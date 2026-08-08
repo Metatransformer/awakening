@@ -49,7 +49,7 @@ func _ready() -> void:
 
 	# --- save slots ---------------------------------------------------------
 	Game.reset()
-	Game.add_rupees(137)
+	Game.add_gold(137)
 	Game.add_key(2)
 	Game.grant(&"hookshot")
 	Game.damage(3)
@@ -57,17 +57,17 @@ func _ready() -> void:
 	if not Saves.save(1):
 		print("FAIL could not write slot 1"); fails += 1
 	var head := Saves.peek(1)
-	if head.get("rupees") != 137 or head.get("keys") != 2:
+	if head.get("gold") != 137 or head.get("keys") != 2:
 		print("FAIL peek wrong: ", head); fails += 1
 	if not (head.get("items") as Array).has("hookshot"):
 		print("FAIL peek lost items: ", head); fails += 1
 
 	Game.reset()
-	if Game.rupees != 0:
+	if Game.gold != 0:
 		print("FAIL reset did not clear"); fails += 1
 	var where := Saves.load_slot(1)
-	if Game.rupees != 137 or Game.small_keys != 2 or not Game.has(&"hookshot"):
-		print("FAIL load did not restore: rupees=", Game.rupees, " keys=", Game.small_keys); fails += 1
+	if Game.gold != 137 or Game.small_keys != 2 or not Game.has(&"hookshot"):
+		print("FAIL load did not restore: gold=", Game.gold, " keys=", Game.small_keys); fails += 1
 	if Game.quarters != Game.max_quarters - 3:
 		print("FAIL health not restored: ", Game.quarters); fails += 1
 	if String(where.get("room", "")) != "room_04":

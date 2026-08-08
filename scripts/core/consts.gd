@@ -186,6 +186,44 @@ const ARROW_SPEED := 42.0
 const ARROW_GRAVITY := 6.0          # [tune] OOT arrows barely drop at this range
 
 
+# --- Metagame (docs/METAGAME.md) --------------------------------------------
+## Slots in the dungeon bag. This number IS the game's core tension: it is what
+## forces "sell it or forge with it" to be answered while you are still in
+## danger. Raising it does not make the game more generous, it makes it flatter.
+const BAG_SLOTS := 10
+## The first N bag slots are the belt pouch, which survives death. Small enough
+## that putting something in it is a real choice.
+const BELT_SLOTS := 3
+
+## Paid extraction: fee = EXTRACT_BASE + EXTRACT_PER_ROOM * rooms_cleared.
+## The price of leaving rises exactly as the haul becomes worth protecting.
+const EXTRACT_BASE := 30
+const EXTRACT_PER_ROOM := 20
+## Seconds the teleport channels. Standing still, and a hit cancels it — you
+## cannot buy your way out of a fight you are already losing.
+const EXTRACT_CHANNEL := 3.0
+
+## Rooms at which the depth band steps up. Band 1 is rooms 0..2, band 2 is
+## 3..6, band 3 is 7+. Fixed at authoring time: enemies never scale to the
+## player, so cleared ground genuinely becomes easy.
+const BAND_2_ROOM := 3
+const BAND_3_ROOM := 7
+
+
+## Depth band (1..3) for a number of rooms cleared this run.
+static func band_for_room(rooms_cleared: int) -> int:
+	if rooms_cleared >= BAND_3_ROOM:
+		return 3
+	if rooms_cleared >= BAND_2_ROOM:
+		return 2
+	return 1
+
+
+## Cost in gold to teleport out having cleared `rooms_cleared` rooms.
+static func extract_fee(rooms_cleared: int) -> int:
+	return EXTRACT_BASE + EXTRACT_PER_ROOM * maxi(rooms_cleared, 0)
+
+
 static func snap_to_tile(p: Vector3) -> Vector3:
 	return Vector3(
 		roundf(p.x / TILE) * TILE,

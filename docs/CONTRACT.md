@@ -6,6 +6,13 @@ else. How you implement your piece is yours to decide.
 
 > **This supersedes the top-down Link's Awakening brief** kept at
 > `docs/CONTRACT.topdown.old.md`. That brief is dead. Do not build to it.
+>
+> **`docs/METAGAME.md` supersedes §0's structure** — the one key-locked dungeon
+> ending in a boss is replaced by a Moonlighter-style loop: a town with a vendor
+> and a smith, and a procedural dungeon you leave by extracting. OOT remains the
+> bar for camera, locomotion, combat feel, and everything in `refs/`. We changed
+> what the game *is*, not how it *feels*. The currency is **gold**
+> (`Game.gold`, `Bus.gold_changed`), not rupees.
 
 ---
 
@@ -125,7 +132,7 @@ These nine facts are the ones clones get wrong. Build to them:
    at 5° pitch, not the 3.30–6.60 m at 10° used outdoors. FOV changes by mode:
    60° free, 50° locked on a hostile, 45° parallel/first-person.
 6. **The HUD's B/A/C buttons are TOP-RIGHT**, arranged in the physical shape of
-   the N64 C-pad. Only the rupee counter (bottom-left) and minimap
+   the N64 C-pad. Only the gold counter (bottom-left) and minimap
    (bottom-right) are at the bottom. Hearts are top-left.
 7. **A bomb hurts the hero too** — no owner exemption. Fuse 3.5 s, blast 1.94 m.
 8. **The hookshot flies perfectly straight.** Gravity is never applied to it.
