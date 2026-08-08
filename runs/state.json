@@ -94,6 +94,14 @@
   },
   "log": [
     {
+      "t": "14:28:48",
+      "msg": "training posts + training.tscn; window opens maximized"
+    },
+    {
+      "t": "14:28:48",
+      "msg": "fixed hero rig yaw: -90 -> 180 (measured via tools/scenes/_facing.tscn)"
+    },
+    {
       "t": "13:59:27",
       "msg": "P14 pause menu dispatched: builder + critic loop"
     },

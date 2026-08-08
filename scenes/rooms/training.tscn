@@ -1,0 +1,32 @@
+[gd_scene load_steps=5 format=3]
+
+; The training area: the proving ground, the hero, the camera, and a row of
+; practice dummies at varying distances so lock-on range and reticle framing
+; can be exercised by eye. Owned by the orchestrator as a test fixture.
+;
+; Post A sits inside K.LOCK_RANGE (8.49 m), post C sits outside it and post B
+; straddles the edge — so "which of these can I lock?" is a visible question.
+
+[ext_resource type="PackedScene" path="res://scenes/rooms/proving_ground.tscn" id="ground"]
+[ext_resource type="PackedScene" path="res://scenes/actors/hero/hero.tscn" id="hero"]
+[ext_resource type="PackedScene" path="res://scenes/camera/game_camera.tscn" id="camera"]
+[ext_resource type="PackedScene" path="res://scenes/props/training_post.tscn" id="post"]
+
+[node name="Training" type="Node3D"]
+
+[node name="Ground" parent="." instance=ExtResource("ground")]
+
+[node name="Hero" parent="." instance=ExtResource("hero")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 6)
+
+[node name="GameCamera" parent="." instance=ExtResource("camera")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 10)
+
+[node name="PostA" parent="." instance=ExtResource("post")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.6, 0, 2.0)
+
+[node name="PostB" parent="." instance=ExtResource("post")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.6, 0, 0.5)
+
+[node name="PostC" parent="." instance=ExtResource("post")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -2.5)

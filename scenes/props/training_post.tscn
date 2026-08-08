@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3]
+
+; A practice dummy: lockable, hittable, and it tells you what you did.
+; Geometry is built in _ready from the exported dimensions — see the script.
+
+[ext_resource type="Script" path="res://scripts/props/training_post.gd" id="1"]
+
+[node name="TrainingPost" type="StaticBody3D"]
+script = ExtResource("1")

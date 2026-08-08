@@ -16,6 +16,7 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 // Best first. The first one that exists on disk wins.
 const CANDIDATES = [
   ['scenes/rooms/dungeon.tscn', 'the full dungeon'],
+  ['scenes/rooms/training.tscn', 'the training area — hero, camera, and practice posts to hit'],
   ['scenes/rooms/playtest.tscn', 'the playable slice — hero + camera in the proving ground'],
   ['scenes/rooms/proving_ground.tscn', 'the proving-ground room (no hero yet — still building)'],
   ['scenes/rooms/_lookdev.tscn', 'the bare lookdev box (nothing built yet)'],
