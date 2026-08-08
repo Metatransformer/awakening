@@ -16,7 +16,12 @@ extends Node3D
 ## Must run WINDOWED. `--headless` uses the dummy renderer and every saved PNG
 ## comes back empty.
 ##
-##   godot --path . res://tools/scenes/_iconbake.tscn -- --out=res://assets/ui/icons
+##   godot --path . res://tools/scenes/_iconbake.tscn -- --out=res://assets/ui/icons/hud
+##
+## --out MUST be a directory that holds nothing but bakes. This overwrites every
+## <id>.png in it without asking, and pointing it at assets/ui/icons/ destroyed
+## the imported hookshot_pistol.png once already. assets/ui/icons/hud/ is that
+## directory; icons/ proper is for imported and hand-authored art.
 
 ## The kit strip, in Hud.KIT order. Values are the euler the model is spun to
 ## before framing -- a sword read edge-on is a line, so it gets a Z tilt.

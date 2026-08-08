@@ -57,12 +57,17 @@ const KIT := [&"sword", &"shield", &"hookshot", &"bow"]
 ## Icons baked from the REAL item models by tools/scenes/_iconbake.gd, then
 ## posterised into the Pal ramp so they read as authored in-palette rather than
 ## as photographs dropped into a 5-bit HUD. Regenerate with:
-##   godot --path . res://tools/scenes/_iconbake.tscn -- --out=<abs>/assets/ui/icons
+##   godot --path . res://tools/scenes/_iconbake.tscn -- --out=<abs>/assets/ui/icons/hud
+##
+## icons/hud/ is GENERATED and the baker overwrites all of it. Hand-authored or
+## imported art belongs in icons/ proper -- do not put anything here you cannot
+## afford to lose, and do not point this at icons/ or the next bake eats the
+## imported source art (it already did once, to hookshot_pistol.png).
 const KIT_ICON := {
-	&"sword": "res://assets/ui/icons/sword_knightly.png",
-	&"shield": "res://assets/ui/icons/kite_shield.png",
-	&"hookshot": "res://assets/ui/icons/hookshot_pistol.png",
-	&"bow": "res://assets/ui/icons/bow_knightly.png",
+	&"sword": "res://assets/ui/icons/hud/sword_knightly.png",
+	&"shield": "res://assets/ui/icons/hud/kite_shield.png",
+	&"hookshot": "res://assets/ui/icons/hud/hookshot_pistol.png",
+	&"bow": "res://assets/ui/icons/hud/bow_knightly.png",
 }
 ## Fallback lettering, used only for an icon that failed to load. A missing
 ## texture must not leave an empty cell -- an empty cell reads as "you have no

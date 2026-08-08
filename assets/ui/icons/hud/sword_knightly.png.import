@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c6djg76udk7xp"
-path="res://.godot/imported/bow_knightly.png-c0ed396f1f34570efbe834fddbe85672.ctex"
+uid="uid://bwbtxuvrg1x6k"
+path="res://.godot/imported/sword_knightly.png-f6e617293e8d190255cb1544f873057b.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/ui/icons/bow_knightly.png"
-dest_files=["res://.godot/imported/bow_knightly.png-c0ed396f1f34570efbe834fddbe85672.ctex"]
+source_file="res://assets/ui/icons/hud/sword_knightly.png"
+dest_files=["res://.godot/imported/sword_knightly.png-f6e617293e8d190255cb1544f873057b.ctex"]
 
 [params]
 

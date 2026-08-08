@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://r1wrv00n5khk"
-path="res://.godot/imported/sword_knightly.png-fe5346cfb42e052f2fc63f549d958805.ctex"
+uid="uid://d348vn0atfaqx"
+path="res://.godot/imported/hookshot_pistol.png-4753d846043f9e4d21de57a15e0ed9b1.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/ui/icons/sword_knightly.png"
-dest_files=["res://.godot/imported/sword_knightly.png-fe5346cfb42e052f2fc63f549d958805.ctex"]
+source_file="res://assets/ui/icons/hud/hookshot_pistol.png"
+dest_files=["res://.godot/imported/hookshot_pistol.png-4753d846043f9e4d21de57a15e0ed9b1.ctex"]
 
 [params]
 
