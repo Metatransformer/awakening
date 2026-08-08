@@ -22,9 +22,9 @@
       "rounds": []
     },
     "P4": {
-      "status": "pending",
+      "status": "building",
       "round": 0,
-      "note": "",
+      "note": "combat package: builder + 2 harsh critics, loop to 3 rounds",
       "gap": "",
       "rounds": []
     },
@@ -50,9 +50,9 @@
       "rounds": []
     },
     "P8": {
-      "status": "building",
+      "status": "judging",
       "round": 0,
-      "note": "proving-ground room + reusable stone kit",
+      "note": "parametric stone kit landed; critics running",
       "gap": "",
       "rounds": []
     },
@@ -90,9 +90,36 @@
       "note": "",
       "gap": "",
       "rounds": []
+    },
+    "P14": {
+      "status": "revising",
+      "round": 0,
+      "note": "menu built; critic failed it 58/100 on pad support \u2014 fixer running",
+      "gap": "",
+      "rounds": []
     }
   },
   "log": [
+    {
+      "t": "14:55:47",
+      "msg": "P14 \u2192 revising menu built; critic failed it 58/100 on pad support \u2014 fixer running"
+    },
+    {
+      "t": "14:55:46",
+      "msg": "P8 \u2192 judging parametric stone kit landed; critics running"
+    },
+    {
+      "t": "14:55:46",
+      "msg": "P4 \u2192 building combat package: builder + 2 harsh critics, loop to 3 rounds"
+    },
+    {
+      "t": "14:55:46",
+      "msg": "input: ui_accept/ui_cancel had no pad bindings \u2014 the menu was unconfirmable on a controller. Fixed."
+    },
+    {
+      "t": "14:55:46",
+      "msg": "assets: swords, shields, hookshot pistol + tether imported from ~/valenfeld and verified by render"
+    },
     {
       "t": "14:28:48",
       "msg": "training posts + training.tscn; window opens maximized"
