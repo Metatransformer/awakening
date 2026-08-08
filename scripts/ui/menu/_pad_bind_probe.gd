@@ -20,9 +20,9 @@ var _n := 0
 
 
 func run(rig) -> void:
-	var menu = rig.current_scene.get_node("PauseMenu")
-	var listen = rig.current_scene.get_node("PauseMenu/Root/Listening")
-	var notice = rig.current_scene.get_node("PauseMenu/Root/Notice")
+	var menu = Menu
+	var listen = Menu.get_node("Root/Listening")
+	var notice = Menu.get_node("Root/Notice")
 
 	# Root -> Options, by pad only.
 	for i in LIMIT:
@@ -31,7 +31,7 @@ func run(rig) -> void:
 			break
 		await _pad(rig, PAD_DDOWN, 4)
 	await _pad(rig, PAD_A, 14)
-	var opts = rig.current_scene.get_node("PauseMenu/Root/Screens/OptionsScreen")
+	var opts = Menu.get_node("Root/Screens/OptionsScreen")
 	_check("pad A alone opened Options", opts.visible)
 
 	# Options -> Controls tab, by pad only.

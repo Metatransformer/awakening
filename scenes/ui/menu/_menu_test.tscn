@@ -1,7 +1,6 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/menu/_menu_test.gd" id="1_test"]
-[ext_resource type="PackedScene" path="res://scenes/ui/menu/pause_menu.tscn" id="2_menu"]
 [ext_resource type="Texture2D" path="res://assets/textures/rock_wall_tiled.png" id="3_wall"]
 [ext_resource type="Texture2D" path="res://assets/textures/rock_wall_tiled_n.png" id="4_wall_n"]
 [ext_resource type="Texture2D" path="res://assets/textures/cobble_grey.png" id="5_floor"]
@@ -98,6 +97,3 @@ mesh = SubResource("Box_wall")
 [node name="Camera3D" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.985, 0.174, 0, -0.174, 0.985, 0, 2.4, 7.2)
 fov = 60.0
-
-[node name="PauseMenu" parent="." instance=ExtResource("2_menu")]
-open_on_ready = true

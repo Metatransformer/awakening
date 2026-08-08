@@ -32,6 +32,13 @@ Saves="*res://scripts/autoload/save_game.gd"
 Hud="*res://scripts/ui/hud/hud.gd"
 ; Prompt arbitrates which Interactable owns the interact button; it needs Bus.
 Prompt="*res://scripts/autoload/prompt.gd"
+; The pause menu is an autoload for the same reason the HUD is: Escape has to
+; work in whatever scene the launcher picks, not just the two the metagame
+; routes between. It shipped fully built but instanced in nothing except
+; scenes/ui/menu/_menu_test.tscn, so the game itself had no escape menu.
+; Layer 100 -- above the HUD (50), below Flow's fade (200). It boots hidden, so
+; lookdev and tool scenes stay clean. This is the ONLY instance in the project.
+Menu="*res://scenes/ui/menu/pause_menu.tscn"
 ; Flow owns the town<->dungeon scene change and the fade. It must load LAST: its
 ; fade veil has to sit above every other autoload's CanvasLayer.
 Flow="*res://scripts/autoload/game_flow.gd"

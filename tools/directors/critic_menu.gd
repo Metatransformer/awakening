@@ -30,12 +30,12 @@ var _shot_n := 0
 
 
 func run(rig) -> void:
-	var menu = rig.current_scene.get_node("PauseMenu")
-	var opts = rig.current_scene.get_node("PauseMenu/Root/Screens/OptionsScreen")
-	var saves = rig.current_scene.get_node("PauseMenu/Root/Screens/SavesScreen")
-	var confirm = rig.current_scene.get_node("PauseMenu/Root/Confirm")
-	var listening = rig.current_scene.get_node("PauseMenu/Root/Listening")
-	var notice = rig.current_scene.get_node("PauseMenu/Root/Notice")
+	var menu = Menu
+	var opts = Menu.get_node("Root/Screens/OptionsScreen")
+	var saves = Menu.get_node("Root/Screens/SavesScreen")
+	var confirm = Menu.get_node("Root/Confirm")
+	var listening = Menu.get_node("Root/Listening")
+	var notice = Menu.get_node("Root/Notice")
 
 	_dump_ui_actions("AFTER PauseMenu._ready()")
 
@@ -180,8 +180,7 @@ func run(rig) -> void:
 	# ==================================================== H. LOAD: empty slot
 	await _pad(rig, PAD_B, 14)          # options -> root
 	_ck("H0 pad B from Options returned to the ROOT screen (still open)",
-		menu.is_open and rig.current_scene.get_node(
-			"PauseMenu/Root/Screens/RootScreen").visible)
+		menu.is_open and Menu.get_node("Root/Screens/RootScreen").visible)
 	for i in LIMIT:
 		if _is_btn(_foc(rig), "Load Game"):
 			break

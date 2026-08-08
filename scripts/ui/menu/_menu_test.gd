@@ -14,7 +14,11 @@ extends Node3D
 ## has something to release and closing it has something to restore.
 @export var capture_mouse_on_start: bool = false
 
-@onready var menu: PauseMenu = $PauseMenu
+## The autoload instance, not a local one. This scene used to instance its own
+## pause_menu.tscn, which is how the project ended up with a menu that existed
+## only here: the harness had one, the game had none. There is now exactly one
+## PauseMenu in the project and this harness drives it.
+@onready var menu: PauseMenu = Menu
 
 
 func _ready() -> void:
@@ -22,6 +26,9 @@ func _ready() -> void:
 		_seed_slots()
 	if capture_mouse_on_start:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	# The instance carried `open_on_ready`; the autoload boots closed for every
+	# other scene, so this harness asks for it explicitly.
+	menu.open.call_deferred()
 	menu.quit_to_title_requested.connect(
 		func() -> void: print("MENU_TEST quit_to_title_requested"))
 	menu.load_requested.connect(

@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bj28l3ousxj8t"
-path="res://.godot/imported/kite_shield_kite_shield_body_diff.jpg-4fd6b33da16e4bf8efc1391cce2a23f0.ctex"
+path.s3tc="res://.godot/imported/kite_shield_kite_shield_body_diff.jpg-4fd6b33da16e4bf8efc1391cce2a23f0.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "c1e54b641c353fdd9142308caffcf986"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/weapons/kite_shield_kite_shield_body_diff.jpg"
-dest_files=["res://.godot/imported/kite_shield_kite_shield_body_diff.jpg-4fd6b33da16e4bf8efc1391cce2a23f0.ctex"]
+dest_files=["res://.godot/imported/kite_shield_kite_shield_body_diff.jpg-4fd6b33da16e4bf8efc1391cce2a23f0.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -40,4 +41,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=1
+detect_3d/compress_to=0
