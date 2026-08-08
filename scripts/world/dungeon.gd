@@ -307,11 +307,16 @@ func _populate() -> void:
 			_add_extract(root, Vector3.ZERO)
 			continue
 
+		var dist := int(rooms[cell]["dist"])
 		var count := _rng.randi_range(enemies_min, enemies_max)
 		for i in count:
-			var c := Crawler.new()
-			c.position = _scatter(i, count, room_size * 0.30)
-			root.add_child(c)
+			var spot := _scatter(i, count, room_size * 0.30)
+			# The deepest room opens with a wraith, whatever else it rolls. The
+			# end of a run should be a thing you recognise on sight, and a room
+			# that happened to roll three goblins does not read as the bottom.
+			var kind: StringName = &"wraith" if (cell == deepest and i == 0) \
+				else _roll_kind(dist)
+			_spawn_foe(root, kind, spot)
 
 		var wants_chest := cell == deepest or _rng.randf() < chest_chance
 		if wants_chest:
@@ -331,6 +336,47 @@ func _populate() -> void:
 				p.position = Vector3(room_size * (0.30 if i == 0 else -0.30),
 					0.0, room_size * 0.30)
 				root.add_child(p)
+
+
+## What each depth band is allowed to spawn.
+##
+## Bands, not scaling. The monsters do not get stronger because the player did;
+## they get stronger because the player walked further in. That is what makes
+## the map worth reading and what keeps a first run's shallow rooms genuinely
+## easy on a tenth run -- level-scaling would flatten both (docs/GDD.md §5).
+##
+## `crawler` is the box-built enemy; the rest are `Enemy` kinds driven by the
+## monster models. The crawler stays as the shallow-water fight so the entrance
+## rooms still open with something readable and cheap.
+const BANDS := {
+	1: [&"crawler", &"crawler", &"goblin"],
+	2: [&"crawler", &"goblin", &"skeleton"],
+	3: [&"goblin", &"skeleton", &"skeleton", &"kobold"],
+	4: [&"skeleton", &"kobold", &"kobold", &"orc"],
+}
+## Anything deeper than the last band.
+const BAND_DEEP: Array[StringName] = [&"kobold", &"orc", &"orc", &"wraith"]
+
+
+func _roll_kind(dist: int) -> StringName:
+	var pool: Array = BANDS.get(maxi(dist, 1), BAND_DEEP)
+	return pool[_rng.randi_range(0, pool.size() - 1)]
+
+
+func _spawn_foe(root: Node3D, kind: StringName, at: Vector3) -> void:
+	# `position`, not `global_position`: the room root is already placed at its
+	# cell centre, and `at` is the scatter offset inside it. Assigning a global
+	# here would stack every room's spawns on top of the entrance.
+	if kind == &"crawler":
+		var c := Crawler.new()
+		c.position = at
+		root.add_child(c)
+		return
+	var e := Enemy.new()
+	e.kind = kind
+	e.drop_seed = _rng.randi()
+	e.position = at
+	root.add_child(e)
 
 
 func _add_extract(root: Node3D, at: Vector3) -> void:
