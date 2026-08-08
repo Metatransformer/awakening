@@ -150,28 +150,42 @@ These nine facts are the ones clones get wrong. Build to them:
 | `Game` | `scripts/autoload/game_state.gd` | hearts, magic, keys, items, flags |
 
 Need a new autoload, input action, or project setting? **Ask the orchestrator.**
-Do not edit `project.godot` — it is the one file every agent would fight over.
+`project.godot` is the file every agent would otherwise fight over. Edit it only
+from a claimed card, and commit that edit on its own — never bundle it into a
+feature commit where a merge will silently pick a side.
 
 Signals on `Bus` and fields on `Game` are **additive**: append yours, never
 rename or remove someone else's.
 
 ---
 
-## 4. Input actions (already registered — keyboard AND pad)
+## 4. Input actions — **Elden Ring layout**
 
-| Action | Keyboard / mouse | Gamepad | OOT equivalent |
+The feel is OOT; the *buttons* are Elden Ring. This table is decoded from
+`project.godot` rather than remembered — the version before it claimed attack was
+`J`/`X` and guard was `K`/R-trigger, none of which had been true for a long time.
+
+| Action | Keyboard / mouse | Gamepad | Elden Ring equivalent |
 |---|---|---|---|
-| `move_up/down/left/right` | WASD, arrows | left stick | control stick |
-| `cam_up/down/left/right` | (mouse motion, read in code) | right stick | C-buttons / free look |
-| `z_target` | **Q**, right mouse | **L trigger**, LB | **Z** — hold, not toggle |
-| `attack` | **J**, left mouse | **X** | B — sword |
-| `shield` | **K**, Ctrl | **R trigger**, RB | R — hold to raise |
-| `context` | **Space** | **A** | A — roll / climb / jump |
-| `interact` | E, F, Enter | A | A — open / talk / lift |
-| `item_left` / `item_up` / `item_right` | **1 / 2 / 3** | dpad-left / Y / B | **C-left / C-up / C-right** |
-| `first_person` | R | dpad-up | C-up look |
-| `pause` / `map` | Esc / Tab | Start / dpad-right | — |
+| `move_up/down/left/right` | WASD, arrows | left stick | move |
+| `cam_up/down/left/right` | mouse motion (read in code) | right stick | camera |
+| `attack` | **LMB** | **RB / R1** | light attack |
+| `shield` | **RMB** | **LB / L1** | guard |
+| `context` | **Space** | **A / Cross** | roll / backstep (hold to sprint) |
+| `z_target` | **Q**, MMB | **R3** | lock-on |
+| `interact` | E | Y / Triangle | event action |
+| `item_left` / `item_up` / `item_right` | 1 / 2 / 3 | dpad L / U / R | quick items |
+| `first_person` | R | — | — |
+| `pause` / `map` | Esc / Tab | Back / L3 | menu |
 | `dbg_reload` | F5 | — | — |
+
+The pad half of this was genuinely broken until it was decoded and looked at:
+**guard was on right-stick-click**, attack was on button 10, roll was on B, and
+lock-on was on L3. Nothing in the code was wrong — the bindings were.
+
+**Not yet bound, because the ability does not exist:** heavy attack (RT/R2,
+`Shift`+LMB), skill (LT/L2, `Shift`+RMB), and jump. Do not register empty
+actions for these; bind them in the same change that builds them.
 
 Read movement as
 `Input.get_vector("move_left","move_right","move_up","move_down")` so stick and

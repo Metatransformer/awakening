@@ -126,8 +126,16 @@ func _fight(rig) -> void:
 	var crawlers: Array = rig.scene().get_tree().get_nodes_in_group(&"enemy")
 	print("MVP enemies=%d" % crawlers.size())
 	if crawlers.is_empty():
+		print("MVP FAIL no enemies spawned")
 		return
-	var foe: Crawler = crawlers[0]
+	# CharacterBody3D, NOT Crawler. The dungeon spawns Crawler in the shallow
+	# rooms and Enemy deeper, so a Crawler-typed assignment throws at runtime the
+	# moment the nearest foe is a goblin -- and it aborted this whole beat
+	# SILENTLY, straight past the fight, the drops and the chest, while the log
+	# still ended with a tidy "MVP home". Anything that reaches for a specific
+	# enemy class here will break again the next time the roster grows.
+	var foe: CharacterBody3D = crawlers[0]
+	print("MVP foe kind=%s" % ("crawler" if foe is Crawler else str(foe.get("kind"))))
 
 	# Stand just outside its reach, facing it, so the telegraph is on camera.
 	var toward := K.flat(foe.global_position - Vector3.ZERO)
@@ -135,10 +143,13 @@ func _fight(rig) -> void:
 	await rig.wait_frames(30)
 	await rig.capture(out.path_join("m_09_enemy.png"))
 
-	var before := foe.health.quarters
+	var before: int = foe.health.quarters
 	# Close, then swing until it dies or we run out of patience.
 	for swing in 12:
-		if not is_instance_valid(foe) or foe.state == Crawler.State.DEAD:
+		# `health.dead` rather than a state enum: Crawler.State and Enemy.State
+		# are different enums, and the health component is the one thing both
+		# kinds genuinely share.
+		if not is_instance_valid(foe) or foe.health.dead:
 			break
 		var toe := K.flat(foe.global_position - Vector3.ZERO)
 		_stand_at(rig, foe.global_position - toe * 1.1, foe.global_position)
