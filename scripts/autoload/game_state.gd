@@ -12,6 +12,19 @@ var max_magic: int = 0  ## 0 until the magic meter is unlocked
 var magic: int = 0
 
 var rupees: int = 0
+## Metagame currency. Survives death; the bag in `Run` does not.
+var gold: int = K.START_GOLD
+## Bag capacity, in slots. Bought from the shop, so it lives here with the rest
+## of the metagame rather than in `Run`, which is wiped every time you die.
+var bag_slots: int = K.START_BAG_SLOTS
+## Extra quarter-hearts the sword deals, bought from the smith.
+var sword_bonus: int = 0
+## Quarter-hearts subtracted from every blow taken, floored at 1 -- armour makes
+## you last longer, never invincible.
+var armour_level: int = 0
+## Shop line id -> how many times it has been bought. Drives the price ramp and
+## the per-line purchase limits. See ShopDb.
+var upgrades: Dictionary[StringName, int] = {}
 var arrows: int = 0
 var max_arrows: int = 30
 var bombs: int = 0
@@ -36,6 +49,11 @@ func reset() -> void:
 	max_magic = 0
 	magic = 0
 	rupees = 0
+	gold = K.START_GOLD
+	bag_slots = K.START_BAG_SLOTS
+	sword_bonus = 0
+	armour_level = 0
+	upgrades.clear()
 	arrows = 0
 	bombs = 0
 	small_keys = 0
@@ -45,6 +63,7 @@ func reset() -> void:
 	items.clear()
 	c_items = [&"", &"", &""]
 	flags.clear()
+	Bus.gold_changed.emit(gold)
 	Bus.key_count_changed.emit(small_keys)
 	Bus.player_health_changed.emit(quarters, max_quarters)
 	Bus.magic_changed.emit(magic, max_magic)
@@ -127,6 +146,30 @@ func spend_ammo(id: StringName) -> bool:
 func add_rupees(n: int) -> void:
 	rupees = maxi(0, rupees + n)
 	Bus.rupees_changed.emit(rupees)
+
+
+# --- Gold -------------------------------------------------------------------
+# The metagame currency. Survives death, buys gear, and pays the extraction fee.
+# Separate from `rupees`, which is the in-dungeon pickup left over from the
+# earlier design and is on its way out.
+
+func add_gold(n: int) -> void:
+	if n == 0:
+		return
+	gold = maxi(0, gold + n)
+	Bus.gold_changed.emit(gold)
+
+
+## Returns false and changes nothing if the player cannot afford it, so callers
+## can use it as the check and the transaction at once.
+func spend_gold(n: int) -> bool:
+	if n <= 0:
+		return true
+	if gold < n:
+		return false
+	gold -= n
+	Bus.gold_changed.emit(gold)
+	return true
 
 
 # --- Keys -------------------------------------------------------------------

@@ -7,7 +7,14 @@ extends Node
 ##
 ## The menu package owns the UI; this owns the truth and the persistence.
 
-const PATH := "user://settings.cfg"
+const DEFAULT_PATH := "user://settings.cfg"
+
+## Where preferences persist. A test or a screenshot director that rebinds keys
+## MUST NOT write to the player's real settings — an earlier menu test left
+## `attack` bound to N in the shipped config, and the game booted with a dead
+## sword button until it was found. Pass `--settings=user://scratch.cfg` after
+## the `--` separator to sandbox a run.
+var path: String = DEFAULT_PATH
 
 signal changed(section: StringName, key: StringName, value: Variant)
 
@@ -41,6 +48,9 @@ var _defaults: Dictionary = {}
 
 
 func _ready() -> void:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--settings="):
+			path = arg.substr(11)
 	_capture_defaults()
 	load_settings()
 	apply_all()
@@ -50,7 +60,7 @@ func _ready() -> void:
 
 func load_settings() -> void:
 	var cfg := ConfigFile.new()
-	if cfg.load(PATH) != OK:
+	if cfg.load(path) != OK:
 		return  # first run: keep the defaults above
 	master_volume = cfg.get_value("audio", "master", master_volume)
 	music_volume = cfg.get_value("audio", "music", music_volume)
@@ -94,7 +104,7 @@ func save_settings() -> void:
 	cfg.set_value("game", "letterbox", letterbox_on_target)
 
 	cfg.set_value("controls", "binds", _binds)
-	cfg.save(PATH)
+	cfg.save(path)
 
 
 func apply_all() -> void:
@@ -145,10 +155,23 @@ func _set_bus(bus_name: StringName, linear: float) -> void:
 # --- Video ------------------------------------------------------------------
 
 func apply_video() -> void:
-	DisplayServer.window_set_mode(
-		DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen
-		else DisplayServer.WINDOW_MODE_WINDOWED
-	)
+	# Only touch the window mode if it is actually wrong. On macOS a
+	# window_set_mode call pumps the OS event queue, which runs a NESTED main
+	# loop iteration -- and if that happens during an autoload's _ready, other
+	# scripts get resumed while the scene tree root is still mid-setup. That
+	# broke tools/shoot.gd for every capture. Re-asserting a mode the window is
+	# already in is pure cost, so the guard removes the hazard at boot without
+	# changing what the settings menu can do.
+	var mode := DisplayServer.window_get_mode()
+	if fullscreen:
+		if mode != DisplayServer.WINDOW_MODE_FULLSCREEN:
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+	elif mode == DisplayServer.WINDOW_MODE_FULLSCREEN \
+			or mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN:
+		# Only leave fullscreen. MAXIMIZED is the project's default launch mode
+		# (window/size/mode=2) and is a perfectly good "not fullscreen" -- forcing
+		# WINDOWED here shrank the window on every single boot.
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 	DisplayServer.window_set_vsync_mode(
 		DisplayServer.VSYNC_ENABLED if vsync else DisplayServer.VSYNC_DISABLED
 	)
@@ -182,8 +205,10 @@ func rebindable_actions() -> Array[StringName]:
 	]
 
 
-## Replace every event on `action` with `event`. Returns false if that key is
-## already taken by another rebindable action — the UI should say so.
+## Rebind `action` to `event`, replacing only bindings of the SAME KIND —
+## rebinding a key must not silently drop the gamepad binding, and vice versa.
+## Returns false if that input is already taken by another rebindable action;
+## the UI is expected to say so rather than fail silently.
 func rebind(action: StringName, event: InputEvent) -> bool:
 	for other in rebindable_actions():
 		if other == action:
@@ -191,7 +216,9 @@ func rebind(action: StringName, event: InputEvent) -> bool:
 		for e in InputMap.action_get_events(other):
 			if e.is_match(event, true):
 				return false
-	InputMap.action_erase_events(action)
+	for e in InputMap.action_get_events(action):
+		if _same_device_class(e, event):
+			InputMap.action_erase_event(action, e)
 	InputMap.action_add_event(action, event)
 	_binds[action] = _serialize(action)
 	save_settings()
@@ -218,6 +245,14 @@ func apply_binds() -> void:
 			var e := _deserialize(d)
 			if e:
 				InputMap.action_add_event(action, e)
+
+
+## Keyboard and mouse are one class (what a keyboard player rebinds); joypad
+## buttons and axes are the other. A rebind only displaces its own class.
+func _same_device_class(a: InputEvent, b: InputEvent) -> bool:
+	var a_pad := a is InputEventJoypadButton or a is InputEventJoypadMotion
+	var b_pad := b is InputEventJoypadButton or b is InputEventJoypadMotion
+	return a_pad == b_pad
 
 
 ## Human-readable label for the first event on an action, for the options list.

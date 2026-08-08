@@ -1,0 +1,22 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/actors/hero/hero.gd" id="hero_script"]
+
+[sub_resource type="CapsuleShape3D" id="hero_capsule"]
+radius = 0.35
+height = 1.5
+
+[node name="Hero" type="CharacterBody3D" groups=["player"]]
+collision_layer = 2
+collision_mask = 1
+floor_snap_length = 0.45
+script = ExtResource("hero_script")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
+shape = SubResource("hero_capsule")
+
+[node name="Model" type="Node3D" parent="."]
+
+[node name="EyeMarker" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.32, 0)

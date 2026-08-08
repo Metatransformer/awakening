@@ -159,6 +159,16 @@ const HITSTOP_HEAVY := 9
 const KNOCKBACK_LIGHT := 4.0
 const KNOCKBACK_HEAVY := 8.0
 
+# --- Economy ----------------------------------------------------------------
+## [tune] Enough gold to afford exactly two bail-outs at the minimum fee, so a
+## new player who panics twice is broke and has to finish a run to recover.
+## That first forced commitment is where the game teaches what it is about.
+const START_GOLD := 30
+## Slots, not items -- a stack shares a slot. Twelve is enough to fill on a good
+## run and not enough to clear a floor with, which is what makes a bag a
+## decision rather than a container. [tune]
+const START_BAG_SLOTS := 12
+
 # --- Items ------------------------------------------------------------------
 ## [oot] Hookshot flies perfectly STRAIGHT — gravity is never applied to it.
 const HOOK_RANGE := 360.0 * U       # 8.74 m

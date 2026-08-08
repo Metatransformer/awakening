@@ -35,6 +35,15 @@ const DIR_ITEMS := "res://assets/items/"
 const SCALE_FIX := {
 	"kite_shield": 0.52,      # 1.39 m tall -> 0.72 m, matching shield_noble
 	"hookshot_pistol": 0.30,  # 1.00 m long -> 0.30 m, a pistol not a rifle
+	# The bows import at 1.52 m -- taller than the hero's torso and longer than
+	# his draw. A 1.10 m shortbow is the Fairy Bow's proportion against a 1.65 m
+	# body, reads at gameplay distance, and stows on the back without the lower
+	# limb passing through his calf.
+	"bow_crude": 0.72,
+	"bow_common": 0.72,
+	"bow_knightly": 0.72,
+	"bow_elegant": 0.72,
+	"bow_noble": 0.72,
 }
 
 ## Models that already carry embedded textures and must NOT be given a

@@ -445,3 +445,17 @@ will not resolve.
 - **`OS.get_keycode_string()` returns `""`** for Enter, Space and the arrows in
   this build while working for Escape. Print raw keycodes in diagnostics; a
   half-working readout invents bugs that are not there.
+- **A weapon socket has TWO axes that can be wrong, and fixing one hides the
+  other.** The shield took three passes because each pass swept a single axis:
+  yaw picks which face meets the blow, roll picks whether the point hangs down
+  or stands at the sky, and a shield with the right face and the wrong roll
+  still looks broken. When a mount reads wrong, sweep every axis at 90-degree
+  steps in one pass and put them on a contact sheet.
+- **`DisplayServer.window_set_mode()` runs a nested main-loop iteration on
+  macOS.** It flushes the deferred queue AND emits `process_frame`, so anything
+  awaiting either can be resumed in the middle of an autoload's `_ready`, while
+  the scene tree root is still adding children. `Settings.apply_video` did this
+  at boot and broke every `tools/shoot.gd` capture with "parent node is busy
+  setting up children". Never re-assert a window mode that is already set.
+- **`window/size/mode=2` is MAXIMIZED, not WINDOWED.** Code that forces
+  `WINDOW_MODE_WINDOWED` as "not fullscreen" shrinks the window on every launch.

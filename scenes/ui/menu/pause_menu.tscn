@@ -1,0 +1,88 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/menu/pause_menu.gd" id="1_menu"]
+[ext_resource type="Theme" path="res://scenes/ui/menu/menu_theme.tres" id="2_theme"]
+[ext_resource type="Script" path="res://scripts/ui/menu/options_panel.gd" id="3_options"]
+[ext_resource type="Script" path="res://scripts/ui/menu/saves_panel.gd" id="4_saves"]
+[ext_resource type="Script" path="res://scripts/ui/menu/menu_confirm.gd" id="5_confirm"]
+[ext_resource type="AudioStream" path="res://audio/sfx/ui_click.ogg" id="6_click"]
+
+[node name="PauseMenu" type="CanvasLayer"]
+process_mode = 3
+layer = 100
+script = ExtResource("1_menu")
+
+[node name="Root" type="Control" parent="."]
+process_mode = 3
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+
+[node name="Dim" type="ColorRect" parent="Root"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.02, 0.017, 0.014, 0.66)
+
+[node name="Screens" type="Control" parent="Root"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_bottom = -70.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="RootScreen" type="Control" parent="Root/Screens"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="OptionsScreen" type="Control" parent="Root/Screens"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("3_options")
+
+[node name="SavesScreen" type="Control" parent="Root/Screens"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("4_saves")
+
+[node name="Confirm" type="Control" parent="Root"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("5_confirm")
+
+[node name="Sfx" type="AudioStreamPlayer" parent="Root"]
+process_mode = 3
+stream = ExtResource("6_click")
+bus = &"UI"

@@ -1,0 +1,28 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" uid="uid://iuqgq875cauw" path="res://assets/shaders/prop_stone.gdshader" id="1_prop"]
+
+[resource]
+resource_name = "mat_prop"
+shader = ExtResource("1_prop")
+shader_parameter/base_color_a = Color(0.165, 0.148, 0.126, 1)
+shader_parameter/base_color_b = Color(0.245, 0.223, 0.194, 1)
+shader_parameter/brightness_variation = 0.18
+shader_parameter/facet_scale = 0.6
+shader_parameter/warp_strength = 0.25
+shader_parameter/jitter_amount = 0.6
+shader_parameter/seam_darkening = 0.6
+shader_parameter/seam_width = 0.04
+shader_parameter/grime_color = Color(0.05, 0.042, 0.03, 1)
+shader_parameter/grime_amount = 0.35
+shader_parameter/chip_strength = 0.32
+shader_parameter/chip_scale = 7.0
+shader_parameter/grain_scale = 14.0
+shader_parameter/grain_strength = 0.16
+shader_parameter/bevel_height = 0.018
+shader_parameter/surface_bump_strength = 0.11
+shader_parameter/relief_strength = 4.0
+shader_parameter/normal_strength = 1.1
+shader_parameter/roughness_base = 0.82
+shader_parameter/roughness_grime = 0.95
+shader_parameter/specular = 0.3

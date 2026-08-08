@@ -1,0 +1,23 @@
+[gd_scene load_steps=5 format=3]
+
+; One floor of the Lower Worlds. The layout is generated at _ready from the run
+; seed -- see scripts/world/dungeon.gd. The .tscn only says "a dungeon, a hero,
+; a camera, and the dungeon's fog".
+
+[ext_resource type="Script" path="res://scripts/world/dungeon.gd" id="1_dungeon"]
+[ext_resource type="PackedScene" path="res://scenes/kit/dungeon_env.tscn" id="2_env"]
+[ext_resource type="PackedScene" path="res://scenes/actors/hero/hero.tscn" id="3_hero"]
+[ext_resource type="PackedScene" path="res://scenes/camera/game_camera.tscn" id="4_cam"]
+
+[node name="DungeonRun" type="Node3D"]
+
+[node name="Env" parent="." instance=ExtResource("2_env")]
+
+[node name="Dungeon" type="Node3D" parent="."]
+script = ExtResource("1_dungeon")
+
+[node name="Hero" parent="." instance=ExtResource("3_hero")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 3.6)
+
+[node name="GameCamera" parent="." instance=ExtResource("4_cam")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 7.6)

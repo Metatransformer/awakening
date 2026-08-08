@@ -1,0 +1,8 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[resource]
+resource_name = "mat_iron"
+albedo_color = Color(0.042, 0.037, 0.035, 1)
+metallic = 0.65
+metallic_specular = 0.45
+roughness = 0.52

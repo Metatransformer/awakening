@@ -14,10 +14,16 @@ extends RefCounted
 ## Waits are in SECONDS: the harness renders uncapped, physics is 60 Hz.
 
 var _i := 0
+var _cam: Camera3D = null
 
 
 func run(rig) -> void:
 	Input.use_accumulated_input = false
+	# GameCamera ignores mouse motion unless the cursor is grabbed, and the
+	# harness never grabs it (that would hijack the machine mid-capture). Opt in
+	# so the synthetic motion below travels the real _unhandled_input path.
+	_cam = rig.root.get_camera_3d()
+
 	await rig.wait_seconds(0.4)
 	await _shot(rig, "behind")
 
@@ -42,28 +48,46 @@ func run(rig) -> void:
 		await _drag(rig, Vector2(0.0, -22.0), 14)
 		await _shot(rig, "pitchdn")
 
-	# 4. Hands off the look: autoswing takes the yaw back while he runs.
+	# Level the pitch again so steps 4 and 5 are shot from the playing angle
+	# rather than from wherever the clamp test left the lens.
+	await _drag(rig, Vector2(0.0, 12.0), 8)
+
+	# 4. Steer off-axis, then run with hands OFF the look. Autoswing has to bring
+	# the yaw back behind him on its own — and must not start before
+	# `manual_hold_time` has elapsed, or it is fighting the player's own steering.
+	# Short bursts keep him in the lit middle of the room; a long run just parks
+	# him in a dark corner where nothing is legible.
+	await _drag(rig, Vector2(-20.0, 0.0), 12)
+	await _shot(rig, "offaxis")
 	Input.action_press(&"move_up", 1.0)
-	for i in 7:
-		await rig.wait_seconds(0.4)
+	for i in 6:
+		await rig.wait_seconds(0.28)
 		await _shot(rig, "swing")
 	Input.action_release(&"move_up")
-	await rig.wait_seconds(0.6)
+	await rig.wait_seconds(0.5)
 
-	# 5. Orbit off-axis again, then tap Z with nothing lockable.
-	for i in 3:
-		await _drag(rig, Vector2(-20.0, 0.0), 12)
-		await _shot(rig, "offaxis")
+	# 5. Knock it off-axis once more, then tap Z with nothing lockable. Parallel
+	# recentres over CAM_DEFAULT_ANIM_TIME = 4 ticks, so these frames are 0.05 s
+	# apart — any slower and the snap is over before the second exposure.
+	await _drag(rig, Vector2(-22.0, 0.0), 12)
+	await _shot(rig, "preZ")
 	Input.action_press(&"z_target")
-	await rig.wait_seconds(0.05)
+	await rig.wait_seconds(0.03)
 	Input.action_release(&"z_target")
-	for i in 4:
-		await rig.wait_seconds(0.06)
+	for i in 5:
+		await rig.wait_seconds(0.05)
 		await _shot(rig, "recenter")
 
 
 ## Push `count` real mouse-motion events, then let a physics tick consume them.
+##
+## The gate is opened only for the handful of milliseconds the synthetic events
+## are in flight. Outside that window the camera ignores mouse motion (the
+## cursor is not grabbed), so a stray twitch of the real mouse over the harness
+## window cannot walk the yaw and silently invalidate the run — which is exactly
+## how an earlier corridor sheet ended up showing the hero curving into a wall.
 func _drag(rig, rel: Vector2, count: int) -> void:
+	_cam.mouse_look_requires_capture = false
 	for i in count:
 		var ev := InputEventMouseMotion.new()
 		ev.relative = rel
@@ -71,6 +95,7 @@ func _drag(rig, rel: Vector2, count: int) -> void:
 		ev.velocity = rel * 60.0
 		Input.parse_input_event(ev)
 	await rig.wait_seconds(0.05)
+	_cam.mouse_look_requires_capture = true
 
 
 func _shot(rig, tag: String) -> void:

@@ -1,0 +1,103 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/menu/_menu_test.gd" id="1_test"]
+[ext_resource type="PackedScene" path="res://scenes/ui/menu/pause_menu.tscn" id="2_menu"]
+[ext_resource type="Texture2D" path="res://assets/textures/rock_wall_tiled.png" id="3_wall"]
+[ext_resource type="Texture2D" path="res://assets/textures/rock_wall_tiled_n.png" id="4_wall_n"]
+[ext_resource type="Texture2D" path="res://assets/textures/cobble_grey.png" id="5_floor"]
+[ext_resource type="Texture2D" path="res://assets/textures/cobble_grey_n.png" id="6_floor_n"]
+
+[sub_resource type="Environment" id="Env_1"]
+background_mode = 1
+background_color = Color(0.03, 0.026, 0.022, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.29, 0.24, 0.18, 1)
+ambient_light_energy = 0.9
+tonemap_mode = 3
+tonemap_white = 1.6
+fog_enabled = true
+fog_light_color = Color(0.08, 0.06, 0.045, 1)
+fog_density = 0.012
+glow_enabled = true
+glow_intensity = 0.5
+glow_bloom = 0.08
+
+[sub_resource type="StandardMaterial3D" id="Mat_wall"]
+albedo_color = Color(0.62, 0.56, 0.47, 1)
+albedo_texture = ExtResource("3_wall")
+normal_enabled = true
+normal_texture = ExtResource("4_wall_n")
+roughness = 0.92
+uv1_scale = Vector3(0.28, 0.28, 0.28)
+uv1_triplanar = true
+
+[sub_resource type="StandardMaterial3D" id="Mat_floor"]
+albedo_color = Color(0.5, 0.47, 0.42, 1)
+albedo_texture = ExtResource("5_floor")
+normal_enabled = true
+normal_texture = ExtResource("6_floor_n")
+roughness = 0.95
+uv1_scale = Vector3(0.4, 0.4, 0.4)
+uv1_triplanar = true
+
+[sub_resource type="BoxMesh" id="Box_floor"]
+material = SubResource("Mat_floor")
+size = Vector3(18, 0.4, 18)
+
+[sub_resource type="BoxMesh" id="Box_wall"]
+material = SubResource("Mat_wall")
+size = Vector3(1, 1, 1)
+
+[node name="MenuTest" type="Node3D"]
+script = ExtResource("1_test")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_1")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, -0.35, 0.354, 0, 0.707, 0.707, -0.5, -0.612, 0.612, 0, 8, 0)
+light_color = Color(1, 0.86, 0.66, 1)
+light_energy = 0.9
+shadow_enabled = true
+
+[node name="Torch" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 3.1, -1.5)
+light_color = Color(1, 0.7, 0.36, 1)
+light_energy = 14.0
+omni_range = 18.0
+shadow_enabled = true
+
+[node name="Floor" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.2, 0)
+mesh = SubResource("Box_floor")
+
+[node name="WallBack" type="MeshInstance3D" parent="."]
+transform = Transform3D(18, 0, 0, 0, 7, 0, 0, 0, 0.6, 0, 3.5, -8)
+mesh = SubResource("Box_wall")
+
+[node name="WallLeft" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.6, 0, 0, 0, 7, 0, 0, 0, 18, -8.5, 3.5, 0)
+mesh = SubResource("Box_wall")
+
+[node name="WallRight" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.6, 0, 0, 0, 7, 0, 0, 0, 18, 8.5, 3.5, 0)
+mesh = SubResource("Box_wall")
+
+[node name="PillarL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1.3, 0, 0, 0, 5, 0, 0, 0, 1.3, -4.2, 2.5, -3.4)
+mesh = SubResource("Box_wall")
+
+[node name="PillarR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1.3, 0, 0, 0, 5, 0, 0, 0, 1.3, 4.2, 2.5, -3.4)
+mesh = SubResource("Box_wall")
+
+[node name="StepBlock" type="MeshInstance3D" parent="."]
+transform = Transform3D(2, 0, 0, 0, 1, 0, 0, 0, 2, 0.3, 0.5, -2.2)
+mesh = SubResource("Box_wall")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.985, 0.174, 0, -0.174, 0.985, 0, 2.4, 7.2)
+fov = 60.0
+
+[node name="PauseMenu" parent="." instance=ExtResource("2_menu")]
+open_on_ready = true

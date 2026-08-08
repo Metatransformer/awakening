@@ -1,0 +1,17 @@
+[gd_scene load_steps=4 format=3]
+
+; The hub. Everything visible is built in code by scripts/world/town.gd -- the
+; .tscn holds the cast, not the geometry.
+
+[ext_resource type="Script" path="res://scripts/world/town.gd" id="1_town"]
+[ext_resource type="PackedScene" path="res://scenes/actors/hero/hero.tscn" id="2_hero"]
+[ext_resource type="PackedScene" path="res://scenes/camera/game_camera.tscn" id="3_cam"]
+
+[node name="Town" type="Node3D"]
+script = ExtResource("1_town")
+
+[node name="Hero" parent="." instance=ExtResource("2_hero")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 4)
+
+[node name="GameCamera" parent="." instance=ExtResource("3_cam")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 8)

@@ -43,6 +43,29 @@ signal boss_engaged(boss: Node3D)
 signal boss_phase_changed(phase: int)
 signal boss_defeated
 
+# --- The run: bag, extraction, economy --------------------------------------
+## A run began. `run_seed` is recorded so it can be replayed.
+signal run_started(run_seed: int)
+## A run ended. `extracted` false means the player died and `lost` is gone.
+signal run_ended(extracted: bool, contents: Dictionary, value: int)
+## The carried bag changed. `value` is what the vendor would pay for it.
+signal bag_changed(bag: Dictionary, value: int)
+signal loot_gained(item_id: StringName, count: int)
+signal bag_full
+signal gold_changed(gold: int)
+signal items_sold(sold: Dictionary, paid: int)
+## The player tried to teleport out and could not afford the fee.
+signal extract_refused(cost: int, gold: int)
+signal depth_changed(depth: int)
+
+# --- Interaction and screens ------------------------------------------------
+## The "(E) OPEN" line, or "" when there is nothing to address. One at a time --
+## Prompt decides which.
+signal prompt_changed(text: String)
+## A full-screen UI took or gave back input. `id` is e.g. &"trade".
+signal screen_opened(id: StringName)
+signal screen_closed(id: StringName)
+
 # --- Presentation -----------------------------------------------------------
 ## Requests for the feel layer. Emitters do not care who answers.
 signal request_hitstop(frames: int)

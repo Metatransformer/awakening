@@ -1,0 +1,21 @@
+[gd_scene load_steps=4 format=3]
+
+; The playable scene every later package tests in: P6/P7's proving ground plus
+; P2's hero standing on its HeroSpawn marker and P1's camera behind him.
+; GameCamera calls make_current() on ready, so the room's own framing cameras
+; (RefCam, CamCorridor, ...) stay in the file without fighting for the viewport.
+
+[ext_resource type="PackedScene" path="res://scenes/rooms/proving_ground.tscn" id="ground"]
+[ext_resource type="PackedScene" path="res://scenes/actors/hero/hero.tscn" id="hero"]
+[ext_resource type="PackedScene" path="res://scenes/camera/game_camera.tscn" id="camera"]
+
+[node name="Playtest" type="Node3D"]
+
+[node name="Ground" parent="." instance=ExtResource("ground")]
+
+; Matches ProvingGround/HeroSpawn at (0, 0, 6), facing north up the room.
+[node name="Hero" parent="." instance=ExtResource("hero")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 6)
+
+[node name="GameCamera" parent="." instance=ExtResource("camera")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 10)

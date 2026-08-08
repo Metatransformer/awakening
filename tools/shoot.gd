@@ -38,6 +38,30 @@ func _initialize() -> void:
 	_run.call_deferred()
 
 
+## Put `instance` under the root and wait until it is really in the tree.
+##
+## `root.add_child()` cannot be called while the root is mid-way through adding
+## its own children, and that is exactly when _run gets to run: an autoload's
+## _ready (Settings.apply_video) calls into DisplayServer, macOS pumps the event
+## queue inside that call, and Godot runs a nested main-loop iteration which
+## flushes the deferred queue AND emits process_frame. So neither call_deferred
+## nor `await process_frame` is a safe moment -- both fire inside the nested
+## iteration, and a deferred add_child that lands there fails silently and is
+## NOT retried, which hangs the harness forever.
+##
+## Settings.apply_video no longer re-asserts the window mode at boot, which
+## removes the cause. This retries anyway: a capture rig that deadlocks when an
+## unrelated autoload touches the window is a trap waiting for the next author.
+func _attach_scene(instance: Node) -> void:
+	for attempt in 240:
+		if instance.is_inside_tree():
+			return
+		root.add_child(instance)
+		await process_frame
+	push_error("shoot.gd: could not attach the scene to the root")
+	quit(5)
+
+
 func _parse_args() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if not arg.begins_with("--"):
@@ -69,7 +93,7 @@ func _run() -> void:
 		return
 
 	var instance := packed.instantiate()
-	root.add_child(instance)
+	await _attach_scene(instance)
 	current_scene = instance
 
 	var warmup := int(_args.get("warmup", "45"))
@@ -136,7 +160,16 @@ func capture(path: String) -> void:
 
 ## Hold a set of input actions down for `frames`, then release.
 ## Actions are Input Map action names, e.g. ["move_up", "attack"].
+##
+## The leading `await process_frame` is load-bearing. Input stamps a synthetic
+## press with the CURRENT frame number, and `is_action_just_pressed` compares
+## that stamp against the frame it is called in -- so a press issued from a
+## `frame_post_draw` resume (which is what every `capture()` leaves you on) is
+## already one frame stale before any node's `_process` runs, and every polled
+## button in the game silently ignores it. Pressing at the top of a frame puts
+## the stamp and the poll in the same frame, wherever the caller resumed from.
 func hold(actions: Array, frames: int) -> void:
+	await process_frame
 	for a in actions:
 		if InputMap.has_action(a):
 			Input.action_press(a)
@@ -149,6 +182,23 @@ func hold(actions: Array, frames: int) -> void:
 ## Tap actions for a single frame.
 func tap(actions: Array) -> void:
 	await hold(actions, 2)
+
+
+## Hold actions for `seconds` of game time.
+##
+## Anything the GAME measures in seconds -- a hold-to-activate prompt, a charge,
+## a channel -- must be driven this way. The window here is uncapped, so a hold
+## counted in frames is a hold of unknown duration, and a director written that
+## way passes or fails depending on how busy the machine is.
+func hold_seconds(actions: Array, seconds: float) -> void:
+	await process_frame
+	for a in actions:
+		if InputMap.has_action(a):
+			Input.action_press(a)
+	await create_timer(seconds, true, false, true).timeout
+	for a in actions:
+		if InputMap.has_action(a):
+			Input.action_release(a)
 
 
 ## The live scene root.

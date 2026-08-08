@@ -1,0 +1,18 @@
+[gd_resource type="StandardMaterial3D" load_steps=3 format=3]
+
+[ext_resource type="Texture2D" uid="uid://caamdjjgsuogy" path="res://assets/textures/rock_wall_tiled.png" id="1_alb"]
+[ext_resource type="Texture2D" uid="uid://dmi8vj34djkfm" path="res://assets/textures/rock_wall_tiled_n.png" id="2_nrm"]
+
+[resource]
+resource_name = "mat_ceiling_tex"
+albedo_color = Color(0.4, 0.37, 0.335, 1)
+albedo_texture = ExtResource("1_alb")
+metallic_specular = 0.15
+roughness = 0.95
+normal_enabled = true
+normal_scale = 1.4
+normal_texture = ExtResource("2_nrm")
+uv1_scale = Vector3(0.55, 0.55, 0.55)
+uv1_triplanar = true
+uv1_world_triplanar = true
+texture_filter = 5

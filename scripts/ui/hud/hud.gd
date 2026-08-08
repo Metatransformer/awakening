@@ -1,0 +1,684 @@
+extends CanvasLayer
+## Autoload `Hud`. The in-game overlay, built to docs/STYLEGUIDE.md §5.
+##
+## TWO POLES. Bottom-left is YOU: health cells and the kit strip, one instrument.
+## Bottom-right is THE MONEY: the bag's running value and the way out, one
+## instrument. They sit in opposite corners deliberately -- in a panic your eye
+## has to travel from "how alive am I" to "how much am I about to lose", and that
+## eye movement IS the game's central decision. The top of the screen stays empty
+## except for transient state, because the over-the-shoulder camera puts the
+## action in the upper-middle third.
+##
+## This replaced an Ocarina-replica HUD (hearts, magic meter, N64 C-pad at
+## top-right). What survived is the architecture, which was sound:
+##   - autoload + a single Control that draws in `_draw`, so the overlay exists
+##     whatever scene the launcher picks;
+##   - coordinates as FRACTIONS of the viewport, so a resize does not relayout;
+##   - repaint on signal, never per frame, EXCEPT while an animation is running;
+##   - hidden unless a node in group `player` is in the tree, so lookdev and tool
+##     scenes stay clean.
+##
+## Every colour comes from Pal and every glyph from PixelFont. Nothing here uses
+## the engine's fallback font -- see the anti-slop list.
+
+const DRAW_LAYER := 50  ## under the pause menu, which sits at 100
+
+# --- Health (STYLEGUIDE §5.1) -----------------------------------------------
+const CELL := Vector2(6.0, 20.0)   ## one quarter-heart, in reference px
+const CELL_GAP := 2.0
+## Wider gutter every fourth cell. This is the only thing that says "heart".
+const HEART_GAP := 5.0
+const HEALTH_MAX_W := 0.336        ## fraction of screen before cells narrow
+## Seconds the cells you just lost stay lit in RUST before draining.
+const GHOST_HOLD := 0.40
+const GHOST_DRAIN := 0.25
+
+# --- Kit strip (§5.2) --------------------------------------------------------
+const KIT_CELL := 32.0
+const KIT_GAP := 6.0
+## Order is the order of the buttons, left to right.
+const KIT := [&"sword", &"shield", &"hookshot", &"bow"]
+const KIT_LABEL := {
+	&"sword": "SW", &"shield": "SH", &"hookshot": "HK", &"bow": "BW",
+}
+
+# --- Bag (§5.3) --------------------------------------------------------------
+const SLIP_H := 4.0
+const SLIP_GAP := 2.0
+const SLIP_MAX := 8
+const SLIP_MAX_W := 0.094          ## fraction of screen
+const ROLL_TIME := 0.30            ## the number eases to its new value
+const TOAST_HOLD := 1.60
+const TOAST_FADE := 0.20
+const RIM_FLASH := 0.10
+
+# --- Extraction (§5.4) -------------------------------------------------------
+const SWEEP_TIME := 0.20
+const HOLD_TO_EXTRACT := 1.50
+
+var _canvas: Control
+
+# Animation state. The HUD only runs `_process` while one of these is live --
+# a HUD that repaints every frame to draw nothing is a HUD that costs a
+# millisecond forever.
+var _ghost_quarters: int = 0       ## cells lost, still lit in RUST
+var _ghost_t: float = -1.0
+var _shown_value: float = 0.0      ## the number actually on screen, mid-roll
+var _target_value: int = 0
+var _toast: String = ""
+var _toast_color: Color = Pal.MOTH
+var _toast_t: float = -1.0
+var _rim_flash_t: float = -1.0
+var _rim_flash_color: Color = Pal.MOTH
+var _sweep_t: float = -1.0
+## 0..1 while the player holds the extract button at a node.
+var _extract_hold: float = 0.0
+var _extract_available: bool = false
+var _refuse_t: float = -1.0
+var _block_flash_t: float = -1.0
+var _lock_target: Node3D = null
+var _last_quarters: int = -1
+## "(E) OPEN", or "" when there is nothing in reach. Owned by the Prompt autoload.
+var _prompt: String = ""
+
+
+func _ready() -> void:
+	layer = DRAW_LAYER
+	process_mode = Node.PROCESS_MODE_ALWAYS
+
+	_canvas = Control.new()
+	_canvas.name = "HudCanvas"
+	_canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_canvas.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_canvas.draw.connect(_draw_hud)
+	add_child(_canvas)
+
+	_target_value = _headline()
+	_shown_value = float(_target_value)
+	_last_quarters = Game.quarters
+
+	Bus.player_health_changed.connect(_on_health)
+	Bus.bag_changed.connect(_on_bag)
+	Bus.loot_gained.connect(_on_loot)
+	Bus.gold_changed.connect(_on_gold)
+	Bus.ammo_changed.connect(_repaint)
+	Bus.extract_refused.connect(_on_refused)
+	Bus.shield_blocked.connect(_on_blocked)
+	Bus.target_acquired.connect(_on_target)
+	Bus.target_lost.connect(_on_target_lost)
+	Bus.prompt_changed.connect(_on_prompt)
+	Bus.run_started.connect(_on_headline_changed)
+	Bus.run_ended.connect(_on_headline_changed)
+
+	get_tree().node_added.connect(_on_tree_changed)
+	get_tree().node_removed.connect(_on_tree_changed)
+	set_process(false)
+	_refresh_visibility()
+
+
+# --- Signals ----------------------------------------------------------------
+
+func _repaint(_a = null, _b = null, _c = null) -> void:
+	_canvas.queue_redraw()
+
+
+func _on_health(quarters: int, _max_q: int) -> void:
+	var lost := _last_quarters - quarters
+	if lost > 0:
+		# The ghost accumulates: two hits inside the hold window should show as
+		# one four-cell loss, not restart at two.
+		_ghost_quarters += lost
+		_ghost_t = 0.0
+		_wake()
+	elif quarters > _last_quarters:
+		_ghost_quarters = 0
+		_ghost_t = -1.0
+	_last_quarters = quarters
+	_repaint()
+
+
+## THE number, bottom right. In the dungeon it is what you are carrying, because
+## that is what you are deciding about. In town it is what you own, because the
+## bag is about to become that and nothing else on the screen says how rich you
+## are. Same glyphs, same corner, same colour rules -- one instrument, two jobs.
+func _headline() -> int:
+	if Run == null:
+		return 0
+	return Run.bag_value() if Run.in_dungeon else Game.gold
+
+
+func _on_bag(_bag: Dictionary, _value: int) -> void:
+	_target_value = _headline()
+	_wake()
+
+
+func _on_gold(_gold: int) -> void:
+	_target_value = _headline()
+	_wake()
+
+
+func _on_headline_changed(_a = null, _b = null, _c = null) -> void:
+	_target_value = _headline()
+	# Crossing town/dungeon should not roll a 900-gold purse up from a 40-gold
+	# bag over a third of a second; that reads as an award, not a context change.
+	_shown_value = float(_target_value)
+	_wake()
+
+
+func _on_loot(item_id: StringName, _count: int) -> void:
+	var def := ItemDb.get_def(item_id)
+	if def == null:
+		return
+	_toast = def.display_name
+	_toast_color = Pal.rarity_color(int(def.rarity))
+	_toast_t = 0.0
+	_rim_flash_color = _toast_color
+	_rim_flash_t = 0.0
+	_wake()
+
+
+func _on_prompt(text: String) -> void:
+	_prompt = text
+	_repaint()
+
+
+func _on_refused(_cost: int, _gold: int) -> void:
+	_refuse_t = 0.0
+	_wake()
+
+
+func _on_blocked(_at: Vector3, _normal: Vector3) -> void:
+	_block_flash_t = 0.0
+	_wake()
+
+
+func _on_target(t: Node3D) -> void:
+	_lock_target = t
+	_wake()
+
+
+func _on_target_lost() -> void:
+	_lock_target = null
+	_repaint()
+
+
+## The extraction node calls these; only it knows the player is standing in one.
+func set_extract_available(on: bool) -> void:
+	if on == _extract_available:
+		return
+	_extract_available = on
+	if on:
+		_sweep_t = 0.0
+	_wake()
+
+
+func set_extract_hold(t01: float) -> void:
+	_extract_hold = clampf(t01, 0.0, 1.0)
+	_repaint()
+
+
+func _wake() -> void:
+	set_process(true)
+	_canvas.queue_redraw()
+
+
+func _on_tree_changed(_n: Node) -> void:
+	_refresh_visibility.call_deferred()
+
+
+## Gameplay scenes have a hero; lookdev boxes and tool scenes do not, and an
+## overlay on a weapon rack is just noise in a contact sheet.
+func _refresh_visibility() -> void:
+	if not is_inside_tree():
+		return
+	var has_player := get_tree().get_first_node_in_group(&"player") != null
+	if visible != has_player:
+		visible = has_player
+	if has_player:
+		_canvas.queue_redraw()
+
+
+# --- Frame ------------------------------------------------------------------
+
+func _process(delta: float) -> void:
+	var busy := false
+
+	if _ghost_t >= 0.0:
+		_ghost_t += delta
+		if _ghost_t > GHOST_HOLD + GHOST_DRAIN:
+			_ghost_t = -1.0
+			_ghost_quarters = 0
+		else:
+			busy = true
+
+	if not is_equal_approx(_shown_value, float(_target_value)):
+		# Ease-out toward the new total. The roll is the dopamine; never snap.
+		var step: float = maxf(1.0, absf(_target_value - _shown_value)) * (delta / ROLL_TIME)
+		_shown_value = move_toward(_shown_value, float(_target_value), step)
+		busy = true
+
+	for t in [&"_toast_t", &"_rim_flash_t", &"_sweep_t", &"_refuse_t", &"_block_flash_t"]:
+		var v: float = get(t)
+		if v >= 0.0:
+			set(t, v + delta)
+			busy = true
+	if _toast_t > TOAST_HOLD + TOAST_FADE:
+		_toast_t = -1.0
+	if _rim_flash_t > RIM_FLASH:
+		_rim_flash_t = -1.0
+	if _sweep_t > SWEEP_TIME:
+		_sweep_t = -1.0
+	if _refuse_t > 1.2:
+		_refuse_t = -1.0
+	if _block_flash_t > 0.06:
+		_block_flash_t = -1.0
+
+	# T3 breathes, so the HUD keeps ticking while the bag is that valuable.
+	if Pal.tier(_target_value) >= 3 or _lock_target != null or _extract_hold > 0.0:
+		busy = true
+
+	_canvas.queue_redraw()
+	if not busy:
+		set_process(false)
+
+
+func _draw_hud() -> void:
+	var s := _canvas.size
+	if s.x < 1.0 or s.y < 1.0:
+		return
+	_draw_health(s)
+	_draw_kit(s)
+	_draw_bag(s)
+	_draw_extraction(s)
+	_draw_toast(s)
+	_draw_prompt(s)
+	_draw_lock_on(s)
+	_draw_sweep(s)
+	_draw_controls(s)
+
+
+# --- Controls -----------------------------------------------------------------
+## A one-line legend, in town only.
+##
+## Not a tutorial and not a settings screen: the two combat verbs live on the
+## mouse and there is nothing on screen that says so, which is exactly how a
+## working sword reads as a broken one. Town is where you are safe and idle, so
+## it is where the legend belongs; underground the line would be noise, and by
+## then you have already used every verb on it.
+
+const KEYS := "WASD MOVE    LMB ATTACK    RMB GUARD    SPACE DODGE    MMB LOCK-ON    E INTERACT"
+
+
+func _draw_controls(s: Vector2) -> void:
+	if Run == null or Run.in_dungeon:
+		return
+	var scale := Pal.px(10.0 / PixelFont.H, s.y)
+	PixelFont.draw_centred(_canvas, KEYS,
+		Vector2(s.x * 0.5, Pal.KEYS_BASELINE * s.y), scale, Pal.ASH)
+
+
+# --- Health (§5.1) ----------------------------------------------------------
+## Discrete cells, one per quarter-heart, grouped in fours. Countable at a
+## glance; a smooth bar is not. Under pressure the player needs "three left",
+## not "about a fifth".
+
+func _draw_health(s: Vector2) -> void:
+	var total: int = maxi(Game.max_quarters, 1)
+	var cw := Pal.px(CELL.x, s.y)
+	var ch := Pal.px(CELL.y, s.y)
+	var gap := Pal.px(CELL_GAP, s.y)
+	var hgap := Pal.px(HEART_GAP, s.y)
+
+	# Narrow the cells rather than wrapping to a second row. The OOT layout wraps
+	# at 11 hearts and the second row is a lie -- it reads as a separate meter.
+	var width := func(c: float) -> float:
+		return total * c + (total - 1) * gap + (total / K.HEART) * (hgap - gap)
+	while width.call(cw) > s.x * HEALTH_MAX_W and cw > Pal.px(3.0, s.y):
+		cw -= Pal.px(1.0, s.y)
+
+	var origin := Pal.HEALTH_ORIGIN * s
+	var low := Game.quarters <= 3
+	var pulse := 0.0
+	if low:
+		pulse = 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.001 * TAU * 2.0)
+
+	var x := origin.x
+	for i in total:
+		if i > 0:
+			x += gap if i % K.HEART != 0 else hgap
+		var r := Rect2(x, origin.y, cw, ch)
+		var filled := i < Game.quarters
+		var ghost := i >= Game.quarters and i < Game.quarters + _ghost_visible()
+
+		var col: Color
+		if filled:
+			col = Pal.VITAL.lerp(Pal.BONE, pulse) if low else Pal.VITAL
+		elif ghost:
+			col = Pal.RUST
+		else:
+			col = Pal.VOID if low else Color(Pal.ASH, 0.6)
+
+		# 1px VOID hairline OUTSIDE the cell, so cells never touch.
+		_canvas.draw_rect(r.grow(Pal.px(1.0, s.y)), Pal.VOID)
+		_canvas.draw_rect(r, col)
+		x += cw
+
+
+## Cells still shown as lost. Holds, then drains right-to-left in 4 steps --
+## how much you just lost is the information; the new total is secondary.
+func _ghost_visible() -> int:
+	if _ghost_t < 0.0 or _ghost_quarters <= 0:
+		return 0
+	if _ghost_t <= GHOST_HOLD:
+		return _ghost_quarters
+	var f := (_ghost_t - GHOST_HOLD) / GHOST_DRAIN
+	var steps: float = 1.0 - floor(f * 4.0) / 4.0
+	return int(ceil(_ghost_quarters * steps))
+
+
+# --- Kit strip (§5.2) -------------------------------------------------------
+## State, not equipment. The sword and shield are never unequipped, so an
+## "equipped" light would be dead pixels; these cells carry block state, the
+## combo window, ammo, and whether the hookshot has something to grab.
+
+func _draw_kit(s: Vector2) -> void:
+	var cell := Pal.px(KIT_CELL, s.y)
+	var gap := Pal.px(KIT_GAP, s.y)
+	var origin := Pal.KIT_ORIGIN * s
+	var combat := _hero_combat()
+	var equipped: StringName = combat.get(&"equipped") if combat != null else &""
+	var blocking: bool = bool(combat.get(&"blocking")) if combat != null else false
+
+	for i in KIT.size():
+		var id: StringName = KIT[i]
+		var r := Rect2(origin.x + i * (cell + gap), origin.y, cell, cell)
+
+		var fill := Color(Pal.MIDNIGHT, 0.8)
+		if id == &"shield" and blocking:
+			fill = Pal.BONE
+		if id == &"shield" and _block_flash_t >= 0.0:
+			fill = Pal.RUST
+		_canvas.draw_rect(r, fill)
+		_canvas.draw_rect(r, Pal.ASH, false, Pal.px(1.0, s.y))
+
+		# A bow with no arrows is not a choice, so it stops looking like one.
+		var dim := id == &"bow" and Game.arrows <= 0
+		var label_col: Color = Color(Pal.MOTH, 0.3) if dim else Pal.BONE
+		if id == &"shield" and blocking:
+			label_col = Pal.MIDNIGHT
+		PixelFont.draw_centred(_canvas, String(KIT_LABEL[id]),
+			Vector2(r.get_center().x, r.position.y + cell * 0.32),
+			Pal.px(2.0, s.y), label_col)
+
+		# Selected underline: which of the two item buttons is actually out.
+		var selected := (id == equipped) or (equipped == &"" and id == &"sword")
+		if selected:
+			_canvas.draw_rect(Rect2(
+				r.position.x, r.end.y - Pal.px(2.0, s.y),
+				cell, Pal.px(2.0, s.y)), Pal.BONE)
+
+		if id == &"bow":
+			PixelFont.draw_right(_canvas, str(Game.arrows),
+				Vector2(r.end.x - Pal.px(3.0, s.y), r.end.y - Pal.px(10.0, s.y)),
+				Pal.px(1.0, s.y), Pal.MOTH)
+
+
+func _hero_combat() -> Node:
+	var hero := get_tree().get_first_node_in_group(&"player")
+	return hero.get(&"combat") if hero != null else null
+
+
+# --- The bag (§5.3) ---------------------------------------------------------
+## The most important object on screen. Four parts: the number, the value
+## histogram, the rim, and the extraction line below it.
+
+func _draw_bag(s: Vector2) -> void:
+	var right := Pal.BAG_RIGHT * s.x
+	var value := int(round(_shown_value))
+	var tier := Pal.tier(_target_value)
+
+	_draw_rim(s, tier)
+
+	# The number. Tabular by construction -- PixelFont is monospaced -- so the
+	# digits do not shuffle while the total rolls up.
+	var scale := Pal.px(32.0 / PixelFont.H, s.y)
+	var col := Pal.bag_color(_target_value)
+	if tier >= 3:
+		# Breathes. At T3 every hit also flickers it, so the game reminds you
+		# what is at stake at the exact instant you are hurt.
+		var b := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.001 * TAU * 0.5)
+		col = col.lerp(Pal.BONE, b * 0.35)
+		if _ghost_t >= 0.0 and _ghost_t < 0.05:
+			col = Pal.GOLD
+	var top := Pal.BAG_NUM_BASELINE * s.y - PixelFont.height(scale)
+	var diamond := Pal.px(16.0, s.y)
+	_draw_diamond(Vector2(right - diamond * 0.5, top + PixelFont.height(scale) * 0.5),
+		diamond * 0.5, Pal.GOLD)
+	PixelFont.draw_right(_canvas, str(value),
+		Vector2(right - diamond - Pal.px(6.0, s.y), top), scale, col)
+
+	_draw_slips(s, right)
+
+
+## A value histogram, not an inventory list. Slip width is that stack's share of
+## the bag's worth, so the useful thought -- "most of my money is that one violet
+## slip" -- is available at a glance, which no list gives you.
+func _draw_slips(s: Vector2, right: float) -> void:
+	var total := Run.bag_value()
+	if total <= 0:
+		return
+
+	var entries: Array = []
+	for id: StringName in Run.bag:
+		var def := ItemDb.get_def(id)
+		if def == null:
+			continue
+		entries.append({
+			"v": def.value * int(Run.bag[id]),
+			"c": Pal.rarity_color(int(def.rarity)),
+		})
+	entries.sort_custom(func(a, b): return a["v"] > b["v"])
+
+	var h := Pal.px(SLIP_H, s.y)
+	var gap := Pal.px(SLIP_GAP, s.y)
+	var max_w := SLIP_MAX_W * s.x
+	var y := Pal.SLIPS_BOTTOM * s.y
+
+	# Normalised to the LARGEST stack, not to the bag total. Against the total,
+	# eight roughly-even stacks each render as a 14 px stub and the histogram
+	# says nothing; against the largest, the top slip is always full width and
+	# the rest read as fractions of it -- which is the comparison the player
+	# actually makes ("is that one purple slip most of my money?").
+	var top_v: float = maxf(1.0, float(entries[0]["v"]))
+
+	for i in mini(entries.size(), SLIP_MAX):
+		var e: Dictionary = entries[i]
+		var w: float = maxf(Pal.px(3.0, s.y), max_w * (float(e["v"]) / top_v))
+		_canvas.draw_rect(Rect2(right - w, y - h, w, h), e["c"])
+		y -= h + gap
+
+	if entries.size() > SLIP_MAX:
+		PixelFont.draw_right(_canvas, "+%d" % (entries.size() - SLIP_MAX),
+			Vector2(right, y - Pal.px(8.0, s.y)), Pal.px(1.0, s.y), Pal.MOTH)
+
+
+## Coloured by the rarity of the single most valuable thing you carry. Silent,
+## permanent, peripheral -- it is how the bag whispers.
+func _draw_rim(s: Vector2, tier: int) -> void:
+	var tl := Pal.RIM_TL * s
+	var br := Pal.RIM_BR * s
+	var r := Rect2(tl, br - tl)
+	var col := Pal.rarity_color(_best_rarity())
+	if _rim_flash_t >= 0.0:
+		_canvas.draw_rect(r, Color(_rim_flash_color, 0.25))
+		col = _rim_flash_color
+	elif tier >= 2:
+		# The dithered gold halo. One ring of 50% gold reads as a dither at the
+		# distance a player actually sits from the screen.
+		_canvas.draw_rect(r.grow(Pal.px(2.0, s.y)), Color(Pal.GOLD, 0.18), false,
+			Pal.px(1.0, s.y))
+	_canvas.draw_rect(r, col, false, Pal.px(2.0, s.y))
+
+
+func _best_rarity() -> int:
+	var best := 0
+	var best_v := -1
+	for id: StringName in Run.bag:
+		var def := ItemDb.get_def(id)
+		if def != null and def.value > best_v:
+			best_v = def.value
+			best = int(def.rarity)
+	return best
+
+
+# --- Extraction (§5.4) ------------------------------------------------------
+## Directly under the bag number, because the decision is a comparison between
+## two numbers and they must be adjacent.
+
+func _draw_extraction(s: Vector2) -> void:
+	if not Run.in_dungeon:
+		return
+	var right := Pal.BAG_RIGHT * s.x
+	var y := Pal.EXTRACT_BASELINE * s.y
+	var cost := Run.extract_cost()
+	var afford := Game.gold >= cost
+
+	var scale := Pal.px((16.0 if _extract_available else 12.0) / PixelFont.H, s.y)
+	var label_col: Color = Pal.CYAN if _extract_available else Pal.MOTH
+	var cost_col: Color = Pal.GOLD if afford else Pal.RUST
+
+	if _refuse_t >= 0.0:
+		PixelFont.draw_right(_canvas, "NEED %d" % cost, Vector2(right, y),
+			scale, Pal.RUST)
+		return
+
+	var cost_s := str(cost)
+	PixelFont.draw_right(_canvas, cost_s, Vector2(right, y), scale, cost_col)
+	var label_x := right - PixelFont.width(cost_s, scale) - Pal.px(8.0, s.y)
+	PixelFont.draw_right(_canvas, "EXTRACT", Vector2(label_x, y), scale, label_col)
+
+	if _extract_available:
+		# A square pip, set well clear of the word. A full-height 2px bar six
+		# pixels from the E is a capital I in this font, and the line read
+		# "IEXTRACT" on every capture until it was a pip instead.
+		var pip := Pal.px(6.0, s.y)
+		var lx := label_x - PixelFont.width("EXTRACT", scale) - Pal.px(14.0, s.y)
+		_canvas.draw_rect(Rect2(lx - pip, y + (PixelFont.height(scale) - pip) * 0.5,
+			pip, pip), Pal.CYAN)
+
+	# Holding draws a ring around your own money while the world stays live.
+	# The cost is paid out of the thing you are protecting, and the UI says so.
+	if _extract_hold > 0.0:
+		var centre := Vector2(right - Pal.px(40.0, s.y),
+			Pal.BAG_NUM_BASELINE * s.y - Pal.px(16.0, s.y))
+		_draw_arc_ring(centre, Pal.px(54.0, s.y), _extract_hold,
+			Pal.px(3.0, s.y), Pal.CYAN)
+
+
+## One screen-wide event, then silence. A permanent "you can extract" banner
+## nags, and a sound alone is missable in combat.
+func _draw_sweep(s: Vector2) -> void:
+	if _sweep_t < 0.0:
+		return
+	var f: float = clampf(_sweep_t / SWEEP_TIME, 0.0, 1.0)
+	_canvas.draw_rect(Rect2(0.0, s.y * 0.5, s.x * f, Pal.px(1.0, s.y)), Pal.CYAN)
+
+
+# --- Toast and lock-on ------------------------------------------------------
+
+func _draw_toast(s: Vector2) -> void:
+	if _toast_t < 0.0 or _toast.is_empty():
+		return
+	var a := 1.0
+	if _toast_t > TOAST_HOLD:
+		a = 1.0 - (_toast_t - TOAST_HOLD) / TOAST_FADE
+	PixelFont.draw_right(_canvas, _toast,
+		Vector2(Pal.BAG_RIGHT * s.x, Pal.TOAST_BASELINE * s.y),
+		Pal.px(16.0 / PixelFont.H, s.y), Color(_toast_color, clampf(a, 0.0, 1.0)))
+
+
+## The interact line. Centred and low -- under the action, above the kit strip,
+## on the axis the player is already looking down. It is the only thing the HUD
+## ever draws in the middle of the screen, which is what makes it impossible to
+## miss without needing to be large.
+func _draw_prompt(s: Vector2) -> void:
+	if _prompt.is_empty():
+		return
+	var scale := Pal.px(14.0 / PixelFont.H, s.y)
+	var w := PixelFont.width(_prompt, scale)
+	var h := PixelFont.height(scale)
+	var centre := Vector2(s.x * 0.5, s.y * 0.735)
+	var pad := Pal.px(7.0, s.y)
+	_canvas.draw_rect(Rect2(centre.x - w * 0.5 - pad, centre.y - pad,
+		w + pad * 2.0, h + pad * 2.0), Color(Pal.VOID, 0.72))
+	PixelFont.draw_centred(_canvas, _prompt, centre, scale, Pal.BONE)
+
+
+## Four corner brackets, not a fairy and not a triangle. Positions quantize to
+## the 480x270 internal grid so the reticle jitters in lockstep with the world's
+## own vertex snapping -- the UI element that touches the world obeys the world's
+## rules, and the corner instruments do not. That is the cohesion detail.
+func _draw_lock_on(s: Vector2) -> void:
+	if _lock_target == null or not is_instance_valid(_lock_target):
+		return
+	var cam := _canvas.get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var head := _lock_target.global_position + Vector3(0.0, 1.4, 0.0)
+	if cam.is_position_behind(head):
+		return
+
+	var c := cam.unproject_position(_lock_target.global_position + Vector3(0, 0.8, 0))
+	var half := Vector2(Pal.px(26.0, s.y), Pal.px(34.0, s.y))
+	var grid := s / Vector2(480.0, 270.0)
+	c = (c / grid).round() * grid
+
+	var arm := Pal.px(8.0, s.y)
+	var w := Pal.px(2.0, s.y)
+	var col := Pal.RUST
+	for sx in [-1.0, 1.0]:
+		for sy in [-1.0, 1.0]:
+			var corner := c + Vector2(half.x * sx, half.y * sy)
+			_canvas.draw_rect(Rect2(
+				corner.x - (arm if sx > 0 else 0.0), corner.y - w * 0.5,
+				arm, w), col)
+			_canvas.draw_rect(Rect2(
+				corner.x - w * 0.5, corner.y - (arm if sy > 0 else 0.0),
+				w, arm), col)
+
+	# Only once the target has taken damage. Never a floating bar over every
+	# enemy in the room.
+	var hp := _health_of(_lock_target)
+	if hp != null and hp.quarters < hp.max_quarters:
+		var bw := half.x * 2.0
+		var by := c.y + half.y + Pal.px(6.0, s.y)
+		_canvas.draw_rect(Rect2(c.x - half.x, by, bw, Pal.px(2.0, s.y)),
+			Color(Pal.ASH, 0.7))
+		_canvas.draw_rect(Rect2(c.x - half.x, by, bw * hp.fraction(),
+			Pal.px(2.0, s.y)), Pal.RUST)
+
+
+func _health_of(n: Node) -> HealthComponent:
+	for c in n.get_children():
+		if c is HealthComponent:
+			return c
+	return null
+
+
+# --- Primitives -------------------------------------------------------------
+
+## The currency glyph. Drawn as a polygon rather than a font character because
+## the styleguide bans icon sets and this is the one symbol the HUD repeats.
+func _draw_diamond(centre: Vector2, r: float, col: Color) -> void:
+	_canvas.draw_colored_polygon(PackedVector2Array([
+		centre + Vector2(0.0, -r), centre + Vector2(r, 0.0),
+		centre + Vector2(0.0, r), centre + Vector2(-r, 0.0),
+	]), col)
+
+
+func _draw_arc_ring(centre: Vector2, radius: float, t01: float,
+		width: float, col: Color) -> void:
+	if t01 <= 0.0:
+		return
+	_canvas.draw_arc(centre, radius, -PI * 0.5, -PI * 0.5 + TAU * t01,
+		maxi(8, int(48 * t01)), col, width)
