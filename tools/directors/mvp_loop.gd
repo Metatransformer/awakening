@@ -161,6 +161,18 @@ func _fight(rig) -> void:
 	print("MVP after_pickup bag=%d value=%d" % [Run.bag_count(), Run.bag_value()])
 	await rig.capture(out.path_join("m_12_picked_up.png"))
 
+	# Patch the hero up before walking him through a dungeon full of crawlers.
+	#
+	# Not cheating the test -- the opposite. The tour teleports between beats
+	# with no regard for what is standing nearby, so the hero routinely arrives
+	# at the chest on his last heart and dies. That is `Run.die()` working
+	# correctly, but it ends the run, sends Flow back to town, and every
+	# remaining beat then reports a failure it did not cause: the bag reads
+	# empty because death emptied it, and the extract pad is "missing" because
+	# we are standing in the town square. Death has its own proof; this one is
+	# about the seams between the screens.
+	Game.heal(Game.max_quarters)
+
 	# The chest, which is where the run-defining drops live.
 	var chest := _chest(rig)
 	if chest != null:
