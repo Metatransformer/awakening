@@ -11,7 +11,10 @@ config_version=5
 [application]
 
 config/name="The Lower Worlds: Awakening"
-run/main_scene="res://scenes/rooms/dungeon.tscn"
+; The loop starts in town. Booting into the dungeon dropped the player into the
+; middle of a run they never chose to take, with nowhere to spend what they
+; carried out of it.
+run/main_scene="res://scenes/rooms/town.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 

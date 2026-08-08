@@ -1,3 +1,6 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# Capture artifacts from the screenshot harness. Regenerable, and ~100 MB.
+/runs/

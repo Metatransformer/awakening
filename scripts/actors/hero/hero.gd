@@ -161,7 +161,29 @@ func _ready() -> void:
 	combat.name = "Combat"
 	add_child(combat)
 
+	_build_key_light()
+
 	Bus.player_spawned.emit(self)
+
+
+## A short-range lamp that travels with the hero.
+##
+## "Torches make pools of light and the space between them is dark" is the right
+## rule for the ROOM and the wrong rule for the character: between two sconces
+## the hero rendered as a featureless black cut-out, and the player cannot read
+## a guard or a roll off a silhouette. The range is deliberately under 4 m and
+## the light casts no shadows, so it lights him and nothing else -- the room's
+## darkness is untouched.
+func _build_key_light() -> void:
+	var lamp := OmniLight3D.new()
+	lamp.name = "KeyLight"
+	lamp.light_color = Color(1.0, 0.94, 0.86)
+	lamp.light_energy = 1.4
+	lamp.omni_range = 3.4
+	lamp.omni_attenuation = 1.7
+	lamp.shadow_enabled = false
+	lamp.position = Vector3(0.0, 1.9, -0.6)
+	add_child(lamp)
 
 
 # --- Rig --------------------------------------------------------------------
