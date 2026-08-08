@@ -1,0 +1,30 @@
+[gd_scene load_steps=4 format=3 uid="uid://blookdev0001"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_1"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_1"]
+albedo_color = Color(0.35, 0.72, 0.31, 1)
+
+[sub_resource type="Environment" id="Env_1"]
+background_mode = 1
+background_color = Color(0.42, 0.62, 0.85, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.6, 0.66, 0.75, 1)
+ambient_light_energy = 0.6
+
+[node name="LookDev" type="Node3D"]
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.6, 0.8, 0, -0.8, 0.6, 0, 6, 4.5)
+fov = 40.0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_1")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.86, 0.35, -0.36, 0, 0.71, 0.7, 0.5, -0.6, 0.62, 0, 8, 0)
+shadow_enabled = true
+
+[node name="Box" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_1")
+surface_material_override/0 = SubResource("Mat_1")

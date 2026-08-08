@@ -1,0 +1,14 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/kit/kit_torch.gd" id="1_script"]
+[ext_resource type="StandardMaterial3D" path="res://assets/materials/mat_wood.tres" id="2_wood"]
+[ext_resource type="StandardMaterial3D" path="res://assets/materials/mat_iron.tres" id="3_iron"]
+[ext_resource type="ShaderMaterial" path="res://assets/materials/mat_flame.tres" id="4_flame"]
+[ext_resource type="StandardMaterial3D" path="res://assets/materials/mat_ember.tres" id="5_ember"]
+
+[node name="Torch" type="Node3D"]
+script = ExtResource("1_script")
+wood_material = ExtResource("2_wood")
+iron_material = ExtResource("3_iron")
+flame_material = ExtResource("4_flame")
+ember_material = ExtResource("5_ember")

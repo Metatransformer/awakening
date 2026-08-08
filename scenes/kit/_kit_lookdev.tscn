@@ -1,0 +1,45 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/kit/dungeon_env.tscn" id="1_env"]
+[ext_resource type="PackedScene" path="res://scenes/kit/floor_slab.tscn" id="2_floor"]
+[ext_resource type="PackedScene" path="res://scenes/kit/wall_segment.tscn" id="3_wall"]
+[ext_resource type="PackedScene" path="res://scenes/kit/doorway.tscn" id="4_door"]
+[ext_resource type="PackedScene" path="res://scenes/kit/pillar.tscn" id="5_pillar"]
+[ext_resource type="PackedScene" path="res://scenes/kit/torch.tscn" id="6_torch"]
+[ext_resource type="PackedScene" path="res://scenes/kit/step_block.tscn" id="7_block"]
+
+[node name="KitLookdev" type="Node3D"]
+
+[node name="Env" parent="." instance=ExtResource("1_env")]
+
+[node name="Floor" parent="." instance=ExtResource("2_floor")]
+size = Vector2(16, 14)
+
+[node name="Wall" parent="." instance=ExtResource("3_wall")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -5)
+length = 16.0
+rng_seed = 3
+
+[node name="Door" parent="." instance=ExtResource("4_door")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 5)
+span = 8.0
+
+[node name="Pillar" parent="." instance=ExtResource("5_pillar")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.5, 0, -1)
+
+[node name="Block" parent="." instance=ExtResource("7_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.2, 2, 0.5)
+
+[node name="TorchWall" parent="." instance=ExtResource("6_torch")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 2.35, -5)
+cast_shadow = true
+rng_seed = 5
+
+[node name="TorchFloor" parent="." instance=ExtResource("6_torch")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.5, 0, -2.5)
+mode = 1
+rng_seed = 9
+
+[node name="Cam" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.9903, -0.1392, 0, 0.1392, 0.9903, 0, 2.6, 5.5)
+fov = 60.0

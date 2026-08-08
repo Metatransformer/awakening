@@ -1,16 +1,16 @@
 {
   "pieces": {
     "P1": {
-      "status": "pending",
+      "status": "building",
       "round": 0,
-      "note": "",
+      "note": "OOT third-person rig",
       "gap": "",
       "rounds": []
     },
     "P2": {
-      "status": "pending",
+      "status": "building",
       "round": 0,
-      "note": "",
+      "note": "controller + AnimationTree",
       "gap": "",
       "rounds": []
     },
@@ -50,9 +50,9 @@
       "rounds": []
     },
     "P8": {
-      "status": "pending",
+      "status": "building",
       "round": 0,
-      "note": "",
+      "note": "proving-ground room + reusable stone kit",
       "gap": "",
       "rounds": []
     },
@@ -93,6 +93,38 @@
     }
   },
   "log": [
+    {
+      "t": "13:59:27",
+      "msg": "P14 pause menu dispatched: builder + critic loop"
+    },
+    {
+      "t": "13:59:26",
+      "msg": "Settings + Saves autoloads built and tested (20/20 assertions)"
+    },
+    {
+      "t": "13:59:26",
+      "msg": "pnpm game launcher live; auto-picks best built scene"
+    },
+    {
+      "t": "13:20:38",
+      "msg": "refs pack landing: 60+ real OOT screenshots"
+    },
+    {
+      "t": "13:20:38",
+      "msg": "workflow A dispatched: stage -> core -> 3 critics -> revise"
+    },
+    {
+      "t": "13:20:38",
+      "msg": "P2 \u2192 building controller + AnimationTree"
+    },
+    {
+      "t": "13:20:38",
+      "msg": "P1 \u2192 building OOT third-person rig"
+    },
+    {
+      "t": "13:20:37",
+      "msg": "P8 \u2192 building proving-ground room + reusable stone kit"
+    },
     {
       "t": "13:17:12",
       "msg": "foundation: hero rig proven, 72 mixamo clips merged, OOT input map live"

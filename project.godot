@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="The Lower Worlds: Awakening"
-run/main_scene="res://scenes/rooms/_lookdev.tscn"
+run/main_scene="res://scenes/rooms/proving_ground.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 
@@ -19,6 +19,8 @@ config/icon="res://icon.svg"
 
 Bus="*res://scripts/autoload/event_bus.gd"
 Game="*res://scripts/autoload/game_state.gd"
+Settings="*res://scripts/autoload/settings.gd"
+Saves="*res://scripts/autoload/save_game.gd"
 
 [display]
 
@@ -164,6 +166,10 @@ dbg_reload={
 3d_physics/layer_6="interact"
 3d_physics/layer_7="pit"
 3d_physics/layer_8="hookshot_target"
+
+[audio]
+
+buses/default_bus_layout="res://default_bus_layout.tres"
 
 [physics]
 

@@ -1,0 +1,19 @@
+{
+  "name": "the-lower-worlds-awakening",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A third-person Ocarina of Time-style 3D dungeon crawler, built in Godot 4.7",
+  "scripts": {
+    "game": "node tools/play.mjs",
+    "play": "node tools/play.mjs",
+    "editor": "godot --path . --editor",
+    "check": "godot --path . --headless --import > /dev/null 2>&1 && godot --path . --headless --quit-after 5 2>&1 | grep -iE 'error|script.*failed' || echo CLEAN",
+    "import": "godot --path . --headless --import",
+    "anims": "godot --path . --headless -s tools/build_anim_lib.gd",
+    "progress": "open progress.html",
+    "shot": "godot --path . -s tools/shoot.gd --"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -218,6 +218,7 @@ in your report — do not reach into their folder and "fix" it.
 | P9 boss | `scripts/actors/boss/**`, `scenes/actors/boss/**` |
 | P10 hud | `scripts/ui/**`, `scenes/ui/**` |
 | P11 feel | `scripts/feel/**`, `assets/audio/**` |
+| P14 menu | `scripts/ui/menu/**`, `scenes/ui/menu/**` |
 | orchestrator | `project.godot`, `docs/**`, `tools/**`, `scripts/core/**`, `scripts/autoload/**`, `refs/**`, `progress.html`, `assets/characters/**`, `assets/animations/**` |
 
 Shared read-only for everyone: `scripts/core/consts.gd`, `refs/**`, `assets/**`.
@@ -276,6 +277,39 @@ func release(hero: Node3D) -> void   # for held/charged items
 
 `Game.c_items: Array[StringName]` of length 3 is what the HUD draws and what
 `item_left/up/right` fires.
+
+### Settings and saves — built, tested, and read-only for everyone but P14
+
+Two more autoloads exist. **The options UI never touches `AudioServer`, the
+window, or the `InputMap` itself** — it calls these, which own persistence and
+application:
+
+```gdscript
+Settings.set_volume(&"Music", 0.7)      # Master / Music / SFX / UI, 0..1 linear
+Settings.rebind(&"attack", event)       # false if that key is already taken
+Settings.reset_binds()
+Settings.label_for(&"attack")           # "J" — for drawing the controls list
+Settings.apply_video()                  # fullscreen, vsync, msaa, shadows, scale
+Settings.changed                        # signal(section, key, value)
+# fields: master/music/sfx/ui_volume, fullscreen, vsync, resolution_scale, msaa,
+#   shadow_quality, fov_offset, invert_camera_y, camera_sensitivity, rumble,
+#   camera_shake, letterbox_on_target
+```
+
+```gdscript
+Saves.peek(slot)        # header for the slot list; {empty:true} if unused
+Saves.save(slot)        # captures Game + hero position + current room
+Saves.load_slot(slot)   # restores Game, RETURNS {scene, room, pos, yaw}
+Saves.erase(slot)       # 3 slots, 0..2
+```
+
+`Saves.load_slot()` deliberately does **not** change scenes — it hands back
+where the hero belongs and lets the caller transition however it wants.
+Whoever owns room transitions should set `Saves.current_room` as rooms change.
+
+Audio buses `Master / Music / SFX / UI` exist in `default_bus_layout.tres`.
+Anything that plays a sound must route to `SFX`, `Music`, or `UI` — never
+straight to `Master`, or the volume sliders will not affect it.
 
 ---
 
