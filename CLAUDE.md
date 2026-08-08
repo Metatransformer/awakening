@@ -1,0 +1,131 @@
+# Working in this repo
+
+Godot 4.7, Forward+, GDScript with static types, macOS/Metal. Read this before
+you touch anything. It is short because it is only the things that have actually
+gone wrong here.
+
+---
+
+## 0. The rule that matters most: check before you build
+
+**Two sessions once built the entire metagame in parallel** — two `Main` nodes,
+two HUDs, two dungeons, two item databases, two town scenes — because neither
+looked at what was already on `main`. Resolving it cost more than either build.
+
+Before you write a system, in this order:
+
+1. `git log --oneline -20` on `main`. Someone may have just built it.
+2. `TaskList`. If a card exists, claim it (`TaskUpdate` with `owner`) instead of
+   starting a rival copy. If one doesn't, make one.
+3. `ls scripts/` and grep for the class name. This repo is not big; look.
+
+If the thing already exists and yours would be better, **replace it and delete
+the loser**. Do not land both and wire a switch. One of each system, always.
+
+---
+
+## 1. Cards and worktrees
+
+- **One card per unit of work.** `TaskCreate` before starting, `in_progress`
+  when you start, `completed` only when it is verified — not when the code is
+  written.
+- **One worktree per card** when work is parallel. Worktrees live in
+  `.claude/worktrees/`. Never `git checkout` a branch that another worktree has.
+- **Never `git checkout HEAD -- <file>` or `git restore` a shared file** to undo
+  someone. That clobbers another agent's uncommitted work. Revert surgically —
+  a targeted edit, or `git apply -R` on a filtered patch.
+- **Commit as soon as the tree is consistent.** A merge resolution sat
+  uncommitted here and was wiped by a stray `git reset --hard`. Hours, gone.
+  Commit, then continue.
+
+---
+
+## 2. Proving your work — you do not get to say it looks good
+
+**Look at the frames.** Testing is not the default proof here; the default proof
+is exercising the thing and reporting what you saw. Every real bug in this
+project's history was found by looking, and several were *hidden* by logs that
+said everything passed.
+
+```bash
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --director=res://tools/directors/mvp_loop.gd --out=/tmp/mvp/x.png --warmup=60
+```
+
+- `tools/directors/mvp_loop.gd` — the whole loop, end to end. Prints
+  `MVP FAIL …` on any beat that did not happen.
+- `tools/directors/monster_lookdev.gd` — the enemy roster, rendered.
+- Write a new director for anything you add that has pixels.
+
+**Never pass `--headless` to a screenshot run.** There is no rendering device
+and every frame comes out empty — silently.
+
+Before you call something done: clean `godot --path . --import`, clean boot, the
+relevant director with no failures, and *your own eyes on the output*.
+
+---
+
+## 3. Godot traps that have each cost real time here
+
+| Trap | What you see | The truth |
+|---|---|---|
+| `Environment.background_mode = 0` | `background_color` ignored | `0` is `BG_CLEAR_COLOR`. You want `1` (`BG_COLOR`). |
+| No `WorldEnvironment` in the scene | Default grey through every doorway | An authored `.tres` that nothing instances does nothing. |
+| `Input.action_press()` | Held actions never fire | It sets action state but dispatches **no** `InputEvent`. `_unhandled_input` never runs. Poll instead. |
+| `await get_tree().process_frame` then `add_child` | "Parent node is busy setting up children" | You resumed *inside* the tree's process loop, where `root` is locked. Use `add_child.call_deferred()` in a retry loop. |
+| Untyped `const` Dictionary indexing | "Cannot infer the type of X" | Indexing returns `Variant`. Annotate: `var next: Vector2i = D[k]`. |
+| `--check-only --script` | "Identifier not found: Bus" | Autoloads aren't registered for that mode. False positive. |
+| Emissive / alpha / `BLEND_MODE_ADD` over near-black | Opaque slab at every opacity | Alpha does not attenuate ADD. Change the *shape*, not the material. |
+| Cold `.godot/imported/` | Missing `.ctex`, text-fallback HUD icons | Run `--import` before judging a frame. |
+
+---
+
+## 4. Facing is measured, not derived — see `docs/CONTRACT.md` §2.5
+
+This has bitten the project **three times**: the hero rig, the weapon socket,
+and the whole monster roster (every model walked at the player backwards under a
+code comment asserting they faced the right way).
+
+- Heading yaw means `h = (sin y, 0, cos y)`. A Node3D's forward is `-basis.z`,
+  so `rotation.y = heading + PI` points the body at the target.
+- Imported art usually faces `+Z` anyway, which needs a **separate 180° on the
+  model node** — `hero.gd`'s `model_yaw_offset`, `enemy.gd`'s `_model.rotation.y`.
+- Fix art-space quirks **on the model**. `-basis.z is forward` is the contract
+  everything else reads facing through; do not break it to save a rotation.
+- Never reason this out from rest-pose bone tracks. **Render it and look.**
+
+---
+
+## 5. Before implementing any Godot system
+
+Invoke the matching `godot-prompter:*` skill first — `player-controller`,
+`state-machine`, `inventory-system`, `ai-navigation`, `hud-system`,
+`camera-system`, and so on. This applies to subagents writing Godot code too.
+"I already know how CharacterBody3D works" is not an exemption; knowing the
+class is not knowing the pattern.
+
+---
+
+## 6. House style
+
+- Static types everywhere. `snake_case` files, `PascalCase` classes.
+- Health is in **quarter-hearts** (`K.QUARTER` = 1, `K.HEART` = 4).
+- Metric: 1 unit = 1 m. Hero is 1.65 m. Constants live in `scripts/core/consts.gd` (`K`).
+- Values tagged `[oot]` in `K` are **measured from reference footage**. They are
+  not typos and they are not yours to "correct".
+- Comments explain *why*, and especially why the obvious thing is wrong. Match
+  the density already in the file — this codebase comments its traps on purpose.
+- `Flow` is the only thing that calls `change_scene_to_file`. Do not add a second.
+
+---
+
+## 7. The docs, and which one owns what
+
+| File | Owns |
+|---|---|
+| `docs/GDD.md` | What the game is. The north star; everything else serves it. |
+| `docs/METAGAME.md` | The economy: loot, bag, gold, extraction, the shops. |
+| `docs/CONTRACT.md` | Interfaces, units, autoloads, collision layers, file ownership. |
+| `docs/STYLEGUIDE.md` | Palette, type, the PSX treatment, the anti-slop list. |
+
+Update the doc in the same commit as the code. A design doc describing something
+the code no longer does is worse than no doc — the next agent will believe it.

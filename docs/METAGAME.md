@@ -5,6 +5,12 @@ town is where you turn it into permanence. Everything below is the design of
 record for what is *implemented*, not a wishlist — every number here is read
 from the code it describes, and the file it lives in is named.
 
+> **`docs/GDD.md` is the north star**; this file is the economy underneath it.
+> The structure here supersedes the "one cyclic, key-locked dungeon ending in a
+> boss" in `docs/CONTRACT.md` §0 — but **everything else in the contract still
+> holds**. OOT remains the bar for camera, locomotion, combat feel, and `refs/`.
+> We changed what the game *is*, not how it *feels*.
+
 ---
 
 ## 1. The loop
