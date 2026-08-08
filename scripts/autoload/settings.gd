@@ -9,6 +9,22 @@ extends Node
 
 const DEFAULT_PATH := "user://settings.cfg"
 
+## Bump this whenever the SHIPPED input layout in project.godot changes.
+##
+## Saved binds are replayed over the InputMap at boot and win, which means a
+## stale `user://settings.cfg` silently outranks the layout the game ships. That
+## is not hypothetical: a menu test once left `attack` on the N key with the
+## mouse binding erased and the sword was dead on the owner's machine until
+## somebody dumped the InputMap at runtime and found it. It happened again when
+## the pad layout was renumbered -- the saved pad binding pinned `attack` to the
+## old index, so the fix appeared not to work.
+##
+## A rebind is a preference about a layout. Change the layout and the preference
+## no longer refers to anything, so it is dropped rather than replayed. Losing a
+## custom bind on a layout change is a small, visible cost; shipping a build
+## whose controls are quietly overridden is not.
+const BIND_SCHEMA := 2
+
 ## Where preferences persist. A test or a screenshot director that rebinds keys
 ## MUST NOT write to the player's real settings — an earlier menu test left
 ## `attack` bound to N in the shipped config, and the game booted with a dead
@@ -80,7 +96,17 @@ func load_settings() -> void:
 	camera_shake = cfg.get_value("game", "camera_shake", camera_shake)
 	letterbox_on_target = cfg.get_value("game", "letterbox", letterbox_on_target)
 
-	_binds = cfg.get_value("controls", "binds", {})
+	# Binds from an older layout are discarded, not replayed. See BIND_SCHEMA.
+	var schema: int = int(cfg.get_value("controls", "schema", 1))
+	if schema == BIND_SCHEMA:
+		_binds = cfg.get_value("controls", "binds", {})
+	else:
+		var stale: Dictionary = cfg.get_value("controls", "binds", {})
+		if not stale.is_empty():
+			print("Settings: dropping %d rebind(s) saved against input layout v%d (now v%d): %s"
+				% [stale.size(), schema, BIND_SCHEMA, ", ".join(PackedStringArray(stale.keys()))])
+		_binds = {}
+		save_settings()
 
 
 func save_settings() -> void:
@@ -103,6 +129,7 @@ func save_settings() -> void:
 	cfg.set_value("game", "camera_shake", camera_shake)
 	cfg.set_value("game", "letterbox", letterbox_on_target)
 
+	cfg.set_value("controls", "schema", BIND_SCHEMA)
 	cfg.set_value("controls", "binds", _binds)
 	cfg.save(path)
 
