@@ -114,6 +114,19 @@ func _build_model() -> void:
 		push_error("enemy: no model at %s" % path)
 		return
 	_model = (load(path) as PackedScene).instantiate() as Node3D
+	# MEASURED BY RENDER, not derived (docs/CONTRACT.md §2.5). The steering math
+	# is right -- `rotation.y = heading + PI` makes the BODY's -Z point at the
+	# player, which is what the rest of this file reads as facing -- but every
+	# monster GLB is authored looking down +Z, so without this the mesh inside
+	# that correct body showed the player its back. Same correction the hero's
+	# FBX needs (`model_yaw_offset = 180`), for the same reason.
+	#
+	# Fix it HERE and not by dropping the +PI: `-basis.z is forward` is the
+	# contract every other system reads an actor's facing through, and paying
+	# for an art-space quirk by breaking that would move the bug rather than
+	# remove it. tools/directors/monster_lookdev.gd is the render that settles
+	# it -- the monsters must look AT the hero standing in front of them.
+	_model.rotation.y = PI
 	add_child(_model)
 
 	# Scale by MEASUREMENT, not a hardcoded factor: the nine GLBs come from
