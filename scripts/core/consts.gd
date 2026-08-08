@@ -4,7 +4,28 @@ extends RefCounted
 ## Never hardcode a number that lives here.
 ##
 ## Metric: 1 unit = 1 metre. Gravity is -Y, the hero moves on the XZ plane.
-## Numbers marked TUNE are starting values the critics are expected to move.
+##
+## Numbers tagged [oot] are converted from the Ocarina of Time decompilation via
+## refs/REFERENCE.md — that file cites file:line for each one. Numbers tagged
+## [tune] are ours to move. DO NOT "clean up" an [oot] number because it looks
+## odd; it looks odd because it is measured.
+##
+## OOT runs its logic at 20 Hz, so decomp constants are per 50 ms tick. Anything
+## quoted here has already been converted to per-second. See TICK below.
+
+# --- Conversion -------------------------------------------------------------
+## OOT's logic and display tick. [oot] R_UPDATE_RATE=3 -> 20 Hz.
+const TICK := 0.05
+## Metres per OOT unit, anchored on OUR hero rather than a guessed ratio:
+## adult Link is 68.0 units tall (Player_GetHeight), our hero is 1.65 m.
+## Use this to convert any further number out of refs/REFERENCE.md.
+const U := 1.65 / 68.0  # 0.024265 m/unit -> ~41.2 units/metre
+
+
+static func from_units(units: float) -> float:
+	## Convert an OOT unit distance out of refs/REFERENCE.md into metres.
+	return units * U
+
 
 # --- Space ------------------------------------------------------------------
 const TILE := 2.0
@@ -22,7 +43,7 @@ const WEST := Vector3(-1, 0, 0)
 const EAST := Vector3(1, 0, 0)
 const UP := Vector3(0, 1, 0)
 
-const GRAVITY := 22.0  # TUNE — OOT falls faster than earth-real 9.8
+const GRAVITY := 22.0  # [tune] OOT falls faster than earth-real 9.8
 
 # --- Collision layers (bit masks, see docs/CONTRACT.md §6) ------------------
 const L_WORLD := 1 << 0
@@ -37,74 +58,122 @@ const L_HOOK := 1 << 7
 # --- Hero body --------------------------------------------------------------
 ## The source mesh is 1.0 units tall; this scales it to adult-Link height.
 const HERO_SCALE := 1.65
-const HERO_H := 1.65
-const HERO_RADIUS := 0.35
+const HERO_H := 1.65               # [oot] 68 u
+const HERO_RADIUS := 0.35          # [oot] body cylinder r=12 u -> 0.29; padded
 const HERO_CAPSULE_H := 1.5
 ## Where the camera aims and where a lock-on reticle sits on the hero.
-const HERO_EYE_Y := 1.35
+## [oot] look-at = feet + height - 13.6 u = 54.4 u up.
+const HERO_EYE_Y := 1.32
+const WALL_CHECK_RADIUS := 0.44    # [oot] 18 u
+const CEILING_CHECK_H := 1.36      # [oot] 56 u
 
-# --- Locomotion (TUNE — the movement critic owns these) ---------------------
-const WALK_SPEED := 1.6
-const RUN_SPEED := 4.8
-## Analog magnitude above which the hero runs instead of walks.
-const RUN_THRESHOLD := 0.62
-const ACCEL := 28.0
-const DECEL := 34.0
+# --- Locomotion -------------------------------------------------------------
+## [oot] THERE IS NO WALK/RUN THRESHOLD. Speed is a continuous curve of stick
+## magnitude. The stick clamps to 0-60 raw; below 20 is deadzone. Normalised:
+const STICK_DEADZONE := 20.0 / 60.0    # 0.333 [oot]
+## Discrete actions (roll, backflip, sidehop) need a near-full deflection.
+const STICK_ACTION_GATE := 55.0 / 60.0  # 0.917 [oot]
+
+const RUN_SPEED := 180.0 * U       # 4.37 m/s [oot] adult run cap
+const ROLL_SPEED := 270.0 * U      # 6.55 m/s [oot] — FASTER than running
+const SIDEHOP_SPEED := 255.0 * U   # 6.19 m/s [oot]
+const BACKFLIP_SPEED := 180.0 * U  # 4.37 m/s [oot]
+## Kept for UI/labels only — the speed curve is continuous, do not branch on it.
+const WALK_SPEED := 60.0 * U       # 1.46 m/s
+
+const ACCEL := 28.0                # [tune]
+const DECEL := 34.0                # [tune]
 ## Degrees/sec the hero's body turns to face his heading when unlocked.
-const TURN_RATE := 900.0
-const ROLL_SPEED := 7.0
-const ROLL_TIME := 0.62
-const BACKFLIP_SPEED := 6.0
-const SIDEHOP_SPEED := 6.5
+const TURN_RATE := 900.0           # [tune]
+const ROLL_TIME := 0.62            # [tune]
+## [oot] roll grants 10 ticks of invulnerability starting at anim frame 8.
+const ROLL_IFRAMES := 10.0 * TICK  # 0.5 s
 
-# --- Camera (TUNE — the camera critic owns these) ---------------------------
-const CAM_FOV := 60.0
-## Metres behind the hero, and metres above his feet, when free.
-const CAM_DIST := 4.2
-const CAM_HEIGHT := 1.9
+
+## OOT's continuous speed curve: normalised stick magnitude -> m/s.
+## Below the deadzone he stands still; above it, speed ramps linearly to the cap.
+static func speed_for_stick(magnitude: float) -> float:
+	if magnitude < STICK_DEADZONE:
+		return 0.0
+	var t := (magnitude - STICK_DEADZONE) / (1.0 - STICK_DEADZONE)
+	return RUN_SPEED * clampf(t, 0.0, 1.0)
+
+
+# --- Camera -----------------------------------------------------------------
+## [oot] FOV is VERTICAL degrees. Three modes, and a low-health squeeze.
+const CAM_FOV := 60.0              # free
+const CAM_FOV_LOCK := 50.0         # locked onto a hostile
+const CAM_FOV_PARALLEL := 45.0     # Z held with no target, and first-person
+const CAM_FOV_LOW_HEALTH := 0.8    # multiplier at <= 1 heart
+
+## [oot] DUNGEON0 camera set — dungeons are TIGHTER and FLATTER than outdoors.
+## Distance is a range the rig lives within, not a fixed boom length.
+const CAM_DIST_MIN := 102.0 * U    # 2.48 m
+const CAM_DIST_MAX := 170.0 * U    # 4.13 m
+const CAM_PITCH := 5.0             # degrees above horizontal, looking down
+## [oot] NORMAL1 outdoor set, for reference if we ever leave the dungeon.
+const CAM_DIST_MIN_OUTDOOR := 136.0 * U  # 3.30 m
+const CAM_DIST_MAX_OUTDOOR := 272.0 * U  # 6.60 m
+const CAM_PITCH_OUTDOOR := 10.0
+
 ## Seconds for the rig to catch up to the hero. Higher = laggier, floatier.
-const CAM_LAG := 0.18
+const CAM_LAG := 0.18              # [tune]
 ## How fast the camera drifts back behind the hero while he runs.
-const CAM_AUTOSWING := 1.1
-## Targeting camera: pulled back to frame hero AND target together.
-const CAM_LOCK_DIST := 5.0
-const CAM_LOCK_HEIGHT := 2.2
-const CAM_MIN_PITCH := -34.0
-const CAM_MAX_PITCH := 22.0
+const CAM_AUTOSWING := 1.1         # [tune]
+## [oot] battle-camera pitch clamp is +/-59.99 degrees.
+const CAM_MIN_PITCH := -55.0
+const CAM_MAX_PITCH := 55.0
 
-# --- Z-targeting (TUNE — the targeting critic owns these) -------------------
-const LOCK_RANGE := 18.0
-## Half-angle, in degrees, of the forward cone a target must fall inside.
-const LOCK_CONE := 62.0
-## Lock breaks past this — hysteresis, so it is wider than LOCK_RANGE.
-const LOCK_BREAK_RANGE := 22.0
-## Height of each cinematic letterbox bar as a fraction of screen height.
-const LETTERBOX_FRAC := 0.11
-const LETTERBOX_TIME := 0.22
+# --- Z-targeting ------------------------------------------------------------
+## [oot] ATTENTION_RANGE_3, the default: acquire at 350 u, break at 429 u.
+## The ~22% hysteresis band is deliberate — it stops the lock chattering.
+const LOCK_RANGE := 350.0 * U        # 8.49 m
+const LOCK_BREAK_RANGE := 428.7 * U  # 10.40 m
+## [oot] Half-angle of the forward search cone: a 120-degree arc.
+const LOCK_CONE := 60.0
+## [oot] Once locked, switching targets widens the cone to +/-90.
+const LOCK_SWITCH_CONE := 90.0
+## [oot] Height of each cinematic letterbox bar, and its slide-in time
+## (27 scanlines of 240 = 11.25%, animated over 3 ticks).
+const LETTERBOX_FRAC := 0.1125
+const LETTERBOX_TIME := 3.0 * TICK  # 0.15 s
 
 # --- Health -----------------------------------------------------------------
-## Health is counted in QUARTER hearts, like the source material.
+## [oot] A heart is 16 internal units; the smallest displayed step is a quarter.
 const QUARTER := 1
 const HEART := 4
 const START_HEARTS := 3
 const MAX_MAGIC := 48
-const IFRAME_TIME := 1.2
+## [oot] 20 ticks of invulnerability after taking damage.
+const IFRAME_TIME := 20.0 * TICK    # 1.0 s
+## [oot] 8 ticks of invulnerability when a shield block is released.
+const SHIELD_IFRAMES := 8.0 * TICK  # 0.4 s
 
 # --- Feel -------------------------------------------------------------------
-## Frames of freeze on a landed hit, at 60fps.
+## DELIBERATE DEVIATION: OOT has NO hit-stop. It sells impact with camera quake
+## and rumble instead. We keep a little hit-stop because we have no rumble and
+## a 60 Hz display — but it is our choice, not fidelity. Do not let a critic
+## "correct" this into existence as an OOT fact.
 const HITSTOP_LIGHT := 4
 const HITSTOP_HEAVY := 9
 const KNOCKBACK_LIGHT := 4.0
 const KNOCKBACK_HEAVY := 8.0
 
-# --- Items (TUNE — the item critics own these) ------------------------------
-const HOOK_SPEED := 34.0
-const HOOK_RANGE := 22.0
-const HOOK_PULL_SPEED := 14.0
-const BOMB_FUSE := 2.5
-const BOMB_RADIUS := 3.0
+# --- Items ------------------------------------------------------------------
+## [oot] Hookshot flies perfectly STRAIGHT — gravity is never applied to it.
+const HOOK_RANGE := 360.0 * U       # 8.74 m
+const HOOK_LONGSHOT_RANGE := 750.0 * U  # 18.20 m
+const HOOK_SPEED := 34.0            # [tune]
+const HOOK_PULL_SPEED := 14.0       # [tune]
+## [oot] 70-tick fuse; blast grows to ~80 u and deals half a heart.
+## Link is NOT exempt from his own bomb (AT_TYPE_ALL, no owner check).
+const BOMB_FUSE := 3.5
+const BOMB_RADIUS := 80.0 * U       # 1.94 m
+const BOMB_DAMAGE := 2 * QUARTER
+const BOMB_HURTS_OWNER := true
+## [oot] arrows cross the whole 8.5 m lock range in ~1 tick — near hitscan.
 const ARROW_SPEED := 42.0
-const ARROW_GRAVITY := 6.0
+const ARROW_GRAVITY := 6.0          # [tune] OOT arrows barely drop at this range
 
 
 static func snap_to_tile(p: Vector3) -> Vector3:

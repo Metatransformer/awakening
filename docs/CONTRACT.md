@@ -93,6 +93,48 @@ troll, golem, kobold, wraith, knight_iron + a brute animation set),
 
 ---
 
+## 2.5 The reference is authoritative — and it contradicts intuition
+
+`refs/REFERENCE.md` is derived from the **`zeldaret/oot` decompilation**, with
+`file:line` citations, plus measurements off the real screenshots in
+`refs/screens/`. `scripts/core/consts.gd` is derived from it: constants tagged
+`[oot]` are **measured**, constants tagged `[tune]` are ours to move.
+
+**Do not "correct" an `[oot]` number because it looks wrong. It looks wrong
+because it is measured and your intuition is not.** If you believe one is
+genuinely mistaken, cite `refs/REFERENCE.md` and tell the orchestrator.
+
+OOT's logic runs at **20 Hz**, so raw decomp constants are per-50 ms tick, and
+distances are in OOT units. `K` has already converted both — use `K`, and use
+`K.from_units()` for anything else you pull out of the reference.
+
+These nine facts are the ones clones get wrong. Build to them:
+
+1. **There is no walk/run threshold.** Speed is a continuous curve of stick
+   magnitude — deadzone below 0.333, ramping to the cap. Use
+   `K.speed_for_stick()`. Do not branch on a "is walking" boolean.
+   The separate `K.STICK_ACTION_GATE` (0.917) is what gates roll/backflip/sidehop.
+2. **Dodges are faster than running** — roll 6.55 m/s and sidehop 6.19 m/s
+   against a 4.37 m/s run. This is why OOT combat moves the way it does.
+3. **Z-targeting is not "lock the nearest enemy."** It is a priority chain:
+   category (Boss > Enemy > Bg) → ±60° cone off the hero's facing → range →
+   on-screen with asymmetric leeway → line of sight → *facing-weighted* nearest.
+4. **Lock range is short** — acquire at 8.49 m, break at 10.40 m. The ~22 %
+   hysteresis is deliberate; without it the lock chatters.
+5. **Dungeon cameras are tighter and flatter than outdoor ones** — 2.48–4.13 m
+   at 5° pitch, not the 3.30–6.60 m at 10° used outdoors. FOV changes by mode:
+   60° free, 50° locked on a hostile, 45° parallel/first-person.
+6. **The HUD's B/A/C buttons are TOP-RIGHT**, arranged in the physical shape of
+   the N64 C-pad. Only the rupee counter (bottom-left) and minimap
+   (bottom-right) are at the bottom. Hearts are top-left.
+7. **A bomb hurts the hero too** — no owner exemption. Fuse 3.5 s, blast 1.94 m.
+8. **The hookshot flies perfectly straight.** Gravity is never applied to it.
+9. **OOT has no hit-stop.** It sells impact with camera quake and rumble. Our
+   `K.HITSTOP_*` is a deliberate deviation because we have no rumble — it is our
+   choice, not fidelity, and it is not evidence of anything about OOT.
+
+---
+
 ## 3. Autoloads — owned by the orchestrator, do not edit `project.godot`
 
 | Autoload | Script | Purpose |
