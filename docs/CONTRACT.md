@@ -278,6 +278,56 @@ func release(hero: Node3D) -> void   # for held/charged items
 `Game.c_items: Array[StringName]` of length 3 is what the HUD draws and what
 `item_left/up/right` fires.
 
+### Weapon and item models — built, read-only outside the orchestrator
+
+Never load a weapon `.glb` yourself. The `weapons_hq` models carry **no embedded
+images** — their diffuse ships beside them as
+`assets/weapons/textures/<id>_diff.jpg` — so a raw load gives a flat grey wedge
+that reads as a lighting bug. Two others need a scale correction. Both problems
+are handled here:
+
+```gdscript
+# scripts/items/weapon_models.gd
+WeaponModels.make("sword_knightly")   # -> Node3D, textured, correctly scaled
+WeaponModels.extent(model)            # -> longest side in metres
+```
+
+Ids: `sword_knightly|noble|elegant|common|crude` (0.92 m),
+`shield_knightly|noble|elegant|common|crude` (0.61–0.94 m), `kite_shield`,
+`hookshot_pistol` (0.30 m).
+
+Grip convention, **verified by render**, not by reading the GLB:
+
+| | origin | axis |
+|---|---|---|
+| sword | the pommel | blade along +Y |
+| shield | the **centre of the disc**, not the rim | front face +Z |
+| hookshot | the grip | barrel along +Z, the way it fires |
+
+Do not compute a bone-socket offset analytically. The rest-pose numbers are in a
+rotated FBX space and will mislead you. Render it, look, adjust, render again.
+
+### Hookshot — chain and anchors, ready for P7
+
+```gdscript
+# scripts/items/hookshot_tether.gd — presentation only; the firer owns the
+# raycast, the target choice, and moving the hero.
+var t := HookshotTether.new()          # add as a child of the hero
+t.begin(from, impact, pull_target)     # flies at K.HOOK_SPEED, fixed speed
+t.advance(delta, from) -> bool         # true on the tick it arrives
+t.update_pull(from)                    # while the hero travels
+t.clear()
+t.preview(from, impact, 0.0..1.0)      # one instant, for a director
+
+# scripts/props/hook_target.gd — an authored ring the aim-assist prefers.
+# Joins group `hookable`. Any surface in K.HOOK_RANGE stays a valid fallback.
+ring.pull_point()    # where the hero lands: nudged up and out off the anchor
+ring.anchor_point()  # where the head bites — what the reticle wants
+```
+
+Fixed **speed**, not fixed duration. A fixed duration makes near shots crawl and
+far shots streak, which is the giveaway tell of a clone.
+
 ### Settings and saves — built, tested, and read-only for everyone but P14
 
 Two more autoloads exist. **The options UI never touches `AudioServer`, the
@@ -371,3 +421,27 @@ will not resolve.
   critic will ask you to change one.
 - Do not `git add` or `git commit`. The orchestrator reviews and commits.
 - Do not "fix" a file outside your allowlist, and never revert a shared file.
+
+### Traps that have already cost us time
+
+- **Autoloads do not exist under `godot -s`.** A SceneTree script replaces the
+  main loop, so `Bus`/`Game`/`Settings`/`Saves` are simply absent. Anything that
+  touches them runs as a real scene: `godot --path . --headless res://tools/scenes/x.tscn`.
+- **A new `class_name` is invisible until you rescan.** Run
+  `godot --path . --headless --import` or every reference is "not declared".
+- **`class_name` only resolves for scripts inside the project.** A test in the
+  scratchpad cannot see `K`.
+- **`/` is reserved** as the library/animation separator. Namespace clips with `_`.
+- **An imported FBX ships a stub `""` AnimationLibrary.** Evict it before adding
+  a merged one, or you get "Can't add animation library twice with name: ''".
+- **Comments in `project.godot` must start with `;`.** A `#` comment is a parse
+  error that silently **eats the assignment directly after it**. This cost an
+  afternoon: `ui_accept` fell back to the engine default while `ui_cancel`, one
+  line further down past the damage, applied fine — an asymmetry that reads as an
+  engine quirk and invites a completely wrong theory.
+- **Never let a test write the real `user://settings.cfg`.** Pass
+  `--settings=user://scratch.cfg` after the `--` separator. A menu test once left
+  `attack` bound to `N` and the game shipped with a dead sword button.
+- **`OS.get_keycode_string()` returns `""`** for Enter, Space and the arrows in
+  this build while working for Escape. Print raw keycodes in diagnostics; a
+  half-working readout invents bugs that are not there.
