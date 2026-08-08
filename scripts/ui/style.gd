@@ -43,6 +43,17 @@ const T3 := 3000
 const SAFE := Vector2(0.025, 0.031)
 
 const HEALTH_ORIGIN := Vector2(0.031, 0.899)
+## Health is a BAR, not a row of cells (styleguide §5.1 specifies cells; this is
+## a deliberate override -- see the note on _draw_health). Width is fixed rather
+## than growing with max health: a bar that gets longer as you buy containers
+## walks across the screen and stops being a shape you recognise peripherally.
+const HEALTH_W := 0.268            ## 343 px @1280
+const HEALTH_H := 15.0             ## reference px
+## Directly below health, sharing its left edge. Deliberately shorter, so the
+## two never read as one two-line meter in peripheral vision.
+const STAMINA_RATIO := 0.62
+const STAMINA_H := 8.0
+const STAMINA_GAP := 4.0
 const KIT_ORIGIN := Vector2(0.031, 0.826)
 const BAG_RIGHT := 0.969
 const BAG_NUM_BASELINE := 0.900

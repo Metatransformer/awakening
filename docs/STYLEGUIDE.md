@@ -269,24 +269,51 @@ the over-the-shoulder camera puts the action in the upper-middle third.
 Design space is 1280×720; all coordinates are fractions of viewport, origin
 top-left. Safe area: nothing within `0.025w` / `0.031h` of an edge.
 
-### 5.1 Health — segmented quarter cells, not hearts
+### 5.1 Health — a ticked bar, not hearts and not cells
 
-One horizontal row of discrete cells, one per quarter-heart, grouped in fours by
-a wider gutter.
+**Superseded 2026-08-08, on the owner's instruction: this was a row of discrete
+quarter cells and is now a continuous bar.** The cells' argument was
+countability — under pressure the player needs "three left", not "about a fifth"
+— and that argument was right, so the countability is carried over by other
+means rather than dropped: a **2 px VOID tick at every heart boundary and a 1 px
+tick at every quarter**, cut *through* the fill. You can still count what is
+left; the fill is continuous between the ticks.
 
-Because: discrete cells are **countable** at a glance and a smooth bar is not —
-under pressure the player needs "three left", not "about a fifth". It preserves
-the existing quarter granularity with no partial-shape clipping. It scales: the
-OOT layout wraps to a second row at 11 hearts and the second row is a lie; a cell
-row just gets denser. And it is unmistakably not Ocarina of Time.
+What did **not** come across from the bar idiom is easing. §7.4 still stands:
+the bar moves instantly on damage and drains its ghost in the same 4 discrete
+steps the cells did. "Bar" here is the shape, not the animation.
+
+One horizontal bar, fixed width. The width does **not** grow with max health —
+a bar that lengthens as you buy containers walks across the screen and stops
+being a shape you recognise peripherally. More containers means denser ticks.
 
 | | |
 |---|---|
 | Origin | x `0.031` (40), top y `0.899` (647) |
-| Cell | 6×20 px, 2 px gutter, **5 px gutter every 4th** (the heart grouping) |
-| 5 hearts | 172 px wide. Cap total at `0.336`; past that cell width drops 6→4→3 and the group gutter carries the reading |
+| Bar | `0.268` w (343 px) × 15 px, fixed at every max-health value |
+| Ticks | 2 px VOID full height at heart boundaries; 1 px VOID at 45% height at quarters |
 | Filled | VITAL | Empty | ASH @60% |
-| Container | 1 px VOID hairline, 1 px outside the cells |
+| Container | 1 px VOID hairline, 1 px outside the bar |
+
+### 5.1b Stamina — directly below health
+
+Added 2026-08-08 with the roll cost (`K.STAMINA_ROLL`). Shares health's left
+edge and sits `4 px` under it, deliberately **shorter** (`0.62×` the width) so
+the two never read as one two-line meter in peripheral vision.
+
+The one fact this bar exists to carry is *can I dodge right now*, so that is the
+thing it says loudest: the fill is BONE while a roll is affordable and turns
+**RUST** the moment it drops below one — the answer is a colour, not a
+measurement the player has to take. Boundaries are drawn at each roll still
+affordable, so the bar reads in **dodges**, not in percent, which is the only
+unit it is ever spent in.
+
+| | |
+|---|---|
+| Origin | x `0.031` (40), top y health bottom + 4 px |
+| Bar | `0.62 ×` health width × 8 px |
+| Filled | BONE, or RUST below `K.STAMINA_ROLL` | Empty | ASH @60% |
+| Ticks | 1 px VOID at each affordable roll boundary |
 
 - **Damage ghost:** cells just lost stay lit in RUST for 400 ms, then drain
   right-to-left over 250 ms in 4 discrete steps. *How much you just lost* is the
@@ -301,6 +328,19 @@ row just gets denser. And it is unmistakably not Ocarina of Time.
 
 Four permanent cells above health, sharing its left edge, so body and tools read
 as one bottom-left instrument. No radial, no wheel.
+
+**Glyphs are renders of the real models**, baked by `tools/scenes/_iconbake.gd`
+and posterised into the Pal ramp, so the cell always shows the thing you are
+actually holding and cannot drift from it. This is not a hole in §7.10: that
+rule bans bought vector icon sets and demands glyphs authored *in the palette*,
+and quantising a render to four Pal values with a 1 px VOID dilation is how a
+render earns that. Lettering ("SW", "SH") survives only as the fallback for a
+missing bake — an empty cell would read as "you have no sword", which is a lie.
+
+The rule the bake taught: **thin items do not survive 32 px.** A whole sword is a
+three-pixel scratch, so its icon crops to the guard and pommel rather than
+dutifully showing the entire blade. `bow_knightly` is the one that still reads
+poorly, because a bow is edge-on from every axis.
 
 | | |
 |---|---|
@@ -402,8 +442,8 @@ Not a fairy, not a triangle.
 
 ### 5.6 Always visible vs. transient
 
-**ALWAYS — five things, nothing else:** health cells, kit strip, bag total,
-extraction line, ammo numerals. Each is a number the player must be able to
+**ALWAYS — six things, nothing else:** the health bar, the stamina bar, kit
+strip, bag total, extraction line, ammo numerals. Each is a number the player must be able to
 consult unprompted, because each feeds the single recurring decision — push on,
 or leave. Anything that does not feed that decision has no claim on permanent
 pixels.
@@ -426,7 +466,8 @@ Fractions of viewport, origin top-left; px at 1280×720.
 
 | Element | x | y | Size |
 |---|---|---|---|
-| Health row origin | 0.031 (40) | 0.899 (647) | cell 6×20, gutter 2/5 |
+| Health bar origin | 0.031 (40) | 0.899 (647) | 0.268 w (343) × 15 |
+| Stamina bar origin | 0.031 (40) | health bottom + 4 | 0.62× health w × 8 |
 | Kit strip origin | 0.031 (40) | 0.826 (595) | cell 32×32, gutter 6 |
 | Bag numeral baseline | right-align 0.969 | 0.900 (648) | 32 px |
 | Value slips | right-align 0.969, max w 0.094 | 0.803→0.858 | 3 px + 2 gutter |
@@ -489,8 +530,10 @@ it counts down to zero in RUST. The palette becomes the score.
 2. **No `#000000` and no `#FFFFFF`, anywhere.** Black is VOID, white is BONE.
 3. **No engine default font.** Open Sans in a PSX dungeon is the loudest
    "unfinished" signal available.
-4. **No smoothly lerped HUD meters.** Discrete cells, instant or 4-step
-   transitions. Continuous easing on a health bar reads as a web dashboard.
+4. **No smoothly lerped HUD meters.** Instant or 4-step transitions. Continuous
+   easing on a health bar reads as a web dashboard. Health and stamina are bars
+   as of 2026-08-08 (§5.1) and this rule is exactly what survived that change —
+   the shape moved, the easing ban did not.
 5. **No bloom, glow or emissive.** The PSX had none. Dither toward BONE and let
    the 5-bit depth do the work.
 6. **No normal maps, PBR metallic/roughness, SSAO, SSR, or screen-space

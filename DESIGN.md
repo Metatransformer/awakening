@@ -9,6 +9,37 @@ tagged **[tune]** are ours to move.
 
 ---
 
+
+---
+
+> ## ⚠ SUPERSEDED — read this first
+>
+> This document was written against the repo as of `0dc3c07`, when the game was
+> an Ocarina-style dungeon crawler with hearts, a magic meter and a C-pad. Commit
+> `34318cf` landed the extraction loop — town, shop, bag value, extraction cost —
+> and with it `docs/STYLEGUIDE.md`, which is the HUD's actual governing document.
+>
+> **The palette in §4 did not ship and should not be used.** `Pal`
+> (`scripts/ui/style.gd`) is the palette: every channel byte a multiple of 8,
+> because the PSX framebuffer was RGB555. The cold/warm split proposed here is
+> incompatible with it, and `GOLD` and `CYAN` already have exclusive owners
+> (currency, and the way out).
+>
+> **What did ship, from the owner's four instructions:**
+>
+> | Asked for | Where it lives now |
+> |---|---|
+> | A normal health bar | `Hud._draw_health` — a ticked bar. STYLEGUIDE §5.1 |
+> | Stamina bar below it | `Hud._draw_stamina`, plus a real stamina cost on the roll. §5.1b |
+> | Real icons | `tools/scenes/_iconbake.gd` → `assets/ui/icons/`, posterised into Pal |
+> | Less margin | Already satisfied: `Pal.SAFE` is 0.025/0.031. The 8% this document complains about was the *old* HUD |
+>
+> Proof: `tools/directors/hud_vitals.gd` drives the bars through spend, refusal,
+> regen, damage-ghost and low-health.
+>
+> What is still worth reading here: §2 (the frame measurements), §11 (the
+> conflicts), and §13 (the decisions log). Everything prescriptive is stale.
+
 ## 0. Product context
 
 - **What this is:** a third-person, over-the-shoulder 3D dungeon crawler in the framing

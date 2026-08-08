@@ -1,7 +1,8 @@
 extends CanvasLayer
 ## Autoload `Hud`. The in-game overlay, built to docs/STYLEGUIDE.md §5.
 ##
-## TWO POLES. Bottom-left is YOU: health cells and the kit strip, one instrument.
+## TWO POLES. Bottom-left is YOU: the health and stamina bars and the kit strip,
+## one instrument.
 ## Bottom-right is THE MONEY: the bag's running value and the way out, one
 ## instrument. They sit in opposite corners deliberately -- in a panic your eye
 ## has to travel from "how alive am I" to "how much am I about to lose", and that
@@ -23,21 +24,49 @@ extends CanvasLayer
 
 const DRAW_LAYER := 50  ## under the pause menu, which sits at 100
 
-# --- Health (STYLEGUIDE §5.1) -----------------------------------------------
-const CELL := Vector2(6.0, 20.0)   ## one quarter-heart, in reference px
-const CELL_GAP := 2.0
-## Wider gutter every fourth cell. This is the only thing that says "heart".
-const HEART_GAP := 5.0
-const HEALTH_MAX_W := 0.336        ## fraction of screen before cells narrow
-## Seconds the cells you just lost stay lit in RUST before draining.
+# --- Health -----------------------------------------------------------------
+## OVERRIDES STYLEGUIDE §5.1, which specifies a row of discrete quarter cells.
+## Changed to a bar on the owner's instruction. The styleguide's argument for
+## cells was countability -- "the player needs 'three left', not 'about a fifth'"
+## -- and that argument is real, so the countability is kept by other means: a
+## 2px VOID tick at every heart boundary and a 1px tick at every quarter, cut
+## THROUGH the fill. You can still count what is left; the fill is now
+## continuous between the ticks.
+##
+## What is NOT taken from the bar idiom is easing. Anti-slop §7.4 bans smoothly
+## lerped meters, and that ban survives intact: this bar moves instantly on
+## damage and drains its ghost in the same 4 discrete steps the cells did.
+## "Bar" here means the shape, not the animation.
+const TICK_W := 1.0                ## quarter tick
+const HEART_TICK_W := 2.0          ## heart boundary tick
+## Seconds the health you just lost stays lit in RUST before draining.
 const GHOST_HOLD := 0.40
 const GHOST_DRAIN := 0.25
+
+# --- Stamina ----------------------------------------------------------------
+## Directly below health. The one fact this bar exists to carry is "can I dodge
+## right now", so it turns RUST the moment it drops under one roll -- the answer
+## is a colour, not a measurement you have to take.
+const STAMINA_TICKS := 3           ## rolls-from-full, drawn as boundaries
 
 # --- Kit strip (§5.2) --------------------------------------------------------
 const KIT_CELL := 32.0
 const KIT_GAP := 6.0
 ## Order is the order of the buttons, left to right.
 const KIT := [&"sword", &"shield", &"hookshot", &"bow"]
+## Icons baked from the REAL item models by tools/scenes/_iconbake.gd, then
+## posterised into the Pal ramp so they read as authored in-palette rather than
+## as photographs dropped into a 5-bit HUD. Regenerate with:
+##   godot --path . res://tools/scenes/_iconbake.tscn -- --out=<abs>/assets/ui/icons
+const KIT_ICON := {
+	&"sword": "res://assets/ui/icons/sword_knightly.png",
+	&"shield": "res://assets/ui/icons/kite_shield.png",
+	&"hookshot": "res://assets/ui/icons/hookshot_pistol.png",
+	&"bow": "res://assets/ui/icons/bow_knightly.png",
+}
+## Fallback lettering, used only for an icon that failed to load. A missing
+## texture must not leave an empty cell -- an empty cell reads as "you have no
+## sword", which is a lie the HUD should never tell.
 const KIT_LABEL := {
 	&"sword": "SW", &"shield": "SH", &"hookshot": "HK", &"bow": "BW",
 }
@@ -57,6 +86,9 @@ const SWEEP_TIME := 0.20
 const HOLD_TO_EXTRACT := 1.50
 
 var _canvas: Control
+var _icons: Dictionary[StringName, Texture2D] = {}
+## Stamina, mirrored from Game so the bar can be redrawn without polling.
+var _stamina: float = K.MAX_STAMINA
 
 # Animation state. The HUD only runs `_process` while one of these is live --
 # a HUD that repaints every frame to draw nothing is a HUD that costs a
@@ -97,7 +129,15 @@ func _ready() -> void:
 	_shown_value = float(_target_value)
 	_last_quarters = Game.quarters
 
+	for id: StringName in KIT:
+		var tex := load(String(KIT_ICON[id])) as Texture2D
+		if tex == null:
+			push_warning("Hud: kit icon missing for '%s' — falling back to lettering" % id)
+		else:
+			_icons[id] = tex
+
 	Bus.player_health_changed.connect(_on_health)
+	Bus.stamina_changed.connect(_on_stamina)
 	Bus.bag_changed.connect(_on_bag)
 	Bus.loot_gained.connect(_on_loot)
 	Bus.gold_changed.connect(_on_gold)
@@ -175,6 +215,11 @@ func _on_loot(item_id: StringName, _count: int) -> void:
 	_rim_flash_color = _toast_color
 	_rim_flash_t = 0.0
 	_wake()
+
+
+func _on_stamina(value: float, _max_s: float) -> void:
+	_stamina = value
+	_repaint()
 
 
 func _on_prompt(text: String) -> void:
@@ -287,6 +332,7 @@ func _draw_hud() -> void:
 	if s.x < 1.0 or s.y < 1.0:
 		return
 	_draw_health(s)
+	_draw_stamina(s)
 	_draw_kit(s)
 	_draw_bag(s)
 	_draw_extraction(s)
@@ -317,54 +363,49 @@ func _draw_controls(s: Vector2) -> void:
 		Vector2(s.x * 0.5, Pal.KEYS_BASELINE * s.y), scale, Pal.ASH)
 
 
-# --- Health (§5.1) ----------------------------------------------------------
-## Discrete cells, one per quarter-heart, grouped in fours. Countable at a
-## glance; a smooth bar is not. Under pressure the player needs "three left",
-## not "about a fifth".
+# --- Health -----------------------------------------------------------------
+## A continuous bar, ticked at every quarter and more heavily at every heart, so
+## "three left" is still countable without the fill being chopped into cells.
+## See the note on TICK_W for why this departs from styleguide §5.1.
 
 func _draw_health(s: Vector2) -> void:
 	var total: int = maxi(Game.max_quarters, 1)
-	var cw := Pal.px(CELL.x, s.y)
-	var ch := Pal.px(CELL.y, s.y)
-	var gap := Pal.px(CELL_GAP, s.y)
-	var hgap := Pal.px(HEART_GAP, s.y)
-
-	# Narrow the cells rather than wrapping to a second row. The OOT layout wraps
-	# at 11 hearts and the second row is a lie -- it reads as a separate meter.
-	var width := func(c: float) -> float:
-		return total * c + (total - 1) * gap + (total / K.HEART) * (hgap - gap)
-	while width.call(cw) > s.x * HEALTH_MAX_W and cw > Pal.px(3.0, s.y):
-		cw -= Pal.px(1.0, s.y)
-
 	var origin := Pal.HEALTH_ORIGIN * s
+	var w := Pal.HEALTH_W * s.x
+	var h := Pal.px(Pal.HEALTH_H, s.y)
+	var rect := Rect2(origin.x, origin.y, w, h)
+
 	var low := Game.quarters <= 3
 	var pulse := 0.0
 	if low:
 		pulse = 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.001 * TAU * 2.0)
 
-	var x := origin.x
-	for i in total:
-		if i > 0:
-			x += gap if i % K.HEART != 0 else hgap
-		var r := Rect2(x, origin.y, cw, ch)
-		var filled := i < Game.quarters
-		var ghost := i >= Game.quarters and i < Game.quarters + _ghost_visible()
+	# 1px VOID hairline OUTSIDE the bar, same containment rule the cells had.
+	_canvas.draw_rect(rect.grow(Pal.px(1.0, s.y)), Pal.VOID)
+	_canvas.draw_rect(rect, Pal.VOID if low else Color(Pal.ASH, 0.6))
 
-		var col: Color
-		if filled:
-			col = Pal.VITAL.lerp(Pal.BONE, pulse) if low else Pal.VITAL
-		elif ghost:
-			col = Pal.RUST
-		else:
-			col = Pal.VOID if low else Color(Pal.ASH, 0.6)
+	var per := w / float(total)
 
-		# 1px VOID hairline OUTSIDE the cell, so cells never touch.
-		_canvas.draw_rect(r.grow(Pal.px(1.0, s.y)), Pal.VOID)
-		_canvas.draw_rect(r, col)
-		x += cw
+	# The ghost sits UNDER the fill and extends past it: what you just lost.
+	var ghost := _ghost_visible()
+	if ghost > 0:
+		_canvas.draw_rect(Rect2(origin.x + Game.quarters * per, origin.y,
+			ghost * per, h), Pal.RUST)
+
+	var fill: Color = Pal.VITAL.lerp(Pal.BONE, pulse) if low else Pal.VITAL
+	_canvas.draw_rect(Rect2(origin.x, origin.y, Game.quarters * per, h), fill)
+
+	# Ticks last, cutting through fill and track alike -- that is what keeps the
+	# bar countable. Heart boundaries are heavier than quarters.
+	for i in range(1, total):
+		var heart := i % K.HEART == 0
+		var tw := Pal.px(HEART_TICK_W if heart else TICK_W, s.y)
+		var th := h if heart else h * 0.45
+		_canvas.draw_rect(Rect2(origin.x + i * per - tw * 0.5,
+			origin.y + h - th, tw, th), Pal.VOID)
 
 
-## Cells still shown as lost. Holds, then drains right-to-left in 4 steps --
+## Quarters still shown as lost. Holds, then drains right-to-left in 4 steps --
 ## how much you just lost is the information; the new total is secondary.
 func _ghost_visible() -> int:
 	if _ghost_t < 0.0 or _ghost_quarters <= 0:
@@ -376,10 +417,43 @@ func _ghost_visible() -> int:
 	return int(ceil(_ghost_quarters * steps))
 
 
+# --- Stamina ----------------------------------------------------------------
+## Directly below health, sharing its left edge, deliberately shorter. Same
+## instant-transition rule as health: it moves when it moves, it does not ease.
+
+func _draw_stamina(s: Vector2) -> void:
+	var origin := Pal.HEALTH_ORIGIN * s
+	var top := origin.y + Pal.px(Pal.HEALTH_H, s.y) + Pal.px(Pal.STAMINA_GAP, s.y)
+	var w := Pal.HEALTH_W * s.x * Pal.STAMINA_RATIO
+	var h := Pal.px(Pal.STAMINA_H, s.y)
+	var rect := Rect2(origin.x, top, w, h)
+
+	_canvas.draw_rect(rect.grow(Pal.px(1.0, s.y)), Pal.VOID)
+	_canvas.draw_rect(rect, Color(Pal.ASH, 0.6))
+
+	var frac: float = clampf(_stamina / maxf(Game.max_stamina, 1.0), 0.0, 1.0)
+	# The whole point of the bar: RUST means the dodge button does nothing.
+	var spent: bool = _stamina < K.STAMINA_ROLL
+	_canvas.draw_rect(Rect2(origin.x, top, w * frac, h),
+		Pal.RUST if spent else Pal.BONE)
+
+	# Boundaries at each roll you can still afford, so the bar reads in DODGES
+	# rather than in percent -- the only unit the player spends it in.
+	for i in range(1, STAMINA_TICKS + 1):
+		var at := K.STAMINA_ROLL * i / maxf(Game.max_stamina, 1.0)
+		if at >= 1.0:
+			break
+		_canvas.draw_rect(Rect2(origin.x + w * at - Pal.px(1.0, s.y) * 0.5, top,
+			Pal.px(1.0, s.y), h), Pal.VOID)
+
+
 # --- Kit strip (§5.2) -------------------------------------------------------
 ## State, not equipment. The sword and shield are never unequipped, so an
 ## "equipped" light would be dead pixels; these cells carry block state, the
 ## combo window, ammo, and whether the hookshot has something to grab.
+##
+## The glyph is a render of the ACTUAL model, baked and posterised into the Pal
+## ramp. Lettering ("SW", "SH") only ever appears if a bake is missing.
 
 func _draw_kit(s: Vector2) -> void:
 	var cell := Pal.px(KIT_CELL, s.y)
@@ -403,12 +477,27 @@ func _draw_kit(s: Vector2) -> void:
 
 		# A bow with no arrows is not a choice, so it stops looking like one.
 		var dim := id == &"bow" and Game.arrows <= 0
-		var label_col: Color = Color(Pal.MOTH, 0.3) if dim else Pal.BONE
-		if id == &"shield" and blocking:
-			label_col = Pal.MIDNIGHT
-		PixelFont.draw_centred(_canvas, String(KIT_LABEL[id]),
-			Vector2(r.get_center().x, r.position.y + cell * 0.32),
-			Pal.px(2.0, s.y), label_col)
+
+		var tex: Texture2D = _icons.get(id)
+		if tex != null:
+			# Inset by 2 reference px so the icon's own VOID dilation never sits
+			# on the cell border and read as a thick frame.
+			var inset := Pal.px(2.0, s.y)
+			var box := Rect2(r.position + Vector2(inset, inset),
+				r.size - Vector2(inset, inset) * 2.0)
+			var mod := Color(1, 1, 1, 0.3 if dim else 1.0)
+			# Blocking fills the cell BONE, so the icon has to invert or it
+			# disappears into its own background.
+			if id == &"shield" and blocking:
+				mod = Color(Pal.MIDNIGHT, 1.0)
+			_canvas.draw_texture_rect(tex, box, false, mod)
+		else:
+			var label_col: Color = Color(Pal.MOTH, 0.3) if dim else Pal.BONE
+			if id == &"shield" and blocking:
+				label_col = Pal.MIDNIGHT
+			PixelFont.draw_centred(_canvas, String(KIT_LABEL[id]),
+				Vector2(r.get_center().x, r.position.y + cell * 0.32),
+				Pal.px(2.0, s.y), label_col)
 
 		# Selected underline: which of the two item buttons is actually out.
 		var selected := (id == equipped) or (equipped == &"" and id == &"sword")

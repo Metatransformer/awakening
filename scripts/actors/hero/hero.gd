@@ -72,6 +72,9 @@ enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER, ATTACK }
 @export var roll_recover_time: float = 0.20
 ## [oot] roll/backflip/sidehop need a near-full stick deflection. §3.2
 @export var roll_stick_gate: float = K.STICK_ACTION_GATE
+## The roll is the i-frame button (roll grants K.ROLL_IFRAMES). Free i-frames
+## make it the only button anyone presses, so it costs. See K.MAX_STAMINA.
+@export var roll_stamina: float = K.STAMINA_ROLL
 
 @export_group("Animation")
 @export var clip_idle: StringName = &"ss_idle_01"
@@ -405,6 +408,10 @@ func _try_start_roll(wish: Vector3, mag: float) -> bool:
 	# [oot] a discrete action needs a near-full deflection — you cannot roll out
 	# of a walk, only out of a committed run. §3.2 / K.STICK_ACTION_GATE.
 	if mag < roll_stick_gate or wish == Vector3.ZERO:
+		return false
+	# Last gate, and deliberately last: every cheaper reason to refuse has already
+	# run, so we never charge stamina for a roll that was not going to happen.
+	if not Game.spend_stamina(roll_stamina):
 		return false
 	state = MoveState.ROLL
 	_state_timer = roll_time

@@ -146,6 +146,20 @@ const START_HEARTS := 3
 const MAX_MAGIC := 48
 ## [oot] 20 ticks of invulnerability after taking damage.
 const IFRAME_TIME := 20.0 * TICK    # 1.0 s
+
+# --- Stamina ----------------------------------------------------------------
+## DELIBERATE DEVIATION: OOT has NO stamina. Link rolls forever, and that is
+## correct for OOT, where a roll is locomotion. Here a roll is the i-frame
+## button (ROLL_IFRAMES), and an i-frame button with no cost is the only button
+## you ever press. Stamina is what makes the dodge a decision. Do not let a
+## critic "correct" this into an OOT fact — see HITSTOP_LIGHT above for the
+## same argument.
+const MAX_STAMINA := 100.0
+const STAMINA_ROLL := 34.0          # [tune] three rolls from full, not four
+## Seconds after spending before regen starts. The pause IS the tell that you
+## are winded; regen with no delay reads as no system at all.
+const STAMINA_DELAY := 0.45         # [tune]
+const STAMINA_REGEN := 46.0         # [tune] units/sec -> full in ~2.2 s
 ## [oot] 8 ticks of invulnerability when a shield block is released.
 const SHIELD_IFRAMES := 8.0 * TICK  # 0.4 s
 

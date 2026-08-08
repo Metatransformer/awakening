@@ -10,6 +10,8 @@ signal player_spawned(player: Node3D)
 ## Health is in QUARTER hearts. See K.HEART.
 signal player_health_changed(quarters: int, max_quarters: int)
 signal magic_changed(magic: int, max_magic: int)
+## Fires on every spend and on every regen step, so the HUD never polls for it.
+signal stamina_changed(stamina: float, max_stamina: float)
 signal ammo_changed(id: StringName, count: int)
 signal rupees_changed(count: int)
 signal c_items_changed(slots: Array)

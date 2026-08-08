@@ -11,6 +11,16 @@ var quarters: int = K.START_HEARTS * K.HEART
 var max_magic: int = 0  ## 0 until the magic meter is unlocked
 var magic: int = 0
 
+## Stamina is what makes the dodge a decision -- see K.MAX_STAMINA for why this
+## exists at all when the source material has no such thing. Unlike everything
+## else here it is NOT save-able state: it refills on its own in a couple of
+## seconds, so persisting it would only ever restore a number that is about to
+## be 100 anyway.
+var max_stamina: float = K.MAX_STAMINA
+var stamina: float = K.MAX_STAMINA
+## Counts down from K.STAMINA_DELAY after a spend. Regen is frozen while > 0.
+var _stamina_hold: float = 0.0
+
 var rupees: int = 0
 ## Metagame currency. Survives death; the bag in `Run` does not.
 var gold: int = K.START_GOLD
@@ -67,6 +77,9 @@ func reset() -> void:
 	Bus.key_count_changed.emit(small_keys)
 	Bus.player_health_changed.emit(quarters, max_quarters)
 	Bus.magic_changed.emit(magic, max_magic)
+	stamina = max_stamina
+	_stamina_hold = 0.0
+	Bus.stamina_changed.emit(stamina, max_stamina)
 
 
 # --- Health -----------------------------------------------------------------
@@ -112,6 +125,35 @@ func spend_magic(cost: int) -> bool:
 func restore_magic(amount: int) -> void:
 	magic = mini(max_magic, magic + amount)
 	Bus.magic_changed.emit(magic, max_magic)
+
+
+# --- Stamina ----------------------------------------------------------------
+## The only thing in this file that ticks. Regen is frozen for K.STAMINA_DELAY
+## after a spend: the pause IS the tell that you are winded, and without it the
+## bar refills so smoothly that it reads as no system at all.
+
+func _process(delta: float) -> void:
+	if _stamina_hold > 0.0:
+		_stamina_hold = maxf(0.0, _stamina_hold - delta)
+		return
+	if stamina >= max_stamina:
+		return
+	stamina = minf(max_stamina, stamina + K.STAMINA_REGEN * delta)
+	Bus.stamina_changed.emit(stamina, max_stamina)
+
+
+## Spend, or refuse. Returns false when there is not enough, and the caller is
+## expected to NOT perform the action -- otherwise the bar and the dodge
+## disagree, which is worse than having no bar.
+func spend_stamina(cost: float) -> bool:
+	if cost <= 0.0:
+		return true
+	if stamina < cost:
+		return false
+	stamina -= cost
+	_stamina_hold = K.STAMINA_DELAY
+	Bus.stamina_changed.emit(stamina, max_stamina)
+	return true
 
 
 # --- Consumables ------------------------------------------------------------

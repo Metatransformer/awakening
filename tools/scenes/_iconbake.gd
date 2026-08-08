@@ -7,21 +7,44 @@ extends Node3D
 ## orthogonal camera framed to the model's measured extent (WeaponModels.extent),
 ## and a two-light rig that reads as torchlight so the icon belongs to the scene.
 ##
+## The render is then POSTERISED into the Pal ramp and downsampled to ICON_PX.
+## A full-colour 256px render dropped into a 5-bit HUD looks like a sticker; the
+## styleguide bans vector icon sets (§7.10) because it wants glyphs that were
+## authored in the palette, and this is how a rendered icon earns that. What
+## survives quantisation is the silhouette, which is all a 32px cell can show.
+##
 ## Must run WINDOWED. `--headless` uses the dummy renderer and every saved PNG
 ## comes back empty.
 ##
-##   godot --path . res://tools/scenes/_iconbake.tscn -- --out=/abs/dir
+##   godot --path . res://tools/scenes/_iconbake.tscn -- --out=res://assets/ui/icons
 
+## The kit strip, in Hud.KIT order. Values are the euler the model is spun to
+## before framing -- a sword read edge-on is a line, so it gets a Z tilt.
 const ICONS := {
-	"hookshot_pistol": Vector3(0.35, 0.55, 0.0),
 	"sword_knightly":  Vector3(0.0, 0.0, 0.62),
-	"sword_crude":     Vector3(0.0, 0.0, 0.62),
-	"shield_knightly": Vector3(0.0, 0.0, 0.0),
-	"shield_noble":    Vector3(0.0, 0.0, 0.0),
 	"kite_shield":     Vector3(0.0, 0.0, 0.0),
+	"hookshot_pistol": Vector3(0.35, 0.55, 0.0),
+	"bow_knightly":    Vector3(0.9, 0.9, 0.4),  # three-quarter: a bow is edge-on from every axis
 }
 
+## Rendered at SIZE, shipped at ICON_PX. Rendering large and knocking it down is
+## what gives the 32px silhouette clean edges.
 const SIZE := 512
+const ICON_PX := 32
+## Luminance cuts into the Pal ramp. Four levels is what the styleguide's
+## dither budget affords, and a 32px glyph cannot carry more.
+## id -> [zoom, x offset, y offset], applied AFTER the refit, in units of the
+## refit box. A whole sword at 32px is a three-pixel scratch; what makes a sword
+## read is the guard and pommel, so the icon crops to them instead of dutifully
+## showing the entire blade. This is what hand-authored game icons do and it is
+## the only reason a rendered icon can work in a 32px cell at all.
+const CROP := {
+	"sword_knightly": [2.1, 0.22, -0.26],
+	"bow_knightly":   [0.92, 0.0, 0.0],  # the whole arc, or it reads as a stick
+}
+
+const RAMP := [Pal.VOID, Pal.ASH, Pal.MOTH, Pal.BONE]
+const CUTS := [0.16, 0.38, 0.66]
 ## Icons read better with a little air; 1.0 would touch the frame edge.
 const PAD := 1.22
 
@@ -79,6 +102,11 @@ func _refit() -> void:
 		cam.h_offset += (mid.x - SIZE * 0.5) * per_px
 		cam.v_offset -= (mid.y - SIZE * 0.5) * per_px
 		cam.size = maxf(float(r.size.x), float(r.size.y)) * per_px * PAD
+		if CROP.has(id):
+			var c: Array = CROP[id]
+			cam.h_offset += float(c[1]) * cam.size
+			cam.v_offset += float(c[2]) * cam.size
+			cam.size /= float(c[0])
 
 
 func _save() -> void:
@@ -87,6 +115,7 @@ func _save() -> void:
 		if vp == null:
 			continue
 		var img := vp.get_texture().get_image()
+		_posterise(img)
 		var path := _out_dir.path_join(id + ".png")
 		var err := img.save_png(path)
 		print("%-18s %s  %dx%d" % [id, "ok" if err == OK else "FAIL", img.get_width(), img.get_height()])
@@ -163,6 +192,56 @@ func _bake(id: String, euler: Vector3) -> void:
 	e.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.environment = e
 	vp.add_child(env)
+
+
+## Downsample to ICON_PX and snap every surviving pixel onto the Pal ramp.
+## Alpha is thresholded, not blended: a half-transparent edge pixel dithers into
+## the scene behind it and the silhouette goes soft, which is the one thing a
+## 32px glyph cannot afford.
+func _posterise(img: Image) -> void:
+	img.resize(ICON_PX, ICON_PX, Image.INTERPOLATE_LANCZOS)
+	for y in ICON_PX:
+		for x in ICON_PX:
+			var c := img.get_pixel(x, y)
+			if c.a < 0.5:
+				img.set_pixel(x, y, Color(0, 0, 0, 0))
+				continue
+			var l := c.get_luminance()
+			var step := RAMP.size() - 1
+			for i in CUTS.size():
+				if l < CUTS[i]:
+					step = i
+					break
+			img.set_pixel(x, y, Color(RAMP[step], 1.0))
+	_dilate(img)
+
+
+## Grow the silhouette by one pixel of VOID.
+##
+## A sword is three pixels wide at 32px and reads as a scratch. This is the same
+## trick as the 1px dark outline the HUD uses everywhere else: it gives a thin
+## glyph a body, and it separates the icon from whatever the cell is filled with.
+## Without it the only kit icon that survives quantisation is the shield.
+func _dilate(img: Image) -> void:
+	var src := img.duplicate() as Image
+	for y in ICON_PX:
+		for x in ICON_PX:
+			if src.get_pixel(x, y).a >= 0.5:
+				continue
+			var touching := false
+			for dy: int in [-1, 0, 1]:
+				for dx: int in [-1, 0, 1]:
+					var nx: int = x + dx
+					var ny: int = y + dy
+					if nx < 0 or ny < 0 or nx >= ICON_PX or ny >= ICON_PX:
+						continue
+					if src.get_pixel(nx, ny).a >= 0.5:
+						touching = true
+						break
+				if touching:
+					break
+			if touching:
+				img.set_pixel(x, y, Color(Pal.VOID, 1.0))
 
 
 ## Union of every MeshInstance3D AABB under `root`, in root-local space.
