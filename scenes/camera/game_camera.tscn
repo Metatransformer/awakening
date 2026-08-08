@@ -1,0 +1,14 @@
+[gd_scene load_steps=2 format=3]
+
+; The camera rig. Pivot -> SpringArm3D (owns wall collision) -> Camera3D.
+; Every value that matters is set in _ready from K, so this scene stays a
+; three-node skeleton and the numbers live in one place.
+
+[ext_resource type="Script" path="res://scripts/camera/game_camera.gd" id="1_script"]
+
+[node name="GameCamera" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="SpringArm3D" type="SpringArm3D" parent="."]
+
+[node name="Camera3D" type="Camera3D" parent="SpringArm3D"]

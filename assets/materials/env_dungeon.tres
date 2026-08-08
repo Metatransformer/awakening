@@ -1,0 +1,45 @@
+[gd_resource type="Environment" format=3]
+
+; The dungeon Environment. The single most important value here is ambient
+; energy: it is nearly zero on purpose.
+;
+; KitTorch's whole lighting argument (scripts/kit/kit_torch.gd) is that a torch
+; makes a POOL of light with a visible edge, and beyond it the room is black.
+; Raise ambient to a "sensible" level and every torch stops mattering — you get
+; an evenly lit grey box with some orange decoration in it. If a room looks too
+; dark, add a torch; do not lift ambient.
+
+[resource]
+; Mode 1 is BG_COLOR — it uses background_color below. Mode 0 (BG_CLEAR_COLOR)
+; looks identical in the inspector but silently ignores it and paints the
+; project's default clear grey, which shows up as a bright slab through every
+; open doorway.
+background_mode = 1
+background_color = Color(0.016, 0.016, 0.021, 1)
+background_energy_multiplier = 1.0
+ambient_light_source = 3
+ambient_light_color = Color(0.13, 0.14, 0.19, 1)
+ambient_light_energy = 0.06
+tonemap_mode = 3
+tonemap_exposure = 1.0
+tonemap_white = 6.0
+ssao_enabled = true
+ssao_radius = 0.9
+ssao_intensity = 1.6
+ssao_power = 2.0
+ssil_enabled = false
+glow_enabled = true
+glow_intensity = 0.5
+glow_strength = 1.0
+glow_bloom = 0.05
+glow_blend_mode = 1
+glow_hdr_threshold = 1.05
+fog_enabled = true
+fog_light_color = Color(0.09, 0.09, 0.12, 1)
+fog_light_energy = 1.0
+fog_density = 0.012
+fog_sky_affect = 0.0
+adjustment_enabled = true
+adjustment_brightness = 1.0
+adjustment_contrast = 1.06
+adjustment_saturation = 1.04

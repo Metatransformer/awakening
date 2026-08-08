@@ -1,0 +1,11 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+; Torch bands and crowns, chest fittings. Rough dark iron: metallic enough to
+; catch the torch's warm key, never mirror-bright.
+
+[resource]
+resource_name = "iron"
+albedo_color = Color(0.106, 0.108, 0.118, 1)
+metallic = 0.85
+metallic_specular = 0.35
+roughness = 0.62

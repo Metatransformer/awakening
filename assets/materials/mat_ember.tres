@@ -1,0 +1,17 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+; Rising sparks above a torch. Unshaded and additive so they glow rather than
+; being lit — an ember lit by the very fire it came from would be invisible.
+
+[resource]
+resource_name = "ember"
+transparency = 1
+blend_mode = 1
+shading_mode = 0
+albedo_color = Color(1.0, 0.62, 0.28, 1)
+emission_enabled = true
+emission = Color(1.0, 0.62, 0.28, 1)
+emission_energy_multiplier = 3.0
+disable_receive_shadows = true
+billboard_mode = 1
+billboard_keep_scale = true

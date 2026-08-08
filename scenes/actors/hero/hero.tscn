@@ -1,0 +1,21 @@
+[gd_scene load_steps=3 format=3]
+
+; The hero. The rig, the animation tree, and every collision/layer value are
+; built in code (scripts/actors/hero/hero.gd) because the 72-clip animation
+; library is only bound at runtime — an editor-authored AnimationTree would
+; have no clips to point at and every blend node would show as broken.
+;
+; Capsule is docs/CONTRACT.md §1: radius 0.35, height 1.5, centred at y=0.75.
+
+[ext_resource type="Script" path="res://scripts/actors/hero/hero.gd" id="1_script"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
+radius = 0.35
+height = 1.5
+
+[node name="Hero" type="CharacterBody3D"]
+script = ExtResource("1_script")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
+shape = SubResource("CapsuleShape3D_body")

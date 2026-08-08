@@ -1,0 +1,15 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+; Hand-cut stone for props (step blocks, pushables, chest bodies). Object-space
+; and always triplanar — a prop is a small fully-visible chunk where every face
+; is on camera. `seed` is an instance uniform, so scattering the same mesh many
+; times does not render as clones; set it per instance, not here.
+
+[ext_resource type="Shader" path="res://assets/shaders/prop_stone.gdshader" id="1_shader"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_shader")
+shader_parameter/base_color_a = Color(0.2, 0.185, 0.16, 1)
+shader_parameter/base_color_b = Color(0.27, 0.25, 0.22, 1)
+shader_parameter/brightness_variation = 0.22

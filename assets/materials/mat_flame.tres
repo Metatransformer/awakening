@@ -1,0 +1,19 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+; The torch flame billboard. Additive and soft-clipped against the depth buffer
+; so the quad's edge never shows as a hard rectangle where it intersects the
+; sconce geometry. Tint matches KitStyle.FIRE_COLOR — the light and the visible
+; flame must agree or the fire reads as a decal with a lamp behind it.
+
+[ext_resource type="Shader" path="res://assets/shaders/fx_particle_soft.gdshader" id="1_shader"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_shader")
+shader_parameter/tint = Color(1.0, 0.74, 0.47, 1)
+shader_parameter/tint_weight = 1.0
+shader_parameter/gain = 2.6
+shader_parameter/core = 2.2
+shader_parameter/falloff_scale = Vector2(1, 1)
+shader_parameter/alpha_mult = 1.0
+shader_parameter/soft_distance = 0.35

@@ -1,0 +1,30 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+; Coursed ashlar masonry for every vertical surface in the kit. The shader is
+; world-space, so walls need no UV setup and every room reads as one material.
+; Block size is matched to KitStyle.BLOCK_W / COURSE_H so the shader's coursing
+; lines up with the geometry relief the kit scripts build.
+
+[ext_resource type="Shader" path="res://assets/shaders/wall_stone.gdshader" id="1_shader"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_shader")
+shader_parameter/base_color_a = Color(0.2, 0.19, 0.21, 1)
+shader_parameter/base_color_b = Color(0.27, 0.26, 0.29, 1)
+shader_parameter/block_brightness_variation = 0.18
+shader_parameter/block_width = 1.55
+shader_parameter/block_height = 0.92
+shader_parameter/course_jitter = 0.12
+shader_parameter/grout_darkening = 0.55
+shader_parameter/mortar_width = 0.06
+shader_parameter/grime_color = Color(0.035, 0.045, 0.03, 1)
+shader_parameter/grime_height = 2.0
+shader_parameter/grime_amount = 0.5
+shader_parameter/streak_frequency = 3.5
+shader_parameter/streak_strength = 0.35
+shader_parameter/chip_strength = 0.35
+shader_parameter/bevel_depth = 0.035
+shader_parameter/surface_bump_strength = 0.12
+shader_parameter/relief_strength = 5.0
+shader_parameter/normal_strength = 1.0

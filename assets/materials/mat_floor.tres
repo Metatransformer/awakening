@@ -1,0 +1,14 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+; Worn flagstone. World-space like the wall, so floor slabs can be scaled freely
+; without the pattern stretching or seaming at slab boundaries.
+
+[ext_resource type="Shader" path="res://assets/shaders/stone_floor.gdshader" id="1_shader"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_shader")
+shader_parameter/base_color_a = Color(0.22, 0.2, 0.18, 1)
+shader_parameter/base_color_b = Color(0.29, 0.27, 0.24, 1)
+shader_parameter/tile_brightness_variation = 0.22
+shader_parameter/tile_hue_jitter_deg = 6.0

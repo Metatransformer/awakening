@@ -11,7 +11,7 @@ signal player_spawned(player: Node3D)
 signal player_health_changed(quarters: int, max_quarters: int)
 signal magic_changed(magic: int, max_magic: int)
 signal ammo_changed(id: StringName, count: int)
-signal rupees_changed(count: int)
+signal gold_changed(count: int)
 signal c_items_changed(slots: Array)
 signal player_died
 
@@ -42,6 +42,27 @@ signal puzzle_solved(puzzle_id: StringName)
 signal boss_engaged(boss: Node3D)
 signal boss_phase_changed(phase: int)
 signal boss_defeated
+
+# --- Metagame (docs/METAGAME.md) --------------------------------------------
+## The dungeon bag or the town stash changed contents.
+signal bag_changed
+signal stash_changed
+## A blade or armour tier was bought. `track` is a Gear.Track.
+signal gear_changed(track: int, tier: int)
+## Ingredients hit the floor because the bag was full when they dropped.
+signal loot_overflowed(id: StringName, count: int)
+signal loot_collected(id: StringName, count: int)
+
+## Run lifecycle. `rooms_cleared` is the depth the run reached.
+signal run_started
+signal run_depth_changed(rooms_cleared: int, band: int)
+## `reason` is &"extracted", &"walked_out" or &"died".
+signal run_ended(reason: StringName, rooms_cleared: int)
+
+## Paid teleport: begins channelling, aborted by damage or movement, or lands.
+signal extraction_started(fee: int)
+signal extraction_progress(t01: float)
+signal extraction_cancelled(why: StringName)
 
 # --- Presentation -----------------------------------------------------------
 ## Requests for the feel layer. Emitters do not care who answers.

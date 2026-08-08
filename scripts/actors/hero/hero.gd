@@ -27,7 +27,12 @@ signal landed(fall_speed: float)
 signal roll_started
 signal roll_finished
 
-enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER }
+## Fires when a swing's damage window opens, so P11 can hang a whoosh on it.
+signal attack_started
+## Fires when the hero is hurt, after the health component has taken it.
+signal hurt(hit: Hit)
+
+enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER, ATTACK, HURT }
 
 @export_group("Rig")
 @export var hero_model: PackedScene = preload("res://assets/characters/hero.fbx")
@@ -73,6 +78,35 @@ enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER }
 ## [oot] roll/backflip/sidehop need a near-full stick deflection. §3.2
 @export var roll_stick_gate: float = K.STICK_ACTION_GATE
 
+@export_group("Attack")
+## Total length of a swing, input-locked. Shorter than the source clip, which
+## is compressed onto it by a TimeScale the same way the roll is.
+@export var attack_time: float = 0.52
+## Fraction of the swing the damage window opens and closes at. The blade only
+## hurts between these — a hitbox that is live for the whole animation lets a
+## player walk into an enemy and win, which is what makes clone combat feel bad.
+@export var attack_hit_open: float = 0.28
+@export var attack_hit_close: float = 0.62
+## Metres the swing carries the hero forward. Small: it closes the last step of
+## a gap, it is not a lunge attack.
+@export var attack_step_speed: float = 2.6
+## Centre of the damage volume, in metres ahead of and above the hero's origin.
+@export var attack_reach: float = 1.15
+@export var attack_height: float = 0.95
+@export var attack_radius: float = 0.85
+
+@export_group("Weapon socket")
+## Bone the blade hangs off. Verified with tools/scenes/_rig_facts.tscn.
+@export var grip_bone: StringName = &"mixamorig_RightHand"
+## Local offset and rotation of the blade inside the grip.
+##
+## MEASURED BY RENDER, not derived (docs/CONTRACT.md §8): the rest pose numbers
+## are in a rotated FBX space and reading them analytically gives a sword that
+## floats beside the fist at a plausible-looking wrong angle. Change these by
+## rendering tools/scenes/_weapon_lookdev.tscn, looking, and adjusting.
+@export var grip_offset: Vector3 = Vector3(0.0, 0.045, 0.02)
+@export var grip_rotation_deg: Vector3 = Vector3(-78.0, 0.0, 0.0)
+
 @export_group("Animation")
 @export var clip_idle: StringName = &"ss_idle_01"
 @export var clip_walk: StringName = &"ss_walk_01"
@@ -81,6 +115,8 @@ enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER }
 @export var clip_turn180: StringName = &"ss_180_turn_01"
 @export var clip_air: StringName = &"ss_jump_01"
 @export var clip_land: StringName = &"ss_jump_02"
+@export var clip_slash: StringName = &"ss_slash_01"
+@export var clip_impact: StringName = &"ss_impact_01"
 ## Speeds, in m/s, the walk and run clips are authored to read as.
 @export var walk_blend_speed: float = K.WALK_SPEED
 @export var run_blend_speed: float = K.RUN_SPEED
@@ -98,6 +134,9 @@ enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER }
 ## docs/CONTRACT.md §8 — `get_first_node_in_group("player").targeting`.
 var targeting: Node = null
 
+## The hero's health, proxying onto Game so it survives a scene change.
+var health: HealthComponent = null
+
 var state: MoveState = MoveState.GROUND
 var facing_yaw: float = 0.0
 
@@ -112,6 +151,12 @@ var _stride_accum: float = 0.0
 var _z_hold: float = 0.0
 var _speed: float = 0.0
 
+var _grip: BoneAttachment3D
+var _blade: Node3D
+var _hitbox: DamageArea
+var _swing_open: bool = false
+var _knockback: Vector3 = Vector3.ZERO
+
 const _P_BLEND := "parameters/Loco/blend_position"
 const _P_STRIDE := "parameters/LocoScale/scale"
 const _P_ROLL_SCALE := "parameters/RollScale/scale"
@@ -119,6 +164,9 @@ const _P_TURN := "parameters/Turn180/request"
 const _P_AIR := "parameters/Air/request"
 const _P_ROLL := "parameters/Roll/request"
 const _P_LAND := "parameters/Land/request"
+const _P_SLASH := "parameters/Slash/request"
+const _P_SLASH_SCALE := "parameters/SlashScale/scale"
+const _P_IMPACT := "parameters/Impact/request"
 
 
 func _ready() -> void:
@@ -137,6 +185,9 @@ func _ready() -> void:
 	facing_yaw = rotation.y + PI
 	_build_rig()
 	_build_anim_tree()
+	_build_weapon()
+	_build_combat()
+	_build_key_light()
 	targeting = find_child("Targeting", false, false)
 	Bus.player_spawned.emit(self)
 
@@ -209,7 +260,24 @@ func _build_anim_tree() -> void:
 	tree_root.connect_node(&"Roll", 1, &"RollScale")
 	prev = &"Roll"
 
-	prev = _add_oneshot(tree_root, &"Land", prev, _anim_node(clip_land), Vector2(1100, 0), 0.06, 0.20)
+	# The swing, compressed onto attack_time by its own TimeScale exactly the
+	# way the roll is. Layered ABOVE the roll so a swing always reads over
+	# locomotion, and below Land so a landing still wins.
+	var slash_anim := _anim_node(clip_slash)
+	var slash_scale := AnimationNodeTimeScale.new()
+	tree_root.add_node(&"SlashAnim", slash_anim, Vector2(880, 400))
+	tree_root.add_node(&"SlashScale", slash_scale, Vector2(1000, 400))
+	tree_root.connect_node(&"SlashScale", 0, &"SlashAnim")
+	var slash_shot := AnimationNodeOneShot.new()
+	slash_shot.fadein_time = 0.04
+	slash_shot.fadeout_time = 0.14
+	tree_root.add_node(&"Slash", slash_shot, Vector2(1060, 0))
+	tree_root.connect_node(&"Slash", 0, prev)
+	tree_root.connect_node(&"Slash", 1, &"SlashScale")
+	prev = &"Slash"
+
+	prev = _add_oneshot(tree_root, &"Impact", prev, _anim_node(clip_impact), Vector2(1280, 0), 0.05, 0.18)
+	prev = _add_oneshot(tree_root, &"Land", prev, _anim_node(clip_land), Vector2(1500, 0), 0.06, 0.20)
 	tree_root.connect_node(&"output", 0, prev)
 
 	_tree = AnimationTree.new()
@@ -228,6 +296,15 @@ func _build_anim_tree() -> void:
 	if anim_library.has_animation(clip_roll):
 		roll_len = anim_library.get_animation(clip_roll).length
 	_tree.set(_P_ROLL_SCALE, roll_len / maxf(roll_time + roll_recover_time, 0.05))
+
+	# Same trick for the swing: ss_slash_01 is 1.5 s of wind-up, cut and
+	# recovery. Played at native speed the hero telegraphs for most of a second
+	# and the fight goes to sleep.
+	var slash_len := 1.0
+	if anim_library.has_animation(clip_slash):
+		slash_len = anim_library.get_animation(clip_slash).length
+	_tree.set(_P_SLASH_SCALE, slash_len / maxf(attack_time, 0.05))
+
 	_tree.set(_P_BLEND, 0.0)
 	_tree.set(_P_STRIDE, 1.0)
 
@@ -251,6 +328,129 @@ func _add_oneshot(tree_root: AnimationNodeBlendTree, id: StringName, base: Strin
 	return id
 
 
+# --- Weapon and combat ------------------------------------------------------
+
+## Hang the blade off the grip bone.
+##
+## Structure is Skeleton3D -> BoneAttachment3D("Grip") -> Node3D("Socket") ->
+## blade. The Socket exists because BoneAttachment3D overwrites its OWN local
+## transform from the bone pose every frame — an offset written onto the
+## attachment itself is silently discarded, which reads as "the offset export
+## does nothing" and sends you looking for a bug in the wrong place.
+func _build_weapon() -> void:
+	var skel := _rig.find_child("Skeleton3D", true, false) as Skeleton3D
+	if skel == null:
+		push_error("hero: no Skeleton3D — cannot mount a weapon")
+		return
+	var idx := skel.find_bone(String(grip_bone))
+	if idx < 0:
+		push_error("hero: no bone '%s' on the rig" % grip_bone)
+		return
+
+	_grip = BoneAttachment3D.new()
+	_grip.name = "Grip"
+	_grip.bone_name = String(grip_bone)
+	_grip.bone_idx = idx
+	skel.add_child(_grip)
+
+	var socket := Node3D.new()
+	socket.name = "Socket"
+	socket.position = grip_offset
+	socket.rotation = Vector3(
+		deg_to_rad(grip_rotation_deg.x),
+		deg_to_rad(grip_rotation_deg.y),
+		deg_to_rad(grip_rotation_deg.z))
+	# The whole rig is scaled by K.HERO_SCALE, so anything parented inside it
+	# inherits that. The weapon GLBs are already native metres (a 0.92 m sword),
+	# so undo the character scale or the hero swings a 1.5 m greatsword.
+	socket.scale = Vector3.ONE / maxf(model_scale, 0.001)
+	_grip.add_child(socket)
+
+	_equip_blade(Game.blade_tier)
+	Bus.gear_changed.connect(_on_gear_changed)
+
+
+func _equip_blade(tier: int) -> void:
+	if _grip == null:
+		return
+	var socket := _grip.get_node_or_null(^"Socket") as Node3D
+	if socket == null:
+		return
+	if _blade != null and is_instance_valid(_blade):
+		_blade.queue_free()
+	_blade = WeaponModels.make(String(Gear.blade_model(tier)))
+	if _blade != null:
+		socket.add_child(_blade)
+
+
+func _on_gear_changed(track: int, tier: int) -> void:
+	if track == int(Gear.Track.BLADE):
+		_equip_blade(tier)
+
+
+func _build_combat() -> void:
+	health = HealthComponent.new()
+	health.name = "Health"
+	health.use_game_state = true
+	health.use_iframes = true
+	add_child(health)
+	health.damaged.connect(_on_damaged)
+
+	_hitbox = DamageArea.new()
+	_hitbox.name = "SwordHitbox"
+	_hitbox.collision_layer = K.L_PLAYER_HITBOX
+	_hitbox.collision_mask = K.L_ENEMY
+	_hitbox.kind = &"sword"
+	# The body's -Z is the heading (see _after_move), so "in front" is -Z.
+	_hitbox.position = Vector3(0.0, attack_height, -attack_reach)
+	var col := CollisionShape3D.new()
+	var sphere := SphereShape3D.new()
+	sphere.radius = attack_radius
+	col.shape = sphere
+	_hitbox.add_child(col)
+	add_child(_hitbox)
+
+
+## A small warm lamp riding above and slightly in front of the hero.
+##
+## The dungeon's lighting rule is "torches make pools, ambient stays near zero"
+## (assets/materials/env_dungeon.tres), and that rule is right for the ROOM. It
+## is wrong for the character: between two torch pools the hero renders as a
+## featureless black cut-out, and you cannot read a swing you cannot see. This
+## is short-range and dim enough that it never lights a wall — it lights him,
+## and whatever he is standing next to.
+func _build_key_light() -> void:
+	var lamp := OmniLight3D.new()
+	lamp.name = "KeyLight"
+	lamp.light_color = Color(1.0, 0.92, 0.82)
+	lamp.light_energy = 1.5
+	lamp.omni_range = 3.2
+	lamp.omni_attenuation = 1.6
+	lamp.shadow_enabled = false
+	lamp.position = Vector3(0.0, 1.9, -0.6)
+	add_child(lamp)
+
+
+func _on_damaged(hit: Hit) -> void:
+	_close_swing()
+	var dir := K.flat(global_position - hit.from)
+	if dir == Vector3.ZERO:
+		dir = -_forward()
+	_knockback = dir * maxf(hit.knockback, 1.0)
+	state = MoveState.HURT
+	_state_timer = maxf(hit.stun, 0.20)
+	_speed = 0.0
+	_fire(_P_IMPACT)
+	Bus.request_shake.emit(0.35, 0.18)
+	hurt.emit(hit)
+
+
+func _close_swing() -> void:
+	if _swing_open:
+		_hitbox.deactivate()
+		_swing_open = false
+
+
 # --- Frame ------------------------------------------------------------------
 
 func _physics_process(delta: float) -> void:
@@ -269,6 +469,10 @@ func _physics_process(delta: float) -> void:
 			_tick_roll(delta)
 		MoveState.ROLL_RECOVER:
 			_tick_roll_recover(delta)
+		MoveState.ATTACK:
+			_tick_attack(delta)
+		MoveState.HURT:
+			_tick_hurt(delta)
 
 	_apply_gravity(delta)
 	var pre_fall := velocity.y
@@ -313,6 +517,8 @@ func _track_z_target(delta: float) -> void:
 # --- States -----------------------------------------------------------------
 
 func _tick_ground(wish: Vector3, mag: float, delta: float) -> void:
+	if _try_start_attack(wish):
+		return
 	if _try_start_roll(wish, mag):
 		return
 
@@ -353,6 +559,58 @@ func _try_start_roll(wish: Vector3, mag: float) -> bool:
 	_fire(_P_ROLL)
 	roll_started.emit()
 	return true
+
+
+## A swing. Unlike the roll this needs no stick deflection — you must be able to
+## attack from a standstill — but it does snap the hero onto his input direction
+## first, so you hit what you are pointing at rather than what you last faced.
+func _try_start_attack(wish: Vector3) -> bool:
+	if not Input.is_action_just_pressed(&"attack"):
+		return false
+	if not is_on_floor():
+		return false
+	if wish != Vector3.ZERO:
+		facing_yaw = atan2(wish.x, wish.z)
+	state = MoveState.ATTACK
+	_state_timer = 0.0
+	_swing_open = false
+	# Read the blade tier at swing time, so a purchase takes effect on the very
+	# next attack without anything having to push a value into the hero.
+	_hitbox.amount = Gear.blade_damage(Game.blade_tier)
+	_hitbox.knockback = K.KNOCKBACK_LIGHT + float(Game.blade_tier) * 0.8
+	_fire(_P_SLASH)
+	attack_started.emit()
+	return true
+
+
+func _tick_attack(delta: float) -> void:
+	_state_timer += delta
+	var t: float = _state_timer / maxf(attack_time, 0.01)
+
+	# A short forward carry that dies off before the recovery, so the swing
+	# closes a gap without turning into a dash.
+	_speed = attack_step_speed * clampf(1.0 - t * 1.7, 0.0, 1.0)
+	_set_planar_velocity(_forward() * _speed)
+
+	if not _swing_open and t >= attack_hit_open and t < attack_hit_close:
+		_swing_open = true
+		_hitbox.activate()
+	elif _swing_open and t >= attack_hit_close:
+		_close_swing()
+
+	if t >= 1.0:
+		_close_swing()
+		_speed = 0.0
+		state = MoveState.GROUND
+
+
+func _tick_hurt(delta: float) -> void:
+	_state_timer -= delta
+	_knockback = _knockback.move_toward(Vector3.ZERO, 30.0 * delta)
+	_set_planar_velocity(_knockback)
+	if _state_timer <= 0.0:
+		_knockback = Vector3.ZERO
+		state = MoveState.GROUND
 
 
 func _start_turn180(wish: Vector3) -> void:

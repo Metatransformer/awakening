@@ -68,8 +68,20 @@ func _run() -> void:
 		quit(3)
 		return
 
+	# Deferred, and then waited on. A direct `root.add_child()` here can land
+	# while root is busy setting up its own children; it fails with "parent is
+	# busy setting up children", `current_scene` never gets set, and the whole
+	# shot silently becomes a black frame with no scene in it.
 	var instance := packed.instantiate()
-	root.add_child(instance)
+	var tries := 0
+	while instance.get_parent() == null:
+		root.add_child.call_deferred(instance)
+		await process_frame
+		tries += 1
+		if tries > 60:
+			push_error("shoot.gd: could not parent the scene to root")
+			quit(5)
+			return
 	current_scene = instance
 
 	var warmup := int(_args.get("warmup", "45"))

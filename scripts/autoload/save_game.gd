@@ -45,7 +45,7 @@ func peek(slot: int) -> Dictionary:
 		"slot": slot,
 		"hearts": float(d.get("quarters", 0)) / float(K.HEART),
 		"max_hearts": float(d.get("max_quarters", 0)) / float(K.HEART),
-		"rupees": d.get("rupees", 0),
+		"gold": d.get("gold", 0),
 		"keys": d.get("small_keys", 0),
 		"room": d.get("room", ""),
 		"items": (d.get("items", {}) as Dictionary).keys(),
@@ -70,7 +70,7 @@ func save(slot: int) -> bool:
 		"max_quarters": Game.max_quarters,
 		"magic": Game.magic,
 		"max_magic": Game.max_magic,
-		"rupees": Game.rupees,
+		"gold": Game.gold,
 		"arrows": Game.arrows,
 		"bombs": Game.bombs,
 		"small_keys": Game.small_keys,
@@ -108,7 +108,7 @@ func load_slot(slot: int) -> Dictionary:
 	Game.quarters = d.get("quarters", Game.max_quarters)
 	Game.max_magic = d.get("max_magic", 0)
 	Game.magic = d.get("magic", 0)
-	Game.rupees = d.get("rupees", 0)
+	Game.gold = d.get("gold", 0)
 	Game.arrows = d.get("arrows", 0)
 	Game.bombs = d.get("bombs", 0)
 	Game.small_keys = d.get("small_keys", 0)
@@ -134,7 +134,7 @@ func load_slot(slot: int) -> Dictionary:
 	Bus.player_health_changed.emit(Game.quarters, Game.max_quarters)
 	Bus.magic_changed.emit(Game.magic, Game.max_magic)
 	Bus.key_count_changed.emit(Game.small_keys)
-	Bus.rupees_changed.emit(Game.rupees)
+	Bus.gold_changed.emit(Game.gold)
 	Bus.c_items_changed.emit(Game.c_items)
 	loaded.emit(slot)
 
