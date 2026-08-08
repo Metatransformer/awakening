@@ -1,0 +1,78 @@
+<!doctype html><html><head><meta charset="utf-8">
+<title>The Lower Worlds: Awakening — build</title>
+<meta http-equiv="refresh" content="15">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0e0e11;color:#e8e8ee;
+ font:14px/1.55 ui-sans-serif,-apple-system,"SF Pro Text",Inter,system-ui,sans-serif}
+a{color:inherit}
+header{padding:26px 30px 18px;border-bottom:1px solid #24242c;
+ display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+h1{margin:0;font-size:19px;letter-spacing:.28px;font-weight:640}
+.sub{color:#8a8a99;font-size:12.5px}
+.bar{margin-left:auto;display:flex;gap:7px;align-items:center}
+.wrap{padding:22px 30px 60px;max-width:1500px}
+.piece{border:1px solid #24242c;border-radius:11px;margin-bottom:14px;
+ background:#131318;overflow:hidden}
+.phead{display:flex;align-items:center;gap:13px;padding:13px 17px;cursor:pointer;
+ user-select:none}
+.phead:hover{background:#17171d}
+.pid{font:600 11.5px ui-monospace,SFMono-Regular,Menlo,monospace;color:#6f6f80;
+ min-width:24px}
+.pname{font-weight:600;font-size:14.5px}
+.pdesc{color:#79798a;font-size:12.5px}
+.spacer{flex:1}
+.tag{font:600 10.5px ui-monospace,Menlo,monospace;letter-spacing:.5px;
+ text-transform:uppercase;padding:3px 9px;border-radius:99px;white-space:nowrap}
+.pending{background:#1d1d24;color:#6f6f80}
+.building{background:#2a2410;color:#e0b341}
+.judging{background:#132433;color:#5aa9e6}
+.revising{background:#331a13;color:#e08a56}
+.passed{background:#12291a;color:#54c47c}
+.rounds{background:#1d1d24;color:#9a9aab;font:600 11px ui-monospace,Menlo,monospace;
+ padding:3px 9px;border-radius:99px}
+.body{display:none;padding:2px 17px 18px;border-top:1px solid #1e1e26}
+.piece.open .body{display:block}
+.gap{background:#191013;border-left:2px solid #b8425c;padding:9px 13px;
+ border-radius:0 6px 6px 0;margin:13px 0;color:#f0c8d2;font-size:13px}
+.note{color:#8a8a99;font-size:12.5px;margin:11px 0}
+.round{border-top:1px solid #1e1e26;padding:15px 0 4px}
+.rhead{display:flex;gap:11px;align-items:center;margin-bottom:9px;font-size:12.5px}
+.rn{font:600 11px ui-monospace,Menlo,monospace;color:#6f6f80}
+.call{font:600 10.5px ui-monospace,Menlo,monospace;padding:2px 8px;border-radius:99px}
+.call.ours{background:#12291a;color:#54c47c}
+.call.ref{background:#331a13;color:#e08a56}
+.call.tie{background:#132433;color:#5aa9e6}
+.shots{display:flex;gap:11px;flex-wrap:wrap}
+.shot{flex:1 1 300px;min-width:0}
+.shot img{width:100%;border-radius:7px;border:1px solid #26262f;display:block;
+ background:#000}
+.cap{color:#6f6f80;font:11px ui-monospace,Menlo,monospace;margin:5px 0 0}
+.verdict{color:#b8b8c6;font-size:12.5px;margin-top:9px;white-space:pre-wrap}
+.logbox{border:1px solid #24242c;border-radius:11px;background:#131318;padding:6px 0;
+ max-height:290px;overflow:auto;margin-top:24px}
+.logrow{display:flex;gap:13px;padding:4px 17px;font-size:12.5px}
+.logt{color:#57576a;font:11px ui-monospace,Menlo,monospace;padding-top:1px}
+.logm{color:#a4a4b4}
+.dot{width:7px;height:7px;border-radius:99px;background:#54c47c;
+ animation:p 1.7s ease-in-out infinite}
+@keyframes p{0%,100%{opacity:1}50%{opacity:.22}}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:1.1px;color:#6f6f80;
+ margin:26px 0 9px;font-weight:640}
+</style></head><body>
+<header><h1>The Lower Worlds: Awakening &mdash; build loop</h1>
+<span class="sub">bar: The Legend of Zelda: Link's Awakening (Switch, 2019) &middot; refs/</span>
+<span class="bar"><span class="dot"></span><span class="sub">0/8 passed &middot; 0 rounds judged &middot; updated 13:17:12</span></span>
+</header><div class="wrap">
+<h2>Pieces</h2><div class="piece" data-id="P1" data-active="0"><div class="phead"><span class="pid">P1</span><span class="pname">Camera</span><span class="pdesc">OOT third-person rig: distance, lag, auto-swing, wall handling, recenter</span><span class="spacer"></span><span class="rounds">0 rd</span><span class="tag pending">pending</span></div><div class="body"><p class="note">No judged rounds yet.</p></div></div><div class="piece" data-id="P2" data-active="0"><div class="phead"><span class="pid">P2</span><span class="pname">Hero &amp; movement</span><span class="pdesc">Walk/run ramp, turn, roll, backflip, sidehop, animation blend</span><span class="spacer"></span><span class="rounds">0 rd</span><span class="tag pending">pending</span></div><div class="body"><p class="note">No judged rounds yet.</p></div></div><div class="piece" data-id="P3" data-active="0"><div class="phead"><span class="pid">P3</span><span class="pname">Z-targeting</span><span class="pdesc">Acquire, reticle, letterbox, strafe, lock camera, break rules</span><span class="spacer"></span><span class="rounds">0 rd</span><span class="tag pending">pending</span></div><div class="body"><p class="note">No judged rounds yet.</p></div></div><div class="piece" data-id="P4" data-active="0"><div class="phead"><span class="pid">P4</span><span class="pname">Sword &amp; shield</span><span class="pdesc">Slash set, jump attack, spin, hitstop, knockback, block cone</span><span class="spacer"></span><span class="rounds">0 rd</span><span class="tag pending">pending</span></div><div class="body"><p class="note">No judged rounds yet.</p></div></div><div class="piece" data-id="P5" data-active="0"><div class="phead"><span class="pid">P5</span><span class="pname">Bow</span><span class="pdesc">First-person aim, arrow arc, ammo, nocking feel</span><span class="spacer"></span><span class="rounds">0 rd</span><span class="tag pending">pending</span></div><div class="body"><p class="note">No judged rounds yet.</p></div></div><div class="piece" data-id="P6" data-active="0"><div class="phead"><span class="pid">P6</span><span class="pname">Bombs</span><span class="pdesc">Fuse, blast, self-damage, physics, bombable walls</span><span class="spacer"></span><span class="rounds">0 rd</span><span class="tag pending">pending</span></div><div class="body"><p class="note">No judged rounds yet.</p></div></div><div class="piece" data-id="P7" data-active="0"><div class="phead"><span class="pid">P7</span><span class="pname">Hookshot</span><span class="pdesc">Chain travel, grab, pull hero vs pull object, valid targets</span><span class="spacer"></span><span class="rounds">0 rd</span><span class="tag pending">pending</span></div><div class="body"><p class="note">No judged rounds yet.</p></div></div><div class="piece" data-id="P8" data-active="0"><div class="phead"><span class="pid">P8</span><span class="pname">Dungeon look</span><span class="pdesc">N64 stone architecture, torch lighting, fog, materials</span><span class="spacer"></span><span class="rounds">0 rd</span><span class="tag pending">pending</span></div><div class="body"><p class="note">No judged rounds yet.</p></div></div><div class="piece" data-id="P9" data-active="0"><div class="phead"><span class="pid">P9</span><span class="pname">Dungeon graph</span><span class="pdesc">Cyclic layout, small keys, locked doors, item gate, boss key</span><span class="spacer"></span><span class="rounds">0 rd</span><span class="tag pending">pending</span></div><div class="body"><p class="note">No judged rounds yet.</p></div></div><div class="piece" data-id="P10" data-active="0"><div class="phead"><span class="pid">P10</span><span class="pname">Enemies</span><span class="pdesc">Roster, AI, targetable, telegraphs, death</span><span class="spacer"></span><span class="rounds">0 rd</span><span class="tag pending">pending</span></div><div class="body"><p class="note">No judged rounds yet.</p></div></div><div class="piece" data-id="P11" data-active="0"><div class="phead"><span class="pid">P11</span><span class="pname">Boss</span><span class="pdesc">Arena, phases, telegraphs, item-tied vulnerability</span><span class="spacer"></span><span class="rounds">0 rd</span><span class="tag pending">pending</span></div><div class="body"><p class="note">No judged rounds yet.</p></div></div><div class="piece" data-id="P12" data-active="0"><div class="phead"><span class="pid">P12</span><span class="pname">HUD</span><span class="pdesc">Hearts, magic, C-buttons, rupees, reticle, minimap</span><span class="spacer"></span><span class="rounds">0 rd</span><span class="tag pending">pending</span></div><div class="body"><p class="note">No judged rounds yet.</p></div></div><div class="piece" data-id="P13" data-active="0"><div class="phead"><span class="pid">P13</span><span class="pname">Feel &amp; audio</span><span class="pdesc">Hitstop, shake, footsteps, sfx, music, transitions</span><span class="spacer"></span><span class="rounds">0 rd</span><span class="tag pending">pending</span></div><div class="body"><p class="note">No judged rounds yet.</p></div></div>
+<h2>Activity</h2><div class="logbox"><div class="logrow"><span class="logt">13:17:12</span><span class="logm">foundation: hero rig proven, 72 mixamo clips merged, OOT input map live</span></div><div class="logrow"><span class="logt">13:17:12</span><span class="logm">brief repointed: OOT third-person + Z-targeting (was top-down)</span></div><div class="logrow"><span class="logt">13:17:12</span><span class="logm">gauntlet initialised</span></div></div>
+</div><script>
+document.querySelectorAll('.phead').forEach(h=>h.onclick=()=>{
+  const p=h.parentElement, id=p.dataset.id, o=p.classList.toggle('open');
+  try{localStorage.setItem('open_'+id,o?'1':'0')}catch(e){}
+});
+document.querySelectorAll('.piece').forEach(p=>{
+  let v=null; try{v=localStorage.getItem('open_'+p.dataset.id)}catch(e){}
+  if(v==='1'||(v===null&&p.dataset.active==='1')) p.classList.add('open');
+});
+</script></body></html>

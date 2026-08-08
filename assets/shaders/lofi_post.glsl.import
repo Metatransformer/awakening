@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://ct8tduetaryy1"
+path="res://.godot/imported/lofi_post.glsl-13304c755096613daf7385ceb4961b72.res"
+
+[deps]
+
+source_file="res://assets/shaders/lofi_post.glsl"
+dest_files=["res://.godot/imported/lofi_post.glsl-13304c755096613daf7385ceb4961b72.res"]
+
+[params]
+

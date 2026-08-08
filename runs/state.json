@@ -1,0 +1,110 @@
+{
+  "pieces": {
+    "P1": {
+      "status": "pending",
+      "round": 0,
+      "note": "",
+      "gap": "",
+      "rounds": []
+    },
+    "P2": {
+      "status": "pending",
+      "round": 0,
+      "note": "",
+      "gap": "",
+      "rounds": []
+    },
+    "P3": {
+      "status": "pending",
+      "round": 0,
+      "note": "",
+      "gap": "",
+      "rounds": []
+    },
+    "P4": {
+      "status": "pending",
+      "round": 0,
+      "note": "",
+      "gap": "",
+      "rounds": []
+    },
+    "P5": {
+      "status": "pending",
+      "round": 0,
+      "note": "",
+      "gap": "",
+      "rounds": []
+    },
+    "P6": {
+      "status": "pending",
+      "round": 0,
+      "note": "",
+      "gap": "",
+      "rounds": []
+    },
+    "P7": {
+      "status": "pending",
+      "round": 0,
+      "note": "",
+      "gap": "",
+      "rounds": []
+    },
+    "P8": {
+      "status": "pending",
+      "round": 0,
+      "note": "",
+      "gap": "",
+      "rounds": []
+    },
+    "P9": {
+      "status": "pending",
+      "round": 0,
+      "note": "",
+      "gap": "",
+      "rounds": []
+    },
+    "P10": {
+      "status": "pending",
+      "round": 0,
+      "note": "",
+      "gap": "",
+      "rounds": []
+    },
+    "P11": {
+      "status": "pending",
+      "round": 0,
+      "note": "",
+      "gap": "",
+      "rounds": []
+    },
+    "P12": {
+      "status": "pending",
+      "round": 0,
+      "note": "",
+      "gap": "",
+      "rounds": []
+    },
+    "P13": {
+      "status": "pending",
+      "round": 0,
+      "note": "",
+      "gap": "",
+      "rounds": []
+    }
+  },
+  "log": [
+    {
+      "t": "13:17:12",
+      "msg": "foundation: hero rig proven, 72 mixamo clips merged, OOT input map live"
+    },
+    {
+      "t": "13:17:12",
+      "msg": "brief repointed: OOT third-person + Z-targeting (was top-down)"
+    },
+    {
+      "t": "13:17:12",
+      "msg": "gauntlet initialised"
+    }
+  ],
+  "started": "13:17:12"
+}
