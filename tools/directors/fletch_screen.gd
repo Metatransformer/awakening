@@ -121,6 +121,9 @@ func _walk_down(rig, pouch) -> Array:
 			break
 		next.grab_focus()
 		await rig.wait_frames(1)
-		if seen.has("Back") and seen.has("Rope"):
+		# Stop once the way out is on the list. NOT once "Back" is — the footer
+		# button is built without a name, so it walks past as "@Button@NN" and a
+		# check on the literal never fires.
+		if seen.has("Rope"):
 			break
 	return seen

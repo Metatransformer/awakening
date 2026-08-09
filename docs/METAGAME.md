@@ -566,9 +566,9 @@ SIZE chest extent=1.15m        SIZE arrow extent=0.68m
 CHEST bundle count=10          CHEST pickup +10 arrows (quiver 10)
 FULL quiver refused the bundle and it stayed on the floor
 BENCH full quiver refused and the bag was untouched
-TOTAL rooms=48 chests=25 bundles=10 loose_arrows=60
-RATE bundles/room=0.21 (arrow_chance=0.25)
-FOCUS walk reached [Cell_0, Cell_4, Cell_8, Fletch, Rope, Back]
+TOTAL rooms=48 chests=25 bundles=11 loose_arrows=66
+RATE bundles/room=0.23 (arrow_chance=0.25)
+FOCUS walk reached [Cell_0, Cell_4, Cell_8, Fletch, Rope]
 ```
 
 The economy of tempo has its own director (§4.5):

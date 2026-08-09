@@ -12,7 +12,7 @@ extends RefCounted
 ## survives to the build.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/dungeon_run.tscn \
+##     --scene=res://scenes/rooms/dungeon.tscn \
 ##     --director=res://tools/directors/dungeon_supply.gd --out=/tmp/dun/d.png
 
 ## Floors to generate. Enough that both rolls have to show up at their stated

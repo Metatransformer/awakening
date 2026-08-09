@@ -39,6 +39,17 @@ const BOB_HEIGHT := 0.06
 ## ten arrows drawn as ten arrows is a bird's nest at this scale.
 const SHAFTS := 3
 
+## Where the "look here" light hangs, and how hard. ABOVE the shafts, not inside
+## them: an omni sitting at the tie is a light source the camera stares straight
+## into, and it saturates the arrowheads it is supposed to be showing you — the
+## first two passes lost the heads in a white flare and only the fletching read.
+## Up here it pools on the floor and rakes the shafts from above, which is the
+## job. `_build` and `_process` both read this, because they used to hold two
+## different numbers for the same lamp.
+const LIGHT_Y := 0.52
+const LIGHT_ENERGY := 0.55
+const LIGHT_RANGE := 1.6
+
 ## Arrows granted on pickup.
 @export var count: int = FLOOR_COUNT
 
@@ -108,50 +119,58 @@ func _build() -> void:
 		# a vertical arrow about Y spins it in place, so the fan collapsed and the
 		# pickup read as a single spear stuck in the floor.
 		shaft.rotation.x = Arrow.MODEL_PITCH
-		shaft.rotate_y(deg_to_rad(-19.0 + 19.0 * float(i)))
+		# Ten degrees, not twenty. A bundle is arrows held together; twenty splayed
+		# the heads 45 cm apart on a 70 cm shaft and the pickup read as a starburst
+		# — three arrows thrown down, not three arrows tied.
+		shaft.rotate_y(deg_to_rad(-10.0 + 10.0 * float(i)))
 		# Stacked a few millimetres apart so the three do not z-fight where they
-		# cross under the cord, and nudged back so the tie sits behind the heads.
-		shaft.position = Vector3(0.0, 0.022 * float(i), 0.10)
+		# cross under the cord. Millimetres: at 2 cm they floated as separate
+		# objects at the size this is actually seen from.
+		shaft.position = Vector3(0.0, 0.013 * float(i), 0.10)
 		_rig.add_child(shaft)
 
 	# The cord. Three loose shafts read as litter; one band across them reads as
 	# something a person tied, which is the difference between "dropped" and
 	# "stashed".
 	var cord_mat := StandardMaterial3D.new()
-	cord_mat.albedo_color = Color(0.32, 0.20, 0.12)
+	cord_mat.albedo_color = Color(0.21, 0.13, 0.08)
 	cord_mat.roughness = 1.0
 	cord_mat.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
 	var cord := MeshInstance3D.new()
 	cord.name = "Cord"
 	var cm := CylinderMesh.new()
-	cm.top_radius = 0.05
-	cm.bottom_radius = 0.05
-	cm.height = 0.055
+	# A band, not a barrel. Three shafts stacked are about 1.5 cm through, so the
+	# tie is 5 cm across and 4 cm tall; the first pass was 10 cm across and read as
+	# a keg the arrows had been stuck into.
+	cm.top_radius = 0.026
+	cm.bottom_radius = 0.026
+	cm.height = 0.042
 	cm.radial_segments = 6
 	cm.rings = 1
 	cm.material = cord_mat
 	cord.mesh = cm
 	# Banded ACROSS the shafts, which now lie along -Z: the cylinder's own axis is
-	# +Y, so it stays upright and the shafts pass through it.
-	cord.position = Vector3(0.0, 0.02, 0.16)
+	# +Y, so it stays upright and the shafts pass through it. Tied near the middle
+	# of the group, which is where a person ties a bundle and is also the only
+	# place that does not hide either the heads or the fletching.
+	cord.position = Vector3(0.0, 0.013, 0.12)
 	_rig.add_child(cord)
 
 	# Same "look here" the motes use, in a neutral bone rather than an item tint,
 	# so a bundle is never mistaken for a rare drop across a room. Short range:
 	# this is supply, not treasure.
 	#
-	# Deliberately DIMMER than a mote's 1.1. A mote is an emissive prism and its
-	# light reads as the object glowing; these are ordinary lit materials on a
-	# thing 4 cm thick, so the same energy lights the FLOOR instead — the first
-	# version put a white blowout over the dungeon's warm stone with three arrows
-	# lost inside it. The same trap loot_mote.gd records at its emission line.
+	# Deliberately DIMMER than a mote's 1.1, and hung above rather than in. A mote
+	# is an emissive prism and its light reads as the object glowing; these are
+	# ordinary lit materials on a thing 4 cm thick, so the same energy lights the
+	# FLOOR instead. The same trap loot_mote.gd records at its emission line.
 	_light = OmniLight3D.new()
 	_light.light_color = Pal.BONE
-	_light.light_energy = 0.45
-	_light.omni_range = 1.15
+	_light.light_energy = LIGHT_ENERGY
+	_light.omni_range = LIGHT_RANGE
 	_light.omni_attenuation = 2.2
 	_light.shadow_enabled = false
-	_light.position.y = 0.22
+	_light.position.y = LIGHT_Y
 	add_child(_light)
 
 
@@ -163,16 +182,16 @@ func _process(delta: float) -> void:
 	var bob := sin(_age * BOB_SPEED) * BOB_HEIGHT
 	_rig.position.y = 0.16 + bob
 	_rig.rotation.y += 0.7 * delta
-	_light.position.y = 0.3 + bob
+	_light.position.y = LIGHT_Y + bob
 
 	if _refused > 0.0:
 		# Quiver full. Pulse and stay: unlike a full bag, this is not a decision
 		# the player has to unmake, it is a bundle to come back for after a fight.
 		_refused = maxf(0.0, _refused - delta)
-		_light.light_energy = 0.45 + (0.5 + 0.5 * sin(_age * 14.0)) * 1.1
+		_light.light_energy = LIGHT_ENERGY + (0.5 + 0.5 * sin(_age * 14.0)) * 1.1
 		return
 
-	_light.light_energy = 0.45
+	_light.light_energy = LIGHT_ENERGY
 	if _age < ARM_TIME:
 		return
 	for b in get_overlapping_bodies():
