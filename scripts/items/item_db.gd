@@ -31,10 +31,15 @@ static func is_component(id: StringName) -> bool:
 
 ## Every component id, in catalogue order. The forge screen and the pouch both
 ## want a stable list, and neither should hardcode one.
-static func components() -> Array[StringName]:
+##
+## `bench` narrows it to one counter's materials (`ItemDef.BENCH_FORGE` /
+## `BENCH_ALCHEMY`); the default is everything, because the pouch draws one
+## workbench and the bag never cared which counter a thing was for.
+static func components(bench: StringName = &"") -> Array[StringName]:
 	var out: Array[StringName] = []
 	for id: StringName in all():
-		if (all()[id] as ItemDef).is_component():
+		var d := all()[id] as ItemDef
+		if d.is_component() and (bench == &"" or d.bench == bench):
 			out.append(id)
 	return out
 
@@ -89,6 +94,28 @@ static func _build() -> void:
 	_add(ItemDef.part(&"cold_iron_core", "Cold Iron Core", 100, R, 2,
 		Color(0.74, 0.82, 0.92), "Ice to the hand hours after the forge. Nothing else finishes a piece."))
 
+	# --- Materials: what the alchemist eats ----------------------------------
+	# The same kind as the four above and the same rules -- banked on the way
+	# home, lost with the bag, never sold -- because they pose the same DECISION:
+	# a slot spent on cullet is a slot not spent on a pearl. What differs is the
+	# counter they walk to, which is a word on the pouch and nothing else.
+	#
+	# Glass is deliberately the commonest thing here, because a bottle you cannot
+	# make is a bottle you never fill and the whole point of the alchemist is the
+	# four slots. The scarcity that matters lives one line down, in the dew.
+	_add(ItemDef.brew(&"fired_cullet", "Fired Cullet", 12, C, 8,
+		Color(0.56, 0.74, 0.70), "Glass that has already been something once."))
+	_add(ItemDef.brew(&"bitter_root", "Bitter Root", 16, C, 8,
+		Color(0.48, 0.44, 0.26), "Pulls up hard and tastes worse. Keeps a man upright."))
+	_add(ItemDef.brew(&"ash_resin", "Ash Resin", 25, U, 6,
+		Color(0.74, 0.50, 0.32), "Weeps out of burnt wood for years afterwards."))
+	# Chests only, exactly like the Cold Iron Core and for the same reason: the
+	# FOURTH bottle is an event. If dew fell off bodies the last slot would be a
+	# grind rather than a find, and grinding is what the depth curve exists to
+	# beat (docs/METAGAME.md §7.1).
+	_add(ItemDef.brew(&"mourning_dew", "Mourning Dew", 85, R, 2,
+		Color(0.66, 0.80, 0.94), "Collected off stone that never sees a morning."))
+
 
 # --- Drop tables ------------------------------------------------------------
 
@@ -108,6 +135,12 @@ const ENEMY_DROPS := {
 	&"whetstone_grit": 10,
 	&"riveted_plate": 4,
 	&"tension_coil": 3,
+	# The alchemist's share of a body. Cullet outweighs root because glass is the
+	# gate on the SLOT and root is the gate on one draught -- being short of
+	# bottles is the state that makes the whole counter pointless.
+	&"fired_cullet": 9,
+	&"bitter_root": 6,
+	&"ash_resin": 3,
 }
 
 ## Chests are the reason to explore off the critical path, so their floor is
@@ -127,6 +160,13 @@ const CHEST_DROPS := {
 	# finishes ANY ladder -- which is why a chest is worth the detour even when
 	# the bag is nearly full.
 	&"cold_iron_core": 3,
+	&"fired_cullet": 7,
+	&"bitter_root": 6,
+	&"ash_resin": 8,
+	# The fourth bottle, and nothing else on the board wants it. Rarer than the
+	# core: the core finishes a ladder you were already climbing, the dew opens a
+	# slot you have never had.
+	&"mourning_dew": 2,
 }
 
 

@@ -1,6 +1,6 @@
 class_name Npc
 extends Interactable
-## The two people in town, and the gate they stand either side of.
+## The three people in town, and the gate they stand around.
 ##
 ## They are boxes with a lantern. That is on purpose for the MVP: a stand-in
 ## character model that is nearly good is worse than an obvious placeholder,
@@ -8,7 +8,17 @@ extends Interactable
 ## turn to face you, light up when addressed, open the right screen -- is the
 ## part that has to be right, and none of it depends on the mesh.
 
-enum Role { VENDOR, SMITH, GATE }
+enum Role { VENDOR, SMITH, GATE, ALCHEMIST }
+
+## The name over each head. A table rather than a chain of ternaries: it was
+## already one ternary answering for two roles, and a third role is exactly when
+## that stops being readable and starts being wrong.
+const SIGNS := {
+	Role.VENDOR: "PAWNBROKER",
+	Role.SMITH: "SMITH",
+	Role.ALCHEMIST: "ALCHEMIST",
+	Role.GATE: "",
+}
 
 @export var role: Role = Role.VENDOR
 @export var robe_color: Color = Color(0.34, 0.20, 0.26)
@@ -29,7 +39,7 @@ func _ready() -> void:
 		# put the shop's menu on the label before you had met the shopkeeper. The
 		# name floating over them (`_sign`) already says which one this is, so
 		# "TALK" is not vague: it reads as TALK TO THE PAWNBROKER.
-		Role.VENDOR, Role.SMITH:
+		Role.VENDOR, Role.SMITH, Role.ALCHEMIST:
 			prompt = "TALK"
 		Role.GATE:
 			prompt = "DESCEND"
@@ -45,6 +55,10 @@ func activate(_by: Node3D) -> void:
 			TradeScreen.open(self, TradeScreen.Mode.SELL, "PAWNBROKER")
 		Role.SMITH:
 			TradeScreen.open(self, TradeScreen.Mode.BUY, "THE FORGE")
+		Role.ALCHEMIST:
+			# The same screen the smith opens, pointed at the other catalogue.
+			# See TradeScreen's header for why there is not a second one.
+			TradeScreen.open(self, TradeScreen.Mode.BUY, "THE ALCHEMIST", AlchemyDb)
 		Role.GATE:
 			Flow.enter_dungeon()
 
@@ -95,7 +109,7 @@ func _build() -> void:
 		_build_person()
 
 	_sign = Label3D.new()
-	_sign.text = "PAWNBROKER" if role == Role.VENDOR else "SMITH"
+	_sign.text = SIGNS.get(role, "")
 	_sign.font_size = 48
 	_sign.pixel_size = 0.0022
 	_sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED

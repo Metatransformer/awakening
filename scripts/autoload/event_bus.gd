@@ -101,6 +101,20 @@ signal components_banked(moved: Dictionary)
 ## anything that wants to celebrate do.
 signal gear_forged(track: StringName, level: int)
 
+# --- Bottles and draughts (docs/METAGAME.md §6.6) ---------------------------
+## A bottle was blown, filled or drunk. `contents` is `Game.bottle_contents` --
+## the whole array, because its SIZE is how many bottles there are and a signal
+## that carried only the changed index would make every listener keep a count of
+## its own.
+signal bottles_changed(contents: Array)
+## A draught went down. `potion` is a PotionDb id. Fired for all three, lasting
+## or not, so the feel layer has one thing to listen to.
+signal potion_drunk(potion: StringName)
+## A lasting draught started, or ran out (`seconds_left` 0.0). NOT emitted every
+## frame while it runs -- the HUD reads `Game.draught_left()` as it draws, the
+## same way it reads health.
+signal draught_changed(potion: StringName, seconds_left: float)
+
 # --- Heat: momentum, and what it is worth -----------------------------------
 ## The chain moved. `window01` is how much of the current tier's window is left,
 ## so a listener can draw the countdown without polling Heat every frame.

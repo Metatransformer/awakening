@@ -12,7 +12,11 @@ const SLOTS := 3
 ## exist. `_read` refuses a version it does not recognise, so a v1 slot reads as
 ## empty rather than as a hero who lost his sharpenings — which is the honest
 ## failure, and there is no live save worth migrating in a dev build.
-const VERSION := 2
+## Bumped to 3 when the bottles landed: a bottle is a purchase and what is in it
+## was paid for, so both have to survive quitting exactly as a forge rung does.
+## `_read` still refuses a version it does not recognise, so a v2 slot reads as
+## empty rather than as a hero whose glass quietly vanished.
+const VERSION := 3
 
 signal saved(slot: int)
 signal loaded(slot: int)
@@ -88,6 +92,10 @@ func save(slot: int) -> bool:
 		# `upgrades` (see Game.FORGE_*), so one key carries all five.
 		"upgrades": Game.upgrades,
 		"components": Game.components,
+		# The array's size is how many bottles there are, so one key carries both
+		# the glass and the contents. The DRAUGHT CLOCKS are deliberately not
+		# saved -- see Game.draughts.
+		"bottles": Game.bottle_contents,
 		"arrows": Game.arrows,
 		"bombs": Game.bombs,
 		"small_keys": Game.small_keys,
@@ -192,6 +200,17 @@ func load_slot(slot: int) -> Dictionary:
 	Game.components.clear()
 	for k in (d.get("components", {}) as Dictionary):
 		Game.components[StringName(k)] = int((d["components"] as Dictionary)[k])
+	# Rebuilt element by element for the reason `upgrades` is: JSON has no
+	# StringName, so an assigned array would come back full of Strings and
+	# `bottle_index()` would parse fine while `PotionDb.has()` missed every
+	# lookup -- a bottle that draws as full and refuses to be drunk. Clamped to
+	# K.BOTTLE_MAX so a hand-edited slot cannot hand out a fifth.
+	Game.bottle_contents.clear()
+	for c in (d.get("bottles", []) as Array):
+		if Game.bottle_contents.size() >= K.BOTTLE_MAX:
+			break
+		var potion := StringName(c)
+		Game.bottle_contents.append(potion if PotionDb.has(potion) else &"")
 	Game.arrows = d.get("arrows", 0)
 	Game.bombs = d.get("bombs", 0)
 	Game.small_keys = d.get("small_keys", 0)
@@ -234,6 +253,7 @@ func load_slot(slot: int) -> Dictionary:
 	Bus.key_count_changed.emit(Game.small_keys)
 	Bus.gold_changed.emit(Game.gold)
 	Bus.quick_slots_changed.emit(Game.quick_slots)
+	Bus.bottles_changed.emit(Game.bottle_contents)
 	Bus.components_changed.emit(Game.components)
 	Bus.loadout_changed.emit(Game.loadout_set,
 		Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_LEFT))

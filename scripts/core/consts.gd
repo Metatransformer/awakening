@@ -336,6 +336,34 @@ const BAND_2_ROOM := 3
 const BAND_3_ROOM := 7
 
 
+# --- Bottles and draughts (docs/METAGAME.md §6.6) ---------------------------
+## How many bottles the alchemist will ever blow you, and how many you start
+## with. The cap is the whole design of the thing: a bottle is a SLOT, and four
+## of them is enough to plan a run around and few enough that filling the fourth
+## with the wrong draught is a decision you regret. [tune]
+const BOTTLE_MAX := 4
+## [test] Handed over at boot so the bottle can be exercised without first
+## finding the glass to blow one. Deleted the same day the starter kit is —
+## see Game.STARTER_KIT, which this sits beside for that reason.
+const BOTTLE_START := 1
+
+## Quarter-hearts a Heart Draught puts back. Two whole hearts against a starting
+## three: a draught is a second chance at the fight you are in, not a top-up you
+## sip between rooms. It is also the only healing in the game that is not the
+## walk home (docs/METAGAME.md §5), which is why it costs a slot and a brew.
+const DRAUGHT_HEAL := 8
+## Seconds the two lasting draughts run for. Long enough to cover a room and its
+## fight, short enough that you cannot drink one in town and still have it at the
+## stair. [tune]
+const DRAUGHT_TIME := 45.0
+## Quarter-hearts Emberblood adds to a swing, and Ironhide soaks off a blow.
+## Both are read through the SAME accessors the forge feeds (`Game.sword_bonus`,
+## `Game.armour_soak`), so a draught is worth exactly two rungs for its 45 s and
+## nothing downstream needed a line of code to know potions exist.
+const DRAUGHT_EDGE := 2
+const DRAUGHT_PLATE := 2
+
+
 ## Depth band (1..3) for a number of rooms cleared this run.
 static func band_for_room(rooms_cleared: int) -> int:
 	if rooms_cleared >= BAND_3_ROOM:

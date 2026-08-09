@@ -72,6 +72,9 @@ func _ready() -> void:
 	# loaded from the Saves screen changes it too. Redraw on the signal rather
 	# than trusting that open() is the only way in.
 	Bus.loadout_changed.connect(func(_s: int, _r: StringName, _l: StringName) -> void: refresh())
+	# A bound bottle's cell shows what is IN it, so brewing, drinking or blowing
+	# one changes this screen without the binding changing at all.
+	Bus.bottles_changed.connect(func(_c: Array) -> void: refresh())
 	refresh()
 
 
@@ -273,6 +276,13 @@ func _make_quick(parent: Node, slot: int, glyph: String, action: StringName) -> 
 	value.theme_type_variation = &"MenuSlotStat"
 	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	value.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# This is the one card whose text is not from a closed list -- what a bottle
+	# is called depends on what is in it -- so it is the one card that has to
+	# survive a name longer than it. A Label does not clip by itself: the long
+	# form printed straight across the neighbouring buttons. `slot_name` keeps
+	# the text short and this keeps a future one from bleeding anyway.
+	value.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	value.clip_text = true
 	col.add_child(value)
 
 	b.pressed.connect(func() -> void: _cycle_bind(b))
@@ -548,7 +558,7 @@ func _paint_quick(b: Button) -> void:
 	# An unbound button says so rather than showing a blank cell. A blank cell
 	# reads as a bug; "Unbound" reads as a choice you have not made yet.
 	letters.text = "·" if id == &"" else ArmamentDb.letter(id)
-	value.text = "Unbound" if id == &"" else ArmamentDb.name_of(id)
+	value.text = "Unbound" if id == &"" else ArmamentDb.slot_name(id)
 
 	# Marked when it is the thing currently in his right hand, so the screen
 	# answers "which button am I holding?" without the player working it out.
@@ -591,6 +601,20 @@ func _describe_quick(b: Button) -> void:
 	_detail_ammo.visible = ammo != &""
 	if ammo == &"arrows":
 		_detail_ammo.text = "%d arrows" % Game.arrows
+
+	# A bottle is DRUNK on the press, not drawn — see Game.use_quick for why the
+	# odd one out is the right shape. The legend has to say so, because every
+	# other thing on this cross behaves the other way.
+	var bottle_at := Game.bottle_index(id)
+	if bottle_at >= 0:
+		var held := Game.bottle(bottle_at)
+		_detail_ammo.visible = held != &""
+		if held != &"":
+			_detail_ammo.text = PotionDb.effect_of(held)
+		_detail_legend.text = ("In play: %s or %s drinks it." % [
+			MenuUtil.pad_label(action), MenuUtil.key_label(action)]) if held != &"" \
+			else "Empty. The alchemist fills it."
+		return
 
 	_detail_legend.text = "In play: %s or %s draws it, and puts it away again." % [
 		MenuUtil.pad_label(action), MenuUtil.key_label(action)]

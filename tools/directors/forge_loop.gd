@@ -60,7 +60,11 @@ func _ck(label: String, ok: bool) -> void:
 # --- A. The catalogue -------------------------------------------------------
 
 func _catalogue() -> void:
-	var parts := ItemDb.components()
+	# The FORGE's four, specifically. The alchemist's materials are the same kind
+	# and share the same workbench (docs/METAGAME.md §6.6), so an unfiltered
+	# `components()` has counted eight since the bottles landed -- and the claims
+	# below are about the forge's table, not about how many benches exist.
+	var parts := ItemDb.components(ItemDef.BENCH_FORGE)
 	print("FORGE components=%s" % [parts])
 	_ck("A0 four components exist", parts.size() == 4)
 	for id in parts:

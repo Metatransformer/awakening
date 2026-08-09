@@ -1,6 +1,6 @@
 class_name Town
 extends Node3D
-## The hub. A walled yard, two people, and a hole in the ground.
+## The hub. A walled yard, three people, and a hole in the ground.
 ##
 ## Deliberately TINY -- about eight seconds of walking, corner to corner. The
 ## town is not content; it is the place where the number in your bag turns into
@@ -21,6 +21,7 @@ const KIT_PILLAR := preload("res://scenes/kit/pillar.tscn")
 
 var vendor: Npc
 var smith: Npc
+var alchemist: Npc
 var gate: Npc
 
 var _report: Label3D
@@ -127,6 +128,26 @@ func _build_people() -> void:
 	smith.lamp_color = Color(0.98, 0.56, 0.24)
 	smith.position = Vector3(yard.x * 0.26, 0.0, -yard.y * 0.06)
 	add_child(smith)
+
+	# West side, ahead of the arrival spot but well short of the far wall.
+	#
+	# The vendor and the smith are the two counters you visit with a FULL BAG, so
+	# they share the far wall either side of the gate; the alchemist is the one
+	# you visit on the way back out, with the bench already banked, and she
+	# stands nearer the near end of that walk.
+	#
+	# The z was +0.22 of the yard first, which is level with where the hero lands
+	# -- and the arrival capture (a_07_home) showed the consequence: she was
+	# BEHIND the camera on the one frame every returning player sees. A shop you
+	# have to turn around to discover is a shop that does not exist. Anything
+	# here has to stay inside the arrival frame; check that capture if you move
+	# her, because nothing else will notice.
+	alchemist = Npc.new()
+	alchemist.role = Npc.Role.ALCHEMIST
+	alchemist.robe_color = Color(0.20, 0.30, 0.26)
+	alchemist.lamp_color = Color(0.42, 0.90, 0.62)
+	alchemist.position = Vector3(-yard.x * 0.10, 0.0, yard.y * 0.11)
+	add_child(alchemist)
 
 	gate = Npc.new()
 	gate.role = Npc.Role.GATE

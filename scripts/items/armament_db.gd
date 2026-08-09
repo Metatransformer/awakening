@@ -52,15 +52,46 @@ const BLURBS := {
 }
 
 
+## A BOTTLE is not an armament -- it never goes in a hand -- but it is bindable,
+## and the two surfaces that draw a bound thing (the HUD cross and the Items
+## screen) route every id through here. Answering for bottles in this one place
+## is what keeps them from each growing a bottle branch of their own, which is
+## exactly the drift the header above is about.
 static func name_of(id: StringName) -> String:
+	var b := Game.bottle_index(id)
+	if b >= 0:
+		var held := Game.bottle(b)
+		return "Bottle %d — %s" % [b + 1,
+			PotionDb.name_of(held) if held != &"" else "Empty"]
 	return NAMES.get(id, String(id).capitalize())
 
 
+## The same thing, short enough to sit in a slot card.
+##
+## `name_of` is written for the DETAIL pane, which has a column to itself; the
+## cards on the Items screen are about 200 px wide and every armament name
+## happens to fit ("Knightly Sword", "Kite Shield"), so nothing enforced it.
+## "Bottle 3 — Emberblood Draught" does not fit: it ran off its card and printed
+## over the neighbour's, and the capture at a_04b_equip caught it doing that.
+## The card is not losing information -- the glyph above it already shows the
+## draught's short name, and the detail pane spells the whole thing out.
+static func slot_name(id: StringName) -> String:
+	var b := Game.bottle_index(id)
+	return "Bottle %d" % (b + 1) if b >= 0 else name_of(id)
+
+
 static func letter(id: StringName) -> String:
+	var b := Game.bottle_index(id)
+	if b >= 0:
+		var short := PotionDb.short_of(Game.bottle(b))
+		return short if short != "" else "—"
 	return LETTERS.get(id, "?")
 
 
 static func blurb(id: StringName) -> String:
+	var b := Game.bottle_index(id)
+	if b >= 0:
+		return PotionDb.blurb_of(Game.bottle(b))
 	return BLURBS.get(id, "")
 
 

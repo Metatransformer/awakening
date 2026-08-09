@@ -256,6 +256,11 @@ func _ready() -> void:
 	Bus.ammo_changed.connect(_repaint)
 	Bus.loadout_changed.connect(_repaint)
 	Bus.quick_slots_changed.connect(_repaint)
+	# A bound bottle's cell draws what is IN it, so filling or draining one moves
+	# the HUD without the binding changing. `_wake` rather than `_repaint` for the
+	# draught: the bar it starts has to keep draining after this frame.
+	Bus.bottles_changed.connect(_repaint)
+	Bus.draught_changed.connect(func(_p: StringName, _s: float) -> void: _wake())
 	Bus.heat_changed.connect(_on_heat)
 	Bus.heat_tier_changed.connect(_on_heat_tier)
 	Bus.extract_refused.connect(_on_refused)
@@ -533,6 +538,10 @@ func _process(delta: float) -> void:
 	# wants a frame-by-frame repaint, and it stops the moment the chain is cold.
 	if Heat.kills > 0:
 		busy = true
+	# Same argument as the chain: a draught bar is a countdown, and it drains for
+	# 45 s off a single signal. Stops the moment the last one runs out.
+	if not Game.draughts.is_empty():
+		busy = true
 	# The other one, and it is a deliberate widening of this file's "repaint on
 	# signal, never per frame" rule. An enemy bar is pinned to a body that walks, so
 	# it has to be re-projected every frame it is on screen, and there is no signal
@@ -559,6 +568,7 @@ func _draw_hud() -> void:
 	_draw_health(s)
 	_draw_stamina(s)
 	_draw_heat(s)
+	_draw_draughts(s)
 	_draw_hands(s)
 	_draw_cpad(s)
 	_draw_bag(s)
@@ -1016,6 +1026,10 @@ func _draw_item_glyph(s: Vector2, r: Rect2, id: StringName,
 		invert_to: Color, inverted: bool, dim: bool) -> void:
 	if id == &"":
 		return
+	var bottle_at := Game.bottle_index(id)
+	if bottle_at >= 0:
+		_draw_bottle_glyph(s, r, Game.bottle(bottle_at))
+		return
 	var tex: Texture2D = _icons.get(id)
 	if tex != null:
 		# Inset by 2 reference px so the icon's own VOID dilation never sits
@@ -1034,6 +1048,93 @@ func _draw_item_glyph(s: Vector2, r: Rect2, id: StringName,
 	PixelFont.draw_centred(_canvas, String(KIT_LABEL.get(id, "?")),
 		Vector2(r.get_center().x, r.position.y + r.size.y * 0.32),
 		Pal.px(2.0, s.y), label_col)
+
+
+## A bottle, drawn rather than baked: the glass is the same for all four and the
+## only thing that differs is the colour of what is in it, which a texture would
+## have to be re-baked four times to say. Neck, shoulder, body — three rects,
+## and the fill rises from the bottom of the body so a full one reads as full at
+## a glance from across the screen.
+##
+## An EMPTY bottle draws the outline and nothing inside it. That is the one cell
+## state that has to be legible mid-fight: "I have the button but not the
+## draught" is a different sentence from "I have no button".
+func _draw_bottle_glyph(s: Vector2, r: Rect2, potion: StringName) -> void:
+	var line := Pal.px(1.0, s.y)
+	var w := r.size.x
+	var body := Rect2(r.position.x + w * 0.28, r.position.y + w * 0.38,
+		w * 0.44, w * 0.46)
+	var neck := Rect2(r.position.x + w * 0.42, r.position.y + w * 0.18,
+		w * 0.16, w * 0.20)
+	var lip := Rect2(r.position.x + w * 0.38, r.position.y + w * 0.14,
+		w * 0.24, w * 0.06)
+
+	if potion != &"":
+		var tint := PotionDb.tint_of(potion)
+		# Filled to two thirds, not to the brim: a rectangle that touches its own
+		# outline reads as a solid block, and the gap is what says "liquid".
+		var fill := Rect2(body.position.x + line, body.position.y + body.size.y * 0.34,
+			body.size.x - line * 2.0, body.size.y * 0.66 - line)
+		_canvas.draw_rect(fill, tint)
+		_canvas.draw_rect(neck, Color(tint, 0.55))
+
+	var edge := Pal.BONE if potion != &"" else Pal.ASH
+	_canvas.draw_rect(body, edge, false, line)
+	_canvas.draw_rect(neck, edge, false, line)
+	_canvas.draw_rect(lip, edge)
+
+
+## The lasting draughts, as a countdown under the heat bar: a pip in the potion's
+## own colour, draining left to right.
+##
+## It shares the stamina/heat column because it is the same KIND of fact — a
+## thing that is true right now and will not be shortly — and because the player
+## is already watching that column when they are deciding whether to drink.
+## Nothing is drawn when nothing is running: an empty slot for a buff you do not
+## have is a permanent reminder of an absence.
+##
+## The stack arithmetic below is spelled out term by term ON PURPOSE. It was
+## written once as a short sum that left `HEALTH_H` out, and the row landed
+## exactly ON the stamina bar -- two instruments in one rectangle, the label
+## sitting inside the dodge meter. Every check in alchemy_loop.gd passed while
+## it did that, because none of them can see a rectangle. Copy the shape of
+## `_draw_stamina` / `_draw_heat` rather than deriving a new offset.
+func _draw_draughts(s: Vector2) -> void:
+	var live: Array[StringName] = []
+	for id in PotionDb.IDS:
+		if Game.draught_left(id) > 0.0:
+			live.append(id)
+	if live.is_empty():
+		return
+
+	var x := Pal.HEALTH_ORIGIN.x * s.x
+	var w := Pal.HEALTH_W * s.x * Pal.HEAT_RATIO
+	var h := Pal.px(Pal.HEAT_H, s.y)
+	# Slot four, under health -> stamina -> heat, in that order. Heat is dungeon
+	# only, so in town its slot is empty and the draughts move UP into it: two
+	# rows hanging below an absent bar would collide with the control legend,
+	# which owns the bottom of the town screen (see _draw_controls).
+	var y := Pal.HEALTH_ORIGIN.y * s.y \
+		+ Pal.px(Pal.HEALTH_H + Pal.STAMINA_GAP + Pal.STAMINA_H + Pal.HEAT_GAP, s.y)
+	if Run != null and Run.in_dungeon:
+		y += Pal.px(Pal.HEAT_H + Pal.HEAT_GAP, s.y)
+
+	for id in live:
+		var t01: float = clampf(Game.draught_left(id) / K.DRAUGHT_TIME, 0.0, 1.0)
+		var tint := PotionDb.tint_of(id)
+		var rect := Rect2(x, y, w, h)
+		# Same two-layer construction as the bars above it -- a hairline of VOID
+		# around an ASH track -- so the column reads as one instrument family
+		# rather than as a loose pip that wandered in.
+		_canvas.draw_rect(rect.grow(Pal.px(1.0, s.y)), Pal.VOID)
+		_canvas.draw_rect(rect, Color(Pal.ASH, 0.6))
+		_canvas.draw_rect(Rect2(x, y, w * t01, h), tint)
+		PixelFont.draw_text(_canvas, PotionDb.short_of(id),
+			Vector2(x + w + Pal.px(6.0, s.y), y - Pal.px(2.0, s.y)),
+			Pal.px(1.0, s.y), tint)
+		# Tighter than HEAT_GAP between rows: two draughts plus the gap have to
+		# fit above the legend in town, and they are one fact, not two columns.
+		y += h + Pal.px(2.0, s.y)
 
 
 func _hero_combat() -> Node:

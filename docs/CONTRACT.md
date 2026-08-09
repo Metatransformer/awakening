@@ -845,12 +845,66 @@ Rules:
   from an ingredient. `ItemDb.is_component(id)` and `ItemDef.is_component()`
   answer it; the vendor, the pouch and `Run.bank_components()` all branch on
   that one bit and nothing else.
+- **`ItemDef.bench` says which counter wants it, and nothing else.** It is
+  `BENCH_FORGE` or `BENCH_ALCHEMY`, it exists so the pouch can send the player
+  to the right place, and it changes no rule: both benches bank on extraction,
+  die with the bag, and spend out of the one `Game.components`.
+  `ItemDb.components()` is **all eight**; pass a bench to get four. Code that
+  means "the forge's four" must say so — `forge_loop.gd` asserted a count of
+  four against the unfiltered call and had to be corrected when this landed.
 - **Components bank on extraction, not on pickup.** `Run.bank_components()` is
   called by `extract()` after the fee, and deliberately **not** by `die()`.
 - New on `Bus`: `components_changed(stock)`, `components_banked(moved)`,
   `gear_forged(track, level)`.
 - New on the pause menu: `PauseMenu.Screen.POUCH`, `Root/Screens/PouchScreen`
   (`scripts/ui/menu/pouch_panel.gd`). It is read-only — the bag has no verbs.
+
+### Bottles and draughts — the array's size is the count
+
+```gdscript
+# scripts/autoload/game_state.gd
+var bottle_contents: Array[StringName] = []   # SIZE is how many bottles he owns
+var draughts: Dictionary[StringName, float] = {}   # potion -> seconds left
+
+func bottle_count() -> int
+func bottle(i: int) -> StringName             # &"" for empty, &"" when out of range
+func empty_bottles() -> int
+func add_bottle() -> bool                     # false at K.BOTTLE_MAX; auto-binds if a slot is free
+func fill_bottle(potion: StringName) -> int   # index filled, or -1
+func drink_bottle(i: int) -> bool             # the bottle empties and STAYS
+static func bottle_id(i: int) -> StringName   # &"bottle_0" ...
+func bottle_index(id: StringName) -> int      # -1 if not an owned bottle
+
+func draught_left(id: StringName) -> float
+func start_draught(id: StringName, seconds: float) -> void
+```
+
+Rules:
+
+- **There is no bottle count.** `bottle_contents.size()` is it. A separate
+  integer is a second source of truth that will disagree with this one.
+- **A bottle id is bindable, and the press DRINKS it.** `Game.use_quick(slot)`
+  branches on `bottle_index(id) >= 0` before anything else; every other bound
+  thing is drawn and put away on a second press. `quick_pool()` is the const
+  pool plus one entry per owned bottle, and `bind_quick` / `cycle_quick_bind`
+  both go through it — do not build a second list of what can be bound.
+- **The lasting draughts are folded into the forge's accessors**
+  (`sword_bonus()`, `armour_soak()`), not into a parallel buff system. That is
+  why nothing downstream needed changing, and it is why a new draught that
+  changes a number should find the accessor that number already comes from.
+- **Ask `ArmamentDb`, not `PotionDb`, when you are drawing a bound thing.**
+  `name_of` / `slot_name` / `letter` / `blurb` answer for bottles too, so the
+  HUD cross and the Items screen never grow a bottle branch. `slot_name` is the
+  short one, for cards; `name_of` is for a detail pane with a column to itself.
+- New on `Bus`: `bottles_changed(contents)`, `potion_drunk(potion)`,
+  `draught_changed(potion, seconds_left)`.
+- **Bottles and contents are saved (`VERSION = 3`); the draught clocks are not.**
+  Rebuild the array element by element with `StringName(c)` on load — JSON has
+  no StringName, and a String-keyed reload draws a full bottle that refuses to
+  be drunk.
+- `AlchemyDb` exposes the identical five statics `ShopDb` does, and
+  `TradeScreen.open(host, mode, title, db)` takes whichever. **Add a method to
+  one and you add it to the other.**
 
 ### The way out — the Escape Rope
 

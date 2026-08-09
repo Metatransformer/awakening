@@ -1,6 +1,16 @@
 class_name TradeScreen
 extends Control
-## The vendor and the smith, which are the same screen pointed in two directions.
+## The vendor, the smith and the alchemist, which are the same screen pointed in
+## three directions.
+##
+## SELL reads the bag. BUY reads a CATALOGUE, handed in at `open()` -- `ShopDb`
+## for the smith, `AlchemyDb` for the alchemist -- and the two are interchangeable
+## because they expose the same five statics (`lines`, `remaining`, `can_buy`,
+## `refusal`, `buy`). Nothing below this line asks which counter it is standing
+## at, and that is the whole reason there is one screen: the recipe column, the
+## per-token affordability colouring and the refusal footer are subtle, they took
+## three passes to get right, and a second shop screen would have been a second
+## place for all of it to drift.
 ##
 ## Drawn with PixelFont and Pal rather than built out of Control nodes and a
 ## Theme, for the same reason the HUD is: docs/STYLEGUIDE.md bans the engine's
@@ -19,6 +29,9 @@ const ROLL_TIME := 0.25
 
 var mode: Mode = Mode.SELL
 var title: String = "VENDOR"
+## The catalogue behind a BUY screen: the ShopDb or AlchemyDb script itself, so
+## its statics can be called through it. Unused by SELL, which reads `Run.bag`.
+var catalogue: GDScript = null
 
 var _rows: Array[Dictionary] = []
 var _cursor: int = 0
@@ -31,7 +44,10 @@ var _closing: bool = false
 
 ## The screen makes its own CanvasLayer. A Control parented to a Node3D never
 ## draws, and every caller here is a prop standing in a 3D town.
-static func open(host: Node, screen_mode: Mode, screen_title: String) -> TradeScreen:
+## `db` is the catalogue for a BUY screen and defaults to the smith's, which is
+## what every existing caller meant. Pass `AlchemyDb` for the other counter.
+static func open(host: Node, screen_mode: Mode, screen_title: String,
+		db: GDScript = null) -> TradeScreen:
 	var layer := CanvasLayer.new()
 	layer.name = "TradeLayer"
 	# Above the HUD (50), below the pause menu (100): pausing out of the shop
@@ -40,6 +56,7 @@ static func open(host: Node, screen_mode: Mode, screen_title: String) -> TradeSc
 	var s := TradeScreen.new()
 	s.mode = screen_mode
 	s.title = screen_title
+	s.catalogue = db if db != null else ShopDb
 	layer.add_child(s)
 	host.get_tree().current_scene.add_child(layer)
 	return s
@@ -85,6 +102,14 @@ func close() -> void:
 
 # --- Rows -------------------------------------------------------------------
 
+## The catalogue this screen is buying from, never null. A screen built by hand
+## (a director, a test) that forgot to set one still gets the smith rather than
+## a crash in the middle of a draw call.
+func _db() -> GDScript:
+	return catalogue if catalogue != null else ShopDb
+
+
+
 ## Rebuilt after every transaction rather than mutated: a sold-out stack has to
 ## leave the list, and a cursor pointing at a row that no longer exists is the
 ## classic shop-screen crash.
@@ -121,8 +146,8 @@ func _refresh() -> void:
 				"ok": true,
 			})
 	else:
-		for line in ShopDb.lines():
-			var left := ShopDb.remaining(line["id"])
+		for line in _db().lines():
+			var left: int = _db().remaining(line["id"])
 			var parts: Dictionary = line.get("parts", {})
 			_rows.append({
 				"kind": &"buy",
@@ -136,7 +161,7 @@ func _refresh() -> void:
 				# the second sentence is asking them to buy on faith.
 				"blurb": "%s   %s" % [line["blurb"], line.get("detail", "")],
 				"parts": parts,
-				"ok": ShopDb.can_buy(line),
+				"ok": _db().can_buy(line),
 			})
 
 	_cursor = clampi(_cursor, 0, maxi(_rows.size() - 1, 0))
@@ -216,7 +241,7 @@ func _commit() -> void:
 		&"all":
 			done = Run.sell_all() > 0
 		&"buy":
-			done = ShopDb.buy(row["line"])
+			done = _db().buy(row["line"])
 
 	if done:
 		_flash = 0.0
@@ -380,7 +405,7 @@ func _footer(s: Vector2, panel: Rect2, pad: float) -> void:
 		# sends the player back down for the wrong thing.
 		hint = "NOTHING THERE"
 		if mode == Mode.BUY and _cursor >= 0 and _cursor < _rows.size():
-			var why := ShopDb.refusal(_rows[_cursor]["line"])
+			var why: String = _db().refusal(_rows[_cursor]["line"])
 			hint = why if why != "" else "NOT ENOUGH GOLD"
 	PixelFont.draw_text(self, hint,
 		Vector2(panel.position.x + pad, panel.end.y - pad), ft, col)

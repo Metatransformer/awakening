@@ -674,9 +674,12 @@ func _paint_cell(b: Button) -> void:
 	chip.color = def.tint
 	name_label.modulate = Color.WHITE
 	b.modulate = Color.WHITE
-	# The diamond is the forge mark. It is the same glyph the rope row uses for
-	# "this does something", and here it means "the smith wants this", which is
-	# the only thing you need to know about a cell while the bag is filling up.
+	# The diamond is the bench mark. It is the same glyph the rope row uses for
+	# "this does something", and here it means "a counter in town wants this,
+	# the vendor does not" -- which is the only thing you need to know about a
+	# cell while the bag is filling up. WHICH counter is in the detail pane; at
+	# cell size it is one bit of information and the bit that matters is "do not
+	# sell it".
 	name_label.text = ("◆ " + def.display_name) if def.is_component() else def.display_name
 	count.text = "×%d" % int(b.get_meta(&"count", 1))
 
@@ -734,10 +737,13 @@ func _describe(b: Button) -> void:
 	var part := def.is_component()
 	_detail_kind.text = "SLOT %d  ·  %s  ·  %s" % [
 		index + 1, def.rarity_name().to_upper(),
-		"COMPONENT" if part else "INGREDIENT"]
+		def.bench_name() if part else "INGREDIENT"]
 	_detail_name.text = def.display_name
 	_detail_value.text = "%d ◇  ·  %d per slot" % [def.value * n, def.stack]
 	_detail_blurb.text = def.blurb
-	_detail_legend.text = ("The forge eats this. It goes to the workbench when you "
-		+ "reach town, not to the vendor.") if part else \
+	# WHICH bench, by name. Two counters eat components now and they are at
+	# opposite ends of the yard; a caption that said "the forge" over a Fired
+	# Cullet would send the player to the wrong one.
+	_detail_legend.text = ("%s eats this. It goes to the workbench when you reach "
+		+ "town, not to the vendor.") % def.bench_name().capitalize() if part else \
 		("The vendor buys this. What it is worth is a quarter of what leaving costs.")

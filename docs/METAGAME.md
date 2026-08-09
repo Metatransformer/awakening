@@ -95,9 +95,11 @@ against a bag full of Grave Wax, not a strictly better one.
 Enemies roll from a weighted table; chests roll richer ones. Rarity also drives
 the mote's glow radius, which is the only "look over here" the game does.
 
-Four more items drop from the same tables and share the same bag, but they are
-not ingredients and the vendor will not take them: the **components** the forge
-eats. They are in §6.5.
+Eight more items drop from the same tables and share the same bag, but they are
+not ingredients and the vendor will not take them: they are **components**, and
+they go to a workbench instead of the purse. Four belong to the forge (§6.5) and
+four to the alchemist (§6.6). The split is a label on the item, not a second
+system — every rule about how a component travels is the same for both benches.
 
 ---
 
@@ -264,9 +266,16 @@ function of depth. Three consequences, all intended:
   the refusal is surfaced (`Bus.extract_refused`), so being too poor to leave
   with treasure is a legible failure state rather than a soft-lock.
 
-Extracting also **heals you to full**, and it is the only heal in the game. That
-is what makes leaving feel like relief instead of retreat, and it is what stops
-a player from farming one safe room forever.
+Extracting also **heals you to full**, and it is the only *free* heal in the
+game. That is what makes leaving feel like relief instead of retreat, and it is
+what stops a player from farming one safe room forever.
+
+The Heart Draught (§6.6) is the only other way to get health back, and it is
+deliberately built so it cannot replace this one: it heals two hearts, not full,
+there are at most four bottles, and every one of them was paid for in town
+before the run. Healing underground is a **stock you brought with you**, which
+is a different decision from leaving — and when the stock is gone, leaving is
+still the only answer.
 
 **Death** (`Run.die()`) takes the whole bag and nothing else. Gold and every
 upgrade bought with it survive. You wake in town at full health — leaving you at
@@ -297,7 +306,7 @@ are already playing, or the first empty one, or it declines and says nothing
 
 ## 6. The town
 
-One walled courtyard (`scripts/world/town.gd`) with three things in it.
+One walled courtyard (`scripts/world/town.gd`) with four things in it.
 
 - **The vendor.** Sells nothing; buys everything. The trade screen
   (`scripts/ui/shop/trade_screen.gd`) lists the bag sorted by value with a
@@ -325,7 +334,16 @@ One walled courtyard (`scripts/world/town.gd`) with three things in it.
 
   Every line changes a number the player can feel inside one run. Nothing here
   is a stat-stick you have to take on faith.
+- **The alchemist.** Four lines (`scripts/items/alchemy_db.gd`): one bottle and
+  three things to put in it. Same transaction as the forge — gold **and**
+  materials — over the same kind of counter, driven by the same screen. She is
+  §6.6.
 - **The gate.** Into the dungeon, and back out again on the arrival pad.
+
+The vendor and the smith share the far wall either side of the gate, because
+they are the two counters you visit with a full bag. The alchemist stands nearer
+the arrival spot: what she sells is spent on the way back *down*, and the frame
+you see when you extract has to contain her or she does not exist.
 
 The costs scale with how many you have already bought, so the shop keeps pace
 instead of being solved by one lucky run. The limits are what stop the smith
@@ -364,13 +382,19 @@ Longshot, measured, not invented. That is asserted by the director, because a
 table whose comment claims a source and whose numbers have drifted off it is
 worse than one with no comment.
 
-### The four components
+### The forge's four components
 
 They live in `scripts/items/item_db.gd` alongside the ingredients and share the
 bag with them, but they are `ItemDef.Kind.COMPONENT`, and everything downstream
 branches on that one bit: the pouch marks them ◆, the vendor's "sell everything"
 leaves them alone, and extraction moves them to the workbench instead of the
 purse.
+
+The alchemist's four (§6.6) are the same kind and obey every one of those rules.
+What separates them is `ItemDef.bench`, a label the item carries so the pouch can
+tell you which counter wants it. `ItemDb.components(bench)` filters on it; an
+unfiltered `components()` is all eight, and code that means "the forge's" must
+say so.
 
 | Component | Value | Rarity | Stack | Drops from |
 |---|---|---|---|---|
@@ -426,6 +450,98 @@ same picture.
 It is a separate screen from **Items**, which is what you are *holding* and what
 the D-pad equips. Carrying and holding are different questions and a player who
 conflates them is a player who thinks the bag can be equipped.
+
+---
+
+## 6.6 The alchemist — the only thing you take down with you
+
+*Numbered 6.6 for the same reason §6.5 is 6.5. Do not renumber.*
+
+The forge sells **permanence**: you buy a rung and it is yours. The alchemist
+sells a **stock** — four glass bottles, and what is in them at the moment you
+step through the gate. Everything below follows from that one difference.
+
+The transaction is the same as the smith's, deliberately: **gold and materials,
+over a counter**. `scripts/items/alchemy_db.gd` exposes the identical five
+statics `ShopDb` does (`lines`, `remaining`, `can_buy`, `refusal`, `buy`), and
+`TradeScreen` holds a reference to whichever catalogue it was opened with. There
+is one shop screen in this game and there will go on being one; a second would
+be a second place for the recipe column, the affordability colours and the
+refusal footer to drift apart.
+
+### The bottle
+
+| | |
+|---|---|
+| Start with | **1** (`K.BOTTLE_START`, `[test]`) |
+| Ceiling | **4** (`K.BOTTLE_MAX`) |
+| Gold | 110, ×2.4 per bottle already owned |
+| Glass | 4 Cullet → 8 Cullet + 2 Resin → 14 Cullet + 1 Dew |
+
+The first bottle is granted at boot so the brew lines are reachable before you
+have found any glass; it is tagged `[test]` in `game_state.gd` and it comes out
+when the game has a tutorial. The other three are earned, and the **fourth wants
+Mourning Dew, which never falls off a body** — the same pacing gate the Cold Iron
+Core is, for the same reason.
+
+`Game.bottle_contents` is the whole model: **the array's size is how many
+bottles there are** and each element is what is in that one, `&""` for empty.
+There is no separate count to disagree with it. A bottle binds to a D-pad button
+like anything else, and the press **drinks** it rather than drawing it — the one
+thing on that cross that behaves that way, which is why the Items screen says so
+in words.
+
+### The three draughts
+
+`scripts/items/potion_db.gd`. Every number below is generated from `K`, so the
+shop's own description of what a draught does cannot drift from what it does.
+
+| Draught | Gold | Materials | Effect |
+|---|---|---|---|
+| Heart Draught | 55 | 3 Root | +2 hearts, at once |
+| Ironhide Draught | 85 | 2 Resin + 2 Root | −2 quarters off every blow, 45 s |
+| Emberblood Draught | 95 | 3 Resin | +2 quarters a swing, 45 s |
+
+The two that last are folded into `Game.sword_bonus()` and `Game.armour_soak()`
+— the same accessors the forge's ladders feed. Nothing downstream needed a line
+of code: the swing, the enemy's health bar, the hero's own `hurt`, and the
+smith's before/after text all picked the draught up for free. Ironhide cannot
+become immunity because `Hero.hurt` floors damage at one quarter.
+
+Prices are **flat**, unlike the smith's, because a draught is gone by the next
+room and the tenth one costing more than the first is nonsense. What limits
+brewing is not price — it is the four slots and what the floor gave you.
+
+### The four materials
+
+| Material | Value | Rarity | Stack | Drops from |
+|---|---|---|---|---|
+| Fired Cullet | 12 | common | 8 | bodies and chests |
+| Bitter Root | 16 | common | 8 | bodies and chests |
+| Ash Resin | 25 | uncommon | 6 | bodies and chests |
+| Mourning Dew | 85 | rare | 2 | **chests only** |
+
+Read `AlchemyDb.BREW_PARTS` by column: root is the cheap tax on the heal, and
+**resin is what both lasting draughts are made of** — so a run that found resin
+is a run that gets to choose between offence and defence, rather than one that
+is handed both.
+
+They ride home exactly as the forge's do: motes on the floor, picked up by
+walking over them, taking bag slots, charged the extraction fee, banked to
+`Game.components` on the way out and **lost with the bag on death**. One
+workbench, two counters spending from it.
+
+### What the HUD says
+
+A bound bottle draws as a bottle in the D-pad cross — body, neck, lip — with the
+draught's colour filling the lower two-thirds, and an outline only when it is
+empty. A live draught adds a draining bar to the health/stamina/heat column, in
+the potion's own colour, because it is the same kind of fact as the bars above
+it: true now, and shortly not. Nothing is drawn when nothing is running.
+
+Bottles and their contents are in the save file (`VERSION = 3`). The draught
+clocks are **not**: a 45-second buff that survives quitting is a buff you can
+bank, and the point of the timer is that it is spent in the room you drank it in.
 
 ---
 
@@ -503,6 +619,9 @@ second one is a decision.
 | Town↔dungeon transition and fade | `scripts/autoload/game_flow.gd` |
 | Ingredients, components and drop tables | `scripts/items/item_db.gd` |
 | The smith's catalogue, and the forge recipes | `scripts/items/shop_db.gd` |
+| The alchemist's catalogue, and the brew recipes | `scripts/items/alchemy_db.gd` |
+| What a draught is called and what it does | `scripts/items/potion_db.gd` |
+| Bottles, their contents and the draught clocks | `scripts/autoload/game_state.gd` |
 | The upgrade ladders, rung by rung | `scripts/core/consts.gd` (`K.EDGE_DAMAGE` …) |
 | The difficulty curve, every floor of it | `scripts/core/progression.gd` |
 | The way down | `scripts/world/stairs.gd` |
@@ -625,6 +744,39 @@ FORGE after_death bench_cores=115 bag=0
 FORGE reloaded   rungs={edge:3 plate:3 guard:3 string:3 chain:3} slots=12
 FORGE OK
 ```
+
+The alchemist has hers (§6.6):
+
+```bash
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --director=res://tools/directors/alchemy_loop.gd --out=/tmp/alchemy/x.png --warmup=60
+```
+
+It reads the catalogue, opens her board, is refused a draught for want of root
+and then for want of an empty bottle, brews into the one bottle he starts with,
+blows glass up to the ceiling, binds three bottles to the D-pad and **drinks
+them with the buttons**, watching health and the two accessors the gear reads
+move and then expire, descends, sweeps three materials off the floor with
+nothing pressed, extracts to prove they bank, and saves/wipes/reloads to prove
+the glass and what is in it survive quitting. `ALCHEMY FAIL …` on any claim that
+did not hold. Last run:
+
+```
+ALCHEMY brewed   bottles=[heart_draught] gold=40000 -> 39945 root=40 -> 37
+ALCHEMY bottles=4 contents=[heart_draught, "", "", ""]
+ALCHEMY drank heart quarters=2 -> 10 bottle0=
+ALCHEMY draughts=[ironhide, emberblood] edge=+0 -> +2 soak=-0 -> -2
+ALCHEMY expired  edge=+0 soak=-0
+ALCHEMY home     bench={cullet:1 root:1 resin:1} bag={}
+ALCHEMY reloaded [heart_draught, "", "", ""]
+ALCHEMY OK
+```
+
+Two of its frames are the whole reason it takes them. `a_04b_equip.png` is where
+a bottle's name was found printing across its neighbours' cards, and
+`a_06_column.png` is the dungeon HUD stack — health, stamina, heat, then the
+draughts — where the first version of that row was found drawn **on top of the
+stamina bar** with every check in the run green. A rectangle in the wrong place
+is not a thing an assertion can see.
 
 **Do not pass `--headless`.** There is no rendering device in headless mode and
 every frame comes out empty.

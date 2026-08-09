@@ -17,10 +17,15 @@ enum Rarity { COMMON, UNCOMMON, RARE }
 ## What the thing is FOR, which is the only question the economy asks of it.
 ##
 ##  * `INGREDIENT` is merchandise. It exists to be sold; its `value` is the point.
-##  * `COMPONENT` is material. The forge eats it (see ShopDb), and extraction
-##    sorts it out of the bag into `Game.components` instead of handing it to the
-##    vendor. It still has a `value`, because the extraction fee is a share of
-##    what you are carrying and a component you carried is something you carried.
+##  * `COMPONENT` is material. A bench eats it -- the forge (ShopDb) or the
+##    alchemist (AlchemyDb) -- and extraction sorts it out of the bag into
+##    `Game.components` instead of handing it to the vendor. It still has a
+##    `value`, because the extraction fee is a share of what you are carrying and
+##    a component you carried is something you carried.
+##
+## WHICH bench is `bench`, and it is a label rather than a second kind, because
+## every rule that matters -- banked on extraction, lost on death, never sold --
+## is the same for both. One catalogue, one drop path, one workbench.
 ##
 ## One catalogue, one drop path, one LootMote. The kind is a label on the row,
 ## not a second inventory: a component and a pearl compete for the same bag slot,
@@ -42,6 +47,14 @@ var tint: Color
 ## player learns what an ingredient is for.
 var blurb: String
 var kind: Kind = Kind.INGREDIENT
+## Who wants it, for COMPONENTs only: `&"forge"` or `&"alchemy"`. Nothing
+## branches on this except the words a screen prints -- the pouch's caption and
+## the counter it sends you to. A material the wrong counter refused would be a
+## rule; this is a signpost.
+var bench: StringName = BENCH_FORGE
+
+const BENCH_FORGE := &"forge"
+const BENCH_ALCHEMY := &"alchemy"
 
 
 static func make(p_id: StringName, p_name: String, p_value: int,
@@ -67,8 +80,24 @@ static func part(p_id: StringName, p_name: String, p_value: int,
 	return d
 
 
+## Same again, for the counter that brews rather than the one that hammers.
+static func brew(p_id: StringName, p_name: String, p_value: int,
+		p_rarity: Rarity, p_stack: int, p_tint: Color, p_blurb: String) -> ItemDef:
+	var d := part(p_id, p_name, p_value, p_rarity, p_stack, p_tint, p_blurb)
+	d.bench = BENCH_ALCHEMY
+	return d
+
+
 func is_component() -> bool:
 	return kind == Kind.COMPONENT
+
+
+## "THE FORGE" / "THE ALCHEMIST", for a screen that has to tell the player where
+## to take the thing. Empty for merchandise, which goes to the vendor.
+func bench_name() -> String:
+	if not is_component():
+		return ""
+	return "THE ALCHEMIST" if bench == BENCH_ALCHEMY else "THE FORGE"
 
 
 ## The short tag a recipe column uses: "GRIT", "PLATE", "CORE". A forge row has
