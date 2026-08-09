@@ -23,6 +23,10 @@ enum State { IDLE, CHASE, WINDUP, STRIKE, RECOVER, HURT, DEAD }
 const LIBRARY := "res://assets/animations/monster_library.res"
 const MODEL_DIR := "res://assets/monsters/"
 
+## How far the body rears back over a wind-up, in degrees. Big enough to read
+## across a dark room, small enough that it is a tell and not a backflip.
+const WINDUP_LEAN_DEG := 17.0
+
 ## kind -> stats. Damage is in quarter-hearts, matching every other number in
 ## the project. Health is tuned against the blade ladder in docs/METAGAME.md §8:
 ## a tier-0 blade does 2, so a skeleton is a 3-hit kill on run one.
@@ -67,6 +71,11 @@ var _knockback: Vector3 = Vector3.ZERO
 var _facing: float = 0.0
 var _rng := RandomNumberGenerator.new()
 var _struck: bool = false
+var _flash := HitFlash.new()
+var _recoil: Tween = null
+## The model's rest pose, so the recoil and the wind-up lean can be measured
+## from it rather than from wherever the last interrupted tween stopped.
+var _model_rest: Vector3 = Vector3.ZERO
 
 
 static func spawn(parent: Node3D, p_kind: StringName, at: Vector3, seed_val: int) -> Enemy:
@@ -135,6 +144,14 @@ func _build_model() -> void:
 	var native := _model_height(_model)
 	if native > 0.001:
 		_model.scale = Vector3.ONE * (float(_def["height"]) / native)
+
+	# Recorded AFTER the art-space +PI and the scale fit, because those are the
+	# rest pose as far as everything downstream is concerned. The recoil and the
+	# wind-up lean both tween rotation.x/z back to this, never to zero -- zeroing
+	# would undo the 180° the GLBs need and turn every struck monster around to
+	# face away mid-flinch (docs/CONTRACT.md §2.5).
+	_model_rest = _model.rotation
+	_flash.bind(self, _model)
 
 	_anim = _model.find_child("AnimationPlayer", true, false) as AnimationPlayer
 	if _anim == null:
@@ -316,17 +333,63 @@ func _tick_chase(delta: float) -> void:
 
 ## The tell. A wind-up the player can read is the difference between a fight and
 ## a coin flip — the enemy stands still and telegraphs before it commits.
+##
+## The animation cannot carry this on its own and it never could. Every monster
+## GLB ships a near-empty clip set (the goblin's is 0.03 s), and the shared
+## `monster_library` clips are not cut to each kind's wind-up length — so
+## `attack_1` finishes long before an orc's 0.62 s commit and the frame the
+## player actually has to read is a monster standing perfectly still. That is
+## what the capture showed: a wind-up you cannot see is not a tell, it is a coin
+## flip with extra steps.
+##
+## So the telegraph is driven here, from the timer that actually governs it: the
+## body rears BACK over the wind-up and glows hot, both scaled by how far through
+## the commit it is. It reads in a dark room, at a distance, on any of the nine
+## models, and it cannot fall out of sync with the thing it is warning about.
 func _tick_windup(delta: float) -> void:
 	_stop()
 	_timer -= delta
 	# Still tracks during the wind-up, but slowly, so sidestepping works.
 	_face_player(delta, 130.0)
+
+	if _model != null:
+		var windup: float = maxf(float(_def["windup"]), 0.001)
+		# 0 at the start of the commit, 1 at the moment it lands.
+		var t := clampf(1.0 - _timer / windup, 0.0, 1.0)
+		# Eased so the last third of the wind-up is where most of the movement
+		# is: a linear rear-back reads as a slow lean, and the player needs the
+		# spike, not the drift.
+		var e := t * t
+		_model.rotation.x = _model_rest.x - deg_to_rad(WINDUP_LEAN_DEG) * e
+		_flash.glow(Pal.RUST, e * 0.55)
+
 	if _timer <= 0.0:
 		state = State.STRIKE
 		_timer = 0.18
 		_struck = true
 		_hitbox.amount = int(_def["damage"])
 		_hitbox.activate()
+		# The commit itself: the glow snaps off as the body whips forward, so
+		# "it is coming" and "it is here" are two different pictures.
+		_flash.restore()
+		_lunge_pose()
+		# Weight, in one byte of data. A 1.95 m orc committing and a 1.25 m
+		# goblin committing should not make the same noise, and height is
+		# already the number that says which is which.
+		Bus.request_sfx.emit(
+			&"swing_heavy" if float(_def["height"]) >= 1.70 else &"swing",
+			global_position)
+
+
+## Whip the body through the blow and let it settle. Not a knockback and not the
+## clip -- it is the 0.18 s the hitbox is open, made visible.
+func _lunge_pose() -> void:
+	if _model == null:
+		return
+	_kill_recoil()
+	_model.rotation.x = _model_rest.x + deg_to_rad(WINDUP_LEAN_DEG * 0.7)
+	_recoil = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_recoil.tween_property(_model, ^"rotation:x", _model_rest.x, 0.26)
 
 
 func _tick_strike(delta: float) -> void:
@@ -373,8 +436,58 @@ func _on_damaged(hit: Hit) -> void:
 	state = State.HURT
 	_timer = maxf(hit.stun, 0.22)
 	_play(&"hurt")
+
+	# What a blow is made of, in the order the player receives it: the world
+	# stops, the body goes white, it reels, the camera kicks, and it makes a
+	# noise. Every one of these is a request -- Feel and Sfx own the answers, so
+	# nothing here holds a player or a camera (docs/CONTRACT.md §8).
 	Bus.request_hitstop.emit(K.HITSTOP_LIGHT)
-	Bus.request_shake.emit(0.22, 0.12)
+	Bus.request_shake.emit(0.28, 0.16)
+	_flash.hit()
+	_flinch(dir)
+	# The noise is NOT requested here. `hit_landed` already says exactly what
+	# happened and where, and Sfx owns the signal->sound table -- an enemy that
+	# picked its own impact sound is how the goblin ends up louder than the orc
+	# (scripts/autoload/sfx.gd). The training post emits this too, and gets the
+	# same sound for free.
+	Bus.hit_landed.emit(self, hit.amount, global_position)
+
+
+## Reel away from the blow. On the MODEL, never on the body: the body's yaw is
+## the facing contract everything else reads (docs/CONTRACT.md §2.5) and its
+## position is being driven by the knockback in the same breath.
+##
+## Rapid hits REPLACE the recoil rather than stack it -- three tweens fighting
+## over one rotation is a body that vibrates instead of one that reels.
+func _flinch(away: Vector3) -> void:
+	if _model == null:
+		return
+	_kill_recoil()
+	# Which way it rocks depends on which side the blow came from, so a flurry
+	# from one direction does not look like the same canned twitch each time.
+	var right := Vector3(cos(_facing), 0.0, -sin(_facing))
+	var side := signf(right.dot(away))
+	if side == 0.0:
+		side = 1.0
+	# Bigger bodies barely move. A 1.25 m goblin is thrown about; a 1.95 m orc
+	# takes the hit and leans, which is most of what makes them feel different
+	# to fight without a single line of per-kind feedback code.
+	var heft := clampf(1.5 / float(_def["height"]), 0.45, 1.5)
+	var roll := deg_to_rad(15.0) * heft * side
+	var pitch := deg_to_rad(10.0) * heft
+
+	_recoil = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_recoil.set_parallel(true)
+	_recoil.tween_property(_model, ^"rotation:z", _model_rest.z + roll, 0.05)
+	_recoil.tween_property(_model, ^"rotation:x", _model_rest.x + pitch, 0.05)
+	_recoil.chain().tween_property(_model, ^"rotation:z", _model_rest.z, 0.24)
+	_recoil.parallel().tween_property(_model, ^"rotation:x", _model_rest.x, 0.24)
+
+
+func _kill_recoil() -> void:
+	if _recoil != null and _recoil.is_valid():
+		_recoil.kill()
+	_recoil = null
 
 
 func _on_died() -> void:
@@ -386,6 +499,17 @@ func _on_died() -> void:
 	collision_layer = 0
 	remove_from_group(&"targetable")
 	_play(&"death")
+	# Settle the body before the death clip runs. Without this a monster killed
+	# mid-flash is a corpse frozen white, and one killed mid-wind-up dies still
+	# glowing the warning colour for a blow it never threw.
+	_kill_recoil()
+	_flash.clear()
+	if _model != null:
+		_model.rotation = _model_rest
+	# A kill is a heavier event than a hit and has to feel like one. Sfx already
+	# answers `enemy_died`; this is the part of it the screen does.
+	Bus.request_hitstop.emit(K.HITSTOP_HEAVY)
+	Bus.request_shake.emit(0.42, 0.26)
 
 	_drop_loot()
 	died_at.emit(global_position)

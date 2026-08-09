@@ -50,7 +50,20 @@ func _struck(rig, out: String) -> void:
 	foe.drop_seed = 4242
 	scene.add_child(foe)
 	foe.global_position = Vector3(1.4, 0.05, 0.0)
+
+	# A SECOND skeleton, and it is the whole point of HitFlash existing. A GLB is
+	# loaded once and every instance shares the loaded mesh's materials, so the
+	# obvious way to write a hit-flash lights up every skeleton in the room at
+	# once -- and the dungeon spawns three of a kind per room, so the tell built
+	# to make one enemy readable would make the room unreadable. This one stands
+	# there and gets hit by nothing; if it glows, the isolation is broken.
+	var bystander := Enemy.new()
+	bystander.kind = &"skeleton"
+	bystander.drop_seed = 4243
+	scene.add_child(bystander)
+	bystander.global_position = Vector3(4.6, 0.05, -1.0)
 	await rig.wait_frames(24)
+	bystander.set_physics_process(false)
 
 	# Frozen: this half is about what a struck body LOOKS like, and a skeleton
 	# walking into the lens mid-flash photographs its own approach instead. The
@@ -87,6 +100,17 @@ func _struck(rig, out: String) -> void:
 			print("FEEL shake offset=%.4f roll=%.4f"
 				% [absf(cam.h_offset) + absf(cam.v_offset), cam.rotation.z])
 
+	# Did the body actually go white, and did it go white ALONE?
+	var lit := _emission(foe)
+	var other := _emission(bystander)
+	if lit <= 0.01:
+		_fail("no hit-flash: the struck body's emission is %.3f" % lit)
+	else:
+		print("FEEL flash struck=%.2f bystander=%.2f" % [lit, other])
+	if other > 0.01:
+		_fail("the flash leaked: an unhit skeleton lit up at %.3f too --"
+			% other + " the GLB's materials are shared, not per-instance")
+
 	await rig.capture(out.path_join("feel_01_impact.png"))
 	await rig.wait_frames(5)
 	await rig.capture(out.path_join("feel_02_flash.png"))
@@ -110,6 +134,7 @@ func _struck(rig, out: String) -> void:
 			% (absf(cam2.h_offset) + absf(cam2.v_offset)))
 
 	foe.queue_free()
+	bystander.queue_free()
 	await rig.wait_frames(4)
 
 
@@ -138,6 +163,11 @@ func _striking(rig, out: String) -> void:
 		await rig.wait_frames(1)
 		if not saw_windup and foe.state == Enemy.State.WINDUP:
 			saw_windup = true
+			# Late in the commit, not on the frame it starts. The lean is eased
+			# so most of it is in the last third -- capturing frame one of the
+			# wind-up photographs a monster standing perfectly still and proves
+			# nothing, which is exactly what the first pass of this director did.
+			await rig.wait_frames(22)
 			await rig.capture(out.path_join("feel_05_windup.png"))
 		if Game.quarters < hp_before:
 			break
@@ -173,6 +203,27 @@ func _strike(foe: Node3D, amount: int) -> void:
 	foe.get_parent().add_child(box)
 	box.global_position = foe.global_position + Vector3.UP * 0.9
 	box.activate()
+
+
+## The brightest emission on any surface of `body`. Reads the surface OVERRIDE
+## rather than the active material, because the override is exactly the thing
+## HitFlash installs to keep one body's reaction to itself -- checking the shared
+## material would report the same number for every skeleton and quietly agree
+## with itself.
+func _emission(body: Node) -> float:
+	var peak := 0.0
+	for node in body.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		var whole := mi.material_override as BaseMaterial3D
+		if whole != null and whole.emission_enabled:
+			peak = maxf(peak, whole.emission_energy_multiplier)
+		for s in mi.mesh.get_surface_count():
+			var m := mi.get_surface_override_material(s) as BaseMaterial3D
+			if m != null and m.emission_enabled:
+				peak = maxf(peak, m.emission_energy_multiplier)
+	return peak
 
 
 func _fail(msg: String) -> void:

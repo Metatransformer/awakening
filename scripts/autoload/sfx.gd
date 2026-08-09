@@ -51,6 +51,11 @@ const CUES := {
 	&"loot_gained": &"pickup",
 	&"items_sold": &"coin_trade",
 	&"puzzle_solved": &"level_chime",
+	# The sound a landed blow makes. It was missing, so the only combat noise in
+	# the game was a monster DYING -- you could hit a wraith five times in
+	# silence and then hear the sixth. Emitted with a real world position by
+	# whatever got hit, so a blow lands where it landed.
+	&"hit_landed": &"hit_flesh",
 	&"enemy_died": &"hit_flesh",
 	&"player_died": &"doom_stinger",
 	&"target_acquired": &"target_cycle",
@@ -99,8 +104,10 @@ func _ready() -> void:
 	Bus.bag_full.connect(func() -> void: _cue(&"bag_full"))
 	Bus.extract_refused.connect(func(_cost: int, _gold: int) -> void:
 		_cue(&"extract_refused"))
-	# This one carries a real world position, so it plays where it happened
+	# These two carry a real world position, so they play where they happened
 	# rather than on top of the player.
+	Bus.hit_landed.connect(func(_t: Node3D, _n: int, pos: Vector3) -> void:
+		play_at(CUES[&"hit_landed"], pos))
 	Bus.enemy_died.connect(func(_e: Node3D, pos: Vector3) -> void:
 		play_at(CUES[&"enemy_died"], pos))
 	# Only the win is a sound. A run that ended badly already has doom_stinger.

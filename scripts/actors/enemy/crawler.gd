@@ -89,13 +89,28 @@ func target_point() -> Vector3:
 	return global_position + Vector3(0.0, 0.85 * body_scale, 0.0)
 
 
-## The damage contract's entry point.
+## The damage contract's entry point (docs/CONTRACT.md §8). `take_hit` is the
+## name `DamageArea._deliver` looks for, and it has to exist here or the crawler
+## is hurt THROUGH its HealthComponent child instead of through this function --
+## which lands the damage and silently skips the flash, the knockback, the stun
+## and the wind-up cancel below. `HeroCombat` and `Arrow` find `apply_hit` on the
+## node first and so were never affected, which is exactly why that would have
+## looked like "the crawler flinches from the sword but not from anything else".
+func take_hit(hit: Hit) -> bool:
+	return apply_hit(hit)
+
+
 func apply_hit(hit: Hit) -> bool:
 	if state == State.DEAD:
 		return false
 	if not health.apply_hit(hit):
 		return false
 	_flash = 1.0
+	# The same impact the monsters ask for, so the shallow-water fight and the
+	# roster fight land with the same weight. Feel and Sfx own the answers.
+	Bus.request_hitstop.emit(K.HITSTOP_LIGHT)
+	Bus.request_shake.emit(0.24, 0.14)
+	Bus.hit_landed.emit(self, hit.amount, global_position)
 	_stun = maxf(_stun, hit.stun if hit.stun > 0.0 else 0.22)
 	var away := K.flat(global_position - hit.from)
 	if away == Vector3.ZERO:
@@ -235,6 +250,9 @@ func _on_died() -> void:
 	collision_layer = 0
 	remove_from_group(&"targetable")
 	remove_from_group(&"hurtbox")
+	# A kill is heavier than a hit, and reads the same for both enemy types.
+	Bus.request_hitstop.emit(K.HITSTOP_HEAVY)
+	Bus.request_shake.emit(0.38, 0.24)
 	Bus.enemy_died.emit(self, global_position)
 
 	for i in maxi(drops, 0):
