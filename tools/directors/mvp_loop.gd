@@ -141,19 +141,20 @@ func _fight(rig) -> void:
 	print("MVP layout rooms=%d deepest=%s seed=%d" % [
 		dun.rooms.size(), dun.deepest, Run.seed_used])
 
-	var crawlers: Array = rig.scene().get_tree().get_nodes_in_group(&"enemy")
-	print("MVP enemies=%d" % crawlers.size())
-	if crawlers.is_empty():
+	var foes: Array = rig.scene().get_tree().get_nodes_in_group(&"enemy")
+	print("MVP enemies=%d" % foes.size())
+	if foes.is_empty():
 		print("MVP FAIL no enemies spawned")
 		return
-	# CharacterBody3D, NOT Crawler. The dungeon spawns Crawler in the shallow
-	# rooms and Enemy deeper, so a Crawler-typed assignment throws at runtime the
-	# moment the nearest foe is a goblin -- and it aborted this whole beat
-	# SILENTLY, straight past the fight, the drops and the chest, while the log
-	# still ended with a tidy "MVP home". Anything that reaches for a specific
-	# enemy class here will break again the next time the roster grows.
-	var foe: CharacterBody3D = crawlers[0]
-	print("MVP foe kind=%s" % ("crawler" if foe is Crawler else str(foe.get("kind"))))
+	# CharacterBody3D, not a concrete enemy class. The dungeon spawns only `Enemy`
+	# now, but this stays loose on purpose: it used to be typed to the box-built
+	# `Crawler`, and the moment the nearest foe was a goblin the assignment threw
+	# at runtime and aborted this whole beat SILENTLY -- straight past the fight,
+	# the drops and the chest, while the log still ended with a tidy "MVP home".
+	# Anything that reaches for a specific enemy class here will break again the
+	# next time the roster grows.
+	var foe: CharacterBody3D = foes[0]
+	print("MVP foe kind=%s" % str(foe.get("kind")))
 
 	# Stand just outside its reach, facing it, so the telegraph is on camera.
 	var toward := K.flat(foe.global_position - Vector3.ZERO)
@@ -164,9 +165,9 @@ func _fight(rig) -> void:
 	var before: int = foe.health.quarters
 	# Close, then swing until it dies or we run out of patience.
 	for swing in 12:
-		# `health.dead` rather than a state enum: Crawler.State and Enemy.State
-		# are different enums, and the health component is the one thing both
-		# kinds genuinely share.
+		# `health.dead` rather than a state enum. The health component is what
+		# every hurtable thing in the game shares (docs/CONTRACT.md §8); a state
+		# enum is per-class and this beat should not care which class it drew.
 		if not is_instance_valid(foe) or foe.health.dead:
 			break
 		var toe := K.flat(foe.global_position - Vector3.ZERO)
@@ -336,7 +337,7 @@ func _nearest_foe(foes: Array, at: Vector3) -> float:
 ## Put the hero on a spot, optionally facing something.
 ##
 ## Facing is not cosmetic here: the sword's arc test rejects anything outside
-## `arc_degrees` of the hero's forward, so a hero teleported next to a crawler
+## `arc_degrees` of the hero's forward, so a hero teleported next to a monster
 ## while still facing his spawn direction swings through empty air forever --
 ## which reads in the log exactly like "damage is broken".
 func _stand_at(rig, at: Vector3, look_at = null) -> void:

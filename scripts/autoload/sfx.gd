@@ -14,7 +14,7 @@ extends Node
 ##    loading its own AudioStream -- is how the chest ends up louder than the
 ##    boss. Anything that wants a noise emits `Bus.request_sfx(&"id", pos)` and
 ##    does not own an AudioStreamPlayer.
-##  * **Pooled, never per-shot instanced.** A dungeon floor of dying crawlers
+##  * **Pooled, never per-shot instanced.** A dungeon floor of dying monsters
 ##    would otherwise allocate a player per corpse.
 ##
 ## Deliberately NOT here: footsteps. `footstep_*` and the 14 material folders
