@@ -273,8 +273,8 @@ func _build_corridor(cell: Vector2i, d: StringName) -> void:
 	var side := 0 if (cell.x + cell.y) % 2 == 0 else 1
 	var torch := ROOM_SCENE_TORCH.instantiate()
 	torch.rng_seed = _salt(cell, d, 20)
-	torch.light_range = 8.0
-	torch.light_energy = 7.0
+	torch.light_range = 11.0
+	torch.light_energy = 6.5
 	torch.position = offs[side] + Vector3(0.0, KitStyle.SCONCE_Y, 0.0)
 	torch.rotation.y = yaws[side]
 	root.add_child(torch)

@@ -734,10 +734,10 @@ func _on_first_person_changed(on: bool) -> void:
 func _build_key_light() -> void:
 	var lamp := OmniLight3D.new()
 	lamp.name = "KeyLight"
-	lamp.light_color = Color(1.0, 0.94, 0.86)
-	lamp.light_energy = 1.4
-	lamp.omni_range = 3.4
-	lamp.omni_attenuation = 1.7
+	lamp.light_color = Color(1.0, 0.95, 0.88)
+	lamp.light_energy = 2.1
+	lamp.omni_range = 4.4
+	lamp.omni_attenuation = 1.2
 	lamp.shadow_enabled = false
 	lamp.position = Vector3(0.0, 1.9, -0.6)
 	add_child(lamp)

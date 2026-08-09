@@ -84,10 +84,19 @@ rather than vanishing. The extract fee is on screen before you pay it.
 Ingredients are sold; gold buys upgrades; upgrades survive death. That
 indirection is what makes a great run a *decision* rather than an automatic one.
 
-**5. Darkness is a material.** Torches make pools with black between them. The
-one exception is the actors — the hero and anything trying to kill him carry
-enough light to be read. A silhouette you cannot read is not atmosphere, it is a
-bug (and it was one).
+**5. Light is a material.** Torches make warm pools, and the stone between them
+is *dimmer*, not black — a lit place with shape, not a string of spotlights in a
+void. The actors always carry enough light to be read: a silhouette you cannot
+read is not atmosphere, it is a bug (and it was one, twice).
+
+*Revised 2026-08-09 on the owner's instruction.* This pillar used to read
+"Darkness is a material. Torches make pools with black between them." That is a
+horror crawler's rule and this is a magical fantasy game — the dread comes from
+the fee, the walk and the monster, not from being unable to see. Contrast is now
+carried by *range* (a real dark doorway against a real bright torch) and by hue
+(warm fire against cool air), not by an absence of light. See
+`docs/STYLEGUIDE.md` §1 for the three rules that keep "brighter" from collapsing
+into "flatter".
 
 ---
 
