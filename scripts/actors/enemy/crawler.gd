@@ -256,7 +256,7 @@ func _on_died() -> void:
 	Bus.enemy_died.emit(self, global_position)
 
 	for i in maxi(drops, 0):
-		var id := ItemDb.roll(ItemDb.ENEMY_DROPS, Run.rng)
+		var id := ItemDb.roll(ItemDb.enemy_drops(Run.level), Run.rng)
 		if id == &"":
 			continue
 		var a := Run.rng.randf_range(0.0, TAU)

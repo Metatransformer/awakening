@@ -84,6 +84,10 @@ signal homeward_used
 ## Something hit him on the way out. The run continues.
 signal homeward_broken
 signal depth_changed(depth: int)
+## You took the stair down. `level` is the floor you are now standing on, 1-based
+## and endless. Everything that gets harder or richer with depth reads this
+## through `Prog` -- see scripts/core/progression.gd.
+signal level_changed(level: int)
 ## The workbench stock changed: a run banked components on the way home, or the
 ## forge ate some. `stock` is `Game.components` -- id -> count. Emitted rather
 ## than polled because the forge screen and the pouch both draw it and neither

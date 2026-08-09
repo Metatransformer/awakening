@@ -65,6 +65,14 @@ const DEFS := {
 @export var kind: StringName = &"skeleton"
 ## Seeded by the dungeon so a run is reproducible from Game.run_seed.
 @export var drop_seed: int = 0
+## Which floor this one was built for. Everything that scales with depth reads it
+## through `Prog`, and it is set by the dungeon rather than read off `Run` so a
+## monster spawned by a director or a test scene is a floor-1 monster.
+@export var level: int = Prog.FIRST
+## A bigger, tougher single body. Deliberately not a stat nudge: a room of six
+## ordinary monsters and a room of five plus one you can SEE coming are different
+## rooms, and only the second one is a decision (scripts/core/progression.gd).
+@export var elite: bool = false
 
 var state: State = State.IDLE
 var health: HealthComponent
@@ -80,6 +88,10 @@ var _knockback: Vector3 = Vector3.ZERO
 var _facing: float = 0.0
 var _rng := RandomNumberGenerator.new()
 var _struck: bool = false
+## What this one hits for, after the floor's curve and the elite bonus. Resolved
+## once in `_build_combat` because the wind-up re-arms the hitbox on every swing
+## and two places computing the same curve is one place to forget it.
+var _damage: int = 0
 var _flash := HitFlash.new()
 var _recoil: Tween = null
 ## Where it woke up. The leash is measured from here, so a monster lured out of
@@ -125,12 +137,21 @@ func _ready() -> void:
 	_orbit = 1.0 if _rng.randf() < 0.5 else -1.0
 
 
+## How tall this one stands. An elite is the same monster made BIGGER, which is
+## the whole reason the variant works without any per-kind art: height is already
+## the number the flinch, the swing sound and the hitbox all read, so one number
+## makes an elite land heavier, sound heavier and reach further, and reads as a
+## threat from across a dark room before it has done anything.
+func _height() -> float:
+	return float(_def["height"]) * (Prog.ELITE_SCALE if elite else 1.0)
+
+
 # --- Construction -----------------------------------------------------------
 
 func _build_body() -> void:
 	var col := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
-	var h: float = _def["height"]
+	var h := _height()
 	cap.radius = clampf(h * 0.22, 0.22, 0.55)
 	cap.height = maxf(h * 0.92, cap.radius * 2.0 + 0.05)
 	col.shape = cap
@@ -164,7 +185,7 @@ func _build_model() -> void:
 	# scale numbers is a table that goes stale the first time one is reimported.
 	var native := _model_height(_model)
 	if native > 0.001:
-		_model.scale = Vector3.ONE * (float(_def["height"]) / native)
+		_model.scale = Vector3.ONE * (_height() / native)
 
 	# Recorded AFTER the art-space +PI and the scale fit, because those are the
 	# rest pose as far as everything downstream is concerned. The recoil and the
@@ -190,7 +211,11 @@ func _build_model() -> void:
 func _build_combat() -> void:
 	health = HealthComponent.new()
 	health.name = "Health"
-	health.max_quarters = int(_def["health"])
+	# Bands, not level-scaling: this reads the FLOOR, never the player's power.
+	# That is what keeps floor 1 genuinely easy on your fiftieth run and what
+	# keeps the forge worth buying (docs/GDD.md §5).
+	var mult := Prog.health_mult(level) * (Prog.ELITE_HEALTH if elite else 1.0)
+	health.max_quarters = maxi(int(roundf(float(_def["health"]) * mult)), 1)
 	add_child(health)
 	health.damaged.connect(_on_damaged)
 	health.died.connect(_on_died)
@@ -199,10 +224,12 @@ func _build_combat() -> void:
 	_hitbox.name = "Claw"
 	_hitbox.collision_layer = K.L_ENEMY_HITBOX
 	_hitbox.collision_mask = K.L_PLAYER
-	_hitbox.amount = int(_def["damage"])
+	_damage = int(_def["damage"]) + Prog.damage_bonus(level) \
+		+ (Prog.ELITE_DAMAGE if elite else 0)
+	_hitbox.amount = _damage
 	_hitbox.kind = &"contact"
 	_hitbox.knockback = K.KNOCKBACK_LIGHT
-	_hitbox.position = Vector3(0.0, float(_def["height"]) * 0.55, -float(_def["reach"]) * 0.7)
+	_hitbox.position = Vector3(0.0, _height() * 0.55, -float(_def["reach"]) * 0.7)
 	var col := CollisionShape3D.new()
 	var sphere := SphereShape3D.new()
 	sphere.radius = float(_def["reach"]) * 0.62
@@ -406,7 +433,10 @@ func _tick_chase(delta: float) -> void:
 	_face_player(delta)
 	if dist <= float(_def["reach"]) and _cooldown <= 0.0:
 		state = State.WINDUP
-		_timer = float(_def["windup"])
+		# Compressed with depth, but never past Prog.WINDUP_FLOOR. The telegraph
+		# is what makes a fight fair, so it is the one number with a hard floor --
+		# a wind-up you cannot react to is a coin flip, not difficulty.
+		_timer = float(_def["windup"]) * Prog.windup_scale(level)
 		_struck = false
 		_stop()
 		_play(&"attack_1")
@@ -506,7 +536,7 @@ func _tick_windup(delta: float) -> void:
 		state = State.STRIKE
 		_timer = 0.18
 		_struck = true
-		_hitbox.amount = int(_def["damage"])
+		_hitbox.amount = _damage
 		_hitbox.activate()
 		# The commit itself: the glow snaps off as the body whips forward, so
 		# "it is coming" and "it is here" are two different pictures.
@@ -517,7 +547,7 @@ func _tick_windup(delta: float) -> void:
 		# goblin committing should not make the same noise, and height is
 		# already the number that says which is which.
 		Bus.request_sfx.emit(
-			&"swing_heavy" if float(_def["height"]) >= 1.70 else &"swing",
+			&"swing_heavy" if _height() >= 1.70 else &"swing",
 			global_position)
 
 
@@ -637,7 +667,7 @@ func _flinch(away: Vector3) -> void:
 	# Bigger bodies barely move. A 1.25 m goblin is thrown about; a 1.95 m orc
 	# takes the hit and leans, which is most of what makes them feel different
 	# to fight without a single line of per-kind feedback code.
-	var heft := clampf(1.5 / float(_def["height"]), 0.45, 1.5)
+	var heft := clampf(1.5 / _height(), 0.45, 1.5)
 	var roll := deg_to_rad(15.0) * heft * side
 	var pitch := deg_to_rad(10.0) * heft
 
@@ -708,9 +738,17 @@ func _on_died() -> void:
 ## difficulty curve rather than a skin swap.
 func _drop_loot() -> void:
 	var health_max: int = _def.get("health", 6)
-	var count := 1 + int(health_max / 7)
+	# Two curves multiplied, on purpose. The kind's health is WHAT it is worth,
+	# and the floor is HOW MUCH the floor pays -- a goblin stays a goblin's worth
+	# of loot relative to a wraith, all the way down. Without the floor half,
+	# going deeper would be strictly worse: the extraction fee scales with what
+	# you are carrying, so a deep floor would cost more and pay the same.
+	var count := (1 + int(health_max / 7)) * Prog.drop_rolls(Run.level)
+	if elite:
+		count += 1
+	var table := ItemDb.enemy_drops(Run.level)
 	for i in count:
-		var id := ItemDb.roll(ItemDb.ENEMY_DROPS, Run.rng)
+		var id := ItemDb.roll(table, Run.rng)
 		if id == &"":
 			continue
 		var a := Run.rng.randf_range(0.0, TAU)

@@ -174,9 +174,27 @@ func _fight(rig) -> void:
 		await rig.wait_frames(2)
 		await rig.tap(["attack"])
 		await rig.wait_frames(34)
-	print("MVP foe hp %d -> %s" % [before,
-		foe.health.quarters if is_instance_valid(foe) else "dead"])
+	print("MVP foe hp %d -> %s (hero %d/%d)" % [before,
+		foe.health.quarters if is_instance_valid(foe) else "dead",
+		Game.quarters, Game.max_quarters])
 	await rig.capture(out.path_join("m_10_swung.png"))
+
+	# Patched up HERE, the frame the fight ends, rather than four beats later
+	# where it used to be. The reason is unchanged -- see the note below -- but
+	# the timing was tuned against monsters that stood where they spawned. Now
+	# that they close in, the hero came out of the swing loop on two quarters and
+	# died during the WALK to the drop, which emptied the bag, sent Flow to town,
+	# and reported "no chest" and "the charm refused to start" for a run that had
+	# no chest and no dungeon left. The line above is where the balance signal
+	# lives; this is where the cascade gets cut.
+	#
+	# Not cheating the test -- the opposite. The tour teleports between beats
+	# with no regard for what is standing nearby, so the hero routinely arrives
+	# at the chest on his last heart and dies. That is `Run.die()` working
+	# correctly, but every remaining beat then reports a failure it did not
+	# cause. Death has its own proof; this one is about the seams between the
+	# screens.
+	Game.heal(Game.max_quarters)
 
 	await rig.wait_frames(40)
 	var motes := _motes(rig)
@@ -190,16 +208,7 @@ func _fight(rig) -> void:
 	print("MVP after_pickup bag=%d value=%d" % [Run.bag_count(), Run.bag_value()])
 	await rig.capture(out.path_join("m_12_picked_up.png"))
 
-	# Patch the hero up before walking him through a dungeon full of crawlers.
-	#
-	# Not cheating the test -- the opposite. The tour teleports between beats
-	# with no regard for what is standing nearby, so the hero routinely arrives
-	# at the chest on his last heart and dies. That is `Run.die()` working
-	# correctly, but it ends the run, sends Flow back to town, and every
-	# remaining beat then reports a failure it did not cause: the bag reads
-	# empty because death emptied it, and the extract pad is "missing" because
-	# we are standing in the town square. Death has its own proof; this one is
-	# about the seams between the screens.
+	# Topped up again on the way to the chest, for the same reason.
 	Game.heal(Game.max_quarters)
 
 	# The chest, which is where the run-defining drops live.
@@ -228,6 +237,15 @@ func _extract(rig) -> void:
 	if charm == null:
 		print("MVP FAIL the hero is carrying no way out")
 		return
+
+	# Break off the fight first. An unblocked hit cancels the channel on purpose
+	# (hero.gd, "you do not get to walk out of a fight you are losing"), so this
+	# beat has to do what a player does and disengage before using the charm.
+	# It did not have to before the monsters chased: they stood where they spawned,
+	# the hero channelled in the middle of them, and the beat passed. The first run
+	# after the AI landed reported "the charm stopped channelling on its own",
+	# which was the game working and the director standing in a mob.
+	await _break_off(rig, hero)
 
 	await rig.wait_frames(20)
 	await rig.capture(out.path_join("m_15_before_charm.png"))
@@ -267,6 +285,53 @@ func _return(rig) -> void:
 
 
 # --- Helpers ----------------------------------------------------------------
+
+## Walk out of the fight and wait for the pack to lose interest.
+##
+## Uses the leash rather than deleting anything: monsters give up and go home
+## when the hero gets far enough away, and a beat that despawned the room to get
+## a clean channel would pass just as happily on a build where they never gave
+## up at all.
+func _break_off(rig, hero: Hero) -> void:
+	var foes: Array = rig.get_nodes_in_group(&"enemy")
+	if foes.is_empty():
+		return
+
+	# The emptiest ROOM on the floor, not an offset off somebody's position: a
+	# hero moved 24 m along an axis lands in the void outside the map as often as
+	# not, and a hero standing in the void is not a hero who walked away.
+	var dun := _dungeon(rig)
+	if dun == null:
+		return
+	var away := hero.global_position
+	var best := -1.0
+	for cell: Vector2i in dun.rooms:
+		var spot := dun.centre_of(cell)
+		var gap := _nearest_foe(foes, spot)
+		if gap > best:
+			best = gap
+			away = spot
+	hero.global_position = Vector3(away.x, 0.05, away.z)
+
+	# Long enough for the leash to run: they walk home at a little over half
+	# speed, so this is a slow beat by design.
+	await rig.wait_frames(120)
+	var gap := _nearest_foe(foes, hero.global_position)
+	print("MVP broke off, nearest monster %.1f m" % gap)
+	if gap < 6.0:
+		print("MVP FAIL could not disengage: a monster is still %.1f m away with"
+			% gap + " the hero in the far corner of the floor -- the leash is not"
+			+ " letting go, and nothing in the dungeon can be walked away from")
+
+
+func _nearest_foe(foes: Array, at: Vector3) -> float:
+	var best := 1e9
+	for f: Node3D in foes:
+		if not is_instance_valid(f):
+			continue
+		best = minf(best, K.plane(f.global_position - at).length())
+	return best
+
 
 ## Put the hero on a spot, optionally facing something.
 ##

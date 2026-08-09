@@ -26,6 +26,17 @@ var bag: Dictionary[StringName, int] = {}
 var in_dungeon: bool = false
 ## How deep. Room count since entering; drives drop quality and the fee.
 var depth: int = 0
+## Which floor of the Lower Worlds you are standing on. 1-based, and it does NOT
+## reset between floors -- taking the stair down keeps the bag and raises this,
+## which is the whole of the endless curve as far as the rest of the game is
+## concerned (see Prog). It resets when the run ends, either way it ends.
+##
+## Separate from `depth` on purpose. `depth` is how far into THIS floor you have
+## walked and is what the extraction fee reads; `level` is how many floors you
+## have committed to and is what the monsters and the drop tables read. Folding
+## them into one number would mean walking a long floor made the monsters
+## stronger, which is a curve nobody chose.
+var level: int = 1
 ## Gold earned ABOVE base value by sweeping loot while the chain was lit. See
 ## Heat. It rides with the bag and dies with it, and `bag_value()` folds it in --
 ## which is what makes the extraction fee rise on a hot run without a single line
@@ -55,6 +66,7 @@ func reset() -> void:
 	premium = 0
 	in_dungeon = false
 	depth = 0
+	level = 1
 
 
 # --- Entering and leaving ---------------------------------------------------
@@ -64,11 +76,41 @@ func enter(run_seed: int = 0) -> void:
 	bag.clear()
 	premium = 0
 	depth = 0
+	# Every run starts at the top. The Lower Worlds are not a save file you
+	# resume -- what you keep between runs is gold and what gold bought, and if
+	# a run could start on floor 7 the forge would be optional (docs/GDD.md §4).
+	level = 1
 	in_dungeon = true
 	seed_used = run_seed if run_seed != 0 else int(Time.get_unix_time_from_system())
 	rng.seed = seed_used
 	Bus.bag_changed.emit(bag, bag_value())
 	Bus.run_started.emit(seed_used)
+	Bus.level_changed.emit(level)
+
+
+## Take the stair down. The bag comes with you and so does everything in it --
+## that is the entire point, and it is what makes the stair a DECISION rather
+## than a corridor: everything you are carrying is now riding on a harder floor.
+##
+## Not a new run. `enter()` would clear the bag, and the seed stays the one the
+## run started with so the whole descent replays from a single number: the floor
+## is generated from `floor_seed()`, which mixes in the level.
+func descend_floor() -> void:
+	if not in_dungeon:
+		return
+	level += 1
+	# `depth` is per-floor -- how far into THIS floor you have walked. The fee
+	# rides on the bag, which is untouched, so arriving on a new floor does not
+	# make leaving cheaper.
+	depth = 0
+	Bus.level_changed.emit(level)
+
+
+## The seed for the floor you are standing on. Same run seed plus same level
+## always builds the same floor, so a bug two floors down is reproducible from
+## the one number the run reports.
+func floor_seed() -> int:
+	return absi(seed_used + level * 2654435761) % 0x7fffffff
 
 
 ## Teleport out. Returns false if the player cannot afford it -- the caller

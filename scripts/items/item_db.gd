@@ -144,3 +144,46 @@ static func roll(table: Dictionary, rng: RandomNumberGenerator) -> StringName:
 		if pick <= 0:
 			return id
 	return table.keys().back()
+
+
+## The enemy table as it stands on floor `level`, and the chest table likewise.
+##
+## The tables above are floor 1. Deeper floors do not get a different table, they
+## get the SAME table flattened toward uniform -- see `_lift`. Two tables per
+## depth band would be two things to keep in sync and a cliff at every boundary;
+## one table with a dial is a curve.
+static func enemy_drops(level: int) -> Dictionary:
+	return _lift(ENEMY_DROPS, level)
+
+
+static func chest_drops(level: int) -> Dictionary:
+	return _lift(CHEST_DROPS, level)
+
+
+## Reweight a drop table toward its rare end, by how deep you are.
+##
+## `w * pow(top / w, k)` leaves the commonest entry untouched and lifts every
+## other one in proportion to how rare it already was, so the shape of the table
+## is preserved and only its steepness changes. At k = 0 it is the authored
+## table; as k grows it flattens toward uniform. It never REORDERS anything --
+## a Cold Iron Core is still the rarest thing on the chest table on floor 40 --
+## because "deeper is richer" must not turn into "deeper hands you the ladder".
+##
+## k is capped, which is what keeps an endless game from converging on a table
+## where everything is equally likely and the rare drops stop being rare.
+static func _lift(table: Dictionary, level: int) -> Dictionary:
+	var k := minf(Prog.rarity_lift(level) * 0.12, 0.6)
+	if k <= 0.0:
+		return table
+
+	var top := 1.0
+	for w: int in table.values():
+		top = maxf(top, float(w))
+
+	var out: Dictionary = {}
+	for id: StringName in table:
+		var w := maxf(float(table[id]), 1.0)
+		# Rounded up, so the rarest entries cannot be lifted by less than one
+		# whole weight unit and quietly stay exactly where they were.
+		out[id] = int(ceilf(w * pow(top / w, k)))
+	return out

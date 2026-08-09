@@ -104,7 +104,18 @@ reward for every upgrade the player bought. Oblivion's own designer called it a
 mistake. We are not repeating it.
 
 The corollary: **the entrance must stay easy forever.** That is what makes a
-short cautious run a real option instead of a wasted one.
+short cautious run a real option instead of a wasted one. Floor 1 is the
+monsters exactly as authored; the curve starts at zero and only ever adds.
+
+**And the depth is endless.** Every floor has a stair in its deepest room, next
+to its best chest. Taking it keeps the bag, the damage and the climbing fee —
+the descent is a commitment, not a checkpoint — and drops you on a floor with
+more rooms, bigger packs, tougher monsters, and a drop table weighted further
+toward the rare end. Nothing has a ceiling except the things that would stop the
+game being readable: the telegraph never compresses past 60%, a room never holds
+more than seven, and the roster runs out of worse monsters. So the run ends when
+you get greedy or unlucky, and **how deep you got is the score**. The numbers
+and the reasoning: `docs/METAGAME.md` §7.1, `scripts/core/progression.gd`.
 
 ---
 

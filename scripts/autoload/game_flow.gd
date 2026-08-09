@@ -67,6 +67,21 @@ func to_town() -> void:
 	_go(TOWN, 0.0)
 
 
+## Take the stair down. The run CONTINUES: same bag, same health, same fee
+## climbing. Only the floor is new.
+##
+## It reloads the same dungeon scene rather than loading a different one, which
+## is what "endless" means here -- there is no floor 8 scene to run out of. The
+## layout differs because `Run.descend_floor` moves the level and the generator
+## seeds off `Run.floor_seed()`, so a given run seed still replays identically
+## all the way down (scripts/world/dungeon.gd).
+func descend() -> void:
+	if busy or not Run.in_dungeon:
+		return
+	Run.descend_floor()
+	_go(DUNGEON, 0.0)
+
+
 # --- The two things that end a run ------------------------------------------
 
 func _on_player_died() -> void:

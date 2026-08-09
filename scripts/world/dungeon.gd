@@ -33,6 +33,7 @@ const DIRS := {
 }
 
 @export_group("Layout")
+## Floor 1's shape. Every floor after it asks `Prog` instead -- see `_ready`.
 @export var room_count: int = 6
 @export var room_size: float = 16.0
 ## Centre-to-centre. The difference from `room_size` is the corridor length.
@@ -64,8 +65,20 @@ func _ready() -> void:
 	if not Run.in_dungeon:
 		Run.enter(seed_override)
 	_rng = RandomNumberGenerator.new()
-	_rng.seed = seed_override if seed_override != 0 else Run.seed_used
+	# `Run.floor_seed()`, not `Run.seed_used`: the same run seed has to give a
+	# DIFFERENT floor each time you descend, and the same one every time you
+	# replay that seed. Mixing the level in does both; reusing the run seed
+	# would generate the identical floor over and over as you went down.
+	_rng.seed = seed_override if seed_override != 0 else Run.floor_seed()
 	_seed_salt = int(_rng.seed & 0xffff)
+
+	# The floor's whole shape, from one place. Nothing here has a curve of its
+	# own -- see scripts/core/progression.gd for why that matters.
+	if seed_override == 0:
+		room_count = Prog.rooms(Run.level)
+		var pack := Prog.pack(Run.level)
+		enemies_min = pack.x
+		enemies_max = pack.y
 
 	_plan()
 	_build()
@@ -310,6 +323,12 @@ func _populate() -> void:
 			continue
 
 		var dist := int(rooms[cell]["dist"])
+		# One number for "how dangerous is this room allowed to be": the floor
+		# plus how far into it you have walked. Keeping the roster and the elite
+		# roll on the SAME number is what makes the deepest room of floor 1
+		# overlap with the first room of floor 2 rather than jump.
+		var band := Prog.band(Run.level, dist)
+		var elite_chance := Prog.elite_chance(Run.level)
 		var count := _rng.randi_range(enemies_min, enemies_max)
 		for i in count:
 			var spot := _scatter(i, count, room_size * 0.30)
@@ -317,15 +336,27 @@ func _populate() -> void:
 			# end of a run should be a thing you recognise on sight, and a room
 			# that happened to roll three goblins does not read as the bottom.
 			var kind: StringName = &"wraith" if (cell == deepest and i == 0) \
-				else _roll_kind(dist)
-			_spawn_foe(root, kind, spot)
+				else _roll_kind(band)
+			# At most one elite in a room. The point of an elite is that it is
+			# THE thing in the room; two of them is just a harder room, and the
+			# separation rule has to keep them both legible besides.
+			var elite := i == 0 and _rng.randf() < elite_chance
+			_spawn_foe(root, kind, spot, elite)
 
 		var wants_chest := cell == deepest or _rng.randf() < chest_chance
 		if wants_chest:
 			var chest := Chest.new()
-			chest.picks = 3 if cell == deepest else 2
+			chest.picks = Prog.chest_picks(Run.level, cell == deepest)
 			chest.position = Vector3(0.0, 0.0, -room_size * 0.32)
 			root.add_child(chest)
+
+		# The way down, in the deepest room, beside the best chest. Deliberately
+		# next to the reward and at the end of the longest walk: the moment you
+		# can go deeper is the moment you have the most to lose.
+		if cell == deepest:
+			var down := Stairs.new()
+			down.position = Vector3(0.0, 0.0, room_size * 0.26)
+			root.add_child(down)
 
 		if _rng.randf() < 0.35:
 			for i in 2:
@@ -361,7 +392,8 @@ func _roll_kind(dist: int) -> StringName:
 	return pool[_rng.randi_range(0, pool.size() - 1)]
 
 
-func _spawn_foe(root: Node3D, kind: StringName, at: Vector3) -> void:
+func _spawn_foe(root: Node3D, kind: StringName, at: Vector3,
+		elite: bool = false) -> void:
 	# `position`, not `global_position`: the room root is already placed at its
 	# cell centre, and `at` is the scatter offset inside it. Assigning a global
 	# here would stack every room's spawns on top of the entrance.
@@ -373,6 +405,8 @@ func _spawn_foe(root: Node3D, kind: StringName, at: Vector3) -> void:
 	var e := Enemy.new()
 	e.kind = kind
 	e.drop_seed = _rng.randi()
+	e.level = Run.level
+	e.elite = elite
 	e.position = at
 	root.add_child(e)
 

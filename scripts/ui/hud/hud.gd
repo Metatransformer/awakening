@@ -202,6 +202,7 @@ func _ready() -> void:
 	Bus.target_lost.connect(_on_target_lost)
 	Bus.aim_changed.connect(_on_aim)
 	Bus.prompt_changed.connect(_on_prompt)
+	Bus.level_changed.connect(func(_l: int) -> void: _repaint())
 	Bus.run_started.connect(_on_headline_changed)
 	Bus.run_ended.connect(_on_headline_changed)
 	# Affordability moves when the purse moves or the bag moves, and on nothing
@@ -467,6 +468,7 @@ func _draw_hud() -> void:
 	_draw_lock_on(s)
 	_draw_sweep(s)
 	_draw_controls(s)
+	_draw_floor(s)
 
 
 # --- Controls -----------------------------------------------------------------
@@ -489,6 +491,23 @@ func _draw_controls(s: Vector2) -> void:
 		return
 	var scale := Pal.px(10.0 / PixelFont.H, s.y)
 	PixelFont.draw_centred(_canvas, KEYS,
+		Vector2(s.x * 0.5, Pal.KEYS_BASELINE * s.y), scale, Pal.ASH)
+
+
+## How deep you are, on the line the controls legend uses in town.
+##
+## The two are exclusive by construction: the legend is the thing you need when
+## you are safe and idle, and the floor is the thing you need when you are not.
+## Sharing the baseline means neither is ever noise, and the strip at the bottom
+## of the screen always says exactly one useful thing.
+##
+## Drawn dim. It is a number you glance at between rooms to decide whether to go
+## on, not a score -- the bag in the corner is the score.
+func _draw_floor(s: Vector2) -> void:
+	if Run == null or not Run.in_dungeon:
+		return
+	var scale := Pal.px(10.0 / PixelFont.H, s.y)
+	PixelFont.draw_centred(_canvas, Prog.label(Run.level),
 		Vector2(s.x * 0.5, Pal.KEYS_BASELINE * s.y), scale, Pal.ASH)
 
 

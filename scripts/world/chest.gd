@@ -43,7 +43,7 @@ func activate(by: Node3D) -> void:
 	tw.parallel().tween_property(_glow, "light_energy", 0.0, 0.5)
 
 	for i in maxi(picks, 1):
-		var id := ItemDb.roll(ItemDb.CHEST_DROPS, Run.rng)
+		var id := ItemDb.roll(ItemDb.chest_drops(Run.level), Run.rng)
 		if id == &"":
 			continue
 		# Fan them out so two drops never land on top of each other and read as

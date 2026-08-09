@@ -361,10 +361,53 @@ time: rooms, connecting corridors, torches in pools with dark between them,
 enemies scattered on a ring so a group is not one clump you can clear with a
 single swing, and chests carrying the richer rolls.
 
-Enemies are `Crawler` (`scripts/actors/enemy/crawler.gd`): see you, walk at you,
-**rear back and hold for 0.45 s**, lunge, recover. That telegraph is the entire
-fight — it is the window to block, roll, or hit first — and it is why an enemy
-this simple is still a fight rather than a health tax.
+Enemies are `Crawler` (`scripts/actors/enemy/crawler.gd`) in the shallow rooms
+and `Enemy` (`scripts/actors/enemies/enemy.gd`) deeper: see you, close, **rear
+back and hold**, swing, recover. That telegraph is the entire fight — it is the
+window to block, roll, or hit first — and it is why an enemy this simple is
+still a fight rather than a health tax. A pack keeps itself spread out, circles
+rather than stacking, and gives up and walks home if you leave — which is what
+makes disengaging a real option and therefore what makes the charm's channel
+survivable.
+
+### 7.1 Going deeper
+
+The deepest room of every floor holds the best chest and, beside it, **the way
+down** (`scripts/world/stairs.gd`) — a lit pit with a `DESCEND` prompt. Taking
+it keeps everything: the same bag, the same health, the same fee climbing. It
+banks nothing and heals nothing. The only way to bank is to go home, and the
+stair is deliberately placed at the end of the longest walk, next to the reward,
+so the moment you *can* go deeper is the moment you have the most to lose.
+
+There is no bottom. `Flow.descend()` reloads the same dungeon scene with
+`Run.level` one higher, and the generator seeds off `Run.floor_seed()` — the
+same run seed still replays identically all the way down, but every floor of a
+run is a different floor.
+
+Everything that gets harder or richer with depth is a pure function of the floor
+and lives in **`scripts/core/progression.gd`** (`Prog`). Nothing else gets a
+curve of its own. Per floor:
+
+| Moves | How much | Stops at |
+|---|---|---|
+| Monster health | +25% of the authored value | never |
+| Monster damage | +1 quarter every 3 floors | never |
+| Wind-up | −3%, so the telegraph tightens | 60% — a wind-up you cannot react to is a coin flip, not difficulty |
+| Rooms on the floor | +1 every 2 floors | 12 |
+| Pack size | grows both ends | 7 in a room |
+| Elites | from floor 3, +5% a room | 35% |
+| Drop rolls off a body | +1 every 3 floors | never |
+| Chest picks | +1 every 3 floors | 7 |
+| Rare weighting in the tables | flattens toward uniform | 0.6 of the way |
+
+The drop side of that table is not decoration. The extract fee scales with what
+you are carrying, so if the carrying did not scale too, going deeper would be
+strictly worse than farming floor 1.
+
+An **elite** is one bigger body rather than a stat nudge — 1.8× health, +1
+damage, 1.22× the height, at most one to a room. A room of six monsters and a
+room of five plus one you can *see* coming are different rooms, and only the
+second one is a decision.
 
 ---
 
@@ -378,6 +421,8 @@ this simple is still a fight rather than a health tax.
 | Ingredients, components and drop tables | `scripts/items/item_db.gd` |
 | The smith's catalogue, and the forge recipes | `scripts/items/shop_db.gd` |
 | The upgrade ladders, rung by rung | `scripts/core/consts.gd` (`K.EDGE_DAMAGE` …) |
+| The difficulty curve, every floor of it | `scripts/core/progression.gd` |
+| The way down | `scripts/world/stairs.gd` |
 | The pouch — the bag, drawn as slots | `scripts/ui/menu/pouch_panel.gd` |
 | Vendor / smith screen | `scripts/ui/shop/trade_screen.gd` |
 | HUD | `scripts/ui/hud/hud.gd` |
