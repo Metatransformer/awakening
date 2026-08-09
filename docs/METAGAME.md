@@ -11,6 +11,26 @@ from the code it describes, and the file it lives in is named.
 > holds**. OOT remains the bar for camera, locomotion, combat feel, and `refs/`.
 > We changed what the game *is*, not how it *feels*.
 
+> ### ⚠ Partly superseded 2026-08-09 — the Descent is finite now
+>
+> `docs/GDD.md` §5 replaced the endless-only structure with **four authored
+> floors, four bosses and an ending**. The endless dungeon is not deleted: it is
+> the post-credits **Long Descent** (GDD §8), and every number in §7.1 below is
+> still exactly what it does there.
+>
+> Two things in this file are now incomplete rather than wrong:
+>
+> - **§7.1 "There is no bottom."** True of the Long Descent, no longer true of
+>   the main line. Floors 1–4 are authored anchors over the same generator, and
+>   the deepest room's stair is a **boss door** (GDD §5.1).
+> - **§4 and §6.5.** A third item class exists: **relics** (GDD §3, §6). They
+>   ride in the bag under every rule a component obeys, but they are donated to a
+>   fourth counter rather than spent at a bench, and they never sell.
+>
+> Everything else here — the bag, Heat, the fee, the receipt, the autosave, the
+> forge, the alchemist, arrows — is unchanged and remains the design of record.
+> **`docs/SCOPE.md` is what decides how much more of any of it gets built.**
+
 ---
 
 ## 1. The loop
@@ -621,7 +641,12 @@ banks nothing and heals nothing. The only way to bank is to go home, and the
 stair is deliberately placed at the end of the longest walk, next to the reward,
 so the moment you *can* go deeper is the moment you have the most to lose.
 
-There is no bottom. `Flow.descend()` reloads the same dungeon scene with
+There is no bottom — **in the Long Descent**. On floors 1–4 the deepest room's
+stair is behind a boss door, and the floor's manifest fixes the room count, the
+band table and the tint (GDD §5.1). The mechanism below is the same one; only
+the ceiling changed.
+
+`Flow.descend()` reloads the same dungeon scene with
 `Run.level` one higher, and the generator seeds off `Run.floor_seed()` — the
 same run seed still replays identically all the way down, but every floor of a
 run is a different floor.

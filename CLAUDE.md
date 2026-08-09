@@ -180,6 +180,7 @@ class is not knowing the pattern.
 | File | Owns |
 |---|---|
 | `docs/GDD.md` | What the game is. The north star; everything else serves it. |
+| `docs/SCOPE.md` | **How much of it there is.** The frozen manifest, the no-list, the build order. It is the doc that gets to say no — check it before you build anything the GDD merely permits. |
 | `docs/METAGAME.md` | The economy: loot, bag, gold, extraction, the shops. |
 | `docs/CONTRACT.md` | Interfaces, units, autoloads, collision layers, file ownership. |
 | `docs/STYLEGUIDE.md` | Palette, type, the PSX treatment, the anti-slop list. |
