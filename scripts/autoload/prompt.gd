@@ -129,7 +129,25 @@ func drop_focus() -> void:
 	focus = null
 	_hold = 0.0
 	_armed = false
+	Bus.hold_changed.emit(0.0, false)
 	Bus.prompt_changed.emit("")
+
+
+## The one place `_hold` moves, so the prop's own tell (`on_hold`) and the HUD's
+## gauge (`Bus.hold_changed`) can never disagree about how far along the player
+## is. They are two channels for one number and they are set together or not at
+## all: the gate's glow saying 90% while the bar says 40% is worse than either
+## alone, because the player believes the diegetic one.
+##
+## Emitted every frame of a hold rather than on a threshold. This is a bar that
+## fills; a bar that updates in steps reads as a stutter, and `Bus` traffic at
+## the frame rate for the fraction of a second something is being held is not a
+## cost worth optimising against a player who thinks the game is dropping frames.
+func _set_hold(t01: float) -> void:
+	var required := focus != null and is_instance_valid(focus) and focus.hold_time > 0.0
+	if required:
+		focus.on_hold(t01)
+	Bus.hold_changed.emit(t01 if required else 0.0, required)
 
 
 func _process(delta: float) -> void:
@@ -142,14 +160,16 @@ func _process(delta: float) -> void:
 		if focus != null:
 			focus.on_focus(true)
 			_say_prompt()
+			# Empty track up immediately: standing at a hold-gated thing is when
+			# the player needs to know it is one, not after a tap did nothing.
+			_set_hold(0.0)
 
 	var down := Input.is_action_pressed(&"interact")
 	if not down:
 		_armed = true
 		if _hold > 0.0:
 			_hold = 0.0
-			if focus != null:
-				focus.on_hold(0.0)
+			_set_hold(0.0)
 
 	if focus == null or not _armed or not down:
 		return
@@ -166,10 +186,10 @@ func _process(delta: float) -> void:
 		var it := focus
 		_hold = 0.0
 		_armed = false
-		it.on_hold(0.0)
+		_set_hold(0.0)
 		it.activate(hero)
 	else:
-		focus.on_hold(clampf(_hold / focus.hold_time, 0.0, 1.0))
+		_set_hold(clampf(_hold / focus.hold_time, 0.0, 1.0))
 
 
 ## "E TO TALK", or "Y TO TALK" on a pad. The button is read off the live InputMap

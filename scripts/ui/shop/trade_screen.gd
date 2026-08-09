@@ -184,11 +184,43 @@ func _refresh() -> void:
 const REPEAT_DELAY := 0.38
 const REPEAT_RATE := 0.09
 
+## Seconds on the button for a commit that eats materials. Shorter than the
+## gate's 0.9 s and deliberately so: the gate is guarding against a press you
+## made while walking past, and this is guarding against the cursor being one row
+## from where you thought it was. Long enough to be a decision, short enough that
+## brewing four draughts in a row is not a chore.
+const CRAFT_HOLD := 0.5
+
 ## Same release-edge trick as Prompt: a confirm that depends on catching a
 ## one-frame `just_pressed` is a confirm that occasionally does nothing.
 var _armed_accept: bool = false
 var _armed_cancel: bool = false
 var _repeat: float = 0.0
+## 0..1 on the selected row's commit. See `_hold_time`.
+var _hold: float = 0.0
+
+
+## Seconds this row wants on the button, 0 to fire on press.
+##
+## **Held: the commits you cannot undo.** A forge rung, a blown bottle and a brew
+## all eat components -- a Cold Iron Core is a thing you FOUND, and spending one
+## on the wrong ladder because the cursor was a row off is the only shop mistake
+## this game cannot give back (docs/METAGAME.md §6.5). SELL EVERYTHING is here
+## for the same reason from the other side: it is one press that empties the bag.
+##
+## **Tapped: everything else.** Arrows, a bag slot, selling one stack. Gold is
+## grindable and a single row is re-buyable, and a hold on every line would be
+## ceremony -- which is worse than no hold at all, because a player who holds
+## through twelve harmless confirms stops reading the one that mattered.
+func _hold_time(i: int) -> float:
+	if i < 0 or i >= _rows.size():
+		return 0.0
+	var row := _rows[i]
+	if row["kind"] == &"all":
+		return CRAFT_HOLD
+	if row["kind"] == &"buy" and _db().crafts(row["line"]):
+		return CRAFT_HOLD
+	return 0.0
 
 
 func _tick_input(delta: float) -> void:
@@ -223,11 +255,29 @@ func _tick_input(delta: float) -> void:
 			dir = 1 if Input.is_action_pressed(&"ui_down") else -1
 	if dir != 0:
 		_cursor = (_cursor + dir + _rows.size()) % _rows.size()
+		# Progress does not travel. Sliding the cursor onto the next line with the
+		# button down would otherwise arrive there half-committed, which is the
+		# exact accident the hold exists to prevent.
+		_hold = 0.0
 		queue_redraw()
 
 	if accept and _armed_accept:
-		_armed_accept = false
-		_commit()
+		var need := _hold_time(_cursor)
+		if need <= 0.0:
+			_armed_accept = false
+			_commit()
+		else:
+			_hold += delta
+			if _hold >= need:
+				_hold = 0.0
+				# Disarmed, so the button still being down after a brew does not
+				# start brewing the next one.
+				_armed_accept = false
+				_commit()
+	elif _hold > 0.0:
+		# Snapped to zero, not decayed, for the reason `Prompt` gives: a bar that
+		# drains says "keep going", and letting go was the opposite of that.
+		_hold = 0.0
 
 
 func _commit() -> void:
@@ -326,6 +376,15 @@ func _draw() -> void:
 			draw_rect(r, Color(Pal.ASH, 0.45))
 			draw_rect(Rect2(r.position.x, r.position.y,
 				Pal.px(3.0, s.y), r.size.y), Pal.BONE)
+			# The hold gauge, along the bottom of the row it commits. Drawn from
+			# the moment the row is selected, empty, because the empty track is
+			# what says "this one is a hold" before the player presses and
+			# wonders why nothing happened. Same widget as the interact prompt's,
+			# same rule -- see `HoldGauge`.
+			if _hold_time(i) > 0.0:
+				var bar_h := Pal.px(HoldGauge.BAR_H, s.y)
+				HoldGauge.bar(self, Rect2(r.position.x, r.end.y - bar_h,
+					r.size.x, bar_h), _hold / _hold_time(i), Pal.GOLD)
 		if i == _flash_row and _flash >= 0.0:
 			draw_rect(r, Color(Pal.GOLD, 0.5 * (1.0 - _flash / 0.35)))
 
@@ -394,10 +453,28 @@ func _recipe(parts: Dictionary, at: Vector2, scale: float) -> void:
 		x += PixelFont.width(token, scale) + PixelFont.width("  ", scale)
 
 
+## The line that says which button does what, and -- on a row that wants one --
+## that this one is a HOLD.
+##
+## The word and the gauge are one statement made twice, in language and in shape,
+## exactly as the interact prompt makes it (`Prompt._say_prompt`). Either alone
+## has shipped as a bug here: "A TO DESCEND" with no bar was a player tapping and
+## filing "descend doesn't work", and a bar with no word is a player watching
+## something fill without knowing they are the one filling it.
+##
+## Buttons come off the live InputMap through `Glyph`, not written in: this line
+## said ENTER and ESC on a pad, under a game whose HUD had already learned not to.
 func _footer(s: Vector2, panel: Rect2, pad: float) -> void:
 	var ft := Pal.px(12.0 / PixelFont.H, s.y)
-	var hint := "ENTER SELL    ESC LEAVE" if mode == Mode.SELL \
-		else "ENTER BUY    ESC LEAVE"
+	var accept_cap := Glyph.cap(&"ui_accept")
+	if accept_cap.is_empty():
+		accept_cap = "ENT"
+	var leave_cap := Glyph.cap(&"ui_cancel")
+	if leave_cap.is_empty():
+		leave_cap = "ESC"
+	var hint := "%s %s    %s LEAVE" % [accept_cap, _verb(), leave_cap]
+	if _hold_time(_cursor) > 0.0:
+		hint = "HOLD %s TO %s    %s LEAVE" % [accept_cap, _verb(), leave_cap]
 	var col: Color = Pal.RUST if _refuse >= 0.0 else Pal.ASH
 	if _refuse >= 0.0:
 		# Ask the catalogue WHY rather than assuming money. Once a line can be
@@ -409,6 +486,27 @@ func _footer(s: Vector2, panel: Rect2, pad: float) -> void:
 			hint = why if why != "" else "NOT ENOUGH GOLD"
 	PixelFont.draw_text(self, hint,
 		Vector2(panel.position.x + pad, panel.end.y - pad), ft, col)
+
+
+## What the selected row does, in the counter's own word: FORGE at the smith,
+## BREW at the alchemist, BUY for anything they merely have in stock, SELL on the
+## other side of the shop. Asked of the catalogue rather than decided here, so a
+## fourth counter names its own act without this file learning about it.
+func _verb() -> String:
+	if _cursor < 0 or _cursor >= _rows.size():
+		return "SELL" if mode == Mode.SELL else "BUY"
+	var row := _rows[_cursor]
+	match row["kind"]:
+		&"all":
+			return "SELL ALL"
+		&"buy":
+			# Both questions asked of the catalogue HERE rather than folded into
+			# one helper on it: a static calling a static inside `Catalogue`
+			# binds to `Catalogue`, so the smith's FORGE never came back. See
+			# the note on `Catalogue.craft_verb`.
+			var line: Dictionary = row["line"]
+			return _db().craft_verb() if _db().crafts(line) else "BUY"
+	return "SELL"
 
 
 func _diamond(centre: Vector2, r: float, col: Color) -> void:

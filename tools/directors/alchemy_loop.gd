@@ -195,7 +195,24 @@ func _brew(rig) -> void:
 		_ck("D1 the draught is in the bottle", false)
 		return
 	screen._cursor = screen._rows.find(heart)
-	screen._commit()
+
+	# Brewed the way a player brews it: the button, HELD. This was a direct
+	# `screen._commit()`, which would still pass with the hold, the gauge and the
+	# footer all deleted -- and brewing eats materials, so it is one of the two
+	# commits in the game that must be held (see `TradeScreen._hold_time`).
+	_ck("D0b her counter says BREW, in her own word (%s)" % screen._verb(),
+		str(screen._verb()) == "BREW")
+	await rig.tap(["ui_accept"])
+	await rig.wait_frames(8)
+	_ck("D0c a tap brews nothing", Game.bottle(0) == &"")
+
+	Input.action_press(&"ui_accept")
+	await rig.wait_frames(10)
+	var mid: float = screen._hold
+	await rig.capture(out.path_join("a_01b_hold.png"))
+	_ck("D0d the gauge fills while she works (%.2f)" % mid, mid > 0.0 and mid < 1.0)
+	await rig.wait_frames(30)
+	Input.action_release(&"ui_accept")
 	await rig.wait_frames(10)
 	print("ALCHEMY brewed bottles=%s gold=%d -> %d root=%d -> %d" % [
 		Game.bottle_contents, gold_before, Game.gold,

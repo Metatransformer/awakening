@@ -737,6 +737,68 @@ one hero, one room, so the honest impact frame is the cheap one. Shake obeys
 `Settings.camera_shake`; hit-stop and sound do not, because shake is the one
 that makes people ill.
 
+### Holds — every required hold shows a gauge, and there is one gauge
+
+**A hold the player can fail must draw its progress, from the moment the hold
+becomes possible.** This is not a style preference. A required hold is the only
+input in the game that can be performed correctly for most of its duration and
+still do nothing, and the silence at 80% does not read as "not yet" — it reads
+as a broken button. The town gate shipped saying `A TO DESCEND`, a player tapped
+it, and the bug report was "A to descend doesn't work".
+
+```gdscript
+# scripts/ui/hold_gauge.gd — the only two shapes a hold is ever drawn in.
+HoldGauge.bar(canvas, rect, t01, col)                  # anything with a box
+HoldGauge.ring(canvas, centre, radius, t01, width, col) # anything without one
+```
+
+`bar()` draws its empty track at `t01 = 0` on purpose: that is the pre-press
+tell that this prompt is a hold at all. `ring()` draws nothing at 0 — an
+unfilled circle over the HUD reads as a reticle.
+
+For an `Interactable`, the wiring is free and cannot be forgotten — set
+`hold_time` and `Prompt` does the rest:
+
+```gdscript
+# Prompt drives BOTH channels from one number, every frame of the hold.
+signal Bus.hold_changed(t01: float, required: bool)   # the HUD's gauge
+func on_hold(t01: float)                              # the prop's own tell
+```
+
+`required` is separate from the number so the HUD can draw the empty track
+before the player has pressed anything. `Hud` mirrors both, so a director can
+read `Hud._hold01` / `Hud._hold_required` and assert what was drawn.
+
+Holds that are not `Interactable` still owe a gauge: the extraction hold draws a
+`ring` around the bag number, the trade screen draws a `bar` along the row it is
+about, and the charged swing ramps the blade's glow through `_vfx.charge(t01)`.
+A hold with no channel of its own is a bug, not a shortcut.
+
+### Counters — one screen, one contract, a subclass per shop
+
+```gdscript
+# scripts/items/catalogue.gd — everything TradeScreen knows about a shop.
+static func lines() -> Array[Dictionary]
+static func remaining(id: StringName) -> int      # -1 = unlimited
+static func can_buy(line: Dictionary) -> bool
+static func refusal(line: Dictionary) -> String   # "" = affordable
+static func buy(line: Dictionary) -> bool
+static func craft_verb() -> String                # FORGE, BREW, …
+static func crafts(line: Dictionary) -> bool      # concrete: has `parts`
+```
+
+`ShopDb` and `AlchemyDb` are `Catalogue` subclasses and `TradeScreen` holds
+whichever it was opened with. **A new shopkeeper is a `Catalogue` subclass plus
+a row in `Npc.COUNTERS` — never a second screen and never a new branch.** The
+recipe column, the per-token affordability colouring, the refusal footer and the
+hold-to-craft gauge are written once; the last time this project grew a second
+copy of a system it cost more than either copy (CLAUDE.md §0).
+
+Call the overridable statics **through the catalogue you were handed**
+(`_db().craft_verb()`). A bare static call inside `Catalogue` binds to
+`Catalogue` at parse time — there is no virtual dispatch back down to `ShopDb`,
+and the smith spent a build saying `HOLD ENT TO CRAFT` because of it.
+
 ### Targeting — read-only for everyone but P3
 
 ```gdscript

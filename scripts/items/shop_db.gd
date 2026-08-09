@@ -1,7 +1,11 @@
 class_name ShopDb
-extends RefCounted
+extends Catalogue
 ## What the smith sells. Eight lines, and every one of them changes a number the
 ## player can feel inside one run.
+##
+## A `Catalogue`, which is the whole of what `TradeScreen` knows about it -- see
+## that file for the contract and for why a third counter is a subclass rather
+## than a second screen.
 ##
 ## Two shapes of line, on one list on purpose:
 ##
@@ -83,6 +87,10 @@ const PARTS := {
 ## `detail` is the sentence that says what the rung DOES, in the unit the player
 ## feels it in, with the number they have now and the number they would have.
 ## A line that only says "SHARPEN BLADE" is asking them to take it on faith.
+static func craft_verb() -> String:
+	return "FORGE"
+
+
 static func lines() -> Array[Dictionary]:
 	return [
 		{
