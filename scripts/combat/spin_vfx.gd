@@ -82,8 +82,12 @@ const LIGHT_BURST := 7.0
 ## at 0.55 m, drew a puddle around his boots that a player would read as a
 ## self-buff rather than as a swing.
 const SWEEP_RADIUS := 1.7
-const SWEEP_DELAY := 0.10
-const SWEEP_TIME := 0.62
+## 0.48 s for the full turn, down from 0.62 — the ring travels 30% faster. It now
+## finishes well inside the 0.68 s swing rather than a hair outside it, and what
+## keeps "the magic lags the sword" true is the mote LIFETIME (0.55 s), not the
+## rate the pen moves: the last of the arc is still burning at ~1.0 s, long after
+## the hero has his feet back.
+const SWEEP_TIME := 0.48
 
 var _sword: Node3D
 var _glow := HitFlash.new()
@@ -155,18 +159,20 @@ func fire() -> void:
 	_tween = create_tween().set_parallel(true)
 	if _pivot != null and _burst != null:
 		_pivot.rotation.y = 0.0
+		# ON THE RELEASE FRAME, not a tenth of a second after it. There used to be a
+		# SWEEP_DELAY of 0.10 here to let the animation's wind-up catch up, and what
+		# it actually bought was a beat of nothing between the button coming up and
+		# the magic appearing — the release is the moment the player is watching for
+		# and it has to be the moment something happens. The emitter is switched on
+		# directly rather than through a zero-delay tween callback, which would
+		# still cost a frame.
+		_sweep(true)
 		# NEGATIVE, so it goes clockwise seen from above — see SWEEP_RADIUS.
 		# tween_property on the pivot rather than a per-frame rotation: the arc's
 		# evenness IS the effect, and a hand-rolled tick would lay the ribbon down
 		# at whatever the frame rate was that second.
-		_tween.tween_property(_pivot, ^"rotation:y", -TAU, SWEEP_TIME) \
-			.from(0.0).set_delay(SWEEP_DELAY)
-		# The delay is the blade catching up. `fire` is called on the frame the
-		# swing STARTS, and the clip spends its first tenth of a second turning
-		# into the sweep — starting the trail on that frame draws it out of a hero
-		# who has not moved yet.
-		_tween.tween_callback(_sweep.bind(true)).set_delay(SWEEP_DELAY)
-		_tween.tween_callback(_sweep.bind(false)).set_delay(SWEEP_DELAY + SWEEP_TIME)
+		_tween.tween_property(_pivot, ^"rotation:y", -TAU, SWEEP_TIME).from(0.0)
+		_tween.tween_callback(_sweep.bind(false)).set_delay(SWEEP_TIME)
 
 	_tween.tween_method(_set_glow, GLOW_FULL, 0.0, GLOW_FADE).set_delay(GLOW_HOLD)
 	# The light spikes and settles back to its charged level immediately — that
@@ -321,7 +327,11 @@ func _build_burst() -> void:
 	# Dense, because this one is a RIBBON and a ribbon with gaps in it is a dotted
 	# line. The count that was too high for a burst is about right for a trail:
 	# these are spread along 10.7 m of arc instead of stacked on one radius.
-	_burst.amount = 150
+	#
+	# 240 rather than 150 since the sweep got 30% faster: the emission RATE is
+	# amount/lifetime, so the same count laid down over a shorter sweep is a
+	# thinner ring. This is the count that keeps the band reading as a band.
+	_burst.amount = 240
 	# Longer than the sweep that lays it down, so the head of the arc is still
 	# burning when the tail is halfway gone — and, deliberately, still burning
 	# after the hero has control back. The magic lags the sword.
@@ -342,16 +352,41 @@ func _build_burst() -> void:
 	_burst.emitting = false
 
 	var pm := ParticleProcessMaterial.new()
-	# A small blob at the blade's radius, not a ring. The blob is the pen; the
-	# pivot is the hand. Slightly taller than it is wide so the arc has a bit of
-	# body to it rather than reading as a wire.
+	# A flat wafer at the blade's radius, not a blob and not a ring. The wafer is
+	# the pen; the pivot is the hand.
+	#
+	# SATURN'S RINGS: the extents are the whole shape decision. It used to be
+	# 0.22 tall against 0.10 wide — a vertical smear that swept round into a
+	# curtain, and a curtain seen from this game's over-the-shoulder camera reads
+	# as a wall of blue rather than as a disc lying on the floor. Now it is 0.02
+	# tall (a tenth of that) and 0.18 DEEP along local Z, which is the radial
+	# axis out here: the band has width where a ring has width and none where a
+	# ring has none.
+	#
+	# The X — the TANGENTIAL half-width, along the direction of travel — is 0.22
+	# for a reason that only a rendered frame will tell you. Particles are emitted
+	# once per FRAME, all of them at wherever the pivot is that frame, and at
+	# 60 fps a 0.48 s sweep around 10.7 m of circumference moves the emitter
+	# ~0.37 m between frames. At the old 0.10 (a 0.20 m span) that leaves a 0.17 m
+	# hole after every clump and the ring photographs as a bead necklace — which
+	# is exactly what it did. 0.22 spans 0.44 m, wider than the frame's own step,
+	# so consecutive clumps overlap and the beads join into a band.
 	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	pm.emission_box_extents = Vector3(0.10, 0.22, 0.10)
+	pm.emission_box_extents = Vector3(0.22, 0.02, 0.18)
 	# Local -Z at the emitter, which — with the emitter parked out along the
 	# pivot's -Z — points directly AWAY from the hero. This is the "outwards" half
 	# of the move: the arc grows as it sweeps rather than riding one radius.
-	pm.direction = Vector3(0.0, 0.12, -1.0)
+	#
+	# Dead level, with no +Y tilt at all: any vertical component and the whole
+	# disc becomes a shallow cone, which is exactly what a ring must not be.
+	pm.direction = Vector3(0.0, 0.0, -1.0)
 	pm.spread = 14.0
+	# The other half of the flattening, and the one that is not obvious. `spread`
+	# is a CONE by default, so 14 degrees of it throws motes above and below the
+	# plane as happily as it throws them wide. flatness = 1.0 collapses that cone
+	# to a fan in the plane perpendicular to the emitter's up — so the spread now
+	# spends all of itself widening the BAND instead of thickening it.
+	pm.flatness = 1.0
 	pm.initial_velocity_min = 0.7
 	pm.initial_velocity_max = 1.6
 	# Almost nothing. The outward push is the initial velocity above; radial accel
@@ -362,9 +397,13 @@ func _build_burst() -> void:
 	pm.radial_accel_max = 1.4
 	pm.tangential_accel_min = 0.0
 	pm.tangential_accel_max = 0.6
-	# A slight settle, so the tail sinks toward the floor as it dies instead of
-	# hanging in the air at hip height like a smoke ring.
-	pm.gravity = Vector3(0.0, -1.6, 0.0)
+	# ZERO, and this is the third leg of the flattening. -1.6 used to pull the tail
+	# floorwards as it died, which is right for a smoke ring and wrong for this:
+	# gravity acts over the mote's whole 0.55 s life, so the head of the arc sat
+	# at hip height while the tail had already sagged a foot — the band was a
+	# spiral staircase, not a ring. With no gravity every mote dies at the height
+	# it was born at and the disc stays a disc.
+	pm.gravity = Vector3.ZERO
 	pm.damping_min = 1.0
 	pm.damping_max = 2.5
 	pm.scale_min = 0.7
@@ -381,7 +420,10 @@ func _build_burst() -> void:
 		[1.0, Color(0.0, 0.0, 0.0, 0.0)],
 	])
 	_burst.process_material = pm
-	_burst.draw_pass_1 = _quad(0.17)
+	# 0.14, down from 0.17. A ring is read as a LINE and a line drawn with fat dots
+	# is a dotted line however many of them there are; the density above is what
+	# fills the band now, not the size of each mote.
+	_burst.draw_pass_1 = _quad(0.14)
 	_burst.material_override = _mote_material()
 	# Out at the blade's radius and at hip height. -Z because that is the hero's
 	# forward (docs/CONTRACT.md §2.5: a Node3D's forward is -basis.z), so the
