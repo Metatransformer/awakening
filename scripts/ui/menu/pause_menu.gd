@@ -37,7 +37,7 @@ signal quit_to_title_requested
 signal load_requested(slot: int, dest: Dictionary)
 signal saved_to(slot: int)
 
-enum Screen { ROOT, OPTIONS, SAVES }
+enum Screen { ROOT, EQUIP, OPTIONS, SAVES }
 
 const NOTICE_TIME := 3.5
 ## Keys that must never become a binding on their own.
@@ -78,6 +78,7 @@ const SND_CONFIRM := preload("res://audio/sfx/ui_confirm.ogg")
 @onready var _root: Control = $Root
 @onready var _screens: Control = $Root/Screens
 @onready var _root_screen: Control = $Root/Screens/RootScreen
+@onready var _equip: MenuEquipPanel = $Root/Screens/EquipScreen
 @onready var _options: MenuOptionsPanel = $Root/Screens/OptionsScreen
 @onready var _saves: MenuSavesPanel = $Root/Screens/SavesScreen
 @onready var _confirm: MenuConfirm = $Root/Confirm
@@ -105,6 +106,9 @@ func _ready() -> void:
 	_build_notice()
 
 	_saves.bind_confirm(_confirm)
+	_equip.back_requested.connect(back)
+	_equip.notice.connect(_notice)
+	_equip.value_settled.connect(func() -> void: _play(SND_CLICK))
 	_options.back_requested.connect(back)
 	_options.rebind_requested.connect(_begin_listening)
 	_options.notice.connect(_notice)
@@ -193,6 +197,7 @@ func _apply_top() -> void:
 	var top: Dictionary = _stack[_stack.size() - 1]
 	var screen: int = top.get("screen", Screen.ROOT)
 	_root_screen.visible = screen == Screen.ROOT
+	_equip.visible = screen == Screen.EQUIP
 	_options.visible = screen == Screen.OPTIONS
 	_saves.visible = screen == Screen.SAVES
 
@@ -203,6 +208,9 @@ func _apply_top() -> void:
 				target = _cmd_buttons[0]
 			if target:
 				target.grab_focus()
+		Screen.EQUIP:
+			_equip.refresh()
+			_equip.focus_first()
 		Screen.OPTIONS:
 			_options.open_tab(top.get("tab", MenuOptionsPanel.Tab.AUDIO))
 			_options.focus_first()
@@ -333,6 +341,8 @@ func _build_root_screen() -> void:
 
 	_cmd_buttons.clear()
 	_cmd_buttons.append(_command(list, "Resume", close))
+	_cmd_buttons.append(_command(list, "Equipment", func() -> void:
+		_push({"screen": Screen.EQUIP})))
 	_cmd_buttons.append(_command(list, "Save Game", func() -> void:
 		_push({"screen": Screen.SAVES, "mode": MenuSavesPanel.Mode.SAVE})))
 	_cmd_buttons.append(_command(list, "Load Game", func() -> void:

@@ -42,14 +42,17 @@ const ACTION_NAMES := {
 	&"move_down": "Move Back",
 	&"move_left": "Move Left",
 	&"move_right": "Move Right",
-	&"z_target": "Z-Target (hold)",
+	# These read the way the Elden Ring layout works, not the way the old OOT
+	# one did: lock-on is a TOGGLE on R3, not a held shoulder, and the item
+	# buttons cycle hands rather than firing three fixed items.
+	&"z_target": "Lock On (toggle)",
 	&"attack": "Attack",
-	&"shield": "Shield (hold)",
-	&"context": "Roll / Jump",
+	&"shield": "Guard (hold)",
+	&"context": "Roll / Backstep",
 	&"interact": "Interact",
-	&"item_left": "Item — Left",
-	&"item_up": "Item — Up",
-	&"item_right": "Item — Right",
+	&"item_left": "Cycle Left Hand",
+	&"item_up": "Swap Loadout",
+	&"item_right": "Cycle Right Hand",
 	&"first_person": "First Person",
 	&"pause": "Pause",
 	&"map": "Map",

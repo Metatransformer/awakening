@@ -308,32 +308,48 @@ func swap_loadout() -> void:
 	_announce_loadout()
 
 
+## What is in `hand` of a SPECIFIC set. `armament()` only answers about the live
+## one; the equipment screen shows both at once.
+func armament_in(set_index: int, hand: StringName) -> StringName:
+	var data: Dictionary = loadout[clampi(set_index, 0, loadout.size() - 1)]
+	return data.get(hand, &"")
+
+
 ## Cycle one hand forward through what the player actually owns. dpad left/right.
 ##
 ## Ownership is checked here rather than at the UI, because the UI is not the
 ## only caller and a hand holding an item the player does not have is a bow that
 ## fires nothing while the icon insists otherwise.
-func cycle_armament(hand: StringName, dir: int = 1) -> void:
+##
+## `set_index` defaults to the live set, which is what the D-pad wants. The
+## equipment screen passes an explicit one so it can edit the set you are not
+## holding without making it live for a frame.
+func cycle_armament(hand: StringName, dir: int = 1, set_index: int = -1) -> void:
+	var target := clampi(set_index if set_index >= 0 else loadout_set, 0, loadout.size() - 1)
 	var pool: Array[StringName] = RIGHT_POOL if hand == HAND_RIGHT else LEFT_POOL
 	var available: Array[StringName] = []
 	for id in pool:
-		if _armament_owned(id):
+		if armament_owned(id):
 			available.append(id)
 	if available.size() <= 1:
 		return
-	var current := armament(hand)
+	var current := armament_in(target, hand)
 	var at := available.find(current)
 	# An unowned current (sold, or a save from a different pool) lands at -1 and
 	# a forward step from there is the first entry, which is the right answer.
 	var next := available[posmod(at + signi(dir), available.size())]
-	loadout[clampi(loadout_set, 0, loadout.size() - 1)][hand] = next
+	loadout[target][hand] = next
 	_announce_loadout()
 
 
 ## The sword and the empty hand are always available; everything else has to be
 ## found or bought. `arrow` follows the bow -- carrying arrows you cannot fire
 ## is not a loadout, it is a slot that lies.
-func _armament_owned(id: StringName) -> bool:
+##
+## Public because the equipment screen has to be able to SAY "not owned" on a
+## slot, and a UI that re-derives ownership from its own rules is a UI that will
+## eventually disagree with the gate.
+func armament_owned(id: StringName) -> bool:
 	match id:
 		&"": return true
 		&"sword": return true

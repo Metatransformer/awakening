@@ -165,12 +165,20 @@ func equip(id: StringName) -> void:
 
 ## Mirror Game's live loadout onto the rig.
 func _on_loadout_changed(_set_index: int, right: StringName, left: StringName) -> void:
+	# A set may name gear the player has not found: the alternate set defaults
+	# to bow and arrows on a brand new game, which is the point -- the slot is
+	# reserved, the bow is not owned yet. Falling back to the sword means dpad-up
+	# on an unfilled set leaves you armed rather than holding an invisible bow
+	# that also refuses to swing (see the `equipped != &""` gate in _try_swing).
+	# The equipment screen is where "(not owned)" gets said out loud.
+	var held := right if Game.armament_owned(right) else &"sword"
+	var off := left if Game.armament_owned(left) else &""
 	# The right hand is the one that swings, so it drives `equipped` -- which is
 	# what _try_swing and the HUD both read. &"sword" IS the empty-item state
 	# here for historical reasons: `equipped == &""` has always meant "sword and
 	# shield", and every caller of it predates the loadout.
-	equip(&"" if right == &"sword" else right)
-	_show_left(left)
+	equip(&"" if held == &"sword" else held)
+	_show_left(off)
 
 
 func _show_equipped() -> void:
