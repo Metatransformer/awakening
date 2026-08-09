@@ -25,10 +25,11 @@ extends Node3D
 ## made during step 1 still become step 2 when it is finally honoured.
 ##
 ## HEAVY is no longer a button. It is what the attack button's HOLD releases
-## into, and LUNGE is the use button under a lock. They stay Intents because the
-## buffer is the thing that makes them feel honest: a charge released during the
-## light swing that started it has to come out when that swing ends, not vanish.
-enum Intent { LIGHT, HEAVY, LUNGE }
+## into, LUNGE is the use button under a lock, and DASH is the attack button
+## pressed from behind a raised shield. They stay Intents because the buffer is
+## the thing that makes them feel honest: a charge released during the light
+## swing that started it has to come out when that swing ends, not vanish.
+enum Intent { LIGHT, HEAVY, LUNGE, DASH }
 
 ## Pitch multiplier per chain step. Two rises, three drops — the chain should
 ## sound like it is going somewhere, and the finisher is the heaviest thing in
@@ -118,6 +119,29 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## reads as the hero hopping on the spot.
 @export var lunge_min_range: float = 1.9
 @export var lunge_max_range: float = 6.0
+
+@export_group("Dash")
+## The stab out from behind the shield — OOT's R+B. It is not a better light
+## swing and it is not a heavy: what it buys is that it CLOSES, and it is the
+## only attack in the kit that closes without a lock. Priced between the two.
+@export var dash_damage: int = 3 * K.QUARTER
+## Longer than a light (0.46) and shorter than a heavy (0.80). The commitment is
+## most of the cost, because the drive has already thrown the hero somewhere he
+## did not have to be.
+@export var dash_swing_time: float = 0.62
+## Opens after the drive has ended (see dash_drive_time), so the point lands at
+## the END of the lunge. Live earlier and the thrust sweeps through everything it
+## travelled past, which is a spin attack wearing a thrust's clip.
+@export var dash_damage_window := Vector2(0.34, 0.60)
+## A thrust does not launch. Shoving the enemy away is also self-defeating here —
+## the whole move was about closing the gap that the knockback would reopen.
+@export var dash_knockback: float = K.KNOCKBACK_LIGHT
+## Seconds of forward drive, and how fast. 0.20 s at 8.0 m/s is 1.6 m of closing:
+## about one enemy's width, which is the gap a guarded player actually stands
+## off at. Fast enough to read as an explosion out of the guard rather than a
+## walk. [tune]
+@export var dash_drive_time: float = 0.20
+@export var dash_speed: float = 8.0
 
 @export_group("Shield")
 ## Half-angle of the block cone, degrees. A blow from outside it is not blocked.
@@ -559,6 +583,19 @@ func _physics_process(delta: float) -> void:
 ## anyway, and a mashed chain never charges anything.
 func _tick_attack_button(delta: float) -> void:
 	if Input.is_action_just_pressed(&"attack"):
+		# Shield up, sword out: the press is the DASH ATTACK, not a light swing.
+		# This is OOT's R+B and it is the shield's other half — the guard has
+		# always been a way of standing still, and the stab is how you come off
+		# it. A guarded player who presses attack is not asking for the ordinary
+		# swing he could have thrown from anywhere.
+		#
+		# No charge is armed on this path, deliberately. The wind-up is a HOLD,
+		# and a hold made from behind a shield is a hold whose release would come
+		# out as a heavy long after the guard dropped for the dash it already
+		# threw. One press, one move.
+		if blocking and equipped == &"":
+			_press(Intent.DASH)
+			return
 		_charge_t = 0.0
 		_press(Intent.LIGHT)
 		return
@@ -640,6 +677,8 @@ func _begin(intent: int) -> void:
 	match intent:
 		Intent.HEAVY:
 			_heavy_swing()
+		Intent.DASH:
+			_dash_swing()
 		Intent.LUNGE:
 			# Sword out, use pressed: the leap, if there is something to leap at.
 			# Nothing otherwise, deliberately -- this is OOT's A, where the jump
@@ -661,6 +700,26 @@ func _heavy_swing() -> void:
 	# different amounts of effort.
 	_commit(heavy_swing_time, heavy_damage_window, heavy_damage, heavy_knockback,
 		K.HITSTOP_HEAVY, randf_range(0.68, 0.78))
+
+
+## The stab out of the guard. Unlike the lunge it asks for no target — see
+## Hero.request_dash for why the shield has already earned it a direction.
+##
+## Note that this can arrive from the BUFFER, a swing or two after the shield it
+## was pressed behind came down. That is correct and it is how the heavy behaves
+## too: the player asked for a dash while guarding, and the answer to a press
+## made half a swing early is the move they asked for, late — not a different
+## move, and not silence.
+func _dash_swing() -> void:
+	if not _hero.request_dash(dash_swing_time, dash_drive_time, dash_speed):
+		return
+	# Ends the chain rather than stepping it, exactly as the heavy does. The dash
+	# is how you OPEN on something, so letting it count as step one would make
+	# the finisher two taps away from a button you press while standing still.
+	_chain_step = 0
+	_chain_timer = 0.0
+	_commit(dash_swing_time, dash_damage_window, dash_damage, dash_knockback,
+		K.HITSTOP_HEAVY, randf_range(0.86, 0.94))
 
 
 func _light_swing(step: int) -> void:

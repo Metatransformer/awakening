@@ -29,13 +29,22 @@ signal roll_finished
 
 enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER, ATTACK, HOOK }
 
+## Which way a dodge goes, measured against the facing it KEEPS through it.
+##
+## Free — nothing locked, no guard — the roll *is* the turn, so this is always
+## FORWARD and the other three never come up: an unpinned dodge cannot go
+## backwards because the body has already turned to meet it. They exist for the
+## stances that pin the facing, which is where OOT's roll/backflip/sidehop split
+## lives too. See `_dodge_for`.
+enum Dodge { FORWARD, BACK, LEFT, RIGHT }
+
 ## Which swing is being played. The hero owns the POSE; HeroCombat owns what the
 ## pose costs and what it does — see request_attack.
 ##
 ## The three lights are separate values rather than an index into one clip
 ## because the animation tree needs one node per variant (see _add_swing), and a
 ## node cannot be addressed by a number that only exists in the combat script.
-enum Swing { LIGHT1, LIGHT2, LIGHT3, HEAVY, LUNGE }
+enum Swing { LIGHT1, LIGHT2, LIGHT3, HEAVY, LUNGE, DASH }
 
 @export_group("Rig")
 @export var hero_model: PackedScene = preload("res://assets/characters/hero.fbx")
@@ -86,6 +95,18 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, HEAVY, LUNGE }
 @export_group("Roll")
 @export var roll_speed: float = K.ROLL_SPEED
 @export var roll_time: float = K.ROLL_TIME
+## The other two dodge speeds, which are NOT the roll's. All three are [oot] and
+## all three are different — the roll is the ground-coverer (6.55 m/s), the
+## sidehop is nearly as fast (6.19), and the backflip is only walking-out-of-
+## trouble quick (4.37). They have sat unused in `K` since the roll was written,
+## because until the facing was pinned there was no backwards to go.
+@export var sidehop_speed: float = K.SIDEHOP_SPEED
+@export var backflip_speed: float = K.BACKFLIP_SPEED
+## Seconds a sidehop or a backstep owns the hero, against `roll_time`'s 0.62.
+## Shorter because a hop IS shorter — it is a step out of the way, not a dive
+## across the room — and because the i-frames run for exactly as long as the
+## dodge does (see take_hit), so a hop buys a smaller window than a roll. [tune]
+@export var hop_time: float = 0.44
 ## The hard recovery. Input is locked and speed bleeds off through it.
 @export var roll_recover_time: float = 0.20
 ## [oot] roll/backflip/sidehop need a near-full stick deflection. §3.2
@@ -98,7 +119,27 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, HEAVY, LUNGE }
 @export var clip_idle: StringName = &"ss_idle_01"
 @export var clip_walk: StringName = &"ss_walk_01"
 @export var clip_run: StringName = &"ss_run_01"
+## The four dodges. **The Pro Sword and Shield Pack contains no roll of any
+## kind** — 52 clips, not one of them a dodge — which is why every direction used
+## to play `ex_roll_to_run`, a 3.2 m forward shoulder dive, including the
+## backstep. A hero sliding backwards through a forward roll is the single most
+## visible thing wrong with the guard.
+##
+## The other three come from the LONGBOW set, which does ship a four-way dodge,
+## and they were checked the only way this can be checked: by reading the hips
+## translation out of the raw FBX before `build_anim_lib` strips it
+## (tools/directors/dodge_lookdev.gd documents the run). dodge_forward travels
+## +1.20 m, dodge_back −1.22 m, dodge_left +1.04 m and dodge_right −1.07 m in
+## clip space, where +Z is the model's forward and +X its left — so the filenames
+## are honest, which is not something to assume (CLAUDE.md §4).
+##
+## FORWARD keeps the dive rather than taking the longbow set's forward hop: it is
+## a real roll, it covers real ground, and it is the one dodge the pack's absence
+## did not actually break.
 @export var clip_roll: StringName = &"ex_roll_to_run"
+@export var clip_roll_back: StringName = &"bow_dodge_back"
+@export var clip_roll_left: StringName = &"bow_dodge_left"
+@export var clip_roll_right: StringName = &"bow_dodge_right"
 @export var clip_turn180: StringName = &"ss_180_turn_01"
 @export var clip_air: StringName = &"ss_jump_01"
 @export var clip_land: StringName = &"ss_jump_02"
@@ -128,6 +169,14 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, HEAVY, LUNGE }
 ## knee. That is why it made a terrible heavy (it shipped as one for a day and
 ## looked like a physics bug) and exactly the right leap at a locked target.
 @export var clip_lunge: StringName = &"ss_attack_01"
+## The dash attack — the stab out from behind the raised shield. Also PICKED OFF
+## THE RENDER (tools/directors/dodge_lookdev.gd): ss_attack_03 coils low with the
+## blade drawn back across the body, explodes into a deep split-legged lunge with
+## the point extended straight down the facing, and recovers into the guard. It
+## is the only clip in the library whose blade goes FORWARD rather than across —
+## every `slash` is an arc, and an arc played on a lunge reads as a man swinging
+## at the air beside the thing he just closed on.
+@export var clip_dash: StringName = &"ss_attack_03"
 ## The loose. `bow_aim_recoil` opens at full draw and snaps the string arm back,
 ## so the shot itself is the whole clip — which is why the aim POSE below is a
 ## held blend rather than part of this: the hero is already drawn when he fires,
@@ -195,6 +244,13 @@ var _roll_dir: Vector3 = Vector3.FORWARD
 ## a lock, or a raised guard. Captured at the start because the shield DROPS for
 ## the roll, so the live flag says the opposite of what the dodge was.
 var _roll_keeps_facing: bool = false
+## Which of the four the dodge in flight is, and how fast it travels. The speed
+## is stored rather than re-derived each tick because `_tick_roll` holds it flat
+## for the whole move, and re-reading it off the direction would need the facing
+## the dodge started with — which is exactly what `_roll_keeps_facing` exists to
+## remember and exactly the bug it was written for.
+var _dodge: int = Dodge.FORWARD
+var _dodge_speed: float = 0.0
 var _airborne_time: float = 0.0
 var _stride_accum: float = 0.0
 var _speed: float = 0.0
@@ -210,23 +266,35 @@ var _invuln: float = 0.0
 
 const _P_BLEND := "parameters/Loco/blend_position"
 const _P_STRIDE := "parameters/LocoScale/scale"
-const _P_ROLL_SCALE := "parameters/RollScale/scale"
 const _P_TURN := "parameters/Turn180/request"
 const _P_AIR := "parameters/Air/request"
-const _P_ROLL := "parameters/Roll/request"
 const _P_LAND := "parameters/Land/request"
+## One animation-tree node per Dodge value, in enum order — same arrangement as
+## _SWING_NODES below, and for the same reason (see _add_scaled_shot).
+const _DODGE_NODES: Array[StringName] = [
+	&"Roll", &"RollBack", &"RollLeft", &"RollRight",
+]
+## The roll gets the widest fade of the four: it is the longest move and the one
+## that ends lying down, so snapping out of it pops the hero upright. The hops
+## are quick steps and a slow fade on a quick step reads as lag.
+const _DODGE_FADE_IN: Array[float] = [0.05, 0.05, 0.04, 0.04]
+const _DODGE_FADE_OUT: Array[float] = [0.16, 0.14, 0.12, 0.12]
 ## One animation-tree node per Swing value, in enum order. Indexed by `Swing`,
 ## so anything added to the enum has to be added here too — which is the point:
 ## a swing with no node fails loudly at build rather than silently not playing.
 const _SWING_NODES: Array[StringName] = [
-	&"Swing1", &"Swing2", &"Swing3", &"SwingHeavy", &"SwingLunge",
+	&"Swing1", &"Swing2", &"Swing3", &"SwingHeavy", &"SwingLunge", &"SwingDash",
 ]
 ## Fades, in seconds, per Swing. They widen as the blow gets heavier: a heavy
 ## that snaps into pose has no wind-up to read, and the wind-up is the whole
 ## tell the player is being asked to trade commitment for. The mid-chain lights
 ## are the tightest because a chain that fades between steps reads as lag.
-const _SWING_FADE_IN: Array[float] = [0.06, 0.04, 0.05, 0.10, 0.08]
-const _SWING_FADE_OUT: Array[float] = [0.16, 0.12, 0.18, 0.22, 0.20]
+## The dash's fade-in is the tightest of the lot on purpose. It comes out of a
+## raised guard, which is already a committed pose the player chose to be in —
+## the wind-up happened before the press — so easing into it puts the shield back
+## between the hero and the thing he is stabbing.
+const _SWING_FADE_IN: Array[float] = [0.06, 0.04, 0.05, 0.10, 0.08, 0.04]
+const _SWING_FADE_OUT: Array[float] = [0.16, 0.12, 0.18, 0.22, 0.20, 0.18]
 
 const _P_RANGED := "parameters/Ranged/request"
 const _P_RANGED_SCALE := "parameters/RangedScale/scale"
@@ -404,18 +472,14 @@ func _build_anim_tree() -> void:
 	prev = _add_oneshot(tree_root, &"Turn180", prev, _anim_node(clip_turn180), Vector2(440, 0), 0.10, 0.22)
 	prev = _add_oneshot(tree_root, &"Air", prev, _anim_node(clip_air), Vector2(660, 0), 0.10, 0.18)
 
-	var roll_anim := _anim_node(clip_roll)
-	var roll_scale := AnimationNodeTimeScale.new()
-	tree_root.add_node(&"RollAnim", roll_anim, Vector2(660, 200))
-	tree_root.add_node(&"RollScale", roll_scale, Vector2(820, 200))
-	tree_root.connect_node(&"RollScale", 0, &"RollAnim")
-	var roll_shot := AnimationNodeOneShot.new()
-	roll_shot.fadein_time = 0.05
-	roll_shot.fadeout_time = 0.16
-	tree_root.add_node(&"Roll", roll_shot, Vector2(880, 0))
-	tree_root.connect_node(&"Roll", 0, prev)
-	tree_root.connect_node(&"Roll", 1, &"RollScale")
-	prev = &"Roll"
+	# Four dodges, four one-shots — not one node whose clip is reassigned, for the
+	# reason _add_scaled_shot gives. They chain in Dodge order and they all sit
+	# BELOW `Block`, which is load-bearing: the guard is a blend that would
+	# otherwise replace whichever dodge is playing, and HeroCombat drops the
+	# shield for the dodge precisely because of where these sit.
+	for i in Dodge.size():
+		prev = _add_scaled_shot(tree_root, _DODGE_NODES[i], prev, _dodge_clip(i),
+			Vector2(880 + 90 * i, 0), _DODGE_FADE_IN[i], _DODGE_FADE_OUT[i])
 
 	# The shield is a HELD pose, so it blends rather than fires: a one-shot would
 	# end on its own while the button is still down.
@@ -434,7 +498,7 @@ func _build_anim_tree() -> void:
 	# no wind-up to read, and the wind-up is the whole tell the player is being
 	# asked to trade commitment for.
 	for i in Swing.size():
-		prev = _add_swing(tree_root, _SWING_NODES[i], prev, _swing_clip(i),
+		prev = _add_scaled_shot(tree_root, _SWING_NODES[i], prev, _swing_clip(i),
 			Vector2(1440 + 80 * i, 0), _SWING_FADE_IN[i], _SWING_FADE_OUT[i])
 
 	# The two shots get one one-shot EACH rather than sharing a node whose clip is
@@ -485,11 +549,12 @@ func _build_anim_tree() -> void:
 	_tree.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_PHYSICS
 	_tree.active = true
 
-	# Compress ex_roll_to_run (1.4 s of roll + recovery-into-run) onto our roll.
-	var roll_len := 1.0
-	if anim_library.has_animation(clip_roll):
-		roll_len = anim_library.get_animation(clip_roll).length
-	_tree.set(_P_ROLL_SCALE, roll_len / maxf(roll_time + roll_recover_time, 0.05))
+	# The dodge time-scales are set per FIRE, not here: the four clips are 0.97 to
+	# 1.63 s long and the roll runs for longer than a hop, so a single compression
+	# factor would be wrong for three of the four. Same arrangement the swings
+	# have used since the heavy landed — see _fire_dodge and request_attack.
+	for i in Dodge.size():
+		_tree.set(_dodge_scale_param(i), 1.0)
 	_tree.set(_P_BLEND, 0.0)
 	_tree.set(_P_STRIDE, 1.0)
 	_tree.set(_P_BLOCK, 0.0)
@@ -511,11 +576,29 @@ func _swing_clip(variant: int) -> StringName:
 		Swing.LIGHT3: return clip_light3
 		Swing.HEAVY: return clip_heavy
 		Swing.LUNGE: return clip_lunge
+		Swing.DASH: return clip_dash
 		_: return clip_attack
+
+
+## The clip each Dodge plays, same arrangement and same reasoning as _swing_clip.
+func _dodge_clip(dodge: int) -> StringName:
+	match dodge:
+		Dodge.BACK: return clip_roll_back
+		Dodge.LEFT: return clip_roll_left
+		Dodge.RIGHT: return clip_roll_right
+		_: return clip_roll
 
 
 func _swing_param(variant: int) -> String:
 	return "parameters/%s/request" % _SWING_NODES[variant]
+
+
+func _dodge_param(dodge: int) -> String:
+	return "parameters/%s/request" % _DODGE_NODES[dodge]
+
+
+func _dodge_scale_param(dodge: int) -> String:
+	return "parameters/%sScale/scale" % _DODGE_NODES[dodge]
 
 
 func _swing_scale_param(variant: int) -> String:
@@ -528,15 +611,17 @@ func _anim_node(clip: StringName) -> AnimationNodeAnimation:
 	return n
 
 
-## Add one swing variant: its clip, a TimeScale so the clip can be compressed
-## onto the real swing duration, and a OneShot layered over `base`. Returns the
-## new top of the chain.
+## Add one time-scaled one-shot: its clip, a TimeScale so the clip can be
+## compressed onto the real move duration, and a OneShot layered over `base`.
+## Returns the new top of the chain. Every swing and every dodge is one of these.
 ##
 ## One node per variant, rather than one node whose `animation` is reassigned:
 ## assigning the clip on a LIVE AnimationNodeAnimation restarts the mixer's
 ## cache mid-blend and eats the first frames of the wind-up. That is the most
-## expensive kind of animation bug here, because it looks like bad art.
-func _add_swing(tree_root: AnimationNodeBlendTree, id: StringName, base: StringName,
+## expensive kind of animation bug here, because it looks like bad art. It is
+## also why the four dodges are four nodes and not one node plus a direction —
+## the eaten frames of a dodge are the launch, which is the whole read.
+func _add_scaled_shot(tree_root: AnimationNodeBlendTree, id: StringName, base: StringName,
 		clip: StringName, pos: Vector2, fade_in: float, fade_out: float) -> StringName:
 	var anim_id := StringName(String(id) + "Anim")
 	var scale_id := StringName(String(id) + "Scale")
@@ -815,7 +900,6 @@ func _try_start_roll(wish: Vector3, mag: float) -> bool:
 	if not Game.spend_stamina(roll_stamina):
 		return false
 	state = MoveState.ROLL
-	_state_timer = roll_time
 	_roll_dir = dir.normalized()
 	_roll_keeps_facing = target != null or blocking
 	# Locked or guarding, the body keeps watching through the whole dodge; the
@@ -824,11 +908,63 @@ func _try_start_roll(wish: Vector3, mag: float) -> bool:
 	# guards against, since a backstep's direction is behind him by definition.
 	if not _roll_keeps_facing:
 		facing_yaw = atan2(dir.x, dir.z)
-	_speed = roll_speed
-	_set_planar_velocity(_roll_dir * roll_speed)
-	_fire(_P_ROLL)
+	# AFTER the facing is settled, never before: which dodge this is means
+	# "which way relative to where he will be looking", and free the answer is
+	# always FORWARD *because* the line above just made it so.
+	_dodge = _dodge_for(_roll_dir)
+	_state_timer = roll_time if _dodge == Dodge.FORWARD else hop_time
+	_dodge_speed = _dodge_speed_for(_dodge)
+	_speed = _dodge_speed
+	_set_planar_velocity(_roll_dir * _dodge_speed)
+	# The clip is compressed onto the dodge AND its recovery, not onto the dodge
+	# alone: all four end by standing back up, and cramming that into the travel
+	# leaves the hero holding a finished pose through the whole recovery.
+	_fire_dodge(_dodge, _state_timer + roll_recover_time)
 	roll_started.emit()
 	return true
+
+
+## Which of the four `dir` is, read against the facing the hero holds through the
+## dodge. See the Dodge enum for why the free case can only ever answer FORWARD.
+func _dodge_for(dir: Vector3) -> int:
+	var f := _forward()
+	var ahead := dir.dot(f)
+	# Hero-local RIGHT, and the sign here is the whole function. Heading yaw h has
+	# forward (sin h, 0, cos h); turning that -90 degrees about Y gives
+	# (-cos h, 0, sin h) == (-f.z, 0, f.x). Sanity-check it at h = 0: forward is
+	# +Z, the body's rotation.y is PI (CONTRACT §2.5 — -basis.z is forward), and
+	# basis.x is therefore (-1, 0, 0). Which agrees. The obvious-looking
+	# (f.z, 0, -f.x) is the hero's LEFT, and it shipped for one render: the
+	# sidehops travelled correctly and played each other's clip, so he hopped
+	# right while crossing his legs to the left.
+	#
+	# Derived from the heading convention rather than read off `basis`, because
+	# `facing_yaw` leads the body: the basis is still catching up on the frame a
+	# dodge starts, and a sidehop picked off a stale basis picks the wrong side.
+	var side := dir.dot(Vector3(-f.z, 0.0, f.x))
+	if absf(ahead) >= absf(side):
+		return Dodge.FORWARD if ahead >= 0.0 else Dodge.BACK
+	return Dodge.RIGHT if side >= 0.0 else Dodge.LEFT
+
+
+func _dodge_speed_for(dodge: int) -> float:
+	match dodge:
+		Dodge.BACK: return backflip_speed
+		Dodge.LEFT, Dodge.RIGHT: return sidehop_speed
+		_: return roll_speed
+
+
+## Play the dodge, compressed onto `duration`. The four clips run 0.97–1.63 s and
+## the moves they serve run 0.44–0.82 s, so each needs its own factor — see the
+## note in _build_anim_tree about why this cannot be set once.
+func _fire_dodge(dodge: int, duration: float) -> void:
+	var clip := _dodge_clip(dodge)
+	var clip_len := 1.0
+	if anim_library.has_animation(clip):
+		clip_len = anim_library.get_animation(clip).length
+	if _tree != null:
+		_tree.set(_dodge_scale_param(dodge), clip_len / maxf(duration, 0.05))
+	_fire(_dodge_param(dodge))
 
 
 func _start_turn180(wish: Vector3) -> void:
@@ -851,8 +987,8 @@ func _tick_turn180(delta: float) -> void:
 func _tick_roll(delta: float) -> void:
 	_state_timer -= delta
 	_track_lock(delta)
-	_speed = roll_speed
-	_set_planar_velocity(_roll_dir * roll_speed)
+	_speed = _dodge_speed
+	_set_planar_velocity(_roll_dir * _dodge_speed)
 	if _state_timer <= 0.0:
 		state = MoveState.ROLL_RECOVER
 		_state_timer = roll_recover_time
@@ -929,12 +1065,17 @@ func request_attack(duration: float, variant: int = Swing.LIGHT1) -> bool:
 	var target := lock_target()
 	if target != null:
 		facing_yaw = _yaw_to(target)
-	else:
+	elif not blocking:
 		var stick := Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down")
 		if stick.length() > 0.3:
 			var wish := _camera_relative(stick)
 			if wish != Vector3.ZERO:
 				facing_yaw = atan2(wish.x, wish.z)
+	# Guarding is the third case and it does NOTHING, which is the point: the
+	# raised shield already pins the facing to the lens (_tick_camera_facing), so
+	# the stick there is a strafe and not an aim. Letting it re-face the swing
+	# meant a guarded sidestep-and-stab lunged off sideways, at ninety degrees to
+	# the thing the player was watching over the top of the shield.
 
 	# The slash clips run 1.4-2.4 s. OOT's swing is about half a second, so the
 	# clip is compressed onto the real swing rather than the swing being slowed
@@ -982,6 +1123,29 @@ func request_lunge(duration: float, drive_time: float, hop: float) -> bool:
 	_lunge_left = drive_time
 	_speed = _lunge_speed
 	velocity.y = hop
+	return true
+
+
+## The dash attack: a swing with a short forward drive behind it, and the one
+## attack in the kit that closes distance WITHOUT a lock.
+##
+## That is the whole difference from `request_lunge`, and it is deliberate. The
+## lunge is what Z-targeting buys you, so it refuses without a target; the dash
+## is what the SHIELD buys you, and the shield has already earned the right to a
+## direction — guarding pins the facing to the lens (`_tick_camera_facing`), so
+## "forward" here is a heading the player chose and is still looking down.
+##
+## It drives along the facing rather than at anything, for the same reason: there
+## may be nothing there. A dash attack that whiffs into open floor is a dash
+## attack the player mistimed, not a button that failed to do its job.
+func request_dash(duration: float, drive_time: float, speed: float) -> bool:
+	if not request_attack(duration, Swing.DASH):
+		return false
+	# request_attack cleared the drive; re-arm it, exactly as request_lunge does.
+	_lunge_dir = _forward()
+	_lunge_speed = speed
+	_lunge_left = drive_time
+	_speed = speed
 	return true
 
 

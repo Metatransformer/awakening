@@ -464,7 +464,10 @@ func _draw_hud() -> void:
 ## it is where the legend belongs; underground the line would be noise, and by
 ## then you have already used every verb on it.
 
-const KEYS := "WASD MOVE    LMB SWORD (HOLD=CHARGE)    F USE/LUNGE    RMB GUARD    SPACE DODGE    MMB LOCK-ON    E INTERACT"
+## GUARD+LMB is named because it is the one verb here you cannot find by
+## pressing a button — it is a button you already know pressed in a stance you
+## already know, and nothing on screen would ever suggest the combination.
+const KEYS := "WASD MOVE    LMB SWORD (HOLD=CHARGE)    F USE/LUNGE    RMB GUARD (+LMB DASH)    SPACE DODGE    MMB LOCK-ON    E INTERACT"
 
 
 func _draw_controls(s: Vector2) -> void:

@@ -202,10 +202,10 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 |---|---|---|---|
 | `move_up/down/left/right` | WASD, arrows | left stick | move |
 | `cam_up/down/left/right` | mouse motion (read in code) | right stick | camera |
-| `attack` | **LMB** | **X / Square** (pad2) | light attack (**hold** = charge) |
+| `attack` | **LMB** | **X / Square** (pad2) | light attack (**hold** = charge, **+guard** = dash) |
 | `use_item` | **F** | **A / Cross** (pad0) | use item / jump attack |
 | `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held**, and it targets |
-| `context` | **Space** | **B / Circle** (pad1) | roll / backstep |
+| `context` | **Space** | **B / Circle** (pad1) | roll / backstep / sidehop |
 | `z_target` | **Q**, MMB | **R3** (pad8) | lock-on |
 | `interact` | E | **Y / Triangle** (pad3) | event action |
 | `item_left` / `item_up` / `item_right` | 1 / 2 / 3 | dpad L / U / R | armaments — §4.1 |
@@ -259,6 +259,17 @@ the wind-up costs the recovery you were spending anyway, and a mashed chain
 never charges anything. `combat.charged` is public, and while it is up the blade
 carries a cold light (`HeroCombat._build_charge_glow`) — a hold with no tell is
 a hold nobody can learn.
+
+**The dash attack is `attack` pressed with the guard already up**, and it is the
+one modified swing on the button (`HeroCombat._tick_attack_button`: `if blocking
+and equipped == &""`). It is a committed forward lunge — `Hero.request_dash`
+drives him along `_forward()` at 8.0 m/s for `dash_drive_time` (0.20 s) under
+the `SwingDash` one-shot, does 3 quarter-hearts, and resets the light chain so
+it can never be step 2 of a combo. It reads as a *decision*: the guard drops,
+he closes the gap, and the recovery is long enough to punish. Note it takes the
+press, so it pre-empts the charge — you cannot wind up a heavy from behind the
+shield, which is deliberate, because a shielded charge is a stance with no
+answer to it.
 
 ### The two ways this table has lied
 
@@ -735,8 +746,36 @@ lock-on and sits in the same place in `_tick_ground`, right after it.
 share: with the facing pinned, a neutral stick and `context` is a **backstep**
 — `_try_start_roll` sends him along `-_forward()` with no stick gate, exactly as
 it does under a lock, because this is a press you make from behind a raised
-shield rather than one you fall into out of a run. Two things follow that are
-easy to get wrong, and both were:
+shield rather than one you fall into out of a run.
+
+**The dodge has four directions, and which one you get is measured off the
+facing, not off the stick.** `Hero._dodge_for` projects the committed
+`_roll_dir` onto the facing and onto hero-right — `(-f.z, 0, f.x)`, and getting
+that sign backwards is hero-*left*, which plays each sidehop as the other one
+while the travel stays correct, so the frames are the only thing that catches
+it. Whichever axis dominates picks the clip and the speed:
+
+| `Dodge` | Clip | Speed | Duration |
+|---|---|---|---|
+| `FORWARD` | `ex_roll_to_run` | `K.ROLL_SPEED` 6.55 | `roll_time` |
+| `BACK` | `bow_dodge_back` | `K.BACKFLIP_SPEED` 4.37 | `hop_time` 0.44 |
+| `LEFT` / `RIGHT` | `bow_dodge_left` / `_right` | `K.SIDEHOP_SPEED` 6.19 | `hop_time` 0.44 |
+
+Three things about that table. The speeds are the `[oot]` measured constants,
+which had sat in `K` unused since they were taken — the sidehop and the backflip
+were always going to be their own moves. The clips come from the **longbow** set,
+not the sword-and-shield set: the Pro Sword and Shield pack has 52 clips and not
+one roll, dodge, evade or dive among them, so anything looking there for a
+backwards roll will find nothing and should stop looking. And each direction is
+its **own** `AnimationNodeOneShot` + `AnimationNodeTimeScale` pair
+(`Hero._DODGE_NODES`) — reassigning `animation` on one live
+`AnimationNodeAnimation` restarts the mixer cache and eats the wind-up frames.
+
+Because the i-frame window is literally `state == MoveState.ROLL` in
+`take_hit`, the duration column *is* the invulnerability column: the sidehops
+and the backstep are shorter dodges than the roll, not just faster ones.
+
+Two more things follow, and both were got wrong first:
 
 - **The roll drops the guard** (`HeroCombat`: `not rolling and …`). `Block` is a
   blend sitting ABOVE the roll one-shot in the animation tree, so a guard held
@@ -764,6 +803,17 @@ left turns him 111°, of which 101° is his own. Guarded, the same input turns h
 6°, of which 3° is his own — he only follows the shot. The rig's `_yaw` moves 0°
 across the whole guarded strafe, which is what says the autoswing suppression is
 doing the work rather than the threshold.
+
+The four dodges and the dash are verified by `tools/directors/guard_moveset.gd`,
+which asserts the `Dodge` that fired, the dominant travel axis, and — for the
+dash — that `SwingDash` is active and the shield has dropped. It runs each move
+**twice**: once measured with no captures, once photographed. That is not
+redundancy. `rig.capture()` consumes game time, so a window that samples travel
+and shoots frames in the same pass runs past the end of the dodge and reports a
+2 m hop as a 0.3 m one. Its staging comment is worth reading before you move the
+mark: the clearance that matters is the **camera's**, not the hero's — a mark
+with 3 m of floor in front of it still shoots four unusable beats if the lens,
+4 m behind, is inside a wall and gets pushed into his hair.
 
 | clip | when |
 |---|---|
