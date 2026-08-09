@@ -200,6 +200,14 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, SPIN, LUNGE, DASH }
 ## What is left runs at scale 1.0 and does not need compressing, because the
 ## airborne stretch of both clips (~0.60 s) is what K.JUMP_SPEED was picked to
 ## match.
+##
+## THE PARAGRAPH ABOVE WAS FALSE from the day it was written until the swings
+## needed the same trick and an A/B caught it (tools/directors/swing_latency.gd).
+## `start_offset` does nothing without `use_custom_timeline`, so both numbers
+## below were dead, and every jump in this project has opened with the 0.50 s
+## squat this comment says is never seen. `_anim_node` sets the four properties
+## it actually takes now. The jump is half a second more responsive than it was,
+## which is not a change of intent — it is this comment finally becoming true.
 @export var jump_start_offset: float = 0.50
 @export var jump_run_start_offset: float = 0.47
 ## The three steps of the light chain. Three DIFFERENT clips, not one replayed:
@@ -466,6 +474,46 @@ const _SWING_NODES: Array[StringName] = [
 ## and a turn eased out of locomotion reads as the hero losing his footing.
 const _SWING_FADE_IN: Array[float] = [0.06, 0.04, 0.05, 0.04, 0.08, 0.04]
 const _SWING_FADE_OUT: Array[float] = [0.16, 0.12, 0.18, 0.22, 0.20, 0.18]
+## Seconds of each swing clip that are never played, indexed by Swing. This is
+## the jump's trick (`jump_start_offset`) applied to the sword, and it is here
+## for the same reason: the clip opens with an anticipation the game has no
+## window for, and the choice is to skip it or to pay for it in input latency.
+##
+## Mixamo swings spend a THIRD TO A HALF of their length winding up. Compressing
+## a clip onto `swing_time` does not fix that — it scales the anticipation down
+## with everything else and keeps it at the same fraction of the swing. Measured
+## with tools/_clip_windup.gd (the sword hand's travel in hips space; total bone
+## rotation cannot see a wind-up, because a wind-up is bones moving briskly in
+## the wrong direction), ss_slash_01 does not begin to STRIKE until 0.50 s of its
+## 1.50 s, which at swing_time 0.60 put 0.20 s between the button and the blade.
+## That is what "the swing feels laggy" was.
+##
+## Each number is picked so the blade starts travelling on the frame the HITBOX
+## GOES LIVE — offset = (strike - f*len) / (1 - f), where f is the swing's
+## `damage_window.x`. Before this the lights damaged things ~0.07 s before the
+## sword visibly moved, which is the same bug seen from the other side.
+##
+##   swing   clip                     len   strike  live at  offset
+##   LIGHT1  ss_slash_01             1.50    0.50    0.22     0.22
+##   LIGHT2  ss_slash_03             1.67    0.73    0.22     0.46
+##   LIGHT3  ss_slash_04             2.43    1.23    0.22     0.47*
+##   SPIN    ax_melee_attack_360_low 1.35    0.73    0.34     0.41
+##   LUNGE   ss_attack_01            2.33    0.93    0.46     0.00*
+##   DASH    ss_attack_03            1.73    0.70    0.34     0.17
+##
+## * The two exceptions, and both are exceptions for the same reason — the
+## formula is blind to the BODY, and these are the two clips whose body leaves
+## the floor. LIGHT3's answer came out at 0.89, which is up at the top of the
+## leap: the swing would have begun with the hero already airborne, popping
+## 0.25 m upward on the first frame. 0.47 is where the launch crouch bottoms out
+## (tools/_clip_hips.gd), so the leap survives intact and only the draw-back
+## before it is cut. LUNGE needs no cut at all — ss_attack_01 already strikes at
+## 0.40 of its length against a window that opens at 0.46, so it is the one clip
+## in the set whose blade moves BEFORE it can hurt anything.
+##
+## Every offset was checked against the hips track for exactly the pop that
+## caught LIGHT3: none of these starts more than 0.03 m off standing height.
+const _SWING_START_OFFSET: Array[float] = [0.22, 0.46, 0.47, 0.41, 0.00, 0.17]
 
 const _P_BOW_DRAW := "parameters/BowDraw/request"
 const _P_BOW_DRAW_SCALE := "parameters/BowDrawScale/scale"
@@ -674,9 +722,9 @@ func _build_anim_tree() -> void:
 	# arrives. The fade-OUT is long, because what it is fading is the landing
 	# recovery back into locomotion, and that one wants to be soft.
 	prev = _add_oneshot(tree_root, &"Jump", prev,
-		_jump_anim(clip_jump, jump_start_offset), Vector2(720, 0), 0.04, 0.22)
+		_anim_node(clip_jump, jump_start_offset), Vector2(720, 0), 0.04, 0.22)
 	prev = _add_oneshot(tree_root, &"JumpRun", prev,
-		_jump_anim(clip_jump_run, jump_run_start_offset), Vector2(790, 0), 0.04, 0.22)
+		_anim_node(clip_jump_run, jump_run_start_offset), Vector2(790, 0), 0.04, 0.22)
 
 	# Four dodges, four one-shots — not one node whose clip is reassigned, for the
 	# reason _add_scaled_shot gives. They chain in Dodge order and they all sit
@@ -703,7 +751,7 @@ func _build_anim_tree() -> void:
 	# that held silhouette is the only thing telling you the spin is coming.
 	#
 	# Frozen with a TimeScale of 0, and parked on the frame with a TimeSeek — NOT
-	# with `start_offset`. The offset is what `_jump_anim` uses and it is the
+	# with `start_offset`. The offset is what `_anim_node` takes and it is the
 	# obvious thing to reach for here, but it is applied when the node STARTS, and
 	# a node behind a zero time scale never starts: the pose came out as frame 0
 	# of the slash no matter what the number said, which is a hero standing there
@@ -733,7 +781,8 @@ func _build_anim_tree() -> void:
 	# asked to trade commitment for.
 	for i in Swing.size():
 		prev = _add_scaled_shot(tree_root, _SWING_NODES[i], prev, _swing_clip(i),
-			Vector2(1440 + 80 * i, 0), _SWING_FADE_IN[i], _SWING_FADE_OUT[i])
+			Vector2(1440 + 80 * i, 0), _SWING_FADE_IN[i], _SWING_FADE_OUT[i],
+			_SWING_START_OFFSET[i])
 
 	# The three shot clips get one one-shot EACH rather than sharing a node whose
 	# clip is swapped. Assigning `animation` on a live AnimationNodeAnimation the
@@ -852,26 +901,58 @@ func _swing_scale_param(variant: int) -> String:
 	return "parameters/%sScale/scale" % _SWING_NODES[variant]
 
 
-func _anim_node(clip: StringName) -> AnimationNodeAnimation:
+## A clip node, optionally started `offset` seconds in — which is how both the
+## jumps and the swings skip their anticipation. See `jump_start_offset` and
+## `_SWING_START_OFFSET` for why an anticipation the game has no window for is
+## skipped rather than played, and tools/build_anim_lib.gd's TRIM note for where
+## the jump numbers came from.
+##
+## SETTING `start_offset` ALONE DOES NOTHING, and it does nothing SILENTLY. The
+## property is gated behind `use_custom_timeline`: with that off, `start_offset`
+## is not even in the node's property list, so assigning it is not an error, does
+## not warn, and is simply dropped. `jump_start_offset` was written this way and
+## was a dead number for its whole life — every jump has been playing the 0.50 s
+## anticipation crouch the comment on it says is never seen. It took an A/B of
+## the swings (tools/directors/swing_latency.gd) to catch, because the only
+## symptom is the thing looking exactly like it did before.
+##
+## The other three properties are not optional either:
+##   timeline_length     defaults to 1.0 — NOT the clip's length. Left alone, a
+##                       1.5 s slash is cut off at one second.
+##   stretch_time_scale  defaults to TRUE, which squeezes the clip into
+##                       timeline_length instead of playing it at its own rate.
+##                       The TimeScale node above is what owns pacing here.
+##   loop_mode           same gate, and LOOP_NONE is what a swing wants.
+##
+## What is left is a node SHORTER than its clip, so anything time-scaling it onto
+## a duration has to divide by what remains (`_clip_scale`).
+func _anim_node(clip: StringName, offset: float = 0.0) -> AnimationNodeAnimation:
 	var n := AnimationNodeAnimation.new()
 	n.animation = clip
+	if offset > 0.0:
+		n.use_custom_timeline = true
+		n.start_offset = offset
+		n.timeline_length = maxf(_clip_len(clip) - offset, 0.05)
+		n.stretch_time_scale = false
 	return n
 
 
-## A jump clip, started at the frame its feet leave the ground. See
-## `jump_start_offset` for why the anticipation crouch is skipped rather than
-## played, and tools/build_anim_lib.gd's TRIM note for where the numbers came
-## from. `start_offset` is engine-side, so the mixer never walks the frames we
-## are not showing — this is not a seek on the first frame.
-func _jump_anim(clip: StringName, offset: float) -> AnimationNodeAnimation:
-	var n := _anim_node(clip)
-	n.start_offset = offset
-	return n
+## How long `clip` runs. One reader, because "the clip is missing" has to answer
+## the same way everywhere it is asked.
+func _clip_len(clip: StringName) -> float:
+	if anim_library.has_animation(clip):
+		return anim_library.get_animation(clip).length
+	return 1.0
 
 
 ## Add one time-scaled one-shot: its clip, a TimeScale so the clip can be
 ## compressed onto the real move duration, and a OneShot layered over `base`.
 ## Returns the new top of the chain. Every swing and every dodge is one of these.
+##
+## `start_offset` skips the clip's opening seconds engine-side (see `_anim_node`),
+## which makes the node shorter than its clip. Whoever passes one must divide by
+## the REMAINING length when they set the TimeScale, or the move ends before the
+## clip does — `_clip_scale` takes the same number for that reason.
 ##
 ## One node per variant, rather than one node whose `animation` is reassigned:
 ## assigning the clip on a LIVE AnimationNodeAnimation restarts the mixer's
@@ -880,10 +961,11 @@ func _jump_anim(clip: StringName, offset: float) -> AnimationNodeAnimation:
 ## also why the four dodges are four nodes and not one node plus a direction —
 ## the eaten frames of a dodge are the launch, which is the whole read.
 func _add_scaled_shot(tree_root: AnimationNodeBlendTree, id: StringName, base: StringName,
-		clip: StringName, pos: Vector2, fade_in: float, fade_out: float) -> StringName:
+		clip: StringName, pos: Vector2, fade_in: float, fade_out: float,
+		start_offset: float = 0.0) -> StringName:
 	var anim_id := StringName(String(id) + "Anim")
 	var scale_id := StringName(String(id) + "Scale")
-	tree_root.add_node(anim_id, _anim_node(clip), pos + Vector2(-200, 260))
+	tree_root.add_node(anim_id, _anim_node(clip, start_offset), pos + Vector2(-200, 260))
 	tree_root.add_node(scale_id, AnimationNodeTimeScale.new(), pos + Vector2(-80, 260))
 	tree_root.connect_node(scale_id, 0, anim_id)
 	var shot := AnimationNodeOneShot.new()
@@ -1336,12 +1418,9 @@ func _dodge_time(dodge: int) -> float:
 ## moves they serve run 0.44–0.82 s, so each needs its own factor — see the note
 ## in _build_anim_tree about why this cannot be set once.
 func _fire_dodge(dodge: int, duration: float) -> void:
-	var clip := _dodge_clip(dodge)
-	var clip_len := 1.0
-	if anim_library.has_animation(clip):
-		clip_len = anim_library.get_animation(clip).length
 	if _tree != null:
-		_tree.set(_dodge_scale_param(dodge), clip_len / maxf(duration, 0.05))
+		_tree.set(_dodge_scale_param(dodge),
+			_clip_scale(_dodge_clip(dodge), duration))
 	_fire(_dodge_param(dodge))
 
 
@@ -1458,12 +1537,13 @@ func request_attack(duration: float, variant: int = Swing.LIGHT1) -> bool:
 	# The slash clips run 1.4-2.4 s. OOT's swing is about half a second, so the
 	# clip is compressed onto the real swing rather than the swing being slowed
 	# to the clip — the animation serves the timing, not the other way round.
-	var clip := _swing_clip(variant)
-	var clip_len := 1.0
-	if anim_library.has_animation(clip):
-		clip_len = anim_library.get_animation(clip).length
+	#
+	# What is compressed is the clip MINUS its wind-up: `_SWING_START_OFFSET` has
+	# already been spent at build time on the node, so the swing gets to spend
+	# its whole `duration` on the part with a sword in it.
 	if _tree != null:
-		_tree.set(_swing_scale_param(variant), clip_len / maxf(duration, 0.05))
+		_tree.set(_swing_scale_param(variant), _clip_scale(
+			_swing_clip(variant), duration, _SWING_START_OFFSET[variant]))
 	_fire(_swing_param(variant))
 	return true
 
@@ -1603,11 +1683,14 @@ func _commit_ranged(duration: float, aim: Vector3) -> bool:
 ## The TimeScale that fits `clip` onto `duration` seconds — the invariant every
 ## committed move in this file holds, that the clip's length IS the move's
 ## length. A missing clip scales to 1.0 rather than dividing by a guess.
-func _clip_scale(clip: StringName, duration: float) -> float:
-	var clip_len := 1.0
-	if anim_library.has_animation(clip):
-		clip_len = anim_library.get_animation(clip).length
-	return clip_len / maxf(duration, 0.05)
+##
+## `skip` is the node's `start_offset`: those seconds are never played, so they
+## are not part of what has to fit. Scaling off the whole length with an offset
+## set runs the clip too fast and strands the hero in a finished pose for the
+## rest of his lockout — the light swing skips 0.22 s of a 1.50 s clip, so
+## getting this wrong would run it 17% fast. Not a rounding error.
+func _clip_scale(clip: StringName, duration: float, skip: float = 0.0) -> float:
+	return maxf(_clip_len(clip) - skip, 0.05) / maxf(duration, 0.05)
 
 
 ## True while a bow or a hookshot is out. Owned by `HeroRanged`, which is the
