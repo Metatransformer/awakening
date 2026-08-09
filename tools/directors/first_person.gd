@@ -11,9 +11,11 @@ extends RefCounted
 ##   2. press it — the boom is gone, the hero is not in his own shot, and the
 ##      view is looking the SAME WAY the third-person camera was;
 ##   3. the stick still turns the head, both axes;
-##   4. the hero cannot walk in here (he is rooted — hold move_up and the eye
-##      must not travel);
-##   5. press it again and the boom comes back, with the hero visible in it.
+##   4. the MOVE stick pops you out — you read the room, now you want to go
+##      there — and the hero walks off on the same input;
+##   5. but entering with that stick already held still enters, and he is rooted
+##      until it comes back to rest (the eject arms on neutral, not on entry);
+##   6. press it again and the boom comes back, with the hero visible in it.
 ##
 ## The measured claims — boom length, hero visibility, eye position — are
 ## asserted, because a screenshot of a dark dungeon wall looks the same whether
@@ -77,20 +79,68 @@ func run(rig) -> void:
 	await rig.wait_seconds(0.08)
 	await _shot(rig, "fp_pitch")
 
-	# --- 4. Rooted -----------------------------------------------------------
-	# Not "he moves slowly": he does not move. `Hero._physics_process` reads the
-	# stick as NEUTRAL while first person is up, so this is the claim that the
-	# camera and the hero agree about what the mode is.
+	# --- 4. The move stick pops you out --------------------------------------
+	# The stance is for READING a room, and the thing you do next is walk into
+	# it. Asking for a direction is therefore the same input as asking to leave,
+	# and it must not cost a second press. `GameCamera._tick_first_person` POLLS
+	# this, so `Input.action_press` is the right way to drive it here — a held
+	# direction dispatches no InputEvent (CLAUDE.md §3) and a hook would never
+	# have fired.
 	var before := _hero.global_position
 	Input.action_press(&"move_up", 1.0)
 	await rig.wait_seconds(0.8)
 	Input.action_release(&"move_up")
 	await rig.wait_seconds(0.2)
-	var walked := before.distance_to(_hero.global_position)
-	_check("he cannot walk in here (%.3f m over 0.8 s)" % walked, walked < 0.05)
-	await _shot(rig, "fp_rooted")
+	_check("steering drops you out of first person", not _cam.first_person())
+	_check("the boom came back on the same input (%.2f m)"
+		% _cam.global_position.distance_to(_eye()),
+		_cam.global_position.distance_to(_eye()) > 1.2)
+	_check("and the hero came back with it", _model_visible())
+	var ejected := before.distance_to(_hero.global_position)
+	# Not "he eventually moved": the press that ejected has to be the press he
+	# walks on. A mode that swallowed it would make every glance cost a nudge.
+	_check("he walked on that same press (%.2f m over 0.8 s)" % ejected, ejected > 0.4)
+	await _shot(rig, "fp_eject")
 
-	# --- 5. Back out ---------------------------------------------------------
+	# --- 5. Entering with the stick held still enters -------------------------
+	# The other half of the rule, and the half that is easy to get wrong. Press
+	# R3 out of a run and the eject above would cancel it on the next frame, so
+	# the toggle would read as dead. It arms on the stick reaching NEUTRAL, not
+	# on entry — which is also where the original rooted claim still lives: he
+	# is in first person with move_up down, and he does not travel.
+	Input.action_press(&"move_up", 1.0)
+	await rig.wait_seconds(0.25)
+	_tap(&"first_person")
+	await rig.wait_seconds(0.5)
+	_check("pressing it with the stick held still enters", _cam.first_person())
+
+	# He was at a run when that press landed, and rooting him does NOT zero his
+	# velocity — `hero.gd` lets him slide to a halt on friction, the same way the
+	# rope's channel does. So the claim is that he stops and stays stopped, which
+	# means sampling after the slide rather than across it. Measured across it
+	# this reads 0.245 m and looks like a rooting failure; it is deceleration.
+	var rooted_from := _hero.global_position
+	await rig.wait_seconds(0.6)
+	var crept := rooted_from.distance_to(_hero.global_position)
+	_check("and he is rooted in there (%.3f m with move_up down)" % crept, crept < 0.05)
+	await _shot(rig, "fp_held_entry")
+
+	Input.action_release(&"move_up")
+	await rig.wait_seconds(0.3)
+	_check("letting go does not eject either", _cam.first_person())
+
+	Input.action_press(&"move_up", 1.0)
+	await rig.wait_seconds(0.4)
+	Input.action_release(&"move_up")
+	await rig.wait_seconds(0.2)
+	_check("but the next push does", not _cam.first_person())
+
+	# --- 6. Back out on the button -------------------------------------------
+	_tap(&"first_person")
+	await rig.wait_seconds(0.5)
+	_check("and it can still be re-entered", _cam.first_person())
+	await _shot(rig, "fp_again")
+
 	_tap(&"first_person")
 	await rig.wait_seconds(0.6)
 	_check("a second press leaves", not _cam.first_person())

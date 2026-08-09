@@ -172,6 +172,9 @@ var _guarding: bool = false
 ## how far the eye has travelled toward the hero's head.
 var _fp: bool = false
 var _fp01: float = 0.0
+## Whether the move stick is allowed to eject the player yet. See
+## `set_first_person` — it is false until the stick has been seen at rest.
+var _fp_stick_armed: bool = false
 
 var _probe: SphereShape3D = SphereShape3D.new()
 var _shape_query := PhysicsShapeQueryParameters3D.new()
@@ -285,6 +288,13 @@ func set_first_person(on: bool) -> void:
 	if on == _fp:
 		return
 	_fp = on
+	if on:
+		# Entering with the stick already held is the ordinary case — you press
+		# R3 out of a run — and the eject below would cancel that press on the
+		# very next frame, so the toggle would read as broken. It arms only once
+		# the stick has come back to rest, which is also the moment the hero has
+		# finished sliding to a halt.
+		_fp_stick_armed = _move_stick().length() < K.STICK_DEADZONE
 	Bus.first_person_changed.emit(on)
 
 
@@ -299,12 +309,31 @@ func first_person() -> bool:
 ## more", and a listener on each is three places for the fourth one to be
 ## forgotten. The head is only allowed to stay while nothing else has claimed
 ## the frame.
+##
+## Wanting to WALK is the fourth path, and the most common one: the player has
+## read the room and now wants to go there. It has to be polled rather than
+## hooked because a held direction is a state, not an event — `move_*` fires no
+## `InputEvent` while it stays down, and under the harness `Input.action_press`
+## fires none at all (CLAUDE.md §3).
 func _tick_first_person(delta: float) -> void:
-	if _fp and ((Prompt != null and Prompt.blocked) or _aiming
-			or (_target != null and is_instance_valid(_target))):
-		set_first_person(false)
+	if _fp:
+		# K.STICK_DEADZONE is [oot]-measured and generous (0.33), which is what
+		# keeps a resting gamepad from throwing you out of the stance.
+		var steering := _move_stick().length() >= K.STICK_DEADZONE
+		if not steering:
+			_fp_stick_armed = true
+		if ((Prompt != null and Prompt.blocked) or _aiming
+				or (_target != null and is_instance_valid(_target))
+				or (_fp_stick_armed and steering)):
+			set_first_person(false)
 	_fp01 = move_toward(_fp01, 1.0 if _fp else 0.0,
 			delta / maxf(fp_blend_time, 0.001))
+
+
+## The hero's move stick, read the same way `Hero` reads it. The camera does not
+## steer with it — it only wants to know whether the player is asking to leave.
+func _move_stick() -> Vector2:
+	return Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down")
 
 
 ## The head. Taken off the hero directly rather than off `_at`, because `_at` is
