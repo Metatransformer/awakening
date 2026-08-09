@@ -120,13 +120,26 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, SPIN, LUNGE, DASH }
 # what a real sidehop would be worth if a clip for one ever turns up.
 
 ## The backflip's own window, because it is not a sidehop. A flip has to leave
-## the ground, inverct and land, and 0.44 s of that is a blur nobody can read as
-## a flip. 0.60 s is the shortest window the clip stays legible in, and it buys
-## the flip its own identity in the one currency dodges trade in: i-frames run
-## for exactly as long as the dodge does, so the backflip is the widest window
-## short of a roll and the slowest to get you out of the way (4.37 m/s). That is
-## the trade — safest, but least ground covered per second. [tune]
-@export var backflip_time: float = 0.60
+## the ground, invert and land, and 0.44 s of that is a blur nobody can read as
+## a flip. It buys the flip its own identity in the one currency dodges trade in:
+## i-frames run for exactly as long as the dodge does, so the backflip is the
+## widest window short of a roll and the slowest to get you out of the way
+## (4.37 m/s). That is the trade — safest, but least ground covered per second.
+##
+## 0.60 -> 0.50, and it is `backflip_start_offset` that paid for it. The old
+## number was "the shortest window the clip stays legible in", and that was
+## honestly measured but it was measuring the wrong clip: 0.45 s of what had to
+## stay legible was an anticipation crouch the player never needed to see. With
+## the gather cut, 0.50 s is all flip, and the sheet from
+## tools/directors/_backflip_trace.gd at 0.50 has every beat in it — gather,
+## launch, inversion, overhead, descent, absorb — with none of them blurred.
+##
+## 0.44 was shot in the same sweep and it also reads. It is not used because of
+## what it costs OFF the sheet: the window is the i-frame window, so 0.44 is a
+## 27% cut to what the button buys defensively, against 0.06 s of snap nobody
+## asked for. 0.50 is a 17% cut and the move is already snappier than the ask
+## from the head cut alone. [tune]
+@export var backflip_time: float = 0.50
 ## The hard recovery. Input is locked and speed bleeds off through it.
 @export var roll_recover_time: float = 0.20
 ## Degrees per second the model turns back onto the body after a sideways roll
@@ -223,6 +236,28 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, SPIN, LUNGE, DASH }
 @export var clip_roll_back: StringName = &"ex_backflip"
 @export var clip_roll_left: StringName = &"ex_roll_to_run"
 @export var clip_roll_right: StringName = &"ex_roll_to_run"
+## Where in `ex_backflip` the flip starts, in seconds. `jump_start_offset`'s
+## problem exactly, and worse here, because the hero is not standing still while
+## the anticipation plays — he is travelling backwards at 4.37 m/s from the frame
+## the button goes down.
+##
+## Measured, not guessed (tools/directors/_backflip_trace.gd, which shoots the
+## dodge the GAME plays rather than the clip): uncut, the hero covered 1.31 m —
+## HALF the backflip — with his hips still at crouch height, and did not leave
+## the ground until 0.33 s into a 0.80 s move. Ten of the twenty-seven frames on
+## that sheet are a man squatting while sliding backwards. That is the whole of
+## what "the backflip feels sluggish" was.
+##
+## The clip's own hips track (tools/_clip_hips.gd) is where the number comes
+## from: standing 0.523, crouch bottoms 0.366 @0.33, a slow unload to 0.423 @0.57,
+## then the launch — steep from 0.57, apex 0.806 @1.13, down @1.35.
+##
+## 0.45 rather than 0.57, and the 0.12 s is deliberate. Cutting to the launch
+## frame the way the jump does starts the clip on a body already extending, and
+## the flip pops out of the guard with no gather at all; keeping the last slice
+## of the unload buys one frame of compression to launch off. The jump can cut
+## clean because it opens from a neutral stand — this opens from a raised shield.
+@export var backflip_start_offset: float = 0.45
 @export var clip_turn180: StringName = &"ss_180_turn_01"
 ## FALLING, not jumping. These two are what plays when the ground goes away
 ## underneath him — walking off a ledge, a pit, the end of a hookshot pull — and
@@ -881,9 +916,22 @@ func _build_anim_tree() -> void:
 	# BELOW `Block`, which is load-bearing: the guard is a blend that would
 	# otherwise replace whichever dodge is playing, and HeroCombat drops the
 	# shield for the dodge precisely because of where these sit.
+	#
+	# BACK is the one that takes a window instead of a whole clip: `ex_backflip`
+	# opens with an anticipation crouch the game has no room for, so it starts at
+	# `backflip_start_offset` the way both jumps start at theirs. Everything
+	# downstream of that has to agree about which seconds are being played —
+	# `_dodge_skip` is the single answer, and `_fire_dodge` sizes the TimeScale
+	# off it.
 	for i in Dodge.size():
-		prev = _add_scaled_shot(tree_root, _DODGE_NODES[i], prev, _dodge_clip(i),
-			Vector2(880 + 90 * i, 0), _DODGE_FADE_IN[i], _DODGE_FADE_OUT[i])
+		var skip := _dodge_skip(i)
+		if skip > 0.0:
+			prev = _add_scaled_jump_shot(tree_root, _DODGE_NODES[i], prev, _dodge_clip(i),
+				skip, _clip_length(_dodge_clip(i)) - skip,
+				Vector2(880 + 90 * i, 0), _DODGE_FADE_IN[i], _DODGE_FADE_OUT[i])
+		else:
+			prev = _add_scaled_shot(tree_root, _DODGE_NODES[i], prev, _dodge_clip(i),
+				Vector2(880 + 90 * i, 0), _DODGE_FADE_IN[i], _DODGE_FADE_OUT[i])
 
 	# The shield is a HELD pose, so it blends rather than fires: a one-shot would
 	# end on its own while the button is still down.
@@ -1024,6 +1072,15 @@ func _swing_clip(variant: int) -> StringName:
 		Swing.LUNGE: return clip_lunge
 		Swing.DASH: return clip_dash
 		_: return clip_attack
+
+
+## Seconds cut off the FRONT of this dodge's clip. Only the backflip cuts any —
+## see `backflip_start_offset`. Read by the tree builder (which sets the node's
+## `start_offset`) and by `_fire_dodge` (which must not count skipped seconds
+## when it sizes the TimeScale), because a disagreement between those two is the
+## bug `_clip_scale`'s `skip` argument exists to prevent.
+func _dodge_skip(dodge: int) -> float:
+	return backflip_start_offset if dodge == Dodge.BACK else 0.0
 
 
 ## The clip each Dodge plays, same arrangement and same reasoning as _swing_clip.
@@ -1742,10 +1799,15 @@ func _dodge_time(dodge: int) -> float:
 ## Play the dodge, compressed onto `duration`. The clips run 0.97–2.17 s and the
 ## moves they serve run 0.44–0.82 s, so each needs its own factor — see the note
 ## in _build_anim_tree about why this cannot be set once.
+##
+## The `skip` is not optional here even though it is zero for three of the four:
+## the backflip plays a WINDOW of `ex_backflip` rather than the whole of it
+## (`_dodge_skip`), and sizing that window off the full length would run it 45%
+## fast and strand the hero in a finished pose for the rest of his lockout.
 func _fire_dodge(dodge: int, duration: float) -> void:
 	if _tree != null:
 		_tree.set(_dodge_scale_param(dodge),
-			_clip_scale(_dodge_clip(dodge), duration))
+			_clip_scale(_dodge_clip(dodge), duration, _dodge_skip(dodge)))
 	_fire(_dodge_param(dodge))
 
 

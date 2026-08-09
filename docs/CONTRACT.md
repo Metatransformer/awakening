@@ -1234,7 +1234,7 @@ it. Whichever axis dominates picks the clip and the speed:
 | `Dodge` | Clip | Speed | Duration | Model turned |
 |---|---|---|---|---|
 | `FORWARD` | `ex_roll_to_run` | `K.ROLL_SPEED` 6.55 | `roll_time` 0.62 | — |
-| `BACK` | `ex_backflip` | `K.BACKFLIP_SPEED` 4.37 | `backflip_time` 0.60 | — |
+| `BACK` | `ex_backflip` | `K.BACKFLIP_SPEED` 4.37 | `backflip_time` 0.50 | — |
 | `LEFT` / `RIGHT` | `ex_roll_to_run` | `K.ROLL_SPEED` 6.55 | `roll_time` 0.62 | ±90° |
 
 **The sideways dodge is the roll, turned.** It was `bow_dodge_left` / `_right`
@@ -1269,6 +1269,11 @@ the roll's nor the hop's, because a flip has to launch, invert and land, and
 short of a roll *and* the least ground covered per second. That is the trade
 between the three: safest, fastest, furthest, pick one.
 
+That duration was 0.60 and is 0.50. The old number was measured as "the shortest
+window the clip stays legible in" and it was honest, but it was measuring a clip
+that spent its first 0.45 s crouching (see the front-trim note below). With the
+gather skipped, 0.50 s is all flip and every beat still reads.
+
 Its source clip has 0.72 s of dead settle after the landing, cut in
 `build_anim_lib`'s `TRIM` table rather than at the call site. That placement is
 load-bearing: `Hero._fire_dodge` scales `clip_length / move_duration` so the
@@ -1276,6 +1281,23 @@ one-shot ends exactly when the dodge does, so **a clip's length has to mean the
 move's length**. Trim the factor instead of the clip and the hero stands in the
 export's settle pose for 0.4 s after the controller has already handed him back
 to locomotion.
+
+It has dead time on the **front** too, and that one is not trimmed at bake time —
+it is skipped at play time by `Hero.backflip_start_offset` (0.45 s), exactly as
+both jumps skip their anticipation crouch with `jump_start_offset`. The reason
+for the difference: a trim changes the clip for everyone, and `dodge_lookdev`
+wants the whole export. The reason it is skipped at all is
+`tools/directors/_backflip_trace.gd`, which shoots the dodge the *game* plays
+rather than the clip — uncut, the hero covered **1.31 m of a 2.53 m backflip
+with his hips still at crouch height**, and did not leave the ground until
+0.33 s into a 0.80 s move. A third of the move was a man squatting while sliding
+backwards. Cut, he is airborne at 0.13 s.
+
+`BACK` is therefore the one dodge whose one-shot is built by
+`_add_scaled_jump_shot` (a *window* of a clip) rather than `_add_scaled_shot` (a
+whole clip). `Hero._dodge_skip` is the single answer to "which seconds are being
+played", read by both the tree builder and `_fire_dodge` — they must not
+disagree, or the TimeScale is sized off seconds nobody is playing.
 
 Because the i-frame window is literally `state == MoveState.ROLL` in
 `take_hit`, the duration column *is* the invulnerability column: the backflip is
