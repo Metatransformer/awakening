@@ -31,6 +31,10 @@ const WINDUP_LEAN_DEG := 17.0
 ## and how hard they push. See `_separation`.
 const CROWD_RADIUS := 1.5
 const CROWD_PUSH := 3.4
+## Metres between the top of a monster's head and anything the HUD hangs over it.
+## Enough to clear the tallest idle pose without reading as a detached label.
+const HEAD_CLEARANCE := 0.26
+
 ## How far from where it woke up a monster will follow before giving up. The
 ## rooms are 16 m across, so this is "anywhere in my room and a little past the
 ## doorway" and not "across the floor".
@@ -135,6 +139,17 @@ func _ready() -> void:
 	_facing = rotation.y
 	_anchor = global_position
 	_orbit = 1.0 if _rng.randf() < 0.5 else -1.0
+
+
+## Where a readout sits above this one's head, in world space.
+##
+## Public, and measured, because the HUD needs it and `_height()` is this class's
+## business. The roster runs 1.25 m (goblin) to 1.95 m (orc), and an elite is
+## `Prog.ELITE_SCALE` on top of that -- so a single constant offset in the HUD
+## would float a hand above a goblin and cut through an orc's jaw. Same reason
+## the model scale is fitted by measurement rather than tabled (`_build_model`).
+func head_point() -> Vector3:
+	return global_position + Vector3(0.0, _height() + HEAD_CLEARANCE, 0.0)
 
 
 ## Is this thing in a fight right now? Everything except asleep and dead.
