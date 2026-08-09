@@ -390,6 +390,18 @@ they are the two counters you visit with a full bag. The alchemist stands nearer
 the arrival spot: what she sells is spent on the way back *down*, and the frame
 you see when you extract has to contain her or she does not exist.
 
+Each of them is a person of one of the Vale's peoples (`scripts/world/race_body.gd`)
+standing behind a booth full of their own trade (`scripts/props/shop_booth.gd`):
+a **Stoneborn** at the forge, hearth and anvil and quench barrel behind him; a
+**Reshi** under a canopied market stall, coin pile and pouch on the counter; a
+**Vyr** at an apothecary's bench with a cauldron and a wall of bottles. They
+were three tapered boxes until the loop worked, and the swap changed nothing
+below the mesh — the counters, the catalogues and the one trade screen are
+exactly as described above. **This is dressing, and it has no rules.** A booth
+has no state and no interaction of its own; a fourth counter is still a
+`Catalogue` subclass and a row in `Npc.COUNTERS`, plus a row in `Npc.LOOKS` for
+who stands at it.
+
 The costs scale with how many you have already bought, so the shop keeps pace
 instead of being solved by one lucky run. The limits are what stop the smith
 from being an infinite gold sink that makes the dungeon irrelevant.
@@ -700,6 +712,9 @@ second one is a decision.
 | Vendor / smith screen | `scripts/ui/shop/trade_screen.gd` |
 | HUD | `scripts/ui/hud/hud.gd` |
 | Town | `scripts/world/town.gd`, `scenes/rooms/town.tscn` |
+| The shopkeepers themselves — who stands where | `scripts/world/npc.gd` (`COUNTERS`, `LOOKS`) |
+| A person of one of the races, dressed and idling | `scripts/world/race_body.gd` |
+| The forge, the stall and the apothecary's bench | `scripts/props/shop_booth.gd` |
 | Dungeon | `scripts/world/dungeon.gd`, `scenes/rooms/dungeon.tscn` |
 | The way out | `scripts/items/escape_rope.gd` |
 | Drops on the floor, and their heat stamp | `scripts/world/loot_mote.gd` |

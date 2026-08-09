@@ -119,41 +119,57 @@ func _build_yard() -> void:
 
 
 func _build_people() -> void:
-	vendor = Npc.new()
-	vendor.role = Npc.Role.VENDOR
-	vendor.robe_color = Color(0.34, 0.20, 0.26)
-	vendor.lamp_color = Pal.GOLD
-	vendor.position = Vector3(-yard.x * 0.26, 0.0, -yard.y * 0.06)
-	add_child(vendor)
-
-	smith = Npc.new()
-	smith.role = Npc.Role.SMITH
-	smith.robe_color = Color(0.22, 0.26, 0.30)
-	smith.lamp_color = Color(0.98, 0.56, 0.24)
-	smith.position = Vector3(yard.x * 0.26, 0.0, -yard.y * 0.06)
-	add_child(smith)
+	# The two counters you visit with a FULL BAG share the far wall either side
+	# of the gate, angled in so the north end of the yard reads as a row of
+	# shops facing you rather than three strangers standing in a line.
+	vendor = _counter(Npc.Role.VENDOR,
+		Vector3(-yard.x * 0.26, 0.0, -yard.y * 0.06), 18.0, Pal.GOLD)
+	smith = _counter(Npc.Role.SMITH,
+		Vector3(yard.x * 0.26, 0.0, -yard.y * 0.06), -18.0, Color(0.98, 0.56, 0.24))
 
 	# West side, ahead of the arrival spot but well short of the far wall.
 	#
-	# The vendor and the smith are the two counters you visit with a FULL BAG, so
-	# they share the far wall either side of the gate; the alchemist is the one
-	# you visit on the way back out, with the bench already banked, and she
-	# stands nearer the near end of that walk.
+	# The alchemist is the one you visit on the way back OUT, bench already
+	# banked and gold in hand, so she stands nearer the near end of that walk and
+	# faces south -- you meet her front-on walking up to the gate.
 	#
 	# The z was +0.22 of the yard first, which is level with where the hero lands
-	# -- and the arrival capture (a_07_home) showed the consequence: she was
-	# BEHIND the camera on the one frame every returning player sees. A shop you
-	# have to turn around to discover is a shop that does not exist. Anything
-	# here has to stay inside the arrival frame; check that capture if you move
-	# her, because nothing else will notice.
-	alchemist = Npc.new()
-	alchemist.role = Npc.Role.ALCHEMIST
-	alchemist.robe_color = Color(0.20, 0.30, 0.26)
-	alchemist.lamp_color = Color(0.42, 0.90, 0.62)
-	alchemist.position = Vector3(-yard.x * 0.10, 0.0, yard.y * 0.11)
-	add_child(alchemist)
+	# -- and the arrival capture showed the consequence: she was BEHIND the
+	# camera on the one frame every returning player sees. A shop you have to
+	# turn around to discover is a shop that does not exist. Anything here has to
+	# stay inside the arrival frame; the shot that proves it is `m_19_home` from
+	# `mvp_loop`, and nothing else in the build will notice if you break it.
+	#
+	# Her lamp is WARM, though every other green thing about her stayed green.
+	# It used to match her cauldron, and two green sources put a wash across the
+	# west half of the yard that reached the flagstones in front of the gate --
+	# the one place in the game that belongs to cyan (STYLEGUIDE §2). The pot,
+	# the shelf and the potions say "apothecary" perfectly well on their own; the
+	# lamp's job is to be a warm light on a face.
+	alchemist = _counter(Npc.Role.ALCHEMIST,
+		Vector3(-yard.x * 0.10, 0.0, yard.y * 0.11), 12.0, Color(0.96, 0.80, 0.52))
 
 	gate = Npc.new()
 	gate.role = Npc.Role.GATE
 	gate.position = Vector3(0.0, 0.0, -yard.y * 0.40)
 	add_child(gate)
+
+
+## One shopkeeper, standing behind their own booth.
+##
+## **`at` is where the COUNTER goes, not the keeper.** Every one of these
+## positions was tuned when an NPC was a single box -- the alchemist's in
+## particular is pinned to what the arrival camera can see, and the comment
+## above it is there because nothing else in the build would catch her drifting
+## out of frame. Now that each of them has a stall in front of them, placing the
+## keeper at the old coordinate would push all three counters a metre further
+## into the yard and quietly invalidate that tuning. So the counter inherits the
+## old spot and the keeper steps back behind it, along their own facing.
+func _counter(role: Npc.Role, at: Vector3, yaw_deg: float, lamp: Color) -> Npc:
+	var n := Npc.new()
+	n.role = role
+	n.lamp_color = lamp
+	n.rotation.y = deg_to_rad(yaw_deg)
+	n.position = at - n.transform.basis * Vector3(0.0, 0.0, ShopBooth.KEEPER_BACK)
+	add_child(n)
+	return n
