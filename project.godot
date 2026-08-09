@@ -165,24 +165,24 @@ cam_right={
 ; with nothing lockable to put the camera back behind the hero.
 ; scripts/targeting/targeting.gd owns that.
 ;
-; On the pad this is the TOGGLE HALF ONLY -- R3, button 8, JOY_BUTTON_RIGHT_STICK.
-; A thumb already resting on the right stick should not have to travel to
-; recentre what that stick just moved, which is the one thing R3 is good for.
+; KEYBOARD ONLY. On the pad, Z is the LEFT TRIGGER and it is bound to `shield`
+; -- one pull, all four of the things OOT's Z did (see the note there). A second
+; pad button that reaches the same lock was a duplicate as soon as the trigger
+; took the whole job, and R3 was worth more as first person (BOTW clicks the
+; right stick to look around, and this game now does too).
 ;
-; The pad's Z is the LEFT TRIGGER, and it is bound to `shield` -- one pull, all
-; four of the things OOT's Z did. See the note there. Both routes reach the same
-; lock; they differ in what LETTING GO means. The trigger's lock drops with the
-; trigger; R3's is a standing decision and survives it (`_lock_from_shield` in
-; targeting.gd is what keeps a guard from silently disarming an R3 lock).
+; R3 held this for a while as the TOGGLE HALF ONLY, on the argument that a thumb
+; resting on the right stick should not travel to recentre what that stick just
+; moved. True, and the trigger does it without the thumb moving at all.
 ;
-; The trigger was briefly bound here too, as a bare recentre, with the shield
-; pushed up onto LB. That split is undone: it asked the player which of Z's four
-; behaviours they wanted before they had learned that they are one behaviour.
+; The trigger was also briefly bound here, as a bare recentre, with the shield
+; pushed up onto LB. That split is undone too: it asked the player which of Z's
+; four behaviours they wanted before they had learned that they are one
+; behaviour.
 z_target={
 "deadzone": 0.2,
 "events": [Object(InputEventMouseButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"button_mask":0,"position":Vector2(0, 0),"global_position":Vector2(0, 0),"factor":1.0,"button_index":3,"canceled":false,"pressed":false,"double_click":false,"script":null)
 , Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":81,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
-, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":8,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
 ; Attack is X/Square -- button 2, "Left Action". It moved off A because A had to
@@ -308,9 +308,22 @@ item_down={
 , Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":12,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
+; Look around out of his own eyes. R3 -- button 8, JOY_BUTTON_RIGHT_STICK --
+; because BOTW clicks the right stick for exactly this and the thumb is already
+; on that stick doing exactly this with the camera.
+;
+; This action was bound to R and read by NOTHING for a long time, which is the
+; thing §4 of the contract says not to do. It shipped with the mode:
+; GameCamera.set_first_person collapses the boom to zero, Hero roots himself and
+; hides his model on Bus.first_person_changed, and both landed in this commit.
+;
+; R3 was free because it had to be taken from `z_target`, which no longer needs
+; a pad button of its own -- the left trigger is the pad's Z and does the whole
+; job. See the note there.
 first_person={
 "deadzone": 0.2,
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":82,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":8,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
 pause={

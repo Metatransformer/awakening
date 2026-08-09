@@ -248,6 +248,11 @@ var ranged: HeroRanged = null
 ## every scene that spawns a hero must spawn one who can leave.
 var charm: HomewardCharm = null
 
+## Looking around out of his own eyes (GameCamera.set_first_person). He does not
+## steer while it is up and his model is not drawn — the lens is inside his head,
+## and half of what it would render is the back of his own face.
+var _first_person: bool = false
+
 var _model: Node3D
 var _rig: Node3D
 var _anim_player: AnimationPlayer
@@ -370,7 +375,22 @@ func _ready() -> void:
 
 	_build_key_light()
 
+	Bus.first_person_changed.connect(_on_first_person_changed)
+
 	Bus.player_spawned.emit(self)
+
+
+## The camera moved into his head, or came back out. `GameCamera.set_first_person`
+## owns that decision — nothing here toggles it.
+##
+## Hiding the model hides the sword and shield with it: they hang off bone
+## attachments under `_rig`. That is correct rather than incidental, because the
+## camera drops out of first person the moment anything is swung, so the hands
+## are back before the swing is.
+func _on_first_person_changed(on: bool) -> void:
+	_first_person = on
+	if _model != null:
+		_model.visible = not on
 
 
 ## A short-range lamp that travels with the hero.
@@ -683,8 +703,13 @@ func _physics_process(delta: float) -> void:
 	# Leaving roots him, by the same mechanism and for a related reason: the
 	# charm's channel is only a decision if walking out of it is not free. He
 	# still falls and still slides to a halt, he just does not steer.
+	# First person roots him for the same reason the charm's channel does: it is a
+	# stance you have chosen to stand still in. It is also the honest one -- his
+	# model is hidden while the lens is inside his head, so a hero who could walk
+	# in here would be an invisible hero walking.
 	var locked := (Prompt != null and Prompt.blocked) \
-		or (charm != null and charm.active())
+		or (charm != null and charm.active()) \
+		or _first_person
 	var stick := Vector2.ZERO if locked \
 		else Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down")
 	var mag := clampf(stick.length(), 0.0, 1.0)

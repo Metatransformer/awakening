@@ -51,7 +51,17 @@ const DEFAULT_PATH := "user://settings.cfg"
 ##    back on A on top of interact, which is the exact collision the move was
 ##    made to remove: one press at a chest would open it and loose an arrow
 ##    through it.
-const BIND_SCHEMA := 7
+## 8: SKIPPED HERE. It belongs to the `jump` pass, which is in flight in another
+##    session and touches these same three files. Two changes cannot both be 8,
+##    and a number reused is a saved layout replayed against a layout it was not
+##    saved for -- which is the entire failure this const exists to stop. The
+##    gap is deliberate.
+## 9: R3 changed hands. `z_target` gave up button 8 -- the left trigger is the
+##    pad's Z and a second pad route to the same lock was a duplicate -- and
+##    `first_person` took it, in the commit that built the mode. A saved layout
+##    from before this would hand R3 back to `z_target` AND leave `first_person`
+##    on it, so one click would lock on and drop into the hero's head together.
+const BIND_SCHEMA := 9
 
 ## Where preferences persist. A test or a screenshot director that rebinds keys
 ## MUST NOT write to the player's real settings — an earlier menu test left

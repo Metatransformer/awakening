@@ -206,10 +206,10 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `use_item` | **F** | **RT / R2** (axis5+) | use the item the D-pad drew |
 | `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held**, and it targets, and it recentres |
 | `context` | **Space** | **B / Circle** (pad1) | roll / backstep / sidehop |
-| `z_target` | **Q**, MMB | **R3** (pad8) | lock-on toggle / camera recentre |
+| `z_target` | **Q**, MMB | — (LT does it) | lock-on toggle / camera recentre |
 | `interact` | E | **A / Cross** (pad0) | context — talk/open, **+guard** = jump attack, else stow item |
 | `item_left` / `item_up` / `item_right` | 1 / 2 / 3 | dpad L / U / R | armaments — §4.1 |
-| `first_person` | R | — | — |
+| `first_person` | R | **R3** (pad8) | look out of his own eyes — he roots |
 | `pause` / `inventory` / `map` | Esc / **I** / Tab | Start (pad6) / **Select** (pad4) / L3 (pad7) | menu / pouch / map |
 | `dbg_reload` | F5 | — | — |
 
@@ -220,8 +220,9 @@ the lock; RT uses whatever the D-pad drew. Aiming a bow with a shoulder and
 loosing it with a thumb makes you let go of the stick that was aiming.
 
 The face buttons are the swings and the verbs: X swings, B rolls, A is context.
-The right stick swings the lens; everything else the camera does is under the
-left index finger.
+The right stick swings the lens and **clicking it (R3) drops you into his eyes**
+— BOTW's arrangement again, and the thumb is already there doing the same job;
+everything else the camera does is under the left index finger.
 
 Both triggers are AXES (`InputEventJoypadMotion`, JoyAxis 4 and 5), not buttons,
 so the action's 0.2 deadzone is how far the trigger travels before it counts as
@@ -311,11 +312,34 @@ RT/R2 was pencilled in for the skill and `use_item` took it instead — the
 triggers being a pair is worth more than reserving one for an ability nobody has
 designed. **Y/Triangle is free** and is the obvious home for the next verb.
 
-`first_person` is the standing exception and it is a wart: the action is bound
-(R) and rebindable, and **nothing in the game reads it**. `Bus.first_person_changed`
-has no emitter either. Either build it or delete it; do not bind it to a pad
-button in the meantime, because a pad button that does nothing is worse than a
-keyboard key nobody presses.
+`first_person` was the standing counter-example and it is now closed: it sat
+bound to R, rebindable, read by nothing, with a `Bus.first_person_changed` that
+had no emitter, for long enough that it had to be written down as a wart. It
+shipped with the mode below, and it took R3 from `z_target` to do it — the left
+trigger is the pad's Z and a second pad route to the same lock was a
+duplicate.
+
+**First person is `GameCamera` with the boom at zero**, and that is the whole
+implementation. The third-person camera's forward is `-_orbit_dir(_yaw, _pitch)`
+— from the eye back down the boom at the hero — which is already exactly the
+direction a head at the at-point wants to face, so `set_first_person` eases
+`_fp01` to 1, `_place` lerps the eye onto `hero + K.HERO_EYE_Y` and the look
+direction onto the *unbiased* orbit, and the mode inherits the stick handling,
+the sensitivity and the pitch clamps for free. Nothing about it is a second
+camera. The unbias matters: whatever swing or lift the wall logic had latched
+must not ride into the head and leave the player facing 40° off where the stick
+had them.
+
+It is a **stance, not a way to play**: `Hero` roots himself and hides his own
+model on `Bus.first_person_changed` (the sword and shield hang off bone
+attachments under it and go with it). `attack` and `context` drop you out on the
+press — the press still counts, `HeroCombat` polls the button and does not care
+that the camera read it first. Anything else that claims the frame — a prompt, a
+lock, a drawn bow — is **polled** out in `_tick_first_person` rather than hooked
+per event, because three listeners is three places for the fourth path in to be
+forgotten. `tools/directors/first_person.gd` is the proof, and it asserts that
+he *can* walk once he is back out: "he did not move" passes just as loudly when
+hero.gd failed to compile.
 
 Read movement as
 `Input.get_vector("move_left","move_right","move_up","move_down")` so stick and

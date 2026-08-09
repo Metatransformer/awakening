@@ -114,6 +114,17 @@ extends Camera3D
 @export var aim_fov: float = K.CAM_FOV_AIM
 @export var aim_blend_time: float = K.CAM_AIM_BLEND
 
+@export_group("First person")
+## Seconds to fall into the hero's eyes and back out again. Short on purpose:
+## this is a toggle the player uses to READ a room, and a long dolly makes them
+## wait twice for every glance.
+@export var fp_blend_time: float = 0.18
+## K.CAM_FOV_PARALLEL is already documented in consts.gd as "Z held with no
+## target, and first-person". 45° vertical is about 73° horizontal at 16:9 — a
+## shade tighter than the free camera, which is what makes looking across a room
+## feel like looking rather than panning.
+@export var fp_fov: float = K.CAM_FOV_PARALLEL
+
 @export_group("Walls")
 ## Radius of the probe swept from the at-point to the eye.
 @export var collide_radius: float = 0.3
@@ -155,6 +166,11 @@ var _aim01: float = 0.0
 ## ease, because raising a shield is not a change of shot.
 var _guarding: bool = false
 
+## First person, and its 0..1 ease. `_fp` is the player's decision; `_fp01` is
+## how far the eye has travelled toward the hero's head.
+var _fp: bool = false
+var _fp01: float = 0.0
+
 var _probe: SphereShape3D = SphereShape3D.new()
 var _shape_query := PhysicsShapeQueryParameters3D.new()
 
@@ -193,6 +209,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		var mm := event as InputEventMouseMotion
 		_look_input += mm.relative * mouse_sensitivity
+	elif event.is_action_pressed(&"first_person"):
+		set_first_person(not _fp)
+	elif _fp and (event.is_action_pressed(&"attack")
+			or event.is_action_pressed(&"context")):
+		# Any verb drops you out. The hero is rooted and his model is hidden in
+		# here, so a swing or a roll taken from first person would be a move
+		# nobody can see. Leaving on the same frame as the press means the press
+		# itself still counts — `HeroCombat` polls the button and does not care
+		# that the camera read it first.
+		set_first_person(false)
 	elif event.is_action_pressed(&"pause") and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -239,6 +265,56 @@ func set_guarding(on: bool) -> void:
 	_guarding = on
 
 
+# --- First person -----------------------------------------------------------
+
+## BOTW's right-stick click: the boom collapses to nothing and the player looks
+## out of the hero's own head.
+##
+## There is no new look code here, and that is the point. The third-person
+## camera's forward is `-_orbit_dir(_yaw, _pitch)` — the direction from the eye
+## back down the boom at the hero — and that is EXACTLY the direction a head
+## sitting at the at-point wants to face. So first person is this camera with
+## `_dist` eased to zero: same yaw, same pitch, same stick handling, same
+## sensitivity, and entering it can be a blend instead of a cut.
+##
+## What it is NOT is a stance the hero can act from. `Hero` roots him and hides
+## his model on `Bus.first_person_changed`, because the alternative — a visible
+## hero walking around with the lens inside his skull — is the inside of a head,
+## every frame.
+func set_first_person(on: bool) -> void:
+	if on == _fp:
+		return
+	_fp = on
+	Bus.first_person_changed.emit(on)
+
+
+func first_person() -> bool:
+	return _fp
+
+
+## Everything that means "the player is doing something else now" kicks them
+## out, and it is POLLED rather than hooked onto each of those events. A shop
+## can open from a prompt, a lock can be taken by the trigger, a bow can be
+## drawn from the D-pad — three unrelated paths into "not looking around any
+## more", and a listener on each is three places for the fourth one to be
+## forgotten. The head is only allowed to stay while nothing else has claimed
+## the frame.
+func _tick_first_person(delta: float) -> void:
+	if _fp and ((Prompt != null and Prompt.blocked) or _aiming
+			or (_target != null and is_instance_valid(_target))):
+		set_first_person(false)
+	_fp01 = move_toward(_fp01, 1.0 if _fp else 0.0,
+			delta / maxf(fp_blend_time, 0.001))
+
+
+## The head. Taken off the hero directly rather than off `_at`, because `_at` is
+## deliberately laggy (§1.5) — a boom is allowed to trail him, a skull is not.
+func _fp_eye() -> Vector3:
+	if _hero == null:
+		return _at
+	return _hero.global_position + Vector3.UP * K.HERO_EYE_Y
+
+
 ## The yaw, in radians, that places the eye directly behind the hero.
 func behind_yaw() -> float:
 	if _hero == null:
@@ -274,6 +350,7 @@ func _physics_process(delta: float) -> void:
 
 	_aim01 = move_toward(_aim01, 1.0 if _aiming else 0.0,
 			delta / maxf(aim_blend_time, 0.001))
+	_tick_first_person(delta)
 
 	_follow_at(want_at, speed01, delta)
 	_apply_look(delta)
@@ -372,10 +449,16 @@ func _apply_parallel(delta: float) -> void:
 	# Sighting down a weapon is the narrowest the frame ever gets, and it wins
 	# over the lock's own pull-in: aiming at a locked target is still aiming.
 	base = lerpf(base, aim_fov, _aim01)
+	# Last, and it wins outright: the two stances are mutually exclusive
+	# (`_tick_first_person` drops the head the moment a bow comes out), so this
+	# only ever blends against a `_aim01` that is on its way to zero.
+	base = lerpf(base, fp_fov, _fp01)
 	var want_fov := base + Settings.fov_offset
 	fov = lerpf(fov, want_fov, 1.0 - exp(-(1.0 / maxf(fov_blend_time, 0.001)) * delta))
 
-	if _recenter_timer <= 0.0:
+	# A recentre landing while the player is looking around from inside his own
+	# head would swing the whole world under a thumb that was not asking for it.
+	if _recenter_timer <= 0.0 or _fp01 > 0.0:
 		return
 	_recenter_timer = maxf(_recenter_timer - delta, 0.0)
 	var err := wrapf(behind_yaw() - _yaw, -PI, PI)
@@ -412,7 +495,10 @@ func _apply_battle(delta: float) -> void:
 
 ## Slow drift to behind the hero while he runs — never while the player steers.
 func _apply_autoswing(speed01: float, delta: float) -> void:
-	if _manual_timer > 0.0 or _recenter_timer > 0.0 or speed01 < 0.12:
+	# `_fp01` first: the hero is rooted in first person so `speed01` is already
+	# zero, but the tail of the blend OUT is not, and a head that drifts toward
+	# behind-the-hero on its way back to the boom is a head that turns itself.
+	if _fp01 > 0.0 or _manual_timer > 0.0 or _recenter_timer > 0.0 or speed01 < 0.12:
 		return
 	# Never while aiming. The hero turns to face the lens in this stance, so
 	# "drift toward behind the hero" and "the hero faces the camera" are the same
@@ -491,7 +577,11 @@ func _place(delta: float) -> void:
 	# BELOW distMin is worth reacting to (§1.6).
 	var swing_target := 0.0
 	var lift_target := 0.0
-	if clear < floor_dist - 0.03:
+	# Not once the eye is most of the way into his head. The wall logic exists to
+	# keep a BOOM out of geometry and first person has no boom, so letting it run
+	# there would rotate the player's own view to dodge something that is nowhere
+	# near where they are looking from.
+	if clear < floor_dist - 0.03 and _fp01 < 0.5:
 		# 1. Arc around it on the yaw axis — the OOT answer.
 		var sign_first := 1.0 if _swing_bias_deg >= 0.0 else -1.0
 		var off := swing_step_deg
@@ -540,9 +630,23 @@ func _place(delta: float) -> void:
 	else:
 		_dist = move_toward(_dist, allowed, push_out_speed * delta)
 
-	global_position = pivot + dir * _dist
-	if global_position.distance_squared_to(pivot) > 0.0004:
-		look_at(pivot, Vector3.UP)
+	# First person: the eye walks from the end of the boom to the hero's head, and
+	# the LOOK direction unwinds to the UNBIASED orbit at the same rate — whatever
+	# swing or lift the wall logic had latched when the toggle came in must not
+	# ride into the head with it and leave the player facing 40° off where the
+	# stick had them.
+	var view := dir
+	var eye := pivot + dir * _dist
+	if _fp01 > 0.0:
+		view = dir.lerp(_orbit_dir(_yaw, _pitch), _fp01).normalized()
+		eye = eye.lerp(_fp_eye(), _fp01)
+	global_position = eye
+
+	# `eye - view`, not the pivot. `dir` points from the pivot OUT to the eye, so
+	# the camera's forward is `-dir` and aiming one metre down that ray is the
+	# same rotation the old `look_at(pivot)` produced at every boom length except
+	# zero -- where the pivot IS the position and there is nothing to aim at.
+	look_at(eye - view, Vector3.UP)
 
 
 ## The at-point the boom actually pivots on: the hero's eye, slid toward his
