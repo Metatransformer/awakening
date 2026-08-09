@@ -259,18 +259,24 @@ tier 3. See Departure 2.
 
 ## 5. The HUD
 
-**The organising idea is two poles.** Bottom-left is YOU — health, stamina and
-what is in your hands, one instrument. Bottom-right is THE MONEY — bag value and
-the way out, one instrument. Opposite corners on purpose: in a panic your eye has
-to travel from "how alive am I" to "how much am I about to lose", and that eye
+**The organising idea is two poles and a control surface.** Bottom-left is YOU —
+health and stamina, one instrument. Bottom-right is THE MONEY — bag value and the
+way out, one instrument. Opposite corners on purpose: in a panic your eye has to
+travel from "how alive am I" to "how much am I about to lose", and that eye
 movement *is* the game's central decision.
 
-**The one exception is the top-right corner**, which holds the three item buttons
-(§5.2b). They are not a readout and they do not belong to either pole: they are a
-picture of the D-pad, and a control surface has to sit where the *thumb* thinks,
-not where the body's numbers live. Everything else at the top stays empty except
-transient state, because the over-the-shoulder camera puts the action in the
-upper-middle third.
+**Top-right is WHAT YOU PRESS** (§5.2, §5.2b): the two hands and the three item
+buttons, one cluster, every cell captioned with the key that fires it. It is not
+a readout and it does not belong to either pole — it is a control surface, and a
+control surface sits where the *thumb* thinks, not where the body's numbers live.
+
+The hands were bottom-left until 2026-08-09, above health, on the reasoning that
+what he is holding is a fact about his body. That was true and it was still the
+wrong corner: every cell in the cluster answers *"what do I press"*, and splitting
+that one question across two corners meant answering it with two glances.
+
+Everything else at the top stays empty except transient state, because the
+over-the-shoulder camera puts the action in the upper-middle third.
 
 Design space is 1280×720; all coordinates are fractions of viewport, origin
 top-left. Safe area: nothing within `0.025w` / `0.031h` of an edge.
@@ -330,7 +336,7 @@ unit it is ever spent in.
   BONE flash each — a full bar takes 0.8 s. The heal is the reward for leaving
   and it should be watched and counted, not granted in a frame.
 
-### 5.2 The hands — left and right, above health
+### 5.2 The hands — left and right, beside the D-pad
 
 **Superseded 2026-08-08: this was a fixed four-cell kit strip (sword, shield,
 hookshot, bow) and is now two cells, the hands.** The strip was a lie by the time
@@ -339,11 +345,20 @@ the hookshot and the bow, and where the right hand can hold any of them. Two
 cells that say *what he is holding right now* is the same pixel budget spent on
 a fact that changes.
 
-Two cells above health, sharing its left edge, so body and tools read as one
-bottom-left instrument. No radial, no wheel. **Left cell is the left hand, right
-cell the right hand** — the reading order is the body, not an inventory order.
-Either can be empty: bow-and-arrows empties the shield arm, and an empty cell is
-correct there rather than a gap to fill.
+Two cells in the top-right cluster, immediately left of the D-pad cross and
+centred against its two rows. No radial, no wheel. **Left cell is the left hand,
+right cell the right hand** — the reading order is the body, not an inventory
+order. Either can be empty: bow-and-arrows empties the shield arm, and an empty
+cell is correct there rather than a gap to fill.
+
+**Every cell carries the key that fires what is in it**, read from the live
+`InputMap` at repaint (`Hud._hotkey`) and never from a table. This is not
+politeness about rebinding — `user://settings.cfg` is replayed over the InputMap
+at boot and wins (`docs/CONTRACT.md`, "the two ways this table has lied" #2), so
+a printed "LMB" is a claim about the shipped layout, not about the one under the
+player's hand. The caption is keyed by the ITEM, not by the hand or the cell:
+two-handing the sword moves it to the other hand and the button that swings it
+does not change.
 
 **Glyphs are renders of the real models**, baked by `tools/scenes/_iconbake.gd`
 and posterised into the Pal ramp, so the cell always shows the thing you are
@@ -395,7 +410,19 @@ a rendering fault, not as a free slot.
 
 The ▼ is a caret rather than a fourth cell because it is not bindable: it swaps
 the primary and alternate sets. Drawing it as a cell would invite the player to
-try to bind it.
+try to bind it — which is also why it is the one thing in the cluster with no key
+cap under it.
+
+**Cells are `Pal.CELL` = 64 reference px**, roughly double what they were until
+2026-08-09, and the hand cell and the button cell are now the *same* size. They
+used to differ by 2 px (32 vs 34), which at that scale nobody could see; doubled,
+a 4 px difference stops reading as deliberate and starts reading as a bug.
+
+The cluster is laid out **from its right edge** (`Pal.CLUSTER_RIGHT`, sharing the
+bag's margin so the HUD has one right edge and not two), never from a left-edge
+fraction. At the old size a left origin was safe. Doubled, the cross alone is 216
+reference px and the old `0.886` left edge put it 82 px off the side of a 1280
+screen. Anchor the thing that must not overflow.
 
 | | |
 |---|---|
@@ -514,8 +541,9 @@ Fractions of viewport, origin top-left; px at 1280×720.
 |---|---|---|---|
 | Health bar origin | 0.031 (40) | 0.899 (647) | 0.268 w (343) × 15 |
 | Stamina bar origin | 0.031 (40) | health bottom + 4 | 0.62× health w × 8 |
-| Hands origin | 0.031 (40) | 0.826 (595) | cell 32×32, gutter 6 |
-| Item buttons origin | 0.886 (1134) | 0.044 (32) | cell 34×34, gutter 6 |
+| D-pad cross origin | right-align 0.969 (1240) | 0.044 (32) | cell 64×64, gutter 12 |
+| Hands origin | cross left − 22 | centred on cross | cell 64×64, gutter 12 |
+| Key caps | centred under cell | cell bottom + 4 | PixelFont ×2 (14 tall) |
 | Bag numeral baseline | right-align 0.969 | 0.900 (648) | 32 px |
 | Value slips | right-align 0.969, max w 0.094 | 0.803→0.858 | 3 px + 2 gutter |
 | Item toast baseline | right-align 0.969 | 0.767 (552) | 16 px |

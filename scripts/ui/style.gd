@@ -69,18 +69,36 @@ const HEAT_GAP := 4.0
 ## "+96 HOT / what you just picked up / what it all is / what leaving costs",
 ## which is the order the thoughts actually arrive in.
 const PREMIUM_BASELINE := 0.735
-## The two HANDS, above health in the "you" pole. Two cells, not the old four:
-## the fixed kit strip (sword/shield/hookshot/bow, always all four, always all
-## owned) described an inventory the game never had.
-const KIT_ORIGIN := Vector2(0.031, 0.826)
-## The three item buttons, TOP-RIGHT and in the physical shape of the D-pad they
-## sit on — docs/CONTRACT.md §2.5 #6. They are here rather than in the bottom-
-## left instrument because they are not a readout, they are a control surface:
-## the arrangement is what tells you which button draws which item, and that is
-## only true if the arrangement matches your thumb.
-const CPAD_ORIGIN := Vector2(0.886, 0.044)
-const CPAD_CELL := 34.0
-const CPAD_GAP := 6.0
+## --- The button cluster, top-right ------------------------------------------
+## The three item buttons in the physical shape of the D-pad they sit on
+## (docs/CONTRACT.md §2.5 #6), and — since they are the same KIND of thing — the
+## two hands beside them. They are not readouts, they are a control surface: the
+## arrangement is what tells you which button draws which item, and that is only
+## true if the arrangement matches your thumb.
+##
+## The hands used to live bottom-left above health, on the reasoning that what he
+## is holding is a fact about his body. That was true and it was the wrong place
+## anyway: every cell here answers "what do I press", and splitting that question
+## across two corners means answering it with two glances. Now every cell in the
+## cluster carries the key that fires it, which is what makes them one instrument.
+##
+## Cells are ~2x the old 32/34, and both sizes collapsed to ONE: at this scale a
+## 2 px difference between the hand cell and the button cell stops reading as
+## deliberate and starts reading as a bug.
+const CELL := 64.0
+const CELL_GAP := 12.0
+## Gap between the hands pair and the D-pad cross — wider than CELL_GAP so the
+## cluster reads as two groups, not five cells in a row.
+const CLUSTER_GAP := 22.0
+## The cluster is laid out from its RIGHT edge (see Hud._cluster_rect), not from
+## a left-edge fraction. At the old size a fractional origin was safe; doubled,
+## the cross alone is 216 reference px and a 0.886 left edge puts it 82 px off
+## the side of a 1280-wide screen. Anchor the thing that must not overflow.
+const CLUSTER_RIGHT := 0.969   ## shares BAG_RIGHT's margin — one right edge, not two
+const CLUSTER_TOP := 0.044
+## Room under a cell for its key cap.
+const KEYCAP_GAP := 4.0
+const KEYCAP_SCALE := 2.0
 const BAG_RIGHT := 0.969
 const BAG_NUM_BASELINE := 0.900
 const SLIPS_TOP := 0.795
