@@ -29,7 +29,10 @@ extends Node3D
 ## from behind a raised shield. They stay Intents because the buffer is the
 ## thing that makes them feel honest: a charge released during the light swing
 ## that started it has to come out when that swing ends, not vanish.
-enum Intent { LIGHT, SPIN, LUNGE, DASH }
+## SLAM is the attack button pressed in the AIR, and it is the one Intent that is
+## never buffered: it is only legal while the hero is off the floor, and a press
+## honoured two swings later would fire it at a hero standing still. See `_press`.
+enum Intent { LIGHT, SPIN, LUNGE, DASH, SLAM }
 
 ## Pitch multiplier per chain step. Two rises, three drops — the chain should
 ## sound like it is going somewhere, and the finisher is the heaviest thing in
@@ -186,6 +189,37 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 @export var dash_drive_time: float = 0.20
 @export var dash_speed: float = 8.0
 
+@export_group("Slam")
+## The air slam's blow. It is the heaviest single hit in the kit — a quarter
+## more than the charged spin — and it is priced that way on purpose: it costs a
+## jump to reach, it cannot be aimed once committed, and `slam_recover` roots the
+## hero on the floor afterwards with no roll out of it. Everything else in here
+## can be thrown from where you already are. [tune]
+@export var slam_damage: int = 6 * K.QUARTER
+## Metres of the circle it damages, measured from the hero's feet. Deliberately
+## wider than the spin's 2.1: the spin is a blade at arm's length and this is the
+## FLOOR moving, so the thing that hits you is not the weapon.
+@export var slam_radius: float = 2.6
+## What the dust reads as, which is not what the damage is. The ring is drawn a
+## little past the edge of the blow — a shockwave whose visible crest stops
+## exactly where the damage does reads as a hitbox, and a player who takes the
+## picture literally will stand a hand's width outside it and be right.
+##
+## The direction of the lie matters: the FX is wider than the damage, never
+## narrower. Wide, a player who dodges the visible edge is safe and the effect
+## simply looks generous; narrow, a player standing clearly outside the dust
+## takes a hit he had every reason to think he had avoided.
+@export var slam_fx_radius: float = 3.1
+## Everything it hits goes flying. Same as the spin's — the two are the kit's
+## "get off me" moves and a crowd that scatters differently from each would make
+## one of them feel weaker than its damage says it is.
+@export var slam_knockback: float = K.KNOCKBACK_HEAVY
+## Seconds the victims are stunned. The spin does not stun and this does, which
+## is the other half of what the recovery buys back: the hero is rooted for
+## `slam_recover` (0.42), so without a stun the slam's own reward would be a ring
+## of enemies free to hit him while he stands in his own dust.
+@export var slam_stun: float = 0.5
+
 @export_group("Shield")
 ## Half-angle of the block cone, degrees. A blow from outside it is not blocked.
 @export var block_cone: float = 70.0
@@ -296,6 +330,9 @@ func _ready() -> void:
 	# Sharpening is sharpening. A whetstone that only improved the light swing
 	# would quietly make the spin the worse button the more you spent in town.
 	spin_damage += Game.sword_bonus()
+	# And the slam, for the same reason. A blow the whetstone skipped would get
+	# quietly worse every time the player spent gold in town.
+	slam_damage += Game.sword_bonus()
 	# The shield's ladder widens the arc it covers (K.GUARD_ARC). Read as a
 	# DELTA off the export rather than assigned, so the export stays what it
 	# says it is -- the bare kite shield -- and a director that hands this node a
@@ -305,6 +342,12 @@ func _ready() -> void:
 	_build_hitbox()
 	_build_audio()
 	_build_vfx()
+
+	# The air slam's blow hangs off the hero's own touchdown, because he is the
+	# only thing that knows which frame the feet arrived on. Same division as
+	# every other attack here: the hero owns the MOVE, this owns what it costs and
+	# what it does (docs/CONTRACT.md §8).
+	_hero.slammed.connect(_slam_impact)
 
 	Bus.loadout_changed.connect(_on_loadout_changed)
 	# Finding a bow has to put it on his back the same moment the chest opens,
@@ -767,6 +810,14 @@ func _tick_context_button() -> void:
 ## anyway, and a mashed chain never charges anything.
 func _tick_attack_button(delta: float) -> void:
 	if Input.is_action_just_pressed(&"attack"):
+		# In the air the attack button is the SLAM, and it is checked before
+		# everything below because none of the rest of the kit can be thrown off
+		# the floor anyway — request_attack refuses them, so without this the
+		# press in mid-air was silence. It also comes before the charge is armed:
+		# a hold that began as a slam must not release into a spin on landing.
+		if not _hero.is_on_floor() and equipped == &"":
+			_press(Intent.SLAM)
+			return
 		# Shield up, sword out: the press is the DASH ATTACK, not a light swing.
 		# This is OOT's R+B and it is the shield's other half — the guard has
 		# always been a way of standing still, and the stab is how you come off
@@ -862,7 +913,13 @@ func _set_charged(on: bool) -> void:
 ## first frame is the player mashing, not the player asking for the next step.
 func _press(intent: int) -> void:
 	if _swing_t >= 0.0:
-		if _swing_t / maxf(_swing_dur, 0.01) >= chain_buffer_from:
+		# A slam is never owed. Every other Intent describes a move the hero could
+		# make from where he is standing whenever it is finally honoured; this one
+		# is only legal in the air, and the air is gone by the time a buffered
+		# press pays out. Buffered, it came out as a hero snapping into a dive
+		# pose on the floor and rooting himself there for no reason the player
+		# could connect to the button they pressed a swing ago.
+		if intent != Intent.SLAM and _swing_t / maxf(_swing_dur, 0.01) >= chain_buffer_from:
 			_buffer = intent
 		return
 	_begin(intent)
@@ -898,6 +955,8 @@ func _begin(intent: int) -> void:
 		return
 
 	match intent:
+		Intent.SLAM:
+			_hero.request_slam()
 		Intent.SPIN:
 			_spin_swing()
 		Intent.DASH:
@@ -1041,6 +1100,86 @@ func _lunge_swing() -> bool:
 	_commit(lunge_swing_time, lunge_damage_window, lunge_damage, lunge_knockback,
 		K.HITSTOP_HEAVY, randf_range(0.80, 0.88))
 	return true
+
+
+## The air slam has arrived. Everything the blow IS happens here, on the one
+## frame the hero's feet touch — `Hero.slammed` is the only thing that knows
+## which frame that is.
+##
+## It does not go through `_commit` and it has no damage window, and that is the
+## difference between this and every other attack in the file. A swing is a blade
+## travelling through an arc over time, so it is scanned across a window; a slam
+## is the floor being hit, which is instantaneous, omnidirectional, and over.
+## Giving it a window would mean a hero who keeps damaging things for a third of
+## a second while standing in his own crater.
+func _slam_impact(at: Vector3, fall_speed: float) -> void:
+	# Presentation first, and specifically before the damage: `apply_hit` can kill
+	# something, and a death takes its own hit-stop and its own sound. The dust
+	# and the bang belong to the LANDING, which happened first.
+	SlamVfx.spawn(_hero.get_parent(), at + Vector3.UP * 0.06, slam_fx_radius)
+	Bus.request_sfx.emit(&"jump_slam", at)
+	Bus.request_hitstop.emit(K.HITSTOP_HEAVY)
+	# The heaviest shake in the game outside taking a hit. Feel SQUARES this
+	# before it moves anything (see its docstring), so the number is not the
+	# fraction of the screen it moves — 0.9 here is a hard jolt, not a wobble.
+	Bus.request_shake.emit(0.90, 0.24)
+
+	for victim in _slam_targets(at):
+		var hit := Hit.make(slam_damage, at, &"sword", slam_knockback, slam_stun)
+		var landed = victim.apply_hit(hit)
+		if landed == false:
+			continue
+		# Deliberately NO per-victim hit-stop or impact sound. The landing has
+		# already spent both, and a slam into four enemies that fired four
+		# hit-stops would freeze the game for a fifth of a second and play the
+		# steel sound as a burst of noise. One blow, one bang.
+		if _impact_player != null and not _impact_player.playing:
+			_impact_player.pitch_scale = randf_range(0.72, 0.80)
+			_impact_player.play()
+	# Silence the unused argument without dropping it from the signal: how fast
+	# he was going is exactly what a future scaling of this blow would read, and
+	# a signal that carries it is cheaper to keep than to re-add.
+	if fall_speed < 0.0:
+		return
+
+
+## Everything damageable inside `slam_radius` of `at`, each listed once.
+##
+## A direct shape query rather than the swing hitbox, and not because it is
+## tidier: `_hitbox` is an Area3D, and an Area3D's overlaps are resolved by the
+## physics server on ITS schedule — turning monitoring on and reading the
+## overlaps in the same frame returns the previous frame's answer, or nothing at
+## all on the first. An impact that must be exact on one named frame cannot ask a
+## question that is answered a frame late.
+func _slam_targets(at: Vector3) -> Array[Node]:
+	var out: Array[Node] = []
+	var space := _hero.get_world_3d().direct_space_state
+	var shape := SphereShape3D.new()
+	shape.radius = slam_radius
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = shape
+	# Chest height, for the reason `_aim_hitbox` puts the sword's sphere there: a
+	# sphere sitting on the floor catches the geometry and misses the bodies.
+	q.transform = Transform3D(Basis.IDENTITY, at + Vector3.UP * 0.7)
+	q.collision_mask = K.L_ENEMY | K.L_INTERACT
+	q.collide_with_areas = true
+	q.collide_with_bodies = true
+	q.exclude = [_hero.get_rid()]
+
+	var seen := {}
+	for touch in space.intersect_shape(q, 32):
+		var node := touch.get("collider") as Node
+		if node == null or node == _hero or _hero.is_ancestor_of(node):
+			continue
+		var victim := _damageable(node)
+		if victim == null:
+			continue
+		var id := victim.get_instance_id()
+		if seen.has(id):
+			continue
+		seen[id] = true
+		out.append(victim)
+	return out
 
 
 ## Arm the swing the hero has just agreed to. Called only after a successful

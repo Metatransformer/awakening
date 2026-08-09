@@ -26,8 +26,17 @@ signal landed(fall_speed: float)
 ## Fires as a roll starts, so P4/P11 can hang i-frames and a whoosh off it.
 signal roll_started
 signal roll_finished
+## Fires the frame an air slam reaches the floor, at the hero's feet. `fall_speed`
+## is m/s downward at contact. HeroCombat hangs the damage, the dust and the
+## bang off this — the hero owns the MOVE and never the blow (docs/CONTRACT.md
+## §8), exactly as request_attack owns the pose and not the damage.
+signal slammed(at: Vector3, fall_speed: float)
 
-enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER, ATTACK, HOOK }
+## SLAM is the air attack: a hang, a drive at the floor, and a rooted recovery
+## once it arrives. It is its OWN state rather than an ATTACK variant because
+## request_attack's first line refuses anything not standing on the floor, and
+## relaxing that would let every swing in the kit be thrown mid-jump.
+enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER, ATTACK, HOOK, SLAM }
 
 ## Which way a dodge goes, measured against the facing it KEEPS through it.
 ##
@@ -136,6 +145,30 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, SPIN, LUNGE, DASH }
 ## the moment the hero is visibly travelling, well before he is sprinting.
 @export var jump_run_speed_gate: float = K.WALK_SPEED
 
+@export_group("Slam")
+## Seconds the hero HANGS before the drive, with the weapon coming overhead.
+##
+## The whole verb lives or dies on this. Without it the slam is instantaneous —
+## press attack in the air and the hero is simply on the floor, with the impact
+## already over by the time the player's eye reaches him — and an attack nobody
+## can see wind up cannot be reacted to by anything, including the player who
+## threw it. A sixth of a second is enough to read the pose and short enough that
+## it never feels like a stall.
+@export var slam_hang: float = 0.16
+## Metres/sec straight down, once the hang is over. Deliberately far faster than
+## a fall (K.GRAVITY tops a jump out at about 6.5 m/s): the drive is what makes
+## this a strike rather than a landing, and at gravity's own speed it reads as
+## the hero giving up mid-air.
+@export var slam_speed: float = 16.0
+## Seconds rooted after touchdown. This is the cost of the move and the only
+## thing keeping it off the "press it constantly" list — it is longer than any
+## swing's recovery, and it cannot be rolled out of.
+@export var slam_recover: float = 0.42
+## How far above the floor the slam may be STARTED. Below this there is not
+## enough air for the hang to read, and what the player gets for the press is a
+## hero who twitches and is immediately rooted for `slam_recover`.
+@export var slam_min_height: float = 0.35
+
 @export_group("Animation")
 @export var clip_idle: StringName = &"ss_idle_01"
 @export var clip_walk: StringName = &"ss_walk_01"
@@ -202,6 +235,29 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, SPIN, LUNGE, DASH }
 ## match.
 @export var jump_start_offset: float = 0.50
 @export var jump_run_start_offset: float = 0.47
+## The air slam, which is ONE clip cut into two one-shots — the dive and the
+## impact — for the reason clip_air/clip_land are two: the game does not know how
+## long the hero will be falling, so a single clip covering both would have to
+## guess, and every guess is either a hero who lands out of a strike he never
+## finished or one who plants his weapon in mid-air.
+##
+## Neither the sword-and-shield set nor `extra` has a downward strike in it —
+## fifty-two clips of horizontal and diagonal — so this borrows from the axe set
+## exactly as the spin does, and for the same reason.
+##
+## `ax_melee_run_jump_attack` is 3.67 s of run-up, gather, leap, strike, land and
+## recovery. The offsets below were read off tools/directors/slam_lookdev.gd,
+## which renders the clip at named seconds — NOT off the hips track, which can
+## tell you where the body is and nothing at all about where the weapon is:
+##
+##   1.23  apex, tucked
+##   1.50  descending, both arms overhead, blade up — THE DIVE POSE
+##   1.70  contact, deep crouch, blade coming down across the body
+##   1.83  the bottom of the compression
+##   2.75  standing again; after this it is a man holding an axe
+@export var clip_slam: StringName = &"ax_melee_run_jump_attack"
+@export var slam_start_offset: float = 1.50
+@export var slam_land_offset: float = 1.70
 ## The three steps of the light chain. Three DIFFERENT clips, not one replayed:
 ## a combo whose every hit is the same swing reads as a stutter, and the whole
 ## point of a chain is that the player can see how far into it they are.
@@ -402,6 +458,12 @@ var _air_fired: bool = false
 ## LANDING: the jump clips carry their own touchdown, so `Land` must not fire on
 ## top of one. A fall the hero did not choose has no such clip and still does.
 var _jumping: bool = false
+## Seconds of HANG left before the slam's drive starts. Above zero the hero is
+## held at exactly his commit height; at zero he starts falling at `slam_speed`.
+var _slam_hang_left: float = 0.0
+## True once a slam has touched down: the state is then running out
+## `slam_recover` on the floor and must not keep driving itself into it.
+var _slam_landed: bool = false
 ## Seconds `context` has been held unbroken. The tap/hold split reads this.
 var _context_held: float = 0.0
 ## NOTE for the next person who measures a jump and finds it short: it is not
@@ -432,6 +494,10 @@ const _P_AIR := "parameters/Air/request"
 const _P_LAND := "parameters/Land/request"
 const _P_JUMP := "parameters/Jump/request"
 const _P_JUMP_RUN := "parameters/JumpRun/request"
+const _P_SLAM := "parameters/Slam/request"
+const _P_SLAM_SCALE := "parameters/SlamScale/scale"
+const _P_SLAM_LAND := "parameters/SlamLand/request"
+const _P_SLAM_LAND_SCALE := "parameters/SlamLandScale/scale"
 ## One animation-tree node per Dodge value, in enum order — same arrangement as
 ## _SWING_NODES below, and for the same reason (see _add_scaled_shot).
 const _DODGE_NODES: Array[StringName] = [
@@ -678,6 +744,25 @@ func _build_anim_tree() -> void:
 	prev = _add_oneshot(tree_root, &"JumpRun", prev,
 		_jump_anim(clip_jump_run, jump_run_start_offset), Vector2(790, 0), 0.04, 0.22)
 
+	# The slam sits above both jumps, because it is what a jump BECOMES: the
+	# player is mid-`ex_jump` when he presses attack, and the dive has to read
+	# over the leap that is still running rather than under it.
+	#
+	# Time-scaled, unlike the jumps. A jump's airborne stretch is a fixed 0.60 s
+	# and the clip matches it; a slam's is however long the drive takes from
+	# wherever the hero happened to be, so `request_slam` measures the drop and
+	# sizes both halves to it (see there). Hence _add_scaled_shot's shape, but
+	# with the offset nodes _jump_anim builds.
+	prev = _add_scaled_jump_shot(tree_root, &"Slam", prev, clip_slam,
+		slam_start_offset, slam_land_offset - slam_start_offset, Vector2(860, 0), 0.05, 0.14)
+	# And the impact above the dive, for the same reason Land sits above Air.
+	# Its fade-in is the shortest in the tree: this is the frame the dust and the
+	# bang go off on, and a contact pose eased in over even 0.05 s arrives after
+	# the thing it is supposed to be causing.
+	prev = _add_scaled_jump_shot(tree_root, &"SlamLand", prev, clip_slam,
+		slam_land_offset, _clip_length(clip_slam) - slam_land_offset,
+		Vector2(930, 0), 0.02, 0.26)
+
 	# Four dodges, four one-shots — not one node whose clip is reassigned, for the
 	# reason _add_scaled_shot gives. They chain in Dodge order and they all sit
 	# BELOW `Block`, which is load-bearing: the guard is a blend that would
@@ -863,9 +948,40 @@ func _anim_node(clip: StringName) -> AnimationNodeAnimation:
 ## played, and tools/build_anim_lib.gd's TRIM note for where the numbers came
 ## from. `start_offset` is engine-side, so the mixer never walks the frames we
 ## are not showing — this is not a seek on the first frame.
-func _jump_anim(clip: StringName, offset: float) -> AnimationNodeAnimation:
+##
+## `use_custom_timeline` IS NOT OPTIONAL, and this is the whole reason a jump
+## used to jump a second time on touchdown. `start_offset`, `timeline_length`,
+## `loop_mode` and `stretch_time_scale` are ALL inert on an AnimationNodeAnimation
+## unless the custom timeline is switched on — the engine hides them in the
+## inspector for exactly that reason, and from code they set silently and do
+## nothing. With it off, `ex_jump` played from 0.00: the hero rose to his apex
+## while the pose was still gathering into the anticipation crouch, and then
+## performed the entire leap AND its landing standing on the floor, 0.50 s late.
+## Measured, not guessed — tools/directors/jump_pose_trace.gd prints the pose's
+## hips against the body's height on one timeline.
+##
+## The rest of the timeline is then ours to state, and all three matter:
+##   timeline_length    — what is LEFT of the clip after the offset. Leave it at
+##                        the 1.0 default and a 1.17 s jump is cut at 1.0.
+##   stretch_time_scale — false. True squeezes the clip into `timeline_length`,
+##                        and the airborne stretch is already 1:1 with the arc
+##                        (see `jump_start_offset`); stretching it re-times the
+##                        one thing that was measured to match.
+##   loop_mode          — NONE. The custom timeline overrides the clip's own, and
+##                        a looping one would restart the leap under the OneShot
+##                        rather than letting it end.
+## `length` defaults to "the rest of the clip", which is what both jumps want.
+## The slam passes a real one because it uses two windows OUT of one clip and the
+## first must stop where the second begins.
+func _jump_anim(clip: StringName, offset: float,
+		length: float = -1.0) -> AnimationNodeAnimation:
 	var n := _anim_node(clip)
+	n.use_custom_timeline = true
 	n.start_offset = offset
+	var rest := _clip_length(clip) - offset
+	n.timeline_length = maxf(rest if length < 0.0 else minf(length, rest), 0.1)
+	n.stretch_time_scale = false
+	n.loop_mode = Animation.LOOP_NONE
 	return n
 
 
@@ -885,6 +1001,32 @@ func _add_scaled_shot(tree_root: AnimationNodeBlendTree, id: StringName, base: S
 	var scale_id := StringName(String(id) + "Scale")
 	tree_root.add_node(anim_id, _anim_node(clip), pos + Vector2(-200, 260))
 	tree_root.add_node(scale_id, AnimationNodeTimeScale.new(), pos + Vector2(-80, 260))
+	tree_root.connect_node(scale_id, 0, anim_id)
+	var shot := AnimationNodeOneShot.new()
+	shot.fadein_time = fade_in
+	shot.fadeout_time = fade_out
+	tree_root.add_node(id, shot, pos)
+	tree_root.connect_node(id, 0, base)
+	tree_root.connect_node(id, 1, scale_id)
+	return id
+
+
+## One offset slice of a clip, time-scaled, as a one-shot. The two halves of the
+## slam are both this: `_jump_anim`'s custom timeline picks the SECONDS of the
+## clip that are wanted, and the TimeScale in front of it compresses that slice
+## onto however long the move actually takes this time.
+##
+## Kept apart from `_add_scaled_shot` rather than folded into it. That one takes
+## a whole clip and is what every swing and dodge uses; this one takes a window,
+## and a single function with an optional window is a function whose callers have
+## to be read to know which of the two things it is doing.
+func _add_scaled_jump_shot(tree_root: AnimationNodeBlendTree, id: StringName,
+		base: StringName, clip: StringName, offset: float, length: float,
+		pos: Vector2, fade_in: float, fade_out: float) -> StringName:
+	var anim_id := StringName(String(id) + "Anim")
+	var scale_id := StringName(String(id) + "Scale")
+	tree_root.add_node(anim_id, _jump_anim(clip, offset, length), pos + Vector2(-200, 340))
+	tree_root.add_node(scale_id, AnimationNodeTimeScale.new(), pos + Vector2(-80, 340))
 	tree_root.connect_node(scale_id, 0, anim_id)
 	var shot := AnimationNodeOneShot.new()
 	shot.fadein_time = fade_in
@@ -953,6 +1095,8 @@ func _physics_process(delta: float) -> void:
 			_tick_attack(delta)
 		MoveState.HOOK:
 			_tick_hook(delta)
+		MoveState.SLAM:
+			_tick_slam(delta)
 
 	# The hookshot flies perfectly straight and so does what it drags
 	# (docs/CONTRACT.md §2.5 #8). Gravity applied during the pull would sag the
@@ -1434,6 +1578,103 @@ func _bleed_dir() -> Vector3:
 	return travel.normalized() if travel != Vector3.ZERO else _forward()
 
 
+## The air slam: hang, drive at the floor, and be rooted when it arrives.
+##
+## Returns false — having done nothing — if the hero is not airborne with room
+## beneath him, so a press made a frame after touchdown is silence rather than a
+## hero who plants himself for `slam_recover` at ankle height.
+##
+## The DROP IS MEASURED, with a ray, before anything is fired. Both halves of the
+## clip are then sized to what that measurement says will happen: the dive is
+## compressed onto `hang + drop / slam_speed` so the blade arrives overhead and
+## comes down over exactly the air the hero has left, and the impact half is
+## sized to `slam_recover` so he is standing again on the frame the state ends.
+## Guessing either one is how you get a strike that finishes in mid-air on a
+## short hop and one that is still winding up on a drop from a ledge.
+func request_slam() -> bool:
+	if state != MoveState.GROUND or is_on_floor():
+		return false
+	var drop := _drop_below()
+	if drop < slam_min_height:
+		return false
+
+	state = MoveState.SLAM
+	_state_timer = 0.0
+	_slam_hang_left = slam_hang
+	_slam_landed = false
+	# A slam kills the horizontal entirely — it goes straight down, at whatever
+	# is under him, and a slam that carries a run's momentum lands a metre past
+	# what the player aimed it at.
+	_speed = 0.0
+	_lunge_left = 0.0
+	_set_planar_velocity(Vector3.ZERO)
+	# The jump's own landing must not fire underneath this one. `_air_fired` is
+	# already true if this came out of a jump; set it for the case it did not,
+	# which is a slam thrown out of an ordinary fall off a ledge.
+	_air_fired = true
+	_jumping = true
+
+	var target := lock_target()
+	if target != null:
+		facing_yaw = _yaw_to(target)
+
+	if _tree != null:
+		var air := slam_hang + drop / maxf(slam_speed, 0.1)
+		_tree.set(_P_SLAM_SCALE,
+			(slam_land_offset - slam_start_offset) / maxf(air, 0.05))
+		_tree.set(_P_SLAM_LAND_SCALE,
+			(_clip_length(clip_slam) - slam_land_offset) / maxf(slam_recover, 0.05))
+	_fire(_P_SLAM)
+	return true
+
+
+## Metres of clear air under the hero's feet, out to 40 m. Used by the slam to
+## size its own animation, so it asks the same collision layer the body falls
+## through (K.L_WORLD) and nothing else — an enemy standing underneath is
+## something to land ON, not a floor to stop the ray.
+func _drop_below() -> float:
+	var space := get_world_3d().direct_space_state
+	var from := global_position + Vector3.UP * 0.05
+	var q := PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * 40.0,
+		K.L_WORLD, [self])
+	var hit := space.intersect_ray(q)
+	if hit.is_empty():
+		return 40.0
+	return maxf(from.y - float((hit.position as Vector3).y), 0.0)
+
+
+## The slam, frame by frame: hang, then drive, then be rooted. The one state in
+## the file that changes what gravity does — see `_apply_gravity`.
+func _tick_slam(delta: float) -> void:
+	if _slam_landed:
+		_state_timer -= delta
+		# Rooted, not frozen: he keeps sliding to a stop if the impact shoved him.
+		_speed = move_toward(_speed, 0.0, decel * 3.0 * delta)
+		_set_planar_velocity(_bleed_dir() * _speed)
+		if _state_timer <= 0.0:
+			state = MoveState.GROUND
+		return
+
+	_track_lock(delta)
+	if _slam_hang_left > 0.0:
+		_slam_hang_left = maxf(_slam_hang_left - delta, 0.0)
+	# The floor test is `_after_move`'s job and it has already run for this frame,
+	# so touchdown is handled there (see `_land_slam`). Nothing else to do here:
+	# the drive itself is velocity, and velocity is _apply_gravity's.
+	_set_planar_velocity(Vector3.ZERO)
+
+
+## Touchdown. Called from `_after_move` — the only place that knows the floor was
+## reached on THIS move rather than a frame ago.
+func _land_slam(fall_speed: float) -> void:
+	_slam_landed = true
+	_state_timer = slam_recover
+	_speed = 0.0
+	if _tree != null:
+		_fire(_P_SLAM_LAND)
+	slammed.emit(global_position, fall_speed)
+
+
 ## Start a swing lasting `duration` seconds. Returns false if the hero is busy —
 ## rolling, turning, or already mid-swing — so the caller does not play a
 ## whoosh for a swing that never happened.
@@ -1635,10 +1876,17 @@ func _commit_ranged(duration: float, aim: Vector3) -> bool:
 ## committed move in this file holds, that the clip's length IS the move's
 ## length. A missing clip scales to 1.0 rather than dividing by a guess.
 func _clip_scale(clip: StringName, duration: float) -> float:
-	var clip_len := 1.0
-	if anim_library.has_animation(clip):
-		clip_len = anim_library.get_animation(clip).length
-	return clip_len / maxf(duration, 0.05)
+	return _clip_length(clip) / maxf(duration, 0.05)
+
+
+## A clip's length in seconds, post-TRIM (tools/build_anim_lib.gd bakes the trim
+## into the resource, so this is the length of the move and not of the export).
+## A missing clip answers 1.0 rather than 0.0, so a caller dividing by it gets a
+## harmless scale instead of an error.
+func _clip_length(clip: StringName) -> float:
+	if anim_library != null and anim_library.has_animation(clip):
+		return anim_library.get_animation(clip).length
+	return 1.0
 
 
 ## True while a bow or a hookshot is out. Owned by `HeroRanged`, which is the
@@ -1858,6 +2106,15 @@ func _apply_gravity(delta: float) -> void:
 		velocity.y = _jump_impulse
 		_jump_impulse = 0.0
 		return
+	# The slam OWNS its vertical, and gravity is not consulted for either half of
+	# it. The hang is a hard zero rather than a small upward push, because the one
+	# thing the pose has to say is "this is deliberate" and a hero still drifting
+	# up through his own wind-up says the opposite; the drive is a hard speed
+	# rather than an impulse, so a slam from a ledge arrives at the same speed as
+	# one from a hop and the impact is worth the same both times.
+	if state == MoveState.SLAM and not _slam_landed:
+		velocity.y = 0.0 if _slam_hang_left > 0.0 else -slam_speed
+		return
 	if is_on_floor():
 		# A whisker of downward bias so floor_snap_length keeps him welded to
 		# the ledge steps instead of launching off each one.
@@ -1868,6 +2125,13 @@ func _apply_gravity(delta: float) -> void:
 
 func _after_move(pre_fall: float, delta: float) -> void:
 	if is_on_floor():
+		# A slam's touchdown is its own event and it is not conditional on
+		# `coyote_time` the way an ordinary landing is: the hero committed to this
+		# one, and a slam thrown a hand's breadth off the floor still has to go
+		# off. Handled before the block below so the ordinary landing sees a hero
+		# who has already dealt with his own arrival.
+		if state == MoveState.SLAM and not _slam_landed:
+			_land_slam(absf(minf(pre_fall, 0.0)))
 		if _airborne_time > coyote_time:
 			var fall := absf(minf(pre_fall, 0.0))
 			landed.emit(fall)
