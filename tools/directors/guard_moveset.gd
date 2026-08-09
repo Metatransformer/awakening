@@ -36,8 +36,12 @@ extends RefCounted
 ##     --warmup=60
 
 ## Which stick, which Dodge it must become, and what it is called on the strip.
-## A neutral stick with the guard raised is the BACKSTEP, the most used defensive
-## move in the source material — see `Hero._try_start_roll`.
+##
+## [oot] The backflip is `move_down` and NOT a neutral stick, which is a change
+## from what this director used to assert. Locked, a neutral stick belongs to the
+## JUMP ATTACK — that is the split the source material makes on Z + A, and it is
+## the one `Hero._try_start_roll` makes now. Pulling BACK is what has always
+## bought the backflip. `lt_moveset.gd` owns the other side of that same press.
 ##
 ## The sideways pair are ROLLS now, not sidehops — same clip as the forward dive
 ## with the model turned (`Hero._dodge_model_offset`), so they travel a roll's
@@ -45,7 +49,7 @@ extends RefCounted
 ## checked here is unchanged and still true: which Dodge fired, and which way it
 ## went. The pose and the speed are `tools/directors/lt_moveset.gd`'s beat.
 const DODGES := [
-	{"action": &"", "dodge": 1, "tag": "backstep"},
+	{"action": &"move_down", "dodge": 1, "tag": "backflip"},
 	{"action": &"move_left", "dodge": 2, "tag": "roll_l"},
 	{"action": &"move_right", "dodge": 3, "tag": "roll_r"},
 	{"action": &"move_up", "dodge": 0, "tag": "roll_fwd"},

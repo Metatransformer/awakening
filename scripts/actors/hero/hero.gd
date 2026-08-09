@@ -1266,6 +1266,20 @@ func _fire_jump() -> void:
 		_fire(_P_JUMP)
 
 
+## Is the stick at rest this frame? [oot] Behind a raised shield ONE button is
+## two moves and the stick is what picks: neutral leaps, deflected dodges. Both
+## halves live in different files — the dodge here, the leap in
+## `HeroCombat._tick_context_button` — and they must answer this question
+## identically or a press falls between them and nothing happens at all.
+## Which is why it is a function and not two copies of a deadzone test.
+##
+## Read raw rather than through `_camera_relative`, because a rotation cannot
+## change a length and the caller in the other file has no camera basis to hand.
+func stick_neutral() -> bool:
+	var stick := Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down")
+	return stick.length() < K.STICK_DEADZONE
+
+
 func _try_start_roll(wish: Vector3, mag: float) -> bool:
 	if Prompt != null and Prompt.blocked:
 		return false
@@ -1285,23 +1299,34 @@ func _try_start_roll(wish: Vector3, mag: float) -> bool:
 	var dir := wish
 
 	if target != null:
-		# Locked, a neutral stick is not "no roll" — it is the BACKSTEP, which
-		# is the single most used defensive move in the source material. The
-		# stick gate does not apply either: locked, a dodge is a deliberate
+		# [oot] Locked, the button is split by the STICK and the source material
+		# splits it exactly here: neutral is the JUMP ATTACK, back is the
+		# backflip, left and right are the sideways dodges. So a neutral press is
+		# not a dodge at all — it belongs to the leap, and this function's job is
+		# to stand down for it. `HeroCombat._tick_context_button` reads the same
+		# `stick_neutral()`, which is the only reason the press cannot land in
+		# both halves; `lunge_max_range` matches the lock's own break range so it
+		# cannot land in neither.
+		#
+		# The stick gate does not apply either: locked, a dodge is a deliberate
 		# press rather than something you fall into out of a run, so gating it
 		# on a near-full deflection would eat half of them.
-		if wish == Vector3.ZERO or mag < K.STICK_DEADZONE:
-			dir = -K.flat(target.global_position - global_position)
-			if dir == Vector3.ZERO:
-				dir = -_forward()
-			dir = dir.normalized()
+		if stick_neutral():
+			return false
 	elif blocking:
 		# Guarding with nothing locked is the same stance minus a target
 		# (_tick_camera_facing): the facing is pinned to the camera, so a
 		# neutral stick backsteps straight away from what you are looking at.
+		#
+		# The leap does NOT take this press, and the asymmetry with the locked
+		# case above is deliberate rather than an oversight: `_lunge_swing` needs
+		# something to leap at and refuses without a lock, so yielding here would
+		# trade a working backstep for silence. A press stands down only for a
+		# move that is actually going to happen.
+		#
 		# Same reasoning as the lock for the missing gate — this is a press you
 		# make from behind a raised shield, not one you fall into out of a run.
-		if wish == Vector3.ZERO or mag < K.STICK_DEADZONE:
+		if stick_neutral():
 			dir = -_forward()
 	else:
 		# [oot] a discrete action needs a near-full deflection — you cannot roll

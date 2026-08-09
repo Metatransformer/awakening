@@ -596,7 +596,7 @@ const LEGEND := [
 	[&"", "LOOK"],
 	[&"z_target", "LOCK-ON"],
 	[&"attack", "SWORD (HOLD=CHARGE)"],
-	[&"use_item", "USE/LUNGE"],
+	[&"use_item", "USE ITEM"],
 	# Two things are named here that a button-masher would never find: the dash,
 	# which is a button you already know pressed in a stance you already know, and
 	# the fact that the guard LOCKS. On the pad `shield` is the left trigger and
@@ -611,7 +611,13 @@ const LEGEND := [
 	# On a pad this row swallows the INTERACT row below it: both are A, and two
 	# entries reading "A DODGE   A INTERACT" is a legend asking the player to
 	# work out which one they get. See `_legend`.
-	[&"context", "DODGE (HOLD=RUN)"],
+	# The leap is named on this row and not on `use_item`, where it used to sit,
+	# because this is the button that throws it: guard up, stick still, A. It
+	# rides the DODGE label rather than getting a row of its own for the same
+	# reason the INTERACT row is swallowed below — they are one button, and a
+	# legend that lists a button twice is asking the player to work out which
+	# one they get.
+	[&"context", "DODGE / LEAP (HOLD=RUN)"],
 	[&"jump", "JUMP"],
 	[&"interact", "INTERACT"],
 	[&"inventory", "POUCH"],

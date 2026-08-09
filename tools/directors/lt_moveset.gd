@@ -5,11 +5,17 @@ extends RefCounted
 ## guard_moveset.gd already proves the four dodges TRAVEL correctly. This asks
 ## the two questions it does not:
 ##
-##   1. **LT + A is the jump attack.** `interact` is A on the pad, and with the
-##      guard up and something locked it is supposed to leap. The failure this
-##      catches is a press that is silently refused — by the range gate, by a
-##      missing lock, or by an interact prompt eating the button — and looks
-##      from the couch exactly like a button that does nothing.
+##   1. **LT + A is the jump attack.** With the guard up, something locked and
+##      the stick AT REST, `context` — A on the pad — is supposed to leap. The
+##      failure this catches is a press that is silently refused: by the range
+##      gate, by a missing lock, by a prompt eating the button, or by the dodge
+##      taking the press that was meant for the leap. All four look from the
+##      couch exactly like a button that does nothing.
+##
+##      [oot] A is TWO moves and the stick picks. So each leap beat also asserts
+##      the hero did not roll — the split failing the other way (both halves
+##      answering, or the dodge answering first) is not visible in "did the
+##      lunge clip play", and it is the failure a shared button actually has.
 ##   2. **The sidewards dodge is a ROLL.** Not the standing shuffle the longbow
 ##      set ships: the hero has to go to ground. Checked by which one-shot is
 ##      live in the tree, because "it travelled 2.4 m sideways" was true of the
@@ -80,6 +86,7 @@ func run(rig) -> void:
 
 	for r in LEAP_RANGES:
 		await _leap_at(rig, hero, post, r)
+	await _shoot_leap(rig, hero, post, out)
 	await _dodge(rig, hero, post, &"move_right", DODGE_RIGHT, "roll_r", out)
 	await _dodge(rig, hero, post, &"move_left", DODGE_LEFT, "roll_l", out)
 
@@ -104,26 +111,53 @@ func _leap_at(rig, hero: Node3D, post: Node3D, range_m: float) -> void:
 	var focus: Object = Prompt.focus if Prompt != null else null
 	print("LT   @%.1fm gap=%.2f focus=%s stamina=%.0f"
 		% [range_m, before, focus, float(Game.get(&"stamina"))])
-	Input.action_press(&"interact")
+	# `context`, the same action the dodge reads, because the whole point is that
+	# ONE press goes one of two ways. `_stance` left the stick alone, so this is
+	# the neutral half.
+	Input.action_press(&"context")
 	# Polled rather than sampled: the one-shot is only REQUESTED on the frame
 	# the state flips, so a single read on that frame sees no swing at all.
 	# guard_moveset paid for this lesson on the dash.
 	var tree: AnimationTree = hero.find_child("AnimTree", false, false)
 	var saw_lunge := false
 	var saw_attack := false
+	var saw_roll := false
 	for _i in 14:
-		if int(hero.get(&"state")) == ST_ATTACK:
+		var st := int(hero.get(&"state"))
+		if st == ST_ATTACK:
 			saw_attack = true
+		if st == ST_ROLL:
+			saw_roll = true
 		if tree != null and bool(tree.get("parameters/SwingLunge/active")):
 			saw_lunge = true
 		await rig.wait_frames(1)
-	Input.action_release(&"interact")
+	Input.action_release(&"context")
 	await rig.wait_seconds(1.0)
 	var closed := before - _gap(hero, post)
-	print("LT leap @%.1fm: attack=%s lunge_clip=%s closed=%+.2fm"
-		% [range_m, saw_attack, saw_lunge, closed])
+	print("LT leap @%.1fm: attack=%s lunge_clip=%s rolled=%s closed=%+.2fm"
+		% [range_m, saw_attack, saw_lunge, saw_roll, closed])
 	if not saw_lunge:
 		_fail("%.1fm: LT+A did not throw the jump attack" % range_m)
+	if saw_roll:
+		_fail("%.1fm: LT+A dodged as well — the stick split leaks" % range_m)
+	await _drop(rig, &"")
+
+
+## The leap, photographed. Separate from the measured sweep for the reason
+## `_shoot` gives below — `rig.capture()` costs game time and a burst
+## interleaved with the poll loop would miss the frame the swing starts on.
+##
+## 4.2 m is the range chosen to LOOK at: point blank the leap correctly has no
+## travel (see `lunge_min_range` in hero_combat.gd), which is the right answer
+## and a useless photograph of it.
+func _shoot_leap(rig, hero: Node3D, post: Node3D, out: String) -> void:
+	await _stance(rig, hero, post, 4.2, &"")
+	Input.action_press(&"context")
+	await rig.wait_frames(2)
+	Input.action_release(&"context")
+	for i in 7:
+		await rig.capture(out.path_join("lt_leap_%d.png" % i))
+		await rig.wait_seconds(0.10)
 	await _drop(rig, &"")
 
 
