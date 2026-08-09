@@ -138,6 +138,20 @@ func _pouch(rig) -> void:
 # --- C and D. The smith -----------------------------------------------------
 
 func _smith(rig) -> void:
+	# THE COUNTER IS EIGHT LINES ONLY IF YOU OWN THE BOW AND THE HOOKSHOT.
+	# `ShopDb.GATED_BY` hides the `string` and `chain` ladders and the arrow line
+	# until the weapon they sharpen is owned (docs/SCOPE.md M1), and
+	# `Game.STARTER_KIT` is empty now -- so a cold boot stands at this counter
+	# and sees FIVE rows, not eight.
+	#
+	# This director is the FORGE, and the ladder it drives by name below is the
+	# chain. Granting the two weapons is the setup that makes the subject
+	# reachable; it is not the thing under test. The gate itself -- that the rows
+	# really are absent before you own the weapon, and really do appear after --
+	# is tools/directors/gate_locks.gd's B and D beats, which is where M1 put it.
+	Game.grant(&"bow")
+	Game.grant(&"hookshot")
+
 	var town := rig.scene() as Town
 	_stand_at(rig, town.smith.global_position + Vector3(0.0, 0.0, 1.6))
 	await rig.wait_frames(20)

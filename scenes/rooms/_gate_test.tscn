@@ -1,0 +1,62 @@
+[gd_scene load_steps=6 format=3]
+
+; The gate fixture: the proving ground with two LockedDoors in it, one keyed to
+; the bow and one to the hookshot. Owned by tools/directors/gate_locks.gd.
+;
+; Underscore-prefixed like _lookdev.tscn and _smoke.tscn -- it is a harness, not
+; a room the game ships.
+;
+; The doors are put in REAL doorways rather than stood in the open, because half
+; of what makes a locked door read is the surround around it (kit_doorway.gd's
+; stepped mouldings) and a door photographed floating in a chamber proves a
+; silhouette nobody will ever see.
+;
+;   BowDoor    the proving ground's own north doorway, with the lit corridor
+;              behind it -- so an opened door has somewhere warm to open ONTO.
+;   HookDoor   further down that corridor, between two sconces. It is here so
+;              the two sigils can be compared in one run: the mark and its hue
+;              come from one row in LockedDoor.SIGILS, and a second door is the
+;              only way to show that the row is doing the work.
+
+[ext_resource type="PackedScene" path="res://scenes/rooms/proving_ground.tscn" id="ground"]
+[ext_resource type="PackedScene" path="res://scenes/actors/hero/hero.tscn" id="hero"]
+[ext_resource type="PackedScene" path="res://scenes/camera/game_camera.tscn" id="camera"]
+[ext_resource type="PackedScene" path="res://scenes/kit/doorway.tscn" id="doorway"]
+[ext_resource type="Script" path="res://scripts/props/locked_door.gd" id="door"]
+
+[node name="GateTest" type="Node3D"]
+
+[node name="Ground" parent="." instance=ExtResource("ground")]
+
+; A doorway across the corridor for the second door to live in. Span 5 so its
+; flanks bury themselves in the corridor's 0.8 m walls instead of stopping short
+; of them; height 5 to match the corridor's ceiling.
+[node name="CorridorDoorway" parent="." instance=ExtResource("doorway")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -16)
+span = 5.0
+height = 5.0
+frame_w = 0.5
+frame_depth = 0.4
+rng_seed = 61
+
+; Set 50 mm back into the reveal so the doorway's own surround frames the leaves
+; instead of the leaves standing proud of it.
+[node name="BowDoor" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -10.05)
+script = ExtResource("door")
+key_item = &"bow"
+label = "The Cistern Shortcut"
+destination = &"cistern_shortcut"
+
+[node name="HookDoor" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -16.05)
+script = ExtResource("door")
+key_item = &"hookshot"
+label = "The Drowned Vault"
+destination = &"cistern_vault"
+
+[node name="Hero" parent="." instance=ExtResource("hero")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, -6)
+
+[node name="GameCamera" parent="." instance=ExtResource("camera")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, -2)

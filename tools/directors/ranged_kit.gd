@@ -40,11 +40,29 @@ func run(rig) -> void:
 	print("RANGED done, %d failure(s)" % fails)
 
 
-# --- The starter kit --------------------------------------------------------
+# --- The ranged kit ---------------------------------------------------------
 
 func _starter_kit(rig) -> void:
-	_check("the bow is owned at boot", Game.has(&"bow"))
-	_check("the hookshot is owned at boot", Game.has(&"hookshot"))
+	# THIS USED TO ASSERT "the bow is owned at boot", AND THAT CLAIM IS NOW
+	# FALSE ON PURPOSE. `Game.STARTER_KIT` is empty (docs/SCOPE.md M1): the bow
+	# and the hookshot are earned off floors 1 and 3, so a fresh save owning
+	# either of them would be the bug rather than the baseline.
+	#
+	# The "he starts with nothing ranged" claim did not go missing with it -- it
+	# MOVED, to tools/directors/gate_locks.gd (checks A0-A6), which is the
+	# director M1 built to own it. Asserting it here as well would be two
+	# directors answering one question, and the copy that is easiest to forget
+	# is the one attached to a director about something else.
+	#
+	# What is left here is this director's actual subject: given the gear, does
+	# the ranged kit work. So it hands itself the gear.
+	Game.grant(&"bow")
+	Game.grant(&"hookshot")
+	if Game.arrows < 30:
+		Game.add_arrows(30 - Game.arrows)
+
+	_check("the granted bow is owned", Game.has(&"bow"))
+	_check("the granted hookshot is owned", Game.has(&"hookshot"))
 	_check("there are arrows to fire (%d)" % Game.arrows, Game.arrows > 0)
 	# Owning them is all there is to check now. They used to be BOUND to a D-pad
 	# direction on pickup and this asserted which one; the D-pad steps a ring

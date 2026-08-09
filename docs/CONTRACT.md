@@ -904,14 +904,31 @@ Rules that are not negotiable:
   it predates the loadout, so `_on_loadout_changed` maps `&"sword"` → `&""`
   rather than renaming it under them.
 
-**`Game.STARTER_KIT` is `[test]` scaffolding.** The bow and the hookshot are
-granted in `Game._ready()`, with arrows, so both are reachable from a cold boot
-without playing a run to the chest that holds them. `grant()`'s own auto-bind is
-what puts them on dpad ← and dpad ↑; nothing here binds a button by hand. It is
-in `_ready()` and deliberately **not** in `reset()` — `reset()` means "a fresh
+**`Game.STARTER_KIT` is empty, and that is the M1 gate.** It used to hand over
+the bow, the hookshot and arrows in `Game._ready()` so all three were reachable
+from a cold boot. That kit was costing every gate in the game: `Game.has()` is
+the ownership check the smith, the locked doors and the boss drops all read, and
+a kit granted on frame one made it answer yes before anything had been earned.
+The hero now starts with the sword, the shield and the rope — the first two are
+unconditional in `armament_owned()`, the third is a menu verb, so none of the
+three needs a row in the array. `STARTER_ARROWS` is deleted outright; a quiver
+you cannot fire is a slot that lies, which is the rule
+`armament_owned(&"arrow")` already keeps.
+
+The constant itself survives, empty, as the place the *next* boot grant goes (a
+demo build, a debug loadout). `_grant_starter_kit()` still runs, because
+`K.BOTTLE_START` is a design number rather than scaffolding and did not go with
+the kit — see the note at that constant.
+
+**The gate is spelled `Game.has(id)`.** There is no `has_item()` alias; a second
+name for one boolean is exactly the duplication `CLAUDE.md` §0 exists to stop.
+
+**A director that needs a bow must grant one.** Roughly twenty directors were
+written against the old boot kit and now need `Game.grant(&"bow")` /
+`Game.grant(&"hookshot")` at the top. `_grant_starter_kit` is called from
+`_ready()` and deliberately **not** from `reset()` — `reset()` means "a fresh
 save owns nothing", several directors assert exactly that, and a kit that
 reappeared on every reset would make the assertion untestable rather than true.
-Delete the two constants to ship.
 
 ### The forge — five rungs, and the gear reads them
 
@@ -1675,6 +1692,57 @@ the menu open and needs no notice at all.
 Audio buses `Master / Music / SFX / UI` exist in `default_bus_layout.tres`.
 Anything that plays a sound must route to `SFX`, `Music`, or `UI` — never
 straight to `Master`, or the volume sliders will not affect it.
+
+### The floors — one row each, and `Prog` is still the only curve
+
+`scripts/world/floor_db.gd` (`FloorDb`) owns the four authored floors of the
+Descent (GDD §5): name and subtitle, room count, the per-distance roster table,
+the tint, the boss and its item, the four anchor rules, and which relic lies in
+which slot. It is **pure data** — no node building, no scene-tree reference, no
+gameplay logic — and the acceptance test for changing a floor is one row, never
+one `if`.
+
+```gdscript
+# scripts/world/floor_db.gd — read by Dungeon, BossDb, RelicDb, the kit.
+FloorDb.floor_count() -> int              # 4, and SCOPE §1 freezes it there
+FloorDb.is_authored(level) -> bool
+FloorDb.get_floor(level) -> Dictionary    # never empty; past 4 it is ENDLESS
+FloorDb.name_of(level) / .subtitle_of(level) -> String
+FloorDb.rooms(level) -> int               # authored, or defers to Prog
+FloorDb.pack(level) -> Vector2i           # authored, or defers to Prog
+FloorDb.bands(level) -> Dictionary        # room distance -> pool of kinds
+FloorDb.roster(level, room_dist) -> Array
+FloorDb.tint(level) -> Dictionary         # .tint_key(level) -> StringName
+FloorDb.boss(level) / .boss_item(level) -> StringName
+FloorDb.shortcut_key(level) -> StringName # == boss_item(level)
+FloorDb.vault_key(level) -> StringName    # == boss_item(level + 1)
+FloorDb.has_vault(level) -> bool
+FloorDb.anchors(level) -> Dictionary      # .anchor(level, id) -> Dictionary
+FloorDb.relics(level) -> Dictionary       # .relic_in(level, slot) -> StringName
+```
+
+Three boundaries this file must not cross, each of which is a rule from
+elsewhere that a manifest is uniquely well placed to break:
+
+- **It carries no difficulty curve.** `scripts/core/progression.gd` still owns
+  health, damage, wind-up, elite share, drop rolls and chest picks. `rooms` and
+  `pack` are shape, not difficulty, and a row that does not want to author them
+  says `ROOMS_FROM_PROG` / `PACK_FROM_PROG` and defers. Two curves is how a floor
+  ends up with tougher monsters and worse loot (GDD §7).
+- **The two fork rules are one line each.** `shortcut_key` is this floor's own
+  boss item and `vault_key` is floor N+1's, exactly as GDD §5.3 words them.
+  "Floor 4 has no vault" is written nowhere — it falls out of there being no
+  floor 5 to lend it a key, and it must stay that way.
+- **Four tints, and none of them dims the room.** `TINTS.size()` is SCOPE §1's
+  variety budget. Every `stone` entry is a multiply with a channel at 1.00, and
+  every `air` is *lighter* than the shipped `env_dungeon.tres` fog — contrast is
+  range and hue, never an absence of light (GDD pillar 5, STYLEGUIDE §1).
+
+`RelicDb` owns what a relic does; `FloorDb` owns only where it lies. `BossDb`
+owns the move sets; `FloorDb` owns only the id. The Long Descent (GDD §8) is one
+extra row, `ENDLESS`, returned for every level past 4 — plus
+`LONG_DESCENT_RELIC`, which is a named row rather than a field on `ENDLESS`
+because a relic in that row would drop on floor 5, 6, 7 and forever.
 
 ---
 

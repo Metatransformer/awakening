@@ -130,37 +130,48 @@ var flags: Dictionary[StringName, bool] = {}
 
 
 # --- The starter kit --------------------------------------------------------
-## [test] Gear the player would otherwise have to FIND, handed over at boot so
-## the ranged items can be exercised without playing a full run to a chest.
+## What a new hero owns at boot, and it is **empty on purpose**.
 ##
-## This is scaffolding and it is meant to be deleted. It is one constant and one
-## call precisely so that deleting it is a two-line change: empty the array and
-## the game goes back to a hero with a sword, a weapon ring one stop long, and
-## an alternate loadout that names a bow he has not found — which is the real
-## starting state and the one the equipment screen's "(not owned)" text exists
-## to describe.
-const STARTER_KIT: Array[StringName] = [&"bow", &"hookshot"]
-## Enough to miss with. A quiver you can empty in one fight turns a test of the
-## bow into a test of the arrow economy.
-const STARTER_ARROWS := 30
-## [test] One empty bottle, for the same reason and with the same expiry date as
-## STARTER_KIT: without it the alchemist's brew lines are unreachable until you
-## have found the glass for a bottle, and the thing worth exercising is the brew.
-## The other three are earned. See K.BOTTLE_START.
+## THE BOW AND THE HOOKSHOT USED TO BE IN HERE, with thirty arrows, as [test]
+## scaffolding so the ranged items were reachable from a cold boot instead of
+## from the chest that holds them. The comment that stood here said the kit was
+## meant to be deleted and that deleting it was a two-line change; this is that
+## deletion (docs/SCOPE.md M1, docs/GDD.md §5.2).
+##
+## What the kit was actually costing was every gate in the game. `has()` is the
+## ownership check the smith, the locked doors and the boss drops all read, and
+## a kit handed over in `_ready` made it answer yes on frame one — so nothing
+## could be earned, the forge's bow and hookshot ladders sat on the counter from
+## the first visit, and the equipment screen's "(not owned)" text described a
+## state no player ever saw. The hero now starts with the sword, the shield and
+## the rope: the first two are unconditional in `armament_owned()` and the third
+## is a menu verb, so none of the three needs a row here.
+##
+## The constant survives the deletion because the NEXT thing handed over at boot
+## goes here — a demo build that starts you with the bow, a debug loadout — and
+## one empty array is a cheaper place for that than a new function. The arrows
+## went with the bow: a quiver you cannot fire is a slot that lies, which is the
+## same rule `armament_owned(&"arrow")` already keeps.
+const STARTER_KIT: Array[StringName] = []
 
 
 func _ready() -> void:
 	_grant_starter_kit()
 
 
-## Idempotent: `grant()` returns early on anything already owned, and the arrow
-## top-up is a floor rather than an addition, so calling this from both boot and
-## reset() cannot stack thirty arrows onto a quiver that already had them.
+## Idempotent: `grant()` returns early on anything already owned and the bottle
+## loop is a floor rather than an addition, so calling this from both boot and
+## reset() cannot stack a second bottle onto one that already exists.
+##
+## The bottle is NOT scaffolding and did not go with the kit. K.BOTTLE_START is a
+## design number (docs/METAGAME.md §6.6) — the alchemist needs an empty bottle
+## before he will brew anything, and starting with one is what makes his counter
+## a place you can use on your first trip rather than after a purchase. Note that
+## K.BOTTLE_START's own comment still claims it expires with the starter kit;
+## that comment is now wrong and `scripts/core/consts.gd` needs the correction.
 func _grant_starter_kit() -> void:
 	for id in STARTER_KIT:
 		grant(id)
-	if arrows < STARTER_ARROWS:
-		add_arrows(STARTER_ARROWS - arrows)
 	while bottle_count() < K.BOTTLE_START:
 		add_bottle()
 
@@ -615,6 +626,22 @@ func grant(item_id: StringName) -> void:
 	Bus.item_acquired.emit(item_id)
 
 
+## **THE ownership gate.** There is one, it is this, and there is no `has_item()`
+## — docs/GDD.md §5.2 and docs/SCOPE.md M1 both name the check `Game.has_item()`
+## in prose, but the function has been called `has()` since the item dictionary
+## existed and adding a one-line alias would be the second implementation of a
+## boolean (CLAUDE.md §0). The docs are what should move.
+##
+## Everything that asks "may this happen yet" comes through here:
+##
+##  * `ShopDb.lines()` hides the bow and hookshot forge ladders, and the arrow
+##    stock line, until the item behind them is owned.
+##  * `LockedDoor` refuses, and names the item it wants, off one call.
+##  * `armament_owned()` gates the weapon ring, and hangs `&"arrow"` off the bow.
+##
+## Which is why the starter kit above is empty: a gate that answers yes at boot
+## is not a gate, and this one function is the reason M1 is a deletion and three
+## filters rather than a system.
 func has(item_id: StringName) -> bool:
 	return items.get(item_id, false)
 

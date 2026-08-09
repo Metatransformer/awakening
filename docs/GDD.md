@@ -215,7 +215,7 @@ them raises a stat. The stats are still the smith's.
 **The hero starts with the sword, the shield and the rope. Nothing else.** The
 bow and the hookshot come out of the starting kit and become earned. Their forge
 ladders do not appear at the smith until the item is owned. This converts systems
-that are already built into progression, at the cost of one `Game.has_item()`
+that are already built into progression, at the cost of one `Game.has()`
 check, and it is what makes §5.3 mean anything.
 
 ### 5.3 The forks — two rules, eight doors

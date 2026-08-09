@@ -15,6 +15,17 @@ const PAD_DUP := 11
 
 
 func run(rig) -> void:
+	# THE BOOT KIT IS GONE (game_state.gd STARTER_KIT is empty now, docs/SCOPE.md
+	# M1): the bow, the hookshot and the thirty arrows used to be handed over in
+	# `Game._ready()`, and this director was written on top of that. It exercises
+	# the gear rather than the earning of it, so it hands itself the same three
+	# things the boot used to -- the alternative is a director that fails for a
+	# reason that has nothing to do with what it claims.
+	Game.grant(&"bow")
+	Game.grant(&"hookshot")
+	if Game.arrows < 30:
+		Game.add_arrows(30 - Game.arrows)
+
 	var menu = Menu
 
 	# root -> Options

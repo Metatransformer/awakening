@@ -1,7 +1,12 @@
 class_name ShopDb
 extends Catalogue
-## What the smith sells. Eight lines, and every one of them changes a number the
-## player can feel inside one run.
+## What the smith sells. Up to eight lines, and every one of them changes a
+## number the player can feel inside one run.
+##
+## "Up to" because three of them are gated on ownership (see GATED_BY): a fresh
+## save is offered five, and the bow's two and the hookshot's one appear when
+## those items are found. The counter GROWS as you earn things, which is the
+## smith's half of docs/GDD.md §5.2.
 ##
 ## A `Catalogue`, which is the whole of what `TradeScreen` knows about it -- see
 ## that file for the contract and for why a third counter is a subclass rather
@@ -28,6 +33,29 @@ extends Catalogue
 ##
 ## Everything here is PERMANENT and lives on `Game`, because the only things
 ## worth buying with money that survives death are things that also survive it.
+
+## Lines that DO NOT EXIST until the player owns the thing they are about.
+##
+## The bow and the hookshot are boss drops now rather than the [test] starter kit
+## they used to be (docs/SCOPE.md M1, `Game.STARTER_KIT`), so their ladders spent
+## the whole early game as rows for weapons the player had never seen. Absent,
+## not greyed out: a greyed row still tells you a bow exists, still costs a line
+## of the counter, and still has to be scrolled past. A ladder for a weapon you
+## have not found is a spoiler and a dead row, and the smith has no reason to
+## offer to restring something you are not carrying.
+##
+## `arrows` follows the bow for the reason `Game.armament_owned(&"arrow")` does:
+## ammunition you cannot fire is a slot that lies.
+##
+## A table rather than a branch, because the acceptance test for the next gated
+## line has to be "one row in a dictionary". StringName values only, so this is
+## a genuine constant expression — a `class_name` or another class's enum in here
+## would not be (CLAUDE.md §3).
+const GATED_BY := {
+	&"arrows": &"bow",
+	&"string": &"bow",
+	&"chain": &"hookshot",
+}
 
 ## Purchases you can only make so many times, and how many. Every forge track is
 ## capped at K.FORGE_MAX because that is how many rungs its ladder has -- the
@@ -91,7 +119,40 @@ static func craft_verb() -> String:
 	return "FORGE"
 
 
+## The counter, filtered by what the player owns. One list, built whole and then
+## sieved through `stocked()` — a table the caller filters, rather than five
+## `if`s scattered through the literal below, so the board is still readable as
+## the board.
 static func lines() -> Array[Dictionary]:
+	var board: Array[Dictionary] = _board()
+	var shown: Array[Dictionary] = []
+	for line in board:
+		if stocked(line["id"]):
+			shown.append(line)
+	return shown
+
+
+## Is `id` on the counter at all? Public because a caller that wants to know
+## whether a line is HIDDEN cannot tell from `lines()` — the row simply is not
+## there — and the director that proves the gate has to be able to ask.
+##
+## Note this is not `remaining()`'s job and must not become it. `remaining` is
+## "you have bought all of these", which is a finished ladder the smith still
+## displays with a refusal; this is "the smith does not offer that", which is no
+## row at all. A finished ladder and an unearned one look nothing alike, and
+## collapsing them would put "NOTHING LEFT TO DO THERE" on a bow you never found.
+static func stocked(id: StringName) -> bool:
+	if not GATED_BY.has(id):
+		return true
+	# Indexing an untyped const Dictionary hands back a Variant (CLAUDE.md §3).
+	var needs: StringName = GATED_BY[id]
+	return Game.has(needs)
+
+
+## Everything the smith could ever offer, before the ownership sieve. Split out
+## of `lines()` rather than inlined so the filter has one thing to filter and the
+## literal stays a literal.
+static func _board() -> Array[Dictionary]:
 	return [
 		{
 			"id": &"arrows",

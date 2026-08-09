@@ -375,9 +375,16 @@ const BAND_3_ROOM := 7
 ## of them is enough to plan a run around and few enough that filling the fourth
 ## with the wrong draught is a decision you regret. [tune]
 const BOTTLE_MAX := 4
-## [test] Handed over at boot so the bottle can be exercised without first
-## finding the glass to blow one. Deleted the same day the starter kit is —
-## see Game.STARTER_KIT, which this sits beside for that reason.
+## How many bottles you own on a cold boot, and it is a DESIGN number, not
+## scaffolding (docs/METAGAME.md §6.6): the alchemist will not brew into thin
+## air, so a hero with no bottle cannot use his counter until he has bought
+## one, and his counter is meant to be somewhere you can go on your first trip.
+##
+## This used to be tagged [test] and promised to expire "the same day the
+## starter kit is". The starter kit is now gone — Game.STARTER_KIT is an empty
+## array and the bow, the hookshot and the arrows went with it — and this
+## deliberately STAYED. It is the one thing `_grant_starter_kit` still hands
+## over. Do not delete it looking for the other half of a pair.
 const BOTTLE_START := 1
 
 ## Quarter-hearts a Heart Draught puts back. Two whole hearts against a starting
