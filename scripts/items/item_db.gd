@@ -21,6 +21,24 @@ static func get_def(id: StringName) -> ItemDef:
 	return all().get(id, null) as ItemDef
 
 
+## Is `id` something the forge eats? Asked by `Run.extract()` when it sorts the
+## bag and by every screen that has to mark a row. One reader of `kind`, so a
+## caller can never disagree with the catalogue about what a thing is for.
+static func is_component(id: StringName) -> bool:
+	var d := get_def(id)
+	return d != null and d.is_component()
+
+
+## Every component id, in catalogue order. The forge screen and the pouch both
+## want a stable list, and neither should hardcode one.
+static func components() -> Array[StringName]:
+	var out: Array[StringName] = []
+	for id: StringName in all():
+		if (all()[id] as ItemDef).is_component():
+			out.append(id)
+	return out
+
+
 static func _add(d: ItemDef) -> void:
 	_items[d.id] = d
 
@@ -53,11 +71,33 @@ static func _build() -> void:
 	_add(ItemDef.make(&"kings_signet", "King's Signet", 90, R, 2,
 		Color(0.95, 0.86, 0.42), "The Lower Worlds had a king. This is all that is left."))
 
+	# --- Components: what the forge eats -------------------------------------
+	# Four, not five, and deliberately NOT one per upgrade track. A component
+	# only one track wanted would make every drop either a jackpot or litter;
+	# each of these feeds at least two ladders, so a pull is always worth
+	# carrying and the question is which one you feed with it.
+	#
+	# Priced ABOVE the ingredient of the same rarity, and the extraction fee
+	# taxes them like everything else -- carrying the forge home is not free,
+	# which is what keeps the bag a decision rather than a checklist.
+	_add(ItemDef.part(&"whetstone_grit", "Whetstone Grit", 14, C, 8,
+		Color(0.62, 0.66, 0.72), "Swarf off a stone that has sharpened better men."))
+	_add(ItemDef.part(&"riveted_plate", "Riveted Plate", 22, U, 6,
+		Color(0.56, 0.54, 0.50), "Cut from a breastplate. The rivets held; he did not."))
+	_add(ItemDef.part(&"tension_coil", "Tension Coil", 26, U, 6,
+		Color(0.78, 0.62, 0.30), "Still wants to spring. Do not hold it loosely."))
+	_add(ItemDef.part(&"cold_iron_core", "Cold Iron Core", 100, R, 2,
+		Color(0.74, 0.82, 0.92), "Ice to the hand hours after the forge. Nothing else finishes a piece."))
+
 
 # --- Drop tables ------------------------------------------------------------
 
 ## Weighted table for an ordinary enemy. Weights are relative, not percentages,
 ## so adding an entry never requires rebalancing the others.
+## Components are ~15% of what a body leaves, and the rarest one is not on this
+## table at all. A Cold Iron Core has to be found, not farmed: if grinding the
+## first room could finish a ladder, the forge would price patience instead of
+## depth, and depth is the thing the whole game is about.
 const ENEMY_DROPS := {
 	&"bone_shard": 34,
 	&"rot_moss": 26,
@@ -65,6 +105,9 @@ const ENEMY_DROPS := {
 	&"grave_wax": 12,
 	&"iron_scrap": 7,
 	&"ghost_silk": 3,
+	&"whetstone_grit": 10,
+	&"riveted_plate": 4,
+	&"tension_coil": 3,
 }
 
 ## Chests are the reason to explore off the critical path, so their floor is
@@ -77,6 +120,13 @@ const CHEST_DROPS := {
 	&"deep_amber": 12,
 	&"void_pearl": 6,
 	&"kings_signet": 2,
+	&"whetstone_grit": 8,
+	&"riveted_plate": 10,
+	&"tension_coil": 9,
+	# ~2% a chest. Two or three floors of opening everything for the piece that
+	# finishes ANY ladder -- which is why a chest is worth the detour even when
+	# the bag is nearly full.
+	&"cold_iron_core": 3,
 }
 
 

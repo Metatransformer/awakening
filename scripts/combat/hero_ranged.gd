@@ -31,10 +31,13 @@ extends Node3D
 ## screen, and the hero turns to face wherever the lens is pointed. This node is
 ## the only emitter — it is the one place that knows what is in his hands.
 
-## Seconds a shot owns the hero, and the fraction of that at which the arrow
-## actually leaves. He is committed for the rest — a bow you can fire while
-## running is a bow with no cost. [tune]
-const BOW_TIME := 0.44
+## The fraction of the draw at which the arrow actually leaves. He is committed
+## for the rest — a bow you can fire while running is a bow with no cost.
+##
+## The draw's LENGTH is not a constant any more: it is `Game.bow_draw_time()`,
+## the bow's forge ladder (K.BOW_DRAW). What the bow costs is commitment, so
+## what the smith sells back is commitment. The release fraction stays fixed, so
+## a faster bow releases proportionally earlier and the pose still reads. [tune]
 const BOW_RELEASE := 0.55
 ## How long the hookshot's firing POSE is scaled to run for. It is not a
 ## commitment window — `hook_begin()` takes the hero over on the same frame, and
@@ -58,8 +61,13 @@ var _tether: HookshotTether
 ## here so a late listener (a HUD rebuilt on a scene change) can ask.
 var aiming: bool = false
 
-## Counts up through BOW_TIME while a shot is in flight, or -1.0 when idle.
+## Counts up through `_bow_time` while a shot is in flight, or -1.0 when idle.
 var _bow_t: float = -1.0
+## The draw length THIS shot was started at. Latched rather than re-read every
+## frame: buying the string mid-draw would otherwise move the release point of a
+## shot already in the air, and the hero's own commitment window (set from the
+## same number in `request_ranged`) would no longer agree with it.
+var _bow_time: float = 0.44
 var _bow_fired: bool = false
 var _bow_dir: Vector3 = Vector3.FORWARD
 
@@ -135,7 +143,8 @@ func _fire_bow() -> bool:
 		Bus.request_sfx.emit(&"craft_fail", _hero.global_position)
 		return false
 	_bow_dir = _aim_at_target_or_camera()
-	if not _hero.request_ranged(BOW_TIME, _bow_dir):
+	_bow_time = Game.bow_draw_time()
+	if not _hero.request_ranged(_bow_time, _bow_dir):
 		return false
 	_bow_t = 0.0
 	_bow_fired = false
@@ -169,20 +178,25 @@ func _release_arrow() -> void:
 func _fire_hookshot() -> bool:
 	var from := _muzzle(&"hookshot")
 	var aim := _camera_forward()
-	var anchor := from + aim * K.HOOK_RANGE
+	# Read ONCE per shot and threaded through everything below. The reach decides
+	# the assist search, the raycast and the length the chain plays out to, and
+	# those three disagreeing is a hookshot that visibly reaches a ring it then
+	# refuses to grab.
+	var reach := Game.hook_reach()
+	var anchor := from + aim * reach
 	var pull := Vector3.ZERO
 	var bit := false
 
 	# An authored ring first. It is the designer saying "this one", and it wins
 	# over whatever wall happens to be behind it.
-	var ring := _best_hookable(from, aim)
+	var ring := _best_hookable(from, aim, reach)
 	if ring != null:
 		anchor = ring.anchor_point()
 		pull = ring.pull_point()
 		bit = true
 	else:
 		_query.from = from
-		_query.to = from + aim * K.HOOK_RANGE
+		_query.to = from + aim * reach
 		_query.collision_mask = K.L_WORLD | K.L_HOOK
 		_query.collide_with_bodies = true
 		_query.collide_with_areas = false
@@ -218,7 +232,9 @@ func _fire_hookshot() -> bool:
 ## The `hookable` nearest the aim line, or null. Scored on ANGLE off the aim,
 ## not on distance: the player is pointing at something, and the nearest ring is
 ## regularly not the one they are looking at.
-func _best_hookable(from: Vector3, aim: Vector3) -> HookTarget:
+## `reach` is the caller's, not this function's, so the assist and the shot can
+## never disagree about how far the chain goes.
+func _best_hookable(from: Vector3, aim: Vector3, reach: float) -> HookTarget:
 	var best: HookTarget = null
 	var best_angle := HOOK_ASSIST_CONE
 	for node in get_tree().get_nodes_in_group(&"hookable"):
@@ -227,7 +243,7 @@ func _best_hookable(from: Vector3, aim: Vector3) -> HookTarget:
 			continue
 		var to := ring.anchor_point() - from
 		var dist := to.length()
-		if dist < 0.5 or dist > K.HOOK_RANGE:
+		if dist < 0.5 or dist > reach:
 			continue
 		var angle := rad_to_deg(aim.angle_to(to))
 		# The snap radius is the ring's own tolerance in METRES, converted to the
@@ -260,9 +276,9 @@ func _tick_bow(delta: float) -> void:
 	if _bow_t < 0.0:
 		return
 	_bow_t += delta
-	if not _bow_fired and _bow_t >= BOW_TIME * BOW_RELEASE:
+	if not _bow_fired and _bow_t >= _bow_time * BOW_RELEASE:
 		_release_arrow()
-	if _bow_t >= BOW_TIME:
+	if _bow_t >= _bow_time:
 		_bow_t = -1.0
 
 
@@ -344,8 +360,10 @@ func _aim_from(muzzle: Vector3) -> Vector3:
 	look = look.normalized()
 
 	# Far enough to be past anything either item can reach, so an unobstructed
-	# ray still yields a focus point rather than nothing.
-	var reach := K.HOOK_RANGE * 2.0
+	# ray still yields a focus point rather than nothing. Off the LONGSHOT rather
+	# than the current chain: this is the crosshair's ray, not a weapon's, and it
+	# must not get shorter than the bow when the hookshot is un-forged.
+	var reach := K.HOOK_LONGSHOT_RANGE * 2.0
 	var focus := cam.global_position + look * reach
 	_query.from = cam.global_position
 	_query.to = focus

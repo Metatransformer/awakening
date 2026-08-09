@@ -14,6 +14,19 @@ extends RefCounted
 
 enum Rarity { COMMON, UNCOMMON, RARE }
 
+## What the thing is FOR, which is the only question the economy asks of it.
+##
+##  * `INGREDIENT` is merchandise. It exists to be sold; its `value` is the point.
+##  * `COMPONENT` is material. The forge eats it (see ShopDb), and extraction
+##    sorts it out of the bag into `Game.components` instead of handing it to the
+##    vendor. It still has a `value`, because the extraction fee is a share of
+##    what you are carrying and a component you carried is something you carried.
+##
+## One catalogue, one drop path, one LootMote. The kind is a label on the row,
+## not a second inventory: a component and a pearl compete for the same bag slot,
+## and that competition IS the decision this whole system exists to create.
+enum Kind { INGREDIENT, COMPONENT }
+
 var id: StringName
 var display_name: String
 ## Base sale price in gold. What the vendor pays, before any haggling.
@@ -28,6 +41,7 @@ var tint: Color
 ## One line the vendor screen shows. Flavour, but it is also the only place the
 ## player learns what an ingredient is for.
 var blurb: String
+var kind: Kind = Kind.INGREDIENT
 
 
 static func make(p_id: StringName, p_name: String, p_value: int,
@@ -41,6 +55,33 @@ static func make(p_id: StringName, p_name: String, p_value: int,
 	d.tint = p_tint
 	d.blurb = p_blurb
 	return d
+
+
+## Same fields, different kind. A separate constructor rather than an eighth
+## positional argument, so the catalogue reads as two lists and a reader can see
+## at a glance which rows the forge cares about.
+static func part(p_id: StringName, p_name: String, p_value: int,
+		p_rarity: Rarity, p_stack: int, p_tint: Color, p_blurb: String) -> ItemDef:
+	var d := make(p_id, p_name, p_value, p_rarity, p_stack, p_tint, p_blurb)
+	d.kind = Kind.COMPONENT
+	return d
+
+
+func is_component() -> bool:
+	return kind == Kind.COMPONENT
+
+
+## The short tag a recipe column uses: "GRIT", "PLATE", "CORE". A forge row has
+## to name two or three components inside a third of a shop row, and "Whetstone
+## Grit x10" does not fit anywhere the eye can run down it.
+##
+## The LAST WORD of the display name, and the four component names are chosen so
+## that last word is unique across the catalogue. If a fifth component ever ends
+## in a word one of these already uses, give this an explicit table rather than
+## renaming the thing to suit the UI.
+func code() -> String:
+	var words := display_name.split(" ", false)
+	return (words[words.size() - 1] if words.size() > 0 else display_name).to_upper()
 
 
 func rarity_name() -> String:

@@ -25,6 +25,7 @@ func _initialize() -> void:
 
 	var seed_val := int(_args.get("seed", "20190920"))
 	seed(seed_val)
+	_deafen_the_gamepad()
 
 	var size_str: String = _args.get("size", "1280x720")
 	var wh := size_str.split("x")
@@ -36,6 +37,30 @@ func _initialize() -> void:
 	root.position = Vector2i(40, 40)
 
 	_run.call_deferred()
+
+
+## Strip every joypad binding out of the InputMap for the life of this run.
+##
+## A controller plugged into the machine running the harness is an INPUT SOURCE
+## the director does not control. This cost a long afternoon: a stick resting
+## just outside its deadzone reported `move_up`, `move_right`, `cam_down` and
+## `cam_left` held, the hero walked away from the town gate mid-hold, `Prompt`
+## dropped focus, and the director reported five economy failures for a gate
+## that had simply not been reached. It was intermittent because the drift
+## wanders in and out, so it looked like a race in the game and not a joystick
+## on somebody's desk.
+##
+## The InputMap edit is in-memory only -- `project.godot` is never written -- and
+## keyboard events, which is all `Input.action_press` needs, are untouched.
+func _deafen_the_gamepad() -> void:
+	var stripped := 0
+	for action in InputMap.get_actions():
+		for ev in InputMap.action_get_events(action):
+			if ev is InputEventJoypadMotion or ev is InputEventJoypadButton:
+				InputMap.action_erase_event(action, ev)
+				stripped += 1
+	if stripped > 0:
+		print("shoot: ignoring the gamepad (%d joypad bindings stripped)" % stripped)
 
 
 ## Put `instance` under the root and wait until it is really in the tree.

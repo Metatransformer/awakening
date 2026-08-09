@@ -192,10 +192,15 @@ func _ready() -> void:
 		return
 	# Sharpening is bought in town and has to survive the scene change, so the
 	# permanent part lives on Game and the export is only the base blade.
-	damage += Game.sword_bonus
+	damage += Game.sword_bonus()
 	# Sharpening is sharpening. A whetstone that only improved the light swing
 	# would quietly make the heavy the worse button the more you spent in town.
-	heavy_damage += Game.sword_bonus
+	heavy_damage += Game.sword_bonus()
+	# The shield's ladder widens the arc it covers (K.GUARD_ARC). Read as a
+	# DELTA off the export rather than assigned, so the export stays what it
+	# says it is -- the bare kite shield -- and a director that hands this node a
+	# different base shield still gets the player's forge work on top of it.
+	block_cone += Game.guard_arc() - K.GUARD_ARC[0]
 	_mount_loadout()
 	_build_hitbox()
 	_build_audio()

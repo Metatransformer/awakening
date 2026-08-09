@@ -71,6 +71,11 @@ const GLYPHS := {
 	")": [0x08, 0x04, 0x02, 0x02, 0x02, 0x04, 0x08],
 	"%": [0x11, 0x12, 0x02, 0x04, 0x08, 0x09, 0x11],
 	"*": [0x00, 0x0A, 0x04, 0x1F, 0x04, 0x0A, 0x00],
+	# The chevrons exist so an upgrade can say "this becomes that" -- the forge
+	# prints "8.7 M REACH -> 11.9 M REACH". Without them `>` fell through to
+	# MISSING and the shop drew a solid block mid-sentence.
+	">": [0x00, 0x10, 0x08, 0x04, 0x08, 0x10, 0x00],
+	"<": [0x00, 0x01, 0x02, 0x04, 0x02, 0x01, 0x00],
 }
 const MISSING := [0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F]
 
@@ -84,6 +89,35 @@ static func width(text: String, scale: float) -> float:
 
 static func height(scale: float) -> float:
 	return H * scale
+
+
+## Break `text` on spaces so no line exceeds `max_width` screen pixels, capped
+## at `max_lines` (the overflow is dropped, not squeezed).
+##
+## Every glyph here is the same width, so this is character counting rather than
+## real typesetting -- which is the whole reason it can live in eight lines. It
+## exists because the shop drew its blurb as one unwrapped line and the longer
+## forge blurbs ran out through the right edge of the panel and kept going.
+static func wrap(text: String, scale: float, max_width: float,
+		max_lines: int = 2) -> PackedStringArray:
+	var per_char := (W + TRACKING) * scale
+	var cols: int = maxi(1, int((max_width + TRACKING * scale) / per_char))
+	var lines := PackedStringArray()
+	var line := ""
+	for word in text.split(" ", false):
+		var candidate: String = word if line.is_empty() else line + " " + word
+		if candidate.length() <= cols:
+			line = candidate
+			continue
+		if not line.is_empty():
+			lines.append(line)
+			if lines.size() >= max_lines:
+				return lines
+		# A single word longer than the line gets cut rather than overhanging.
+		line = word.substr(0, cols)
+	if not line.is_empty() and lines.size() < max_lines:
+		lines.append(line)
+	return lines
 
 
 ## Draw `text` with its TOP-LEFT at `at`. Uppercased, because the table has no

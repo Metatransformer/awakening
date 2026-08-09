@@ -1170,7 +1170,7 @@ func take_hit(hit: Hit) -> bool:
 		charm.cancel()
 	# Armour never zeroes a blow. A build that cannot be hurt turns the whole
 	# extraction decision into a formality.
-	Game.damage(maxi(K.QUARTER, hit.amount - Game.armour_level))
+	Game.damage(maxi(K.QUARTER, hit.amount - Game.armour_soak()))
 	if hit.knockback > 0.0:
 		var away := K.flat(global_position - hit.from)
 		if away == Vector3.ZERO:

@@ -7,7 +7,12 @@ extends Node
 
 const DIR := "user://saves"
 const SLOTS := 3
-const VERSION := 1
+## Bumped to 2 when the forge landed: `upgrades` was never written at all (a v1
+## save silently reloaded with every purchase undone) and `components` did not
+## exist. `_read` refuses a version it does not recognise, so a v1 slot reads as
+## empty rather than as a hero who lost his sharpenings — which is the honest
+## failure, and there is no live save worth migrating in a dev build.
+const VERSION := 2
 
 signal saved(slot: int)
 signal loaded(slot: int)
@@ -71,6 +76,11 @@ func save(slot: int) -> bool:
 		"magic": Game.magic,
 		"max_magic": Game.max_magic,
 		"gold": Game.gold,
+		"bag_slots": Game.bag_slots,
+		# Every permanent purchase, forge rungs included -- the ladders live in
+		# `upgrades` (see Game.FORGE_*), so one key carries all five.
+		"upgrades": Game.upgrades,
+		"components": Game.components,
 		"arrows": Game.arrows,
 		"bombs": Game.bombs,
 		"small_keys": Game.small_keys,
@@ -111,6 +121,18 @@ func load_slot(slot: int) -> Dictionary:
 	Game.max_magic = d.get("max_magic", 0)
 	Game.magic = d.get("magic", 0)
 	Game.gold = d.get("gold", 0)
+	Game.bag_slots = int(d.get("bag_slots", K.START_BAG_SLOTS))
+	# JSON has no StringName and no typed Dictionary, so both of these come back
+	# as plain String keys in an untyped Dictionary. Rebuild rather than assign:
+	# `Game.upgrades` is Dictionary[StringName, int] and a String key in it makes
+	# `forge_level(&"edge")` miss every time — a hero who paid for the ladder and
+	# reloads holding the bare blade.
+	Game.upgrades.clear()
+	for k in (d.get("upgrades", {}) as Dictionary):
+		Game.upgrades[StringName(k)] = int((d["upgrades"] as Dictionary)[k])
+	Game.components.clear()
+	for k in (d.get("components", {}) as Dictionary):
+		Game.components[StringName(k)] = int((d["components"] as Dictionary)[k])
 	Game.arrows = d.get("arrows", 0)
 	Game.bombs = d.get("bombs", 0)
 	Game.small_keys = d.get("small_keys", 0)
@@ -153,6 +175,7 @@ func load_slot(slot: int) -> Dictionary:
 	Bus.key_count_changed.emit(Game.small_keys)
 	Bus.gold_changed.emit(Game.gold)
 	Bus.quick_slots_changed.emit(Game.quick_slots)
+	Bus.components_changed.emit(Game.components)
 	Bus.loadout_changed.emit(Game.loadout_set,
 		Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_LEFT))
 	loaded.emit(slot)

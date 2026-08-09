@@ -84,6 +84,18 @@ signal homeward_used
 ## Something hit him on the way out. The run continues.
 signal homeward_broken
 signal depth_changed(depth: int)
+## The workbench stock changed: a run banked components on the way home, or the
+## forge ate some. `stock` is `Game.components` -- id -> count. Emitted rather
+## than polled because the forge screen and the pouch both draw it and neither
+## should be asking every frame.
+signal components_changed(stock: Dictionary)
+## A run reached home and its components moved to the workbench. `moved` is
+## id -> count. The arrival report says so; nothing else needs to care.
+signal components_banked(moved: Dictionary)
+## A forge rung was bought. `track` is a Game.FORGE_* id, `level` the new rung.
+## The gear does not listen -- it reads Game on spawn -- but the smith screen and
+## anything that wants to celebrate do.
+signal gear_forged(track: StringName, level: int)
 
 # --- Heat: momentum, and what it is worth -----------------------------------
 ## The chain moved. `window01` is how much of the current tier's window is left,

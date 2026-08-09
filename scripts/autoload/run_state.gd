@@ -84,12 +84,63 @@ func extract() -> bool:
 
 	Game.spend_gold(fee)
 	in_dungeon = false
+	# The fee was charged on the WHOLE bag, components included, and only then
+	# are they sorted out of it. That order is the rule: you pay to carry a
+	# component home exactly as you pay to carry a pearl home, so choosing the
+	# component is a choice about slots and never a way to dodge the toll.
+	var banked := bank_components()
 	# Getting your health back is what makes extracting feel like relief rather
 	# than retreat. It is also the only heal in the game, which is what stops a
 	# player from grinding one room forever.
 	Game.heal(Game.max_quarters)
 	Bus.run_ended.emit(true, bag.duplicate(), bag_value())
+	if not banked.is_empty():
+		Bus.components_banked.emit(banked)
 	return true
+
+
+## Move every component out of the bag and onto the workbench. Returns what
+## moved, so the arrival can say so.
+##
+## Ingredients are merchandise and components are material, and extraction is
+## where the two part company: the vendor never sees a component and the forge
+## never sees a pearl. One rule, applied once, at the one moment the bag stops
+## being at risk -- which is also why `die()` does not call this. Components you
+## were still carrying die with the bag, like everything else in it. That is not
+## a punishment bolted on; it is the same sentence the bag has always served,
+## and exempting the forge from it would quietly delete the reason to leave.
+func bank_components() -> Dictionary:
+	var moved: Dictionary[StringName, int] = {}
+	# The premium's share has to be measured against the bag as it stands NOW --
+	# `_premium_share` divides by `base_value()`, and by the time the components
+	# are out of the bag that denominator is a different number. Measure first,
+	# move second.
+	var leaving := 0
+	for id: StringName in bag:
+		if not ItemDb.is_component(id):
+			continue
+		var def := ItemDb.get_def(id)
+		if def != null:
+			leaving += def.value * int(bag[id])
+	if leaving <= 0:
+		return moved
+	var share := _premium_share(leaving)
+
+	for id: StringName in bag.keys():
+		if not ItemDb.is_component(id):
+			continue
+		var n: int = bag[id]
+		moved[id] = n
+		bag.erase(id)
+		Game.add_component(id, n)
+
+	# Heat is paid on what you sweep, and a component you swept hot was worth
+	# more to carry. It banked as gold-equivalent nothing, so its share of the
+	# pot leaves with it -- otherwise the remaining merchandise would carry heat
+	# it never earned and the vendor would pay for it.
+	premium = maxi(0, premium - share)
+	Bus.bag_changed.emit(bag, bag_value())
+	return moved
 
 
 ## Die. The bag is gone; gold and anything bought with it survives.

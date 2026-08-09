@@ -250,6 +250,43 @@ const ARROW_SPEED := 42.0
 const ARROW_GRAVITY := 6.0          # [tune] OOT arrows barely drop at this range
 
 
+# --- The forge (docs/METAGAME.md §6.5) --------------------------------------
+## Five ladders, three rungs each, bought with gold AND components at the smith.
+## Every array is indexed by LEVEL 0..FORGE_MAX, so index 0 is the un-upgraded
+## piece and the arrays are read as absolutes rather than as deltas -- a table
+## that lists the level-0 value cannot drift from the thing it is upgrading.
+##
+## TYPED arrays for the reason HEAT_TIER_MULT is typed: indexing an untyped
+## const returns Variant and the inference trap in CLAUDE.md §3 bites in the
+## innocent file, not this one.
+##
+## The rule every rung obeys: **one number, and the player can feel it inside
+## one run.** No percentages, no stat sticks, nothing you have to take on faith.
+const FORGE_MAX := 3
+## Quarter-hearts added to every sword swing, light and heavy alike. [tune]
+const EDGE_DAMAGE: Array[int] = [0, 1, 2, 3]
+## Quarter-hearts taken off every blow that lands, floored at one by `Hero.hurt`.
+## Armour makes you last longer; it never makes you safe. [tune]
+const PLATE_SOAK: Array[int] = [0, 1, 2, 3]
+## Half-angle of the shield's guard arc, degrees. The shield's upgrade is not
+## "less damage" -- damage it already stops completely -- it is WHICH blows it
+## stops. Widening the arc buys back the flank, and it stays strictly frontal at
+## every level, because being punished for turning away is the point. [tune]
+const GUARD_ARC: Array[float] = [70.0, 85.0, 100.0, 115.0]
+## Seconds a shot owns the hero. NOT arrow damage: arrow.gd is explicit that the
+## bow's advantage is reach and a bow that out-damages the blade is the only
+## weapon anyone brings. What the bow costs is commitment, so what you buy back
+## is commitment. [tune]
+const BOW_DRAW: Array[float] = [0.44, 0.38, 0.32, 0.26]
+## Hookshot reach in metres. The rungs walk [oot]'s own two lengths: rung 0 is
+## the Hookshot and rung 3 is exactly the Longshot, with two even steps between.
+## Length is the only thing a hookshot has, which is why it is the one track the
+## owner named by its number.
+const CHAIN_REACH: Array[float] = [
+	HOOK_RANGE, 11.89, 15.05, HOOK_LONGSHOT_RANGE,
+]
+
+
 # --- Metagame (docs/METAGAME.md) --------------------------------------------
 ## Slots in the dungeon bag. This number IS the game's core tension: it is what
 ## forces "sell it or forge with it" to be answered while you are still in

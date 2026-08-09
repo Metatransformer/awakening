@@ -27,14 +27,18 @@ var gold: int = K.START_GOLD
 ## Bag capacity, in slots. Bought from the shop, so it lives here with the rest
 ## of the metagame rather than in `Run`, which is wiped every time you die.
 var bag_slots: int = K.START_BAG_SLOTS
-## Extra quarter-hearts the sword deals, bought from the smith.
-var sword_bonus: int = 0
-## Quarter-hearts subtracted from every blow taken, floored at 1 -- armour makes
-## you last longer, never invincible.
-var armour_level: int = 0
-## Shop line id -> how many times it has been bought. Drives the price ramp and
-## the per-line purchase limits. See ShopDb.
+## Shop line id -> how many times it has been bought. Drives the price ramp, the
+## per-line purchase limits, and every forge ladder. See ShopDb.
+##
+## The forge tracks live in here rather than as five more `var`s because a rung
+## is a PURCHASE, and the smith already knows how to count purchases. The gear
+## reads them through the accessors below and never indexes this directly.
 var upgrades: Dictionary[StringName, int] = {}
+## Component id -> how many are on the workbench. Persistent: components that
+## reached town survive death, because they were already paid for by the run
+## that carried them home (`Run.extract` banks them). Components still in the
+## bag when you die are gone with it.
+var components: Dictionary[StringName, int] = {}
 var arrows: int = 0
 var max_arrows: int = 30
 var bombs: int = 0
@@ -142,9 +146,8 @@ func reset() -> void:
 	rupees = 0
 	gold = K.START_GOLD
 	bag_slots = K.START_BAG_SLOTS
-	sword_bonus = 0
-	armour_level = 0
 	upgrades.clear()
+	components.clear()
 	arrows = 0
 	bombs = 0
 	small_keys = 0
@@ -166,6 +169,7 @@ func reset() -> void:
 	# for state nobody polls.
 	_announce_loadout()
 	Bus.quick_slots_changed.emit(quick_slots)
+	Bus.components_changed.emit(components)
 	Bus.ammo_changed.emit(&"arrows", arrows)
 	Bus.gold_changed.emit(gold)
 	Bus.key_count_changed.emit(small_keys)
@@ -317,6 +321,104 @@ func spend_gold(n: int) -> bool:
 		return false
 	gold -= n
 	Bus.gold_changed.emit(gold)
+	return true
+
+
+# --- The forge --------------------------------------------------------------
+# Five ladders (K.FORGE_MAX rungs each), bought at the smith with gold AND
+# components. Everything below is a READ of `upgrades`; ShopDb is the only thing
+# that writes a rung, because a rung is a purchase and purchases have one till.
+#
+# Each accessor answers in the unit the gear actually uses, so no consumer ever
+# indexes a K array or knows what a "level" is. That indirection is the whole
+# point: when the shield's upgrade stops being an arc and becomes something
+# else, `guard_arc()` changes and hero_combat.gd does not.
+
+## Forge track ids. Spelled once, here, and used by ShopDb, the pouch screen and
+## the save file -- three places that have already drifted apart once in this
+## repo over how &"bow" is spelled (see ArmamentDb's header).
+const FORGE_EDGE := &"edge"      ## the sword
+const FORGE_PLATE := &"plate"    ## the armour
+const FORGE_GUARD := &"guard"    ## the shield
+const FORGE_STRING := &"string"  ## the bow
+const FORGE_CHAIN := &"chain"    ## the hookshot
+const FORGE_TRACKS: Array[StringName] = [
+	FORGE_EDGE, FORGE_PLATE, FORGE_GUARD, FORGE_STRING, FORGE_CHAIN,
+]
+
+
+## How many rungs of `track` are bought, clamped so a corrupt save can never
+## index a K array off the end.
+func forge_level(track: StringName) -> int:
+	return clampi(int(upgrades.get(track, 0)), 0, K.FORGE_MAX)
+
+
+## Quarter-hearts the sword adds. Named `sword_bonus` for years; it is a
+## function now because the number has a ladder behind it.
+func sword_bonus() -> int:
+	return K.EDGE_DAMAGE[forge_level(FORGE_EDGE)]
+
+
+## Quarter-hearts subtracted from every blow taken. `Hero.hurt` floors the
+## result at one -- armour makes you last longer, never invincible.
+func armour_soak() -> int:
+	return K.PLATE_SOAK[forge_level(FORGE_PLATE)]
+
+
+## Half-angle, in degrees, of the arc the raised shield covers.
+func guard_arc() -> float:
+	return K.GUARD_ARC[forge_level(FORGE_GUARD)]
+
+
+## Seconds a bow shot owns the hero, start to finish.
+func bow_draw_time() -> float:
+	return K.BOW_DRAW[forge_level(FORGE_STRING)]
+
+
+## Metres the hookshot's chain reaches. Rung 3 is the Longshot.
+func hook_reach() -> float:
+	return K.CHAIN_REACH[forge_level(FORGE_CHAIN)]
+
+
+# --- Components -------------------------------------------------------------
+# The workbench stock. Filled by `Run.extract()` sorting them out of the bag,
+# emptied by the forge. Never by anything else: a component that appeared
+# without a run behind it would make the dungeon optional.
+
+func component_count(id: StringName) -> int:
+	return int(components.get(id, 0))
+
+
+func add_component(id: StringName, n: int = 1) -> void:
+	if n <= 0:
+		return
+	components[id] = component_count(id) + n
+	Bus.components_changed.emit(components)
+
+
+## Take `n` off the bench. Returns false and changes NOTHING when there are not
+## enough, so a caller can use it as the check and the transaction at once --
+## the same contract `spend_gold` keeps, for the same reason.
+func spend_component(id: StringName, n: int) -> bool:
+	if n <= 0:
+		return true
+	var have := component_count(id)
+	if have < n:
+		return false
+	if have == n:
+		components.erase(id)
+	else:
+		components[id] = have - n
+	Bus.components_changed.emit(components)
+	return true
+
+
+## Can the bench pay a whole recipe? Checked before spending ANY of it, because
+## a recipe half-paid is a player robbed.
+func can_afford_parts(parts: Dictionary) -> bool:
+	for id: StringName in parts:
+		if component_count(id) < int(parts[id]):
+			return false
 	return true
 
 

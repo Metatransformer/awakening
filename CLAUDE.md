@@ -94,6 +94,7 @@ relevant director with no failures, and *your own eyes on the output*.
 | `--check-only --script` | "Identifier not found: Bus" | Autoloads aren't registered for that mode. False positive. |
 | Emissive / alpha / `BLEND_MODE_ADD` over near-black | Opaque slab at every opacity | Alpha does not attenuate ADD. Change the *shape*, not the material. |
 | Cold `.godot/imported/` | Missing `.ctex`, text-fallback HUD icons | Run `--import` before judging a frame. |
+| A gamepad plugged into this Mac | Directors fail intermittently, in beats that look like game races | Sticks resting outside the deadzone report `move_*` / `cam_*` held. The hero walks off mid-beat. `shoot.gd` strips joypad bindings now — if you write a harness that does not go through it, do the same. |
 | `--import` rewrites `project.godot` | A clean diff you didn't make | It re-serialises the file: **every `;` comment is deleted**, and it dropped `window/size/resizable`. The autoload load-order notes and the `#`-is-a-parse-error warning all vanish. `git diff project.godot` after every `--import`, and restore from `git show HEAD:project.godot` + re-apply your line. |
 
 ---

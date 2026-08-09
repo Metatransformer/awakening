@@ -27,7 +27,7 @@ func _ready() -> void:
 		Role.VENDOR:
 			prompt = "SELL"
 		Role.SMITH:
-			prompt = "TRADE"
+			prompt = "FORGE"
 		Role.GATE:
 			prompt = "DESCEND"
 			hold_time = 0.9
@@ -41,7 +41,7 @@ func activate(_by: Node3D) -> void:
 		Role.VENDOR:
 			TradeScreen.open(self, TradeScreen.Mode.SELL, "PAWNBROKER")
 		Role.SMITH:
-			TradeScreen.open(self, TradeScreen.Mode.BUY, "SMITH")
+			TradeScreen.open(self, TradeScreen.Mode.BUY, "THE FORGE")
 		Role.GATE:
 			Flow.enter_dungeon()
 

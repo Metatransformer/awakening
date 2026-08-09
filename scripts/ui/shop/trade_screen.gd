@@ -123,6 +123,7 @@ func _refresh() -> void:
 	else:
 		for line in ShopDb.lines():
 			var left := ShopDb.remaining(line["id"])
+			var parts: Dictionary = line.get("parts", {})
 			_rows.append({
 				"kind": &"buy",
 				"line": line,
@@ -130,7 +131,11 @@ func _refresh() -> void:
 				"count": left,
 				"price": int(line["cost"]),
 				"color": Pal.BONE,
-				"blurb": line["blurb"],
+				# The blurb says what the thing IS; the detail says what the
+				# number DOES, in the unit the player feels. A forge line without
+				# the second sentence is asking them to buy on faith.
+				"blurb": "%s   %s" % [line["blurb"], line.get("detail", "")],
+				"parts": parts,
 				"ok": ShopDb.can_buy(line),
 			})
 
@@ -311,10 +316,14 @@ func _draw() -> void:
 		if row["kind"] == &"item":
 			PixelFont.draw_text(self, "X%d" % int(row["count"]),
 				Vector2(qx, text_y), rt, Pal.MOTH)
-		elif row["kind"] == &"buy" and int(row["count"]) >= 0:
-			PixelFont.draw_text(self, "%d LEFT" % int(row["count"]),
-				Vector2(qx, text_y), rt,
-				Pal.MOTH if int(row["count"]) > 0 else Pal.RUST)
+		elif row["kind"] == &"buy":
+			var parts: Dictionary = row.get("parts", {})
+			if not parts.is_empty():
+				_recipe(parts, Vector2(qx, text_y), rt)
+			elif int(row["count"]) >= 0:
+				PixelFont.draw_text(self, "%d LEFT" % int(row["count"]),
+					Vector2(qx, text_y), rt,
+					Pal.MOTH if int(row["count"]) > 0 else Pal.RUST)
 
 		var price_col: Color = Pal.GOLD if affordable else Pal.RUST
 		if mode == Mode.SELL:
@@ -325,12 +334,39 @@ func _draw() -> void:
 		y += row_h
 
 	# The blurb for the highlighted line, in the one place blurbs ever appear.
+	# Wrapped, not clipped: a forge line carries its before/after numbers here
+	# ("8.7 M REACH -> 11.9 M REACH") and unwrapped that ran straight out through
+	# the right edge of the panel and on across the dungeon behind it.
 	var row2 := _rows[_cursor]
 	var bt := Pal.px(12.0 / PixelFont.H, s.y)
-	PixelFont.draw_text(self, str(row2["blurb"]),
-		Vector2(panel.position.x + pad, panel.end.y - pad * 2.4), bt, Pal.MOTH)
+	var bh := PixelFont.height(bt) * 1.5
+	var blurb := PixelFont.wrap(str(row2["blurb"]), bt, panel.size.x - pad * 2.0)
+	var by := panel.end.y - pad * 2.4 - bh * (blurb.size() - 1)
+	for i in blurb.size():
+		PixelFont.draw_text(self, blurb[i],
+			Vector2(panel.position.x + pad, by + bh * i), bt, Pal.MOTH)
 
 	_footer(s, panel, pad)
+
+
+## The component half of a bill: `3 GRIT  1 CORE`, each token GOLD when the
+## workbench can cover it and RUST when it cannot.
+##
+## Per-token colour, not per-row: a recipe you are one core short of and a recipe
+## you have none of look identical if the whole line just greys out, and the
+## difference between them is a whole run's worth of where to go looking.
+func _recipe(parts: Dictionary, at: Vector2, scale: float) -> void:
+	var x := at.x
+	for id: StringName in parts:
+		var need := int(parts[id])
+		var def := ItemDb.get_def(id)
+		if def == null:
+			continue
+		var have := Game.component_count(id)
+		var token := "%d %s" % [need, def.code()]
+		PixelFont.draw_text(self, token, Vector2(x, at.y), scale,
+			Pal.GOLD if have >= need else Pal.RUST)
+		x += PixelFont.width(token, scale) + PixelFont.width("  ", scale)
 
 
 func _footer(s: Vector2, panel: Rect2, pad: float) -> void:
@@ -339,7 +375,13 @@ func _footer(s: Vector2, panel: Rect2, pad: float) -> void:
 		else "ENTER BUY    ESC LEAVE"
 	var col: Color = Pal.RUST if _refuse >= 0.0 else Pal.ASH
 	if _refuse >= 0.0:
-		hint = "NOT ENOUGH GOLD" if mode == Mode.BUY else "NOTHING THERE"
+		# Ask the catalogue WHY rather than assuming money. Once a line can be
+		# refused for four different reasons, a hardcoded "NOT ENOUGH GOLD"
+		# sends the player back down for the wrong thing.
+		hint = "NOTHING THERE"
+		if mode == Mode.BUY and _cursor >= 0 and _cursor < _rows.size():
+			var why := ShopDb.refusal(_rows[_cursor]["line"])
+			hint = why if why != "" else "NOT ENOUGH GOLD"
 	PixelFont.draw_text(self, hint,
 		Vector2(panel.position.x + pad, panel.end.y - pad), ft, col)
 

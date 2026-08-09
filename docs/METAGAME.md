@@ -95,6 +95,10 @@ against a bag full of Grave Wax, not a strictly better one.
 Enemies roll from a weighted table; chests roll richer ones. Rarity also drives
 the mote's glow radius, which is the only "look over here" the game does.
 
+Four more items drop from the same tables and share the same bag, but they are
+not ingredients and the vendor will not take them: the **components** the forge
+eats. They are in §6.5.
+
 ---
 
 ## 4.5 Heat — what tempo is worth
@@ -234,18 +238,25 @@ One walled courtyard (`scripts/world/town.gd`) with three things in it.
   (`scripts/ui/shop/trade_screen.gd`) lists the bag sorted by value with a
   "sell everything" line, because the common case is dumping the lot and the UI
   should not make that tedious.
-- **The smith.** Five permanent lines (`scripts/items/shop_db.gd`), priced
+- **The smith.** Eight permanent lines (`scripts/items/shop_db.gd`), priced
   against the drop tables — a good run extracts with roughly 250–450 gold of
   ingredients, so cheap lines land after one run and dear ones after two or
   three.
 
-  | Line | Base cost | Growth | Limit |
-  |---|---|---|---|
-  | Arrows ×10 | 40 | — | unlimited |
-  | Bag slot | 140 | ×1.6 | 4 |
-  | Sharpen blade | 220 | ×1.7 | 3 |
-  | Temper armour | 260 | ×1.8 | 2 |
-  | Heart container | 320 | ×1.5 | 3 |
+  | Line | Base cost | Growth | Limit | Also costs |
+  |---|---|---|---|---|
+  | Arrows ×10 | 40 | — | unlimited | — |
+  | Bag slot | 140 | ×1.6 | 4 | — |
+  | Heart container | 320 | ×1.5 | 3 | — |
+  | Sharpen the blade | 120 | ×2.1 | 3 | components |
+  | Temper the armour | 140 | ×2.1 | 3 | components |
+  | Bind the shield | 110 | ×2.2 | 3 | components |
+  | String the bow | 130 | ×2.1 | 3 | components |
+  | Lengthen the chain | 150 | ×2.1 | 3 | components |
+
+  The top three are stock: things the smith HAS, and money is the whole
+  transaction. The bottom five are the **forge** (§6.5) and gold alone will not
+  buy them.
 
   Every line changes a number the player can feel inside one run. Nothing here
   is a stat-stick you have to take on faith.
@@ -254,6 +265,92 @@ One walled courtyard (`scripts/world/town.gd`) with three things in it.
 The costs scale with how many you have already bought, so the shop keeps pace
 instead of being solved by one lucky run. The limits are what stop the smith
 from being an infinite gold sink that makes the dungeon irrelevant.
+
+---
+
+## 6.5 The forge — the only upgrades that are not bought
+
+*Numbered 6.5 rather than 7 for the same reason §4.5 is: the sections below it
+are referenced from code comments and directors. Do not renumber them.*
+
+Gold is a grind. A grind is solvable by patience, and a metagame whose whole
+ladder is solvable by patience stops asking anything of the player after the
+first hour. So the five pieces of gear that matter each climb a ladder whose
+rungs cost **gold and components**, and components only exist underground.
+
+### The five ladders
+
+Four rungs each: rung 0 is the piece as it comes out of the box, and there are
+three to buy. The numbers live in `scripts/core/consts.gd` and the gear reads
+them back through accessors on `Game` — `sword_bonus()`, `armour_soak()`,
+`guard_arc()`, `bow_draw_time()`, `hook_reach()` — so a rung IS the effect, and
+there is no per-track special case anywhere in the shop.
+
+| Track | Gear | What the rung moves | 0 → 3 |
+|---|---|---|---|
+| `edge` | sword | damage, in quarter-hearts | +0 → +3 |
+| `plate` | armour | damage soaked off every hit, floor of one quarter | −0 → −3 |
+| `guard` | shield | block arc, in degrees | 70° → 115° |
+| `string` | bow | draw time, in seconds | 0.44 → 0.26 |
+| `chain` | hookshot | **reach**, in metres | 8.74 → 18.20 |
+
+The top of the chain ladder is exactly `K.HOOK_LONGSHOT_RANGE` — [oot]'s
+Longshot, measured, not invented. That is asserted by the director, because a
+table whose comment claims a source and whose numbers have drifted off it is
+worse than one with no comment.
+
+### The four components
+
+They live in `scripts/items/item_db.gd` alongside the ingredients and share the
+bag with them, but they are `ItemDef.Kind.COMPONENT`, and everything downstream
+branches on that one bit: the pouch marks them ◆, the vendor's "sell everything"
+leaves them alone, and extraction moves them to the workbench instead of the
+purse.
+
+| Component | Value | Rarity | Stack | Drops from |
+|---|---|---|---|---|
+| Whetstone Grit | 14 | common | 8 | bodies and chests |
+| Riveted Plate | 22 | uncommon | 6 | bodies and chests |
+| Tension Coil | 26 | uncommon | 6 | bodies and chests |
+| Cold Iron Core | 100 | rare | 2 | **chests only** |
+
+Read the recipes in `ShopDb.PARTS` by column, not by row: grit is the cheap tax
+on the two melee ladders, plate is the armour's spine and the shield's second
+ingredient, and coil belongs to the two things under tension — the bow and the
+chain. **Every third rung wants a Cold Iron Core.** That is the pacing gate: the
+core never drops off a body, so no amount of grinding room one finishes a
+ladder, and which ladder gets the core you found is the only genuinely hard
+spending decision the smith ever poses.
+
+### How they get home
+
+Exactly like everything else, which is the point:
+
+- They **drop as motes** and you pick them up by **walking over them**. There is
+  no pick-up button — `LootMote` is an Area3D and the overlap is the pickup.
+- They sit **in the bag**, taking slots, counted by `Run.slots_used()` and
+  valued by `Run.bag_value()`. A pocket full of grit is a pocket you cannot put
+  a Void Pearl in, and the extraction fee is charged on the components too.
+- **Extraction banks them** (`Run.bank_components()`): the fee comes off the
+  whole bag first, then components move to `Game.components` and the rest stays
+  for the vendor. `Bus.components_banked` says what moved.
+- **Death takes them.** `die()` does not bank. Components in the bag die with
+  the bag; components already on the bench are permanent, like gold.
+
+### The pouch
+
+`scripts/ui/menu/pouch_panel.gd`, on the pause menu under Equipment. It draws
+`Game.bag_slots` cells — not a list — because a list of six rows and a list of
+twelve rows look the same at a glance and the difference between them is the
+entire pressure in §3. Stacks occupy one cell until they overflow, exactly as
+`Run.slots_used()` counts them, so the picture and the arithmetic cannot
+disagree. The right-hand column names what is under the cursor and shows the
+workbench stock, read-only: this screen shows what you have, the smith spends
+it.
+
+It is a separate screen from **Items**, which is what you are *holding* and what
+the D-pad equips. Carrying and holding are different questions and a player who
+conflates them is a player who thinks the bag can be equipped.
 
 ---
 
@@ -276,10 +373,12 @@ this simple is still a fight rather than a health tax.
 | Concern | File |
 |---|---|
 | Run state, bag, extraction, death | `scripts/autoload/run_state.gd` |
-| Persistent gold and upgrades | `scripts/autoload/game_state.gd` |
+| Persistent gold, forge rungs, workbench stock | `scripts/autoload/game_state.gd` |
 | Town↔dungeon transition and fade | `scripts/autoload/game_flow.gd` |
-| Ingredients and drop tables | `scripts/items/item_db.gd` |
-| The smith's catalogue | `scripts/items/shop_db.gd` |
+| Ingredients, components and drop tables | `scripts/items/item_db.gd` |
+| The smith's catalogue, and the forge recipes | `scripts/items/shop_db.gd` |
+| The upgrade ladders, rung by rung | `scripts/core/consts.gd` (`K.EDGE_DAMAGE` …) |
+| The pouch — the bag, drawn as slots | `scripts/ui/menu/pouch_panel.gd` |
 | Vendor / smith screen | `scripts/ui/shop/trade_screen.gd` |
 | HUD | `scripts/ui/hud/hud.gd` |
 | Town | `scripts/world/town.gd`, `scenes/rooms/town.tscn` |
@@ -330,6 +429,30 @@ HEAT after_sweep bag=222 premium=114 fee=56   (was value=0 fee=15)
 HEAT premium 114 vs 130 uncooled -- the gap IS the cooling
 HEAT struck      tier 3 -> 2
 HEAT OK
+```
+
+The forge and the pouch have theirs (§6.5):
+
+```bash
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --director=res://tools/directors/forge_loop.gd --out=/tmp/forge/x.png --warmup=60
+```
+
+It reads the catalogue, opens the pouch, is refused a rung it cannot pay for in
+components, buys all fifteen rungs and watches the gear's own accessors move,
+descends, walks over three component motes with **no button pressed**, extracts,
+dies on purpose to prove the bench survives what the bag does not, and finally
+saves, wipes and reloads to prove a forged rung survives quitting the game.
+`FORGE FAIL …` on any claim that did not hold. Last run:
+
+```
+FORGE base       edge=+0 plate=-0 guard=70 draw=0.44 reach=8.74
+FORGE full       edge=+3 plate=-3 guard=115 draw=0.26 reach=18.20
+FORGE swept      bag=3 value=62        (walked over, nothing pressed)
+FORGE pre_extract bag=140 fee=35
+FORGE home       bench={grit:92 plate:82 coil:78 core:115} bag={void_pearl:1}
+FORGE after_death bench_cores=115 bag=0
+FORGE reloaded   rungs={edge:3 plate:3 guard:3 string:3 chain:3} slots=12
+FORGE OK
 ```
 
 **Do not pass `--headless`.** There is no rendering device in headless mode and

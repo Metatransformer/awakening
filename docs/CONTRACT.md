@@ -516,6 +516,58 @@ save owns nothing", several directors assert exactly that, and a kit that
 reappeared on every reset would make the assertion untestable rather than true.
 Delete the two constants to ship.
 
+### The forge — five rungs, and the gear reads them
+
+```gdscript
+# scripts/autoload/game_state.gd
+const FORGE_EDGE   := &"edge"     # the sword
+const FORGE_PLATE  := &"plate"    # the armour
+const FORGE_GUARD  := &"guard"    # the shield
+const FORGE_STRING := &"string"   # the bow
+const FORGE_CHAIN  := &"chain"    # the hookshot
+const FORGE_TRACKS: Array[StringName] = [...]
+
+var components: Dictionary[StringName, int] = {}   # the workbench, survives death
+
+func forge_level(track: StringName) -> int         # 0..K.FORGE_MAX, clamped
+
+func sword_bonus() -> int        # K.EDGE_DAMAGE[level]   quarter-hearts
+func armour_soak() -> int        # K.PLATE_SOAK[level]    quarter-hearts
+func guard_arc() -> float        # K.GUARD_ARC[level]     degrees
+func bow_draw_time() -> float    # K.BOW_DRAW[level]      seconds
+func hook_reach() -> float       # K.CHAIN_REACH[level]   metres
+
+func component_count(id: StringName) -> int
+func add_component(id: StringName, n := 1) -> void          # emits components_changed
+func spend_component(id: StringName, n: int) -> bool        # check-and-transaction
+func can_afford_parts(parts: Dictionary) -> bool
+```
+
+The rungs live in `Game.upgrades` beside the shop's other counters; the numbers
+they index live in `scripts/core/consts.gd`. **Rung 0 is the un-upgraded piece**,
+so the arrays are the whole truth and there is no "base + bonus" arithmetic to
+drift. `K.CHAIN_REACH[3]` is `K.HOOK_LONGSHOT_RANGE` on purpose.
+
+Rules:
+
+- **Ask `Game`, do not cache the number.** `hero_combat.gd` and `hero_ranged.gd`
+  read the accessor — in `_ready` for what the rig is built out of, per shot for
+  the bow's draw and the hookshot's reach. A hero spawned into a fresh dungeon
+  comes up with what the player forged, which is exactly what a rung is for.
+- **Read arcs and cones as a delta** (`Game.guard_arc() - K.GUARD_ARC[0]`) when
+  the value is also an `@export`, so the exported number still means "the bare
+  kite shield" in the inspector.
+- **`ItemDef.Kind.COMPONENT` is the only thing that distinguishes a component**
+  from an ingredient. `ItemDb.is_component(id)` and `ItemDef.is_component()`
+  answer it; the vendor, the pouch and `Run.bank_components()` all branch on
+  that one bit and nothing else.
+- **Components bank on extraction, not on pickup.** `Run.bank_components()` is
+  called by `extract()` after the fee, and deliberately **not** by `die()`.
+- New on `Bus`: `components_changed(stock)`, `components_banked(moved)`,
+  `gear_forged(track, level)`.
+- New on the pause menu: `PauseMenu.Screen.POUCH`, `Root/Screens/PouchScreen`
+  (`scripts/ui/menu/pouch_panel.gd`). It is read-only — the bag has no verbs.
+
 ### The way out — the Homeward Charm
 
 ```gdscript
@@ -864,6 +916,11 @@ Saves.load_slot(slot)   # restores Game, RETURNS {scene, room, pos, yaw}
 Saves.erase(slot)       # 3 slots, 0..2
 ```
 
+The save file is at **`VERSION = 2`**: it carries `bag_slots`, `upgrades` and
+`components` on top of v1. On load, both dictionaries are rebuilt with
+`StringName` keys — JSON hands back `String` keys, and a `String` key makes
+`forge_level(&"edge")` miss silently and every forged rung vanish.
+
 `Saves.load_slot()` deliberately does **not** change scenes — it hands back
 where the hero belongs and lets the caller transition however it wants.
 Whoever owns room transitions should set `Saves.current_room` as rooms change.
@@ -959,6 +1016,15 @@ will not resolve.
 - **Never let a test write the real `user://settings.cfg`.** Pass
   `--settings=user://scratch.cfg` after the `--` separator. A menu test once left
   `attack` bound to `N` and the game shipped with a dead sword button.
+- **A gamepad plugged into the machine drives the harness too.** Sticks resting
+  just outside the deadzone report `move_up`, `move_right`, `cam_down` and
+  `cam_left` HELD, with nothing pressed. The hero walks off his mark mid-beat,
+  `Prompt` drops focus, and the director reports failures in the *system it was
+  testing* rather than in the input it never controlled. It is intermittent
+  because the drift wanders, so it reads as a race in the game. `shoot.gd`
+  strips joypad bindings from the InputMap at startup (in memory —
+  `project.godot` is untouched); any harness that does not go through it must do
+  the same.
 - **`OS.get_keycode_string()` returns `""`** for Enter, Space and the arrows in
   this build while working for Escape. Print raw keycodes in diagnostics; a
   half-working readout invents bugs that are not there.

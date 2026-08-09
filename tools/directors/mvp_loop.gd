@@ -92,7 +92,7 @@ func _buy(rig) -> void:
 	await rig.tap(["ui_accept"])
 	await rig.wait_frames(24)
 	print("MVP after_buy gold=%d slots=%d sword=+%d armour=+%d" % [
-		Game.gold, Game.bag_slots, Game.sword_bonus, Game.armour_level])
+		Game.gold, Game.bag_slots, Game.sword_bonus(), Game.armour_soak()])
 	await rig.capture(out.path_join("m_06_bought.png"))
 
 	await rig.tap(["ui_cancel"])
