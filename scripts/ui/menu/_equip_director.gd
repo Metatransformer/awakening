@@ -24,7 +24,10 @@ var _fail := 0
 
 
 func run(rig) -> void:
-	var menu: PauseMenu = rig.current_scene.get_node("PauseMenu")
+	# The autoload, not a scene-local instance. There is exactly one PauseMenu in
+	# the project now; a harness that instanced its own is how this project once
+	# ended up with a menu that existed only in its own test scene.
+	var menu: PauseMenu = Menu
 	var equip: MenuEquipPanel = menu.get_node("Root/Screens/EquipScreen")
 
 	# A fresh Game owns nothing, which is the state the ownership gate is for.
