@@ -176,10 +176,20 @@ func run(rig) -> void:
 	# whole light swing -- inside the 0.35 s between these two taps.
 	_drain()
 	mark = _hits.size()
+	print("DBG drained stamina=%.2f hits=%d" % [Game.stamina, _hits.size()])
 	await rig.tap(["attack"])
 	await rig.wait_seconds(0.3)
+	print("DBG after attack stamina=%.2f hits=%d" % [Game.stamina, _hits.size()])
+	print("DBG pre-heavy stamina=%.6f hold_hits=%d" % [Game.stamina, _hits.size()])
 	await rig.tap(["heavy"])
+	print("DBG mid-heavy stamina=%.6f hits=%d" % [Game.stamina, _hits.size()])
+	for _d in 40:
+		await rig.wait_frames(1)
+		if _hits.size() > mark:
+			print("DBG blow landed at frame %d stamina=%.6f dmg=%d charged=%s" % [_d, Game.stamina, _hits[mark], bool(combat.get(&"charged"))])
+			break
 	await rig.wait_seconds(0.6)
+	print("DBG after heavy stamina=%.2f hits=%d" % [Game.stamina, _hits.size()])
 	var spent_blows := _hits.size() - mark
 	await rig.capture(out.path_join("h_03b_no_stamina.png"))
 	_refill()
