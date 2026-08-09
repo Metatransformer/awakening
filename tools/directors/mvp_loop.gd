@@ -110,7 +110,7 @@ func _descend(rig) -> void:
 	# This beat was flaky about one run in five, and the failure was expensive
 	# out of all proportion: the hold went into the smith's screen while it was
 	# still closing, the descent silently did not happen, and every beat after it
-	# — the dungeon, the fight, the chest, the charm — then reported a failure it
+	# — the dungeon, the fight, the chest, the rope — then reported a failure it
 	# did not cause. Two sessions have now gone hunting the economy for what was
 	# a screen that had not finished shutting. A fixed frame count after
 	# `ui_cancel` is the wrong instrument; wait for the state you need instead.
@@ -184,7 +184,7 @@ func _fight(rig) -> void:
 	# the timing was tuned against monsters that stood where they spawned. Now
 	# that they close in, the hero came out of the swing loop on two quarters and
 	# died during the WALK to the drop, which emptied the bag, sent Flow to town,
-	# and reported "no chest" and "the charm refused to start" for a run that had
+	# and reported "no chest" and "the rope refused to start" for a run that had
 	# no chest and no dungeon left. The line above is where the balance signal
 	# lives; this is where the cascade gets cut.
 	#
@@ -227,52 +227,52 @@ func _fight(rig) -> void:
 		await rig.capture(out.path_join("m_14_chest_loot.png"))
 
 
-## Leaving. There is no pad to walk to any more -- the way out is the Homeward
-## Charm, used from the menu, which then channels in the world. This drives the
-## charm directly rather than the menu; the menu path is the equip director's
+## Leaving. There is no pad to walk to any more -- the way out is the Escape
+## Rope, used from the menu, which then channels in the world. This drives the
+## rope directly rather than the menu; the menu path is the equip director's
 ## job, and duplicating it here would only test the same buttons twice.
 func _extract(rig) -> void:
 	var hero = rig.get_nodes_in_group(&"player")[0]
-	var charm: HomewardCharm = hero.charm
-	if charm == null:
+	var rope: EscapeRope = hero.rope
+	if rope == null:
 		print("MVP FAIL the hero is carrying no way out")
 		return
 
 	# Break off the fight first. An unblocked hit cancels the channel on purpose
 	# (hero.gd, "you do not get to walk out of a fight you are losing"), so this
-	# beat has to do what a player does and disengage before using the charm.
+	# beat has to do what a player does and disengage before using the rope.
 	# It did not have to before the monsters chased: they stood where they spawned,
 	# the hero channelled in the middle of them, and the beat passed. The first run
-	# after the AI landed reported "the charm stopped channelling on its own",
+	# after the AI landed reported "the rope stopped channelling on its own",
 	# which was the game working and the director standing in a mob.
 	await _break_off(rig, hero)
 
 	await rig.wait_frames(20)
-	await rig.capture(out.path_join("m_15_before_charm.png"))
+	await rig.capture(out.path_join("m_15_before_rope.png"))
 
 	print("MVP pre_extract gold=%d fee=%d value=%d" % [
 		Game.gold, Run.extract_cost(), Run.bag_value()])
-	if not charm.begin():
+	if not rope.begin():
 		# begin() has three refusals and they mean completely different things:
 		# already channelling, not underground, or too poor. Printing only gold
 		# and the fee named the one cause that is almost never the real one, and
 		# sent a session hunting the economy for what was a state bug.
-		print("MVP FAIL the charm refused to start (gold=%d fee=%d in_dungeon=%s active=%s can=%s)"
-			% [Game.gold, Run.extract_cost(), Run.in_dungeon, charm.active(),
+		print("MVP FAIL the rope refused to start (gold=%d fee=%d in_dungeon=%s active=%s can=%s)"
+			% [Game.gold, Run.extract_cost(), Run.in_dungeon, rope.active(),
 				Run.can_extract()])
 		return
 
 	# Caught mid-channel, so the ring is closing and the column of light is
 	# halfway up him rather than absent or finished.
-	await rig.wait_seconds(HomewardCharm.CHANNEL_TIME * 0.5)
-	if not charm.active():
-		print("MVP FAIL the charm stopped channelling on its own")
+	await rig.wait_seconds(EscapeRope.CHANNEL_TIME * 0.5)
+	if not rope.active():
+		print("MVP FAIL the rope stopped channelling on its own")
 	await rig.capture(out.path_join("m_16_channelling.png"))
 
-	await rig.wait_seconds(HomewardCharm.CHANNEL_TIME)
+	await rig.wait_seconds(EscapeRope.CHANNEL_TIME)
 	await rig.wait_frames(30)
 	if Run.in_dungeon:
-		print("MVP FAIL the charm finished and he is still underground")
+		print("MVP FAIL the rope finished and he is still underground")
 	await rig.capture(out.path_join("m_17_extracting.png"))
 
 

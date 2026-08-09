@@ -126,7 +126,7 @@ Blazing the safe state and delete the decision.
 **What breaks it:** the window running out, or **a blow that lands**. A blow you
 *block* does not, because Heat watches `Bus.player_health_changed` and a blocked
 blow never changes health — the shield being the tempo tool is a consequence of
-the wiring, not a special case. It is the same rule the charm channels under
+the wiring, not a special case. It is the same rule the rope channels under
 (§5), which is why it should feel familiar rather than new.
 
 **Breaking steps down one tier, not to zero.** Zeroing makes one mistake at
@@ -174,8 +174,10 @@ Proof: `tools/directors/heat_flow.gd`.
 
 ## 5. Extraction — the priced decision
 
-The way out is the **Homeward Charm** (`scripts/items/homeward_charm.gd`): a
-permanent key item, used from the pause menu's ITEMS screen, under **USE**.
+The way out is the **Escape Rope** (`scripts/items/escape_rope.gd`): a
+permanent key item, used from the pause menu's **POUCH** screen, under THE WAY
+OUT — beside the bag's worth and the purse, because those three numbers are the
+decision and they belong on one screen.
 
 **Superseded 2026-08-08, on the owner's instruction: this was a rune pad you
 stood on and held (`scripts/world/extract_node.gd`, deleted).** The pad made
@@ -184,9 +186,9 @@ decision into a navigation problem, and a rich run could be lost to not
 remembering where the door was. The decision was never "can I find my way back",
 it was "is what I am carrying worth the fee".
 
-The charm is **not consumable**. A stock you can run out of would strand a
+The rope is **not consumable**. A stock you can run out of would strand a
 player underground, and being stranded is the one thing this section rules out
-below: you are never trapped. The fee is the price of leaving; the charm is just
+below: you are never trapped. The fee is the price of leaving; the rope is just
 where the button lives.
 
 The pad's two real properties survive the move, because everything below is
@@ -195,10 +197,10 @@ built on them:
 - **Leaving takes time and can be interrupted.** The pad was a *hold* so that a
   decision could not be made by fumbling a button. A menu press has neither
   property on its own — the menu is paused, so a "hold" in there is a slow
-  click. So using the charm closes the menu and starts a **1.2 s channel in the
+  click. So using the rope closes the menu and starts a **1.2 s channel in the
   world**: he is rooted, the ring closes around the bag total, and **a blow that
   lands breaks it**. A blow he *blocks* does not — standing your ground behind
-  the shield while the charm works is a legitimate way to leave, and a better one
+  the shield while the rope works is a legitimate way to leave, and a better one
   than mashing a button was.
 - **The fee comes out of the number you are protecting**, and the HUD says so.
 
@@ -367,7 +369,7 @@ back and hold**, swing, recover. That telegraph is the entire fight — it is th
 window to block, roll, or hit first — and it is why an enemy this simple is
 still a fight rather than a health tax. A pack keeps itself spread out, circles
 rather than stacking, and gives up and walks home if you leave — which is what
-makes disengaging a real option and therefore what makes the charm's channel
+makes disengaging a real option and therefore what makes the rope's channel
 survivable.
 
 ### 7.1 Going deeper
@@ -428,7 +430,7 @@ second one is a decision.
 | HUD | `scripts/ui/hud/hud.gd` |
 | Town | `scripts/world/town.gd`, `scenes/rooms/town.tscn` |
 | Dungeon | `scripts/world/dungeon.gd`, `scenes/rooms/dungeon.tscn` |
-| The way out | `scripts/items/homeward_charm.gd` |
+| The way out | `scripts/items/escape_rope.gd` |
 | Drops on the floor, and their heat stamp | `scripts/world/loot_mote.gd` |
 | The chain, its tiers and what they are worth | `scripts/autoload/heat.gd` |
 
@@ -446,7 +448,7 @@ godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --direc
 
 `tools/directors/mvp_loop.gd` walks the whole loop through the real interaction
 paths and photographs every beat: sell one → sell all → buy → descend → fight →
-pick up a drop → open a chest → **channel the charm** → home. It prints the gold,
+pick up a drop → open a chest → **channel the rope** → home. It prints the gold,
 bag and health it observed at each seam, and prints `MVP FAIL …` if a beat did not
 happen. Last run:
 

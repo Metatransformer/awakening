@@ -498,12 +498,12 @@ func _physics_process(delta: float) -> void:
 	# A shop or a fade owns the buttons while it is up. The swing already in
 	# flight still finishes below -- cancelling it would leave the hitbox on.
 	#
-	# The charm's channel locks the same buttons: swapping your loadout halfway
+	# The rope's channel locks the same buttons: swapping your loadout halfway
 	# out of the dungeon is not a thing that should typecheck. The SHIELD is the
 	# exception and is handled below -- guarding through the channel is the one
 	# defence he has left while rooted.
 	var locked := Prompt != null and Prompt.blocked
-	var leaving := _hero.charm != null and _hero.charm.active()
+	var leaving := _hero.rope != null and _hero.rope.active()
 
 	# The shield is held, not toggled, and it drops the moment you commit to
 	# anything else — you cannot hide behind it and attack out of it, and you

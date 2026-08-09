@@ -198,7 +198,7 @@ func _ready() -> void:
 	Bus.heat_changed.connect(_on_heat)
 	Bus.heat_tier_changed.connect(_on_heat_tier)
 	Bus.extract_refused.connect(_on_refused)
-	Bus.homeward_broken.connect(_on_homeward_broken)
+	Bus.escape_rope_broken.connect(_on_escape_rope_broken)
 	Bus.shield_blocked.connect(_on_blocked)
 	Bus.target_acquired.connect(_on_target)
 	Bus.target_lost.connect(_on_target_lost)
@@ -319,12 +319,12 @@ func _on_refused(_cost: int, _gold: int) -> void:
 	_wake()
 
 
-## Knocked out of the charm. Said as a toast rather than as a beep, because the
+## Knocked out of the rope. Said as a toast rather than as a beep, because the
 ## player pressed a button in a menu and then arrived back in the world still in
 ## the dungeon -- without a sentence, that reads as the menu having eaten the
 ## input.
-func _on_homeward_broken() -> void:
-	_toast = "THE CHARM BREAKS"
+func _on_escape_rope_broken() -> void:
+	_toast = "THE ROPE SNAPS"
 	_toast_color = Pal.RUST
 	_toast_t = 0.0
 	_wake()
@@ -353,7 +353,7 @@ func _on_aim(active: bool) -> void:
 ## "You can leave right now."
 ##
 ## This used to mean "you are standing on the rune pad", and the pad called it.
-## The pad is gone (the way out is the Homeward Charm, used from the menu), so
+## The pad is gone (the way out is the Escape Rope, used from the menu), so
 ## availability is no longer about WHERE you are -- it is about whether you can
 ## afford the fee, which is the only thing that can still stop you. The sweep
 ## therefore fires the moment leaving becomes possible again, which is a more

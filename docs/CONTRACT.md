@@ -662,27 +662,27 @@ Rules:
 - New on the pause menu: `PauseMenu.Screen.POUCH`, `Root/Screens/PouchScreen`
   (`scripts/ui/menu/pouch_panel.gd`). It is read-only — the bag has no verbs.
 
-### The way out — the Homeward Charm
+### The way out — the Escape Rope
 
 ```gdscript
-# scripts/items/homeward_charm.gd, built by hero.gd as `hero.charm`
-Bus.homeward_used.emit()          # the ITEMS screen, after closing the menu
-hero.charm.begin() -> bool        # or drive it directly, as directors do
-hero.charm.active() -> bool       # rooted, mid-channel
-hero.charm.cancel()               # a blow landed; emits Bus.homeward_broken
+# scripts/items/escape_rope.gd, built by hero.gd as `hero.rope`
+Bus.escape_rope_used.emit()      # the POUCH screen, after closing the menu
+hero.rope.begin() -> bool        # or drive it directly, as directors do
+hero.rope.active() -> bool       # rooted, mid-channel
+hero.rope.cancel()               # a blow landed; emits Bus.escape_rope_broken
 ```
 
 There is no extraction node and no exit room. `ExtractNode` is **deleted** —
 do not add a second way out (METAGAME §5).
 
-- **The charm channels, it does not teleport.** `CHANNEL_TIME` seconds rooted in
+- **The rope channels, it does not teleport.** `CHANNEL_TIME` seconds rooted in
   the world, cancelled by a blow that *lands*. A blocked blow does not cancel it.
 - **The hero is rooted by the same mechanism a shop uses**, so he still falls and
-  still slides to a halt — `hero.gd` folds `charm.active()` into the same
+  still slides to a halt — `hero.gd` folds `rope.active()` into the same
   `locked` flag as `Prompt.blocked`, and `hero_combat.gd` locks the item buttons
   but deliberately **not** the shield.
 - **It is not bindable.** It is not in `QUICK_POOL` and must not be added to it.
-- **Only `Run` decides whether leaving is possible.** The charm asks
+- **Only `Run` decides whether leaving is possible.** The rope asks
   `Run.can_extract()` before it starts and `Run.extract()` when it finishes; the
   fee moves with the bag, so both checks are load-bearing.
 - **Unowned gear is not on the body.** The bow and the hookshot each have two

@@ -111,7 +111,7 @@ func _ready() -> void:
 	_equip.notice.connect(_notice)
 	_equip.value_settled.connect(func() -> void: _play(SND_CLICK))
 	_pouch.back_requested.connect(back)
-	# Using the way out is not backing out one screen: the Homeward Charm's
+	# Using the way out is not backing out one screen: the Escape Rope's
 	# channel happens in the world and the player has to be able to watch it, so
 	# the whole menu goes away rather than popping to root.
 	_pouch.use_requested.connect(close)

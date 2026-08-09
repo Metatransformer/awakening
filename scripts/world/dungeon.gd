@@ -317,7 +317,7 @@ func _populate() -> void:
 		_add_room_trigger(root, cell)
 
 		# The entrance room stays empty. It used to hold the extraction pad; the
-		# way out is the Homeward Charm now (scripts/items/homeward_charm.gd),
+		# way out is the Escape Rope now (scripts/items/escape_rope.gd),
 		# so there is no room you have to walk back to.
 		if cell == entrance:
 			continue

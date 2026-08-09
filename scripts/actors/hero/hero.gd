@@ -246,7 +246,7 @@ var ranged: HeroRanged = null
 
 ## The way out, carried on his belt. Built here for the same reason combat is:
 ## every scene that spawns a hero must spawn one who can leave.
-var charm: HomewardCharm = null
+var rope: EscapeRope = null
 
 ## Looking around out of his own eyes (GameCamera.set_first_person). He does not
 ## steer while it is up and his model is not drawn — the lens is inside his head,
@@ -369,9 +369,9 @@ func _ready() -> void:
 	ranged.name = "Ranged"
 	add_child(ranged)
 
-	charm = HomewardCharm.new()
-	charm.name = "Charm"
-	add_child(charm)
+	rope = EscapeRope.new()
+	rope.name = "Rope"
+	add_child(rope)
 
 	_build_key_light()
 
@@ -701,14 +701,14 @@ func _physics_process(delta: float) -> void:
 	# Without this the shop's confirm key (space) is also the dodge key, and every
 	# purchase throws the hero across the town square behind the panel.
 	# Leaving roots him, by the same mechanism and for a related reason: the
-	# charm's channel is only a decision if walking out of it is not free. He
+	# rope's channel is only a decision if walking out of it is not free. He
 	# still falls and still slides to a halt, he just does not steer.
-	# First person roots him for the same reason the charm's channel does: it is a
+	# First person roots him for the same reason the rope's channel does: it is a
 	# stance you have chosen to stand still in. It is also the honest one -- his
 	# model is hidden while the lens is inside his head, so a hero who could walk
 	# in here would be an invisible hero walking.
 	var locked := (Prompt != null and Prompt.blocked) \
-		or (charm != null and charm.active()) \
+		or (rope != null and rope.active()) \
 		or _first_person
 	var stick := Vector2.ZERO if locked \
 		else Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down")
@@ -1268,7 +1268,7 @@ func aim_item() -> StringName:
 
 # --- The hookshot pull -------------------------------------------------------
 ## HeroRanged owns the raycast, the anchor and the chain; this owns the body.
-## The split is the same one the charm uses — whoever decides is not whoever
+## The split is the same one the rope uses — whoever decides is not whoever
 ## moves — and it is what keeps the hookshot out of the movement script.
 
 ## Seconds a pull is allowed to take before the hero is released regardless.
@@ -1380,13 +1380,13 @@ func take_hit(hit: Hit) -> bool:
 	_invuln = K.IFRAME_TIME
 	# You do not get to walk out of a fight you are losing. This is the property
 	# the rune pad's hold existed to protect (METAGAME §5) and the only reason
-	# the charm channels at all rather than teleporting on the menu press.
+	# the rope channels at all rather than teleporting on the menu press.
 	#
 	# A BLOCKED blow does not break it -- that path returns above. Standing your
-	# ground behind the shield while the charm works is a legitimate way to
+	# ground behind the shield while the rope works is a legitimate way to
 	# leave, and it is a better one than mashing the button was.
-	if charm != null:
-		charm.cancel()
+	if rope != null:
+		rope.cancel()
 	# Armour never zeroes a blow. A build that cannot be hurt turns the whole
 	# extraction decision into a formality.
 	Game.damage(maxi(K.QUARTER, hit.amount - Game.armour_soak()))

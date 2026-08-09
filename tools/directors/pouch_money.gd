@@ -82,9 +82,9 @@ func run(rig) -> void:
 	var fee: Label = _find_label(pouch, "◇")
 	if fee != null and fee != header:
 		print("  fee row: %s" % fee.text)
-	_check("the way out is on this screen", pouch.find_child("Charm", true, false) != null)
+	_check("the way out is on this screen", pouch.find_child("Rope", true, false) != null)
 	_check("...and it is gone from the items screen",
-		menu.get_node("Root/Screens/EquipScreen").find_child("Charm", true, false) == null)
+		menu.get_node("Root/Screens/EquipScreen").find_child("Rope", true, false) == null)
 
 	# Pressing it again closes: a button that opens must close.
 	_tap(&"inventory")

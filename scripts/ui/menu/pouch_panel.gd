@@ -76,8 +76,8 @@ var _detail_name: Label
 var _detail_value: Label
 var _detail_blurb: Label
 var _detail_legend: Label
-var _charm: Button
-var _charm_fee: Label
+var _rope: Button
+var _rope_fee: Label
 
 
 func _ready() -> void:
@@ -155,7 +155,7 @@ func _build() -> void:
 	right.add_theme_constant_override("separation", 12)
 	split.add_child(right)
 	_build_detail(right)
-	_build_charm(right)
+	_build_rope(right)
 	_build_stock(right)
 
 	var footer := PanelContainer.new()
@@ -328,7 +328,7 @@ func _build_detail(parent: Node) -> void:
 ## the fumble the hold was guarding against. Two deliberate presses in a paused
 ## menu, then a channel you can be knocked out of, is the same guarantee by
 ## other means.
-func _build_charm(parent: Node) -> void:
+func _build_rope(parent: Node) -> void:
 	var card := PanelContainer.new()
 	card.name = "Use"
 	card.theme_type_variation = &"MenuSection"
@@ -343,46 +343,53 @@ func _build_charm(parent: Node) -> void:
 	caption.text = "THE WAY OUT"
 	inner.add_child(caption)
 
-	_charm = Button.new()
-	_charm.name = "Charm"
-	_charm.theme_type_variation = &"MenuRow"
-	_charm.focus_mode = Control.FOCUS_ALL
-	_charm.text = "◈  Homeward Charm"
-	inner.add_child(_charm)
+	_rope = Button.new()
+	_rope.name = "Rope"
+	_rope.theme_type_variation = &"MenuRow"
+	_rope.focus_mode = Control.FOCUS_ALL
+	_rope.text = "◈  Escape Rope"
+	inner.add_child(_rope)
 
-	_charm_fee = Label.new()
-	_charm_fee.name = "Fee"
-	_charm_fee.theme_type_variation = &"MenuValue"
-	_charm_fee.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_charm_fee.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_charm_fee.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_charm.add_child(_charm_fee)
-	_charm_fee.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_charm_fee.offset_right = -16
+	_rope_fee = Label.new()
+	_rope_fee.name = "Fee"
+	_rope_fee.theme_type_variation = &"MenuValue"
+	_rope_fee.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_rope_fee.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_rope_fee.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_rope.add_child(_rope_fee)
+	_rope_fee.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_rope_fee.offset_right = -16
 
-	_charm.pressed.connect(_use_charm)
-	_charm.focus_entered.connect(_describe_charm)
-	_charm.mouse_entered.connect(_describe_charm)
+	_rope.pressed.connect(_use_rope)
+	_rope.focus_entered.connect(_describe_rope)
+	_rope.mouse_entered.connect(_describe_rope)
 
 
 ## Leaving is not something to do from inside a menu screen: the channel happens
 ## in the world and the player has to be able to see it. So the menu closes and
-## the hero's charm node takes it from there (`Bus.homeward_used`).
-func _use_charm() -> void:
+## the hero's rope node takes it from there (`Bus.escape_rope_used`).
+func _use_rope() -> void:
 	if not Run.in_dungeon:
 		notice.emit("You are already home.", true)
 		return
 	var fee := Run.extract_cost()
 	if Game.gold < fee:
-		notice.emit("The charm wants %d gold and you have %d." % [fee, Game.gold], true)
+		notice.emit("The rope wants %d gold and you have %d." % [fee, Game.gold], true)
 		return
 	use_requested.emit()
-	Bus.homeward_used.emit()
+	Bus.escape_rope_used.emit()
 
 
-func _describe_charm() -> void:
-	_detail_kind.text = "THE WAY OUT"
-	_detail_name.text = "Homeward Charm"
+func _describe_rope() -> void:
+	# NOT "THE WAY OUT" — that is the caption on the section directly below this
+	# panel, and with the rope focused the screen said it twice, one line apart.
+	# The kind line is metadata everywhere else on this screen ("SLOT 1 · COMMON
+	# · INGREDIENT"), so it says the two things about the rope that are not
+	# obvious from the button: it costs no slot, and it is deliberately not
+	# bindable (escape_rope.gd — one D-pad press that ends the run is the fumble
+	# the channel exists to prevent).
+	_detail_kind.text = "ALWAYS CARRIED  ·  NOT BINDABLE"
+	_detail_name.text = "Escape Rope"
 	if not Run.in_dungeon:
 		_detail_value.text = ""
 		_detail_blurb.text = "Cold, and quiet. It only wakes underground."
@@ -402,18 +409,18 @@ func _describe_charm() -> void:
 ## sentences and the player should not have to focus the row to read the second.
 ##
 ## The row stays ENABLED when you cannot afford it. A greyed-out control tells
-## you nothing about why; pressing it and being told "the charm wants 340 gold
+## you nothing about why; pressing it and being told "the rope wants 340 gold
 ## and you have 190" tells you exactly what to do about it.
-func _paint_charm() -> void:
-	if _charm == null:
+func _paint_rope() -> void:
+	if _rope == null:
 		return
 	if not Run.in_dungeon:
-		_charm_fee.text = "—"
-		_charm_fee.modulate = Color(1, 1, 1, 0.5)
+		_rope_fee.text = "—"
+		_rope_fee.modulate = Color(1, 1, 1, 0.5)
 		return
 	var fee := Run.extract_cost()
-	_charm_fee.text = "%d ◇" % fee
-	_charm_fee.modulate = Color.WHITE if Game.gold >= fee else Pal.RUST
+	_rope_fee.text = "%d ◇" % fee
+	_rope_fee.modulate = Color.WHITE if Game.gold >= fee else Pal.RUST
 
 
 ## What made it home. Not focusable and not editable — it is the answer to "can
@@ -461,10 +468,10 @@ func _wire_focus() -> void:
 			# Out of the bottom of the grid comes the way out, and only then Back.
 			# That order is the screen's argument in one column: here is what you
 			# are carrying, here is what it costs to keep it, here is the door.
-			MenuUtil.link_down(_cells[i], _charm)
-	MenuUtil.link_down(_charm, _back)
-	_charm.focus_neighbor_left = ^"."
-	_charm.focus_neighbor_right = ^"."
+			MenuUtil.link_down(_cells[i], _rope)
+	MenuUtil.link_down(_rope, _back)
+	_rope.focus_neighbor_left = ^"."
+	_rope.focus_neighbor_right = ^"."
 	_back.focus_neighbor_bottom = _back.get_path_to(_cells[0])
 	_back.focus_next = _back.get_path_to(_cells[0])
 	_back.focus_neighbor_left = ^"."
@@ -485,13 +492,13 @@ func refresh() -> void:
 	_rebuild_cells()
 	_fill_cells()
 	_paint_header()
-	_paint_charm()
+	_paint_rope()
 	_paint_stock()
 	var focused := get_viewport().gui_get_focus_owner()
 	if _cells.has(focused):
 		_describe(focused as Button)
-	elif focused == _charm:
-		_describe_charm()
+	elif focused == _rope:
+		_describe_rope()
 	elif not _cells.is_empty():
 		_describe(_cells[0])
 
@@ -542,7 +549,7 @@ func _paint_cell(b: Button) -> void:
 	chip.color = def.tint
 	name_label.modulate = Color.WHITE
 	b.modulate = Color.WHITE
-	# The diamond is the forge mark. It is the same glyph the charm row uses for
+	# The diamond is the forge mark. It is the same glyph the rope row uses for
 	# "this does something", and here it means "the smith wants this", which is
 	# the only thing you need to know about a cell while the bag is filling up.
 	name_label.text = ("◆ " + def.display_name) if def.is_component() else def.display_name
