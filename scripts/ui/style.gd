@@ -100,13 +100,14 @@ const PREMIUM_BASELINE := 0.735
 ## deliberate and starts reading as a bug.
 const CELL := 64.0
 const CELL_GAP := 12.0
-## Gap between the hands pair and the D-pad cross — wider than CELL_GAP so the
-## cluster reads as two groups, not five cells in a row.
+## Gap between the hands pair and the item cell — wider than CELL_GAP so the
+## cluster reads as two groups (what he is holding, what he has selected) and not
+## as three cells in a row.
 const CLUSTER_GAP := 22.0
-## The cluster is laid out from its RIGHT edge (see Hud._cluster_rect), not from
+## The cluster is laid out from its RIGHT edge (see Hud._cross_origin), not from
 ## a left-edge fraction. At the old size a fractional origin was safe; doubled,
-## the cross alone is 216 reference px and a 0.886 left edge puts it 82 px off
-## the side of a 1280-wide screen. Anchor the thing that must not overflow.
+## the old six-cell cluster was 216 reference px and a 0.886 left edge put it
+## 82 px off the side of a 1280-wide screen. Anchor what must not overflow.
 const CLUSTER_RIGHT := 0.969   ## shares BAG_RIGHT's margin — one right edge, not two
 const CLUSTER_TOP := 0.044
 ## Room under a cell for its key cap.

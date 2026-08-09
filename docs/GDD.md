@@ -381,13 +381,15 @@ this one ships.
 
 ## 9. What the player does with their hands
 
-Camera-relative movement on the left stick. Sword on one button, shield on
-another, a committed roll, and lock-on. Interact is a single button that `Prompt`
-arbitrates so only one thing ever claims it. Bow, hookshot, bombs and bottles
-bind to the D-pad. Extraction is a **hold** — a decision you can make by fumbling
-a button is not a decision.
+Camera-relative movement on the left stick. Both right shoulders are the sword —
+RB the light chain, RT the heavy — and whatever you draw takes them over. LT is
+the guard and the lock. The face buttons are one verb each: A talks, B dodges and
+holds to run, X drinks the selected bottle, Y jumps. The D-pad steps rings rather
+than holding bindings: ← → walk the right hand through the weapons you own, ↓
+steps the bottle, ↑ swaps the whole loadout. Extraction is a **hold** — a
+decision you can make by fumbling a button is not a decision.
 
-The **air slam** is the one verb with no button of its own: the sword button,
+The **air slam** is the one verb with no button of its own: either sword button,
 pressed while airborne and unarmed, hangs the hero for a beat and drives him into
 the floor. Jump is already the commitment — you are in the air with no way to
 change your mind — and the slam only charges for what that commitment was already

@@ -268,8 +268,9 @@ built on them:
   than mashing a button was.
 - **The fee comes out of the number you are protecting**, and the HUD says so.
 
-It is deliberately **not bindable to an item button**. One D-pad press that ends
-the run is precisely the fumble the hold existed to prevent.
+It is deliberately **not on any ring**. It is not in `RIGHT_POOL` and it is not a
+bottle, so no D-pad direction can ever land on it — one press that ends the run
+is precisely the fumble the hold existed to prevent.
 
 ```
 cost = max(15, round(bag_value × 0.25))
@@ -510,7 +511,7 @@ cheapest two things in the grid to its left, so the price and the stock are the
 same picture.
 
 It is a separate screen from **Items**, which is what you are *holding* and what
-the D-pad equips. Carrying and holding are different questions and a player who
+the D-pad cycles. Carrying and holding are different questions and a player who
 conflates them is a player who thinks the bag can be equipped.
 
 ---
@@ -549,10 +550,11 @@ Core is, for the same reason.
 
 `Game.bottle_contents` is the whole model: **the array's size is how many
 bottles there are** and each element is what is in that one, `&""` for empty.
-There is no separate count to disagree with it. A bottle binds to a D-pad button
-like anything else, and the press **drinks** it rather than drawing it — the one
-thing on that cross that behaves that way, which is why the Items screen says so
-in words.
+There is no separate count to disagree with it. Bottles are a RING: D-pad ↓ steps
+the selection (`Game.cycle_item`, empties included, so the ring's length never
+changes under you) and **X drinks** the selected one (`Game.use_selected_item`).
+A bottle is used, never drawn — the one thing in the cluster that behaves that
+way, which is why the Items screen says so in words.
 
 ### The three draughts
 
@@ -596,8 +598,8 @@ workbench, two counters spending from it.
 
 ### What the HUD says
 
-A bound bottle draws as a bottle in the D-pad cross — body, neck, lip — with the
-draught's colour filling the lower two-thirds, and an outline only when it is
+The selected bottle draws in the cluster's third cell — body, neck, lip — with
+the draught's colour filling the lower two-thirds, and an outline only when it is
 empty. A live draught adds a draining bar to the health/stamina/heat column, in
 the potion's own colour, because it is the same kind of fact as the bars above
 it: true now, and shortly not. Nothing is drawn when nothing is running.
@@ -832,8 +834,8 @@ godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --direc
 
 It reads the catalogue, opens her board, is refused a draught for want of root
 and then for want of an empty bottle, brews into the one bottle he starts with,
-blows glass up to the ceiling, binds three bottles to the D-pad and **drinks
-them with the buttons**, watching health and the two accessors the gear reads
+blows glass up to the ceiling, steps the bottle ring with D-pad ↓ (proving it
+wraps back to where it started) and **drinks with X**, watching health and the two accessors the gear reads
 move and then expire, descends, sweeps three materials off the floor with
 nothing pressed, extracts to prove they bank, and saves/wipes/reloads to prove
 the glass and what is in it survive quitting. `ALCHEMY FAIL …` on any claim that

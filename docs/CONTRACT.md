@@ -227,15 +227,19 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 |---|---|---|---|
 | `move_up/down/left/right` | WASD, arrows | left stick | move |
 | `cam_up/down/left/right` | mouse motion (read in code) | right stick | camera |
-| `attack` | **LMB** | **X / Square** (pad2) | light attack (**hold** = charge, **+guard** = dash) |
-| `use_item` | **F** | **RT / R2** (axis5+) | use the item the D-pad drew — **held**: down aims, up fires |
+| `attack` | **LMB** | **RB / R1** (pad10) | light attack — the chain, or fire what is in the right hand |
+| `heavy` | **F** | **RT / R2** (axis5+) | heavy — **hold** = spin, **airborne** = jump attack, **locked** = leap, or fire what is in the right hand |
 | `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held**, and it targets, and it recentres |
-| `context` | **Shift** | **A / Cross** (pad0) | **tap** = dodge, or the **jump attack** on a still stick — **hold** = run, and then it is not a dodge |
+| `context` | **Shift** | **B / Circle** (pad1) | **tap** = dodge — **hold** = run, and then it is not a dodge |
+| `use_item` | **X** | **X / Square** (pad2) | drink the selected bottle — §4.1 |
 | `jump` | **Space** | **Y / Triangle** (pad3) | jump |
-| `z_target` | **Q**, MMB | — (LT does it) | lock-on toggle / camera recentre |
-| `interact` | E | **A / Cross** (pad0) | talk/open — **wins over the dodge**, else stow item |
-| `ui_cancel` | Esc | **B / Circle** (pad1) | close/back, and **nothing else** |
-| `item_left` / `item_up` / `item_right` | 1 / 2 / 3 | dpad L / U / R | armaments — §4.1 |
+| `z_target` | **Q**, MMB | **R3** (pad8) | lock-on toggle / camera recentre |
+| `interact` | E | **A / Cross** (pad0) | talk/open, and nothing else |
+| `ui_cancel` | Esc | **B / Circle** (pad1) | close/back — in menus only |
+| `weapon_prev` / `weapon_next` | 1 / 3 | dpad ← / → | step the right hand through the weapons you own — §4.1 |
+| `item_next` | 4 | dpad ↓ | step the selected item — §4.1 |
+| `loadout_swap` | 2 | dpad ↑ | primary ↔ alternate — §4.1 |
+| — | — | **LB** (pad9) | **deliberately empty**, held for spells |
 | `first_person` | R | **R3** (pad8) | look out of his own eyes — he roots |
 | `pause` / `inventory` / `map` | Esc / **I** / Tab | Start (pad6) / **Select** (pad4) / L3 (pad7) | menu / pouch / map |
 | `dbg_reload` | F5 | — | — |
@@ -243,15 +247,22 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 **The triggers are a pair and that is the layout's spine.** This is BOTW's
 arrangement, and it is right: the left index finger holds a STANCE and the right
 index finger fires what that stance is aimed at. LT raises the guard and takes
-the lock; RT uses whatever the D-pad drew. Aiming a bow with a shoulder and
-loosing it with a thumb makes you let go of the stick that was aiming.
+the lock; RT is the heavy swing, and whatever the right hand is holding takes it
+over. Aiming a bow with a shoulder and loosing it with a thumb makes you let go
+of the stick that was aiming.
 
-The face buttons are the swings and the verbs: X swings, **A is the dodge *and*
-the context button**, Y jumps, and **B is empty in the world** — it closes menus
-and does nothing else, on purpose. The right stick swings the lens and
-**clicking it (R3) drops you into his eyes**
-— BOTW's arrangement again, and the thumb is already there doing the same job;
-everything else the camera does is under the left index finger.
+**The sword is on the two right shoulders and the face buttons are verbs.** RB
+is the light chain, RT is the heavy; A talks, B dodges, X drinks what you have
+selected, Y jumps. One verb per button and no arbitration anywhere on the pad —
+nothing here needs a rule to say which of two things a press meant.
+
+**LB is bound to nothing, on purpose.** It is where spells go if they are ever
+built: casting is a left-hand verb in every game this one borrows from, and an
+unbound button is cheaper than a bound one that then has to move. Do not fill
+it because it looks empty.
+
+The right stick swings the lens and **clicking it (R3) locks on** — the standing
+decision, the one that survives letting go of the trigger.
 
 Both triggers are AXES (`InputEventJoypadMotion`, JoyAxis 4 and 5), not buttons,
 so the action's 0.2 deadzone is how far the trigger travels before it counts as
@@ -277,96 +288,62 @@ they are the same thing. One trigger, four behaviours, no decision.
 letting go of the trigger. A thumb already resting on the right stick should not
 have to travel to recentre what that stick just moved.
 
-The sword is on **X**, permanently, and it is the *only* thing on it. That is
-OOT's arrangement — the sword lives on one button forever and the items live on
-the C-pad — and it is what makes a drawn item safe to leave drawn. Drawing here
-is **sticky**: a D-pad press puts the hookshot in his hand and it stays there,
-so you can walk around carrying it, which OOT's momentary C-buttons never allow.
-Carrying it is not *aiming* it — the sight belongs to the trigger, below.
-A sticky mode needs an unconditional way out, and `attack` is it: pressing it
-with an item drawn stows the item **and swings on the same press**
-(`HeroCombat._begin`, `Game.stow_item`). Not the next press — the same one.
+**The sword is on the two right shoulders and an item REPLACES it there.** That
+is the design and not a collision: drawing something is what "temporarily"
+means, and a player holding a bow should not have to remember which of two
+attack buttons the bow answers to. Both `attack` and `heavy` reach the drawn item
+(`HeroCombat._tick_item_trigger`, which runs before either swing tick so both can
+open with a plain "an item owns the right hand" bail).
 
-`use_item` took the A/Cross the sword vacated, and then the right trigger. It is
-the "do the thing you are holding" button and nothing else: it fires the drawn
-bow or hookshot, and with empty hands it is **silent** whether or not anything
-is locked. The lunge passed through it for one change and went back to A, which
-is where OOT has it — under Z, and only under Z.
+Drawing is **sticky**: a D-pad press puts the hookshot in his hand and it stays
+there, so you can walk around carrying it, which OOT's momentary C-buttons never
+allow. Carrying it is not *aiming* it — the sight belongs to the trigger, below.
 
-**With an item in hand it is HELD, not pressed.** Pull it and he raises the item
+A sticky mode needs an unconditional way out, and **the way out is the D-pad**.
+The sword is a stop on the same weapon ring the bow is on, so ← or → hands it
+back. `attack` used to be the escape hatch — it stowed the item and swung on the
+same press — and that went when the ring arrived: the hatch existed because the
+direction you drew with was a fact you had to remember, and a ring has no such
+question. `Game.stow_item` survives with no callers and says so in its own
+docstring.
+
+**With an item in hand the trigger is HELD, not pressed.** Pull it and he raises the item
 into its aim; let go and it fires. That is the only arrangement that works once
 the button is a trigger and the aim is the camera: the item goes up, THEN you
 move the stick, then you shoot. Firing on the press meant the shot was gone
 before the aim began, and it also meant the hero had nowhere to stand between
 shots — the stance now belongs to the button, so he lowers the item afterwards
-and the next shot costs another pull. See §8 Ranged. Empty-handed it is
-**silent**: the leap is on A, and a "use item" that quietly becomes a jump
-attack when there is nothing to use is two verbs sharing a name.
+and the next shot costs another pull. See §8 Ranged.
 
-**`interact` and `context` are the same button — A/Cross — and the thing in
-reach wins.** They are never both wanted at once: you can only address the smith
-while you are standing at the smith. `Prompt.claims_press` / `claims_hold` is the
-whole rule, and `Hero._try_start_roll` and `Hero._tick_context` are its only two
-callers — both refuse when `interact` is down *and* something is focused. Step
-away and the same button dodges again.
+**`interact` and `context` are two buttons now, and the arbitration between them
+is DELETED.** They shared A/Cross for one pass, refereed by
+`Prompt.claims_press` / `claims_hold`: while something was in reach the thing in
+reach owned the press and nothing rolled. Both of those functions are gone.
 
-`claims_hold` does the heavier lifting of the two now that a tap pays out on the
-release: it is true for the *whole* time the button is down at a focused prompt,
-so `_tick_context` disarms the press on the frame it is made and there is no
-dodge owed when the button finally comes up. `claims_press` only ever sees the
-frame `interact` goes down, which is a frame the dodge may no longer resolve on.
+The argument for sharing was that a thumb at rest wants either "get out of the
+way" or "talk to that", never both at once. True, and still not worth it: it put
+a rule on the most reaction-critical button in the game, it cost you the roll
+away from a chest, and the whole of it existed to keep B free for `ui_cancel` —
+which B still is, because a menu is up or it is not. **A talks and B dodges**,
+and `ui_cancel` lives on the same B without a rule, because nothing in the world
+reads a button while a menu is open.
 
-Two properties of that arbitration are load-bearing:
+`interact` still shares A with `ui_accept`, which is safe for its own older
+reason: `trade_screen`'s accept edge starts DISARMED, so the press that opens a
+screen cannot also confirm inside it. That is the only arbitration left anywhere
+on the pad, and it is a one-frame one inside a single screen.
 
-* **The keyboard is not in it.** There the two are Shift and E, a press never
-  reaches both, so `claims_press` is false and Shift still rolls at a chest.
-  Asking "is there a focus?" alone would have taken that away for nothing.
-* **`Prompt` needs no changes to activate.** It was already going to fire the
-  focused Interactable off its own read of the same button, on its own tick. The
-  arbitration is entirely a *refusal* on the hero's side.
+**The jump attack came off A with the dodge.** It was "guard up, stick still, A"
+— OOT's Z + A read literally, with a four-way stick table deciding between the
+leap, the backflip and two dodges. It is `heavy` now: **airborne** it is the
+slam, **locked on** it is the leap, and neither reads the stick at all. What the
+stick table leaves behind is better — a neutral-stick dodge under a lock or a
+guard is the **backstep**, on `context`, with nothing to fall between.
 
-The price is that you cannot roll away from a chest — true, and small: an
-Interactable's radius is a couple of metres and the answer is one step. The
-alternatives (a modifier, a double-tap, a hold to disambiguate) all put latency
-or a decision on the most reaction-critical button in the game.
-
-**B/Circle is empty in the world**, which is the other half of the change and
-not a leftover. It is `ui_cancel` and nothing else, so "B closes this" is true in
-every menu with no exception a player has to learn. Do not put a world verb back
-on it. `interact` still shares A with `ui_accept` as well, which is safe for its
-own older reason: `trade_screen`'s accept edge starts DISARMED, so the press that
-opens a screen cannot also confirm inside it.
-
-**Under a lock, A is two moves and THE STICK PICKS.** This is OOT's Z + A,
-verbatim:
-
-| stick, guard up | A does |
-|---|---|
-| at rest | the **jump attack** (`HeroCombat._tick_context_button`) |
-| back | the **backflip** |
-| left / right | the **sideways dodge** |
-| forward | the **roll** |
-
-An intermediate pass read that as an unresolvable collision — A had just become
-the dodge, guard + neutral + A was made the backstep, and the leap was moved onto
-`use_item`. It is only a collision if the stick is noise, and under a lock the
-stick is the only thing telling four moves apart already. So the leap is back
-where the source material puts it and the backflip costs a pull backwards, as it
-always has.
-
-`Hero.stick_neutral()` is the **single** function both halves ask. Two copies of
-a deadzone test in two files is how a press ends up landing in both (a leap and a
-dodge on one frame) or in neither (a button that does nothing). For the same
-reason `lunge_max_range` is `K.LOCK_BREAK_RANGE` and not `K.LOCK_RANGE`: inside
+`Hero.stick_neutral()` still picks the backstep out of the dodges, and
+`lunge_max_range` is still `K.LOCK_BREAK_RANGE` and not `K.LOCK_RANGE`: inside
 the lock's hysteresis band the dodge has already stood down, so a leap that
 refuses on range there would be a dead press.
-
-**With no lock, guard + neutral + A is still the backstep**, and the asymmetry is
-deliberate. `_lunge_swing` needs something to leap at and refuses without a
-target, so yielding the press there would trade a working move for silence. A
-press stands down only for a move that is actually going to happen.
-
-`use_item` (RT) does **not** throw the leap. Empty-handed it is silent.
 
 **The dodge button is a tap OR a hold, and the two are exclusive.** `context` is
 *measured*: released inside `Hero.sprint_hold_time` (0.18 s) the press was a
@@ -376,11 +353,11 @@ button or the stamina bar gives out — and it will not roll when it finally com
 up. That is Elden Ring's arrangement and BOTW's B.
 
 `Hero._tick_context` is the only thing that reads the raw button. It publishes
-`Hero.context_tapped`, true for exactly one frame, and both halves of the press
-read *that* — `_try_start_roll` here and `HeroCombat._tick_context_button` for
-the leap — for the same reason they both call `stick_neutral()`: two places
-measuring one hold is how a press comes out as a leap and a roll on the same
-frame, or as neither.
+`Hero.context_tapped`, true for exactly one frame, and the dodge reads *that*
+rather than the button. It had a second reader while the leap lived on this
+button, and that is the reason the flag exists at all: two places measuring one
+hold is how a press comes out as a leap and a roll on the same frame, or as
+neither.
 
 An intermediate pass fired the dodge on the press and started the run underneath
 it, to keep the latency off the most reaction-critical button in the game (the
@@ -430,12 +407,27 @@ for, so they are started at their launch frame via `jump_start_offset`. Set that
 to zero and the hero visibly squats while already 0.4 m in the air; it was A/B'd
 in `tools/directors/_jump_trace.gd` and the two frames are not subtle.
 
-**There is no heavy-attack button.** The heavy is the charge: tap X for the
-light chain, *hold* X to wind up, release to **spin**. The light swing comes out
-on the **press**, never on the release — a button that waits to see whether you
-meant a tap puts `charge_time` (0.42 s) of latency on every ordinary swing. So
-the wind-up costs the recovery you were spending anyway, and a mashed chain
-never charges anything. `combat.charged` is public and goes up at `charge_time`.
+**There IS a heavy-attack button now, and it is RT.** For most of this project's
+life there was not: the heavy was the charge, held off the same light button, and
+"the game's biggest ordinary blow" was locked behind two presses of a smaller
+one. RB taps the light chain; RT throws the overhead, and *holding* RT winds up
+the **spin**.
+
+Both come out on the **press**, never on the release — a button that waits to see
+whether you meant a tap puts `charge_time` (0.42 s) of latency on every ordinary
+swing. So the wind-up costs the recovery you were spending anyway, and a mashed
+trigger never charges anything. That is OOT's B and Elden Ring's R2 exactly.
+`combat.charged` is public and goes up at `charge_time`.
+
+**Every sword swing costs stamina, and the rule is not the dodge's rule**
+(`HeroCombat._can_swing`, `Game.spend_stamina(cost, partial := true)`). Any
+stamina above zero buys the swing and the cost clamps at the floor, so a chain is
+never interrupted between its own steps — it empties the bar and the NEXT press
+is the one that finds nothing there. A dodge is the strict version: it is refused
+unless the bar holds the whole of `Hero.roll_stamina`. Elden Ring prices them the
+same two ways and the reason is legibility — a swing refused halfway through a
+combo reads as a dropped input, an empty bar after the combo reads as a decision
+you made. A refused swing is **silent**; the bar on screen already said so.
 
 The release is a **360**, not a bigger forward swing, and that is a claim about
 *direction* that the hitbox has to make good on. Every other swing on this node
@@ -478,9 +470,9 @@ Sound: `sword_charging` rises from the **press**, and both the release swipe and
 the hero's yell fire on the **release**. The yell was on the arm-up at first,
 which announced a commitment the player had not made yet.
 
-**The dash attack is `attack` pressed with the guard already up**, and it is the
-one modified swing on the button (`HeroCombat._tick_attack_button`: `if blocking
-and equipped == &""`). It is a committed forward lunge — `Hero.request_dash`
+**The dash attack is `attack` pressed with the guard already up**
+(`HeroCombat._tick_light_button`, which opens with an `equipped != &""` bail
+because a full hand owns both shoulders). It is a committed forward lunge — `Hero.request_dash`
 drives him along `_forward()` at 8.0 m/s for `dash_drive_time` (0.20 s) under
 the `SwingDash` one-shot, does 3 quarter-hearts, and resets the light chain so
 it can never be step 2 of a combo. It reads as a *decision*: the guard drops,
@@ -489,12 +481,15 @@ press, so it pre-empts the charge — you cannot wind up a heavy from behind the
 shield, which is deliberate, because a shielded charge is a stance with no
 answer to it.
 
-**The air slam is `attack` pressed off the floor** — the second modified swing
-on the button, and the same gate reads it (`HeroCombat._tick_attack_button`:
-`if not _hero.is_on_floor() and equipped == &""`). It takes the press before
-anything else can, and it is never buffered: a slam that fires because you
-pressed attack a moment before you left the ground is a slam you did not ask
-for.
+**The air slam is on BOTH shoulders off the floor**, and it is the same move
+either way: `HeroCombat._tick_light_button` throws it on the `attack` press, and
+`_tick_heavy_button` throws it off a **held** `heavy`. Held rather than an edge,
+deliberately — a player who wants to come down on something pulls RT on the way
+up, not at the top of the arc, and an edge would have been spent on the ground as
+an overhead before he ever left it. The same pull therefore throws the overhead
+on the floor and the slam once he is off it. It is never buffered: a slam that
+fires because you pressed attack a moment before you left the ground is a slam
+you did not ask for.
 
 `Hero.request_slam()` owns the move and refuses it from anywhere but `GROUND`
 while airborne with at least `slam_min_height` (0.35 m) of floor below —
@@ -545,10 +540,12 @@ and `project.godot` looked perfectly correct the whole time. `Settings`
 now stamps saved binds with `BIND_SCHEMA` and **discards** binds saved against
 an older layout — bump it in any change that moves a shipped binding.
 
-**Not yet bound, because the ability does not exist:** skill. Do not register an
-empty action for it; bind it in the same change that builds it. RT/R2 was
-pencilled in for the skill and `use_item` took it instead — the triggers being a
-pair is worth more than reserving one for an ability nobody has designed.
+**Not yet bound, because the ability does not exist:** skills and spells. Do not
+register an empty action for either; bind it in the same change that builds it.
+RT/R2 was pencilled in for the skill and the heavy took it instead — the triggers
+being a pair is worth more than reserving one for an ability nobody has designed.
+**LB** is the one exception to "bind it when you build it" and it is not bound
+either: it is left with no action at all, held for spells (§4).
 
 `first_person` was the standing counter-example and it is now closed: it sat
 bound to R, rebindable, read by nothing, with a `Bus.first_person_changed` that
@@ -614,26 +611,36 @@ polled and synthetic presses alike (`Input.action_press` dispatches no
 `InputEvent` at all, which is why every director drives it — CLAUDE.md §3).
 Diffing a held state cannot miss an edge either way.
 
-### 4.1 The item buttons — the D-pad is the C-pad
+### 4.1 The D-pad — three rings, no bindings
 
-Three of the four directions are **bindable item buttons**, the way Ocarina's C
-buttons are. What is on them is the player's choice, made in the Items screen:
+The D-pad does not hold items. It **steps rings**, and each direction owns one:
 
-| Button | Does |
-|---|---|
-| dpad ← (`item_left`, key `1`) | draw whatever is bound here; press again to put it away |
-| dpad ↑ (`item_up`, key `2`) | as above |
-| dpad → (`item_right`, key `3`) | as above |
-| dpad ↓ (`item_down`, key `4`) | swap to the **alternate loadout** — bow and arrows by default |
+| Button | Action | Does |
+|---|---|---|
+| dpad ← (`weapon_prev`, key `1`) | `Game.cycle_weapon(-1)` | step the RIGHT HAND back through the weapons you own |
+| dpad → (`weapon_next`, key `3`) | `Game.cycle_weapon(1)` | step it forward — sword, bow, hookshot |
+| dpad ↓ (`item_next`, key `4`) | `Game.cycle_item(1)` | step the SELECTED BOTTLE |
+| dpad ↑ (`loadout_swap`, key `2`) | `Game.swap_loadout()` | swap to the alternate set — both hands at once |
 
-**Nothing cycles in play.** Cycling lives entirely in the menu, because a button
-you have to watch to use is not a button you can reach for — the whole value of
-a bound item is that your thumb knows where it is. `Game.quick_slots` owns the
-bindings and `Game.loadout` owns the hands; see §8 *Armaments*.
+**There are no bindable slots.** There were: three directions each held an item
+the player chose in a menu, exactly as Ocarina's C buttons do, and picking one up
+auto-bound it to the first free button. It is all deleted — `quick_slots`,
+`bind_quick`, `cycle_quick_bind`, `use_quick`, `Bus.quick_slots_changed`, the
+ITEM BUTTONS card on the equipment screen, and the auto-bind on pickup.
 
-Finding an item **auto-binds it to the first free button**, as the source
-material does. Being made to open a menu before you can shoot a bow you just
-found is the one thing Ocarina never does to you.
+What killed it was that it made every direction mean *whatever you last decided*,
+which is only worth its cost when you own more things than you have buttons. This
+game has three weapons and a shelf of bottles; a ring you can count is faster to
+reach for than a binding you have to remember, and it costs no menu at all. Elden
+Ring is the shape now, one direction per ring instead of one direction per slot.
+The **left hand** is not on the D-pad, deliberately: ↑ swaps the pair, and the
+place to edit a pair is the screen built for it.
+
+**Weapons cycle, bottles cycle, and they do not share a ring** — a bottle is
+*used* (X), a weapon is *held*. `Game.cycle_item` steps through empty bottles
+too: a ring whose length changed every time you drank is a ring you cannot count.
+`Game.selected_item()` / `selected_potion()` name what ↓ landed on; the HUD draws
+one cell for it instead of the four the old C-pad needed. See §8 *Armaments*.
 
 ---
 
@@ -834,7 +841,7 @@ the live lock, and the trigger's release drops only its own. Leaving the
 `targetable` group is how a lock ends — that is the path a death takes out of
 `_validate`, so nothing needs a separate "my target died" hook.
 
-### Items — C-button slots
+### Items — the bottle ring
 
 ```gdscript
 # scripts/items/item.gd, owned by P5
@@ -846,10 +853,13 @@ func use(hero: Node3D) -> void
 func release(hero: Node3D) -> void   # for held/charged items
 ```
 
-`Game.c_items` is **gone**. It was the half-built C-button idea — three slots,
-an auto-assign on pickup, and nothing that read them. It is now
-`Game.quick_slots` and it is wired to actual buttons. Saves written under the
-old `"c_items"` key still load.
+`Game.c_items` is **gone**, and so is `Game.quick_slots`, the bindable-slot
+system that replaced it. Two attempts at the same idea — a small set of buttons
+holding whatever the player put there — and both went for the reason in §4.1:
+this game has fewer things than the scheme needs to be worth its menu. Items are
+one ring now (`item_selected`, `cycle_item`, `selected_item`, `use_selected_item`),
+stepped with D-pad ↓ and drunk with X. Saves written under either old key still
+load; neither is written back.
 
 ### Armaments — two loadouts, two hands
 
@@ -866,29 +876,26 @@ var loadout: Array[Dictionary] = [
 ]
 var loadout_set: int = PRIMARY
 
-var quick_slots: Array[StringName] = [&"", &"", &""]   # C-buttons ←, ↑, →
+const RIGHT_POOL: Array[StringName] = [&"sword", &"bow", &"hookshot"]
+const LEFT_POOL:  Array[StringName] = [&"shield", &"arrow", &""]
 
 func armament(hand: StringName) -> StringName     # what is in that hand, now
 func armament_in(set_index: int, hand) -> StringName
-func swap_loadout() -> void                       # dpad ↓
-func cycle_armament(hand: StringName, dir := 1, set_index := -1)   # menu only
-
-func quick(slot: int) -> StringName               # what is on that C-button
-func bind_quick(slot: int, item_id: StringName) -> bool   # menu only
-func cycle_quick_bind(slot: int, dir := 1) -> void        # menu only
-func use_quick(slot: int) -> void                 # dpad ← / ↑ / →
+func swap_loadout() -> void                       # dpad ↑, and the Swap Set button
+func cycle_armament(hand: StringName, dir := 1, set_index := -1)   # the menu
+func cycle_weapon(dir := 1) -> void               # dpad ← / →, the right hand
+func stow_item() -> bool                          # no callers; see the docstring
 ```
 
-`use_quick` puts the bound item in the **right hand**, and puts it away again on
-a second press. That is what a C-button does: C-right with the bow *draws the
-bow*. `Bus.quick_slots_changed(slots)` fires on every bind.
+`cycle_weapon` is a thin wrapper over `cycle_armament(HAND_RIGHT, dir)`, so the
+button and the equipment screen are **the same code** and cannot drift apart. The
+ring skips what you do not own (`armament_owned`), which is what makes ← and →
+safe to press blind: a ring that stopped on a bow you have never found would be a
+ring that lies about your inventory. `&""` in `LEFT_POOL` is a legitimate stop —
+dropping the shield to two-hand the sword is a decision, not a broken state.
 
-**One item, one button.** Binding something already on another slot MOVES it —
-two buttons that draw the same bow is two buttons doing one button's job.
-
-`bind_quick` refuses anything unowned, and refuses anything outside
-`QUICK_POOL`. A button that draws a bow you have never found is a button lying
-about your inventory.
+`swap_loadout()` has exactly two callers, the button and the screen, for the same
+reason.
 
 Two sets rather than one, because the primary answers "something is in front of
 me" and the alternate answers "something is not" — and a weapon switch you have
@@ -1003,18 +1010,23 @@ Rules:
 
 - **There is no bottle count.** `bottle_contents.size()` is it. A separate
   integer is a second source of truth that will disagree with this one.
-- **A bottle id is bindable, and the press DRINKS it.** `Game.use_quick(slot)`
-  branches on `bottle_index(id) >= 0` before anything else; every other bound
-  thing is drawn and put away on a second press. `quick_pool()` is the const
-  pool plus one entry per owned bottle, and `bind_quick` / `cycle_quick_bind`
-  both go through it — do not build a second list of what can be bound.
+- **A bottle is USED, never drawn**, and that asymmetry is the whole reason
+  items and weapons sit on different inputs. `Game.use_selected_item()` (X)
+  drinks `item_selected` and nothing enters the hand. Making a draught a
+  two-press item — take it out, then pull a trigger — would put the slowest
+  input in the game on the button you reach for when you are about to die.
+- **The item ring steps empties too** (`cycle_item`). A ring whose length
+  changed every time you drank is a ring you cannot count, and counting is what
+  makes ↓ usable without looking. `_clamp_item()` keeps the index honest rather
+  than every caller doing it: bottles are bought, emptied, and rearranged at the
+  alchemist, so an index that was valid when it was set does not stay valid.
 - **The lasting draughts are folded into the forge's accessors**
   (`sword_bonus()`, `armour_soak()`), not into a parallel buff system. That is
   why nothing downstream needed changing, and it is why a new draught that
   changes a number should find the accessor that number already comes from.
-- **Ask `ArmamentDb`, not `PotionDb`, when you are drawing a bound thing.**
-  `name_of` / `slot_name` / `letter` / `blurb` answer for bottles too, so the
-  HUD cross and the Items screen never grow a bottle branch. `slot_name` is the
+- **Ask `ArmamentDb`, not `PotionDb`, when you are drawing a held or selected
+  thing.** `name_of` / `slot_name` / `letter` / `blurb` answer for bottles too,
+  so the HUD cluster and the Items screen never grow a bottle branch. `slot_name` is the
   short one, for cards; `name_of` is for a detail pane with a column to itself.
 - New on `Bus`: `bottles_changed(contents)`, `potion_drunk(potion)`,
   `draught_changed(potion, seconds_left)`.
@@ -1043,9 +1055,11 @@ do not add a second way out (METAGAME §5).
   the world, cancelled by a blow that *lands*. A blocked blow does not cancel it.
 - **The hero is rooted by the same mechanism a shop uses**, so he still falls and
   still slides to a halt — `hero.gd` folds `rope.active()` into the same
-  `locked` flag as `Prompt.blocked`, and `hero_combat.gd` locks the item buttons
-  but deliberately **not** the shield.
-- **It is not bindable.** It is not in `QUICK_POOL` and must not be added to it.
+  `locked` flag as `Prompt.blocked`, and `hero_combat.gd` locks the D-pad and
+  the swing buttons but deliberately **not** the shield.
+- **It is not on any ring.** It is not in `RIGHT_POOL` and must not be added —
+  the way out of a run is a decision made from a menu, not a thing you can step
+  onto with a D-pad press mid-fight.
 - **Only `Run` decides whether leaving is possible.** The rope asks
   `Run.can_extract()` before it starts and `Run.extract()` when it finishes; the
   fee moves with the bag, so both checks are load-bearing.
@@ -1180,13 +1194,16 @@ measuring. The poses are `swing_lookdev`'s job.
 `HeroCombat`**, not more of it. HeroCombat is the sword arm: the swing, the
 block cone, the sockets every model hangs off. What an arrow does after it
 leaves has nothing to do with any of that. HeroCombat still owns the combat
-BUTTONS (one reader, §4) and hands `use_item`'s two edges straight to it when the
-right hand is not holding the sword.
+BUTTONS (one reader, §4) and hands the shoulders' two edges straight to it when
+the right hand is not holding the sword (`HeroCombat._tick_item_trigger`).
 
-**`use_item` is a HELD trigger, not a press.** Down raises and aims, up fires.
-Both items work this way and it is not negotiable: they are AIMED items, and a
-button that fires on the press cannot be aimed with — pulling RT to bring the bow
-up spent the arrow before the stick had moved. The stance follows the button too,
+**A drawn item is fired by a HELD shoulder, not a press.** Down raises and aims,
+up fires. Either shoulder works — `attack` and `heavy` are ORed on both the edge
+and the hold, because a player carrying a bow should not have to remember which
+of two attack buttons a bow answers to (§4). Held rather than pressed is not
+negotiable: these are AIMED items, and a button that fires on the press cannot be
+aimed with — pulling RT to bring the bow up spent the arrow before the stick had
+moved. The stance follows the button too,
 so the shot ends with the item LOWERED and still in his hand, and the next shot
 costs another pull.
 
@@ -1198,6 +1215,11 @@ hero.ranged.busy() -> bool                           # a shot is mid-flight
 hero.ranged.aiming -> bool                           # a sighted item is OUT
 hero.ranged.aim_item() -> StringName                 # ...and RAISED, or &""
 ```
+
+`use_release()` is called **unconditionally** whenever neither shoulder is down,
+not only while an item is out: D-pad ← / → can step the weapon out from under a
+live draw, and a `_using` flag cleared only by the hand that set it is a bow
+stuck at full draw the next time one is drawn.
 
 `aiming` and `aim_item()` are deliberately different questions. The first is the
 item being in his hand — the camera and the crosshair belong to that. The second
