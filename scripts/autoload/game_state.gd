@@ -48,7 +48,41 @@ var has_compass: bool = false
 ## Item ids the player owns, e.g. &"hookshot".
 var items: Dictionary[StringName, bool] = {}
 ## The three C-button slots the HUD draws and item_left/up/right fire.
+##
+## SUPERSEDED by `loadout` below, and kept only because `save_game.gd` still
+## round-trips it and old saves carry it. Nothing reads it to decide what is in
+## the hero's hands any more. Do not add to it.
 var c_items: Array[StringName] = [&"", &"", &""]
+
+# --- Armaments --------------------------------------------------------------
+## Two loadouts, each with a right hand and a left hand, exactly as Elden Ring
+## arranges them. dpad up swaps the SET; dpad left/right cycle one hand within
+## whatever you own.
+##
+## The alternate set is bow and arrows, which is the point of having two: the
+## primary answers "something is in front of me" and the alternate answers
+## "something is not". Swapping is one button rather than a menu, because a
+## weapon switch you have to pause for is a weapon switch nobody makes.
+##
+## Ids, not Resources. The whole save file is ids (see save_game.gd), and a
+## Resource reference here would be one more thing that cannot survive a scene
+## change -- which is exactly what extraction is.
+const PRIMARY := 0
+const ALTERNATE := 1
+const HAND_RIGHT := &"right"
+const HAND_LEFT := &"left"
+
+## What each hand may hold, in cycle order. `&""` is the empty hand and is a
+## legitimate choice: two-handing the sword and dropping the shield is a real
+## decision, not a broken state.
+const RIGHT_POOL: Array[StringName] = [&"sword", &"bow", &"hookshot"]
+const LEFT_POOL: Array[StringName] = [&"shield", &"arrow", &""]
+
+var loadout: Array[Dictionary] = [
+	{HAND_RIGHT: &"sword", HAND_LEFT: &"shield"},
+	{HAND_RIGHT: &"bow", HAND_LEFT: &"arrow"},
+]
+var loadout_set: int = PRIMARY
 ## One-way world flags: chests opened, doors unlocked, puzzles solved.
 var flags: Dictionary[StringName, bool] = {}
 
@@ -72,6 +106,11 @@ func reset() -> void:
 	has_compass = false
 	items.clear()
 	c_items = [&"", &"", &""]
+	loadout = [
+		{HAND_RIGHT: &"sword", HAND_LEFT: &"shield"},
+		{HAND_RIGHT: &"bow", HAND_LEFT: &"arrow"},
+	]
+	loadout_set = PRIMARY
 	flags.clear()
 	Bus.gold_changed.emit(gold)
 	Bus.key_count_changed.emit(small_keys)
@@ -253,6 +292,58 @@ func equip(slot: int, item_id: StringName) -> void:
 		return
 	c_items[slot] = item_id
 	Bus.c_items_changed.emit(c_items)
+
+
+# --- Armaments --------------------------------------------------------------
+
+## What is in `hand` (Game.HAND_RIGHT / HAND_LEFT) in the live set.
+func armament(hand: StringName) -> StringName:
+	var set_data: Dictionary = loadout[clampi(loadout_set, 0, loadout.size() - 1)]
+	return set_data.get(hand, &"")
+
+
+## Swap primary <-> alternate. dpad up.
+func swap_loadout() -> void:
+	loadout_set = ALTERNATE if loadout_set == PRIMARY else PRIMARY
+	_announce_loadout()
+
+
+## Cycle one hand forward through what the player actually owns. dpad left/right.
+##
+## Ownership is checked here rather than at the UI, because the UI is not the
+## only caller and a hand holding an item the player does not have is a bow that
+## fires nothing while the icon insists otherwise.
+func cycle_armament(hand: StringName, dir: int = 1) -> void:
+	var pool: Array[StringName] = RIGHT_POOL if hand == HAND_RIGHT else LEFT_POOL
+	var available: Array[StringName] = []
+	for id in pool:
+		if _armament_owned(id):
+			available.append(id)
+	if available.size() <= 1:
+		return
+	var current := armament(hand)
+	var at := available.find(current)
+	# An unowned current (sold, or a save from a different pool) lands at -1 and
+	# a forward step from there is the first entry, which is the right answer.
+	var next := available[posmod(at + signi(dir), available.size())]
+	loadout[clampi(loadout_set, 0, loadout.size() - 1)][hand] = next
+	_announce_loadout()
+
+
+## The sword and the empty hand are always available; everything else has to be
+## found or bought. `arrow` follows the bow -- carrying arrows you cannot fire
+## is not a loadout, it is a slot that lies.
+func _armament_owned(id: StringName) -> bool:
+	match id:
+		&"": return true
+		&"sword": return true
+		&"shield": return true
+		&"arrow": return has(&"bow")
+	return has(id)
+
+
+func _announce_loadout() -> void:
+	Bus.loadout_changed.emit(loadout_set, armament(HAND_RIGHT), armament(HAND_LEFT))
 
 
 func set_flag(id: StringName) -> void:

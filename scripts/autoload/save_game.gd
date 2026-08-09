@@ -79,6 +79,8 @@ func save(slot: int) -> bool:
 		"has_compass": Game.has_compass,
 		"items": Game.items,
 		"c_items": Game.c_items,
+		"loadout": Game.loadout,
+		"loadout_set": Game.loadout_set,
 		"flags": Game.flags,
 		"room": String(current_room),
 		"scene": current_scene_path if current_scene_path != "" else _scene_path(),
@@ -126,6 +128,20 @@ func load_slot(slot: int) -> Dictionary:
 	for i in mini(slots.size(), Game.c_items.size()):
 		Game.c_items[i] = StringName(slots[i])
 
+	# Armaments. Read defensively and per-hand rather than assigning the array
+	# wholesale: JSON hands back plain Strings in untyped Dictionaries, and a
+	# save written before the loadout existed has no "loadout" key at all, so
+	# the default sword/shield + bow/arrows has to survive being loaded over.
+	var sets: Array = d.get("loadout", [])
+	for i in mini(sets.size(), Game.loadout.size()):
+		var src: Dictionary = sets[i]
+		for hand: StringName in [Game.HAND_RIGHT, Game.HAND_LEFT]:
+			if src.has(hand) or src.has(String(hand)):
+				var raw = src.get(hand, src.get(String(hand), &""))
+				Game.loadout[i][hand] = StringName(raw)
+	Game.loadout_set = clampi(int(d.get("loadout_set", Game.PRIMARY)),
+		0, Game.loadout.size() - 1)
+
 	active_slot = slot
 	current_room = StringName(d.get("room", ""))
 	current_scene_path = d.get("scene", "")
@@ -136,6 +152,8 @@ func load_slot(slot: int) -> Dictionary:
 	Bus.key_count_changed.emit(Game.small_keys)
 	Bus.gold_changed.emit(Game.gold)
 	Bus.c_items_changed.emit(Game.c_items)
+	Bus.loadout_changed.emit(Game.loadout_set,
+		Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_LEFT))
 	loaded.emit(slot)
 
 	var p: Array = d.get("pos", [0, 0, 0])

@@ -87,6 +87,17 @@ func _ready() -> void:
 	_build_hitbox()
 	_build_audio()
 
+	Bus.loadout_changed.connect(_on_loadout_changed)
+	# Finding a bow has to put it on his back the same moment the chest opens,
+	# not the next time a hand changes. See the ownership gate in _show_equipped.
+	Bus.item_acquired.connect(func(_id: StringName) -> void: _show_equipped())
+	# Adopt whatever Game already holds. A hero spawned into a fresh dungeon
+	# after an extraction must come up wearing the set the player left with,
+	# and waiting for the next button press to sync would arm him wrongly for
+	# the first room.
+	_on_loadout_changed(Game.loadout_set,
+		Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_LEFT))
+
 
 # --- Loadout ----------------------------------------------------------------
 
@@ -142,12 +153,24 @@ func _mount_item(id: StringName, model_id: String,
 	}
 
 
-## Put `id` in the hero's hands, or pass &"" to go back to sword and shield.
-## Pressing the button for what is already held puts it away, which is the
-## behaviour every player tries first.
+## Put `id` in the hero's RIGHT hand, or pass &"" for the empty hand.
+##
+## Kept as the low-level "show this model" call. The armament decision lives on
+## Game so it survives the scene change that extracting causes; this only makes
+## the rig agree with it.
 func equip(id: StringName) -> void:
-	equipped = &"" if id == equipped else id
+	equipped = id
 	_show_equipped()
+
+
+## Mirror Game's live loadout onto the rig.
+func _on_loadout_changed(_set_index: int, right: StringName, left: StringName) -> void:
+	# The right hand is the one that swings, so it drives `equipped` -- which is
+	# what _try_swing and the HUD both read. &"sword" IS the empty-item state
+	# here for historical reasons: `equipped == &""` has always meant "sword and
+	# shield", and every caller of it predates the loadout.
+	equip(&"" if right == &"sword" else right)
+	_show_left(left)
 
 
 func _show_equipped() -> void:
@@ -157,10 +180,24 @@ func _show_equipped() -> void:
 		if pair["hand"] != null:
 			(pair["hand"] as Node3D).visible = in_hand
 		if pair["stow"] != null:
-			(pair["stow"] as Node3D).visible = not in_hand
-	# You cannot hold a bow and a sword. The shield stays: it is strapped on.
+			# Stowed, but only if he actually has one. Both mounts are built at
+			# _ready because BoneAttachment3D is not something to be creating
+			# mid-run, so without this gate the hero starts the game wearing a
+			# bow and a hookshot he has never found -- and the ownership check
+			# in Game.cycle_armament then refuses to equip the bow the player
+			# can plainly see on his own back.
+			(pair["stow"] as Node3D).visible = not in_hand and Game.has(id)
+	# You cannot hold a bow and a sword.
 	if sword != null:
 		sword.visible = equipped == &""
+
+
+## The left hand. Only the shield has a model, so anything else empties the arm
+## rather than mounting a placeholder -- an untextured cube on the forearm reads
+## as a bug, and "arrows" is a count on the HUD, not a thing you hold up.
+func _show_left(left: StringName) -> void:
+	if shield != null:
+		shield.visible = left == &"shield"
 
 
 ## Attach a weapon model to `bone`, undoing the rig's scale so the model keeps
@@ -253,10 +290,15 @@ func _physics_process(delta: float) -> void:
 		_hero.set_blocking(blocking)
 
 	if not locked:
+		# The D-pad, arranged the way Elden Ring arranges it: each side cycles
+		# the hand on that side, up swaps the whole set. Game owns which
+		# armament is where; this only reacts to the change.
 		if Input.is_action_just_pressed(&"item_left"):
-			equip(&"hookshot")
+			Game.cycle_armament(Game.HAND_LEFT)
 		if Input.is_action_just_pressed(&"item_right"):
-			equip(&"bow")
+			Game.cycle_armament(Game.HAND_RIGHT)
+		if Input.is_action_just_pressed(&"item_up"):
+			Game.swap_loadout()
 		if Input.is_action_just_pressed(&"attack"):
 			_try_swing()
 

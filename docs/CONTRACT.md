@@ -161,27 +161,46 @@ rename or remove someone else's.
 
 ## 4. Input actions — **Elden Ring layout**
 
-The feel is OOT; the *buttons* are Elden Ring. This table is decoded from
-`project.godot` rather than remembered — the version before it claimed attack was
-`J`/`X` and guard was `K`/R-trigger, none of which had been true for a long time.
+The feel is OOT; the *buttons* are Elden Ring. This table is **dumped from the
+running game**, not read off `project.godot` — the file is not the last word on
+what the player's hands get (see "two ways this lies", below).
+
+```bash
+godot --path . --headless res://tools/scenes/_padnames.tscn
+```
 
 | Action | Keyboard / mouse | Gamepad | Elden Ring equivalent |
 |---|---|---|---|
 | `move_up/down/left/right` | WASD, arrows | left stick | move |
 | `cam_up/down/left/right` | mouse motion (read in code) | right stick | camera |
-| `attack` | **LMB** | **RB / R1** | light attack |
-| `shield` | **RMB** | **LB / L1** | guard |
-| `context` | **Space** | **A / Cross** | roll / backstep (hold to sprint) |
-| `z_target` | **Q**, MMB | **R3** | lock-on |
-| `interact` | E | Y / Triangle | event action |
-| `item_left` / `item_up` / `item_right` | 1 / 2 / 3 | dpad L / U / R | quick items |
+| `attack` | **LMB** | **RB / R1** (pad10) | light attack |
+| `shield` | **RMB** | **LB / L1** (pad9) | guard |
+| `context` | **Space** | **B / Circle** (pad1) | roll / backstep |
+| `z_target` | **Q**, MMB | **R3** (pad8) | lock-on |
+| `interact` | E | **A / Cross** (pad0) | event action |
+| `item_left` / `item_up` / `item_right` | 1 / 2 / 3 | dpad L / U / R | armaments — §4.1 |
 | `first_person` | R | — | — |
-| `pause` / `map` | Esc / Tab | Back / L3 | menu |
+| `pause` / `map` | Esc / Tab | Start (pad6) / L3 (pad7) | menu / map |
 | `dbg_reload` | F5 | — | — |
 
-The pad half of this was genuinely broken until it was decoded and looked at:
-**guard was on right-stick-click**, attack was on button 10, roll was on B, and
-lock-on was on L3. Nothing in the code was wrong — the bindings were.
+A/Cross is ER's jump. This game has no jump, so the event action takes it and
+the roll takes B/Circle, where the source material has it.
+
+### The two ways this table has lied
+
+**1. `button_index` is Godot's `JoyButton` enum, not the SDL/Xbox numbering.**
+They disagree exactly where it matters — `5` is the Xbox HOME button, not RB;
+`9` is LB, not R3. A pass that renumbered the pad from memory bound `attack` to
+Home and `z_target` to LB, and the pad had no attack button at all. The enum is
+printed by `_padnames.tscn` straight out of the engine. Do not derive it.
+
+**2. `user://settings.cfg` is replayed over the InputMap at boot and wins.**
+So the shipped layout and the layout the player gets are different questions,
+and only the dump answers the second. A menu test once left `attack` on the `N`
+key with the mouse binding erased; the sword was dead on the owner's machine
+and `project.godot` looked perfectly correct the whole time. `Settings`
+now stamps saved binds with `BIND_SCHEMA` and **discards** binds saved against
+an older layout — bump it in any change that moves a shipped binding.
 
 **Not yet bound, because the ability does not exist:** heavy attack (RT/R2,
 `Shift`+LMB), skill (LT/L2, `Shift`+RMB), and jump. Do not register empty
@@ -192,8 +211,23 @@ Read movement as
 keyboard behave identically. Movement is **camera-relative**: the input vector is
 rotated by the camera's yaw before it becomes world motion.
 
-`z_target` is **held**, exactly like OOT's Z. Tapping it with no valid target
-recentres the camera behind the hero; holding it with a target locks on.
+`z_target` is a **TOGGLE**, which is Elden Ring rather than OOT: press to lock,
+press again to release, press with nothing lockable to recentre the camera
+behind the hero. It is not held — holding a shoulder button and steering the
+camera with the same thumb is the thing R3 exists to avoid.
+
+### 4.1 The item buttons — armaments, not C-slots
+
+The D-pad cycles what is in each hand, the way ER's does:
+
+| Button | Does |
+|---|---|
+| dpad ← (`item_left`, key `1`) | cycle the **left hand** armament |
+| dpad → (`item_right`, key `3`) | cycle the **right hand** armament |
+| dpad ↑ (`item_up`, key `2`) | swap to the **alternate loadout** — bow and arrows by default |
+
+`Game.loadout` owns this; see §8 *Armaments*. ER's dpad ↓ is the quick item and
+is deliberately unbound — there are no consumables to put on it yet.
 
 ---
 
@@ -296,8 +330,57 @@ func use(hero: Node3D) -> void
 func release(hero: Node3D) -> void   # for held/charged items
 ```
 
-`Game.c_items: Array[StringName]` of length 3 is what the HUD draws and what
-`item_left/up/right` fires.
+`Game.c_items: Array[StringName]` of length 3 is **superseded** by *Armaments*
+below. It is still saved and still loaded, because old save files carry it, but
+nothing reads it to decide what is in the hero's hands. Do not add to it.
+
+### Armaments — two loadouts, two hands
+
+```gdscript
+# scripts/autoload/game_state.gd
+const PRIMARY := 0
+const ALTERNATE := 1
+const HAND_RIGHT := &"right"
+const HAND_LEFT  := &"left"
+
+var loadout: Array[Dictionary] = [
+    {HAND_RIGHT: &"sword", HAND_LEFT: &"shield"},   # PRIMARY
+    {HAND_RIGHT: &"bow",   HAND_LEFT: &"arrow"},    # ALTERNATE
+]
+var loadout_set: int = PRIMARY
+
+func armament(hand: StringName) -> StringName     # what is in that hand, now
+func swap_loadout() -> void                       # dpad ↑
+func cycle_armament(hand: StringName, dir := 1)   # dpad ← / →
+```
+
+Two sets rather than one, because the primary answers "something is in front of
+me" and the alternate answers "something is not" — and a weapon switch you have
+to open a menu for is a weapon switch nobody makes.
+
+Rules that are not negotiable:
+
+- **Ids, not Resources.** The save file is ids (`save_game.gd` round-trips
+  `loadout` and `loadout_set`). A `Resource` reference here would not survive the
+  scene change that extraction *is*.
+- **`Game` decides, the rig agrees.** `cycle_armament` / `swap_loadout` emit
+  `Bus.loadout_changed(set_index, right, left)`. `hero_combat.gd` listens and
+  makes the models match. Nothing else may set `equipped` to disagree with
+  `Game`, and `hero_combat` re-reads `Game` on `_ready` so a hero spawned into a
+  fresh dungeon comes up wearing what the player left with.
+- **Ownership is checked in `Game`, not in the UI**, because the UI is not the
+  only caller. `&""`, `&"sword"` and `&"shield"` are always available; `&"arrow"`
+  requires the bow — arrows you cannot fire are a slot that lies.
+- **`equipped == &""` means sword-and-shield.** Historical, and every caller of
+  it predates the loadout, so `_on_loadout_changed` maps `&"sword"` → `&""`
+  rather than renaming it under them.
+- **Unowned gear is not on the body.** The bow and the hookshot each have two
+  mounts, both built at `_ready` (a `BoneAttachment3D` is not something to be
+  creating mid-run). The stow mount is shown only when `Game.has(id)` — without
+  that gate the hero starts the game wearing a bow he has never found, while
+  `cycle_armament` refuses to equip it.
+
+Verified by `tools/directors/loadout_switch.gd`.
 
 ### Weapon and item models — built, read-only outside the orchestrator
 
