@@ -29,8 +29,13 @@ const ACTION_NAMES := {
 	&"attack": "Sword (hold to charge)",
 	&"use_item": "Use Item / Lunge",
 	&"shield": "Guard / Lock On (hold)",
-	&"context": "Roll / Backstep",
-	&"interact": "Interact",
+	# These two are ONE BUTTON on a pad (A/Cross) and two on a keyboard (Shift and
+	# E). Both rows stay, and both name the whole button rather than half of it:
+	# a player looking at this screen to find out what A does must not have to
+	# read two rows and infer that the game picks between them. It does, and
+	# `Prompt.claims_press` is the rule — the thing in reach wins.
+	&"context": "Dodge / Sprint (hold) — yields to Interact",
+	&"interact": "Interact / Talk — wins over Dodge",
 	&"item_left": "Item ←",
 	&"item_up": "Item ↑",
 	&"item_right": "Item →",

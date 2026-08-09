@@ -62,7 +62,14 @@ const DEFAULT_PATH := "user://settings.cfg"
 ##    `first_person` took it, in the commit that built the mode. A saved layout
 ##    from 8 would hand R3 back to `z_target` AND leave `first_person` on it, so
 ##    one click would lock on and drop into the hero's head together.
-const BIND_SCHEMA := 9
+## 10: `context` moved B -> A, onto the button `interact` already had, and B was
+##     left holding nothing but `ui_cancel`. A saved layout from 9 is the quiet
+##     kind of stale: everything would still "work", because the dodge would
+##     simply be back on B and A would still talk — so the player would never
+##     see a dead button, they would just never get the layout the game now
+##     documents, and every prompt the HUD draws would name a button that does
+##     something else. Discarding is correct.
+const BIND_SCHEMA := 10
 
 ## Where preferences persist. A test or a screenshot director that rebinds keys
 ## MUST NOT write to the player's real settings — an earlier menu test left

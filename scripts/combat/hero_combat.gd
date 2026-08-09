@@ -693,37 +693,42 @@ func _physics_process(delta: float) -> void:
 		_advance_swing(delta)
 
 
-## The context button — OOT's A, and contextual in the way OOT's A is: what it
-## does is whatever the situation has made most useful, and the player learns the
+## The A button — OOT's A, and contextual in the way OOT's A is: what it does is
+## whatever the situation has made most useful, and the player learns the
 ## situations rather than the button.
 ##
 ##   something in reach  -> talk / open / descend. Not handled here at all.
-##   shield up           -> the jump attack.
-##   item in hand        -> put it away.
+##   nothing in reach    -> the DODGE. Not handled here either — `Hero`.
+##   item in hand        -> put it away, which is all this function is now.
 ##
 ## Talking wins, and it wins by this function never being consulted: `Prompt`
 ## owns the interact button whenever it has a focus (see its docstring — exactly
-## one thing answers a press). Without that check, walking up to the smith with
-## the shield raised would leap at him and open his shop on the same frame.
+## one thing answers a press). Without that check, walking up to the smith would
+## stow the hookshot and open his shop on the same frame.
 ##
-## The leap lives behind the shield because the shield is the lock now — guard
-## acquires the target (docs/CONTRACT.md §4) — so "press A while holding guard"
-## and OOT's "press A while holding Z" are the same sentence. With the shield
-## down the button is silent rather than swinging, which is what keeps it safe to
-## mash at a chest.
+## THE JUMP ATTACK IS GONE FROM THIS BUTTON. It used to live here behind a raised
+## shield, on the argument that "press A while holding guard" is OOT's "press A
+## while holding Z". A is the dodge now, and guard + neutral stick + A is the
+## BACKSTEP (`Hero._try_start_roll`) — which is the defensive move the source
+## material leans on hardest, and which cannot share a press with a leap in the
+## opposite direction. The leap is still one button away on `use_item`, thrown
+## from the same stance. Two answers to one press is not a thing to arbitrate.
+##
+## The stow DOES coincide with a dodge, deliberately: rolling with the bow drawn
+## and coming up empty-handed is the same sentence, and it is what every game
+## with a sticky draw does with a dodge. If the roll is refused — no stamina, or
+## a stick too shallow to clear `roll_stick_gate` — the stow still happens, which
+## is exactly the behaviour this button had before it was shared.
 func _tick_context_button() -> void:
 	if not Input.is_action_just_pressed(&"interact"):
 		return
 	if Prompt.focus != null:
 		return
-	if equipped != &"":
+	if equipped != &"" and not blocking:
 		# An item is out. Putting it away is the useful thing here, and it is the
 		# calm way out — the ATTACK button's escape hatch stows it too, but that
 		# one comes with a swing attached (see `_begin`).
-		if not blocking:
-			Game.stow_item()
-	elif blocking:
-		_press(Intent.LUNGE)
+		Game.stow_item()
 
 
 ## The attack button. A tap is the light chain; a hold is the wind-up; the

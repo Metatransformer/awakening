@@ -1149,10 +1149,18 @@ func _target_speed(mag: float) -> float:
 	return s
 
 
-## Tap versus hold on one button. The tap half is `_try_start_roll`, which is
-## untouched and still fires on the press — nothing here delays a dodge.
+## Tap versus hold on one button. The tap half is `_try_start_roll`, which still
+## fires on the press — nothing here delays a dodge.
+##
+## `Prompt.claims_hold` is the other button this one shares. On a pad the dodge
+## and the interact are both A/Cross, so holding it at the dungeon gate is the
+## player filling the gate's ring — not winding up to run at it. The clock is
+## RESET rather than merely frozen: letting go at the gate and pressing again a
+## step later should be a fresh hold, not one that inherits the 0.9 s the ring
+## already took.
 func _tick_sprint(delta: float, input_locked: bool) -> void:
-	if input_locked or not Input.is_action_pressed(&"context"):
+	if input_locked or not Input.is_action_pressed(&"context") \
+			or (Prompt != null and Prompt.claims_hold()):
 		_context_held = 0.0
 		sprinting = false
 		return
@@ -1231,6 +1239,13 @@ func _try_start_roll(wish: Vector3, mag: float) -> bool:
 	if Prompt != null and Prompt.blocked:
 		return false
 	if not Input.is_action_just_pressed(&"context"):
+		return false
+	# The dodge and the interact are the same button on a pad, and the thing in
+	# reach wins the press (Prompt.claims_press, and the block above `context` in
+	# project.godot). Checked HERE rather than in Prompt because refusing is all
+	# there is to it — Prompt was already going to activate whatever is focused,
+	# on its own tick, off its own read of the same button.
+	if Prompt != null and Prompt.claims_press():
 		return false
 	if not is_on_floor():
 		return false
