@@ -104,18 +104,21 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, SPIN, LUNGE, DASH }
 @export_group("Roll")
 @export var roll_speed: float = K.ROLL_SPEED
 @export var roll_time: float = K.ROLL_TIME
-## The other two dodge speeds, which are NOT the roll's. All three are [oot] and
-## all three are different — the roll is the ground-coverer (6.55 m/s), the
-## sidehop is nearly as fast (6.19), and the backflip is only walking-out-of-
-## trouble quick (4.37). They have sat unused in `K` since the roll was written,
-## because until the facing was pinned there was no backwards to go.
-@export var sidehop_speed: float = K.SIDEHOP_SPEED
+## The backflip's speed, which is not the roll's: it is only walking-out-of-
+## trouble quick (4.37 m/s against 6.55). [oot], and measured.
 @export var backflip_speed: float = K.BACKFLIP_SPEED
-## Seconds a sidehop or a backstep owns the hero, against `roll_time`'s 0.62.
-## Shorter because a hop IS shorter — it is a step out of the way, not a dive
-## across the room — and because the i-frames run for exactly as long as the
-## dodge does (see take_hit), so a hop buys a smaller window than a roll. [tune]
-@export var hop_time: float = 0.44
+# THERE IS NO SIDEHOP ANY MORE, and `K.SIDEHOP_SPEED` (6.19 m/s) / the 0.44 s
+# hop window it used to pair with are deliberately not read here. They are OOT's
+# numbers for a short hop out of the way, and the sideways dodge in this game is
+# a full roll now (see `clip_roll_left`) — it travels at a roll's speed for a
+# roll's duration in whatever direction it points, or the left-hand dodge is
+# quietly worse than the forward one for no reason the player can see. i-frames
+# run for exactly as long as the dodge does (`take_hit`), so that is not a
+# cosmetic difference: it is the width of the window the button buys.
+#
+# The constant stays in `K`. It is measured footage, not a typo (§6), and it is
+# what a real sidehop would be worth if a clip for one ever turns up.
+
 ## The backflip's own window, because it is not a sidehop. A flip has to leave
 ## the ground, inverct and land, and 0.44 s of that is a blur nobody can read as
 ## a flip. 0.60 s is the shortest window the clip stays legible in, and it buys
@@ -126,6 +129,12 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, SPIN, LUNGE, DASH }
 @export var backflip_time: float = 0.60
 ## The hard recovery. Input is locked and speed bleeds off through it.
 @export var roll_recover_time: float = 0.20
+## Degrees per second the model turns back onto the body after a sideways roll
+## (see `_dodge_model_yaw`). 420 walks the 90-degree case back in 0.21 s, which
+## is `roll_recover_time` — so the unwind IS the recovery, and he is square again
+## on the frame he gets his input back. Slower and he stands up crabwise; faster
+## and the last frame of the roll snaps, which is the exact pop this avoids.
+@export var dodge_unwind_deg: float = 420.0
 ## [oot] roll/backflip/sidehop need a near-full stick deflection. §3.2
 @export var roll_stick_gate: float = K.STICK_ACTION_GATE
 ## The roll is the i-frame button (roll grants K.ROLL_IFRAMES). Free i-frames
@@ -174,32 +183,46 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, SPIN, LUNGE, DASH }
 @export var clip_walk: StringName = &"ss_walk_01"
 @export var clip_run: StringName = &"ss_run_01"
 ## The four dodges. **The Pro Sword and Shield Pack contains no roll of any
-## kind** — 52 clips, not one of them a dodge — which is why every direction used
-## to play `ex_roll_to_run`, a 3.2 m forward shoulder dive, including the
+## kind** — 52 clips, not one of them a dodge — which is why every direction once
+## played `ex_roll_to_run`, a 3.2 m forward shoulder dive, including the
 ## backstep. A hero sliding backwards through a forward roll is the single most
-## visible thing wrong with the guard.
+## visible thing wrong with the guard, and it is worth knowing that the fix below
+## is not a return to that: three of the four still name that clip, but the model
+## is TURNED to face where each one travels, which is the whole difference.
 ##
-## The sidehops come from the LONGBOW set, which does ship a four-way dodge, and
-## they were checked the only way this can be checked: by reading the hips
-## translation out of the raw FBX before `build_anim_lib` strips it
-## (tools/directors/dodge_lookdev.gd documents the run). dodge_left travels
-## +1.04 m and dodge_right −1.07 m in clip space, where +Z is the model's forward
-## and +X its left — so the filenames are honest, which is not something to
-## assume (CLAUDE.md §4).
+## LEFT and RIGHT are **the roll, turned sideways**, and they got there the long
+## way round. They were `bow_dodge_left` / `bow_dodge_right` out of the longbow
+## set, whose hips tracks are honest (+1.04 m and −1.07 m in clip space, read out
+## of the raw FBX before `build_anim_lib` strips them — see
+## tools/directors/dodge_lookdev.gd) and whose POSE is not a dodge at all: the
+## hero stays bolt upright and slides, feet shuffling, like a man edging along a
+## ledge. Photographed side by side with the forward dive
+## (tools/directors/lt_moveset.gd) there is no argument to have about it.
 ##
-## FORWARD keeps the dive rather than taking the longbow set's forward hop: it is
-## a real roll, it covers real ground, and it is the one dodge the pack's absence
-## did not actually break.
+## So all three of FORWARD, LEFT and RIGHT play `ex_roll_to_run` now. A roll is a
+## roll whichever way it points, and the direction is carried by turning the
+## MODEL rather than by finding a clip per compass point — see
+## `_dodge_model_offset`. That also keeps the sideways dodge honest about its own
+## cost: it is a full roll, so it takes a roll's time and covers a roll's ground
+## (`_dodge_time`, `_dodge_speed_for`), rather than being the cheap 0.44 s hop
+## that a shuffle could get away with pretending to be.
 ##
-## BACK is a **backflip**, and it is the one place the longbow set was not good
-## enough: `bow_dodge_back` is a backward shuffle-walk that never leaves the
-## ground, which is a retreat, not an evade. `ex_backflip` crouches, launches,
-## goes fully inverted overhead and lands in a deep absorb — and it is what
-## `K.BACKFLIP_SPEED` has been named after since the day it was measured.
+## They stay three separate exports pointing at one clip rather than collapsing
+## into one, because they are three separate one-shots in the tree with their own
+## time scales, and because a sideways clip that is actually a sidehop may still
+## turn up — the pack has none today.
+##
+## BACK is a **backflip**, and it is the one dodge that keeps a clip of its own:
+## `bow_dodge_back` is a backward shuffle-walk that never leaves the ground,
+## which is a retreat, not an evade. `ex_backflip` crouches, launches, goes fully
+## inverted overhead and lands in a deep absorb — and it is what
+## `K.BACKFLIP_SPEED` has been named after since the day it was measured. It is
+## also the one dodge that must NOT be turned: it is authored travelling
+## backwards already.
 @export var clip_roll: StringName = &"ex_roll_to_run"
 @export var clip_roll_back: StringName = &"ex_backflip"
-@export var clip_roll_left: StringName = &"bow_dodge_left"
-@export var clip_roll_right: StringName = &"bow_dodge_right"
+@export var clip_roll_left: StringName = &"ex_roll_to_run"
+@export var clip_roll_right: StringName = &"ex_roll_to_run"
 @export var clip_turn180: StringName = &"ss_180_turn_01"
 ## FALLING, not jumping. These two are what plays when the ground goes away
 ## underneath him — walking off a ledge, a pit, the end of a hookshot pull — and
@@ -443,6 +466,14 @@ var _roll_keeps_facing: bool = false
 ## remember and exactly the bug it was written for.
 var _dodge: int = Dodge.FORWARD
 var _dodge_speed: float = 0.0
+## Radians the MODEL is turned away from the body, and the whole trick behind a
+## sideways roll. Locked or guarding, the BODY has to keep watching the target
+## for the whole dodge — that is what the stance is — while the dive itself has
+## to point where he is actually travelling. Those are two different directions,
+## so they get two different nodes: `rotation.y` stays on the target and the
+## model carries the difference. Unwound over `dodge_unwind_deg` once the roll is
+## over, which is what makes him stand back up facing the thing he dodged.
+var _dodge_model_yaw: float = 0.0
 var _airborne_time: float = 0.0
 ## Upward velocity waiting to be applied, in m/s. A jump CANNOT write velocity.y
 ## directly: _apply_gravity runs after the state ticks and would clamp it away.
@@ -1379,6 +1410,20 @@ func _fire_jump() -> void:
 		_fire(_P_JUMP)
 
 
+## Is the stick at rest this frame? [oot] Behind a raised shield ONE button is
+## two moves and the stick is what picks: neutral leaps, deflected dodges. Both
+## halves live in different files — the dodge here, the leap in
+## `HeroCombat._tick_context_button` — and they must answer this question
+## identically or a press falls between them and nothing happens at all.
+## Which is why it is a function and not two copies of a deadzone test.
+##
+## Read raw rather than through `_camera_relative`, because a rotation cannot
+## change a length and the caller in the other file has no camera basis to hand.
+func stick_neutral() -> bool:
+	var stick := Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down")
+	return stick.length() < K.STICK_DEADZONE
+
+
 func _try_start_roll(wish: Vector3, mag: float) -> bool:
 	if Prompt != null and Prompt.blocked:
 		return false
@@ -1398,23 +1443,34 @@ func _try_start_roll(wish: Vector3, mag: float) -> bool:
 	var dir := wish
 
 	if target != null:
-		# Locked, a neutral stick is not "no roll" — it is the BACKSTEP, which
-		# is the single most used defensive move in the source material. The
-		# stick gate does not apply either: locked, a dodge is a deliberate
+		# [oot] Locked, the button is split by the STICK and the source material
+		# splits it exactly here: neutral is the JUMP ATTACK, back is the
+		# backflip, left and right are the sideways dodges. So a neutral press is
+		# not a dodge at all — it belongs to the leap, and this function's job is
+		# to stand down for it. `HeroCombat._tick_context_button` reads the same
+		# `stick_neutral()`, which is the only reason the press cannot land in
+		# both halves; `lunge_max_range` matches the lock's own break range so it
+		# cannot land in neither.
+		#
+		# The stick gate does not apply either: locked, a dodge is a deliberate
 		# press rather than something you fall into out of a run, so gating it
 		# on a near-full deflection would eat half of them.
-		if wish == Vector3.ZERO or mag < K.STICK_DEADZONE:
-			dir = -K.flat(target.global_position - global_position)
-			if dir == Vector3.ZERO:
-				dir = -_forward()
-			dir = dir.normalized()
+		if stick_neutral():
+			return false
 	elif blocking:
 		# Guarding with nothing locked is the same stance minus a target
 		# (_tick_camera_facing): the facing is pinned to the camera, so a
 		# neutral stick backsteps straight away from what you are looking at.
+		#
+		# The leap does NOT take this press, and the asymmetry with the locked
+		# case above is deliberate rather than an oversight: `_lunge_swing` needs
+		# something to leap at and refuses without a lock, so yielding here would
+		# trade a working backstep for silence. A press stands down only for a
+		# move that is actually going to happen.
+		#
 		# Same reasoning as the lock for the missing gate — this is a press you
 		# make from behind a raised shield, not one you fall into out of a run.
-		if wish == Vector3.ZERO or mag < K.STICK_DEADZONE:
+		if stick_neutral():
 			dir = -_forward()
 	else:
 		# [oot] a discrete action needs a near-full deflection — you cannot roll
@@ -1439,6 +1495,7 @@ func _try_start_roll(wish: Vector3, mag: float) -> bool:
 	# "which way relative to where he will be looking", and free the answer is
 	# always FORWARD *because* the line above just made it so.
 	_dodge = _dodge_for(_roll_dir)
+	_dodge_model_yaw = _dodge_model_offset(_dodge, _roll_dir)
 	_state_timer = _dodge_time(_dodge)
 	_dodge_speed = _dodge_speed_for(_dodge)
 	_speed = _dodge_speed
@@ -1474,20 +1531,41 @@ func _dodge_for(dir: Vector3) -> int:
 	return Dodge.RIGHT if side >= 0.0 else Dodge.LEFT
 
 
+## How far the MODEL is turned off the body for this dodge, in radians.
+##
+## Only the sideways pair turn. FORWARD is already pointing where it travels;
+## BACK is the backflip, which is authored travelling backwards and would come
+## out facing the wrong way if it were turned. And a dodge that does not pin the
+## facing turned the BODY instead (`_roll_keeps_facing`), which leaves nothing
+## for the model to carry — it can only ever be FORWARD in that case anyway.
+##
+## Derived as a DIFFERENCE rather than from the basis, which is what keeps it out
+## of CLAUDE.md §4's way: whatever `rotation.y = facing_yaw + PI` means, a body
+## turned to `heading` instead of `facing_yaw` differs from this one by exactly
+## `heading - facing_yaw`, and the model is a child of the body. So adding that
+## to the model's own local yaw aims the dive exactly where a whole-body turn
+## would have aimed it, with no sign to get wrong and nothing to re-derive if the
+## facing convention ever moves.
+func _dodge_model_offset(dodge: int, dir: Vector3) -> float:
+	if dodge != Dodge.LEFT and dodge != Dodge.RIGHT:
+		return 0.0
+	return wrapf(atan2(dir.x, dir.z) - facing_yaw, -PI, PI)
+
+
+## Two answers, not three: the backflip is its own move and everything else is
+## the roll, pointed somewhere. See `clip_roll_left` for why the sidehop's own
+## number stopped being read.
 func _dodge_speed_for(dodge: int) -> float:
 	match dodge:
 		Dodge.BACK: return backflip_speed
-		Dodge.LEFT, Dodge.RIGHT: return sidehop_speed
 		_: return roll_speed
 
 
 ## How long the hero belongs to this dodge — which is also how long he is
 ## invulnerable, since take_hit reads `state == MoveState.ROLL` and nothing finer.
-## Three different answers because these are three different moves.
 func _dodge_time(dodge: int) -> float:
 	match dodge:
 		Dodge.BACK: return backflip_time
-		Dodge.LEFT, Dodge.RIGHT: return hop_time
 		_: return roll_time
 
 
@@ -2225,8 +2303,23 @@ func _drive_animation(delta: float) -> void:
 	if charging:
 		_tree.set(_P_CHARGE_SEEK, charge_pose_time)
 
-	# The rig's yaw correction is a fixed 180 (see model_yaw_offset) and is set
-	# once in _build_rig — it does not vary with speed.
+	_drive_model_yaw(delta)
+
+
+## The model's own yaw. Its correction is a fixed 180 (see `model_yaw_offset`)
+## and does not vary with speed — the only thing that ever moves it off that is a
+## sideways roll, which points the dive without turning the body underneath it.
+##
+## The unwind runs everywhere EXCEPT the roll itself, rather than only during the
+## recovery, so a roll cut short by a hit, a scene change or a death cannot leave
+## the hero permanently walking crabwise. Costs one comparison a frame; the class
+## of bug it removes is the kind that only ever shows up in someone's recording.
+func _drive_model_yaw(delta: float) -> void:
+	if state != MoveState.ROLL and _dodge_model_yaw != 0.0:
+		_dodge_model_yaw = move_toward(_dodge_model_yaw, 0.0,
+			deg_to_rad(dodge_unwind_deg) * delta)
+	if _model != null:
+		_model.rotation.y = deg_to_rad(model_yaw_offset) + _dodge_model_yaw
 
 
 ## Walk a Blend2's amount toward `want` over `aim_fade` seconds.

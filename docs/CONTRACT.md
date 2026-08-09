@@ -214,7 +214,7 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `attack` | **LMB** | **X / Square** (pad2) | light attack (**hold** = charge, **+guard** = dash) |
 | `use_item` | **F** | **RT / R2** (axis5+) | use the item the D-pad drew — **held**: down aims, up fires |
 | `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held**, and it targets, and it recentres |
-| `context` | **Shift** | **A / Cross** (pad0) | roll / backstep / sidehop — **hold** = run |
+| `context` | **Shift** | **A / Cross** (pad0) | dodge, or the **jump attack** on a still stick — **hold** = run |
 | `jump` | **Space** | **Y / Triangle** (pad3) | jump |
 | `z_target` | **Q**, MMB | — (LT does it) | lock-on toggle / camera recentre |
 | `interact` | E | **A / Cross** (pad0) | talk/open — **wins over the dodge**, else stow item |
@@ -271,10 +271,10 @@ with an item drawn stows the item **and swings on the same press**
 (`HeroCombat._begin`, `Game.stow_item`). Not the next press — the same one.
 
 `use_item` took the A/Cross the sword vacated, and then the right trigger. It is
-the "do the thing you are holding" button: it fires the drawn bow or hookshot,
-and with the sword out and something locked it is the lunge. With the sword out
-and nothing locked it is **silent**, deliberately — that is OOT's A, where the
-jump attack exists only under Z.
+the "do the thing you are holding" button and nothing else: it fires the drawn
+bow or hookshot, and with empty hands it is **silent** whether or not anything
+is locked. The lunge passed through it for one change and went back to A, which
+is where OOT has it — under Z, and only under Z.
 
 **With an item in hand it is HELD, not pressed.** Pull it and he raises the item
 into its aim; let go and it fires. That is the only arrangement that works once
@@ -282,8 +282,9 @@ the button is a trigger and the aim is the camera: the item goes up, THEN you
 move the stick, then you shoot. Firing on the press meant the shot was gone
 before the aim began, and it also meant the hero had nowhere to stand between
 shots — the stance now belongs to the button, so he lowers the item afterwards
-and the next shot costs another pull. See §8 Ranged; empty-handed the lunge is
-still on the press, because a leap is not a thing you hold.
+and the next shot costs another pull. See §8 Ranged. Empty-handed it is
+**silent**: the leap is on A, and a "use item" that quietly becomes a jump
+attack when there is nothing to use is two verbs sharing a name.
 
 **`interact` and `context` are the same button — A/Cross — and the thing in
 reach wins.** They are never both wanted at once: you can only address the smith
@@ -313,12 +314,36 @@ on it. `interact` still shares A with `ui_accept` as well, which is safe for its
 own older reason: `trade_screen`'s accept edge starts DISARMED, so the press that
 opens a screen cannot also confirm inside it.
 
-**The jump attack came off A** in the same change. It used to fire from
-`HeroCombat._tick_context_button` when A was pressed under a raised shield —
-OOT's Z+A. Guard + neutral stick + A is the **backstep** now, which is the
-defensive move the source material leans on hardest and cannot share a press with
-a leap in the opposite direction. `use_item` (RT) still throws the leap from the
-same stance, so nothing was lost but the collision.
+**Under a lock, A is two moves and THE STICK PICKS.** This is OOT's Z + A,
+verbatim:
+
+| stick, guard up | A does |
+|---|---|
+| at rest | the **jump attack** (`HeroCombat._tick_context_button`) |
+| back | the **backflip** |
+| left / right | the **sideways dodge** |
+| forward | the **roll** |
+
+An intermediate pass read that as an unresolvable collision — A had just become
+the dodge, guard + neutral + A was made the backstep, and the leap was moved onto
+`use_item`. It is only a collision if the stick is noise, and under a lock the
+stick is the only thing telling four moves apart already. So the leap is back
+where the source material puts it and the backflip costs a pull backwards, as it
+always has.
+
+`Hero.stick_neutral()` is the **single** function both halves ask. Two copies of
+a deadzone test in two files is how a press ends up landing in both (a leap and a
+dodge on one frame) or in neither (a button that does nothing). For the same
+reason `lunge_max_range` is `K.LOCK_BREAK_RANGE` and not `K.LOCK_RANGE`: inside
+the lock's hysteresis band the dodge has already stood down, so a leap that
+refuses on range there would be a dead press.
+
+**With no lock, guard + neutral + A is still the backstep**, and the asymmetry is
+deliberate. `_lunge_swing` needs something to leap at and refuses without a
+target, so yielding the press there would trade a working move for silence. A
+press stands down only for a move that is actually going to happen.
+
+`use_item` (RT) does **not** throw the leap. Empty-handed it is silent.
 
 **The dodge button is a tap AND a hold.** Tap `context` and the hero rolls,
 exactly as before. Hold it past `Hero.sprint_hold_time` (0.18 s) and he **runs**
@@ -907,7 +932,7 @@ hero.wish_dir() -> Vector3          # the stick, camera-relative, in world space
 | light 2 | `ss_slash_03` | attack, again inside `chain_window` | 2 |
 | light 3 (finisher) | `ss_slash_04` | attack, again | 4 |
 | spin | `ax_melee_attack_360_low` | attack **held** past `charge_time`, on release | 5, all round |
-| lunge | `ss_attack_01` | use_item, **locked on** | 4 |
+| lunge | `ss_attack_01` | context + guard, still stick, **locked on** | 4 |
 | dash | `ss_attack_03` | attack, with the **guard already up** | 3 |
 
 The clips were picked off `tools/directors/swing_lookdev.gd`, which renders
@@ -951,6 +976,21 @@ a version that also fired unlocked would just be a better standing attack. It
 has no stick gate and no chain gate — both existed to tell a leap apart from an
 ordinary swing pressed with the same thumb, and on a dedicated button a hidden
 rule is just a button that intermittently does nothing.
+
+**And no near range gate.** There was one — `lunge_min_range`, 1.9 m — whose
+argument was that point blank there is no gap to close, so the leap reads as
+hopping on the spot. 1.9 m is *inside sword range*: it is where you stand when
+you are fighting something, so the button did nothing at the only distance
+anyone presses it from, and that is precisely how it got reported as broken.
+Point blank the leap now comes out with no travel (`request_lunge` clamps the
+gap at zero), the clip's own jump carries the read, and the blow lands. The far
+gate is the **lock's** reach — `K.LOCK_BREAK_RANGE`, the number the lock itself
+breaks at rather than the one it acquires at — for the same reason the near one
+went: if you can lock it you can leap at it, and anything shorter is a second
+invisible range to learn. Inside the hysteresis band between the two the dodge
+has already stood down for the leap (§4), so a leap refusing there would be a
+dead press rather than a fallback. `lunge_max_speed` is what stops a long lock becoming a
+teleport. Swept at 1.4 / 2.6 / 4.2 / 6.5 m by `tools/directors/lt_moveset.gd`.
 
 Proved by `tools/directors/p4_combo.gd` (the chain, in damage),
 `tools/directors/p4_charge.gd` (the hold: a tap is a tap, a short hold is a tap,
@@ -1050,10 +1090,15 @@ lock-on and sits in the same place in `_tick_ground`, right after it.
 
 **A raised shield takes the same tick** (`Hero._tick_camera_facing`, which is
 `if aiming() or blocking`). That is OOT's Z-Parallel, and it is not a cosmetic
-share: with the facing pinned, a neutral stick and `context` is a **backstep**
-— `_try_start_roll` sends him along `-_forward()` with no stick gate, exactly as
-it does under a lock, because this is a press you make from behind a raised
-shield rather than one you fall into out of a run.
+share: with the facing pinned, "backwards" finally means something, so a neutral
+stick and `context` is a **backstep** — `_try_start_roll` sends him along
+`-_forward()` with no stick gate, because this is a press you make from behind a
+raised shield rather than one you fall into out of a run.
+
+Guarding with nothing *locked*, that is. Once there is a lock the neutral press
+belongs to the jump attack and the backflip costs a pull backwards (§4). The
+no-target case keeps the backstep because the leap has nothing to leap at
+there — a press only stands down for a move that is going to happen.
 
 **The dodge has four directions, and which one you get is measured off the
 facing, not off the stick.** `Hero._dodge_for` projects the committed
@@ -1062,21 +1107,35 @@ that sign backwards is hero-*left*, which plays each sidehop as the other one
 while the travel stays correct, so the frames are the only thing that catches
 it. Whichever axis dominates picks the clip and the speed:
 
-| `Dodge` | Clip | Speed | Duration |
-|---|---|---|---|
-| `FORWARD` | `ex_roll_to_run` | `K.ROLL_SPEED` 6.55 | `roll_time` 0.62 |
-| `BACK` | `ex_backflip` | `K.BACKFLIP_SPEED` 4.37 | `backflip_time` 0.60 |
-| `LEFT` / `RIGHT` | `bow_dodge_left` / `_right` | `K.SIDEHOP_SPEED` 6.19 | `hop_time` 0.44 |
+| `Dodge` | Clip | Speed | Duration | Model turned |
+|---|---|---|---|---|
+| `FORWARD` | `ex_roll_to_run` | `K.ROLL_SPEED` 6.55 | `roll_time` 0.62 | — |
+| `BACK` | `ex_backflip` | `K.BACKFLIP_SPEED` 4.37 | `backflip_time` 0.60 | — |
+| `LEFT` / `RIGHT` | `ex_roll_to_run` | `K.ROLL_SPEED` 6.55 | `roll_time` 0.62 | ±90° |
 
-Four things about that table. The speeds are the `[oot]` measured constants,
-which had sat in `K` unused since they were taken — the sidehop and the backflip
-were always going to be their own moves. The sidehops come from the **longbow**
-set, not the sword-and-shield set: the Pro Sword and Shield pack has 52 clips
-and not one roll, dodge, evade or dive among them, so anything looking there for
-a backwards roll will find nothing and should stop looking. Each direction is
-its **own** `AnimationNodeOneShot` + `AnimationNodeTimeScale` pair
-(`Hero._DODGE_NODES`) — reassigning `animation` on one live
-`AnimationNodeAnimation` restarts the mixer cache and eats the wind-up frames.
+**The sideways dodge is the roll, turned.** It was `bow_dodge_left` / `_right`
+out of the longbow set at `K.SIDEHOP_SPEED` for `hop_time`, and the travel was
+right while the pose was not: the hero stayed bolt upright and *slid*, feet
+shuffling like a man edging along a ledge. So LEFT and RIGHT play the forward
+dive now, and the direction is carried by turning the **model** — `Hero`'s
+`_dodge_model_yaw`, a difference between the roll's heading and `facing_yaw`
+applied to the `Model` node, unwound at `dodge_unwind_deg` (420 °/s ≈ one
+`roll_recover_time`) so he stands back up square. The body itself never turns:
+locked or guarding, `rotation.y` stays on the target for the whole dodge, which
+is what makes it a *strafe* dodge rather than a roll that breaks the lock.
+
+That is also why the sidehop's own numbers stopped being read. i-frames are
+literally `state == MoveState.ROLL`, so a shorter dodge is a narrower window —
+leaving 0.44 s on a move that visibly dives would make the left-hand dodge
+quietly worse than the forward one for no reason the player can see.
+`K.SIDEHOP_SPEED` stays in `K`; it is measured footage (§6), and it is what a
+real sidehop would be worth if a clip for one ever shows up.
+
+Two more things about that table. The remaining speeds are the `[oot]` measured
+constants. And each direction is still its **own** `AnimationNodeOneShot` +
+`AnimationNodeTimeScale` pair (`Hero._DODGE_NODES`) even though three of them now
+name one clip — reassigning `animation` on one live `AnimationNodeAnimation`
+restarts the mixer cache and eats the wind-up frames.
 
 And `BACK` is a **backflip**, which is the one row the longbow set could not
 fill: `bow_dodge_back` is a backward shuffle-walk that never leaves the ground,
@@ -1095,8 +1154,8 @@ export's settle pose for 0.4 s after the controller has already handed him back
 to locomotion.
 
 Because the i-frame window is literally `state == MoveState.ROLL` in
-`take_hit`, the duration column *is* the invulnerability column: the sidehops
-and the backstep are shorter dodges than the roll, not just faster ones.
+`take_hit`, the duration column *is* the invulnerability column: the backflip is
+a shorter dodge than the roll, not just a slower one.
 
 Two more things follow, and both were got wrong first:
 
@@ -1453,7 +1512,7 @@ will not resolve.
 - **`K.flat()` NORMALISES.** It is a direction helper, not a projection:
   `K.flat(a - b).length()` is `1.0` for every pair of points in the world. The
   lunge's leap speed and its range gate were both computed that way and came out
-  as "every target is exactly 1 m away" — the leap stood still and the range band
+  as "every target is exactly 1 m away" — the leap stood still and the range gate
   admitted everything. Flatten by hand when you want a DISTANCE:
   `var d := a - b; var dist := Vector2(d.x, d.z).length()`.
 - **`/` is reserved** as the library/animation separator. Namespace clips with `_`.

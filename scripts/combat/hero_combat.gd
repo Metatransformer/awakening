@@ -154,11 +154,40 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## the body sliding along the floor under an airborne pose. Adding a real jump
 ## on top of a baked one gets you a hero who exits the top of the screen.
 @export var lunge_hop: float = 1.8
-## The band of distances the leap is offered at. Past the far edge it is a long
-## unpunishable approach; inside the near edge there is no gap to close and it
-## reads as the hero hopping on the spot.
-@export var lunge_min_range: float = 1.9
-@export var lunge_max_range: float = 6.0
+## How far away the leap is still offered. **THE LOCK IS THE GATE**, so this is
+## the lock's own reach and not a shorter band of its own.
+##
+## There used to be a band — 1.9 m to 6.0 m — and the near edge was the bug the
+## player reported as "the jump attack doesn't work". Its argument was that
+## inside 1.9 m there is no gap to close, so the leap reads as hopping on the
+## spot. True, and irrelevant: 1.9 m is INSIDE SWORD RANGE. It is where you are
+## standing when you are fighting something, which made the one button OOT gives
+## you for Z+A silently do nothing at the only distance anybody presses it from.
+## Measured, not argued — tools/directors/lt_moveset.gd sweeps the ranges and
+## caught it refusing at 1.4 m and firing at 2.6 m.
+##
+## Point blank the leap now comes out with no travel at all, because
+## `Hero.request_lunge` clamps the gap at zero: the hero hops, the clip's own
+## jump carries the read, and the blow lands. That is OOT's jump attack in a
+## corridor and it is the right answer — the alternative is a dead button.
+##
+## The far edge stays, because past the lock's reach there is no target to leap
+## at and the swing would be thrown at nothing. It is the lock's number rather
+## than a smaller one for the same reason the near edge went: a button that works
+## on everything you can lock is a rule the player can hold in their head, and
+## anything shorter is a second invisible range they have to learn. The leap's
+## own speed cap (`Hero.lunge_max_speed`) is what stops a long lock becoming a
+## teleport; a leap that falls short and whiffs is a mistimed attack, which is a
+## thing the player can see and learn from.
+##
+## LOCK_BREAK_RANGE and not LOCK_RANGE, and the ~22% between them is the whole
+## reason: that band is the lock's hysteresis, where a target you acquired at
+## 8 m is still yours at 10 m. Gate the leap at the ACQUIRE number and every
+## press inside that band is a dead button — the leap refuses on range while
+## `Hero._try_start_roll` has already stood down for it (neutral stick belongs to
+## the leap). The two numbers have to be the same number, and "as far as the lock
+## reaches" is the one the player can actually perceive.
+@export var lunge_max_range: float = K.LOCK_BREAK_RANGE
 
 @export_group("Dash")
 ## The stab out from behind the shield — OOT's R+B. It is not a better light
@@ -689,18 +718,18 @@ func _physics_process(delta: float) -> void:
 			Game.use_quick(Game.QUICK_RIGHT)
 		if Input.is_action_just_pressed(&"item_down"):
 			Game.swap_loadout()
-		# The use button fires whatever the D-pad drew, and now that is ALL it
-		# does: the leap moved to the context button below, so this button means
-		# one thing whether or not something is locked. It used to mean both, and
-		# "use item" that silently became a jump attack when your hands were empty
-		# is two verbs sharing a name.
+		# The use button fires whatever the D-pad drew, and that is ALL it does:
+		# the leap is on A (`_tick_context_button` below), so this button means
+		# one thing whether or not something is locked and whether or not your
+		# hands are empty. It used to mean both, and a "use item" that silently
+		# became a jump attack when there was nothing to use is two verbs sharing
+		# a name.
 		#
 		# With an item in hand it is a HELD trigger and not a press: down raises
 		# and aims, up looses (hero_ranged.gd owns both halves). It used to fire on
 		# the press, which meant a player pulling RT to aim had already shot before
 		# they touched the stick — the bug this split exists to fix. Empty-handed
-		# it is still the lunge, on the press, because a leap is not a thing you
-		# hold.
+		# it is silent.
 		#
 		# The release arm is `not pressed` rather than `just_released` on purpose:
 		# a press and a release inside one physics tick would otherwise raise the
@@ -715,8 +744,6 @@ func _physics_process(delta: float) -> void:
 			# `_using` flag that only ever gets cleared by the hand that set it is
 			# a bow stuck at full draw the next time one is drawn.
 			_hero.ranged.use_release()
-		elif Input.is_action_just_pressed(&"use_item"):
-			_press(Intent.LUNGE)
 		_tick_context_button()
 		_tick_attack_button(delta)
 	else:
@@ -764,22 +791,33 @@ func _physics_process(delta: float) -> void:
 ## whatever the situation has made most useful, and the player learns the
 ## situations rather than the button.
 ##
-##   something in reach  -> talk / open / descend. Not handled here at all.
-##   nothing in reach    -> the DODGE. Not handled here either — `Hero`.
-##   item in hand        -> put it away, which is all this function is now.
+##   something in reach     -> talk / open / descend. Not handled here at all.
+##   guard up, stick moved  -> the DODGE. Not handled here either — `Hero`.
+##   guard up, stick still  -> the JUMP ATTACK. That half is here.
+##   item in hand           -> put it away.
 ##
 ## Talking wins, and it wins by this function never being consulted: `Prompt`
 ## owns the interact button whenever it has a focus (see its docstring — exactly
-## one thing answers a press). Without that check, walking up to the smith would
-## stow the hookshot and open his shop on the same frame.
+## one thing answers a press). Without that check, walking up to the smith with
+## the shield raised would leap at him and open his shop on the same frame.
 ##
-## THE JUMP ATTACK IS GONE FROM THIS BUTTON. It used to live here behind a raised
-## shield, on the argument that "press A while holding guard" is OOT's "press A
-## while holding Z". A is the dodge now, and guard + neutral stick + A is the
-## BACKSTEP (`Hero._try_start_roll`) — which is the defensive move the source
-## material leans on hardest, and which cannot share a press with a leap in the
-## opposite direction. The leap is still one button away on `use_item`, thrown
-## from the same stance. Two answers to one press is not a thing to arbitrate.
+## [oot] THE LEAP AND THE DODGE SHARE THE PRESS AND THE STICK SEPARATES THEM,
+## which is what the source material does with Z + A: neutral is the jump attack,
+## back is the backflip, left and right are the sideways dodges. An earlier pass
+## read that as an unresolvable collision and moved the leap onto `use_item` — but
+## the collision is only there if you treat the stick as noise. It is not noise;
+## under a lock it is the only thing distinguishing four moves already, and the
+## backflip in particular has ALWAYS needed you to pull back. So the leap is back
+## on A, where "press A while holding guard" and OOT's "press A while holding Z"
+## are the same sentence, and `Hero.stick_neutral()` is the single function both
+## halves ask so that the press can never land in both or in neither.
+##
+## Fired off `context` rather than `interact` for the same reason: `context` is
+## the action the dodge reads (both are A/Cross on a pad; on a keyboard they are
+## Shift and E). Splitting one press means splitting ONE action.
+##
+## With the shield down the button is silent rather than swinging, which is what
+## keeps it safe to mash at a chest.
 ##
 ## The stow DOES coincide with a dodge, deliberately: rolling with the bow drawn
 ## and coming up empty-handed is the same sentence, and it is what every game
@@ -787,6 +825,10 @@ func _physics_process(delta: float) -> void:
 ## a stick too shallow to clear `roll_stick_gate` — the stow still happens, which
 ## is exactly the behaviour this button had before it was shared.
 func _tick_context_button() -> void:
+	if Prompt.focus == null and blocking and equipped == &"" \
+			and Input.is_action_just_pressed(&"context") \
+			and _hero.stick_neutral():
+		_press(Intent.LUNGE)
 	if not Input.is_action_just_pressed(&"interact"):
 		return
 	if Prompt.focus != null:
@@ -1078,11 +1120,11 @@ func _lunge_swing() -> bool:
 
 	# Flattened by hand rather than with K.flat, which NORMALISES: a range gate
 	# reading distance off K.flat sees every target in the world as exactly 1 m
-	# away, which puts them all inside the band and none of them outside it.
+	# away, which puts every one of them inside the gate and none outside it.
 	var delta := target.global_position - _hero.global_position
 	var to := Vector3(delta.x, 0.0, delta.z)
 	var dist := to.length()
-	if dist < lunge_min_range or dist > lunge_max_range:
+	if dist > lunge_max_range:
 		return false
 
 	# The stick cone and the "only from a standing start" chain gate both went
