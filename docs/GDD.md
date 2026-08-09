@@ -142,6 +142,14 @@ another, a committed roll, and lock-on. Interact is a single button that
 `Prompt` arbitrates so only one thing ever claims it. Extraction is a **hold** —
 a decision you can make by fumbling a button is not a decision.
 
+The **air slam** is the one verb with no button of its own: the sword button,
+pressed while airborne and unarmed, hangs the hero for a beat and drives him
+into the floor for heavy damage in a circle. It is deliberately not a second
+attack button. Jump is already the commitment — you are in the air with no way
+to change your mind — and the slam only charges for what that commitment was
+already costing, which is why it is worth more than a swing and why holding a
+bow or a torch takes it away rather than layering it on.
+
 Full input map and the pad bindings: `docs/CONTRACT.md` §4.
 
 ---

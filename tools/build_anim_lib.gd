@@ -33,8 +33,14 @@ const SETS := {
 ## is not holding. The low one crouches into the turn and carries the blade out
 ## at arm's length through the whole circle, which is the pose the hitbox is
 ## claiming to be.
+## `melee_attack_downward` and `melee_run_jump_attack` are the two candidates for
+## the AIR SLAM, and both are here so the choice can be made off a render rather
+## than off a filename (see tools/directors/slam_lookdev.gd). The sword-and-shield
+## set has no downward strike in it at all — its four `attack_*` and five
+## `slash_*` are every one of them horizontal or diagonal, which is why this
+## borrows from the axe set exactly as the spin does.
 const ONLY := {
-	"ax": ["melee_attack_360_low"],
+	"ax": ["melee_attack_360_low", "melee_attack_downward", "melee_run_jump_attack"],
 }
 const OUT := "res://assets/animations/hero_anims.res"
 ## Clips that should loop when played. Everything else is one-shot.
@@ -86,11 +92,19 @@ const LOOPING := [
 ## for 0.59 s. That is not a coincidence to be proud of, it is why these clips
 ## play at scale 1.0 — see `jump_start_offset` in hero.gd for the other half,
 ## which is that the game has no room for the anticipation crouch at the front.
+## `ax_melee_run_jump_attack` is the air slam and it is 3.67 s of which the game
+## uses 1.50–2.75: the descent with the weapon overhead, the strike, the landing
+## compression and the push back to standing. Everything before 1.50 is a run-up
+## and a leap the hero has already done for real, and everything after 2.75 is a
+## man standing there holding an axe. Cut here rather than in hero.gd so the
+## clip's length keeps meaning "the move", which is what `_jump_anim` sizes the
+## impact half of the slam off (see Hero.clip_slam for the frame table).
 const TRIM := {
 	"ex_backflip": 1.45,
 	"ax_melee_attack_360_low": 1.35,
 	"ex_jump": 1.67,
 	"ex_jump_running": 1.45,
+	"ax_melee_run_jump_attack": 2.75,
 }
 
 

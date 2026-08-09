@@ -375,6 +375,46 @@ press, so it pre-empts the charge — you cannot wind up a heavy from behind the
 shield, which is deliberate, because a shielded charge is a stance with no
 answer to it.
 
+**The air slam is `attack` pressed off the floor** — the second modified swing
+on the button, and the same gate reads it (`HeroCombat._tick_attack_button`:
+`if not _hero.is_on_floor() and equipped == &""`). It takes the press before
+anything else can, and it is never buffered: a slam that fires because you
+pressed attack a moment before you left the ground is a slam you did not ask
+for.
+
+`Hero.request_slam()` owns the move and refuses it from anywhere but `GROUND`
+while airborne with at least `slam_min_height` (0.35 m) of floor below —
+measured with a downward ray, not assumed, so a slam over a ledge cannot start
+from a height that gives it nowhere to travel. It hangs for `slam_hang`
+(0.16 s), drives down at `slam_speed` (16 m/s, and `_apply_gravity` hands the
+SLAM state a fixed velocity rather than an acceleration, so the descent is the
+same every time), then roots him for `slam_recover` (0.42 s).
+
+The animation is **one clip cut into two windows**, both time-scaled, because
+the fall is a different length every time: `ax_melee_run_jump_attack`
+1.50→1.70 is the dive and is scaled to the drop the ray just measured, and
+1.70→end is the impact and recovery and is scaled to `slam_recover`. See
+`Hero.clip_slam` for the frame table — the offsets are picked off
+`tools/directors/slam_lookdev.gd`, not read off the filename.
+
+Damage is instantaneous and **not** an Area3D:
+`HeroCombat._slam_targets` runs a `PhysicsShapeQueryParameters3D` sphere of
+`slam_radius` (2.6 m) against `K.L_ENEMY | K.L_INTERACT` on the frame of
+contact. An area's overlaps are resolved a frame late, and an impact is exactly
+the question that cannot be answered a frame late.
+
+The tell is `SlamVfx` (`scripts/combat/slam_vfx.gd`), four layers of MIX
+billboards — crest, body, column, grit — spawned at the point of contact and
+freed with the node. It is `PROCESS_MODE_ALWAYS` because the impact asks for
+its own hit-stop and dust that froze with the world would appear only after the
+freeze it caused. Its ring is deliberately sized to reach roughly where
+`slam_radius` reaches; the numbers in that file are set against a render and
+the note at the top says what happened when they were not.
+
+Sound: `jump_slam` on contact, with `K.HITSTOP_HEAVY` and a 0.90 shake. One
+hit-stop for the impact, never one per victim — a slam into four skeletons
+would otherwise freeze the game four times over.
+
 ### The two ways this table has lied
 
 **1. `button_index` is Godot's `JoyButton` enum, not the SDL/Xbox numbering.**
@@ -1108,6 +1148,25 @@ Proof: `tools/directors/ranged_kit.gd` (the loop, including the shoulder
 camera), `tools/directors/ranged_anim_lookdev.gd` (the poses),
 `tools/directors/bow_stow_lookdev.gd` (where the slung bow sits — read its
 header before you decide it looks wrong).
+
+The slam's half of the same boundary:
+
+```gdscript
+hero.request_slam() -> bool                 # refuses on the floor, and below slam_min_height
+signal slammed(at: Vector3, fall_speed: float)   # the frame of contact, once
+```
+
+`slammed` is the seam, and it is what keeps the damage out of `hero.gd`. The
+hero owns the body — the hang, the drive, the root, the two animation windows —
+and knows nothing about what a hit is worth; `HeroCombat` listens for the signal
+and does the dust, the sound, the shake and the sphere query. The alternative,
+`hero.gd` reaching for `Hit.make`, is how the controller ends up owning the
+damage table.
+
+Proof: `tools/directors/slam_attack.gd` (measures the hang, the drive and the
+root, then photographs the impact and checks a post takes damage),
+`tools/directors/slam_lookdev.gd` (the clip, seeked and rendered, which is where
+the two offsets came from).
 
 ### Music — picks itself, and nobody calls it
 
