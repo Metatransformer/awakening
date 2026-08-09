@@ -6,7 +6,7 @@
 // later. Rather than hardcode one and break, pick the best scene that actually
 // exists right now, and tell the player what they got.
 
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -64,19 +64,23 @@ function pickScene() {
   process.exit(1)
 }
 
-// Keep the editor's F5 in step with what the launcher plays, so opening the
-// project in Godot and pressing play gives the same thing as `pnpm game`.
-function syncMainScene(rel) {
-  const path = join(ROOT, 'project.godot')
-  const src = readFileSync(path, 'utf8')
-  const want = `run/main_scene="res://${rel}"`
-  const next = src.replace(/run\/main_scene="[^"]*"/, want)
-  if (next !== src) writeFileSync(path, next)
-}
+// There used to be a syncMainScene() here that rewrote run/main_scene in
+// project.godot to whatever room this launcher picked, to keep the editor's F5
+// in step with `pnpm game`. It is gone, and it must not come back.
+//
+// dungeon.tscn is first in CANDIDATES, so every single run of this script left
+// the project pointed underground -- and project.godot's own comment records
+// that line drifting to dungeon.tscn three times, the third of which SHIPPED.
+// This script was the mechanism the whole time. It bought a convenience for the
+// editor by mutating the one setting that decides what a player boots into.
+//
+// Nothing is lost: the scene is passed to Godot on the command line below, so
+// `pnpm game` plays the right room regardless of what that line says. If you
+// want the editor's F5 to match, open the scene and set it there yourself.
+// `pnpm deploy` refuses to build unless the line reads town.tscn.
 
 const godot = process.env.GODOT || findGodot()
 const [scene, label] = pickScene()
-syncMainScene(scene)
 
 console.log(`\n  The Lower Worlds: Awakening`)
 console.log(`  playing ${scene}`)
