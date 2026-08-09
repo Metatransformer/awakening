@@ -105,6 +105,24 @@ func _descend(rig) -> void:
 	await rig.wait_frames(20)
 	await rig.capture(out.path_join("m_07_gate.png"))
 
+	# Wait for the GATE to actually own the interact button before holding it.
+	#
+	# This beat was flaky about one run in five, and the failure was expensive
+	# out of all proportion: the hold went into the smith's screen while it was
+	# still closing, the descent silently did not happen, and every beat after it
+	# — the dungeon, the fight, the chest, the charm — then reported a failure it
+	# did not cause. Two sessions have now gone hunting the economy for what was
+	# a screen that had not finished shutting. A fixed frame count after
+	# `ui_cancel` is the wrong instrument; wait for the state you need instead.
+	for _i in 40:
+		if Prompt.focus != null:
+			break
+		await rig.wait_frames(2)
+	print("MVP gate focus=%s" % [
+		Prompt.focus.prompt if Prompt.focus != null else "<none>"])
+	if Prompt.focus == null:
+		print("MVP FAIL nothing owns the interact button at the gate")
+
 	# The gate is a 0.9 s hold, so tapping must NOT open it. Holding must.
 	await rig.hold_seconds(["interact"], 1.3)
 	await rig.wait_frames(120)
