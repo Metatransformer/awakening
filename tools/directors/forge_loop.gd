@@ -373,16 +373,30 @@ func _descend(rig) -> void:
 	# with nothing printed, so the bar restarts and the beat lies about why.
 	Input.action_press(&"interact")
 
-	# A third of the way into the 0.9 s, with the shutter open: the gate's own
-	# glow is the diegetic half of this and the HUD's gauge is the legible half,
-	# and the bug this guards against is the one where a hold ships with neither.
-	# `Hud` mirrors `Bus.hold_changed`, so reading it is reading what got drawn.
-	await rig.wait_frames(20)
-	print("FORGE gate gauge t=%.2f required=%s" % [Hud._hold01, Hud._hold_required])
-	_ck("E0c the HUD knows the gate is a hold", Hud._hold_required)
-	_ck("E0d the gauge is filling (%.2f)" % Hud._hold01,
-		Hud._hold01 > 0.0 and Hud._hold01 < 1.0)
-	await rig.capture(out.path_join("f_03_gate_hold.png"))
+	# The gate's own glow is the diegetic half of this and the HUD's gauge is the
+	# legible half; the bug being guarded against is a hold that ships with
+	# neither. `Hud` mirrors `Bus.hold_changed`, so reading it is reading what
+	# got drawn, and the shutter opens on the first frame it is non-zero.
+	#
+	# Sampled per frame and kept as a PEAK. Read once after twenty frames it
+	# failed two runs in three on a loaded machine -- twenty frames is 0.9 s if
+	# the frames are 45 ms, the descent had already happened, and the gauge it
+	# went looking for had correctly gone back to zero along with the town.
+	var peak := 0.0
+	var required := false
+	var shot := false
+	for _i in 40:
+		await rig.wait_frames(1)
+		peak = maxf(peak, Hud._hold01)
+		required = required or Hud._hold_required
+		if not shot and peak > 0.0:
+			shot = true
+			await rig.capture(out.path_join("f_03_gate_hold.png"))
+		if Run.in_dungeon:
+			break
+	print("FORGE gate gauge peak=%.2f required=%s" % [peak, required])
+	_ck("E0c the HUD knows the gate is a hold", required)
+	_ck("E0d the gauge filled while he held it (%.2f)" % peak, peak > 0.0)
 
 	for _i in 12:
 		await rig.wait_frames(8)
