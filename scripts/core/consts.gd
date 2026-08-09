@@ -341,6 +341,19 @@ static func yaw_between(from: Vector3, to: Vector3) -> float:
 
 
 ## Flatten to the XZ plane and normalise. Zero stays zero.
+##
+## **This throws the length away.** `K.flat(a - b).length()` is 1.0 for every
+## pair of points in the world, and it does not error -- it quietly answers a
+## distance question with a direction. That has cost this project three separate
+## bugs now (the hero's lunge stood still, the target sweep saw every enemy at
+## 1 m, and the monster pack shoved across whole rooms). If you want a gap, a
+## radius or a leash, you want `plane` below.
 static func flat(v: Vector3) -> Vector3:
 	var f := Vector3(v.x, 0.0, v.z)
 	return f.normalized() if f.length_squared() > 0.0001 else Vector3.ZERO
+
+
+## Flatten to the XZ plane, length preserved. The one to reach for when the
+## answer is a distance.
+static func plane(v: Vector3) -> Vector3:
+	return Vector3(v.x, 0.0, v.z)

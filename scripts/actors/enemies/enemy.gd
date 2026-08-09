@@ -18,7 +18,7 @@ extends CharacterBody3D
 
 signal died_at(position: Vector3)
 
-enum State { IDLE, CHASE, WINDUP, STRIKE, RECOVER, HURT, DEAD }
+enum State { IDLE, CHASE, CIRCLE, WINDUP, STRIKE, RECOVER, HURT, DEAD }
 
 const LIBRARY := "res://assets/animations/monster_library.res"
 const MODEL_DIR := "res://assets/monsters/"
@@ -26,6 +26,15 @@ const MODEL_DIR := "res://assets/monsters/"
 ## How far the body rears back over a wind-up, in degrees. Big enough to read
 ## across a dark room, small enough that it is a tell and not a backflip.
 const WINDUP_LEAN_DEG := 17.0
+
+## How close two monsters have to be before they start pushing apart, in metres,
+## and how hard they push. See `_separation`.
+const CROWD_RADIUS := 1.5
+const CROWD_PUSH := 3.4
+## How far from where it woke up a monster will follow before giving up. The
+## rooms are 16 m across, so this is "anywhere in my room and a little past the
+## doorway" and not "across the floor".
+const LEASH := 17.0
 
 ## kind -> stats. Damage is in quarter-hearts, matching every other number in
 ## the project. Health is tuned against the blade ladder in docs/METAGAME.md §8:
@@ -73,9 +82,19 @@ var _rng := RandomNumberGenerator.new()
 var _struck: bool = false
 var _flash := HitFlash.new()
 var _recoil: Tween = null
+## Where it woke up. The leash is measured from here, so a monster lured out of
+## its room walks back to it rather than joining the conga line behind the hero.
+var _anchor: Vector3 = Vector3.ZERO
+## Which way it circles, +1 or -1. Fixed per monster rather than rerolled each
+## time, so a pack splits and goes both ways round instead of all orbiting
+## together like a carousel.
+var _orbit: float = 1.0
 ## The model's rest pose, so the recoil and the wind-up lean can be measured
 ## from it rather than from wherever the last interrupted tween stopped.
 var _model_rest: Vector3 = Vector3.ZERO
+## True while the wind-up telegraph is holding the body's emission. See the
+## guard at the top of `_physics_process`.
+var _glowing: bool = false
 
 
 static func spawn(parent: Node3D, p_kind: StringName, at: Vector3, seed_val: int) -> Enemy:
@@ -102,6 +121,8 @@ func _ready() -> void:
 	_build_model()
 	_build_combat()
 	_facing = rotation.y
+	_anchor = global_position
+	_orbit = 1.0 if _rng.randf() < 0.5 else -1.0
 
 
 # --- Construction -----------------------------------------------------------
@@ -234,11 +255,24 @@ func _physics_process(delta: float) -> void:
 	_cooldown = maxf(_cooldown - delta, 0.0)
 	_player = _find_player()
 
+	# The wind-up glow is written every frame by `_tick_windup` and owns no timer,
+	# so leaving the wind-up is the only thing that can take it back down. Doing
+	# that here, off the state itself, rather than at each exit, means the next
+	# person to add a way out of WINDUP cannot forget to -- and the failure they
+	# would ship is a monster standing in a quiet room glowing hot for ever.
+	# `_on_damaged` clears the flag before calling `_flash.hit()`, because the
+	# white flash supersedes the glow and must not be wiped by this the next frame.
+	if _glowing and state != State.WINDUP:
+		_glowing = false
+		_flash.restore()
+
 	match state:
 		State.IDLE:
 			_tick_idle()
 		State.CHASE:
 			_tick_chase(delta)
+		State.CIRCLE:
+			_tick_circle(delta)
 		State.WINDUP:
 			_tick_windup(delta)
 		State.STRIKE:
@@ -275,11 +309,14 @@ func _distance() -> float:
 
 
 func _face_player(delta: float, rate_deg: float = 420.0) -> void:
-	var d := K.flat(_to_player())
+	_face_heading(K.flat(_to_player()), delta, rate_deg)
+
+
+## Turn toward a flat direction. The models face -Z like every other Node3D, so
+## the heading yaw needs the same +PI the hero applies (docs/CONTRACT.md §2.5).
+func _face_heading(d: Vector3, delta: float, rate_deg: float = 420.0) -> void:
 	if d == Vector3.ZERO:
 		return
-	# The models face -Z like every other Node3D, so the heading yaw needs the
-	# same +PI the hero applies.
 	var want := atan2(d.x, d.z) + PI
 	var err := wrapf(want - _facing, -PI, PI)
 	var step := deg_to_rad(rate_deg) * delta
@@ -293,11 +330,63 @@ func _stop() -> void:
 
 # --- States -----------------------------------------------------------------
 
+## Push apart from the other monsters nearby.
+##
+## Without this a pack is not a pack. Every one of them steers at the same point
+## with the same rule, so they converge on the hero's face and stack into a
+## single silhouette -- you cannot tell three goblins from one, you cannot tell
+## which of them is winding up, and the wind-up tell built in the last commit is
+## wasted because it is happening inside another body. Six lines of repulsion is
+## the difference between a crowd and a smear.
+##
+## Linear in the number of monsters and run per monster, so quadratic overall --
+## which is fine at the 13 a floor spawns and would not be at 300. If a room ever
+## holds a swarm this wants a grid; it does not want a NavigationAgent3D, because
+## the problem is spacing and not pathing.
+func _separation() -> Vector3:
+	var push := Vector3.ZERO
+	for other in get_tree().get_nodes_in_group(&"enemy"):
+		if other == self:
+			continue
+		var body := other as Node3D
+		if body == null or not is_instance_valid(body):
+			continue
+		# K.plane, not K.flat: flat normalises, so `d` would be 1.0 for every
+		# monster on the floor and this would shove between rooms at full strength.
+		var away := K.plane(global_position - body.global_position)
+		var d := away.length()
+		if d > CROWD_RADIUS or d <= 0.001:
+			continue
+		# Falls off with distance, so a monster just inside the radius drifts and
+		# one standing inside another shoves hard.
+		push += away.normalized() * (1.0 - d / CROWD_RADIUS)
+	return push * CROWD_PUSH
+
+
+## Walk `dir` at `speed`, with the crowd shove folded in. Everything that moves
+## goes through here so no state can forget the spacing.
+func _steer(dir: Vector3, speed: float) -> void:
+	var want := dir * speed + _separation()
+	velocity.x = want.x
+	velocity.z = want.z
+
+
 func _tick_idle() -> void:
-	_stop()
 	_play(&"idle", true)
 	if _player != null and _distance() <= float(_def["detect"]):
 		state = State.CHASE
+		return
+
+	# Nothing to fight: go back to where you woke up. A monster lured across the
+	# floor and then abandoned used to stand wherever the chase ended, so a
+	# cleared room slowly filled with other rooms' monsters standing in doorways.
+	var home := K.plane(_anchor - global_position)
+	if home.length() > 1.0:
+		_face_heading(home, get_physics_process_delta_time(), 200.0)
+		_steer(home.normalized(), float(_def["speed"]) * 0.55)
+		_play(&"walk_fwd", true, 0.8)
+	else:
+		_stop()
 
 
 func _tick_chase(delta: float) -> void:
@@ -305,7 +394,12 @@ func _tick_chase(delta: float) -> void:
 		state = State.IDLE
 		return
 	var dist := _distance()
-	if dist > float(_def["detect"]) * 1.35:
+	# Two ways to lose interest, and the leash is the one that matters. Detection
+	# alone means a monster follows the hero to the far side of the floor and
+	# stays there, so every room he passes through donates its monsters to the
+	# room he is standing in and the last room of a run holds all of them.
+	if dist > float(_def["detect"]) * 1.35 \
+			or K.plane(global_position - _anchor).length() > LEASH:
 		state = State.IDLE
 		return
 
@@ -321,14 +415,54 @@ func _tick_chase(delta: float) -> void:
 	# Stop short of the hero's own capsule so a crowd does not shove him around.
 	var stop_at: float = float(_def["reach"]) * 0.85
 	if dist > stop_at:
-		var dir := K.flat(_to_player())
 		var speed: float = _def["speed"]
-		velocity.x = dir.x * speed
-		velocity.z = dir.z * speed
+		_steer(K.flat(_to_player()), speed)
 		_play(&"walk_fwd", true, clampf(speed / 2.2, 0.7, 1.6))
 	else:
-		_stop()
+		# In reach but still on cooldown. Keep the spacing anyway -- standing
+		# perfectly still here is what let a second monster walk inside the
+		# first one while it waited.
+		_steer(Vector3.ZERO, 0.0)
 		_play(&"idle", true)
+
+
+## Circle the hero at reach instead of walking straight back in.
+##
+## Without this, a pack QUEUES. Everyone runs to the same point, everyone is on
+## the same cooldown clock, and the fight becomes a line of monsters taking turns
+## at the front while the ones behind stand still -- which is both boring and
+## easy, because you only ever fight one at a time. Circling spreads them around
+## the hero, so the threat becomes positional: the one you can see is not the one
+## about to hit you, and turning to face it is a real decision.
+##
+## It is a beat between attacks and not a permanent state; `_timer` ends it and
+## the cooldown is what decides whether the next one is a swing.
+func _tick_circle(delta: float) -> void:
+	if _player == null:
+		state = State.IDLE
+		return
+	_timer -= delta
+	var dist := _distance()
+	if _timer <= 0.0 or dist > float(_def["detect"]):
+		state = State.CHASE
+		return
+
+	# Keep looking at him while sidestepping -- a monster that turns its back to
+	# orbit reads as having lost interest, and it is about to attack.
+	_face_player(delta, 260.0)
+
+	var to_hero := K.flat(_to_player())
+	if to_hero == Vector3.ZERO:
+		return
+	var inward := to_hero.normalized()
+	# Perpendicular, in the fixed direction this monster picked at spawn.
+	var side := Vector3(-inward.z, 0.0, inward.x) * _orbit
+	# Hold station at a comfortable ring: drift in if it has fallen back, out if
+	# it is crowding, so the orbit does not spiral into or away from him.
+	var ring: float = float(_def["reach"]) * 1.5
+	var correct := inward * clampf((dist - ring) * 0.8, -1.0, 1.0)
+	_steer((side + correct).normalized(), float(_def["speed"]) * 0.75)
+	_play(&"walk_fwd", true, 0.95)
 
 
 ## The tell. A wind-up the player can read is the difference between a fight and
@@ -362,6 +496,7 @@ func _tick_windup(delta: float) -> void:
 		var e := t * t
 		_model.rotation.x = _model_rest.x - deg_to_rad(WINDUP_LEAN_DEG) * e
 		_flash.glow(Pal.RUST, e * 0.55)
+		_glowing = true
 
 	if _timer <= 0.0:
 		state = State.STRIKE
@@ -371,6 +506,7 @@ func _tick_windup(delta: float) -> void:
 		_hitbox.activate()
 		# The commit itself: the glow snaps off as the body whips forward, so
 		# "it is coming" and "it is here" are two different pictures.
+		_glowing = false
 		_flash.restore()
 		_lunge_pose()
 		# Weight, in one byte of data. A 1.95 m orc committing and a 1.25 m
@@ -408,14 +544,29 @@ func _tick_recover(delta: float) -> void:
 	_timer -= delta
 	if _timer <= 0.0:
 		_cooldown = float(_def["cooldown"])
-		state = State.CHASE
+		# Most of the time, back off and circle rather than walking straight
+		# back into reach. Not always: an orc that never once pressed forward
+		# would be trivially kited, and the roster needs kinds that come at you.
+		# The slow heavy ones re-engage more often, the quick ones dance more --
+		# so speed, which is already the number that separates them, doubles as
+		# their temperament and no per-kind table is needed.
+		var dances := clampf(float(_def["speed"]) / 5.0, 0.25, 0.75)
+		if _rng.randf() < dances:
+			state = State.CIRCLE
+			_timer = _rng.randf_range(0.5, 1.1)
+		else:
+			state = State.CHASE
 
 
 func _tick_hurt(delta: float) -> void:
 	_timer -= delta
 	_knockback = _knockback.move_toward(Vector3.ZERO, 26.0 * delta)
-	velocity.x = _knockback.x
-	velocity.z = _knockback.z
+	# The shove wins while it lasts, but the crowd rule still applies underneath
+	# it -- two monsters knocked into the same spot should not end up inside each
+	# other and stay there once the knockback has bled off.
+	var push := _separation()
+	velocity.x = _knockback.x + push.x
+	velocity.z = _knockback.z + push.z
 	if _timer <= 0.0:
 		_knockback = Vector3.ZERO
 		state = State.CHASE
@@ -433,8 +584,15 @@ func _on_damaged(hit: Hit) -> void:
 	if dir == Vector3.ZERO:
 		dir = Vector3(0, 0, 1).rotated(Vector3.UP, _facing)
 	_knockback = dir * maxf(hit.knockback, 1.0)
+	# Interrupting a wind-up is the reward for reading the tell and going first.
+	# Without the cooldown push a monster struck mid-commit recovers into another
+	# commit immediately, so hitting it first bought nothing and the telegraph
+	# was decoration. The push NEVER shortens an existing cooldown -- `maxf` --
+	# or a flurry of light hits would be a way to make an orc attack faster.
+	var interrupted := state == State.WINDUP
 	state = State.HURT
 	_timer = maxf(hit.stun, 0.22)
+	_cooldown = maxf(_cooldown, _timer + (0.45 if interrupted else 0.2))
 	_play(&"hurt")
 
 	# What a blow is made of, in the order the player receives it: the world
@@ -443,6 +601,9 @@ func _on_damaged(hit: Hit) -> void:
 	# nothing here holds a player or a camera (docs/CONTRACT.md §8).
 	Bus.request_hitstop.emit(K.HITSTOP_LIGHT)
 	Bus.request_shake.emit(0.28, 0.16)
+	# Cleared before the flash, not after: the white supersedes any wind-up glow,
+	# and leaving the flag set would have the guard restore over it next frame.
+	_glowing = false
 	_flash.hit()
 	_flinch(dir)
 	# The noise is NOT requested here. `hit_landed` already says exactly what
