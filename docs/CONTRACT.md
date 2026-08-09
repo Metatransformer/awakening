@@ -870,6 +870,18 @@ has no stick gate and no chain gate — both existed to tell a leap apart from a
 ordinary swing pressed with the same thumb, and on a dedicated button a hidden
 rule is just a button that intermittently does nothing.
 
+**And no near range gate.** There was one — `lunge_min_range`, 1.9 m — whose
+argument was that point blank there is no gap to close, so the leap reads as
+hopping on the spot. 1.9 m is *inside sword range*: it is where you stand when
+you are fighting something, so the button did nothing at the only distance
+anyone presses it from, and that is precisely how it got reported as broken.
+Point blank the leap now comes out with no travel (`request_lunge` clamps the
+gap at zero), the clip's own jump carries the read, and the blow lands. The far
+gate is the **lock's** reach, `K.LOCK_RANGE`, for the same reason the near one
+went: if you can lock it you can leap at it, and anything shorter is a second
+invisible range to learn. `lunge_max_speed` is what stops a long lock becoming a
+teleport. Swept at 1.4 / 2.6 / 4.2 / 6.5 m by `tools/directors/lt_moveset.gd`.
+
 Proved by `tools/directors/p4_combo.gd` (the chain, in damage),
 `tools/directors/p4_charge.gd` (the hold: a tap is a tap, a short hold is a tap,
 a long hold arms and pays) and `tools/directors/p4_lunge.gd` (the leap, in
@@ -958,21 +970,35 @@ that sign backwards is hero-*left*, which plays each sidehop as the other one
 while the travel stays correct, so the frames are the only thing that catches
 it. Whichever axis dominates picks the clip and the speed:
 
-| `Dodge` | Clip | Speed | Duration |
-|---|---|---|---|
-| `FORWARD` | `ex_roll_to_run` | `K.ROLL_SPEED` 6.55 | `roll_time` 0.62 |
-| `BACK` | `ex_backflip` | `K.BACKFLIP_SPEED` 4.37 | `backflip_time` 0.60 |
-| `LEFT` / `RIGHT` | `bow_dodge_left` / `_right` | `K.SIDEHOP_SPEED` 6.19 | `hop_time` 0.44 |
+| `Dodge` | Clip | Speed | Duration | Model turned |
+|---|---|---|---|---|
+| `FORWARD` | `ex_roll_to_run` | `K.ROLL_SPEED` 6.55 | `roll_time` 0.62 | — |
+| `BACK` | `ex_backflip` | `K.BACKFLIP_SPEED` 4.37 | `backflip_time` 0.60 | — |
+| `LEFT` / `RIGHT` | `ex_roll_to_run` | `K.ROLL_SPEED` 6.55 | `roll_time` 0.62 | ±90° |
 
-Four things about that table. The speeds are the `[oot]` measured constants,
-which had sat in `K` unused since they were taken — the sidehop and the backflip
-were always going to be their own moves. The sidehops come from the **longbow**
-set, not the sword-and-shield set: the Pro Sword and Shield pack has 52 clips
-and not one roll, dodge, evade or dive among them, so anything looking there for
-a backwards roll will find nothing and should stop looking. Each direction is
-its **own** `AnimationNodeOneShot` + `AnimationNodeTimeScale` pair
-(`Hero._DODGE_NODES`) — reassigning `animation` on one live
-`AnimationNodeAnimation` restarts the mixer cache and eats the wind-up frames.
+**The sideways dodge is the roll, turned.** It was `bow_dodge_left` / `_right`
+out of the longbow set at `K.SIDEHOP_SPEED` for `hop_time`, and the travel was
+right while the pose was not: the hero stayed bolt upright and *slid*, feet
+shuffling like a man edging along a ledge. So LEFT and RIGHT play the forward
+dive now, and the direction is carried by turning the **model** — `Hero`'s
+`_dodge_model_yaw`, a difference between the roll's heading and `facing_yaw`
+applied to the `Model` node, unwound at `dodge_unwind_deg` (420 °/s ≈ one
+`roll_recover_time`) so he stands back up square. The body itself never turns:
+locked or guarding, `rotation.y` stays on the target for the whole dodge, which
+is what makes it a *strafe* dodge rather than a roll that breaks the lock.
+
+That is also why the sidehop's own numbers stopped being read. i-frames are
+literally `state == MoveState.ROLL`, so a shorter dodge is a narrower window —
+leaving 0.44 s on a move that visibly dives would make the left-hand dodge
+quietly worse than the forward one for no reason the player can see.
+`K.SIDEHOP_SPEED` stays in `K`; it is measured footage (§6), and it is what a
+real sidehop would be worth if a clip for one ever shows up.
+
+Two more things about that table. The remaining speeds are the `[oot]` measured
+constants. And each direction is still its **own** `AnimationNodeOneShot` +
+`AnimationNodeTimeScale` pair (`Hero._DODGE_NODES`) even though three of them now
+name one clip — reassigning `animation` on one live `AnimationNodeAnimation`
+restarts the mixer cache and eats the wind-up frames.
 
 And `BACK` is a **backflip**, which is the one row the longbow set could not
 fill: `bow_dodge_back` is a backward shuffle-walk that never leaves the ground,
@@ -1299,7 +1325,7 @@ will not resolve.
 - **`K.flat()` NORMALISES.** It is a direction helper, not a projection:
   `K.flat(a - b).length()` is `1.0` for every pair of points in the world. The
   lunge's leap speed and its range gate were both computed that way and came out
-  as "every target is exactly 1 m away" — the leap stood still and the range band
+  as "every target is exactly 1 m away" — the leap stood still and the range gate
   admitted everything. Flatten by hand when you want a DISTANCE:
   `var d := a - b; var dist := Vector2(d.x, d.z).length()`.
 - **`/` is reserved** as the library/animation separator. Namespace clips with `_`.

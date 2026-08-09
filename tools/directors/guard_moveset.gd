@@ -38,10 +38,16 @@ extends RefCounted
 ## Which stick, which Dodge it must become, and what it is called on the strip.
 ## A neutral stick with the guard raised is the BACKSTEP, the most used defensive
 ## move in the source material — see `Hero._try_start_roll`.
+##
+## The sideways pair are ROLLS now, not sidehops — same clip as the forward dive
+## with the model turned (`Hero._dodge_model_offset`), so they travel a roll's
+## 4 m rather than a hop's 2.7 and clip this room's props on the way. What is
+## checked here is unchanged and still true: which Dodge fired, and which way it
+## went. The pose and the speed are `tools/directors/lt_moveset.gd`'s beat.
 const DODGES := [
 	{"action": &"", "dodge": 1, "tag": "backstep"},
-	{"action": &"move_left", "dodge": 2, "tag": "sidehop_l"},
-	{"action": &"move_right", "dodge": 3, "tag": "sidehop_r"},
+	{"action": &"move_left", "dodge": 2, "tag": "roll_l"},
+	{"action": &"move_right", "dodge": 3, "tag": "roll_r"},
 	{"action": &"move_up", "dodge": 0, "tag": "roll_fwd"},
 ]
 
@@ -200,9 +206,11 @@ func _stance(rig, hero: Node3D, action: StringName) -> void:
 	# camera trails ~4 m behind him, z = 8 put it at z = 12 inside the south
 	# wall, and its collision push-in parked it inside his hair. Budget for the
 	# camera, not the body. Facing -Z from z = 2.5, the lens sits at z ≈ 6.5 with
-	# 3.5 m of wall clearance even at the end of a backstep, a forward roll ends
-	# 1.8 m short of PostC, and the sidehops stay in the clear central band
-	# (blocks are all west of x = -1.7, the ledge steps end at z = 1).
+	# 3.5 m of wall clearance even at the end of a backstep, and a forward roll
+	# ends 1.8 m short of PostC. The sideways pair DO clip the furniture now that
+	# they are 4 m rolls rather than 2.7 m hops (blocks west of x = -1.7, the
+	# ledge east of x = 3), which is why the checks below are direction and
+	# dominance and never a distance.
 	hero.global_position = Vector3(0.0, 0.15, 2.5)
 	hero.velocity = Vector3.ZERO
 	# Face the posts, and put the lens back behind him, so every beat starts from

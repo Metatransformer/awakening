@@ -151,11 +151,32 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## the body sliding along the floor under an airborne pose. Adding a real jump
 ## on top of a baked one gets you a hero who exits the top of the screen.
 @export var lunge_hop: float = 1.8
-## The band of distances the leap is offered at. Past the far edge it is a long
-## unpunishable approach; inside the near edge there is no gap to close and it
-## reads as the hero hopping on the spot.
-@export var lunge_min_range: float = 1.9
-@export var lunge_max_range: float = 6.0
+## How far away the leap is still offered. **THE LOCK IS THE GATE**, so this is
+## the lock's own reach and not a shorter band of its own.
+##
+## There used to be a band — 1.9 m to 6.0 m — and the near edge was the bug the
+## player reported as "the jump attack doesn't work". Its argument was that
+## inside 1.9 m there is no gap to close, so the leap reads as hopping on the
+## spot. True, and irrelevant: 1.9 m is INSIDE SWORD RANGE. It is where you are
+## standing when you are fighting something, which made the one button OOT gives
+## you for Z+A silently do nothing at the only distance anybody presses it from.
+## Measured, not argued — tools/directors/lt_moveset.gd sweeps the ranges and
+## caught it refusing at 1.4 m and firing at 2.6 m.
+##
+## Point blank the leap now comes out with no travel at all, because
+## `Hero.request_lunge` clamps the gap at zero: the hero hops, the clip's own
+## jump carries the read, and the blow lands. That is OOT's jump attack in a
+## corridor and it is the right answer — the alternative is a dead button.
+##
+## The far edge stays, because past the lock's reach there is no target to leap
+## at and the swing would be thrown at nothing. It is the lock's number rather
+## than a smaller one for the same reason the near edge went: a button that works
+## on everything you can lock is a rule the player can hold in their head, and
+## anything shorter is a second invisible range they have to learn. The leap's
+## own speed cap (`Hero.lunge_max_speed`) is what stops a long lock becoming a
+## teleport; a leap that falls short and whiffs is a mistimed attack, which is a
+## thing the player can see and learn from.
+@export var lunge_max_range: float = K.LOCK_RANGE
 
 @export_group("Dash")
 ## The stab out from behind the shield — OOT's R+B. It is not a better light
@@ -988,11 +1009,11 @@ func _lunge_swing() -> bool:
 
 	# Flattened by hand rather than with K.flat, which NORMALISES: a range gate
 	# reading distance off K.flat sees every target in the world as exactly 1 m
-	# away, which puts them all inside the band and none of them outside it.
+	# away, which puts every one of them inside the gate and none outside it.
 	var delta := target.global_position - _hero.global_position
 	var to := Vector3(delta.x, 0.0, delta.z)
 	var dist := to.length()
-	if dist < lunge_min_range or dist > lunge_max_range:
+	if dist > lunge_max_range:
 		return false
 
 	# The stick cone and the "only from a standing start" chain gate both went
