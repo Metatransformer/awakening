@@ -12,6 +12,16 @@ extends Node3D
 ## attack BUTTON (one reader, docs/CONTRACT.md §4) and calls `fire()` when the
 ## hand holding it is not holding the sword.
 ##
+## ## A bow shot is two halves, and this owns the clock between them
+##
+## Charge then loose: `_bow_draw` seconds of pull, the arrow, then `BOW_LOOSE`
+## seconds of follow-through. Two clips (see `Hero.clip_bow_draw`), fired from
+## two one-shots, and the seam between them is the only moment the shot has —
+## `_tick_bow` spawns the arrow and fires the second clip on the same frame off
+## the same counter. The hero is committed for both halves; what he is NOT is
+## the thing timing them, because a body counting its own frames next to a
+## `HeroRanged` counting its own is how the arrow and the string come apart.
+##
 ## ## Aim comes from the camera, not from the body
 ##
 ## The hero's facing is a yaw. A hookshot that can only be aimed in yaw cannot
@@ -31,14 +41,19 @@ extends Node3D
 ## screen, and the hero turns to face wherever the lens is pointed. This node is
 ## the only emitter — it is the one place that knows what is in his hands.
 
-## The fraction of the draw at which the arrow actually leaves. He is committed
-## for the rest — a bow you can fire while running is a bow with no cost.
+## Seconds of loose and follow-through after the arrow leaves — the second half
+## of a bow shot, and the second of its two clips (`Hero.clip_bow_shot`).
 ##
-## The draw's LENGTH is not a constant any more: it is `Game.bow_draw_time()`,
-## the bow's forge ladder (K.BOW_DRAW). What the bow costs is commitment, so
-## what the smith sells back is commitment. The release fraction stays fixed, so
-## a faster bow releases proportionally earlier and the pose still reads. [tune]
-const BOW_RELEASE := 0.55
+## FIXED, where the draw in front of it is the forge ladder `Game.bow_draw_time()`
+## (K.BOW_DRAW). That split is the whole shape of the upgrade: a better string
+## lets you pull faster, it does not make the arrow leave your hand faster once
+## you have let go. Buying the string therefore buys back a shrinking share of
+## the shot, which is what a ladder that tops out is supposed to feel like.
+##
+## 0.30 s against a 0.70 s clip is a 2.3x compression — the snap reads and the
+## settle does not outstay it. He is committed for all of it: a bow you can walk
+## out of the instant the arrow leaves is a bow with half its cost. [tune]
+const BOW_LOOSE := 0.30
 ## How long the hookshot's firing POSE is scaled to run for. It is not a
 ## commitment window — `hook_begin()` takes the hero over on the same frame, and
 ## the chain's flight is the real commitment. This only decides how fast the
@@ -61,13 +76,14 @@ var _tether: HookshotTether
 ## here so a late listener (a HUD rebuilt on a scene change) can ask.
 var aiming: bool = false
 
-## Counts up through `_bow_time` while a shot is in flight, or -1.0 when idle.
+## Counts up through the shot — `_bow_draw` of pull and then `BOW_LOOSE` of
+## loose — or -1.0 when idle.
 var _bow_t: float = -1.0
 ## The draw length THIS shot was started at. Latched rather than re-read every
 ## frame: buying the string mid-draw would otherwise move the release point of a
 ## shot already in the air, and the hero's own commitment window (set from the
-## same number in `request_ranged`) would no longer agree with it.
-var _bow_time: float = 0.44
+## same number in `request_bow`) would no longer agree with it.
+var _bow_draw: float = 0.44
 var _bow_fired: bool = false
 var _bow_dir: Vector3 = Vector3.FORWARD
 
@@ -143,20 +159,28 @@ func _fire_bow() -> bool:
 		Bus.request_sfx.emit(&"craft_fail", _hero.global_position)
 		return false
 	_bow_dir = _aim_at_target_or_camera()
-	_bow_time = Game.bow_draw_time()
-	if not _hero.request_ranged(_bow_time, _bow_dir):
+	_bow_draw = Game.bow_draw_time()
+	if not _hero.request_bow(_bow_draw, BOW_LOOSE, _bow_dir):
 		return false
 	_bow_t = 0.0
 	_bow_fired = false
+	# On the press, over the charge clip, which is now a real pull rather than a
+	# recoil played slowly — so this cue finally has the motion it was named for
+	# underneath it. `bow_shoot` fires at the seam, with the loose.
 	Bus.request_sfx.emit(&"bow_draw", _hero.global_position)
 	return true
 
 
-## The arrow leaves. Ammo is spent HERE and not on the press, so a shot
-## interrupted before release costs nothing — the arrow that was never loosed is
-## still in the quiver, which is the only reading that is not a lie.
+## The arrow leaves, at the seam between the two clips. Ammo is spent HERE and
+## not on the press, so a shot interrupted before release costs nothing — the
+## arrow that was never loosed is still in the quiver, which is the only reading
+## that is not a lie.
 func _release_arrow() -> void:
 	_bow_fired = true
+	# The body looses whether or not the quiver agrees. He is a third of a second
+	# into a committed pull with the string at his ear; the one thing that cannot
+	# happen here is that he holds that pose and the shot silently evaporates.
+	_hero.bow_loose(BOW_LOOSE)
 	if not Game.spend_ammo(&"arrows"):
 		return
 	# Re-aimed at release rather than reused from the press: the lock can move,
@@ -217,7 +241,7 @@ func _fire_hookshot() -> bool:
 				pull = anchor + Vector3.DOWN * (K.HERO_H + 0.2)
 			bit = true
 
-	if not _hero.request_ranged(HOOK_FIRE_TIME, aim, true):
+	if not _hero.request_hookshot(HOOK_FIRE_TIME, aim):
 		return false
 
 	_hook_active = true
@@ -276,9 +300,12 @@ func _tick_bow(delta: float) -> void:
 	if _bow_t < 0.0:
 		return
 	_bow_t += delta
-	if not _bow_fired and _bow_t >= _bow_time * BOW_RELEASE:
+	# The seam. The charge clip ends on full draw and the loose opens on it, so
+	# this one instant is the string leaving his fingers, the arrow spawning and
+	# the second clip firing — all three off this clock, so they cannot drift.
+	if not _bow_fired and _bow_t >= _bow_draw:
 		_release_arrow()
-	if _bow_t >= _bow_time:
+	if _bow_t >= _bow_draw + BOW_LOOSE:
 		_bow_t = -1.0
 
 

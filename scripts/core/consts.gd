@@ -294,10 +294,14 @@ const PLATE_SOAK: Array[int] = [0, 1, 2, 3]
 ## stops. Widening the arc buys back the flank, and it stays strictly frontal at
 ## every level, because being punished for turning away is the point. [tune]
 const GUARD_ARC: Array[float] = [70.0, 85.0, 100.0, 115.0]
-## Seconds a shot owns the hero. NOT arrow damage: arrow.gd is explicit that the
-## bow's advantage is reach and a bow that out-damages the blade is the only
-## weapon anyone brings. What the bow costs is commitment, so what you buy back
-## is commitment. [tune]
+## Seconds of DRAW — the pull, up to the frame the arrow leaves. Not the whole
+## shot: `HeroRanged.BOW_LOOSE` is the follow-through on the end of it, and the
+## hero is committed for both. This is the half the smith sells, because pulling
+## faster is the thing a better string does.
+##
+## NOT arrow damage: arrow.gd is explicit that the bow's advantage is reach and a
+## bow that out-damages the blade is the only weapon anyone brings. What the bow
+## costs is commitment, so what you buy back is commitment. [tune]
 const BOW_DRAW: Array[float] = [0.44, 0.38, 0.32, 0.26]
 ## Hookshot reach in metres. The rungs walk [oot]'s own two lengths: rung 0 is
 ## the Hookshot and rung 3 is exactly the Longshot, with two even steps between.

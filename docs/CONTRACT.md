@@ -87,9 +87,12 @@ Proven working. Do not rebuild this.
   - `bow_*` — longbow (39): `equip`/`disarm`, `draw_arrow`, `aim_overdraw`,
     `aim_recoil`, `aim_walk_*`, `aim_turn_*`, `shoot_*`, `reload_*`, `dodge_*`,
     `death_*`. **These are the archer's real clips — the old stand-in
-    `ss_casting_01` is gone.** The three the rig actually reads are
+    `ss_casting_01` is gone.** The four the rig actually reads are
     `aim_overdraw` (holding at full draw), `aim_walk_forward` (strafing at
-    draw, and it LOOPS), and `aim_recoil` (the loose). The rest are stock.
+    draw, and it LOOPS), `draw_arrow` (the charge — reach, nock, pull) and
+    `aim_recoil` (the loose). The last two are one shot, in that order, and
+    they abut: `draw_arrow` ends on the pose `aim_recoil` opens on. The rest
+    are stock.
 - **Binding** (the FBX ships a stub library you must evict first):
   ```gdscript
   var ap: AnimationPlayer = hero.find_child("AnimationPlayer", true, false)
@@ -890,6 +893,23 @@ hero.ranged.busy() -> bool                        # a shot is mid-flight
 hero.ranged.aiming -> bool                        # a sighted item is out
 hero.ranged.aim_item() -> StringName              # &"bow" &"hookshot" or &""
 ```
+
+**A bow shot is two clips and one clock.** `K.BOW_DRAW[level]` seconds of charge
+(`bow_draw_arrow`), then `HeroRanged.BOW_LOOSE` seconds of loose
+(`bow_aim_recoil`), and the arrow leaves at the seam. `HeroRanged` owns the
+clock; the hero owns the body and is committed for both halves:
+
+```gdscript
+hero.request_bow(draw_time, loose_time, aim) -> bool  # commits, fires the CHARGE
+hero.bow_loose(loose_time)                            # the seam — not a request
+hero.request_hookshot(duration, aim) -> bool          # one phase, not two
+```
+
+Only `HeroRanged` calls these, and it fires `bow_loose` off the same frame it
+spawns the arrow — the string leaving his fingers and the arrow leaving the bow
+are one event, and two things counting to it separately is how they come apart.
+Proof is `tools/directors/bow_charge_release.gd`, which photographs the shot
+across both clips: a boolean saying two nodes played is not a drawn bow.
 
 **Aim mode has exactly one author.** Bringing out the bow or the hookshot drops
 the camera to the shoulder, draws a crosshair, and changes how the body moves.

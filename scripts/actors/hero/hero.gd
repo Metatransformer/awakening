@@ -251,11 +251,27 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, SPIN, LUNGE, DASH }
 ## every `slash` is an arc, and an arc played on a lunge reads as a man swinging
 ## at the air beside the thing he just closed on.
 @export var clip_dash: StringName = &"ss_attack_03"
-## The loose. `bow_aim_recoil` opens at full draw and snaps the string arm back,
-## so the shot itself is the whole clip — which is why the aim POSE below is a
-## held blend rather than part of this: the hero is already drawn when he fires,
-## and a one-shot that had to draw first would put the arrow half a second behind
-## the button.
+## A bow shot is TWO clips, not one, and they fire from two separate one-shots.
+##
+## It was one for a while — `bow_aim_recoil` alone, time-scaled across the whole
+## draw window — on the reasoning that the aim stance already holds him at full
+## draw, so there was nothing left to pull. Rendered, that is not what it looks
+## like. `bow_aim_recoil` is 0.70 s of loose-and-follow-through: the string hand
+## snapping open past his ear and the arms settling. Stretched over a 0.44 s
+## commitment it is the RECOVERY played in slow motion, and the shot has no
+## wind-up at all — the arrow leaves 0.24 s into a clip that has not yet done
+## anything a bow does. Every other committed move in this file (see
+## `_SWING_FADE_IN`) is priced on its wind-up being legible; the bow was the one
+## that had none.
+##
+## So: `bow_draw_arrow` (1.03 s — reach over the shoulder, nock, pull to full
+## draw) is the charge, `bow_aim_recoil` is the loose, and the arrow leaves at
+## the SEAM between them. The two clips abut cleanly because the first ends on
+## exactly the pose the second opens on, which is why this pair and not, say,
+## `bow_shoot_*`.
+@export var clip_bow_draw: StringName = &"bow_draw_arrow"
+## The loose. Opens at full draw — where `clip_bow_draw` left him — and snaps the
+## string arm back.
 @export var clip_bow_shot: StringName = &"bow_aim_recoil"
 ## Firing the hookshot. A brace-and-punch with the barrel out front, from
 ## Shooting.fbx; the bow clips would have him loosing an arrow off a grapple.
@@ -451,6 +467,8 @@ const _SWING_NODES: Array[StringName] = [
 const _SWING_FADE_IN: Array[float] = [0.06, 0.04, 0.05, 0.04, 0.08, 0.04]
 const _SWING_FADE_OUT: Array[float] = [0.16, 0.12, 0.18, 0.22, 0.20, 0.18]
 
+const _P_BOW_DRAW := "parameters/BowDraw/request"
+const _P_BOW_DRAW_SCALE := "parameters/BowDrawScale/scale"
 const _P_RANGED := "parameters/Ranged/request"
 const _P_RANGED_SCALE := "parameters/RangedScale/scale"
 const _P_HOOK_SHOT := "parameters/HookShot/request"
@@ -717,15 +735,23 @@ func _build_anim_tree() -> void:
 		prev = _add_scaled_shot(tree_root, _SWING_NODES[i], prev, _swing_clip(i),
 			Vector2(1440 + 80 * i, 0), _SWING_FADE_IN[i], _SWING_FADE_OUT[i])
 
-	# The two shots get one one-shot EACH rather than sharing a node whose clip is
-	# swapped. Assigning `animation` on a live AnimationNodeAnimation the same
-	# frame it is asked to play restarts the mixer's cache mid-blend and drops the
-	# opening frames — which for the bow is the loose itself, the one frame the
+	# The three shot clips get one one-shot EACH rather than sharing a node whose
+	# clip is swapped. Assigning `animation` on a live AnimationNodeAnimation the
+	# same frame it is asked to play restarts the mixer's cache mid-blend and drops
+	# the opening frames — which for the bow is the loose itself, the one frame the
 	# whole shot is about. They sit above the swings because a bow is never held at
 	# the same time as the sword: whichever fired last is the one that should read.
 	#
+	# The bow's charge goes on FIRST, so the loose above it wins the frame it
+	# fires on. Two stacked one-shots and not one node fired twice: the loose has
+	# to interrupt a charge that is still fading, and a node cannot cross-fade
+	# with itself. The draw's own fade-out is short and almost never seen — the
+	# loose is already at full blend over the top of it by the time it runs.
+	prev = _add_scaled_shot(tree_root, &"BowDraw", prev, clip_bow_draw,
+		Vector2(1760, 0), 0.08, 0.10)
+
 	# The bow's fade-in is very short on purpose. `bow_aim_recoil` starts from the
-	# same full draw the `Aim` stance is already holding, so there is nothing to
+	# same full draw `clip_bow_draw` just pulled him into, so there is nothing to
 	# ease between — a longer fade just delays the string leaving his fingers.
 	var ranged_scale := AnimationNodeTimeScale.new()
 	tree_root.add_node(&"RangedAnim", _anim_node(clip_bow_shot), Vector2(1840, 260))
@@ -783,6 +809,7 @@ func _build_anim_tree() -> void:
 	_tree.set(_P_AIM, 0.0)
 	_tree.set(_P_AIM_HOOK, 0.0)
 	_tree.set(_P_AIM_BLEND, 0.0)
+	_tree.set(_P_BOW_DRAW_SCALE, 1.0)
 	_tree.set(_P_RANGED_SCALE, 1.0)
 	_tree.set(_P_HOOK_SCALE, 1.0)
 
@@ -1509,8 +1536,47 @@ func wish_dir() -> Vector3:
 		Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down"))
 
 
-## Commit to a shot lasting `duration` seconds, turning to face `aim`. Returns
-## false if the hero is busy, exactly as `request_attack` does.
+## Commit to a bow shot: `draw_time` seconds pulling, then `loose_time` seconds
+## loosing, turning to face `aim`. Returns false if the hero is busy.
+##
+## Only the CHARGE is fired here. `HeroRanged` owns the clock that decides when
+## the arrow leaves and calls `bow_loose` at the seam — the same clock the arrow
+## itself is spawned off, so the string leaving his fingers and the arrow leaving
+## the bow cannot drift apart. Firing both here on a timer of the hero's own is
+## exactly the drift the one-clip version had.
+func request_bow(draw_time: float, loose_time: float, aim: Vector3) -> bool:
+	if not _commit_ranged(draw_time + loose_time, aim):
+		return false
+	if _tree != null:
+		_tree.set(_P_BOW_DRAW_SCALE, _clip_scale(clip_bow_draw, draw_time))
+	_fire(_P_BOW_DRAW)
+	return true
+
+
+## The loose, `loose_time` seconds of it. Called by `HeroRanged` when the draw
+## it committed to in `request_bow` runs out. Deliberately NOT a request: the
+## hero already agreed to this half of the shot and cannot decline it now.
+func bow_loose(loose_time: float) -> void:
+	if _tree != null:
+		_tree.set(_P_RANGED_SCALE, _clip_scale(clip_bow_shot, loose_time))
+	_fire(_P_RANGED)
+
+
+## Commit to a hookshot shot lasting `duration` seconds, turning to face `aim`.
+## One phase, not two: the chain's flight is the commitment (see
+## `HeroRanged.HOOK_FIRE_TIME`) and this clip is only the punch that starts it.
+func request_hookshot(duration: float, aim: Vector3) -> bool:
+	if not _commit_ranged(duration, aim):
+		return false
+	if _tree != null:
+		_tree.set(_P_HOOK_SCALE, _clip_scale(clip_hook_shot, duration))
+	_fire(_P_HOOK_SHOT)
+	return true
+
+
+## The half of a shot that is the same for every ranged item: take the hero for
+## `duration` seconds and point him down the aim. False if he is busy, exactly as
+## `request_attack` is.
 ##
 ## It reuses `MoveState.ATTACK` rather than adding a state of its own: what the
 ## hero's BODY does here is identical — no steering, bleed off whatever speed he
@@ -1519,11 +1585,7 @@ func wish_dir() -> Vector3:
 ##
 ## `aim` is a full 3D direction because it comes from the camera, which has a
 ## pitch; only its yaw reaches the body, because the hero does not lean.
-##
-## `hook` picks which of the two shot clips plays. The bow and the hookshot have
-## separate one-shots — see `_build_anim_tree` — so this is a choice of node, not
-## a clip swap.
-func request_ranged(duration: float, aim: Vector3, hook: bool = false) -> bool:
+func _commit_ranged(duration: float, aim: Vector3) -> bool:
 	if state != MoveState.GROUND or not is_on_floor():
 		return false
 	state = MoveState.ATTACK
@@ -1535,16 +1597,17 @@ func request_ranged(duration: float, aim: Vector3, hook: bool = false) -> bool:
 	var flat_aim := K.flat(aim)
 	if flat_aim != Vector3.ZERO:
 		facing_yaw = atan2(flat_aim.x, flat_aim.z)
+	return true
 
-	var clip: StringName = clip_hook_shot if hook else clip_bow_shot
+
+## The TimeScale that fits `clip` onto `duration` seconds — the invariant every
+## committed move in this file holds, that the clip's length IS the move's
+## length. A missing clip scales to 1.0 rather than dividing by a guess.
+func _clip_scale(clip: StringName, duration: float) -> float:
 	var clip_len := 1.0
 	if anim_library.has_animation(clip):
 		clip_len = anim_library.get_animation(clip).length
-	if _tree != null:
-		_tree.set(_P_HOOK_SCALE if hook else _P_RANGED_SCALE,
-			clip_len / maxf(duration, 0.05))
-	_fire(_P_HOOK_SHOT if hook else _P_RANGED)
-	return true
+	return clip_len / maxf(duration, 0.05)
 
 
 ## True while a bow or a hookshot is out. Owned by `HeroRanged`, which is the
