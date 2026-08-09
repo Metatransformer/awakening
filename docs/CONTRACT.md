@@ -214,7 +214,7 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `attack` | **LMB** | **X / Square** (pad2) | light attack (**hold** = charge, **+guard** = dash) |
 | `use_item` | **F** | **RT / R2** (axis5+) | use the item the D-pad drew — **held**: down aims, up fires |
 | `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held**, and it targets, and it recentres |
-| `context` | **Shift** | **A / Cross** (pad0) | dodge, or the **jump attack** on a still stick — **hold** = run |
+| `context` | **Shift** | **A / Cross** (pad0) | **tap** = dodge, or the **jump attack** on a still stick — **hold** = run, and then it is not a dodge |
 | `jump` | **Space** | **Y / Triangle** (pad3) | jump |
 | `z_target` | **Q**, MMB | — (LT does it) | lock-on toggle / camera recentre |
 | `interact` | E | **A / Cross** (pad0) | talk/open — **wins over the dodge**, else stow item |
@@ -289,9 +289,15 @@ attack when there is nothing to use is two verbs sharing a name.
 **`interact` and `context` are the same button — A/Cross — and the thing in
 reach wins.** They are never both wanted at once: you can only address the smith
 while you are standing at the smith. `Prompt.claims_press` / `claims_hold` is the
-whole rule, and `Hero._try_start_roll` and `Hero._tick_sprint` are its only two
-callers — both refuse when `interact` is down on the same frame *and* something is
-focused. Step away and the same button dodges again.
+whole rule, and `Hero._try_start_roll` and `Hero._tick_context` are its only two
+callers — both refuse when `interact` is down *and* something is focused. Step
+away and the same button dodges again.
+
+`claims_hold` does the heavier lifting of the two now that a tap pays out on the
+release: it is true for the *whole* time the button is down at a focused prompt,
+so `_tick_context` disarms the press on the frame it is made and there is no
+dodge owed when the button finally comes up. `claims_press` only ever sees the
+frame `interact` goes down, which is a frame the dodge may no longer resolve on.
 
 Two properties of that arbitration are load-bearing:
 
@@ -345,14 +351,36 @@ press stands down only for a move that is actually going to happen.
 
 `use_item` (RT) does **not** throw the leap. Empty-handed it is silent.
 
-**The dodge button is a tap AND a hold.** Tap `context` and the hero rolls,
-exactly as before. Hold it past `Hero.sprint_hold_time` (0.18 s) and he **runs**
-— `K.SPRINT_SPEED`, 6.07 m/s against the 4.37 run cap — until the button or the
-stamina bar gives out. That is Elden Ring's arrangement and BOTW's B, and the
-consequence is theirs too: a held button rolls and *then* runs, because the roll
-still fires on the **press**. Waiting to see whether a press was a tap would put
-0.18 s of latency on the most reaction-critical button in the game, which is the
-same argument the charge makes above for the sword coming out on the press.
+**The dodge button is a tap OR a hold, and the two are exclusive.** `context` is
+*measured*: released inside `Hero.sprint_hold_time` (0.18 s) the press was a
+**dodge**, and it pays out on the release. Still down when the window expires, it
+was a **run** — `K.SPRINT_SPEED`, 6.07 m/s against the 4.37 run cap, until the
+button or the stamina bar gives out — and it will not roll when it finally comes
+up. That is Elden Ring's arrangement and BOTW's B.
+
+`Hero._tick_context` is the only thing that reads the raw button. It publishes
+`Hero.context_tapped`, true for exactly one frame, and both halves of the press
+read *that* — `_try_start_roll` here and `HeroCombat._tick_context_button` for
+the leap — for the same reason they both call `stick_neutral()`: two places
+measuring one hold is how a press comes out as a leap and a roll on the same
+frame, or as neither.
+
+An intermediate pass fired the dodge on the press and started the run underneath
+it, to keep the latency off the most reaction-critical button in the game (the
+same argument the charge makes above for the sword coming out on the press).
+The latency argument is right and the arrangement it bought was still wrong:
+**every run in the game began with an involuntary roll**, which spends a third of
+the bar the run is about to need and throws the hero 3.2 m in whatever direction
+he was pointing. You could not start running without dodging first.
+
+The latency argument survives where it applies. `Hero._context_resolves_now`
+pays the press out **instantly** in every stance the run is withheld from —
+locked, guarding, aiming, airborne (below) — so the dodge you make with a sword
+coming at you costs nothing, and the leap under a raised guard is unchanged.
+Only the free-roam dodge, the one you make out of a run against nothing in
+particular, waits to be classified. The window is one number and not two on
+purpose: the frame the sprint begins is the frame the dodge stops being
+possible, so there is no band in which a press means neither.
 
 The run is deliberately **slower than a roll** (6.55). The roll is the fastest
 the hero ever travels and it costs a third of the bar for half a second; a
@@ -363,7 +391,10 @@ sprint meter, so a player who runs everywhere arrives with nothing to dodge on.
 It is withheld in three stances, each for its own reason: **locked** (the stick
 is a circle-strafe there, and "run" has no direction to mean), **guarding** and
 **aiming** (a run would have to drop a stance the player is holding a button
-for). Holding the button still rolls in all three; only the run is refused.
+for). Those are exactly the three `_context_resolves_now` names, and they have to
+be the same list: a stance with no run in it is a stance where the press is a
+dodge the instant it is made, held or not. **Holding the button in all three is
+just a dodge**, on the press frame, as it always was.
 
 **Jump is real, and it is not OOT's contextual ledge-hop.** `K.JUMP_SPEED`
 against `K.GRAVITY` gives 0.96 m of apex and 0.59 s in the air, with full air

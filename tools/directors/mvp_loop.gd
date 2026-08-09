@@ -325,12 +325,25 @@ func _break_off(rig, hero: Hero) -> void:
 			+ " letting go, and nothing in the dungeon can be walked away from")
 
 
+## Distance to the closest monster still standing. UNRELATED to the A button; it
+## is here because it fails the break-off beat intermittently on main.
+##
+## The loop variable is deliberately UNTYPED. `for f: Node3D in foes` assigns
+## each element to a typed local BEFORE the body runs, and assigning a freed
+## instance is a hard SCRIPT ERROR that aborts the function — which then returns
+## 0.0, reads as "a monster is standing on top of you", and fails the disengage
+## for a skeleton the hero killed forty seconds earlier. `is_instance_valid`
+## cannot save a body the loop never reaches. It only bit when the kill above
+## happened to be collected before this ran, which is why it looked flaky.
 func _nearest_foe(foes: Array, at: Vector3) -> float:
 	var best := 1e9
-	for f: Node3D in foes:
+	for f in foes:
 		if not is_instance_valid(f):
 			continue
-		best = minf(best, K.plane(f.global_position - at).length())
+		var n := f as Node3D
+		if n == null:
+			continue
+		best = minf(best, K.plane(n.global_position - at).length())
 	return best
 
 

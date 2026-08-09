@@ -618,6 +618,11 @@ const LEGEND := [
 	# discover the run — there is no prompt, no stance and no tell for a button
 	# you are not holding down. Same argument as the GUARD/LOCK line above.
 	#
+	# TAP= is on the row for a related reason and it is not decoration: the two
+	# halves are now EXCLUSIVE (Hero.sprint_hold_time), so a player who holds the
+	# button expecting the roll that used to come out underneath the run gets
+	# nothing, and "HOLD=RUN" alone reads as an addition rather than a choice.
+	#
 	# On a pad this row swallows the INTERACT row below it: both are A, and two
 	# entries reading "A DODGE   A INTERACT" is a legend asking the player to
 	# work out which one they get. See `_legend`.
@@ -627,7 +632,7 @@ const LEGEND := [
 	# reason the INTERACT row is swallowed below — they are one button, and a
 	# legend that lists a button twice is asking the player to work out which
 	# one they get.
-	[&"context", "DODGE / LEAP (HOLD=RUN)"],
+	[&"context", "TAP=DODGE/LEAP HOLD=RUN"],
 	[&"jump", "JUMP"],
 	[&"interact", "INTERACT"],
 	[&"inventory", "POUCH"],
@@ -671,7 +676,7 @@ func _legend() -> String:
 		# whether anything is in reach, and the prompt line already says when
 		# something is.
 		elif action == &"context" and _hotkey(&"interact") == cap:
-			verb = "DODGE/TALK (HOLD=RUN)"
+			verb = "TAP=DODGE/TALK HOLD=RUN"
 		elif action == &"interact" and _hotkey(&"context") == cap:
 			continue  # already said, on the merged row above
 		parts.append("%s %s" % [cap, verb])
