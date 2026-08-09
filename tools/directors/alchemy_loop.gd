@@ -206,13 +206,32 @@ func _brew(rig) -> void:
 	await rig.wait_frames(8)
 	_ck("D0c a tap brews nothing", Game.bottle(0) == &"")
 
+	# Sampled every frame and released on the FIRST reading, not read once after a
+	# fixed wait. The gauge advances by `delta`, so ten frames is ten frames of
+	# unknown duration (see `shoot.hold_seconds`) -- this beat read 0.00 on a run
+	# where the frames were slow enough that the whole 0.5 s had already elapsed
+	# and the brew had committed, resetting the bar it was looking at.
 	Input.action_press(&"ui_accept")
-	await rig.wait_frames(10)
-	var mid: float = screen._hold
-	await rig.capture(out.path_join("a_01b_hold.png"))
-	_ck("D0d the gauge fills while she works (%.2f)" % mid, mid > 0.0 and mid < 1.0)
-	await rig.wait_frames(30)
+	var peak := 0.0
+	for _i in 30:
+		await rig.wait_frames(1)
+		peak = maxf(peak, screen._hold)
+		if peak > 0.0:
+			break
 	Input.action_release(&"ui_accept")
+	await rig.wait_frames(6)
+	_ck("D0d the gauge fills while she works (%.2f)" % peak, peak > 0.0)
+	_ck("D0e letting go there brewed nothing", Game.bottle(0) == &"")
+
+	# Now held through, with the shutter open one frame in: the frame is the
+	# proof, and a beat that only asserts numbers cannot see a bar that renders
+	# behind the panel or off the row.
+	Input.action_press(&"ui_accept")
+	await rig.wait_frames(1)
+	await rig.capture(out.path_join("a_01b_hold.png"))
+	# Game seconds from here, not frames: see the twin of this beat in
+	# forge_loop, which is where the frame-counted version was caught lying.
+	await rig.hold_seconds(["ui_accept"], 0.9)
 	await rig.wait_frames(10)
 	print("ALCHEMY brewed bottles=%s gold=%d -> %d root=%d -> %d" % [
 		Game.bottle_contents, gold_before, Game.gold,
