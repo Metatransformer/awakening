@@ -216,8 +216,22 @@ func _mount_loadout() -> void:
 	# the gear visibly is most of what makes a character read as an adventurer
 	# rather than a man who happens to be holding a sword, and it means the item
 	# buttons have something to animate between instead of a pop-in.
+	# The hookshot's three numbers were all wrong, and each one was wrong in a way
+	# only tools/directors/hookshot_grip.gd could show:
+	#
+	#   z=90  is the roll. At 0 the pistol lay flat on its side in his palm — the
+	#         same class of error as the shield's, and the same fix the sword's
+	#         z=-90 makes. It rolls the OTHER way to the sword because the mesh
+	#         hangs off one side of its own origin: -90 swings the whole body up
+	#         above his fist, +90 drops it through the fingers where a grip goes.
+	#   x=-66 is the pitch. At -96 the barrel sat 27 degrees off his facing, so
+	#         the thing visibly pointed across his body while the chain flew
+	#         straight ahead. -66 brings that to under 3.
+	#   pos   seats it. Rolling about the barrel moved the body clean out of his
+	#         hand, and +0.07 on x with +0.03 on y is what puts it back through
+	#         the fist rather than floating beside it.
 	_mount_item(&"hookshot", hookshot_id,
-		&"mixamorig_RightHand", Vector3(0.0, 0.05, 0.02), Vector3(-96.0, 6.0, 0.0),
+		&"mixamorig_RightHand", Vector3(0.07, 0.08, 0.02), Vector3(-66.0, 6.0, 90.0),
 		&"mixamorig_Hips", Vector3(-0.16, 0.02, 0.10), Vector3(0.0, 0.0, -90.0))
 	_mount_item(&"bow", bow_id,
 		&"mixamorig_LeftHand", Vector3(0.0, 0.04, 0.0), Vector3(-96.0, 0.0, 90.0),

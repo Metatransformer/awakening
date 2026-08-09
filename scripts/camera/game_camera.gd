@@ -328,7 +328,14 @@ func _apply_look(delta: float) -> void:
 	var invert := -1.0 if Settings.invert_camera_y else 1.0
 	look *= maxf(Settings.camera_sensitivity, 0.05)
 	_yaw -= look.x
-	_pitch = clampf(_pitch + look.y * invert, K.CAM_MIN_PITCH, K.CAM_MAX_PITCH)
+	# `look` is RADIANS and `_pitch` is DEGREES — the two ends of this function do
+	# not share a unit, and for a long time this line pretended they did. Yaw was
+	# right (it is radians throughout) and the pitch was 57x too slow: a full stick
+	# held for a second and a half moved the aim about six degrees, which reads
+	# exactly like a camera that cannot be pitched at all. That is why the hookshot
+	# could not be aimed at a ceiling ring.
+	_pitch = clampf(_pitch + rad_to_deg(look.y) * invert,
+			K.CAM_MIN_PITCH, K.CAM_MAX_PITCH)
 	_manual_timer = manual_hold_time
 	# Steering by hand cancels a recentre in progress — the camera must never
 	# fight the player's own input.
