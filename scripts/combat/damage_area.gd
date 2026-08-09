@@ -64,21 +64,55 @@ func _try_hit(body: Node3D) -> void:
 	if _already_hit.has(id):
 		return
 
-	var hp := _health_of(body)
-	# `dead`, not `is_dead`. HealthComponent has never had an `is_dead` and this
-	# read threw on EVERY overlap -- "Invalid access to property or key
-	# 'is_dead'" -- which aborted _try_hit before apply_hit and silently dropped
-	# every blow in the game, both ways. It is invisible from the log because
-	# combat still LOOKS like it is happening: the swing plays, the hitbox opens,
-	# the error scrolls past in a run nobody reads, and only the health number
-	# stays put. tools/directors/monster_feel.gd checks the number now.
-	if hp == null or hp.dead:
-		return
+	# Marked before the outcome is known, not after: "once per activation" is a
+	# property of the SWING, and a blow the shield ate is still a blow this swing
+	# has spent. Marking on success instead would leave the window retrying every
+	# frame and land the moment the victim's i-frames lapsed, which is a swing
+	# that hits you for standing still.
 	_already_hit.append(id)
 
 	var hit := Hit.make(amount, global_position, kind, knockback, stun)
-	hp.apply_hit(hit)
-	connected.emit(body, hit)
+	# Only a blow that actually landed is announced. Blocked and i-framed blows
+	# must not spark and clang as though they connected.
+	if _deliver(body, hit):
+		connected.emit(body, hit)
+
+
+## Hand `hit` to whatever `body` uses to take damage, and say whether it landed.
+##
+## There are TWO victim entry points and that is deliberate, not drift. An enemy
+## keeps its health in a `HealthComponent` child. The hero cannot: his health
+## lives in `Game` so it survives the scene change that extracting causes, and a
+## component on his body would die with the dungeon along with the whole reason
+## to extract (`Hero.take_hit`). So the single damage path is THIS function --
+## one deliverer, asked in one order -- and not a single victim class.
+##
+## Both halves of that were broken until now, in ways that looked like design:
+##
+##   * `hp.is_dead` -- HealthComponent has `dead`, and has never had an
+##     `is_dead`. The read raised "Invalid access to property or key" and aborted
+##     this function one line before the damage, for every blow in the game, in
+##     both directions, for as long as the file has existed.
+##   * Only HealthComponent was ever consulted, so the hero -- who has none --
+##     could not be hurt by anything that swings a DamageArea. `Crawler` was the
+##     only enemy that could touch him, because it reaches around this file and
+##     calls `take_hit` itself. The nine GLB monsters all swing DamageAreas, and
+##     every one of them has been harmless since the roster landed.
+##
+## Neither shows up in a log. The swing plays, the hitbox opens and closes on
+## schedule, and the only thing that never moves is the health number -- which is
+## why `tools/directors/monster_feel.gd` watches the number and not the
+## animation, on both sides of the fight.
+static func _deliver(body: Node, hit: Hit) -> bool:
+	# The hero first: he is the one who defines his own rules -- i-frames, the
+	# shield's arc, the roll's immunity -- and `take_hit` returns false when one
+	# of them ate the blow, which is exactly what the caller needs to know.
+	if body.has_method(&"take_hit"):
+		return bool(body.call(&"take_hit", hit))
+	var hp := _health_of(body)
+	if hp == null or hp.dead:
+		return false
+	return hp.apply_hit(hit)
 
 
 static func _health_of(body: Node) -> HealthComponent:

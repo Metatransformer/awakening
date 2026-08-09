@@ -400,8 +400,23 @@ Shared read-only for everyone: `scripts/core/consts.gd`, `refs/**`, `assets/**`.
 
 ### Damage — one path, no second one
 
-Anything that can be hurt has a `HealthComponent`
-(`scripts/combat/health_component.gd`, owned by P4):
+One **deliverer**, `DamageArea._deliver`. Two **victim entry points**, and that
+is deliberate:
+
+| Victim | Entry point | Why |
+|---|---|---|
+| Enemies, props | a `HealthComponent` child | health dies with the body |
+| The hero | `Hero.take_hit(hit) -> bool` | his health lives in `Game` so it survives the scene change extracting causes |
+
+`DamageArea` asks for `take_hit` first and falls back to the component. **Do not
+reach around it** — `Crawler` did, calling `hero.take_hit` itself, and that is
+the only reason it was the one enemy in the game that could hurt you: the nine
+GLB monsters all swing `DamageArea`s, which knew about `HealthComponent` alone
+and had therefore been harmless since the roster landed. A blow that lands
+returns true; a blow the shield or an i-frame ate returns false, and only the
+first is announced on `connected`.
+
+`HealthComponent` (`scripts/combat/health_component.gd`, owned by P4):
 
 ```gdscript
 class_name Hit extends RefCounted
@@ -417,8 +432,23 @@ signal damaged(hit: Hit)
 signal died
 ```
 
-Anything that deals damage puts an `Area3D` in group `hitbox` and calls
-`apply_hit`. **Do not invent a second damage path.**
+Anything that deals damage puts a `DamageArea` in group `hitbox` and opens its
+window. **Do not invent a second damage path.**
+
+### Feel — ask for it, never own it
+
+```gdscript
+Bus.request_hitstop.emit(K.HITSTOP_LIGHT)   # frames at 60 Hz
+Bus.request_shake.emit(0.45, 0.18)          # trauma 0..1, seconds to bleed off
+Bus.request_sfx.emit(&"hit_flesh", position)
+```
+
+`Feel` (`scripts/autoload/feel.gd`) implements the first two, `Sfx` the third.
+Nothing else may stop time or move the camera — a second owner is how you get
+two hit-stops stacking into a freeze. `Feel`'s hit-stop is **global** on purpose:
+one hero, one room, so the honest impact frame is the cheap one. Shake obeys
+`Settings.camera_shake`; hit-stop and sound do not, because shake is the one
+that makes people ill.
 
 ### Targeting — read-only for everyone but P3
 

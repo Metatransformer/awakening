@@ -40,6 +40,13 @@ Music="*res://scripts/autoload/music.gd"
 ; emitter and no listener -- and owns the signal->sound table. After Bus, which
 ; it connects to on _ready.
 Sfx="*res://scripts/autoload/sfx.gd"
+; Feel implements Bus.request_hitstop and Bus.request_shake -- both declared in
+; event_bus.gd, both emitted from four scripts, and neither with a listener
+; anywhere in the project until now. After Settings (it reads camera_shake) and
+; after Game (it seeds itself from Game.quarters so the first blow of a session
+; is not read as a heal). Its vignette is a CanvasLayer at 60: above the HUD,
+; below the pause menu.
+Feel="*res://scripts/autoload/feel.gd"
 ; The HUD is an autoload so the overlay exists whatever scene the launcher
 ; picks. It hides itself unless a node in group `player` is in the tree, so
 ; lookdev and tool scenes stay clean.
