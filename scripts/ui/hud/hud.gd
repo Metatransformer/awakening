@@ -64,8 +64,22 @@ const HEAT_BREAK_FLASH := 0.35
 const HEAT_BANK_POP := 0.45
 
 # --- Hands and item buttons (§5.2) -------------------------------------------
-const KIT_CELL := 32.0
-const KIT_GAP := 6.0
+## Cell geometry lives in Pal now (Pal.CELL / CELL_GAP / CLUSTER_*), because the
+## hands and the D-pad share one cluster and one right edge — see the note there.
+##
+## Which action fires the thing in a cell. Keyed by ITEM, not by which hand or
+## which corner, because that is the honest question: two-handing the sword moves
+## the sword to the other hand and the button that swings it does not change.
+## Rendered through _hotkey(), which reads the LIVE InputMap rather than printing
+## a remembered "LMB" — CONTRACT §"The two ways this table has lied" #2:
+## user://settings.cfg is replayed over the InputMap at boot and wins, so the
+## shipped binding and the player's binding are different questions.
+const KIT_ACTION := {
+	&"sword": &"attack",
+	&"shield": &"shield",
+	&"bow": &"use_item",
+	&"hookshot": &"use_item",
+}
 ## The hands, left to right as they are on the body. What is IN them comes from
 ## Game.armament(); this is no longer a fixed list of everything that exists.
 ##
@@ -651,12 +665,90 @@ func _heat_color() -> Color:
 ## The glyph is a render of the ACTUAL model, baked and posterised into the Pal
 ## ramp. Lettering ("SW", "SH") only ever appears if a bake is missing.
 
+## Where the two groups sit. Laid out from the cluster's RIGHT edge and not from
+## a left-edge fraction, so that doubling the cell size moves the left edge left
+## instead of pushing the cross off the screen. The cross is the anchor because
+## it is the one whose SHAPE carries meaning: it has to stay a cross, in the
+## corner, whatever the hands beside it are doing.
+func _cross_origin(s: Vector2) -> Vector2:
+	var cell := Pal.px(Pal.CELL, s.y)
+	var gap := Pal.px(Pal.CELL_GAP, s.y)
+	return Vector2(
+		Pal.CLUSTER_RIGHT * s.x - (cell * 3.0 + gap * 2.0),
+		Pal.CLUSTER_TOP * s.y)
+
+
+## The hands sit to the LEFT of the cross and centred against its two rows, so
+## the pair reads as its own group rather than as a third row of the D-pad.
+func _hands_origin(s: Vector2) -> Vector2:
+	var cell := Pal.px(Pal.CELL, s.y)
+	var gap := Pal.px(Pal.CELL_GAP, s.y)
+	var cross := _cross_origin(s)
+	var cross_h := cell * 2.0 + gap
+	return Vector2(
+		cross.x - Pal.px(Pal.CLUSTER_GAP, s.y) - (cell * 2.0 + gap),
+		cross.y + (cross_h - cell) * 0.5)
+
+
+## The key that fires `action`, as the player would say it out loud, or "" for an
+## action with nothing bound. Keyboard and mouse only: this HUD is drawn for
+## someone looking at a keyboard, and a pad user has the arrangement itself.
+##
+## Read from the LIVE InputMap every repaint rather than from a table, because a
+## table would be a second copy of the bindings and the second copy is the one
+## that goes stale — see the note on KIT_ACTION.
+func _hotkey(action: StringName) -> String:
+	if action == &"" or not InputMap.has_action(action):
+		return ""
+	for ev in InputMap.action_get_events(action):
+		if ev is InputEventMouseButton:
+			match (ev as InputEventMouseButton).button_index:
+				MOUSE_BUTTON_LEFT: return "LMB"
+				MOUSE_BUTTON_RIGHT: return "RMB"
+				MOUSE_BUTTON_MIDDLE: return "MMB"
+			continue
+		if ev is InputEventKey:
+			var key := ev as InputEventKey
+			# physical_keycode first: a binding stored physically prints nothing
+			# through `keycode`, and a blank cap is worse than no cap at all.
+			var code := key.physical_keycode if key.physical_keycode != 0 else key.keycode
+			if code == 0:
+				continue
+			var name := OS.get_keycode_string(code)
+			match name:
+				"Space": return "SPC"
+				"Escape": return "ESC"
+			return name if name.length() <= 4 else name.substr(0, 4)
+	return ""
+
+
+## The key cap: the binding, centred under its cell. Drawn BEFORE the cell so a
+## cap never lands on top of the icon it belongs to.
+func _draw_keycap(s: Vector2, cell: Rect2, key: String) -> void:
+	if key.is_empty():
+		return
+	var scale := Pal.px(Pal.KEYCAP_SCALE, s.y)
+	var top := cell.end.y + Pal.px(Pal.KEYCAP_GAP, s.y)
+	var w := PixelFont.width(key, scale)
+	var h := PixelFont.height(scale)
+	var pad := Pal.px(3.0, s.y)
+	# On its own plate, not bare on the scene. The cells have a MIDNIGHT fill and
+	# the caps hang BELOW them, so a bare cap sits on whatever the world happens
+	# to be — ASH lettering over a torchlit wall is nearly gone. It also earns the
+	# metaphor: a key cap should look like a key.
+	_canvas.draw_rect(Rect2(
+		cell.get_center().x - w * 0.5 - pad, top - pad,
+		w + pad * 2.0, h + pad * 2.0), Color(Pal.MIDNIGHT, 0.8))
+	PixelFont.draw_centred(_canvas, key,
+		Vector2(cell.get_center().x, top), scale, Pal.BONE)
+
+
 ## The hands: what he is holding, left then right. Two cells, and both of them
 ## can be empty -- two-handing the sword is a real choice, not a broken state.
 func _draw_hands(s: Vector2) -> void:
-	var cell := Pal.px(KIT_CELL, s.y)
-	var gap := Pal.px(KIT_GAP, s.y)
-	var origin := Pal.KIT_ORIGIN * s
+	var cell := Pal.px(Pal.CELL, s.y)
+	var gap := Pal.px(Pal.CELL_GAP, s.y)
+	var origin := _hands_origin(s)
 	var combat := _hero_combat()
 	var blocking: bool = bool(combat.get(&"blocking")) if combat != null else false
 
@@ -664,6 +756,7 @@ func _draw_hands(s: Vector2) -> void:
 		var hand: StringName = HANDS[i]
 		var id: StringName = Game.armament(hand)
 		var r := Rect2(origin.x + i * (cell + gap), origin.y, cell, cell)
+		_draw_keycap(s, r, _hotkey(KIT_ACTION.get(id, &"")))
 
 		# The shield cell IS the block tell. It was the one thing the old strip
 		# did that nothing else does, so it survives the strip.
@@ -689,20 +782,25 @@ func _draw_hands(s: Vector2) -> void:
 ## label -- a row of three cells would need three glyphs and the player would
 ## still have to translate "cell 2" into "up" every time (CONTRACT §2.5 #6).
 func _draw_cpad(s: Vector2) -> void:
-	var cell := Pal.px(Pal.CPAD_CELL, s.y)
-	var gap := Pal.px(Pal.CPAD_GAP, s.y)
-	var origin := Pal.CPAD_ORIGIN * s
+	var cell := Pal.px(Pal.CELL, s.y)
+	var gap := Pal.px(Pal.CELL_GAP, s.y)
+	var origin := _cross_origin(s)
 	var mid := origin.x + cell + gap
 	var held: StringName = Game.armament(Game.HAND_RIGHT)
 
 	for entry in [
-		{"slot": Game.QUICK_UP, "at": Vector2(mid, origin.y)},
-		{"slot": Game.QUICK_LEFT, "at": Vector2(origin.x, origin.y + cell + gap)},
-		{"slot": Game.QUICK_RIGHT, "at": Vector2(mid + cell + gap, origin.y + cell + gap)},
+		{"slot": Game.QUICK_UP, "at": Vector2(mid, origin.y), "act": &"item_up"},
+		{"slot": Game.QUICK_LEFT, "at": Vector2(origin.x, origin.y + cell + gap),
+			"act": &"item_left"},
+		{"slot": Game.QUICK_RIGHT, "at": Vector2(mid + cell + gap, origin.y + cell + gap),
+			"act": &"item_right"},
 	]:
 		var slot: int = entry["slot"]
 		var id: StringName = Game.quick(slot)
 		var r := Rect2(entry["at"], Vector2(cell, cell))
+		# The key cap goes on whether or not the slot is bound. An empty cell with
+		# no cap is a hole; an empty cell with a "1" on it is an invitation.
+		_draw_keycap(s, r, _hotkey(entry["act"]))
 
 		_canvas.draw_rect(r, Color(Pal.MIDNIGHT, 0.8))
 		# An unbound button is drawn EMPTY and dim rather than skipped. A gap in
@@ -718,10 +816,17 @@ func _draw_cpad(s: Vector2) -> void:
 				Pal.px(1.0, s.y), Pal.MOTH)
 
 	# ▼ swaps the set. A caret rather than a cell: it is not a bindable button,
-	# and drawing it as one would invite the player to try.
-	var tip := Vector2(mid + cell * 0.5, origin.y + (cell + gap) * 2.0 + Pal.px(3.0, s.y))
-	var w := Pal.px(5.0, s.y)
-	var h := Pal.px(5.0, s.y)
+	# and drawing it as one would invite the player to try — which is also why it
+	# is the one thing in the cluster with no key cap.
+	#
+	# Cleared past the bottom row's caps, not past the bottom row: the caps hang
+	# below the cells they belong to, and the caret's old +3 px put it inside the
+	# ◄ and ► lettering the moment the caps arrived.
+	var caps_bottom := origin.y + cell * 2.0 + gap + Pal.px(Pal.KEYCAP_GAP, s.y) \
+		+ PixelFont.height(Pal.px(Pal.KEYCAP_SCALE, s.y)) + Pal.px(3.0, s.y)
+	var tip := Vector2(mid + cell * 0.5, caps_bottom + Pal.px(6.0, s.y))
+	var w := Pal.px(9.0, s.y)
+	var h := Pal.px(9.0, s.y)
 	_canvas.draw_colored_polygon(PackedVector2Array([
 		tip + Vector2(-w, 0.0), tip + Vector2(w, 0.0), tip + Vector2(0.0, h),
 	]), Pal.ASH)
