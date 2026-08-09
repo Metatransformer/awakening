@@ -863,9 +863,35 @@ func _anim_node(clip: StringName) -> AnimationNodeAnimation:
 ## played, and tools/build_anim_lib.gd's TRIM note for where the numbers came
 ## from. `start_offset` is engine-side, so the mixer never walks the frames we
 ## are not showing — this is not a seek on the first frame.
+##
+## `use_custom_timeline` IS NOT OPTIONAL, and this is the whole reason a jump
+## used to jump a second time on touchdown. `start_offset`, `timeline_length`,
+## `loop_mode` and `stretch_time_scale` are ALL inert on an AnimationNodeAnimation
+## unless the custom timeline is switched on — the engine hides them in the
+## inspector for exactly that reason, and from code they set silently and do
+## nothing. With it off, `ex_jump` played from 0.00: the hero rose to his apex
+## while the pose was still gathering into the anticipation crouch, and then
+## performed the entire leap AND its landing standing on the floor, 0.50 s late.
+## Measured, not guessed — tools/directors/jump_pose_trace.gd prints the pose's
+## hips against the body's height on one timeline.
+##
+## The rest of the timeline is then ours to state, and all three matter:
+##   timeline_length    — what is LEFT of the clip after the offset. Leave it at
+##                        the 1.0 default and a 1.17 s jump is cut at 1.0.
+##   stretch_time_scale — false. True squeezes the clip into `timeline_length`,
+##                        and the airborne stretch is already 1:1 with the arc
+##                        (see `jump_start_offset`); stretching it re-times the
+##                        one thing that was measured to match.
+##   loop_mode          — NONE. The custom timeline overrides the clip's own, and
+##                        a looping one would restart the leap under the OneShot
+##                        rather than letting it end.
 func _jump_anim(clip: StringName, offset: float) -> AnimationNodeAnimation:
 	var n := _anim_node(clip)
+	n.use_custom_timeline = true
 	n.start_offset = offset
+	n.timeline_length = maxf(_clip_length(clip) - offset, 0.1)
+	n.stretch_time_scale = false
+	n.loop_mode = Animation.LOOP_NONE
 	return n
 
 
@@ -1604,10 +1630,17 @@ func _commit_ranged(duration: float, aim: Vector3) -> bool:
 ## committed move in this file holds, that the clip's length IS the move's
 ## length. A missing clip scales to 1.0 rather than dividing by a guess.
 func _clip_scale(clip: StringName, duration: float) -> float:
-	var clip_len := 1.0
-	if anim_library.has_animation(clip):
-		clip_len = anim_library.get_animation(clip).length
-	return clip_len / maxf(duration, 0.05)
+	return _clip_length(clip) / maxf(duration, 0.05)
+
+
+## A clip's length in seconds, post-TRIM (tools/build_anim_lib.gd bakes the trim
+## into the resource, so this is the length of the move and not of the export).
+## A missing clip answers 1.0 rather than 0.0, so a caller dividing by it gets a
+## harmless scale instead of an error.
+func _clip_length(clip: StringName) -> float:
+	if anim_library != null and anim_library.has_animation(clip):
+		return anim_library.get_animation(clip).length
+	return 1.0
 
 
 ## True while a bow or a hookshot is out. Owned by `HeroRanged`, which is the
