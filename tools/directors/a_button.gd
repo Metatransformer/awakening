@@ -87,7 +87,7 @@ func _b_closes(rig) -> void:
 	# B in the world. It used to roll; it must now be silent, because "B closes
 	# this" is only true everywhere if B means nothing anywhere else.
 	var hero := _hero(rig)
-	_stand_at(rig, _clear_ground(rig))
+	_stand_clear(rig)
 	await rig.wait_frames(20)
 	Input.action_press(&"move_up", 1.0)
 	await rig.wait_seconds(0.4)
@@ -104,7 +104,7 @@ func _b_closes(rig) -> void:
 
 func _roll_when_free(rig) -> void:
 	var hero := _hero(rig)
-	_stand_at(rig, _clear_ground(rig))
+	_stand_clear(rig)
 	await _await_no_focus(rig)
 	if Prompt.focus != null:
 		_fail("could not find ground clear of every Interactable")
@@ -133,7 +133,7 @@ func _hold_at_gate(rig) -> void:
 
 	# The negative control FIRST, on clear ground: a held A must reach a sprint,
 	# otherwise "no sprint at the gate" is not evidence of anything.
-	_stand_at(rig, _clear_ground(rig))
+	_stand_clear(rig)
 	await _await_no_focus(rig)
 	Input.action_press(&"move_up", 1.0)
 	var ran := await _watch_sprint(rig, hero, 0.6)
@@ -274,6 +274,18 @@ func _await_no_focus(rig) -> void:
 func _clear_ground(rig) -> Vector3:
 	var town := rig.scene() as Town
 	return town.vendor.global_position + Vector3(0.0, 0.0, 9.0)
+
+
+## Stand clear and FACE AWAY from the vendor. The beats that need clear ground
+## all run forward for half a second before they press anything, and the stick is
+## camera-relative — pointed the other way that run walks straight back into the
+## pawnbroker's radius, and the beat then fails for a reason that has nothing to
+## do with the button. It cannot pass wrongly (a focus refuses the roll, so the
+## drift shows up as a FAIL) but it can waste an afternoon.
+func _stand_clear(rig) -> void:
+	var town := rig.scene() as Town
+	var at := _clear_ground(rig)
+	_stand_at(rig, at, at + (at - town.vendor.global_position))
 
 
 func _hero(rig) -> Hero:
