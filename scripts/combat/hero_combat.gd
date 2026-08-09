@@ -461,12 +461,28 @@ func _physics_process(delta: float) -> void:
 	var locked := Prompt != null and Prompt.blocked
 	var leaving := _hero.charm != null and _hero.charm.active()
 
-	# The shield is held, not toggled, and it drops the moment you commit to a
-	# swing — you cannot hide behind it and attack out of it.
-	var want_block := not locked and Input.is_action_pressed(&"shield") and _swing_t < 0.0
+	# The shield is held, not toggled, and it drops the moment you commit to
+	# anything else — you cannot hide behind it and attack out of it, and you
+	# cannot hold a shield up through a dive roll.
+	#
+	# The roll clause is not cosmetic even though it looks it. `Block` is a
+	# BLEND sitting above the roll one-shot in the animation tree, so a guard
+	# held at amount 1.0 does not layer over the dive, it REPLACES it — the hero
+	# slid backwards across the floor in a standing block pose. It also makes the
+	# roll's recovery honestly vulnerable, which is what the recovery is for.
+	# The button is still down, so the guard comes straight back up on landing.
+	var rolling := _hero.state == Hero.MoveState.ROLL \
+		or _hero.state == Hero.MoveState.ROLL_RECOVER
+	var want_block := not locked and not rolling \
+		and Input.is_action_pressed(&"shield") and _swing_t < 0.0
 	if want_block != blocking:
 		blocking = want_block
 		_hero.set_blocking(blocking)
+		# The camera needs to know: guarding pins the hero's facing to the lens
+		# (Hero._tick_camera_facing), and autoswing pins the lens to behind the
+		# hero. Left running, the two chase each other and a guarded strafe
+		# slowly rotates the player 30-odd degrees off what he was watching.
+		Bus.guard_changed.emit(blocking)
 
 	if not locked and not leaving:
 		# The D-pad is the C-pad. ←, ↑ and → each draw whatever the player bound

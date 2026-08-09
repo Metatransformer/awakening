@@ -9,13 +9,27 @@ extends Node3D
 ## that was always null. `hero.targeting` resolved to null too, which is why
 ## `z_target` only ever recentred the camera. This is the missing piece.
 ##
-## **It is a TOGGLE, not a hold**, and that is the deliberate departure from the
-## Ocarina model the rest of the feel is built on. OOT holds Z because Z is an
-## index finger on a shoulder. Elden Ring puts lock-on on R3, and you cannot hold
-## a stick click and steer with the same thumb — a held R3 is not a control, it
-## is a cramp. Press to lock, press again to let go, press with nothing lockable
-## to recentre the camera behind the hero (which is the one OOT behaviour that
+## **There are two ways in, and they are different on purpose.**
+##
+## `z_target` (R3) is a TOGGLE, which is Elden Ring rather than OOT. You cannot
+## hold a stick click and steer with the same thumb — a held R3 is not a control,
+## it is a cramp. Press to lock, press again to let go, press with nothing
+## lockable to recentre the camera behind the hero (the one OOT behaviour that
 ## survives, because ER does the same thing).
+##
+## `shield` (the LEFT TRIGGER) is a HOLD, and it is OOT's Z exactly. The trigger
+## is an index finger on a shoulder — the thing OOT's Z actually was — so it can
+## afford to be held, and raising the guard and looking at what you are guarding
+## against are the same intention. Pull it and the best candidate is acquired
+## along with the shield; let go and both drop. It is deliberately the WEAKER
+## claim of the two: a trigger release only drops a lock the trigger itself
+## raised, so a deliberate R3 toggle survives you guarding and un-guarding
+## underneath it (`_lock_from_shield`).
+##
+## While the trigger is down and nothing is locked, this keeps looking. That is
+## what makes it read as auto-target rather than as a one-shot acquire: kill the
+## thing you were locked to and the guard finds the next one without you
+## re-pulling a trigger you never let go of.
 ##
 ## Acquisition is scored in SCREEN space, not in hero space. The player's "that
 ## one" is the thing nearest the middle of the picture, and a body-space rule
@@ -60,9 +74,28 @@ var is_locked: bool = false
 @export var flick_on: float = 0.7
 @export var flick_off: float = 0.35
 
+@export_group("Guard")
+## Seconds between re-scans while the trigger is held with nothing locked.
+## `_best_candidate` walks the whole targetable group and raycasts each one, and
+## in a room of fifteen that is not a per-frame cost worth paying to shave a
+## tenth of a second off an acquisition the player is not waiting on.
+@export var guard_rescan: float = 0.15
+
 var _hero: Node3D = null
 var _los_lost: float = 0.0
 var _flick_armed: bool = true
+## The shield trigger's own edge, tracked rather than polled with
+## `is_action_just_pressed`. The reason is the one in `_toggle_queued` below —
+## a `just_pressed` is stamped with the frame it arrived in and a physics tick
+## slower than the render rate drops it — but the fix here is different because
+## a HOLD has state to compare against. Diffing the held state cannot miss an
+## edge at all, and it works for synthetic presses too, which `_unhandled_input`
+## does not (CLAUDE.md §3: `Input.action_press` dispatches no InputEvent).
+var _shield_down: bool = false
+## True when the live lock was raised by the shield trigger rather than by the
+## R3 toggle. Releasing the trigger drops only its own lock.
+var _lock_from_shield: bool = false
+var _rescan_t: float = 0.0
 ## Set by _unhandled_input, consumed in _physics_process. The press must not be
 ## read by polling: `is_action_just_pressed` is true for exactly one frame and
 ## is stamped with the frame it arrived in, so a physics tick slower than the
@@ -112,12 +145,20 @@ func _physics_process(delta: float) -> void:
 		# screen closes, so the queue is dropped rather than held.
 		_toggle_queued = false
 		_switch_queued = 0
+		# The shield comes down when a screen opens (hero_combat gates it on the
+		# same flag), so the lock it was holding goes with it. Forgetting the
+		# trigger's state as well means the release that happens behind the panel
+		# cannot fire as a fresh edge when the panel closes.
+		if _lock_from_shield:
+			_release()
+		_shield_down = false
 		return
 
 	if _toggle_queued:
 		_toggle_queued = false
 		_toggle()
 
+	_read_guard(delta)
 	_read_stick_flick()
 
 	if is_locked:
@@ -136,10 +177,46 @@ func _toggle() -> void:
 	var best := _best_candidate(cone_acquire, null)
 	if best != null:
 		_acquire(best)
+		# A toggled lock is the player's standing decision and outlives the
+		# guard: raise the shield and drop it again and this is still held.
+		_lock_from_shield = false
 	else:
 		# Nothing lockable. This is OOT's Parallel recentre, and Elden Ring does
 		# the same thing with an empty R3 — the button always does something.
 		Bus.camera_recenter.emit()
+
+
+## The shield trigger, held. Acquires on the pull, keeps looking while it is
+## down, and drops on the release — but only a lock it raised itself.
+func _read_guard(delta: float) -> void:
+	var down := Input.is_action_pressed(&"shield")
+
+	if down and not _shield_down:
+		_rescan_t = 0.0
+	elif not down and _shield_down:
+		# Only its own. An R3 toggle underneath the guard is a decision the
+		# player made separately and must survive letting go of the trigger —
+		# otherwise every block silently disarms the lock-on button.
+		if _lock_from_shield:
+			_release()
+	_shield_down = down
+
+	if not down or is_locked:
+		return
+	# Still looking. Deliberately not a one-shot acquire on the pull: kill what
+	# you were locked to with the trigger still held and the guard should find
+	# the next one, which is what "hold to target" means in the source material.
+	_rescan_t -= delta
+	if _rescan_t > 0.0:
+		return
+	_rescan_t = guard_rescan
+	var best := _best_candidate(cone_acquire, null)
+	if best != null:
+		_acquire(best)
+		_lock_from_shield = true
+	# No recentre on an empty guard. That is the toggle's job — a camera that
+	# snapped behind the hero every time he raised his shield at nothing would
+	# fight the player during exactly the fights the shield is for.
 
 
 func _acquire(t: Node3D) -> void:
@@ -156,6 +233,12 @@ func _release() -> void:
 	current_target = null
 	is_locked = false
 	_los_lost = 0.0
+	_lock_from_shield = false
+	# Re-scan on the very next frame rather than after the full interval: this
+	# is the path a target's DEATH takes out of `_validate`, and a guard that
+	# waited out its timer before looking again would leave the player briefly
+	# unlocked in the middle of a fight for no reason he can see.
+	_rescan_t = 0.0
 	target_lost.emit()
 	Bus.target_lost.emit()
 

@@ -151,6 +151,9 @@ var _initialised: bool = false
 ## instead of cutting to it.
 var _aiming: bool = false
 var _aim01: float = 0.0
+## The guard stance. Only autoswing reads it — there is no framing change and no
+## ease, because raising a shield is not a change of shot.
+var _guarding: bool = false
 
 var _probe: SphereShape3D = SphereShape3D.new()
 var _shape_query := PhysicsShapeQueryParameters3D.new()
@@ -171,6 +174,7 @@ func _ready() -> void:
 	Bus.target_lost.connect(clear_target)
 	Bus.player_spawned.connect(_on_player_spawned)
 	Bus.aim_changed.connect(set_aiming)
+	Bus.guard_changed.connect(set_guarding)
 
 	# The screenshot harness runs windowed; grabbing the cursor there would
 	# hijack the machine mid-capture. Its SceneTree carries a script, the
@@ -226,6 +230,13 @@ func set_aiming(on: bool) -> void:
 
 func aiming() -> bool:
 	return _aiming
+
+
+## The shield went up or came down. Deliberately does NOT recentre the way
+## `set_aiming` does: drawing a bow is the player choosing a new shot, and a
+## raised shield is the player standing his ground in the shot he already has.
+func set_guarding(on: bool) -> void:
+	_guarding = on
 
 
 ## The yaw, in radians, that places the eye directly behind the hero.
@@ -409,7 +420,13 @@ func _apply_autoswing(speed01: float, delta: float) -> void:
 	# — except here they agree perfectly and the pair has no error to close, so
 	# every stray metre of strafing would drag the crosshair off the target the
 	# player is holding it on. Aim is steered by hand, full stop.
-	if _aiming:
+	#
+	# A raised guard is the same stance and gets the same answer. Measured:
+	# strafing left for half a second behind a shield rotated the hero 31° off
+	# what he was facing, in slow motion, with the stick never asking him to
+	# turn — the camera crept toward behind-him, he steered to the camera, and
+	# the pair walked away together. Z-Parallel means the facing does not move.
+	if _aiming or _guarding:
 		return
 	# Locked, `_apply_battle` owns the yaw. The two rules mostly agree — the
 	# hero faces the target, so "behind the hero" and "behind the hero on the

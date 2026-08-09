@@ -35,6 +35,14 @@ signal first_person_changed(on: bool)
 ## one place that knows what is in his hands — the camera and the HUD both read
 ## this rather than each deciding for itself what counts as aiming.
 signal aim_changed(active: bool)
+## The shield is up. Emitted by `HeroCombat`, which owns the decision. The camera
+## is the only listener and it uses this for exactly one thing: killing autoswing.
+## A raised guard puts the hero in the same stance the bow does — he faces the
+## lens — and "drift to behind the hero" plus "the hero faces the camera" is the
+## rule pair that corkscrews (see `GameCamera._apply_autoswing`). Unlike
+## `aim_changed` this must NOT recentre: snapping the camera behind the hero the
+## instant he raises his shield is a yank in the middle of a fight.
+signal guard_changed(active: bool)
 
 # --- Combat -----------------------------------------------------------------
 signal hit_landed(target: Node3D, amount: int, position: Vector3)

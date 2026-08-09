@@ -204,7 +204,7 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `cam_up/down/left/right` | mouse motion (read in code) | right stick | camera |
 | `attack` | **LMB** | **X / Square** (pad2) | light attack (**hold** = charge) |
 | `use_item` | **F** | **A / Cross** (pad0) | use item / jump attack |
-| `shield` | **RMB** | **LT / L2** (axis4+) | guard |
+| `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held**, and it targets |
 | `context` | **Space** | **B / Circle** (pad1) | roll / backstep |
 | `z_target` | **Q**, MMB | **R3** (pad8) | lock-on |
 | `interact` | E | **Y / Triangle** (pad3) | event action |
@@ -218,6 +218,16 @@ The face buttons are the swings and the shoulders are the holds. Guard is on the
 button — a control you hold down for seconds belongs on an analogue pull, and
 the action's 0.2 deadzone is how far it travels before the shield counts as
 raised.
+
+**The trigger is OOT's Z**, and it carries everything Z carried. An index finger
+on a shoulder is exactly what Z was, so pulling it does all three at once:
+raises the guard, **acquires the best target**, and — with nothing lockable —
+pins the facing so the stick becomes a strafe. Let go and all three drop. The
+targeting half is in §8; the facing half is Z-Parallel and lives in
+`Hero._tick_camera_facing`, the same tick the bow uses, because the split is the
+same one (the body faces the camera, the stick moves you). Without a pinned
+facing "roll backwards" has no backwards to mean, which is why the backstep is
+part of the same change and not a separate feature.
 
 The sword is on **X**, permanently, and it is the *only* thing on it. That is
 OOT's arrangement — the sword lives on one button forever and the items live on
@@ -275,10 +285,33 @@ Read movement as
 keyboard behave identically. Movement is **camera-relative**: the input vector is
 rotated by the camera's yaw before it becomes world motion.
 
+**There are two ways to lock on and they are different on purpose.**
+
 `z_target` is a **TOGGLE**, which is Elden Ring rather than OOT: press to lock,
 press again to release, press with nothing lockable to recentre the camera
-behind the hero. It is not held — holding a shoulder button and steering the
-camera with the same thumb is the thing R3 exists to avoid.
+behind the hero. It is not held — holding a stick click and steering the camera
+with the same thumb is the thing R3 exists to avoid.
+
+`shield` is a **HOLD**, and it is OOT's Z exactly (above). It is deliberately
+the *weaker* claim of the two: releasing the trigger drops only a lock the
+trigger itself raised (`Targeting._lock_from_shield`), so a deliberate R3 toggle
+survives you guarding and un-guarding underneath it. Otherwise every block would
+silently disarm the lock-on button. While it is held and nothing is locked it
+keeps re-scanning every `guard_rescan` (0.15 s) — kill what you were locked to
+without letting go and the guard finds the next one, which is what *hold to
+target* means. An empty guard does **not** recentre the camera; that stays the
+toggle's job, because a camera that snapped behind the hero every time he raised
+his shield at nothing would fight the player during exactly the fights the
+shield is for.
+
+The trigger's edges are read by **diffing `is_action_pressed` against a stored
+`_shield_down`**, not by `is_action_just_pressed`. A `just_pressed` is true for
+one frame and stamped with the frame it arrived in, so a physics tick slower
+than the render rate drops it. `z_target` solves that by queueing the press from
+`_unhandled_input`; a hold cannot use that route, because it has to work for
+polled and synthetic presses alike (`Input.action_press` dispatches no
+`InputEvent` at all, which is why every director drives it — CLAUDE.md §3).
+Diffing a held state cannot miss an edge either way.
 
 ### 4.1 The item buttons — the D-pad is the C-pad
 
@@ -389,6 +422,13 @@ signal target_lost
 
 Anything that wants to be lockable joins group `targetable` and exposes
 `func target_point() -> Vector3` (where the reticle sits — usually chest height).
+
+**Two buttons drive it and they are not interchangeable** — see §4. `z_target`
+toggles; `shield` holds and re-scans every `guard_rescan` (0.15 s) while it is
+down with nothing locked. `_lock_from_shield` records which of the two raised
+the live lock, and the trigger's release drops only its own. Leaving the
+`targetable` group is how a lock ends — that is the path a death takes out of
+`_validate`, so nothing needs a separate "my target died" hook.
 
 ### Items — C-button slots
 
@@ -619,6 +659,10 @@ camera.set_aiming(on)                  # connected to it in GameCamera._ready
 camera.aiming() -> bool
 hero.aiming() -> bool                  # both read through HeroRanged
 hero.aim_item() -> StringName          # which stance the body holds
+
+Bus.guard_changed(active: bool)        # emitted by HeroCombat, nobody else
+camera.set_guarding(on)                # connected to it in GameCamera._ready
+hero.blocking -> bool                  # set by HeroCombat.set_blocking
 ```
 
 **The eye slides sideways; the boom does not turn.** Over-the-shoulder framing
@@ -633,6 +677,41 @@ camera does not get an opinion).
 While aiming the hero **strafes**: he faces where the camera faces, at ~1.8×
 turn rate, and moves independently of that facing. This is the same shape as
 lock-on and sits in the same place in `_tick_ground`, right after it.
+
+**A raised shield takes the same tick** (`Hero._tick_camera_facing`, which is
+`if aiming() or blocking`). That is OOT's Z-Parallel, and it is not a cosmetic
+share: with the facing pinned, a neutral stick and `context` is a **backstep**
+— `_try_start_roll` sends him along `-_forward()` with no stick gate, exactly as
+it does under a lock, because this is a press you make from behind a raised
+shield rather than one you fall into out of a run. Two things follow that are
+easy to get wrong, and both were:
+
+- **The roll drops the guard** (`HeroCombat`: `not rolling and …`). `Block` is a
+  blend sitting ABOVE the roll one-shot in the animation tree, so a guard held
+  at amount 1.0 does not layer over the dive, it *replaces* it — the hero slides
+  backwards across the floor in a standing block pose. Dropping it also makes
+  the recovery honestly vulnerable, which is what the recovery is for. The
+  button is still down, so the guard comes back up on landing.
+- **Because the guard drops, `blocking` is the wrong thing to read once the roll
+  is in flight.** `Hero._roll_keeps_facing` is captured when the roll *starts*
+  and is what `_tick_roll_recover` bleeds along. Ask the live flag instead and
+  every guarded backstep coasts back along the facing into the thing it just
+  dodged away from.
+- **The guard kills camera autoswing**, exactly as aiming does, via
+  `Bus.guard_changed` → `GameCamera.set_guarding`. Autoswing drifts the lens to
+  behind the hero while the hero steers to the lens: two rules writing one angle,
+  with no error to close, so a guarded strafe walks the pair round together —
+  measured at 31° off in half a second, in slow motion, with the stick never
+  asking for a turn. Unlike `aim_changed` this does **not** recentre; a shield
+  going up is not a change of shot.
+
+Verified by `tools/directors/guard_lock.gd`, and note *what* it measures: the
+turn **relative to the lens**, because the pinned facing follows the camera by
+construction and the camera still arcs around obstructions. Unguarded, holding
+left turns him 111°, of which 101° is his own. Guarded, the same input turns him
+6°, of which 3° is his own — he only follows the shot. The rig's `_yaw` moves 0°
+across the whole guarded strafe, which is what says the autoswing suppression is
+doing the work rather than the threshold.
 
 | clip | when |
 |---|---|

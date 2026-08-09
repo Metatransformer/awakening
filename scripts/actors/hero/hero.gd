@@ -191,6 +191,10 @@ var _anim_player: AnimationPlayer
 var _tree: AnimationTree
 var _state_timer: float = 0.0
 var _roll_dir: Vector3 = Vector3.FORWARD
+## Whether the roll in flight was started from a stance that pins the facing —
+## a lock, or a raised guard. Captured at the start because the shield DROPS for
+## the roll, so the live flag says the opposite of what the dodge was.
+var _roll_keeps_facing: bool = false
 var _airborne_time: float = 0.0
 var _stride_accum: float = 0.0
 var _speed: float = 0.0
@@ -659,8 +663,10 @@ func _tick_ground(wish: Vector3, mag: float, delta: float) -> void:
 		_tick_locked(wish, target_speed, moving, target, delta)
 		return
 
-	if aiming():
-		_tick_aiming(wish, target_speed, moving, delta)
+	# Aiming and guarding hold the body the same way, so they share a tick. See
+	# _tick_camera_facing for why the shield belongs in it.
+	if aiming() or blocking:
+		_tick_camera_facing(wish, target_speed, moving, delta)
 		return
 
 	if moving and _speed > K.RUN_SPEED * turnaround_min_speed01:
@@ -720,19 +726,28 @@ func _tick_locked(wish: Vector3, target_speed: float, moving: bool,
 			_set_planar_velocity(travel.normalized() * _speed)
 
 
-## Aiming, unlocked: the body points where the LENS points and the stick moves
-## you around, which is the same split `_tick_locked` makes and for the same
-## reason. Here the thing being faced is the crosshair rather than an enemy.
+## Aiming or guarding, unlocked: the body points where the LENS points and the
+## stick moves you around, which is the same split `_tick_locked` makes and for
+## the same reason. Here the thing being faced is the camera rather than an enemy.
 ##
-## Without this the hero runs where the stick says while the camera sits on his
-## shoulder looking somewhere else, and the bow — held in the hands of a body
-## facing away from the shot — visibly points at nothing the arrow will hit. The
-## aim is the camera's (see hero_ranged.gd), so the body has to agree with it.
+## For the BOW this is what stops the shot lying. Without it the hero runs where
+## the stick says while the camera sits on his shoulder looking somewhere else,
+## and the bow — held in the hands of a body facing away from the shot — visibly
+## points at nothing the arrow will hit. The aim is the camera's (see
+## hero_ranged.gd), so the body has to agree with it.
+##
+## For the SHIELD it is OOT's Z-Parallel, which is the half of holding Z that
+## has nothing to do with locking onto anything: the guard pins your facing and
+## the stick becomes a strafe. That is what makes the shield a stance rather than
+## a toggle you carry around — you sidestep round a thing while watching it, back
+## off from it in a straight line, and the backstep in `_try_start_roll` has a
+## direction to be the opposite OF. Without a facing to hold, "roll backwards"
+## means nothing, because backwards is wherever you last happened to run.
 ##
 ## The 135° reversal is suppressed for the same reason it is under a lock: the
 ## body never turns to travel here, so an about-face is a backstep, and firing a
-## 180 clip would spin him off the target he is holding the crosshair on.
-func _tick_aiming(wish: Vector3, target_speed: float, moving: bool, delta: float) -> void:
+## 180 clip would spin him off whatever he is facing.
+func _tick_camera_facing(wish: Vector3, target_speed: float, moving: bool, delta: float) -> void:
 	_steer_to(_camera_heading(), turn_rate * 1.8, delta)
 
 	if moving:
@@ -781,6 +796,14 @@ func _try_start_roll(wish: Vector3, mag: float) -> bool:
 			if dir == Vector3.ZERO:
 				dir = -_forward()
 			dir = dir.normalized()
+	elif blocking:
+		# Guarding with nothing locked is the same stance minus a target
+		# (_tick_camera_facing): the facing is pinned to the camera, so a
+		# neutral stick backsteps straight away from what you are looking at.
+		# Same reasoning as the lock for the missing gate — this is a press you
+		# make from behind a raised shield, not one you fall into out of a run.
+		if wish == Vector3.ZERO or mag < K.STICK_DEADZONE:
+			dir = -_forward()
 	else:
 		# [oot] a discrete action needs a near-full deflection — you cannot roll
 		# out of a walk, only out of a committed run. §3.2 / K.STICK_ACTION_GATE.
@@ -794,9 +817,12 @@ func _try_start_roll(wish: Vector3, mag: float) -> bool:
 	state = MoveState.ROLL
 	_state_timer = roll_time
 	_roll_dir = dir.normalized()
-	# Locked, the body keeps watching the target through the whole dodge; the
-	# roll moves him without turning him. Unlocked, the roll IS the turn.
-	if target == null:
+	_roll_keeps_facing = target != null or blocking
+	# Locked or guarding, the body keeps watching through the whole dodge; the
+	# roll moves him without turning him. Free, the roll IS the turn — and
+	# spinning the hero to face his own backstep is precisely the failure this
+	# guards against, since a backstep's direction is behind him by definition.
+	if not _roll_keeps_facing:
 		facing_yaw = atan2(dir.x, dir.z)
 	_speed = roll_speed
 	_set_planar_velocity(_roll_dir * roll_speed)
@@ -868,10 +894,12 @@ func _track_lock(delta: float) -> void:
 ## and bleeding along the FACING there walks him into the enemy at the end of
 ## every backstep.
 func _bleed_dir() -> Vector3:
-	# Aiming has the same split as a lock — facing is the crosshair, travel is the
-	# stick — so it bleeds the same way. Without this a shot fired while strafing
-	# sideways slides him forward along the bow instead of coasting to a stop.
-	if lock_target() == null and not aiming():
+	# Aiming and guarding have the same split as a lock — facing is the camera,
+	# travel is the stick — so they bleed the same way. Without this a shot fired
+	# while strafing sideways slides him forward along the bow instead of
+	# coasting to a stop, and a guarded backstep coasts back into what he just
+	# stepped away from.
+	if lock_target() == null and not aiming() and not blocking:
 		return _forward()
 	var travel := K.flat(velocity)
 	return travel.normalized() if travel != Vector3.ZERO else _forward()
@@ -1170,9 +1198,14 @@ func _tick_roll_recover(delta: float) -> void:
 	_state_timer -= delta
 	_track_lock(delta)
 	_speed = move_toward(_speed, 0.0, decel * 1.6 * delta)
-	# Along the roll, not along the facing. Locked those differ, and a backstep
-	# that bled along the facing would coast the hero back into what he dodged.
-	_set_planar_velocity((_roll_dir if lock_target() != null else _forward()) * _speed)
+	# Along the roll, not along the facing. Locked or guarding those differ, and
+	# a backstep that bled along the facing would coast the hero straight back
+	# into the thing he just dodged away from.
+	# Read off the flag captured when the roll STARTED, not off `blocking` now:
+	# the shield comes down for the roll (hero_combat drops it, so the dive is
+	# not played underneath a block pose), and asking the live flag here would
+	# make every guarded backstep bleed along a facing it was dodging away from.
+	_set_planar_velocity((_roll_dir if _roll_keeps_facing else _forward()) * _speed)
 	if _state_timer <= 0.0:
 		state = MoveState.GROUND
 		roll_finished.emit()
