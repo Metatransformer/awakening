@@ -236,6 +236,7 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `z_target` | **Q**, MMB | **R3** (pad8) | lock-on toggle / camera recentre |
 | `interact` | E | **A / Cross** (pad0) | talk/open, and nothing else |
 | `ui_cancel` | Esc | **B / Circle** (pad1) | close/back — in menus only |
+| `ui_hold` | **Y** | **Y / Triangle** (pad3) | the menu's HOLD — in menus only. A goes forward, B goes back, and this is the press that must not be a press. Today: the escape rope on the POUCH screen (METAGAME §5). Shares Y with `jump`, which is safe because the tree is paused whenever it is read. **Not rebindable** — the `ui_` prefix is what enforces that (`Settings._capture_defaults` skips it). |
 | `weapon_prev` / `weapon_next` | 1 / 3 | dpad ← / → | step the right hand through the weapons you own — §4.1 |
 | `item_next` | 4 | dpad ↓ | step the selected item — §4.1 |
 | `loadout_swap` | 2 | dpad ↑ | primary ↔ alternate — §4.1 |

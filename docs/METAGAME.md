@@ -259,13 +259,21 @@ The pad's two real properties survive the move, because everything below is
 built on them:
 
 - **Leaving takes time and can be interrupted.** The pad was a *hold* so that a
-  decision could not be made by fumbling a button. A menu press has neither
-  property on its own — the menu is paused, so a "hold" in there is a slow
-  click. So using the rope closes the menu and starts a **1.2 s channel in the
-  world**: he is rooted, the ring closes around the bag total, and **a blow that
-  lands breaks it**. A blow he *blocks* does not — standing your ground behind
-  the shield while the rope works is a legitimate way to leave, and a better one
-  than mashing a button was.
+  decision could not be made by fumbling a button *and* so that something
+  chasing you was a real problem. Those are two guarantees, and only one of them
+  can be kept inside a paused menu, so the rope keeps them in two places.
+  - **The channel, in the world.** Using the rope closes the menu and starts a
+    **1.2 s channel**: he is rooted, the ring closes around the bag total, and
+    **a blow that lands breaks it**. A blow he *blocks* does not — standing your
+    ground behind the shield while the rope works is a legitimate way to leave,
+    and a better one than mashing a button was.
+  - **The hold, in the menu.** The POUCH row does not fire on A. It is **held on
+    Y (`ui_hold`) for 0.9 s**, anywhere on that screen, with the same gauge every
+    other hold in the game draws (`HoldGauge`). That is the fumble guard, and it
+    is on a different button from the A that fletches arrows one row above it —
+    the accident being prevented is the press you make while reading something
+    else. A on the row says "Hold Y" rather than doing nothing, because a control
+    that ignores the universal confirm is a control that gets filed as broken.
 - **The fee comes out of the number you are protecting**, and the HUD says so.
 
 It is deliberately **not on any ring**. It is not in `RIGHT_POOL` and it is not a

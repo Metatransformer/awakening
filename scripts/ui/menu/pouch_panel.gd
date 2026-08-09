@@ -20,7 +20,8 @@ extends Control
 ##    vendor or to the forge. The mark is the ◆ and the caption says which.
 ##  * **The workbench**, which is what survived. Read-only: this screen shows
 ##    the stock, the smith spends it.
-##  * **The way out**, and its fee. It moved here off the ITEMS screen, and the
+##  * **The way out**, its fee, and the HOLD it now takes — Y, down for
+##    `ROPE_HOLD` seconds, with the gauge. It moved here off the ITEMS screen, and the
 ##    HUD's gold total moved here too (hud.gd took it off the screen on purpose).
 ##    That is not three unrelated things sharing a frame: the bag's worth, the
 ##    purse and the fee ARE the extraction decision, and it is a decision made by
@@ -38,7 +39,23 @@ signal notice(text: String, is_error: bool)
 signal use_requested
 
 const FRAME_SIZE := Vector2(1060, 604)
-const HINT := "↑↓←→ Look    A Fletch    Esc / B Back    The bench and the way out are on the right"
+const HINT := "↑↓←→ Look    A Fletch    Hold Y Escape    Esc / B Back"
+
+## The action the way out is held on: Y on the pad, Y on the keyboard.
+##
+## Not `ui_accept`. A is the universal forward press in every menu in this game
+## and it is one row below on this very screen, where it fletches arrows — a
+## thing you press repeatedly and on purpose. The run-ending control cannot be
+## the same button as the repeatable one, and a HOLD on a DIFFERENT button is
+## two independent reasons the fumble cannot happen.
+const HOLD_ACTION := &"ui_hold"
+
+## Seconds on Y. Longer than the shop's 0.5 s craft hold and the same length as
+## the gate's descent, because those spend materials and this ends the run. [tune]
+##
+## It is a real hold and not ceremony: the thing it guards against is the press
+## you make while reading something else on this screen.
+const ROPE_HOLD := 0.9
 
 ## Cells per row. Twelve slots is the start, sixteen the bought maximum
 ## (K.START_BAG_SLOTS + ShopDb.LIMITS.bag_slot): four across is three clean rows
@@ -79,6 +96,14 @@ var _detail_blurb: Label
 var _detail_legend: Label
 var _rope: Button
 var _rope_fee: Label
+var _rope_bar: HoldBar
+var _rope_say: Label
+## Seconds of Y accumulated. Snapped to 0 on release, never decayed.
+var _rope_hold: float = 0.0
+## The hold starts DISARMED and arms on the first frame Y is up. Without it, a
+## player who opens the pouch with Y already down (it is `jump` in the world)
+## arrives on this screen part-way through leaving the dungeon.
+var _rope_armed: bool = false
 var _fletch: Button
 var _fletch_have: Label
 var _fletch_cost: Label
@@ -156,6 +181,18 @@ func _build() -> void:
 	left.add_theme_constant_override("separation", 12)
 	split.add_child(left)
 	_build_grid(left)
+	# THE BENCH IS ON THE LEFT, under the grid, and it is here for room rather
+	# than for meaning -- though the meaning survives the move, since what made it
+	# home sits directly under what has not yet.
+	#
+	# Measured, not guessed: with all four cards stacked on the right the column
+	# wanted 627 px and the frame 801, inside a 720 px viewport. Forty pixels of
+	# the header and forty of the bench rendered off the top and bottom edges of
+	# the screen, and nothing complained -- the same failure the ITEMS screen hit
+	# and the same one `_build_stock`'s own comment describes surviving once
+	# already. The bench is the only card here that is not focusable and not part
+	# of the extraction arithmetic, so it is the one that moves.
+	_build_stock(left)
 
 	var right := VBoxContainer.new()
 	right.name = "Right"
@@ -165,7 +202,6 @@ func _build() -> void:
 	_build_detail(right)
 	_build_fletch(right)
 	_build_rope(right)
-	_build_stock(right)
 
 	var footer := PanelContainer.new()
 	footer.theme_type_variation = &"MenuFooter"
@@ -444,9 +480,21 @@ func _paint_fletch() -> void:
 ## It is not one of the three bindable buttons and it never will be. Extraction
 ## used to be a hold on a rune pad precisely so it could not be triggered by a
 ## fumble (METAGAME §5); putting it on a D-pad direction would hand back exactly
-## the fumble the hold was guarding against. Two deliberate presses in a paused
-## menu, then a channel you can be knocked out of, is the same guarantee by
-## other means.
+## the fumble the hold was guarding against.
+##
+## **So the hold came back, here.** The row does not fire on A — it fires on Y
+## held for `ROPE_HOLD` seconds, anywhere on this screen, with the gauge every
+## other hold in the game uses. What A does now is say so, because a control that
+## does nothing when you press the button everything else answers to is a control
+## the player files a bug about (`HoldGauge`'s whole opening argument).
+##
+## Why the world channel is still there and this is not a replacement for it:
+## they guard different things. The channel is INTERRUPTIBLE — something swinging
+## at you can break it, which is what makes leaving a decision made in a room
+## rather than in a menu. This is the FUMBLE guard: the menu is paused, so no
+## amount of holding in here can be interrupted by anything, and a hold whose
+## only job is to be deliberate is exactly the right shape for a press made one
+## row below the button you spam to fletch arrows.
 func _build_rope(parent: Node) -> void:
 	var card := PanelContainer.new()
 	card.name = "Use"
@@ -479,21 +527,130 @@ func _build_rope(parent: Node) -> void:
 	_rope_fee.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_rope_fee.offset_right = -16
 
-	_rope.pressed.connect(_use_rope)
+	# CYAN, because the way out is CYAN and nothing else is (STYLEGUIDE §1) —
+	# the same colour the rope's slats climb the hero in and the same colour the
+	# HUD's extraction ring closes in. One hold, drawn twice, in one hue.
+	_rope_bar = HoldBar.new()
+	_rope_bar.name = "Hold"
+	_rope_bar.col = Pal.CYAN
+	_rope_bar.pin_to_bottom_of(_rope)
+
+	# The instruction, on the row. `HoldGauge`'s rule is that a hold says it in
+	# language AND in shape, because either one alone has already shipped as a bug
+	# here: the word with no bar was a player tapping and filing "it doesn't
+	# work", and the bar with no word is a player watching something fill without
+	# knowing they are the one filling it.
+	_rope_say = Label.new()
+	_rope_say.name = "Say"
+	_rope_say.theme_type_variation = &"MenuSlotStat"
+	_rope_say.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	inner.add_child(_rope_say)
+
+	_rope.pressed.connect(_on_rope_pressed)
 	_rope.focus_entered.connect(_describe_rope)
 	_rope.mouse_entered.connect(_describe_rope)
+
+
+## The hold, ticked while this screen is up.
+##
+## `_process`, polling `Input`, and not `_unhandled_input`: a hold is a duration
+## and there is no event for "still down". It is also the only thing that works
+## here — the menu pauses the tree and `Input.action_press` (which every director
+## drives this with) sets action STATE and dispatches no InputEvent at all
+## (CLAUDE.md §3). This node reaches `_process` while paused because PauseMenu is
+## PROCESS_MODE_ALWAYS and children inherit it.
+##
+## Held ANYWHERE on the screen, not only with the row focused. The row is a
+## readout of a decision you make by looking at the grid and the header, and
+## making the player navigate to it first would put a focus move between reading
+## the number and acting on it.
+func _process(delta: float) -> void:
+	if not is_visible_in_tree():
+		# Hidden is not the same as un-processed: a Control keeps ticking when its
+		# parent screen is swapped out, and without this the pouch would fill its
+		# gauge from another screen's Y press.
+		_reset_hold()
+		return
+
+	if not Input.is_action_pressed(HOLD_ACTION):
+		_rope_armed = true
+		_reset_hold()
+		return
+	if not _rope_armed:
+		return
+
+	# Refused on the FIRST frame of the press, never after a full second of
+	# holding. Making a player hold something down to be told no is the one thing
+	# worse than a dead button: it costs them the second AND teaches them the
+	# gauge is a lie.
+	var why := _rope_refusal()
+	if not why.is_empty():
+		_rope_armed = false
+		notice.emit(why, true)
+		Bus.request_sfx.emit(&"craft_fail", Vector3.ZERO)
+		return
+
+	_rope_hold += delta
+	if _rope_hold >= ROPE_HOLD:
+		# Disarmed, so a button still down through the scene change cannot be read
+		# as the beginning of a second one.
+		_rope_armed = false
+		_reset_hold()
+		_use_rope()
+		return
+	_rope_bar.progress = _rope_hold / ROPE_HOLD
+
+
+## Snapped to zero, not decayed. A bar that drains says "keep going", and letting
+## go was the opposite of that (`trade_screen._tick_input` says the same).
+func _reset_hold() -> void:
+	_rope_hold = 0.0
+	if _rope_bar != null:
+		_rope_bar.progress = 0.0
+
+
+## Why the rope will not work right now, or "" if it will.
+func _rope_refusal() -> String:
+	if not Run.in_dungeon:
+		return "You are already home."
+	var fee := Run.extract_cost()
+	if Game.gold < fee:
+		return "The rope wants %d gold and you have %d." % [fee, Game.gold]
+	return ""
+
+
+## A on the row. It does not leave — it points at the button that does.
+##
+## The alternative was to make the row unfocusable, and that is worse: the row
+## is where the fee and the detail pane live, and a player who cannot put the
+## cursor on the way out has no way to read what leaving costs. So it keeps the
+## focus and answers the universal confirm with the one sentence that is useful.
+func _on_rope_pressed() -> void:
+	var why := _rope_refusal()
+	if not why.is_empty():
+		notice.emit(why, true)
+		return
+	notice.emit("Hold %s to use the rope." % _hold_glyph(), false)
+
+
+## The hold button, named off the LIVE InputMap and on the device in the player's
+## hands (`Glyph`). Both bindings happen to be "Y" today; this file is not the
+## place that decides that, and a line reading "Hold Y" to somebody who rebound
+## it is the bug Glyph exists to prevent.
+func _hold_glyph() -> String:
+	var e := Glyph.event_for(HOLD_ACTION, Settings != null and Settings.using_pad)
+	if e == null:
+		e = Glyph.event_for(HOLD_ACTION, false)
+	return Glyph.long(e) if e != null else "Y"
 
 
 ## Leaving is not something to do from inside a menu screen: the channel happens
 ## in the world and the player has to be able to see it. So the menu closes and
 ## the hero's rope node takes it from there (`Bus.escape_rope_used`).
 func _use_rope() -> void:
-	if not Run.in_dungeon:
-		notice.emit("You are already home.", true)
-		return
-	var fee := Run.extract_cost()
-	if Game.gold < fee:
-		notice.emit("The rope wants %d gold and you have %d." % [fee, Game.gold], true)
+	var why := _rope_refusal()
+	if not why.is_empty():
+		notice.emit(why, true)
 		return
 	use_requested.emit()
 	Bus.escape_rope_used.emit()
@@ -519,8 +676,12 @@ func _describe_rope() -> void:
 	_detail_blurb.text = "It pulls you home and heals what the dark took. " \
 		+ "The fee is a quarter of what you are carrying, and the fee is why " \
 		+ "the greedy run is a decision."
-	_detail_legend.text = "Takes a moment. A blow that lands breaks it." \
-		if Game.gold >= fee else "You cannot afford to leave. Sell, or die trying."
+	# Both halves of the way out, in the order the player meets them: the hold in
+	# here, then the channel out there. They are separate on purpose — one cannot
+	# be fumbled, the other can be interrupted (see `_build_rope`).
+	_detail_legend.text = "Hold %s. Then it takes a moment, and a blow that lands breaks it." \
+		% _hold_glyph() if Game.gold >= fee \
+		else "You cannot afford to leave. Sell, or die trying."
 
 
 ## The fee, live. It is on the row rather than only in the detail pane because
@@ -533,6 +694,15 @@ func _describe_rope() -> void:
 func _paint_rope() -> void:
 	if _rope == null:
 		return
+	# The empty track is drawn whenever the hold is POSSIBLE and hidden when it is
+	# not — `HoldGauge` calls that the pre-press tell, and it is only a tell if its
+	# absence means something. A track under a rope you cannot afford would say
+	# "hold me" about a button that is going to refuse.
+	var ready := _rope_refusal().is_empty()
+	_rope_bar.visible = ready
+	_rope_say.text = "Hold %s to climb out." % _hold_glyph() if ready \
+		else _rope_refusal()
+	_rope_say.modulate = Color.WHITE if ready else Pal.RUST
 	if not Run.in_dungeon:
 		_rope_fee.text = "—"
 		_rope_fee.modulate = Color(1, 1, 1, 0.5)
@@ -623,7 +793,13 @@ func _wire_focus() -> void:
 
 # --- State ------------------------------------------------------------------
 
+## Called every time the screen is entered. It re-disarms the hold as well as
+## placing the cursor: the press that OPENED the pouch is not the press that
+## leaves the dungeon, and `inventory` is Select while the hold is Y only until
+## somebody rebinds one of them.
 func focus_first() -> void:
+	_rope_armed = false
+	_reset_hold()
 	if not _cells.is_empty():
 		_cells[0].grab_focus()
 

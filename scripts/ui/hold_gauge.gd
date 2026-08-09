@@ -27,9 +27,15 @@ class_name HoldGauge
 ## HOLD in the line says it in language, and this says it in shape, and one of
 ## the two will be the one that lands.
 ##
-## Static, and drawing into whatever CanvasItem it is handed, because the three
-## callers are three unrelated nodes (the HUD autoload, the trade screen, and
-## whatever grows a hold next) and none of them should own the look.
+## Static, and drawing into whatever CanvasItem it is handed, because the
+## callers are unrelated nodes (the HUD autoload, the trade screen, and whatever
+## grows a hold next) and none of them should own the look.
+##
+## Screens built out of Control nodes rather than out of `_draw` call `bar()`
+## through `HoldBar` (scripts/ui/hold_bar.gd) instead of directly: a Control
+## draws its own commands BENEATH its children, so a menu that drew this over one
+## of its own rows would render it behind that row's StyleBox. Same widget, same
+## rule, one node of indirection.
 
 ## How thick the fill track is, in reference px (see `Pal.px`).
 const BAR_H := 3.0

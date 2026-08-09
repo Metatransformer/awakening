@@ -406,7 +406,11 @@ func _build_root_screen() -> void:
 	col.add_child(footer)
 	var hint := Label.new()
 	hint.theme_type_variation = &"MenuHint"
-	hint.text = "↑↓ / D-pad Select    Enter / A Confirm    Esc / Start Resume"
+	# B, not Start, because B is the universal back in every other screen in this
+	# menu and the root is the one place it was not written down. At the root
+	# there is nothing left to back out of, so backing out closes — which is what
+	# "Resume" was already describing.
+	hint.text = "↑↓ / D-pad Select    Enter / A Confirm    Esc / B Resume"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	footer.add_child(hint)
 

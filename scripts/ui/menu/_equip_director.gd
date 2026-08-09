@@ -31,6 +31,12 @@ const NAV_LIMIT := 20
 
 var _pass := 0
 var _fail := 0
+## Set by `Bus.escape_rope_used`. See the note where it is armed.
+var _rope_fired := false
+
+
+func _on_rope_fired() -> void:
+	_rope_fired = true
 
 
 func run(rig) -> void:
@@ -183,15 +189,95 @@ func run(rig) -> void:
 		Run.extract_cost() >= 15)
 	await rig.capture("eq_07_rope_fee.png")
 
+	# --- The way out is a HOLD -----------------------------------------------
+	# A is the universal forward press and it is one row above this on the same
+	# screen, where it fletches arrows repeatedly and on purpose. So A here must
+	# NOT leave -- it must point at the button that does (METAGAME §5).
+	await _key(rig, KEY_ENTER, 10)
+	_check("A on the rope did not leave: it is a hold now",
+		Run.in_dungeon and menu.is_open and pouch.visible)
+
+	# A tap of Y leaves nothing either. Sampled every frame and released on the
+	# FIRST non-zero reading rather than after a fixed wait: the gauge advances by
+	# `delta`, so N frames is N frames of unknown duration, and the shop's twin of
+	# this beat was caught reading 0.00 on a slow run where the whole hold had
+	# already elapsed (see forge_loop `CH3`). Releasing one frame in is also a
+	# harder test of "letting go does nothing" than releasing at 40%.
+	Input.action_press(&"ui_hold")
+	var peak := 0.0
+	for _i in 30:
+		await rig.wait_frames(1)
+		peak = maxf(peak, pouch._rope_hold)
+		if peak > 0.0:
+			break
+	Input.action_release(&"ui_hold")
+	await rig.wait_frames(6)
+	_check("the gauge fills while Y is down (%.2f s)" % peak, peak > 0.0)
+	_check("letting go snapped it back to zero (%.2f)" % pouch._rope_hold,
+		is_zero_approx(pouch._rope_hold))
+	_check("and a tap of Y left nobody anywhere",
+		Run.in_dungeon and menu.is_open and pouch.visible)
+
+	# Held through, with the shutter open two frames in: the frame is the proof,
+	# and no assertion about a float can see a bar that renders behind its row --
+	# which is the exact failure HoldBar exists to avoid.
+	#
+	# The listener is connected BEFORE the press and the capture is INSIDE the
+	# held-through half, both for the same reason: `capture()` costs frames of
+	# unknown duration, and the first version of this beat took a photograph so
+	# slow that the whole 0.9 s elapsed inside it -- the rope left, the menu
+	# closed, and the beat then reported "holding Y did nothing" while the beat
+	# below it reported "the menu closed" and passed. A director that photographs
+	# the thing it is testing has to survive the shutter finishing the job.
+	# `_rope_fired`, a FIELD, and not a local flag closed over by a lambda: a
+	# GDScript lambda captures locals BY VALUE, so `func(): left = true` sets the
+	# lambda's own copy and the caller reads false forever. That is not a
+	# hypothetical either -- it is what this beat did on its first run, reporting
+	# "holding Y did nothing" one line above "the menu closed whole for it".
+	_rope_fired = false
+	Bus.escape_rope_used.connect(_on_rope_fired)
+	Input.action_press(&"ui_hold")
+	# Waited on the GAUGE, not on a frame count, so the photograph is taken with
+	# the bar visibly part-full on a fast machine and a slow one alike. A capture
+	# two frames in read 0.02 s of 0.90 -- a two percent sliver, which proves the
+	# code and shows a human nothing.
+	for _i in 120:
+		await rig.wait_frames(1)
+		if pouch._rope_hold >= MenuPouchPanel.ROPE_HOLD * 0.45:
+			break
+	print("ROPE hold at the shutter: %.2f of %.2f s" % [
+		pouch._rope_hold, MenuPouchPanel.ROPE_HOLD])
+	await rig.capture("eq_07b_rope_hold.png")
+	# GAME SECONDS from here, not frames: 45 frames is 0.75 s at 60 Hz and 0.37 s
+	# at 120, and only one of those outlasts a 0.9 s hold.
+	await rig.hold_seconds(["ui_hold"], MenuPouchPanel.ROPE_HOLD + 0.4)
+	await rig.wait_frames(8)
+	Bus.escape_rope_used.disconnect(_on_rope_fired)
+	_check("holding Y through used the rope", _rope_fired)
+	# The channel happens in the WORLD, so the whole menu goes away -- not one
+	# screen popped off the stack.
+	_check("and the menu closed whole for it", not menu.is_open)
+
+	menu.open_pouch()
+	await rig.wait_frames(8)
+
 	# Too poor to leave. This must refuse and SAY SO, not silently do nothing:
 	# being unable to afford the way out is a legible failure state by design
-	# (METAGAME §5), and a dead button is not legible.
+	# (METAGAME §5), and a dead button is not legible. Refused on the FIRST frame
+	# of the press, so the gauge never moves -- making a player hold something
+	# down to be told no costs them the second and teaches them the bar lies.
 	Game.spend_gold(Game.gold)
 	pouch.refresh()
 	await rig.wait_frames(4)
-	await _key(rig, KEY_ENTER, 10)
+	_rope_fired = false
+	Bus.escape_rope_used.connect(_on_rope_fired)
+	await rig.hold_seconds(["ui_hold"], MenuPouchPanel.ROPE_HOLD + 0.4)
+	await rig.wait_frames(8)
+	Bus.escape_rope_used.disconnect(_on_rope_fired)
 	_check("too poor to leave: refused, still in the run, menu still open",
-		Run.in_dungeon and menu.is_open and pouch.visible)
+		not _rope_fired and Run.in_dungeon and menu.is_open and pouch.visible)
+	_check("and the gauge never moved for it (%.2f)" % pouch._rope_hold,
+		is_zero_approx(pouch._rope_hold))
 	await rig.capture("eq_08_rope_broke.png")
 	Run.in_dungeon = false
 

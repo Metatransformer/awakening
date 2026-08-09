@@ -12,9 +12,14 @@ extends Node3D
 ##
 ##  * **Leaving takes time and can be interrupted.** The pad was a HOLD so that a
 ##    decision could not be made by fumbling a button and so that something
-##    chasing you was a real problem. A menu press has neither property on its
-##    own — the menu is paused, so a "hold" in there is just a slow click. So the
-##    rope channels in the WORLD, after the menu closes, and a hit breaks it.
+##    chasing you was a real problem. Those are two different guarantees and the
+##    rope now keeps them in two places, because one of them cannot be kept in a
+##    paused menu: the channel happens in the WORLD, after the menu closes, and a
+##    hit breaks it. **The fumble guard is back where the press is** — the pouch
+##    row is held on Y for `MenuPouchPanel.ROPE_HOLD` seconds with the usual
+##    gauge, on a different button from the A that fletches arrows one row above
+##    it. Nothing in here reads that hold; by the time `Bus.escape_rope_used`
+##    arrives the player has already meant it.
 ##  * **The fee is paid out of the number you are protecting**, and the HUD says
 ##    so: the ring closes around the bag total, exactly as it did on the pad.
 ##
