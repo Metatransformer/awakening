@@ -50,6 +50,18 @@ const AT_GOBLIN := Vector3(-2.2, 0.05, 2.4)
 ## which is a pass that proves nothing.
 const AT_SLEEPER := Vector3(2.5, 0.05, -5.5)
 const AT_ELITE := Vector3(2.8, 0.05, 1.6)
+## Every position above is written in world space and only frames anything if the
+## camera is looking north, so this director has to SAY so. It did not, at first
+## -- it placed the hero and recentred, and inherited whatever facing the town
+## spawn happened to give him. That worked until a merge moved the default, and
+## then the sleeper was simply off screen: case B still "passed" (no bar, because
+## no monster) and case C failed. A director that reads its own frames must own
+## the framing.
+##
+## `facing_yaw` is the HEADING yaw (docs/CONTRACT.md §2.5): heading is
+## (sin y, 0, cos y), so PI is heading (0,0,-1) and the camera's behind_yaw puts
+## the lens at the hero's back looking up the courtyard.
+const LOOK_NORTH := PI
 
 var _out := ""
 var _fails := 0
@@ -62,6 +74,10 @@ func run(rig) -> void:
 	var scene: Node = rig.current_scene
 	var hero: Node3D = rig.get_nodes_in_group(&"player")[0]
 	hero.global_position = AT_HERO
+	# `rotation.y` as well as `facing_yaw`: the hero turns toward his own heading
+	# every frame, so setting only the node is undone before the first capture.
+	hero.set(&"facing_yaw", LOOK_NORTH)
+	hero.rotation.y = LOOK_NORTH + PI
 	Bus.camera_recenter.emit()
 	await rig.wait_frames(20)
 
@@ -85,6 +101,11 @@ func run(rig) -> void:
 		b.size(), _lengths(b), sleeper.state, sleeper.is_engaged()])
 	_want(not sleeper.is_engaged(),
 		"the distant skeleton woke up on its own; case B proves nothing")
+	# The two ways this case lies, both of which it has already told: the monster
+	# is awake (so "no bar" is untested), or it is not in frame at all (so "no bar"
+	# is a tautology). Assert the head is somewhere the bar COULD have been drawn.
+	_want(_framed(hero, sleeper),
+		"the sleeping skeleton was not on camera; case B proves nothing")
 	_want(b.size() == 1,
 		"a sleeping, unhurt skeleton drew a bar (%d on screen, wanted 1)" % b.size())
 
@@ -147,6 +168,21 @@ func _spawn(scene: Node, kind: StringName, at: Vector3, elite: bool) -> Enemy:
 	scene.add_child(e)
 	e.global_position = at
 	return e
+
+
+## Is this monster's head somewhere the HUD could put a bar? Deliberately the same
+## two questions `Hud._draw_enemy_bars` asks -- behind the lens, or off the rect --
+## and deliberately NOT the occlusion ray, because case D wants a framed monster
+## the wall is hiding.
+func _framed(hero: Node3D, e: Enemy) -> bool:
+	var cam := hero.get_viewport().get_camera_3d()
+	if cam == null:
+		return false
+	var head: Vector3 = e.head_point()
+	if cam.is_position_behind(head):
+		return false
+	var r := Rect2(Vector2.ZERO, Vector2(cam.get_viewport().get_visible_rect().size))
+	return r.has_point(cam.unproject_position(head))
 
 
 func _hurt(e: Enemy, quarters: int) -> void:
