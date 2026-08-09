@@ -262,7 +262,12 @@ func _baseline(body: Node) -> Dictionary:
 ##
 ## Emission is folded in with the same normalisation, because the glow is the
 ## other half of `ice()` and a leak that showed up only there would otherwise
-## sail past the bystander check.
+## sail past the bystander check — but only when it is FROST-coloured. A body
+## that is lit is not a body that is frozen: this beat originally counted any
+## emission at all, and the merge onto main caught it out immediately. The
+## skeleton thawed correctly, walked into the hero, and started a wind-up, and
+## the render showed a monster glowing RUST orange under a line claiming it was
+## still 34% iced. The hue is what tells the two tells apart.
 func _ice(body: Node, base: Dictionary) -> float:
 	var peak := 0.0
 	for m in _surfaces(body):
@@ -274,7 +279,7 @@ func _ice(body: Node, base: Dictionary) -> float:
 		if trip > 0.001:
 			peak = maxf(peak, _rgb(start).distance_to(_rgb(m.albedo_color)) / trip)
 		var lit := 0.0
-		if m.emission_enabled:
+		if m.emission_enabled and _rgb(m.emission).distance_to(_rgb(Pal.FROST)) < 0.2:
 			lit = absf(m.emission_energy_multiplier - float(was["energy"]))
 		peak = maxf(peak, lit / HitFlash.ICE_ENERGY)
 	return clampf(peak, 0.0, 1.0)
