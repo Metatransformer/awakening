@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://budkt368dww4x"
 path.s3tc="res://.godot/imported/treasure_chest_treasure_chest_diff.jpg-56907bc81440f21e0283603e6f559062.s3tc.ctex"
+path.etc2="res://.godot/imported/treasure_chest_treasure_chest_diff.jpg-56907bc81440f21e0283603e6f559062.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/props/treasure_chest_treasure_chest_diff.jpg"
-dest_files=["res://.godot/imported/treasure_chest_treasure_chest_diff.jpg-56907bc81440f21e0283603e6f559062.s3tc.ctex"]
+dest_files=["res://.godot/imported/treasure_chest_treasure_chest_diff.jpg-56907bc81440f21e0283603e6f559062.s3tc.ctex", "res://.godot/imported/treasure_chest_treasure_chest_diff.jpg-56907bc81440f21e0283603e6f559062.etc2.ctex"]
 
 [params]
 

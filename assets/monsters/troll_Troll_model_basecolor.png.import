@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://bdl7hnd25vcsj"
 path.s3tc="res://.godot/imported/troll_Troll_model_basecolor.png-7c17e2a4f050a16d0cf91fb779061d75.s3tc.ctex"
+path.etc2="res://.godot/imported/troll_Troll_model_basecolor.png-7c17e2a4f050a16d0cf91fb779061d75.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/monsters/troll_Troll_model_basecolor.png"
-dest_files=["res://.godot/imported/troll_Troll_model_basecolor.png-7c17e2a4f050a16d0cf91fb779061d75.s3tc.ctex"]
+dest_files=["res://.godot/imported/troll_Troll_model_basecolor.png-7c17e2a4f050a16d0cf91fb779061d75.s3tc.ctex", "res://.godot/imported/troll_Troll_model_basecolor.png-7c17e2a4f050a16d0cf91fb779061d75.etc2.ctex"]
 
 [params]
 

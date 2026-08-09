@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://bppawmb6eb4q5"
 path.s3tc="res://.godot/imported/reshi_male_base_Color_97aa79f7-8174-4c77-9b4f-4294bf2329c1.jpg-6a69d09c59ffacaf54b8197b3b706bca.s3tc.ctex"
+path.etc2="res://.godot/imported/reshi_male_base_Color_97aa79f7-8174-4c77-9b4f-4294bf2329c1.jpg-6a69d09c59ffacaf54b8197b3b706bca.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/characters/races/reshi_male_base_Color_97aa79f7-8174-4c77-9b4f-4294bf2329c1.jpg"
-dest_files=["res://.godot/imported/reshi_male_base_Color_97aa79f7-8174-4c77-9b4f-4294bf2329c1.jpg-6a69d09c59ffacaf54b8197b3b706bca.s3tc.ctex"]
+dest_files=["res://.godot/imported/reshi_male_base_Color_97aa79f7-8174-4c77-9b4f-4294bf2329c1.jpg-6a69d09c59ffacaf54b8197b3b706bca.s3tc.ctex", "res://.godot/imported/reshi_male_base_Color_97aa79f7-8174-4c77-9b4f-4294bf2329c1.jpg-6a69d09c59ffacaf54b8197b3b706bca.etc2.ctex"]
 
 [params]
 

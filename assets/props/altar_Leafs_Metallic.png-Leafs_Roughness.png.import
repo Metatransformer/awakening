@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://bl472xv17w2wu"
 path.s3tc="res://.godot/imported/altar_Leafs_Metallic.png-Leafs_Roughness.png-db46de1e47b1ccb9f6777596fb2eeff4.s3tc.ctex"
+path.etc2="res://.godot/imported/altar_Leafs_Metallic.png-Leafs_Roughness.png-db46de1e47b1ccb9f6777596fb2eeff4.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/props/altar_Leafs_Metallic.png-Leafs_Roughness.png"
-dest_files=["res://.godot/imported/altar_Leafs_Metallic.png-Leafs_Roughness.png-db46de1e47b1ccb9f6777596fb2eeff4.s3tc.ctex"]
+dest_files=["res://.godot/imported/altar_Leafs_Metallic.png-Leafs_Roughness.png-db46de1e47b1ccb9f6777596fb2eeff4.s3tc.ctex", "res://.godot/imported/altar_Leafs_Metallic.png-Leafs_Roughness.png-db46de1e47b1ccb9f6777596fb2eeff4.etc2.ctex"]
 
 [params]
 

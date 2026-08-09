@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://blgnpaecrmt0o"
 path.s3tc="res://.godot/imported/altar_Poles_Emission.png-8ce85701cd1526da08215736998a3f91.s3tc.ctex"
+path.etc2="res://.godot/imported/altar_Poles_Emission.png-8ce85701cd1526da08215736998a3f91.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/props/altar_Poles_Emission.png"
-dest_files=["res://.godot/imported/altar_Poles_Emission.png-8ce85701cd1526da08215736998a3f91.s3tc.ctex"]
+dest_files=["res://.godot/imported/altar_Poles_Emission.png-8ce85701cd1526da08215736998a3f91.s3tc.ctex", "res://.godot/imported/altar_Poles_Emission.png-8ce85701cd1526da08215736998a3f91.etc2.ctex"]
 
 [params]
 

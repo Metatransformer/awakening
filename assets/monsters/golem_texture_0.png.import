@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://ddvw85gagcnn8"
 path.s3tc="res://.godot/imported/golem_texture_0.png-31b26c6d09ce41b3c712121308dc29b9.s3tc.ctex"
+path.etc2="res://.godot/imported/golem_texture_0.png-31b26c6d09ce41b3c712121308dc29b9.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/monsters/golem_texture_0.png"
-dest_files=["res://.godot/imported/golem_texture_0.png-31b26c6d09ce41b3c712121308dc29b9.s3tc.ctex"]
+dest_files=["res://.godot/imported/golem_texture_0.png-31b26c6d09ce41b3c712121308dc29b9.s3tc.ctex", "res://.godot/imported/golem_texture_0.png-31b26c6d09ce41b3c712121308dc29b9.etc2.ctex"]
 
 [params]
 

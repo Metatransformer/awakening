@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://cqtfvd8g2rsdv"
 path.s3tc="res://.godot/imported/kobold_goblin_creature_3d_model_basecolor.png-6f13e4bcf0e69db48f864e9833dccf2a.s3tc.ctex"
+path.etc2="res://.godot/imported/kobold_goblin_creature_3d_model_basecolor.png-6f13e4bcf0e69db48f864e9833dccf2a.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/monsters/kobold_goblin_creature_3d_model_basecolor.png"
-dest_files=["res://.godot/imported/kobold_goblin_creature_3d_model_basecolor.png-6f13e4bcf0e69db48f864e9833dccf2a.s3tc.ctex"]
+dest_files=["res://.godot/imported/kobold_goblin_creature_3d_model_basecolor.png-6f13e4bcf0e69db48f864e9833dccf2a.s3tc.ctex", "res://.godot/imported/kobold_goblin_creature_3d_model_basecolor.png-6f13e4bcf0e69db48f864e9833dccf2a.etc2.ctex"]
 
 [params]
 

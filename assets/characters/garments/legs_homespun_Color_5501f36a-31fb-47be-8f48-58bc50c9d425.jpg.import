@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://bif16cfuwbvwa"
 path.s3tc="res://.godot/imported/legs_homespun_Color_5501f36a-31fb-47be-8f48-58bc50c9d425.jpg-b5d61a95af90efbfd3cdb25e16dbdd7c.s3tc.ctex"
+path.etc2="res://.godot/imported/legs_homespun_Color_5501f36a-31fb-47be-8f48-58bc50c9d425.jpg-b5d61a95af90efbfd3cdb25e16dbdd7c.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/characters/garments/legs_homespun_Color_5501f36a-31fb-47be-8f48-58bc50c9d425.jpg"
-dest_files=["res://.godot/imported/legs_homespun_Color_5501f36a-31fb-47be-8f48-58bc50c9d425.jpg-b5d61a95af90efbfd3cdb25e16dbdd7c.s3tc.ctex"]
+dest_files=["res://.godot/imported/legs_homespun_Color_5501f36a-31fb-47be-8f48-58bc50c9d425.jpg-b5d61a95af90efbfd3cdb25e16dbdd7c.s3tc.ctex", "res://.godot/imported/legs_homespun_Color_5501f36a-31fb-47be-8f48-58bc50c9d425.jpg-b5d61a95af90efbfd3cdb25e16dbdd7c.etc2.ctex"]
 
 [params]
 

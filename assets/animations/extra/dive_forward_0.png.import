@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://ob1nyieal5b0"
 path.s3tc="res://.godot/imported/dive_forward_0.png-27cfffbb900216e35f9188189bb378f3.s3tc.ctex"
+path.etc2="res://.godot/imported/dive_forward_0.png-27cfffbb900216e35f9188189bb378f3.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/animations/extra/dive_forward_0.png"
-dest_files=["res://.godot/imported/dive_forward_0.png-27cfffbb900216e35f9188189bb378f3.s3tc.ctex"]
+dest_files=["res://.godot/imported/dive_forward_0.png-27cfffbb900216e35f9188189bb378f3.s3tc.ctex", "res://.godot/imported/dive_forward_0.png-27cfffbb900216e35f9188189bb378f3.etc2.ctex"]
 
 [params]
 

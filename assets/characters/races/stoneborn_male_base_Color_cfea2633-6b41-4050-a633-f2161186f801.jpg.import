@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://yt6d5s33k5h0"
 path.s3tc="res://.godot/imported/stoneborn_male_base_Color_cfea2633-6b41-4050-a633-f2161186f801.jpg-4b80d3b61dd00c2ac4d0e0c83dab2e9a.s3tc.ctex"
+path.etc2="res://.godot/imported/stoneborn_male_base_Color_cfea2633-6b41-4050-a633-f2161186f801.jpg-4b80d3b61dd00c2ac4d0e0c83dab2e9a.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/characters/races/stoneborn_male_base_Color_cfea2633-6b41-4050-a633-f2161186f801.jpg"
-dest_files=["res://.godot/imported/stoneborn_male_base_Color_cfea2633-6b41-4050-a633-f2161186f801.jpg-4b80d3b61dd00c2ac4d0e0c83dab2e9a.s3tc.ctex"]
+dest_files=["res://.godot/imported/stoneborn_male_base_Color_cfea2633-6b41-4050-a633-f2161186f801.jpg-4b80d3b61dd00c2ac4d0e0c83dab2e9a.s3tc.ctex", "res://.godot/imported/stoneborn_male_base_Color_cfea2633-6b41-4050-a633-f2161186f801.jpg-4b80d3b61dd00c2ac4d0e0c83dab2e9a.etc2.ctex"]
 
 [params]
 

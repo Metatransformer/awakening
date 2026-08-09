@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://b3r4mc58ssedl"
 path.s3tc="res://.godot/imported/roll_to_run_0.png-f86e1c79e8f6b4f63abbd99f1f9febae.s3tc.ctex"
+path.etc2="res://.godot/imported/roll_to_run_0.png-f86e1c79e8f6b4f63abbd99f1f9febae.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/animations/extra/roll_to_run_0.png"
-dest_files=["res://.godot/imported/roll_to_run_0.png-f86e1c79e8f6b4f63abbd99f1f9febae.s3tc.ctex"]
+dest_files=["res://.godot/imported/roll_to_run_0.png-f86e1c79e8f6b4f63abbd99f1f9febae.s3tc.ctex", "res://.godot/imported/roll_to_run_0.png-f86e1c79e8f6b4f63abbd99f1f9febae.etc2.ctex"]
 
 [params]
 

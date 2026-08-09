@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://b23imcig54jx4"
 path.s3tc="res://.godot/imported/paladin_0.png-a7dbb8851cef4c8e52a8339c0950b63d.s3tc.ctex"
+path.etc2="res://.godot/imported/paladin_0.png-a7dbb8851cef4c8e52a8339c0950b63d.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/characters/paladin_0.png"
-dest_files=["res://.godot/imported/paladin_0.png-a7dbb8851cef4c8e52a8339c0950b63d.s3tc.ctex"]
+dest_files=["res://.godot/imported/paladin_0.png-a7dbb8851cef4c8e52a8339c0950b63d.s3tc.ctex", "res://.godot/imported/paladin_0.png-a7dbb8851cef4c8e52a8339c0950b63d.etc2.ctex"]
 
 [params]
 

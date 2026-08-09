@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://u71h8e5admt3"
 path.s3tc="res://.godot/imported/altar_Leafs_Normal.png-6aa66f3db8e4455276a7c8a0ceae61e0.s3tc.ctex"
+path.etc2="res://.godot/imported/altar_Leafs_Normal.png-6aa66f3db8e4455276a7c8a0ceae61e0.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/props/altar_Leafs_Normal.png"
-dest_files=["res://.godot/imported/altar_Leafs_Normal.png-6aa66f3db8e4455276a7c8a0ceae61e0.s3tc.ctex"]
+dest_files=["res://.godot/imported/altar_Leafs_Normal.png-6aa66f3db8e4455276a7c8a0ceae61e0.s3tc.ctex", "res://.godot/imported/altar_Leafs_Normal.png-6aa66f3db8e4455276a7c8a0ceae61e0.etc2.ctex"]
 
 [params]
 

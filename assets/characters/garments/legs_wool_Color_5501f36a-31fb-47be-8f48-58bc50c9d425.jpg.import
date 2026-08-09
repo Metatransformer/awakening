@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://bsw0tyhpi7wja"
 path.s3tc="res://.godot/imported/legs_wool_Color_5501f36a-31fb-47be-8f48-58bc50c9d425.jpg-102fc7dca0eec14fbe7c91228ecec1d1.s3tc.ctex"
+path.etc2="res://.godot/imported/legs_wool_Color_5501f36a-31fb-47be-8f48-58bc50c9d425.jpg-102fc7dca0eec14fbe7c91228ecec1d1.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/characters/garments/legs_wool_Color_5501f36a-31fb-47be-8f48-58bc50c9d425.jpg"
-dest_files=["res://.godot/imported/legs_wool_Color_5501f36a-31fb-47be-8f48-58bc50c9d425.jpg-102fc7dca0eec14fbe7c91228ecec1d1.s3tc.ctex"]
+dest_files=["res://.godot/imported/legs_wool_Color_5501f36a-31fb-47be-8f48-58bc50c9d425.jpg-102fc7dca0eec14fbe7c91228ecec1d1.s3tc.ctex", "res://.godot/imported/legs_wool_Color_5501f36a-31fb-47be-8f48-58bc50c9d425.jpg-102fc7dca0eec14fbe7c91228ecec1d1.etc2.ctex"]
 
 [params]
 

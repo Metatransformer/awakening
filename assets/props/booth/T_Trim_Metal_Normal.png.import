@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://f6bagtklrmc3"
 path.s3tc="res://.godot/imported/T_Trim_Metal_Normal.png-5523e55c5554e647e1aeffd4f001f51c.s3tc.ctex"
+path.etc2="res://.godot/imported/T_Trim_Metal_Normal.png-5523e55c5554e647e1aeffd4f001f51c.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/props/booth/T_Trim_Metal_Normal.png"
-dest_files=["res://.godot/imported/T_Trim_Metal_Normal.png-5523e55c5554e647e1aeffd4f001f51c.s3tc.ctex"]
+dest_files=["res://.godot/imported/T_Trim_Metal_Normal.png-5523e55c5554e647e1aeffd4f001f51c.s3tc.ctex", "res://.godot/imported/T_Trim_Metal_Normal.png-5523e55c5554e647e1aeffd4f001f51c.etc2.ctex"]
 
 [params]
 

@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://dfwuqqqkckix7"
 path.s3tc="res://.godot/imported/cast_heavy_0.png-a21f1fc6aa3a0a8bb151a1c8257d47c6.s3tc.ctex"
+path.etc2="res://.godot/imported/cast_heavy_0.png-a21f1fc6aa3a0a8bb151a1c8257d47c6.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/animations/extra/cast_heavy_0.png"
-dest_files=["res://.godot/imported/cast_heavy_0.png-a21f1fc6aa3a0a8bb151a1c8257d47c6.s3tc.ctex"]
+dest_files=["res://.godot/imported/cast_heavy_0.png-a21f1fc6aa3a0a8bb151a1c8257d47c6.s3tc.ctex", "res://.godot/imported/cast_heavy_0.png-a21f1fc6aa3a0a8bb151a1c8257d47c6.etc2.ctex"]
 
 [params]
 

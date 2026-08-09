@@ -539,6 +539,14 @@ buses/default_bus_layout="res://default_bus_layout.tres"
 [rendering]
 
 rendering_device/driver.windows="d3d12"
+; The macOS export REFUSES to build universal or arm64 without this — it is a
+; hard configuration error, not a warning, and it is why `pnpm deploy` would
+; otherwise die on the first preset. Apple GPUs want ASTC, and Godot will not
+; ship a bundle that has no ASTC variant to hand them.
+; Turning it on re-imports every texture with an extra variant: .godot/imported/
+; grows and so does the export. That is the price of an Apple Silicon build that
+; is not Rosetta-only, and on this project's texture count it is worth it.
+textures/vram_compression/import_etc2_astc=true
 lights_and_shadows/directional_shadow/size=8192
 lights_and_shadows/directional_shadow/soft_shadow_filter_quality=4
 anti_aliasing/quality/msaa_3d=2

@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://b7ihm8o5pepoa"
 path.s3tc="res://.godot/imported/kite_shield_kite_shield_clamps_trim_nor_gl.jpg-18340c74166d15f72ef62aac5a9966d4.s3tc.ctex"
+path.etc2="res://.godot/imported/kite_shield_kite_shield_clamps_trim_nor_gl.jpg-18340c74166d15f72ef62aac5a9966d4.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/weapons/kite_shield_kite_shield_clamps_trim_nor_gl.jpg"
-dest_files=["res://.godot/imported/kite_shield_kite_shield_clamps_trim_nor_gl.jpg-18340c74166d15f72ef62aac5a9966d4.s3tc.ctex"]
+dest_files=["res://.godot/imported/kite_shield_kite_shield_clamps_trim_nor_gl.jpg-18340c74166d15f72ef62aac5a9966d4.s3tc.ctex", "res://.godot/imported/kite_shield_kite_shield_clamps_trim_nor_gl.jpg-18340c74166d15f72ef62aac5a9966d4.etc2.ctex"]
 
 [params]
 

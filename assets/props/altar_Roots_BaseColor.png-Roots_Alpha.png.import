@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://bq0w16wpygjiv"
 path.s3tc="res://.godot/imported/altar_Roots_BaseColor.png-Roots_Alpha.png-7bd0d946392258fb2a0e18dd3b2d8803.s3tc.ctex"
+path.etc2="res://.godot/imported/altar_Roots_BaseColor.png-Roots_Alpha.png-7bd0d946392258fb2a0e18dd3b2d8803.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/props/altar_Roots_BaseColor.png-Roots_Alpha.png"
-dest_files=["res://.godot/imported/altar_Roots_BaseColor.png-Roots_Alpha.png-7bd0d946392258fb2a0e18dd3b2d8803.s3tc.ctex"]
+dest_files=["res://.godot/imported/altar_Roots_BaseColor.png-Roots_Alpha.png-7bd0d946392258fb2a0e18dd3b2d8803.s3tc.ctex", "res://.godot/imported/altar_Roots_BaseColor.png-Roots_Alpha.png-7bd0d946392258fb2a0e18dd3b2d8803.etc2.ctex"]
 
 [params]
 

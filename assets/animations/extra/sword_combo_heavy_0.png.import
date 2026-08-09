@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://cegb6m5vp7o0r"
 path.s3tc="res://.godot/imported/sword_combo_heavy_0.png-24b85899dce0e3c60c929ad9f5a9715c.s3tc.ctex"
+path.etc2="res://.godot/imported/sword_combo_heavy_0.png-24b85899dce0e3c60c929ad9f5a9715c.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/animations/extra/sword_combo_heavy_0.png"
-dest_files=["res://.godot/imported/sword_combo_heavy_0.png-24b85899dce0e3c60c929ad9f5a9715c.s3tc.ctex"]
+dest_files=["res://.godot/imported/sword_combo_heavy_0.png-24b85899dce0e3c60c929ad9f5a9715c.s3tc.ctex", "res://.godot/imported/sword_combo_heavy_0.png-24b85899dce0e3c60c929ad9f5a9715c.etc2.ctex"]
 
 [params]
 

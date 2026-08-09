@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://uam10hhb00gk"
 path.s3tc="res://.godot/imported/altar_base_BaseColor.png-f37499c9fd6812f8c79e831d739e8b61.s3tc.ctex"
+path.etc2="res://.godot/imported/altar_base_BaseColor.png-f37499c9fd6812f8c79e831d739e8b61.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/props/altar_base_BaseColor.png"
-dest_files=["res://.godot/imported/altar_base_BaseColor.png-f37499c9fd6812f8c79e831d739e8b61.s3tc.ctex"]
+dest_files=["res://.godot/imported/altar_base_BaseColor.png-f37499c9fd6812f8c79e831d739e8b61.s3tc.ctex", "res://.godot/imported/altar_base_BaseColor.png-f37499c9fd6812f8c79e831d739e8b61.etc2.ctex"]
 
 [params]
 

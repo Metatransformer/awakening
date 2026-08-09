@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://ccf7o1fq6ulr8"
 path.s3tc="res://.godot/imported/warrior_0.png-6cb955dfe0e61b263cb2bd175dbeaaa5.s3tc.ctex"
+path.etc2="res://.godot/imported/warrior_0.png-6cb955dfe0e61b263cb2bd175dbeaaa5.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/characters/warrior_0.png"
-dest_files=["res://.godot/imported/warrior_0.png-6cb955dfe0e61b263cb2bd175dbeaaa5.s3tc.ctex"]
+dest_files=["res://.godot/imported/warrior_0.png-6cb955dfe0e61b263cb2bd175dbeaaa5.s3tc.ctex", "res://.godot/imported/warrior_0.png-6cb955dfe0e61b263cb2bd175dbeaaa5.etc2.ctex"]
 
 [params]
 

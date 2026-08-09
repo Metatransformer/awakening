@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://dxoobf0n4fxw4"
 path.s3tc="res://.godot/imported/running_0.png-7c62fb9892ab00c6d416bfa07ace4ec6.s3tc.ctex"
+path.etc2="res://.godot/imported/running_0.png-7c62fb9892ab00c6d416bfa07ace4ec6.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/animations/extra/running_0.png"
-dest_files=["res://.godot/imported/running_0.png-7c62fb9892ab00c6d416bfa07ace4ec6.s3tc.ctex"]
+dest_files=["res://.godot/imported/running_0.png-7c62fb9892ab00c6d416bfa07ace4ec6.s3tc.ctex", "res://.godot/imported/running_0.png-7c62fb9892ab00c6d416bfa07ace4ec6.etc2.ctex"]
 
 [params]
 

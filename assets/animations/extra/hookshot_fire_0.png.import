@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://00l7tl13g7d5"
 path.s3tc="res://.godot/imported/hookshot_fire_0.png-f828d91b78127a30dc4984f9fd076c52.s3tc.ctex"
+path.etc2="res://.godot/imported/hookshot_fire_0.png-f828d91b78127a30dc4984f9fd076c52.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/animations/extra/hookshot_fire_0.png"
-dest_files=["res://.godot/imported/hookshot_fire_0.png-f828d91b78127a30dc4984f9fd076c52.s3tc.ctex"]
+dest_files=["res://.godot/imported/hookshot_fire_0.png-f828d91b78127a30dc4984f9fd076c52.s3tc.ctex", "res://.godot/imported/hookshot_fire_0.png-f828d91b78127a30dc4984f9fd076c52.etc2.ctex"]
 
 [params]
 

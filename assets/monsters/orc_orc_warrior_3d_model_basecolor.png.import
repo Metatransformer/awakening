@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://dlenl7gq08mex"
 path.s3tc="res://.godot/imported/orc_orc_warrior_3d_model_basecolor.png-741f2a01c2cf2fb1c322b5fb05df98de.s3tc.ctex"
+path.etc2="res://.godot/imported/orc_orc_warrior_3d_model_basecolor.png-741f2a01c2cf2fb1c322b5fb05df98de.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/monsters/orc_orc_warrior_3d_model_basecolor.png"
-dest_files=["res://.godot/imported/orc_orc_warrior_3d_model_basecolor.png-741f2a01c2cf2fb1c322b5fb05df98de.s3tc.ctex"]
+dest_files=["res://.godot/imported/orc_orc_warrior_3d_model_basecolor.png-741f2a01c2cf2fb1c322b5fb05df98de.s3tc.ctex", "res://.godot/imported/orc_orc_warrior_3d_model_basecolor.png-741f2a01c2cf2fb1c322b5fb05df98de.etc2.ctex"]
 
 [params]
 

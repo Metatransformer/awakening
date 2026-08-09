@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://c6fodspspaoe3"
 path.s3tc="res://.godot/imported/backflip_0.png-bd176f78da4f0fd4b0fcc8c73e018837.s3tc.ctex"
+path.etc2="res://.godot/imported/backflip_0.png-bd176f78da4f0fd4b0fcc8c73e018837.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/animations/extra/backflip_0.png"
-dest_files=["res://.godot/imported/backflip_0.png-bd176f78da4f0fd4b0fcc8c73e018837.s3tc.ctex"]
+dest_files=["res://.godot/imported/backflip_0.png-bd176f78da4f0fd4b0fcc8c73e018837.s3tc.ctex", "res://.godot/imported/backflip_0.png-bd176f78da4f0fd4b0fcc8c73e018837.etc2.ctex"]
 
 [params]
 

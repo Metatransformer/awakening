@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://dlg82xda21gyo"
 path.s3tc="res://.godot/imported/altar_Poles_BaseColor.png-Poles_Alpha.png-d676db90901bf5ffc8cb4498246fed3a.s3tc.ctex"
+path.etc2="res://.godot/imported/altar_Poles_BaseColor.png-Poles_Alpha.png-d676db90901bf5ffc8cb4498246fed3a.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/props/altar_Poles_BaseColor.png-Poles_Alpha.png"
-dest_files=["res://.godot/imported/altar_Poles_BaseColor.png-Poles_Alpha.png-d676db90901bf5ffc8cb4498246fed3a.s3tc.ctex"]
+dest_files=["res://.godot/imported/altar_Poles_BaseColor.png-Poles_Alpha.png-d676db90901bf5ffc8cb4498246fed3a.s3tc.ctex", "res://.godot/imported/altar_Poles_BaseColor.png-Poles_Alpha.png-d676db90901bf5ffc8cb4498246fed3a.etc2.ctex"]
 
 [params]
 

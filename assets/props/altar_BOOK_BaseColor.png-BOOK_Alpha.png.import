@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://cpisbb6s75l35"
 path.s3tc="res://.godot/imported/altar_BOOK_BaseColor.png-BOOK_Alpha.png-2435839493873e48f3b58aa0cf333d2d.s3tc.ctex"
+path.etc2="res://.godot/imported/altar_BOOK_BaseColor.png-BOOK_Alpha.png-2435839493873e48f3b58aa0cf333d2d.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/props/altar_BOOK_BaseColor.png-BOOK_Alpha.png"
-dest_files=["res://.godot/imported/altar_BOOK_BaseColor.png-BOOK_Alpha.png-2435839493873e48f3b58aa0cf333d2d.s3tc.ctex"]
+dest_files=["res://.godot/imported/altar_BOOK_BaseColor.png-BOOK_Alpha.png-2435839493873e48f3b58aa0cf333d2d.s3tc.ctex", "res://.godot/imported/altar_BOOK_BaseColor.png-BOOK_Alpha.png-2435839493873e48f3b58aa0cf333d2d.etc2.ctex"]
 
 [params]
 

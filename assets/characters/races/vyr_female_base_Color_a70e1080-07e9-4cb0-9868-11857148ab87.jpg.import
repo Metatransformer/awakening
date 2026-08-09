@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://y4bvfj66wlgw"
 path.s3tc="res://.godot/imported/vyr_female_base_Color_a70e1080-07e9-4cb0-9868-11857148ab87.jpg-e235f8c136dd4c434354c052a90ae665.s3tc.ctex"
+path.etc2="res://.godot/imported/vyr_female_base_Color_a70e1080-07e9-4cb0-9868-11857148ab87.jpg-e235f8c136dd4c434354c052a90ae665.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/characters/races/vyr_female_base_Color_a70e1080-07e9-4cb0-9868-11857148ab87.jpg"
-dest_files=["res://.godot/imported/vyr_female_base_Color_a70e1080-07e9-4cb0-9868-11857148ab87.jpg-e235f8c136dd4c434354c052a90ae665.s3tc.ctex"]
+dest_files=["res://.godot/imported/vyr_female_base_Color_a70e1080-07e9-4cb0-9868-11857148ab87.jpg-e235f8c136dd4c434354c052a90ae665.s3tc.ctex", "res://.godot/imported/vyr_female_base_Color_a70e1080-07e9-4cb0-9868-11857148ab87.jpg-e235f8c136dd4c434354c052a90ae665.etc2.ctex"]
 
 [params]
 
