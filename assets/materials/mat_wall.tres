@@ -1,28 +1,18 @@
-[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+[gd_resource type="StandardMaterial3D" load_steps=3 format=3]
 
-[ext_resource type="Shader" uid="uid://4uhagvr11ur" path="res://assets/shaders/wall_stone.gdshader" id="1_wall"]
+[ext_resource type="Texture2D" uid="uid://caamdjjgsuogy" path="res://assets/textures/rock_wall_tiled.png" id="1_alb"]
+[ext_resource type="Texture2D" uid="uid://dmi8vj34djkfm" path="res://assets/textures/rock_wall_tiled_n.png" id="2_nrm"]
 
 [resource]
 resource_name = "mat_wall"
-shader = ExtResource("1_wall")
-shader_parameter/base_color_a = Color(0.265, 0.234, 0.194, 1)
-shader_parameter/base_color_b = Color(0.398, 0.358, 0.303, 1)
-shader_parameter/block_brightness_variation = 0.44
-shader_parameter/block_width = 0.86
-shader_parameter/block_height = 0.43
-shader_parameter/course_jitter = 0.34
-shader_parameter/grout_darkening = 0.22
-shader_parameter/mortar_width = 0.075
-shader_parameter/grime_color = Color(0.108, 0.092, 0.07, 1)
-shader_parameter/grime_height = 2.4
-shader_parameter/grime_amount = 0.3
-shader_parameter/streak_frequency = 3.0
-shader_parameter/streak_strength = 0.38
-shader_parameter/chip_strength = 0.42
-shader_parameter/bevel_depth = 0.04
-shader_parameter/surface_bump_strength = 0.17
-shader_parameter/relief_strength = 6.5
-shader_parameter/normal_strength = 1.15
-shader_parameter/roughness_base = 0.88
-shader_parameter/roughness_grime = 0.98
-shader_parameter/specular = 0.22
+albedo_color = Color(0.46, 0.42, 0.37, 1)
+albedo_texture = ExtResource("1_alb")
+metallic_specular = 0.18
+roughness = 0.92
+normal_enabled = true
+normal_scale = 1.5
+normal_texture = ExtResource("2_nrm")
+uv1_scale = Vector3(0.55, 0.55, 0.55)
+uv1_triplanar = true
+uv1_world_triplanar = true
+texture_filter = 5
