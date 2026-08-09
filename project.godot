@@ -26,12 +26,28 @@ Game="*res://scripts/autoload/game_state.gd"
 Run="*res://scripts/autoload/run_state.gd"
 Settings="*res://scripts/autoload/settings.gd"
 Saves="*res://scripts/autoload/save_game.gd"
+; Music picks the track and crossfades it. It must load after Bus (it listens
+; for boss_engaged) and after Settings, which owns the Music bus volume the
+; pause-menu slider drives. The 15 tracks in res://audio/music/ were imported
+; and then never played by anything; this is what plays them.
+Music="*res://scripts/autoload/music.gd"
+; Sfx implements Bus.request_sfx -- which was declared in event_bus.gd with no
+; emitter and no listener -- and owns the signal->sound table. After Bus, which
+; it connects to on _ready.
+Sfx="*res://scripts/autoload/sfx.gd"
 ; The HUD is an autoload so the overlay exists whatever scene the launcher
 ; picks. It hides itself unless a node in group `player` is in the tree, so
 ; lookdev and tool scenes stay clean.
 Hud="*res://scripts/ui/hud/hud.gd"
 ; Prompt arbitrates which Interactable owns the interact button; it needs Bus.
 Prompt="*res://scripts/autoload/prompt.gd"
+; The pause menu is an autoload for the same reason the HUD is: Escape has to
+; work in whatever scene the launcher picks, not just the two the metagame
+; routes between. It shipped fully built but instanced in nothing except
+; scenes/ui/menu/_menu_test.tscn, so the game itself had no escape menu.
+; Layer 100 -- above the HUD (50), below Flow's fade (200). It boots hidden, so
+; lookdev and tool scenes stay clean. This is the ONLY instance in the project.
+Menu="*res://scenes/ui/menu/pause_menu.tscn"
 ; Flow owns the town<->dungeon scene change and the fade. It must load LAST: its
 ; fade veil has to sit above every other autoload's CanvasLayer.
 Flow="*res://scripts/autoload/game_flow.gd"

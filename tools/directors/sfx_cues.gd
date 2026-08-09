@@ -1,0 +1,92 @@
+extends RefCounted
+## Fires every signal in Sfx.CUES and checks a voice actually started.
+##
+## The failure this is built to catch is a silent one: a cue table entry naming
+## a file that is not there. `Sfx._load` push_warnings and returns null, the
+## game carries on, and the sound is simply missing forever -- which is exactly
+## how 147 of this project's 156 sounds came to be unused without anyone
+## noticing. So this asserts on `playing`, not on the absence of an error.
+##
+## Run:
+##   godot --path . -s tools/shoot.gd -- \
+##     --scene=res://scenes/rooms/town.tscn \
+##     --director=res://tools/directors/sfx_cues.gd \
+##     --out=/tmp/sfx/x.png --warmup=90
+
+var _fails := 0
+
+
+func run(rig) -> void:
+	Settings.set_volume(&"SFX", 0.9)
+
+	# Every id the table can ever ask for must resolve to a real file. This is
+	# the cheap half of the check and it covers all of them at once.
+	var ids: Array = Sfx.CUES.values()
+	ids.append(&"dungeon_complete")  # emitted directly by the run_ended handler
+	for id in ids:
+		var s: AudioStream = Sfx._load(id)
+		_ck("file exists for cue %s" % id, s != null)
+
+	# The expensive half: prove the wiring, not just the files. Emitting on Bus
+	# is what the game does, so that is what gets tested -- calling Sfx.play()
+	# here would pass even if no signal were connected.
+	await _fires(rig, "chest_opened",
+		func() -> void: Bus.chest_opened.emit(&"c1", &"gold"))
+	await _fires(rig, "door_opened",
+		func() -> void: Bus.door_opened.emit(&"d1"))
+	await _fires(rig, "item_acquired",
+		func() -> void: Bus.item_acquired.emit(&"bow"))
+	await _fires(rig, "loot_gained",
+		func() -> void: Bus.loot_gained.emit(&"ore", 1))
+	await _fires(rig, "items_sold",
+		func() -> void: Bus.items_sold.emit({}, 40))
+	await _fires(rig, "puzzle_solved",
+		func() -> void: Bus.puzzle_solved.emit(&"p1"))
+	await _fires(rig, "target_acquired",
+		func() -> void: Bus.target_acquired.emit(null))
+	await _fires(rig, "player_died", func() -> void: Bus.player_died.emit())
+	await _fires(rig, "bag_full", func() -> void: Bus.bag_full.emit())
+	await _fires(rig, "extract_refused",
+		func() -> void: Bus.extract_refused.emit(50, 10))
+	await _fires(rig, "enemy_died",
+		func() -> void: Bus.enemy_died.emit(null, Vector3(2, 0, 2)))
+	await _fires(rig, "run_started", func() -> void: Bus.run_started.emit(1))
+	await _fires(rig, "run_ended (extracted)",
+		func() -> void: Bus.run_ended.emit(true, {}, 100))
+	await _fires(rig, "request_sfx (the declared interface)",
+		func() -> void: Bus.request_sfx.emit(&"level_up", Vector3.ZERO))
+
+	if _fails == 0:
+		print("SFX OK — all checks passed")
+	else:
+		print("SFX FAIL — %d check(s) failed" % _fails)
+
+
+## Emit, then look for a voice that started. Voices are round-robin, so this
+## checks the pool as a whole rather than guessing which one was claimed.
+func _fires(rig, label: String, emit: Callable) -> void:
+	_silence()
+	await rig.wait_frames(2)
+	emit.call()
+	await rig.wait_frames(4)
+	_ck("%s started a voice" % label, _any_playing())
+
+
+func _silence() -> void:
+	for v in Sfx._pool:
+		v.stop()
+
+
+func _any_playing() -> bool:
+	for v in Sfx._pool:
+		if v.playing:
+			return true
+	return false
+
+
+func _ck(label: String, ok: bool) -> void:
+	if ok:
+		print("  ok   %s" % label)
+	else:
+		_fails += 1
+		print("SFX FAIL %s" % label)

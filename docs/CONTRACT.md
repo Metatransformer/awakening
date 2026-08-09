@@ -144,10 +144,31 @@ These nine facts are the ones clones get wrong. Build to them:
 
 ## 3. Autoloads — owned by the orchestrator, do not edit `project.godot`
 
+**Load order is part of the contract**, and the table is in that order:
+
 | Autoload | Script | Purpose |
 |---|---|---|
 | `Bus` | `scripts/autoload/event_bus.gd` | sideways peer→peer signals |
 | `Game` | `scripts/autoload/game_state.gd` | hearts, magic, keys, items, flags |
+| `Run` | `scripts/autoload/run_state.gd` | the current delve; **after `Game`** — it spends and grants gold |
+| `Settings` | `scripts/autoload/settings.gd` | volumes, video, binds, and their persistence |
+| `Saves` | `scripts/autoload/save_game.gd` | slots |
+| `Music` | `scripts/autoload/music.gd` | picks the track and crossfades it; **after `Bus`** |
+| `Sfx` | `scripts/autoload/sfx.gd` | implements `Bus.request_sfx`, owns the signal→sound table; **after `Bus`** |
+| `Hud` | `scripts/ui/hud/hud.gd` | the overlay, `CanvasLayer` **50** |
+| `Prompt` | `scripts/autoload/prompt.gd` | which Interactable owns the interact button |
+| `Menu` | `scenes/ui/menu/pause_menu.tscn` | the pause menu, `CanvasLayer` **100** |
+| `Flow` | `scripts/autoload/game_flow.gd` | town↔dungeon + the fade, `CanvasLayer` **200**; **loads LAST** |
+
+The three `CanvasLayer` numbers are a stack, not preferences: the HUD draws under
+the pause menu, and Flow's fade covers both. A fade something can draw on top of
+is not a fade.
+
+`Menu` is an autoload for the same reason `Hud` is — Escape has to work in
+whatever scene the launcher picks. It shipped built but instanced only in
+`scenes/ui/menu/_menu_test.tscn`, so for a while the harness had a pause menu and
+the game had none. **There is one `PauseMenu` in the project**; drive that one,
+do not instance a second.
 
 Need a new autoload, input action, or project setting? **Ask the orchestrator.**
 `project.godot` is the file every agent would otherwise fight over. Edit it only
@@ -431,6 +452,58 @@ ring.anchor_point()  # where the head bites — what the reticle wants
 
 Fixed **speed**, not fixed duration. A fixed duration makes near shots crawl and
 far shots streak, which is the giveaway tell of a clone.
+
+### Music — picks itself, and nobody calls it
+
+`Music` decides what is playing from the state the game is already in. **Do not
+call it to start a track.** It reads:
+
+- the current scene's path — `town` → `CALM`, anything else → `DELVE`;
+- the enemy roster — any node in group `enemy` whose `state` is 1..4
+  (CHASE/WINDUP/STRIKE/RECOVER, the range both enemy scripts agree on) → `FIGHT`,
+  held for `FIGHT_LINGER` after the last one disengages;
+- `Bus.boss_engaged` / `Bus.boss_defeated` → `BOSS`;
+- no node in group `player` → `SILENT`, so lookdev and tool scenes stay quiet.
+
+```gdscript
+Music.mood_name()        # "SILENT" "CALM" "DELVE" "FIGHT" "BOSS" — for directors
+Music.current_track()    # res:// path of what is playing, or ""
+```
+
+Every music import is **`loop=false` on purpose**: there are 3 dungeon, 7 combat
+and 4 boss tracks, and the pool rotates without repeating rather than looping one
+cue forever. If you set `loop=true` on one, it will never hand off and that mood
+will play one track for the rest of the run. Volume is the `Music` bus, which
+belongs to `Settings` — `Music` never touches `AudioServer`.
+
+### Sound effects — emit, do not own a player
+
+**Nothing outside `Sfx` should hold an `AudioStreamPlayer` for a world sound.**
+Want a noise? Emit the interface that was already declared for it:
+
+```gdscript
+Bus.request_sfx.emit(&"chest_open", global_position)   # id = a file in audio/sfx/
+```
+
+`Sfx` also maps the events that already say what happened — `chest_opened`,
+`door_opened`, `item_acquired`, `loot_gained`, `items_sold`, `puzzle_solved`,
+`enemy_died`, `player_died`, `target_acquired`, `run_started`, `run_ended`,
+`bag_full`, `extract_refused` — so those need no emit at all. Add a row to
+`Sfx.CUES` rather than a player to a prop.
+
+Two traps the table has already hit:
+
+- **Some sounds only exist as `_N` variants.** `coin_trade` is on disk as
+  `coin_trade_1..3` and `doom_stinger` as `doom_stinger_1` alone — the bare name
+  resolves to nothing. List it in `Sfx.VARIANTS` with its count, including a
+  count of 1.
+- **A missing file is silent, not loud.** `Sfx._load` warns and returns null, and
+  the game plays on. `tools/directors/sfx_cues.gd` fires every cue and asserts a
+  voice actually started; run it when you add one.
+
+Not wired, and deliberately: **footsteps**. `audio/sfx/footsteps/` has 14 material
+folders, and using them needs a step event off the hero's animation plus a read
+of what is underfoot. That is a system, not a table row.
 
 ### Settings and saves — built, tested, and read-only for everyone but P14
 

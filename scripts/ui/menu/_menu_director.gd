@@ -21,7 +21,7 @@ var _shots: Array[String] = []
 
 
 func run(rig) -> void:
-	var menu: PauseMenu = rig.current_scene.get_node("PauseMenu")
+	var menu: PauseMenu = Menu
 
 	# --- Root -----------------------------------------------------------------
 	_check("menu opened on ready", menu.is_open)
@@ -98,7 +98,7 @@ func run(rig) -> void:
 	# --- Saves: load mode -----------------------------------------------------
 	await _nav_to_button(rig, "Load Game")
 	await _key(rig, KEY_ENTER, 12)
-	var saves: Node = rig.current_scene.get_node("PauseMenu/Root/Screens/SavesScreen")
+	var saves: Node = Menu.get_node("Root/Screens/SavesScreen")
 	_check("empty slot is unreachable in Load mode", _empty_slot_locked(saves))
 	await _shot(rig, "13_saves_load.png")
 

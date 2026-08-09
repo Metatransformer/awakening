@@ -15,7 +15,7 @@ const PAD_DUP := 11
 
 
 func run(rig) -> void:
-	var menu = rig.current_scene.get_node("PauseMenu")
+	var menu = Menu
 
 	# root -> Options
 	for i in LIMIT:
