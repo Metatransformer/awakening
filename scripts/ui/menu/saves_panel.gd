@@ -19,7 +19,6 @@ signal load_requested(slot: int, dest: Dictionary)
 
 enum Mode { SAVE, LOAD }
 
-const FRAME_SIZE := Vector2(1060, 604)
 const ERASE_WIDTH := 150
 
 var mode: Mode = Mode.SAVE
@@ -53,7 +52,7 @@ func _build() -> void:
 	var frame := PanelContainer.new()
 	frame.name = "Frame"
 	frame.theme_type_variation = &"MenuFrame"
-	frame.custom_minimum_size = FRAME_SIZE
+	frame.custom_minimum_size = MenuUtil.FRAME_SIZE
 	center.add_child(frame)
 
 	var col := VBoxContainer.new()

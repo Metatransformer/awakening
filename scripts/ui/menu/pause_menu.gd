@@ -37,7 +37,7 @@ signal quit_to_title_requested
 signal load_requested(slot: int, dest: Dictionary)
 signal saved_to(slot: int)
 
-enum Screen { ROOT, EQUIP, POUCH, OPTIONS, SAVES }
+enum Screen { ROOT, EQUIP, POUCH, MAP, OPTIONS, SAVES }
 
 const NOTICE_TIME := 3.5
 ## Keys that must never become a binding on their own.
@@ -59,7 +59,36 @@ const MODIFIER_KEYS := [KEY_SHIFT, KEY_CTRL, KEY_ALT, KEY_META, KEY_CAPSLOCK]
 const PAD_UI_BUTTONS := {
 	&"ui_accept": [JOY_BUTTON_A, JOY_BUTTON_X],
 	&"ui_cancel": [JOY_BUTTON_B],
+	# The shoulders page between the three inspection screens — see PAGES. They
+	# are `ui_` actions for the same reason accept and cancel are: they belong to
+	# the MENU and not to the game, so `Settings` must neither offer them for
+	# rebinding nor be able to wipe them with Reset to Defaults (it skips every
+	# action whose name starts with `ui_`).
+	&"ui_tab_prev": [JOY_BUTTON_LEFT_SHOULDER],
+	&"ui_tab_next": [JOY_BUTTON_RIGHT_SHOULDER],
 }
+## The keyboard half of the same two. Q/E because they sit under the fingers
+## already on WASD, which is the whole argument for them — a keyboard player has
+## no shoulder buttons and paging with Tab would fight the `map` binding.
+const KEY_UI_BUTTONS := {
+	&"ui_tab_prev": [KEY_Q],
+	&"ui_tab_next": [KEY_E],
+}
+
+## The screens the shoulders cycle, in ring order, with the tab strip's labels.
+##
+## Three, and not five. ITEMS / POUCH / MAP are the screens that ANSWER a
+## question about the run in progress — what am I holding, what am I carrying,
+## where am I — and paging between them is how a player checks all three without
+## going back to a list each time. Options and Save/Load are things you DO, they
+## change the game or the disk, and putting them one shoulder-press away from a
+## map read mid-corridor is how a player lands on the save screen by accident.
+## They stay commands on the root menu.
+const PAGES := [
+	[Screen.EQUIP, "ITEMS"],
+	[Screen.POUCH, "POUCH"],
+	[Screen.MAP, "MAP"],
+]
 ## Stick travel required before a joypad axis counts as "the player moved it".
 ## Below this it is resting drift, which must not cancel a rebind.
 const PAD_MOTION_DEADZONE := 0.5
@@ -80,6 +109,7 @@ const SND_CONFIRM := preload("res://audio/sfx/ui_confirm.ogg")
 @onready var _root_screen: Control = $Root/Screens/RootScreen
 @onready var _equip: MenuEquipPanel = $Root/Screens/EquipScreen
 @onready var _pouch: MenuPouchPanel = $Root/Screens/PouchScreen
+@onready var _map: MenuMapPanel = $Root/Screens/MapScreen
 @onready var _options: MenuOptionsPanel = $Root/Screens/OptionsScreen
 @onready var _saves: MenuSavesPanel = $Root/Screens/SavesScreen
 @onready var _confirm: MenuConfirm = $Root/Confirm
@@ -92,6 +122,11 @@ var _listening: StringName = &""
 var _listen_return: Control = null
 
 var _cmd_buttons: Array[Button] = []
+## One `MenuPageTabs` per paged screen. Kept so a page change can light the
+## right tab on ALL of them: each screen carries its own copy of the strip, and
+## a strip that only updated when its own screen was showing would be wrong the
+## moment you paged away and back.
+var _page_tabs: Array[MenuPageTabs] = []
 var _last_root_button: Button = null
 var _listen_layer: Control
 var _listen_action_label: Label
@@ -116,6 +151,8 @@ func _ready() -> void:
 	# the whole menu goes away rather than popping to root.
 	_pouch.use_requested.connect(close)
 	_pouch.notice.connect(_notice)
+	_map.back_requested.connect(back)
+	_build_page_tabs()
 	_options.back_requested.connect(back)
 	_options.rebind_requested.connect(_begin_listening)
 	_options.notice.connect(_notice)
@@ -195,6 +232,96 @@ func open_pouch() -> void:
 	_push({"screen": Screen.POUCH})
 
 
+## The map button (`map` — M or Tab, or Select on the pad). Same contract as
+## `open_pouch`: opens straight onto the screen, and pressing it again closes
+## the menu from wherever you had navigated to.
+##
+## "Where am I and what have I not opened yet" is asked as often as "what am I
+## carrying", and it is asked mid-corridor — a map you reach through Escape and
+## a list is a map the player consults once and then stops consulting.
+func open_map() -> void:
+	if _is_open:
+		close()
+		return
+	open()
+	_push({"screen": Screen.MAP})
+
+
+## One strip per paged screen, all built here.
+##
+## The panels expose a `tab_host()` and nothing else — no ring constant, no
+## `picked` re-emission, no "which tab am I" of their own. That is deliberate:
+## the ring, the strips, the highlight and the screen stack are one mechanism,
+## and the version of this where each panel owned its strip is the version where
+## adding a fourth tab means editing four files and getting one of them wrong.
+func _build_page_tabs() -> void:
+	_page_tabs.clear()
+	for page: Array in PAGES:
+		var screen: int = int(page[0])
+		var host: HBoxContainer = _panel_for(screen).call(&"tab_host")
+		if host == null:
+			continue
+		var strip := MenuPageTabs.new()
+		host.add_child(strip)
+		host.move_child(strip, 0)
+		strip.setup(PAGES, screen)
+		strip.picked.connect(_go_page)
+		_page_tabs.append(strip)
+	# Every cap on every strip is named for the device in the player's hands, so
+	# picking up a pad relabels all three at once — the same rule the HUD's key
+	# caps follow (`Bus.input_device_changed` in hud.gd).
+	Bus.input_device_changed.connect(func(_pad: bool) -> void:
+		for s in _page_tabs:
+			s.refresh_caps())
+
+
+func _panel_for(screen: int) -> Control:
+	match screen:
+		Screen.EQUIP: return _equip
+		Screen.POUCH: return _pouch
+		Screen.MAP: return _map
+	return null
+
+
+## Step `delta` tabs around the ring. Does nothing anywhere but on the ring.
+##
+## It REPLACES the top of the stack rather than pushing onto it. That is the
+## whole difference between a tab and a screen: paging ITEMS → POUCH → MAP and
+## then pressing B should put you back where you were before you opened any of
+## them, not walk you back out through two screens you were only passing
+## through. The stack still records the one entry, so B behaves the same
+## whichever tab you happen to be standing on when you press it.
+func _page(delta: int) -> void:
+	if _stack.is_empty():
+		return
+	var here: int = _stack[_stack.size() - 1].get("screen", Screen.ROOT)
+	var at := -1
+	for i in PAGES.size():
+		if int(PAGES[i][0]) == here:
+			at = i
+			break
+	if at < 0:
+		return
+	var to: int = int(PAGES[posmod(at + delta, PAGES.size())][0])
+	if to == here:
+		return
+	_stack[_stack.size() - 1] = {"screen": to}
+	_apply_top()
+	_play(SND_MOVE)
+
+
+## A tab was clicked with the mouse. Same move as `_page`, said by a different
+## input — routed through one place so a click and a shoulder press cannot end
+## up doing two different things to the stack.
+func _go_page(screen: int) -> void:
+	if _stack.is_empty() or int(_stack[_stack.size() - 1].get("screen",
+			Screen.ROOT)) == screen:
+		return
+	_stack[_stack.size() - 1] = {"screen": screen}
+	_apply_top()
+	_play(SND_MOVE)
+
+
 ## Back out one level. At the root level that means closing the menu.
 func back() -> void:
 	if _listening != &"":
@@ -226,8 +353,11 @@ func _apply_top() -> void:
 	_root_screen.visible = screen == Screen.ROOT
 	_equip.visible = screen == Screen.EQUIP
 	_pouch.visible = screen == Screen.POUCH
+	_map.visible = screen == Screen.MAP
 	_options.visible = screen == Screen.OPTIONS
 	_saves.visible = screen == Screen.SAVES
+	for strip in _page_tabs:
+		strip.set_active(screen)
 
 	match screen:
 		Screen.ROOT:
@@ -242,6 +372,9 @@ func _apply_top() -> void:
 		Screen.POUCH:
 			_pouch.refresh()
 			_pouch.focus_first()
+		Screen.MAP:
+			_map.refresh()
+			_map.focus_first()
 		Screen.OPTIONS:
 			_options.open_tab(top.get("tab", MenuOptionsPanel.Tab.AUDIO))
 			_options.focus_first()
@@ -257,8 +390,14 @@ func _apply_top() -> void:
 ## that already carries the button is left alone, so events never pile up.
 func _ensure_pad_ui_actions() -> void:
 	for action: StringName in PAD_UI_BUTTONS:
+		# `ui_tab_prev` / `ui_tab_next` are ours and the engine ships neither, so
+		# they are CREATED here rather than skipped. `ui_accept` / `ui_cancel`
+		# exist already and this leaves them alone. Registering at runtime rather
+		# than in project.godot keeps them out of `--import`'s reach — that tool
+		# re-serialises the file and has silently eaten hand-written lines from it
+		# before (see CLAUDE.md §3).
 		if not InputMap.has_action(action):
-			continue
+			InputMap.add_action(action)
 		for button: int in PAD_UI_BUTTONS[action]:
 			if _action_has_pad_button(action, button):
 				continue
@@ -266,6 +405,23 @@ func _ensure_pad_ui_actions() -> void:
 			e.device = -1  # any connected pad, not just joypad 0
 			e.button_index = button
 			InputMap.action_add_event(action, e)
+	for action: StringName in KEY_UI_BUTTONS:
+		if not InputMap.has_action(action):
+			InputMap.add_action(action)
+		for code: int in KEY_UI_BUTTONS[action]:
+			if _action_has_key(action, code):
+				continue
+			var k := InputEventKey.new()
+			k.physical_keycode = code
+			InputMap.action_add_event(action, k)
+
+
+func _action_has_key(action: StringName, code: int) -> bool:
+	for e in InputMap.action_get_events(action):
+		var k := e as InputEventKey
+		if k != null and k.physical_keycode == code:
+			return true
+	return false
 
 
 func _action_has_pad_button(action: StringName, button: int) -> bool:
@@ -336,10 +492,26 @@ func _unhandled_input(event: InputEvent) -> void:
 		open_pouch()
 		get_viewport().set_input_as_handled()
 		return
+	if event.is_action_pressed(&"map"):
+		open_map()
+		get_viewport().set_input_as_handled()
+		return
 	if not _is_open:
 		if event.is_action_pressed(&"pause"):
 			open()
 			get_viewport().set_input_as_handled()
+		return
+	# The shoulders page, and ONLY while the screen you are on is one of the
+	# three in the ring. Pressing LB on the options screen does nothing, which is
+	# the right nothing: a shoulder button that teleported you out of a rebind
+	# you were halfway through would be worse than one that is inert.
+	if event.is_action_pressed(&"ui_tab_next"):
+		_page(1)
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed(&"ui_tab_prev"):
+		_page(-1)
+		get_viewport().set_input_as_handled()
 		return
 	# Escape is bound to both `pause` and `ui_cancel`; one branch, one response.
 	if event.is_action_pressed(&"pause") or event.is_action_pressed(&"ui_cancel"):

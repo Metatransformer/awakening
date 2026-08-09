@@ -52,6 +52,14 @@ const LIGHT_RANGE := 1.6
 
 ## Arrows granted on pickup.
 @export var count: int = FLOOR_COUNT
+## Is this bundle the one the floor plan is advertising?
+##
+## True for the bundle `Dungeon._populate` lies in a room, which is the one that
+## got an `Atlas` marker. False for one a chest spat out (`drop`), which never
+## had a marker of its own -- and if it cleared one on pickup it would erase the
+## floor bundle still lying six metres away in the same room, and the map would
+## be telling the player they had already swept a room they had not.
+var mapped: bool = true
 
 var _rig: Node3D
 var _light: OmniLight3D
@@ -68,6 +76,7 @@ static func drop(parent: Node, at: Vector3, n: int = FLOOR_COUNT,
 	var b := ArrowBundle.new()
 	b.name = "ArrowBundle"
 	b.count = maxi(n, 1)
+	b.mapped = false
 	parent.add_child(b)
 	b.global_position = at
 	if fling != Vector3.ZERO:
@@ -208,6 +217,12 @@ func _take() -> void:
 	var got: int = mini(count, room)
 	Game.add_arrows(got)
 	_taken = true
+	# Off the map entirely, unlike an opened chest, which greys out. A chest is
+	# a landmark you remember a room by; a bundle of arrows off the floor is
+	# nothing, and a permanent grey arrow in a room would be the map advertising
+	# somewhere there is no reason to go back to.
+	if mapped:
+		Atlas.replace_at(global_position, Atlas.M_ARROWS, &"")
 	Bus.request_sfx.emit(&"pickup", global_position)
 	Bus.request_message.emit("Arrows  +%d" % got)
 	_pop()

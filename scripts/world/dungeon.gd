@@ -89,6 +89,7 @@ func _ready() -> void:
 		enemies_max = pack.y
 
 	_plan()
+	_publish()
 	_build()
 	_populate()
 
@@ -145,6 +146,25 @@ static func _opposite(d: StringName) -> StringName:
 
 func centre_of(cell: Vector2i) -> Vector3:
 	return Vector3(float(cell.x) * spacing, 0.0, float(cell.y) * spacing)
+
+
+## Hand the plan to `Atlas`, which is what the minimap and the MAP screen draw.
+##
+## Between `_plan` and `_build` on purpose: the map is a picture of the LAYOUT,
+## and the layout is finished the moment `_plan` returns. Publishing after the
+## geometry would tie the map's existence to a build step it has no stake in, and
+## publishing from inside `_build_room` would mean a floor that failed halfway
+## through building had half a map.
+##
+## Markers are added later, by `_populate`, as each thing is actually placed --
+## never predicted from the same roll twice. A map that said "chest" because the
+## generator was ABOUT to roll one is a map that lies the first time the two
+## rolls are reordered.
+func _publish() -> void:
+	Atlas.open_floor(Run.level, spacing, room_size, door_span, entrance)
+	for cell: Vector2i in rooms:
+		Atlas.add_room(cell, rooms[cell]["doors"])
+	Atlas.mark(entrance, Atlas.M_ENTRANCE)
 
 
 # --- Geometry ---------------------------------------------------------------
@@ -357,6 +377,7 @@ func _populate() -> void:
 			chest.picks = Prog.chest_picks(Run.level, cell == deepest)
 			chest.position = Vector3(0.0, 0.0, -room_size * 0.32)
 			root.add_child(chest)
+			Atlas.mark(cell, Atlas.M_CHEST)
 
 		# Arrows on the floor, opposite the chest and away from the door line, so
 		# picking them up is a step off the path you were already walking rather
@@ -368,6 +389,7 @@ func _populate() -> void:
 			bundle.count = ArrowBundle.FLOOR_COUNT
 			bundle.position = Vector3(room_size * 0.30, 0.0, -room_size * 0.24)
 			root.add_child(bundle)
+			Atlas.mark(cell, Atlas.M_ARROWS)
 
 		# The way down, in the deepest room, beside the best chest. Deliberately
 		# next to the reward and at the end of the longest walk: the moment you
@@ -376,6 +398,7 @@ func _populate() -> void:
 			var down := Stairs.new()
 			down.position = Vector3(0.0, 0.0, room_size * 0.26)
 			root.add_child(down)
+			Atlas.mark(cell, Atlas.M_STAIRS)
 
 		if _rng.randf() < 0.35:
 			for i in 2:
@@ -460,8 +483,20 @@ func _add_room_trigger(root: Node3D, cell: Vector2i) -> void:
 	root.add_child(area)
 
 	var visited := [cell == entrance]
+	# The arrival cell is on the map before the player has taken a step. It is
+	# the room they are standing in -- fogging it would mean the first thing the
+	# minimap ever shows is a blank frame -- and it is already counted as visited
+	# for the depth tally, so this is the same fact said to the same rule.
+	if cell == entrance:
+		Atlas.see(cell)
 	area.body_entered.connect(func(body: Node3D) -> void:
-		if not body.is_in_group(&"player") or visited[0]:
+		if not body.is_in_group(&"player"):
+			return
+		# OUTSIDE the `visited` gate. Fog is per-room and the depth tally is
+		# per-FIRST-entry, and folding them together would mean a room re-entered
+		# after a `close_floor` (a load into a live run) stayed dark forever.
+		Atlas.see(cell)
+		if visited[0]:
 			return
 		visited[0] = true
 		Run.descend()

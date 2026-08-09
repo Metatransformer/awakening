@@ -297,6 +297,11 @@ func _ready() -> void:
 	# draught: the bar it starts has to keep draining after this frame.
 	Bus.bottles_changed.connect(_repaint)
 	Bus.draught_changed.connect(func(_p: StringName, _s: float) -> void: _wake())
+	# A room came out of the fog, or a chest on the plan was opened. The hero
+	# ARROW does not need this -- it rides the per-frame repaint below -- but the
+	# plan itself only changes on these, so the minimap is not asking `Atlas`
+	# anything it has not been told.
+	Bus.map_changed.connect(_repaint)
 	Bus.heat_changed.connect(_on_heat)
 	Bus.heat_tier_changed.connect(_on_heat_tier)
 	Bus.extract_refused.connect(_on_refused)
@@ -612,6 +617,13 @@ func _process(delta: float) -> void:
 	# on the floor is what puts it back to sleep.
 	if _enemies_present:
 		busy = true
+	# The third, and the last widening this rule gets. The minimap's hero arrow
+	# is pinned to a body that walks, exactly like an enemy bar, and there is no
+	# "the hero moved" signal to hang it on -- so while there is a floor plan on
+	# screen, the overlay ticks. It stops the moment the run ends, because
+	# `Atlas` tears the plan down on `run_ended` and this goes false with it.
+	if Run != null and Run.in_dungeon and Atlas != null and Atlas.has_floor():
+		busy = true
 
 	_canvas.queue_redraw()
 	if not busy:
@@ -628,6 +640,7 @@ func _draw_hud() -> void:
 	_draw_draughts(s)
 	_draw_hands(s)
 	_draw_cpad(s)
+	_draw_minimap(s)
 	_draw_bag(s)
 	_draw_extraction(s)
 	_draw_toast(s)
@@ -1020,42 +1033,53 @@ func _heat_color() -> Color:
 ## The glyph is a render of the ACTUAL model, baked and posterised into the Pal
 ## ramp. Lettering ("SW", "SH") only ever appears if a bake is missing.
 
-## Where the two groups sit. Laid out from the cluster's RIGHT edge and not from
-## a left-edge fraction, so that doubling the cell size moves the left edge left
-## instead of pushing the cross off the screen. The cross is the anchor because
-## it is the one whose SHAPE carries meaning: it has to stay a cross, in the
-## corner, whatever the hands beside it are doing.
+## Where the two groups sit. Laid out from the cluster's LEFT edge -- shared with
+## health and stamina, so the bottom-left pole hangs off one margin -- and
+## UPWARDS from `Pal.CLUSTER_BOTTOM`, so adding a row pushes the cluster into the
+## empty middle of the screen instead of down through the health bar.
 ##
-## THE CLUSTER IS THREE CELLS NOW, not six, and that is the whole story of this
-## change: [left hand][right hand] and one selected item beside them. There were
-## four bindable D-pad cells here and the D-pad does not bind anything any more.
-##
-## Measured from the right edge inwards, so widening a cell moves the left edge
-## left instead of pushing the cluster off screen.
+## THE CLUSTER IS THREE CELLS, not six: [left hand][right hand] and one selected
+## item beside them. There were four bindable D-pad cells here and the D-pad does
+## not bind anything any more.
 ##
 ## THE CARET RULE, which the whole cluster reads by: a caret ABOVE a cell is the
 ## D-pad direction that cycles that cell. ← → over the right hand, ↓ over the
 ## item. Nothing else in the cluster draws a triangle, so a triangle always means
 ## "a direction changes this".
-func _cross_origin(s: Vector2) -> Vector2:
-	return Vector2(
-		Pal.CLUSTER_RIGHT * s.x - Pal.px(Pal.CELL, s.y),
-		Pal.CLUSTER_TOP * s.y + _caret_band(s))
-
-
-## Height reserved above the cells for the carets. Every cell in the cluster is
-## pushed down by it whether or not it has one, so the tops stay in a line.
-func _caret_band(s: Vector2) -> float:
-	return Pal.px(CARET * 2.0 + CARET_GAP, s.y)
-
-
-## The hands sit to the LEFT of the item and share its top edge.
+##
+## The hands come first because that is the order they are on the body, and the
+## item cell sits to their right across the wider CLUSTER_GAP.
 func _hands_origin(s: Vector2) -> Vector2:
+	return Vector2(Pal.CLUSTER_LEFT * s.x, _cluster_top(s))
+
+
+## The item cell sits to the RIGHT of the hands pair and shares its top edge.
+func _cross_origin(s: Vector2) -> Vector2:
 	var cell := Pal.px(Pal.CELL, s.y)
 	var gap := Pal.px(Pal.CELL_GAP, s.y)
-	var cross := _cross_origin(s)
+	var hands := _hands_origin(s)
 	return Vector2(
-		cross.x - Pal.px(Pal.CLUSTER_GAP, s.y) - (cell * 2.0 + gap), cross.y)
+		hands.x + cell * 2.0 + gap + Pal.px(Pal.CLUSTER_GAP, s.y), hands.y)
+
+
+## The top of the CELL ROW, worked back from the bottom of the whole cluster.
+##
+## Spelled out term by term rather than folded into one constant, for the same
+## reason `_draw_draughts` spells its stack out: the rows below the cells are the
+## key caps and then the loadout line, and a version of this that forgot one of
+## them put the caps THROUGH the health bar. Read it against `_draw_cpad`, which
+## is where those two rows are actually drawn.
+func _cluster_top(s: Vector2) -> float:
+	var caps := Pal.px(Pal.KEYCAP_GAP, s.y) + PixelFont.height(
+		Pal.px(Pal.KEYCAP_SCALE, s.y))
+	var loadout := Pal.px(9.0, s.y) + PixelFont.height(
+		Pal.px(Pal.KEYCAP_SCALE, s.y))
+	# No allowance for the caret band above the cells, and that is not an
+	# oversight. The cluster used to be pinned to the TOP of the screen, where a
+	# caret drawn above a cell would have gone off the frame, so the origin had
+	# to reserve CARET * 2 + CARET_GAP before anything else was placed. Growing
+	# upwards from the bottom, the band extends into empty screen instead.
+	return Pal.CLUSTER_BOTTOM * s.y - (caps + loadout) - Pal.px(Pal.CELL, s.y)
 
 
 ## The button that fires `action`, as the player would say it out loud, or "" for
@@ -1217,6 +1241,45 @@ func _draw_cpad(s: Vector2) -> void:
 		w + pad * 2.0, PixelFont.height(scale) + pad * 2.0),
 		Color(Pal.MIDNIGHT, 0.8))
 	PixelFont.draw_right(_canvas, line, Vector2(r.end.x, top), scale, Pal.MOTH)
+
+
+# --- The minimap -------------------------------------------------------------
+## Where you are on the floor, top-right, in the corner the button cluster
+## vacated (see the note on Pal.CLUSTER_LEFT for why it was the one that moved).
+##
+## It is the same map as the pause menu's MAP screen, drawn by the same
+## `MapDraw.draw_map` into a smaller box. There is exactly one map in this game
+## and it is rendered at two sizes -- a corner minimap that drifted from the
+## screen you open to read it properly is worse than having only one of them.
+##
+## **Dungeon only, and only once you have seen a room.** In town there is no
+## floor, and an empty frame in the corner of the town screen is a widget
+## announcing that it has nothing to say. The frame appears with the first room
+## you stand in, which is also the frame the player has a reason to look at it.
+##
+## The plate is opaque VOID rather than the 0.72 the prompt box uses. Everything
+## else on this HUD is a mark over the world; this is a document held up in
+## front of it, and a floor plan you can see torchlight through is a floor plan
+## you have to work to read.
+func _draw_minimap(s: Vector2) -> void:
+	if Run == null or not Run.in_dungeon or Atlas == null or not Atlas.has_floor():
+		return
+	# Nothing at all until the first room is out of the fog. On arrival the
+	# entrance is already marked seen (`Dungeon._add_room_trigger` seeds it), so
+	# this is only ever true in a scene with no player in it -- which is exactly
+	# where the rest of this overlay hides too.
+	if Atlas.explored_count() <= 0:
+		return
+
+	var size := Pal.px(Pal.MINIMAP_SIZE, s.y)
+	var frame := Rect2(
+		Pal.MINIMAP_RIGHT * s.x - size, Pal.MINIMAP_TOP * s.y, size, size)
+	_canvas.draw_rect(frame, Color(Pal.VOID, 0.88))
+	_canvas.draw_rect(frame, Pal.ASH, false, Pal.px(1.0, s.y))
+
+	var pad := Pal.px(Pal.MINIMAP_PAD, s.y)
+	MapDraw.draw_map(_canvas, frame.grow(-pad), s.y,
+		get_tree().get_first_node_in_group(&"player") as Node3D)
 
 
 ## One caret, `dir` being the unit direction it points. `tip` is where the point

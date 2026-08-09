@@ -82,18 +82,25 @@ const HEAT_GAP := 4.0
 ## "+96 HOT / what you just picked up / what it all is / what leaving costs",
 ## which is the order the thoughts actually arrive in.
 const PREMIUM_BASELINE := 0.735
-## --- The button cluster, top-right ------------------------------------------
+## --- The button cluster, bottom-left ----------------------------------------
 ## The three item buttons in the physical shape of the D-pad they sit on
 ## (docs/CONTRACT.md §2.5 #6), and — since they are the same KIND of thing — the
 ## two hands beside them. They are not readouts, they are a control surface: the
 ## arrangement is what tells you which button draws which item, and that is only
 ## true if the arrangement matches your thumb.
 ##
-## The hands used to live bottom-left above health, on the reasoning that what he
-## is holding is a fact about his body. That was true and it was the wrong place
-## anyway: every cell here answers "what do I press", and splitting that question
-## across two corners means answering it with two glances. Now every cell in the
-## cluster carries the key that fires it, which is what makes them one instrument.
+## Every cell here answers "what do I press", so they stay ONE cluster with one
+## key cap each; splitting that question across two corners means answering it
+## with two glances, which is why the hands are not a separate instrument.
+##
+## **It sits over health now, not in the top-right corner.** Two reasons, and
+## the first is the stronger: the cluster and the vitals stack are the same
+## sentence — what I am holding, and what I have left to hold it with — and that
+## sentence was being read across the full diagonal of the screen. The second is
+## that the top-right corner is the one place a minimap can go (see MINIMAP_*
+## below): the top-left is the floor card, and both bottom corners are the
+## game's central decision (hud.gd's header). Something had to move and the
+## corner that was a control surface is the one that had somewhere else to be.
 ##
 ## Cells are ~2x the old 32/34, and both sizes collapsed to ONE: at this scale a
 ## 2 px difference between the hand cell and the button cell stops reading as
@@ -104,12 +111,34 @@ const CELL_GAP := 12.0
 ## cluster reads as two groups (what he is holding, what he has selected) and not
 ## as three cells in a row.
 const CLUSTER_GAP := 22.0
-## The cluster is laid out from its RIGHT edge (see Hud._cross_origin), not from
-## a left-edge fraction. At the old size a fractional origin was safe; doubled,
-## the old six-cell cluster was 216 reference px and a 0.886 left edge put it
-## 82 px off the side of a 1280-wide screen. Anchor what must not overflow.
-const CLUSTER_RIGHT := 0.969   ## shares BAG_RIGHT's margin — one right edge, not two
-const CLUSTER_TOP := 0.044
+## Shares HEALTH_ORIGIN's x, so the whole bottom-left pole hangs off ONE left
+## edge. Laid out from that edge rightwards and from CLUSTER_BOTTOM upwards, so
+## a taller cell or an extra text row grows into the empty middle of the screen
+## rather than off an edge — which is what the old right-anchored version was
+## protecting against and is still the rule, just about a different corner.
+const CLUSTER_LEFT := 0.031
+## The baseline the cluster's LAST row (the loadout line) sits on. Clear of
+## HEALTH_ORIGIN.y (0.899) by enough that the key caps under the cells never
+## touch the health bar's VOID hairline.
+const CLUSTER_BOTTOM := 0.872
+## --- The minimap, top-right --------------------------------------------------
+## The floor plan, in the corner the button cluster used to have. It is the only
+## corner it can be in: top-left is the floor card, bottom-left is the body,
+## bottom-right is the bag and the fee.
+##
+## Square, and sized so the widest floor in the game (the Chord Gate, 10 rooms)
+## still puts a room at ~26 px — the size at which a chest glyph is a chest and
+## not three gold pixels. Bigger than this and it starts eating the upper-middle
+## third of the frame, which is where the over-the-shoulder camera puts the
+## fight (see the note at the top of hud.gd).
+const MINIMAP_RIGHT := 0.969   ## the same right edge as the bag and the fee
+const MINIMAP_TOP := 0.052     ## level with the floor card opposite it
+const MINIMAP_SIZE := 148.0    ## reference px, square
+## Padding between the minimap's frame and the map fitted inside it. The map is
+## fitted to the FULL floor bounds, so a room on the outermost cell puts its
+## wall right on this margin — without it the outline and the frame touch and
+## read as one thick line.
+const MINIMAP_PAD := 8.0
 ## Room under a cell for its key cap.
 const KEYCAP_GAP := 4.0
 const KEYCAP_SCALE := 2.0

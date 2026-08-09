@@ -315,15 +315,24 @@ way out, one instrument. Opposite corners on purpose: in a panic your eye has to
 travel from "how alive am I" to "how much am I about to lose", and that eye
 movement *is* the game's central decision.
 
-**Top-right is WHAT YOU PRESS** (§5.2, §5.2b): the two hands and the three item
-buttons, one cluster, every cell captioned with the key that fires it. It is not
-a readout and it does not belong to either pole — it is a control surface, and a
-control surface sits where the *thumb* thinks, not where the body's numbers live.
+**Bottom-left, directly above health, is WHAT YOU PRESS** (§5.2, §5.2b): the two
+hands and the item cell, one cluster, every cell captioned with the key that
+fires it.
 
-The hands were bottom-left until 2026-08-09, above health, on the reasoning that
-what he is holding is a fact about his body. That was true and it was still the
-wrong corner: every cell in the cluster answers *"what do I press"*, and splitting
-that one question across two corners meant answering it with two glances.
+**Top-right is WHERE YOU ARE** (§5.5b): the minimap. It is the only readout on
+the screen that is about the ROOM rather than about the hero, and it is the one
+thing that wants the corner the over-the-shoulder camera leaves emptiest.
+
+The cluster has been in both corners and the reasoning each way is worth keeping,
+because the second move is not the first one undone. It sat bottom-left until
+2026-08-09 and moved to the top-right that day, on the argument that every cell
+answers *"what do I press"* and a control surface belongs where the thumb thinks.
+It came back down the same day, and the thing that settled it was not taste: the
+map has to go somewhere, a map is a picture and needs a square of its own, and
+the only square on a 1280×720 screen big enough to hold one is the top-right
+corner. Given that, the cluster is better under health than beside a map — what
+he is holding and how alive he is are one glance, and neither of them is
+navigation.
 
 Everything else at the top stays empty except transient state, because the
 over-the-shoulder camera puts the action in the upper-middle third.
@@ -395,7 +404,7 @@ the hookshot and the bow, and where the right hand can hold any of them. Two
 cells that say *what he is holding right now* is the same pixel budget spent on
 a fact that changes.
 
-Two cells in the top-right cluster, immediately left of the item cell and
+Two cells in the bottom-left cluster, immediately left of the item cell and
 sharing its top edge. No radial, no wheel. **Left cell is the left hand,
 right cell the right hand** — the reading order is the body, not an inventory
 order. Either can be empty: bow-and-arrows empties the shield arm, and an empty
@@ -478,15 +487,21 @@ NOT have ▲ ▼ ◄ ►, which render as the solid MISSING block.
 the shoulders do that, and a cap on the sword cell would be claiming a button the
 sword shares with whatever you draw.
 
-The cluster is laid out **from its right edge** (`Pal.CLUSTER_RIGHT`, sharing the
-bag's margin so the HUD has one right edge and not two), never from a left-edge
-fraction. At the old size a left origin was safe. Doubled, the old six-cell
-cluster was 216 reference px wide and the old `0.886` left edge put it 82 px off
-the side of a 1280 screen. Anchor the thing that must not overflow.
+The cluster is laid out **from its left edge and up from its baseline**
+(`Pal.CLUSTER_LEFT`, sharing `HEALTH_ORIGIN.x` so the HUD has one left edge and
+not two; `Pal.CLUSTER_BOTTOM` is the baseline of its last row, clear of health at
+`0.899`). Both anchors point at the corner it is in — the six-cell version of
+this cluster once overflowed the screen because it was laid out from the edge it
+was *not* anchored to. Anchor the thing that must not overflow.
+
+Growing **upward** from a bottom baseline is also why `Hud._cluster_top` makes no
+allowance for the caret band above the cells. Top-anchored, a caret drawn above a
+cell would have gone off the frame and the origin had to reserve it; from the
+bottom the band extends into empty screen.
 
 | | |
 |---|---|
-| Cross origin | x `0.886` (1134), top y `0.044` (32) — the ▲ cell's row |
+| Cross origin | x `0.031` + two cells + gutter, baseline y `0.872` |
 | Cell | 34×34 px, 6 px gutter |
 | Fill | MIDNIGHT @80%, 1 px ASH border |
 | Drawn now | 2 px BONE border on the cell holding the item currently in hand |
@@ -591,14 +606,59 @@ Not a fairy, not a triangle.
 - Off-screen locked target: an 8 px RUST chevron on the screen edge at the
   target's bearing, inset `0.028`.
 
+### 5.5b The minimap — line art, and only underground
+
+A 148 px square, top-right, VOID @88% on a 1 px ASH border. Drawn by
+`MapDraw.draw_map` — the **same** routine that fills the pause menu's MAP tab,
+called with a smaller box. There is one map in this game; see
+`docs/CONTRACT.md` §8, "The map".
+
+**It is a schematic and never a rendered camera.** Room outlines, corridors, a
+gap in a wall where a door is, and one small symbol per thing worth walking to.
+A top-down render of the floor is a picture of the same masonry the player is
+already looking at, it cannot do fog of war without a second visibility system,
+and it is not line art.
+
+- **It only exists underground**, and only once at least one room is off the fog.
+  In town there is no floor and the corner is empty — an empty corner is correct,
+  not a gap to fill.
+- **Fogged rooms are not drawn at all.** Not greyed, not outlined: absent. The
+  map is fitted to the whole floor's bounds so it does not re-scale as it fills
+  in, which means the blank space IS the information.
+- **A corridor to a room you have seen is drawn whole; one to a room you have not
+  is a stub** that stops short of it. A promise that there is more that way, and
+  no claim about what.
+- **The room you are standing in draws a heavier, brighter outline** (2 px BONE
+  against 1 px MOTH). That is the "you are here" that survives at this size — the
+  hero arrow is 5 px and reads as a dot from a normal seat.
+- **The hero is a BONE triangle over a darker one**, at his real position inside
+  his real room, pointed by `-basis.z` and never by `rotation.y`
+  (`docs/CONTRACT.md` §2.5). The backing triangle is the same trick the enemy
+  bars' frame uses: the marker has to survive being over a lit floor fill, over a
+  gold chest glyph, and over the VOID outside the rooms.
+- **Markers are drawn shapes, not icons.** Chest = GOLD box with a VOID lid band
+  and a hasp. Stair = three CYAN treads descending (CYAN is the way out and
+  nothing else — §2 — and the stair down is the way on). Arrows = MOSS broadhead.
+  Entrance = a hollow MOTH ring, hollow because it is the one marker that is a
+  landmark rather than something to go and get. At 6 px a baked render of a chest
+  is four brown pixels; a gold box with a lid is a chest.
+- Lines are `draw_rect`, not `draw_line`. At 1–2 px `draw_line` lands on half
+  pixels and comes out soft, which is the treatment collapsing (§1).
+
+The one glyph set this project did NOT use: `~/valenfeld`'s map icons. They are
+256 px painterly round world-map POI tokens in a warmer palette, they are
+illegible at 6 px, and the set contains no chest and no staircase — the two the
+map most needed.
+
 ### 5.6 Always visible vs. transient
 
-**ALWAYS — seven things, nothing else:** the health bar, the stamina bar, the
-hands, the item buttons, bag total, extraction line, ammo numerals. Each is a
-number or a binding the player must be able to
-consult unprompted, because each feeds the single recurring decision — push on,
-or leave. Anything that does not feed that decision has no claim on permanent
-pixels.
+**ALWAYS — eight things, nothing else:** the health bar, the stamina bar, the
+hands, the item buttons, bag total, extraction line, ammo numerals, and — under
+ground only — the minimap. Each is a number or a binding the player must be able
+to consult unprompted, because each feeds the single recurring decision — push
+on, or leave. The minimap earns the eighth slot on that same test: how far from
+the stair you are is the other half of "can I afford one more room". Anything
+that does not feed that decision has no claim on permanent pixels.
 
 **FADES IN:** item toasts; lock-on brackets and target health; the extraction
 promotion and sweep; the room name card (Jacquard 24 @24 px, BONE 30%, centre
@@ -606,11 +666,28 @@ x `0.5`, baseline y `0.139`, 1.4 s on room entry); damage-direction arc (3 px
 RUST, 40°, radius `0.28h` about centre, 300 ms); interaction prompts; gold
 floaters.
 
-**NEVER:** a minimap, quest text, objective markers, floating damage numbers, an
-XP bar. No minimap specifically, because the dungeon is room-based and legible,
-and a corner minimap trains the player to navigate by abstraction — which
-destroys fog-as-draw-distance as a tension device outright. The `map` action
-opens a **full-screen** map instead, and does not pause.
+**NEVER:** quest text, objective markers, floating damage numbers, an XP bar.
+
+**Superseded 2026-08-09, on the owner's instruction: this list began "a minimap"
+and there is now one in the top-right corner (§5.5b).** The old argument was that
+a corner minimap trains the player to navigate by abstraction, which destroys
+fog-as-draw-distance as a tension device outright. That argument is still true of
+the minimap it was written about — a rendered top-down view of the floor around
+you, updating live, showing rooms you have not entered. It is not true of the one
+that got built, and the difference is the whole design:
+
+- **It shows only rooms you have stood in.** It cannot tell you what is ahead,
+  because it does not know. Fog-as-draw-distance is intact: the map is a record
+  of where you have been, not a preview of where you are going.
+- **It is a schematic, not the floor.** Boxes and lines. Nothing about a room's
+  contents, its light, or what is in it beyond one symbol for the chest.
+- **It is fitted to the floor's full bounds**, so the blank space says how much
+  is left without saying anything about what is in it.
+
+What it buys is the thing a room-based dungeon with a fee for leaving actually
+needs: "which way is the stair, and have I already been down that corridor". The
+`map` action (M / Tab / L3) opens the same plan larger, on a paused tab of the
+pause menu, with a legend.
 
 ### 5.7 Anchor table
 
@@ -620,10 +697,11 @@ Fractions of viewport, origin top-left; px at 1280×720.
 |---|---|---|---|
 | Health bar origin | 0.031 (40) | 0.899 (647) | 0.268 w (343) × 15 |
 | Stamina bar origin | 0.031 (40) | health bottom + 4 | 0.62× health w × 8 |
-| Item cell origin | right-align 0.969 (1240) | 0.044 (32) + caret band | cell 64×64 |
-| Hands origin | item left − 22 | same top as the item | cell 64×64, gutter 12 |
+| Hands origin | 0.031 (40) | baseline 0.872 (628) up | cell 64×64, gutter 12 |
+| Item cell origin | hands left + 2 cells + gutter + 22 | same top as the hands | cell 64×64 |
 | Caret band | above every cell | 21 tall (8·2 + 5) | ← → right hand, ↓ item |
-| Loadout line | right-align 0.969 | below the key caps + 9 | plated, `↑ PRIMARY` |
+| Loadout line | right-align to the cluster | below the key caps + 9 | plated, `↑ PRIMARY` |
+| Minimap frame | right-align 0.969 (1240) | 0.052 (37) | 148×148, 8 px pad |
 | Key caps | centred under cell | cell bottom + 4 | PixelFont ×2 (14 tall) |
 | Bag numeral baseline | right-align 0.969 | 0.900 (648) | 32 px |
 | Value slips | right-align 0.969, max w 0.094 | 0.803→0.858 | 3 px + 2 gutter |
