@@ -68,16 +68,23 @@ Proven working. Do not rebuild this.
 - **Model:** `res://assets/characters/hero.fbx` — textured, `Skeleton3D` with
   33 `mixamorig_*` bones, mesh is 1.0 units tall.
 - **Animations:** `res://assets/animations/hero_anims.res`, a single
-  `AnimationLibrary` of **72 clips on that exact skeleton — no retargeting
+  `AnimationLibrary` of **112 clips on that exact skeleton — no retargeting
   needed**. Names are `<set>_<clip>`:
   - `ss_*` — sword & shield (51): `idle_01..04`, `walk_01/02`, `run_01/02`,
     `strafe_01..04`, `slash_01..05`, `attack_01..04`, `block_01/02`,
     `block_idle_01`, `impact_01..03`, `180_turn_01/02`, `turn_01/02`,
     `jump_01/02`, `kick_01`, `power_up_01`, `death_01/02`, `casting_01/02`,
     `draw_sword_1_01`, `sheath_sword_1_01`, `crouch*`
-  - `ex_*` — extra (7): `running`, `fast_run`, `roll_to_run`,
-    `sword_combo_light`, `sword_combo_heavy`, `cast_light`, `cast_heavy`
+  - `ex_*` — extra (8): `running`, `fast_run`, `roll_to_run`,
+    `sword_combo_light`, `sword_combo_heavy`, `cast_light`, `cast_heavy`,
+    `hookshot_fire`
   - `mg_*` — magic (14): casts, hit reactions, `react_death_backward`
+  - `bow_*` — longbow (39): `equip`/`disarm`, `draw_arrow`, `aim_overdraw`,
+    `aim_recoil`, `aim_walk_*`, `aim_turn_*`, `shoot_*`, `reload_*`, `dodge_*`,
+    `death_*`. **These are the archer's real clips — the old stand-in
+    `ss_casting_01` is gone.** The three the rig actually reads are
+    `aim_overdraw` (holding at full draw), `aim_walk_forward` (strafing at
+    draw, and it LOOPS), and `aim_recoil` (the loose). The rest are stock.
 - **Binding** (the FBX ships a stub library you must evict first):
   ```gdscript
   var ap: AnimationPlayer = hero.find_child("AnimationPlayer", true, false)
@@ -562,7 +569,50 @@ the sword.
 ```gdscript
 hero.ranged.fire(&"bow" | &"hookshot") -> bool   # false = the press did nothing
 hero.ranged.busy() -> bool                        # a shot is mid-flight
+hero.ranged.aiming -> bool                        # a sighted item is out
+hero.ranged.aim_item() -> StringName              # &"bow" &"hookshot" or &""
 ```
+
+**Aim mode has exactly one author.** Bringing out the bow or the hookshot drops
+the camera to the shoulder, draws a crosshair, and changes how the body moves.
+Three systems, one decision — and if the camera, the HUD and the hero each
+decided for themselves what counts as aiming they would disagree the first frame
+one of them was wrong. `HeroRanged` is the one place that knows what is in his
+hands, so it decides and says so:
+
+```gdscript
+Bus.aim_changed(active: bool)          # emitted by HeroRanged, nobody else
+
+camera.set_aiming(on)                  # connected to it in GameCamera._ready
+camera.aiming() -> bool
+hero.aiming() -> bool                  # both read through HeroRanged
+hero.aim_item() -> StringName          # which stance the body holds
+```
+
+**The eye slides sideways; the boom does not turn.** Over-the-shoulder framing
+offsets the camera's PIVOT laterally (`K.CAM_AIM_SHOULDER`) rather than yawing
+the boom, so the screen-centre ray stays *parallel* to the boom axis. Yaw the
+boom instead and the crosshair stops being where the camera raycast goes, which
+is the whole thing the convergent aim above exists to guarantee. The blend is a
+single `0..1` over `K.CAM_AIM_BLEND` driving distance, FOV and the offset
+together; autoswing is suppressed for its duration (the player is aiming — the
+camera does not get an opinion).
+
+While aiming the hero **strafes**: he faces where the camera faces, at ~1.8×
+turn rate, and moves independently of that facing. This is the same shape as
+lock-on and sits in the same place in `_tick_ground`, right after it.
+
+| clip | when |
+|---|---|
+| `bow_aim_overdraw` | bow out, standing — the held draw |
+| `bow_aim_walk_forward` | bow out, moving — blended by planar speed |
+| `ex_hookshot_fire` | hookshot out — **looped as a held brace**, not a one-shot |
+| `bow_aim_recoil` | the loose, time-scaled onto the shot duration |
+
+The hookshot needs its own held pose for a reason worth remembering: run it
+through the bow's `Aim` blend and he braces a pistol in the full-draw archer
+stance, both hands at his ear and the torso wound 90° off the shot. Two items,
+two stances, two `Blend2`s — selected by `aim_item()`.
 
 **Aim comes from the camera, and converges on what it is looking AT.** The
 camera is the only thing carrying a player-controlled pitch (§4), so it is the
@@ -607,7 +657,7 @@ far shots streak, which is the giveaway tell of a clone.
 The hero side of it — `scripts/actors/hero/hero.gd`:
 
 ```gdscript
-hero.request_ranged(duration, aim) -> bool  # commits him, faces him down the aim
+hero.request_ranged(duration, aim, hook := false) -> bool  # commits him, faces him down the aim
 hero.hook_begin() -> bool                   # the hookshot takes him over
 hook.hook_pull_to(point)                    # …and drags him there
 hero.hook_end()
@@ -621,7 +671,10 @@ because that one really is different — **gravity is not applied while it runs*
 (§ "the hookshot flies perfectly straight" applies to the hero too), and it ends
 on arrival or on a timeout so a hook into moved geometry cannot strand him.
 
-Proof: `tools/directors/ranged_kit.gd`.
+Proof: `tools/directors/ranged_kit.gd` (the loop, including the shoulder
+camera), `tools/directors/ranged_anim_lookdev.gd` (the poses),
+`tools/directors/bow_stow_lookdev.gd` (where the slung bow sits — read its
+header before you decide it looks wrong).
 
 ### Music — picks itself, and nobody calls it
 

@@ -1,0 +1,116 @@
+extends RefCounted
+## Photographs the ranged clips as pose strips, so picking one is a thing
+## somebody looked at rather than a thing inferred from a filename.
+##
+## The whole point of the longbow pack is that "standing draw arrow" and
+## "standing aim recoil" are guesses until you see them. CLAUDE.md §4 is blunt
+## about this: never reason a pose out from bone tracks, render it and look.
+##
+## Each clip gets one PNG — four evenly spaced poses side by side, left to
+## right, over the clip's own length. The AnimationTree is switched off for the
+## duration so the AnimationPlayer can be scrubbed directly; the tree would
+## otherwise overwrite the pose with the locomotion blend on the next frame.
+##
+##   godot --path . -s tools/shoot.gd -- \
+##     --scene=res://scenes/rooms/training.tscn \
+##     --director=res://tools/directors/ranged_anim_lookdev.gd --out=/tmp/anim/x.png
+
+## Clip, and the item to have in hand while it plays. An empty item leaves him
+## holding the sword, which is what the stand-in has always been photographed in.
+const STRIPS := [
+	{"clip": &"ss_casting_01", "item": "item_left", "label": "standin_casting"},
+	{"clip": &"bow_draw_arrow", "item": "item_left", "label": "bow_draw_arrow"},
+	{"clip": &"bow_aim_recoil", "item": "item_left", "label": "bow_aim_recoil"},
+	{"clip": &"bow_aim_overdraw", "item": "item_left", "label": "bow_aim_overdraw"},
+	{"clip": &"bow_equip", "item": "item_left", "label": "bow_equip"},
+	{"clip": &"ex_hookshot_fire", "item": "item_up", "label": "hookshot_fire"},
+]
+const POSES := 4
+## Turn off dead-on so the drawn arm reads. Straight at the lens hides the pull.
+const FACE_OFFSET := 0.7
+
+
+func run(rig) -> void:
+	var out: String = rig.arg("out", "/tmp/anim/x.png").get_base_dir()
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	await rig.wait_frames(20)
+
+	var hero = rig.get_nodes_in_group(&"player")[0]
+	var player: AnimationPlayer = hero._anim_player
+	var tree: AnimationTree = hero._tree
+	var cam: Camera3D = hero.get_viewport().get_camera_3d()
+	if cam == null or player == null or tree == null:
+		print("ANIMLOOK FAIL no camera / no rig")
+		return
+
+	# Face him three-quarters to the lens, by the contract's heading formula.
+	var to_cam: Vector3 = K.flat(cam.global_position - hero.global_position)
+	hero.facing_yaw = atan2(to_cam.x, to_cam.z) + FACE_OFFSET
+	await rig.wait_frames(20)
+
+	var held := ""
+	for strip in STRIPS:
+		var clip: StringName = strip["clip"]
+		var item: String = strip["item"]
+		var label: String = strip["label"]
+
+		if item != held:
+			# Nothing cycles behind the game's back (docs/CONTRACT.md §4.1), so
+			# the D-pad button is pressed, and the previous item is put away with
+			# a second press of its own button first.
+			if held != "":
+				await rig.tap([held])
+				await rig.wait_frames(10)
+			await rig.tap([item])
+			await rig.wait_frames(14)
+			held = item
+			hero.facing_yaw = atan2(to_cam.x, to_cam.z) + FACE_OFFSET
+			await rig.wait_frames(6)
+
+		if not player.has_animation(clip):
+			print("ANIMLOOK FAIL missing clip %s" % clip)
+			continue
+
+		tree.active = false
+		var length: float = player.get_animation(clip).length
+		var sheet: Image = null
+		for i in POSES:
+			# The last pose sits a hair inside the end: a one-shot's final key is
+			# often the neutral it blends back to, and photographing that gives a
+			# strip whose last frame says nothing about the clip.
+			var t: float = length * (float(i) / float(POSES - 1)) * 0.97
+			player.play(clip)
+			player.seek(t, true)
+			player.pause()
+			await rig.wait_frames(2)
+			# Annotated, not inferred: an awaited call yields Variant, and `:=`
+			# on one is the "cannot infer the type of X" parse error (CLAUDE.md §3).
+			var frame: Image = await _grab(rig)
+			if sheet == null:
+				sheet = Image.create_empty(
+					frame.get_width() * POSES, frame.get_height(), false, frame.get_format()
+				)
+			sheet.blit_rect(
+				frame,
+				Rect2i(Vector2i.ZERO, frame.get_size()),
+				Vector2i(frame.get_width() * i, 0)
+			)
+		player.stop()
+		tree.active = true
+		await rig.wait_frames(6)
+
+		var path := out.path_join("anim_%s.png" % label)
+		DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+		sheet.save_png(path)
+		print("ANIMLOOK %-18s len=%.2f -> %s" % [label, length, path])
+
+	print("ANIMLOOK done")
+
+
+## One rendered frame, halved. Four full-size frames side by side is a 5120 px
+## image nobody can read; half scale keeps the whole strip legible at once.
+func _grab(rig) -> Image:
+	await RenderingServer.frame_post_draw
+	var img: Image = rig.root.get_texture().get_image()
+	img.resize(img.get_width() / 2, img.get_height() / 2, Image.INTERPOLATE_LANCZOS)
+	return img

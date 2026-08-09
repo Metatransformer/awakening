@@ -61,29 +61,20 @@ func _bow(rig, hero) -> void:
 	_check("the bow model is in his hands", _visible(hero.combat.bow))
 	# A kite shield growing out of a bowstring: both used to be on the left arm.
 	_check("the shield came off the bow arm", not _visible(hero.combat.shield))
-	# The default camera sits behind his shoulders and the bow is held in the
-	# LEFT hand, so the rear view has his own body in front of it. Turn him to
-	# face the lens for one frame: a model nobody can see is a model nobody has
-	# checked, and `is_visible_in_tree()` is not the same claim.
-	#
-	# Turned to face the lens by the contract's own heading formula rather than
-	# by a guessed constant: a heading yaw means h = (sin y, 0, cos y), so the
-	# yaw that points him at the camera is atan2 of the flat vector to it
-	# (CLAUDE.md §4). An earlier version of this just wrote PI and photographed
-	# his back — which is the exact failure §4 exists to warn about.
 	var cam = hero.get_viewport().get_camera_3d()
 	if cam == null:
 		_fail("no camera, so there is no aim and nothing to photograph")
 		return
-	var was: float = hero.facing_yaw
-	var to_cam: Vector3 = K.flat(cam.global_position - hero.global_position)
-	hero.facing_yaw = atan2(to_cam.x, to_cam.z)
-	# And waited on, because `facing_yaw` is a target the body swings onto at
-	# `turn_rate`, not a snap.
-	await _wait_for_facing(rig, hero, hero.facing_yaw)
+	# No fixture turning here any more. Drawing the bow raises aim mode, and aim
+	# mode is exactly the framing this photo used to fake: the rig drops onto his
+	# right shoulder, so the hero sits off to one side of the picture with the bow
+	# in clear view. The previous version wrote `facing_yaw` to spin him toward
+	# the lens, which now cannot work — `_tick_aiming` owns the facing while a
+	# ranged item is out and steers it straight back to the camera heading, and a
+	# director fighting the thing it is testing proves nothing either way.
+	_check("the camera went over the shoulder for the bow", cam.aiming())
+	await rig.wait_frames(24)
 	await rig.capture(out.path_join("r_01_bow_drawn.png"))
-	hero.facing_yaw = was
-	await _wait_for_facing(rig, hero, was)
 
 	# --- Shot one: aimed by the camera ---------------------------------------
 	# The post is moved ONTO the camera's forward ray rather than the shot being
@@ -94,12 +85,16 @@ func _bow(rig, hero) -> void:
 		_fail("no training post to shoot at")
 		return
 	var aim: Vector3 = -cam.global_transform.basis.z
-	# Six metres, not nine. The aim is a raycast from the camera to whatever the
-	# crosshair is over, so a post parked BEHIND the room's barrels is not the
-	# thing being aimed at and the arrow correctly hits the barrel instead. The
-	# fixture has to be the first thing on the line, which is the same rule the
-	# player plays by.
-	post.global_position = hero.global_position + K.flat(aim) * 6.0
+	# From the CAMERA, not from the hero. Over the shoulder the eye sits ~0.6 m to
+	# his right, so the crosshair ray and the hero's centre line are parallel and
+	# half a metre apart — a post on the hero's line is not the thing under the
+	# crosshair, and the arrow correctly sails past it. This is the whole reason
+	# `_aim_from` converges on the crosshair POINT instead of firing parallel.
+	#
+	# Six metres out, not nine. The aim is a raycast to whatever the crosshair is
+	# over, so a post parked BEHIND the room's barrels is not what is being aimed
+	# at. The fixture has to be the first thing on the line, same as for a player.
+	post.global_position = cam.global_position + K.flat(aim) * 6.0
 	post.global_position.y = 0.0
 	await rig.wait_frames(10)
 
@@ -317,20 +312,6 @@ func _hookshot_wall(rig, hero) -> void:
 
 
 # --- Helpers ----------------------------------------------------------------
-
-## Wait until the body has actually swung onto `yaw`, so a capture taken for the
-## look of a thing is not taken halfway through the turn.
-func _wait_for_facing(rig, hero, yaw: float) -> void:
-	for i in 120:
-		var now: float = hero.global_rotation.y
-		if absf(angle_difference(now, yaw + PI)) < deg_to_rad(8.0):
-			await rig.wait_frames(4)
-			return
-		await rig.wait_frames(1)
-	# Not a failure of the feature — say so and carry on rather than fail a beat
-	# about the bow on a fact about the turn rate.
-	print("RANGED note: the hero never finished turning to %.2f rad" % yaw)
-
 
 ## Wait for a post's damage readout to clear itself, so a later "nothing hit it"
 ## can be read off a baseline of zero instead of off a number that expires.

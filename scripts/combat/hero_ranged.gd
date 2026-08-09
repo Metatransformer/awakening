@@ -19,8 +19,17 @@ extends Node3D
 ## the only thing in this game that carries a player-controlled PITCH (`_pitch`,
 ## clamped to ±55° in game_camera.gd), so the camera's forward is the aim — the
 ## same source movement already reads (docs/CONTRACT.md §4, camera-relative).
-## Locked on, the bow overrides that and shoots the target, because that is the
+## Locked on, both items override that and shoot the target, because that is the
 ## whole promise of the lock.
+##
+## ## Aim mode
+##
+## Because the aim IS the camera, drawing one of these has to change the camera,
+## or the player is aiming a weapon with a rig framed for running around. Bringing
+## either item out therefore raises `Bus.aim_changed(true)`: the boom drops to the
+## hero's shoulder, the FOV narrows, the HUD puts a crosshair on the middle of the
+## screen, and the hero turns to face wherever the lens is pointed. This node is
+## the only emitter — it is the one place that knows what is in his hands.
 
 ## Seconds a shot owns the hero, and the fraction of that at which the arrow
 ## actually leaves. He is committed for the rest — a bow you can fire while
@@ -38,8 +47,16 @@ const HOOK_FIRE_TIME := 0.34
 ## demanding pixel aim across a chasm is how a traversal item becomes a chore.
 const HOOK_ASSIST_CONE := 22.0
 
+## The two items that put the camera on the shoulder. A set rather than a pair of
+## comparisons so adding a third — a slingshot, a wand — is one entry.
+const AIMED: Array[StringName] = [&"bow", &"hookshot"]
+
 var _hero: Hero
 var _tether: HookshotTether
+
+## True while a ranged item is in the right hand. Mirrored onto the Bus; kept
+## here so a late listener (a HUD rebuilt on a scene change) can ask.
+var aiming: bool = false
 
 ## Counts up through BOW_TIME while a shot is in flight, or -1.0 when idle.
 var _bow_t: float = -1.0
@@ -64,6 +81,32 @@ func _ready() -> void:
 	_tether = HookshotTether.new()
 	_tether.name = "Tether"
 	_hero.add_child(_tether)
+
+	Bus.loadout_changed.connect(_on_loadout_changed)
+	# Deferred: the hero is still being built, and the camera and the HUD that
+	# listen for this have not necessarily reached their own _ready yet. A stance
+	# announced into an empty room leaves the camera framed for running while the
+	# bow is already in his hand, which is exactly the bug this signal exists for.
+	_refresh_aiming.call_deferred()
+
+
+func _on_loadout_changed(_set_index: int, _right: StringName, _left: StringName) -> void:
+	_refresh_aiming()
+
+
+## The sighted item, or &"" for none — what the hero's stance is built from.
+func aim_item() -> StringName:
+	var held := Game.armament(Game.HAND_RIGHT)
+	return held if AIMED.has(held) else &""
+
+
+## Recompute the stance from what is actually equipped, and announce a change.
+func _refresh_aiming() -> void:
+	var want := AIMED.has(Game.armament(Game.HAND_RIGHT))
+	if want == aiming:
+		return
+	aiming = want
+	Bus.aim_changed.emit(aiming)
 
 
 ## Use whatever is in the right hand. Returns false when the press should be
@@ -160,7 +203,7 @@ func _fire_hookshot() -> bool:
 				pull = anchor + Vector3.DOWN * (K.HERO_H + 0.2)
 			bit = true
 
-	if not _hero.request_ranged(HOOK_FIRE_TIME, aim):
+	if not _hero.request_ranged(HOOK_FIRE_TIME, aim, true):
 		return false
 
 	_hook_active = true
@@ -265,8 +308,8 @@ func _muzzle(id: StringName) -> Vector3:
 
 
 ## The locked target's chest, else wherever the camera is pointed.
-func _aim_at_target_or_camera() -> Vector3:
-	var muzzle := _muzzle(&"bow")
+func _aim_at_target_or_camera(id: StringName = &"bow") -> Vector3:
+	var muzzle := _muzzle(id)
 	var target := _hero.lock_target()
 	if target != null:
 		var to := target.global_position + Vector3.UP * 0.9 - muzzle
@@ -322,8 +365,14 @@ func _aim_from(muzzle: Vector3) -> Vector3:
 
 
 ## The aim for a hookshot shot, which leaves the barrel in his right hand.
+##
+## The lock wins here for the same reason it wins for the bow: holding a target
+## and then having the chain sail past it because the crosshair was a few degrees
+## off reads as the lock being decorative. The ring assist in `_best_hookable`
+## still runs on top of whatever this returns, so an authored anchor beside the
+## locked enemy is still the thing that gets grabbed.
 func _camera_forward() -> Vector3:
-	return _aim_from(_muzzle(&"hookshot"))
+	return _aim_at_target_or_camera(&"hookshot")
 
 
 func _scene_root() -> Node:

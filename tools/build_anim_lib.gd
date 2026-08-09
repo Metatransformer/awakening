@@ -14,10 +14,18 @@ const SETS := {
 	"ss": "res://assets/animations/sword_shield",
 	"ex": "res://assets/animations/extra",
 	"mg": "res://assets/animations/magic",
+	"bow": "res://assets/animations/longbow",
 }
 const OUT := "res://assets/animations/hero_anims.res"
 ## Clips that should loop when played. Everything else is one-shot.
-const LOOPING := ["idle", "walk", "run", "strafe", "block_idle", "crouch_idle", "crouching"]
+##
+## Matched with `begins_with`, which is why "aim_walk" and "fall_loop" are listed
+## separately: the longbow set's held-aim strafes are named `aim_walk_forward`,
+## so neither "walk" nor "idle" catches them, and they are cycles like any other.
+const LOOPING := [
+	"idle", "walk", "run", "strafe", "block_idle", "crouch_idle", "crouching",
+	"aim_walk", "fall_loop",
+]
 
 
 func _initialize() -> void:

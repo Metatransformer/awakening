@@ -30,6 +30,11 @@ signal target_lost
 signal camera_recenter
 signal letterbox_requested(on: bool)
 signal first_person_changed(on: bool)
+## A ranged item is out and the hero is sighting down it: the camera drops to the
+## shoulder and the HUD draws a crosshair. Emitted by `HeroRanged`, which is the
+## one place that knows what is in his hands — the camera and the HUD both read
+## this rather than each deciding for itself what counts as aiming.
+signal aim_changed(active: bool)
 
 # --- Combat -----------------------------------------------------------------
 signal hit_landed(target: Node3D, amount: int, position: Vector3)

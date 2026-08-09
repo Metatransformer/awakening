@@ -99,6 +99,21 @@ extends Camera3D
 ## order the scenes were instanced in.
 @export var take_over_on_ready: bool = true
 
+@export_group("Aim")
+## Over-the-shoulder framing while a bow or a hookshot is out. `HeroRanged` owns
+## the stance and announces it on `Bus.aim_changed`; nothing here decides.
+##
+## The eye slides sideways rather than the boom rotating, so the crosshair ray
+## stays PARALLEL to the boom axis and simply passes beside the hero. That is
+## what makes screen-centre a usable sight: `HeroRanged._aim_from` raycasts down
+## exactly this ray to find what the crosshair is over, and a rig that converged
+## on the hero instead would put the crosshair on his shoulder blade.
+@export var aim_distance: float = K.CAM_DIST_AIM
+@export var aim_shoulder: float = K.CAM_AIM_SHOULDER
+@export var aim_rise: float = K.CAM_AIM_RISE
+@export var aim_fov: float = K.CAM_FOV_AIM
+@export var aim_blend_time: float = K.CAM_AIM_BLEND
+
 @export_group("Walls")
 ## Radius of the probe swept from the at-point to the eye.
 @export var collide_radius: float = 0.3
@@ -131,6 +146,12 @@ var _manual_timer: float = 0.0
 var _recenter_timer: float = 0.0
 var _initialised: bool = false
 
+## The aim stance, and its 0..1 ease. Everything about the shoulder framing is
+## scaled by `_aim01` rather than switched, so drawing the bow slides the rig in
+## instead of cutting to it.
+var _aiming: bool = false
+var _aim01: float = 0.0
+
 var _probe: SphereShape3D = SphereShape3D.new()
 var _shape_query := PhysicsShapeQueryParameters3D.new()
 
@@ -149,6 +170,7 @@ func _ready() -> void:
 	Bus.target_acquired.connect(set_target)
 	Bus.target_lost.connect(clear_target)
 	Bus.player_spawned.connect(_on_player_spawned)
+	Bus.aim_changed.connect(set_aiming)
 
 	# The screenshot harness runs windowed; grabbing the cursor there would
 	# hijack the machine mid-capture. Its SceneTree carries a script, the
@@ -183,6 +205,29 @@ func clear_target() -> void:
 	_target = null
 
 
+# --- Seam for the ranged items ----------------------------------------------
+
+## `HeroRanged` calls this through `Bus.aim_changed` when a bow or a hookshot
+## comes out or goes away.
+##
+## Raising it recentres. The crosshair is the middle of the screen and the shot
+## goes wherever that ray lands, so a stance that begins with the lens still
+## pointed off at whatever the player was last looking at means the first shot
+## goes somewhere they did not choose. Behind the hero is the one starting yaw
+## that is never a surprise. Dropping it does not recentre — coming out of aim
+## should leave the camera where the player left it.
+func set_aiming(on: bool) -> void:
+	if on == _aiming:
+		return
+	_aiming = on
+	if on:
+		recenter()
+
+
+func aiming() -> bool:
+	return _aiming
+
+
 ## The yaw, in radians, that places the eye directly behind the hero.
 func behind_yaw() -> float:
 	if _hero == null:
@@ -215,6 +260,9 @@ func _physics_process(delta: float) -> void:
 		global_position = _at + _orbit_dir(_yaw, _pitch) * _dist
 
 	var speed01 := _hero_speed01()
+
+	_aim01 = move_toward(_aim01, 1.0 if _aiming else 0.0,
+			delta / maxf(aim_blend_time, 0.001))
 
 	_follow_at(want_at, speed01, delta)
 	_apply_look(delta)
@@ -303,6 +351,9 @@ func _apply_parallel(delta: float) -> void:
 		base = K.CAM_FOV_LOCK
 	elif _recenter_timer > 0.0:
 		base = fov_parallel
+	# Sighting down a weapon is the narrowest the frame ever gets, and it wins
+	# over the lock's own pull-in: aiming at a locked target is still aiming.
+	base = lerpf(base, aim_fov, _aim01)
 	var want_fov := base + Settings.fov_offset
 	fov = lerpf(fov, want_fov, 1.0 - exp(-(1.0 / maxf(fov_blend_time, 0.001)) * delta))
 
@@ -345,6 +396,14 @@ func _apply_battle(delta: float) -> void:
 func _apply_autoswing(speed01: float, delta: float) -> void:
 	if _manual_timer > 0.0 or _recenter_timer > 0.0 or speed01 < 0.12:
 		return
+	# Never while aiming. The hero turns to face the lens in this stance, so
+	# "drift toward behind the hero" and "the hero faces the camera" are the same
+	# pair of rules that corkscrewed the camera before (see autoswing_fade_from_deg)
+	# — except here they agree perfectly and the pair has no error to close, so
+	# every stray metre of strafing would drag the crosshair off the target the
+	# player is holding it on. Aim is steered by hand, full stop.
+	if _aiming:
+		return
 	# Locked, `_apply_battle` owns the yaw. The two rules mostly agree — the
 	# hero faces the target, so "behind the hero" and "behind the hero on the
 	# target line" are the same ray — but they stop agreeing the instant he is
@@ -372,39 +431,50 @@ func _orbit_dir(yaw: float, pitch_degrees: float) -> Vector3:
 ## Sweep a sphere from the at-point toward `dir` and report how far the eye may
 ## travel. A start-overlap (hero jammed into a corner) degrades to a plain ray
 ## so we still get the best distance the raw geometry allows.
-func _clear_distance(dir: Vector3, want: float) -> float:
+## `origin` is the point the boom pivots on. It is the at-point normally, and the
+## SHOULDER-OFFSET at-point while aiming: the eye is what has to stay out of the
+## wall, and sweeping from the hero's centre while the eye sits 0.6 m to one side
+## clears a corridor the eye is not actually in.
+func _clear_distance(dir: Vector3, want: float, origin: Vector3) -> float:
 	var space := get_world_3d().direct_space_state
-	_shape_query.transform = Transform3D(Basis(), _at)
+	_shape_query.transform = Transform3D(Basis(), origin)
 	_shape_query.motion = dir * want
 	var res := space.cast_motion(_shape_query)
 	if res.size() == 2 and res[0] > 0.001:
 		return want * res[0]
-	var rq := PhysicsRayQueryParameters3D.create(_at, _at + dir * want)
+	var rq := PhysicsRayQueryParameters3D.create(origin, origin + dir * want)
 	rq.collision_mask = K.L_WORLD
 	var hit := space.intersect_ray(rq)
 	if hit.is_empty():
 		return want
-	return maxf(_at.distance_to(hit.position) - collide_radius, 0.0)
+	return maxf(origin.distance_to(hit.position) - collide_radius, 0.0)
 
 
 func _place(delta: float) -> void:
-	var want := distance
+	var want := lerpf(distance, aim_distance, _aim01)
+	# The boom the wall logic is defending. Aiming asks for a boom well inside
+	# distMin on purpose, and comparing a deliberate 1.55 m against a 2.48 m floor
+	# would have the rig arcing and climbing to escape an obstruction that is not
+	# there — every frame, for the whole time the bow is out.
+	var floor_dist := minf(min_distance, want)
+	var pivot := _aim_pivot()
 	var base_pitch := _pitch + _lift_bias_deg
-	var clear := _clear_distance(_orbit_dir(_yaw + deg_to_rad(_swing_bias_deg), base_pitch), want)
+	var clear := _clear_distance(
+			_orbit_dir(_yaw + deg_to_rad(_swing_bias_deg), base_pitch), want, pivot)
 
 	# Being nudged from distMax down toward distMin is inside the shipped dungeon
 	# range and needs no drama. Only an obstruction that would force the boom
 	# BELOW distMin is worth reacting to (§1.6).
 	var swing_target := 0.0
 	var lift_target := 0.0
-	if clear < min_distance - 0.03:
+	if clear < floor_dist - 0.03:
 		# 1. Arc around it on the yaw axis — the OOT answer.
 		var sign_first := 1.0 if _swing_bias_deg >= 0.0 else -1.0
 		var off := swing_step_deg
 		while off <= swing_max_deg and swing_target == 0.0:
 			for s: float in [sign_first, -sign_first]:
 				var cand := _yaw + deg_to_rad(off * s)
-				if _clear_distance(_orbit_dir(cand, _pitch), want) >= min_distance:
+				if _clear_distance(_orbit_dir(cand, _pitch), want, pivot) >= floor_dist:
 					swing_target = off * s
 					break
 			off += swing_step_deg
@@ -413,7 +483,7 @@ func _place(delta: float) -> void:
 			var lift := lift_step_deg
 			while lift <= lift_max_deg:
 				var p := minf(_pitch + lift, K.CAM_MAX_PITCH)
-				if _clear_distance(_orbit_dir(_yaw, p), want) >= min_distance:
+				if _clear_distance(_orbit_dir(_yaw, p), want, pivot) >= floor_dist:
 					lift_target = lift
 					break
 				lift += lift_step_deg
@@ -425,7 +495,7 @@ func _place(delta: float) -> void:
 
 	var dir := _orbit_dir(_yaw + deg_to_rad(_swing_bias_deg),
 			minf(_pitch + _lift_bias_deg, K.CAM_MAX_PITCH))
-	clear = _clear_distance(dir, want)
+	clear = _clear_distance(dir, want, pivot)
 
 	# 3. Still blocked: pull in. Immediately on the way in — a lagged pull-in is
 	# a clipped frame — and smoothly on the way back out.
@@ -446,6 +516,23 @@ func _place(delta: float) -> void:
 	else:
 		_dist = move_toward(_dist, allowed, push_out_speed * delta)
 
-	global_position = _at + dir * _dist
-	if global_position.distance_squared_to(_at) > 0.0004:
-		look_at(_at, Vector3.UP)
+	global_position = pivot + dir * _dist
+	if global_position.distance_squared_to(pivot) > 0.0004:
+		look_at(pivot, Vector3.UP)
+
+
+## The at-point the boom actually pivots on: the hero's eye, slid toward his
+## right shoulder and lifted a little, in proportion to the aim ease.
+##
+## The offset is taken in the ORBIT's frame rather than the camera's own basis,
+## because the camera's basis is what this function is about to decide — reading
+## it here would use last frame's, and the lag shows up as the crosshair swimming
+## whenever the player turns.
+func _aim_pivot() -> Vector3:
+	if _aim01 <= 0.0:
+		return _at
+	# The boom's own yaw, +90°: the horizontal direction to the eye's right when
+	# it is looking back down the boom at the hero.
+	var yaw := _yaw + deg_to_rad(_swing_bias_deg)
+	var right := Vector3(cos(yaw), 0.0, -sin(yaw))
+	return _at + right * (aim_shoulder * _aim01) + Vector3.UP * (aim_rise * _aim01)

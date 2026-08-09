@@ -134,6 +134,8 @@ var _extract_available: bool = false
 var _refuse_t: float = -1.0
 var _block_flash_t: float = -1.0
 var _lock_target: Node3D = null
+## A bow or a hookshot is out, so the middle of the screen is a sight.
+var _aiming: bool = false
 var _last_quarters: int = -1
 ## Heat, mirrored from the signal. The WINDOW is not mirrored -- it drains every
 ## frame and is read straight off Heat when the bar draws, the same way health
@@ -184,6 +186,7 @@ func _ready() -> void:
 	Bus.shield_blocked.connect(_on_blocked)
 	Bus.target_acquired.connect(_on_target)
 	Bus.target_lost.connect(_on_target_lost)
+	Bus.aim_changed.connect(_on_aim)
 	Bus.prompt_changed.connect(_on_prompt)
 	Bus.run_started.connect(_on_headline_changed)
 	Bus.run_ended.connect(_on_headline_changed)
@@ -323,6 +326,11 @@ func _on_target_lost() -> void:
 	_repaint()
 
 
+func _on_aim(active: bool) -> void:
+	_aiming = active
+	_repaint()
+
+
 ## "You can leave right now."
 ##
 ## This used to mean "you are standing on the rune pad", and the pad called it.
@@ -441,6 +449,7 @@ func _draw_hud() -> void:
 	_draw_extraction(s)
 	_draw_toast(s)
 	_draw_prompt(s)
+	_draw_crosshair(s)
 	_draw_lock_on(s)
 	_draw_sweep(s)
 	_draw_controls(s)
@@ -953,6 +962,41 @@ func _draw_prompt(s: Vector2) -> void:
 	_canvas.draw_rect(Rect2(centre.x - w * 0.5 - pad, centre.y - pad,
 		w + pad * 2.0, h + pad * 2.0), Color(Pal.VOID, 0.72))
 	PixelFont.draw_centred(_canvas, _prompt, centre, scale, Pal.BONE)
+
+
+## The sight, drawn only while a ranged item is out.
+##
+## Four ticks around an empty middle, and nothing in the centre. The gap is the
+## point: a solid dot or a full cross covers the thing being shot at, and at this
+## resolution that is a goblin's head. Everything the player needs — "the shot
+## goes HERE" — is carried by the four points converging on a hole.
+##
+## Screen centre, exactly, because that is the ray `HeroRanged._aim_from` casts.
+## A crosshair drawn anywhere else would be a decoration that lies.
+##
+## Holding a lock turns it RUST and pulls the ticks in. The lock overrides the
+## crosshair — the shot goes to the target, not to the middle of the screen — and
+## a sight that looked identical either way would be claiming otherwise.
+func _draw_crosshair(s: Vector2) -> void:
+	if not _aiming:
+		return
+	var locked := _lock_target != null and is_instance_valid(_lock_target)
+	var centre := s * 0.5
+	# Quantized to the same 480x270 grid the lock reticle uses, so the two never
+	# sit half a pixel apart from each other.
+	var grid := s / Vector2(480.0, 270.0)
+	centre = (centre / grid).round() * grid
+
+	var gap := Pal.px(5.0 if locked else 7.0, s.y)
+	var arm := Pal.px(5.0, s.y)
+	var w := Pal.px(1.0, s.y)
+	var col := Pal.RUST if locked else Pal.BONE
+	for dir: Vector2 in [Vector2.LEFT, Vector2.RIGHT, Vector2.UP, Vector2.DOWN]:
+		var near := centre + dir * gap
+		var far := near + dir * arm
+		var a := Vector2(minf(near.x, far.x), minf(near.y, far.y))
+		var b := Vector2(maxf(near.x, far.x), maxf(near.y, far.y))
+		_canvas.draw_rect(Rect2(a, (b - a) + Vector2(w, w)), col)
 
 
 ## Four corner brackets, not a fairy and not a triangle. Positions quantize to

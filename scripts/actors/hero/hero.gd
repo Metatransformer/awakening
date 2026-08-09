@@ -128,11 +128,24 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, HEAVY, LUNGE }
 ## knee. That is why it made a terrible heavy (it shipped as one for a day and
 ## looked like a physics bug) and exactly the right leap at a locked target.
 @export var clip_lunge: StringName = &"ss_attack_01"
-## What the hero does with a bow or a hookshot in his hands. A stand-in: the
-## library is a sword-and-shield set with no draw and no aim clip
-## (docs/CONTRACT.md §2), and the alternative — reusing `clip_attack` — swings an
-## invisible sword every time you shoot, which is worse than a generic pose.
-@export var clip_ranged: StringName = &"ss_casting_01"
+## The loose. `bow_aim_recoil` opens at full draw and snaps the string arm back,
+## so the shot itself is the whole clip — which is why the aim POSE below is a
+## held blend rather than part of this: the hero is already drawn when he fires,
+## and a one-shot that had to draw first would put the arrow half a second behind
+## the button.
+@export var clip_bow_shot: StringName = &"bow_aim_recoil"
+## Firing the hookshot. A brace-and-punch with the barrel out front, from
+## Shooting.fbx; the bow clips would have him loosing an arrow off a grapple.
+@export var clip_hook_shot: StringName = &"ex_hookshot_fire"
+## The held aim, and the two ends of the aim-walk blend. These are what the
+## over-the-shoulder stance looks like: `bow_aim_overdraw` is a sustained pull at
+## full draw, and the aim-walk clips carry the bow through a step instead of
+## sliding a statue across the floor.
+@export var clip_aim_idle: StringName = &"bow_aim_overdraw"
+@export var clip_aim_walk: StringName = &"bow_aim_walk_forward"
+## Seconds the aim stance takes to blend in and out. Matches K.CAM_AIM_BLEND so
+## the body and the camera arrive at the shoulder together.
+@export var aim_fade: float = K.CAM_AIM_BLEND
 @export var clip_block: StringName = &"ss_block_idle_01"
 ## Seconds the shield takes to come up and go down. Fast enough to be a
 ## reaction, slow enough that you can see it happen.
@@ -213,6 +226,11 @@ const _SWING_FADE_OUT: Array[float] = [0.16, 0.12, 0.18, 0.22, 0.20]
 
 const _P_RANGED := "parameters/Ranged/request"
 const _P_RANGED_SCALE := "parameters/RangedScale/scale"
+const _P_HOOK_SHOT := "parameters/HookShot/request"
+const _P_HOOK_SCALE := "parameters/HookScale/scale"
+const _P_AIM := "parameters/Aim/blend_amount"
+const _P_AIM_HOOK := "parameters/HookAim/blend_amount"
+const _P_AIM_BLEND := "parameters/AimLoco/blend_position"
 const _P_BLOCK := "parameters/Block/blend_amount"
 
 
@@ -332,9 +350,53 @@ func _build_anim_tree() -> void:
 	tree_root.add_node(&"LocoScale", stride, Vector2(220, 0))
 	tree_root.connect_node(&"LocoScale", 0, &"Loco")
 
+	# The aim stances REPLACE locomotion rather than layering over it. A held pose
+	# blended on top of a walk cycle is what the shield does, and it is the right
+	# answer there because a shield only occupies one arm — a bow at full draw
+	# occupies the whole body, and mixing it with a sword-and-shield stride gives
+	# a hero drawing a bow with his legs out of a different animation.
+	#
+	# So the bow gets a second, parallel locomotion blend built out of the longbow
+	# set's own clips. Same axis, same units, same `_P_BLEND`-shaped input — see
+	# `_drive_animation`.
+	var aim_loco := AnimationNodeBlendSpace1D.new()
+	aim_loco.min_space = 0.0
+	aim_loco.max_space = run_blend_speed
+	aim_loco.sync_mode = AnimationNodeBlendSpace1D.SYNC_MODE_CYCLIC_MUTABLE
+	aim_loco.add_blend_point(_anim_node(clip_aim_idle), 0.0, -1, &"aim_idle")
+	aim_loco.add_blend_point(_anim_node(clip_aim_walk), walk_blend_speed, -1, &"aim_walk")
+	# The pack has no aim RUN — you do not sprint at full draw. Reusing the walk
+	# at the run end keeps the blend defined across the whole axis; the stride
+	# scale in `_drive_animation` is what stops the feet skating.
+	aim_loco.add_blend_point(_anim_node(clip_aim_walk), run_blend_speed, -1, &"aim_run")
+	tree_root.add_node(&"AimLoco", aim_loco, Vector2(220, 400))
+
+	var aim_blend := AnimationNodeBlend2.new()
+	tree_root.add_node(&"Aim", aim_blend, Vector2(340, 0))
+	tree_root.connect_node(&"Aim", 0, &"LocoScale")
+	tree_root.connect_node(&"Aim", 1, &"AimLoco")
+
+	# The hookshot gets its OWN stance, and it has to. Held in the bow's stance he
+	# aims a grapple pistol with an archer's draw — both hands up beside his ear,
+	# torso wound ninety degrees off the shot — and the giveaway is the longbow
+	# slung on his back, which is pinned to Spine2 and swings out into open air
+	# with the twist. It looked like the bow had come unstuck from the model. It
+	# had not; he was drawing an invisible bow around it.
+	#
+	# One clip, held, rather than a blend: the pack has no hookshot walk, and a
+	# brace is a brace whether or not the feet are moving.
+	var hook_pose := _anim_node(clip_hook_shot)
+	hook_pose.loop_mode = Animation.LOOP_LINEAR
+	tree_root.add_node(&"HookAimAnim", hook_pose, Vector2(220, 600))
+	var hook_aim := AnimationNodeBlend2.new()
+	tree_root.add_node(&"HookAim", hook_aim, Vector2(460, 0))
+	tree_root.connect_node(&"HookAim", 0, &"Aim")
+	tree_root.connect_node(&"HookAim", 1, &"HookAimAnim")
+
 	# One-shots layered over the locomotion, cheapest first. Land is last so a
-	# landing always reads over whatever else is still fading out.
-	var prev := &"LocoScale"
+	# landing always reads over whatever else is still fading out. They sit above
+	# the stances so a roll or a hit reaction still reads while the bow is out.
+	var prev := &"HookAim"
 	prev = _add_oneshot(tree_root, &"Turn180", prev, _anim_node(clip_turn180), Vector2(440, 0), 0.10, 0.22)
 	prev = _add_oneshot(tree_root, &"Air", prev, _anim_node(clip_air), Vector2(660, 0), 0.10, 0.18)
 
@@ -371,23 +433,41 @@ func _build_anim_tree() -> void:
 		prev = _add_swing(tree_root, _SWING_NODES[i], prev, _swing_clip(i),
 			Vector2(1440 + 80 * i, 0), _SWING_FADE_IN[i], _SWING_FADE_OUT[i])
 
-	# Shooting gets its own one-shot for the same reason the heavy does: a clip
-	# swapped into a live AnimationNodeAnimation restarts the mixer's cache
-	# mid-blend. It sits above both swings because a bow is never held at the
-	# same time as the sword — whichever fired last is the one that should read.
+	# The two shots get one one-shot EACH rather than sharing a node whose clip is
+	# swapped. Assigning `animation` on a live AnimationNodeAnimation the same
+	# frame it is asked to play restarts the mixer's cache mid-blend and drops the
+	# opening frames — which for the bow is the loose itself, the one frame the
+	# whole shot is about. They sit above the swings because a bow is never held at
+	# the same time as the sword: whichever fired last is the one that should read.
+	#
+	# The bow's fade-in is very short on purpose. `bow_aim_recoil` starts from the
+	# same full draw the `Aim` stance is already holding, so there is nothing to
+	# ease between — a longer fade just delays the string leaving his fingers.
 	var ranged_scale := AnimationNodeTimeScale.new()
-	tree_root.add_node(&"RangedAnim", _anim_node(clip_ranged), Vector2(1600, 420))
-	tree_root.add_node(&"RangedScale", ranged_scale, Vector2(1720, 420))
+	tree_root.add_node(&"RangedAnim", _anim_node(clip_bow_shot), Vector2(1840, 260))
+	tree_root.add_node(&"RangedScale", ranged_scale, Vector2(1960, 260))
 	tree_root.connect_node(&"RangedScale", 0, &"RangedAnim")
 	var ranged_shot := AnimationNodeOneShot.new()
-	ranged_shot.fadein_time = 0.06
-	ranged_shot.fadeout_time = 0.16
-	tree_root.add_node(&"Ranged", ranged_shot, Vector2(1880, 0))
+	ranged_shot.fadein_time = 0.03
+	ranged_shot.fadeout_time = 0.18
+	tree_root.add_node(&"Ranged", ranged_shot, Vector2(1840, 0))
 	tree_root.connect_node(&"Ranged", 0, prev)
 	tree_root.connect_node(&"Ranged", 1, &"RangedScale")
 	prev = &"Ranged"
 
-	prev = _add_oneshot(tree_root, &"Land", prev, _anim_node(clip_land), Vector2(2040, 0), 0.06, 0.20)
+	var hook_scale := AnimationNodeTimeScale.new()
+	tree_root.add_node(&"HookShotAnim", _anim_node(clip_hook_shot), Vector2(1940, 500))
+	tree_root.add_node(&"HookScale", hook_scale, Vector2(2060, 500))
+	tree_root.connect_node(&"HookScale", 0, &"HookShotAnim")
+	var hook_shot := AnimationNodeOneShot.new()
+	hook_shot.fadein_time = 0.06
+	hook_shot.fadeout_time = 0.16
+	tree_root.add_node(&"HookShot", hook_shot, Vector2(1940, 0))
+	tree_root.connect_node(&"HookShot", 0, prev)
+	tree_root.connect_node(&"HookShot", 1, &"HookScale")
+	prev = &"HookShot"
+
+	prev = _add_oneshot(tree_root, &"Land", prev, _anim_node(clip_land), Vector2(2160, 0), 0.06, 0.20)
 	tree_root.connect_node(&"output", 0, prev)
 
 	_tree = AnimationTree.new()
@@ -411,7 +491,11 @@ func _build_anim_tree() -> void:
 	_tree.set(_P_BLOCK, 0.0)
 	for i in Swing.size():
 		_tree.set(_swing_scale_param(i), 1.0)
+	_tree.set(_P_AIM, 0.0)
+	_tree.set(_P_AIM_HOOK, 0.0)
+	_tree.set(_P_AIM_BLEND, 0.0)
 	_tree.set(_P_RANGED_SCALE, 1.0)
+	_tree.set(_P_HOOK_SCALE, 1.0)
 
 
 ## The clip each Swing plays. A match rather than an array of exports so the
@@ -575,6 +659,10 @@ func _tick_ground(wish: Vector3, mag: float, delta: float) -> void:
 		_tick_locked(wish, target_speed, moving, target, delta)
 		return
 
+	if aiming():
+		_tick_aiming(wish, target_speed, moving, delta)
+		return
+
 	if moving and _speed > K.RUN_SPEED * turnaround_min_speed01:
 		var away := absf(rad_to_deg(wrapf(atan2(wish.x, wish.z) - facing_yaw, -PI, PI)))
 		if away >= turnaround_angle_deg:
@@ -630,6 +718,45 @@ func _tick_locked(wish: Vector3, target_speed: float, moving: bool,
 			_set_planar_velocity(Vector3.ZERO)
 		else:
 			_set_planar_velocity(travel.normalized() * _speed)
+
+
+## Aiming, unlocked: the body points where the LENS points and the stick moves
+## you around, which is the same split `_tick_locked` makes and for the same
+## reason. Here the thing being faced is the crosshair rather than an enemy.
+##
+## Without this the hero runs where the stick says while the camera sits on his
+## shoulder looking somewhere else, and the bow — held in the hands of a body
+## facing away from the shot — visibly points at nothing the arrow will hit. The
+## aim is the camera's (see hero_ranged.gd), so the body has to agree with it.
+##
+## The 135° reversal is suppressed for the same reason it is under a lock: the
+## body never turns to travel here, so an about-face is a backstep, and firing a
+## 180 clip would spin him off the target he is holding the crosshair on.
+func _tick_aiming(wish: Vector3, target_speed: float, moving: bool, delta: float) -> void:
+	_steer_to(_camera_heading(), turn_rate * 1.8, delta)
+
+	if moving:
+		_speed = move_toward(_speed, target_speed, accel * delta)
+		_set_planar_velocity(wish.normalized() * _speed)
+	else:
+		_speed = move_toward(_speed, 0.0, decel * delta)
+		var travel := K.flat(velocity)
+		if travel == Vector3.ZERO:
+			_set_planar_velocity(Vector3.ZERO)
+		else:
+			_set_planar_velocity(travel.normalized() * _speed)
+
+
+## The camera's forward, flattened, as a heading direction — or the hero's
+## current facing when there is no camera, so a director rendering a bare hero
+## does not spin him to world north.
+func _camera_heading() -> Vector3:
+	var cam := get_viewport().get_camera_3d()
+	if cam != null:
+		var f := K.flat(-cam.global_transform.basis.z)
+		if f != Vector3.ZERO:
+			return f.normalized()
+	return _forward()
 
 
 func _try_start_roll(wish: Vector3, mag: float) -> bool:
@@ -741,7 +868,10 @@ func _track_lock(delta: float) -> void:
 ## and bleeding along the FACING there walks him into the enemy at the end of
 ## every backstep.
 func _bleed_dir() -> Vector3:
-	if lock_target() == null:
+	# Aiming has the same split as a lock — facing is the crosshair, travel is the
+	# stick — so it bleeds the same way. Without this a shot fired while strafing
+	# sideways slides him forward along the bow instead of coasting to a stop.
+	if lock_target() == null and not aiming():
 		return _forward()
 	var travel := K.flat(velocity)
 	return travel.normalized() if travel != Vector3.ZERO else _forward()
@@ -846,7 +976,11 @@ func wish_dir() -> Vector3:
 ##
 ## `aim` is a full 3D direction because it comes from the camera, which has a
 ## pitch; only its yaw reaches the body, because the hero does not lean.
-func request_ranged(duration: float, aim: Vector3) -> bool:
+##
+## `hook` picks which of the two shot clips plays. The bow and the hookshot have
+## separate one-shots — see `_build_anim_tree` — so this is a choice of node, not
+## a clip swap.
+func request_ranged(duration: float, aim: Vector3, hook: bool = false) -> bool:
 	if state != MoveState.GROUND or not is_on_floor():
 		return false
 	state = MoveState.ATTACK
@@ -859,13 +993,30 @@ func request_ranged(duration: float, aim: Vector3) -> bool:
 	if flat_aim != Vector3.ZERO:
 		facing_yaw = atan2(flat_aim.x, flat_aim.z)
 
+	var clip: StringName = clip_hook_shot if hook else clip_bow_shot
 	var clip_len := 1.0
-	if anim_library.has_animation(clip_ranged):
-		clip_len = anim_library.get_animation(clip_ranged).length
+	if anim_library.has_animation(clip):
+		clip_len = anim_library.get_animation(clip).length
 	if _tree != null:
-		_tree.set(_P_RANGED_SCALE, clip_len / maxf(duration, 0.05))
-	_fire(_P_RANGED)
+		_tree.set(_P_HOOK_SCALE if hook else _P_RANGED_SCALE,
+			clip_len / maxf(duration, 0.05))
+	_fire(_P_HOOK_SHOT if hook else _P_RANGED)
 	return true
+
+
+## True while a bow or a hookshot is out. Owned by `HeroRanged`, which is the
+## only thing that knows what is in his hands; the hero asks rather than
+## duplicating the rule, so there is one answer and the camera, the HUD and the
+## body cannot disagree about whether he is aiming.
+func aiming() -> bool:
+	return ranged != null and ranged.aiming
+
+
+## Which ranged item is sighted, or &"" for none. The bow and the hookshot hold
+## the body in genuinely different shapes — a full draw versus a two-handed brace
+## — so the stance has to know which, not merely that he is aiming.
+func aim_item() -> StringName:
+	return ranged.aim_item() if ranged != null else &""
 
 
 # --- The hookshot pull -------------------------------------------------------
@@ -1104,8 +1255,22 @@ func _drive_animation(delta: float) -> void:
 		return
 	var planar := Vector2(velocity.x, velocity.z).length()
 	_tree.set(_P_BLEND, clampf(planar, 0.0, run_blend_speed))
+	# The aim stance rides the same speed axis, so a strafe at the shoulder blends
+	# through the aim-walk at the pace the sword stance would have walked at.
+	_tree.set(_P_AIM_BLEND, clampf(planar, 0.0, run_blend_speed))
 	var speed01 := clampf(planar / K.RUN_SPEED, 0.0, 1.0)
 	_tree.set(_P_STRIDE, lerpf(stride_scale_idle, stride_scale_run, speed01))
+
+	# The stances ease in and out with the camera, not instantly: drawing the bow
+	# is a move he makes, and the rig sliding to the shoulder over a body that
+	# snapped into a full draw a frame earlier reads as two unrelated events.
+	#
+	# Two independent amounts rather than one and a clip swap, for the reason the
+	# two shot one-shots are separate: a live AnimationNodeAnimation whose clip is
+	# reassigned restarts the mixer's cache mid-blend.
+	var item := aim_item()
+	_ease_blend(_P_AIM, 1.0 if item == &"bow" else 0.0, delta)
+	_ease_blend(_P_AIM_HOOK, 1.0 if item == &"hookshot" else 0.0, delta)
 
 	# The shield eases in and out rather than snapping, so raising it is a
 	# visible action instead of a costume change between frames.
@@ -1115,3 +1280,9 @@ func _drive_animation(delta: float) -> void:
 
 	# The rig's yaw correction is a fixed 180 (see model_yaw_offset) and is set
 	# once in _build_rig — it does not vary with speed.
+
+
+## Walk a Blend2's amount toward `want` over `aim_fade` seconds.
+func _ease_blend(param: String, want: float, delta: float) -> void:
+	var now: float = _tree.get(param)
+	_tree.set(param, move_toward(now, want, delta / maxf(aim_fade, 0.01)))

@@ -124,6 +124,22 @@ const CAM_AUTOSWING := 1.1         # [tune]
 const CAM_MIN_PITCH := -55.0
 const CAM_MAX_PITCH := 55.0
 
+## Over-the-shoulder, for the bow and the hookshot. Not [oot] — Ocarina aims the
+## bow in first person, and this game's hero is a body you watch rather than a
+## pair of hands, so the reference here is the third-person shooter framing every
+## player already reads as "you are aiming": boom in tight, eye off one shoulder,
+## FOV narrowed so the crosshair means something at range.
+const CAM_DIST_AIM := 1.55         # [tune] metres, well inside CAM_DIST_MIN
+const CAM_FOV_AIM := 42.0          # [tune] tighter than Parallel; this is a sight
+## Metres the eye slides toward the hero's right and rises, so his body sits in
+## the left of frame instead of on top of the thing being shot at. Right, because
+## the hookshot is in his right hand and the bow is drawn across to the right.
+const CAM_AIM_SHOULDER := 0.62     # [tune]
+const CAM_AIM_RISE := 0.16         # [tune]
+## Seconds to slide in and out of the shoulder. Fast — this is a stance change,
+## and a lazy one reads as the camera being broken rather than as weight.
+const CAM_AIM_BLEND := 0.16        # [tune]
+
 # --- Z-targeting ------------------------------------------------------------
 ## [oot] ATTENTION_RANGE_3, the default: acquire at 350 u, break at 429 u.
 ## The ~22% hysteresis band is deliberate — it stops the lock chattering.
