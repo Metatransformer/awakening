@@ -29,6 +29,14 @@ signal roll_finished
 
 enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER, ATTACK, HOOK }
 
+## Which swing is being played. The hero owns the POSE; HeroCombat owns what the
+## pose costs and what it does — see request_attack.
+##
+## The three lights are separate values rather than an index into one clip
+## because the animation tree needs one node per variant (see _add_swing), and a
+## node cannot be addressed by a number that only exists in the combat script.
+enum Swing { LIGHT1, LIGHT2, LIGHT3, HEAVY, LUNGE }
+
 @export_group("Rig")
 @export var hero_model: PackedScene = preload("res://assets/characters/hero.fbx")
 @export var anim_library: AnimationLibrary = preload("res://assets/animations/hero_anims.res")
@@ -65,6 +73,16 @@ enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER, ATTACK, HOOK }
 @export var turnaround_min_speed01: float = 0.45
 @export var turn180_time: float = 0.30
 
+@export_group("Lunge")
+## Ceiling on the leap's ground speed, m/s. Without it a lock on something far
+## away turns the lunge into a teleport — the drive is "close this gap in this
+## many seconds", and a big enough gap divides into an absurd number.
+@export var lunge_max_speed: float = 12.0
+## Metres of the gap the leap deliberately leaves. Landing ON the target shoves
+## the hero through him, and a lunge that ends behind the enemy is a whiff the
+## player will read as the hitbox being broken.
+@export var lunge_stop_short: float = 1.0
+
 @export_group("Roll")
 @export var roll_speed: float = K.ROLL_SPEED
 @export var roll_time: float = K.ROLL_TIME
@@ -84,7 +102,32 @@ enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER, ATTACK, HOOK }
 @export var clip_turn180: StringName = &"ss_180_turn_01"
 @export var clip_air: StringName = &"ss_jump_01"
 @export var clip_land: StringName = &"ss_jump_02"
+## The three steps of the light chain. Three DIFFERENT clips, not one replayed:
+## a combo whose every hit is the same swing reads as a stutter, and the whole
+## point of a chain is that the player can see how far into it they are.
+##
+## Chosen off the render, and chosen as a SEQUENCE: 01 comes down on the diagonal
+## and ends low, 03 sweeps back up from there, 04 is a leaping overhead slam that
+## finishes on one knee. Down, up, over — each one starts where the last ended,
+## which is what makes three clips read as one sentence instead of three swings.
 @export var clip_attack: StringName = &"ss_slash_01"
+@export var clip_light2: StringName = &"ss_slash_03"
+@export var clip_light3: StringName = &"ss_slash_04"
+## The heavy is a DIFFERENT clip, not the light slash time-scaled down. Slowing
+## ss_slash_01 to 0.8 s reads as the hero being tired, not as a blow that weighs
+## something — the wind-up has to be a real pose the player can learn to see.
+##
+## ss_attack_02 was PICKED OFF THE RENDER (tools/directors/swing_lookdev.gd), not
+## off its name: it opens with the sword drawn back behind a turned shoulder —
+## a wind-up you can read in one frame — and sweeps horizontally through. It is
+## also the shortest of the attack clips at 1.30 s, so it compresses onto a
+## 0.8 s swing barely at all, where ss_attack_03 would have to run at 2.2x.
+@export var clip_heavy: StringName = &"ss_attack_02"
+## The lock-on lunge. ss_attack_01 is the one clip in the library where the hero
+## leaves the ground — a leap straight up into a downward slam that lands on one
+## knee. That is why it made a terrible heavy (it shipped as one for a day and
+## looked like a physics bug) and exactly the right leap at a locked target.
+@export var clip_lunge: StringName = &"ss_attack_01"
 ## What the hero does with a bow or a hookshot in his hands. A stand-in: the
 ## library is a sword-and-shield set with no draw and no aim clip
 ## (docs/CONTRACT.md §2), and the alternative — reusing `clip_attack` — swings an
@@ -138,6 +181,13 @@ var _roll_dir: Vector3 = Vector3.FORWARD
 var _airborne_time: float = 0.0
 var _stride_accum: float = 0.0
 var _speed: float = 0.0
+## The lunge's forward drive: seconds left, which way, and how fast. Kept apart
+## from `_speed` because the lunge does NOT bleed — it holds its speed for the
+## leap and then stops dead, and folding it into the decel curve would give the
+## hero a long powerless glide out of every one.
+var _lunge_left: float = 0.0
+var _lunge_dir: Vector3 = Vector3.FORWARD
+var _lunge_speed: float = 0.0
 ## Seconds of damage immunity left. See take_hit().
 var _invuln: float = 0.0
 
@@ -148,8 +198,19 @@ const _P_TURN := "parameters/Turn180/request"
 const _P_AIR := "parameters/Air/request"
 const _P_ROLL := "parameters/Roll/request"
 const _P_LAND := "parameters/Land/request"
-const _P_ATTACK := "parameters/Attack/request"
-const _P_ATTACK_SCALE := "parameters/AttackScale/scale"
+## One animation-tree node per Swing value, in enum order. Indexed by `Swing`,
+## so anything added to the enum has to be added here too — which is the point:
+## a swing with no node fails loudly at build rather than silently not playing.
+const _SWING_NODES: Array[StringName] = [
+	&"Swing1", &"Swing2", &"Swing3", &"SwingHeavy", &"SwingLunge",
+]
+## Fades, in seconds, per Swing. They widen as the blow gets heavier: a heavy
+## that snaps into pose has no wind-up to read, and the wind-up is the whole
+## tell the player is being asked to trade commitment for. The mid-chain lights
+## are the tightest because a chain that fades between steps reads as lag.
+const _SWING_FADE_IN: Array[float] = [0.06, 0.04, 0.05, 0.10, 0.08]
+const _SWING_FADE_OUT: Array[float] = [0.16, 0.12, 0.18, 0.22, 0.20]
+
 const _P_RANGED := "parameters/Ranged/request"
 const _P_RANGED_SCALE := "parameters/RangedScale/scale"
 const _P_BLOCK := "parameters/Block/blend_amount"
@@ -299,39 +360,34 @@ func _build_anim_tree() -> void:
 	tree_root.connect_node(&"Block", 1, &"BlockAnim")
 	prev = &"Block"
 
-	# The swing goes ON TOP of the block, so a slash reads even if the shield was
-	# up the instant before it.
-	var attack_scale := AnimationNodeTimeScale.new()
-	tree_root.add_node(&"AttackAnim", _anim_node(clip_attack), Vector2(1240, 260))
-	tree_root.add_node(&"AttackScale", attack_scale, Vector2(1360, 260))
-	tree_root.connect_node(&"AttackScale", 0, &"AttackAnim")
-	var attack_shot := AnimationNodeOneShot.new()
-	attack_shot.fadein_time = 0.04
-	attack_shot.fadeout_time = 0.12
-	tree_root.add_node(&"Attack", attack_shot, Vector2(1440, 0))
-	tree_root.connect_node(&"Attack", 0, prev)
-	tree_root.connect_node(&"Attack", 1, &"AttackScale")
-	prev = &"Attack"
+	# The swings go ON TOP of the block, so a slash reads even if the shield was
+	# up the instant before it. One one-shot per variant — see _add_swing for why
+	# they are not one node with the clip reassigned.
+	#
+	# The fades widen as the blow gets heavier. A heavy that snaps into pose has
+	# no wind-up to read, and the wind-up is the whole tell the player is being
+	# asked to trade commitment for.
+	for i in Swing.size():
+		prev = _add_swing(tree_root, _SWING_NODES[i], prev, _swing_clip(i),
+			Vector2(1440 + 80 * i, 0), _SWING_FADE_IN[i], _SWING_FADE_OUT[i])
 
-	# Shooting gets its own one-shot rather than swapping a clip into AttackAnim.
-	# Assigning `animation` on a live AnimationNodeAnimation the same frame it is
-	# asked to play restarts the mixer's cache mid-blend and drops the opening
-	# frames — the draw, in this case, which is most of what a bow shot looks
-	# like. It sits above the swing because a bow is never held at the same time
-	# as the sword: whichever fired last is the one that should read.
+	# Shooting gets its own one-shot for the same reason the heavy does: a clip
+	# swapped into a live AnimationNodeAnimation restarts the mixer's cache
+	# mid-blend. It sits above both swings because a bow is never held at the
+	# same time as the sword — whichever fired last is the one that should read.
 	var ranged_scale := AnimationNodeTimeScale.new()
-	tree_root.add_node(&"RangedAnim", _anim_node(clip_ranged), Vector2(1440, 260))
-	tree_root.add_node(&"RangedScale", ranged_scale, Vector2(1560, 260))
+	tree_root.add_node(&"RangedAnim", _anim_node(clip_ranged), Vector2(1600, 420))
+	tree_root.add_node(&"RangedScale", ranged_scale, Vector2(1720, 420))
 	tree_root.connect_node(&"RangedScale", 0, &"RangedAnim")
 	var ranged_shot := AnimationNodeOneShot.new()
 	ranged_shot.fadein_time = 0.06
 	ranged_shot.fadeout_time = 0.16
-	tree_root.add_node(&"Ranged", ranged_shot, Vector2(1640, 0))
+	tree_root.add_node(&"Ranged", ranged_shot, Vector2(1880, 0))
 	tree_root.connect_node(&"Ranged", 0, prev)
 	tree_root.connect_node(&"Ranged", 1, &"RangedScale")
 	prev = &"Ranged"
 
-	prev = _add_oneshot(tree_root, &"Land", prev, _anim_node(clip_land), Vector2(1840, 0), 0.06, 0.20)
+	prev = _add_oneshot(tree_root, &"Land", prev, _anim_node(clip_land), Vector2(2040, 0), 0.06, 0.20)
 	tree_root.connect_node(&"output", 0, prev)
 
 	_tree = AnimationTree.new()
@@ -353,14 +409,59 @@ func _build_anim_tree() -> void:
 	_tree.set(_P_BLEND, 0.0)
 	_tree.set(_P_STRIDE, 1.0)
 	_tree.set(_P_BLOCK, 0.0)
-	_tree.set(_P_ATTACK_SCALE, 1.0)
+	for i in Swing.size():
+		_tree.set(_swing_scale_param(i), 1.0)
 	_tree.set(_P_RANGED_SCALE, 1.0)
+
+
+## The clip each Swing plays. A match rather than an array of exports so the
+## clips stay individually named in the inspector — `clip_light2` says what it
+## is; `swing_clips[1]` needs this file open to read.
+func _swing_clip(variant: int) -> StringName:
+	match variant:
+		Swing.LIGHT2: return clip_light2
+		Swing.LIGHT3: return clip_light3
+		Swing.HEAVY: return clip_heavy
+		Swing.LUNGE: return clip_lunge
+		_: return clip_attack
+
+
+func _swing_param(variant: int) -> String:
+	return "parameters/%s/request" % _SWING_NODES[variant]
+
+
+func _swing_scale_param(variant: int) -> String:
+	return "parameters/%sScale/scale" % _SWING_NODES[variant]
 
 
 func _anim_node(clip: StringName) -> AnimationNodeAnimation:
 	var n := AnimationNodeAnimation.new()
 	n.animation = clip
 	return n
+
+
+## Add one swing variant: its clip, a TimeScale so the clip can be compressed
+## onto the real swing duration, and a OneShot layered over `base`. Returns the
+## new top of the chain.
+##
+## One node per variant, rather than one node whose `animation` is reassigned:
+## assigning the clip on a LIVE AnimationNodeAnimation restarts the mixer's
+## cache mid-blend and eats the first frames of the wind-up. That is the most
+## expensive kind of animation bug here, because it looks like bad art.
+func _add_swing(tree_root: AnimationNodeBlendTree, id: StringName, base: StringName,
+		clip: StringName, pos: Vector2, fade_in: float, fade_out: float) -> StringName:
+	var anim_id := StringName(String(id) + "Anim")
+	var scale_id := StringName(String(id) + "Scale")
+	tree_root.add_node(anim_id, _anim_node(clip), pos + Vector2(-200, 260))
+	tree_root.add_node(scale_id, AnimationNodeTimeScale.new(), pos + Vector2(-80, 260))
+	tree_root.connect_node(scale_id, 0, anim_id)
+	var shot := AnimationNodeOneShot.new()
+	shot.fadein_time = fade_in
+	shot.fadeout_time = fade_out
+	tree_root.add_node(id, shot, pos)
+	tree_root.connect_node(id, 0, base)
+	tree_root.connect_node(id, 1, scale_id)
+	return id
 
 
 func _add_oneshot(tree_root: AnimationNodeBlendTree, id: StringName, base: StringName,
@@ -610,8 +711,16 @@ func _tick_roll(delta: float) -> void:
 func _tick_attack(delta: float) -> void:
 	_state_timer -= delta
 	_track_lock(delta)
-	_speed = move_toward(_speed, 0.0, decel * 2.2 * delta)
-	_set_planar_velocity(_bleed_dir() * _speed)
+	# The lunge drives, then the swing bleeds like any other. The drive is short
+	# on purpose: it is over before the damage window opens, so the blow lands at
+	# the END of the leap rather than sweeping through everything on the way.
+	if _lunge_left > 0.0:
+		_lunge_left -= delta
+		_speed = _lunge_speed
+		_set_planar_velocity(_lunge_dir * _lunge_speed)
+	else:
+		_speed = move_toward(_speed, 0.0, decel * 2.2 * delta)
+		_set_planar_velocity(_bleed_dir() * _speed)
 	if _state_timer <= 0.0:
 		state = MoveState.GROUND
 
@@ -641,11 +750,18 @@ func _bleed_dir() -> Vector3:
 ## Start a swing lasting `duration` seconds. Returns false if the hero is busy —
 ## rolling, turning, or already mid-swing — so the caller does not play a
 ## whoosh for a swing that never happened.
-func request_attack(duration: float) -> bool:
+##
+## `variant` picks which clip plays and nothing else: the timing, the damage and
+## the commitment all live in HeroCombat, because they are combat numbers. This
+## owns the pose and the facing, exactly as it does for the light swing.
+func request_attack(duration: float, variant: int = Swing.LIGHT1) -> bool:
 	if state != MoveState.GROUND or not is_on_floor():
 		return false
 	state = MoveState.ATTACK
 	_state_timer = duration
+	# Any ordinary swing cancels a leftover drive. request_lunge re-arms it after
+	# calling through here, which is why this clear is safe to do unconditionally.
+	_lunge_left = 0.0
 
 	# Locked, the swing goes at the target -- that is the entire promise of the
 	# lock, and letting the stick redirect it means a player circling an enemy
@@ -665,13 +781,59 @@ func request_attack(duration: float) -> bool:
 	# The slash clips run 1.4-2.4 s. OOT's swing is about half a second, so the
 	# clip is compressed onto the real swing rather than the swing being slowed
 	# to the clip — the animation serves the timing, not the other way round.
+	var clip := _swing_clip(variant)
 	var clip_len := 1.0
-	if anim_library.has_animation(clip_attack):
-		clip_len = anim_library.get_animation(clip_attack).length
+	if anim_library.has_animation(clip):
+		clip_len = anim_library.get_animation(clip).length
 	if _tree != null:
-		_tree.set(_P_ATTACK_SCALE, clip_len / maxf(duration, 0.05))
-	_fire(_P_ATTACK)
+		_tree.set(_swing_scale_param(variant), clip_len / maxf(duration, 0.05))
+	_fire(_swing_param(variant))
 	return true
+
+
+## The lock-on lunge: the same swing, plus a burst of drive at the locked target
+## and a hop off the floor, because clip_lunge is the one clip in the library
+## where the hero's feet leave the ground.
+##
+## Returns false — and swings nothing — if there is no lock. That refusal is the
+## feature: the lunge is what Z-targeting BUYS you, and a version of it that
+## also fired unlocked would just be a better standing attack.
+##
+## `drive_time` and `hop` are HeroCombat's, like every other number about the
+## blow. What this owns is the arithmetic that turns "there is an enemy 4 m away"
+## into a speed, because that is a movement question.
+func request_lunge(duration: float, drive_time: float, hop: float) -> bool:
+	var target := lock_target()
+	if target == null:
+		return false
+	if not request_attack(duration, Swing.LUNGE):
+		return false
+
+	# request_attack has already pointed the body at the target, so the leap goes
+	# where the hero is now facing rather than where he was standing a frame ago.
+	#
+	# Flattened by hand, NOT with K.flat: K.flat NORMALISES. Reading a distance
+	# off it gives 1.0 for every target in the world, which made the gap
+	# arithmetic below produce a leap speed of zero and a lunge that stood still.
+	var delta := target.global_position - global_position
+	var to := Vector3(delta.x, 0.0, delta.z)
+	var dist := to.length()
+	_lunge_dir = to.normalized() if dist > 0.001 else _forward()
+	var gap := maxf(dist - lunge_stop_short, 0.0)
+	_lunge_speed = minf(gap / maxf(drive_time, 0.05), lunge_max_speed)
+	_lunge_left = drive_time
+	_speed = _lunge_speed
+	velocity.y = hop
+	return true
+
+
+## The stick in world space, as the hero reads it. Public because the lunge is
+## distinguished from a standing swing by exactly one thing — whether the player
+## is asking to move TOWARD what they are locked onto — and HeroCombat cannot ask
+## that question without the camera-relative rotation this applies.
+func wish_dir() -> Vector3:
+	return _camera_relative(
+		Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down"))
 
 
 ## Commit to a shot lasting `duration` seconds, turning to face `aim`. Returns

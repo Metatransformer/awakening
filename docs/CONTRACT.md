@@ -195,18 +195,31 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 |---|---|---|---|
 | `move_up/down/left/right` | WASD, arrows | left stick | move |
 | `cam_up/down/left/right` | mouse motion (read in code) | right stick | camera |
-| `attack` | **LMB** | **RB / R1** (pad10) | light attack |
-| `shield` | **RMB** | **LB / L1** (pad9) | guard |
+| `attack` | **LMB** | **A / Cross** (pad0) | light attack |
+| `heavy_attack` | **F** | **X / Square** (pad2) | heavy attack |
+| `shield` | **RMB** | **LT / L2** (axis4+) | guard |
 | `context` | **Space** | **B / Circle** (pad1) | roll / backstep |
 | `z_target` | **Q**, MMB | **R3** (pad8) | lock-on |
-| `interact` | E | **A / Cross** (pad0) | event action |
+| `interact` | E | **Y / Triangle** (pad3) | event action |
 | `item_left` / `item_up` / `item_right` | 1 / 2 / 3 | dpad L / U / R | armaments — §4.1 |
 | `first_person` | R | — | — |
 | `pause` / `map` | Esc / Tab | Start (pad6) / L3 (pad7) | menu / map |
 | `dbg_reload` | F5 | — | — |
 
-A/Cross is ER's jump. This game has no jump, so the event action takes it and
-the roll takes B/Circle, where the source material has it.
+The face buttons are the swings and the shoulders are the holds. Attack sits on
+A/Cross because it is the most-pressed button in the game and A is where the
+thumb already rests; the heavy sits one roll away on X/Square. Guard moved to
+the **left trigger**, which is an AXIS (`InputEventJoypadMotion`, JoyAxis 4),
+not a button — a control you hold down for seconds belongs on an analogue pull,
+and the action's 0.2 deadzone is how far it travels before the shield counts as
+raised.
+
+That pushed `interact` off A and up to Y/Triangle. Attack and interact cannot
+share a button: `interact` still shares A with `ui_accept`, which is safe only
+because `trade_screen`'s accept edge starts DISARMED, and nothing equivalent
+guards the world — `hero_combat` polls `attack` every physics frame, so one
+press at a chest would open it and swing at it. The roll keeps B/Circle, where
+the source material has it.
 
 ### The two ways this table has lied
 
@@ -494,6 +507,49 @@ Grip convention, **verified by render**, not by reading the GLB:
 Do not compute a bone-socket offset analytically. The rest-pose numbers are in a
 rotated FBX space and will mislead you. Render it, look, adjust, render again.
 
+### The sword — three lights, a heavy, and a lunge
+
+`HeroCombat` owns what a blow COSTS and DOES; `Hero` owns the pose and the
+facing. The split is why `Hero.Swing` exists at all: the animation tree needs one
+`AnimationNodeOneShot` per variant, and a node cannot be addressed by a number
+that only lives in the combat script.
+
+```gdscript
+enum Swing { LIGHT1, LIGHT2, LIGHT3, HEAVY, LUNGE }   # on Hero
+hero.request_attack(duration: float, variant := Swing.LIGHT1) -> bool
+hero.request_lunge(duration: float, drive_time: float, hop: float) -> bool
+hero.wish_dir() -> Vector3          # the stick, camera-relative, in world space
+```
+
+| Move | Clip | Button | Damage (quarter-hearts) |
+|---|---|---|---|
+| light 1 | `ss_slash_01` | attack | 2 |
+| light 2 | `ss_slash_03` | attack, again inside `chain_window` | 2 |
+| light 3 (finisher) | `ss_slash_04` | attack, again | 4 |
+| heavy | `ss_attack_02` | heavy_attack | 5 |
+| lunge | `ss_attack_01` | attack, **locked on**, stick at the target | 4 |
+
+The five clips were picked off `tools/directors/swing_lookdev.gd`, which renders
+every frame of every swing in the library — not off their filenames, which carry
+no information at all. The three lights are a SEQUENCE (down, up, overhead), and
+`ss_attack_01` is the only clip in which the hero's feet leave the ground, which
+is why it is the lunge and was a terrible heavy.
+
+**The chain is buffered.** A press in the back half of a swing
+(`chain_buffer_from`) is remembered and paid out one frame AFTER the swing ends
+— never on the boundary frame, because `HeroCombat` is the hero's CHILD and its
+swing clock runs a frame ahead of his `MoveState.ATTACK`. Ask him on the
+boundary frame and he refuses, and the press vanishes.
+
+**The lunge is what Z-targeting buys.** It refuses without a lock, on purpose;
+a version that also fired unlocked would just be a better standing attack.
+
+Proved by `tools/directors/p4_combo.gd` (the chain, in damage) and
+`tools/directors/p4_lunge.gd` (the leap, in metres closed against an unlocked
+control). Neither photographs the swing — `capture()` stalls the game clock for
+longer than the chain window, so a director that screenshots mid-chain breaks
+the thing it is measuring. The poses are `swing_lookdev`'s job.
+
 ### Ranged — `HeroRanged` owns the bow and the hookshot
 
 `scripts/combat/hero_ranged.gd`, a child of the hero and a **sibling of
@@ -722,6 +778,12 @@ will not resolve.
   `godot --path . --headless --import` or every reference is "not declared".
 - **`class_name` only resolves for scripts inside the project.** A test in the
   scratchpad cannot see `K`.
+- **`K.flat()` NORMALISES.** It is a direction helper, not a projection:
+  `K.flat(a - b).length()` is `1.0` for every pair of points in the world. The
+  lunge's leap speed and its range gate were both computed that way and came out
+  as "every target is exactly 1 m away" — the leap stood still and the range band
+  admitted everything. Flatten by hand when you want a DISTANCE:
+  `var d := a - b; var dist := Vector2(d.x, d.z).length()`.
 - **`/` is reserved** as the library/animation separator. Namespace clips with `_`.
 - **An imported FBX ships a stub `""` AnimationLibrary.** Evict it before adding
   a merged one, or you get "Can't add animation library twice with name: ''".

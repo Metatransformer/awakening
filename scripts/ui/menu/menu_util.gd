@@ -47,6 +47,7 @@ const ACTION_NAMES := {
 	# C-pad: whatever the player bound to them, bound in the Items screen.
 	&"z_target": "Lock On (toggle)",
 	&"attack": "Attack",
+	&"heavy_attack": "Heavy Attack",
 	&"shield": "Guard (hold)",
 	&"context": "Roll / Backstep",
 	&"interact": "Interact",

@@ -164,26 +164,55 @@ z_target={
 , Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":8,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
+; Attack is A/Cross -- button 0, the "Bottom Action" the enum dump above names.
+; The swing is the thing you press most, so it gets the thumb's rest position,
+; and the shoulders are freed for the things you HOLD rather than tap.
+;
+; This displaced `interact`, which lived on A. See the note at `interact`: the
+; two cannot share a button, because unlike ui_accept there is no armed/disarmed
+; edge protecting a chest from also eating a sword swing.
 attack={
 "deadzone": 0.2,
 "events": [Object(InputEventMouseButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"button_mask":0,"position":Vector2(0, 0),"global_position":Vector2(0, 0),"factor":1.0,"button_index":1,"canceled":false,"pressed":false,"double_click":false,"script":null)
-, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":10,"pressure":0.0,"pressed":false,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":0,"pressure":0.0,"pressed":false,"script":null)
+]
+}
+; Heavy attack is X/Square -- button 2, "Left Action". Next to A so the light
+; and the heavy are one thumb roll apart; NOT a shoulder, because a heavy is a
+; tap that commits, not a hold. Keyboard is F: left hand, without leaving WASD.
+heavy_attack={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":70,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":2,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
 ; Block is the other half of the mouse: LMB swings, RMB raises the shield. It
 ; used to be K and Shift only, with RMB on z_target, and nobody found it -- the
 ; lock-on moved to the middle button, which is the thing you can afford to hide.
+;
+; On the pad the shield is the LEFT TRIGGER, which is an AXIS and not a button:
+; JoyAxis 4 (TRIGGER_LEFT), bound as an InputEventJoypadMotion the same way the
+; sticks are. That is why the deadzone matters here in a way it does not for a
+; button -- 0.2 is how far the trigger travels before the shield counts as
+; raised, and hero_combat polls this with is_action_pressed, which reads the
+; axis through that deadzone. A trigger is the right home for a HELD control:
+; the shield is the one input in this game you keep down for seconds at a time.
 shield={
 "deadzone": 0.2,
 "events": [Object(InputEventMouseButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"button_mask":0,"position":Vector2(0, 0),"global_position":Vector2(0, 0),"factor":1.0,"button_index":2,"canceled":false,"pressed":false,"double_click":false,"script":null)
-, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":9,"pressure":0.0,"pressed":false,"script":null)
+, Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":-1,"axis":4,"axis_value":1.0,"script":null)
 ]
 }
-; Roll is B/Circle and interact is A/Cross, which is Elden Ring's arrangement.
-; A/Cross is ER's jump; this game has no jump, so the event action moves onto it
-; and the roll takes the button it has in the source. `interact` sharing A with
-; ui_accept is safe: trade_screen's accept edge starts DISARMED precisely so the
-; press that opens a screen cannot also confirm inside it.
+; Roll is B/Circle, Elden Ring's arrangement, and is unchanged.
+;
+; Interact USED to be A/Cross next to it, also ER's. Attack has taken A, so
+; interact moved up to Y/Triangle -- button 3, "Top Action", the only face
+; button nothing else wanted. Sharing A between attack and interact is not an
+; option even though `interact` still shares it with ui_accept: ui_accept is
+; safe because trade_screen's accept edge starts DISARMED, so the press that
+; opens a screen cannot also confirm inside it. Nothing equivalent guards the
+; world -- hero_combat polls `attack` every physics frame with no such edge, so
+; one press at a chest would open it and swing at it.
 context={
 "deadzone": 0.2,
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":32,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
@@ -193,7 +222,7 @@ context={
 interact={
 "deadzone": 0.2,
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":69,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
-, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":0,"pressure":0.0,"pressed":false,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":3,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
 item_left={

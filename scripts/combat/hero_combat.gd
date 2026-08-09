@@ -19,6 +19,18 @@ extends Node3D
 ## 1.52 m — a greatsword — which is exactly the kind of error that looks like an
 ## art problem and is really a transform problem.
 
+## What the player asked for. Deliberately coarser than Hero.Swing: the player
+## presses one of two buttons, and WHICH light swing that becomes — step 1, 2, 3
+## or the lunge — is this script's decision, made from the chain state and the
+## lock. Buffering an Intent rather than a Swing is what lets a press made during
+## step 1 still become step 2 when it is finally honoured.
+enum Intent { LIGHT, HEAVY }
+
+## Pitch multiplier per chain step. Two rises, three drops — the chain should
+## sound like it is going somewhere, and the finisher is the heaviest thing in
+## it. Cheapest honest way to make three swings read as one sentence.
+const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
+
 @export_group("Loadout")
 @export var sword_id: String = "sword_knightly"
 @export var shield_id: String = "shield_noble"
@@ -38,6 +50,65 @@ extends Node3D
 @export var reach: float = 1.35
 @export var arc_degrees: float = 130.0
 @export var knockback: float = K.KNOCKBACK_LIGHT
+
+@export_group("Heavy")
+## Over a full heart, against the light swing's half. The heavy is worth the
+## commitment or nobody presses it twice.
+@export var heavy_damage: int = 5 * K.QUARTER
+## Nearly twice the light swing. This number IS the cost — the whole trade is
+## that you are unsteerable and unable to guard for this long. [tune]
+@export var heavy_swing_time: float = 0.80
+## Lives later in the swing than the light one and stays live for less of it:
+## the extra time is spent in the wind-up, where the tell is, not in the blade.
+@export var heavy_damage_window := Vector2(0.46, 0.74)
+@export var heavy_knockback: float = K.KNOCKBACK_HEAVY
+
+@export_group("Combo")
+## Seconds after a swing ends during which another press continues the chain
+## instead of starting a new one. Short enough that you cannot wander off and
+## come back to a finisher; long enough that the chain is not a rhythm test.
+@export var chain_window: float = 0.34
+## Fraction of the current swing after which a press is REMEMBERED rather than
+## dropped. Before it, an input is the player mashing; after it, they have seen
+## the swing and are asking for the next one. This buffer is the whole difference
+## between a chain that obeys you and one that eats inputs made a frame early.
+@export var chain_buffer_from: float = 0.35
+## Multipliers on swing_time for steps 2 and 3. Two is faster than one — a chain
+## should accelerate — and three is much slower, because it is the one that
+## hurts AND because its clip is a 2.4 s leaping overhead: at step two's pace the
+## whole slam would go past in a third of a second and read as a twitch.
+@export var chain_time_scale := Vector2(0.92, 1.65)
+## Extra quarter-hearts on the finisher, and the shove it delivers. The payoff
+## for landing three in a row instead of backing off after one.
+@export var chain_finisher_bonus: int = 2 * K.QUARTER
+@export var chain_finisher_knockback: float = K.KNOCKBACK_HEAVY
+
+@export_group("Lunge")
+## Between the light swing and the heavy. It is not the biggest blow in the kit;
+## what it buys is the distance, and paying twice for that would make Z-targeting
+## strictly better than standing your ground.
+@export var lunge_damage: int = 4 * K.QUARTER
+@export var lunge_swing_time: float = 0.78
+## Opens after the drive ends (see lunge_drive_time), so the blade lands at the
+## end of the leap rather than sweeping everything along the way.
+@export var lunge_damage_window := Vector2(0.46, 0.72)
+@export var lunge_knockback: float = K.KNOCKBACK_HEAVY
+## Seconds of forward drive. See Hero.request_lunge for what it becomes.
+@export var lunge_drive_time: float = 0.24
+## Upward metres/sec at the leap. Deliberately small — the CLIP already leaps
+## (ss_attack_01 lifts the mesh clean out of frame), so this only has to stop
+## the body sliding along the floor under an airborne pose. Adding a real jump
+## on top of a baked one gets you a hero who exits the top of the screen.
+@export var lunge_hop: float = 1.8
+## The band of distances the leap is offered at. Past the far edge it is a long
+## unpunishable approach; inside the near edge there is no gap to close and it
+## reads as the hero hopping on the spot.
+@export var lunge_min_range: float = 1.9
+@export var lunge_max_range: float = 6.0
+## Half-angle, degrees, between the stick and the target. The lunge is the
+## attack you press while asking to GO there; pressing attack while strafing is
+## still a standing swing.
+@export var lunge_stick_cone: float = 60.0
 
 @export_group("Shield")
 ## Half-angle of the block cone, degrees. A blow from outside it is not blocked.
@@ -66,6 +137,19 @@ var hookshot: Node3D
 var _items: Dictionary = {}
 var _hitbox: Area3D
 var _swing_t: float = -1.0
+## The numbers of the swing currently in flight, captured when it starts. A
+## swing has to finish on the terms it began on — reading the exports live would
+## mean a heavy that landed while `equipped` changed could pay out light damage.
+var _swing_dur: float = 0.0
+var _swing_window := Vector2.ZERO
+var _swing_damage: int = 0
+var _swing_knock: float = 0.0
+var _swing_hitstop: int = K.HITSTOP_LIGHT
+## Which light comes next: 0, 1, 2. Reset when `_chain_timer` runs out.
+var _chain_step: int = 0
+var _chain_timer: float = 0.0
+## An Intent pressed mid-swing and owed to the player, or -1.
+var _buffer: int = -1
 var _hit_this_swing: Dictionary = {}
 var _swing_player: AudioStreamPlayer3D
 var _impact_player: AudioStreamPlayer3D
@@ -83,6 +167,9 @@ func _ready() -> void:
 	# Sharpening is bought in town and has to survive the scene change, so the
 	# permanent part lives on Game and the export is only the base blade.
 	damage += Game.sword_bonus
+	# Sharpening is sharpening. A whetstone that only improved the light swing
+	# would quietly make the heavy the worse button the more you spent in town.
+	heavy_damage += Game.sword_bonus
 	_mount_loadout()
 	_build_hitbox()
 	_build_audio()
@@ -324,38 +411,180 @@ func _physics_process(delta: float) -> void:
 			Game.use_quick(Game.QUICK_RIGHT)
 		if Input.is_action_just_pressed(&"item_down"):
 			Game.swap_loadout()
-		if Input.is_action_just_pressed(&"attack"):
-			_try_swing()
+		# Heavy first: if a frame somehow carries both edges, the button that
+		# costs more to press is the one the player meant.
+		if Input.is_action_just_pressed(&"heavy_attack"):
+			_press(Intent.HEAVY)
+		elif Input.is_action_just_pressed(&"attack"):
+			_press(Intent.LIGHT)
+
+	# The chain window is the gap BETWEEN swings, so it only runs while nothing is
+	# swinging. Ticking it through the swing was the first version, and it made
+	# the chain silently impossible: the window (0.34 s) is shorter than the swing
+	# it was started by (0.46 s), so `_chain_step` reset before the swing that set
+	# it had even finished and every press came out as step one.
+	#
+	# Ticked outside the `locked` gate on purpose: a shop that opens mid-chain
+	# should let the chain lapse, not freeze the player one press from a finisher.
+	if _swing_t < 0.0 and _chain_timer > 0.0:
+		_chain_timer = maxf(_chain_timer - delta, 0.0)
+		if _chain_timer == 0.0:
+			_chain_step = 0
+
+	# Pay out a press made during the recovery — but only on a frame AFTER the
+	# swing ended, never on the boundary frame itself. The hero clears
+	# MoveState.ATTACK in his own _physics_process, and the swing clock runs one
+	# frame ahead of his: this node is his CHILD, so on the frame a swing starts
+	# the hero has already ticked and the swing has not. Firing the buffer at the
+	# end of _advance_swing therefore asked a hero who was still mid-attack, he
+	# refused, and the press vanished — the chain could not reach step two at all.
+	#
+	# Consumed before _begin runs, so a swing that gets refused for a real reason
+	# does not leave the press owed forever.
+	if _swing_t < 0.0 and _buffer >= 0:
+		var queued := _buffer
+		_buffer = -1
+		_begin(queued)
 
 	if _swing_t >= 0.0:
 		_advance_swing(delta)
 
 
-func _try_swing() -> void:
+## A press of one of the two attack buttons. Mid-swing it is remembered rather
+## than dropped — but only in the back half of the swing, because a press on the
+## first frame is the player mashing, not the player asking for the next step.
+func _press(intent: int) -> void:
 	if _swing_t >= 0.0:
+		if _swing_t / maxf(_swing_dur, 0.01) >= chain_buffer_from:
+			_buffer = intent
 		return
+	_begin(intent)
+
+
+## Turn an Intent into an actual swing. Everything that decides WHICH swing —
+## the lock, the chain position, whether an item is in the hand — lives here, so
+## the buffered path and the live path cannot drift apart.
+func _begin(intent: int) -> void:
 	# The sword is stowed while an item is out, so a swing here would deal damage
 	# with an invisible blade. What the attack button does instead is USE the
 	# item -- the bow shoots, the hookshot fires. That is what the button means
 	# in the source material, and for a long time this line simply ate the press,
 	# which made every bound item a thing you could draw and then not use.
+	#
+	# The heavy button is deliberately not a second way to shoot: there is no
+	# heavy arrow, and mapping it to the same shot would make the two buttons
+	# lie about being different.
 	if equipped != &"":
-		if _hero.ranged != null:
+		if intent == Intent.LIGHT and _hero.ranged != null:
 			_hero.ranged.fire(equipped)
 		return
-	if not _hero.request_attack(swing_time):
+
+	if intent == Intent.HEAVY:
+		_heavy_swing()
 		return
+	# The lunge gets first refusal on a light press: it is the same button, and
+	# what distinguishes it is the lock plus a stick pushed at what you locked.
+	if _lunge_swing():
+		return
+	_light_swing(_chain_step)
+
+
+func _heavy_swing() -> void:
+	if not _hero.request_attack(heavy_swing_time, Hero.Swing.HEAVY):
+		return
+	# A heavy ENDS the chain rather than counting as a step in it. It is the
+	# other button; letting it slot into the light chain would make the finisher
+	# something you reach by pressing whatever, which is not a combo.
+	_chain_step = 0
+	_chain_timer = 0.0
+	# Pitched down, the cheapest honest way to make the swings sound like
+	# different amounts of effort.
+	_commit(heavy_swing_time, heavy_damage_window, heavy_damage, heavy_knockback,
+		K.HITSTOP_HEAVY, randf_range(0.68, 0.78))
+
+
+func _light_swing(step: int) -> void:
+	var variant := Hero.Swing.LIGHT1
+	var dur := swing_time
+	var dmg := damage
+	var knock := knockback
+	var hitstop := K.HITSTOP_LIGHT
+	match step:
+		1:
+			variant = Hero.Swing.LIGHT2
+			dur = swing_time * chain_time_scale.x
+		2:
+			variant = Hero.Swing.LIGHT3
+			dur = swing_time * chain_time_scale.y
+			dmg += chain_finisher_bonus
+			knock = chain_finisher_knockback
+			hitstop = K.HITSTOP_HEAVY
+	# Only commit the swing's numbers once the hero has agreed to swing — he
+	# refuses while rolling or turning, and a half-armed swing left behind by a
+	# refusal would pay out on whatever landed next.
+	if not _hero.request_attack(dur, variant):
+		return
+	# Wraps back to 0 after the finisher: the chain is a loop, not a staircase
+	# you fall off the end of.
+	_chain_step = (step + 1) % 3
+	_chain_timer = chain_window
+	_commit(dur, damage_window, dmg, knock, hitstop,
+		randf_range(0.94, 1.07) * _CHAIN_PITCH[step])
+
+
+## The Z-targeted leap. Returns false — having done nothing — the moment any of
+## its conditions fail, so the caller falls straight through to a normal swing.
+func _lunge_swing() -> bool:
+	var target := _hero.lock_target()
+	if target == null:
+		return false
+	# Only from a standing start. Ending a chain with a leap would let a mashed
+	# combo travel the whole room, which is the opposite of what committing to a
+	# chain is meant to cost.
+	if _chain_step != 0:
+		return false
+
+	# Flattened by hand rather than with K.flat, which NORMALISES: a range gate
+	# reading distance off K.flat sees every target in the world as exactly 1 m
+	# away, which puts them all inside the band and none of them outside it.
+	var delta := target.global_position - _hero.global_position
+	var to := Vector3(delta.x, 0.0, delta.z)
+	var dist := to.length()
+	if dist < lunge_min_range or dist > lunge_max_range:
+		return false
+
+	var wish := _hero.wish_dir()
+	if wish.length() < 0.5 or rad_to_deg(wish.angle_to(to)) > lunge_stick_cone:
+		return false
+
+	if not _hero.request_lunge(lunge_swing_time, lunge_drive_time, lunge_hop):
+		return false
+	_chain_timer = 0.0
+	_commit(lunge_swing_time, lunge_damage_window, lunge_damage, lunge_knockback,
+		K.HITSTOP_HEAVY, randf_range(0.80, 0.88))
+	return true
+
+
+## Arm the swing the hero has just agreed to. Called only after a successful
+## request_*, so the numbers in flight always describe a swing that is happening.
+func _commit(dur: float, window: Vector2, dmg: int, knock: float,
+		hitstop: int, pitch: float) -> void:
+	_swing_dur = dur
+	_swing_window = window
+	_swing_damage = dmg
+	_swing_knock = knock
+	_swing_hitstop = hitstop
 	_swing_t = 0.0
 	_hit_this_swing.clear()
-	_swing_player.pitch_scale = randf_range(0.94, 1.07)
+	_swing_player.pitch_scale = pitch
 	_swing_player.play()
 
 
 func _advance_swing(delta: float) -> void:
 	_swing_t += delta
-	var frac := _swing_t / maxf(swing_time, 0.01)
+	var frac := _swing_t / maxf(_swing_dur, 0.01)
 
-	var live := frac >= damage_window.x and frac <= damage_window.y
+	var live := frac >= _swing_window.x and frac <= _swing_window.y
 	if live != swinging:
 		swinging = live
 		_hitbox.monitoring = live
@@ -399,7 +628,7 @@ func _maybe_hit(node: Node) -> void:
 		return
 
 	_hit_this_swing[id] = true
-	var hit := Hit.make(damage, _hero.global_position, &"sword", knockback)
+	var hit := Hit.make(_swing_damage, _hero.global_position, &"sword", _swing_knock)
 	var landed = victim.apply_hit(hit)
 	# apply_hit returns bool on a HealthComponent and null on the duck-typed
 	# props that predate it, so absence of a false is treated as a landed blow.
@@ -408,7 +637,7 @@ func _maybe_hit(node: Node) -> void:
 
 	_impact_player.pitch_scale = randf_range(0.92, 1.08)
 	_impact_player.play()
-	Bus.request_hitstop.emit(K.HITSTOP_LIGHT)
+	Bus.request_hitstop.emit(_swing_hitstop)
 
 
 ## Find whatever on or under `node` answers the damage contract. Props built

@@ -23,7 +23,12 @@ const DEFAULT_PATH := "user://settings.cfg"
 ## no longer refers to anything, so it is dropped rather than replayed. Losing a
 ## custom bind on a layout change is a small, visible cost; shipping a build
 ## whose controls are quietly overridden is not.
-const BIND_SCHEMA := 2
+##
+## 3: attack moved RB -> A, interact A -> Y, shield LB -> left trigger (an AXIS,
+##    not a button), and `heavy_attack` was added on X. A saved layout from 2
+##    would pin attack back onto RB and leave the new A binding dead — which is
+##    the second failure described above, verbatim.
+const BIND_SCHEMA := 3
 
 ## Where preferences persist. A test or a screenshot director that rebinds keys
 ## MUST NOT write to the player's real settings — an earlier menu test left
@@ -226,7 +231,7 @@ func _capture_defaults() -> void:
 func rebindable_actions() -> Array[StringName]:
 	return [
 		&"move_up", &"move_down", &"move_left", &"move_right",
-		&"z_target", &"attack", &"shield", &"context", &"interact",
+		&"z_target", &"attack", &"heavy_attack", &"shield", &"context", &"interact",
 		&"item_left", &"item_up", &"item_right", &"first_person",
 		&"pause", &"map",
 	]
