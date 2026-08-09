@@ -42,10 +42,12 @@ const ACTION_NAMES := {
 	&"move_down": "Move Back",
 	&"move_left": "Move Left",
 	&"move_right": "Move Right",
-	# Lock-on is a TOGGLE on the right stick, not a held shoulder — a stick you
-	# have to keep clicked in is not a control. The three item buttons are the
-	# C-pad: whatever the player bound to them, bound in the Items screen.
-	&"z_target": "Lock On (toggle)",
+	# Lock-on is a TOGGLE, and on the pad it is the left trigger (OOT's Z) with
+	# R3 kept as the thumb's shortcut. Pressed with nothing lockable it puts the
+	# camera back behind you, which is the half of this button players actually
+	# reach for. The three item buttons are the C-pad: whatever the player bound
+	# to them, bound in the Items screen.
+	&"z_target": "Lock On / Recentre",
 	# One button for the whole sword: tap it for the chain, hold it for the
 	# charge. There is no separate heavy to rebind any more.
 	&"attack": "Sword (hold to charge)",
@@ -59,6 +61,7 @@ const ACTION_NAMES := {
 	&"item_down": "Swap Loadout",
 	&"first_person": "First Person",
 	&"pause": "Pause",
+	&"inventory": "Pouch",
 	&"map": "Map",
 }
 

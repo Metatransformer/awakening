@@ -161,13 +161,24 @@ cam_right={
 "events": [Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":-1,"axis":2,"axis_value":1.0,"script":null)
 ]
 }
-; Lock-on is R3 -- the right stick click, the button Elden Ring puts it on. It
-; is a TOGGLE, not a hold: press to lock, press again to let go, press with
-; nothing lockable to recentre. scripts/targeting/targeting.gd owns that.
+; Lock-on. A TOGGLE, not a hold: press to lock, press again to let go, press
+; with nothing lockable to put the camera back behind the hero.
+; scripts/targeting/targeting.gd owns that.
+;
+; The pad's home for it is the LEFT TRIGGER -- JoyAxis 4 (TRIGGER_LEFT), bound
+; as an InputEventJoypadMotion the same way the sticks are, so the deadzone is
+; how far the trigger has to travel before it counts as pressed. That is Z on
+; the N64 controller, and the whole camera lives under one finger there: the
+; right stick swings the lens, the trigger snaps it back behind you. R3 stays
+; bound too (Elden Ring's arrangement) because a thumb already resting on the
+; right stick should not have to travel to recentre.
+;
+; The trigger used to be the shield. The shield is LB now -- see `shield`.
 z_target={
 "deadzone": 0.2,
 "events": [Object(InputEventMouseButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"button_mask":0,"position":Vector2(0, 0),"global_position":Vector2(0, 0),"factor":1.0,"button_index":3,"canceled":false,"pressed":false,"double_click":false,"script":null)
 , Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":81,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+, Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":-1,"axis":4,"axis_value":1.0,"script":null)
 , Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":8,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
@@ -205,17 +216,19 @@ use_item={
 ; used to be K and Shift only, with RMB on z_target, and nobody found it -- the
 ; lock-on moved to the middle button, which is the thing you can afford to hide.
 ;
-; On the pad the shield is the LEFT TRIGGER, which is an AXIS and not a button:
-; JoyAxis 4 (TRIGGER_LEFT), bound as an InputEventJoypadMotion the same way the
-; sticks are. That is why the deadzone matters here in a way it does not for a
-; button -- 0.2 is how far the trigger travels before the shield counts as
-; raised, and hero_combat polls this with is_action_pressed, which reads the
-; axis through that deadzone. A trigger is the right home for a HELD control:
-; the shield is the one input in this game you keep down for seconds at a time.
+; On the pad the shield WAS the left trigger, bound as an axis. It is LB now --
+; button 9, JOY_BUTTON_LEFT_SHOULDER -- because the trigger had to become the
+; camera button (see z_target above), and because a shoulder is where Elden Ring
+; puts the guard anyway. The pair reads correctly under one finger: the trigger
+; aims the camera, the bumper above it raises the shield.
+;
+; Still a HELD control and still polled with is_action_pressed -- a button just
+; reports 0 or 1 through the same deadzone the axis was read through, so nothing
+; downstream in hero_combat changed.
 shield={
 "deadzone": 0.2,
 "events": [Object(InputEventMouseButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"button_mask":0,"position":Vector2(0, 0),"global_position":Vector2(0, 0),"factor":1.0,"button_index":2,"canceled":false,"pressed":false,"double_click":false,"script":null)
-, Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":-1,"axis":4,"axis_value":1.0,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":9,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
 ; Roll is B/Circle, Elden Ring's arrangement, and is unchanged.
@@ -273,6 +286,19 @@ pause={
 "deadzone": 0.2,
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":4194305,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
 , Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":6,"pressure":0.0,"pressed":false,"script":null)
+]
+}
+; The pouch, straight open -- I on the keyboard, SELECT (button 4, "Back") on
+; the pad. It is the same menu `pause` opens, entered one screen deeper, because
+; "what am I carrying and can I afford to leave" is the question players ask
+; between every room and it should not cost two presses and a focus move.
+;
+; Select is the right pad button for it: it is the only face-adjacent button
+; nothing else wanted, and every game that has an inventory puts it there.
+inventory={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":73,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":4,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
 map={

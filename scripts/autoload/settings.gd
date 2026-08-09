@@ -33,7 +33,13 @@ const DEFAULT_PATH := "user://settings.cfg"
 ##    saved layout from 3 is the worst case this const exists for: it would put
 ##    attack back on A, on top of use_item, so one press would swing the sword
 ##    and fire the hookshot at once.
-const BIND_SCHEMA := 4
+## 5: the left trigger became the camera button -- `z_target` gained it, which
+##    is OOT's Z -- so `shield` moved off the trigger and onto LB. `inventory`
+##    was added on I / Select. A saved layout from 4 would put the guard back on
+##    the trigger UNDERNEATH the recentre, so pulling LT to look behind you
+##    would also raise the shield and freeze the hero's facing: two verbs, one
+##    finger, and no way for the player to tell which one they asked for.
+const BIND_SCHEMA := 5
 
 ## Where preferences persist. A test or a screenshot director that rebinds keys
 ## MUST NOT write to the player's real settings — an earlier menu test left
@@ -238,7 +244,7 @@ func rebindable_actions() -> Array[StringName]:
 		&"move_up", &"move_down", &"move_left", &"move_right",
 		&"z_target", &"attack", &"use_item", &"shield", &"context", &"interact",
 		&"item_left", &"item_up", &"item_right", &"first_person",
-		&"pause", &"map",
+		&"pause", &"inventory", &"map",
 	]
 
 

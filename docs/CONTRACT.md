@@ -204,23 +204,32 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `cam_up/down/left/right` | mouse motion (read in code) | right stick | camera |
 | `attack` | **LMB** | **X / Square** (pad2) | light attack (**hold** = charge, **+guard** = dash) |
 | `use_item` | **F** | **A / Cross** (pad0) | use item / jump attack |
-| `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held**, and it targets |
+| `shield` | **RMB** | **LB / L1** (pad9) | guard — **held**, and it targets |
 | `context` | **Space** | **B / Circle** (pad1) | roll / backstep / sidehop |
-| `z_target` | **Q**, MMB | **R3** (pad8) | lock-on |
+| `z_target` | **Q**, MMB | **LT / L2** (axis4+), **R3** (pad8) | lock-on / camera recentre |
 | `interact` | E | **Y / Triangle** (pad3) | event action |
 | `item_left` / `item_up` / `item_right` | 1 / 2 / 3 | dpad L / U / R | armaments — §4.1 |
 | `first_person` | R | — | — |
-| `pause` / `map` | Esc / Tab | Start (pad6) / L3 (pad7) | menu / map |
+| `pause` / `inventory` / `map` | Esc / **I** / Tab | Start (pad6) / **Select** (pad4) / L3 (pad7) | menu / pouch / map |
 | `dbg_reload` | F5 | — | — |
 
-The face buttons are the swings and the shoulders are the holds. Guard is on the
-**left trigger**, which is an AXIS (`InputEventJoypadMotion`, JoyAxis 4), not a
-button — a control you hold down for seconds belongs on an analogue pull, and
-the action's 0.2 deadzone is how far it travels before the shield counts as
-raised.
+The face buttons are the swings and the left shoulders are the holds. **The
+whole camera is under the left index finger**: the right stick swings the lens,
+and the **left trigger** puts it back behind the hero. That is what the trigger
+is for now, and it is the one control a lost player reaches for.
 
-**The trigger is OOT's Z**, and it carries everything Z carried. An index finger
-on a shoulder is exactly what Z was, so pulling it does all three at once:
+The trigger is an AXIS (`InputEventJoypadMotion`, JoyAxis 4), not a button, so
+the action's 0.2 deadzone is how far it travels before it counts as pressed.
+`z_target` is bound to **both** the trigger and R3: a thumb already resting on
+the right stick should not have to travel to recentre what that stick just
+moved.
+
+Guard moved off the trigger to **LB** when the camera took it — Elden Ring's
+block button, and the bumper directly above the trigger, so the pair stays under
+one finger.
+
+**LB is OOT's Z**, and it carries everything Z carried. An index finger
+on a shoulder is exactly what Z was, so holding it does all three at once:
 raises the guard, **acquires the best target**, and — with nothing lockable —
 pins the facing so the stick becomes a strafe. Let go and all three drop. The
 targeting half is in §8; the facing half is Z-Parallel and lives in
@@ -301,11 +310,12 @@ rotated by the camera's yaw before it becomes world motion.
 `z_target` is a **TOGGLE**, which is Elden Ring rather than OOT: press to lock,
 press again to release, press with nothing lockable to recentre the camera
 behind the hero. It is not held — holding a stick click and steering the camera
-with the same thumb is the thing R3 exists to avoid.
+with the same thumb is the thing the trigger exists to avoid, and the trigger is
+why the recentre no longer costs the player their grip on the right stick.
 
 `shield` is a **HOLD**, and it is OOT's Z exactly (above). It is deliberately
-the *weaker* claim of the two: releasing the trigger drops only a lock the
-trigger itself raised (`Targeting._lock_from_shield`), so a deliberate R3 toggle
+the *weaker* claim of the two: releasing the bumper drops only a lock the
+bumper itself raised (`Targeting._lock_from_shield`), so a deliberate toggle
 survives you guarding and un-guarding underneath it. Otherwise every block would
 silently disarm the lock-on button. While it is held and nothing is locked it
 keeps re-scanning every `guard_rescan` (0.15 s) — kill what you were locked to
@@ -315,7 +325,7 @@ toggle's job, because a camera that snapped behind the hero every time he raised
 his shield at nothing would fight the player during exactly the fights the
 shield is for.
 
-The trigger's edges are read by **diffing `is_action_pressed` against a stored
+The guard's edges are read by **diffing `is_action_pressed` against a stored
 `_shield_down`**, not by `is_action_just_pressed`. A `just_pressed` is true for
 one frame and stamped with the frame it arrived in, so a physics tick slower
 than the render rate drops it. `z_target` solves that by queueing the press from

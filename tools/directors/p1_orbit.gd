@@ -66,17 +66,36 @@ func run(rig) -> void:
 	Input.action_release(&"move_up")
 	await rig.wait_seconds(0.5)
 
-	# 5. Knock it off-axis once more, then tap Z with nothing lockable. Parallel
-	# recentres over CAM_DEFAULT_ANIM_TIME = 4 ticks, so these frames are 0.05 s
-	# apart — any slower and the snap is over before the second exposure.
+	# 5. Knock it off-axis once more, then tap the camera button with nothing
+	# lockable. Parallel recentres over CAM_DEFAULT_ANIM_TIME = 4 ticks, so these
+	# frames are 0.05 s apart — any slower and the snap is over before the second
+	# exposure.
+	#
+	# This is what the left trigger does on a pad (project.godot binds `z_target`
+	# to JoyAxis 4 as well as R3), and shoot.gd strips every joypad binding, so
+	# the trigger itself cannot be pushed here — the ACTION is what is under test.
+	#
+	# A real InputEventAction, not `Input.action_press`: `Targeting` reads this
+	# button in `_unhandled_input` (it queues the press so a slow physics tick
+	# cannot drop the edge), and `action_press` sets the action's state without
+	# dispatching any InputEvent at all — CLAUDE.md §3. This step photographed a
+	# camera that never moved for as long as it was written that way.
 	await _drag(rig, Vector2(-22.0, 0.0), 12)
 	await _shot(rig, "preZ")
-	Input.action_press(&"z_target")
+	_tap(&"z_target")
 	await rig.wait_seconds(0.03)
-	Input.action_release(&"z_target")
 	for i in 5:
 		await rig.wait_seconds(0.05)
 		await _shot(rig, "recenter")
+
+
+## One press-and-release of `action`, down the real event path.
+func _tap(action: StringName) -> void:
+	for pressed: bool in [true, false]:
+		var ev := InputEventAction.new()
+		ev.action = action
+		ev.pressed = pressed
+		Input.parse_input_event(ev)
 
 
 ## Push `count` real mouse-motion events, then let a physics tick consume them.
