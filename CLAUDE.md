@@ -37,6 +37,24 @@ the loser**. Do not land both and wire a switch. One of each system, always.
 - **Commit as soon as the tree is consistent.** A merge resolution sat
   uncommitted here and was wiped by a stray `git reset --hard`. Hours, gone.
   Commit, then continue.
+- **Land it on `main` when the card is done. Do not wait to be asked.** A
+  verified branch sitting in a worktree is not finished work — it is work the
+  next session cannot see, and this repo has already paid for that once: two
+  agents built the entire metagame twice because neither could see the other's
+  branch (§0). Merging is what makes §0's `git log --oneline -20` tell the
+  truth.
+
+  `main` is checked out in the primary worktree, so merge from **there** —
+  never `git checkout main` inside a worktree:
+
+  ```bash
+  cd /Users/nickbryant/zeldalike && git merge --ff-only <your-branch>
+  ```
+
+  Use `--ff-only`. If it refuses, `main` moved under you: rebase your branch
+  onto it, re-run the directors (a clean rebase is not a passing one), and
+  merge again. Land only what you have actually verified — the bar in §2 is the
+  bar for merging, not just for saying you are done.
 
 ---
 
