@@ -47,6 +47,14 @@ const DIRS := {
 @export var enemies_max: int = 4
 ## Chance a non-entrance room holds a chest. The furthest room always does.
 @export var chest_chance: float = 0.55
+## Chance a room has a bundle of arrows lying loose in it, on top of whatever a
+## chest in that room might hold.
+##
+## This is the floor UNDER the bow. Chests are a detour and the fletching wants
+## a bag with something in it, so a player who has neither — early, poor, and out
+## of shots — would otherwise be holding a stick. A quarter of rooms means a
+## short walk usually turns one up and never guarantees it. [tune]
+@export var arrow_chance: float = 0.25
 
 ## cell -> {"doors": Array[StringName], "index": int, "dist": int, "node": Node3D}
 var rooms: Dictionary = {}
@@ -349,6 +357,17 @@ func _populate() -> void:
 			chest.picks = Prog.chest_picks(Run.level, cell == deepest)
 			chest.position = Vector3(0.0, 0.0, -room_size * 0.32)
 			root.add_child(chest)
+
+		# Arrows on the floor, opposite the chest and away from the door line, so
+		# picking them up is a step off the path you were already walking rather
+		# than something you collect by accident on the way through. Rolled here
+		# and not inside the chest branch: a room with no chest is exactly the
+		# room a dry quiver needs supply in.
+		if _rng.randf() < arrow_chance:
+			var bundle := ArrowBundle.new()
+			bundle.count = ArrowBundle.FLOOR_COUNT
+			bundle.position = Vector3(room_size * 0.30, 0.0, -room_size * 0.24)
+			root.add_child(bundle)
 
 		# The way down, in the deepest room, beside the best chest. Deliberately
 		# next to the reward and at the end of the longest walk: the moment you

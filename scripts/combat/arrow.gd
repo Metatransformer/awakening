@@ -25,8 +25,24 @@ const KNOCKBACK := K.KNOCKBACK_LIGHT
 const LINGER := 2.5
 ## Seconds before an arrow that never hit anything gives up.
 const LIFETIME := 4.0
-const SHAFT_LEN := 0.62
-const SHAFT_R := 0.012
+
+## The model, and how it has to be turned to agree with the flight.
+##
+## `assets/weapons/arrow.glb` is a real arrow with a real head, real fletching
+## and its own materials — 224 triangles, which is cheaper than the five-sided
+## cylinder it replaced was going to be once it grew a nock. It imports lying
+## along +Y, and this node flies along -Z (see `_face_travel`), so the model gets
+## a quarter turn about X and nothing else in the class has to know.
+##
+## MEASURED, not derived. Which end of a GLB is the point is not a thing to
+## reason out from an axis name — see CLAUDE.md §4 and
+## `tools/directors/arrow_supply.gd`, which renders it and measures it.
+const MODEL_ID := "arrow"
+const MODEL_PITCH := -PI * 0.5
+## Rendered length, metres. Not used by anything here — the flight is a raycast
+## and cares nothing for the mesh — but the bundle and the lookdev both want to
+## know how long the thing they are laying out is.
+const MODEL_LEN := 0.70
 
 var _velocity: Vector3 = Vector3.ZERO
 var _origin: Vector3 = Vector3.ZERO
@@ -148,57 +164,16 @@ func _face_travel() -> void:
 
 
 # --- Construction -----------------------------------------------------------
-## Built in code, like every other prop here. The shaft runs along local -Z so
-## `looking_at` aims it with no extra correction — the same convention the
-## hookshot head uses on +Y, chosen per-object to keep the aiming maths trivial.
+## The node flies along local -Z, so `looking_at` aims it with no extra
+## correction. The MODEL is turned to match, once, here — that is the whole of
+## the art-space fix and it lives on the model node, never on this node's basis,
+## because `-basis.z is forward` is the contract the flight and the raycast both
+## read (CLAUDE.md §4).
 
 func _build() -> void:
-	var wood := StandardMaterial3D.new()
-	wood.albedo_color = Color(0.36, 0.27, 0.17)
-	wood.roughness = 0.85
-
-	var steel := StandardMaterial3D.new()
-	steel.albedo_color = Color(0.58, 0.58, 0.62)
-	steel.metallic = 0.8
-	steel.roughness = 0.32
-
-	var shaft_mesh := CylinderMesh.new()
-	shaft_mesh.top_radius = SHAFT_R
-	shaft_mesh.bottom_radius = SHAFT_R
-	shaft_mesh.height = SHAFT_LEN
-	shaft_mesh.radial_segments = 5  # faceted on purpose: N64 silhouette
-	shaft_mesh.rings = 1
-	shaft_mesh.material = wood
-	var shaft := MeshInstance3D.new()
-	shaft.name = "Shaft"
-	shaft.mesh = shaft_mesh
-	shaft.rotation.x = -PI * 0.5  # cylinder is +Y, the arrow flies -Z
-	shaft.position.z = SHAFT_LEN * 0.5
-	add_child(shaft)
-
-	var head_mesh := CylinderMesh.new()
-	head_mesh.top_radius = 0.0
-	head_mesh.bottom_radius = SHAFT_R * 2.6
-	head_mesh.height = 0.09
-	head_mesh.radial_segments = 5
-	head_mesh.rings = 1
-	head_mesh.material = steel
-	var head := MeshInstance3D.new()
-	head.name = "Head"
-	head.mesh = head_mesh
-	head.rotation.x = -PI * 0.5
-	head.position.z = -0.045
-	add_child(head)
-
-	# Two crossed vanes rather than a cone of feathers: at this size the fletching
-	# is three pixels, and its only job is to say which end is the back.
-	for i in 2:
-		var vane_mesh := BoxMesh.new()
-		vane_mesh.size = Vector3(0.005, 0.05, 0.10)
-		vane_mesh.material = wood
-		var vane := MeshInstance3D.new()
-		vane.name = "Vane%d" % i
-		vane.mesh = vane_mesh
-		vane.rotation.z = PI * 0.5 * float(i)
-		vane.position.z = SHAFT_LEN - 0.10
-		add_child(vane)
+	var model := WeaponModels.make(MODEL_ID)
+	if model == null:
+		return
+	model.name = "Model"
+	model.rotation.x = MODEL_PITCH
+	add_child(model)

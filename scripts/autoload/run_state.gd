@@ -252,6 +252,37 @@ func collect(id: StringName, count: int = 1, heat_mult: float = 1.0) -> int:
 	return taken
 
 
+## Burn `count` of `id` out of the bag without selling it. Returns how many were
+## actually taken, which is 0 when the bag is short -- the caller decides whether
+## that is a beep or a sentence.
+##
+## The premium share goes with them, exactly as it does in `sell()`. Heat is
+## earned per gold of merchandise; take merchandise out of the bag by any door
+## and the pot has to shrink with it, or the stacks that are left would inherit
+## a bonus they never earned and the vendor would pay for arrows.
+##
+## Only the fletching calls this today. It is on Run rather than on Fletching
+## because the bag's bookkeeping -- the erase, the premium, the signal -- is
+## Run's and nobody else's, and a second writer of `bag` is how the two halves
+## of a total start to disagree.
+func consume(id: StringName, count: int = 1) -> int:
+	var have: int = bag.get(id, 0)
+	if have <= 0 or count <= 0:
+		return 0
+	var def := ItemDb.get_def(id)
+	if def == null:
+		return 0
+	var n: int = mini(count, have)
+	premium -= _premium_share(def.value * n)
+	premium = maxi(premium, 0)
+	if n >= have:
+		bag.erase(id)
+	else:
+		bag[id] = have - n
+	Bus.bag_changed.emit(bag, bag_value())
+	return n
+
+
 ## Slots consumed. A stack of 20 bone shards with stack==20 is one slot; the
 ## twenty-first starts a second.
 func slots_used() -> int:
