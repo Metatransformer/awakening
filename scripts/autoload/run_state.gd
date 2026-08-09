@@ -171,6 +171,16 @@ func extract() -> bool:
 	# component home exactly as you pay to carry a pearl home, so choosing the
 	# component is a choice about slots and never a way to dodge the toll.
 	var banked := bank_components()
+	# The relics leave the bag after the toll too, and for the same reason: you pay
+	# to carry the only one of these there is home exactly as you pay to carry a
+	# pearl home. `bank_relics` is the moment a relic stops being a thing you can
+	# lose (docs/GDD.md §3).
+	var recovered := bank_relics()
+	# Folded into `banked` so the receipt draws a relic as "TO THE BENCH" instead
+	# of a gold figure. Those are the wrong three words for the Society's hall and
+	# the right SENTENCE -- that column means "this line is not money", and a relic
+	# priced in gold on the receipt is the exact lie GDD §6.3 forbids.
+	banked.merge(recovered)
 	_end_summary(true, carried, carried_value, banked, fee)
 	# Same reason as in `die()`: the next run starts at the top, and until the
 	# number says so the HUD in town is reporting a floor nobody is standing on.
@@ -230,7 +240,61 @@ func bank_components() -> Dictionary:
 	return moved
 
 
+## Move every relic out of the bag and onto the Society's shelf. Returns what
+## moved, so the receipt can say so.
+##
+## The mirror of `bank_components`, one floor up: a relic is neither merchandise
+## nor material, so extraction is where it parts company with both. `RelicDb`
+## keeps it as a flag rather than an inventory row (see its note on `recover`),
+## which is why nothing is added anywhere here -- the id leaving the bag and the
+## flag going up ARE the same event.
+##
+## No premium arithmetic, unlike `bank_components`. A relic never earned a share
+## of the heat pot -- `RelicPickup` collects at 1.0 and there is no such thing as
+## a hot relic -- and `_premium_share` already divides by the merchandise half of
+## the bag, so taking the relic out leaves every other line's share exactly where
+## it was.
+func bank_relics() -> Dictionary:
+	var moved: Dictionary[StringName, int] = {}
+	for id: StringName in bag.keys():
+		if not RelicDb.is_relic(id):
+			continue
+		moved[id] = int(bag[id])
+		bag.erase(id)
+		RelicDb.recover(id)
+	if not moved.is_empty():
+		Bus.bag_changed.emit(bag, bag_value())
+	return moved
+
+
+## The gold-weight of the relics in the bag right now.
+##
+## Public because three separate things have to subtract it and none of them
+## should be summing the bag themselves: the vendor pays nothing for a relic, so
+## every number that describes what the vendor would pay has this taken off it,
+## while the number the ROPE reads (`bag_value`) keeps it. See `ItemDb.RELIC_TOLL`
+## for why a relic weighs anything at all.
+func relic_toll() -> int:
+	var total := 0
+	for id: StringName in bag:
+		if not RelicDb.is_relic(id):
+			continue
+		var def := ItemDb.get_def(id)
+		if def != null:
+			total += def.value * int(bag[id])
+	return total
+
+
 ## Die. The bag is gone; gold and anything bought with it survives.
+##
+## **A relic in the bag is NOT destroyed here** (docs/GDD.md §3). Nothing is set
+## and nothing needs to be: the held flag was never raised, so `RelicDb.held()`
+## and `donated()` both still answer false, which is precisely the state that
+## means "still down there" -- `RelicPickup.place` reads it and puts the thing
+## back in the room it was placed in the next time that floor is built. The sting
+## is the walk. A permanently missable unique in a game that takes your bag would
+## be a corrupt save rather than tension, and the way to guarantee that can never
+## happen is for losing one to require no code at all.
 func die() -> void:
 	if not in_dungeon:
 		return
@@ -285,8 +349,13 @@ func _end_summary(extracted: bool, contents: Dictionary, value: int,
 
 
 ## What leaving costs right now.
+##
+## The rate comes through `RelicDb` unconditionally -- it hands back `EXTRACT_RATE`
+## untouched until the Rope-Drum is recorded and 0.20 after, so there is no `if`
+## here and never should be. A caller that wrote `if RelicDb.donated(...)` would
+## be the unlock implemented twice, and the next tuning pass would move one copy.
 func extract_cost() -> int:
-	return maxi(EXTRACT_MIN, int(round(bag_value() * EXTRACT_RATE)))
+	return maxi(EXTRACT_MIN, int(round(bag_value() * RelicDb.extract_rate(EXTRACT_RATE))))
 
 
 func can_extract() -> bool:
@@ -399,20 +468,36 @@ func base_value() -> int:
 ## What one stack is worth, carrying its share of the premium. The vendor screen
 ## prices its lines with this so the row and the gold that lands agree; a line
 ## that said 72 and paid 91 reads as a bug however welcome the extra is.
+##
+## **Zero for a relic**, which is the whole of "no relic sells" as a number: the
+## row draws 0 and `sell()` below refuses the press. A relic still weighs on
+## `bag_value()` and therefore on the fee (`ItemDb.RELIC_TOLL`), and those two
+## facts are not in tension -- the rope charges by what you are hauling, the
+## vendor pays for what he can resell, and a relic is the one thing in the game
+## where those are different numbers.
+##
+## The market multiplier rides here rather than in `bag_value`, so a lit square
+## makes SELLING better and never makes LEAVING cheaper. The relic that makes
+## leaving cheaper is the Rope-Drum and it is a different relic.
 func line_value(id: StringName) -> int:
 	var def := ItemDb.get_def(id)
-	if def == null or not bag.has(id):
+	if def == null or not bag.has(id) or RelicDb.is_relic(id):
 		return 0
 	var base := def.value * int(bag[id])
-	return base + _premium_share(base)
+	return int(round((base + _premium_share(base)) * RelicDb.vendor_price_mult()))
 
 
 ## The premium riding on `base` gold of flat value. Rounded down at the last
 ## stack so repeated partial sells can never pay out more premium than exists.
+##
+## The denominator is the MERCHANDISE half of the bag, relics taken off. Heat is
+## earned per gold of sellable loot; a relic earned none of it and cannot carry
+## any away, so leaving its weight in the divisor would quietly shrink every real
+## stack's share for as long as one was in the bag.
 func _premium_share(base: int) -> int:
 	if premium <= 0 or base <= 0:
 		return 0
-	var whole := base_value()
+	var whole := base_value() - relic_toll()
 	if whole <= 0:
 		return 0
 	return mini(premium, int(round(premium * float(base) / float(whole))))
@@ -426,25 +511,42 @@ func bag_count() -> int:
 
 
 ## Hand the whole bag to the vendor. Returns what it paid.
+##
+## **Relics stay.** He will not take one and the row does not empty -- SELL
+## EVERYTHING means everything he BUYS, and a bag that came back holding one thing
+## says why on its own. Their weight comes off the payout for the same reason
+## `line_value` answers 0: the toll and the sale price are different numbers and
+## only one of them is his (GDD §6.3).
 func sell_all() -> int:
-	var paid := bag_value()
+	var paid := int(round((bag_value() - relic_toll()) * RelicDb.vendor_price_mult()))
 	if paid <= 0:
 		return 0
-	var sold := bag.duplicate()
-	bag.clear()
-	# `paid` is bag_value(), which already includes the premium -- emptying the
-	# bag empties the pot with it, and neither is counted twice.
+	var sold: Dictionary[StringName, int] = {}
+	for id: StringName in bag.keys():
+		if RelicDb.is_relic(id):
+			continue
+		sold[id] = int(bag[id])
+		bag.erase(id)
+	# `paid` was the whole merchandise value, premium included -- emptying the
+	# sellable half empties the pot with it, and neither is counted twice.
 	premium = 0
 	Game.add_gold(paid)
-	Bus.bag_changed.emit(bag, 0)
+	Bus.bag_changed.emit(bag, bag_value())
 	Bus.items_sold.emit(sold, paid)
 	return paid
 
 
 ## Sell one stack. Used by the vendor screen when the player picks a line.
+##
+## **A relic is refused here, and 0 is the refusal.** The screen already draws a
+## failed commit as its footer's "why not" line, so the vendor saying no costs no
+## UI: he simply never pays for one. This is the enforcement point rather than a
+## check on the screen because the bag's bookkeeping is this file's and nobody
+## else's -- a rule about what may leave the bag that lived in `TradeScreen` would
+## be a rule the next caller of `sell()` did not know about.
 func sell(id: StringName, count: int = -1) -> int:
 	var have: int = bag.get(id, 0)
-	if have <= 0:
+	if have <= 0 or RelicDb.is_relic(id):
 		return 0
 	var def := ItemDb.get_def(id)
 	if def == null:
@@ -454,7 +556,9 @@ func sell(id: StringName, count: int = -1) -> int:
 	# Prorated, and taken out of the pot in the same breath: sell half the bag
 	# and half the heat you earned goes with it.
 	var share := _premium_share(base)
-	var paid := base + share
+	# A lit square pays more for the same stack. Unconditional -- `vendor_price_mult`
+	# is 1.0 until the Pillar-Shard is recorded.
+	var paid := int(round((base + share) * RelicDb.vendor_price_mult()))
 	premium -= share
 
 	if n >= have:

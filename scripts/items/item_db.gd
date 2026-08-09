@@ -116,6 +116,54 @@ static func _build() -> void:
 	_add(ItemDef.brew(&"mourning_dew", "Mourning Dew", 85, R, 2,
 		Color(0.66, 0.80, 0.94), "Collected off stone that never sees a morning."))
 
+	# --- The twelve relics ---------------------------------------------------
+	# Built from `RelicDb.RELICS`, never typed out again. `Run.collect` refuses an
+	# id this catalogue has never heard of, so WITHOUT a row here a relic cannot
+	# be picked up at all -- but everything else about one (where it is, what it
+	# unlocks, who it is handed to) belongs to `RelicDb`, and a second hand-written
+	# list here is a thirteenth relic waiting to happen.
+	for row in RelicDb.RELICS:
+		_add(_relic(row))
+
+
+## What the ROPE charges to haul one relic up, and it is NOT a sale price.
+##
+## GDD §3 says a relic "is charged the extraction fee", and the fee is a share of
+## what the bag is worth -- so a relic worth nothing would ride home free and that
+## sentence would be a lie. This is that weight. The vendor never pays it:
+## `Run.line_value` answers 0 for a relic and `Run.sell` / `Run.sell_all` refuse
+## one outright (GDD §6.3, "no relic sells").
+##
+## 200 against a good run's 250-450 gold of ingredients, so carrying the relic out
+## adds about 50 gold to the toll -- a real line on the bill and nowhere near the
+## price of abandoning the run. **Uniform across all twelve on purpose.** A
+## per-relic toll would be a hidden ranking of which unique is worth the trip, and
+## there is no such ranking: the list is twelve things, not a ladder. [tune]
+const RELIC_TOLL := 200
+
+
+## One relic as a thing the bag can hold. Every column is the same for all
+## twelve, which is the point: a relic is not a better or worse relic.
+##
+## `stack` is 1 -- a relic always costs a whole slot, and that slot is the
+## sharpest form of the one question (docs/GDD.md §3).
+##
+## The tier is index 3 of `Pal.RARITY`, ARCANE, which the styleguide reserves for
+## legendary and rations at "twice a run at most". Twelve objects in the entire
+## game is exactly what that ration was written for, and it is the one colour on
+## the board no ingredient can ever wear -- so a violet mote on the floor means
+## one thing and nothing else. `ItemDef.Rarity` names three tiers and this is the
+## fourth; the cast is deliberate, `Pal.rarity_color` clamps to it, and
+## `ItemDef.rarity_name()` has no arm for it yet (it reports "Common" in the
+## pouch's caption -- one line, in a file this change does not own).
+static func _relic(row: Dictionary) -> ItemDef:
+	const LEGENDARY := 3
+	var d := ItemDef.make(row["id"], String(row["name"]), RELIC_TOLL,
+		ItemDef.Rarity.RARE, 1, Pal.ARCANE,
+		"The Lanternkeeper records it. No coin buys it. %s" % row["detail"])
+	d.rarity = LEGENDARY as ItemDef.Rarity
+	return d
+
 
 # --- Drop tables ------------------------------------------------------------
 

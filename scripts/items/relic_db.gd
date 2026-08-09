@@ -415,6 +415,23 @@ static func donated(id: StringName) -> bool:
 	return Game.flag(flag_donated(id))
 
 
+## Is this relic still down there, waiting to be found?
+##
+## The one question a room asks before it places one, and it is the whole of "a
+## relic lost on death goes back where it came from" (GDD §3). Death sets no flag
+## -- so a relic you were carrying when you died answers true again the moment the
+## floor is rebuilt, with nobody having written a line of code to put it back.
+## The only two states that take it off the floor are being in your hand
+## (`held`) and being in the ledger (`donated`).
+##
+## False for anything that is not one of the twelve, so a typo in a floor manifest
+## places nothing rather than a nameless mote.
+static func outstanding(id: StringName) -> bool:
+	if by_id(id).is_empty():
+		return false
+	return not held(id) and not donated(id)
+
+
 static func donated_count() -> int:
 	var n := 0
 	for row in RELICS:
@@ -500,10 +517,16 @@ static func lines() -> Array[Dictionary]:
 			# Zero gold, and the column says so. She does not buy and she does
 			# not sell (GDD §6): the price of a donation is the object.
 			"cost": 0,
-			# The price, as DATA, so the concrete `Catalogue.crafts()` can see
-			# it. See the note on `crafts` below -- this is what makes the row a
-			# hold without overriding anything.
-			"parts": {id: 1} if not donated(id) else {},
+			# **No `parts`.** The first cut carried `{id: 1}` here, on the reasoning
+			# that the price IS the object and the concrete `Catalogue.crafts()`
+			# would then make the row a hold with nothing overridden. It read wrong
+			# on the frame: `TradeScreen._recipe` prices a parts token against
+			# `Game.component_count`, which is 0 for a relic and always will be, so
+			# all twelve rows drew a RUST "1 WEIGHTS" -- "you need one of these and
+			# you have none" printed over a relic that was in the player's hand.
+			# The quantity column says "1 LEFT" / "0 LEFT" off `remaining()` now,
+			# which is what a checklist of twelve wants to say anyway, and the hold
+			# comes from the `crafts()` override below.
 			"blurb": String(row["lore"]) if known else _unwritten(row),
 			"detail": String(row["detail"]),
 		})
@@ -565,11 +588,18 @@ static func buy(line: Dictionary) -> bool:
 	return true
 
 
-## A donation is a HOLD, and the data says so rather than an override: `parts`
-## carries `{relic_id: 1}`, so the concrete `Catalogue.crafts()` returns true
-## without this class touching it. That is the point of `crafts` being concrete
-## -- a shop that answered the question its own way is a shop where committing
-## is a hold at one counter and a tap at the next.
+## A donation is a HOLD.
+##
+## This is the one override of `Catalogue.crafts` in the game, and the base
+## class's warning against it is about a shop ANSWERING DIFFERENTLY -- committing
+## as a hold at one counter and a tap at the next. This answers the same: yes,
+## hold. What it cannot do is answer it the same way the other two do, through a
+## `parts` recipe, because a relic is not a component and the recipe column
+## priced it as one (see `lines()`).
+##
+## Reached because `TradeScreen` asks through the catalogue it was handed
+## (`_db().crafts(line)`) rather than bare inside `Catalogue`, which is exactly
+## the distinction the note on `Catalogue.craft_verb` was written about.
 ##
 ## **Why hold, when the mistake is nearly harmless.** You can only donate a relic
 ## you are holding, every relic is eventually donated, and the order barely
@@ -579,8 +609,8 @@ static func buy(line: Dictionary) -> bool:
 ## spent is FOUND, it is one of twelve, it never rolls and it never comes back.
 ## The half second is the game saying *this one only happens once*, which is true
 ## here in a way it is not true of anything else on any counter in the town.
-##
-## No override below this line. The comment is the decision; `parts` is the data.
+static func crafts(_line: Dictionary) -> bool:
+	return true
 
 
 # --- The unlocks ------------------------------------------------------------
