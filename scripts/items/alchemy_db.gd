@@ -1,14 +1,12 @@
 class_name AlchemyDb
-extends RefCounted
+extends Catalogue
 ## What the alchemist will make you. Four lines: the bottle, and three things to
 ## put in it.
 ##
-## **The same shape as `ShopDb`, deliberately and exactly.** `lines()`,
-## `remaining()`, `can_buy()`, `refusal()`, `buy()` -- the trade screen holds a
-## reference to whichever of the two it was opened with and never asks which; a
-## second shop screen would have been a second place for the recipe column, the
-## affordability colouring and the refusal footer to drift. If you add a method
-## here, add it there.
+## **The same shape as `ShopDb`, deliberately and exactly** -- which is now a
+## thing the parser knows rather than a promise in a comment: both extend
+## `Catalogue`, and the five statics below are its contract. The trade screen
+## holds whichever catalogue it was opened with and never asks which.
 ##
 ## The transaction is Moonlighter's: **gold AND materials**, over a counter, for
 ## a thing you carry back down. The smith sells permanence and the alchemist
@@ -61,6 +59,10 @@ const BOTTLE_GROWTH := 2.4
 ## The board, top to bottom. The bottle first: it is the line that makes the
 ## other three usable, and a player standing here with no empty bottle has to be
 ## looking at the answer.
+static func craft_verb() -> String:
+	return "BREW"
+
+
 static func lines() -> Array[Dictionary]:
 	var out: Array[Dictionary] = [_bottle_line()]
 	for id in PotionDb.IDS:

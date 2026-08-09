@@ -69,8 +69,21 @@ func _sell(rig) -> void:
 	if screen != null:
 		screen._cursor = screen._rows.size() - 1
 		screen.queue_redraw()
+
+	# SELL EVERYTHING is a HOLD (`TradeScreen._hold_time`): one press should not
+	# be able to empty the bag, and the row draws a gauge saying so. A tap first,
+	# because a beat that only holds would pass with the hold deleted.
 	await rig.tap(["ui_accept"])
+	await rig.wait_frames(12)
+	if Run.bag_value() == 0:
+		print("MVP FAIL a tap emptied the bag -- SELL EVERYTHING is meant to be held")
+	Input.action_press(&"ui_accept")
+	await rig.wait_frames(45)
+	Input.action_release(&"ui_accept")
 	await rig.wait_frames(24)
+	if Run.bag_value() > 0:
+		print("MVP FAIL holding SELL EVERYTHING did not empty the bag (%d left)"
+			% Run.bag_value())
 	print("MVP after_sell gold=%d bag=%d" % [Game.gold, Run.bag_value()])
 	await rig.capture(out.path_join("m_04_sold_all.png"))
 

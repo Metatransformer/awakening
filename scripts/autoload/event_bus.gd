@@ -142,6 +142,14 @@ signal heat_banked(gold: int)
 ## The "(E) OPEN" line, or "" when there is nothing to address. One at a time --
 ## Prompt decides which.
 signal prompt_changed(text: String)
+## The focused Interactable's hold, 0..1, and whether the thing in reach wants a
+## hold at all. Emitted by `Prompt` on every change INCLUDING the change to zero,
+## so a listener never has to poll and never has to guess when a hold ended.
+##
+## `required` is separate from the number on purpose: the HUD draws an empty
+## track the moment something hold-gated is in reach, which is what tells the
+## player it is a hold BEFORE they press and fail. See `HoldGauge`.
+signal hold_changed(t01: float, required: bool)
 ## A full-screen UI took or gave back input. `id` is e.g. &"trade".
 signal screen_opened(id: StringName)
 signal screen_closed(id: StringName)

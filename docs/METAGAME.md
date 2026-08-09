@@ -373,6 +373,24 @@ The costs scale with how many you have already bought, so the shop keeps pace
 instead of being solved by one lucky run. The limits are what stop the smith
 from being an infinite gold sink that makes the dungeon irrelevant.
 
+### What is held, and what is tapped
+
+**A commit that eats materials is held for half a second; everything else is one
+press.** Forging a rung, blowing a bottle, brewing a draught and SELL EVERYTHING
+are the four, and they share one reason: gold is grindable and a single row is
+re-buyable, but a Cold Iron Core is a thing you *found* (§6.5) and a bag is one
+press from empty. Spending either because the cursor sat a row from where you
+thought it did is the only shop mistake this game cannot give back.
+
+Arrows, a bag slot, a heart container and selling one stack stay taps. A hold on
+every line would be ceremony, and a player who holds through twelve harmless
+confirms has stopped reading the one that mattered.
+
+The held rows say so twice — `HOLD ENT TO FORGE` in the footer, and a gauge
+filling along the row (docs/CONTRACT.md §8, "Holds"). The word and the bar are
+one statement in two languages, and this project has shipped the bug that each
+one alone leaves behind.
+
 ---
 
 ## 6.5 The forge — the only upgrades that are not bought
@@ -486,12 +504,13 @@ sells a **stock** — four glass bottles, and what is in them at the moment you
 step through the gate. Everything below follows from that one difference.
 
 The transaction is the same as the smith's, deliberately: **gold and materials,
-over a counter**. `scripts/items/alchemy_db.gd` exposes the identical five
-statics `ShopDb` does (`lines`, `remaining`, `can_buy`, `refusal`, `buy`), and
-`TradeScreen` holds a reference to whichever catalogue it was opened with. There
-is one shop screen in this game and there will go on being one; a second would
-be a second place for the recipe column, the affordability colours and the
-refusal footer to drift apart.
+over a counter**. `scripts/items/alchemy_db.gd` and `scripts/items/shop_db.gd`
+are both `Catalogue` subclasses — the contract is a base class now rather than a
+promise in a comment (docs/CONTRACT.md §8) — and `TradeScreen` holds whichever
+one it was opened with. There is one shop screen in this game and there will go
+on being one; a second would be a second place for the recipe column, the
+affordability colours and the refusal footer to drift apart. **A third counter
+is a `Catalogue` subclass and a row in `Npc.COUNTERS`, nothing else.**
 
 ### The bottle
 

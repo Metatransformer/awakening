@@ -238,6 +238,11 @@ var _heat_kills: int = 0
 var _heat_break_t: float = -1.0
 ## "(E) OPEN", or "" when there is nothing in reach. Owned by the Prompt autoload.
 var _prompt: String = ""
+## The focused Interactable's hold, mirrored off `Bus.hold_changed`. `_required`
+## is true whenever the thing in reach wants a hold AT ALL, held separately from
+## the number so the empty track can be drawn before the player presses anything.
+var _hold01: float = 0.0
+var _hold_required: bool = false
 
 
 func _ready() -> void:
@@ -284,6 +289,7 @@ func _ready() -> void:
 	Bus.target_lost.connect(_on_target_lost)
 	Bus.aim_changed.connect(_on_aim)
 	Bus.prompt_changed.connect(_on_prompt)
+	Bus.hold_changed.connect(_on_hold)
 	# Every button this overlay names is named for the device in the player's
 	# hands, so picking up a pad repaints all of it: the caps, the legend, and
 	# the prompt (which Prompt re-emits on the same signal).
@@ -397,6 +403,14 @@ func _on_heat_tier(_tier: int, rising: bool) -> void:
 
 func _on_prompt(text: String) -> void:
 	_prompt = text
+	_repaint()
+
+
+## `Prompt` re-emits this every frame of a hold, so a repaint is all this needs
+## -- there is no timer here to tick and nothing to keep awake between signals.
+func _on_hold(t01: float, required: bool) -> void:
+	_hold01 = t01
+	_hold_required = required
 	_repaint()
 
 
@@ -1351,7 +1365,7 @@ func _draw_extraction(s: Vector2) -> void:
 	if _extract_hold > 0.0:
 		var centre := Vector2(right - Pal.px(40.0, s.y),
 			Pal.BAG_NUM_BASELINE * s.y - Pal.px(16.0, s.y))
-		_draw_arc_ring(centre, Pal.px(54.0, s.y), _extract_hold,
+		HoldGauge.ring(_canvas, centre, Pal.px(54.0, s.y), _extract_hold,
 			Pal.px(3.0, s.y), Pal.CYAN)
 
 
@@ -1416,9 +1430,19 @@ func _draw_prompt(s: Vector2) -> void:
 	var h := PixelFont.height(scale)
 	var centre := Vector2(s.x * 0.5, s.y * 0.735)
 	var pad := Pal.px(7.0, s.y)
-	_canvas.draw_rect(Rect2(centre.x - w * 0.5 - pad, centre.y - pad,
-		w + pad * 2.0, h + pad * 2.0), Color(Pal.VOID, 0.72))
+	var box := Rect2(centre.x - w * 0.5 - pad, centre.y - pad,
+		w + pad * 2.0, h + pad * 2.0)
+	_canvas.draw_rect(box, Color(Pal.VOID, 0.72))
 	PixelFont.draw_centred(_canvas, _prompt, centre, scale, Pal.BONE)
+
+	# The hold gauge, along the bottom edge of the line it belongs to. Inside the
+	# box rather than under it: a bar floating below the plate is a second widget
+	# the player has to associate with the first, and this is the same statement
+	# as "HOLD A TO DESCEND" drawn in the other language. See `HoldGauge`.
+	if _hold_required:
+		var bar_h := Pal.px(HoldGauge.BAR_H, s.y)
+		HoldGauge.bar(_canvas, Rect2(box.position.x, box.end.y - bar_h,
+			box.size.x, bar_h), _hold01, Pal.BONE)
 
 
 ## The sight, drawn only while a ranged item is out.
@@ -1583,10 +1607,7 @@ func _health_of(n: Node) -> HealthComponent:
 
 
 # --- Primitives -------------------------------------------------------------
-
-func _draw_arc_ring(centre: Vector2, radius: float, t01: float,
-		width: float, col: Color) -> void:
-	if t01 <= 0.0:
-		return
-	_canvas.draw_arc(centre, radius, -PI * 0.5, -PI * 0.5 + TAU * t01,
-		maxi(8, int(48 * t01)), col, width)
+# The arc ring that used to live here is `HoldGauge.ring`. It moved out when the
+# interact prompt and the shop counter grew holds of their own: three surfaces
+# drawing "keep holding" three ways is three chances for one of them to be the
+# one nobody notices.

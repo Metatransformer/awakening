@@ -14,6 +14,8 @@ extends RefCounted
 ##   A  Components are in the catalogue and on the drop tables.
 ##   B  The pouch draws `Game.bag_slots` cells and marks the components.
 ##   C  The smith names a component cost and REFUSES when the bench is short.
+##   CH Forging is a HOLD, it shows a gauge while you hold it, and a tap does
+##      nothing -- the same contract the gate has, at the counter.
 ##   D  Buying a rung moves the number the gear actually reads -- the arc, the
 ##      draw, the reach, the edge, the plate -- not just a counter.
 ##   E  A component on the dungeon floor is picked up by WALKING OVER IT.
@@ -192,6 +194,8 @@ func _smith(rig) -> void:
 	await rig.wait_frames(8)
 	await rig.capture(out.path_join("f_02_forge.png"))
 
+	await _forge_is_a_hold(rig, screen)
+
 	for track in Game.FORGE_TRACKS:
 		for _rung in K.FORGE_MAX:
 			var line := ShopDb.lines().filter(
@@ -247,6 +251,81 @@ func _smith(rig) -> void:
 		% hero.combat.block_cone)
 
 
+# --- CH. Forging is a hold ---------------------------------------------------
+
+## The counter's half of the rule in `HoldGauge`: a commit that eats MATERIALS
+## wants the button held, it shows a gauge for the whole hold, and letting go
+## early does nothing at all.
+##
+## Driven with real presses. Every other beat in this file reaches past the input
+## layer and calls `screen._commit()` -- which is right, they are about the
+## economy -- and that is exactly why this one must not: the thing under test IS
+## the input path, and a director that reached past it would still pass with the
+## hold deleted and the gauge never drawn.
+## `screen` is untyped, like `rig`: annotating it `TradeScreen` made this call
+## fail once with "argument 2 (previously freed) is not a subclass of the
+## expected argument class" on a screen that was demonstrably alive and in the
+## tree one line earlier. A director is not the place to spend an afternoon on a
+## class-cache race.
+func _forge_is_a_hold(rig, screen) -> void:
+	var chain := _row(screen, &"chain")
+	if chain.is_empty():
+		_ck("CH0 there is a chain rung to hold", false)
+		return
+	screen._cursor = screen._rows.find(chain)
+	screen._hold = 0.0
+	await rig.wait_frames(4)
+
+	# Annotated, not inferred: `screen` is untyped above, so everything read off
+	# it is a Variant and `:=` cannot infer a float from one (CLAUDE.md §3).
+	var need: float = screen._hold_time(screen._cursor)
+	var before := Game.forge_level(Game.FORGE_CHAIN)
+	_ck("CH0 the chain rung wants a hold (%.2f s)" % need, need > 0.0)
+	# The other kind of line, and the reason `_hold_time` asks the catalogue
+	# rather than the mode: arrows are gold-only, re-buyable, and a hold on them
+	# would be the ceremony that teaches players to stop reading holds.
+	var arrows := _row(screen, &"arrows")
+	_ck("CH1 a gold-only line is still a tap",
+		not arrows.is_empty()
+		and is_zero_approx(screen._hold_time(screen._rows.find(arrows))))
+	# The footer says the SMITH's word, not the UI's. It shipped as "CRAFT" for
+	# one build because a static in `Catalogue` calling another static in
+	# `Catalogue` never reaches `ShopDb` -- caught by looking at the frame, so it
+	# is checked in text here where a glance cannot miss it.
+	_ck("CH1b the footer speaks the smith's word (%s)" % screen._verb(),
+		str(screen._verb()) == "FORGE")
+
+	await rig.tap(["ui_accept"])
+	await rig.wait_frames(10)
+	_ck("CH2 a tap forges nothing", Game.forge_level(Game.FORGE_CHAIN) == before)
+
+	# Mid-hold, on purpose: the frame is the proof. Read before the capture, and
+	# early in the hold, because a capture costs frames of its own and this must
+	# still be MID-hold when the shutter opens.
+	Input.action_press(&"ui_accept")
+	await rig.wait_frames(6)
+	var mid: float = screen._hold
+	await rig.capture(out.path_join("f_02b_hold.png"))
+	print("FORGE craft hold mid=%.2f of %.2f s" % [mid, need])
+	_ck("CH3 the gauge fills while the button is down (%.2f)" % mid,
+		mid > 0.0 and mid < need)
+	Input.action_release(&"ui_accept")
+	await rig.wait_frames(6)
+	_ck("CH4 letting go snaps it back to zero (%.2f)" % screen._hold,
+		is_zero_approx(screen._hold))
+	_ck("CH5 and forged nothing", Game.forge_level(Game.FORGE_CHAIN) == before)
+
+	# Held through. 45 frames is 0.75 s against a 0.5 s hold -- the margin is for
+	# the frame the press lands on, not for slop in the clock.
+	Input.action_press(&"ui_accept")
+	await rig.wait_frames(45)
+	Input.action_release(&"ui_accept")
+	await rig.wait_frames(10)
+	_ck("CH6 holding it through forges the rung (%d -> %d)" % [
+		before, Game.forge_level(Game.FORGE_CHAIN)],
+		Game.forge_level(Game.FORGE_CHAIN) == before + 1)
+
+
 # --- E and F. Underground ---------------------------------------------------
 
 func _descend(rig) -> void:
@@ -286,6 +365,18 @@ func _descend(rig) -> void:
 	# The re-plant stays: the hero has physics, and losing focus zeroes `_hold`
 	# with nothing printed, so the bar restarts and the beat lies about why.
 	Input.action_press(&"interact")
+
+	# A third of the way into the 0.9 s, with the shutter open: the gate's own
+	# glow is the diegetic half of this and the HUD's gauge is the legible half,
+	# and the bug this guards against is the one where a hold ships with neither.
+	# `Hud` mirrors `Bus.hold_changed`, so reading it is reading what got drawn.
+	await rig.wait_frames(20)
+	print("FORGE gate gauge t=%.2f required=%s" % [Hud._hold01, Hud._hold_required])
+	_ck("E0c the HUD knows the gate is a hold", Hud._hold_required)
+	_ck("E0d the gauge is filling (%.2f)" % Hud._hold01,
+		Hud._hold01 > 0.0 and Hud._hold01 < 1.0)
+	await rig.capture(out.path_join("f_03_gate_hold.png"))
+
 	for _i in 12:
 		await rig.wait_frames(8)
 		if Run.in_dungeon:

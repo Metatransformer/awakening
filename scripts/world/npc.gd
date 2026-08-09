@@ -10,14 +10,46 @@ extends Interactable
 
 enum Role { VENDOR, SMITH, GATE, ALCHEMIST }
 
-## The name over each head. A table rather than a chain of ternaries: it was
-## already one ternary answering for two roles, and a third role is exactly when
-## that stops being readable and starts being wrong.
-const SIGNS := {
-	Role.VENDOR: "PAWNBROKER",
-	Role.SMITH: "SMITH",
-	Role.ALCHEMIST: "ALCHEMIST",
-	Role.GATE: "",
+## Everything that differs between the people in this town, on one row each.
+##
+## It started as a name table beside a `match` in `_ready` and a second `match`
+## in `activate`, which is three places to edit to add a fourth shopkeeper and
+## two of them easy to miss. **A new counter is a row here plus a `Catalogue`
+## subclass -- never a new screen and never a new branch.** The trade screen, the
+## recipe column, the affordability colouring and the hold-to-craft gauge are
+## written once and pointed; that is the entire reason `TradeScreen` takes its
+## catalogue as an argument.
+##
+##   * `sign`   -- the name over their head. "" for the gate, which is masonry.
+##   * `prompt` -- the verb. TALK, not SELL/FORGE: the verb on a person should be
+##     the thing you do to a person, and the sign already says which one this is.
+##   * `hold`   -- seconds on the button, 0 to fire on press. See `Prompt`.
+##   * `counter`-- present only for the three who stand behind one. `db` null
+##     means SELL (the screen reads the bag, not a catalogue).
+##
+## The GATE has no counter, so `activate` has exactly one branch: open a counter,
+## or do the role's own thing.
+##
+## `static var`, not `const`: a catalogue is a script reference and an enum from
+## another class, and neither is a constant expression to the parser. Static, so
+## the table is still built once for the whole game rather than per shopkeeper.
+static var COUNTERS := {
+	Role.VENDOR: {
+		"sign": "PAWNBROKER", "prompt": "TALK", "hold": 0.0,
+		"counter": {"title": "PAWNBROKER", "mode": TradeScreen.Mode.SELL, "db": null},
+	},
+	Role.SMITH: {
+		"sign": "SMITH", "prompt": "TALK", "hold": 0.0,
+		"counter": {"title": "THE FORGE", "mode": TradeScreen.Mode.BUY, "db": ShopDb},
+	},
+	Role.ALCHEMIST: {
+		"sign": "ALCHEMIST", "prompt": "TALK", "hold": 0.0,
+		"counter": {"title": "THE ALCHEMIST", "mode": TradeScreen.Mode.BUY, "db": AlchemyDb},
+	},
+	# 0.9 s, and the only hold in the world. It is the door OUT of the hub and
+	# the one press in the game that ends the safe part of the session, so it is
+	# the one press that should be impossible to make by accident on the way past.
+	Role.GATE: {"sign": "", "prompt": "DESCEND", "hold": 0.9},
 }
 
 @export var role: Role = Role.VENDOR
@@ -32,35 +64,31 @@ var _lit: float = 0.0
 var _age: float = 0.0
 
 
+## The row for this NPC. Never null -- a role added to the enum and forgotten
+## here gets a nameless prop you can walk up to, not a crash mid-town.
+func _row() -> Dictionary:
+	var row: Dictionary = COUNTERS.get(role, {})
+	return row
+
+
 func _ready() -> void:
-	match role:
-		# TALK, not SELL/FORGE. The verb on a person should be the thing you do to
-		# a person -- what they then open is theirs to decide, and naming it here
-		# put the shop's menu on the label before you had met the shopkeeper. The
-		# name floating over them (`_sign`) already says which one this is, so
-		# "TALK" is not vague: it reads as TALK TO THE PAWNBROKER.
-		Role.VENDOR, Role.SMITH, Role.ALCHEMIST:
-			prompt = "TALK"
-		Role.GATE:
-			prompt = "DESCEND"
-			hold_time = 0.9
+	var row := _row()
+	prompt = str(row.get("prompt", "EXAMINE"))
+	hold_time = float(row.get("hold", 0.0))
 	radius = 2.3
 	super()
 	_build()
 
 
 func activate(_by: Node3D) -> void:
-	match role:
-		Role.VENDOR:
-			TradeScreen.open(self, TradeScreen.Mode.SELL, "PAWNBROKER")
-		Role.SMITH:
-			TradeScreen.open(self, TradeScreen.Mode.BUY, "THE FORGE")
-		Role.ALCHEMIST:
-			# The same screen the smith opens, pointed at the other catalogue.
-			# See TradeScreen's header for why there is not a second one.
-			TradeScreen.open(self, TradeScreen.Mode.BUY, "THE ALCHEMIST", AlchemyDb)
-		Role.GATE:
-			Flow.enter_dungeon()
+	# One screen, pointed. See `Catalogue` for why there is not a second one.
+	var counter: Dictionary = _row().get("counter", {})
+	if not counter.is_empty():
+		TradeScreen.open(self, int(counter["mode"]), str(counter["title"]),
+			counter["db"] as GDScript)
+		return
+	if role == Role.GATE:
+		Flow.enter_dungeon()
 
 
 func on_focus(on: bool) -> void:
@@ -109,7 +137,7 @@ func _build() -> void:
 		_build_person()
 
 	_sign = Label3D.new()
-	_sign.text = SIGNS.get(role, "")
+	_sign.text = str(_row().get("sign", ""))
 	_sign.font_size = 48
 	_sign.pixel_size = 0.0022
 	_sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED
