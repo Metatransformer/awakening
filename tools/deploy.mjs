@@ -175,6 +175,28 @@ if (!existsSync(join(ROOT, 'export_presets.cfg'))) {
   }
 }
 
+// A dirty tree is not fatal -- shipping a WIP build to testers is a real thing
+// to want -- but it must not be quiet. This worktree is shared, and the first
+// deploy off it very nearly published another session's half-written pause
+// menu: pouch_panel.gd referenced a HoldBar class whose file was still being
+// typed, so the pause menu failed to compile in every scene. The MVP director
+// caught it; a silent `pnpm deploy` would not have.
+{
+  const st = spawnSync('git', ['status', '--porcelain'], { cwd: ROOT, encoding: 'utf8' })
+  const lines = (st.stdout || '').trim().split('\n').filter(Boolean)
+  if (lines.length > 0) {
+    console.log(`  ! ${lines.length} uncommitted change(s) -- these SHIP:`)
+    for (const l of lines.slice(0, 12)) console.log(`      ${l}`)
+    if (lines.length > 12) console.log(`      ... and ${lines.length - 12} more`)
+    console.log(
+      '    A shared worktree usually has someone else\'s work in flight. To ship\n' +
+        '    only what is committed, export from a clean checkout instead:\n' +
+        '      git worktree add --detach .claude/worktrees/release HEAD\n' +
+        '      cd .claude/worktrees/release && godot --headless --import && pnpm deploy\n'
+    )
+  }
+}
+
 // `butler status` on a project you can reach prints its channels; on a bad key
 // or a typo'd target it fails. Catching that here beats discovering it after a
 // twenty-minute export.
