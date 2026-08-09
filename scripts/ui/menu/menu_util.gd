@@ -24,22 +24,19 @@ const ACTION_NAMES := {
 	# reach for. The three item buttons are the C-pad: whatever the player bound
 	# to them, bound in the Items screen.
 	&"z_target": "Lock On / Recentre",
-	# One button for the whole sword: tap it for the chain, hold it for the
-	# charge. There is no separate heavy to rebind any more.
-	&"attack": "Sword (hold to charge)",
-	&"use_item": "Use Item / Lunge",
+	# The sword is the two right shoulder buttons: the fast chain on one, the
+	# heavy on the other. The heavy row has to name the hold and the item, because
+	# the trigger is the same button for both and nothing on screen says so.
+	&"attack": "Sword — fast",
+	&"heavy": "Sword — heavy (hold to spin) / Use Item",
 	&"shield": "Guard / Lock On (hold)",
-	# These two are ONE BUTTON on a pad (A/Cross) and two on a keyboard (Shift and
-	# E). Both rows stay, and both name the whole button rather than half of it:
-	# a player looking at this screen to find out what A does must not have to
-	# read two rows and infer that the game picks between them. It does, and
-	# `Prompt.claims_press` is the rule — the thing in reach wins.
-	&"context": "Dodge / Sprint (hold) — yields to Interact",
-	&"interact": "Interact / Talk — wins over Dodge",
-	&"item_left": "Item ←",
+	&"context": "Dodge / Sprint (hold)",
+	&"interact": "Interact / Talk",
+	&"sheathe": "Put Away / Draw Sword",
+	&"loadout_prev": "Loadout ←",
+	&"loadout_next": "Loadout →",
 	&"item_up": "Item ↑",
-	&"item_right": "Item →",
-	&"item_down": "Swap Loadout",
+	&"item_down": "Item ↓",
 	&"first_person": "First Person",
 	&"pause": "Pause",
 	&"inventory": "Pouch",

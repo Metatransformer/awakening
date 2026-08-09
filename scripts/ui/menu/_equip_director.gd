@@ -40,19 +40,19 @@ func run(rig) -> void:
 	await _key(rig, KEY_ENTER, 12)
 	_check("the items screen is showing", equip.visible)
 	_check("focus landed inside it, not on nothing", _focused(rig) != null)
-	_check("a new game has three unbound item buttons",
-		Game.quick(0) == &"" and Game.quick(1) == &"" and Game.quick(2) == &"")
+	_check("a new game has two unbound item buttons",
+		Game.QUICK_SLOTS == 2 and Game.quick(0) == &"" and Game.quick(1) == &"")
 	await rig.capture("eq_00_unowned.png")
 
 	# --- Binding refuses what you have not found -----------------------------
-	# Focus opens on the ← item button. Mash confirm: owning nothing bindable,
+	# Focus opens on the ↑ item button. Mash confirm: owning nothing bindable,
 	# the only thing in the pool is the empty binding, so it must stay unbound
 	# -- five times, not just once.
 	for i in 5:
 		await _key(rig, KEY_ENTER, 3)
 	_check("an unowned item cannot be bound to a button (still %s)"
-		% ("unbound" if Game.quick(Game.QUICK_LEFT) == &"" else Game.quick(Game.QUICK_LEFT)),
-		Game.quick(Game.QUICK_LEFT) == &"")
+		% ("unbound" if Game.quick(Game.QUICK_UP) == &"" else Game.quick(Game.QUICK_UP)),
+		Game.quick(Game.QUICK_UP) == &"")
 	await rig.capture("eq_01_refused.png")
 
 	# --- Finding the bow binds it, without anyone opening a menu -------------
@@ -60,31 +60,31 @@ func run(rig) -> void:
 	Game.add_arrows(18)
 	await rig.wait_frames(6)
 	_check("finding the bow bound it to the first free button (%s)"
-		% Game.quick(Game.QUICK_LEFT), Game.quick(Game.QUICK_LEFT) == &"bow")
+		% Game.quick(Game.QUICK_UP), Game.quick(Game.QUICK_UP) == &"bow")
 	Game.grant(&"hookshot")
 	await rig.wait_frames(4)
 	_check("finding the hookshot took the NEXT button, it did not overwrite (%s)"
-		% Game.quick(Game.QUICK_UP), Game.quick(Game.QUICK_UP) == &"hookshot")
+		% Game.quick(Game.QUICK_DOWN), Game.quick(Game.QUICK_DOWN) == &"hookshot")
 	equip.refresh()
 	await rig.wait_frames(4)
 	await rig.capture("eq_02_owned.png")
 
 	# --- Pressing a bound button draws it, and puts it away ------------------
-	Game.use_quick(Game.QUICK_LEFT)
+	Game.use_quick(Game.QUICK_UP)
 	await rig.wait_frames(4)
-	_check("the ← button drew the bow (right hand is %s)"
+	_check("the ↑ button drew the bow (right hand is %s)"
 		% Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_RIGHT) == &"bow")
-	Game.use_quick(Game.QUICK_LEFT)
+	Game.use_quick(Game.QUICK_UP)
 	await rig.wait_frames(4)
 	_check("pressing it again put the bow away (right hand is %s)"
 		% Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_RIGHT) == &"sword")
 
-	# One item, one button: binding the bow onto ↑ must take it OFF ←.
-	Game.bind_quick(Game.QUICK_UP, &"bow")
+	# One item, one button: binding the bow onto ↓ must take it OFF ↑.
+	Game.bind_quick(Game.QUICK_DOWN, &"bow")
 	_check("binding an item to a second button moved it rather than cloning it",
-		Game.quick(Game.QUICK_UP) == &"bow" and Game.quick(Game.QUICK_LEFT) == &"")
-	Game.bind_quick(Game.QUICK_LEFT, &"bow")
-	Game.bind_quick(Game.QUICK_UP, &"hookshot")
+		Game.quick(Game.QUICK_DOWN) == &"bow" and Game.quick(Game.QUICK_UP) == &"")
+	Game.bind_quick(Game.QUICK_UP, &"bow")
+	Game.bind_quick(Game.QUICK_DOWN, &"hookshot")
 	equip.refresh()
 	await rig.wait_frames(4)
 

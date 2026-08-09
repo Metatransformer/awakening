@@ -197,6 +197,30 @@ const STAMINA_REGEN := 46.0         # [tune] units/sec -> full in ~2.2 s
 ## always" from being the correct way to play. 4.5 s is also about a room and a
 ## half of this dungeon, so crossing open ground is a choice and not a commute.
 const STAMINA_SPRINT := 22.0        # [tune]
+
+## SWINGING COSTS STAMINA, which is Elden Ring and is a second deliberate
+## deviation on top of the first. OOT's B button is free forever and the correct
+## play there is to mash it; the moment a game has a guard, a dodge and a heavy,
+## a free light swing makes all three of them optional.
+##
+## THE RULE IS NOT THE ROLL'S RULE. A roll is refused unless the whole cost is in
+## the bar (STAMINA_ROLL), because a dodge that half happens is a death. A swing
+## is allowed on ANY stamina above zero and the cost clamps at the floor -- so
+## the bar never stops you mid-chain, it stops you AFTER, which is the shape
+## Elden Ring uses and the reason its stamina reads as commitment rather than as
+## a cooldown. `Game.spend_stamina(cost, true)` is the partial half of that.
+##
+## The numbers are priced against STAMINA_ROLL (34) and the 46/sec regen, so a
+## full bar is roughly: eight light swings, OR three heavies, OR two spins, OR
+## three rolls -- and in practice a mix, because the regen delay (0.45 s) means
+## a chain thrown back to back is paid for out of one pocket. [tune]
+const STAMINA_SWING := 12.0         # [tune] the light chain, per step
+const STAMINA_HEAVY := 26.0         # [tune] the overhead on the trigger
+const STAMINA_SPIN := 34.0          # [tune] the charged release -- one roll
+const STAMINA_DASH := 18.0          # [tune] the stab out of the guard
+const STAMINA_LUNGE := 20.0         # [tune] the jump attack, under a lock
+const STAMINA_SLAM := 22.0          # [tune] the air slam
+
 ## [oot] 8 ticks of invulnerability when a shield block is released.
 const SHIELD_IFRAMES := 8.0 * TICK  # 0.4 s
 

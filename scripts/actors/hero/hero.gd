@@ -488,14 +488,12 @@ var sprinting: bool = false
 
 ## True for exactly ONE frame: the frame on which a press of `context` has
 ## resolved as a dodge rather than a run. Set by `_tick_context`, which is the
-## only thing in the project that reads the raw button — `_try_start_roll` and
-## `HeroCombat._tick_context_button` both read this instead, for the same reason
-## they both call `stick_neutral()`. Two places measuring one hold is how a press
-## comes out as a leap and a roll on the same frame, or as neither.
+## only thing in the project that reads the raw button; `_try_start_roll` reads
+## this instead, because a second opinion on how long a button was held is how a
+## press comes out as two moves on one frame, or as neither.
 ##
-## Written before the state machine runs and read after it, in this order:
-## `_physics_process` -> `_tick_context` -> the state tick -> HeroCombat's own
-## `_physics_process` (it is a CHILD of the hero, so it ticks second).
+## It had a second reader — the jump attack, back when that was the same button
+## behind a guard. That is on the trigger now and reads its own press.
 var context_tapped: bool = false
 
 ## The sword, shield and swing. Built in _ready; other packages reach combat
@@ -1494,13 +1492,13 @@ func _target_speed(mag: float) -> float:
 ##      as a late dodge would be a roll the player asked for a third of a second
 ##      ago and has stopped expecting.
 ##
-## `Prompt.claims_hold` is the other button this one shares. On a pad the dodge
-## and the interact are both A/Cross, so holding it at the dungeon gate is the
-## player filling the gate's ring — not winding up to run at it, and not a dodge
-## owed on release either, which is why this disarms as well as resetting. The
-## clock is RESET rather than merely frozen: letting go at the gate and pressing
-## again a step later should be a fresh hold, not one that inherits the 0.9 s the
-## ring already took.
+## THIS BUTTON IS B AND IT IS SHARED WITH NOTHING. It used to be A, on top of
+## `interact`, arbitrated by `Prompt.claims_press` / `claims_hold` — holding A at
+## the dungeon gate had to fill the gate's ring without also winding the hero up
+## to run at it. Both of those functions are gone with the layout that needed
+## them (see the `context` note in project.godot): a dodge that has to ask a
+## shopkeeper for permission is a dodge with a rule on it, and this is the one
+## button in the game that cannot afford one.
 func _tick_context(delta: float, input_locked: bool) -> void:
 	context_tapped = false
 	var pressed := not input_locked and Input.is_action_pressed(&"context")
@@ -1511,7 +1509,7 @@ func _tick_context(delta: float, input_locked: bool) -> void:
 		or (not input_locked and Input.is_action_just_pressed(&"context"))
 	_context_down = pressed
 
-	if input_locked or (Prompt != null and Prompt.claims_hold()):
+	if input_locked:
 		_context_held = 0.0
 		_context_armed = false
 		sprinting = false
@@ -1626,15 +1624,19 @@ func _fire_jump() -> void:
 		_fire(_P_JUMP)
 
 
-## Is the stick at rest this frame? [oot] Behind a raised shield ONE button is
-## two moves and the stick is what picks: neutral leaps, deflected dodges. Both
-## halves live in different files — the dodge here, the leap in
-## `HeroCombat._tick_context_button` — and they must answer this question
-## identically or a press falls between them and nothing happens at all.
-## Which is why it is a function and not two copies of a deadzone test.
+## Is the stick at rest this frame? A planted dodge with no direction asked for
+## is the BACKSTEP (`_try_start_roll`), and this is the deadzone test that says
+## so.
+##
+## It used to be the seam between two files: behind a guard the dodge button was
+## also the jump attack, neutral leapt and deflected rolled, and the two halves
+## had to answer this identically or the press fell between them. The leap has
+## its own trigger now, so this has one caller again — kept as a function because
+## the deadzone it reads (K.STICK_DEADZONE) is the same one every other "is the
+## player asking for a direction" question in this file uses.
 ##
 ## Read raw rather than through `_camera_relative`, because a rotation cannot
-## change a length and the caller in the other file has no camera basis to hand.
+## change a length.
 func stick_neutral() -> bool:
 	var stick := Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down")
 	return stick.length() < K.STICK_DEADZONE
@@ -1649,54 +1651,26 @@ func _try_start_roll(wish: Vector3, mag: float) -> bool:
 	# of coming out of the sprint in a roll he stopped asking for.
 	if not context_tapped:
 		return false
-	# The dodge and the interact are the same button on a pad, and the thing in
-	# reach wins the press (Prompt.claims_press, and the block above `context` in
-	# project.godot). Checked HERE rather than in Prompt because refusing is all
-	# there is to it — Prompt was already going to activate whatever is focused,
-	# on its own tick, off its own read of the same button.
-	#
-	# `claims_press` only sees the frame `interact` goes down, which is a frame
-	# this function may no longer be running on — a tap pays out on RELEASE now.
-	# The gap is covered by `claims_hold` in `_tick_context`: a focused prompt
-	# disarms the press for its whole duration, so a press made at the vendor is
-	# never owed a dodge in the first place. This stays for the case that DOES
-	# land on the press frame, `_context_resolves_now`.
-	if Prompt != null and Prompt.claims_press():
-		return false
 	if not is_on_floor():
 		return false
 
 	var target := lock_target()
 	var dir := wish
 
-	if target != null:
-		# [oot] Locked, the button is split by the STICK and the source material
-		# splits it exactly here: neutral is the JUMP ATTACK, back is the
-		# backflip, left and right are the sideways dodges. So a neutral press is
-		# not a dodge at all — it belongs to the leap, and this function's job is
-		# to stand down for it. `HeroCombat._tick_context_button` reads the same
-		# `stick_neutral()`, which is the only reason the press cannot land in
-		# both halves; `lunge_max_range` matches the lock's own break range so it
-		# cannot land in neither.
+	if target != null or blocking:
+		# LOCKED OR GUARDING, A NEUTRAL STICK IS THE BACKSTEP. Both stances pin
+		# the facing (_tick_camera_facing), so "no direction" has an unambiguous
+		# one: straight back from what you are watching.
 		#
-		# The stick gate does not apply either: locked, a dodge is a deliberate
-		# press rather than something you fall into out of a run, so gating it
-		# on a near-full deflection would eat half of them.
-		if stick_neutral():
-			return false
-	elif blocking:
-		# Guarding with nothing locked is the same stance minus a target
-		# (_tick_camera_facing): the facing is pinned to the camera, so a
-		# neutral stick backsteps straight away from what you are looking at.
+		# The locked half of this used to REFUSE instead, standing down so that
+		# the same press could come out as the jump attack — [oot] Z+A, neutral
+		# leaps and back flips. The leap is on the trigger now (`heavy`), so there
+		# is nothing left to stand down for, and what replaces a stick rule the
+		# player had to learn is the move Elden Ring gives a neutral dodge anyway.
 		#
-		# The leap does NOT take this press, and the asymmetry with the locked
-		# case above is deliberate rather than an oversight: `_lunge_swing` needs
-		# something to leap at and refuses without a lock, so yielding here would
-		# trade a working backstep for silence. A press stands down only for a
-		# move that is actually going to happen.
-		#
-		# Same reasoning as the lock for the missing gate — this is a press you
-		# make from behind a raised shield, not one you fall into out of a run.
+		# The stick gate does not apply in either stance: this is a deliberate
+		# press made from a planted position, not something you fall into out of
+		# a run, so gating it on a near-full deflection would eat half of them.
 		if stick_neutral():
 			dir = -_forward()
 	else:

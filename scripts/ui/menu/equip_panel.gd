@@ -2,10 +2,11 @@ class_name MenuEquipPanel
 extends Control
 ## The Items screen. Two halves, and the top one is the point:
 ##
-##  * **ITEM BUTTONS** — the three C-buttons, drawn in the shape of the D-pad
-##    they live on. This is where you BIND. In play those buttons draw what you
-##    put on them and nothing else; there is no cycling out there, because a
-##    button you have to watch to use is not a button you can reach for.
+##  * **ITEM BUTTONS** — the two quick slots, drawn in the shape of the D-pad
+##    half they live on (↑ over ↓). This is where you BIND. In play those buttons
+##    draw what you put on them and nothing else; there is no cycling out there,
+##    because a button you have to watch to use is not a button you can reach
+##    for. The other half of the D-pad, ← and →, cycles the loadout instead.
 ##  * **PRIMARY / ALTERNATE** — the two hands, twice over, with the live set
 ##    marked. Changed here only.
 ##
@@ -20,10 +21,10 @@ signal notice(text: String, is_error: bool)
 signal value_settled
 
 const FRAME_SIZE := Vector2(1060, 604)
-## No "swap set" shortcut in the hint on purpose: the button that swaps in play
-## is D-pad ↓, and inside a menu D-pad ↓ is how focus moves. Rather than teach a
-## second, contradictory binding, the swap is a focusable button and the detail
-## pane names the in-play one.
+## No "swap set" shortcut in the hint on purpose: the buttons that cycle the
+## loadout in play are D-pad ← / →, and inside a menu ← / → is how focus moves.
+## Rather than teach a second, contradictory binding, the swap is a focusable
+## button and the detail pane names the in-play one.
 const HINT := "↑↓←→ Select    Enter / A Bind    Esc / B Back"
 
 ## Sized so the whole screen -- header, three cards, footer -- fits inside 720p
@@ -49,7 +50,8 @@ const HAND_NAMES := {&"left": "LEFT HAND", &"right": "RIGHT HAND"}
 ## `set_index * 2 + hand_index` -> the button. Flat because the focus wiring
 ## walks it as a grid and a nested array only makes that harder to read.
 var _slots: Array[Button] = []
-## Indexed by Game.QUICK_LEFT / QUICK_UP / QUICK_RIGHT, not by screen order.
+## Indexed by Game.QUICK_UP / QUICK_DOWN, which here does match screen order --
+## stated rather than assumed, because it did not match when there were three.
 var _quick_slots: Array[Button] = []
 var _set_frames: Array[PanelContainer] = []
 var _set_marks: Array[Label] = []
@@ -172,10 +174,15 @@ func _build() -> void:
 	frow.add_child(_back)
 
 
-## The three C-buttons, drawn in the physical shape of the D-pad they sit on:
-## ← and → flanking ↑, with the ↓ direction spelled out beneath as the swap.
+## The two item buttons, drawn in the physical shape of the D-pad half they sit
+## on: ↑ stacked over ↓, with ← → spelled out beside them as the loadout cycle.
 ## docs/CONTRACT.md §2.5 #6 — the arrangement IS the label. A vertical list of
-## "Item 1 / Item 2 / Item 3" makes the player translate, every time.
+## "Item 1 / Item 2" makes the player translate, every time.
+##
+## It was a three-across row when ← ↑ → were all item buttons. The loadout took
+## the horizontal pair (see the `loadout_prev` note in project.godot), so the
+## shape had to follow the pad down to a column — a row of two labelled ▲ ▼
+## would be the arrangement lying about the buttons it stands for.
 func _build_quick(parent: Node) -> void:
 	var card := PanelContainer.new()
 	card.name = "Quick"
@@ -191,19 +198,16 @@ func _build_quick(parent: Node) -> void:
 	caption.text = "ITEM BUTTONS"
 	inner.add_child(caption)
 
-	var cross := HBoxContainer.new()
+	var cross := VBoxContainer.new()
 	cross.alignment = BoxContainer.ALIGNMENT_CENTER
 	cross.add_theme_constant_override("separation", 12)
 	inner.add_child(cross)
 
-	# Order on screen is ← ↑ →, which is the order they sit on the pad. The
-	# slot indices are NOT in that order (LEFT=0, UP=1, RIGHT=2 happens to
-	# match, but the mapping is stated rather than assumed).
+	# Order on screen is ↑ then ↓, which is the order they sit on the pad.
 	_quick_slots.resize(Game.QUICK_SLOTS)
 	for entry in [
-		{"slot": Game.QUICK_LEFT, "glyph": "◄", "action": &"item_left"},
 		{"slot": Game.QUICK_UP, "glyph": "▲", "action": &"item_up"},
-		{"slot": Game.QUICK_RIGHT, "glyph": "►", "action": &"item_right"},
+		{"slot": Game.QUICK_DOWN, "glyph": "▼", "action": &"item_down"},
 	]:
 		_quick_slots[entry["slot"]] = _make_quick(cross, entry["slot"],
 			entry["glyph"], entry["action"])
@@ -215,7 +219,7 @@ func _build_quick(parent: Node) -> void:
 	swap_note.theme_type_variation = &"MenuHint"
 	swap_note.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	swap_note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	swap_note.text = "▼  swaps the loadout below"
+	swap_note.text = "◄ ►  cycle the loadout below"
 	foot.add_child(swap_note)
 	_swap = Button.new()
 	_swap.theme_type_variation = &"MenuRow"
@@ -447,17 +451,23 @@ func _build_detail(parent: Node) -> void:
 	col.add_child(_detail_legend)
 
 
-## Grid wiring, done by hand because MenuUtil.chain does columns and this is a
-## 2x2 with a button under it. Left/right wraps within a row; up/down walks the
-## whole column and lands on Swap Set at the bottom, so there is no orphan.
+## Grid wiring, done by hand because MenuUtil.chain does closed loops and this is
+## a column of two over a 2x2 with a button under it. Left/right wraps within a
+## row; up/down walks the whole thing and lands on Swap Set at the bottom, so
+## there is no orphan.
 func _wire_focus() -> void:
-	# The bind cross, left to right, wrapping.
+	# The bind column, top to bottom. This used to be a wrapping ROW of three and
+	# the fan-out below it had to decide which hand each of ← ↑ → fell to; two
+	# stacked buttons make that a straight line, and the whole column falls into
+	# the left hand because that is the slot directly beneath it.
 	var cross: Array[Button] = [
-		_quick_slots[Game.QUICK_LEFT],
 		_quick_slots[Game.QUICK_UP],
-		_quick_slots[Game.QUICK_RIGHT],
+		_quick_slots[Game.QUICK_DOWN],
 	]
-	MenuUtil.chain_row(cross)
+	MenuUtil.link_down(cross[0], cross[1])
+	for b in cross:
+		b.focus_neighbor_left = ^"."
+		b.focus_neighbor_right = ^"."
 
 	var cols := HANDS.size()
 	for i in _slots.size():
@@ -469,13 +479,9 @@ func _wire_focus() -> void:
 		var bottom := _slots[cols + col]
 		MenuUtil.link_down(top, bottom)
 		MenuUtil.link_down(bottom, _swap)
-		# Down out of the cross lands on the hands. The cross has three columns
-		# and the hands have two, so ← and ↑ both fall to the left hand and →
-		# falls to the right — the nearest slot under the finger, not index 0.
-		MenuUtil.link_down(cross[col if col < cols else cols - 1], top)
-	MenuUtil.link_down(cross[cross.size() - 1], _slots[cols - 1])
+	MenuUtil.link_down(cross[cross.size() - 1], _slots[0])
 	# Swap Set is the last control on the screen, so it closes the loop back to
-	# the top of the cross -- everything here is reachable by pressing one
+	# the top of the column -- everything here is reachable by pressing one
 	# direction repeatedly and nothing is an orphan. The way out used to be this
 	# last stop; it lives on the POUCH now, with the numbers it is decided from.
 	_swap.focus_neighbor_bottom = _swap.get_path_to(cross[0])
@@ -486,11 +492,11 @@ func _wire_focus() -> void:
 
 # --- State ------------------------------------------------------------------
 
-## Focus entry point when the screen opens: the ← item button, because binding
+## Focus entry point when the screen opens: the ↑ item button, because binding
 ## items is what this screen is for and the hands below it rarely change.
 func focus_first() -> void:
-	if not _quick_slots.is_empty() and _quick_slots[Game.QUICK_LEFT] != null:
-		_quick_slots[Game.QUICK_LEFT].grab_focus()
+	if not _quick_slots.is_empty() and _quick_slots[Game.QUICK_UP] != null:
+		_quick_slots[Game.QUICK_UP].grab_focus()
 
 
 func refresh() -> void:
@@ -512,7 +518,7 @@ func refresh() -> void:
 	elif _quick_slots.has(focused):
 		_describe_quick(focused as Button)
 	else:
-		_describe_quick(_quick_slots[Game.QUICK_LEFT])
+		_describe_quick(_quick_slots[Game.QUICK_UP])
 
 
 func _paint(b: Button) -> void:
@@ -651,7 +657,8 @@ func _describe(b: Button) -> void:
 	if ammo == &"arrows":
 		_detail_ammo.text = "%d arrows" % Game.arrows
 
-	# Hands are changed HERE and nowhere else -- the D-pad belongs to the item
-	# buttons now. Saying so on the screen is the only place a player finds out.
-	_detail_legend.text = "Confirm to change this hand. In play, %s swaps to the other set." % (
-		MenuUtil.pad_label(&"item_down"))
+	# Hands are changed HERE and nowhere else -- in play the D-pad only cycles
+	# between the sets you built here. Saying so on the screen is the only place
+	# a player finds out.
+	_detail_legend.text = "Confirm to change this hand. In play, %s / %s cycle the sets." % (
+		[MenuUtil.pad_label(&"loadout_prev"), MenuUtil.pad_label(&"loadout_next")])

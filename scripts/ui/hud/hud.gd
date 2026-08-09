@@ -124,9 +124,13 @@ const HEAT_BREAK_FLASH := 0.35
 const KIT_ACTION := {
 	&"sword": &"attack",
 	&"shield": &"shield",
-	&"bow": &"use_item",
-	&"hookshot": &"use_item",
+	&"bow": &"heavy",
+	&"hookshot": &"heavy",
 }
+## Half-height of a loadout caret, in reference px. Also its half-width — they
+## are drawn as equilateral-ish triangles so ◄ and ► read at a glance in a HUD
+## that is 40 px tall in the corner.
+const CPAD_CARET := 9.0
 ## The hands, left to right as they are on the body. What is IN them comes from
 ## Game.armament(); this is no longer a fixed list of everything that exists.
 ##
@@ -605,8 +609,13 @@ const LEGEND := [
 	[&"", "MOVE"],
 	[&"", "LOOK"],
 	[&"z_target", "LOCK-ON"],
-	[&"attack", "SWORD (HOLD=CHARGE)"],
-	[&"use_item", "USE ITEM"],
+	[&"attack", "SWORD"],
+	# One row for the trigger, and it has to carry three meanings without becoming
+	# a paragraph: the heavy, the charge that a hold turns it into, and the fact
+	# that a drawn item takes the button over entirely. Naming the HOLD is the
+	# same argument the dodge row below makes — there is no tell for a button you
+	# are not holding down, so a player who only taps will never find the spin.
+	[&"heavy", "HEAVY (HOLD=SPIN) / ITEM"],
 	# Two things are named here that a button-masher would never find: the dash,
 	# which is a button you already know pressed in a stance you already know, and
 	# the fact that the guard LOCKS. On the pad `shield` is the left trigger and
@@ -623,18 +632,15 @@ const LEGEND := [
 	# button expecting the roll that used to come out underneath the run gets
 	# nothing, and "HOLD=RUN" alone reads as an addition rather than a choice.
 	#
-	# On a pad this row swallows the INTERACT row below it: both are A, and two
-	# entries reading "A DODGE   A INTERACT" is a legend asking the player to
-	# work out which one they get. See `_legend`.
-	# The leap is named on this row and not on `use_item`, where it used to sit,
-	# because this is the button that throws it: guard up, stick still, A. It
-	# rides the DODGE label rather than getting a row of its own for the same
-	# reason the INTERACT row is swallowed below — they are one button, and a
-	# legend that lists a button twice is asking the player to work out which
-	# one they get.
-	[&"context", "TAP=DODGE/LEAP HOLD=RUN"],
+	# The LEAP came off this row when it came off this button. It is the trigger's
+	# now, under a lock, and it is not named separately up there either — a legend
+	# that lists every branch of a contextual button is a manual, not a legend.
+	[&"context", "TAP=DODGE HOLD=RUN"],
 	[&"jump", "JUMP"],
 	[&"interact", "INTERACT"],
+	# The one verb on the pad a player will not find by pressing things: nothing
+	# in the world prompts for it and nothing goes wrong if you never press it.
+	[&"sheathe", "PUT AWAY"],
 	[&"inventory", "POUCH"],
 ]
 ## What drives movement and the camera on each device. The sticks are bound as
@@ -670,11 +676,12 @@ func _legend() -> String:
 			continue  # nothing bound on this device — say nothing rather than lie
 		if action == &"shield":
 			verb = "GUARD/LOCK (+%s DASH)" % _hotkey(&"attack")
-		# The dodge and the interact are one button on a pad and two on a
-		# keyboard, so the legend has to be able to be both shapes. Merged, the
-		# row says what the button DOES — which of the two you get is decided by
-		# whether anything is in reach, and the prompt line already says when
-		# something is.
+		# The dodge and the interact were ONE button on a pad for a while, and this
+		# merge is what kept the legend from printing "A DODGE   A INTERACT" and
+		# asking the player to work out which one they got. They are B and A now
+		# and neither branch fires — kept because the layout has moved before, and
+		# a legend that silently prints a button twice is how you find out it moved
+		# back.
 		elif action == &"context" and _hotkey(&"interact") == cap:
 			verb = "TAP=DODGE/TALK HOLD=RUN"
 		elif action == &"interact" and _hotkey(&"context") == cap:
@@ -878,12 +885,24 @@ func _heat_color() -> Color:
 ## instead of pushing the cross off the screen. The cross is the anchor because
 ## it is the one whose SHAPE carries meaning: it has to stay a cross, in the
 ## corner, whatever the hands beside it are doing.
+##
+## The cross is ONE cell wide now, with a caret's worth of wing on each side —
+## it used to be three cells across, back when the item buttons owned all four
+## directions. Measured the same way regardless: from the right edge inwards, so
+## the hands pair beside it moves with it instead of colliding with it.
 func _cross_origin(s: Vector2) -> Vector2:
 	var cell := Pal.px(Pal.CELL, s.y)
-	var gap := Pal.px(Pal.CELL_GAP, s.y)
 	return Vector2(
-		Pal.CLUSTER_RIGHT * s.x - (cell * 3.0 + gap * 2.0),
+		Pal.CLUSTER_RIGHT * s.x - (cell + _cpad_wing(s) * 2.0),
 		Pal.CLUSTER_TOP * s.y)
+
+
+## Room beside the item column for one loadout caret: the caret's own half-width
+## twice over, plus the gap that keeps it off the cell border. One function so
+## the layout and the drawing cannot disagree about how wide the cluster is —
+## which is exactly how a cluster ends up half off the right edge.
+func _cpad_wing(s: Vector2) -> float:
+	return Pal.px(Pal.CELL_GAP + CPAD_CARET * 2.0, s.y)
 
 
 ## The hands sit to the LEFT of the cross and centred against its two rows, so
@@ -969,23 +988,26 @@ func _draw_hands(s: Vector2) -> void:
 				Pal.px(1.0, s.y), Pal.MOTH)
 
 
-## The three item buttons, in the shape of the D-pad: ▲ above, ◄ and ► below it,
-## with the ▼ direction marked as the loadout swap. The arrangement is the
-## label -- a row of three cells would need three glyphs and the player would
-## still have to translate "cell 2" into "up" every time (CONTRACT §2.5 #6).
+## The two item buttons, in the shape of the D-pad they sit on: ▲ above ▼, with
+## the ◄ and ► directions marked as the loadout cycle. The arrangement is the
+## label -- a row of cells would need a glyph apiece and the player would still
+## have to translate "cell 2" into "down" every time (CONTRACT §2.5 #6).
+##
+## It was a three-cell cross with the swap on ▼. The horizontal pair went to the
+## loadout when the loadout got the D-pad, so what is drawn here is now exactly
+## what the D-pad does: two bindable cells on the vertical, two carets on the
+## horizontal, and nothing in the middle to mislead.
 func _draw_cpad(s: Vector2) -> void:
 	var cell := Pal.px(Pal.CELL, s.y)
 	var gap := Pal.px(Pal.CELL_GAP, s.y)
 	var origin := _cross_origin(s)
-	var mid := origin.x + cell + gap
+	var mid := origin.x + _cpad_wing(s)
 	var held: StringName = Game.armament(Game.HAND_RIGHT)
 
 	for entry in [
 		{"slot": Game.QUICK_UP, "at": Vector2(mid, origin.y), "act": &"item_up"},
-		{"slot": Game.QUICK_LEFT, "at": Vector2(origin.x, origin.y + cell + gap),
-			"act": &"item_left"},
-		{"slot": Game.QUICK_RIGHT, "at": Vector2(mid + cell + gap, origin.y + cell + gap),
-			"act": &"item_right"},
+		{"slot": Game.QUICK_DOWN, "at": Vector2(mid, origin.y + cell + gap),
+			"act": &"item_down"},
 	]:
 		var slot: int = entry["slot"]
 		var id: StringName = Game.quick(slot)
@@ -1007,21 +1029,21 @@ func _draw_cpad(s: Vector2) -> void:
 				Vector2(r.end.x - Pal.px(3.0, s.y), r.end.y - Pal.px(10.0, s.y)),
 				Pal.px(1.0, s.y), Pal.MOTH)
 
-	# ▼ swaps the set. A caret rather than a cell: it is not a bindable button,
-	# and drawing it as one would invite the player to try — which is also why it
-	# is the one thing in the cluster with no key cap.
+	# ◄ and ► cycle the set. Carets rather than cells, for the reason the swap
+	# caret was one: they are not bindable buttons, and drawing them as cells
+	# would invite the player to try to put a bottle on one — which is also why
+	# they are the only things in the cluster with no key cap.
 	#
-	# Cleared past the bottom row's caps, not past the bottom row: the caps hang
-	# below the cells they belong to, and the caret's old +3 px put it inside the
-	# ◄ and ► lettering the moment the caps arrived.
-	var caps_bottom := origin.y + cell * 2.0 + gap + Pal.px(Pal.KEYCAP_GAP, s.y) \
-		+ PixelFont.height(Pal.px(Pal.KEYCAP_SCALE, s.y)) + Pal.px(3.0, s.y)
-	var tip := Vector2(mid + cell * 0.5, caps_bottom + Pal.px(6.0, s.y))
-	var w := Pal.px(9.0, s.y)
-	var h := Pal.px(9.0, s.y)
-	_canvas.draw_colored_polygon(PackedVector2Array([
-		tip + Vector2(-w, 0.0), tip + Vector2(w, 0.0), tip + Vector2(0.0, h),
-	]), Pal.ASH)
+	# Placed on the vertical MIDDLE of the two cells, which is where they are on
+	# the pad. Sitting them beside one cell or the other would say they belonged
+	# to it.
+	var cy := origin.y + cell + gap * 0.5
+	var w := Pal.px(CPAD_CARET, s.y)
+	for dir: float in [-1.0, 1.0]:
+		var tip := Vector2(mid + cell * 0.5 + dir * (cell * 0.5 + _cpad_wing(s)), cy)
+		_canvas.draw_colored_polygon(PackedVector2Array([
+			Vector2(tip.x - dir * w, cy - w), Vector2(tip.x - dir * w, cy + w), tip,
+		]), Pal.ASH)
 
 
 ## One item's icon in a cell, or its two letters if the bake is missing. An

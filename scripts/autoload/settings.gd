@@ -69,7 +69,20 @@ const DEFAULT_PATH := "user://settings.cfg"
 ##     see a dead button, they would just never get the layout the game now
 ##     documents, and every prompt the HUD draws would name a button that does
 ##     something else. Discarding is correct.
-const BIND_SCHEMA := 10
+## 11: THE SHOULDER PASS, and it moves or renames more than any entry above.
+##     `attack` X -> RB. `use_item` was RENAMED to `heavy` and kept RT, gaining
+##     the heavy swing, the charge and the jump attack. `context` A -> B.
+##     `interact` kept A and lost everything else. `sheathe` was ADDED on X.
+##     `item_left` / `item_right` were REPLACED by `loadout_prev` /
+##     `loadout_next` on the same two D-pad directions.
+##     A saved layout from 10 is the worst case this const has ever had to
+##     catch, because most of it would still "work": the sword would be back on
+##     X while RB did nothing, the dodge would be back on top of `interact` on A
+##     with the arbitration that used to resolve it now deleted, and the two
+##     renamed actions would simply not be in the file at all -- so the D-pad
+##     would cycle nothing and the trigger would keep the item half of a button
+##     that is now the whole sword. Discarding is correct.
+const BIND_SCHEMA := 11
 
 ## Where preferences persist. A test or a screenshot director that rebinds keys
 ## MUST NOT write to the player's real settings — an earlier menu test left
@@ -320,8 +333,9 @@ func _capture_defaults() -> void:
 func rebindable_actions() -> Array[StringName]:
 	return [
 		&"move_up", &"move_down", &"move_left", &"move_right",
-		&"z_target", &"attack", &"use_item", &"shield", &"context", &"interact",
-		&"item_left", &"item_up", &"item_right", &"first_person",
+		&"z_target", &"attack", &"heavy", &"shield", &"context", &"interact",
+		&"sheathe", &"loadout_prev", &"loadout_next", &"item_up", &"item_down",
+		&"first_person",
 		&"pause", &"inventory", &"map",
 	]
 

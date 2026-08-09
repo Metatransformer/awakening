@@ -76,7 +76,7 @@ var has_compass: bool = false
 var items: Dictionary[StringName, bool] = {}
 
 # --- Quick slots: the C-buttons ---------------------------------------------
-## What is bound to D-pad ←, ↑ and → — Ocarina's C-buttons, in that order.
+## What is bound to D-pad ↑ and ↓ — Ocarina's C-buttons, in that order.
 ##
 ## Pressing one puts the bound item in the RIGHT hand; pressing it again puts
 ## it away. That is what a C-button does in the source material: C-right with
@@ -84,11 +84,16 @@ var items: Dictionary[StringName, bool] = {}
 ## which is the whole reason it beats cycling — you reach for the hookshot
 ## because you want the hookshot, not because it is two presses from the sword.
 ##
-## `&""` is an unbound slot and is not an error; a new game has three of them.
-const QUICK_SLOTS := 3
-const QUICK_LEFT := 0
-const QUICK_UP := 1
-const QUICK_RIGHT := 2
+## THERE WERE THREE OF THESE, on ←, ↑ and →, with the loadout swap on ↓. The
+## horizontal pair went to `loadout_prev` / `loadout_next` (see the D-pad note in
+## project.godot): four directions spent on one idea left the SET — the thing
+## Elden Ring puts on this D-pad — with no button of its own, and a set swap is
+## the coarse gear change a bound item cannot be.
+##
+## `&""` is an unbound slot and is not an error; a new game has two of them.
+const QUICK_SLOTS := 2
+const QUICK_UP := 0
+const QUICK_DOWN := 1
 ## What may be bound, in bind-cycle order. The empty binding is first so
 ## clearing a slot is one press past the end rather than a separate verb.
 ##
@@ -97,12 +102,13 @@ const QUICK_RIGHT := 2
 ## thing the player changes at the alchemist. A const cannot answer that.
 const QUICK_POOL: Array[StringName] = [&"", &"bow", &"hookshot"]
 
-var quick_slots: Array[StringName] = [&"", &"", &""]
+var quick_slots: Array[StringName] = [&"", &""]
 
 # --- Armaments --------------------------------------------------------------
 ## Two loadouts, each with a right hand and a left hand, exactly as Elden Ring
-## arranges them. dpad up swaps the SET; dpad left/right cycle one hand within
-## whatever you own.
+## arranges them. dpad ← / → cycle the SET; the hands within a set are changed on
+## the equipment screen (`cycle_armament`), which is the one place a change you
+## have to look at belongs.
 ##
 ## The alternate set is bow and arrows, which is the point of having two: the
 ## primary answers "something is in front of me" and the alternate answers
@@ -138,13 +144,13 @@ var flags: Dictionary[StringName, bool] = {}
 ##
 ## This is scaffolding and it is meant to be deleted. It is one constant and one
 ## call precisely so that deleting it is a two-line change: empty the array and
-## the game goes back to a hero with a sword, three empty C-buttons and an
+## the game goes back to a hero with a sword, two empty C-buttons and an
 ## alternate loadout that names a bow he has not found — which is the real
 ## starting state and the one the equipment screen's "(not owned)" text exists
 ## to describe.
 ##
 ## `grant()` auto-binds each item to the first free C-button in order, so the
-## bow lands on dpad ← and the hookshot on dpad ↑ with no extra wiring.
+## bow lands on dpad ↑ and the hookshot on dpad ↓ with no extra wiring.
 const STARTER_KIT: Array[StringName] = [&"bow", &"hookshot"]
 ## Enough to miss with. A quiver you can empty in one fight turns a test of the
 ## bow into a test of the arrow economy.
@@ -190,7 +196,7 @@ func reset() -> void:
 	items.clear()
 	bottle_contents.clear()
 	draughts.clear()
-	quick_slots = [&"", &"", &""]
+	quick_slots = [&"", &""]
 	loadout = [
 		{HAND_RIGHT: &"sword", HAND_LEFT: &"shield"},
 		{HAND_RIGHT: &"bow", HAND_LEFT: &"arrow"},
@@ -280,12 +286,24 @@ func _process(delta: float) -> void:
 ## Spend, or refuse. Returns false when there is not enough, and the caller is
 ## expected to NOT perform the action -- otherwise the bar and the dodge
 ## disagree, which is worse than having no bar.
-func spend_stamina(cost: float) -> bool:
+##
+## `partial` is the SWING rule, and it is a different rule (K.STAMINA_SWING).
+## Strict, the bar must hold the whole cost or nothing happens: that is right for
+## a dodge, where a roll that half happens is a death, and it is why three rolls
+## from full is exactly three. Partial, any stamina above zero buys the action
+## and the cost clamps at the floor -- so a chain is never interrupted between
+## its own steps, it simply leaves you with nothing afterwards. Elden Ring prices
+## attacks the second way and dodges the first, and the reason is legibility: a
+## swing refused halfway through a combo reads as the game dropping an input,
+## while an empty bar after the combo reads as a decision you made.
+func spend_stamina(cost: float, partial: bool = false) -> bool:
 	if cost <= 0.0:
 		return true
-	if stamina < cost:
+	if stamina < cost and not partial:
 		return false
-	stamina -= cost
+	if stamina <= 0.0:
+		return false
+	stamina = maxf(0.0, stamina - cost)
 	_stamina_hold = K.STAMINA_DELAY
 	Bus.stamina_changed.emit(stamina, max_stamina)
 	return true
@@ -740,9 +758,25 @@ func armament(hand: StringName) -> StringName:
 	return set_data.get(hand, &"")
 
 
-## Swap primary <-> alternate. dpad up.
+## Swap primary <-> alternate. The equipment screen's button, and the two-set
+## special case of `cycle_loadout` below.
 func swap_loadout() -> void:
 	loadout_set = ALTERNATE if loadout_set == PRIMARY else PRIMARY
+	_announce_loadout()
+
+
+## Step the live SET, wrapping. dpad ← is -1 and dpad → is +1.
+##
+## An index step rather than a bool toggle even though there are exactly two sets
+## today and both directions therefore land on the same one. That is not
+## indulgence: the D-pad is now the loadout's button, and the difference between
+## "cycles the set" and "toggles between the two sets" is whether a third set is
+## a data change or a control change. It is a data change.
+func cycle_loadout(dir: int) -> void:
+	var n := loadout.size()
+	if n <= 1:
+		return
+	loadout_set = posmod(clampi(loadout_set, 0, n - 1) + signi(dir), n)
 	_announce_loadout()
 
 

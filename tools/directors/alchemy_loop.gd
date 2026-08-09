@@ -271,13 +271,13 @@ func _bottles(rig) -> void:
 # --- G. Binding it, and drinking it -----------------------------------------
 
 func _bind(rig) -> void:
-	# Bound by the SAME call the equipment screen makes, to the same three
-	# buttons, so this is the player's path and not a back door.
-	_ck("G0 a bottle is bindable", Game.bind_quick(Game.QUICK_LEFT, Game.bottle_id(0)))
+	# Bound by the SAME call the equipment screen makes, to the same buttons, so
+	# this is the player's path and not a back door. There are two item buttons
+	# and three bottles, which is the point of the rebind in `_drink` below.
+	_ck("G0 a bottle is bindable", Game.bind_quick(Game.QUICK_UP, Game.bottle_id(0)))
 	_ck("G1 the button holds it",
-		Game.quick(Game.QUICK_LEFT) == Game.bottle_id(0))
-	Game.bind_quick(Game.QUICK_UP, Game.bottle_id(1))
-	Game.bind_quick(Game.QUICK_RIGHT, Game.bottle_id(2))
+		Game.quick(Game.QUICK_UP) == Game.bottle_id(0))
+	Game.bind_quick(Game.QUICK_DOWN, Game.bottle_id(1))
 	await rig.wait_frames(8)
 	await rig.capture(out.path_join("a_04_bound.png"))
 
@@ -318,7 +318,7 @@ func _drink(rig) -> void:
 	Bus.player_health_changed.emit(Game.quarters, Game.max_quarters)
 	await rig.wait_frames(4)
 	var hurt := Game.quarters
-	await rig.tap(["item_left"])
+	await rig.tap(["item_up"])
 	await rig.wait_frames(12)
 	print("ALCHEMY drank heart quarters=%d -> %d bottle0=%s" % [
 		hurt, Game.quarters, Game.bottle(0)])
