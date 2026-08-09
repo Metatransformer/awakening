@@ -37,6 +37,19 @@ the loser**. Do not land both and wire a switch. One of each system, always.
 - **Commit as soon as the tree is consistent.** A merge resolution sat
   uncommitted here and was wiped by a stray `git reset --hard`. Hours, gone.
   Commit, then continue.
+- **Sweeping up another agent's uncommitted work is fine. Commit anyway.** The
+  primary worktree is shared and usually has two or three streams half-written
+  in it, often in the same file, sometimes in a binary like
+  `assets/animations/hero_anims.res` that no hunk-level split can separate.
+  Do not stall on that. A commit does not damage anyone's work — the files stay
+  exactly as they are on disk, and an untidy commit is recoverable in a way that
+  §0's duplicated-metagame outcome is not. Stage what you can attribute, say in
+  the message what else came along for the ride, and land it. The thing that has
+  actually cost this repo time is work that stayed invisible, never a shared
+  commit.
+
+  This is not a licence to *destroy*: the `git checkout HEAD -- <file>` rule
+  above still stands, because that one removes work rather than recording it.
 - **Land it on `main` when the card is done. Do not wait to be asked.** A
   verified branch sitting in a worktree is not finished work — it is work the
   next session cannot see, and this repo has already paid for that once: two
