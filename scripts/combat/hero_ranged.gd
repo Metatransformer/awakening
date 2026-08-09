@@ -53,6 +53,17 @@ extends Node3D
 ## advance and rooting a player for an unbounded one is a freeze with a button
 ## attached.
 ##
+## ## The hookshot bites monsters, and does them no harm at all
+##
+## A shot that lands on a body is a THIRD outcome, alongside "found an anchor" and
+## "played out to nothing". It deals zero damage — deliberately, not as an
+## oversight; `HealthComponent.apply_hit` would refuse a zero-quarter blow even if
+## one were sent — and it does not pull the hero either, because reeling him into
+## the monster he has just stopped would spend the shot's own reward on closing
+## the distance he wanted. What it buys is a second of `K.HOOK_FREEZE`: the thing
+## goes blue, holds still, and thaws (`Enemy.freeze`). That is the swing, or the
+## walk past, or the time to nock an arrow.
+##
 ## ## Aim comes from the camera, not from the body
 ##
 ## The hero's facing is a yaw. A hookshot that can only be aimed in yaw cannot
@@ -134,6 +145,10 @@ var _hook_ready: bool = false
 var _hook_active: bool = false
 var _hook_bit: bool = false
 var _hook_pull: Vector3 = Vector3.ZERO
+## The monster the head is going to bite, if it is going to bite one. A THIRD
+## outcome, not a flavour of the other two: the chain found something (`_hook_bit`
+## is true, the clang plays) but nothing gets pulled anywhere — see `_tick_hook`.
+var _hook_foe: Enemy = null
 
 var _query := PhysicsRayQueryParameters3D.new()
 
@@ -311,6 +326,7 @@ func _fire_hookshot() -> bool:
 	var anchor := from + aim * reach
 	var pull := Vector3.ZERO
 	var bit := false
+	var foe: Enemy = null
 
 	# An authored ring first. It is the designer saying "this one", and it wins
 	# over whatever wall happens to be behind it.
@@ -322,24 +338,35 @@ func _fire_hookshot() -> bool:
 	else:
 		_query.from = from
 		_query.to = from + aim * reach
-		_query.collision_mask = K.L_WORLD | K.L_HOOK
+		# L_ENEMY is in here so the chain can BITE a monster rather than passing
+		# through one. It was absent for as long as the hookshot was only a
+		# traversal item, and the tell was unmistakable once you looked: the head
+		# flew through a skeleton's ribcage and stuck in the wall behind it.
+		_query.collision_mask = K.L_WORLD | K.L_HOOK | K.L_ENEMY
 		_query.collide_with_bodies = true
 		_query.collide_with_areas = false
 		_query.exclude = [_hero.get_rid()]
 		var hit := get_world_3d().direct_space_state.intersect_ray(_query)
 		if not hit.is_empty():
 			anchor = hit["position"] as Vector3
-			var normal := hit["normal"] as Vector3
-			# Land ON the surface the head bit, standing off it along its own
-			# normal. Without the stand-off the pull ends inside the wall and
-			# move_and_slide spends the next second squeezing him back out.
-			pull = anchor + normal * (K.HERO_RADIUS + 0.25)
-			# A shot into a ceiling would otherwise leave him hanging in the air
-			# under it; drop the landing to where his feet can be.
-			if normal.y > 0.6:
-				pull.y = anchor.y + 0.05
-			elif normal.y < -0.6:
-				pull = anchor + Vector3.DOWN * (K.HERO_H + 0.2)
+			foe = hit["collider"] as Enemy
+			# A monster is an anchor that does not hold. The chain bites, the
+			# clang plays, and the hero stays exactly where he is — a hookshot
+			# that reeled you into the thing you just froze would spend its own
+			# reward walking you into claw range. `pull` stays ZERO and
+			# `_tick_hook` never reads it.
+			if foe == null:
+				var normal := hit["normal"] as Vector3
+				# Land ON the surface the head bit, standing off it along its own
+				# normal. Without the stand-off the pull ends inside the wall and
+				# move_and_slide spends the next second squeezing him back out.
+				pull = anchor + normal * (K.HERO_RADIUS + 0.25)
+				# A shot into a ceiling would otherwise leave him hanging in the
+				# air under it; drop the landing to where his feet can be.
+				if normal.y > 0.6:
+					pull.y = anchor.y + 0.05
+				elif normal.y < -0.6:
+					pull = anchor + Vector3.DOWN * (K.HERO_H + 0.2)
 			bit = true
 
 	if not _hero.request_hookshot(HOOK_FIRE_TIME, aim):
@@ -347,6 +374,7 @@ func _fire_hookshot() -> bool:
 
 	_hook_active = true
 	_hook_bit = bit
+	_hook_foe = foe
 	_hook_pull = pull
 	_hero.hook_begin()
 	_tether.begin(from, anchor, pull)
@@ -385,6 +413,7 @@ func _best_hookable(from: Vector3, aim: Vector3, reach: float) -> HookTarget:
 func _end_hook() -> void:
 	_hook_active = false
 	_hook_bit = false
+	_hook_foe = null
 	_tether.clear()
 
 
@@ -461,6 +490,18 @@ func _tick_hook(delta: float) -> void:
 		# exactly how far the hookshot reaches, which is the whole information
 		# content of a miss; there is nothing left to do but let go.
 		if not _hook_bit:
+			_hero.hook_end()
+			_end_hook()
+			return
+		# It bit a monster. Zero damage — nothing goes near `HealthComponent`,
+		# which refuses a zero-quarter blow anyway — and the freeze IS the shot's
+		# whole effect. The hero is handed straight back rather than dragged,
+		# because there is nothing here to be dragged to; `Enemy.freeze` owns the
+		# clang and the hit-stop for this one, since it is the body being hit
+		# that knows whether the hit landed on anything.
+		if _hook_foe != null:
+			if is_instance_valid(_hook_foe):
+				_hook_foe.freeze(K.HOOK_FREEZE)
 			_hero.hook_end()
 			_end_hook()
 			return

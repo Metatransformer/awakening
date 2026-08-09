@@ -22,6 +22,16 @@ extends RefCounted
 const HIT_ENERGY := 2.4
 const HIT_SECONDS := 0.17
 
+## How far `ice()` drags each surface's ALBEDO toward the tint at full freeze,
+## and how much emission rides on top. The albedo is the load-bearing half: a
+## dungeon monster is a dark, low-saturation body (STYLEGUIDE §2 caps world
+## surfaces at ~0.25 saturation), and emission alone over that is a faint blue
+## haze rather than a thing encased in ice. Short of 1.0 on purpose — a solid
+## flat blue is a silhouette, and you have to still be able to read WHICH
+## monster you froze.
+const ICE_ALBEDO := 0.78
+const ICE_ENERGY := 0.85
+
 var _host: Node = null
 var _mats: Array[BaseMaterial3D] = []
 ## material instance id -> {enabled, color, energy}. A wraith may be emissive
@@ -83,6 +93,29 @@ func glow(tint: Color, energy01: float) -> void:
 	_write(tint, clampf(energy01, 0.0, 1.0) * HIT_ENERGY)
 
 
+## Frozen solid, at `amount01` of full — 1.0 is the moment the head bites and 0.0
+## is thawed. Driven every frame from the freeze timer for the same reason
+## `glow` is: the thaw can be cut short by a sword or by the monster dying, and a
+## tween that gets killed mid-ramp leaves a body blue for ever.
+##
+## The one call that touches ALBEDO. See ICE_ALBEDO — emission is what a body
+## about to hit you does, and reusing it alone for a body that CANNOT hit you
+## would make the two tells the same picture in different hues.
+func ice(tint: Color, amount01: float) -> void:
+	_kill()
+	var a := clampf(amount01, 0.0, 1.0)
+	for m in _mats:
+		if not is_instance_valid(m):
+			continue
+		var base: Dictionary = _baselines.get(m.get_instance_id(), {})
+		if base.is_empty():
+			continue
+		m.albedo_color = (base["albedo"] as Color).lerp(tint, a * ICE_ALBEDO)
+		m.emission_enabled = true
+		m.emission = tint
+		m.emission_energy_multiplier = a * ICE_ENERGY
+
+
 ## Put every surface back the way the artist left it.
 func restore() -> void:
 	for m in _mats:
@@ -91,6 +124,7 @@ func restore() -> void:
 		var base: Dictionary = _baselines.get(m.get_instance_id(), {})
 		if base.is_empty():
 			continue
+		m.albedo_color = base["albedo"]
 		m.emission = base["color"]
 		m.emission_energy_multiplier = float(base["energy"])
 		m.emission_enabled = bool(base["enabled"])
@@ -124,6 +158,10 @@ func _remember(m: BaseMaterial3D) -> void:
 		"enabled": m.emission_enabled,
 		"color": m.emission,
 		"energy": m.emission_energy_multiplier,
+		# Recorded even though only `ice` writes it. "Off" is not a safe thing to
+		# restore an albedo to either, and a baseline captured lazily by whoever
+		# happens to tint first would be a baseline of the previous tint.
+		"albedo": m.albedo_color,
 	}
 
 
