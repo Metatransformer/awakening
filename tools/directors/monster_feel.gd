@@ -19,6 +19,11 @@ extends RefCounted
 ##     --scene=res://scenes/rooms/town.tscn \
 ##     --director=res://tools/directors/monster_feel.gd --out=/tmp/feel/x.png
 
+## How much image a unit of `Camera3D.h_offset` is worth, at 1280x720 and this
+## project's FOV. Measured by rendering the same shot at several offsets and
+## cross-correlating them -- see `_shake_scale`, which still emits those frames.
+const PX_PER_OFFSET := 37.5
+
 var _fails: int = 0
 
 
@@ -28,9 +33,50 @@ func run(rig) -> void:
 
 	await _struck(rig, out)
 	await _striking(rig, out)
+	await _shake_scale(rig, out)
 
 	if _fails == 0:
 		print("FEEL OK")
+
+
+## What the shake actually looks like, as a picture rather than as arithmetic.
+##
+## Every number in the shake is a fraction of a fraction -- trauma is squared,
+## multiplied by a noise sample that is rarely near 1, and decaying the whole
+## time -- so "peak offset 0.017 of a possible 0.16" is not a thing anyone can
+## judge from the log. These three frames are the same shot at rest, at a landed
+## blow's trauma, and at the ceiling, so the threshold below them is set by
+## looking rather than by guessing.
+func _shake_scale(rig, out: String) -> void:
+	var cam := rig.root.get_viewport().get_camera_3d() as Camera3D
+	if cam == null:
+		return
+	await rig.wait_frames(30)
+
+	# Feel and the scene BOTH have to be held still for this to be an A/B.
+	#
+	# The tree is paused so the three frames differ by the offset and nothing
+	# else -- otherwise the orc walks between shots and the comparison is of two
+	# different pictures. And `Feel` is disabled outright, because it is
+	# PROCESS_MODE_ALWAYS and its shake tick zeroes h_offset/v_offset on every
+	# idle frame where there is no trauma. Writing the camera directly with Feel
+	# still running produced three identical frames: the write happened after the
+	# draw, and Feel wiped it before the next one.
+	var was := Feel.process_mode
+	Feel.process_mode = Node.PROCESS_MODE_DISABLED
+	rig.paused = true
+
+	for shot in [{"n": "feel_10_rest", "o": 0.0},
+			{"n": "feel_11_hit", "o": 0.15},
+			{"n": "feel_12_full", "o": Feel.MAX_OFFSET}]:
+		cam.h_offset = float(shot["o"])
+		cam.v_offset = float(shot["o"]) * 0.6
+		await rig.capture(out.path_join(String(shot["n"]) + ".png"))
+
+	cam.h_offset = 0.0
+	cam.v_offset = 0.0
+	rig.paused = false
+	Feel.process_mode = was
 
 
 # --- Half one: the monster takes a blow --------------------------------------
@@ -89,20 +135,57 @@ func _struck(rig, out: String) -> void:
 	if Engine.time_scale > 0.0:
 		_fail("no hit-stop: Engine.time_scale is %.2f a frame after impact"
 			% Engine.time_scale)
+	# Sampled at frame_post_draw, which is the only moment the camera holds the
+	# values the player actually saw. `GameCamera` works in _physics_process and
+	# ends on `look_at`, which rebuilds the whole basis -- so anywhere else in the
+	# frame the ROLL reads as exactly zero while the offsets, which look_at does
+	# not touch, still hold. Reading it at an arbitrary idle point reported a dead
+	# roll on a shake that was rendering fine.
+	# Every impact number is a PEAK over one window, sampled together.
+	#
+	# Peaks, because a shake is a noise field: any single frame can land on a zero
+	# crossing and read as no shake at all. "Is there a shake" and "can you feel
+	# it" are different questions and only the second one matters.
+	#
+	# Together, because these effects overlap and each one's window is short. A
+	# 20-frame loop added to measure the shake spent the flash's entire 0.17 s
+	# before the flash was read, and reported a hit-flash of 0.000 on a flash that
+	# was working -- a director that breaks the thing it is measuring.
 	var cam := rig.root.get_viewport().get_camera_3d() as Camera3D
 	if cam == null:
 		_fail("no 3D camera to shake")
-	else:
-		var moved := absf(cam.h_offset) + absf(cam.v_offset) + absf(cam.rotation.z)
-		if moved <= 0.0001:
+	var peak_off := 0.0
+	var peak_roll := 0.0
+	var want_roll := 0.0
+	var lit := 0.0
+	var other := 0.0
+	for i in 20:
+		await RenderingServer.frame_post_draw
+		if cam != null:
+			peak_off = maxf(peak_off, absf(cam.h_offset) + absf(cam.v_offset))
+			peak_roll = maxf(peak_roll, absf(cam.rotation.z))
+			want_roll = maxf(want_roll, absf(Feel._roll))
+		lit = maxf(lit, _emission(foe))
+		other = maxf(other, _emission(bystander))
+
+	if cam != null:
+		# Reported in PIXELS, because that is the only unit anyone can judge.
+		# `h_offset` is a frustum shift whose magnitude means nothing on its own --
+		# the first version of this beat passed a shake of 0.6 px because 0.017 of
+		# a possible 0.16 sounds like a tenth of something.
+		var px := peak_off * PX_PER_OFFSET
+		print("FEEL shake peak offset=%.4f (%.1f px) roll=%.4f (wanted %.4f)"
+			% [peak_off, px, peak_roll, want_roll])
+		if peak_off <= 0.0001:
 			_fail("no shake: the camera did not move on impact")
-		else:
-			print("FEEL shake offset=%.4f roll=%.4f"
-				% [absf(cam.h_offset) + absf(cam.v_offset), cam.rotation.z])
+		elif px < 3.0:
+			_fail("the shake is invisible: a landed blow moves the image %.1f px"
+				% px)
+		if peak_roll <= 0.00001:
+			_fail("no roll: the camera shook but never tilted --"
+				+ " look_at is winning the frame")
 
 	# Did the body actually go white, and did it go white ALONE?
-	var lit := _emission(foe)
-	var other := _emission(bystander)
 	if lit <= 0.01:
 		_fail("no hit-flash: the struck body's emission is %.3f" % lit)
 	else:

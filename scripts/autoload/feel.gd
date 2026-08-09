@@ -11,19 +11,36 @@ extends CanvasLayer
 ##
 ## Emit at it. Never hold a reference to it:
 ##   Bus.request_hitstop.emit(K.HITSTOP_LIGHT)
-##   Bus.request_shake.emit(0.4, 0.2)
+##   Bus.request_shake.emit(0.55, 0.18)
+##
+## **What the strength number means.** Trauma is 0..1 where 1 is the biggest
+## shake the game has, and it is SQUARED before it moves anything -- so pick from
+## the top half of the range or you are asking for nothing. The first pass here
+## used 0.24-0.45, which reads as "a bit less than half" and arrives as 6-20% of
+## an already-subtle maximum; measured peak on a landed blow was 2%, i.e. a shake
+## that shipped, passed its own beat, and could not be seen. Landing a blow is
+## ~0.5, killing something ~0.65, being hit yourself ~0.8.
 ##
 ## A CanvasLayer rather than a plain Node because the damage vignette is a
 ## full-screen overlay this owns. Layer 60: above the HUD (50), below the pause
 ## menu (100) and Flow's fade (200) -- being hurt should tint the health bar, and
 ## should not tint the menu you opened to look at it.
 
-## Frustum shift at full trauma, in the camera's near-plane units. Small on
-## purpose: h_offset moves the VIEW, not the eye, so it stays subtle and never
-## clips the boom through a wall the way shoving global_position would.
-const MAX_OFFSET := 0.16
-## Roll at full trauma, radians.
-const MAX_ROLL := 0.055
+## Frustum shift at full trauma. h_offset moves the VIEW, not the eye, so the
+## shake can be as big as it likes without ever clipping the boom through a wall
+## the way shoving global_position would.
+##
+## MEASURED, not guessed: `tools/directors/monster_feel.gd` renders the same shot
+## at a set of offsets and cross-correlates them, and at 1280x720 with this
+## project's FOV one unit of h_offset is **37.5 px** of image shift. The first
+## pass here used 0.16 -- six pixels at FULL trauma, and 0.6 px on a landed blow,
+## which is why every attempt to fix the shake by raising the request numbers
+## made no visible difference. 1.4 puts full trauma at ~50 px per axis, which is
+## a hit you feel, and a landed blow at ~5 px, which is a hit you notice.
+const MAX_OFFSET := 1.4
+## Roll at full trauma, radians. ~4 degrees; roll reads far more strongly than
+## offset does, so this does not scale with it.
+const MAX_ROLL := 0.07
 ## How fast the noise field is walked. Too slow reads as a drift, too fast as
 ## static; this is roughly a 20 Hz wobble.
 const SHAKE_HZ := 22.0
@@ -37,6 +54,9 @@ var _noise: FastNoiseLite
 var _noise_t: float = 0.0
 ## Wall-clock deadline for the current hit-stop, in msec. Zero when not stopped.
 var _stop_until: int = 0
+## The roll `_tick_shake` computed this frame, restamped just before the draw.
+## See `_on_pre_draw`.
+var _roll: float = 0.0
 
 var _vignette: ColorRect
 var _vig: float = 0.0
@@ -56,6 +76,25 @@ func _ready() -> void:
 	_noise = FastNoiseLite.new()
 	_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
 	_noise.seed = 0x5EED
+	# MUST be set, and this is the whole shake. FastNoiseLite defaults to 0.01,
+	# where one feature of the field spans ~100 coordinate units -- and a 0.16 s
+	# shake walks `_noise_t` a grand total of 3.5. So every sample came off one
+	# nearly-flat patch: the camera did not wobble, it leaned by whatever
+	# arbitrary value sat at that spot, and the measured peak was 8% of the
+	# nominal maximum. At 1.0 a unit of `_noise_t` is a feature, which is what
+	# makes SHAKE_HZ mean hertz and the comment on it true.
+	_noise.frequency = 1.0
+
+	# The ROLL has to be written last or it does not exist.
+	#
+	# `GameCamera` works in _physics_process and ends on `look_at(pivot, UP)`,
+	# which rebuilds the entire basis and throws any rotation.z away. h_offset and
+	# v_offset are separate properties and survive that; the roll does not, so it
+	# lived or died on whether Feel happened to run after the camera in a given
+	# frame, and measured 1.6% of its ceiling where the offsets measured 20%.
+	# frame_pre_draw is the one hook that is guaranteed to be after every process
+	# and physics callback and before the picture is taken.
+	RenderingServer.frame_pre_draw.connect(_on_pre_draw)
 
 	_vignette = ColorRect.new()
 	_vignette.name = "Vignette"
@@ -161,6 +200,20 @@ func _tick_shake(delta: float) -> void:
 	var cam := get_viewport().get_camera_3d()
 	if cam == null:
 		return
+
+	# Walked EVERY frame, not only while a shake is live.
+	#
+	# Advancing it only during a shake means every shake starts at the same place
+	# in the field, so every blow in the game shakes identically -- and if that
+	# one spot happens to sit near a zero crossing on a line, that component is
+	# missing from every blow, for ever. It did: the roll measured 1% of its
+	# ceiling while the offsets measured 20%, not because the roll was being lost
+	# but because its line was flat exactly where every shake began. Free-running
+	# makes each blow sample an arbitrary phase, which is both correct and the
+	# reason two hits in a row do not feel like the same hit twice.
+	var walk := delta if Engine.time_scale > 0.0 else 1.0 / 60.0
+	_noise_t += walk * SHAKE_HZ
+
 	if _trauma <= 0.0:
 		# Only write when there is something to clear, so a game with no shake in
 		# it is not fighting anything else that might want these.
@@ -168,6 +221,7 @@ func _tick_shake(delta: float) -> void:
 			cam.h_offset = 0.0
 			cam.v_offset = 0.0
 			cam.rotation.z = 0.0
+		_roll = 0.0
 		return
 
 	# Wall-clock delta: while a hit-stop is up, `delta` is zero, and a shake that
@@ -175,18 +229,19 @@ func _tick_shake(delta: float) -> void:
 	# than as impact. The two effects fire together on almost every blow.
 	var dt := delta if Engine.time_scale > 0.0 else 1.0 / 60.0
 	_trauma = maxf(0.0, _trauma - _decay * dt)
-	_noise_t += dt * SHAKE_HZ
 
 	# Squared: a small trauma should be a twitch, not a small earthquake.
 	var s := _trauma * _trauma
 	# Three parallel lines through the field, none of them through the origin.
-	# Simplex noise is exactly zero at (0,0), and `_noise_t` starts at zero and
-	# only advances while a shake is live -- so sampling (t, 0) would make the
-	# FIRST shake of a session begin from a dead frame, which reads as the shake
-	# having missed rather than as it having started.
+	# Simplex noise is exactly zero at (0,0) and `_noise_t` starts at zero, so
+	# sampling (t, 0) would make the first shake of a session begin from a dead
+	# frame -- which reads as the shake having missed rather than started. The
+	# lines are far apart so the two offsets and the roll are decorrelated; three
+	# samples of one line would be a lean, not a wobble.
 	cam.h_offset = MAX_OFFSET * s * _noise.get_noise_2d(_noise_t, 11.7)
 	cam.v_offset = MAX_OFFSET * s * _noise.get_noise_2d(_noise_t, 53.1)
-	cam.rotation.z = MAX_ROLL * s * _noise.get_noise_2d(_noise_t, 97.3)
+	_roll = MAX_ROLL * s * _noise.get_noise_2d(_noise_t, 97.3)
+	cam.rotation.z = _roll
 
 
 func _tick_vignette(delta: float) -> void:
@@ -224,3 +279,19 @@ void fragment() {
 	var m := ShaderMaterial.new()
 	m.shader = sh
 	return m
+
+
+## Restamp the roll onto the camera immediately before the frame is drawn.
+##
+## Everything else the shake does is a property `look_at` does not touch, so it
+## survives being written in _process. The roll is a rotation, and the camera
+## rebuilds its whole basis every physics tick -- so the only way the tilt
+## reaches the picture is to write it after everyone else has finished and
+## before the picture is taken. This is not belt and braces; without it the roll
+## is simply absent from most frames.
+func _on_pre_draw() -> void:
+	if _roll == 0.0:
+		return
+	var cam := get_viewport().get_camera_3d()
+	if cam != null:
+		cam.rotation.z = _roll

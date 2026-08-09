@@ -109,7 +109,7 @@ func apply_hit(hit: Hit) -> bool:
 	# The same impact the monsters ask for, so the shallow-water fight and the
 	# roster fight land with the same weight. Feel and Sfx own the answers.
 	Bus.request_hitstop.emit(K.HITSTOP_LIGHT)
-	Bus.request_shake.emit(0.24, 0.14)
+	Bus.request_shake.emit(0.50, 0.14)
 	Bus.hit_landed.emit(self, hit.amount, global_position)
 	_stun = maxf(_stun, hit.stun if hit.stun > 0.0 else 0.22)
 	var away := K.flat(global_position - hit.from)
@@ -252,7 +252,7 @@ func _on_died() -> void:
 	remove_from_group(&"hurtbox")
 	# A kill is heavier than a hit, and reads the same for both enemy types.
 	Bus.request_hitstop.emit(K.HITSTOP_HEAVY)
-	Bus.request_shake.emit(0.38, 0.24)
+	Bus.request_shake.emit(0.62, 0.24)
 	Bus.enemy_died.emit(self, global_position)
 
 	for i in maxi(drops, 0):

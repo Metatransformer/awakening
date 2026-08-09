@@ -1372,7 +1372,7 @@ func take_hit(hit: Hit) -> bool:
 		_set_planar_velocity(away * hit.knockback)
 		_speed = 0.0
 	Bus.request_hitstop.emit(K.HITSTOP_LIGHT)
-	Bus.request_shake.emit(0.45, 0.18)
+	Bus.request_shake.emit(0.80, 0.18)
 	return true
 
 

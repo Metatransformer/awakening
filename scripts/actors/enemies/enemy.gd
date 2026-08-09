@@ -495,7 +495,11 @@ func _tick_windup(delta: float) -> void:
 		# spike, not the drift.
 		var e := t * t
 		_model.rotation.x = _model_rest.x - deg_to_rad(WINDUP_LEAN_DEG) * e
-		_flash.glow(Pal.RUST, e * 0.55)
+		# 0.22, not the 0.55 this started at. At 0.55 the telegraph works too
+		# well: the body goes to a flat, featureless orange silhouette, and a
+		# monster you cannot read the pose of is not a monster you can react to.
+		# A tell should tint the thing, not replace it.
+		_flash.glow(Pal.RUST, e * 0.22)
 		_glowing = true
 
 	if _timer <= 0.0:
@@ -600,7 +604,7 @@ func _on_damaged(hit: Hit) -> void:
 	# noise. Every one of these is a request -- Feel and Sfx own the answers, so
 	# nothing here holds a player or a camera (docs/CONTRACT.md §8).
 	Bus.request_hitstop.emit(K.HITSTOP_LIGHT)
-	Bus.request_shake.emit(0.28, 0.16)
+	Bus.request_shake.emit(0.52, 0.16)
 	# Cleared before the flash, not after: the white supersedes any wind-up glow,
 	# and leaving the flag set would have the guard restore over it next frame.
 	_glowing = false
@@ -670,7 +674,7 @@ func _on_died() -> void:
 	# A kill is a heavier event than a hit and has to feel like one. Sfx already
 	# answers `enemy_died`; this is the part of it the screen does.
 	Bus.request_hitstop.emit(K.HITSTOP_HEAVY)
-	Bus.request_shake.emit(0.42, 0.26)
+	Bus.request_shake.emit(0.68, 0.26)
 
 	_drop_loot()
 	died_at.emit(global_position)
