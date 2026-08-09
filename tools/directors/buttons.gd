@@ -78,23 +78,49 @@ func run(rig) -> void:
 		String(combat.get(&"equipped")) == "hookshot")
 	await rig.capture(out.path_join("b_02_still_drawn.png"))
 
-	# --- 2. use_item fires it ------------------------------------------------
+	# --- 2. use_item is HELD, and the release is what fires -------------------
 	# Aimed at the wall rather than the post: what is being checked is that the
 	# button reaches the item at all. Where the chain GOES is ranged_kit.gd's.
-	await rig.tap(["use_item"])
+	#
+	# The hold half is the bug this beat grew for. The trigger used to fire on the
+	# press, so pulling RT to bring the pistol up and line up a ring sent the chain
+	# out before the stick had moved — you could not aim the thing you were aiming.
+	# A tap alone cannot tell the two apart, because a tap presses AND releases.
+	await rig.wait_frames(1)
+	Input.action_press(&"use_item")
+	var fired_while_held := false
+	for _i in 60:
+		await rig.wait_frames(1)
+		if bool(hero.call(&"hooking")):
+			fired_while_held = true
+			break
+	_check("holding use_item did not fire the chain", not fired_while_held)
+	_check("holding it brought the hookshot up instead (stance=%s)"
+		% hero.call(&"aim_item"), String(hero.call(&"aim_item")) == "hookshot")
+	await rig.capture(out.path_join("b_02b_braced.png"))
+
+	Input.action_release(&"use_item")
 	var fired := false
 	for _i in 30:
 		await rig.wait_frames(1)
 		if bool(hero.call(&"hooking")):
 			fired = true
 			break
-	_check("use_item fired the hookshot", fired)
+	_check("releasing use_item fired the hookshot", fired)
 	await rig.capture(out.path_join("b_03_fired.png"))
 	# Let the pull finish and put him back on the post.
 	for _i in 180:
 		if not bool(hero.call(&"hooking")):
 			break
 		await rig.wait_frames(1)
+	await rig.wait_frames(30)
+	# And he lowers it. The item is still in his hand — that is the sticky draw
+	# above — but the BRACE is over, because the brace belongs to the trigger.
+	_check("he came out of the brace after the shot (stance=%s)"
+		% hero.call(&"aim_item"), String(hero.call(&"aim_item")) == "")
+	_check("the hookshot is still in his hand (%s)"
+		% Game.armament(Game.HAND_RIGHT),
+		String(combat.get(&"equipped")) == "hookshot")
 	hero.global_position = post_pos + Vector3(0.0, 0.05, 1.1)
 	hero.set(&"facing_yaw", PI)
 	await rig.wait_frames(30)

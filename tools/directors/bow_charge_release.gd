@@ -8,6 +8,17 @@ extends RefCounted
 ## hurt the post, it cost one ammo) while the hero visibly never drew the bow.
 ## Nothing but a strip of frames says which of those two you are looking at.
 ##
+## It now also owns the TRIGGER, which is the second thing a passing assertion
+## could not tell you about. `use_item` is a held trigger: down pulls, up looses,
+## and the shot waits at full draw for as long as the player waits. It fired on
+## the press for a while — so pulling RT to aim spent the arrow before the stick
+## had moved — and every beat below still passed, because an arrow that leaves
+## too early is still an arrow. The hold beat is the one that can tell.
+##
+## The third thing is where he ends up. The stance belongs to the BUTTON, not to
+## the bow being in his hand, so the shot has to hand him back to an ordinary
+## standing pose holding the bow rather than leaving him at full draw forever.
+##
 ##   godot --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/bow_charge_release.gd --out=/tmp/bow/x.png
@@ -35,6 +46,12 @@ const FACE_OFFSET := 0.7
 ## Pixels of the 1280x720 frame kept around the hero. Tall rather than square:
 ## the whole read is a bow held vertically and an arm going back past his ear.
 const CROP := Vector2i(420, 600)
+
+## The hold beat's box. Wider and taller than the strip's, because it is asking a
+## different question: the strip wants the bowstring, and this wants the whole
+## SILHOUETTE — a bow held down at his side reads as an arm and a hip, and a box
+## framed on a bowstring that is no longer drawn crops both of them out.
+const HOLD_CROP := Vector2i(800, 760)
 
 var _fails := 0
 
@@ -82,6 +99,8 @@ func run(rig) -> void:
 	print("BOWSHOT draw=%.2fs loose=%.2fs total=%.2fs"
 		% [draw_time, loose_time, draw_time + loose_time])
 
+	await _hold_beat(rig, hero, cam, out, draw_time, loose_time)
+
 	# The sample times, in shot seconds, and what each one is supposed to show.
 	var marks: Array = []
 	for f in CHARGE_AT:
@@ -96,7 +115,8 @@ func run(rig) -> void:
 	var seen_charge_active := false
 	var seen_loose_active := false
 	var arrow_at := -1.0
-	var free_during_shot := false
+	var free_during_pull := false
+	var committed_in_loose := false
 	var next := 0
 	# Bounded by REAL frames, not by the shot clock: a shot that never starts
 	# would otherwise spin here forever.
@@ -116,8 +136,12 @@ func run(rig) -> void:
 		# Sampled INSIDE the shot, not after it. The follow-through is half the
 		# point of splitting the clips: an archer who is walking again the frame
 		# the arrow leaves has paid for the loose and not been charged for it.
-		if t >= 0.0 and hero.state != Hero.MoveState.ATTACK:
-			free_during_shot = true
+		# The pull is the opposite claim and wants the opposite witness.
+		if t >= 0.0 and t < draw_time * 0.9:
+			free_during_pull = free_during_pull or hero.state == Hero.MoveState.GROUND
+		if t >= draw_time and t < draw_time + loose_time * 0.8:
+			committed_in_loose = committed_in_loose \
+				or hero.state == Hero.MoveState.ATTACK
 		if next >= marks.size():
 			break
 		if t < 0.0:
@@ -141,9 +165,13 @@ func run(rig) -> void:
 	# is the one-clip bug wearing two clips.
 	_check("the arrow left at the seam, not during the pull (t=%.3f, draw=%.2f)"
 		% [arrow_at, draw_time], arrow_at >= draw_time * 0.9)
-	_check("the hero stayed committed through both clips", not free_during_shot)
-	# And is handed back afterwards. A commitment window that never closes is the
-	# same bug as one that never opens, and it looks identical up to here.
+	# The commitment is the LOOSE and only the loose now. The pull is a stance he
+	# can walk in, because it lasts as long as the player holds the trigger and
+	# there is no such thing as rooting someone for an unbounded window.
+	_check("the hero was committed for the follow-through", committed_in_loose)
+	_check("the pull left him free to move", free_during_pull)
+	# And he is handed back afterwards. A commitment window that never closes is
+	# the same bug as one that never opens, and it looks identical up to here.
 	await rig.wait_seconds(0.5)
 	_check("the shot handed the hero back", hero.state == Hero.MoveState.GROUND
 		and hero.ranged._bow_t < 0.0)
@@ -163,6 +191,105 @@ func run(rig) -> void:
 	print("BOWSHOT done, %d failure(s)" % _fails)
 
 
+## The trigger, held. The bug: pulling RT drew AND loosed, so a player bringing
+## the bow up to aim had already spent the arrow before the stick moved.
+##
+## Held for three times the draw. That is the whole test — anything that fires on
+## its own clock rather than on the release will have gone by then, and the
+## `_bow_t` reading says which: parked exactly at `_bow_draw` is a hero standing
+## at full draw waiting, and anything past it is a shot that went without him.
+##
+## Then the release, and then the REST — he lowers the bow rather than staying at
+## full draw, which is what `aim_item()` going quiet means. Both states are
+## photographed side by side, because "he goes back to a resting position" is a
+## claim about a pose and no counter can make it for you.
+func _hold_beat(rig, hero: Hero, cam: Camera3D, out: String,
+		draw_time: float, loose_time: float) -> void:
+	var before: int = Game.arrows
+	var ranged: HeroRanged = hero.ranged
+
+	await rig.wait_frames(1)
+	Input.action_press(&"use_item")
+
+	var held_frames := int(draw_time * 3.0 * Engine.physics_ticks_per_second)
+	var fired_while_held := false
+	for _i in held_frames:
+		await rig.wait_frames(1)
+		if Game.arrows < before or _arrows_in_flight(rig) > 0:
+			fired_while_held = true
+			break
+
+	var t_held: float = ranged._bow_t
+	var stance_held: StringName = hero.aim_item()
+	var full_draw: Image = await _grab(rig, cam, hero, HOLD_CROP)
+
+	_check("holding the trigger did not loose the arrow", not fired_while_held)
+	_check("he waited AT full draw (t=%.3f, draw=%.2f)" % [t_held, draw_time],
+		absf(t_held - draw_time) < 0.05)
+	_check("the full-draw stance was up while held (%s)" % stance_held,
+		stance_held == &"bow")
+
+	# And he can WALK there, which is the other half of taking the commitment off
+	# the pull. A hold is open-ended; rooting a player for one is a freeze with a
+	# button attached, and `AimLoco`'s aim-walk existed for years without ever
+	# being reachable because the stance only ever lasted as long as a shot.
+	var from_pos: Vector3 = hero.global_position
+	Input.action_press(&"move_left")
+	await rig.wait_frames(36)
+	var walked: float = K.flat(hero.global_position - from_pos).length()
+	var walking: Image = await _grab(rig, cam, hero, HOLD_CROP)
+	Input.action_release(&"move_left")
+	_check("he could walk at full draw (%.2f m)" % walked, walked > 0.5)
+	_check("...and was still at full draw after it (t=%.3f)" % ranged._bow_t,
+		absf(ranged._bow_t - draw_time) < 0.05)
+	DirAccess.make_dir_recursive_absolute(out)
+	walking.save_png(out.path_join("bow_hold_walk.png"))
+
+	Input.action_release(&"use_item")
+
+	# Generous: the loose has to start, spawn the arrow and run its clip out.
+	var fired_after := false
+	for _i in int((loose_time + 0.5) * Engine.physics_ticks_per_second):
+		await rig.wait_frames(1)
+		if Game.arrows < before:
+			fired_after = true
+			break
+	_check("releasing the trigger loosed the arrow", fired_after)
+
+	await rig.wait_seconds(loose_time + 0.6)
+	var rest: Image = await _grab(rig, cam, hero, HOLD_CROP)
+	_check("he lowered the bow afterwards (stance=%s)" % hero.aim_item(),
+		hero.aim_item() == &"")
+	_check("the shot ended and gave the body back",
+		ranged._bow_t < 0.0 and hero.state == Hero.MoveState.GROUND)
+	# The bow is still IN HIS HAND. Lowering it must not put it away — that is the
+	# D-pad's job, and a trigger that stowed the item would make every second shot
+	# cost two presses.
+	_check("the bow is still drawn (right hand = %s)"
+		% Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_RIGHT) == &"bow")
+
+	_save_pair(full_draw, rest, out.path_join("bow_hold_release.png"))
+	print("BOWSHOT hold strip -> %s" % out.path_join("bow_hold_release.png"))
+
+	# THIS arrow has to be gone before the strip beat starts counting them, or the
+	# strip reads it as an arrow that left during its own pull — which is exactly
+	# the failure the strip exists to catch, reported against the wrong shot.
+	for _i in 600:
+		if _arrows_in_flight(rig) == 0:
+			break
+		await rig.wait_frames(1)
+
+
+## Two frames side by side: held at full draw, and lowered afterwards.
+func _save_pair(a: Image, b: Image, path: String) -> void:
+	var sheet := Image.create_empty(a.get_width() + b.get_width(),
+		maxi(a.get_height(), b.get_height()), false, a.get_format())
+	sheet.blit_rect(a, Rect2i(Vector2i.ZERO, a.get_size()), Vector2i.ZERO)
+	sheet.blit_rect(b, Rect2i(Vector2i.ZERO, b.get_size()), Vector2i(a.get_width(), 0))
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	sheet.save_png(path)
+
+
 ## One rendered frame, CROPPED to the hero rather than scaled down.
 ##
 ## Eight full frames side by side is a 10 k image nobody can read, and halving
@@ -173,7 +300,7 @@ func run(rig) -> void:
 ## box rather than a black margin — `blit_rect` on an out-of-bounds source is
 ## silent, and a silently empty photograph is the one failure this whole director
 ## exists to prevent.
-func _grab(rig, cam: Camera3D, hero: Hero) -> Image:
+func _grab(rig, cam: Camera3D, hero: Hero, crop: Vector2i = CROP) -> Image:
 	await RenderingServer.frame_post_draw
 	var img: Image = rig.root.get_texture().get_image()
 	var chest: Vector2 = cam.unproject_position(
@@ -195,7 +322,7 @@ func _grab(rig, cam: Camera3D, hero: Hero) -> Image:
 	# would hand back a different box on any frame he drifts near an edge, and the
 	# sheet below sizes itself off the first shot — mismatched frames blit
 	# silently and the strip quietly loses its right-hand side.
-	var size := Vector2i(Vector2(CROP) * zoom).min(img.get_size())
+	var size := Vector2i(Vector2(crop) * zoom).min(img.get_size())
 	var corner := Vector2i(chest * zoom) - size / 2
 	corner = corner.clamp(Vector2i.ZERO, img.get_size() - size)
 	return img.get_region(Rect2i(corner, size))

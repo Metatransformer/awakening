@@ -9,18 +9,49 @@ extends Node3D
 ## an arrow does after it leaves has nothing to do with any of that, and the one
 ## thing the two genuinely share — which item is in the right hand — already
 ## lives on `Game`, where it survives the scene change. HeroCombat still owns the
-## attack BUTTON (one reader, docs/CONTRACT.md §4) and calls `fire()` when the
-## hand holding it is not holding the sword.
+## attack BUTTON (one reader, docs/CONTRACT.md §4) and hands the use button's two
+## edges — `use_press` and `use_release` — down here when the hand holding it is
+## not holding the sword.
+##
+## ## The trigger is HELD, and the shot is the release
+##
+## Both items are pull-to-ready, release-to-fire. `use_press` raises the item —
+## the bow starts pulling, the hookshot comes up into its brace — and `use_release`
+## is what actually looses. They fired on the PRESS for a while, which made
+## holding the trigger indistinguishable from tapping it: you pulled RT to aim,
+## and the shot was already gone before you had moved the stick. A button that
+## fires on the press cannot be aimed with, and both of these items are aimed.
+##
+## The release is also what puts him back down. `aim_item()` — the stance — is
+## true only between the press and the end of the shot, so when the arrow has
+## gone he lowers the bow and stands in ordinary locomotion holding it, until the
+## next pull. That resting beat did not exist while the stance was equipment-
+## driven: drawing the bow from the D-pad put him at full draw and left him
+## there, permanently, which is what a held C-button used to mean and is no
+## longer what the item button means.
 ##
 ## ## A bow shot is two halves, and this owns the clock between them
 ##
-## Charge then loose: `_bow_draw` seconds of pull, the arrow, then `BOW_LOOSE`
+## Pull then loose: `_bow_draw` seconds of pull, the arrow, then `BOW_LOOSE`
 ## seconds of follow-through. Two clips (see `Hero.clip_bow_draw`), fired from
 ## two one-shots, and the seam between them is the only moment the shot has —
 ## `_tick_bow` spawns the arrow and fires the second clip on the same frame off
-## the same counter. The hero is committed for both halves; what he is NOT is
-## the thing timing them, because a body counting its own frames next to a
-## `HeroRanged` counting its own is how the arrow and the string come apart.
+## the same counter. What the hero is NOT is the thing timing them, because a
+## body counting its own frames next to a `HeroRanged` counting its own is how
+## the arrow and the string come apart.
+##
+## Held past full draw the clock STALLS at `_bow_draw` rather than running on —
+## he sits at full draw for as long as the trigger is down. Released early it
+## does not stall and does not cut the pull short either: the arrow leaves at the
+## seam it was always going to leave at. A tap is therefore exactly the shot the
+## button used to fire, which is what keeps `Game.bow_draw_time()` — the forge
+## ladder — meaning the thing it says it means, and what stops a mashed trigger
+## from being faster than an aimed one.
+##
+## Only the LOOSE commits the hero. The pull is a stance he can walk in
+## (`Hero.request_bow_draw`), because a hold has no length anybody knows in
+## advance and rooting a player for an unbounded one is a freeze with a button
+## attached.
 ##
 ## ## Aim comes from the camera, not from the body
 ##
@@ -76,16 +107,26 @@ var _tether: HookshotTether
 ## here so a late listener (a HUD rebuilt on a scene change) can ask.
 var aiming: bool = false
 
+## The use button, as of the last frame HeroCombat polled it. Not read from
+## `Input` here: the buttons have one reader (docs/CONTRACT.md §4), and this node
+## must not start disagreeing with the one that owns the shop and channel gates.
+var _using: bool = false
+
 ## Counts up through the shot — `_bow_draw` of pull and then `BOW_LOOSE` of
-## loose — or -1.0 when idle.
+## loose — or -1.0 when idle. It STALLS at `_bow_draw` while the trigger is
+## still down, which is the hero sitting at full draw.
 var _bow_t: float = -1.0
 ## The draw length THIS shot was started at. Latched rather than re-read every
 ## frame: buying the string mid-draw would otherwise move the release point of a
-## shot already in the air, and the hero's own commitment window (set from the
-## same number in `request_bow`) would no longer agree with it.
+## shot already being pulled, and the clip's time scale (set from the same number
+## in `request_bow_draw`) would no longer agree with it.
 var _bow_draw: float = 0.44
 var _bow_fired: bool = false
-var _bow_dir: Vector3 = Vector3.FORWARD
+
+## The hookshot is up in its brace, waiting for the trigger to come off. It has
+## no pull clock — a grapple pistol is either pointed at something or it is not —
+## so this flag is the whole of its held state.
+var _hook_ready: bool = false
 
 ## The chain is out. `_hook_bit` distinguishes a shot that found an anchor from
 ## one that played out to maximum range and found nothing — both draw the chain,
@@ -118,10 +159,21 @@ func _on_loadout_changed(_set_index: int, _right: StringName, _left: StringName)
 	_refresh_aiming()
 
 
-## The sighted item, or &"" for none — what the hero's stance is built from.
+## The RAISED item, or &"" for none — what the hero's stance is built from.
+##
+## Not the same question as `aiming`, and the difference is the rest pose. This
+## one is true only from the moment the trigger goes down to the end of the shot
+## it fired; `aiming` stays true for as long as the thing is in his hand. So the
+## camera and the crosshair belong to the item and the POSE belongs to the
+## button, and letting go of the button puts the bow down without putting it
+## away.
 func aim_item() -> StringName:
 	var held := Game.armament(Game.HAND_RIGHT)
-	return held if AIMED.has(held) else &""
+	if not AIMED.has(held):
+		return &""
+	if held == &"bow":
+		return &"bow" if _bow_t >= 0.0 else &""
+	return &"hookshot" if _hook_ready or _hook_active else &""
 
 
 ## Recompute the stance from what is actually equipped, and announce a change.
@@ -133,16 +185,51 @@ func _refresh_aiming() -> void:
 	Bus.aim_changed.emit(aiming)
 
 
-## Use whatever is in the right hand. Returns false when the press should be
-## ignored — no ammo, nothing hookable, or a shot already in progress — so the
-## caller does not play a noise for a shot that never happened.
-func fire(id: StringName) -> bool:
-	if _bow_t >= 0.0 or _hook_active:
+## The use button went down. Raise whatever is in the right hand: the bow starts
+## pulling, the hookshot comes up. Returns false when the press should be ignored
+## — no ammo, not a ranged item, a shot already running, or a body that cannot
+## take a stance right now — so the caller does not play a noise for a shot that
+## never happened.
+##
+## Nothing LEAVES here. That is `use_release`.
+func use_press(id: StringName) -> bool:
+	_using = true
+	if _bow_t >= 0.0 or _hook_active or not AIMED.has(id):
+		return false
+	# Rolling, swinging, in the air. Refused for the reasons a swing is refused,
+	# and refused HERE rather than by the hero, because the hookshot's brace fires
+	# no clip for the hero to decline.
+	if _hero.state != Hero.MoveState.GROUND or not _hero.is_on_floor():
 		return false
 	match id:
-		&"bow": return _fire_bow()
-		&"hookshot": return _fire_hookshot()
+		&"bow": return _draw_bow()
+		&"hookshot": return _ready_hookshot()
 	return false
+
+
+## The use button came up: loose it. Safe to call on a frame where nothing was
+## raised, which is why HeroCombat can call it blindly every frame the button is
+## not down.
+##
+## The BOW is deliberately not handled here. Released before full draw, the pull
+## still has to finish — the arrow leaves at the seam and nowhere else — so the
+## release is a fact `_tick_bow` reads rather than an event it is handed, and
+## `_using` going false above is the whole of it.
+func use_release() -> void:
+	_using = false
+	if _hook_ready:
+		_hook_ready = false
+		_fire_hookshot()
+
+
+## Put down whatever is raised without firing it. The shop, the escape rope's
+## channel and a stowed item all land here: a pull abandoned costs nothing,
+## because the arrow is only ever spent at the seam.
+func cancel_use() -> void:
+	_using = false
+	_hook_ready = false
+	if _bow_t >= 0.0 and not _bow_fired:
+		_bow_t = -1.0
 
 
 func busy() -> bool:
@@ -151,16 +238,18 @@ func busy() -> bool:
 
 # --- The bow ----------------------------------------------------------------
 
-func _fire_bow() -> bool:
+## Start the pull. The quiver is checked HERE, on the press, and not at the seam:
+## a bow that comes up, draws for half a second and then declines to shoot has
+## told you about the empty quiver at the worst possible moment.
+func _draw_bow() -> bool:
 	if Game.arrows <= 0:
 		# Deliberately audible, unlike an unbound button: you asked for a shot
 		# with a bow you are holding, and silence there reads as a dropped input
 		# rather than as an empty quiver.
 		Bus.request_sfx.emit(&"craft_fail", _hero.global_position)
 		return false
-	_bow_dir = _aim_at_target_or_camera()
 	_bow_draw = Game.bow_draw_time()
-	if not _hero.request_bow(_bow_draw, BOW_LOOSE, _bow_dir):
+	if not _hero.request_bow_draw(_bow_draw):
 		return false
 	_bow_t = 0.0
 	_bow_fired = false
@@ -172,21 +261,22 @@ func _fire_bow() -> bool:
 
 
 ## The arrow leaves, at the seam between the two clips. Ammo is spent HERE and
-## not on the press, so a shot interrupted before release costs nothing — the
+## not on the press, so a pull interrupted before release costs nothing — the
 ## arrow that was never loosed is still in the quiver, which is the only reading
 ## that is not a lie.
 func _release_arrow() -> void:
 	_bow_fired = true
-	# The body looses whether or not the quiver agrees. He is a third of a second
-	# into a committed pull with the string at his ear; the one thing that cannot
-	# happen here is that he holds that pose and the shot silently evaporates.
-	_hero.bow_loose(BOW_LOOSE)
+	# Aimed at RELEASE rather than at the press: that is the entire point of a
+	# trigger you hold. The lock can move, and the player has spent the whole pull
+	# putting the crosshair somewhere — reusing the press's vector would throw the
+	# shot down a line they had already left.
+	var dir := _aim_at_target_or_camera()
+	# The body looses whether or not the quiver agrees. The string is at his ear;
+	# the one thing that cannot happen here is that he holds that pose and the
+	# shot silently evaporates.
+	_hero.bow_loose(BOW_LOOSE, dir)
 	if not Game.spend_ammo(&"arrows"):
 		return
-	# Re-aimed at release rather than reused from the press: the lock can move,
-	# and half a second is long enough for a circling enemy to leave the line
-	# the shot was aimed down.
-	var dir := _aim_at_target_or_camera()
 	var arrow := Arrow.new()
 	arrow.name = "Arrow"
 	# Parented to the scene, not to the hero. An arrow under the hero inherits
@@ -198,6 +288,17 @@ func _release_arrow() -> void:
 
 
 # --- The hookshot -----------------------------------------------------------
+
+## Bring it up. No clip and no clock — `clip_hook_shot` doubles as the held brace
+## (`HookAimAnim`, looped) and the firing pose, so raising it is one blend
+## amount, driven off this flag by `aim_item()`.
+##
+## Always true: unlike the bow there is nothing to spend and nothing to check.
+## Whether the chain finds an anchor is a question for the release.
+func _ready_hookshot() -> bool:
+	_hook_ready = true
+	return true
+
 
 func _fire_hookshot() -> bool:
 	var from := _muzzle(&"hookshot")
@@ -296,20 +397,59 @@ func _physics_process(delta: float) -> void:
 	_tick_hook(delta)
 
 
+## True while the body can still hold `id` raised. Checked every frame of a hold
+## rather than only at the press, because a hold is open-ended and the world gets
+## a say in it: a roll, a hit reaction or an item stowed by the attack button's
+## escape hatch all have to put the thing down.
+##
+## Deliberately says nothing about the BUTTON — the two items disagree about what
+## a release means, and each handles its own. Re-raising afterwards is not
+## automatic either: it costs a new press, so a trigger still held down when he
+## gets back up does not fire a shot the player has stopped asking for.
+func _can_hold(id: StringName) -> bool:
+	return Game.armament(Game.HAND_RIGHT) == id \
+		and _hero.state == Hero.MoveState.GROUND
+
+
 func _tick_bow(delta: float) -> void:
 	if _bow_t < 0.0:
 		return
+
+	if _bow_fired:
+		# The loose. He is committed for it and nothing takes it back.
+		_bow_t += delta
+		if _bow_t >= _bow_draw + BOW_LOOSE:
+			_bow_t = -1.0
+		return
+
+	# Still pulling. Note the BUTTON is not part of this: a trigger released early
+	# does not cancel the pull, it schedules the loose for the seam below.
+	if not _can_hold(&"bow"):
+		_bow_t = -1.0
+		return
+
 	_bow_t += delta
+	if _bow_t < _bow_draw:
+		return
+	if _using:
+		# Full draw, trigger still down. Parked rather than left to run on, so
+		# the clock reads the same on the frame he lets go whether he held it for
+		# a tenth of a second or ten seconds — everything downstream measures the
+		# loose from `_bow_draw`.
+		_bow_t = _bow_draw
+		return
 	# The seam. The charge clip ends on full draw and the loose opens on it, so
 	# this one instant is the string leaving his fingers, the arrow spawning and
 	# the second clip firing — all three off this clock, so they cannot drift.
-	if not _bow_fired and _bow_t >= _bow_draw:
-		_release_arrow()
-	if _bow_t >= _bow_draw + BOW_LOOSE:
-		_bow_t = -1.0
+	_release_arrow()
 
 
 func _tick_hook(delta: float) -> void:
+	if _hook_ready and not _can_hold(&"hookshot"):
+		# Knocked out of the brace, or the pistol left his hand mid-hold. Put it
+		# down rather than firing it: a chain that goes out because he got hit is
+		# a shot the player did not aim.
+		_hook_ready = false
 	if not _hook_active:
 		return
 	var from := _muzzle(&"hookshot")
