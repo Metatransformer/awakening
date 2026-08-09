@@ -217,8 +217,13 @@ func _extract(rig) -> void:
 	print("MVP pre_extract gold=%d fee=%d value=%d" % [
 		Game.gold, Run.extract_cost(), Run.bag_value()])
 	if not charm.begin():
-		print("MVP FAIL the charm refused to start (gold=%d fee=%d)"
-			% [Game.gold, Run.extract_cost()])
+		# begin() has three refusals and they mean completely different things:
+		# already channelling, not underground, or too poor. Printing only gold
+		# and the fee named the one cause that is almost never the real one, and
+		# sent a session hunting the economy for what was a state bug.
+		print("MVP FAIL the charm refused to start (gold=%d fee=%d in_dungeon=%s active=%s can=%s)"
+			% [Game.gold, Run.extract_cost(), Run.in_dungeon, charm.active(),
+				Run.can_extract()])
 		return
 
 	# Caught mid-channel, so the ring is closing and the column of light is

@@ -97,6 +97,77 @@ the mote's glow radius, which is the only "look over here" the game does.
 
 ---
 
+## 4.5 Heat — what tempo is worth
+
+Numbered `4.5` rather than `5` on purpose: extraction is §5 and several code
+comments point at it by number. Do not renumber the sections below.
+
+The economy above prices **how deep** you went. Heat prices **how fast**
+(`scripts/autoload/heat.gd`, autoload `Heat`). Kills chain; the chain decays;
+what the chain is worth gets **stamped onto the loot you sweep while it is lit**.
+
+| Tier | Kills | Window | Multiplier | Magnet |
+|---|---|---|---|---|
+| 0 — Cold | 0 | — | ×1.00 | — |
+| 1 — Warm | 2 | 4.0 s | ×1.25 | 2.5 m |
+| 2 — Hot | 5 | 3.2 s | ×1.60 | 3.5 m |
+| 3 — Blazing | 9 | 2.5 s | ×2.20 | 4.5 m |
+
+`K.HEAT_TIER_KILLS`, `HEAT_TIER_WINDOW`, `HEAT_TIER_MULT`, `HEAT_MAGNET`.
+
+**The window shrinks as the chain climbs.** That is the whole tension: the reward
+for being fast is a shorter leash. A window that grew with the tier would make
+Blazing the safe state and delete the decision.
+
+**What breaks it:** the window running out, or **a blow that lands**. A blow you
+*block* does not, because Heat watches `Bus.player_health_changed` and a blocked
+blow never changes health — the shield being the tempo tool is a consequence of
+the wiring, not a special case. It is the same rule the charm channels under
+(§5), which is why it should feel familiar rather than new.
+
+**Breaking steps down one tier, not to zero.** Zeroing makes one mistake at
+Blazing cost nine kills, and makes the meter binary — the player never watches
+the thing they are about to lose sliding away.
+
+**Two things make a chain physically possible** at OOT's swing lengths, and both
+are transient:
+
+- a kill refunds `K.STAMINA_KILL = 40` stamina (against `STAMINA_ROLL = 34`), so
+  a kill buys the roll that reaches the next enemy;
+- motes are dragged toward the hero from the tier's magnet range, so sweeping the
+  floor is not a separate, chain-killing errand.
+
+**Heat pays money, never power.** No damage, no reach, no speed — GDD pillar 4.
+A chain that made the hero stronger would quietly delete the smith.
+
+### Where the money goes
+
+A mote records the multiplier at the moment it *dropped*, and then **cools** over
+`K.HEAT_COOL_TIME = 6 s` back toward ×1.00. Loot left on the floor while you go
+and die somewhere is worth its base price again. Sweeping is the act that banks
+it.
+
+The extra is **not** a different item. It accumulates in `Run.premium`, a single
+gold pot, and `Run.bag_value()` is `base_value() + premium`. That choice matters:
+keying the bag by `(item, tier)` would double the row count and destroy the
+value-per-slot comparison §3's pressure is built on. Selling a line pays its base
+plus its proportional share of the pot (`Run.line_value()`), so the trade screen
+names the gold that will actually land.
+
+Because the premium sits inside `bag_value()`, **the extraction fee rises with
+it** — `cost = max(15, bag_value × 0.25)`, unchanged, and no fee code knows Heat
+exists. Going fast makes the walk home more expensive. That is the one question
+(GDD §2) asked on the time axis.
+
+**On the HUD:** the bar under stamina, filling with the window left and coloured
+ash → moth → gold → breathing gold, with the live multiplier beside it; it flashes
+rust when the chain breaks. The banked premium reads `+N HOT` in gold above the
+bag corner, so the money is visible next to the number the fee is taken from.
+
+Proof: `tools/directors/heat_flow.gd`.
+
+---
+
 ## 5. Extraction — the priced decision
 
 The way out is the **Homeward Charm** (`scripts/items/homeward_charm.gd`): a
@@ -214,7 +285,8 @@ this simple is still a fight rather than a health tax.
 | Town | `scripts/world/town.gd`, `scenes/rooms/town.tscn` |
 | Dungeon | `scripts/world/dungeon.gd`, `scenes/rooms/dungeon.tscn` |
 | The way out | `scripts/items/homeward_charm.gd` |
-| Drops on the floor | `scripts/world/loot_mote.gd` |
+| Drops on the floor, and their heat stamp | `scripts/world/loot_mote.gd` |
+| The chain, its tiers and what they are worth | `scripts/autoload/heat.gd` |
 
 The game boots into **town** (`run/main_scene`). `Flow` is the only thing that
 ever calls `change_scene_to_file`; if a second caller appears, the fade stops
@@ -230,16 +302,34 @@ godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --direc
 
 `tools/directors/mvp_loop.gd` walks the whole loop through the real interaction
 paths and photographs every beat: sell one → sell all → buy → descend → fight →
-pick up a drop → open a chest → **hold the pad** → home. It prints the gold, bag
-and health it observed at each seam, and prints `MVP FAIL …` if a beat did not
+pick up a drop → open a chest → **channel the charm** → home. It prints the gold,
+bag and health it observed at each seam, and prints `MVP FAIL …` if a beat did not
 happen. Last run:
 
 ```
 MVP after_sell  gold=346 bag=0
 MVP after_buy   gold=206 slots=13
-MVP descended   in_dungeon=true  rooms=6 enemies=15
-MVP after_chest bag=3 value=28 fee=15
-MVP home        scene=Town in_dungeon=false gold=191 bag=28 hearts=12/12
+MVP descended   in_dungeon=true  rooms=6 enemies=17
+MVP after_chest bag=4 value=95 fee=24
+MVP home        scene=Town in_dungeon=false gold=182 bag=95 hearts=12/12
+```
+
+The economy of tempo has its own director (§4.5):
+
+```bash
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/dungeon.tscn --director=res://tools/directors/heat_flow.gd --out=/tmp/heat/x.png --warmup=60
+```
+
+It climbs the ladder kill by kill, photographs every tier, drops loot at full
+heat and lets the magnet sweep it, then breaks the chain with a landed blow and
+lets the rest cool. `HEAT FAIL …` on any claim that did not hold. Last run:
+
+```
+HEAT kill 9      -> kills=9 tier=3 mult=2.20
+HEAT after_sweep bag=222 premium=114 fee=56   (was value=0 fee=15)
+HEAT premium 114 vs 130 uncooled -- the gap IS the cooling
+HEAT struck      tier 3 -> 2
+HEAT OK
 ```
 
 **Do not pass `--headless`.** There is no rendering device in headless mode and

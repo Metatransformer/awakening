@@ -151,6 +151,7 @@ These nine facts are the ones clones get wrong. Build to them:
 | `Bus` | `scripts/autoload/event_bus.gd` | sideways peer→peer signals |
 | `Game` | `scripts/autoload/game_state.gd` | hearts, magic, keys, items, flags |
 | `Run` | `scripts/autoload/run_state.gd` | the current delve; **after `Game`** — it spends and grants gold |
+| `Heat` | `scripts/autoload/heat.gd` | the kill chain and what it is worth; **after `Game`** (it refunds stamina) and **after `Run`** (no chain outside the dungeon) |
 | `Settings` | `scripts/autoload/settings.gd` | volumes, video, binds, and their persistence |
 | `Saves` | `scripts/autoload/save_game.gd` | slots |
 | `Music` | `scripts/autoload/music.gd` | picks the track and crossfades it; **after `Bus`** |

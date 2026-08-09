@@ -252,6 +252,18 @@ func spend_stamina(cost: float) -> bool:
 	return true
 
 
+## Hand stamina back outside the regen curve. A kill calls this (see Heat), and
+## it deliberately does NOT touch `_stamina_hold`: the winded pause is the tell
+## that you spent something, and clearing it on every kill would make a chain
+## read as "stamina is off now" rather than as a reward. The refund lands on top
+## of whatever the regen was already going to do.
+func refund_stamina(amount: float) -> void:
+	if amount <= 0.0 or stamina >= max_stamina:
+		return
+	stamina = minf(max_stamina, stamina + amount)
+	Bus.stamina_changed.emit(stamina, max_stamina)
+
+
 # --- Consumables ------------------------------------------------------------
 
 func add_arrows(n: int) -> void:

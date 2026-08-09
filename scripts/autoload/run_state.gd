@@ -26,6 +26,16 @@ var bag: Dictionary[StringName, int] = {}
 var in_dungeon: bool = false
 ## How deep. Room count since entering; drives drop quality and the fee.
 var depth: int = 0
+## Gold earned ABOVE base value by sweeping loot while the chain was lit. See
+## Heat. It rides with the bag and dies with it, and `bag_value()` folds it in --
+## which is what makes the extraction fee rise on a hot run without a single line
+## of fee code knowing that heat exists.
+##
+## A pot rather than a per-item stamp because the bag is `id -> count`, and
+## keying it by (id, tier) instead would double the width of every loop that
+## touches it to buy a distinction the player never makes. What the player
+## compares is value PER SLOT, and a pot preserves that arithmetic exactly.
+var premium: int = 0
 ## Seeded per run so a dungeon can be replayed exactly.
 var rng := RandomNumberGenerator.new()
 var seed_used: int = 0
@@ -42,6 +52,7 @@ func _ready() -> void:
 
 func reset() -> void:
 	bag.clear()
+	premium = 0
 	in_dungeon = false
 	depth = 0
 
@@ -51,6 +62,7 @@ func reset() -> void:
 ## Start a run. Pass a seed to replay one; 0 picks a fresh one and records it.
 func enter(run_seed: int = 0) -> void:
 	bag.clear()
+	premium = 0
 	depth = 0
 	in_dungeon = true
 	seed_used = run_seed if run_seed != 0 else int(Time.get_unix_time_from_system())
@@ -87,6 +99,9 @@ func die() -> void:
 	var lost := bag.duplicate()
 	var lost_value := bag_value()
 	bag.clear()
+	# The heat premium dies with the bag it was earned into. It is the same
+	# gold; there was never a second container.
+	premium = 0
 	in_dungeon = false
 	depth = 0
 	# You wake up in town: broke, but alive. Leaving health at zero would mean
@@ -109,7 +124,13 @@ func can_extract() -> bool:
 
 ## Put `count` of `id` in the bag. Returns how many actually fit -- a full bag
 ## is a real event the caller should show, not an error to swallow.
-func collect(id: StringName, count: int = 1) -> int:
+##
+## `heat_mult` is what the chain was worth when this was swept off the floor
+## (LootMote carries it; see Heat). Anything above 1.0 lands in `premium`. It is
+## a parameter rather than a read of Heat.multiplier() because the mote's heat is
+## the heat it was KILLED at, cooling on the floor -- by the time you reach it
+## the live chain may be hotter or dead, and neither is what this pickup is worth.
+func collect(id: StringName, count: int = 1, heat_mult: float = 1.0) -> int:
 	var def := ItemDb.get_def(id)
 	if def == null or count <= 0:
 		return 0
@@ -127,6 +148,10 @@ func collect(id: StringName, count: int = 1) -> int:
 		taken += 1
 
 	if taken > 0:
+		var bonus := int(round(def.value * taken * (maxf(heat_mult, 1.0) - 1.0)))
+		if bonus > 0:
+			premium += bonus
+			Bus.heat_banked.emit(bonus)
 		Bus.bag_changed.emit(bag, bag_value())
 		Bus.loot_gained.emit(id, taken)
 	if taken < count:
@@ -149,14 +174,44 @@ func is_full() -> bool:
 	return slots_used() >= Game.bag_slots
 
 
-## What the vendor would pay for everything in the bag.
+## What the vendor would pay for everything in the bag, heat included. This is
+## THE number: the HUD headline, the extraction fee, and the vendor's SELL
+## EVERYTHING line are all this function, which is why the premium is folded in
+## here rather than bolted onto each of them.
 func bag_value() -> int:
+	return base_value() + premium
+
+
+## The same bag at flat, un-lit prices. Only the premium arithmetic needs this.
+func base_value() -> int:
 	var total := 0
 	for id: StringName in bag:
 		var def := ItemDb.get_def(id)
 		if def != null:
 			total += def.value * int(bag[id])
 	return total
+
+
+## What one stack is worth, carrying its share of the premium. The vendor screen
+## prices its lines with this so the row and the gold that lands agree; a line
+## that said 72 and paid 91 reads as a bug however welcome the extra is.
+func line_value(id: StringName) -> int:
+	var def := ItemDb.get_def(id)
+	if def == null or not bag.has(id):
+		return 0
+	var base := def.value * int(bag[id])
+	return base + _premium_share(base)
+
+
+## The premium riding on `base` gold of flat value. Rounded down at the last
+## stack so repeated partial sells can never pay out more premium than exists.
+func _premium_share(base: int) -> int:
+	if premium <= 0 or base <= 0:
+		return 0
+	var whole := base_value()
+	if whole <= 0:
+		return 0
+	return mini(premium, int(round(premium * float(base) / float(whole))))
 
 
 func bag_count() -> int:
@@ -173,6 +228,9 @@ func sell_all() -> int:
 		return 0
 	var sold := bag.duplicate()
 	bag.clear()
+	# `paid` is bag_value(), which already includes the premium -- emptying the
+	# bag empties the pot with it, and neither is counted twice.
+	premium = 0
 	Game.add_gold(paid)
 	Bus.bag_changed.emit(bag, 0)
 	Bus.items_sold.emit(sold, paid)
@@ -188,7 +246,12 @@ func sell(id: StringName, count: int = -1) -> int:
 	if def == null:
 		return 0
 	var n: int = have if count < 0 else mini(count, have)
-	var paid := def.value * n
+	var base := def.value * n
+	# Prorated, and taken out of the pot in the same breath: sell half the bag
+	# and half the heat you earned goes with it.
+	var share := _premium_share(base)
+	var paid := base + share
+	premium -= share
 
 	if n >= have:
 		bag.erase(id)

@@ -72,6 +72,18 @@ signal homeward_used
 signal homeward_broken
 signal depth_changed(depth: int)
 
+# --- Heat: momentum, and what it is worth -----------------------------------
+## The chain moved. `window01` is how much of the current tier's window is left,
+## so a listener can draw the countdown without polling Heat every frame.
+signal heat_changed(kills: int, tier: int, window01: float)
+## The tier stepped. `rising` false means it cooled out or a blow broke it --
+## a blow he BLOCKS never gets here, because blocking costs no health and health
+## is what Heat watches.
+signal heat_tier_changed(tier: int, rising: bool)
+## Loot was swept hot: `gold` is what the heat added on top of its base value.
+## Already folded into Run.premium by the time this fires.
+signal heat_banked(gold: int)
+
 # --- Interaction and screens ------------------------------------------------
 ## The "(E) OPEN" line, or "" when there is nothing to address. One at a time --
 ## Prompt decides which.

@@ -49,6 +49,20 @@ const GHOST_DRAIN := 0.25
 ## is a colour, not a measurement you have to take.
 const STAMINA_TICKS := 3           ## rolls-from-full, drawn as boundaries
 
+# --- Heat --------------------------------------------------------------------
+## Seconds the bar burns RUST after the chain steps down. The break has to be
+## an EVENT -- a bar that merely gets shorter when you are hit is a bar the
+## player learns about three runs later, from the wrong conclusion.
+##
+## Long against the block flash's 0.06 and the rim's 0.10, and deliberately so:
+## those two report that something touched you, this one reports that a
+## multiplier you spent nine kills building just went away. It is also the
+## shortest flash tools/directors/heat_flow.gd could reliably photograph, which
+## is a fair proxy for the shortest one a player will reliably notice.
+const HEAT_BREAK_FLASH := 0.35
+## Seconds the "+N HOT" line stays lit after it grows.
+const HEAT_BANK_POP := 0.45
+
 # --- Hands and item buttons (§5.2) -------------------------------------------
 const KIT_CELL := 32.0
 const KIT_GAP := 6.0
@@ -121,6 +135,13 @@ var _refuse_t: float = -1.0
 var _block_flash_t: float = -1.0
 var _lock_target: Node3D = null
 var _last_quarters: int = -1
+## Heat, mirrored from the signal. The WINDOW is not mirrored -- it drains every
+## frame and is read straight off Heat when the bar draws, the same way health
+## is read off Game. See the note on Heat._process.
+var _heat_tier: int = 0
+var _heat_kills: int = 0
+var _heat_break_t: float = -1.0
+var _heat_bank_t: float = -1.0
 ## "(E) OPEN", or "" when there is nothing in reach. Owned by the Prompt autoload.
 var _prompt: String = ""
 
@@ -155,6 +176,9 @@ func _ready() -> void:
 	Bus.ammo_changed.connect(_repaint)
 	Bus.loadout_changed.connect(_repaint)
 	Bus.quick_slots_changed.connect(_repaint)
+	Bus.heat_changed.connect(_on_heat)
+	Bus.heat_tier_changed.connect(_on_heat_tier)
+	Bus.heat_banked.connect(_on_heat_banked)
 	Bus.extract_refused.connect(_on_refused)
 	Bus.homeward_broken.connect(_on_homeward_broken)
 	Bus.shield_blocked.connect(_on_blocked)
@@ -241,6 +265,26 @@ func _on_loot(item_id: StringName, _count: int) -> void:
 func _on_stamina(value: float, _max_s: float) -> void:
 	_stamina = value
 	_repaint()
+
+
+func _on_heat(kills: int, tier: int, _window01: float) -> void:
+	_heat_kills = kills
+	_heat_tier = tier
+	_wake()
+
+
+## Only the FALL flashes. A tier gained already announces itself -- the bar
+## jumps, the multiplier changes, and the loot on the floor gets brighter -- and
+## flashing both directions would make the two events the same event.
+func _on_heat_tier(_tier: int, rising: bool) -> void:
+	if not rising:
+		_heat_break_t = 0.0
+	_wake()
+
+
+func _on_heat_banked(_gold: int) -> void:
+	_heat_bank_t = 0.0
+	_wake()
 
 
 func _on_prompt(text: String) -> void:
@@ -349,7 +393,8 @@ func _process(delta: float) -> void:
 		_shown_value = move_toward(_shown_value, float(_target_value), step)
 		busy = true
 
-	for t in [&"_toast_t", &"_rim_flash_t", &"_sweep_t", &"_refuse_t", &"_block_flash_t"]:
+	for t in [&"_toast_t", &"_rim_flash_t", &"_sweep_t", &"_refuse_t", &"_block_flash_t",
+			&"_heat_break_t", &"_heat_bank_t"]:
 		var v: float = get(t)
 		if v >= 0.0:
 			set(t, v + delta)
@@ -364,9 +409,18 @@ func _process(delta: float) -> void:
 		_refuse_t = -1.0
 	if _block_flash_t > 0.06:
 		_block_flash_t = -1.0
+	if _heat_break_t > HEAT_BREAK_FLASH:
+		_heat_break_t = -1.0
+	if _heat_bank_t > HEAT_BANK_POP:
+		_heat_bank_t = -1.0
 
 	# T3 breathes, so the HUD keeps ticking while the bag is that valuable.
 	if Pal.tier(_target_value) >= 3 or _lock_target != null or _extract_hold > 0.0:
+		busy = true
+	# A live chain is a countdown, and a countdown that only repaints on a signal
+	# is a countdown that jumps. This is the one thing on the HUD that genuinely
+	# wants a frame-by-frame repaint, and it stops the moment the chain is cold.
+	if Heat.kills > 0:
 		busy = true
 
 	_canvas.queue_redraw()
@@ -380,6 +434,7 @@ func _draw_hud() -> void:
 		return
 	_draw_health(s)
 	_draw_stamina(s)
+	_draw_heat(s)
 	_draw_hands(s)
 	_draw_cpad(s)
 	_draw_bag(s)
@@ -493,6 +548,83 @@ func _draw_stamina(s: Vector2) -> void:
 			break
 		_canvas.draw_rect(Rect2(origin.x + w * at - Pal.px(1.0, s.y) * 0.5, top,
 			Pal.px(1.0, s.y), h), Pal.VOID)
+
+
+# --- Heat -------------------------------------------------------------------
+## Third in the "you" stack, under stamina. Two facts, one instrument:
+##
+##   the FILL is time  -- how much of the window is left before you drop a tier
+##   the NUMBER is money -- what loot swept right now is worth
+##
+## They are deliberately adjacent, because the decision the bar exists to
+## provoke is a trade between them: the multiplier is only worth chasing for as
+## long as the fill lasts, and the fill gets SHORTER the higher the multiplier
+## goes. A player who understands nothing else about heat can still read "big
+## number, emptying fast" and draw the right conclusion.
+##
+## Dungeon only. In town there is nothing to chain and the bar would be a third
+## empty meter under a control legend.
+
+func _draw_heat(s: Vector2) -> void:
+	if Run == null or not Run.in_dungeon:
+		return
+
+	var origin := Pal.HEALTH_ORIGIN * s
+	var top := origin.y + Pal.px(Pal.HEALTH_H, s.y) + Pal.px(Pal.STAMINA_GAP, s.y) \
+		+ Pal.px(Pal.STAMINA_H, s.y) + Pal.px(Pal.HEAT_GAP, s.y)
+	var w := Pal.HEALTH_W * s.x * Pal.HEAT_RATIO
+	var h := Pal.px(Pal.HEAT_H, s.y)
+	var rect := Rect2(origin.x, top, w, h)
+
+	# The track is drawn even at zero, so the bar is a thing the player has seen
+	# before the first time it matters. An instrument that only appears once you
+	# are already doing well teaches nobody.
+	_canvas.draw_rect(rect.grow(Pal.px(1.0, s.y)), Pal.VOID)
+	_canvas.draw_rect(rect, Color(Pal.ASH, 0.6))
+
+	var col := _heat_color()
+	if Heat.kills > 0:
+		_canvas.draw_rect(Rect2(origin.x, top, w * Heat.window01(), h), col)
+
+	# NO TIER TICKS, deliberately, and this was tried the other way first. The
+	# health and stamina bars are both ticked, so ticking this one looked like
+	# consistency -- but on those two the fill and the ticks measure the SAME
+	# quantity, and here they would not. The fill is time; the tier is not. Four
+	# ticked segments under a nearly-full bar read as "4 of 4 tiers" at Warm,
+	# which is the exact opposite of true, and the capture at h_01_tier1 showed
+	# it doing precisely that. Tier is carried by the colour and by the number
+	# beside it; the bar means one thing only.
+
+	# The multiplier, right of the bar. Drawn at every tier including x1.0: the
+	# number is the whole point of the meter, and hiding it until tier 1 means
+	# the player meets it for the first time in the middle of a fight.
+	var scale := Pal.px(10.0 / PixelFont.H, s.y)
+	# String.num rather than "%.2f": it drops trailing zeros, so the ramp reads
+	# X1 / X1.25 / X1.6 / X2.2 instead of a column of dead decimals.
+	var label := "x" + String.num(Heat.multiplier(), 2)
+	PixelFont.draw_centred(_canvas, label,
+		Vector2(origin.x + w + Pal.px(22.0, s.y),
+			top + (h - PixelFont.height(scale)) * 0.5),
+		scale, col)
+
+
+## RUST while a break is flashing, then the tier ramp: dim when cold, MOTH at
+## Warm, GOLD from Hot up, breathing toward BONE at Blazing. GOLD is the money
+## colour everywhere else on this HUD, and heat is money, so the bar arriving at
+## gold is the game saying the same thing in the same voice.
+func _heat_color() -> Color:
+	if _heat_break_t >= 0.0:
+		return Pal.RUST
+	match _heat_tier:
+		0:
+			return Pal.MOTH if _heat_kills > 0 else Color(Pal.ASH, 0.8)
+		1:
+			return Pal.MOTH
+		2:
+			return Pal.GOLD
+		_:
+			var b := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.001 * TAU * 1.5)
+			return Pal.GOLD.lerp(Pal.BONE, b * 0.55)
 
 
 # --- The hands and the item buttons (§5.2, §5.2b) ---------------------------
@@ -645,6 +777,28 @@ func _draw_bag(s: Vector2) -> void:
 		Vector2(right - diamond - Pal.px(6.0, s.y), top), scale, col)
 
 	_draw_slips(s, right)
+	_draw_premium(s, right)
+
+
+## How much of that total is heat.
+##
+## The premium is already INSIDE the headline -- Run.bag_value() folds it in, so
+## the fee above is charging for it too. This line exists because a number that
+## is quietly larger than the drop tables can explain reads as a bug, and because
+## it is the only place the game ever says out loud that killing fast was worth
+## something. Take it away and heat is a multiplier the player has to infer from
+## a vendor screen five minutes later.
+func _draw_premium(s: Vector2, right: float) -> void:
+	if Run.premium <= 0:
+		return
+	var scale := Pal.px(14.0 / PixelFont.H, s.y)
+	var col: Color = Pal.GOLD
+	if _heat_bank_t >= 0.0:
+		# Lands BONE and settles to gold, so a pickup mid-fight registers in
+		# peripheral vision without anything moving.
+		col = Pal.BONE.lerp(Pal.GOLD, clampf(_heat_bank_t / HEAT_BANK_POP, 0.0, 1.0))
+	PixelFont.draw_right(_canvas, "+%d HOT" % Run.premium,
+		Vector2(right, Pal.PREMIUM_BASELINE * s.y), scale, col)
 
 
 ## A value histogram, not an inventory list. Slip width is that stack's share of

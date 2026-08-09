@@ -163,6 +163,40 @@ const STAMINA_REGEN := 46.0         # [tune] units/sec -> full in ~2.2 s
 ## [oot] 8 ticks of invulnerability when a shield block is released.
 const SHIELD_IFRAMES := 8.0 * TICK  # 0.4 s
 
+# --- Heat (momentum) --------------------------------------------------------
+## Kills chain into heat, and heat is worth MONEY, never power. A dungeon drop
+## that made the hero stronger would delete the smith (docs/GDD.md §4, pillar 4),
+## so every number below buys value or tempo and none of them buys damage.
+##
+## Indexed by tier 0..3 -- Cold, Warm, Hot, Blazing. TYPED arrays, not bare
+## ones: indexing an untyped const returns Variant, which is the inference trap
+## in CLAUDE.md §3. Not Packed* either, tempting as it looks -- the parser
+## cannot constant-fold `PackedFloat32Array([...])`, so a const built that way
+## reads as <null> at parse time in any OTHER script that indexes it with a
+## literal, and the failure is a parse error in the innocent file.
+const HEAT_TIERS := 4
+## Chain length at which each tier starts. [tune]
+const HEAT_TIER_KILLS: Array[int] = [0, 2, 5, 9]
+## Seconds a tier survives without a kill. It SHRINKS as you climb: the better
+## you are doing, the less slack you have, and that is what turns a bonus into a
+## rhythm. Index 0 is unused -- a cold chain still runs on tier 1's window, so a
+## single kill does not sit lit forever. [tune]
+const HEAT_TIER_WINDOW: Array[float] = [4.0, 4.0, 3.2, 2.5]
+## What the vendor pays for loot swept at this tier, as a multiplier. [tune]
+const HEAT_TIER_MULT: Array[float] = [1.0, 1.25, 1.6, 2.2]
+## Metres a mote is dragged toward the hero from, per tier. Removing the
+## stop-and-vacuum tax is the single change that makes a chain survivable --
+## without it the loop is kill, halt, hoover, and the window is already gone.
+const HEAT_MAGNET: Array[float] = [0.0, 2.5, 3.5, 4.5]
+const HEAT_MAGNET_SPEED := 9.0     # [tune] m/s, faster than the hero can run
+## Stamina a kill hands straight back. STAMINA_ROLL is 34, so a kill buys the
+## roll that carries you to the next body. This is the whole reason a chain is
+## physically possible at OOT's swing lengths -- see docs/METAGAME.md §10.
+const STAMINA_KILL := 40.0         # [tune]
+## Seconds a mote on the floor keeps the heat it was killed at. After this it is
+## worth base value: the loot cools whether or not you do. [tune]
+const HEAT_COOL_TIME := 6.0
+
 # --- Feel -------------------------------------------------------------------
 ## DELIBERATE DEVIATION: OOT has NO hit-stop. It sells impact with camera quake
 ## and rumble instead. We keep a little hit-stop because we have no rumble and

@@ -101,7 +101,10 @@ func _refresh() -> void:
 				"id": id,
 				"label": def.display_name,
 				"count": n,
-				"price": def.value * n,
+				# Not def.value * n: a stack carries its share of the run's heat
+				# premium, and the row has to name the gold that will actually
+				# land or the screen is lying about its own prices.
+				"price": Run.line_value(id),
 				"color": Pal.rarity_color(int(def.rarity)),
 				"blurb": def.blurb,
 				"ok": true,

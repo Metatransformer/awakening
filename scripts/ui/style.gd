@@ -54,6 +54,21 @@ const HEALTH_H := 15.0             ## reference px
 const STAMINA_RATIO := 0.62
 const STAMINA_H := 8.0
 const STAMINA_GAP := 4.0
+## The heat bar, third in the "you" stack and shortest of the three. It belongs
+## in this pole rather than the money pole even though it PAYS in money: what it
+## reports is a state of the body -- how fast you are killing and how long you
+## have -- and you read it with the same glance that asks "can I dodge". What it
+## is worth is printed beside it; what it has EARNED is over in the money pole,
+## and that separation is deliberate.
+const HEAT_RATIO := 0.44
+const HEAT_H := 6.0
+const HEAT_GAP := 4.0
+## The heat premium, right-aligned in the bag column. It sits ABOVE the toast
+## line because everything below is spoken for -- slips at 0.845, the total at
+## 0.900, the fee at 0.940 -- and because reading down the money pole then goes
+## "+96 HOT / what you just picked up / what it all is / what leaving costs",
+## which is the order the thoughts actually arrive in.
+const PREMIUM_BASELINE := 0.735
 ## The two HANDS, above health in the "you" pole. Two cells, not the old four:
 ## the fixed kit strip (sword/shield/hookshot/bow, always all four, always all
 ## owned) described an inventory the game never had.

@@ -33,6 +33,16 @@ make that question harder to answer?"**
 A feature that makes the answer obvious — infinite storage, a free teleport, a
 heal you can carry — is a feature that deletes the game. Say no to it.
 
+The question has **two axes**, and for a long time the game only priced one.
+*How deep* is the axis of space: the bands, the fee, the walk back. *How fast* is
+the axis of time, and until Heat existed nothing charged for standing still — the
+optimal line was pull one enemy, kill it, stop, sweep the drops, breathe, repeat,
+forever. Heat is the second axis. Loot swept while the chain is lit is worth more,
+so a hot run and a careful run are genuinely different bets rather than the same
+bet at different speeds. Crucially it pays in **money, not power** (pillar 4), and
+because the premium rides inside the bag it raises the fee too: going fast makes
+the walk back more expensive, which is the one question asked a second way.
+
 ---
 
 ## 3. The loop
@@ -47,8 +57,8 @@ heal you can carry — is a feature that deletes the game. Say no to it.
 
 Two ways out, and the difference between them is the whole game:
 
-- **Extract** — stand on the pad, hold the button, pay a share of what you are
-  carrying. Keep the bag. Heal to full.
+- **Extract** — use the Homeward Charm and stand still while it channels, paying
+  a share of what you are carrying. Keep the bag. Heal to full.
 - **Die** — lose the entire bag. Keep your gold and everything it bought.
 
 Death is not a rewind. It is a *bad trade*, and you can see it coming.
@@ -105,8 +115,10 @@ stack sizes** so rare items cost more slots per unit of value — a bag of King'
 Signets is a genuine choice against a bag of Grave Wax, not a strictly better
 one. Twelve bag slots to start, four more purchasable. The extract fee is
 `max(15, 25% of bag value)`, so a poor run is cheap to abandon and a rich one
-costs real money to bank. Five permanent upgrade lines, all limited, all priced
-so a good run buys one cheap thing or part of an expensive one.
+costs real money to bank. Loot swept while Heat is lit carries a premium on top
+of its base price, which sits inside the bag value and therefore inside the fee.
+Five permanent upgrade lines, all limited, all priced so a good run buys one
+cheap thing or part of an expensive one.
 
 Full numbers, and the reasoning behind each: **`docs/METAGAME.md`**.
 
@@ -128,8 +140,9 @@ Full input map and the pad bindings: `docs/CONTRACT.md` §4.
 **Built and playable:** town with vendor and smith, trade screens, the full
 ten-ingredient economy, five permanent upgrade lines, a seeded room-graph
 dungeon with corridors and chests, six enemy kinds across depth bands, physical
-loot drops with a refusing bag, the extraction pad, death, the fade transition,
-HUD, pause menu, saves.
+loot drops with a refusing bag, the Homeward Charm, death, the fade transition,
+HUD, pause menu, saves, and the Heat chain (§2) with its multiplier, its mote
+magnetism and its premium on the bag.
 
 **Not built, and named honestly:**
 
