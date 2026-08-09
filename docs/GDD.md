@@ -94,8 +94,8 @@ bug (and it was one).
 ## 5. Difficulty comes from depth, not from you
 
 **Bands, never level-scaling.** Rooms carry a distance from the entrance, and
-that distance alone chooses what spawns: crawlers and goblins at the mouth,
-skeletons and kobolds further, orcs deeper, a wraith at the bottom.
+that distance alone chooses what spawns: skeletons and goblins at the mouth,
+kobolds further, orcs deeper, a wraith at the bottom.
 
 Monsters get harder because *you walked further*, not because you got stronger.
 Scaling the world to the player flattens the map into wallpaper, makes a tenth

@@ -13,13 +13,10 @@ extends Node
 ##    own music cues, this notices the scene it landed in. That way training,
 ##    playtest and proving_ground get music too, without Flow learning about
 ##    every scene anyone adds.
-##  * **Combat** is polled off the enemies themselves. Both rosters
-##    (`actors/enemy/crawler.gd` and `actors/enemies/enemy.gd`) expose a public
-##    `state`, and while their enums differ at the tail, they agree exactly on
-##    1..4 = CHASE, WINDUP, STRIKE/LUNGE, RECOVER. That overlap is the check.
-##    Bus has no "combat started" signal and inventing one would mean editing
-##    both rosters; `target_acquired` is Z-lock, which is not the same thing --
-##    you can be swarmed without locking, and lock a corpse without a fight.
+##  * **Combat** is polled off the enemies themselves: anything in the `enemy`
+##    group that answers `is_engaged()`. Bus has no "combat started" signal, and
+##    `target_acquired` is Z-lock, which is not the same thing -- you can be
+##    swarmed without locking, and lock a corpse without a fight.
 ##  * **Boss** is the one thing that IS a signal, because Bus already has
 ##    `boss_engaged` / `boss_defeated` and they mean precisely this.
 ##
@@ -71,13 +68,9 @@ const XFADE_OUT := 1.4
 const XFADE_FIGHT := 0.5
 
 ## How long after the last enemy disengages before the fight music lets go.
-## Without this, one crawler losing line of sight for half a second whipsaws the
+## Without this, one goblin losing line of sight for half a second whipsaws the
 ## whole soundtrack.
 const FIGHT_LINGER := 4.0
-## Enemy `state` values that mean "this thing is actively fighting you". Shared
-## by both enemy scripts; see the header for why this range and not an enum.
-const ENGAGED_STATES := [1, 2, 3, 4]
-
 ## Cheap enough to run 4x a second, and no cue in the game needs finer timing.
 const POLL := 0.25
 
@@ -170,11 +163,14 @@ func _desired_mood() -> Mood:
 
 func _enemies_engaged() -> bool:
 	for e in get_tree().get_nodes_in_group(&"enemy"):
-		# `state` is a plain int on both rosters; guard anyway, because a future
-		# enemy that does not have one should mean "no fight", not a crash.
-		if not (&"state" in e):
+		# Asked, not inspected. This used to read `e.state` and compare it against
+		# a hardcoded range of enum indices, which meant this file had an opinion
+		# about the internals of a class it deliberately does not import. The
+		# enemy owns what its own states mean; duck-typed so a future enemy that
+		# answers the question differently just answers it.
+		if not e.has_method(&"is_engaged"):
 			continue
-		if ENGAGED_STATES.has(int(e.state)):
+		if e.is_engaged():
 			return true
 	return false
 

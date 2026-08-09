@@ -423,10 +423,11 @@ is deliberate:
 | The hero | `Hero.take_hit(hit) -> bool` | his health lives in `Game` so it survives the scene change extracting causes |
 
 `DamageArea` asks for `take_hit` first and falls back to the component. **Do not
-reach around it** — `Crawler` did, calling `hero.take_hit` itself, and that is
-the only reason it was the one enemy in the game that could hurt you: the nine
-GLB monsters all swing `DamageArea`s, which knew about `HealthComponent` alone
-and had therefore been harmless since the roster landed. A blow that lands
+reach around it** — the box-built placeholder enemy (`Crawler`, since deleted)
+did, calling `hero.take_hit` itself, and that is the only reason it was the one
+enemy in the game that could hurt you: the GLB monsters all swing `DamageArea`s,
+which knew about `HealthComponent` alone and had therefore been harmless from the
+day the roster landed until this was fixed. A blow that lands
 returns true; a blow the shield or an i-frame ate returns false, and only the
 first is announced on `connected`.
 
@@ -911,7 +912,7 @@ camera raycasts for the point under the crosshair and the muzzle is aimed at
 Arrow.new(); arrow.launch(from, dir, shooter)
 ```
 
-At `K.ARROW_SPEED` an arrow steps 0.7 m per frame, further than a crawler is
+At `K.ARROW_SPEED` an arrow steps 0.7 m per frame, further than a goblin is
 wide. An Area3D only reports what it overlaps on the frame it is sampled, so it
 passes through thin enemies about as often as it hits them — and the misses look
 like bad aim. Each frame it raycasts the **segment** it is about to travel.

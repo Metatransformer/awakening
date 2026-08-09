@@ -137,6 +137,19 @@ func _ready() -> void:
 	_orbit = 1.0 if _rng.randf() < 0.5 else -1.0
 
 
+## Is this thing in a fight right now? Everything except asleep and dead.
+##
+## Lives here because the states are this class's business. `Music` used to carry
+## a `[1, 2, 3, 4]` array of raw enum indices instead, which was not a style
+## choice: there were two enemy scripts with different enums, and 1..4 was the
+## range where they happened to agree. That roster is gone, and the magic numbers
+## went with it -- they were also quietly wrong, because for THIS enum 1..4 stops
+## at STRIKE, so a monster staggered by a hit or recovering from a swing counted
+## as not fighting and only the linger timer kept the combat music up.
+func is_engaged() -> bool:
+	return state != State.IDLE and state != State.DEAD
+
+
 ## How tall this one stands. An elite is the same monster made BIGGER, which is
 ## the whole reason the variant works without any per-kind art: height is already
 ## the number the flinch, the swing sound and the hitbox all read, so one number
@@ -725,8 +738,8 @@ func _on_died() -> void:
 	queue_free()
 
 
-## Rolls from `ItemDb.ENEMY_DROPS`, the same table the crawler pulls from, and
-## drops physical motes rather than crediting the bag: the bag is the thing the
+## Rolls from `ItemDb.ENEMY_DROPS` and drops physical motes rather than
+## crediting the bag: the bag is the thing the
 ## player is deciding about, and a number that moves while you are still
 ## swinging teaches nothing (docs/METAGAME.md §3).
 ##

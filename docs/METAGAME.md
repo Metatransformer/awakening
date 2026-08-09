@@ -361,9 +361,9 @@ time: rooms, connecting corridors, torches in pools with dark between them,
 enemies scattered on a ring so a group is not one clump you can clear with a
 single swing, and chests carrying the richer rolls.
 
-Enemies are `Crawler` (`scripts/actors/enemy/crawler.gd`) in the shallow rooms
-and `Enemy` (`scripts/actors/enemies/enemy.gd`) deeper: see you, close, **rear
-back and hold**, swing, recover. That telegraph is the entire fight — it is the
+Every enemy is an `Enemy` (`scripts/actors/enemies/enemy.gd`) driven by one of
+the monster models, shallow rooms included: see you, close, **rear back and
+hold**, swing, recover. That telegraph is the entire fight — it is the
 window to block, roll, or hit first — and it is why an enemy this simple is
 still a fight rather than a health tax. A pack keeps itself spread out, circles
 rather than stacking, and gives up and walks home if you leave — which is what
