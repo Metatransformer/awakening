@@ -24,6 +24,11 @@ Bus="*res://scripts/autoload/event_bus.gd"
 Game="*res://scripts/autoload/game_state.gd"
 ; Run must load after Game: it spends and grants gold on the way in and out.
 Run="*res://scripts/autoload/run_state.gd"
+; Heat is the momentum meter: kills chain, the chain decays, and what it is
+; worth gets stamped onto loot. After Game (it refunds stamina on a kill) and
+; after Run (it refuses to build a chain outside the dungeon). Before Hud, which
+; reads Heat.window01() every frame it draws.
+Heat="*res://scripts/autoload/heat.gd"
 Settings="*res://scripts/autoload/settings.gd"
 Saves="*res://scripts/autoload/save_game.gd"
 ; Music picks the track and crossfades it. It must load after Bus (it listens
