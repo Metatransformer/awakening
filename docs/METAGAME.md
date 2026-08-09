@@ -230,6 +230,27 @@ a player from farming one safe room forever.
 upgrade bought with it survive. You wake in town at full health — leaving you at
 zero would just kill you again before you could sell.
 
+### The run is not savable, and that is what the autosave protects
+
+`Flow` autosaves on **every** scene transition — entering the dungeon, taking
+the stair down, and coming home whether you walked out or were carried — and the
+HUD says **AUTOSAVING…** bottom-right as the world fades back in.
+
+What it writes is `Game`: gold, hearts, upgrades, forge rungs, key items. What
+it never writes is `Run`: no bag, no floor, no run seed, no `in_dungeon`. A save
+you could reload from the third floor would let a player undo the extraction
+decision this whole section is built on, and the fee would stop being a
+decision — so `save()` records **town** as the scene whenever `Run.in_dungeon`.
+
+So the autosave is not a safety net under the run. It is a safety net under the
+*metagame*: everything the run was being gambled **for** is committed to disk at
+the exact four moments it changes hands, and the gamble itself still resolves
+the way you played it.
+
+An autosave will never overwrite a save you made by hand — it takes the slot you
+are already playing, or the first empty one, or it declines and says nothing
+(`save_game.gd autosave()`).
+
 ---
 
 ## 6. The town
@@ -477,6 +498,19 @@ HEAT premium 114 vs 130 uncooled -- the gap IS the cooling
 HEAT struck      tier 3 -> 2
 HEAT OK
 ```
+
+The autosave has one too (§5):
+
+```bash
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --director=res://tools/directors/autosave.gd --out=/tmp/save/x.png --warmup=60
+```
+
+It drives all three transitions and asserts a slot was written each time, that
+every one of those saves points at **town** rather than at the floor it was
+taken on, and that with all three slots full of hand-made saves the autosave
+declines and the HUD stays quiet. It photographs the notice as the world comes
+back. It backs up the three real slots and puts them back, so running it cannot
+cost you a save.
 
 The forge and the pouch have theirs (§6.5):
 

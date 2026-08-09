@@ -1163,6 +1163,8 @@ Saves.peek(slot)        # header for the slot list; {empty:true} if unused
 Saves.save(slot)        # captures Game + hero position + current room
 Saves.load_slot(slot)   # restores Game, RETURNS {scene, room, pos, yaw}
 Saves.erase(slot)       # 3 slots, 0..2
+Saves.autosave()        # Flow calls this on EVERY transition; false = declined
+Saves.autosaved         # signal(slot) -- slot is -1 when it declined
 ```
 
 The save file is at **`VERSION = 2`**: it carries `bag_slots`, `upgrades` and
@@ -1173,6 +1175,32 @@ The save file is at **`VERSION = 2`**: it carries `bag_slots`, `upgrades` and
 `Saves.load_slot()` deliberately does **not** change scenes — it hands back
 where the hero belongs and lets the caller transition however it wants.
 Whoever owns room transitions should set `Saves.current_room` as rooms change.
+
+**Autosaving is `Flow`'s, and it is unconditional.** The last thing `_go` does,
+after the fade lifts, is call `Saves.autosave()` — there is no per-caller flag,
+because all four ways through that function (in, down, home paid, home in a box)
+are moments a player would be furious to replay, and a rule with no exceptions
+cannot be forgotten by the fifth caller. It runs at the *end* on purpose:
+`Saves.save` reads the hero out of the live tree, and the notice it raises is
+drawn by the HUD, so announcing it behind a black screen announces it to nobody.
+
+Two rules the format enforces, both proved by `tools/directors/autosave.gd`:
+
+- **A recorded scene is never a dungeon.** `_save_scene()` returns `Flow.TOWN`
+  whenever `Run.in_dungeon`. A slot holds `Game` and nothing of `Run`
+  (METAGAME §5), so a save pointing underground reloaded into a generated floor
+  with no bag, no fee and no run behind it. That predates the autosave and was
+  reachable by saving manually in the dungeon.
+- **An autosave never overwrites a save made by hand.** It takes the active slot
+  if there is one, else the first empty slot (which it then keeps), else it
+  declines and emits `autosaved(-1)`. Picking a slot to sacrifice for a player
+  who manages three by hand is the autosave deciding which of their saves
+  mattered least.
+
+`Hud` listens on `autosaved` and draws **AUTOSAVING…** bottom-right for 2.2 s on
+the toast's baseline, in `MOTH` — the HUD talking about itself, not about the
+world. It is a separate signal from `saved` because a manual save is made with
+the menu open and needs no notice at all.
 
 Audio buses `Master / Music / SFX / UI` exist in `default_bus_layout.tres`.
 Anything that plays a sound must route to `SFX`, `Music`, or `UI` — never
