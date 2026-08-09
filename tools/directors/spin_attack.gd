@@ -118,7 +118,12 @@ func run(rig) -> void:
 	# The sheet cannot also be the thing that times the swing: capture() stalls
 	# the frame clock. The measured release is a separate hold, below.
 	_clear()
-	Input.action_press(&"attack")
+	# `heavy`, not `attack`. The wind-up moved to the trigger when the sword grew
+	# a second button, and this director was left holding RB — which charges
+	# nothing now, so the sheet was four frames of an unlit sword and the release
+	# was a light swing. Beat 1 above stays on `attack` deliberately: the thing it
+	# is checking is that the LIGHT chain has not inherited the spin's 360 box.
+	Input.action_press(&"heavy")
 	# Wait on the ARMED FLAG, never on a frame count. capture() stalls the frame
 	# clock, so 20 frames of waiting is not 20/60 of a second of holding — the
 	# first version of this beat photographed four frames of an unlit sword and
@@ -131,7 +136,7 @@ func run(rig) -> void:
 		lit = bool(combat.get(&"charged"))
 		if lit:
 			break
-	Input.action_release(&"attack")
+	Input.action_release(&"heavy")
 	for i in 6:
 		await rig.wait_frames(4)
 		await rig.capture(out.path_join("s_03_spin_%d.png" % i))
@@ -141,7 +146,7 @@ func run(rig) -> void:
 
 	# --- 3. the release, measured ---------------------------------------------
 	_clear()
-	await rig.hold_seconds(["attack"], charge_time + 0.35)
+	await rig.hold_seconds(["heavy"], charge_time + 0.35)
 	# Long enough for a 0.90 s spin to open its window, sweep, and close it.
 	await rig.wait_seconds(1.8)
 	var spin_front := _struck("PostA")
@@ -190,7 +195,7 @@ func run(rig) -> void:
 		cam.global_position = centre + Vector3(0.0, 4.2, 4.6)
 		cam.look_at(centre + Vector3(0.0, 0.6, 0.0), Vector3.UP)
 	_clear()
-	await rig.hold_seconds(["attack"], charge_time + 0.35)
+	await rig.hold_seconds(["heavy"], charge_time + 0.35)
 	for i in 8:
 		await rig.wait_frames(3)
 		await rig.capture(out.path_join("s_05_arc_%d.png" % i))

@@ -228,7 +228,7 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `move_up/down/left/right` | WASD, arrows | left stick | move |
 | `cam_up/down/left/right` | mouse motion (read in code) | right stick | camera |
 | `attack` | **LMB** | **RB / R1** (pad10) | light attack — the chain, or fire what is in the right hand |
-| `heavy` | **F** | **RT / R2** (axis5+) | heavy — **hold** = spin, **airborne** = jump attack, **locked** = leap, or fire what is in the right hand |
+| `heavy` | **F** | **RT / R2** (axis5+) | heavy — one pull, one blow, on the **release**: **tap** = overhead, **hold** = spin, **airborne** = jump attack, **locked** = leap, or fire what is in the right hand |
 | `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held**, and it targets, and it recentres |
 | `context` | **Shift** | **B / Circle** (pad1) | **tap** = dodge — **hold** = run, and then it is not a dodge |
 | `use_item` | **X** | **X / Square** (pad2) | drink the selected bottle — §4.1 |
@@ -413,11 +413,20 @@ life there was not: the heavy was the charge, held off the same light button, an
 one. RB taps the light chain; RT throws the overhead, and *holding* RT winds up
 the **spin**.
 
-Both come out on the **press**, never on the release — a button that waits to see
-whether you meant a tap puts `charge_time` (0.42 s) of latency on every ordinary
-swing. So the wind-up costs the recovery you were spending anyway, and a mashed
-trigger never charges anything. That is OOT's B and Elden Ring's R2 exactly.
-`combat.charged` is public and goes up at `charge_time`.
+**One pull of RT is exactly one blow**, and both come out on the **release**. A
+short pull is the overhead; a pull past `charge_time` (0.42 s) is the spin
+*instead of* it. That is Elden Ring's R2, and `combat.charged` — public, up at
+`charge_time` — is which of the two the release will pay out.
+
+They used to be a **sequence** and it was wrong: the overhead fired on the press
+and the charge kept running underneath it, so holding the trigger threw the
+overhead *and* the spin off a single pull. Two power attacks, the second landing
+while the first was still finishing, and a charge that was not a decision — it
+was what happened to you if you did not let go fast enough. The argument for the
+old ordering was latency, that a button waiting to see whether you meant a tap
+costs `charge_time` on every heavy. It does not: a tap is however long the finger
+is actually down, a frame or three, and the swing with no latency at all is RB.
+A button that quietly does two things is the more expensive problem.
 
 **Every sword swing costs stamina, and the rule is not the dodge's rule**
 (`HeroCombat._can_swing`, `Game.spend_stamina(cost, partial := true)`). Any
@@ -476,10 +485,12 @@ because a full hand owns both shoulders). It is a committed forward lunge — `H
 drives him along `_forward()` at 8.0 m/s for `dash_drive_time` (0.20 s) under
 the `SwingDash` one-shot, does 3 quarter-hearts, and resets the light chain so
 it can never be step 2 of a combo. It reads as a *decision*: the guard drops,
-he closes the gap, and the recovery is long enough to punish. Note it takes the
-press, so it pre-empts the charge — you cannot wind up a heavy from behind the
-shield, which is deliberate, because a shielded charge is a stance with no
-answer to it.
+he closes the gap, and the recovery is long enough to punish. It has no bearing
+on the charge either way — that lives on the other shoulder now (§4), and a
+guarded player pulling RT winds up a spin exactly as an unguarded one does. This
+paragraph used to claim the dash "pre-empts the charge, so you cannot wind up a
+heavy from behind the shield": true when the charge was held off this same
+button, and stale since it moved.
 
 **The air slam is on BOTH shoulders off the floor**, and it is the same move
 either way: `HeroCombat._tick_light_button` throws it on the `attack` press, and
@@ -1136,8 +1147,9 @@ hero.wish_dir() -> Vector3          # the stick, camera-relative, in world space
 | light 1 | `ss_slash_01` | attack | 2 |
 | light 2 | `ss_slash_03` | attack, again inside `chain_window` | 2 |
 | light 3 (finisher) | `ss_slash_04` | attack, again | 4 |
-| spin | `ax_melee_attack_360_low` | attack **held** past `charge_time`, on release | 5, all round |
-| lunge | `ss_attack_01` | context + guard, still stick, **locked on** | 4 |
+| heavy | `ss_slash_04` | heavy, **tapped** — on the release | 4 |
+| spin | `ax_melee_attack_360_low` | heavy **held** past `charge_time`, on release, *instead of* the heavy | 5, all round |
+| lunge | `ss_attack_01` | heavy, tapped, **locked on** and in range | 4 |
 | dash | `ss_attack_03` | attack, with the **guard already up** | 3 |
 
 The clips were picked off `tools/directors/swing_lookdev.gd`, which renders
@@ -1171,10 +1183,16 @@ fractions of it, so the blade's live slice sits in the same place in the swing.
 swing clock runs a frame ahead of his `MoveState.ATTACK`. Ask him on the
 boundary frame and he refuses, and the press vanishes.
 
-**The heavy is a hold, not a button** (§4). The press that starts the hold still
-throws its light swing; the release throws the heavy, buffered like any other
-intent if the light is still running. A heavy ENDS the chain rather than
-counting as a step in it.
+**The heavy and the spin are one pull** (§4). The press starts the wind-up and
+throws nothing; the release throws whichever of the two `combat.charged` says,
+buffered like any other intent if a swing is still running. Both END the chain
+rather than counting as a step in it.
+
+A wind-up **taken** from the player mid-pull — a shop opening, an item drawn, the
+ground leaving his feet — pays out nothing at all, and the release edge that
+arrives afterwards is swallowed (`_charge_t < 0`). Otherwise a cancelled hold
+comes back as an overhead a second later, which is the same double-blow bug
+wearing a different hat.
 
 **The lunge is what Z-targeting buys.** It refuses without a lock, on purpose;
 a version that also fired unlocked would just be a better standing attack. It

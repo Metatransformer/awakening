@@ -12,9 +12,16 @@ extends RefCounted
 ##        filename carries the timestamp to put in `charge_pose_time`.
 ##   b_*  the LIVE hold, from the game camera, with the button actually held.
 ##        This is the one that matters — the scrub is the clip alone, and the
-##        hold is that clip blended under a light swing that is still finishing,
-##        over whatever the locomotion was doing. A pose that reads in `a` and
-##        not in `b` is not a pose the player will ever see.
+##        hold is that clip eased in over whatever the locomotion was doing. A
+##        pose that reads in `a` and not in `b` is not a pose the player will
+##        ever see.
+##
+##        It used to be that clip blended under a light swing that was still
+##        finishing, because the press that started the hold threw one. It does
+##        not any more: one pull of the trigger is one blow, and the wind-up is
+##        now the FIRST thing the player sees rather than something arriving
+##        under a swing. That makes this sheet a stricter test than it was —
+##        there is no swing left to hide a weak pose behind.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
@@ -96,7 +103,8 @@ func run(rig) -> void:
 		print("POSE FAIL no HeroCombat on the Hero")
 		return
 
-	Input.action_press(&"attack")
+	# `heavy`, not `attack`: the wind-up lives on the trigger. RB charges nothing.
+	Input.action_press(&"heavy")
 	# Wait on the ARMED FLAG, not on a frame count: capture() stalls the frame
 	# clock, so N frames of waiting is not N/60 of a second of holding.
 	var lit := false
@@ -111,7 +119,7 @@ func run(rig) -> void:
 	for i in 2:
 		await rig.wait_frames(10)
 		await rig.capture(out.path_join("b_armed_%d.png" % i))
-	Input.action_release(&"attack")
+	Input.action_release(&"heavy")
 
 	if not lit:
 		print("POSE FAIL the hold never armed — the b sheet is of a tap")

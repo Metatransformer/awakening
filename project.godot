@@ -254,16 +254,27 @@ attack={
 ; InputEventJoypadMotion like the sticks, so the 0.2 deadzone is how far it
 ; travels before it counts.
 ;
-; ONE FINGER, ONE PULL, AND WHAT IT DOES IS WHATEVER IS IN THE RIGHT HAND:
+; ONE FINGER, ONE PULL, ONE BLOW, AND WHICH BLOW IS WHATEVER IS IN THE RIGHT
+; HAND AND HOW LONG YOU HELD IT:
 ;
-;   sword, free            -> the heavy swing. The overhead, slower and harder
-;                             than the chain on RB above.
-;   sword, HELD            -> the wind-up, and the release is the spin. Elden
-;                             Ring's R2 exactly: tap it for the heavy, hold it
-;                             for the charged one, and the charge costs the
-;                             recovery you were spending anyway.
+;   sword, tapped          -> the heavy swing. The overhead, slower and harder
+;                             than the chain on RB above. It comes out on the
+;                             RELEASE, not the press.
+;   sword, HELD            -> the wind-up, and the release is the spin INSTEAD
+;                             of the overhead. Elden Ring's R2 exactly: tap it
+;                             for the heavy, hold it for the charged one, and
+;                             the two are alternatives.
+;
+;                             THEY USED TO BE A SEQUENCE, and that was the bug:
+;                             the overhead fired on the press and kept charging
+;                             underneath itself, so one pull of the trigger threw
+;                             the overhead AND the spin. Two power attacks nobody
+;                             asked for, and a charge that was not a choice --
+;                             it was what happened if you did not let go fast
+;                             enough. The blow is on the release now.
 ;   sword, locked on       -> the JUMP ATTACK, which is OOT's Z+A and used to be
-;                             on A. It only exists under a lock, and out of the
+;                             on A. The tapped release's other form, not a third
+;                             blow. It only exists under a lock, and out of the
 ;                             lock's range it falls through to the heavy rather
 ;                             than going silent -- see hero_combat.gd.
 ;   bow / hookshot drawn   -> that item's trigger. Held: down aims, up looses.
