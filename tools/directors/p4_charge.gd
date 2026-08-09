@@ -1,13 +1,17 @@
 extends RefCounted
-## The sword is two buttons: the light chain on RB, the heavy on RT. Does the
-## trigger give you the heavy on the press AND the spin on the hold?
+## The sword is two buttons: the light chain on RB, the heavy on RT. Does one
+## pull of the trigger give you exactly ONE blow?
 ##
-## This is the third layout this director has measured. It replaced p4_heavy.gd,
+## This is the fourth layout this director has measured. It replaced p4_heavy.gd,
 ## which pressed a `heavy_attack` action that no longer exists; then it measured
-## one button that was tap-light / hold-heavy; and now the two verbs have a
-## button each and the HOLD on the heavy's button buys the spin. What is worth
-## measuring did not change much, because the failure mode did not: a button
-## that carries a press meaning and a hold meaning can always eat one of them.
+## one button that was tap-light / hold-heavy; then two verbs with a button each,
+## where the heavy came out on the PRESS and the spin on the release. That last
+## one is what this pass fixes and what claim 5 below now inverts: holding the
+## trigger threw the overhead and then the spin, two power attacks off a single
+## pull, and the charge stopped being a choice — it was what happened to you if
+## you did not let go fast enough. The failure mode has never changed across any
+## of the four: a button carrying a press meaning and a hold meaning can always
+## serve both.
 ##
 ##   1. `heavy_attack` is GONE and both `attack` and `heavy` exist. A layout edit
 ##      that did not take is the cheapest failure here and the hardest to see in
@@ -15,10 +19,12 @@ extends RefCounted
 ##   2. A tap on `attack` still swings immediately, with no charge latency.
 ##   3. A tap on `heavy` lands a BIGGER blow than the light, and LATER. Its cost
 ##      is the commitment; a heavy that lands as fast as a light is free.
-##   4. A SHORT hold of `heavy` is just that heavy — one blow, nothing extra on
-##      the release. Otherwise the spin is not a choice, it is a side effect.
-##   5. A LONG hold arms `combat.charged`, and letting go lands a SECOND blow.
-##      That is the whole feature.
+##   4. A SHORT hold of `heavy` is just that heavy — ONE blow, on the release.
+##      Otherwise the spin is not a choice, it is a side effect.
+##   5. A LONG hold arms `combat.charged`, and letting go lands ONE blow: the
+##      spin, bigger than the heavy, INSTEAD of it and not after it. This is the
+##      claim the old layout failed — it landed two — and it is the whole point
+##      of the button.
 ##   6. The shield still works, on a layout that moved two buttons around it.
 ##   7. An EMPTY stamina bar refuses the swing outright. That is the new gate
 ##      (K.STAMINA_SWING / _HEAVY / _SPIN) and nothing else in the project
@@ -160,14 +166,19 @@ func run(rig) -> void:
 	Input.action_press(&"heavy")
 	await rig.wait_seconds(charge_time + 0.35)
 	var charged: bool = bool(combat.get(&"charged"))
+	# Nothing may have landed yet. The press throws no swing any more, so a blow
+	# arriving during the HOLD is the double-attack bug returning, and it is
+	# cheaper to catch here than to infer from the totals afterwards.
+	var blows_during_hold := _hits.size() - mark
 	Input.action_release(&"heavy")
 	# Counted from the RELEASE, which is when the spin is asked for. Counting
 	# from the press would measure the hold, and the hold is the player's choice
 	# rather than a property of the blow.
-	var spin_frames := await _frames_to_hit(rig, mark + 1)
-	var held_heavy := _hit(mark)
-	var spin_dmg := _hit(mark + 1)
+	var spin_frames := await _frames_to_hit(rig, mark)
+	var spin_dmg := _hit(mark)
 	await rig.wait_seconds(LAPSE)
+	# The whole feature, in one number: a pull that charged is ONE blow.
+	var long_blows := _hits.size() - mark
 
 	# --- an empty bar refuses ------------------------------------------------
 	# Both buttons, because the gate is on the SWING rather than on either button.
@@ -210,8 +221,8 @@ func run(rig) -> void:
 	print("CHARGE heavy tap dmg=%d contact_frame=%d" % [heavy_dmg, heavy_frames])
 	print("CHARGE short hold (%.2fs) blows=%d dmg=%d charged=%s"
 		% [charge_time * 0.6, short_blows, short_dmg, short_charged])
-	print("CHARGE long hold press dmg=%d release dmg=%d release_to_contact=%d charged=%s/%s"
-		% [held_heavy, spin_dmg, spin_frames, charged, sheet_charged])
+	print("CHARGE long hold blows=%d (during hold %d) dmg=%d release_to_contact=%d charged=%s/%s"
+		% [long_blows, blows_during_hold, spin_dmg, spin_frames, charged, sheet_charged])
 	print("CHARGE empty bar blows=%d (light %d)" % [spent_blows, light_on_empty])
 
 	if light_dmg <= 0:
@@ -237,11 +248,14 @@ func run(rig) -> void:
 		print("CHARGE FAIL holding past charge_time never armed the charge"); fails += 1
 	if not sheet_charged:
 		print("CHARGE FAIL the photographed hold never armed — the sheet shows nothing"); fails += 1
-	if held_heavy != heavy_dmg:
-		print("CHARGE FAIL the press that started the hold dealt %d, not the tap's %d — the hold ate the press"
-			% [held_heavy, heavy_dmg]); fails += 1
+	if blows_during_hold != 0:
+		print("CHARGE FAIL %d blow(s) landed DURING the hold — the press is swinging again"
+			% blows_during_hold); fails += 1
+	if long_blows != 1:
+		print("CHARGE FAIL a charged pull threw %d blows, not 1 — there are two power attacks again"
+			% long_blows); fails += 1
 	if spin_dmg <= heavy_dmg:
-		print("CHARGE FAIL the release dealt %d against the press's %d"
+		print("CHARGE FAIL the charged release dealt %d against a tapped heavy's %d"
 			% [spin_dmg, heavy_dmg]); fails += 1
 	if spent_blows != 0:
 		print("CHARGE FAIL an empty stamina bar still threw %d blow(s)"

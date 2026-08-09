@@ -92,16 +92,16 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 @export var heavy_knockback: float = K.KNOCKBACK_HEAVY
 
 @export_group("Spin")
-## Seconds the trigger must be HELD before the release becomes a spin.
-## Under it, the release is nothing — the swing the press already started is all
-## you get, which is what makes a tap a tap.
+## Seconds the trigger must be HELD before the release becomes a spin. Under it,
+## the release is the OVERHEAD — the two are the same pull answered differently,
+## and this is the line between them.
 ##
-## 0.42 is deliberately SHORTER than the swing it overlaps: the point is that you
-## can start winding up during the swing you just threw, so a charge costs you the
-## recovery you were spending anyway rather than a separate standing-still beat.
-## It now overlaps the HEAVY (0.99) rather than the light swing it was tuned
-## against, which only widens the overlap — the spin is armed less than halfway
-## through the overhead the same press threw.
+## It is also, therefore, the worst-case latency on a tapped heavy, which is why
+## it is 0.42 and not the half-second a "charge" usually is. Nobody holds a tap
+## for four tenths of a second; the real cost on a tap is however long the finger
+## is actually down, which is a frame or three. What 0.42 buys is the other side:
+## a threshold short enough that committing to the spin does not feel like
+## waiting, and long enough that a hurried press cannot fall into it by accident.
 @export var charge_time: float = 0.42
 ## Over a full heart, against the light swing's half. The spin is worth the
 ## commitment or nobody presses it twice.
@@ -1004,19 +1004,29 @@ func _tick_light_button() -> void:
 
 ## RT — the heavy, and everything the heavy becomes:
 ##
-##   on the ground  -> the overhead, on the press.
-##   held           -> the wind-up, and the release is the spin.
-##   locked on      -> the leap, closing the gap (`_begin`).
+##   on the ground  -> the wind-up, on the press. NOTHING swings yet.
+##   released short -> the overhead.
+##   released armed -> the spin. One pull, one blow, and WHICH blow is the
+##                     length of the pull.
+##   locked on      -> the leap, closing the gap (`_begin`) — the short
+##                     release's other form, not a third blow.
 ##   IN THE AIR     -> the jump attack. Same slam RB throws off a jump, on the
 ##                     button the player is already holding for the heavy.
 ##
-## The heavy comes out on the PRESS and never on the release, and that ordering
-## is the whole feel of the button. One that waited to see whether you meant a
-## tap would put `charge_time` of latency on every heavy — which is the most
-## common way a charge attack ruins the swing it was bolted to. OOT does exactly
-## this with B, and Elden Ring with R2: the swing happens, and CONTINUING to hold
-## is what winds up the next one. So the charge costs the recovery you were
-## spending anyway, and a mashed trigger never stores anything.
+## ONE PULL IS ONE BLOW, and that is the whole feel of the button. It used to
+## throw the overhead on the PRESS and keep charging underneath it, so a player
+## who held the trigger got the overhead AND the spin off a single pull — two
+## power attacks nobody asked for, the second one arriving while the first was
+## still landing. The charge stopped being a choice: it was what happened to you
+## if you did not let go fast enough.
+##
+## So the blow moved to the release. That is Elden Ring's R2, which is what the
+## button was always documented as being (project.godot, `heavy`): tap it for the
+## overhead, hold it for the charged one, and the two are alternatives rather
+## than a sequence. The cost is `charge_time` of latency on a tapped heavy in the
+## worst case — which is exactly what a tap-length hold is, a fraction of a
+## second — and that is the price of the trigger meaning one thing. The button
+## with no latency at all is RB, and it is right there.
 func _tick_heavy_button(delta: float) -> void:
 	if equipped != &"":
 		# An item owns this trigger while it is drawn (`_tick_item_trigger`), so
@@ -1053,18 +1063,33 @@ func _tick_heavy_button(delta: float) -> void:
 		# a rise that begins at the top is a beep.
 		if _charging_player != null:
 			_charging_player.play()
-		_press(Intent.HEAVY)
 		return
 	if Input.is_action_just_released(&"heavy"):
-		_release_charge(charged)
+		# The one place either blow is asked for. `_release_charge` fires the spin
+		# when the wind-up armed; when it did not, the pull was a tap and the tap
+		# is the overhead. Exactly one of the two, every time.
+		#
+		# `_charge_t >= 0.0` is what makes that "every time" honest. A hold can be
+		# TAKEN from the player mid-pull — a shop opening, an item drawn, the
+		# ground leaving his feet — and each of those calls `_release_charge(false)`
+		# and parks the clock at -1. The finger is still down; the release edge is
+		# still coming. Without this the edge would land an overhead a second after
+		# the wind-up it belonged to was cancelled, which is the same bug as the
+		# double blow wearing a different hat.
+		var live := _charge_t >= 0.0
+		var armed := charged
+		_release_charge(armed)
+		if live and not armed:
+			_press(Intent.HEAVY)
 		return
 	if _charge_t < 0.0:
 		return
 	_charge_t += delta
-	# The held pose, from the first frame of the hold rather than from the arm-up.
-	# It blends in under the light swing the press threw (hero.gd §Charge), so
-	# what the player sees is the swing finishing INTO the wind-up instead of
-	# returning to idle and then striking a pose a moment later.
+	# The held pose, from the first frame of the hold rather than from the arm-up:
+	# it eases in (hero.gd §Charge) rather than snapping, so a tap never reads as
+	# a pose at all, and a real hold is already visibly winding up well before the
+	# charge arms. A pose that waited for `charge_time` would tell the player the
+	# thing they can already see coming and nothing on the way there.
 	_hero.charging = true
 	if not charged and _charge_t >= charge_time:
 		_set_charged(true)
