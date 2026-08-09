@@ -76,6 +76,12 @@ const GLYPHS := {
 	# MISSING and the shop drew a solid block mid-sentence.
 	">": [0x00, 0x10, 0x08, 0x04, 0x08, 0x10, 0x00],
 	"<": [0x00, 0x01, 0x02, 0x04, 0x02, 0x01, 0x00],
+	# Same story as the chevrons, found the same way. The controls legend has read
+	# "HOLD=RUN" since the sprint landed and the `=` has been drawing as a solid
+	# block that whole time — MISSING is a filled 5x7 cell, which at legend size
+	# looks enough like a deliberate separator to survive several screenshots.
+	# Look at the glyph table before you put a new character in a string.
+	"=": [0x00, 0x00, 0x1F, 0x00, 0x1F, 0x00, 0x00],
 	# The four arrows are the D-pad's key caps. The HUD draws the item buttons in
 	# the SHAPE of the cross, so the cap under the top cell wants to be an arrow
 	# and not the four letters "D-Up" — see Glyph.PAD_CAPS.

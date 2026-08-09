@@ -390,14 +390,27 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, SPIN, LUNGE, DASH }
 ## Top speed while the dodge button is held. See K.SPRINT_SPEED for why it is
 ## deliberately slower than a roll.
 @export var sprint_speed: float = K.SPRINT_SPEED
-## How long `context` must be held before it stops being a dodge and becomes a
-## run. Elden Ring's arrangement — tap to roll, hold to sprint, one button.
+## The tap window. `context` released inside it is a DODGE; still down when it
+## expires, the press is a RUN and will never be a dodge, however it ends.
+## Elden Ring's arrangement — tap to roll, hold to sprint, one button — and this
+## is the *measuring* of it, which is the half that was missing.
 ##
-## The dodge still fires on the PRESS, unchanged, so nothing here costs the roll
-## any latency: waiting to see whether a press was a tap would put this much lag
-## on the most reaction-critical button in the game. The consequence is that a
-## held button rolls and THEN runs, which is what Elden Ring does too, and the
-## threshold is shorter than a roll so the hero comes out of one already moving.
+## An earlier pass fired the dodge on the press and let the sprint start
+## underneath it, on the reasoning that waiting to classify a press would put
+## this much latency on the most reaction-critical button in the game. That is
+## true, and the cost it bought was worse: every run in the game began with an
+## involuntary roll, which spends a third of the stamina bar the run is about to
+## need and throws the hero 3.2 m in whatever direction he happened to be
+## pointing. You cannot start running without dodging first.
+##
+## The latency argument survives where it actually applies. `_context_resolves_now`
+## fires the press INSTANTLY in every stance a run is withheld from — locked,
+## guarding, aiming, airborne — so the reaction-critical dodge, the one you make
+## with a sword coming at you, still costs nothing. Only the free-roam dodge,
+## which you make out of a run against no immediate threat, waits to be
+## classified. The window is one number and not two on purpose: the frame the
+## sprint begins is the frame the dodge stops being possible, so there is no
+## band in which a press means neither.
 @export var sprint_hold_time: float = 0.18
 ## Stamina per second, spent while running. The bar is the whole limit on it —
 ## there is no separate sprint meter, so a run and a dodge come out of the same
@@ -427,9 +440,20 @@ var blocking: bool = false
 var charging: bool = false
 ## True while the dodge button has been held past `sprint_hold_time` and the bar
 ## is paying for it. Public because the HUD and the camera both want to know the
-## hero is running, and because it survives the ROLL a held press started —
-## which is the point (see `sprint_hold_time`).
+## hero is running.
 var sprinting: bool = false
+
+## True for exactly ONE frame: the frame on which a press of `context` has
+## resolved as a dodge rather than a run. Set by `_tick_context`, which is the
+## only thing in the project that reads the raw button — `_try_start_roll` and
+## `HeroCombat._tick_context_button` both read this instead, for the same reason
+## they both call `stick_neutral()`. Two places measuring one hold is how a press
+## comes out as a leap and a roll on the same frame, or as neither.
+##
+## Written before the state machine runs and read after it, in this order:
+## `_physics_process` -> `_tick_context` -> the state tick -> HeroCombat's own
+## `_physics_process` (it is a CHILD of the hero, so it ticks second).
+var context_tapped: bool = false
 
 ## The sword, shield and swing. Built in _ready; other packages reach combat
 ## through the hero rather than reaching into the scene tree for it.
@@ -497,6 +521,16 @@ var _slam_hang_left: float = 0.0
 var _slam_landed: bool = false
 ## Seconds `context` has been held unbroken. The tap/hold split reads this.
 var _context_held: float = 0.0
+## True while the press in progress could still turn out to be a dodge. Cleared
+## the moment it becomes a run, is claimed by a Prompt, or is spent — so a press
+## can be paid out exactly once, and a press that became a run cannot cash in as
+## a dodge when the button finally comes up.
+var _context_armed: bool = false
+## Last frame's raw button state, so the press EDGE survives a physics frame that
+## `is_action_just_pressed` missed. The harness drives the button with
+## `Input.action_press` from a render frame (CLAUDE.md §3) and the window renders
+## uncapped, so both a doubled and a dropped just-pressed are real here.
+var _context_down: bool = false
 ## NOTE for the next person who measures a jump and finds it short: it is not
 ## `floor_snap_length`. 0.45 m of snap looks exactly like the culprit — it is
 ## enough to swallow the last 0.08 s of the descent — and it is not, because
@@ -1108,10 +1142,11 @@ func _physics_process(delta: float) -> void:
 
 	# Both button clocks run OUTSIDE the state match, and both have to. The jump
 	# buffer exists precisely to survive the frames the hero is not free, and the
-	# sprint hold has to keep counting through the ROLL a held press just started
-	# — that is the whole tap-versus-hold arrangement (see `sprint_hold_time`).
+	# A button's clock has to keep counting through a state that cannot act on it
+	# — a press made during an attack recovery is still a press whose LENGTH
+	# decides what it meant (see `sprint_hold_time`).
 	_tick_jump_buffer(delta, locked)
-	_tick_sprint(delta, locked)
+	_tick_context(delta, locked)
 
 	match state:
 		MoveState.GROUND:
@@ -1312,7 +1347,7 @@ func _camera_heading() -> Vector3:
 ## The speed the stick is asking for, sprint included. One function so that
 ## every tick that reads a target speed reads the same one — the locked tick and
 ## the camera-facing tick call this too, and they get the plain curve back
-## because `sprinting` is never true in either (see _tick_sprint).
+## because `sprinting` is never true in either (see _tick_context).
 func _target_speed(mag: float) -> float:
 	var s := K.speed_for_stick(mag)
 	# Any deflection at all becomes a full run, rather than scaling the curve.
@@ -1324,22 +1359,68 @@ func _target_speed(mag: float) -> float:
 	return s
 
 
-## Tap versus hold on one button. The tap half is `_try_start_roll`, which still
-## fires on the press — nothing here delays a dodge.
+## The whole A button, measured: how long it was held is what decides whether the
+## press was a DODGE or a RUN, and this is the only place that reads it. Both
+## payouts leave through `context_tapped`; the sprint leaves through `sprinting`.
+##
+## The three ways a press ends:
+##
+##   1. It cannot become a run at all (`_context_resolves_now`) — paid out on the
+##      PRESS frame, no latency, exactly as it always was. That is the dodge you
+##      make with something swinging at you.
+##   2. It is released before `sprint_hold_time` — paid out on the RELEASE frame.
+##      Press and release inside one physics frame is the same path: `pressed` is
+##      already false on the frame the edge is seen, and the tap falls out below.
+##   3. It is still down when the window expires — disarmed, forever. The run
+##      starts and the button will not roll when it eventually comes up. Note
+##      this is decided by the CLOCK and not by whether the run materialised: a
+##      hold refused by an empty stamina bar is still a hold, and paying it out
+##      as a late dodge would be a roll the player asked for a third of a second
+##      ago and has stopped expecting.
 ##
 ## `Prompt.claims_hold` is the other button this one shares. On a pad the dodge
 ## and the interact are both A/Cross, so holding it at the dungeon gate is the
-## player filling the gate's ring — not winding up to run at it. The clock is
-## RESET rather than merely frozen: letting go at the gate and pressing again a
-## step later should be a fresh hold, not one that inherits the 0.9 s the ring
-## already took.
-func _tick_sprint(delta: float, input_locked: bool) -> void:
-	if input_locked or not Input.is_action_pressed(&"context") \
-			or (Prompt != null and Prompt.claims_hold()):
+## player filling the gate's ring — not winding up to run at it, and not a dodge
+## owed on release either, which is why this disarms as well as resetting. The
+## clock is RESET rather than merely frozen: letting go at the gate and pressing
+## again a step later should be a fresh hold, not one that inherits the 0.9 s the
+## ring already took.
+func _tick_context(delta: float, input_locked: bool) -> void:
+	context_tapped = false
+	var pressed := not input_locked and Input.is_action_pressed(&"context")
+	# The edge, taken from BOTH sources: `just_pressed` alone drops a press the
+	# physics frame did not see, and the raw rising edge alone drops a press and
+	# release that landed inside one frame.
+	var began := (pressed and not _context_down) \
+		or (not input_locked and Input.is_action_just_pressed(&"context"))
+	_context_down = pressed
+
+	if input_locked or (Prompt != null and Prompt.claims_hold()):
 		_context_held = 0.0
+		_context_armed = false
 		sprinting = false
 		return
-	_context_held += delta
+
+	if began:
+		_context_held = 0.0
+		_context_armed = true
+	if pressed:
+		_context_held += delta
+
+	if _context_armed:
+		if _context_resolves_now():
+			# Nothing to wait for: this press has no run in it.
+			context_tapped = true
+			_context_armed = false
+		elif not pressed:
+			context_tapped = true
+			_context_armed = false
+		elif _context_held >= sprint_hold_time:
+			_context_armed = false
+
+	if not pressed:
+		sprinting = false
+		return
 
 	# Free locomotion only, and each exclusion is its own reason:
 	#   locked   — the stick is a circle-strafe there, and "run" has no direction
@@ -1347,7 +1428,9 @@ func _tick_sprint(delta: float, input_locked: bool) -> void:
 	#   guarding — a sprint would have to drop the shield, and dropping a stance
 	#              the player is holding a button for is worse than not running.
 	#   aiming   — same, plus the pack has no aim-run to play (see AimLoco).
-	# Holding the button still ROLLS in all three. Only the run is withheld.
+	# These are the same stances `_context_resolves_now` names, and they have to
+	# be: a stance that withholds the run is a stance where the press is a dodge
+	# the instant it is made.
 	if lock_target() != null or blocking or aiming() or not is_on_floor():
 		sprinting = false
 		return
@@ -1368,6 +1451,23 @@ func _tick_sprint(delta: float, input_locked: bool) -> void:
 	sprinting = Game.spend_stamina(sprint_stamina_rate * delta)
 	if not sprinting:
 		_sprint_winded = true
+
+
+## Is there any run in this press? If not, it is a dodge NOW and the tap window
+## never runs — that is what keeps the reaction-critical half of the button at
+## zero latency (see `sprint_hold_time`).
+##
+## Read every frame rather than latched at the press, because the answer can
+## change under a held button: raise the shield mid-hold and the run stops being
+## available, which retires the wait and pays the press out as a dodge. The
+## reverse — a lock breaking mid-hold — cannot resurrect a wait that has already
+## been paid, since `_context_armed` is false by then.
+##
+## Airborne is in the list for a duller reason than the other three: a dodge is
+## refused off the floor anyway, so waiting would hold a press that has nowhere
+## to go and then cash it in on landing, a third of a second after it was made.
+func _context_resolves_now() -> bool:
+	return lock_target() != null or blocking or aiming() or not is_on_floor()
 
 
 func _tick_jump_buffer(delta: float, input_locked: bool) -> void:
@@ -1427,13 +1527,24 @@ func stick_neutral() -> bool:
 func _try_start_roll(wish: Vector3, mag: float) -> bool:
 	if Prompt != null and Prompt.blocked:
 		return false
-	if not Input.is_action_just_pressed(&"context"):
+	# NOT the raw button: `context_tapped` is the press AFTER `_tick_context` has
+	# measured how long it lasted and ruled that it was a dodge and not a run. On
+	# the release of a long hold it is false, and the hero keeps running instead
+	# of coming out of the sprint in a roll he stopped asking for.
+	if not context_tapped:
 		return false
 	# The dodge and the interact are the same button on a pad, and the thing in
 	# reach wins the press (Prompt.claims_press, and the block above `context` in
 	# project.godot). Checked HERE rather than in Prompt because refusing is all
 	# there is to it — Prompt was already going to activate whatever is focused,
 	# on its own tick, off its own read of the same button.
+	#
+	# `claims_press` only sees the frame `interact` goes down, which is a frame
+	# this function may no longer be running on — a tap pays out on RELEASE now.
+	# The gap is covered by `claims_hold` in `_tick_context`: a focused prompt
+	# disarms the press for its whole duration, so a press made at the vendor is
+	# never owed a dodge in the first place. This stays for the case that DOES
+	# land on the press frame, `_context_resolves_now`.
 	if Prompt != null and Prompt.claims_press():
 		return false
 	if not is_on_floor():

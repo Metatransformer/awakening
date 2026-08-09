@@ -67,6 +67,7 @@ func run(rig) -> void:
 	await _beat_running_jump(rig, hero, cam, out)
 	await _beat_sprint(rig, hero, cam, out)
 	await _beat_tap_still_rolls(rig, hero)
+	await _beat_release_after_hold_is_silent(rig, hero)
 
 	_report()
 
@@ -127,9 +128,17 @@ func _beat_running_jump(rig, hero: Node3D, cam: Camera3D, out: String) -> void:
 	Input.action_release(&"move_up")
 
 
-## Hold the dodge button and keep holding it. Proves three separate things: that
-## the hold becomes a run at all, that the run is faster than the run cap, and
-## that the bar is what ends it.
+## Hold the dodge button and keep holding it. Proves four separate things: that
+## the hold becomes a run at all, that it does NOT roll on the way in, that the
+## run is faster than the run cap, and that the bar is what ends it.
+##
+## The second of those is the newest and the one worth stating: the hold used to
+## fire the dodge on the press and start the run underneath it, so every sprint
+## began with an involuntary roll that spent a third of the bar the run needed.
+## `Hero.sprint_hold_time` is a WINDOW now — released inside it the press is a
+## dodge, still down when it expires it is a run and nothing else — and a roll
+## seen anywhere in this beat means the two halves have started overlapping
+## again.
 func _beat_sprint(rig, hero: Node3D, cam: Camera3D, out: String) -> void:
 	_release_all()
 	await rig.wait_seconds(1.4)  # let stamina come back from the rolls above
@@ -140,8 +149,14 @@ func _beat_sprint(rig, hero: Node3D, cam: Camera3D, out: String) -> void:
 	var run_speed := _planar(hero)
 
 	Input.action_press(&"context")
-	# Past sprint_hold_time (0.18) AND past the roll the press also started.
-	await rig.wait_seconds(1.0)
+	# Polled from the press frame rather than sampled after the wait: the roll
+	# being hunted here is 0.4 s long and lands right at the start, so a single
+	# read taken once the sprint is up would miss it every time.
+	var rolled_in := false
+	for i in 60:  # 1.0 s, well past sprint_hold_time (0.18)
+		await rig.physics_frame
+		if int(hero.get(&"state")) == ST_ROLL:
+			rolled_in = true
 
 	var top := 0.0
 	var stam_before: float = Game.stamina
@@ -151,11 +166,13 @@ func _beat_sprint(rig, hero: Node3D, cam: Camera3D, out: String) -> void:
 
 	var sprinting: bool = hero.get(&"sprinting")
 	var drained: float = stam_before - Game.stamina
-	print("JUMP sprint: run=%.2f sprint=%.2f m/s (cap %.2f) drained=%.1f sprinting=%s" % [
-		run_speed, top, K.RUN_SPEED, drained, sprinting])
+	print("JUMP sprint: run=%.2f sprint=%.2f m/s (cap %.2f) drained=%.1f sprinting=%s rolled_in=%s" % [
+		run_speed, top, K.RUN_SPEED, drained, sprinting, rolled_in])
 
 	if not sprinting:
 		_fail("holding the dodge button never became a run")
+	if rolled_in:
+		_fail("the held button rolled on its way into the run — the window is not exclusive")
 	if top < K.RUN_SPEED * 1.15:
 		_fail("the sprint topped out at %.2f m/s, barely over the %.2f run cap" % [
 			top, K.RUN_SPEED])
@@ -191,8 +208,11 @@ func _beat_sprint(rig, hero: Node3D, cam: Camera3D, out: String) -> void:
 	Input.action_release(&"move_up")
 
 
-## The half that had to keep working. A tap is still a dodge, on the press, with
-## nothing added to it — that is the entire promise of putting the run on a hold.
+## The half that had to keep working. A tap is still a dodge — on the RELEASE
+## now, since that is the frame the press is known to have been a tap, and 0.04 s
+## after the press is the same instant as far as anyone playing is concerned.
+## That is the entire promise of putting the run on a hold, and it is the half
+## the window could break by classifying every press as a run.
 func _beat_tap_still_rolls(rig, hero: Node3D) -> void:
 	_release_all()
 	await rig.wait_seconds(1.6)
@@ -214,6 +234,45 @@ func _beat_tap_still_rolls(rig, hero: Node3D) -> void:
 	print("JUMP tap: rolled=%s" % rolled)
 	if not rolled:
 		_fail("a TAP no longer rolls — the hold has eaten the dodge")
+
+
+## The other end of the window, and the beat that would have caught the obvious
+## wrong implementation of it: fire the dodge whenever the button comes up.
+##
+## Held 0.5 s — past `Hero.sprint_hold_time` (0.18) but nowhere near long enough
+## to be mistaken for the sprint beat above — and then released with a FULL bar,
+## so a roll refusing here would have to be refused for the right reason and not
+## for want of stamina. Nothing may happen on the release: the press was spent on
+## the run and a player who lets go of a sprint is asking to stop, not to dive.
+func _beat_release_after_hold_is_silent(rig, hero: Node3D) -> void:
+	_release_all()
+	await rig.wait_seconds(1.6)
+	Game.stamina = Game.max_stamina
+
+	Input.action_press(&"move_up", 1.0)
+	await rig.wait_seconds(0.6)
+	Input.action_press(&"context")
+	await rig.wait_seconds(0.5)
+	var ran: bool = hero.get(&"sprinting")
+	var stam: float = Game.stamina
+	Input.action_release(&"context")
+
+	var rolled := false
+	for i in 30:
+		await rig.physics_frame
+		if int(hero.get(&"state")) == ST_ROLL:
+			rolled = true
+	Input.action_release(&"move_up")
+	print("JUMP hold_release: ran=%s stamina_at_release=%.0f rolled_after=%s" % [
+		ran, stam, rolled])
+	if not ran:
+		_fail("a 0.5 s hold never reached the run — this beat proves nothing")
+	if stam < 20.0:
+		_fail("the bar was down to %.0f at the release, so a refused roll proves"
+			% stam + " nothing about the window")
+	if rolled:
+		_fail("letting go after a run still rolled — the window is being ignored"
+			+ " and every sprint ends in a dive")
 
 
 # --- helpers ----------------------------------------------------------------

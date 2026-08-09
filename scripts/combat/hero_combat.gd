@@ -816,6 +816,13 @@ func _physics_process(delta: float) -> void:
 ## the action the dodge reads (both are A/Cross on a pad; on a keyboard they are
 ## Shift and E). Splitting one press means splitting ONE action.
 ##
+## And off `Hero.context_tapped` rather than the raw button, which is the same
+## rule one layer down: the A button now MEASURES its press before deciding
+## whether it was a dodge or a run, and a leap fired off `is_action_just_pressed`
+## would be a second opinion on that measurement. It costs the leap nothing —
+## with the guard up there is no run to wait for, so a tap resolves on the press
+## frame exactly as it did (`Hero._context_resolves_now`).
+##
 ## With the shield down the button is silent rather than swinging, which is what
 ## keeps it safe to mash at a chest.
 ##
@@ -826,7 +833,7 @@ func _physics_process(delta: float) -> void:
 ## is exactly the behaviour this button had before it was shared.
 func _tick_context_button() -> void:
 	if Prompt.focus == null and blocking and equipped == &"" \
-			and Input.is_action_just_pressed(&"context") \
+			and _hero.context_tapped \
 			and _hero.stick_neutral():
 		_press(Intent.LUNGE)
 	if not Input.is_action_just_pressed(&"interact"):
