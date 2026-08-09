@@ -742,8 +742,18 @@ FORGE pre_extract bag=140 fee=35
 FORGE home       bench={grit:92 plate:82 coil:78 core:115} bag={void_pearl:1}
 FORGE after_death bench_cores=115 bag=0
 FORGE reloaded   rungs={edge:3 plate:3 guard:3 string:3 chain:3} slots=12
-FORGE OK
+FORGE pouch frame=1060x772 viewport=1280x720
+FORGE FAIL B4 the pouch frame fits on the screen
+FORGE FAIL -- 1 check(s) failed
 ```
+
+**B4 is red and it is a real bug, not a flaky check.** The POUCH frame is 52 px
+taller than the screen, so the Back button and the bottom of the WORKBENCH card
+render past the edge. It is not the alchemist's doing — three runs on `main`
+before this branch existed fail it at exactly the same 1060x772 — and the
+suspect is the fourth section the right column grew, THE WAY OUT. It has its own
+card. Everything else in the director is green, and the line stays printed here
+rather than quietly re-run until it passes.
 
 The alchemist has hers (§6.6):
 
@@ -771,12 +781,25 @@ ALCHEMY reloaded [heart_draught, "", "", ""]
 ALCHEMY OK
 ```
 
-Two of its frames are the whole reason it takes them. `a_04b_equip.png` is where
-a bottle's name was found printing across its neighbours' cards, and
+Three of its frames are the whole reason it takes them. `a_04b_equip.png` is
+where a bottle's name was found printing across its neighbours' cards;
 `a_06_column.png` is the dungeon HUD stack — health, stamina, heat, then the
 draughts — where the first version of that row was found drawn **on top of the
-stamina bar** with every check in the run green. A rectangle in the wrong place
-is not a thing an assertion can see.
+stamina bar** with every check in the run green; and `a_04a_pouch.png` is where
+the WORKBENCH list was found running off the bottom of the screen once the
+alchemist's four materials joined the forge's four, which is why that list is
+two columns now. A rectangle in the wrong place is not a thing an assertion can
+see.
+
+One trap worth naming, because both these directors fell in it and the symptom
+blamed the wrong system. `game_flow.gd` autosaves at the **end** of a
+transition, after the fade in — so a beat that waits a fixed number of frames
+after `Run.die()` or `Run.extract()` can return while that autosave is still
+coming. The save beat then calls `Saves.save(2)`, which makes 2 the active slot,
+and the late autosave lands *there*. Arrive after the beat's `Game.reset()` and
+the slot holds the wiped state: the reload checks fail and every sentence in
+them blames the save format. Wait for `Flow.busy` to clear, the way
+`autosave.gd`'s `_settle` does. A fixed frame count only moves the odds.
 
 **Do not pass `--headless`.** There is no rendering device in headless mode and
 every frame comes out empty.
