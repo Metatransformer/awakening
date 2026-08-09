@@ -379,7 +379,20 @@ func _death(rig) -> void:
 	var bench := Game.component_count(&"cold_iron_core")
 	_ck("G0 a core is in the bag", Run.bag.has(&"cold_iron_core"))
 	Run.die()
-	await rig.wait_frames(20)
+	# Wait out the WHOLE ride home, not a fixed 20 frames. `Run.die()` starts a
+	# Flow transition, and game_flow.gd `_go` autosaves at the very END of it --
+	# after the fade in. Twenty frames returns while that is still in flight, so
+	# the autosave lands somewhere inside H below: `Saves.save(2)` has already
+	# made 2 the active slot by then, and if the stray write arrives after
+	# `Game.reset()` it overwrites the slot with the wiped state and H1/H2/H4
+	# fail for a reason that has nothing to do with the save format. Roughly one
+	# run in two, and it moves whenever anything upstream changes frame timing.
+	# Same shape as autosave.gd's `_settle`, and for the same reason.
+	for _i in 240:
+		await rig.wait_seconds(0.05)
+		if not Flow.busy:
+			break
+	await rig.wait_seconds(0.25)
 	_ck("G1 death took the bag", Run.bag.is_empty())
 	_ck("G2 death did NOT touch the bench",
 		Game.component_count(&"cold_iron_core") == bench)

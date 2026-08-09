@@ -445,6 +445,20 @@ func _underground(rig) -> void:
 ## `bottle_index()` still parses, the HUD still draws a full bottle, and the
 ## press does nothing -- a bottle that lies.
 func _save(rig) -> void:
+	# Let the ride home finish before touching a slot. game_flow.gd `_go`
+	# autosaves at the very END of a transition, and `Saves.save(2)` below makes
+	# 2 the active slot -- so a transition still in flight from H lands its
+	# autosave inside this beat, and if it arrives after `Game.reset()` it
+	# overwrites the slot with the wiped state. That is what was failing I1-I5
+	# intermittently, and the same race was caught red-handed in forge_loop's
+	# `_death`. A fixed frame count only moves the odds; this waits for the
+	# thing itself.
+	for _i in 240:
+		await rig.wait_seconds(0.05)
+		if not Flow.busy:
+			break
+	await rig.wait_seconds(0.25)
+
 	# One full, one empty, so the reload has both states to get wrong. Built up
 	# rather than assigned by index: an earlier beat that failed can leave fewer
 	# bottles here than this expects, and `bottle_contents[1] = ...` on a
