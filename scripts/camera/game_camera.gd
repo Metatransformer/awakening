@@ -18,12 +18,17 @@ extends Camera3D
 ##     we swing first and only pull the boom in when no yaw within
 ##     `swing_max_deg` is clear — which is exactly the corridor-through-a-doorway
 ##     case, where there is no angle that works.
-##   * Z with no target is Parallel mode: recentre exactly behind the hero over
-##     ~4 ticks and drop FOV to 45°. §1.7
+##   * Lock-on with nothing lockable is Parallel mode: recentre exactly behind
+##     the hero over ~4 ticks and drop FOV to 45°. §1.7
+##   * Lock-on WITH a target is Battle1 (`_apply_battle`): the eye eases onto the
+##     hero→target line so the enemy is dead ahead down the middle of the frame,
+##     and FOV pulls to K.CAM_FOV_LOCK.
 ##
-## Targeting framing (Camera_Battle1) is P3's. The seam is `set_target()` /
-## `clear_target()` plus the Bus signals — this script only uses a live target to
-## decide that Parallel mode does NOT apply.
+## `Targeting` drives that through `set_target()` / `clear_target()` and the Bus
+## signals. Note that lock-on is a TOGGLE, so nothing here may poll `z_target` —
+## a held R3 is no longer a state, and the poll that used to live in
+## `_apply_parallel` would have jammed the camera in Parallel under a resting
+## thumb.
 
 ## Explicit hero to follow. Left empty, the camera finds the "player" group.
 @export var target_path: NodePath
@@ -77,6 +82,10 @@ extends Camera3D
 @export var autoswing_fade_to_deg: float = 110.0
 ## [oot] Parallel recentres over CAM_DEFAULT_ANIM_TIME = 4 ticks.
 @export var recenter_time: float = 4.0 * K.TICK
+## Seconds for the battle framing to settle onto the hero->target line. Slower
+## than the recentre on purpose: the target moves, and a rig that tracked it
+## tightly would swing the whole world every time a crawler side-stepped.
+@export var battle_frame_time: float = 0.55
 @export var capture_mouse: bool = true
 ## Mouse motion only steers while the cursor is actually grabbed. Without this
 ## the camera keeps spinning after the player frees the cursor for the pause
@@ -210,6 +219,7 @@ func _physics_process(delta: float) -> void:
 	_follow_at(want_at, speed01, delta)
 	_apply_look(delta)
 	_apply_parallel(delta)
+	_apply_battle(delta)
 	_apply_autoswing(speed01, delta)
 	_place(delta)
 
@@ -277,14 +287,23 @@ func _apply_look(delta: float) -> void:
 	_recenter_timer = 0.0
 
 
-## Z held with nothing lockable = OOT's Parallel camera: hard behind the hero,
-## FOV 45. Z with a live target is P3's Battle1 and we stay out of its way.
+## FOV, and the recentre ease.
+##
+## `z_target` used to be POLLED here, on the assumption it was held like OOT's Z.
+## It is a toggle now (Targeting owns it, docs/CONTRACT.md §4), so a held button
+## is no longer a state anything can read — an empty press arrives as
+## `Bus.camera_recenter` instead, which is what `_recenter_timer` already ran on.
+## Polling it after the toggle landed would have pinned the camera to Parallel
+## for exactly as long as a thumb rested on R3.
 func _apply_parallel(delta: float) -> void:
-	var parallel := Input.is_action_pressed(&"z_target") and _target == null
-	if parallel:
-		_recenter_timer = recenter_time
+	# Locked: pull in a little, the way Battle1 does. Otherwise the free FOV.
 	# Settings.fov_offset is the player's accessibility FOV nudge (P14 owns it).
-	var want_fov := (fov_parallel if parallel else fov_free) + Settings.fov_offset
+	var base := fov_free
+	if _target != null and is_instance_valid(_target):
+		base = K.CAM_FOV_LOCK
+	elif _recenter_timer > 0.0:
+		base = fov_parallel
+	var want_fov := base + Settings.fov_offset
 	fov = lerpf(fov, want_fov, 1.0 - exp(-(1.0 / maxf(fov_blend_time, 0.001)) * delta))
 
 	if _recenter_timer <= 0.0:
@@ -294,9 +313,44 @@ func _apply_parallel(delta: float) -> void:
 	_yaw += err * clampf(delta / maxf(recenter_time, 0.001), 0.0, 1.0)
 
 
+## Battle1: frame the hero and what he is locked onto.
+##
+## The eye is placed on the far side of the hero from the target, so the shot
+## reads hero-in-front-of-enemy down a single line. That one rule is what makes
+## a lock-on shot legible — the player's screen-space "toward the enemy" is
+## always straight up the middle, so the stick directions mean the same thing
+## for the whole fight.
+##
+## Manual look still wins for `manual_hold_time`. A camera that cannot be
+## nudged while locked is a camera that fights you the moment the framing picks
+## the wrong side of a pillar, and the wall-swing in `_place` cannot solve every
+## one of those.
+func _apply_battle(delta: float) -> void:
+	if _target == null or not is_instance_valid(_target) or _hero == null:
+		return
+	if _manual_timer > 0.0 or _recenter_timer > 0.0:
+		return
+	var to := K.flat(_target.global_position - _hero.global_position)
+	if to == Vector3.ZERO:
+		return
+	# Behind the hero on the hero->target line: the orbit yaw whose eye sits
+	# opposite the target. Same convention as behind_yaw().
+	var want := atan2(-to.x, -to.z)
+	var err := wrapf(want - _yaw, -PI, PI)
+	var k := clampf(delta / maxf(battle_frame_time, 0.001), 0.0, 1.0)
+	_yaw += err * k
+
+
 ## Slow drift to behind the hero while he runs — never while the player steers.
 func _apply_autoswing(speed01: float, delta: float) -> void:
 	if _manual_timer > 0.0 or _recenter_timer > 0.0 or speed01 < 0.12:
+		return
+	# Locked, `_apply_battle` owns the yaw. The two rules mostly agree — the
+	# hero faces the target, so "behind the hero" and "behind the hero on the
+	# target line" are the same ray — but they stop agreeing the instant he is
+	# knocked or shoved off that line, and two rules writing one value is how
+	# the camera-vs-hero corkscrew documented above got built the first time.
+	if _target != null and is_instance_valid(_target):
 		return
 	var err := wrapf(behind_yaw() - _yaw, -PI, PI)
 	var fade := 1.0 - smoothstep(deg_to_rad(autoswing_fade_from_deg),

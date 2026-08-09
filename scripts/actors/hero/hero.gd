@@ -123,7 +123,6 @@ var _state_timer: float = 0.0
 var _roll_dir: Vector3 = Vector3.FORWARD
 var _airborne_time: float = 0.0
 var _stride_accum: float = 0.0
-var _z_hold: float = 0.0
 var _speed: float = 0.0
 ## Seconds of damage immunity left. See take_hit().
 var _invuln: float = 0.0
@@ -156,7 +155,14 @@ func _ready() -> void:
 	facing_yaw = rotation.y + PI
 	_build_rig()
 	_build_anim_tree()
+	# Built here rather than authored into hero.tscn for the same reason combat
+	# is: every scene that spawns a hero must get a lockable one, and half the
+	# rooms in this project build their hero in code.
 	targeting = find_child("Targeting", false, false)
+	if targeting == null:
+		targeting = Targeting.new()
+		targeting.name = "Targeting"
+		add_child(targeting)
 
 	# The sword and shield live in their own node, but the hero owns their
 	# lifetime so every scene that spawns a hero gets an armed one.
@@ -340,9 +346,6 @@ func _physics_process(delta: float) -> void:
 	var mag := clampf(stick.length(), 0.0, 1.0)
 	var wish := _camera_relative(stick)
 
-	if not locked:
-		_track_z_target(delta)
-
 	match state:
 		MoveState.GROUND:
 			_tick_ground(wish, mag, delta)
@@ -380,19 +383,24 @@ func _camera_relative(stick: Vector2) -> Vector3:
 	return K.flat(right * stick.x - fwd * stick.y)
 
 
-func _track_z_target(delta: float) -> void:
-	if Input.is_action_just_pressed(&"z_target"):
-		_z_hold = 0.0
-	elif Input.is_action_pressed(&"z_target"):
-		_z_hold += delta
-	elif Input.is_action_just_released(&"z_target"):
-		# A TAP of Z with nothing lockable is OOT's recentre. Whether a lock
-		# exists is P3's call; until it lands, `targeting` is null and every tap
-		# recentres. docs/CONTRACT.md §4, refs/REFERENCE.md §1.7.
-		var locked: bool = targeting != null and bool(targeting.get(&"is_locked"))
-		if _z_hold <= 0.28 and not locked:
-			Bus.camera_recenter.emit()
-		_z_hold = 0.0
+## The locked target, or null. `z_target` itself belongs to Targeting now — the
+## hero only ever asks who is being locked, never who pressed what.
+func lock_target() -> Node3D:
+	if targeting == null:
+		return null
+	if not bool(targeting.get(&"is_locked")):
+		return null
+	var t := targeting.get(&"current_target") as Node3D
+	return t if t != null and is_instance_valid(t) else null
+
+
+## Heading yaw that points the hero at `t`. Heading convention, not node
+## rotation: heading == (sin y, 0, cos y). See `facing_yaw`.
+func _yaw_to(t: Node3D) -> float:
+	var to := K.flat(t.global_position - global_position)
+	if to == Vector3.ZERO:
+		return facing_yaw
+	return atan2(to.x, to.z)
 
 
 # --- States -----------------------------------------------------------------
@@ -404,6 +412,11 @@ func _tick_ground(wish: Vector3, mag: float, delta: float) -> void:
 	# [oot] §3.2 — a continuous curve of stick magnitude, no walk/run branch.
 	var target_speed := K.speed_for_stick(mag)
 	var moving := target_speed > 0.0
+
+	var target := lock_target()
+	if target != null:
+		_tick_locked(wish, target_speed, moving, target, delta)
+		return
 
 	if moving and _speed > K.RUN_SPEED * turnaround_min_speed01:
 		var away := absf(rad_to_deg(wrapf(atan2(wish.x, wish.z) - facing_yaw, -PI, PI)))
@@ -420,6 +433,48 @@ func _tick_ground(wish: Vector3, mag: float, delta: float) -> void:
 	_set_planar_velocity(_forward() * _speed)
 
 
+## Locked on: the body points at the target and the stick moves you around it.
+##
+## This is the whole difference between a lock-on and a camera hint, and it is
+## what was missing. Unlocked, heading and travel are the same vector — the hero
+## goes where he faces, and steering IS turning. Locked, they come apart:
+## `facing_yaw` is owned by the target and the stick drives velocity directly,
+## so pulling left circles the enemy while still looking at him.
+##
+## Two consequences worth naming, because both are load-bearing:
+##
+##   * The 135-degree reversal (§3.3) is suppressed. It exists to make an
+##     about-face read as its own move, which only makes sense when the body
+##     turns to travel. Locked, the body never turns, so a reversal is just
+##     backing off — and firing a 180 clip there would spin the hero away from
+##     the thing he is supposed to be watching.
+##   * Speed is NOT reduced for backing up or side-stepping. Elden Ring does
+##     slow a backward walk, and doing that here needs strafe clips the library
+##     ships but nobody has identified (tools/directors/strafe_lookdev.gd), so
+##     it is deliberately left alone rather than tuned against the wrong
+##     animation.
+func _tick_locked(wish: Vector3, target_speed: float, moving: bool,
+		target: Node3D, delta: float) -> void:
+	# Faster than the free turn rate: the lock is a promise that he keeps facing
+	# the thing, and a lazy swing off that promise reads as the lock slipping.
+	_steer_to(Vector3(sin(_yaw_to(target)), 0.0, cos(_yaw_to(target))),
+		turn_rate * 1.8, delta)
+
+	if moving:
+		_speed = move_toward(_speed, target_speed, accel * delta)
+		_set_planar_velocity(wish.normalized() * _speed)
+	else:
+		_speed = move_toward(_speed, 0.0, decel * delta)
+		# Bleed off along whatever direction he was already travelling, not
+		# along his facing — locked, those are different, and using the facing
+		# here slides him into the enemy every time he lets go of the stick.
+		var travel := K.flat(velocity)
+		if travel == Vector3.ZERO:
+			_set_planar_velocity(Vector3.ZERO)
+		else:
+			_set_planar_velocity(travel.normalized() * _speed)
+
+
 func _try_start_roll(wish: Vector3, mag: float) -> bool:
 	if Prompt != null and Prompt.blocked:
 		return false
@@ -427,18 +482,38 @@ func _try_start_roll(wish: Vector3, mag: float) -> bool:
 		return false
 	if not is_on_floor():
 		return false
-	# [oot] a discrete action needs a near-full deflection — you cannot roll out
-	# of a walk, only out of a committed run. §3.2 / K.STICK_ACTION_GATE.
-	if mag < roll_stick_gate or wish == Vector3.ZERO:
-		return false
+
+	var target := lock_target()
+	var dir := wish
+
+	if target != null:
+		# Locked, a neutral stick is not "no roll" — it is the BACKSTEP, which
+		# is the single most used defensive move in the source material. The
+		# stick gate does not apply either: locked, a dodge is a deliberate
+		# press rather than something you fall into out of a run, so gating it
+		# on a near-full deflection would eat half of them.
+		if wish == Vector3.ZERO or mag < K.STICK_DEADZONE:
+			dir = -K.flat(target.global_position - global_position)
+			if dir == Vector3.ZERO:
+				dir = -_forward()
+			dir = dir.normalized()
+	else:
+		# [oot] a discrete action needs a near-full deflection — you cannot roll
+		# out of a walk, only out of a committed run. §3.2 / K.STICK_ACTION_GATE.
+		if mag < roll_stick_gate or wish == Vector3.ZERO:
+			return false
+
 	# Last gate, and deliberately last: every cheaper reason to refuse has already
 	# run, so we never charge stamina for a roll that was not going to happen.
 	if not Game.spend_stamina(roll_stamina):
 		return false
 	state = MoveState.ROLL
 	_state_timer = roll_time
-	_roll_dir = wish
-	facing_yaw = atan2(wish.x, wish.z)
+	_roll_dir = dir.normalized()
+	# Locked, the body keeps watching the target through the whole dodge; the
+	# roll moves him without turning him. Unlocked, the roll IS the turn.
+	if target == null:
+		facing_yaw = atan2(dir.x, dir.z)
 	_speed = roll_speed
 	_set_planar_velocity(_roll_dir * roll_speed)
 	_fire(_P_ROLL)
@@ -465,6 +540,7 @@ func _tick_turn180(delta: float) -> void:
 
 func _tick_roll(delta: float) -> void:
 	_state_timer -= delta
+	_track_lock(delta)
 	_speed = roll_speed
 	_set_planar_velocity(_roll_dir * roll_speed)
 	if _state_timer <= 0.0:
@@ -477,10 +553,33 @@ func _tick_roll(delta: float) -> void:
 ## being able to steer through a swing is the single biggest tell of a clone.
 func _tick_attack(delta: float) -> void:
 	_state_timer -= delta
+	_track_lock(delta)
 	_speed = move_toward(_speed, 0.0, decel * 2.2 * delta)
-	_set_planar_velocity(_forward() * _speed)
+	_set_planar_velocity(_bleed_dir() * _speed)
 	if _state_timer <= 0.0:
 		state = MoveState.GROUND
+
+
+## Keep the body on the target through a move that owns the hero. Without this a
+## swing or a dodge freezes the facing, and an enemy that side-steps mid-attack
+## ends up behind a hero who is still supposedly locked onto him.
+func _track_lock(delta: float) -> void:
+	var target := lock_target()
+	if target == null:
+		return
+	var yaw := _yaw_to(target)
+	_steer_to(Vector3(sin(yaw), 0.0, cos(yaw)), turn_rate * 1.8, delta)
+
+
+## Which way residual speed bleeds off. Unlocked these are the same thing, but
+## locked the hero faces the target while travelling somewhere else entirely --
+## and bleeding along the FACING there walks him into the enemy at the end of
+## every backstep.
+func _bleed_dir() -> Vector3:
+	if lock_target() == null:
+		return _forward()
+	var travel := K.flat(velocity)
+	return travel.normalized() if travel != Vector3.ZERO else _forward()
 
 
 ## Start a swing lasting `duration` seconds. Returns false if the hero is busy —
@@ -492,13 +591,20 @@ func request_attack(duration: float) -> bool:
 	state = MoveState.ATTACK
 	_state_timer = duration
 
-	# Face where the stick is pointing at the instant of the swing, so an attack
-	# aims where the player is looking rather than where he last ran.
-	var stick := Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down")
-	if stick.length() > 0.3:
-		var wish := _camera_relative(stick)
-		if wish != Vector3.ZERO:
-			facing_yaw = atan2(wish.x, wish.z)
+	# Locked, the swing goes at the target -- that is the entire promise of the
+	# lock, and letting the stick redirect it means a player circling an enemy
+	# swings past him. Unlocked, face where the stick is pointing at the instant
+	# of the swing, so an attack aims where the player is looking rather than
+	# where he last ran.
+	var target := lock_target()
+	if target != null:
+		facing_yaw = _yaw_to(target)
+	else:
+		var stick := Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down")
+		if stick.length() > 0.3:
+			var wish := _camera_relative(stick)
+			if wish != Vector3.ZERO:
+				facing_yaw = atan2(wish.x, wish.z)
 
 	# The slash clips run 1.4-2.4 s. OOT's swing is about half a second, so the
 	# clip is compressed onto the real swing rather than the swing being slowed
@@ -571,8 +677,11 @@ func skeleton() -> Skeleton3D:
 ## that is exactly why it reads as a move and not as a dodge-cancel.
 func _tick_roll_recover(delta: float) -> void:
 	_state_timer -= delta
+	_track_lock(delta)
 	_speed = move_toward(_speed, 0.0, decel * 1.6 * delta)
-	_set_planar_velocity(_forward() * _speed)
+	# Along the roll, not along the facing. Locked those differ, and a backstep
+	# that bled along the facing would coast the hero back into what he dodged.
+	_set_planar_velocity((_roll_dir if lock_target() != null else _forward()) * _speed)
 	if _state_timer <= 0.0:
 		state = MoveState.GROUND
 		roll_finished.emit()
