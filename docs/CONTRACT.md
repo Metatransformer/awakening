@@ -214,10 +214,11 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `attack` | **LMB** | **X / Square** (pad2) | light attack (**hold** = charge, **+guard** = dash) |
 | `use_item` | **F** | **RT / R2** (axis5+) | use the item the D-pad drew |
 | `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held**, and it targets, and it recentres |
-| `context` | **Shift** | **B / Circle** (pad1) | roll / backstep / sidehop — **hold** = run |
+| `context` | **Shift** | **A / Cross** (pad0) | roll / backstep / sidehop — **hold** = run |
 | `jump` | **Space** | **Y / Triangle** (pad3) | jump |
 | `z_target` | **Q**, MMB | — (LT does it) | lock-on toggle / camera recentre |
-| `interact` | E | **A / Cross** (pad0) | context — talk/open, **+guard** = jump attack, else stow item |
+| `interact` | E | **A / Cross** (pad0) | talk/open — **wins over the dodge**, else stow item |
+| `ui_cancel` | Esc | **B / Circle** (pad1) | close/back, and **nothing else** |
 | `item_left` / `item_up` / `item_right` | 1 / 2 / 3 | dpad L / U / R | armaments — §4.1 |
 | `first_person` | R | **R3** (pad8) | look out of his own eyes — he roots |
 | `pause` / `inventory` / `map` | Esc / **I** / Tab | Start (pad6) / **Select** (pad4) / L3 (pad7) | menu / pouch / map |
@@ -229,8 +230,10 @@ index finger fires what that stance is aimed at. LT raises the guard and takes
 the lock; RT uses whatever the D-pad drew. Aiming a bow with a shoulder and
 loosing it with a thumb makes you let go of the stick that was aiming.
 
-The face buttons are the swings and the verbs: X swings, B rolls, A is context.
-The right stick swings the lens and **clicking it (R3) drops you into his eyes**
+The face buttons are the swings and the verbs: X swings, **A is the dodge *and*
+the context button**, Y jumps, and **B is empty in the world** — it closes menus
+and does nothing else, on purpose. The right stick swings the lens and
+**clicking it (R3) drops you into his eyes**
 — BOTW's arrangement again, and the thumb is already there doing the same job;
 everything else the camera does is under the left index finger.
 
@@ -273,12 +276,40 @@ something locked it is the lunge. With the sword out and nothing locked it is
 **silent**, deliberately — that is OOT's A, where the jump attack exists only
 under Z.
 
-`interact` sits on Y/Triangle because A was spoken for twice over. It cannot
-share A with `use_item`: `interact` already shares A with `ui_accept`, which is
-safe only because `trade_screen`'s accept edge starts DISARMED, and nothing
-equivalent guards the world — `hero_combat` polls its buttons every physics
-frame, so one press at a chest would open it and loose an arrow through it. The
-roll keeps B/Circle, where the source material has it.
+**`interact` and `context` are the same button — A/Cross — and the thing in
+reach wins.** They are never both wanted at once: you can only address the smith
+while you are standing at the smith. `Prompt.claims_press` / `claims_hold` is the
+whole rule, and `Hero._try_start_roll` and `Hero._tick_sprint` are its only two
+callers — both refuse when `interact` is down on the same frame *and* something is
+focused. Step away and the same button dodges again.
+
+Two properties of that arbitration are load-bearing:
+
+* **The keyboard is not in it.** There the two are Shift and E, a press never
+  reaches both, so `claims_press` is false and Shift still rolls at a chest.
+  Asking "is there a focus?" alone would have taken that away for nothing.
+* **`Prompt` needs no changes to activate.** It was already going to fire the
+  focused Interactable off its own read of the same button, on its own tick. The
+  arbitration is entirely a *refusal* on the hero's side.
+
+The price is that you cannot roll away from a chest — true, and small: an
+Interactable's radius is a couple of metres and the answer is one step. The
+alternatives (a modifier, a double-tap, a hold to disambiguate) all put latency
+or a decision on the most reaction-critical button in the game.
+
+**B/Circle is empty in the world**, which is the other half of the change and
+not a leftover. It is `ui_cancel` and nothing else, so "B closes this" is true in
+every menu with no exception a player has to learn. Do not put a world verb back
+on it. `interact` still shares A with `ui_accept` as well, which is safe for its
+own older reason: `trade_screen`'s accept edge starts DISARMED, so the press that
+opens a screen cannot also confirm inside it.
+
+**The jump attack came off A** in the same change. It used to fire from
+`HeroCombat._tick_context_button` when A was pressed under a raised shield —
+OOT's Z+A. Guard + neutral stick + A is the **backstep** now, which is the
+defensive move the source material leans on hardest and cannot share a press with
+a leap in the opposite direction. `use_item` (RT) still throws the leap from the
+same stance, so nothing was lost but the collision.
 
 **The dodge button is a tap AND a hold.** Tap `context` and the hero rolls,
 exactly as before. Hold it past `Hero.sprint_hold_time` (0.18 s) and he **runs**

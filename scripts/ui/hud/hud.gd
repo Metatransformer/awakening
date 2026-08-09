@@ -607,6 +607,10 @@ const LEGEND := [
 	# runs off the same button, and a player who only ever taps it will never
 	# discover the run — there is no prompt, no stance and no tell for a button
 	# you are not holding down. Same argument as the GUARD/LOCK line above.
+	#
+	# On a pad this row swallows the INTERACT row below it: both are A, and two
+	# entries reading "A DODGE   A INTERACT" is a legend asking the player to
+	# work out which one they get. See `_legend`.
 	[&"context", "DODGE (HOLD=RUN)"],
 	[&"jump", "JUMP"],
 	[&"interact", "INTERACT"],
@@ -645,6 +649,15 @@ func _legend() -> String:
 			continue  # nothing bound on this device — say nothing rather than lie
 		if action == &"shield":
 			verb = "GUARD/LOCK (+%s DASH)" % _hotkey(&"attack")
+		# The dodge and the interact are one button on a pad and two on a
+		# keyboard, so the legend has to be able to be both shapes. Merged, the
+		# row says what the button DOES — which of the two you get is decided by
+		# whether anything is in reach, and the prompt line already says when
+		# something is.
+		elif action == &"context" and _hotkey(&"interact") == cap:
+			verb = "DODGE/TALK (HOLD=RUN)"
+		elif action == &"interact" and _hotkey(&"context") == cap:
+			continue  # already said, on the merged row above
 		parts.append("%s %s" % [cap, verb])
 	return "    ".join(parts)
 

@@ -86,6 +86,38 @@ func unregister(it: Interactable) -> void:
 		drop_focus()
 
 
+## True when the press that arrived THIS FRAME belongs to a focused Interactable
+## rather than to the dodge. False when nothing is in reach, or when the press
+## did not come off the shared button at all.
+##
+## `interact` and `context` are both on A/Cross (see the long block above
+## `context` in project.godot). They are never both wanted at once — you can only
+## address the smith while standing at the smith — so the rule is that the thing
+## in reach wins, and stepping away hands the button back to the dodge.
+##
+## The `interact` test is what keeps a KEYBOARD out of this. There the two are E
+## and Shift and a press never reaches both, so Shift still rolls at a chest and
+## this returns false. Asking "is there a focus?" alone would have taken the
+## keyboard dodge away for nothing.
+##
+## `blocked` is not re-tested: a blocker drops the focus (`block` -> `drop_focus`)
+## so a screen being up already reads as null here — and the hero is holding a
+## neutral stick behind it in any case.
+func claims_press() -> bool:
+	return focus != null and Input.is_action_just_pressed(&"interact")
+
+
+## The held half of the same question, for the sprint. Holding A at the dungeon
+## gate fills its ring; it must not also wind the hero up to run at it.
+##
+## Deliberately the whole time the button is down and not just the activating
+## frame: an Interactable with `hold_time` owns the press for as long as the
+## player keeps making it, and one that activates instantly still owns it until
+## they let go (`_armed` is cleared on activate for the same reason).
+func claims_hold() -> bool:
+	return focus != null and Input.is_action_pressed(&"interact")
+
+
 ## Let go of whatever is focused, telling it so. Safe to call on nothing.
 func drop_focus() -> void:
 	if focus == null:
