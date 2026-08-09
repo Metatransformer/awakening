@@ -463,16 +463,30 @@ func _mount_loadout() -> void:
 	sword = _mount(sword_id, &"mixamorig_RightHand",
 		Vector3(0.0, 0.04, 0.02), Vector3(-6.0, 6.0, -90.0))
 	# The scabbard. Same bone the hookshot stows on and the mirror side of it —
-	# the hookshot rides his right hip at x=-0.16, so the sword takes his left,
-	# which is the side a right-handed draw reaches across to.
+	# the hookshot rides his right hip, so the sword takes his left, which is the
+	# side a right-handed draw reaches across to.
 	#
-	# MEASURED BY RENDERING, like every other mount in this file
-	# (tools/directors/sheathe_lookdev.gd). The Hips bone's local axes are in the
-	# rotated FBX space this file's opening note warns about, so x is his lateral
-	# and z is his depth only because the frame says so — do not re-derive them
-	# from the bone matrix.
+	# MEASURED BY RENDERING (tools/directors/sheathe_lookdev.gd), and the numbers
+	# it replaced are the reason that director had to be written: the old mount
+	# carried this same "measured" comment and had never been rendered once. It
+	# held the sword HORIZONTAL through his hip, jutting a metre out sideways like
+	# a spit, in a state the player used to reach almost never — and now reaches
+	# with one press of D-pad →.
+	#
+	# The Hips bone's local axes are in the rotated FBX space this file's opening
+	# note warns about, and BOTH of the old comment's claims about them were
+	# backwards. The frames say:
+	#   x is his DEPTH   (more x = further forward; 0.0 puts it in the hip plane)
+	#   y is his HEIGHT  (0.02 hangs the grip at the belt)
+	#   z is his LATERAL (negative is his LEFT; -0.11 clears the leg by ~4 cm
+	#                     without the blade floating off the body)
+	# and the roll that matters is z=180: at 0 the blade stands point-UP out of
+	# his waist. The x=12 is the lean that tips the tip off the leg so the blade
+	# is not buried in the tunic in the flank view.
+	#
+	# Do not re-derive any of this from the bone matrix. Render it.
 	sword_stow = _mount(sword_id, &"mixamorig_Hips",
-		Vector3(0.17, 0.02, 0.06), Vector3(0.0, 0.0, -90.0))
+		Vector3(0.0, 0.06, -0.11), Vector3(12.0, 0.0, 180.0))
 	# The shield rides the left forearm, not the hand — that is how it sits in
 	# the block clips, and hanging it off the hand makes it swing like a paddle.
 	# Its origin is the CENTRE of the disc, so it needs pushing off the arm.
