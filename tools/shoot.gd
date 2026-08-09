@@ -230,12 +230,23 @@ func tap(actions: Array) -> void:
 ## button is testing the button, and the button is the thing that broke last
 ## time. Returns false (and the caller should fail) when the ring never lands on
 ## `id` — which is what "you do not own it" looks like from out here.
+## `Game` is fetched off the tree and never NAMED. This file is loaded with
+## `-s`, and autoloads are not registered as identifiers for that mode
+## (CLAUDE.md §3) -- so `Game.armament(...)` is not a runtime problem, it is a
+## COMPILE error that takes the whole harness down with it, and every director
+## in the project dies at load with "Identifier not found: Game" before its
+## first frame. A director is the only proof this repo accepts, so this is the
+## one file where naming an autoload costs everything.
 func draw_weapon(id: StringName, limit: int = 8) -> bool:
+	var game := root.get_node_or_null(^"Game")
+	if game == null:
+		push_error("shoot.gd: draw_weapon needs the Game autoload")
+		return false
 	for i in limit:
-		if Game.armament(Game.HAND_RIGHT) == id:
+		if game.armament(game.HAND_RIGHT) == id:
 			return true
 		await tap(["weapon_next"])
-	return Game.armament(Game.HAND_RIGHT) == id
+	return game.armament(game.HAND_RIGHT) == id
 
 
 ## Hold actions for `seconds` of game time.
