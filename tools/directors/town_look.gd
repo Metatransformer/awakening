@@ -1,26 +1,75 @@
 extends RefCounted
-## Close reads of the two people and the gate, from the height the player sees
-## them at. A shopkeeper only has to survive one distance: standing-in-front-of.
+## The town, and everyone in it, from the distances the player actually sees.
+##
+## A shopkeeper has to survive exactly two shots: the wide, where the yard has to
+## read as three DIFFERENT shops at a glance, and standing-in-front-of, where the
+## person behind the counter has to look like a person. Both are here, because
+## the two fail in opposite directions -- a booth that reads beautifully up close
+## can be an unreadable pile of brown boxes from across the yard.
+##
+##   godot --path . -s tools/shoot.gd -- \
+##     --scene=res://scenes/rooms/town.tscn \
+##     --director=res://tools/directors/town_look.gd --out=/tmp/town/x.png
 
 func run(rig) -> void:
 	var out: String = rig.arg("out", "/tmp/tl/x.png").get_base_dir()
 	var town: Town = rig.scene()
-	await rig.wait_frames(24)
+	# Long, on purpose. The bodies retarget a shared clip library at load and the
+	# booths instance about twenty GLBs between them; a shot taken too early
+	# catches bind-pose statues standing in an empty yard and looks like a bug in
+	# something else entirely.
+	await rig.wait_frames(40)
 
 	var cam := Camera3D.new()
 	cam.fov = 50.0
 	town.add_child(cam)
 	cam.make_current()
 
+	# Wide first: the whole yard from above the arrival end, which is the frame
+	# that answers "does this look like a town".
+	cam.fov = 62.0
+	cam.global_position = Vector3(0.0, 9.5, 15.0)
+	cam.look_at(Vector3(0.0, 1.0, -3.0), Vector3.UP)
+	await rig.wait_frames(4)
+	await rig.capture(out.path_join("tl_00_yard.png"))
+
+	# And the walk in, at eye height -- what you see stepping out of the gate.
+	cam.fov = 50.0
+	cam.global_position = Vector3(0.0, 1.7, 8.0)
+	cam.look_at(Vector3(0.0, 1.2, -4.0), Vector3.UP)
+	await rig.wait_frames(4)
+	await rig.capture(out.path_join("tl_01_arrive.png"))
+
+	# Every counter from the customer's side of it. The eye is derived from the
+	# keeper's own facing rather than hard-coded, so an NPC that is turned the
+	# wrong way photographs as a back, not as a mysteriously empty frame.
 	var subjects := [
-		{"name": "vendor", "at": town.vendor, "eye": Vector3(0.6, 1.6, 3.0)},
-		{"name": "smith", "at": town.smith, "eye": Vector3(-0.6, 1.6, 3.0)},
-		{"name": "gate", "at": town.gate, "eye": Vector3(0.0, 2.0, 6.0)},
+		{"name": "vendor", "at": town.vendor, "back": 3.4, "high": 1.65},
+		{"name": "smith", "at": town.smith, "back": 3.8, "high": 1.65},
+		{"name": "alchemist", "at": town.alchemist, "back": 3.4, "high": 1.65},
+		{"name": "gate", "at": town.gate, "back": 6.0, "high": 2.0},
 	]
 	for s in subjects:
 		var node: Node3D = s["at"]
-		cam.global_position = node.global_position + (s["eye"] as Vector3)
+		# The keeper's own +Z is the customer's side (see `ShopBooth`), so stand
+		# there and look back at them across their counter.
+		var front: Vector3 = node.global_transform.basis * Vector3(0.0, 0.0, 1.0)
+		cam.global_position = node.global_position \
+			+ front * float(s["back"]) + Vector3(0.0, float(s["high"]), 0.0)
 		cam.look_at(node.global_position + Vector3(0.0, 1.1, 0.0), Vector3.UP)
 		await rig.wait_frames(3)
-		await rig.capture(out.path_join("tl_%s.png" % s["name"]))
+		await rig.capture(out.path_join("tl_10_%s.png" % s["name"]))
+
+	# One three-quarter per shop as well. A booth is a little scene, and a
+	# straight-on shot hides everything the keeper is standing in front of.
+	for s in subjects:
+		if String(s["name"]) == "gate":
+			continue
+		var node: Node3D = s["at"]
+		var b := node.global_transform.basis
+		var eye: Vector3 = b * Vector3(2.8, 0.0, 2.6)
+		cam.global_position = node.global_position + eye + Vector3(0.0, 2.0, 0.0)
+		cam.look_at(node.global_position + Vector3(0.0, 0.9, 0.0), Vector3.UP)
+		await rig.wait_frames(3)
+		await rig.capture(out.path_join("tl_20_%s_booth.png" % s["name"]))
 	print("TOWNLOOK done")

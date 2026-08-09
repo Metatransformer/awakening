@@ -249,7 +249,11 @@ func _draw_verdict(s: Vector2, panel: Rect2, pad: float, y: float,
 	var floor_no := int(result.get("level", 1))
 	var ft := Pal.px(12.0 / PixelFont.H, s.y)
 	if not dry:
-		PixelFont.draw_text(self, "FLOOR %d" % floor_no,
+		# `Prog.label`, the short form and not the name -- the receipt is already
+		# unambiguously about the run you just made, so printing the dungeon's
+		# name here would be the screen telling you something you have been
+		# looking at for ten minutes.
+		PixelFont.draw_text(self, Prog.label(floor_no),
 			Vector2(panel.position.x + pad, y), ft, Pal.MOTH)
 		PixelFont.draw_right(self, "%d ROOMS" % int(result.get("depth", 0)),
 			Vector2(panel.end.x - pad, y), ft, Pal.MOTH)

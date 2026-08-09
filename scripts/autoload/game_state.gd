@@ -704,10 +704,14 @@ func cycle_weapon(dir: int = 1) -> void:
 ## Put the sword back, whatever was in the right hand. Returns false if it was
 ## already there, so a caller can tell a real stow from a no-op.
 ##
-## Not on any button now -- the sword is a stop on the weapon ring, so the way
-## back to it is ← or →. This survives for the places that have to take a bow out
-## of the hero's hands WITHOUT the player asking: the shop gate, a cutscene, a
-## scene change that must not leave him aiming at a vendor.
+## NOTHING CALLS THIS, and it is kept anyway -- with that said out loud, because
+## a docstring listing callers it does not have is how the next reader gets
+## misled. It was the light button's escape hatch (hero_combat `_begin`) until
+## the sword became a stop on the weapon ring and ← / → became the way back. What
+## it is here for is the case that has not been written yet: taking a drawn bow
+## out of the hero's hands WITHOUT the player asking -- a cutscene, or a scene
+## change that must not leave him aiming at a vendor. If that case never arrives,
+## delete this rather than finding it a job.
 func stow_item() -> bool:
 	var live := clampi(loadout_set, 0, loadout.size() - 1)
 	var held: StringName = loadout[live][HAND_RIGHT]

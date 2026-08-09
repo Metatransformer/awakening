@@ -99,6 +99,18 @@ signal depth_changed(depth: int)
 ## and endless. Everything that gets harder or richer with depth reads this
 ## through `Prog` -- see scripts/core/progression.gd.
 signal level_changed(level: int)
+## You are STANDING on that floor and can see it. Emitted by `Flow` on the frame
+## the loading card starts lifting, once for every arrival in the dungeon --
+## walking in and taking the stair both.
+##
+## A second signal beside `level_changed` rather than a reuse of it, because the
+## two fire a full transition apart. `Run.enter()` and `Run.descend_floor()` both
+## emit `level_changed` BEFORE the fade, which is the right moment for anything
+## that has to be correct when the new floor builds (the generator, the HUD's
+## numbers) and the wrong one for anything the player is supposed to read: an
+## announcement started there spends its whole life behind a black screen. This
+## is the arrival, and the HUD's floor card is what waits for it.
+signal floor_arrived(level: int)
 ## The workbench stock changed: a run banked components on the way home, or the
 ## forge ate some. `stock` is `Game.components` -- id -> count. Emitted rather
 ## than polled because the forge screen and the pouch both draw it and neither

@@ -283,7 +283,9 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 @export_group("Audio")
 @export var sfx_swing: AudioStream = preload("res://audio/sfx/swing.ogg")
 @export var sfx_impact: AudioStream = preload("res://audio/sfx/weapon_impact_sword_1.ogg")
-@export var sfx_block: AudioStream = preload("res://audio/sfx/block.ogg")
+# THE BLOCK SOUND IS NOT HERE. `on_blocked` emits `Bus.shield_blocked` and `Sfx`
+# owns which clang that is (`shield_block`), because a sound that only ever plays
+# on a signal the whole game can hear belongs in the table with the rest of them.
 ## The wind-up hum, started on the PRESS and cut on the release. It is a rise
 ## that reaches full body at about 0.35 s, which is why `charge_time` (0.42) can
 ## stay where it is: the sound is all the way up a hair before the charge arms.
@@ -461,16 +463,30 @@ func _mount_loadout() -> void:
 	sword = _mount(sword_id, &"mixamorig_RightHand",
 		Vector3(0.0, 0.04, 0.02), Vector3(-6.0, 6.0, -90.0))
 	# The scabbard. Same bone the hookshot stows on and the mirror side of it —
-	# the hookshot rides his right hip at x=-0.16, so the sword takes his left,
-	# which is the side a right-handed draw reaches across to.
+	# the hookshot rides his right hip, so the sword takes his left, which is the
+	# side a right-handed draw reaches across to.
 	#
-	# MEASURED BY RENDERING, like every other mount in this file
-	# (tools/directors/sheathe_lookdev.gd). The Hips bone's local axes are in the
-	# rotated FBX space this file's opening note warns about, so x is his lateral
-	# and z is his depth only because the frame says so — do not re-derive them
-	# from the bone matrix.
+	# MEASURED BY RENDERING (tools/directors/sheathe_lookdev.gd), and the numbers
+	# it replaced are the reason that director had to be written: the old mount
+	# carried this same "measured" comment and had never been rendered once. It
+	# held the sword HORIZONTAL through his hip, jutting a metre out sideways like
+	# a spit, in a state the player used to reach almost never — and now reaches
+	# with one press of D-pad →.
+	#
+	# The Hips bone's local axes are in the rotated FBX space this file's opening
+	# note warns about, and BOTH of the old comment's claims about them were
+	# backwards. The frames say:
+	#   x is his DEPTH   (more x = further forward; 0.0 puts it in the hip plane)
+	#   y is his HEIGHT  (0.02 hangs the grip at the belt)
+	#   z is his LATERAL (negative is his LEFT; -0.11 clears the leg by ~4 cm
+	#                     without the blade floating off the body)
+	# and the roll that matters is z=180: at 0 the blade stands point-UP out of
+	# his waist. The x=12 is the lean that tips the tip off the leg so the blade
+	# is not buried in the tunic in the flank view.
+	#
+	# Do not re-derive any of this from the bone matrix. Render it.
 	sword_stow = _mount(sword_id, &"mixamorig_Hips",
-		Vector3(0.17, 0.02, 0.06), Vector3(0.0, 0.0, -90.0))
+		Vector3(0.0, 0.06, -0.11), Vector3(12.0, 0.0, 180.0))
 	# The shield rides the left forearm, not the hand — that is how it sits in
 	# the block clips, and hanging it off the hand makes it swing like a paddle.
 	# Its origin is the CENTRE of the disc, so it needs pushing off the arm.
@@ -879,9 +895,33 @@ func _tick_dpad() -> void:
 	if Input.is_action_just_pressed(&"weapon_next"):
 		Game.cycle_weapon(1)
 	if Input.is_action_just_pressed(&"item_next"):
+		# The blip is refused on a ring of one, because there `cycle_item` is a
+		# no-op and a click that says "moved" when nothing moved is worse than
+		# silence -- the player looks at the HUD for a change that is not there.
+		if Game.bottle_count() > 1:
+			_select_blip()
 		Game.cycle_item(1)
 	if Input.is_action_just_pressed(&"loadout_swap"):
+		_select_blip()
 		Game.swap_loadout()
+
+
+## The D-pad's selection click.
+##
+## ONLY ↓ and ↑ ring it, and that is not an oversight. ← / → already speak:
+## `_on_loadout_changed` plays `sfx_swap` whenever the right hand's model
+## actually changes, and doubling a leather-and-buckle equip with a UI click on
+## the same press turns one clear event into mush. What ↓ and ↑ had was nothing
+## at all -- a bottle selection is invisible on a controller (the HUD cell is in
+## the corner of the eye) and a set swap that lands on the same right-hand weapon
+## changes nothing on screen whatsoever. Those are the two presses that could
+## land and leave the player unsure whether they had.
+##
+## Non-positional in spirit but played at the hero, because `Sfx` is 3D-only and
+## the hero is where the listener is; the same thing every menu cue here does.
+func _select_blip() -> void:
+	if _hero != null:
+		Bus.request_sfx.emit(&"ui_move_selection", _hero.global_position)
 
 
 ## X — drink the selected bottle. One press, no draw, no aim.
@@ -1116,30 +1156,20 @@ func _press(intent: int) -> void:
 ## the lock, the chain position, whether an item is in the hand — lives here, so
 ## the buffered path and the live path cannot drift apart.
 func _begin(intent: int) -> void:
-	# An item is out. THE TRIGGER fires it -- that is what it is for -- and the
-	# LIGHT button is the escape hatch: it puts the item away and swings on the
-	# same press, so a hookshot you drew by mistake costs you one button you were
-	# already reaching for rather than a hunt for which D-pad direction you
-	# pressed to draw it.
+	# AN ITEM IS OUT: nothing swings. Both shoulder buttons belong to whatever is
+	# in the right hand (`_tick_item_trigger`), and neither of the two swing ticks
+	# even reaches `_press` while something is drawn -- so the only way in here is
+	# a LIGHT buffered before the draw, paying out after it.
 	#
-	# That escape hatch is the whole reason the sword and the item can share the
-	# trigger. Drawing is sticky here -- the item STAYS out and you walk around
-	# aiming it, which OOT's momentary C-buttons never let you do -- and a sticky
-	# mode with no unconditional way out is a trap.
+	# THE ESCAPE HATCH USED TO LIVE HERE and it is worth saying why it went. A
+	# LIGHT with an item out stowed the item and swung on the same press, so a
+	# hookshot drawn by mistake cost you one button you were already reaching for.
+	# It existed because drawing was sticky and the D-pad direction you drew with
+	# was a fact you had to remember. The D-pad steps a RING now: the sword is a
+	# stop on it, ← or → hands it back, and there is nothing to remember. Keeping
+	# the hatch would mean a press buffered a quarter-second ago silently stowing
+	# the bow the player has just chosen.
 	if equipped != &"":
-		if intent == Intent.LIGHT:
-			# Stowing is synchronous (Game._announce_loadout -> Bus ->
-			# _on_loadout_changed -> equip), so `equipped` is already &"" by the
-			# time the swing below asks. If that ever becomes deferred, the swing
-			# starts happening with the bow still in his hands.
-			Game.stow_item()
-			_light_swing(_chain_step)
-			return
-		# Every other intent is silent with an item out. The trigger no longer
-		# arrives here at all while something is drawn — it is read straight into
-		# HeroRanged (see `_tick_heavy_button`), because a shot that has to survive
-		# a swing buffer is a shot that can come out a quarter of a second after
-		# the player let go.
 		return
 
 	match intent:
@@ -1532,15 +1562,13 @@ func blocks(from_pos: Vector3) -> bool:
 	return rad_to_deg(fwd.angle_to(to)) <= block_cone
 
 
-## Play the clang and tell the world. The blocker calls this so a blocked blow
+## Tell the world a blow was stopped. The blocker calls this so a blocked blow
 ## reads differently from one that never arrived.
+##
+## It used to build an `AudioStreamPlayer3D` per block and free it on `finished`,
+## which is exactly the thing CONTRACT §8 forbids — a prop holding a player for a
+## world sound. `Sfx` hangs `shield_block` off this signal now, so the clang is
+## chosen in one place with everything else and a fight full of parries allocates
+## nothing. All this function does is say what happened and where.
 func on_blocked(at: Vector3, normal: Vector3) -> void:
-	var p := AudioStreamPlayer3D.new()
-	p.stream = sfx_block
-	p.bus = &"SFX"
-	p.unit_size = 6.0
-	add_child(p)
-	p.global_position = at
-	p.finished.connect(p.queue_free)
-	p.play()
 	Bus.shield_blocked.emit(at, normal)

@@ -100,13 +100,14 @@ const PREMIUM_BASELINE := 0.735
 ## deliberate and starts reading as a bug.
 const CELL := 64.0
 const CELL_GAP := 12.0
-## Gap between the hands pair and the D-pad cross — wider than CELL_GAP so the
-## cluster reads as two groups, not five cells in a row.
+## Gap between the hands pair and the item cell — wider than CELL_GAP so the
+## cluster reads as two groups (what he is holding, what he has selected) and not
+## as three cells in a row.
 const CLUSTER_GAP := 22.0
-## The cluster is laid out from its RIGHT edge (see Hud._cluster_rect), not from
+## The cluster is laid out from its RIGHT edge (see Hud._cross_origin), not from
 ## a left-edge fraction. At the old size a fractional origin was safe; doubled,
-## the cross alone is 216 reference px and a 0.886 left edge puts it 82 px off
-## the side of a 1280-wide screen. Anchor the thing that must not overflow.
+## the old six-cell cluster was 216 reference px and a 0.886 left edge put it
+## 82 px off the side of a 1280-wide screen. Anchor what must not overflow.
 const CLUSTER_RIGHT := 0.969   ## shares BAG_RIGHT's margin — one right edge, not two
 const CLUSTER_TOP := 0.044
 ## Room under a cell for its key cap.
@@ -128,6 +129,15 @@ const EXTRACT_BASELINE := 0.940
 const RIM_TL := Vector2(0.812, 0.786)
 const RIM_BR := Vector2(0.978, 0.914)
 const ROOM_NAME_BASELINE := 0.139
+## The floor card -- the dungeon's name and the level you are on. Top-left, which
+## was the one corner of this HUD with nothing in it: health and stamina are
+## bottom-left, the bag and the fee bottom-right, the button cluster top-right.
+##
+## It shares HEALTH_ORIGIN's x so the left margin is ONE edge and not two. The y
+## clears the safe area (0.031) by enough that the two-line card does not touch
+## it -- an announcement pinned to the very top of the frame reads as a system
+## notification rather than as part of the game.
+const FLOOR_ORIGIN := Vector2(0.031, 0.052)
 ## The control legend, town only. Bottom edge, under everything.
 const KEYS_BASELINE := 0.962
 

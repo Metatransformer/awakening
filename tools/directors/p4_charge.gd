@@ -174,22 +174,23 @@ func run(rig) -> void:
 	# Emptied through `spend_stamina` and not by assigning the field: spending is
 	# what arms the regen delay, and without it the bar hands 16 units back -- a
 	# whole light swing -- inside the 0.35 s between these two taps.
+	#
+	# DRAINED TWICE, once before each press, and that is not belt-and-braces. One
+	# drain and two taps is what this beat did first, and it reported the heavy
+	# swinging on an empty bar: K.STAMINA_DELAY is 0.45 s, the gap between the
+	# taps is 0.3 s, and the tap itself plus the frames either side of it spend
+	# the rest -- so by the second press the delay had lapsed and regen had put
+	# several units back. The bar under test was not empty. A director that empties
+	# the bar once and then measures something 0.4 s later is measuring the regen
+	# curve, not the gate.
 	_drain()
 	mark = _hits.size()
-	print("DBG drained stamina=%.2f hits=%d" % [Game.stamina, _hits.size()])
 	await rig.tap(["attack"])
 	await rig.wait_seconds(0.3)
-	print("DBG after attack stamina=%.2f hits=%d" % [Game.stamina, _hits.size()])
-	print("DBG pre-heavy stamina=%.6f hold_hits=%d" % [Game.stamina, _hits.size()])
+	var light_on_empty := _hits.size() - mark
+	_drain()
 	await rig.tap(["heavy"])
-	print("DBG mid-heavy stamina=%.6f hits=%d" % [Game.stamina, _hits.size()])
-	for _d in 40:
-		await rig.wait_frames(1)
-		if _hits.size() > mark:
-			print("DBG blow landed at frame %d stamina=%.6f dmg=%d charged=%s" % [_d, Game.stamina, _hits[mark], bool(combat.get(&"charged"))])
-			break
 	await rig.wait_seconds(0.6)
-	print("DBG after heavy stamina=%.2f hits=%d" % [Game.stamina, _hits.size()])
 	var spent_blows := _hits.size() - mark
 	await rig.capture(out.path_join("h_03b_no_stamina.png"))
 	_refill()
@@ -211,7 +212,7 @@ func run(rig) -> void:
 		% [charge_time * 0.6, short_blows, short_dmg, short_charged])
 	print("CHARGE long hold press dmg=%d release dmg=%d release_to_contact=%d charged=%s/%s"
 		% [held_heavy, spin_dmg, spin_frames, charged, sheet_charged])
-	print("CHARGE empty bar blows=%d" % spent_blows)
+	print("CHARGE empty bar blows=%d (light %d)" % [spent_blows, light_on_empty])
 
 	if light_dmg <= 0:
 		print("CHARGE FAIL the light tap did not land"); fails += 1
@@ -266,7 +267,19 @@ func _refill() -> void:
 
 
 ## Empty it the way the game empties it, so the regen delay is armed too.
+##
+## The one-unit top-up is not a fudge, it is the whole reason this works twice in
+## a row. `spend_stamina` returns EARLY on a zero cost -- rightly, nothing was
+## spent -- and an early return does not touch `_stamina_hold`. So draining a bar
+## that is already at zero re-arms nothing, K.STAMINA_DELAY lapses on the clock
+## the FIRST drain started, and regen quietly puts a swing's worth back under the
+## press the drain was meant to refuse. That is what "an empty stamina bar still
+## threw 1 blow" turned out to be, and the bar was not empty when the game read
+## the press: `Input.action_press` and the physics tick that polls it are a frame
+## or two apart, which is all the room 46 units a second needs.
 func _drain() -> void:
+	if Game.stamina <= 0.0:
+		Game.stamina = 1.0
 	Game.spend_stamina(Game.stamina)
 
 

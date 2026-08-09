@@ -113,11 +113,12 @@ func _time(rig, hero: Node3D, combat: Node, label: String, mods: Array,
 
 	# The clock starts at the RELEASE for anything held, and the first version of
 	# this director got that wrong in a way that produced a confident number for a
-	# swing it never saw. The spin's press throws a LIGHT swing on its way past
-	# (that is the design — see HeroCombat._tick_attack_button), so a window
-	# opened at the press watches the light chain and times out ~40 ms before the
-	# spin comes out. The giveaway was SPIN's profile being byte-identical to
-	# LIGHT1's from 133 ms on.
+	# swing it never saw. The spin's press throws a swing on its way past (that is
+	# the design — `HeroCombat._tick_heavy_button` fires the overhead on the press
+	# and winds up only if you keep holding), so a window opened at the press
+	# watches that swing and times out ~40 ms before the spin comes out. The
+	# giveaway was SPIN's profile being byte-identical to the press swing's from
+	# 133 ms on.
 	if hold_frames > 0:
 		await rig.wait_frames(hold_frames)
 		Input.action_release(action)

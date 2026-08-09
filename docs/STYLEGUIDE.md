@@ -386,7 +386,7 @@ unit it is ever spent in.
   BONE flash each — a full bar takes 0.8 s. The heal is the reward for leaving
   and it should be watched and counted, not granted in a frame.
 
-### 5.2 The hands — left and right, beside the D-pad
+### 5.2 The hands — left and right, beside the item
 
 **Superseded 2026-08-08: this was a fixed four-cell kit strip (sword, shield,
 hookshot, bow) and is now two cells, the hands.** The strip was a lie by the time
@@ -395,8 +395,8 @@ the hookshot and the bow, and where the right hand can hold any of them. Two
 cells that say *what he is holding right now* is the same pixel budget spent on
 a fact that changes.
 
-Two cells in the top-right cluster, immediately left of the D-pad cross and
-centred against its two rows. No radial, no wheel. **Left cell is the left hand,
+Two cells in the top-right cluster, immediately left of the item cell and
+sharing its top edge. No radial, no wheel. **Left cell is the left hand,
 right cell the right hand** — the reading order is the body, not an inventory
 order. Either can be empty: bow-and-arrows empties the shield arm, and an empty
 cell is correct there rather than a gap to fill.
@@ -443,36 +443,46 @@ bottom edge, and the hookshot cell brightening to BONE when a hookable target is
 in range and in the reticle. Both were written here before the loadout existed
 and neither has ever been drawn — they are intent, not description.
 
-### 5.2b The item buttons — a picture of the D-pad, top-right
+### 5.2b The item cell, and the carets that say what cycles
 
-Three cells in the physical arrangement of the D-pad: **▲ above, ◄ and ► below
-it**, with a small ASH ▼ caret under the cross. Whatever the player bound to a
-direction in the Items screen is what that cell shows (`docs/CONTRACT.md` §4.1).
+**Superseded 2026-08-09: this was four bindable cells in the physical shape of
+the D-pad — ▲ above, ◄ ► below, a ▼ caret under the cross — and it is now one
+cell.** The cross was a picture of a control that no longer exists: the D-pad
+binds nothing, it *steps rings* (`docs/CONTRACT.md` §4.1), so four cells drawing
+"what you put on each direction" were four cells drawing a lie. What replaced it
+is the third cell in a row of three: **[left hand] [right hand] [selected item]**,
+all `Pal.CELL` = 64 reference px, all sharing one top and one bottom.
 
-**The arrangement is the label.** A row of three cells would need three direction
-glyphs printed on them, and the player would still be translating "cell 2" into
-"up" every time they reached for it. In the cross shape there is nothing to
-translate: the cell is where the thumb is.
+**THE CARET RULE, and it is the whole cluster's grammar:** a caret ABOVE a cell
+is the D-pad direction that cycles that cell. **← →** sit over the right hand,
+**↓** sits over the item, and nothing else in the cluster draws a triangle — so a
+triangle always means "a direction changes this". The band above the cells is
+`CARET * 2 + CARET_GAP` tall and every cell is pushed down by it whether or not it
+has a caret, which is what keeps the tops in a line.
 
-**An unbound button is drawn empty, not skipped.** A gap would break the cross,
-and the cross is the whole point — three cells in a row plus one missing reads as
-a rendering fault, not as a free slot.
+The right hand's carets are drawn **always**, even when the player owns nothing
+but the sword. A ring of one is still the ring, and a caret that only appears the
+moment you pick up a bow is a control the player has to notice arriving — the
+question the old bindable cross answered loudly ("which direction is my bow on?")
+would come back as a quieter one.
 
-The ▼ is a caret rather than a fourth cell because it is not bindable: it swaps
-the primary and alternate sets. Drawing it as a cell would invite the player to
-try to bind it — which is also why it is the one thing in the cluster with no key
-cap under it.
+**↑ is a line of text, not a cell.** Under the cluster, right-aligned on a
+MIDNIGHT @80% plate: `↑ PRIMARY` or `↑ ALTERNATE`. A set is not a thing with an
+icon — it is which pair of hands you are looking at — and the two cells above it
+already show it. It is plated because it sits over the world with nothing else
+behind it, and it uses a real `↑` because `PixelFont.GLYPHS` has arrows and does
+NOT have ▲ ▼ ◄ ►, which render as the solid MISSING block.
 
-**Cells are `Pal.CELL` = 64 reference px**, roughly double what they were until
-2026-08-09, and the hand cell and the button cell are now the *same* size. They
-used to differ by 2 px (32 vs 34), which at that scale nobody could see; doubled,
-a 4 px difference stops reading as deliberate and starts reading as a bug.
+**Only the item cell carries a key cap that fires it** — `X`, read from the live
+`InputMap` like every other cap (§5.2). The hands are not fired from the cluster;
+the shoulders do that, and a cap on the sword cell would be claiming a button the
+sword shares with whatever you draw.
 
 The cluster is laid out **from its right edge** (`Pal.CLUSTER_RIGHT`, sharing the
 bag's margin so the HUD has one right edge and not two), never from a left-edge
-fraction. At the old size a left origin was safe. Doubled, the cross alone is 216
-reference px and the old `0.886` left edge put it 82 px off the side of a 1280
-screen. Anchor the thing that must not overflow.
+fraction. At the old size a left origin was safe. Doubled, the old six-cell
+cluster was 216 reference px wide and the old `0.886` left edge put it 82 px off
+the side of a 1280 screen. Anchor the thing that must not overflow.
 
 | | |
 |---|---|
@@ -610,8 +620,10 @@ Fractions of viewport, origin top-left; px at 1280×720.
 |---|---|---|---|
 | Health bar origin | 0.031 (40) | 0.899 (647) | 0.268 w (343) × 15 |
 | Stamina bar origin | 0.031 (40) | health bottom + 4 | 0.62× health w × 8 |
-| D-pad cross origin | right-align 0.969 (1240) | 0.044 (32) | cell 64×64, gutter 12 |
-| Hands origin | cross left − 22 | centred on cross | cell 64×64, gutter 12 |
+| Item cell origin | right-align 0.969 (1240) | 0.044 (32) + caret band | cell 64×64 |
+| Hands origin | item left − 22 | same top as the item | cell 64×64, gutter 12 |
+| Caret band | above every cell | 21 tall (8·2 + 5) | ← → right hand, ↓ item |
+| Loadout line | right-align 0.969 | below the key caps + 9 | plated, `↑ PRIMARY` |
 | Key caps | centred under cell | cell bottom + 4 | PixelFont ×2 (14 tall) |
 | Bag numeral baseline | right-align 0.969 | 0.900 (648) | 32 px |
 | Value slips | right-align 0.969, max w 0.094 | 0.803→0.858 | 3 px + 2 gutter |
@@ -619,6 +631,7 @@ Fractions of viewport, origin top-left; px at 1280×720.
 | Extraction baseline | right-align 0.969 | 0.940 (677) | 12 / 16 px |
 | Bag rim | 0.740 → 0.978 | 0.786 → 0.958 | 2 px |
 | Room name baseline | centre 0.500 | 0.139 (100) | 24 px Jacquard |
+| Floor card origin | 0.031 (40) | 0.052 (37) | name 10 px over level 16 px, VOID plate, 6 px pad |
 | Extraction sweep | 0.0 → 1.0 | 0.500 | 1 px, 200 ms |
 | Damage arc | centre 0.500 | centre 0.500 | r = 0.28h, 3 px |
 | Safe margin | 0.025 w | 0.031 h | |

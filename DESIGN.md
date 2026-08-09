@@ -107,7 +107,7 @@ document is how each layer looks.
 |---|---|---|---|
 | **Vitals** | cold | **always** | health bar, stamina bar, item slots, currency |
 | **Engagement** | cold | only while a fight is live | lock brackets, target threat arc, telegraph rings, damage numbers |
-| **Run** | warm | transitions only, then fades | floor title, room pips, boon cards, full-opacity map |
+| **Run** | warm | transitions, then fades — **except the floor card, which settles rather than leaving** | floor card, room pips, boon cards, full-opacity map |
 
 Tiering follows `gamestack:ui-ux-and-feedback` §B.1: Tier-1 (can kill you inside a 3s
 reaction window) is permanent and peripheral; Tier-2 is context-triggered; Tier-3 is in a
@@ -235,7 +235,7 @@ measured value is kept in `refs/REFERENCE.md` as history; `K.HUD_MARGIN` is ours
 | Currency | Vitals | bottom-left | x 3.1%, y 92% |
 | Item slots ×3 | Vitals | bottom-right | right-aligned to 96.9%, centre y 88%; equipped r=44, stowed r=32 |
 | Minimap | Run | top-right | right edge at 96.9%, y 5.5–25% |
-| Floor title + pips | Run | top-right | right-aligned to 96.9%, under the map |
+| Floor card | Run | **top-left** | x 3.1%, y 5.2%; "THE SUNKEN CUT" over "LEVEL n" on a VOID plate. Announces lit on `Bus.floor_arrived`, settles over 0.9s; the level line never dims. **Shipped here, not top-right**: the button cluster took that corner, and this is the only text on the HUD with lit brick behind it — hence the plate |
 | Lock brackets | Engagement | world | corner brackets on the target's screen AABB, inset 26px |
 | Target threat arc | Engagement | world | 62px radius arc, centred above the bracket box |
 | Telegraph ring | Engagement | world | at the **attacker's** feet, not the hero's — the danger is where the blow lands |
@@ -357,8 +357,10 @@ HUD (CanvasLayer, layer = 1)
 - `tween.kill()` before starting a new one, or rapid damage stacks animations.
 - Damage-number pool must outlive its own tween duration.
 
-**Shaders already in the repo, imported from `~/valenfeld` and currently unused.** These
-were written for exactly this and their own header comments describe these use cases:
+**Shaders already in the repo, imported from `~/valenfeld`, most of them still unused.**
+These were written for exactly this and their own header comments describe these use
+cases. `ui_title_backdrop` is the one that has since been instanced — its header had
+described the loading frame it now draws since the foundation commit:
 
 | Shader | Use |
 |---|---|
@@ -366,7 +368,7 @@ were written for exactly this and their own header comments describe these use c
 | `ui_boon_frame.gdshader` | boon cards; drive `accent` / `glow` / `shimmer` from rarity only |
 | `ui_carved_panel.gdshader` | pause and map panels |
 | `ui_spell_sigil.gdshader` | item slot socket backing, behind the baked icon |
-| `ui_title_backdrop.gdshader` | floor title |
+| `ui_title_backdrop.gdshader` | **in use** — `LoadingCard`, the named screen on the way into the Sunken Cut |
 | `ground_decal` / `nova_decal` | telegraph rings |
 
 ### Bus signals — all four the HUD needs already exist
