@@ -20,6 +20,11 @@ extends Control
 ##    vendor or to the forge. The mark is the ◆ and the caption says which.
 ##  * **The workbench**, which is what survived. Read-only: this screen shows
 ##    the stock, the smith spends it.
+##  * **The way out**, and its fee. It moved here off the ITEMS screen, and the
+##    HUD's gold total moved here too (hud.gd took it off the screen on purpose).
+##    That is not three unrelated things sharing a frame: the bag's worth, the
+##    purse and the fee ARE the extraction decision, and it is a decision made by
+##    stopping and looking, not by glancing at a corner while running.
 ##
 ## It owns no state and changes none. Equipping is the ITEMS screen's job (the
 ## D-pad and the two hands), and the two are separate screens on purpose — one
@@ -28,9 +33,12 @@ extends Control
 
 signal back_requested
 signal notice(text: String, is_error: bool)
+## The player asked to leave. The channel happens in the WORLD, so the menu has
+## to close whole rather than back out one screen.
+signal use_requested
 
 const FRAME_SIZE := Vector2(1060, 604)
-const HINT := "↑↓←→ Look    Esc / B Back    Items screen equips the D-pad"
+const HINT := "↑↓←→ Look    Esc / B Back    The way out is in the right column"
 
 ## Cells per row. Twelve slots is the start, sixteen the bought maximum
 ## (K.START_BAG_SLOTS + ShopDb.LIMITS.bag_slot): four across is three clean rows
@@ -68,6 +76,8 @@ var _detail_name: Label
 var _detail_value: Label
 var _detail_blurb: Label
 var _detail_legend: Label
+var _charm: Button
+var _charm_fee: Label
 
 
 func _ready() -> void:
@@ -145,6 +155,7 @@ func _build() -> void:
 	right.add_theme_constant_override("separation", 12)
 	split.add_child(right)
 	_build_detail(right)
+	_build_charm(right)
 	_build_stock(right)
 
 	var footer := PanelContainer.new()
@@ -304,6 +315,107 @@ func _build_detail(parent: Node) -> void:
 	col.add_child(_detail_legend)
 
 
+## The way out. The only control on this screen that ENDS something — everything
+## above it is a picture of what you are carrying, and this spends it.
+##
+## It sits directly under the grid it is priced from, which is why it moved here
+## from the ITEMS screen: the fee is a quarter of the bag, and the bag is what
+## the left column draws. On the other screen the number had nothing beside it.
+##
+## It is not one of the three bindable buttons and it never will be. Extraction
+## used to be a hold on a rune pad precisely so it could not be triggered by a
+## fumble (METAGAME §5); putting it on a D-pad direction would hand back exactly
+## the fumble the hold was guarding against. Two deliberate presses in a paused
+## menu, then a channel you can be knocked out of, is the same guarantee by
+## other means.
+func _build_charm(parent: Node) -> void:
+	var card := PanelContainer.new()
+	card.name = "Use"
+	card.theme_type_variation = &"MenuSection"
+	parent.add_child(card)
+
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 8)
+	card.add_child(inner)
+
+	var caption := Label.new()
+	caption.theme_type_variation = &"MenuHeading"
+	caption.text = "THE WAY OUT"
+	inner.add_child(caption)
+
+	_charm = Button.new()
+	_charm.name = "Charm"
+	_charm.theme_type_variation = &"MenuRow"
+	_charm.focus_mode = Control.FOCUS_ALL
+	_charm.text = "◈  Homeward Charm"
+	inner.add_child(_charm)
+
+	_charm_fee = Label.new()
+	_charm_fee.name = "Fee"
+	_charm_fee.theme_type_variation = &"MenuValue"
+	_charm_fee.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_charm_fee.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_charm_fee.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_charm.add_child(_charm_fee)
+	_charm_fee.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_charm_fee.offset_right = -16
+
+	_charm.pressed.connect(_use_charm)
+	_charm.focus_entered.connect(_describe_charm)
+	_charm.mouse_entered.connect(_describe_charm)
+
+
+## Leaving is not something to do from inside a menu screen: the channel happens
+## in the world and the player has to be able to see it. So the menu closes and
+## the hero's charm node takes it from there (`Bus.homeward_used`).
+func _use_charm() -> void:
+	if not Run.in_dungeon:
+		notice.emit("You are already home.", true)
+		return
+	var fee := Run.extract_cost()
+	if Game.gold < fee:
+		notice.emit("The charm wants %d gold and you have %d." % [fee, Game.gold], true)
+		return
+	use_requested.emit()
+	Bus.homeward_used.emit()
+
+
+func _describe_charm() -> void:
+	_detail_kind.text = "THE WAY OUT"
+	_detail_name.text = "Homeward Charm"
+	if not Run.in_dungeon:
+		_detail_value.text = ""
+		_detail_blurb.text = "Cold, and quiet. It only wakes underground."
+		_detail_legend.text = "Nothing to leave."
+		return
+	var fee := Run.extract_cost()
+	_detail_value.text = "%d gold" % fee
+	_detail_blurb.text = "It pulls you home and heals what the dark took. " \
+		+ "The fee is a quarter of what you are carrying, and the fee is why " \
+		+ "the greedy run is a decision."
+	_detail_legend.text = "Takes a moment. A blow that lands breaks it." \
+		if Game.gold >= fee else "You cannot afford to leave. Sell, or die trying."
+
+
+## The fee, live. It is on the row rather than only in the detail pane because
+## it is the whole decision: "leave" and "leave for 340 gold" are different
+## sentences and the player should not have to focus the row to read the second.
+##
+## The row stays ENABLED when you cannot afford it. A greyed-out control tells
+## you nothing about why; pressing it and being told "the charm wants 340 gold
+## and you have 190" tells you exactly what to do about it.
+func _paint_charm() -> void:
+	if _charm == null:
+		return
+	if not Run.in_dungeon:
+		_charm_fee.text = "—"
+		_charm_fee.modulate = Color(1, 1, 1, 0.5)
+		return
+	var fee := Run.extract_cost()
+	_charm_fee.text = "%d ◇" % fee
+	_charm_fee.modulate = Color.WHITE if Game.gold >= fee else Pal.RUST
+
+
 ## What made it home. Not focusable and not editable — it is the answer to "can
 ## I afford the next rung", shown next to the bag it came out of.
 func _build_stock(parent: Node) -> void:
@@ -346,7 +458,13 @@ func _wire_focus() -> void:
 		if below < n:
 			MenuUtil.link_down(_cells[i], _cells[below])
 		else:
-			MenuUtil.link_down(_cells[i], _back)
+			# Out of the bottom of the grid comes the way out, and only then Back.
+			# That order is the screen's argument in one column: here is what you
+			# are carrying, here is what it costs to keep it, here is the door.
+			MenuUtil.link_down(_cells[i], _charm)
+	MenuUtil.link_down(_charm, _back)
+	_charm.focus_neighbor_left = ^"."
+	_charm.focus_neighbor_right = ^"."
 	_back.focus_neighbor_bottom = _back.get_path_to(_cells[0])
 	_back.focus_next = _back.get_path_to(_cells[0])
 	_back.focus_neighbor_left = ^"."
@@ -367,10 +485,13 @@ func refresh() -> void:
 	_rebuild_cells()
 	_fill_cells()
 	_paint_header()
+	_paint_charm()
 	_paint_stock()
 	var focused := get_viewport().gui_get_focus_owner()
 	if _cells.has(focused):
 		_describe(focused as Button)
+	elif focused == _charm:
+		_describe_charm()
 	elif not _cells.is_empty():
 		_describe(_cells[0])
 
@@ -428,10 +549,22 @@ func _paint_cell(b: Button) -> void:
 	count.text = "×%d" % int(b.get_meta(&"count", 1))
 
 
+## Three numbers, and this screen is now the only place two of them are said.
+##
+## The HUD used to print a running gold total in the corner and it was taken out
+## on purpose (see hud.gd `_draw_bag`): money on screen turns a dungeon into an
+## accounting exercise. So the bag's worth and the purse live HERE, where the
+## player has stopped to look at them, which is where a decision about money is
+## actually made. That is also why the pouch got its own button.
+##
+## BAG and PURSE are labelled rather than left as two bare figures with a diamond
+## each. Unlabelled, they read as one number that changed, and the whole point of
+## showing them together is that they are the two sides of the extraction trade.
 func _paint_header() -> void:
 	var used := Run.slots_used()
 	var full := used >= Game.bag_slots
-	_header.text = "%d / %d SLOTS      %d ◇" % [used, Game.bag_slots, Run.bag_value()]
+	_header.text = "%d / %d SLOTS      BAG %d ◇      PURSE %d ◇" \
+		% [used, Game.bag_slots, Run.bag_value(), Game.gold]
 	# The only colour on the header, and it means one thing: the next mote you
 	# walk over is going to stay on the floor.
 	_header.modulate = Pal.RUST if full else Color.WHITE

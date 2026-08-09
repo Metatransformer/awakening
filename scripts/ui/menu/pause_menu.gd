@@ -108,13 +108,13 @@ func _ready() -> void:
 
 	_saves.bind_confirm(_confirm)
 	_equip.back_requested.connect(back)
-	# Using an item is not backing out one screen: the Homeward Charm's channel
-	# happens in the world and the player has to be able to watch it, so the
-	# whole menu goes away rather than popping to root.
-	_equip.use_requested.connect(close)
 	_equip.notice.connect(_notice)
 	_equip.value_settled.connect(func() -> void: _play(SND_CLICK))
 	_pouch.back_requested.connect(back)
+	# Using the way out is not backing out one screen: the Homeward Charm's
+	# channel happens in the world and the player has to be able to watch it, so
+	# the whole menu goes away rather than popping to root.
+	_pouch.use_requested.connect(close)
 	_pouch.notice.connect(_notice)
 	_options.back_requested.connect(back)
 	_options.rebind_requested.connect(_begin_listening)
@@ -173,6 +173,26 @@ func toggle() -> void:
 		close()
 	else:
 		open()
+
+
+## The pouch button (`inventory` — I, or Select on the pad). Opens the menu
+## already ON the pouch, rather than at the root with the pouch one press away.
+##
+## This is the only screen with its own button, and it earns it: "what am I
+## carrying and can I afford to leave" is the question the player asks between
+## every room, and it is now the ONLY place the game says how much money is in
+## play — the HUD stopped printing a total on purpose (see hud.gd). A question
+## asked that often must not cost two presses and a focus move.
+##
+## Pressed again with the menu up it closes, wherever you had navigated to. A
+## button that opens must close, or the player has to find a different button to
+## undo what they just did.
+func open_pouch() -> void:
+	if _is_open:
+		close()
+		return
+	open()
+	_push({"screen": Screen.POUCH})
 
 
 ## Back out one level. At the root level that means closing the menu.
@@ -303,6 +323,10 @@ func _input(event: InputEvent) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _listening != &"":
+		return
+	if event.is_action_pressed(&"inventory"):
+		open_pouch()
+		get_viewport().set_input_as_handled()
 		return
 	if not _is_open:
 		if event.is_action_pressed(&"pause"):

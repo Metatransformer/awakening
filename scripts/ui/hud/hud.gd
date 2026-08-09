@@ -3,10 +3,16 @@ extends CanvasLayer
 ##
 ## TWO POLES. Bottom-left is YOU: the health and stamina bars and the kit strip,
 ## one instrument.
-## Bottom-right is THE MONEY: the bag's running value and the way out, one
-## instrument. They sit in opposite corners deliberately -- in a panic your eye
-## has to travel from "how alive am I" to "how much am I about to lose", and that
-## eye movement IS the game's central decision. The top of the screen stays empty
+## Bottom-right is WHAT YOU STAND TO LOSE: the bag's rim, its value histogram,
+## and the fee to leave. They sit in opposite corners deliberately -- in a panic
+## your eye has to travel from "how alive am I" to "how much am I about to
+## lose", and that eye movement IS the game's central decision.
+##
+## Note what is NOT in that corner: a gold total. It was there, 32 px and
+## rolling, and it made the corner an accounting screen -- the player read the
+## number instead of the room. Money is now something you go and LOOK at, in the
+## pouch or over a vendor's counter. The corner still says how much is at stake;
+## it no longer says it in figures. The top of the screen stays empty
 ## except for transient state, because the over-the-shoulder camera puts the
 ## action in the upper-middle third.
 ##
@@ -60,8 +66,6 @@ const STAMINA_TICKS := 3           ## rolls-from-full, drawn as boundaries
 ## shortest flash tools/directors/heat_flow.gd could reliably photograph, which
 ## is a fair proxy for the shortest one a player will reliably notice.
 const HEAT_BREAK_FLASH := 0.35
-## Seconds the "+N HOT" line stays lit after it grows.
-const HEAT_BANK_POP := 0.45
 
 # --- Hands and item buttons (§5.2) -------------------------------------------
 ## Cell geometry lives in Pal now (Pal.CELL / CELL_GAP / CLUSTER_*), because the
@@ -115,7 +119,6 @@ const SLIP_H := 4.0
 const SLIP_GAP := 2.0
 const SLIP_MAX := 8
 const SLIP_MAX_W := 0.094          ## fraction of screen
-const ROLL_TIME := 0.30            ## the number eases to its new value
 const TOAST_HOLD := 1.60
 const TOAST_FADE := 0.20
 const RIM_FLASH := 0.10
@@ -134,7 +137,9 @@ var _stamina: float = K.MAX_STAMINA
 # millisecond forever.
 var _ghost_quarters: int = 0       ## cells lost, still lit in RUST
 var _ghost_t: float = -1.0
-var _shown_value: float = 0.0      ## the number actually on screen, mid-roll
+## What the bag is worth. NOT drawn as a number any more (see `_draw_bag`); it
+## survives because the rim's tier, the T3 breathing and the repaint budget are
+## all decisions about how much is at stake, and those are still made here.
 var _target_value: int = 0
 var _toast: String = ""
 var _toast_color: Color = Pal.MOTH
@@ -157,7 +162,6 @@ var _last_quarters: int = -1
 var _heat_tier: int = 0
 var _heat_kills: int = 0
 var _heat_break_t: float = -1.0
-var _heat_bank_t: float = -1.0
 ## "(E) OPEN", or "" when there is nothing in reach. Owned by the Prompt autoload.
 var _prompt: String = ""
 
@@ -174,7 +178,6 @@ func _ready() -> void:
 	add_child(_canvas)
 
 	_target_value = _headline()
-	_shown_value = float(_target_value)
 	_last_quarters = Game.quarters
 
 	for id: StringName in KIT_ICON:
@@ -194,7 +197,6 @@ func _ready() -> void:
 	Bus.quick_slots_changed.connect(_repaint)
 	Bus.heat_changed.connect(_on_heat)
 	Bus.heat_tier_changed.connect(_on_heat_tier)
-	Bus.heat_banked.connect(_on_heat_banked)
 	Bus.extract_refused.connect(_on_refused)
 	Bus.homeward_broken.connect(_on_homeward_broken)
 	Bus.shield_blocked.connect(_on_blocked)
@@ -244,14 +246,20 @@ func _on_health(quarters: int, _max_q: int) -> void:
 	_repaint()
 
 
-## THE number, bottom right. In the dungeon it is what you are carrying, because
-## that is what you are deciding about. In town it is what you own, because the
-## bag is about to become that and nothing else on the screen says how rich you
-## are. Same glyphs, same corner, same colour rules -- one instrument, two jobs.
+## What the bag is worth, always -- in town as well, where it is normally zero.
+##
+## This USED to be a number in the bottom-right corner, and in town it showed the
+## purse instead. Both are gone. A running gold total on screen turns every room
+## into an accounting screen: the player reads the number, not the room, and the
+## extraction decision stops being "is this worth the walk back" and becomes
+## "has the number gone up". Money is now something you go and LOOK at -- the
+## pouch screen, or a vendor's counter -- which is where a decision about it is
+## actually made. What stays out here is only what is at stake: the rim's colour,
+## the slips, and the extraction fee beside it.
 func _headline() -> int:
 	if Run == null:
 		return 0
-	return Run.bag_value() if Run.in_dungeon else Game.gold
+	return Run.bag_value()
 
 
 func _on_bag(_bag: Dictionary, _value: int) -> void:
@@ -266,9 +274,6 @@ func _on_gold(_gold: int) -> void:
 
 func _on_headline_changed(_a = null, _b = null, _c = null) -> void:
 	_target_value = _headline()
-	# Crossing town/dungeon should not roll a 900-gold purse up from a 40-gold
-	# bag over a third of a second; that reads as an award, not a context change.
-	_shown_value = float(_target_value)
 	_wake()
 
 
@@ -301,11 +306,6 @@ func _on_heat(kills: int, tier: int, _window01: float) -> void:
 func _on_heat_tier(_tier: int, rising: bool) -> void:
 	if not rising:
 		_heat_break_t = 0.0
-	_wake()
-
-
-func _on_heat_banked(_gold: int) -> void:
-	_heat_bank_t = 0.0
 	_wake()
 
 
@@ -414,14 +414,8 @@ func _process(delta: float) -> void:
 		else:
 			busy = true
 
-	if not is_equal_approx(_shown_value, float(_target_value)):
-		# Ease-out toward the new total. The roll is the dopamine; never snap.
-		var step: float = maxf(1.0, absf(_target_value - _shown_value)) * (delta / ROLL_TIME)
-		_shown_value = move_toward(_shown_value, float(_target_value), step)
-		busy = true
-
 	for t in [&"_toast_t", &"_rim_flash_t", &"_sweep_t", &"_refuse_t", &"_block_flash_t",
-			&"_heat_break_t", &"_heat_bank_t"]:
+			&"_heat_break_t"]:
 		var v: float = get(t)
 		if v >= 0.0:
 			set(t, v + delta)
@@ -438,8 +432,6 @@ func _process(delta: float) -> void:
 		_block_flash_t = -1.0
 	if _heat_break_t > HEAT_BREAK_FLASH:
 		_heat_break_t = -1.0
-	if _heat_bank_t > HEAT_BANK_POP:
-		_heat_bank_t = -1.0
 
 	# T3 breathes, so the HUD keeps ticking while the bag is that valuable.
 	if Pal.tier(_target_value) >= 3 or _lock_target != null or _extract_hold > 0.0:
@@ -919,62 +911,30 @@ func _hero_combat() -> Node:
 
 
 # --- The bag (§5.3) ---------------------------------------------------------
-## The most important object on screen. Four parts: the number, the value
-## histogram, the rim, and the extraction line below it.
-
+## What you are carrying, said WITHOUT a number: the rim's colour and the value
+## histogram. The extraction line below it is the only figure left in this corner.
+##
+## There used to be a 32 px gold total here, rolling up on every pickup, and it
+## was the most-read thing on the screen. That is the problem with it. A player
+## watching a running total is doing bookkeeping in the middle of a dungeon, and
+## the extraction decision degrades from "is this worth the walk back" into "has
+## the number gone up". The information did not go away -- it moved to the pouch
+## and the vendor's counter, which is where you go to think about money.
+##
+## What survives is the part that is about RISK rather than arithmetic: the rim
+## says how rare the best thing in the bag is, the slips say whether your money
+## is one stack or eight, and neither is a figure you can read while running.
 func _draw_bag(s: Vector2) -> void:
 	var right := Pal.BAG_RIGHT * s.x
-	var value := int(round(_shown_value))
-	var tier := Pal.tier(_target_value)
-
-	_draw_rim(s, tier)
-
-	# The number. Tabular by construction -- PixelFont is monospaced -- so the
-	# digits do not shuffle while the total rolls up.
-	var scale := Pal.px(32.0 / PixelFont.H, s.y)
-	var col := Pal.bag_color(_target_value)
-	if tier >= 3:
-		# Breathes. At T3 every hit also flickers it, so the game reminds you
-		# what is at stake at the exact instant you are hurt.
-		var b := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.001 * TAU * 0.5)
-		col = col.lerp(Pal.BONE, b * 0.35)
-		if _ghost_t >= 0.0 and _ghost_t < 0.05:
-			col = Pal.GOLD
-	var top := Pal.BAG_NUM_BASELINE * s.y - PixelFont.height(scale)
-	var diamond := Pal.px(16.0, s.y)
-	_draw_diamond(Vector2(right - diamond * 0.5, top + PixelFont.height(scale) * 0.5),
-		diamond * 0.5, Pal.GOLD)
-	PixelFont.draw_right(_canvas, str(value),
-		Vector2(right - diamond - Pal.px(6.0, s.y), top), scale, col)
-
+	_draw_rim(s, Pal.tier(_target_value))
 	_draw_slips(s, right)
-	_draw_premium(s, right)
-
-
-## How much of that total is heat.
-##
-## The premium is already INSIDE the headline -- Run.bag_value() folds it in, so
-## the fee above is charging for it too. This line exists because a number that
-## is quietly larger than the drop tables can explain reads as a bug, and because
-## it is the only place the game ever says out loud that killing fast was worth
-## something. Take it away and heat is a multiplier the player has to infer from
-## a vendor screen five minutes later.
-func _draw_premium(s: Vector2, right: float) -> void:
-	if Run.premium <= 0:
-		return
-	var scale := Pal.px(14.0 / PixelFont.H, s.y)
-	var col: Color = Pal.GOLD
-	if _heat_bank_t >= 0.0:
-		# Lands BONE and settles to gold, so a pickup mid-fight registers in
-		# peripheral vision without anything moving.
-		col = Pal.BONE.lerp(Pal.GOLD, clampf(_heat_bank_t / HEAT_BANK_POP, 0.0, 1.0))
-	PixelFont.draw_right(_canvas, "+%d HOT" % Run.premium,
-		Vector2(right, Pal.PREMIUM_BASELINE * s.y), scale, col)
 
 
 ## A value histogram, not an inventory list. Slip width is that stack's share of
 ## the bag's worth, so the useful thought -- "most of my money is that one violet
-## slip" -- is available at a glance, which no list gives you.
+## slip" -- is available at a glance, which no list gives you. With the total
+## gone this is the only reading of the bag left out here, and it is deliberately
+## a shape and not a figure.
 func _draw_slips(s: Vector2, right: float) -> void:
 	var total := Run.bag_value()
 	if total <= 0:
@@ -1213,15 +1173,6 @@ func _health_of(n: Node) -> HealthComponent:
 
 
 # --- Primitives -------------------------------------------------------------
-
-## The currency glyph. Drawn as a polygon rather than a font character because
-## the styleguide bans icon sets and this is the one symbol the HUD repeats.
-func _draw_diamond(centre: Vector2, r: float, col: Color) -> void:
-	_canvas.draw_colored_polygon(PackedVector2Array([
-		centre + Vector2(0.0, -r), centre + Vector2(r, 0.0),
-		centre + Vector2(0.0, r), centre + Vector2(-r, 0.0),
-	]), col)
-
 
 func _draw_arc_ring(centre: Vector2, radius: float, t01: float,
 		width: float, col: Color) -> void:
