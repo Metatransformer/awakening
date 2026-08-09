@@ -1,6 +1,28 @@
 [gd_scene load_steps=2 format=3]
 
+; The dungeon's air and its fill light.
+;
+; The fill is NOT a sun -- there is no sky down here. It is the cheat every
+; lit interior uses: ambient alone raises every surface by the same amount,
+; which lifts the black but also flattens the masonry into one grey sheet, so
+; "brighter" and "lower contrast" arrive together. A single shadowless
+; directional at low energy gives every block a lit face and a turned-away
+; face, which is where contrast actually comes from -- the range between two
+; faces of the same stone, not the gap between a torch pool and a void.
+;
+; shadow_enabled stays false on purpose: STYLEGUIDE 4.7 keeps real-time shadows
+; out of the dungeon (actors use a blob decal), and a shadowed key here would
+; also stripe the room with shadows cast by a light source the fiction has no
+; explanation for.
+
 [ext_resource type="Environment" path="res://assets/materials/env_dungeon.tres" id="1_env"]
 
 [node name="DungeonEnv" type="WorldEnvironment"]
 environment = ExtResource("1_env")
+
+[node name="Fill" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.321394, 0.383022, 0, 0.766044, 0.642788, -0.5, -0.556670, 0.663414, 0, 6, 0)
+light_color = Color(0.66, 0.74, 0.95, 1)
+light_energy = 0.32
+light_specular = 0.25
+shadow_enabled = false

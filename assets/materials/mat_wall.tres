@@ -5,17 +5,17 @@
 [resource]
 resource_name = "mat_wall"
 shader = ExtResource("1_wall")
-shader_parameter/base_color_a = Color(0.2, 0.178, 0.15, 1)
-shader_parameter/base_color_b = Color(0.325, 0.295, 0.255, 1)
+shader_parameter/base_color_a = Color(0.265, 0.234, 0.194, 1)
+shader_parameter/base_color_b = Color(0.398, 0.358, 0.303, 1)
 shader_parameter/block_brightness_variation = 0.44
 shader_parameter/block_width = 0.86
 shader_parameter/block_height = 0.43
 shader_parameter/course_jitter = 0.34
-shader_parameter/grout_darkening = 0.28
+shader_parameter/grout_darkening = 0.22
 shader_parameter/mortar_width = 0.075
-shader_parameter/grime_color = Color(0.052, 0.045, 0.034, 1)
+shader_parameter/grime_color = Color(0.108, 0.092, 0.07, 1)
 shader_parameter/grime_height = 2.4
-shader_parameter/grime_amount = 0.42
+shader_parameter/grime_amount = 0.3
 shader_parameter/streak_frequency = 3.0
 shader_parameter/streak_strength = 0.38
 shader_parameter/chip_strength = 0.42

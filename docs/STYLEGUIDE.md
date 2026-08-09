@@ -9,15 +9,41 @@ the HUD is explicitly modern rather than an Ocarina copy.
 
 ## 1. Thesis
 
-> A cold, low-bit world of wet stone and dithered dark, where the only clean,
-> saturated pixels on screen are the ones you are carrying out.
+> A warm, low-bit fantasy world of lamplit stone, where the light is generous
+> enough to love the place and the only clean, saturated pixels on screen are
+> the ones you are carrying out.
 
-The core beat is **greed against the walk back to the exit**. Greed is an
-abstraction until it has a colour, so colour is rationed and gold is the only
-thing allowed to be bright. Dread is an abstraction until you cannot see how far
-away the exit is, so fog is tuned as a draw-distance wall rather than as weather.
+**Changed 2026-08-09 on the owner's instruction.** The thesis used to read "a
+cold, low-bit world of wet stone and dithered dark", and the lighting was built
+to serve it: ambient at 0.26, torch falloff at 1.6, stone albedo at 0.18–0.32.
+The result was measurably faithful to that sentence and wrong for the game — the
+hero rendered as a black cut-out between sconces, monsters could not be read at
+the 8–10 m the combat design requires (§9), and the room was a string of
+spotlights in a void. That is a horror crawler's look. This is a **magical
+fantasy** game: Zelda-shaped, LOTR-earnest. Players should feel warm, not
+afraid.
 
-Material: damp stone, tarnished brass, dyed wool, bone.
+The core beat is still **greed against the walk back to the exit**, and colour
+is still rationed so gold stays the brightest thing you own. What changed is
+where the dread comes from: it is the fee, the walk and the monster, **not the
+inability to see**. Fog is atmosphere and draw distance now, not a blindfold.
+
+Three rules keep "brighter" from becoming "flatter", which is the failure mode
+this pivot walked into once already:
+
+1. **Contrast is range, not darkness.** Every frame must hold a real dark (a
+   doorway, a corner, a turned-away face) and a real bright (a torch pool). A
+   uniformly lit room is a *lower*-contrast image than a dark one, and lifting
+   ambient alone produces exactly that — one beige sheet.
+2. **Warm key, cool air.** Torches are warm (`KitStyle.FIRE_COLOR`); ambient
+   and the dungeon fill light are cool blue-violet. Warmth reads as warmth only
+   against something cooler, so the hue contrast is what sells "magical" — and
+   it lets shadows stay *coloured* rather than crushing to black.
+3. **Not cutesy.** Saturation sits at 1.12, not 1.5. The palette stays earthy
+   stone, brass, wool and bone. No candy colours, no cel bands, no outline pass
+   (§10.9).
+
+Material: lamplit stone, tarnished brass, dyed wool, bone.
 Energy: long slow walk, short violent burst, long slow walk.
 
 ---
@@ -215,6 +241,13 @@ Fog is the far clip plane wearing a coat. **Fog colour must be a palette entry
 and must equal the camera clear colour exactly** — any mismatch draws a visible
 horizon line, which is the thing fog exists to hide.
 
+> **Retuned 2026-08-09 with the §1 pivot.** Dungeon `fog_density` went 0.0115 →
+> 0.0055 and the fog colour was lifted and pushed violet
+> (`Color(0.16, 0.142, 0.175)`), because fog that is *darker* than the geometry
+> reads as dread and fog that is slightly lighter reads as depth. The live values
+> are in `assets/materials/env_dungeon.tres`; the depth-based table below is the
+> older town-side treatment and the dungeon now uses exponential density.
+
 | Property | Dungeon | Town |
 |---|---|---|
 | `fog_mode` | `FOG_MODE_DEPTH` | `FOG_MODE_DEPTH` |
@@ -255,7 +288,19 @@ tier 3. See Departure 2.
     16-colour palette.
 - **`render_mode vertex_lighting, specular_disabled, diffuse_lambert`.**
   Per-pixel lighting on a 128px texture at 480×270 is exactly what "low-poly
-  indie" looks like. Contrast lives in the texture, not the light.
+  indie" looks like.
+- **Contrast lives in the texture *and* in the light** (changed 2026-08-09, §1).
+  It used to live in the texture alone, which is why stone albedo was authored
+  at 0.18–0.32 — near-black paint. A dark material cannot return light, so the
+  room stayed dark no matter what the lamps did, and that single fact was most
+  of the old look. Wall/floor albedo now sits at **0.24–0.40**. Do not push it
+  past ~0.45: above that the torch pools stop reading as light sources because
+  the wall is already as bright as they are.
+- **The dungeon carries one shadowless `DirectionalLight3D` fill**
+  (`scenes/kit/dungeon_env.tscn`), cool and low-energy. It is not a sun — it is
+  there so every block has a lit face and a turned-away face. Ambient alone
+  raises all surfaces equally, which lifts the black *and* flattens the masonry
+  into one sheet; "brighter" and "lower contrast" otherwise arrive together.
 - **No real-time shadows in the dungeon.** Actors get a blob shadow: a 1-bit
   alpha unshaded quad decal, 0.7 m across, scaled by ground proximity.
 - Tri budgets: hero ≤900, standard enemy ≤500, boss ≤2000, chest ≤120, wall ≤32.
@@ -523,8 +568,8 @@ Not a fairy, not a triangle.
   three conditions, and they are load-bearing, not decoration:
 
   - **Only monsters in the fight.** Engaged, or already bleeding. An unwoken room
-    draws nothing, so darkness stays a material (`docs/GDD.md` §4, pillar 5) and
-    a bar never spoils an ambush.
+    draws nothing, so an unlit room keeps its secrets (`docs/GDD.md` §4,
+    pillar 5) and a bar never spoils an ambush.
   - **Only in line of sight**, by a raycast from the camera against world
     geometry. A bar anchored in the world obeys the world; without this the
     feature is an x-ray that reads monsters through walls.
