@@ -22,12 +22,14 @@ const HOLD := 0.45
 ## True while a transition is in flight. Everything that could start another one
 ## checks this -- a second extract press during the fade would re-enter town.
 var busy: bool = false
-
-## The run that just ended, stashed for whoever arrives next. `run_ended` fires
-## in the dungeon, during the fade, before the town exists -- so without this the
-## only run result the player could ever see is one that ended in town.
-## {"extracted": bool, "contents": Dictionary, "value": int}. Town clears it.
-var last_result: Dictionary = {}
+## True from the moment a run ends until the ending screen's button is pressed.
+##
+## A second guard beside `busy` rather than a reuse of it, because the two mean
+## opposite things to the one caller that matters: `to_town()` refuses while a
+## transition is in flight and is exactly what the ending screen's button calls.
+## Folding them together would leave the button unable to fire the transition it
+## exists to fire.
+var ending: bool = false
 
 var _layer: CanvasLayer
 var _veil: ColorRect
@@ -55,15 +57,18 @@ func _ready() -> void:
 # --- Entry points -----------------------------------------------------------
 
 func enter_dungeon(run_seed: int = 0) -> void:
-	if busy:
+	if busy or ending:
 		return
 	Run.enter(run_seed)
 	_go(DUNGEON, 0.0)
 
 
+## The ride home. Called by the ending screen's BACK TO TOWN button, and by
+## anything else that just wants the hub.
 func to_town() -> void:
 	if busy:
 		return
+	ending = false
 	_go(TOWN, 0.0)
 
 
@@ -76,7 +81,7 @@ func to_town() -> void:
 ## seeds off `Run.floor_seed()`, so a given run seed still replays identically
 ## all the way down (scripts/world/dungeon.gd).
 func descend() -> void:
-	if busy or not Run.in_dungeon:
+	if busy or ending or not Run.in_dungeon:
 		return
 	Run.descend_floor()
 	_go(DUNGEON, 0.0)
@@ -85,21 +90,60 @@ func descend() -> void:
 # --- The two things that end a run ------------------------------------------
 
 func _on_player_died() -> void:
-	if busy:
+	if ending:
 		return
 	if Run.in_dungeon:
-		# Run.die clears the bag and emits run_ended(false), which is what
-		# actually sends us home. Death does not know about scenes.
+		# Run.die clears the bag and emits run_ended(false), which is what raises
+		# the ending screen. Death does not know about scenes.
 		Run.die()
 	else:
+		# Killed somewhere with no run behind it -- town, a lookdev scene, a
+		# director's test room. There is nothing to lose and nowhere to be sent, so
+		# he just gets up.
+		#
+		# `busy` is deliberately NOT a guard on this branch. It used to guard the
+		# whole function, which meant a blow that landed during a fade was dropped
+		# entirely: the run had already ended and healed him to full, monsters kept
+		# swinging for the ~1 s the fade takes, and a second lethal hit hit this
+		# early return. He arrived in town on zero hearts -- and then could not
+		# die again, because Hero.take_hit refuses at zero, so nothing would ever
+		# emit `player_died` to heal him. The ending screen stops the world dead,
+		# which closes that window at the source; this makes sure the recovery
+		# still works if anything ever opens another one.
 		Game.heal(Game.max_quarters)
 
 
-func _on_run_ended(extracted: bool, contents: Dictionary, value: int) -> void:
-	last_result = {"extracted": extracted, "contents": contents, "value": value}
-	if busy:
+## A run ended, either way it can end. Stop the world and show the receipt.
+##
+## It does NOT go to town. Sending the player home on a timer meant the run ended
+## in a room they never got to look at, and the summary then had to be re-staged in
+## the hub, where it was drawn as a Label3D above the arrival camera's frustum and
+## was never once seen (see run_end_screen.gd). The screen belongs over the floor
+## the run ended on, and leaving is the player's press.
+func _on_run_ended(_extracted: bool, _contents: Dictionary, _value: int) -> void:
+	if busy or ending:
 		return
-	_go(TOWN, HOLD if extracted else HOLD * 1.6)
+	ending = true
+	_show_ending()
+
+
+## Hold on the killing blow, then raise the screen.
+##
+## The hold is the same beat the fade used to take, and it is here for the same
+## reason: the player has to see the thing that happened to them. The pause lands
+## AFTER it so the death animation, the hit-stop and the doom sting all get to
+## play, and then everything stops -- which is also what makes a second blow during
+## this window impossible rather than merely unlikely.
+func _show_ending() -> void:
+	Prompt.blocked = true
+	await get_tree().create_timer(HOLD * 1.4, true, false, true).timeout
+	if not ending:
+		return
+	get_tree().paused = true
+	# `Prompt.blocked` stays set the whole way through to `_go`, which clears it on
+	# arrival. The screen adds its own blocker on top; that one expires with the
+	# node, and this one covers the frames either side of it.
+	RunEndScreen.open(self, Run.summary)
 
 
 # --- Transition -------------------------------------------------------------

@@ -277,12 +277,50 @@ func _extract(rig) -> void:
 	await rig.capture(out.path_join("m_17_extracting.png"))
 
 
+## The receipt, and then the ride home.
+##
+## The rope no longer lands you in town by itself: a run now ends on the floor it
+## ended on, under `RunEndScreen`, and BACK TO TOWN is the press that goes home
+## (scripts/ui/run_end/). This beat used to be a wait and a capture, and after the
+## screen landed it still passed -- while photographing the ending screen into
+## `m_18_home.png` and printing "MVP home scene=DungeonRun". A beat that asserts
+## nothing cannot notice that it has stopped testing the thing in its name.
 func _return(rig) -> void:
 	await rig.wait_frames(150)
+	var screen := _run_end(rig)
+	print("MVP receipt screen=%s paused=%s kills=%d" % [
+		screen != null, rig.paused, int(Run.summary.get("kills", -1))])
+	if screen == null:
+		print("MVP FAIL no ending screen after the rope")
+		return
+	await rig.capture(out.path_join("m_18_receipt.png"))
+
+	await rig.wait_seconds(RunEndScreen.SETTLE + 0.2)
+	await rig.hold_seconds([&"ui_accept"], 0.2)
+	await rig.wait_frames(240)
+
 	print("MVP home scene=%s in_dungeon=%s gold=%d bag=%d hearts=%d/%d" % [
 		rig.scene().name, Run.in_dungeon, Game.gold, Run.bag_value(),
 		Game.quarters, Game.max_quarters])
-	await rig.capture(out.path_join("m_18_home.png"))
+	if rig.scene() is not Town:
+		print("MVP FAIL BACK TO TOWN did not reach town (scene=%s)" % rig.scene().name)
+	if rig.paused:
+		print("MVP FAIL the tree is still paused in town")
+	await rig.capture(out.path_join("m_19_home.png"))
+
+
+func _run_end(rig) -> RunEndScreen:
+	for n in _walk(rig.scene()):
+		if n is RunEndScreen:
+			return n
+	return null
+
+
+func _walk(root: Node) -> Array:
+	var found := [root]
+	for c in root.get_children():
+		found.append_array(_walk(c))
+	return found
 
 
 # --- Helpers ----------------------------------------------------------------
@@ -308,7 +346,7 @@ func _break_off(rig, hero: Hero) -> void:
 	var best := -1.0
 	for cell: Vector2i in dun.rooms:
 		var spot := dun.centre_of(cell)
-		var gap := _nearest_foe(foes, spot)
+		var gap := _nearest_foe(rig, spot)
 		if gap > best:
 			best = gap
 			away = spot
@@ -317,7 +355,7 @@ func _break_off(rig, hero: Hero) -> void:
 	# Long enough for the leash to run: they walk home at a little over half
 	# speed, so this is a slow beat by design.
 	await rig.wait_frames(120)
-	var gap := _nearest_foe(foes, hero.global_position)
+	var gap := _nearest_foe(rig, hero.global_position)
 	print("MVP broke off, nearest monster %.1f m" % gap)
 	if gap < 6.0:
 		print("MVP FAIL could not disengage: a monster is still %.1f m away with"
@@ -325,12 +363,25 @@ func _break_off(rig, hero: Hero) -> void:
 			+ " letting go, and nothing in the dungeon can be walked away from")
 
 
-func _nearest_foe(foes: Array, at: Vector3) -> float:
+## Distance to the nearest LIVE monster, asked of the group and not of a snapshot.
+##
+## The loop variable is untyped on purpose. `for f: Node3D in foes` raises
+## "Trying to assign invalid previously freed instance" on a freed entry at the
+## ASSIGNMENT -- before the body's `is_instance_valid` guard can skip it -- and the
+## error takes the whole loop down with it, so this returned 1e9 for every room.
+## `_break_off` then read every room as equally empty, kept `rooms[0]`, teleported
+## the hero into the pack it was supposed to be leaving, and printed "the leash is
+## not letting go". The corpse was always there to find: this director kills a
+## skeleton two beats earlier, and the caller snapshotted the group before that.
+func _nearest_foe(rig, at: Vector3) -> float:
 	var best := 1e9
-	for f: Node3D in foes:
+	for f in rig.get_nodes_in_group(&"enemy"):
 		if not is_instance_valid(f):
 			continue
-		best = minf(best, K.plane(f.global_position - at).length())
+		var n := f as Node3D
+		if n == null:
+			continue
+		best = minf(best, K.plane(n.global_position - at).length())
 	return best
 
 

@@ -281,6 +281,30 @@ still the only answer.
 upgrade bought with it survive. You wake in town at full health — leaving you at
 zero would just kill you again before you could sell.
 
+### Both endings stop and show you the receipt
+
+Either ending — the rope or the killing blow — raises **one** screen over the
+floor the run ended on: `RunEndScreen` (`scripts/ui/run_end/`), off
+`Bus.run_ended` via `Flow`. It names the floor, what killed you, how many
+monsters you killed, and every stack you were carrying priced line by line, with
+components marked TO THE BENCH because the vendor will never pay gold for one.
+The tree is **paused** under it and the only control on it is BACK TO TOWN; that
+button is what calls `Flow.to_town()`, so the ride home is a press and not a
+timer.
+
+One screen for both endings, and the death version is the *same list* with a
+cross struck through it. That is the whole design: the loss has to be legible as
+the specific things you decided to keep carrying — the deep amber you went one
+room too far for — and not as a number going to zero. Two screens would have
+been two places for the loot list and the arithmetic to drift apart, and would
+have made the two endings read as different games instead of two outcomes of one
+decision.
+
+It also replaced a `Label3D` in the town yard that had never once been visible
+(it sat about sixty degrees above the arrival camera's view centre), and a ride
+home on a timer that ended the run in a room the player never got to look at. A
+run that ends underground says so underground.
+
 ### The run is not savable, and that is what the autosave protects
 
 `Flow` autosaves on **every** scene transition — entering the dungeon, taking
@@ -617,6 +641,7 @@ second one is a decision.
 | Run state, bag, extraction, death | `scripts/autoload/run_state.gd` |
 | Persistent gold, forge rungs, workbench stock | `scripts/autoload/game_state.gd` |
 | Town↔dungeon transition and fade | `scripts/autoload/game_flow.gd` |
+| The end-of-run receipt, both endings | `scripts/ui/run_end/run_end_screen.gd` |
 | Ingredients, components and drop tables | `scripts/items/item_db.gd` |
 | The smith's catalogue, and the forge recipes | `scripts/items/shop_db.gd` |
 | The alchemist's catalogue, and the brew recipes | `scripts/items/alchemy_db.gd` |

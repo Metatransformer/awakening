@@ -16,14 +16,26 @@ var knockback: float = 0.0
 var stun: float = 0.0
 ## &"sword" &"arrow" &"bomb" &"contact" &"fire"
 var kind: StringName = &"sword"
+## Who threw it, ready to print: "SKELETON", "ELITE WRAITH".
+##
+## A NAME and not a node reference, because the only thing that reads it is the
+## run-ending screen, and by the time that screen draws the thing that killed you
+## is being freed along with the floor it stood on. A `Node3D` here would be a
+## field that is valid for one frame and dangling for the one that matters.
+##
+## Empty means nobody claimed it. The screen says so ("THE DARK") rather than
+## inventing an attacker.
+var source: StringName = &""
 
 
 static func make(amount_q: int, from_pos: Vector3, kind_id: StringName = &"sword",
-		knock: float = 0.0, stun_time: float = 0.0) -> Hit:
+		knock: float = 0.0, stun_time: float = 0.0,
+		source_name: StringName = &"") -> Hit:
 	var h := Hit.new()
 	h.amount = amount_q
 	h.from = from_pos
 	h.kind = kind_id
 	h.knockback = knock
 	h.stun = stun_time
+	h.source = source_name
 	return h

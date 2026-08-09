@@ -24,18 +24,22 @@ var smith: Npc
 var alchemist: Npc
 var gate: Npc
 
-var _report: Label3D
 
-
+## Deliberately says nothing about the run you just finished.
+##
+## There used to be a `Label3D` here that read "YOU DIED / LOST N ITEMS" over the
+## yard, on the reasoning that a modal summary would stop the loop dead. The
+## reasoning was fine and the execution never worked: it was authored at
+## (0, 2.6, +6.6) and the arrival camera sits at (0, 1.7, +8) pitched about thirty
+## degrees down, so the notice was roughly sixty degrees above the middle of the
+## only frame a returning player ever sees. The game had a death notice nobody had
+## ever read, in the wrong room — a run ends underground, and it is
+## `RunEndScreen` (scripts/ui/run_end/) that says so now, over the floor it ended
+## on, before the ride home. Do not re-add a second one here.
 func _ready() -> void:
 	_build_env()
 	_build_yard()
 	_build_people()
-	# The result of the run you just finished, shown once, in the world, on the
-	# spot you arrived. A modal "RUN SUMMARY" popup would stop the loop dead;
-	# this is readable while you are already walking to the vendor.
-	Bus.run_ended.connect(_show_report)
-	_show_last_report()
 
 
 # --- Look -------------------------------------------------------------------
@@ -153,45 +157,3 @@ func _build_people() -> void:
 	gate.role = Npc.Role.GATE
 	gate.position = Vector3(0.0, 0.0, -yard.y * 0.40)
 	add_child(gate)
-
-
-# --- The run report ---------------------------------------------------------
-
-func _show_last_report() -> void:
-	# Arriving in town from a run means run_ended already fired, during the fade,
-	# before this scene existed. Flow stashes the last one so the arrival can
-	# show it -- otherwise the only run whose result you ever see is one that
-	# somehow ended while you were already standing here.
-	if Flow.last_result.is_empty():
-		return
-	_show_report(bool(Flow.last_result["extracted"]),
-		Flow.last_result["contents"], int(Flow.last_result["value"]))
-	Flow.last_result = {}
-
-
-func _show_report(extracted: bool, contents: Dictionary, value: int) -> void:
-	if _report == null:
-		_report = Label3D.new()
-		_report.font_size = 56
-		_report.pixel_size = 0.0030
-		_report.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		_report.no_depth_test = true
-		_report.outline_size = 18
-		_report.position = Vector3(0.0, 2.6, yard.y * 0.30)
-		add_child(_report)
-
-	var count := 0
-	for id: StringName in contents:
-		count += int(contents[id])
-
-	if extracted:
-		_report.modulate = Pal.CYAN
-		_report.text = "EXTRACTED\n%d ITEMS  %d GOLD" % [count, value]
-	else:
-		_report.modulate = Pal.RUST
-		_report.text = "YOU DIED\nLOST %d ITEMS  %d GOLD" % [count, value]
-
-	_report.modulate.a = 1.0
-	var tw := create_tween()
-	tw.tween_interval(4.0)
-	tw.tween_property(_report, "modulate:a", 0.0, 1.2)

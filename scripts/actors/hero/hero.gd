@@ -2111,6 +2111,12 @@ func take_hit(hit: Hit) -> bool:
 	# leave, and it is a better one than mashing the button was.
 	if rope != null:
 		rope.cancel()
+	# Who hit him, recorded BEFORE the damage lands. `Game.damage` is what emits
+	# `player_died`, and Run.die() -- which builds the ending screen's summary --
+	# runs inside that emission, so a line written after this call is a line
+	# written after the screen has already asked. Every blow overwrites it, which
+	# is exactly right: what the screen wants is the LAST one.
+	Run.last_attacker = hit.source
 	# Armour never zeroes a blow. A build that cannot be hurt turns the whole
 	# extraction decision into a formality.
 	Game.damage(maxi(K.QUARTER, hit.amount - Game.armour_soak()))

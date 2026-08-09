@@ -153,6 +153,18 @@ static func cap_for(e: InputEvent) -> String:
 			"Escape": return "ESC"
 			"Shift": return "SHFT"
 			"Ctrl": return "CTRL"
+			# "Enter" is five characters, so the stump was "ENTE" -- and it shipped,
+			# under the run-end screen's one button, where it read as a string the
+			# game had run out of room for. `ui_accept` is bound to it, which means
+			# every menu in the project could print it.
+			"Enter": return "ENT"
+			"Kp Enter": return "ENT"
+			"Delete": return "DEL"
+			"Backspace": return "BKSP"
+			"Right": return "→"
+			"Left": return "←"
+			"Up": return "↑"
+			"Down": return "↓"
 		return name if name.length() <= 4 else name.substr(0, 4)
 	if e is InputEventJoypadButton:
 		var b := (e as InputEventJoypadButton).button_index
