@@ -55,6 +55,23 @@ enum Dodge { FORWARD, BACK, LEFT, RIGHT }
 ## node cannot be addressed by a number that only exists in the combat script.
 enum Swing { LIGHT1, LIGHT2, LIGHT3, SPIN, LUNGE, DASH }
 
+## The hero's voice — the one grunt of effort the project has, spent on the jump
+## and on the backflip (`_fire_jump`, `_fire_dodge`).
+##
+## It is `weapon_full_charge_voice_male_1` because THAT IS THE ONLY VOCALISATION
+## IN THE PROJECT THAT MAKES A SOUND. `audio/sfx/` ships a full human voice set —
+## `human_male_attack_1/2`, `human_male_hurt`, `human_male_death`, and the female
+## equivalents — and every one of them is digital silence on disk: -91.0 dBFS
+## peak, four kilobytes of nothing, an ogg header and no samples. Wiring one of
+## those is how you spend an afternoon on a jump that never makes a noise and a
+## `_load` that never warns, because the file is right there.
+##
+## Named as a constant rather than typed at both call sites so that the day those
+## files are replaced with real recordings, the hero's voice moves in one edit.
+## `HeroCombat.sfx_yell` is the same clip on the spin release — two uses of one
+## grunt is the price of having one grunt.
+const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
+
 @export_group("Rig")
 @export var hero_model: PackedScene = preload("res://assets/characters/hero.fbx")
 @export var anim_library: AnimationLibrary = preload("res://assets/animations/hero_anims.res")
@@ -1661,6 +1678,7 @@ func _fire_jump() -> void:
 		_fire(_P_JUMP_RUN)
 	else:
 		_fire(_P_JUMP)
+	Bus.request_sfx.emit(VOICE_EFFORT, global_position)
 
 
 ## Is the stick at rest this frame? A planted dodge with no direction asked for
@@ -1822,6 +1840,20 @@ func _fire_dodge(dodge: int, duration: float) -> void:
 		_tree.set(_dodge_scale_param(dodge),
 			_clip_scale(_dodge_clip(dodge), duration, _dodge_skip(dodge)))
 	_fire(_dodge_param(dodge))
+	# THE SPLIT IS THE SAME ONE THE CLIPS MAKE. Three of the four dodges are the
+	# roll (`clip_roll` is `ex_roll_to_run` for FORWARD, LEFT and RIGHT), and a
+	# roll is a body going over the ground — cloth and scuffed stone. BACK is the
+	# backflip, which never touches the ground at all: it is a leap, and it gets
+	# what the jump gets, because the sound of a man launching himself backwards
+	# is not the sound of one rolling.
+	#
+	# Hung here rather than on `roll_started` for exactly that reason: the signal
+	# fires once for all four and does not say which, and a backflip that scuffs
+	# was the first version of this.
+	if dodge == Dodge.BACK:
+		Bus.request_sfx.emit(VOICE_EFFORT, global_position)
+	else:
+		Bus.request_sfx.emit(&"dodge_roll", global_position)
 
 
 func _start_turn180(wish: Vector3) -> void:

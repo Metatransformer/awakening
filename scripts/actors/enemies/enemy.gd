@@ -721,7 +721,12 @@ func freeze(seconds: float = K.HOOK_FREEZE) -> void:
 	# chain rings off bone. Sfx owns which sound (docs/CONTRACT.md §8); this only
 	# says what happened and where.
 	Bus.request_hitstop.emit(K.HITSTOP_LIGHT)
-	Bus.request_sfx.emit(&"craft_clang", global_position)
+	# `arrow_body_impact`, not the smith's `craft_clang` that was here: the only
+	# caller of `freeze` is the hookshot biting a monster (hero_ranged.gd), and
+	# that is a metal head arriving in a body, not iron on an anvil. The anchor
+	# case, which really is metal on stone, rings `hit_armor` at the impact
+	# point instead — the two halves of the shot no longer share one wrong sound.
+	Bus.request_sfx.emit(&"arrow_body_impact", global_position)
 
 
 ## Let go of everything the freeze is HOLDING — the flag and the stopped
