@@ -65,7 +65,14 @@ func _try_hit(body: Node3D) -> void:
 		return
 
 	var hp := _health_of(body)
-	if hp == null or hp.is_dead:
+	# `dead`, not `is_dead`. HealthComponent has never had an `is_dead` and this
+	# read threw on EVERY overlap -- "Invalid access to property or key
+	# 'is_dead'" -- which aborted _try_hit before apply_hit and silently dropped
+	# every blow in the game, both ways. It is invisible from the log because
+	# combat still LOOKS like it is happening: the swing plays, the hitbox opens,
+	# the error scrolls past in a run nobody reads, and only the health number
+	# stays put. tools/directors/monster_feel.gd checks the number now.
+	if hp == null or hp.dead:
 		return
 	_already_hit.append(id)
 
