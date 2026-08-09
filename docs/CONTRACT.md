@@ -82,6 +82,13 @@ Proven working. Do not rebuild this.
     This set is where clips the sword-and-shield pack does not contain end up,
     and the list of what it does not contain is long: no roll, no 360, and no
     jump. `fast_run` is the sprint, `jump`/`jump_running` are the two jump arcs.
+    **`running` is the RUN**, and it is not from that pack for a reason worth
+    knowing before you reach for `ss_run_01`: the pack's own run holds the guard
+    through the whole cycle, so it is a man jogging with a shield up rather than
+    a man running. Photographed side by side in
+    `tools/directors/run_lookdev.gd`. It also has the longer authored stride of
+    the two (`tools/_clip_travel.gd`: 2.34 m/s of leg against 2.13), and it puts
+    the run in the same family as the sprint that follows it.
   - `ax_*` — axe (1): `melee_attack_360_low`, the charged spin. One clip
     borrowed out of a whole moveset (`build_anim_lib.gd` §ONLY).
   - `mg_*` — magic (14): casts, hit reactions, `react_death_backward`
