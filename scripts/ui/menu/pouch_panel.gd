@@ -38,7 +38,7 @@ signal notice(text: String, is_error: bool)
 signal use_requested
 
 const FRAME_SIZE := Vector2(1060, 604)
-const HINT := "↑↓←→ Look    Esc / B Back    The way out is in the right column"
+const HINT := "↑↓←→ Look    A Fletch    Esc / B Back    The bench and the way out are on the right"
 
 ## Cells per row. Twelve slots is the start, sixteen the bought maximum
 ## (K.START_BAG_SLOTS + ShopDb.LIMITS.bag_slot): four across is three clean rows
@@ -78,6 +78,9 @@ var _detail_blurb: Label
 var _detail_legend: Label
 var _charm: Button
 var _charm_fee: Label
+var _fletch: Button
+var _fletch_have: Label
+var _fletch_cost: Label
 
 
 func _ready() -> void:
@@ -90,6 +93,10 @@ func _ready() -> void:
 	# signals rather than trusting `refresh()` on open to be the only way in.
 	Bus.bag_changed.connect(func(_b: Dictionary, _v: int) -> void: refresh())
 	Bus.components_changed.connect(func(_s: Dictionary) -> void: refresh())
+	# The bench prints the quiver, and the quiver fills from the world — walk over
+	# a bundle with this screen open and the row has to stop offering a batch it
+	# no longer has room for.
+	Bus.ammo_changed.connect(func(_id: StringName, _n: int) -> void: refresh())
 	refresh()
 
 
@@ -155,6 +162,7 @@ func _build() -> void:
 	right.add_theme_constant_override("separation", 12)
 	split.add_child(right)
 	_build_detail(right)
+	_build_fletch(right)
 	_build_charm(right)
 	_build_stock(right)
 
@@ -315,6 +323,116 @@ func _build_detail(parent: Node) -> void:
 	col.add_child(_detail_legend)
 
 
+## The fletching bench. The one thing on this screen that turns the bag into
+## something other than money.
+##
+## It is a card and not a cell verb, and that distinction is the whole reason it
+## fits here. `_make_cell` says a cell does nothing when pressed and that is
+## still true: you cannot drop, sort or use an item, because the vendor buys them
+## and the forge eats them, both in town. What this adds is a verb belonging to
+## the BAG, not to any item in it — the same shape the Homeward Charm already
+## has, sitting directly above it for the same reason. Both spend the bag; one
+## spends it on getting out and one spends it on staying in.
+##
+## Why it lives on the pouch at all: the recipe eats the cheapest two things in
+## the grid to the left, so the price and the stock are the same picture. Putting
+## it on the ITEMS screen would mean reading a cost on one screen against a
+## quantity on another, and the whole argument of this screen is that the
+## extraction decision is made by stopping and LOOKING at what you have.
+func _build_fletch(parent: Node) -> void:
+	var card := PanelContainer.new()
+	card.name = "Fletch"
+	card.theme_type_variation = &"MenuSection"
+	parent.add_child(card)
+
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 8)
+	card.add_child(inner)
+
+	var caption := Label.new()
+	caption.theme_type_variation = &"MenuHeading"
+	caption.text = "FLETCHING"
+	inner.add_child(caption)
+
+	_fletch = Button.new()
+	_fletch.name = "Fletch"
+	_fletch.theme_type_variation = &"MenuRow"
+	_fletch.focus_mode = Control.FOCUS_ALL
+	_fletch.text = "➶  Fletch Arrows"
+	inner.add_child(_fletch)
+
+	_fletch_have = Label.new()
+	_fletch_have.name = "Have"
+	_fletch_have.theme_type_variation = &"MenuValue"
+	_fletch_have.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_fletch_have.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_fletch_have.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fletch.add_child(_fletch_have)
+	_fletch_have.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_fletch_have.offset_right = -16
+
+	# The recipe, under the row rather than only in the detail pane, for the same
+	# reason the charm's fee is: "fletch arrows" and "fletch arrows for two flint
+	# and two bone shard, and you have one flint" are different sentences, and the
+	# second one is the only one you can act on.
+	_fletch_cost = Label.new()
+	_fletch_cost.name = "Cost"
+	_fletch_cost.theme_type_variation = &"MenuSlotStat"
+	_fletch_cost.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	inner.add_child(_fletch_cost)
+
+	_fletch.pressed.connect(_do_fletch)
+	_fletch.focus_entered.connect(_describe_fletch)
+	_fletch.mouse_entered.connect(_describe_fletch)
+
+
+## Make a batch, or say why not. Repeatable: the row keeps focus and the screen
+## repaints, so a player with a bag full of shards can sit here and fill the
+## quiver a batch at a time and watch both numbers move. That is deliberate —
+## the cost is visible on every press, so there is nothing to protect them from.
+func _do_fletch() -> void:
+	var why := Fletching.refusal()
+	if not why.is_empty():
+		notice.emit(why, true)
+		Bus.request_sfx.emit(&"craft_fail", Vector3.ZERO)
+		return
+	var made := Fletching.fletch()
+	if made <= 0:
+		notice.emit("The fletching failed.", true)
+		return
+	Bus.request_sfx.emit(&"craft_success", Vector3.ZERO)
+	notice.emit("Fletched %d arrows. %d in the quiver." % [made, Game.arrows], false)
+	refresh()
+	_describe_fletch()
+
+
+func _describe_fletch() -> void:
+	_detail_kind.text = "THE BENCH"
+	_detail_name.text = "Fletch Arrows"
+	_detail_value.text = "%d arrows  ·  %d / %d in the quiver" \
+		% [Fletching.BATCH, Game.arrows, Game.max_arrows]
+	_detail_blurb.text = "Flint for the heads, bone for the shafts. It is what " \
+		+ "the bottom of the bag is for, and it is the only reason to be glad " \
+		+ "of a shard."
+	var why := Fletching.refusal()
+	_detail_legend.text = why if not why.is_empty() else \
+		"Costs slots, not gold. The smith is cheaper; the smith is also upstairs."
+
+
+## What the bench can do right now, live on the row. Enabled even when it will
+## refuse, exactly like the charm — a greyed row says you cannot and never says
+## what you are short of, and here you are always short of something nameable.
+func _paint_fletch() -> void:
+	if _fletch == null:
+		return
+	_fletch_cost.text = Fletching.cost_line()
+	var ready := Fletching.can_fletch()
+	_fletch_have.text = "+%d" % mini(Fletching.BATCH, Fletching.quiver_room()) \
+		if ready else "—"
+	_fletch_have.modulate = Color.WHITE if ready else Pal.RUST
+	_fletch_cost.modulate = Color.WHITE if ready else Color(1, 1, 1, 0.55)
+
+
 ## The way out. The only control on this screen that ENDS something — everything
 ## above it is a picture of what you are carrying, and this spends it.
 ##
@@ -458,11 +576,15 @@ func _wire_focus() -> void:
 		if below < n:
 			MenuUtil.link_down(_cells[i], _cells[below])
 		else:
-			# Out of the bottom of the grid comes the way out, and only then Back.
-			# That order is the screen's argument in one column: here is what you
-			# are carrying, here is what it costs to keep it, here is the door.
-			MenuUtil.link_down(_cells[i], _charm)
+			# Out of the bottom of the grid comes the bench, then the way out,
+			# and only then Back. That order is the screen's argument in one
+			# column: here is what you are carrying, here is what it can become,
+			# here is what it costs to keep it, here is the door.
+			MenuUtil.link_down(_cells[i], _fletch)
+	MenuUtil.link_down(_fletch, _charm)
 	MenuUtil.link_down(_charm, _back)
+	_fletch.focus_neighbor_left = ^"."
+	_fletch.focus_neighbor_right = ^"."
 	_charm.focus_neighbor_left = ^"."
 	_charm.focus_neighbor_right = ^"."
 	_back.focus_neighbor_bottom = _back.get_path_to(_cells[0])
@@ -485,11 +607,14 @@ func refresh() -> void:
 	_rebuild_cells()
 	_fill_cells()
 	_paint_header()
+	_paint_fletch()
 	_paint_charm()
 	_paint_stock()
 	var focused := get_viewport().gui_get_focus_owner()
 	if _cells.has(focused):
 		_describe(focused as Button)
+	elif focused == _fletch:
+		_describe_fletch()
 	elif focused == _charm:
 		_describe_charm()
 	elif not _cells.is_empty():

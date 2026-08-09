@@ -101,6 +101,48 @@ eats. They are in §6.5.
 
 ---
 
+## 4.6 Arrows — the only resource with three sources
+
+Arrows live on `Game`, not in the bag. They cost no slot, carry no heat, are
+worth no gold, and **survive death** — because they are supply, not merchandise.
+Routing them through the bag would put ammunition on the extraction fee and make
+a full bag refuse the one pickup an empty quiver most needs.
+
+They arrive three ways, and each answers a different kind of empty:
+
+| Source | Where | What it costs | Answers |
+|---|---|---|---|
+| **The smith** — `ARROWS X10` | Town (`shop_db.gd`) | 40 gold (4.0/arrow) | a purse, no bag |
+| **Found** — `ArrowBundle` | Dungeon floors and chests | a short detour | early, poor, and dry |
+| **Fletched** — `Fletching` | The POUCH screen, anywhere | 2 Cracked Flint + 2 Bone Shard → 5 arrows (4.8/arrow) | a full bag, no purse |
+
+**Found**: `arrow_chance` on `Dungeon` puts a 6-arrow bundle on the floor of a
+quarter of rooms; `arrow_chance` on `Chest` gives 40% of chests a 10-arrow one
+on top of its picks. The chest roll is deliberately **not** an entry on
+`ItemDb.CHEST_DROPS` — `_lift()` reweights that table with depth, and arrows
+must not get rarer or commoner as you descend. The bow has to keep working at
+the same rate on floor eight as on floor one.
+
+A bundle you cannot take because the quiver is full **stays and pulses**, the
+same as a refused mote — but it means something different. A refused mote is a
+decision you made about slots; a refused bundle is just a thing to come back for
+after the next fight.
+
+**Fletched**: this is what makes the bow sustainable underground. Running dry on
+floor six used to mean the bow was a decoration until you extracted, and "go home
+to reload" is not a decision, it is a walk. The recipe eats the two commonest
+ingredients on the enemy table — the two you have most of and were least glad to
+see — so the trade is *the floor of my bag, for shots*, which is §5's question
+(slots against worth) aimed at a second resource. It also runs the right way
+round: fletching **frees slots**, so a nearly-full bag and an empty quiver solve
+each other.
+
+Priced above the smith on purpose. Convenience underground is the thing being
+sold, and a recipe that undercut the shop would kill the shop line — which is
+what a player with gold and no bag is supposed to reach for.
+
+---
+
 ## 4.5 Heat — what tempo is worth
 
 Numbered `4.5` rather than `5` on purpose: extraction is §5 and several code
@@ -348,6 +390,16 @@ disagree. The right-hand column names what is under the cursor and shows the
 workbench stock, read-only: this screen shows what you have, the smith spends
 it.
 
+The right column also carries the screen's two **verbs**, in the order they
+argue: the **fletching bench** (§4.6) and then the **Homeward Charm** (§5).
+Both spend the bag; one spends it on staying in and the other on getting out.
+Neither is a verb on an item — a *cell* still does nothing when you press it,
+because there is nothing you can do to one thing in the bag. These act on the
+bag as a whole, which is why they are cards beside the grid and not entries in
+it, and why the bench is here rather than at the smith: the recipe eats the
+cheapest two things in the grid to its left, so the price and the stock are the
+same picture.
+
 It is a separate screen from **Items**, which is what you are *holding* and what
 the D-pad equips. Carrying and holding are different questions and a player who
 conflates them is a player who thinks the bag can be equipped.
@@ -359,7 +411,15 @@ conflates them is a player who thinks the bag can be equipped.
 A seeded room graph (`scripts/world/dungeon.gd`) built from the P6 kit at run
 time: rooms, connecting corridors, torches in pools with dark between them,
 enemies scattered on a ring so a group is not one clump you can clear with a
-single swing, and chests carrying the richer rolls.
+single swing, chests carrying the richer rolls, and bundles of arrows on a
+quarter of the floors (§4.6).
+
+Chests are `treasure_chest.glb` — authored art, not the six-box version that
+preceded it, which read as a crate. The lid is a separate node hinged on the
+chest's own back edge, which is what makes it a chest rather than a barrel: it
+opens where a lid opens. The gold seam of light at the lid line is still built
+in code, and it is still the whole "there is something in here" read — no
+floating icon, no beam, no exclamation mark.
 
 Enemies are `Crawler` (`scripts/actors/enemy/crawler.gd`) in the shallow rooms
 and `Enemy` (`scripts/actors/enemies/enemy.gd`) deeper: see you, close, **rear
@@ -431,6 +491,9 @@ second one is a decision.
 | The way out | `scripts/items/homeward_charm.gd` |
 | Drops on the floor, and their heat stamp | `scripts/world/loot_mote.gd` |
 | The chain, its tiers and what they are worth | `scripts/autoload/heat.gd` |
+| Chests — the model, the lid, what comes out | `scripts/world/chest.gd` |
+| Arrows on the floor, and the pickup | `scripts/world/arrow_bundle.gd` |
+| The fletching recipe, and its refusals | `scripts/items/fletching.gd` |
 
 The game boots into **town** (`run/main_scene`). `Flow` is the only thing that
 ever calls `change_scene_to_file`; if a second caller appears, the fade stops
@@ -456,6 +519,33 @@ MVP after_buy   gold=206 slots=13
 MVP descended   in_dungeon=true  rooms=6 enemies=17
 MVP after_chest bag=4 value=95 fee=24
 MVP home        scene=Town in_dungeon=false gold=182 bag=95 hearts=12/12
+```
+
+Arrows have two, because the supply chain has two halves — the objects, and the
+floor that has to contain them (§4.6):
+
+```bash
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --director=res://tools/directors/arrow_supply.gd --out=/tmp/arrows/x.png --warmup=60
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/dungeon.tscn --director=res://tools/directors/dungeon_supply.gd --out=/tmp/dun/d.png --warmup=60
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/ui/menu/_menu_test.tscn --director=res://tools/directors/fletch_screen.gd --out=/tmp/fletch/f.png --warmup=50
+```
+
+`arrow_supply.gd` opens a chest and photographs the lid, measures the chest and
+the arrow against the sizes §2 of `docs/CONTRACT.md` promises, walks a body onto
+a bundle, and checks that a full quiver refuses **without** eating the bag.
+`dungeon_supply.gd` generates eight floors and counts what landed in the rooms,
+because a 25% roll cannot be judged from one floor. `fletch_screen.gd` drives
+the POUCH card and walks the D-pad down it, because a new card between the grid
+and the charm is exactly the change that orphans the way out. Last runs:
+
+```
+SIZE chest extent=1.15m        SIZE arrow extent=0.68m
+CHEST bundle count=10          CHEST pickup +10 arrows (quiver 10)
+FULL quiver refused the bundle and it stayed on the floor
+BENCH full quiver refused and the bag was untouched
+TOTAL rooms=48 chests=25 bundles=10 loose_arrows=60
+RATE bundles/room=0.21 (arrow_chance=0.25)
+FOCUS walk reached [Cell_0, Cell_4, Cell_8, Fletch, Charm, Back]
 ```
 
 The economy of tempo has its own director (§4.5):

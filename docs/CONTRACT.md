@@ -52,7 +52,8 @@ Metric. 1 Godot unit = 1 metre. Gravity is `-Y`. The hero moves on the XZ plane.
 | Standard room | 16 x 16 m to 24 x 24 m, ceiling 7 m |
 | Boss arena | 32 x 32 m, ceiling 12 m |
 | Door opening | 2.4 m wide, 3.2 m tall |
-| Chest | 1.1 wide x 0.8 deep x 0.8 tall |
+| Chest | 1.15 wide x 0.61 deep x 0.74 tall (measured off `treasure_chest.glb` at `Chest.MODEL_SCALE`) |
+| Arrow | 0.70 m long (`Arrow.MODEL_LEN`; the GLB is 1.50 m native and is scaled in `WeaponModels.SCALE_FIX`) |
 | Pot | 0.5 diameter, 0.6 tall |
 | Push block | 1 tile: 2.0 x 2.0 x 2.0 |
 
@@ -932,6 +933,37 @@ passes through thin enemies about as often as it hits them — and the misses lo
 like bad aim. Each frame it raycasts the **segment** it is about to travel.
 Ammo is spent at **release**, not on the press: a shot interrupted before the
 arrow leaves costs nothing.
+
+The shaft is `assets/weapons/arrow.glb` (`Arrow.MODEL_ID`), turned once by
+`Arrow.MODEL_PITCH` onto the -Z this node flies down. The art-space fix is on
+the **model node**, never on the Arrow's own basis — `-basis.z is forward` is
+what the flight, the raycast and `_face_travel` all read (CLAUDE.md §4).
+
+```gdscript
+# scripts/world/arrow_bundle.gd — arrows on the floor. NOT a LootMote.
+ArrowBundle.drop(parent, at, count, fling := Vector3.ZERO) -> ArrowBundle
+```
+
+Arrows live on `Game`, so a bundle grants ammo directly and never touches the
+bag: no slot, no heat, no gold, no extraction fee, and a full bag cannot refuse
+one. Walk-over, like a mote, with no pick-up button. A full **quiver** refuses
+and the bundle stays lit on the floor rather than vanishing. Chests
+(`Chest.arrow_chance`) and dungeon rooms (`Dungeon.arrow_chance`) place them;
+the chest's roll happens **before** its loot rolls and always, whether or not it
+lands, so adding it cannot shift a seed's contents.
+
+```gdscript
+# scripts/items/fletching.gd — arrows out of the bag, anywhere.
+Fletching.can_fletch() -> bool      # short() is empty AND quiver_room() > 0
+Fletching.fletch() -> int           # arrows made; 0 means it refused
+Fletching.refusal() -> String       # why, in a sentence; "" when it will
+Fletching.cost_line() -> String     # "2/2 Cracked Flint  +  0/2 Bone Shard"
+```
+
+It spends through `Run.consume(id, n)`, which is the **only** writer of the bag
+besides `collect`/`sell` — the premium share leaves with what it takes, exactly
+as a sale does. The card that draws it is on the POUCH screen (§ pouch, and
+docs/METAGAME.md §4.6).
 
 ```gdscript
 # scripts/items/hookshot_tether.gd — presentation only; the firer owns the
