@@ -335,6 +335,12 @@ func _release_arrow() -> void:
 ## Whether the chain finds an anchor is a question for the release.
 func _ready_hookshot() -> bool:
 	_hook_ready = true
+	# The brace is a HOLD with no clock and no cost, so before this it was the
+	# only item in the game you could take out in total silence -- the pistol
+	# came up in the corner of the eye and nothing said the trigger was live.
+	# The load is the sound of it being made ready, and it is the tell that the
+	# next release fires.
+	Bus.request_sfx.emit(&"hookshot_load", _hero.global_position)
 	return true
 
 
@@ -535,7 +541,19 @@ func _tick_hook(delta: float) -> void:
 			_hero.hook_end()
 			_end_hook()
 			return
-		Bus.request_sfx.emit(&"craft_clang", _tether.impact_position)
+		# The head bites stone. `craft_clang` was standing in here and it is the
+		# SMITH's anvil — the shop's sound, in a dungeon, on a traversal move.
+		# `hit_armor` is metal arriving on something hard, which is what this is.
+		Bus.request_sfx.emit(&"hit_armor", _tether.impact_position)
+		# ...and immediately the reel. Two sounds on one frame on purpose: the
+		# bite and the pull are one beat to the player, and the chain running is
+		# the only thing that says the anchor HELD (a monster clangs and lets go).
+		#
+		# Trimmed to 0.9 s at import for exactly this: the pull is
+		# distance / K.HOOK_PULL_SPEED, which tops out around 0.62 s at
+		# K.HOOK_RANGE, so a chain any longer than this would still be reeling
+		# after the hero had landed. Fired and forgotten — `Sfx` has no stop.
+		Bus.request_sfx.emit(&"hookshot_pull", _hero.global_position)
 		_hero.hook_pull_to(_hook_pull)
 		return
 

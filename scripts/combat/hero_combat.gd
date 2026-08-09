@@ -283,7 +283,9 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 @export_group("Audio")
 @export var sfx_swing: AudioStream = preload("res://audio/sfx/swing.ogg")
 @export var sfx_impact: AudioStream = preload("res://audio/sfx/weapon_impact_sword_1.ogg")
-@export var sfx_block: AudioStream = preload("res://audio/sfx/block.ogg")
+# THE BLOCK SOUND IS NOT HERE. `on_blocked` emits `Bus.shield_blocked` and `Sfx`
+# owns which clang that is (`shield_block`), because a sound that only ever plays
+# on a signal the whole game can hear belongs in the table with the rest of them.
 ## The wind-up hum, started on the PRESS and cut on the release. It is a rise
 ## that reaches full body at about 0.35 s, which is why `charge_time` (0.42) can
 ## stay where it is: the sound is all the way up a hair before the charge arms.
@@ -879,9 +881,33 @@ func _tick_dpad() -> void:
 	if Input.is_action_just_pressed(&"weapon_next"):
 		Game.cycle_weapon(1)
 	if Input.is_action_just_pressed(&"item_next"):
+		# The blip is refused on a ring of one, because there `cycle_item` is a
+		# no-op and a click that says "moved" when nothing moved is worse than
+		# silence -- the player looks at the HUD for a change that is not there.
+		if Game.bottle_count() > 1:
+			_select_blip()
 		Game.cycle_item(1)
 	if Input.is_action_just_pressed(&"loadout_swap"):
+		_select_blip()
 		Game.swap_loadout()
+
+
+## The D-pad's selection click.
+##
+## ONLY ↓ and ↑ ring it, and that is not an oversight. ← / → already speak:
+## `_on_loadout_changed` plays `sfx_swap` whenever the right hand's model
+## actually changes, and doubling a leather-and-buckle equip with a UI click on
+## the same press turns one clear event into mush. What ↓ and ↑ had was nothing
+## at all -- a bottle selection is invisible on a controller (the HUD cell is in
+## the corner of the eye) and a set swap that lands on the same right-hand weapon
+## changes nothing on screen whatsoever. Those are the two presses that could
+## land and leave the player unsure whether they had.
+##
+## Non-positional in spirit but played at the hero, because `Sfx` is 3D-only and
+## the hero is where the listener is; the same thing every menu cue here does.
+func _select_blip() -> void:
+	if _hero != null:
+		Bus.request_sfx.emit(&"ui_move_selection", _hero.global_position)
 
 
 ## X — drink the selected bottle. One press, no draw, no aim.
@@ -1532,15 +1558,13 @@ func blocks(from_pos: Vector3) -> bool:
 	return rad_to_deg(fwd.angle_to(to)) <= block_cone
 
 
-## Play the clang and tell the world. The blocker calls this so a blocked blow
+## Tell the world a blow was stopped. The blocker calls this so a blocked blow
 ## reads differently from one that never arrived.
+##
+## It used to build an `AudioStreamPlayer3D` per block and free it on `finished`,
+## which is exactly the thing CONTRACT §8 forbids — a prop holding a player for a
+## world sound. `Sfx` hangs `shield_block` off this signal now, so the clang is
+## chosen in one place with everything else and a fight full of parries allocates
+## nothing. All this function does is say what happened and where.
 func on_blocked(at: Vector3, normal: Vector3) -> void:
-	var p := AudioStreamPlayer3D.new()
-	p.stream = sfx_block
-	p.bus = &"SFX"
-	p.unit_size = 6.0
-	add_child(p)
-	p.global_position = at
-	p.finished.connect(p.queue_free)
-	p.play()
 	Bus.shield_blocked.emit(at, normal)

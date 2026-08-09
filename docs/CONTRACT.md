@@ -1592,9 +1592,19 @@ Bus.request_sfx.emit(&"chest_open", global_position)   # id = a file in audio/sf
 
 `Sfx` also maps the events that already say what happened — `chest_opened`,
 `door_opened`, `item_acquired`, `loot_gained`, `items_sold`, `puzzle_solved`,
-`enemy_died`, `player_died`, `target_acquired`, `run_started`, `run_ended`,
-`bag_full`, `extract_refused` — so those need no emit at all. Add a row to
-`Sfx.CUES` rather than a player to a prop.
+`hit_landed`, `shield_blocked`, `enemy_died`, `player_died`, `target_acquired`,
+`run_started`, `run_ended`, `bag_full`, `extract_refused` — so those need no emit
+at all. Add a row to `Sfx.CUES` rather than a player to a prop.
+
+`shield_blocked` is the one that had it the other way round and was corrected:
+`HeroCombat.on_blocked` built a fresh `AudioStreamPlayer3D` per block and freed
+it on `finished`, which is exactly the rule above. It emits and nothing else now.
+
+The hero's own MOVES are the other half, and they are `request_sfx` emitters
+rather than table rows, because none of them is a `Bus` signal: the jump and the
+backflip grunt (`Hero.VOICE_EFFORT`), the other three dodges scuff
+(`dodge_roll`), and the hookshot's three beats are `hookshot_load` on the brace,
+`hit_armor` / `arrow_body_impact` on the bite, and `hookshot_pull` on the reel.
 
 Two traps the table has already hit:
 
@@ -1604,7 +1614,15 @@ Two traps the table has already hit:
   count of 1.
 - **A missing file is silent, not loud.** `Sfx._load` warns and returns null, and
   the game plays on. `tools/directors/sfx_cues.gd` fires every cue and asserts a
-  voice actually started; run it when you add one.
+  voice actually started; `tools/directors/sfx_moves.gd` does the same for the
+  hero's moves, through the buttons, and reads the ids back BY NAME so a right
+  sound on the wrong move fails. Run them when you add one.
+- **The human voice set on disk is silent.** `human_male_attack_1/2`,
+  `human_male_hurt`, `human_male_death` and the female equivalents are all
+  4 KB of digital silence — an ogg header and no samples, -91 dBFS peak. They
+  resolve, they warn about nothing, and they play nothing. The project's only
+  working vocalisation is `weapon_full_charge_voice_male_1`, which is what
+  `Hero.VOICE_EFFORT` names.
 
 Not wired, and deliberately: **footsteps**. `audio/sfx/footsteps/` has 14 material
 folders, and using them needs a step event off the hero's animation plus a read

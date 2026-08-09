@@ -57,6 +57,11 @@ const CUES := {
 	# whatever got hit, so a blow lands where it landed.
 	&"hit_landed": &"hit_flesh",
 	&"enemy_died": &"hit_flesh",
+	# A blow that was STOPPED, which has to read differently from one that
+	# landed and from one that missed -- it is the shield's whole reward.
+	# `HeroCombat.on_blocked` used to build its own AudioStreamPlayer3D per
+	# block; it emits and nothing else now.
+	&"shield_blocked": &"shield_block",
 	&"player_died": &"doom_stinger",
 	&"target_acquired": &"target_cycle",
 	&"run_started": &"dungeon_enter",
@@ -110,6 +115,10 @@ func _ready() -> void:
 		play_at(CUES[&"hit_landed"], pos))
 	Bus.enemy_died.connect(func(_e: Node3D, pos: Vector3) -> void:
 		play_at(CUES[&"enemy_died"], pos))
+	# `at` is the contact point on the shield, not the hero's feet, so a blow
+	# caught on the boss's side of the guard rings from there.
+	Bus.shield_blocked.connect(func(at: Vector3, _n: Vector3) -> void:
+		play_at(CUES[&"shield_blocked"], at))
 	# Only the win is a sound. A run that ended badly already has doom_stinger.
 	Bus.run_ended.connect(func(extracted: bool, _c: Dictionary, _v: int) -> void:
 		if extracted:
