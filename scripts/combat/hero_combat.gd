@@ -326,11 +326,29 @@ func _mount_loadout() -> void:
 	# Right hand holds the sword. The z=-90 is the roll that stands the blade up
 	# out of the fist; without it the blade lies over at 45 degrees and the whole
 	# pose reads off-kilter even though the grip is in exactly the right place.
+	#
+	# x=-6 is the spin about the BLADE's own axis, and it is the one number here
+	# that is a look decision rather than a fit. At -96 the sword was carried
+	# edge-on to the camera: correct for a swordsman, and from behind the hero —
+	# the only angle the game ever shows — a 92 cm blade with no width at all,
+	# indistinguishable from the hookshot's chain. Ninety degrees of spin turns
+	# the flat to the camera, and the silhouette becomes a sword again. The grip
+	# does not move; tools/directors/sword_grip.gd shoots the four spins.
 	sword = _mount(sword_id, &"mixamorig_RightHand",
-		Vector3(0.0, 0.04, 0.02), Vector3(-96.0, 6.0, -90.0))
+		Vector3(0.0, 0.04, 0.02), Vector3(-6.0, 6.0, -90.0))
 	# The shield rides the left forearm, not the hand — that is how it sits in
 	# the block clips, and hanging it off the hand makes it swing like a paddle.
 	# Its origin is the CENTRE of the disc, so it needs pushing off the arm.
+	#
+	# The two POSITION numbers are read in the idle, not the block, because that
+	# is the pose the shield spends the game in — the forearm bone points down
+	# the arm there, so x is DOWN and y is his right (the sweep prints the
+	# mapping: shield_lookdev.gd --sweep=pos).
+	#   x=0.04 (was 0.10) lifts it 6 cm back up the forearm. At 0.10 it hung at
+	#         the knee and swung across his shin.
+	#   y=-0.03 (was 0.02) pushes it 5 cm off his left side. It was seated
+	#         INSIDE the hip: from behind, the whole disc was buried in the body
+	#         with a finger's width of rim showing past the leg.
 	#
 	# TWO axes were wrong, which is why the first fix only half worked.
 	#   y=180 decides which face meets the blow. At 0 the hero presents the
@@ -341,7 +359,7 @@ func _mount_loadout() -> void:
 	#         that hangs the point at the hero's knee, where it belongs.
 	# tools/directors/shield_lookdev.gd renders the roll candidates side by side.
 	shield = _mount(shield_id, &"mixamorig_LeftForeArm",
-		Vector3(0.10, 0.02, 0.0), Vector3(0.0, 180.0, -90.0))
+		Vector3(0.04, -0.03, 0.0), Vector3(0.0, 180.0, -90.0))
 
 	# The hookshot and the bow each get TWO mounts: one in the hand for when
 	# they are equipped, one stowed on the body for when they are not. Carrying
@@ -365,9 +383,16 @@ func _mount_loadout() -> void:
 	_mount_item(&"hookshot", hookshot_id,
 		&"mixamorig_RightHand", Vector3(0.07, 0.08, 0.02), Vector3(-66.0, 6.0, 90.0),
 		&"mixamorig_Hips", Vector3(-0.16, 0.02, 0.10), Vector3(0.0, 0.0, -90.0))
+	# The slung bow's z is its stand-off from the spine: -0.09, not the -0.16 it
+	# shipped with. At 16 cm the bow rode a hand's width clear of his back and
+	# off to one side of it — from behind, a bow travelling alongside the hero
+	# rather than on him. 9 cm is the rung that touches without swallowing the
+	# lower limb; at 6 cm the limb goes through the sash. bow_stow_lookdev.gd
+	# shoots the ladder, and shoots it from his flank, where a stand-off is a
+	# gap you can see instead of a depth the camera has flattened.
 	_mount_item(&"bow", bow_id,
 		&"mixamorig_LeftHand", Vector3(0.0, 0.04, 0.0), Vector3(-96.0, 0.0, 90.0),
-		&"mixamorig_Spine2", Vector3(0.0, 0.06, -0.16), Vector3(0.0, 0.0, 28.0))
+		&"mixamorig_Spine2", Vector3(0.0, 0.06, -0.09), Vector3(0.0, 0.0, 28.0))
 	hookshot = _items[&"hookshot"]["hand"]
 	bow = _items[&"bow"]["hand"]
 	_show_equipped()
