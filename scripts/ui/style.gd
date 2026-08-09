@@ -54,7 +54,18 @@ const HEALTH_H := 15.0             ## reference px
 const STAMINA_RATIO := 0.62
 const STAMINA_H := 8.0
 const STAMINA_GAP := 4.0
+## The two HANDS, above health in the "you" pole. Two cells, not the old four:
+## the fixed kit strip (sword/shield/hookshot/bow, always all four, always all
+## owned) described an inventory the game never had.
 const KIT_ORIGIN := Vector2(0.031, 0.826)
+## The three item buttons, TOP-RIGHT and in the physical shape of the D-pad they
+## sit on — docs/CONTRACT.md §2.5 #6. They are here rather than in the bottom-
+## left instrument because they are not a readout, they are a control surface:
+## the arrangement is what tells you which button draws which item, and that is
+## only true if the arrangement matches your thumb.
+const CPAD_ORIGIN := Vector2(0.886, 0.044)
+const CPAD_CELL := 34.0
+const CPAD_GAP := 6.0
 const BAG_RIGHT := 0.969
 const BAG_NUM_BASELINE := 0.900
 const SLIPS_TOP := 0.795

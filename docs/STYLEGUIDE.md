@@ -259,12 +259,18 @@ tier 3. See Departure 2.
 
 ## 5. The HUD
 
-**The organising idea is two poles.** Bottom-left is YOU — health and kit, one
-instrument. Bottom-right is THE MONEY — bag value and the way out, one
-instrument. Opposite corners on purpose: in a panic your eye has to travel from
-"how alive am I" to "how much am I about to lose", and that eye movement *is* the
-game's central decision. The top stays empty except for transient state, because
-the over-the-shoulder camera puts the action in the upper-middle third.
+**The organising idea is two poles.** Bottom-left is YOU — health, stamina and
+what is in your hands, one instrument. Bottom-right is THE MONEY — bag value and
+the way out, one instrument. Opposite corners on purpose: in a panic your eye has
+to travel from "how alive am I" to "how much am I about to lose", and that eye
+movement *is* the game's central decision.
+
+**The one exception is the top-right corner**, which holds the three item buttons
+(§5.2b). They are not a readout and they do not belong to either pole: they are a
+picture of the D-pad, and a control surface has to sit where the *thumb* thinks,
+not where the body's numbers live. Everything else at the top stays empty except
+transient state, because the over-the-shoulder camera puts the action in the
+upper-middle third.
 
 Design space is 1280×720; all coordinates are fractions of viewport, origin
 top-left. Safe area: nothing within `0.025w` / `0.031h` of an edge.
@@ -324,10 +330,20 @@ unit it is ever spent in.
   BONE flash each — a full bar takes 0.8 s. The heal is the reward for leaving
   and it should be watched and counted, not granted in a frame.
 
-### 5.2 Kit strip — sword / shield / hookshot / bow
+### 5.2 The hands — left and right, above health
 
-Four permanent cells above health, sharing its left edge, so body and tools read
-as one bottom-left instrument. No radial, no wheel.
+**Superseded 2026-08-08: this was a fixed four-cell kit strip (sword, shield,
+hookshot, bow) and is now two cells, the hands.** The strip was a lie by the time
+the loadout landed — it drew four items you always had, in a game where you find
+the hookshot and the bow, and where the right hand can hold any of them. Two
+cells that say *what he is holding right now* is the same pixel budget spent on
+a fact that changes.
+
+Two cells above health, sharing its left edge, so body and tools read as one
+bottom-left instrument. No radial, no wheel. **Left cell is the left hand, right
+cell the right hand** — the reading order is the body, not an inventory order.
+Either can be empty: bow-and-arrows empties the shield arm, and an empty cell is
+correct there rather than a gap to fill.
 
 **Glyphs are renders of the real models**, baked by `tools/scenes/_iconbake.gd`
 and posterised into the Pal ramp, so the cell always shows the thing you are
@@ -345,21 +361,50 @@ poorly, because a bow is edge-on from every axis.
 | | |
 |---|---|
 | Row origin | x `0.031` (40), top y `0.826` (595) |
-| Cell | 32×32 px, 6 px gutter → 146 px total |
+| Cell | 32×32 px, 6 px gutter → 70 px total |
 | Fill | MIDNIGHT SLATE @80%, 1 px ASH border |
-| Selected | 2 px BONE underline flush to cell bottom |
 | Ammo numeral | 16 px MOTH, right-aligned at +29, +30 |
 
-These cells show **state, not equipment** — sword and shield are never
-unequipped, so an "equipped" indicator is dead pixels:
+Beyond naming the armament, these cells carry **state nothing else surfaces**:
 
-- **Shield cell** fills BONE while blocking; flashes RUST 2 frames on a blocked
-  hit. The only place block timing is surfaced.
-- **Sword cell** carries a 2 px combo-window tick along its bottom edge that
-  drains over the window. The only place attack cadence is visible.
-- **Bow cell** dims to 30% at 0 arrows. **Hookshot cell** brightens to BONE when
-  a hookable target is in range and in the reticle — that is a targeting fact and
-  it belongs on the tool, not floating in the world.
+- **A shield in the left cell** fills BONE while blocking and flashes RUST for
+  2 frames on a blocked hit. This is the only place block timing is visible, and
+  it is the one thing the old strip did that nothing else does — it survived the
+  strip on that ground alone.
+- **Arrows in the left cell** carry the count and dim to 30% at zero.
+
+Not built, still wanted: a 2 px combo-window tick draining along the sword cell's
+bottom edge, and the hookshot cell brightening to BONE when a hookable target is
+in range and in the reticle. Both were written here before the loadout existed
+and neither has ever been drawn — they are intent, not description.
+
+### 5.2b The item buttons — a picture of the D-pad, top-right
+
+Three cells in the physical arrangement of the D-pad: **▲ above, ◄ and ► below
+it**, with a small ASH ▼ caret under the cross. Whatever the player bound to a
+direction in the Items screen is what that cell shows (`docs/CONTRACT.md` §4.1).
+
+**The arrangement is the label.** A row of three cells would need three direction
+glyphs printed on them, and the player would still be translating "cell 2" into
+"up" every time they reached for it. In the cross shape there is nothing to
+translate: the cell is where the thumb is.
+
+**An unbound button is drawn empty, not skipped.** A gap would break the cross,
+and the cross is the whole point — three cells in a row plus one missing reads as
+a rendering fault, not as a free slot.
+
+The ▼ is a caret rather than a fourth cell because it is not bindable: it swaps
+the primary and alternate sets. Drawing it as a cell would invite the player to
+try to bind it.
+
+| | |
+|---|---|
+| Cross origin | x `0.886` (1134), top y `0.044` (32) — the ▲ cell's row |
+| Cell | 34×34 px, 6 px gutter |
+| Fill | MIDNIGHT @80%, 1 px ASH border |
+| Drawn now | 2 px BONE border on the cell holding the item currently in hand |
+| Ammo numeral | 16 px MOTH on a bound bow, right-aligned inside the cell |
+| Swap caret | 10×5 px ASH triangle, centred under the ▲ column |
 
 ### 5.3 The bag — the most important object on screen
 
@@ -442,8 +487,9 @@ Not a fairy, not a triangle.
 
 ### 5.6 Always visible vs. transient
 
-**ALWAYS — six things, nothing else:** the health bar, the stamina bar, kit
-strip, bag total, extraction line, ammo numerals. Each is a number the player must be able to
+**ALWAYS — seven things, nothing else:** the health bar, the stamina bar, the
+hands, the item buttons, bag total, extraction line, ammo numerals. Each is a
+number or a binding the player must be able to
 consult unprompted, because each feeds the single recurring decision — push on,
 or leave. Anything that does not feed that decision has no claim on permanent
 pixels.
@@ -468,7 +514,8 @@ Fractions of viewport, origin top-left; px at 1280×720.
 |---|---|---|---|
 | Health bar origin | 0.031 (40) | 0.899 (647) | 0.268 w (343) × 15 |
 | Stamina bar origin | 0.031 (40) | health bottom + 4 | 0.62× health w × 8 |
-| Kit strip origin | 0.031 (40) | 0.826 (595) | cell 32×32, gutter 6 |
+| Hands origin | 0.031 (40) | 0.826 (595) | cell 32×32, gutter 6 |
+| Item buttons origin | 0.886 (1134) | 0.044 (32) | cell 34×34, gutter 6 |
 | Bag numeral baseline | right-align 0.969 | 0.900 (648) | 32 px |
 | Value slips | right-align 0.969, max w 0.094 | 0.803→0.858 | 3 px + 2 gutter |
 | Item toast baseline | right-align 0.969 | 0.767 (552) | 16 px |

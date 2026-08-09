@@ -49,11 +49,16 @@ const GHOST_DRAIN := 0.25
 ## is a colour, not a measurement you have to take.
 const STAMINA_TICKS := 3           ## rolls-from-full, drawn as boundaries
 
-# --- Kit strip (§5.2) --------------------------------------------------------
+# --- Hands and item buttons (§5.2) -------------------------------------------
 const KIT_CELL := 32.0
 const KIT_GAP := 6.0
-## Order is the order of the buttons, left to right.
-const KIT := [&"sword", &"shield", &"hookshot", &"bow"]
+## The hands, left to right as they are on the body. What is IN them comes from
+## Game.armament(); this is no longer a fixed list of everything that exists.
+##
+## It used to be [sword, shield, hookshot, bow] -- every item, always drawn,
+## whether or not the player had found it, with an underline marking which was
+## out. That is a picture of the game's item table, not of the hero.
+const HANDS := [&"left", &"right"]
 ## Icons baked from the REAL item models by tools/scenes/_iconbake.gd, then
 ## posterised into the Pal ramp so they read as authored in-palette rather than
 ## as photographs dropped into a 5-bit HUD. Regenerate with:
@@ -74,6 +79,7 @@ const KIT_ICON := {
 ## sword", which is a lie the HUD should never tell.
 const KIT_LABEL := {
 	&"sword": "SW", &"shield": "SH", &"hookshot": "HK", &"bow": "BW",
+	&"arrow": "AR", &"": "",
 }
 
 # --- Bag (§5.3) --------------------------------------------------------------
@@ -134,7 +140,7 @@ func _ready() -> void:
 	_shown_value = float(_target_value)
 	_last_quarters = Game.quarters
 
-	for id: StringName in KIT:
+	for id: StringName in KIT_ICON:
 		var tex := load(String(KIT_ICON[id])) as Texture2D
 		if tex == null:
 			push_warning("Hud: kit icon missing for '%s' — falling back to lettering" % id)
@@ -147,6 +153,8 @@ func _ready() -> void:
 	Bus.loot_gained.connect(_on_loot)
 	Bus.gold_changed.connect(_on_gold)
 	Bus.ammo_changed.connect(_repaint)
+	Bus.loadout_changed.connect(_repaint)
+	Bus.quick_slots_changed.connect(_repaint)
 	Bus.extract_refused.connect(_on_refused)
 	Bus.shield_blocked.connect(_on_blocked)
 	Bus.target_acquired.connect(_on_target)
@@ -338,7 +346,8 @@ func _draw_hud() -> void:
 		return
 	_draw_health(s)
 	_draw_stamina(s)
-	_draw_kit(s)
+	_draw_hands(s)
+	_draw_cpad(s)
 	_draw_bag(s)
 	_draw_extraction(s)
 	_draw_toast(s)
@@ -452,69 +461,119 @@ func _draw_stamina(s: Vector2) -> void:
 			Pal.px(1.0, s.y), h), Pal.VOID)
 
 
-# --- Kit strip (§5.2) -------------------------------------------------------
-## State, not equipment. The sword and shield are never unequipped, so an
-## "equipped" light would be dead pixels; these cells carry block state, the
-## combo window, ammo, and whether the hookshot has something to grab.
+# --- The hands and the item buttons (§5.2, §5.2b) ---------------------------
+## Two instruments, deliberately in opposite corners. The hands sit above health
+## because what he is holding is a fact about his BODY. The item buttons sit
+## top-right because they are not a readout at all -- they are a picture of the
+## D-pad, and a control surface belongs where the thumb is.
+##
+## The hands cells carry the block tell and the ammo count as well as the
+## armament; that state has nowhere else to live.
 ##
 ## The glyph is a render of the ACTUAL model, baked and posterised into the Pal
 ## ramp. Lettering ("SW", "SH") only ever appears if a bake is missing.
 
-func _draw_kit(s: Vector2) -> void:
+## The hands: what he is holding, left then right. Two cells, and both of them
+## can be empty -- two-handing the sword is a real choice, not a broken state.
+func _draw_hands(s: Vector2) -> void:
 	var cell := Pal.px(KIT_CELL, s.y)
 	var gap := Pal.px(KIT_GAP, s.y)
 	var origin := Pal.KIT_ORIGIN * s
 	var combat := _hero_combat()
-	var equipped: StringName = combat.get(&"equipped") if combat != null else &""
 	var blocking: bool = bool(combat.get(&"blocking")) if combat != null else false
 
-	for i in KIT.size():
-		var id: StringName = KIT[i]
+	for i in HANDS.size():
+		var hand: StringName = HANDS[i]
+		var id: StringName = Game.armament(hand)
 		var r := Rect2(origin.x + i * (cell + gap), origin.y, cell, cell)
 
+		# The shield cell IS the block tell. It was the one thing the old strip
+		# did that nothing else does, so it survives the strip.
+		var raised := id == &"shield" and blocking
 		var fill := Color(Pal.MIDNIGHT, 0.8)
-		if id == &"shield" and blocking:
+		if raised:
 			fill = Pal.BONE
 		if id == &"shield" and _block_flash_t >= 0.0:
 			fill = Pal.RUST
 		_canvas.draw_rect(r, fill)
 		_canvas.draw_rect(r, Pal.ASH, false, Pal.px(1.0, s.y))
 
-		# A bow with no arrows is not a choice, so it stops looking like one.
-		var dim := id == &"bow" and Game.arrows <= 0
+		_draw_item_glyph(s, r, id, Pal.MIDNIGHT if raised else Color.BLACK,
+			raised, id == &"arrow" and Game.arrows <= 0)
+		if id == &"arrow":
+			PixelFont.draw_right(_canvas, str(Game.arrows),
+				Vector2(r.end.x - Pal.px(3.0, s.y), r.end.y - Pal.px(10.0, s.y)),
+				Pal.px(1.0, s.y), Pal.MOTH)
 
-		var tex: Texture2D = _icons.get(id)
-		if tex != null:
-			# Inset by 2 reference px so the icon's own VOID dilation never sits
-			# on the cell border and read as a thick frame.
-			var inset := Pal.px(2.0, s.y)
-			var box := Rect2(r.position + Vector2(inset, inset),
-				r.size - Vector2(inset, inset) * 2.0)
-			var mod := Color(1, 1, 1, 0.3 if dim else 1.0)
-			# Blocking fills the cell BONE, so the icon has to invert or it
-			# disappears into its own background.
-			if id == &"shield" and blocking:
-				mod = Color(Pal.MIDNIGHT, 1.0)
-			_canvas.draw_texture_rect(tex, box, false, mod)
-		else:
-			var label_col: Color = Color(Pal.MOTH, 0.3) if dim else Pal.BONE
-			if id == &"shield" and blocking:
-				label_col = Pal.MIDNIGHT
-			PixelFont.draw_centred(_canvas, String(KIT_LABEL[id]),
-				Vector2(r.get_center().x, r.position.y + cell * 0.32),
-				Pal.px(2.0, s.y), label_col)
 
-		# Selected underline: which of the two item buttons is actually out.
-		var selected := (id == equipped) or (equipped == &"" and id == &"sword")
-		if selected:
-			_canvas.draw_rect(Rect2(
-				r.position.x, r.end.y - Pal.px(2.0, s.y),
-				cell, Pal.px(2.0, s.y)), Pal.BONE)
+## The three item buttons, in the shape of the D-pad: ▲ above, ◄ and ► below it,
+## with the ▼ direction marked as the loadout swap. The arrangement is the
+## label -- a row of three cells would need three glyphs and the player would
+## still have to translate "cell 2" into "up" every time (CONTRACT §2.5 #6).
+func _draw_cpad(s: Vector2) -> void:
+	var cell := Pal.px(Pal.CPAD_CELL, s.y)
+	var gap := Pal.px(Pal.CPAD_GAP, s.y)
+	var origin := Pal.CPAD_ORIGIN * s
+	var mid := origin.x + cell + gap
+	var held: StringName = Game.armament(Game.HAND_RIGHT)
+
+	for entry in [
+		{"slot": Game.QUICK_UP, "at": Vector2(mid, origin.y)},
+		{"slot": Game.QUICK_LEFT, "at": Vector2(origin.x, origin.y + cell + gap)},
+		{"slot": Game.QUICK_RIGHT, "at": Vector2(mid + cell + gap, origin.y + cell + gap)},
+	]:
+		var slot: int = entry["slot"]
+		var id: StringName = Game.quick(slot)
+		var r := Rect2(entry["at"], Vector2(cell, cell))
+
+		_canvas.draw_rect(r, Color(Pal.MIDNIGHT, 0.8))
+		# An unbound button is drawn EMPTY and dim rather than skipped. A gap in
+		# the cross would break the shape, and the shape is the whole point.
+		var drawn := id != &"" and id == held
+		_canvas.draw_rect(r, Pal.BONE if drawn else Pal.ASH, false,
+			Pal.px(2.0 if drawn else 1.0, s.y))
+		_draw_item_glyph(s, r, id, Color.BLACK, false, false)
 
 		if id == &"bow":
 			PixelFont.draw_right(_canvas, str(Game.arrows),
 				Vector2(r.end.x - Pal.px(3.0, s.y), r.end.y - Pal.px(10.0, s.y)),
 				Pal.px(1.0, s.y), Pal.MOTH)
+
+	# ▼ swaps the set. A caret rather than a cell: it is not a bindable button,
+	# and drawing it as one would invite the player to try.
+	var tip := Vector2(mid + cell * 0.5, origin.y + (cell + gap) * 2.0 + Pal.px(3.0, s.y))
+	var w := Pal.px(5.0, s.y)
+	var h := Pal.px(5.0, s.y)
+	_canvas.draw_colored_polygon(PackedVector2Array([
+		tip + Vector2(-w, 0.0), tip + Vector2(w, 0.0), tip + Vector2(0.0, h),
+	]), Pal.ASH)
+
+
+## One item's icon in a cell, or its two letters if the bake is missing. An
+## empty hand draws nothing at all -- an "empty" glyph is still a glyph, and the
+## cell border already says the slot is there.
+func _draw_item_glyph(s: Vector2, r: Rect2, id: StringName,
+		invert_to: Color, inverted: bool, dim: bool) -> void:
+	if id == &"":
+		return
+	var tex: Texture2D = _icons.get(id)
+	if tex != null:
+		# Inset by 2 reference px so the icon's own VOID dilation never sits
+		# on the cell border and reads as a thick frame.
+		var inset := Pal.px(2.0, s.y)
+		var box := Rect2(r.position + Vector2(inset, inset),
+			r.size - Vector2(inset, inset) * 2.0)
+		var mod := Color(1, 1, 1, 0.3 if dim else 1.0)
+		if inverted:
+			mod = Color(invert_to, 1.0)
+		_canvas.draw_texture_rect(tex, box, false, mod)
+		return
+	var label_col: Color = Color(Pal.MOTH, 0.3) if dim else Pal.BONE
+	if inverted:
+		label_col = invert_to
+	PixelFont.draw_centred(_canvas, String(KIT_LABEL.get(id, "?")),
+		Vector2(r.get_center().x, r.position.y + r.size.y * 0.32),
+		Pal.px(2.0, s.y), label_col)
 
 
 func _hero_combat() -> Node:
