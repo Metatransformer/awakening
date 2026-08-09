@@ -26,6 +26,11 @@ Game="*res://scripts/autoload/game_state.gd"
 Run="*res://scripts/autoload/run_state.gd"
 Settings="*res://scripts/autoload/settings.gd"
 Saves="*res://scripts/autoload/save_game.gd"
+; Music picks the track and crossfades it. It must load after Bus (it listens
+; for boss_engaged) and after Settings, which owns the Music bus volume the
+; pause-menu slider drives. The 15 tracks in res://audio/music/ were imported
+; and then never played by anything; this is what plays them.
+Music="*res://scripts/autoload/music.gd"
 ; The HUD is an autoload so the overlay exists whatever scene the launcher
 ; picks. It hides itself unless a node in group `player` is in the tree, so
 ; lookdev and tool scenes stay clean.
