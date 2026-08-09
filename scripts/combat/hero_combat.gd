@@ -24,12 +24,12 @@ extends Node3D
 ## the chain state. Buffering an Intent rather than a Swing is what lets a press
 ## made during step 1 still become step 2 when it is finally honoured.
 ##
-## HEAVY is no longer a button. It is what the attack button's HOLD releases
-## into, LUNGE is the use button under a lock, and DASH is the attack button
-## pressed from behind a raised shield. They stay Intents because the buffer is
-## the thing that makes them feel honest: a charge released during the light
-## swing that started it has to come out when that swing ends, not vanish.
-enum Intent { LIGHT, HEAVY, LUNGE, DASH }
+## SPIN is not a button. It is what the attack button's HOLD releases into,
+## LUNGE is the use button under a lock, and DASH is the attack button pressed
+## from behind a raised shield. They stay Intents because the buffer is the
+## thing that makes them feel honest: a charge released during the light swing
+## that started it has to come out when that swing ends, not vanish.
+enum Intent { LIGHT, SPIN, LUNGE, DASH }
 
 ## Pitch multiplier per chain step. Two rises, three drops — the chain should
 ## sound like it is going somewhere, and the finisher is the heaviest thing in
@@ -64,8 +64,8 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 @export var arc_degrees: float = 130.0
 @export var knockback: float = K.KNOCKBACK_LIGHT
 
-@export_group("Heavy")
-## Seconds the attack button must be HELD before the release becomes a heavy.
+@export_group("Spin")
+## Seconds the attack button must be HELD before the release becomes a spin.
 ## Under it, the release is nothing — the swing the press already started is all
 ## you get, which is what makes a tap a tap.
 ##
@@ -74,18 +74,45 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## charge costs you the recovery you were spending anyway rather than a separate
 ## standing-still beat. It was tuned against a 0.46 swing, where the two ended
 ## together; the slower chain only widens the overlap, which is the right
-## direction — the heavy is armed by the time the light finishes.
+## direction — the spin is armed by the time the light finishes.
 @export var charge_time: float = 0.42
-## Over a full heart, against the light swing's half. The heavy is worth the
+## Over a full heart, against the light swing's half. The spin is worth the
 ## commitment or nobody presses it twice.
-@export var heavy_damage: int = 5 * K.QUARTER
-## Nearly twice the light swing. This number IS the cost — the whole trade is
-## that you are unsteerable and unable to guard for this long. [tune]
-@export var heavy_swing_time: float = 0.80
-## Lives later in the swing than the light one and stays live for less of it:
-## the extra time is spent in the wind-up, where the tell is, not in the blade.
-@export var heavy_damage_window := Vector2(0.46, 0.74)
-@export var heavy_knockback: float = K.KNOCKBACK_HEAVY
+##
+## Note that this is what EVERYONE in the circle takes. The spin is not priced as
+## a bigger single blow — it is priced as this blow, delivered to a room.
+@export var spin_damage: int = 5 * K.QUARTER
+## Longer than any other swing in the kit. This number IS the cost — the whole
+## trade is that you are unsteerable and unable to guard for this long.
+##
+## It ENDS BEFORE THE EFFECT DOES, on purpose. `SpinVfx` lays its arc down over
+## ~0.72 s and the motes it leaves live another half-second in world space, so
+## the hero has his feet back while the circle behind him is still burning. That
+## split second is not sloppiness, it is the read: the magic lags the sword, the
+## way it does in the game this is taken from. A lockout that outlasted the
+## effect would make the recovery feel like the cost of the picture rather than
+## the cost of the blow. [tune]
+@export var spin_swing_time: float = 0.68
+## The live slice, as fractions of spin_swing_time. It opens LATE and stays open
+## LONG, which is the opposite shape to every other swing here and is the whole
+## point: the blade is genuinely travelling through 360 degrees, so the window
+## has to be wide enough to still be open when the far side of the circle comes
+## round. Measured against the clip — the sweep peaks at 0.87 s of a 1.35 s
+## trim, which lands at 0.64 of the way through (tools/_clip_motion.gd).
+@export var spin_damage_window := Vector2(0.34, 0.86)
+@export var spin_knockback: float = K.KNOCKBACK_HEAVY
+## How far the circle reaches, metres from the hero's centre. Wider than the
+## sword's forward `reach` (1.35): a spin that only caught what a standing swing
+## would have caught is a worse standing swing that costs you a hold.
+##
+## 2.1 m is a little over one enemy's width past the blade's tip, which is the
+## distance a second attacker stands off at while the first one is engaging.
+## Catching that second attacker IS the move.
+@export var spin_reach: float = 2.1
+## Degrees of arc the blade is credited with. 360 means the direction test in
+## `_maybe_hit` never rejects anything, which is what makes this the one attack
+## in the kit you cannot be behind. [tune]
+@export var spin_arc: float = 360.0
 
 @export_group("Combo")
 ## Seconds after a swing ends during which another press continues the chain
@@ -108,7 +135,7 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 @export var chain_finisher_knockback: float = K.KNOCKBACK_HEAVY
 
 @export_group("Lunge")
-## Between the light swing and the heavy. It is not the biggest blow in the kit;
+## Between the light swing and the spin. It is not the biggest blow in the kit;
 ## what it buys is the distance, and paying twice for that would make Z-targeting
 ## strictly better than standing your ground.
 @export var lunge_damage: int = 4 * K.QUARTER
@@ -132,13 +159,14 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 
 @export_group("Dash")
 ## The stab out from behind the shield — OOT's R+B. It is not a better light
-## swing and it is not a heavy: what it buys is that it CLOSES, and it is the
+## swing and it is not a spin: what it buys is that it CLOSES, and it is the
 ## only attack in the kit that closes without a lock. Priced between the two.
 @export var dash_damage: int = 3 * K.QUARTER
-## Shorter than a heavy (0.80). The commitment is most of the cost, because the
+## Shorter than a spin (0.90). The commitment is most of the cost, because the
 ## drive has already thrown the hero somewhere he did not have to be.
 ##
-## It used to sit clearly between a light (0.46) and a heavy; the light slowed to
+## It used to sit clearly between a light (0.46) and the charged release; the
+## light slowed to
 ## 0.60 and this did not follow, because the dash is one clip and not part of the
 ## chain the slowdown was for. So it is now barely longer than a light — the
 ## drive still prices it, but if it starts reading as free, this is the number.
@@ -166,10 +194,28 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 @export var sfx_swing: AudioStream = preload("res://audio/sfx/swing.ogg")
 @export var sfx_impact: AudioStream = preload("res://audio/sfx/weapon_impact_sword_1.ogg")
 @export var sfx_block: AudioStream = preload("res://audio/sfx/block.ogg")
-## The moment the charge is ready. A hold with no tell is a hold the player
-## cannot learn: without this the only way to find `charge_time` is to release
-## repeatedly and count. Paired with the blade glow in `_set_charged`.
-@export var sfx_charged: AudioStream = preload(
+## The wind-up hum, started on the PRESS and cut on the release. It is a rise
+## that reaches full body at about 0.35 s, which is why `charge_time` (0.42) can
+## stay where it is: the sound is all the way up a hair before the charge arms.
+##
+## Stopped rather than left to finish, and that matters — the stream is 1.9 s
+## against a 0.42 s hold, so a hum allowed to run out would still be winding up
+## a second after the spin it belonged to had already landed.
+@export var sfx_charging: AudioStream = preload("res://audio/sfx/sword_charging.ogg")
+## The release: the sword, and the hero.
+##
+## BOTH play on the release and NEITHER plays when the charge arms, which is the
+## fix to the thing that was wrong here. The yell used to fire the instant the
+## hold passed `charge_time` — so the hero shouted while standing still, holding
+## a button, and then swung in silence. A yell is the sound of effort being
+## spent, not of effort being stored.
+##
+## What tells the player the charge is READY is now entirely visual: the blade
+## takes on light and starts pulling motes in (SpinVfx). That is a better tell
+## than the ping was — it is legible at a glance, it is legible WHILE you are
+## reading the room, and it does not go off in a corridor you were sneaking down.
+@export var sfx_spin: AudioStream = preload("res://audio/sfx/sword_release.ogg")
+@export var sfx_yell: AudioStream = preload(
 	"res://audio/sfx/weapon_full_charge_voice_male_1.ogg")
 
 ## True while the swing is inside its damage window.
@@ -195,12 +241,17 @@ var _hitbox: Area3D
 var _swing_t: float = -1.0
 ## The numbers of the swing currently in flight, captured when it starts. A
 ## swing has to finish on the terms it began on — reading the exports live would
-## mean a heavy that landed while `equipped` changed could pay out light damage.
+## mean a spin that landed while `equipped` changed could pay out light damage.
 var _swing_dur: float = 0.0
 var _swing_window := Vector2.ZERO
 var _swing_damage: int = 0
 var _swing_knock: float = 0.0
 var _swing_hitstop: int = K.HITSTOP_LIGHT
+## The arc this swing is allowed to reach around, degrees. Captured like every
+## other number above, and for the same reason: the spin reshapes the hitbox on
+## its way out, and a swing that read `arc_degrees` live would be judged against
+## whatever the LAST swing left behind.
+var _swing_arc: float = 130.0
 ## Which light comes next: 0, 1, 2. Reset when `_chain_timer` runs out.
 var _chain_step: int = 0
 var _chain_timer: float = 0.0
@@ -210,14 +261,24 @@ var _hit_this_swing: Dictionary = {}
 ## Seconds the attack button has been held, or -1.0 when it is not down. The
 ## sentinel matters: 0.0 is a legitimate reading on the frame of the press.
 var _charge_t: float = -1.0
-## The blade's glow while the charge is ready. Built once in _build_charge_glow
-## rather than made and freed per charge — a light spawned mid-frame under a
-## BoneAttachment3D shows up at the origin for one frame, which reads as a flash
-## at the hero's feet.
-var _charge_glow: OmniLight3D
+## Everything the charge and the spin LOOK like — the blade's glow, the motes it
+## draws in, and the ring the release throws off. Driven from the hold clock
+## below; it decides nothing on its own.
+var _vfx: SpinVfx
+## The blade's own hitbox shape, kept so the spin can widen and re-centre it.
+## Reshaped per swing rather than given a second Area3D: two hitboxes is two
+## `monitoring` flags to keep in step, and the one that gets left on is the one
+## that damages things during a roll.
+var _hit_shape: CollisionShape3D
+var _hit_sphere: SphereShape3D
 var _swing_player: AudioStreamPlayer3D
 var _impact_player: AudioStreamPlayer3D
-var _charge_player: AudioStreamPlayer3D
+## The wind-up hum. One player, held across the whole hold so it can be STOPPED
+## on release — a hum fired and forgotten outlives the charge by a second and a
+## half (see `sfx_charging`).
+var _charging_player: AudioStreamPlayer3D
+var _spin_player: AudioStreamPlayer3D
+var _yell_player: AudioStreamPlayer3D
 
 
 func _ready() -> void:
@@ -233,8 +294,8 @@ func _ready() -> void:
 	# permanent part lives on Game and the export is only the base blade.
 	damage += Game.sword_bonus()
 	# Sharpening is sharpening. A whetstone that only improved the light swing
-	# would quietly make the heavy the worse button the more you spent in town.
-	heavy_damage += Game.sword_bonus()
+	# would quietly make the spin the worse button the more you spent in town.
+	spin_damage += Game.sword_bonus()
 	# The shield's ladder widens the arc it covers (K.GUARD_ARC). Read as a
 	# DELTA off the export rather than assigned, so the export stays what it
 	# says it is -- the bare kite shield -- and a director that hands this node a
@@ -243,7 +304,7 @@ func _ready() -> void:
 	_mount_loadout()
 	_build_hitbox()
 	_build_audio()
-	_build_charge_glow()
+	_build_vfx()
 
 	Bus.loadout_changed.connect(_on_loadout_changed)
 	# Finding a bow has to put it on his back the same moment the chest opens,
@@ -431,16 +492,32 @@ func _build_hitbox() -> void:
 	_hitbox.monitoring = false
 	_hitbox.monitorable = false
 
-	var shape := CollisionShape3D.new()
-	var box := SphereShape3D.new()
-	box.radius = reach * 0.62
-	shape.shape = box
-	# Sat out in front of the hero at chest height: a sphere on the origin would
-	# hit things behind him, which is how a clone ends up with a sword that
-	# damages what it visibly missed.
-	shape.position = Vector3(0.0, 1.0, -reach * 0.55)
-	_hitbox.add_child(shape)
+	_hit_shape = CollisionShape3D.new()
+	_hit_sphere = SphereShape3D.new()
+	_hit_shape.shape = _hit_sphere
+	_hitbox.add_child(_hit_shape)
 	add_child(_hitbox)
+	_aim_hitbox(reach * 0.62, reach * 0.55, arc_degrees)
+
+
+## Point the blade's box at what the swing about to go out is claiming to cut.
+##
+## `forward` is how far IN FRONT of the hero the sphere sits. For every ordinary
+## swing that is most of the reach, because a sphere on the origin hits things
+## BEHIND him — which is how a clone ends up with a sword that damages what it
+## visibly missed. The spin is the one swing that wants exactly that, so it
+## passes 0.0 and gets the omnidirectional box the other four are guarding
+## against.
+##
+## `arc` is the other half of the same claim and is enforced separately, in
+## `_maybe_hit`: the sphere decides what is in RANGE, the arc decides what is in
+## FRONT. Widening one without the other is how you get a spin that reaches 2 m
+## and still only hits the thing the hero happens to be facing.
+func _aim_hitbox(radius: float, forward: float, arc: float) -> void:
+	_hit_sphere.radius = radius
+	# Chest height, so a sphere sized for reach does not scrape the floor.
+	_hit_shape.position = Vector3(0.0, 1.0, -forward)
+	_swing_arc = arc
 
 
 func _build_audio() -> void:
@@ -456,37 +533,37 @@ func _build_audio() -> void:
 	_impact_player.unit_size = 6.0
 	add_child(_impact_player)
 
-	_charge_player = AudioStreamPlayer3D.new()
-	_charge_player.stream = sfx_charged
-	_charge_player.bus = &"SFX"
-	_charge_player.unit_size = 6.0
-	add_child(_charge_player)
+	_charging_player = AudioStreamPlayer3D.new()
+	_charging_player.stream = sfx_charging
+	_charging_player.bus = &"SFX"
+	_charging_player.unit_size = 6.0
+	add_child(_charging_player)
+
+	_spin_player = AudioStreamPlayer3D.new()
+	_spin_player.stream = sfx_spin
+	_spin_player.bus = &"SFX"
+	_spin_player.unit_size = 7.0
+	add_child(_spin_player)
+
+	_yell_player = AudioStreamPlayer3D.new()
+	_yell_player.stream = sfx_yell
+	_yell_player.bus = &"SFX"
+	# Louder than the steel. It is a person, and the whole reason it moved to the
+	# release is that a spin attack is the hero committing to something.
+	_yell_player.unit_size = 9.0
+	add_child(_yell_player)
 
 
-## A cold light on the blade for as long as the charge is held.
-##
-## The ping says the wind-up became ready; this says it still IS. Half this game
-## is a room lit by two sconces with a hero-shaped silhouette in between, and a
-## charge state you can only hear is a charge state the player loses track of
-## every time they get hit.
-##
-## Parented to the sword's holder, so it inherits `sword.visible` for free —
-## drawing the bow puts the blade away and takes its glow with it.
-func _build_charge_glow() -> void:
+## The charge's look. A child of this node rather than of the sword, because the
+## release's ring belongs to the FLOOR around the hero and only the blade half
+## rides the hand — SpinVfx sorts that out once it has the holder.
+func _build_vfx() -> void:
 	if sword == null:
 		return
-	_charge_glow = OmniLight3D.new()
-	_charge_glow.name = "ChargeGlow"
-	_charge_glow.light_color = Color(0.66, 0.88, 1.0)
-	_charge_glow.light_energy = 2.4
-	_charge_glow.omni_range = 1.6
-	_charge_glow.shadow_enabled = false
-	# 0.6 m up the blade. The holder's origin is the POMMEL and the blade runs
-	# along +Y (weapon_models.gd §sword); a light left at the origin lights his
-	# fist and the sword reads as unlit.
-	_charge_glow.position = Vector3(0.0, 0.6, 0.0)
-	_charge_glow.visible = false
-	sword.add_child(_charge_glow)
+	_vfx = SpinVfx.new()
+	_vfx.name = "SpinVfx"
+	add_child(_vfx)
+	_vfx.bind(sword)
 
 
 # --- Frame ------------------------------------------------------------------
@@ -498,7 +575,7 @@ func _physics_process(delta: float) -> void:
 	# A shop or a fade owns the buttons while it is up. The swing already in
 	# flight still finishes below -- cancelling it would leave the hitbox on.
 	#
-	# The rope's channel locks the same buttons: swapping your loadout halfway
+	# The escape rope's channel locks the same buttons: swapping your loadout halfway
 	# out of the dungeon is not a thing that should typecheck. The SHIELD is the
 	# exception and is handled below -- guarding through the channel is the one
 	# defence he has left while rooted.
@@ -544,9 +621,14 @@ func _physics_process(delta: float) -> void:
 			Game.use_quick(Game.QUICK_RIGHT)
 		if Input.is_action_just_pressed(&"item_down"):
 			Game.swap_loadout()
-		# The use button: fire what is drawn, or leap at what is locked.
+		# The use button fires whatever the D-pad drew, and now that is ALL it
+		# does: the leap moved to the context button below, so this button means
+		# one thing whether or not something is locked. It used to mean both, and
+		# "use item" that silently became a jump attack when your hands were empty
+		# is two verbs sharing a name.
 		if Input.is_action_just_pressed(&"use_item"):
 			_press(Intent.LUNGE)
+		_tick_context_button()
 		_tick_attack_button(delta)
 	else:
 		# A shop opening mid-wind-up must not leave the charge armed behind the
@@ -586,8 +668,41 @@ func _physics_process(delta: float) -> void:
 		_advance_swing(delta)
 
 
+## The context button — OOT's A, and contextual in the way OOT's A is: what it
+## does is whatever the situation has made most useful, and the player learns the
+## situations rather than the button.
+##
+##   something in reach  -> talk / open / descend. Not handled here at all.
+##   shield up           -> the jump attack.
+##   item in hand        -> put it away.
+##
+## Talking wins, and it wins by this function never being consulted: `Prompt`
+## owns the interact button whenever it has a focus (see its docstring — exactly
+## one thing answers a press). Without that check, walking up to the smith with
+## the shield raised would leap at him and open his shop on the same frame.
+##
+## The leap lives behind the shield because the shield is the lock now — guard
+## acquires the target (docs/CONTRACT.md §4) — so "press A while holding guard"
+## and OOT's "press A while holding Z" are the same sentence. With the shield
+## down the button is silent rather than swinging, which is what keeps it safe to
+## mash at a chest.
+func _tick_context_button() -> void:
+	if not Input.is_action_just_pressed(&"interact"):
+		return
+	if Prompt.focus != null:
+		return
+	if equipped != &"":
+		# An item is out. Putting it away is the useful thing here, and it is the
+		# calm way out — the ATTACK button's escape hatch stows it too, but that
+		# one comes with a swing attached (see `_begin`).
+		if not blocking:
+			Game.stow_item()
+	elif blocking:
+		_press(Intent.LUNGE)
+
+
 ## The attack button. A tap is the light chain; a hold is the wind-up; the
-## release is the heavy.
+## release is the spin.
 ##
 ## The light swing comes out on the PRESS, never on the release, and that
 ## ordering is the whole feel of it. A button that waits to see whether you
@@ -606,12 +721,16 @@ func _tick_attack_button(delta: float) -> void:
 		#
 		# No charge is armed on this path, deliberately. The wind-up is a HOLD,
 		# and a hold made from behind a shield is a hold whose release would come
-		# out as a heavy long after the guard dropped for the dash it already
+		# out as a spin long after the guard dropped for the dash it already
 		# threw. One press, one move.
 		if blocking and equipped == &"":
 			_press(Intent.DASH)
 			return
 		_charge_t = 0.0
+		# The hum starts on the PRESS, not when the charge arms. It is a rise, and
+		# a rise that begins at the top is a beep.
+		if _charging_player != null:
+			_charging_player.play()
 		_press(Intent.LIGHT)
 		return
 	if Input.is_action_just_released(&"attack"):
@@ -622,33 +741,66 @@ func _tick_attack_button(delta: float) -> void:
 	# Drawing an item mid-hold drops the wind-up. The press that STARTED this
 	# hold already stowed whatever was in his hands and swung (see _begin), so
 	# the only way to be here with an item out is a D-pad press made during the
-	# hold — and paying that out as a heavy on release would be a swing with an
+	# hold — and paying that out as a spin on release would be a swing with an
 	# invisible sword, which is the bug the `equipped` gate in _begin exists for.
 	if equipped != &"":
 		_release_charge(false)
 		return
 	_charge_t += delta
+	# The held pose, from the first frame of the hold rather than from the arm-up.
+	# It blends in under the light swing the press threw (hero.gd §Charge), so
+	# what the player sees is the swing finishing INTO the wind-up instead of
+	# returning to idle and then striking a pose a moment later.
+	_hero.charging = true
 	if not charged and _charge_t >= charge_time:
 		_set_charged(true)
+	# Every frame, not just at the threshold: the glow and the motes ARE the
+	# "nearly there" tell now that the ping has moved to the release, and a tell
+	# that only exists at the moment it completes tells you nothing on the way up.
+	if _vfx != null:
+		_vfx.charge(clampf(_charge_t / maxf(charge_time, 0.01), 0.0, 1.0))
 
 
-## Let go of the wind-up, swinging it if `fire`. Safe to call on a frame where
+## Let go of the wind-up, spinning if `fire`. Safe to call on a frame where
 ## nothing was being held, which is why the shop gate can call it blindly.
+##
+## The hum is cut here whether or not anything is swung, and that is the whole
+## reason it is one held player rather than a fire-and-forget: the stream is
+## 1.9 s long against a hold that is usually half a second.
 func _release_charge(fire: bool) -> void:
+	if _charging_player != null and _charging_player.playing:
+		_charging_player.stop()
+	# Dropped here rather than in the tick, so every way out of a hold — the
+	# release, the shop, an item drawn mid-wind-up — puts the pose down. A flag
+	# only cleared on the happy path is a hero who stands frozen in a swing.
+	_hero.charging = false
 	if fire:
-		_press(Intent.HEAVY)
+		# The yell, the swipe and the ring all live in `_spin_swing`, not here.
+		# A release is a REQUEST, and a request made in the back half of the light
+		# swing that started the hold is buffered — up to `swing_time` minus
+		# `charge_time` before it actually comes out. Playing them here put the ring
+		# on the floor and the shout in the air while the hero was still finishing
+		# the swing before, and left both hanging if the spin was refused outright.
+		# The blade stays lit across that gap on its own: nothing clears the glow
+		# between here and the swing.
+		_press(Intent.SPIN)
+	elif _vfx != null:
+		# A hold abandoned without a spin gives the light straight back rather
+		# than fading it, so the blade cannot be caught glowing while the hero
+		# stands there holding nothing.
+		_vfx.clear()
 	_charge_t = -1.0
 	_set_charged(false)
 
 
+## The charge has armed, or been given up. Public state only — what it LOOKS
+## like is `_vfx.charge`, driven per frame, and what it SOUNDS like is the
+## release. Nothing fires here any more; the ping that used to lives in
+## `_release_charge` as the yell.
 func _set_charged(on: bool) -> void:
 	if charged == on:
 		return
 	charged = on
-	if _charge_glow != null:
-		_charge_glow.visible = on
-	if on and _charge_player != null:
-		_charge_player.play()
 
 
 ## An Intent the player has asked for. Mid-swing it is remembered rather
@@ -690,8 +842,8 @@ func _begin(intent: int) -> void:
 		return
 
 	match intent:
-		Intent.HEAVY:
-			_heavy_swing()
+		Intent.SPIN:
+			_spin_swing()
 		Intent.DASH:
 			_dash_swing()
 		Intent.LUNGE:
@@ -703,17 +855,42 @@ func _begin(intent: int) -> void:
 			_light_swing(_chain_step)
 
 
-func _heavy_swing() -> void:
-	if not _hero.request_attack(heavy_swing_time, Hero.Swing.HEAVY):
+## The charged release: a full 360 with the blade out at arm's length, and the
+## only blow in the kit that does not care which way the hero is facing.
+##
+## It is the one swing that reshapes the hitbox. Everything else in here fights
+## to keep the sword from hitting what it visibly missed; this one is asking for
+## precisely the omnidirectional box the others guard against, so it says so out
+## loud rather than letting a wide `arc_degrees` leak into the light chain.
+func _spin_swing() -> void:
+	if not _hero.request_attack(spin_swing_time, Hero.Swing.SPIN):
+		# Refused, so the charge is spent for nothing — and the blade is still
+		# carrying the light the hold put into it, because the release deliberately
+		# leaves it lit for the buffered case. Give it back here or he walks away
+		# glowing.
+		if _vfx != null:
+			_vfx.clear()
 		return
-	# A heavy ENDS the chain rather than counting as a step in it. It is the
-	# other button; letting it slot into the light chain would make the finisher
-	# something you reach by pressing whatever, which is not a combo.
+	# Voice, steel and the ring, all on the frame the spin actually starts. The
+	# yell used to fire at the top of the HOLD, which announced a commitment the
+	# player had not made yet.
+	if _spin_player != null:
+		_spin_player.pitch_scale = randf_range(0.96, 1.04)
+		_spin_player.play()
+	if _yell_player != null:
+		_yell_player.pitch_scale = randf_range(0.97, 1.03)
+		_yell_player.play()
+	if _vfx != null:
+		_vfx.fire()
+	# A spin ENDS the chain rather than counting as a step in it. It is the other
+	# half of the same button; letting it slot into the light chain would make the
+	# finisher something you reach by pressing whatever, which is not a combo.
 	_chain_step = 0
 	_chain_timer = 0.0
+	_aim_hitbox(spin_reach, 0.0, spin_arc)
 	# Pitched down, the cheapest honest way to make the swings sound like
 	# different amounts of effort.
-	_commit(heavy_swing_time, heavy_damage_window, heavy_damage, heavy_knockback,
+	_commit(spin_swing_time, spin_damage_window, spin_damage, spin_knockback,
 		K.HITSTOP_HEAVY, randf_range(0.68, 0.78))
 
 
@@ -721,20 +898,29 @@ func _heavy_swing() -> void:
 ## Hero.request_dash for why the shield has already earned it a direction.
 ##
 ## Note that this can arrive from the BUFFER, a swing or two after the shield it
-## was pressed behind came down. That is correct and it is how the heavy behaves
+## was pressed behind came down. That is correct and it is how the spin behaves
 ## too: the player asked for a dash while guarding, and the answer to a press
 ## made half a swing early is the move they asked for, late — not a different
 ## move, and not silence.
 func _dash_swing() -> void:
 	if not _hero.request_dash(dash_swing_time, dash_drive_time, dash_speed):
 		return
-	# Ends the chain rather than stepping it, exactly as the heavy does. The dash
+	# Ends the chain rather than stepping it, exactly as the spin does. The dash
 	# is how you OPEN on something, so letting it count as step one would make
 	# the finisher two taps away from a button you press while standing still.
 	_chain_step = 0
 	_chain_timer = 0.0
+	_aim_sword()
 	_commit(dash_swing_time, dash_damage_window, dash_damage, dash_knockback,
 		K.HITSTOP_HEAVY, randf_range(0.86, 0.94))
+
+
+## The ordinary forward box, which is every swing except the spin. Called by
+## each of them rather than restored at the END of the spin: a spin cancelled
+## by a scene change or a death never reaches its own end, and the next swing
+## after that one would inherit a 2.1 m sphere centred on the hero.
+func _aim_sword() -> void:
+	_aim_hitbox(reach * 0.62, reach * 0.55, arc_degrees)
 
 
 func _light_swing(step: int) -> void:
@@ -762,6 +948,7 @@ func _light_swing(step: int) -> void:
 	# you fall off the end of.
 	_chain_step = (step + 1) % 3
 	_chain_timer = chain_window
+	_aim_sword()
 	_commit(dur, damage_window, dmg, knock, hitstop,
 		randf_range(0.94, 1.07) * _CHAIN_PITCH[step])
 
@@ -794,6 +981,7 @@ func _lunge_swing() -> bool:
 	if not _hero.request_lunge(lunge_swing_time, lunge_drive_time, lunge_hop):
 		return false
 	_chain_timer = 0.0
+	_aim_sword()
 	_commit(lunge_swing_time, lunge_damage_window, lunge_damage, lunge_knockback,
 		K.HITSTOP_HEAVY, randf_range(0.80, 0.88))
 	return true
@@ -854,7 +1042,10 @@ func _maybe_hit(node: Node) -> void:
 	var to := K.flat(target.global_position - _hero.global_position)
 	if to != Vector3.ZERO:
 		var fwd := -_hero.global_transform.basis.z
-		if rad_to_deg(fwd.angle_to(to)) > arc_degrees * 0.5:
+		# `_swing_arc`, not `arc_degrees`: the spin sets 360, and `angle_to` tops
+		# out at 180, so a half-angle of 180 rejects nothing and the circle is
+		# whole. Every other swing passes the export straight through.
+		if rad_to_deg(fwd.angle_to(to)) > _swing_arc * 0.5:
 			return
 
 	var victim := _damageable(target)

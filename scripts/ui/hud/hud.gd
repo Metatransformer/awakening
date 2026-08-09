@@ -123,6 +123,14 @@ const TOAST_HOLD := 1.60
 const TOAST_FADE := 0.20
 const RIM_FLASH := 0.10
 
+## The autosave notice. Longer than a toast on purpose: it goes up as the world
+## fades back in (game_flow.gd `_go`), so the first third of it is spent behind
+## a screen that is still dark. 2.2 s leaves about a second and a half of it
+## actually readable, which is what a player needs to register a word they were
+## not looking for.
+const SAVE_HOLD := 2.20
+const SAVE_FADE := 0.35
+
 # --- Extraction (§5.4) -------------------------------------------------------
 const SWEEP_TIME := 0.20
 const HOLD_TO_EXTRACT := 1.50
@@ -144,6 +152,9 @@ var _target_value: int = 0
 var _toast: String = ""
 var _toast_color: Color = Pal.MOTH
 var _toast_t: float = -1.0
+## The autosave notice's own clock, kept apart from the toast's so that neither
+## can silently eat the other. They share a baseline (see `_draw_save`).
+var _save_t: float = -1.0
 var _rim_flash_t: float = -1.0
 var _rim_flash_color: Color = Pal.MOTH
 var _sweep_t: float = -1.0
@@ -199,6 +210,7 @@ func _ready() -> void:
 	Bus.heat_tier_changed.connect(_on_heat_tier)
 	Bus.extract_refused.connect(_on_refused)
 	Bus.escape_rope_broken.connect(_on_escape_rope_broken)
+	Saves.autosaved.connect(_on_autosaved)
 	Bus.shield_blocked.connect(_on_blocked)
 	Bus.target_acquired.connect(_on_target)
 	Bus.target_lost.connect(_on_target_lost)
@@ -330,6 +342,18 @@ func _on_escape_rope_broken() -> void:
 	_wake()
 
 
+## The disk was written. `slot` is -1 when the autosave declined -- all three
+## slots are full of saves a player made by hand -- and then this says NOTHING,
+## which is the entire reason `Bus`-side it is a separate signal carrying a
+## slot. A notice that appears whether or not anything was written is a notice
+## that teaches the player to ignore it.
+func _on_autosaved(slot: int) -> void:
+	if slot < 0:
+		return
+	_save_t = 0.0
+	_wake()
+
+
 func _on_blocked(_at: Vector3, _normal: Vector3) -> void:
 	_block_flash_t = 0.0
 	_wake()
@@ -414,14 +438,16 @@ func _process(delta: float) -> void:
 		else:
 			busy = true
 
-	for t in [&"_toast_t", &"_rim_flash_t", &"_sweep_t", &"_refuse_t", &"_block_flash_t",
-			&"_heat_break_t"]:
+	for t in [&"_toast_t", &"_save_t", &"_rim_flash_t", &"_sweep_t", &"_refuse_t",
+			&"_block_flash_t", &"_heat_break_t"]:
 		var v: float = get(t)
 		if v >= 0.0:
 			set(t, v + delta)
 			busy = true
 	if _toast_t > TOAST_HOLD + TOAST_FADE:
 		_toast_t = -1.0
+	if _save_t > SAVE_HOLD + SAVE_FADE:
+		_save_t = -1.0
 	if _rim_flash_t > RIM_FLASH:
 		_rim_flash_t = -1.0
 	if _sweep_t > SWEEP_TIME:
@@ -459,6 +485,7 @@ func _draw_hud() -> void:
 	_draw_bag(s)
 	_draw_extraction(s)
 	_draw_toast(s)
+	_draw_save(s)
 	_draw_prompt(s)
 	_draw_crosshair(s)
 	_draw_lock_on(s)
@@ -496,7 +523,12 @@ const LEGEND := [
 	# it is the whole of OOT's Z — the R3 above is only the standing toggle — so a
 	# line that called this button GUARD would be hiding its main use.
 	[&"shield", "GUARD/LOCK"],
-	[&"context", "DODGE"],
+	# The hold is named because nothing else can name it. A tap rolls and a hold
+	# runs off the same button, and a player who only ever taps it will never
+	# discover the run — there is no prompt, no stance and no tell for a button
+	# you are not holding down. Same argument as the GUARD/LOCK line above.
+	[&"context", "DODGE (HOLD=RUN)"],
+	[&"jump", "JUMP"],
 	[&"interact", "INTERACT"],
 	[&"inventory", "POUCH"],
 ]
@@ -1059,7 +1091,7 @@ func _draw_sweep(s: Vector2) -> void:
 # --- Toast and lock-on ------------------------------------------------------
 
 func _draw_toast(s: Vector2) -> void:
-	if _toast_t < 0.0 or _toast.is_empty():
+	if _toast_t < 0.0 or _toast.is_empty() or _save_t >= 0.0:
 		return
 	var a := 1.0
 	if _toast_t > TOAST_HOLD:
@@ -1067,6 +1099,33 @@ func _draw_toast(s: Vector2) -> void:
 	PixelFont.draw_right(_canvas, _toast,
 		Vector2(Pal.BAG_RIGHT * s.x, Pal.TOAST_BASELINE * s.y),
 		Pal.px(16.0 / PixelFont.H, s.y), Color(_toast_color, clampf(a, 0.0, 1.0)))
+
+
+## AUTOSAVING…, bottom right, on the toast's baseline.
+##
+## The same line, and not a line of its own, because the corner below it is
+## already spoken for: the rim frames the bag from 0.786 to 0.914, the
+## extraction fee sits at 0.940, and the control legend runs across 0.962 in
+## town. There is no free row down there, and a notice that overlapped the fee
+## would obscure the one number the player is standing still to read.
+##
+## Sharing is safe by construction rather than by luck: an autosave only fires
+## inside a `Flow` transition, and nothing drops loot or snaps a rope during a
+## fade. `_draw_toast` yields anyway if both are somehow up, because the save is
+## the one that reports something irreversible.
+##
+## MOTH, not CYAN and not GOLD. It is the HUD talking about itself rather than
+## about the world, and the two colours that mean "the way out" and "money" are
+## exactly the two a player would misread here.
+func _draw_save(s: Vector2) -> void:
+	if _save_t < 0.0:
+		return
+	var a := 1.0
+	if _save_t > SAVE_HOLD:
+		a = 1.0 - (_save_t - SAVE_HOLD) / SAVE_FADE
+	PixelFont.draw_right(_canvas, "AUTOSAVING...",
+		Vector2(Pal.BAG_RIGHT * s.x, Pal.TOAST_BASELINE * s.y),
+		Pal.px(14.0 / PixelFont.H, s.y), Color(Pal.MOTH, clampf(a, 0.0, 1.0)))
 
 
 ## The interact line. Centred and low -- under the action, above the kit strip,

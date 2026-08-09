@@ -51,16 +51,17 @@ const DEFAULT_PATH := "user://settings.cfg"
 ##    back on A on top of interact, which is the exact collision the move was
 ##    made to remove: one press at a chest would open it and loose an arrow
 ##    through it.
-## 8: SKIPPED HERE. It belongs to the `jump` pass, which is in flight in another
-##    session and touches these same three files. Two changes cannot both be 8,
-##    and a number reused is a saved layout replayed against a layout it was not
-##    saved for -- which is the entire failure this const exists to stop. The
-##    gap is deliberate.
+## 8: `jump` was ADDED (Space, Y/Triangle) and `context` gave up Space for Shift
+##    to make room for it. A saved layout from 7 is the collision this const is
+##    for, and it is a nasty one because both halves still "work": Space would
+##    come back on the dodge while `jump` kept it too, so one press would roll
+##    the hero and launch him at the same time, and the pad's Y would sit there
+##    doing nothing because 7 had nothing bound to it. Discarding is correct.
 ## 9: R3 changed hands. `z_target` gave up button 8 -- the left trigger is the
 ##    pad's Z and a second pad route to the same lock was a duplicate -- and
 ##    `first_person` took it, in the commit that built the mode. A saved layout
-##    from before this would hand R3 back to `z_target` AND leave `first_person`
-##    on it, so one click would lock on and drop into the hero's head together.
+##    from 8 would hand R3 back to `z_target` AND leave `first_person` on it, so
+##    one click would lock on and drop into the hero's head together.
 const BIND_SCHEMA := 9
 
 ## Where preferences persist. A test or a screenshot director that rebinds keys

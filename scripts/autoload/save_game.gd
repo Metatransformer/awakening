@@ -16,6 +16,13 @@ const VERSION := 2
 
 signal saved(slot: int)
 signal loaded(slot: int)
+## Fired by `autosave()` only, and separately from `saved`, because the HUD says
+## something about one of them and must not say it about the other: a manual
+## save is made with the menu open and needs no notice, and an autosave happens
+## behind a fade with nobody's hand on a button. `slot` is -1 when the autosave
+## declined (see `autosave`), so a listener can stay silent rather than claim
+## something was written.
+signal autosaved(slot: int)
 
 ## Set by the dungeon package when it changes rooms, so a save knows where to
 ## put you back. Falls back to the current scene if nobody sets it.
@@ -93,7 +100,7 @@ func save(slot: int) -> bool:
 		"loadout_set": Game.loadout_set,
 		"flags": Game.flags,
 		"room": String(current_room),
-		"scene": current_scene_path if current_scene_path != "" else _scene_path(),
+		"scene": _save_scene(),
 		"pos": [pos.x, pos.y, pos.z],
 		"yaw": yaw,
 	}
@@ -106,6 +113,58 @@ func save(slot: int) -> bool:
 	active_slot = slot
 	saved.emit(slot)
 	return true
+
+
+## Where a load should put you back — and it is NEVER a dungeon.
+##
+## A slot captures `Game` and nothing of `Run`: no bag, no floor, no run seed,
+## no `in_dungeon`. That is deliberate and it is METAGAME §5. The run's contents
+## are the thing you are gambling; a save you could reload from the third floor
+## would let a player undo the extraction decision the whole game is built on,
+## and the fee would stop being a decision. So the run is not savable, and the
+## honest thing for the recorded scene to say is where the surviving state
+## actually belongs.
+##
+## Without this a save written underground reloaded into the dungeon scene with
+## `Run.in_dungeon` false: a generated floor with no run behind it, no bag, no
+## fee and no way out that would answer. It looked like a corrupted save and it
+## was really a save that had told the truth about the wrong half of the game.
+func _save_scene() -> String:
+	if Run != null and Run.in_dungeon:
+		return Flow.TOWN
+	if current_scene_path != "":
+		return current_scene_path
+	return _scene_path()
+
+
+## Commit the metagame without anyone asking. Called by `Flow` on every scene
+## transition — into the dungeon, down a floor, and home whether you walked out
+## or were carried (game_flow.gd `_go`).
+##
+## WHICH SLOT is the whole question here, and the rule is that an autosave never
+## destroys a save a player made by hand:
+##
+##   1. the slot you are already playing, if you have saved or loaded one;
+##   2. otherwise the first EMPTY slot, which it then keeps (step 1 from here on);
+##   3. otherwise nothing at all, and it says so with slot -1.
+##
+## Step 3 is a player who has filled all three slots deliberately and manages
+## them by hand. Picking one to overwrite for them — oldest, first, any of it —
+## is the autosave deciding which of their saves mattered least, and it will
+## eventually be wrong about a save they cannot get back.
+func autosave() -> bool:
+	var slot := active_slot
+	if slot < 0:
+		for i in SLOTS:
+			if not has_save(i):
+				slot = i
+				break
+	if slot < 0:
+		autosaved.emit(-1)
+		return false
+	var ok := save(slot)
+	autosaved.emit(slot if ok else -1)
+	return ok
 
 
 ## Restore `Game` from a slot and return where the hero should be placed.
