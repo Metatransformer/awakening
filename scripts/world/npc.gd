@@ -302,7 +302,12 @@ func _build_gate() -> void:
 	_body.add_child(_lamp)
 
 	var plate := Label3D.new()
-	plate.text = "THE LOWER WORLDS"
+	# The name of the place this gate opens onto, not the name of the setting.
+	# "The Lower Worlds" is everything under the town (docs/GDD.md); THE SUNKEN
+	# CUT is the one dungeon there is a way down into, and a sign over a door
+	# should say where the door goes. It reads off `Prog.NAME` so the gate, the
+	# loading card and the HUD cannot end up calling it three different things.
+	plate.text = Prog.NAME
 	plate.font_size = 40
 	plate.pixel_size = 0.0028
 	plate.modulate = Pal.MOTH

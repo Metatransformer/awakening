@@ -116,7 +116,27 @@ static func rarity_lift(level: int) -> float:
 	return float(maxi(level, FIRST) - FIRST) * 0.35
 
 
-## A short line for the HUD and the run report. Floors are named, not numbered
-## alone, because "FLOOR 7" is a number and "DEEP 7" is a place.
+## The place you are going down into. One dungeon today (docs/GDD.md §8), so one
+## name, and it lives here beside the curve because the curve is the only other
+## thing in the project that knows what a "floor" is.
+##
+## It is a NAME and not a number for the reason the run report is a receipt and
+## not a score: "FLOOR 7" is a depth reading, and "THE SUNKEN CUT, LEVEL 7" is
+## somewhere you went. Uppercase because PixelFont has no lowercase (see its
+## header) -- do not write it in title case anywhere the HUD will draw it.
+const NAME := "THE SUNKEN CUT"
+
+
+## The short line, for the places that already sit inside dungeon context and
+## would only be repeating the name: the run report's header, a debug print.
 static func label(level: int) -> String:
-	return "FLOOR %d" % maxi(level, FIRST)
+	return "LEVEL %d" % maxi(level, FIRST)
+
+
+## The whole thing, for the two places that ANNOUNCE a floor rather than report
+## one -- the loading card and the HUD's top-left card. Two spaces between the
+## name and the number: PixelFont is monospaced with a 1 px track, so a single
+## space reads as a slightly wide letter gap rather than a break between two
+## thoughts.
+static func full_label(level: int) -> String:
+	return "%s  %s" % [NAME, label(level)]

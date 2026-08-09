@@ -128,6 +128,15 @@ const EXTRACT_BASELINE := 0.940
 const RIM_TL := Vector2(0.812, 0.786)
 const RIM_BR := Vector2(0.978, 0.914)
 const ROOM_NAME_BASELINE := 0.139
+## The floor card -- the dungeon's name and the level you are on. Top-left, which
+## was the one corner of this HUD with nothing in it: health and stamina are
+## bottom-left, the bag and the fee bottom-right, the button cluster top-right.
+##
+## It shares HEALTH_ORIGIN's x so the left margin is ONE edge and not two. The y
+## clears the safe area (0.031) by enough that the two-line card does not touch
+## it -- an announcement pinned to the very top of the frame reads as a system
+## notification rather than as part of the game.
+const FLOOR_ORIGIN := Vector2(0.031, 0.052)
 ## The control legend, town only. Bottom edge, under everything.
 const KEYS_BASELINE := 0.962
 

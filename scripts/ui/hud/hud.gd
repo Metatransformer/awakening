@@ -188,6 +188,20 @@ const RIM_FLASH := 0.10
 const SAVE_HOLD := 2.20
 const SAVE_FADE := 0.35
 
+# --- The floor card ----------------------------------------------------------
+## How long the top-left card stays at announcement brightness after you arrive
+## on a floor, and how long it takes to settle back to the resting dim. It does
+## not disappear -- "which level am I on" is a question you ask between rooms,
+## not once on the way in -- so this is a fade to a colour and not to nothing.
+##
+## The hold starts on `Bus.floor_arrived`, which is the frame the loading card
+## begins lifting, so the name is continuously on screen from the transition to
+## the settled HUD. Announcing on `level_changed` instead would start the clock a
+## fade and a load-hold too early and the card would already be dim by the time
+## the player could see it.
+const FLOOR_HOLD := 2.40
+const FLOOR_SETTLE := 0.90
+
 # --- Extraction (§5.4) -------------------------------------------------------
 const SWEEP_TIME := 0.20
 const HOLD_TO_EXTRACT := 1.50
@@ -212,6 +226,9 @@ var _toast_t: float = -1.0
 ## The autosave notice's own clock, kept apart from the toast's so that neither
 ## can silently eat the other. They share a baseline (see `_draw_save`).
 var _save_t: float = -1.0
+## The floor card's announcement clock. -1 means settled, which is where it
+## spends most of a floor.
+var _floor_t: float = -1.0
 var _rim_flash_t: float = -1.0
 var _rim_flash_color: Color = Pal.MOTH
 var _sweep_t: float = -1.0
@@ -296,6 +313,7 @@ func _ready() -> void:
 	# the prompt (which Prompt re-emits on the same signal).
 	Bus.input_device_changed.connect(func(_pad: bool) -> void: _repaint())
 	Bus.level_changed.connect(func(_l: int) -> void: _repaint())
+	Bus.floor_arrived.connect(_on_floor_arrived)
 	Bus.run_started.connect(_on_headline_changed)
 	Bus.run_ended.connect(_on_headline_changed)
 	# Affordability moves when the purse moves or the bag moves, and on nothing
@@ -443,6 +461,13 @@ func _on_autosaved(slot: int) -> void:
 	_wake()
 
 
+## You are standing on a new floor and the loading card is lifting off it. Light
+## the top-left card up, and let `_process` walk it back down.
+func _on_floor_arrived(_level: int) -> void:
+	_floor_t = 0.0
+	_wake()
+
+
 func _on_blocked(_at: Vector3, _normal: Vector3) -> void:
 	_block_flash_t = 0.0
 	_wake()
@@ -537,8 +562,8 @@ func _process(delta: float) -> void:
 		else:
 			busy = true
 
-	for t in [&"_toast_t", &"_save_t", &"_rim_flash_t", &"_sweep_t", &"_refuse_t",
-			&"_block_flash_t", &"_heat_break_t"]:
+	for t in [&"_toast_t", &"_save_t", &"_floor_t", &"_rim_flash_t", &"_sweep_t",
+			&"_refuse_t", &"_block_flash_t", &"_heat_break_t"]:
 		var v: float = get(t)
 		if v >= 0.0:
 			set(t, v + delta)
@@ -547,6 +572,10 @@ func _process(delta: float) -> void:
 		_toast_t = -1.0
 	if _save_t > SAVE_HOLD + SAVE_FADE:
 		_save_t = -1.0
+	# Settling, not disappearing: past the fade the card keeps drawing at its
+	# resting colour, and -1 is what tells `_draw_floor` it has got there.
+	if _floor_t > FLOOR_HOLD + FLOOR_SETTLE:
+		_floor_t = -1.0
 	if _rim_flash_t > RIM_FLASH:
 		_rim_flash_t = -1.0
 	if _sweep_t > SWEEP_TIME:
@@ -620,6 +649,10 @@ func _draw_hud() -> void:
 ## working sword reads as a broken one. Town is where you are safe and idle, so
 ## it is where the legend belongs; underground the line would be noise, and by
 ## then you have already used every verb on it.
+##
+## It has this baseline to itself now. The floor readout used to share it and is
+## a top-left card instead (see `_draw_floor`), so nothing has to be exclusive
+## with anything down here.
 
 ## The verbs, in the order a player meets them, each paired with the action that
 ## fires it. Built from the LIVE bindings rather than written out, because the
@@ -751,21 +784,67 @@ func _legend() -> PackedStringArray:
 	return lines
 
 
-## How deep you are, on the line the controls legend uses in town.
+## Where you are: the dungeon's name, and how far down it you have got.
 ##
-## The two are exclusive by construction: the legend is the thing you need when
-## you are safe and idle, and the floor is the thing you need when you are not.
-## Sharing the baseline means neither is ever noise, and the strip at the bottom
-## of the screen always says exactly one useful thing.
+## Top-left, and it is one card doing two jobs. On arrival it is the ANNOUNCEMENT
+## -- lit, taking over from the loading card on the frame that lifts, so the
+## descent has a beat that says "level 2" in the world rather than only on a
+## screen you were waiting through. Then it settles and becomes the READOUT: the
+## thing you glance at between rooms to decide whether to go on. A card that
+## vanished after its announcement would make that a question you could not
+## answer, and a card that never dimmed would make the arrival mean nothing.
 ##
-## Drawn dim. It is a number you glance at between rooms to decide whether to go
-## on, not a score -- the bag in the corner is the score.
+## It used to be a dim `FLOOR n` centred on the bottom edge, sharing a baseline
+## with the town controls legend. That was a perfectly good readout and a
+## non-existent announcement: the descent's own moment was drawn in ASH, in the
+## strip of screen a player looks at least, three lines under the fight.
+##
+## Deliberately NOT drawn in GOLD however much a title wants to be -- gold is
+## currency and only currency (docs/STYLEGUIDE.md §2).
 func _draw_floor(s: Vector2) -> void:
 	if Run == null or not Run.in_dungeon:
 		return
-	var scale := Pal.px(10.0 / PixelFont.H, s.y)
-	PixelFont.draw_centred(_canvas, Prog.label(Run.level),
-		Vector2(s.x * 0.5, Pal.KEYS_BASELINE * s.y), scale, Pal.ASH)
+
+	# 0 while announcing, 1 once settled. The fade is on the COLOUR, not on a
+	# size: PixelFont lands on whole pixels at an integer scale, and a card that
+	# animated its scale would visibly snap between two of them.
+	var settle := 1.0
+	if _floor_t >= 0.0:
+		settle = 0.0 if _floor_t < FLOOR_HOLD \
+			else clampf((_floor_t - FLOOR_HOLD) / FLOOR_SETTLE, 0.0, 1.0)
+
+	var at := Pal.FLOOR_ORIGIN * s
+	var nt := Pal.px(10.0 / PixelFont.H, s.y)
+	var lt := Pal.px(16.0 / PixelFont.H, s.y)
+	var name_line := Prog.NAME
+	var level_line := Prog.label(Run.level)
+	var gap := Pal.px(5.0, s.y)
+	var level_y := at.y + PixelFont.height(nt) + gap
+
+	# The plate, and it is not decoration. This card is the only text on the HUD
+	# with a LIT WALL behind it -- health and the bag sit over floor and shadow,
+	# the button cluster carries its own cells -- and torchlit brick at this end
+	# of the palette is brighter than MOTH. The first version had no plate and
+	# the settled name was invisible from two metres back.
+	#
+	# It fades with the text rather than staying put, so the corner does not
+	# acquire a permanent box: what is left after the announcement is a whisper
+	# of shade under two lines, which is what makes the dim colours legible
+	# without making the card a panel.
+	var pad := Pal.px(6.0, s.y)
+	var w: float = maxf(PixelFont.width(name_line, nt),
+		PixelFont.width(level_line, lt))
+	_canvas.draw_rect(Rect2(at.x - pad, at.y - pad, w + pad * 2.0,
+		level_y + PixelFont.height(lt) + pad * 2.0 - at.y),
+		Color(Pal.VOID, lerpf(0.62, 0.34, settle)))
+
+	PixelFont.draw_text(_canvas, name_line, at, nt, Pal.BONE.lerp(Pal.MOTH, settle))
+
+	# The level does NOT dim. It is the half of the card that carries the
+	# information -- the name is a constant and you only need to be told it once
+	# -- and a readout you have to squint at between rooms is one the player
+	# stops consulting, which was the exact failure of the old bottom-edge line.
+	PixelFont.draw_text(_canvas, level_line, Vector2(at.x, level_y), lt, Pal.BONE)
 
 
 # --- Health -----------------------------------------------------------------

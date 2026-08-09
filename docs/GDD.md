@@ -37,6 +37,22 @@ further in you go.
 
 **The one thing this game does that Moonlighter did not: the town changes.**
 
+The shaft under Valenfeld is called **the Sunken Cut**. That is the name of the
+*way down* — the one dungeon there is a way into — and the four authored floors
+in §5 are the places it passes through: the Cistern, the Foundry, the Hushing
+Choir, the Chord Gate. It is signed over the gate in town, said on the card the
+game shows you on the way in, and said again in the corner of the screen every
+time you take a stair. A place you are going back to a hundred times needs a name
+for the same reason the run report is a receipt and not a score — "floor 7" is a
+depth reading, and "the Sunken Cut, level 7" is somewhere you have been.
+
+It lives in one constant, `Prog.NAME`, because there is one shaft (§5). **The
+per-floor names in §5 are not wired up**: the card says THE SUNKEN CUT / LEVEL n
+today, and the day the Cistern and the Foundry become real places rather than a
+table in this document, `Prog` grows a name per level and the same two callers
+draw it — the loading card and the HUD's floor card. Nothing else says the name,
+by design.
+
 ---
 
 ## 2. The one question

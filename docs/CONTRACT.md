@@ -190,6 +190,13 @@ not a fade. Two screens are not autoloads and take their place in the same stack
 `TradeScreen` at **60** and `RunEndScreen` at **150**, the latter deliberately
 above the pause menu so Escape cannot open a menu behind the end of a run.
 
+`LoadingCard` (`scripts/ui/loading/loading_card.gd`) is not in that stack because
+it is not a screen anyone opens: it is a child of Flow's own **200** layer, in
+front of the fade veil, raised and freed by `Flow._go` on the two transitions
+into the dungeon. Nothing else may instance one — it is opaque and full-screen,
+and a second owner is a black rectangle nobody can dismiss. The world is
+**paused** for the whole time it is up.
+
 `Menu` is an autoload for the same reason `Hud` is — Escape has to work in
 whatever scene the launcher picks. It shipped built but instanced only in
 `scenes/ui/menu/_menu_test.tscn`, so for a while the harness had a pause menu and

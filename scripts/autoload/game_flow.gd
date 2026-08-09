@@ -18,6 +18,16 @@ const FADE_IN := 0.45
 ## Beat between the extract flash / death and the screen going dark, so the
 ## player sees the thing that happened to them.
 const HOLD := 0.45
+## How long the loading card holds before the floor fades in.
+##
+## `change_scene_to_file` is synchronous and a floor of this size builds in well
+## under a frame, so this is NOT a progress bar for a load that takes any time --
+## it is the read. Fourteen characters at the size the card draws them needs
+## roughly a second of settled screen to be read rather than glimpsed, and the
+## number under it is the thing the player is actually here for. Under a second
+## and the descent stops announcing anything; much over and a stair the player
+## takes eight times a run turns into a wait. [tune]
+const LOAD_HOLD := 1.30
 
 ## True while a transition is in flight. Everything that could start another one
 ## checks this -- a second extract press during the fade would re-enter town.
@@ -33,6 +43,12 @@ var ending: bool = false
 
 var _layer: CanvasLayer
 var _veil: ColorRect
+## The named loading screen, alive only between the veil going black and the new
+## floor fading in. Held as a field rather than a local so a transition that
+## starts while one is still up cannot leave an orphan welded over the game --
+## the card is opaque, and an opaque orphan on layer 200 is an unrecoverable
+## black screen.
+var _card: LoadingCard = null
 
 
 func _ready() -> void:
@@ -158,12 +174,28 @@ func _go(path: String, hold: float) -> void:
 	tw.tween_property(_veil, "color:a", 1.0, FADE_OUT)
 	await tw.finished
 
+	# The named card, on the two ways into the dungeon and on nothing else. Town
+	# is the place you already know; the floor is the one that needs saying.
+	#
+	# `Run.level` is correct HERE because both callers move the run before they
+	# call this -- `Run.enter()` resets to 1 and `Run.descend_floor()` increments
+	# -- which is also why the card can be built once and never updated.
+	var card := path == DUNGEON
+	if card:
+		_raise_card()
+		# The veil has nothing left to cover: the card is opaque and fills the
+		# same rect, in front of it. Dropping it now is what makes the CARD the
+		# thing the floor fades in from, rather than fading the world in behind a
+		# card and then dissolving a second black layer off it.
+		_veil.color.a = 0.0
+
 	get_tree().paused = false
 	var err := get_tree().change_scene_to_file(path)
 	if err != OK:
 		push_error("Flow: could not load %s (%d)" % [path, err])
 		busy = false
 		Prompt.blocked = false
+		_drop_card()
 		_veil.color.a = 0.0
 		return
 
@@ -172,10 +204,38 @@ func _go(path: String, hold: float) -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
+	# The read. Deliberately AFTER the scene is built rather than in parallel with
+	# building it: the hold is for the player, and a hold that overlapped the work
+	# would shrink to nothing the day a floor takes longer to generate.
+	#
+	# **And the world is STOPPED for it.** `change_scene_to_file` returns a floor
+	# that is already running, so without this the hold is a second and a third of
+	# live game behind an opaque card: monsters wake, walk to a hero who is
+	# standing still because his player is reading a title, and swing. It cost a
+	# `mvp_loop` run to find -- he arrived on floor 1, died during the card, and
+	# because `_on_run_ended` refuses while `busy` the run ended with no receipt
+	# and no way home. A loading screen the game plays on is not a loading screen.
+	#
+	# `process_always` on the timer is what lets this un-pause itself: Flow is
+	# PROCESS_MODE_ALWAYS and so is the card.
+	if card:
+		get_tree().paused = true
+		await get_tree().create_timer(LOAD_HOLD, true, false, true).timeout
+		get_tree().paused = false
+
 	Prompt.blocked = false
 	busy = false
 	var tin := create_tween().set_ignore_time_scale(true)
-	tin.tween_property(_veil, "color:a", 0.0, FADE_IN)
+	if _card != null:
+		tin.tween_property(_card, "modulate:a", 0.0, FADE_IN)
+		tin.tween_callback(_drop_card)
+		# The HUD's floor card takes over from this one on the same frame, so the
+		# name never leaves the screen in the middle of the handover. `level`
+		# rather than a bare ping because a listener that has to ask Run which
+		# floor it is could be told a different answer on a late frame.
+		Bus.floor_arrived.emit(Run.level)
+	else:
+		tin.tween_property(_veil, "color:a", 0.0, FADE_IN)
 
 	# The autosave, and it is EVERY transition rather than a flag per caller.
 	# There are exactly four ways through this function -- into the dungeon, down
@@ -189,3 +249,19 @@ func _go(path: String, hold: float) -> void:
 	# HUD -- announcing it to a screen that is still black is announcing it to
 	# nobody, so it goes up on the same frame the world comes back.
 	Saves.autosave()
+
+
+# --- The loading card -------------------------------------------------------
+
+## Free whatever is up and put a fresh card over the black. Added to `_layer`
+## after `_veil`, which is what puts it in FRONT of the veil -- siblings draw in
+## tree order.
+func _raise_card() -> void:
+	_drop_card()
+	_card = LoadingCard.open(_layer, Prog.NAME, Prog.label(Run.level))
+
+
+func _drop_card() -> void:
+	if _card != null:
+		_card.queue_free()
+		_card = null

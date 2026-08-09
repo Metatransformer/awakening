@@ -619,6 +619,7 @@ Fractions of viewport, origin top-left; px at 1280×720.
 | Extraction baseline | right-align 0.969 | 0.940 (677) | 12 / 16 px |
 | Bag rim | 0.740 → 0.978 | 0.786 → 0.958 | 2 px |
 | Room name baseline | centre 0.500 | 0.139 (100) | 24 px Jacquard |
+| Floor card origin | 0.031 (40) | 0.052 (37) | name 10 px over level 16 px, VOID plate, 6 px pad |
 | Extraction sweep | 0.0 → 1.0 | 0.500 | 1 px, 200 ms |
 | Damage arc | centre 0.500 | centre 0.500 | r = 0.28h, 3 px |
 | Safe margin | 0.025 w | 0.031 h | |
