@@ -130,13 +130,14 @@ const KIT_ACTION := {
 	&"bow": &"attack",
 	&"hookshot": &"attack",
 }
-## The selected-item cell, in reference px. SMALLER than Pal.CELL, which the
-## hands use, and the size difference is the hierarchy: the hands are what the
-## hero is holding and the item is what he could swallow.
-const CPAD_CELL := 46.0
 ## Half-height of a D-pad caret, in reference px. Also its half-width — they are
-## drawn as equilateral-ish triangles so ◄ ▼ ► read at a glance in a HUD that is
+## drawn as equilateral-ish triangles so ← ↓ → read at a glance in a HUD that is
 ## 40 px tall in the corner.
+##
+## The band above the cells is CARET * 2 + CARET_GAP tall and every caret is
+## drawn INSIDE it. The first version had them straddling the cell edges — the
+## left one hung over the icon's top-left corner and the down one had its body
+## behind the cell — which made a 64 px cell look like a rendering fault.
 const CARET := 8.0
 ## The gap between a cell and the caret sitting over it.
 const CARET_GAP := 5.0
@@ -631,6 +632,15 @@ func _draw_hud() -> void:
 ## entry -- for the D-pad, whose four directions are one idea and would otherwise
 ## need four rows naming four caps the player never presses individually.
 const LEGEND_LITERAL := &"__literal"
+## Everything after this entry goes on a SECOND line.
+##
+## It is here because the legend outgrew 1280 px. Jump, the item button and the
+## three D-pad cycles all landed in one pass, and the single centred line went
+## off BOTH edges of the screen -- MOVE was cut in half on the left and LOADOUT
+## on the right, which is the one failure a legend cannot have. Two rows, split
+## where the verbs change subject: what you do with the sword, then what you do
+## with your gear.
+const LEGEND_BREAK := &"__break"
 
 const LEGEND := [
 	[&"", "MOVE"],
@@ -664,6 +674,7 @@ const LEGEND := [
 	# that lists every branch of a contextual button is a manual, not a legend.
 	[&"context", "TAP=DODGE HOLD=RUN"],
 	[&"jump", "JUMP"],
+	[LEGEND_BREAK, ""],
 	[&"interact", "INTERACT"],
 	# The item button, named for the thing it does rather than for the ring it
 	# reads from: a player looking for "how do I drink this" is not looking for
@@ -673,7 +684,9 @@ const LEGEND := [
 	# your gear and never uses it. Three rows would make them look unrelated and
 	# would be the longest thing in the legend, for the input that needs the
 	# least explaining once you have seen the carets in the corner.
-	[LEGEND_LITERAL, "D-PAD  ◄► WEAPON  ▼ ITEM  ▲ LOADOUT"],
+	# ← → ↓ ↑ and not ◄ ► ▼ ▲: PixelFont has the four thin arrows and none of the
+	# four solid triangles, so the pretty ones came out as MISSING blocks.
+	[LEGEND_LITERAL, "D-PAD  \u2190\u2192 WEAPON  \u2193 ITEM  \u2191 SET"],
 	[&"inventory", "POUCH"],
 ]
 ## What drives movement and the camera on each device. The sticks are bound as
@@ -689,17 +702,28 @@ func _draw_controls(s: Vector2) -> void:
 	if Run == null or Run.in_dungeon:
 		return
 	var scale := Pal.px(10.0 / PixelFont.H, s.y)
-	PixelFont.draw_centred(_canvas, _legend(),
-		Vector2(s.x * 0.5, Pal.KEYS_BASELINE * s.y), scale, Pal.ASH)
+	var lines := _legend()
+	# Drawn UPWARDS from the baseline, so adding a row pushes the legend into the
+	# empty floor above it rather than off the bottom of the screen.
+	var step := PixelFont.height(scale) + Pal.px(5.0, s.y)
+	var top := Pal.KEYS_BASELINE * s.y - step * (lines.size() - 1)
+	for i in lines.size():
+		PixelFont.draw_centred(_canvas, lines[i],
+			Vector2(s.x * 0.5, top + step * i), scale, Pal.ASH)
 
 
-func _legend() -> String:
+func _legend() -> PackedStringArray:
 	var sticks: Array = LEGEND_STICKS[Settings != null and Settings.using_pad]
+	var lines: PackedStringArray = []
 	var parts: PackedStringArray = []
 	var stick := 0
 	for entry: Array in LEGEND:
 		var action: StringName = entry[0]
 		var verb: String = entry[1]
+		if action == LEGEND_BREAK:
+			lines.append("    ".join(parts))
+			parts = PackedStringArray()
+			continue
 		if action == LEGEND_LITERAL:
 			parts.append(verb)
 			continue
@@ -723,7 +747,8 @@ func _legend() -> String:
 		elif action == &"interact" and _hotkey(&"context") == cap:
 			continue  # already said, on the merged row above
 		parts.append("%s %s" % [cap, verb])
-	return "    ".join(parts)
+	lines.append("    ".join(parts))
+	return lines
 
 
 ## How deep you are, on the line the controls legend uses in town.
@@ -930,12 +955,12 @@ func _heat_color() -> Color:
 ## left instead of pushing the cluster off screen.
 ##
 ## THE CARET RULE, which the whole cluster reads by: a caret ABOVE a cell is the
-## D-pad direction that cycles that cell. ◄ ► over the right hand, ▼ over the
+## D-pad direction that cycles that cell. ← → over the right hand, ↓ over the
 ## item. Nothing else in the cluster draws a triangle, so a triangle always means
 ## "a direction changes this".
 func _cross_origin(s: Vector2) -> Vector2:
 	return Vector2(
-		Pal.CLUSTER_RIGHT * s.x - Pal.px(CPAD_CELL, s.y),
+		Pal.CLUSTER_RIGHT * s.x - Pal.px(Pal.CELL, s.y),
 		Pal.CLUSTER_TOP * s.y + _caret_band(s))
 
 
@@ -1004,7 +1029,7 @@ func _draw_hands(s: Vector2) -> void:
 		var hand: StringName = HANDS[i]
 		var id: StringName = Game.armament(hand)
 		var r := Rect2(origin.x + i * (cell + gap), origin.y, cell, cell)
-		# ◄ ► OVER THE RIGHT HAND: this is the cell D-pad ← / → step, and it is
+		# ← → OVER THE RIGHT HAND: this is the cell D-pad ← / → step, and it is
 		# the only thing on screen that says so. Without it the weapon ring is
 		# invisible — a player who has found a bow has no way to learn it is one
 		# press away, and the question the old bindable cross answered loudly
@@ -1014,11 +1039,11 @@ func _draw_hands(s: Vector2) -> void:
 		# ring of one is still the ring, and a caret that appears the moment you
 		# pick up a bow is a control the player has to notice arriving.
 		if hand == &"right":
-			var band := Pal.px(CARET_GAP, s.y)
-			_draw_caret(s, Vector2(r.position.x, r.position.y - band),
-				Vector2(-1.0, 0.0))
-			_draw_caret(s, Vector2(r.end.x, r.position.y - band),
-				Vector2(1.0, 0.0))
+			# Both of them live in the band ABOVE the cell, at its mid-line, so
+			# neither triangle touches the icon it is describing.
+			var mid := r.position.y - Pal.px(CARET_GAP + CARET, s.y)
+			_draw_caret(s, Vector2(r.position.x, mid), Vector2(-1.0, 0.0))
+			_draw_caret(s, Vector2(r.end.x, mid), Vector2(1.0, 0.0))
 		_draw_keycap(s, r, _hotkey(KIT_ACTION.get(id, &"")))
 
 		# The shield cell IS the block tell. It was the one thing the old strip
@@ -1045,6 +1070,12 @@ func _draw_hands(s: Vector2) -> void:
 ## rather than a side effect: the cross existed so the player could answer "which
 ## direction is this on", and nothing asks that any more.
 ##
+## The same SIZE as a hand cell, after one render at 46 px against their 64. The
+## smaller cell was meant to say "this is not a hand"; what it actually said was
+## "this is misaligned" — tops in a line and bottoms ragged, with its key cap
+## floating half a row above RMB and LMB. Three cells in a row is what a cluster
+## is, and the caret over each one is what says which is which.
+##
 ## The bottle it draws is the SELECTION, not the bottle you own most of. An empty
 ## bottle is drawn empty rather than skipped — you own it, you are about to fill
 ## it, and a ring whose length changed every time you drank would be a ring you
@@ -1053,16 +1084,18 @@ func _draw_hands(s: Vector2) -> void:
 ## The loadout line under it is text and not a cell, because it is the only thing
 ## in the cluster you cannot look at and see: which of the two sets is live is a
 ## fact about a screen you are not on. It is named rather than marked for the
-## same reason — "▲ PRIMARY" is readable cold, and a filled-vs-hollow pip is a
+## same reason — "↑ PRIMARY" is readable cold, and a filled-vs-hollow pip is a
 ## convention the player has to be taught.
 func _draw_cpad(s: Vector2) -> void:
-	var cell := Pal.px(CPAD_CELL, s.y)
+	var cell := Pal.px(Pal.CELL, s.y)
 	var origin := _cross_origin(s)
 	var r := Rect2(origin, Vector2(cell, cell))
 
-	# ▼ over the cell: D-pad ↓ steps it. The caret rule, see `_cross_origin`.
+	# ↓ over the cell: D-pad ↓ steps it, and the triangle POINTS AT the thing it
+	# steps. The caret rule, see `_cross_origin`. It pointed up for one render,
+	# which put its body behind the cell and its point out in the wall.
 	_draw_caret(s, Vector2(r.get_center().x, origin.y - Pal.px(CARET_GAP, s.y)),
-		Vector2(0.0, -1.0))
+		Vector2(0.0, 1.0))
 	# The cap is X, the button that USES it — not the direction that selects it.
 	# A cell caps with the button you press to make it happen, and selecting an
 	# item does not make anything happen.
@@ -1086,13 +1119,25 @@ func _draw_cpad(s: Vector2) -> void:
 			Vector2(r.end.x - Pal.px(3.0, s.y), r.end.y - Pal.px(10.0, s.y)),
 			Pal.px(1.0, s.y), Pal.MOTH)
 
-	# The loadout, under the item's key cap.
+	# The loadout, on its own row under the key caps.
+	#
+	# ON A PLATE, and with an ARROW the font actually has. It was "\u25b2 PRIMARY"
+	# in bare ASH for one render: PixelFont has no ▲ (its arrows are ↑ ↓ ← →), so
+	# the glyph came out as the MISSING block, and ASH lettering laid straight
+	# over a torchlit wall was barely there. Right-aligned to the cluster's edge
+	# like everything else in it, so the widest word (ALTERNATE) grows leftwards
+	# under the hands rather than off the screen.
 	var scale := Pal.px(Pal.KEYCAP_SCALE, s.y)
-	var line := "PRIMARY" if Game.loadout_set == Game.PRIMARY else "ALTERNATE"
-	var at := Vector2(r.end.x,
-		r.end.y + Pal.px(Pal.KEYCAP_GAP, s.y) + PixelFont.height(scale)
-			+ Pal.px(9.0, s.y))
-	PixelFont.draw_right(_canvas, "%s %s" % ["\u25b2", line], at, scale, Pal.ASH)
+	var line := "\u2191 PRIMARY" if Game.loadout_set == Game.PRIMARY \
+		else "\u2191 ALTERNATE"
+	var top := r.end.y + Pal.px(Pal.KEYCAP_GAP, s.y) + PixelFont.height(scale) \
+		+ Pal.px(9.0, s.y)
+	var w := PixelFont.width(line, scale)
+	var pad := Pal.px(3.0, s.y)
+	_canvas.draw_rect(Rect2(r.end.x - w - pad, top - pad,
+		w + pad * 2.0, PixelFont.height(scale) + pad * 2.0),
+		Color(Pal.MIDNIGHT, 0.8))
+	PixelFont.draw_right(_canvas, line, Vector2(r.end.x, top), scale, Pal.MOTH)
 
 
 ## One caret, `dir` being the unit direction it points. `tip` is where the point

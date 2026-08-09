@@ -15,15 +15,20 @@ extends RefCounted
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/ranged_anim_lookdev.gd --out=/tmp/anim/x.png
 
-## Clip, and the item to have in hand while it plays. An empty item leaves him
-## holding the sword, which is what the stand-in has always been photographed in.
+## Clip, and the WEAPON to have in hand while it plays. `sword` is what the
+## stand-in has always been photographed in.
+##
+## These used to name a D-pad direction (`item_left`, `item_up`) because each
+## item lived on a bound button. They name the weapon itself now: the D-pad steps
+## a ring, so "which button is the bow on" has no answer and `rig.draw_weapon`
+## presses → until the right thing is in his hand.
 const STRIPS := [
-	{"clip": &"ss_casting_01", "item": "item_left", "label": "standin_casting"},
-	{"clip": &"bow_draw_arrow", "item": "item_left", "label": "bow_draw_arrow"},
-	{"clip": &"bow_aim_recoil", "item": "item_left", "label": "bow_aim_recoil"},
-	{"clip": &"bow_aim_overdraw", "item": "item_left", "label": "bow_aim_overdraw"},
-	{"clip": &"bow_equip", "item": "item_left", "label": "bow_equip"},
-	{"clip": &"ex_hookshot_fire", "item": "item_up", "label": "hookshot_fire"},
+	{"clip": &"ss_casting_01", "item": &"bow", "label": "standin_casting"},
+	{"clip": &"bow_draw_arrow", "item": &"bow", "label": "bow_draw_arrow"},
+	{"clip": &"bow_aim_recoil", "item": &"bow", "label": "bow_aim_recoil"},
+	{"clip": &"bow_aim_overdraw", "item": &"bow", "label": "bow_aim_overdraw"},
+	{"clip": &"bow_equip", "item": &"bow", "label": "bow_equip"},
+	{"clip": &"ex_hookshot_fire", "item": &"hookshot", "label": "hookshot_fire"},
 ]
 const POSES := 4
 ## Turn off dead-on so the drawn arm reads. Straight at the lens hides the pull.
@@ -48,20 +53,18 @@ func run(rig) -> void:
 	hero.facing_yaw = atan2(to_cam.x, to_cam.z) + FACE_OFFSET
 	await rig.wait_frames(20)
 
-	var held := ""
+	var held := &""
 	for strip in STRIPS:
 		var clip: StringName = strip["clip"]
-		var item: String = strip["item"]
+		var item: StringName = strip["item"]
 		var label: String = strip["label"]
 
 		if item != held:
-			# Nothing cycles behind the game's back (docs/CONTRACT.md §4.1), so
-			# the D-pad button is pressed, and the previous item is put away with
-			# a second press of its own button first.
-			if held != "":
-				await rig.tap([held])
-				await rig.wait_frames(10)
-			await rig.tap([item])
+			# Nothing is assigned behind the game's back (docs/CONTRACT.md §4.1),
+			# so the D-pad is PRESSED until the ring lands on it. Stepping onto
+			# the next weapon is also what puts the last one away, so there is no
+			# separate stow press any more.
+			await rig.draw_weapon(item)
 			await rig.wait_frames(14)
 			held = item
 			hero.facing_yaw = atan2(to_cam.x, to_cam.z) + FACE_OFFSET

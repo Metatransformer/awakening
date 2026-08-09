@@ -1088,9 +1088,9 @@ func _set_charged(on: bool) -> void:
 ## as a cooldown: you are never told "no" during a move you already committed to.
 ##
 ## A refused swing is SILENT. No buzzer, no whiff animation — the bar is empty on
-## screen and the player emptied it, which is the same argument `Game.use_quick`
-## makes about an unbound button: a noise about a thing you already know is the
-## game shouting at you.
+## screen and the player emptied it, which is the same argument
+## `Game.use_selected_item` makes about an empty bottle: a noise about a thing
+## you already know is the game shouting at you.
 func _can_swing() -> bool:
 	return Game.stamina > 0.0
 

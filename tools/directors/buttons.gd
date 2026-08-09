@@ -8,6 +8,14 @@ extends RefCounted
 ## select the hookshot and then I want my sword back" is the whole reason this
 ## file exists.
 ##
+## THE ANSWER CHANGED and this director changed with it. It used to be `attack`:
+## the light swing stowed whatever was drawn and swung on the same press, an
+## escape hatch bolted to the sword button. There are no quick slots now — the
+## D-pad steps a RING, and the sword is a stop on it — so the way out is ← or →,
+## the same button that put the hookshot there. The old hatch had to go with the
+## hatch's reason: both shoulder buttons belong to whatever is in the right hand,
+## so `attack` with a bow drawn FIRES THE BOW rather than stowing it.
+##
 ## Carrying it is not AIMING it — that is the trigger, and only for as long as
 ## the trigger is down (hero_ranged.gd). The two get checked separately below,
 ## the sticky one positively and the sight negatively, because the version of
@@ -15,15 +23,17 @@ extends RefCounted
 ## hookshot zoomed the game permanently into a sight.
 ##
 ## The claims:
-##   1. A D-pad press draws the item, and it is still drawn a couple of seconds
-##      and a walk later. Sticky is the feature, not an accident.
-##   2. `heavy` fires what is drawn. It is the item's button.
-##   3. `attack` — the sword — puts the item away AND swings, on the SAME press.
-##      Not "the next press swings": the press that cancels must also land the
-##      blow, or the escape hatch costs a beat in the fight it is needed in.
-##   4. With the sword out and nothing locked, `heavy` is silent. It is not a
-##      second attack button; the lunge is what it becomes under a lock, and
-##      p4_lunge.gd measures that in metres.
+##   1. D-pad → draws the item, and it is still drawn a couple of seconds and a
+##      walk later. Sticky is the feature, not an accident.
+##   2. `heavy` fires what is drawn, on the RELEASE. It is the item's button.
+##   3. `attack` with an item drawn does NOT hand the sword back. Both shoulders
+##      belong to the hand, and the hand is full.
+##   4. D-pad → gets the sword back — the ring wraps, so a player who can find
+##      the hookshot can find his way off it with the same finger.
+##   5. Sword out, nothing locked: `attack` lands the light swing and `heavy`
+##      lands the heavy. `heavy` used to be deliberately silent here, which was
+##      a trigger the player stopped pulling; the light/heavy split fixed it.
+##   6. X drinks the selected bottle, and it does not touch the hand.
 ##
 ## Every beat is photographed. "The hookshot is out" is a claim about his hands.
 ##
@@ -73,11 +83,12 @@ func run(rig) -> void:
 	await rig.capture(out.path_join("b_00_sword.png"))
 
 	# --- 1. the draw is sticky ----------------------------------------------
-	# dpad up. The starter kit auto-binds the hookshot to the second C slot
-	# (game_state.gd `grant`), which is `item_up`.
-	await rig.tap(["item_up"])
+	# D-pad →, stepped until the hookshot is in his hand. Not one press of a known
+	# direction any more — the ring's length is however many weapons he owns, so
+	# the rig presses until it lands (tools/shoot.gd `draw_weapon`).
+	_check("the ring reached the hookshot", await rig.draw_weapon(&"hookshot"))
 	await rig.wait_frames(24)
-	_check("dpad up drew the hookshot (%s)" % Game.armament(Game.HAND_RIGHT),
+	_check("D-pad → drew the hookshot (%s)" % Game.armament(Game.HAND_RIGHT),
 		String(combat.get(&"equipped")) == "hookshot")
 	# And it does NOT zoom. The draw is sticky; the SIGHT is not. Selecting the
 	# hookshot used to drop the camera onto his shoulder and narrow the lens for
@@ -149,7 +160,7 @@ func run(rig) -> void:
 			break
 	_check("releasing heavy fired the hookshot", fired)
 	await rig.capture(out.path_join("b_03_fired.png"))
-	# Let the pull finish and put him back on the post.
+	# Let the pull finish.
 	for _i in 180:
 		if not bool(hero.call(&"hooking")):
 			break
@@ -162,46 +173,102 @@ func run(rig) -> void:
 	_check("the hookshot is still in his hand (%s)"
 		% Game.armament(Game.HAND_RIGHT),
 		String(combat.get(&"equipped")) == "hookshot")
+
+	# --- 3. attack does NOT hand the sword back ------------------------------
+	# The negative half of the redesign, and the reason it is checked at all: for
+	# most of this project's life `attack` WAS the escape hatch, and a reader of
+	# hero_combat could still reasonably expect it to be. Both shoulder buttons
+	# belong to whatever is in the right hand now, so this press goes to the
+	# hookshot and the sword stays where it is.
+	#
+	# On open floor, deliberately. He is holding a grapple and this beat presses
+	# its trigger; standing him at the post would fire a chain into it and make
+	# the position, not the button, the thing under test.
+	hero.global_position = home
+	hero.velocity = Vector3.ZERO
+	await rig.wait_frames(20)
+	await rig.tap(["attack"])
+	await rig.wait_frames(6)
+	_check("attack with an item drawn did not stow it (%s)"
+		% Game.armament(Game.HAND_RIGHT),
+		String(combat.get(&"equipped")) == "hookshot")
+	for _i in 180:
+		if not bool(hero.call(&"hooking")):
+			break
+		await rig.wait_frames(1)
+	await rig.wait_frames(20)
+
+	# --- 4. the D-pad is the way out -----------------------------------------
+	# The ring wraps, so → gets back to the sword without the player ever needing
+	# to know how many weapons he owns. This is the whole answer to the question
+	# in the docstring, and it is one finger.
+	_check("the ring came back round to the sword",
+		await rig.draw_weapon(&"sword"))
+	await rig.wait_frames(20)
+	_check("the sword is in his hand again (%s)" % Game.armament(Game.HAND_RIGHT),
+		String(combat.get(&"equipped")) == "")
 	hero.global_position = post_pos + Vector3(0.0, 0.05, 1.1)
 	hero.set(&"facing_yaw", PI)
 	await rig.wait_frames(30)
-
-	# --- 3. attack takes the sword back AND swings ---------------------------
-	_check("the hookshot survived the pull and is still in his hand",
-		String(combat.get(&"equipped")) == "hookshot")
-	var mark := _hits.size()
-	await rig.tap(["attack"])
-	# Checked on the frame after the press, before waiting for the blow: the
-	# claim is that the stow happens on the SAME press, and a check made after
-	# a 30-frame wait cannot tell that from a stow that took half a second.
-	await rig.wait_frames(2)
-	var stowed := String(combat.get(&"equipped")) == ""
-	_check("that press put the hookshot away (right hand holds %s)"
-		% Game.armament(Game.HAND_RIGHT), stowed)
-	var landed := 0
-	for _i in 90:
-		await rig.wait_frames(1)
-		if _hits.size() > mark:
-			landed = _hits[mark]
-			break
-	_check("the same press also landed a sword blow (%d damage)" % landed, landed > 0)
 	await rig.capture(out.path_join("b_04_sword_back.png"))
 
-	# --- 4. heavy with the sword out and no lock is silent ----------------
-	await rig.wait_seconds(1.4)
+	# --- 5. both shoulders swing, and neither is silent ----------------------
+	# `heavy` used to do NOTHING here: with the sword out and nothing locked it
+	# was deliberately quiet, because it was the item button and there was no
+	# item. A trigger that is inert four fifths of the time is a trigger the
+	# player stops pulling, which is what the light/heavy split undid.
 	_check("nothing is locked", hero.call(&"lock_target") == null)
+	var mark := _hits.size()
+	await rig.tap(["attack"])
+	var light := await _wait_for_hit(rig, mark)
+	_check("attack landed the light swing (%d damage)" % light, light > 0)
+	await rig.capture(out.path_join("b_05_light.png"))
+
+	await rig.wait_seconds(1.4)
 	mark = _hits.size()
 	var where: Vector3 = hero.global_position
 	await rig.tap(["heavy"])
-	await rig.wait_seconds(1.2)
-	_check("heavy with the sword out and no lock swung nothing (%d blow(s))"
-		% (_hits.size() - mark), _hits.size() == mark)
-	_check("...and did not move him (%.2f m)"
+	var heavy := await _wait_for_hit(rig, mark)
+	_check("heavy landed the heavy swing (%d damage)" % heavy, heavy > 0)
+	_check("the heavy hits harder than the light (%d vs %d)" % [heavy, light],
+		heavy >= light)
+	# It is a swing, not a lunge: the leap belongs to a LOCK, and p4_lunge.gd
+	# measures that in metres. Unlocked, his feet stay where they were.
+	_check("...and unlocked it did not carry him (%.2f m)"
 		% where.distance_to(hero.global_position),
-		where.distance_to(hero.global_position) < 0.3)
-	await rig.capture(out.path_join("b_05_silent.png"))
+		where.distance_to(hero.global_position) < 0.6)
+	await rig.capture(out.path_join("b_06_heavy.png"))
+
+	# --- 6. X drinks, and leaves the hand alone ------------------------------
+	# The item button is not a hand button, and the whole reason bottles came off
+	# the weapon ring is that using one must never cost you the sword.
+	while Game.bottle_count() < 1:
+		Game.add_bottle()
+	Game.fill_bottle(&"heart_draught")
+	Game.damage(K.HEART)
+	await rig.wait_frames(10)
+	var hurt := Game.quarters
+	await rig.tap(["use_item"])
+	await rig.wait_frames(20)
+	_check("X drank the selected bottle (%d -> %d quarters)" % [hurt, Game.quarters],
+		Game.quarters > hurt)
+	_check("drinking left the sword in his hand (%s)"
+		% Game.armament(Game.HAND_RIGHT), String(combat.get(&"equipped")) == "")
+	await rig.capture(out.path_join("b_07_drank.png"))
 
 	print("BUTTONS done, %d failure(s)" % fails)
+
+
+## Wait up to 90 frames for a blow to land on the post, and answer with its
+## damage. 90 rather than 30 for the same reason the chain window is 90: a swing
+## landing is not frame-budgeted, and a tight window turns a busy machine into a
+## damning, false claim about a button.
+func _wait_for_hit(rig, mark: int) -> int:
+	for _i in 90:
+		await rig.wait_frames(1)
+		if _hits.size() > mark:
+			return _hits[mark]
+	return 0
 
 
 func _check(what: String, ok: bool) -> void:

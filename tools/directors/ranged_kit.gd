@@ -46,10 +46,11 @@ func _starter_kit(rig) -> void:
 	_check("the bow is owned at boot", Game.has(&"bow"))
 	_check("the hookshot is owned at boot", Game.has(&"hookshot"))
 	_check("there are arrows to fire (%d)" % Game.arrows, Game.arrows > 0)
-	_check("the bow took dpad left (%s)" % Game.quick(Game.QUICK_LEFT),
-		Game.quick(Game.QUICK_LEFT) == &"bow")
-	_check("the hookshot took dpad up (%s)" % Game.quick(Game.QUICK_UP),
-		Game.quick(Game.QUICK_UP) == &"hookshot")
+	# Owning them is all there is to check now. They used to be BOUND to a D-pad
+	# direction on pickup and this asserted which one; the D-pad steps a ring
+	# instead, so "which button is the bow on" is not a question with an answer.
+	_check("owning three weapons makes a ring worth stepping",
+		Game.has(&"bow") and Game.has(&"hookshot"))
 	await rig.wait_frames(20)
 	await rig.capture(out.path_join("r_00_kit.png"))
 
@@ -57,11 +58,11 @@ func _starter_kit(rig) -> void:
 # --- The bow ----------------------------------------------------------------
 
 func _bow(rig, hero) -> void:
-	# dpad left draws it. Nothing cycles in play (docs/CONTRACT.md §4.1), so the
-	# button is pressed rather than the loadout being set behind the game's back.
-	await rig.tap(["item_left"])
+	# D-pad → steps the ring to it. The button is pressed rather than the loadout
+	# being set behind the game's back (docs/CONTRACT.md §4.1).
+	await rig.draw_weapon(&"bow")
 	await rig.wait_frames(8)
-	_check("dpad left drew the bow (right hand is %s)" % Game.armament(Game.HAND_RIGHT),
+	_check("the ring drew the bow (right hand is %s)" % Game.armament(Game.HAND_RIGHT),
 		Game.armament(Game.HAND_RIGHT) == &"bow")
 	_check("the bow model is in his hands", _visible(hero.combat.bow))
 	# A kite shield growing out of a bowstring: both used to be on the left arm.
@@ -215,19 +216,20 @@ func _empty_quiver(rig, hero) -> void:
 	Game.add_arrows(kept)
 	await rig.wait_frames(4)
 
-	# Put the bow away, so the hookshot beats start clean.
-	await rig.tap(["item_left"])
+	# Put the bow away, so the hookshot beats start clean. The sword is a stop on
+	# the same ring, so "put it away" and "draw something" are one motion.
+	await rig.draw_weapon(&"sword")
 	await rig.wait_frames(6)
-	_check("dpad left again put the bow away (right hand is %s)"
+	_check("stepping the ring round to the sword put the bow away (right hand is %s)"
 		% Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_RIGHT) == &"sword")
 
 
 # --- The hookshot, onto an authored ring ------------------------------------
 
 func _hookshot_ring(rig, hero) -> void:
-	await rig.tap(["item_up"])
+	await rig.draw_weapon(&"hookshot")
 	await rig.wait_frames(8)
-	_check("dpad up drew the hookshot (right hand is %s)" % Game.armament(Game.HAND_RIGHT),
+	_check("the ring drew the hookshot (right hand is %s)" % Game.armament(Game.HAND_RIGHT),
 		Game.armament(Game.HAND_RIGHT) == &"hookshot")
 	_check("the hookshot model is in his hand", _visible(hero.combat.hookshot))
 	await rig.capture(out.path_join("r_04_hookshot_drawn.png"))

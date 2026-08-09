@@ -50,7 +50,7 @@ func run(rig) -> void:
 	await _counter(rig)
 	await _brew(rig)
 	await _bottles(rig)
-	await _bind(rig)
+	await _select(rig)
 	await _screens(rig)
 	await _drink(rig)
 	await _underground(rig)
@@ -285,18 +285,36 @@ func _bottles(rig) -> void:
 	await rig.wait_frames(10)
 
 
-# --- G. Binding it, and drinking it -----------------------------------------
+# --- G. Selecting it, and drinking it ---------------------------------------
 
-func _bind(rig) -> void:
-	# Bound by the SAME call the equipment screen makes, to the same buttons, so
-	# this is the player's path and not a back door. There are two item buttons
-	# and three bottles, which is the point of the rebind in `_drink` below.
-	_ck("G0 a bottle is bindable", Game.bind_quick(Game.QUICK_UP, Game.bottle_id(0)))
-	_ck("G1 the button holds it",
-		Game.quick(Game.QUICK_UP) == Game.bottle_id(0))
-	Game.bind_quick(Game.QUICK_DOWN, Game.bottle_id(1))
+## THERE IS NOTHING TO BIND ANY MORE, and this beat is what replaced the binding.
+##
+## It used to put bottle 0 on D-pad ↑ and bottle 1 on ↓ -- two item buttons for
+## four bottles, which meant the third draught could only be reached by
+## rebinding mid-fight. ↓ steps the selection now and X drinks whatever it
+## landed on, so every bottle is reachable with one finger and the arithmetic is
+## gone.
+func _select(rig) -> void:
+	var n := Game.bottle_count()
+	var at := Game.item_selected
+	await rig.tap(["item_next"])
+	await rig.wait_frames(2)
+	_ck("G0 down stepped the selection", Game.item_selected == posmod(at + 1, n))
+	# Round the whole ring, empties included. The cycle deliberately does not skip
+	# an empty bottle -- a ring whose length changed every time you drank is a
+	# ring you cannot use blind (game_state.gd `cycle_item`).
+	for i in n - 1:
+		await rig.tap(["item_next"])
+	await rig.wait_frames(2)
+	# n presses in total, counting the one above: a ring of n stops is back where
+	# it started after n of them, and that is the property the player is counting
+	# on when they step it blind.
+	_ck("G1 %d steps came back round to where it started" % n,
+		Game.item_selected == at)
+	while Game.item_selected != 0:
+		await rig.tap(["item_next"])
 	await rig.wait_frames(8)
-	await rig.capture(out.path_join("a_04_bound.png"))
+	await rig.capture(out.path_join("a_04_selected.png"))
 
 
 ## Capture-only, and deliberately so. The pouch and the equipment screen are
@@ -335,17 +353,19 @@ func _drink(rig) -> void:
 	Bus.player_health_changed.emit(Game.quarters, Game.max_quarters)
 	await rig.wait_frames(4)
 	var hurt := Game.quarters
-	await rig.tap(["item_up"])
+	_ck("G1a the heart draught is the one selected",
+		Game.selected_potion() == &"heart_draught")
+	await rig.tap(["use_item"])
 	await rig.wait_frames(12)
 	print("ALCHEMY drank heart quarters=%d -> %d bottle0=%s" % [
 		hurt, Game.quarters, Game.bottle(0)])
-	_ck("G2 the button drank it -- health went up",
+	_ck("G2 X drank it -- health went up",
 		Game.quarters == mini(Game.max_quarters, hurt + K.DRAUGHT_HEAL))
 	_ck("G3 the bottle emptied", Game.bottle(0) == &"")
 	_ck("G4 the bottle itself stayed", Game.bottle_count() == K.BOTTLE_MAX)
 	# An empty bottle on a button is a no-op, not a crash and not a free heal.
 	var after := Game.quarters
-	await rig.tap(["item_up"])
+	await rig.tap(["use_item"])
 	await rig.wait_frames(8)
 	_ck("G5 pressing it again does nothing", Game.quarters == after)
 
@@ -355,15 +375,17 @@ func _drink(rig) -> void:
 	var edge_before := Game.sword_bonus()
 	var soak_before := Game.armour_soak()
 	var which := [Game.bottle(1), Game.bottle(2)]
-	await rig.tap(["item_down"])
+	# ↓ then X, twice. This is the beat the rebind used to be: with two bindable
+	# buttons and three full bottles the third draught could only be reached by
+	# opening a menu mid-fight, and the whole argument for the ring is that the
+	# fourth bottle costs exactly one more press than the third.
+	await rig.tap(["item_next"])
+	await rig.wait_frames(4)
+	await rig.tap(["use_item"])
 	await rig.wait_frames(6)
-	# Three bottles, two buttons. The drained one above is still sitting on ↑, so
-	# the third draught gets there the way a player would put it there -- by
-	# rebinding, mid-fight if they have to. This is the case that only exists
-	# since the loadout took ← / →, and it is the one worth photographing.
-	Game.bind_quick(Game.QUICK_UP, Game.bottle_id(2))
-	await rig.wait_frames(2)
-	await rig.tap(["item_up"])
+	await rig.tap(["item_next"])
+	await rig.wait_frames(4)
+	await rig.tap(["use_item"])
 	await rig.wait_frames(6)
 	print("ALCHEMY draughts=%s edge=+%d -> +%d soak=-%d -> -%d" % [
 		which, edge_before, Game.sword_bonus(), soak_before, Game.armour_soak()])
