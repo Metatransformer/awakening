@@ -194,7 +194,46 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, SPIN, LUNGE, DASH }
 @export_group("Animation")
 @export var clip_idle: StringName = &"ss_idle_01"
 @export var clip_walk: StringName = &"ss_walk_01"
-@export var clip_run: StringName = &"ss_run_01"
+## The run is `ex_running` — a FREE run, arms driving — and NOT `ss_run_01`, the
+## sword-and-shield pack's own, which is what shipped here for a year on the
+## reasoning that the idle and the walk came from that pack so the run should
+## too. That reasoning picked a clip off its filename, which is the thing
+## swing_lookdev exists to stop, and nobody had photographed it since.
+##
+## Photograph it (tools/directors/run_lookdev.gd, six frames, front and side,
+## with the sword and shield mounted) and `ss_run_01` is not a run. The torso
+## stays bolt upright, the knees barely pass each other, and both arms are
+## PINNED — shield flat across the chest, sword held out stiff — for the whole
+## cycle. It is a man jogging while holding a guard, and at K.RUN_SPEED, which is
+## most of the seconds this game is ever looked at, it reads as a shuffle.
+##
+## `ex_running` leans, drives the knee through, and swings both arms; the sword
+## and shield ride the hands they are bone-attached to and come along for free.
+## Yes, that means the guard is down while he runs. That is what running is, and
+## the guard is a button (`clip_block`) which puts it back up in 0.12 s.
+##
+## THE STRIDE SAYS THE SAME THING, and it is measured, not eyeballed —
+## tools/_clip_travel.gd, which reads toe-to-toe separation off the posed
+## skeleton because `build_anim_lib` strips the hips translation that would
+## otherwise carry the answer:
+##
+##   ss_run_01     0.700 s  stride 0.747 m -> legs authored for 2.13 m/s
+##   ex_running    0.633 s  stride 0.741 m -> legs authored for 2.34 m/s
+##   ex_fast_run   0.533 s  stride 0.721 m -> legs authored for 2.70 m/s
+##
+## Same step, quicker cycle: `ex_running` covers 10% more ground per second than
+## the clip it replaces, so against K.RUN_SPEED's 4.37 m/s it is the one that
+## skates LESS. (Everything here is driven roughly 2x its authored speed. That is
+## the hero being 1.65 m against Mixamo's actor and the speeds being OOT's; it is
+## a whole-locomotion question and not this line's to answer.)
+##
+## And it closes a costume change that the blend space's own comment claims not
+## to have: the SPRINT is already `ex_fast_run`, out of this same free-armed
+## family. Guarded walk -> guarded run -> free sprint put the pose swap in the
+## middle of the curve, at the speed the player crosses most often. Now the only
+## seam left is walk -> run, where a hero lowering his guard as he opens up is
+## the thing you would animate on purpose.
+@export var clip_run: StringName = &"ex_running"
 ## The four dodges. **The Pro Sword and Shield Pack contains no roll of any
 ## kind** — 52 clips, not one of them a dodge — which is why every direction once
 ## played `ex_roll_to_run`, a 3.2 m forward shoulder dive, including the
