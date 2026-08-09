@@ -299,27 +299,34 @@ func _forge_is_a_hold(rig, screen) -> void:
 	await rig.wait_frames(10)
 	_ck("CH2 a tap forges nothing", Game.forge_level(Game.FORGE_CHAIN) == before)
 
-	# Mid-hold, on purpose: the frame is the proof. Read before the capture, and
-	# early in the hold, because a capture costs frames of its own and this must
-	# still be MID-hold when the shutter opens.
+	# Sampled every frame and released on the FIRST reading. NOT read once after a
+	# fixed wait: the gauge advances by `delta`, so N frames is N frames of
+	# unknown duration (`shoot.hold_seconds` says this in as many words), and the
+	# alchemist's twin of this beat duly read 0.00 on a slow run where the whole
+	# hold had already elapsed and the commit had reset the bar.
 	Input.action_press(&"ui_accept")
-	await rig.wait_frames(6)
-	var mid: float = screen._hold
-	await rig.capture(out.path_join("f_02b_hold.png"))
-	print("FORGE craft hold mid=%.2f of %.2f s" % [mid, need])
-	_ck("CH3 the gauge fills while the button is down (%.2f)" % mid,
-		mid > 0.0 and mid < need)
+	var peak := 0.0
+	for _i in 30:
+		await rig.wait_frames(1)
+		peak = maxf(peak, screen._hold)
+		if peak > 0.0:
+			break
 	Input.action_release(&"ui_accept")
 	await rig.wait_frames(6)
+	print("FORGE craft hold peak=%.2f of %.2f s" % [peak, need])
+	_ck("CH3 the gauge fills while the button is down (%.2f)" % peak, peak > 0.0)
 	_ck("CH4 letting go snaps it back to zero (%.2f)" % screen._hold,
 		is_zero_approx(screen._hold))
 	_ck("CH5 and forged nothing", Game.forge_level(Game.FORGE_CHAIN) == before)
 
-	# Held through. 45 frames is 0.75 s against a 0.5 s hold -- the margin is for
-	# the frame the press lands on, not for slop in the clock.
+	# Held through, with the shutter open one frame in: the frame is the proof,
+	# and no assertion about a float can see a bar that renders off its row.
 	Input.action_press(&"ui_accept")
-	await rig.wait_frames(45)
-	Input.action_release(&"ui_accept")
+	await rig.wait_frames(1)
+	await rig.capture(out.path_join("f_02b_hold.png"))
+	# And from here in GAME SECONDS, not frames -- 45 frames is 0.75 s at 60 Hz
+	# and 0.37 s at 120, and only one of those outlasts a 0.5 s hold.
+	await rig.hold_seconds(["ui_accept"], 0.9)
 	await rig.wait_frames(10)
 	_ck("CH6 holding it through forges the rung (%d -> %d)" % [
 		before, Game.forge_level(Game.FORGE_CHAIN)],

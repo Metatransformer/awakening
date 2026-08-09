@@ -77,9 +77,9 @@ func _sell(rig) -> void:
 	await rig.wait_frames(12)
 	if Run.bag_value() == 0:
 		print("MVP FAIL a tap emptied the bag -- SELL EVERYTHING is meant to be held")
-	Input.action_press(&"ui_accept")
-	await rig.wait_frames(45)
-	Input.action_release(&"ui_accept")
+	# Held in game seconds. A frame count is a duration of unknown length and the
+	# gauge advances by `delta` (see `rig.hold_seconds`).
+	await rig.hold_seconds(["ui_accept"], 0.9)
 	await rig.wait_frames(24)
 	if Run.bag_value() > 0:
 		print("MVP FAIL holding SELL EVERYTHING did not empty the bag (%d left)"
