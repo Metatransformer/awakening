@@ -37,30 +37,58 @@ func run(rig) -> void:
 
 	await _nav_to_button(rig, "Equipment")
 	await _key(rig, KEY_ENTER, 12)
-	_check("the equipment screen is showing", equip.visible)
+	_check("the items screen is showing", equip.visible)
 	_check("focus landed inside it, not on nothing", _focused(rig) != null)
+	_check("a new game has three unbound item buttons",
+		Game.quick(0) == &"" and Game.quick(1) == &"" and Game.quick(2) == &"")
 	await rig.capture("eq_00_unowned.png")
 
-	# --- The ownership gate, from the UI side --------------------------------
-	# Focus opens on the live set's right hand. Mash confirm: with no bow and no
-	# hookshot the only right-hand armament that exists is the sword, so the
-	# slot must refuse -- five times, not just once.
-	var before := Game.armament_in(Game.PRIMARY, Game.HAND_RIGHT)
+	# --- Binding refuses what you have not found -----------------------------
+	# Focus opens on the ← item button. Mash confirm: owning nothing bindable,
+	# the only thing in the pool is the empty binding, so it must stay unbound
+	# -- five times, not just once.
 	for i in 5:
 		await _key(rig, KEY_ENTER, 3)
-	_check("an unowned armament cannot be cycled to from the menu (still %s)"
-		% Game.armament_in(Game.PRIMARY, Game.HAND_RIGHT),
-		Game.armament_in(Game.PRIMARY, Game.HAND_RIGHT) == before)
+	_check("an unowned item cannot be bound to a button (still %s)"
+		% ("unbound" if Game.quick(Game.QUICK_LEFT) == &"" else Game.quick(Game.QUICK_LEFT)),
+		Game.quick(Game.QUICK_LEFT) == &"")
 	await rig.capture("eq_01_refused.png")
 
-	# --- With a bow ----------------------------------------------------------
+	# --- Finding the bow binds it, without anyone opening a menu -------------
 	Game.grant(&"bow")
 	Game.add_arrows(18)
 	await rig.wait_frames(6)
+	_check("finding the bow bound it to the first free button (%s)"
+		% Game.quick(Game.QUICK_LEFT), Game.quick(Game.QUICK_LEFT) == &"bow")
+	Game.grant(&"hookshot")
+	await rig.wait_frames(4)
+	_check("finding the hookshot took the NEXT button, it did not overwrite (%s)"
+		% Game.quick(Game.QUICK_UP), Game.quick(Game.QUICK_UP) == &"hookshot")
 	equip.refresh()
 	await rig.wait_frames(4)
 	await rig.capture("eq_02_owned.png")
 
+	# --- Pressing a bound button draws it, and puts it away ------------------
+	Game.use_quick(Game.QUICK_LEFT)
+	await rig.wait_frames(4)
+	_check("the ← button drew the bow (right hand is %s)"
+		% Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_RIGHT) == &"bow")
+	Game.use_quick(Game.QUICK_LEFT)
+	await rig.wait_frames(4)
+	_check("pressing it again put the bow away (right hand is %s)"
+		% Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_RIGHT) == &"sword")
+
+	# One item, one button: binding the bow onto ↑ must take it OFF ←.
+	Game.bind_quick(Game.QUICK_UP, &"bow")
+	_check("binding an item to a second button moved it rather than cloning it",
+		Game.quick(Game.QUICK_UP) == &"bow" and Game.quick(Game.QUICK_LEFT) == &"")
+	Game.bind_quick(Game.QUICK_LEFT, &"bow")
+	Game.bind_quick(Game.QUICK_UP, &"hookshot")
+	equip.refresh()
+	await rig.wait_frames(4)
+
+	# --- The hands, below --------------------------------------------------
+	await _nav_to_slot(rig, "Slot_0_right")
 	var right_before := Game.armament_in(Game.PRIMARY, Game.HAND_RIGHT)
 	await _key(rig, KEY_ENTER, 10)
 	_check("confirming the right-hand slot cycled it (%s -> %s)"
@@ -122,6 +150,16 @@ func _key(rig, code: int, settle: int = 6) -> void:
 
 func _focused(rig) -> Control:
 	return rig.root.gui_get_focus_owner()
+
+
+## Walk DOWN until the named slot has focus. Slots are named Slot_<set>_<hand>.
+func _nav_to_slot(rig, node_name: String) -> void:
+	for i in NAV_LIMIT:
+		var c := _focused(rig)
+		if c != null and c.name == node_name:
+			return
+		await _key(rig, KEY_DOWN if i % 2 == 0 else KEY_RIGHT, 3)
+	_check("could reach slot '%s' by keyboard" % node_name, false)
 
 
 func _nav_to_button(rig, label: String) -> void:

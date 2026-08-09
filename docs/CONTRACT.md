@@ -237,18 +237,26 @@ press again to release, press with nothing lockable to recentre the camera
 behind the hero. It is not held — holding a shoulder button and steering the
 camera with the same thumb is the thing R3 exists to avoid.
 
-### 4.1 The item buttons — armaments, not C-slots
+### 4.1 The item buttons — the D-pad is the C-pad
 
-The D-pad cycles what is in each hand, the way ER's does:
+Three of the four directions are **bindable item buttons**, the way Ocarina's C
+buttons are. What is on them is the player's choice, made in the Items screen:
 
 | Button | Does |
 |---|---|
-| dpad ← (`item_left`, key `1`) | cycle the **left hand** armament |
-| dpad → (`item_right`, key `3`) | cycle the **right hand** armament |
-| dpad ↑ (`item_up`, key `2`) | swap to the **alternate loadout** — bow and arrows by default |
+| dpad ← (`item_left`, key `1`) | draw whatever is bound here; press again to put it away |
+| dpad ↑ (`item_up`, key `2`) | as above |
+| dpad → (`item_right`, key `3`) | as above |
+| dpad ↓ (`item_down`, key `4`) | swap to the **alternate loadout** — bow and arrows by default |
 
-`Game.loadout` owns this; see §8 *Armaments*. ER's dpad ↓ is the quick item and
-is deliberately unbound — there are no consumables to put on it yet.
+**Nothing cycles in play.** Cycling lives entirely in the menu, because a button
+you have to watch to use is not a button you can reach for — the whole value of
+a bound item is that your thumb knows where it is. `Game.quick_slots` owns the
+bindings and `Game.loadout` owns the hands; see §8 *Armaments*.
+
+Finding an item **auto-binds it to the first free button**, as the source
+material does. Being made to open a menu before you can shoot a bow you just
+found is the one thing Ocarina never does to you.
 
 ---
 
@@ -351,9 +359,10 @@ func use(hero: Node3D) -> void
 func release(hero: Node3D) -> void   # for held/charged items
 ```
 
-`Game.c_items: Array[StringName]` of length 3 is **superseded** by *Armaments*
-below. It is still saved and still loaded, because old save files carry it, but
-nothing reads it to decide what is in the hero's hands. Do not add to it.
+`Game.c_items` is **gone**. It was the half-built C-button idea — three slots,
+an auto-assign on pickup, and nothing that read them. It is now
+`Game.quick_slots` and it is wired to actual buttons. Saves written under the
+old `"c_items"` key still load.
 
 ### Armaments — two loadouts, two hands
 
@@ -370,10 +379,29 @@ var loadout: Array[Dictionary] = [
 ]
 var loadout_set: int = PRIMARY
 
+var quick_slots: Array[StringName] = [&"", &"", &""]   # C-buttons ←, ↑, →
+
 func armament(hand: StringName) -> StringName     # what is in that hand, now
-func swap_loadout() -> void                       # dpad ↑
-func cycle_armament(hand: StringName, dir := 1)   # dpad ← / →
+func armament_in(set_index: int, hand) -> StringName
+func swap_loadout() -> void                       # dpad ↓
+func cycle_armament(hand: StringName, dir := 1, set_index := -1)   # menu only
+
+func quick(slot: int) -> StringName               # what is on that C-button
+func bind_quick(slot: int, item_id: StringName) -> bool   # menu only
+func cycle_quick_bind(slot: int, dir := 1) -> void        # menu only
+func use_quick(slot: int) -> void                 # dpad ← / ↑ / →
 ```
+
+`use_quick` puts the bound item in the **right hand**, and puts it away again on
+a second press. That is what a C-button does: C-right with the bow *draws the
+bow*. `Bus.quick_slots_changed(slots)` fires on every bind.
+
+**One item, one button.** Binding something already on another slot MOVES it —
+two buttons that draw the same bow is two buttons doing one button's job.
+
+`bind_quick` refuses anything unowned, and refuses anything outside
+`QUICK_POOL`. A button that draws a bow you have never found is a button lying
+about your inventory.
 
 Two sets rather than one, because the primary answers "something is in front of
 me" and the alternate answers "something is not" — and a weapon switch you have

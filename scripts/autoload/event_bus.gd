@@ -15,6 +15,9 @@ signal stamina_changed(stamina: float, max_stamina: float)
 signal ammo_changed(id: StringName, count: int)
 signal rupees_changed(count: int)
 signal c_items_changed(slots: Array)
+## What is bound to the three C-buttons (D-pad ←, ↑, →) changed. See
+## Game.quick_slots. Supersedes c_items_changed, which nothing emits any more.
+signal quick_slots_changed(slots: Array)
 ## An armament changed hands, or the whole set was swapped. `set_index` is which
 ## loadout is live (0 primary, 1 alternate). See Game.loadout.
 signal loadout_changed(set_index: int, right: StringName, left: StringName)

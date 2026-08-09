@@ -298,14 +298,20 @@ func _physics_process(delta: float) -> void:
 		_hero.set_blocking(blocking)
 
 	if not locked:
-		# The D-pad, arranged the way Elden Ring arranges it: each side cycles
-		# the hand on that side, up swaps the whole set. Game owns which
-		# armament is where; this only reacts to the change.
+		# The D-pad is the C-pad. ←, ↑ and → each draw whatever the player bound
+		# to them (and put it away on a second press); ↓ swaps the whole set.
+		#
+		# Binding lives in the menu and nowhere else: a button that CYCLES is a
+		# button you have to watch to use, and the point of a bound item is that
+		# you can reach for it without looking. Game owns what is bound and what
+		# is in which hand; this only presses the buttons.
 		if Input.is_action_just_pressed(&"item_left"):
-			Game.cycle_armament(Game.HAND_LEFT)
-		if Input.is_action_just_pressed(&"item_right"):
-			Game.cycle_armament(Game.HAND_RIGHT)
+			Game.use_quick(Game.QUICK_LEFT)
 		if Input.is_action_just_pressed(&"item_up"):
+			Game.use_quick(Game.QUICK_UP)
+		if Input.is_action_just_pressed(&"item_right"):
+			Game.use_quick(Game.QUICK_RIGHT)
+		if Input.is_action_just_pressed(&"item_down"):
 			Game.swap_loadout()
 		if Input.is_action_just_pressed(&"attack"):
 			_try_swing()

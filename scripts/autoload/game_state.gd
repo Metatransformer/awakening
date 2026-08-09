@@ -47,12 +47,26 @@ var has_compass: bool = false
 
 ## Item ids the player owns, e.g. &"hookshot".
 var items: Dictionary[StringName, bool] = {}
-## The three C-button slots the HUD draws and item_left/up/right fire.
+
+# --- Quick slots: the C-buttons ---------------------------------------------
+## What is bound to D-pad ←, ↑ and → — Ocarina's C-buttons, in that order.
 ##
-## SUPERSEDED by `loadout` below, and kept only because `save_game.gd` still
-## round-trips it and old saves carry it. Nothing reads it to decide what is in
-## the hero's hands any more. Do not add to it.
-var c_items: Array[StringName] = [&"", &"", &""]
+## Pressing one puts the bound item in the RIGHT hand; pressing it again puts
+## it away. That is what a C-button does in the source material: C-right with
+## the bow *draws the bow*, it does not open a menu. Binding is direct access,
+## which is the whole reason it beats cycling — you reach for the hookshot
+## because you want the hookshot, not because it is two presses from the sword.
+##
+## `&""` is an unbound slot and is not an error; a new game has three of them.
+const QUICK_SLOTS := 3
+const QUICK_LEFT := 0
+const QUICK_UP := 1
+const QUICK_RIGHT := 2
+## What may be bound, in bind-cycle order. The empty binding is first so
+## clearing a slot is one press past the end rather than a separate verb.
+const QUICK_POOL: Array[StringName] = [&"", &"bow", &"hookshot"]
+
+var quick_slots: Array[StringName] = [&"", &"", &""]
 
 # --- Armaments --------------------------------------------------------------
 ## Two loadouts, each with a right hand and a left hand, exactly as Elden Ring
@@ -105,7 +119,7 @@ func reset() -> void:
 	has_map = false
 	has_compass = false
 	items.clear()
-	c_items = [&"", &"", &""]
+	quick_slots = [&"", &"", &""]
 	loadout = [
 		{HAND_RIGHT: &"sword", HAND_LEFT: &"shield"},
 		{HAND_RIGHT: &"bow", HAND_LEFT: &"arrow"},
@@ -274,12 +288,14 @@ func grant(item_id: StringName) -> void:
 	if items.get(item_id, false):
 		return
 	items[item_id] = true
-	# Auto-assign a newly found item to the first empty C slot, as OOT does.
-	for i in c_items.size():
-		if c_items[i] == &"":
-			c_items[i] = item_id
-			Bus.c_items_changed.emit(c_items)
-			break
+	# Auto-bind a newly found item to the first empty C slot, as the source
+	# material does. Finding the bow and then having to open a menu before you
+	# can shoot it is the one thing Ocarina never makes you do.
+	if QUICK_POOL.has(item_id):
+		for i in quick_slots.size():
+			if quick_slots[i] == &"":
+				bind_quick(i, item_id)
+				break
 	Bus.item_acquired.emit(item_id)
 
 
@@ -287,11 +303,59 @@ func has(item_id: StringName) -> bool:
 	return items.get(item_id, false)
 
 
-func equip(slot: int, item_id: StringName) -> void:
-	if slot < 0 or slot >= c_items.size():
+# --- Quick slots ------------------------------------------------------------
+
+func quick(slot: int) -> StringName:
+	if slot < 0 or slot >= quick_slots.size():
+		return &""
+	return quick_slots[slot]
+
+
+## Put `item_id` on a C-button. Refuses anything unowned, because a button that
+## draws a bow you have never found is a button that lies about your inventory.
+func bind_quick(slot: int, item_id: StringName) -> bool:
+	if slot < 0 or slot >= quick_slots.size():
+		return false
+	if item_id != &"" and not (QUICK_POOL.has(item_id) and has(item_id)):
+		return false
+	# One item, one button. Binding something already on another slot MOVES it
+	# rather than duplicating it -- two buttons that draw the same bow is two
+	# buttons doing one button's job.
+	for i in quick_slots.size():
+		if i != slot and quick_slots[i] == item_id and item_id != &"":
+			quick_slots[i] = &""
+	quick_slots[slot] = item_id
+	Bus.quick_slots_changed.emit(quick_slots)
+	return true
+
+
+## Cycle a slot's binding forward through what the player owns. The bind UI.
+func cycle_quick_bind(slot: int, dir: int = 1) -> void:
+	if slot < 0 or slot >= quick_slots.size():
 		return
-	c_items[slot] = item_id
-	Bus.c_items_changed.emit(c_items)
+	var available: Array[StringName] = []
+	for id in QUICK_POOL:
+		if id == &"" or has(id):
+			available.append(id)
+	if available.size() <= 1:
+		return
+	var at := available.find(quick(slot))
+	bind_quick(slot, available[posmod(at + signi(dir), available.size())])
+
+
+## Press a C-button: draw what is bound there, or put it away if it is already
+## out. An unbound slot does nothing at all -- deliberately silent, because a
+## refusal noise on a button you never assigned is noise about your own choice.
+func use_quick(slot: int) -> void:
+	var id := quick(slot)
+	if id == &"" or not has(id):
+		return
+	var live := clampi(loadout_set, 0, loadout.size() - 1)
+	# Indexing an untyped Dictionary hands back Variant, so the comparison has
+	# to be annotated or the parser cannot infer `stow`. See CLAUDE.md §3.
+	var held: StringName = loadout[live][HAND_RIGHT]
+	loadout[live][HAND_RIGHT] = &"sword" if held == id else id
+	_announce_loadout()
 
 
 # --- Armaments --------------------------------------------------------------

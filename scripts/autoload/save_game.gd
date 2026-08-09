@@ -78,7 +78,7 @@ func save(slot: int) -> bool:
 		"has_map": Game.has_map,
 		"has_compass": Game.has_compass,
 		"items": Game.items,
-		"c_items": Game.c_items,
+		"quick_slots": Game.quick_slots,
 		"loadout": Game.loadout,
 		"loadout_set": Game.loadout_set,
 		"flags": Game.flags,
@@ -124,9 +124,10 @@ func load_slot(slot: int) -> Dictionary:
 	Game.flags.clear()
 	for k in (d.get("flags", {}) as Dictionary):
 		Game.flags[StringName(k)] = true
-	var slots: Array = d.get("c_items", [])
-	for i in mini(slots.size(), Game.c_items.size()):
-		Game.c_items[i] = StringName(slots[i])
+	# "c_items" is the pre-C-button name; a save written under it still loads.
+	var slots: Array = d.get("quick_slots", d.get("c_items", []))
+	for i in mini(slots.size(), Game.quick_slots.size()):
+		Game.quick_slots[i] = StringName(slots[i])
 
 	# Armaments. Read defensively and per-hand rather than assigning the array
 	# wholesale: JSON hands back plain Strings in untyped Dictionaries, and a
@@ -151,7 +152,7 @@ func load_slot(slot: int) -> Dictionary:
 	Bus.magic_changed.emit(Game.magic, Game.max_magic)
 	Bus.key_count_changed.emit(Game.small_keys)
 	Bus.gold_changed.emit(Game.gold)
-	Bus.c_items_changed.emit(Game.c_items)
+	Bus.quick_slots_changed.emit(Game.quick_slots)
 	Bus.loadout_changed.emit(Game.loadout_set,
 		Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_LEFT))
 	loaded.emit(slot)
