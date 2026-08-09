@@ -90,7 +90,7 @@ func _read_floor(rig) -> void:
 	for n in foes:
 		var e := n as Enemy
 		if e == null:
-			continue   # the crawler, which is the shallow-water enemy and flat
+			continue   # nothing in the group is anything else today; see below
 		health = maxi(health, e.health.max_quarters)
 		damage = maxi(damage, e._damage)
 		kinds[e.kind] = true

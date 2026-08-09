@@ -84,7 +84,7 @@ extends Camera3D
 @export var recenter_time: float = 4.0 * K.TICK
 ## Seconds for the battle framing to settle onto the hero->target line. Slower
 ## than the recentre on purpose: the target moves, and a rig that tracked it
-## tightly would swing the whole world every time a crawler side-stepped.
+## tightly would swing the whole world every time a goblin side-stepped.
 @export var battle_frame_time: float = 0.55
 @export var capture_mouse: bool = true
 ## Mouse motion only steers while the cursor is actually grabbed. Without this

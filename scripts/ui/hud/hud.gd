@@ -49,6 +49,49 @@ const HEART_TICK_W := 2.0          ## heart boundary tick
 const GHOST_HOLD := 0.40
 const GHOST_DRAIN := 0.25
 
+# --- Enemy health bars --------------------------------------------------------
+## OVERRIDES STYLEGUIDE §5.5, which confined target health to the lock-on bracket
+## and ended "Never a floating bar over every enemy." Changed on the owner's
+## instruction; §5.5 is amended in the same commit rather than left contradicting
+## the code.
+##
+## What that rule was protecting is still protected, by conditions rather than by
+## absence. A bar is drawn only when all of these hold:
+##
+##  * **The monster is in the fight** -- engaged, or already bleeding. A room you
+##    have not woken draws nothing, so darkness stays a material (docs/GDD.md §4,
+##    pillar 5) and a bar is never what spoils an ambush.
+##  * **Nothing is in the way.** A raycast from the CAMERA, against world geometry
+##    only. This element is anchored in the world, so it obeys the world's rules --
+##    the same principle the lock brackets quantize for. Without it a floating bar
+##    becomes an x-ray that reads monsters through walls, which is the single worst
+##    version of this feature.
+##  * **It is close enough to read.** Past `EBAR_RANGE` the bar is a smear rather
+##    than a readout, and a floor's worth of smears is the icon vomit the
+##    styleguide is arguing against.
+##
+## And it never eases. Anti-slop §7.4 bans smoothly lerped meters; the fill is
+## written straight from `fraction()` and rounded to whole pixels, so the only
+## thing that moves is the monster.
+##
+## The locked target is NOT special-cased out. It draws through this same path at
+## `EBAR_LOCK_MULT` width, which is how the lock keeps reading as a lock -- one
+## code path, one bar per monster, emphasis carried by size. `_draw_lock_on` used
+## to draw its own bar under the bracket and that duplicate is gone.
+const EBAR_W := 20.0          ## reference px at Pal.REF_H, before the lock multiplier
+const EBAR_H := 2.0
+const EBAR_BORDER := 1.0
+## The locked target's bar, as a multiple of the ordinary one. Sized to sit inside
+## the bracket's 52 px span rather than to match it, so the bracket still frames
+## the bar instead of the two sharing an edge.
+const EBAR_LOCK_MULT := 2.2
+## Metres from the hero. Deliberately shorter than the monsters' own detect range
+## (11-15 m) is long, because this is a legibility limit and not a stealth one -- a
+## monster chasing you from 20 m away is still visibly chasing you.
+const EBAR_RANGE := 22.0
+## Used when something in the `enemy` group does not implement `head_point()`.
+const EBAR_FALLBACK_Y := 2.0
+
 # --- Stamina ----------------------------------------------------------------
 ## Directly below health. The one fact this bar exists to carry is "can I dodge
 ## right now", so it turns RUST the moment it drops under one roll -- the answer
@@ -164,6 +207,13 @@ var _extract_available: bool = false
 var _refuse_t: float = -1.0
 var _block_flash_t: float = -1.0
 var _lock_target: Node3D = null
+## Whether anything is in the `enemy` group right now. Cached off the tree's own
+## add/remove signals rather than polled, so `_process` does not walk a group every
+## frame just to decide whether to repaint. See the note in `_process`.
+var _enemies_present: bool = false
+## Reused rather than built per monster per frame: a room holds up to seven and
+## this runs at the frame rate.
+var _ebar_ray := PhysicsRayQueryParameters3D.new()
 ## A bow or a hookshot is out, so the middle of the screen is a sight.
 var _aiming: bool = false
 var _last_quarters: int = -1
@@ -230,6 +280,12 @@ func _ready() -> void:
 	Bus.run_started.connect(func(_s: int) -> void: _refresh_extract_available())
 	Bus.run_ended.connect(func(_e: bool, _c: Dictionary, _v: int) -> void:
 		_refresh_extract_available())
+
+	# World geometry only, for the enemy bars' occlusion test. Bodies, not areas:
+	# a doorway trigger is not a wall.
+	_ebar_ray.collision_mask = K.L_WORLD
+	_ebar_ray.collide_with_bodies = true
+	_ebar_ray.collide_with_areas = false
 
 	get_tree().node_added.connect(_on_tree_changed)
 	get_tree().node_removed.connect(_on_tree_changed)
@@ -421,6 +477,16 @@ func _refresh_visibility() -> void:
 	var has_player := get_tree().get_first_node_in_group(&"player") != null
 	if visible != has_player:
 		visible = has_player
+
+	# Deferred off node_added/node_removed, which is exactly when this answer can
+	# change, so the enemy bars get their frame ticker the moment a dungeon builds
+	# and lose it on the last corpse. `_wake` and not just a repaint: a bar that
+	# painted once and then stopped would sit at the spot the monster left.
+	var had := _enemies_present
+	_enemies_present = not get_tree().get_nodes_in_group(&"enemy").is_empty()
+	if has_player and _enemies_present and not had:
+		_wake()
+
 	if has_player:
 		_canvas.queue_redraw()
 
@@ -467,6 +533,19 @@ func _process(delta: float) -> void:
 	# wants a frame-by-frame repaint, and it stops the moment the chain is cold.
 	if Heat.kills > 0:
 		busy = true
+	# The other one, and it is a deliberate widening of this file's "repaint on
+	# signal, never per frame" rule. An enemy bar is pinned to a body that walks, so
+	# it has to be re-projected every frame it is on screen, and there is no signal
+	# for "the goblin moved".
+	#
+	# Gated on monsters EXISTING, not on a bar having been drawn. That is the whole
+	# subtlety: gating on the bar deadlocks, because a sleeping overlay never draws,
+	# never sets the flag, and so never wakes when a monster finally notices you.
+	# There is no aggro signal to wake it on either. So the honest rule is the wide
+	# one -- while anything is alive in here, the overlay ticks -- and the last death
+	# on the floor is what puts it back to sleep.
+	if _enemies_present:
+		busy = true
 
 	_canvas.queue_redraw()
 	if not busy:
@@ -489,6 +568,7 @@ func _draw_hud() -> void:
 	_draw_prompt(s)
 	_draw_crosshair(s)
 	_draw_lock_on(s)
+	_draw_enemy_bars(s)
 	_draw_sweep(s)
 	_draw_controls(s)
 	_draw_floor(s)
@@ -527,6 +607,10 @@ const LEGEND := [
 	# runs off the same button, and a player who only ever taps it will never
 	# discover the run — there is no prompt, no stance and no tell for a button
 	# you are not holding down. Same argument as the GUARD/LOCK line above.
+	#
+	# On a pad this row swallows the INTERACT row below it: both are A, and two
+	# entries reading "A DODGE   A INTERACT" is a legend asking the player to
+	# work out which one they get. See `_legend`.
 	[&"context", "DODGE (HOLD=RUN)"],
 	[&"jump", "JUMP"],
 	[&"interact", "INTERACT"],
@@ -565,6 +649,15 @@ func _legend() -> String:
 			continue  # nothing bound on this device — say nothing rather than lie
 		if action == &"shield":
 			verb = "GUARD/LOCK (+%s DASH)" % _hotkey(&"attack")
+		# The dodge and the interact are one button on a pad and two on a
+		# keyboard, so the legend has to be able to be both shapes. Merged, the
+		# row says what the button DOES — which of the two you get is decided by
+		# whether anything is in reach, and the prompt line already says when
+		# something is.
+		elif action == &"context" and _hotkey(&"interact") == cap:
+			verb = "DODGE/TALK (HOLD=RUN)"
+		elif action == &"interact" and _hotkey(&"context") == cap:
+			continue  # already said, on the merged row above
 		parts.append("%s %s" % [cap, verb])
 	return "    ".join(parts)
 
@@ -1212,16 +1305,91 @@ func _draw_lock_on(s: Vector2) -> void:
 				corner.x - w * 0.5, corner.y - (arm if sy > 0 else 0.0),
 				w, arm), col)
 
-	# Only once the target has taken damage. Never a floating bar over every
-	# enemy in the room.
-	var hp := _health_of(_lock_target)
-	if hp != null and hp.quarters < hp.max_quarters:
-		var bw := half.x * 2.0
-		var by := c.y + half.y + Pal.px(6.0, s.y)
-		_canvas.draw_rect(Rect2(c.x - half.x, by, bw, Pal.px(2.0, s.y)),
-			Color(Pal.ASH, 0.7))
-		_canvas.draw_rect(Rect2(c.x - half.x, by, bw * hp.fraction(),
-			Pal.px(2.0, s.y)), Pal.RUST)
+	# The bar that used to hang 6 px under this bracket is gone. It is now drawn by
+	# `_draw_enemy_bars`, over the target's HEAD, through the same path every other
+	# monster's bar takes -- widened by EBAR_LOCK_MULT so the lock still reads as a
+	# lock. Two bars on one monster, in two places, from two code paths, is how the
+	# locked one stops being the one you are looking at.
+
+
+## Little bars over the monsters. See the EBAR_* block for what earns one and why
+## the conditions are not decoration.
+func _draw_enemy_bars(s: Vector2) -> void:
+	var cam := _canvas.get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var hero := get_tree().get_first_node_in_group(&"player") as Node3D
+	if hero == null:
+		return
+
+	# Quantized to the same 480x270 grid as the lock brackets, so a bar and the
+	# bracket around it jitter together with the world's vertex snapping instead of
+	# sliding against each other (docs/STYLEGUIDE.md §5.5).
+	var grid := s / Vector2(480.0, 270.0)
+	var space := cam.get_world_3d().direct_space_state
+
+	for n in get_tree().get_nodes_in_group(&"enemy"):
+		var e := n as Node3D
+		if e == null or not is_instance_valid(e):
+			continue
+		var hp := _health_of(e)
+		if hp == null or hp.dead:
+			continue
+		# Asleep and unhurt earns nothing. `is_engaged` is the monster's own answer
+		# about its own states (scripts/actors/enemies/enemy.gd).
+		var engaged: bool = e.has_method(&"is_engaged") and e.is_engaged()
+		if not engaged and hp.quarters >= hp.max_quarters:
+			continue
+		if hero.global_position.distance_to(e.global_position) > EBAR_RANGE:
+			continue
+
+		var head: Vector3 = e.call(&"head_point") if e.has_method(&"head_point") \
+			else e.global_position + Vector3.UP * EBAR_FALLBACK_Y
+		# Behind the camera unprojects to a point in front of it -- a bar for a
+		# monster at your back, drawn over the wall you are facing.
+		if cam.is_position_behind(head):
+			continue
+		if not _bar_visible(space, cam, head, e):
+			continue
+
+		var locked := e == _lock_target
+		var w := Pal.px(EBAR_W * (EBAR_LOCK_MULT if locked else 1.0), s.y)
+		var h := Pal.px(EBAR_H, s.y)
+		var b := Pal.px(EBAR_BORDER, s.y)
+		var c := cam.unproject_position(head)
+		c = (c / grid).round() * grid
+		var x := c.x - w * 0.5
+
+		# A frame, because this bar is drawn over the world rather than over a
+		# known background: 2 px of RUST on a lit sandstone wall is nearly the wall,
+		# and on VOID an ASH track alone is nearly nothing. BONE for an elite is the
+		# only per-kind mark on the HUD, and it is on the one monster whose whole
+		# design is "you can see this one coming" (scripts/core/progression.gd).
+		var elite: bool = bool(e.get(&"elite")) if &"elite" in e else false
+		_canvas.draw_rect(Rect2(x - b, c.y - b, w + b * 2.0, h + b * 2.0),
+			Pal.BONE if elite else Pal.VOID)
+		_canvas.draw_rect(Rect2(x, c.y, w, h), Color(Pal.ASH, 0.85))
+		# Rounded to whole pixels, and never eased. Anti-slop §7.4.
+		var fill := roundf(w * hp.fraction())
+		if fill >= 1.0:
+			_canvas.draw_rect(Rect2(x, c.y, fill, h), Pal.RUST)
+
+
+## Is there world geometry between the camera and this monster's head?
+##
+## World layer only, and the monster itself excluded. Both matter: including
+## `L_ENEMY` would make a monster block its own bar and make a pack hide each
+## other's, which is the same bug `Targeting._has_los` documents at length -- a
+## thing is never between you and itself.
+func _bar_visible(space: PhysicsDirectSpaceState3D, cam: Camera3D,
+		head: Vector3, e: Node3D) -> bool:
+	_ebar_ray.from = cam.global_position
+	_ebar_ray.to = head
+	var skip: Array[RID] = []
+	if e is CollisionObject3D:
+		skip.append((e as CollisionObject3D).get_rid())
+	_ebar_ray.exclude = skip
+	return space.intersect_ray(_ebar_ray).is_empty()
 
 
 func _health_of(n: Node) -> HealthComponent:

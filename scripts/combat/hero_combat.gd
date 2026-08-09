@@ -672,15 +672,39 @@ func _physics_process(delta: float) -> void:
 		# one thing whether or not something is locked. It used to mean both, and
 		# "use item" that silently became a jump attack when your hands were empty
 		# is two verbs sharing a name.
-		if Input.is_action_just_pressed(&"use_item"):
+		#
+		# With an item in hand it is a HELD trigger and not a press: down raises
+		# and aims, up looses (hero_ranged.gd owns both halves). It used to fire on
+		# the press, which meant a player pulling RT to aim had already shot before
+		# they touched the stick — the bug this split exists to fix. Empty-handed
+		# it is still the lunge, on the press, because a leap is not a thing you
+		# hold.
+		#
+		# The release arm is `not pressed` rather than `just_released` on purpose:
+		# a press and a release inside one physics tick would otherwise raise the
+		# bow and never let it go. This way the raise lands on this frame and the
+		# loose on the next one, which is what a one-frame tap should look like.
+		if equipped != &"" and _hero.ranged != null \
+			and Input.is_action_just_pressed(&"use_item"):
+			_hero.ranged.use_press(equipped)
+		elif _hero.ranged != null and not Input.is_action_pressed(&"use_item"):
+			# Unconditional, not gated on an item being out: the item can leave his
+			# hand mid-hold (the attack button's escape hatch stows it), and a
+			# `_using` flag that only ever gets cleared by the hand that set it is
+			# a bow stuck at full draw the next time one is drawn.
+			_hero.ranged.use_release()
+		elif Input.is_action_just_pressed(&"use_item"):
 			_press(Intent.LUNGE)
 		_tick_context_button()
 		_tick_attack_button(delta)
 	else:
 		# A shop opening mid-wind-up must not leave the charge armed behind the
 		# panel, waiting to come out at whatever is standing there when the
-		# player closes it again.
+		# player closes it again. A held bow is the same shape of bug and worse,
+		# because the trigger coming up behind the panel would LOOSE it.
 		_release_charge(false)
+		if _hero.ranged != null:
+			_hero.ranged.cancel_use()
 
 	# The chain window is the gap BETWEEN swings, so it only runs while nothing is
 	# swinging. Ticking it through the swing was the first version, and it made
@@ -714,37 +738,42 @@ func _physics_process(delta: float) -> void:
 		_advance_swing(delta)
 
 
-## The context button — OOT's A, and contextual in the way OOT's A is: what it
-## does is whatever the situation has made most useful, and the player learns the
+## The A button — OOT's A, and contextual in the way OOT's A is: what it does is
+## whatever the situation has made most useful, and the player learns the
 ## situations rather than the button.
 ##
 ##   something in reach  -> talk / open / descend. Not handled here at all.
-##   shield up           -> the jump attack.
-##   item in hand        -> put it away.
+##   nothing in reach    -> the DODGE. Not handled here either — `Hero`.
+##   item in hand        -> put it away, which is all this function is now.
 ##
 ## Talking wins, and it wins by this function never being consulted: `Prompt`
 ## owns the interact button whenever it has a focus (see its docstring — exactly
-## one thing answers a press). Without that check, walking up to the smith with
-## the shield raised would leap at him and open his shop on the same frame.
+## one thing answers a press). Without that check, walking up to the smith would
+## stow the hookshot and open his shop on the same frame.
 ##
-## The leap lives behind the shield because the shield is the lock now — guard
-## acquires the target (docs/CONTRACT.md §4) — so "press A while holding guard"
-## and OOT's "press A while holding Z" are the same sentence. With the shield
-## down the button is silent rather than swinging, which is what keeps it safe to
-## mash at a chest.
+## THE JUMP ATTACK IS GONE FROM THIS BUTTON. It used to live here behind a raised
+## shield, on the argument that "press A while holding guard" is OOT's "press A
+## while holding Z". A is the dodge now, and guard + neutral stick + A is the
+## BACKSTEP (`Hero._try_start_roll`) — which is the defensive move the source
+## material leans on hardest, and which cannot share a press with a leap in the
+## opposite direction. The leap is still one button away on `use_item`, thrown
+## from the same stance. Two answers to one press is not a thing to arbitrate.
+##
+## The stow DOES coincide with a dodge, deliberately: rolling with the bow drawn
+## and coming up empty-handed is the same sentence, and it is what every game
+## with a sticky draw does with a dodge. If the roll is refused — no stamina, or
+## a stick too shallow to clear `roll_stick_gate` — the stow still happens, which
+## is exactly the behaviour this button had before it was shared.
 func _tick_context_button() -> void:
 	if not Input.is_action_just_pressed(&"interact"):
 		return
 	if Prompt.focus != null:
 		return
-	if equipped != &"":
+	if equipped != &"" and not blocking:
 		# An item is out. Putting it away is the useful thing here, and it is the
 		# calm way out — the ATTACK button's escape hatch stows it too, but that
 		# one comes with a swing attached (see `_begin`).
-		if not blocking:
-			Game.stow_item()
-	elif blocking:
-		_press(Intent.LUNGE)
+		Game.stow_item()
 
 
 ## The attack button. A tap is the light chain; a hold is the wind-up; the
@@ -883,8 +912,10 @@ func _begin(intent: int) -> void:
 			Game.stow_item()
 			_light_swing(_chain_step)
 			return
-		if intent == Intent.LUNGE and _hero.ranged != null:
-			_hero.ranged.fire(equipped)
+		# Every other intent is silent with an item out. The use button no longer
+		# arrives here at all — it is a held trigger read straight into HeroRanged
+		# (see _tick_input), because a shot that has to survive a swing buffer is a
+		# shot that can come out a quarter of a second after the player let go.
 		return
 
 	match intent:

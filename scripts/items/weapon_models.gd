@@ -44,11 +44,18 @@ const SCALE_FIX := {
 	"bow_knightly": 0.72,
 	"bow_elegant": 0.72,
 	"bow_noble": 0.72,
+	# The loose arrow imports at 1.50 m — longer than the bow that fires it and
+	# taller than a crawler. 0.70 m is a real arrow against a 1.65 m hero, and it
+	# is the length `Arrow.MODEL_LEN` promises everything that lays one out.
+	"arrow": 0.467,
 }
 
 ## Models that already carry embedded textures and must NOT be given a
 ## `_diff` bind (they have full PBR sets and overriding would flatten them).
-const SELF_TEXTURED := ["kite_shield", "hookshot_pistol"]
+## `arrow` is here for the other reason: it carries four authored materials and
+## no maps at all, so there is nothing to bind and a `_diff` warning would be
+## noise about a model that is already correct.
+const SELF_TEXTURED := ["kite_shield", "hookshot_pistol", "arrow"]
 
 
 ## Build a model by id (the filename without extension), e.g. "sword_knightly".

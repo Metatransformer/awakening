@@ -94,10 +94,11 @@ func _try_hit(body: Node3D) -> void:
 ##     this function one line before the damage, for every blow in the game, in
 ##     both directions, for as long as the file has existed.
 ##   * Only HealthComponent was ever consulted, so the hero -- who has none --
-##     could not be hurt by anything that swings a DamageArea. `Crawler` was the
-##     only enemy that could touch him, because it reaches around this file and
-##     calls `take_hit` itself. The nine GLB monsters all swing DamageAreas, and
-##     every one of them has been harmless since the roster landed.
+##     could not be hurt by anything that swings a DamageArea. The box-built
+##     placeholder enemy (`Crawler`, since deleted) was the only thing that could
+##     touch him, because it reached around this file and called `take_hit`
+##     itself. The GLB monsters all swing DamageAreas, and every one of them was
+##     harmless from the day the roster landed until this was fixed.
 ##
 ## Neither shows up in a log. The swing plays, the hitbox opens and closes on
 ## schedule, and the only thing that never moves is the health number -- which is

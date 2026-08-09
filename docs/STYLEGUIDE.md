@@ -506,9 +506,28 @@ Not a fairy, not a triangle.
   world obeys the world's rules; the corner instruments do not.
 - Acquire: brackets converge from 1.4× over 90 ms. Break: fly outward, fade over
   120 ms.
-- **Target health:** a 2 px bar 6 px below the bracket, bracket-width, only while
-  locked and only once the target has taken damage. Never a floating bar over
-  every enemy.
+- **Enemy health:** a 2 px bar over the monster's **head**, 20 px wide, with a
+  1 px VOID frame (BONE if the monster is an elite) over an ASH track and a RUST
+  fill. **The locked target gets the same bar at 2.2× width** — the bracket
+  frames it, and the emphasis is size rather than a second bar somewhere else.
+  There is exactly one bar per monster and one code path that draws it.
+
+  This **replaces** the old rule, which put a bracket-width bar 6 px *below* the
+  bracket, only while locked, and ended "never a floating bar over every enemy".
+  Changed on the owner's instruction. What the old rule was protecting is kept as
+  three conditions, and they are load-bearing, not decoration:
+
+  - **Only monsters in the fight.** Engaged, or already bleeding. An unwoken room
+    draws nothing, so darkness stays a material (`docs/GDD.md` §4, pillar 5) and
+    a bar never spoils an ambush.
+  - **Only in line of sight**, by a raycast from the camera against world
+    geometry. A bar anchored in the world obeys the world; without this the
+    feature is an x-ray that reads monsters through walls.
+  - **Only within 22 m.** Past that a 20 px bar is a smear, and a floor of smears
+    is the icon vomit this section exists to prevent.
+
+  Positions quantize to the 480×270 grid like the brackets, and the fill **never
+  eases** — anti-slop §7.4 stands.
 - Off-screen locked target: an 8 px RUST chevron on the screen edge at the
   target's bearing, inset `0.028`.
 

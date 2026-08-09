@@ -52,7 +52,8 @@ Metric. 1 Godot unit = 1 metre. Gravity is `-Y`. The hero moves on the XZ plane.
 | Standard room | 16 x 16 m to 24 x 24 m, ceiling 7 m |
 | Boss arena | 32 x 32 m, ceiling 12 m |
 | Door opening | 2.4 m wide, 3.2 m tall |
-| Chest | 1.1 wide x 0.8 deep x 0.8 tall |
+| Chest | 1.15 wide x 0.61 deep x 0.74 tall (measured off `treasure_chest.glb` at `Chest.MODEL_SCALE`) |
+| Arrow | 0.70 m long (`Arrow.MODEL_LEN`; the GLB is 1.50 m native and is scaled in `WeaponModels.SCALE_FIX`) |
 | Pot | 0.5 diameter, 0.6 tall |
 | Push block | 1 tile: 2.0 x 2.0 x 2.0 |
 
@@ -211,12 +212,13 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `move_up/down/left/right` | WASD, arrows | left stick | move |
 | `cam_up/down/left/right` | mouse motion (read in code) | right stick | camera |
 | `attack` | **LMB** | **X / Square** (pad2) | light attack (**hold** = charge, **+guard** = dash) |
-| `use_item` | **F** | **RT / R2** (axis5+) | use the item the D-pad drew |
+| `use_item` | **F** | **RT / R2** (axis5+) | use the item the D-pad drew — **held**: down aims, up fires |
 | `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held**, and it targets, and it recentres |
-| `context` | **Shift** | **B / Circle** (pad1) | roll / backstep / sidehop — **hold** = run |
+| `context` | **Shift** | **A / Cross** (pad0) | roll / backstep / sidehop — **hold** = run |
 | `jump` | **Space** | **Y / Triangle** (pad3) | jump |
 | `z_target` | **Q**, MMB | — (LT does it) | lock-on toggle / camera recentre |
-| `interact` | E | **A / Cross** (pad0) | context — talk/open, **+guard** = jump attack, else stow item |
+| `interact` | E | **A / Cross** (pad0) | talk/open — **wins over the dodge**, else stow item |
+| `ui_cancel` | Esc | **B / Circle** (pad1) | close/back, and **nothing else** |
 | `item_left` / `item_up` / `item_right` | 1 / 2 / 3 | dpad L / U / R | armaments — §4.1 |
 | `first_person` | R | **R3** (pad8) | look out of his own eyes — he roots |
 | `pause` / `inventory` / `map` | Esc / **I** / Tab | Start (pad6) / **Select** (pad4) / L3 (pad7) | menu / pouch / map |
@@ -228,8 +230,10 @@ index finger fires what that stance is aimed at. LT raises the guard and takes
 the lock; RT uses whatever the D-pad drew. Aiming a bow with a shoulder and
 loosing it with a thumb makes you let go of the stick that was aiming.
 
-The face buttons are the swings and the verbs: X swings, B rolls, A is context.
-The right stick swings the lens and **clicking it (R3) drops you into his eyes**
+The face buttons are the swings and the verbs: X swings, **A is the dodge *and*
+the context button**, Y jumps, and **B is empty in the world** — it closes menus
+and does nothing else, on purpose. The right stick swings the lens and
+**clicking it (R3) drops you into his eyes**
 — BOTW's arrangement again, and the thumb is already there doing the same job;
 everything else the camera does is under the left index finger.
 
@@ -266,18 +270,55 @@ A sticky mode needs an unconditional way out, and `attack` is it: pressing it
 with an item drawn stows the item **and swings on the same press**
 (`HeroCombat._begin`, `Game.stow_item`). Not the next press — the same one.
 
-`use_item` took the A/Cross the sword vacated. It is the "do the thing you are
-holding" button: it fires the drawn bow or hookshot, and with the sword out and
-something locked it is the lunge. With the sword out and nothing locked it is
-**silent**, deliberately — that is OOT's A, where the jump attack exists only
-under Z.
+`use_item` took the A/Cross the sword vacated, and then the right trigger. It is
+the "do the thing you are holding" button: it fires the drawn bow or hookshot,
+and with the sword out and something locked it is the lunge. With the sword out
+and nothing locked it is **silent**, deliberately — that is OOT's A, where the
+jump attack exists only under Z.
 
-`interact` sits on Y/Triangle because A was spoken for twice over. It cannot
-share A with `use_item`: `interact` already shares A with `ui_accept`, which is
-safe only because `trade_screen`'s accept edge starts DISARMED, and nothing
-equivalent guards the world — `hero_combat` polls its buttons every physics
-frame, so one press at a chest would open it and loose an arrow through it. The
-roll keeps B/Circle, where the source material has it.
+**With an item in hand it is HELD, not pressed.** Pull it and he raises the item
+into its aim; let go and it fires. That is the only arrangement that works once
+the button is a trigger and the aim is the camera: the item goes up, THEN you
+move the stick, then you shoot. Firing on the press meant the shot was gone
+before the aim began, and it also meant the hero had nowhere to stand between
+shots — the stance now belongs to the button, so he lowers the item afterwards
+and the next shot costs another pull. See §8 Ranged; empty-handed the lunge is
+still on the press, because a leap is not a thing you hold.
+
+**`interact` and `context` are the same button — A/Cross — and the thing in
+reach wins.** They are never both wanted at once: you can only address the smith
+while you are standing at the smith. `Prompt.claims_press` / `claims_hold` is the
+whole rule, and `Hero._try_start_roll` and `Hero._tick_sprint` are its only two
+callers — both refuse when `interact` is down on the same frame *and* something is
+focused. Step away and the same button dodges again.
+
+Two properties of that arbitration are load-bearing:
+
+* **The keyboard is not in it.** There the two are Shift and E, a press never
+  reaches both, so `claims_press` is false and Shift still rolls at a chest.
+  Asking "is there a focus?" alone would have taken that away for nothing.
+* **`Prompt` needs no changes to activate.** It was already going to fire the
+  focused Interactable off its own read of the same button, on its own tick. The
+  arbitration is entirely a *refusal* on the hero's side.
+
+The price is that you cannot roll away from a chest — true, and small: an
+Interactable's radius is a couple of metres and the answer is one step. The
+alternatives (a modifier, a double-tap, a hold to disambiguate) all put latency
+or a decision on the most reaction-critical button in the game.
+
+**B/Circle is empty in the world**, which is the other half of the change and
+not a leftover. It is `ui_cancel` and nothing else, so "B closes this" is true in
+every menu with no exception a player has to learn. Do not put a world verb back
+on it. `interact` still shares A with `ui_accept` as well, which is safe for its
+own older reason: `trade_screen`'s accept edge starts DISARMED, so the press that
+opens a screen cannot also confirm inside it.
+
+**The jump attack came off A** in the same change. It used to fire from
+`HeroCombat._tick_context_button` when A was pressed under a raised shield —
+OOT's Z+A. Guard + neutral stick + A is the **backstep** now, which is the
+defensive move the source material leans on hardest and cannot share a press with
+a leap in the opposite direction. `use_item` (RT) still throws the leap from the
+same stance, so nothing was lost but the collision.
 
 **The dodge button is a tap AND a hold.** Tap `context` and the hero rolls,
 exactly as before. Hold it past `Hero.sprint_hold_time` (0.18 s) and he **runs**
@@ -545,10 +586,11 @@ is deliberate:
 | The hero | `Hero.take_hit(hit) -> bool` | his health lives in `Game` so it survives the scene change extracting causes |
 
 `DamageArea` asks for `take_hit` first and falls back to the component. **Do not
-reach around it** — `Crawler` did, calling `hero.take_hit` itself, and that is
-the only reason it was the one enemy in the game that could hurt you: the nine
-GLB monsters all swing `DamageArea`s, which knew about `HealthComponent` alone
-and had therefore been harmless since the roster landed. A blow that lands
+reach around it** — the box-built placeholder enemy (`Crawler`, since deleted)
+did, calling `hero.take_hit` itself, and that is the only reason it was the one
+enemy in the game that could hurt you: the GLB monsters all swing `DamageArea`s,
+which knew about `HealthComponent` alone and had therefore been harmless from the
+day the roster landed until this was fixed. A blow that lands
 returns true; a blow the shield or an i-frame ate returns false, and only the
 first is announced on `connected`.
 
@@ -896,24 +938,45 @@ measuring. The poses are `swing_lookdev`'s job.
 `HeroCombat`**, not more of it. HeroCombat is the sword arm: the swing, the
 block cone, the sockets every model hangs off. What an arrow does after it
 leaves has nothing to do with any of that. HeroCombat still owns the combat
-BUTTONS (one reader, §4) and calls `fire()` on a `use_item` press when the right
-hand is not holding the sword.
+BUTTONS (one reader, §4) and hands `use_item`'s two edges straight to it when the
+right hand is not holding the sword.
+
+**`use_item` is a HELD trigger, not a press.** Down raises and aims, up fires.
+Both items work this way and it is not negotiable: they are AIMED items, and a
+button that fires on the press cannot be aimed with — pulling RT to bring the bow
+up spent the arrow before the stick had moved. The stance follows the button too,
+so the shot ends with the item LOWERED and still in his hand, and the next shot
+costs another pull.
 
 ```gdscript
-hero.ranged.fire(&"bow" | &"hookshot") -> bool   # false = the press did nothing
-hero.ranged.busy() -> bool                        # a shot is mid-flight
-hero.ranged.aiming -> bool                        # a sighted item is out
-hero.ranged.aim_item() -> StringName              # &"bow" &"hookshot" or &""
+hero.ranged.use_press(&"bow" | &"hookshot") -> bool  # raise it; false = ignored
+hero.ranged.use_release()                            # loose it; safe when idle
+hero.ranged.cancel_use()                             # put it down, fire nothing
+hero.ranged.busy() -> bool                           # a shot is mid-flight
+hero.ranged.aiming -> bool                           # a sighted item is OUT
+hero.ranged.aim_item() -> StringName                 # ...and RAISED, or &""
 ```
 
-**A bow shot is two clips and one clock.** `K.BOW_DRAW[level]` seconds of charge
+`aiming` and `aim_item()` are deliberately different questions. The first is the
+item being in his hand — the camera and the crosshair belong to that. The second
+is the trigger being down — the POSE belongs to that. Letting go puts the bow
+down without putting it away.
+
+**A bow shot is two clips and one clock.** `K.BOW_DRAW[level]` seconds of pull
 (`bow_draw_arrow`), then `HeroRanged.BOW_LOOSE` seconds of loose
-(`bow_aim_recoil`), and the arrow leaves at the seam. `HeroRanged` owns the
-clock; the hero owns the body and is committed for both halves:
+(`bow_aim_recoil`), and the arrow leaves at the seam. Held past full draw the
+clock STALLS at the seam rather than running on; released early it does not cut
+the pull short, so a tap is exactly a full-strength shot and a mashed trigger is
+never faster than an aimed one — which is what keeps `Game.bow_draw_time()`, the
+forge ladder, meaning what it says.
+
+**Only the LOOSE commits the hero.** The pull is a stance he can walk in
+(`AimLoco`), because a hold has no length anybody knows in advance and rooting a
+player for an unbounded one is a freeze with a button attached.
 
 ```gdscript
-hero.request_bow(draw_time, loose_time, aim) -> bool  # commits, fires the CHARGE
-hero.bow_loose(loose_time)                            # the seam — not a request
+hero.request_bow_draw(draw_time) -> bool   # fires the PULL clip; commits nothing
+hero.bow_loose(loose_time, aim)            # the seam — takes the commitment
 hero.request_hookshot(duration, aim) -> bool          # one phase, not two
 ```
 
@@ -936,7 +999,8 @@ Bus.aim_changed(active: bool)          # emitted by HeroRanged, nobody else
 camera.set_aiming(on)                  # connected to it in GameCamera._ready
 camera.aiming() -> bool
 hero.aiming() -> bool                  # both read through HeroRanged
-hero.aim_item() -> StringName          # which stance the body holds
+hero.aim_item() -> StringName          # which stance the body holds — and only
+                                       # while the trigger is actually down
 
 Bus.guard_changed(active: bool)        # emitted by HeroCombat, nobody else
 camera.set_guarding(on)                # connected to it in GameCamera._ready
@@ -1086,12 +1150,43 @@ camera raycasts for the point under the crosshair and the muzzle is aimed at
 Arrow.new(); arrow.launch(from, dir, shooter)
 ```
 
-At `K.ARROW_SPEED` an arrow steps 0.7 m per frame, further than a crawler is
+At `K.ARROW_SPEED` an arrow steps 0.7 m per frame, further than a goblin is
 wide. An Area3D only reports what it overlaps on the frame it is sampled, so it
 passes through thin enemies about as often as it hits them — and the misses look
 like bad aim. Each frame it raycasts the **segment** it is about to travel.
 Ammo is spent at **release**, not on the press: a shot interrupted before the
 arrow leaves costs nothing.
+
+The shaft is `assets/weapons/arrow.glb` (`Arrow.MODEL_ID`), turned once by
+`Arrow.MODEL_PITCH` onto the -Z this node flies down. The art-space fix is on
+the **model node**, never on the Arrow's own basis — `-basis.z is forward` is
+what the flight, the raycast and `_face_travel` all read (CLAUDE.md §4).
+
+```gdscript
+# scripts/world/arrow_bundle.gd — arrows on the floor. NOT a LootMote.
+ArrowBundle.drop(parent, at, count, fling := Vector3.ZERO) -> ArrowBundle
+```
+
+Arrows live on `Game`, so a bundle grants ammo directly and never touches the
+bag: no slot, no heat, no gold, no extraction fee, and a full bag cannot refuse
+one. Walk-over, like a mote, with no pick-up button. A full **quiver** refuses
+and the bundle stays lit on the floor rather than vanishing. Chests
+(`Chest.arrow_chance`) and dungeon rooms (`Dungeon.arrow_chance`) place them;
+the chest's roll happens **before** its loot rolls and always, whether or not it
+lands, so adding it cannot shift a seed's contents.
+
+```gdscript
+# scripts/items/fletching.gd — arrows out of the bag, anywhere.
+Fletching.can_fletch() -> bool      # short() is empty AND quiver_room() > 0
+Fletching.fletch() -> int           # arrows made; 0 means it refused
+Fletching.refusal() -> String       # why, in a sentence; "" when it will
+Fletching.cost_line() -> String     # "2/2 Cracked Flint  +  0/2 Bone Shard"
+```
+
+It spends through `Run.consume(id, n)`, which is the **only** writer of the bag
+besides `collect`/`sell` — the premium share leaves with what it takes, exactly
+as a sale does. The card that draws it is on the POUCH screen (§ pouch, and
+docs/METAGAME.md §4.6).
 
 ```gdscript
 # scripts/items/hookshot_tether.gd — presentation only; the firer owns the
