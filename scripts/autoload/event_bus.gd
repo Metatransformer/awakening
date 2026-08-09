@@ -62,6 +62,16 @@ signal key_count_changed(count: int)
 signal item_acquired(item_id: StringName)
 signal switch_toggled(switch_id: StringName, on: bool)
 signal puzzle_solved(puzzle_id: StringName)
+## The floor plan the player can see has changed: a room came out of the fog, a
+## chest was opened, a bundle was picked up, or the floor was torn down on the
+## way to town. `Atlas` is the state; this is the poke.
+##
+## It carries nothing on purpose. Both listeners -- the HUD's corner minimap and
+## the pause menu's MAP screen -- redraw the WHOLE map from `Atlas` when it
+## fires, because a map is cheap to redraw and a diff of it is not. A payload
+## here would be a second, partial description of a thing that already has a
+## complete one.
+signal map_changed
 
 # --- Boss -------------------------------------------------------------------
 signal boss_engaged(boss: Node3D)

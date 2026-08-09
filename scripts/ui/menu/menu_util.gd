@@ -12,6 +12,19 @@ extends RefCounted
 ## the same answers this screen gives and the two had already drifted, which is
 ## how the HUD came to print `LMB` at a player holding a controller.
 
+## The house frame. Every screen in the pause menu is exactly this size, and it
+## has to live in ONE place: the player pages ITEMS → POUCH → MAP with the
+## shoulder buttons, and a frame that changes size between two of them reads as
+## the window jumping rather than as the content changing.
+##
+## Width was 1060 in five separate consts until the paper doll needed a column
+## of its own on the pouch. 1220 inside a 1280-wide base viewport leaves 30 px of
+## dimmed world down each side, which is as narrow a margin as the frame's own
+## border can carry without looking like it was clipped. Height is unchanged and
+## is the binding constraint: 604 inside 720 is already the tallest a screen can
+## be before the footer's Back button walks off the bottom.
+const FRAME_SIZE := Vector2(1220, 604)
+
 ## Player-facing names for the actions Settings offers to rebind.
 const ACTION_NAMES := {
 	&"move_up": "Move Forward",

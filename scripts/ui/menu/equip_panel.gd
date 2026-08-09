@@ -19,7 +19,6 @@ signal notice(text: String, is_error: bool)
 ## A slot settled on a new armament — the menu answers with a click.
 signal value_settled
 
-const FRAME_SIZE := Vector2(1060, 604)
 ## No "swap set" shortcut in the hint on purpose: the button that swaps the set
 ## in play is D-pad ↑, and inside a menu ↑ is how focus moves. Rather than teach
 ## a second, contradictory binding, the swap is a focusable button and the detail
@@ -46,6 +45,11 @@ const HAND_NAMES := {&"left": "LEFT HAND", &"right": "RIGHT HAND"}
 
 ## `set_index * 2 + hand_index` -> the button. Flat because the focus wiring
 ## walks it as a grid and a nested array only makes that harder to read.
+## The header's row, so `PauseMenu` can drop the shared tab strip into it. The
+## three paged screens all expose this and none of them builds a strip of its
+## own — the ring, the strip and the stack all live in one place.
+var _hrow: HBoxContainer
+
 var _slots: Array[Button] = []
 var _set_frames: Array[PanelContainer] = []
 var _set_marks: Array[Label] = []
@@ -96,7 +100,7 @@ func _build() -> void:
 	var frame := PanelContainer.new()
 	frame.name = "Frame"
 	frame.theme_type_variation = &"MenuFrame"
-	frame.custom_minimum_size = FRAME_SIZE
+	frame.custom_minimum_size = MenuUtil.FRAME_SIZE
 	center.add_child(frame)
 
 	var col := VBoxContainer.new()
@@ -107,10 +111,13 @@ func _build() -> void:
 	var header := PanelContainer.new()
 	header.theme_type_variation = &"MenuHeader"
 	col.add_child(header)
-	var title := Label.new()
-	title.theme_type_variation = &"MenuTitle"
-	title.text = "ITEMS"
-	header.add_child(title)
+	# The shared tab strip goes here and there is no title Label: the lit tab is
+	# the title. See `build_tabs` and `MenuPageTabs`.
+	_hrow = HBoxContainer.new()
+	header.add_child(_hrow)
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_hrow.add_child(gap)
 
 	var body := MarginContainer.new()
 	body.theme_type_variation = &"MenuBodyPad"
@@ -387,6 +394,11 @@ func _wire_focus() -> void:
 func focus_first() -> void:
 	if not _slots.is_empty():
 		_slots[HANDS.find(Game.HAND_RIGHT)].grab_focus()
+
+
+## Where the shared tab strip is inserted. See `_hrow`.
+func tab_host() -> HBoxContainer:
+	return _hrow
 
 
 func refresh() -> void:

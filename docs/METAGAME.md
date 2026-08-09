@@ -530,9 +530,25 @@ it, and why the bench is here rather than at the smith: the recipe eats the
 cheapest two things in the grid to its left, so the price and the stock are the
 same picture.
 
+Left of the grid is **WORN** — a drawn silhouette of the hero with the left
+hand, the right hand and the bottle cell filled in from `Game.armament()` and
+`Game.selected_potion()`, in the viewer's order, matching ITEMS and the HUD
+cluster. It is a **paper doll, not an equipment screen**: nothing on it is
+pressable, and the hint line says so (`Hands change on ITEMS`). The figure is
+drawn in `scripts/ui/menu/paper_doll.gd` with `draw_circle`/`draw_line` rather
+than being a portrait sprite, for the reason in STYLEGUIDE §5 — the menu owns no
+art, and a silhouette that is obviously a diagram never has to survive a
+comparison with the model on screen behind it.
+
+It earns the column because the pouch is where you go to ask *what am I carrying
+into the next room*, and until it was here that question needed two screens: the
+bag on this one and the hands on ITEMS. The doll answers it without making the
+answer editable, which is the distinction the next paragraph is about.
+
 It is a separate screen from **Items**, which is what you are *holding* and what
 the D-pad cycles. Carrying and holding are different questions and a player who
-conflates them is a player who thinks the bag can be equipped.
+conflates them is a player who thinks the bag can be equipped. The doll shows
+holding on the carrying screen precisely because it cannot be used to change it.
 
 ---
 
@@ -836,18 +852,27 @@ FORGE pre_extract bag=140 fee=35
 FORGE home       bench={grit:92 plate:82 coil:78 core:115} bag={void_pearl:1}
 FORGE after_death bench_cores=115 bag=0
 FORGE reloaded   rungs={edge:3 plate:3 guard:3 string:3 chain:3} slots=12
-FORGE pouch frame=1060x772 viewport=1280x720
-FORGE FAIL B4 the pouch frame fits on the screen
-FORGE FAIL -- 1 check(s) failed
+FORGE pouch frame=1220x711 viewport=1280x720
+FORGE OK
 ```
 
-**B4 is red and it is a real bug, not a flaky check.** The POUCH frame is 52 px
-taller than the screen, so the Back button and the bottom of the WORKBENCH card
-render past the edge. It is not the alchemist's doing — three runs on `main`
-before this branch existed fail it at exactly the same 1060x772 — and the
-suspect is the fourth section the right column grew, THE WAY OUT. It has its own
-card. Everything else in the director is green, and the line stays printed here
-rather than quietly re-run until it passes.
+**B4 was red for a long time and is green as of 2026-08-09.** The POUCH frame was
+1060x772 — 52 px taller than the screen, so the Back button and the bottom of the
+WORKBENCH card rendered past the edge. It was never the alchemist's doing; the
+diagnosis in this paragraph used to name THE WAY OUT as the suspect for growing
+the right column a fourth card, and that was the right suspect but the wrong
+framing. The height came from **all four** cards plus the gaps between them, and
+no one of them was removable.
+
+It was closed by spacing, not by taking anything off the screen: the right
+column's gap went 12 → 8, the three cards' inner gaps 8 → 6, the detail pane's 10
+→ 6, `MenuSection`'s vertical padding 8 → 6 and `MenuBodyPad`'s 16 → 10. That is
+28 px of air across a column that stacks four cards, and it is invisible.
+
+**The margin is 9 px, so this check is load-bearing.** The bench pairs its
+materials into two columns precisely because a ninth material would otherwise add
+a whole row (§6.5); at this height it would add one anyway and put B4 back in the
+red. If it goes red again the answer is a card off the screen, not another 2 px.
 
 The alchemist has hers (§6.6):
 

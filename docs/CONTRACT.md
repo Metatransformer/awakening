@@ -179,6 +179,7 @@ These nine facts are the ones clones get wrong. Build to them:
 | `Saves` | `scripts/autoload/save_game.gd` | slots |
 | `Music` | `scripts/autoload/music.gd` | picks the track and crossfades it; **after `Bus`** |
 | `Sfx` | `scripts/autoload/sfx.gd` | implements `Bus.request_sfx`, owns the signal→sound table; **after `Bus`** |
+| `Atlas` | `scripts/autoload/atlas.gd` | the floor's plan and its fog of war; **before `Hud`** (the minimap reads it on every repaint) and **before `Menu`** (the MAP screen connects to `Bus.map_changed` on `_ready`) |
 | `Hud` | `scripts/ui/hud/hud.gd` | the overlay, `CanvasLayer` **50** |
 | `Prompt` | `scripts/autoload/prompt.gd` | which Interactable owns the interact button |
 | `Menu` | `scenes/ui/menu/pause_menu.tscn` | the pause menu, `CanvasLayer` **100** |
@@ -240,9 +241,10 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `weapon_prev` / `weapon_next` | 1 / 3 | dpad ← / → | step the right hand through the weapons you own — §4.1 |
 | `item_next` | 4 | dpad ↓ | step the selected item — §4.1 |
 | `loadout_swap` | 2 | dpad ↑ | primary ↔ alternate — §4.1 |
-| — | — | **LB** (pad9) | **deliberately empty**, held for spells |
+| — | — | **LB** (pad9) | **deliberately empty in the world**, held for spells — it pages menu tabs, see below |
 | `first_person` | R | **R3** (pad8) | look out of his own eyes — he roots |
-| `pause` / `inventory` / `map` | Esc / **I** / Tab | Start (pad6) / **Select** (pad4) / L3 (pad7) | menu / pouch / map |
+| `pause` / `inventory` / `map` | Esc / **I** / **M**, Tab | Start (pad6) / **Select** (pad4) / L3 (pad7) | menu / pouch / map |
+| `ui_tab_prev` / `ui_tab_next` | **Q** / **E** | **LB** / **RB** | page ITEMS ↔ POUCH ↔ MAP — **in menus only**, see below |
 | `dbg_reload` | F5 | — | — |
 
 **The triggers are a pair and that is the layout's spine.** This is BOTW's
@@ -261,6 +263,19 @@ nothing here needs a rule to say which of two things a press meant.
 built: casting is a left-hand verb in every game this one borrows from, and an
 unbound button is cheaper than a bound one that then has to move. Do not fill
 it because it looks empty.
+
+**The shoulders page the menu's tabs, and that does not contradict the line
+above.** `ui_tab_prev` / `ui_tab_next` (LB/RB, Q/E) exist only while the pause
+menu is open, where the world is paused and the hero receives no input at all —
+so RB being the light attack and Q being lock-on cost nothing. They are the
+shoulders because that is where "previous page / next page" lives in every menu
+on every console, and because the thumbs are already spending ↑↓←→ on focus.
+
+Both are **registered at runtime** by `PauseMenu._ensure_pad_ui_actions()` and
+appear in neither `project.godot` nor any `.tscn`. That is deliberate on two
+counts: `--import` re-serialises `project.godot` and has eaten additions before
+(§10), and `Settings` skips every `ui_`-prefixed action, so these cannot be
+rebound onto a world verb and cannot be wiped by Reset to Defaults.
 
 The right stick swings the lens and **clicking it (R3) locks on** — the standing
 decision, the one that survives letting go of the trigger.
@@ -1809,6 +1824,40 @@ owns the move sets; `FloorDb` owns only the id. The Long Descent (GDD §8) is on
 extra row, `ENDLESS`, returned for every level past 4 — plus
 `LONG_DESCENT_RELIC`, which is a named row rather than a field on `ENDLESS`
 because a relic in that row would drop on floor 5, 6, 7 and forever.
+
+### The map — one plan, two sizes, and the fog is the room trigger
+
+There is **one** map in this game. `Atlas` holds the plan; `MapDraw.draw_map` is
+the only thing that draws it, and it is called twice — by `Hud._draw_minimap`
+into a 148 px square in the top-right corner, and by `MenuMapPanel` into the MAP
+tab of the pause menu. The only difference between them is the size of the box.
+Do not write a second map; a menu map that re-derived the layout is the one that
+goes stale.
+
+`Dungeon._publish()` is the **only writer** of the room graph, and it writes it
+in the same pass that builds the geometry. Markers go on from `_populate` and
+from the objects themselves: `Chest.activate` swaps `M_CHEST` → `M_CHEST_OPEN`,
+`ArrowBundle._take` clears `M_ARROWS`. Both go through `Atlas.replace_at(world
+position, from, to)` and **not** by name — `Bus.chest_opened` carries a node
+name, and that name is `Chest` in every room on the floor.
+
+Fog of war is `Atlas.seen`, written by the room trigger `Dungeon._add_room_trigger`
+already had. A room is on the map for exactly the same reason it counts toward
+the extraction fee: **the player walked into it.** `Atlas.see()` sits outside the
+trigger's `visited` gate so the two rules stay independent. Nothing may reveal a
+room by proximity, by line of sight, or by owning an item — that would be a
+second definition of "have I been here" sitting next to `Run.descend()`'s.
+
+The plan is not persisted and does not survive the run: `open_floor` wipes the
+previous floor, and `Bus.run_ended` wipes it entirely. `Atlas.bounds()` is the
+whole floor including fogged rooms, deliberately — fitting to the explored subset
+would re-scale and re-centre the map every time a door opened, which makes the
+one instrument whose job is orientation the least stable thing on screen.
+
+Markers are drawn shapes in `Pal` colours, not textures. At 6 px on the minimap
+a photograph of a chest is four brown pixels; a gold box with a dark band is a
+chest. `Atlas`'s marker ids and `MapDraw.MARK_ORDER` are two halves of one list —
+an id with no glyph draws nothing, silently. Add to both.
 
 ---
 

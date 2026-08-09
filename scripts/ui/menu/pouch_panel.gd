@@ -38,8 +38,16 @@ signal notice(text: String, is_error: bool)
 ## to close whole rather than back out one screen.
 signal use_requested
 
-const FRAME_SIZE := Vector2(1060, 604)
-const HINT := "↑↓←→ Look    A Fletch    Hold Y Escape    Esc / B Back"
+## No `FRAME_SIZE` here any more. It was one of five identical copies and the
+## paper doll needed the frame wider, so it lives in `MenuUtil.FRAME_SIZE` where
+## all five screens read the same number — see the comment on it for why they
+## have to.
+##
+## The hint carries four things and it is at its limit. "Hands change on ITEMS"
+## is on it rather than under the WORN card because the misconception it heads
+## off — that the doll is where you equip — is formed by looking at the doll and
+## then looking for the verb, and the verbs are all on this line.
+const HINT := "↑↓←→ Look   A Fletch   Hold Y Escape   Esc / B Back   Hands change on ITEMS"
 
 ## The action the way out is held on: Y on the pad, Y on the keyboard.
 ##
@@ -80,6 +88,19 @@ const CELL_COUNT_PT := 18
 ## Four rows of four. That is the bought maximum, so it is also the tallest grid
 ## the frame was measured against.
 const MAX_CELLS := 16
+
+## The paper doll's column. The frame grew from 1060 to `MenuUtil.FRAME_SIZE`'s
+## 1220 to make room for exactly this, so the number is the width that was added
+## less the separation beside it -- the grid's budget above is unchanged.
+const DOLL_W := 144
+
+## The header's row, so `PauseMenu` can drop the shared tab strip into it. See
+## the same field on `MenuEquipPanel`.
+var _hrow: HBoxContainer
+
+var _doll: MenuPaperDoll
+## Slot key (&"left" / &"right" / &"item") -> the Label naming what is in it.
+var _worn: Dictionary[StringName, Label] = {}
 
 var _cells: Array[Button] = []
 ## Parallel to `_cells`: the item id in each, or &"" for an empty slot.
@@ -123,6 +144,11 @@ func _ready() -> void:
 	# a bundle with this screen open and the row has to stop offering a batch it
 	# no longer has room for.
 	Bus.ammo_changed.connect(func(_id: StringName, _n: int) -> void: refresh())
+	# The doll redraws itself off these, but the three lines naming its slots are
+	# this screen's, and ITEMS is one shoulder press away.
+	Bus.loadout_changed.connect(
+		func(_s: int, _r: StringName, _l: StringName) -> void: _paint_doll())
+	Bus.item_selected_changed.connect(func(_i: int) -> void: _paint_doll())
 	refresh()
 
 
@@ -138,7 +164,7 @@ func _build() -> void:
 	var frame := PanelContainer.new()
 	frame.name = "Frame"
 	frame.theme_type_variation = &"MenuFrame"
-	frame.custom_minimum_size = FRAME_SIZE
+	frame.custom_minimum_size = MenuUtil.FRAME_SIZE
 	center.add_child(frame)
 
 	var col := VBoxContainer.new()
@@ -149,12 +175,11 @@ func _build() -> void:
 	var header := PanelContainer.new()
 	header.theme_type_variation = &"MenuHeader"
 	col.add_child(header)
-	var hrow := HBoxContainer.new()
-	header.add_child(hrow)
-	var title := Label.new()
-	title.theme_type_variation = &"MenuTitle"
-	title.text = "POUCH"
-	hrow.add_child(title)
+	# The shared tab strip is inserted here by `PauseMenu` and there is no title
+	# Label: the lit tab is the title. See `MenuPageTabs`.
+	_hrow = HBoxContainer.new()
+	header.add_child(_hrow)
+	var hrow := _hrow
 	var gap := Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hrow.add_child(gap)
@@ -175,11 +200,15 @@ func _build() -> void:
 	split.add_theme_constant_override("separation", 24)
 	body.add_child(split)
 
-	var left := VBoxContainer.new()
+	# Doll, then grid: the figure on the far left, what it is carrying beside it,
+	# and what any of that is worth on the right. Left to right, the screen is a
+	# sentence about you.
+	var left := HBoxContainer.new()
 	left.name = "Left"
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	left.add_theme_constant_override("separation", 12)
+	left.add_theme_constant_override("separation", 16)
 	split.add_child(left)
+	_build_doll(left)
 	_build_grid(left)
 	# THE BENCH IS ON THE LEFT, under the grid, and it is here for room rather
 	# than for meaning -- though the meaning survives the move, since what made it
@@ -197,7 +226,11 @@ func _build() -> void:
 	var right := VBoxContainer.new()
 	right.name = "Right"
 	right.custom_minimum_size.x = 340
-	right.add_theme_constant_override("separation", 12)
+	# 8 and not the 12 the other columns use. This column stacks four cards and
+	# is the tallest thing on the screen -- it, not the frame's 604, is what sets
+	# the pouch's height, and at 12 the footer's Back button ran off the bottom
+	# of a 720p viewport. Four px a gap is the whole difference.
+	right.add_theme_constant_override("separation", 8)
 	split.add_child(right)
 	_build_detail(right)
 	_build_fletch(right)
@@ -223,15 +256,73 @@ func _build() -> void:
 	frow.add_child(_back)
 
 
-func _build_grid(parent: Node) -> void:
+## The figure, and the three things hanging off it. Read-only: see
+## `MenuPaperDoll`'s header for why equipping stays on the ITEMS screen.
+##
+## A fixed width rather than a share of the row. The bag grid beside it is four
+## cells of a measured 140 px and it cannot give any of that back (see `COLS`);
+## the doll gets the width the frame grew by and not a pixel of the grid's.
+func _build_doll(parent: Node) -> void:
 	var card := PanelContainer.new()
-	card.name = "Bag"
+	card.name = "Worn"
 	card.theme_type_variation = &"MenuSection"
+	card.custom_minimum_size.x = DOLL_W
 	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	parent.add_child(card)
 
 	var inner := VBoxContainer.new()
-	inner.add_theme_constant_override("separation", 8)
+	inner.add_theme_constant_override("separation", 6)
+	card.add_child(inner)
+
+	var caption := Label.new()
+	caption.theme_type_variation = &"MenuHeading"
+	caption.text = "WORN"
+	inner.add_child(caption)
+
+	_doll = MenuPaperDoll.new()
+	_doll.name = "Doll"
+	inner.add_child(_doll)
+
+	# One line per slot, under the figure that draws it. The figure says WHICH
+	# hand by where the box is; the line says what is in it, because two 40 px
+	# bakes of a sword and a hookshot are not tellable apart by everyone.
+	for key: StringName in [&"left", &"right", &"item"]:
+		var row := Label.new()
+		row.name = "Worn_%s" % key
+		row.theme_type_variation = &"MenuSlotStat"
+		row.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		row.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		# Smaller than the theme's default for the same reason the bag cells are
+		# (see CELL_NAME_PT): this column is 144 px wide and "RIGHT · Knightly
+		# Sword" is the longest thing that has to fit in it.
+		row.add_theme_font_size_override("font_size", CELL_NAME_PT)
+		inner.add_child(row)
+		_worn[key] = row
+
+
+func _paint_doll() -> void:
+	if _doll == null:
+		return
+	_doll.queue_redraw()
+	(_worn[&"left"] as Label).text = "LEFT · %s" \
+		% ArmamentDb.slot_name(Game.armament(Game.HAND_LEFT))
+	(_worn[&"right"] as Label).text = "RIGHT · %s" \
+		% ArmamentDb.slot_name(Game.armament(Game.HAND_RIGHT))
+	var potion := Game.selected_potion()
+	(_worn[&"item"] as Label).text = "ITEM · %s" % (
+		PotionDb.name_of(potion) if potion != &"" else "Empty bottle")
+
+
+func _build_grid(parent: Node) -> void:
+	var card := PanelContainer.new()
+	card.name = "Bag"
+	card.theme_type_variation = &"MenuSection"
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	parent.add_child(card)
+
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 6)
 	card.add_child(inner)
 
 	var caption := Label.new()
@@ -332,7 +423,7 @@ func _build_detail(parent: Node) -> void:
 	parent.add_child(card)
 
 	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 10)
+	col.add_theme_constant_override("separation", 6)
 	card.add_child(col)
 
 	_detail_kind = Label.new()
@@ -383,7 +474,7 @@ func _build_fletch(parent: Node) -> void:
 	parent.add_child(card)
 
 	var inner := VBoxContainer.new()
-	inner.add_theme_constant_override("separation", 8)
+	inner.add_theme_constant_override("separation", 6)
 	card.add_child(inner)
 
 	var caption := Label.new()
@@ -502,7 +593,7 @@ func _build_rope(parent: Node) -> void:
 	parent.add_child(card)
 
 	var inner := VBoxContainer.new()
-	inner.add_theme_constant_override("separation", 8)
+	inner.add_theme_constant_override("separation", 6)
 	card.add_child(inner)
 
 	var caption := Label.new()
@@ -804,9 +895,15 @@ func focus_first() -> void:
 		_cells[0].grab_focus()
 
 
+## Where the shared tab strip is inserted. See `_hrow`.
+func tab_host() -> HBoxContainer:
+	return _hrow
+
+
 func refresh() -> void:
 	_rebuild_cells()
 	_fill_cells()
+	_paint_doll()
 	_paint_header()
 	_paint_fletch()
 	_paint_rope()

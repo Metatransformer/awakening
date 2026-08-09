@@ -20,7 +20,6 @@ signal value_settled
 enum Tab { AUDIO, GRAPHICS, CONTROLS, GAME }
 
 const TAB_NAMES: Array[String] = ["AUDIO", "GRAPHICS", "CONTROLS", "GAME"]
-const FRAME_SIZE := Vector2(1060, 604)
 
 const MSAA_NAMES: Array[String] = ["Off", "2x", "4x", "8x"]
 const SHADOW_NAMES: Array[String] = ["Off", "Low", "Medium", "High"]
@@ -58,7 +57,7 @@ func _build_chrome() -> void:
 	var frame := PanelContainer.new()
 	frame.name = "Frame"
 	frame.theme_type_variation = &"MenuFrame"
-	frame.custom_minimum_size = FRAME_SIZE
+	frame.custom_minimum_size = MenuUtil.FRAME_SIZE
 	center.add_child(frame)
 
 	var col := VBoxContainer.new()

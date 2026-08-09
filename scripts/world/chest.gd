@@ -75,6 +75,14 @@ func activate(by: Node3D) -> void:
 			global_position + Vector3.UP * 0.7, ArrowBundle.CHEST_COUNT,
 			_fan(slot, fan) * 1.15)
 
+	# The map keeps the chest and greys it out rather than erasing it. An emptied
+	# chest is still the answer to "have I done this room" -- a room that went
+	# back to blank on the plan is a room the player walks to a second time.
+	#
+	# By POSITION rather than by cell, because a chest knows where it is standing
+	# and does not know, or need to know, which cell that is. `Bus.chest_opened`
+	# carries only a node name, which is "Chest" in every room on the floor.
+	Atlas.replace_at(global_position, Atlas.M_CHEST, Atlas.M_CHEST_OPEN)
 	Bus.chest_opened.emit(name, &"chest")
 	activated.emit(by)
 
