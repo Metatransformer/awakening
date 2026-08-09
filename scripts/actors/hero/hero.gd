@@ -27,7 +27,7 @@ signal landed(fall_speed: float)
 signal roll_started
 signal roll_finished
 
-enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER, ATTACK }
+enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER, ATTACK, HOOK }
 
 @export_group("Rig")
 @export var hero_model: PackedScene = preload("res://assets/characters/hero.fbx")
@@ -85,6 +85,11 @@ enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER, ATTACK }
 @export var clip_air: StringName = &"ss_jump_01"
 @export var clip_land: StringName = &"ss_jump_02"
 @export var clip_attack: StringName = &"ss_slash_01"
+## What the hero does with a bow or a hookshot in his hands. A stand-in: the
+## library is a sword-and-shield set with no draw and no aim clip
+## (docs/CONTRACT.md §2), and the alternative — reusing `clip_attack` — swings an
+## invisible sword every time you shoot, which is worse than a generic pose.
+@export var clip_ranged: StringName = &"ss_casting_01"
 @export var clip_block: StringName = &"ss_block_idle_01"
 ## Seconds the shield takes to come up and go down. Fast enough to be a
 ## reaction, slow enough that you can see it happen.
@@ -115,6 +120,11 @@ var blocking: bool = false
 ## through the hero rather than reaching into the scene tree for it.
 var combat: HeroCombat = null
 
+## The bow and the hookshot. Built here for the same reason combat is: an item
+## bound to a D-pad button has to work in every scene that spawns a hero, and
+## half the rooms in this project build theirs in code.
+var ranged: HeroRanged = null
+
 ## The way out, carried on his belt. Built here for the same reason combat is:
 ## every scene that spawns a hero must spawn one who can leave.
 var charm: HomewardCharm = null
@@ -140,6 +150,8 @@ const _P_ROLL := "parameters/Roll/request"
 const _P_LAND := "parameters/Land/request"
 const _P_ATTACK := "parameters/Attack/request"
 const _P_ATTACK_SCALE := "parameters/AttackScale/scale"
+const _P_RANGED := "parameters/Ranged/request"
+const _P_RANGED_SCALE := "parameters/RangedScale/scale"
 const _P_BLOCK := "parameters/Block/blend_amount"
 
 
@@ -173,6 +185,13 @@ func _ready() -> void:
 	combat = HeroCombat.new()
 	combat.name = "Combat"
 	add_child(combat)
+
+	# After combat, and that ordering matters: HeroRanged reads `combat.bow` and
+	# `combat.hookshot` to find the muzzle a shot leaves from, and those are
+	# mounted in HeroCombat's own _ready.
+	ranged = HeroRanged.new()
+	ranged.name = "Ranged"
+	add_child(ranged)
 
 	charm = HomewardCharm.new()
 	charm.name = "Charm"
@@ -294,7 +313,25 @@ func _build_anim_tree() -> void:
 	tree_root.connect_node(&"Attack", 1, &"AttackScale")
 	prev = &"Attack"
 
-	prev = _add_oneshot(tree_root, &"Land", prev, _anim_node(clip_land), Vector2(1600, 0), 0.06, 0.20)
+	# Shooting gets its own one-shot rather than swapping a clip into AttackAnim.
+	# Assigning `animation` on a live AnimationNodeAnimation the same frame it is
+	# asked to play restarts the mixer's cache mid-blend and drops the opening
+	# frames — the draw, in this case, which is most of what a bow shot looks
+	# like. It sits above the swing because a bow is never held at the same time
+	# as the sword: whichever fired last is the one that should read.
+	var ranged_scale := AnimationNodeTimeScale.new()
+	tree_root.add_node(&"RangedAnim", _anim_node(clip_ranged), Vector2(1440, 260))
+	tree_root.add_node(&"RangedScale", ranged_scale, Vector2(1560, 260))
+	tree_root.connect_node(&"RangedScale", 0, &"RangedAnim")
+	var ranged_shot := AnimationNodeOneShot.new()
+	ranged_shot.fadein_time = 0.06
+	ranged_shot.fadeout_time = 0.16
+	tree_root.add_node(&"Ranged", ranged_shot, Vector2(1640, 0))
+	tree_root.connect_node(&"Ranged", 0, prev)
+	tree_root.connect_node(&"Ranged", 1, &"RangedScale")
+	prev = &"Ranged"
+
+	prev = _add_oneshot(tree_root, &"Land", prev, _anim_node(clip_land), Vector2(1840, 0), 0.06, 0.20)
 	tree_root.connect_node(&"output", 0, prev)
 
 	_tree = AnimationTree.new()
@@ -317,6 +354,7 @@ func _build_anim_tree() -> void:
 	_tree.set(_P_STRIDE, 1.0)
 	_tree.set(_P_BLOCK, 0.0)
 	_tree.set(_P_ATTACK_SCALE, 1.0)
+	_tree.set(_P_RANGED_SCALE, 1.0)
 
 
 func _anim_node(clip: StringName) -> AnimationNodeAnimation:
@@ -369,8 +407,14 @@ func _physics_process(delta: float) -> void:
 			_tick_roll_recover(delta)
 		MoveState.ATTACK:
 			_tick_attack(delta)
+		MoveState.HOOK:
+			_tick_hook(delta)
 
-	_apply_gravity(delta)
+	# The hookshot flies perfectly straight and so does what it drags
+	# (docs/CONTRACT.md §2.5 #8). Gravity applied during the pull would sag the
+	# arc, and a hookshot that cannot lift you to a ledge above you is a rope.
+	if state != MoveState.HOOK:
+		_apply_gravity(delta)
 	var pre_fall := velocity.y
 	move_and_slide()
 	_after_move(pre_fall, delta)
@@ -628,6 +672,119 @@ func request_attack(duration: float) -> bool:
 		_tree.set(_P_ATTACK_SCALE, clip_len / maxf(duration, 0.05))
 	_fire(_P_ATTACK)
 	return true
+
+
+## Commit to a shot lasting `duration` seconds, turning to face `aim`. Returns
+## false if the hero is busy, exactly as `request_attack` does.
+##
+## It reuses `MoveState.ATTACK` rather than adding a state of its own: what the
+## hero's BODY does here is identical — no steering, bleed off whatever speed he
+## carried in — and the only difference is which clip plays. A separate state
+## would be two copies of `_tick_attack` waiting to drift apart.
+##
+## `aim` is a full 3D direction because it comes from the camera, which has a
+## pitch; only its yaw reaches the body, because the hero does not lean.
+func request_ranged(duration: float, aim: Vector3) -> bool:
+	if state != MoveState.GROUND or not is_on_floor():
+		return false
+	state = MoveState.ATTACK
+	_state_timer = duration
+
+	# Shooting where you are looking, always. Unlike the sword there is no stick
+	# gate here: the aim came from the camera, and the camera IS the player
+	# saying where the shot goes.
+	var flat_aim := K.flat(aim)
+	if flat_aim != Vector3.ZERO:
+		facing_yaw = atan2(flat_aim.x, flat_aim.z)
+
+	var clip_len := 1.0
+	if anim_library.has_animation(clip_ranged):
+		clip_len = anim_library.get_animation(clip_ranged).length
+	if _tree != null:
+		_tree.set(_P_RANGED_SCALE, clip_len / maxf(duration, 0.05))
+	_fire(_P_RANGED)
+	return true
+
+
+# --- The hookshot pull -------------------------------------------------------
+## HeroRanged owns the raycast, the anchor and the chain; this owns the body.
+## The split is the same one the charm uses — whoever decides is not whoever
+## moves — and it is what keeps the hookshot out of the movement script.
+
+## Seconds a pull is allowed to take before the hero is released regardless.
+## A pull that ends against a lip the raycast could not see would otherwise root
+## him forever, and being stuck is worse than arriving in the wrong place.
+const HOOK_TIMEOUT_PAD := 0.6
+
+var _hook_point: Vector3 = Vector3.ZERO
+## False while the chain is still outbound and the hero is rooted; true once it
+## has bitten and he is being dragged.
+var _hook_travelling: bool = false
+var _hook_timeout: float = 0.0
+
+
+## Root the hero for the chain's flight. Refused for the same reasons a swing
+## is, so a hookshot cannot be fired out of a roll.
+func hook_begin() -> bool:
+	if state != MoveState.GROUND and state != MoveState.ATTACK:
+		return false
+	state = MoveState.HOOK
+	_hook_travelling = false
+	_hook_timeout = 0.0
+	_speed = 0.0
+	velocity = Vector3.ZERO
+	return true
+
+
+## The head bit something. Drag him to `point` at K.HOOK_PULL_SPEED.
+func hook_pull_to(point: Vector3) -> void:
+	if state != MoveState.HOOK:
+		return
+	_hook_point = point
+	_hook_travelling = true
+	_hook_timeout = global_position.distance_to(point) / maxf(K.HOOK_PULL_SPEED, 0.1) \
+		+ HOOK_TIMEOUT_PAD
+	# Face the anchor. Being dragged backwards through the air is the single
+	# clearest tell that a hookshot was bolted on rather than built in.
+	var flat := K.flat(point - global_position)
+	if flat != Vector3.ZERO:
+		facing_yaw = atan2(flat.x, flat.z)
+
+
+func hook_end() -> void:
+	if state != MoveState.HOOK:
+		return
+	state = MoveState.GROUND
+	_hook_travelling = false
+	_speed = 0.0
+	velocity = Vector3.ZERO
+
+
+## True while the chain is out or the hero is on it. HeroRanged polls this to
+## know when the pull has finished rather than being told, because the pull can
+## end on arrival OR on the timeout and only the hero knows which.
+func hooking() -> bool:
+	return state == MoveState.HOOK
+
+
+func _tick_hook(delta: float) -> void:
+	if not _hook_travelling:
+		# Rooted while the chain flies out. Held still rather than merely
+		# unsteered: the shot reads as an aimed thing, and drifting out from
+		# under your own chain looks like the anchor moved.
+		velocity = Vector3.ZERO
+		return
+
+	_hook_timeout -= delta
+	var to := _hook_point - global_position
+	# Arrival is generous. The pull point stands off a wall by a hero radius, so
+	# insisting on reaching it exactly means arriving is decided by whether
+	# move_and_slide let him touch geometry — which is not a thing to hang a
+	# state transition on.
+	if to.length() <= 0.45 or _hook_timeout <= 0.0:
+		hook_end()
+		return
+	velocity = to.normalized() * K.HOOK_PULL_SPEED
 
 
 ## Raise or drop the shield. HeroCombat owns the decision; this owns the pose.

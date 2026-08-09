@@ -424,6 +424,15 @@ Rules that are not negotiable:
   it predates the loadout, so `_on_loadout_changed` maps `&"sword"` → `&""`
   rather than renaming it under them.
 
+**`Game.STARTER_KIT` is `[test]` scaffolding.** The bow and the hookshot are
+granted in `Game._ready()`, with arrows, so both are reachable from a cold boot
+without playing a run to the chest that holds them. `grant()`'s own auto-bind is
+what puts them on dpad ← and dpad ↑; nothing here binds a button by hand. It is
+in `_ready()` and deliberately **not** in `reset()` — `reset()` means "a fresh
+save owns nothing", several directors assert exactly that, and a kit that
+reappeared on every reset would make the assertion untestable rather than true.
+Delete the two constants to ship.
+
 ### The way out — the Homeward Charm
 
 ```gdscript
@@ -484,7 +493,40 @@ Grip convention, **verified by render**, not by reading the GLB:
 Do not compute a bone-socket offset analytically. The rest-pose numbers are in a
 rotated FBX space and will mislead you. Render it, look, adjust, render again.
 
-### Hookshot — chain and anchors, ready for P7
+### Ranged — `HeroRanged` owns the bow and the hookshot
+
+`scripts/combat/hero_ranged.gd`, a child of the hero and a **sibling of
+`HeroCombat`**, not more of it. HeroCombat is the sword arm: the swing, the
+block cone, the sockets every model hangs off. What an arrow does after it
+leaves has nothing to do with any of that. HeroCombat still owns the attack
+BUTTON (one reader, §4) and calls `fire()` when the right hand is not holding
+the sword.
+
+```gdscript
+hero.ranged.fire(&"bow" | &"hookshot") -> bool   # false = the press did nothing
+hero.ranged.busy() -> bool                        # a shot is mid-flight
+```
+
+**Aim comes from the camera, and converges on what it is looking AT.** The
+camera is the only thing carrying a player-controlled pitch (§4), so it is the
+aim source; locked on, the bow overrides it and shoots the target. The muzzle is
+the item's own model — the bow in the left hand, the hookshot in the right — so
+it sits ~0.6 m off his centre line. **Aim parallel to the camera and every shot
+travels its whole flight 0.6 m to one side of what the player lined up.** So the
+camera raycasts for the point under the crosshair and the muzzle is aimed at
+*that point*. Exact at every distance, which a fixed convergence distance is not.
+
+```gdscript
+# scripts/combat/arrow.gd — raycast-stepped, NOT an Area3D.
+Arrow.new(); arrow.launch(from, dir, shooter)
+```
+
+At `K.ARROW_SPEED` an arrow steps 0.7 m per frame, further than a crawler is
+wide. An Area3D only reports what it overlaps on the frame it is sampled, so it
+passes through thin enemies about as often as it hits them — and the misses look
+like bad aim. Each frame it raycasts the **segment** it is about to travel.
+Ammo is spent at **release**, not on the press: a shot interrupted before the
+arrow leaves costs nothing.
 
 ```gdscript
 # scripts/items/hookshot_tether.gd — presentation only; the firer owns the
@@ -504,6 +546,25 @@ ring.anchor_point()  # where the head bites — what the reticle wants
 
 Fixed **speed**, not fixed duration. A fixed duration makes near shots crawl and
 far shots streak, which is the giveaway tell of a clone.
+
+The hero side of it — `scripts/actors/hero/hero.gd`:
+
+```gdscript
+hero.request_ranged(duration, aim) -> bool  # commits him, faces him down the aim
+hero.hook_begin() -> bool                   # the hookshot takes him over
+hook.hook_pull_to(point)                    # …and drags him there
+hero.hook_end()
+hero.hooking() -> bool
+```
+
+`request_ranged` reuses `MoveState.ATTACK` on purpose: the body does the same
+thing during a draw as during a swing, and a second state would be two copies of
+`_tick_attack` waiting to drift apart. The pull is its own `MoveState.HOOK`,
+because that one really is different — **gravity is not applied while it runs**
+(§ "the hookshot flies perfectly straight" applies to the hero too), and it ends
+on arrival or on a timeout so a hook into moved geometry cannot strand him.
+
+Proof: `tools/directors/ranged_kit.gd`.
 
 ### Music — picks itself, and nobody calls it
 

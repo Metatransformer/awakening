@@ -205,7 +205,12 @@ func _show_equipped() -> void:
 ## as a bug, and "arrows" is a count on the HUD, not a thing you hold up.
 func _show_left(left: StringName) -> void:
 	if shield != null:
-		shield.visible = left == &"shield"
+		# The bow is mounted on the LEFT hand (that is where a bow is held) while
+		# the shield rides the left forearm, so drawing the bow out of the primary
+		# set used to leave both on the same arm -- a kite shield growing out of a
+		# bowstring. You cannot draw a bow with a shield strapped to the hand that
+		# holds it, so the shield comes off for as long as the bow is out.
+		shield.visible = left == &"shield" and equipped != &"bow"
 
 
 ## Attach a weapon model to `bone`, undoing the rig's scale so the model keeps
@@ -329,9 +334,14 @@ func _physics_process(delta: float) -> void:
 func _try_swing() -> void:
 	if _swing_t >= 0.0:
 		return
-	# The sword is stowed while an item is out, so a swing here would deal
-	# damage with an invisible blade.
+	# The sword is stowed while an item is out, so a swing here would deal damage
+	# with an invisible blade. What the attack button does instead is USE the
+	# item -- the bow shoots, the hookshot fires. That is what the button means
+	# in the source material, and for a long time this line simply ate the press,
+	# which made every bound item a thing you could draw and then not use.
 	if equipped != &"":
+		if _hero.ranged != null:
+			_hero.ranged.fire(equipped)
 		return
 	if not _hero.request_attack(swing_time):
 		return

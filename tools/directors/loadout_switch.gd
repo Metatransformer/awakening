@@ -14,6 +14,13 @@ func run(rig) -> void:
 	var out: String = rig.arg("out", "/tmp/load/x.png").get_base_dir()
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
+	# The honest empty state, asked for out loud. `Game` hands out a [test]
+	# starter kit at boot (game_state.gd STARTER_KIT) so the ranged items can be
+	# exercised without playing to a chest, and everything below this line is
+	# about what the hero owns BEFORE he has found anything. reset() is the one
+	# thing that still means "a brand new game".
+	Game.reset()
+
 	var hero = rig.get_nodes_in_group(&"player")[0]
 	hero.global_position = Vector3(0.0, 0.05, 4.0)
 	await rig.wait_frames(12)

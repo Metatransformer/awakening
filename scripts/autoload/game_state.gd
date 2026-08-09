@@ -101,6 +101,41 @@ var loadout_set: int = PRIMARY
 var flags: Dictionary[StringName, bool] = {}
 
 
+# --- The starter kit --------------------------------------------------------
+## [test] Gear the player would otherwise have to FIND, handed over at boot so
+## the ranged items can be exercised without playing a full run to a chest.
+##
+## This is scaffolding and it is meant to be deleted. It is one constant and one
+## call precisely so that deleting it is a two-line change: empty the array and
+## the game goes back to a hero with a sword, three empty C-buttons and an
+## alternate loadout that names a bow he has not found — which is the real
+## starting state and the one the equipment screen's "(not owned)" text exists
+## to describe.
+##
+## `grant()` auto-binds each item to the first free C-button in order, so the
+## bow lands on dpad ← and the hookshot on dpad ↑ with no extra wiring.
+const STARTER_KIT: Array[StringName] = [&"bow", &"hookshot"]
+## Enough to miss with. A quiver you can empty in one fight turns a test of the
+## bow into a test of the arrow economy.
+const STARTER_ARROWS := 30
+
+
+func _ready() -> void:
+	_grant_starter_kit()
+
+
+## Deliberately called from boot and NOT from `reset()`. `reset()` means "a
+## fresh save owns nothing", several directors assert exactly that, and a kit
+## that reappeared on every reset would make the assertion untestable rather
+## than true. Idempotent anyway: `grant()` returns early on anything already
+## owned and the arrow top-up is a floor rather than an addition.
+func _grant_starter_kit() -> void:
+	for id in STARTER_KIT:
+		grant(id)
+	if arrows < STARTER_ARROWS:
+		add_arrows(STARTER_ARROWS - arrows)
+
+
 func reset() -> void:
 	max_quarters = K.START_HEARTS * K.HEART
 	quarters = max_quarters
@@ -126,6 +161,14 @@ func reset() -> void:
 	]
 	loadout_set = PRIMARY
 	flags.clear()
+	# Say that the hands and the buttons emptied. Without this, resetting cleared
+	# `items` and `loadout` in silence and every listener kept drawing the gear
+	# it last heard about — a hero still wearing a stowed bow he no longer owns,
+	# and item buttons still labelled with it. Announcing state is not optional
+	# for state nobody polls.
+	_announce_loadout()
+	Bus.quick_slots_changed.emit(quick_slots)
+	Bus.ammo_changed.emit(&"arrows", arrows)
 	Bus.gold_changed.emit(gold)
 	Bus.key_count_changed.emit(small_keys)
 	Bus.player_health_changed.emit(quarters, max_quarters)

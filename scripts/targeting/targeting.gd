@@ -288,9 +288,21 @@ func target_point_of(t: Node3D) -> Vector3:
 ## Eye-to-chest, world geometry only. Enemy and player bodies are deliberately
 ## not in the mask: a crawler standing between you and the orc behind it should
 ## not make the orc unlockable, only a wall should.
+##
+## **The target is excluded, and it has to be.** The ray ends AT the target's
+## chest, which is inside the target's own collider, so anything that is itself
+## on `L_WORLD` reported as blocking the view of itself — `training_post.gd`
+## sets `L_WORLD | L_INTERACT`, and locking a post therefore held for exactly
+## `los_grace` and then dropped, every time, forever. The question this asks is
+## "is anything BETWEEN us", and a thing is never between you and itself.
 func _has_los(t: Node3D) -> bool:
 	_ray.from = _hero.global_position + Vector3.UP * K.HERO_EYE_Y
 	_ray.to = target_point_of(t)
-	_ray.exclude = [_hero.get_rid()] if _hero is CollisionObject3D else []
+	var skip: Array[RID] = []
+	if _hero is CollisionObject3D:
+		skip.append((_hero as CollisionObject3D).get_rid())
+	if t is CollisionObject3D:
+		skip.append((t as CollisionObject3D).get_rid())
+	_ray.exclude = skip
 	var space := get_world_3d().direct_space_state
 	return space.intersect_ray(_ray).is_empty()
