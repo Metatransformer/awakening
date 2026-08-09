@@ -47,6 +47,25 @@ var level: int = 1
 ## touches it to buy a distinction the player never makes. What the player
 ## compares is value PER SLOT, and a pot preserves that arithmetic exactly.
 var premium: int = 0
+## Monsters killed since `enter()`. Per RUN and not per floor: the stair keeps
+## the bag, so it keeps the tally that sits next to the bag on the ending screen.
+var kills: int = 0
+## Name of whatever last hit the hero, stamped by `Hero.take_hit` off `Hit.source`
+## and read once by `die()`. Empty until something connects.
+##
+## Here rather than on the hero because the hero is destroyed by the very scene
+## change the ending screen is about to make, and this has to outlive him by
+## exactly as long as it takes to say what he died to.
+var last_attacker: StringName = &""
+## What the run that just ended looked like, for `RunEndScreen`. Built by `die()`
+## and `extract()` -- the only two functions that know -- because both of them
+## then destroy the state it is made of: the bag is cleared, the components are
+## moved to the bench, `level` goes back to 1. A screen that read `Run` directly
+## would be reading the wreckage.
+##
+## Keys: extracted, contents, banked, value, premium, fee, kills, level, depth,
+## killer. Empty before the first run ends.
+var summary: Dictionary = {}
 ## Seeded per run so a dungeon can be replayed exactly.
 var rng := RandomNumberGenerator.new()
 var seed_used: int = 0
@@ -59,6 +78,10 @@ const EXTRACT_MIN := 15
 
 func _ready() -> void:
 	reset()
+	# The tally the ending screen prints. Counted here rather than read off Heat,
+	# which has one too: Heat's is a CHAIN and it decays -- that is its whole job --
+	# so it answers "how fast are you killing", never "how many did you kill".
+	Bus.enemy_died.connect(_on_enemy_died)
 
 
 func reset() -> void:
@@ -67,6 +90,13 @@ func reset() -> void:
 	in_dungeon = false
 	depth = 0
 	level = 1
+	kills = 0
+	last_attacker = &""
+
+
+func _on_enemy_died(_enemy: Node3D, _position: Vector3) -> void:
+	if in_dungeon:
+		kills += 1
 
 
 # --- Entering and leaving ---------------------------------------------------
@@ -80,6 +110,9 @@ func enter(run_seed: int = 0) -> void:
 	# resume -- what you keep between runs is gold and what gold bought, and if
 	# a run could start on floor 7 the forge would be optional (docs/GDD.md §4).
 	level = 1
+	kills = 0
+	last_attacker = &""
+	summary = {}
 	in_dungeon = true
 	seed_used = run_seed if run_seed != 0 else int(Time.get_unix_time_from_system())
 	rng.seed = seed_used
@@ -126,16 +159,28 @@ func extract() -> bool:
 
 	Game.spend_gold(fee)
 	in_dungeon = false
+	# Snapshotted BEFORE the components leave, because the ending screen is a
+	# receipt for the run and a component you carried out is the single best thing
+	# on it. `bank_components` erases those lines from the bag, so a screen built
+	# from the bag afterwards would list a haul with the best of it missing and no
+	# hint that anything had gone anywhere.
+	var carried := bag.duplicate()
+	var carried_value := bag_value()
 	# The fee was charged on the WHOLE bag, components included, and only then
 	# are they sorted out of it. That order is the rule: you pay to carry a
 	# component home exactly as you pay to carry a pearl home, so choosing the
 	# component is a choice about slots and never a way to dodge the toll.
 	var banked := bank_components()
+	_end_summary(true, carried, carried_value, banked, fee)
+	# Same reason as in `die()`: the next run starts at the top, and until the
+	# number says so the HUD in town is reporting a floor nobody is standing on.
+	level = 1
+	Bus.level_changed.emit(level)
 	# Getting your health back is what makes extracting feel like relief rather
 	# than retreat. It is also the only heal in the game, which is what stops a
 	# player from grinding one room forever.
 	Game.heal(Game.max_quarters)
-	Bus.run_ended.emit(true, bag.duplicate(), bag_value())
+	Bus.run_ended.emit(true, carried, carried_value)
 	if not banked.is_empty():
 		Bus.components_banked.emit(banked)
 	return true
@@ -191,17 +236,52 @@ func die() -> void:
 		return
 	var lost := bag.duplicate()
 	var lost_value := bag_value()
+	_end_summary(false, lost, lost_value, {}, 0)
 	bag.clear()
 	# The heat premium dies with the bag it was earned into. It is the same
 	# gold; there was never a second container.
 	premium = 0
 	in_dungeon = false
 	depth = 0
+	# Back to the top of the Lower Worlds, and it is reset HERE rather than left
+	# for the next `enter()` to do. Between the two the player is standing in town
+	# with the HUD still saying FLOOR 4, which is a floor nobody is on -- the run
+	# that reached it is over and the next one starts at 1 by rule. The ending
+	# screen has already been handed the number it needs (`_end_summary` above).
+	level = 1
+	Bus.level_changed.emit(level)
 	# You wake up in town: broke, but alive. Leaving health at zero would mean
 	# the next thing that touched you killed you again before you could sell.
 	Game.heal(Game.max_quarters)
 	Bus.bag_changed.emit(bag, 0)
 	Bus.run_ended.emit(false, lost, lost_value)
+
+
+## Freeze what the run looked like, for `RunEndScreen`.
+##
+## Called by `die()` and `extract()` as their FIRST act, before either starts
+## dismantling the run -- the bag, the premium pot, the floor number and the
+## in_dungeon flag are all about to change, and every one of them is on the
+## receipt. The screen does not draw until a frame or two later (Flow holds on the
+## killing blow first), by which point reading `Run` live would report the state of
+## a player standing in town.
+func _end_summary(extracted: bool, contents: Dictionary, value: int,
+		banked: Dictionary, fee: int) -> void:
+	summary = {
+		"extracted": extracted,
+		"contents": contents.duplicate(),
+		# Which of those lines went to the bench rather than the vendor. Only ever
+		# non-empty on an extraction -- components you were carrying die with the
+		# bag, same as everything else in it (see `bank_components`).
+		"banked": banked.duplicate(),
+		"value": value,
+		"premium": premium,
+		"fee": fee,
+		"kills": kills,
+		"level": level,
+		"depth": depth,
+		"killer": last_attacker,
+	}
 
 
 ## What leaving costs right now.

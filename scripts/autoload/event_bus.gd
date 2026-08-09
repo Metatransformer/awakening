@@ -67,7 +67,14 @@ signal boss_defeated
 # --- The run: bag, extraction, economy --------------------------------------
 ## A run began. `run_seed` is recorded so it can be replayed.
 signal run_started(run_seed: int)
-## A run ended. `extracted` false means the player died and `lost` is gone.
+## A run ended. `extracted` false means the player died and the bag is gone.
+##
+## `contents` is what was in the bag AS THE RUN ENDED -- on an extraction that
+## means components included, before `Run.bank_components` sorts them out to the
+## bench. The fuller picture (the fee, the kill count, the floor, what killed you)
+## is on `Run.summary`, which `RunEndScreen` reads; this signal stays three
+## arguments because everything else that listens only wants to know THAT a run
+## ended.
 signal run_ended(extracted: bool, contents: Dictionary, value: int)
 ## The carried bag changed. `value` is what the vendor would pay for it.
 signal bag_changed(bag: Dictionary, value: int)

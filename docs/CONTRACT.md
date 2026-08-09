@@ -177,9 +177,11 @@ These nine facts are the ones clones get wrong. Build to them:
 | `Menu` | `scenes/ui/menu/pause_menu.tscn` | the pause menu, `CanvasLayer` **100** |
 | `Flow` | `scripts/autoload/game_flow.gd` | town↔dungeon + the fade, `CanvasLayer` **200**; **loads LAST** |
 
-The three `CanvasLayer` numbers are a stack, not preferences: the HUD draws under
-the pause menu, and Flow's fade covers both. A fade something can draw on top of
-is not a fade.
+The `CanvasLayer` numbers are a stack, not preferences: the HUD draws under the
+pause menu, and Flow's fade covers both. A fade something can draw on top of is
+not a fade. Two screens are not autoloads and take their place in the same stack —
+`TradeScreen` at **60** and `RunEndScreen` at **150**, the latter deliberately
+above the pause menu so Escape cannot open a menu behind the end of a run.
 
 `Menu` is an autoload for the same reason `Hud` is — Escape has to work in
 whatever scene the launcher picks. It shipped built but instanced only in
@@ -700,6 +702,7 @@ var from: Vector3        # world position the hit came from
 var knockback: float     # metres/sec applied away from `from`
 var stun: float          # seconds the victim is stunned
 var kind: StringName     # &"sword" &"arrow" &"bomb" &"contact" &"fire"
+var source: StringName   # who threw it, ready to print: &"SKELETON", &"ELITE WRAITH"
 
 # on HealthComponent:
 func apply_hit(hit: Hit) -> void
@@ -709,6 +712,15 @@ signal died
 
 Anything that deals damage puts a `DamageArea` in group `hitbox` and opens its
 window. **Do not invent a second damage path.**
+
+`source` is set once, on the `DamageArea` (`@export var source`), and `Enemy`
+fills its contact hitbox in from its own kind. It exists so the end-of-run screen
+can say *what* killed you — `Hero.take_hit` stashes it in `Run.last_attacker`
+**before** calling `Game.damage`, because `Game.damage` emits `player_died`
+synchronously and `Run.die()` builds the summary off the back of it. An attacker
+that never stamps itself is not an error: the screen says `KILLED BY THE DARK`
+rather than inventing one. Anything new that can kill the hero should set it,
+including traps and falls when they arrive.
 
 ### Feel — ask for it, never own it
 

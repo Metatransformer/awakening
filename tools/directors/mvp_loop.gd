@@ -277,12 +277,50 @@ func _extract(rig) -> void:
 	await rig.capture(out.path_join("m_17_extracting.png"))
 
 
+## The receipt, and then the ride home.
+##
+## The rope no longer lands you in town by itself: a run now ends on the floor it
+## ended on, under `RunEndScreen`, and BACK TO TOWN is the press that goes home
+## (scripts/ui/run_end/). This beat used to be a wait and a capture, and after the
+## screen landed it still passed -- while photographing the ending screen into
+## `m_18_home.png` and printing "MVP home scene=DungeonRun". A beat that asserts
+## nothing cannot notice that it has stopped testing the thing in its name.
 func _return(rig) -> void:
 	await rig.wait_frames(150)
+	var screen := _run_end(rig)
+	print("MVP receipt screen=%s paused=%s kills=%d" % [
+		screen != null, rig.paused, int(Run.summary.get("kills", -1))])
+	if screen == null:
+		print("MVP FAIL no ending screen after the rope")
+		return
+	await rig.capture(out.path_join("m_18_receipt.png"))
+
+	await rig.wait_seconds(RunEndScreen.SETTLE + 0.2)
+	await rig.hold_seconds([&"ui_accept"], 0.2)
+	await rig.wait_frames(240)
+
 	print("MVP home scene=%s in_dungeon=%s gold=%d bag=%d hearts=%d/%d" % [
 		rig.scene().name, Run.in_dungeon, Game.gold, Run.bag_value(),
 		Game.quarters, Game.max_quarters])
-	await rig.capture(out.path_join("m_18_home.png"))
+	if rig.scene() is not Town:
+		print("MVP FAIL BACK TO TOWN did not reach town (scene=%s)" % rig.scene().name)
+	if rig.paused:
+		print("MVP FAIL the tree is still paused in town")
+	await rig.capture(out.path_join("m_19_home.png"))
+
+
+func _run_end(rig) -> RunEndScreen:
+	for n in _walk(rig.scene()):
+		if n is RunEndScreen:
+			return n
+	return null
+
+
+func _walk(root: Node) -> Array:
+	var found := [root]
+	for c in root.get_children():
+		found.append_array(_walk(c))
+	return found
 
 
 # --- Helpers ----------------------------------------------------------------
@@ -308,7 +346,7 @@ func _break_off(rig, hero: Hero) -> void:
 	var best := -1.0
 	for cell: Vector2i in dun.rooms:
 		var spot := dun.centre_of(cell)
-		var gap := _nearest_foe(foes, spot)
+		var gap := _nearest_foe(rig, spot)
 		if gap > best:
 			best = gap
 			away = spot
@@ -317,7 +355,7 @@ func _break_off(rig, hero: Hero) -> void:
 	# Long enough for the leash to run: they walk home at a little over half
 	# speed, so this is a slow beat by design.
 	await rig.wait_frames(120)
-	var gap := _nearest_foe(foes, hero.global_position)
+	var gap := _nearest_foe(rig, hero.global_position)
 	print("MVP broke off, nearest monster %.1f m" % gap)
 	if gap < 6.0:
 		print("MVP FAIL could not disengage: a monster is still %.1f m away with"
@@ -325,19 +363,24 @@ func _break_off(rig, hero: Hero) -> void:
 			+ " letting go, and nothing in the dungeon can be walked away from")
 
 
-## Distance to the closest monster still standing. UNRELATED to the A button; it
-## is here because it fails the break-off beat intermittently on main.
+## Distance to the nearest LIVE monster, asked of the GROUP and not of a snapshot.
 ##
-## The loop variable is deliberately UNTYPED. `for f: Node3D in foes` assigns
-## each element to a typed local BEFORE the body runs, and assigning a freed
-## instance is a hard SCRIPT ERROR that aborts the function — which then returns
-## 0.0, reads as "a monster is standing on top of you", and fails the disengage
-## for a skeleton the hero killed forty seconds earlier. `is_instance_valid`
-## cannot save a body the loop never reaches. It only bit when the kill above
-## happened to be collected before this ran, which is why it looked flaky.
-func _nearest_foe(foes: Array, at: Vector3) -> float:
+## The loop variable is deliberately UNTYPED. `for f: Node3D in foes` assigns each
+## element to a typed local BEFORE the body runs, and assigning a freed instance is
+## a hard SCRIPT ERROR that aborts the whole function -- so it returns 0.0, the
+## default for its return type, and `is_instance_valid` never gets a body to guard.
+## That 0.0 lies twice: every room reads as equally awful, so `_break_off` keeps
+## `rooms[0]` and teleports the hero into the pack he was leaving, and the final
+## measurement then reports "a monster is standing on top of you" for a skeleton he
+## killed forty seconds earlier. It only bit when that corpse happened to be
+## collected before this ran, which is why the beat looked flaky rather than broken.
+##
+## Re-fetched from the group each call rather than handed a snapshot, which is the
+## second half of the same bug: a list taken before the fight has the corpse in it
+## by definition, and misses anything that spawned since.
+func _nearest_foe(rig, at: Vector3) -> float:
 	var best := 1e9
-	for f in foes:
+	for f in rig.get_nodes_in_group(&"enemy"):
 		if not is_instance_valid(f):
 			continue
 		var n := f as Node3D

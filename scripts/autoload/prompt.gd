@@ -181,12 +181,24 @@ func _process(delta: float) -> void:
 ## bracket form is a keycap notation -- it asks the player to know the convention
 ## before it tells them anything -- while the sentence form is the instruction
 ## itself, and it costs three characters on the one line the HUD centres.
+##
+## **"HOLD" IS NOT DECORATION.** An Interactable with `hold_time` does nothing at
+## all for a tap, and it does it silently -- there is no refusal, no beep, no
+## error. The town gate is the only one in the game, and it is also the door out
+## of the hub, so the one prompt in the project that had to say how to press it
+## was the one prompt that could strand a player. It read "A TO DESCEND", a
+## player tapped A at it, and the honest bug report that came back was "A to
+## descend doesn't work". Read off `hold_time` rather than written per prop, so
+## the next Interactable that grows a hold cannot forget to say so.
 func _say_prompt() -> void:
 	if focus == null or not is_instance_valid(focus):
 		return
 	var cap := Glyph.cap(&"interact")
-	Bus.prompt_changed.emit("%s TO %s" % [cap, focus.prompt] if not cap.is_empty()
-		else focus.prompt)
+	if cap.is_empty():
+		Bus.prompt_changed.emit(focus.prompt)
+		return
+	var form := "HOLD %s TO %s" if focus.hold_time > 0.0 else "%s TO %s"
+	Bus.prompt_changed.emit(form % [cap, focus.prompt])
 
 
 func _nearest(hero: Node3D) -> Interactable:

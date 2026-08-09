@@ -266,6 +266,12 @@ func _build_combat() -> void:
 		+ (Prog.ELITE_DAMAGE if elite else 0)
 	_hitbox.amount = _damage
 	_hitbox.kind = &"contact"
+	# What the run-ending screen prints after "KILLED BY". The elite prefix is on
+	# the name and not only on the stats because "ELITE ORC" is the whole story of
+	# that death -- an ordinary orc and the bigger one you could see coming are
+	# different rooms (see `elite`), and a screen that called both of them ORC
+	# would flatten the one distinction the roster is built on.
+	_hitbox.source = StringName(("ELITE " if elite else "") + String(kind).to_upper())
 	_hitbox.knockback = K.KNOCKBACK_LIGHT
 	_hitbox.position = Vector3(0.0, _height() * 0.55, -float(_def["reach"]) * 0.7)
 	var col := CollisionShape3D.new()

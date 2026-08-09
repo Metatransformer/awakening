@@ -18,6 +18,10 @@ signal connected(victim: Node3D, hit: Hit)
 @export var knockback: float = K.KNOCKBACK_LIGHT
 @export var stun: float = 0.15
 @export var kind: StringName = &"sword"
+## Printable name of whatever owns this hitbox, stamped onto every Hit it makes
+## so the run-ending screen can say what killed you. `Enemy` sets it; the hero's
+## own blade leaves it empty because nothing reads the killer of a monster.
+@export var source: StringName = &""
 
 var active: bool = false
 
@@ -71,7 +75,7 @@ func _try_hit(body: Node3D) -> void:
 	# that hits you for standing still.
 	_already_hit.append(id)
 
-	var hit := Hit.make(amount, global_position, kind, knockback, stun)
+	var hit := Hit.make(amount, global_position, kind, knockback, stun, source)
 	# Only a blow that actually landed is announced. Blocked and i-framed blows
 	# must not spark and clang as though they connected.
 	if _deliver(body, hit):
