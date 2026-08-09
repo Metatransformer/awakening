@@ -1,14 +1,15 @@
 extends RefCounted
 ## Does Z-targeting buy you an attack you cannot otherwise make?
 ##
-## The lunge is the same button as the light swing. What makes it a different
-## move is the lock plus a stick pushed at what you locked, and that is exactly
-## what this measures — in METRES CLOSED, because "he leapt" is a claim about
-## distance and the pose cannot settle it.
+## The lunge has its own button now: `use_item`, the one that fires the bow when
+## an item is drawn. With the sword out and something locked it is the leap, and
+## with nothing locked it is silent — which is OOT's A exactly. What this
+## measures is METRES CLOSED, because "he leapt" is a claim about distance and
+## the pose cannot settle it.
 ##
 ## Four claims:
-##   1. Locked, with the stick toward the target, the hero closes the gap and
-##      lands the blow. Distance before minus distance after is the leap.
+##   1. Locked, `use_item` closes the gap and lands the blow. Distance before
+##      minus distance after is the leap.
 ##   2. It hurts more than a light swing. It is a commitment; it should pay.
 ##   3. UNLOCKED, the same inputs do NOT leap. If they do, Z-targeting bought
 ##      nothing and the lunge is simply the light attack with extra reach.
@@ -183,10 +184,13 @@ func _place_at(hero: Node3D, post_pos: Vector3, range_m: float) -> void:
 	hero.set(&"facing_yaw", atan2(-inward.x, -inward.z))
 
 
-## Hold the stick toward the target, press attack, and report what landed.
+## Hold the stick toward the target, press `use_item`, and report what landed.
 ##
-## The stick has to be DOWN when the button is pressed — that is the whole gate
-## on the lunge — so this cannot use rig.tap, which presses one action alone.
+## The stick is no longer a GATE — the lunge stopped sharing the attack button,
+## and a hidden stick rule on a dedicated button is just a button that
+## intermittently does nothing. It is still held here because the unlocked run
+## is a CONTROL: both runs get identical inputs, so any ground the unlocked hero
+## covers by simply walking is subtracted out by construction.
 func _lunge(rig, _hero: Node3D) -> int:
 	var before := _hits.size()
 	Input.action_press(&"move_up")
@@ -195,15 +199,14 @@ func _lunge(rig, _hero: Node3D) -> int:
 	# is answered against the PHYSICS frame counter: a press and release that
 	# both land between two physics ticks never happened as far as the game is
 	# concerned, and this director lost a whole unlocked attack that way.
-	Input.action_press(&"attack")
-	# The stick comes off almost immediately. It only has to be DOWN at the
-	# instant of the press — that is the entire gate — and holding it any longer
-	# lets the unlocked control run at the post under its own steam, which is
-	# ground closed that has nothing to do with a leap.
+	Input.action_press(&"use_item")
+	# The stick comes off almost immediately: held any longer it lets the
+	# unlocked control run at the post under its own steam, which is ground
+	# closed that has nothing to do with a leap.
 	await rig.wait_frames(2)
 	Input.action_release(&"move_up")
 	await rig.wait_frames(8)
-	Input.action_release(&"attack")
+	Input.action_release(&"use_item")
 	for _i in 240:
 		if _hits.size() > before:
 			return _hits[before]

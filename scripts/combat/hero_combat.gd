@@ -19,12 +19,16 @@ extends Node3D
 ## 1.52 m — a greatsword — which is exactly the kind of error that looks like an
 ## art problem and is really a transform problem.
 
-## What the player asked for. Deliberately coarser than Hero.Swing: the player
-## presses one of two buttons, and WHICH light swing that becomes — step 1, 2, 3
-## or the lunge — is this script's decision, made from the chain state and the
-## lock. Buffering an Intent rather than a Swing is what lets a press made during
-## step 1 still become step 2 when it is finally honoured.
-enum Intent { LIGHT, HEAVY }
+## What the player asked for. Deliberately coarser than Hero.Swing: WHICH light
+## swing a LIGHT becomes — step 1, 2 or 3 — is this script's decision, made from
+## the chain state. Buffering an Intent rather than a Swing is what lets a press
+## made during step 1 still become step 2 when it is finally honoured.
+##
+## HEAVY is no longer a button. It is what the attack button's HOLD releases
+## into, and LUNGE is the use button under a lock. They stay Intents because the
+## buffer is the thing that makes them feel honest: a charge released during the
+## light swing that started it has to come out when that swing ends, not vanish.
+enum Intent { LIGHT, HEAVY, LUNGE }
 
 ## Pitch multiplier per chain step. Two rises, three drops — the chain should
 ## sound like it is going somewhere, and the finisher is the heaviest thing in
@@ -52,6 +56,15 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 @export var knockback: float = K.KNOCKBACK_LIGHT
 
 @export_group("Heavy")
+## Seconds the attack button must be HELD before the release becomes a heavy.
+## Under it, the release is nothing — the swing the press already started is all
+## you get, which is what makes a tap a tap.
+##
+## 0.42 is deliberately longer than the light swing it overlaps (0.46 is close
+## enough that the charge finishes as the swing does): the point is that you can
+## start winding up during the swing you just threw, so a charge costs you the
+## recovery you were spending anyway rather than a separate standing-still beat.
+@export var charge_time: float = 0.42
 ## Over a full heart, against the light swing's half. The heavy is worth the
 ## commitment or nobody presses it twice.
 @export var heavy_damage: int = 5 * K.QUARTER
@@ -105,10 +118,6 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## reads as the hero hopping on the spot.
 @export var lunge_min_range: float = 1.9
 @export var lunge_max_range: float = 6.0
-## Half-angle, degrees, between the stick and the target. The lunge is the
-## attack you press while asking to GO there; pressing attack while strafing is
-## still a standing swing.
-@export var lunge_stick_cone: float = 60.0
 
 @export_group("Shield")
 ## Half-angle of the block cone, degrees. A blow from outside it is not blocked.
@@ -118,10 +127,18 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 @export var sfx_swing: AudioStream = preload("res://audio/sfx/swing.ogg")
 @export var sfx_impact: AudioStream = preload("res://audio/sfx/weapon_impact_sword_1.ogg")
 @export var sfx_block: AudioStream = preload("res://audio/sfx/block.ogg")
+## The moment the charge is ready. A hold with no tell is a hold the player
+## cannot learn: without this the only way to find `charge_time` is to release
+## repeatedly and count. Paired with the blade glow in `_set_charged`.
+@export var sfx_charged: AudioStream = preload(
+	"res://audio/sfx/weapon_full_charge_voice_male_1.ogg")
 
 ## True while the swing is inside its damage window.
 var swinging: bool = false
 var blocking: bool = false
+## True once the attack button has been held past `charge_time`. Public so the
+## HUD and a director can both see the wind-up without timing it themselves.
+var charged: bool = false
 
 ## Which item is in the hero's hands right now, or &"" for sword and shield.
 var equipped: StringName = &""
@@ -151,8 +168,17 @@ var _chain_timer: float = 0.0
 ## An Intent pressed mid-swing and owed to the player, or -1.
 var _buffer: int = -1
 var _hit_this_swing: Dictionary = {}
+## Seconds the attack button has been held, or -1.0 when it is not down. The
+## sentinel matters: 0.0 is a legitimate reading on the frame of the press.
+var _charge_t: float = -1.0
+## The blade's glow while the charge is ready. Built once in _build_charge_glow
+## rather than made and freed per charge — a light spawned mid-frame under a
+## BoneAttachment3D shows up at the origin for one frame, which reads as a flash
+## at the hero's feet.
+var _charge_glow: OmniLight3D
 var _swing_player: AudioStreamPlayer3D
 var _impact_player: AudioStreamPlayer3D
+var _charge_player: AudioStreamPlayer3D
 
 
 func _ready() -> void:
@@ -173,6 +199,7 @@ func _ready() -> void:
 	_mount_loadout()
 	_build_hitbox()
 	_build_audio()
+	_build_charge_glow()
 
 	Bus.loadout_changed.connect(_on_loadout_changed)
 	# Finding a bow has to put it on his back the same moment the chest opens,
@@ -385,6 +412,38 @@ func _build_audio() -> void:
 	_impact_player.unit_size = 6.0
 	add_child(_impact_player)
 
+	_charge_player = AudioStreamPlayer3D.new()
+	_charge_player.stream = sfx_charged
+	_charge_player.bus = &"SFX"
+	_charge_player.unit_size = 6.0
+	add_child(_charge_player)
+
+
+## A cold light on the blade for as long as the charge is held.
+##
+## The ping says the wind-up became ready; this says it still IS. Half this game
+## is a room lit by two sconces with a hero-shaped silhouette in between, and a
+## charge state you can only hear is a charge state the player loses track of
+## every time they get hit.
+##
+## Parented to the sword's holder, so it inherits `sword.visible` for free —
+## drawing the bow puts the blade away and takes its glow with it.
+func _build_charge_glow() -> void:
+	if sword == null:
+		return
+	_charge_glow = OmniLight3D.new()
+	_charge_glow.name = "ChargeGlow"
+	_charge_glow.light_color = Color(0.66, 0.88, 1.0)
+	_charge_glow.light_energy = 2.4
+	_charge_glow.omni_range = 1.6
+	_charge_glow.shadow_enabled = false
+	# 0.6 m up the blade. The holder's origin is the POMMEL and the blade runs
+	# along +Y (weapon_models.gd §sword); a light left at the origin lights his
+	# fist and the sword reads as unlit.
+	_charge_glow.position = Vector3(0.0, 0.6, 0.0)
+	_charge_glow.visible = false
+	sword.add_child(_charge_glow)
+
 
 # --- Frame ------------------------------------------------------------------
 
@@ -425,12 +484,15 @@ func _physics_process(delta: float) -> void:
 			Game.use_quick(Game.QUICK_RIGHT)
 		if Input.is_action_just_pressed(&"item_down"):
 			Game.swap_loadout()
-		# Heavy first: if a frame somehow carries both edges, the button that
-		# costs more to press is the one the player meant.
-		if Input.is_action_just_pressed(&"heavy_attack"):
-			_press(Intent.HEAVY)
-		elif Input.is_action_just_pressed(&"attack"):
-			_press(Intent.LIGHT)
+		# The use button: fire what is drawn, or leap at what is locked.
+		if Input.is_action_just_pressed(&"use_item"):
+			_press(Intent.LUNGE)
+		_tick_attack_button(delta)
+	else:
+		# A shop opening mid-wind-up must not leave the charge armed behind the
+		# panel, waiting to come out at whatever is standing there when the
+		# player closes it again.
+		_release_charge(false)
 
 	# The chain window is the gap BETWEEN swings, so it only runs while nothing is
 	# swinging. Ticking it through the swing was the first version, and it made
@@ -464,7 +526,59 @@ func _physics_process(delta: float) -> void:
 		_advance_swing(delta)
 
 
-## A press of one of the two attack buttons. Mid-swing it is remembered rather
+## The attack button. A tap is the light chain; a hold is the wind-up; the
+## release is the heavy.
+##
+## The light swing comes out on the PRESS, never on the release, and that
+## ordering is the whole feel of it. A button that waits to see whether you
+## meant a tap puts `charge_time` of latency on every ordinary swing — which is
+## the most common way a charge attack ruins the light attack it was bolted to.
+## OOT does exactly this: B swings, and CONTINUING to hold B after the swing is
+## what winds up the spin. So the hold costs the recovery you were spending
+## anyway, and a mashed chain never charges anything.
+func _tick_attack_button(delta: float) -> void:
+	if Input.is_action_just_pressed(&"attack"):
+		_charge_t = 0.0
+		_press(Intent.LIGHT)
+		return
+	if Input.is_action_just_released(&"attack"):
+		_release_charge(charged)
+		return
+	if _charge_t < 0.0:
+		return
+	# Drawing an item mid-hold drops the wind-up. The press that STARTED this
+	# hold already stowed whatever was in his hands and swung (see _begin), so
+	# the only way to be here with an item out is a D-pad press made during the
+	# hold — and paying that out as a heavy on release would be a swing with an
+	# invisible sword, which is the bug the `equipped` gate in _begin exists for.
+	if equipped != &"":
+		_release_charge(false)
+		return
+	_charge_t += delta
+	if not charged and _charge_t >= charge_time:
+		_set_charged(true)
+
+
+## Let go of the wind-up, swinging it if `fire`. Safe to call on a frame where
+## nothing was being held, which is why the shop gate can call it blindly.
+func _release_charge(fire: bool) -> void:
+	if fire:
+		_press(Intent.HEAVY)
+	_charge_t = -1.0
+	_set_charged(false)
+
+
+func _set_charged(on: bool) -> void:
+	if charged == on:
+		return
+	charged = on
+	if _charge_glow != null:
+		_charge_glow.visible = on
+	if on and _charge_player != null:
+		_charge_player.play()
+
+
+## An Intent the player has asked for. Mid-swing it is remembered rather
 ## than dropped — but only in the back half of the swing, because a press on the
 ## first frame is the player mashing, not the player asking for the next step.
 func _press(intent: int) -> void:
@@ -479,28 +593,39 @@ func _press(intent: int) -> void:
 ## the lock, the chain position, whether an item is in the hand — lives here, so
 ## the buffered path and the live path cannot drift apart.
 func _begin(intent: int) -> void:
-	# The sword is stowed while an item is out, so a swing here would deal damage
-	# with an invisible blade. What the attack button does instead is USE the
-	# item -- the bow shoots, the hookshot fires. That is what the button means
-	# in the source material, and for a long time this line simply ate the press,
-	# which made every bound item a thing you could draw and then not use.
+	# An item is out. The USE button fires it -- that is what it is for -- and
+	# the ATTACK button is the escape hatch: it puts the item away and swings on
+	# the same press, so a hookshot you drew by mistake costs you one button you
+	# were already reaching for rather than a hunt for which D-pad direction you
+	# pressed to draw it.
 	#
-	# The heavy button is deliberately not a second way to shoot: there is no
-	# heavy arrow, and mapping it to the same shot would make the two buttons
-	# lie about being different.
+	# That escape hatch is the whole reason the sword and the item are on
+	# different buttons now. Drawing is sticky here -- the item STAYS out and you
+	# walk around aiming it, which OOT's momentary C-buttons never let you do --
+	# and a sticky mode with no unconditional way out is a trap.
 	if equipped != &"":
-		if intent == Intent.LIGHT and _hero.ranged != null:
+		if intent == Intent.LIGHT:
+			# Stowing is synchronous (Game._announce_loadout -> Bus ->
+			# _on_loadout_changed -> equip), so `equipped` is already &"" by the
+			# time the swing below asks. If that ever becomes deferred, the swing
+			# starts happening with the bow still in his hands.
+			Game.stow_item()
+			_light_swing(_chain_step)
+			return
+		if intent == Intent.LUNGE and _hero.ranged != null:
 			_hero.ranged.fire(equipped)
 		return
 
-	if intent == Intent.HEAVY:
-		_heavy_swing()
-		return
-	# The lunge gets first refusal on a light press: it is the same button, and
-	# what distinguishes it is the lock plus a stick pushed at what you locked.
-	if _lunge_swing():
-		return
-	_light_swing(_chain_step)
+	match intent:
+		Intent.HEAVY:
+			_heavy_swing()
+		Intent.LUNGE:
+			# Sword out, use pressed: the leap, if there is something to leap at.
+			# Nothing otherwise, deliberately -- this is OOT's A, where the jump
+			# attack exists only under Z and the button is silent without it.
+			_lunge_swing()
+		_:
+			_light_swing(_chain_step)
 
 
 func _heavy_swing() -> void:
@@ -547,15 +672,11 @@ func _light_swing(step: int) -> void:
 
 
 ## The Z-targeted leap. Returns false — having done nothing — the moment any of
-## its conditions fail, so the caller falls straight through to a normal swing.
+## its conditions fail. It has its own button now, so a refusal is silence
+## rather than a fallback swing: `attack` is one thumb away and always swings.
 func _lunge_swing() -> bool:
 	var target := _hero.lock_target()
 	if target == null:
-		return false
-	# Only from a standing start. Ending a chain with a leap would let a mashed
-	# combo travel the whole room, which is the opposite of what committing to a
-	# chain is meant to cost.
-	if _chain_step != 0:
 		return false
 
 	# Flattened by hand rather than with K.flat, which NORMALISES: a range gate
@@ -567,9 +688,13 @@ func _lunge_swing() -> bool:
 	if dist < lunge_min_range or dist > lunge_max_range:
 		return false
 
-	var wish := _hero.wish_dir()
-	if wish.length() < 0.5 or rad_to_deg(wish.angle_to(to)) > lunge_stick_cone:
-		return false
+	# The stick cone and the "only from a standing start" chain gate both went
+	# when the lunge stopped sharing the attack button. They existed to tell a
+	# leap apart from an ordinary swing pressed with the same thumb, and a hidden
+	# rule on a DEDICATED button is just a button that intermittently does
+	# nothing -- press X, press A, watch the hero stand there. What stops a
+	# mashed chain touring the room is the same thing that always did: the leap
+	# costs 0.78 s of unsteerable commitment, and you have to be locked on.
 
 	if not _hero.request_lunge(lunge_swing_time, lunge_drive_time, lunge_hop):
 		return false

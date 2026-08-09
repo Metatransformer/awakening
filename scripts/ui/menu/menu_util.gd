@@ -46,8 +46,10 @@ const ACTION_NAMES := {
 	# have to keep clicked in is not a control. The three item buttons are the
 	# C-pad: whatever the player bound to them, bound in the Items screen.
 	&"z_target": "Lock On (toggle)",
-	&"attack": "Attack",
-	&"heavy_attack": "Heavy Attack",
+	# One button for the whole sword: tap it for the chain, hold it for the
+	# charge. There is no separate heavy to rebind any more.
+	&"attack": "Sword (hold to charge)",
+	&"use_item": "Use Item / Lunge",
 	&"shield": "Guard (hold)",
 	&"context": "Roll / Backstep",
 	&"interact": "Interact",

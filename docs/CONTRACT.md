@@ -202,8 +202,8 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 |---|---|---|---|
 | `move_up/down/left/right` | WASD, arrows | left stick | move |
 | `cam_up/down/left/right` | mouse motion (read in code) | right stick | camera |
-| `attack` | **LMB** | **A / Cross** (pad0) | light attack |
-| `heavy_attack` | **F** | **X / Square** (pad2) | heavy attack |
+| `attack` | **LMB** | **X / Square** (pad2) | light attack (**hold** = charge) |
+| `use_item` | **F** | **A / Cross** (pad0) | use item / jump attack |
 | `shield` | **RMB** | **LT / L2** (axis4+) | guard |
 | `context` | **Space** | **B / Circle** (pad1) | roll / backstep |
 | `z_target` | **Q**, MMB | **R3** (pad8) | lock-on |
@@ -213,20 +213,42 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `pause` / `map` | Esc / Tab | Start (pad6) / L3 (pad7) | menu / map |
 | `dbg_reload` | F5 | — | — |
 
-The face buttons are the swings and the shoulders are the holds. Attack sits on
-A/Cross because it is the most-pressed button in the game and A is where the
-thumb already rests; the heavy sits one roll away on X/Square. Guard moved to
-the **left trigger**, which is an AXIS (`InputEventJoypadMotion`, JoyAxis 4),
-not a button — a control you hold down for seconds belongs on an analogue pull,
-and the action's 0.2 deadzone is how far it travels before the shield counts as
+The face buttons are the swings and the shoulders are the holds. Guard is on the
+**left trigger**, which is an AXIS (`InputEventJoypadMotion`, JoyAxis 4), not a
+button — a control you hold down for seconds belongs on an analogue pull, and
+the action's 0.2 deadzone is how far it travels before the shield counts as
 raised.
 
-That pushed `interact` off A and up to Y/Triangle. Attack and interact cannot
-share a button: `interact` still shares A with `ui_accept`, which is safe only
-because `trade_screen`'s accept edge starts DISARMED, and nothing equivalent
-guards the world — `hero_combat` polls `attack` every physics frame, so one
-press at a chest would open it and swing at it. The roll keeps B/Circle, where
-the source material has it.
+The sword is on **X**, permanently, and it is the *only* thing on it. That is
+OOT's arrangement — the sword lives on one button forever and the items live on
+the C-pad — and it is what makes a drawn item safe to leave drawn. Drawing here
+is **sticky**: a D-pad press puts the hookshot in his hand and it stays there,
+so you can walk around aiming it, which OOT's momentary C-buttons never allow.
+A sticky mode needs an unconditional way out, and `attack` is it: pressing it
+with an item drawn stows the item **and swings on the same press**
+(`HeroCombat._begin`, `Game.stow_item`). Not the next press — the same one.
+
+`use_item` took the A/Cross the sword vacated. It is the "do the thing you are
+holding" button: it fires the drawn bow or hookshot, and with the sword out and
+something locked it is the lunge. With the sword out and nothing locked it is
+**silent**, deliberately — that is OOT's A, where the jump attack exists only
+under Z.
+
+`interact` sits on Y/Triangle because A was spoken for twice over. It cannot
+share A with `use_item`: `interact` already shares A with `ui_accept`, which is
+safe only because `trade_screen`'s accept edge starts DISARMED, and nothing
+equivalent guards the world — `hero_combat` polls its buttons every physics
+frame, so one press at a chest would open it and loose an arrow through it. The
+roll keeps B/Circle, where the source material has it.
+
+**There is no heavy-attack button.** The heavy is the charge: tap X for the
+light chain, *hold* X to wind up, release to swing it. The light swing comes out
+on the **press**, never on the release — a button that waits to see whether you
+meant a tap puts `charge_time` (0.42 s) of latency on every ordinary swing. So
+the wind-up costs the recovery you were spending anyway, and a mashed chain
+never charges anything. `combat.charged` is public, and while it is up the blade
+carries a cold light (`HeroCombat._build_charge_glow`) — a hold with no tell is
+a hold nobody can learn.
 
 ### The two ways this table has lied
 
@@ -244,9 +266,9 @@ and `project.godot` looked perfectly correct the whole time. `Settings`
 now stamps saved binds with `BIND_SCHEMA` and **discards** binds saved against
 an older layout — bump it in any change that moves a shipped binding.
 
-**Not yet bound, because the ability does not exist:** heavy attack (RT/R2,
-`Shift`+LMB), skill (LT/L2, `Shift`+RMB), and jump. Do not register empty
-actions for these; bind them in the same change that builds them.
+**Not yet bound, because the ability does not exist:** skill (RT/R2,
+`Shift`+RMB) and jump. Do not register empty actions for these; bind them in
+the same change that builds them.
 
 Read movement as
 `Input.get_vector("move_left","move_right","move_up","move_down")` so stick and
@@ -533,8 +555,8 @@ hero.wish_dir() -> Vector3          # the stick, camera-relative, in world space
 | light 1 | `ss_slash_01` | attack | 2 |
 | light 2 | `ss_slash_03` | attack, again inside `chain_window` | 2 |
 | light 3 (finisher) | `ss_slash_04` | attack, again | 4 |
-| heavy | `ss_attack_02` | heavy_attack | 5 |
-| lunge | `ss_attack_01` | attack, **locked on**, stick at the target | 4 |
+| heavy | `ss_attack_02` | attack **held** past `charge_time`, on release | 5 |
+| lunge | `ss_attack_01` | use_item, **locked on** | 4 |
 
 The five clips were picked off `tools/directors/swing_lookdev.gd`, which renders
 every frame of every swing in the library — not off their filenames, which carry
@@ -548,23 +570,33 @@ is why it is the lunge and was a terrible heavy.
 swing clock runs a frame ahead of his `MoveState.ATTACK`. Ask him on the
 boundary frame and he refuses, and the press vanishes.
 
-**The lunge is what Z-targeting buys.** It refuses without a lock, on purpose;
-a version that also fired unlocked would just be a better standing attack.
+**The heavy is a hold, not a button** (§4). The press that starts the hold still
+throws its light swing; the release throws the heavy, buffered like any other
+intent if the light is still running. A heavy ENDS the chain rather than
+counting as a step in it.
 
-Proved by `tools/directors/p4_combo.gd` (the chain, in damage) and
-`tools/directors/p4_lunge.gd` (the leap, in metres closed against an unlocked
-control). Neither photographs the swing — `capture()` stalls the game clock for
-longer than the chain window, so a director that screenshots mid-chain breaks
-the thing it is measuring. The poses are `swing_lookdev`'s job.
+**The lunge is what Z-targeting buys.** It refuses without a lock, on purpose;
+a version that also fired unlocked would just be a better standing attack. It
+has no stick gate and no chain gate — both existed to tell a leap apart from an
+ordinary swing pressed with the same thumb, and on a dedicated button a hidden
+rule is just a button that intermittently does nothing.
+
+Proved by `tools/directors/p4_combo.gd` (the chain, in damage),
+`tools/directors/p4_charge.gd` (the hold: a tap is a tap, a short hold is a tap,
+a long hold arms and pays) and `tools/directors/p4_lunge.gd` (the leap, in
+metres closed against an unlocked control). The chain directors photograph
+almost nothing — `capture()` stalls the game clock for longer than the chain
+window, so a director that screenshots mid-chain breaks the thing it is
+measuring. The poses are `swing_lookdev`'s job.
 
 ### Ranged — `HeroRanged` owns the bow and the hookshot
 
 `scripts/combat/hero_ranged.gd`, a child of the hero and a **sibling of
 `HeroCombat`**, not more of it. HeroCombat is the sword arm: the swing, the
 block cone, the sockets every model hangs off. What an arrow does after it
-leaves has nothing to do with any of that. HeroCombat still owns the attack
-BUTTON (one reader, §4) and calls `fire()` when the right hand is not holding
-the sword.
+leaves has nothing to do with any of that. HeroCombat still owns the combat
+BUTTONS (one reader, §4) and calls `fire()` on a `use_item` press when the right
+hand is not holding the sword.
 
 ```gdscript
 hero.ranged.fire(&"bow" | &"hookshot") -> bool   # false = the press did nothing

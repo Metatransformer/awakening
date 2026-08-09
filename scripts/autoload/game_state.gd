@@ -124,11 +124,9 @@ func _ready() -> void:
 	_grant_starter_kit()
 
 
-## Deliberately called from boot and NOT from `reset()`. `reset()` means "a
-## fresh save owns nothing", several directors assert exactly that, and a kit
-## that reappeared on every reset would make the assertion untestable rather
-## than true. Idempotent anyway: `grant()` returns early on anything already
-## owned and the arrow top-up is a floor rather than an addition.
+## Idempotent: `grant()` returns early on anything already owned, and the arrow
+## top-up is a floor rather than an addition, so calling this from both boot and
+## reset() cannot stack thirty arrows onto a quiver that already had them.
 func _grant_starter_kit() -> void:
 	for id in STARTER_KIT:
 		grant(id)
@@ -411,6 +409,24 @@ func use_quick(slot: int) -> void:
 	var held: StringName = loadout[live][HAND_RIGHT]
 	loadout[live][HAND_RIGHT] = &"sword" if held == id else id
 	_announce_loadout()
+
+
+## Put the sword back, whatever was in the right hand. Returns false if it was
+## already there, so a caller can tell a real stow from a no-op.
+##
+## The escape hatch for a sticky draw. `use_quick` is a TOGGLE, which means the
+## only way out of a drawn hookshot used to be remembering which of three D-pad
+## directions you pressed to draw it -- and the player who wants their sword back
+## is by definition the player who is not thinking about the D-pad. The attack
+## button calls this, so the way out is the button you were already reaching for.
+func stow_item() -> bool:
+	var live := clampi(loadout_set, 0, loadout.size() - 1)
+	var held: StringName = loadout[live][HAND_RIGHT]
+	if held == &"sword" or held == &"":
+		return false
+	loadout[live][HAND_RIGHT] = &"sword"
+	_announce_loadout()
+	return true
 
 
 # --- Armaments --------------------------------------------------------------

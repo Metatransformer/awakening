@@ -464,7 +464,7 @@ func _draw_hud() -> void:
 ## it is where the legend belongs; underground the line would be noise, and by
 ## then you have already used every verb on it.
 
-const KEYS := "WASD MOVE    LMB ATTACK    F HEAVY    RMB GUARD    SPACE DODGE    MMB LOCK-ON    E INTERACT"
+const KEYS := "WASD MOVE    LMB SWORD (HOLD=CHARGE)    F USE/LUNGE    RMB GUARD    SPACE DODGE    MMB LOCK-ON    E INTERACT"
 
 
 func _draw_controls(s: Vector2) -> void:

@@ -164,26 +164,34 @@ z_target={
 , Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":8,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
-; Attack is A/Cross -- button 0, the "Bottom Action" the enum dump above names.
-; The swing is the thing you press most, so it gets the thumb's rest position,
-; and the shoulders are freed for the things you HOLD rather than tap.
+; Attack is X/Square -- button 2, "Left Action". It moved off A because A had to
+; become the USE button (see `use_item` below), and because the sword is the one
+; thing in this game that is never put away: OOT keeps it on B forever and puts
+; the items on the C-pad, and the whole reason an item can be drawn here without
+; getting stuck is that a different button always swings.
 ;
-; This displaced `interact`, which lived on A. See the note at `interact`: the
-; two cannot share a button, because unlike ui_accept there is no armed/disarmed
-; edge protecting a chest from also eating a sword swing.
+; There is no `heavy_attack` any more. The heavy is the CHARGE: tap X for the
+; light chain, hold X to wind up, release to swing it. One button, and the cost
+; is time rather than a second thing to reach for -- which is the arrangement
+; every Zelda spin attack has used. hero_combat.gd owns the hold clock.
 attack={
 "deadzone": 0.2,
 "events": [Object(InputEventMouseButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"button_mask":0,"position":Vector2(0, 0),"global_position":Vector2(0, 0),"factor":1.0,"button_index":1,"canceled":false,"pressed":false,"double_click":false,"script":null)
-, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":0,"pressure":0.0,"pressed":false,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":2,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
-; Heavy attack is X/Square -- button 2, "Left Action". Next to A so the light
-; and the heavy are one thumb roll apart; NOT a shoulder, because a heavy is a
-; tap that commits, not a hold. Keyboard is F: left hand, without leaving WASD.
-heavy_attack={
+; Use is A/Cross -- button 0, the thumb's rest position, which attack vacated.
+; It is the "do the thing you are holding" button: it fires the bow or the
+; hookshot when one is drawn, and with the sword out and something locked it is
+; the lunge. With the sword out and nothing locked it does nothing, deliberately
+; -- that is OOT's A exactly, where the jump attack only exists under Z.
+;
+; Keyboard is F, inherited from the heavy it replaced: left hand, without
+; leaving WASD.
+use_item={
 "deadzone": 0.2,
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":70,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
-, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":2,"pressure":0.0,"pressed":false,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":0,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
 ; Block is the other half of the mouse: LMB swings, RMB raises the shield. It
@@ -205,14 +213,14 @@ shield={
 }
 ; Roll is B/Circle, Elden Ring's arrangement, and is unchanged.
 ;
-; Interact USED to be A/Cross next to it, also ER's. Attack has taken A, so
-; interact moved up to Y/Triangle -- button 3, "Top Action", the only face
-; button nothing else wanted. Sharing A between attack and interact is not an
+; Interact USED to be A/Cross next to it, also ER's. A is `use_item` now, so
+; interact stays up on Y/Triangle -- button 3, "Top Action", the only face
+; button nothing else wanted. Sharing A between use and interact is not an
 ; option even though `interact` still shares it with ui_accept: ui_accept is
 ; safe because trade_screen's accept edge starts DISARMED, so the press that
 ; opens a screen cannot also confirm inside it. Nothing equivalent guards the
-; world -- hero_combat polls `attack` every physics frame with no such edge, so
-; one press at a chest would open it and swing at it.
+; world -- hero_combat polls its buttons every physics frame with no such edge,
+; so one press at a chest would open it and loose an arrow through it.
 context={
 "deadzone": 0.2,
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":32,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)

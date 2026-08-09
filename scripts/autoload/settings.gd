@@ -28,7 +28,12 @@ const DEFAULT_PATH := "user://settings.cfg"
 ##    not a button), and `heavy_attack` was added on X. A saved layout from 2
 ##    would pin attack back onto RB and leave the new A binding dead — which is
 ##    the second failure described above, verbatim.
-const BIND_SCHEMA := 3
+## 4: attack moved A -> X, `heavy_attack` was DELETED (the heavy is now X held
+##    rather than a button of its own), and `use_item` took the vacated A. A
+##    saved layout from 3 is the worst case this const exists for: it would put
+##    attack back on A, on top of use_item, so one press would swing the sword
+##    and fire the hookshot at once.
+const BIND_SCHEMA := 4
 
 ## Where preferences persist. A test or a screenshot director that rebinds keys
 ## MUST NOT write to the player's real settings — an earlier menu test left
@@ -231,7 +236,7 @@ func _capture_defaults() -> void:
 func rebindable_actions() -> Array[StringName]:
 	return [
 		&"move_up", &"move_down", &"move_left", &"move_right",
-		&"z_target", &"attack", &"heavy_attack", &"shield", &"context", &"interact",
+		&"z_target", &"attack", &"use_item", &"shield", &"context", &"interact",
 		&"item_left", &"item_up", &"item_right", &"first_person",
 		&"pause", &"map",
 	]

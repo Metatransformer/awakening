@@ -149,7 +149,11 @@ func run(rig) -> void:
 		await _pad(rig, PAD_DDOWN, 4)
 	var atk0: String = Settings.label_for(&"attack")
 	await _pad(rig, PAD_A, 10)
-	await _key(rig, KEY_K, 16)          # K belongs to Shield
+	# E belongs to `interact`. It used to be K, for a shield that has been on the
+	# left trigger and RMB since the Elden Ring pass — so this beat spent two
+	# layouts offering a FREE key to a check that only means anything with a
+	# taken one, and reported the refusal as broken every run.
+	await _key(rig, KEY_E, 16)
 	_ck("F1 conflicting rebind refused (attack still %s)"
 		% Settings.label_for(&"attack"), Settings.label_for(&"attack") == atk0)
 	_ck("F2 the refusal is SHOWN (notice visible=%s: '%s')"
@@ -171,8 +175,12 @@ func run(rig) -> void:
 	_ck("G1 D-pad reached 'Reset to Defaults'",
 		_is_btn(_foc(rig), "Reset to Defaults"))
 	await _pad(rig, PAD_A, 14)
+	# The shipped keyboard/mouse binding for `attack`, which has been the LEFT
+	# MOUSE BUTTON since the Elden Ring pass — not the "J" this asserted, which
+	# was the layout two changes ago. A reset check pinned to a stale default is
+	# a permanent red line that teaches the next reader to ignore this file.
 	_ck("G2 reset restored attack to %s" % Settings.label_for(&"attack"),
-		Settings.label_for(&"attack") == "J")
+		Settings.label_for(&"attack") == "Mouse L")
 	_ck("G3 ui_accept still carries a pad button after reset_binds()",
 		_has_joy(&"ui_accept"))
 	await _shot(rig, "after_reset")

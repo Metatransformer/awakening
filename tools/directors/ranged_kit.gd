@@ -1,6 +1,11 @@
 extends RefCounted
 ## Do the bow and the hookshot actually work when you press the button?
 ##
+## The button is `use_item` (A / F). `attack` is the SWORD now and pressing it
+## with an item drawn stows the item and swings — see tools/directors/buttons.gd
+## for that half. Firing here goes through the use button, which is the one a
+## player with a bow in his hands actually presses.
+##
 ## Prints `RANGED FAIL ...` on any beat that did not happen, and photographs the
 ## ones that have pixels — the drawn bow, the arrow in the air, the chain out,
 ## the hero at the end of it. A boolean that flipped is not proof that a chain
@@ -100,7 +105,7 @@ func _bow(rig, hero) -> void:
 
 	var before_arrows := Game.arrows
 	var before_damage: int = post.total_damage
-	await rig.tap(["attack"])
+	await rig.tap(["use_item"])
 	# Watched frame by frame rather than sampled once. The draw is 0.44 s and the
 	# arrow leaves at 55 % of it, and the first version of this beat looked on a
 	# fixed frame, found the arrow already spent, and reported that no arrow had
@@ -151,7 +156,7 @@ func _bow(rig, hero) -> void:
 	_check("the lock is holding a post off the camera ray", hero.lock_target() == side)
 
 	var side_before: int = side.total_damage
-	await rig.tap(["attack"])
+	await rig.tap(["use_item"])
 	# Named, because the failure it catches is silent otherwise: the arrow is
 	# aimed at RELEASE, a quarter of a second after the press, and `Targeting`
 	# drops a lock whose line of sight lapses. A lock that quietly expires in
@@ -183,7 +188,7 @@ func _empty_quiver(rig, hero) -> void:
 
 	var kept := Game.arrows
 	Game.arrows = 0
-	await rig.tap(["attack"])
+	await rig.tap(["use_item"])
 	# Sampled every frame rather than once at the end, so an arrow that landed
 	# and whose readout then expired cannot slip through the gap.
 	var struck := false
@@ -236,7 +241,7 @@ func _hookshot_ring(rig, hero) -> void:
 
 	var start: Vector3 = hero.global_position
 	var pull: Vector3 = ring.pull_point()
-	await rig.tap(["attack"])
+	await rig.tap(["use_item"])
 	await rig.wait_frames(6)
 	_check("the chain went out", hero.hooking())
 	await rig.capture(out.path_join("r_05_chain_out.png"))
@@ -287,7 +292,7 @@ func _hookshot_wall(rig, hero) -> void:
 	_check("no authored ring is left standing for the fallback beat", rings.is_empty())
 	print("RANGED wall is %.2f m away along the aim" % _wall_distance(hero))
 
-	await rig.tap(["attack"])
+	await rig.tap(["use_item"])
 	# Polled rather than sampled at a fixed frame: how long the chain is out
 	# depends on how far the wall is, and a beat that reads `hooking()` on frame
 	# eight and nowhere else fails whenever the answer is "it already arrived".
