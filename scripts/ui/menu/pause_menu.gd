@@ -107,6 +107,10 @@ func _ready() -> void:
 
 	_saves.bind_confirm(_confirm)
 	_equip.back_requested.connect(back)
+	# Using an item is not backing out one screen: the Homeward Charm's channel
+	# happens in the world and the player has to be able to watch it, so the
+	# whole menu goes away rather than popping to root.
+	_equip.use_requested.connect(close)
 	_equip.notice.connect(_notice)
 	_equip.value_settled.connect(func() -> void: _play(SND_CLICK))
 	_options.back_requested.connect(back)

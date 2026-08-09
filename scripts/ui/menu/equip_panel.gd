@@ -18,6 +18,9 @@ signal back_requested
 signal notice(text: String, is_error: bool)
 ## A slot settled on a new armament — the menu answers with a click.
 signal value_settled
+## The player used an item that has to happen in the world. The menu closes
+## whole rather than backing out one screen.
+signal use_requested
 
 const FRAME_SIZE := Vector2(1060, 604)
 ## No "swap set" shortcut in the hint on purpose: the button that swaps in play
@@ -54,6 +57,8 @@ var _quick_slots: Array[Button] = []
 var _set_frames: Array[PanelContainer] = []
 var _set_marks: Array[Label] = []
 var _swap: Button
+var _charm: Button
+var _charm_fee: Label
 var _back: Button
 var _detail_name: Label
 var _detail_hand: Label
@@ -131,7 +136,21 @@ func _build() -> void:
 
 	_build_quick(left)
 	_build_sets(left)
-	_build_detail(split)
+
+	# The right column carries the detail pane and, under it, the charm. The
+	# charm started in the LEFT column and pushed the whole frame past 720p --
+	# the footer and half the row went off the bottom of the screen, caught by
+	# looking at the capture. It is a better fit here anyway: the left column is
+	# where you ARRANGE what you carry and the right is where the screen talks
+	# back, and using the charm is the screen talking back.
+	var right := VBoxContainer.new()
+	right.name = "Right"
+	right.custom_minimum_size.x = 360
+	right.add_theme_constant_override("separation", 12)
+	split.add_child(right)
+
+	_build_detail(right)
+	_build_charm(right)
 	_wire_focus()
 
 	var footer := PanelContainer.new()
@@ -386,11 +405,90 @@ func _new_icon(px: int) -> TextureRect:
 	return icon
 
 
+## The way out. A card of its own, at the bottom, because it is the only control
+## on this screen that ENDS something — everything above it rearranges what you
+## are carrying, and this spends it.
+##
+## It is not one of the three bindable buttons and it never will be. Extraction
+## used to be a hold on a rune pad precisely so it could not be triggered by a
+## fumble (METAGAME §5); putting it on a D-pad direction would hand back exactly
+## the fumble the hold was guarding against. Two deliberate presses in a paused
+## menu, then a channel you can be knocked out of, is the same guarantee by
+## other means.
+func _build_charm(parent: Node) -> void:
+	var card := PanelContainer.new()
+	card.name = "Use"
+	card.theme_type_variation = &"MenuSection"
+	parent.add_child(card)
+
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 8)
+	card.add_child(inner)
+
+	var caption := Label.new()
+	caption.theme_type_variation = &"MenuHeading"
+	caption.text = "USE"
+	inner.add_child(caption)
+
+	_charm = Button.new()
+	_charm.name = "Charm"
+	_charm.theme_type_variation = &"MenuRow"
+	_charm.focus_mode = Control.FOCUS_ALL
+	_charm.text = "◈  Homeward Charm"
+	inner.add_child(_charm)
+
+	_charm_fee = Label.new()
+	_charm_fee.name = "Fee"
+	_charm_fee.theme_type_variation = &"MenuValue"
+	_charm_fee.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_charm_fee.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_charm_fee.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_charm.add_child(_charm_fee)
+	_charm_fee.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_charm_fee.offset_right = -16
+
+	_charm.pressed.connect(_use_charm)
+	_charm.focus_entered.connect(_describe_charm)
+	_charm.mouse_entered.connect(_describe_charm)
+
+
+## Leaving is not something to do from inside a menu screen: the channel happens
+## in the world and the player has to be able to see it. So the menu closes and
+## the hero's charm node takes it from there (`Bus.homeward_used`).
+func _use_charm() -> void:
+	if not Run.in_dungeon:
+		notice.emit("You are already home.", true)
+		return
+	var fee := Run.extract_cost()
+	if Game.gold < fee:
+		notice.emit("The charm wants %d gold and you have %d." % [fee, Game.gold], true)
+		return
+	use_requested.emit()
+	Bus.homeward_used.emit()
+
+
+func _describe_charm() -> void:
+	_detail_hand.text = "USE"
+	_detail_name.text = "Homeward Charm"
+	if not Run.in_dungeon:
+		_detail_ammo.text = ""
+		_detail_blurb.text = "Cold, and quiet. It only wakes underground."
+		_detail_legend.text = "Nothing to leave."
+		return
+	var fee := Run.extract_cost()
+	_detail_ammo.text = "%d gold" % fee
+	_detail_blurb.text = "It pulls you home and heals what the dark took. " \
+		+ "The fee is a quarter of what you are carrying, and the fee is why " \
+		+ "the greedy run is a decision."
+	_detail_legend.text = "Takes a moment. A blow that lands breaks it." \
+		if Game.gold >= fee else "You cannot afford to leave. Sell, or die trying."
+
+
 func _build_detail(parent: Node) -> void:
 	var card := PanelContainer.new()
 	card.name = "Detail"
 	card.theme_type_variation = &"MenuSection"
-	card.custom_minimum_size.x = 360
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	parent.add_child(card)
 
 	var col := VBoxContainer.new()
@@ -449,11 +547,16 @@ func _wire_focus() -> void:
 		# falls to the right — the nearest slot under the finger, not index 0.
 		MenuUtil.link_down(cross[col if col < cols else cols - 1], top)
 	MenuUtil.link_down(cross[cross.size() - 1], _slots[cols - 1])
-	# Closing the loop upward puts Swap Set one press above the cross, so a pad
-	# user gets back to the top without walking the whole screen.
-	_swap.focus_neighbor_bottom = _swap.get_path_to(cross[0])
+	# Swap Set falls to the charm, and the charm closes the loop back to the top
+	# of the cross -- so every control on the screen is reachable by pressing one
+	# direction repeatedly, and nothing is an orphan.
+	MenuUtil.link_down(_swap, _charm)
 	_swap.focus_neighbor_left = ^"."
 	_swap.focus_neighbor_right = ^"."
+	_charm.focus_neighbor_bottom = _charm.get_path_to(cross[0])
+	_charm.focus_next = _charm.get_path_to(cross[0])
+	_charm.focus_neighbor_left = ^"."
+	_charm.focus_neighbor_right = ^"."
 
 
 # --- State ------------------------------------------------------------------
@@ -478,13 +581,35 @@ func refresh() -> void:
 		_paint(b)
 	for b in _quick_slots:
 		_paint_quick(b)
+	_paint_charm()
 	var focused := get_viewport().gui_get_focus_owner()
 	if _slots.has(focused):
 		_describe(focused as Button)
 	elif _quick_slots.has(focused):
 		_describe_quick(focused as Button)
+	elif focused == _charm:
+		_describe_charm()
 	else:
 		_describe_quick(_quick_slots[Game.QUICK_LEFT])
+
+
+## The fee, live. It is on the row rather than only in the detail pane because
+## it is the whole decision: "leave" and "leave for 340 gold" are different
+## sentences and the player should not have to focus the row to read the second.
+##
+## The row stays ENABLED when you cannot afford it. A greyed-out control tells
+## you nothing about why; pressing it and being told "the charm wants 340 gold
+## and you have 190" tells you exactly what to do about it.
+func _paint_charm() -> void:
+	if _charm == null:
+		return
+	if not Run.in_dungeon:
+		_charm_fee.text = "—"
+		_charm_fee.modulate = Color(1, 1, 1, 0.5)
+		return
+	var fee := Run.extract_cost()
+	_charm_fee.text = "%d ◇" % fee
+	_charm_fee.modulate = Color.WHITE if Game.gold >= fee else Pal.RUST
 
 
 func _paint(b: Button) -> void:

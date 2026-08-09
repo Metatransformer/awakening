@@ -303,8 +303,10 @@ func _populate() -> void:
 			continue
 		_add_room_trigger(root, cell)
 
+		# The entrance room stays empty. It used to hold the extraction pad; the
+		# way out is the Homeward Charm now (scripts/items/homeward_charm.gd),
+		# so there is no room you have to walk back to.
 		if cell == entrance:
-			_add_extract(root, Vector3.ZERO)
 			continue
 
 		var dist := int(rooms[cell]["dist"])
@@ -325,11 +327,7 @@ func _populate() -> void:
 			chest.position = Vector3(0.0, 0.0, -room_size * 0.32)
 			root.add_child(chest)
 
-		if cell == deepest:
-			# The deep pad sits opposite its chest, so you have to cross the room
-			# you just fought in to use it.
-			_add_extract(root, Vector3(0.0, 0.0, room_size * 0.30))
-		elif _rng.randf() < 0.35:
+		if _rng.randf() < 0.35:
 			for i in 2:
 				var p := ROOM_SCENE_PILLAR.instantiate()
 				p.height = K.CEIL_ROOM
@@ -375,12 +373,6 @@ func _spawn_foe(root: Node3D, kind: StringName, at: Vector3) -> void:
 	var e := Enemy.new()
 	e.kind = kind
 	e.drop_seed = _rng.randi()
-	e.position = at
-	root.add_child(e)
-
-
-func _add_extract(root: Node3D, at: Vector3) -> void:
-	var e := ExtractNode.new()
 	e.position = at
 	root.add_child(e)
 

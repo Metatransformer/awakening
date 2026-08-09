@@ -200,27 +200,38 @@ func _fight(rig) -> void:
 		await rig.capture(out.path_join("m_14_chest_loot.png"))
 
 
+## Leaving. There is no pad to walk to any more -- the way out is the Homeward
+## Charm, used from the menu, which then channels in the world. This drives the
+## charm directly rather than the menu; the menu path is the equip director's
+## job, and duplicating it here would only test the same buttons twice.
 func _extract(rig) -> void:
-	var pads := []
-	for n in _all(rig.scene()):
-		if n is ExtractNode:
-			pads.append(n)
-	if pads.is_empty():
-		print("MVP FAIL no extract pad")
+	var hero = rig.get_nodes_in_group(&"player")[0]
+	var charm: HomewardCharm = hero.charm
+	if charm == null:
+		print("MVP FAIL the hero is carrying no way out")
 		return
 
-	_stand_at(rig, pads[0].global_position)
 	await rig.wait_frames(20)
-	await rig.capture(out.path_join("m_15_pad.png"))
-
-	# Half the hold, so the ring is caught mid-close.
-	await rig.hold_seconds(["interact"], 0.8)
-	await rig.capture(out.path_join("m_16_holding.png"))
+	await rig.capture(out.path_join("m_15_before_charm.png"))
 
 	print("MVP pre_extract gold=%d fee=%d value=%d" % [
 		Game.gold, Run.extract_cost(), Run.bag_value()])
-	await rig.hold_seconds(["interact"], 2.0)
+	if not charm.begin():
+		print("MVP FAIL the charm refused to start (gold=%d fee=%d)"
+			% [Game.gold, Run.extract_cost()])
+		return
+
+	# Caught mid-channel, so the ring is closing and the column of light is
+	# halfway up him rather than absent or finished.
+	await rig.wait_seconds(HomewardCharm.CHANNEL_TIME * 0.5)
+	if not charm.active():
+		print("MVP FAIL the charm stopped channelling on its own")
+	await rig.capture(out.path_join("m_16_channelling.png"))
+
+	await rig.wait_seconds(HomewardCharm.CHANNEL_TIME)
 	await rig.wait_frames(30)
+	if Run.in_dungeon:
+		print("MVP FAIL the charm finished and he is still underground")
 	await rig.capture(out.path_join("m_17_extracting.png"))
 
 

@@ -156,12 +156,20 @@ func _ready() -> void:
 	Bus.loadout_changed.connect(_repaint)
 	Bus.quick_slots_changed.connect(_repaint)
 	Bus.extract_refused.connect(_on_refused)
+	Bus.homeward_broken.connect(_on_homeward_broken)
 	Bus.shield_blocked.connect(_on_blocked)
 	Bus.target_acquired.connect(_on_target)
 	Bus.target_lost.connect(_on_target_lost)
 	Bus.prompt_changed.connect(_on_prompt)
 	Bus.run_started.connect(_on_headline_changed)
 	Bus.run_ended.connect(_on_headline_changed)
+	# Affordability moves when the purse moves or the bag moves, and on nothing
+	# else -- those are exactly Run.can_extract()'s two inputs.
+	Bus.gold_changed.connect(func(_g: int) -> void: _refresh_extract_available())
+	Bus.bag_changed.connect(func(_b: Dictionary, _v: int) -> void: _refresh_extract_available())
+	Bus.run_started.connect(func(_s: int) -> void: _refresh_extract_available())
+	Bus.run_ended.connect(func(_e: bool, _c: Dictionary, _v: int) -> void:
+		_refresh_extract_available())
 
 	get_tree().node_added.connect(_on_tree_changed)
 	get_tree().node_removed.connect(_on_tree_changed)
@@ -245,6 +253,17 @@ func _on_refused(_cost: int, _gold: int) -> void:
 	_wake()
 
 
+## Knocked out of the charm. Said as a toast rather than as a beep, because the
+## player pressed a button in a menu and then arrived back in the world still in
+## the dungeon -- without a sentence, that reads as the menu having eaten the
+## input.
+func _on_homeward_broken() -> void:
+	_toast = "THE CHARM BREAKS"
+	_toast_color = Pal.RUST
+	_toast_t = 0.0
+	_wake()
+
+
 func _on_blocked(_at: Vector3, _normal: Vector3) -> void:
 	_block_flash_t = 0.0
 	_wake()
@@ -260,7 +279,18 @@ func _on_target_lost() -> void:
 	_repaint()
 
 
-## The extraction node calls these; only it knows the player is standing in one.
+## "You can leave right now."
+##
+## This used to mean "you are standing on the rune pad", and the pad called it.
+## The pad is gone (the way out is the Homeward Charm, used from the menu), so
+## availability is no longer about WHERE you are -- it is about whether you can
+## afford the fee, which is the only thing that can still stop you. The sweep
+## therefore fires the moment leaving becomes possible again, which is a more
+## useful moment than the old one: crossing back over the fee line mid-run is a
+## fact the player cannot otherwise see coming.
+##
+## Still public because tools/directors/hud_lookdev.gd forces it on to shoot the
+## emphasised state.
 func set_extract_available(on: bool) -> void:
 	if on == _extract_available:
 		return
@@ -268,6 +298,10 @@ func set_extract_available(on: bool) -> void:
 	if on:
 		_sweep_t = 0.0
 	_wake()
+
+
+func _refresh_extract_available() -> void:
+	set_extract_available(Run != null and Run.can_extract())
 
 
 func set_extract_hold(t01: float) -> void:

@@ -99,10 +99,36 @@ the mote's glow radius, which is the only "look over here" the game does.
 
 ## 5. Extraction — the priced decision
 
-The way out is a rune pad you stand on and **hold**
-(`scripts/world/extract_node.gd`). It is a hold and not a press because a
-decision you can make by fumbling a button is not a decision, and because the
-hold can be interrupted — leaving with something chasing you is its own problem.
+The way out is the **Homeward Charm** (`scripts/items/homeward_charm.gd`): a
+permanent key item, used from the pause menu's ITEMS screen, under **USE**.
+
+**Superseded 2026-08-08, on the owner's instruction: this was a rune pad you
+stood on and held (`scripts/world/extract_node.gd`, deleted).** The pad made
+leaving a *place*. That is the wrong noun — it turned the game's central
+decision into a navigation problem, and a rich run could be lost to not
+remembering where the door was. The decision was never "can I find my way back",
+it was "is what I am carrying worth the fee".
+
+The charm is **not consumable**. A stock you can run out of would strand a
+player underground, and being stranded is the one thing this section rules out
+below: you are never trapped. The fee is the price of leaving; the charm is just
+where the button lives.
+
+The pad's two real properties survive the move, because everything below is
+built on them:
+
+- **Leaving takes time and can be interrupted.** The pad was a *hold* so that a
+  decision could not be made by fumbling a button. A menu press has neither
+  property on its own — the menu is paused, so a "hold" in there is a slow
+  click. So using the charm closes the menu and starts a **1.2 s channel in the
+  world**: he is rooted, the ring closes around the bag total, and **a blow that
+  lands breaks it**. A blow he *blocks* does not — standing your ground behind
+  the shield while the charm works is a legitimate way to leave, and a better one
+  than mashing a button was.
+- **The fee comes out of the number you are protecting**, and the HUD says so.
+
+It is deliberately **not bindable to an item button**. One D-pad press that ends
+the run is precisely the fumble the hold existed to prevent.
 
 ```
 cost = max(15, round(bag_value × 0.25))
@@ -187,7 +213,7 @@ this simple is still a fight rather than a health tax.
 | HUD | `scripts/ui/hud/hud.gd` |
 | Town | `scripts/world/town.gd`, `scenes/rooms/town.tscn` |
 | Dungeon | `scripts/world/dungeon.gd`, `scenes/rooms/dungeon.tscn` |
-| The way out | `scripts/world/extract_node.gd` |
+| The way out | `scripts/items/homeward_charm.gd` |
 | Drops on the floor | `scripts/world/loot_mote.gd` |
 
 The game boots into **town** (`run/main_scene`). `Flow` is the only thing that

@@ -115,6 +115,10 @@ var blocking: bool = false
 ## through the hero rather than reaching into the scene tree for it.
 var combat: HeroCombat = null
 
+## The way out, carried on his belt. Built here for the same reason combat is:
+## every scene that spawns a hero must spawn one who can leave.
+var charm: HomewardCharm = null
+
 var _model: Node3D
 var _rig: Node3D
 var _anim_player: AnimationPlayer
@@ -169,6 +173,10 @@ func _ready() -> void:
 	combat = HeroCombat.new()
 	combat.name = "Combat"
 	add_child(combat)
+
+	charm = HomewardCharm.new()
+	charm.name = "Charm"
+	add_child(charm)
 
 	_build_key_light()
 
@@ -340,7 +348,11 @@ func _physics_process(delta: float) -> void:
 	# simulated -- he still falls, still slides to a halt, still finishes a roll.
 	# Without this the shop's confirm key (space) is also the dodge key, and every
 	# purchase throws the hero across the town square behind the panel.
-	var locked := Prompt != null and Prompt.blocked
+	# Leaving roots him, by the same mechanism and for a related reason: the
+	# charm's channel is only a decision if walking out of it is not free. He
+	# still falls and still slides to a halt, he just does not steer.
+	var locked := (Prompt != null and Prompt.blocked) \
+		or (charm != null and charm.active())
 	var stick := Vector2.ZERO if locked \
 		else Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down")
 	var mag := clampf(stick.length(), 0.0, 1.0)
@@ -649,6 +661,15 @@ func take_hit(hit: Hit) -> bool:
 		return false
 
 	_invuln = K.IFRAME_TIME
+	# You do not get to walk out of a fight you are losing. This is the property
+	# the rune pad's hold existed to protect (METAGAME §5) and the only reason
+	# the charm channels at all rather than teleporting on the menu press.
+	#
+	# A BLOCKED blow does not break it -- that path returns above. Standing your
+	# ground behind the shield while the charm works is a legitimate way to
+	# leave, and it is a better one than mashing the button was.
+	if charm != null:
+		charm.cancel()
 	# Armour never zeroes a blow. A build that cannot be hurt turns the whole
 	# extraction decision into a formality.
 	Game.damage(maxi(K.QUARTER, hit.amount - Game.armour_level))

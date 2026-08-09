@@ -423,6 +423,30 @@ Rules that are not negotiable:
 - **`equipped == &""` means sword-and-shield.** Historical, and every caller of
   it predates the loadout, so `_on_loadout_changed` maps `&"sword"` → `&""`
   rather than renaming it under them.
+
+### The way out — the Homeward Charm
+
+```gdscript
+# scripts/items/homeward_charm.gd, built by hero.gd as `hero.charm`
+Bus.homeward_used.emit()          # the ITEMS screen, after closing the menu
+hero.charm.begin() -> bool        # or drive it directly, as directors do
+hero.charm.active() -> bool       # rooted, mid-channel
+hero.charm.cancel()               # a blow landed; emits Bus.homeward_broken
+```
+
+There is no extraction node and no exit room. `ExtractNode` is **deleted** —
+do not add a second way out (METAGAME §5).
+
+- **The charm channels, it does not teleport.** `CHANNEL_TIME` seconds rooted in
+  the world, cancelled by a blow that *lands*. A blocked blow does not cancel it.
+- **The hero is rooted by the same mechanism a shop uses**, so he still falls and
+  still slides to a halt — `hero.gd` folds `charm.active()` into the same
+  `locked` flag as `Prompt.blocked`, and `hero_combat.gd` locks the item buttons
+  but deliberately **not** the shield.
+- **It is not bindable.** It is not in `QUICK_POOL` and must not be added to it.
+- **Only `Run` decides whether leaving is possible.** The charm asks
+  `Run.can_extract()` before it starts and `Run.extract()` when it finishes; the
+  fee moves with the bag, so both checks are load-bearing.
 - **Unowned gear is not on the body.** The bow and the hookshot each have two
   mounts, both built at `_ready` (a `BoneAttachment3D` is not something to be
   creating mid-run). The stow mount is shown only when `Game.has(id)` — without
