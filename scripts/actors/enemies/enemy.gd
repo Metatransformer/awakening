@@ -18,7 +18,7 @@ extends CharacterBody3D
 
 signal died_at(position: Vector3)
 
-enum State { IDLE, CHASE, CIRCLE, WINDUP, STRIKE, RECOVER, HURT, DEAD }
+enum State { IDLE, CHASE, CIRCLE, WINDUP, STRIKE, RECOVER, HURT, FROZEN, DEAD }
 
 const LIBRARY := "res://assets/animations/monster_library.res"
 const MODEL_DIR := "res://assets/monsters/"
@@ -111,6 +111,16 @@ var _model_rest: Vector3 = Vector3.ZERO
 ## True while the wind-up telegraph is holding the body's emission. See the
 ## guard at the top of `_physics_process`.
 var _glowing: bool = false
+## True while the freeze is holding the body's ALBEDO as well. Tracked separately
+## from `_glowing` for the same reason it exists at all: leaving FROZEN is the
+## only thing that can take the ice back down, and there are three ways out of it
+## (the timer, a sword, dying). See the guard at the top of `_physics_process`.
+var _frozen: bool = false
+## Seconds of freeze left. Counts the whole of it, thaw included, so
+## `_tick_frozen` can read one number for both "am I still stopped" and "how
+## blue am I".
+var _freeze_left: float = 0.0
+var _freeze_total: float = 0.0
 
 
 static func spawn(parent: Node3D, p_kind: StringName, at: Vector3, seed_val: int) -> Enemy:
@@ -320,6 +330,15 @@ func _physics_process(delta: float) -> void:
 	if _glowing and state != State.WINDUP:
 		_glowing = false
 		_flash.restore()
+	# The same guard, for the same reason, over the ice. There are three ways out
+	# of FROZEN — the timer runs out, a sword lands, the thing dies — and only one
+	# of them goes through `_tick_frozen`. Clearing it here, off the state itself,
+	# means the next person to add a fourth cannot ship a monster that is blue for
+	# the rest of the run. Both `_on_damaged` and `_on_died` drop the flag before
+	# writing their own colour, so this cannot wipe them the next frame.
+	if _frozen and state != State.FROZEN:
+		_thaw_body()
+		_flash.restore()
 
 	match state:
 		State.IDLE:
@@ -336,6 +355,8 @@ func _physics_process(delta: float) -> void:
 			_tick_recover(delta)
 		State.HURT:
 			_tick_hurt(delta)
+		State.FROZEN:
+			_tick_frozen(delta)
 
 	if not is_on_floor():
 		velocity.y -= K.GRAVITY * delta
@@ -634,6 +655,106 @@ func _tick_hurt(delta: float) -> void:
 		state = State.CHASE
 
 
+# --- The freeze -------------------------------------------------------------
+## What the hookshot does to a body. Not damage — `HealthComponent.apply_hit`
+## refuses a zero-quarter blow outright, and it should: a chain with a barb on
+## the end that chips a monster's health would make the hookshot a bad bow, when
+## what it actually is is the thing that buys you the swing.
+##
+## Deliberately NOT a state of its own in some parallel status-effect machine.
+## The one thing a freeze has to be able to do is INTERRUPT — a monster caught
+## mid-wind-up must not resume that wind-up when it thaws, or the freeze is a
+## pause button on an attack that is still coming — and interrupting is what
+## `state = ...` already means in this file.
+
+## Stop this thing dead for `seconds`, doing no damage. Safe to call on a corpse
+## and safe to call on something already frozen, which REFRESHES rather than
+## stacks: two hooks in a second are two seconds of freeze end to end, never a
+## body that has to thaw twice.
+func freeze(seconds: float = K.HOOK_FREEZE) -> void:
+	if state == State.DEAD or seconds <= 0.0:
+		return
+	# Whatever it was doing, it is not doing it now. A swing already in the air
+	# is taken out of the air with it — the hitbox is open for 0.18 s and a
+	# frozen monster whose claw still lands is the freeze doing nothing.
+	if _struck:
+		_hitbox.deactivate()
+		_struck = false
+	_stop()
+	_knockback = Vector3.ZERO
+	_kill_recoil()
+	if _model != null:
+		# Back to rest before the ice, not left mid-lean: the pose a body holds
+		# for a whole second is a pose the player reads, and half a wind-up frozen
+		# solid reads as "still winding up".
+		_model.rotation = _model_rest
+	state = State.FROZEN
+	_freeze_total = seconds
+	_freeze_left = seconds
+	# The white flash and the wind-up glow both lose to this, so drop their flags
+	# rather than letting the guards in `_physics_process` restore over the ice.
+	_glowing = false
+	_frozen = true
+	# It cannot swing the instant it thaws either. Without this a monster frozen
+	# mid-wind-up comes back with a spent cooldown and commits immediately, and
+	# the second you paid a shot for buys you nothing but a delay.
+	_cooldown = maxf(_cooldown, seconds + 0.25)
+	# Stop the CLOCK, do not change the clip. The first cut of this played `idle`
+	# and the render caught it out immediately: the body stood there working
+	# through the idle loop, waving its arms, tinted blue. A thing that is still
+	# moving is not frozen however cold it looks, and a blue monster in motion
+	# reads as a status effect you can ignore. Stopping the clock instead also
+	# leaves it caught in whatever pose the freeze interrupted — mid-stride,
+	# mid-reach — which is the picture ice is supposed to make. `_play` would
+	# have been worse than useless here anyway: a blend of 0.15 s cannot advance
+	# on a clock that is not running, so it would have stuck the body halfway
+	# between two clips for the whole second.
+	if _anim != null:
+		_anim.speed_scale = 0.0
+	# The hit's weight without the hit: the world stops for a few frames and the
+	# chain rings off bone. Sfx owns which sound (docs/CONTRACT.md §8); this only
+	# says what happened and where.
+	Bus.request_hitstop.emit(K.HITSTOP_LIGHT)
+	Bus.request_sfx.emit(&"craft_clang", global_position)
+
+
+## Let go of everything the freeze is HOLDING — the flag and the stopped
+## animation clock — without deciding what colour the body should be next. The
+## three ways out of FROZEN each want a different answer to that (the guard
+## restores, a blow flashes white, a death clears), and only the clock is common.
+##
+## Not folded into the guard in `_physics_process`, because `_on_died` returns
+## from that function before the guard is reached: a monster killed while frozen
+## would keep `speed_scale = 0.0` and its death clip would never play a frame.
+func _thaw_body() -> void:
+	_frozen = false
+	if _anim != null:
+		_anim.speed_scale = 1.0
+
+
+## True while this one is iced. Public because the hookshot needs to know
+## whether a second shot is a refresh, and because a director has to be able to
+## assert on it.
+func is_frozen() -> bool:
+	return state == State.FROZEN
+
+
+## Hold still and thaw. The tint is written EVERY frame rather than tweened, for
+## the reason `_tick_windup` writes the glow every frame: a tween that outlives
+## the state it belongs to is a body stuck at whatever colour the tween was on.
+func _tick_frozen(delta: float) -> void:
+	_stop()
+	_freeze_left -= delta
+	if _freeze_left <= 0.0:
+		# Out into CHASE, not back into whatever was interrupted. `_cooldown`
+		# above is what stops that from being a free swing.
+		state = State.CHASE
+		return
+	# 1.0 for the solid half, then down to 0 across the tail — the thaw.
+	var thaw := maxf(K.HOOK_THAW * _freeze_total, 0.001)
+	_flash.ice(Pal.FROST, clampf(_freeze_left / thaw, 0.0, 1.0))
+
+
 # --- Damage and death -------------------------------------------------------
 
 func _on_damaged(hit: Hit) -> void:
@@ -663,9 +784,13 @@ func _on_damaged(hit: Hit) -> void:
 	# nothing here holds a player or a camera (docs/CONTRACT.md §8).
 	Bus.request_hitstop.emit(K.HITSTOP_LIGHT)
 	Bus.request_shake.emit(0.52, 0.16)
-	# Cleared before the flash, not after: the white supersedes any wind-up glow,
-	# and leaving the flag set would have the guard restore over it next frame.
+	# Cleared before the flash, not after: the white supersedes any wind-up glow
+	# and any ice, and leaving a flag set would have the guard restore over it
+	# next frame. Hitting a frozen monster therefore THAWS it — it takes the blow
+	# and reels, which is the honest reading of a body that just got hit, and the
+	# `state = State.HURT` above has already taken it out of FROZEN anyway.
 	_glowing = false
+	_thaw_body()
 	_flash.hit()
 	_flinch(dir)
 	# The noise is NOT requested here. `hit_landed` already says exactly what
@@ -723,9 +848,13 @@ func _on_died() -> void:
 	remove_from_group(&"targetable")
 	_play(&"death")
 	# Settle the body before the death clip runs. Without this a monster killed
-	# mid-flash is a corpse frozen white, and one killed mid-wind-up dies still
-	# glowing the warning colour for a blow it never threw.
+	# mid-flash is a corpse frozen white, one killed mid-wind-up dies still
+	# glowing the warning colour for a blow it never threw, and one killed while
+	# iced dies blue and stays that way — `clear()` is the only thing that puts
+	# the albedo back, so the flag has to come down with it.
 	_kill_recoil()
+	_glowing = false
+	_thaw_body()
 	_flash.clear()
 	if _model != null:
 		_model.rotation = _model_rest

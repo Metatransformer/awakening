@@ -260,6 +260,15 @@ const HOOK_RANGE := 360.0 * U       # 8.74 m
 const HOOK_LONGSHOT_RANGE := 750.0 * U  # 18.20 m
 const HOOK_SPEED := 34.0            # [tune]
 const HOOK_PULL_SPEED := 14.0       # [tune]
+## Seconds a monster stays frozen after the head bites it. The hookshot does NO
+## damage to a body — the second is the entire reward, and it is a second because
+## that is about one sword swing plus the walk into range. [tune]
+const HOOK_FREEZE := 1.0
+## The share of that second spent thawing. The tint holds flat for the first
+## half and then bleeds out over the tail, so the freeze reads as two facts —
+## "it is stopped" and then "it is about to move" — rather than as a fade that
+## has been ending since it began. [tune]
+const HOOK_THAW := 0.45
 ## [oot] 70-tick fuse; blast grows to ~80 u and deals half a heart.
 ## Link is NOT exempt from his own bomb (AT_TYPE_ALL, no owner check).
 const BOMB_FUSE := 3.5

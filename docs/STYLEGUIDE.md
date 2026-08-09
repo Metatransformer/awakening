@@ -46,7 +46,12 @@ move it anyway.
 
 Rules that keep it dirty rather than clean:
 
-- No colour appears that is not in this table or a dither of two entries.
+- No colour appears that is not in this table or a dither of two entries. The
+  named ones live in `Pal` under "derived dithers" so two systems reaching for
+  the same mix cannot land on two colours: **FROST** `#48A8C8` (COBALT half and
+  half with EXTRACT CYAN) is a body the hookshot has frozen — cyan alone is the
+  hookshot's own hue but on a monster it reads as an extraction node with legs,
+  and cobalt alone is cold stone rather than ice.
 - Textures are authored at **≤16 unique colours** each (PSX 4-bit CLUT).
 - The palette is an **authoring** constraint. The framebuffer quantizes to
   RGB555, not to twelve colours — palette-locking the framebuffer gives you a

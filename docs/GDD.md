@@ -150,6 +150,15 @@ to change your mind — and the slam only charges for what that commitment was
 already costing, which is why it is worth more than a swing and why holding a
 bow or a torch takes it away rather than layering it on.
 
+The **hookshot** is the other verb that is not a weapon. Fired at a monster it
+does no damage at all — it freezes the thing for a second, blue and motionless,
+thawing out of it. That is deliberately a worse trade than an arrow if what you
+wanted was damage, and a much better one if what you wanted was a swing you were
+never going to get, a wind-up cancelled, or the two seconds it takes to walk past
+something you cannot afford to fight. An item that pulls you across a chasm and
+an item that buys you a beat are the same item because both are answers to "I am
+not where I need to be yet".
+
 Full input map and the pad bindings: `docs/CONTRACT.md` §4.
 
 ---

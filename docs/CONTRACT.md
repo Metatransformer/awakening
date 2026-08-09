@@ -1365,6 +1365,28 @@ ring.anchor_point()  # where the head bites — what the reticle wants
 Fixed **speed**, not fixed duration. A fixed duration makes near shots crawl and
 far shots streak, which is the giveaway tell of a clone.
 
+**A shot that lands on a monster is a third outcome.** The firing raycast reads
+`L_WORLD | L_HOOK | L_ENEMY`, and a hit on `L_ENEMY` neither damages nor pulls:
+
+```gdscript
+foe.freeze(K.HOOK_FREEZE)   # 1.0 s, State.FROZEN, zero quarters of damage
+foe.is_frozen() -> bool
+```
+
+Zero damage is the design, not a gap — `HealthComponent.apply_hit` refuses a
+zero-quarter blow anyway, so nothing is sent down the damage path at all
+(§ "one damage path"). The hero is handed straight back rather than dragged,
+because reeling him into the thing he just stopped would spend the shot's reward
+on closing the distance he wanted. `freeze` interrupts whatever the monster was
+doing, takes an in-flight claw out of the air with it, holds `_cooldown` past the
+thaw so it cannot swing the instant it comes back, and **stops the animation
+clock** (`speed_scale = 0.0`) — a body still working through its idle loop is not
+frozen however cold it looks. Three ways out of `FROZEN` — the timer, a blow, or
+death — and `Enemy._thaw_body` is the one that all three go through, because
+`_physics_process` returns before the state guard when the monster is `DEAD`.
+
+Proof: `tools/directors/hook_freeze.gd`.
+
 The hero side of it — `scripts/actors/hero/hero.gd`:
 
 ```gdscript

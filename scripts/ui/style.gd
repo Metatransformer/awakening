@@ -32,6 +32,19 @@ const ARCANE := Color("b060c0")   ## legendary
 ## a common drop should look like something you did not need to read.
 const RARITY := [MOTH, MOSS, COBALT, ARCANE]
 
+# --- Derived dithers --------------------------------------------------------
+## Not new palette entries. STYLEGUIDE §2 allows "a dither of two entries", and
+## these are those blends written down once so two systems reaching for the same
+## mix cannot land on two different colours. Each channel is still a multiple of
+## 8, because a 50/50 of two in-grid bytes is only in-grid if you round it back.
+
+## A monster the hookshot has bitten. COBALT mixed half-and-half with EXTRACT
+## CYAN: cyan alone is the hookshot's own hue (STYLEGUIDE §2 gives it "the
+## hookshot line"), but on a body it reads as an extraction node with legs, and
+## cobalt alone is cold stone rather than ice. Halfway is blue enough to say
+## "frozen" and cyan enough to say "the thing in your right hand did that".
+const FROST := Color("48a8c8")
+
 # --- Bag value tiers --------------------------------------------------------
 ## The thresholds at which the bag stops being pocket change and starts being
 ## something you can lose. [tune]
