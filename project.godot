@@ -31,6 +31,10 @@ Saves="*res://scripts/autoload/save_game.gd"
 ; pause-menu slider drives. The 15 tracks in res://audio/music/ were imported
 ; and then never played by anything; this is what plays them.
 Music="*res://scripts/autoload/music.gd"
+; Sfx implements Bus.request_sfx -- which was declared in event_bus.gd with no
+; emitter and no listener -- and owns the signal->sound table. After Bus, which
+; it connects to on _ready.
+Sfx="*res://scripts/autoload/sfx.gd"
 ; The HUD is an autoload so the overlay exists whatever scene the launcher
 ; picks. It hides itself unless a node in group `player` is in the tree, so
 ; lookdev and tool scenes stay clean.
