@@ -27,7 +27,7 @@ extends RefCounted
 ## recipe that undercut the shop would kill the shop line, and the shop line is
 ## what a player with a purse and an empty bag is supposed to reach for.
 ##
-## Lives on the POUCH screen next to the Homeward Charm, because both are verbs
+## Lives on the POUCH screen next to the escape rope, because both are verbs
 ## the bag can perform on itself and neither is something you hold.
 
 ## What one batch costs, out of the bag. Both are COMMON on `ItemDb.ENEMY_DROPS`

@@ -379,7 +379,7 @@ func target_point_of(t: Node3D) -> Vector3:
 
 
 ## Eye-to-chest, world geometry only. Enemy and player bodies are deliberately
-## not in the mask: a crawler standing between you and the orc behind it should
+## not in the mask: a goblin standing between you and the orc behind it should
 ## not make the orc unlockable, only a wall should.
 ##
 ## **The target is excluded, and it has to be.** The ray ends AT the target's

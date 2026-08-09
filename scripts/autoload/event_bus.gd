@@ -77,12 +77,12 @@ signal gold_changed(gold: int)
 signal items_sold(sold: Dictionary, paid: int)
 ## The player tried to teleport out and could not afford the fee.
 signal extract_refused(cost: int, gold: int)
-## The Homeward Charm was used from the menu. The hero's charm node picks this
+## The Escape Rope was used from the menu. The hero's rope node picks this
 ## up and starts the channel — the menu deliberately does not reach into the
 ## hero, because the menu exists in scenes that have no hero at all.
-signal homeward_used
+signal escape_rope_used
 ## Something hit him on the way out. The run continues.
-signal homeward_broken
+signal escape_rope_broken
 signal depth_changed(depth: int)
 ## You took the stair down. `level` is the floor you are now standing on, 1-based
 ## and endless. Everything that gets harder or richer with depth reads this

@@ -29,6 +29,7 @@ func run(rig) -> void:
 	# ended up with a menu that existed only in its own test scene.
 	var menu: PauseMenu = Menu
 	var equip: MenuEquipPanel = menu.get_node("Root/Screens/EquipScreen")
+	var pouch: MenuPouchPanel = menu.get_node("Root/Screens/PouchScreen")
 
 	# A fresh Game owns nothing, which is the state the ownership gate is for.
 	# The screen has to be honest about it BEFORE anything is granted.
@@ -121,49 +122,60 @@ func run(rig) -> void:
 		Game.loadout_set != live_before)
 	await rig.capture("eq_05_swapped.png")
 
-	# --- The way out --------------------------------------------------------
-	# The charm has to be REACHABLE by keyboard alone, like everything else on
-	# this screen -- it is the only control here that ends a run, and a pad user
-	# who cannot get focus onto it cannot leave the dungeon at all.
-	await _nav_to_button(rig, "◈  Homeward Charm")
-	_check("the Homeward Charm is reachable by keyboard",
-		_focused(rig) != null and (_focused(rig) as Button).text.ends_with("Homeward Charm"))
-	await rig.capture("eq_06_charm.png")
+	# --- The way out, which is on the POUCH now ------------------------------
+	# It used to be on this screen and it is not any more: the bag's worth, the
+	# purse and the fee are one decision, so they are on one screen (pouch_panel
+	# owns all three, hud.gd draws none of them). The assertions did not move
+	# with it for one commit, which is exactly how a director ends up proving a
+	# button that is no longer there.
+	await _key(rig, KEY_ESCAPE, 12)
+	_check("Escape backed out of Equipment to the root", not equip.visible)
+	await _nav_to_button(rig, "Pouch")
+	await _key(rig, KEY_ENTER, 12)
+	_check("the pouch screen is showing", pouch.visible)
+
+	# The rope has to be REACHABLE by keyboard alone, like everything else on
+	# this screen -- it is the only control in the menu that ends a run, and a
+	# pad user who cannot get focus onto it cannot leave the dungeon at all.
+	await _nav_to_button(rig, "◈  Escape Rope")
+	_check("the Escape Rope is reachable by keyboard",
+		_focused(rig) != null and (_focused(rig) as Button).text.ends_with("Escape Rope"))
+	await rig.capture("eq_06_rope.png")
 
 	# This scene is not a dungeon. Using it must refuse, and must NOT close the
 	# menu -- "the menu ate my button press" is the failure mode the notice and
 	# this assertion exist for.
 	await _key(rig, KEY_ENTER, 10)
-	_check("using the charm outside a run refused, and the menu stayed open",
-		menu.is_open and equip.visible and not Run.in_dungeon)
+	_check("using the rope outside a run refused, and the menu stayed open",
+		menu.is_open and pouch.visible and not Run.in_dungeon)
 
 	# Underground, the row has to name the price. `in_dungeon` is set directly
 	# rather than by running Run.enter(): this is a menu test scene with no
-	# dungeon in it, and the charm reads exactly two facts -- are you in a run,
+	# dungeon in it, and the rope reads exactly two facts -- are you in a run,
 	# and can you pay.
 	Run.in_dungeon = true
-	equip.refresh()
+	pouch.refresh()
 	await rig.wait_frames(4)
-	_check("in a run the charm names the fee (%d gold)" % Run.extract_cost(),
+	_check("in a run the rope names the fee (%d gold)" % Run.extract_cost(),
 		Run.extract_cost() >= 15)
-	await rig.capture("eq_07_charm_fee.png")
+	await rig.capture("eq_07_rope_fee.png")
 
 	# Too poor to leave. This must refuse and SAY SO, not silently do nothing:
 	# being unable to afford the way out is a legible failure state by design
 	# (METAGAME §5), and a dead button is not legible.
 	Game.spend_gold(Game.gold)
-	equip.refresh()
+	pouch.refresh()
 	await rig.wait_frames(4)
 	await _key(rig, KEY_ENTER, 10)
 	_check("too poor to leave: refused, still in the run, menu still open",
-		Run.in_dungeon and menu.is_open and equip.visible)
-	await rig.capture("eq_08_charm_broke.png")
+		Run.in_dungeon and menu.is_open and pouch.visible)
+	await rig.capture("eq_08_rope_broke.png")
 	Run.in_dungeon = false
 
 	# --- Back ----------------------------------------------------------------
 	await _key(rig, KEY_ESCAPE, 12)
 	_check("Escape backed out to the root screen, it did not close the menu",
-		menu.is_open and not equip.visible)
+		menu.is_open and not pouch.visible)
 
 	print("EQUIP %d passed, %d failed" % [_pass, _fail])
 	if _fail > 0:

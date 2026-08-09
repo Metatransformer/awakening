@@ -11,7 +11,7 @@ extends RefCounted
 ##
 ## It also checks the thing a screenshot cannot: that the card sits in the D-pad
 ## walk. The pouch is a gamepad screen — every control has to be reachable by
-## holding one direction — and a new card wedged between the grid and the charm
+## holding one direction — and a new card wedged between the grid and the rope
 ## is exactly the change that silently orphans the way out.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
@@ -35,7 +35,7 @@ func run(rig) -> void:
 		_fail("no PouchScreen")
 		return
 
-	# A live run, so the bag is a bag and the charm has a fee to print.
+	# A live run, so the bag is a bag and the escape rope has a fee to print.
 	Run.enter(20190920)
 	Run.bag.clear()
 	Run.premium = 0
@@ -78,11 +78,11 @@ func run(rig) -> void:
 			% Fletching.cost_line())
 
 	# Walk the focus down from the grid the way a pad does, and make sure the
-	# bench and then the charm are both on the road.
+	# bench and then the escape rope are both on the road.
 	var reached: Array = await _walk_down(rig, pouch)
 	if not reached.has("Fletch"):
 		_fail("holding DOWN from the grid never lands on the bench")
-	if not reached.has("Charm"):
+	if not reached.has("Rope"):
 		_fail("the bench swallowed the walk — the way out is unreachable")
 	print("FOCUS walk reached %s" % str(reached))
 
@@ -121,6 +121,6 @@ func _walk_down(rig, pouch) -> Array:
 			break
 		next.grab_focus()
 		await rig.wait_frames(1)
-		if seen.has("Back") and seen.has("Charm"):
+		if seen.has("Back") and seen.has("Rope"):
 			break
 	return seen

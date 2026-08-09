@@ -15,6 +15,26 @@ const SETS := {
 	"ex": "res://assets/animations/extra",
 	"mg": "res://assets/animations/magic",
 	"bow": "res://assets/animations/longbow",
+	"ax": "res://assets/animations/axe",
+}
+## Sets we want ONE clip out of, by stem. Everything else in that directory is
+## skipped.
+##
+## `greatsword` and `axe` are other characters' movesets — a full idle/run/block
+## set each, on the same mixamorig skeleton but posed around a weapon this hero
+## does not carry. Baking them wholesale would double the library with clips
+## nothing can ever play, and would put two more `idle`s in front of the next
+## person who greps for one. The sword-and-shield set has no 360 in it, which is
+## the one thing the spin attack needs, so it is borrowed a clip at a time.
+## `melee_attack_360_low` is the spin attack, PICKED OFF THE RENDER
+## (tools/directors/swing_lookdev.gd) against the other two 360s in the project:
+## `ax_melee_attack_360_high` swings behind the body and reads as a shield-bash
+## turn, and `gs_high_spin_attack_1` is posed around a two-handed hilt this hero
+## is not holding. The low one crouches into the turn and carries the blade out
+## at arm's length through the whole circle, which is the pose the hitbox is
+## claiming to be.
+const ONLY := {
+	"ax": ["melee_attack_360_low"],
 }
 const OUT := "res://assets/animations/hero_anims.res"
 ## Clips that should loop when played. Everything else is one-shot.
@@ -24,7 +44,7 @@ const OUT := "res://assets/animations/hero_anims.res"
 ## so neither "walk" nor "idle" catches them, and they are cycles like any other.
 const LOOPING := [
 	"idle", "walk", "run", "strafe", "block_idle", "crouch_idle", "crouching",
-	"aim_walk", "fall_loop",
+	"aim_walk", "fall_loop", "fast_run",
 ]
 ## Library-name -> the second the MOVE ends. Mixamo exports often carry a tail of
 ## the actor standing still after the action is over, and that tail is not free:
@@ -40,8 +60,37 @@ const LOOPING := [
 ## Read the number off the hips track; do not eyeball it. `ex_backflip` is 2.17 s
 ## of which 0.20–1.45 is crouch, launch, inversion and landing — apex at 1.10,
 ## grounded again by 1.45 — and the last 0.72 s is a man standing there.
+##
+## `ax_melee_attack_360_low` is 2.50 s and the SPIN is over by 1.35. Read off
+## tools/_clip_motion.gd, which prints per-frame rotation across every bone: the
+## turn peaks at 0.87 (the blade fully extended at the bottom of the sweep),
+## falls to a fifth of that by 1.05, and what follows is a long settle back into
+## the guard with a dead 0.33 s on the end. Left uncut, a 0.9 s spin runs the
+## clip at 2.8x and the sweep — the one part anybody is looking at — goes past in
+## a third of a second.
+## The two jump clips are cut at the end of the LANDING RECOVERY, not at the end
+## of the leap — a jump that ends the frame the feet touch leaves the hero
+## snapping upright out of a crouch. Read off the hips Y track with
+## tools/_clip_hips.gd — NOT _clip_motion.gd, which measures bone ROTATION and is
+## blind to a jump, that being almost pure translation:
+##
+##   ex_jump          stand 0.523, crouch bottoms 0.313 @0.33, leaves the ground
+##                    @0.50, apex 0.879 @0.77, lands @1.10, compression bottoms
+##                    @1.30, standing again @1.67. After that: a man standing.
+##   ex_jump_running  launches @0.47, apex 0.720 @0.77 (a FLATTER arc — 0.26 of
+##                    rise against the standing jump's 0.57, which is what a
+##                    running jump is), lands @1.10, back into run cadence @1.45.
+##                    It has no dead tail to find because it ends running.
+##
+## Both are airborne for ~0.60 s, and K.JUMP_SPEED against K.GRAVITY is airborne
+## for 0.59 s. That is not a coincidence to be proud of, it is why these clips
+## play at scale 1.0 — see `jump_start_offset` in hero.gd for the other half,
+## which is that the game has no room for the anticipation crouch at the front.
 const TRIM := {
 	"ex_backflip": 1.45,
+	"ax_melee_attack_360_low": 1.35,
+	"ex_jump": 1.67,
+	"ex_jump_running": 1.45,
 }
 
 
@@ -62,6 +111,8 @@ func _initialize() -> void:
 			if not f.ends_with(".fbx"):
 				continue
 			var stem := f.get_basename()
+			if ONLY.has(prefix) and not (ONLY[prefix] as Array).has(stem):
+				continue
 			var anim := _extract(dir_path.path_join(f))
 			if anim == null:
 				failed.append(f)

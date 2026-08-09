@@ -37,6 +37,19 @@ the loser**. Do not land both and wire a switch. One of each system, always.
 - **Commit as soon as the tree is consistent.** A merge resolution sat
   uncommitted here and was wiped by a stray `git reset --hard`. Hours, gone.
   Commit, then continue.
+- **Sweeping up another agent's uncommitted work is fine. Commit anyway.** The
+  primary worktree is shared and usually has two or three streams half-written
+  in it, often in the same file, sometimes in a binary like
+  `assets/animations/hero_anims.res` that no hunk-level split can separate.
+  Do not stall on that. A commit does not damage anyone's work — the files stay
+  exactly as they are on disk, and an untidy commit is recoverable in a way that
+  §0's duplicated-metagame outcome is not. Stage what you can attribute, say in
+  the message what else came along for the ride, and land it. The thing that has
+  actually cost this repo time is work that stayed invisible, never a shared
+  commit.
+
+  This is not a licence to *destroy*: the `git checkout HEAD -- <file>` rule
+  above still stands, because that one removes work rather than recording it.
 - **Land it on `main` when the card is done. Do not wait to be asked.** A
   verified branch sitting in a worktree is not finished work — it is work the
   next session cannot see, and this repo has already paid for that once: two
@@ -48,13 +61,35 @@ the loser**. Do not land both and wire a switch. One of each system, always.
   never `git checkout main` inside a worktree:
 
   ```bash
-  cd /Users/nickbryant/zeldalike && git merge --ff-only <your-branch>
+  cd /Users/nickbryant/zeldalike && git merge <your-branch>
   ```
 
-  Use `--ff-only`. If it refuses, `main` moved under you: rebase your branch
-  onto it, re-run the directors (a clean rebase is not a passing one), and
-  merge again. Land only what you have actually verified — the bar in §2 is the
-  bar for merging, not just for saying you are done.
+  Plain `git merge`. Not `--ff-only`, not "I'll ask first", not a summary of
+  what you *would* have merged. If `main` moved under you, that is the normal
+  case in this repo, not an incident.
+
+- **Conflicts are yours to resolve. They are not a reason to stop.** You have
+  both sides in front of you and you know what your half was for; nobody is
+  better placed to merge it than you are, and a session that hands a conflict
+  back has turned twenty minutes of reading into a blocked card. Read both
+  sides, keep both intents, delete neither silently, and say in the merge
+  message what you reconciled and why. If a conflict is genuinely a design
+  collision — two answers to one question, §0 — pick the better one, delete the
+  loser, and say so. That is a decision you are allowed to make.
+
+  The only thing a conflict changes is the proof: a resolved merge is new code
+  that has never run. Re-run the directors on the *merged* tree. A clean rebase
+  is not a passing one.
+
+- **Do not leave verified work sitting for permission.** "Should I merge?" is
+  not a question this repo wants asked — the answer is always yes, and asking
+  it costs a round-trip during which another session starts building your
+  feature again. Merge it, then say what you merged. If it turns out wrong,
+  `git revert` is one command; the duplicated metagame in §0 took days.
+
+  Land only what you have actually verified — the bar in §2 is the bar for
+  merging, not just for saying you are done. That is the *only* gate. "It might
+  conflict", "someone else has files open", "main moved" are not gates.
 
 ---
 

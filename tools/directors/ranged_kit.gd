@@ -106,11 +106,12 @@ func _bow(rig, hero) -> void:
 	var before_arrows := Game.arrows
 	var before_damage: int = post.total_damage
 	await rig.tap(["use_item"])
-	# Watched frame by frame rather than sampled once. The draw is 0.44 s and the
-	# arrow leaves at 55 % of it, and the first version of this beat looked on a
-	# fixed frame, found the arrow already spent, and reported that no arrow had
-	# ever existed. Photographing the frame it is FOUND on is also the only way
-	# to be sure the picture has an arrow in it.
+	# Watched frame by frame rather than sampled once. The arrow leaves at the
+	# seam between the charge clip and the loose — the far end of a 0.44 s draw —
+	# and the first version of this beat looked on a fixed frame, found the arrow
+	# already spent, and reported that no arrow had ever existed. Photographing
+	# the frame it is FOUND on is also the only way to be sure the picture has an
+	# arrow in it.
 	var arrows_out := 0
 	for i in 60:
 		await rig.wait_frames(1)
@@ -272,7 +273,7 @@ func _hookshot_ring(rig, hero) -> void:
 ## into, and it is the one that would silently rot if only the ring were tested.
 
 func _hookshot_wall(rig, hero) -> void:
-	# The ring shot leaves him in mid-air off a wall, and `request_ranged`
+	# The ring shot leaves him in mid-air off a wall, and `request_hookshot`
 	# refuses while he is not on the floor — same gate the sword uses. Waiting
 	# for the landing is not padding: a beat that fires while he is still falling
 	# tests the refusal, then blames the hookshot for it.

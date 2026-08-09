@@ -32,6 +32,14 @@ extends RefCounted
 ## Every swing in the library, with the two the game already uses first so they
 ## are the reference the rest are judged against.
 const CLIPS: Array[StringName] = [
+	# The spin, first because it is the only clip here from another character's
+	# moveset: the sword-and-shield set has no 360 in it at all, so the charged
+	# release borrows one (build_anim_lib.gd §ONLY). It was picked over
+	# `ax_melee_attack_360_high` and `gs_high_spin_attack_1` in this very sheet —
+	# the high one swings behind the body and the greatsword one is posed around
+	# a two-handed hilt. Neither is baked any more; re-add them to ONLY if the
+	# choice ever wants re-litigating.
+	&"ax_melee_attack_360_low",  # in use: the charged spin attack
 	&"ss_slash_01",     # in use: light attack
 	&"ss_attack_01",    # in use: heavy attack
 	&"ss_slash_02", &"ss_slash_03", &"ss_slash_04", &"ss_slash_05",

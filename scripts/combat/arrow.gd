@@ -4,7 +4,7 @@ extends Node3D
 ## own trajectory and the one blow it lands.
 ##
 ## **It is not an Area3D, and that is the point.** K.ARROW_SPEED is 42 m/s, which
-## at 60 Hz is a 0.7 m step per frame — further than a crawler is wide and far
+## at 60 Hz is a 0.7 m step per frame — further than a goblin is wide and far
 ## further than a wall is thick. An Area3D only reports what it OVERLAPS on the
 ## frame the physics server samples it, so an arrow built that way passes clean
 ## through a thin enemy roughly as often as it hits one, and the misses look like
@@ -36,7 +36,7 @@ const LIFETIME := 4.0
 ##
 ## MEASURED, not derived. Which end of a GLB is the point is not a thing to
 ## reason out from an axis name — see CLAUDE.md §4 and
-## `tools/directors/arrow_bundle_lookdev.gd`, which renders it.
+## `tools/directors/arrow_supply.gd`, which renders it and measures it.
 const MODEL_ID := "arrow"
 const MODEL_PITCH := -PI * 0.5
 ## Rendered length, metres. Not used by anything here — the flight is a raycast

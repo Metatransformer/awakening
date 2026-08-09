@@ -81,6 +81,21 @@ const BACKFLIP_SPEED := 180.0 * U  # 4.37 m/s [oot]
 ## Kept for UI/labels only — the speed curve is continuous, do not branch on it.
 const WALK_SPEED := 60.0 * U       # 1.46 m/s
 
+## DELIBERATE DEVIATION, like the stamina bar below it: OOT has no jump button
+## and no sprint. It has a contextual ledge-hop and one running speed, and BOTW
+## — which is the game this project is actually chasing — has both on buttons.
+##
+## The sprint is deliberately SLOWER than the roll (6.55). The roll is the
+## fastest the hero ever travels and it costs a third of the bar for half a
+## second of it; a sprint that outran it would make the dodge a worse way to
+## cover ground than the button it shares.
+const SPRINT_SPEED := 250.0 * U    # 6.07 m/s [tune] 1.39x the run cap
+## Straight up, m/s. Against GRAVITY = 22 this apexes at v^2/2g = 0.96 m and is
+## airborne for 2v/g = 0.59 s. Both numbers are the point: 0.96 m clears a
+## waist-high ledge on a 1.65 m hero, and 0.59 s is short enough that a jump is
+## a step rather than a state you wait out.
+const JUMP_SPEED := 6.5            # [tune]
+
 const ACCEL := 28.0                # [tune]
 const DECEL := 34.0                # [tune]
 ## Degrees/sec the hero's body turns to face his heading when unlocked.
@@ -176,6 +191,12 @@ const STAMINA_ROLL := 34.0          # [tune] three rolls from full, not four
 ## are winded; regen with no delay reads as no system at all.
 const STAMINA_DELAY := 0.45         # [tune]
 const STAMINA_REGEN := 46.0         # [tune] units/sec -> full in ~2.2 s
+## Units/sec while sprinting -> 4.5 s of running from a full bar. Deliberately
+## priced so a full bar is a SPRINT OR THREE ROLLS and not both: the run and the
+## dodge share one pocket, which is the only thing stopping "hold the button
+## always" from being the correct way to play. 4.5 s is also about a room and a
+## half of this dungeon, so crossing open ground is a choice and not a commute.
+const STAMINA_SPRINT := 22.0        # [tune]
 ## [oot] 8 ticks of invulnerability when a shield block is released.
 const SHIELD_IFRAMES := 8.0 * TICK  # 0.4 s
 
@@ -273,10 +294,14 @@ const PLATE_SOAK: Array[int] = [0, 1, 2, 3]
 ## stops. Widening the arc buys back the flank, and it stays strictly frontal at
 ## every level, because being punished for turning away is the point. [tune]
 const GUARD_ARC: Array[float] = [70.0, 85.0, 100.0, 115.0]
-## Seconds a shot owns the hero. NOT arrow damage: arrow.gd is explicit that the
-## bow's advantage is reach and a bow that out-damages the blade is the only
-## weapon anyone brings. What the bow costs is commitment, so what you buy back
-## is commitment. [tune]
+## Seconds of DRAW — the pull, up to the frame the arrow leaves. Not the whole
+## shot: `HeroRanged.BOW_LOOSE` is the follow-through on the end of it, and the
+## hero is committed for both. This is the half the smith sells, because pulling
+## faster is the thing a better string does.
+##
+## NOT arrow damage: arrow.gd is explicit that the bow's advantage is reach and a
+## bow that out-damages the blade is the only weapon anyone brings. What the bow
+## costs is commitment, so what you buy back is commitment. [tune]
 const BOW_DRAW: Array[float] = [0.44, 0.38, 0.32, 0.26]
 ## Hookshot reach in metres. The rungs walk [oot]'s own two lengths: rung 0 is
 ## the Hookshot and rung 3 is exactly the Longshot, with two even steps between.

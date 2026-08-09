@@ -144,9 +144,15 @@ static func cap_for(e: InputEvent) -> String:
 		if code == 0:
 			return ""
 		var name := OS.get_keycode_string(code)
+		# Names longer than four characters are truncated below, and truncation is
+		# only acceptable when the stump is still readable. These are the ones
+		# where it is not: "Shift" becomes "Shif", which reads as a typo on a key
+		# cap the dodge now lives on.
 		match name:
 			"Space": return "SPC"
 			"Escape": return "ESC"
+			"Shift": return "SHFT"
+			"Ctrl": return "CTRL"
 		return name if name.length() <= 4 else name.substr(0, 4)
 	if e is InputEventJoypadButton:
 		var b := (e as InputEventJoypadButton).button_index

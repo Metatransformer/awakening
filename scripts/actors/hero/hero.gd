@@ -44,7 +44,7 @@ enum Dodge { FORWARD, BACK, LEFT, RIGHT }
 ## The three lights are separate values rather than an index into one clip
 ## because the animation tree needs one node per variant (see _add_swing), and a
 ## node cannot be addressed by a number that only exists in the combat script.
-enum Swing { LIGHT1, LIGHT2, LIGHT3, HEAVY, LUNGE, DASH }
+enum Swing { LIGHT1, LIGHT2, LIGHT3, SPIN, LUNGE, DASH }
 
 @export_group("Rig")
 @export var hero_model: PackedScene = preload("res://assets/characters/hero.fbx")
@@ -123,6 +123,19 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, HEAVY, LUNGE, DASH }
 ## make it the only button anyone presses, so it costs. See K.MAX_STAMINA.
 @export var roll_stamina: float = K.STAMINA_ROLL
 
+@export_group("Jump")
+## Straight up, m/s. See K.JUMP_SPEED for what it buys against K.GRAVITY (0.96 m
+## of apex, 0.59 s in the air) and why both numbers are the ones the clips want.
+@export var jump_speed: float = K.JUMP_SPEED
+## Seconds a `jump` press stays live. A press made in the last moments of a fall
+## still jumps on touchdown rather than being eaten — without it the only way to
+## chain jumps is to press exactly on the landing frame, and nobody can.
+@export var jump_buffer_time: float = 0.12
+## Ground speed at launch above which the RUNNING jump plays. Set at walking
+## pace, not at the run cap: the standing clip's near-vertical arc reads wrong
+## the moment the hero is visibly travelling, well before he is sprinting.
+@export var jump_run_speed_gate: float = K.WALK_SPEED
+
 @export_group("Animation")
 @export var clip_idle: StringName = &"ss_idle_01"
 @export var clip_walk: StringName = &"ss_walk_01"
@@ -155,8 +168,40 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, HEAVY, LUNGE, DASH }
 @export var clip_roll_left: StringName = &"bow_dodge_left"
 @export var clip_roll_right: StringName = &"bow_dodge_right"
 @export var clip_turn180: StringName = &"ss_180_turn_01"
+## FALLING, not jumping. These two are what plays when the ground goes away
+## underneath him — walking off a ledge, a pit, the end of a hookshot pull — and
+## they stay on the sword-and-shield set because that is the stance he falls in.
+## A deliberate jump plays clip_jump/clip_jump_run below instead, and suppresses
+## both of these: those clips contain their own air pose AND their own landing.
 @export var clip_air: StringName = &"ss_jump_01"
 @export var clip_land: StringName = &"ss_jump_02"
+## The two jumps. Standing and running are separate clips rather than one clip
+## leaned on, because they are different ARCS, not the same arc at two speeds:
+## the standing jump rises 0.57 in hip height and the running one 0.26, which is
+## the difference between going up and going along.
+##
+## Both come from `extra`, which is where this project's non-sword-set clips
+## live — the Pro Sword and Shield Pack has no jump in it either (see the note
+## on the dodges above; it had no roll and no 360 for the same reason).
+@export var clip_jump: StringName = &"ex_jump"
+@export var clip_jump_run: StringName = &"ex_jump_running"
+## Where in each clip the feet leave the ground, in seconds. Measured off the
+## hips Y track — see the TRIM note in tools/build_anim_lib.gd for the full
+## profile of both.
+##
+## THIS IS THE WHOLE TRICK, and it is worth understanding before changing it.
+## Both clips open with an anticipation crouch — `ex_jump` spends 0.50 s
+## gathering before it launches — and the game has no anticipation window at
+## all: the hero is airborne on the frame the button goes down. Playing the
+## crouch would mean either 0.50 s of input latency on every jump, or a hero who
+## squats while already rising. So the clip is STARTED at its launch frame
+## (AnimationNodeAnimation.start_offset) and the crouch is simply never seen.
+##
+## What is left runs at scale 1.0 and does not need compressing, because the
+## airborne stretch of both clips (~0.60 s) is what K.JUMP_SPEED was picked to
+## match.
+@export var jump_start_offset: float = 0.50
+@export var jump_run_start_offset: float = 0.47
 ## The three steps of the light chain. Three DIFFERENT clips, not one replayed:
 ## a combo whose every hit is the same swing reads as a stutter, and the whole
 ## point of a chain is that the player can see how far into it they are.
@@ -168,16 +213,31 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, HEAVY, LUNGE, DASH }
 @export var clip_attack: StringName = &"ss_slash_01"
 @export var clip_light2: StringName = &"ss_slash_03"
 @export var clip_light3: StringName = &"ss_slash_04"
-## The heavy is a DIFFERENT clip, not the light slash time-scaled down. Slowing
-## ss_slash_01 to 0.8 s reads as the hero being tired, not as a blow that weighs
-## something — the wind-up has to be a real pose the player can learn to see.
+## The charged release: a full 360 spin, Zelda's. It is a DIFFERENT clip, not a
+## slash time-scaled down — slowing ss_slash_01 to 0.9 s reads as the hero being
+## tired, not as a blow that weighs something.
 ##
-## ss_attack_02 was PICKED OFF THE RENDER (tools/directors/swing_lookdev.gd), not
-## off its name: it opens with the sword drawn back behind a turned shoulder —
-## a wind-up you can read in one frame — and sweeps horizontally through. It is
-## also the shortest of the attack clips at 1.30 s, so it compresses onto a
-## 0.8 s swing barely at all, where ss_attack_03 would have to run at 2.2x.
-@export var clip_heavy: StringName = &"ss_attack_02"
+## It is also the only clip the hero plays that is not from the sword-and-shield
+## set. That set has no 360 in it, so this is borrowed out of the axe moveset a
+## clip at a time (tools/build_anim_lib.gd §ONLY) and trimmed to the sweep
+## (§TRIM). PICKED OFF THE RENDER against the project's other two spins — see
+## tools/directors/swing_lookdev.gd, where all three were photographed.
+##
+## The pose is what earns the 360 hitbox: he crouches into the turn and carries
+## the blade out at arm's length the whole way round, so the circle the damage
+## claims is a circle you can see him cut.
+@export var clip_spin: StringName = &"ax_melee_attack_360_low"
+## Seconds into `clip_attack` that the charge holds on. This is a FRAME PICKED
+## OFF THE RENDER, not a fraction of the clip: see tools/directors/charge_pose.gd,
+## which photographs the whole slash and then the live hold, because "the bottom
+## of the swing" is a thing you can see and not a thing you can compute. It wants
+## the frame where the follow-through has carried the blade out to his left and
+## the shoulders have not started coming back yet.
+@export var charge_pose_time: float = 0.70
+## Seconds to ease the hold pose in and out of. Slower than the shield's, because
+## the pose is arrived at out of a swing that is still finishing — snapping into
+## it reads as the swing being cut off rather than settling.
+@export var charge_pose_fade: float = 0.18
 ## The lock-on lunge. ss_attack_01 is the one clip in the library where the hero
 ## leaves the ground — a leap straight up into a downward slam that lands on one
 ## knee. That is why it made a terrible heavy (it shipped as one for a day and
@@ -191,11 +251,27 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, HEAVY, LUNGE, DASH }
 ## every `slash` is an arc, and an arc played on a lunge reads as a man swinging
 ## at the air beside the thing he just closed on.
 @export var clip_dash: StringName = &"ss_attack_03"
-## The loose. `bow_aim_recoil` opens at full draw and snaps the string arm back,
-## so the shot itself is the whole clip — which is why the aim POSE below is a
-## held blend rather than part of this: the hero is already drawn when he fires,
-## and a one-shot that had to draw first would put the arrow half a second behind
-## the button.
+## A bow shot is TWO clips, not one, and they fire from two separate one-shots.
+##
+## It was one for a while — `bow_aim_recoil` alone, time-scaled across the whole
+## draw window — on the reasoning that the aim stance already holds him at full
+## draw, so there was nothing left to pull. Rendered, that is not what it looks
+## like. `bow_aim_recoil` is 0.70 s of loose-and-follow-through: the string hand
+## snapping open past his ear and the arms settling. Stretched over a 0.44 s
+## commitment it is the RECOVERY played in slow motion, and the shot has no
+## wind-up at all — the arrow leaves 0.24 s into a clip that has not yet done
+## anything a bow does. Every other committed move in this file (see
+## `_SWING_FADE_IN`) is priced on its wind-up being legible; the bow was the one
+## that had none.
+##
+## So: `bow_draw_arrow` (1.03 s — reach over the shoulder, nock, pull to full
+## draw) is the charge, `bow_aim_recoil` is the loose, and the arrow leaves at
+## the SEAM between them. The two clips abut cleanly because the first ends on
+## exactly the pose the second opens on, which is why this pair and not, say,
+## `bow_shoot_*`.
+@export var clip_bow_draw: StringName = &"bow_draw_arrow"
+## The loose. Opens at full draw — where `clip_bow_draw` left him — and snaps the
+## string arm back.
 @export var clip_bow_shot: StringName = &"bow_aim_recoil"
 ## Firing the hookshot. A brace-and-punch with the barrel out front, from
 ## Shooting.fbx; the bow clips would have him loosing an arrow off a grapple.
@@ -216,10 +292,42 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, HEAVY, LUNGE, DASH }
 ## Speeds, in m/s, the walk and run clips are authored to read as.
 @export var walk_blend_speed: float = K.WALK_SPEED
 @export var run_blend_speed: float = K.RUN_SPEED
+## The sprint's own clip and its point on the same speed axis. `ex_fast_run` has
+## been sitting unused in the library since the day it was imported; it is a
+## 0.53 s cycle against the run's 0.70 s, so the cadence comes from the CLIP
+## rather than from playing the run faster, which is what stride-scaling a run
+## into a sprint always looks like — a man doing the same thing on fast-forward.
+##
+## Adding it as a fourth blend point keeps §3.2 intact: one continuous curve of
+## idle -> walk -> run -> sprint, still no branch anywhere in the locomotion.
+@export var clip_sprint: StringName = &"ex_fast_run"
+@export var sprint_blend_speed: float = K.SPRINT_SPEED
 ## Playback rate applied to the locomotion blend at a standstill and at the run
 ## cap. Keeps the feet from skating at in-between speeds.
 @export var stride_scale_idle: float = 1.0
 @export var stride_scale_run: float = 1.06
+
+@export_group("Sprint")
+## Top speed while the dodge button is held. See K.SPRINT_SPEED for why it is
+## deliberately slower than a roll.
+@export var sprint_speed: float = K.SPRINT_SPEED
+## How long `context` must be held before it stops being a dodge and becomes a
+## run. Elden Ring's arrangement — tap to roll, hold to sprint, one button.
+##
+## The dodge still fires on the PRESS, unchanged, so nothing here costs the roll
+## any latency: waiting to see whether a press was a tap would put this much lag
+## on the most reaction-critical button in the game. The consequence is that a
+## held button rolls and THEN runs, which is what Elden Ring does too, and the
+## threshold is shorter than a roll so the hero comes out of one already moving.
+@export var sprint_hold_time: float = 0.18
+## Stamina per second, spent while running. The bar is the whole limit on it —
+## there is no separate sprint meter, so a run and a dodge come out of the same
+## pocket and a player who sprints everywhere arrives with nothing to dodge on.
+@export var sprint_stamina_rate: float = K.STAMINA_SPRINT
+## Fraction of the bar that must come back before an exhausted run can restart.
+## Without it a held button re-starts the sprint the instant one frame's worth of
+## stamina regenerates, and the hero stutters between running and not.
+@export var sprint_recover01: float = 0.25
 
 @export_group("Footsteps")
 ## Metres of ground covered per footfall at walk speed and at the run cap.
@@ -234,6 +342,15 @@ var state: MoveState = MoveState.GROUND
 var facing_yaw: float = 0.0
 ## Set by HeroCombat while the shield button is held. Read-only elsewhere.
 var blocking: bool = false
+## Set by HeroCombat while the attack button is held for the spin. Read-only
+## elsewhere. It drives the held wind-up pose and nothing else — whether the hold
+## has ARMED is `HeroCombat.charged`, which is a different question.
+var charging: bool = false
+## True while the dodge button has been held past `sprint_hold_time` and the bar
+## is paying for it. Public because the HUD and the camera both want to know the
+## hero is running, and because it survives the ROLL a held press started —
+## which is the point (see `sprint_hold_time`).
+var sprinting: bool = false
 
 ## The sword, shield and swing. Built in _ready; other packages reach combat
 ## through the hero rather than reaching into the scene tree for it.
@@ -246,7 +363,12 @@ var ranged: HeroRanged = null
 
 ## The way out, carried on his belt. Built here for the same reason combat is:
 ## every scene that spawns a hero must spawn one who can leave.
-var charm: HomewardCharm = null
+var rope: EscapeRope = null
+
+## Looking around out of his own eyes (GameCamera.set_first_person). He does not
+## steer while it is up and his model is not drawn — the lens is inside his head,
+## and half of what it would render is the back of his own face.
+var _first_person: bool = false
 
 var _model: Node3D
 var _rig: Node3D
@@ -266,6 +388,31 @@ var _roll_keeps_facing: bool = false
 var _dodge: int = Dodge.FORWARD
 var _dodge_speed: float = 0.0
 var _airborne_time: float = 0.0
+## Upward velocity waiting to be applied, in m/s. A jump CANNOT write velocity.y
+## directly: _apply_gravity runs after the state ticks and would clamp it away.
+## See the note there — this is the channel that survives it.
+var _jump_impulse: float = 0.0
+## Seconds a `jump` press stays live. See `jump_buffer_time`.
+var _jump_buffer: float = 0.0
+## Whether the airborne pose has already been fired for the stretch of air the
+## hero is currently in, so the coyote-time crossing in _after_move cannot fire
+## a second one on top of a jump that already played its own.
+var _air_fired: bool = false
+## True from a deliberate jump's launch until it lands. What it gates is the
+## LANDING: the jump clips carry their own touchdown, so `Land` must not fire on
+## top of one. A fall the hero did not choose has no such clip and still does.
+var _jumping: bool = false
+## Seconds `context` has been held unbroken. The tap/hold split reads this.
+var _context_held: float = 0.0
+## NOTE for the next person who measures a jump and finds it short: it is not
+## `floor_snap_length`. 0.45 m of snap looks exactly like the culprit — it is
+## enough to swallow the last 0.08 s of the descent — and it is not, because
+## Godot does not snap a body that left the floor travelling upward. This was
+## A/B'd frame by frame with the suppression in and out and the landing frame is
+## identical (tools/directors/_jump_trace.gd). Measure the arc before you fix it.
+## Set when a sprint ends because the bar ran out, cleared when enough of it has
+## come back. See `sprint_recover01`.
+var _sprint_winded: bool = false
 var _stride_accum: float = 0.0
 var _speed: float = 0.0
 ## The lunge's forward drive: seconds left, which way, and how fast. Kept apart
@@ -283,6 +430,8 @@ const _P_STRIDE := "parameters/LocoScale/scale"
 const _P_TURN := "parameters/Turn180/request"
 const _P_AIR := "parameters/Air/request"
 const _P_LAND := "parameters/Land/request"
+const _P_JUMP := "parameters/Jump/request"
+const _P_JUMP_RUN := "parameters/JumpRun/request"
 ## One animation-tree node per Dodge value, in enum order — same arrangement as
 ## _SWING_NODES below, and for the same reason (see _add_scaled_shot).
 const _DODGE_NODES: Array[StringName] = [
@@ -303,19 +452,23 @@ const _DODGE_FADE_OUT: Array[float] = [0.16, 0.14, 0.12, 0.12]
 ## so anything added to the enum has to be added here too — which is the point:
 ## a swing with no node fails loudly at build rather than silently not playing.
 const _SWING_NODES: Array[StringName] = [
-	&"Swing1", &"Swing2", &"Swing3", &"SwingHeavy", &"SwingLunge", &"SwingDash",
+	&"Swing1", &"Swing2", &"Swing3", &"SwingSpin", &"SwingLunge", &"SwingDash",
 ]
-## Fades, in seconds, per Swing. They widen as the blow gets heavier: a heavy
-## that snaps into pose has no wind-up to read, and the wind-up is the whole
-## tell the player is being asked to trade commitment for. The mid-chain lights
-## are the tightest because a chain that fades between steps reads as lag.
-## The dash's fade-in is the tightest of the lot on purpose. It comes out of a
-## raised guard, which is already a committed pose the player chose to be in —
-## the wind-up happened before the press — so easing into it puts the shield back
-## between the hero and the thing he is stabbing.
-const _SWING_FADE_IN: Array[float] = [0.06, 0.04, 0.05, 0.10, 0.08, 0.04]
+## Fades, in seconds, per Swing. The mid-chain lights are the tightest because a
+## chain that fades between steps reads as lag.
+##
+## The SPIN and the DASH share the tightest fade-in of the lot, for the same
+## reason: their wind-up already happened. The dash comes out of a raised guard,
+## a committed pose the player chose to be in; the spin comes out of a hold the
+## player spent `charge_time` on, with a glowing blade saying so the whole time.
+## Easing into either one spends the release on a blend — which on the spin is
+## the worst place to spend it, because the first thing the clip does is turn,
+## and a turn eased out of locomotion reads as the hero losing his footing.
+const _SWING_FADE_IN: Array[float] = [0.06, 0.04, 0.05, 0.04, 0.08, 0.04]
 const _SWING_FADE_OUT: Array[float] = [0.16, 0.12, 0.18, 0.22, 0.20, 0.18]
 
+const _P_BOW_DRAW := "parameters/BowDraw/request"
+const _P_BOW_DRAW_SCALE := "parameters/BowDrawScale/scale"
 const _P_RANGED := "parameters/Ranged/request"
 const _P_RANGED_SCALE := "parameters/RangedScale/scale"
 const _P_HOOK_SHOT := "parameters/HookShot/request"
@@ -324,6 +477,9 @@ const _P_AIM := "parameters/Aim/blend_amount"
 const _P_AIM_HOOK := "parameters/HookAim/blend_amount"
 const _P_AIM_BLEND := "parameters/AimLoco/blend_position"
 const _P_BLOCK := "parameters/Block/blend_amount"
+const _P_CHARGE := "parameters/Charge/blend_amount"
+const _P_CHARGE_FREEZE := "parameters/ChargeFreeze/scale"
+const _P_CHARGE_SEEK := "parameters/ChargeSeek/seek_request"
 
 
 func _ready() -> void:
@@ -364,13 +520,28 @@ func _ready() -> void:
 	ranged.name = "Ranged"
 	add_child(ranged)
 
-	charm = HomewardCharm.new()
-	charm.name = "Charm"
-	add_child(charm)
+	rope = EscapeRope.new()
+	rope.name = "Rope"
+	add_child(rope)
 
 	_build_key_light()
 
+	Bus.first_person_changed.connect(_on_first_person_changed)
+
 	Bus.player_spawned.emit(self)
+
+
+## The camera moved into his head, or came back out. `GameCamera.set_first_person`
+## owns that decision — nothing here toggles it.
+##
+## Hiding the model hides the sword and shield with it: they hang off bone
+## attachments under `_rig`. That is correct rather than incidental, because the
+## camera drops out of first person the moment anything is swung, so the hands
+## are back before the swing is.
+func _on_first_person_changed(on: bool) -> void:
+	_first_person = on
+	if _model != null:
+		_model.visible = not on
 
 
 ## A short-range lamp that travels with the hero.
@@ -428,14 +599,18 @@ func _build_anim_tree() -> void:
 		return
 	var tree_root := AnimationNodeBlendTree.new()
 
-	# idle -> walk -> run, blended on ground speed in m/s. §3.2: continuous.
+	# idle -> walk -> run -> sprint, blended on ground speed in m/s. §3.2:
+	# continuous, no walk/run branch — and the sprint joins the same curve rather
+	# than becoming a mode, so coming off the button is a decel through the run
+	# and not a costume change.
 	var loco := AnimationNodeBlendSpace1D.new()
 	loco.min_space = 0.0
-	loco.max_space = run_blend_speed
+	loco.max_space = sprint_blend_speed
 	loco.sync_mode = AnimationNodeBlendSpace1D.SYNC_MODE_CYCLIC_MUTABLE
 	loco.add_blend_point(_anim_node(clip_idle), 0.0, -1, &"idle")
 	loco.add_blend_point(_anim_node(clip_walk), walk_blend_speed, -1, &"walk")
 	loco.add_blend_point(_anim_node(clip_run), run_blend_speed, -1, &"run")
+	loco.add_blend_point(_anim_node(clip_sprint), sprint_blend_speed, -1, &"sprint")
 	tree_root.add_node(&"Loco", loco, Vector2(0, 0))
 
 	var stride := AnimationNodeTimeScale.new()
@@ -492,6 +667,17 @@ func _build_anim_tree() -> void:
 	prev = _add_oneshot(tree_root, &"Turn180", prev, _anim_node(clip_turn180), Vector2(440, 0), 0.10, 0.22)
 	prev = _add_oneshot(tree_root, &"Air", prev, _anim_node(clip_air), Vector2(660, 0), 0.10, 0.18)
 
+	# The two jumps sit ABOVE Air, so a deliberate jump reads over a fall that is
+	# still fading out. Their fade-in is the tightest in the tree (0.04, the
+	# dodges' number) for the dodges' reason: the launch is the entire read, and a
+	# jump eased into over 0.10 s has already left the ground by the time the pose
+	# arrives. The fade-OUT is long, because what it is fading is the landing
+	# recovery back into locomotion, and that one wants to be soft.
+	prev = _add_oneshot(tree_root, &"Jump", prev,
+		_jump_anim(clip_jump, jump_start_offset), Vector2(720, 0), 0.04, 0.22)
+	prev = _add_oneshot(tree_root, &"JumpRun", prev,
+		_jump_anim(clip_jump_run, jump_run_start_offset), Vector2(790, 0), 0.04, 0.22)
+
 	# Four dodges, four one-shots — not one node whose clip is reassigned, for the
 	# reason _add_scaled_shot gives. They chain in Dodge order and they all sit
 	# BELOW `Block`, which is load-bearing: the guard is a blend that would
@@ -510,6 +696,34 @@ func _build_anim_tree() -> void:
 	tree_root.connect_node(&"Block", 1, &"BlockAnim")
 	prev = &"Block"
 
+	# The charged wind-up is a HELD POSE, and it is one frame of the light slash
+	# rather than a clip of its own: the bottom of the first swing, blade out to
+	# his left, which is where the arm already is when the button stays down. OOT
+	# does the same thing — Link finishes the swing and STAYS there, humming, and
+	# that held silhouette is the only thing telling you the spin is coming.
+	#
+	# Frozen with a TimeScale of 0, and parked on the frame with a TimeSeek — NOT
+	# with `start_offset`. The offset is what `_jump_anim` uses and it is the
+	# obvious thing to reach for here, but it is applied when the node STARTS, and
+	# a node behind a zero time scale never starts: the pose came out as frame 0
+	# of the slash no matter what the number said, which is a hero standing there
+	# holding his sword up. The seek is absolute and lands every time.
+	#
+	# It goes UNDER the swings deliberately. The press that starts the hold also
+	# throws a light swing, and that one-shot has to win while it is running —
+	# blended in below, the pose is simply what is left when the swing ends, which
+	# is exactly the moment the player should see him settle into it.
+	tree_root.add_node(&"ChargeAnim", _anim_node(clip_attack), Vector2(1160, 260))
+	tree_root.add_node(&"ChargeSeek", AnimationNodeTimeSeek.new(), Vector2(1260, 260))
+	tree_root.connect_node(&"ChargeSeek", 0, &"ChargeAnim")
+	tree_root.add_node(&"ChargeFreeze", AnimationNodeTimeScale.new(), Vector2(1360, 260))
+	tree_root.connect_node(&"ChargeFreeze", 0, &"ChargeSeek")
+	var charge_blend := AnimationNodeBlend2.new()
+	tree_root.add_node(&"Charge", charge_blend, Vector2(1400, 0))
+	tree_root.connect_node(&"Charge", 0, prev)
+	tree_root.connect_node(&"Charge", 1, &"ChargeFreeze")
+	prev = &"Charge"
+
 	# The swings go ON TOP of the block, so a slash reads even if the shield was
 	# up the instant before it. One one-shot per variant — see _add_swing for why
 	# they are not one node with the clip reassigned.
@@ -521,15 +735,23 @@ func _build_anim_tree() -> void:
 		prev = _add_scaled_shot(tree_root, _SWING_NODES[i], prev, _swing_clip(i),
 			Vector2(1440 + 80 * i, 0), _SWING_FADE_IN[i], _SWING_FADE_OUT[i])
 
-	# The two shots get one one-shot EACH rather than sharing a node whose clip is
-	# swapped. Assigning `animation` on a live AnimationNodeAnimation the same
-	# frame it is asked to play restarts the mixer's cache mid-blend and drops the
-	# opening frames — which for the bow is the loose itself, the one frame the
+	# The three shot clips get one one-shot EACH rather than sharing a node whose
+	# clip is swapped. Assigning `animation` on a live AnimationNodeAnimation the
+	# same frame it is asked to play restarts the mixer's cache mid-blend and drops
+	# the opening frames — which for the bow is the loose itself, the one frame the
 	# whole shot is about. They sit above the swings because a bow is never held at
 	# the same time as the sword: whichever fired last is the one that should read.
 	#
+	# The bow's charge goes on FIRST, so the loose above it wins the frame it
+	# fires on. Two stacked one-shots and not one node fired twice: the loose has
+	# to interrupt a charge that is still fading, and a node cannot cross-fade
+	# with itself. The draw's own fade-out is short and almost never seen — the
+	# loose is already at full blend over the top of it by the time it runs.
+	prev = _add_scaled_shot(tree_root, &"BowDraw", prev, clip_bow_draw,
+		Vector2(1760, 0), 0.08, 0.10)
+
 	# The bow's fade-in is very short on purpose. `bow_aim_recoil` starts from the
-	# same full draw the `Aim` stance is already holding, so there is nothing to
+	# same full draw `clip_bow_draw` just pulled him into, so there is nothing to
 	# ease between — a longer fade just delays the string leaving his fingers.
 	var ranged_scale := AnimationNodeTimeScale.new()
 	tree_root.add_node(&"RangedAnim", _anim_node(clip_bow_shot), Vector2(1840, 260))
@@ -578,11 +800,16 @@ func _build_anim_tree() -> void:
 	_tree.set(_P_BLEND, 0.0)
 	_tree.set(_P_STRIDE, 1.0)
 	_tree.set(_P_BLOCK, 0.0)
+	_tree.set(_P_CHARGE, 0.0)
+	# 0.0 is what makes the pose a POSE. The clip sits at charge_pose_time and
+	# never moves off it.
+	_tree.set(_P_CHARGE_FREEZE, 0.0)
 	for i in Swing.size():
 		_tree.set(_swing_scale_param(i), 1.0)
 	_tree.set(_P_AIM, 0.0)
 	_tree.set(_P_AIM_HOOK, 0.0)
 	_tree.set(_P_AIM_BLEND, 0.0)
+	_tree.set(_P_BOW_DRAW_SCALE, 1.0)
 	_tree.set(_P_RANGED_SCALE, 1.0)
 	_tree.set(_P_HOOK_SCALE, 1.0)
 
@@ -594,7 +821,7 @@ func _swing_clip(variant: int) -> StringName:
 	match variant:
 		Swing.LIGHT2: return clip_light2
 		Swing.LIGHT3: return clip_light3
-		Swing.HEAVY: return clip_heavy
+		Swing.SPIN: return clip_spin
 		Swing.LUNGE: return clip_lunge
 		Swing.DASH: return clip_dash
 		_: return clip_attack
@@ -628,6 +855,17 @@ func _swing_scale_param(variant: int) -> String:
 func _anim_node(clip: StringName) -> AnimationNodeAnimation:
 	var n := AnimationNodeAnimation.new()
 	n.animation = clip
+	return n
+
+
+## A jump clip, started at the frame its feet leave the ground. See
+## `jump_start_offset` for why the anticipation crouch is skipped rather than
+## played, and tools/build_anim_lib.gd's TRIM note for where the numbers came
+## from. `start_offset` is engine-side, so the mixer never walks the frames we
+## are not showing — this is not a seek on the first frame.
+func _jump_anim(clip: StringName, offset: float) -> AnimationNodeAnimation:
+	var n := _anim_node(clip)
+	n.start_offset = offset
 	return n
 
 
@@ -681,14 +919,26 @@ func _physics_process(delta: float) -> void:
 	# Without this the shop's confirm key (space) is also the dodge key, and every
 	# purchase throws the hero across the town square behind the panel.
 	# Leaving roots him, by the same mechanism and for a related reason: the
-	# charm's channel is only a decision if walking out of it is not free. He
+	# rope's channel is only a decision if walking out of it is not free. He
 	# still falls and still slides to a halt, he just does not steer.
+	# First person roots him for the same reason the rope's channel does: it is a
+	# stance you have chosen to stand still in. It is also the honest one -- his
+	# model is hidden while the lens is inside his head, so a hero who could walk
+	# in here would be an invisible hero walking.
 	var locked := (Prompt != null and Prompt.blocked) \
-		or (charm != null and charm.active())
+		or (rope != null and rope.active()) \
+		or _first_person
 	var stick := Vector2.ZERO if locked \
 		else Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down")
 	var mag := clampf(stick.length(), 0.0, 1.0)
 	var wish := _camera_relative(stick)
+
+	# Both button clocks run OUTSIDE the state match, and both have to. The jump
+	# buffer exists precisely to survive the frames the hero is not free, and the
+	# sprint hold has to keep counting through the ROLL a held press just started
+	# — that is the whole tap-versus-hold arrangement (see `sprint_hold_time`).
+	_tick_jump_buffer(delta, locked)
+	_tick_sprint(delta, locked)
 
 	match state:
 		MoveState.GROUND:
@@ -759,8 +1009,13 @@ func _tick_ground(wish: Vector3, mag: float, delta: float) -> void:
 	if _try_start_roll(wish, mag):
 		return
 
+	# Deliberately does NOT return: a jump is not a state, it is an impulse, and
+	# the hero keeps steering the whole way up and down. Air control in a game
+	# with no aerial attacks is just the ability to land where you aimed.
+	_try_start_jump()
+
 	# [oot] §3.2 — a continuous curve of stick magnitude, no walk/run branch.
-	var target_speed := K.speed_for_stick(mag)
+	var target_speed := _target_speed(mag)
 	var moving := target_speed > 0.0
 
 	var target := lock_target()
@@ -877,6 +1132,99 @@ func _camera_heading() -> Vector3:
 		if f != Vector3.ZERO:
 			return f.normalized()
 	return _forward()
+
+
+## The speed the stick is asking for, sprint included. One function so that
+## every tick that reads a target speed reads the same one — the locked tick and
+## the camera-facing tick call this too, and they get the plain curve back
+## because `sprinting` is never true in either (see _tick_sprint).
+func _target_speed(mag: float) -> float:
+	var s := K.speed_for_stick(mag)
+	# Any deflection at all becomes a full run, rather than scaling the curve.
+	# That is BOTW's answer and it is the right one: the button means "run", and
+	# a half-pushed stick under a held run button that produced a jog would make
+	# the player negotiate with two analogue inputs for one intention.
+	if sprinting and s > 0.0:
+		return sprint_speed
+	return s
+
+
+## Tap versus hold on one button. The tap half is `_try_start_roll`, which is
+## untouched and still fires on the press — nothing here delays a dodge.
+func _tick_sprint(delta: float, input_locked: bool) -> void:
+	if input_locked or not Input.is_action_pressed(&"context"):
+		_context_held = 0.0
+		sprinting = false
+		return
+	_context_held += delta
+
+	# Free locomotion only, and each exclusion is its own reason:
+	#   locked   — the stick is a circle-strafe there, and "run" has no direction
+	#              to mean when the body is owned by a target.
+	#   guarding — a sprint would have to drop the shield, and dropping a stance
+	#              the player is holding a button for is worse than not running.
+	#   aiming   — same, plus the pack has no aim-run to play (see AimLoco).
+	# Holding the button still ROLLS in all three. Only the run is withheld.
+	if lock_target() != null or blocking or aiming() or not is_on_floor():
+		sprinting = false
+		return
+	if _context_held < sprint_hold_time:
+		sprinting = false
+		return
+
+	if _sprint_winded:
+		if Game.stamina < Game.max_stamina * sprint_recover01:
+			sprinting = false
+			return
+		_sprint_winded = false
+
+	# Charged per frame, so the run ends exactly when the bar does. spend_stamina
+	# also holds regen off for K.STAMINA_DELAY on every call, which is the
+	# behaviour we want and not a side effect to route around: a run must not
+	# refill the bar it is emptying.
+	sprinting = Game.spend_stamina(sprint_stamina_rate * delta)
+	if not sprinting:
+		_sprint_winded = true
+
+
+func _tick_jump_buffer(delta: float, input_locked: bool) -> void:
+	if not input_locked and Input.is_action_just_pressed(&"jump"):
+		_jump_buffer = jump_buffer_time
+	else:
+		_jump_buffer = maxf(0.0, _jump_buffer - delta)
+
+
+## Leave the ground. Returns whether it did, though only _tick_ground calls it
+## and only for the side effect — a jump does not interrupt anything, so there
+## is nothing for a caller to skip.
+func _try_start_jump() -> bool:
+	if _jump_buffer <= 0.0:
+		return false
+	# Coyote, and it reuses the grace the Air one-shot already runs on rather
+	# than inventing a second window: walking off a ledge and pressing jump a
+	# frame later is a press the player meant, and refusing it is the single
+	# most common complaint about a jump that is technically correct.
+	if not is_on_floor() and _airborne_time > coyote_time:
+		return false
+	_jump_buffer = 0.0
+	_jump_impulse = jump_speed
+	_jumping = true
+	# The jump clip contains its own airborne pose, so the coyote crossing in
+	# _after_move must not fire `Air` over the top of it a tenth of a second in.
+	_air_fired = true
+	_fire_jump()
+	return true
+
+
+## Which of the two jumps this is. Read off `_speed` — the speed he is CARRYING —
+## rather than off the stick, because the arc is decided by momentum: a hero at a
+## dead stop who slams the stick forward on the launch frame is still going
+## straight up, and the flat running arc under him would read as a glitch.
+func _fire_jump() -> void:
+	if _speed >= jump_run_speed_gate:
+		_fire(_P_JUMP_RUN)
+	else:
+		_fire(_P_JUMP)
 
 
 func _try_start_roll(wish: Vector3, mag: float) -> bool:
@@ -1188,8 +1536,47 @@ func wish_dir() -> Vector3:
 		Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down"))
 
 
-## Commit to a shot lasting `duration` seconds, turning to face `aim`. Returns
-## false if the hero is busy, exactly as `request_attack` does.
+## Commit to a bow shot: `draw_time` seconds pulling, then `loose_time` seconds
+## loosing, turning to face `aim`. Returns false if the hero is busy.
+##
+## Only the CHARGE is fired here. `HeroRanged` owns the clock that decides when
+## the arrow leaves and calls `bow_loose` at the seam — the same clock the arrow
+## itself is spawned off, so the string leaving his fingers and the arrow leaving
+## the bow cannot drift apart. Firing both here on a timer of the hero's own is
+## exactly the drift the one-clip version had.
+func request_bow(draw_time: float, loose_time: float, aim: Vector3) -> bool:
+	if not _commit_ranged(draw_time + loose_time, aim):
+		return false
+	if _tree != null:
+		_tree.set(_P_BOW_DRAW_SCALE, _clip_scale(clip_bow_draw, draw_time))
+	_fire(_P_BOW_DRAW)
+	return true
+
+
+## The loose, `loose_time` seconds of it. Called by `HeroRanged` when the draw
+## it committed to in `request_bow` runs out. Deliberately NOT a request: the
+## hero already agreed to this half of the shot and cannot decline it now.
+func bow_loose(loose_time: float) -> void:
+	if _tree != null:
+		_tree.set(_P_RANGED_SCALE, _clip_scale(clip_bow_shot, loose_time))
+	_fire(_P_RANGED)
+
+
+## Commit to a hookshot shot lasting `duration` seconds, turning to face `aim`.
+## One phase, not two: the chain's flight is the commitment (see
+## `HeroRanged.HOOK_FIRE_TIME`) and this clip is only the punch that starts it.
+func request_hookshot(duration: float, aim: Vector3) -> bool:
+	if not _commit_ranged(duration, aim):
+		return false
+	if _tree != null:
+		_tree.set(_P_HOOK_SCALE, _clip_scale(clip_hook_shot, duration))
+	_fire(_P_HOOK_SHOT)
+	return true
+
+
+## The half of a shot that is the same for every ranged item: take the hero for
+## `duration` seconds and point him down the aim. False if he is busy, exactly as
+## `request_attack` is.
 ##
 ## It reuses `MoveState.ATTACK` rather than adding a state of its own: what the
 ## hero's BODY does here is identical — no steering, bleed off whatever speed he
@@ -1198,11 +1585,7 @@ func wish_dir() -> Vector3:
 ##
 ## `aim` is a full 3D direction because it comes from the camera, which has a
 ## pitch; only its yaw reaches the body, because the hero does not lean.
-##
-## `hook` picks which of the two shot clips plays. The bow and the hookshot have
-## separate one-shots — see `_build_anim_tree` — so this is a choice of node, not
-## a clip swap.
-func request_ranged(duration: float, aim: Vector3, hook: bool = false) -> bool:
+func _commit_ranged(duration: float, aim: Vector3) -> bool:
 	if state != MoveState.GROUND or not is_on_floor():
 		return false
 	state = MoveState.ATTACK
@@ -1214,16 +1597,17 @@ func request_ranged(duration: float, aim: Vector3, hook: bool = false) -> bool:
 	var flat_aim := K.flat(aim)
 	if flat_aim != Vector3.ZERO:
 		facing_yaw = atan2(flat_aim.x, flat_aim.z)
+	return true
 
-	var clip: StringName = clip_hook_shot if hook else clip_bow_shot
+
+## The TimeScale that fits `clip` onto `duration` seconds — the invariant every
+## committed move in this file holds, that the clip's length IS the move's
+## length. A missing clip scales to 1.0 rather than dividing by a guess.
+func _clip_scale(clip: StringName, duration: float) -> float:
 	var clip_len := 1.0
 	if anim_library.has_animation(clip):
 		clip_len = anim_library.get_animation(clip).length
-	if _tree != null:
-		_tree.set(_P_HOOK_SCALE if hook else _P_RANGED_SCALE,
-			clip_len / maxf(duration, 0.05))
-	_fire(_P_HOOK_SHOT if hook else _P_RANGED)
-	return true
+	return clip_len / maxf(duration, 0.05)
 
 
 ## True while a bow or a hookshot is out. Owned by `HeroRanged`, which is the
@@ -1243,7 +1627,7 @@ func aim_item() -> StringName:
 
 # --- The hookshot pull -------------------------------------------------------
 ## HeroRanged owns the raycast, the anchor and the chain; this owns the body.
-## The split is the same one the charm uses — whoever decides is not whoever
+## The split is the same one the rope uses — whoever decides is not whoever
 ## moves — and it is what keeps the hookshot out of the movement script.
 
 ## Seconds a pull is allowed to take before the hero is released regardless.
@@ -1355,13 +1739,13 @@ func take_hit(hit: Hit) -> bool:
 	_invuln = K.IFRAME_TIME
 	# You do not get to walk out of a fight you are losing. This is the property
 	# the rune pad's hold existed to protect (METAGAME §5) and the only reason
-	# the charm channels at all rather than teleporting on the menu press.
+	# the rope channels at all rather than teleporting on the menu press.
 	#
 	# A BLOCKED blow does not break it -- that path returns above. Standing your
-	# ground behind the shield while the charm works is a legitimate way to
+	# ground behind the shield while the rope works is a legitimate way to
 	# leave, and it is a better one than mashing the button was.
-	if charm != null:
-		charm.cancel()
+	if rope != null:
+		rope.cancel()
 	# Armour never zeroes a blow. A build that cannot be hurt turns the whole
 	# extraction decision into a formality.
 	Game.damage(maxi(K.QUARTER, hit.amount - Game.armour_soak()))
@@ -1426,6 +1810,15 @@ func _set_planar_velocity(v: Vector3) -> void:
 
 
 func _apply_gravity(delta: float) -> void:
+	# The jump is applied HERE, not by the code that decided to jump, and this is
+	# not tidiness — it is the only place it survives. `is_on_floor()` reports the
+	# LAST move_and_slide, so on the frame a jump starts it is still true, and the
+	# -0.5 clamp below would overwrite the launch velocity before the body ever
+	# moved. The hero would play a full jump animation standing on the floor.
+	if _jump_impulse > 0.0:
+		velocity.y = _jump_impulse
+		_jump_impulse = 0.0
+		return
 	if is_on_floor():
 		# A whisker of downward bias so floor_snap_length keeps him welded to
 		# the ledge steps instead of launching off each one.
@@ -1439,13 +1832,21 @@ func _after_move(pre_fall: float, delta: float) -> void:
 		if _airborne_time > coyote_time:
 			var fall := absf(minf(pre_fall, 0.0))
 			landed.emit(fall)
-			if fall > 2.5:
+			# `landed` still fires for a jump — the dust, the sound and the camera
+			# all want it. The Land CLIP does not: a jump plays one clip that
+			# already contains its own touchdown and recovery (build_anim_lib's
+			# TRIM cuts it at the end of the recovery, not at the end of the leap),
+			# so firing Land over it lands the hero twice.
+			if fall > 2.5 and not _jumping:
 				_fire(_P_LAND)
 		_airborne_time = 0.0
+		_air_fired = false
+		_jumping = false
 	else:
 		var was := _airborne_time
 		_airborne_time += delta
-		if was <= coyote_time and _airborne_time > coyote_time:
+		if was <= coyote_time and _airborne_time > coyote_time and not _air_fired:
+			_air_fired = true
 			_fire(_P_AIR)
 
 	rotation.y = facing_yaw + PI
@@ -1481,7 +1882,10 @@ func _drive_animation(delta: float) -> void:
 	if _tree == null:
 		return
 	var planar := Vector2(velocity.x, velocity.z).length()
-	_tree.set(_P_BLEND, clampf(planar, 0.0, run_blend_speed))
+	# Loco's axis now runs to the SPRINT speed, so the clamp has to as well —
+	# left at run_blend_speed the fourth blend point would be unreachable and the
+	# sprint clip would never play a frame.
+	_tree.set(_P_BLEND, clampf(planar, 0.0, sprint_blend_speed))
 	# The aim stance rides the same speed axis, so a strafe at the shoulder blends
 	# through the aim-walk at the pace the sword stance would have walked at.
 	_tree.set(_P_AIM_BLEND, clampf(planar, 0.0, run_blend_speed))
@@ -1504,6 +1908,19 @@ func _drive_animation(delta: float) -> void:
 	var want := 1.0 if blocking else 0.0
 	var now: float = _tree.get(_P_BLOCK)
 	_tree.set(_P_BLOCK, move_toward(now, want, delta / maxf(block_fade, 0.01)))
+
+	# The wind-up pose, eased the same way. `charging` is set by HeroCombat every
+	# frame the button is down; it is a flag rather than a request because the
+	# hold has no duration anybody knows in advance.
+	var pose_now: float = _tree.get(_P_CHARGE)
+	_tree.set(_P_CHARGE, move_toward(pose_now, 1.0 if charging else 0.0,
+		delta / maxf(charge_pose_fade, 0.01)))
+	# Re-parked every frame of the hold rather than once on the edge. The request
+	# is consumed by the tree the frame it lands, and it costs one float — against
+	# a whole class of bug where a rebuild, a blend restart or a missed edge
+	# leaves the pose showing the wrong frame with nothing to say so.
+	if charging:
+		_tree.set(_P_CHARGE_SEEK, charge_pose_time)
 
 	# The rig's yaw correction is a fixed 180 (see model_yaw_offset) and is set
 	# once in _build_rig — it does not vary with speed.

@@ -1,8 +1,10 @@
 extends RefCounted
 ## Where does the SLUNG bow sit when the hero is not holding it?
 ##
-## ANSWER: on Spine2 at `(0, 0.06, -0.16) / (0, 0, 28)`, which is what ships.
-## This director exists to stop that being re-litigated, because it already was.
+## ANSWER: on Spine2 at `(0, 0.06, -0.09) / (0, 0, 28)`, which is what ships.
+## The BONE has not moved since the sweep below settled it, and that part is not
+## worth re-opening. The STAND-OFF along it was retuned from -0.16 the day this
+## director was finally pointed at the gap instead of at the room.
 ##
 ## It was written to chase a bug that did not exist. A tight, brightened CROP of
 ## an aim stance shows the bow apparently hanging in the air off the hero's left,
@@ -24,8 +26,17 @@ extends RefCounted
 ## All on Spine2 — a slung bow SHOULD wind with the chest, that is what a strap
 ## does. `shipped` is first, and is the one that ships; the rest are kept as the
 ## comparison that proves it, and as the place to add a new candidate.
+##
+## The bone's local -Z is straight out of his back, so the third component of
+## `pos` IS the gap: less of it is a bow worn against the shoulder blades, more
+## is a bow floating behind him. The `near_*` rungs exist because that gap was
+## the one thing the original sweep never varied — it swept bones and rolls, and
+## every one of them kept the same 16 cm stand-off.
 const CANDIDATES := [
-	{"name": "shipped", "pos": Vector3(0.0, 0.06, -0.16), "rot": Vector3(0.0, 0.0, 28.0)},
+	{"name": "shipped", "pos": Vector3(0.0, 0.06, -0.09), "rot": Vector3(0.0, 0.0, 28.0)},
+	{"name": "far_16", "pos": Vector3(0.0, 0.06, -0.16), "rot": Vector3(0.0, 0.0, 28.0)},
+	{"name": "near_12", "pos": Vector3(0.0, 0.06, -0.12), "rot": Vector3(0.0, 0.0, 28.0)},
+	{"name": "near_06", "pos": Vector3(0.0, 0.06, -0.06), "rot": Vector3(0.0, 0.0, 28.0)},
 	{"name": "standup", "pos": Vector3(0.0, 0.06, -0.16), "rot": Vector3(-96.0, 0.0, 28.0)},
 	{"name": "standup_roll90", "pos": Vector3(0.0, 0.06, -0.16), "rot": Vector3(-96.0, 0.0, 118.0)},
 	{"name": "standup_yaw90", "pos": Vector3(0.0, 0.06, -0.16), "rot": Vector3(-96.0, 90.0, 28.0)},
@@ -58,7 +69,26 @@ func run(rig) -> void:
 	# hero detail, and photographing it head on hides exactly the gap in question.
 	var to_cam: Vector3 = K.flat(cam.global_position - hero.global_position)
 	hero.facing_yaw = atan2(to_cam.x, to_cam.z) + FACE_OFFSET
-	await rig.wait_frames(20)
+	# 90, not 20. The body TURNS to meet `facing_yaw` at a capped rate, and 143
+	# degrees of it takes longer than the old wait: the first candidate used to be
+	# photographed mid-turn and the rest after it had settled, so candidate 0 was
+	# shot from a different angle than candidates 1..n and the sweep compared
+	# nothing. Every frame in this sheet has to be the same camera on the same
+	# body or the whole exercise is decoration.
+	await rig.wait_frames(90)
+
+	# Then CLOSE, and lit. The first version of this director shot the room from
+	# the gameplay camera and the whole argument — a few centimetres of air
+	# between a bow and a shoulder blade — came out as a dozen dark pixels. A
+	# torso-height lamp and a 1.7 m stand-off is what makes the gap something you
+	# can actually see, without cropping the body out of frame (see the note at
+	# the top: the crop is what lied last time).
+	var lamp := OmniLight3D.new()
+	lamp.light_energy = 3.0
+	lamp.omni_range = 6.0
+	lamp.shadow_enabled = false
+	rig.scene().add_child(lamp)
+	cam.set_physics_process(false)
 
 	# Every candidate gets a real mount, built once, and they take turns being
 	# visible. Rebuilding a BoneAttachment3D between captures is the one thing
@@ -98,6 +128,27 @@ func run(rig) -> void:
 			# in, and a strip shot at t=0 would show two identical torsos.
 			player.seek(player.get_animation(clip).length * 0.6, true)
 			player.pause()
+			# Framed from his flank, not his back. A stand-off is a distance along
+			# the one axis a rear view has no depth in; from the side it is the
+			# space between two silhouettes and cannot be argued with.
+			#
+			# And the flank is taken off the BONE, not off `facing_yaw`. These
+			# clips rotate the hips — the aim clip turns him most of a quarter
+			# turn out of his heading — so a camera placed from the heading is
+			# pointing at wherever he WOULD have been standing. The socket's own
+			# -Z is the axis `pos.z` slides along, so a camera perpendicular to it
+			# always has the gap running left-to-right across the frame.
+			var socket: Node3D = mounts[i].get_parent() as Node3D
+			var away: Vector3 = K.flat(socket.global_transform.basis * Vector3.FORWARD)
+			if away == Vector3.ZERO:
+				away = Vector3.FORWARD
+			away = away.normalized()
+			var eye: Vector3 = away.cross(Vector3.UP).normalized()
+			var chest: Vector3 = socket.global_position
+			cam.global_position = chest + eye * 1.5 + Vector3.UP * 0.15
+			cam.look_at(chest, Vector3.UP)
+			cam.fov = 42.0
+			lamp.global_position = chest + eye * 1.2 + Vector3.UP * 0.9
 			await rig.wait_frames(2)
 			print("STOW %-16s %-14s %s" % [CANDIDATES[i]["name"],
 				STANCES[j]["label"], _describe(mounts[i], hero)])
@@ -132,8 +183,16 @@ func _describe(mount: Node3D, hero) -> String:
 	var inv := body.global_transform.affine_inverse()
 	var c := inv * aabb.get_center()
 	var span := aabb.size
-	return "centre right=%+.2f up=%+.2f back=%+.2f  span=%.2f" % [
-		c.x, c.y, -c.z, maxf(span.x, maxf(span.y, span.z))]
+	# The centre says where the bow hangs; `near` says how far its closest point
+	# is from the plane of his spine, which is the number the eye is reacting to
+	# when it says "that is floating". His back surface is roughly 0.10 m behind
+	# the spine, so a bow reading much past 0.15 is worn off the body.
+	var near := INF
+	for k in 8:
+		var p := inv * aabb.get_endpoint(k)
+		near = minf(near, -p.z)
+	return "centre right=%+.2f up=%+.2f back=%+.2f  near=%+.2f  span=%.2f" % [
+		c.x, c.y, -c.z, near, maxf(span.x, maxf(span.y, span.z))]
 
 
 func _world_aabb(n: Node3D) -> AABB:

@@ -49,6 +49,49 @@ const HEART_TICK_W := 2.0          ## heart boundary tick
 const GHOST_HOLD := 0.40
 const GHOST_DRAIN := 0.25
 
+# --- Enemy health bars --------------------------------------------------------
+## OVERRIDES STYLEGUIDE §5.5, which confined target health to the lock-on bracket
+## and ended "Never a floating bar over every enemy." Changed on the owner's
+## instruction; §5.5 is amended in the same commit rather than left contradicting
+## the code.
+##
+## What that rule was protecting is still protected, by conditions rather than by
+## absence. A bar is drawn only when all of these hold:
+##
+##  * **The monster is in the fight** -- engaged, or already bleeding. A room you
+##    have not woken draws nothing, so darkness stays a material (docs/GDD.md §4,
+##    pillar 5) and a bar is never what spoils an ambush.
+##  * **Nothing is in the way.** A raycast from the CAMERA, against world geometry
+##    only. This element is anchored in the world, so it obeys the world's rules --
+##    the same principle the lock brackets quantize for. Without it a floating bar
+##    becomes an x-ray that reads monsters through walls, which is the single worst
+##    version of this feature.
+##  * **It is close enough to read.** Past `EBAR_RANGE` the bar is a smear rather
+##    than a readout, and a floor's worth of smears is the icon vomit the
+##    styleguide is arguing against.
+##
+## And it never eases. Anti-slop §7.4 bans smoothly lerped meters; the fill is
+## written straight from `fraction()` and rounded to whole pixels, so the only
+## thing that moves is the monster.
+##
+## The locked target is NOT special-cased out. It draws through this same path at
+## `EBAR_LOCK_MULT` width, which is how the lock keeps reading as a lock -- one
+## code path, one bar per monster, emphasis carried by size. `_draw_lock_on` used
+## to draw its own bar under the bracket and that duplicate is gone.
+const EBAR_W := 20.0          ## reference px at Pal.REF_H, before the lock multiplier
+const EBAR_H := 2.0
+const EBAR_BORDER := 1.0
+## The locked target's bar, as a multiple of the ordinary one. Sized to sit inside
+## the bracket's 52 px span rather than to match it, so the bracket still frames
+## the bar instead of the two sharing an edge.
+const EBAR_LOCK_MULT := 2.2
+## Metres from the hero. Deliberately shorter than the monsters' own detect range
+## (11-15 m) is long, because this is a legibility limit and not a stealth one -- a
+## monster chasing you from 20 m away is still visibly chasing you.
+const EBAR_RANGE := 22.0
+## Used when something in the `enemy` group does not implement `head_point()`.
+const EBAR_FALLBACK_Y := 2.0
+
 # --- Stamina ----------------------------------------------------------------
 ## Directly below health. The one fact this bar exists to carry is "can I dodge
 ## right now", so it turns RUST the moment it drops under one roll -- the answer
@@ -123,6 +166,14 @@ const TOAST_HOLD := 1.60
 const TOAST_FADE := 0.20
 const RIM_FLASH := 0.10
 
+## The autosave notice. Longer than a toast on purpose: it goes up as the world
+## fades back in (game_flow.gd `_go`), so the first third of it is spent behind
+## a screen that is still dark. 2.2 s leaves about a second and a half of it
+## actually readable, which is what a player needs to register a word they were
+## not looking for.
+const SAVE_HOLD := 2.20
+const SAVE_FADE := 0.35
+
 # --- Extraction (§5.4) -------------------------------------------------------
 const SWEEP_TIME := 0.20
 const HOLD_TO_EXTRACT := 1.50
@@ -144,6 +195,9 @@ var _target_value: int = 0
 var _toast: String = ""
 var _toast_color: Color = Pal.MOTH
 var _toast_t: float = -1.0
+## The autosave notice's own clock, kept apart from the toast's so that neither
+## can silently eat the other. They share a baseline (see `_draw_save`).
+var _save_t: float = -1.0
 var _rim_flash_t: float = -1.0
 var _rim_flash_color: Color = Pal.MOTH
 var _sweep_t: float = -1.0
@@ -153,6 +207,13 @@ var _extract_available: bool = false
 var _refuse_t: float = -1.0
 var _block_flash_t: float = -1.0
 var _lock_target: Node3D = null
+## Whether anything is in the `enemy` group right now. Cached off the tree's own
+## add/remove signals rather than polled, so `_process` does not walk a group every
+## frame just to decide whether to repaint. See the note in `_process`.
+var _enemies_present: bool = false
+## Reused rather than built per monster per frame: a room holds up to seven and
+## this runs at the frame rate.
+var _ebar_ray := PhysicsRayQueryParameters3D.new()
 ## A bow or a hookshot is out, so the middle of the screen is a sight.
 var _aiming: bool = false
 var _last_quarters: int = -1
@@ -198,7 +259,8 @@ func _ready() -> void:
 	Bus.heat_changed.connect(_on_heat)
 	Bus.heat_tier_changed.connect(_on_heat_tier)
 	Bus.extract_refused.connect(_on_refused)
-	Bus.homeward_broken.connect(_on_homeward_broken)
+	Bus.escape_rope_broken.connect(_on_escape_rope_broken)
+	Saves.autosaved.connect(_on_autosaved)
 	Bus.shield_blocked.connect(_on_blocked)
 	Bus.target_acquired.connect(_on_target)
 	Bus.target_lost.connect(_on_target_lost)
@@ -218,6 +280,12 @@ func _ready() -> void:
 	Bus.run_started.connect(func(_s: int) -> void: _refresh_extract_available())
 	Bus.run_ended.connect(func(_e: bool, _c: Dictionary, _v: int) -> void:
 		_refresh_extract_available())
+
+	# World geometry only, for the enemy bars' occlusion test. Bodies, not areas:
+	# a doorway trigger is not a wall.
+	_ebar_ray.collision_mask = K.L_WORLD
+	_ebar_ray.collide_with_bodies = true
+	_ebar_ray.collide_with_areas = false
 
 	get_tree().node_added.connect(_on_tree_changed)
 	get_tree().node_removed.connect(_on_tree_changed)
@@ -319,14 +387,26 @@ func _on_refused(_cost: int, _gold: int) -> void:
 	_wake()
 
 
-## Knocked out of the charm. Said as a toast rather than as a beep, because the
+## Knocked out of the rope. Said as a toast rather than as a beep, because the
 ## player pressed a button in a menu and then arrived back in the world still in
 ## the dungeon -- without a sentence, that reads as the menu having eaten the
 ## input.
-func _on_homeward_broken() -> void:
-	_toast = "THE CHARM BREAKS"
+func _on_escape_rope_broken() -> void:
+	_toast = "THE ROPE SNAPS"
 	_toast_color = Pal.RUST
 	_toast_t = 0.0
+	_wake()
+
+
+## The disk was written. `slot` is -1 when the autosave declined -- all three
+## slots are full of saves a player made by hand -- and then this says NOTHING,
+## which is the entire reason `Bus`-side it is a separate signal carrying a
+## slot. A notice that appears whether or not anything was written is a notice
+## that teaches the player to ignore it.
+func _on_autosaved(slot: int) -> void:
+	if slot < 0:
+		return
+	_save_t = 0.0
 	_wake()
 
 
@@ -353,7 +433,7 @@ func _on_aim(active: bool) -> void:
 ## "You can leave right now."
 ##
 ## This used to mean "you are standing on the rune pad", and the pad called it.
-## The pad is gone (the way out is the Homeward Charm, used from the menu), so
+## The pad is gone (the way out is the Escape Rope, used from the menu), so
 ## availability is no longer about WHERE you are -- it is about whether you can
 ## afford the fee, which is the only thing that can still stop you. The sweep
 ## therefore fires the moment leaving becomes possible again, which is a more
@@ -397,6 +477,16 @@ func _refresh_visibility() -> void:
 	var has_player := get_tree().get_first_node_in_group(&"player") != null
 	if visible != has_player:
 		visible = has_player
+
+	# Deferred off node_added/node_removed, which is exactly when this answer can
+	# change, so the enemy bars get their frame ticker the moment a dungeon builds
+	# and lose it on the last corpse. `_wake` and not just a repaint: a bar that
+	# painted once and then stopped would sit at the spot the monster left.
+	var had := _enemies_present
+	_enemies_present = not get_tree().get_nodes_in_group(&"enemy").is_empty()
+	if has_player and _enemies_present and not had:
+		_wake()
+
 	if has_player:
 		_canvas.queue_redraw()
 
@@ -414,14 +504,16 @@ func _process(delta: float) -> void:
 		else:
 			busy = true
 
-	for t in [&"_toast_t", &"_rim_flash_t", &"_sweep_t", &"_refuse_t", &"_block_flash_t",
-			&"_heat_break_t"]:
+	for t in [&"_toast_t", &"_save_t", &"_rim_flash_t", &"_sweep_t", &"_refuse_t",
+			&"_block_flash_t", &"_heat_break_t"]:
 		var v: float = get(t)
 		if v >= 0.0:
 			set(t, v + delta)
 			busy = true
 	if _toast_t > TOAST_HOLD + TOAST_FADE:
 		_toast_t = -1.0
+	if _save_t > SAVE_HOLD + SAVE_FADE:
+		_save_t = -1.0
 	if _rim_flash_t > RIM_FLASH:
 		_rim_flash_t = -1.0
 	if _sweep_t > SWEEP_TIME:
@@ -441,6 +533,19 @@ func _process(delta: float) -> void:
 	# wants a frame-by-frame repaint, and it stops the moment the chain is cold.
 	if Heat.kills > 0:
 		busy = true
+	# The other one, and it is a deliberate widening of this file's "repaint on
+	# signal, never per frame" rule. An enemy bar is pinned to a body that walks, so
+	# it has to be re-projected every frame it is on screen, and there is no signal
+	# for "the goblin moved".
+	#
+	# Gated on monsters EXISTING, not on a bar having been drawn. That is the whole
+	# subtlety: gating on the bar deadlocks, because a sleeping overlay never draws,
+	# never sets the flag, and so never wakes when a monster finally notices you.
+	# There is no aggro signal to wake it on either. So the honest rule is the wide
+	# one -- while anything is alive in here, the overlay ticks -- and the last death
+	# on the floor is what puts it back to sleep.
+	if _enemies_present:
+		busy = true
 
 	_canvas.queue_redraw()
 	if not busy:
@@ -459,9 +564,11 @@ func _draw_hud() -> void:
 	_draw_bag(s)
 	_draw_extraction(s)
 	_draw_toast(s)
+	_draw_save(s)
 	_draw_prompt(s)
 	_draw_crosshair(s)
 	_draw_lock_on(s)
+	_draw_enemy_bars(s)
 	_draw_sweep(s)
 	_draw_controls(s)
 	_draw_floor(s)
@@ -496,7 +603,12 @@ const LEGEND := [
 	# it is the whole of OOT's Z — the R3 above is only the standing toggle — so a
 	# line that called this button GUARD would be hiding its main use.
 	[&"shield", "GUARD/LOCK"],
-	[&"context", "DODGE"],
+	# The hold is named because nothing else can name it. A tap rolls and a hold
+	# runs off the same button, and a player who only ever taps it will never
+	# discover the run — there is no prompt, no stance and no tell for a button
+	# you are not holding down. Same argument as the GUARD/LOCK line above.
+	[&"context", "DODGE (HOLD=RUN)"],
+	[&"jump", "JUMP"],
 	[&"interact", "INTERACT"],
 	[&"inventory", "POUCH"],
 ]
@@ -1059,7 +1171,7 @@ func _draw_sweep(s: Vector2) -> void:
 # --- Toast and lock-on ------------------------------------------------------
 
 func _draw_toast(s: Vector2) -> void:
-	if _toast_t < 0.0 or _toast.is_empty():
+	if _toast_t < 0.0 or _toast.is_empty() or _save_t >= 0.0:
 		return
 	var a := 1.0
 	if _toast_t > TOAST_HOLD:
@@ -1067,6 +1179,33 @@ func _draw_toast(s: Vector2) -> void:
 	PixelFont.draw_right(_canvas, _toast,
 		Vector2(Pal.BAG_RIGHT * s.x, Pal.TOAST_BASELINE * s.y),
 		Pal.px(16.0 / PixelFont.H, s.y), Color(_toast_color, clampf(a, 0.0, 1.0)))
+
+
+## AUTOSAVING…, bottom right, on the toast's baseline.
+##
+## The same line, and not a line of its own, because the corner below it is
+## already spoken for: the rim frames the bag from 0.786 to 0.914, the
+## extraction fee sits at 0.940, and the control legend runs across 0.962 in
+## town. There is no free row down there, and a notice that overlapped the fee
+## would obscure the one number the player is standing still to read.
+##
+## Sharing is safe by construction rather than by luck: an autosave only fires
+## inside a `Flow` transition, and nothing drops loot or snaps a rope during a
+## fade. `_draw_toast` yields anyway if both are somehow up, because the save is
+## the one that reports something irreversible.
+##
+## MOTH, not CYAN and not GOLD. It is the HUD talking about itself rather than
+## about the world, and the two colours that mean "the way out" and "money" are
+## exactly the two a player would misread here.
+func _draw_save(s: Vector2) -> void:
+	if _save_t < 0.0:
+		return
+	var a := 1.0
+	if _save_t > SAVE_HOLD:
+		a = 1.0 - (_save_t - SAVE_HOLD) / SAVE_FADE
+	PixelFont.draw_right(_canvas, "AUTOSAVING...",
+		Vector2(Pal.BAG_RIGHT * s.x, Pal.TOAST_BASELINE * s.y),
+		Pal.px(14.0 / PixelFont.H, s.y), Color(Pal.MOTH, clampf(a, 0.0, 1.0)))
 
 
 ## The interact line. Centred and low -- under the action, above the kit strip,
@@ -1153,16 +1292,91 @@ func _draw_lock_on(s: Vector2) -> void:
 				corner.x - w * 0.5, corner.y - (arm if sy > 0 else 0.0),
 				w, arm), col)
 
-	# Only once the target has taken damage. Never a floating bar over every
-	# enemy in the room.
-	var hp := _health_of(_lock_target)
-	if hp != null and hp.quarters < hp.max_quarters:
-		var bw := half.x * 2.0
-		var by := c.y + half.y + Pal.px(6.0, s.y)
-		_canvas.draw_rect(Rect2(c.x - half.x, by, bw, Pal.px(2.0, s.y)),
-			Color(Pal.ASH, 0.7))
-		_canvas.draw_rect(Rect2(c.x - half.x, by, bw * hp.fraction(),
-			Pal.px(2.0, s.y)), Pal.RUST)
+	# The bar that used to hang 6 px under this bracket is gone. It is now drawn by
+	# `_draw_enemy_bars`, over the target's HEAD, through the same path every other
+	# monster's bar takes -- widened by EBAR_LOCK_MULT so the lock still reads as a
+	# lock. Two bars on one monster, in two places, from two code paths, is how the
+	# locked one stops being the one you are looking at.
+
+
+## Little bars over the monsters. See the EBAR_* block for what earns one and why
+## the conditions are not decoration.
+func _draw_enemy_bars(s: Vector2) -> void:
+	var cam := _canvas.get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var hero := get_tree().get_first_node_in_group(&"player") as Node3D
+	if hero == null:
+		return
+
+	# Quantized to the same 480x270 grid as the lock brackets, so a bar and the
+	# bracket around it jitter together with the world's vertex snapping instead of
+	# sliding against each other (docs/STYLEGUIDE.md §5.5).
+	var grid := s / Vector2(480.0, 270.0)
+	var space := cam.get_world_3d().direct_space_state
+
+	for n in get_tree().get_nodes_in_group(&"enemy"):
+		var e := n as Node3D
+		if e == null or not is_instance_valid(e):
+			continue
+		var hp := _health_of(e)
+		if hp == null or hp.dead:
+			continue
+		# Asleep and unhurt earns nothing. `is_engaged` is the monster's own answer
+		# about its own states (scripts/actors/enemies/enemy.gd).
+		var engaged: bool = e.has_method(&"is_engaged") and e.is_engaged()
+		if not engaged and hp.quarters >= hp.max_quarters:
+			continue
+		if hero.global_position.distance_to(e.global_position) > EBAR_RANGE:
+			continue
+
+		var head: Vector3 = e.call(&"head_point") if e.has_method(&"head_point") \
+			else e.global_position + Vector3.UP * EBAR_FALLBACK_Y
+		# Behind the camera unprojects to a point in front of it -- a bar for a
+		# monster at your back, drawn over the wall you are facing.
+		if cam.is_position_behind(head):
+			continue
+		if not _bar_visible(space, cam, head, e):
+			continue
+
+		var locked := e == _lock_target
+		var w := Pal.px(EBAR_W * (EBAR_LOCK_MULT if locked else 1.0), s.y)
+		var h := Pal.px(EBAR_H, s.y)
+		var b := Pal.px(EBAR_BORDER, s.y)
+		var c := cam.unproject_position(head)
+		c = (c / grid).round() * grid
+		var x := c.x - w * 0.5
+
+		# A frame, because this bar is drawn over the world rather than over a
+		# known background: 2 px of RUST on a lit sandstone wall is nearly the wall,
+		# and on VOID an ASH track alone is nearly nothing. BONE for an elite is the
+		# only per-kind mark on the HUD, and it is on the one monster whose whole
+		# design is "you can see this one coming" (scripts/core/progression.gd).
+		var elite: bool = bool(e.get(&"elite")) if &"elite" in e else false
+		_canvas.draw_rect(Rect2(x - b, c.y - b, w + b * 2.0, h + b * 2.0),
+			Pal.BONE if elite else Pal.VOID)
+		_canvas.draw_rect(Rect2(x, c.y, w, h), Color(Pal.ASH, 0.85))
+		# Rounded to whole pixels, and never eased. Anti-slop §7.4.
+		var fill := roundf(w * hp.fraction())
+		if fill >= 1.0:
+			_canvas.draw_rect(Rect2(x, c.y, fill, h), Pal.RUST)
+
+
+## Is there world geometry between the camera and this monster's head?
+##
+## World layer only, and the monster itself excluded. Both matter: including
+## `L_ENEMY` would make a monster block its own bar and make a pack hide each
+## other's, which is the same bug `Targeting._has_los` documents at length -- a
+## thing is never between you and itself.
+func _bar_visible(space: PhysicsDirectSpaceState3D, cam: Camera3D,
+		head: Vector3, e: Node3D) -> bool:
+	_ebar_ray.from = cam.global_position
+	_ebar_ray.to = head
+	var skip: Array[RID] = []
+	if e is CollisionObject3D:
+		skip.append((e as CollisionObject3D).get_rid())
+	_ebar_ray.exclude = skip
+	return space.intersect_ray(_ebar_ray).is_empty()
 
 
 func _health_of(n: Node) -> HealthComponent:

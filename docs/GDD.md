@@ -57,7 +57,7 @@ the walk back more expensive, which is the one question asked a second way.
 
 Two ways out, and the difference between them is the whole game:
 
-- **Extract** — use the Homeward Charm and stand still while it channels, paying
+- **Extract** — use the Escape Rope and stand still while it channels, paying
   a share of what you are carrying. Keep the bag. Heal to full.
 - **Die** — lose the entire bag. Keep your gold and everything it bought.
 
@@ -94,8 +94,8 @@ bug (and it was one).
 ## 5. Difficulty comes from depth, not from you
 
 **Bands, never level-scaling.** Rooms carry a distance from the entrance, and
-that distance alone chooses what spawns: crawlers and goblins at the mouth,
-skeletons and kobolds further, orcs deeper, a wraith at the bottom.
+that distance alone chooses what spawns: skeletons and goblins at the mouth,
+kobolds further, orcs deeper, a wraith at the bottom.
 
 Monsters get harder because *you walked further*, not because you got stronger.
 Scaling the world to the player flattens the map into wallpaper, makes a tenth
@@ -151,7 +151,7 @@ Full input map and the pad bindings: `docs/CONTRACT.md` §4.
 **Built and playable:** town with vendor and smith, trade screens, the full
 ten-ingredient economy, five permanent upgrade lines, a seeded room-graph
 dungeon with corridors and chests, six enemy kinds across depth bands, physical
-loot drops with a refusing bag, the Homeward Charm, death, the fade transition,
+loot drops with a refusing bag, the Escape Rope, death, the fade transition,
 HUD, pause menu, saves, and the Heat chain (§2) with its multiplier, its mote
 magnetism and its premium on the bag.
 

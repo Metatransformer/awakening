@@ -1,6 +1,6 @@
-class_name HomewardCharm
+class_name EscapeRope
 extends Node3D
-## The way out, carried. You open the menu, use the charm, and it pulls you home.
+## The way out, carried. You open the menu, use the rope, and it pulls you home.
 ##
 ## This replaces the rune pad (`ExtractNode`, deleted). The pad made leaving a
 ## PLACE — you had to find your way back to it, which turned the game's central
@@ -14,7 +14,7 @@ extends Node3D
 ##    decision could not be made by fumbling a button and so that something
 ##    chasing you was a real problem. A menu press has neither property on its
 ##    own — the menu is paused, so a "hold" in there is just a slow click. So the
-##    charm channels in the WORLD, after the menu closes, and a hit breaks it.
+##    rope channels in the WORLD, after the menu closes, and a hit breaks it.
 ##  * **The fee is paid out of the number you are protecting**, and the HUD says
 ##    so: the ring closes around the bag total, exactly as it did on the pad.
 ##
@@ -40,7 +40,7 @@ var _light: OmniLight3D
 func _ready() -> void:
 	_build()
 	set_process(false)
-	Bus.homeward_used.connect(_on_used)
+	Bus.escape_rope_used.connect(_on_used)
 
 
 func active() -> bool:
@@ -80,14 +80,14 @@ func cancel() -> void:
 	set_process(false)
 	_show_fx(false)
 	Hud.set_extract_hold(0.0)
-	Bus.homeward_broken.emit()
+	Bus.escape_rope_broken.emit()
 
 
 func _process(delta: float) -> void:
 	_t += delta
 	var t01 := clampf(_t / CHANNEL_TIME, 0.0, 1.0)
 	Hud.set_extract_hold(t01)
-	# The slats climb the hero rather than standing on the floor. The charm is
+	# The slats climb the hero rather than standing on the floor. The rope is
 	# the thing working, so the effect belongs on the body carrying it.
 	_column.scale.y = maxf(0.001, t01)
 	_column.rotation.y = t01 * 1.4
@@ -117,7 +117,7 @@ func _on_used() -> void:
 	begin()
 
 
-## The charm is invisible until it is working. An always-on CYAN light on the
+## The rope is invisible until it is working. An always-on CYAN light on the
 ## hero would read as an equipped item and, worse, would light the room -- CYAN
 ## is reserved for the way out and nothing else (STYLEGUIDE §1).
 func _show_fx(on: bool) -> void:
@@ -137,7 +137,7 @@ func _show_fx(on: bool) -> void:
 ##
 ## So: opaque, unshaded, emissive slats, 9 cm wide, with five-sixths of the ring
 ## being GAP. You see the hero between them, the effect still wraps him, and it
-## grows from the floor because that is the direction the charm pulls.
+## grows from the floor because that is the direction the rope pulls.
 func _build() -> void:
 	_slat_mat = StandardMaterial3D.new()
 	_slat_mat.albedo_color = Pal.CYAN

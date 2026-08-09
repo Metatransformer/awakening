@@ -69,23 +69,31 @@ Proven working. Do not rebuild this.
 - **Model:** `res://assets/characters/hero.fbx` — textured, `Skeleton3D` with
   33 `mixamorig_*` bones, mesh is 1.0 units tall.
 - **Animations:** `res://assets/animations/hero_anims.res`, a single
-  `AnimationLibrary` of **112 clips on that exact skeleton — no retargeting
+  `AnimationLibrary` of **117 clips on that exact skeleton — no retargeting
   needed**. Names are `<set>_<clip>`:
   - `ss_*` — sword & shield (51): `idle_01..04`, `walk_01/02`, `run_01/02`,
     `strafe_01..04`, `slash_01..05`, `attack_01..04`, `block_01/02`,
     `block_idle_01`, `impact_01..03`, `180_turn_01/02`, `turn_01/02`,
     `jump_01/02`, `kick_01`, `power_up_01`, `death_01/02`, `casting_01/02`,
     `draw_sword_1_01`, `sheath_sword_1_01`, `crouch*`
-  - `ex_*` — extra (8): `running`, `fast_run`, `roll_to_run`,
-    `sword_combo_light`, `sword_combo_heavy`, `cast_light`, `cast_heavy`,
-    `hookshot_fire`
+  - `ex_*` — extra (12): `running`, `fast_run`, `roll_to_run`, `backflip`,
+    `dive_forward`, `jump`, `jump_running`, `sword_combo_light`,
+    `sword_combo_heavy`, `cast_light`, `cast_heavy`, `hookshot_fire`.
+    This set is where clips the sword-and-shield pack does not contain end up,
+    and the list of what it does not contain is long: no roll, no 360, and no
+    jump. `fast_run` is the sprint, `jump`/`jump_running` are the two jump arcs.
+  - `ax_*` — axe (1): `melee_attack_360_low`, the charged spin. One clip
+    borrowed out of a whole moveset (`build_anim_lib.gd` §ONLY).
   - `mg_*` — magic (14): casts, hit reactions, `react_death_backward`
   - `bow_*` — longbow (39): `equip`/`disarm`, `draw_arrow`, `aim_overdraw`,
     `aim_recoil`, `aim_walk_*`, `aim_turn_*`, `shoot_*`, `reload_*`, `dodge_*`,
     `death_*`. **These are the archer's real clips — the old stand-in
-    `ss_casting_01` is gone.** The three the rig actually reads are
+    `ss_casting_01` is gone.** The four the rig actually reads are
     `aim_overdraw` (holding at full draw), `aim_walk_forward` (strafing at
-    draw, and it LOOPS), and `aim_recoil` (the loose). The rest are stock.
+    draw, and it LOOPS), `draw_arrow` (the charge — reach, nock, pull) and
+    `aim_recoil` (the loose). The last two are one shot, in that order, and
+    they abut: `draw_arrow` ends on the pose `aim_recoil` opens on. The rest
+    are stock.
 - **Binding** (the FBX ships a stub library you must evict first):
   ```gdscript
   var ap: AnimationPlayer = hero.find_child("AnimationPlayer", true, false)
@@ -206,11 +214,12 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `attack` | **LMB** | **X / Square** (pad2) | light attack (**hold** = charge, **+guard** = dash) |
 | `use_item` | **F** | **RT / R2** (axis5+) | use the item the D-pad drew |
 | `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held**, and it targets, and it recentres |
-| `context` | **Space** | **B / Circle** (pad1) | roll / backstep / sidehop |
-| `z_target` | **Q**, MMB | **R3** (pad8) | lock-on toggle / camera recentre |
+| `context` | **Shift** | **B / Circle** (pad1) | roll / backstep / sidehop — **hold** = run |
+| `jump` | **Space** | **Y / Triangle** (pad3) | jump |
+| `z_target` | **Q**, MMB | — (LT does it) | lock-on toggle / camera recentre |
 | `interact` | E | **A / Cross** (pad0) | context — talk/open, **+guard** = jump attack, else stow item |
 | `item_left` / `item_up` / `item_right` | 1 / 2 / 3 | dpad L / U / R | armaments — §4.1 |
-| `first_person` | R | — | — |
+| `first_person` | R | **R3** (pad8) | look out of his own eyes — he roots |
 | `pause` / `inventory` / `map` | Esc / **I** / Tab | Start (pad6) / **Select** (pad4) / L3 (pad7) | menu / pouch / map |
 | `dbg_reload` | F5 | — | — |
 
@@ -221,8 +230,9 @@ the lock; RT uses whatever the D-pad drew. Aiming a bow with a shoulder and
 loosing it with a thumb makes you let go of the stick that was aiming.
 
 The face buttons are the swings and the verbs: X swings, B rolls, A is context.
-The right stick swings the lens; everything else the camera does is under the
-left index finger.
+The right stick swings the lens and **clicking it (R3) drops you into his eyes**
+— BOTW's arrangement again, and the thumb is already there doing the same job;
+everything else the camera does is under the left index finger.
 
 Both triggers are AXES (`InputEventJoypadMotion`, JoyAxis 4 and 5), not buttons,
 so the action's 0.2 deadzone is how far the trigger travels before it counts as
@@ -270,14 +280,90 @@ equivalent guards the world — `hero_combat` polls its buttons every physics
 frame, so one press at a chest would open it and loose an arrow through it. The
 roll keeps B/Circle, where the source material has it.
 
+**The dodge button is a tap AND a hold.** Tap `context` and the hero rolls,
+exactly as before. Hold it past `Hero.sprint_hold_time` (0.18 s) and he **runs**
+— `K.SPRINT_SPEED`, 6.07 m/s against the 4.37 run cap — until the button or the
+stamina bar gives out. That is Elden Ring's arrangement and BOTW's B, and the
+consequence is theirs too: a held button rolls and *then* runs, because the roll
+still fires on the **press**. Waiting to see whether a press was a tap would put
+0.18 s of latency on the most reaction-critical button in the game, which is the
+same argument the charge makes above for the sword coming out on the press.
+
+The run is deliberately **slower than a roll** (6.55). The roll is the fastest
+the hero ever travels and it costs a third of the bar for half a second; a
+sprint that outran it would make the dodge a worse way to cover ground than the
+button it shares. They come out of one pocket on purpose — there is no separate
+sprint meter, so a player who runs everywhere arrives with nothing to dodge on.
+
+It is withheld in three stances, each for its own reason: **locked** (the stick
+is a circle-strafe there, and "run" has no direction to mean), **guarding** and
+**aiming** (a run would have to drop a stance the player is holding a button
+for). Holding the button still rolls in all three; only the run is refused.
+
+**Jump is real, and it is not OOT's contextual ledge-hop.** `K.JUMP_SPEED`
+against `K.GRAVITY` gives 0.96 m of apex and 0.59 s in the air, with full air
+control throughout. It is **buffered** (`jump_buffer_time`, so a press during a
+fall lands and jumps) and **coyote-timed** off the same `coyote_time` the fall
+animation already used, so walking off a ledge and pressing a frame late still
+jumps.
+
+Two things about it are worth knowing before touching it. First, the impulse is
+applied inside `Hero._apply_gravity`, not by the code that decides to jump:
+`is_on_floor()` reports the *last* `move_and_slide`, so it is still true on the
+launch frame and the floor clamp would overwrite the launch velocity — giving a
+hero who plays an entire jump animation standing on the ground. Second, both
+`ex_jump` clips open with a ~0.5 s anticipation crouch that the game has no room
+for, so they are started at their launch frame via `jump_start_offset`. Set that
+to zero and the hero visibly squats while already 0.4 m in the air; it was A/B'd
+in `tools/directors/_jump_trace.gd` and the two frames are not subtle.
+
 **There is no heavy-attack button.** The heavy is the charge: tap X for the
-light chain, *hold* X to wind up, release to swing it. The light swing comes out
+light chain, *hold* X to wind up, release to **spin**. The light swing comes out
 on the **press**, never on the release — a button that waits to see whether you
 meant a tap puts `charge_time` (0.42 s) of latency on every ordinary swing. So
 the wind-up costs the recovery you were spending anyway, and a mashed chain
-never charges anything. `combat.charged` is public, and while it is up the blade
-carries a cold light (`HeroCombat._build_charge_glow`) — a hold with no tell is
-a hold nobody can learn.
+never charges anything. `combat.charged` is public and goes up at `charge_time`.
+
+The release is a **360**, not a bigger forward swing, and that is a claim about
+*direction* that the hitbox has to make good on. Every other swing on this node
+shares one forward box; the spin declares its own through `_aim_hitbox` —
+`spin_reach` 2.1 m centred **on the hero** with `spin_arc` 360°, against the
+light chain's 130° cone out in front. Each swing re-aims before it commits and
+nothing is restored afterwards, deliberately: a spin cut short by a death or a
+scene change never reaches its own end, and the next light swing would inherit a
+2.1 m sphere. `tools/directors/spin_attack.gd` is the proof — three posts on a
+ring, and it fails if a *tap* reaches the one behind him.
+
+The hold has a **pose**, and it is one frame of `ss_slash_01` held (`hero.gd`
+§Charge: an `AnimationNodeAnimation` behind a `TimeSeek` and a `TimeScale` of 0,
+blended in *under* the swings). It is the bottom of the light slash — crouched,
+blade carried out to his left — so the press's own swing settles into the
+wind-up instead of returning to idle and striking a pose afterwards.
+`charge_pose_time` is a frame **picked off the render**
+(`tools/directors/charge_pose.gd`), not a fraction of the clip. Note the seek:
+`start_offset` is the obvious tool and it silently does nothing here, because it
+is applied when a node starts and a node behind a zero time scale never starts.
+
+The tell is `SpinVfx` (`scripts/combat/spin_vfx.gd`), driven every frame off the
+hold clock: motes drawn **into** the blade, the blade taking on an azul emission
+through `HitFlash`, an `OmniLight3D` riding the steel, and on release a trail
+swept **clockwise** around him at 1.7 m. That trail is one small emitter on a
+turning pivot leaving world-space motes behind it — the arc is where the emitter
+has *been*, which is why it follows the blade instead of appearing around it.
+Its colours are chosen for how they **stack**: the particles are additive, so a
+pale blue clips to white the moment three of them overlap on an already-lit
+floor, and the numbers in that file are the deep end of azul for that reason and
+are not to be brightened without re-rendering. A hold with no tell is a hold
+nobody can learn.
+
+**The effect outlives the lockout on purpose.** `spin_swing_time` is 0.68 s, the
+arc takes ~0.72 s to draw and its motes live another half-second after that, so
+the hero has his feet back while the circle behind him is still burning. The
+magic lags the sword.
+
+Sound: `sword_charging` rises from the **press**, and both the release swipe and
+the hero's yell fire on the **release**. The yell was on the arm-up at first,
+which announced a commitment the player had not made yet.
 
 **The dash attack is `attack` pressed with the guard already up**, and it is the
 one modified swing on the button (`HeroCombat._tick_attack_button`: `if blocking
@@ -306,17 +392,38 @@ and `project.godot` looked perfectly correct the whole time. `Settings`
 now stamps saved binds with `BIND_SCHEMA` and **discards** binds saved against
 an older layout — bump it in any change that moves a shipped binding.
 
-**Not yet bound, because the ability does not exist:** skill and jump. Do not
-register empty actions for these; bind them in the same change that builds them.
-RT/R2 was pencilled in for the skill and `use_item` took it instead — the
-triggers being a pair is worth more than reserving one for an ability nobody has
-designed. **Y/Triangle is free** and is the obvious home for the next verb.
+**Not yet bound, because the ability does not exist:** skill. Do not register an
+empty action for it; bind it in the same change that builds it. RT/R2 was
+pencilled in for the skill and `use_item` took it instead — the triggers being a
+pair is worth more than reserving one for an ability nobody has designed.
 
-`first_person` is the standing exception and it is a wart: the action is bound
-(R) and rebindable, and **nothing in the game reads it**. `Bus.first_person_changed`
-has no emitter either. Either build it or delete it; do not bind it to a pad
-button in the meantime, because a pad button that does nothing is worse than a
-keyboard key nobody presses.
+`first_person` was the standing counter-example and it is now closed: it sat
+bound to R, rebindable, read by nothing, with a `Bus.first_person_changed` that
+had no emitter, for long enough that it had to be written down as a wart. It
+shipped with the mode below, and it took R3 from `z_target` to do it — the left
+trigger is the pad's Z and a second pad route to the same lock was a duplicate.
+
+**First person is `GameCamera` with the boom at zero**, and that is the whole
+implementation. The third-person camera's forward is `-_orbit_dir(_yaw, _pitch)`
+— from the eye back down the boom at the hero — which is already exactly the
+direction a head at the at-point wants to face, so `set_first_person` eases
+`_fp01` to 1, `_place` lerps the eye onto `hero + K.HERO_EYE_Y` and the look
+direction onto the *unbiased* orbit, and the mode inherits the stick handling,
+the sensitivity and the pitch clamps for free. Nothing about it is a second
+camera. The unbias matters: whatever swing or lift the wall logic had latched
+must not ride into the head and leave the player facing 40° off where the stick
+had them.
+
+It is a **stance, not a way to play**: `Hero` roots himself and hides his own
+model on `Bus.first_person_changed` (the sword and shield hang off bone
+attachments under it and go with it). `attack` and `context` drop you out on the
+press — the press still counts, `HeroCombat` polls the button and does not care
+that the camera read it first. Anything else that claims the frame — a prompt, a
+lock, a drawn bow — is **polled** out in `_tick_first_person` rather than hooked
+per event, because three listeners is three places for the fourth path in to be
+forgotten. `tools/directors/first_person.gd` is the proof, and it asserts that
+he *can* walk once he is back out: "he did not move" passes just as loudly when
+hero.gd failed to compile.
 
 Read movement as
 `Input.get_vector("move_left","move_right","move_up","move_down")` so stick and
@@ -439,10 +546,11 @@ is deliberate:
 | The hero | `Hero.take_hit(hit) -> bool` | his health lives in `Game` so it survives the scene change extracting causes |
 
 `DamageArea` asks for `take_hit` first and falls back to the component. **Do not
-reach around it** — `Crawler` did, calling `hero.take_hit` itself, and that is
-the only reason it was the one enemy in the game that could hurt you: the nine
-GLB monsters all swing `DamageArea`s, which knew about `HealthComponent` alone
-and had therefore been harmless since the roster landed. A blow that lands
+reach around it** — the box-built placeholder enemy (`Crawler`, since deleted)
+did, calling `hero.take_hit` itself, and that is the only reason it was the one
+enemy in the game that could hurt you: the GLB monsters all swing `DamageArea`s,
+which knew about `HealthComponent` alone and had therefore been harmless from the
+day the roster landed until this was fixed. A blow that lands
 returns true; a blow the shield or an i-frame ate returns false, and only the
 first is announced on `connected`.
 
@@ -639,27 +747,27 @@ Rules:
 - New on the pause menu: `PauseMenu.Screen.POUCH`, `Root/Screens/PouchScreen`
   (`scripts/ui/menu/pouch_panel.gd`). It is read-only — the bag has no verbs.
 
-### The way out — the Homeward Charm
+### The way out — the Escape Rope
 
 ```gdscript
-# scripts/items/homeward_charm.gd, built by hero.gd as `hero.charm`
-Bus.homeward_used.emit()          # the ITEMS screen, after closing the menu
-hero.charm.begin() -> bool        # or drive it directly, as directors do
-hero.charm.active() -> bool       # rooted, mid-channel
-hero.charm.cancel()               # a blow landed; emits Bus.homeward_broken
+# scripts/items/escape_rope.gd, built by hero.gd as `hero.rope`
+Bus.escape_rope_used.emit()      # the POUCH screen, after closing the menu
+hero.rope.begin() -> bool        # or drive it directly, as directors do
+hero.rope.active() -> bool       # rooted, mid-channel
+hero.rope.cancel()               # a blow landed; emits Bus.escape_rope_broken
 ```
 
 There is no extraction node and no exit room. `ExtractNode` is **deleted** —
 do not add a second way out (METAGAME §5).
 
-- **The charm channels, it does not teleport.** `CHANNEL_TIME` seconds rooted in
+- **The rope channels, it does not teleport.** `CHANNEL_TIME` seconds rooted in
   the world, cancelled by a blow that *lands*. A blocked blow does not cancel it.
 - **The hero is rooted by the same mechanism a shop uses**, so he still falls and
-  still slides to a halt — `hero.gd` folds `charm.active()` into the same
+  still slides to a halt — `hero.gd` folds `rope.active()` into the same
   `locked` flag as `Prompt.blocked`, and `hero_combat.gd` locks the item buttons
   but deliberately **not** the shield.
 - **It is not bindable.** It is not in `QUICK_POOL` and must not be added to it.
-- **Only `Run` decides whether leaving is possible.** The charm asks
+- **Only `Run` decides whether leaving is possible.** The rope asks
   `Run.can_extract()` before it starts and `Run.extract()` when it finishes; the
   fee moves with the bag, so both checks are load-bearing.
 - **Unowned gear is not on the body.** The bow and the hookshot each have two
@@ -707,7 +815,7 @@ facing. The split is why `Hero.Swing` exists at all: the animation tree needs on
 that only lives in the combat script.
 
 ```gdscript
-enum Swing { LIGHT1, LIGHT2, LIGHT3, HEAVY, LUNGE }   # on Hero
+enum Swing { LIGHT1, LIGHT2, LIGHT3, SPIN, LUNGE, DASH }   # on Hero
 hero.request_attack(duration: float, variant := Swing.LIGHT1) -> bool
 hero.request_lunge(duration: float, drive_time: float, hop: float) -> bool
 hero.wish_dir() -> Vector3          # the stick, camera-relative, in world space
@@ -718,14 +826,24 @@ hero.wish_dir() -> Vector3          # the stick, camera-relative, in world space
 | light 1 | `ss_slash_01` | attack | 2 |
 | light 2 | `ss_slash_03` | attack, again inside `chain_window` | 2 |
 | light 3 (finisher) | `ss_slash_04` | attack, again | 4 |
-| heavy | `ss_attack_02` | attack **held** past `charge_time`, on release | 5 |
+| spin | `ax_melee_attack_360_low` | attack **held** past `charge_time`, on release | 5, all round |
 | lunge | `ss_attack_01` | use_item, **locked on** | 4 |
+| dash | `ss_attack_03` | attack, with the **guard already up** | 3 |
 
-The five clips were picked off `tools/directors/swing_lookdev.gd`, which renders
+The clips were picked off `tools/directors/swing_lookdev.gd`, which renders
 every frame of every swing in the library — not off their filenames, which carry
 no information at all. The three lights are a SEQUENCE (down, up, overhead), and
 `ss_attack_01` is the only clip in which the hero's feet leave the ground, which
 is why it is the lunge and was a terrible heavy.
+
+The spin is the **only** clip in the kit borrowed from another character's
+moveset: the sword-and-shield set has no 360 in it, so `build_anim_lib.gd`'s
+`ONLY` allowlist takes exactly one clip from the axe set and leaves the rest.
+It beat `ax_melee_attack_360_high` and `gs_high_spin_attack_1` in that same
+sheet — the high one carries the blade behind the body and the greatsword one is
+posed around a two-handed hilt. Its Mixamo tail is trimmed to 1.35 s (measured
+with `tools/_clip_motion.gd`, not eyeballed) so `clip.length` still means "how
+long this move takes".
 
 **The chain's pace is `swing_time` (0.60 s) and it is also its animation
 speed.** `Hero.request_attack` scales each clip by `clip_len / duration`, so the
@@ -777,6 +895,23 @@ hero.ranged.busy() -> bool                        # a shot is mid-flight
 hero.ranged.aiming -> bool                        # a sighted item is out
 hero.ranged.aim_item() -> StringName              # &"bow" &"hookshot" or &""
 ```
+
+**A bow shot is two clips and one clock.** `K.BOW_DRAW[level]` seconds of charge
+(`bow_draw_arrow`), then `HeroRanged.BOW_LOOSE` seconds of loose
+(`bow_aim_recoil`), and the arrow leaves at the seam. `HeroRanged` owns the
+clock; the hero owns the body and is committed for both halves:
+
+```gdscript
+hero.request_bow(draw_time, loose_time, aim) -> bool  # commits, fires the CHARGE
+hero.bow_loose(loose_time)                            # the seam — not a request
+hero.request_hookshot(duration, aim) -> bool          # one phase, not two
+```
+
+Only `HeroRanged` calls these, and it fires `bow_loose` off the same frame it
+spawns the arrow — the string leaving his fingers and the arrow leaving the bow
+are one event, and two things counting to it separately is how they come apart.
+Proof is `tools/directors/bow_charge_release.gd`, which photographs the shot
+across both clips: a boolean saying two nodes played is not a drawn bow.
 
 **Aim mode has exactly one author.** Bringing out the bow or the hookshot drops
 the camera to the shoulder, draws a crosshair, and changes how the body moves.
@@ -927,7 +1062,7 @@ camera raycasts for the point under the crosshair and the muzzle is aimed at
 Arrow.new(); arrow.launch(from, dir, shooter)
 ```
 
-At `K.ARROW_SPEED` an arrow steps 0.7 m per frame, further than a crawler is
+At `K.ARROW_SPEED` an arrow steps 0.7 m per frame, further than a goblin is
 wide. An Area3D only reports what it overlaps on the frame it is sampled, so it
 passes through thin enemies about as often as it hits them — and the misses look
 like bad aim. Each frame it raycasts the **segment** it is about to travel.
@@ -1081,6 +1216,8 @@ Saves.peek(slot)        # header for the slot list; {empty:true} if unused
 Saves.save(slot)        # captures Game + hero position + current room
 Saves.load_slot(slot)   # restores Game, RETURNS {scene, room, pos, yaw}
 Saves.erase(slot)       # 3 slots, 0..2
+Saves.autosave()        # Flow calls this on EVERY transition; false = declined
+Saves.autosaved         # signal(slot) -- slot is -1 when it declined
 ```
 
 The save file is at **`VERSION = 2`**: it carries `bag_slots`, `upgrades` and
@@ -1091,6 +1228,32 @@ The save file is at **`VERSION = 2`**: it carries `bag_slots`, `upgrades` and
 `Saves.load_slot()` deliberately does **not** change scenes — it hands back
 where the hero belongs and lets the caller transition however it wants.
 Whoever owns room transitions should set `Saves.current_room` as rooms change.
+
+**Autosaving is `Flow`'s, and it is unconditional.** The last thing `_go` does,
+after the fade lifts, is call `Saves.autosave()` — there is no per-caller flag,
+because all four ways through that function (in, down, home paid, home in a box)
+are moments a player would be furious to replay, and a rule with no exceptions
+cannot be forgotten by the fifth caller. It runs at the *end* on purpose:
+`Saves.save` reads the hero out of the live tree, and the notice it raises is
+drawn by the HUD, so announcing it behind a black screen announces it to nobody.
+
+Two rules the format enforces, both proved by `tools/directors/autosave.gd`:
+
+- **A recorded scene is never a dungeon.** `_save_scene()` returns `Flow.TOWN`
+  whenever `Run.in_dungeon`. A slot holds `Game` and nothing of `Run`
+  (METAGAME §5), so a save pointing underground reloaded into a generated floor
+  with no bag, no fee and no run behind it. That predates the autosave and was
+  reachable by saving manually in the dungeon.
+- **An autosave never overwrites a save made by hand.** It takes the active slot
+  if there is one, else the first empty slot (which it then keeps), else it
+  declines and emits `autosaved(-1)`. Picking a slot to sacrifice for a player
+  who manages three by hand is the autosave deciding which of their saves
+  mattered least.
+
+`Hud` listens on `autosaved` and draws **AUTOSAVING…** bottom-right for 2.2 s on
+the toast's baseline, in `MOTH` — the HUD talking about itself, not about the
+world. It is a separate signal from `saved` because a manual save is made with
+the menu open and needs no notice at all.
 
 Audio buses `Master / Music / SFX / UI` exist in `default_bus_layout.tres`.
 Anything that plays a sound must route to `SFX`, `Music`, or `UI` — never

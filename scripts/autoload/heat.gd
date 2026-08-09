@@ -15,7 +15,7 @@ extends Node
 ## That last rule is not special-cased anywhere. Heat watches
 ## `Bus.player_health_changed`, and a blocked blow never changes health, so the
 ## shield being the tempo tool falls out of the wiring rather than out of an if.
-## It is the same rule the Homeward Charm already channels under
+## It is the same rule the Escape Rope already channels under
 ## (docs/METAGAME.md §5), which is why it should feel familiar rather than new.
 ##
 ## HEAT IS WORTH MONEY, NEVER POWER. It does not raise damage, reach, or speed.

@@ -325,7 +325,7 @@ func _populate() -> void:
 		_add_room_trigger(root, cell)
 
 		# The entrance room stays empty. It used to hold the extraction pad; the
-		# way out is the Homeward Charm now (scripts/items/homeward_charm.gd),
+		# way out is the Escape Rope now (scripts/items/escape_rope.gd),
 		# so there is no room you have to walk back to.
 		if cell == entrance:
 			continue
@@ -393,12 +393,22 @@ func _populate() -> void:
 ## the map worth reading and what keeps a first run's shallow rooms genuinely
 ## easy on a tenth run -- level-scaling would flatten both (docs/GDD.md §5).
 ##
-## `crawler` is the box-built enemy; the rest are `Enemy` kinds driven by the
-## monster models. The crawler stays as the shallow-water fight so the entrance
-## rooms still open with something readable and cheap.
+## Every kind here is an `Enemy` driven by a monster model. There is no longer a
+## box-built placeholder in the pool: the `crawler` that used to hold the two
+## shallowest slots was a stand-in from before the roster had art, and it was
+## mechanically a skeleton wearing boxes -- same 6 health, same 2 damage, same
+## 1.7 m reach, same 0.45 s telegraph -- so the skeleton is what replaced it
+## rather than a re-tune of anything.
+##
+## Bands 1 and 2 draw from the same two cheap kinds and are separated by RATIO,
+## not by roster. Band 1 leans on the skeleton's slow 0.45 s wind-up, which is
+## the telegraph the player learns to read first; band 2 leans on the goblin's
+## 0.32 s, which is the same lesson at speed. Losing the crawler collapsed those
+## two bands into one pool, and weighting them is what keeps the entrance rooms
+## from being the second rooms over again.
 const BANDS := {
-	1: [&"crawler", &"crawler", &"goblin"],
-	2: [&"crawler", &"goblin", &"skeleton"],
+	1: [&"skeleton", &"skeleton", &"goblin"],
+	2: [&"skeleton", &"goblin", &"goblin"],
 	3: [&"goblin", &"skeleton", &"skeleton", &"kobold"],
 	4: [&"skeleton", &"kobold", &"kobold", &"orc"],
 }
@@ -416,11 +426,6 @@ func _spawn_foe(root: Node3D, kind: StringName, at: Vector3,
 	# `position`, not `global_position`: the room root is already placed at its
 	# cell centre, and `at` is the scatter offset inside it. Assigning a global
 	# here would stack every room's spawns on top of the entrance.
-	if kind == &"crawler":
-		var c := Crawler.new()
-		c.position = at
-		root.add_child(c)
-		return
 	var e := Enemy.new()
 	e.kind = kind
 	e.drop_seed = _rng.randi()
@@ -431,7 +436,7 @@ func _spawn_foe(root: Node3D, kind: StringName, at: Vector3,
 
 
 ## Ring-scatter with a jitter, rather than uniform random: a uniform scatter puts
-## two crawlers on top of each other often enough to look like a bug.
+## two monsters on top of each other often enough to look like a bug.
 func _scatter(i: int, total: int, radius: float) -> Vector3:
 	var a := TAU * (float(i) + _rng.randf_range(-0.18, 0.18)) / float(maxi(total, 1))
 	var r := radius * _rng.randf_range(0.55, 1.0)

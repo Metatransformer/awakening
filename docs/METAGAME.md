@@ -168,7 +168,7 @@ Blazing the safe state and delete the decision.
 **What breaks it:** the window running out, or **a blow that lands**. A blow you
 *block* does not, because Heat watches `Bus.player_health_changed` and a blocked
 blow never changes health — the shield being the tempo tool is a consequence of
-the wiring, not a special case. It is the same rule the charm channels under
+the wiring, not a special case. It is the same rule the rope channels under
 (§5), which is why it should feel familiar rather than new.
 
 **Breaking steps down one tier, not to zero.** Zeroing makes one mistake at
@@ -216,8 +216,10 @@ Proof: `tools/directors/heat_flow.gd`.
 
 ## 5. Extraction — the priced decision
 
-The way out is the **Homeward Charm** (`scripts/items/homeward_charm.gd`): a
-permanent key item, used from the pause menu's ITEMS screen, under **USE**.
+The way out is the **Escape Rope** (`scripts/items/escape_rope.gd`): a
+permanent key item, used from the pause menu's **POUCH** screen, under THE WAY
+OUT — beside the bag's worth and the purse, because those three numbers are the
+decision and they belong on one screen.
 
 **Superseded 2026-08-08, on the owner's instruction: this was a rune pad you
 stood on and held (`scripts/world/extract_node.gd`, deleted).** The pad made
@@ -226,9 +228,9 @@ decision into a navigation problem, and a rich run could be lost to not
 remembering where the door was. The decision was never "can I find my way back",
 it was "is what I am carrying worth the fee".
 
-The charm is **not consumable**. A stock you can run out of would strand a
+The rope is **not consumable**. A stock you can run out of would strand a
 player underground, and being stranded is the one thing this section rules out
-below: you are never trapped. The fee is the price of leaving; the charm is just
+below: you are never trapped. The fee is the price of leaving; the rope is just
 where the button lives.
 
 The pad's two real properties survive the move, because everything below is
@@ -237,10 +239,10 @@ built on them:
 - **Leaving takes time and can be interrupted.** The pad was a *hold* so that a
   decision could not be made by fumbling a button. A menu press has neither
   property on its own — the menu is paused, so a "hold" in there is a slow
-  click. So using the charm closes the menu and starts a **1.2 s channel in the
+  click. So using the rope closes the menu and starts a **1.2 s channel in the
   world**: he is rooted, the ring closes around the bag total, and **a blow that
   lands breaks it**. A blow he *blocks* does not — standing your ground behind
-  the shield while the charm works is a legitimate way to leave, and a better one
+  the shield while the rope works is a legitimate way to leave, and a better one
   than mashing a button was.
 - **The fee comes out of the number you are protecting**, and the HUD says so.
 
@@ -269,6 +271,27 @@ a player from farming one safe room forever.
 **Death** (`Run.die()`) takes the whole bag and nothing else. Gold and every
 upgrade bought with it survive. You wake in town at full health — leaving you at
 zero would just kill you again before you could sell.
+
+### The run is not savable, and that is what the autosave protects
+
+`Flow` autosaves on **every** scene transition — entering the dungeon, taking
+the stair down, and coming home whether you walked out or were carried — and the
+HUD says **AUTOSAVING…** bottom-right as the world fades back in.
+
+What it writes is `Game`: gold, hearts, upgrades, forge rungs, key items. What
+it never writes is `Run`: no bag, no floor, no run seed, no `in_dungeon`. A save
+you could reload from the third floor would let a player undo the extraction
+decision this whole section is built on, and the fee would stop being a
+decision — so `save()` records **town** as the scene whenever `Run.in_dungeon`.
+
+So the autosave is not a safety net under the run. It is a safety net under the
+*metagame*: everything the run was being gambled **for** is committed to disk at
+the exact four moments it changes hands, and the gamble itself still resolves
+the way you played it.
+
+An autosave will never overwrite a save you made by hand — it takes the slot you
+are already playing, or the first empty one, or it declines and says nothing
+(`save_game.gd autosave()`).
 
 ---
 
@@ -391,7 +414,7 @@ workbench stock, read-only: this screen shows what you have, the smith spends
 it.
 
 The right column also carries the screen's two **verbs**, in the order they
-argue: the **fletching bench** (§4.6) and then the **Homeward Charm** (§5).
+argue: the **fletching bench** (§4.6) and then the **escape rope** (§5).
 Both spend the bag; one spends it on staying in and the other on getting out.
 Neither is a verb on an item — a *cell* still does nothing when you press it,
 because there is nothing you can do to one thing in the bag. These act on the
@@ -421,13 +444,13 @@ opens where a lid opens. The gold seam of light at the lid line is still built
 in code, and it is still the whole "there is something in here" read — no
 floating icon, no beam, no exclamation mark.
 
-Enemies are `Crawler` (`scripts/actors/enemy/crawler.gd`) in the shallow rooms
-and `Enemy` (`scripts/actors/enemies/enemy.gd`) deeper: see you, close, **rear
-back and hold**, swing, recover. That telegraph is the entire fight — it is the
+Every enemy is an `Enemy` (`scripts/actors/enemies/enemy.gd`) driven by one of
+the monster models, shallow rooms included: see you, close, **rear back and
+hold**, swing, recover. That telegraph is the entire fight — it is the
 window to block, roll, or hit first — and it is why an enemy this simple is
 still a fight rather than a health tax. A pack keeps itself spread out, circles
 rather than stacking, and gives up and walks home if you leave — which is what
-makes disengaging a real option and therefore what makes the charm's channel
+makes disengaging a real option and therefore what makes the rope's channel
 survivable.
 
 ### 7.1 Going deeper
@@ -488,7 +511,7 @@ second one is a decision.
 | HUD | `scripts/ui/hud/hud.gd` |
 | Town | `scripts/world/town.gd`, `scenes/rooms/town.tscn` |
 | Dungeon | `scripts/world/dungeon.gd`, `scenes/rooms/dungeon.tscn` |
-| The way out | `scripts/items/homeward_charm.gd` |
+| The way out | `scripts/items/escape_rope.gd` |
 | Drops on the floor, and their heat stamp | `scripts/world/loot_mote.gd` |
 | The chain, its tiers and what they are worth | `scripts/autoload/heat.gd` |
 | Chests — the model, the lid, what comes out | `scripts/world/chest.gd` |
@@ -509,7 +532,7 @@ godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --direc
 
 `tools/directors/mvp_loop.gd` walks the whole loop through the real interaction
 paths and photographs every beat: sell one → sell all → buy → descend → fight →
-pick up a drop → open a chest → **channel the charm** → home. It prints the gold,
+pick up a drop → open a chest → **channel the rope** → home. It prints the gold,
 bag and health it observed at each seam, and prints `MVP FAIL …` if a beat did not
 happen. Last run:
 
@@ -536,7 +559,7 @@ a bundle, and checks that a full quiver refuses **without** eating the bag.
 `dungeon_supply.gd` generates eight floors and counts what landed in the rooms,
 because a 25% roll cannot be judged from one floor. `fletch_screen.gd` drives
 the POUCH card and walks the D-pad down it, because a new card between the grid
-and the charm is exactly the change that orphans the way out. Last runs:
+and the rope is exactly the change that orphans the way out. Last runs:
 
 ```
 SIZE chest extent=1.15m        SIZE arrow extent=0.68m
@@ -545,7 +568,7 @@ FULL quiver refused the bundle and it stayed on the floor
 BENCH full quiver refused and the bag was untouched
 TOTAL rooms=48 chests=25 bundles=10 loose_arrows=60
 RATE bundles/room=0.21 (arrow_chance=0.25)
-FOCUS walk reached [Cell_0, Cell_4, Cell_8, Fletch, Charm, Back]
+FOCUS walk reached [Cell_0, Cell_4, Cell_8, Fletch, Rope, Back]
 ```
 
 The economy of tempo has its own director (§4.5):
@@ -565,6 +588,19 @@ HEAT premium 114 vs 130 uncooled -- the gap IS the cooling
 HEAT struck      tier 3 -> 2
 HEAT OK
 ```
+
+The autosave has one too (§5):
+
+```bash
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --director=res://tools/directors/autosave.gd --out=/tmp/save/x.png --warmup=60
+```
+
+It drives all three transitions and asserts a slot was written each time, that
+every one of those saves points at **town** rather than at the floor it was
+taken on, and that with all three slots full of hand-made saves the autosave
+declines and the HUD stays quiet. It photographs the notice as the world comes
+back. It backs up the three real slots and puts them back, so running it cannot
+cost you a save.
 
 The forge and the pouch have theirs (§6.5):
 

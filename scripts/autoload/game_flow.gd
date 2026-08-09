@@ -132,3 +132,16 @@ func _go(path: String, hold: float) -> void:
 	busy = false
 	var tin := create_tween().set_ignore_time_scale(true)
 	tin.tween_property(_veil, "color:a", 0.0, FADE_IN)
+
+	# The autosave, and it is EVERY transition rather than a flag per caller.
+	# There are exactly four ways through this function -- into the dungeon, down
+	# a floor, home with the fee paid, home in a box -- and all four are moments
+	# the player would be furious to replay. A rule with no exceptions also
+	# cannot be forgotten by the fifth caller.
+	#
+	# Here at the END, not before the fade, for two reasons. `Saves.save` reads
+	# the hero's position out of the live tree, and during the fade that hero is
+	# the one in the scene being left. And the notice this raises is drawn by the
+	# HUD -- announcing it to a screen that is still black is announcing it to
+	# nobody, so it goes up on the same frame the world comes back.
+	Saves.autosave()

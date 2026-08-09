@@ -14,13 +14,32 @@ extends RefCounted
 ##     face normal decides whether the kite point hangs DOWN or sticks out
 ##     sideways, and getting that wrong is what "off kilter" looks like.
 ##
+##  4. The roll and the SEATING are different questions and want different
+##     sweeps. `--sweep=pos` answers the second one: where on the forearm the
+##     disc sits, which is three numbers in a bone space whose axes nobody can
+##     name from memory. So it prints the mapping — each offset axis said in the
+##     hero's own right/up/back — before it photographs anything. Two runs of
+##     guessing an axis is one run more than reading it.
+##
 ##   godot --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/shield_lookdev.gd --out=/tmp/sl/x.png
-##     [--target=shield|sword]
+##     [--target=shield|sword] [--sweep=roll|pos]
 
 ## Shield: yaw is settled at 180, so this sweeps the roll about its face normal.
 const SHIELD_ROLLS := [-90.0, 0.0, 90.0, 180.0]
+
+## `--sweep=pos`: one axis at a time off the shipped seat, so the frames say what
+## each component of the offset DOES rather than showing five blended guesses.
+const POS_STEPS := [
+	{"name": "shipped", "d": Vector3(0.0, 0.0, 0.0)},
+	{"name": "x_plus", "d": Vector3(0.06, 0.0, 0.0)},
+	{"name": "x_minus", "d": Vector3(-0.06, 0.0, 0.0)},
+	{"name": "y_plus", "d": Vector3(0.0, 0.06, 0.0)},
+	{"name": "y_minus", "d": Vector3(0.0, -0.06, 0.0)},
+	{"name": "z_plus", "d": Vector3(0.0, 0.0, 0.06)},
+	{"name": "z_minus", "d": Vector3(0.0, 0.0, -0.06)},
+]
 ## Sword: the mount that reads correctly is (-96, 6, 0); this sweeps 90-degree
 ## steps of the roll about the blade axis on top of it.
 const SWORD_ROLLS := [-90.0, 0.0, 90.0, 180.0]
@@ -28,6 +47,11 @@ const SWORD_ROLLS := [-90.0, 0.0, 90.0, 180.0]
 const VIEWS := [
 	{"name": "front", "eye": Vector3(-0.30, 1.25, -2.3), "aim": Vector3(0.0, 1.05, 0.0)},
 	{"name": "left", "eye": Vector3(-2.2, 1.25, -0.3), "aim": Vector3(0.0, 1.05, 0.0)},
+	# Over his shoulder, because that is the only angle the game ever shows.
+	# "Left" and "right" said about a character mean left and right ON SCREEN,
+	# and from behind him they are his own left and right; a note taken off the
+	# front view has them backwards.
+	{"name": "rear", "eye": Vector3(0.25, 1.55, 2.2), "aim": Vector3(0.0, 1.0, 0.0)},
 ]
 
 
@@ -70,6 +94,14 @@ func run(rig) -> void:
 		Input.action_press(&"shield")
 	await rig.wait_frames(30)
 
+	if rig.arg("sweep", "roll") == "pos":
+		await _sweep_pos(rig, hero, holder, cam, out, target)
+		if target == "shield":
+			Input.action_release(&"shield")
+		key.queue_free()
+		cam.queue_free()
+		return
+
 	var base: Vector3 = holder.rotation_degrees
 	var rolls: Array = SHIELD_ROLLS if target == "shield" else SWORD_ROLLS
 	for roll: float in rolls:
@@ -91,3 +123,45 @@ func run(rig) -> void:
 	key.queue_free()
 	cam.queue_free()
 	print("SHIELDCHECK target=%s rolls=%d views=%d" % [target, rolls.size(), VIEWS.size()])
+
+
+## Where the mount sits on the arm, one offset axis at a time.
+##
+## The seat is judged from the FRONT and the LEFT both, because the two things
+## being asked of it are perpendicular: "up and inboard" is a front-view claim,
+## and "pushed out" is only visible from his flank, where the disc's stand-off
+## from the forearm is an actual gap and not a foreshortened nothing.
+func _sweep_pos(rig, hero: Node3D, holder: Node3D, cam: Camera3D,
+		out: String, target: String) -> void:
+	# Seated in the IDLE, not the block. The roll sweep photographs a block on
+	# purpose — that is the pose the face normal has to be right in — but the
+	# forearm bone points somewhere completely different there, so an offset
+	# tuned against a raised guard is tuned against the pose the player sees
+	# least. Down-arm in the idle is what "up a bit" and "pushed out" mean.
+	Input.action_release(&"shield")
+	await rig.wait_frames(40)
+
+	var seat: Vector3 = holder.position
+	var socket: Node3D = holder.get_parent() as Node3D
+	_print_axes(hero, socket)
+	for step in POS_STEPS:
+		holder.position = seat + (step["d"] as Vector3)
+		for view in VIEWS:
+			cam.global_position = hero.global_position + (view["eye"] as Vector3)
+			cam.look_at(hero.global_position + (view["aim"] as Vector3), Vector3.UP)
+			await rig.wait_frames(3)
+			await rig.capture(out.path_join("%s_pos_%s_%s.png" % [
+				target, step["name"], view["name"]]))
+		print("SEAT %-8s pos %s" % [step["name"], str(holder.position)])
+	holder.position = seat
+
+
+## Each of the socket's local axes, said in the hero's own frame. This is the
+## whole reason the sweep above needs only one pass: +x on the mount is some
+## direction on the body, and after this print it has a name.
+func _print_axes(hero: Node3D, socket: Node3D) -> void:
+	var inv := hero.global_transform.basis.inverse()
+	for pair in [["x", Vector3.RIGHT], ["y", Vector3.UP], ["z", Vector3.BACK]]:
+		var v: Vector3 = (inv * (socket.global_transform.basis * (pair[1] as Vector3))).normalized()
+		# -basis.z is forward (CONTRACT §2.5), so +z in hero space is BEHIND him.
+		print("AXIS +%s -> right=%+.2f up=%+.2f back=%+.2f" % [pair[0], v.x, v.y, v.z])

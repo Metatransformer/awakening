@@ -14,7 +14,7 @@ config/name="The Lower Worlds: Awakening"
 ; The loop starts in town. Booting into the dungeon dropped the player into the
 ; middle of a run they never chose to take, with nowhere to spend what they
 ; carried out of it.
-run/main_scene="res://scenes/rooms/town.tscn"
+run/main_scene="res://scenes/rooms/dungeon.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 
@@ -165,24 +165,24 @@ cam_right={
 ; with nothing lockable to put the camera back behind the hero.
 ; scripts/targeting/targeting.gd owns that.
 ;
-; On the pad this is the TOGGLE HALF ONLY -- R3, button 8, JOY_BUTTON_RIGHT_STICK.
-; A thumb already resting on the right stick should not have to travel to
-; recentre what that stick just moved, which is the one thing R3 is good for.
+; KEYBOARD ONLY. On the pad, Z is the LEFT TRIGGER and it is bound to `shield`
+; -- one pull, all four of the things OOT's Z did (see the note there). A second
+; pad button that reaches the same lock was a duplicate as soon as the trigger
+; took the whole job, and R3 was worth more as first person (BOTW clicks the
+; right stick to look around, and this game now does too).
 ;
-; The pad's Z is the LEFT TRIGGER, and it is bound to `shield` -- one pull, all
-; four of the things OOT's Z did. See the note there. Both routes reach the same
-; lock; they differ in what LETTING GO means. The trigger's lock drops with the
-; trigger; R3's is a standing decision and survives it (`_lock_from_shield` in
-; targeting.gd is what keeps a guard from silently disarming an R3 lock).
+; R3 held this for a while as the TOGGLE HALF ONLY, on the argument that a thumb
+; resting on the right stick should not travel to recentre what that stick just
+; moved. True, and the trigger does it without the thumb moving at all.
 ;
-; The trigger was briefly bound here too, as a bare recentre, with the shield
-; pushed up onto LB. That split is undone: it asked the player which of Z's four
-; behaviours they wanted before they had learned that they are one behaviour.
+; The trigger was also briefly bound here, as a bare recentre, with the shield
+; pushed up onto LB. That split is undone too: it asked the player which of Z's
+; four behaviours they wanted before they had learned that they are one
+; behaviour.
 z_target={
 "deadzone": 0.2,
 "events": [Object(InputEventMouseButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"button_mask":0,"position":Vector2(0, 0),"global_position":Vector2(0, 0),"factor":1.0,"button_index":3,"canceled":false,"pressed":false,"double_click":false,"script":null)
 , Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":81,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
-, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":8,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
 ; Attack is X/Square -- button 2, "Left Action". It moved off A because A had to
@@ -270,12 +270,51 @@ shield={
 ; different reason: trade_screen's accept edge starts DISARMED, so the press
 ; that opens a screen cannot also confirm inside it.
 ;
-; Y/Triangle is now free. Leave it that way until something earns it -- an empty
-; button is honest, a button bound to a dead action is a bug report.
+; Y/Triangle was left free above, for something that earned it. `jump` did --
+; see the block on it below.
+;
+; THE DODGE IS A TAP AND A HOLD, and both live on this one action. Tap it and
+; the hero rolls, exactly as before and on the PRESS, with no latency added.
+; Hold it past Hero.sprint_hold_time (0.18 s) and he runs, spending stamina
+; until the bar or the button gives out. That is Elden Ring's arrangement, and
+; the consequence -- a held button rolls and THEN runs -- is Elden Ring's too.
+; Nothing here is a second action to bind; Hero._tick_sprint reads the hold off
+; the same `context` the roll reads its press off.
+;
+; The KEYBOARD half moved: this was Space, and Space is `jump` now. Shift is
+; where the whole genre puts a dodge/sprint on a keyboard, it is under the pinky
+; that is already resting on WASD, and it was the only unbound modifier left.
+; KEY_SHIFT is 4194325 -- one past KEY_PAGEDOWN (4194324), which you can check
+; against move_up's KEY_UP (4194320) three actions up this file. Do not derive
+; it from memory any more than you would a JoyButton; _padnames.tscn prints
+; the live map for both devices.
 context={
 "deadzone": 0.2,
-"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":32,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":4194325,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
 , Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":1,"pressure":0.0,"pressed":false,"script":null)
+]
+}
+; Jump. SPACE, because Space is the jump button in every game with a keyboard,
+; and Y/TRIANGLE -- button 3, "Top Action" -- because it is the face button the
+; right-trigger move left empty and because BOTW, which is the game this project
+; is chasing, puts jump on the top-right face button too (its X).
+;
+; THIS ACTION SHIPPED WITH THE ABILITY, which is the rule §4 of the contract
+; states and the reason there was no `jump` here for so long: an action bound to
+; nothing is a button that lies. Hero._try_start_jump, Hero._apply_gravity's
+; impulse channel, and the two `ex_jump*` clips all landed in the same commit as
+; these four lines.
+;
+; It is a real jump and not OOT's contextual ledge-hop: 0.96 m of apex, 0.59 s
+; in the air, air control the whole way (K.JUMP_SPEED). Buffered, so a press
+; during a fall lands and jumps; coyote-timed off the same grace the fall
+; animation already used, so walking off a ledge and pressing a frame late still
+; jumps. Neither is polish -- they are the two things that make a jump button
+; feel like it is reading the player instead of the physics.
+jump={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":32,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":3,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
 interact={
@@ -308,9 +347,22 @@ item_down={
 , Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":12,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
+; Look around out of his own eyes. R3 -- button 8, JOY_BUTTON_RIGHT_STICK --
+; because BOTW clicks the right stick for exactly this and the thumb is already
+; on that stick doing exactly this with the camera.
+;
+; This action was bound to R and read by NOTHING for a long time, which is the
+; thing §4 of the contract says not to do. It shipped with the mode:
+; GameCamera.set_first_person collapses the boom to zero, Hero roots himself and
+; hides his model on Bus.first_person_changed, and both landed in this commit.
+;
+; R3 was free because it had to be taken from `z_target`, which no longer needs
+; a pad button of its own -- the left trigger is the pad's Z now and does the
+; whole job. See the note there.
 first_person={
 "deadzone": 0.2,
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":82,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":8,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
 pause={

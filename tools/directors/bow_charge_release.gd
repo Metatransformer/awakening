@@ -1,0 +1,225 @@
+extends RefCounted
+## Photographs a bow shot across BOTH of its clips, so the charge and the loose
+## are things somebody looked at rather than two node names in a blend tree.
+##
+## The shot this exists to catch was not a crash. It was one clip —
+## `bow_aim_recoil`, the follow-through — stretched over the whole commitment
+## window, which passed every assertion `ranged_kit` makes (an arrow existed, it
+## hurt the post, it cost one ammo) while the hero visibly never drew the bow.
+## Nothing but a strip of frames says which of those two you are looking at.
+##
+##   godot --path . -s tools/shoot.gd -- \
+##     --scene=res://scenes/rooms/training.tscn \
+##     --director=res://tools/directors/bow_charge_release.gd --out=/tmp/bow/x.png
+##
+## Prints `BOWSHOT FAIL …` on any beat that did not happen.
+
+## Fractions of each phase to photograph. The last charge sample and the first
+## loose sample sit hard against the seam from either side: the seam is the whole
+## claim — full draw on one frame, string away on the next — and a strip that
+## steps over it proves two clips played without proving they MEET.
+const CHARGE_AT: Array[float] = [0.02, 0.35, 0.68, 0.97]
+const LOOSE_AT: Array[float] = [0.05, 0.30, 0.60, 0.95]
+
+## The game runs at a fifth speed for the strip. A 0.44 s draw is 26 frames, and
+## grabbing a 1280x720 backbuffer costs more than one of them — sampled at speed,
+## the clock jumps past the times asked for and the strip is whatever frames the
+## machine happened to be free on. Slowing the whole engine scales the shot
+## clock, the TimeScale nodes and the blend together, so these are the real poses
+## of the real shot, just handed over slowly enough to photograph.
+const SLOW := 0.2
+
+## Turn off dead-on so the drawn arm reads. Straight down the lens hides the pull.
+const FACE_OFFSET := 0.7
+
+## Pixels of the 1280x720 frame kept around the hero. Tall rather than square:
+## the whole read is a bow held vertically and an arm going back past his ear.
+const CROP := Vector2i(420, 600)
+
+var _fails := 0
+
+
+func run(rig) -> void:
+	var out: String = rig.arg("out", "/tmp/bow/x.png").get_base_dir()
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	await rig.wait_frames(20)
+
+	# Annotated, not inferred: `rig` is untyped, so every call on it yields
+	# Variant and `:=` on one is the "cannot infer the type of X" parse error
+	# (CLAUDE.md §3).
+	var heroes: Array = rig.get_nodes_in_group(&"player")
+	if heroes.is_empty():
+		_fail("no hero in the scene")
+		return
+	var hero: Hero = heroes[0]
+	var tree: AnimationTree = hero._tree
+	if tree == null or hero.ranged == null:
+		_fail("no AnimationTree / no HeroRanged")
+		return
+
+	# dpad left draws the bow. Pressed, not set behind the game's back
+	# (docs/CONTRACT.md §4.1).
+	await rig.tap(["item_left"])
+	await rig.wait_frames(24)
+	if Game.armament(Game.HAND_RIGHT) != &"bow":
+		_fail("dpad left did not put the bow in his hand")
+		return
+	_ok("the bow is in his hand")
+
+	# Three-quarters to the lens by the contract's heading formula (§2.5). The
+	# aim owns his facing the instant the shot starts, so this only frames the
+	# stance he is standing in beforehand.
+	var cam: Camera3D = hero.get_viewport().get_camera_3d()
+	if cam == null:
+		_fail("no camera")
+		return
+	var to_cam: Vector3 = K.flat(cam.global_position - hero.global_position)
+	hero.facing_yaw = atan2(to_cam.x, to_cam.z) + FACE_OFFSET
+	await rig.wait_frames(20)
+
+	var draw_time: float = Game.bow_draw_time()
+	var loose_time: float = HeroRanged.BOW_LOOSE
+	print("BOWSHOT draw=%.2fs loose=%.2fs total=%.2fs"
+		% [draw_time, loose_time, draw_time + loose_time])
+
+	# The sample times, in shot seconds, and what each one is supposed to show.
+	var marks: Array = []
+	for f in CHARGE_AT:
+		marks.append({"t": draw_time * f, "phase": "charge"})
+	for f in LOOSE_AT:
+		marks.append({"t": draw_time + loose_time * f, "phase": "loose"})
+
+	Engine.time_scale = SLOW
+	await rig.tap(["use_item"])
+
+	var shots: Array[Image] = []
+	var seen_charge_active := false
+	var seen_loose_active := false
+	var arrow_at := -1.0
+	var free_during_shot := false
+	var next := 0
+	# Bounded by REAL frames, not by the shot clock: a shot that never starts
+	# would otherwise spin here forever.
+	for _i in 4000:
+		await rig.wait_frames(1)
+		var t: float = hero.ranged._bow_t
+		if t < 0.0 and next == 0:
+			continue  # the press has not landed yet
+		# `active` is the OneShot's own answer to "am I playing", which is the
+		# only witness that does not just restate the code that fired it.
+		if bool(tree.get("parameters/BowDraw/active")):
+			seen_charge_active = true
+		if bool(tree.get("parameters/Ranged/active")):
+			seen_loose_active = true
+		if arrow_at < 0.0 and _arrows_in_flight(rig) > 0:
+			arrow_at = t
+		# Sampled INSIDE the shot, not after it. The follow-through is half the
+		# point of splitting the clips: an archer who is walking again the frame
+		# the arrow leaves has paid for the loose and not been charged for it.
+		if t >= 0.0 and hero.state != Hero.MoveState.ATTACK:
+			free_during_shot = true
+		if next >= marks.size():
+			break
+		if t < 0.0:
+			break  # the shot ended before the last mark; the loop below reports it
+		if t >= float(marks[next]["t"]):
+			var frame: Image = await _grab(rig, cam, hero)
+			shots.append(frame)
+			print("BOWSHOT   %-6s t=%.3f  charge=%s loose=%s" % [
+				marks[next]["phase"], t,
+				tree.get("parameters/BowDraw/active"),
+				tree.get("parameters/Ranged/active")])
+			next += 1
+
+	Engine.time_scale = 1.0
+
+	_check("the charge clip played", seen_charge_active)
+	_check("the loose clip played", seen_loose_active)
+	_check("every sample was photographed (%d/%d)" % [shots.size(), marks.size()],
+		shots.size() == marks.size())
+	# The seam, from the side that can lie. An arrow that leaves during the pull
+	# is the one-clip bug wearing two clips.
+	_check("the arrow left at the seam, not during the pull (t=%.3f, draw=%.2f)"
+		% [arrow_at, draw_time], arrow_at >= draw_time * 0.9)
+	_check("the hero stayed committed through both clips", not free_during_shot)
+	# And is handed back afterwards. A commitment window that never closes is the
+	# same bug as one that never opens, and it looks identical up to here.
+	await rig.wait_seconds(0.5)
+	_check("the shot handed the hero back", hero.state == Hero.MoveState.GROUND
+		and hero.ranged._bow_t < 0.0)
+
+	if not shots.is_empty():
+		var sheet := Image.create_empty(
+			shots[0].get_width() * shots.size(), shots[0].get_height(),
+			false, shots[0].get_format())
+		for i in shots.size():
+			sheet.blit_rect(shots[i], Rect2i(Vector2i.ZERO, shots[i].get_size()),
+				Vector2i(shots[i].get_width() * i, 0))
+		var path := out.path_join("bow_charge_release.png")
+		DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+		sheet.save_png(path)
+		print("BOWSHOT strip -> %s" % path)
+
+	print("BOWSHOT done, %d failure(s)" % _fails)
+
+
+## One rendered frame, CROPPED to the hero rather than scaled down.
+##
+## Eight full frames side by side is a 10 k image nobody can read, and halving
+## them is worse than useless here: over the shoulder the hero is a sixth of the
+## picture, and the thing under test is a bowstring. The crop box is unprojected
+## off his chest every frame, so it follows him and the strip is comparable frame
+## to frame. Clamped into the viewport so a hero near the edge yields a smaller
+## box rather than a black margin — `blit_rect` on an out-of-bounds source is
+## silent, and a silently empty photograph is the one failure this whole director
+## exists to prevent.
+func _grab(rig, cam: Camera3D, hero: Hero) -> Image:
+	await RenderingServer.frame_post_draw
+	var img: Image = rig.root.get_texture().get_image()
+	var chest: Vector2 = cam.unproject_position(
+		hero.global_position + Vector3.UP * (K.HERO_H * 0.6))
+
+	# `unproject_position` answers in the LOGICAL viewport (1280x720 here); on this
+	# Mac the backbuffer comes back hiDPI at 3456x1944. Cropping at the raw
+	# unprojected point put the box 2.7x too far up and left — dead centre on a
+	# barrel across the room — and it did it silently, in a photograph, which is
+	# the exact failure mode CLAUDE.md §2 is about. `shoot.gd:capture` normalises
+	# the same mismatch by resizing; this scales into image space instead, because
+	# the whole reason to crop is to keep the pixels.
+	var logical: Vector2 = cam.get_viewport().get_visible_rect().size
+	var zoom := Vector2(
+		img.get_size().x / maxf(logical.x, 1.0),
+		img.get_size().y / maxf(logical.y, 1.0))
+
+	# The size is FIXED and the corner is what moves. Clamping the rect instead
+	# would hand back a different box on any frame he drifts near an edge, and the
+	# sheet below sizes itself off the first shot — mismatched frames blit
+	# silently and the strip quietly loses its right-hand side.
+	var size := Vector2i(Vector2(CROP) * zoom).min(img.get_size())
+	var corner := Vector2i(chest * zoom) - size / 2
+	corner = corner.clamp(Vector2i.ZERO, img.get_size() - size)
+	return img.get_region(Rect2i(corner, size))
+
+
+func _arrows_in_flight(rig) -> int:
+	var n := 0
+	for node in rig.scene().get_children():
+		if node is Arrow:
+			n += 1
+	return n
+
+
+func _check(what: String, pass_: bool) -> void:
+	if pass_:
+		_ok(what)
+	else:
+		_fail(what)
+
+
+func _ok(what: String) -> void:
+	print("BOWSHOT ok   %s" % what)
+
+
+func _fail(what: String) -> void:
+	_fails += 1
+	print("BOWSHOT FAIL %s" % what)
