@@ -6,7 +6,9 @@ extends RefCounted
 ##   3. pitch to the K.CAM_MAX_PITCH clamp and back down to K.CAM_MIN_PITCH;
 ##   4. run WITHOUT touching the look — K.CAM_AUTOSWING drifts back behind him;
 ##   5. a `z_target` tap with no target: Bus.camera_recenter, the OOT Parallel
-##      snap, which is far faster than the drift in step 4.
+##      snap, which is far faster than the drift in step 4;
+##   6. the same snap off the OTHER route — a `shield` PULL with no target. On a
+##      pad that is the left trigger, and it is the one a player actually finds.
 ##
 ## Step 4 is the one that catches a camera that fights the player: the autoswing
 ## must not start until `manual_hold_time` has elapsed since the last look.
@@ -71,9 +73,7 @@ func run(rig) -> void:
 	# frames are 0.05 s apart — any slower and the snap is over before the second
 	# exposure.
 	#
-	# This is what the left trigger does on a pad (project.godot binds `z_target`
-	# to JoyAxis 4 as well as R3), and shoot.gd strips every joypad binding, so
-	# the trigger itself cannot be pushed here — the ACTION is what is under test.
+	# On a pad this is R3 — the standing toggle. Step 6 covers the trigger.
 	#
 	# A real InputEventAction, not `Input.action_press`: `Targeting` reads this
 	# button in `_unhandled_input` (it queues the press so a slow physics tick
@@ -87,6 +87,24 @@ func run(rig) -> void:
 	for i in 5:
 		await rig.wait_seconds(0.05)
 		await _shot(rig, "recenter")
+
+	# 6. The other route in, and the one the pad actually uses: pull the GUARD
+	# with nothing lockable. `Targeting._read_guard` acquires on the pull and,
+	# finding nothing, recentres — once, on the pull, never on the rescan.
+	#
+	# `Input.action_press` is correct here where it was wrong above: the guard is
+	# a HOLD and targeting.gd reads it by diffing `is_action_pressed` against a
+	# stored `_shield_down`, precisely so that polled and synthetic presses behave
+	# the same. shoot.gd has stripped the joypad bindings, so the trigger itself
+	# cannot be pulled — the ACTION is what is under test.
+	await _drag(rig, Vector2(24.0, 0.0), 12)
+	await _shot(rig, "preGuard")
+	Input.action_press(&"shield", 1.0)
+	await rig.wait_seconds(0.03)
+	for i in 5:
+		await rig.wait_seconds(0.05)
+		await _shot(rig, "guardRecenter")
+	Input.action_release(&"shield")
 
 
 ## One press-and-release of `action`, down the real event path.

@@ -46,8 +46,16 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## Quarter-hearts per slash. K.HEART == 4, so this is half a heart.
 @export var damage: int = 2 * K.QUARTER
 ## Seconds the whole swing owns the hero. The clips are 1.4-2.4 s, far too slow
-## for OOT, so they are time-scaled onto this.
-@export var swing_time: float = 0.46
+## for OOT, so they are time-scaled onto this — `Hero.request_attack` divides the
+## clip length by this number, so raising it slows the ANIMATION, not just the
+## lockout, and `chain_time_scale` carries the change into steps 2 and 3.
+##
+## Was 0.46, and at that pace the chain read as a blur: three clips averaging
+## 1.9 s each, crushed into roughly a second, and the finisher's leaping overhead
+## in particular went past before you could see it was an overhead. 0.60 is that
+## +30%. The damage windows are fractions of this, so the blade's live slice
+## stays in the same place in the swing and the hit timing is unchanged in feel.
+@export var swing_time: float = 0.60
 ## The slice of the swing during which the blade can hurt something, as
 ## fractions of swing_time. Before it is the wind-up, after it is the recovery.
 @export var damage_window := Vector2(0.22, 0.62)
@@ -61,10 +69,12 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## Under it, the release is nothing — the swing the press already started is all
 ## you get, which is what makes a tap a tap.
 ##
-## 0.42 is deliberately longer than the light swing it overlaps (0.46 is close
-## enough that the charge finishes as the swing does): the point is that you can
-## start winding up during the swing you just threw, so a charge costs you the
-## recovery you were spending anyway rather than a separate standing-still beat.
+## 0.42 is deliberately SHORTER than the light swing it overlaps (0.60): the
+## point is that you can start winding up during the swing you just threw, so a
+## charge costs you the recovery you were spending anyway rather than a separate
+## standing-still beat. It was tuned against a 0.46 swing, where the two ended
+## together; the slower chain only widens the overlap, which is the right
+## direction — the heavy is armed by the time the light finishes.
 @export var charge_time: float = 0.42
 ## Over a full heart, against the light swing's half. The heavy is worth the
 ## commitment or nobody presses it twice.
@@ -125,9 +135,14 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## swing and it is not a heavy: what it buys is that it CLOSES, and it is the
 ## only attack in the kit that closes without a lock. Priced between the two.
 @export var dash_damage: int = 3 * K.QUARTER
-## Longer than a light (0.46) and shorter than a heavy (0.80). The commitment is
-## most of the cost, because the drive has already thrown the hero somewhere he
-## did not have to be.
+## Shorter than a heavy (0.80). The commitment is most of the cost, because the
+## drive has already thrown the hero somewhere he did not have to be.
+##
+## It used to sit clearly between a light (0.46) and a heavy; the light slowed to
+## 0.60 and this did not follow, because the dash is one clip and not part of the
+## chain the slowdown was for. So it is now barely longer than a light — the
+## drive still prices it, but if it starts reading as free, this is the number.
+## [tune]
 @export var dash_swing_time: float = 0.62
 ## Opens after the drive has ended (see dash_drive_time), so the point lands at
 ## the END of the lunge. Live earlier and the thrust sweeps through everything it

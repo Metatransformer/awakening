@@ -51,6 +51,10 @@ var _armed: bool = false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_PAUSABLE
+	# The line names a button, so it has to be re-said when the button changes
+	# under it. Nothing else about the focus moves — the same thing is still in
+	# reach, it is just reached with a different thumb.
+	Bus.input_device_changed.connect(func(_pad: bool) -> void: _say_prompt())
 
 
 ## Claim input for `by`, for exactly as long as `by` is in the tree.
@@ -105,7 +109,7 @@ func _process(delta: float) -> void:
 		focus = best
 		if focus != null:
 			focus.on_focus(true)
-			Bus.prompt_changed.emit("(E) %s" % focus.prompt)
+			_say_prompt()
 
 	var down := Input.is_action_pressed(&"interact")
 	if not down:
@@ -134,6 +138,23 @@ func _process(delta: float) -> void:
 		it.activate(hero)
 	else:
 		focus.on_hold(clampf(_hold / focus.hold_time, 0.0, 1.0))
+
+
+## "E TO TALK", or "Y TO TALK" on a pad. The button is read off the live InputMap
+## through `Glyph` rather than written into the string: `interact` moved from A
+## to Y when the pad layout changed, and a hardcoded "(E)" was the last thing in
+## the game still claiming a keyboard was the only way to open a chest.
+##
+## "E TO TALK" and not "(E) TALK", because the line is read, not parsed. The
+## bracket form is a keycap notation -- it asks the player to know the convention
+## before it tells them anything -- while the sentence form is the instruction
+## itself, and it costs three characters on the one line the HUD centres.
+func _say_prompt() -> void:
+	if focus == null or not is_instance_valid(focus):
+		return
+	var cap := Glyph.cap(&"interact")
+	Bus.prompt_changed.emit("%s TO %s" % [cap, focus.prompt] if not cap.is_empty()
+		else focus.prompt)
 
 
 func _nearest(hero: Node3D) -> Interactable:

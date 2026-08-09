@@ -202,6 +202,10 @@ func _ready() -> void:
 	Bus.target_lost.connect(_on_target_lost)
 	Bus.aim_changed.connect(_on_aim)
 	Bus.prompt_changed.connect(_on_prompt)
+	# Every button this overlay names is named for the device in the player's
+	# hands, so picking up a pad repaints all of it: the caps, the legend, and
+	# the prompt (which Prompt re-emits on the same signal).
+	Bus.input_device_changed.connect(func(_pad: bool) -> void: _repaint())
 	Bus.level_changed.connect(func(_l: int) -> void: _repaint())
 	Bus.run_started.connect(_on_headline_changed)
 	Bus.run_ended.connect(_on_headline_changed)
@@ -480,18 +484,65 @@ func _draw_hud() -> void:
 ## it is where the legend belongs; underground the line would be noise, and by
 ## then you have already used every verb on it.
 
-## GUARD+LMB is named because it is the one verb here you cannot find by
-## pressing a button — it is a button you already know pressed in a stance you
-## already know, and nothing on screen would ever suggest the combination.
-const KEYS := "WASD MOVE    LMB SWORD (HOLD=CHARGE)    F USE/LUNGE    RMB GUARD (+LMB DASH)    SPACE DODGE    MMB LOCK-ON    E INTERACT"
+## The verbs, in the order a player meets them, each paired with the action that
+## fires it. Built from the LIVE bindings rather than written out, because the
+## line has to be true on a pad as well as on a keyboard and there is no way to
+## keep two hand-written strings honest — the keyboard one had already outlived
+## two rebinds of the sword.
+##
+## `&""` means the label carries its own button (the sticks, which are not
+## actions the player rebinds).
+const LEGEND := [
+	[&"", "MOVE"],
+	[&"", "LOOK"],
+	[&"z_target", "LOCK-ON"],
+	[&"attack", "SWORD (HOLD=CHARGE)"],
+	[&"use_item", "USE/LUNGE"],
+	# Two things are named here that a button-masher would never find: the dash,
+	# which is a button you already know pressed in a stance you already know, and
+	# the fact that the guard LOCKS. On the pad `shield` is the left trigger and
+	# it is the whole of OOT's Z — the R3 above is only the standing toggle — so a
+	# line that called this button GUARD would be hiding its main use.
+	[&"shield", "GUARD/LOCK"],
+	[&"context", "DODGE"],
+	[&"interact", "INTERACT"],
+	[&"inventory", "POUCH"],
+]
+## What drives movement and the camera on each device. The sticks are bound as
+## four actions apiece and naming any one of them ("STICK L MOVE") would be
+## nonsense, so this pair is the one thing on the line that is written out.
+const LEGEND_STICKS := {
+	false: ["WASD", "MOUSE"],
+	true: ["L-STICK", "R-STICK"],
+}
 
 
 func _draw_controls(s: Vector2) -> void:
 	if Run == null or Run.in_dungeon:
 		return
 	var scale := Pal.px(10.0 / PixelFont.H, s.y)
-	PixelFont.draw_centred(_canvas, KEYS,
+	PixelFont.draw_centred(_canvas, _legend(),
 		Vector2(s.x * 0.5, Pal.KEYS_BASELINE * s.y), scale, Pal.ASH)
+
+
+func _legend() -> String:
+	var sticks: Array = LEGEND_STICKS[Settings != null and Settings.using_pad]
+	var parts: PackedStringArray = []
+	var stick := 0
+	for entry: Array in LEGEND:
+		var action: StringName = entry[0]
+		var verb: String = entry[1]
+		if action == &"":
+			parts.append("%s %s" % [sticks[stick], verb])
+			stick += 1
+			continue
+		var cap := _hotkey(action)
+		if cap.is_empty():
+			continue  # nothing bound on this device — say nothing rather than lie
+		if action == &"shield":
+			verb = "GUARD/LOCK (+%s DASH)" % _hotkey(&"attack")
+		parts.append("%s %s" % [cap, verb])
+	return "    ".join(parts)
 
 
 ## How deep you are, on the line the controls legend uses in town.
@@ -709,36 +760,20 @@ func _hands_origin(s: Vector2) -> Vector2:
 		cross.y + (cross_h - cell) * 0.5)
 
 
-## The key that fires `action`, as the player would say it out loud, or "" for an
-## action with nothing bound. Keyboard and mouse only: this HUD is drawn for
-## someone looking at a keyboard, and a pad user has the arrangement itself.
+## The button that fires `action`, as the player would say it out loud, or "" for
+## an action the device they are holding has nothing bound to.
+##
+## This used to be keyboard-and-mouse only, under a comment claiming a pad player
+## "has the arrangement itself". They do not: the cells here are the only thing
+## that says which of the four face buttons swings, and a controller in hand next
+## to a cap reading LMB is the HUD lying about the game. `Glyph` answers for
+## whichever device was touched last (`Settings.using_pad`).
 ##
 ## Read from the LIVE InputMap every repaint rather than from a table, because a
 ## table would be a second copy of the bindings and the second copy is the one
 ## that goes stale — see the note on KIT_ACTION.
 func _hotkey(action: StringName) -> String:
-	if action == &"" or not InputMap.has_action(action):
-		return ""
-	for ev in InputMap.action_get_events(action):
-		if ev is InputEventMouseButton:
-			match (ev as InputEventMouseButton).button_index:
-				MOUSE_BUTTON_LEFT: return "LMB"
-				MOUSE_BUTTON_RIGHT: return "RMB"
-				MOUSE_BUTTON_MIDDLE: return "MMB"
-			continue
-		if ev is InputEventKey:
-			var key := ev as InputEventKey
-			# physical_keycode first: a binding stored physically prints nothing
-			# through `keycode`, and a blank cap is worse than no cap at all.
-			var code := key.physical_keycode if key.physical_keycode != 0 else key.keycode
-			if code == 0:
-				continue
-			var name := OS.get_keycode_string(code)
-			match name:
-				"Space": return "SPC"
-				"Escape": return "ESC"
-			return name if name.length() <= 4 else name.substr(0, 4)
-	return ""
+	return Glyph.cap(action)
 
 
 ## The key cap: the binding, centred under its cell. Drawn BEFORE the cell so a

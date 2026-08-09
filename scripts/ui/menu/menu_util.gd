@@ -7,34 +7,10 @@ extends RefCounted
 ## focus wiring is done ONE way everywhere, because a menu with a hole in its
 ## focus graph strands a pad user on nothing.
 
-## Godot's JoyButton indices, named the way a player would read them on an
-## Xbox-layout pad. project.godot binds by index, so this is the decode table.
-const PAD_BUTTONS := {
-	JOY_BUTTON_A: "A",
-	JOY_BUTTON_B: "B",
-	JOY_BUTTON_X: "X",
-	JOY_BUTTON_Y: "Y",
-	JOY_BUTTON_BACK: "Back",
-	JOY_BUTTON_GUIDE: "Guide",
-	JOY_BUTTON_START: "Start",
-	JOY_BUTTON_LEFT_STICK: "L-Stick",
-	JOY_BUTTON_RIGHT_STICK: "R-Stick",
-	JOY_BUTTON_LEFT_SHOULDER: "LB",
-	JOY_BUTTON_RIGHT_SHOULDER: "RB",
-	JOY_BUTTON_DPAD_UP: "D-Up",
-	JOY_BUTTON_DPAD_DOWN: "D-Down",
-	JOY_BUTTON_DPAD_LEFT: "D-Left",
-	JOY_BUTTON_DPAD_RIGHT: "D-Right",
-}
-
-const PAD_AXES := {
-	JOY_AXIS_LEFT_X: ["Stick L", "Stick R"],
-	JOY_AXIS_LEFT_Y: ["Stick Up", "Stick Down"],
-	JOY_AXIS_RIGHT_X: ["R-Stick L", "R-Stick R"],
-	JOY_AXIS_RIGHT_Y: ["R-Stick Up", "R-Stick Down"],
-	JOY_AXIS_TRIGGER_LEFT: ["LT", "LT"],
-	JOY_AXIS_TRIGGER_RIGHT: ["RT", "RT"],
-}
+## The pad decode tables used to live here, and a second copy of them lived in
+## the HUD. Both are `Glyph` now (scripts/core/input_glyphs.gd) — the HUD needed
+## the same answers this screen gives and the two had already drifted, which is
+## how the HUD came to print `LMB` at a player holding a controller.
 
 ## Player-facing names for the actions Settings offers to rebind.
 const ACTION_NAMES := {
@@ -52,7 +28,7 @@ const ACTION_NAMES := {
 	# charge. There is no separate heavy to rebind any more.
 	&"attack": "Sword (hold to charge)",
 	&"use_item": "Use Item / Lunge",
-	&"shield": "Guard (hold)",
+	&"shield": "Guard / Lock On (hold)",
 	&"context": "Roll / Backstep",
 	&"interact": "Interact",
 	&"item_left": "Item ←",
@@ -146,40 +122,16 @@ static func key_label(action: StringName) -> String:
 
 
 ## Gamepad label for an action. Settings.label_for() only reports keyboard and
-## mouse, so the pad column is decoded here, read-only, from the live InputMap.
+## mouse, so the pad column is decoded read-only from the live InputMap.
 static func pad_label(action: StringName) -> String:
-	if not InputMap.has_action(action):
-		return "—"
-	for e in InputMap.action_get_events(action):
-		var text := event_label(e)
-		if e is InputEventJoypadButton or e is InputEventJoypadMotion:
-			return text
-	return "—"
+	var e := Glyph.event_for(action, true)
+	return Glyph.long(e) if e != null else "—"
 
 
 ## Human label for any single event — used for the conflict message, which has
 ## to name the key the player just pressed.
 static func event_label(e: InputEvent) -> String:
-	if e is InputEventKey:
-		var k := e as InputEventKey
-		var code := k.physical_keycode if k.physical_keycode != 0 else k.keycode
-		return OS.get_keycode_string(code)
-	if e is InputEventMouseButton:
-		match (e as InputEventMouseButton).button_index:
-			MOUSE_BUTTON_LEFT: return "Mouse L"
-			MOUSE_BUTTON_RIGHT: return "Mouse R"
-			MOUSE_BUTTON_MIDDLE: return "Mouse M"
-			_: return "Mouse %d" % (e as InputEventMouseButton).button_index
-	if e is InputEventJoypadButton:
-		var b := (e as InputEventJoypadButton).button_index
-		return PAD_BUTTONS.get(b, "Pad %d" % b)
-	if e is InputEventJoypadMotion:
-		var m := e as InputEventJoypadMotion
-		var pair: Array = PAD_AXES.get(m.axis, [])
-		if pair.is_empty():
-			return "Axis %d" % m.axis
-		return pair[0] if m.axis_value < 0.0 else pair[1]
-	return "—"
+	return Glyph.long(e)
 
 
 ## Which rebindable action already owns `event`, or &"" if none does.

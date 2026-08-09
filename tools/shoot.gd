@@ -52,7 +52,15 @@ func _initialize() -> void:
 ##
 ## The InputMap edit is in-memory only -- `project.godot` is never written -- and
 ## keyboard events, which is all `Input.action_press` needs, are untouched.
+## `--keep-pad` opts out, and exactly one kind of director needs it: one that is
+## photographing what the pad's own bindings LOOK like (the HUD's key caps read
+## the live InputMap through `Glyph`, so a stripped map draws blank caps and the
+## sheet proves nothing). Do not pass it with a controller plugged in — the
+## afternoon described above is what you get back.
 func _deafen_the_gamepad() -> void:
+	if _args.has("keep-pad"):
+		print("shoot: --keep-pad, the gamepad's BINDINGS are live")
+		return
 	var stripped := 0
 	for action in InputMap.get_actions():
 		for ev in InputMap.action_get_events(action):

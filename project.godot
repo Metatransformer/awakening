@@ -165,20 +165,23 @@ cam_right={
 ; with nothing lockable to put the camera back behind the hero.
 ; scripts/targeting/targeting.gd owns that.
 ;
-; The pad's home for it is the LEFT TRIGGER -- JoyAxis 4 (TRIGGER_LEFT), bound
-; as an InputEventJoypadMotion the same way the sticks are, so the deadzone is
-; how far the trigger has to travel before it counts as pressed. That is Z on
-; the N64 controller, and the whole camera lives under one finger there: the
-; right stick swings the lens, the trigger snaps it back behind you. R3 stays
-; bound too (Elden Ring's arrangement) because a thumb already resting on the
-; right stick should not have to travel to recentre.
+; On the pad this is the TOGGLE HALF ONLY -- R3, button 8, JOY_BUTTON_RIGHT_STICK.
+; A thumb already resting on the right stick should not have to travel to
+; recentre what that stick just moved, which is the one thing R3 is good for.
 ;
-; The trigger used to be the shield. The shield is LB now -- see `shield`.
+; The pad's Z is the LEFT TRIGGER, and it is bound to `shield` -- one pull, all
+; four of the things OOT's Z did. See the note there. Both routes reach the same
+; lock; they differ in what LETTING GO means. The trigger's lock drops with the
+; trigger; R3's is a standing decision and survives it (`_lock_from_shield` in
+; targeting.gd is what keeps a guard from silently disarming an R3 lock).
+;
+; The trigger was briefly bound here too, as a bare recentre, with the shield
+; pushed up onto LB. That split is undone: it asked the player which of Z's four
+; behaviours they wanted before they had learned that they are one behaviour.
 z_target={
 "deadzone": 0.2,
 "events": [Object(InputEventMouseButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"button_mask":0,"position":Vector2(0, 0),"global_position":Vector2(0, 0),"factor":1.0,"button_index":3,"canceled":false,"pressed":false,"double_click":false,"script":null)
 , Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":81,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
-, Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":-1,"axis":4,"axis_value":1.0,"script":null)
 , Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":8,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
@@ -216,19 +219,30 @@ use_item={
 ; used to be K and Shift only, with RMB on z_target, and nobody found it -- the
 ; lock-on moved to the middle button, which is the thing you can afford to hide.
 ;
-; On the pad the shield WAS the left trigger, bound as an axis. It is LB now --
-; button 9, JOY_BUTTON_LEFT_SHOULDER -- because the trigger had to become the
-; camera button (see z_target above), and because a shoulder is where Elden Ring
-; puts the guard anyway. The pair reads correctly under one finger: the trigger
-; aims the camera, the bumper above it raises the shield.
+; ON THE PAD THIS IS OOT'S Z, and it is the whole of it. The LEFT TRIGGER --
+; JoyAxis 4 (TRIGGER_LEFT), an InputEventJoypadMotion like the sticks, so the
+; 0.2 deadzone is how far the trigger travels before it counts as pressed.
 ;
-; Still a HELD control and still polled with is_action_pressed -- a button just
-; reports 0 or 1 through the same deadzone the axis was read through, so nothing
-; downstream in hero_combat changed.
+; One pull does four things, because in the source material they were never four
+; things:
+;   - raises the shield                       (hero_combat)
+;   - acquires the best target                (targeting.gd `_read_guard`)
+;   - pins the facing, so the stick strafes   (Hero._tick_camera_facing)
+;   - and with NOTHING lockable, puts the camera back behind the hero.
+; Let go and all four drop. An index finger on a shoulder is exactly what Z was.
+;
+; It spent one commit on LB (button 9) with the trigger reassigned to a bare
+; recentre. That was a mistake and this is the undo: guarding, looking at the
+; thing you are guarding against, and facing down an empty corridor are one
+; intention, and splitting them across two fingers made the player choose.
+;
+; HELD, and polled with is_action_pressed -- the axis reports its travel through
+; the same deadzone a button's 0/1 goes through, so nothing downstream in
+; hero_combat cares which kind of event it is.
 shield={
 "deadzone": 0.2,
 "events": [Object(InputEventMouseButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"button_mask":0,"position":Vector2(0, 0),"global_position":Vector2(0, 0),"factor":1.0,"button_index":2,"canceled":false,"pressed":false,"double_click":false,"script":null)
-, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":9,"pressure":0.0,"pressed":false,"script":null)
+, Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":-1,"axis":4,"axis_value":1.0,"script":null)
 ]
 }
 ; Roll is B/Circle, Elden Ring's arrangement, and is unchanged.

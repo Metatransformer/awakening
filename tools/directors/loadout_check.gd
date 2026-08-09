@@ -49,7 +49,7 @@ func run(rig) -> void:
 	Input.action_release(&"shield")
 	await rig.wait_frames(24)
 
-	# Mid-swing. The damage window is 0.22-0.62 of a 0.46 s swing, so a handful
+	# Mid-swing. The damage window is 0.22-0.62 of a 0.60 s swing, so a handful
 	# of frames after the press lands inside it.
 	await rig.hold(["attack"], 2)
 	await rig.wait_frames(7)

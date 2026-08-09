@@ -17,13 +17,15 @@ extends Node3D
 ## lockable to recentre the camera behind the hero (the one OOT behaviour that
 ## survives, because ER does the same thing).
 ##
-## `shield` (the LEFT TRIGGER) is a HOLD, and it is OOT's Z exactly. The trigger
-## is an index finger on a shoulder — the thing OOT's Z actually was — so it can
-## afford to be held, and raising the guard and looking at what you are guarding
-## against are the same intention. Pull it and the best candidate is acquired
-## along with the shield; let go and both drop. It is deliberately the WEAKER
-## claim of the two: a trigger release only drops a lock the trigger itself
-## raised, so a deliberate R3 toggle survives you guarding and un-guarding
+## `shield` (the LEFT TRIGGER) is a HOLD, and it is OOT's Z exactly — one button
+## that raises the guard, takes the lock, and recentres. The trigger is an index
+## finger on a shoulder — the thing OOT's Z actually was — so it can afford to be
+## held, and raising the guard and looking at what you are guarding against are
+## the same intention. Pull it and the best candidate is acquired along with the
+## shield; pull it with nothing lockable and the camera goes back behind the hero
+## instead; let go and the guard and its lock both drop. It is deliberately the
+## WEAKER claim of the two: a trigger release only drops a lock the trigger
+## itself raised, so a deliberate R3 toggle survives you guarding and un-guarding
 ## underneath it (`_lock_from_shield`).
 ##
 ## While the trigger is down and nothing is locked, this keeps looking. That is
@@ -190,6 +192,11 @@ func _toggle() -> void:
 ## down, and drops on the release — but only a lock it raised itself.
 func _read_guard(delta: float) -> void:
 	var down := Input.is_action_pressed(&"shield")
+	## True only on the frame the trigger goes down. The recentre below is the
+	## pull's alone: a recentre that fired on the rescan tick would re-aim the
+	## camera four times a second for as long as you stood in an empty room with
+	## the shield up, and the player would be unable to look anywhere.
+	var pulled := down and not _shield_down
 
 	if down and not _shield_down:
 		_rescan_t = 0.0
@@ -214,9 +221,12 @@ func _read_guard(delta: float) -> void:
 	if best != null:
 		_acquire(best)
 		_lock_from_shield = true
-	# No recentre on an empty guard. That is the toggle's job — a camera that
-	# snapped behind the hero every time he raised his shield at nothing would
-	# fight the player during exactly the fights the shield is for.
+	elif pulled:
+		# Nothing to look at, so the trigger does the other half of OOT's Z and
+		# puts the camera back behind the hero. The whole point of one button is
+		# that it always does something: pull it at a goblin and you lock, pull it
+		# at an empty corridor and you are facing down it again.
+		Bus.camera_recenter.emit()
 
 
 func _acquire(t: Node3D) -> void:

@@ -39,7 +39,7 @@ extends RefCounted
 ## Seconds to wait after a blow lands before pressing again. In SECONDS, not
 ## frames: the thing being cleared is `chain_buffer_from`, a fraction of a swing
 ## measured in seconds, and rig.wait_frames counts PROCESS frames whose rate
-## depends on the machine. Contact is at 0.22 of a 0.46 s swing and the buffer
+## depends on the machine. Contact is at 0.22 of a 0.60 s swing and the buffer
 ## opens at 0.35, so this lands the press around the middle of the recovery.
 const AFTER_CONTACT := 0.12
 ## Long enough to be past chain_window (0.34 s) and past the tail of the
@@ -80,6 +80,25 @@ func run(rig) -> void:
 	hero.set(&"facing_yaw", PI)
 	await rig.wait_frames(20)
 	await rig.capture(out.path_join("c_00_ready.png"))
+
+	# --- the pace, which is also the animation speed -------------------------
+	# `Hero.request_attack` plays the clip at `clip_len / duration`, so there is
+	# no separate animation knob: `swing_time` IS how fast the swing looks. That
+	# makes it silently retunable by anyone who reads the name as "lockout" —
+	# hence measuring it here rather than trusting the export. Measured, not
+	# asserted against a literal, because the number is a tuning value and a
+	# director that fails when the designer tunes it is a director nobody keeps.
+	# What IS asserted is that the clock the hero actually spends in the swing
+	# matches the export — a clip whose speed scale never got set would sail past
+	# while the state sat there, and the printed number would still look right.
+	var want: float = combat.get(&"swing_time")
+	var got := await _time_one_swing(rig, hero)
+	print("COMBO pace swing_time=%.2fs, measured %.2fs (chain scale %s)"
+		% [want, got, combat.get(&"chain_time_scale")])
+	if absf(got - want) > 0.10:
+		print("COMBO FAIL the swing owned the hero for %.2fs, not swing_time's %.2fs"
+			% [got, want]); fails += 1
+	await rig.wait_seconds(LAPSE)
 
 	# --- the chain, three presses -------------------------------------------
 	# NOT A FRAME IS CAPTURED IN HERE. capture() awaits frame_post_draw and then
@@ -140,6 +159,27 @@ func run(rig) -> void:
 
 func _on_struck(amount: int, _from: Vector3) -> void:
 	_hits.append(amount)
+
+
+## Wall-clock seconds the hero spends in MoveState.ATTACK for one light swing.
+##
+## `swing_time` is both the lockout AND the animation speed (`Hero.request_attack`
+## scales the clip by `clip_len / duration`), so this one number is the whole
+## claim that the chain slowed down. Timed with `Time.get_ticks_msec` rather than
+## counted in frames because the harness renders uncapped.
+func _time_one_swing(rig, hero: Node) -> float:
+	var attack: int = 4  # Hero.MoveState.ATTACK — the enum is not exported.
+	await rig.tap(["attack"])
+	for _i in 240:
+		if int(hero.get(&"state")) == attack:
+			break
+		await rig.wait_frames(1)
+	var t0 := Time.get_ticks_msec()
+	for _i in 600:
+		if int(hero.get(&"state")) != attack:
+			break
+		await rig.wait_frames(1)
+	return float(Time.get_ticks_msec() - t0) / 1000.0
 
 
 ## Press `action` and return what the resulting blow dealt, or 0 if nothing

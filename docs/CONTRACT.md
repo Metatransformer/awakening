@@ -204,39 +204,41 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `cam_up/down/left/right` | mouse motion (read in code) | right stick | camera |
 | `attack` | **LMB** | **X / Square** (pad2) | light attack (**hold** = charge, **+guard** = dash) |
 | `use_item` | **F** | **A / Cross** (pad0) | use item / jump attack |
-| `shield` | **RMB** | **LB / L1** (pad9) | guard — **held**, and it targets |
+| `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held**, and it targets, and it recentres |
 | `context` | **Space** | **B / Circle** (pad1) | roll / backstep / sidehop |
-| `z_target` | **Q**, MMB | **LT / L2** (axis4+), **R3** (pad8) | lock-on / camera recentre |
+| `z_target` | **Q**, MMB | **R3** (pad8) | lock-on toggle / camera recentre |
 | `interact` | E | **Y / Triangle** (pad3) | event action |
 | `item_left` / `item_up` / `item_right` | 1 / 2 / 3 | dpad L / U / R | armaments — §4.1 |
 | `first_person` | R | — | — |
 | `pause` / `inventory` / `map` | Esc / **I** / Tab | Start (pad6) / **Select** (pad4) / L3 (pad7) | menu / pouch / map |
 | `dbg_reload` | F5 | — | — |
 
-The face buttons are the swings and the left shoulders are the holds. **The
-whole camera is under the left index finger**: the right stick swings the lens,
-and the **left trigger** puts it back behind the hero. That is what the trigger
-is for now, and it is the one control a lost player reaches for.
+The face buttons are the swings and the left trigger is the hold. The right
+stick swings the lens; everything else the camera does is under the left index
+finger.
 
 The trigger is an AXIS (`InputEventJoypadMotion`, JoyAxis 4), not a button, so
 the action's 0.2 deadzone is how far it travels before it counts as pressed.
-`z_target` is bound to **both** the trigger and R3: a thumb already resting on
-the right stick should not have to travel to recentre what that stick just
-moved.
 
-Guard moved off the trigger to **LB** when the camera took it — Elden Ring's
-block button, and the bumper directly above the trigger, so the pair stays under
-one finger.
+**The left trigger is OOT's Z**, and it carries everything Z carried on one
+pull. An index finger on a shoulder is exactly what Z was, so it does all of it
+at once: raises the guard, **acquires the best target**, pins the facing so the
+stick becomes a strafe, and — with nothing lockable — puts the camera back
+behind the hero. Let go and it all drops. The targeting half is in §8; the
+facing half is Z-Parallel and lives in `Hero._tick_camera_facing`, the same tick
+the bow uses, because the split is the same one (the body faces the camera, the
+stick moves you). Without a pinned facing "roll backwards" has no backwards to
+mean, which is why the backstep is part of the same change and not a separate
+feature.
 
-**LB is OOT's Z**, and it carries everything Z carried. An index finger
-on a shoulder is exactly what Z was, so holding it does all three at once:
-raises the guard, **acquires the best target**, and — with nothing lockable —
-pins the facing so the stick becomes a strafe. Let go and all three drop. The
-targeting half is in §8; the facing half is Z-Parallel and lives in
-`Hero._tick_camera_facing`, the same tick the bow uses, because the split is the
-same one (the body faces the camera, the stick moves you). Without a pinned
-facing "roll backwards" has no backwards to mean, which is why the backstep is
-part of the same change and not a separate feature.
+The guard and the recentre were briefly split across LB and LT, one button each.
+That is the arrangement Elden Ring has, and it was wrong here: it asks the
+player which of the four things Z did they want before they have learned that
+they are the same thing. One trigger, four behaviours, no decision.
+
+`z_target` keeps **R3** for the standing decision — a lock that survives you
+letting go of the trigger. A thumb already resting on the right stick should not
+have to travel to recentre what that stick just moved.
 
 The sword is on **X**, permanently, and it is the *only* thing on it. That is
 OOT's arrangement — the sword lives on one button forever and the items live on
@@ -310,20 +312,22 @@ rotated by the camera's yaw before it becomes world motion.
 `z_target` is a **TOGGLE**, which is Elden Ring rather than OOT: press to lock,
 press again to release, press with nothing lockable to recentre the camera
 behind the hero. It is not held — holding a stick click and steering the camera
-with the same thumb is the thing the trigger exists to avoid, and the trigger is
-why the recentre no longer costs the player their grip on the right stick.
+with the same thumb is a cramp, not a control.
 
 `shield` is a **HOLD**, and it is OOT's Z exactly (above). It is deliberately
-the *weaker* claim of the two: releasing the bumper drops only a lock the
-bumper itself raised (`Targeting._lock_from_shield`), so a deliberate toggle
+the *weaker* claim of the two: releasing the trigger drops only a lock the
+trigger itself raised (`Targeting._lock_from_shield`), so a deliberate toggle
 survives you guarding and un-guarding underneath it. Otherwise every block would
 silently disarm the lock-on button. While it is held and nothing is locked it
 keeps re-scanning every `guard_rescan` (0.15 s) — kill what you were locked to
 without letting go and the guard finds the next one, which is what *hold to
-target* means. An empty guard does **not** recentre the camera; that stays the
-toggle's job, because a camera that snapped behind the hero every time he raised
-his shield at nothing would fight the player during exactly the fights the
-shield is for.
+target* means.
+
+An empty guard recentres, but **only on the pull** (`Targeting._read_guard`'s
+`pulled`). Firing it on the rescan tick instead would re-aim the camera four
+times a second for as long as you stood in an empty room with the shield up, and
+the player could never look anywhere; firing it once on the pull is the button
+keeping its promise that it always does something.
 
 The guard's edges are read by **diffing `is_action_pressed` against a stored
 `_shield_down`**, not by `is_action_just_pressed`. A `just_pressed` is true for
@@ -706,6 +710,16 @@ every frame of every swing in the library — not off their filenames, which car
 no information at all. The three lights are a SEQUENCE (down, up, overhead), and
 `ss_attack_01` is the only clip in which the hero's feet leave the ground, which
 is why it is the lunge and was a terrible heavy.
+
+**The chain's pace is `swing_time` (0.60 s) and it is also its animation
+speed.** `Hero.request_attack` scales each clip by `clip_len / duration`, so the
+number that owns the hero and the number that plays the swing are the same one —
+there is no separate animation knob, and raising `swing_time` slows the picture
+as well as the lockout. It was 0.46; at that pace three clips averaging 1.9 s
+each were crushed into about a second and the finisher's leaping overhead went
+past before you could see it was an overhead. `chain_time_scale` (0.92, 1.65)
+multiplies it, so steps 2 and 3 move with it, and the damage windows are
+fractions of it, so the blade's live slice sits in the same place in the swing.
 
 **The chain is buffered.** A press in the back half of a swing
 (`chain_buffer_from`) is remembered and paid out one frame AFTER the swing ends

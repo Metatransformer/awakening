@@ -39,7 +39,13 @@ const DEFAULT_PATH := "user://settings.cfg"
 ##    the trigger UNDERNEATH the recentre, so pulling LT to look behind you
 ##    would also raise the shield and freeze the hero's facing: two verbs, one
 ##    finger, and no way for the player to tell which one they asked for.
-const BIND_SCHEMA := 5
+## 6: 5 undone. The split it describes was the mistake -- the guard, the lock and
+##    the recentre are ONE intention and OOT put them on one button, so `shield`
+##    took the left trigger back and `z_target` gave it up (it keeps R3). A saved
+##    layout from 5 is the same collision as above with the roles reversed:
+##    `shield` pinned to LB, so the trigger would target and recentre while the
+##    guard sat on a bumper nobody was told about.
+const BIND_SCHEMA := 6
 
 ## Where preferences persist. A test or a screenshot director that rebinds keys
 ## MUST NOT write to the player's real settings — an earlier menu test left
@@ -79,13 +85,61 @@ var _binds: Dictionary = {}
 var _defaults: Dictionary = {}
 
 
+## True while the player is on a gamepad. Not a preference and never saved — it
+## is what they touched last, and it decides which button every on-screen prompt
+## names. See `_input` for why the two thresholds below exist.
+var using_pad: bool = false
+
+## Stick travel before a joypad axis counts as the player MOVING it. A resting
+## stick reports motion events forever — that is the drift documented in
+## CLAUDE.md §3 that once walked the hero out of a director run — and at a lower
+## threshold a pad merely plugged in would flip every prompt on the HUD while
+## the player was typing.
+const PAD_MOTION_WAKE := 0.5
+## Pixels of mouse travel before the mouse counts as being used. The camera
+## captures the pointer, so a desk bump is not the player choosing a keyboard.
+const MOUSE_WAKE := 3.0
+
+
 func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--settings="):
 			path = arg.substr(11)
+	# The device watcher has to keep running while the menu has the tree paused:
+	# the pause screen is exactly where a player switches to a pad, and a paused
+	# node is not offered input at all.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_capture_defaults()
 	load_settings()
 	apply_all()
+	# A pad already connected at boot is the likeliest single-controller case —
+	# somebody who plays on a pad plugged it in before launching. Start there and
+	# let the first keypress say otherwise.
+	using_pad = not Input.get_connected_joypads().is_empty()
+
+
+## Watch what the player is actually touching.
+##
+## `_input`, not `_unhandled_input`: this is an observer, and half the inputs it
+## cares about are consumed before they reach the unhandled path — `Targeting`
+## eats the lock-on button, the camera eats mouse motion, and the menu eats
+## everything while it is open.
+func _input(event: InputEvent) -> void:
+	var pad := using_pad
+	if event is InputEventJoypadButton:
+		pad = true
+	elif event is InputEventJoypadMotion:
+		if absf((event as InputEventJoypadMotion).axis_value) > PAD_MOTION_WAKE:
+			pad = true
+	elif event is InputEventKey or event is InputEventMouseButton:
+		pad = false
+	elif event is InputEventMouseMotion:
+		if (event as InputEventMouseMotion).relative.length() > MOUSE_WAKE:
+			pad = false
+	if pad == using_pad:
+		return
+	using_pad = pad
+	Bus.input_device_changed.emit(pad)
 
 
 # --- Persistence ------------------------------------------------------------

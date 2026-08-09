@@ -24,10 +24,13 @@ var _age: float = 0.0
 
 func _ready() -> void:
 	match role:
-		Role.VENDOR:
-			prompt = "SELL"
-		Role.SMITH:
-			prompt = "FORGE"
+		# TALK, not SELL/FORGE. The verb on a person should be the thing you do to
+		# a person -- what they then open is theirs to decide, and naming it here
+		# put the shop's menu on the label before you had met the shopkeeper. The
+		# name floating over them (`_sign`) already says which one this is, so
+		# "TALK" is not vague: it reads as TALK TO THE PAWNBROKER.
+		Role.VENDOR, Role.SMITH:
+			prompt = "TALK"
 		Role.GATE:
 			prompt = "DESCEND"
 			hold_time = 0.9

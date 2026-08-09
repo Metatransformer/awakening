@@ -120,6 +120,12 @@ signal prompt_changed(text: String)
 ## A full-screen UI took or gave back input. `id` is e.g. &"trade".
 signal screen_opened(id: StringName)
 signal screen_closed(id: StringName)
+## The player picked up a pad, or went back to the keyboard. Emitted by
+## `Settings`, which watches raw input for it, and only on the CHANGE. Every
+## surface that names a button to the player listens: the HUD's key caps, its
+## town legend, and the interact prompt. Nothing else should be deciding for
+## itself what the player is holding.
+signal input_device_changed(using_pad: bool)
 
 # --- Presentation -----------------------------------------------------------
 ## Requests for the feel layer. Emitters do not care who answers.
