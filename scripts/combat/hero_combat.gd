@@ -1116,30 +1116,20 @@ func _press(intent: int) -> void:
 ## the lock, the chain position, whether an item is in the hand — lives here, so
 ## the buffered path and the live path cannot drift apart.
 func _begin(intent: int) -> void:
-	# An item is out. THE TRIGGER fires it -- that is what it is for -- and the
-	# LIGHT button is the escape hatch: it puts the item away and swings on the
-	# same press, so a hookshot you drew by mistake costs you one button you were
-	# already reaching for rather than a hunt for which D-pad direction you
-	# pressed to draw it.
+	# AN ITEM IS OUT: nothing swings. Both shoulder buttons belong to whatever is
+	# in the right hand (`_tick_item_trigger`), and neither of the two swing ticks
+	# even reaches `_press` while something is drawn -- so the only way in here is
+	# a LIGHT buffered before the draw, paying out after it.
 	#
-	# That escape hatch is the whole reason the sword and the item can share the
-	# trigger. Drawing is sticky here -- the item STAYS out and you walk around
-	# aiming it, which OOT's momentary C-buttons never let you do -- and a sticky
-	# mode with no unconditional way out is a trap.
+	# THE ESCAPE HATCH USED TO LIVE HERE and it is worth saying why it went. A
+	# LIGHT with an item out stowed the item and swung on the same press, so a
+	# hookshot drawn by mistake cost you one button you were already reaching for.
+	# It existed because drawing was sticky and the D-pad direction you drew with
+	# was a fact you had to remember. The D-pad steps a RING now: the sword is a
+	# stop on it, ← or → hands it back, and there is nothing to remember. Keeping
+	# the hatch would mean a press buffered a quarter-second ago silently stowing
+	# the bow the player has just chosen.
 	if equipped != &"":
-		if intent == Intent.LIGHT:
-			# Stowing is synchronous (Game._announce_loadout -> Bus ->
-			# _on_loadout_changed -> equip), so `equipped` is already &"" by the
-			# time the swing below asks. If that ever becomes deferred, the swing
-			# starts happening with the bow still in his hands.
-			Game.stow_item()
-			_light_swing(_chain_step)
-			return
-		# Every other intent is silent with an item out. The trigger no longer
-		# arrives here at all while something is drawn — it is read straight into
-		# HeroRanged (see `_tick_heavy_button`), because a shot that has to survive
-		# a swing buffer is a shot that can come out a quarter of a second after
-		# the player let go.
 		return
 
 	match intent:
