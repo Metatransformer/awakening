@@ -108,6 +108,8 @@ extends Camera3D
 ## what makes screen-centre a usable sight: `HeroRanged._aim_from` raycasts down
 ## exactly this ray to find what the crosshair is over, and a rig that converged
 ## on the hero instead would put the crosshair on his shoulder blade.
+##
+## And in this stance the eye PITCHES IN PLACE — see `_boom_pitch`.
 @export var aim_distance: float = K.CAM_DIST_AIM
 @export var aim_shoulder: float = K.CAM_AIM_SHOULDER
 @export var aim_rise: float = K.CAM_AIM_RISE
@@ -237,21 +239,19 @@ func clear_target() -> void:
 
 # --- Seam for the ranged items ----------------------------------------------
 
-## `HeroRanged` calls this through `Bus.aim_changed` when a bow or a hookshot
-## comes out or goes away.
+## `HeroRanged` calls this through `Bus.aim_changed` when the trigger raises a
+## bow or a hookshot, and again when the shot is over.
 ##
-## Raising it recentres. The crosshair is the middle of the screen and the shot
-## goes wherever that ray lands, so a stance that begins with the lens still
-## pointed off at whatever the player was last looking at means the first shot
-## goes somewhere they did not choose. Behind the hero is the one starting yaw
-## that is never a surprise. Dropping it does not recentre — coming out of aim
-## should leave the camera where the player left it.
+## It does NOT recentre, and it used to. That was written when the stance began
+## on the D-pad — one recentre, on the frame you selected the bow, to stop a
+## permanent sight opening with the lens pointed off at whatever you had last
+## looked at. The stance begins on the TRIGGER now, and a recentre there is the
+## camera swinging out from under the player at the exact instant they decided to
+## shoot: they have already put the lens on the thing: that is why they pulled.
 func set_aiming(on: bool) -> void:
 	if on == _aiming:
 		return
 	_aiming = on
-	if on:
-		recenter()
 
 
 func aiming() -> bool:
@@ -414,7 +414,7 @@ func _apply_look(delta: float) -> void:
 		_manual_timer = maxf(_manual_timer - delta, 0.0)
 		return
 	var invert := -1.0 if Settings.invert_camera_y else 1.0
-	look *= maxf(Settings.camera_sensitivity, 0.05)
+	look *= maxf(Settings.camera_sensitivity, 0.05) * _fov_gain()
 	_yaw -= look.x
 	# `look` is RADIANS and `_pitch` is DEGREES — the two ends of this function do
 	# not share a unit, and for a long time this line pretended they did. Yaw was
@@ -428,6 +428,30 @@ func _apply_look(delta: float) -> void:
 	# Steering by hand cancels a recentre in progress — the camera must never
 	# fight the player's own input.
 	_recenter_timer = 0.0
+
+
+## Look sensitivity, scaled for how much lens is in front of it.
+##
+## `stick_speed_deg` is an ANGULAR rate, and the player does not steer in angles
+## — they steer by watching something cross the screen. Narrow the lens without
+## touching the rate and the same thumb movement throws the crosshair further,
+## because every degree is now worth more pixels: at the sight's 42° against the
+## free camera's 60°, the crosshair crossed the frame half again as fast in the
+## one stance that exists to place it precisely. Overshooting a goblin's head at
+## 12 m and hunting back and forth over it is the other half of "the right stick
+## moves the crosshair around weird".
+##
+## The ratio of half-FOV TANGENTS is the exact correction — that is the screen
+## width a degree buys — so this holds the crosshair's speed across the FRAME
+## constant no matter what the lens is doing. Read off the live `fov`, so it also
+## covers first person and the lock's pull-in, and so it needs no second knob to
+## keep in step with `aim_fov` or the player's own `Settings.fov_offset`.
+##
+## Clamped at 0.35 rather than left open: a future scope narrow enough to want a
+## quarter rate wants a deliberate number, not this function's arithmetic.
+func _fov_gain() -> float:
+	var base := tan(deg_to_rad(maxf(fov_free, 1.0) * 0.5))
+	return clampf(tan(deg_to_rad(maxf(fov, 1.0) * 0.5)) / base, 0.35, 1.0)
 
 
 ## FOV, and the recentre ease.
@@ -568,7 +592,12 @@ func _place(delta: float) -> void:
 	# there — every frame, for the whole time the bow is out.
 	var floor_dist := minf(min_distance, want)
 	var pivot := _aim_pivot()
-	var base_pitch := _pitch + _lift_bias_deg
+	# The pitch the EYE is placed at, which stops being the pitch it LOOKS at as
+	# soon as a weapon comes up. Everything below that decides where the eye goes
+	# — the wall sweep, the arc, the climb — reads `rest`; only `view`, right at
+	# the bottom, reads `_pitch`.
+	var rest := _boom_pitch()
+	var base_pitch := rest + _lift_bias_deg
 	var clear := _clear_distance(
 			_orbit_dir(_yaw + deg_to_rad(_swing_bias_deg), base_pitch), want, pivot)
 
@@ -588,7 +617,7 @@ func _place(delta: float) -> void:
 		while off <= swing_max_deg and swing_target == 0.0:
 			for s: float in [sign_first, -sign_first]:
 				var cand := _yaw + deg_to_rad(off * s)
-				if _clear_distance(_orbit_dir(cand, _pitch), want, pivot) >= floor_dist:
+				if _clear_distance(_orbit_dir(cand, rest), want, pivot) >= floor_dist:
 					swing_target = off * s
 					break
 			off += swing_step_deg
@@ -596,7 +625,7 @@ func _place(delta: float) -> void:
 		if swing_target == 0.0:
 			var lift := lift_step_deg
 			while lift <= lift_max_deg:
-				var p := minf(_pitch + lift, K.CAM_MAX_PITCH)
+				var p := minf(rest + lift, K.CAM_MAX_PITCH)
 				if _clear_distance(_orbit_dir(_yaw, p), want, pivot) >= floor_dist:
 					lift_target = lift
 					break
@@ -608,7 +637,7 @@ func _place(delta: float) -> void:
 	_lift_bias_deg = move_toward(_lift_bias_deg, lift_target, lift_rate_deg * delta)
 
 	var dir := _orbit_dir(_yaw + deg_to_rad(_swing_bias_deg),
-			minf(_pitch + _lift_bias_deg, K.CAM_MAX_PITCH))
+			minf(rest + _lift_bias_deg, K.CAM_MAX_PITCH))
 	clear = _clear_distance(dir, want, pivot)
 
 	# 3. Still blocked: pull in. Immediately on the way in — a lagged pull-in is
@@ -630,15 +659,26 @@ func _place(delta: float) -> void:
 	else:
 		_dist = move_toward(_dist, allowed, push_out_speed * delta)
 
+	# Where the lens POINTS, as opposed to where it sits.
+	#
+	# Off the aim stance these are the same ray and this is exactly `dir` — the
+	# camera looks back down its own boom, which is the whole third-person rig.
+	# In the aim stance they come apart twice over. The pitch comes apart in
+	# `_boom_pitch`. The wall's swing and lift come apart here, and for the same
+	# reason: an obstruction is allowed to move the EYE, it is not allowed to move
+	# the crosshair. A rig that let it would drag a held sight off the goblin
+	# because a pillar clipped the boom, and the player would have no idea why.
+	var view := _orbit_dir(
+			_yaw + deg_to_rad(_swing_bias_deg) * (1.0 - _aim01),
+			_pitch + _lift_bias_deg * (1.0 - _aim01))
 	# First person: the eye walks from the end of the boom to the hero's head, and
 	# the LOOK direction unwinds to the UNBIASED orbit at the same rate — whatever
 	# swing or lift the wall logic had latched when the toggle came in must not
 	# ride into the head with it and leave the player facing 40° off where the
 	# stick had them.
-	var view := dir
 	var eye := pivot + dir * _dist
 	if _fp01 > 0.0:
-		view = dir.lerp(_orbit_dir(_yaw, _pitch), _fp01).normalized()
+		view = view.lerp(_orbit_dir(_yaw, _pitch), _fp01).normalized()
 		eye = eye.lerp(_fp_eye(), _fp01)
 	global_position = eye
 
@@ -647,6 +687,35 @@ func _place(delta: float) -> void:
 	# same rotation the old `look_at(pivot)` produced at every boom length except
 	# zero -- where the pivot IS the position and there is nothing to aim at.
 	look_at(eye - view, Vector3.UP)
+
+
+## The elevation the EYE is placed at, which is `_pitch` until a weapon comes up
+## and then eases to the rig's resting `pitch_deg` and stays there.
+##
+## This is the difference between a camera that pitches and a camera that ORBITS,
+## and it is the whole of "the right stick moves the crosshair around wrong".
+##
+## Off the aim stance, orbiting is correct and is the reference behaviour (§1.1):
+## looking down swings the eye up and over the hero, which is how you see what he
+## is standing on. In the aim stance the boom is 1.55 m and the pivot is at his
+## shoulder, so the same rule swung the eye through an arc a metre and a half
+## across. Measured, before this: full up-look put the eye at y=0.32 — under his
+## knees, looking up past his hip — and full down-look put it at y=2.75, a
+## bird's-eye over the top of his head. Two and a half metres of camera travel
+## for a thumb movement that was only ever asking to tilt the sight. The world
+## heaved, the hero swam across the frame, and the crosshair — which is nailed to
+## screen centre and was the one thing behaving — read as the thing at fault,
+## because it was visibly rotating about a point out in front of the lens.
+##
+## Freezing the placement pitch is what every third-person sight does: the eye
+## sits behind the shoulder at a fixed height and only the LOOK tilts. The stick
+## then moves the crosshair and nothing else, which is the entire promise of a
+## sight.
+##
+## `pitch_deg` rather than zero, so the stance settles onto the rig's own resting
+## elevation and the blend in and out of it has nothing to travel at rest.
+func _boom_pitch() -> float:
+	return lerpf(_pitch, pitch_deg, _aim01)
 
 
 ## The at-point the boom actually pivots on: the hero's eye, slid toward his

@@ -70,16 +70,12 @@ func _bow(rig, hero) -> void:
 	if cam == null:
 		_fail("no camera, so there is no aim and nothing to photograph")
 		return
-	# No fixture turning here any more. Drawing the bow raises aim mode, and aim
-	# mode is exactly the framing this photo used to fake: the rig drops onto his
-	# right shoulder, so the hero sits off to one side of the picture with the bow
-	# in clear view. The previous version wrote `facing_yaw` to spin him toward
-	# the lens, which now cannot work — `_tick_aiming` owns the facing while a
-	# ranged item is out and steers it straight back to the camera heading, and a
-	# director fighting the thing it is testing proves nothing either way.
-	_check("the camera went over the shoulder for the bow", cam.aiming())
+	# Selecting it must not zoom. Carrying a bow is not aiming a bow, and the
+	# framing this photo used to be taken in — shoulder rig, 42° lens — is now
+	# something the trigger buys and the D-pad does not.
+	_check("selecting the bow did not zoom", not cam.aiming())
 	await rig.wait_frames(24)
-	await rig.capture(out.path_join("r_01_bow_drawn.png"))
+	await rig.capture(out.path_join("r_01_bow_carried.png"))
 
 	# --- Shot one: aimed by the camera ---------------------------------------
 	# The post is moved ONTO the camera's forward ray rather than the shot being
@@ -89,6 +85,20 @@ func _bow(rig, hero) -> void:
 	if post == null:
 		_fail("no training post to shoot at")
 		return
+
+	# HELD, not tapped, and the fixture is not placed until the rig has arrived.
+	# The stance belongs to the trigger now, so the eye is still out on the free
+	# boom on the frame the button goes down and slides 0.6 m to his right over
+	# the next sixth of a second. A post placed on the ray read before that slide
+	# is a post the settled crosshair is half a metre off — the arrow flies true
+	# and misses, and the beat reports the aim as broken. Holding also costs
+	# nothing: the pull parks at full draw for as long as the button is down.
+	Input.action_press(&"use_item")
+	await rig.wait_frames(30)
+	_check("the trigger put the camera over the shoulder", cam.aiming())
+	_check("holding the trigger raised the bow (stance=%s)" % hero.aim_item(),
+		hero.aim_item() == &"bow")
+	await rig.capture(out.path_join("r_01b_bow_drawn.png"))
 	var aim: Vector3 = -cam.global_transform.basis.z
 	# From the CAMERA, not from the hero. Over the shoulder the eye sits ~0.6 m to
 	# his right, so the crosshair ray and the hero's centre line are parallel and
@@ -105,7 +115,9 @@ func _bow(rig, hero) -> void:
 
 	var before_arrows := Game.arrows
 	var before_damage: int = post.total_damage
-	await rig.tap(["use_item"])
+	# The release is the shot. He is already at full draw, so the arrow leaves at
+	# the seam a fraction of a second later, aimed down the ray measured above.
+	Input.action_release(&"use_item")
 	# Watched frame by frame rather than sampled once. The arrow leaves at the
 	# seam between the charge clip and the loose — the far end of a 0.44 s draw —
 	# and the first version of this beat looked on a fixed frame, found the arrow

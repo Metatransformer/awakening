@@ -265,7 +265,8 @@ The sword is on **X**, permanently, and it is the *only* thing on it. That is
 OOT's arrangement — the sword lives on one button forever and the items live on
 the C-pad — and it is what makes a drawn item safe to leave drawn. Drawing here
 is **sticky**: a D-pad press puts the hookshot in his hand and it stays there,
-so you can walk around aiming it, which OOT's momentary C-buttons never allow.
+so you can walk around carrying it, which OOT's momentary C-buttons never allow.
+Carrying it is not *aiming* it — the sight belongs to the trigger, below.
 A sticky mode needs an unconditional way out, and `attack` is it: pressing it
 with an item drawn stows the item **and swings on the same press**
 (`HeroCombat._begin`, `Game.stow_item`). Not the next press — the same one.
@@ -1139,12 +1140,19 @@ are one event, and two things counting to it separately is how they come apart.
 Proof is `tools/directors/bow_charge_release.gd`, which photographs the shot
 across both clips: a boolean saying two nodes played is not a drawn bow.
 
-**Aim mode has exactly one author.** Bringing out the bow or the hookshot drops
-the camera to the shoulder, draws a crosshair, and changes how the body moves.
-Three systems, one decision — and if the camera, the HUD and the hero each
-decided for themselves what counts as aiming they would disagree the first frame
-one of them was wrong. `HeroRanged` is the one place that knows what is in his
-hands, so it decides and says so:
+**Aim mode has exactly one author, and the TRIGGER is what raises it.** Pulling
+the bow or the hookshot drops the camera to the shoulder, draws a crosshair, and
+changes how the body moves; letting go drops all three again. Three systems, one
+decision — and if the camera, the HUD and the hero each decided for themselves
+what counts as aiming they would disagree the first frame one of them was wrong.
+`HeroRanged` is the one place that knows what is in his hands *and whether it is
+up*, so it decides and says so:
+
+*Selecting* the item does none of that, and used to. The stance was equipment-
+driven, so choosing the bow on the D-pad put the game in a 42° sight with a
+crosshair up and left it there for as long as you carried the thing. Carrying a
+bow is not aiming a bow. `aiming` and `aim_item()` are therefore the same fact
+now — one drops the item's name — and they are deliberately the same fact.
 
 ```gdscript
 Bus.aim_changed(active: bool)          # emitted by HeroRanged, nobody else
@@ -1152,8 +1160,8 @@ Bus.aim_changed(active: bool)          # emitted by HeroRanged, nobody else
 camera.set_aiming(on)                  # connected to it in GameCamera._ready
 camera.aiming() -> bool
 hero.aiming() -> bool                  # both read through HeroRanged
-hero.aim_item() -> StringName          # which stance the body holds — and only
-                                       # while the trigger is actually down
+hero.aim_item() -> StringName          # the same fact plus which item — true
+                                       # only while the trigger is actually down
 
 Bus.guard_changed(active: bool)        # emitted by HeroCombat, nobody else
 camera.set_guarding(on)                # connected to it in GameCamera._ready
@@ -1168,6 +1176,25 @@ is the whole thing the convergent aim above exists to guarantee. The blend is a
 single `0..1` over `K.CAM_AIM_BLEND` driving distance, FOV and the offset
 together; autoswing is suppressed for its duration (the player is aiming — the
 camera does not get an opinion).
+
+**And the boom does not pitch either — the eye tilts in place.** Free-look puts
+the eye on an arm and swings it: pitch up and the camera drops behind you, which
+is exactly right for a running third-person shot. At 1.55 m over the shoulder
+that same arm is a disaster. Pulling the stick down to aim at something at your
+feet lifted the eye to 2.75 m — over the hero's head, looking at his hair — and
+pulling up dropped it to 0.32 m, below his knees, both while the crosshair swept
+a modest arc. The player reads that as the reticle moving "from the wrong centre
+point", because it is: the centre was a metre and a half behind him.
+So `_place` splits the two pitches. The eye is *placed* at `_boom_pitch()`,
+which blends the free pitch toward the rig's neutral `pitch_deg` on `_aim01` and
+also feeds the wall sweep and the lift; only the look direction reads `_pitch`.
+The wall's swing and lift bias fade out of the *view* on the same `_aim01` for
+the same reason — a boom shoving itself past a pillar must not walk the shot.
+
+Look gain scales with the lens (`_fov_gain`, the ratio of half-FOV tangents,
+floored at 0.35). A stick that moves the world at a fixed rate in radians moves
+it *three times faster across the screen* at 42° than at 75°, so without this the
+sight is unusable at exactly the moment precision is the point.
 
 While aiming the hero **strafes**: he faces where the camera faces, at ~1.8×
 turn rate, and moves independently of that facing. This is the same shape as
