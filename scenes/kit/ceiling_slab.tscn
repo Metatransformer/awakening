@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/kit/kit_slab.gd" id="1_script"]
 [ext_resource type="StandardMaterial3D" path="res://assets/materials/mat_ceiling_tex.tres" id="2_face"]
-[ext_resource type="ShaderMaterial" path="res://assets/materials/mat_wall.tres" id="3_edge"]
+[ext_resource type="StandardMaterial3D" path="res://assets/materials/mat_wall.tres" id="3_edge"]
 
 [node name="CeilingSlab" type="StaticBody3D"]
 collision_layer = 1

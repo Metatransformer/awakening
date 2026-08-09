@@ -157,7 +157,7 @@ static func _board() -> Array[Dictionary]:
 		{
 			"id": &"arrows",
 			"label": "ARROWS X10",
-			"cost": 40,
+			"cost": _stock(40),
 			"parts": {},
 			"blurb": "Fletched from something that used to fly.",
 			"detail": _arrow_detail(),
@@ -165,7 +165,7 @@ static func _board() -> Array[Dictionary]:
 		{
 			"id": &"bag_slot",
 			"label": "BAG SLOT",
-			"cost": _scaled(140, &"bag_slot", 1.6),
+			"cost": _stock(140, &"bag_slot", 1.6),
 			"parts": {},
 			"blurb": "One more thing you can carry, and lose.",
 			"detail": "%d slots -> %d" % [Game.bag_slots, Game.bag_slots + 1],
@@ -173,7 +173,7 @@ static func _board() -> Array[Dictionary]:
 		{
 			"id": &"heart",
 			"label": "HEART CONTAINER",
-			"cost": _scaled(320, &"heart", 1.5),
+			"cost": _stock(320, &"heart", 1.5),
 			"parts": {},
 			"blurb": "One more heart. It does not grow back on its own.",
 			"detail": "%d hearts -> %d" % [
@@ -246,11 +246,43 @@ static func _scaled(base: int, id: StringName, factor: float) -> int:
 	return int(round(base * pow(factor, float(owned))))
 
 
+## A STOCK line's price: the scaled cost with the mill's discount on it.
+##
+## The three lines the smith BUYS IN -- arrows, a bag slot, a heart container --
+## and not the five forge ladders, which is the whole reason this is a second
+## helper rather than a multiply inside `_scaled`. A rung is not something the
+## smith buys in, and discounting it would make the Waterwheel Gear the strongest
+## relic on the list by a distance (`RelicDb.SMITH_MULT_MILL`).
+##
+## Adopted unconditionally: `smith_stock_mult()` is 1.0 until the mill turns, so
+## there is no branch here and there must never be one.
+static func _stock(base: int, id: StringName = &"", factor: float = 1.0) -> int:
+	return int(round(_scaled(base, id, factor) * RelicDb.smith_stock_mult()))
+
+
 ## How many more of `id` the player may buy. -1 means unlimited.
 static func remaining(id: StringName) -> int:
 	if not LIMITS.has(id):
 		return -1
-	return maxi(0, int(LIMITS[id]) - int(Game.upgrades.get(id, 0)))
+	return maxi(0, cap_of(id) - int(Game.upgrades.get(id, 0)))
+
+
+## The ceiling on `id`: how many of it the smith will ever sell.
+##
+## For the three stock lines that is `LIMITS` and nothing else. For a forge
+## ladder it is `LIMITS` clamped by **what the smith has been taught** --
+## `RelicDb.forge_rungs_known()` is 1 until the Tally-Ledger of Fair Weights and
+## 2 until the Imperium Anvil-Plate. Adopted unconditionally, because that
+## accessor already returns the untouched ceiling once both are recorded; an
+## `if RelicDb.donated(...)` here would be the unlock written a second time.
+##
+## Public so `refusal()` can tell the two ceilings apart, and so a director can
+## ask without re-deriving it.
+static func cap_of(id: StringName) -> int:
+	var limit: int = int(LIMITS.get(id, -1))
+	if not PARTS.has(id):
+		return limit
+	return mini(limit, RelicDb.forge_rungs_known())
 
 
 static func can_buy(line: Dictionary) -> bool:
@@ -271,6 +303,12 @@ static func can_buy(line: Dictionary) -> bool:
 static func refusal(line: Dictionary) -> String:
 	var id: StringName = line["id"]
 	if remaining(id) == 0:
+		# Two different ceilings, and telling the player the wrong one sends them
+		# to the wrong place. A ladder at the top of its own table is FINISHED;
+		# a ladder stopped short of it is a rung the smith has not been taught,
+		# and the answer to that is a relic, not another run's worth of grit.
+		if int(LIMITS.get(id, 0)) > cap_of(id):
+			return "HE HAS NOT BEEN TAUGHT THAT RUNG"
 		return "NOTHING LEFT TO DO THERE"
 	if id == &"arrows" and Game.arrows >= Game.max_arrows:
 		return "THE QUIVER IS FULL"
