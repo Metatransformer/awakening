@@ -26,6 +26,23 @@ const LOOPING := [
 	"idle", "walk", "run", "strafe", "block_idle", "crouch_idle", "crouching",
 	"aim_walk", "fall_loop",
 ]
+## Library-name -> the second the MOVE ends. Mixamo exports often carry a tail of
+## the actor standing still after the action is over, and that tail is not free:
+## the hero fires these through an AnimationNodeTimeScale sized as
+## `clip_length / move_duration`, so every dead second both blurs the real motion
+## (to make room for nothing) and leaves the one-shot running past the point the
+## game has handed the hero back to locomotion — he lands, and then holds the
+## export's settle pose while the controller thinks he is free.
+##
+## Cut it here rather than in the caller, so that `clip.length` keeps meaning
+## "how long this move takes" for everyone who reads it.
+##
+## Read the number off the hips track; do not eyeball it. `ex_backflip` is 2.17 s
+## of which 0.20–1.45 is crouch, launch, inversion and landing — apex at 1.10,
+## grounded again by 1.45 — and the last 0.72 s is a man standing there.
+const TRIM := {
+	"ex_backflip": 1.45,
+}
 
 
 func _initialize() -> void:
@@ -57,7 +74,16 @@ func _initialize() -> void:
 			)
 			# "/" is reserved as the library/animation separator, so sets are
 			# namespaced with an underscore: "ss_slash_01".
-			lib.add_animation("%s_%s" % [prefix, stem], anim)
+			var key := "%s_%s" % [prefix, stem]
+			if TRIM.has(key):
+				var cut: float = TRIM[key]
+				if cut < anim.length:
+					print("TRIM %s %.2f -> %.2f" % [key, anim.length, cut])
+					anim.length = cut
+				else:
+					push_warning("TRIM %s is %.2f, past the clip's %.2f" % [
+						key, cut, anim.length])
+			lib.add_animation(key, anim)
 			n += 1
 
 	var err := ResourceSaver.save(lib, OUT)

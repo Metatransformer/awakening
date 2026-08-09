@@ -26,13 +26,16 @@ extends RefCounted
 ##     ffmpeg -y -i "${b}_%d.png" -filter_complex tile=6x1 "${b}_sheet.png"; done
 
 const CLIPS: Array[StringName] = [
-	# In use, and the thing the other four are judged against.
-	&"ex_roll_to_run",
-	&"bow_dodge_forward", &"bow_dodge_back",
+	# In use, and the thing the challengers are judged against.
+	&"ex_roll_to_run", &"bow_dodge_back",
 	&"bow_dodge_left", &"bow_dodge_right",
-	&"bow_dive_forward",
-	# Thrust candidates for the dash attack.
-	&"ss_slash_05", &"ss_attack_03", &"ss_attack_04", &"ss_crouch_block_02",
+	# The owner's four. The measured tracks already say `ex_dodge_left/right` are
+	# the same Mixamo clip as the longbow pair — 0.97 s, 1.04 m and 1.07 m, to the
+	# centimetre — so what is actually in question for those two is the *pose*:
+	# the longbow export may be carrying a bow the standing one is not. That is a
+	# render question and nothing else can answer it.
+	&"ex_backflip", &"ex_dive_forward",
+	&"ex_dodge_left", &"ex_dodge_right",
 ]
 
 ## A dodge is over in a second and its whole read is in the middle of it, so this

@@ -140,11 +140,28 @@ func _measure_dash(rig, hero: Node3D) -> void:
 	# HeroCombat on purpose: the failure this guards against is a swing whose
 	# numbers are the dash's and whose pose is the light slash, and no amount of
 	# asking HeroCombat what it committed would ever catch that.
+	#
+	# POLLED, not sampled once. `MoveState.ATTACK` is set by the same call that
+	# merely *requests* the one-shot; the tree does not process that request until
+	# it next ticks, so on the frame the state flips no swing node is active at
+	# all — not the dash's and not a light's. Sampling there is a coin toss on
+	# frame phase, and it came up heads long enough to look like a passing check.
+	# The claim being made is "SwingDash goes live during this swing", so poll it.
 	var tree: AnimationTree = hero.find_child("AnimTree", false, false)
-	if tree != null and not bool(tree.get("parameters/SwingDash/active")):
-		_fail("dash swung something that was not SwingDash")
 	var combat = hero.get(&"combat")
-	if combat != null and bool(combat.get(&"blocking")):
+	var saw_dash := false
+	var saw_guard_drop := false
+	for _i in 12:
+		if tree != null and bool(tree.get("parameters/SwingDash/active")):
+			saw_dash = true
+		if combat != null and not bool(combat.get(&"blocking")):
+			saw_guard_drop = true
+		if saw_dash and saw_guard_drop:
+			break
+		await rig.wait_frames(1)
+	if tree != null and not saw_dash:
+		_fail("dash swung something that was not SwingDash")
+	if combat != null and not saw_guard_drop:
 		_fail("the shield stayed up through the dash")
 
 	var moved := await _travel_during(rig, hero, before, ST_ATTACK)

@@ -757,19 +757,35 @@ it. Whichever axis dominates picks the clip and the speed:
 
 | `Dodge` | Clip | Speed | Duration |
 |---|---|---|---|
-| `FORWARD` | `ex_roll_to_run` | `K.ROLL_SPEED` 6.55 | `roll_time` |
-| `BACK` | `bow_dodge_back` | `K.BACKFLIP_SPEED` 4.37 | `hop_time` 0.44 |
+| `FORWARD` | `ex_roll_to_run` | `K.ROLL_SPEED` 6.55 | `roll_time` 0.62 |
+| `BACK` | `ex_backflip` | `K.BACKFLIP_SPEED` 4.37 | `backflip_time` 0.60 |
 | `LEFT` / `RIGHT` | `bow_dodge_left` / `_right` | `K.SIDEHOP_SPEED` 6.19 | `hop_time` 0.44 |
 
-Three things about that table. The speeds are the `[oot]` measured constants,
+Four things about that table. The speeds are the `[oot]` measured constants,
 which had sat in `K` unused since they were taken — the sidehop and the backflip
-were always going to be their own moves. The clips come from the **longbow** set,
-not the sword-and-shield set: the Pro Sword and Shield pack has 52 clips and not
-one roll, dodge, evade or dive among them, so anything looking there for a
-backwards roll will find nothing and should stop looking. And each direction is
+were always going to be their own moves. The sidehops come from the **longbow**
+set, not the sword-and-shield set: the Pro Sword and Shield pack has 52 clips
+and not one roll, dodge, evade or dive among them, so anything looking there for
+a backwards roll will find nothing and should stop looking. Each direction is
 its **own** `AnimationNodeOneShot` + `AnimationNodeTimeScale` pair
 (`Hero._DODGE_NODES`) — reassigning `animation` on one live
 `AnimationNodeAnimation` restarts the mixer cache and eats the wind-up frames.
+
+And `BACK` is a **backflip**, which is the one row the longbow set could not
+fill: `bow_dodge_back` is a backward shuffle-walk that never leaves the ground,
+and a retreat is not an evade. It also owns the only duration that is neither
+the roll's nor the hop's, because a flip has to launch, invert and land, and
+0.44 s of that is a blur — which makes the backflip the widest i-frame window
+short of a roll *and* the least ground covered per second. That is the trade
+between the three: safest, fastest, furthest, pick one.
+
+Its source clip has 0.72 s of dead settle after the landing, cut in
+`build_anim_lib`'s `TRIM` table rather than at the call site. That placement is
+load-bearing: `Hero._fire_dodge` scales `clip_length / move_duration` so the
+one-shot ends exactly when the dodge does, so **a clip's length has to mean the
+move's length**. Trim the factor instead of the clip and the hero stands in the
+export's settle pose for 0.4 s after the controller has already handed him back
+to locomotion.
 
 Because the i-frame window is literally `state == MoveState.ROLL` in
 `take_hit`, the duration column *is* the invulnerability column: the sidehops

@@ -107,6 +107,14 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, HEAVY, LUNGE, DASH }
 ## across the room — and because the i-frames run for exactly as long as the
 ## dodge does (see take_hit), so a hop buys a smaller window than a roll. [tune]
 @export var hop_time: float = 0.44
+## The backflip's own window, because it is not a sidehop. A flip has to leave
+## the ground, inverct and land, and 0.44 s of that is a blur nobody can read as
+## a flip. 0.60 s is the shortest window the clip stays legible in, and it buys
+## the flip its own identity in the one currency dodges trade in: i-frames run
+## for exactly as long as the dodge does, so the backflip is the widest window
+## short of a roll and the slowest to get you out of the way (4.37 m/s). That is
+## the trade — safest, but least ground covered per second. [tune]
+@export var backflip_time: float = 0.60
 ## The hard recovery. Input is locked and speed bleeds off through it.
 @export var roll_recover_time: float = 0.20
 ## [oot] roll/backflip/sidehop need a near-full stick deflection. §3.2
@@ -125,19 +133,25 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, HEAVY, LUNGE, DASH }
 ## backstep. A hero sliding backwards through a forward roll is the single most
 ## visible thing wrong with the guard.
 ##
-## The other three come from the LONGBOW set, which does ship a four-way dodge,
-## and they were checked the only way this can be checked: by reading the hips
+## The sidehops come from the LONGBOW set, which does ship a four-way dodge, and
+## they were checked the only way this can be checked: by reading the hips
 ## translation out of the raw FBX before `build_anim_lib` strips it
-## (tools/directors/dodge_lookdev.gd documents the run). dodge_forward travels
-## +1.20 m, dodge_back −1.22 m, dodge_left +1.04 m and dodge_right −1.07 m in
-## clip space, where +Z is the model's forward and +X its left — so the filenames
-## are honest, which is not something to assume (CLAUDE.md §4).
+## (tools/directors/dodge_lookdev.gd documents the run). dodge_left travels
+## +1.04 m and dodge_right −1.07 m in clip space, where +Z is the model's forward
+## and +X its left — so the filenames are honest, which is not something to
+## assume (CLAUDE.md §4).
 ##
 ## FORWARD keeps the dive rather than taking the longbow set's forward hop: it is
 ## a real roll, it covers real ground, and it is the one dodge the pack's absence
 ## did not actually break.
+##
+## BACK is a **backflip**, and it is the one place the longbow set was not good
+## enough: `bow_dodge_back` is a backward shuffle-walk that never leaves the
+## ground, which is a retreat, not an evade. `ex_backflip` crouches, launches,
+## goes fully inverted overhead and lands in a deep absorb — and it is what
+## `K.BACKFLIP_SPEED` has been named after since the day it was measured.
 @export var clip_roll: StringName = &"ex_roll_to_run"
-@export var clip_roll_back: StringName = &"bow_dodge_back"
+@export var clip_roll_back: StringName = &"ex_backflip"
 @export var clip_roll_left: StringName = &"bow_dodge_left"
 @export var clip_roll_right: StringName = &"bow_dodge_right"
 @export var clip_turn180: StringName = &"ss_180_turn_01"
@@ -279,6 +293,12 @@ const _DODGE_NODES: Array[StringName] = [
 ## are quick steps and a slow fade on a quick step reads as lag.
 const _DODGE_FADE_IN: Array[float] = [0.05, 0.05, 0.04, 0.04]
 const _DODGE_FADE_OUT: Array[float] = [0.16, 0.14, 0.12, 0.12]
+## NOTE: the backflip's dead tail is cut at BAKE time, in build_anim_lib's TRIM
+## table, not here. `_fire_dodge` scales `clip_len / duration` so the one-shot
+## ends exactly when the dodge does; trimming at this end would shorten the
+## factor without shortening the clip, and the hero would stand in the clip's
+## settle pose for 0.4 s after the game had already handed him back to
+## locomotion. The invariant is *the clip's length is the move's length*.
 ## One animation-tree node per Swing value, in enum order. Indexed by `Swing`,
 ## so anything added to the enum has to be added here too — which is the point:
 ## a swing with no node fails loudly at build rather than silently not playing.
@@ -912,7 +932,7 @@ func _try_start_roll(wish: Vector3, mag: float) -> bool:
 	# "which way relative to where he will be looking", and free the answer is
 	# always FORWARD *because* the line above just made it so.
 	_dodge = _dodge_for(_roll_dir)
-	_state_timer = roll_time if _dodge == Dodge.FORWARD else hop_time
+	_state_timer = _dodge_time(_dodge)
 	_dodge_speed = _dodge_speed_for(_dodge)
 	_speed = _dodge_speed
 	_set_planar_velocity(_roll_dir * _dodge_speed)
@@ -954,9 +974,19 @@ func _dodge_speed_for(dodge: int) -> float:
 		_: return roll_speed
 
 
-## Play the dodge, compressed onto `duration`. The four clips run 0.97–1.63 s and
-## the moves they serve run 0.44–0.82 s, so each needs its own factor — see the
-## note in _build_anim_tree about why this cannot be set once.
+## How long the hero belongs to this dodge — which is also how long he is
+## invulnerable, since take_hit reads `state == MoveState.ROLL` and nothing finer.
+## Three different answers because these are three different moves.
+func _dodge_time(dodge: int) -> float:
+	match dodge:
+		Dodge.BACK: return backflip_time
+		Dodge.LEFT, Dodge.RIGHT: return hop_time
+		_: return roll_time
+
+
+## Play the dodge, compressed onto `duration`. The clips run 0.97–2.17 s and the
+## moves they serve run 0.44–0.82 s, so each needs its own factor — see the note
+## in _build_anim_tree about why this cannot be set once.
 func _fire_dodge(dodge: int, duration: float) -> void:
 	var clip := _dodge_clip(dodge)
 	var clip_len := 1.0
