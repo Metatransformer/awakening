@@ -69,7 +69,8 @@ var _cells: Array[Button] = []
 var _cell_ids: Array[StringName] = []
 var _grid: GridContainer
 var _header: Label
-var _stock: Label
+var _stock: GridContainer
+var _stock_empty: Label
 var _back: Button
 var _detail_kind: Label
 var _detail_name: Label
@@ -558,10 +559,27 @@ func _build_stock(parent: Node) -> void:
 	caption.text = "WORKBENCH"
 	col.add_child(caption)
 
-	_stock = Label.new()
-	_stock.theme_type_variation = &"MenuSlotStat"
-	_stock.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# Two columns, not one line per material. The bench held four things when
+	# this was a single autowrapping Label; the alchemist's four brought it to
+	# eight, and eight rows grew the right column until the frame was 872 px
+	# tall inside a 720 px viewport -- the bottom half of the list rendered off
+	# the screen and nothing complained. Pairing them keeps the tallest bench
+	# the same height as the forge-only one was, so adding a ninth material
+	# costs half a row instead of a whole one.
+	_stock = GridContainer.new()
+	_stock.name = "BenchGrid"
+	_stock.columns = 2
+	_stock.add_theme_constant_override("h_separation", 14)
+	_stock.add_theme_constant_override("v_separation", 2)
 	col.add_child(_stock)
+
+	# The empty case cannot live in the grid: a GridContainer has no column
+	# span, so one long sentence in cell 0 would set the width of column 1.
+	_stock_empty = Label.new()
+	_stock_empty.theme_type_variation = &"MenuSlotStat"
+	_stock_empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_stock_empty.text = "Nothing yet. Components reach the bench by reaching town."
+	col.add_child(_stock_empty)
 
 
 ## Grid focus, wired by hand: left/right wraps within a row, up/down walks the
@@ -706,15 +724,25 @@ func _paint_header() -> void:
 
 
 func _paint_stock() -> void:
-	var lines: Array[String] = []
+	for old in _stock.get_children():
+		old.queue_free()
+		# queue_free() is next-frame; the grid is repainted every time the
+		# screen opens, so without this the freed rows are still children and
+		# the columns double.
+		_stock.remove_child(old)
+	var any := false
 	for id in ItemDb.components():
 		var have := Game.component_count(id)
 		if have <= 0:
 			continue
 		var def := ItemDb.get_def(id)
-		lines.append("%s  ×%d" % [def.display_name, have])
-	_stock.text = "\n".join(lines) if not lines.is_empty() \
-		else "Nothing yet. Components reach the bench by reaching town."
+		var row := Label.new()
+		row.theme_type_variation = &"MenuSlotStat"
+		row.text = "%s  ×%d" % [def.display_name, have]
+		_stock.add_child(row)
+		any = true
+	_stock.visible = any
+	_stock_empty.visible = not any
 
 
 func _describe(b: Button) -> void:
