@@ -20,6 +20,15 @@ committed roll, a shield, a telegraphed enemy you can read. The shape around it
 is Moonlighter: a town, a vendor, a smith, and a hole in the ground that gets
 worse the further in you go.
 
+The hole in the ground is called **the Sunken Cut**. The Lower Worlds are the
+setting — everything under the town, endless, of which the game shows one shaft.
+The Sunken Cut is that shaft: the one dungeon there is a way down into, signed
+over the gate in town, named on the card the game shows you on the way in, and
+named again in the corner of the screen every time you take a stair. A place you
+are going back to a hundred times needs a name for the same reason the run report
+is a receipt and not a score — "floor 7" is a depth reading, and "the Sunken Cut,
+level 7" is somewhere you have been. It lives in one constant, `Prog.NAME`.
+
 ---
 
 ## 2. The one question
@@ -186,7 +195,9 @@ magnetism and its premium on the bag.
 - **Crafting.** Ingredients are only sold today. The name "ingredient" is a
   promise the game has not yet kept — the smith should eventually want *items*,
   not only gold, so that a rare drop has a use besides its price.
-- **More than one dungeon.** One biome, one enemy roster, one kit.
+- **More than one dungeon.** One biome, one enemy roster, one kit — which is
+  why the Sunken Cut can be a constant rather than a field on a dungeon
+  resource. The day there is a second one, `Prog.NAME` is what has to move.
 - **A boss**, and any reason to reach the bottom other than the loot there.
 - **Depth beyond one level.** `Run.descend()` exists; nothing calls it.
 - **Audio.** `Bus.request_sfx` is emitted and nothing listens.

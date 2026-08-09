@@ -324,6 +324,14 @@ func _input(event: InputEvent) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if _listening != &"":
 		return
+	# Nothing opens during a scene transition. Flow's veil is at layer 200 and its
+	# loading card is opaque, so a menu opened here is a menu at layer 100 that
+	# nobody can see, holding the focus, over a world it did not pause -- and it
+	# clears `get_tree().paused` on the way out from under `Flow._go`, which pauses
+	# the world itself for the length of the loading card. The window used to be
+	# a third of a second of black; naming the floor made it nearly two.
+	if Flow != null and (Flow.busy or Flow.ending) and not _is_open:
+		return
 	if event.is_action_pressed(&"inventory"):
 		open_pouch()
 		get_viewport().set_input_as_handled()
