@@ -47,8 +47,12 @@ func run(rig) -> void:
 	_check_line("keyboard")
 	await rig.capture("f_00_keyboard.png")
 
-	# A face button. This is what a player pressing anything on a pad sends.
-	_push(_pad_button(JOY_BUTTON_A))
+	# RB, and it has to be a button bound to NOTHING. This used to press A, which
+	# was harmless right up until A became `interact`: the press that was only
+	# meant to say "a pad is in hand" also talked to the pawnbroker the hero is
+	# standing at, the shop took input, `Prompt` dropped focus, and the prompt
+	# under test went blank. The watcher does not care which button it is.
+	_push(_pad_button(JOY_BUTTON_RIGHT_SHOULDER))
 	await rig.wait_seconds(0.25)
 	var pad := _caps()
 	_check("pad", pad, true)

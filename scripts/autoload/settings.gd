@@ -45,7 +45,13 @@ const DEFAULT_PATH := "user://settings.cfg"
 ##    layout from 5 is the same collision as above with the roles reversed:
 ##    `shield` pinned to LB, so the trigger would target and recentre while the
 ##    guard sat on a bumper nobody was told about.
-const BIND_SCHEMA := 6
+## 7: the BOTW pass. `use_item` moved A -> RT (an AXIS), which made the triggers
+##    a pair -- left holds a stance, right fires what it is aimed at -- and
+##    `interact` took the A it vacated. A saved layout from 6 would put use_item
+##    back on A on top of interact, which is the exact collision the move was
+##    made to remove: one press at a chest would open it and loose an arrow
+##    through it.
+const BIND_SCHEMA := 7
 
 ## Where preferences persist. A test or a screenshot director that rebinds keys
 ## MUST NOT write to the player's real settings — an earlier menu test left

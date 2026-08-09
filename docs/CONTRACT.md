@@ -203,22 +203,29 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `move_up/down/left/right` | WASD, arrows | left stick | move |
 | `cam_up/down/left/right` | mouse motion (read in code) | right stick | camera |
 | `attack` | **LMB** | **X / Square** (pad2) | light attack (**hold** = charge, **+guard** = dash) |
-| `use_item` | **F** | **A / Cross** (pad0) | use item / jump attack |
+| `use_item` | **F** | **RT / R2** (axis5+) | use the item the D-pad drew |
 | `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held**, and it targets, and it recentres |
 | `context` | **Space** | **B / Circle** (pad1) | roll / backstep / sidehop |
 | `z_target` | **Q**, MMB | **R3** (pad8) | lock-on toggle / camera recentre |
-| `interact` | E | **Y / Triangle** (pad3) | event action |
+| `interact` | E | **A / Cross** (pad0) | context — talk/open, **+guard** = jump attack, else stow item |
 | `item_left` / `item_up` / `item_right` | 1 / 2 / 3 | dpad L / U / R | armaments — §4.1 |
 | `first_person` | R | — | — |
 | `pause` / `inventory` / `map` | Esc / **I** / Tab | Start (pad6) / **Select** (pad4) / L3 (pad7) | menu / pouch / map |
 | `dbg_reload` | F5 | — | — |
 
-The face buttons are the swings and the left trigger is the hold. The right
-stick swings the lens; everything else the camera does is under the left index
-finger.
+**The triggers are a pair and that is the layout's spine.** This is BOTW's
+arrangement, and it is right: the left index finger holds a STANCE and the right
+index finger fires what that stance is aimed at. LT raises the guard and takes
+the lock; RT uses whatever the D-pad drew. Aiming a bow with a shoulder and
+loosing it with a thumb makes you let go of the stick that was aiming.
 
-The trigger is an AXIS (`InputEventJoypadMotion`, JoyAxis 4), not a button, so
-the action's 0.2 deadzone is how far it travels before it counts as pressed.
+The face buttons are the swings and the verbs: X swings, B rolls, A is context.
+The right stick swings the lens; everything else the camera does is under the
+left index finger.
+
+Both triggers are AXES (`InputEventJoypadMotion`, JoyAxis 4 and 5), not buttons,
+so the action's 0.2 deadzone is how far the trigger travels before it counts as
+pressed.
 
 **The left trigger is OOT's Z**, and it carries everything Z carried on one
 pull. An index finger on a shoulder is exactly what Z was, so it does all of it
@@ -298,9 +305,17 @@ and `project.godot` looked perfectly correct the whole time. `Settings`
 now stamps saved binds with `BIND_SCHEMA` and **discards** binds saved against
 an older layout — bump it in any change that moves a shipped binding.
 
-**Not yet bound, because the ability does not exist:** skill (RT/R2,
-`Shift`+RMB) and jump. Do not register empty actions for these; bind them in
-the same change that builds them.
+**Not yet bound, because the ability does not exist:** skill and jump. Do not
+register empty actions for these; bind them in the same change that builds them.
+RT/R2 was pencilled in for the skill and `use_item` took it instead — the
+triggers being a pair is worth more than reserving one for an ability nobody has
+designed. **Y/Triangle is free** and is the obvious home for the next verb.
+
+`first_person` is the standing exception and it is a wart: the action is bound
+(R) and rebindable, and **nothing in the game reads it**. `Bus.first_person_changed`
+has no emitter either. Either build it or delete it; do not bind it to a pad
+button in the meantime, because a pad button that does nothing is worse than a
+keyboard key nobody presses.
 
 Read movement as
 `Input.get_vector("move_left","move_right","move_up","move_down")` so stick and
