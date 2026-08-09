@@ -16,6 +16,16 @@ extends RefCounted
 ##  * the ownership gate holds from the UI side: a slot cannot be cycled onto an
 ##    armament the player has never found, no matter how many times you press A
 ##  * the live-set mark follows Game.loadout_set
+##  * the D-pad cycles agree with the screen: `cycle_weapon` walks the same pool
+##    the right-hand slot walks, `cycle_item` walks the bottles, and X drinks
+##    the one that is selected
+##
+## THE ITEM BUTTONS CARD IS GONE and half this director went with it. It used to
+## prove that finding a bow auto-bound it to ↑, that binding it to ↓ moved it
+## rather than cloning it, and that pressing a bound button drew and re-stowed.
+## None of those are propositions any more -- there is nothing to bind -- and a
+## director that kept asserting them would have been proving a screen that no
+## longer exists.
 
 const NAV_LIMIT := 20
 
@@ -40,52 +50,65 @@ func run(rig) -> void:
 	await _key(rig, KEY_ENTER, 12)
 	_check("the items screen is showing", equip.visible)
 	_check("focus landed inside it, not on nothing", _focused(rig) != null)
-	_check("a new game has two unbound item buttons",
-		Game.QUICK_SLOTS == 2 and Game.quick(0) == &"" and Game.quick(1) == &"")
 	await rig.capture("eq_00_unowned.png")
 
-	# --- Binding refuses what you have not found -----------------------------
-	# Focus opens on the ↑ item button. Mash confirm: owning nothing bindable,
-	# the only thing in the pool is the empty binding, so it must stay unbound
-	# -- five times, not just once.
+	# --- The ring refuses what you have not found ----------------------------
+	# Focus opens on the primary right hand. Mash confirm: owning nothing but the
+	# sword, the pool the cycle walks is one entry long, so the hand must not
+	# move -- five times, not just once. This is `cycle_armament`'s own early
+	# return, seen from the screen, and it is the same gate D-pad → hits.
+	await _nav_to_slot(rig, "Slot_0_right")
 	for i in 5:
 		await _key(rig, KEY_ENTER, 3)
-	_check("an unowned item cannot be bound to a button (still %s)"
-		% ("unbound" if Game.quick(Game.QUICK_UP) == &"" else Game.quick(Game.QUICK_UP)),
-		Game.quick(Game.QUICK_UP) == &"")
+	_check("an unowned weapon cannot be cycled onto (right hand is still %s)"
+		% Game.armament_in(Game.PRIMARY, Game.HAND_RIGHT),
+		Game.armament_in(Game.PRIMARY, Game.HAND_RIGHT) == &"sword")
+	Game.cycle_weapon(1)
+	_check("D-pad → refuses for the same reason, owning only the sword",
+		Game.armament(Game.HAND_RIGHT) == &"sword")
 	await rig.capture("eq_01_refused.png")
 
-	# --- Finding the bow binds it, without anyone opening a menu -------------
+	# --- Finding a weapon puts it on the ring, and nothing else happens ------
+	# There is no auto-bind to check any more. What replaced it is this: the bow
+	# is one press of → away the moment it is granted, with no menu trip.
 	Game.grant(&"bow")
 	Game.add_arrows(18)
-	await rig.wait_frames(6)
-	_check("finding the bow bound it to the first free button (%s)"
-		% Game.quick(Game.QUICK_UP), Game.quick(Game.QUICK_UP) == &"bow")
 	Game.grant(&"hookshot")
-	await rig.wait_frames(4)
-	_check("finding the hookshot took the NEXT button, it did not overwrite (%s)"
-		% Game.quick(Game.QUICK_DOWN), Game.quick(Game.QUICK_DOWN) == &"hookshot")
+	await rig.wait_frames(6)
+	Game.cycle_weapon(1)
+	_check("→ stepped the right hand off the sword (%s)"
+		% Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_RIGHT) != &"sword")
+	Game.cycle_weapon(1)
+	Game.cycle_weapon(1)
+	_check("three steps around a three-weapon ring came back to the sword (%s)"
+		% Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_RIGHT) == &"sword")
+	Game.cycle_weapon(-1)
+	_check("← is the other way round the same ring (%s)"
+		% Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_RIGHT) == &"hookshot")
+	Game.cycle_weapon(1)
 	equip.refresh()
 	await rig.wait_frames(4)
 	await rig.capture("eq_02_owned.png")
 
-	# --- Pressing a bound button draws it, and puts it away ------------------
-	Game.use_quick(Game.QUICK_UP)
+	# --- The item selection, which is a different ring on a different button --
+	# Weapons are DRAWN and items are USED, and the two must not share a cycle:
+	# stepping the bottles cannot be allowed to disturb the hand.
+	var hand_before := Game.armament(Game.HAND_RIGHT)
+	while Game.bottle_count() < 2:
+		Game.add_bottle()
+	Game.fill_bottle(&"heart_draught")
 	await rig.wait_frames(4)
-	_check("the ↑ button drew the bow (right hand is %s)"
-		% Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_RIGHT) == &"bow")
-	Game.use_quick(Game.QUICK_UP)
-	await rig.wait_frames(4)
-	_check("pressing it again put the bow away (right hand is %s)"
-		% Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_RIGHT) == &"sword")
-
-	# One item, one button: binding the bow onto ↓ must take it OFF ↑.
-	Game.bind_quick(Game.QUICK_DOWN, &"bow")
-	_check("binding an item to a second button moved it rather than cloning it",
-		Game.quick(Game.QUICK_DOWN) == &"bow" and Game.quick(Game.QUICK_UP) == &"")
-	Game.bind_quick(Game.QUICK_UP, &"bow")
-	Game.bind_quick(Game.QUICK_DOWN, &"hookshot")
-	equip.refresh()
+	_check("↓ steps the bottles", Game.bottle_count() >= 2)
+	var item_before := Game.item_selected
+	Game.cycle_item(1)
+	_check("↓ moved the selection (%d -> %d)" % [item_before, Game.item_selected],
+		Game.item_selected != item_before)
+	_check("stepping the items left the right hand alone (%s)" % hand_before,
+		Game.armament(Game.HAND_RIGHT) == hand_before)
+	Game.cycle_item(1)
+	_check("the item ring wraps back to where it started",
+		Game.item_selected == item_before)
+	_check("X drinks the selected bottle", Game.use_selected_item())
 	await rig.wait_frames(4)
 
 	# --- The hands, below --------------------------------------------------

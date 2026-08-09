@@ -1,19 +1,18 @@
 class_name MenuEquipPanel
 extends Control
-## The Items screen. Two halves, and the top one is the point:
+## The Items screen: **PRIMARY / ALTERNATE**, the two hands twice over, with the
+## live set marked.
 ##
-##  * **ITEM BUTTONS** — the two quick slots, drawn in the shape of the D-pad
-##    half they live on (↑ over ↓). This is where you BIND. In play those buttons
-##    draw what you put on them and nothing else; there is no cycling out there,
-##    because a button you have to watch to use is not a button you can reach
-##    for. The other half of the D-pad, ← and →, cycles the loadout instead.
-##  * **PRIMARY / ALTERNATE** — the two hands, twice over, with the live set
-##    marked. Changed here only.
+## IT USED TO HAVE A SECOND HALF and losing it is the point. An ITEM BUTTONS card
+## sat on top of this, four cells in the shape of the D-pad, and it existed to
+## let the player decide which direction the bow was on. The D-pad cycles now
+## (see the note in project.godot) so there is nothing to bind, and this screen
+## is down to the one question it was always best at: what goes in which hand.
 ##
-## It owns no state. Everything reads `Game` and writes back through
-## `bind_quick` / `cycle_armament` / `swap_loadout` (docs/CONTRACT.md §4.1,
-## §8 *Armaments*), so there is no path where this screen and the buttons
-## disagree about what the hero is holding.
+## In play, D-pad ← / → step the right hand through this same pool and ↑ swaps
+## the set — the same `cycle_armament` and `swap_loadout` calls the buttons here
+## make. One code path, so the screen and the D-pad cannot disagree about what
+## the hero is holding (docs/CONTRACT.md §4.1, §8 *Armaments*).
 
 signal back_requested
 signal notice(text: String, is_error: bool)
@@ -21,19 +20,17 @@ signal notice(text: String, is_error: bool)
 signal value_settled
 
 const FRAME_SIZE := Vector2(1060, 604)
-## No "swap set" shortcut in the hint on purpose: the buttons that cycle the
-## loadout in play are D-pad ← / →, and inside a menu ← / → is how focus moves.
-## Rather than teach a second, contradictory binding, the swap is a focusable
-## button and the detail pane names the in-play one.
-const HINT := "↑↓←→ Select    Enter / A Bind    Esc / B Back"
+## No "swap set" shortcut in the hint on purpose: the button that swaps the set
+## in play is D-pad ↑, and inside a menu ↑ is how focus moves. Rather than teach
+## a second, contradictory binding, the swap is a focusable button and the detail
+## pane names the in-play one.
+const HINT := "↑↓←→ Select    Enter / A Change    Esc / B Back"
 
-## Sized so the whole screen -- header, three cards, footer -- fits inside 720p
-## without the frame running off the bottom. It did, the first time: the cards
-## are minimums and a VBox grows past its parent without complaining.
+## Sized so the whole screen -- header, cards, footer -- fits inside 720p without
+## the frame running off the bottom. It did, the first time: the cards are
+## minimums and a VBox grows past its parent without complaining.
 const ICON_PX := 48
-const QUICK_ICON_PX := 40
 const SLOT_MIN := Vector2(228, 98)
-const QUICK_MIN := Vector2(150, 104)
 
 ## Row order on screen. Index into `Game.loadout`.
 ##
@@ -50,9 +47,6 @@ const HAND_NAMES := {&"left": "LEFT HAND", &"right": "RIGHT HAND"}
 ## `set_index * 2 + hand_index` -> the button. Flat because the focus wiring
 ## walks it as a grid and a nested array only makes that harder to read.
 var _slots: Array[Button] = []
-## Indexed by Game.QUICK_UP / QUICK_DOWN, which here does match screen order --
-## stated rather than assumed, because it did not match when there were three.
-var _quick_slots: Array[Button] = []
 var _set_frames: Array[PanelContainer] = []
 var _set_marks: Array[Label] = []
 var _swap: Button
@@ -134,8 +128,8 @@ func _build() -> void:
 	left.add_theme_constant_override("separation", 12)
 	split.add_child(left)
 
-	_build_quick(left)
 	_build_sets(left)
+	_build_swap(left)
 
 	# The right column is where the screen talks back: the detail pane for
 	# whatever has focus on the left.
@@ -174,53 +168,27 @@ func _build() -> void:
 	frow.add_child(_back)
 
 
-## The two item buttons, drawn in the physical shape of the D-pad half they sit
-## on: ↑ stacked over ↓, with ← → spelled out beside them as the loadout cycle.
-## docs/CONTRACT.md §2.5 #6 — the arrangement IS the label. A vertical list of
-## "Item 1 / Item 2" makes the player translate, every time.
+## The button that swaps the live set.
 ##
-## It was a three-across row when ← ↑ → were all item buttons. The loadout took
-## the horizontal pair (see the `loadout_prev` note in project.godot), so the
-## shape had to follow the pad down to a column — a row of two labelled ▲ ▼
-## would be the arrangement lying about the buttons it stands for.
-func _build_quick(parent: Node) -> void:
-	var card := PanelContainer.new()
-	card.name = "Quick"
-	card.theme_type_variation = &"MenuSection"
-	parent.add_child(card)
-
-	var inner := VBoxContainer.new()
-	inner.add_theme_constant_override("separation", 8)
-	card.add_child(inner)
-
-	var caption := Label.new()
-	caption.theme_type_variation = &"MenuHeading"
-	caption.text = "ITEM BUTTONS"
-	inner.add_child(caption)
-
-	var cross := VBoxContainer.new()
-	cross.alignment = BoxContainer.ALIGNMENT_CENTER
-	cross.add_theme_constant_override("separation", 12)
-	inner.add_child(cross)
-
-	# Order on screen is ↑ then ↓, which is the order they sit on the pad.
-	_quick_slots.resize(Game.QUICK_SLOTS)
-	for entry in [
-		{"slot": Game.QUICK_UP, "glyph": "▲", "action": &"item_up"},
-		{"slot": Game.QUICK_DOWN, "glyph": "▼", "action": &"item_down"},
-	]:
-		_quick_slots[entry["slot"]] = _make_quick(cross, entry["slot"],
-			entry["glyph"], entry["action"])
-
+## It used to live under the ITEM BUTTONS card, which is gone. It sits under the
+## two sets now rather than going with it, because it was never an item-button
+## control: it is the second half of "which of these two am I holding", and both
+## halves are on screen together here.
+##
+## The row beside it names the IN-PLAY input, which is D-pad ↑ and is not a thing
+## you can press in this menu (↑ moves focus). A screen that only offered its own
+## button would leave the pad shortcut undiscoverable.
+func _build_swap(parent: Node) -> void:
 	var foot := HBoxContainer.new()
+	foot.name = "SwapRow"
 	foot.add_theme_constant_override("separation", 12)
-	inner.add_child(foot)
-	var swap_note := Label.new()
-	swap_note.theme_type_variation = &"MenuHint"
-	swap_note.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	swap_note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	swap_note.text = "◄ ►  cycle the loadout below"
-	foot.add_child(swap_note)
+	parent.add_child(foot)
+	var note := Label.new()
+	note.theme_type_variation = &"MenuHint"
+	note.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	note.text = "In play, %s swaps sets" % MenuUtil.pad_label(&"loadout_swap")
+	foot.add_child(note)
 	_swap = Button.new()
 	_swap.theme_type_variation = &"MenuRow"
 	_swap.text = "Swap Set"
@@ -230,69 +198,6 @@ func _build_quick(parent: Node) -> void:
 		Game.swap_loadout()
 		value_settled.emit())
 	foot.add_child(_swap)
-
-
-func _make_quick(parent: Node, slot: int, glyph: String, action: StringName) -> Button:
-	var b := Button.new()
-	b.name = "Quick_%d" % slot
-	b.theme_type_variation = &"MenuSlot"
-	b.focus_mode = Control.FOCUS_ALL
-	b.custom_minimum_size = QUICK_MIN
-	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	b.set_meta(&"quick", slot)
-	b.set_meta(&"action", action)
-	b.set_meta(&"glyph", glyph)
-	parent.add_child(b)
-
-	var col := VBoxContainer.new()
-	col.name = "Col"
-	col.alignment = BoxContainer.ALIGNMENT_CENTER
-	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	b.add_child(col)
-	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	col.offset_left = 10
-	col.offset_right = -10
-	col.offset_top = 8
-	col.offset_bottom = -8
-
-	var cap := Label.new()
-	cap.name = "Caption"
-	cap.theme_type_variation = &"MenuValue"
-	cap.text = glyph
-	cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_child(cap)
-
-	var art := CenterContainer.new()
-	art.name = "Art"
-	art.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_child(art)
-	art.add_child(_new_icon(QUICK_ICON_PX))
-	var letters := Label.new()
-	letters.name = "Letters"
-	letters.theme_type_variation = &"MenuMuted"
-	letters.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	art.add_child(letters)
-
-	var value := Label.new()
-	value.name = "Value"
-	value.theme_type_variation = &"MenuSlotStat"
-	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	value.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# This is the one card whose text is not from a closed list -- what a bottle
-	# is called depends on what is in it -- so it is the one card that has to
-	# survive a name longer than it. A Label does not clip by itself: the long
-	# form printed straight across the neighbouring buttons. `slot_name` keeps
-	# the text short and this keeps a future one from bleeding anyway.
-	value.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	value.clip_text = true
-	col.add_child(value)
-
-	b.pressed.connect(func() -> void: _cycle_bind(b))
-	b.focus_entered.connect(func() -> void: _describe_quick(b))
-	b.mouse_entered.connect(func() -> void: _describe_quick(b))
-	return b
 
 
 func _build_sets(parent: Node) -> void:
@@ -452,23 +357,9 @@ func _build_detail(parent: Node) -> void:
 
 
 ## Grid wiring, done by hand because MenuUtil.chain does closed loops and this is
-## a column of two over a 2x2 with a button under it. Left/right wraps within a
-## row; up/down walks the whole thing and lands on Swap Set at the bottom, so
-## there is no orphan.
+## a 2x2 with a button under it. Left/right wraps within a row; up/down walks the
+## whole thing and lands on Swap Set at the bottom, so there is no orphan.
 func _wire_focus() -> void:
-	# The bind column, top to bottom. This used to be a wrapping ROW of three and
-	# the fan-out below it had to decide which hand each of ← ↑ → fell to; two
-	# stacked buttons make that a straight line, and the whole column falls into
-	# the left hand because that is the slot directly beneath it.
-	var cross: Array[Button] = [
-		_quick_slots[Game.QUICK_UP],
-		_quick_slots[Game.QUICK_DOWN],
-	]
-	MenuUtil.link_down(cross[0], cross[1])
-	for b in cross:
-		b.focus_neighbor_left = ^"."
-		b.focus_neighbor_right = ^"."
-
 	var cols := HANDS.size()
 	for i in _slots.size():
 		var row := i / cols
@@ -479,24 +370,23 @@ func _wire_focus() -> void:
 		var bottom := _slots[cols + col]
 		MenuUtil.link_down(top, bottom)
 		MenuUtil.link_down(bottom, _swap)
-	MenuUtil.link_down(cross[cross.size() - 1], _slots[0])
 	# Swap Set is the last control on the screen, so it closes the loop back to
-	# the top of the column -- everything here is reachable by pressing one
-	# direction repeatedly and nothing is an orphan. The way out used to be this
-	# last stop; it lives on the POUCH now, with the numbers it is decided from.
-	_swap.focus_neighbor_bottom = _swap.get_path_to(cross[0])
-	_swap.focus_next = _swap.get_path_to(cross[0])
+	# the top-left hand -- everything here is reachable by pressing one direction
+	# repeatedly and nothing is an orphan. The way out used to be this last stop;
+	# it lives on the POUCH now, with the numbers it is decided from.
+	_swap.focus_neighbor_bottom = _swap.get_path_to(_slots[0])
+	_swap.focus_next = _swap.get_path_to(_slots[0])
 	_swap.focus_neighbor_left = ^"."
 	_swap.focus_neighbor_right = ^"."
 
 
 # --- State ------------------------------------------------------------------
 
-## Focus entry point when the screen opens: the ↑ item button, because binding
-## items is what this screen is for and the hands below it rarely change.
+## Focus entry point when the screen opens: the primary right hand, because that
+## is the one the D-pad cycles in play and so the one a player comes here to set.
 func focus_first() -> void:
-	if not _quick_slots.is_empty() and _quick_slots[Game.QUICK_UP] != null:
-		_quick_slots[Game.QUICK_UP].grab_focus()
+	if not _slots.is_empty():
+		_slots[HANDS.find(Game.HAND_RIGHT)].grab_focus()
 
 
 func refresh() -> void:
@@ -510,15 +400,11 @@ func refresh() -> void:
 		_set_frames[i].modulate = Color.WHITE if live else Color(1, 1, 1, 0.62)
 	for b in _slots:
 		_paint(b)
-	for b in _quick_slots:
-		_paint_quick(b)
 	var focused := get_viewport().gui_get_focus_owner()
 	if _slots.has(focused):
 		_describe(focused as Button)
-	elif _quick_slots.has(focused):
-		_describe_quick(focused as Button)
 	else:
-		_describe_quick(_quick_slots[Game.QUICK_UP])
+		_describe(_slots[HANDS.find(Game.HAND_RIGHT)])
 
 
 func _paint(b: Button) -> void:
@@ -549,81 +435,8 @@ func _paint(b: Button) -> void:
 		value.text = "%s  (not owned)" % text
 
 
-func _paint_quick(b: Button) -> void:
-	var slot: int = b.get_meta(&"quick")
-	var id := Game.quick(slot)
-
-	var icon := b.get_node("Col/Art/Icon") as TextureRect
-	var letters := b.get_node("Col/Art/Letters") as Label
-	var value := b.get_node("Col/Value") as Label
-
-	var tex := ArmamentDb.icon(id)
-	icon.texture = tex
-	icon.visible = tex != null
-	letters.visible = tex == null
-	# An unbound button says so rather than showing a blank cell. A blank cell
-	# reads as a bug; "Unbound" reads as a choice you have not made yet.
-	letters.text = "·" if id == &"" else ArmamentDb.letter(id)
-	value.text = "Unbound" if id == &"" else ArmamentDb.slot_name(id)
-
-	# Marked when it is the thing currently in his right hand, so the screen
-	# answers "which button am I holding?" without the player working it out.
-	# The mark goes on the GLYPH, not after the name: appending " · drawn" made
-	# the longest names overrun the slot and sit on top of their neighbours.
-	var live := Game.armament(Game.HAND_RIGHT) == id and id != &""
-	var glyph: String = b.get_meta(&"glyph")
-	(b.get_node("Col/Caption") as Label).text = "%s ●" % glyph if live else glyph
-
-
 func _armament(set_index: int, hand: StringName) -> StringName:
 	return Game.armament_in(set_index, hand)
-
-
-func _cycle_bind(b: Button) -> void:
-	var slot: int = b.get_meta(&"quick")
-	var before := Game.quick(slot)
-	Game.cycle_quick_bind(slot)
-	if Game.quick(slot) == before:
-		notice.emit("You have not found anything to bind there yet.", false)
-		return
-	refresh()
-	_describe_quick(b)
-	value_settled.emit()
-
-
-func _describe_quick(b: Button) -> void:
-	if b == null or _detail_name == null:
-		return
-	var slot: int = b.get_meta(&"quick")
-	var action: StringName = b.get_meta(&"action")
-	var id := Game.quick(slot)
-
-	_detail_hand.text = "ITEM BUTTON  ·  %s" % MenuUtil.action_title(action)
-	_detail_name.text = "Unbound" if id == &"" else ArmamentDb.name_of(id)
-	_detail_blurb.text = ("Nothing on this button. Confirm to bind something you have found."
-		if id == &"" else ArmamentDb.blurb(id))
-
-	var ammo := ArmamentDb.ammo_of(id)
-	_detail_ammo.visible = ammo != &""
-	if ammo == &"arrows":
-		_detail_ammo.text = "%d arrows" % Game.arrows
-
-	# A bottle is DRUNK on the press, not drawn — see Game.use_quick for why the
-	# odd one out is the right shape. The legend has to say so, because every
-	# other thing on this cross behaves the other way.
-	var bottle_at := Game.bottle_index(id)
-	if bottle_at >= 0:
-		var held := Game.bottle(bottle_at)
-		_detail_ammo.visible = held != &""
-		if held != &"":
-			_detail_ammo.text = PotionDb.effect_of(held)
-		_detail_legend.text = ("In play: %s or %s drinks it." % [
-			MenuUtil.pad_label(action), MenuUtil.key_label(action)]) if held != &"" \
-			else "Empty. The alchemist fills it."
-		return
-
-	_detail_legend.text = "In play: %s or %s draws it, and puts it away again." % [
-		MenuUtil.pad_label(action), MenuUtil.key_label(action)]
 
 
 func _cycle(b: Button) -> void:
@@ -657,8 +470,13 @@ func _describe(b: Button) -> void:
 	if ammo == &"arrows":
 		_detail_ammo.text = "%d arrows" % Game.arrows
 
-	# Hands are changed HERE and nowhere else -- in play the D-pad only cycles
-	# between the sets you built here. Saying so on the screen is the only place
-	# a player finds out.
-	_detail_legend.text = "Confirm to change this hand. In play, %s / %s cycle the sets." % (
-		[MenuUtil.pad_label(&"loadout_prev"), MenuUtil.pad_label(&"loadout_next")])
+	# The two hands are not symmetrical in play and the legend has to say which
+	# one you are looking at. ← / → walk the RIGHT hand through the same pool this
+	# cell cycles; the left hand is set here and here only, because the D-pad has
+	# no spare direction for it and a shield you can lose mid-fight is a bug.
+	if hand == Game.HAND_RIGHT:
+		_detail_legend.text = "Confirm to change it. In play, %s / %s step this hand." % [
+			MenuUtil.pad_label(&"weapon_prev"), MenuUtil.pad_label(&"weapon_next")]
+	else:
+		_detail_legend.text = "Confirm to change it. In play, %s swaps the whole set." % (
+			MenuUtil.pad_label(&"loadout_swap"))

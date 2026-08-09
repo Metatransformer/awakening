@@ -17,11 +17,11 @@ extends RefCounted
 ## The claims:
 ##   1. A D-pad press draws the item, and it is still drawn a couple of seconds
 ##      and a walk later. Sticky is the feature, not an accident.
-##   2. `use_item` fires what is drawn. It is the item's button.
+##   2. `heavy` fires what is drawn. It is the item's button.
 ##   3. `attack` — the sword — puts the item away AND swings, on the SAME press.
 ##      Not "the next press swings": the press that cancels must also land the
 ##      blow, or the escape hatch costs a beat in the fight it is needed in.
-##   4. With the sword out and nothing locked, `use_item` is silent. It is not a
+##   4. With the sword out and nothing locked, `heavy` is silent. It is not a
 ##      second attack button; the lunge is what it becomes under a lock, and
 ##      p4_lunge.gd measures that in metres.
 ##
@@ -96,7 +96,7 @@ func run(rig) -> void:
 		String(combat.get(&"equipped")) == "hookshot")
 	await rig.capture(out.path_join("b_02_still_drawn.png"))
 
-	# --- 2. use_item is HELD, and the release is what fires -------------------
+	# --- 2. heavy is HELD, and the release is what fires -------------------
 	# Aimed at the wall rather than the post: what is being checked is that the
 	# button reaches the item at all. Where the chain GOES is ranged_kit.gd's.
 	#
@@ -122,20 +122,20 @@ func run(rig) -> void:
 	hero.velocity = Vector3.ZERO
 	await rig.wait_frames(20)
 
-	Input.action_press(&"use_item")
+	Input.action_press(&"heavy")
 	var fired_while_held := false
 	for _i in 60:
 		await rig.wait_frames(1)
 		if bool(hero.call(&"hooking")):
 			fired_while_held = true
 			break
-	_check("holding use_item did not fire the chain", not fired_while_held)
+	_check("holding heavy did not fire the chain", not fired_while_held)
 	_check("holding it brought the hookshot up instead (stance=%s)"
 		% hero.call(&"aim_item"), String(hero.call(&"aim_item")) == "hookshot")
 	_check("and the trigger is what zoomed", bool(hero.call(&"aiming")))
 	await rig.capture(out.path_join("b_02b_braced.png"))
 
-	Input.action_release(&"use_item")
+	Input.action_release(&"heavy")
 	var fired := false
 	# 90 frames, not 30. At 30 this beat failed roughly one run in two whenever
 	# the machine had a second Godot on it, and the failure reads as "the release
@@ -147,7 +147,7 @@ func run(rig) -> void:
 		if bool(hero.call(&"hooking")):
 			fired = true
 			break
-	_check("releasing use_item fired the hookshot", fired)
+	_check("releasing heavy fired the hookshot", fired)
 	await rig.capture(out.path_join("b_03_fired.png"))
 	# Let the pull finish and put him back on the post.
 	for _i in 180:
@@ -187,14 +187,14 @@ func run(rig) -> void:
 	_check("the same press also landed a sword blow (%d damage)" % landed, landed > 0)
 	await rig.capture(out.path_join("b_04_sword_back.png"))
 
-	# --- 4. use_item with the sword out and no lock is silent ----------------
+	# --- 4. heavy with the sword out and no lock is silent ----------------
 	await rig.wait_seconds(1.4)
 	_check("nothing is locked", hero.call(&"lock_target") == null)
 	mark = _hits.size()
 	var where: Vector3 = hero.global_position
-	await rig.tap(["use_item"])
+	await rig.tap(["heavy"])
 	await rig.wait_seconds(1.2)
-	_check("use_item with the sword out and no lock swung nothing (%d blow(s))"
+	_check("heavy with the sword out and no lock swung nothing (%d blow(s))"
 		% (_hits.size() - mark), _hits.size() == mark)
 	_check("...and did not move him (%.2f m)"
 		% where.distance_to(hero.global_position),

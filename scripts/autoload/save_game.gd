@@ -103,7 +103,7 @@ func save(slot: int) -> bool:
 		"has_map": Game.has_map,
 		"has_compass": Game.has_compass,
 		"items": Game.items,
-		"quick_slots": Game.quick_slots,
+		"item_selected": Game.item_selected,
 		"loadout": Game.loadout,
 		"loadout_set": Game.loadout_set,
 		"flags": Game.flags,
@@ -224,10 +224,13 @@ func load_slot(slot: int) -> Dictionary:
 	Game.flags.clear()
 	for k in (d.get("flags", {}) as Dictionary):
 		Game.flags[StringName(k)] = true
-	# "c_items" is the pre-C-button name; a save written under it still loads.
-	var slots: Array = d.get("quick_slots", d.get("c_items", []))
-	for i in mini(slots.size(), Game.quick_slots.size()):
-		Game.quick_slots[i] = StringName(slots[i])
+	# `quick_slots` / `c_items` were the two names the D-pad BINDINGS were saved
+	# under. There are no bindings any more (Game.item_selected), so an old save
+	# simply drops them -- the ring is derived from what you own, and what you own
+	# is in "items" and "bottles", which still load. The selection itself is
+	# clamped on read rather than trusted: a save with four bottles restored into
+	# a game with one is a `bottle_contents[3]` on the first press of X.
+	Game.item_selected = int(d.get("item_selected", 0))
 
 	# Armaments. Read defensively and per-hand rather than assigning the array
 	# wholesale: JSON hands back plain Strings in untyped Dictionaries, and a
@@ -252,7 +255,7 @@ func load_slot(slot: int) -> Dictionary:
 	Bus.magic_changed.emit(Game.magic, Game.max_magic)
 	Bus.key_count_changed.emit(Game.small_keys)
 	Bus.gold_changed.emit(Game.gold)
-	Bus.quick_slots_changed.emit(Game.quick_slots)
+	Bus.item_selected_changed.emit(Game.item_selected)
 	Bus.bottles_changed.emit(Game.bottle_contents)
 	Bus.components_changed.emit(Game.components)
 	Bus.loadout_changed.emit(Game.loadout_set,

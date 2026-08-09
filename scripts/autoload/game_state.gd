@@ -75,45 +75,36 @@ var has_compass: bool = false
 ## Item ids the player owns, e.g. &"hookshot".
 var items: Dictionary[StringName, bool] = {}
 
-# --- Quick slots: the C-buttons ---------------------------------------------
-## What is bound to D-pad ↑ and ↓ — Ocarina's C-buttons, in that order.
+# --- The selected item ------------------------------------------------------
+## Which bottle D-pad ↓ has stepped to, and X will use. An index into
+## `bottle_contents`, so it means nothing until you own a bottle.
 ##
-## Pressing one puts the bound item in the RIGHT hand; pressing it again puts
-## it away. That is what a C-button does in the source material: C-right with
-## the bow *draws the bow*, it does not open a menu. Binding is direct access,
-## which is the whole reason it beats cycling — you reach for the hookshot
-## because you want the hookshot, not because it is two presses from the sword.
+## THERE WAS A QUICK-SLOT BINDING SYSTEM HERE and it is gone. Four bindable D-pad
+## directions, an ownership gate, an auto-bind on pickup, a bind cycle and a card
+## on the equipment screen all existed to answer one question -- WHICH DIRECTION
+## is the bow on -- and a cycle does not ask it. What binding bought was direct
+## access: one press to the hookshot instead of two. What it cost was every
+## player having to visit a menu before their new bow meant anything, and a HUD
+## that had to draw four cells to say what one cell now says.
 ##
-## THERE WERE THREE OF THESE, on ←, ↑ and →, with the loadout swap on ↓. The
-## horizontal pair went to `loadout_prev` / `loadout_next` (see the D-pad note in
-## project.godot): four directions spent on one idea left the SET — the thing
-## Elden Ring puts on this D-pad — with no button of its own, and a set swap is
-## the coarse gear change a bound item cannot be.
-##
-## `&""` is an unbound slot and is not an error; a new game has two of them.
-const QUICK_SLOTS := 2
-const QUICK_UP := 0
-const QUICK_DOWN := 1
-## What may be bound, in bind-cycle order. The empty binding is first so
-## clearing a slot is one press past the end rather than a separate verb.
-##
-## The BOTTLES are appended to this at runtime by `quick_pool()` -- they are not
-## in `items`, there are between one and four of them, and which ones exist is a
-## thing the player changes at the alchemist. A const cannot answer that.
-const QUICK_POOL: Array[StringName] = [&"", &"bow", &"hookshot"]
-
-var quick_slots: Array[StringName] = [&"", &""]
+## Kept honest by `_clamp_item()` rather than by every caller: bottles are bought
+## AND emptied AND (at the alchemist) rearranged, so an index that was valid when
+## it was set is not an index that stays valid.
+var item_selected: int = 0
 
 # --- Armaments --------------------------------------------------------------
 ## Two loadouts, each with a right hand and a left hand, exactly as Elden Ring
-## arranges them. dpad ← / → cycle the SET; the hands within a set are changed on
-## the equipment screen (`cycle_armament`), which is the one place a change you
-## have to look at belongs.
+## arranges them. Both the SET and the hands within it are changed on the
+## equipment screen, which is the one place a change you have to look at belongs.
+##
+## In PLAY the thing that changes what is in the right hand is D-pad ← / →, which
+## steps that hand through the weapons you own (`cycle_weapon`) without touching
+## the set. D-pad ↑ swaps the set under it. The set is the pair; the ring is the
+## one hand.
 ##
 ## The alternate set is bow and arrows, which is the point of having two: the
 ## primary answers "something is in front of me" and the alternate answers
-## "something is not". Swapping is one button rather than a menu, because a
-## weapon switch you have to pause for is a weapon switch nobody makes.
+## "something is not".
 ##
 ## Ids, not Resources. The whole save file is ids (see save_game.gd), and a
 ## Resource reference here would be one more thing that cannot survive a scene
@@ -144,13 +135,10 @@ var flags: Dictionary[StringName, bool] = {}
 ##
 ## This is scaffolding and it is meant to be deleted. It is one constant and one
 ## call precisely so that deleting it is a two-line change: empty the array and
-## the game goes back to a hero with a sword, two empty C-buttons and an
-## alternate loadout that names a bow he has not found — which is the real
+## the game goes back to a hero with a sword, a weapon ring one stop long, and
+## an alternate loadout that names a bow he has not found — which is the real
 ## starting state and the one the equipment screen's "(not owned)" text exists
 ## to describe.
-##
-## `grant()` auto-binds each item to the first free C-button in order, so the
-## bow lands on dpad ↑ and the hookshot on dpad ↓ with no extra wiring.
 const STARTER_KIT: Array[StringName] = [&"bow", &"hookshot"]
 ## Enough to miss with. A quiver you can empty in one fight turns a test of the
 ## bow into a test of the arrow economy.
@@ -196,20 +184,19 @@ func reset() -> void:
 	items.clear()
 	bottle_contents.clear()
 	draughts.clear()
-	quick_slots = [&"", &""]
+	item_selected = 0
 	loadout = [
 		{HAND_RIGHT: &"sword", HAND_LEFT: &"shield"},
 		{HAND_RIGHT: &"bow", HAND_LEFT: &"arrow"},
 	]
 	loadout_set = PRIMARY
 	flags.clear()
-	# Say that the hands and the buttons emptied. Without this, resetting cleared
-	# `items` and `loadout` in silence and every listener kept drawing the gear
-	# it last heard about — a hero still wearing a stowed bow he no longer owns,
-	# and item buttons still labelled with it. Announcing state is not optional
-	# for state nobody polls.
+	# Say that the hands and the selection emptied. Without this, resetting
+	# cleared `items` and `loadout` in silence and every listener kept drawing
+	# the gear it last heard about — a hero still wearing a stowed bow he no
+	# longer owns. Announcing state is not optional for state nobody polls.
 	_announce_loadout()
-	Bus.quick_slots_changed.emit(quick_slots)
+	Bus.item_selected_changed.emit(item_selected)
 	Bus.bottles_changed.emit(bottle_contents)
 	Bus.components_changed.emit(components)
 	Bus.ammo_changed.emit(&"arrows", arrows)
@@ -518,13 +505,8 @@ func add_bottle() -> bool:
 	if bottle_contents.size() >= K.BOTTLE_MAX:
 		return false
 	bottle_contents.append(&"")
-	# Straight onto the first free button, exactly as a found item is (`grant`).
-	# A bottle you paid for and then have to go and bind in a menu is a bottle
-	# you do not have in the fight you bought it for.
-	for i in quick_slots.size():
-		if quick_slots[i] == &"":
-			bind_quick(i, bottle_id(bottle_contents.size() - 1))
-			break
+	# The new bottle is on the ring the moment it is bought -- that is what a
+	# cycle gives you for free, and it is what the auto-bind existed to fake.
 	Bus.bottles_changed.emit(bottle_contents)
 	return true
 
@@ -558,14 +540,14 @@ func drink_bottle(i: int) -> bool:
 	return true
 
 
-## The quick-slot id for bottle `i`. Bottles bind one at a time and by index,
+## The item id for bottle `i`. Bottles are addressed one at a time and by index,
 ## because that is what the player reaches for: "the red one on ←", never "a
 ## bottle, whichever".
 static func bottle_id(i: int) -> StringName:
 	return StringName("bottle_%d" % (i + 1))
 
 
-## The bottle a quick-slot id names, or -1 for anything that is not a bottle you
+## The bottle an id names, or -1 for anything that is not a bottle you
 ## own. Parsed rather than looked up, so owning three bottles and owning four is
 ## not two different tables.
 func bottle_index(id: StringName) -> int:
@@ -622,18 +604,14 @@ func spend_key() -> bool:
 
 # --- Items and flags --------------------------------------------------------
 
+## Finding a weapon puts it in the cycle and nothing else happens -- no auto-bind
+## and no menu trip, because there is no longer a button for it to land on. The
+## bow you just found is one press of D-pad → away, which is what the auto-bind
+## was for.
 func grant(item_id: StringName) -> void:
 	if items.get(item_id, false):
 		return
 	items[item_id] = true
-	# Auto-bind a newly found item to the first empty C slot, as the source
-	# material does. Finding the bow and then having to open a menu before you
-	# can shoot it is the one thing Ocarina never makes you do.
-	if QUICK_POOL.has(item_id):
-		for i in quick_slots.size():
-			if quick_slots[i] == &"":
-				bind_quick(i, item_id)
-				break
 	Bus.item_acquired.emit(item_id)
 
 
@@ -641,105 +619,68 @@ func has(item_id: StringName) -> bool:
 	return items.get(item_id, false)
 
 
-# --- Quick slots ------------------------------------------------------------
+# --- The selected item ------------------------------------------------------
 
-func quick(slot: int) -> StringName:
-	if slot < 0 or slot >= quick_slots.size():
-		return &""
-	return quick_slots[slot]
-
-
-## Everything bindable RIGHT NOW, in bind-cycle order: the const pool, then one
-## entry per bottle you own. A function rather than a const because the bottles
-## are bought (see QUICK_POOL), and every caller that used to read QUICK_POOL
-## reads this instead -- there is one answer to "what can go on a button" and
-## the bind cycle, the ownership gate and the auto-bind all ask it here.
-func quick_pool() -> Array[StringName]:
-	var pool: Array[StringName] = QUICK_POOL.duplicate()
-	for i in bottle_contents.size():
-		pool.append(bottle_id(i))
-	return pool
+## Which bottle is under D-pad ↓ right now, or `&""` if you own none.
+func selected_item() -> StringName:
+	_clamp_item()
+	return bottle_id(item_selected) if bottle_count() > 0 else &""
 
 
-## Can `id` go on a button? The empty binding always can; an item has to be
-## owned and a bottle has to exist. This is the gate `bind_quick` keeps, pulled
-## out so the equipment screen can grey a row without re-deriving the rule.
-func quick_bindable(id: StringName) -> bool:
-	if id == &"":
-		return true
-	if bottle_index(id) >= 0:
-		return true
-	return QUICK_POOL.has(id) and has(id)
+## What is IN the selected bottle, or `&""` for empty and for no bottle at all.
+## The HUD draws this; `selected_item()` is what names the glass around it.
+func selected_potion() -> StringName:
+	_clamp_item()
+	return bottle(item_selected)
 
 
-## Put `item_id` on a C-button. Refuses anything unowned, because a button that
-## draws a bow you have never found is a button that lies about your inventory.
-func bind_quick(slot: int, item_id: StringName) -> bool:
-	if slot < 0 or slot >= quick_slots.size():
-		return false
-	if not quick_bindable(item_id):
-		return false
-	# One item, one button. Binding something already on another slot MOVES it
-	# rather than duplicating it -- two buttons that draw the same bow is two
-	# buttons doing one button's job.
-	for i in quick_slots.size():
-		if i != slot and quick_slots[i] == item_id and item_id != &"":
-			quick_slots[i] = &""
-	quick_slots[slot] = item_id
-	Bus.quick_slots_changed.emit(quick_slots)
-	return true
-
-
-## Cycle a slot's binding forward through what the player owns. The bind UI.
-func cycle_quick_bind(slot: int, dir: int = 1) -> void:
-	if slot < 0 or slot >= quick_slots.size():
-		return
-	var available: Array[StringName] = []
-	for id in quick_pool():
-		if quick_bindable(id):
-			available.append(id)
-	if available.size() <= 1:
-		return
-	var at := available.find(quick(slot))
-	bind_quick(slot, available[posmod(at + signi(dir), available.size())])
-
-
-## Press a C-button: draw what is bound there, or put it away if it is already
-## out. An unbound slot does nothing at all -- deliberately silent, because a
-## refusal noise on a button you never assigned is noise about your own choice.
+## D-pad ↓. Steps to the next bottle, wrapping.
 ##
-## A BOTTLE is drunk, not drawn. That asymmetry is the point of binding one: the
-## bow is a thing you take out and then use, and a draught is a thing you use.
-## Making the bottle a two-press item -- draw it, then press the use button --
-## would put the slowest input in the game on the button you reach for when you
-## are about to die.
-func use_quick(slot: int) -> void:
-	var id := quick(slot)
-	var bottle_at := bottle_index(id)
-	if bottle_at >= 0:
-		# An empty bottle on a button is silent for the same reason an unbound
-		# one is: you know it is empty, the HUD cell says so, and a buzzer in the
-		# middle of a fight is the game shouting about a thing you already knew.
-		drink_bottle(bottle_at)
+## Steps through ALL of them, empties included, and that is deliberate: an empty
+## bottle is a thing you own and are about to fill, and a cycle that silently
+## skipped it would put the player's four bottles on a ring whose length changed
+## every time they drank. A ring you can count is a ring you can use blind.
+func cycle_item(dir: int = 1) -> void:
+	var n := bottle_count()
+	if n <= 1:
 		return
-	if id == &"" or not has(id):
-		return
-	var live := clampi(loadout_set, 0, loadout.size() - 1)
-	# Indexing an untyped Dictionary hands back Variant, so the comparison has
-	# to be annotated or the parser cannot infer `stow`. See CLAUDE.md §3.
-	var held: StringName = loadout[live][HAND_RIGHT]
-	loadout[live][HAND_RIGHT] = &"sword" if held == id else id
-	_announce_loadout()
+	item_selected = posmod(_clamped_item() + signi(dir), n)
+	Bus.item_selected_changed.emit(item_selected)
+
+
+## X. Drink what is selected. Silent on an empty bottle and on no bottle at all,
+## for the same reason the old unbound slot was: you know it is empty, the HUD
+## cell says so, and a buzzer in the middle of a fight is the game shouting about
+## a thing you already knew.
+##
+## A bottle is USED, never drawn. That asymmetry is why items and weapons are on
+## different inputs at all: the bow is a thing you take out and then fire, and a
+## draught is a thing you swallow. Making the bottle a two-press item -- draw it,
+## then press the trigger -- would put the slowest input in the game on the
+## button you reach for when you are about to die.
+func use_selected_item() -> bool:
+	if bottle_count() == 0:
+		return false
+	return drink_bottle(_clamped_item())
+
+
+## D-pad ← / →. Step the right hand through the weapons you own.
+##
+## A thin wrapper over `cycle_armament`, which the equipment screen has always
+## used, so the button and the menu are the same code and cannot drift. It exists
+## as its own name because the CALLER means something different: the screen is
+## editing a set, and this is the player reaching for a weapon.
+func cycle_weapon(dir: int = 1) -> void:
+	cycle_armament(HAND_RIGHT, dir)
 
 
 ## Put the sword back, whatever was in the right hand. Returns false if it was
 ## already there, so a caller can tell a real stow from a no-op.
 ##
-## The escape hatch for a sticky draw. `use_quick` is a TOGGLE, which means the
-## only way out of a drawn hookshot used to be remembering which of three D-pad
-## directions you pressed to draw it -- and the player who wants their sword back
-## is by definition the player who is not thinking about the D-pad. The attack
-## button calls this, so the way out is the button you were already reaching for.
+## Not on any button now -- the sword is a stop on the weapon ring, so the way
+## back to it is ← or →. This survives for the places that have to take a bow out
+## of the hero's hands WITHOUT the player asking: the shop gate, a cutscene, a
+## scene change that must not leave him aiming at a vendor.
 func stow_item() -> bool:
 	var live := clampi(loadout_set, 0, loadout.size() - 1)
 	var held: StringName = loadout[live][HAND_RIGHT]
@@ -750,6 +691,21 @@ func stow_item() -> bool:
 	return true
 
 
+## The selection, forced back inside the bottles that exist. Bottles are bought,
+## emptied and refilled, so an index that was valid when it was set is not an
+## index that stays valid -- and the failure is silent (you press X and drink a
+## bottle you were not looking at) rather than loud.
+func _clamped_item() -> int:
+	return clampi(item_selected, 0, maxi(0, bottle_count() - 1))
+
+
+func _clamp_item() -> void:
+	var at := _clamped_item()
+	if at != item_selected:
+		item_selected = at
+		Bus.item_selected_changed.emit(item_selected)
+
+
 # --- Armaments --------------------------------------------------------------
 
 ## What is in `hand` (Game.HAND_RIGHT / HAND_LEFT) in the live set.
@@ -758,25 +714,15 @@ func armament(hand: StringName) -> StringName:
 	return set_data.get(hand, &"")
 
 
-## Swap primary <-> alternate. The equipment screen's button, and the two-set
-## special case of `cycle_loadout` below.
+## Swap primary <-> alternate. D-pad ↑, and the equipment screen's Swap Set
+## button -- one function, so the two cannot disagree.
+##
+## ↑ is the direction Elden Ring spends on its spell row, which this game has no
+## content for; a set swap is the coarsest gear change there is, so it gets the
+## direction that is not stepping anything. If a third set is ever added this
+## becomes a wrapping step; it is a bool toggle today because there are two.
 func swap_loadout() -> void:
 	loadout_set = ALTERNATE if loadout_set == PRIMARY else PRIMARY
-	_announce_loadout()
-
-
-## Step the live SET, wrapping. dpad ← is -1 and dpad → is +1.
-##
-## An index step rather than a bool toggle even though there are exactly two sets
-## today and both directions therefore land on the same one. That is not
-## indulgence: the D-pad is now the loadout's button, and the difference between
-## "cycles the set" and "toggles between the two sets" is whether a third set is
-## a data change or a control change. It is a data change.
-func cycle_loadout(dir: int) -> void:
-	var n := loadout.size()
-	if n <= 1:
-		return
-	loadout_set = posmod(clampi(loadout_set, 0, n - 1) + signi(dir), n)
 	_announce_loadout()
 
 

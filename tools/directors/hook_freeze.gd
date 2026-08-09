@@ -76,12 +76,12 @@ func run(rig) -> void:
 	var foe_base := _baseline(foe)
 	var bystander_base := _baseline(bystander)
 
-	# Draw it. dpad up is the hookshot's quick slot (ranged_kit asserts that
-	# binding; this beat only needs it to be true).
-	await rig.tap(["item_up"])
+	# Draw it, by stepping the weapon ring with → (ranged_kit owns the assertions
+	# about the ring itself; this beat only needs the hookshot in his hand).
+	await rig.draw_weapon(&"hookshot")
 	await rig.wait_frames(10)
 	if Game.armament(Game.HAND_RIGHT) != &"hookshot":
-		_fail("dpad up did not draw the hookshot (right hand holds %s)"
+		_fail("the weapon ring did not draw the hookshot (right hand holds %s)"
 			% Game.armament(Game.HAND_RIGHT))
 		return
 
@@ -99,7 +99,7 @@ func run(rig) -> void:
 	# first run of this director photographed the result: the chain went into the
 	# cobbles two metres in front of his boots, and the beat below blamed
 	# `L_ENEMY` for it.
-	await rig.hold(["use_item"], 40)
+	await rig.hold(["heavy"], 40)
 	await rig.wait_frames(3)
 	await rig.capture(out.path_join("hook_01_chain_out.png"))
 

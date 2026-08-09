@@ -217,6 +217,27 @@ func tap(actions: Array) -> void:
 	await hold(actions, 2)
 
 
+## Put `id` in the hero's right hand by PRESSING D-pad →, the way a player does.
+##
+## Every director that wanted the bow out used to tap one D-pad direction, because
+## the bow lived on a bound quick slot and its direction was a fact you could
+## assert. That system is gone: the D-pad steps a RING now, so "draw the bow" is
+## no longer one press of a known button — it is however many presses of → the
+## ring needs, and the count depends on what the player owns.
+##
+## It goes through `tap` rather than setting `Game.loadout` directly on purpose.
+## A director that assigns the hand is testing the renderer; one that presses the
+## button is testing the button, and the button is the thing that broke last
+## time. Returns false (and the caller should fail) when the ring never lands on
+## `id` — which is what "you do not own it" looks like from out here.
+func draw_weapon(id: StringName, limit: int = 8) -> bool:
+	for i in limit:
+		if Game.armament(Game.HAND_RIGHT) == id:
+			return true
+		await tap(["weapon_next"])
+	return Game.armament(Game.HAND_RIGHT) == id
+
+
 ## Hold actions for `seconds` of game time.
 ##
 ## Anything the GAME measures in seconds -- a hold-to-activate prompt, a charge,

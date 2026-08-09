@@ -9,7 +9,7 @@ extends RefCounted
 ## Nothing but a strip of frames says which of those two you are looking at.
 ##
 ## It now also owns the TRIGGER, which is the second thing a passing assertion
-## could not tell you about. `use_item` is a held trigger: down pulls, up looses,
+## could not tell you about. `heavy` is a held trigger: down pulls, up looses,
 ## and the shot waits at full draw for as long as the player waits. It fired on
 ## the press for a while — so pulling RT to aim spent the arrow before the stick
 ## had moved — and every beat below still passed, because an arrow that leaves
@@ -74,12 +74,12 @@ func run(rig) -> void:
 		_fail("no AnimationTree / no HeroRanged")
 		return
 
-	# dpad left draws the bow. Pressed, not set behind the game's back
+	# D-pad → steps the ring to the bow. Pressed, not set behind the game's back
 	# (docs/CONTRACT.md §4.1).
-	await rig.tap(["item_left"])
+	await rig.draw_weapon(&"bow")
 	await rig.wait_frames(24)
 	if Game.armament(Game.HAND_RIGHT) != &"bow":
-		_fail("dpad left did not put the bow in his hand")
+		_fail("the weapon ring did not put the bow in his hand")
 		return
 	_ok("the bow is in his hand")
 
@@ -109,7 +109,7 @@ func run(rig) -> void:
 		marks.append({"t": draw_time + loose_time * f, "phase": "loose"})
 
 	Engine.time_scale = SLOW
-	await rig.tap(["use_item"])
+	await rig.tap(["heavy"])
 
 	var shots: Array[Image] = []
 	var seen_charge_active := false
@@ -209,7 +209,7 @@ func _hold_beat(rig, hero: Hero, cam: Camera3D, out: String,
 	var ranged: HeroRanged = hero.ranged
 
 	await rig.wait_frames(1)
-	Input.action_press(&"use_item")
+	Input.action_press(&"heavy")
 
 	var held_frames := int(draw_time * 3.0 * Engine.physics_ticks_per_second)
 	var fired_while_held := false
@@ -245,7 +245,7 @@ func _hold_beat(rig, hero: Hero, cam: Camera3D, out: String,
 	DirAccess.make_dir_recursive_absolute(out)
 	walking.save_png(out.path_join("bow_hold_walk.png"))
 
-	Input.action_release(&"use_item")
+	Input.action_release(&"heavy")
 
 	# Generous: the loose has to start, spawn the arrow and run its clip out.
 	var fired_after := false

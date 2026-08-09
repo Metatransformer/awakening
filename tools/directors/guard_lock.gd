@@ -116,10 +116,12 @@ func run(rig) -> void:
 	_check("R3 let go again", hero.lock_target() == null)
 
 	# --- 5. the guard is what makes the lunge reachable ----------------------
-	# `use_item` with the sword out is silent unless something is locked
-	# (p4_lunge.gd owns that claim). Before this change the only way to satisfy
-	# it was an R3 toggle; the point of putting targeting on the trigger is that
-	# the guard now does it, so "brace and leap at him" is one hand.
+	# `heavy` with the sword out is an overhead swing on the spot UNLESS something
+	# is locked, and then it is the leap (p4_lunge.gd owns that claim). Before
+	# this change the only way to satisfy it was an R3 toggle; the point of
+	# putting targeting on the trigger is that the guard now does it, so "brace
+	# and leap at him" is one hand. The 1.5 m of closed distance below is what
+	# tells the two apart — an overhead closes nothing.
 	#
 	# PostA has to be the only lockable thing for the same reason p4_lunge.gd
 	# clears the room: acquisition is scored in SCREEN space, so from the middle
@@ -142,7 +144,7 @@ func run(rig) -> void:
 		hero.lock_target() == post)
 	var gap_before := _gap(hero, post)
 	_hits.clear()
-	await rig.tap(["use_item"])
+	await rig.tap(["heavy"])
 	await rig.wait_frames(45)
 	var gap_after := _gap(hero, post)
 	Input.action_release(&"shield")

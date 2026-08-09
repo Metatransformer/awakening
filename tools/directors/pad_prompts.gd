@@ -25,7 +25,7 @@ extends RefCounted
 
 ## Actions whose cap has to differ between the two devices. `interact` is the
 ## one the prompt line prints, so it is the load-bearing one.
-const WATCH := [&"attack", &"use_item", &"shield", &"context", &"interact",
+const WATCH := [&"attack", &"heavy", &"shield", &"context", &"interact",
 	&"z_target", &"item_up", &"inventory"]
 
 var _fail := 0

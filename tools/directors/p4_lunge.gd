@@ -1,14 +1,14 @@
 extends RefCounted
 ## Does Z-targeting buy you an attack you cannot otherwise make?
 ##
-## The lunge has its own button now: `use_item`, the one that fires the bow when
+## The lunge has its own button now: `heavy`, the one that fires the bow when
 ## an item is drawn. With the sword out and something locked it is the leap, and
 ## with nothing locked it is silent — which is OOT's A exactly. What this
 ## measures is METRES CLOSED, because "he leapt" is a claim about distance and
 ## the pose cannot settle it.
 ##
 ## Four claims:
-##   1. Locked, `use_item` closes the gap and lands the blow. Distance before
+##   1. Locked, `heavy` closes the gap and lands the blow. Distance before
 ##      minus distance after is the leap.
 ##   2. It hurts more than a light swing. It is a commitment; it should pay.
 ##   3. UNLOCKED, the same inputs do NOT leap. If they do, Z-targeting bought
@@ -184,7 +184,7 @@ func _place_at(hero: Node3D, post_pos: Vector3, range_m: float) -> void:
 	hero.set(&"facing_yaw", atan2(-inward.x, -inward.z))
 
 
-## Hold the stick toward the target, press `use_item`, and report what landed.
+## Hold the stick toward the target, press `heavy`, and report what landed.
 ##
 ## The stick is no longer a GATE — the lunge stopped sharing the attack button,
 ## and a hidden stick rule on a dedicated button is just a button that
@@ -199,14 +199,14 @@ func _lunge(rig, _hero: Node3D) -> int:
 	# is answered against the PHYSICS frame counter: a press and release that
 	# both land between two physics ticks never happened as far as the game is
 	# concerned, and this director lost a whole unlocked attack that way.
-	Input.action_press(&"use_item")
+	Input.action_press(&"heavy")
 	# The stick comes off almost immediately: held any longer it lets the
 	# unlocked control run at the post under its own steam, which is ground
 	# closed that has nothing to do with a leap.
 	await rig.wait_frames(2)
 	Input.action_release(&"move_up")
 	await rig.wait_frames(8)
-	Input.action_release(&"use_item")
+	Input.action_release(&"heavy")
 	for _i in 240:
 		if _hits.size() > before:
 			return _hits[before]

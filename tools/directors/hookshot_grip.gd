@@ -39,9 +39,9 @@ func run(rig) -> void:
 
 	var hero = rig.get_nodes_in_group(&"player")[0]
 
-	# dpad up draws it. The STOWED mount is a different node with its own
-	# rotation, so drawing is what puts the one under test on screen.
-	await rig.tap(["item_up"])
+	# D-pad → steps the ring to it. The STOWED mount is a different node with its
+	# own rotation, so drawing is what puts the one under test on screen.
+	await rig.draw_weapon(&"hookshot")
 	await rig.wait_frames(24)
 	if hero.combat == null or hero.combat.hookshot == null:
 		print("GRIP FAIL no hookshot model mounted")

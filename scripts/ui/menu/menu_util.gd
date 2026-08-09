@@ -21,8 +21,7 @@ const ACTION_NAMES := {
 	# Lock-on is a TOGGLE, and on the pad it is the left trigger (OOT's Z) with
 	# R3 kept as the thumb's shortcut. Pressed with nothing lockable it puts the
 	# camera back behind you, which is the half of this button players actually
-	# reach for. The three item buttons are the C-pad: whatever the player bound
-	# to them, bound in the Items screen.
+	# reach for.
 	&"z_target": "Lock On / Recentre",
 	# The sword is the two right shoulder buttons: the fast chain on one, the
 	# heavy on the other. The heavy row has to name the hold and the item, because
@@ -32,11 +31,15 @@ const ACTION_NAMES := {
 	&"shield": "Guard / Lock On (hold)",
 	&"context": "Dodge / Sprint (hold)",
 	&"interact": "Interact / Talk",
-	&"sheathe": "Put Away / Draw Sword",
-	&"loadout_prev": "Loadout ←",
-	&"loadout_next": "Loadout →",
-	&"item_up": "Item ↑",
-	&"item_down": "Item ↓",
+	&"use_item": "Use Item",
+	&"jump": "Jump",
+	# The three cycles. Named as cycles, because "Weapon ←" would read as a slot
+	# and the whole point of the change that made these is that there are no
+	# slots -- see the D-pad note in project.godot.
+	&"weapon_prev": "Previous Weapon",
+	&"weapon_next": "Next Weapon",
+	&"item_next": "Next Item",
+	&"loadout_swap": "Swap Loadout",
 	&"first_person": "First Person",
 	&"pause": "Pause",
 	&"inventory": "Pouch",

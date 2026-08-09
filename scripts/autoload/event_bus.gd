@@ -14,10 +14,14 @@ signal magic_changed(magic: int, max_magic: int)
 signal stamina_changed(stamina: float, max_stamina: float)
 signal ammo_changed(id: StringName, count: int)
 signal rupees_changed(count: int)
-signal c_items_changed(slots: Array)
-## What is bound to the three C-buttons (D-pad ←, ↑, →) changed. See
-## Game.quick_slots. Supersedes c_items_changed, which nothing emits any more.
-signal quick_slots_changed(slots: Array)
+## D-pad ↓ stepped to a different bottle. `index` is into Game.bottle_contents.
+##
+## Replaces `quick_slots_changed` and, before that, `c_items_changed` -- both of
+## which announced which item was on which BUTTON, a question the game no longer
+## asks (see the note on Game.item_selected). Neither is emitted any more and
+## neither has a listener; they are gone rather than kept as aliases, because a
+## signal nothing emits is a signal the next reader will wire something to.
+signal item_selected_changed(index: int)
 ## An armament changed hands, or the whole set was swapped. `set_index` is which
 ## loadout is live (0 primary, 1 alternate). See Game.loadout.
 signal loadout_changed(set_index: int, right: StringName, left: StringName)

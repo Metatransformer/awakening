@@ -1,23 +1,33 @@
 extends RefCounted
-## The heavy has no button. Does holding the attack button still get you one?
+## The sword is two buttons: the light chain on RB, the heavy on RT. Does the
+## trigger give you the heavy on the press AND the spin on the hold?
 ##
-## This replaces p4_heavy.gd, which pressed a `heavy_attack` action that no
-## longer exists. The blow is the same blow; what changed is that reaching it
-## costs TIME on a button you were already holding rather than a second button —
-## which is the arrangement every Zelda spin attack has used, and which has one
-## specific way of going wrong: the hold eats the tap. So the claims are:
+## This is the third layout this director has measured. It replaced p4_heavy.gd,
+## which pressed a `heavy_attack` action that no longer exists; then it measured
+## one button that was tap-light / hold-heavy; and now the two verbs have a
+## button each and the HOLD on the heavy's button buys the spin. What is worth
+## measuring did not change much, because the failure mode did not: a button
+## that carries a press meaning and a hold meaning can always eat one of them.
 ##
-##   1. `heavy_attack` is GONE and `use_item` exists. A layout edit that did not
-##      take is the cheapest failure here and the hardest to see in a frame.
-##   2. A tap still swings immediately. The light attack must not have acquired
-##      `charge_time` of latency in exchange for the charge.
-##   3. A SHORT hold is just a tap — one blow, nothing extra on release.
-##      Otherwise every swing is a heavy and the light button is dead content.
-##   4. A LONG hold arms `combat.charged`, and letting go lands a SECOND, bigger
-##      blow. That is the whole feature.
-##   5. The heavy still arrives later than the light. Its cost is the
-##      commitment, so a heavy that connects as fast as a light is free.
+##   1. `heavy_attack` is GONE and both `attack` and `heavy` exist. A layout edit
+##      that did not take is the cheapest failure here and the hardest to see in
+##      a frame.
+##   2. A tap on `attack` still swings immediately, with no charge latency.
+##   3. A tap on `heavy` lands a BIGGER blow than the light, and LATER. Its cost
+##      is the commitment; a heavy that lands as fast as a light is free.
+##   4. A SHORT hold of `heavy` is just that heavy — one blow, nothing extra on
+##      the release. Otherwise the spin is not a choice, it is a side effect.
+##   5. A LONG hold arms `combat.charged`, and letting go lands a SECOND blow.
+##      That is the whole feature.
 ##   6. The shield still works, on a layout that moved two buttons around it.
+##   7. An EMPTY stamina bar refuses the swing outright. That is the new gate
+##      (K.STAMINA_SWING / _HEAVY / _SPIN) and nothing else in the project
+##      photographs it.
+##
+## Stamina is refilled before each MEASURED press, deliberately. A director that
+## measures the swing must not also be measuring the bar — the same reason the
+## hero is placed on the post rather than walked onto it. Claim 7 is the one
+## place the bar is allowed to be the subject, and it empties it on purpose.
 ##
 ## Damage is read off the post's `struck` signal, NOT off `total_damage`. The
 ## post clears its running total after 4 s of quiet, and this director both holds
@@ -56,15 +66,15 @@ func run(rig) -> void:
 	# catches a project.godot edit that did not take — including the DELETION,
 	# because a leftover `heavy_attack` still bound to X would fire a heavy on
 	# every press of the button that is now the light chain.
-	for action in [&"attack", &"use_item", &"shield"]:
+	for action in [&"attack", &"heavy", &"shield"]:
 		if not InputMap.has_action(action):
 			print("CHARGE FAIL action missing from the InputMap: ", action)
 			fails += 1
 	if InputMap.has_action(&"heavy_attack"):
 		print("CHARGE FAIL `heavy_attack` still exists — the heavy is the hold now")
 		fails += 1
-	print("CHARGE binds attack=%s use_item=%s shield=%s"
-		% [_binds(&"attack"), _binds(&"use_item"), _binds(&"shield")])
+	print("CHARGE binds attack=%s heavy=%s shield=%s"
+		% [_binds(&"attack"), _binds(&"heavy"), _binds(&"shield")])
 
 	var post: Node = scene.get_node_or_null(^"PostA")
 	if post == null:
@@ -92,7 +102,8 @@ func run(rig) -> void:
 
 	var charge_time: float = float(combat.get(&"charge_time"))
 
-	# --- the tap, for the numbers the charge has to beat ---------------------
+	# --- the light tap, for the numbers the heavy has to beat ----------------
+	_refill()
 	var mark := _hits.size()
 	await rig.tap(["attack"])
 	var light_frames := await _frames_to_hit(rig, mark)
@@ -101,15 +112,26 @@ func run(rig) -> void:
 	await rig.capture(out.path_join("h_01_after_light.png"))
 	await rig.wait_seconds(LAPSE)
 
-	# --- a hold too short to charge is just a tap ----------------------------
+	# --- the heavy tap -------------------------------------------------------
+	_refill()
+	mark = _hits.size()
+	await rig.tap(["heavy"])
+	var heavy_frames := await _frames_to_hit(rig, mark)
+	var heavy_dmg := _hit(mark)
+	await rig.wait_seconds(LAPSE)
+	await rig.capture(out.path_join("h_01b_after_heavy.png"))
+	await rig.wait_seconds(LAPSE)
+
+	# --- a hold too short to charge is just that heavy -----------------------
 	# Held to 60% of the way, deliberately not "one frame under": what is being
 	# checked is that a hurried press does not accidentally charge, and a player
 	# mashing holds the button for a good fraction of the window every time.
+	_refill()
 	mark = _hits.size()
-	Input.action_press(&"attack")
+	Input.action_press(&"heavy")
 	await rig.wait_seconds(charge_time * 0.6)
 	var short_charged: bool = bool(combat.get(&"charged"))
-	Input.action_release(&"attack")
+	Input.action_release(&"heavy")
 	await rig.wait_seconds(LAPSE)
 	var short_blows := _hits.size() - mark
 	var short_dmg := _hit(mark)
@@ -118,31 +140,49 @@ func run(rig) -> void:
 	# --- the long hold, photographed across the wind-up ----------------------
 	# The sheet cannot also be the thing that times the swing: capture() stalls
 	# the frame clock, so the numbers come from the untouched runs either side.
-	Input.action_press(&"attack")
+	_refill()
+	Input.action_press(&"heavy")
 	for i in 4:
 		await rig.wait_frames(5)
 		await rig.capture(out.path_join("h_02_charge_%d.png" % i))
 	var sheet_charged: bool = bool(combat.get(&"charged"))
-	Input.action_release(&"attack")
+	Input.action_release(&"heavy")
 	for i in 4:
 		await rig.wait_frames(5)
 		await rig.capture(out.path_join("h_02_charge_%d.png" % (i + 4)))
 	await rig.wait_seconds(LAPSE)
-	await rig.capture(out.path_join("h_03_after_heavy.png"))
+	await rig.capture(out.path_join("h_03_after_spin.png"))
 	await rig.wait_seconds(LAPSE)
 
 	# --- the same hold again, timed instead of photographed ------------------
+	_refill()
 	mark = _hits.size()
-	Input.action_press(&"attack")
+	Input.action_press(&"heavy")
 	await rig.wait_seconds(charge_time + 0.35)
 	var charged: bool = bool(combat.get(&"charged"))
-	Input.action_release(&"attack")
-	# Counted from the RELEASE, which is when the heavy is asked for. Counting
+	Input.action_release(&"heavy")
+	# Counted from the RELEASE, which is when the spin is asked for. Counting
 	# from the press would measure the hold, and the hold is the player's choice
 	# rather than a property of the blow.
-	var heavy_frames := await _frames_to_hit(rig, mark + 1)
-	var held_light := _hit(mark)
-	var heavy_dmg := _hit(mark + 1)
+	var spin_frames := await _frames_to_hit(rig, mark + 1)
+	var held_heavy := _hit(mark)
+	var spin_dmg := _hit(mark + 1)
+	await rig.wait_seconds(LAPSE)
+
+	# --- an empty bar refuses ------------------------------------------------
+	# Both buttons, because the gate is on the SWING rather than on either button.
+	# Emptied through `spend_stamina` and not by assigning the field: spending is
+	# what arms the regen delay, and without it the bar hands 16 units back -- a
+	# whole light swing -- inside the 0.35 s between these two taps.
+	_drain()
+	mark = _hits.size()
+	await rig.tap(["attack"])
+	await rig.wait_seconds(0.3)
+	await rig.tap(["heavy"])
+	await rig.wait_seconds(0.6)
+	var spent_blows := _hits.size() - mark
+	await rig.capture(out.path_join("h_03b_no_stamina.png"))
+	_refill()
 	await rig.wait_seconds(LAPSE)
 
 	# --- the shield still works, on its new binding -------------------------
@@ -155,38 +195,46 @@ func run(rig) -> void:
 	await rig.wait_frames(24)
 	var blocked_down: bool = bool(combat.get(&"blocking"))
 
-	print("CHARGE tap dmg=%d contact_frame=%d" % [light_dmg, light_frames])
+	print("CHARGE light tap dmg=%d contact_frame=%d" % [light_dmg, light_frames])
+	print("CHARGE heavy tap dmg=%d contact_frame=%d" % [heavy_dmg, heavy_frames])
 	print("CHARGE short hold (%.2fs) blows=%d dmg=%d charged=%s"
 		% [charge_time * 0.6, short_blows, short_dmg, short_charged])
 	print("CHARGE long hold press dmg=%d release dmg=%d release_to_contact=%d charged=%s/%s"
-		% [held_light, heavy_dmg, heavy_frames, charged, sheet_charged])
+		% [held_heavy, spin_dmg, spin_frames, charged, sheet_charged])
+	print("CHARGE empty bar blows=%d" % spent_blows)
 
 	if light_dmg <= 0:
-		print("CHARGE FAIL the tap did not land"); fails += 1
+		print("CHARGE FAIL the light tap did not land"); fails += 1
 	if light_frames < 0:
-		print("CHARGE FAIL the tap never connected"); fails += 1
+		print("CHARGE FAIL the light tap never connected"); fails += 1
+	if heavy_dmg <= light_dmg:
+		print("CHARGE FAIL the heavy dealt %d against a light's %d"
+			% [heavy_dmg, light_dmg]); fails += 1
+	if heavy_frames <= light_frames:
+		print("CHARGE FAIL heavy lands on frame %d, light on %d — no commitment"
+			% [heavy_frames, light_frames]); fails += 1
 	if short_charged:
 		print("CHARGE FAIL a hold of %.2f s charged, under a charge_time of %.2f"
 			% [charge_time * 0.6, charge_time]); fails += 1
 	if short_blows != 1:
 		print("CHARGE FAIL a short hold threw %d blows, not 1 — the release is not free"
 			% short_blows); fails += 1
-	if short_dmg != light_dmg:
-		print("CHARGE FAIL a short hold dealt %d against the tap's %d — it is not a tap"
-			% [short_dmg, light_dmg]); fails += 1
+	if short_dmg != heavy_dmg:
+		print("CHARGE FAIL a short hold dealt %d against the heavy tap's %d — it is not a tap"
+			% [short_dmg, heavy_dmg]); fails += 1
 	if not charged:
 		print("CHARGE FAIL holding past charge_time never armed the charge"); fails += 1
 	if not sheet_charged:
 		print("CHARGE FAIL the photographed hold never armed — the sheet shows nothing"); fails += 1
-	if held_light != light_dmg:
-		print("CHARGE FAIL the press that started the hold dealt %d, not the tap's %d — the hold ate the tap"
-			% [held_light, light_dmg]); fails += 1
-	if heavy_dmg <= light_dmg:
-		print("CHARGE FAIL the release dealt %d against a light's %d"
-			% [heavy_dmg, light_dmg]); fails += 1
-	if heavy_frames <= light_frames:
-		print("CHARGE FAIL heavy lands %d frames after release, light %d after press — no commitment"
-			% [heavy_frames, light_frames]); fails += 1
+	if held_heavy != heavy_dmg:
+		print("CHARGE FAIL the press that started the hold dealt %d, not the tap's %d — the hold ate the press"
+			% [held_heavy, heavy_dmg]); fails += 1
+	if spin_dmg <= heavy_dmg:
+		print("CHARGE FAIL the release dealt %d against the press's %d"
+			% [spin_dmg, heavy_dmg]); fails += 1
+	if spent_blows != 0:
+		print("CHARGE FAIL an empty stamina bar still threw %d blow(s)"
+			% spent_blows); fails += 1
 	if not blocked_up:
 		print("CHARGE FAIL shield never rose"); fails += 1
 	if blocked_down:
@@ -197,6 +245,19 @@ func run(rig) -> void:
 
 func _on_struck(amount: int, _from: Vector3) -> void:
 	_hits.append(amount)
+
+
+## Full bar before a measured press. Every swing costs stamina now, and this
+## director throws six of them inside a few seconds — without this, the last
+## measurement would be of the regen curve rather than of the blow.
+func _refill() -> void:
+	Game.stamina = Game.max_stamina
+	Bus.stamina_changed.emit(Game.stamina, Game.max_stamina)
+
+
+## Empty it the way the game empties it, so the regen delay is armed too.
+func _drain() -> void:
+	Game.spend_stamina(Game.stamina)
 
 
 ## What the blow at index `i` dealt, or 0 if it never arrived.

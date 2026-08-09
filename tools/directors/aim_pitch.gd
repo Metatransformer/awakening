@@ -44,8 +44,9 @@ func run(rig) -> void:
 		_fail("no camera")
 		return
 
-	# dpad up draws the hookshot. Pressed, not set behind the game's back.
-	await rig.tap(["item_up"])
+	# D-pad → steps the ring to the hookshot. Pressed, not set behind the game's
+	# back -- see rig.draw_weapon for why the count of presses is not a constant.
+	await rig.draw_weapon(&"hookshot")
 	await rig.wait_frames(20)
 	_check("the hookshot is in his hand (%s)" % Game.armament(Game.HAND_RIGHT),
 		Game.armament(Game.HAND_RIGHT) == &"hookshot")
@@ -59,7 +60,7 @@ func run(rig) -> void:
 	# the chain goes out and the stance ends before the stick has moved. Pressed
 	# through `Input` rather than `rig.hold` because this hold has to outlive
 	# several beats, and `hold` releases at the end of its own.
-	_press(rig, &"use_item")
+	_press(rig, &"heavy")
 	await rig.wait_frames(20)
 	_check("the trigger put the camera over the shoulder", cam.aiming())
 	_report(rig, hero, cam, "level")
@@ -99,7 +100,7 @@ func run(rig) -> void:
 	# And letting go puts it back. The chain goes out on this release — that is
 	# the hookshot's whole contract — so the wait is long enough for the shot to
 	# play out and the stance to end with it.
-	_release(rig, &"use_item")
+	_release(rig, &"heavy")
 	await rig.wait_frames(140)
 	_check("releasing the trigger left aim mode", not cam.aiming())
 	await rig.capture(out.path_join("a_04_released.png"))

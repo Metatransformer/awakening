@@ -82,7 +82,20 @@ const DEFAULT_PATH := "user://settings.cfg"
 ##     renamed actions would simply not be in the file at all -- so the D-pad
 ##     would cycle nothing and the trigger would keep the item half of a button
 ##     that is now the whole sword. Discarding is correct.
-const BIND_SCHEMA := 11
+## 12: the D-pad became CYCLES and the binding system was deleted. 11's
+##     `loadout_prev` / `loadout_next` became `weapon_prev` / `weapon_next` on
+##     the same two directions but stepping the RIGHT HAND through the weapons
+##     you own; `item_up` became `loadout_swap`; `item_down` became `item_next`;
+##     and 11's `sheathe` on X became `use_item` -- drink the selected bottle --
+##     because with the sword a stop on the weapon ring there is nothing left to
+##     sheathe. Five of the eleven names in 11 do not exist any more.
+##     A saved layout from 11 is the FIRST one where discarding is obviously
+##     right rather than arguably right: five actions would be missing outright,
+##     so five of the game's inputs would be unbound on a pad that looks fully
+##     configured. The interesting half is X -- a stale binding there would put
+##     `sheathe` on it, an action nothing reads, so the player's flask button
+##     would be silent in the fight they bought the flask for.
+const BIND_SCHEMA := 12
 
 ## Where preferences persist. A test or a screenshot director that rebinds keys
 ## MUST NOT write to the player's real settings — an earlier menu test left
@@ -334,8 +347,8 @@ func rebindable_actions() -> Array[StringName]:
 	return [
 		&"move_up", &"move_down", &"move_left", &"move_right",
 		&"z_target", &"attack", &"heavy", &"shield", &"context", &"interact",
-		&"sheathe", &"loadout_prev", &"loadout_next", &"item_up", &"item_down",
-		&"first_person",
+		&"use_item", &"jump", &"weapon_prev", &"weapon_next", &"item_next",
+		&"loadout_swap", &"first_person",
 		&"pause", &"inventory", &"map",
 	]
 

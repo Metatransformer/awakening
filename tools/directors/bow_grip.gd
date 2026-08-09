@@ -65,9 +65,9 @@ func run(rig) -> void:
 		print("BOWGRIP FAIL no camera / no rig")
 		return
 
-	# dpad left draws the bow. Nothing cycles behind the game's back
-	# (docs/CONTRACT.md §4.1), so the button is pressed like a player would.
-	await rig.tap(["item_left"])
+	# D-pad → steps the ring to the bow. Nothing is assigned behind the game's
+	# back (docs/CONTRACT.md §4.1), so the button is pressed like a player would.
+	await rig.draw_weapon(&"bow")
 	await rig.wait_frames(24)
 	if hero.combat == null or hero.combat.bow == null:
 		print("BOWGRIP FAIL no bow model mounted")

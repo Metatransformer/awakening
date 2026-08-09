@@ -328,7 +328,7 @@ func _drink(rig) -> void:
 	_ck("G4 the bottle itself stayed", Game.bottle_count() == K.BOTTLE_MAX)
 	# An empty bottle on a button is a no-op, not a crash and not a free heal.
 	var after := Game.quarters
-	await rig.tap(["item_left"])
+	await rig.tap(["item_up"])
 	await rig.wait_frames(8)
 	_ck("G5 pressing it again does nothing", Game.quarters == after)
 
@@ -338,9 +338,15 @@ func _drink(rig) -> void:
 	var edge_before := Game.sword_bonus()
 	var soak_before := Game.armour_soak()
 	var which := [Game.bottle(1), Game.bottle(2)]
-	await rig.tap(["item_up"])
+	await rig.tap(["item_down"])
 	await rig.wait_frames(6)
-	await rig.tap(["item_right"])
+	# Three bottles, two buttons. The drained one above is still sitting on ↑, so
+	# the third draught gets there the way a player would put it there -- by
+	# rebinding, mid-fight if they have to. This is the case that only exists
+	# since the loadout took ← / →, and it is the one worth photographing.
+	Game.bind_quick(Game.QUICK_UP, Game.bottle_id(2))
+	await rig.wait_frames(2)
+	await rig.tap(["item_up"])
 	await rig.wait_frames(6)
 	print("ALCHEMY draughts=%s edge=+%d -> +%d soak=-%d -> -%d" % [
 		which, edge_before, Game.sword_bonus(), soak_before, Game.armour_soak()])

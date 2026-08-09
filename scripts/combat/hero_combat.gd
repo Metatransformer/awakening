@@ -307,10 +307,16 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 @export var sfx_spin: AudioStream = preload("res://audio/sfx/sword_release.ogg")
 @export var sfx_yell: AudioStream = preload(
 	"res://audio/sfx/weapon_full_charge_voice_male_1.ogg")
-## The blade leaving the hip and going back onto it. `equip.ogg` is the leather-
-## and-buckle sound the pickup cue already uses, which is the right family: a
-## sheathe is gear being handled, not a swing.
-@export var sfx_sheathe: AudioStream = preload("res://audio/sfx/equip.ogg")
+## The right hand changing what is in it -- the blade going onto the hip, the bow
+## coming off the back. `equip.ogg` is the leather-and-buckle sound the pickup cue
+## already uses, which is the right family: a weapon swap is gear being handled,
+## not a swing.
+##
+## It matters more than a swap sound usually would, because D-pad ← / → are the
+## one input in the game with NO other feedback on a controller: the model
+## changes in the corner of the eye and the HUD cell changes off-screen. The
+## sound is what tells a player mid-fight that the press landed.
+@export var sfx_swap: AudioStream = preload("res://audio/sfx/equip.ogg")
 
 ## True while the swing is inside its damage window.
 var swinging: bool = false
@@ -321,29 +327,21 @@ var charged: bool = false
 
 ## Which item is in the hero's hands right now, or &"" for sword and shield.
 var equipped: StringName = &""
-## The sword is on his hip rather than in his fist. `sheathe` (X) toggles it, and
-## it is the bottom rung of that button's ladder — item, then sword, then away.
-##
-## It is a LOOK, not a stance, and nothing in the kit asks it for permission: a
-## swing pressed while sheathed draws and swings on the same press (`_begin`),
-## exactly as a swing pressed with a bow out stows the bow and swings. The rule
-## this project keeps is that a sticky mode always has an unconditional way out;
-## a sheathe you could be caught in would be the first exception and it would be
-## paid for in deaths.
-##
-## Only ever true with the sword in the right hand — drawing an item clears it
-## (`_on_loadout_changed`), so putting that item away always returns the blade to
-## the fist rather than to the hip.
-var sheathed: bool = false
-
 var _hero: Hero
 var _skel: Skeleton3D
 ## The mounted models. Public so a director can sweep their placement.
 var sword: Node3D
 ## The same blade, on his hip. Exactly one of this and `sword` is visible, and
-## the pair is what makes both "the bow is out" and "the sword is sheathed" read
-## as a place the sword went rather than as the sword ceasing to exist — which is
-## what drawing the bow used to look like.
+## the pair is what makes "the bow is out" read as a place the sword WENT rather
+## than as the sword ceasing to exist — which is what drawing the bow used to
+## look like.
+##
+## THERE IS NO SHEATHE BUTTON and this is not one: the hip is simply where the
+## sword lives while the hand is full, derived from `equipped` every repaint. X
+## was a sheathe toggle for one afternoon, and it went when the weapon ring
+## arrived -- with ← / → stepping through the weapons you own, "put the sword
+## away" is a direction, and a button whose whole job is a look is a button on a
+## pad that has better uses.
 var sword_stow: Node3D
 var shield: Node3D
 var bow: Node3D
@@ -392,8 +390,8 @@ var _impact_player: AudioStreamPlayer3D
 var _charging_player: AudioStreamPlayer3D
 var _spin_player: AudioStreamPlayer3D
 var _yell_player: AudioStreamPlayer3D
-## The draw and the sheathe. One player, pitched by direction — see `_set_sheathed`.
-var _sheathe_player: AudioStreamPlayer3D
+## The right hand changing. One player -- see `_on_loadout_changed`.
+var _swap_player: AudioStreamPlayer3D
 
 
 func _ready() -> void:
@@ -587,12 +585,17 @@ func _on_loadout_changed(_set_index: int, right: StringName, left: StringName) -
 	# The equipment screen is where "(not owned)" gets said out loud.
 	var held := right if Game.armament_owned(right) else &"sword"
 	var off := left if Game.armament_owned(left) else &""
-	# An item in the right hand means the sword is already put away, so the
-	# sheathe flag has nothing left to describe. Clearing it here is what makes
-	# the X ladder terminate: stow the item and the blade comes back to the FIST,
-	# not to the hip it would otherwise still believe it was on.
-	if held != &"sword":
-		sheathed = false
+	# The swap sound, on a REAL change only. This signal also fires for a set swap
+	# that lands on the same weapon and for the announce `Game.reset()` makes, and
+	# a buckle click on those is the rig congratulating itself for nothing.
+	#
+	# Guarded on the incoming id rather than on `equipped`, because `equipped`
+	# folds the sword into &"" and the two directions of a sword <-> unowned-bow
+	# step would then read as no change at all.
+	var was: StringName = equipped
+	var now: StringName = &"" if held == &"sword" else held
+	if was != now and _swap_player != null and is_inside_tree():
+		_swap_player.play()
 	# The right hand is the one that swings, so it drives `equipped` -- which is
 	# what _try_swing and the HUD both read. &"sword" IS the empty-item state
 	# here for historical reasons: `equipped == &""` has always meant "sword and
@@ -619,7 +622,7 @@ func _show_equipped() -> void:
 	# his hip, never nowhere. `drawn` is the single answer both mounts read, so
 	# the two can never both be visible (a hero with two swords) or both hidden
 	# (a swordsman who has mislaid it).
-	var drawn := equipped == &"" and not sheathed
+	var drawn := equipped == &""
 	if sword != null:
 		sword.visible = drawn
 	if sword_stow != null:
@@ -746,12 +749,12 @@ func _build_audio() -> void:
 	_yell_player.unit_size = 9.0
 	add_child(_yell_player)
 
-	_sheathe_player = AudioStreamPlayer3D.new()
-	_sheathe_player.stream = sfx_sheathe
-	_sheathe_player.bus = &"SFX"
+	_swap_player = AudioStreamPlayer3D.new()
+	_swap_player.stream = sfx_swap
+	_swap_player.bus = &"SFX"
 	# Quieter than the steel. It is a thing he does with his hands, not a blow.
-	_sheathe_player.unit_size = 4.0
-	add_child(_sheathe_player)
+	_swap_player.unit_size = 4.0
+	add_child(_swap_player)
 
 
 ## The charge's look. A child of this node rather than of the sword, because the
@@ -807,7 +810,11 @@ func _physics_process(delta: float) -> void:
 
 	if not locked and not leaving:
 		_tick_dpad()
-		_tick_sheathe_button()
+		_tick_use_item_button()
+		# The item trigger FIRST, so the two swing ticks below can each open with
+		# a plain "an item owns the right hand" bail instead of both carrying half
+		# the ranged state machine.
+		_tick_item_trigger()
 		_tick_light_button()
 		_tick_heavy_button(delta)
 	else:
@@ -851,52 +858,77 @@ func _physics_process(delta: float) -> void:
 		_advance_swing(delta)
 
 
-## The D-pad, which is two ideas on two axes.
+## The D-pad, which is the whole equipment screen: three cycles and no bindings.
 ##
-##   ← / →  cycle the loadout SET. Elden Ring's D-pad, and the reason the item
-##          buttons gave up their horizontal pair: the set is the coarse gear
-##          change, and it had no button of its own.
-##   ↑ / ↓  the two item buttons — Ocarina's C-pad. Each draws whatever the
-##          player bound to it, and puts it away on a second press.
+##   ← / →  step the RIGHT HAND through the weapons you own. The sword is a stop
+##          on that ring like anything else, which is what makes "give me my
+##          sword back" a direction rather than a button.
+##   ↓      step the selected ITEM. Selecting is not using — X uses.
+##   ↑      swap the loadout SET under the ring.
 ##
-## Binding lives in the menu and nowhere else: a button that CYCLES is a button
-## you have to watch to use, and the point of a bound item is that you can reach
-## for it without looking. Which is exactly why it is the SET that cycles here
-## and the items that do not. Game owns what is bound and what is in which hand;
-## this only presses the buttons.
+## NOTHING HERE FIRES ANYTHING. That split is the whole scheme, and it is the one
+## thing Ocarina got to live with rather than fix: a C-button there both equipped
+## AND fired, so pulling the bow out was also loosing an arrow at whatever you
+## happened to be facing.
+##
+## Game owns what is in which hand and which bottle is selected; this only
+## presses the buttons.
 func _tick_dpad() -> void:
-	if Input.is_action_just_pressed(&"loadout_prev"):
-		Game.cycle_loadout(-1)
-	if Input.is_action_just_pressed(&"loadout_next"):
-		Game.cycle_loadout(1)
-	if Input.is_action_just_pressed(&"item_up"):
-		Game.use_quick(Game.QUICK_UP)
-	if Input.is_action_just_pressed(&"item_down"):
-		Game.use_quick(Game.QUICK_DOWN)
+	if Input.is_action_just_pressed(&"weapon_prev"):
+		Game.cycle_weapon(-1)
+	if Input.is_action_just_pressed(&"weapon_next"):
+		Game.cycle_weapon(1)
+	if Input.is_action_just_pressed(&"item_next"):
+		Game.cycle_item(1)
+	if Input.is_action_just_pressed(&"loadout_swap"):
+		Game.swap_loadout()
 
 
-## X — put away whatever is nearest the hand, and take the sword back out at the
-## bottom of the ladder:
+## X — drink the selected bottle. One press, no draw, no aim.
 ##
-##   item drawn   -> stow it. The sword returns to the fist.
-##   sword drawn  -> sheathe it. It goes on his hip.
-##   sheathed     -> draw it again.
+## Elden Ring's X and it is the reason items and weapons are on different inputs
+## at all: a flask is a thing you swallow, and the two-press version of it (take
+## it out, then use it) puts the slowest input in the game on the button you
+## reach for when you are about to die.
 ##
-## One verb, read downwards, so the button never needs the player to know which
-## rung they are on — pressing it twice from a drawn hookshot always ends with a
-## sheathed hero and pressing it once more always ends with a sword.
+## It does NOT interrupt or get interrupted. Drinking mid-swing is fine and
+## drinking mid-roll is fine; the potion is state (`Game.drink_bottle`) rather
+## than an animation, and gating it on the hero being idle would make the button
+## unreliable in exactly the fight it exists for.
 ##
-## Stowing used to be a second job on `interact`, which was wrong in the small
-## way that matters: A is the button you mash at a chest, and a mashed A that
-## sometimes puts your bow away is a button you learn not to trust.
-func _tick_sheathe_button() -> void:
-	if not Input.is_action_just_pressed(&"sheathe"):
+## X was the sheathe button for one afternoon. Sheathing has no button now —
+## the sword is a stop on the weapon ring, so the way back to it is D-pad ← or →.
+func _tick_use_item_button() -> void:
+	if not Input.is_action_just_pressed(&"use_item"):
 		return
-	# The item rung first, and `stow_item` reports whether it was on it — false
-	# means the sword was already in the right hand, which is the rung below.
-	if Game.stow_item():
+	Game.use_selected_item()
+
+
+## RB AND RT, when an item is in the right hand: the item's trigger.
+##
+## BOTH shoulder buttons, because "the right hand" is what those two buttons are
+## for and an item has replaced the sword in it. A player holding a bow should
+## not have to remember which of the two attack buttons the bow answers to —
+## there is only one thing in the hand and it does one thing.
+##
+## HELD, not tapped, and that is not a detail: it used to fire on the press,
+## which meant a player pulling the trigger to AIM had already shot before they
+## touched the stick. Down draws, up looses.
+func _tick_item_trigger() -> void:
+	if _hero.ranged == null:
 		return
-	_set_sheathed(not sheathed)
+	var down := Input.is_action_pressed(&"heavy") or Input.is_action_pressed(&"attack")
+	var edge := (Input.is_action_just_pressed(&"heavy")
+		or Input.is_action_just_pressed(&"attack"))
+	if equipped != &"" and edge:
+		_hero.ranged.use_press(equipped)
+		return
+	if not down:
+		# Unconditional, not gated on an item being out: the item can leave his
+		# hand mid-hold (D-pad ← / → step the weapon out from under the draw), and
+		# a `_using` flag that only ever gets cleared by the hand that set it is a
+		# bow stuck at full draw the next time one is drawn.
+		_hero.ranged.use_release()
 
 
 ## RB — the light chain, and the two swings that are the same press in a
@@ -906,13 +938,17 @@ func _tick_sheathe_button() -> void:
 ## rest of the heavy (`_tick_heavy_button`), which is what lets this button be
 ## mashed as fast as the chain will accept without ever storing anything.
 func _tick_light_button() -> void:
+	# An item owns both shoulder buttons while it is drawn (`_tick_item_trigger`,
+	# which has already run this frame). There is no sword half to reach.
+	if equipped != &"":
+		return
 	if not Input.is_action_just_pressed(&"attack"):
 		return
 	# In the air the light button is the SLAM, and it is checked before
 	# everything below because none of the rest of the kit can be thrown off
 	# the floor anyway — request_attack refuses them, so without this the
 	# press in mid-air was silence.
-	if not _hero.is_on_floor() and equipped == &"":
+	if not _hero.is_on_floor():
 		_press(Intent.SLAM)
 		return
 	# Shield up, sword out: the press is the DASH ATTACK, not a light swing.
@@ -920,19 +956,19 @@ func _tick_light_button() -> void:
 	# always been a way of standing still, and the stab is how you come off
 	# it. A guarded player who presses attack is not asking for the ordinary
 	# swing he could have thrown from anywhere.
-	if blocking and equipped == &"":
+	if blocking:
 		_press(Intent.DASH)
 		return
 	_press(Intent.LIGHT)
 
 
-## RT — the whole of the right hand. What it does is whatever is IN that hand,
-## and the item that is in it has replaced the sword for as long as it is drawn:
+## RT — the heavy, and everything the heavy becomes:
 ##
-##   bow / hookshot  -> that item's trigger. HELD: down aims, up looses.
-##   sword           -> the heavy, on the press. Locked on and in range it is the
-##                      jump attack instead (`_begin`).
-##   sword, held on  -> the wind-up, and the release is the spin.
+##   on the ground  -> the overhead, on the press.
+##   held           -> the wind-up, and the release is the spin.
+##   locked on      -> the leap, closing the gap (`_begin`).
+##   IN THE AIR     -> the jump attack. Same slam RB throws off a jump, on the
+##                     button the player is already holding for the heavy.
 ##
 ## The heavy comes out on the PRESS and never on the release, and that ordering
 ## is the whole feel of the button. One that waited to see whether you meant a
@@ -941,27 +977,32 @@ func _tick_light_button() -> void:
 ## this with B, and Elden Ring with R2: the swing happens, and CONTINUING to hold
 ## is what winds up the next one. So the charge costs the recovery you were
 ## spending anyway, and a mashed trigger never stores anything.
-##
-## The item's half is a HELD trigger and not a press for a related reason: it
-## used to fire on the press, which meant a player pulling RT to aim had already
-## shot before they touched the stick.
 func _tick_heavy_button(delta: float) -> void:
-	if _hero.ranged != null:
-		if equipped != &"" and Input.is_action_just_pressed(&"heavy"):
-			_hero.ranged.use_press(equipped)
-			return
-		if not Input.is_action_pressed(&"heavy"):
-			# Unconditional, not gated on an item being out: the item can leave his
-			# hand mid-hold (the light button's escape hatch stows it), and a
-			# `_using` flag that only ever gets cleared by the hand that set it is
-			# a bow stuck at full draw the next time one is drawn.
-			_hero.ranged.use_release()
 	if equipped != &"":
-		# An item owns this trigger while it is drawn, so there is no sword half
-		# to run — and any wind-up that was already in flight is dropped rather
-		# than left armed. The only way to be mid-hold with an item out is a D-pad
-		# press made during the hold, and paying that out as a spin on release
-		# would be a swing with an invisible sword.
+		# An item owns this trigger while it is drawn (`_tick_item_trigger`), so
+		# there is no sword half to run — and any wind-up that was already in
+		# flight is dropped rather than left armed. The only way to be mid-hold
+		# with an item out is a D-pad press made during the hold, and paying that
+		# out as a spin on release would be a swing with an invisible sword.
+		if _charge_t >= 0.0:
+			_release_charge(false)
+		return
+
+	# THE JUMP ATTACK, off the HELD trigger rather than off the press edge. A
+	# player who wants to come down on something pulls RT on the way up, not at
+	# the top of the arc, and an edge would have been spent on the ground as an
+	# overhead before he ever left it. Reading the held state means the same pull
+	# throws the overhead on the floor and the slam once he is off it.
+	#
+	# Held also makes the mid-air press work, so both readings of "hold RT in the
+	# air" land on the same move. `_press` is safe to call every frame — an
+	# Intent already in flight is not restarted (`_begin` -> `request_slam`).
+	if not _hero.is_on_floor():
+		if Input.is_action_pressed(&"heavy"):
+			_press(Intent.SLAM)
+		# The wind-up cannot survive the jump: a charge armed on the ground and
+		# released after landing is a spin the player asked for in a different
+		# situation. Dropped silently, without firing.
 		if _charge_t >= 0.0:
 			_release_charge(false)
 		return
@@ -1054,22 +1095,6 @@ func _can_swing() -> bool:
 	return Game.stamina > 0.0
 
 
-## Draw or put away. One place, because three things have to agree — the flag,
-## which mount is visible, and the sound — and a sheathe that only moved two of
-## them is a sword hanging on a hip and in a fist at once.
-func _set_sheathed(on: bool) -> void:
-	if sheathed == on:
-		return
-	sheathed = on
-	_show_equipped()
-	if _sheathe_player != null:
-		# Lower going away, higher coming out. Same clip both ways: it is leather
-		# and steel in either direction, and pitch is the cheapest honest way to
-		# say which direction it was.
-		_sheathe_player.pitch_scale = 0.86 if on else 1.12
-		_sheathe_player.play()
-
-
 ## An Intent the player has asked for. Mid-swing it is remembered rather
 ## than dropped — but only in the back half of the swing, because a press on the
 ## first frame is the player mashing, not the player asking for the next step.
@@ -1116,14 +1141,6 @@ func _begin(intent: int) -> void:
 		# a swing buffer is a shot that can come out a quarter of a second after
 		# the player let go.
 		return
-
-	# Sheathed, and the player has asked for a swing. The blade comes out on THIS
-	# press and the swing still happens — same bargain the item escape hatch above
-	# makes, and for the same reason: X is a look, not a stance you can be caught
-	# in. Set before the swing so `_show_equipped` has already put the sword in
-	# his fist by the time the clip starts playing with it.
-	if sheathed:
-		_set_sheathed(false)
 
 	match intent:
 		Intent.SLAM:

@@ -124,13 +124,22 @@ const HEAT_BREAK_FLASH := 0.35
 const KIT_ACTION := {
 	&"sword": &"attack",
 	&"shield": &"shield",
-	&"bow": &"heavy",
-	&"hookshot": &"heavy",
+	# Both shoulder buttons fire a drawn item (`_tick_item_trigger`); the cap
+	# names RB, the one a player already associates with "use what is in my
+	# hand", rather than making the cell ask which trigger they meant.
+	&"bow": &"attack",
+	&"hookshot": &"attack",
 }
-## Half-height of a loadout caret, in reference px. Also its half-width — they
-## are drawn as equilateral-ish triangles so ◄ and ► read at a glance in a HUD
-## that is 40 px tall in the corner.
-const CPAD_CARET := 9.0
+## The selected-item cell, in reference px. SMALLER than Pal.CELL, which the
+## hands use, and the size difference is the hierarchy: the hands are what the
+## hero is holding and the item is what he could swallow.
+const CPAD_CELL := 46.0
+## Half-height of a D-pad caret, in reference px. Also its half-width — they are
+## drawn as equilateral-ish triangles so ◄ ▼ ► read at a glance in a HUD that is
+## 40 px tall in the corner.
+const CARET := 8.0
+## The gap between a cell and the caret sitting over it.
+const CARET_GAP := 5.0
 ## The hands, left to right as they are on the body. What is IN them comes from
 ## Game.armament(); this is no longer a fixed list of everything that exists.
 ##
@@ -259,7 +268,7 @@ func _ready() -> void:
 	Bus.gold_changed.connect(_on_gold)
 	Bus.ammo_changed.connect(_repaint)
 	Bus.loadout_changed.connect(_repaint)
-	Bus.quick_slots_changed.connect(_repaint)
+	Bus.item_selected_changed.connect(_repaint)
 	# A bound bottle's cell draws what is IN it, so filling or draining one moves
 	# the HUD without the binding changing. `_wake` rather than `_repaint` for the
 	# draught: the bar it starts has to keep draining after this frame.
@@ -604,7 +613,11 @@ func _draw_hud() -> void:
 ## two rebinds of the sword.
 ##
 ## `&""` means the label carries its own button (the sticks, which are not
-## actions the player rebinds).
+## actions the player rebinds), and LEGEND_LITERAL means the text IS the whole
+## entry -- for the D-pad, whose four directions are one idea and would otherwise
+## need four rows naming four caps the player never presses individually.
+const LEGEND_LITERAL := &"__literal"
+
 const LEGEND := [
 	[&"", "MOVE"],
 	[&"", "LOOK"],
@@ -638,9 +651,15 @@ const LEGEND := [
 	[&"context", "TAP=DODGE HOLD=RUN"],
 	[&"jump", "JUMP"],
 	[&"interact", "INTERACT"],
-	# The one verb on the pad a player will not find by pressing things: nothing
-	# in the world prompts for it and nothing goes wrong if you never press it.
-	[&"sheathe", "PUT AWAY"],
+	# The item button, named for the thing it does rather than for the ring it
+	# reads from: a player looking for "how do I drink this" is not looking for
+	# the word SELECT. Which bottle it drinks is on the HUD cell itself.
+	[&"use_item", "USE ITEM"],
+	# The three cycles, on one line, because they are one idea: the D-pad changes
+	# your gear and never uses it. Three rows would make them look unrelated and
+	# would be the longest thing in the legend, for the input that needs the
+	# least explaining once you have seen the carets in the corner.
+	[LEGEND_LITERAL, "D-PAD  ◄► WEAPON  ▼ ITEM  ▲ LOADOUT"],
 	[&"inventory", "POUCH"],
 ]
 ## What drives movement and the camera on each device. The sticks are bound as
@@ -667,6 +686,9 @@ func _legend() -> String:
 	for entry: Array in LEGEND:
 		var action: StringName = entry[0]
 		var verb: String = entry[1]
+		if action == LEGEND_LITERAL:
+			parts.append(verb)
+			continue
 		if action == &"":
 			parts.append("%s %s" % [sticks[stick], verb])
 			stick += 1
@@ -886,35 +908,36 @@ func _heat_color() -> Color:
 ## it is the one whose SHAPE carries meaning: it has to stay a cross, in the
 ## corner, whatever the hands beside it are doing.
 ##
-## The cross is ONE cell wide now, with a caret's worth of wing on each side —
-## it used to be three cells across, back when the item buttons owned all four
-## directions. Measured the same way regardless: from the right edge inwards, so
-## the hands pair beside it moves with it instead of colliding with it.
+## THE CLUSTER IS THREE CELLS NOW, not six, and that is the whole story of this
+## change: [left hand][right hand] and one selected item beside them. There were
+## four bindable D-pad cells here and the D-pad does not bind anything any more.
+##
+## Measured from the right edge inwards, so widening a cell moves the left edge
+## left instead of pushing the cluster off screen.
+##
+## THE CARET RULE, which the whole cluster reads by: a caret ABOVE a cell is the
+## D-pad direction that cycles that cell. ◄ ► over the right hand, ▼ over the
+## item. Nothing else in the cluster draws a triangle, so a triangle always means
+## "a direction changes this".
 func _cross_origin(s: Vector2) -> Vector2:
-	var cell := Pal.px(Pal.CELL, s.y)
 	return Vector2(
-		Pal.CLUSTER_RIGHT * s.x - (cell + _cpad_wing(s) * 2.0),
-		Pal.CLUSTER_TOP * s.y)
+		Pal.CLUSTER_RIGHT * s.x - Pal.px(CPAD_CELL, s.y),
+		Pal.CLUSTER_TOP * s.y + _caret_band(s))
 
 
-## Room beside the item column for one loadout caret: the caret's own half-width
-## twice over, plus the gap that keeps it off the cell border. One function so
-## the layout and the drawing cannot disagree about how wide the cluster is —
-## which is exactly how a cluster ends up half off the right edge.
-func _cpad_wing(s: Vector2) -> float:
-	return Pal.px(Pal.CELL_GAP + CPAD_CARET * 2.0, s.y)
+## Height reserved above the cells for the carets. Every cell in the cluster is
+## pushed down by it whether or not it has one, so the tops stay in a line.
+func _caret_band(s: Vector2) -> float:
+	return Pal.px(CARET * 2.0 + CARET_GAP, s.y)
 
 
-## The hands sit to the LEFT of the cross and centred against its two rows, so
-## the pair reads as its own group rather than as a third row of the D-pad.
+## The hands sit to the LEFT of the item and share its top edge.
 func _hands_origin(s: Vector2) -> Vector2:
 	var cell := Pal.px(Pal.CELL, s.y)
 	var gap := Pal.px(Pal.CELL_GAP, s.y)
 	var cross := _cross_origin(s)
-	var cross_h := cell * 2.0 + gap
 	return Vector2(
-		cross.x - Pal.px(Pal.CLUSTER_GAP, s.y) - (cell * 2.0 + gap),
-		cross.y + (cross_h - cell) * 0.5)
+		cross.x - Pal.px(Pal.CLUSTER_GAP, s.y) - (cell * 2.0 + gap), cross.y)
 
 
 ## The button that fires `action`, as the player would say it out loud, or "" for
@@ -967,6 +990,21 @@ func _draw_hands(s: Vector2) -> void:
 		var hand: StringName = HANDS[i]
 		var id: StringName = Game.armament(hand)
 		var r := Rect2(origin.x + i * (cell + gap), origin.y, cell, cell)
+		# ◄ ► OVER THE RIGHT HAND: this is the cell D-pad ← / → step, and it is
+		# the only thing on screen that says so. Without it the weapon ring is
+		# invisible — a player who has found a bow has no way to learn it is one
+		# press away, and the question the old bindable cross answered loudly
+		# ("which direction is my bow on?") would come back as a quieter one.
+		#
+		# Drawn for the right hand ALWAYS, even owning nothing but the sword: a
+		# ring of one is still the ring, and a caret that appears the moment you
+		# pick up a bow is a control the player has to notice arriving.
+		if hand == &"right":
+			var band := Pal.px(CARET_GAP, s.y)
+			_draw_caret(s, Vector2(r.position.x, r.position.y - band),
+				Vector2(-1.0, 0.0))
+			_draw_caret(s, Vector2(r.end.x, r.position.y - band),
+				Vector2(1.0, 0.0))
 		_draw_keycap(s, r, _hotkey(KIT_ACTION.get(id, &"")))
 
 		# The shield cell IS the block tell. It was the one thing the old strip
@@ -988,62 +1026,73 @@ func _draw_hands(s: Vector2) -> void:
 				Pal.px(1.0, s.y), Pal.MOTH)
 
 
-## The two item buttons, in the shape of the D-pad they sit on: ▲ above ▼, with
-## the ◄ and ► directions marked as the loadout cycle. The arrangement is the
-## label -- a row of cells would need a glyph apiece and the player would still
-## have to translate "cell 2" into "down" every time (CONTRACT §2.5 #6).
+## The selected item — ONE cell, the bottle D-pad ↓ has stepped to and X will
+## drink. It replaced a four-cell bindable cross, and the cell count is the point
+## rather than a side effect: the cross existed so the player could answer "which
+## direction is this on", and nothing asks that any more.
 ##
-## It was a three-cell cross with the swap on ▼. The horizontal pair went to the
-## loadout when the loadout got the D-pad, so what is drawn here is now exactly
-## what the D-pad does: two bindable cells on the vertical, two carets on the
-## horizontal, and nothing in the middle to mislead.
+## The bottle it draws is the SELECTION, not the bottle you own most of. An empty
+## bottle is drawn empty rather than skipped — you own it, you are about to fill
+## it, and a ring whose length changed every time you drank would be a ring you
+## could not count (Game.cycle_item).
+##
+## The loadout line under it is text and not a cell, because it is the only thing
+## in the cluster you cannot look at and see: which of the two sets is live is a
+## fact about a screen you are not on. It is named rather than marked for the
+## same reason — "▲ PRIMARY" is readable cold, and a filled-vs-hollow pip is a
+## convention the player has to be taught.
 func _draw_cpad(s: Vector2) -> void:
-	var cell := Pal.px(Pal.CELL, s.y)
-	var gap := Pal.px(Pal.CELL_GAP, s.y)
+	var cell := Pal.px(CPAD_CELL, s.y)
 	var origin := _cross_origin(s)
-	var mid := origin.x + _cpad_wing(s)
-	var held: StringName = Game.armament(Game.HAND_RIGHT)
+	var r := Rect2(origin, Vector2(cell, cell))
 
-	for entry in [
-		{"slot": Game.QUICK_UP, "at": Vector2(mid, origin.y), "act": &"item_up"},
-		{"slot": Game.QUICK_DOWN, "at": Vector2(mid, origin.y + cell + gap),
-			"act": &"item_down"},
-	]:
-		var slot: int = entry["slot"]
-		var id: StringName = Game.quick(slot)
-		var r := Rect2(entry["at"], Vector2(cell, cell))
-		# The key cap goes on whether or not the slot is bound. An empty cell with
-		# no cap is a hole; an empty cell with a "1" on it is an invitation.
-		_draw_keycap(s, r, _hotkey(entry["act"]))
+	# ▼ over the cell: D-pad ↓ steps it. The caret rule, see `_cross_origin`.
+	_draw_caret(s, Vector2(r.get_center().x, origin.y - Pal.px(CARET_GAP, s.y)),
+		Vector2(0.0, -1.0))
+	# The cap is X, the button that USES it — not the direction that selects it.
+	# A cell caps with the button you press to make it happen, and selecting an
+	# item does not make anything happen.
+	_draw_keycap(s, r, _hotkey(&"use_item"))
 
-		_canvas.draw_rect(r, Color(Pal.MIDNIGHT, 0.8))
-		# An unbound button is drawn EMPTY and dim rather than skipped. A gap in
-		# the cross would break the shape, and the shape is the whole point.
-		var drawn := id != &"" and id == held
-		_canvas.draw_rect(r, Pal.BONE if drawn else Pal.ASH, false,
-			Pal.px(2.0 if drawn else 1.0, s.y))
-		_draw_item_glyph(s, r, id, Color.BLACK, false, false)
+	_canvas.draw_rect(r, Color(Pal.MIDNIGHT, 0.8))
+	var potion := Game.selected_potion()
+	_canvas.draw_rect(r, Pal.BONE if potion != &"" else Pal.ASH, false,
+		Pal.px(2.0 if potion != &"" else 1.0, s.y))
+	# `selected_item()` names the GLASS and `selected_potion()` what is in it.
+	# The glyph wants the glass: a bottle with nothing in it still has to draw.
+	_draw_item_glyph(s, r, Game.selected_item(), Color.BLACK, false,
+		potion == &"")
 
-		if id == &"bow":
-			PixelFont.draw_right(_canvas, str(Game.arrows),
-				Vector2(r.end.x - Pal.px(3.0, s.y), r.end.y - Pal.px(10.0, s.y)),
-				Pal.px(1.0, s.y), Pal.MOTH)
+	# How many bottles there are, so the player knows the ring has more stops.
+	# Only past one — "1" under a single bottle is a count of a thing nobody is
+	# counting.
+	if Game.bottle_count() > 1:
+		PixelFont.draw_right(_canvas,
+			"%d/%d" % [Game.item_selected + 1, Game.bottle_count()],
+			Vector2(r.end.x - Pal.px(3.0, s.y), r.end.y - Pal.px(10.0, s.y)),
+			Pal.px(1.0, s.y), Pal.MOTH)
 
-	# ◄ and ► cycle the set. Carets rather than cells, for the reason the swap
-	# caret was one: they are not bindable buttons, and drawing them as cells
-	# would invite the player to try to put a bottle on one — which is also why
-	# they are the only things in the cluster with no key cap.
-	#
-	# Placed on the vertical MIDDLE of the two cells, which is where they are on
-	# the pad. Sitting them beside one cell or the other would say they belonged
-	# to it.
-	var cy := origin.y + cell + gap * 0.5
-	var w := Pal.px(CPAD_CARET, s.y)
-	for dir: float in [-1.0, 1.0]:
-		var tip := Vector2(mid + cell * 0.5 + dir * (cell * 0.5 + _cpad_wing(s)), cy)
-		_canvas.draw_colored_polygon(PackedVector2Array([
-			Vector2(tip.x - dir * w, cy - w), Vector2(tip.x - dir * w, cy + w), tip,
-		]), Pal.ASH)
+	# The loadout, under the item's key cap.
+	var scale := Pal.px(Pal.KEYCAP_SCALE, s.y)
+	var line := "PRIMARY" if Game.loadout_set == Game.PRIMARY else "ALTERNATE"
+	var at := Vector2(r.end.x,
+		r.end.y + Pal.px(Pal.KEYCAP_GAP, s.y) + PixelFont.height(scale)
+			+ Pal.px(9.0, s.y))
+	PixelFont.draw_right(_canvas, "%s %s" % ["\u25b2", line], at, scale, Pal.ASH)
+
+
+## One caret, `dir` being the unit direction it points. `tip` is where the point
+## lands. Drawn rather than typeset because the HUD's PixelFont has no arrow
+## glyphs and a "^" is not a caret.
+func _draw_caret(s: Vector2, tip: Vector2, dir: Vector2) -> void:
+	var w := Pal.px(CARET, s.y)
+	# The back edge is perpendicular to `dir`, so one function draws all four
+	# directions and none of them is a special case.
+	var back := tip - dir * w * 2.0
+	var side := Vector2(-dir.y, dir.x) * w
+	_canvas.draw_colored_polygon(PackedVector2Array([
+		back + side, back - side, tip,
+	]), Pal.ASH)
 
 
 ## One item's icon in a cell, or its two letters if the bake is missing. An
