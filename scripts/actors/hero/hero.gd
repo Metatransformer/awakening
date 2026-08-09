@@ -1536,16 +1536,25 @@ func wish_dir() -> Vector3:
 		Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down"))
 
 
-## Commit to a bow shot: `draw_time` seconds pulling, then `loose_time` seconds
-## loosing, turning to face `aim`. Returns false if the hero is busy.
+## Raise into the pull: `draw_time` seconds of it. Returns false if he cannot
+## draw right now — mid-roll, mid-swing, off the ground.
 ##
-## Only the CHARGE is fired here. `HeroRanged` owns the clock that decides when
-## the arrow leaves and calls `bow_loose` at the seam — the same clock the arrow
-## itself is spawned off, so the string leaving his fingers and the arrow leaving
-## the bow cannot drift apart. Firing both here on a timer of the hero's own is
-## exactly the drift the one-clip version had.
-func request_bow(draw_time: float, loose_time: float, aim: Vector3) -> bool:
-	if not _commit_ranged(draw_time + loose_time, aim):
+## **This is not a commitment, and that is the change the trigger made.** The
+## pull is held for as long as the player holds the button (`HeroRanged` owns
+## that clock), and a stance you can be locked into indefinitely is a stance you
+## have to be able to WALK in — which is exactly what `AimLoco` was built for and
+## what the old draw-and-loose-in-one-window never once played. So this fires the
+## clip and hands the body straight back; `_tick_camera_facing` already points
+## him down the lens for the whole time the bow is out, which was the only other
+## thing the commitment was doing here.
+##
+## Only the CHARGE is fired. `HeroRanged` owns the clock that decides when the
+## arrow leaves and calls `bow_loose` — the same clock the arrow itself is
+## spawned off, so the string leaving his fingers and the arrow leaving the bow
+## cannot drift apart. Firing both here on a timer of the hero's own is exactly
+## the drift the one-clip version had.
+func request_bow_draw(draw_time: float) -> bool:
+	if state != MoveState.GROUND or not is_on_floor():
 		return false
 	if _tree != null:
 		_tree.set(_P_BOW_DRAW_SCALE, _clip_scale(clip_bow_draw, draw_time))
@@ -1553,10 +1562,17 @@ func request_bow(draw_time: float, loose_time: float, aim: Vector3) -> bool:
 	return true
 
 
-## The loose, `loose_time` seconds of it. Called by `HeroRanged` when the draw
-## it committed to in `request_bow` runs out. Deliberately NOT a request: the
-## hero already agreed to this half of the shot and cannot decline it now.
-func bow_loose(loose_time: float) -> void:
+## The loose, `loose_time` seconds of it, down `aim`. Called by `HeroRanged` when
+## the trigger comes up on a bow at full draw.
+##
+## Deliberately NOT a request: the string is at his ear and the one thing that
+## cannot happen is that the shot silently evaporates. It TAKES the commitment
+## rather than asking for it — the follow-through is the only part of a bow shot
+## the hero is owned for now, and `_commit_ranged` refusing (he was knocked out
+## of it on the same frame) still leaves the clip playing over whatever he is
+## doing instead, which is the honest reading.
+func bow_loose(loose_time: float, aim: Vector3) -> void:
+	_commit_ranged(loose_time, aim)
 	if _tree != null:
 		_tree.set(_P_RANGED_SCALE, _clip_scale(clip_bow_shot, loose_time))
 	_fire(_P_RANGED)
@@ -1618,9 +1634,17 @@ func aiming() -> bool:
 	return ranged != null and ranged.aiming
 
 
-## Which ranged item is sighted, or &"" for none. The bow and the hookshot hold
+## Which ranged item is RAISED, or &"" for none. The bow and the hookshot hold
 ## the body in genuinely different shapes — a full draw versus a two-handed brace
 ## — so the stance has to know which, not merely that he is aiming.
+##
+## Narrower than `aiming()` on purpose, and the gap between them is the whole of
+## "he goes back to a resting position after the shot": `aiming()` is true for as
+## long as the item is in his hand (the camera is on his shoulder, the crosshair
+## is up), while this is true only while the trigger is actually down. Drawn but
+## not pulled, he stands in ordinary locomotion holding the bow — which is the
+## rest pose, already authored, and it was simply never reachable while the
+## stance was equipment-driven.
 func aim_item() -> StringName:
 	return ranged.aim_item() if ranged != null else &""
 

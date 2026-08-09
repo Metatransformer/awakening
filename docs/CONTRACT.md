@@ -211,7 +211,7 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `move_up/down/left/right` | WASD, arrows | left stick | move |
 | `cam_up/down/left/right` | mouse motion (read in code) | right stick | camera |
 | `attack` | **LMB** | **X / Square** (pad2) | light attack (**hold** = charge, **+guard** = dash) |
-| `use_item` | **F** | **RT / R2** (axis5+) | use the item the D-pad drew |
+| `use_item` | **F** | **RT / R2** (axis5+) | use the item the D-pad drew — **held**: down aims, up fires |
 | `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held**, and it targets, and it recentres |
 | `context` | **Shift** | **B / Circle** (pad1) | roll / backstep / sidehop — **hold** = run |
 | `jump` | **Space** | **Y / Triangle** (pad3) | jump |
@@ -266,11 +266,20 @@ A sticky mode needs an unconditional way out, and `attack` is it: pressing it
 with an item drawn stows the item **and swings on the same press**
 (`HeroCombat._begin`, `Game.stow_item`). Not the next press — the same one.
 
-`use_item` took the A/Cross the sword vacated. It is the "do the thing you are
-holding" button: it fires the drawn bow or hookshot, and with the sword out and
-something locked it is the lunge. With the sword out and nothing locked it is
-**silent**, deliberately — that is OOT's A, where the jump attack exists only
-under Z.
+`use_item` took the A/Cross the sword vacated, and then the right trigger. It is
+the "do the thing you are holding" button: it fires the drawn bow or hookshot,
+and with the sword out and something locked it is the lunge. With the sword out
+and nothing locked it is **silent**, deliberately — that is OOT's A, where the
+jump attack exists only under Z.
+
+**With an item in hand it is HELD, not pressed.** Pull it and he raises the item
+into its aim; let go and it fires. That is the only arrangement that works once
+the button is a trigger and the aim is the camera: the item goes up, THEN you
+move the stick, then you shoot. Firing on the press meant the shot was gone
+before the aim began, and it also meant the hero had nowhere to stand between
+shots — the stance now belongs to the button, so he lowers the item afterwards
+and the next shot costs another pull. See §8 Ranged; empty-handed the lunge is
+still on the press, because a leap is not a thing you hold.
 
 `interact` sits on Y/Triangle because A was spoken for twice over. It cannot
 share A with `use_item`: `interact` already shares A with `ui_accept`, which is
@@ -884,24 +893,45 @@ measuring. The poses are `swing_lookdev`'s job.
 `HeroCombat`**, not more of it. HeroCombat is the sword arm: the swing, the
 block cone, the sockets every model hangs off. What an arrow does after it
 leaves has nothing to do with any of that. HeroCombat still owns the combat
-BUTTONS (one reader, §4) and calls `fire()` on a `use_item` press when the right
-hand is not holding the sword.
+BUTTONS (one reader, §4) and hands `use_item`'s two edges straight to it when the
+right hand is not holding the sword.
+
+**`use_item` is a HELD trigger, not a press.** Down raises and aims, up fires.
+Both items work this way and it is not negotiable: they are AIMED items, and a
+button that fires on the press cannot be aimed with — pulling RT to bring the bow
+up spent the arrow before the stick had moved. The stance follows the button too,
+so the shot ends with the item LOWERED and still in his hand, and the next shot
+costs another pull.
 
 ```gdscript
-hero.ranged.fire(&"bow" | &"hookshot") -> bool   # false = the press did nothing
-hero.ranged.busy() -> bool                        # a shot is mid-flight
-hero.ranged.aiming -> bool                        # a sighted item is out
-hero.ranged.aim_item() -> StringName              # &"bow" &"hookshot" or &""
+hero.ranged.use_press(&"bow" | &"hookshot") -> bool  # raise it; false = ignored
+hero.ranged.use_release()                            # loose it; safe when idle
+hero.ranged.cancel_use()                             # put it down, fire nothing
+hero.ranged.busy() -> bool                           # a shot is mid-flight
+hero.ranged.aiming -> bool                           # a sighted item is OUT
+hero.ranged.aim_item() -> StringName                 # ...and RAISED, or &""
 ```
 
-**A bow shot is two clips and one clock.** `K.BOW_DRAW[level]` seconds of charge
+`aiming` and `aim_item()` are deliberately different questions. The first is the
+item being in his hand — the camera and the crosshair belong to that. The second
+is the trigger being down — the POSE belongs to that. Letting go puts the bow
+down without putting it away.
+
+**A bow shot is two clips and one clock.** `K.BOW_DRAW[level]` seconds of pull
 (`bow_draw_arrow`), then `HeroRanged.BOW_LOOSE` seconds of loose
-(`bow_aim_recoil`), and the arrow leaves at the seam. `HeroRanged` owns the
-clock; the hero owns the body and is committed for both halves:
+(`bow_aim_recoil`), and the arrow leaves at the seam. Held past full draw the
+clock STALLS at the seam rather than running on; released early it does not cut
+the pull short, so a tap is exactly a full-strength shot and a mashed trigger is
+never faster than an aimed one — which is what keeps `Game.bow_draw_time()`, the
+forge ladder, meaning what it says.
+
+**Only the LOOSE commits the hero.** The pull is a stance he can walk in
+(`AimLoco`), because a hold has no length anybody knows in advance and rooting a
+player for an unbounded one is a freeze with a button attached.
 
 ```gdscript
-hero.request_bow(draw_time, loose_time, aim) -> bool  # commits, fires the CHARGE
-hero.bow_loose(loose_time)                            # the seam — not a request
+hero.request_bow_draw(draw_time) -> bool   # fires the PULL clip; commits nothing
+hero.bow_loose(loose_time, aim)            # the seam — takes the commitment
 hero.request_hookshot(duration, aim) -> bool          # one phase, not two
 ```
 
@@ -924,7 +954,8 @@ Bus.aim_changed(active: bool)          # emitted by HeroRanged, nobody else
 camera.set_aiming(on)                  # connected to it in GameCamera._ready
 camera.aiming() -> bool
 hero.aiming() -> bool                  # both read through HeroRanged
-hero.aim_item() -> StringName          # which stance the body holds
+hero.aim_item() -> StringName          # which stance the body holds — and only
+                                       # while the trigger is actually down
 
 Bus.guard_changed(active: bool)        # emitted by HeroCombat, nobody else
 camera.set_guarding(on)                # connected to it in GameCamera._ready

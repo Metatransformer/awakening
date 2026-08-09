@@ -651,15 +651,39 @@ func _physics_process(delta: float) -> void:
 		# one thing whether or not something is locked. It used to mean both, and
 		# "use item" that silently became a jump attack when your hands were empty
 		# is two verbs sharing a name.
-		if Input.is_action_just_pressed(&"use_item"):
+		#
+		# With an item in hand it is a HELD trigger and not a press: down raises
+		# and aims, up looses (hero_ranged.gd owns both halves). It used to fire on
+		# the press, which meant a player pulling RT to aim had already shot before
+		# they touched the stick — the bug this split exists to fix. Empty-handed
+		# it is still the lunge, on the press, because a leap is not a thing you
+		# hold.
+		#
+		# The release arm is `not pressed` rather than `just_released` on purpose:
+		# a press and a release inside one physics tick would otherwise raise the
+		# bow and never let it go. This way the raise lands on this frame and the
+		# loose on the next one, which is what a one-frame tap should look like.
+		if equipped != &"" and _hero.ranged != null \
+			and Input.is_action_just_pressed(&"use_item"):
+			_hero.ranged.use_press(equipped)
+		elif _hero.ranged != null and not Input.is_action_pressed(&"use_item"):
+			# Unconditional, not gated on an item being out: the item can leave his
+			# hand mid-hold (the attack button's escape hatch stows it), and a
+			# `_using` flag that only ever gets cleared by the hand that set it is
+			# a bow stuck at full draw the next time one is drawn.
+			_hero.ranged.use_release()
+		elif Input.is_action_just_pressed(&"use_item"):
 			_press(Intent.LUNGE)
 		_tick_context_button()
 		_tick_attack_button(delta)
 	else:
 		# A shop opening mid-wind-up must not leave the charge armed behind the
 		# panel, waiting to come out at whatever is standing there when the
-		# player closes it again.
+		# player closes it again. A held bow is the same shape of bug and worse,
+		# because the trigger coming up behind the panel would LOOSE it.
 		_release_charge(false)
+		if _hero.ranged != null:
+			_hero.ranged.cancel_use()
 
 	# The chain window is the gap BETWEEN swings, so it only runs while nothing is
 	# swinging. Ticking it through the swing was the first version, and it made
@@ -862,8 +886,10 @@ func _begin(intent: int) -> void:
 			Game.stow_item()
 			_light_swing(_chain_step)
 			return
-		if intent == Intent.LUNGE and _hero.ranged != null:
-			_hero.ranged.fire(equipped)
+		# Every other intent is silent with an item out. The use button no longer
+		# arrives here at all — it is a held trigger read straight into HeroRanged
+		# (see _tick_input), because a shot that has to survive a swing buffer is a
+		# shot that can come out a quarter of a second after the player let go.
 		return
 
 	match intent:
