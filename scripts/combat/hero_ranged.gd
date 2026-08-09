@@ -63,14 +63,20 @@ extends Node3D
 ## Locked on, both items override that and shoot the target, because that is the
 ## whole promise of the lock.
 ##
-## ## Aim mode
+## ## Aim mode is the TRIGGER, not the D-pad
 ##
-## Because the aim IS the camera, drawing one of these has to change the camera,
-## or the player is aiming a weapon with a rig framed for running around. Bringing
-## either item out therefore raises `Bus.aim_changed(true)`: the boom drops to the
-## hero's shoulder, the FOV narrows, the HUD puts a crosshair on the middle of the
-## screen, and the hero turns to face wherever the lens is pointed. This node is
-## the only emitter — it is the one place that knows what is in his hands.
+## Because the aim IS the camera, pulling one of these has to change the camera,
+## or the player is aiming a weapon with a rig framed for running around. So the
+## trigger raises `Bus.aim_changed(true)`: the boom drops to the hero's shoulder,
+## the FOV narrows, the HUD puts a crosshair on the middle of the screen, and the
+## hero turns to face wherever the lens is pointed. Letting go drops all of it
+## again. This node is the only emitter — it is the one place that knows what is
+## in his hands and whether it is up.
+##
+## Selecting the item does NOT do that, and used to. Choosing the bow on the
+## D-pad zoomed the game into a sight and left it there: you crossed a room in
+## over-the-shoulder framing at 42° of lens with a crosshair on the wall, having
+## asked for none of it. Carrying a bow is not aiming a bow.
 
 ## Seconds of loose and follow-through after the arrow leaves — the second half
 ## of a bow shot, and the second of its two clips (`Hero.clip_bow_shot`).
@@ -103,8 +109,9 @@ const AIMED: Array[StringName] = [&"bow", &"hookshot"]
 var _hero: Hero
 var _tether: HookshotTether
 
-## True while a ranged item is in the right hand. Mirrored onto the Bus; kept
-## here so a late listener (a HUD rebuilt on a scene change) can ask.
+## True while a ranged item is RAISED — the trigger is down, or the shot it fired
+## is still playing out. Mirrored onto the Bus; kept here so a late listener (a
+## HUD rebuilt on a scene change) can ask.
 var aiming: bool = false
 
 ## The use button, as of the last frame HeroCombat polled it. Not read from
@@ -161,12 +168,14 @@ func _on_loadout_changed(_set_index: int, _right: StringName, _left: StringName)
 
 ## The RAISED item, or &"" for none — what the hero's stance is built from.
 ##
-## Not the same question as `aiming`, and the difference is the rest pose. This
-## one is true only from the moment the trigger goes down to the end of the shot
-## it fired; `aiming` stays true for as long as the thing is in his hand. So the
-## camera and the crosshair belong to the item and the POSE belongs to the
-## button, and letting go of the button puts the bow down without putting it
-## away.
+## True only from the moment the trigger goes down to the end of the shot it
+## fired. Merely HOLDING a bow is not this: he stands in ordinary locomotion
+## carrying it, which is the rest pose, and letting go of the button puts the bow
+## down without putting it away.
+##
+## `aiming` is this same fact with the item thrown away, mirrored onto the Bus
+## for the camera and the HUD (`_refresh_aiming`). The pose, the framing and the
+## crosshair therefore all begin and end on the trigger, together.
 func aim_item() -> StringName:
 	var held := Game.armament(Game.HAND_RIGHT)
 	if not AIMED.has(held):
@@ -176,9 +185,23 @@ func aim_item() -> StringName:
 	return &"hookshot" if _hook_ready or _hook_active else &""
 
 
-## Recompute the stance from what is actually equipped, and announce a change.
+## Recompute the stance from what is actually RAISED, and announce a change.
+##
+## The trigger decides this, not the D-pad. It was equipment-driven — selecting
+## the bow dropped the camera onto his shoulder, narrowed the lens to 42° and put
+## a crosshair up, and left all three there until you put the item away. You were
+## not aiming; you were carrying a bow, and the game had committed the entire
+## frame to a shot you had not asked for. Walking anywhere with the bow selected
+## meant walking in a sight.
+##
+## So the zoom is now exactly as long as the pull: trigger down raises it, the
+## end of the shot puts it back down, and between shots he stands in ordinary
+## third-person framing holding a bow. That also makes this the same fact as
+## `aim_item()` — one is which item, the other is whether there is one — and they
+## are deliberately the same fact, because a camera and a body disagreeing about
+## whether he is aiming is the bug this whole node exists to prevent.
 func _refresh_aiming() -> void:
-	var want := AIMED.has(Game.armament(Game.HAND_RIGHT))
+	var want := aim_item() != &""
 	if want == aiming:
 		return
 	aiming = want
@@ -395,6 +418,13 @@ func _physics_process(delta: float) -> void:
 		return
 	_tick_bow(delta)
 	_tick_hook(delta)
+	# POLLED, at the end, after both items have had their say. The raised state
+	# ends in half a dozen places — the seam, the follow-through running out, a
+	# roll or a hit taking the pose away, `cancel_use` from the shop — and a
+	# `Bus.aim_changed` hung off each of those is five places for the sixth to be
+	# forgotten and one for the camera to be left zoomed into a shot that ended.
+	# One comparison a frame against `aim_item()` cannot go stale.
+	_refresh_aiming()
 
 
 ## True while the body can still hold `id` raised. Checked every frame of a hold

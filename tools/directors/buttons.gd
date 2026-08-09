@@ -2,10 +2,17 @@ extends RefCounted
 ## Can you get your sword back?
 ##
 ## Drawing an item here is STICKY — a D-pad press puts the hookshot in his hand
-## and it stays there while you walk around aiming it, which is not what OOT's
-## momentary C-buttons do. That is a deliberate trade (you can aim on the move),
-## and it buys one specific failure: a mode you cannot leave. "I select the
-## hookshot and then I want my sword back" is the whole reason this file exists.
+## and it stays there while you walk around carrying it, which is not what OOT's
+## momentary C-buttons do. That is a deliberate trade (the item is on the move
+## with you), and it buys one specific failure: a mode you cannot leave. "I
+## select the hookshot and then I want my sword back" is the whole reason this
+## file exists.
+##
+## Carrying it is not AIMING it — that is the trigger, and only for as long as
+## the trigger is down (hero_ranged.gd). The two get checked separately below,
+## the sticky one positively and the sight negatively, because the version of
+## this file that only asked about stickiness passed happily while selecting a
+## hookshot zoomed the game permanently into a sight.
 ##
 ## The claims:
 ##   1. A D-pad press draws the item, and it is still drawn a couple of seconds
@@ -46,6 +53,13 @@ func run(rig) -> void:
 	post.connect(&"struck", func(amount: int, _from: Vector3) -> void:
 		_hits.append(amount))
 
+	# Where he spawned: open floor with room in every direction. The hookshot beat
+	# below needs somewhere for the chain to GO, and the post he stands at for the
+	# sword beats is 1.1 m away — a chain fired at that arrives, pulls him nowhere
+	# and lets go inside two frames, which from outside is indistinguishable from
+	# a button that did nothing.
+	var home: Vector3 = hero.global_position
+
 	# In reach and facing it, placed rather than walked — a director measuring
 	# the buttons must not also be measuring the pathing (see p4_charge.gd).
 	# facing_yaw is the HEADING yaw (docs/CONTRACT.md §2.5).
@@ -65,7 +79,11 @@ func run(rig) -> void:
 	await rig.wait_frames(24)
 	_check("dpad up drew the hookshot (%s)" % Game.armament(Game.HAND_RIGHT),
 		String(combat.get(&"equipped")) == "hookshot")
-	_check("the camera went over the shoulder", bool(hero.call(&"aiming")))
+	# And it does NOT zoom. The draw is sticky; the SIGHT is not. Selecting the
+	# hookshot used to drop the camera onto his shoulder and narrow the lens for
+	# as long as you carried it, so this beat's own "still drawn after 2 s and a
+	# walk" was a walk taken down a gun sight.
+	_check("selecting it did not zoom", not bool(hero.call(&"aiming")))
 	await rig.capture(out.path_join("b_01_drawn.png"))
 
 	# Two seconds of standing there and a walk. A mode that quietly expires is
@@ -82,11 +100,28 @@ func run(rig) -> void:
 	# Aimed at the wall rather than the post: what is being checked is that the
 	# button reaches the item at all. Where the chain GOES is ranged_kit.gd's.
 	#
+	# Put back on OPEN FLOOR first, and not on the post's mark.
+	#
+	# Two things conspire here and both are about the chain having somewhere to
+	# go. The walk above no longer lands in the same place twice — `move_left` is
+	# camera-relative, and carrying an item no longer pins the camera the way
+	# aiming one does (hero_ranged.gd), so autoswing drifts the lens while he
+	# walks and "left" rotates under him; it wandered about a metre between runs.
+	# And the sword beats' mark is 1.1 m from a post he is facing. From either of
+	# those the chain bites instantly, pulls him nowhere and lets go inside a
+	# couple of frames, and a `hooking()` poll straddles the whole event and
+	# reports that the release does not fire the hookshot. It fires. There was
+	# nothing to fire it at. A beat about a BUTTON must not also be a measurement
+	# of the room.
+	#
 	# The hold half is the bug this beat grew for. The trigger used to fire on the
 	# press, so pulling RT to bring the pistol up and line up a ring sent the chain
 	# out before the stick had moved — you could not aim the thing you were aiming.
 	# A tap alone cannot tell the two apart, because a tap presses AND releases.
-	await rig.wait_frames(1)
+	hero.global_position = home
+	hero.velocity = Vector3.ZERO
+	await rig.wait_frames(20)
+
 	Input.action_press(&"use_item")
 	var fired_while_held := false
 	for _i in 60:
@@ -97,11 +132,17 @@ func run(rig) -> void:
 	_check("holding use_item did not fire the chain", not fired_while_held)
 	_check("holding it brought the hookshot up instead (stance=%s)"
 		% hero.call(&"aim_item"), String(hero.call(&"aim_item")) == "hookshot")
+	_check("and the trigger is what zoomed", bool(hero.call(&"aiming")))
 	await rig.capture(out.path_join("b_02b_braced.png"))
 
 	Input.action_release(&"use_item")
 	var fired := false
-	for _i in 30:
+	# 90 frames, not 30. At 30 this beat failed roughly one run in two whenever
+	# the machine had a second Godot on it, and the failure reads as "the release
+	# does not fire the hookshot" — a damning, entirely false claim about the
+	# button. The chain leaving is not frame-budgeted; the window has no business
+	# being tight.
+	for _i in 90:
 		await rig.wait_frames(1)
 		if bool(hero.call(&"hooking")):
 			fired = true

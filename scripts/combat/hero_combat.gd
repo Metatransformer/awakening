@@ -455,6 +455,25 @@ func _mount_loadout() -> void:
 	_mount_item(&"hookshot", hookshot_id,
 		&"mixamorig_RightHand", Vector3(0.07, 0.08, 0.02), Vector3(-66.0, 6.0, 90.0),
 		&"mixamorig_Hips", Vector3(-0.16, 0.02, 0.10), Vector3(0.0, 0.0, -90.0))
+	# The bow was in his fist BACKWARDS, and it took a render to see which way.
+	# The hand rotation shipped at (-96, 0, 90) — the -96 pitch copied off the
+	# hookshot above, where it is right — and that is a quarter turn about the
+	# bow's own limbs. The limbs stood up correctly (15° off vertical, which is
+	# the draw's own lean) so the silhouette from behind looked fine, but the bow
+	# was edge-on to the shot: its plane lay ALONG the arrow instead of across it,
+	# which from his flank is a flat stave with the string cutting through it and
+	# from any other angle is a bow strung the wrong way round.
+	#
+	# (6, 180, -90) is that same mount spun +90° about the model's own +Y, which
+	# is the only spin that turns the plane without tipping the limbs over. The
+	# sign is the whole answer and it is not derivable: the bow's local +X is the
+	# STRING side, not the back — the mesh runs from the grip at the origin out to
+	# the tips at +0.235, and on a strung bow the tips are where the string is —
+	# so the correct grip has +X pointing back at the ARCHER. -90° spins it the
+	# other way and gives a bow whose limbs curve into his own chest, which
+	# measures just as well (8.5° vs 171.5° off the shot) and is wrong. Only the
+	# frame says which. tools/directors/bow_grip.gd shoots the sweep.
+	#
 	# The slung bow's z is its stand-off from the spine: -0.09, not the -0.16 it
 	# shipped with. At 16 cm the bow rode a hand's width clear of his back and
 	# off to one side of it — from behind, a bow travelling alongside the hero
@@ -463,7 +482,7 @@ func _mount_loadout() -> void:
 	# shoots the ladder, and shoots it from his flank, where a stand-off is a
 	# gap you can see instead of a depth the camera has flattened.
 	_mount_item(&"bow", bow_id,
-		&"mixamorig_LeftHand", Vector3(0.0, 0.04, 0.0), Vector3(-96.0, 0.0, 90.0),
+		&"mixamorig_LeftHand", Vector3(0.0, 0.04, 0.0), Vector3(6.0, 180.0, -90.0),
 		&"mixamorig_Spine2", Vector3(0.0, 0.06, -0.09), Vector3(0.0, 0.0, 28.0))
 	hookshot = _items[&"hookshot"]["hand"]
 	bow = _items[&"bow"]["hand"]
