@@ -28,6 +28,22 @@ var blocked: bool:
 		if blocked:
 			drop_focus()
 
+## True while a full-screen UI is actually up — the shop, the stash, the run
+## summary. NOT true during a fade, which is the whole point of it being separate
+## from `blocked`: a transition blocks interaction, but it is not a screen you
+## can be standing in, and the two callers who ask this question want the
+## difference.
+##
+##   - `PauseMenu` refuses to OPEN while one of these is up. Escape is bound to
+##     both `pause` and `ui_cancel`, and every one of these screens closes on
+##     either — so without this the one press that closes the shop also opens
+##     the pause menu behind it.
+##   - The cursor is handed back for exactly as long as one of these is up.
+var screen_up: bool:
+	get:
+		_prune()
+		return not _blockers.is_empty()
+
 var _items: Array[Interactable] = []
 var _blockers: Array[Node] = []
 var _override: bool = false

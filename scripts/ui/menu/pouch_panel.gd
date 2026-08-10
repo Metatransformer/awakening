@@ -47,7 +47,7 @@ signal use_requested
 ## is on it rather than under the WORN card because the misconception it heads
 ## off — that the doll is where you equip — is formed by looking at the doll and
 ## then looking for the verb, and the verbs are all on this line.
-const HINT := "↑↓←→ Look   A Fletch   Hold Y Escape   Esc / B Back   Hands change on ITEMS"
+const HINT := "↑↓←→ Look   E / A Fletch   Hold Y Escape   Esc / B Back   Hands change on ITEMS"
 
 ## The action the way out is held on: Y on the pad, Y on the keyboard.
 ##

@@ -235,6 +235,22 @@ not a fade. Two screens are not autoloads and take their place in the same stack
 `TradeScreen` at **60** and `RunEndScreen` at **150**, the latter deliberately
 above the pause menu so Escape cannot open a menu behind the end of a run.
 
+**Nothing opens a menu behind any of them, and it is not the layer that
+enforces it.** Escape is bound to both `pause` and `ui_cancel`, and every
+full-screen screen closes on either — so the press that closed the shop used to
+raise the pause menu in the same frame. `PauseMenu` refuses to open while
+`Prompt.screen_up` (a screen has called `Prompt.block`, as distinct from a fade,
+which sets `Prompt.blocked` and must not count). One press, one response.
+
+**The cursor belongs to whoever took the screen.** `GameCamera` GRABS it on
+spawn and never releases it — every full-screen UI saves `Input.mouse_mode` on
+the way in and restores exactly what it found on the way out (`PauseMenu`,
+`TradeScreen`, `StashScreen`, `RunEndScreen`). The camera used to release it on
+`pause` as well, and because unhandled input runs deepest-child-first the camera
+got there before the autoload menu: the menu recorded "visible" as the state to
+put back, restored "visible" on close, and mouse-look was dead for the rest of
+the session.
+
 `LoadingCard` (`scripts/ui/loading/loading_card.gd`) is not in that stack because
 it is not a screen anyone opens: it is a child of Flow's own **200** layer, in
 front of the fade veil, raised and freed by `Flow._go` on the two transitions
@@ -279,7 +295,8 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `use_item` | **R** | **X / Square** (pad2) | drink the selected bottle — §4.1 |
 | `jump` | **F** | **Y / Triangle** (pad3) | jump |
 | `z_target` | **Q**, MMB | **R3** (pad8) | lock-on toggle / camera recentre |
-| `interact` | E | **A / Cross** (pad0) | talk/open, and nothing else |
+| `interact` | E | **A / Cross** (pad0) | talk/open, and nothing else. **E and A are also `ui_accept`** — the confirm is the same press in the world and in a menu, see below |
+| `ui_accept` | Enter, Space, **E** | **A** (pad0), **X** (pad2) | confirm — in menus only. E is registered at runtime, the same way the pad buttons are |
 | `ui_cancel` | Esc | **B / Circle** (pad1) | close/back — in menus only |
 | `ui_hold` | **Y** | **Y / Triangle** (pad3) | the menu's HOLD — in menus only. A goes forward, B goes back, and this is the press that must not be a press. Today: the escape rope on the POUCH screen (METAGAME §5). Shares Y with `jump`, which is safe because the tree is paused whenever it is read. **Not rebindable** — the `ui_` prefix is what enforces that (`Settings._capture_defaults` skips it). |
 | `weapon_prev` / `weapon_next` | 1 / 3 | dpad ← / → | step the right hand through the weapons you own — §4.1 |
@@ -289,7 +306,7 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `first_person` | **V** | **R3** (pad8) | look out of his own eyes — he roots. No Elden Ring equivalent; V because `use_item` took R |
 | — | **X** | — | **deliberately unbound**, held for a crouch. Elden Ring's crouch key, and the one row of its layout this game has no ability for. CONTRACT §4: it stays unbound until the verb exists |
 | `pause` / `inventory` / `map` | Esc / **I** / **M**, Tab | Start (pad6) / **Select** (pad4) / L3 (pad7) | menu / pouch / map |
-| `ui_tab_prev` / `ui_tab_next` | **Q** / **E** | **LB** / **RB** | page ITEMS ↔ POUCH ↔ MAP — **in menus only**, see below |
+| `ui_tab_prev` / `ui_tab_next` | **Q** / **R** | **LB** / **RB** | page ITEMS ↔ POUCH ↔ MAP — **in menus only**, see below. Next was E until E became the confirm |
 | `dbg_reload` | F5 | — | — |
 
 **A MODIFIED BINDING DOES NOT EXCLUDE THE UNMODIFIED ONE.** `attack` is plain
@@ -349,7 +366,8 @@ it because it looks empty.
 **The shoulders page the menu's tabs, and that does not contradict the line
 above.** `ui_tab_prev` / `ui_tab_next` (LB/RB, Q/E) exist only while the pause
 menu is open, where the world is paused and the hero receives no input at all —
-so RB being the light attack and Q being lock-on cost nothing. They are the
+so RB being the light attack, Q being lock-on and R being `use_item` cost
+nothing. They are the
 shoulders because that is where "previous page / next page" lives in every menu
 on every console, and because the thumbs are already spending ↑↓←→ on focus.
 
@@ -430,6 +448,15 @@ reads a button while a menu is open.
 reason: `trade_screen`'s accept edge starts DISARMED, so the press that opens a
 screen cannot also confirm inside it. That is the only arbitration left anywhere
 on the pad, and it is a one-frame one inside a single screen.
+
+**And E now shares the same pair on the keyboard.** The pad had confirm and
+interact on one button from the start; the keyboard had E for the world and
+Enter for menus, so a player who had spent a whole run pressing E to say yes to
+a vendor pressed it at a menu row and paged the tabs instead. E is on
+`ui_accept` (registered at runtime by `PauseMenu._ensure_pad_ui_actions`, with
+the pad buttons and for the same reasons), Enter and Space still confirm, and
+paging moved to Q / **R**. The disarm above is what makes it safe in both
+directions.
 
 **The jump attack came off A with the dodge.** It was "guard up, stick still, A"
 — OOT's Z + A read literally, with a four-way stick table deciding between the

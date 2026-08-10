@@ -23,7 +23,7 @@ signal value_settled
 ## in play is D-pad ↑, and inside a menu ↑ is how focus moves. Rather than teach
 ## a second, contradictory binding, the swap is a focusable button and the detail
 ## pane names the in-play one.
-const HINT := "↑↓←→ Select    Enter / A Change    Esc / B Back"
+const HINT := "↑↓←→ Select    E / A Change    Esc / B Back"
 
 ## Sized so the whole screen -- header, cards, footer -- fits inside 720p without
 ## the frame running off the bottom. It did, the first time: the cards are

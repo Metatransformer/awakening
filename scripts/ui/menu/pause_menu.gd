@@ -19,7 +19,11 @@ extends CanvasLayer
 ##  * **Escape opens and closes; Cancel backs out one level** — the screen stack
 ##    pops, it does not jump to root. B is the pad's Escape everywhere, including
 ##    inside the "press a key" overlay, where it cancels instead of being
-##    recorded as a binding.
+##    recorded as a binding. A screen reached in ONE press (I, M) has nothing
+##    under it and Escape leaves outright — see `_open_onto`.
+##  * **It never opens over another screen.** The shop and the stash close on the
+##    same Escape, and a menu that opened behind the thing you just closed is a
+##    press the player did not make (`Prompt.screen_up`, in `_unhandled_input`).
 ##  * **It re-reads Settings and Saves on every open**, so values survive being
 ##    changed, closed and reopened.
 ##
@@ -72,12 +76,24 @@ const PAD_UI_BUTTONS := {
 	&"ui_tab_prev": [JOY_BUTTON_LEFT_SHOULDER],
 	&"ui_tab_next": [JOY_BUTTON_RIGHT_SHOULDER],
 }
-## The keyboard half of the same two. Q/E because they sit under the fingers
-## already on WASD, which is the whole argument for them — a keyboard player has
-## no shoulder buttons and paging with Tab would fight the `map` binding.
+## The keyboard half of the same set.
+##
+## **E CONFIRMS.** It is the world's `interact` — the key that talks to the
+## vendor, opens the chest, pulls the lever — and a player who has spent the
+## whole game pressing E to say yes to things does not stop meaning yes because
+## the thing they are saying it to is now a menu row. Pad A is already on both
+## `interact` and `ui_accept` for exactly that reason; this is the keyboard half
+## of a symmetry that was only half built. Enter and Space still confirm.
+##
+## Which cost E its old job. Paging was Q/E because those sit under the fingers
+## already on WASD, and that argument survives intact for Q — R is the next key
+## under the same hand, `use_item`'s key in the world and free in a menu (the
+## hero does not read his buttons while the tree is paused). Tab is not
+## available: it is bound to `map`.
 const KEY_UI_BUTTONS := {
+	&"ui_accept": [KEY_E],
 	&"ui_tab_prev": [KEY_Q],
-	&"ui_tab_next": [KEY_E],
+	&"ui_tab_next": [KEY_R],
 }
 
 ## The screens the shoulders cycle, in ring order, with the tab strip's labels.
@@ -247,7 +263,7 @@ func open_pouch() -> void:
 		close()
 		return
 	open()
-	_push({"screen": Screen.POUCH})
+	_open_onto(Screen.POUCH)
 
 
 ## The map button (`map` — M or Tab, or Select on the pad). Same contract as
@@ -262,7 +278,26 @@ func open_map() -> void:
 		close()
 		return
 	open()
-	_push({"screen": Screen.MAP})
+	_open_onto(Screen.MAP)
+
+
+## Land on `screen` with NOTHING UNDER IT. The root is not a step you passed
+## through on the way here, so Escape must not walk you back onto it.
+##
+## This was the bug: `open()` seeds the stack with ROOT, so opening the pouch
+## with I left [ROOT, POUCH], and Escape — which the player is pressing to LEAVE
+## — popped one level and opened the pause menu they never asked for. A button
+## that opens a screen owns the way back out of it, and the way out of a screen
+## you reached in one press is the world.
+##
+## Paging (`_page`) REPLACES the top of the stack, so this holds across the whole
+## ITEMS/POUCH/MAP ring: however you shoulder around it, Escape leaves.
+##
+## Reaching the same screen from the root menu still stacks normally — there the
+## root IS where you came from, and backing onto it is what the player means.
+func _open_onto(screen: int) -> void:
+	_stack.clear()
+	_push({"screen": screen})
 
 
 ## One strip per paged screen, all built here.
@@ -506,6 +541,18 @@ func _unhandled_input(event: InputEvent) -> void:
 	# a third of a second of black; naming the floor made it nearly two.
 	if Flow != null and (Flow.busy or Flow.ending) and not _is_open:
 		return
+	# Nothing opens over a screen that is already up either. The shop, the stash
+	# and the run summary all close on `ui_cancel` OR `pause`, and Escape is bound
+	# to BOTH — so one Escape at the vendor used to close the shop and open this
+	# menu in the same frame, which is the player using a button to leave and
+	# being handed something else instead. One press, one response.
+	#
+	# It is not just Escape: Start does the same thing on a pad, and the fix is
+	# the same shape for both. (The old note on `TradeScreen.open`'s CanvasLayer
+	# claiming you could pause ON TOP of the shop described a state you could
+	# only ever reach by hitting this bug.)
+	if not _is_open and Prompt != null and Prompt.screen_up:
+		return
 	if event.is_action_pressed(&"inventory"):
 		open_pouch()
 		get_viewport().set_input_as_handled()
@@ -610,7 +657,7 @@ func _build_root_screen() -> void:
 	# menu and the root is the one place it was not written down. At the root
 	# there is nothing left to back out of, so backing out closes — which is what
 	# "Resume" was already describing.
-	hint.text = "↑↓ / D-pad Select    Enter / A Confirm    Esc / B Resume"
+	hint.text = "↑↓ / D-pad Select    E / A Confirm    Esc / B Resume"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	UITheme.apply_text_style(hint, UITheme.TYPE_CAPTION)
 	footer.add_child(hint)
@@ -628,7 +675,11 @@ func _build_root_screen() -> void:
 func refresh_root() -> void:
 	if _root_list == null:
 		return
-	var want := _last_root_button.text if _last_root_button != null else ""
+	# `UiKit.label_of`, NOT `.text`. A VerbRow's own `text` is empty by
+	# construction — the label is a child of the composite — so reading `.text`
+	# here compared "" against "" and matched the FIRST row every time, which
+	# silently turned "put me back where I was" into "put me on Resume".
+	var want := UiKit.label_of(_last_root_button)
 	UITheme.clear_children(_root_band_slot)
 	UITheme.clear_children(_root_list)
 	_cmd_buttons.clear()
@@ -677,7 +728,7 @@ func refresh_root() -> void:
 	# actually remembers standing on.
 	_last_root_button = null
 	for b in _cmd_buttons:
-		if b.text == want:
+		if UiKit.label_of(b) == want:
 			_last_root_button = b
 			break
 

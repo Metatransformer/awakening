@@ -25,7 +25,7 @@ const MSAA_NAMES: Array[String] = ["Off", "2x", "4x", "8x"]
 const SHADOW_NAMES: Array[String] = ["Off", "Low", "Medium", "High"]
 const ONOFF: Array[String] = ["Off", "On"]
 
-const HINT := "↑↓ / D-pad Select    ←→ Adjust    Enter / A Confirm    Esc / B Back"
+const HINT := "↑↓ / D-pad Select    ←→ Adjust    E / A Confirm    Esc / B Back"
 
 var _tab := Tab.AUDIO
 var _tab_buttons: Array[Button] = []

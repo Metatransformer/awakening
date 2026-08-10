@@ -62,6 +62,11 @@ var _age: float = 0.0
 var _armed: bool = false
 var _leaving: bool = false
 
+## What the pointer was doing before this screen took the viewport. Saved and put
+## back rather than forced to VISIBLE on the way out, so a screen that closes
+## into a menu does not steal the cursor from it. Same contract as `PauseMenu`.
+var _prev_mouse: int = Input.MOUSE_MODE_VISIBLE
+
 var _button: Button
 var _strike: Strike
 
@@ -94,7 +99,9 @@ func _ready() -> void:
 	theme = load(THEME_PATH) as Theme
 
 	# The pointer is captured for camera look while you play; hand it back or the
-	# one button on this screen cannot be clicked.
+	# one button on this screen cannot be clicked. Saved rather than forced, and
+	# put back in `_exit_tree` — see `_prev_mouse`.
+	_prev_mouse = Input.mouse_mode
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_build_rows()
 	_build()
@@ -107,6 +114,7 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	Prompt.unblock(self)
 	Bus.screen_closed.emit(&"run_end")
+	Input.mouse_mode = _prev_mouse as Input.MouseMode
 
 
 func _fit() -> void:

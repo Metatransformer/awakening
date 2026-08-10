@@ -75,13 +75,23 @@ static func open(from: Node) -> StashScreen:
 	var layer := CanvasLayer.new()
 	layer.name = "StashLayer"
 	# 60. Above the HUD, below the pause menu, exactly where the trade screen
-	# sits — pausing out of the locker should put the menu on top of it.
+	# sits — and for the reason its note now gives: Escape and Start CLOSE this
+	# screen and no longer also raise the menu behind it.
 	layer.layer = 60
 	var s := StashScreen.new()
 	s.host = from
 	layer.add_child(s)
 	from.get_tree().current_scene.add_child(layer)
 	return s
+
+
+## What the pointer was doing before this screen took the viewport.
+##
+## Saved and put back rather than forced to VISIBLE on the way out: this screen
+## can be up in the garrison (pointer captured for camera look) or over a menu
+## that already freed it, and a screen that unconditionally captures on close
+## grabs the cursor in cases where nobody had it. Same contract as `PauseMenu`.
+var _prev_mouse: int = Input.MOUSE_MODE_VISIBLE
 
 
 func _ready() -> void:
@@ -92,6 +102,10 @@ func _ready() -> void:
 	_fit()
 	get_viewport().size_changed.connect(_fit)
 	_build_rows()
+	# The camera captures the pointer for look. Hand it back or not one cell on
+	# this screen can be clicked.
+	_prev_mouse = Input.mouse_mode
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	Prompt.block(self)
 	Bus.screen_opened.emit(&"stash")
 
@@ -104,6 +118,7 @@ func _fit() -> void:
 func _exit_tree() -> void:
 	Prompt.unblock(self)
 	Bus.screen_closed.emit(&"stash")
+	Input.mouse_mode = _prev_mouse as Input.MouseMode
 
 
 func close() -> void:
