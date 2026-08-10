@@ -17,8 +17,15 @@ puzzle on it is M6), and phase 2's remaining three atoms.
 rather than adding a ninth line to the ceiling; nothing yet *places* a
 `LanternGrid` on a generated floor.
 
-This file owns the puzzle vocabulary, the three shapes, and where Echoes come
-from, and it owns nothing else.
+**§3.1 and §10 are design, added 2026-08-10** after reading the 1998 Player's
+Guide end to end — `docs/OOT_CATALOGUE.md` is that pass. §3.1 adds three
+combinators (6 → 9, priced in §8.1) and §10 is the **grammar**: the rule that says
+which puzzles a floor may build, and why floor 4's are harder than floor 1's
+without containing a word floor 1 did not have. Enemies and bosses came out of the
+same pass and live in `docs/BESTIARY.md`.
+
+This file owns the puzzle vocabulary, the grammar, the three shapes, and where
+Echoes come from, and it owns nothing else.
 
 It exists because `docs/GDD.md` §5.3 shipped a **lock** and called it a puzzle. A
 door that opens because you own item X is a *check*. Zelda's verb is that the
@@ -168,6 +175,10 @@ puzzle rooms.
 | **5** | **Cycle** — the atom is on the *far* side, and solving it opens a two-way link | You come round the loop and blast the pillar from inside |
 | **6** | **Couple** — solving one atom *un-solves* its neighbours | Lights out: strike a lantern and its four neighbours flip too |
 
+| **7** | **Chain** — solving one atom solves its neighbours, if they are in line | A row of cracked pillars: burst the first and it walks down the row — but there is a **gap**, and you have to stand in it |
+| **8** | **Convert** — an atom does not solve; it **changes what your shot is** | Shoot an arrow through a lit lantern and it arrives burning, and *only* a burning arrow opens the frozen eye |
+| **9** | **Reconfigure** — the atom moves walls, not doors | The maze room, and the floor-wide version of it |
+
 Combinator 5 is the important one and it deserves its own section.
 
 **Combinator 6 is the only one that changes what kind of thinking the room
@@ -181,6 +192,57 @@ backwards**: a board dealt cell-by-cell at random is, over GF(2), usually
 Every press is its own inverse, so solvability is a property of construction at
 any grid size. The grid is **not an atom** — it hands each lantern the gate's own
 `puzzle_id` and the ordinary `PuzzleGate` count does the rest.
+
+### 3.1 Combinators 7–9 — read off Ocarina, 2026-08-10
+
+**Design, not built.** These three came out of reading the 1998 Player's Guide
+end to end and writing down every puzzle in all nine dungeons —
+`docs/OOT_CATALOGUE.md` is that pass, and its §4 is the shortlist these three
+were drawn from. They move `docs/SCOPE.md`'s combinator count from **6 to 9**,
+which is scope creep by that document's own definition; §8 below states the bill
+rather than absorbing it.
+
+**Nothing here adds an atom.** That is the test they were chosen to pass. Ocarina
+is not a game with many props — it is a game that says a lot with few, and every
+one of these three is a new *sentence*, not a new *word*.
+
+**7 — Chain.** One atom's solve propagates to the next along a line of sight,
+inside a radius. Dodongo's Cavern runs a row of bomb flowers this way and puts a
+**deliberate gap** in the middle, so the player has to supply one link
+themselves. That gap is the whole puzzle: without it, chain is a domino topple
+you watch. With it, chain is *where do I stand*, which is the one question none
+of combinators 1–6 asks. It is also the natural home for the T2 cracked pillar,
+which is currently one prop that does one thing.
+
+**8 — Convert, and it is the important one.** An atom that is not a lock. You
+shoot *through* it and your arrow arrives as something else; the lock on the far
+side only accepts the something else. Ocarina does this twice — Forest Temple's
+ice-covered eye switch and the Water Temple's torches — and both times the effect
+is the same: **a lower-tier item answers a higher-tier question.**
+
+That is worth more to this design than it was to Ocarina, because §0 rule 1 is a
+real constraint here and convert is the only thing in the catalogue that relaxes
+it honestly. A floor-2 room may pose a question that *looks* like it needs Burst,
+and be answerable with the Bow the player already has plus a lantern on the sight
+line. The player has not been handed a shortcut; they have been handed a longer
+sentence in a vocabulary they already own. **This is the mechanic that makes a
+four-verb game feel like a nine-verb game**, and it costs one flag on `HitInfo`
+and one prop that already exists.
+
+**9 — Reconfigure, which we have already built and never named.** The atom moves
+*walls*, not doors: §5.4's maze room is exactly this and it shipped without the
+word. Naming it is not bookkeeping — it is what makes the **floor-scale** version
+sayable. The Water Temple sets three water levels from three stations and every
+door in the dungeon changes meaning; the Forest Temple's basement spins a whole
+ring of walls. The room-scale version is on disk. The floor-scale version is one
+lever that re-runs `Dungeon`'s barred-passage pass, and it is the single biggest
+"this floor is not like the last one" available for the price.
+
+> **The rule that keeps this at nine.** A proposed combinator must change *what
+> the player is thinking about*, not what they are aiming at. Couple earned its
+> row because it made the board something you read before your first blow. Chain
+> asks where to stand, convert asks what route the shot takes, reconfigure asks
+> which room to make. A tenth that is "sequence but harder" is sequence.
 
 ---
 
@@ -489,7 +551,7 @@ argue about**, and every one of them is a ceiling.
 |---|---|---|
 | Puzzle verbs | **4** | Bow, Burst, Hookshot, + T0. No fifth. Nothing new is invented to serve a puzzle |
 | Puzzle atoms | **9** | Phase 1 + the lantern, pulled forward. Phase 2's remaining three are flavour and are not committed |
-| Combinators | **6** | Nest, sequence, time, displace, cycle, couple |
+| Combinators | **9** | Was 6. Nest, sequence, time, displace, cycle, couple, **+ chain, convert, reconfigure** (§3.1, 2026-08-10). One of the three is already on disk under another name — §5.4's maze room *is* reconfigure |
 | Puzzle shapes | **3** | Shortcut, critical, treasure |
 | Puzzle prefabs | **12** | 4 tiers × 3 shapes. The generator picks by (floor, shape, owned verb). **3 built**: `Dungeon.GATE_PREFABS` — sun nest (T0), lights out (T0), eye row (T1) |
 | New anchor kinds | **2** | `gate_room`, `puzzle_room` |
@@ -507,8 +569,36 @@ table to pay for it and the owner declined: the gear loop is the reason to
 delve (GDD §6.6), not a service beside it.
 
 **What the ledger asks in return is that the ceilings above do the braking.**
-Nine atoms, six combinators, twelve prefabs, twelve Echoes, four minibosses.
+Nine atoms, nine combinators, twelve prefabs, twelve Echoes, four minibosses.
 A proposal that moves one of those numbers is back to needing a deletion.
+
+### 8.1 The 6 → 9 combinator amendment, priced
+
+`docs/SCOPE.md` §4.2 wants the bill stated, so: **three combinators, no new
+atoms, no new items, no new screens, no new models.** The bill is engineering and
+it is small, which is exactly the argument every bad amendment also makes — so
+here is the specific work, per row, so it can be checked rather than believed.
+
+| | Combinator | What it actually costs | Free because |
+|---|---|---|---|
+| 7 | **Chain** | One `propagate()` on `PuzzleAtom`: a radius, a line-of-sight ray, and a re-entrancy guard so a ring of atoms does not stack-overflow | The atoms already emit `solved`; chain is a second listener on a signal that exists |
+| 8 | **Convert** | One `StringName` on the projectile's `HitInfo` (`arrow` → `arrow_fire`), one `Area3D` on `Lantern` that rewrites it in flight, and one `refusal` string on the atom that only accepts the rewritten kind | `EyeSwitch` already refuses on `kind != &"arrow"`. Convert is that same check with a different constant |
+| 9 | **Reconfigure** | **Zero at room scale — it is shipped.** `MazeRoom` moves walls and colliders off a lantern press today. The floor-scale version is one lever that re-runs `Dungeon`'s barred-passage pass | §5.4 |
+
+**What it does not buy, and must not be allowed to buy:** a tenth atom. Every one
+of the three is a way to make the nine props on disk say more, and the moment a
+combinator arrives needing a prop of its own it has stopped being a combinator.
+That is the ceiling this amendment is willing to be held to.
+
+**The honest counter-argument, written down so nobody has to rediscover it:**
+this is the *third* amendment to a manifest whose own §4.2 says a third should be
+hard. The defence is that combinators are the cheapest variety this project can
+buy — §3 opens by saying so, and the twelve-prefab count only survives because
+combinators do the work forty hand-authored rooms would otherwise do. If that
+argument is not good enough, **the deletion available is phase 2's three
+remaining atoms** (torch, timed bars, sounding set, §2), which were never
+committed and which chain and convert make largely redundant: a lantern that
+converts a shot *is* the torch, and chain across a timer *is* timed bars.
 
 ---
 
@@ -554,3 +644,167 @@ Sluice-Keeper dies and the second stone lights).
 stays open across saves — and a **puzzle** gate wearing it would leave the gate
 room open from run two onward over a puzzle that `PuzzleAtom.clear_run_flags()`
 had just reset. §5.2's promise is that the gate room is a puzzle every run.
+
+---
+
+## 10. The grammar — what makes floor 4 harder than floor 1
+
+**Design, 2026-08-10.** §2 and §3 are the vocabulary. This section is the
+*syntax*: the rule that says which sentences the generator is allowed to build on
+which floor, and why floor 4's sentences are harder than floor 1's without
+containing a single word floor 1 did not have.
+
+It exists because "harder deeper" has three cheap answers and all three are
+wrong, and the catalogue is what proves they are wrong.
+
+### 10.1 The three wrong axes
+
+| The cheap answer | Why Ocarina does not do it |
+|---|---|
+| **More atoms.** Five eyes on floor 4 instead of three on floor 1 | Five is not harder than three, it is *longer* than three. The Deku Tree already asks for three of a thing |
+| **Tighter timers.** The same puzzle, less clock | GDD §7 forbids compressing a telegraph past 60% for exactly this reason, and a puzzle timer is a telegraph. It converts a design into an execution test |
+| **Rarer atoms.** Save the interesting prop for floor 4 | This is the trap `docs/OOT_CATALOGUE.md` §4 pattern 11 catches: the Fire Temple's rusted switches are not a *late* prop, they are an *early* prop that the hammer switched on. The player's inventory is the difficulty curve |
+
+### 10.2 The right axis: verbs per room
+
+The single most useful sentence in the whole guide-reading is that the Spirit
+Temple's hardest room does not contain a hard atom. It contains **four verbs** —
+a ground-pound, a set of struck doors, an arrow into an eye switch, and a climb —
+and every one of them is something you learned two dungeons ago.
+
+> **Depth is how much of your kit one room asks for at once.**
+
+That is the axis, and it is the only one that gets harder without getting meaner.
+It also happens to be the axis this project already wants for a second reason:
+GDD pillar 2 says a cautious player is never blocked, and a room that asks for
+three things you own can never block anybody.
+
+### 10.3 The production rule
+
+Three lines. This is the whole grammar.
+
+```
+room       := gate( goal )
+goal       := atom | logical( goal, goal… ) | spatial( goal ) | temporal( goal )
+atom       := any row of PuzzleAtoms.pool(tier)
+```
+
+**The nine combinators sort into three kinds, and the kind is what makes the
+grammar finite instead of a soup.** This is the taxonomy the generator branches
+on; §3's table is the same nine in the order they were invented.
+
+| Kind | Combinators | What it varies | Arity |
+|---|---|---|---|
+| **Logical** | nest, sequence, couple, **chain**, **convert** | how the atoms relate to *each other* | 2+ |
+| **Spatial** | displace, cycle, **reconfigure** | where the atoms are relative to the door | 1 |
+| **Temporal** | time | when the solve has to land | 1 |
+
+**One logical, at most one spatial, at most one temporal, and no kind twice.**
+That rule is the whole brake, and it is what stops the generator emitting
+`nest(nest(nest(eye)))` — a legal sentence that reads as one puzzle wearing three
+coats. It also means the tree is at most three deep, which is the depth a player
+can hold in their head standing in a doorway.
+
+**Weight**, for the budget table below, is the node count: `weight(atom) = 1`,
+`weight(combinator(g…)) = 1 + Σ weight(g)`.
+
+### 10.4 The budget, per floor
+
+| Floor | Pool (§1) | Atoms | Verbs asked | Logical | Spatial | Temporal | Weight |
+|---|---|---|---|---|---|---|---|
+| **1** The Cistern | T0 | 1–2 | **1** | 1 | — | — | ≤ 3 |
+| **2** The Foundry | T0–T1 | 2–3 | **2** | 1 | 1 | — | ≤ 5 |
+| **3** The Choir | T0–T2 | 3–4 | **2–3** | 1 | 1 | maybe | ≤ 7 |
+| **4** The Chord Gate | T0–T3 | 3–5 | **3** | 1 | 1 | yes | ≤ 9 |
+
+The **verbs asked** column is the one that matters and the **atoms** column is
+the one that will be tempted upward in tuning. Resist it in that order.
+
+`PuzzleAtoms.pool(max_tier)` already returns *everything at or below* the tier —
+it was written that way for §0 rule 1, and it turns out to be pattern 11 for
+free. Nothing needs changing for retro-unlock to work; it is already the
+behaviour.
+
+### 10.5 A floor-4 room, worked
+
+Because the budget table is abstract and the point it is making is not.
+`docs/PUZZLES.md` §5.2 caps the gate room at **tier ≤ N−1**, so floor 4's
+critical-path puzzle may not ask for the hookshot at all.
+
+> **The Long Note** — floor 4, gate room.
+>
+> A frozen eye switch sits in an alcove behind a fixed grate. There is no angle
+> from anywhere in the room that puts an arrow through the grate *and* on the
+> eye, and the eye is iced over besides, so a plain arrow would bounce.
+>
+> A lantern stands on the one sight line that works. Lit, it converts a shot
+> passing through it — **`convert`** — and a burning arrow is the only thing the
+> frozen eye takes.
+>
+> The lantern is dark, and it is on a plate that has to stay held. The only
+> weight on the floor is a push block, and it is in the room you cleared two
+> rooms ago — **`nest`** under **`displace`**.
+>
+> The eye, struck, retracts the grate ring and opens the wall behind it —
+> **`reconfigure`** — and what is behind it comes out near the entrance, which is
+> §4's cycle and the walk home.
+
+**Verbs asked: three.** Push, hold, shoot. **Tier used: T1.** The hookshot the
+player is carrying — the newest, shiniest thing they own — is not the answer to a
+single beat of it.
+
+That is the whole design, and it is worth being blunt about why it is right
+rather than disappointing: **the hookshot is what the floor pays you for solving
+this**, because the cycle it opens is the one you cross with it and the shortcut
+on this floor is drawn from exactly tier N (§1). The newest item is the *reward
+path*, never the *lock*. A game that makes the last item the answer to the last
+puzzle has built a corridor and called it a temple.
+
+### 10.6 Two answers, from floor 3 down
+
+**A puzzle at depth has more than one solution, and neither one is the real one.**
+The Fire Temple's Flare Dancer takes a bomb, a hookshot, or a hammer; the Spirit
+Temple's *Trial by fire* is solved with Fire Arrows or by leading the enemy into a
+fire wall that was already burning. Ocarina stops insisting somewhere around the
+fifth dungeon and the game gets better at exactly that point.
+
+It is not generosity. A single-solution puzzle at weight 7 is a **knowledge
+check** — you either see it or you stand there — and GDD pillar 3 already rules
+knowledge checks out for combat. A second answer that is slower, or costs more
+arrows, or asks you to fight something you could have avoided, converts "I am
+stuck" into "I am paying more than I should have to", which is a sentence this
+game is entirely built to have with the player.
+
+**Cheapest implementation, and it needs no new anything:** the second answer to a
+`convert` chain is to bring your own fire — which is the T2 Burst — and the second
+answer to a held plate is a monster baited onto it (`docs/OOT_CATALOGUE.md` §2.9,
+and `plate_weight` is already a group any body can join). Both are the *expensive*
+answer. That is the design.
+
+### 10.7 The Chord Gate should be trials round a hub — and three is enough
+
+Ganon's Castle is **a hub with one trial per temple around it**, each a short exam
+in that temple's verb. For a game whose floors are generated and whose items are
+earned one per floor, that is the correct finale shape and it is nearly the only
+finale shape that pays off a run-based inventory.
+
+**The expensive version is not on the manifest and should not go on it** — six
+authored trial rooms is six prefabs and a new anchor kind.
+
+**The cheap version costs zero new counts.** Floor 4 already gets three puzzle
+anchors: the shortcut, the gate room and the treasure room. Draw them **one per
+verb — T1, T2, T3 — instead of by the normal rule**, and the Chord Gate becomes
+the floor that asks for the bow, the Burst and the hookshot in three separate
+rooms before it asks for the Riven Knight. That is a change to one selection
+function in `Dungeon`, and it is the difference between a fourth floor and a
+finale.
+
+---
+
+## 11. Enemies, minibosses and bosses
+
+**`docs/BESTIARY.md` owns them**, including the design rules §7's four minibosses
+are built against and the item-answer vocabulary the roster is missing. §7 above
+keeps what it has always owned — *which* four minibosses floors 1–4 get, and why
+they sit behind the treasure puzzle — because that is a reward-branch decision and
+this is the reward-branch document.

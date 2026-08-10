@@ -183,7 +183,9 @@ class is not knowing the pattern.
 | `docs/GDD.md` | What the game is. The north star; everything else serves it. |
 | `docs/SCOPE.md` | **How much of it there is.** The frozen manifest, the no-list, the build order. It is the doc that gets to say no — check it before you build anything the GDD merely permits. |
 | `docs/METAGAME.md` | The economy: loot, bag, gold, extraction, the shops. |
-| `docs/PUZZLES.md` | The puzzle verb ladder, the atoms and combinators, the three puzzle shapes, the four minibosses, and where Echoes come from. `docs/GDD.md` §5.3 is the summary; this is the design of record. |
+| `docs/PUZZLES.md` | The puzzle verb ladder, the atoms and combinators, **the grammar** (§10 — how a floor gets harder), the three puzzle shapes, the four minibosses, and where Echoes come from. `docs/GDD.md` §5.3 is the summary; this is the design of record. |
+| `docs/BESTIARY.md` | **Encounter design.** What a body asks the player and which item answers it: the enemy behaviours, the miniboss rules, and one fight shape per boss. Not stats — those are `Enemy.DEFS` and `BossDb`. |
+| `docs/OOT_CATALOGUE.md` | The source material. Ocarina dungeon by dungeon, as mechanics, with the twelve patterns worth stealing. **Owns nothing** — it is what the two docs above cite. |
 | `docs/CONTRACT.md` | Interfaces, units, autoloads, collision layers, file ownership. |
 | `docs/STYLEGUIDE.md` | Palette, type, the PSX treatment, the anti-slop list. |
 

@@ -36,7 +36,8 @@ definition**, and §4.2 applies.
 | Vault prefabs | **3** | Three rooms each |
 | **Puzzle atoms** | **9** | Phase 1: key door, urn, plate, push block, eye switch, cracked pillar, hookshot target, sun switch, **lantern**. The lantern was pulled forward out of phase 2 (2026-08-10), leaving three there, uncommitted |
 | **Puzzle prefabs** | **12** | 4 verb tiers × 3 shapes (shortcut, gate room, treasure) |
-| **Puzzle combinators** | **6** | Nest, sequence, time, displace, cycle, **couple** (lights out). This is where the variety lives, which is why the prefab count is 12 and not 40 |
+| **Puzzle combinators** | **9** | Was 6. Nest, sequence, time, displace, cycle, **couple** (lights out), **chain**, **convert**, **reconfigure**. This is where the variety lives, which is why the prefab count is 12 and not 40 — and why the 6 → 9 amendment bought no new atoms. `docs/PUZZLES.md` §3.1, §8.1 |
+| **Enemy behaviours** | **8**, 4 committed | New row, 2026-08-10. A behaviour is a key on an existing `Enemy.DEFS` row that names **which item answers this body** — thrower/shield, guard/burst, perched/bow-or-hookshot, thief/chase. Not a tenth enemy kind and not a model. `docs/BESTIARY.md` §3 |
 | **Chord edges** | **1 / floor** | The cycle. `dungeon.gd` builds a tree today; one extra edge per floor is the whole change |
 | **Echoes** | **12** | Run-scoped, 1 bag slot, worth 0 gold, dies with the run. Named — no thirteenth, same discipline as the relics |
 | **Minibosses** | **4** | One per floor, behind the treasure puzzle, **two** beats each (a boss gets three) |
@@ -295,6 +296,7 @@ not worth adding.
 | **The gear loop.** Garrison NPCs 4 → 5, forge ladders 5 → 12, 8 jewel tracks, 5 named stats | **Nothing. This is an owner's amendment to the manifest, made deliberately and with the cost known.** | GDD §6.6 |
 | **Puzzles, Echoes and minibosses.** New mechanics 1 → 2, 9 atoms, 12 prefabs, 12 Echoes, 4 minibosses, 2 anchor kinds, 1 chord edge per floor | **Nothing. The second owner's amendment, 2026-08-10.** The jewelcrafter's 8 tracks were offered as the deletion and the owner declined | `docs/PUZZLES.md` |
 | **The voices and the elder.** Voiced lines 0 → 15, garrison NPCs 5 → 6, and an opening that is not a cutscene | **Nothing to delete: the lines were already recorded when they arrived.** The owner made them and asked for them to be wired; the manifest's job here is to write down the ceiling, not to relitigate a finished asset | §1, `scripts/autoload/voice.gd` |
+| **The Ocarina pass.** Puzzle combinators 6 → 9, enemy behaviours 0 → 8 (4 committed) | **Phase 2's three uncommitted atoms are on the table** — chain and convert make the torch and the timed bars redundant. Everything else on both rows is a key on a table that exists. **Zero new atoms, models, screens, items or beats** | `docs/PUZZLES.md` §3.1/§8.1, `docs/BESTIARY.md`, `docs/OOT_CATALOGUE.md` |
 
 The first line is the rule working as intended: the two deleted relics were the
 only entries on GDD §6.2's table that were numbers on a subsystem rather than
@@ -389,6 +391,36 @@ guarding.**
   of the narration and lifts it, and `Game.flags` makes it once per save. That is
   why `Cutscenes` is still 0, and if it ever needs a camera move, it is a
   cutscene and it costs one of the two endings.
+
+The sixth line is the first one on this table that **arrives with a deletion
+offered rather than declined**, and that is the only reason it is a ledger line
+and not an amendment.
+
+- **What it buys is sentences, not words.** Nine props were already on disk. The
+  three new combinators are ways to say more with those nine — a row of cracked
+  pillars that detonates down the line, an arrow that catches fire on the way
+  through a lantern, a lever that moves walls. `docs/PUZZLES.md` §8.1 prices each
+  one and none of them needs a prop of its own. **The moment a combinator asks
+  for an atom, it has stopped being a combinator**, and that is the ceiling this
+  line is held to.
+- **The deletion is real and it is phase 2.** The three uncommitted atoms —
+  torch, timed bars, sounding set — were flavour, and two of the three are now
+  strictly worse versions of something on the combinator list: a lantern that
+  converts a shot *is* the torch, and chain under `time` *is* timed bars. If the
+  count has to come back down, that is where it comes from, and nothing built
+  moves.
+- **Enemy behaviours is a new row on the manifest and it should be read
+  narrowly.** It is not "enemies get more interesting" — it is *four keys that
+  each name one of the six ring stops*, because `docs/BESTIARY.md` §0's diagnosis
+  is that three of the four earned items have a room to open and no body to beat.
+  The row is capped at 8, only 4 are committed, and **new monster models is still
+  0** — which is the row that was actually at risk here and the one to check when
+  the next encounter proposal arrives.
+- **The pass that produced this line deleted nothing else and built nothing.**
+  It is three documents. That is worth recording because the failure mode
+  `CLAUDE.md` §0 names is two sessions building the same system twice, and a
+  design pass that lands as docs on `main` is the cheapest possible defence
+  against it.
 
 ### 4.3 Three questions before any new system
 
