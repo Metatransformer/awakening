@@ -23,9 +23,29 @@ func run(rig) -> void:
 	await rig.wait_frames(30)
 
 	await _town_arrival(rig)
-	await _sell(rig)
-	await _buy(rig)
-	await _descend(rig)
+
+	# THE TOWN BEATS ARE A CHAIN AND THEY STOP THE RUN WHEN THEY BREAK.
+	#
+	# Every beat after this one assumes the one before it happened: the gate beat
+	# needs the shop screens closed, the dungeon beats need a dungeon, the receipt
+	# needs a run to end. When the sell beat silently did not happen, this director
+	# printed FOUR more failures -- no focus at the gate, no descent, no dungeon,
+	# no enemies -- none of which were about the systems they named, and a reader
+	# had no way to tell that from a real regression in four systems at once.
+	# One cause, one message, and nothing downstream pretending to have been tested.
+	if not await _sell(rig):
+		print("MVP ABORT the sell beat did not happen -- stopping rather than"
+			+ " reporting four failures it would have caused")
+		return
+	if not await _buy(rig):
+		print("MVP ABORT the buy beat did not happen -- stopping rather than"
+			+ " reporting four failures it would have caused")
+		return
+	if not await _descend(rig):
+		print("MVP ABORT never got underground -- stopping rather than reporting"
+			+ " the dungeon, the fight and the rope as broken from up here")
+		return
+
 	await _fight(rig)
 	await _extract(rig)
 	await _return(rig)
@@ -39,7 +59,7 @@ func _town_arrival(rig) -> void:
 	await rig.capture(out.path_join("m_00_town.png"))
 
 
-func _sell(rig) -> void:
+func _sell(rig) -> bool:
 	# Arrive as though a run had just paid out, so the vendor has something to
 	# buy and the bag corner has something to show.
 	Run.in_dungeon = false
@@ -50,13 +70,21 @@ func _sell(rig) -> void:
 	await rig.wait_frames(10)
 
 	var town := rig.scene() as Town
-	_stand_at(rig, town.vendor.global_position + Vector3(0.0, 0.0, 1.6))
-	await rig.wait_frames(20)
+	if not await _approach(rig, town.vendor,
+			town.vendor.global_position + Vector3(0.0, 0.0, 1.6)):
+		return false
 	print("MVP focus=%s bag=%d" % [
 		Prompt.focus.prompt if Prompt.focus != null else "<none>", Run.bag_value()])
 	await rig.capture(out.path_join("m_01_vendor_prompt.png"))
 
 	await rig.tap(["interact"])
+	# The screen is a state, not a frame count: `TradeScreen` is built inside
+	# `Npc.activate` and is up on the next frame, but a beat that assumed so would
+	# be making the same mistake one layer along.
+	var opened: bool = await rig.until(func() -> bool: return _screen(rig) != null)
+	if not opened:
+		print("MVP FAIL the vendor took the press and no shop screen came up")
+		return false
 	await rig.wait_frames(14)
 	await rig.capture(out.path_join("m_02_sell_screen.png"))
 
@@ -81,21 +109,30 @@ func _sell(rig) -> void:
 	# gauge advances by `delta` (see `rig.hold_seconds`).
 	await rig.hold_seconds(["ui_accept"], 0.9)
 	await rig.wait_frames(24)
-	if Run.bag_value() > 0:
+	var emptied := Run.bag_value() == 0
+	if not emptied:
 		print("MVP FAIL holding SELL EVERYTHING did not empty the bag (%d left)"
 			% Run.bag_value())
 	print("MVP after_sell gold=%d bag=%d" % [Game.gold, Run.bag_value()])
 	await rig.capture(out.path_join("m_04_sold_all.png"))
 
 	await rig.tap(["ui_cancel"])
-	await rig.wait_frames(12)
+	# The close is a state too, and it is the one that bit the gate beat: a hold
+	# that lands while the screen is still shutting goes into the screen.
+	await rig.until(func() -> bool: return _screen(rig) == null)
+	return emptied
 
 
-func _buy(rig) -> void:
+func _buy(rig) -> bool:
 	var town := rig.scene() as Town
-	_stand_at(rig, town.smith.global_position + Vector3(0.0, 0.0, 1.6))
-	await rig.wait_frames(20)
+	if not await _approach(rig, town.smith,
+			town.smith.global_position + Vector3(0.0, 0.0, 1.6)):
+		return false
 	await rig.tap(["interact"])
+	var opened: bool = await rig.until(func() -> bool: return _screen(rig) != null)
+	if not opened:
+		print("MVP FAIL the smith took the press and no shop screen came up")
+		return false
 	await rig.wait_frames(14)
 	await rig.capture(out.path_join("m_05_shop.png"))
 
@@ -109,14 +146,12 @@ func _buy(rig) -> void:
 	await rig.capture(out.path_join("m_06_bought.png"))
 
 	await rig.tap(["ui_cancel"])
-	await rig.wait_frames(12)
+	await rig.until(func() -> bool: return _screen(rig) == null)
+	return true
 
 
-func _descend(rig) -> void:
+func _descend(rig) -> bool:
 	var town := rig.scene() as Town
-	_stand_at(rig, town.gate.global_position + Vector3(0.0, 0.0, 1.8))
-	await rig.wait_frames(20)
-	await rig.capture(out.path_join("m_07_gate.png"))
 
 	# Wait for the GATE to actually own the interact button before holding it.
 	#
@@ -127,21 +162,28 @@ func _descend(rig) -> void:
 	# did not cause. Two sessions have now gone hunting the economy for what was
 	# a screen that had not finished shutting. A fixed frame count after
 	# `ui_cancel` is the wrong instrument; wait for the state you need instead.
-	for _i in 40:
-		if Prompt.focus != null:
-			break
-		await rig.wait_frames(2)
+	#
+	# That lesson is `_approach` now, and the sell and buy beats above -- which
+	# had the same bug against the shop triggers rather than against a closing
+	# screen -- go through it too.
+	if not await _approach(rig, town.gate,
+			town.gate.global_position + Vector3(0.0, 0.0, 1.8)):
+		return false
 	print("MVP gate focus=%s" % [
 		Prompt.focus.prompt if Prompt.focus != null else "<none>"])
-	if Prompt.focus == null:
-		print("MVP FAIL nothing owns the interact button at the gate")
+	await rig.capture(out.path_join("m_07_gate.png"))
 
 	# The gate is a 0.9 s hold, so tapping must NOT open it. Holding must.
 	await rig.hold_seconds(["interact"], 1.3)
-	await rig.wait_frames(120)
+	var arrived: bool = await rig.until(
+		func() -> bool: return Run.in_dungeon and _dungeon(rig) != null, 10.0)
+	await rig.wait_frames(60)
 	print("MVP descended in_dungeon=%s scene=%s" % [
 		Run.in_dungeon, rig.scene().name])
 	await rig.capture(out.path_join("m_08_arrived.png"))
+	if not arrived:
+		print("MVP FAIL holding DESCEND for 1.3 s did not open the gate")
+	return arrived
 
 
 # --- Dungeon ----------------------------------------------------------------
@@ -228,10 +270,14 @@ func _fight(rig) -> void:
 	# The chest, which is where the run-defining drops live.
 	var chest := _chest(rig)
 	if chest != null:
-		_stand_at(rig, chest.global_position + Vector3(0.0, 0.0, 1.3))
-		await rig.wait_frames(24)
+		# Through `_approach` for the reason it exists: a chest is an Interactable
+		# and being next to one is not being noticed by one.
+		if not await _approach(rig, chest,
+				chest.global_position + Vector3(0.0, 0.0, 1.3)):
+			return
 		await rig.capture(out.path_join("m_13_chest_prompt.png"))
 		await rig.tap(["interact"])
+		await rig.until(func() -> bool: return chest.opened)
 		await rig.wait_frames(40)
 		for m in _motes(rig):
 			_stand_at(rig, m.global_position)
@@ -443,6 +489,41 @@ func _nearest_foe(rig, at: Vector3) -> float:
 ## `arc_degrees` of the hero's forward, so a hero teleported next to a monster
 ## while still facing his spawn direction swings through empty air forever --
 ## which reads in the log exactly like "damage is broken".
+## Walk up to `it` and wait until it actually owns the interact button.
+##
+## **This is the only correct way for this director to arrive anywhere it intends
+## to press a button.** Standing next to an Interactable is not the same event as
+## being NOTICED by one: `Interactable.player_inside` is set from an Area3D's
+## `body_entered`, which lands about two PHYSICS ticks after a teleport, and
+## `Prompt` only takes focus on the frame after that.
+##
+## The beat this replaces waited 20 rendered frames and pressed. That was the
+## flake -- roughly one run in four on some machines, none at all on others, and
+## the reason for the difference is the whole lesson: rendered frames and physics
+## ticks are two different clocks, and their ratio belongs to the panel. 20 frames
+## is ~10 physics ticks on the 120 Hz Mac this was written on and ~2 on a machine
+## rendering twice as fast, and two is exactly the margin the trigger needs. The
+## gate beat below had already learned this once (see `_descend`); the sell and
+## buy beats had not, and they are the ones that broke.
+##
+## Returns false, having said why, when the prompt never arrives. The caller is
+## expected to STOP -- see `run`.
+func _approach(rig, it: Interactable, at: Vector3, look_at = null) -> bool:
+	_stand_at(rig, at, look_at)
+	var seen: bool = await rig.until(func() -> bool: return Prompt.focus == it)
+	if not seen:
+		print(("MVP FAIL %s never took the interact button after three seconds"
+			+ " standing in front of it (focus=%s, inside=%s, blocked=%s)") % [
+			it.prompt, Prompt.focus.prompt if Prompt.focus != null else "<none>",
+			it.player_inside, Prompt.blocked])
+		return false
+	# One more physics tick before the press. Focus is live the frame the trigger
+	# reports the hero, and `Prompt.drop_focus` DISARMS on that same frame -- so a
+	# press issued in it is swallowed and the hold can never begin.
+	await rig.wait_physics_frames(2)
+	return true
+
+
 func _stand_at(rig, at: Vector3, look_at = null) -> void:
 	var hero: Hero = rig.scene().get_tree().get_first_node_in_group(&"player")
 	if hero == null:
