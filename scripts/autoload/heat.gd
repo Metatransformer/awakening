@@ -53,6 +53,7 @@ func _ready() -> void:
 	# who opens it to read the fee should not come back to a cold bar.
 	Bus.enemy_died.connect(_on_enemy_died)
 	Bus.player_health_changed.connect(_on_health_changed)
+	Bus.shield_blocked.connect(_on_blocked)
 	Bus.run_started.connect(func(_s: int) -> void: reset())
 	Bus.run_ended.connect(func(_e: bool, _c: Dictionary, _v: int) -> void: reset())
 	reset()
@@ -99,18 +100,51 @@ func _on_enemy_died(_enemy: Node3D, _position: Vector3) -> void:
 	if not Run.in_dungeon:
 		return
 
+	_advance()
+
+
+## One step of the chain: grow it, refresh the window, hand stamina back.
+##
+## Split out of `_on_enemy_died` so the Answering Strike has something to call.
+## A blocked blow that duplicated these six lines would be a second definition of
+## what a step IS, and the first tuning pass would move one of them.
+func _advance() -> void:
 	kills += 1
 	var next := _tier_for(kills)
 	# maxi(next, 1): a cold chain still runs on tier 1's clock, so the first kill
 	# expires instead of sitting lit until you happen to find a second one.
-	window = K.HEAT_TIER_WINDOW[maxi(next, 1)]
-	Game.refund_stamina(K.STAMINA_KILL)
+	#
+	# The Held Note (`EchoDb.HELD_NOTE`) is the one term that is not the table:
+	# every tier keeps Warm's leash, so the reward for going fast stops coming
+	# with a shorter one (`docs/PUZZLES.md` §6.1, row 1).
+	var rung := maxi(next, 1)
+	if Run.has_echo(EchoDb.HELD_NOTE):
+		rung = 1
+	window = K.HEAT_TIER_WINDOW[rung]
+	# The Second Wind (row 4) returns the WHOLE bar rather than `K.STAMINA_KILL`.
+	# A rule about kills, not about the size of the bar -- `Game.max_stamina` is
+	# untouched, so GDD §6.6's five stats stay the smith's.
+	Game.refund_stamina(Game.max_stamina if Run.has_echo(EchoDb.SECOND_WIND)
+		else K.STAMINA_KILL)
 
 	if next != tier:
 		tier = next
 		peak_tier = maxi(peak_tier, tier)
 		Bus.heat_tier_changed.emit(tier, true)
 	_announce()
+
+
+## The Answering Strike (`EchoDb.ANSWERING_STRIKE`): a blow you BLOCK advances
+## the chain by one, as a kill does.
+##
+## `Bus.shield_blocked` and not a hero flag, for the reason the class note gives
+## about `player_health_changed`: a blocked blow never changes health, so the
+## shield being the tempo tool already falls out of the wiring, and this is the
+## same wiring asked to do slightly more.
+func _on_blocked(_position: Vector3, _normal: Vector3) -> void:
+	if not Run.in_dungeon or not Run.has_echo(EchoDb.ANSWERING_STRIKE):
+		return
+	_advance()
 
 
 ## He took a hit that actually cost health. Blocked blows never reach here.
@@ -147,6 +181,16 @@ func _step_down(struck: bool) -> void:
 ## What the vendor pays for loot swept right now, as a multiplier on base value.
 func multiplier() -> float:
 	return K.HEAT_TIER_MULT[clampi(tier, 0, K.HEAT_TIERS - 1)]
+
+
+## The chain is at the top rung -- Blazing.
+##
+## A function rather than `tier == 3` at the two sites that ask (the Blazing
+## Tithe's extra mote and the Full Cup's unspent bottle), because 3 is
+## `K.HEAT_TIERS - 1` and a literal is what makes a fifth tier a bug in three
+## files instead of one number.
+func blazing() -> bool:
+	return tier >= K.HEAT_TIERS - 1
 
 
 ## Metres a mote will be dragged from at the current tier. 0 means no magnetism.

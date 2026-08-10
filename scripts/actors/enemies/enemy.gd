@@ -130,6 +130,10 @@ var _knockback: Vector3 = Vector3.ZERO
 var _facing: float = 0.0
 var _rng := RandomNumberGenerator.new()
 var _struck: bool = false
+## `Hit.kind` of the last blow that damaged this body -- `&"sword"`, `&"arrow"`,
+## `&"bomb"`, `&"contact"`, `&"fire"` (`docs/CONTRACT.md` §8). Written by
+## `_on_damaged` and read once, by `_die`, for the Returning Shaft.
+var _last_hit_kind: StringName = &""
 ## What this one hits for, after the floor's curve and the elite bonus. Resolved
 ## once in `_build_combat` because the wind-up re-arms the hitbox on every swing
 ## and two places computing the same curve is one place to forget it.
@@ -841,6 +845,10 @@ func _tick_frozen(delta: float) -> void:
 func _on_damaged(hit: Hit) -> void:
 	if state == State.DEAD:
 		return
+	# Stamped on every landed blow, read once by `_die`. It is what made the
+	# killing blow, which is the only question the Returning Shaft asks -- see
+	# there for why the LAST one and not "was it ever shot".
+	_last_hit_kind = hit.kind
 	if _struck:
 		_hitbox.deactivate()
 		_struck = false
@@ -950,6 +958,16 @@ func _on_died() -> void:
 	Bus.request_shake.emit(0.68, 0.26)
 
 	_drop_loot()
+	# The Returning Shaft (`EchoDb.RETURNING_SHAFT`): an arrow is recovered from
+	# what it killed. `_last_hit_kind` is the killing blow's -- an enemy softened
+	# with the sword and finished with an arrow gives one back, one shot with the
+	# bow and finished with the sword does not, which is the honest reading of
+	# "from what it killed". The bow stops being rationed, so range becomes an
+	# option at depth rather than a budget (`docs/METAGAME.md` §4.6).
+	if _last_hit_kind == &"arrow":
+		var back := int(Run.echo(EchoDb.RETURNING_SHAFT))
+		if back > 0:
+			Game.add_arrows(back)
 	died_at.emit(global_position)
 	Bus.enemy_died.emit(self, global_position)
 
@@ -989,6 +1007,13 @@ func _drop_loot() -> void:
 	var count := (1 + int(health_max / 7)) * Prog.drop_rolls(Run.level)
 	if elite:
 		count += 1
+	# The Blazing Tithe (`EchoDb.BLAZING_TITHE`): at the top rung of the chain a
+	# killed body leaves one MORE. The top tier finally pays in quantity and not
+	# only in rate -- and it is the one Echo whose value the player has to keep
+	# earning, because a chain that lapses stops paying it (`docs/PUZZLES.md`
+	# §6.1, row 5).
+	if Heat.blazing():
+		count += int(Run.echo(EchoDb.BLAZING_TITHE))
 	var table := ItemDb.enemy_drops(Run.level)
 	for i in count:
 		var id := ItemDb.roll(table, Run.rng)

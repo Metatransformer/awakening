@@ -881,6 +881,14 @@ func drink_bottle(i: int) -> bool:
 		return false
 	if not PotionDb.apply(potion):
 		return false
+	# The Full Cup (`EchoDb.FULL_CUP`): a draught drunk while BLAZING is not
+	# spent. Speed buys back the one thing you had to purchase in the garrison,
+	# and only while the leash is shortest -- so it is a reward for the chain
+	# rather than a fifth bottle (`docs/PUZZLES.md` §6.1, row 11). The bottle is
+	# still a loadout and never a currency; this is the same sentence the
+	# docstring above makes, said once more by an Echo.
+	if Heat.blazing() and Run.has_echo(EchoDb.FULL_CUP):
+		return true
 	bottle_contents[i] = &""
 	Bus.bottles_changed.emit(bottle_contents)
 	return true

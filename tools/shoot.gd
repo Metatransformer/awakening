@@ -47,6 +47,7 @@ func _initialize() -> void:
 	seed(seed_val)
 	_sandbox_the_settings()
 	_deafen_the_gamepad()
+	_hush_the_speakers()
 
 	var size_str: String = _args.get("size", "1280x720")
 	var wh := size_str.split("x")
@@ -123,6 +124,29 @@ func _deafen_the_gamepad() -> void:
 				stripped += 1
 	if stripped > 0:
 		print("shoot: ignoring the gamepad (%d joypad bindings stripped)" % stripped)
+
+
+## Silence. **A harness run makes no noise, ever, unless you ask for it.**
+##
+## A director is not a playthrough — it is a batch job that somebody runs six of
+## in a row while they are reading something else, and every one of them opens a
+## window that starts playing the dungeon score and firing a bell at every atom.
+## Six overlapping soundtracks out of a background task is not feedback, it is a
+## machine shouting at whoever launched it, and there is nothing in a WAV that a
+## screenshot or a `FAIL` line does not say better.
+##
+## The MASTER bus, not `Music` and `Sfx`. Two reasons: it is one call rather than
+## a list that goes stale the day somebody adds an `Ambience` bus, and it is
+## `set_bus_mute` rather than a volume, so `Settings.apply_audio` running later in
+## the autoloads' `_ready` cannot quietly undo it by writing the sliders back.
+##
+## `--sound` opts in, for the one director that would ever want it: one proving
+## that a cue FIRES. Nothing does today.
+func _hush_the_speakers() -> void:
+	if _args.has("sound"):
+		print("shoot: --sound, the run is audible")
+		return
+	AudioServer.set_bus_mute(0, true)
 
 
 ## Put `instance` under the root and wait until it is really in the tree.

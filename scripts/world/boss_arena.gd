@@ -43,6 +43,12 @@ extends Area3D
 ## Where the boss stands, relative to this node. Across the room from the way in,
 ## so it is a silhouette in the far half of the frame when the door shuts.
 @export var boss_offset: Vector3 = Vector3(0.0, 0.0, -4.5)
+## Which `RelicDb` slot this arena's occupant is carrying, for the lost-relic
+## replacement below. `&"boss"` for a floor boss; **`&""` for a miniboss**, which
+## drops nothing but the chest behind it (`docs/PUZZLES.md` §7) -- and without
+## the empty case a spent miniboss chamber would put floor N's BOSS relic on the
+## floor, which is the boss's drop handed out behind an optional puzzle.
+@export var relic_slot: StringName = &"boss"
 
 # --- The fence ---------------------------------------------------------------
 const SEAL_SEGMENTS := 20
@@ -119,7 +125,9 @@ func _already_dead() -> bool:
 ## when it is in the ledger. So the only case that places anything is the one
 ## this exists for.
 func _replace_lost_relic() -> void:
-	RelicPickup.place_anchor(self, Run.level, &"boss",
+	if relic_slot == &"":
+		return
+	RelicPickup.place_anchor(self, Run.level, relic_slot,
 		global_position + Vector3.UP * 1.0)
 
 

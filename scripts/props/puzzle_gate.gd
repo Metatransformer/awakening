@@ -96,6 +96,21 @@ func watch(atom: PuzzleAtom) -> void:
 	_refresh_prompt()
 
 
+## The one-way flag, keyed **per run** rather than for ever.
+##
+## `LockedDoor.flag_id()` writes `door_open_<destination>` into `Game.flags`,
+## which is permanent and saved -- exactly right for a boss door, and wrong here.
+## `PuzzleAtom.clear_run_flags()` wipes every `atom_*` key on `Run.enter()`, so a
+## gate keyed the base class's way would come back OPEN on run two standing over
+## a puzzle that had just been reset: the gate room reduced to a corridor from
+## the second descent onward, which is the precise failure `docs/PUZZLES.md` §5.2
+## exists to prevent. The door and its atoms have one lifetime, and this is the
+## line that says so.
+func flag_id() -> StringName:
+	var tag := String(puzzle_id) if puzzle_id != &"" else String(name)
+	return StringName("atom_door_%s" % tag)
+
+
 ## The atoms this gate is waiting on. Public because a director has to be able to
 ## say "the gate adopted three things" separately from "the gate opened" -- a
 ## puzzle that adopted nothing is `unlocked()` from the first frame, and that is

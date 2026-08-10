@@ -1,11 +1,16 @@
 # Puzzles and Echoes
 
-**Status: §2 is built (M1). Everything else is still design.** The eight phase-1
-atoms and the door that listens are in the code — `scripts/props/puzzle_atoms.gd`
-(the table and the factory), `scripts/props/puzzle_atom.gd` (the base body), the
-eight files under `scripts/props/atoms/`, and `scripts/props/puzzle_gate.gd`,
-proved by `tools/directors/puzzle_atoms.gd`. §3's combinators, §4's cycles, §5's
-three shapes, §6's Echoes and §7's minibosses are M4 and later.
+**Status: §2 is built (M1). §4, §5.2, §5.3, §6 and §7 are built (M4).** The eight
+phase-1 atoms and the door that listens are in the code —
+`scripts/props/puzzle_atoms.gd` (the table and the factory),
+`scripts/props/puzzle_atom.gd` (the base body), the eight files under
+`scripts/props/atoms/`, and `scripts/props/puzzle_gate.gd`, proved by
+`tools/directors/puzzle_atoms.gd`. The spine on top of them — the chord edge, the
+gate room, the treasure puzzle, the Sluice-Keeper and the Echo pedestal — is
+proved end to end by `tools/directors/puzzle_loop.gd`. See **§9, as built**.
+
+Still design: **§5.1**, the shortcut puzzle (the door exists and is a check; the
+puzzle on it is M6), and phase 2's four atoms.
 
 This file owns the puzzle vocabulary, the three shapes, and where Echoes come
 from, and it owns nothing else.
@@ -194,8 +199,26 @@ puzzle that pays in the game's own currency instead of in power.
 - **Anchor:** new, `gate_room` — on the path to `deepest`, around 0.7 of the way.
 - **Verb:** tier ≤ N−1. **Never anything you do not own** (§0 rule 1).
 - **Reward:** the approach to the boss door, **+1 Echo** (choice of three at a
-  sounding stone), and **the cycle back toward the entrance** (§4).
+  sounding stone), **a chest**, and **the cycle back toward the entrance** (§4).
 - **Shape:** cycle. Always.
+
+**Every puzzle pays in loot, not only in passage.** The chest is the owner's
+amendment of 2026-08-10 and it is a rule for all three shapes, not a prop for
+this one: *a solved puzzle drops something you can carry out.* A door that opens
+onto more corridor is a toll booth — the player paid attention and got permission
+back. This game already answers "was it worth the walk" in one currency (GDD §2,
+`docs/METAGAME.md`), and a puzzle that pays in Echoes and shortcuts alone is
+paying in a currency the player cannot weigh against the walk home. So:
+
+| Shape | Passage | Echo | Loot |
+|---|---|---|---|
+| **5.1** shortcut | the way down | +1 | the shortcut chest |
+| **5.2** gate room | the boss approach + the cycle | +1 | **a chest**, floor table |
+| **5.3** treasure | the miniboss chamber | +1 | the **rich** chest, + the miniboss's own drop |
+
+It costs nothing new: `Chest` and `Prog.chest_picks` already exist and already
+know what a floor's table is worth. What it buys is that the sentence *"I solved
+that"* and the sentence *"I am carrying more than I was"* are the same sentence.
 
 Floor 1's is a key hunt, because T0 is all it may ask for and a key hunt is the
 honest T0 puzzle. That is correct, not a placeholder: Ocarina's first dungeon is
@@ -404,3 +427,48 @@ delve (GDD §6.6), not a service beside it.
 **What the ledger asks in return is that the ceilings above do the braking.**
 Eight atoms, five combinators, twelve prefabs, twelve Echoes, four minibosses.
 A proposal that moves one of those numbers is back to needing a deletion.
+
+---
+
+## 9. As built (M4)
+
+The spine, and the file that owns each piece. `tools/directors/puzzle_loop.gd`
+walks all of it in one run — beats **A** (the tables validate) through **G** (the
+Sluice-Keeper dies and the second stone lights).
+
+| §  | Piece | Where |
+|---|---|---|
+| 4 | The chord edge | `Dungeon._plan_chord` / `_build_chord`; one per floor, ranked on (depth, span) |
+| 4 | Barred from the near side only | `scripts/props/barred_passage.gd` — `BarredPassage`, refuses with *BARRED FROM THE OTHER SIDE* |
+| 5.2 | `gate_room` anchor | `Dungeon._room_for(&"gate_path")` — 0.7 along the route to `deepest`, never either end |
+| 5.2 | The gate itself | A `PuzzleGate` **in the doorway the floor continues through**, not on a blank wall |
+| 5.2 | Floor 1's key hunt | `Dungeon._place_gate_room` — sun socket → key → door, §3's *nest* |
+| 5.2 | The chest | `Dungeon._land_prize`, on `opened` |
+| 5.3 | `puzzle_room` anchor | `Dungeon._room_for(&"mid_ring")`, off the critical path, always |
+| 5.3 | Floor 1's treasure puzzle | `Dungeon._place_puzzle_room` — plate + block, §3's *nest* again, different atoms |
+| 5.3 | The chamber behind it | `Dungeon._place_chamber` / `_build_chamber`; arena, rich chest, stone |
+| 6 | The Echo pedestal | `scripts/world/sounding_stone.gd`; three `LootMote`s and three name plates |
+| 6 | The twelve | `scripts/items/echo_db.gd`, `ItemDb` rows, `Run.echoes_held()` |
+| 7 | The Sluice-Keeper | `BossDb.MINIBOSSES`; two beats, a scaled troll, `relic_slot = &""` |
+
+### Three decisions worth not re-deriving
+
+- **The gate stands in the doorway, not on a wall.** A critical-path puzzle is
+  critical *by construction* that way — there is no version of the floor where
+  the player walks round it. `puzzle_loop`'s beat B3 asserts the door's forward
+  agrees with the route's next step.
+- **The socket is not one of the gate's atoms.** The key cannot be reached
+  without it, so watching both is redundant, and the refusal would name the wrong
+  half — *THE SOCKET IS DARK* beside a key you can see.
+- **The treasure chamber's chest and stone are outside the arena's seal ring**
+  (`CHAMBER_SKIRT = 10.0`). A player sealed in with the Sluice-Keeper can see both
+  rewards and reach neither. That is geometry doing a lock's job, which costs no
+  code and cannot desync.
+
+### The one atom flag that is not permanent
+
+`PuzzleGate.flag_id()` overrides `LockedDoor`'s to write `atom_door_*` instead of
+`door_open_*`. `LockedDoor`'s flag is permanent on purpose — a shortcut you opened
+stays open across saves — and a **puzzle** gate wearing it would leave the gate
+room open from run two onward over a puzzle that `PuzzleAtom.clear_run_flags()`
+had just reset. §5.2's promise is that the gate room is a puzzle every run.

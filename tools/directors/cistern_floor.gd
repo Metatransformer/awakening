@@ -108,6 +108,8 @@ func run(rig) -> void:
 	# beat turns a reachability measurement into a fight. The BOSS stays -- it is
 	# the one body this beat is about.
 	_clear_the_floor(d)
+	# And the locks that are not geometry. See the function.
+	_unbar_the_puzzles(d)
 	await rig.wait_frames(6)
 
 	await _shortcut_refuses(rig, d, hero)
@@ -329,6 +331,56 @@ func _clear_the_floor(d: Node) -> void:
 		freed += 1
 		e.queue_free()
 	print("FLOOR cleared %d bodies for the reachability walks" % freed)
+
+
+## Solve and swing every `PuzzleGate` on the floor, for the same reason the line
+## above frees every body: **beats C, F and G are claims about GEOMETRY**, and a
+## shut gate is a lock, not a wall you cannot build a way through.
+##
+## M4's puzzle spine put a `PuzzleGate` in the doorway on the way to the deepest
+## room (`docs/PUZZLES.md` §5.2 -- the gate room is on the critical path by
+## construction). Without this the reachability sweep rubs along the closed
+## leaves for four hundred steps and reports the boss chamber unreachable, which
+## is true of a player who has not solved it and says nothing about the floor.
+##
+## That the gate GATES is `tools/directors/puzzle_loop.gd`'s claim, and it is the
+## whole of that file. This one is not allowed to make it and must not silently
+## depend on it either way.
+func _unbar_the_puzzles(d: Node) -> void:
+	var opened := 0
+	var shut := 0
+	for node in _every(d, func(n: Node) -> bool:
+			return n.is_in_group(&"puzzle_gate")):
+		for atom in node.call(&"atoms"):
+			# ARMED first. The gate room's key is deliberately disarmed until the
+			# sun socket lights it (`Dungeon._place_gate_room`), and
+			# `PuzzleAtom.solve()` refuses while it is -- so a loop that only
+			# called `solve` opened nothing, said it had opened one, and left the
+			# reachability sweep rubbing along a shut door for four hundred steps.
+			atom.set(&"armed", true)
+			atom.call(&"solve")
+		# `needs_key` gates spend one at the door. The hunt that produces it is
+		# `puzzle_loop`'s beat; here the key is simply given.
+		if bool(node.get(&"needs_key")):
+			Game.add_key(1)
+		node.call(&"activate", null)
+		if bool(node.call(&"is_open")):
+			opened += 1
+		else:
+			shut += 1
+			print("FLOOR   a puzzle gate would not open: \"%s\""
+				% node.call(&"refusal_line"))
+	if shut > 0:
+		_ck("C-1 every puzzle gate opened for the reachability walks", false)
+	# And the chord's bars, which refuse from the near side by design -- a sweep
+	# arriving from the wrong side of a one-way passage is the same measurement
+	# problem as a shut gate.
+	var bars := 0
+	for node in _every(d, func(n: Node) -> bool:
+			return n.has_method(&"on_far_side")):
+		node.call(&"lift")
+		bars += 1
+	print("FLOOR opened %d puzzle gate(s) and %d barred passage(s)" % [opened, bars])
 
 
 # --- C. Walking it ----------------------------------------------------------------

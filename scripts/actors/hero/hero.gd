@@ -2402,7 +2402,12 @@ func take_hit(hit: Hit) -> bool:
 	# A BLOCKED blow does not break it -- that path returns above. Standing your
 	# ground behind the shield while the rope works is a legitimate way to
 	# leave, and it is a better one than mashing the button was.
-	if rope != null:
+	#
+	# The Unbroken Rope (`EchoDb.UNBROKEN_ROPE`) is the one exception, and it is
+	# a rule bend rather than a power: you can always leave, so you can always go
+	# one room further (`docs/PUZZLES.md` §6.1, row 6). The blow still lands and
+	# still costs health -- what it stops doing is interrupting the channel.
+	if rope != null and not Run.has_echo(EchoDb.UNBROKEN_ROPE):
 		rope.cancel()
 	# Who hit him, recorded BEFORE the damage lands. `Game.damage` is what emits
 	# `player_died`, and Run.die() -- which builds the ending screen's summary --

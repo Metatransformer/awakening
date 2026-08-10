@@ -609,6 +609,149 @@ static var BOSSES := {
 }
 
 
+# --- The minibosses -----------------------------------------------------------
+## `docs/PUZZLES.md` §7. One per floor, **behind the treasure puzzle and
+## therefore optional, always**. A player who never solves a treasure puzzle
+## never meets one, and that is correct: this is the branch of the floor that
+## pays extra for extra work.
+##
+## **Same row shape as `BOSSES`, deliberately**, so `Boss` and `BossArena`
+## execute one of these with no code of their own -- `get_boss()` below reads
+## both tables and neither node can tell the difference. A parallel `Miniboss`
+## node would have been a second implementation of the beat loop, the tell, the
+## five shapes and the punish promise, and `CLAUDE.md` §0 is a section about what
+## this repo pays for two of something.
+##
+## What differs is three rules, and each one is checked by `validate()`:
+##
+## **1. TWO beats, not three.** A boss gets three (GDD §5); a miniboss gets two,
+##    and one of them is answered by the floor's own verb:
+##
+##    > A miniboss's first beat is a wall that the floor's own verb opens.
+##
+##    So the treasure branch is where the game teaches *in combat* what the gate
+##    room taught in a puzzle.
+##
+## **2. It drops NOTHING.** No item, no stat, no relic -- GDD pillar 4 holds here
+##    exactly as it does everywhere else. The chest behind it is the reward and
+##    the Echo on that branch comes from the puzzle, not from the kill. The empty
+##    `drop` row is what makes `BossArena`'s relic replacement skip it.
+##
+## **3. No floor's miniboss shares a model with its boss.** Floor 3's boss is a
+##    `wraith`, so a `wraith` miniboss there would be two fights against one
+##    silhouette in one descent, and a player who cannot tell at a glance which
+##    they are looking at cannot tell which move set to expect. The bosses take
+##    `golem`, `ogre`, `wraith` and `knight_iron`; the minibosses draw from what
+##    is left. **New monster models stays 0.**
+static var MINIBOSSES := {
+	# =========================================================================
+	&"sluice_keeper": {
+		"floor": 1,
+		"title": "THE SLUICE-KEEPER",
+		"model": &"troll",
+		# 2.60 m. A troll at about 1.2x, which puts it a head over the tallest
+		# thing in the ordinary roster (the 1.95 m orc) and a clear THREE QUARTERS
+		# of a metre under the Warden. That gap is the design: a miniboss must
+		# read as "this one is bigger" and never as "this is the floor boss", and
+		# height is the number the hitbox, the head marker and the silhouette all
+		# share.
+		"height": 2.60,
+		# Wet bronze. The same drowned-metal family as the Warden -- they are the
+		# same floor and the same water -- but the mix is lighter and the emission
+		# is COBALT rather than MOSS, so the two are cousins in a still frame
+		# instead of twins.
+		"tint": {
+			"albedo": Pal.COBALT, "albedo_mix": 0.28,
+			"emission": Pal.COBALT, "energy": 0.20,
+		},
+		# 24 q = 6 hearts, HALF the Warden. The arithmetic, as the bosses show it:
+		#
+		#   A light swing is 2 q at forge rung 0 and 5 q at rung 3.
+		#     rung 0 -> 24/2 = 12 swings.   rung 3 -> 24/5 = 5 swings.
+		#   A punish window here averages 1.25 s, which is two light swings, so
+		#   12 swings is 6 windows and the average cycle is 3.3 s: about a
+		#   25-second fight on run one with an unforged blade.
+		#
+		# Half the boss is the right size for an optional side branch met on the
+		# way past. It is long enough to be a fight and short enough that losing
+		# the Heat chain to it is a real cost rather than a foregone one.
+		"health": 24,
+		"arena": {
+			"radius": 7.5,
+			# No cover. Beat two is a ring you roll out of and a pillar would
+			# teach the player to solve it by standing behind something, which is
+			# the same reason the Warden's arena is bare.
+			"cover": false, "cover_count": 0,
+		},
+		# Nothing. See rule 2 above -- the empty row is load-bearing, not a gap.
+		"drop": {"item": &"", "relic": &""},
+		"music": "",
+		"lore": "It worked the intake gates on a rota nobody has kept since the "
+			+ "Sundering, and it is still on shift. The wheel it turns has not "
+			+ "been attached to anything for four hundred years.",
+		"beats": [
+			{
+				# THE WALL, and floor 1's verb is T0 -- sword, shield, body, key
+				# (`docs/PUZZLES.md` §1). So the wall is answered by the SHIELD,
+				# which is also the atom the gate room taught with (the sun
+				# socket is the one T0 atom that asks the player to aim a guard).
+				#
+				# A blocked blow never changes health, so `Heat` never sees a
+				# step-down and the shield is how a chain survives this fight
+				# (`docs/METAGAME.md` §4.5). That is the lesson, and it is taught
+				# by a beat that is generous about it: 1.15 s of tell is the
+				# longest overhead in the game.
+				"id": &"wheel_swing", "name": "Wheel-Swing",
+				"tell": {
+					"time": 1.15, "pose": POSE_REAR,
+					"color": Pal.COBALT, "energy": 0.60,
+					"sfx": &"craft_grind",
+					"read": "It hauls both hands over its head as though it were "
+						+ "still turning the wheel, and holds them there a full "
+						+ "beat while the water runs off its forearms in two "
+						+ "sheets. Blue light gathers in the knuckles. It is the "
+						+ "slowest thing in the room and it is aimed straight "
+						+ "down the line you are standing on.",
+				},
+				# Narrow, so the blow is a LINE rather than a sweep: a 42-degree
+				# arc is something a player can also side-step, and a wall whose
+				# only answer is the shield would be a check rather than a beat.
+				"shape": SHAPE_ARC, "reach": 4.0, "arc_deg": 42.0,
+				"damage": 3, "knockback": K.KNOCKBACK_HEAVY, "stun": 0.28,
+				"sfx": &"weapon_impact_blunt",
+				"recover": 0.85, "punish": 1.35, "cooldown": 1.35,
+				"weight": 3.0, "min_range": 0.0, "max_range": 5.5,
+			},
+			{
+				# THE THREAT. Rolled, never blocked -- the shield answers beat one
+				# and pointedly does not answer this one, which is what stops the
+				# fight from being "hold block".
+				"id": &"flood_stomp", "name": "Flood-Stomp",
+				"tell": {
+					"time": 0.95, "pose": POSE_CROUCH,
+					"color": Pal.MOSS, "energy": 0.70,
+					"sfx": &"jump_slam",
+					"read": "It plants both feet and sinks, and the standing "
+						+ "water pulls BACK off them in a widening green rim. "
+						+ "The rim is the attack, drawn on the floor a second "
+						+ "before it is thrown, and there is no middle to it.",
+				},
+				# A solid disc: `safe_inner` 0.0, so there is no walk-toward-it
+				# answer. That is the deliberate mirror of the Warden's donut --
+				# the two slams on this floor must not be one attack in two hues,
+				# and the miniboss is where the player learns that a ring can go
+				# either way.
+				"shape": SHAPE_SLAM, "radius": 5.0, "safe_inner": 0.0,
+				"damage": 3, "knockback": K.KNOCKBACK_LIGHT, "stun": 0.22,
+				"sfx": &"spell_impact_frost",
+				"recover": 0.60, "punish": 1.15, "cooldown": 1.40,
+				"weight": 2.0, "min_range": 0.0, "max_range": 7.0,
+			},
+		],
+	},
+}
+
+
 # --- Reading the table --------------------------------------------------------
 
 ## Every boss id, in floor order. The array is rebuilt from the table rather than
@@ -623,11 +766,41 @@ static func all() -> Array[StringName]:
 	return ids
 
 
+## Every miniboss id, in floor order. The same shape as `all()` and for the same
+## reason -- a hand-kept parallel list is the one that is one day missing a row.
+static func all_minibosses() -> Array[StringName]:
+	var ids: Array[StringName] = []
+	for k in MINIBOSSES.keys():
+		ids.append(k as StringName)
+	ids.sort_custom(func(a: StringName, b: StringName) -> bool:
+		return int(MINIBOSSES[a]["floor"]) < int(MINIBOSSES[b]["floor"]))
+	return ids
+
+
+static func is_miniboss(id: StringName) -> bool:
+	return MINIBOSSES.has(id)
+
+
 ## One row, or an empty Dictionary. Empty rather than a fallback boss: a floor
 ## that asks for a boss that does not exist has a broken manifest, and quietly
 ## handing it the Warden would ship that bug into the Chord Gate.
+##
+## **Both tables, one accessor.** `Boss` and `BossArena` read a row and execute
+## it; neither has any business knowing which table it came from, and giving them
+## a second lookup would be the point at which a miniboss started needing its own
+## code path. The ids cannot collide -- `validate()` checks that too.
 static func get_boss(id: StringName) -> Dictionary:
-	return BOSSES.get(id, {})
+	return BOSSES.get(id, MINIBOSSES.get(id, {}))
+
+
+## Which miniboss stands behind floor `level`'s treasure puzzle, or `&""`. The
+## mirror of `for_floor`, and the dungeon asks this rather than carrying its own
+## floor->miniboss table.
+static func miniboss_for(level: int) -> StringName:
+	for id in all_minibosses():
+		if int(MINIBOSSES[id]["floor"]) == level:
+			return id
+	return &""
 
 
 ## Which boss guards floor `level`, or `&""`. The dungeon asks this rather than
@@ -845,4 +1018,71 @@ static func validate() -> PackedStringArray:
 	if all().size() != 4:
 		out.append("the manifest says 4 bosses; this table has %d"
 			% all().size())
+
+	# --- The minibosses ------------------------------------------------------
+	# `docs/PUZZLES.md` §7's three rules, each checked because each one is the
+	# kind a plausible edit breaks silently: a third beat, a relic drop that
+	# would make an optional branch mandatory, and a silhouette a player cannot
+	# tell from the floor's boss.
+	for id in all_minibosses():
+		var row := get_boss(id)
+		var list := beats(id)
+		var level := int(row["floor"])
+
+		var model_path: String = MODEL_DIR + String(row["model"]) + ".glb"
+		if not ResourceLoader.exists(model_path):
+			out.append("%s: no model at %s" % [id, model_path])
+		if BOSSES.has(id):
+			out.append("%s: is both a boss and a miniboss -- get_boss() would "
+				% id + "answer with whichever table was read first")
+
+		# Rule 1: two beats, and one of them is the wall the floor's verb opens.
+		if list.size() != 2:
+			out.append("%s: %d beats — a miniboss gets exactly 2 (PUZZLES §7)"
+				% [id, list.size()])
+
+		# Rule 2: it drops nothing. An item or a relic here would put something
+		# GDD pillar 4 cares about behind an OPTIONAL puzzle, and floor 1 would
+		# stop being completable without solving one.
+		var drop: Dictionary = row.get("drop", {})
+		if StringName(drop.get("item", &"")) != &"" \
+				or StringName(drop.get("relic", &"")) != &"":
+			out.append("%s: drops something — a miniboss drops nothing but the "
+				% id + "chest behind it (PUZZLES §7)")
+
+		# Rule 3: not the same silhouette as its own floor's boss.
+		var boss_id := for_floor(level)
+		if boss_id != &"" and BOSSES[boss_id]["model"] == row["model"]:
+			out.append("%s: shares the model %s with floor %d's boss %s"
+				% [id, row["model"], level, boss_id])
+
+		var mini_poses: Dictionary = {}
+		for b in list:
+			var bid: StringName = b["id"]
+			var tell: Dictionary = b["tell"]
+			if not SHAPES.has(b["shape"]):
+				out.append("%s/%s: shape %s is not in the vocabulary"
+					% [id, bid, b["shape"]])
+			if not POSES.has(tell["pose"]):
+				out.append("%s/%s: pose %s is not in the vocabulary"
+					% [id, bid, tell["pose"]])
+			if mini_poses.has(tell["pose"]):
+				out.append("%s/%s: reuses pose %s within the same fight"
+					% [id, bid, tell["pose"]])
+			mini_poses[tell["pose"]] = true
+			# The same-picture rule, against the bosses AND the other
+			# minibosses: `seen_tells` is still the one map, so a miniboss tell
+			# that matched a boss's is caught here rather than in play.
+			var key := "%s|%s" % [tell["pose"], (tell["color"] as Color).to_html()]
+			if seen_tells.has(key):
+				out.append("%s/%s: same (pose, colour) as %s"
+					% [id, bid, seen_tells[key]])
+			seen_tells[key] = "%s/%s" % [id, bid]
+			if float(b["punish"]) <= 0.0:
+				out.append("%s/%s: no punish window" % [id, bid])
+			if float(b["cooldown"]) < float(b["punish"]):
+				out.append("%s/%s: cooldown %.2f is shorter than punish %.2f"
+					% [id, bid, b["cooldown"], b["punish"]])
+			if float(tell["time"]) <= 0.0:
+				out.append("%s/%s: no tell" % [id, bid])
 	return out
