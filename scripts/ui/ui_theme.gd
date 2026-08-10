@@ -743,8 +743,8 @@ static func _style_tabs(t: Theme) -> void:
 ## `ItemCell` and `UpgradeLadder` are drawn by every screen that shows more than
 ## one thing — the bag, the pouch, the vendor's board, the locker, the receipt —
 ## and they ask for `MenuSlot`, `MenuSlotStat`, `MenuValue`, `MenuHeading` and
-## `MenuMuted` by name. Those names are defined in `menu_theme.tres`, which is
-## the theme §3.0 of the styleguide replaces. So a screen adopting the kit had
+## `MenuMuted` by name. Those names used to be defined in `menu_theme.tres`, the
+## theme §3.0 of the styleguide replaces. So a screen adopting the kit had
 ## exactly two options: rebuild the cell, or render the cell as an unstyled
 ## default Button.
 ##
@@ -754,10 +754,15 @@ static func _style_tabs(t: Theme) -> void:
 ## that looked one way in the pouch and another at the counter would break the
 ## one promise `ItemCell`'s header makes.
 ##
-## It is a BRIDGE, not an invitation. Do not add variation names here to save
+## `menu_theme.tres` is now deleted, so this is no longer a bridge to somewhere
+## — it is the only definition of those five names, and the cells would render
+## as default Buttons without it. It stays for exactly as long as the ITEM CELL
+## does, which is indefinitely: the item menu is the one screen the owner asked
+## us not to touch.
+##
+## It is still not an invitation. Do not add variation names here to save
 ## writing a composite — new screens compose with `UiKit` and style their own
-## labels through `apply_text_style`. This list only ever shrinks, and it goes
-## when `menu_theme.tres` does.
+## labels through `apply_text_style`. This list only ever shrinks.
 static func _style_shared_cells(t: Theme) -> void:
 	# The cell plate. Gold borders are out (§ the palette note above): what marks
 	# an armed cell here is the same off-white HIGHLIGHT every other armed thing

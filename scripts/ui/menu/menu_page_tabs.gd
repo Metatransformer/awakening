@@ -24,12 +24,12 @@ extends HBoxContainer
 ## they ended up bound to rather than print a remembered "LB".
 ##
 ## **Painted by explicit override, not by a theme variation.** The three screens
-## are moving onto `UITheme` one at a time, so for a while some of them render
+## moved onto `UITheme` one at a time, so for a while some of them rendered
 ## through `menu_theme.tres` and some through `UITheme.theme()`. A strip that got
-## its look from a named variation would then be lit one way on ITEMS and another
-## on MAP — the exact thing the class note above says must never happen. Overrides
-## are theme-independent, so the strip looks the same in both worlds and keeps
-## looking the same after the last screen converts.
+## its look from a named variation would then have been lit one way on ITEMS and
+## another on MAP — the exact thing the class note above says must never happen.
+## Overrides are theme-independent, so the strip looked the same in both worlds
+## and looks the same now that the last screen has converted.
 
 ## A tab was clicked. Carries a `PauseMenu.Screen` value — the strip is told
 ## which screens it lists, so it can hand back the one that was picked rather

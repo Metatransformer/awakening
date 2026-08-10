@@ -827,12 +827,12 @@ it counts down to zero in RUST. The palette becomes the score.
   dungeon and mandates the OOT HUD in §7.1. That section is superseded here and
   the contract needs amending rather than silently diverging, because other
   agents build against it.
-- `scripts/ui/menu/_build_theme.gd` and `scenes/ui/menu/menu_theme.tres` are the
-  SystemFont theme §3.0 replaces. They are still what most panels render
-  through: the screens move onto `UITheme` one at a time, and this line goes
-  when the last one has. Do not add to them.
+- `scripts/ui/menu/_build_theme.gd` and `scenes/ui/menu/menu_theme.tres` were
+  the SystemFont theme §3.0 replaces. **They are deleted.** `PauseMenu._ready`
+  puts `UITheme.theme()` on Root and every panel inherits it; there is one menu
+  theme in this project and it is built in code.
 
-  On the kit so far: the paper doll and its slot tiles; the pause menu's ROOT
+  On the kit: the paper doll and its slot tiles; the pause menu's ROOT
   screen (plate header, a live stat band, and `VerbRow`s with a meta column,
   replacing eight identical full-width buttons); and all five counters, which
   are one screen — the pawnbroker, the smith, the alchemist, the setting bench
@@ -869,11 +869,19 @@ it counts down to zero in RUST. The palette becomes the score.
   FLOOR KEPT" and "THE CASE BROUGHT HOME" are told apart by colour and a rule
   paints both the same.
 
-  Every panel is now on the kit. `menu_theme.tres` is still what Root carries
-  and the shared-cell bridge in `UITheme._style_shared_cells` still exists;
-  collapsing Root onto `UITheme.theme()` and deleting `_build_theme.gd` is the
-  one remaining step, and it wants its own card — it touches every screen at
-  once and the proof is every director, not one.
+  The last thing off the old theme was not a panel at all: the REBIND overlay
+  in `PauseMenu._build_listen_overlay`, which wore `MenuFrame` / `MenuList` /
+  `MenuTitle` / `MenuHint`. It is a `hover_card` now, the same face `MenuConfirm`
+  wears, because it is the other thing this menu RAISES over a screen rather
+  than being one, and two raised surfaces with two faces is two modal languages.
+
+  What survives of the old theme is five names — `MenuSlot`, `MenuSlotStat`,
+  `MenuValue`, `MenuHeading`, `MenuMuted` — redefined in kit tokens by
+  `UITheme._style_shared_cells`. That is not leftover scaffolding: it is now the
+  ONLY definition of those names, and it is what keeps `ItemCell` and
+  `UpgradeLadder` painted without editing them. The item menu is the one screen
+  the owner asked us not to touch, so the cells kept their code and changed only
+  what they render through.
 
   Two things were AUTHORED for that, not ported — valenfeld has no settings
   screen and so no answer for either. `UITheme._style_sliders` gives HSlider a

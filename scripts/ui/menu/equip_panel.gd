@@ -70,13 +70,10 @@ func _ready() -> void:
 	_assert_agrees_with_game()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# The whole subtree renders through the kit, overriding the `menu_theme.tres`
-	# the pause menu's Root still carries. That is also what puts `MenuSlot`,
-	# `MenuValue` and `MenuSlotStat` — the armament cells, which are NOT being
-	# rebuilt — into kit paint: `UITheme.theme()` defines those names in kit
-	# tokens (`_style_shared_cells`), so a cell here matches a cell on the locker.
-	UITheme.prewarm()
-	theme = UITheme.theme()
+	# No `theme` of its own: `PauseMenu` puts `UITheme.theme()` on Root and every
+	# panel inherits it. This used to override a `menu_theme.tres` that Root
+	# carried while the screens converted one at a time; they all have, so the
+	# per-panel override went with the .tres.
 	_build()
 	# The D-pad can change the loadout while this screen is open (it is a pause
 	# menu, but nothing stops a director or a rebind from firing), and a save

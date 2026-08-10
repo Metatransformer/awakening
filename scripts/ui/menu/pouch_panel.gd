@@ -154,12 +154,10 @@ var _fletch_cost: Label
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# The subtree renders through the kit, overriding the `menu_theme.tres` the
-	# pause menu's Root still carries — which is also what puts the two ItemGrids
-	# into kit paint, via the shared-cell names `UITheme.theme()` defines. The bag
-	# grid's own code is untouched; only what it renders through moved.
-	UITheme.prewarm()
-	theme = UITheme.theme()
+	# No `theme` of its own: `PauseMenu` puts `UITheme.theme()` on Root and every
+	# panel inherits it. This used to override a `menu_theme.tres` that Root
+	# carried while the screens converted one at a time; they all have, so the
+	# per-panel override went with the .tres.
 	_build()
 	# The bag changes while this screen is open in exactly one case that matters
 	# — a director driving a run with the menu up — but it also changes under a
