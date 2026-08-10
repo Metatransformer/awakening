@@ -41,7 +41,7 @@ definition**, and §4.2 applies.
 | **Echoes** | **12** | Run-scoped, 1 bag slot, worth 0 gold, dies with the run. Named — no thirteenth, same discipline as the relics |
 | **Minibosses** | **4** | One per floor, behind the treasure puzzle, **two** beats each (a boss gets three) |
 | Relics | **12** | Named, hand-placed, non-rolling. **Two are Verses; all twelve arrive broken** — GDD §6.4 |
-| Garrison NPCs | **5** | Vendor, smith, alchemist, **Lanternkeeper (new)**, **Jewelcrafter (new)**. There is no sixth. |
+| Garrison NPCs | **6** | Five counters — vendor, smith, alchemist, Lanternkeeper, Jewelcrafter — and **one person who is not a counter: the village elder (new, 2026-08-10)**. Was 5. **There is no sixth counter**, and that is the half of this number that was ever the brake — see §4.2's fifth ledger line. |
 | **Stats** | **5** | Damage, speed, max health, stamina, soak. GDD §6.6. No sixth. |
 | **Upgrade tracks** | **20** | 4 gear (edge, guard, string, chain) + 8 armour (4 pieces × 2 paths) + 8 jewel (4 slots × 2 paths) |
 | Armour pieces | **4** | Chest, legs, arms, boots. ×2 paths, ×4 rungs (rung 0 free, 3 bought — `K.FORGE_MAX`) |
@@ -54,10 +54,10 @@ definition**, and §4.2 applies.
 | Ingredients / components | **10 / 8** | As built. No new rarity band. |
 | Forge ladders | **12** | At the smith: 4 gear + 8 armour. Was 5; `plate` became 8. ×4 rungs |
 | Draughts | **3** | As built |
-| Dialogue trees | **0** | NPCs have counters, not conversations |
+| Dialogue trees | **0** | NPCs have counters, not conversations. **Unmoved by the voice lines below** — a line you cannot answer is not a tree |
 | Quests | **0** | The relic list is the quest log |
-| Voiced lines | **0** | |
-| Cutscenes | **0** | Two ending sequences, in-engine, no camera authoring beyond a pan |
+| Voiced lines | **15** | Was 0, recorded 2026-08-10 and **this is all of them**: 1 narrator, 3 elder, 3 each for smith / pawnbroker / jewelcrafter, 2 alchemist. The table in `scripts/autoload/voice.gd` is the manifest and a sixteenth is an amendment. The Lanternkeeper has none and is silent on purpose |
+| Cutscenes | **0** | Two ending sequences, in-engine, no camera authoring beyond a pan. **The opening is not a third**: it is the existing `Flow` veil held down over one recorded line, no camera, no choreography, once per save |
 
 ### What "new" actually costs, and why the zeroes matter
 
@@ -294,6 +294,7 @@ not worth adding.
 | Usable items 4 → 6 | Nothing — a working is a row in `armament_db.gd`, and the **ring stops** ceiling was added in the same commit to cap it | §1 |
 | **The gear loop.** Garrison NPCs 4 → 5, forge ladders 5 → 12, 8 jewel tracks, 5 named stats | **Nothing. This is an owner's amendment to the manifest, made deliberately and with the cost known.** | GDD §6.6 |
 | **Puzzles, Echoes and minibosses.** New mechanics 1 → 2, 8 atoms, 12 prefabs, 12 Echoes, 4 minibosses, 2 anchor kinds, 1 chord edge per floor | **Nothing. The second owner's amendment, 2026-08-10.** The jewelcrafter's 8 tracks were offered as the deletion and the owner declined | `docs/PUZZLES.md` |
+| **The voices and the elder.** Voiced lines 0 → 15, garrison NPCs 5 → 6, and an opening that is not a cutscene | **Nothing to delete: the lines were already recorded when they arrived.** The owner made them and asked for them to be wired; the manifest's job here is to write down the ceiling, not to relitigate a finished asset | §1, `scripts/autoload/voice.gd` |
 
 The first line is the rule working as intended: the two deleted relics were the
 only entries on GDD §6.2's table that were numbers on a subsystem rather than
@@ -327,6 +328,8 @@ What the ledger asks in return is that the cost is not pretended away:
 - **The ceilings in §1 are now doing the work §4.2 used to.** Five stats, four
   pieces, four slots, no sixth NPC, zero armour art. Those counts are the whole
   brake, so a proposal that moves one of them is back to needing a deletion.
+  *(Read "no sixth NPC" as **no sixth counter** — that is what it always meant,
+  and the fifth ledger line is where the distinction got tested.)*
 
 The fourth line is the same call made a second time, and it needs the same
 honesty. The owner's position is that **a locked door standing in for a puzzle**
@@ -351,6 +354,34 @@ What it costs, stated rather than pretended away:
   the shield reflect is not, because it is a raycast off a shield that exists.
   Anything that claims to be free the way those two are should have to prove it
   the way those two did.
+
+The fifth line is the smallest of the four amendments and the one most likely to
+be misread as a precedent, so: **what moved is not what the ceiling was
+guarding.**
+
+- **The number that mattered was counters, and it did not move.** "Garrison NPCs
+  5, there is no sixth" was written to stop a *sixth catalogue* — another screen,
+  another price table, another draw on the same drop tables (the third ledger
+  line's second bullet is the whole argument). The elder has no `counter` key, no
+  `ShopBooth`, no `Catalogue`, and touches gold nowhere. New UI screens stay 1,
+  currencies stay 1, components stay 10 / 8.
+- **Fifteen lines is a closed set, and the file says so.** `Voice.LINES` is the
+  manifest, one row per recording, and a speaker with no take for a cue is
+  silently skipped rather than covered by somebody else's line — which is why the
+  alchemist has no sale line and the Lanternkeeper has none at all. **That
+  silence is the ceiling doing its job.** A sixteenth line is an amendment here,
+  not a commit.
+- **This is where "voiced" would grow if it grew, and it must not.** The bill for
+  voice is never the wiring; it is that every future counter, every new screen
+  and every rewritten line owes a recording session, and a line that goes missing
+  is worse than one that never existed. Fifteen lines is a garrison that speaks.
+  A hundred is a game that needs a script, a cast and a pipeline, and
+  `Dialogue trees 0` is the row that stops it.
+- **The opening is one line over the veil `Flow` already owns.** No camera, no
+  cut, no authored beat — `Flow.open_on_black` holds the fade down for the length
+  of the narration and lifts it, and `Game.flags` makes it once per save. That is
+  why `Cutscenes` is still 0, and if it ever needs a camera move, it is a
+  cutscene and it costs one of the two endings.
 
 ### 4.3 Three questions before any new system
 

@@ -142,6 +142,43 @@ func blink(during: Callable, dark: float = 0.9) -> void:
 	tin.tween_property(_veil, "color:a", 0.0, FADE_IN)
 
 
+## Start the scene BLACK, hold there for `dark` seconds, then lift.
+##
+## The opening's transition, and the mirror image of `blink`: that one fades out
+## of a world the player can see, and this one is for a world they have not seen
+## yet. `Garrison._open_the_game` calls it on the first frame of a new game with
+## the narrator's line already playing, so the veil is opaque before anything is
+## ever presented -- an autoload is built before the main scene, so the alpha is
+## set during the garrison's `_ready` and no frame of the yard is ever drawn.
+##
+## HERE, and not a second ColorRect in the garrison, for the reason the whole
+## file exists: there is one veil, on layer 200, above every other CanvasLayer.
+## A second black rectangle is a second thing that can fail to come down.
+##
+## The world is PAUSED across the dark, same as `blink` and for the same reason
+## with more at stake -- fifteen seconds of narration is fifteen seconds in which
+## an untouched gamepad's drift walks the hero out of the courtyard he is about
+## to be introduced to. `Voice` is `PROCESS_MODE_ALWAYS`, so the line keeps
+## talking.
+##
+## `dark` is a NUMBER rather than a signal to await, and that is deliberate:
+## `Voice.say` hands back the length of what it started even when the file is
+## missing (0.0), so a broken import costs a black flash. Awaiting a `finished`
+## that never fires would cost a black screen with no way out of it.
+func open_on_black(dark: float) -> void:
+	busy = true
+	Prompt.blocked = true
+	_veil.color.a = 1.0
+	get_tree().paused = true
+	await get_tree().create_timer(dark, true, false, true).timeout
+	get_tree().paused = false
+	Prompt.blocked = false
+	busy = false
+	var tin := create_tween().set_ignore_time_scale(true)
+	tin.tween_property(_veil, "color:a", 0.0, FADE_IN)
+	await tin.finished
+
+
 # --- The two things that end a run ------------------------------------------
 
 func _on_player_died() -> void:

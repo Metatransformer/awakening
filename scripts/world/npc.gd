@@ -17,7 +17,7 @@ extends Interactable
 ## KEEPER and JEWELLER are appended rather than slotted in beside the other
 ## counters: the values are what an `@export var role` serialises, and
 ## re-ordering this enum would silently turn every placed alchemist into a gate.
-enum Role { VENDOR, SMITH, GATE, ALCHEMIST, KEEPER, JEWELLER }
+enum Role { VENDOR, SMITH, GATE, ALCHEMIST, KEEPER, JEWELLER, ELDER }
 
 ## Everything that differs between the people in this garrison, on one row each.
 ##
@@ -33,8 +33,12 @@ enum Role { VENDOR, SMITH, GATE, ALCHEMIST, KEEPER, JEWELLER }
 ##   * `prompt` -- the verb. TALK, not SELL/FORGE: the verb on a person should be
 ##     the thing you do to a person, and the sign already says which one this is.
 ##   * `hold`   -- seconds on the button, 0 to fire on press. See `Prompt`.
-##   * `counter`-- present only for the three who stand behind one. `db` null
-##     means SELL (the screen reads the bag, not a catalogue).
+##   * `counter`-- present only for those who stand behind one. `db` null means
+##     SELL (the screen reads the bag, not a catalogue).
+##   * `voice`  -- their key in `Voice.LINES`, or absent for the ones nobody has
+##     recorded. `activate` says their `hello` and the screen says the other two;
+##     a speaker with no take for a cue is silent and that is not an error, so
+##     the Lanternkeeper simply has no row here and no branch anywhere.
 ##
 ## The GATE has no counter, so `activate` has exactly one branch: open a counter,
 ## or do the role's own thing.
@@ -44,15 +48,15 @@ enum Role { VENDOR, SMITH, GATE, ALCHEMIST, KEEPER, JEWELLER }
 ## the table is still built once for the whole game rather than per shopkeeper.
 static var COUNTERS := {
 	Role.VENDOR: {
-		"sign": "PAWNBROKER", "prompt": "TALK", "hold": 0.0,
+		"sign": "PAWNBROKER", "prompt": "TALK", "hold": 0.0, "voice": &"pawnbroker",
 		"counter": {"title": "PAWNBROKER", "mode": TradeScreen.Mode.SELL, "db": null},
 	},
 	Role.SMITH: {
-		"sign": "SMITH", "prompt": "TALK", "hold": 0.0,
+		"sign": "SMITH", "prompt": "TALK", "hold": 0.0, "voice": &"smith",
 		"counter": {"title": "THE FORGE", "mode": TradeScreen.Mode.BUY, "db": ShopDb},
 	},
 	Role.ALCHEMIST: {
-		"sign": "ALCHEMIST", "prompt": "TALK", "hold": 0.0,
+		"sign": "ALCHEMIST", "prompt": "TALK", "hold": 0.0, "voice": &"alchemist",
 		"counter": {"title": "THE ALCHEMIST", "mode": TradeScreen.Mode.BUY, "db": AlchemyDb},
 	},
 	# The fourth counter. She cost exactly this row and a `Catalogue` subclass --
@@ -84,10 +88,27 @@ static var COUNTERS := {
 	# eat stones and the blanks stay a tap -- which is the rule `Catalogue.crafts`
 	# exists to state once.
 	Role.JEWELLER: {
-		"sign": "JEWELCRAFTER", "prompt": "TALK", "hold": 0.0,
+		"sign": "JEWELCRAFTER", "prompt": "TALK", "hold": 0.0, "voice": &"jewelcrafter",
 		"counter": {
 			"title": "THE SETTING BENCH", "mode": TradeScreen.Mode.BUY, "db": JewelDb,
 		},
+	},
+	# The sixth person, and the only one who is not selling you anything.
+	#
+	# **A row with a `voice` and no `counter` is the whole of him**, which is the
+	# claim `COUNTERS` has been making since it was written and had never once
+	# been tested by a person who does not trade: `activate` opens a counter if
+	# there is one, and if there is not, the greeting it already said IS the
+	# interaction. No dialogue tree (`docs/SCOPE.md` §1 still says **0**, and a
+	# recorded line is not a tree), no screen, no branch.
+	#
+	# He is why the garrison has somebody to report to. `docs/GDD.md` §1 used to
+	# say the hub gets to be small because there is "nobody to talk to who is not
+	# selling something"; the elder is the amendment to that sentence and he is
+	# deliberately the *smallest* one available -- two takes on a greeting, and
+	# a third line the opening spends once (`Voice.LINES` &"elder"/&"arrival").
+	Role.ELDER: {
+		"sign": "VILLAGE ELDER", "prompt": "TALK", "hold": 0.0, "voice": &"elder",
 	},
 	# 0.9 s, and the only hold in the world. It is the door OUT of the hub and
 	# the one press in the game that ends the safe part of the session, so it is
@@ -136,7 +157,9 @@ static var COUNTERS := {
 ##     colours directly and produced three silhouettes in black.
 ##   * `idle`   -- their resting loop, one each so the garrison is not three people
 ##     breathing in time. All from the standing family; see `RaceBody.CLIPS`.
-##   * `booth`  -- the shop they stand in.
+##   * `booth`  -- the shop they stand in. **Absent means none**, and the elder is
+##     the one row that leaves it out: a counter is what a person who sells
+##     things stands behind, so the person who sells nothing stands in the open.
 static var LOOKS := {
 	# Tan, not the cold slate the box placeholder wore. The pack's homespun chest
 	# piece is a strapped work harness rather than a shirt, and tinted slate over
@@ -189,6 +212,44 @@ static var LOOKS := {
 		"race": "stoneborn", "suit": "mail", "idle": &"idle4",
 		"tint": Color(0.78, 0.60, 0.92), "booth": ShopBooth.Kind.STALL,
 	},
+	# The elder, and every field here is doing the same job: making the one person
+	# in the yard who wants nothing from you legible as that from across it.
+	#
+	#  * **Reshi**, the settler height (1.65 m) -- eye to eye with the hero, which
+	#    the Stoneborn and the Vyr are deliberately not. You are being spoken to,
+	#    not sold to or looked down at.
+	#  * **Leather in warm russet, and it was authored in CLOTH first.** Cloth is
+	#    the obvious call -- a robe is what an elder wears, and undyed homespun is
+	#    the absence of a trade colour, which is what he is. It rendered as a
+	#    charcoal-blue hooded figure of exactly the hero's value, standing next to
+	#    the hero, in the one frame the whole placement exists to compose. Only the
+	#    capture could say so (`v_02_from_the_spawn` in `tools/directors/voices.gd`).
+	#
+	#    **`tint` MULTIPLIES, and every atlas in the pack is dark**, with
+	#    `SuitSeater.TINT_PULL` softening the colour halfway to white before it
+	#    even lands -- so a pale tint is very nearly no tint, and there is no
+	#    number here that makes cloth read light. **Pick saturation, never
+	#    brightness; to change VALUE, change the suit.** Leather is the lightest
+	#    atlas a non-combatant can plausibly wear, and in russet he reads warm and
+	#    a full stop lighter than the hero at fifteen metres, which is the distance
+	#    he is first seen from. (Mail was tried and works even better on legibility
+	#    and reads as a soldier, which he is not.)
+	#
+	#    The smith is also in leather, also warm. He is a 1.41 m Stoneborn behind a
+	#    forge at the far north-east; this is a 1.65 m Reshi alone in the middle of
+	#    the grass. Different height, different people, twelve metres apart, and
+	#    the tint is a stop deeper.
+	#  * **`idle4`.** `RaceBody.CLIPS` is four and there are six people, so
+	#    somebody repeats -- and the rule the jewelcrafter's row set is *repeat the
+	#    one nobody who looks like you is using*. `idle3` is the smith's and he is
+	#    the other man in leather; `idle9` is the Lanternkeeper's and she is the
+	#    other Reshi; `idle` is the pawnbroker's, also Reshi. `idle4` belongs to a
+	#    Vyr and a Stoneborn, neither of whom he could be mistaken for.
+	#  * **No booth.** See the field list above.
+	Role.ELDER: {
+		"race": "reshi", "suit": "leather", "idle": &"idle4",
+		"tint": Color(1.00, 0.82, 0.44),
+	},
 }
 
 @export var role: Role = Role.VENDOR
@@ -224,11 +285,23 @@ func _ready() -> void:
 
 
 func activate(_by: Node3D) -> void:
+	var row := _row()
+	# They speak first, before the screen, because that is the order it happens
+	# in: you say hello to somebody and then look at what they have. Silent for
+	# the gate, which is masonry, and for the Lanternkeeper, who has no takes --
+	# `Voice.say` answers 0.0 and nothing happens, so neither needs a branch.
+	#
+	# For the elder this call IS the interaction. He has no counter, so the
+	# function ends two lines down having done exactly what talking to him does.
+	var who := StringName(row.get("voice", &""))
+	if who != &"":
+		Voice.say(who, &"hello")
+
 	# One screen, pointed. See `Catalogue` for why there is not a second one.
-	var counter: Dictionary = _row().get("counter", {})
+	var counter: Dictionary = row.get("counter", {})
 	if not counter.is_empty():
 		TradeScreen.open(self, int(counter["mode"]), str(counter["title"]),
-			counter["db"] as GDScript)
+			counter["db"] as GDScript, who)
 		return
 	if role == Role.GATE:
 		Flow.enter_dungeon()
@@ -310,11 +383,15 @@ func _build_person() -> void:
 	# The shop. Set forward of the keeper along the Npc's own +Z, which is the
 	# side `ShopBooth` authors its counter to face -- so aiming an Npc at the
 	# yard aims their booth at it too, and nothing has to be placed twice.
-	var kind: ShopBooth.Kind = look.get("booth", ShopBooth.Kind.STALL)
-	var booth := ShopBooth.new()
-	booth.kind = kind
-	booth.position.z = ShopBooth.KEEPER_BACK
-	add_child(booth)
+	#
+	# Absent for the elder. `Garrison._stand` is the other half of that: a keeper
+	# is placed by where their COUNTER goes and steps back behind it, and somebody
+	# with no counter has to be placed where they are standing.
+	if look.has("booth"):
+		var booth := ShopBooth.new()
+		booth.kind = look["booth"]
+		booth.position.z = ShopBooth.KEEPER_BACK
+		add_child(booth)
 
 	# The person.
 	_person = RaceBody.make(str(look.get("race", "reshi")))

@@ -15,6 +15,9 @@ extends SceneTree
 ##   --director=res://tools/directors/combat.gd   script with `func run(rig)`
 ##   --burst=8 --burst-gap=6                      contact sheet of N frames
 ##   --seed=12345                                 deterministic RNG
+##   --intro                                      let the garrison play its
+##                                                opening (off by default --
+##                                                see `_skip_the_opening`)
 
 ## The scratch config every harness run writes instead of `user://settings.cfg`.
 ## See `_sandbox_the_settings`.
@@ -191,8 +194,39 @@ func _verify_sandbox() -> void:
 	quit(6)
 
 
+## The flag `Garrison._open_the_game` reads. Spelled out rather than reached for
+## through `Garrison.INTRO_FLAG`, for the reason `HARNESS_META` is: naming a
+## `class_name` here compiles that script -- and everything it references -- as a
+## dependency of this file, before the autoloads exist. `tools/directors/voices.gd`
+## is what would fail if the two ever drift, and it says so.
+const INTRO_FLAG := &"reported_for_duty"
+
+
+## Do not play the opening at a director, unless the director asked for it.
+##
+## The garrison narrates itself the first time a save sees it: fifteen seconds of
+## voice over an opaque veil with the world paused. That is correct for a player
+## and ruinous for a harness -- every garrison director starts from a fresh
+## `Game`, so every one of them would open by photographing a black screen and
+## then wait a quarter of a minute to be allowed to press anything.
+##
+## So it is off here by default and `--intro` turns it back on, which is the same
+## bargain as the settings sandbox above: the harness is made safe whether or not
+## the author of the next director thought about it, and the one director that
+## needs the real thing says so out loud.
+func _skip_the_opening() -> void:
+	if _args.has("intro"):
+		return
+	var game: Node = root.get_node_or_null(^"Game")
+	if game == null:
+		push_warning("shoot.gd: no /root/Game -- cannot skip the opening")
+		return
+	game.call(&"set_flag", INTRO_FLAG)
+
+
 func _run() -> void:
 	_verify_sandbox()
+	_skip_the_opening()
 
 	var scene_path: String = _args.get("scene", "")
 	if scene_path.is_empty():

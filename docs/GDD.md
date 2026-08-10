@@ -46,8 +46,12 @@ true*.
 
 **The name and the pronoun are the only things about Kael this document fixes:
 he is male, and he is called Kael.** No backstory, no family, no arc — the
-Society's creed is the characterisation, and a game with zero dialogue trees and
-zero voiced lines (`docs/SCOPE.md` §1) has nowhere to put more than that. What
+Society's creed is the characterisation, and a game with zero dialogue trees
+(`docs/SCOPE.md` §1) has nowhere to put more than that. **Kael himself does not
+speak**: fifteen voiced lines arrived on 2026-08-10 and every one of them is
+somebody talking *at* him — a narrator over the opening black, an elder, four
+counters. He is the one person in the garrison with no recording, and that is
+the characterisation holding, not a gap. What
 the name buys is that the receipt, the plaque and the Lanternkeeper's board can
 say something other than "the player."
 
@@ -74,9 +78,14 @@ leave.
 — the walled camp the Highbridge people hold at the shaft head, a day's road
 from the town proper. That is deliberate, and it is the reason the hub gets to
 be four counters and a hole in the ground: a garrison is *supposed* to be small,
-purposeful and short of comforts, so nobody has to explain why there is no inn,
-no square and nobody to talk to who is not selling something. A town would have
-owed you those. See §6.
+purposeful and short of comforts, so nobody has to explain why there is no inn
+and no square. A town would have owed you those. See §6.
+
+The one person here who is not selling anything is the **village elder**, and he
+is the exception that keeps the rule cheap: he stands in the middle of the yard,
+he is expecting you when you arrive, and he has three recorded lines and no
+counter, no quest and no dialogue tree. What a garrison owes you is somebody to
+report to. It does not owe you a conversation.
 
 The moment-to-moment is OOT: a boom camera, weighty camera-relative locomotion,
 a committed roll, a shield, a telegraphed enemy you can read. The shape around
@@ -803,9 +812,12 @@ difficulty menu:
   untouched, so §7 is intact — this is not level-scaling by another name. The Cut
   stays exactly as dangerous; the hero stops dying to it.
 - **It lives in options and not in the fiction.** Hades can make it a boon
-  because Hades has gods who talk to you. This game has five counters and no
-  dialogue (`docs/SCOPE.md`: dialogue trees, 0), and inventing an NPC to hand
-  over a mercy is how §6.1 gets broken. Name it plainly and put it in the menu.
+  because Hades has gods who talk to you. This game has five counters, an elder
+  with three lines, and no dialogue (`docs/SCOPE.md`: dialogue trees, 0) — and
+  the elder is the closest thing to a temptation here, which is exactly why he
+  says the same two things forever. A voice is not a conversation, and inventing
+  an NPC to hand over a mercy is how §6.1 gets broken. Name it plainly and put it
+  in the menu.
 
 ---
 

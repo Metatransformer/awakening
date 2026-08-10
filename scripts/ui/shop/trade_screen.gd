@@ -112,12 +112,24 @@ var _toast_slot: VBoxContainer
 var _refuse_line: Dictionary = {}
 
 
+## Whose voice this counter speaks in -- a key in `Voice.LINES`, or `&""` for a
+## keeper nobody has recorded.
+##
+## The screen owns two of the three cues and the `Npc` owns the first, and the
+## split is not arbitrary: `hello` happens when you address a person, which is
+## something the person knows about, and `deal` and `farewell` happen on a press
+## that landed and on the screen coming down, which are things only this file
+## knows about. Passing the id down beats a signal back up -- the alternative was
+## `Bus.trade_committed`, a signal whose only listener would be the node that
+## opened the screen it came from.
+var speaker: StringName = &""
+
 ## The screen makes its own CanvasLayer. A Control parented to a Node3D never
 ## draws, and every caller here is a prop standing in a 3D garrison.
 ## `db` is the catalogue for a BUY screen and defaults to the smith's, which is
 ## what every existing caller meant.
 static func open(host: Node, screen_mode: Mode, screen_title: String,
-		db: GDScript = null) -> TradeScreen:
+		db: GDScript = null, voice: StringName = &"") -> TradeScreen:
 	var layer := CanvasLayer.new()
 	layer.name = "TradeLayer"
 	# Above the HUD (50), below the pause menu (100): pausing out of the shop
@@ -127,6 +139,7 @@ static func open(host: Node, screen_mode: Mode, screen_title: String,
 	s.mode = screen_mode
 	s.title = screen_title
 	s.catalogue = db if db != null else ShopDb
+	s.speaker = voice
 	layer.add_child(s)
 	host.get_tree().current_scene.add_child(layer)
 	return s
@@ -164,6 +177,12 @@ func close() -> void:
 	if _closing:
 		return
 	_closing = true
+	# Said over the screen coming down rather than after it, so the goodbye
+	# overlaps the walk away instead of following it. In `close` and not
+	# `_exit_tree` because this has to be the player LEAVING: `_exit_tree` also
+	# runs when the garrison is torn down for the descent, and the smith calling
+	# "take care" at a black screen would be the counter talking to nobody.
+	Voice.say(speaker, &"farewell")
 	var layer := get_parent()
 	if layer is CanvasLayer:
 		layer.queue_free()
@@ -888,6 +907,9 @@ func _commit() -> void:
 	if done:
 		# The purchase that just landed answers whatever the last refusal said.
 		_end_refusal()
+		# On the press that WORKED, never on the press. A keeper who says "good
+		# price" over a refusal is worse than one who says nothing.
+		Voice.say(speaker, &"deal")
 	else:
 		_show_refusal()
 	_refresh()
