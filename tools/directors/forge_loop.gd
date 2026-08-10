@@ -34,6 +34,7 @@ var _fails := 0
 
 func run(rig) -> void:
 	out = rig.arg("out", "/tmp/forge/x.png").get_base_dir()
+	_teach_the_smith()
 	await rig.wait_frames(20)
 
 	_catalogue()
@@ -49,6 +50,24 @@ func run(rig) -> void:
 		print("FORGE OK")
 	else:
 		print("FORGE FAIL -- %d check(s) failed" % _fails)
+
+
+## The five ladders are now RATIONED by two of the twelve relics: the smith knows
+## rung 1 from the start, rung 2 after the Tally-Ledger and the rest after the
+## Imperium Anvil-Plate (`RelicDb.forge_rungs_known()`, GDD §6.2 relics 1 and 2).
+## Every D-beat below is written about a FULLY CLIMBED ladder -- "the finished
+## chain is exactly the Longshot" is a claim about rung 3 -- and on a fresh save
+## the ladder now stops at rung 1, so five checks failed on a forge that was
+## working exactly as designed.
+##
+## Donated here, out loud, as a precondition. That the relics are what open the
+## rungs is `relic_donate.gd`'s claim and is proved there; this director's
+## subject is what the top of a ladder is worth once you can reach it.
+func _teach_the_smith() -> void:
+	for id: StringName in RelicDb.RUNG_RELICS:
+		Game.set_flag(RelicDb.flag_donated(id))
+	print("FORGE precondition: donated %s -- the ladders are rationed by them now"
+		% [RelicDb.RUNG_RELICS])
 
 
 func _ck(label: String, ok: bool) -> void:

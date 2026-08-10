@@ -91,6 +91,15 @@ func _read_floor(rig) -> void:
 		var e := n as Enemy
 		if e == null:
 			continue   # nothing in the group is anything else today; see below
+		# The BOSS is an `Enemy` in the enemy group like everything else, and it
+		# is the wrong body to measure this curve with: `BossDb` sets its health
+		# and it is four to five times a rank-and-file monster. Counted, floor 1
+		# reads as 48 q against bossless floor 5's 44 q and `_compare` reports
+		# that the game got EASIER with depth -- which is a lie about the curve
+		# told by a body that is not on the curve. Skipped by where it stands,
+		# not by kind: an arena has exactly one occupant.
+		if _under(e, "Arena"):
+			continue
 		health = maxi(health, e.health.max_quarters)
 		damage = maxi(damage, e._damage)
 		kinds[e.kind] = true
@@ -99,11 +108,20 @@ func _read_floor(rig) -> void:
 
 	# The stair is the only thing that makes the next floor reachable, so its
 	# absence is fatal rather than a note.
+	#
+	# Counted OUTSIDE the shortcut landing. Since M4 an authored floor builds two
+	# `Stairs`: the way down, now behind the boss door on `BossLanding` instead of
+	# loose in the deepest room (GDD §5.3), and the shortcut's, on
+	# `ShortcutLanding`, which skips a floor and is a different promise entirely.
+	# "Exactly one stair" was true when there was one kind of stair; the invariant
+	# that survived is "exactly one way DOWN".
 	var stairs := 0
 	for n in dungeon.find_children("*", "Stairs", true, false):
+		if _under(n, "ShortcutLanding"):
+			continue
 		stairs += 1
 	if stairs != 1:
-		_fail("floor %d has %d stairs, wanted exactly 1" % [Run.level, stairs])
+		_fail("floor %d has %d ways down, wanted exactly 1" % [Run.level, stairs])
 
 	var row := {
 		"level": Run.level,
@@ -119,6 +137,18 @@ func _read_floor(rig) -> void:
 	print("DIVE floor=%d rooms=%d foes=%d toughest=%dq hardest=%dq elites=%d kinds=%d"
 		% [row["level"], row["rooms"], row["foes"], row["health"], row["damage"],
 			row["elites"], row["kinds"]])
+
+
+## Is `n` anywhere below a node of this name? Both users of this ask a question
+## about WHERE a thing stands -- which is the only honest way to tell a boss from
+## a monster, or the way down from the shortcut, without a second table saying so.
+func _under(n: Node, ancestor: String) -> bool:
+	var at := n.get_parent()
+	while at != null:
+		if at.name == ancestor:
+			return true
+		at = at.get_parent()
+	return false
 
 
 ## The generator, which is a CHILD of the scene root -- dungeon.tscn's root is
