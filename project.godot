@@ -11,9 +11,11 @@ config_version=5
 [application]
 
 config/name="The Lower Worlds: Awakening"
-; The loop starts in the garrison. Booting into the dungeon dropped the player
-; into the middle of a run they never chose to take, with nowhere to spend what
-; they carried out of it.
+; The game boots to the TITLE SCREEN, and from 2026-08-10 that is where the two
+; ways into it live: CONTINUE (Flow.continue_game) and NEW GAME (Flow.new_game).
+; Booting straight into the garrison meant the game had no way to start a new
+; one -- Game.reset() existed with no caller, so the opening's flag and every
+; relic the save had ever lit came back with the process.
 ;
 ; THIS LINE HAS NOW DRIFTED TO dungeon.tscn THREE TIMES, always inside a commit
 ; that was about something else, and the third one shipped: a session pointed it
@@ -25,7 +27,7 @@ config/name="The Lower Worlds: Awakening"
 ; I died".
 ; To look at a room without touching this line, pass it to the harness:
 ;   godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/dungeon.tscn ...
-run/main_scene="res://scenes/rooms/garrison.tscn"
+run/main_scene="res://scenes/ui/title/title_screen.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 

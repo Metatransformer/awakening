@@ -24,15 +24,33 @@ extends Node
 ## `Settings` (docs/CONTRACT.md §8) -- so the pause-menu slider drives this for
 ## free and nothing here has to know the slider exists.
 
-enum Mood { SILENT, CALM, DELVE, FIGHT, BOSS }
+enum Mood { SILENT, TITLE, PROLOGUE, CALM, DELVE, FIGHT, BOSS }
 
-## Every track in the project, sorted into the mood it belongs to. There is no
-## garrison-specific track in the set, so the garrison gets `title_screen` -- it
-## is the only cue in the library that is neither a dungeon ambience nor a
-## fight.
+## Every track in the project, sorted into the mood it belongs to.
+##
+## **Three of these arrived on 2026-08-10 with the title screen**, and two of
+## them are ports from `~/valenfeld` the same way the sky shader is -- that
+## project's soundtrack has role-tagged beds this one had no equivalents for, and
+## the garrison had been running on the title theme for want of anything else:
+##
+##  * `TITLE` -- `title_screen.ogg`, "Wanderer's Last Cadence". It was always the
+##    overture; it is finally on the overture.
+##  * `PROLOGUE` -- `prologue.ogg`, valenfeld's `nature_2` / "Wanderer Motif". A
+##    road piece, under a narration about a man on a road. Only ever playing
+##    while `Cutscene` is up, and `Flow` forces it there (see `force`).
+##  * `CALM` -- `town.ogg`, valenfeld's `town_3` / "Frontier Outpost", which is
+##    what the Highbridge garrison *is*: a walled camp at the edge of the map.
+##    ONE track and not the three that project has, because there is one hub
+##    here and a place whose theme changes every two minutes has no identity.
 const POOLS := {
-	Mood.CALM: [
+	Mood.TITLE: [
 		"res://audio/music/title_screen.ogg",
+	],
+	Mood.PROLOGUE: [
+		"res://audio/music/prologue.ogg",
+	],
+	Mood.CALM: [
+		"res://audio/music/town.ogg",
 	],
 	Mood.DELVE: [
 		"res://audio/music/dungeon_1.ogg",
@@ -87,6 +105,10 @@ var _drawn: Array[String] = []
 var _boss := false
 var _fight_until := 0.0
 var _elapsed := 0.0
+## A mood pinned by a caller, or -1 for "work it out from the world". See `force`.
+## An int rather than a `Mood` because `Mood` has no "none" member and adding one
+## would put an unplayable value in `POOLS`' key space.
+var _forced: int = -1
 
 
 func _ready() -> void:
@@ -143,6 +165,18 @@ func _evaluate() -> void:
 
 
 func _desired_mood() -> Mood:
+	# An explicit cue beats every derived one. See `force`.
+	if _forced >= 0:
+		return _forced as Mood
+
+	var current := get_tree().current_scene
+	var here := current.scene_file_path if current != null else ""
+
+	# The title screen, checked BEFORE the hero test below, because it is the one
+	# scene in the game that is scored and has no hero standing in it.
+	if here.contains("title_screen"):
+		return Mood.TITLE
+
 	# Same rule the HUD uses: no hero in the tree means this is lookdev or a tool
 	# scene, and those stay silent.
 	var hero := get_tree().get_first_node_in_group(&"player")
@@ -157,9 +191,7 @@ func _desired_mood() -> Mood:
 	if _elapsed < _fight_until:
 		return Mood.FIGHT
 
-	var scene := get_tree().current_scene
-	var path := scene.scene_file_path if scene != null else ""
-	return Mood.CALM if path.contains("garrison") else Mood.DELVE
+	return Mood.CALM if here.contains("garrison") else Mood.DELVE
 
 
 func _enemies_engaged() -> bool:
@@ -178,6 +210,31 @@ func _enemies_engaged() -> bool:
 
 func _set_boss(on: bool) -> void:
 	_boss = on
+	_evaluate()
+
+
+## Pin the score to one mood until `release`.
+##
+## The escape hatch for the one case the poll cannot see: a screen held OVER a
+## scene that is not what is being shown. `Flow.new_game` builds the garrison
+## behind the opening cutscene, so from this file's point of view the player is
+## already standing in the town while a narrator is still describing the road to
+## it -- and the derived answer would be the town theme, two beats early.
+##
+## Deliberately NOT a general "play this track" API. Everything else in the game
+## gets its music from where it is, which is why no scene in this project has
+## ever had to remember to ask.
+func force(mood: Mood) -> void:
+	if _forced == int(mood):
+		return
+	_forced = int(mood)
+	_evaluate()
+
+
+func release() -> void:
+	if _forced < 0:
+		return
+	_forced = -1
 	_evaluate()
 
 

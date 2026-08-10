@@ -57,7 +57,7 @@ definition**, and §4.2 applies.
 | Dialogue trees | **0** | NPCs have counters, not conversations. **Unmoved by the voice lines below** — a line you cannot answer is not a tree |
 | Quests | **0** | The relic list is the quest log |
 | Voiced lines | **15** | Was 0, recorded 2026-08-10 and **this is all of them**: 1 narrator, 3 elder, 3 each for smith / pawnbroker / jewelcrafter, 2 alchemist. The table in `scripts/autoload/voice.gd` is the manifest and a sixteenth is an amendment. The elder's three are the Lanternkeeper's, those two being one man since the same day; the alchemist still has no sale line |
-| Cutscenes | **0** | Two ending sequences, in-engine, no camera authoring beyond a pan. **The opening is not a third**: it is the existing `Flow` veil held down over one recorded line, no camera, no choreography, once per save |
+| Cutscenes | **0** | Two ending sequences, in-engine, no camera authoring beyond a pan. **The opening is not a third**: it is a still painting held on the existing `Flow` layer under one recorded line, no camera, no choreography, no actor, once per save (`scripts/ui/title/cutscene.gd`) |
 
 ### What "new" actually costs, and why the zeroes matter
 
@@ -384,11 +384,18 @@ guarding.**
   is worse than one that never existed. Fifteen lines is a garrison that speaks.
   A hundred is a game that needs a script, a cast and a pipeline, and
   `Dialogue trees 0` is the row that stops it.
-- **The opening is one line over the veil `Flow` already owns.** No camera, no
-  cut, no authored beat — `Flow.open_on_black` holds the fade down for the length
-  of the narration and lifts it, and `Game.flags` makes it once per save. That is
-  why `Cutscenes` is still 0, and if it ever needs a camera move, it is a
-  cutscene and it costs one of the two endings.
+- **The opening is one line over the layer `Flow` already owns.** No camera, no
+  cut, no authored beat — `Flow.new_game` raises a `Cutscene` (a `TextureRect`, a
+  `Label` and a clock) on the same CanvasLayer the fade and the loading card use,
+  and `Game.flags` makes it once per save. It gained a PAINTING and its words on
+  screen on 2026-08-10 and it is still not a cutscene by this table's meaning:
+  nothing moves. That is why `Cutscenes` is still 0, and if it ever needs a
+  camera move, it is a cutscene and it costs one of the two endings.
+- **`Cutscene` is a subtitle clock, and that is the ceiling.** One still, a list
+  of lines, one recorded clip per line — a clip covering several lines is split
+  evenly between them, which is what the opening's single take does today. The
+  moment it wants a second image, a transition between them, or a speaker who is
+  not the narrator, it has stopped being this and the row above applies.
 
 ### 4.3 Three questions before any new system
 
