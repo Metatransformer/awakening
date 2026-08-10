@@ -95,7 +95,27 @@ const DEFAULT_PATH := "user://settings.cfg"
 ##     configured. The interesting half is X -- a stale binding there would put
 ##     `sheathe` on it, an action nothing reads, so the player's flask button
 ##     would be silent in the fight they bought the flask for.
-const BIND_SCHEMA := 12
+## 13: the KEYBOARD became Elden Ring's, and the serializer learned modifiers.
+##     No action was added, removed or renamed — this is the first bump that is
+##     purely about which keys the defaults sit on, and it is a bump for two
+##     independent reasons, either of which alone would justify it:
+##
+##     THE LAYOUT ROTATED, and every moved key landed on a key another action was
+##     already using: `context` (dodge/sprint) Shift -> Space, `jump` Space -> F,
+##     `heavy` F -> Shift+LMB, `use_item` X -> R, `first_person` R -> V. A v12
+##     save replayed over this would be a HALF-ROTATED layout rather than an old
+##     one, and the collisions are the bad half: a player who had rebound only
+##     `jump` gets it back on Space, on top of the dodge, and the most
+##     reaction-critical key in the game now does two things. Discarding gives
+##     them the new layout whole, which is the only coherent state available.
+##
+##     THE FORMAT GREW A FIELD. `_serialize` now records a modifier bitmask ("m")
+##     on key and mouse binds, because Shift+LMB is a default now and the old
+##     format could not express it — see MOD_SHIFT for the bug that made a
+##     gamepad rebind quietly collapse the heavy onto the light attack. A v12
+##     entry has no "m" and would deserialize as unmodified, which for `heavy` is
+##     exactly that bug replayed out of the config file.
+const BIND_SCHEMA := 13
 
 ## Where preferences persist. A test or a screenshot director that rebinds keys
 ## MUST NOT write to the player's real settings — an earlier menu test left
@@ -428,19 +448,57 @@ func _same_device_class(a: InputEvent, b: InputEvent) -> bool:
 
 
 ## Human-readable label for the first event on an action, for the options list.
+## THIS DELEGATES TO `Glyph` AND DOES NOT DECODE ANYTHING ITSELF, which it used
+## to. Glyph's own header names three surfaces that each decoded the InputMap
+## privately and the pad player who ended up reading "LMB" off one of them; this
+## function was a fourth copy, and it went stale the same way the others did —
+## it printed the button index of a mouse bind and nothing else, so `heavy`
+## (Shift+LMB) and `attack` (LMB) both came out as "Mouse L" in the options
+## screen's keyboard column, which is the one place in the game whose entire
+## purpose is to answer "what is this bound to".
 func label_for(action: StringName) -> String:
 	if not InputMap.has_action(action):
 		return "—"
-	var events := InputMap.action_get_events(action)
-	for e in events:
-		if e is InputEventKey:
-			return OS.get_keycode_string((e as InputEventKey).physical_keycode)
-		if e is InputEventMouseButton:
-			match (e as InputEventMouseButton).button_index:
-				MOUSE_BUTTON_LEFT: return "Mouse L"
-				MOUSE_BUTTON_RIGHT: return "Mouse R"
-				MOUSE_BUTTON_MIDDLE: return "Mouse M"
-	return "—"
+	var e := Glyph.event_for(action, false)
+	return Glyph.long(e) if e != null else "—"
+
+
+## Our own modifier bits, written into the "m" field of a serialized key or mouse
+## bind. NOT Godot's KeyModifierMask — those are high bits of the keycode enum and
+## would round-trip through ConfigFile as huge integers for no benefit.
+##
+## THIS FIELD IS WHY BIND_SCHEMA IS 13. Before it, `_serialize` recorded a mouse
+## bind as nothing but its button index, and the default `heavy` — Shift+LMB — has
+## a modifier that IS the binding. The bug that made it necessary is not
+## hypothetical and does not need the player to touch the heavy at all:
+##
+##   1. Player rebinds the heavy's PAD half (say RT to LB) in the options screen.
+##   2. `rebind` erases same-device-class events only, so Shift+LMB survives in
+##      the live InputMap and is correct for the rest of the session.
+##   3. `_serialize` then writes EVERY event on the action, and wrote the mouse
+##      one as a bare LMB.
+##   4. Next boot, `apply_binds` replays it: `heavy` is now plain LMB.
+##
+## The player's light attack and heavy attack are on the same click from then on,
+## for a rebind they made to a gamepad. Nothing in the game would report it.
+const MOD_SHIFT := 1
+const MOD_CTRL := 2
+const MOD_ALT := 4
+const MOD_META := 8
+
+
+func _mod_bits(e: InputEventWithModifiers) -> int:
+	return (MOD_SHIFT if e.shift_pressed else 0) \
+		| (MOD_CTRL if e.ctrl_pressed else 0) \
+		| (MOD_ALT if e.alt_pressed else 0) \
+		| (MOD_META if e.meta_pressed else 0)
+
+
+func _apply_mods(e: InputEventWithModifiers, bits: int) -> void:
+	e.shift_pressed = (bits & MOD_SHIFT) != 0
+	e.ctrl_pressed = (bits & MOD_CTRL) != 0
+	e.alt_pressed = (bits & MOD_ALT) != 0
+	e.meta_pressed = (bits & MOD_META) != 0
 
 
 # ConfigFile cannot hold InputEvent objects, so binds round-trip as dictionaries.
@@ -448,9 +506,17 @@ func _serialize(action: StringName) -> Array:
 	var out: Array = []
 	for e in InputMap.action_get_events(action):
 		if e is InputEventKey:
-			out.append({"t": "key", "c": (e as InputEventKey).physical_keycode})
+			out.append({
+				"t": "key",
+				"c": (e as InputEventKey).physical_keycode,
+				"m": _mod_bits(e as InputEventKey),
+			})
 		elif e is InputEventMouseButton:
-			out.append({"t": "mb", "c": (e as InputEventMouseButton).button_index})
+			out.append({
+				"t": "mb",
+				"c": (e as InputEventMouseButton).button_index,
+				"m": _mod_bits(e as InputEventMouseButton),
+			})
 		elif e is InputEventJoypadButton:
 			out.append({"t": "jb", "c": (e as InputEventJoypadButton).button_index})
 		elif e is InputEventJoypadMotion:
@@ -467,10 +533,12 @@ func _deserialize(d: Dictionary) -> InputEvent:
 		"key":
 			var k := InputEventKey.new()
 			k.physical_keycode = d.get("c", 0)
+			_apply_mods(k, int(d.get("m", 0)))
 			return k
 		"mb":
 			var m := InputEventMouseButton.new()
 			m.button_index = d.get("c", 0)
+			_apply_mods(m, int(d.get("m", 0)))
 			return m
 		"jb":
 			var j := InputEventJoypadButton.new()

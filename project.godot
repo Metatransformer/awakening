@@ -302,9 +302,35 @@ attack={
 ; you let go of the stick that was aiming.
 ;
 ; Keyboard is F: left hand, without leaving WASD.
+; THE KEYBOARD HALF IS SHIFT+LMB, and it is the one binding in this file that
+; needed the engine printed at it before it could be written down.
+;
+; Elden Ring's keyboard layout is the target (LMB light, Shift+LMB strong, RMB
+; guard) and the pad half above already grew into that arrangement, so the mouse
+; is where the two finally agree: one button is the sword, and how hard you
+; swing it is whether the pinky is down.
+;
+; IT DOES NOT WORK BY ITSELF. A modifier'd binding does NOT stop the unmodified
+; action firing -- `attack` is plain LMB, and Godot's action state carries the
+; modifier match as a SEPARATE flag rather than as part of the match. Probed on
+; 4.7, not remembered:
+;
+;     pressed LMB        attack loose=true  exact=true    heavy=false
+;     pressed Shift+LMB  attack loose=true  exact=FALSE   heavy=true
+;
+; So Shift+LMB fires the light swing AND the heavy unless `attack` is read with
+; exact=true, which is what hero_combat and game_camera now do. That is the
+; whole mechanism -- there is no arbitration and no consumed event.
+;
+; The same probe says the pad is untouched by that: an InputEventJoypadButton
+; has no modifier mask to mismatch, so RB reports exact=true, and so does a bare
+; Input.action_press() -- which is what every director in tools/directors uses.
+; Reading `attack` exactly costs the pad and the harness nothing.
+;
+; It was F for one layout, which is where `jump` lives now.
 heavy={
 "deadzone": 0.2,
-"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":70,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+"events": [Object(InputEventMouseButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":true,"ctrl_pressed":false,"meta_pressed":false,"button_mask":0,"position":Vector2(0, 0),"global_position":Vector2(0, 0),"factor":1.0,"button_index":1,"canceled":false,"pressed":false,"double_click":false,"script":null)
 , Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":-1,"axis":5,"axis_value":1.0,"script":null)
 ]
 }
@@ -369,16 +395,30 @@ shield={
 ; second action to bind; Hero._tick_sprint reads the hold off the same `context`
 ; the roll reads its press off.
 ;
-; The KEYBOARD half is Shift, and it is NOT shared with anything: Space is `jump`
-; and E is `interact`. Shift is where the whole genre puts a dodge/sprint on a
-; keyboard, it is under the pinky that is already resting on WASD, and it was the
-; only unbound modifier left. KEY_SHIFT is 4194325 -- one past KEY_PAGEDOWN
-; (4194324), which you can check against move_up's KEY_UP (4194320) three actions
-; up this file. Do not derive it from memory any more than you would a JoyButton;
-; _padnames.tscn prints the live map for both devices.
+; The KEYBOARD half is SPACE, which is where Elden Ring puts it and where the
+; tap/hold split this action already implements came from in the first place.
+; The pad has read that way for a while -- one button that rolls on the tap and
+; runs on the hold -- and the keyboard only just caught up.
+;
+; It was Shift, under the argument that Shift is where the genre puts a
+; dodge/sprint. That is true of shooters, and it is NOT true of this genre: in
+; Elden Ring, Shift is the modifier that turns a swing heavy, and it is the
+; modifier here too now (see `heavy`). A pinky cannot hold the sprint and reach
+; the strong attack at the same time, so the two could not both stay on it.
+;
+; SPACE IS ALSO `ui_accept`, and that is the same non-collision the pad has had
+; since B/Circle took the dodge: a menu that is up has either paused the tree or
+; raised Prompt.blocked, and the hero does not read his buttons through either.
+; Space rolls in the world and confirms in a menu, exactly as B dodges in the
+; world and backs out of a menu. `ui_accept` still has Enter for the menus that
+; want a key that never means anything else.
+;
+; What it cost is `jump`, which moved to F -- also Elden Ring's. That is the
+; trade the layout is making: the button you press to survive is the biggest one
+; on the keyboard, and the button you press to cross a gap is not.
 context={
 "deadzone": 0.2,
-"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":4194325,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":32,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
 , Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":1,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
@@ -402,18 +442,33 @@ context={
 ; had nothing left to un-draw. The hip scabbard survives as a LOOK -- the hero
 ; wears the sword when his hand is full of something else -- and not as a verb.
 ;
-; Keyboard is X, which is the letter on the pad button. There is no shortage of
-; keys and matching the glyph is worth more than another home-row raid.
+; Keyboard is R -- Elden Ring's flask key, and the one place this layout drops
+; the "match the pad glyph" rule on purpose.
+;
+; It was X for one layout, on the argument that X is the letter printed on the
+; pad button and matching the glyph beats raiding the home row. That argument
+; only holds while the keyboard has no opinion of its own, and here it does: R
+; is the key a player of this genre has already learned means "drink the thing
+; that keeps you alive", and it is one finger off WASD instead of a thumb tucked
+; under the palm. X is now UNBOUND and is being kept that way for a crouch, which
+; is the one verb in Elden Ring's layout this game has no ability for yet -- see
+; the note at the end of this block.
 use_item={
 "deadzone": 0.2,
-"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":88,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":82,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
 , Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":2,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
-; Jump. SPACE, because Space is the jump button in every game with a keyboard,
-; and Y/TRIANGLE -- button 3, "Top Action" -- because it is the face button the
-; right-trigger move left empty and because BOTW, which is the game this project
-; is chasing, puts jump on the top-right face button too (its X).
+; Jump. F on the keyboard, and Y/TRIANGLE -- button 3, "Top Action" -- because
+; it is the face button the right-trigger move left empty and because BOTW,
+; which is the game this project is chasing, puts jump on the top-right face
+; button too (its X).
+;
+; IT WAS SPACE, "because Space is the jump button in every game with a
+; keyboard". That is true of every game except the one this layout is now
+; copying: Elden Ring puts the roll on Space and the jump on F, because in a
+; game where a badly-timed roll kills you the evade gets the key you cannot
+; miss. `context` took Space and this took F -- see the note there.
 ;
 ; THIS ACTION SHIPPED WITH THE ABILITY, which is the rule §4 of the contract
 ; states and the reason there was no `jump` here for so long: an action bound to
@@ -429,7 +484,7 @@ use_item={
 ; feel like it is reading the player instead of the physics.
 jump={
 "deadzone": 0.2,
-"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":32,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":70,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
 , Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":3,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
@@ -518,9 +573,16 @@ item_next={
 ; R3 was free because it had to be taken from `z_target`, which no longer needs
 ; a pad button of its own -- the left trigger is the pad's Z now and does the
 ; whole job. See the note there.
+;
+; THE KEY IS V, and it was evicted rather than chosen: `use_item` took R when the
+; keyboard moved to Elden Ring's layout, and the flask has the better claim on
+; that key -- it is a verb you press mid-fight, this is one you press while
+; standing still looking at scenery. Elden Ring has no first-person toggle to
+; copy, so V is simply the nearest free key that is not a home-row raid, and it
+; is the one the rest of the medium uses for a camera toggle.
 first_person={
 "deadzone": 0.2,
-"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":82,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":86,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
 , Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":8,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
@@ -552,6 +614,26 @@ map={
 , Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":7,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
+; --- WHAT ELDEN RING BINDS THAT THIS FILE DELIBERATELY DOES NOT --------------
+;
+; The keyboard layout above is Elden Ring's, minus two rows, and both are
+; missing for the SAME reason rather than by oversight. CONTRACT §4: an action
+; bound to nothing is a button that lies, and the fix is to ship the action with
+; the ability, in one commit, not to reserve the key and hope.
+;
+;   CROUCH, ER's X. There is no crouch, no sneak and no stealth in this game --
+;       no state, no clip, no detection rule for it to change. X is UNBOUND and
+;       is being held for it: it is the key `use_item` vacated, it is where ER
+;       puts crouch, and it is the only free key in the layout that is reserved
+;       for a named verb rather than simply spare.
+;   SKILL / ASH OF WAR, ER's Shift+RMB. LB IS DELIBERATELY EMPTY on the pad for
+;       exactly this (see the D-pad note) and the keyboard matches: casting is a
+;       left-hand verb, and it gets both buttons on the day it gets an ability.
+;       Note that Shift+RMB would fire `shield` too if it were bound naively --
+;       the guard is plain RMB, and the exact-match rule the heavy needs (see
+;       `heavy`) would have to be applied to `shield` the same way.
+;   MAP is G in ER and is M here, on the player's instruction. The map screen's
+;       own hint prints M, Tab is the second binding, and neither moved.
 dbg_reload={
 "deadzone": 0.2,
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":4194336,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)

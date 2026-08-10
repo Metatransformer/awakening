@@ -40,6 +40,32 @@ extends Node3D
 ## honoured two swings later would fire it at a hero standing still. See `_press`.
 enum Intent { LIGHT, HEAVY, SPIN, DASH, SLAM }
 
+## Read `attack` with exact modifier matching. THIS IS WHAT MAKES THE HEAVY A
+## SEPARATE BUTTON ON THE KEYBOARD, and without it the strong attack is unusable.
+##
+## `attack` is plain LMB and `heavy` is Shift+LMB (Elden Ring's layout). Godot
+## does NOT treat those as two bindings that exclude each other: a modifier'd
+## press matches the unmodified action too, and records the mismatch as a
+## separate `exact` flag rather than as a failure to match. Probed on 4.7 rather
+## than remembered — the numbers are in project.godot's note on `heavy`:
+##
+##     pressed LMB        attack loose=true  exact=true    heavy=false
+##     pressed Shift+LMB  attack loose=true  exact=FALSE   heavy=true
+##
+## So the default loose read fires the light chain on every strong attack, and
+## the player gets both swings for one click.
+##
+## IT IS SAFE FOR THE PAD AND FOR THE DIRECTORS, which is the only reason it can
+## be a blanket rule instead of a keyboard special case: an InputEventJoypadButton
+## has no modifier mask to mismatch, so RB reports exact=true, and so does a bare
+## `Input.action_press(&"attack")` — the path every harness in tools/directors
+## uses. Both were probed alongside the two lines above.
+##
+## `heavy` is NOT read exactly. Nothing else is bound to Shift+LMB, so there is
+## no press it needs to reject, and reading it loosely means a player who is also
+## holding some other modifier still gets their swing.
+const ATTACK_EXACT := true
+
 ## Pitch multiplier per chain step. Two rises, three drops — the chain should
 ## sound like it is going somewhere, and the finisher is the heaviest thing in
 ## it. Cheapest honest way to make three swings read as one sentence.
@@ -958,9 +984,15 @@ func _tick_use_item_button() -> void:
 func _tick_item_trigger() -> void:
 	if _hero.ranged == null:
 		return
-	var down := Input.is_action_pressed(&"heavy") or Input.is_action_pressed(&"attack")
+	# `attack` is read EXACTLY here and in `_tick_light_button` — see ATTACK_EXACT.
+	# It matters even on this line, where both buttons do the same thing: without
+	# it a Shift+LMB draw would arrive as two presses in one frame, so `edge`
+	# would fire `use_press` and the bow would loose on the pull that was meant to
+	# aim it.
+	var down := Input.is_action_pressed(&"heavy") \
+		or Input.is_action_pressed(&"attack", ATTACK_EXACT)
 	var edge := (Input.is_action_just_pressed(&"heavy")
-		or Input.is_action_just_pressed(&"attack"))
+		or Input.is_action_just_pressed(&"attack", ATTACK_EXACT))
 	if equipped != &"" and edge:
 		_hero.ranged.use_press(equipped)
 		return
@@ -983,7 +1015,7 @@ func _tick_light_button() -> void:
 	# which has already run this frame). There is no sword half to reach.
 	if equipped != &"":
 		return
-	if not Input.is_action_just_pressed(&"attack"):
+	if not Input.is_action_just_pressed(&"attack", ATTACK_EXACT):
 		return
 	# In the air the light button is the SLAM, and it is checked before
 	# everything below because none of the rest of the kit can be thrown off

@@ -216,7 +216,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		_look_input += mm.relative * mouse_sensitivity
 	elif event.is_action_pressed(&"first_person"):
 		set_first_person(not _fp)
-	elif _fp and (event.is_action_pressed(&"attack")
+	# `attack` exactly (HeroCombat.ATTACK_EXACT): plain LMB is the light swing and
+	# Shift+LMB is `heavy`, and a loose read here would leave first person on the
+	# strong attack too — harmless in itself, but it would disagree with the hero,
+	# who does not swing on a loose `attack` any more. One rule, read the same way
+	# on both sides of the same press.
+	elif _fp and (event.is_action_pressed(&"attack", false, HeroCombat.ATTACK_EXACT)
+			or event.is_action_pressed(&"heavy")
 			or event.is_action_pressed(&"context")):
 		# Any verb drops you out. The hero is rooted and his model is hidden in
 		# here, so a swing or a roll taken from first person would be a move

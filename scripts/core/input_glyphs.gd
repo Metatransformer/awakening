@@ -101,6 +101,43 @@ static func is_pad(e: InputEvent) -> bool:
 	return e is InputEventJoypadButton or e is InputEventJoypadMotion
 
 
+# --- Modifiers --------------------------------------------------------------
+
+## THE MODIFIER IS PART OF THE BINDING, and leaving it off this file is how the
+## whole keyboard layout becomes a lie in two places at once.
+##
+## `heavy` is Shift+LMB and `attack` is plain LMB (project.godot's note on
+## `heavy`). Both are `InputEventMouseButton` with `button_index == 1`, so a
+## decoder that reads only the button index prints "Mouse L" for the strong
+## attack and "Mouse L" for the light one — and the two surfaces that would print
+## it are the OPTIONS SCREEN, whose entire job is telling the player what is
+## bound, and the HUD LEGEND, which would show two different verbs on the same
+## cap. That is the same class of failure as the pad player looking at a cap
+## reading LMB, which is the reason this file exists at all.
+##
+## Godot has `get_modifiers_mask()`, which is not used here: it returns high bits
+## of the keycode enum, and the four booleans are what the rest of the project
+## reads and writes (Settings.MOD_SHIFT).
+const MOD_LONG := [["shift_pressed", "Shift"], ["ctrl_pressed", "Ctrl"],
+	["alt_pressed", "Alt"], ["meta_pressed", "Cmd"]]
+const MOD_CAP := [["shift_pressed", "SHFT"], ["ctrl_pressed", "CTRL"],
+	["alt_pressed", "ALT"], ["meta_pressed", "CMD"]]
+
+
+## "Shift+" / "SHFT+" / "" — the prefix for whatever `e` is holding down.
+## Anything that is not an InputEventWithModifiers has none, which covers both
+## pad event types.
+static func mod_prefix(e: InputEvent, caps: bool) -> String:
+	if not (e is InputEventWithModifiers):
+		return ""
+	var m := e as InputEventWithModifiers
+	var out := ""
+	for pair in (MOD_CAP if caps else MOD_LONG):
+		if m.get(pair[0]):
+			out += "%s+" % pair[1]
+	return out
+
+
 # --- Single events ----------------------------------------------------------
 
 ## Human label for any single event — used for the rebind conflict message,
@@ -109,13 +146,18 @@ static func long(e: InputEvent) -> String:
 	if e is InputEventKey:
 		var k := e as InputEventKey
 		var code := k.physical_keycode if k.physical_keycode != 0 else k.keycode
-		return OS.get_keycode_string(code)
+		# A modifier key bound ON ITS OWN reports itself as held, so a bare Shift
+		# would print "Shift+Shift". Name the key and stop.
+		if code in [KEY_SHIFT, KEY_CTRL, KEY_ALT, KEY_META]:
+			return OS.get_keycode_string(code)
+		return mod_prefix(e, false) + OS.get_keycode_string(code)
 	if e is InputEventMouseButton:
+		var pre := mod_prefix(e, false)
 		match (e as InputEventMouseButton).button_index:
-			MOUSE_BUTTON_LEFT: return "Mouse L"
-			MOUSE_BUTTON_RIGHT: return "Mouse R"
-			MOUSE_BUTTON_MIDDLE: return "Mouse M"
-			_: return "Mouse %d" % (e as InputEventMouseButton).button_index
+			MOUSE_BUTTON_LEFT: return pre + "Mouse L"
+			MOUSE_BUTTON_RIGHT: return pre + "Mouse R"
+			MOUSE_BUTTON_MIDDLE: return pre + "Mouse M"
+			_: return pre + "Mouse %d" % (e as InputEventMouseButton).button_index
 	if e is InputEventJoypadButton:
 		var b := (e as InputEventJoypadButton).button_index
 		return PAD_BUTTONS.get(b, "Pad %d" % b)
@@ -129,12 +171,19 @@ static func long(e: InputEvent) -> String:
 
 
 ## Four characters at most, upper case, for the HUD.
+## A MODIFIED CAP BREAKS THE FOUR-CHARACTER RULE and is allowed to: "SHFT+LMB" is
+## eight, and there is no honest four-character form of it — "LMB" is the light
+## attack's cap and a truncated "SHFT" is a key that is not bound to anything.
+## The two callers can both take it: `_draw_keycap` sizes its plate from the
+## string, and the HUD legend was measured on screen with this cap in it rather
+## than assumed to fit (tools/directors/mvp_loop.gd).
 static func cap_for(e: InputEvent) -> String:
 	if e is InputEventMouseButton:
+		var pre := mod_prefix(e, true)
 		match (e as InputEventMouseButton).button_index:
-			MOUSE_BUTTON_LEFT: return "LMB"
-			MOUSE_BUTTON_RIGHT: return "RMB"
-			MOUSE_BUTTON_MIDDLE: return "MMB"
+			MOUSE_BUTTON_LEFT: return pre + "LMB"
+			MOUSE_BUTTON_RIGHT: return pre + "RMB"
+			MOUSE_BUTTON_MIDDLE: return pre + "MMB"
 		return ""
 	if e is InputEventKey:
 		var k := e as InputEventKey
@@ -143,32 +192,42 @@ static func cap_for(e: InputEvent) -> String:
 		var code := k.physical_keycode if k.physical_keycode != 0 else k.keycode
 		if code == 0:
 			return ""
-		var name := OS.get_keycode_string(code)
-		# Names longer than four characters are truncated below, and truncation is
-		# only acceptable when the stump is still readable. These are the ones
-		# where it is not: "Shift" becomes "Shif", which reads as a typo on a key
-		# cap the dodge now lives on.
-		match name:
-			"Space": return "SPC"
-			"Escape": return "ESC"
-			"Shift": return "SHFT"
-			"Ctrl": return "CTRL"
-			# "Enter" is five characters, so the stump was "ENTE" -- and it shipped,
-			# under the run-end screen's one button, where it read as a string the
-			# game had run out of room for. `ui_accept` is bound to it, which means
-			# every menu in the project could print it.
-			"Enter": return "ENT"
-			"Kp Enter": return "ENT"
-			"Delete": return "DEL"
-			"Backspace": return "BKSP"
-			"Right": return "→"
-			"Left": return "←"
-			"Up": return "↑"
-			"Down": return "↓"
-		return name if name.length() <= 4 else name.substr(0, 4)
+		# A modifier key bound on its own is named, not prefixed — otherwise a bare
+		# Shift caps as "SHFT+SHFT".
+		if code in [KEY_SHIFT, KEY_CTRL, KEY_ALT, KEY_META]:
+			return _key_cap(code)
+		return mod_prefix(e, true) + _key_cap(code)
 	if e is InputEventJoypadButton:
 		var b := (e as InputEventJoypadButton).button_index
 		return PAD_CAPS.get(b, PAD_BUTTONS.get(b, "P%d" % b))
 	if e is InputEventJoypadMotion:
 		return AXIS_CAPS.get((e as InputEventJoypadMotion).axis, "AXIS")
 	return ""
+
+
+## The cap for a keycode with no modifier considered. Split out of `cap_for` when
+## modifiers arrived, so that "SHFT+" has something to prefix — the rules below
+## are unchanged and are the reason it could not just be OS.get_keycode_string().
+static func _key_cap(code: int) -> String:
+	var name := OS.get_keycode_string(code)
+	# Names longer than four characters are truncated below, and truncation is
+	# only acceptable when the stump is still readable. These are the ones
+	# where it is not: "Shift" becomes "Shif", which reads as a typo on a key cap.
+	match name:
+		"Space": return "SPC"
+		"Escape": return "ESC"
+		"Shift": return "SHFT"
+		"Ctrl": return "CTRL"
+		# "Enter" is five characters, so the stump was "ENTE" -- and it shipped,
+		# under the run-end screen's one button, where it read as a string the
+		# game had run out of room for. `ui_accept` is bound to it, which means
+		# every menu in the project could print it.
+		"Enter": return "ENT"
+		"Kp Enter": return "ENT"
+		"Delete": return "DEL"
+		"Backspace": return "BKSP"
+		"Right": return "→"
+		"Left": return "←"
+		"Up": return "↑"
+		"Down": return "↓"
+	return name if name.length() <= 4 else name.substr(0, 4)

@@ -706,7 +706,8 @@ Core is, for the same reason.
 bottles there are** and each element is what is in that one, `&""` for empty.
 There is no separate count to disagree with it. Bottles are a RING: D-pad ↓ steps
 the selection (`Game.cycle_item`, empties included, so the ring's length never
-changes under you) and **X drinks** the selected one (`Game.use_selected_item`).
+changes under you) and **X/Square — R on the keyboard — drinks** the selected one
+(`Game.use_selected_item`).
 A bottle is used, never drawn — the one thing in the cluster that behaves that
 way, which is why the Items screen says so in words.
 

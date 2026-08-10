@@ -229,11 +229,11 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `move_up/down/left/right` | WASD, arrows | left stick | move |
 | `cam_up/down/left/right` | mouse motion (read in code) | right stick | camera |
 | `attack` | **LMB** | **RB / R1** (pad10) | light attack — the chain, or fire what is in the right hand |
-| `heavy` | **F** | **RT / R2** (axis5+) | heavy — one pull, one blow, on the **release**: **tap** = overhead, **hold** = spin, **airborne** = jump attack, **locked** = leap, or fire what is in the right hand |
+| `heavy` | **Shift+LMB** | **RT / R2** (axis5+) | heavy — one pull, one blow, on the **release**: **tap** = overhead, **hold** = spin, **airborne** = jump attack, **locked** = leap, or fire what is in the right hand. **The modifier only works because `attack` is read exactly** — see below |
 | `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held**, and it targets, and it recentres |
-| `context` | **Shift** | **B / Circle** (pad1) | **tap** = dodge — **hold** = run, and then it is not a dodge |
-| `use_item` | **X** | **X / Square** (pad2) | drink the selected bottle — §4.1 |
-| `jump` | **Space** | **Y / Triangle** (pad3) | jump |
+| `context` | **Space** | **B / Circle** (pad1) | **tap** = dodge — **hold** = run, and then it is not a dodge |
+| `use_item` | **R** | **X / Square** (pad2) | drink the selected bottle — §4.1 |
+| `jump` | **F** | **Y / Triangle** (pad3) | jump |
 | `z_target` | **Q**, MMB | **R3** (pad8) | lock-on toggle / camera recentre |
 | `interact` | E | **A / Cross** (pad0) | talk/open, and nothing else |
 | `ui_cancel` | Esc | **B / Circle** (pad1) | close/back — in menus only |
@@ -242,10 +242,48 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `item_next` | 4 | dpad ↓ | step the selected item — §4.1 |
 | `loadout_swap` | 2 | dpad ↑ | primary ↔ alternate — §4.1 |
 | — | — | **LB** (pad9) | **deliberately empty in the world**, held for spells — it pages menu tabs, see below |
-| `first_person` | R | **R3** (pad8) | look out of his own eyes — he roots |
+| `first_person` | **V** | **R3** (pad8) | look out of his own eyes — he roots. No Elden Ring equivalent; V because `use_item` took R |
+| — | **X** | — | **deliberately unbound**, held for a crouch. Elden Ring's crouch key, and the one row of its layout this game has no ability for. CONTRACT §4: it stays unbound until the verb exists |
 | `pause` / `inventory` / `map` | Esc / **I** / **M**, Tab | Start (pad6) / **Select** (pad4) / L3 (pad7) | menu / pouch / map |
 | `ui_tab_prev` / `ui_tab_next` | **Q** / **E** | **LB** / **RB** | page ITEMS ↔ POUCH ↔ MAP — **in menus only**, see below |
 | `dbg_reload` | F5 | — | — |
+
+**A MODIFIED BINDING DOES NOT EXCLUDE THE UNMODIFIED ONE.** `attack` is plain
+LMB and `heavy` is Shift+LMB, and Godot matches a modified press against BOTH —
+it records the modifier mismatch as a separate `exact` flag rather than as a
+failure to match. Probed on 4.7, not remembered:
+
+|  pressed | `attack` loose | `attack` exact | `heavy` |
+|---|---|---|---|
+| LMB | true | **true** | false |
+| Shift+LMB | true | **false** | true |
+
+So every read of `attack` passes `HeroCombat.ATTACK_EXACT` (`hero_combat.gd`,
+`game_camera.gd`). Without it one click throws the light chain *and* the heavy.
+Two consequences worth writing down because neither is obvious:
+
+- **The pad and every director are unaffected**, which is why this can be a
+  blanket rule rather than a keyboard special case. An `InputEventJoypadButton`
+  has no modifier mask to mismatch, so RB reports `exact=true` — and so does a
+  bare `Input.action_press(&"attack")`, the path every harness in
+  `tools/directors/` uses. Both were probed alongside the table above.
+- **Anything else bound with a modifier inherits the problem.** Elden Ring's
+  Ash of War is Shift+RMB; binding it naively would fire `shield` (plain RMB)
+  at the same time, and `shield` would need the same exact read. See the note
+  at the end of `project.godot`'s `[input]` block.
+
+`Settings` serializes the modifier (`MOD_SHIFT` &c., `BIND_SCHEMA` 13). Before
+it did, a player rebinding the heavy's *gamepad* half wrote the surviving mouse
+event back as a bare LMB, and their next boot collapsed the heavy onto the light
+attack — silently, out of the config file. `Glyph.long` / `Glyph.cap_for` print
+the modifier for the same reason: without it the options screen and the HUD
+legend both show "Mouse L" for two different verbs.
+
+`tools/directors/keyboard_layout.gd` is the proof, and it is the only director
+that presses **keys and mouse buttons** and lets the InputMap do the lookup —
+the same argument `rb_swing.gd` makes for the pad. Its discriminator is timing:
+the light swing lands on the PRESS and the heavy on the RELEASE, so a Shift+LMB
+that is still not swinging two physics frames in is proof the light did not fire.
 
 **The triggers are a pair and that is the layout's spine.** This is BOTW's
 arrangement, and it is right: the left index finger holds a STANCE and the right
@@ -590,7 +628,8 @@ being a pair is worth more than reserving one for an ability nobody has designed
 either: it is left with no action at all, held for spells (§4).
 
 `first_person` was the standing counter-example and it is now closed: it sat
-bound to R, rebindable, read by nothing, with a `Bus.first_person_changed` that
+bound to R (it is **V** now — `use_item` took R with the Elden Ring keyboard
+layout), rebindable, read by nothing, with a `Bus.first_person_changed` that
 had no emitter, for long enough that it had to be written down as a wart. It
 shipped with the mode below, and it took R3 from `z_target` to do it — the left
 trigger is the pad's Z and a second pad route to the same lock was a duplicate.
@@ -692,7 +731,7 @@ request for a new system — it will arrive as one more spell that is "only a ro
 and on that argument it is a row, and the row is the problem.
 
 **Weapons cycle, bottles cycle, and they do not share a ring** — a bottle is
-*used* (X), a weapon is *held*. `Game.cycle_item` steps through empty bottles
+*used* (X/Square on the pad, **R** on the keyboard), a weapon is *held*. `Game.cycle_item` steps through empty bottles
 too: a ring whose length changed every time you drank is a ring you cannot count.
 `Game.selected_item()` / `selected_potion()` name what ↓ landed on; the HUD draws
 one cell for it instead of the four the old C-pad needed. See §8 *Armaments*.
