@@ -630,14 +630,6 @@ func _build_sell_rows() -> void:
 		})
 
 
-## What a free line says where its price would go. `remaining()` is -1 for the
-## unlimited lines every other counter sells, so this is silent unless a counter
-## is handing out finite things for nothing -- which is the Lanternkeeper and
-## only her.
-func _tally(left: int) -> String:
-	return UpgradeLadder.TICK if left == 0 else ""
-
-
 func _build_buy_rows() -> void:
 	for line in _db().lines():
 		var left: int = _db().remaining(line["id"])
@@ -649,13 +641,15 @@ func _build_buy_rows() -> void:
 			"count": left,
 			"price": cost,
 			# The price, when there is one. A counter that charges nothing has no
-			# price column, and the Lanternkeeper's board printed "0 ◇" twelve
-			# times before it had one -- a number repeated down the whole screen
-			# to say a thing the header already says. What her board is actually
-			# keeping is a tally of which of the twelve are IN, so a line that is
-			# free and spent for good says so with the ladder's own tick.
-			"sub": ("%d ◇" % cost) if cost > 0 else _tally(left),
-			"sub_tint": Pal.MOSS if cost <= 0 else Color.WHITE,
+			# price column: the Lanternkeeper's board printed "0 ◇" twelve times,
+			# a number repeated down the whole screen to say a thing the header
+			# already says. What goes there instead is the LINE's business and
+			# nobody else's -- `tally` is hers, holding the ladder's tick on a
+			# relic that is in. Read off the line rather than derived from
+			# `remaining() == 0`, which is also true of a maxed jewel slot whose
+			# Recut row is free and is the opposite of done.
+			"sub": ("%d ◇" % cost) if cost > 0 else String(line.get("tally", "")),
+			"sub_tint": Color.WHITE if cost > 0 else Pal.MOSS,
 			"color": Pal.BONE,
 			# The blurb says what the thing IS; the detail says what the number
 			# DOES, in the unit the player feels. A forge line without the second

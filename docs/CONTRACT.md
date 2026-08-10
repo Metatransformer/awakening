@@ -1115,6 +1115,13 @@ says what this press does rather than what the counter usually does. Without the
 override the smith's undo row would read `HOLD ENT TO FORGE`, which is the
 opposite of what it is about to do.
 
+A third, `"tally": "✓"`, is what a **free** line puts on its cell where a priced
+one puts its price — `cost == 0` prints no price column, because a board reading
+`0 ◇` twelve times says nothing twelve times. The Lanternkeeper's is the ladder's
+tick on a relic that is in. It is authored per line and never inferred from
+`remaining() == 0`: that is equally true of a maxed jewel slot, whose free Recut
+row means the exact opposite of done.
+
 `ShopDb` and `AlchemyDb` are `Catalogue` subclasses and `TradeScreen` holds
 whichever it was opened with. **A new shopkeeper is a `Catalogue` subclass plus
 a row in `Npc.COUNTERS` — never a second screen and never a new branch.** The

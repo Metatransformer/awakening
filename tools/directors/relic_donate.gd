@@ -228,7 +228,13 @@ func _death(rig) -> void:
 	print("RELIC after death held=%s donated=%s outstanding=%s bag=%d" % [
 		RelicDb.held(FIRST), RelicDb.donated(FIRST),
 		RelicDb.outstanding(FIRST), Run.bag_count()])
-	_ck("D1 death took the bag", Run.bag.is_empty())
+	# Was "death took the bag", and that stopped being the rule when the document
+	# case landed (GDD §3.1): death takes the HOLD and the case comes home, so an
+	# empty bag is now the wrong claim and this beat failed on the merge. What is
+	# still true -- and is the entire reason `case_fits` refuses a relic a case
+	# slot -- is that no relic is ever in the part that survives. A relic you were
+	# carrying is always still down there.
+	_ck("D1 death did not bring the relic home", not Run.bag.has(FIRST))
 	_ck("D2 the relic is NOT in hand", not RelicDb.held(FIRST))
 	_ck("D3 and it was NOT recorded either", not RelicDb.donated(FIRST))
 	# The whole rule, as one answer: nothing was written, so the floor puts it

@@ -246,6 +246,12 @@ const RELICS: Array[Dictionary] = [
 ## for the counter's "not recovered yet" line. Four anchors and the endless
 ## mode's one chest -- there is no fifth, because a relic that could appear
 ## anywhere is a relic that rolls.
+## The mark a recorded relic wears on the board. The same glyph `UpgradeLadder`
+## puts on a climbed rung, and written out here rather than imported from it: a
+## catalogue is data and the ladder is a Control, and a table of twelve objects
+## reaching up into the UI layer for a tick would be the wrong arrow.
+const RECORDED := "✓"
+
 const SOURCE_DEEP_CHEST := &"deep_chest"
 const SOURCE_VAULT := &"vault"
 const SOURCE_BOSS := &"boss"
@@ -549,6 +555,13 @@ static func lines() -> Array[Dictionary]:
 			# Zero gold, and the column says so. She does not buy and she does
 			# not sell (GDD §6): the price of a donation is the object.
 			"cost": 0,
+			# Where a priced counter puts the price, hers puts the tally. Twelve
+			# cells reading "0 ◇" said nothing twelve times; a tick on the ones
+			# that are in makes the board the checklist this list has always
+			# claimed to be. Authored here rather than inferred by the screen
+			# from `remaining() == 0`, which is equally true of a maxed jewel
+			# slot whose free Recut row means the opposite of done.
+			"tally": RECORDED if donated(id) else "",
 			# **No `parts`.** The first cut carried `{id: 1}` here, on the reasoning
 			# that the price IS the object and the concrete `Catalogue.crafts()`
 			# would then make the row a hold with nothing overridden. It read wrong
