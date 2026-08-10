@@ -518,15 +518,34 @@ func _mount_loadout() -> void:
 	# the block clips, and hanging it off the hand makes it swing like a paddle.
 	# Its origin is the CENTRE of the disc, so it needs pushing off the arm.
 	#
-	# The two POSITION numbers are read in the idle, not the block, because that
-	# is the pose the shield spends the game in — the forearm bone points down
-	# the arm there, so x is DOWN and y is his right (the sweep prints the
-	# mapping: shield_lookdev.gd --sweep=pos).
-	#   x=0.04 (was 0.10) lifts it 6 cm back up the forearm. At 0.10 it hung at
-	#         the knee and swung across his shin.
-	#   y=-0.03 (was 0.02) pushes it 5 cm off his left side. It was seated
-	#         INSIDE the hip: from behind, the whole disc was buried in the body
-	#         with a finger's width of rim showing past the leg.
+	# The POSITION is not a silhouette judgement any more. It was one for a
+	# while — x and y were nudged until the disc looked well placed against the
+	# body from three metres — and what that produced was a shield the arm was
+	# INSIDE: the boards passed through the sleeve, and of the two strap bands on
+	# the inner face only one had any arm under it. Both are 2 cm relationships
+	# that no body-scale frame can show, so they were measured instead, in the
+	# shield's OWN frame (tools/directors/shield_arm_fit.gd, which prints them):
+	#
+	#   the two bands sit at shield x=-0.11 and x=+0.09, 20 cm apart, and the
+	#   forearm is 21 cm elbow-to-wrist. That is not a coincidence — the model is
+	#   built for the arm to lie ACROSS the width with the elbow at one band and
+	#   the hand at the other — so there is exactly one seat across the width and
+	#   it is the one that centres the arm between them.
+	#
+	#   the boards are dished. Their inner surface runs +0.028 at the boss out to
+	#   -0.021 at the rim and the bands stand proud of it to -0.049, so the
+	#   tunnel the arm goes through is about z -0.04 .. +0.02. The seat shipped
+	#   with the arm at z=0.000 — in the shell, not under it.
+	#
+	# In the bone's frame (x is DOWN the arm, y is his RIGHT, z is BEHIND him —
+	# shield_lookdev.gd --sweep=pos prints that mapping) the two corrections are:
+	#   y=0.124 (was -0.03) slides it 15 cm along the arm's own direction, which
+	#         is inboard in the poses the shield is held in. This is the "only
+	#         one strap fits" fix, and it is nearly all of the change.
+	#   z=-0.030 (was 0.0) lifts the boards off the sleeve — 3 cm out along the
+	#         shield's face normal, which is forward of him while he guards.
+	#   x=0.04 is unchanged: where the arm crosses the shield ALONG its length is
+	#         what decides how low the point hangs, and that was already right.
 	#
 	# TWO axes were wrong, which is why the first fix only half worked.
 	#   y=180 decides which face meets the blow. At 0 the hero presents the
@@ -537,7 +556,7 @@ func _mount_loadout() -> void:
 	#         that hangs the point at the hero's knee, where it belongs.
 	# tools/directors/shield_lookdev.gd renders the roll candidates side by side.
 	shield = _mount(shield_id, &"mixamorig_LeftForeArm",
-		Vector3(0.04, -0.03, 0.0), Vector3(0.0, 180.0, -90.0))
+		Vector3(0.04, 0.063, -0.018), Vector3(0.0, 180.0, -90.0))
 
 	# The hookshot and the bow each get TWO mounts: one in the hand for when
 	# they are equipped, one stowed on the body for when they are not. Carrying
