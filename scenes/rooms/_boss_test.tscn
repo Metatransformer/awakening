@@ -1,0 +1,222 @@
+[gd_scene load_steps=10 format=3]
+
+; The Cistern Warden's fixture. Owned by tools/directors/boss_cistern.gd.
+;
+; Underscore-prefixed like _gate_test.tscn and _lookdev.tscn -- it is a harness,
+; not a room the game ships. `Dungeon` will place a BossArena and a BossDoor in
+; the deepest generated room at M4; this is the same two props in a hand-built
+; chamber so the FIGHT can be proved before the floor exists to hold it.
+;
+; The shape is the one docs/GDD.md §5.1 describes and nothing more:
+;
+;   Chamber     26 x 26 m, ceiling 10. `BossDb`'s arena radius for the Warden is
+;               11.0, so the seal ring comes up two metres inside the masonry --
+;               far enough that the fence reads as its own thing rather than as
+;               the wall, and the Warden's 6.2 m slam still has floor to spare
+;               on every side of it.
+;   Corridor    the way IN, south. The hero starts out here on purpose: the
+;               arena seals behind him and the director has to photograph the
+;               before as well as the after.
+;   BossDoor    the far wall, north, where the stair would otherwise be. GDD
+;               §5.1 -- the way down is behind the boss, and the longest walk on
+;               the floor ends at the thing holding it.
+;
+; No pillars, and that is data rather than laziness: `BossDb` sets the Warden's
+; `arena.cover` to false because a pillar here would teach the player to solve
+; beat two by standing behind something, and beat two's answer is to walk INTO
+; it. `BossArena._build_cover` reads the row; floors 2 and 4 get their posts for
+; free from the same loop.
+
+[ext_resource type="PackedScene" path="res://scenes/kit/dungeon_env.tscn" id="env"]
+[ext_resource type="PackedScene" path="res://scenes/kit/floor_slab.tscn" id="slab"]
+[ext_resource type="PackedScene" path="res://scenes/kit/ceiling_slab.tscn" id="ceil"]
+[ext_resource type="PackedScene" path="res://scenes/kit/wall_segment.tscn" id="wall"]
+[ext_resource type="PackedScene" path="res://scenes/kit/doorway.tscn" id="doorway"]
+[ext_resource type="PackedScene" path="res://scenes/kit/torch.tscn" id="torch"]
+[ext_resource type="PackedScene" path="res://scenes/actors/hero/hero.tscn" id="hero"]
+[ext_resource type="PackedScene" path="res://scenes/camera/game_camera.tscn" id="camera"]
+[ext_resource type="Script" path="res://scripts/world/boss_arena.gd" id="arena"]
+[ext_resource type="Script" path="res://scripts/world/boss_door.gd" id="bossdoor"]
+
+[node name="BossTest" type="Node3D"]
+
+[node name="Env" parent="." instance=ExtResource("env")]
+
+[node name="Chamber" type="Node3D" parent="."]
+
+[node name="Floor" parent="Chamber" instance=ExtResource("slab")]
+size = Vector2(26, 26)
+thickness = 0.6
+
+[node name="Ceiling" parent="Chamber" instance=ExtResource("ceil")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 0)
+size = Vector2(26, 26)
+
+[node name="WallWest" parent="Chamber" instance=ExtResource("wall")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -13, 0, 0)
+length = 26.0
+height = 10.0
+rng_seed = 71
+
+[node name="WallEast" parent="Chamber" instance=ExtResource("wall")]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 13, 0, 0)
+length = 26.0
+height = 10.0
+rng_seed = 72
+
+[node name="WallNorthW" parent="Chamber" instance=ExtResource("wall")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.75, 0, -13)
+length = 10.5
+height = 10.0
+rng_seed = 73
+
+[node name="WallNorthE" parent="Chamber" instance=ExtResource("wall")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.75, 0, -13)
+length = 10.5
+height = 10.0
+rng_seed = 74
+
+[node name="WallSouthW" parent="Chamber" instance=ExtResource("wall")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -7.75, 0, 13)
+length = 10.5
+height = 10.0
+rng_seed = 75
+
+[node name="WallSouthE" parent="Chamber" instance=ExtResource("wall")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 7.75, 0, 13)
+length = 10.5
+height = 10.0
+rng_seed = 76
+
+[node name="DoorwayNorth" parent="Chamber" instance=ExtResource("doorway")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -13)
+span = 5.0
+height = 5.0
+frame_w = 0.6
+frame_depth = 0.46
+rng_seed = 77
+
+[node name="DoorwaySouth" parent="Chamber" instance=ExtResource("doorway")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 13)
+span = 5.0
+height = 5.0
+frame_w = 0.6
+frame_depth = 0.46
+rng_seed = 78
+
+[node name="Corridor" type="Node3D" parent="."]
+
+[node name="Floor" parent="Corridor" instance=ExtResource("slab")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 19)
+size = Vector2(5, 12)
+thickness = 0.6
+
+[node name="Ceiling" parent="Corridor" instance=ExtResource("ceil")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 19)
+size = Vector2(5, 12)
+
+[node name="WallWest" parent="Corridor" instance=ExtResource("wall")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -2.5, 0, 19)
+length = 12.0
+height = 5.0
+rng_seed = 81
+
+[node name="WallEast" parent="Corridor" instance=ExtResource("wall")]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 2.5, 0, 19)
+length = 12.0
+height = 5.0
+rng_seed = 82
+
+[node name="WallEnd" parent="Corridor" instance=ExtResource("wall")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 25)
+length = 5.0
+height = 5.0
+rng_seed = 83
+
+[node name="Torches" type="Node3D" parent="."]
+
+[node name="WestA" parent="Torches" instance=ExtResource("torch")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -13, 2.35, -6)
+rng_seed = 91
+light_range = 14.0
+light_energy = 9.0
+
+[node name="WestB" parent="Torches" instance=ExtResource("torch")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -13, 2.35, 6)
+rng_seed = 92
+light_range = 14.0
+light_energy = 9.0
+
+[node name="EastA" parent="Torches" instance=ExtResource("torch")]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 13, 2.35, -6)
+rng_seed = 93
+light_range = 14.0
+light_energy = 9.0
+
+[node name="EastB" parent="Torches" instance=ExtResource("torch")]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 13, 2.35, 6)
+rng_seed = 94
+light_range = 14.0
+light_energy = 9.0
+
+[node name="NorthW" parent="Torches" instance=ExtResource("torch")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.2, 2.35, -13)
+rng_seed = 95
+light_range = 12.0
+light_energy = 8.0
+
+[node name="NorthE" parent="Torches" instance=ExtResource("torch")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.2, 2.35, -13)
+rng_seed = 96
+light_range = 12.0
+light_energy = 8.0
+
+[node name="SouthW" parent="Torches" instance=ExtResource("torch")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -4.2, 2.35, 13)
+rng_seed = 97
+light_range = 12.0
+light_energy = 8.0
+
+[node name="SouthE" parent="Torches" instance=ExtResource("torch")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 4.2, 2.35, 13)
+rng_seed = 98
+light_range = 12.0
+light_energy = 8.0
+
+[node name="CorridorW" parent="Torches" instance=ExtResource("torch")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -2.5, 2.35, 18)
+rng_seed = 99
+light_range = 9.0
+light_energy = 7.0
+
+[node name="CorridorE" parent="Torches" instance=ExtResource("torch")]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 2.5, 2.35, 22)
+rng_seed = 100
+light_range = 9.0
+light_energy = 7.0
+
+; The arena is the CHAMBER's middle, not the boss's. `BossDb` authors a radius
+; and the seal, the trigger and the scatter for zone discs are all measured from
+; here, so an arena whose origin sat on the boss would drift with it.
+[node name="Arena" type="Area3D" parent="."]
+script = ExtResource("arena")
+boss_id = &"cistern_warden"
+door_path = NodePath("../BossDoor")
+boss_offset = Vector3(0, 0, -5)
+
+; Set 50 mm back into the reveal, the same as _gate_test's doors, so the
+; doorway's surround frames the leaves instead of the leaves standing proud of
+; it. The opening matches the hole the wall segments leave.
+[node name="BossDoor" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -13.05)
+script = ExtResource("bossdoor")
+boss_id = &"cistern_warden"
+label = "The Long Descent"
+opening_w = 5.0
+opening_h = 5.0
+
+[node name="Hero" parent="." instance=ExtResource("hero")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 18)
+
+[node name="GameCamera" parent="." instance=ExtResource("camera")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 22)

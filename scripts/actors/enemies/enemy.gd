@@ -64,6 +64,44 @@ const DEFS := {
 		"health": 20, "damage": 5, "speed": 2.8, "height": 1.90,
 		"detect": 15.0, "reach": 1.9, "windup": 0.48, "recover": 0.60, "cooldown": 0.8,
 	},
+	# --- The Chord Gate's two bodies ----------------------------------------
+	# `FloorDb.FLOORS[4]` has named these since it was written and neither had a
+	# row, which is not a gap you can see: `DEFS.get(kind, DEFS[&"skeleton"])`
+	# below hands back SKELETON'S NUMBERS under the requested MODEL, so floor 4
+	# was spawning 6-quarter, 2-damage, 1.70 m skeletons wearing troll and iron
+	# knight meshes. Nothing logs that. `BossDb.validate()` refuses a summon of a
+	# kind with no row for exactly this reason.
+	#
+	# THE ARITHMETIC, because a health number with no working shown is a number
+	# nobody can safely change. A light swing is `2 + K.EDGE_DAMAGE[rung]`
+	# (hero_combat.gd), so 2 q at blade rung 0 and 5 q at rung 3. These are
+	# FLOOR-1 base numbers like every row above; floor 4 puts `Prog.health_mult(4)`
+	# = 1.75 on the health and `Prog.damage_bonus(4)` = +1 on the damage:
+	#
+	#   troll        22 -> 39 q on floor 4.  rung 0 -> 20 swings.  rung 3 -> 8.
+	#   knight_iron  19 -> 33 q on floor 4.  rung 0 -> 17 swings.  rung 3 -> 7.
+	#
+	# Seven or eight swings for the heaviest ordinary body, against six for a
+	# floor-3 wraith (30 q at rung 3) and twenty-six for the Riven Knight itself
+	# (`BossDb`, 128 q): the roster steps, the boss is still four times a monster.
+	# The rung-0 column is meant to look awful. `docs/SCOPE.md` and BossDb both
+	# say arriving at the Chord Gate with an unforged blade should be a wall, and
+	# a wall is what twenty swings a body is.
+	&"troll": {
+		# The slow one. Longest reach and the longest wind-up in the roster --
+		# it hits hardest of anything that is not a boss, and it tells you for
+		# three quarters of a second first. That pairing is the whole design:
+		# damage is only unfair when you could not read it coming.
+		"health": 22, "damage": 6, "speed": 2.0, "height": 2.60,
+		"detect": 12.0, "reach": 2.4, "windup": 0.72, "recover": 0.85, "cooldown": 1.15,
+	},
+	&"knight_iron": {
+		# The fast one, and deliberately the SHORTER of the two: floor 4's threat
+		# is not "everything got bigger", it is a heavy you can see over and a
+		# soldier you cannot outpace. Quickest wind-up outside the goblins.
+		"health": 19, "damage": 5, "speed": 2.7, "height": 2.10,
+		"detect": 13.0, "reach": 1.9, "windup": 0.46, "recover": 0.58, "cooldown": 0.80,
+	},
 }
 
 @export var kind: StringName = &"skeleton"
@@ -133,7 +171,7 @@ static func spawn(parent: Node3D, p_kind: StringName, at: Vector3, seed_val: int
 
 
 func _ready() -> void:
-	_def = DEFS.get(kind, DEFS[&"skeleton"])
+	_def = _resolve_def()
 	_rng.seed = drop_seed if drop_seed != 0 else randi()
 
 	add_to_group(&"enemy")
@@ -186,6 +224,36 @@ func _height() -> float:
 
 # --- Construction -----------------------------------------------------------
 
+## Where this body's stats come from. An ordinary monster reads `DEFS`; `Boss`
+## reads `BossDb` instead, because a boss's health and reach are authored for one
+## floor and are not a row in this table (`BossDb`'s executor contract, §2).
+##
+## An INSTANCE method and not a static, and the difference is not style: a bare
+## static call written inside this class binds to `Enemy`'s copy at parse time
+## and the subclass's override never runs, silently (`CLAUDE.md` §3). Virtual
+## dispatch is only a property of instance methods.
+##
+## The `DEFS.get(kind, ...)` fallback is deliberately a FALLBACK and not an
+## error: a director or a test scene may drop an unnamed body into a room and it
+## should still be a monster. It is also the trap that hid the missing `troll`
+## and `knight_iron` rows for as long as it did -- see the comment on those rows.
+func _resolve_def() -> Dictionary:
+	return DEFS.get(kind, DEFS[&"skeleton"])
+
+
+## Last chance to touch the model's SURFACES before `HitFlash` binds them. A
+## no-op here; `Boss` paints its authored tint in it.
+##
+## The ordering is the whole reason this hook exists rather than the caller doing
+## it afterwards. `bind()` records each surface's colour as the baseline that
+## `restore()` returns to, so a tint applied after binding is erased by the first
+## landed blow -- the body flashes white and then reverts to a stock grey mesh
+## for the rest of the fight, and the frame that shows it is the frame after the
+## player's first hit.
+func _style_model() -> void:
+	pass
+
+
 func _build_body() -> void:
 	var col := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
@@ -231,6 +299,8 @@ func _build_model() -> void:
 	# would undo the 180° the GLBs need and turn every struck monster around to
 	# face away mid-flinch (docs/CONTRACT.md §2.5).
 	_model_rest = _model.rotation
+	# Before `bind`, never after. See `_style_model`.
+	_style_model()
 	_flash.bind(self, _model)
 
 	_anim = _model.find_child("AnimationPlayer", true, false) as AnimationPlayer
@@ -852,9 +922,14 @@ func _kill_recoil() -> void:
 func _on_died() -> void:
 	state = State.DEAD
 	_stop()
-	if _struck:
-		_hitbox.deactivate()
-	_hitbox.queue_free()
+	# Guarded, because a body is allowed not to have one. `Boss` builds no contact
+	# hitbox at all -- every quarter-heart it deals comes from an authored beat's
+	# shape -- and an unguarded `queue_free()` here killed it on the frame it died,
+	# taking the drop and `Bus.boss_defeated` down with it.
+	if _hitbox != null:
+		if _struck:
+			_hitbox.deactivate()
+		_hitbox.queue_free()
 	collision_layer = 0
 	remove_from_group(&"targetable")
 	_play(&"death")
