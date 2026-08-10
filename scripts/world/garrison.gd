@@ -405,13 +405,18 @@ func _build_yard() -> void:
 ## statue has to be in the tree first for the Lanternkeeper's spot to have
 ## anything behind it.
 ##
-## The statue is set 3.9 m along the Lanternkeeper's own back. Not due north of
-## him, which was the first cut and which put a 4 m column of stone directly
-## between the arrival camera and the gate. Turning him a few degrees west of
-## south swings the monument out to x = +2.8, which clears the walk to the arch
-## and, as a bonus, is the more interesting composition: you arrive looking at a
-## figure with a bigger figure over his shoulder, rather than at two things
+## The statue is set 3.9 m off the plaza's middle, north-east. **Not due north**,
+## which was the first cut and which put a 4 m column of stone directly between
+## the arrival camera and the gate. Swinging it out to x = +2.8 clears the walk
+## to the arch and is the more interesting composition: you arrive looking at a
+## figure with a bigger figure over its shoulder, rather than at two things
 ## stacked.
+##
+## `STATUE_BEARING` is its OWN number now. It used to be read off `KEEPER_YAW` --
+## the monument stood at the Lanternkeeper's back, which was true and tidy right
+## up until he left the middle of the plaza to stand in front of the hero. A
+## statue that follows a person around is a statue nobody can place; this is a
+## monument on a paved circle and the circle is what it belongs to.
 func _build_plaza() -> void:
 	plaza = Plaza.new()
 	plaza.radius = PLAZA_R
@@ -419,11 +424,12 @@ func _build_plaza() -> void:
 	add_child(plaza)
 
 	statue = Statue.new()
-	var behind := -Vector3(sin(deg_to_rad(KEEPER_YAW)), 0.0, cos(deg_to_rad(KEEPER_YAW)))
-	statue.position = PLAZA_AT + behind * 3.9
-	# Facing the same way she is, so the two silhouettes agree. A statue looking
-	# somewhere else turns into a second point of interest arguing with the first.
-	statue.rotation.y = deg_to_rad(KEEPER_YAW)
+	var out := Vector3(sin(deg_to_rad(STATUE_BEARING)), 0.0, -cos(deg_to_rad(STATUE_BEARING)))
+	statue.position = PLAZA_AT + out * 3.9
+	# Looking back across the plaza at the people arriving, which is what it was
+	# doing before and where the value comes from -- it is the yaw `KEEPER_YAW`
+	# used to hand it, written down now that the keeper no longer stands here.
+	statue.rotation.y = deg_to_rad(STATUE_YAW)
 	add_child(statue)
 
 
@@ -433,9 +439,9 @@ func _build_plaza() -> void:
 ## rather than taste.** Everything else in the yard is spoken for: the gate and
 ## the shaft head are due north, the vendor and the smith flank them, the
 ## alchemist stands on the west side inside the arrival frame that `_build_people`
-## says must not be broken, and the Lanternkeeper has the south-east with her
-## facing tuned so that turning away from her shows eight relic props. The
-## south-west is the one quadrant no existing tuning reads.
+## says must not be broken, and the Lanternkeeper has the centre line and the
+## paving in front of the arrival. The south-west is the one quadrant no existing
+## tuning reads.
 ##
 ## It also has to miss the relic ring, which is the constraint that actually
 ## fixes the size. `_build_relic_props` puts twelve lamps on an ellipse of
@@ -460,10 +466,54 @@ func _build_house() -> void:
 	add_child(house)
 
 
-## Which way the Lanternkeeper faces, in degrees, and therefore which way the
-## statue behind her does. A shade west of due south: see `_build_plaza` for why
-## it is not zero, and `_build_people` for what it does to the frame.
-const KEEPER_YAW := -45.0
+## Where the Lanternkeeper stands, and which way he looks.
+##
+## **Conversation distance in front of where the hero lands, half a pace off his
+## shoulder.** The hero arrives at (0, 0, +4) and the arrival camera sits behind
+## him at (0, 1.7, +8) looking up -Z, so this is the frame the player opens their
+## eyes into and every number here is measured in it.
+##
+## The DISTANCE was walked in twice. 6 m -- the plaza's middle, where he used to
+## stand behind a stall -- reads as a man who happens to be over there. 2.4 m
+## still reads as across-the-room. 1.8 m is close enough that his face is legible
+## before the player has touched the stick, and `Npc`'s trigger is 2.3 m, so TALK
+## is up on the very first frame. Closer and the hero spawns inside his capsule.
+##
+## The 0.7 m OFF THE AXIS is the part that is not obvious and is not optional.
+## Dead centre is the strongest place in the frame and it is also directly behind
+## the player's own character: at x = 0 the hero's shoulders cover the elder's
+## chest from the arrival camera, so the first thing you ever see of the person
+## speaking to you is a head floating over your own. Stepped to the hero's left he
+## clears the silhouette completely and is still 6.9 degrees off the camera's
+## axis, which `tools/directors/voices.gd` C1 measures against a 24 degree bound.
+## LEFT rather than right because the statue and its plinth fill the right half of
+## this shot; put him that side and he is a figure in front of a bigger figure.
+##
+## He is the person who says "I've been expecting you" over that frame
+## (`_open_the_game`), and a man saying it from six metres off to one side, behind
+## a stall, is a man the player has to be *told* is talking to them.
+##
+## The yaw aims his +Z at the spawn point rather than straight down -Z: 21
+## degrees is `atan2(0.7, 1.8)`, the angle from where he stands to where the hero
+## lands, so the offset above buys its framing without costing the thing it was
+## for. `Npc`'s +Z is the side the customer stands on -- every director that
+## photographs a keeper derives its camera from it (`garrison_look.gd`) -- and
+## the model's own art-space flip is handled inside `Npc`, not here. CLAUDE.md
+## §4: measured off a render, not reasoned out of a rest pose.
+##
+## He is ON the walk to the gate, and that is the price of the centre line, paid
+## deliberately. Sidestepping a man who greets you by name is a fair cost; the
+## alternative is the thing that was there before, where the first person in the
+## game could be walked straight past without ever being looked at.
+const KEEPER_AT := Vector3(-0.7, 0.0, 2.2)
+const KEEPER_YAW := 21.0
+
+## Where the monument stands on the plaza, and which way it looks. Both used to
+## be `KEEPER_YAW`'s job; see `_build_plaza` for why they are their own numbers
+## now, and for why the bearing is not due north. The two values are what that
+## arrangement produced, kept exactly: x = +2.8, looking back at the arrival.
+const STATUE_BEARING := 45.0
+const STATUE_YAW := -45.0
 
 
 ## Five counters on one circle, and one carved figure in the middle of it.
@@ -490,14 +540,16 @@ const KEEPER_YAW := -45.0
 ##     offer only means anything once the plate has cost you something), which
 ##     was the entire argument for her old spot against the west wall and
 ##     survives the move intact.
-##   * **The centre: the Lanternkeeper**, which is the one placement that is
-##     better than what it replaced rather than merely equivalent, and which now
-##     answers two things at once. His reward is the only one in the garrison
-##     that is not on the screen you just closed -- it is a lamp fifteen metres
-##     away -- so where the player stands when they stop talking to him matters,
-##     and from the middle of the plaza turning away faces the yard in EVERY
-##     direction. He is also the village elder, so he has to be the figure the
-##     opening's third line comes from; see below.
+##   * **Off the ring entirely: the Lanternkeeper**, who has no kiosk and stands
+##     on the hero's own axis two and a half metres in front of where he lands
+##     (`KEEPER_AT`). He was on the plaza's middle with a stall in front of him,
+##     which answered the reward question -- his lamp is fifteen metres away, so
+##     where you stand when you stop talking to him matters, and from the paving
+##     turning away faces the yard in every direction -- and that is still true
+##     one plaza-radius nearer. What it could not answer is that he is also the
+##     village elder and speaks the opening's third line to a player who has just
+##     opened their eyes. A greeting has to come from somebody visibly greeting
+##     you, and four counters is already the number of counters this yard has.
 func _build_people() -> void:
 	# North-east and north-west of the plaza, flanking the approach to the gate.
 	smith = _ring(Npc.Role.SMITH, 55.0, Color(0.98, 0.56, 0.24))
@@ -524,24 +576,30 @@ func _build_people() -> void:
 	alchemist = _ring(Npc.Role.ALCHEMIST, -118.0, Color(0.96, 0.80, 0.52))
 	jeweller = _ring(Npc.Role.JEWELLER, 118.0, Color(0.80, 0.62, 0.94))
 
-	# The Lanternkeeper, on the middle of the plaza with the First Lantern carved
-	# in stone at his back. See the note on this function, and `_build_plaza` for
-	# why he is turned a few degrees west of due south.
+	# The Lanternkeeper, on the centre line, facing the arrival. See `KEEPER_AT`.
 	#
-	# `_counter` still applies: `PLAZA_AT` is where his COUNTER goes and he steps
-	# back behind it, which puts his body between the stall and the plinth --
-	# exactly where a keeper working under a monument would stand.
-	keeper = _counter(Npc.Role.KEEPER, PLAZA_AT, KEEPER_YAW, Pal.GOLD)
+	# **Not `_ring` and not `_counter`**, and that is the whole shape of him: those
+	# two exist to put a keeper behind a stall (`at` is where the COUNTER goes and
+	# the keeper steps back from it), and he no longer has one -- `Npc.LOOKS` is
+	# where that comes off. With no counter there is nothing to step back from, so
+	# he is placed where he stands.
+	keeper = Npc.new()
+	keeper.role = Npc.Role.KEEPER
+	keeper.lamp_color = Pal.GOLD
+	keeper.position = KEEPER_AT
+	keeper.rotation.y = deg_to_rad(KEEPER_YAW)
+	add_child(keeper)
 
 	# **He is also the village elder** -- one person, not two, since 2026-08-10
-	# (`4fccd0a`), and the merge is what makes the centre of the plaza the right
-	# place for him rather than merely an available one. He carries the opening's
-	# third beat: the veil lifts, and "I've been expecting you" has to come from
-	# somebody you can see (`_open_the_game`). The middle of a paved circle six
-	# metres in front of where the hero lands is the most unambiguously *in front
-	# of you* spot the yard has, and `tools/directors/voices.gd` C1 measures it --
-	# he is 0 degrees off the arrival camera's axis here, against a 24 degree
-	# bound that his previous spot fifteen metres east missed by three times over.
+	# (`4fccd0a`), and the merge is what took him off the ring. He carries the
+	# opening's third beat: the veil lifts, and "I've been expecting you" has to
+	# come from somebody you can see (`_open_the_game`). He stood on the middle of
+	# the plaza for that, six metres out with a stall between the two of you, which
+	# `tools/directors/voices.gd` C1 already passed -- 0 degrees off the arrival
+	# camera's axis, against a 24 degree bound his older spot fifteen metres east
+	# missed by three times over. Angle was never the part that was wrong. He is on
+	# the same 0 degrees now, at 2.4 m with nothing in front of him, which is the
+	# difference between being in the frame and being the subject of it.
 	#
 	# The old worry about x = 0 -- that a figure on the centre line is silhouetted
 	# against the gate's cold mouth -- died with the flat arch. The mouth now lies

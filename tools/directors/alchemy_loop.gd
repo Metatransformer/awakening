@@ -357,7 +357,7 @@ func _select(rig) -> void:
 
 
 ## Capture-only, and deliberately so. The pouch and the equipment screen are
-## Label trees rather than PixelFont draws, so nothing here can be asserted that
+## Label trees rather than CanvasText draws, so nothing here can be asserted that
 ## is not already asserted somewhere cheaper -- what they are for is that a
 ## human looks at them. Two claims live only in these two frames: that a
 ## material's detail sends the player to the RIGHT counter, and that a bound

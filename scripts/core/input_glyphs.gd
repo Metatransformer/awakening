@@ -16,7 +16,7 @@ extends RefCounted
 ## Two lengths, because two places have different room:
 ##
 ##   * `long()` — "R-Stick", "D-Up", "LT". The options list, which has a column.
-##   * `cap()` — four characters at most, drawn in PixelFont: "R3", "↑", "LT".
+##   * `cap()` — four characters at most, drawn in CanvasText: "R3", "↑", "LT".
 ##     The HUD's key caps hang under 40 px cells and there is no room to be
 ##     polite about it.
 

@@ -71,6 +71,72 @@ func _ready() -> void:
 	Bus.run_ended.connect(_on_run_ended)
 
 
+# --- The boot is the garrison, and that is not a setting ---------------------
+
+## Called by a scene that is about to build itself and suspects it is the first
+## thing this session has ever shown. Returns true if it is, and if so has
+## already sent the player to the garrison — the caller must build NOTHING.
+##
+## **THE GAME ALWAYS STARTS IN THE GARRISON.** `run/main_scene` says so and has
+## said so three times before, because it has drifted to the dungeon three times
+## (the note above it in `project.godot` is the record). This is the fourth way
+## in and the setting was innocent: a positional scene path on the command line,
+##
+##     godot --path . res://scenes/rooms/dungeon.tscn
+##
+## beats `main_scene` outright. One launcher typed for one look at a floor and
+## the player boots underground — no gate, no descent, no choice, and the first
+## time they ever meet the way down is after their first death. A setting can be
+## fixed. The habit that keeps pointing at a floor cannot, so the rule is code.
+##
+## `get_tree().current_scene` is the entire discriminator, and it separates the
+## three cases exactly:
+##
+##   * **Booted** — `main_scene` or a path on the command line. The engine calls
+##     `add_current_scene`, which assigns `current_scene` BEFORE adding the node,
+##     so a scene asking this during its own `_ready` already finds itself there.
+##     Refused.
+##   * **The harness** — `tools/shoot.gd` attaches with a plain `root.add_child`,
+##     so `current_scene` stays null. Every director that photographs a floor
+##     directly is untouched, which is what keeps this from costing the one way
+##     anybody actually looks at the dungeon.
+##   * **Flow's own `_go`** — also a `change_scene_to_file`, and it does set
+##     `current_scene`. It never reaches here: both callers move the run first,
+##     so `Run.in_dungeon` is true and the question is not asked.
+##
+## An ANCESTOR test and not `==`, because the script asking is usually not the
+## scene root: `dungeon.tscn` is a `DungeonRun` holding the env, the hero, the
+## camera and a `Dungeon` child, and it is that child that carries the generator.
+## Comparing the caller to `current_scene` directly let the very launch this was
+## written against straight through.
+##
+## `--boot-here` opts out, for a human who really does want a floor from a cold
+## start without going through the harness. Same bargain the harness's `--intro`
+## makes: safe by default, and the one caller that wants the other thing says so.
+func refuse_boot(scene: Node) -> bool:
+	var booted := get_tree().current_scene
+	if booted == null or not (booted == scene or booted.is_ancestor_of(scene)):
+		return false
+	if OS.get_cmdline_args().has("--boot-here") \
+			or OS.get_cmdline_user_args().has("--boot-here"):
+		print("Flow: --boot-here, booting into %s" % booted.scene_file_path)
+		return false
+
+	# Loud, because the alternative is a developer watching the garrison appear
+	# after they asked for a floor and having no idea why.
+	push_warning("Flow: refused to boot into %s -- the game starts in the "
+		% booted.scene_file_path
+		+ "garrison. Use tools/shoot.gd to look at a room, or --boot-here.")
+	print("Flow: %s is not a boot scene; going to the garrison."
+		% booted.scene_file_path)
+
+	# Straight there, not `to_garrison()`: that one fades out of a world the
+	# player is looking at, and there is no such world yet -- the scene calling
+	# this has not drawn a frame and is about to return without building one.
+	get_tree().change_scene_to_file.call_deferred(GARRISON)
+	return true
+
+
 # --- Entry points -----------------------------------------------------------
 
 func enter_dungeon(run_seed: int = 0) -> void:

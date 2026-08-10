@@ -134,9 +134,14 @@ static func apply_text_style(lbl: Label, style: Dictionary, color_override = nul
 ## Retired, deliberately, and NOT to be re-added without a reason written here:
 ## Alegreya (the variable serif) — Cinzel is the display voice now, and two
 ## serifs in one screen is drift, not hierarchy — and Pixel Operator Bold, whose
-## `keycap_font()` had no callers at all; the HUD's hard-edged voice is
-## `PixelFont` (scripts/ui/pixel_font.gd), which is drawn rects, not a face.
-## Departure Mono and Jacquard 24 (docs/STYLEGUIDE.md §3) were never wired.
+## `keycap_font()` had no callers at all. Departure Mono and Jacquard 24
+## (docs/STYLEGUIDE.md §3) were never wired.
+##
+## The HUD is on the same two faces. `CanvasText` (scripts/ui/canvas_text.gd)
+## paints `display_font()` onto a CanvasItem for everything drawn rather than
+## typeset — the vitals, the legend, the floor card, the world prompts. Until
+## 2026-08-10 that class was a 5x7 bitmap of its own, which made the HUD the one
+## surface in the build that ignored the shipped pair.
 const BODY_TTF := "res://assets/ui/fonts/AlegreyaSans-Regular.ttf"
 const DISPLAY_TTF := "res://assets/ui/fonts/Cinzel-SemiBold.ttf"
 
@@ -205,8 +210,10 @@ static func ensure_global() -> void:
 static func prewarm() -> void:
 	ensure_global()
 	var sample := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 ·×•.,:'\"-/"
+	# 9..30 are the sizes `CanvasText` asks for at 720p and 1080p. Without them the
+	# HUD's first painted frame after a scene change rasterises under the player.
 	for f in [body_font(), display_font()]:
-		for sz in [12, 14, 16, 18, 19, 24, 32]:
+		for sz in [9, 10, 12, 14, 15, 16, 18, 19, 21, 22, 24, 30, 32]:
 			f.get_string_size(sample, HORIZONTAL_ALIGNMENT_LEFT, -1, sz)
 
 

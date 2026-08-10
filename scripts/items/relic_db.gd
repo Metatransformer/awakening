@@ -96,22 +96,22 @@ extends Catalogue
 ## a failure, because a museum label implies none of those and nobody reads one
 ## twice.
 ##
-## **ASCII only, and a narrower ASCII than you think.** `PixelFont` has no
-## semicolon and no em dash -- anything missing draws as a filled 5x7 block, and
-## that survived several screenshots the last time (see its GLYPH table). Full
-## stops and commas only.
+## **ASCII only.** A character Cinzel lacks — the semicolon is fine, an em dash
+## or a middle dot is the risk — comes back from the system fallback in a
+## different face, mid-word, which is more conspicuous than the filled block the
+## old 5x7 table used to draw. Full stops and commas only.
 ##
 ## Length is bounded by the panel, not by taste: `TradeScreen` wraps
 ## `blurb + detail` upward from the bottom of the panel at ~63 characters a line,
 ## and the twelve rows above it reach down to within five lines of it.
 ##
 ## **TODAY ONLY TWO OF THOSE LINES DRAW, and the entries below are longer than
-## that.** `PixelFont.wrap()` takes a `max_lines` that DEFAULTS TO 2 and
+## that.** `CanvasText.wrap()` takes a `max_lines` that DEFAULTS TO 2 and
 ## `trade_screen.gd` does not pass one, so every entry here is clipped mid-word
 ## on the counter -- `relic_donate.gd`'s `r_21_hold.png` is the frame that caught
 ## it. This comment used to claim four lines fit; it was never true.
 ##
-## `# NEEDS:` one argument at the `PixelFont.wrap` call in
+## `# NEEDS:` one argument at the `CanvasText.wrap` call in
 ## `scripts/ui/shop/trade_screen.gd` (`, 4`). The panel has the room -- the list
 ## ends around 90 px above where the blurb starts -- and the fix belongs there
 ## rather than here, because the smith's and the alchemist's blurbs are clipped

@@ -76,9 +76,9 @@ static func tint_of(id: StringName) -> Color:
 
 static func blurb_of(id: StringName) -> String:
 	if not DEFS.has(id):
-		# No semicolon, and none anywhere a draught's text can reach: PixelFont's
-		# glyph table is ASCII minus a few, `;` is one of the missing, and the
-		# trade screen draws blurbs with it.
+		# Full stops, not semicolons, anywhere a draught's text can reach: three
+		# short sentences read at a glance and a clause chain does not, and the
+		# trade screen draws these at HUD size.
 		return "Empty. The alchemist fills it. The dungeon is what makes you want it full."
 	var d: Dictionary = DEFS[id]
 	return String(d["blurb"])

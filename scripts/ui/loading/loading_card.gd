@@ -21,7 +21,7 @@ extends Control
 ## yet. That is why the type sits high on the card and the bottom two thirds are
 ## left to the glow: the empty space under the name is the effect, not padding.
 ##
-## Drawn with PixelFont and Pal for the reason every other screen in this project
+## Drawn with CanvasText and Pal for the reason every other screen in this project
 ## is (docs/STYLEGUIDE.md bans the engine's fallback font). `Flow` owns its life:
 ## it is created after the veil is black, it is what the new floor fades in from,
 ## and it frees itself when that fade ends.
@@ -104,8 +104,8 @@ func _draw_ink() -> void:
 	if s.x < 1.0 or s.y < 1.0:
 		return
 
-	var t := Pal.px(TITLE_PX / PixelFont.H, s.y)
-	PixelFont.draw_centred(_ink, title, Vector2(s.x * 0.5, s.y * TITLE_Y), t,
+	var t := CanvasText.scale_for(TITLE_PX, s.y)
+	CanvasText.draw_centred(_ink, title, Vector2(s.x * 0.5, s.y * TITLE_Y), t,
 		Pal.BONE)
 
 	# A rule, not a box. The name wants something under it that says "and now the
@@ -116,6 +116,6 @@ func _draw_ink() -> void:
 		Pal.px(1.0, s.y)), Color(Pal.ASH, 0.8))
 
 	if not level_line.is_empty():
-		var lt := Pal.px(LEVEL_PX / PixelFont.H, s.y)
-		PixelFont.draw_centred(_ink, level_line,
+		var lt := CanvasText.scale_for(LEVEL_PX, s.y)
+		CanvasText.draw_centred(_ink, level_line,
 			Vector2(s.x * 0.5, s.y * LEVEL_Y), lt, Pal.MOTH)

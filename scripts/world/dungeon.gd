@@ -190,6 +190,13 @@ func _ready() -> void:
 	# Running the scene straight from the editor or the capture harness has no
 	# Run behind it. Start one rather than generating an unseeded floor.
 	if not Run.in_dungeon:
+		# Unless this floor is the scene the GAME BOOTED INTO, in which case
+		# inventing a run is the bug: nobody chose it, the gate was never pressed,
+		# and the line below is what turns "somebody launched the wrong scene"
+		# into "the player is on floor 1 of a run they never started". Flow sends
+		# them to the garrison; we build nothing at all. See `Flow.refuse_boot`.
+		if Flow.refuse_boot(self):
+			return
 		Run.enter(seed_override)
 	_rng = RandomNumberGenerator.new()
 	# `Run.floor_seed()`, not `Run.seed_used`: the same run seed has to give a

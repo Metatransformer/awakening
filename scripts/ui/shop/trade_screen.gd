@@ -13,7 +13,7 @@ extends Control
 ## shop screen would have been a second place for all of it to drift.
 ##
 ## **It draws cells, not a list, and the cell is the bag's** (`ItemCell`).
-## Until 2026-08-09 this screen was a column of PixelFont rows: the same objects
+## Until 2026-08-09 this screen was a column of canvas-drawn rows: the same objects
 ## the pouch drew as tinted cells arrived at the vendor as lines of text, so a
 ## player looking at their bag and then at what it was worth was reading two
 ## different UIs about one set of things. The cell is the pouch's, which means an

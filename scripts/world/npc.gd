@@ -230,12 +230,19 @@ static var LOOKS := {
 	# here (`COUNTERS`). He is still the person you report to; he now also keeps
 	# the records, which was always what the Society's man did.
 	#
-	# A STALL, and that is the end of dressing him. The hall is not a booth kind
-	# and it does not need to be: the twelve lamps outside are what says this
-	# counter is different, and a bespoke booth would be spending on the wrong
-	# half of GDD §6.2's budget.
+	# **NO BOOTH, and he is the only person in the yard without one.** He had a
+	# stall for a day and it was the wrong furniture for what he is: the other
+	# four sell you something across a counter, and a counter is exactly the right
+	# object for that. He is the man who greets you and takes the record, and a
+	# stall between him and the hero turned the one person who speaks first in the
+	# game into a fifth shopkeeper you happened to be parked in front of.
+	#
+	# The twelve lamps outside are what says this counter is different, and they
+	# say it better with nothing in front of him. `Garrison._build_people` is the
+	# other half: with no counter to step back behind, he is placed where he
+	# STANDS -- on the centre line, facing the arrival.
 	Role.KEEPER: {
-		"model": "lanternkeeper", "idle": &"idle9", "booth": ShopBooth.Kind.STALL,
+		"model": "lanternkeeper", "idle": &"idle9",
 	},
 	# Black and gold, an emerald the size of a thumb at her throat, gold at both
 	# wrists. She is the one person in the garrison wearing her own stock, which
@@ -449,6 +456,14 @@ func _build_person() -> void:
 	# and the workbench's top, so it lights the keeper's face across the counter
 	# without ever being between them and you.
 	var at := Vector3(1.52, 0.0, ShopBooth.KEEPER_BACK + 0.10)
+	# ...unless there is no counter for it to be at the end of. The offsets above
+	# are measured off the stall, so on the one person without one they plant a
+	# 2 m pole a metre in FRONT of him -- which is the failure the note above
+	# describes, except that a keeper with nothing between you and them gets it
+	# from every angle instead of only from three-quarters. Beside him and half a
+	# step back: still the only light on his face, never in front of it.
+	if not look.has("booth"):
+		at = Vector3(1.05, 0.0, -0.25)
 	const LAMP_Y := 1.96
 
 	var post := MeshInstance3D.new()

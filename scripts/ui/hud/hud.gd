@@ -25,8 +25,9 @@ extends CanvasLayer
 ##   - hidden unless a node in group `player` is in the tree, so lookdev and tool
 ##     scenes stay clean.
 ##
-## Every colour comes from Pal and every glyph from PixelFont. Nothing here uses
-## the engine's fallback font -- see the anti-slop list.
+## Every colour comes from Pal and every line of text from CanvasText, which sets
+## it in the display face the menus use. Nothing here uses the engine's fallback
+## font -- see the anti-slop list.
 
 const DRAW_LAYER := 50  ## under the pause menu, which sits at 100
 
@@ -736,8 +737,9 @@ const LEGEND := [
 	# your gear and never uses it. Three rows would make them look unrelated and
 	# would be the longest thing in the legend, for the input that needs the
 	# least explaining once you have seen the carets in the corner.
-	# ← → ↓ ↑ and not ◄ ► ▼ ▲: PixelFont has the four thin arrows and none of the
-	# four solid triangles, so the pretty ones came out as MISSING blocks.
+	# ← → ↓ ↑ and not ◄ ► ▼ ▲. Neither set is in Cinzel; both arrive from the
+	# system fallback, and the thin arrows are the pair that sit on a cap-height
+	# line without looming over the words either side of them.
 	[LEGEND_LITERAL, "D-PAD  \u2190\u2192 WEAPON  \u2193 ITEM  \u2191 SET"],
 	[&"inventory", "POUCH"],
 ]
@@ -753,14 +755,14 @@ const LEGEND_STICKS := {
 func _draw_controls(s: Vector2) -> void:
 	if Run == null or Run.in_dungeon:
 		return
-	var scale := Pal.px(10.0 / PixelFont.H, s.y)
+	var scale := CanvasText.scale_for(10.0, s.y)
 	var lines := _legend()
 	# Drawn UPWARDS from the baseline, so adding a row pushes the legend into the
 	# empty floor above it rather than off the bottom of the screen.
-	var step := PixelFont.height(scale) + Pal.px(5.0, s.y)
+	var step := CanvasText.height(scale) + Pal.px(5.0, s.y)
 	var top := Pal.KEYS_BASELINE * s.y - step * (lines.size() - 1)
 	for i in lines.size():
-		PixelFont.draw_centred(_canvas, lines[i],
+		CanvasText.draw_centred(_canvas, lines[i],
 			Vector2(s.x * 0.5, top + step * i), scale, Pal.ASH)
 
 
@@ -825,20 +827,19 @@ func _draw_floor(s: Vector2) -> void:
 		return
 
 	# 0 while announcing, 1 once settled. The fade is on the COLOUR, not on a
-	# size: PixelFont lands on whole pixels at an integer scale, and a card that
-	# animated its scale would visibly snap between two of them.
+	# size: a card that animated its scale would re-rasterise the face every frame.
 	var settle := 1.0
 	if _floor_t >= 0.0:
 		settle = 0.0 if _floor_t < FLOOR_HOLD \
 			else clampf((_floor_t - FLOOR_HOLD) / FLOOR_SETTLE, 0.0, 1.0)
 
 	var at := Pal.FLOOR_ORIGIN * s
-	var nt := Pal.px(10.0 / PixelFont.H, s.y)
-	var lt := Pal.px(16.0 / PixelFont.H, s.y)
+	var nt := CanvasText.scale_for(10.0, s.y)
+	var lt := CanvasText.scale_for(16.0, s.y)
 	var name_line := Prog.NAME
 	var level_line := Prog.label(Run.level)
 	var gap := Pal.px(5.0, s.y)
-	var level_y := at.y + PixelFont.height(nt) + gap
+	var level_y := at.y + CanvasText.height(nt) + gap
 
 	# The plate, and it is not decoration. This card is the only text on the HUD
 	# with a LIT WALL behind it -- health and the bag sit over floor and shadow,
@@ -851,19 +852,19 @@ func _draw_floor(s: Vector2) -> void:
 	# of shade under two lines, which is what makes the dim colours legible
 	# without making the card a panel.
 	var pad := Pal.px(6.0, s.y)
-	var w: float = maxf(PixelFont.width(name_line, nt),
-		PixelFont.width(level_line, lt))
+	var w: float = maxf(CanvasText.width(name_line, nt),
+		CanvasText.width(level_line, lt))
 	_canvas.draw_rect(Rect2(at.x - pad, at.y - pad, w + pad * 2.0,
-		level_y + PixelFont.height(lt) + pad * 2.0 - at.y),
+		level_y + CanvasText.height(lt) + pad * 2.0 - at.y),
 		Color(Pal.VOID, lerpf(0.62, 0.34, settle)))
 
-	PixelFont.draw_text(_canvas, name_line, at, nt, Pal.BONE.lerp(Pal.MOTH, settle))
+	CanvasText.draw_text(_canvas, name_line, at, nt, Pal.BONE.lerp(Pal.MOTH, settle))
 
 	# The level does NOT dim. It is the half of the card that carries the
 	# information -- the name is a constant and you only need to be told it once
 	# -- and a readout you have to squint at between rooms is one the player
 	# stops consulting, which was the exact failure of the old bottom-edge line.
-	PixelFont.draw_text(_canvas, level_line, Vector2(at.x, level_y), lt, Pal.BONE)
+	CanvasText.draw_text(_canvas, level_line, Vector2(at.x, level_y), lt, Pal.BONE)
 
 
 # --- Health -----------------------------------------------------------------
@@ -998,13 +999,13 @@ func _draw_heat(s: Vector2) -> void:
 	# The multiplier, right of the bar. Drawn at every tier including x1.0: the
 	# number is the whole point of the meter, and hiding it until tier 1 means
 	# the player meets it for the first time in the middle of a fight.
-	var scale := Pal.px(10.0 / PixelFont.H, s.y)
+	var scale := CanvasText.scale_for(10.0, s.y)
 	# String.num rather than "%.2f": it drops trailing zeros, so the ramp reads
 	# X1 / X1.25 / X1.6 / X2.2 instead of a column of dead decimals.
 	var label := "x" + String.num(Heat.multiplier(), 2)
-	PixelFont.draw_centred(_canvas, label,
+	CanvasText.draw_centred(_canvas, label,
 		Vector2(origin.x + w + Pal.px(22.0, s.y),
-			top + (h - PixelFont.height(scale)) * 0.5),
+			top + (h - CanvasText.height(scale)) * 0.5),
 		scale, col)
 
 
@@ -1076,9 +1077,9 @@ func _cross_origin(s: Vector2) -> Vector2:
 ## them put the caps THROUGH the health bar. Read it against `_draw_cpad`, which
 ## is where those two rows are actually drawn.
 func _cluster_top(s: Vector2) -> float:
-	var caps := Pal.px(Pal.KEYCAP_GAP, s.y) + PixelFont.height(
+	var caps := Pal.px(Pal.KEYCAP_GAP, s.y) + CanvasText.height(
 		Pal.px(Pal.KEYCAP_SCALE, s.y))
-	var loadout := Pal.px(9.0, s.y) + PixelFont.height(
+	var loadout := Pal.px(9.0, s.y) + CanvasText.height(
 		Pal.px(Pal.KEYCAP_SCALE, s.y))
 	# No allowance for the caret band above the cells, and that is not an
 	# oversight. The cluster used to be pinned to the TOP of the screen, where a
@@ -1111,8 +1112,8 @@ func _draw_keycap(s: Vector2, cell: Rect2, key: String) -> void:
 		return
 	var scale := Pal.px(Pal.KEYCAP_SCALE, s.y)
 	var top := cell.end.y + Pal.px(Pal.KEYCAP_GAP, s.y)
-	var w := PixelFont.width(key, scale)
-	var h := PixelFont.height(scale)
+	var w := CanvasText.width(key, scale)
+	var h := CanvasText.height(scale)
 	var pad := Pal.px(3.0, s.y)
 	# On its own plate, not bare on the scene. The cells have a MIDNIGHT fill and
 	# the caps hang BELOW them, so a bare cap sits on whatever the world happens
@@ -1121,7 +1122,7 @@ func _draw_keycap(s: Vector2, cell: Rect2, key: String) -> void:
 	_canvas.draw_rect(Rect2(
 		cell.get_center().x - w * 0.5 - pad, top - pad,
 		w + pad * 2.0, h + pad * 2.0), Color(Pal.MIDNIGHT, 0.8))
-	PixelFont.draw_centred(_canvas, key,
+	CanvasText.draw_centred(_canvas, key,
 		Vector2(cell.get_center().x, top), scale, Pal.BONE)
 
 
@@ -1169,7 +1170,7 @@ func _draw_hands(s: Vector2) -> void:
 		_draw_item_glyph(s, r, id, Pal.MIDNIGHT if raised else Color.BLACK,
 			raised, id == &"arrow" and Game.arrows <= 0)
 		if id == &"arrow":
-			PixelFont.draw_right(_canvas, str(Game.arrows),
+			CanvasText.draw_right(_canvas, str(Game.arrows),
 				Vector2(r.end.x - Pal.px(3.0, s.y), r.end.y - Pal.px(10.0, s.y)),
 				Pal.px(1.0, s.y), Pal.MOTH)
 
@@ -1223,7 +1224,7 @@ func _draw_cpad(s: Vector2) -> void:
 	# Only past one — "1" under a single bottle is a count of a thing nobody is
 	# counting.
 	if Game.bottle_count() > 1:
-		PixelFont.draw_right(_canvas,
+		CanvasText.draw_right(_canvas,
 			"%d/%d" % [Game.item_selected + 1, Game.bottle_count()],
 			Vector2(r.end.x - Pal.px(3.0, s.y), r.end.y - Pal.px(10.0, s.y)),
 			Pal.px(1.0, s.y), Pal.MOTH)
@@ -1231,22 +1232,22 @@ func _draw_cpad(s: Vector2) -> void:
 	# The loadout, on its own row under the key caps.
 	#
 	# ON A PLATE, and with an ARROW the font actually has. It was "\u25b2 PRIMARY"
-	# in bare ASH for one render: PixelFont has no ▲ (its arrows are ↑ ↓ ← →), so
-	# the glyph came out as the MISSING block, and ASH lettering laid straight
+	# in bare ASH for one render: a solid triangle overpowers the word beside it
+	# at cap height in this face, and ASH lettering laid straight
 	# over a torchlit wall was barely there. Right-aligned to the cluster's edge
 	# like everything else in it, so the widest word (ALTERNATE) grows leftwards
 	# under the hands rather than off the screen.
 	var scale := Pal.px(Pal.KEYCAP_SCALE, s.y)
 	var line := "\u2191 PRIMARY" if Game.loadout_set == Game.PRIMARY \
 		else "\u2191 ALTERNATE"
-	var top := r.end.y + Pal.px(Pal.KEYCAP_GAP, s.y) + PixelFont.height(scale) \
+	var top := r.end.y + Pal.px(Pal.KEYCAP_GAP, s.y) + CanvasText.height(scale) \
 		+ Pal.px(9.0, s.y)
-	var w := PixelFont.width(line, scale)
+	var w := CanvasText.width(line, scale)
 	var pad := Pal.px(3.0, s.y)
 	_canvas.draw_rect(Rect2(r.end.x - w - pad, top - pad,
-		w + pad * 2.0, PixelFont.height(scale) + pad * 2.0),
+		w + pad * 2.0, CanvasText.height(scale) + pad * 2.0),
 		Color(Pal.MIDNIGHT, 0.8))
-	PixelFont.draw_right(_canvas, line, Vector2(r.end.x, top), scale, Pal.MOTH)
+	CanvasText.draw_right(_canvas, line, Vector2(r.end.x, top), scale, Pal.MOTH)
 
 
 # --- The minimap -------------------------------------------------------------
@@ -1289,8 +1290,8 @@ func _draw_minimap(s: Vector2) -> void:
 
 
 ## One caret, `dir` being the unit direction it points. `tip` is where the point
-## lands. Drawn rather than typeset because the HUD's PixelFont has no arrow
-## glyphs and a "^" is not a caret.
+## lands. Drawn rather than typeset: a caret that has to point at a moving
+## direction wants a rotation, not a glyph, and a "^" is not a caret.
 func _draw_caret(s: Vector2, tip: Vector2, dir: Vector2) -> void:
 	var w := Pal.px(CARET, s.y)
 	# The back edge is perpendicular to `dir`, so one function draws all four
@@ -1328,7 +1329,7 @@ func _draw_item_glyph(s: Vector2, r: Rect2, id: StringName,
 	var label_col: Color = Color(Pal.MOTH, 0.3) if dim else Pal.BONE
 	if inverted:
 		label_col = invert_to
-	PixelFont.draw_centred(_canvas, String(KIT_LABEL.get(id, "?")),
+	CanvasText.draw_centred(_canvas, String(KIT_LABEL.get(id, "?")),
 		Vector2(r.get_center().x, r.position.y + r.size.y * 0.32),
 		Pal.px(2.0, s.y), label_col)
 
@@ -1412,7 +1413,7 @@ func _draw_draughts(s: Vector2) -> void:
 		_canvas.draw_rect(rect.grow(Pal.px(1.0, s.y)), Pal.VOID)
 		_canvas.draw_rect(rect, Color(Pal.ASH, 0.6))
 		_canvas.draw_rect(Rect2(x, y, w * t01, h), tint)
-		PixelFont.draw_text(_canvas, PotionDb.short_of(id),
+		CanvasText.draw_text(_canvas, PotionDb.short_of(id),
 			Vector2(x + w + Pal.px(6.0, s.y), y - Pal.px(2.0, s.y)),
 			Pal.px(1.0, s.y), tint)
 		# Tighter than HEAT_GAP between rows: two draughts plus the gap have to
@@ -1486,7 +1487,7 @@ func _draw_slips(s: Vector2, right: float) -> void:
 		y -= h + gap
 
 	if entries.size() > SLIP_MAX:
-		PixelFont.draw_right(_canvas, "+%d" % (entries.size() - SLIP_MAX),
+		CanvasText.draw_right(_canvas, "+%d" % (entries.size() - SLIP_MAX),
 			Vector2(right, y - Pal.px(8.0, s.y)), Pal.px(1.0, s.y), Pal.MOTH)
 
 
@@ -1539,7 +1540,7 @@ func _draw_extraction(s: Vector2) -> void:
 	# the two signals that can change the answer. Read the flag rather than asking
 	# again: this runs inside a repaint, and one of them summing the bag per frame
 	# is enough.
-	var scale := Pal.px((16.0 if _extract_dear else 12.0) / PixelFont.H, s.y)
+	var scale := CanvasText.scale_for(16.0 if _extract_dear else 12.0, s.y)
 	# The emphasis used to mean "you can afford this" and now means "this costs
 	# everything you have" -- see `set_extract_dear`. CYAN stays CYAN because the
 	# subject has not changed (it is still the way out, STYLEGUIDE §1); the RUST
@@ -1548,17 +1549,17 @@ func _draw_extraction(s: Vector2) -> void:
 	var cost_col: Color = Pal.RUST if _extract_dear else Pal.GOLD
 
 	var cost_s := str(cost)
-	PixelFont.draw_right(_canvas, cost_s, Vector2(right, y), scale, cost_col)
-	var label_x := right - PixelFont.width(cost_s, scale) - Pal.px(8.0, s.y)
-	PixelFont.draw_right(_canvas, "EXTRACT", Vector2(label_x, y), scale, label_col)
+	CanvasText.draw_right(_canvas, cost_s, Vector2(right, y), scale, cost_col)
+	var label_x := right - CanvasText.width(cost_s, scale) - Pal.px(8.0, s.y)
+	CanvasText.draw_right(_canvas, "EXTRACT", Vector2(label_x, y), scale, label_col)
 
 	if _extract_dear:
 		# A square pip, set well clear of the word. A full-height 2px bar six
 		# pixels from the E is a capital I in this font, and the line read
 		# "IEXTRACT" on every capture until it was a pip instead.
 		var pip := Pal.px(6.0, s.y)
-		var lx := label_x - PixelFont.width("EXTRACT", scale) - Pal.px(14.0, s.y)
-		_canvas.draw_rect(Rect2(lx - pip, y + (PixelFont.height(scale) - pip) * 0.5,
+		var lx := label_x - CanvasText.width("EXTRACT", scale) - Pal.px(14.0, s.y)
+		_canvas.draw_rect(Rect2(lx - pip, y + (CanvasText.height(scale) - pip) * 0.5,
 			pip, pip), Pal.CYAN)
 
 	# Holding draws a ring around your own money while the world stays live.
@@ -1587,9 +1588,9 @@ func _draw_toast(s: Vector2) -> void:
 	var a := 1.0
 	if _toast_t > TOAST_HOLD:
 		a = 1.0 - (_toast_t - TOAST_HOLD) / TOAST_FADE
-	PixelFont.draw_right(_canvas, _toast,
+	CanvasText.draw_right(_canvas, _toast,
 		Vector2(Pal.BAG_RIGHT * s.x, Pal.TOAST_BASELINE * s.y),
-		Pal.px(16.0 / PixelFont.H, s.y), Color(_toast_color, clampf(a, 0.0, 1.0)))
+		CanvasText.scale_for(16.0, s.y), Color(_toast_color, clampf(a, 0.0, 1.0)))
 
 
 ## AUTOSAVING…, bottom right, on the toast's baseline.
@@ -1614,9 +1615,9 @@ func _draw_save(s: Vector2) -> void:
 	var a := 1.0
 	if _save_t > SAVE_HOLD:
 		a = 1.0 - (_save_t - SAVE_HOLD) / SAVE_FADE
-	PixelFont.draw_right(_canvas, "AUTOSAVING...",
+	CanvasText.draw_right(_canvas, "AUTOSAVING...",
 		Vector2(Pal.BAG_RIGHT * s.x, Pal.TOAST_BASELINE * s.y),
-		Pal.px(14.0 / PixelFont.H, s.y), Color(Pal.MOTH, clampf(a, 0.0, 1.0)))
+		CanvasText.scale_for(14.0, s.y), Color(Pal.MOTH, clampf(a, 0.0, 1.0)))
 
 
 ## The interact line. Centred and low -- under the action, above the kit strip,
@@ -1626,15 +1627,15 @@ func _draw_save(s: Vector2) -> void:
 func _draw_prompt(s: Vector2) -> void:
 	if _prompt.is_empty():
 		return
-	var scale := Pal.px(14.0 / PixelFont.H, s.y)
-	var w := PixelFont.width(_prompt, scale)
-	var h := PixelFont.height(scale)
+	var scale := CanvasText.scale_for(14.0, s.y)
+	var w := CanvasText.width(_prompt, scale)
+	var h := CanvasText.height(scale)
 	var centre := Vector2(s.x * 0.5, s.y * 0.735)
 	var pad := Pal.px(7.0, s.y)
 	var box := Rect2(centre.x - w * 0.5 - pad, centre.y - pad,
 		w + pad * 2.0, h + pad * 2.0)
 	_canvas.draw_rect(box, Color(Pal.VOID, 0.72))
-	PixelFont.draw_centred(_canvas, _prompt, centre, scale, Pal.BONE)
+	CanvasText.draw_centred(_canvas, _prompt, centre, scale, Pal.BONE)
 
 	# The hold gauge, along the bottom edge of the line it belongs to. Inside the
 	# box rather than under it: a bar floating below the plate is a second widget

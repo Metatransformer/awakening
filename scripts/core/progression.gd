@@ -122,8 +122,9 @@ static func rarity_lift(level: int) -> float:
 ##
 ## It is a NAME and not a number for the reason the run report is a receipt and
 ## not a score: "FLOOR 7" is a depth reading, and "THE SUNKEN CUT, LEVEL 7" is
-## somewhere you went. Uppercase because PixelFont has no lowercase (see its
-## header) -- do not write it in title case anywhere the HUD will draw it.
+## somewhere you went. Uppercase because `CanvasText` uppercases everything it
+## draws (Cinzel's lowercase is a small-cap) -- title case here would only be a
+## lie about what the HUD will show.
 const NAME := "THE SUNKEN CUT"
 
 
@@ -135,8 +136,8 @@ static func label(level: int) -> String:
 
 ## The whole thing, for the two places that ANNOUNCE a floor rather than report
 ## one -- the loading card and the HUD's top-left card. Two spaces between the
-## name and the number: PixelFont is monospaced with a 1 px track, so a single
-## space reads as a slightly wide letter gap rather than a break between two
-## thoughts.
+## name and the number. Cinzel's capitals are widely fitted, so a single space
+## reads as a slightly wide letter gap rather than a break between two thoughts —
+## the reason predates the face and outlived it.
 static func full_label(level: int) -> String:
 	return "%s  %s" % [NAME, label(level)]

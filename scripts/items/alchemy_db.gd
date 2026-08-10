@@ -139,9 +139,9 @@ static func _brew_line(id: StringName) -> Dictionary:
 		"cost": int(BREW_GOLD.get(id, 0)),
 		"parts": BREW_PARTS.get(id, {}),
 		"blurb": PotionDb.blurb_of(id),
-		# Parenthesised and spaced rather than separated by a middle dot. PixelFont
-		# has no `·` and drew a missing-glyph box between the two halves of the
-		# line -- ASCII only in anything this font renders, and the smith's
+		# Parenthesised and spaced rather than separated by a middle dot. Cinzel
+		# has no `·`, so it arrives from the system fallback in a foreign face
+		# -- ASCII only in anything CanvasText renders, and the smith's
 		# "8.7 -> 11.9 m reach  (finished)" is the house shape for a trailing aside.
 		"detail": "%s   (%d empty of %d)" % [
 			PotionDb.effect_of(id), Game.empty_bottles(), Game.bottle_count()],

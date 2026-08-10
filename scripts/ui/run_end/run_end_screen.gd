@@ -22,7 +22,7 @@ extends Control
 ##
 ## ## The haul is a GRID, and it is the bag's grid
 ##
-## Until 2026-08-09 this was PixelFont rows: `DEEP AMBER X2` and a number, in a
+## Until 2026-08-09 this was canvas-drawn rows: `DEEP AMBER X2` and a number, in a
 ## column. That was the same deep amber the player had been looking at as a
 ## tinted cell for the whole run -- in the pouch, at the vendor, on the locker's
 ## shelf -- and at the one moment that matters most, the moment it is taken away

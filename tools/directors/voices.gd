@@ -147,12 +147,18 @@ func _elder(rig) -> void:
 		% [off, to.length()])
 	_ck("C1 he is in the arrival frame (%.1f deg off axis)" % off, off < 24.0)
 
-	# And still a counter, which is the half of him that is not new.
+	# And NO counter, which is the half of him that is new. This checked for
+	# exactly one while he stood on the plaza's middle behind a stall; he is the
+	# person who greets you now, standing on the hero's own axis with nothing in
+	# front of him (`Garrison.KEEPER_AT`), and a stall is the one object that can
+	# put itself between a greeting and the person being greeted. Kept as a check
+	# rather than deleted: the absence is the decision, so it is the thing worth
+	# failing over if somebody gives him furniture again.
 	var booths := 0
 	for c in garrison.keeper.get_children():
 		if c is ShopBooth:
 			booths += 1
-	_ck("C2 he is standing behind the relic counter", booths == 1)
+	_ck("C2 he has no counter between him and you", booths == 0)
 
 	# **The frame the placement is FOR**, taken before anything moves the hero:
 	# the arrival camera, untouched, on the spot every player lands on. Captured

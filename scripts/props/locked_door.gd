@@ -676,7 +676,7 @@ func _build_lights() -> void:
 ## of the door that is still there to be read afterwards.
 ##
 ## Label3D with the engine font, which is the house pattern for a plate in the
-## world (npc.gd does the same over the vendor). PixelFont is a canvas renderer
+## world (npc.gd does the same over the vendor). CanvasText is a canvas renderer
 ## and there is no 3D path to it; a plate is not the HUD.
 func _build_plate(stone: Material) -> void:
 	if label.strip_edges().is_empty():
