@@ -38,7 +38,6 @@ var _accum := 0.0
 
 
 func _init() -> void:
-	theme_type_variation = &"MenuRow"
 	focus_mode = Control.FOCUS_ALL
 	custom_minimum_size.y = ROW_HEIGHT
 
@@ -54,7 +53,10 @@ func _ready() -> void:
 	box.offset_top = PAD_Y
 	box.offset_bottom = -PAD_Y
 
+	UiKit.style_row_button(self)
+
 	_title = Label.new()
+	UITheme.apply_text_style(_title, UITheme.TYPE_PARAGRAPH_1, UITheme.TEXT)
 	_title.custom_minimum_size.x = TITLE_WIDTH
 	_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -66,7 +68,7 @@ func _ready() -> void:
 	box.add_child(spacer)
 
 	_value = Label.new()
-	_value.theme_type_variation = &"MenuValue"
+	UITheme.apply_text_style(_value, UITheme.TYPE_LABEL_MD, UITheme.ACCENT)
 	_value.custom_minimum_size.x = VALUE_WIDTH
 	_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER

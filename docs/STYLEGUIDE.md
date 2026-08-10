@@ -856,7 +856,21 @@ it counts down to zero in RUST. The palette becomes the score.
   modal (`MenuConfirm`), which carries the kit's paint itself rather than
   inheriting Root's, because it is raised over converted and unconverted
   screens both and a modal that changes face depending on who asked is a modal
-  the player stops reading. Still on the old theme: options and the receipt.
+  the player stops reading; and Options, with its four tabs on the kit's one
+  underline voice, `section_rule` for every group heading, and the slider,
+  choice and bind rows on the shared row plate (`UiKit.style_row_button` →
+  `VerbRow.row_box`, so a settings row and a verb row are the same plate by
+  construction). Still on the old theme: the receipt.
+
+  Two things were AUTHORED for that, not ported — valenfeld has no settings
+  screen and so no answer for either. `UITheme._style_sliders` gives HSlider a
+  hairline groove, a spent-run fill and an off-white stone nub; note the nub is
+  an **icon**, not a StyleBox, which is the one theme item on Slider that is a
+  Texture2D — a StyleBox handed to `grabber` is silently ignored and you inherit
+  whatever ancestor theme still has an icon for it. And `VerbRow.row_box` is now
+  public, because a row that owns an HSlider is not a composition the kit can
+  build, but it is the same PLATE, and a settings row painted a second way puts
+  two row voices on one screen.
 
   The pouch's Fletch and Escape Rope rows are the documented exception to the
   refusal law: they use `UiKit.verb_meta` to write the shortfall into the meta

@@ -147,6 +147,16 @@ static func verb_meta(row: Button, text: String, tone: Variant = null) -> void:
 ## parenting it into the footer — the kit builds the toast, it cannot enforce
 ## where you put it, and putting it above the content is the bug this component
 ## exists to prevent.
+## Paint a hand-built Button with the row plate — for the rows the kit cannot
+## compose, which today means the settings screen's slider, choice and bind
+## rows. See `VerbRow.row_box`.
+static func style_row_button(btn: Button) -> void:
+	if btn == null:
+		return
+	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+		btn.add_theme_stylebox_override(state, VerbRowScript.row_box(state))
+
+
 static func footer_toast(parent: Node, text: String, tone: Color = UITheme.SUCCESS) -> Control:
 	return FooterToastScript.build(parent, text, tone)
 

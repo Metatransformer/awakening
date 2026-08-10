@@ -633,6 +633,72 @@ static func scrollbar_grabber(lit := false) -> StyleBoxFlat:
 	return sb
 
 
+## THE slider voice: a hairline groove with a filled run and a square stone nub,
+## the same chiselled material as the scrollbars. Godot's default HSlider is a
+## blue capsule, which is the one colour this palette does not contain.
+##
+## The nub is drawn with `grabber_area` filled behind it, so the travelled part
+## of the run reads as spent — a settings slider is a number you are LOOKING at,
+## and a bare groove makes you read the figure beside it to know where you are.
+static func slider_track() -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.03, 0.028, 0.026, 0.70)
+	sb.border_color = Color(EDGE.r, EDGE.g, EDGE.b, 0.55)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(2)
+	sb.content_margin_top = 3
+	sb.content_margin_bottom = 3
+	return sb
+
+
+static func slider_fill(lit := false) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	var a := 0.55 if lit else 0.34
+	sb.bg_color = Color(HIGHLIGHT.r, HIGHLIGHT.g, HIGHLIGHT.b, a)
+	sb.set_corner_radius_all(2)
+	sb.anti_aliasing = false
+	return sb
+
+
+## The nub. A Slider's grabber is an ICON, not a StyleBox — the one theme item on
+## the class that is a Texture2D — so it is drawn here rather than styled. A
+## StyleBox handed to `grabber` is silently ignored and you get the engine's
+## default circle, or, worse, whichever ancestor theme still has an icon for it.
+##
+## It is off-white stone, not gold. Gold in this kit is TEXT that carries a
+## value, and the slider's value is already printed in gold at the end of the
+## row; a gold nub would be the same fact said twice, in the loudest colour on
+## the screen, on the part of the row that is furthest from being a number.
+static func slider_grabber_tex(lit := false) -> ImageTexture:
+	var key := "slider_grab_lit" if lit else "slider_grab"
+	if _gradient_cache.has(key):
+		return _gradient_cache[key]
+	const W := 9
+	const H := 20
+	var face := HIGHLIGHT if lit else Color(0.62, 0.59, 0.55)
+	var rim := Color(0.86, 0.83, 0.78) if lit else Color(0.72, 0.69, 0.64)
+	var img := Image.create(W, H, false, Image.FORMAT_RGBA8)
+	for y in H:
+		for x in W:
+			var edge := x == 0 or x == W - 1 or y == 0 or y == H - 1
+			img.set_pixel(x, y, rim if edge else face)
+	var tex := ImageTexture.create_from_image(img)
+	_gradient_cache[key] = tex
+	return tex
+
+
+static func _style_sliders(t: Theme) -> void:
+	for cls in ["HSlider", "VSlider"]:
+		t.set_stylebox("slider", cls, slider_track())
+		t.set_stylebox("grabber_area", cls, slider_fill(false))
+		t.set_stylebox("grabber_area_highlight", cls, slider_fill(true))
+		t.set_icon("grabber", cls, slider_grabber_tex(false))
+		t.set_icon("grabber_highlight", cls, slider_grabber_tex(true))
+		t.set_icon("grabber_disabled", cls, slider_grabber_tex(false))
+		t.set_constant("center_grabber", cls, 0)
+		t.set_constant("grabber_offset", cls, 0)
+
+
 static func _style_scrollbars(t: Theme) -> void:
 	for cls in ["VScrollBar", "HScrollBar"]:
 		t.set_stylebox("scroll", cls, scrollbar_track())
@@ -772,6 +838,7 @@ static func theme() -> Theme:
 	t.set_font_size("font_size", "TooltipLabel", 16)
 
 	_style_scrollbars(t)
+	_style_sliders(t)
 	_style_tabs(t)
 	_style_shared_cells(t)
 
