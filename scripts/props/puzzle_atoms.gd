@@ -63,6 +63,7 @@ const EYE_SWITCH := &"eye_switch"
 const CRACKED_PILLAR := &"cracked_pillar"
 const HOOK_RING := &"hook_ring"
 const SUN_SOCKET := &"sun_socket"
+const LANTERN := &"lantern"
 
 ## The kit, in `docs/PUZZLES.md` §2's own order.
 ##
@@ -77,6 +78,12 @@ const SUN_SOCKET := &"sun_socket"
 ##   `refusal`  String     — what a gate says while ONE of these is unsolved.
 ##   `plural`   String     — and what it says while several are. "3 OF 4 EYES
 ##                           STILL SHUT" needs the noun on its own.
+##   `state`    String     — and the word for what the unsolved ones ARE. It was
+##                           hardcoded "SHUT" until the kit grew an atom that is
+##                           never shut: "4 OF 9 LANTERNS STILL SHUT" is a door
+##                           describing a thing the player is looking at, wrongly,
+##                           which is worse than the "LOCKED" pillar 3 forbids.
+##                           Optional; "SHUT" is right for the other eight.
 ##   `latching` bool       — does solving it stick? A plate does not: step off
 ##                           and it rises. Everything else in the kit is one-way,
 ##                           because a puzzle you can un-solve by walking away is
@@ -160,6 +167,24 @@ static var ATOMS := {
 		"refusal": "THE SOCKET IS DARK", "plural": "SOCKETS",
 		"latching": true, "gates": true,
 	},
+	## The ninth, and phase 2's crystal switch grown up (`docs/PUZZLES.md` §2's
+	## table). **Non-latching, and unlike the plate it is non-latching on
+	## purpose** -- the whole of §3's sixth combinator is that pressing one turns
+	## others OFF, and an atom that could only ever go one way could not be
+	## coupled to anything.
+	##
+	## It never gates alone. `LanternGrid` is what a door hangs on, and a lone
+	## lantern is a light switch (`Lantern`'s class note). `gates` is still true
+	## because the GATE's side of the contract is unchanged: it adopts nine atoms
+	## carrying its `puzzle_id` and opens when all nine are solved, which is
+	## exactly "all nine lit" with no idea a grid exists.
+	LANTERN: {
+		"tier": T0, "verb": "any blow",
+		"script": "res://scripts/props/atoms/lantern.gd",
+		"refusal": "THE LANTERN IS DARK", "plural": "LANTERNS",
+		"state": "DARK",
+		"latching": false, "gates": true,
+	},
 }
 
 
@@ -211,7 +236,8 @@ static func refusal_for(id: StringName, left: int = 1, total: int = 1) -> String
 		return "IT WILL NOT OPEN"
 	if total <= 1 or left <= 1:
 		return String(r["refusal"])
-	return "%d OF %d %s STILL SHUT" % [left, total, String(r["plural"])]
+	return "%d OF %d %s STILL %s" % [left, total, String(r["plural"]),
+		String(r.get("state", "SHUT"))]
 
 
 ## The item a gate wearing this atom's tier should carry as its MARK.
@@ -291,8 +317,14 @@ static func make(id: StringName, puzzle: StringName = &"") -> Node3D:
 ## count `docs/PUZZLES.md` §8 froze at eight.
 static func validate() -> PackedStringArray:
 	var out := PackedStringArray()
-	if ATOMS.size() != 8:
-		out.append("the kit is %d atoms -- PUZZLES.md §8 freezes phase 1 at 8"
+	# Nine: phase 1's eight, plus the lantern, which is phase 2's crystal switch
+	# cashed in against §8's ceiling by the owner's amendment of 2026-08-10. The
+	# check stays an EQUALITY rather than becoming a `<=`: the number is a ceiling
+	# somebody argued for, and a bound that only complains when it is exceeded
+	# would let the kit drift to nine by accident, which is how a frozen manifest
+	# stops being frozen.
+	if ATOMS.size() != 9:
+		out.append("the kit is %d atoms -- PUZZLES.md §8 freezes it at 9"
 			% ATOMS.size())
 	var seen_refusals: Dictionary = {}
 	for id in all():

@@ -34,9 +34,9 @@ definition**, and §4.2 applies.
 | **New mechanics** | **2** | The working, and **the puzzle**. Was 1. See §4.2's fourth ledger line — this is an owner's amendment, not an absorption. |
 | Locked doors | **8** | 4 shortcuts, 3 vaults, 1 to the Long Descent. **They are puzzles now, not checks** — `docs/PUZZLES.md`, GDD §5.3 |
 | Vault prefabs | **3** | Three rooms each |
-| **Puzzle atoms** | **8** | Phase 1: key door, urn, plate, push block, eye switch, cracked pillar, hookshot target, sun switch. Phase 2's four are not committed |
+| **Puzzle atoms** | **9** | Phase 1: key door, urn, plate, push block, eye switch, cracked pillar, hookshot target, sun switch, **lantern**. The lantern was pulled forward out of phase 2 (2026-08-10), leaving three there, uncommitted |
 | **Puzzle prefabs** | **12** | 4 verb tiers × 3 shapes (shortcut, gate room, treasure) |
-| **Puzzle combinators** | **5** | Nest, sequence, time, displace, cycle. This is where the variety lives, which is why the prefab count is 12 and not 40 |
+| **Puzzle combinators** | **6** | Nest, sequence, time, displace, cycle, **couple** (lights out). This is where the variety lives, which is why the prefab count is 12 and not 40 |
 | **Chord edges** | **1 / floor** | The cycle. `dungeon.gd` builds a tree today; one extra edge per floor is the whole change |
 | **Echoes** | **12** | Run-scoped, 1 bag slot, worth 0 gold, dies with the run. Named — no thirteenth, same discipline as the relics |
 | **Minibosses** | **4** | One per floor, behind the treasure puzzle, **two** beats each (a boss gets three) |
@@ -97,7 +97,7 @@ would have left the smith's counter carrying a branch for a case it never sees.
 
 **Two new mechanics** *(was one, amended 2026-08-10 — §4.2's fourth line)*. The
 working — a thrown arc, a fuse, a sphere query, a cracked wall. And the puzzle —
-eight props that emit `solved`, five combinators, and one extra edge in the room
+nine props that emit `solved`, six combinators, and one extra edge in the room
 planner. Everything else in the plan is still a *gate on*, a *number in*, or an
 *arrangement of* something that already runs, and that includes the two things
 that arrived alongside the puzzle and are **not** mechanics: an Echo is a bag row
@@ -293,7 +293,7 @@ not worth adding.
 | The Sustain-Verse, the Ballast-Verse (2 relics) | **Fletcher's Jig** and **Waterwheel Gear**, deleted | GDD §6.2 |
 | Usable items 4 → 6 | Nothing — a working is a row in `armament_db.gd`, and the **ring stops** ceiling was added in the same commit to cap it | §1 |
 | **The gear loop.** Garrison NPCs 4 → 5, forge ladders 5 → 12, 8 jewel tracks, 5 named stats | **Nothing. This is an owner's amendment to the manifest, made deliberately and with the cost known.** | GDD §6.6 |
-| **Puzzles, Echoes and minibosses.** New mechanics 1 → 2, 8 atoms, 12 prefabs, 12 Echoes, 4 minibosses, 2 anchor kinds, 1 chord edge per floor | **Nothing. The second owner's amendment, 2026-08-10.** The jewelcrafter's 8 tracks were offered as the deletion and the owner declined | `docs/PUZZLES.md` |
+| **Puzzles, Echoes and minibosses.** New mechanics 1 → 2, 9 atoms, 12 prefabs, 12 Echoes, 4 minibosses, 2 anchor kinds, 1 chord edge per floor | **Nothing. The second owner's amendment, 2026-08-10.** The jewelcrafter's 8 tracks were offered as the deletion and the owner declined | `docs/PUZZLES.md` |
 
 The first line is the rule working as intended: the two deleted relics were the
 only entries on GDD §6.2's table that were numbers on a subsystem rather than
