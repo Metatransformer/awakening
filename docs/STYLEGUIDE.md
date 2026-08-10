@@ -90,6 +90,34 @@ Rules that keep it dirty rather than clean:
 
 ## 3. Type
 
+### 3.0 The split: the world is PSX, the menus are Gallery Vellum
+
+**This section used to describe every glyph in the game and it no longer does.**
+Everything below §3.1 governs the HUD and the world — the layer the player reads
+while the game is running, at native resolution, on the RGB555 grid. The MENUS
+are a different surface with a different job, and since the Gallery Vellum port
+they are governed by `scripts/ui/ui_theme.gd`: smooth Alegreya, a 12→32 scale
+declared as `UITheme.TYPE_*` constants, and `apply_text_style()` rather than a
+raw `add_theme_font_size_override`.
+
+Two reasons this is an amendment and not a betrayal:
+
+1. **Departure Mono and Jacquard 24 were never wired.** Every menu in this game
+   has rendered in `SystemFont` "Trebuchet MS" since `_build_theme.gd` was
+   written — see its `FONT_NAMES`. This section described an intention, and the
+   next agent to read it would have believed the code already did it.
+2. **A pause menu is not diegetic.** The PSX treatment is about what the WORLD
+   looks like through a 1998 renderer. A menu is the reader's surface, not the
+   world's; making it fight the same pixel grid costs legibility and buys a
+   consistency nobody experiences, because the two are never on screen sharp
+   against each other.
+
+The HUD stays on this page's rules. If you are typesetting something that
+overlays play, read on. If you are typesetting a panel, read `docs/CONTRACT.md`
+and `UITheme`.
+
+### 3.1 The world faces
+
 Two faces, both free to ship.
 
 **Display — Jacquard 24** (Google Fonts, OFL). A bitmap-grid pixel blackletter.
@@ -799,3 +827,7 @@ it counts down to zero in RUST. The palette becomes the score.
   dungeon and mandates the OOT HUD in §7.1. That section is superseded here and
   the contract needs amending rather than silently diverging, because other
   agents build against it.
+- `scripts/ui/menu/_build_theme.gd` and `scenes/ui/menu/menu_theme.tres` are the
+  SystemFont theme §3.0 replaces. They are still what most panels render
+  through: the screens move onto `UITheme` one at a time, and this line goes
+  when the last one has. Do not add to them.

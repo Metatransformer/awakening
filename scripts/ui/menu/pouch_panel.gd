@@ -91,15 +91,13 @@ const MAX_CELLS := 16
 ## The paper doll's column. The frame grew from 1060 to `MenuUtil.FRAME_SIZE`'s
 ## 1220 to make room for exactly this, so the number is the width that was added
 ## less the separation beside it -- the grid's budget above is unchanged.
-const DOLL_W := 144
+const DOLL_W := 152
 
 ## The header's row, so `PauseMenu` can drop the shared tab strip into it. See
 ## the same field on `MenuEquipPanel`.
 var _hrow: HBoxContainer
 
 var _doll: MenuPaperDoll
-## Slot key (&"left" / &"right" / &"item") -> the Label naming what is in it.
-var _worn: Dictionary[StringName, Label] = {}
 
 ## What is in each drawn cell, in grid order: the item id and how many of it are
 ## in that one cell. `&""` for a slot the bag has not filled. This is the screen's
@@ -146,11 +144,10 @@ func _ready() -> void:
 	# a bundle with this screen open and the row has to stop offering a batch it
 	# no longer has room for.
 	Bus.ammo_changed.connect(func(_id: StringName, _n: int) -> void: refresh())
-	# The doll redraws itself off these, but the three lines naming its slots are
-	# this screen's, and ITEMS is one shoulder press away.
-	Bus.loadout_changed.connect(
-		func(_s: int, _r: StringName, _l: StringName) -> void: _paint_doll())
-	Bus.item_selected_changed.connect(func(_i: int) -> void: _paint_doll())
+	# `loadout_changed` / `item_selected_changed` are NOT hooked here any more:
+	# the doll owns those, and the three lines that used to need them are its
+	# tiles now. Two subscribers repainting the same card is how a screen ends up
+	# doing its work twice per press.
 	refresh()
 
 
@@ -296,38 +293,21 @@ func _build_doll(parent: Node) -> void:
 	caption.text = "WORN"
 	inner.add_child(caption)
 
+	# The three "LEFT · Kite Shield" lines that used to sit under the figure are
+	# gone: they are the doll's own three `SlotTile`s now, which say the same
+	# thing with the slot's glyph beside it and the empty case drawn rather than
+	# spelled. Two places naming the same hand is how one of them goes stale.
 	_doll = MenuPaperDoll.new()
 	_doll.name = "Doll"
 	inner.add_child(_doll)
 
-	# One line per slot, under the figure that draws it. The figure says WHICH
-	# hand by where the box is; the line says what is in it, because two 40 px
-	# bakes of a sword and a hookshot are not tellable apart by everyone.
-	for key: StringName in [&"left", &"right", &"item"]:
-		var row := Label.new()
-		row.name = "Worn_%s" % key
-		row.theme_type_variation = &"MenuSlotStat"
-		row.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		row.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		# Smaller than the theme's default for the same reason the bag cells are
-		# (see CELL_NAME_PT): this column is 144 px wide and "RIGHT · Knightly
-		# Sword" is the longest thing that has to fit in it.
-		row.add_theme_font_size_override("font_size", CELL_NAME_PT)
-		inner.add_child(row)
-		_worn[key] = row
-
 
 func _paint_doll() -> void:
-	if _doll == null:
-		return
-	_doll.queue_redraw()
-	(_worn[&"left"] as Label).text = "LEFT · %s" \
-		% ArmamentDb.slot_name(Game.armament(Game.HAND_LEFT))
-	(_worn[&"right"] as Label).text = "RIGHT · %s" \
-		% ArmamentDb.slot_name(Game.armament(Game.HAND_RIGHT))
-	var potion := Game.selected_potion()
-	(_worn[&"item"] as Label).text = "ITEM · %s" % (
-		PotionDb.name_of(potion) if potion != &"" else "Empty bottle")
+	# The doll repaints itself off `Bus` (see its `_ready`). This stays as the
+	# screen's one-shot hook — `_refresh` calls it on open, when no signal has
+	# fired yet and the card would otherwise show the previous run's hands.
+	if _doll != null:
+		_doll.repaint()
 
 
 func _build_grid(parent: Node) -> void:
