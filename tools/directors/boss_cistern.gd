@@ -184,10 +184,19 @@ func _before(rig, arena: Node, door: Node) -> void:
 	_ck("B5 the door is shut", not door.is_open())
 	_ck("B6 and unlocked() says no", not door.unlocked())
 
-	# 2.2 m out: inside `LockedDoor`'s 2.9 m interact radius, and 10.85 m from the
-	# arena's centre, which is outside the 9.02 m seal trigger. The before-shot
-	# has to be takeable without starting the fight.
-	await _stand_at(rig, door.global_position + Vector3(0.0, 0.05, 2.2),
+	# 2.76 m out and off to one side: inside `LockedDoor`'s 2.9 m interact radius,
+	# and 11.3 m from the arena's centre, which is outside the 9.02 m seal
+	# trigger. The before-shot has to be takeable without starting the fight.
+	#
+	# OFF TO ONE SIDE and not square-on, which is a camera fix rather than a
+	# composition one. The chase camera sits behind the hero along his facing, so
+	# a hero standing square in front of the door put the lens at z = -6.4 -- one
+	# and a half metres from the sleeping Warden's centre, INSIDE its mesh, and
+	# b_01 came back as a screenful of green with the door nowhere in it. Two
+	# metres to the right walks the lens past the boss's shoulder instead, and
+	# photographs the surround's stepped mouldings at a rake, which is the angle
+	# they were built to be read at.
+	await _stand_at(rig, door.global_position + Vector3(2.0, 0.05, 1.9),
 		door.global_position)
 	var said: String = Hud._prompt
 	print("BOSS the door says: \"%s\"" % said)

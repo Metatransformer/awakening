@@ -64,42 +64,61 @@ length = 26.0
 height = 10.0
 rng_seed = 72
 
+; The two flanks stop at |x| = 3.5, not 2.5. A `KitDoorway` is a WALL PANEL with
+; a hole in it, not a hole: it needs stone either side of the opening to carry
+; its jambs, and at a 5 m gap around a 5 m opening there was none for them to
+; stand on. See DoorwayNorth for what the tight gap actually cost.
 [node name="WallNorthW" parent="Chamber" instance=ExtResource("wall")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.75, 0, -13)
-length = 10.5
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.25, 0, -13)
+length = 9.5
 height = 10.0
 rng_seed = 73
 
 [node name="WallNorthE" parent="Chamber" instance=ExtResource("wall")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.75, 0, -13)
-length = 10.5
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.25, 0, -13)
+length = 9.5
 height = 10.0
 rng_seed = 74
 
 [node name="WallSouthW" parent="Chamber" instance=ExtResource("wall")]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -7.75, 0, 13)
-length = 10.5
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -8.25, 0, 13)
+length = 9.5
 height = 10.0
 rng_seed = 75
 
 [node name="WallSouthE" parent="Chamber" instance=ExtResource("wall")]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 7.75, 0, 13)
-length = 10.5
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 8.25, 0, 13)
+length = 9.5
 height = 10.0
 rng_seed = 76
 
+; `height` is the PANEL's height, not the opening's -- the opening is
+; `opening_h`. This read 5.0 for both, in a chamber whose walls are 10, so
+; everything from the doorway's header to the ceiling was nothing at all: a
+; 5 x 5 hole straight out of the room, which photographed as an untextured black
+; slab hanging over the door in every b_01 and b_02 ever taken. It was diagnosed
+; twice as the BossDoor's leaves failing to render and it was never the door --
+; the leaves are correct, and were, and are two metres BELOW the black.
+;
+; The opening is spelled out too. It defaulted to K.DOOR_W x K.DOOR_H (2.4 x 3.2)
+; while the BossDoor standing in it is 5 x 5, so the shut leaves were wider than
+; the hole they filled.
 [node name="DoorwayNorth" parent="Chamber" instance=ExtResource("doorway")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -13)
-span = 5.0
-height = 5.0
+span = 7.0
+height = 10.0
+opening_w = 5.0
+opening_h = 5.0
 frame_w = 0.6
 frame_depth = 0.46
 rng_seed = 77
 
 [node name="DoorwaySouth" parent="Chamber" instance=ExtResource("doorway")]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 13)
-span = 5.0
-height = 5.0
+span = 7.0
+height = 10.0
+opening_w = 5.0
+opening_h = 5.0
 frame_w = 0.6
 frame_depth = 0.46
 rng_seed = 78
@@ -207,18 +226,13 @@ boss_offset = Vector3(0, 0, -5)
 ; Set 50 mm back into the reveal, the same as _gate_test's doors, so the
 ; doorway's surround frames the leaves instead of the leaves standing proud of
 ; it. The opening matches the hole the wall segments leave.
-; KNOWN, AND NOT A TRANSFORM PROBLEM: the shut leaves photograph as an
-; untextured black slab five metres square (see /tmp/boss/b_01, b_02). The
-; obvious fix -- yaw this node 180, since a `LockedDoor`'s leaves face down its
-; own -basis.z and the chamber is south of this wall -- was tried on 2026-08-09
-; and is WRONG: `boss_cistern.gd` derives its camera from this node's basis, so
-; turning the door turns the shot, and b_01 comes back as a green screenful of
-; boss. Forty assertions stayed green through both orientations, because a door
-; that refuses BY NAME refuses just as correctly backwards.
-;
-; The same `LockedDoor` shut in a generated floor renders properly -- plate,
-; leaves, lock sigil (/tmp/cf/f_02_vault_locked.png) -- so this is the fixture,
-; not the prop, and no player sees it. Fix the door and the camera together.
+; SOLVED 2026-08-09, and the door was never the problem. The "untextured black
+; slab" this comment used to describe was the hole ABOVE the doorway -- see
+; DoorwayNorth, whose panel was 5 m tall in a 10 m wall. The leaves render, and
+; always did; nobody had looked far enough down the frame to see them under it.
+; The identity basis here is correct: `-basis.z` is forward, the leaves face the
+; chamber, and yawing this node 180 (which was tried) turns the door away from
+; the room it seals.
 [node name="BossDoor" type="Area3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -13.05)
 script = ExtResource("bossdoor")
