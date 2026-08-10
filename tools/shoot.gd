@@ -16,6 +16,23 @@ extends SceneTree
 ##   --burst=8 --burst-gap=6                      contact sheet of N frames
 ##   --seed=12345                                 deterministic RNG
 
+## The scratch config every harness run writes instead of `user://settings.cfg`.
+## See `_sandbox_the_settings`.
+const HARNESS_SETTINGS := "user://harness_settings.cfg"
+
+## Must equal `Settings.HARNESS_META`, and it is spelled out here rather than
+## read from that script ON PURPOSE. `preload("res://scripts/autoload/settings.gd")`
+## compiles settings.gd as a dependency of THIS file, which happens before the
+## autoloads are registered — so its reference to `Bus` fails to resolve and
+## takes the whole harness down with it (CLAUDE.md §3, the "Identifier not
+## found" row, which turns out to bite outside `--check-only` too). The two
+## constants cannot drift silently: `_verify_sandbox` below fails the run.
+const HARNESS_META := &"zl_harness_settings_path"
+
+## The file the sandbox exists to keep this harness away from. Mirrors
+## `Settings.DEFAULT_PATH`, for the same reason HARNESS_META is spelled out.
+const PLAYER_SETTINGS := "user://settings.cfg"
+
 var _args := {}
 var _out_paths: Array[String] = []
 
@@ -25,6 +42,7 @@ func _initialize() -> void:
 
 	var seed_val := int(_args.get("seed", "20190920"))
 	seed(seed_val)
+	_sandbox_the_settings()
 	_deafen_the_gamepad()
 
 	var size_str: String = _args.get("size", "1280x720")
@@ -37,6 +55,39 @@ func _initialize() -> void:
 	root.position = Vector2i(40, 40)
 
 	_run.call_deferred()
+
+
+## Point `Settings` at a scratch config so a director can never write the
+## player's own preferences.
+##
+## This has to happen here, in `_initialize`, because it is the last moment
+## before the autoloads' `_ready` — Settings reads the meta there and an
+## explicit `--settings=` on the command line still beats it.
+##
+## THIS IS NOT TIDINESS, IT IS THE FIX FOR A BUG THAT LANDED TWICE. A director
+## that rebinds a key calls `Settings.rebind()`, which calls `save_settings()`,
+## which wrote `user://settings.cfg` — the real one. `_menu_director.gd` puts
+## `attack` on N to photograph the rebind flow, so the owner's config came out
+## of a screenshot run with `attack` bound to N and the game booted with a dead
+## sword button. Twice. The audio sliders leaked the same way: the same director
+## drags Music to the floor, and the game came up silent.
+##
+## It is WORSE than a stray keybind, and `_deafen_the_gamepad` below is why. The
+## pad bindings are gone from the InputMap by the time the director rebinds, so
+## the bind that gets serialised has no pad event in it at all, and
+## `Settings.apply_binds` erases an action before replaying it. One keyboard
+## rebind in a menu test = RB permanently unbound from `attack` on the machine
+## that ran it. Nothing the director does is wrong; writing it to the real file
+## is. So the harness does not get the real file.
+## Deleting it each run is not housekeeping either: this harness exists to be
+## deterministic, and a scratch config that survived the last run would replay
+## whatever that run's director happened to set. Every run starts from the
+## shipped layout. A director that WANTS to carry state across runs passes its
+## own `--settings=`, which this never touches.
+func _sandbox_the_settings() -> void:
+	Engine.set_meta(HARNESS_META, HARNESS_SETTINGS)
+	if FileAccess.file_exists(HARNESS_SETTINGS):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(HARNESS_SETTINGS))
 
 
 ## Strip every joypad binding out of the InputMap for the life of this run.
@@ -107,7 +158,42 @@ func _parse_args() -> void:
 			_args[body.substr(0, eq)] = body.substr(eq + 1)
 
 
+## Fail the run if `Settings` is still pointed at the player's real config.
+##
+## `_sandbox_the_settings` sets a meta key that Settings reads by name, so the
+## two spellings are only joined by a string. This is the joint, checked once
+## per run now that the autoloads are up: if it ever comes apart, the harness
+## stops instead of quietly going back to writing `user://settings.cfg`. A
+## silent version of this check is worth nothing — silence is how a screenshot
+## run unbound the sword from RB and nobody noticed for a day.
+## `Settings` is fetched by path, not written as an identifier: this file is a
+## MainLoop launched with `-s`, and autoload NAMES do not resolve at compile
+## time there. Spelling it `Settings.path` costs the whole harness with
+## "Identifier not found: Settings" — the same family of trap as the preload
+## above, one layer out.
+func _verify_sandbox() -> void:
+	var s: Node = root.get_node_or_null(^"Settings")
+	if s == null:
+		# Not "nothing to check" — the autoload this guards has gone missing or
+		# been renamed, so the guard is not guarding. Say so; a check that goes
+		# quiet when it loses its subject is the bug it was written against.
+		push_warning("shoot.gd: no /root/Settings — the settings sandbox is unverified")
+		return
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--settings="):
+			return  # the caller named a file; that is their business
+	if str(s.get(&"path")) != PLAYER_SETTINGS:
+		return
+	push_error("shoot.gd: Settings is still on %s -- the sandbox did not take. "
+		% PLAYER_SETTINGS
+		+ "shoot.gd's HARNESS_META must equal Settings.HARNESS_META. Refusing "
+		+ "to run: a director could overwrite the player's real preferences.")
+	quit(6)
+
+
 func _run() -> void:
+	_verify_sandbox()
+
 	var scene_path: String = _args.get("scene", "")
 	if scene_path.is_empty():
 		push_error("shoot.gd: --scene= is required")
@@ -138,7 +224,17 @@ func _run() -> void:
 			push_error("shoot.gd: director not found: %s" % director_path)
 			quit(4)
 			return
+		# A director with a parse error loads as null, and `null.new()` used to
+		# leave the harness sitting here until its outer `timeout` killed it --
+		# with the actual "Parse Error:" line scrolled off the top and no
+		# SHOT_OK to mark the end. Two runs and eight minutes went into working
+		# out that a hang was a typo. Say which script, and stop.
 		var director_script := load(director_path) as GDScript
+		if director_script == null:
+			push_error("shoot.gd: director failed to parse: %s (look further up "
+				% director_path + "this log for the Parse Error line)")
+			quit(4)
+			return
 		var director = director_script.new()
 		if director.has_method("run"):
 			await director.run(self)

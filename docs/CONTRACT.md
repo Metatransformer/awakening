@@ -567,6 +567,21 @@ and `project.godot` looked perfectly correct the whole time. `Settings`
 now stamps saved binds with `BIND_SCHEMA` and **discards** binds saved against
 an older layout — bump it in any change that moves a shipped binding.
 
+That happened a second time, and `BIND_SCHEMA` could not have caught it: the
+poisoned bind was stamped with the *current* schema, because the run that wrote
+it was running the current layout. The schema guards a layout CHANGE; it has
+nothing to say about a save that should never have been written. The fix for
+that half is the harness sandbox in §"traps" below. Two independent failures,
+one symptom — when the sword dies, check the dump before the layout.
+
+**The directors cannot see this class of bug and it is worth knowing why.**
+Every combat director reaches the hero through `Input.action_press(&"attack")`
+or `rig.hold(["attack"])`, which set action state directly and never consult the
+InputMap. An `attack` with no button bound to it at all still swings for them.
+`tools/directors/rb_swing.gd` is the one that presses a *button index* and lets
+the InputMap do the lookup — the only test here that fails when the binding is
+what broke. Run it with `--keep-pad`.
+
 **Not yet bound, because the ability does not exist:** skills and spells. Do not
 register an empty action for either; bind it in the same change that builds it.
 RT/R2 was pencilled in for the skill and the heavy took it instead — the triggers
@@ -1963,9 +1978,21 @@ will not resolve.
   afternoon: `ui_accept` fell back to the engine default while `ui_cancel`, one
   line further down past the damage, applied fine — an asymmetry that reads as an
   engine quirk and invites a completely wrong theory.
-- **Never let a test write the real `user://settings.cfg`.** Pass
-  `--settings=user://scratch.cfg` after the `--` separator. A menu test once left
-  `attack` bound to `N` and the game shipped with a dead sword button.
+- **A test cannot write the real `user://settings.cfg` any more, and that is a
+  mechanism now rather than a rule.** `shoot.gd` points `Settings.path` at
+  `user://harness_settings.cfg` before the autoloads are ready, deletes that
+  file at the head of every run so each run starts from the shipped layout, and
+  `_verify_sandbox` fails the run if the redirect ever stops taking. Pass
+  `--settings=user://your.cfg` to name a different file; it still wins.
+
+  This used to be the advice "pass `--settings=`", and the advice was followed
+  exactly zero times by the director that needed it. A menu test left `attack`
+  bound to `N` and the sword was dead — **twice**, months apart. The second time
+  was worse than the first: `shoot.gd` strips the pad bindings for the run
+  (below), so the bind that got saved had no pad event in it at all, and
+  `Settings.apply_binds` erases an action before replaying it. One keyboard
+  rebind in a screenshot run unbound **RB** from `attack` permanently. A doc
+  comment asking the next author to remember a flag is not a control.
 - **A gamepad plugged into the machine drives the harness too.** Sticks resting
   just outside the deadzone report `move_up`, `move_right`, `cam_down` and
   `cam_left` HELD, with nothing pressed. The hero walks off his mark mid-beat,

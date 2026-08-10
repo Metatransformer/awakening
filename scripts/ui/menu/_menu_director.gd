@@ -8,6 +8,16 @@ extends RefCounted
 ##     --director=res://scripts/ui/menu/_menu_director.gd \
 ##     --out=/abs/out/f.png --size=1280x720 --warmup=60
 ##
+## THIS DIRECTOR MUTATES SETTINGS ON PURPOSE — it drags the Music slider to the
+## floor and rebinds `attack` onto N — and both of those used to land in the
+## player's real `user://settings.cfg`, because `Settings.rebind()` saves. That
+## is how the sword died on RB: shoot.gd strips the pad bindings for the run, so
+## the saved `attack` had no pad event left in it, and every later boot replayed
+## a keyboard-only bind over the shipped one. shoot.gd now sandboxes
+## `Settings.path` for every run, so this is safe by construction and needs no
+## flag here. Do not "helpfully" make these steps read-only — proving the rebind
+## flow actually rebinds is what the director is for.
+##
 ## Every navigation step goes through Input.parse_input_event(), so the InputMap,
 ## the focus graph and the pause state are all exercised for real. Assertions
 ## print PASS/FAIL lines to stdout — a menu that looks right in a screenshot but
@@ -55,14 +65,25 @@ func run(rig) -> void:
 	await _key(rig, KEY_RIGHT, 10)
 	await _shot(rig, "05_options_controls.png")
 
-	# Rebind Attack onto K — which Shield already owns. Settings.rebind() answers
-	# false; the menu has to SAY so rather than quietly doing nothing.
+	# Rebind Attack onto a key another action ALREADY OWNS. Settings.rebind()
+	# answers false; the menu has to SAY so rather than quietly doing nothing.
+	#
+	# The owned key is looked up, not hardcoded, because a hardcoded one rots
+	# into a test that passes vacuously. This step used to press K "which Shield
+	# already owns" — shield's keyboard binding had since become Mouse2, nothing
+	# owned K, so the rebind was correctly ACCEPTED and the assertion had been
+	# testing the layout rather than the conflict rule. If no rebindable action
+	# owns a key at all, that is reported as its own failure: a silent skip here
+	# is indistinguishable from a pass.
+	var taken := _a_key_owned_by_another_action(&"attack")
+	_check("there is a key owned by another action to collide with", taken != KEY_NONE)
 	var attack_before: String = Settings.label_for(&"attack")
 	await _nav_down_to(rig, "bind_attack")
 	await _key(rig, KEY_ENTER, 8)
 	await _shot(rig, "06_rebind_listening.png")
-	await _key(rig, KEY_K, 10)
-	_check("conflicting rebind was refused (attack still %s)" % Settings.label_for(&"attack"),
+	await _key(rig, taken, 10)
+	_check("conflicting rebind on %s was refused (attack still %s)"
+			% [OS.get_keycode_string(taken), Settings.label_for(&"attack")],
 		Settings.label_for(&"attack") == attack_before)
 	await _shot(rig, "07_rebind_conflict.png")
 
@@ -233,6 +254,23 @@ func _find_slots(n: Node) -> Array:
 func _shot(rig, name: String) -> void:
 	await rig.capture(name)
 	_shots.append(name)
+
+
+## A physical keycode currently bound to some rebindable action other than
+## `mine` — i.e. one `Settings.rebind()` is obliged to refuse. KEY_NONE if the
+## layout has no keyboard binding to collide with at all.
+##
+## Only keys count. The conflict rule is per device class, so offering it a
+## mouse button or a pad face button would test the wrong branch — and under
+## shoot.gd the pad bindings are stripped anyway.
+func _a_key_owned_by_another_action(mine: StringName) -> Key:
+	for action in Settings.rebindable_actions():
+		if action == mine:
+			continue
+		for e in InputMap.action_get_events(action):
+			if e is InputEventKey:
+				return (e as InputEventKey).physical_keycode
+	return KEY_NONE
 
 
 func _check(what: String, ok: bool) -> void:
