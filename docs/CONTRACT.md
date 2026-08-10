@@ -34,7 +34,11 @@ on its own — it is done when it survives a blind A/B against `refs/`.
 
 We are matching OOT's **feel, framing, pacing, and structure**. We are not
 copying its assets, characters, or names. Our hero is a hooded warrior, not
-Link. Refer to him as **the hero** in code and comments.
+Link. He is **Kael** *(tentative, 2026-08-10 — `docs/GDD.md` §1)*, he is male,
+and **in code and comments he stays "the hero."** The class is `Hero`, the script
+is `hero.gd`, and a rename buys nothing but a diff across every file that
+touches him. The name belongs to the fiction — the receipt, the plaque, the
+Lanternkeeper's board — not to the identifiers.
 
 ---
 
