@@ -35,10 +35,10 @@ var _erasers: Array[Button] = []
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# The subtree renders through the kit, overriding the `menu_theme.tres` the
-	# pause menu's Root still carries. See the same two lines on `EquipPanel`.
-	UITheme.prewarm()
-	theme = UITheme.theme()
+	# No `theme` of its own: `PauseMenu` puts `UITheme.theme()` on Root and every
+	# panel inherits it. This used to override a `menu_theme.tres` that Root
+	# carried while the screens converted one at a time; they all have, so the
+	# per-panel override went with the .tres.
 	_build()
 
 

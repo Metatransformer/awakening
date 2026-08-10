@@ -167,6 +167,12 @@ func _ready() -> void:
 	# textures and loads the faces; without it the first menu frame a player ever
 	# sees is drawn with fallback styleboxes and then corrects itself.
 	UITheme.prewarm()
+	# The whole menu renders through the kit, and this is the line that says so.
+	# It used to be `menu_theme.tres` on Root in the scene, with each converted
+	# panel overriding it on itself; every panel has now converted, so the
+	# override moved up to the one place and the .tres is gone. A Theme built by
+	# a static function cannot be an `ext_resource`, hence code and not the scene.
+	$Root.theme = UITheme.theme()
 	_build_root_screen()
 	_build_listen_overlay()
 	_build_notice()
@@ -804,30 +810,38 @@ func _build_listen_overlay() -> void:
 	_listen_layer.add_child(center)
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
+	# `hover_card`, the same face `MenuConfirm` wears, and for the same reason:
+	# this is the other thing that gets RAISED over a screen rather than being
+	# one, and two raised surfaces with two faces is two modal languages.
 	var frame := PanelContainer.new()
-	frame.theme_type_variation = &"MenuFrame"
+	frame.add_theme_stylebox_override("panel", UITheme.hover_card())
+	frame.clip_contents = true
 	frame.custom_minimum_size.x = 620
 	center.add_child(frame)
 
 	var pad := MarginContainer.new()
+	for side in ["left", "top", "right", "bottom"]:
+		pad.add_theme_constant_override("margin_" + side, 22)
 	frame.add_child(pad)
 	var col := VBoxContainer.new()
-	col.theme_type_variation = &"MenuList"
+	col.add_theme_constant_override("separation", 8)
 	pad.add_child(col)
 
 	var head := Label.new()
-	head.theme_type_variation = &"MenuHeading"
+	UITheme.apply_text_style(head, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
 	head.text = "PRESS A KEY OR BUTTON"
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(head)
 
+	# The action being rebound is the whole content of this overlay, so it gets
+	# the display face — everything else here is instruction.
 	_listen_action_label = Label.new()
-	_listen_action_label.theme_type_variation = &"MenuTitle"
+	UITheme.apply_text_style(_listen_action_label, UITheme.TYPE_H1, UITheme.TEXT)
 	_listen_action_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(_listen_action_label)
 
 	var foot := Label.new()
-	foot.theme_type_variation = &"MenuHint"
+	UITheme.apply_text_style(foot, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
 	foot.text = "Esc / B cancels"
 	foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(foot)
