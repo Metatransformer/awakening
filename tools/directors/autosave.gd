@@ -74,16 +74,33 @@ func run(rig) -> void:
 	# The real way out, not Flow.to_town(): extraction is the transition the
 	# player has the most to lose across, and it runs through Run.extract ->
 	# Bus.run_ended -> Flow, which is a longer path than the two above.
+	#
+	# **`Run.extract()` does not go home by itself, and this beat believed it did
+	# until 2026-08-09.** A run now ENDS on the floor it ended on, under
+	# `RunEndScreen`, and BACK TO TOWN is the press that travels
+	# (scripts/ui/run_end/). `_on_run_ended` only raises the screen. So the old
+	# beat measured the file a second after the rope, found the second beat's
+	# write still sitting there, and reported `7.4 -> 7.4` — a red director that
+	# was reading a real fact about a transition that had not started.
+	#
+	# `mvp_loop._return` was corrected for exactly this drift and left a note
+	# about it; this one was not. Press the button the player presses.
 	before = _played_of(0)
 	Game.add_gold(Run.extract_cost() + 50)   # he is not here to fail the toll
 	_check("he can afford to leave (%d gold, %d fee)" % [Game.gold, Run.extract_cost()],
 		Run.can_extract())
 	_check("and he does", Run.extract())
+	await rig.wait_frames(150)
+	_check("the run is over", not Run.in_dungeon)
+	_check("...and the receipt is up, on the floor he left from", _run_end(rig) != null)
+	await rig.wait_seconds(RunEndScreen.SETTLE + 0.2)
+	await rig.hold_seconds([&"ui_accept"], 0.2)
 	await _settle(rig)
+	_check("...and BACK TO TOWN reached town (%s)" % rig.scene().name,
+		rig.scene() is Town)
 	_check("...which wrote it a third time (%.1f -> %.1f)" % [before, _played_of(0)],
 		_played_of(0) > before)
 	_check("coming home wrote it again", Saves.active_slot == 0)
-	_check("the run is over", not Run.in_dungeon)
 	_check("and the notice came up in town too", float(Hud.get(&"_save_t")) >= 0.0)
 	await _shot(rig, "home")
 
@@ -103,14 +120,47 @@ func run(rig) -> void:
 	print("AUTOSAVE OK" if _fail == 0 else "AUTOSAVE FAILED (%d)" % _fail)
 
 
+## The receipt, if it is up. Same search `mvp_loop` does — a run-ended screen is
+## parented under whatever scene the run ended on, so there is no fixed path.
+func _run_end(rig) -> RunEndScreen:
+	for n in _walk(rig.scene()):
+		if n is RunEndScreen:
+			return n
+	return null
+
+
+func _walk(root: Node) -> Array:
+	var found := [root]
+	for c in root.get_children():
+		found.append_array(_walk(c))
+	return found
+
+
 ## Wait out the whole transition: the hold, the fade out, the scene swap, the
 ## fade in, and the autosave that lands at the end of it (game_flow.gd `_go`).
+##
+## **Do not wait on `Flow.busy` for this, which is what this did until
+## 2026-08-09.** It is wrong at both ends. It is cleared near the TOP of `_go`'s
+## second half, before `change_scene_to_file` and a long way before the write, so
+## a poll that breaks on `not busy` returns with the autosave still pending. And
+## it starts false: extraction runs `Run.extract` -> `Bus.run_ended` -> `Flow`, so
+## a poll begun the frame after `Run.extract()` sees `busy == false` on its very
+## first tick and breaks out before the fade has even started. Beat 3 then read
+## beat 2's file and reported `6.8 -> 6.8`.
+##
+## That it passed for months is the point: it was a race this director won by a
+## few milliseconds, and it started losing the day the town grew a house to build
+## in `_ready`. Wait on the thing that actually changes — the scene node — and
+## then give the tail of `_go` a margin it does not have to win.
 func _settle(rig) -> void:
-	for i in 240:
+	# Annotated: `rig` is untyped here, so `scene()` hands back a Variant and
+	# `:=` cannot infer (CLAUDE.md §3).
+	var was: Node = rig.scene()
+	for i in 300:
 		await rig.wait_seconds(0.05)
-		if not Flow.busy:
+		if rig.scene() != was and not Flow.busy:
 			break
-	await rig.wait_seconds(0.25)
+	await rig.wait_seconds(0.8)
 
 
 # --- The slots ---------------------------------------------------------------

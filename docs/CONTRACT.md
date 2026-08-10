@@ -742,6 +742,7 @@ in your report — do not reach into their folder and "fix" it.
 | P10 hud | `scripts/ui/**`, `scenes/ui/**` |
 | P11 feel | `scripts/feel/**`, `assets/audio/**` |
 | P14 menu | `scripts/ui/menu/**`, `scenes/ui/menu/**` |
+| P15 town | `scripts/world/**`, `scripts/props/**`, `scripts/ui/stash/**` |
 | orchestrator | `project.godot`, `docs/**`, `tools/**`, `scripts/core/**`, `scripts/autoload/**`, `refs/**`, `progress.html`, `assets/characters/**`, `assets/animations/**` |
 
 Shared read-only for everyone: `scripts/core/consts.gd`, `refs/**`, `assets/**`.
@@ -1059,6 +1060,62 @@ Rules:
   `gear_forged(track, level)`.
 - New on the pause menu: `PauseMenu.Screen.POUCH`, `Root/Screens/PouchScreen`
   (`scripts/ui/menu/pouch_panel.gd`). It is read-only — the bag has no verbs.
+
+### The footlocker — a third pile, and the only one that is finite by design
+
+```gdscript
+# scripts/autoload/game_state.gd
+var stash: Dictionary[StringName, int] = {}   # the hero's quarters, survives death
+
+func stash_count(id: StringName) -> int
+func stash_slots_used() -> int            # ceil(n / def.stack) per kind -- the BAG's rule
+func stash_full() -> bool                 # slots_used >= K.STASH_SLOTS
+func stash_room_for(id: StringName) -> int  # slack in the part stack + free slots x stack
+func stash_add(id: StringName, n: int) -> int    # returns how many FIT
+func stash_take(id: StringName, n: int) -> int   # returns how many CAME OUT
+```
+
+There are now three places an item can be, and they are not interchangeable:
+`Run.bag` dies with the run, `Game.components` is uncapped and spendable only at
+a bench, and `Game.stash` is **24 slots** (`K.STASH_SLOTS`) that survive death
+and are unreachable from underground. `docs/METAGAME.md` §6.8 has the table and
+the reason the cap exists.
+
+Rules:
+
+- **`stash_add` and `stash_take` return a count, not a bool.** Both are partial
+  by design — a locker with room for two takes two of your four. A caller that
+  treats the return as success/failure will destroy items, which is the exact
+  bug the footlocker was built to fix.
+- **Nothing moves in or out except through `Run.consume` / `Run.collect`.**
+  `StashScreen` never touches `Run.bag`. Slot arithmetic and the heat premium
+  (METAGAME §4.5) live in `run_state.gd` and stowing has to pay the same
+  proration selling does, or the shelf becomes a way to launder heat value.
+- **The stash is not cleared by `Run.enter()` and not banked by `extract()`.** It
+  has no dungeon-side half at all; that is the point.
+- New on `Bus`: `stash_changed(stock)`, `rested(slot)`.
+- New on the save: a `stash` key. It arrived at `VERSION = 3` and rides in v4;
+  see "Settings and saves" below for why v3 itself is no longer readable.
+
+### Sleeping — `Flow.blink` fades without changing scene
+
+```gdscript
+Flow.blink(during: Callable, dark := 0.9) -> void   # fade out, pause, call, unpause, fade in
+```
+
+`Flow` owns the veil (CanvasLayer 200) and, per §10, is the only thing that may
+call `change_scene_to_file`. `blink` is the fade *without* the transition, for
+the case that has no scene on the other side of it: it takes `Flow.busy` and
+`Prompt.blocked` the same way `_go` does, pauses the tree, runs `during` behind
+the black, and lifts. It is a no-op while `busy` or `ending`.
+
+It exists so `bed.gd` does not build a second veil on a second CanvasLayer.
+Anything else that wants a black screen with no room behind it — an ending
+beat, a cutscene wipe — calls this rather than tweening its own. The callable
+runs **paused and in the dark**, so it is the right place for anything the
+player should find already true when the lights come up: `Bed._sleep` autosaves
+there specifically because `Saves.save` reads the hero out of the live tree and
+should record him standing by his own cot.
 
 ### Bottles and draughts — the array's size is the count
 
@@ -1770,10 +1827,19 @@ Saves.autosave()        # Flow calls this on EVERY transition; false = declined
 Saves.autosaved         # signal(slot) -- slot is -1 when it declined
 ```
 
-The save file is at **`VERSION = 2`**: it carries `bag_slots`, `upgrades` and
-`components` on top of v1. On load, both dictionaries are rebuilt with
-`StringName` keys — JSON hands back `String` keys, and a `String` key makes
-`forge_level(&"edge")` miss silently and every forged rung vanish.
+The save file is at **`VERSION = 4`**, and `READABLE` — not `VERSION` — is what
+`load_slot` checks. v2 added `bag_slots`, `upgrades` and `components` on top of
+v1; v3 added `stash` and `max_stamina`; v4 is the gear split, where `plate`
+stopped being one rung and became eight tracks. **v3 is refused rather than
+migrated** and `READABLE` holds `[4]` alone, because a v3 `plate` key means
+something the v4 accessors would read as a different piece of armour. An
+*additive* version bump can be readable alongside its predecessor; this one was
+not additive. `save_game.gd`'s header comment carries the full argument.
+
+Every one of those dictionaries is rebuilt on load with `StringName` keys — JSON
+hands back `String` keys, and a `String` key makes `forge_level(&"edge")` and
+`stash_count(&"void_pearl")` miss silently, so every forged rung and everything
+on the shelf vanishes.
 
 `Saves.load_slot()` deliberately does **not** change scenes — it hands back
 where the hero belongs and lets the caller transition however it wants.

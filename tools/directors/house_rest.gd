@@ -100,7 +100,9 @@ func _built(rig, town: Town) -> bool:
 	# pointed on purpose. Everything AFTER this beat goes back to the game rig,
 	# because the prompt and the screen are only proved at the distance and angle
 	# the player actually reads them from.
-	var keep := rig.scene().get_viewport().get_camera_3d()
+	# Annotated rather than inferred: the parser cannot infer through this chain
+	# and the file would not load at all (CLAUDE.md §3).
+	var keep: Camera3D = rig.scene().get_viewport().get_camera_3d()
 	var cam := Camera3D.new()
 	cam.fov = 55.0
 	rig.scene().add_child(cam)

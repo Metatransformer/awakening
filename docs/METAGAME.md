@@ -415,6 +415,12 @@ An autosave will never overwrite a save you made by hand — it takes the slot y
 are already playing, or the first empty one, or it declines and says nothing
 (`save_game.gd autosave()`).
 
+**There is a fifth moment, and it is the bed.** Everything the player does *in
+town* — the selling, the forging, the brewing, the gem-setting, the stashing —
+happens between transitions and is therefore on nobody's disk until the next one.
+Sleeping in the hero's quarters calls the same `Saves.autosave()` by hand. It is
+§6.8, and it is the only autosave a player asks for rather than receives.
+
 ---
 
 ## 6. The town
@@ -456,6 +462,10 @@ it.
   §6.6.
 - **The jewelcrafter.** Four blanks and eight paths (`scripts/items/jewel_db.gd`),
   the west gap of the yard. She is §6.7.
+- **The hero's quarters.** Not a counter — nobody stands in it, and nothing in it
+  takes gold. A lean-to in the south-west corner with a cot you sleep in and a
+  footlocker you stash in. It is §6.8, and `docs/SCOPE.md` §2 records why the
+  no-list's housing entry let it through.
 - **The gate.** Into the dungeon, and back out again on the arrival pad.
 
 The vendor and the smith share the far wall either side of the gate, because
@@ -815,6 +825,89 @@ only honest way to say "you have bought 1.2 and the game floors it".
 
 ---
 
+## 6.8 The hero's quarters — the bed and the footlocker
+
+*Numbered 6.8 for the reason §6.5 gives: these numbers are cited from code
+comments and directors. Do not renumber them.*
+
+A lean-to in the courtyard's south-west corner (`scripts/world/house.gd`), built
+by `Town._build_house`. Three walls, a sloped roof, a lantern, and two props:
+a cot and a chest. It costs nothing, it upgrades into nothing, and it is not a
+counter — nobody stands in it. `docs/SCOPE.md` §2 refuses housing and this is the
+argued exception; the reason is that **both props close a hole the metagame
+already had**, not that the hero wanted somewhere to live.
+
+### The bed writes the save
+
+`Flow._go` autosaves on scene transitions and only on scene transitions (§5,
+above). That covers the four moments a *run* passes through and none of the time
+between them — which is where the entire town lives. Sell the bag, forge two
+rungs, blow a bottle, set a gem, quit: as of the last autosave, none of it
+happened. The cot is where a player says *keep this*, in the gesture every game
+of this shape has used to say it.
+
+Holding **E** on the cot fades to black for 0.9 s, heals to full, refills
+stamina, and calls `Saves.autosave()`. The HUD's own **AUTOSAVING…** notice is
+what confirms it; when three slots are full of hand-made saves the autosave
+declines, and the bed says `RESTED. NO SLOT FREE TO SAVE.` rather than fading to
+black and silently doing nothing.
+
+**The heal costs the design nothing**, which is the only reason it is allowed to
+exist next to GDD §2's refusal of "a heal you can carry without paying for it".
+Both doors into town already heal to full — `Run.extract` and `Run.die` each call
+`Game.heal(Game.max_quarters)` — so there is no state in which a hero reaches
+this cot hurt. It heals so the object does what the object says, not because it
+moves a number anyone can reach. **And it is refused outright while
+`Run.in_dungeon`** (`bed.gd activate`), because the rule it enforces is not "the
+cot is in town", it is §5's *you cannot save your way out of a run*.
+
+**No clock advances.** `Town._build_env` pins the sky to one afternoon on
+purpose (SCOPE §1 freezes the mechanic count), and a bed that skipped to morning
+would be a day/night system arriving through a prop.
+
+### The footlocker stops the town destroying goods
+
+`Run.enter()` clears the bag. That is correct and it stays — the bag is the
+pressure valve (§3) and a run must start empty. But it meant that anything
+carried home and *not sold before the next descent* was deleted without a word:
+the four Deep Amber you were saving for a heavy-chest rung went into the dark the
+moment you touched the gate. Silent destruction is not a decision, it is a bug.
+
+The locker is `K.STASH_SLOTS` = **24 slots**, counted by exactly the bag's rule —
+`ceil(count / stack)` per item kind, so a stack of ten Bone Shards is one slot,
+not ten. It is stored in `Game.stash` (survives death; banked with components and
+relics, §6.5 "How they get home") and written to the save under `stash`.
+
+| | Bag (`Run.bag`) | Locker (`Game.stash`) | Pouch (`Game.components`) |
+|---|---|---|---|
+| Slots | 8 → 12, priced | 24, fixed | uncapped |
+| Survives death | no | yes | yes |
+| Reachable underground | it *is* the run | **no** | read-only, for forging |
+| Cleared by `Run.enter` | yes | no | no |
+
+**24 is finite for the same reason the bag is.** SCOPE §2: a shelf that never
+fills is a shelf that answers *is what I am carrying worth more than the walk
+back* on the player's behalf, forever. When the locker is full you sell
+something, and the screen says `THE LOCKER IS FULL` in the refusal colour rather
+than quietly dropping the transfer.
+
+`StashScreen` (`scripts/ui/stash/stash_screen.gd`) is the one new UI screen in
+the plan and SCOPE §1 records why. One row per item kind, two columns —
+**STORED** and **CARRIED** — `←` stows, `→` retrieves, held for the whole stack,
+`ESC` leaves. Both directions go through `Run.consume` and `Run.collect` rather
+than touching `Run.bag` directly, so the bag's slot arithmetic and the heat
+premium (§4.5) stay in the one file that owns them: **stowing a premium
+ingredient prorates the premium out exactly as selling it would**, and there is
+no way to launder heat value through the shelf.
+
+The row *order* is frozen when the screen opens. It used to re-sort
+carried-first on every transfer, which moved the row out from under the cursor
+mid-hold and emptied a stack the player never chose — found by
+`house_rest.gd` on its first run, and the reason the sort and the refresh are two
+functions now.
+
+---
+
 ## 7. The dungeon
 
 A seeded room graph (`scripts/world/dungeon.gd`) built from the P6 kit at run
@@ -1001,6 +1094,35 @@ taken on, and that with all three slots full of hand-made saves the autosave
 declines and the HUD stays quiet. It photographs the notice as the world comes
 back. It backs up the three real slots and puts them back, so running it cannot
 cost you a save.
+
+The quarters have one (§6.8):
+
+```bash
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --director=res://tools/directors/house_rest.gd --out=/tmp/house/x.png --warmup=60
+```
+
+It measures the billet against the relic ring, moves a stack both ways through
+`Run.consume` / `Run.collect`, fills the shelf to 24/24 and photographs the
+refusal, runs `Run.enter()` to prove the shelf survives what the bag does not,
+then wounds the hero, sleeps, and reloads the written slot to prove the stash
+came off the disk. `HOUSE FAIL …` on any claim that did not hold. It backs up
+the three real slots and puts them back, like `autosave.gd`. Last run:
+
+```
+ok  SLEEP is inside the walls (-12.2, 8.4)
+ok  OPEN is inside the walls (-8.1, 8.6)
+ok  the nearest relic lamp is 2.0 m clear of the furniture
+ok  the cot did not steal the button from four metres away
+ok  holding stowed the rest of the stack (bag has 0, shelf has 4)
+ok  the shelf filled to its cap (24/24 slots off 24 stacks)
+ok  a full locker refused the silk (3 still carried)
+ok  the run cleared the bag, as it always has
+ok  and the two pearls are still on the shelf (2)
+ok  he woke up whole (8 -> 12/12)
+ok  the rest wrote a slot (0)
+ok  the shelf came back off the disk (2 pearls)
+HOUSE OK
+```
 
 The forge and the pouch have theirs (§6.5):
 

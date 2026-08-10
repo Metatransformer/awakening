@@ -42,7 +42,7 @@ definition**, and §4.2 applies.
 | Jewelry slots | **4** | Amulet, 2 rings, bracelet. ×2 paths, ×5 rungs (base + 4 bought) |
 | **Armour / jewelry art** | **0** | Every piece is a number. No modular meshes, no icons beyond the existing catalogue rows. |
 | Town scenes | **1** | The courtyard. There is no second settlement. |
-| **New UI screens** | **0** | The Lanternkeeper and the Jewelcrafter are `Catalogue`s on the existing `TradeScreen`. The stat block is a panel on the equipment screen, not a screen. |
+| **New UI screens** | **1** | Was 0, and the zero is still the rule — see §2's housing entry. `StashScreen` is the one exception, because a footlocker is a two-column transfer and `TradeScreen` prices things. The Lanternkeeper and the Jewelcrafter are `Catalogue`s on the existing `TradeScreen`. The stat block is a panel on the equipment screen, not a screen. |
 | Endings | **2** | Lantern, Chord |
 | Currencies | **1** | Gold. Components and relics are items, not money. |
 | Ingredients / components | **10 / 8** | As built. No new rarity band. |
@@ -65,12 +65,22 @@ fixing the facing bug that has bitten this project three times
 (`CLAUDE.md` §4) — is weeks, and it buys silhouettes the player sees for four
 minutes each.
 
-**Zero new UI screens.** `TradeScreen` already drives two catalogues that behave
-differently (gold-only rows, gold-and-materials rows, held confirms, affordability
-colouring, refusal footers). A donation is a row whose price is one relic. The
-Lanternkeeper is a subclass and a row in `Npc.COUNTERS` — the contract in
-`docs/METAGAME.md` §6.6 says so explicitly: *"a third counter is a `Catalogue`
-subclass and a row in `Npc.COUNTERS`, nothing else."*
+**Zero new UI screens** *(one, since the footlocker; the rule is unchanged).*
+`TradeScreen` already drives two catalogues that behave differently (gold-only
+rows, gold-and-materials rows, held confirms, affordability colouring, refusal
+footers). A donation is a row whose price is one relic. The Lanternkeeper is a
+subclass and a row in `Npc.COUNTERS` — the contract in `docs/METAGAME.md` §6.6
+says so explicitly: *"a third counter is a `Catalogue` subclass and a row in
+`Npc.COUNTERS`, nothing else."*
+
+`StashScreen` is the exception and it is worth naming why, because the next
+person will want to make it a third one. Every `Catalogue` row is *a thing with a
+price you either can or cannot pay*; the footlocker has no price and no
+affordability, and it needs a column the trade screen has nowhere to put — what
+is on the shelf, beside what is in the bag, moving both ways. Bending
+`TradeScreen` into that would have cost more than the 200 lines it saved and
+would have left the smith's counter carrying a branch for a case it never sees.
+**One exception, argued. Not a precedent.**
 
 **One new mechanic.** The working — a thrown arc, a fuse, a sphere query, a
 cracked wall. Everything else in the plan is a *gate on*, a *number in*, or an
@@ -120,7 +130,29 @@ every time someone has the idea again.
   has magic — three usable items with charges, GDD §6.5 — and that is all the
   magic it has. Every one of those four is the first step of the multi-class game
   the line above already refuses.
-- Mounts, fishing, farming, housing, cooking.
+- Mounts, fishing, farming, **housing**, cooking.
+
+  **Housing shipped anyway, in one room, and the refusal still stands.** The
+  hero's quarters (`scripts/world/house.gd`) is a lean-to in the courtyard's
+  south-west corner with a bed and a footlocker in it. What this line refuses is
+  *housing as a system* — a plot you buy, rooms you place, furniture you
+  purchase and arrange, a decoration economy, a second interior to author and
+  light. None of that exists and none of it is planned. What shipped is two
+  props in an alcove, at the same budget as the smith's anvil: it takes no gold,
+  it has no upgrade ladder, and it has nothing you can put in it that is not an
+  item you already own.
+
+  It was allowed through because both props close holes the town already had.
+  The bed **writes the save** — `Flow._go` autosaves on scene changes only, so
+  until this existed, an hour of selling, forging and brewing in town was on
+  nobody's disk (`scripts/props/bed.gd` says this at the top). The footlocker
+  **stops the town silently destroying goods** — `Run.enter` clears the bag, so
+  ingredients carried home and not sold before the next descent were deleted
+  without a word. Neither is a feature anyone asked for as housing; both are
+  bugs wearing furniture.
+
+  See §2's "delete a tension" entry below for the storage half of the argument,
+  and `docs/METAGAME.md` §9 for the numbers.
 
 **Refused because they multiply the authoring cost of everything else:**
 
@@ -136,6 +168,14 @@ every time someone has the idea again.
 
 - A relic that can be sold, or that rolls from a table (GDD §6.3).
 - A bag upgrade past the four already priced (GDD §10).
+- **Storage the dungeon can reach.** The footlocker holds `K.STASH_SLOTS` = 24
+  slots and it is nailed to the floor of a room in town. GDD §2 refuses
+  "infinite storage" because the question the whole game turns on is *is what I
+  am carrying worth more than the walk back* — and a shelf you can reach from
+  floor three answers it for you, forever. So: no portable chest, no
+  send-to-stash, no "bank it from the vault", and no second locker underground.
+  The 24 is finite for the same reason the bag is; when it fills you sell
+  something, which is the decision the cap exists to force.
 - Healing items found underground (GDD §10).
 - Fast travel that is not a shortcut door you unlocked.
 - A save you can reload from mid-run (`docs/METAGAME.md` §5).
