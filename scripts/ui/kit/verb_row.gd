@@ -119,6 +119,14 @@ static func build(parent: Node, config: Dictionary) -> Button:
 		elif on_press != null:
 			push_error("[VerbRow] label='%s' reason=on_press is not a valid Callable" % label_text)
 
+	# The row's OWN Button.text is empty — everything visible is the line above,
+	# so the label, the meta and the chevron can be laid out in columns instead of
+	# crammed into one string. That leaves the row with no name a harness can
+	# match on, and every keyboard-navigation director in this repo finds a
+	# control by asking "is this the button that says X". So the label is stamped
+	# here, and `UiKit.label_of()` is the one reader of it.
+	row.set_meta(&"verb_label", label_text)
+
 	if parent != null:
 		parent.add_child(row)
 	return row

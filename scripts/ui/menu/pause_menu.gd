@@ -40,6 +40,11 @@ signal saved_to(slot: int)
 enum Screen { ROOT, EQUIP, POUCH, MAP, OPTIONS, SAVES }
 
 const NOTICE_TIME := 3.5
+
+## The root frame's width. Wider than the 480 the button stack needed, because a
+## verb row carries a meta column on the right and the two have to be able to sit
+## on one line — "Pouch ......... 7 / 12 slots" wrapped at 480.
+const ROOT_W := 560
 ## Keys that must never become a binding on their own.
 const MODIFIER_KEYS := [KEY_SHIFT, KEY_CTRL, KEY_ALT, KEY_META, KEY_CAPSLOCK]
 
@@ -122,6 +127,11 @@ var _listening: StringName = &""
 var _listen_return: Control = null
 
 var _cmd_buttons: Array[Button] = []
+## Where `refresh_root` rebuilds. Held rather than looked up by path, because the
+## containers between the frame and these two are unnamed layout and a path
+## through them is a path that breaks when the layout is adjusted.
+var _root_list: VBoxContainer
+var _root_band_slot: VBoxContainer
 ## One `MenuPageTabs` per paged screen. Kept so a page change can light the
 ## right tab on ALL of them: each screen carries its own copy of the strip, and
 ## a strip that only updated when its own screen was showing would be wrong the
@@ -137,6 +147,10 @@ var _notice_timer: Timer
 
 func _ready() -> void:
 	_ensure_pad_ui_actions()
+	# Before the first panel is built. `prewarm` bakes the procedural plate
+	# textures and loads the faces; without it the first menu frame a player ever
+	# sees is drawn with fallback styleboxes and then corrects itself.
+	UITheme.prewarm()
 	_build_root_screen()
 	_build_listen_overlay()
 	_build_notice()
@@ -185,6 +199,10 @@ func open() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().paused = true
 	_root.visible = true
+	# The band and the meta columns are about THIS moment in the run, so they are
+	# rebuilt on open rather than at boot. A menu that is never torn down would
+	# otherwise show the bag you had the last time you paused.
+	refresh_root()
 	_stack.clear()
 	_push({"screen": Screen.ROOT})
 	_play(SND_OPEN)
@@ -521,6 +539,23 @@ func _unhandled_input(event: InputEvent) -> void:
 
 # --- Root screen ------------------------------------------------------------
 
+## The root, on the kit.
+##
+## It was eight identical full-width buttons stacked in a box, which is the exact
+## shape `UiKit`'s header describes as what happens when a screen has paint and
+## no composition: no hierarchy for the eye to land on, and a pause menu that
+## looks the same whether you are safe in the garrison or four floors down with a
+## full bag. It said nothing about the run it was pausing.
+##
+## Rebuilt as a plate header (WHAT this is), a stat band (WHAT STATE the run is
+## in), and verb rows with a META COLUMN — the cost, the count, the consequence.
+## `Resume` is the one `primary`. `Pouch` says how full the bag is without your
+## opening it. `Quit to Title` says what it will cost you, in the row, before
+## the confirm dialog rather than only inside it.
+##
+## The band is REPAINTED on every open (`refresh_root`), not built once: the menu
+## is not torn down between visits, and a stat band showing the bag you had two
+## floors ago is worse than no band.
 func _build_root_screen() -> void:
 	var center := CenterContainer.new()
 	center.name = "Center"
@@ -528,75 +563,147 @@ func _build_root_screen() -> void:
 	_root_screen.add_child(center)
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
+	# PanelContainer, NOT Panel. A bare `Panel` is not a Container: it neither
+	# lays its children out nor takes a minimum size from them, so inside a
+	# CenterContainer it collapses to nothing and the whole pause menu renders as
+	# an empty screen — which is exactly what the first frame of this rebuild
+	# looked like, with every navigation assertion still passing.
 	var frame := PanelContainer.new()
 	frame.name = "Frame"
-	frame.theme_type_variation = &"MenuFrame"
-	frame.custom_minimum_size.x = 480
+	frame.custom_minimum_size.x = ROOT_W
+	# edge_to_edge: the header band and the stat band own their own inset and
+	# have to reach the frame's edge, or they read as two cards inside a card.
+	UITheme.style_panel(frame, UITheme.FRAME_FACE_SOLID, true)
 	center.add_child(frame)
 
 	var col := VBoxContainer.new()
-	col.theme_type_variation = &"MenuStack"
+	col.add_theme_constant_override("separation", 0)
 	frame.add_child(col)
 
-	var header := PanelContainer.new()
-	header.theme_type_variation = &"MenuHeader"
-	col.add_child(header)
-	var title := Label.new()
-	title.theme_type_variation = &"MenuTitle"
-	title.text = "PAUSED"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	header.add_child(title)
+	UiKit.plate_header(col, {
+		"kicker": "The Lower Worlds",
+		"title": "Paused",
+		"emblem": UiKit.action_icon("relic"),
+	})
+
+	_root_band_slot = VBoxContainer.new()
+	_root_band_slot.add_theme_constant_override("separation", 0)
+	col.add_child(_root_band_slot)
 
 	var pad := MarginContainer.new()
-	pad.theme_type_variation = &"MenuBodyPad"
+	pad.add_theme_constant_override("margin_left", 0)
+	pad.add_theme_constant_override("margin_right", 0)
+	pad.add_theme_constant_override("margin_top", 10)
+	pad.add_theme_constant_override("margin_bottom", 10)
 	col.add_child(pad)
-	var list := VBoxContainer.new()
-	list.theme_type_variation = &"MenuCommands"
-	pad.add_child(list)
+	_root_list = VBoxContainer.new()
+	_root_list.add_theme_constant_override("separation", 0)
+	pad.add_child(_root_list)
 
-	_cmd_buttons.clear()
-	_cmd_buttons.append(_command(list, "Resume", close))
-	_cmd_buttons.append(_command(list, "Equipment", func() -> void:
-		_push({"screen": Screen.EQUIP})))
-	# Second, directly under Equipment, because the two answer adjacent
-	# questions -- what am I HOLDING, what am I CARRYING -- and a player who has
-	# just checked one usually wants the other.
-	_cmd_buttons.append(_command(list, "Pouch", func() -> void:
-		_push({"screen": Screen.POUCH})))
-	_cmd_buttons.append(_command(list, "Save Game", func() -> void:
-		_push({"screen": Screen.SAVES, "mode": MenuSavesPanel.Mode.SAVE})))
-	_cmd_buttons.append(_command(list, "Load Game", func() -> void:
-		_push({"screen": Screen.SAVES, "mode": MenuSavesPanel.Mode.LOAD})))
-	_cmd_buttons.append(_command(list, "Options", func() -> void:
-		_push({"screen": Screen.OPTIONS, "tab": _options.current_tab()})))
-	_cmd_buttons.append(_command(list, "Quit to Title", _ask_quit_to_title))
-	_cmd_buttons.append(_command(list, "Quit", _ask_quit))
-	MenuUtil.chain(_cmd_buttons, true)
-
-	var footer := PanelContainer.new()
-	footer.theme_type_variation = &"MenuFooter"
+	var footer := MarginContainer.new()
+	footer.add_theme_constant_override("margin_left", 18)
+	footer.add_theme_constant_override("margin_right", 18)
+	footer.add_theme_constant_override("margin_bottom", 12)
 	col.add_child(footer)
 	var hint := Label.new()
-	hint.theme_type_variation = &"MenuHint"
 	# B, not Start, because B is the universal back in every other screen in this
 	# menu and the root is the one place it was not written down. At the root
 	# there is nothing left to back out of, so backing out closes — which is what
 	# "Resume" was already describing.
 	hint.text = "↑↓ / D-pad Select    Enter / A Confirm    Esc / B Resume"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UITheme.apply_text_style(hint, UITheme.TYPE_CAPTION)
 	footer.add_child(hint)
 
+	refresh_root()
 
-func _command(parent: Node, label: String, action: Callable) -> Button:
-	var b := Button.new()
-	b.text = label
-	b.theme_type_variation = &"MenuCommand"
-	b.focus_mode = Control.FOCUS_ALL
-	parent.add_child(b)
-	b.pressed.connect(func() -> void:
-		_last_root_button = b
-		_play(SND_CONFIRM)
-		action.call())
+
+## Rebuild the band and the rows from the live run.
+##
+## The whole list is rebuilt rather than repainted in place, unlike the doll's
+## tiles: the ROWS themselves change here (a refusal appears, a meta figure
+## moves), and there is nothing on this screen a rebuild can lose — focus is
+## re-established by `_apply_top` on every push, and `_last_root_button` is
+## restored by NAME below rather than by node identity.
+func refresh_root() -> void:
+	if _root_list == null:
+		return
+	var want := _last_root_button.text if _last_root_button != null else ""
+	UITheme.clear_children(_root_band_slot)
+	UITheme.clear_children(_root_list)
+	_cmd_buttons.clear()
+
+	var used := Run.slots_used()
+	var underground := Run.in_dungeon
+	UiKit.stat_band(_root_band_slot, [
+		{"value": "%d" % Run.depth if underground else "—", "label": "Depth"},
+		{"value": "%d / %d" % [used, Game.bag_slots], "label": "Slots",
+			"tone": UITheme.WARNING if used >= Game.bag_slots else null},
+		{"value": "%d" % Run.bag_value(), "label": "Bag"},
+		{"value": "%d" % Game.gold, "label": "Purse", "tone": UITheme.SUCCESS},
+		{"value": "%d" % Run.extract_cost() if underground else "—", "label": "Way out",
+			"tone": UITheme.DANGER if underground and Run.extract_cost() > Game.gold else null},
+	])
+
+	_command("Resume", "resume", "", close, {"primary": true})
+	_command("Equipment", "sword",
+		ArmamentDb.slot_name(Game.armament(Game.HAND_RIGHT)),
+		func() -> void: _push({"screen": Screen.EQUIP}), {"submenu": true})
+	# Second, directly under Equipment, because the two answer adjacent
+	# questions -- what am I HOLDING, what am I CARRYING -- and a player who has
+	# just checked one usually wants the other.
+	_command("Pouch", "bag", "%d / %d slots" % [used, Game.bag_slots],
+		func() -> void: _push({"screen": Screen.POUCH}), {"submenu": true})
+	_command("Save Game", "save", "", func() -> void:
+		_push({"screen": Screen.SAVES, "mode": MenuSavesPanel.Mode.SAVE}),
+		{"submenu": true})
+	_command("Load Game", "read", "", func() -> void:
+		_push({"screen": Screen.SAVES, "mode": MenuSavesPanel.Mode.LOAD}),
+		{"submenu": true})
+	_command("Options", "options", "", func() -> void:
+		_push({"screen": Screen.OPTIONS, "tab": _options.current_tab()}),
+		{"submenu": true})
+	# The consequence goes in the META COLUMN, in the row, not only behind the
+	# confirm dialog. A player who has read "the run is lost" before pressing is
+	# a player the dialog is confirming a decision for rather than breaking one to
+	# them.
+	_command("Quit to Title", "leave",
+		"the run is lost" if underground else "", _ask_quit_to_title)
+	_command("Quit", "quit", "", _ask_quit)
+	MenuUtil.chain(_cmd_buttons, true)
+
+	# Restored by LABEL: `refresh_root` builds new Buttons every time, so the
+	# node the player last pressed no longer exists. The text is what the player
+	# actually remembers standing on.
+	_last_root_button = null
+	for b in _cmd_buttons:
+		if b.text == want:
+			_last_root_button = b
+			break
+
+
+## One root verb. `glyph` names a member of the ACTION family; `meta` is the
+## right-hand column and is allowed to be empty (a row with nothing to say about
+## cost is still a row, it just says nothing).
+func _command(label: String, glyph: String, meta: String, action: Callable,
+		extra: Dictionary = {}) -> Button:
+	var config := {
+		"label": label,
+		"icon": UiKit.action_icon(glyph),
+		"meta": meta,
+		"on_press": func() -> void:
+			_play(SND_CONFIRM)
+			action.call(),
+	}
+	config.merge(extra, true)
+	var b := UiKit.verb_row(_root_list, config)
+	if b == null:
+		return null
+	# The press handler above cannot capture `b` (it does not exist yet), and the
+	# last-pressed row has to be recoverable after a rebuild — so the bookkeeping
+	# is a second connection rather than a closure over a node.
+	b.pressed.connect(func() -> void: _last_root_button = b)
+	_cmd_buttons.append(b)
 	return b
 
 

@@ -126,6 +126,21 @@ static func footer_toast(parent: Node, text: String, tone: Color = UITheme.SUCCE
 	return FooterToastScript.build(parent, text, tone)
 
 
+## What a control SAYS, whether it is a plain Button or a composed `VerbRow`.
+##
+## A VerbRow's own `text` is empty by construction, so `button.text == "Options"`
+## — which is how every keyboard-navigation director in this repo finds a control
+## — silently stops matching the moment a screen adopts the kit. One reader, here,
+## rather than each director growing its own special case.
+static func label_of(control: Control) -> String:
+	if control == null:
+		return ""
+	if control.has_meta(&"verb_label"):
+		return String(control.get_meta(&"verb_label"))
+	var button := control as Button
+	return button.text if button != null else ""
+
+
 ## Resolve an icon argument that may be a live Texture2D, a `res://` path, or
 ## absent. The rule lives in KitIcon because the composites need it too, and
 ## UiKit preloads them all — putting it here and having them call back would make

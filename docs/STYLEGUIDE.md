@@ -831,3 +831,10 @@ it counts down to zero in RUST. The palette becomes the score.
   SystemFont theme §3.0 replaces. They are still what most panels render
   through: the screens move onto `UITheme` one at a time, and this line goes
   when the last one has. Do not add to them.
+
+  On the kit so far: the paper doll and its slot tiles, and the pause menu's
+  ROOT screen (plate header, a live stat band, and `VerbRow`s with a meta
+  column, replacing eight identical full-width buttons). Still on the old
+  theme: equipment, pouch chrome, options, saves, map, the pawnbroker, the
+  locker and the receipt. The bag grid — `ItemGrid` / `ItemCell` — is NOT on
+  the list; it stays as it is.
