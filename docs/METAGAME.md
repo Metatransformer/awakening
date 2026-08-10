@@ -896,6 +896,8 @@ second one is a decision.
 | Ingredients, components and drop tables | `scripts/items/item_db.gd` |
 | The smith's catalogue, and the forge recipes | `scripts/items/shop_db.gd` |
 | The alchemist's catalogue, and the brew recipes | `scripts/items/alchemy_db.gd` |
+| The jewelcrafter's slots, paths and rungs | `scripts/items/jewel_db.gd` |
+| The hero's five stats, drawn | `scripts/ui/menu/equip_panel.gd` |
 | What a draught is called and what it does | `scripts/items/potion_db.gd` |
 | Bottles, their contents and the draught clocks | `scripts/autoload/game_state.gd` |
 | The upgrade ladders, rung by rung | `scripts/core/consts.gd` (`K.EDGE_DAMAGE` …) |
@@ -1014,17 +1016,25 @@ saves, wipes and reloads to prove a forged rung survives quitting the game.
 `FORGE FAIL …` on any claim that did not hold. Last run:
 
 ```
+PLATE full-heavy soak=4.00 speed=0.9200
+PLATE full-light soak=2.00 speed=1.0000
 FORGE base       edge=+0 plate=-0 guard=70 draw=0.44 reach=8.74
-FORGE full       edge=+3 plate=-3 guard=115 draw=0.26 reach=18.20
+FORGE full       edge=+3 plate=-4 guard=115 draw=0.26 reach=18.20
 FORGE swept      bag=3 value=62        (walked over, nothing pressed)
 FORGE pre_extract bag=140 fee=35
-FORGE home       bench={grit:92 plate:82 coil:78 core:115} bag={void_pearl:1}
-FORGE after_death bench_cores=115 bag=0
-FORGE reloaded   rungs={edge:1 plate:1 guard:1 string:1 chain:1} slots=12
-FORGE rungs taught=1 of 3 (relics donated: 0)
+FORGE home       bench={grit:86 plate:53 coil:78 core:112} bag={void_pearl:1}
+FORGE after_death bench_cores=112 bag=0
+FORGE reloaded   rungs={edge:3 guard:3 string:3 chain:3
+                        plate_*_heavy:3 plate_*_light:0} slots=12
+FORGE rungs taught=3 of 3 (relics donated: 2)
 FORGE pouch frame=1220x637 viewport=1280x720
 FORGE OK
 ```
+
+The two `PLATE` lines are the whole reason beats P1–P4 exist: they are the sums
+§6.5 claims, printed rather than asserted-in-silence, so a drift shows up in the
+log instead of in the difficulty three months later. `plate=-4` on the full line
+is the four heavy pieces at rung 3, at the `SOAK_MAX` ceiling.
 
 **B4 was red for a long time and is green as of 2026-08-09.** It has been red in
 two different directions, which is why the check earns its place.
@@ -1083,6 +1093,43 @@ alchemist's four materials joined the forge's four, which is why that list is a
 grid rather than a column at all — two columns then, four now that the card runs
 the full width under the bag. A rectangle in the wrong place is not a thing an assertion can
 see.
+
+The jewelcrafter has hers (§6.7):
+
+```bash
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --director=res://tools/directors/jewel_loop.gd --out=/tmp/jewel/x.png --warmup=60
+```
+
+It checks her two stones are on her own bench and on nobody else's, finds her in
+the yard and measures her clear of the relic ring, opens her board through TALK,
+watches it go four blank rows → five → eight as slots are bought, commits a path
+and watches the sibling leave, buys every rung and reads the numbers back
+through the accessors, opens **both faucets on each capped number** to prove the
+cap belongs to the number, checks she is not rationed by the smith's relics, and
+photographs the stat block. `JEWEL FAIL …` on any claim that did not hold. Last
+run:
+
+```
+JEWEL stones=[silver_wire, cut_gemstone]
+JEWEL she stands at (-11.25, 0.00, 1.10) facing 90 deg
+JEWEL nearest relic post = 2.30 m
+JEWEL widest board = 8 rows
+JEWEL full-A edge=+2 soak=2.00 hearts=5 stamina=100
+JEWEL full-B speed=1.0000 regen=64.40 stamina=160
+JEWEL both soak faucets open = 4.00 (cap 4.00)
+JEWEL swift-only raw=1.0837 clamped=1.0000
+JEWEL both edge faucets open = +5 (cap 5)
+JEWEL smith knows 1 rungs; she offers 4
+JEWEL stat block { damage: "+1 quarter", speed: "98.6%", health: "4 hearts",
+                   stamina: "100", soak: "-1 quarter  (1.2)" }
+JEWEL equip frame=1220x604 viewport=1280x720
+JEWEL OK
+```
+
+`swift-only raw=1.0837 clamped=1.0000` is the line worth keeping: the ladder
+genuinely computes a number above 1.0 and the clamp is what makes it a ceiling.
+Printing the raw value is how we know the clamp is doing work rather than the
+ladder happening to stop short.
 
 One trap worth naming, because both these directors fell in it and the symptom
 blamed the wrong system. `game_flow.gd` autosaves at the **end** of a
