@@ -332,7 +332,7 @@ surprise, and so nobody rebuilds the plan around it.
 | **A sixth stat** | Every new track wants a number nothing else owns — crit, luck, poise, cast speed. | GDD §6.6: five stats, each one felt inside a run. A stat needing a tooltip is a stat that does not matter. |
 | **Audio slips to never** | It is M8, it has no gameplay, and nothing fails without it. | It is a ship blocker. A silent action game reads as a prototype and no store page survives it. |
 | **The endless mode absorbs the project** | It is already built, it is genuinely fun, and it has no bottom — so it can always be improved instead of finishing floors 2–4. | It is post-credits content. It gets the floor-10 relic and the plaque and **nothing else** until M9. |
-| **Lore gravity** | `~/valenfeld` has 109 characters, 172 places, 59 factions and 90 quests, all good. | The game uses: the Society, the College, the Vyr, Valenfeld, and the Sundering as the reason the shaft is there. Five nouns. Everything else is flavour text on a relic, at most. |
+| **Lore gravity** | `~/valenfeld` has 109 characters, 172 places, 59 factions and 90 quests, all good. | The game uses: the Society, the College, the Vyr, Valenfeld, the Sundering, and **Highbridge** as the reason the shaft is there. **Six** nouns — Highbridge was added 2026-08-09 when the hub became a garrison rather than the town itself (GDD §6), and it earns its place by explaining why the hub is four counters and a hole. It is the last one. Everything else is flavour text on a relic, at most. |
 
 ---
 

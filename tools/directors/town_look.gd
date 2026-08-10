@@ -26,9 +26,14 @@ func run(rig) -> void:
 	cam.make_current()
 
 	# Wide first: the whole yard from above the arrival end, which is the frame
-	# that answers "does this look like a town".
+	# that answers "does this look like a garrison".
+	#
+	# Raised from (0, 9.5, 15) when the boundary became a 6 m curtain wall: at the
+	# old height the south wall stood between this camera and the yard and filled
+	# the bottom third of the shot with masonry. A proof camera that cannot see the
+	# thing it is proving is worse than no shot, because it still says SHOT_OK.
 	cam.fov = 62.0
-	cam.global_position = Vector3(0.0, 9.5, 15.0)
+	cam.global_position = Vector3(0.0, 15.0, 21.0)
 	cam.look_at(Vector3(0.0, 1.0, -3.0), Vector3.UP)
 	await rig.wait_frames(4)
 	await rig.capture(out.path_join("tl_00_yard.png"))

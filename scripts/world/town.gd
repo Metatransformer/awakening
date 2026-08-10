@@ -1,13 +1,26 @@
 class_name Town
 extends Node3D
-## The hub. A fenced yard on open grass, four people, and a hole in the ground.
+## The hub. **A garrison, not a town** -- the Highbridge people's walled camp over
+## the mouth of the mine. Four people, a yard, and a hole in the ground.
 ##
-## It used to be a walled stone courtyard at night, which was a mistake worth
-## writing down: it was built from the dungeon kit, so it rendered as one more
-## interior -- the same masonry, the same dark, the same torches. The single
-## strongest contrast this game can get for free is that the surface is OUTSIDE
-## and the Lower Worlds are not, and the courtyard threw it away. Sky, grass and
-## a waist-high fence you can see over cost three props and buy the whole of it.
+## Two mistakes are recorded here because the fix for each broke the other, and
+## the current build is the shape that satisfies both:
+##
+##   1. **It was a stone courtyard at night**, built from the dungeon kit, so it
+##      photographed as one more interior -- same masonry, same dark, same
+##      torches. The strongest contrast this game gets for free is that the
+##      surface is outside and the Lower Worlds are not, and the courtyard threw
+##      it away.
+##   2. **Then it was an open yard behind a waist-high fence**, which fixed that
+##      and cost something else: you could see straight out over the rail at a
+##      placeholder plain that runs flat to the horizon in every direction. An
+##      empty world visible past the only safe place in the game is worse than no
+##      world at all.
+##
+## So: curtain walls high enough that the horizon never clears them, and DAYLIGHT
+## AND SKY AND GRASS INSIDE them. Sky overhead is what keeps a walled yard reading
+## as a fort rather than as a room whose ceiling failed to load. Those are the two
+## halves; do not remove either one thinking it is decoration.
 ##
 ## Deliberately TINY -- about eight seconds of walking, corner to corner. The
 ## town is not content; it is the place where the number in your bag turns into
@@ -19,20 +32,39 @@ extends Node3D
 ## gate's cold mouth mean something.
 
 const KIT_FLOOR := preload("res://scenes/kit/floor_slab.tscn")
+const KIT_WALL := preload("res://scenes/kit/wall_segment.tscn")
+const KIT_PILLAR := preload("res://scenes/kit/pillar.tscn")
 const MAT_GRASS := preload("res://assets/materials/mat_grass.tres")
+## The kit's own stone, at a daylight albedo.
+##
+## Not a second look -- the SAME texture and normal map as `mat_wall.tres`, with
+## albedo lifted 0.46 -> 0.82. The dungeon's 0.46 is tuned against a torch at
+## `KitStyle.FIRE_ENERGY` 9.5 sitting two metres away; under one directional sun
+## at 1.35 the identical number renders the curtain as a black band across the top
+## of the frame. Same masonry, two lighting regimes, two albedos. If the dungeon
+## ever changes stone, change it in both.
+const MAT_WALL_SUNLIT := preload("res://assets/materials/mat_wall_sunlit.tres")
 const SKY_SHADER := preload("res://assets/shaders/sky.gdshader")
 
-## Where the fence stands. Unchanged from the old wall line, because every NPC
+## Clear width left between the two shaft-head rails, so the arch is walkable.
+const RAIL_GAP := 5.0
+
+## Where the curtain stands. Unchanged through both rebuilds, because every NPC
 ## position in `_build_people` and the whole prop ring in `_build_relic_props`
 ## are tuned against these numbers and against the arrival camera.
 @export var yard: Vector2 = Vector2(26.0, 22.0)
-## The grass goes well past the fence so the town sits IN a landscape instead of
-## on a slab with a void around it. Placeholder ground, on purpose -- SCOPE §3's
-## gate is a played hour, not a look.
-## Big enough that its straight edge is never on screen. Outdoor fog is thin (see
-## `_build_env`), so it cannot be used to hide a horizon the way the dungeon's can
-## -- the slab just has to run past the far clip.
+## The grass runs well past the walls, so the garrison sits IN a landscape rather
+## than on a slab with a void around it. Placeholder ground, on purpose --
+## SCOPE §3's gate is a played hour, not a look. Nothing inside the yard can see
+## any of it now; it is for the lookdev and rampart-height cameras, and for the
+## day somebody cuts a gate in the north wall.
 @export var ground: Vector2 = Vector2(300.0, 300.0)
+## **Tall enough that you cannot see out, and that is the requirement, not a
+## style.** The game camera sits around 3 m and pitches about thirty degrees
+## down; anything past roughly 4 m already puts the skyline behind masonry, and 6
+## gives margin for the pitch-up. Drop this and the empty placeholder plain comes
+## back into frame over the parapet.
+@export var wall_height: float = 6.0
 
 var vendor: Npc
 var smith: Npc
@@ -216,10 +248,10 @@ func _build_yard() -> void:
 
 	var hx := yard.x * 0.5
 	var hz := yard.y * 0.5
-	# A fence runs along local X with its face down local +Z -- the same frame the
-	# wall segments used, so these four lines did not have to change when the
-	# masonry did. Different seeds, or opposite sides lean identically and the eye
-	# catches the mirror.
+	# The curtain. A `KitWall` runs along local X with its finished face down local
+	# +Z, which is the frame the fence borrowed, so these four lines have survived
+	# both boundaries unchanged. Different seeds, or opposite sides get an identical
+	# block field and the eye catches the mirror.
 	var sides := [
 		{"yaw": 0.0, "at": Vector3(0, 0, -hz), "len": yard.x, "seed": 501},
 		{"yaw": PI, "at": Vector3(0, 0, hz), "len": yard.x, "seed": 502},
@@ -227,12 +259,36 @@ func _build_yard() -> void:
 		{"yaw": -PI * 0.5, "at": Vector3(hx, 0, 0), "len": yard.y, "seed": 504},
 	]
 	for s in sides:
-		var f := Fence.new()
-		f.length = float(s["len"])
-		f.rng_seed = int(s["seed"])
-		f.position = s["at"]
-		f.rotation.y = float(s["yaw"])
-		add_child(f)
+		var w := KIT_WALL.instantiate()
+		w.length = float(s["len"])
+		w.height = wall_height
+		w.rng_seed = int(s["seed"])
+		w.material = MAT_WALL_SUNLIT
+		w.position = s["at"]
+		w.rotation.y = float(s["yaw"])
+		add_child(w)
+
+	# Corner towers -- pillars run a third taller than the curtain, so the yard has
+	# four hard verticals at its corners instead of a continuous band of masonry.
+	# That is most of what separates a fort from a room with no ceiling.
+	for sx in [-1.0, 1.0]:
+		for sz in [-1.0, 1.0]:
+			var p := KIT_PILLAR.instantiate()
+			p.height = wall_height * 1.32
+			p.material = MAT_WALL_SUNLIT
+			p.position = Vector3(hx * sx, 0.0, hz * sz)
+			add_child(p)
+
+	# A rail round the shaft head, either side of the arch. Two runs of the same
+	# fence the boundary used to be -- a working mine has something stopping people
+	# walking into it in the dark, and it is the one thing in the yard that says the
+	# hole is a hole before you are standing on it.
+	for sx in [-1.0, 1.0]:
+		var rail := Fence.new()
+		rail.length = 5.0
+		rail.rng_seed = 540 + int(sx)
+		rail.position = Vector3((RAIL_GAP * 0.5 + 2.5) * sx, 0.0, -yard.y * 0.40 + 1.4)
+		add_child(rail)
 
 
 func _build_people() -> void:

@@ -38,12 +38,20 @@ withdrew to their sky-seat and left the world to fail without them. You make run
 into it. You take what the dead empire left. You decide, every time, when to
 leave.
 
+**You never see Valenfeld.** The hub you play in is the **Highbridge garrison**
+— the walled camp the Highbridge people hold at the shaft head, a day's road from
+the town proper. That is deliberate, and it is the reason the hub gets to be four
+counters and a hole in the ground: a garrison is *supposed* to be small, purposeful
+and short of comforts, so nobody has to explain why there is no inn, no square and
+nobody to talk to who is not selling something. A town would have owed you those.
+See §6.
+
 The moment-to-moment is OOT: a boom camera, weighty camera-relative locomotion, a
 committed roll, a shield, a telegraphed enemy you can read. The shape around it
-is Moonlighter: a town, a counter, and a hole in the ground that gets worse the
-further in you go.
+is Moonlighter: a garrison, a counter, and a hole in the ground that gets worse
+the further in you go.
 
-**The one thing this game does that Moonlighter did not: the town changes.**
+**The one thing this game does that Moonlighter did not: the garrison changes.**
 
 The shaft under Valenfeld is called **the Sunken Cut**. That is the name of the
 *way down* — the one dungeon there is a way into — and the four authored floors
@@ -299,19 +307,28 @@ being a fork and started being floor 5, and floor 5 is out of scope.
 
 ---
 
-## 6. The town — twelve relics, twelve consequences
+## 6. The garrison — twelve relics, twelve consequences
 
-Valenfeld is one walled courtyard. It gains **one** counter and no new screens.
+The Highbridge garrison is one walled yard over the mine mouth: curtain walls you
+cannot see out of, open sky above them, and a rail round the shaft head. It gains
+**one** counter and no new screens.
 
-**The Lanternkeeper** keeps the Far Lantern Society's hall on the square. She
-does not buy and she does not sell: you hand her a relic and something in the
-town changes. Mechanically she is a `Catalogue` subclass and a row in
+The walls are not scenery. Everything past them is placeholder ground that runs
+flat to the horizon, and a visible empty world is worse than none — so the
+boundary is load-bearing until there is something outside worth seeing. The sky
+above it is equally load-bearing in the other direction: take that away and the
+yard is a dungeon room whose ceiling failed to load, which is exactly what the
+hub used to be.
+
+**The Lanternkeeper** keeps the Far Lantern Society's hall against the east wall.
+She does not buy and she does not sell: you hand her a relic and something in the
+garrison changes. Mechanically she is a `Catalogue` subclass and a row in
 `Npc.COUNTERS`, exactly like the smith and the alchemist, driven by the same
 `TradeScreen` — a donation is a transaction whose price is **one relic and the
 cost of making it work again** (§6.4). There is no fourth screen.
 
 The vendor buys, the smith forges, the alchemist brews, the Lanternkeeper
-records. Four counters, and that is the town.
+records. Four counters, and that is the garrison.
 
 ### 6.1 The rule that keeps this small
 

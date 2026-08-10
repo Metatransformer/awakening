@@ -25,7 +25,7 @@ extends Control
 ## and a summary screen in Open Sans next to a HUD made of whole pixels is the
 ## loudest "unfinished" signal the game could send.
 ##
-## Flow opens it and Flow closes it -- BACK TO TOWN calls `Flow.to_town()`, and
+## Flow opens it and Flow closes it -- the button calls `Flow.to_town()`, and
 ## `Flow` is still the only thing in the project that changes scenes.
 
 ## Rows of loot, before the list starts scrolling into the footer. Twelve bag
@@ -391,7 +391,7 @@ func _strike(r: Rect2, s: Vector2) -> void:
 	draw_rect(r, Color(Pal.VITAL, 0.45), false, Pal.px(2.0, s.y))
 
 
-## BACK TO TOWN, and the one thing on this screen you can press.
+## The way home, and the one thing on this screen you can press.
 ##
 ## A single button rather than a "press any key" line: the run is over and going
 ## home is not a dismissal, it is the next move in the loop. It carries the button
@@ -405,7 +405,9 @@ func _strike(r: Rect2, s: Vector2) -> void:
 func _draw_button(s: Vector2, panel: Rect2, pad: float, y: float,
 		dry: bool) -> float:
 	var t := Pal.px(16.0 / PixelFont.H, s.y)
-	var label := "BACK TO TOWN"
+	# The hub is the Highbridge garrison, not a town (docs/GDD.md §6). The button
+	# width is measured off the label, so a longer string just makes a wider button.
+	var label := "BACK TO THE GARRISON"
 	var bw := PixelFont.width(label, t) + pad * 2.0
 	var bh := PixelFont.height(t) + pad
 	y += Pal.px(12.0, s.y)
