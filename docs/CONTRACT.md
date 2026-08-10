@@ -644,21 +644,33 @@ wind-up instead of returning to idle and striking a pose afterwards.
 is applied when a node starts and a node behind a zero time scale never starts.
 
 The tell is `SpinVfx` (`scripts/combat/spin_vfx.gd`), driven every frame off the
-hold clock: motes drawn **into** the blade, the blade taking on an azul emission
-through `HitFlash`, an `OmniLight3D` riding the steel, and on release a trail
-swept **clockwise** around him at 1.7 m. That trail is one small emitter on a
-turning pivot leaving world-space motes behind it — the arc is where the emitter
-has *been*, which is why it follows the blade instead of appearing around it.
+hold clock: motes drawn **into** the blade, the blade taking on a fire emission
+through `HitFlash`, an `OmniLight3D` riding the steel, and on release a ring of
+fire swept **clockwise** around him at 1.7 m — Ocarina's spin, which is what the
+effect is copying.
+
+That ring is a **mesh**, not particles: an annulus built once (1.18 m to 2.20 m,
+so its outer edge lands on `spin_reach`) with a shader that lights only the part
+of it the blade has already passed. `head` is the sweep in turns, `tail` is how
+much of the circle burns at once. It was a particle trail before — one emitter on
+a turning pivot leaving world-space motes behind it — and that cannot be made
+continuous, because an emitter emits once per *frame*: at 30 fps the pivot steps
+0.74 m round a 10.7 m circumference and the ring photographs as a string of
+beads. Particles are still there, but only as the **embers** thrown off the head,
+which are meant to be discrete.
+
 Its colours are chosen for how they **stack**: the particles are additive, so a
-pale blue clips to white the moment three of them overlap on an already-lit
-floor, and the numbers in that file are the deep end of azul for that reason and
-are not to be brightened without re-rendering. A hold with no tell is a hold
-nobody can learn.
+warm mote clips the moment three of them overlap on an already-lit floor, and the
+numbers in that file keep blue far below red so the clip lands on amber instead
+of on white. They are not to be brightened without re-rendering
+(`tools/directors/spin_rings.gd`). A hold with no tell is a hold nobody can
+learn.
 
 **The effect outlives the lockout on purpose.** `spin_swing_time` is 0.68 s, the
-arc takes ~0.72 s to draw and its motes live another half-second after that, so
-the hero has his feet back while the circle behind him is still burning. The
-magic lags the sword.
+head closes the circle at 0.48 s and then keeps going for another tail's worth,
+eating the fire out from under itself until nothing is left at ~0.78 s — and the
+embers fall for longer still. The hero has his feet back while the circle behind
+him is still burning. The magic lags the sword.
 
 Sound: `sword_charging` rises from the **press**, and both the release swipe and
 the hero's yell fire on the **release**. The yell was on the arm-up at first,
