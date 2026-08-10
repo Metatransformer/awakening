@@ -570,6 +570,19 @@ var rope: EscapeRope = null
 ## and half of what it would render is the back of his own face.
 var _first_person: bool = false
 
+## The block he has hold of, or null. Set by `grip_push` — see the shoulder
+## section for what having hold of one costs him.
+var _grip: Node3D = null
+## The cardinal heading INTO the gripped block. Not re-derived per frame: the
+## grip is the promise that the shove keeps going the way it started, and a
+## direction taken live off the stick would let a player rotate a block round a
+## corner without ever letting go.
+var _grip_axis: Vector3 = Vector3.ZERO
+## How fast the block walks. The BLOCK's number, handed over at the grip, so the
+## two cannot drift apart — a hero who walked faster than the stone would spend
+## every slide with his chest inside it.
+var _grip_speed: float = 0.0
+
 var _model: Node3D
 var _rig: Node3D
 var _anim_player: AnimationPlayer
@@ -1311,6 +1324,16 @@ func _physics_process(delta: float) -> void:
 	var locked := (Prompt != null and Prompt.blocked) \
 		or (rope != null and rope.active()) \
 		or _first_person
+
+	# Everything that is not standing on the floor in control of himself lets go
+	# of the block, in one line and BEFORE the state match, so a roll, a swing, a
+	# jump, a hookshot, a shop screen and a hit all break the grip through the
+	# same door. Written as a release inside each of those instead, it would be
+	# seven places to remember and the eighth would be the one that shipped.
+	if _grip != null and (locked or state != MoveState.GROUND or not is_on_floor() \
+			or not is_instance_valid(_grip)):
+		_drop_grip()
+
 	var stick := Vector2.ZERO if locked \
 		else Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down")
 	var mag := clampf(stick.length(), 0.0, 1.0)
@@ -1399,6 +1422,16 @@ func _tick_ground(wish: Vector3, mag: float, delta: float) -> void:
 	# the hero keeps steering the whole way up and down. Air control in a game
 	# with no aerial attacks is just the ability to land where you aimed.
 	_try_start_jump()
+
+	# AFTER the roll and the jump, so both are still ways out of a grip — a dodge
+	# backwards off a block is how you stop pushing it in a hurry, and a grip you
+	# could only leave by releasing the stick would be a grip that ate the one
+	# button the player reaches for when something is coming at them. BEFORE the
+	# lock-on and the guard, because having hold of a block outranks both: the
+	# stone is where his hands are.
+	if _grip != null:
+		_tick_push(delta)
+		return
 
 	# [oot] §3.2 — a continuous curve of stick magnitude, no walk/run branch.
 	var target_speed := _target_speed(mag)
@@ -1506,6 +1539,38 @@ func _tick_camera_facing(wish: Vector3, target_speed: float, moving: bool, delta
 			_set_planar_velocity(Vector3.ZERO)
 		else:
 			_set_planar_velocity(travel.normalized() * _speed)
+
+
+## Hands on the stone. The tick that makes a block a thing you HOLD rather than
+## a thing you repeatedly walk into.
+##
+## Three things happen here and each is one of the reasons the grip exists:
+##
+##   * **The facing is the axis.** Square to the face, not wherever the stick
+##     last wandered, so the shove reads as a shove.
+##   * **He walks at the block's pace, always.** Not at the stick's — pressing
+##     harder does not shove harder, and running at a block he is already
+##     touching is what used to jitter him against its face. While the stone is
+##     still, this velocity is simply eaten by the collision and he strains; the
+##     instant it gives, he is already moving at exactly its speed and travels
+##     with it. That is the whole trick, and it is why nothing here tweens him.
+##   * **He is pulled onto the centre-line.** Sideways only, and gently. Without
+##     it, a grip taken off a diagonal lean leaves him on the corner, and four
+##     shoves later he has slid off the edge of a block he never let go of.
+##
+## Note what is NOT read: the stick. Lateral deflection does nothing while he
+## has hold, which is exactly what "stuck to it" means. The block owns the
+## question of whether the player is still pressing (`PushBlock` senses it, the
+## same way it always sensed the lean) and lets go on his behalf.
+func _tick_push(delta: float) -> void:
+	_steer_to(_grip_axis, turn_rate * 1.8, delta)
+	_speed = move_toward(_speed, _grip_speed, accel * delta)
+	var v := _grip_axis * _speed
+	if _grip.has_method(&"grip_anchor"):
+		var to_block := K.flat(_grip.call(&"grip_anchor") - global_position)
+		var side := to_block - _grip_axis * to_block.dot(_grip_axis)
+		v += side.limit_length(GRIP_CENTRE_SPEED / GRIP_CENTRE_GAIN) * GRIP_CENTRE_GAIN
+	_set_planar_velocity(v)
 
 
 ## The camera's forward, flattened, as a heading direction — or the hero's
@@ -2160,6 +2225,72 @@ func request_dash(duration: float, drive_time: float, speed: float) -> bool:
 func wish_dir() -> Vector3:
 	return _camera_relative(
 		Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down"))
+
+
+# --- The shoulder -------------------------------------------------------------
+#
+# A push block is the one prop in the game the hero is ATTACHED to, and the
+# attachment is the mechanic: lean on a block and you have hold of it until you
+# let go of the stick. That is Ocarina's, and it is not a nicety — a block you
+# had to re-approach and re-lean on for every metre of a four-metre push is a
+# block that spends the whole puzzle arguing with the player about whether they
+# are standing in the right place.
+#
+# The split with `PushBlock`: the BLOCK senses (it already read `wish_dir` to
+# know it was being leaned on, and that is the same question as "is he still
+# holding on"), the HERO obeys. Nothing here reads input, and nothing here names
+# `PushBlock` — the calls go both ways through `has_method`, so a future thing
+# with a face and a grid can be pushed by the same shoulder.
+
+## How hard he is pulled back onto the face's centre-line, and the ceiling on it
+## in metres per second. Fast enough to have squared him up inside one shove,
+## slow enough that it never looks like the block is magnetic.
+const GRIP_CENTRE_GAIN := 4.0
+const GRIP_CENTRE_SPEED := 1.2
+
+
+## Take hold of `block`. `axis` is the cardinal heading INTO it and `speed` the
+## pace its slide travels at, both the block's to decide.
+##
+## Refused off the floor or out of GROUND, which is the same bar `request_attack`
+## and the bow draw hold: a hero mid-roll has not got a free hand, and a grip
+## taken during one would be silently dropped by `_physics_process` on the very
+## next frame anyway. Returning false lets the block fall back to shoving him
+## nothing — see `PushBlock._take_grip`.
+func grip_push(block: Node3D, axis: Vector3, speed: float) -> bool:
+	if state != MoveState.GROUND or not is_on_floor():
+		return false
+	if block == null or axis == Vector3.ZERO or speed <= 0.0:
+		return false
+	_grip = block
+	_grip_axis = K.flat(axis).normalized()
+	_grip_speed = speed
+	return true
+
+
+## Let go, because the BLOCK says so — the stick came off it, or it seated on its
+## mark. Silent by design: the caller is the block, and calling back into it here
+## is how you write an infinite loop.
+func release_push(_block: Node3D = null) -> void:
+	_grip = null
+	_grip_axis = Vector3.ZERO
+	_grip_speed = 0.0
+
+
+## Let go, because the HERO says so — he rolled, swung, was hit, or a screen took
+## his input. Tells the block, so it stops driving itself off a grip that no
+## longer exists and goes back to needing a fresh lean.
+func _drop_grip() -> void:
+	var block := _grip
+	release_push()
+	if block != null and is_instance_valid(block) and block.has_method(&"release_grip"):
+		block.call(&"release_grip")
+
+
+## Whether he has hold of something. For a director, and for anything that wants
+## to know why he is walking into a wall.
+func gripping() -> bool:
+	return _grip != null
 
 
 ## Raise into the pull: `draw_time` seconds of it. Returns false if he cannot

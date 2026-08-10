@@ -130,12 +130,25 @@ the whole reason combinator 6 below can exist. It costs the manifest one atom
 | Small key | `scripts/props/atoms/small_key.gd` | walking onto it; `Game.add_key(1)` |
 | Urn | `scripts/props/atoms/urn.gd` | any `apply_hit` — spills arrows or hearts |
 | Pressure plate | `scripts/props/atoms/pressure_plate.gd` | the hero, or anything in group `plate_weight` |
-| Push block | `scripts/props/atoms/push_block.gd` | shoved onto its mark, one 1.2 m step at a time |
+| Push block | `scripts/props/atoms/push_block.gd` | shoved onto its mark, one 1.2 m step at a time — **held**, see below |
 | Eye switch | `scripts/props/atoms/eye_switch.gd` | `apply_hit` with `kind == &"arrow"`, and nothing else |
 | Cracked pillar | `scripts/props/atoms/cracked_pillar.gd` | `burst()` — **inert until M5** |
 | Hook ring | `scripts/props/atoms/hook_ring.gd` | `HookTarget.on_bitten`, from the firer |
 | Sun socket | `scripts/props/atoms/sun_socket.gd` | guard up in the shaft, aimed at the socket |
 | Lantern | `scripts/props/atoms/lantern.gd` | any `apply_hit` — and it **toggles**, so it can be un-solved |
+
+**The block is held, not repeatedly bumped.** Lean into a face for 0.30 s and
+the hero *takes hold of it*: he squares up on the centre-line and walks it along
+at walking pace, cell after cell, for as long as the stick keeps pointing into
+it — and lets go the instant it does not. That is Ocarina's block and it is the
+difference between one decision and one chore per metre; a four-metre push is
+four cells, and re-earning the lean and re-squaring up for each of them is the
+version that makes the player argue with where they are standing instead of with
+the puzzle. The delay is the price of *starting* and it is still there, so
+brushing past a block does not move it. Rolling, swinging, being hit or opening
+a screen all let go. Proved by `tools/directors/push_grip.gd`, which presses a
+direction and never touches the block; `tools/directors/puzzle_atoms.gd` still
+proves the seating the other way, by shoving it with no hero in the room.
 
 The table itself is `scripts/props/puzzle_atoms.gd` — tier, verb, script, refusal,
 plural, `latching` and `gates`, one row each — and `PuzzleAtoms.pool(max_tier)`
