@@ -22,6 +22,14 @@ extends HBoxContainer
 ## same way the HUD's key caps are. `ui_tab_prev` / `ui_tab_next` are registered
 ## at runtime by `PauseMenu._ensure_pad_ui_actions`, so the strip has to ask what
 ## they ended up bound to rather than print a remembered "LB".
+##
+## **Painted by explicit override, not by a theme variation.** The three screens
+## are moving onto `UITheme` one at a time, so for a while some of them render
+## through `menu_theme.tres` and some through `UITheme.theme()`. A strip that got
+## its look from a named variation would then be lit one way on ITEMS and another
+## on MAP — the exact thing the class note above says must never happen. Overrides
+## are theme-independent, so the strip looks the same in both worlds and keeps
+## looking the same after the last screen converts.
 
 ## A tab was clicked. Carries a `PauseMenu.Screen` value — the strip is told
 ## which screens it lists, so it can hand back the one that was picked rather
@@ -45,7 +53,6 @@ func setup(pages: Array, active: int) -> void:
 	for page: Array in pages:
 		var b := Button.new()
 		b.text = String(page[1])
-		b.theme_type_variation = &"MenuTab"
 		# See the class note: clickable, never focusable.
 		b.focus_mode = Control.FOCUS_NONE
 		var screen: int = int(page[0])
@@ -61,7 +68,7 @@ func setup(pages: Array, active: int) -> void:
 
 func _cap() -> Label:
 	var l := Label.new()
-	l.theme_type_variation = &"MenuHint"
+	UITheme.apply_text_style(l, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	return l
 
@@ -81,5 +88,31 @@ func refresh_caps() -> void:
 
 func set_active(screen: int) -> void:
 	for i in _buttons.size():
-		_buttons[i].theme_type_variation = (
-			&"MenuTabActive" if _screens[i] == screen else &"MenuTab")
+		_paint(_buttons[i], _screens[i] == screen)
+
+
+## THE tab voice: no fill, ever. An idle tab is bare text, the live one is the
+## same text lit and underlined. `UITheme.tab_box` owns the rule; this only says
+## which of its three states a tab is in.
+##
+## The underline is HIGHLIGHT (off-white) rather than gold, and so is the live
+## tab's label. Gold in this UI is TEXT that carries a VALUE — a price, a count,
+## a kicker — and a lit tab is neither; it is where you are. Colouring it gold
+## put the loudest colour on screen on the one thing the player already knows.
+func _paint(b: Button, active: bool) -> void:
+	b.add_theme_stylebox_override("normal",
+		UITheme.tab_box("selected" if active else "unselected"))
+	b.add_theme_stylebox_override("hover",
+		UITheme.tab_box("selected" if active else "hovered"))
+	b.add_theme_stylebox_override("pressed", UITheme.tab_box("selected"))
+	# Never focused (FOCUS_NONE), but a focus stylebox left unset falls through
+	# to the ambient theme's, which is a bordered box on one of the two themes
+	# this strip has to live under.
+	b.add_theme_stylebox_override("focus", UITheme.tab_box("unselected"))
+	b.add_theme_font_override("font", UITheme.display_font())
+	b.add_theme_font_size_override("font_size", int(UITheme.TYPE_LABEL_MD["size"]))
+	var idle: Color = UITheme.HIGHLIGHT if active else UITheme.TEXT_DIM
+	b.add_theme_color_override("font_color", idle)
+	b.add_theme_color_override("font_hover_color", UITheme.HIGHLIGHT)
+	b.add_theme_color_override("font_pressed_color", UITheme.HIGHLIGHT)
+	b.add_theme_color_override("font_focus_color", idle)
