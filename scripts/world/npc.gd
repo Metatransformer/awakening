@@ -5,13 +5,18 @@ extends Interactable
 ## They were boxes with a lantern, on purpose, for as long as the loop was the
 ## thing being built: a stand-in character model that is nearly good is worse
 ## than an obvious placeholder, because it invites you to fix the model instead
-## of the game. The loop works, so they are people now -- `RaceBody`, one of the
-## Vale's three peoples each, standing behind a `ShopBooth` full of their own
-## trade.
+## of the game. The loop works, so they are people now -- standing behind a
+## `ShopBooth` full of their own trade, and built two different ways:
 ##
-## **What they DO did not change, and that is the point.** Turn to face you,
-## light up when addressed, open the right screen: all of it still lives here,
-## none of it ever depended on the mesh, and swapping the mesh touched
+##   * Four are **authored bodies** (`NpcBody`) -- a dwarf smith, a warrior at the
+##     pawnbroker's stall, a hooded Lanternkeeper and the jewelcrafter, each
+##     modelled as a whole dressed figure. They do not go near the suit system.
+##   * Two are **built** (`RaceBody`) -- the alchemist and the elder, cast from one
+##     of the Vale's three peoples and dressed by `SuitSeater`.
+##
+## **What they DO did not change, either time, and that is the point.** Turn to
+## face you, light up when addressed, open the right screen: all of it still lives
+## here, none of it ever depended on the mesh, and both mesh swaps touched
 ## `_build_person` and nothing else.
 
 ## KEEPER and JEWELLER are appended rather than slotted in beside the other
@@ -127,90 +132,99 @@ static var COUNTERS := {
 	Role.GATE: {"sign": "", "prompt": "DESCEND", "hold": 0.9},
 }
 
-## Who each shopkeeper IS -- their people, their clothes, and how they stand.
+## Who each shopkeeper IS -- their body, their clothes, and how they stand.
 ##
 ## Separate from `COUNTERS` because the two tables answer different questions and
 ## get edited for different reasons: `COUNTERS` is what a counter DOES, this is
 ## what a person looks like. A palette pass should not have to read past the
 ## trade modes to find the colours.
 ##
-## The races are not cast at random. Each keeps the counter their people would
-## keep, which is why the garrison reads as a place with history in it rather
-## than three vendors in different hats:
+## **There are two kinds of row here, and a row is one or the other.**
 ##
-##   * **Stoneborn** at the forge -- short, slab-built, and by their own account
-##     the best forges north of the river.
-##   * **Reshi** at the pawnbroker's -- caravan blood, the Driftmarket stalls,
-##     and a reputation for quiet fences that the shop's SELL mode is built on.
-##   * **Vyr** at the apothecary -- a head over any settler and born, they say,
-##     seeing the flaw in the drawing. Which is the job.
+##  * **`model`** -- an AUTHORED person (`NpcBody.PEOPLE`). They were modelled as a
+##    whole figure, dressed, with their buckles and their beard painted into one
+##    atlas: the smith's apron, the Lanternkeeper's jewelled mail, the
+##    jewelcrafter's gown. There is no bare body under them and no normalised UV
+##    layout, so **`suit` and `tint` are meaningless on these rows and must not be
+##    added.** Putting the clothing system anywhere near them seats a garment onto
+##    a rig it was never fitted to and produces a person wearing another person.
+##  * **`race`** -- a base from the Valenfeld pack, dressed by the suit system
+##    (`RaceBody.wear`). Two rows are left: the alchemist and the elder. That is
+##    not a leftover to be finished off. A `RaceBody` is what you reach for when a
+##    person has to be BUILT out of a race, a suit and a colour -- which is still
+##    how the Vale's three peoples are cast -- and it is the only one of the two
+##    that can put somebody new in the yard without commissioning a model.
 ##
-## Heights come with the race (`RaceBody.RACES`) and are load-bearing: the hero
-## is 1.65 m, so the smith reads a head short of you and the alchemist a head
-## tall, before either of them says a word.
+## The casting is not at random on either side. Each body keeps the counter it
+## would keep, which is why the garrison reads as a place with history in it
+## rather than six vendors in different hats: a dwarf at the forge, an old man in
+## relic-jewelled mail at the Far Lantern, a woman wearing her own trade at the
+## setting bench, a scarred road-warrior fencing goods at the stall, and the two
+## races the pack still casts -- **Vyr** at the apothecary, a head over any settler
+## and born, they say, seeing the flaw in the drawing (which is the job), and a
+## **Reshi** elder, settler height, eye to eye with you.
 ##
-##   * `suit`   -- which authored suit to dress them in (`SuitSeater.SETS`). Not a
-##     fabric name any more: a suit is a whole dressed person, so this picks their
-##     entire outfit including boots, gloves and hood. See `RaceBody.wear`.
-##   * `tint`   -- MULTIPLIES the weave, so these run much lighter than a flat
-##     robe colour would. The first pass fed in the box placeholders' robe
-##     colours directly and produced three silhouettes in black.
-##   * `idle`   -- their resting loop, one each so the garrison is not three people
-##     breathing in time. All from the standing family; see `RaceBody.CLIPS`.
+## Heights are load-bearing and come off `NpcBody.PEOPLE` / `RaceBody.RACES`. The
+## hero is 1.65 m, and the row steps -- smith 1.44, jewelcrafter 1.63, elder 1.65,
+## pawnbroker 1.72, keeper 1.74, alchemist 1.82 -- so the smith reads a clear head
+## short of you and the alchemist a clear head tall, before either says a word.
+##
+##   * `model`  -- an authored body, dressed as it ships. Excludes `race`.
+##   * `race`   -- a base to build and dress. Excludes `model`.
+##   * `suit`   -- `race` rows only: which authored suit to dress them in
+##     (`SuitSeater.SETS`). Not a fabric name: a suit is a whole dressed person,
+##     so this picks the entire outfit including boots, gloves and hood.
+##   * `tint`   -- `race` rows only, and it MULTIPLIES the weave, so it runs much
+##     lighter than a flat robe colour would. The first pass fed in the box
+##     placeholders' robe colours directly and produced silhouettes in black.
+##   * `idle`   -- their resting loop, so the garrison is not six people breathing
+##     in time. All from the standing family; see `RaceBody.CLIPS`, which is the
+##     same four clips either kind of body plays.
 ##   * `booth`  -- the shop they stand in. **Absent means none**, and the elder is
 ##     the one row that leaves it out: a counter is what a person who sells
 ##     things stands behind, so the person who sells nothing stands in the open.
 static var LOOKS := {
-	# Tan, not the cold slate the box placeholder wore. The pack's homespun chest
-	# piece is a strapped work harness rather than a shirt, and tinted slate over
-	# a dark weave it read as black webbing on a bare grey torso. In leather it
-	# reads as what it is -- a smith's apron -- and it stops fighting the fire
-	# two metres behind him.
+	# The dwarf: leather apron, one pauldron, a hammer on the belt and a bare
+	# forearm, at 1.44 m and half again as wide as anyone else in the yard. He is
+	# roughly the height of the Stoneborn he replaced, deliberately -- the forge
+	# wants the SHORT silhouette, and the fire two metres behind him is what the
+	# tinting of the old placeholder was fighting to survive.
 	Role.SMITH: {
-		"race": "stoneborn", "suit": "leather", "idle": &"idle3",
-		"tint": Color(0.95, 0.74, 0.52), "booth": ShopBooth.Kind.FORGE,
+		"model": "smith", "idle": &"idle3", "booth": ShopBooth.Kind.FORGE,
 	},
 	Role.VENDOR: {
-		"race": "reshi", "suit": "cloth", "idle": &"idle",
-		"tint": Color(0.86, 0.52, 0.58), "booth": ShopBooth.Kind.STALL,
+		"model": "pawnbroker", "idle": &"idle", "booth": ShopBooth.Kind.STALL,
 	},
 	Role.ALCHEMIST: {
 		"race": "vyr", "suit": "cloth", "idle": &"idle4",
 		"tint": Color(0.56, 0.88, 0.68), "booth": ShopBooth.Kind.ALCHEMY,
 	},
-	# Reshi, like the pawnbroker, because there are three peoples and four
-	# counters -- the Society recruits, it is not a race. The suit, the idle
-	# and the tint all differ from his for one reason and it is not taste: two
-	# reshi in the same suit at the same height, breathing in time, read as the SAME
-	# PERSON standing in two places, and a player who cannot tell the
-	# Lanternkeeper from the pawnbroker across the yard cannot find the hall.
-	# Cool against his rose, so the two ends of the yard are told apart by
-	# silhouette colour before either sign is readable.
+	# Hooded, white-bearded, and wearing a mail coat set with a dozen coloured
+	# stones -- which is the whole of the Far Lantern's pitch worn on a body. He
+	# is the tallest of the four authored people and the only one you cannot see
+	# the face of from across the yard, so the strange counter reads as the
+	# strange one before the sign is legible. (He replaced a Reshi woman built out
+	# of suit and tint, and the tint was doing this job on its own.)
 	#
-	# A STALL, and that is the end of dressing her. The hall is not a booth kind
+	# A STALL, and that is the end of dressing him. The hall is not a booth kind
 	# and it does not need to be: the twelve lamps outside are what says this
 	# counter is different, and a bespoke booth would be spending on the wrong
 	# half of GDD §6.2's budget.
 	Role.KEEPER: {
-		"race": "reshi", "suit": "leather", "idle": &"idle9",
-		"tint": Color(0.66, 0.76, 0.94), "booth": ShopBooth.Kind.STALL,
+		"model": "lanternkeeper", "idle": &"idle9", "booth": ShopBooth.Kind.STALL,
 	},
-	# Stoneborn, like the smith, and for the same reason the Lanternkeeper is
-	# reshi like the pawnbroker: three peoples, five counters. Cutting stone is
-	# their trade twice over, so the doubling reads as a people rather than as a
-	# reused asset -- and she is told apart from him the way the keeper is told
-	# apart from the pawnbroker, by suit, tint and idle. Violet against his tan,
-	# which is also the tint of the stone she sets (`cut_gemstone`).
-	# The idle is the ALCHEMIST'S, not the smith's, and that is the whole reason
-	# it is a repeat rather than a fifth clip: `RaceBody.CLIPS` is four, capped by
-	# what survives dropping the position tracks, so the fifth counter has to
-	# borrow one. Borrowing across the yard from a Vyr of a different height is
-	# invisible; borrowing the Stoneborn next to her would put two short,
-	# slab-built people breathing in time at the same end of the courtyard, which
-	# is the exact failure the keeper's row was written to avoid.
+	# Black and gold, an emerald the size of a thumb at her throat, gold at both
+	# wrists. She is the one person in the garrison wearing her own stock, which
+	# says what the setting bench sells without a word of it -- and it is why she
+	# needs no tint: the violet the old Stoneborn row used was standing in for
+	# exactly this and cost a `cut_gemstone` cross-reference to explain.
+	#
+	# `idle4` is shared with the alchemist, and that is fine for the reason the
+	# old row gave and which still holds: `RaceBody.CLIPS` is four and there are
+	# six people, so somebody repeats, and you repeat the clip nobody who LOOKS
+	# like you is using. The alchemist is a 1.82 m Vyr at the far side of the yard.
 	Role.JEWELLER: {
-		"race": "stoneborn", "suit": "mail", "idle": &"idle4",
-		"tint": Color(0.78, 0.60, 0.92), "booth": ShopBooth.Kind.STALL,
+		"model": "jewelcrafter", "idle": &"idle4", "booth": ShopBooth.Kind.STALL,
 	},
 	# The elder, and every field here is doing the same job: making the one person
 	# in the yard who wants nothing from you legible as that from across it.
@@ -256,7 +270,9 @@ static var LOOKS := {
 @export var lamp_color: Color = Pal.GOLD
 
 var _body: Node3D
-var _person: RaceBody
+## Whoever is standing here -- a `RaceBody` or an `NpcBody`, see `LOOKS`. Held as
+## a `Node3D` because nothing outside `_build_person` asks it anything.
+var _person: Node3D
 var _lamp: OmniLight3D
 var _lamp_mat: StandardMaterial3D
 var _sign: Label3D
@@ -393,15 +409,26 @@ func _build_person() -> void:
 		booth.position.z = ShopBooth.KEEPER_BACK
 		add_child(booth)
 
-	# The person.
-	_person = RaceBody.make(str(look.get("race", "reshi")))
-	if _person != null:
-		_body.add_child(_person)
-		var tint: Color = look.get("tint", Color.WHITE)
-		var idle: StringName = look.get("idle", &"idle")
-		_person.wear(str(look.get("suit", "cloth")), tint)
-		_person.play(idle)
-		_head = _person.height
+	# The person. Two kinds, and the row says which -- see `LOOKS`. An authored
+	# body arrives dressed and is left alone; a race base is built, then dressed by
+	# the suit system. Both answer `height` and `play`, so nothing below this cares
+	# which one turned up.
+	var idle: StringName = look.get("idle", &"idle")
+	if look.has("model"):
+		var authored := NpcBody.make(str(look["model"]))
+		if authored != null:
+			_person = authored
+			_body.add_child(authored)
+			authored.play(idle)
+			_head = authored.height
+	else:
+		var built := RaceBody.make(str(look.get("race", "reshi")))
+		if built != null:
+			_person = built
+			_body.add_child(built)
+			built.wear(str(look.get("suit", "cloth")), look.get("tint", Color.WHITE))
+			built.play(idle)
+			_head = built.height
 
 	# The lamp on its post, at the end of the counter. It used to be a cube in
 	# the keeper's fist, which was the right call for a keeper made of cubes; a

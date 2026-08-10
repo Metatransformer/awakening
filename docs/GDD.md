@@ -68,12 +68,22 @@ stays `the hero`** — `Hero`, `hero.gd`, unchanged; the name lives in the
 fiction, not in the identifiers.
 
 **The counters are the other people in this game, and none of them is him.** The
-vendor is a man (§6.3); the alchemist, the Lanternkeeper and the jewelcrafter are
-women (§6, §6.5, §6.6). **The smith's is not written down anywhere** — not here,
-not in `docs/METAGAME.md`, not in the code — so it is genuinely open, and the
-next person to need it should decide it rather than infer it. Worth stating,
-because §6.6 used to lean on a bare *she* to mean the jewelcrafter in a sentence
-whose other subject was the smith, which only parses if you already knew. Under the frontier town
+vendor and the smith are men (§6.3); the alchemist and the jewelcrafter are women
+(§6.5, §6.6); the Lanternkeeper is an old man (§6). Worth stating, because §6.6
+used to lean on a bare *she* to mean the jewelcrafter in a sentence whose other
+subject was the smith, which only parses if you already knew.
+
+**Four of the five were settled by the art, not by this document, and that is the
+right way round.** The smith's was written here as *genuinely open* until
+2026-08-10, when four authored bodies landed for the smith, the vendor, the
+Lanternkeeper and the jewelcrafter (`NpcBody.PEOPLE`): a bearded dwarf at the
+forge, a road-scarred warrior at the stall, a white-bearded hooded man in
+relic-jewelled mail at the Far Lantern, a woman wearing her own stock at the
+setting bench. **The Lanternkeeper changed sex in that pass** — she had been a
+Reshi woman built out of a suit and a cool tint, and the tint was the only thing
+carrying "this counter is the strange one", which the hood and the stones now do
+on their own. Nothing mechanical moved with it. The alchemist is still a Vyr
+woman and the elder still a Reshi man, both still built from a race and a suit. Under the frontier town
 of **Valenfeld** there is a shaft into the works the **Vyr** built before they
 withdrew to their sky-seat and left the world to fail without them. You make runs
 into it. You take what the dead empire left. You decide, every time, when to
@@ -464,12 +474,14 @@ above it is equally load-bearing in the other direction: take that away and the
 yard is a dungeon room whose ceiling failed to load, which is exactly what the
 hub used to be.
 
-**The Lanternkeeper** keeps the Far Lantern Society's hall against the east wall.
-She does not buy and she does not sell: you hand her a relic and something in
-the garrison changes. Mechanically she is a `Catalogue` subclass and a row in
-`Npc.COUNTERS`, exactly like the smith and the alchemist, driven by the same
-`TradeScreen` — a donation is a transaction whose price is **one relic and the
-cost of making it work again** (§6.4). There is no fourth screen.
+**The Lanternkeeper** keeps the Far Lantern Society's hall against the east wall —
+an old man, hooded, in a mail coat set with a dozen coloured stones, which is the
+Society's whole pitch worn on a body. He does not buy and he does not sell: you
+hand him a relic and something in the garrison changes. Mechanically he is a
+`Catalogue` subclass and a row in `Npc.COUNTERS`, exactly like the smith and the
+alchemist, driven by the same `TradeScreen` — a donation is a transaction whose
+price is **one relic and the cost of making it work again** (§6.4). There is no
+fourth screen.
 
 The vendor buys, the smith forges, the alchemist brews, the Lanternkeeper
 records. Four counters, and that is the garrison.
