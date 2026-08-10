@@ -136,13 +136,38 @@ func _buy(rig) -> bool:
 	await rig.wait_frames(14)
 	await rig.capture(out.path_join("m_05_shop.png"))
 
-	# Second line is the bag slot -- cheap enough that one run pays for it.
-	await rig.tap(["ui_down"])
-	await rig.wait_frames(6)
+	# Walk to the BAG SLOT line -- cheap enough that one run pays for it.
+	#
+	# By NAME, not by counting presses. This beat used to tap down once, on the
+	# strength of a comment saying the bag slot was the second line. It is not:
+	# the smith hides ARROWS until you own a bow, so on this save the bag slot is
+	# the FIRST line and one press walked past it onto the heart container. The
+	# board's length is a function of what you own, so no fixed count is safe.
+	var screen := _screen(rig)
+	var walked := 0
+	while screen.cursor_label() != "BAG SLOT" and walked < screen.line_count():
+		# RIGHT is one cell. Down is a whole ROW now that the counter is a grid.
+		await rig.tap(["ui_right"])
+		await rig.wait_frames(4)
+		walked += 1
+	if screen.cursor_label() != "BAG SLOT":
+		print("MVP FAIL the smith has no BAG SLOT line to buy")
+		return false
+	var was_gold := Game.gold
+	var was_slots := Game.bag_slots
 	await rig.tap(["ui_accept"])
 	await rig.wait_frames(24)
 	print("MVP after_buy gold=%d slots=%d sword=+%d armour=+%d" % [
 		Game.gold, Game.bag_slots, Game.sword_bonus(), Game.armour_soak()])
+	# This beat used to only PRINT. When the counter became a grid the cursor
+	# landed somewhere else, the press bought nothing, and the run went green --
+	# the regression was sitting in plain sight in the log for two runs. A beat
+	# that names the thing it bought is the difference between a director and a
+	# transcript.
+	if Game.bag_slots != was_slots + 1 or Game.gold >= was_gold:
+		print("MVP FAIL BAG SLOT did not buy (gold %d -> %d, slots %d -> %d)"
+			% [was_gold, Game.gold, was_slots, Game.bag_slots])
+		return false
 	await rig.capture(out.path_join("m_06_bought.png"))
 
 	await rig.tap(["ui_cancel"])

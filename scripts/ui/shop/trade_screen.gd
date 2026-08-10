@@ -1,58 +1,79 @@
 class_name TradeScreen
 extends Control
-## The vendor, the smith and the alchemist, which are the same screen pointed in
-## three directions.
+## The vendor, the smith, the alchemist, the jewelcrafter and the Lanternkeeper,
+## which are the same screen pointed in five directions.
 ##
 ## SELL reads the bag. BUY reads a CATALOGUE, handed in at `open()` -- `ShopDb`
-## for the smith, `AlchemyDb` for the alchemist -- and the two are interchangeable
-## because they expose the same five statics (`lines`, `remaining`, `can_buy`,
-## `refusal`, `buy`). Nothing below this line asks which counter it is standing
-## at, and that is the whole reason there is one screen: the recipe column, the
-## per-token affordability colouring and the refusal footer are subtle, they took
-## three passes to get right, and a second shop screen would have been a second
-## place for all of it to drift.
+## for the smith, `AlchemyDb` for the alchemist, `JewelDb` for the jewelcrafter --
+## and they are interchangeable because they expose the same five statics
+## (`lines`, `remaining`, `can_buy`, `refusal`, `buy`). Nothing below this line
+## asks which counter it is standing at, and that is the whole reason there is one
+## screen: the recipe column, the per-token affordability colouring and the
+## refusal footer are subtle, they took three passes to get right, and a second
+## shop screen would have been a second place for all of it to drift.
 ##
-## Drawn with PixelFont and Pal rather than built out of Control nodes and a
-## Theme, for the same reason the HUD is: docs/STYLEGUIDE.md bans the engine's
-## fallback font, and a shop that looks like an editor panel next to a HUD made
-## of whole pixels is the single loudest "unfinished" signal the game could send.
+## **It draws a GRID, not a list, and the grid is the bag's** (`ItemGrid`).
+## Until 2026-08-09 this screen was a column of PixelFont rows: the same objects
+## the pouch drew as tinted cells arrived at the vendor as lines of text, so a
+## player looking at their bag and then at what it was worth was reading two
+## different UIs about one set of things. The grid is the pouch's, cell for cell,
+## which means an ingredient has the same colour chip and the same ◆ in both
+## places. That is the only icon set this game has.
 ##
-## One list, one cursor, one number that moves. The player is answering "what is
-## this worth" over and over, so the price column is the only thing that is ever
-## GOLD, and the running total is the only thing that animates.
+## The frame, the header and the footer are the pause menu's theme
+## (`scenes/ui/menu/menu_theme.tres`) for the same reason -- it is the game's one
+## menu look, and a shop that did not use it was a shop that looked like a
+## different program.
+##
+## One board, one cursor, one number that moves. The player is answering "what is
+## this worth" over and over, so the price is the only thing that is ever GOLD and
+## the purse is the only thing that animates.
 
 enum Mode { SELL, BUY }
 
-const ROW_H := 26.0        ## reference px
-const PAD := 22.0
+const THEME_PATH := "res://scenes/ui/menu/menu_theme.tres"
 const ROLL_TIME := 0.25
+## Cells across. Four is the pouch's, and the pouch's was measured against this
+## same frame width -- see the note on `MenuPouchPanel.COLS`.
+const COLS := 4
+## The detail column, in the same pixels the pouch's is.
+const DETAIL_W := 340
 
 var mode: Mode = Mode.SELL
 var title: String = "VENDOR"
-## The catalogue behind a BUY screen: the ShopDb or AlchemyDb script itself, so
-## its statics can be called through it. Unused by SELL, which reads `Run.bag`.
+## The catalogue behind a BUY screen: the ShopDb, AlchemyDb, JewelDb or RelicDb
+## script itself, so its statics can be called through it. **Through the handle,
+## never bare** -- a static call written inside `Catalogue` binds to `Catalogue`
+## at parse time and the subclass's override never runs (CLAUDE.md §3). Unused by
+## SELL, which reads `Run.bag`.
 var catalogue: GDScript = null
 
+## One entry per cell, in grid order. Kinds: &"item" and &"all" on the SELL side,
+## &"buy" on the other. Rebuilt whole after every transaction rather than mutated:
+## a sold-out stack has to leave the board, and a cursor pointing at a row that no
+## longer exists is the classic shop-screen crash.
 var _rows: Array[Dictionary] = []
 var _cursor: int = 0
-## First row drawn. The list WINDOWS rather than shrinking to fit: the smith's
-## board went from eight lines to fifteen when `plate` became four pieces times
-## two paths (docs/GDD.md §6.6), and a bag of thirty stacks was always able to
-## overrun the panel from the SELL side -- it just happened to be rarer. Set in
-## `_draw`, which is the only place that knows how many rows the panel can hold
-## at the current viewport size.
-var _top: int = 0
 var _shown_gold: float = 0.0
-var _flash: float = -1.0
-var _flash_row: int = -1
 var _refuse: float = -1.0
 var _closing: bool = false
+
+var _grid: ItemGrid
+var _gold_label: Label
+var _empty: Label
+var _d_kind: Label
+var _d_name: Label
+var _d_price: Label
+var _d_blurb: Label
+var _recipe: VBoxContainer
+var _hint: Label
+var _hold_bar: HoldBar
 
 
 ## The screen makes its own CanvasLayer. A Control parented to a Node3D never
 ## draws, and every caller here is a prop standing in a 3D town.
 ## `db` is the catalogue for a BUY screen and defaults to the smith's, which is
-## what every existing caller meant. Pass `AlchemyDb` for the other counter.
+## what every existing caller meant.
 static func open(host: Node, screen_mode: Mode, screen_title: String,
 		db: GDScript = null) -> TradeScreen:
 	var layer := CanvasLayer.new()
@@ -71,11 +92,12 @@ static func open(host: Node, screen_mode: Mode, screen_title: String,
 
 func _ready() -> void:
 	# A Control parented straight to a CanvasLayer is outside the viewport's
-	# Control tree, so anchors alone never resolve and it sits at size (0,0) --
-	# which _draw reads as "no viewport yet" and skips. Size it from the viewport
-	# and keep it there.
+	# Control tree, so anchors alone never resolve and it sits at size (0,0).
+	# Size it from the viewport and keep it there.
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	theme = load(THEME_PATH) as Theme
+	_build()
 	_fit()
 	get_viewport().size_changed.connect(_fit)
 
@@ -88,7 +110,6 @@ func _ready() -> void:
 func _fit() -> void:
 	position = Vector2.ZERO
 	size = get_viewport_rect().size
-	queue_redraw()
 
 
 func _exit_tree() -> void:
@@ -107,75 +128,347 @@ func close() -> void:
 		queue_free()
 
 
-# --- Rows -------------------------------------------------------------------
+# --- Building ----------------------------------------------------------------
+
+## Darken the world rather than hide it. You are standing in the town while you
+## do this, and the shop is a conversation, not a menu screen.
+func _build() -> void:
+	var dim := ColorRect.new()
+	dim.color = Color(Pal.VOID, 0.86)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(dim)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	var centre := CenterContainer.new()
+	add_child(centre)
+	centre.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	var frame := PanelContainer.new()
+	frame.name = "Frame"
+	frame.theme_type_variation = &"MenuFrame"
+	frame.custom_minimum_size = MenuUtil.FRAME_SIZE
+	centre.add_child(frame)
+
+	var stack := VBoxContainer.new()
+	stack.theme_type_variation = &"MenuStack"
+	frame.add_child(stack)
+
+	_build_header(stack)
+	_build_body(stack)
+	_build_footer(stack)
+
+
+func _build_header(parent: Node) -> void:
+	var header := PanelContainer.new()
+	header.theme_type_variation = &"MenuHeader"
+	parent.add_child(header)
+
+	var row := HBoxContainer.new()
+	header.add_child(row)
+
+	var name_label := Label.new()
+	name_label.theme_type_variation = &"MenuTitle"
+	name_label.text = title
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(name_label)
+
+	# The purse. The only number on this screen that animates, because it is the
+	# only one the player's own press moved.
+	_gold_label = Label.new()
+	_gold_label.theme_type_variation = &"MenuValue"
+	_gold_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(_gold_label)
+
+
+func _build_body(parent: Node) -> void:
+	var pad := MarginContainer.new()
+	pad.theme_type_variation = &"MenuBodyPad"
+	pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	parent.add_child(pad)
+
+	var split := HBoxContainer.new()
+	split.add_theme_constant_override("separation", 24)
+	pad.add_child(split)
+
+	var left := VBoxContainer.new()
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.add_theme_constant_override("separation", 6)
+	split.add_child(left)
+
+	var card := PanelContainer.new()
+	card.theme_type_variation = &"MenuSection"
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	left.add_child(card)
+
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 6)
+	card.add_child(inner)
+
+	var caption := Label.new()
+	caption.theme_type_variation = &"MenuHeading"
+	caption.text = "IN THE BAG" if mode == Mode.SELL else "ON THE BOARD"
+	inner.add_child(caption)
+
+	_grid = ItemGrid.new()
+	_grid.name = "Board"
+	_grid.columns = COLS
+	# The cursor is this screen's, not the grid's -- see `_tick_input`. The grid
+	# still reports a look, because the mouse can land on a cell the stick never
+	# crossed and the detail pane has to follow it.
+	_grid.cell_focused.connect(_on_cell_looked)
+	inner.add_child(_grid)
+
+	_empty = Label.new()
+	_empty.theme_type_variation = &"MenuMuted"
+	_empty.text = "Nothing to sell." if mode == Mode.SELL else "Sold out."
+	inner.add_child(_empty)
+
+	_build_detail(split)
+
+
+## The one place a blurb, a price or a recipe is ever spelled out. A grid cell has
+## room for a name and one number; everything else the player needs to decide with
+## lives here, beside it, and never on the cell.
+func _build_detail(parent: Node) -> void:
+	var card := PanelContainer.new()
+	card.name = "Detail"
+	card.theme_type_variation = &"MenuSection"
+	card.custom_minimum_size = Vector2(DETAIL_W, 0)
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	parent.add_child(card)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 6)
+	card.add_child(col)
+
+	_d_kind = Label.new()
+	_d_kind.theme_type_variation = &"MenuMuted"
+	col.add_child(_d_kind)
+
+	_d_name = Label.new()
+	_d_name.theme_type_variation = &"MenuHeading"
+	_d_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(_d_name)
+
+	_d_price = Label.new()
+	_d_price.theme_type_variation = &"MenuValue"
+	col.add_child(_d_price)
+
+	# The bill, one component per row: what it wants and what the bench has.
+	# **Per row, never per line.** A recipe you are one core short of and a recipe
+	# you have none of look identical if the whole thing just greys out, and the
+	# difference between them is a whole run's worth of where to go looking.
+	_recipe = VBoxContainer.new()
+	_recipe.add_theme_constant_override("separation", 2)
+	col.add_child(_recipe)
+
+	_d_blurb = Label.new()
+	_d_blurb.theme_type_variation = &"MenuSlotStat"
+	_d_blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_d_blurb.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(_d_blurb)
+
+
+## The line that says which button does what, and -- on a cell that wants one --
+## that this one is a HOLD.
+##
+## The word and the gauge are one statement made twice, in language and in shape,
+## exactly as the interact prompt makes it. Either alone has shipped as a bug
+## here: "A TO DESCEND" with no bar was a player tapping and filing "descend
+## doesn't work", and a bar with no word is a player watching something fill
+## without knowing they are the one filling it.
+func _build_footer(parent: Node) -> void:
+	var footer := PanelContainer.new()
+	footer.theme_type_variation = &"MenuFooter"
+	parent.add_child(footer)
+
+	var row := VBoxContainer.new()
+	row.add_theme_constant_override("separation", 2)
+	footer.add_child(row)
+
+	_hint = Label.new()
+	_hint.theme_type_variation = &"MenuHint"
+	row.add_child(_hint)
+
+	_hold_bar = HoldBar.new()
+	_hold_bar.col = Pal.GOLD
+	row.add_child(_hold_bar)
+
+
+# --- Rows --------------------------------------------------------------------
 
 ## The catalogue this screen is buying from, never null. A screen built by hand
-## (a director, a test) that forgot to set one still gets the smith rather than
-## a crash in the middle of a draw call.
+## (a director, a test) that forgot to set one still gets the smith rather than a
+## crash in the middle of a build.
 func _db() -> GDScript:
 	return catalogue if catalogue != null else ShopDb
 
 
-
-## Rebuilt after every transaction rather than mutated: a sold-out stack has to
-## leave the list, and a cursor pointing at a row that no longer exists is the
-## classic shop-screen crash.
 func _refresh() -> void:
 	_rows.clear()
 	if mode == Mode.SELL:
-		for id: StringName in Run.bag:
-			var def := ItemDb.get_def(id)
-			if def == null:
-				continue
-			var n: int = Run.bag[id]
-			_rows.append({
-				"kind": &"item",
-				"id": id,
-				"label": def.display_name,
-				"count": n,
-				# Not def.value * n: a stack carries its share of the run's heat
-				# premium, and the row has to name the gold that will actually
-				# land or the screen is lying about its own prices.
-				"price": Run.line_value(id),
-				"color": Pal.rarity_color(int(def.rarity)),
-				"blurb": def.blurb,
-				"ok": true,
-			})
-		_rows.sort_custom(func(a, b) -> bool: return a["price"] > b["price"])
-		if not _rows.is_empty():
-			_rows.append({
-				"kind": &"all",
-				"label": "SELL EVERYTHING",
-				"count": 0,
-				"price": Run.bag_value(),
-				"color": Pal.BONE,
-				"blurb": "Empty the bag. The smith is two doors down.",
-				"ok": true,
-			})
+		_build_sell_rows()
 	else:
-		for line in _db().lines():
-			var left: int = _db().remaining(line["id"])
-			var parts: Dictionary = line.get("parts", {})
-			_rows.append({
-				"kind": &"buy",
-				"line": line,
-				"label": line["label"],
-				"count": left,
-				"price": int(line["cost"]),
-				"color": Pal.BONE,
-				# The blurb says what the thing IS; the detail says what the
-				# number DOES, in the unit the player feels. A forge line without
-				# the second sentence is asking them to buy on faith.
-				"blurb": "%s   %s" % [line["blurb"], line.get("detail", "")],
-				"parts": parts,
-				"ok": _db().can_buy(line),
-			})
+		_build_buy_rows()
 
 	_cursor = clampi(_cursor, 0, maxi(_rows.size() - 1, 0))
-	queue_redraw()
+
+	var cells: Array = []
+	for i in _rows.size():
+		var row := _rows[i]
+		cells.append({
+			"index": i,
+			"label": String(row["label"]),
+			"sub": String(row["sub"]),
+			"tint": row["color"],
+			"mark": bool(row.get("mark", false)),
+			"dim": not bool(row["ok"]),
+		})
+	_grid.set_cells(cells)
+	_empty.visible = _rows.is_empty()
+	_grid.visible = not _rows.is_empty()
+	_point_at(_cursor)
 
 
-# --- Input ------------------------------------------------------------------
+func _build_sell_rows() -> void:
+	for id: StringName in Run.bag:
+		var def := ItemDb.get_def(id)
+		if def == null:
+			continue
+		_rows.append({
+			"kind": &"item",
+			"id": id,
+			"label": def.display_name,
+			"count": int(Run.bag[id]),
+			# Not def.value * n: a stack carries its share of the run's heat
+			# premium, and the cell has to name the gold that will actually land
+			# or the screen is lying about its own prices.
+			"price": Run.line_value(id),
+			"sub": "%d ◇" % Run.line_value(id),
+			"color": Pal.rarity_color(int(def.rarity)),
+			"mark": def.is_component(),
+			"blurb": def.blurb,
+			"ok": true,
+		})
+	_rows.sort_custom(func(a, b) -> bool: return a["price"] > b["price"])
+	if not _rows.is_empty():
+		_rows.append({
+			"kind": &"all",
+			"label": "SELL EVERYTHING",
+			"count": 0,
+			"price": Run.bag_value(),
+			"sub": "%d ◇" % Run.bag_value(),
+			"color": Pal.BONE,
+			"blurb": "Empty the bag. The smith is two doors down.",
+			"ok": true,
+		})
+
+
+func _build_buy_rows() -> void:
+	for line in _db().lines():
+		var left: int = _db().remaining(line["id"])
+		_rows.append({
+			"kind": &"buy",
+			"line": line,
+			"label": String(line["label"]),
+			"count": left,
+			"price": int(line["cost"]),
+			"sub": "%d ◇" % int(line["cost"]),
+			"color": Pal.BONE,
+			# The blurb says what the thing IS; the detail says what the number
+			# DOES, in the unit the player feels. A forge line without the second
+			# sentence is asking them to buy on faith.
+			"blurb": "%s   %s" % [line["blurb"], line.get("detail", "")],
+			"parts": line.get("parts", {}),
+			"ok": _db().can_buy(line),
+		})
+
+
+# --- The cursor --------------------------------------------------------------
+
+## Move the cursor and make the screen agree with it: the cell takes focus (which
+## is what draws the highlight, out of the theme, exactly as it does in the pause
+## menu) and the detail pane describes it.
+func _point_at(i: int) -> void:
+	_cursor = clampi(i, 0, maxi(_rows.size() - 1, 0))
+	var cell := _grid.cell_at(_cursor)
+	if cell != null and cell.get_viewport() != null:
+		cell.grab_focus()
+	_describe()
+
+
+## The mouse landed on a cell. Follow it — a click is also a look.
+func _on_cell_looked(index: int) -> void:
+	if index >= 0 and index != _cursor:
+		_point_at(index)
+
+
+func _describe() -> void:
+	for c in _recipe.get_children():
+		c.queue_free()
+	if _rows.is_empty():
+		_d_kind.text = ""
+		_d_name.text = ""
+		_d_price.text = ""
+		_d_blurb.text = ""
+		return
+
+	var row := _rows[_cursor]
+	_d_name.text = String(row["label"])
+	_d_blurb.text = String(row["blurb"])
+
+	match row["kind"]:
+		&"item":
+			var def := ItemDb.get_def(row["id"])
+			_d_kind.text = "%s  ·  %s" % [def.rarity_name().to_upper(),
+				def.bench_name() if def.is_component() else "INGREDIENT"]
+			_d_price.text = "%d ◇  for ×%d" % [int(row["price"]), int(row["count"])]
+		&"all":
+			_d_kind.text = "EVERY STACK"
+			_d_price.text = "%d ◇" % int(row["price"])
+		&"buy":
+			var left: int = int(row["count"])
+			_d_kind.text = "%d LEFT" % left if left >= 0 else ""
+			_d_price.text = "%d ◇" % int(row["price"])
+			_fill_recipe(row.get("parts", {}))
+
+
+func _fill_recipe(parts: Dictionary) -> void:
+	if parts.is_empty():
+		return
+	for id: StringName in parts:
+		var def := ItemDb.get_def(id)
+		if def == null:
+			continue
+		var need := int(parts[id])
+		var have := Game.component_count(id)
+
+		var line := HBoxContainer.new()
+		_recipe.add_child(line)
+
+		# The name carries what the recipe WANTS and the right-hand figure what
+		# the bench HAS. Spelled "have 3" rather than shown as "3 / 4", because
+		# a bare pair of numbers reads either way round and the first version of
+		# this row printed 120/4 for a recipe wanting four of a hundred and
+		# twenty — which looks exactly like being short.
+		var what := Label.new()
+		what.theme_type_variation = &"MenuSlotStat"
+		what.text = "%s ×%d" % [def.display_name, need]
+		what.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		line.add_child(what)
+
+		var tally := Label.new()
+		tally.theme_type_variation = &"MenuSlotStat"
+		tally.text = "have %d" % have
+		# Green when the bench covers it, red when it does not, PER COMPONENT.
+		# A recipe you are one core short of and a recipe you have none of look
+		# identical if the whole line just greys out, and the difference between
+		# them is a whole run's worth of where to go looking.
+		tally.modulate = Pal.MOSS if have >= need else Pal.RUST
+		line.add_child(tally)
+
+
+# --- Input -------------------------------------------------------------------
 ## Polled, not event-driven. Two reasons, and the second is the real one:
 ##
 ##  1. Held-direction repeat is a timer, and a timer next to `_unhandled_input`
@@ -185,6 +478,11 @@ func _refresh() -> void:
 ##     only listens to `_unhandled_input` cannot be exercised by a tool. A screen
 ##     that can only be tested by a human is a screen that does not get tested.
 ##
+## This is also why the cursor is `_cursor` and not the focus owner: Godot's own
+## focus navigation runs off InputEvents, so a board driven by `grab_focus` alone
+## would be invisible to every director in `tools/`. Focus follows the cursor
+## rather than leading it.
+##
 ## Both edges start DISARMED, which is what stops the interact press that opened
 ## this screen -- still held -- from buying the top line on arrival.
 
@@ -192,33 +490,32 @@ const REPEAT_DELAY := 0.38
 const REPEAT_RATE := 0.09
 
 ## Seconds on the button for a commit that eats materials. Shorter than the
-## gate's 0.9 s and deliberately so: the gate is guarding against a press you
-## made while walking past, and this is guarding against the cursor being one row
-## from where you thought it was. Long enough to be a decision, short enough that
+## gate's 0.9 s and deliberately so: the gate is guarding against a press you made
+## while walking past, and this is guarding against the cursor being one cell from
+## where you thought it was. Long enough to be a decision, short enough that
 ## brewing four draughts in a row is not a chore.
 const CRAFT_HOLD := 0.5
 
-## Same release-edge trick as Prompt: a confirm that depends on catching a
-## one-frame `just_pressed` is a confirm that occasionally does nothing.
 var _armed_accept: bool = false
 var _armed_cancel: bool = false
 var _repeat: float = 0.0
-## 0..1 on the selected row's commit. See `_hold_time`.
+## 0..1 on the selected cell's commit. See `_hold_time`.
 var _hold: float = 0.0
 
 
-## Seconds this row wants on the button, 0 to fire on press.
+## Seconds this cell wants on the button, 0 to fire on press.
 ##
-## **Held: the commits you cannot undo.** A forge rung, a blown bottle and a brew
-## all eat components -- a Cold Iron Core is a thing you FOUND, and spending one
-## on the wrong ladder because the cursor was a row off is the only shop mistake
-## this game cannot give back (docs/METAGAME.md §6.5). SELL EVERYTHING is here
-## for the same reason from the other side: it is one press that empties the bag.
+## **Held: the commits you cannot undo.** A forge rung, a blown bottle, a brew and
+## a set stone all eat components -- a Cold Iron Core is a thing you FOUND, and
+## spending one on the wrong ladder because the cursor was a cell off is the only
+## shop mistake this game cannot give back (docs/METAGAME.md §6.5). SELL
+## EVERYTHING is here for the same reason from the other side: it is one press
+## that empties the bag.
 ##
-## **Tapped: everything else.** Arrows, a bag slot, selling one stack. Gold is
-## grindable and a single row is re-buyable, and a hold on every line would be
-## ceremony -- which is worse than no hold at all, because a player who holds
-## through twelve harmless confirms stops reading the one that mattered.
+## **Tapped: everything else.** Arrows, a bag slot, a jewel blank, selling one
+## stack. Gold is grindable and a single line is re-buyable, and a hold on every
+## cell would be ceremony -- which is worse than no hold at all, because a player
+## who holds through twelve harmless confirms stops reading the one that mattered.
 func _hold_time(i: int) -> float:
 	if i < 0 or i >= _rows.size():
 		return 0.0
@@ -248,25 +545,16 @@ func _tick_input(delta: float) -> void:
 	if _rows.is_empty():
 		return
 
-	var dir := 0
-	if Input.is_action_just_pressed(&"ui_down"):
-		dir = 1
-	elif Input.is_action_just_pressed(&"ui_up"):
-		dir = -1
-	if dir != 0:
-		_repeat = REPEAT_DELAY
-	elif Input.is_action_pressed(&"ui_down") or Input.is_action_pressed(&"ui_up"):
-		_repeat -= delta
-		if _repeat <= 0.0:
-			_repeat = REPEAT_RATE
-			dir = 1 if Input.is_action_pressed(&"ui_down") else -1
-	if dir != 0:
-		_cursor = (_cursor + dir + _rows.size()) % _rows.size()
-		# Progress does not travel. Sliding the cursor onto the next line with the
-		# button down would otherwise arrive there half-committed, which is the
-		# exact accident the hold exists to prevent.
+	var step := _step(delta)
+	if step != 0:
+		# Wraps in reading order across the whole board, so holding one direction
+		# still visits every cell -- the guarantee the pouch's grid makes, kept
+		# here even though this screen moves the cursor itself.
+		_point_at((_cursor + step + _rows.size()) % _rows.size())
+		# Progress does not travel. Sliding onto the next cell with the button
+		# down would arrive there half-committed, which is the exact accident the
+		# hold exists to prevent.
 		_hold = 0.0
-		queue_redraw()
 
 	if accept and _armed_accept:
 		var need := _hold_time(_cursor)
@@ -287,6 +575,41 @@ func _tick_input(delta: float) -> void:
 		_hold = 0.0
 
 
+## How far the cursor moves this frame, in cells. Left/right is one; up/down is a
+## whole row, which is what makes a grid navigable with the same four directions a
+## list used.
+func _step(delta: float) -> int:
+	var d := 0
+	if Input.is_action_just_pressed(&"ui_right"):
+		d = 1
+	elif Input.is_action_just_pressed(&"ui_left"):
+		d = -1
+	elif Input.is_action_just_pressed(&"ui_down"):
+		d = COLS
+	elif Input.is_action_just_pressed(&"ui_up"):
+		d = -COLS
+	if d != 0:
+		_repeat = REPEAT_DELAY
+		return d
+
+	var held := 0
+	if Input.is_action_pressed(&"ui_right"):
+		held = 1
+	elif Input.is_action_pressed(&"ui_left"):
+		held = -1
+	elif Input.is_action_pressed(&"ui_down"):
+		held = COLS
+	elif Input.is_action_pressed(&"ui_up"):
+		held = -COLS
+	if held == 0:
+		return 0
+	_repeat -= delta
+	if _repeat > 0.0:
+		return 0
+	_repeat = REPEAT_RATE
+	return held
+
+
 func _commit() -> void:
 	if _cursor < 0 or _cursor >= _rows.size():
 		return
@@ -300,10 +623,7 @@ func _commit() -> void:
 		&"buy":
 			done = _db().buy(row["line"])
 
-	if done:
-		_flash = 0.0
-		_flash_row = _cursor
-	else:
+	if not done:
 		_refuse = 0.0
 	_refresh()
 
@@ -315,242 +635,85 @@ func _process(delta: float) -> void:
 	if not is_equal_approx(_shown_gold, float(Game.gold)):
 		var step: float = maxf(1.0, absf(Game.gold - _shown_gold)) * (delta / ROLL_TIME)
 		_shown_gold = move_toward(_shown_gold, float(Game.gold), step)
-	for t in [&"_flash", &"_refuse"]:
-		var v: float = get(t)
-		if v >= 0.0:
-			set(t, v + delta)
-	if _flash > 0.35:
-		_flash = -1.0
-		_flash_row = -1
-	if _refuse > 0.45:
-		_refuse = -1.0
-	queue_redraw()
+	if _refuse >= 0.0:
+		_refuse += delta
+		if _refuse > 0.45:
+			_refuse = -1.0
+	_paint_chrome()
 
 
-# --- Draw -------------------------------------------------------------------
+func _paint_chrome() -> void:
+	_gold_label.text = "%d ◇" % int(round(_shown_gold))
 
-func _draw() -> void:
-	var s := size
-	if s.x < 1.0 or s.y < 1.0:
-		return
+	var need := _hold_time(_cursor)
+	_hold_bar.visible = need > 0.0
+	_hold_bar.progress = (_hold / need) if need > 0.0 else 0.0
 
-	# Darken the world rather than hide it. You are standing in the town while
-	# you do this, and the shop is a conversation, not a menu screen.
-	draw_rect(Rect2(Vector2.ZERO, s), Color(Pal.VOID, 0.86))
-
-	var pad := Pal.px(PAD, s.y)
-	var panel := Rect2(s.x * 0.16, s.y * 0.13, s.x * 0.68, s.y * 0.74)
-	draw_rect(panel, Color(Pal.MIDNIGHT, 0.94))
-	draw_rect(panel, Pal.ASH, false, Pal.px(2.0, s.y))
-
-	var t2 := Pal.px(20.0 / PixelFont.H, s.y)
-	PixelFont.draw_text(self, title,
-		panel.position + Vector2(pad, pad), t2, Pal.BONE)
-
-	# The purse. Right-aligned and monospaced so it does not reflow as it rolls.
-	var gold_s := "%d" % int(round(_shown_gold))
-	var gt := Pal.px(24.0 / PixelFont.H, s.y)
-	PixelFont.draw_right(self, gold_s,
-		Vector2(panel.end.x - pad - Pal.px(20.0, s.y), panel.position.y + pad),
-		gt, Pal.GOLD)
-	_diamond(Vector2(panel.end.x - pad - Pal.px(8.0, s.y),
-		panel.position.y + pad + PixelFont.height(gt) * 0.5),
-		Pal.px(8.0, s.y), Pal.GOLD)
-
-	var rule_y := panel.position.y + pad + PixelFont.height(gt) + Pal.px(10.0, s.y)
-	draw_rect(Rect2(panel.position.x + pad, rule_y,
-		panel.size.x - pad * 2.0, Pal.px(1.0, s.y)), Pal.ASH)
-
-	if _rows.is_empty():
-		PixelFont.draw_centred(self,
-			"NOTHING TO SELL" if mode == Mode.SELL else "SOLD OUT",
-			Vector2(panel.get_center().x, panel.get_center().y),
-			Pal.px(16.0 / PixelFont.H, s.y), Pal.MOTH)
-		_footer(s, panel, pad)
-		return
-
-	var row_h := Pal.px(ROW_H, s.y)
-	var rt := Pal.px(14.0 / PixelFont.H, s.y)
-	var y := rule_y + Pal.px(12.0, s.y)
-
-	# The window. The blurb block below is reserved at its FULL four lines even
-	# when the selected row only needs one, because a list whose height changed as
-	# the cursor moved down it would shuffle every row under the cursor -- the one
-	# thing a list you are aiming at must never do.
-	var bt0 := Pal.px(12.0 / PixelFont.H, s.y)
-	var blurb_top := panel.end.y - pad * 2.4 - PixelFont.height(bt0) * 1.5 * 3.0
-	var fit := maxi(1, int((blurb_top - y - Pal.px(10.0, s.y)) / row_h))
-	_top = clampi(_top, maxi(0, _cursor - fit + 1), _cursor)
-	_top = clampi(_top, 0, maxi(0, _rows.size() - fit))
-	var last: int = mini(_rows.size(), _top + fit)
-
-	for i in range(_top, last):
-		var row := _rows[i]
-		var selected := i == _cursor
-		var r := Rect2(panel.position.x + pad * 0.5, y,
-			panel.size.x - pad, row_h)
-
-		if selected:
-			draw_rect(r, Color(Pal.ASH, 0.45))
-			draw_rect(Rect2(r.position.x, r.position.y,
-				Pal.px(3.0, s.y), r.size.y), Pal.BONE)
-			# The hold gauge, along the bottom of the row it commits. Drawn from
-			# the moment the row is selected, empty, because the empty track is
-			# what says "this one is a hold" before the player presses and
-			# wonders why nothing happened. Same widget as the interact prompt's,
-			# same rule -- see `HoldGauge`.
-			if _hold_time(i) > 0.0:
-				var bar_h := Pal.px(HoldGauge.BAR_H, s.y)
-				HoldGauge.bar(self, Rect2(r.position.x, r.end.y - bar_h,
-					r.size.x, bar_h), _hold / _hold_time(i), Pal.GOLD)
-		if i == _flash_row and _flash >= 0.0:
-			draw_rect(r, Color(Pal.GOLD, 0.5 * (1.0 - _flash / 0.35)))
-
-		var affordable: bool = row["ok"]
-		var name_col: Color = row["color"] if affordable else Color(Pal.MOTH, 0.45)
-		var text_y := y + (row_h - PixelFont.height(rt)) * 0.5
-
-		PixelFont.draw_text(self, str(row["label"]),
-			Vector2(r.position.x + pad, text_y), rt, name_col)
-
-		# Quantity column, fixed at a third across, so the eye can run down it.
-		var qx := panel.position.x + panel.size.x * 0.52
-		if row["kind"] == &"item":
-			PixelFont.draw_text(self, "X%d" % int(row["count"]),
-				Vector2(qx, text_y), rt, Pal.MOTH)
-		elif row["kind"] == &"buy":
-			var parts: Dictionary = row.get("parts", {})
-			if not parts.is_empty():
-				_recipe(parts, Vector2(qx, text_y), rt)
-			elif int(row["count"]) >= 0:
-				PixelFont.draw_text(self, "%d LEFT" % int(row["count"]),
-					Vector2(qx, text_y), rt,
-					Pal.MOTH if int(row["count"]) > 0 else Pal.RUST)
-
-		var price_col: Color = Pal.GOLD if affordable else Pal.RUST
-		if mode == Mode.SELL:
-			price_col = Pal.GOLD
-		PixelFont.draw_right(self, "%d" % int(row["price"]),
-			Vector2(r.end.x - pad, text_y), rt, price_col)
-
-		y += row_h
-
-	# "There is more of this list." Two carets in the price column's gutter, drawn
-	# only when there is something off the end -- without them a windowed list is
-	# indistinguishable from a short one, and a player who cannot see the boots
-	# rows does not know to press down.
-	if _rows.size() > fit:
-		var cx := panel.end.x - pad * 0.9
-		var ct := Pal.px(12.0 / PixelFont.H, s.y)
-		# The D-pad's own glyphs, which are in the table -- `^` and `v` are not,
-		# and MISSING draws as a filled 5x7 block that reads as a deliberate mark
-		# (see the note over `=` in PixelFont).
-		if _top > 0:
-			PixelFont.draw_right(self, "↑", Vector2(cx,
-				rule_y + Pal.px(2.0, s.y)), ct, Pal.MOTH)
-		if last < _rows.size():
-			PixelFont.draw_right(self, "↓", Vector2(cx, y), ct, Pal.MOTH)
-
-	# The blurb for the highlighted line, in the one place blurbs ever appear.
-	# Wrapped, not clipped: a forge line carries its before/after numbers here
-	# ("8.7 M REACH -> 11.9 M REACH") and unwrapped that ran straight out through
-	# the right edge of the panel and on across the dungeon behind it.
-	var row2 := _rows[_cursor]
-	var bt := Pal.px(12.0 / PixelFont.H, s.y)
-	var bh := PixelFont.height(bt) * 1.5
-	# FOUR lines, not `wrap`'s default two. The default silently truncated every
-	# blurb longer than two lines mid-word -- the Lanternkeeper's twelve lore
-	# rows all ended like "...AND GAVE IT TO THE", and the smith's and
-	# alchemist's longer lines with them. The block grows UPWARD off
-	# `panel.end.y`, and the gap between the last row and the footer is ~90 px at
-	# this scale, so four fit without touching the rows above.
-	var blurb := PixelFont.wrap(str(row2["blurb"]), bt, panel.size.x - pad * 2.0, 4)
-	var by := panel.end.y - pad * 2.4 - bh * (blurb.size() - 1)
-	for i in blurb.size():
-		PixelFont.draw_text(self, blurb[i],
-			Vector2(panel.position.x + pad, by + bh * i), bt, Pal.MOTH)
-
-	_footer(s, panel, pad)
-
-
-## The component half of a bill: `3 GRIT  1 CORE`, each token GOLD when the
-## workbench can cover it and RUST when it cannot.
-##
-## Per-token colour, not per-row: a recipe you are one core short of and a recipe
-## you have none of look identical if the whole line just greys out, and the
-## difference between them is a whole run's worth of where to go looking.
-func _recipe(parts: Dictionary, at: Vector2, scale: float) -> void:
-	var x := at.x
-	for id: StringName in parts:
-		var need := int(parts[id])
-		var def := ItemDb.get_def(id)
-		if def == null:
-			continue
-		var have := Game.component_count(id)
-		var token := "%d %s" % [need, def.code()]
-		PixelFont.draw_text(self, token, Vector2(x, at.y), scale,
-			Pal.GOLD if have >= need else Pal.RUST)
-		x += PixelFont.width(token, scale) + PixelFont.width("  ", scale)
-
-
-## The line that says which button does what, and -- on a row that wants one --
-## that this one is a HOLD.
-##
-## The word and the gauge are one statement made twice, in language and in shape,
-## exactly as the interact prompt makes it (`Prompt._say_prompt`). Either alone
-## has shipped as a bug here: "A TO DESCEND" with no bar was a player tapping and
-## filing "descend doesn't work", and a bar with no word is a player watching
-## something fill without knowing they are the one filling it.
-##
-## Buttons come off the live InputMap through `Glyph`, not written in: this line
-## said ENTER and ESC on a pad, under a game whose HUD had already learned not to.
-func _footer(s: Vector2, panel: Rect2, pad: float) -> void:
-	var ft := Pal.px(12.0 / PixelFont.H, s.y)
+	# Buttons come off the live InputMap through `Glyph`, not written in: this
+	# line said ENTER and ESC on a pad, under a game whose HUD had already learned
+	# not to.
 	var accept_cap := Glyph.cap(&"ui_accept")
 	if accept_cap.is_empty():
 		accept_cap = "ENT"
 	var leave_cap := Glyph.cap(&"ui_cancel")
 	if leave_cap.is_empty():
 		leave_cap = "ESC"
-	var hint := "%s %s    %s LEAVE" % [accept_cap, _verb(), leave_cap]
-	if _hold_time(_cursor) > 0.0:
-		hint = "HOLD %s TO %s    %s LEAVE" % [accept_cap, _verb(), leave_cap]
-	var col: Color = Pal.RUST if _refuse >= 0.0 else Pal.ASH
+	var hint := "%s %s    %s Leave" % [accept_cap, _verb(), leave_cap]
+	if need > 0.0:
+		hint = "Hold %s to %s    %s Leave" % [accept_cap, _verb(), leave_cap]
 	if _refuse >= 0.0:
 		# Ask the catalogue WHY rather than assuming money. Once a line can be
-		# refused for four different reasons, a hardcoded "NOT ENOUGH GOLD"
-		# sends the player back down for the wrong thing.
-		hint = "NOTHING THERE"
+		# refused for four different reasons, a hardcoded "NOT ENOUGH GOLD" sends
+		# the player back down for the wrong thing.
+		hint = "Nothing there"
 		if mode == Mode.BUY and _cursor >= 0 and _cursor < _rows.size():
 			var why: String = _db().refusal(_rows[_cursor]["line"])
-			hint = why if why != "" else "NOT ENOUGH GOLD"
-	PixelFont.draw_text(self, hint,
-		Vector2(panel.position.x + pad, panel.end.y - pad), ft, col)
+			hint = why if why != "" else "Not enough gold"
+	_hint.text = hint
+	_hint.modulate = Pal.RUST if _refuse >= 0.0 else Color.WHITE
 
 
-## What the selected row does, in the counter's own word: FORGE at the smith,
-## BREW at the alchemist, BUY for anything they merely have in stock, SELL on the
-## other side of the shop. Asked of the catalogue rather than decided here, so a
-## fourth counter names its own act without this file learning about it.
+## The label of the cell the cursor is on, or "" when the board is empty.
+##
+## For the directors. A beat that wants a particular line used to reach it by
+## counting presses from the top, and that count is a lie the moment the board
+## changes length — the smith hides ARROWS until you own a bow, so `mvp_loop`'s
+## "second line is the bag slot" quietly became "the heart container" and the run
+## still went green. A beat can now walk the board and stop when it recognises
+## where it is. Read-only, and the shipped screen never calls it.
+func cursor_label() -> String:
+	if _cursor < 0 or _cursor >= _rows.size():
+		return ""
+	return String(_rows[_cursor]["label"])
+
+
+## How many cells the board has, so a walk over it terminates.
+func line_count() -> int:
+	return _rows.size()
+
+
+## What the selected cell does, in the counter's own word: FORGE at the smith,
+## BREW at the alchemist, SET at the jewelcrafter, BUY for anything they merely
+## have in stock, SELL on the other side of the shop. Asked of the catalogue
+## rather than decided here, so a sixth counter names its own act without this
+## file learning about it.
 func _verb() -> String:
 	if _cursor < 0 or _cursor >= _rows.size():
-		return "SELL" if mode == Mode.SELL else "BUY"
+		return "Sell" if mode == Mode.SELL else "Buy"
 	var row := _rows[_cursor]
 	match row["kind"]:
 		&"all":
-			return "SELL ALL"
+			return "Sell all"
 		&"buy":
 			# Both questions asked of the catalogue HERE rather than folded into
-			# one helper on it: a static calling a static inside `Catalogue`
-			# binds to `Catalogue`, so the smith's FORGE never came back. See
-			# the note on `Catalogue.craft_verb`.
+			# one helper on it: a static calling a static inside `Catalogue` binds
+			# to `Catalogue`, so the smith's FORGE never came back. See the note
+			# on `Catalogue.craft_verb`.
 			var line: Dictionary = row["line"]
-			return _db().craft_verb() if _db().crafts(line) else "BUY"
-	return "SELL"
-
-
-func _diamond(centre: Vector2, r: float, col: Color) -> void:
-	draw_colored_polygon(PackedVector2Array([
-		centre + Vector2(0.0, -r), centre + Vector2(r, 0.0),
-		centre + Vector2(0.0, r), centre + Vector2(-r, 0.0),
-	]), col)
+			# The counter's own word, in the counter's own case. Not capitalized
+			# to match the rest of the footer: FORGE, BREW and SET are what these
+			# people call the act, `forge_loop` CH1b checks that this line says
+			# so, and a screen that quietly title-cased the smith's word would
+			# make that check a lie about the thing it is testing.
+			return _db().craft_verb() if _db().crafts(line) else "Buy"
+	return "Sell"
