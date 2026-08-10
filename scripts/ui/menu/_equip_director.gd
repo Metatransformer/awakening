@@ -360,8 +360,24 @@ func run(rig) -> void:
 	await rig.wait_frames(8)
 
 	# --- Back ----------------------------------------------------------------
+	# `open_pouch` goes through `_open_onto`, which CLEARS the stack: the pouch
+	# reached in one press (I) has nothing underneath it, so Escape leaves outright
+	# rather than surfacing onto a root the player never went through
+	# (`PauseMenu._open_onto`, commit bb3fe8d). This beat asserted the old
+	# behaviour and had been failing since that landed.
 	await _key(rig, KEY_ESCAPE, 12)
-	_check("Escape backed out to the root screen, it did not close the menu",
+	_check("Escape left outright from a pouch opened in one press",
+		not menu.is_open)
+
+	# And the two-press route still backs out one level, which is the half of the
+	# rule the assertion above cannot see.
+	menu.open()
+	await rig.wait_frames(8)
+	await _nav_to_button(rig, "Pouch")
+	await _key(rig, KEY_ENTER, 12)
+	_check("...but from the root it is still a level to back out of", pouch.visible)
+	await _key(rig, KEY_ESCAPE, 12)
+	_check("Escape backed out onto the root, it did not close the menu",
 		menu.is_open and not pouch.visible)
 
 	print("EQUIP %d passed, %d failed" % [_pass, _fail])
