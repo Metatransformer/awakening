@@ -51,6 +51,11 @@ Music="*res://scripts/autoload/music.gd"
 ; emitter and no listener -- and owns the signal->sound table. After Bus, which
 ; it connects to on _ready.
 Sfx="*res://scripts/autoload/sfx.gd"
+; Voice owns the fifteen recorded lines and the single player that says them.
+; After Bus only by convention -- it listens to nothing and is called, never
+; connected. It must be PROCESS_MODE_ALWAYS, which it sets itself: the opening
+; narration plays over a paused world.
+Voice="*res://scripts/autoload/voice.gd"
 ; Feel implements Bus.request_hitstop and Bus.request_shake -- both declared in
 ; event_bus.gd, both emitted from four scripts, and neither with a listener
 ; anywhere in the project until now. After Settings (it reads camera_shake) and

@@ -49,6 +49,9 @@ const SKY_SHADER := preload("res://assets/shaders/sky.gdshader")
 ## Clear width left between the two shaft-head rails, so the arch is walkable.
 const RAIL_GAP := 5.0
 
+## Set the first time a save sees the courtyard. See `_open_the_game`.
+const INTRO_FLAG := &"reported_for_duty"
+
 ## Where the curtain stands. Unchanged through both rebuilds, because every NPC
 ## position in `_build_people` and the whole prop ring in `_build_relic_props`
 ## are tuned against these numbers and against the arrival camera.
@@ -71,6 +74,7 @@ var smith: Npc
 var alchemist: Npc
 var keeper: Npc
 var jeweller: Npc
+var elder: Npc
 var gate: Npc
 ## The hero's billet, in the south-west corner. Public so a director can walk to
 ## it without knowing where the corner is.
@@ -98,6 +102,50 @@ func _ready() -> void:
 	_build_house()
 	_build_people()
 	_build_relic_props()
+	_open_the_game()
+
+
+## The first thirty seconds of a new game: a voice in the dark, then the yard,
+## then the man who sent for you.
+##
+## **Once per save, not once per boot.** The gate is `Game.flags`, which is
+## persisted (`Saves`) and cleared by `Game.reset()`, so it is the flag set every
+## other one-way thing in the game uses -- a loaded save comes back to a garrison
+## that does not re-introduce itself, and a new game gets the opening even if the
+## player has launched the game a hundred times. It is also why this sits behind
+## a flag at all rather than behind "is this the first scene of the process":
+## `Flow` brings you back through here after every single run.
+##
+## The order is the whole of it, and each beat is doing a job the next one needs:
+##
+##   1. **The narration plays over black.** Before the yard, because the yard
+##      answers the question the narration is asking -- you arrive at the
+##      garrison having been told what the Sunken Cut is, not while looking at it.
+##   2. **The veil lifts on the courtyard**, with the elder centre-frame.
+##   3. **"I've been expecting you."** After the fade rather than under it,
+##      because it is addressed to a man who has just walked through the gate,
+##      and a line delivered to a black screen is a line nobody is in the room
+##      for. It is also the tutorial: the first voice you hear in the world comes
+##      from the one person in it who is standing in the open, which is a cheaper
+##      way of saying "go and talk to him" than a prompt would be.
+##
+## Nothing here waits on a signal. `Voice.say` returns the length of what it
+## started -- 0.0 if the file is missing -- so the worst a broken import can do is
+## skip the opening, rather than hold the veil down forever.
+func _open_the_game() -> void:
+	if Game.flag(INTRO_FLAG):
+		return
+	Game.set_flag(INTRO_FLAG)
+
+	var narration := Voice.say(&"narrator", &"opening")
+	# A beat of silence on the black after the last word, so the fade is a
+	# response to the narration rather than an interruption of it.
+	await Flow.open_on_black(narration + 0.6)
+	# And a beat with the yard visible before he speaks, for the same reason in
+	# the other direction: the player needs a moment to see where they are
+	# standing before somebody starts talking to them.
+	await get_tree().create_timer(0.5).timeout
+	Voice.say(&"elder", &"arrival")
 
 
 # --- Look -------------------------------------------------------------------
@@ -399,6 +447,41 @@ func _build_people() -> void:
 	jeweller = _counter(Npc.Role.JEWELLER,
 		Vector3(-yard.x * 0.396, 0.0, yard.y * 0.05), 90.0, Color(0.80, 0.62, 0.94))
 
+	# The elder, in the open middle of the yard, facing the arrival.
+	#
+	# **This is the one position in this function that is about the FIRST frame
+	# rather than about the loop.** The hero spawns at (0, 0, +4) with the camera
+	# behind him at (0, 1.7, +8); everybody else in here is against a wall or in a
+	# corner, so the middle is the only place that is unambiguously *in front of
+	# you* when the opening's veil lifts. You are reporting for duty and the person
+	# you report to should not have to be found.
+	#
+	# **It was dead centre first, at (0, 0, +0.4), and the capture is why it is
+	# not** -- `v_01_arrival` from `tools/directors/voices.gd`, which is the only
+	# thing in the build that would ever have shown it. Two failures, both
+	# invisible from the code:
+	#
+	#  * **The hero stood in front of him.** The arrival camera, the hero and the
+	#    yard's centre line are all x = 0, so the one figure the frame exists to
+	#    introduce was directly behind the one figure that is always drawn.
+	#  * **He was standing IN THE GATE.** The mouth is a 2.5 m cyan quad at
+	#    x = 0, and it is the only cold thing in a warm courtyard on purpose
+	#    (`Npc._build_gate`). A person silhouetted against it stops reading as a
+	#    person and starts reading as something in the doorway, and takes the
+	#    gate's signposting down with him.
+	#
+	# So: two metres right of the centre line, which clears both the hero and the
+	# arch (posts at x = ±1.55), and two metres nearer the spawn, which makes him
+	# the largest figure in the arrival frame. Still open ground, still nobody's
+	# counter, and still off the walk from the spawn to the gate -- that runs
+	# straight down x = 0 and he is deliberately not standing in it.
+	#
+	# Yaw 0 leaves his +Z (the side a keeper is addressed from, see `ShopBooth`)
+	# pointing down +Z at the arrival spot. He has no booth, so the only thing
+	# that actually places is his lamp post.
+	elder = _stand(Npc.Role.ELDER, Vector3(2.0, 0.0, 1.8), 0.0,
+		Color(1.00, 0.92, 0.72))
+
 	gate = Npc.new()
 	gate.role = Npc.Role.GATE
 	gate.position = Vector3(0.0, 0.0, -yard.y * 0.40)
@@ -472,5 +555,22 @@ func _counter(role: Npc.Role, at: Vector3, yaw_deg: float, lamp: Color) -> Npc:
 	n.lamp_color = lamp
 	n.rotation.y = deg_to_rad(yaw_deg)
 	n.position = at - n.transform.basis * Vector3(0.0, 0.0, ShopBooth.KEEPER_BACK)
+	add_child(n)
+	return n
+
+
+## Somebody standing in the open, placed where they are standing.
+##
+## The difference from `_counter` is one line and it is the whole point of having
+## two functions: a keeper's coordinate is where their COUNTER goes and the
+## person steps back behind it, so passing the elder through `_counter` would
+## quietly put him 0.95 m behind the spot this file says he is on -- and the spot
+## is the entire argument for his placement.
+func _stand(role: Npc.Role, at: Vector3, yaw_deg: float, lamp: Color) -> Npc:
+	var n := Npc.new()
+	n.role = role
+	n.lamp_color = lamp
+	n.rotation.y = deg_to_rad(yaw_deg)
+	n.position = at
 	add_child(n)
 	return n
