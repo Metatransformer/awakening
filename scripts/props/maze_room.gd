@@ -24,10 +24,14 @@ extends Node3D
 ## the far side of the maze and the lock is the *geometry*. A gate as well would
 ## be asking the player to solve it twice.
 
-## Metres per maze cell. Wide enough to fight in — the corridors take enemies
-## later (`docs/PUZZLES.md` §5.4), and a corridor you cannot swing in is a
-## corridor the sword does not work in.
-const CELL := 3.6
+## Metres per maze cell. Two things set this and they pull opposite ways: a
+## corridor you cannot swing a sword in is a corridor the sword does not work in
+## (the maze takes enemies later, `docs/PUZZLES.md` §5.4), and a 4x4 maze has to
+## FIT inside a 16 m dungeon room with a walkway round it. 3.1 leaves ~2.6 m of
+## clear corridor against a 1.65 m hero, and 12.4 m across the room. 3.6 was the
+## first number here and it did not fit -- `Dungeon.pick_maze_cell` refused every
+## room on the floor, which is the correct failure but not a shipped room.
+const CELL := 3.1
 const WALL_H := 4.0
 
 ## The dungeon's own wall, not a box. `KitWall` is a `StaticBody3D` already, with

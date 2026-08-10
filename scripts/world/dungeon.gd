@@ -113,6 +113,10 @@ const ANCHOR_ORDER: Array[StringName] = [
 ## Chance a non-entrance room holds a chest. The deep-chest anchor's room always
 ## does, anchor or no anchor.
 @export var chest_chance: float = 0.55
+## How often a floor gets a maze room (`docs/PUZZLES.md` §5.4). Not every run:
+## the room is a change of pace, and a change of pace that is always there is a
+## room type.
+@export var maze_chance: float = 0.5
 ## Chance a room has a bundle of arrows lying loose in it, on top of whatever a
 ## chest in that room might hold.
 ##
@@ -152,6 +156,12 @@ const CHAMBER_SKIRT := 10.0
 ## (`docs/PUZZLES.md` §4: *"pick two rooms whose `dist` differs by >= 3"*). Below
 ## three the shortcut saves nothing and the loop is a doorway between neighbours.
 const CHORD_SPAN := 3
+
+## The maze's cells. 4x4 at `MazeRoom.CELL` is 14.4 m, which fits a 16 m room
+## with a walkway round it; 5x5 does not, and `_pick_maze_cell` checks rather
+## than assuming.
+const MAZE_ROWS := 4
+const MAZE_COLS := 4
 
 ## cell -> {"doors": Array[StringName], "index": int, "dist": int,
 ##          "parent": Vector2i, "size": float, "anchors": Dictionary, "node": Node3D}
@@ -1639,9 +1649,79 @@ func _wall(root: Node3D, length: float, height: float, at: Vector3, yaw: float,
 
 # --- Population -------------------------------------------------------------
 
+## One plain room per floor becomes a maze (`docs/PUZZLES.md` §5.4), or none.
+##
+## **Plain is the requirement, and it is not fussiness.** A maze fills its room
+## wall to wall; dropped on an anchored room it would bury the gate, the chest or
+## the sounding stone inside masonry, and the symptom would be a floor whose
+## critical path silently cannot be finished. Anchors are placed before
+## `_populate` runs (`_plan_anchors` -> `_build_anchors`), so `placements` is
+## already the authority on which rooms are spoken for and this only has to read
+## it.
+##
+## The entrance and the deepest room are excluded for reasons of their own: the
+## entrance is deliberately empty, and `deepest` is where the good chest and the
+## boss live.
+func pick_maze_cell(forced: bool = false):
+	if not forced and _rng.randf() >= maze_chance:
+		return null
+	var taken := {}
+	for id: StringName in placements:
+		taken[placements[id]["cell"]] = true
+	var free: Array[Vector2i] = []
+	for cell: Vector2i in rooms:
+		if cell == entrance or cell == deepest or taken.has(cell):
+			continue
+		# It has to FIT. `MazeRoom` is `cols * CELL` across and the room is
+		# `size_of` -- a maze wider than its room pokes through four walls, and
+		# read off the script's own constants rather than restated here so the two
+		# cannot drift (the same trick `_place_puzzle_room` uses for `STEP`).
+		if size_of(cell) < float(MAZE_COLS) * MazeRoom.CELL + 2.0:
+			continue
+		free.append(cell)
+	if free.is_empty():
+		return null
+	return free[_rng.randi_range(0, free.size() - 1)]
+
+
+## Build it, and hang the loot on it opening.
+##
+## Public, and `_pick_maze_cell` is too: `maze_chance` means a given seed may not
+## place one, and a director that could only photograph the lucky seeds would be
+## proving the roll rather than the room. `tools/directors/maze.gd` beat G asks
+## for a free cell and places one itself, through this exact function.
+func place_maze(cell: Vector2i) -> void:
+	var root: Node3D = rooms[cell]["node"]
+	var maze := MazeRoom.new()
+	maze.name = "MazeRoom"
+	maze.rows = MAZE_ROWS
+	maze.cols = MAZE_COLS
+	# Off the floor's own stream, so a replayed seed deals the same maze -- the
+	# same reason `SoundingStone.offer` and `LanternGrid` use it.
+	maze.rng = _rng
+	root.add_child(maze)
+
+	var prize := Chest.new()
+	prize.name = "MazeChest"
+	prize.picks = Prog.chest_picks(Run.level, false)
+	prize.position = maze.prize_point()
+	prize.visible = false
+	prize.enabled = false
+	root.add_child(prize)
+	# The chest is already standing in the deepest cell, hidden. It lands when the
+	# way to it opens rather than when the player reaches it: §5.2's loot rule is
+	# that solving the puzzle is what pays, and a chest that appeared on arrival
+	# would read as a reward for walking.
+	maze.opened.connect(func() -> void: _land_prize(prize))
+	Atlas.mark(cell, Atlas.M_CHEST)
+
+
 func _populate() -> void:
 	var has_boss := placements.has(&"boss_door")
 	var boss_cell := anchor_cell(&"boss_door")
+	# Untyped on purpose: `_pick_maze_cell` answers `null` when the floor has no
+	# room to spare, and `:=` cannot infer a type from a Variant (CLAUDE.md §3).
+	var maze_cell = pick_maze_cell()
 
 	for cell: Vector2i in rooms:
 		var root: Node3D = rooms[cell].get("node")
@@ -1659,6 +1739,13 @@ func _populate() -> void:
 		# unreadable one -- SCOPE §6 names the boss ballooning as risk one and a
 		# pack in the arena is the same mistake by another route.
 		if has_boss and cell == boss_cell:
+			continue
+		# The maze fills its room wall to wall, so it gets no scatter and no
+		# chest of its own -- both would land inside masonry. Its reward hangs on
+		# the maze opening instead, which is `docs/PUZZLES.md` §5.2's rule that a
+		# puzzle pays rather than merely letting you past.
+		if cell == maze_cell:
+			place_maze(cell)
 			continue
 
 		var size := size_of(cell)

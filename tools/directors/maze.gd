@@ -52,6 +52,20 @@ func run(rig) -> void:
 	if _hero == null:
 		_hero = rig.scene().get_tree().get_first_node_in_group(&"player") as Node3D
 
+	# `--floor` runs beat G only: it needs the dungeon scene, and the fixture beats
+	# need a room with nothing in it. One director, two hosts, chosen explicitly
+	# rather than by sniffing the scene name.
+	# `shoot.gd` gives a bare `--floor` the value "1". Compared as a string: `bool`
+	# has no String constructor in GDScript and the call is a runtime error, not a
+	# parse one -- so it survives every check that is not a run.
+	if rig.arg("floor", "") != "":
+		await _g_on_a_floor(rig)
+		if _fails == 0:
+			print("MAZE ok -- every check passed")
+		else:
+			print("MAZE FAIL -- %d check(s) failed" % _fails)
+		return
+
 	await _a_carve(rig)
 	_b_dealt_shut()
 	await _c_press(rig)
@@ -340,3 +354,79 @@ func _look(rig, at: Vector3, back: float) -> void:
 		_hero.rotation.y = _hero.facing_yaw + PI
 	Bus.camera_recenter.emit()
 	await rig.wait_frames(24)
+
+
+# --- G. On a real floor -------------------------------------------------------
+
+## **A floor that generates one.** Everything above runs on a maze the director
+## stood up by hand; this is the beat that says `Dungeon` places one, in a room
+## that had nothing else in it, with its chest hidden until the way opens.
+##
+## Run separately, on the dungeon scene:
+##
+##   godot --path . -s tools/shoot.gd -- \
+##     --scene=res://scenes/rooms/dungeon.tscn \
+##     --director=res://tools/directors/maze.gd --floor \
+##     --out=/tmp/mzf/x.png --warmup=60
+func _g_on_a_floor(rig) -> void:
+	# Untyped: `rig` is untyped, so everything off it is a Variant (CLAUDE.md §3).
+	var dungeon = rig.scene().get_tree().get_first_node_in_group(&"dungeon")
+	if dungeon == null:
+		dungeon = rig.scene().get_node_or_null(^"Dungeon")
+	if dungeon == null:
+		_ck("G0 there is a dungeon to look in", false)
+		return
+	var found: Node3D = null
+	for n in rig.scene().get_tree().get_nodes_in_group(&"maze_room"):
+		found = n as Node3D
+		break
+	if found == null:
+		# The roll said no on this seed, which is legal. Place one through the
+		# dungeon's OWN placer rather than skipping the beat -- a director that
+		# quietly passed on the unlucky seeds would be proving `maze_chance` and
+		# nothing else.
+		var cell = dungeon.call(&"pick_maze_cell", true)
+		if cell == null:
+			_ck("G0 the floor has a room a maze fits in", false)
+			return
+		dungeon.call(&"place_maze", cell)
+		await rig.wait_frames(20)
+		for n in rig.scene().get_tree().get_nodes_in_group(&"maze_room"):
+			found = n as Node3D
+			break
+	if found == null:
+		_ck("G0 the floor placed a maze", false)
+		return
+	_ck("G0 the floor placed a maze", true)
+	_ck("G1 shut as generated", not bool(found.call(&"is_open")))
+	var chest = found.get_parent().get_node_or_null(^"MazeChest")
+	_ck("G2 with a chest standing hidden at the prize",
+		chest != null and not chest.visible)
+	# The room it landed in has to be one nothing else wanted. An anchor buried
+	# in masonry is a floor that cannot be finished.
+	var siblings := 0
+	for c in found.get_parent().get_children():
+		if c is PuzzleGate or c is LockedDoor:
+			siblings += 1
+	_ck("G3 in a room with no door anchor in it (%d)" % siblings, siblings == 0)
+
+	var lamp = found.call(&"lantern", 0)
+	if lamp != null:
+		for _i in 4:
+			if bool(found.call(&"is_open")):
+				break
+			lamp.call(&"apply_hit", null)
+			await rig.wait_seconds(0.4)
+			lamp = found.call(&"lantern", 1)
+	_ck("G4 and the lanterns open it", bool(found.call(&"is_open")))
+	await rig.wait_frames(30)
+	_ck("G5 which is what lands the chest -- the puzzle pays (§5.2)",
+		chest != null and chest.visible)
+	if found != null:
+		_hero.global_position = found.global_position + Vector3(0.0, 0.15, 11.0)
+		var to := K.flat(found.global_position - _hero.global_position)
+		_hero.facing_yaw = atan2(to.x, to.z)
+		_hero.rotation.y = _hero.facing_yaw + PI
+		Bus.camera_recenter.emit()
+		await rig.wait_frames(24)
+	await rig.capture(out.path_join("m_05_on_a_floor.png"))
