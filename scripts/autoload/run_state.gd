@@ -114,6 +114,12 @@ func enter(run_seed: int = 0) -> void:
 	last_attacker = &""
 	summary = {}
 	in_dungeon = true
+	# Fresh puzzles. Atom flags live in `Game.flags` alongside the door flags, and
+	# those are permanent on purpose -- a shortcut you opened stays open across
+	# saves. A PLATE must not: `docs/PUZZLES.md` §5.2 is that you solve the gate
+	# room on the way down and walk the cycle home, once, this run. Solved on run
+	# nine, the gate room would be a corridor. See `PuzzleAtom.clear_run_flags`.
+	PuzzleAtom.clear_run_flags()
 	seed_used = run_seed if run_seed != 0 else int(Time.get_unix_time_from_system())
 	rng.seed = seed_used
 	Bus.bag_changed.emit(bag, bag_value())

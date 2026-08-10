@@ -217,6 +217,18 @@ static func sigil_of(key: StringName) -> Dictionary:
 	return SIGILS.get(key, SIGIL_DEFAULT)
 
 
+## What THIS door says while it is shut. The instance-level counterpart of
+## `refusal_for`, and the single place the two lines below read.
+##
+## It exists so `PuzzleGate` can say "2 OF 3 EYES STILL SHUT" -- a refusal that
+## names the verb and counts the work left, which is the atom kit's half of the
+## same promise the class note makes about "LOCKED". A gate whose line came from
+## `refusal_for(key_item)` would say "NEEDS THE BOW" at a door the bow does not
+## open, which is worse than saying nothing.
+func refusal_line() -> String:
+	return refusal_for(key_item)
+
+
 func activate(by: Node3D) -> void:
 	if _open:
 		return
@@ -249,13 +261,13 @@ func on_focus(on: bool) -> void:
 
 
 func _refresh_prompt() -> void:
-	prompt = "OPEN" if unlocked() else refusal_for(key_item)
+	prompt = "OPEN" if unlocked() else refusal_line()
 
 
 func _say_refusal() -> void:
 	if Prompt.focus != self or _open or unlocked():
 		return
-	Bus.prompt_changed.emit(refusal_for(key_item))
+	Bus.prompt_changed.emit(refusal_line())
 
 
 func _on_item_acquired(id: StringName) -> void:

@@ -1,9 +1,14 @@
-# Puzzles and Echoes — DRAFT
+# Puzzles and Echoes
 
-**Status: design, not built.** Nothing in this document is in the code yet. When
-it lands, `docs/GDD.md` §5.3, `docs/SCOPE.md` §1 and `CLAUDE.md` §7 all move in
-the same commit — this file owns the puzzle vocabulary, the three shapes, and
-where Echoes come from, and it owns nothing else.
+**Status: §2 is built (M1). Everything else is still design.** The eight phase-1
+atoms and the door that listens are in the code — `scripts/props/puzzle_atoms.gd`
+(the table and the factory), `scripts/props/puzzle_atom.gd` (the base body), the
+eight files under `scripts/props/atoms/`, and `scripts/props/puzzle_gate.gd`,
+proved by `tools/directors/puzzle_atoms.gd`. §3's combinators, §4's cycles, §5's
+three shapes, §6's Echoes and §7's minibosses are M4 and later.
+
+This file owns the puzzle vocabulary, the three shapes, and where Echoes come
+from, and it owns nothing else.
 
 It exists because `docs/GDD.md` §5.3 shipped a **lock** and called it a puzzle. A
 door that opens because you own item X is a *check*. Zelda's verb is that the
@@ -94,6 +99,31 @@ listens.
 
 **Phase 1 is eight props** and it covers all four tiers plus the key, which is
 the whole of §1's table. Phase 2 is the flavour and none of it is load-bearing.
+
+### As built (M1)
+
+| Atom | Script | Solved by |
+|---|---|---|
+| Small key | `scripts/props/atoms/small_key.gd` | walking onto it; `Game.add_key(1)` |
+| Urn | `scripts/props/atoms/urn.gd` | any `apply_hit` — spills arrows or hearts |
+| Pressure plate | `scripts/props/atoms/pressure_plate.gd` | the hero, or anything in group `plate_weight` |
+| Push block | `scripts/props/atoms/push_block.gd` | shoved onto its mark, one 1.2 m step at a time |
+| Eye switch | `scripts/props/atoms/eye_switch.gd` | `apply_hit` with `kind == &"arrow"`, and nothing else |
+| Cracked pillar | `scripts/props/atoms/cracked_pillar.gd` | `burst()` — **inert until M5** |
+| Hook ring | `scripts/props/atoms/hook_ring.gd` | `HookTarget.on_bitten`, from the firer |
+| Sun socket | `scripts/props/atoms/sun_socket.gd` | guard up in the shaft, aimed at the socket |
+
+The table itself is `scripts/props/puzzle_atoms.gd` — tier, verb, script, refusal,
+plural, `latching` and `gates`, one row each — and `PuzzleAtoms.pool(max_tier)`
+is rule 1 of §0 in a single function: it takes the minimum of the shape's ceiling
+and what `Game.has()` says the player owns.
+
+**The door that listens is `PuzzleGate`** (`scripts/props/puzzle_gate.gd`), a
+`LockedDoor` subclass. It adopts every atom carrying its `puzzle_id`, refuses
+with the atom's own line — *"2 OF 3 EYES STILL SHUT"* — and opens itself when the
+last one lands, unless `needs_key` says the key has to be spent at the door.
+Atom flags are cleared by `Run.enter()`, so a floor re-entered inside one run
+stays solved and run two gets its puzzle back (§5.2).
 
 **The shield reflect is in phase 1 on purpose.** Floor 1's critical path is
 T0-only (§1), and without it every Cistern puzzle is a key, a plate or a block —
