@@ -16,8 +16,8 @@ build.
 Before you write a system, in this order:
 
 1. `git log --oneline -20` on `main`. Someone may have just built it.
-2. `TaskList`. If a card exists, claim it (`TaskUpdate` with `owner`) instead of
-   starting a rival copy. If one doesn't, make one.
+2. **Look at the board** (§1.1). If a card exists, claim it instead of starting a
+   rival copy. If one doesn't, make one.
 3. `ls scripts/` and grep for the class name. This repo is not big; look.
 
 If the thing already exists and yours would be better, **replace it and delete
@@ -27,9 +27,45 @@ the loser**. Do not land both and wire a switch. One of each system, always.
 
 ## 1. Cards and worktrees
 
-- **One card per unit of work.** `TaskCreate` before starting, `in_progress`
-  when you start, `completed` only when it is verified — not when the code is
-  written.
+### 1.1 The board is on GitHub
+
+**[The Lower Worlds: Awakening](https://github.com/orgs/Metatransformer/projects/8) —
+org `Metatransformer`, project `8`.** That board is the record of what is being
+built and by whom. A session's own `TaskList` is scratch: it dies with the
+session, and §0's duplicated metagame happened precisely because one agent could
+not see what another was doing. **Put it where the next session will look.**
+
+There is no GitHub MCP here. `gh` is authenticated with the `project` scope and
+that is all this needs:
+
+```bash
+gh project item-list 8 --owner Metatransformer --format json        # what exists
+gh issue create --repo Metatransformer/awakening --title "…" --body "…"
+gh project item-add 8 --owner Metatransformer --url <issue-url>
+```
+
+- **Cards are real issues in `Metatransformer/awakening`**, not draft items, so a
+  commit can close one and the history joins up.
+- **Status** is a single-select: `Backlog` → `Ready` → `In progress` →
+  `In review` → `Done`. Move yours to **In progress** when you start and to
+  **Done** only when §2's bar is met — not when the code is written. Setting it
+  needs the ids, and `gh project field-list 8 --owner Metatransformer --format json`
+  prints them.
+- **`Ready` means specified enough to start cold.** If you have to re-derive the
+  design before you can begin, the card belongs in `Backlog` with a pointer to
+  the doc that owns it.
+- **Write the card so a session with no context can act on it**: the file paths,
+  the constraint, and what "done" looks like on screen. A card that only makes
+  sense to the person who wrote it is a note, not a card.
+- **Record finished design work as a closed card too.** Three documents landing
+  on `main` is invisible unless something says so, and invisible work is the one
+  failure this repo has actually paid for.
+
+### 1.2 The rest
+
+- **One card per unit of work.** Open it before starting, move it to
+  `In progress` when you start, `Done` only when it is verified — not when the
+  code is written.
 - **One worktree per card** when work is parallel. Worktrees live in
   `.claude/worktrees/`. Never `git checkout` a branch that another worktree has.
 - **Never `git checkout HEAD -- <file>` or `git restore` a shared file** to undo

@@ -438,10 +438,16 @@ Ask all three. Any *no* kills it.
 ### 4.4 One card, one worktree, land it
 
 Unchanged from `CLAUDE.md` §1, restated because it is the process half of scope
-control: `TaskCreate` before starting, `in_progress` when you start, `completed`
-only when the director passes, and **merge to `main` the moment it does.** A
-verified branch sitting in a worktree is invisible work, and invisible work is
-how this repo built its metagame twice.
+control: a card on **[the board](https://github.com/orgs/Metatransformer/projects/8)**
+before starting, `In progress` when you start, `Done` only when the director
+passes, and **merge to `main` the moment it does.** A verified branch sitting in
+a worktree is invisible work, and invisible work is how this repo built its
+metagame twice.
+
+**The board is also where scope gets caught.** §4.2's ledger only works if a
+proposal is visible before it is built, and a card in `Backlog` is the cheapest
+place to notice that something wants a tenth atom or a sixth counter. A card that
+moves a number in §1 says so in its body.
 
 ---
 
