@@ -270,7 +270,7 @@ These nine facts are the ones clones get wrong. Build to them:
 | `Hud` | `scripts/ui/hud/hud.gd` | the overlay, `CanvasLayer` **50** |
 | `Prompt` | `scripts/autoload/prompt.gd` | which Interactable owns the interact button |
 | `Menu` | `scenes/ui/menu/pause_menu.tscn` | the pause menu, `CanvasLayer` **100** |
-| `Flow` | `scripts/autoload/game_flow.gd` | garrison↔dungeon + the fade, `CanvasLayer` **200**; **loads LAST** |
+| `Flow` | `scripts/autoload/game_flow.gd` | title↔garrison↔dungeon + the fade, `CanvasLayer` **200**; **loads LAST** |
 
 The `CanvasLayer` numbers are a stack, not preferences: the HUD draws under the
 pause menu, and Flow's fade covers both. A fade something can draw on top of is
@@ -930,7 +930,7 @@ in your report — do not reach into their folder and "fix" it.
 | P7 dungeon | `scripts/dungeon/**`, `scenes/rooms/**`, `data/dungeon/**` |
 | P8 enemies | `scripts/actors/enemies/**`, `scenes/actors/enemies/**` |
 | P9 boss | `scripts/actors/boss/**`, `scenes/actors/boss/**` |
-| P10 hud | `scripts/ui/**`, `scenes/ui/**` |
+| P10 hud | `scripts/ui/**`, `scenes/ui/**` (incl. `scripts/ui/title/**` — the title screen and `Cutscene`) |
 | P11 feel | `scripts/feel/**`, `assets/audio/**` |
 | P14 menu | `scripts/ui/menu/**`, `scenes/ui/menu/**` |
 | P15 garrison | `scripts/world/**`, `scripts/props/**`, `scripts/ui/stash/**` |
@@ -1476,6 +1476,32 @@ Rules:
 - New on `Bus`: `stash_changed(stock)`, `rested(slot)`.
 - New on the save: a `stash` key. It arrived at `VERSION = 3` and rides in v4;
   see "Settings and saves" below for why v3 itself is no longer readable.
+
+### Starting a game — the two doors, and both of them are `Flow`'s
+
+```gdscript
+Flow.new_game() -> void                         # reset, play the opening, land in the garrison
+Flow.continue_game(slot: int) -> bool           # await it — false means the slot would not read
+```
+
+The title screen (`res://scenes/ui/title/title_screen.tscn`, the project's
+`run/main_scene`) is the only caller of either, and it calls nothing else —
+per §10 `Flow` is still the one thing that may change a scene.
+
+- **`new_game` is the only caller `Game.reset()` has ever had.** Before the title
+  screen there was no way to start a second game in a process: the opening's
+  flag, the relics, the forge rungs all came back with the boot. It clears
+  `Game`, raises `Cutscene.OPENING` on Flow's layer, builds the garrison *behind*
+  the picture with the tree **paused**, and fades the picture off the built
+  courtyard. It does not touch `Saves` — `autosave` claims the first EMPTY slot,
+  so a new game costs a player with three full slots nothing until they pick one.
+- **`continue_game` is a coroutine and its bool arrives at the far end of the
+  fade.** `await` it. It calls `Saves.load_slot` (which per "Settings and saves"
+  restores `Game` and deliberately does *not* change scenes), then `_go`s to the
+  recorded scene and puts the hero back at the recorded `pos`/`yaw`.
+  **That yaw is a NODE rotation, not a heading** — `Saves.save` writes
+  `global_rotation.y` verbatim, so restoring it is an assignment and the `+ PI`
+  in §2.5 does not apply here.
 
 ### Sleeping — `Flow.blink` fades without changing scene
 
@@ -2217,12 +2243,17 @@ Voice.line_finished             # signal; NOT emitted when a line is cut off
   loudness-normalises to the same target and writes mono ogg. Dropping an mp3 in
   by hand gets you the encoder's padding frame — ~30 ms of silence between the
   button and a 0.8 s line.
-- **The opening lives in `Garrison`, not here.** `_open_the_game` checks
-  `Game.flag(&"reported_for_duty")`, says the narrator's line, and holds
-  `Flow.open_on_black(length)` down over it — a **duration**, not an await on
-  `line_finished`, so a missing file costs a black flash instead of a black
-  screen forever. `tools/shoot.gd` sets that flag for every director; pass
-  `--intro` to the one that wants it (`tools/directors/voices.gd`).
+- **The opening is split across two files, and the seam is the fade.** The
+  narrator's line belongs to `Flow.new_game`, which raises `Cutscene.OPENING`
+  over the road painting and lets `Cutscene` write the words out under it. What
+  stayed in `Garrison._open_the_game` is the beat that was always the ROOM's:
+  the elder's "I've been expecting you", after the picture lifts, still gated on
+  `Game.flag(&"reported_for_duty")`. Neither half awaits `line_finished` — both
+  take the **duration** `Voice.say` hands back, so a missing file costs a short
+  flash instead of a screen forever. `tools/shoot.gd` sets that flag for every
+  director; pass `--intro` to the ones that want it
+  (`tools/directors/voices.gd`, and see `tools/directors/title.gd`, which drives
+  `Flow.new_game` directly and therefore clears the flag itself).
 
 ### Settings and saves — built, tested, and read-only for everyone but P14
 

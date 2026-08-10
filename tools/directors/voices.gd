@@ -13,9 +13,11 @@ extends RefCounted
 ## What it claims, in the order it proves them:
 ##
 ##   A  Every take named in `Voice.LINES` is a file that exists.
-##   B  The opening: black BEFORE the yard, the narration over it, the world
-##      stopped, then the veil lifts on the courtyard and the elder speaks. Once
-##      per save -- the flag is set and a second garrison does not re-narrate.
+##   B  The room's half of the opening: the elder speaks a beat after the yard
+##      is visible, once per save -- the flag is set and coming home does not
+##      re-introduce the place. **The NARRATION is not here**; it moved to
+##      `Flow.new_game` and the road painting on 2026-08-10, and
+##      `tools/directors/title.gd` is what proves it.
 ##   C  The elder is in the arrival frame, behind the relic counter, and TALK on
 ##      him both says something -- a DIFFERENT something the second time -- and
 ##      opens the Far Lantern off the same press.
@@ -81,40 +83,43 @@ func _table() -> void:
 
 func _opening(rig) -> void:
 	if rig.arg("intro", "") == "":
-		print("VOICES (no --intro: the opening was skipped, beats B0..B6 not run)")
+		print("VOICES (no --intro: the opening was skipped, beats B0..B4 not run)")
 		return
 
-	# The director is called after the warmup, and the whole opening is still in
-	# front of it: the narration is ~15 s long.
-	_ck("B0 the veil is down before a frame of the yard is drawn",
-		Flow.busy and rig.paused)
-	_ck("B1 the narrator is talking (%s)" % Voice.line(),
-		Voice.line() == "opening")
-	await rig.capture(out.path_join("v_00_black.png"))
+	# **The narration is not here any more, and that is not a gap.** Until
+	# 2026-08-10 this beat asserted a black veil, `Flow.busy`, and the narrator
+	# talking over a stopped world -- all of which moved to `Flow.new_game` and
+	# the road painting when the title screen landed. `tools/directors/title.gd`
+	# beats C and D are where the narration is proven now, over the picture it is
+	# actually delivered on. What is left here is the half that always belonged to
+	# the ROOM: this scene is entered directly, so there is no fade in front of it
+	# and the only thing owed is the elder.
+	_ck("B0 no fade: the room is entered, not transitioned into",
+		not Flow.busy and not rig.paused)
 
-	# The unit of this wait is the thing waited for, not a frame count: the veil
-	# comes up when the line ends, and the line is however long it is.
-	var lifted: bool = await rig.until(func() -> bool: return not Flow.busy, 45.0)
-	_ck("B2 the opening ends by itself", lifted)
-	_ck("B3 and gives the world back", not rig.paused)
-
-	# He speaks AFTER the fade, not under it. Half a second of yard, then a voice.
+	# He speaks after a beat of visible yard, not on the first frame: the player
+	# needs a moment to see where they are standing. The unit of the wait is the
+	# thing waited for.
 	var spoke: bool = await rig.until(
-		func() -> bool: return Voice.line() == "ive_been_expecting_you", 6.0)
-	_ck("B4 the elder is expecting you", spoke)
+		func() -> bool: return Voice.line() == "ive_been_expecting_you", 8.0)
+	_ck("B1 the elder is expecting you", spoke)
 	await rig.capture(out.path_join("v_01_arrival.png"))
 
 	# Through `Garrison.INTRO_FLAG`, not a literal: `tools/shoot.gd` spells the
 	# same flag out by hand (it cannot name a `class_name` without compiling it
 	# before the autoloads exist), and this is the joint where a drift shows up.
-	_ck("B5 the save has reported for duty", Game.flag(Garrison.INTRO_FLAG))
+	_ck("B2 the save has reported for duty", Game.flag(Garrison.INTRO_FLAG))
+
 	# The other half of "once per save", and the half that would go wrong: the
 	# flag is what `Flow` brings you back through this scene against, four or five
-	# times an hour.
+	# times an hour. Silence it first, or a second greeting cannot be told from
+	# the first one still playing.
+	Voice.stop()
 	var garrison: Garrison = rig.scene()
 	garrison._open_the_game()
-	await rig.wait_frames(4)
-	_ck("B6 coming home does not re-narrate", not Flow.busy)
+	await rig.wait_seconds(2.0)
+	_ck("B3 coming home does not re-introduce the place", Voice.line() == "")
+	_ck("B4 and does not take the screen", not Flow.busy)
 
 
 # --- C. The elder, who keeps the Far Lantern -----------------------------------

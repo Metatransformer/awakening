@@ -1,6 +1,10 @@
 extends Node
-## Autoload `Flow`. Owns the two scenes the game actually has and the fade
+## Autoload `Flow`. Owns the three scenes the game actually has and the fades
 ## between them.
+##
+## Title, garrison, dungeon. The title screen is the boot scene and the two
+## buttons on it are `new_game` and `continue_game` below; everything after that
+## is the loop.
 ##
 ## Garrison and dungeon are separate scenes rather than one streamed world
 ## because the transition IS the mechanic: extracting has to feel like arriving
@@ -12,6 +16,7 @@ extends Node
 
 const GARRISON := "res://scenes/rooms/garrison.tscn"
 const DUNGEON := "res://scenes/rooms/dungeon.tscn"
+const TITLE := "res://scenes/ui/title/title_screen.tscn"
 
 const FADE_OUT := 0.35
 const FADE_IN := 0.45
@@ -71,16 +76,25 @@ func _ready() -> void:
 	Bus.run_ended.connect(_on_run_ended)
 
 
-# --- The boot is the garrison, and that is not a setting ---------------------
+# --- The boot is the title screen, and that is not a setting -----------------
 
 ## Called by a scene that is about to build itself and suspects it is the first
 ## thing this session has ever shown. Returns true if it is, and if so has
-## already sent the player to the garrison — the caller must build NOTHING.
+## already sent the player to the title screen — the caller must build NOTHING.
 ##
-## **THE GAME ALWAYS STARTS IN THE GARRISON.** `run/main_scene` says so and has
-## said so three times before, because it has drifted to the dungeon three times
-## (the note above it in `project.godot` is the record). This is the fourth way
-## in and the setting was innocent: a positional scene path on the command line,
+## **THE GAME ALWAYS STARTS AT THE FRONT DOOR.** Until 2026-08-10 that door was
+## the garrison and this function said so; the title screen took the job on the
+## same day, and a refused boot goes there now rather than to the courtyard.
+## That is the stricter answer, not a looser one: dropping a mistyped launcher
+## into the garrison starts a game nobody chose, with whatever flags the process
+## happened to have, which is the same complaint this function was written about
+## one room further up. The title screen is where CONTINUE and NEW GAME are, so
+## it is the only place that can hand out a game somebody actually picked.
+##
+## `run/main_scene` is supposed to be the whole of that rule and it is not enough,
+## because it has drifted to the dungeon three separate times (the note above it
+## in `project.godot` is the record). This is the fourth way in, and this time the
+## setting was innocent: a positional scene path on the command line,
 ##
 ##     godot --path . res://scenes/rooms/dungeon.tscn
 ##
@@ -124,17 +138,136 @@ func refuse_boot(scene: Node) -> bool:
 
 	# Loud, because the alternative is a developer watching the garrison appear
 	# after they asked for a floor and having no idea why.
-	push_warning("Flow: refused to boot into %s -- the game starts in the "
+	push_warning("Flow: refused to boot into %s -- the game starts at the "
 		% booted.scene_file_path
-		+ "garrison. Use tools/shoot.gd to look at a room, or --boot-here.")
-	print("Flow: %s is not a boot scene; going to the garrison."
+		+ "title screen. Use tools/shoot.gd to look at a room, or --boot-here.")
+	print("Flow: %s is not a boot scene; going to the title screen."
 		% booted.scene_file_path)
 
 	# Straight there, not `to_garrison()`: that one fades out of a world the
 	# player is looking at, and there is no such world yet -- the scene calling
 	# this has not drawn a frame and is about to return without building one.
-	get_tree().change_scene_to_file.call_deferred(GARRISON)
+	get_tree().change_scene_to_file.call_deferred(TITLE)
 	return true
+
+
+# --- Starting a game --------------------------------------------------------
+
+## NEW GAME. Throw the character away, play the opening, arrive in the garrison.
+##
+## The three beats, and the order matters as much as it does in
+## `Garrison._open_the_game`:
+##
+##   1. **`Game.reset()` FIRST**, before anything is loaded or shown. It clears
+##      `Game.flags`, which is what re-arms the garrison's own opening
+##      (`reported_for_duty`) and every other one-way thing in the game. This is
+##      the only caller `reset()` has ever had -- before the title screen existed
+##      the game had no way of starting a second one.
+##   2. **The cutscene goes up over the black, and the garrison is built behind
+##      it.** Not after it: the scene change is free at this size and doing it
+##      under the picture means the fade off the last frame of the opening is
+##      the fade onto the courtyard, with nothing in between.
+##   3. **The world is PAUSED for the whole of the opening**, for the same reason
+##      `_go`'s loading hold pauses it: a garrison
+##      running behind an opaque picture for twenty seconds is a hero being
+##      walked out of it by a gamepad's stick drift (CLAUDE.md §3).
+##
+## `Saves` is deliberately NOT touched. `active_slot` is already -1 in a process
+## that has only ever seen the title screen, and `autosave` claims the first
+## EMPTY slot and never picks one to overwrite for you -- so starting a new game
+## with three full slots costs the player nothing until they choose one.
+func new_game() -> void:
+	if busy or ending:
+		return
+	ending = false
+	Game.reset()
+	busy = true
+	Prompt.blocked = true
+
+	var tw := create_tween().set_ignore_time_scale(true)
+	tw.tween_property(_veil, "color:a", 1.0, FADE_OUT)
+	await tw.finished
+
+	var opening := Cutscene.open(_layer, Cutscene.OPENING)
+	# The picture is opaque and fills the same rect, in front of the veil. Same
+	# handover as the loading card: dropping the veil now is what makes the
+	# CUTSCENE the thing the garrison fades in from, rather than fading a world
+	# in behind a picture and then dissolving a black layer off it.
+	_veil.color.a = 0.0
+	# The score belongs to the opening, not to the room being built behind it.
+	# Forced rather than derived, because by the time the first line is spoken
+	# the current scene IS the garrison and `Music` would otherwise call this
+	# the town.
+	Music.force(Music.Mood.PROLOGUE)
+
+	get_tree().paused = false
+	var err := get_tree().change_scene_to_file(GARRISON)
+	if err != OK:
+		push_error("Flow: could not load %s (%d)" % [GARRISON, err])
+		opening.queue_free()
+		Music.release()
+		busy = false
+		Prompt.blocked = false
+		_veil.color.a = 0.0
+		return
+
+	# Two frames for the new scene's `_ready` to run, so the picture lifts on a
+	# built courtyard rather than on the title screen's last frame.
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	get_tree().paused = true
+	await opening.finished
+	get_tree().paused = false
+
+	Music.release()
+	Prompt.blocked = false
+	busy = false
+	var tin := create_tween().set_ignore_time_scale(true)
+	tin.tween_property(opening, "modulate:a", 0.0, FADE_IN)
+	tin.tween_callback(opening.queue_free)
+
+
+## CONTINUE. Restore a slot and go to the room it was written in.
+##
+## Returns false without touching the screen if the slot cannot be read, so the
+## title screen can put its menu back rather than fading to a garrison that was
+## never restored. Everything past that point is `_go`, which is why a loaded
+## save gets the same fade every other arrival in the game gets.
+##
+## `Saves.load_slot` deliberately does not change scenes (docs/CONTRACT.md §8) --
+## it hands back where the hero was, and placing him is the caller's job because
+## only the caller knows when the scene it belongs to exists. That is the two
+## `process_frame`s below.
+func continue_game(slot: int) -> bool:
+	if busy or ending:
+		return false
+	var dest := Saves.load_slot(slot)
+	if dest.is_empty():
+		return false
+	ending = false
+	await _go(String(dest.get("scene", GARRISON)), 0.0)
+	_place_hero(dest)
+	return true
+
+
+## Put the hero back where the save left him.
+##
+## After `_go`, so the scene exists and its own `_ready` has already run and
+## placed him at the room's default spawn -- this overrides that. Silent when
+## there is no hero in the tree, which is the honest answer for a save written in
+## a scene that no longer has one.
+func _place_hero(dest: Dictionary) -> void:
+	var hero := get_tree().get_first_node_in_group(&"player") as Node3D
+	if hero == null:
+		return
+	hero.global_position = dest.get("pos", hero.global_position)
+	# **No `+ PI` here, and that is not an oversight.** `Saves.save` writes the
+	# hero's `global_rotation.y` verbatim, so what comes back is a NODE rotation
+	# and not a heading -- round-tripping it is an assignment. The conversion
+	# CLAUDE.md §4 is about (`rotation.y = heading + PI`) belongs where a heading
+	# is being turned into a facing, and there is no heading in this dictionary.
+	hero.global_rotation.y = float(dest.get("yaw", 0.0))
 
 
 # --- Entry points -----------------------------------------------------------
@@ -208,41 +341,20 @@ func blink(during: Callable, dark: float = 0.9) -> void:
 	tin.tween_property(_veil, "color:a", 0.0, FADE_IN)
 
 
-## Start the scene BLACK, hold there for `dark` seconds, then lift.
+## `open_on_black` USED TO BE HERE, and it is deliberately gone.
 ##
-## The opening's transition, and the mirror image of `blink`: that one fades out
-## of a world the player can see, and this one is for a world they have not seen
-## yet. `Garrison._open_the_game` calls it on the first frame of a new game with
-## the narrator's line already playing, so the veil is opaque before anything is
-## ever presented -- an autoload is built before the main scene, so the alpha is
-## set during the garrison's `_ready` and no frame of the yard is ever drawn.
+## It started the scene opaque, held for `dark` seconds and lifted -- the mirror
+## of `blink`, for a world the player has not seen yet -- and it had exactly one
+## caller: `Garrison._open_the_game`, holding a black rectangle down over fifteen
+## seconds of narration. `new_game` above does that job now with the road
+## painting in front of the veil instead of nothing, so the black-screen variant
+## had no callers left on 2026-08-10 and was deleted rather than kept warm.
 ##
-## HERE, and not a second ColorRect in the garrison, for the reason the whole
-## file exists: there is one veil, on layer 200, above every other CanvasLayer.
-## A second black rectangle is a second thing that can fail to come down.
-##
-## The world is PAUSED across the dark, same as `blink` and for the same reason
-## with more at stake -- fifteen seconds of narration is fifteen seconds in which
-## an untouched gamepad's drift walks the hero out of the courtyard he is about
-## to be introduced to. `Voice` is `PROCESS_MODE_ALWAYS`, so the line keeps
-## talking.
-##
-## `dark` is a NUMBER rather than a signal to await, and that is deliberate:
-## `Voice.say` hands back the length of what it started even when the file is
-## missing (0.0), so a broken import costs a black flash. Awaiting a `finished`
-## that never fires would cost a black screen with no way out of it.
-func open_on_black(dark: float) -> void:
-	busy = true
-	Prompt.blocked = true
-	_veil.color.a = 1.0
-	get_tree().paused = true
-	await get_tree().create_timer(dark, true, false, true).timeout
-	get_tree().paused = false
-	Prompt.blocked = false
-	busy = false
-	var tin := create_tween().set_ignore_time_scale(true)
-	tin.tween_property(_veil, "color:a", 0.0, FADE_IN)
-	await tin.finished
+## Do not reinstate it for "an opening that does not want a picture". The one
+## thing it did that `new_game` does not is start opaque on the FIRST frame of a
+## scene, and `new_game` does not need that because it fades out of the title
+## screen before the garrison exists. Something that genuinely needs a dark hold
+## with no scene change has `blink`.
 
 
 # --- The two things that end a run ------------------------------------------

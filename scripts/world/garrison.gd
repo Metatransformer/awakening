@@ -129,8 +129,8 @@ func _ready() -> void:
 	_open_the_game()
 
 
-## The first thirty seconds of a new game: a voice in the dark, then the yard,
-## then the man who sent for you.
+## The last beat of a new game's opening: the man who sent for you, once the
+## picture has gone and you can see where you are standing.
 ##
 ## **Once per save, not once per boot.** The gate is `Game.flags`, which is
 ## persisted (`Saves`) and cleared by `Game.reset()`, so it is the flag set every
@@ -140,45 +140,51 @@ func _ready() -> void:
 ## a flag at all rather than behind "is this the first scene of the process":
 ## `Flow` brings you back through here after every single run.
 ##
-## The order is the whole of it, and each beat is doing a job the next one needs:
+## ## The narration is not here any more
 ##
-##   1. **The narration plays over black.** Before the yard, because the yard
-##      answers the question the narration is asking -- you arrive at the
-##      garrison having been told what the Sunken Cut is, not while looking at it.
-##   2. **The veil lifts on the courtyard**, with the Far Lantern's twelve lamp
-##      posts and the man who keeps them across the yard from you.
-##   3. **"I've been expecting you."** After the fade rather than under it,
-##      because it is addressed to a man who has just walked through the gate,
-##      and a line delivered to a black screen is a line nobody is in the room
-##      for. It is also the tutorial: the first voice you hear in the world is the
-##      elder's, and he is the counter that matters least to a first run and most
-##      to a tenth, which is a cheaper way of saying "go and talk to him" than a
-##      prompt would be.
+## It used to be: `Voice.say(&"narrator", &"opening")` over `Flow.open_on_black`,
+## fifteen seconds of a voice in an empty black rectangle. It moved to
+## `Cutscene.OPENING` on 2026-08-10 -- same take, same place in the order, now
+## with the road painting behind it and the words written out under it, raised by
+## `Flow.new_game` before this scene is ever shown. **Do not re-add it here.**
+## Two things saying the opening is two openings, and the one in `Flow` is the
+## one with a picture.
 ##
-##      **He is the Lanternkeeper.** The elder used to stand alone in the middle
-##      of the yard so that the veil lifting would find him; they became one
-##      person on 2026-08-10 (`Npc.COUNTERS`) and this line now comes from behind
-##      the relic counter on the east side. `Voice.say` is not positional
-##      (`Voice`'s header, third rule) so the line is unchanged by the move -- but
-##      the FRAME is, and `v_01_arrival` in `tools/directors/voices.gd` is the
-##      thing that says whether he is still in it.
+## What is left is the beat that always belonged to the room rather than to the
+## black: **"I've been expecting you."** After the fade rather than under it,
+## because it is addressed to a man who has just walked through the gate, and a
+## line delivered to a screen the player cannot see past is a line nobody is in
+## the room for. It is also the tutorial: the first voice you hear in the WORLD is
+## the elder's, and he is the counter that matters least to a first run and most
+## to a tenth, which is a cheaper way of saying "go and talk to him" than a prompt
+## would be.
 ##
-## Nothing here waits on a signal. `Voice.say` returns the length of what it
-## started -- 0.0 if the file is missing -- so the worst a broken import can do is
-## skip the opening, rather than hold the veil down forever.
+## **He is the Lanternkeeper.** The elder used to stand alone in the middle of the
+## yard so that the veil lifting would find him; they became one person on
+## 2026-08-10 (`Npc.COUNTERS`) and this line now comes from behind the relic
+## counter on the east side. `Voice.say` is not positional (`Voice`'s header,
+## third rule) so the line is unchanged by the move -- but the FRAME is, and
+## `v_01_arrival` in `tools/directors/voices.gd` is the thing that says whether
+## he is still in it.
+##
+## ## The timer does NOT run while the cutscene is up
+##
+## `process_always = false` -- the third argument, and the load-bearing one. This
+## `_ready` fires during `change_scene_to_file`, which `Flow.new_game` calls
+## *behind* the opening picture with the tree about to be paused for the whole of
+## it. A default timer is `process_always = true` and would tick straight through
+## that pause, so the elder would greet an empty room a second into the narration
+## and be finished long before anyone could see him. Held this way, the clock only
+## starts when the world does, which is the frame the picture begins to lift.
 func _open_the_game() -> void:
 	if Game.flag(INTRO_FLAG):
 		return
 	Game.set_flag(INTRO_FLAG)
 
-	var narration := Voice.say(&"narrator", &"opening")
-	# A beat of silence on the black after the last word, so the fade is a
-	# response to the narration rather than an interruption of it.
-	await Flow.open_on_black(narration + 0.6)
-	# And a beat with the yard visible before he speaks, for the same reason in
-	# the other direction: the player needs a moment to see where they are
-	# standing before somebody starts talking to them.
-	await get_tree().create_timer(0.5).timeout
+	# Long enough to cover `Flow.FADE_IN` and leave a beat of quiet courtyard
+	# after it: the player needs a moment to see where they are standing before
+	# somebody starts talking to them.
+	await get_tree().create_timer(1.4, false).timeout
 	Voice.say(&"elder", &"arrival")
 
 
