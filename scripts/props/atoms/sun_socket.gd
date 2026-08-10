@@ -54,6 +54,8 @@ var _hero: Node3D
 var _held: float = 0.0
 var _bounce: Node3D
 var _bounce_mesh: MeshInstance3D
+## Held so the shaft can dim when the aim is off. See `_show_bounce`.
+var _bounce_mat: StandardMaterial3D
 var _lens_mat: StandardMaterial3D
 var _lamp: OmniLight3D
 var _shaft_mat: StandardMaterial3D
@@ -89,11 +91,18 @@ func _physics_process(delta: float) -> void:
 		_hero = _find_hero()
 		if _hero == null:
 			return
-	if not _reflecting():
+	# **Guard up in the catch is enough to DRAW the bounce; only aim decides
+	# whether it lands.** Unlocked, the hero's facing is pinned to the camera lens
+	# (`hero.gd._tick_camera_facing`), so the shield angle is already the player's
+	# to steer -- what was missing was any way to see it. A beam that appears only
+	# once the aim is already correct teaches nothing: the player sweeps blind and
+	# the puzzle reads as "stand somewhere and hope". Now the shaft comes off the
+	# shield wherever it points, and steering it onto the lens is the verb.
+	var on_target := _reflecting()
+	_show_bounce(bool(_hero.get(&"blocking")) and _in_catch(), on_target)
+	if not on_target:
 		_held = 0.0
-		_show_bounce(false)
 		return
-	_show_bounce(true)
 	_held += delta
 	if _held >= HOLD_TIME:
 		solve()
@@ -107,10 +116,7 @@ func _physics_process(delta: float) -> void:
 func _reflecting() -> bool:
 	if not bool(_hero.get(&"blocking")):
 		return false
-	var catch := catch_point()
-	var here := _hero.global_position
-	here.y = catch.y
-	if here.distance_to(catch) > CATCH_R:
+	if not _in_catch():
 		return false
 	# `-basis.z` is forward. Measured, never derived from the yaw the hero happens
 	# to be storing -- `CLAUDE.md` §4 is three bugs deep on exactly that.
@@ -121,6 +127,15 @@ func _reflecting() -> bool:
 	if face.length_squared() < 0.0001 or to_socket.length_squared() < 0.0001:
 		return false
 	return face.normalized().dot(to_socket.normalized()) >= AIM_DOT
+
+
+## Standing in the fallen light. Split out of `_reflecting` because the beam is
+## drawn on position alone and only aimed by the dot below.
+func _in_catch() -> bool:
+	var catch := catch_point()
+	var here := _hero.global_position
+	here.y = catch.y
+	return here.distance_to(catch) <= CATCH_R
 
 
 ## Point `node`'s -Z at `target`, picking an up vector that is not parallel to
@@ -148,12 +163,23 @@ func _find_hero() -> Node3D:
 ## Draw (or hide) the reflected shaft, hero to socket. `top_level` so the two
 ## ends are world points -- a beam parented into this node's frame would inherit
 ## a placer's rotation and point somewhere else entirely.
-func _show_bounce(on: bool) -> void:
+func _show_bounce(on: bool, on_target: bool) -> void:
 	_bounce.visible = on
 	if not on:
 		return
 	var from := _hero.global_position + Vector3.UP * 1.0
+	# On target it ends AT the lens; off target it runs off down the shield's own
+	# facing at the same length, so the miss is visibly a miss and the direction
+	# to correct in is the one the beam is already pointing.
 	var to := global_position + Vector3.UP * 0.9
+	if not on_target:
+		var face := -_hero.global_transform.basis.z
+		face.y = 0.0
+		if face.length_squared() < 0.0001:
+			return
+		to = from + face.normalized() * from.distance_to(to)
+	if _bounce_mat != null:
+		_bounce_mat.albedo_color.a = 0.55 if on_target else 0.22
 	var span := to - from
 	var len := span.length()
 	if len < 0.05:
@@ -170,7 +196,7 @@ func _show_bounce(on: bool) -> void:
 
 func on_solved() -> void:
 	Bus.request_sfx.emit(&"glint_bell", global_position)
-	_show_bounce(false)
+	_show_bounce(false, false)
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(_lens_mat, "emission", Pal.GOLD, 0.3)
 	tw.tween_property(_lens_mat, "emission_energy_multiplier", 1.8, 0.3)
@@ -184,7 +210,7 @@ func on_solved() -> void:
 
 
 func restore_solved() -> void:
-	_show_bounce(false)
+	_show_bounce(false, false)
 	_lens_mat.emission = Pal.GOLD
 	_lens_mat.emission_energy_multiplier = 1.8
 	_lamp.light_color = Pal.GOLD
@@ -314,6 +340,6 @@ func _build_bounce_node() -> void:
 	add_child(_bounce)
 	# Unit height, scaled per frame. `_cyl`'s faceted 6 segments is the same
 	# silhouette the shaft has, so the reflection is visibly the SAME light.
-	_bounce_mesh = _cyl(_bounce, _shaft_material(0.55, Pal.GOLD), BEAM_R * 0.9, 1.0,
-		Vector3.ZERO, 6)
+	_bounce_mat = _shaft_material(0.55, Pal.GOLD)
+	_bounce_mesh = _cyl(_bounce, _bounce_mat, BEAM_R * 0.9, 1.0, Vector3.ZERO, 6)
 	_bounce_mesh.rotation.x = PI * 0.5
