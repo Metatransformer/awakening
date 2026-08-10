@@ -98,15 +98,19 @@ static func build(parent: Node, config: Dictionary) -> Control:
 	text.add_theme_constant_override("separation", 1)
 	line.add_child(text)
 
-	var kicker_text := String(config.get("kicker", ""))
-	if not kicker_text.is_empty():
+	# Built whenever the caller PASSED a kicker, even an empty one. A panel whose
+	# kicker depends on state it does not have yet — a counter that cannot know it
+	# forges until its board has been read — needs somewhere to write the answer
+	# later, and a Label conjured on the second call would land under the title.
+	if config.has("kicker"):
 		var kicker := Label.new()
-		kicker.text = kicker_text.to_upper()
+		kicker.text = String(config["kicker"]).to_upper()
 		kicker.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		UITheme.apply_text_style(kicker, UITheme.TYPE_CAPTION, UITheme.ACCENT)
 		if art != null:
 			_outline(kicker, 4)
 		text.add_child(kicker)
+		band.set_meta(&"plate_kicker", kicker)
 
 	var title := Label.new()
 	title.text = title_text
@@ -136,6 +140,23 @@ static func build(parent: Node, config: Dictionary) -> Control:
 		# labels already have their theme fonts.
 		band.custom_minimum_size.y = ceilf(pad.get_combined_minimum_size().y)
 	return band
+
+
+## Rewrite the kicker of a header already on screen.
+##
+## The header is otherwise built once, because it is the panel's IDENTITY and an
+## identity that flickers is not one. The kicker is the exception: it carries the
+## state qualifier — "RARE · INGREDIENT", "FORGE" — and the panel sometimes cannot
+## know that until it has read the thing it is about.
+##
+## Does nothing if the header was built without a `kicker` key. Adding one after
+## the fact would put it under the title instead of over it.
+static func set_kicker(header: Control, text: String) -> void:
+	if header == null or not header.has_meta(&"plate_kicker"):
+		return
+	var label := header.get_meta(&"plate_kicker") as Label
+	if label != null:
+		label.text = text.to_upper()
 
 
 ## Hand the art off to the panel fill, so there is no seam where the image stops.

@@ -36,10 +36,17 @@ extends Control
 ## refusal footer and the hold all run over `_rows` and neither arrangement can
 ## see them.
 ##
-## The frame, the header and the footer are the pause menu's theme
-## (`scenes/ui/menu/menu_theme.tres`) for the same reason -- it is the game's one
-## menu look, and a shop that did not use it was a shop that looked like a
-## different program.
+## The frame, the header and the footer are the game's ONE menu look -- since the
+## Gallery Vellum port that is `UITheme` and `UiKit`, and a shop that did not use
+## it was a shop that looked like a different program. What the kit brings that
+## the old chrome did not: a `PlateHeader` naming the counter and the act, and a
+## `StatBand` under it carrying the four numbers you decide with, so the answer to
+## "can I afford anything on this board" is on screen before you walk it.
+##
+## The BOARD is untouched by that. `ItemCell` and `UpgradeLadder` still draw it,
+## still through the `MenuSlot` / `MenuValue` variation names -- those are painted
+## in kit tokens now (`UITheme._style_shared_cells`) so the bag cell looks the same
+## in the pouch and at the counter, which is the promise `ItemCell`'s header makes.
 ##
 ## One board, one cursor, one number that moves. The player is answering "what is
 ## this worth" over and over, so the price is the only thing that is ever GOLD and
@@ -47,7 +54,6 @@ extends Control
 
 enum Mode { SELL, BUY }
 
-const THEME_PATH := "res://scenes/ui/menu/menu_theme.tres"
 const ROLL_TIME := 0.25
 ## Cells across. Four is the pouch's, and the pouch's was measured against this
 ## same frame width -- see the note on `MenuPouchPanel.COLS`.
@@ -82,7 +88,12 @@ var _scroll: ScrollContainer
 ## put the shield between the blade and the armour), and the cursor has to walk
 ## what the player can see.
 var _order: Array[int] = []
-var _gold_label: Label
+## The `StatBand` and the slot it is rebuilt into. The purse inside it rolls, so
+## it is written per frame through `UiKit.band_value` rather than rebuilt — see
+## `StatBand.set_value`.
+var _header: Control
+var _band: Control
+var _band_slot: VBoxContainer
 var _empty: Label
 var _d_kind: Label
 var _d_name: Label
@@ -91,6 +102,14 @@ var _d_blurb: Label
 var _recipe: VBoxContainer
 var _hint: Label
 var _hold_bar: HoldBar
+## The refusal message, when there is one. A `FooterToast`, built on the failed
+## press and freed when it times out, rather than a permanent Label that spends
+## most of its life empty and reserving a line.
+var _toast: Control
+var _toast_slot: VBoxContainer
+## The catalogue line the toast is about, so `_refresh` can re-ask whether it is
+## still true. Empty on the SELL side, which has nothing to re-ask.
+var _refuse_line: Dictionary = {}
 
 
 ## The screen makes its own CanvasLayer. A Control parented to a Node3D never
@@ -119,7 +138,8 @@ func _ready() -> void:
 	# Size it from the viewport and keep it there.
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	theme = load(THEME_PATH) as Theme
+	UITheme.prewarm()
+	theme = UITheme.theme()
 	_build()
 	_fit()
 	get_viewport().size_changed.connect(_fit)
@@ -168,12 +188,14 @@ func _build() -> void:
 
 	var frame := PanelContainer.new()
 	frame.name = "Frame"
-	frame.theme_type_variation = &"MenuFrame"
+	# `edge_to_edge`, because the header plate, the band and the footer all reach
+	# the frame edge; the BODY between them owns its own inset.
+	UITheme.style_panel(frame, UITheme.FRAME_FACE_SOLID, true)
 	frame.custom_minimum_size = MenuUtil.FRAME_SIZE
 	centre.add_child(frame)
 
 	var stack := VBoxContainer.new()
-	stack.theme_type_variation = &"MenuStack"
+	stack.add_theme_constant_override("separation", 0)
 	frame.add_child(stack)
 
 	_build_header(stack)
@@ -181,32 +203,113 @@ func _build() -> void:
 	_build_footer(stack)
 
 
+## Who this is and what they do, then the four numbers you decide with.
+##
+## The old header was the counter's name and the purse on one line. It told you
+## nothing you could act on: whether anything on the board was affordable was a
+## question you answered by walking it, and at the smith that is eleven presses.
 func _build_header(parent: Node) -> void:
-	var header := PanelContainer.new()
-	header.theme_type_variation = &"MenuHeader"
-	parent.add_child(header)
+	# Empty kicker, filled by the first `_refresh`. It cannot be filled here: what
+	# this counter DOES is read off its own board, and the board has not been built
+	# yet. The Setting Bench shipped a header reading BUY over a footer reading
+	# SET for exactly that reason -- at `_ready()` her four rows are all unbought
+	# blanks, none of which carries a recipe.
+	_header = UiKit.plate_header(parent, {
+		"kicker": "",
+		"title": _counter_name(),
+		"emblem": UiKit.action_icon(_emblem()),
+	})
+	# The band is rebuilt by `_refresh`, because what is affordable changes with
+	# every purchase. The slot is what survives that.
+	_band_slot = VBoxContainer.new()
+	_band_slot.add_theme_constant_override("separation", 0)
+	_band_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(_band_slot)
 
-	var row := HBoxContainer.new()
-	header.add_child(row)
 
-	var name_label := Label.new()
-	name_label.theme_type_variation = &"MenuTitle"
-	name_label.text = title
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(name_label)
+## The counter's name as a name, not as shouting. `Npc.COUNTERS` writes these in
+## caps -- "THE FORGE" -- which was right when the title was a 38 px slab and is
+## wrong in a display serif. Godot's own `String.capitalize()` cannot do this: it
+## inserts a space before every interior capital, so "THE FORGE" comes back as
+## "T H E   F O R G E".
+func _counter_name() -> String:
+	var words: Array[String] = []
+	for word in title.strip_edges().to_lower().split(" ", false):
+		words.append(word.substr(0, 1).to_upper() + word.substr(1))
+	return " ".join(words)
 
-	# The purse. The only number on this screen that animates, because it is the
-	# only one the player's own press moved.
-	_gold_label = Label.new()
-	_gold_label.theme_type_variation = &"MenuValue"
-	_gold_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	row.add_child(_gold_label)
+
+## The act, in the counter's own word, for the kicker: SELL here, FORGE at the
+## smith, BREW at the alchemist, SET at the bench, RECORD at the lantern.
+##
+## Asked of the CATALOGUE and of the board as it stands -- never of which db this
+## is. A counter with nothing on it that eats materials says BUY, and it says so
+## because none of its rows carry a recipe, not because this screen recognised it.
+## Read off `_rows` rather than `lines()` so it answers for the board the player is
+## actually looking at, which is why `_refresh` is what writes it.
+func _act() -> String:
+	if mode == Mode.SELL:
+		return "Sell"
+	for row in _rows:
+		if _db().crafts(row["line"]):
+			return _db().craft_verb()
+	return "Buy"
+
+
+## The header glyph. `Catalogue.emblem()` for a counter, and the trade glyph for
+## the pawnbroker, who has no catalogue at all.
+func _emblem() -> String:
+	return "trade" if mode == Mode.SELL else String(_db().emblem())
+
+
+## The four numbers, per side.
+##
+## SELL is about the bag: what it is worth, how full it is, and how much of that
+## worth is heat the vendor will not pay twice. BUY is about the board: how many
+## lines there are and how many of them you can actually pay for -- the one thing
+## the old header made you walk eleven cells to learn.
+func _band_cells() -> Array:
+	var purse := {"key": &"purse", "label": "Purse",
+		"value": "%d ◇" % int(round(_shown_gold)), "icon": UiKit.action_icon("coin")}
+	if mode == Mode.SELL:
+		var used := Run.slots_used()
+		return [
+			purse,
+			{"label": "Bag", "value": "%d ◇" % Run.bag_value(),
+				"icon": UiKit.action_icon("bag")},
+			{"label": "Slots", "value": "%d / %d" % [used, Game.bag_slots],
+				"tone": UITheme.WARNING if used >= Game.bag_slots else null},
+			{"label": "Heat", "value": "+%d ◇" % Run.premium,
+				"tone": UITheme.WARNING if Run.premium > 0 else null},
+		]
+	var afford := 0
+	for row in _rows:
+		if bool(row["ok"]):
+			afford += 1
+	return [
+		purse,
+		{"label": "Lines", "value": str(_rows.size())},
+		{"label": "Affordable", "value": str(afford),
+			"tone": UITheme.SUCCESS if afford > 0 else UITheme.DANGER},
+		# Follows the cursor, so the number you are deciding about is in the band
+		# as well as in the detail pane -- the band is where the eye already is,
+		# because the purse it must be weighed against is one cell to the left.
+		{"key": &"cost", "label": "This line", "value": "—"},
+	]
+
+
+func _rebuild_band() -> void:
+	if _band_slot == null:
+		return
+	UITheme.clear_children(_band_slot)
+	_band = UiKit.stat_band(_band_slot, _band_cells())
 
 
 func _build_body(parent: Node) -> void:
 	var pad := MarginContainer.new()
-	pad.theme_type_variation = &"MenuBodyPad"
 	pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	for side in ["left", "right", "top", "bottom"]:
+		pad.add_theme_constant_override("margin_" + side, 20)
 	parent.add_child(pad)
 
 	var split := HBoxContainer.new()
@@ -218,19 +321,20 @@ func _build_body(parent: Node) -> void:
 	left.add_theme_constant_override("separation", 6)
 	split.add_child(left)
 
+	# A WELL, not a panel. The board is a recess in the frame -- darker glass
+	# behind a fainter hairline -- which is what makes a grid of cells read as
+	# things sitting IN something rather than a second window floating on the first.
 	var card := PanelContainer.new()
-	card.theme_type_variation = &"MenuSection"
+	card.add_theme_stylebox_override("panel", UITheme.well())
 	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left.add_child(card)
 
 	var inner := VBoxContainer.new()
-	inner.add_theme_constant_override("separation", 6)
+	inner.add_theme_constant_override("separation", 8)
 	card.add_child(inner)
 
-	var caption := Label.new()
-	caption.theme_type_variation = &"MenuHeading"
-	caption.text = "IN THE BAG" if mode == Mode.SELL else "ON THE BOARD"
-	inner.add_child(caption)
+	UITheme.section_rule(inner,
+		"IN THE BAG" if mode == Mode.SELL else "ON THE BOARD")
 
 	# SELL is a grid of what is in the bag; BUY is a ladder per thing on offer.
 	# Two arrangements of the SAME cell (`ItemCell`) rather than two screens,
@@ -256,6 +360,7 @@ func _build_body(parent: Node) -> void:
 		_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		inner.add_child(_scroll)
+		UITheme.style_scrollbar(_scroll)
 
 		_ladder = UpgradeLadder.new()
 		_ladder.name = "Board"
@@ -264,8 +369,9 @@ func _build_body(parent: Node) -> void:
 		_scroll.add_child(_ladder)
 
 	_empty = Label.new()
-	_empty.theme_type_variation = &"MenuMuted"
 	_empty.text = "Nothing to sell." if mode == Mode.SELL else "Sold out."
+	_empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UITheme.apply_text_style(_empty, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
 	inner.add_child(_empty)
 
 	_build_detail(split)
@@ -277,7 +383,7 @@ func _build_body(parent: Node) -> void:
 func _build_detail(parent: Node) -> void:
 	var card := PanelContainer.new()
 	card.name = "Detail"
-	card.theme_type_variation = &"MenuSection"
+	UITheme.style_panel(card, UITheme.BG_INSET)
 	card.custom_minimum_size = Vector2(DETAIL_W, 0)
 	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	parent.add_child(card)
@@ -286,17 +392,21 @@ func _build_detail(parent: Node) -> void:
 	col.add_theme_constant_override("separation", 6)
 	card.add_child(col)
 
+	# The kicker/title/number stack of a `PlateHeader`, written out by hand rather
+	# than composed: this one is REWRITTEN on every cursor move, and a component
+	# that rebuilds its own nodes would throw away the layout sixty times a second
+	# while a stick is held.
 	_d_kind = Label.new()
-	_d_kind.theme_type_variation = &"MenuMuted"
+	UITheme.apply_text_style(_d_kind, UITheme.TYPE_CAPTION, UITheme.ACCENT)
 	col.add_child(_d_kind)
 
 	_d_name = Label.new()
-	_d_name.theme_type_variation = &"MenuHeading"
 	_d_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	UITheme.apply_text_style(_d_name, UITheme.TYPE_H1, UITheme.TEXT)
 	col.add_child(_d_name)
 
 	_d_price = Label.new()
-	_d_price.theme_type_variation = &"MenuValue"
+	UITheme.apply_text_style(_d_price, UITheme.TYPE_LABEL_XL, UITheme.ACCENT)
 	col.add_child(_d_price)
 
 	# The bill, one component per row: what it wants and what the bench has.
@@ -308,9 +418,9 @@ func _build_detail(parent: Node) -> void:
 	col.add_child(_recipe)
 
 	_d_blurb = Label.new()
-	_d_blurb.theme_type_variation = &"MenuSlotStat"
 	_d_blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_d_blurb.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	UITheme.apply_text_style(_d_blurb, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
 	col.add_child(_d_blurb)
 
 
@@ -322,17 +432,31 @@ func _build_detail(parent: Node) -> void:
 ## here: "A TO DESCEND" with no bar was a player tapping and filing "descend
 ## doesn't work", and a bar with no word is a player watching something fill
 ## without knowing they are the one filling it.
+##
+## The refusal is a `FooterToast` and NOT the hint line recoloured, which is what
+## it used to be. Those are two different statements — one is "here is what the
+## buttons do", the other is "here is why that press did nothing" — and spending
+## one line on both meant the control hint disappeared at the exact moment a
+## confused player was looking for it.
 func _build_footer(parent: Node) -> void:
 	var footer := PanelContainer.new()
-	footer.theme_type_variation = &"MenuFooter"
+	footer.add_theme_stylebox_override("panel", UITheme.hud_box(UITheme.GRAY_1, 20, 10, 20, 10))
 	parent.add_child(footer)
 
 	var row := VBoxContainer.new()
-	row.add_theme_constant_override("separation", 2)
+	row.add_theme_constant_override("separation", 6)
 	footer.add_child(row)
 
+	# Above the hint, because the toast reports on the board and the hint reports
+	# on the pad — and because a toast that appeared BELOW the hint would push the
+	# hint up under the player's eye every time a press was refused.
+	_toast_slot = VBoxContainer.new()
+	_toast_slot.add_theme_constant_override("separation", 0)
+	_toast_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(_toast_slot)
+
 	_hint = Label.new()
-	_hint.theme_type_variation = &"MenuHint"
+	UITheme.apply_text_style(_hint, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
 	row.add_child(_hint)
 
 	_hold_bar = HoldBar.new()
@@ -386,6 +510,11 @@ func _refresh() -> void:
 	# on the row that is still there beats snapping back to the top of the board.
 	if not _order.is_empty() and not _order.has(_cursor):
 		_cursor = _order[mini(_at(), _order.size() - 1)]
+	# After the board, because both of these are read off it: the BUY band counts
+	# what is affordable, and the kicker asks whether anything here is crafted.
+	_drop_stale_refusal()
+	UiKit.plate_kicker(_header, _act())
+	_rebuild_band()
 	_point_at(_cursor)
 
 
@@ -489,6 +618,7 @@ func _describe() -> void:
 		_d_name.text = ""
 		_d_price.text = ""
 		_d_blurb.text = ""
+		UiKit.band_value(_band, &"cost", "—")
 		return
 
 	var row := _rows[_cursor]
@@ -509,6 +639,11 @@ func _describe() -> void:
 			_d_kind.text = "%d LEFT" % left if left >= 0 else ""
 			_d_price.text = "%d ◇" % int(row["price"])
 			_fill_recipe(row.get("parts", {}))
+			# SUCCESS/DANGER off `ok`, which is the catalogue's own answer and
+			# accounts for MATERIALS as well as coin. Colouring it by comparing the
+			# price to the purse would call a recipe you cannot fill affordable.
+			UiKit.band_value(_band, &"cost", "%d ◇" % int(row["price"]),
+				UITheme.SUCCESS if bool(row["ok"]) else UITheme.DANGER)
 
 
 func _fill_recipe(parts: Dictionary) -> void:
@@ -530,19 +665,23 @@ func _fill_recipe(parts: Dictionary) -> void:
 		# this row printed 120/4 for a recipe wanting four of a hundred and
 		# twenty — which looks exactly like being short.
 		var what := Label.new()
-		what.theme_type_variation = &"MenuSlotStat"
 		what.text = "%s ×%d" % [def.display_name, need]
 		what.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		UITheme.apply_text_style(what, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT)
 		line.add_child(what)
 
-		var tally := Label.new()
-		tally.theme_type_variation = &"MenuSlotStat"
-		tally.text = "have %d" % have
 		# Green when the bench covers it, red when it does not, PER COMPONENT.
 		# A recipe you are one core short of and a recipe you have none of look
 		# identical if the whole line just greys out, and the difference between
 		# them is a whole run's worth of where to go looking.
-		tally.modulate = Pal.MOSS if have >= need else Pal.RUST
+		#
+		# The kit's SUCCESS/DANGER rather than `Pal.MOSS`/`Pal.RUST`: this is a
+		# status tick on a menu, not something in the world. The PSX pair stays
+		# where it belongs — the HUD, the motes, the world at native resolution.
+		var tally := Label.new()
+		tally.text = "have %d" % have
+		UITheme.apply_text_style(tally, UITheme.TYPE_PARAGRAPH_2,
+			UITheme.SUCCESS if have >= need else UITheme.DANGER)
 		line.add_child(tally)
 
 
@@ -573,6 +712,13 @@ const REPEAT_RATE := 0.09
 ## where you thought it was. Long enough to be a decision, short enough that
 ## brewing four draughts in a row is not a chore.
 const CRAFT_HOLD := 0.5
+
+## How long a refusal stays on the footer.
+##
+## Long enough to READ. The old 0.45 s was tuned for a one-word recolour of the
+## hint line; "NEED 2 COLD IRON CORES" is a sentence, and a sentence that leaves
+## before it is finished is the same as no sentence.
+const REFUSE_TIME := 1.8
 
 var _armed_accept: bool = false
 var _armed_cancel: bool = false
@@ -739,9 +885,56 @@ func _commit() -> void:
 		&"buy":
 			done = _db().buy(row["line"])
 
-	if not done:
-		_refuse = 0.0
+	if done:
+		# The purchase that just landed answers whatever the last refusal said.
+		_end_refusal()
+	else:
+		_show_refusal()
 	_refresh()
+
+
+## Say why the press did nothing, in the counter's words.
+##
+## Ask the CATALOGUE rather than assuming money. Once a line can be refused for
+## four different reasons, a hardcoded "NOT ENOUGH GOLD" sends the player back
+## down for the wrong thing.
+func _show_refusal() -> void:
+	_end_refusal()
+	var why := "Nothing there"
+	if mode == Mode.BUY and _cursor >= 0 and _cursor < _rows.size():
+		_refuse_line = _rows[_cursor]["line"]
+		var said: String = _db().refusal(_refuse_line)
+		why = said if said != "" else "Not enough gold"
+	_refuse = 0.0
+	_toast = UiKit.footer_toast(_toast_slot, why, UITheme.DANGER)
+
+
+## Take the refusal down: the clock, the message and the line it was about.
+##
+## One function and not three assignments at each site, because the three have to
+## move together — an earlier version cleared the node from inside the show path
+## and took the remembered line with it, which left `_drop_stale_refusal` with
+## nothing to re-ask and the stale message on screen for its full 1.8 s.
+func _end_refusal() -> void:
+	_refuse = -1.0
+	_refuse_line = {}
+	if _toast != null and is_instance_valid(_toast):
+		_toast.queue_free()
+	_toast = null
+
+
+## Drop a refusal that has stopped being true.
+##
+## The message outlives the press by design — long enough to read a sentence like
+## "NEED 2 COLD IRON CORES" — and in that window the board can change under it: a
+## rung bought on another track frees a component, an extraction stocks the bench.
+## A red line saying you cannot afford something you can now afford is worse than
+## no line, so `_refresh` re-asks the catalogue rather than letting the clock run.
+func _drop_stale_refusal() -> void:
+	if _refuse < 0.0 or _refuse_line.is_empty():
+		return
+	if _db().can_buy(_refuse_line):
+		_end_refusal()
 
 
 func _process(delta: float) -> void:
@@ -753,13 +946,13 @@ func _process(delta: float) -> void:
 		_shown_gold = move_toward(_shown_gold, float(Game.gold), step)
 	if _refuse >= 0.0:
 		_refuse += delta
-		if _refuse > 0.45:
-			_refuse = -1.0
+		if _refuse > REFUSE_TIME:
+			_end_refusal()
 	_paint_chrome()
 
 
 func _paint_chrome() -> void:
-	_gold_label.text = "%d ◇" % int(round(_shown_gold))
+	UiKit.band_value(_band, &"purse", "%d ◇" % int(round(_shown_gold)))
 
 	var need := _hold_time(_cursor)
 	_hold_bar.visible = need > 0.0
@@ -774,19 +967,12 @@ func _paint_chrome() -> void:
 	var leave_cap := Glyph.cap(&"ui_cancel")
 	if leave_cap.is_empty():
 		leave_cap = "ESC"
-	var hint := "%s %s    %s Leave" % [accept_cap, _verb(), leave_cap]
+	# The hint says what the BUTTONS do and nothing else. Why a press was refused
+	# is the footer toast's line (`_show_refusal`) — see `_build_footer`.
 	if need > 0.0:
-		hint = "Hold %s to %s    %s Leave" % [accept_cap, _verb(), leave_cap]
-	if _refuse >= 0.0:
-		# Ask the catalogue WHY rather than assuming money. Once a line can be
-		# refused for four different reasons, a hardcoded "NOT ENOUGH GOLD" sends
-		# the player back down for the wrong thing.
-		hint = "Nothing there"
-		if mode == Mode.BUY and _cursor >= 0 and _cursor < _rows.size():
-			var why: String = _db().refusal(_rows[_cursor]["line"])
-			hint = why if why != "" else "Not enough gold"
-	_hint.text = hint
-	_hint.modulate = Pal.RUST if _refuse >= 0.0 else Color.WHITE
+		_hint.text = "Hold %s to %s    %s Leave" % [accept_cap, _verb(), leave_cap]
+	else:
+		_hint.text = "%s %s    %s Leave" % [accept_cap, _verb(), leave_cap]
 
 
 ## The label of the cell the cursor is on, or "" when the board is empty.

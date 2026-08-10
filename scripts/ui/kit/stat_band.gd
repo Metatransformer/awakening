@@ -62,14 +62,53 @@ static func build(parent: Node, cells: Array) -> Control:
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	band.add_child(line)
 
+	# The live cells, by key. See `set_value`.
+	var keyed := {}
 	for index in rows.size():
 		if index > 0:
 			line.add_child(_divider())
-		line.add_child(_cell(rows[index]))
+		var cell := _cell(rows[index])
+		line.add_child(cell)
+		var key := StringName(rows[index].get("key", &""))
+		if key != &"":
+			keyed[key] = cell.get_meta(&"band_value")
+	band.set_meta(&"band_values", keyed)
 
 	if parent != null:
 		parent.add_child(band)
 	return band
+
+
+## Rewrite ONE cell's number in place.
+##
+## A band is cheap to rebuild and most panels should just rebuild it. The purse
+## at a shop counter is the exception: it rolls toward its new value over 250 ms
+## (`TradeScreen.ROLL_TIME`), so a rebuild-per-frame would mean tearing down and
+## re-laying-out five cells sixty times a second while the number counts — and
+## it would destroy the focused control under the player's cursor mid-roll.
+##
+## Cells opt in by carrying a `key`. A `key` nobody updates costs nothing, and an
+## update to a key that is not on the band is silently ignored rather than
+## erroring: which cells a band has is the panel's decision and it changes with
+## the mode.
+static func set_value(band: Control, key: StringName, value: String,
+		tone: Variant = null) -> void:
+	if band == null or not band.has_meta(&"band_values"):
+		return
+	var keyed: Dictionary = band.get_meta(&"band_values")
+	var label := keyed.get(key) as Label
+	if label == null:
+		return
+	label.text = value
+	var color: Color = UITheme.TEXT
+	if tone is Color and TONES.has(tone as Color):
+		color = tone as Color
+	label.add_theme_color_override("font_color", color)
+	# The icon is tinted with the number, so a DANGER cell goes red whole.
+	if label.has_meta(&"band_icon"):
+		var art := label.get_meta(&"band_icon") as Control
+		if art != null:
+			art.modulate = color
 
 
 static func _cell(row: Dictionary) -> Control:
@@ -108,17 +147,24 @@ static func _cell(row: Dictionary) -> Control:
 			push_error("[StatBand] label='%s' tone=%s reason=tone must be UITheme.SUCCESS/DANGER/WARNING; falling back to TEXT"
 				% [row.get("label", "?"), tone])
 
+	var glyph: Control = null
 	var icon := KitIconScript.resolve(row.get("icon"))
 	if icon != null:
-		var art := KitIconScript.rect(icon, ICON_PX)
-		art.modulate = value_color
-		value_line.add_child(art)
+		glyph = KitIconScript.rect(icon, ICON_PX)
+		glyph.modulate = value_color
+		value_line.add_child(glyph)
 
 	var value := Label.new()
 	value.text = String(row.get("value", "—"))
 	value.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	UITheme.apply_text_style(value, UITheme.TYPE_PARAGRAPH_1, value_color)
 	value_line.add_child(value)
+	# `set_value` reaches the number through the cell and the glyph through the
+	# number, so a live update repaints both without the band holding a second
+	# parallel dictionary that could fall out of step with this one.
+	cell.set_meta(&"band_value", value)
+	if glyph != null:
+		value.set_meta(&"band_icon", glyph)
 
 	var caption := Label.new()
 	caption.text = String(row.get("label", "")).to_upper()

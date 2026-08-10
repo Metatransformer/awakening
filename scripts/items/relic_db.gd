@@ -524,6 +524,10 @@ static func craft_verb() -> String:
 	return "RECORD"
 
 
+static func emblem() -> StringName:
+	return &"relic"  ## The lantern's mark.
+
+
 ## All twelve, always, in catalogue order -- including the ones you have never
 ## seen.
 ##

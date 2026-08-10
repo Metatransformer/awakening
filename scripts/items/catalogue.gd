@@ -113,6 +113,18 @@ static func crafts(line: Dictionary) -> bool:
 	return not parts.is_empty()
 
 
+## The glyph on this counter's header plate, named from `assets/icons/actions/`.
+##
+## Asked of the catalogue for the same reason `craft_verb` is: `TradeScreen`
+## never learns which counter it is standing at, and a `match` on the db handle
+## in the screen would be exactly that knowledge, smuggled in as art. A sixth
+## counter names its own emblem here and the screen does not change.
+##
+## The same "through the handle, never bare" rule applies — see below.
+static func emblem() -> StringName:
+	return &"shops"
+
+
 ## What this counter calls the act of making something out of materials. FORGE
 ## at the smith, BREW at the alchemist. Overridden per catalogue because the
 ## footer says it to the player -- "HOLD ENT TO FORGE" is the smith talking, and

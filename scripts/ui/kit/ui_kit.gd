@@ -82,6 +82,14 @@ static func plate_header(parent: Node, config: Dictionary) -> Control:
 	return header
 
 
+## Rewrite a header's kicker after the fact, for the qualifier a panel cannot know
+## until it has read its own contents. The title and the art never move — an
+## identity that flickers is not one. Requires the header to have been built with
+## a `kicker` key, even an empty one.
+static func plate_kicker(header: Control, text: String) -> void:
+	PlateHeaderScript.set_kicker(header, text)
+
+
 ## The numbers that let a player choose BEFORE committing to the primary verb.
 ##
 ## `cells` is an Array of Dictionaries:
@@ -89,10 +97,19 @@ static func plate_header(parent: Node, config: Dictionary) -> Control:
 ##   label : String              a short uppercase caption — "Bag"
 ##   icon  : Texture2D|String    optional 13px glyph beside the value
 ##   tone  : Color               ONLY UITheme.SUCCESS / DANGER / WARNING
+##   key   : StringName          makes the cell live — see `band_value`
 ##
 ## 4-6 cells is the rule, not a suggestion.
 static func stat_band(parent: Node, cells: Array) -> Control:
 	return StatBandScript.build(parent, cells)
+
+
+## Rewrite one `key`ed cell of a band in place, for a number that MOVES — a purse
+## rolling toward its new total, a cost that follows the cursor. Everything else
+## should rebuild the band: it is cheap, and a rebuild cannot go stale.
+static func band_value(band: Control, key: StringName, value: String,
+		tone: Variant = null) -> void:
+	StatBandScript.set_value(band, key, value, tone)
 
 
 ## One row of the verb list. Replaces the stack of identical full-width buttons.

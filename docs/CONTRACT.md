@@ -1057,8 +1057,14 @@ static func can_buy(line: Dictionary) -> bool
 static func refusal(line: Dictionary) -> String   # "" = affordable
 static func buy(line: Dictionary) -> bool
 static func craft_verb() -> String                # FORGE, BREW, …
+static func emblem() -> StringName                # assets/icons/actions/<name>
 static func crafts(line: Dictionary) -> bool      # concrete: has `parts`
 ```
+
+`emblem()` is the glyph on the counter's header plate, and it is asked of the
+catalogue for the same reason `craft_verb()` is: **`TradeScreen` never learns
+which counter it is standing at.** A `match` on the db handle inside the screen
+would be exactly that knowledge, smuggled in as art.
 
 `ShopDb` and `AlchemyDb` are `Catalogue` subclasses and `TradeScreen` holds
 whichever it was opened with. **A new shopkeeper is a `Catalogue` subclass plus
