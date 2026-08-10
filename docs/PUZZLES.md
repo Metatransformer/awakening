@@ -262,6 +262,28 @@ without it, and GDD §5.1's *"walking into the Cistern, filling twelve slots and
 roping out is a complete, correct, profitable run"* survives intact.
 
 
+### 5.2a The gate room's prefabs
+
+**Built.** `Dungeon.GATE_PREFABS`, one placer function each, picked by
+`PuzzleAtoms.pool(tier)` so a prefab never appears on a floor whose verb the
+player cannot own (§0 rule 1).
+
+| Prefab | Tier | The puzzle |
+|---|---|---|
+| `sun_nest` | T0 | A beam off the grate, bounced off the **shield** into a socket |
+| `lights_out` | T0 | A 3×3 lantern grid, §3's *couple* |
+| `eye_row` | T1 | Three eyes along the door's wall, shot with the **bow** |
+
+**Every prefab ends by waking the key**, and that invariant is what makes the
+table safe to add under a shipped door. The gate keeps watching one key, keeps
+`needs_key`, and keeps refusing by naming the key rather than whichever half of
+the puzzle this seed drew. The room varies; the reward path does not.
+
+`--gate-prefab=<name>` forces one, because the pick is seed-driven and a director
+that could only photograph its own seed's draw would ship the other two unproven.
+
+---
+
 ### 5.4 The maze room — *the map is not the answer*
 
 **Built.** `scripts/world/maze.gd` (the carve, no nodes), `scripts/props/maze_room.gd`
@@ -469,7 +491,7 @@ argue about**, and every one of them is a ceiling.
 | Puzzle atoms | **9** | Phase 1 + the lantern, pulled forward. Phase 2's remaining three are flavour and are not committed |
 | Combinators | **6** | Nest, sequence, time, displace, cycle, couple |
 | Puzzle shapes | **3** | Shortcut, critical, treasure |
-| Puzzle prefabs | **12** | 4 tiers × 3 shapes. The generator picks by (floor, shape, owned verb) |
+| Puzzle prefabs | **12** | 4 tiers × 3 shapes. The generator picks by (floor, shape, owned verb). **3 built**: `Dungeon.GATE_PREFABS` — sun nest (T0), lights out (T0), eye row (T1) |
 | New anchor kinds | **2** | `gate_room`, `puzzle_room` |
 | Chord edges per floor | **1** | The cycle |
 | **Echoes** | **12** | Named. No thirteenth, same discipline as the relics |

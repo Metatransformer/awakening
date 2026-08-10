@@ -161,6 +161,41 @@ func _placed(d: Node) -> void:
 		not route.has(t_cell) or t_cell == d.entrance)
 
 
+## The gate room's puzzle, whichever prefab was drawn. Named nodes rather than a
+## type sweep, because the NAMES are the contract `Dungeon` writes and a sweep
+## would happily find a decorative lantern.
+func _gate_nest(root: Node) -> Node:
+	for n: StringName in [&"GateSocket", &"GateLights", &"GateEye0"]:
+		var found := root.get_node_or_null(NodePath(n))
+		if found != null:
+			return found
+	return null
+
+
+## Answer it. Each prefab has its own verb and that is the entire point of the
+## table -- what is common is only that solving it wakes the key.
+func _solve_nest(rig, nest: Node) -> void:
+	match nest.name:
+		&"GateLights":
+			# The real presses, through the grid's own solver. `solve()` on nine
+			# lanterns would light a board the coupling never produced.
+			var grid := nest
+			for at: int in (grid.call(&"solution") as Array):
+				var lamp: Node = grid.call(&"cell", at)
+				lamp.call(&"apply_hit", null)
+				await rig.wait_seconds(0.4)
+		&"GateEye0":
+			var root := nest.get_parent()
+			for i in 3:
+				var eye := root.get_node_or_null(NodePath("GateEye%d" % i))
+				if eye != null:
+					eye.call(&"solve")
+			await rig.wait_frames(6)
+		_:
+			nest.call(&"solve")
+			await rig.wait_frames(6)
+
+
 # --- C. The gate room -----------------------------------------------------------
 
 func _the_gate_room(rig, d: Node, hero: Node3D) -> void:
@@ -169,11 +204,16 @@ func _the_gate_room(rig, d: Node, hero: Node3D) -> void:
 		return
 	var cell: Vector2i = d.anchor_cell(&"gate_room")
 	var root: Node = d.rooms[cell]["node"]
-	var socket: Node = root.get_node_or_null(^"GateSocket")
+	# **Whichever prefab this seed drew** (`Dungeon.GATE_PREFABS`). The room's
+	# puzzle varies; the reward path does not, and that invariant is what the rest
+	# of this beat checks. A director pinned to the sun socket would pass on one
+	# prefab and fail on the other two for no reason but its own assumption.
+	var nest: Node = _gate_nest(root)
 	var key: Node = root.get_node_or_null(^"GateKey")
-	_ck("C0 the room holds a sun socket", socket != null)
+	_ck("C0 the room holds a gate puzzle (%s)" %
+		(nest.name if nest != null else "none"), nest != null)
 	_ck("C1 and a small key", key != null)
-	if socket == null or key == null:
+	if nest == null or key == null:
 		return
 
 	# The set the door is counting. The socket must NOT be in it -- see
@@ -198,15 +238,14 @@ func _the_gate_room(rig, d: Node, hero: Node3D) -> void:
 	_ck("C7 walking through it grants nothing (%d keys)" % Game.small_keys,
 		Game.small_keys == keys_before)
 
-	# The catch, not the socket's back: the socket is aimed across the room at the
-	# gate, so this is the spot the player has to be in to answer it.
-	await _stand_in_front(rig, hero, socket, 5.5)
+	# The spot the player has to be in to answer this prefab. For the socket that
+	# is the catch it is aimed at; for the others, in front of the puzzle.
+	await _stand_in_front(rig, hero, nest, 5.5)
 	await rig.capture(out.path_join("p_01_gate_room.png"))
 
-	# The socket's own verb is `puzzle_atoms.gd`'s beat. See the class note.
-	socket.call(&"solve")
+	await _solve_nest(rig, nest)
 	await rig.wait_frames(30)
-	_ck("C8 lighting the socket wakes the key", key.visible
+	_ck("C8 solving it wakes the key", key.visible
 		and bool(key.get(&"armed")))
 	await rig.capture(out.path_join("p_02_key_woken.png"))
 

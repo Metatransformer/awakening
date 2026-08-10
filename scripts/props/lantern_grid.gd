@@ -65,6 +65,17 @@ const REDEALS := 8
 ## Presses used to deal. 0 means `SCRAMBLE`.
 @export var presses: int = 0
 
+## The board came good. Edge-triggered -- it fires on the press that lights the
+## last lantern and not again, so a placer can hang a key or a door on it the way
+## `MazeRoom.opened` is hung on.
+##
+## A grid whose lanterns carry a gate's own `puzzle_id` does not need this: the
+## door counts nine atoms itself (see the class note). This is for the other
+## arrangement, where the grid is one half of a NEST -- the lanterns wake a key
+## and the key is what the door is watching -- which is how `Dungeon` uses it,
+## because a gate room's refusal has to keep naming the key.
+signal lit_out
+
 var _cells: Array[Lantern] = []
 var _dealt: Array[bool] = []
 
@@ -153,10 +164,13 @@ func _on_pressed(lamp: Lantern) -> void:
 	var at := _cells.find(lamp)
 	if at < 0:
 		return
+	var was := is_lit_out()
 	for i in _cross(at):
 		var cell := _cells[i]
 		if is_instance_valid(cell):
 			cell.set_lit(not cell.is_solved())
+	if not was and is_lit_out():
+		lit_out.emit()
 
 
 # --- What a director asks it --------------------------------------------------

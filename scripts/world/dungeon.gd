@@ -1145,28 +1145,6 @@ func _place_gate_room(id: StringName) -> void:
 	root.add_child(gate)
 	p["node"] = gate
 
-	# The socket stands against the wall OPPOSITE the door, looking back at it, so
-	# its beam runs the length of the room and the catch lands where the player
-	# already walks. `SunSocket` authors the grate and the catch off its own
-	# forward (`catch_offset`, `beam_from`), so aiming the prop is one rotation and
-	# the geometry cannot be positioned wrong -- see that file's class note.
-	# A tag of its own, and NOT the gate's: `PuzzleGate._adopt` collects every atom
-	# carrying its own `puzzle_id`, so a socket sharing the tag would be adopted
-	# and the door's refusal would name the wrong half of the nest. The tag is
-	# still not empty, because `PuzzleAtom.flag_id()` falls back to the node NAME
-	# and a per-run flag keyed on a name is one rename away from being a different
-	# flag.
-	var socket := PuzzleAtoms.make(PuzzleAtoms.SUN_SOCKET,
-		StringName("gate_%d_nest" % Run.level))
-	if socket == null:
-		return
-	socket.name = "GateSocket"
-	socket.position = facing * (half - 1.3)
-	# Forward is `-basis.z`, so a node whose `facing_of(yaw)` is `facing` looks
-	# back along `-facing` -- at the door (docs/CONTRACT.md §2.5).
-	socket.rotation.y = atan2(facing.x, facing.z)
-	root.add_child(socket)
-
 	var key := PuzzleAtoms.make(PuzzleAtoms.SMALL_KEY, tag)
 	if key == null:
 		return
@@ -1176,12 +1154,20 @@ func _place_gate_room(id: StringName) -> void:
 	root.add_child(key)
 	key.visible = false
 
-	# **A solved puzzle drops something you can carry out** (`docs/PUZZLES.md`
-	# §5.2's table). Without this the gate room pays an Echo, a shortcut and
-	# permission -- three things the player cannot weigh against the walk home,
-	# which is the one question GDD §2 asks. The floor's ordinary table, not the
-	# rich one: §5.3 is the branch that is supposed to pay better, and a critical
-	# -path chest that matched it would delete the reason to take the detour.
+	# **The prefab.** `docs/PUZZLES.md` §8 promised twelve of these and the room
+	# had exactly one for a while; this is the table that makes the promise real.
+	#
+	# Every prefab ends the same way -- it WAKES THE KEY -- and that is the whole
+	# reason the table is safe to add. The door's contract does not move: it
+	# watches one key, `needs_key` stays true, its refusal keeps naming the key
+	# rather than whichever half of the puzzle happens to be in the room this run,
+	# and §5.2's spine (and the director that proves it) is unchanged. What varies
+	# is the puzzle in front of the key, which is the thing a player replaying
+	# floor 1 for the fifth time actually sees.
+	var made := _gate_prefab(root, cell, tag, spot, key)
+	if not made:
+		return
+
 	var prize := Chest.new()
 	prize.name = "GateChest"
 	prize.picks = Prog.chest_picks(Run.level, false)
@@ -1210,15 +1196,167 @@ func _place_gate_room(id: StringName) -> void:
 		gate.opened.connect(func(_where: StringName) -> void: stone.call(&"offer"))
 	gate.opened.connect(func(_where: StringName) -> void: _land_prize(prize))
 
-	# The socket may already be lit -- a floor re-entered inside one run restores
-	# its atoms from their flags and `restore_solved()` deliberately emits nothing
-	# (`PuzzleAtom._ready`). Without this line the key would stay dark for ever on
-	# the second visit, and the room would be a locked door with no key in it.
-	var atom := socket as PuzzleAtom
-	if atom.is_solved():
+	# The restore case -- a floor re-entered inside one run brings its atoms back
+	# from their flags and `restore_solved()` deliberately emits nothing
+	# (`PuzzleAtom._ready`) -- is each prefab's own business, and every one of them
+	# handles it the same way: check `is_solved` after wiring the signal. Without
+	# that the key stays dark for ever on the second visit and the room is a locked
+	# door with no key in it.
+
+
+## The gate room's puzzle prefabs (`docs/PUZZLES.md` §8), one function each.
+##
+## Picked by `(shape ceiling, owned verb)` through `PuzzleAtoms.pool`, which is
+## §0 rule 1 in one call -- a prefab never appears on a floor whose player cannot
+## own its verb, so the critical path is never blocked by a seed.
+##
+## Each one returns `true` if it built, and every one of them ends by connecting
+## something to `_wake_key`. **That is the contract**, and the reason a table can
+## be added under a shipped door without touching the door: the room varies, the
+## reward path does not.
+const GATE_PREFABS: Array[StringName] = [&"sun_nest", &"lights_out", &"eye_row"]
+
+
+func _gate_prefab(root: Node3D, cell: Vector2i, tag: StringName,
+		spot: Dictionary, key: Node3D) -> bool:
+	var pool := PuzzleAtoms.pool(_gate_tier())
+	var open_to: Array[StringName] = []
+	for name_i: StringName in GATE_PREFABS:
+		if _prefab_fits(name_i, pool):
+			open_to.append(name_i)
+	if open_to.is_empty():
+		# `sun_nest` is T0 and `pool` always answers T0 with something, so this is
+		# a manifest whose atom kit has been emptied. Refuse loudly rather than
+		# building a door with no key in the world, on the critical path.
+		push_warning("dungeon: no gate prefab fits floor %d" % Run.level)
+		return false
+	# `--gate-prefab=lights_out` forces one. Not a debug hook bolted on: the pick is
+	# seed-driven, so without this a director can only ever photograph whichever
+	# prefab its own seed happened to draw, and the other two ship unproven. Read
+	# from the command line rather than an export because the room is built in
+	# `_ready`, before any director gets to touch the node.
+	var forced := ""
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--gate-prefab="):
+			forced = a.substr(14)
+	var pick: StringName = open_to[_rng.randi_range(0, open_to.size() - 1)]
+	if forced != "" and open_to.has(StringName(forced)):
+		pick = StringName(forced)
+	print("dungeon: gate prefab %s" % pick)
+	match pick:
+		&"lights_out": return _gate_lights_out(root, cell, tag, spot, key)
+		&"eye_row": return _gate_eye_row(root, cell, tag, spot, key)
+	return _gate_sun_nest(root, cell, tag, spot, key)
+
+
+## What each prefab needs in the pool. Read off the SAME `pool` the placer uses,
+## so a prefab can never be picked for a floor whose verb the player lacks.
+func _prefab_fits(name_i: StringName, pool: Array) -> bool:
+	match name_i:
+		&"lights_out": return pool.has(PuzzleAtoms.LANTERN)
+		&"eye_row": return pool.has(PuzzleAtoms.EYE_SWITCH)
+	return pool.has(PuzzleAtoms.SUN_SOCKET)
+
+
+## Prefab 1, the original: a beam off the grate, bounced off the shield into a
+## socket. T0, and the one atom in the kit that asks the player to AIM.
+##
+## The socket stands against the wall OPPOSITE the door, looking back at it, so
+## its beam runs the length of the room and the catch lands where the player
+## already walks. `SunSocket` authors the grate and the catch off its own forward
+## (`catch_offset`, `beam_from`), so aiming the prop is one rotation and the
+## geometry cannot be positioned wrong -- see that file's class note.
+##
+## A tag of its own, and NOT the gate's: `PuzzleGate._adopt` collects every atom
+## carrying its own `puzzle_id`, so a socket sharing the tag would be adopted and
+## the door's refusal would name the wrong half of the nest. The tag is still not
+## empty, because `PuzzleAtom.flag_id()` falls back to the node NAME and a per-run
+## flag keyed on a name is one rename away from being a different flag.
+func _gate_sun_nest(root: Node3D, cell: Vector2i, _tag: StringName,
+		spot: Dictionary, key: Node3D) -> bool:
+	var facing: Vector3 = spot["facing"]
+	var half := size_of(cell) * 0.5
+	var socket := PuzzleAtoms.make(PuzzleAtoms.SUN_SOCKET,
+		StringName("gate_%d_nest" % Run.level))
+	if socket == null:
+		return false
+	socket.name = "GateSocket"
+	socket.position = facing * (half - 1.3)
+	# Forward is `-basis.z`, so a node whose `facing_of(yaw)` is `facing` looks
+	# back along `-facing` -- at the door (docs/CONTRACT.md §2.5).
+	socket.rotation.y = atan2(facing.x, facing.z)
+	root.add_child(socket)
+	socket.connect(&"solved", func(_a) -> void: _wake_key(key))
+	# A floor re-entered inside one run restores its atoms from their flags, and
+	# `restore_solved()` deliberately emits nothing -- so the key has to be woken
+	# by hand for a socket that was already lit when the room rebuilt.
+	if bool(socket.call(&"is_solved")):
 		_wake_key(key)
-	else:
-		atom.solved.connect(func(_a: PuzzleAtom) -> void: _wake_key(key))
+	return true
+
+
+## Prefab 2, lights out (`docs/PUZZLES.md` §3, combinator 6). A 3x3 of lanterns
+## in the middle of the room: strike one and its orthogonal neighbours flip too,
+## and the key wakes when the board is lit out.
+##
+## **The grid gets a tag of its own, not the gate's**, for the same reason the
+## socket does -- nine adopted lanterns would make the door refuse with "4 OF 9
+## LANTERNS STILL DARK" and never mention the key it is actually watching. That
+## is why `LanternGrid` has a `lit_out` signal: this arrangement is a NEST, not
+## the door-counts-the-atoms one the grid's class note describes.
+func _gate_lights_out(root: Node3D, cell: Vector2i, _tag: StringName,
+		spot: Dictionary, key: Node3D) -> bool:
+	var facing: Vector3 = spot["facing"]
+	var half := size_of(cell) * 0.5
+	var grid := LanternGrid.new()
+	grid.name = "GateLights"
+	grid.puzzle_id = StringName("gate_%d_nest" % Run.level)
+	# Off the middle, toward the far wall: the board wants the player to walk INTO
+	# it and read it from inside, and a grid against the door is one the player
+	# reads over their shoulder while standing at the thing it opens.
+	grid.position = facing * (half * 0.42)
+	root.add_child(grid)
+	grid.lit_out.connect(func() -> void: _wake_key(key))
+	if bool(grid.call(&"is_lit_out")):
+		_wake_key(key)
+	return true
+
+
+## Prefab 3, a row of eyes (§3, combinator 2 -- *sequence*, relaxed to "all of
+## them"). **T1**: it only appears once the player owns the Bow, which on floor 1
+## means never and on floor 2 means always -- `_prefab_fits` reads the same pool
+## the ceiling does, so this cannot strand a floor.
+##
+## Three, spread along the wall the door is in, so the shot and the door are in
+## the same view and the player can see what each arrow bought.
+func _gate_eye_row(root: Node3D, cell: Vector2i, _tag: StringName,
+		spot: Dictionary, key: Node3D) -> bool:
+	var facing: Vector3 = spot["facing"]
+	var along := along_of(float(spot["yaw"]))
+	var half := size_of(cell) * 0.5
+	var nest := StringName("gate_%d_nest" % Run.level)
+	var eyes: Array[Node3D] = []
+	for i in 3:
+		var eye := PuzzleAtoms.make(PuzzleAtoms.EYE_SWITCH, nest)
+		if eye == null:
+			return false
+		eye.name = "GateEye%d" % i
+		eye.position = facing * (half - 0.9) + along * (float(i) - 1.0) * 3.2
+		eye.rotation.y = atan2(facing.x, facing.z)
+		root.add_child(eye)
+		eyes.append(eye)
+	# The key wakes on the LAST one. Counted here rather than by a second
+	# `PuzzleGate`, because a door watching the eyes and a door watching the key
+	# would be two doors, and §5.2 wants one.
+	var lit := func() -> void:
+		for e in eyes:
+			if not bool(e.call(&"is_solved")):
+				return
+		_wake_key(key)
+	for e in eyes:
+		e.connect(&"solved", func(_a) -> void: lit.call())
+	lit.call()
+	return true
 
 
 ## The gate room's chest lands. §5.2's third reward — see `_place_gate_room`.
