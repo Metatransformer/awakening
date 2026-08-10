@@ -556,6 +556,13 @@ holding on the carrying screen precisely because it cannot be used to change it.
 
 *Numbered 6.6 for the same reason §6.5 is 6.5. Do not renumber.*
 
+> **⏳ Extended, not superseded — `docs/GDD.md` §6.5, not built.** This counter
+> gains two jobs at M5. She **reads** the two Verse relics (GDD §6.2), and she
+> sells **charges** for the three workings — the same stock-you-bought-in-town
+> relationship the bottles below have, priced the same way, refilled only here.
+> Everything in this section is true today and stays true; nothing below changes.
+> Charges are a HUD counter beside the arrows, never a bag slot.
+
 The forge sells **permanence**: you buy a rung and it is yours. The alchemist
 sells a **stock** — four glass bottles, and what is in them at the moment you
 step through the gate. Everything below follows from that one difference.

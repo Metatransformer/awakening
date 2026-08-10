@@ -29,11 +29,12 @@ definition**, and §4.2 applies.
 | **New monster models** | **0** | Bosses are scaled/re-tinted `golem`, `ogre`, `wraith`, `knight_iron` — all on disk |
 | Enemy kinds in rotation | **9** | Everything in `assets/monsters/`. No tenth. |
 | Dungeon kits | **1** | The P6 kit, four tints |
-| Usable items | **4** | Bow (built), Hookshot (built), **Bomb Bag (new)**, Far Lantern (no verb) |
-| **New mechanics** | **1** | The Bomb Bag. That is the entire mechanical invention budget. |
+| Usable items | **6** | Bow (built), Hookshot (built), **Burst**, **Sustain**, **Ballast** (new), Far Lantern (no verb) |
+| **Ring stops** | **6** | Sword, bow, hookshot, Burst, Sustain, Ballast. **Hard ceiling** — `docs/CONTRACT.md` §4.1 |
+| **New mechanics** | **1** | The working. Same arc, fuse and sphere query the Bomb Bag was; Sustain and Ballast are rows on it. That is the entire mechanical invention budget. |
 | Locked doors | **8** | 4 shortcuts, 3 vaults, 1 to the Long Descent |
 | Vault prefabs | **3** | Three rooms each |
-| Relics | **12** | Named, hand-placed, non-rolling |
+| Relics | **12** | Named, hand-placed, non-rolling. **Two are Verses; all twelve arrive broken** — GDD §6.4 |
 | Town NPCs | **4** | Vendor, smith, alchemist, **Lanternkeeper (new)** |
 | Town scenes | **1** | The courtyard. There is no second settlement. |
 | **New UI screens** | **0** | The Lanternkeeper is a `Catalogue` on the existing `TradeScreen` |
@@ -66,8 +67,34 @@ Lanternkeeper is a subclass and a row in `Npc.COUNTERS` — the contract in
 `docs/METAGAME.md` §6.6 says so explicitly: *"a third counter is a `Catalogue`
 subclass and a row in `Npc.COUNTERS`, nothing else."*
 
-**One new mechanic.** Bombs. Everything else in the plan is a *gate on*, a
-*number in*, or an *arrangement of* something that already runs.
+**One new mechanic.** The working — a thrown arc, a fuse, a sphere query, a
+cracked wall. Everything else in the plan is a *gate on*, a *number in*, or an
+*arrangement of* something that already runs.
+
+### Why "usable items" went 4 → 6 and nothing else moved
+
+Because a working is a **usable item**, not a system. `armament_db.gd` already
+holds the right hand; `Game.cycle_weapon` already steps it; CONTRACT §4 already
+says RB and RT *fire what is in the right hand*; the bow already spends a counted
+resource bought in town. Burst, Sustain and Ballast are rows in that table with a
+charge count where the arrows go. There is no mana, no school, no casting layer,
+and no new save field beyond the ones an owned item and a counted resource
+already need (GDD §6.5).
+
+The **ring stops** row is the honest cap, and it is the one to defend. Scope
+pressure on magic will not arrive as "add a system" — it will arrive as a fourth
+spell that is only a row. Six stops is where a ring stops being countable, which
+is the whole argument CONTRACT §4.1 used to delete bindable slots in the first
+place. **This row is why there is no fourth working.**
+
+### Broken relics cost nothing on this table
+
+GDD §6.4 — every relic arrives broken and is repaired (or, for a Verse, read) at
+a home counter for gold — moves **no number here**. Relics stay 12, town NPCs
+stay 4, new UI screens stay 0. It is a price and a `broken` flag on rows in
+`relic_db.gd` that the plan already required, plus a description string. It
+*removes* a special case: the Lanternkeeper stops being the one counter whose
+transaction costs no gold.
 
 ---
 
@@ -84,6 +111,10 @@ every time someone has the idea again.
 - Player-joinable factions. The Vale has fourteen of them in the lore. That is a
   reason to keep the lore, not a reason to build the game the lore implies.
 - Character creation, races, classes, skill trees.
+- **A spell school, a mana bar, a spell level, or a fourth working.** The game
+  has magic — three usable items with charges, GDD §6.5 — and that is all the
+  magic it has. Every one of those four is the first step of the multi-class game
+  the line above already refuses.
 - Mounts, fishing, farming, housing, cooking.
 
 **Refused because they multiply the authoring cost of everything else:**
@@ -132,10 +163,10 @@ milestone; land it on `main` when it closes.
 | **M0** | **The freeze.** Land this doc + the GDD. Annotate `METAGAME.md` where it is superseded. No code. | Docs merged to `main` |
 | **M1** | **Gates and gear.** `Game.has()`. Sword + shield + rope at start; bow and hookshot removed from the starting kit; their forge ladders hidden at the smith until owned. Locked-door prop, keyed to an item id, with a refusal that names the item. | `gate_locks.gd` |
 | **M2** | **One boss.** The Cistern Warden. Boss door replaces the deepest room's stair; arena; a three-beat telegraphed move set; the drop (Bow + relic); the door stays open and the arena stays empty forever after. | `boss_cistern.gd` |
-| **M3** | **The relic and the hall.** `RelicDb` as a `Catalogue`; the Lanternkeeper NPC; donation on the existing `TradeScreen`; relics ride in the bag, are charged the fee, die with the bag and return to their room; the first three unlocks live; one town prop lights per donation. | `relic_donate.gd` |
+| **M3** | **The relic and the hall.** `RelicDb` as a `Catalogue`; the Lanternkeeper NPC; donation on the existing `TradeScreen`; relics ride in the bag, are charged the fee, die with the bag and return to their room; **they arrive broken, name their home counter in the description, and cost gold to repair (GDD §6.4) — the first is free**; the first three unlocks live; one town prop lights per donation. | `relic_donate.gd` |
 | **M4** | **Floor 1, whole.** The Cistern's manifest: room count, band table, tint, boss door, shortcut door, vault door, deep chest. The vault prefab. **This is the demo.** | `cistern_floor.gd` |
 | — | **🛑 THE GATE. Play M4 for an hour. See §4.1.** | A human, playing |
-| **M5** | **Bombs.** Throw arc, fuse, blast, damage, cracked walls. The one new mechanic. | `bomb_throw.gd` |
+| **M5** | **The workings.** Burst: throw arc, fuse, blast, damage, cracked walls. The one new mechanic. Then Sustain and Ballast as rows on it, and charges on the alchemist's board. | `bomb_throw.gd` |
 | **M6** | **Floors 2–4 and bosses 2–4.** Repetition of M2 and M4 with the pattern proven. Three manifests, three move sets, two vault prefabs, six doors. **Invent nothing here.** | `foundry_floor.gd`, `choir_floor.gd`, `chord_floor.gd` |
 | **M7** | **The endings.** Lantern ending + credits; the Long Descent gate and the floor-10 relic; the plaque; the Chord ending. Relics 4–12 wired. | `endings.gd` |
 | **M8** | **Audio.** `Bus.request_sfx` is emitted today and nothing listens (`GDD` §8, as it stood). Music, ambience, the whole SFX vocabulary. This is a ship blocker, not a polish item. | `sfx_cues.gd`, extended |
@@ -187,6 +218,23 @@ Not "we'll cut something later." Later never comes; that is the entire mechanism
 by which scope grows. A fifth floor costs a vault and two relics. A new monster
 model costs an existing one. If nothing feels worth deleting, the addition was
 not worth adding.
+
+**The ledger. Every addition to §1 gets a line here, with what paid for it.**
+
+| Added | Paid for by | Where |
+|---|---|---|
+| The Sustain-Verse, the Ballast-Verse (2 relics) | **Fletcher's Jig** and **Waterwheel Gear**, deleted | GDD §6.2 |
+| Usable items 4 → 6 | Nothing — a working is a row in `armament_db.gd`, and the **ring stops** ceiling was added in the same commit to cap it | §1 |
+
+The first line is the rule working as intended: the two deleted relics were the
+only entries on GDD §6.2's table that were numbers on a subsystem rather than
+changes to the town, which is the §3 test a relic exists to pass. The addition
+paid for itself *and* raised the average.
+
+The second line is the rule being **honest about a hole**. Two usable items
+arrived without a deletion, because they genuinely cost no new system — and that
+is exactly the argument every future addition will make. The ring-stops ceiling
+is the price: from here, a seventh stop costs a sixth.
 
 ### 4.3 Three questions before any new system
 
@@ -245,7 +293,9 @@ surprise, and so nobody rebuilds the plan around it.
 | Risk | Why it is likely | What to do |
 |---|---|---|
 | **Boss move sets balloon** | Four beats feel better than three, and phase two feels better than one phase. Then four bosses are sixteen behaviours. | Three beats, one phase, hard cap. A boss is a *readable* fight, not a long one. |
-| **The Bomb Bag drags in physics** | Thrown arcs invite rigid bodies, then bounce, then chain reactions, then destructible terrain. | It is a timed projectile with a fixed arc and a sphere query. It is not a physics feature. |
+| **Burst drags in physics** | Thrown arcs invite rigid bodies, then bounce, then chain reactions, then destructible terrain. | It is a timed projectile with a fixed arc and a sphere query. It is not a physics feature. |
+| **The workings breed** | Three spells is a *list*, and a list wants a fourth. Each new one is genuinely only a row, so each one is genuinely cheap, and that is the trap. | The ring stops row in §1 and CONTRACT §4.1. A seventh stop costs a sixth. Refuse at the row, not at the system. |
+| **Repair prices become a grind gate** | A gold cost is the easiest dial in the game to turn, and turning it up "adds pressure" without anyone having to design anything. | GDD §6.4: the first is free, none exceeds one good run, and §6.3's *no relic gates the ending* is the acceptance test. If a repair is ever worth farming for, it is priced wrong. |
 | **M6 gets special cases** | See §3. This is the big one. | Any floor 2–4 requirement that is not in a manifest goes back to M2/M4 as a pattern change, or it is cut. |
 | **The relic unlocks get "designed"** | Twelve one-line changes are unsatisfying to write; each one wants to become a feature. | The table in GDD §6.2 is the spec. A relic that needs more than a line is the wrong relic. |
 | **Audio slips to never** | It is M8, it has no gameplay, and nothing fails without it. | It is a ship blocker. A silent action game reads as a prototype and no store page survives it. |
@@ -256,8 +306,10 @@ surprise, and so nobody rebuilds the plan around it.
 
 ## 7. The one-paragraph version
 
-Four floors, four bosses built from monsters already on disk, one new mechanic
-(bombs), twelve hand-placed relics that each change one line in the town, eight
+Four floors, four bosses built from monsters already on disk, one new mechanic —
+the working, a thrown arc and a fuse, carrying three spells on a six-stop weapon
+ring — twelve hand-placed relics that come up broken, are repaired or read at the
+counter whose thing they change, and each alter one line in the town, eight
 locked doors following two rules, two endings, and the endless dungeon that
 already works as the post-credits mode. The demo is floor 1 and it exists at the
 halfway point. Everything not on that list is a sequel, and the way we know we

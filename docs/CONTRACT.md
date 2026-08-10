@@ -24,7 +24,7 @@ Legend of Zelda: Ocarina of Time (N64, 1998)**, in Godot 4.7, Forward+.
 - Camera behind and above the hero; **Z-targeting / lock-on** is the centre of
   the whole design — combat, camera, and movement all change mode when it's on.
 - WASD + mouse **and** full controller support, equivalently.
-- Sword, shield, bow, bombs, hookshot.
+- Sword, shield, bow, hookshot, and the three workings (`docs/GDD.md` §6.5).
 - **One cyclic, key-locked intro dungeon** ending in a boss.
 
 **The bar is `refs/`.** Real Ocarina of Time screenshots in `refs/screens/`, the
@@ -645,7 +645,7 @@ The D-pad does not hold items. It **steps rings**, and each direction owns one:
 | Button | Action | Does |
 |---|---|---|
 | dpad ← (`weapon_prev`, key `1`) | `Game.cycle_weapon(-1)` | step the RIGHT HAND back through the weapons you own |
-| dpad → (`weapon_next`, key `3`) | `Game.cycle_weapon(1)` | step it forward — sword, bow, hookshot |
+| dpad → (`weapon_next`, key `3`) | `Game.cycle_weapon(1)` | step it forward — sword, bow, hookshot, and the three workings |
 | dpad ↓ (`item_next`, key `4`) | `Game.cycle_item(1)` | step the SELECTED BOTTLE |
 | dpad ↑ (`loadout_swap`, key `2`) | `Game.swap_loadout()` | swap to the alternate set — both hands at once |
 
@@ -662,6 +662,19 @@ reach for than a binding you have to remember, and it costs no menu at all. Elde
 Ring is the shape now, one direction per ring instead of one direction per slot.
 The **left hand** is not on the D-pad, deliberately: ↑ swaps the pair, and the
 place to edit a pair is the screen built for it.
+
+**The weapon ring's ceiling is SIX stops, and it is a design constraint rather
+than an implementation limit.** Sword, bow, hookshot and the three workings
+(`docs/GDD.md` §6.5) fill it exactly. The argument above is the whole reason —
+bindable slots were deleted because a ring you can *count* beats a binding you
+have to remember, and that argument expires the moment the ring is long enough
+that you stop counting and start hunting. Six is where a player still knows that
+Burst is "→ twice" without looking at the cluster.
+
+So: **a seventh stop costs a sixth.** `docs/SCOPE.md` §1 carries this as a row in
+the frozen manifest and §4.2 as a debt, because the pressure will not arrive as a
+request for a new system — it will arrive as one more spell that is "only a row",
+and on that argument it is a row, and the row is the problem.
 
 **Weapons cycle, bottles cycle, and they do not share a ring** — a bottle is
 *used* (X), a weapon is *held*. `Game.cycle_item` steps through empty bottles
@@ -873,9 +886,11 @@ the live lock, and the trigger's release drops only its own. Leaving the
 ```gdscript
 # scripts/items/item.gd, owned by P5
 class_name Item extends Resource
-@export var id: StringName        # &"bow" &"bombs" &"hookshot"
+@export var id: StringName        # &"bow" &"hookshot" &"burst" &"sustain" &"ballast"
 @export var icon: Texture2D
-@export var magic_cost: int
+@export var magic_cost: int       # CHARGES, not mana — the bow's arrow count with
+                                  # another name. Bought from the alchemist, spent
+                                  # on cast, refilled in town only. GDD §6.5.
 func use(hero: Node3D) -> void
 func release(hero: Node3D) -> void   # for held/charged items
 ```

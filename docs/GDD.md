@@ -111,6 +111,11 @@ and **it dies with the bag.** You are carrying the only one of these there is,
 five rooms from the rope, with eleven slots of Deep Amber you would also like to
 keep.
 
+And it is **broken** (§6.4). It does nothing yet, it will cost gold at a counter
+before it ever does, and it is still taking the slot and still paying the fee.
+The hardest version of §2 is a decision about an object that is currently worth
+less than the ore beside it.
+
 That is the hardest version of the one question the game can ask, and it is why
 relics live in the bag rather than being granted on pickup.
 
@@ -172,7 +177,7 @@ authored space to live in.
 | # | Floor | What it was | Boss | Model | Drops |
 |---|---|---|---|---|---|
 | 1 | **The Cistern** | Flooded Vyr intake works | The Cistern Warden | `golem` | **The Bow** + relic |
-| 2 | **The Foundry** | Where the Imperium re-cut Vyr bronze | The Slag Ogre | `ogre` | **The Bomb Bag** + relic |
+| 2 | **The Foundry** | Where the Imperium re-cut Vyr bronze | The Slag Ogre | `ogre` | **The Burst-Verse** + relic |
 | 3 | **The Hushing Choir** | A resonance hall that still rings | The Bellwake | `wraith` | **The Hookshot** + relic |
 | 4 | **The Chord Gate** | The threshold over Caer Vallen | The Riven Knight | `knight_iron` | **The Far Lantern** + relic |
 
@@ -217,9 +222,14 @@ them raises a stat. The stats are still the smith's.
 - **The Bow** — for the thing that has not noticed you yet. Arrows, fletching and
   the `string` forge ladder already exist and simply become unreachable until the
   Warden is dead.
-- **The Bomb Bag** — the only genuinely new mechanic in the plan. A thrown arc, a
-  fused blast, and cracked walls. It is the game's one *destructive* answer and
-  therefore the one that opens doors the others cannot.
+- **The Burst-Verse** — the only genuinely new mechanic in the plan. A thrown arc,
+  a fused blast, and cracked walls. It is the game's one *destructive* answer and
+  therefore the one that opens doors the others cannot. **It is cast, not
+  thrown**: the Foundry is where the Imperium re-cut Vyr bronze, and what you take
+  off the Slag Ogre is a written working rather than a satchel of powder. That is
+  a change of noun and of particle colour — the arc, the fuse, the sphere query
+  and the cracked walls are identical, and so is `docs/SCOPE.md`'s warning that
+  none of it may become a physics feature.
 - **The Hookshot** — crosses a gap, or brings the gap to you. Fired at a monster
   it does no damage; it freezes the thing for a second. An item that pulls you
   across a chasm and an item that buys you a beat are the same item, because both
@@ -233,6 +243,16 @@ bow and the hookshot come out of the starting kit and become earned. Their forge
 ladders do not appear at the smith until the item is owned. This converts systems
 that are already built into progression, at the cost of one `Game.has()`
 check, and it is what makes §5.3 mean anything.
+
+**A working is a usable item and nothing more.** The Burst-Verse is a row in
+`scripts/items/armament_db.gd`, it draws to the right hand, D-pad ← → reaches it,
+RB and RT cast it, and the HUD cluster and the pouch's paper doll show it because
+they already read `Game.armament()`. Its charges are the bow's arrows with a
+different noun — a count in the HUD column, spent on cast, refilled only in town.
+There is no mana, no school, and no casting system: `docs/CONTRACT.md` §4 already
+says *fire what is in the right hand*, and a working is a thing that is in the
+right hand. The other two workings and the rules that keep them from multiplying
+are §6.5.
 
 ### 5.3 The forks — two rules, eight doors
 
@@ -272,8 +292,8 @@ Valenfeld is one walled courtyard. It gains **one** counter and no new screens.
 does not buy and she does not sell: you hand her a relic and something in the
 town changes. Mechanically she is a `Catalogue` subclass and a row in
 `Npc.COUNTERS`, exactly like the smith and the alchemist, driven by the same
-`TradeScreen` — a donation is a transaction whose price is one relic and zero
-gold. There is no fourth screen.
+`TradeScreen` — a donation is a transaction whose price is **one relic and the
+cost of making it work again** (§6.4). There is no fourth screen.
 
 The vendor buys, the smith forges, the alchemist brews, the Lanternkeeper
 records. Four counters, and that is the town.
@@ -288,24 +308,37 @@ not a coincidence, it is the acceptance criterion.
 
 ### 6.2 The twelve
 
-| # | Relic | Where it is | What it does |
-|---|---|---|---|
-| 1 | Tally-Ledger of Fair Weights | Cistern deep chest | The smith **learns rung 2** on every forge ladder |
-| 2 | Imperium Anvil-Plate | Warden (boss 1) | The smith **learns rung 3** on every forge ladder |
-| 3 | Cracked Still-Head | Cistern vault | The alchemist **learns the Ironhide Draught** |
-| 4 | Cinder-Retort | Foundry deep chest | The alchemist **learns the Emberblood Draught** |
-| 5 | Glass-Kiln Core | Slag Ogre (boss 2) | The alchemist can **blow bottles 3 and 4** |
-| 6 | Fletcher's Jig | Foundry vault | Fletching yields **7 arrows** instead of 5 |
-| 7 | Pillar-Shard | Choir deep chest | **The square lights.** A lit market pays: vendor prices **+10%** |
-| 8 | Sounding-Rod | Bellwake (boss 3) | The deep chest **hums** on arrival — the floor's only wayfinding |
-| 9 | Warp-Stone Fragment | Choir vault | **Shortcuts work from town.** Start a run on any floor whose shortcut you have opened |
-| 10 | Rope-Drum | Chord Gate deep chest | Extraction fee **25% → 20%** |
-| 11 | Waterwheel Gear | Riven Knight (boss 4) | **The mill turns.** The smith's stock lines cost **−15%** |
-| 12 | The Riven Chord | **Long Descent, floor 10** | The last one. See §8 |
+| # | Relic | Where it is | Home | What it does |
+|---|---|---|---|---|
+| 1 | Tally-Ledger of Fair Weights | Cistern deep chest | Smith | The smith **learns rung 2** on every forge ladder |
+| 2 | Imperium Anvil-Plate | Warden (boss 1) | Smith | The smith **learns rung 3** on every forge ladder |
+| 3 | Cracked Still-Head | Cistern vault | Alchemist | The alchemist **learns the Ironhide Draught** |
+| 4 | Cinder-Retort | Foundry deep chest | Alchemist | The alchemist **learns the Emberblood Draught** |
+| 5 | Glass-Kiln Core | Slag Ogre (boss 2) | Alchemist | The alchemist can **blow bottles 3 and 4** |
+| 6 | **The Sustain-Verse** | Foundry vault | Alchemist | She **reads** it: you learn the working **Sustain** (§6.5) |
+| 7 | **The Ballast-Verse** | Choir deep chest | Alchemist | She **reads** it: you learn the working **Ballast** (§6.5) |
+| 8 | Sounding-Rod | Bellwake (boss 3) | Lanternkeeper | The deep chest **hums** on arrival — the floor's only wayfinding |
+| 9 | Warp-Stone Fragment | Choir vault | Lanternkeeper | **Shortcuts work from town.** Start a run on any floor whose shortcut you have opened |
+| 10 | Rope-Drum | Chord Gate deep chest | Lanternkeeper | Extraction fee **25% → 20%** |
+| 11 | Pillar-Shard | Riven Knight (boss 4) | Lanternkeeper | **The square lights.** A lit market pays: vendor prices **+10%** |
+| 12 | The Riven Chord | **Long Descent, floor 10** | Lanternkeeper | The last one. See §8 |
 
 Four from bosses, four from deep chests, three from vaults, one from the endless
 mode. Eleven are reachable in Act I; the twelfth is the reason to keep going
 after it.
+
+**Two entries were deleted to pay for the two Verses** (`docs/SCOPE.md` §4.2):
+*Fletcher's Jig* (fletching yields 7 arrows instead of 5) and *Waterwheel Gear*
+(the smith's stock lines cost −15%). Both were numbers on a subsystem rather than
+changes to the place you come home to, which is the §3 test a relic has to pass;
+they were the only two on the table that failed it. **Pillar-Shard moved** from
+the Choir's deep chest to the Riven Knight to fill the freed boss slot, and it is
+better there — the square coming on is the largest visible change in the game and
+it now lands on the last boss of Act I.
+
+**The vendor is nobody's home counter.** He buys everything already, so he has
+nothing a relic could unlock, and inventing one for the sake of symmetry is how
+§6.1 gets broken.
 
 **Each donation also lights one thing in the courtyard** — a lamp, the well, the
 mill wheel, the College's window. Twelve dark props, twelve of them come on. The
@@ -316,14 +349,94 @@ places. That contrast *is* the reward; do not spend more than a prop on it.
 ### 6.3 What the relics deliberately do not do
 
 - **No relic sells.** The vendor refuses them, the way he already refuses
-  components. A relic with a gold price is a relic the player will convert into
-  the grind, and §3's whole point is that the three currencies do not touch.
-- **No relic is a stat.** Look at the table: catalogues, recipes, prices, one
-  wayfinding hum. The closest thing to power is the fee cut, and that is a
-  discount on leaving, not a bigger sword.
+  components. A relic the player can turn into gold is a relic the player will
+  convert into the grind, and §3's whole point is that the three currencies do
+  not touch. **The repair price in §6.4 is not a violation of this** — it runs
+  the other way. Gold buys a relic's *effect*, the way it already buys a forge
+  rung; it can never buy the relic, and the relic can never become gold.
+- **No relic is a stat.** Look at the table: catalogues, recipes, prices, two
+  workings, one wayfinding hum. The closest thing to power is the fee cut, and
+  that is a discount on leaving, not a bigger sword. The two Verses are the §5.2
+  rule applied to relics — **a verb you did not have, never a number that went
+  up.** Sustain and Ballast do not raise anything; they are two more things you
+  can decide to do, and both of them cost you something you were carrying.
 - **No relic gates the ending.** You can kill the Riven Knight having donated
   none of them. The relics are the reason to keep playing, not a toll on the
   plot.
+
+### 6.4 Broken on arrival — the home counter
+
+**A relic you find does not work.** It comes up out of the Cut as
+`BROKEN TALLY-LEDGER`, its description reads *Take it to the smith*, and it does
+nothing at all until you have carried it home, walked it to the right counter and
+paid to have it repaired — or, for a Verse, **read**. The Home column above is
+that counter, and the rule that generates it needs no table of its own:
+
+> **A relic's home is the counter whose thing it changes.**
+
+This is not an extra system bolted onto the donation; it is the donation losing
+its special case. Pillar 4 says permanence is *bought or given, in town, over a
+counter, after you got home*, and a relic that worked the moment you touched it
+was the one thing in the design quietly breaking that. Now the Lanternkeeper
+prices a repair the way the smith prices a rung, and all four counters are the
+same transaction.
+
+It also sharpens §2 one more turn. A broken relic is worth **nothing** until you
+pay for it, and it still costs a bag slot and still pays the fee on the way out.
+You are carrying twelve slots of Deep Amber and one object that is currently
+worth less than the Amber, five rooms from the rope.
+
+**The prices are small and they are not a gate.**
+
+- **The first repair is free.** The Tally-Ledger is the game teaching you what
+  the counter does, and a tutorial you cannot afford is not a tutorial.
+- The rest scale with the floor the relic came from, and **none of them is more
+  than one good run's takings.** A repair is a ritual and a delay, never a grind.
+  §6.3 still holds: no relic gates the ending.
+- The numbers live in `scripts/items/relic_db.gd` beside the rows they price, not
+  in this document, for the reason `docs/METAGAME.md` opens with — a doc that
+  restates a number is a doc that will disagree with the code.
+
+**The wall in the hall is the quest log.** The Lanternkeeper's board shows all
+twelve slots: empty, broken, or lit. That is where "what is still out there" is
+answered, it is why `docs/SCOPE.md` can keep Quests at 0, and it is a
+`Catalogue`'s existing row list rather than a screen.
+
+### 6.5 The workings — charges, not mana
+
+Three workings, and the number three is load-bearing.
+
+| Working | From | Charges | What it does |
+|---|---|---|---|
+| **Burst** | The Slag Ogre (§5.2) | Bought | The thrown arc, the fuse, the cracked wall |
+| **Sustain** | The Sustain-Verse, read | Bought | The Heat chain holds through **one** break (§2) |
+| **Ballast** | The Ballast-Verse, read | Bought | Burn the cheapest stack in the bag for a soak window |
+
+**They are usable items.** Each is a stop on the right-hand ring, cast with RB or
+RT like the bow, selected with D-pad ← →. Nothing about the input layer changes.
+
+**Charges are arrows.** You buy them from the alchemist — she is already *the
+only thing you take down with you* (`docs/METAGAME.md` §6.6), and a charge is a
+stock you paid for in town before you left, exactly like a bottle. **They do not
+refill underground.** There is no rest, there cannot be one (the run is not
+savable, `docs/METAGAME.md` §5), and a resource that comes back mid-run softens
+the walk home. Spending your last charge on floor 2 is a statement about how deep
+you were planning to go.
+
+**Charges live in the HUD column with arrows and stamina, never in the bag.** The
+bag is the pressure valve and it does not get taxed twice.
+
+**Sustain and Ballast both sharpen §2 rather than softening it.** Sustain makes
+speed cheaper *and* raises the fee, because Heat rides in the bag — the one
+question asked twice in one button. Ballast is the sharpest form of it in the
+game: the thing you came down for is the thing that keeps you alive, and casting
+it is eating your own profit.
+
+**The ceiling is the ring, not the manifest.** Sword, bow, hookshot, Burst,
+Sustain, Ballast is **six stops**, and `docs/CONTRACT.md` §4.1 chose rings over
+bindable slots on the grounds that a ring you can *count* beats a binding you
+have to remember. Six is where counting stops being free. **There is no fourth
+working**, and the reason is a thumb rather than a budget.
 
 ---
 
@@ -411,7 +524,14 @@ the longer list and the rule for adding to it.
 - **A second scene-change path.** `Flow` owns transitions.
 - **Hover boots.** They tax the authoring of every room in the game — a traversal
   item needs gaps to traverse, everywhere, forever — and they open no door the
-  Bomb Bag cannot. The fantasy is real and it is a sequel's.
+  Burst-Verse cannot. The fantasy is real and it is a sequel's.
+- **A spell school, a mana bar, or a fourth working.** Magic in this game is
+  three usable items with charges (§6.5). The moment it has a resource of its
+  own it wants ranks, then schools, then a class — and `docs/SCOPE.md` §2 has
+  already refused classes. The cap is the ring: six stops, `docs/CONTRACT.md`
+  §4.1.
+- **A relic that works when you pick it up.** §6.4. It was the one thing in the
+  design breaking pillar 4.
 - **A map screen.** The floors are ten rooms and the Sounding-Rod is the answer
   to "where is the good chest." A map is a system that makes a small place feel
   like it needs one.
