@@ -863,7 +863,7 @@ it counts down to zero in RUST. The palette becomes the score.
   construction); and the receipt (`RunEndScreen`), the last one — its verdict is
   a `PlateHeader` whose title carries the ending's own colour (`title_color`,
   the one sanctioned tint on a headline: VITAL for "You Died", CYAN for
-  "Extracted"), the killer line sits under it, and the four-row stat tally
+  "Recovered"), the killer line sits under it, and the four-row stat tally
   became a band — ROOMS, SLAIN, FEE, STACKS. The two loot columns kept their
   captions as coloured Labels rather than `section_rule`s, because "WHAT THE
   FLOOR KEPT" and "THE CASE BROUGHT HOME" are told apart by colour and a rule

@@ -240,7 +240,7 @@ func _build_verdict(parent: Node, dead: bool, accent: Color) -> void:
 	# ten minutes.
 	UiKit.plate_header(parent, {
 		"kicker": Prog.label(int(result.get("level", 1))),
-		"title": "You Died" if dead else "Extracted",
+		"title": "You Died" if dead else "Recovered",
 		"title_color": accent,
 		"edge": accent,
 		"emblem": "" if dead else UiKit.action_icon("leave"),
@@ -402,6 +402,7 @@ func _build_column(parent: Node, caption_text: String, rows: Array[Dictionary],
 		_strike = Strike.new()
 		_strike.col = accent
 		over.add_child(_strike)
+		_strike.watch(grid)
 
 	if rows.size() > shown:
 		var more := Label.new()
@@ -580,17 +581,46 @@ func _accept_hint() -> String:
 ## leaf Control and a sibling of the grid for `HoldBar`'s reason: a Control draws
 ## its own commands BENEATH its children, so a cross drawn by the card over its
 ## own cells would render behind every one of their StyleBoxes.
+## The cross, struck through each STACK the floor kept -- not through the column.
+##
+## One cross over the whole grid crossed out the empty space as well, which reads
+## as "the column is void" rather than "these three stacks are gone", and on a
+## death with one stack lost it drew a metre-wide X over a single cell's worth of
+## loot. The loss is per item, so the mark is per item.
+##
+## The rects come from the grid's own cells rather than from arithmetic on
+## columns and separations: the MarginContainer fits this overlay and the grid to
+## the same rect, so a cell's position inside the grid is its position inside
+## here, and a layout change cannot put the two out of step. It does mean the
+## marks are only correct AFTER the grid has sorted, hence `sort_children`.
 class Strike extends Control:
 	var col: Color = Pal.VITAL
+
+	var _grid: ItemGrid
 
 	func _init() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		focus_mode = Control.FOCUS_NONE
 
+	func watch(grid: ItemGrid) -> void:
+		_grid = grid
+		if grid != null and not grid.sort_children.is_connected(queue_redraw):
+			grid.sort_children.connect(queue_redraw)
+		queue_redraw()
+
 	func _draw() -> void:
-		var r := Rect2(Vector2.ZERO, size)
-		var line := Color(col, 0.75)
-		draw_line(r.position, r.end, line, 3.0)
-		draw_line(Vector2(r.position.x, r.end.y), Vector2(r.end.x, r.position.y),
-			line, 3.0)
-		draw_rect(r, Color(col, 0.45), false, 2.0)
+		if _grid == null:
+			return
+		var line := Color(col, 0.85)
+		for i in _grid.count():
+			var cell := _grid.cell_at(i)
+			if cell == null:
+				continue
+			# Inset so the arms end ON the cell rather than butting into the gap
+			# between two cells, where two neighbouring crosses would touch and
+			# read as one long zigzag.
+			var r := Rect2(cell.position, cell.size).grow(-4.0)
+			draw_line(r.position, r.end, line, 3.0)
+			draw_line(Vector2(r.position.x, r.end.y), Vector2(r.end.x, r.position.y),
+				line, 3.0)
+			draw_rect(r, Color(col, 0.5), false, 2.0)
