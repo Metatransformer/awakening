@@ -22,6 +22,14 @@ extends RefCounted
 ##
 ## NEVER pass --headless (CLAUDE.md §2).
 
+## The button the spin is a HOLD OF. `heavy` (Shift+LMB), not `attack` — the
+## layout moved and this director did not follow it, so every frame it shot for a
+## while was a light swing with no ring in it at all and the only complaint was
+## one line of FAIL text. If this file ever prints "the hold never armed" again,
+## check this constant against `HeroCombat._tick_heavy_button` before touching
+## the effect.
+const HOLD := "heavy"
+
 ## When each shot is taken, seconds after the button comes up. SWEEP_TIME is
 ## 0.48 and the motes live 0.55 past that, so 0.75 is the arc at its fullest and
 ## the last two are the burn-down.
@@ -76,7 +84,7 @@ func run(rig) -> void:
 	for i in SHOTS.size():
 		_look(cam, centre, Vector3(0.0, 4.4, 3.4))
 		await rig.wait_seconds(SETTLE)
-		await rig.hold_seconds(["attack"], charge_time + 0.35)
+		await rig.hold_seconds([HOLD], charge_time + 0.35)
 		if i == 0 and not bool(combat.get(&"charged")):
 			print("RINGS FAIL the hold never armed — every frame below is of a light swing")
 			fails += 1
@@ -92,7 +100,7 @@ func run(rig) -> void:
 		var t: float = SHOTS[i + 3]
 		_look(cam, centre + Vector3(0.0, 0.7, 0.0), Vector3(0.0, 0.35, 4.2))
 		await rig.wait_seconds(SETTLE)
-		await rig.hold_seconds(["attack"], charge_time + 0.35)
+		await rig.hold_seconds([HOLD], charge_time + 0.35)
 		await rig.wait_seconds(t)
 		await rig.capture(out.path_join("r_edge_%d_%03dms.png" % [i, int(t * 1000.0)]))
 

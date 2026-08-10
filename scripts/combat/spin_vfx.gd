@@ -21,31 +21,36 @@ extends Node3D
 ## opaque one, which is how this project has produced a glowing slab before. The
 ## fade out of every gradient here therefore walks the RGB to black as well as
 ## the alpha to zero, so it is still a fade with the blend mode ignoring alpha.
+## The ring shader takes the same rule to its conclusion and never touches ALPHA
+## at all — it holds ALPHA at 1.0 and does every fade in the colour, because
+## black added to a framebuffer is exactly nothing whatever the blend func does.
 
-## Azul, and every one of these is kept well clear of white ON PURPOSE.
+## Ocarina's spin, which is a FIRE colour. Every one of these is kept clear of
+## white on purpose, and the reason survives the change of hue.
 ##
-## This is the thing that had to be rendered to be believed. Additive blending
-## SUMS, so N overlapping particles of colour c land on the framebuffer as N*c,
-## and every channel that reaches 1.0 clips. A pale blue that looks correct as a
-## single mote — (0.66, 0.88, 1.0), which is what the old charge light used —
-## becomes (1.0, 1.0, 1.0) the moment three of them stack, and a burst is
-## nothing BUT stacked particles. The first render of this effect was a wall of
-## white blobs for exactly that reason.
-##
-## The fix is to keep red far below blue at every stop. (0.06, 0.26, 0.95)
-## tripled is (0.18, 0.78, 2.85), which clips to (0.18, 0.78, 1.0) — still
-## unmistakably blue. Judge these numbers stacked, never one at a time.
+## Additive blending SUMS, so N overlapping motes of colour c land as N*c and
+## every channel reaching 1.0 clips. This effect was azul before, and the first
+## render of it was a wall of WHITE blobs because (0.66, 0.88, 1.0) tripled is
+## white in all three channels. Fire has the same trap with the channels
+## permuted: keep BLUE far below red and the clip lands on amber instead of on
+## white. FIRE tripled is (2.94, 0.90, 0.09) → clipped (1.0, 0.90, 0.09), which
+## is a hot yellow-orange and still unmistakably fire. Judge these stacked,
+## never one at a time.
 ##
 ## And the thing that is easy to forget: the FLOOR is one of the things being
-## added to. This dungeon is torchlit, so a mote lands on roughly (0.35, 0.25,
-## 0.15) of warm stone before anything else stacks on it. AZUL_HOT rendered as a
-## white dot with a blue rim for exactly that reason — 0.62 of green plus the
-## floor's own is over 1.0 before a second particle arrives. AZUL_HOT is
-## therefore the LIGHT colour, where nothing sums, and the motes and the blade
-## use AZUL.
-const AZUL_HOT := Color(0.30, 0.62, 1.0)
-const AZUL := Color(0.06, 0.26, 0.95)
-const AZUL_DEEP := Color(0.02, 0.06, 0.45)
+## added to, and here it works AGAINST us in a way it did not when this was
+## blue. A torchlit dungeon floor is already about (0.35, 0.25, 0.15) of warm
+## stone, so a warm mote starts most of the way to clipping before a second one
+## arrives. That is why FIRE_HOT — the only near-white value here — is the LIGHT
+## colour, where nothing sums, and the motes use FIRE.
+const FIRE_HOT := Color(1.00, 0.66, 0.26)
+const FIRE := Color(0.98, 0.30, 0.03)
+const FIRE_DEEP := Color(0.50, 0.07, 0.01)
+## What the blade is tinted with. Not FIRE: `HitFlash` multiplies the tint by its
+## own HIT_ENERGY of 2.4, so 0.30 of green comes back out at 0.72 and the steel
+## reads white-hot with an orange edge. 0.22 survives the multiply at 0.45 and
+## the blade stays the colour of a poker instead of a lightsaber.
+const FIRE_BLADE := Color(0.95, 0.22, 0.02)
 
 ## How hot the blade's emission goes at a full charge. HitFlash multiplies this
 ## by its own HIT_ENERGY, so 1.0 here is as bright as a landed blow.
@@ -65,11 +70,9 @@ const GLOW_FADE := 0.35
 const LIGHT_FULL := 2.6
 const LIGHT_BURST := 7.0
 
-## The sweep, which is the effect. OOT's spin does not put a ring on the floor —
-## it drags a comet tail around the hero, and the tail is BEHIND the blade the
-## whole way. So the emitter is a single blob parked at the blade's radius on a
-## pivot that turns, and the motes are left in world space as it goes; the arc is
-## the history of where the emitter has been, not a shape anybody authored.
+## The sweep, which is the effect. OOT's spin does not put a static ring on the
+## floor — it drags a burning comet tail around the hero, and the tail is BEHIND
+## the blade the whole way, thinning into embers as it goes.
 ##
 ## Clockwise seen from above, which is NEGATIVE rotation about +Y: the right-hand
 ## rule takes +Z toward +X, and with +X right and +Z toward the bottom of a
@@ -82,25 +85,189 @@ const LIGHT_BURST := 7.0
 ## at 0.55 m, drew a puddle around his boots that a player would read as a
 ## self-buff rather than as a swing.
 const SWEEP_RADIUS := 1.7
-## 0.48 s for the full turn, down from 0.62 — the ring travels 30% faster. It now
-## finishes well inside the 0.68 s swing rather than a hair outside it, and what
-## keeps "the magic lags the sword" true is the mote LIFETIME (0.55 s), not the
-## rate the pen moves: the last of the arc is still burning at ~1.0 s, long after
+## 0.48 s for the full turn. It finishes well inside the 0.68 s swing, and what
+## keeps "the magic lags the sword" true is RING_TAIL below: the head closes the
+## circle at 0.48 s and the last of the fire is still burning at ~0.78 s, after
 ## the hero has his feet back.
 const SWEEP_TIME := 0.48
+
+## --- the ring -----------------------------------------------------------------
+##
+## **Why this is a mesh and not particles any more, which is the whole change.**
+## The ring used to be one small emitter on the turning pivot, laying world-space
+## motes down behind it — the arc as the history of where the pen had been. It is
+## a lovely idea and it cannot be made continuous, because a GPU emitter emits
+## once per FRAME at wherever the pivot is that frame. At 60 fps the emitter
+## steps ~0.37 m round a 10.7 m circumference; at the 30-odd fps this game
+## actually hits in a lit room it steps 0.74 m, and no box extent wide enough to
+## bridge that is still a thin ring. Every render of it came out as a string of
+## blue beads with floor between them — the photographs are in /tmp/rings — and
+## the fixes all pointed the same way: more particles, fatter particles, wider
+## emitter, i.e. make each bead big enough to touch the next one. That is a
+## dotted line arguing about dot size.
+##
+## Ocarina's is not a particle system at all. It is a textured ribbon swept round
+## Link — one continuous piece of fire with a bright head and an ember tail — and
+## the honest version of that here is the same thing: an annulus of geometry
+## built once, with a shader that only lights the part of it the blade has
+## already passed. The sweep is a float going 0 → 1; frame rate cannot put holes
+## in it, because there is nothing being deposited.
+##
+## The particles did not go away, they went back to being what particles are good
+## at: EMBERS spat off the head, which are meant to be discrete.
+##
+## Inner and outer radius of the band, and where it sits off the floor. The band
+## straddles SWEEP_RADIUS (1.7) and its outer edge reaches `spin_reach` (2.1), so
+## the fire ends where the damage does. RING_LIFT flares the outer edge upward —
+## dead flat is correct for Saturn but a plane exactly edge-on to a low camera is
+## invisible, and fire flares outward anyway.
+const RING_INNER := 1.18
+const RING_OUTER := 2.20
+const RING_BASE := 0.10
+const RING_LIFT := 0.34
+## How many quads round the circle. 160 is ~4 cm of arc per segment at the outer
+## edge, which is far finer than the shader's own noise and keeps the ragged
+## flame edge from looking faceted.
+const RING_SEGMENTS := 160
+## How much of the circle is burning at once, in turns. 0.62 means the fire
+## behind the blade stretches most of the way back round and the head is always
+## clearly the head — a longer tail closes the loop into a plain ring and loses
+## the direction, a shorter one reads as a comet with no ring at all.
+const RING_TAIL := 0.62
+## The ring grows as it burns, which is the last of the Ocarina read: the fire
+## leaves him rather than orbiting him. Scale, not radius, so the already-drawn
+## arc expands with the head instead of the band spiralling outward.
+const RING_GROW := Vector2(0.88, 1.10)
+
+## The ring shader. Unshaded and additive like everything else here, and it never
+## writes depth — a flat additive disc that occludes itself flickers along the
+## seam where the two halves of the band meet.
+##
+## `head` is the sweep, in turns, and it is the only thing animated: a fragment
+## whose UV.x is ahead of it has not been cut yet, one further behind than `tail`
+## has burnt out. It is allowed to run past 1.0 so the tail can finish crossing
+## the seam after the head has closed the circle.
+##
+## The noise is sampled on the LOCAL POSITION rather than on UV, and that is not
+## a style choice. UV.x wraps from 1 back to 0 at the seam, so any noise keyed on
+## it draws a hard vertical crack through the fire at the hero's front. Position
+## has no seam — the ring is a closed loop in space whatever the parameterisation
+## says.
+const RING_SHADER := """
+shader_type spatial;
+render_mode unshaded, blend_add, cull_disabled, depth_draw_never,
+	shadows_disabled, fog_disabled;
+
+uniform float head = -1.0;
+uniform float tail = 0.62;
+uniform float burn = 1.0;
+uniform vec3 core : source_color = vec3(1.0, 0.66, 0.26);
+uniform vec3 mid : source_color = vec3(0.98, 0.30, 0.03);
+uniform vec3 ember : source_color = vec3(0.42, 0.05, 0.01);
+
+varying vec3 loc;
+
+float hash12(vec2 p) {
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
+}
+
+float vnoise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	float a = hash12(i);
+	float b = hash12(i + vec2(1.0, 0.0));
+	float c = hash12(i + vec2(0.0, 1.0));
+	float d = hash12(i + vec2(1.0, 1.0));
+	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+float fbm(vec2 p) {
+	return vnoise(p) * 0.60 + vnoise(p * 2.7) * 0.28 + vnoise(p * 6.1) * 0.12;
+}
+
+void vertex() {
+	loc = VERTEX;
+}
+
+void fragment() {
+	// Three noise fields. The coarse one decides where the flame TIPS reach, the
+	// fine one is the flicker inside the band, and `ragged` is the one that stops
+	// this looking like geometry.
+	float lick = fbm(loc.xz * 2.6 + vec2(0.0, TIME * 1.6));
+	float flick = fbm(loc.xz * 4.6 - vec2(TIME * 2.3, 0.0));
+	float ragged = (fbm(loc.xz * 3.1 + vec2(TIME * 0.9, 0.0)) - 0.5) * 0.035;
+
+	// How long ago the blade passed this angle, in turns. Negative means it has
+	// not been here yet.
+	//
+	// `ragged` bends that boundary by up to ±0.017 of a turn — about ±6° — and
+	// it is doing more work than its size suggests. Without it the leading edge
+	// is a perfectly straight radial cut, and a straight radial cut across a
+	// 1 m band photographs as a paper WEDGE: the first render of this had a
+	// bright trapezoid at the head that read as a hole in the effect rather than
+	// as the front of it.
+	float age = head - UV.x + ragged;
+	float life = 1.0 - clamp(age / tail, 0.0, 1.0);
+	if (age < 0.0) {
+		life = 0.0;
+	}
+	// And the cut itself is softened over ~5° so the fire arrives rather than
+	// appearing. Asymmetric on purpose: it opens fast, because the head IS the
+	// blade and a blade does not have a gradient in front of it.
+	float lead = smoothstep(-0.004, 0.012, age);
+
+	// v = 0 at the inner rim, 1 at the outer. The outer edge is eaten away by
+	// the coarse noise, which is what makes it read as licking flame instead of
+	// as a gradient-filled washer.
+	float v = UV.y;
+	float rim = 0.28 + 0.46 * lick;
+	float band = smoothstep(0.0, 0.20, v) * (1.0 - smoothstep(rim, rim + 0.30, v));
+
+	// The head is a hot spot about 20° long, not a step: this is the blade
+	// itself, and it is the brightest thing in the effect. 22 rather than the 11
+	// it started at — at 11 the hot spot spanned a quarter of the circle and the
+	// ring had no head at all, just a bright half and a dim half.
+	float hot = exp(-max(age, 0.0) * 22.0);
+	// 1.1, not the 1.6 it started at. The exponent is how much of the circle is
+	// still lit, and at 1.6 the tail was gone within a third of a turn of the
+	// head — a comet with no ring behind it. This is the number that decides
+	// whether the effect reads as Saturn or as a shooting star.
+	float body = pow(life, 1.1) * (0.55 + 0.55 * flick);
+	float i = band * lead * (body + hot * 1.15) * burn;
+
+	vec3 col = mix(mid, core, hot);
+	// 0.45 keeps the tail ORANGE most of the way round and only lets it drop to
+	// the ember red at the very end. At 0.7 the band turned dark red almost
+	// immediately, and dark red on a torchlit floor is the same colour as the
+	// floor.
+	col = mix(ember, col, pow(life, 0.45));
+
+	// ALPHA stays at 1.0 and every fade lives in the colour — black added to the
+	// framebuffer is nothing, whatever the blend func does with alpha.
+	ALBEDO = col * i;
+	ALPHA = 1.0;
+}
+"""
 
 var _sword: Node3D
 var _glow := HitFlash.new()
 var _light: OmniLight3D
-## What the sweep turns. The trail hangs off this and nothing else does.
+## What the sweep turns. The embers hang off this and nothing else does.
 var _pivot: Node3D
 ## Motes drawn to the blade while the button is held. Parented to the sword, so
 ## they are emitted along whatever arc the hand is travelling.
 var _gather: GPUParticles3D
-## The trail. Parented to `_pivot` at `SWEEP_RADIUS`, NOT to the blade: the sword
-## is animated and the animation is not a source of truth for where the effect
-## should be — it dips, it foreshortens, and it belongs to a clip borrowed from
-## another character. The pivot turns at a rate this file owns.
+## The fire itself: one annulus, lit a piece at a time by RING_SHADER.
+var _ring: MeshInstance3D
+var _ring_mat: ShaderMaterial
+## Embers thrown off the head of the fire. Parented to `_pivot` at
+## `SWEEP_RADIUS`, NOT to the blade: the sword is animated and the animation is
+## not a source of truth for where the effect should be — it dips, it
+## foreshortens, and it belongs to a clip borrowed from another character. The
+## pivot turns at a rate this file owns.
 var _burst: GPUParticles3D
 var _tween: Tween
 ## The last value `charge` was given, so `fire` knows whether there is anything
@@ -118,6 +285,7 @@ func bind(sword: Node3D) -> void:
 	_glow.bind(self, _sword)
 	_build_light()
 	_build_gather()
+	_build_ring()
 	_build_burst()
 	clear()
 
@@ -133,7 +301,7 @@ func charge(t01: float) -> void:
 	# arrives near the top. A linear ramp reads as "the sword is on" from the
 	# first frame and gives the player nothing to time the release against.
 	var ramp := t * t
-	_glow.glow(AZUL, ramp * GLOW_FULL)
+	_glow.glow(FIRE_BLADE, ramp * GLOW_FULL)
 	if _light != null:
 		_light.visible = t > 0.0
 		_light.light_energy = ramp * LIGHT_FULL
@@ -154,24 +322,49 @@ func fire() -> void:
 	if _light != null:
 		_light.visible = true
 		_light.light_energy = LIGHT_BURST
-	_glow.glow(AZUL, GLOW_FULL)
+	_glow.glow(FIRE_BLADE, GLOW_FULL)
+
+	# Both the fire and the embers are cut loose from the hero for the length of
+	# the effect. They are placed where he is STANDING when he lets go and left
+	# there: he is locked for the swing, but he is not locked afterwards, and a
+	# ring that walked away with him would undo the one thing the world-space
+	# particles were bought for.
+	var yaw := global_transform.basis.get_euler().y
+	_place(_ring, yaw)
+	_place(_pivot, yaw)
 
 	_tween = create_tween().set_parallel(true)
-	if _pivot != null and _burst != null:
-		_pivot.rotation.y = 0.0
+
+	if _ring_mat != null and _ring != null:
+		_ring.visible = true
+		_ring_mat.set_shader_parameter(&"burn", 1.0)
 		# ON THE RELEASE FRAME, not a tenth of a second after it. There used to be a
 		# SWEEP_DELAY of 0.10 here to let the animation's wind-up catch up, and what
 		# it actually bought was a beat of nothing between the button coming up and
 		# the magic appearing — the release is the moment the player is watching for
-		# and it has to be the moment something happens. The emitter is switched on
-		# directly rather than through a zero-delay tween callback, which would
-		# still cost a frame.
+		# and it has to be the moment something happens.
+		_set_head(0.0)
+		# Past 1.0 by a whole tail, at the SAME angular rate: the head closes the
+		# circle at SWEEP_TIME and then keeps going, eating the tail out from under
+		# itself until there is nothing left burning. That extra 0.62 of a turn is
+		# where "the magic lags the sword" now lives.
+		_tween.tween_method(
+			_set_head, 0.0, 1.0 + RING_TAIL, SWEEP_TIME * (1.0 + RING_TAIL)
+		)
+		_tween.tween_property(
+			_ring, ^"scale",
+			Vector3(RING_GROW.y, 1.0, RING_GROW.y),
+			SWEEP_TIME * (1.0 + RING_TAIL)
+		).from(Vector3(RING_GROW.x, 1.0, RING_GROW.x))
+
+	if _pivot != null and _burst != null:
+		_pivot.rotation.y = yaw
 		_sweep(true)
 		# NEGATIVE, so it goes clockwise seen from above — see SWEEP_RADIUS.
-		# tween_property on the pivot rather than a per-frame rotation: the arc's
-		# evenness IS the effect, and a hand-rolled tick would lay the ribbon down
-		# at whatever the frame rate was that second.
-		_tween.tween_property(_pivot, ^"rotation:y", -TAU, SWEEP_TIME).from(0.0)
+		# tween_property on the pivot rather than a per-frame rotation: the embers
+		# have to come off the same head the shader is drawing, and a hand-rolled
+		# tick would drift from it at whatever the frame rate was that second.
+		_tween.tween_property(_pivot, ^"rotation:y", yaw - TAU, SWEEP_TIME).from(yaw)
 		_tween.tween_callback(_sweep.bind(false)).set_delay(SWEEP_TIME)
 
 	_tween.tween_method(_set_glow, GLOW_FULL, 0.0, GLOW_FADE).set_delay(GLOW_HOLD)
@@ -194,32 +387,56 @@ func clear() -> void:
 		_light.visible = false
 	if _gather != null:
 		_gather.emitting = false
-	# The trail is deliberately NOT killed here — only its emitter is. The motes
-	# already laid down are world-space and finish their own lifetimes, which is
+	if _ring != null:
+		_ring.visible = false
+		_set_head(-1.0)
+	# The embers already in the air are deliberately NOT killed here — only their
+	# emitter is. They are world-space and finish their own lifetimes, which is
 	# the whole "the magic lags the sword" read: the hero has his feet back before
-	# the arc behind him has finished burning.
+	# the last of the fire behind him has gone out.
 	_sweep(false)
 
 
 # --- internals --------------------------------------------------------------
 
-## Emitter on or off. Off also parks the pivot back at the hero's facing, so the
-## next spin starts its arc in front of him rather than wherever the last one
+## Cut a node loose from the hero and stand it where he is, facing where he
+## faces. `top_level` is what makes the ring stay put once it is drawn; setting
+## it here rather than at build time keeps the node riding the hero while it is
+## idle, so the first frame of a spin is never at the world origin.
+func _place(node: Node3D, yaw: float) -> void:
+	if node == null:
+		return
+	node.top_level = true
+	node.global_position = global_position
+	node.rotation = Vector3(0.0, yaw, 0.0)
+	node.scale = Vector3.ONE
+
+
+## Ember emitter on or off. Off also parks the pivot back at the hero's facing,
+## so the next spin starts in front of him rather than wherever the last one
 ## happened to stop.
 func _sweep(on: bool) -> void:
 	if _burst == null:
 		return
 	_burst.emitting = on
 	if not on and _pivot != null:
+		_pivot.top_level = false
 		_pivot.rotation.y = 0.0
 
 
+## Where the blade is, in turns round the circle. -1 parks it before the start,
+## which draws nothing at all.
+func _set_head(t: float) -> void:
+	if _ring_mat != null:
+		_ring_mat.set_shader_parameter(&"head", t)
+
+
 func _set_glow(e: float) -> void:
-	# AZUL, not AZUL_HOT. HitFlash multiplies the tint by 2.4, so a colour with
-	# 0.62 of green in it comes out of the tonemapper as a white-hot blade with a
-	# blue edge — which is a lightsaber, not a charged sword. AZUL's 0.26 of green
-	# survives the multiply at 0.62 and the blade stays blue at full charge.
-	_glow.glow(AZUL, e)
+	# FIRE_BLADE, not FIRE_HOT — see the constant. HitFlash multiplies the tint by
+	# 2.4, so a colour with 0.66 of green in it comes out of the tonemapper as a
+	# white-hot blade with an orange edge, which is a lightsaber, not a charged
+	# sword.
+	_glow.glow(FIRE_BLADE, e)
 
 
 func _set_light(e: float) -> void:
@@ -239,7 +456,7 @@ func _kill() -> void:
 func _build_light() -> void:
 	_light = OmniLight3D.new()
 	_light.name = "SpinGlow"
-	_light.light_color = AZUL_HOT
+	_light.light_color = FIRE_HOT
 	_light.light_energy = 0.0
 	_light.omni_range = 2.6
 	# A charging sword throwing hard shadows around a torchlit room is both
@@ -292,12 +509,12 @@ func _build_gather() -> void:
 	pm.scale_max = 1.0
 	pm.scale_curve = _shrink_curve()
 	pm.color_ramp = _ramp([
-		[0.0, Color(AZUL_DEEP.r, AZUL_DEEP.g, AZUL_DEEP.b, 0.0)],
-		[0.3, AZUL_DEEP],
-		# Brightest as it ARRIVES, which is the read: the light is going into the
-		# sword. Peaks at AZUL rather than AZUL_HOT because this is the moment the
+		[0.0, Color(FIRE_DEEP.r, FIRE_DEEP.g, FIRE_DEEP.b, 0.0)],
+		[0.3, FIRE_DEEP],
+		# Brightest as it ARRIVES, which is the read: the fire is going into the
+		# sword. Peaks at FIRE rather than FIRE_HOT because this is the moment the
 		# motes are most crowded, and crowded is where the sum whitens.
-		[0.85, AZUL],
+		[0.85, FIRE],
 		# To BLACK, not just to transparent — alpha does not attenuate ADD.
 		[1.0, Color(0.0, 0.0, 0.0, 0.0)],
 	])
@@ -309,126 +526,153 @@ func _build_gather() -> void:
 	_sword.add_child(_gather)
 
 
-## The trail: one blob of motes on a turning pivot, left behind in world space.
+## The fire: one annulus, built once, lit a slice at a time by RING_SHADER.
 ##
-## Everything about this shape comes from that one decision. There is no ring
-## emitter, no 360 of particles born at once, and no authored circle anywhere —
-## the arc is where the emitter HAS BEEN, which is why it always trails the blade
-## instead of appearing around it. The first pass did author the circle (an
-## EMISSION_SHAPE_RING, all 54 at once) and it read as a shockwave: correct
-## radius, no direction, no sense that a sword had gone past.
+## The geometry is deliberately dumb — a flat washer with its outer edge lifted,
+## 160 segments, UV.x running once round the circle and UV.y running from the
+## inner rim to the outer. All of the effect is in the shader, and all of the
+## SHAPE is in these two radii. There is no emitter here, nothing is deposited,
+## and the frame rate therefore cannot put a hole in the ring, which is the one
+## thing the particle version could never promise.
+##
+## Angles are laid out so that UV.x = 0 is the hero's FORWARD and UV.x rises
+## clockwise seen from above, because that is the direction the blade travels
+## (see SWEEP_RADIUS). A Node3D's forward is -Z (docs/CONTRACT.md §2.5), so the
+## point at angle phi is (r·sin phi, y, -r·cos phi): phi = 0 gives (0, y, -r),
+## dead ahead, and a small positive phi swings it toward +X, which is his right.
+func _build_ring() -> void:
+	var verts := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var idx := PackedInt32Array()
+
+	for i in RING_SEGMENTS + 1:
+		var f := float(i) / float(RING_SEGMENTS)
+		var phi := f * TAU
+		for j in 2:
+			var v := float(j)
+			var r: float = lerpf(RING_INNER, RING_OUTER, v)
+			# v² rather than v: the lift is all in the outer third, so the band is
+			# flat where it is brightest and only the flame tips rise.
+			verts.push_back(Vector3(
+				r * sin(phi), RING_BASE + RING_LIFT * v * v, -r * cos(phi)
+			))
+			uvs.push_back(Vector2(f, v))
+
+	# The seam column is DUPLICATED (RING_SEGMENTS + 1 columns for
+	# RING_SEGMENTS quads) so the last quad can reach UV.x = 1.0. Sharing one
+	# column would wrap its U back to 0 and the final quad would be textured with
+	# the entire ring squeezed backwards into it.
+	for i in RING_SEGMENTS:
+		var a := i * 2
+		idx.append_array([a, a + 1, a + 2, a + 1, a + 3, a + 2])
+
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = idx
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+
+	var sh := Shader.new()
+	sh.code = RING_SHADER
+	_ring_mat = ShaderMaterial.new()
+	_ring_mat.shader = sh
+	_ring_mat.set_shader_parameter(&"head", -1.0)
+	_ring_mat.set_shader_parameter(&"tail", RING_TAIL)
+	_ring_mat.set_shader_parameter(&"burn", 1.0)
+	_ring_mat.set_shader_parameter(&"core", FIRE_HOT)
+	_ring_mat.set_shader_parameter(&"mid", FIRE)
+	_ring_mat.set_shader_parameter(&"ember", FIRE_DEEP)
+
+	_ring = MeshInstance3D.new()
+	_ring.name = "SpinRing"
+	_ring.mesh = mesh
+	_ring.material_override = _ring_mat
+	# The mesh never moves in its own space, so Godot's own AABB is exact — but it
+	# is a 4.4 m disc 0.4 m tall and the hero can stand with most of it inside a
+	# wall. Shadow casting off for the same reason the blade light has none: this
+	# is a glow, not a lamp.
+	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_ring.visible = false
+	add_child(_ring)
+
+
+## The embers thrown off the head of the fire.
+##
+## This is the entire surviving job of the old trail emitter, and it is the job
+## particles were always right for: discrete sparks flung outward and upward off
+## the leading edge, dying at their own rates. Their count is a tenth of what the
+## ribbon needed because nothing here has to JOIN UP — a gap between two sparks
+## is two sparks, whereas a gap in a ring is a broken ring.
 func _build_burst() -> void:
 	_pivot = Node3D.new()
 	_pivot.name = "SpinSweep"
 	add_child(_pivot)
 
 	_burst = GPUParticles3D.new()
-	_burst.name = "SpinTrail"
-	# Dense, because this one is a RIBBON and a ribbon with gaps in it is a dotted
-	# line. The count that was too high for a burst is about right for a trail:
-	# these are spread along 10.7 m of arc instead of stacked on one radius.
-	#
-	# 240 rather than 150 since the sweep got 30% faster: the emission RATE is
-	# amount/lifetime, so the same count laid down over a shorter sweep is a
-	# thinner ring. This is the count that keeps the band reading as a band.
-	_burst.amount = 240
-	# Longer than the sweep that lays it down, so the head of the arc is still
-	# burning when the tail is halfway gone — and, deliberately, still burning
-	# after the hero has control back. The magic lags the sword.
-	_burst.lifetime = 0.55
+	_burst.name = "SpinEmbers"
+	_burst.amount = 90
+	# Longer than the sweep that throws them, and longer than the ring's own burn,
+	# so the last sparks are still falling after the fire has gone out.
+	_burst.lifetime = 0.85
 	# NOT one_shot. The emitter runs for the length of the sweep and is switched
-	# off by hand at the end of it; a one-shot would dump the whole ribbon at
-	# whatever angle the pivot happened to be at.
+	# off by hand at the end of it; a one-shot would dump every spark at whatever
+	# angle the pivot happened to be at.
 	_burst.one_shot = false
-	# 0.0 is the whole point: particles come out EVENLY across the sweep. Any
-	# explosiveness at all clumps them into bursts and the arc goes dotted.
+	# 0.0: sparks come out evenly across the sweep rather than in gouts.
 	_burst.explosiveness = 0.0
-	_burst.randomness = 0.4
-	# World space, and this is the load-bearing flag. In local space every mote
-	# would ride the pivot round and the trail would be a rigid arm sweeping the
-	# room instead of a tail being left behind.
+	_burst.randomness = 0.6
+	# World space, and this is the load-bearing flag. In local space every spark
+	# would ride the pivot round and they would be a rigid arm sweeping the room
+	# instead of embers left in the air.
 	_burst.local_coords = false
 	_burst.draw_order = GPUParticles3D.DRAW_ORDER_VIEW_DEPTH
 	_burst.emitting = false
 
 	var pm := ParticleProcessMaterial.new()
-	# A flat wafer at the blade's radius, not a blob and not a ring. The wafer is
-	# the pen; the pivot is the hand.
-	#
-	# SATURN'S RINGS: the extents are the whole shape decision. It used to be
-	# 0.22 tall against 0.10 wide — a vertical smear that swept round into a
-	# curtain, and a curtain seen from this game's over-the-shoulder camera reads
-	# as a wall of blue rather than as a disc lying on the floor. Now it is 0.02
-	# tall (a tenth of that) and 0.18 DEEP along local Z, which is the radial
-	# axis out here: the band has width where a ring has width and none where a
-	# ring has none.
-	#
-	# The X — the TANGENTIAL half-width, along the direction of travel — is 0.22
-	# for a reason that only a rendered frame will tell you. Particles are emitted
-	# once per FRAME, all of them at wherever the pivot is that frame, and at
-	# 60 fps a 0.48 s sweep around 10.7 m of circumference moves the emitter
-	# ~0.37 m between frames. At the old 0.10 (a 0.20 m span) that leaves a 0.17 m
-	# hole after every clump and the ring photographs as a bead necklace — which
-	# is exactly what it did. 0.22 spans 0.44 m, wider than the frame's own step,
-	# so consecutive clumps overlap and the beads join into a band.
+	# A small wafer at the blade's radius. It no longer has to be wide enough to
+	# bridge a frame's worth of travel — that was the ribbon's problem and the
+	# ribbon is a mesh now — so this is back to being a point-ish source.
 	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	pm.emission_box_extents = Vector3(0.22, 0.02, 0.18)
+	pm.emission_box_extents = Vector3(0.10, 0.04, 0.16)
 	# Local -Z at the emitter, which — with the emitter parked out along the
-	# pivot's -Z — points directly AWAY from the hero. This is the "outwards" half
-	# of the move: the arc grows as it sweeps rather than riding one radius.
-	#
-	# Dead level, with no +Y tilt at all: any vertical component and the whole
-	# disc becomes a shallow cone, which is exactly what a ring must not be.
-	pm.direction = Vector3(0.0, 0.0, -1.0)
-	pm.spread = 14.0
-	# The other half of the flattening, and the one that is not obvious. `spread`
-	# is a CONE by default, so 14 degrees of it throws motes above and below the
-	# plane as happily as it throws them wide. flatness = 1.0 collapses that cone
-	# to a fan in the plane perpendicular to the emitter's up — so the spread now
-	# spends all of itself widening the BAND instead of thickening it.
-	pm.flatness = 1.0
-	pm.initial_velocity_min = 0.7
-	pm.initial_velocity_max = 1.6
-	# Almost nothing. The outward push is the initial velocity above; radial accel
-	# here is measured from the EMITTER, which is itself out at SWEEP_RADIUS, so a
-	# big number here would blow the ribbon apart sideways rather than widen the
-	# circle.
-	pm.radial_accel_min = 0.4
-	pm.radial_accel_max = 1.4
+	# pivot's -Z — points directly AWAY from the hero, and tilted up: these are
+	# sparks off a fire and fire throws them upward.
+	pm.direction = Vector3(0.0, 0.55, -1.0)
+	pm.spread = 26.0
+	pm.initial_velocity_min = 1.1
+	pm.initial_velocity_max = 2.6
+	pm.radial_accel_min = 0.2
+	pm.radial_accel_max = 1.0
 	pm.tangential_accel_min = 0.0
-	pm.tangential_accel_max = 0.6
-	# ZERO, and this is the third leg of the flattening. -1.6 used to pull the tail
-	# floorwards as it died, which is right for a smoke ring and wrong for this:
-	# gravity acts over the mote's whole 0.55 s life, so the head of the arc sat
-	# at hip height while the tail had already sagged a foot — the band was a
-	# spiral staircase, not a ring. With no gravity every mote dies at the height
-	# it was born at and the disc stays a disc.
-	pm.gravity = Vector3.ZERO
-	pm.damping_min = 1.0
-	pm.damping_max = 2.5
-	pm.scale_min = 0.7
-	pm.scale_max = 1.3
+	pm.tangential_accel_max = 0.8
+	# Real gravity, unlike the old ribbon, and for the opposite reason. A trail
+	# that sagged turned the ring into a spiral staircase; a SPARK that does not
+	# arc over and fall is not a spark, it is a floating dot. The ring's flatness
+	# is the mesh's job now, so these are free to behave.
+	pm.gravity = Vector3(0.0, -3.2, 0.0)
+	pm.damping_min = 0.4
+	pm.damping_max = 1.6
+	pm.scale_min = 0.5
+	pm.scale_max = 1.1
 	pm.scale_curve = _shrink_curve()
 	# No white stop. A white first stop is invisible as a decision and fatal as a
 	# result: it is the brightest thing on screen at the exact frame the most
-	# particles overlap, so the opening of the arc — the one part the whole effect
-	# is for — was the one part that had no colour in it at all.
+	# sparks overlap.
 	pm.color_ramp = _ramp([
-		[0.0, AZUL],
-		[0.4, AZUL],
-		[0.8, AZUL_DEEP],
+		[0.0, FIRE_HOT],
+		[0.35, FIRE],
+		[0.8, FIRE_DEEP],
 		[1.0, Color(0.0, 0.0, 0.0, 0.0)],
 	])
 	_burst.process_material = pm
-	# 0.14, down from 0.17. A ring is read as a LINE and a line drawn with fat dots
-	# is a dotted line however many of them there are; the density above is what
-	# fills the band now, not the size of each mote.
-	_burst.draw_pass_1 = _quad(0.14)
+	# Small. An ember is a speck; the fire it comes off is the ring.
+	_burst.draw_pass_1 = _quad(0.075)
 	_burst.material_override = _mote_material()
 	# Out at the blade's radius and at hip height. -Z because that is the hero's
-	# forward (docs/CONTRACT.md §2.5: a Node3D's forward is -basis.z), so the
-	# sweep starts in front of him and comes round.
-	_burst.position = Vector3(0.0, 0.75, -SWEEP_RADIUS)
+	# forward (docs/CONTRACT.md §2.5), so the sweep starts in front of him.
+	_burst.position = Vector3(0.0, 0.55, -SWEEP_RADIUS)
 	_pivot.add_child(_burst)
 
 
