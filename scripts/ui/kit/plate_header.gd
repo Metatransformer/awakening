@@ -115,7 +115,18 @@ static func build(parent: Node, config: Dictionary) -> Control:
 	var title := Label.new()
 	title.text = title_text
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	UITheme.apply_text_style(title, UITheme.TYPE_TITLE, UITheme.TEXT)
+	# `title_color` is for a headline whose COLOUR is part of what it says — the
+	# run-end receipt's "You Died" / "Extracted", where the ending's colour is the
+	# thing you read from across the room. It is not a decoration knob: a panel
+	# that tints its title because it looks nice has invented a second title
+	# voice, and the default off-white is the one every other panel wears.
+	var title_color: Variant = config.get("title_color")
+	if title_color != null and not title_color is Color:
+		push_error("[PlateHeader] title='%s' reason=title_color must be a Color; using TEXT"
+			% title_text)
+		title_color = null
+	UITheme.apply_text_style(title, UITheme.TYPE_TITLE,
+		title_color if title_color is Color else UITheme.TEXT)
 	if art != null:
 		_outline(title, 6)
 	text.add_child(title)

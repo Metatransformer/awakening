@@ -48,7 +48,6 @@ extends Control
 ## Flow opens it and Flow closes it -- the button calls `Flow.to_garrison()`,
 ## and `Flow` is still the only thing in the project that changes scenes.
 
-const THEME_PATH := "res://scenes/ui/menu/menu_theme.tres"
 ## Cells across, the pouch's number for the pouch's reason.
 const COLS := 4
 ## Cells across on a death, where the haul is drawn as TWO columns: what the
@@ -116,7 +115,8 @@ func _ready() -> void:
 	# from the viewport and keep it there. (Same note as TradeScreen.)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	theme = load(THEME_PATH) as Theme
+	UITheme.prewarm()
+	theme = UITheme.theme()
 
 	# The pointer is captured for camera look while you play; hand it back or the
 	# one button on this screen cannot be clicked. Saved rather than forced, and
@@ -208,23 +208,14 @@ func _build() -> void:
 
 	var frame := PanelContainer.new()
 	frame.name = "Frame"
-	frame.theme_type_variation = &"MenuFrame"
+	# `edge_to_edge`: the plate header, the band and the footer reach the frame's
+	# edge and the body owns its inset, like every other window in the menu.
+	UITheme.style_panel(frame, UITheme.FRAME_FACE_SOLID, true)
 	frame.custom_minimum_size = Vector2(MenuUtil.FRAME_SIZE.x * 0.72, 0)
 	centre.add_child(frame)
 
-	# The one deliberate departure from the menu theme. The border says which
-	# ending this is from across the room, before a word of it is read, which is
-	# what the old hand-drawn panel's coloured edge did and the only part of it
-	# worth keeping. A duplicate of the theme's box rather than a second authored
-	# StyleBox, so the corner radius and the fill stay the menu's.
-	var box := frame.get_theme_stylebox(&"panel", &"MenuFrame")
-	if box is StyleBoxFlat:
-		var edged := (box as StyleBoxFlat).duplicate() as StyleBoxFlat
-		edged.border_color = accent
-		frame.add_theme_stylebox_override(&"panel", edged)
-
 	var stack := VBoxContainer.new()
-	stack.theme_type_variation = &"MenuStack"
+	stack.add_theme_constant_override("separation", 0)
 	frame.add_child(stack)
 
 	_build_verdict(stack, dead, accent)
@@ -232,61 +223,72 @@ func _build() -> void:
 	_build_footer(stack)
 
 
-## The headline, the floor it happened on, and -- if it was a death -- what did it.
+## The headline, what killed you, and the run's four numbers.
+##
+## The ending's colour is the plate's LEFT EDGE, which is what `PlateHeader`'s
+## `edge` is for: a semantic stripe down the identity band. It used to be the
+## whole frame's border, tinted by duplicating the theme's StyleBoxFlat -- a
+## trick the kit's frame cannot do (it is a StyleBoxTexture) and would not want
+## to, since a coloured border on a window is the first step back into the
+## asset-pack look § the palette note warns about. The claim it was making --
+## "you can tell which ending this is from across the room, before a word of it
+## is read" -- is unchanged; it is made by a stripe and a headline instead.
 func _build_verdict(parent: Node, dead: bool, accent: Color) -> void:
-	var header := PanelContainer.new()
-	header.theme_type_variation = &"MenuHeader"
-	parent.add_child(header)
-
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 4)
-	header.add_child(col)
-
-	var top := HBoxContainer.new()
-	col.add_child(top)
-
 	# `Prog.label`, the short form and not the name -- the receipt is already
 	# unambiguously about the run you just made, so printing the dungeon's name
 	# here would be the screen telling you something you have been looking at for
 	# ten minutes.
-	var where := Label.new()
-	where.theme_type_variation = &"MenuMuted"
-	where.text = Prog.label(int(result.get("level", 1)))
-	where.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top.add_child(where)
+	UiKit.plate_header(parent, {
+		"kicker": Prog.label(int(result.get("level", 1))),
+		"title": "You Died" if dead else "Extracted",
+		"title_color": accent,
+		"edge": accent,
+		"emblem": "" if dead else UiKit.action_icon("leave"),
+	})
 
-	var rooms := Label.new()
-	rooms.theme_type_variation = &"MenuMuted"
-	rooms.text = "%d ROOMS" % int(result.get("depth", 0))
-	rooms.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	top.add_child(rooms)
+	if dead:
+		# Named, because "you died" is not information and "killed by an elite
+		# wraith" is. An unclaimed kill says THE DARK rather than inventing an
+		# attacker -- falling, a trap, or a hit whose owner never stamped itself.
+		var killer := String(result.get("killer", &""))
+		if killer.is_empty():
+			killer = "THE DARK"
+		var by := Label.new()
+		UITheme.apply_text_style(by, UITheme.TYPE_PARAGRAPH_2, UITheme.DANGER)
+		by.text = "Killed by %s" % killer.to_lower()
+		by.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var pad := MarginContainer.new()
+		pad.add_theme_constant_override("margin_bottom", 8)
+		pad.add_child(by)
+		parent.add_child(pad)
 
-	var verdict := Label.new()
-	verdict.theme_type_variation = &"MenuTitle"
-	verdict.text = "YOU DIED" if dead else "EXTRACTED"
-	verdict.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	verdict.modulate = accent
-	col.add_child(verdict)
+	UiKit.stat_band(parent, _band_cells(dead))
 
-	if not dead:
-		return
-	# Named, because "you died" is not information and "killed by an elite
-	# wraith" is. An unclaimed kill says THE DARK rather than inventing an
-	# attacker -- falling, a trap, or a hit whose owner never stamped itself.
-	var killer := String(result.get("killer", &""))
-	if killer.is_empty():
-		killer = "THE DARK"
-	var by := Label.new()
-	by.theme_type_variation = &"MenuHint"
-	by.text = "KILLED BY %s" % killer
-	by.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	by.modulate = Pal.RUST
-	col.add_child(by)
+
+## What the run DID, as opposed to what it earned -- the earnings are the two
+## big figures at the bottom, which are the screen's argument and do not belong
+## in a row of small captions.
+##
+## The fee cell reads "—" on a death rather than "0": a `FEE PAID 0` line on a
+## death screen reads as a refund, and the old tally hid the row entirely, which
+## made the band four cells on one ending and three on the other.
+func _band_cells(dead: bool) -> Array:
+	var fee := int(result.get("fee", 0))
+	return [
+		{"label": "Rooms", "value": "%d" % int(result.get("depth", 0))},
+		{"label": "Slain", "value": "%d" % int(result.get("kills", 0)),
+			"icon": UiKit.action_icon("sword")},
+		{"label": "Fee", "value": "—" if fee <= 0 else "%d ◇" % fee,
+			"tone": null if fee <= 0 else UITheme.WARNING},
+		{"label": "Stacks", "value": "%d" % (_rows.size() + _kept.size()),
+			"icon": UiKit.action_icon("bag")},
+	]
 
 
 func _build_body(parent: Node, dead: bool, accent: Color) -> void:
 	var pad := MarginContainer.new()
-	pad.theme_type_variation = &"MenuBodyPad"
+	for side in ["left", "right", "top", "bottom"]:
+		pad.add_theme_constant_override("margin_" + side, 20)
 	pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	parent.add_child(pad)
 
@@ -294,46 +296,8 @@ func _build_body(parent: Node, dead: bool, accent: Color) -> void:
 	col.add_theme_constant_override("separation", 10)
 	pad.add_child(col)
 
-	_build_tally(col)
 	_build_loot(col, dead, accent)
 	_build_total(col, dead)
-
-
-## What the run did, as opposed to what it earned.
-func _build_tally(parent: Node) -> void:
-	var card := PanelContainer.new()
-	card.theme_type_variation = &"MenuSection"
-	parent.add_child(card)
-
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 2)
-	card.add_child(col)
-
-	_stat_row(col, "ENEMIES SLAIN", "%d" % int(result.get("kills", 0)), Pal.BONE)
-
-	# The toll, and only on the ending that charged one. A "FEE PAID 0" line on a
-	# death screen reads as a refund.
-	var fee := int(result.get("fee", 0))
-	if fee > 0:
-		_stat_row(col, "TELEPORT FEE", "-%d" % fee, Pal.GOLD)
-
-
-func _stat_row(parent: Node, what: String, value: String, tint: Color) -> void:
-	var row := HBoxContainer.new()
-	row.theme_type_variation = &"MenuStatRow"
-	parent.add_child(row)
-
-	var a := Label.new()
-	a.theme_type_variation = &"MenuSlotStat"
-	a.text = what
-	a.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(a)
-
-	var b := Label.new()
-	b.theme_type_variation = &"MenuValue"
-	b.text = value
-	b.modulate = tint
-	row.add_child(b)
 
 
 ## The bag, and the cross through it.
@@ -350,7 +314,7 @@ func _stat_row(parent: Node, what: String, value: String, tint: Color) -> void:
 ## receipt inventing a distinction the ending did not make.
 func _build_loot(parent: Node, dead: bool, accent: Color) -> void:
 	var card := PanelContainer.new()
-	card.theme_type_variation = &"MenuSection"
+	card.add_theme_stylebox_override("panel", UITheme.well())
 	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	parent.add_child(card)
 
@@ -382,16 +346,19 @@ func _build_column(parent: Node, caption_text: String, rows: Array[Dictionary],
 	col.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	parent.add_child(col)
 
+	# A Label and not a `section_rule`: a rule's text is gold, and both of these
+	# captions are carrying a LOAD-BEARING colour -- the ending's accent on one,
+	# CYAN on the case (docs/STYLEGUIDE.md §1). Same exception, same reason, as
+	# the pouch's case caption.
 	var caption := Label.new()
-	caption.theme_type_variation = &"MenuHeading"
+	UITheme.apply_text_style(caption, UITheme.TYPE_H3,
+		UITheme.TEXT_DIM if struck else accent)
 	caption.text = caption_text
-	if not struck:
-		caption.modulate = accent
 	col.add_child(caption)
 
 	if rows.is_empty():
 		var none := Label.new()
-		none.theme_type_variation = &"MenuMuted"
+		UITheme.apply_text_style(none, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
 		none.text = empty_text
 		col.add_child(none)
 		return
@@ -438,7 +405,7 @@ func _build_column(parent: Node, caption_text: String, rows: Array[Dictionary],
 
 	if rows.size() > shown:
 		var more := Label.new()
-		more.theme_type_variation = &"MenuMuted"
+		UITheme.apply_text_style(more, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
 		more.text = "+%d more" % (rows.size() - shown)
 		col.add_child(more)
 
@@ -449,26 +416,29 @@ func _build_column(parent: Node, caption_text: String, rows: Array[Dictionary],
 ## player who chained six kills earned that part deliberately.
 func _build_total(parent: Node, dead: bool) -> void:
 	var row := HBoxContainer.new()
-	row.theme_type_variation = &"MenuStatRow"
+	row.add_theme_constant_override("separation", 12)
 	parent.add_child(row)
 
 	var what := Label.new()
-	what.theme_type_variation = &"MenuHeading"
+	UITheme.apply_text_style(what, UITheme.TYPE_H2,
+		UITheme.DANGER if dead else UITheme.ACCENT)
 	what.text = "LOST" if dead else "HAUL"
 	what.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	what.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(what)
 
 	var premium := int(result.get("premium", 0))
 	if premium > 0:
 		var hot := Label.new()
-		hot.theme_type_variation = &"MenuMuted"
+		UITheme.apply_text_style(hot, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
 		hot.text = "including %d hot" % premium
+		hot.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		row.add_child(hot)
 
 	var value := Label.new()
-	value.theme_type_variation = &"MenuTitle"
+	UITheme.apply_text_style(value, UITheme.TYPE_TITLE,
+		UITheme.DANGER if dead else UITheme.ACCENT)
 	value.text = "%d ◇" % int(result.get("value", 0))
-	value.modulate = Pal.RUST if dead else Pal.GOLD
 	row.add_child(value)
 
 	# The second figure, and it goes under the first rather than beside it: LOST
@@ -477,20 +447,21 @@ func _build_total(parent: Node, dead: bool) -> void:
 	if not dead:
 		return
 	var kept_row := HBoxContainer.new()
-	kept_row.theme_type_variation = &"MenuStatRow"
+	kept_row.add_theme_constant_override("separation", 12)
 	parent.add_child(kept_row)
 
+	# CYAN, the way out, and the case is the way out that worked. Kept as `Pal`'s
+	# game-semantic colour rather than a kit token, same as the column caption.
 	var kept_what := Label.new()
-	kept_what.theme_type_variation = &"MenuHeading"
+	UITheme.apply_text_style(kept_what, UITheme.TYPE_H2, Pal.CYAN)
 	kept_what.text = "CAME HOME"
 	kept_what.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	kept_what.modulate = Pal.CYAN
+	kept_what.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	kept_row.add_child(kept_what)
 
 	var kept_value := Label.new()
-	kept_value.theme_type_variation = &"MenuTitle"
+	UITheme.apply_text_style(kept_value, UITheme.TYPE_TITLE, Pal.CYAN)
 	kept_value.text = "%d ◇" % int(result.get("kept_value", 0))
-	kept_value.modulate = Pal.CYAN
 	kept_row.add_child(kept_value)
 
 
@@ -502,16 +473,17 @@ func _build_total(parent: Node, dead: bool) -> void:
 ## game, so a pad player is told A and a keyboard player is told ENTER.
 func _build_footer(parent: Node) -> void:
 	var footer := PanelContainer.new()
-	footer.theme_type_variation = &"MenuFooter"
+	footer.add_theme_stylebox_override("panel",
+		UITheme.hud_box(UITheme.GRAY_1, 20, 12, 20, 12))
 	parent.add_child(footer)
 
 	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 2)
+	col.add_theme_constant_override("separation", 6)
 	footer.add_child(col)
 
 	# The hub is the Highbridge garrison, not a town (docs/GDD.md §6).
 	_button = Button.new()
-	_button.theme_type_variation = &"MenuCommand"
+	UITheme.style_pill_button(_button)
 	_button.text = "BACK TO THE GARRISON"
 	_button.focus_mode = Control.FOCUS_ALL
 	_button.pressed.connect(_on_button)
@@ -521,7 +493,7 @@ func _build_footer(parent: Node) -> void:
 	if hint_text.is_empty():
 		return
 	var hint := Label.new()
-	hint.theme_type_variation = &"MenuHint"
+	UITheme.apply_text_style(hint, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
 	hint.text = hint_text
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(hint)
