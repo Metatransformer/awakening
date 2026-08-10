@@ -12,13 +12,29 @@ extends Control
 ## refusal footer are subtle, they took three passes to get right, and a second
 ## shop screen would have been a second place for all of it to drift.
 ##
-## **It draws a GRID, not a list, and the grid is the bag's** (`ItemGrid`).
+## **It draws cells, not a list, and the cell is the bag's** (`ItemCell`).
 ## Until 2026-08-09 this screen was a column of PixelFont rows: the same objects
 ## the pouch drew as tinted cells arrived at the vendor as lines of text, so a
 ## player looking at their bag and then at what it was worth was reading two
-## different UIs about one set of things. The grid is the pouch's, cell for cell,
-## which means an ingredient has the same colour chip and the same ◆ in both
-## places. That is the only icon set this game has.
+## different UIs about one set of things. The cell is the pouch's, which means an
+## ingredient has the same colour chip and the same ◆ in both places. That is the
+## only icon set this game has.
+##
+## The two sides arrange that cell differently, because they are two different
+## shapes of thing:
+##
+##  * **SELL** is an `ItemGrid` -- four across, one cell per stack. A stack you
+##    own has no rungs; it is just a thing with a price on it.
+##  * **BUY** is an `UpgradeLadder` -- a row per thing the counter sells, with
+##    that thing's rungs along it and arrows between them. Every counter here
+##    sells ladders and the flat board could not say so: it showed the rung you
+##    could buy next and nothing else, so the smith's eight armour lines read as
+##    eight unrelated purchases instead of four pieces with two answers each.
+##
+## Not two screens and not a branch anywhere below `_build_body` and `_move`:
+## the cursor, the prices, the recipe column, the affordability colouring, the
+## refusal footer and the hold all run over `_rows` and neither arrangement can
+## see them.
 ##
 ## The frame, the header and the footer are the pause menu's theme
 ## (`scenes/ui/menu/menu_theme.tres`) for the same reason -- it is the game's one
@@ -59,6 +75,13 @@ var _refuse: float = -1.0
 var _closing: bool = false
 
 var _grid: ItemGrid
+var _ladder: UpgradeLadder
+var _scroll: ScrollContainer
+## The buyable lines in BOARD order. On the SELL side that is just 0..n-1; on a
+## BUY counter the ladder's rows are not in `lines()` order (the smith's groups
+## put the shield between the blade and the armour), and the cursor has to walk
+## what the player can see.
+var _order: Array[int] = []
 var _gold_label: Label
 var _empty: Label
 var _d_kind: Label
@@ -209,14 +232,36 @@ func _build_body(parent: Node) -> void:
 	caption.text = "IN THE BAG" if mode == Mode.SELL else "ON THE BOARD"
 	inner.add_child(caption)
 
-	_grid = ItemGrid.new()
-	_grid.name = "Board"
-	_grid.columns = COLS
-	# The cursor is this screen's, not the grid's -- see `_tick_input`. The grid
-	# still reports a look, because the mouse can land on a cell the stick never
-	# crossed and the detail pane has to follow it.
-	_grid.cell_focused.connect(_on_cell_looked)
-	inner.add_child(_grid)
+	# SELL is a grid of what is in the bag; BUY is a ladder per thing on offer.
+	# Two arrangements of the SAME cell (`ItemCell`) rather than two screens,
+	# because the two sides differ in exactly one way: a stack you own has no
+	# rungs and a thing the counter makes longer has nothing else.
+	if mode == Mode.SELL:
+		_grid = ItemGrid.new()
+		_grid.name = "Board"
+		_grid.columns = COLS
+		# The cursor is this screen's, not the grid's -- see `_tick_input`. It
+		# still reports a look, because the mouse can land on a cell the stick
+		# never crossed and the detail pane has to follow it.
+		_grid.cell_focused.connect(_on_cell_looked)
+		inner.add_child(_grid)
+	else:
+		# The smith's board is eight rows on a fresh save and eleven once the bow
+		# and the hookshot are found, which is taller than the frame. It scrolls
+		# rather than shrinking the cells: a rung you cannot read is worse than a
+		# rung you have to scroll to, and `_point_at` keeps the cursor in view so
+		# a pad player never touches the scrollbar.
+		_scroll = ScrollContainer.new()
+		_scroll.name = "BoardScroll"
+		_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		inner.add_child(_scroll)
+
+		_ladder = UpgradeLadder.new()
+		_ladder.name = "Board"
+		_ladder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_ladder.cell_focused.connect(_on_cell_looked)
+		_scroll.add_child(_ladder)
 
 	_empty = Label.new()
 	_empty.theme_type_variation = &"MenuMuted"
@@ -324,10 +369,30 @@ func _refresh() -> void:
 			"mark": bool(row.get("mark", false)),
 			"dim": not bool(row["ok"]),
 		})
-	_grid.set_cells(cells)
+	if mode == Mode.SELL:
+		_grid.set_cells(cells)
+		_grid.visible = not _rows.is_empty()
+		_order.clear()
+		for i in _rows.size():
+			_order.append(i)
+	else:
+		_ladder.set_board(_db().groups(), cells)
+		_scroll.visible = not _rows.is_empty()
+		_order = _ladder.order().duplicate()
 	_empty.visible = _rows.is_empty()
-	_grid.visible = not _rows.is_empty()
+
+	# A refresh can retire the line the cursor was on -- a finished ladder loses
+	# its buyable rung, a committed piece loses its whole losing branch. Landing
+	# on the row that is still there beats snapping back to the top of the board.
+	if not _order.is_empty() and not _order.has(_cursor):
+		_cursor = _order[mini(_at(), _order.size() - 1)]
 	_point_at(_cursor)
+
+
+## Where the cursor is in BOARD order, or 0 when it is nowhere.
+func _at() -> int:
+	var i := _order.find(_cursor)
+	return maxi(i, 0)
 
 
 func _build_sell_rows() -> void:
@@ -391,9 +456,22 @@ func _build_buy_rows() -> void:
 ## menu) and the detail pane describes it.
 func _point_at(i: int) -> void:
 	_cursor = clampi(i, 0, maxi(_rows.size() - 1, 0))
-	var cell := _grid.cell_at(_cursor)
+	var cell: Button = null
+	if mode == Mode.SELL:
+		cell = _grid.cell_at(_cursor)
+	else:
+		cell = _ladder.cell_at(_ladder.slot_of_line(_cursor))
 	if cell != null and cell.get_viewport() != null:
 		cell.grab_focus()
+		# The board is taller than the frame. Following the cursor is what makes
+		# the scrollbar something the player never has to know about.
+		#
+		# DEFERRED, because the common caller is `_refresh`, which has just torn
+		# the board down and rebuilt it: the new cell is in the tree but the
+		# containers have not laid out yet, so it is still at (0,0) with zero
+		# size and scrolling to it scrolls to the top every time.
+		if _scroll != null:
+			_scroll.ensure_control_visible.call_deferred(cell)
 	_describe()
 
 
@@ -546,11 +624,8 @@ func _tick_input(delta: float) -> void:
 		return
 
 	var step := _step(delta)
-	if step != 0:
-		# Wraps in reading order across the whole board, so holding one direction
-		# still visits every cell -- the guarantee the pouch's grid makes, kept
-		# here even though this screen moves the cursor itself.
-		_point_at((_cursor + step + _rows.size()) % _rows.size())
+	if step != Vector2i.ZERO:
+		_move(step)
 		# Progress does not travel. Sliding onto the next cell with the button
 		# down would arrive there half-committed, which is the exact accident the
 		# hold exists to prevent.
@@ -575,39 +650,80 @@ func _tick_input(delta: float) -> void:
 		_hold = 0.0
 
 
-## How far the cursor moves this frame, in cells. Left/right is one; up/down is a
-## whole row, which is what makes a grid navigable with the same four directions a
-## list used.
-func _step(delta: float) -> int:
-	var d := 0
+## Which way the stick went this frame, one press or one repeat tick. Both axes
+## are answered as -1/0/+1 and what a step MEANS is `_move`'s business, because
+## the two sides of this screen are laid out differently and neither of them is
+## "add one to an index": down a grid is four cells, down a board of ladders is
+## however many rungs the row you are on happens to have.
+func _step(delta: float) -> Vector2i:
+	var d := Vector2i.ZERO
 	if Input.is_action_just_pressed(&"ui_right"):
-		d = 1
+		d.x = 1
 	elif Input.is_action_just_pressed(&"ui_left"):
-		d = -1
+		d.x = -1
 	elif Input.is_action_just_pressed(&"ui_down"):
-		d = COLS
+		d.y = 1
 	elif Input.is_action_just_pressed(&"ui_up"):
-		d = -COLS
-	if d != 0:
+		d.y = -1
+	if d != Vector2i.ZERO:
 		_repeat = REPEAT_DELAY
 		return d
 
-	var held := 0
+	var held := Vector2i.ZERO
 	if Input.is_action_pressed(&"ui_right"):
-		held = 1
+		held.x = 1
 	elif Input.is_action_pressed(&"ui_left"):
-		held = -1
+		held.x = -1
 	elif Input.is_action_pressed(&"ui_down"):
-		held = COLS
+		held.y = 1
 	elif Input.is_action_pressed(&"ui_up"):
-		held = -COLS
-	if held == 0:
-		return 0
+		held.y = -1
+	if held == Vector2i.ZERO:
+		return Vector2i.ZERO
 	_repeat -= delta
 	if _repeat > 0.0:
-		return 0
+		return Vector2i.ZERO
 	_repeat = REPEAT_RATE
 	return held
+
+
+## Move the cursor one step.
+##
+## Left and right always mean ONE cell, on both sides. Up and down mean "the next
+## thing", which is a row of four in the bag's grid and the next ladder on a
+## counter -- a player at the smith wanting the next piece of armour should not
+## have to press through three rungs of the one they are on to reach it.
+##
+## Both axes wrap. Holding one direction visits everything and never dead-ends,
+## which is the guarantee the pouch's grid makes and the reason this screen moves
+## its own cursor at all (see `_tick_input`).
+func _move(d: Vector2i) -> void:
+	if _order.is_empty():
+		return
+	if d.x != 0:
+		var i := (_at() + d.x + _order.size()) % _order.size()
+		_point_at(_order[i])
+		return
+	if d.y == 0:
+		return
+	if mode == Mode.SELL:
+		_point_at((_cursor + d.y * COLS + _rows.size()) % _rows.size())
+		return
+
+	# The next row that has anything buyable on it. Rows CAN be dead -- a fully
+	# climbed ladder still draws, because a row that vanished when you finished it
+	# would take the record of finishing it with it -- so this walks past them
+	# rather than parking the cursor on a rung with no price.
+	var rows := _ladder.row_count()
+	if rows <= 0:
+		return
+	var at := _ladder.row_of_line(_cursor)
+	for n in rows:
+		at = (at + d.y + rows) % rows
+		var line := _ladder.first_line_of_row(at)
+		if line >= 0:
+			_point_at(line)
+			return
 
 
 func _commit() -> void:

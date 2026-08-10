@@ -52,17 +52,14 @@ signal cell_activated(index: int)
 ## producer of these builds them inline from a catalogue row or a bag entry and
 ## none of them wants a second type to keep in step.
 
-const CELL_MIN := Vector2(140, 88)
-## Cell text is smaller than the theme's Label default. A cell is 140 px wide and
-## half these names are two words; at 18 pt they wrapped to three lines and shoved
-## the sub-line out through the bottom border.
-const NAME_PT := 16
-const SUB_PT := 18
-
-## The empty cell's chip and label. An empty slot is DIMMED, never hidden — a
-## grid that shrank as you spent would stop being a picture of your capacity,
-## which is the whole reason the bag is drawn this way (docs/METAGAME.md §3).
-const EMPTY_LABEL := "—"
+## The cell itself lives in `ItemCell`, because the ladders at the counters
+## (`UpgradeLadder`) draw the same button in a different arrangement and two
+## containers building "the same" cell is exactly how two cells happen. These are
+## aliases so the callers that already read `ItemGrid.NAME_PT` keep working.
+const CELL_MIN := ItemCell.SIZE
+const NAME_PT := ItemCell.NAME_PT
+const SUB_PT := ItemCell.SUB_PT
+const EMPTY_LABEL := ItemCell.EMPTY_LABEL
 
 ## Where the cursor goes out of the BOTTOM row. Set by the screen, because only
 ## the screen knows what comes after its collection — the bench and the way out
@@ -138,55 +135,10 @@ func _resize(want: int) -> void:
 
 
 func _make(at: int) -> Button:
-	var b := Button.new()
+	var b := ItemCell.make()
 	b.name = "Cell_%d" % at
-	b.theme_type_variation = &"MenuSlot"
-	b.focus_mode = Control.FOCUS_ALL
-	b.custom_minimum_size = CELL_MIN
-	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b.set_meta(&"at", at)
 	add_child(b)
-
-	var col := VBoxContainer.new()
-	col.name = "Col"
-	col.alignment = BoxContainer.ALIGNMENT_CENTER
-	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_theme_constant_override("separation", 2)
-	b.add_child(col)
-	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	col.offset_left = 7
-	col.offset_right = -7
-	col.offset_top = 4
-	col.offset_bottom = -4
-
-	# The chip is the item's own tint, which is the same colour the mote on the
-	# floor glowed and the same colour its name prints in everywhere else. One
-	# hue per thing, across every screen: that consistency is the only icon set
-	# this game has, and it is the reason a grid of cells reads at a glance.
-	var chip := ColorRect.new()
-	chip.name = "Chip"
-	chip.custom_minimum_size = Vector2(0, 8)
-	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_child(chip)
-
-	var label := Label.new()
-	label.name = "Name"
-	label.theme_type_variation = &"MenuSlotStat"
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.add_theme_font_size_override("font_size", NAME_PT)
-	col.add_child(label)
-
-	var sub := Label.new()
-	sub.name = "Sub"
-	sub.theme_type_variation = &"MenuValue"
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	sub.add_theme_font_size_override("font_size", SUB_PT)
-	col.add_child(sub)
-
 	b.pressed.connect(func() -> void: _on_press(b))
 	b.focus_entered.connect(func() -> void: _report(b))
 	b.mouse_entered.connect(func() -> void: _report(b))
@@ -194,27 +146,7 @@ func _make(at: int) -> Button:
 
 
 func _paint(b: Button, e: Dictionary) -> void:
-	var chip := b.get_node("Col/Chip") as ColorRect
-	var name_label := b.get_node("Col/Name") as Label
-	var sub := b.get_node("Col/Sub") as Label
-
-	if e.is_empty():
-		chip.color = Color(Pal.ASH, 0.35)
-		name_label.text = EMPTY_LABEL
-		name_label.modulate = Color(1, 1, 1, 0.4)
-		sub.text = ""
-		b.modulate = Color(1, 1, 1, 0.55)
-		return
-
-	chip.color = e.get("tint", Pal.ASH)
-	name_label.modulate = Color.WHITE
-	# The diamond means "a counter in town wants this, the vendor does not". At
-	# cell size it is one bit of information and that is the bit that matters:
-	# do not sell it. WHICH counter is the detail pane's job.
-	var text := String(e.get("label", ""))
-	name_label.text = ("◆ " + text) if bool(e.get("mark", false)) else text
-	sub.text = String(e.get("sub", ""))
-	b.modulate = Color(1, 1, 1, 0.55) if bool(e.get("dim", false)) else Color.WHITE
+	ItemCell.paint(b, e)
 
 
 # --- Focus -------------------------------------------------------------------

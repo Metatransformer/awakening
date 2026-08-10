@@ -176,6 +176,95 @@ static func lines() -> Array[Dictionary]:
 	return shown
 
 
+## The board as rows: one per thing the smith can make longer, with its rungs
+## along it. See `Catalogue.groups` for the shape.
+##
+## The armour is the reason this override exists. `chest` is ONE row with two
+## branches, because the question the player is answering is "what do I do about
+## my chest" and heavy and light are its two answers — the flat board put them
+## next to each other (see `_board`) and hoped that was enough, but next to each
+## other is not the same as on the same row, and eight lines that happened to be
+## in pairs read as eight lines. Once a piece commits, the losing branch is not
+## in `lines()` at all and the row is simply the one ladder.
+##
+## The stock lines are ladders too and were never drawn as such: BAG SLOT is four
+## purchases at rising prices, and a player who had bought two of them had no way
+## to see they were two from the end.
+static func groups() -> Array[Dictionary]:
+	var rows: Array[Dictionary] = lines()
+	var at := {}
+	for i in rows.size():
+		at[rows[i]["id"]] = i
+
+	var out: Array[Dictionary] = []
+	_stock_row(out, at, rows, &"arrows", "ARROWS", 1)
+	_stock_row(out, at, rows, &"bag_slot", "THE BAG", int(LIMITS[&"bag_slot"]))
+	_stock_row(out, at, rows, &"heart", "HEARTS", int(LIMITS[&"heart"]))
+	_forge_row(out, at, &"edge", "THE BLADE")
+	_forge_row(out, at, &"guard", "THE SHIELD")
+	for piece: StringName in Game.PLATE_PIECES:
+		_armour_row(out, at, piece)
+	_forge_row(out, at, &"string", "THE BOW")
+	_forge_row(out, at, &"chain", "THE CHAIN")
+	return out
+
+
+## One row, one ladder. Absent from the board entirely when the smith is not
+## offering it -- a bow ladder for a bow you have not found is a spoiler and a
+## dead row (see `stocked`), and that has to stay true of the row as well as of
+## the line.
+static func _forge_row(out: Array[Dictionary], at: Dictionary,
+		id: StringName, title: String) -> void:
+	if not stocked(id):
+		return
+	out.append({"title": title, "tracks": [_track(at, id, "", K.FORGE_MAX)]})
+
+
+static func _stock_row(out: Array[Dictionary], at: Dictionary,
+		rows: Array[Dictionary], id: StringName, title: String,
+		rungs: int) -> void:
+	if not stocked(id):
+		return
+	# Arrows are the one line here with no ceiling, so they get the plain named
+	# cell a repeatable gets rather than a one-rung ladder with a numeral on it.
+	if rungs <= 1:
+		var i: int = at.get(id, -1)
+		if i < 0:
+			return
+		out.append({"title": title, "tracks": [{
+			"name": String(rows[i]["label"]), "line": i, "owned": 0, "rungs": 1}]})
+		return
+	out.append({"title": title, "tracks": [_track(at, id, "", rungs)]})
+
+
+## A piece of armour: one row, and its two paths are two branches on it until one
+## of them commits.
+static func _armour_row(out: Array[Dictionary], at: Dictionary,
+		piece: StringName) -> void:
+	var tracks: Array = []
+	for path: StringName in [Game.PLATE_HEAVY, Game.PLATE_LIGHT]:
+		var id := Game.plate_track(piece, path)
+		if not stocked(id) and Game.forge_level(id) == 0:
+			continue
+		tracks.append(_track(at, id, String(path).to_upper(), K.FORGE_MAX))
+	if tracks.is_empty():
+		return
+	out.append({"title": String(piece).to_upper(), "tracks": tracks})
+
+
+## The rung arithmetic, in one place. `line` is -1 when the ladder is finished or
+## the smith is not offering it, which is what tells `UpgradeLadder` there is
+## nothing on this chain to point the cursor at.
+static func _track(at: Dictionary, id: StringName, branch: String,
+		rungs: int) -> Dictionary:
+	return {
+		"name": branch,
+		"line": int(at.get(id, -1)),
+		"owned": int(Game.upgrades.get(id, 0)),
+		"rungs": rungs,
+	}
+
+
 ## Is `id` on the counter at all? Public because a caller that wants to know
 ## whether a line is HIDDEN cannot tell from `lines()` — the row simply is not
 ## there — and the director that proves the gate has to be able to ask.

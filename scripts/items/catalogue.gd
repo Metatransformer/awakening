@@ -33,6 +33,45 @@ static func lines() -> Array[Dictionary]:
 	return []
 
 
+## The same board, arranged into ROWS — one per thing the counter sells, with
+## that thing's ladder laid out along it (`UpgradeLadder`).
+##
+## Every counter here sells ladders and the flat list could not say so: it showed
+## the rung you could buy next and nothing else, so eight armour lines were eight
+## unrelated purchases rather than four pieces with two answers each. The shape of
+## the decision is the thing worth drawing.
+##
+##   group = {"title": String, "tracks": Array}
+##   track = {"name": String, "line": int, "owned": int, "rungs": int}
+##
+## `line` indexes `lines()` — the NEXT buyable rung, or -1 when the ladder is
+## finished. `owned` is how many rungs are bought and `rungs` how long the ladder
+## is; a `rungs` of 1 is a repeatable and draws as a plain named cell.
+##
+## **The default is one row holding every line**, which wraps into exactly the
+## grid the counters had before ladders existed. A fourth catalogue still costs a
+## `lines()` and nothing else; overriding this is how a counter says "these four
+## are pairs".
+static func groups() -> Array[Dictionary]:
+	return []
+
+
+## The fallback board: everything on one wrapping row. Here rather than inlined
+## in `groups()` so a subclass can build the authored rows it cares about and
+## call this for the leftovers.
+##
+## Static and taking `rows` rather than calling `lines()` itself: a bare static
+## call inside `Catalogue` binds to `Catalogue` at parse time and would hand back
+## the empty base list (see `craft_verb`).
+static func flat_group(title: String, rows: Array[Dictionary],
+		from: int = 0) -> Dictionary:
+	var tracks: Array = []
+	for i in range(from, rows.size()):
+		tracks.append({"name": String(rows[i].get("label", "")),
+			"line": i, "owned": 0, "rungs": 1})
+	return {"title": title, "tracks": tracks}
+
+
 ## How many of `id` are left, or -1 for unlimited. Drawn as "N LEFT".
 static func remaining(_id: StringName) -> int:
 	return -1

@@ -85,6 +85,33 @@ static func lines() -> Array[Dictionary]:
 	return out
 
 
+## Two rows, because she sells two different kinds of thing and the flat board
+## made them look like one.
+##
+## Glass is a LADDER: four bottles at rising prices, and how many you have is the
+## only cap on everything under it. Draughts are repeatables -- a Heart Draught
+## is a Heart Draught however many you have brewed -- so they share one wrapping
+## row of plain named cells, which is what they already looked like.
+static func groups() -> Array[Dictionary]:
+	var rows: Array[Dictionary] = lines()
+	if rows.is_empty():
+		return []
+
+	var out: Array[Dictionary] = []
+	# `_bottle_line` is always `lines()[0]`; asserting that here rather than
+	# searching for the id, because if it ever stops being true the glass row is
+	# the wrong length and that is worth failing loudly over.
+	out.append({"title": "GLASS", "tracks": [{
+		"name": "",
+		"line": 0 if Game.bottle_count() < K.BOTTLE_MAX else -1,
+		"owned": Game.bottle_count() - K.BOTTLE_START,
+		"rungs": K.BOTTLE_MAX - K.BOTTLE_START,
+	}]})
+	if rows.size() > 1:
+		out.append(flat_group("DRAUGHTS", rows, 1))
+	return out
+
+
 static func _bottle_line() -> Dictionary:
 	var owned := Game.bottle_count()
 	return {

@@ -887,11 +887,63 @@ halves are load-bearing: Godot's spatial focus finds nothing to the right of a
 row's last cell, so without the wrap the stick dies every fourth cell, and
 without the spill the grid is a trap you can only leave with B.
 
+### Ladders — the same cell, arranged as the progression it is
+
+```gdscript
+# scripts/ui/common/item_cell.gd — the cell itself, as two statics.
+enum Size { FULL, RUNG, NAMED }
+static func make(shape: Size = Size.FULL) -> Button
+static func paint(b: Button, e: Dictionary) -> void
+
+# scripts/ui/common/upgrade_ladder.gd — a VBoxContainer, not a screen.
+signal cell_focused(line: int)      # -1 for a rung that is not buyable
+signal cell_activated(line: int)    # never emitted for -1
+func set_board(groups: Array, cells: Array) -> void
+func slot_of_line(line: int) -> int # catalogue line -> flat cell position
+func order() -> Array[int]          # the buyable lines, in BOARD order
+func row_of_line(line: int) -> int
+func first_line_of_row(row: int) -> int
+func row_count() -> int
+var spill_down: Control
+```
+
+`ItemGrid` and `UpgradeLadder` are two arrangements of **one** cell — `ItemCell`
+is statics rather than a class because a cell has no state and both containers
+wanted the same button. A rung on the smith's board and a stack in your bag are
+painted by the same function and cannot drift.
+
+A counter's BUY side is a ladder; its SELL side is a grid. The board comes from
+`Catalogue.groups()`:
+
+```gdscript
+static func groups() -> Array[Dictionary]
+# a group is one row:   {"title": String, "tracks": Array}
+# a track is one chain: {"name": String, "line": int, "owned": int, "rungs": int}
+```
+
+`line` indexes `lines()` and is the NEXT buyable rung, or -1 when there is none.
+`rungs == 1` means a repeatable — a draught, a bundle of arrows — and draws as a
+plain named cell rather than a numeral. The base `groups()` returns `[]`, which
+the screen reads as "one row holding every line", i.e. the flat grid the counters
+had before; `Catalogue.flat_group()` builds that row for a subclass that wants
+part of its board flat (the alchemist's DRAUGHTS).
+
+The ladder knows nothing about gold, components or `Game` — the cursor, prices,
+affordability and the commit all stay in `TradeScreen`, exactly as when the board
+was a grid. It is a **control**, not a screen; SCOPE §1 adds none.
+
+The cursor walks `order()`, never `lines()`: the smith's board reorders what
+`lines()` hands over, and its LENGTH depends on what the player owns (`arrows`
+does not appear until you own a bow). **No fixed press count into a counter is
+ever safe** — `mvp_loop` walks the board by `TradeScreen.cursor_label()` for that
+reason, having once silently bought a heart container instead of a bag slot.
+
 ### Counters — one screen, one contract, a subclass per shop
 
 ```gdscript
 # scripts/items/catalogue.gd — everything TradeScreen knows about a shop.
 static func lines() -> Array[Dictionary]
+static func groups() -> Array[Dictionary]         # [] = one flat row
 static func remaining(id: StringName) -> int      # -1 = unlimited
 static func can_buy(line: Dictionary) -> bool
 static func refusal(line: Dictionary) -> String   # "" = affordable

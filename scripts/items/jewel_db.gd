@@ -146,6 +146,44 @@ static func lines() -> Array[Dictionary]:
 	return out
 
 
+## Her board as rows: one per slot. Exactly the smith's armour shape and for the
+## same reason -- the question is "what goes in the amulet", and Vigor and Focus
+## are its two answers, so they belong on one row rather than merely next to each
+## other. A slot with no blank in it yet is a one-cell row: there is nothing to
+## choose between until the blank exists, and drawing two empty ladders under it
+## would be the counter offering a decision it is not offering.
+static func groups() -> Array[Dictionary]:
+	var rows: Array[Dictionary] = lines()
+	var at := {}
+	for i in rows.size():
+		at[rows[i]["id"]] = i
+
+	var out: Array[Dictionary] = []
+	for slot: StringName in Game.JEWEL_SLOTS:
+		var title := String(BLANKS[slot]["name"]).to_upper()
+		if not owns_blank(slot):
+			var i: int = at.get(blank_id(slot), -1)
+			if i < 0:
+				continue
+			out.append({"title": title, "tracks": [{
+				"name": "BLANK", "line": i, "owned": 0, "rungs": 1}]})
+			continue
+		var tracks: Array = []
+		for path: StringName in PATHS[slot]:
+			var track := Game.jewel_track(slot, path)
+			if Game.path_closed(track):
+				continue
+			tracks.append({
+				"name": String(PATH_INFO[path]["label"]),
+				"line": int(at.get(track, -1)),
+				"owned": Game.jewel_level(track),
+				"rungs": K.JEWEL_MAX,
+			})
+		if not tracks.is_empty():
+			out.append({"title": title, "tracks": tracks})
+	return out
+
+
 ## Has the player bought the blank for `slot`? Stored as a rung count on the
 ## slot's own id, which is the same `Game.upgrades` shape everything else uses --
 ## a `Dictionary[StringName, bool]` of owned blanks would be a second store that
