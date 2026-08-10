@@ -671,6 +671,63 @@ static func _style_tabs(t: Theme) -> void:
 	t.set_stylebox("panel", "TabContainer", frame())
 
 
+## The variation names the SHARED cell components render through, painted in
+## Gallery Vellum.
+##
+## `ItemCell` and `UpgradeLadder` are drawn by every screen that shows more than
+## one thing — the bag, the pouch, the vendor's board, the locker, the receipt —
+## and they ask for `MenuSlot`, `MenuSlotStat`, `MenuValue`, `MenuHeading` and
+## `MenuMuted` by name. Those names are defined in `menu_theme.tres`, which is
+## the theme §3.0 of the styleguide replaces. So a screen adopting the kit had
+## exactly two options: rebuild the cell, or render the cell as an unstyled
+## default Button.
+##
+## This is the third one. The names stay, the cell's own code does not change,
+## and the paint underneath becomes the kit's. That matters beyond convenience:
+## the bag and the vendor's board are the same objects seen twice, and a bag cell
+## that looked one way in the pouch and another at the counter would break the
+## one promise `ItemCell`'s header makes.
+##
+## It is a BRIDGE, not an invitation. Do not add variation names here to save
+## writing a composite — new screens compose with `UiKit` and style their own
+## labels through `apply_text_style`. This list only ever shrinks, and it goes
+## when `menu_theme.tres` does.
+static func _style_shared_cells(t: Theme) -> void:
+	# The cell plate. Gold borders are out (§ the palette note above): what marks
+	# an armed cell here is the same off-white HIGHLIGHT every other armed thing
+	# in the kit wears.
+	t.set_type_variation("MenuSlot", "Button")
+	t.set_stylebox("normal", "MenuSlot", _flat(PLATE, EDGE_FAINT, 7, 5, 7, 5))
+	t.set_stylebox("hover", "MenuSlot", _flat(PLATE_HOVER, EDGE_LIT, 7, 5, 7, 5))
+	t.set_stylebox("pressed", "MenuSlot", _flat(SELECTED_FILL, EDGE_LIT, 7, 5, 7, 5))
+	t.set_stylebox("disabled", "MenuSlot",
+		_flat(Color(0, 0, 0, 0.25), EDGE_FAINT, 7, 5, 7, 5))
+	t.set_stylebox("focus", "MenuSlot", focus_rim(true))
+
+	# `ItemCell` overrides the SIZE on both of these per shape — a rung's numeral
+	# and a stack's name are not the same length — so what the variation carries
+	# is the voice, not the scale.
+	t.set_type_variation("MenuSlotStat", "Label")
+	t.set_color("font_color", "MenuSlotStat", TEXT)
+	t.set_font_size("font_size", "MenuSlotStat", TYPE_PARAGRAPH_1["size"])
+
+	# The cell's second line is a NUMBER — a price, a count, a tally. Gold, which
+	# is the one thing gold is still for.
+	t.set_type_variation("MenuValue", "Label")
+	t.set_font("font", "MenuValue", display_font())
+	t.set_color("font_color", "MenuValue", ACCENT)
+	t.set_font_size("font_size", "MenuValue", TYPE_LABEL_MD["size"])
+
+	t.set_type_variation("MenuHeading", "Label")
+	t.set_font("font", "MenuHeading", display_font())
+	t.set_color("font_color", "MenuHeading", ACCENT)
+	t.set_font_size("font_size", "MenuHeading", TYPE_H2["size"])
+
+	t.set_type_variation("MenuMuted", "Label")
+	t.set_color("font_color", "MenuMuted", TEXT_DIM)
+	t.set_font_size("font_size", "MenuMuted", TYPE_CAPTION["size"])
+
+
 # ---- the theme ---------------------------------------------------------------
 static func theme() -> Theme:
 	if _theme:
@@ -716,6 +773,7 @@ static func theme() -> Theme:
 
 	_style_scrollbars(t)
 	_style_tabs(t)
+	_style_shared_cells(t)
 
 	_theme = t
 	return t

@@ -122,6 +122,10 @@ static func craft_verb() -> String:
 	return "SET"
 
 
+static func emblem() -> StringName:
+	return &"jewel"  ## The stone itself.
+
+
 ## The counter. Four rows on a fresh save -- one blank per slot -- growing to
 ## eight as blanks are bought and settling back to four as each slot commits.
 ##

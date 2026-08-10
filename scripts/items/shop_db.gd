@@ -163,6 +163,10 @@ static func craft_verb() -> String:
 	return "FORGE"
 
 
+static func emblem() -> StringName:
+	return &"forge"  ## The smith's anvil.
+
+
 ## The counter, filtered by what the player owns. One list, built whole and then
 ## sieved through `stocked()` — a table the caller filters, rather than five
 ## `if`s scattered through the literal below, so the board is still readable as

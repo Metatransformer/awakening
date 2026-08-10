@@ -63,6 +63,10 @@ static func craft_verb() -> String:
 	return "BREW"
 
 
+static func emblem() -> StringName:
+	return &"bottle"  ## Her blown glass.
+
+
 ## Sieved through `RelicDb.knows_draught()`, exactly as the smith's ladders are
 ## sieved through `RelicDb.forge_rungs_known()`.
 ##

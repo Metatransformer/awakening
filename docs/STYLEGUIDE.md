@@ -832,9 +832,16 @@ it counts down to zero in RUST. The palette becomes the score.
   through: the screens move onto `UITheme` one at a time, and this line goes
   when the last one has. Do not add to them.
 
-  On the kit so far: the paper doll and its slot tiles, and the pause menu's
-  ROOT screen (plate header, a live stat band, and `VerbRow`s with a meta
-  column, replacing eight identical full-width buttons). Still on the old
-  theme: equipment, pouch chrome, options, saves, map, the pawnbroker, the
-  locker and the receipt. The bag grid — `ItemGrid` / `ItemCell` — is NOT on
-  the list; it stays as it is.
+  On the kit so far: the paper doll and its slot tiles; the pause menu's ROOT
+  screen (plate header, a live stat band, and `VerbRow`s with a meta column,
+  replacing eight identical full-width buttons); and all five counters, which
+  are one screen — the pawnbroker, the smith, the alchemist, the setting bench
+  and the Far Lantern (`TradeScreen`). Still on the old theme: equipment, pouch
+  chrome, options, saves, map, the locker and the receipt.
+
+  The bag grid — `ItemGrid` / `ItemCell` — is NOT on the list; it stays as it
+  is. What it renders THROUGH moved, though: `MenuSlot`, `MenuSlotStat`,
+  `MenuValue`, `MenuHeading` and `MenuMuted` are defined in `UITheme.theme()`
+  now (`_style_shared_cells`), painted in kit tokens, so a shared cell looks the
+  same on a converted screen and an unconverted one. That bridge only ever
+  shrinks — do not add names to it to avoid writing a composite.
