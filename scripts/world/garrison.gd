@@ -185,7 +185,15 @@ func _open_the_game() -> void:
 	# after it: the player needs a moment to see where they are standing before
 	# somebody starts talking to them.
 	await get_tree().create_timer(1.4, false).timeout
-	Voice.say(&"elder", &"arrival")
+	# In a box, with his face in it, since the dialogue system landed -- the same
+	# box every counter uses, with NO options on it. That is the whole difference
+	# between the two shapes: a conversation asks something and waits, and this one
+	# does not. He says his line, you press once, and the garrison is yours.
+	#
+	# It is still a `Voice.say` underneath (`DialogueDb.speak`), so the line, the
+	# timing and `voices.gd` B1 are all unchanged -- what is new is that you can
+	# see who said it.
+	DialogueBox.open(self, &"elder", DialogueDb.speak(&"elder", &"arrival"))
 
 
 # --- Look -------------------------------------------------------------------

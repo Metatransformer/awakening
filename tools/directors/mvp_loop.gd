@@ -78,9 +78,15 @@ func _sell(rig) -> bool:
 	await rig.capture(out.path_join("m_01_vendor_prompt.png"))
 
 	await rig.tap(["interact"])
+	# The press opens a CONVERSATION now, and the shop is the Trade option at the
+	# end of it (`Npc.activate`, 2026-08-10). `rig.talk` is the whole of that beat
+	# and it presses real buttons to do it.
+	if not await rig.talk("Trade"):
+		print("MVP FAIL the vendor would not offer to trade")
+		return false
 	# The screen is a state, not a frame count: `TradeScreen` is built inside
-	# `Npc.activate` and is up on the next frame, but a beat that assumed so would
-	# be making the same mistake one layer along.
+	# `Npc._choose_trade` and is up on the next frame, but a beat that assumed so
+	# would be making the same mistake one layer along.
 	var opened: bool = await rig.until(func() -> bool: return _screen(rig) != null)
 	if not opened:
 		print("MVP FAIL the vendor took the press and no shop screen came up")
@@ -129,6 +135,9 @@ func _buy(rig) -> bool:
 			garrison.smith.global_position + Vector3(0.0, 0.0, 1.6)):
 		return false
 	await rig.tap(["interact"])
+	if not await rig.talk("Trade"):
+		print("MVP FAIL the smith would not offer to trade")
+		return false
 	var opened: bool = await rig.until(func() -> bool: return _screen(rig) != null)
 	if not opened:
 		print("MVP FAIL the smith took the press and no shop screen came up")

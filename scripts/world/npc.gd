@@ -295,31 +295,97 @@ func _ready() -> void:
 	_build()
 
 
+## **You TALK to them. The counter is something the conversation offers you.**
+##
+## Until 2026-08-10 this function said hello and opened the shop on the same
+## press, which is the shape a shop keeper has when the shop is the only thing
+## about them. It is not the shape a PERSON has: the greeting was a sound with
+## nothing on screen, the counter's own name was the only thing that said who you
+## were standing in front of, and there was no moment in the game where somebody
+## addressed you and waited.
+##
+## So the press opens a `DialogueBox` -- their face, their name, their line typed
+## out -- and Trade is one of the options at the end of it. The counter itself did
+## not change and neither did anything below `TradeScreen.open`: what used to be
+## the whole of this function is now `_choose_trade`, reached by a choice instead
+## of by the press.
+##
+## The gate is masonry and answers first. It has no voice, no name and nothing to
+## say; a hole in the ground does not greet you.
 func activate(_by: Node3D) -> void:
-	var row := _row()
-	# They speak first, before the screen, because that is the order it happens
-	# in: you say hello to somebody and then look at what they have. Silent for
-	# the gate, which is masonry -- `Voice.say` answers 0.0 for a speaker with no
-	# takes and nothing happens, so it does not need a branch either.
-	#
-	# **Both halves are optional and always were**, which is what made the elder
-	# cheap to fold into the Lanternkeeper: a row can carry a voice and no counter
-	# (the elder, until 2026-08-10), a counter and no voice (the Lanternkeeper,
-	# until the same day), or both, and this function did not change a line to
-	# allow the third. Nothing exercises voice-without-counter now. It still
-	# works: the function simply ends two lines down.
-	var who := StringName(row.get("voice", &""))
-	if who != &"":
-		Voice.say(who, &"hello")
-
-	# One screen, pointed. See `Catalogue` for why there is not a second one.
-	var counter: Dictionary = row.get("counter", {})
-	if not counter.is_empty():
-		TradeScreen.open(self, int(counter["mode"]), str(counter["title"]),
-			counter["db"] as GDScript, who)
-		return
 	if role == Role.GATE:
 		Flow.enter_dungeon()
+		return
+
+	var row := _row()
+	var who := StringName(row.get("voice", &""))
+	# The mouth picks the take and `DialogueDb` reads the words off the take that
+	# is playing, so the elder's two greetings alternate in the ear and on the
+	# screen together. See `DialogueDb.speak`.
+	var pages := DialogueDb.speak(who, &"hello")
+	if pages.is_empty():
+		# Nobody has written them a line. Straight to the counter, exactly as this
+		# function behaved before there was a dialogue box -- a keeper with no words
+		# is still a keeper, and a box that opened to say nothing would be worse
+		# than no box.
+		_choose_trade(who, row)
+		return
+	DialogueBox.open(self, who, pages, _options(who, row))
+
+
+## What the conversation offers when the line is finished.
+##
+## Trade only for somebody with a counter, and Leave always -- so the one person
+## with no counter (there is none today; the elder was the last, `COUNTERS`) still
+## gets a box that can be closed by saying goodbye rather than only by walking
+## off. The order is the kit's rule about primary rows: the thing you came for is
+## first.
+func _options(who: StringName, row: Dictionary) -> Array:
+	var out: Array = []
+	var counter: Dictionary = row.get("counter", {})
+	if not counter.is_empty():
+		out.append({
+			"label": "Trade",
+			# The counter's own name in the meta column, so picking Trade at the
+			# Lanternkeeper is visibly not the same act as picking it at the smith.
+			"meta": _titled(str(counter.get("title", ""))),
+			"act": _choose_trade.bind(who, row),
+		})
+	out.append({"label": "Leave", "act": _choose_leave.bind(who)})
+	return out
+
+
+## One screen, pointed. See `Catalogue` for why there is not a second one.
+##
+## Returns nothing to say, which `DialogueBox` reads as "the conversation is
+## over": the shop is the rest of this interaction, and it says the farewell
+## itself when it comes down (`TradeScreen.close`).
+func _choose_trade(who: StringName, row: Dictionary) -> PackedStringArray:
+	var counter: Dictionary = row.get("counter", {})
+	if counter.is_empty():
+		return PackedStringArray()
+	TradeScreen.open(self, int(counter["mode"]), str(counter["title"]),
+		counter["db"] as GDScript, who)
+	return PackedStringArray()
+
+
+## Goodbye, said out loud and written down, and then the box closes on the next
+## press. The same `farewell` cue the trade screen says on its way out -- one cue,
+## two doors out of the same conversation.
+func _choose_leave(who: StringName) -> PackedStringArray:
+	return DialogueDb.speak(who, &"farewell")
+
+
+## "THE FORGE" -> "The Forge". `COUNTERS` writes these in caps, which is right
+## over a shop front and shouting in a meta column. Godot's own `capitalize()`
+## cannot do it -- it inserts a space before every interior capital, so "THE
+## FORGE" comes back as "T H E   F O R G E". Same four lines as
+## `TradeScreen._counter_name`, and for the same reason.
+func _titled(caps: String) -> String:
+	var words: Array[String] = []
+	for word in caps.strip_edges().to_lower().split(" ", false):
+		words.append(word.substr(0, 1).to_upper() + word.substr(1))
+	return " ".join(words)
 
 
 func on_focus(on: bool) -> void:

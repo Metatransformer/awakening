@@ -152,18 +152,27 @@ func _set_hold(t01: float) -> void:
 func _process(delta: float) -> void:
 	var hero := get_tree().get_first_node_in_group(&"player") as Node3D
 	var best := _nearest(hero)
+	var down := Input.is_action_pressed(&"interact")
 
 	if best != focus:
 		drop_focus()
 		focus = best
 		if focus != null:
+			# **A button that was already down is not a press for something that
+			# has only just come into reach.** `drop_focus` cannot say this: it
+			# returns early when there was nothing focused to drop, which is
+			# exactly this case. The press that DISMISSES a dialogue box is still
+			# down on the frame the box frees itself, the block comes off, and the
+			# keeper standing behind it becomes reachable again -- so without this
+			# the one press both ends the conversation and starts it over. It read
+			# as "the box will not go away".
+			_armed = not down
 			focus.on_focus(true)
 			_say_prompt()
 			# Empty track up immediately: standing at a hold-gated thing is when
 			# the player needs to know it is one, not after a tap did nothing.
 			_set_hold(0.0)
 
-	var down := Input.is_action_pressed(&"interact")
 	if not down:
 		_armed = true
 		if _hold > 0.0:

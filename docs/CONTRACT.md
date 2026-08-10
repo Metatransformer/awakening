@@ -2267,6 +2267,60 @@ Voice.line_finished             # signal; NOT emitted when a line is cut off
   (`tools/directors/voices.gd`, and see `tools/directors/title.gd`, which drives
   `Flow.new_game` directly and therefore clears the flag itself).
 
+### Dialogue — one box, and the words are keyed by the TAKE
+
+`DialogueDb` (`scripts/world/dialogue_db.gd`) owns who people are and what they
+say; `DialogueBox` (`scripts/ui/dialogue/dialogue_box.gd`) is the only thing that
+shows it. Both are keyed by the same speaker id `Voice.LINES` and
+`Npc.COUNTERS`'s `"voice"` already use, so there is no second name for anybody.
+
+```gdscript
+DialogueDb.name_of(&"smith")          # "Brannoc" -- the plate says who, not what
+DialogueDb.model_of(&"smith")         # an `NpcBody.PEOPLE` key, for the bust
+DialogueDb.speak(&"smith", &"hello")  # says it AND returns the pages to type
+DialogueBox.open(host, &"smith", pages, choices)   # null when `pages` is empty
+```
+
+- **The text is looked up by the take that is playing, never by the cue.**
+  `speak` calls `Voice.say` and then resolves the words through `Voice.line()`.
+  The elder's `hello` has two takes and alternates; the box types the sentence
+  that is actually in your ear, and no second alternator exists to drift out of
+  step with the first. A take with no transcript is a line that types nothing —
+  `tools/directors/dialogue.gd` beat A walks `Voice.LINES` and fails on it.
+- **A written line with no recording is legal.** `DialogueDb.WRITTEN` is the
+  fallback when `Voice.say` answers 0.0 — the elder's "You're doing wonderfully."
+  is text-only today. The reverse (a take with no words) is the failure above.
+- **`choices` is `{label, meta, act}` and `act` returns the NEXT pages.** Return
+  an empty array to end the conversation. That is the whole branch mechanism:
+  Trade opens the counter and returns nothing, Leave returns the farewell.
+- **One button drives all of it** — `interact`, the same press that opened it:
+  fill the line, turn the page, ask the question, take the answer, in that order.
+  `ui_cancel` ends a conversation outright. Input is POLLED, for
+  `TradeScreen._tick_input`'s reason (`Input.action_press` synthesises no event).
+- **The counter is behind the Trade option, not behind the press.** Since
+  2026-08-10 `Npc.activate` opens a box; `TradeScreen` opens from a choice inside
+  it. Every director that addresses a keeper goes through `shoot.gd`'s `talk()`.
+- **A box blocks the world** (`Prompt.block`) and the HUD stands down for it
+  (`Hud._refresh_visibility`, off `Bus.screen_opened(&"dialogue")`). The overlay
+  cannot be switched off from outside — the HUD forces its own `visible` on every
+  tree change, and building the box is a tree change.
+- **The figures are painted portraits**, one PNG per person in
+  `assets/ui/portraits/`, listener (always the hero) left and speaker right. The
+  first cut rendered the game's own rigs through two bust-cropped `DollStage`s,
+  on the reasoning that a model can never disagree with the person standing in
+  front of you. **That reasoning lost to the drawings** (2026-08-10, owner's
+  call): a rest-pose rig with its arms out is a mannequin. The rig path is gone
+  rather than kept as a fallback — one way to draw a speaker, and a person with
+  no portrait simply has no figure on their side.
+- **The art arrives on a flat backdrop and `tools/cut_portrait.py` takes it
+  off.** Border flood-fill, never a colour key: the elder's robe and the
+  alchemist's hood are within a few levels of their own black background, and a
+  key punches holes straight through both. Re-run it from the source art, do not
+  hand-edit the cut PNGs.
+- Sized off the frame's HEIGHT and given the drawing's own aspect ratio, so
+  nothing is cropped but the bottom edge. A square rect flattened the top of the
+  alchemist's hood off with a straight line.
+
 ### Settings and saves — built, tested, and read-only for everyone but P14
 
 Two more autoloads exist. **The options UI never touches `AudioServer`, the

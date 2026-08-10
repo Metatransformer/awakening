@@ -259,6 +259,10 @@ func _smith(rig) -> void:
 	_stand_at(rig, garrison.smith.global_position + Vector3(0.0, 0.0, 1.6))
 	await rig.wait_frames(20)
 	await rig.tap(["interact"])
+	# The counter is behind the Trade option now (`Npc.activate`, 2026-08-10).
+	if not await rig.talk("Trade"):
+		print("FORGE FAIL the smith would not offer to trade")
+		return
 	await rig.wait_frames(16)
 
 	var screen := _screen(rig)

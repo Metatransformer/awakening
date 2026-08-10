@@ -304,6 +304,11 @@ func _ready() -> void:
 	# plan itself only changes on these, so the minimap is not asking `Atlas`
 	# anything it has not been told.
 	Bus.map_changed.connect(_repaint)
+	# Somebody is talking to you, and the overlay stands down for it. See
+	# `_refresh_visibility` -- this is a flag and not a direct `visible` because
+	# that function has the last word on this property.
+	Bus.screen_opened.connect(func(id: StringName) -> void: _on_conversation(id, true))
+	Bus.screen_closed.connect(func(id: StringName) -> void: _on_conversation(id, false))
 	Bus.heat_changed.connect(_on_heat)
 	Bus.heat_tier_changed.connect(_on_heat_tier)
 	Bus.escape_rope_broken.connect(_on_escape_rope_broken)
@@ -541,14 +546,39 @@ func _on_tree_changed(_n: Node) -> void:
 	_refresh_visibility.call_deferred()
 
 
+## True while a `DialogueBox` is up. See `_refresh_visibility`.
+var _conversing: bool = false
+
+
+func _on_conversation(id: StringName, up: bool) -> void:
+	if id != &"dialogue":
+		return
+	_conversing = up
+	_refresh_visibility()
+
+
 ## Gameplay scenes have a hero; lookdev boxes and tool scenes do not, and an
 ## overlay on a weapon rack is just noise in a contact sheet.
+##
+## **And nobody is talking to you.** The dialogue box is a strip across the
+## bottom of a LIVE courtyard -- it does not cover this the way the trade screen
+## does -- and it lands in the same two corners as the bars and the key legend.
+## The first frame of it had "RMB GUARD | LMB DASH" reading out from under the
+## panel while a dwarf introduced himself. It also says nothing useful there:
+## `Prompt.blocked` has the hero's controls for the length of a conversation, so
+## every button on that line is a button that does nothing.
+##
+## The flag is the reason this is here and not a `Hud.visible = false` in the
+## box: this function runs deferred off `node_added`/`node_removed` and forces
+## `visible` back to `has_player` -- and the box's own construction is a tree
+## change. Anything setting `visible` from outside is overwritten within a frame.
 func _refresh_visibility() -> void:
 	if not is_inside_tree():
 		return
 	var has_player := get_tree().get_first_node_in_group(&"player") != null
-	if visible != has_player:
-		visible = has_player
+	var showing := has_player and not _conversing
+	if visible != showing:
+		visible = showing
 
 	# Deferred off node_added/node_removed, which is exactly when this answer can
 	# change, so the enemy bars get their frame ticker the moment a dungeon builds

@@ -488,6 +488,108 @@ func hold_seconds(actions: Array, seconds: float) -> void:
 			Input.action_release(a)
 
 
+## The `DialogueBox` that is up, or null.
+##
+## Found by DUCK TYPING and never by class. This file is loaded with `-s`, where
+## a named `class_name` is compiled before the autoloads exist and takes the whole
+## harness down with it (see `draw_weapon`) -- so the box's five reader methods are
+## the interface, and `choice_labels` is the one this looks for.
+func dialogue() -> Node:
+	var stack: Array[Node] = [current_scene]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n == null:
+			continue
+		# A box that has already been closed does not count. `close()` is a
+		# `queue_free`, so the node is still a child for the rest of the frame --
+		# and a director that sees it there presses `interact` at it ONE MORE TIME.
+		# That press lands a frame later, when the block has come off and the
+		# keeper has the button back, and re-opens the conversation that was just
+		# ended. It reads as "the box would not go away".
+		#
+		# Asked of the ANCESTORS and not just the node: the box frees its own
+		# CanvasLayer, so the flag is on the parent and the box itself answers no.
+		if n.has_method(&"choice_labels") and n.has_method(&"is_choosing") \
+				and not _dying(n):
+			return n
+		for c in n.get_children():
+			stack.append(c)
+	return null
+
+
+## True if `n` or anything above it is on its way out of the tree this frame.
+func _dying(n: Node) -> bool:
+	var at: Node = n
+	while at != null:
+		if at.is_queued_for_deletion():
+			return true
+		at = at.get_parent()
+	return false
+
+
+## Hold the conversation that a press just opened, and pick `option` off the end
+## of it. Answers false if there was never a box, if it never offered options, or
+## if `option` is not one of them.
+##
+## Every director that addresses a counter needs this and needs it identically:
+## since 2026-08-10 `interact` on a keeper opens a `DialogueBox`, and the shop is
+## behind the Trade option rather than behind the press. One implementation here
+## rather than the same eight-line dance pasted into seven directors -- and it is
+## driven with real presses (`tap`), not by calling the box's own methods, because
+## a director that reaches into a screen is testing the screen's fields and not
+## its buttons.
+func talk(option: String = "Trade", seconds: float = 6.0) -> bool:
+	# Polled by hand rather than through `until`, because the thing being waited
+	# for is also the thing being FETCHED: a GDScript lambda captures a local by
+	# value, so a closure assigning `box` would leave it null out here.
+	var box: Node = dialogue()
+	var deadline := Time.get_ticks_msec() + int(seconds * 1000.0)
+	while box == null and Time.get_ticks_msec() < deadline:
+		await process_frame
+		box = dialogue()
+	if box == null:
+		print("shoot: talk('%s') -- nothing opened a dialogue box" % option)
+		return false
+
+	# Turn pages until the question is on screen. The cap is a runaway guard, not
+	# a page count: two presses per page (fill the line, then turn it) over a
+	# conversation that is one page today.
+	for i in 16:
+		if not is_instance_valid(box) or box.is_choosing():
+			break
+		await tap(["interact"])
+		await _wait_frames(2)
+	if not is_instance_valid(box):
+		print("shoot: talk('%s') -- the box closed before it offered anything" % option)
+		return false
+	if not box.is_choosing():
+		print("shoot: talk('%s') -- the box never offered any options" % option)
+		return false
+
+	var labels: PackedStringArray = box.choice_labels()
+	var want := -1
+	for i in labels.size():
+		if labels[i] == option:
+			want = i
+	if want < 0:
+		print("shoot: talk('%s') -- the options were %s" % [option, labels])
+		return false
+
+	# Walked with the stick, one row at a time, the way a pad player reaches it.
+	for i in labels.size():
+		if box.choice_index() == want:
+			break
+		await tap(["ui_down"])
+		await _wait_frames(2)
+	if box.choice_index() != want:
+		print("shoot: talk('%s') -- the cursor would not land on it" % option)
+		return false
+
+	await tap(["interact"])
+	await _wait_frames(4)
+	return true
+
+
 ## The live scene root.
 func scene() -> Node:
 	return current_scene
