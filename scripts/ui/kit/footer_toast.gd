@@ -38,6 +38,10 @@ static func build(parent: Node, text: String, tone: Color = UITheme.SUCCESS) -> 
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	UITheme.apply_text_style(line, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT)
 	toast.add_child(line)
+	# The line, for a panel that has to read back or rewrite what was said. The
+	# pause menu's notice bar does both, and a caller digging for `get_child(0)`
+	# is a caller that breaks the next time this component grows a second child.
+	toast.set_meta(&"toast_label", line)
 
 	if parent != null:
 		parent.add_child(toast)

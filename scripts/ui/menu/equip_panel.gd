@@ -70,6 +70,13 @@ func _ready() -> void:
 	_assert_agrees_with_game()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# The whole subtree renders through the kit, overriding the `menu_theme.tres`
+	# the pause menu's Root still carries. That is also what puts `MenuSlot`,
+	# `MenuValue` and `MenuSlotStat` — the armament cells, which are NOT being
+	# rebuilt — into kit paint: `UITheme.theme()` defines those names in kit
+	# tokens (`_style_shared_cells`), so a cell here matches a cell on the locker.
+	UITheme.prewarm()
+	theme = UITheme.theme()
 	_build()
 	# The D-pad can change the loadout while this screen is open (it is a pause
 	# menu, but nothing stops a director or a rebind from firing), and a save
@@ -103,17 +110,22 @@ func _build() -> void:
 
 	var frame := PanelContainer.new()
 	frame.name = "Frame"
-	frame.theme_type_variation = &"MenuFrame"
+	# `edge_to_edge`: the tab strip and the footer reach the frame's edge and the
+	# body between them owns its own inset — the same construction the counters
+	# and the locker use, so the three pause screens and the five shop screens are
+	# one piece of furniture.
+	UITheme.style_panel(frame, UITheme.FRAME_FACE_SOLID, true)
 	frame.custom_minimum_size = MenuUtil.FRAME_SIZE
 	center.add_child(frame)
 
 	var col := VBoxContainer.new()
 	col.name = "Col"
-	col.theme_type_variation = &"MenuStack"
+	col.add_theme_constant_override("separation", 0)
 	frame.add_child(col)
 
 	var header := PanelContainer.new()
-	header.theme_type_variation = &"MenuHeader"
+	header.add_theme_stylebox_override("panel",
+		UITheme.hud_box(UITheme.GRAY_1, 14, 6, 14, 0))
 	col.add_child(header)
 	# The shared tab strip goes here and there is no title Label: the lit tab is
 	# the title. See `build_tabs` and `MenuPageTabs`.
@@ -124,7 +136,8 @@ func _build() -> void:
 	_hrow.add_child(gap)
 
 	var body := MarginContainer.new()
-	body.theme_type_variation = &"MenuBodyPad"
+	for side in ["left", "right", "top", "bottom"]:
+		body.add_theme_constant_override("margin_" + side, 20)
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(body)
 
@@ -163,12 +176,13 @@ func _build() -> void:
 	_wire_focus()
 
 	var footer := PanelContainer.new()
-	footer.theme_type_variation = &"MenuFooter"
+	footer.add_theme_stylebox_override("panel",
+		UITheme.hud_box(UITheme.GRAY_1, 20, 10, 20, 10))
 	col.add_child(footer)
 	var frow := HBoxContainer.new()
 	footer.add_child(frow)
 	var hint := Label.new()
-	hint.theme_type_variation = &"MenuHint"
+	UITheme.apply_text_style(hint, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
 	hint.text = HINT
 	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	frow.add_child(hint)
@@ -196,23 +210,21 @@ func _build() -> void:
 ## Nothing here takes focus, so the 2x2-plus-Swap graph `_wire_focus` builds is
 ## untouched by the column appearing beside it.
 func _build_doll(parent: Node) -> void:
-	var card := PanelContainer.new()
-	card.name = "Worn"
-	card.theme_type_variation = &"MenuSection"
+	# NOT a card. It was one, and so were the detail pane and the stat block, and
+	# three nested boxes inside a boxed frame is the "everything is a panel" read
+	# the kit exists to undo — it also cost 44 px of padding a column, which is
+	# what pushed this screen past `MenuUtil.FRAME_SIZE` and made the window fill
+	# the viewport. A `section_rule` divides a column for free.
+	var col := VBoxContainer.new()
+	col.name = "Worn"
 	# A floor, not a share. The two hand slots beside it are a measured 228 px
 	# each (`SLOT_MIN`) and cannot give any of it back, and the detail column is
 	# 360; this is what is left of 1220 with the separations taken off.
-	card.custom_minimum_size.x = DOLL_W
-	parent.add_child(card)
-
-	var col := VBoxContainer.new()
+	col.custom_minimum_size.x = DOLL_W
 	col.add_theme_constant_override("separation", 8)
-	card.add_child(col)
+	parent.add_child(col)
 
-	var head := Label.new()
-	head.theme_type_variation = &"MenuHeading"
-	head.text = "WORN"
-	col.add_child(head)
+	UITheme.section_rule(col, "WORN")
 
 	var doll := MenuPaperDoll.new()
 	doll.name = "Doll"
@@ -224,7 +236,7 @@ func _build_doll(parent: Node) -> void:
 	# something says what one pip is, and the two ladders are different lengths
 	# -- three rungs of plate against four of a stone (K.FORGE_MAX, K.JEWEL_MAX).
 	var legend := Label.new()
-	legend.theme_type_variation = &"MenuHint"
+	UITheme.apply_text_style(legend, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
 	legend.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	legend.text = "Plate at the smith, stones at her bench.  %d rungs of plate, %d of a stone." % [
 		K.FORGE_MAX, K.JEWEL_MAX]
@@ -242,25 +254,19 @@ func _build_doll(parent: Node) -> void:
 ## you can press in this menu (↑ moves focus). A screen that only offered its own
 ## button would leave the pad shortcut undiscoverable.
 func _build_swap(parent: Node) -> void:
-	var foot := HBoxContainer.new()
-	foot.name = "SwapRow"
-	foot.add_theme_constant_override("separation", 12)
-	parent.add_child(foot)
-	var note := Label.new()
-	note.theme_type_variation = &"MenuHint"
-	note.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	note.text = "In play, %s swaps sets" % MenuUtil.pad_label(&"loadout_swap")
-	foot.add_child(note)
-	_swap = Button.new()
-	_swap.theme_type_variation = &"MenuRow"
-	_swap.text = "Swap Set"
-	_swap.focus_mode = Control.FOCUS_ALL
-	_swap.custom_minimum_size.x = 190
-	_swap.pressed.connect(func() -> void:
-		Game.swap_loadout()
-		value_settled.emit())
-	foot.add_child(_swap)
+	# A `VerbRow`, and the in-play input goes in its META column rather than in a
+	# note beside it. The note and the button were two controls saying one thing —
+	# "this is how you swap" — laid out as though they were unrelated, and the
+	# meta column is the component's answer to exactly that.
+	_swap = UiKit.verb_row(parent, {
+		"label": "Swap Set",
+		"icon": UiKit.action_icon("upgrade"),
+		"meta": "in play  %s" % MenuUtil.pad_label(&"loadout_swap"),
+		"on_press": func() -> void:
+			Game.swap_loadout()
+			value_settled.emit(),
+	})
+	_swap.name = "SwapRow"
 
 
 func _build_sets(parent: Node) -> void:
@@ -275,7 +281,7 @@ func _build_sets(parent: Node) -> void:
 
 		var card := PanelContainer.new()
 		card.name = "Set%d" % set_index
-		card.theme_type_variation = &"MenuSection"
+		UITheme.style_panel(card, UITheme.BG_INSET)
 		stack.add_child(card)
 		_set_frames.append(card)
 
@@ -286,7 +292,7 @@ func _build_sets(parent: Node) -> void:
 		var caption := HBoxContainer.new()
 		inner.add_child(caption)
 		var name_label := Label.new()
-		name_label.theme_type_variation = &"MenuHeading"
+		UITheme.apply_text_style(name_label, UITheme.TYPE_H2, UITheme.ACCENT)
 		name_label.text = SET_NAMES[set_index]
 		caption.add_child(name_label)
 		var gap := Control.new()
@@ -295,8 +301,10 @@ func _build_sets(parent: Node) -> void:
 		# The live-set mark. A colour difference alone is not enough — the
 		# styleguide's palette is five bits deep and two stone greys apart is
 		# not a state anyone reads at a glance.
+		# HIGHLIGHT, not gold. "IN HAND" is a STATE — which of the two sets is
+		# live — and the off-white is what this UI uses to mean "this one".
 		var mark := Label.new()
-		mark.theme_type_variation = &"MenuValue"
+		UITheme.apply_text_style(mark, UITheme.TYPE_LABEL_MD, UITheme.HIGHLIGHT)
 		caption.add_child(mark)
 		_set_marks.append(mark)
 
@@ -336,7 +344,7 @@ func _make_slot(parent: Node, set_index: int, hand: StringName) -> Button:
 
 	var caption := Label.new()
 	caption.name = "Caption"
-	caption.theme_type_variation = &"MenuHint"
+	UITheme.apply_text_style(caption, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
 	caption.text = HAND_NAMES[hand]
 	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -384,37 +392,36 @@ func _new_icon(px: int) -> TextureRect:
 
 
 func _build_detail(parent: Node) -> void:
-	var card := PanelContainer.new()
-	card.name = "Detail"
-	card.theme_type_variation = &"MenuSection"
-	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	parent.add_child(card)
-
 	var col := VBoxContainer.new()
+	col.name = "Detail"
+	col.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_theme_constant_override("separation", 10)
-	card.add_child(col)
+	parent.add_child(col)
 
+	# The kicker / title / value stack of a `PlateHeader`, written by hand because
+	# this one is REWRITTEN on every focus change — an identity that flickers is
+	# not one, so the composite is built once and this pane is not it.
 	_detail_hand = Label.new()
-	_detail_hand.theme_type_variation = &"MenuHint"
+	UITheme.apply_text_style(_detail_hand, UITheme.TYPE_CAPTION, UITheme.ACCENT)
 	col.add_child(_detail_hand)
 
 	_detail_name = Label.new()
-	_detail_name.theme_type_variation = &"MenuSlotTitle"
+	UITheme.apply_text_style(_detail_name, UITheme.TYPE_H1, UITheme.TEXT)
 	_detail_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(_detail_name)
 
 	_detail_ammo = Label.new()
-	_detail_ammo.theme_type_variation = &"MenuValue"
+	UITheme.apply_text_style(_detail_ammo, UITheme.TYPE_LABEL_MD, UITheme.ACCENT)
 	col.add_child(_detail_ammo)
 
 	_detail_blurb = Label.new()
-	_detail_blurb.theme_type_variation = &"MenuSlotStat"
+	UITheme.apply_text_style(_detail_blurb, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
 	_detail_blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_detail_blurb.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(_detail_blurb)
 
 	_detail_legend = Label.new()
-	_detail_legend.theme_type_variation = &"MenuHint"
+	UITheme.apply_text_style(_detail_legend, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
 	_detail_legend.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(_detail_legend)
 
@@ -451,19 +458,12 @@ const STAT_NAMES := {
 
 
 func _build_stats(parent: Node) -> void:
-	var card := PanelContainer.new()
-	card.name = "Stats"
-	card.theme_type_variation = &"MenuSection"
-	parent.add_child(card)
-
 	var col := VBoxContainer.new()
+	col.name = "Stats"
 	col.add_theme_constant_override("separation", 6)
-	card.add_child(col)
+	parent.add_child(col)
 
-	var head := Label.new()
-	head.theme_type_variation = &"MenuHeading"
-	head.text = "THE HERO"
-	col.add_child(head)
+	UITheme.section_rule(col, "THE HERO")
 
 	for id: StringName in STATS:
 		var row := HBoxContainer.new()
@@ -471,13 +471,13 @@ func _build_stats(parent: Node) -> void:
 		col.add_child(row)
 
 		var name_label := Label.new()
-		name_label.theme_type_variation = &"MenuSlotStat"
+		UITheme.apply_text_style(name_label, UITheme.TYPE_PARAGRAPH_1, UITheme.TEXT_DIM)
 		name_label.text = String(STAT_NAMES[id])
 		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(name_label)
 
 		var value := Label.new()
-		value.theme_type_variation = &"MenuValue"
+		UITheme.apply_text_style(value, UITheme.TYPE_LABEL_MD, UITheme.ACCENT)
 		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		row.add_child(value)
 		_stat_values[id] = value
@@ -611,7 +611,11 @@ func _cycle(b: Button) -> void:
 	var after := _armament(set_index, hand)
 
 	if after == before:
-		notice.emit("Nothing else to put in that hand yet.", false)
+		# An ERROR. A press that changed nothing is a refusal, and it was flagged
+		# `false` back when the notice bar's two tones were gold and gold: nothing
+		# on screen was going to contradict it. The bar draws SUCCESS green now, so
+		# "nothing happened" arrived looking like "done".
+		notice.emit("Nothing else to put in that hand yet.", true)
 		return
 	refresh()
 	_describe(b)

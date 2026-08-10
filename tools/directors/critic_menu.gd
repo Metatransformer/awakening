@@ -169,7 +169,7 @@ func run(rig) -> void:
 	# ================================== G. reset to defaults must not kill pad A
 	for i in LIMIT:
 		var c := _foc(rig)
-		if c is Button and (c as Button).text == "Reset to Defaults":
+		if c is Button and UiKit.label_of(c as Button) == "Reset to Defaults":
 			break
 		await _pad(rig, PAD_DDOWN, 4)
 	_ck("G1 D-pad reached 'Reset to Defaults'",
@@ -327,18 +327,37 @@ func _nm(c: Control) -> String:
 	if c == null:
 		return "<null>"
 	if c is Button:
-		return "%s '%s'" % [c.name, (c as Button).text]
+		return "%s '%s'" % [c.name, UiKit.label_of(c as Button)]
 	return String(c.name)
 
 
+## Through `UiKit.label_of`, never `Button.text`. A composed `VerbRow` leaves its
+## own `text` empty — the label is a child Label — so a director matching on
+## `.text` stops finding every row on the root screen the moment that screen
+## adopts the kit, and reports it as a broken focus graph. It did.
 func _is_btn(c: Control, label: String) -> bool:
-	return c is Button and (c as Button).text == label
+	return c is Button and UiKit.label_of(c as Button) == label
 
 
+## The first Label anywhere under the notice bar. Not `get_child(0).text`: the
+## bar holds a `FooterToast` now, which is a PanelContainer with the line inside
+## it, and a director that assumes the shape of the chrome it is reading starts
+## failing the moment the chrome is restyled.
 func _notice_text(notice: Node) -> String:
-	if notice == null or notice.get_child_count() == 0:
-		return ""
-	return notice.get_child(0).text
+	var label := _first_label(notice)
+	return label.text if label != null else ""
+
+
+func _first_label(n: Node) -> Label:
+	if n == null:
+		return null
+	if n is Label:
+		return n as Label
+	for child in n.get_children():
+		var found := _first_label(child)
+		if found != null:
+			return found
+	return null
 
 
 func _slots(n: Node) -> Array:

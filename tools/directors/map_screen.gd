@@ -115,9 +115,15 @@ func run(rig) -> void:
 	# `PauseMenu._ensure_pad_ui_actions` -- they are in no .tscn and not in
 	# project.godot -- so this is the beat that proves the registration actually
 	# happened rather than that the action name exists.
-	_key(KEY_E)
+	# R, not E. E CONFIRMS now (`PauseMenu.KEY_UI_BUTTONS`, commit bb3fe8d) — it
+	# is the world's `interact` and a player who has pressed it at every chest all
+	# game does not stop meaning yes inside a menu. Paging kept Q and moved to the
+	# next key under the same hand. This beat still said E, so it was pressing
+	# `ui_accept` on the focused Back button and reading "the menu closed" as
+	# "the tabs did not page".
+	_key(KEY_R)
 	await rig.wait_seconds(0.3)
-	_check("E paged the tabs like RB does", items.visible and not map.visible)
+	_check("R paged the tabs like RB does", items.visible and not map.visible)
 	_key(KEY_Q)
 	await rig.wait_seconds(0.3)
 	_check("Q paged back like LB does", map.visible and not items.visible)

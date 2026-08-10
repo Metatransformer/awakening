@@ -887,6 +887,10 @@ func _restore_listen_focus() -> void:
 
 # --- Notice bar -------------------------------------------------------------
 
+## Wide enough for the longest thing the bar says — the rebind conflict, which
+## names two actions and a key — without running the full width of the screen.
+const NOTICE_W := 660
+
 func _build_notice() -> void:
 	_notice_panel = PanelContainer.new()
 	_notice_panel.name = "Notice"
@@ -906,10 +910,17 @@ func _build_notice() -> void:
 	_notice_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_notice_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 
-	_notice_label = Label.new()
-	_notice_label.theme_type_variation = &"MenuError"
-	_notice_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_notice_panel.add_child(_notice_label)
+	# The panel is now just the anchor. What goes in it is a `FooterToast`, built
+	# fresh per notice — the same component, in the same tones, that the locker
+	# and the five counters use to say why a press did nothing. A rejected rebind
+	# and a refused purchase are the same event and now look like it.
+	_notice_panel.add_theme_stylebox_override("panel",
+		UITheme.hud_box(UITheme.GRAY_1, 4, 4, 4, 4))
+	# A width of its own, because the bar is grown from a ZERO-SIZE rect: its size
+	# is whatever its child's minimum is, and a `FooterToast`'s line autowraps, so
+	# that minimum is ONE CHARACTER. The first frame of this was the whole notice
+	# set vertically down the middle of the screen, one letter per row.
+	_notice_panel.custom_minimum_size.x = NOTICE_W
 
 	_notice_timer = Timer.new()
 	_notice_timer.one_shot = true
@@ -921,9 +932,15 @@ func _build_notice() -> void:
 ## Say why something did not happen. A rejected rebind that silently does
 ## nothing is the single most common way this screen lies to the player.
 func _notice(text: String, is_error: bool) -> void:
-	_notice_label.text = text
-	_notice_label.theme_type_variation = &"MenuError" if is_error else &"MenuValue"
-	_notice_panel.theme_type_variation = &"MenuNotice" if is_error else &"MenuNoticeOk"
+	for child in _notice_panel.get_children():
+		child.queue_free()
+		_notice_panel.remove_child(child)
+	var toast := UiKit.footer_toast(_notice_panel, text,
+		UITheme.DANGER if is_error else UITheme.SUCCESS)
+	# Kept so `tools/directors` and `_menu_director` can read what was said —
+	# several of them assert on the WORDS, which is the only way to prove the
+	# screen explained itself rather than just flashing.
+	_notice_label = toast.get_meta(&"toast_label", null) as Label
 	_notice_panel.visible = true
 	_notice_timer.start(NOTICE_TIME)
 
