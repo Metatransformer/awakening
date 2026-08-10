@@ -196,7 +196,7 @@ func _focused(rig) -> Control:
 func _nav_to_button(rig, label: String) -> void:
 	for i in NAV_LIMIT:
 		var c := _focused(rig)
-		if c is Button and (c as Button).text == label:
+		if c is Button and UiKit.label_of(c as Button) == label:
 			return
 		await _key(rig, KEY_DOWN, 3)
 	_check("could reach button '%s' by keyboard" % label, false)
@@ -216,7 +216,7 @@ func _nav_down_to(rig, node_name: String) -> void:
 func _nav_to_tab(rig, label: String) -> void:
 	for i in NAV_LIMIT:
 		var c := _focused(rig)
-		if c is Button and (c as Button).text == label:
+		if c is Button and UiKit.label_of(c as Button) == label:
 			return
 		await _key(rig, KEY_RIGHT, 4)
 	_check("could reach the '%s' tab by keyboard" % label, false)
