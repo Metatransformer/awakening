@@ -161,13 +161,58 @@ func _run() -> void:
 # --- API available to director scripts -------------------------------------
 
 ## Wait n rendered frames.
+##
+## **A rendered frame is not a unit of anything the GAME measures in.** Physics
+## runs at its own rate, and the ratio between the two is a property of the
+## machine: 1:1 on a 60 Hz panel, 1:2 on the 120 Hz one this project is built on,
+## and anything at all while a shader compiles. So `wait_frames` is the right
+## instrument for "let the picture settle before a capture" and the wrong one for
+## every "wait until the game has done X" -- use `until` for those.
 func wait_frames(n: int) -> void:
 	await _wait_frames(n)
+
+
+## Wait n PHYSICS ticks. The unit for anything driven by the physics step:
+## an Area3D noticing a body, a CharacterBody3D settling onto the floor.
+func wait_physics_frames(n: int) -> void:
+	for i in maxi(n, 1):
+		await physics_frame
 
 
 ## Wait n seconds of game time.
 func wait_seconds(s: float) -> void:
 	await create_timer(s).timeout
+
+
+## Wait until `test` answers true, and say whether it ever did.
+##
+## THE UNIT OF A WAIT IS THE THING WAITED FOR. Almost nothing a director waits on
+## is a number of rendered frames: it is a state -- a prompt taking focus, a
+## screen finishing its close, a body being noticed by the trigger it was
+## teleported into. Those arrive on the physics clock, or on a timer, or on a
+## signal, and a director that guesses a frame count instead is a director whose
+## pass/fail depends on the refresh rate of the panel it ran on.
+##
+## `mvp_loop`'s sell beat cost this project a long session for exactly that: it
+## teleported the hero at the vendor, waited 20 RENDERED frames, and pressed. The
+## vendor's `Interactable.player_inside` is set by an Area3D and arrives about two
+## PHYSICS ticks after the teleport -- render frames 3 to 5 at 60 Hz physics on a
+## 120 Hz panel, and 20 to 24 when the ratio moves. When it missed, the one press
+## the beat had went into a world where nothing was focused, the shop never
+## opened, and four later beats reported failures they had not caused.
+##
+## The timeout is REAL seconds on purpose: it is a watchdog, not a measurement.
+## A game clock that has stopped is one of the things it exists to catch, so it
+## cannot be counted on the game clock.
+func until(test: Callable, seconds: float = 3.0) -> bool:
+	var deadline := Time.get_ticks_msec() + int(seconds * 1000.0)
+	while true:
+		if test.call():
+			return true
+		if Time.get_ticks_msec() >= deadline:
+			return false
+		await process_frame
+	return false
 
 
 ## Capture the current frame to `path` (absolute, or relative to --out's dir).
@@ -255,12 +300,35 @@ func draw_weapon(id: StringName, limit: int = 8) -> bool:
 ## a channel -- must be driven this way. The window here is uncapped, so a hold
 ## counted in frames is a hold of unknown duration, and a director written that
 ## way passes or fails depending on how busy the machine is.
+##
+## Counted on THE CLOCK THE RECEIVER COUNTS ON, which is the scaled process
+## delta: every hold in the game is a `_hold += delta` in someone's `_process`
+## (`Prompt._process`, `TradeScreen._tick_input`). This used to be a timer built
+## with `ignore_time_scale = true`, so a hold that overlapped a hit-stop --
+## `Feel.hitstop` sets `Engine.time_scale = 0` -- spent its whole budget of real
+## seconds while the gauge it was filling did not move at all. The two clocks
+## agree at time_scale 1, which is why it survived: the disagreement only shows
+## up in the beats that are hardest to reproduce.
+##
+## The wall-clock cap is a WATCHDOG and not the measurement. A game clock that
+## has stopped for good would otherwise hang the harness with no output at all,
+## which is the worst thing a capture rig can do; this says so and moves on.
 func hold_seconds(actions: Array, seconds: float) -> void:
 	await process_frame
 	for a in actions:
 		if InputMap.has_action(a):
 			Input.action_press(a)
-	await create_timer(seconds, true, false, true).timeout
+	var spent := 0.0
+	var deadline := Time.get_ticks_msec() + int(seconds * 4000.0) + 3000
+	while spent < seconds:
+		await process_frame
+		spent += root.get_process_delta_time()
+		if Time.get_ticks_msec() >= deadline:
+			print(("shoot: HELD %s for %.2f s of game time out of %.2f before the"
+				+ " wall clock ran out -- the game is not advancing"
+				+ " (Engine.time_scale=%.2f, paused=%s)")
+				% [actions, spent, seconds, Engine.time_scale, paused])
+			break
 	for a in actions:
 		if InputMap.has_action(a):
 			Input.action_release(a)
