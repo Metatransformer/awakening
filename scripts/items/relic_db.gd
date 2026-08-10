@@ -565,6 +565,47 @@ static func lines() -> Array[Dictionary]:
 	return out
 
 
+## One row per floor.
+##
+## Every relic here is a one-rung track: there is one of the thing, you either
+## brought it in or you did not, and there is no ladder to climb. So the rows are
+## not ladders either -- they are the floors, which is the only axis this list
+## has and the one the player is actually asking about. "What is still down
+## there, and how far down" is answered by the row titles alone, without walking
+## the cursor onto twelve cells to read twelve refusals.
+##
+## The board would DRAW without this: `TradeScreen._board` falls back to the
+## wrapping row `Catalogue.groups()` documents, and did not until this was
+## written, which is why the Lanternkeeper's counter was blank. This override is
+## the shape, not the fix.
+static func groups() -> Array[Dictionary]:
+	# `lines()` is one entry per `RELICS` row, in `RELICS` order, so `i` indexes
+	# both. That is the only coupling here and it is the same one `lines()` has
+	# with itself.
+	var rows: Array[Dictionary] = lines()
+	var out: Array[Dictionary] = []
+	var tracks: Array = []
+	var level: int = -1
+	for i in rows.size():
+		var lv: int = int(RELICS[i]["level"])
+		# Split where the manifest splits rather than sorting into a fixed set of
+		# floors: if a relic moves down a level, the board follows the table
+		# instead of quietly regrouping behind it.
+		if lv != level and not tracks.is_empty():
+			out.append({"title": _floor_title(level), "tracks": tracks})
+			tracks = []
+		level = lv
+		tracks.append({"name": String(rows[i]["label"]), "line": i,
+			"owned": 0, "rungs": 1})
+	if not tracks.is_empty():
+		out.append({"title": _floor_title(level), "tracks": tracks})
+	return out
+
+
+static func _floor_title(level: int) -> String:
+	return String(FLOOR_NAMES.get(level, "THE DESCENT"))
+
+
 ## The catalogue entry for a relic nobody has brought in. Not a teaser and not a
 ## riddle: the Society's ledger has a line for the object and a note of where it
 ## is believed to be, because that is what an honest catalogue of things you
