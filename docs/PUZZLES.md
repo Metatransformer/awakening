@@ -223,6 +223,80 @@ the Chord Gate carrying almost nothing worth selling, and that is the decision.
 three motes over it — used at all three sites. It is the Slay the Spire beat and
 it costs nothing beyond the prefab that already had to exist.
 
+### 6.1 The twelve
+
+**Relics are objects and Echoes are sounds.** That is the whole naming rule and
+it is worth keeping: a relic is a thing you carry to a counter — Tally-Ledger,
+Anvil-Plate, Cracked Still-Head — and an Echo is a tone you carried out of a
+room. If a proposed Echo wants to be a noun you could put on a shelf, it is a
+relic and it is in the wrong table.
+
+Each one **bends a rule the game already runs**, and the rule it bends is named
+so the next person can find it. None of them moves damage, speed, max health,
+max stamina or soak (GDD §6.6) — check the right-hand column before adding a
+thirteenth, because that is the boundary that keeps a found thing from quietly
+replacing a bought one.
+
+**How fast — the Heat axis (GDD §2)**
+
+| | Echo | What it bends |
+|---|---|---|
+| 1 | **The Held Note** | Heat's window stops shrinking; every tier keeps Warm's leash. The reward for speed stops coming with a shorter one — `K.HEAT_TIER_WINDOW` |
+| 2 | **The Answering Strike** | A blow you **block** advances the chain by one, as a kill does. The shield becomes a tempo tool rather than a wall, and it is the same wiring that already lets a blocked blow keep the chain alive (`docs/METAGAME.md` §4.5) |
+| 3 | **The Slow Fade** | Motes never cool. A stamped multiplier holds until you sweep it, so a chain can be spent on fighting instead of on tidying — `K.HEAT_COOL_TIME` |
+| 4 | **The Second Wind** | A kill refunds the **whole** stamina bar, not `K.STAMINA_KILL`. A rule about kills, not the size of the bar — the stat is untouched |
+| 5 | **The Blazing Tithe** | At Blazing, a killed enemy drops a **second** mote. The top tier finally pays in quantity and not only in rate |
+
+**How deep — the space axis (GDD §2)**
+
+| | Echo | What it bends |
+|---|---|---|
+| 6 | **The Unbroken Rope** | The 1.2 s extraction channel cannot be broken by a blow that lands. You can always leave, so you can always go one room further — `docs/METAGAME.md` §5 |
+| 7 | **The Cold Ledger** | The fee is charged on the bag's **base** value; Heat's stamp is not taxed. This is the one Echo that cuts §2's central coupling, and it does it for exactly one run |
+| 8 | **The Deep Pocket** | Common-band ingredients stack twice as high. It does not add a slot — it changes what is worth bending down for, which is the more interesting half of the bag |
+| 9 | **The Quiet Room** | The first enemy in each room you enter is held for a beat. Every room opens on your terms, and a floor gets about one room deeper |
+| 10 | **The Returning Shaft** | Arrows are recovered from what they kill. The bow stops being rationed, so range becomes an option at depth rather than a budget — `docs/METAGAME.md` §4.6 |
+
+**Both axes — the two that are about the Echoes themselves**
+
+| | Echo | What it bends |
+|---|---|---|
+| 11 | **The Full Cup** | A bottle drunk while **Blazing** is not spent. Speed buys back the one thing you had to purchase in the garrison, and only while the leash is shortest |
+| 12 | **The Long Chord** | Offered on floor 3 or deeper only. **Every other Echo in the bag stops taking a slot.** It costs one and refunds the rest, so it is worth nothing unless you already committed — the only Echo whose value is a function of the others |
+
+### 6.2 Why these twelve and not others
+
+**Five push on tempo, five on depth, two on the carrying itself.** That split is
+the design, not an accident of listing: GDD §2 says the one question has two
+axes, and an Echo pool that leaned one way would quietly make one of those axes
+the real game.
+
+**Number 12 is the one to protect.** The Long Chord is the only Echo that makes
+the *slot cost* the subject, and it is what stops a pool of twelve small rule
+bends from being twelve flavours of the same shrug. A player who has taken three
+Echoes and is offered the Long Chord on floor 3 has a genuinely hard read on
+whether a fourth floor is coming.
+
+**Number 7 is the one to watch in tuning.** The Cold Ledger unpicks the coupling
+GDD §2 calls *the one question asked a second way* — Heat rides in the bag, so
+going fast raises the fee. Cutting that is powerful and it is *meant* to be, but
+it dies with the run and costs a slot, which is the whole reason found power is
+allowed to exist here at all. If it proves too strong, the fix is the floor it is
+offered on, never a percentage on the effect.
+
+**What was deliberately not written:** nothing that gates, points at, or reveals a
+chest — that is relic #8, the Sounding-Rod (GDD §6.2), and one drop must not do
+another's job. Nothing that holds a Heat chain through a break — that is the
+Sustain working (GDD §6.5). Nothing that burns a stack for soak — that is
+Ballast. Nothing that changes a price at a counter — that is relic #11. **Four
+near-misses, all of them rejected for the same reason: an Echo may not be a
+weaker copy of something permanent.**
+
+**The tuning values are not in this document.** "Twice as high", "a beat", "the
+whole bar" become numbers in `scripts/items/echo_db.gd` beside the rows they
+describe, for the reason `docs/METAGAME.md` opens with — a doc that restates a
+number is a doc that will disagree with the code.
+
 ---
 
 ## 7. The minibosses — four, and each one teaches the floor's verb
