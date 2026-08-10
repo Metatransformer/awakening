@@ -44,11 +44,27 @@ You play **Kael** *(tentative, 2026-08-10)* — a member of the **Far Lantern
 Society**, whose whole creed is three clauses long: *go far, come home, tell
 true*.
 
-**The name is the only thing about Kael this document fixes.** No backstory, no
-family, no arc: the Society's creed is the characterisation, and a game with zero
-dialogue trees and zero voiced lines (`docs/SCOPE.md` §1) has nowhere to put more
-than that. What the name buys is that the receipt, the plaque and the
-Lanternkeeper's board can say something other than "the player." Under the frontier town
+**The name and the pronoun are the only things about Kael this document fixes:
+he is male, and he is called Kael.** No backstory, no family, no arc — the
+Society's creed is the characterisation, and a game with zero dialogue trees and
+zero voiced lines (`docs/SCOPE.md` §1) has nowhere to put more than that. What
+the name buys is that the receipt, the plaque and the Lanternkeeper's board can
+say something other than "the player."
+
+The pronoun is written down because it was **not** consistent before: this
+document had the hero's own equipment screen reading *"her four stones"* two
+paragraphs from *"things he used to beat"* (§6.6), while `docs/CONTRACT.md` §0
+had said *him* since the beginning. Both now say the same thing. **In code he
+stays `the hero`** — `Hero`, `hero.gd`, unchanged; the name lives in the
+fiction, not in the identifiers.
+
+**The counters are the other people in this game, and none of them is him.** The
+vendor is a man (§6.3); the alchemist, the Lanternkeeper and the jewelcrafter are
+women (§6, §6.5, §6.6). **The smith's is not written down anywhere** — not here,
+not in `docs/METAGAME.md`, not in the code — so it is genuinely open, and the
+next person to need it should decide it rather than infer it. Worth stating,
+because §6.6 used to lean on a bare *she* to mean the jewelcrafter in a sentence
+whose other subject was the smith, which only parses if you already knew. Under the frontier town
 of **Valenfeld** there is a shaft into the works the **Vyr** built before they
 withdrew to their sky-seat and left the world to fail without them. You make runs
 into it. You take what the dead empire left. You decide, every time, when to
