@@ -199,15 +199,24 @@ func _opens(rig, door) -> void:
 	# Mid-swing, because the whole claim about the open is that it is AUTHORED --
 	# a door that teleported to its end pose would photograph identically at the
 	# other two shutter times. Which is exactly what the first run of this beat
-	# produced, so the angle is now MEASURED rather than assumed: a leaf that is
-	# already at its end stop 0.25 s after the press is a snap wearing a tween.
-	# NINE frames, for a tween that takes 0.85 s. The rig does not run at 60 Hz --
-	# this scene renders at roughly 22, so a frame count here buys about 45 ms of
-	# tween, not 17, and the first version of this beat waited 24 frames and
-	# photographed a door that had finished opening a third of a second earlier.
-	await rig.wait_frames(9)
+	# produced, so the angle is MEASURED rather than assumed: a leaf that is
+	# already at its end stop the first time it has moved at all is a snap
+	# wearing a tween.
+	#
+	# POLLED, not counted. This was `wait_frames(9)` against an assumed ~22 Hz
+	# render, which on a warm cache renders at ~60 and put the shutter at 0.15 s
+	# -- inside the leaves' own 0.22 s delay (they wait for the bars), so the
+	# measurement came back a flat 0.0 deg and the beat failed on a door that was
+	# opening perfectly. A frame count cannot express "part-way through a tween"
+	# on a rig whose frame rate is not fixed; the first frame on which the leaf
+	# has moved at all can.
 	var leaf: Node3D = door.get_node("PivotR")
-	var mid := absf(rad_to_deg(leaf.rotation.y))
+	var mid := 0.0
+	for _i in 240:
+		mid = absf(rad_to_deg(leaf.rotation.y))
+		if mid > 4.0:
+			break
+		await rig.wait_frames(1)
 	print("GATE mid-swing leaf=%.1f deg" % mid)
 	_ck("D6b the leaves are genuinely mid-swing (%.1f deg)" % mid,
 		mid > 4.0 and mid < 48.0)

@@ -424,7 +424,13 @@ func _draw() -> void:
 	var row2 := _rows[_cursor]
 	var bt := Pal.px(12.0 / PixelFont.H, s.y)
 	var bh := PixelFont.height(bt) * 1.5
-	var blurb := PixelFont.wrap(str(row2["blurb"]), bt, panel.size.x - pad * 2.0)
+	# FOUR lines, not `wrap`'s default two. The default silently truncated every
+	# blurb longer than two lines mid-word -- the Lanternkeeper's twelve lore
+	# rows all ended like "...AND GAVE IT TO THE", and the smith's and
+	# alchemist's longer lines with them. The block grows UPWARD off
+	# `panel.end.y`, and the gap between the last row and the footer is ~90 px at
+	# this scale, so four fit without touching the rows above.
+	var blurb := PixelFont.wrap(str(row2["blurb"]), bt, panel.size.x - pad * 2.0, 4)
 	var by := panel.end.y - pad * 2.4 - bh * (blurb.size() - 1)
 	for i in blurb.size():
 		PixelFont.draw_text(self, blurb[i],

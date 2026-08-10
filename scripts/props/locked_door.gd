@@ -105,6 +105,21 @@ const OPEN_TIME := 0.85
 static var SIGILS := {
 	&"bow": {"noun": "THE BOW", "hue": Pal.MOSS, "shape": &"bow"},
 	&"hookshot": {"noun": "THE HOOKSHOT", "hue": Pal.CYAN, "shape": &"hook"},
+	# The other two keys in the manifest. Floor 1's VAULT is keyed to floor 2's
+	# boss item (`FloorDb.vault_key`), so without these rows the first locked
+	# door a player meets on the first floor says "NEEDS A KEY" -- a generic
+	# refusal on the one door whose whole job is to name a thing worth going
+	# deeper for, and a straight miss of GDD pillar 3.
+	#
+	# Both wear the fallback KEYHOLE on purpose. The WORDS are the gap; authoring
+	# a bomb and a lantern glyph is art, and art is not this card. `shape` is
+	# still spelled out rather than left to `SIGIL_DEFAULT`, because `_sigil`
+	# indexes the row directly and a row missing the key is a crash, not a
+	# fallback. The hues are pulled apart from each other and from the two above
+	# so four doors are still four colours across a dark room -- and neither is
+	# `Pal.GOLD`, which STYLEGUIDE §2 reserves for currency.
+	&"bomb_bag": {"noun": "THE BOMB BAG", "hue": Pal.RUST, "shape": &"keyhole"},
+	&"far_lantern": {"noun": "THE FAR LANTERN", "hue": Pal.ARCANE, "shape": &"keyhole"},
 }
 
 ## For a key with no row: a plain keyhole in the game's off-white. A door that

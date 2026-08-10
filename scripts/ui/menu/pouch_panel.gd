@@ -552,8 +552,11 @@ func _do_fletch() -> void:
 func _describe_fletch() -> void:
 	_detail_kind.text = "THE BENCH"
 	_detail_name.text = "Fletch Arrows"
+	# `batch()`, never `BATCH`. The constant is the un-donated yield; the
+	# Fletcher's Jig raises it, and a panel reading the const says 5 over a bench
+	# that cuts 7.
 	_detail_value.text = "%d arrows  ·  %d / %d in the quiver" \
-		% [Fletching.BATCH, Game.arrows, Game.max_arrows]
+		% [Fletching.batch(), Game.arrows, Game.max_arrows]
 	_detail_blurb.text = "Flint for the heads, bone for the shafts. It is what " \
 		+ "the bottom of the bag is for, and it is the only reason to be glad " \
 		+ "of a shard."
@@ -570,7 +573,7 @@ func _paint_fletch() -> void:
 		return
 	_fletch_cost.text = Fletching.cost_line()
 	var ready := Fletching.can_fletch()
-	_fletch_have.text = "+%d" % mini(Fletching.BATCH, Fletching.quiver_room()) \
+	_fletch_have.text = "+%d" % mini(Fletching.batch(), Fletching.quiver_room()) \
 		if ready else "—"
 	_fletch_have.modulate = Color.WHITE if ready else Pal.RUST
 	_fletch_cost.modulate = Color.WHITE if ready else Color(1, 1, 1, 0.55)
