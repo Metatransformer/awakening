@@ -1245,6 +1245,31 @@ the live lock, and the trigger's release drops only its own. Leaving the
 `targetable` group is how a lock ends — that is the path a death takes out of
 `_validate`, so nothing needs a separate "my target died" hook.
 
+### The shoulder — a prop may take hold of the hero
+
+```gdscript
+# The hero, for anything with a face and a grid. All three duck-typed on the
+# prop's side (`has_method`), so neither file names the other's class.
+hero.wish_dir() -> Vector3          # the stick, camera-rotated. Read, do not act
+hero.grip_push(prop, axis, speed) -> bool   # take hold: cardinal, metres/second
+hero.release_push(prop) -> void     # the PROP lets go
+hero.gripping() -> bool             # has he got hold of anything
+
+# The prop, for the hero
+prop.release_grip() -> void         # the HERO lets go (rolled, hit, screen up)
+prop.grip_anchor() -> Vector3       # where the face he is holding actually is
+```
+
+`PushBlock` is the only thing that uses it (`docs/PUZZLES.md` §2). **The PROP
+senses and the hero obeys**: nothing on the hero's side reads input to decide
+whether the hold continues, because the question "is he still pressing into it"
+is the same question the block already asked to know it was being leaned on.
+
+Whoever lets go first does not get told back — `release_push` and `release_grip`
+are each other's silent halves, and a symmetric pair here is an infinite loop.
+While gripped the hero walks at the speed he was handed and ignores lateral
+stick; that is the mechanic, not a limitation.
+
 ### Items — the bottle ring
 
 ```gdscript

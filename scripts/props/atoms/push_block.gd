@@ -34,6 +34,31 @@ extends PuzzleAtom
 ## It does not read input itself for the reason `CLAUDE.md` §3 records: input in
 ## this project is polled by the hero and nothing else, and a prop with its own
 ## `_unhandled_input` is a prop that fights the pause menu.
+##
+## ## The grip
+##
+## The first shove GRABS. From that moment the hero is stuck to the face and
+## walking it along for as long as he keeps pressing into it -- Ocarina's block,
+## and the reason it is Ocarina's and not "lean, wait, catch up, lean again" is
+## that a four-metre push is four cells, and re-earning `PUSH_DELAY` and
+## re-squaring up for each one turns one decision into four chores.
+##
+## What the grip changes, and nothing else:
+##
+##   * **No second delay.** `PUSH_DELAY` is the price of STARTING, and it is
+##     there so that brushing past does not move the block. Once you have hold
+##     of it, cells chain straight into one another.
+##   * **The stone sets the pace** (`GRIP_SPEED`), and the hero matches it
+##     exactly, so the two travel as one body instead of him running at a thing
+##     that is running away. A scripted `push_to` keeps the crisper `SLIDE_TIME`
+##     -- see that function.
+##   * **The probe stops being the authority.** It is a 0.5 m shell and the whole
+##     point of the grip is that the player does not have to stay inside it by
+##     hand; `_on_exited` is ignored while gripped, and the STICK is what ends
+##     the hold.
+##
+## The hero owns none of this. He is handed an axis and a speed and told to walk
+## (`Hero.grip_push`); this file decides when that stops being true.
 
 ## Metres per shove. One block-width plus a finger, so a row of them reads as a
 ## grid rather than as a smear.
@@ -50,6 +75,17 @@ const PUSH_DOT := 0.76
 ## How close to the mark counts as seated. Generous against float drift over
 ## several slides; tight enough that the neighbouring cell does not qualify.
 const SEAT_TOL := STEP * 0.45
+## The pace a hero walks it along at, once he has hold. Walking speed and not
+## `STEP / SLIDE_TIME`: the man is the engine now, so the stone travels at the
+## speed of a man leaning on it, and the walk cycle under him is the one clip in
+## the library whose feet agree with that ground speed. (There is no push clip.
+## A shove animated at 3 m/s is a hero skating behind a rock.)
+const GRIP_SPEED := K.WALK_SPEED
+## How far off the axis the stick may wander before the hold breaks -- cos(70
+## deg). Deliberately looser than `PUSH_DOT`: what it takes to START a shove
+## should be squarer than what it takes to keep one going, or a wobbling thumb
+## drops a block halfway across the room.
+const GRIP_DOT := 0.34
 
 ## Where it belongs, in metres from where it was placed. The floor decal is this
 ## vector drawn. Zero means "no mark" -- see the class note on `armed`.
@@ -63,6 +99,12 @@ var _pusher: Node3D
 var _lean: float = 0.0
 var _sliding: bool = false
 var _home: Vector3 = Vector3.ZERO
+## The cardinal the grip is travelling down, or ZERO for "nobody has hold of it".
+var _grip: Vector3 = Vector3.ZERO
+## The next cell is a wall and we have already said so. Without it, a player
+## leaning on a jammed block gets `craft_fail` and a raycast every frame he
+## keeps holding -- which he will, because leaning is how he finds out.
+var _jammed: bool = false
 
 
 func _ready() -> void:
@@ -75,16 +117,38 @@ func _ready() -> void:
 # --- The shove ----------------------------------------------------------------
 
 func _physics_process(delta: float) -> void:
-	if _sliding or is_solved() or not armed:
+	if is_solved() or not armed:
+		_let_go()
 		return
 	if _pusher == null or not is_instance_valid(_pusher):
+		_let_go()
 		_lean = 0.0
 		return
 	var wish := Vector3.ZERO
 	if _pusher.has_method(&"wish_dir"):
 		wish = _pusher.wish_dir()
 	wish.y = 0.0
-	if wish.length_squared() < 0.25:
+	var stick := wish.length_squared() >= 0.25
+
+	# Held. The one question left is whether he is still pressing INTO it, and
+	# the answer is the stick's alone -- not the probe's, not his position, not
+	# how far the block has got. He let go, or he did not.
+	if _grip != Vector3.ZERO:
+		if not stick or wish.normalized().dot(_grip) < GRIP_DOT:
+			_let_go()
+			return
+		# The hero may have been knocked out of the grip at his end (a hit, a
+		# shop screen, a roll). Then it is over here too -- otherwise the block
+		# keeps sliding under a man who is no longer touching it.
+		if _pusher.has_method(&"gripping") and not bool(_pusher.call(&"gripping")):
+			_let_go()
+			return
+		# No `PUSH_DELAY` here: that is the price of starting, and he has paid it.
+		if not _sliding and not _jammed and not push_to(_grip, STEP / GRIP_SPEED):
+			_jammed = true
+		return
+
+	if _sliding or not stick:
 		_lean = 0.0
 		return
 	var into := _body.global_position - _pusher.global_position
@@ -97,7 +161,57 @@ func _physics_process(delta: float) -> void:
 	_lean += delta
 	if _lean >= PUSH_DELAY:
 		_lean = 0.0
-		push_to(_cardinal(into))
+		_take_hold(_cardinal(into))
+
+
+## The grab. Squares the axis, hands the hero the walk, and shoves the first
+## cell -- one function because they are one moment: the shove IS the grab, and
+## a block that grabbed you a beat before it moved would be a block that stole
+## your feet for nothing.
+##
+## A hero who cannot take hold (mid-swing, or a director's bare Node3D with no
+## such method) still gets the old shove, at the old crisp `SLIDE_TIME`. Nothing
+## about this atom requires the grip; the grip is what happens when the thing
+## leaning on it has hands.
+func _take_hold(axis: Vector3) -> void:
+	if axis == Vector3.ZERO:
+		return
+	_jammed = false
+	if _pusher.has_method(&"grip_push") \
+			and bool(_pusher.call(&"grip_push", self, axis, GRIP_SPEED)):
+		_grip = axis
+		if not push_to(axis, STEP / GRIP_SPEED):
+			_jammed = true
+		return
+	push_to(axis)
+
+
+## Let go, from this end. Tells the hero, unless he is the one who told us.
+func _let_go() -> void:
+	if _grip == Vector3.ZERO:
+		return
+	_grip = Vector3.ZERO
+	_jammed = false
+	_lean = 0.0
+	if _pusher != null and is_instance_valid(_pusher) \
+			and _pusher.has_method(&"release_push"):
+		_pusher.call(&"release_push", self)
+
+
+## Let go, because the HERO says so. Silent, for the same reason `release_push`
+## is: whoever spoke first does not need telling back.
+func release_grip() -> void:
+	_grip = Vector3.ZERO
+	_jammed = false
+	_lean = 0.0
+
+
+## Where the face he is holding actually is. The BODY's position and not the
+## root's -- the root is the anchor the mark is measured from and it never moves,
+## so a hero centring himself on it would drift further off the block with every
+## cell it travelled.
+func grip_anchor() -> Vector3:
+	return _body.global_position
 
 
 ## Snap a heading to the nearer world axis. The grid is what makes a block puzzle
@@ -113,7 +227,12 @@ func _cardinal(v: Vector3) -> Vector3:
 ## One step, if the next cell is clear. Public so a director can shove it without
 ## standing a hero next to it -- proving the SEATING separately from the sensing
 ## is the whole reason the two halves are separate functions.
-func push_to(dir: Vector3) -> bool:
+##
+## `time` defaults to the crisp `SLIDE_TIME` a scripted shove has always used. A
+## grip passes `STEP / GRIP_SPEED` instead, which is slower, and has to: the man
+## walking behind it travels at exactly that speed, and any other number here is
+## either his chest inside the stone or a gap opening in front of him.
+func push_to(dir: Vector3, time: float = SLIDE_TIME) -> bool:
 	if _sliding or is_solved() or not armed or dir == Vector3.ZERO:
 		return false
 	var from := _body.global_position
@@ -127,7 +246,7 @@ func push_to(dir: Vector3) -> bool:
 	# Linear, deliberately. Stone dragged over stone does not ease -- an eased
 	# slide reads as a thing floating, which is exactly the note
 	# `docs/STYLEGUIDE.md` makes about weight.
-	tw.tween_property(_body, "global_position", to, SLIDE_TIME)
+	tw.tween_property(_body, "global_position", to, time)
 	tw.tween_callback(_settled)
 	return true
 
@@ -171,12 +290,17 @@ func _mark_world() -> Vector3:
 
 
 func _on_entered(b: Node3D) -> void:
-	if b.is_in_group(&"player"):
+	if b.is_in_group(&"player") and _grip == Vector3.ZERO:
 		_pusher = b
 
 
+## Ignored while gripped, deliberately. The probe is a 0.5 m shell and the hero
+## rides a few centimetres of accelerate-and-catch-up at the start of every cell;
+## a hold that the shell could revoke would be a hold that dropped itself on the
+## first shove about a third of the time, which is exactly how this read before
+## the grip existed.
 func _on_exited(b: Node3D) -> void:
-	if b == _pusher:
+	if b == _pusher and _grip == Vector3.ZERO:
 		_pusher = null
 		_lean = 0.0
 
