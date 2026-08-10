@@ -102,7 +102,27 @@ const BIND_SCHEMA := 12
 ## `attack` bound to N in the shipped config, and the game booted with a dead
 ## sword button until it was found. Pass `--settings=user://scratch.cfg` after
 ## the `--` separator to sandbox a run.
+##
+## THAT WAS ONCE ADVICE AND IT WAS NOT ENOUGH: the same director did it a second
+## time, because a doc comment asking every future harness to remember a flag is
+## not a mechanism. `shoot.gd` now sets `HARNESS_META` before the autoloads are
+## ready and this reads it, so a harness run is sandboxed whether or not its
+## author thought about it. An explicit `--settings=` still wins over both.
+##
+## The second round did more damage than the first, and the reason is worth
+## keeping: shoot.gd strips every joypad binding out of the InputMap for the
+## life of a run (its own §"deafen the gamepad"). A rebind under the harness
+## therefore serialises an action whose pad event is ALREADY GONE, and
+## `apply_binds` erases before it replays — so one keyboard rebind in a menu
+## test silently unbound RB from `attack` in the player's real config, for good.
+## Sandboxing the file is what makes that unreachable.
 var path: String = DEFAULT_PATH
+
+## Set by `tools/shoot.gd` in `_initialize()` — i.e. before any autoload's
+## `_ready` — to the scratch config a harness run should write instead of the
+## player's. On `Engine` rather than a global because Settings is itself an
+## autoload: there is no node to read at that point in the boot.
+const HARNESS_META := &"zl_harness_settings_path"
 
 signal changed(section: StringName, key: StringName, value: Variant)
 
@@ -152,6 +172,10 @@ const MOUSE_WAKE := 3.0
 
 
 func _ready() -> void:
+	# Order matters: the harness default is applied first so that an explicit
+	# `--settings=` on the command line still overrides it.
+	if Engine.has_meta(HARNESS_META):
+		path = str(Engine.get_meta(HARNESS_META))
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--settings="):
 			path = arg.substr(11)
