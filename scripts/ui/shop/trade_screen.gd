@@ -377,6 +377,14 @@ func _build_body(parent: Node) -> void:
 		_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		inner.add_child(_scroll)
 		UITheme.style_scrollbar(_scroll)
+		# The board is not the only thing that decides how tall the board is: a
+		# refusal builds a toast into the footer, the footer grows, and this
+		# viewport loses a line off its bottom. The scroll offset does not move
+		# with it, so the cell the cursor is ON gets clipped in half at exactly
+		# the moment the counter is explaining why it said no. Re-ask on every
+		# resize rather than at the toast's call site -- the toast is one of
+		# several things down there that can change height.
+		_scroll.resized.connect(_keep_cursor_in_view)
 
 		_ladder = UpgradeLadder.new()
 		_ladder.name = "Board"
@@ -489,6 +497,29 @@ func _db() -> GDScript:
 	return catalogue if catalogue != null else ShopDb
 
 
+## The rows of the board, never empty while the counter has lines.
+##
+## `Catalogue.groups()` documents its default as "one row holding every line" and
+## then returns `[]`, because it cannot do otherwise: a bare `lines()` written
+## inside `Catalogue` binds to `Catalogue.lines()` at parse time and hands back
+## the base class's empty list (CLAUDE.md §3, the same trap that shipped a smith
+## saying HOLD ENT TO CRAFT). There is no virtual dispatch to climb back down to
+## the subclass.
+##
+## So the default is built HERE, where the handle exists and the call does
+## dispatch. That matters beyond tidiness: `Catalogue` promises a new counter
+## costs a `lines()` and nothing else, and the Lanternkeeper took that promise at
+## its word -- twelve relics, no `groups()`, and a board with nothing drawn on it
+## for as long as she has existed. A sixth catalogue gets the grid it was told it
+## would get.
+func _board() -> Array:
+	var db := _db()
+	var groups: Array = db.groups()
+	if not groups.is_empty():
+		return groups
+	return [Catalogue.flat_group("", db.lines())]
+
+
 func _refresh() -> void:
 	_rows.clear()
 	if mode == Mode.SELL:
@@ -506,6 +537,7 @@ func _refresh() -> void:
 			"label": String(row["label"]),
 			"sub": String(row["sub"]),
 			"tint": row["color"],
+			"sub_tint": row.get("sub_tint", Color.WHITE),
 			"mark": bool(row.get("mark", false)),
 			"dim": not bool(row["ok"]),
 		})
@@ -516,10 +548,15 @@ func _refresh() -> void:
 		for i in _rows.size():
 			_order.append(i)
 	else:
-		_ladder.set_board(_db().groups(), cells)
-		_scroll.visible = not _rows.is_empty()
+		_ladder.set_board(_board(), cells)
+		# The BOARD decides, not `_rows`. A catalogue can hand back twelve lines
+		# and a board that draws none of them, and the pane that results is blank
+		# with no words on it -- which is what the Lanternkeeper shipped: twelve
+		# rows, an empty left pane, and "Sold out." suppressed because `_rows` was
+		# not empty. A counter with nothing ON it says so.
+		_scroll.visible = _ladder.count() > 0
 		_order = _ladder.order().duplicate()
-	_empty.visible = _rows.is_empty()
+	_empty.visible = _rows.is_empty() if mode == Mode.SELL else not _scroll.visible
 
 	# A refresh can retire the line the cursor was on -- a finished ladder loses
 	# its buyable rung, a committed piece loses its whole losing branch. Landing
@@ -574,16 +611,32 @@ func _build_sell_rows() -> void:
 		})
 
 
+## What a free line says where its price would go. `remaining()` is -1 for the
+## unlimited lines every other counter sells, so this is silent unless a counter
+## is handing out finite things for nothing -- which is the Lanternkeeper and
+## only her.
+func _tally(left: int) -> String:
+	return UpgradeLadder.TICK if left == 0 else ""
+
+
 func _build_buy_rows() -> void:
 	for line in _db().lines():
 		var left: int = _db().remaining(line["id"])
+		var cost := int(line["cost"])
 		_rows.append({
 			"kind": &"buy",
 			"line": line,
 			"label": String(line["label"]),
 			"count": left,
-			"price": int(line["cost"]),
-			"sub": "%d ◇" % int(line["cost"]),
+			"price": cost,
+			# The price, when there is one. A counter that charges nothing has no
+			# price column, and the Lanternkeeper's board printed "0 ◇" twelve
+			# times before it had one -- a number repeated down the whole screen
+			# to say a thing the header already says. What her board is actually
+			# keeping is a tally of which of the twelve are IN, so a line that is
+			# free and spent for good says so with the ladder's own tick.
+			"sub": ("%d ◇" % cost) if cost > 0 else _tally(left),
+			"sub_tint": Pal.MOSS if cost <= 0 else Color.WHITE,
 			"color": Pal.BONE,
 			# The blurb says what the thing IS; the detail says what the number
 			# DOES, in the unit the player feels. A forge line without the second
@@ -618,6 +671,18 @@ func _point_at(i: int) -> void:
 		if _scroll != null:
 			_scroll.ensure_control_visible.call_deferred(cell)
 	_describe()
+
+
+## Put the cursor's cell back in the viewport after something else changed the
+## viewport's size. Deferred for the same reason `_point_at` defers: on a resize
+## frame the containers have not finished laying out, and scrolling to a rect
+## that has not moved yet scrolls to where the cell used to be.
+func _keep_cursor_in_view() -> void:
+	if mode == Mode.SELL or _scroll == null or _ladder == null:
+		return
+	var cell := _ladder.cell_at(_ladder.slot_of_line(_cursor))
+	if cell != null and cell.get_viewport() != null:
+		_scroll.ensure_control_visible.call_deferred(cell)
 
 
 ## The mouse landed on a cell. Follow it — a click is also a look.

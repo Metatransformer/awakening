@@ -1063,6 +1063,17 @@ the screen reads as "one row holding every line", i.e. the flat grid the counter
 had before; `Catalogue.flat_group()` builds that row for a subclass that wants
 part of its board flat (the alchemist's DRAUGHTS).
 
+**That default lives in `TradeScreen._board()`, not in `Catalogue`, and cannot
+move.** A `lines()` written bare inside `Catalogue.groups()` binds to
+`Catalogue.lines()` at parse time and hands back the base class's empty list —
+the same no-virtual-dispatch trap as `craft_verb` below. The screen holds the
+subclass handle, so the call dispatches there and only there. This was not
+hypothetical: `RelicDb` took the contract at its word, overrode `lines()` and
+nothing else, and the Lanternkeeper's counter drew a **blank left pane** — twelve
+rows in `_rows`, a detail pane describing them, and no board. The screen's
+"nothing here" label keys off the BOARD for the same reason: a pane with no cells
+on it says so, whatever `lines()` claims.
+
 The ladder knows nothing about gold, components or `Game` — the cursor, prices,
 affordability and the commit all stay in `TradeScreen`, exactly as when the board
 was a grid. It is a **control**, not a screen; SCOPE §1 adds none.
