@@ -247,9 +247,20 @@ func _e_solve(rig) -> void:
 
 	for at: int in plan:
 		var lamp: Node = _grid.call(&"cell", at)
-		lamp.call(&"apply_hit", null)
-		# One press per re-arm window. A director that pressed faster than the
-		# prop allows would be proving a puzzle the player cannot play.
+		# **Press until it takes, not for a fixed time.** One press per re-arm
+		# window is the rule -- a director that pressed faster than the prop allows
+		# would be proving a puzzle the player cannot play -- but a wall-clock sleep
+		# of `REARM` + a bit is a coin flip on a cold run, where one stalled frame
+		# swallows the blow and the walk silently drops a press. A cold-import run
+		# failed E1 exactly that way. So: swing, and if the board did not move,
+		# wait out the window and swing again.
+		for _try in 6:
+			var before: Array = (_grid.call(&"board") as Array).duplicate()
+			lamp.call(&"apply_hit", null)
+			await rig.wait_frames(6)
+			if (_grid.call(&"board") as Array) != before:
+				break
+			await rig.wait_seconds(0.4)
 		await rig.wait_seconds(0.4)
 	await rig.wait_frames(30)
 
