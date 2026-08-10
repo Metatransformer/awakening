@@ -1,7 +1,9 @@
 extends RefCounted
-## M1's second half (docs/SCOPE.md §3): **the atom kit.** The eight phase-1
-## puzzle props of `docs/PUZZLES.md` §2, each a body that emits `solved`, and a
-## door that listens with a refusal that names the verb.
+## M1's second half (docs/SCOPE.md §3): **the atom kit.** The phase-1 puzzle
+## props of `docs/PUZZLES.md` §2, each a body that emits `solved`, and a door
+## that listens with a refusal that names the verb. Eight at M1; the lantern is
+## the ninth (the owner's amendment of 2026-08-10) and `lights_out.gd` is what
+## proves the puzzle it was added FOR.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/_atom_test.tscn \
@@ -11,10 +13,10 @@ extends RefCounted
 ## What it claims, in the order it proves them:
 ##
 ##   A  `PuzzleAtoms.validate()` is clean: eight rows, every script on disk,
-##      every tier on the ladder, eight distinct non-empty refusals.
-##   B  All eight BUILD, through `PuzzleAtoms.make()` -- the same call a
+##      every tier on the ladder, nine distinct non-empty refusals.
+##   B  All nine BUILD, through `PuzzleAtoms.make()` -- the same call a
 ##      generator makes -- and are photographed together, unsolved. This is the
-##      lookdev half: eight props that are all grey boxes would pass every
+##      lookdev half: nine props that are all grey boxes would pass every
 ##      assertion below and still be unshippable.
 ##   C  Each one solves by ITS OWN VERB, not by `solve()`:
 ##        key      the hero walks onto it, and `Game.small_keys` grows by one
@@ -29,6 +31,9 @@ extends RefCounted
 ##        ring     the firer's `on_bitten`, which is the one call in the game
 ##                 that can tell a marker it was caught
 ##        socket   the hero in the shaft with the guard up, aimed
+##        lantern  a blow, and it TOGGLES -- lit goes dark again on the second,
+##                 which no other atom in the kit but the plate can do, and the
+##                 plate only does it by being stepped off
 ##   D  A `PuzzleGate` adopts its three atoms by tag, refuses with a COUNT
 ##      ("3 OF 3 EYES STILL SHUT"), counts down as they land, and opens itself on
 ##      the last one. Photographed shut and open.
@@ -77,13 +82,14 @@ func run(rig) -> void:
 	await _c_pillar(rig)
 	await _c_ring(rig)
 	await _c_socket(rig)
+	await _c_lantern(rig)
 	await _shoot_kit(rig, "02_kit_solved.png")
 
 	await _d_gate(rig)
 	_e_flags()
 
 	if _fails == 0:
-		print("ATOM OK the eight atoms answer their own verbs and the gate counts")
+		print("ATOM OK the nine atoms answer their own verbs and the gate counts")
 	else:
 		print("ATOM FAIL %d checks failed" % _fails)
 
@@ -111,7 +117,7 @@ func _a_table() -> void:
 	_ck("the urn never gates", not t0.has(PuzzleAtoms.URN))
 
 
-# --- B. Eight props -----------------------------------------------------------
+# --- B. The props -------------------------------------------------------------
 
 ## Where each atom stands.
 ##
@@ -145,6 +151,11 @@ func _plan() -> Array:
 		# Placed so the CATCH lands at z = +1 in open floor: the hero has to be
 		# able to stand in it, and half the ground is a ledge.
 		[PuzzleAtoms.SUN_SOCKET, Vector3(-0.4, CHAMBER_Y, -4.0), PI, &"demo"],
+		# The ninth. Proved here as a PROP -- one post, one blow, it toggles -- and
+		# nothing more: coupling is `LanternGrid`'s and `lights_out.gd` proves that.
+		# Splitting it that way is the point of the split everywhere else in this
+		# file, that a verb is proved by driving the verb.
+		[PuzzleAtoms.LANTERN, Vector3(-6.2, CHAMBER_Y, 2.6), 0.0, &""],
 	]
 
 
@@ -165,7 +176,7 @@ func _b_build(rig) -> void:
 			node.set(&"mark_offset", Vector3(3.6, 0.0, 0.0))
 		rig.scene().add_child(node)
 		_atoms[id] = node
-	_ck("all eight built (%d)" % _atoms.size(), _atoms.size() == 8)
+	_ck("all nine built (%d)" % _atoms.size(), _atoms.size() == 9)
 
 	# Two more eyes, so the gate has a SET and its refusal has something to count.
 	# Same tag, different `index` -- which is the whole reason `index` is on
@@ -190,7 +201,31 @@ func _solved(id) -> bool:
 	return a != null and bool(a.call(&"is_solved"))
 
 
-# --- C. Eight verbs -----------------------------------------------------------
+# --- C. The verbs -------------------------------------------------------------
+
+
+## A blow, then another. The lantern is the only atom in the kit whose SECOND
+## answer to its own verb undoes the first, and that is not a detail -- it is the
+## property `LanternGrid` is built out of. An atom that latched could not be
+## coupled to anything.
+func _c_lantern(rig) -> void:
+	var lamp := _atom(PuzzleAtoms.LANTERN)
+	if lamp == null:
+		_ck("the lantern built", false)
+		return
+	_ck("the lantern starts dark", not _solved(PuzzleAtoms.LANTERN))
+	lamp.call(&"apply_hit", null)
+	await rig.wait_frames(6)
+	_ck("a blow lights it", _solved(PuzzleAtoms.LANTERN))
+	# Past `REARM`. Inside it the second blow is swallowed on purpose -- one sword
+	# arc reports `apply_hit` on several frames and a toggle that took all of them
+	# would look like it ignored the player.
+	await rig.wait_seconds(0.4)
+	lamp.call(&"apply_hit", null)
+	await rig.wait_frames(6)
+	_ck("and a second blow puts it out again (the only atom that goes both ways)",
+		not _solved(PuzzleAtoms.LANTERN))
+
 
 ## Walk onto it. The real pickup path -- `Game.add_key` sits inside the atom's own
 ## overlap guard, and a director that called `solve()` would skip the one line
