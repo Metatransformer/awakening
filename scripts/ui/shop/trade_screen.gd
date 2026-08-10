@@ -35,6 +35,13 @@ var catalogue: GDScript = null
 
 var _rows: Array[Dictionary] = []
 var _cursor: int = 0
+## First row drawn. The list WINDOWS rather than shrinking to fit: the smith's
+## board went from eight lines to fifteen when `plate` became four pieces times
+## two paths (docs/GDD.md §6.6), and a bag of thirty stacks was always able to
+## overrun the panel from the SELL side -- it just happened to be rarer. Set in
+## `_draw`, which is the only place that knows how many rows the panel can hold
+## at the current viewport size.
+var _top: int = 0
 var _shown_gold: float = 0.0
 var _flash: float = -1.0
 var _flash_row: int = -1
@@ -366,7 +373,18 @@ func _draw() -> void:
 	var rt := Pal.px(14.0 / PixelFont.H, s.y)
 	var y := rule_y + Pal.px(12.0, s.y)
 
-	for i in _rows.size():
+	# The window. The blurb block below is reserved at its FULL four lines even
+	# when the selected row only needs one, because a list whose height changed as
+	# the cursor moved down it would shuffle every row under the cursor -- the one
+	# thing a list you are aiming at must never do.
+	var bt0 := Pal.px(12.0 / PixelFont.H, s.y)
+	var blurb_top := panel.end.y - pad * 2.4 - PixelFont.height(bt0) * 1.5 * 3.0
+	var fit := maxi(1, int((blurb_top - y - Pal.px(10.0, s.y)) / row_h))
+	_top = clampi(_top, maxi(0, _cursor - fit + 1), _cursor)
+	_top = clampi(_top, 0, maxi(0, _rows.size() - fit))
+	var last: int = mini(_rows.size(), _top + fit)
+
+	for i in range(_top, last):
 		var row := _rows[i]
 		var selected := i == _cursor
 		var r := Rect2(panel.position.x + pad * 0.5, y,
@@ -416,6 +434,22 @@ func _draw() -> void:
 			Vector2(r.end.x - pad, text_y), rt, price_col)
 
 		y += row_h
+
+	# "There is more of this list." Two carets in the price column's gutter, drawn
+	# only when there is something off the end -- without them a windowed list is
+	# indistinguishable from a short one, and a player who cannot see the boots
+	# rows does not know to press down.
+	if _rows.size() > fit:
+		var cx := panel.end.x - pad * 0.9
+		var ct := Pal.px(12.0 / PixelFont.H, s.y)
+		# The D-pad's own glyphs, which are in the table -- `^` and `v` are not,
+		# and MISSING draws as a filled 5x7 block that reads as a deliberate mark
+		# (see the note over `=` in PixelFont).
+		if _top > 0:
+			PixelFont.draw_right(self, "↑", Vector2(cx,
+				rule_y + Pal.px(2.0, s.y)), ct, Pal.MOTH)
+		if last < _rows.size():
+			PixelFont.draw_right(self, "↓", Vector2(cx, y), ct, Pal.MOTH)
 
 	# The blurb for the highlighted line, in the one place blurbs ever appear.
 	# Wrapped, not clipped: a forge line carries its before/after numbers here

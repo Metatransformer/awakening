@@ -60,6 +60,8 @@ var _detail_hand: Label
 var _detail_blurb: Label
 var _detail_legend: Label
 var _detail_ammo: Label
+## Stat id -> the right-hand Label on its row. See `_build_stats`.
+var _stat_values: Dictionary[StringName, Label] = {}
 
 
 func _ready() -> void:
@@ -153,6 +155,7 @@ func _build() -> void:
 	split.add_child(right)
 
 	_build_detail(right)
+	_build_stats(right)
 	_wire_focus()
 
 	var footer := PanelContainer.new()
@@ -363,6 +366,101 @@ func _build_detail(parent: Node) -> void:
 	col.add_child(_detail_legend)
 
 
+## **Five stats, and there is no sixth** (docs/GDD.md §6.6, docs/SCOPE.md §1).
+## Damage, speed, max health, stamina, soak. Every one is a number the player can
+## feel inside one run; a stat that needs a tooltip explaining why it matters is
+## a stat that does not matter, and the moment this card grows a sixth row the
+## gear loop has become a character sheet.
+##
+## **Nothing here is recomputed.** Every value comes back from an accessor on
+## `Game` -- the same call the sword, the hero's locomotion, the HUD and the two
+## shop counters read -- so a stat block and the game can never disagree about
+## what the hero is. The first draft of this summed `K.PLATE_HEAVY_SOAK` itself
+## and was wrong within an hour of the jewelcrafter landing, because `Ward` is a
+## second faucet on soak and the panel did not know.
+##
+## Here rather than on the pouch because this is the screen about WHAT YOU ARE:
+## the pouch is what you are carrying and what leaving will cost. It sits under
+## the detail pane on the right, which is the column that already answers
+## "and what does that mean" for whatever has focus.
+##
+## No art, per STYLEGUIDE §5 -- the menu owns no art. Five labelled rows.
+const STATS: Array[StringName] = [
+	&"damage", &"speed", &"health", &"stamina", &"soak",
+]
+const STAT_NAMES := {
+	&"damage": "DAMAGE",
+	&"speed": "SPEED",
+	&"health": "MAX HEALTH",
+	&"stamina": "STAMINA",
+	&"soak": "SOAK",
+}
+
+
+func _build_stats(parent: Node) -> void:
+	var card := PanelContainer.new()
+	card.name = "Stats"
+	card.theme_type_variation = &"MenuSection"
+	parent.add_child(card)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 6)
+	card.add_child(col)
+
+	var head := Label.new()
+	head.theme_type_variation = &"MenuHeading"
+	head.text = "THE HERO"
+	col.add_child(head)
+
+	for id: StringName in STATS:
+		var row := HBoxContainer.new()
+		row.name = String(id).capitalize()
+		col.add_child(row)
+
+		var name_label := Label.new()
+		name_label.theme_type_variation = &"MenuSlotStat"
+		name_label.text = String(STAT_NAMES[id])
+		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(name_label)
+
+		var value := Label.new()
+		value.theme_type_variation = &"MenuValue"
+		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		row.add_child(value)
+		_stat_values[id] = value
+
+
+## The five numbers, in the units the player feels them in.
+##
+## Quarter-hearts for the two that are quarter-hearts, because that is what the
+## HUD draws and what `Hero.hurt` subtracts. Speed as a percentage of the
+## measured `[oot]` run rather than in metres a second: the player has no way to
+## know what 4.8 m/s felt like, and 100% is a ceiling they can read as one.
+func _refresh_stats() -> void:
+	if _stat_values.is_empty():
+		return
+	_stat_values[&"damage"].text = "+%d %s" % [
+		Game.sword_bonus(), _quarters(Game.sword_bonus())]
+	_stat_values[&"speed"].text = "%.1f%%" % (Game.speed_mult() * 100.0)
+	_stat_values[&"health"].text = "%d hearts" % Game.heart_containers()
+	_stat_values[&"stamina"].text = "%d" % int(round(Game.max_stamina))
+	# The exact figure beside the one that actually applies, because
+	# `armour_soak()` FLOORS and four pieces at 0.4 each is 1.6 -- a player who
+	# only saw "1" would read three purchases as having done nothing.
+	var exact := Game.armour_soak_exact()
+	var applied := Game.armour_soak()
+	_stat_values[&"soak"].text = "-%d %s" % [applied, _quarters(applied)] \
+		if is_equal_approx(exact, floorf(exact)) \
+		else "-%d %s  (%.1f)" % [applied, _quarters(applied), exact]
+
+
+## "quarter" or "quarters". A one-word helper rather than living with "+1
+## quarters", because the stat block is five short lines and a grammar slip on
+## one of them is the whole card looking unfinished.
+func _quarters(n: int) -> String:
+	return "quarter" if n == 1 else "quarters"
+
+
 ## Grid wiring, done by hand because MenuUtil.chain does closed loops and this is
 ## a 2x2 with a button under it. Left/right wraps within a row; up/down walks the
 ## whole thing and lands on Swap Set at the bottom, so there is no orphan.
@@ -412,6 +510,7 @@ func refresh() -> void:
 		_set_frames[i].modulate = Color.WHITE if live else Color(1, 1, 1, 0.62)
 	for b in _slots:
 		_paint(b)
+	_refresh_stats()
 	var focused := get_viewport().gui_get_focus_owner()
 	if _slots.has(focused):
 		_describe(focused as Button)

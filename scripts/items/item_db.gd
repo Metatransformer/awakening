@@ -33,7 +33,7 @@ static func is_component(id: StringName) -> bool:
 ## want a stable list, and neither should hardcode one.
 ##
 ## `bench` narrows it to one counter's materials (`ItemDef.BENCH_FORGE` /
-## `BENCH_ALCHEMY`); the default is everything, because the pouch draws one
+## `BENCH_ALCHEMY` / `BENCH_JEWEL`); the default is everything, because the pouch draws one
 ## workbench and the bag never cared which counter a thing was for.
 static func components(bench: StringName = &"") -> Array[StringName]:
 	var out: Array[StringName] = []
@@ -116,6 +116,24 @@ static func _build() -> void:
 	_add(ItemDef.brew(&"mourning_dew", "Mourning Dew", 85, R, 2,
 		Color(0.66, 0.80, 0.94), "Collected off stone that never sees a morning."))
 
+	# --- Stones: what the jewelcrafter eats ----------------------------------
+	# TWO, against the forge's four and the alchemist's four, because her ladders
+	# are the shallowest thing in the game to want a component at all: eight
+	# tracks that only ever climb from a blank you already bought. A third stone
+	# would be a third thing to find for a counter whose whole offer is "spend the
+	# speed you lost".
+	#
+	# No id is shared with the other two benches, and that is a rule rather than a
+	# coincidence -- see `ItemDef.bench`. The competition she creates is for the
+	# BAG SLOT, which is the only competition this economy actually needs.
+	_add(ItemDef.gem(&"silver_wire", "Silver Wire", 15, C, 8,
+		Color(0.80, 0.84, 0.90), "Drawn thin enough to hold a stone and nothing else."))
+	# Chests only, like the Cold Iron Core and the Mourning Dew, and for the third
+	# time the same reason: the top of a ladder is an EVENT. Rarer than the core
+	# because two of them finish a jewel and one finishes a ladder.
+	_add(ItemDef.gem(&"cut_gemstone", "Cut Gemstone", 95, R, 3,
+		Color(0.72, 0.46, 0.86), "Faceted before the Sundering. Nobody has cut one since."))
+
 	# --- The twelve relics ---------------------------------------------------
 	# Built from `RelicDb.RELICS`, never typed out again. `Run.collect` refuses an
 	# id this catalogue has never heard of, so WITHOUT a row here a relic cannot
@@ -189,6 +207,8 @@ const ENEMY_DROPS := {
 	&"fired_cullet": 9,
 	&"bitter_root": 6,
 	&"ash_resin": 3,
+	# The jewelcrafter's share. Wire only -- a cut stone never falls off a body.
+	&"silver_wire": 5,
 }
 
 ## Chests are the reason to explore off the critical path, so their floor is
@@ -215,6 +235,10 @@ const CHEST_DROPS := {
 	# core: the core finishes a ladder you were already climbing, the dew opens a
 	# slot you have never had.
 	&"mourning_dew": 2,
+	&"silver_wire": 11,
+	# Rarer than the core (3) and on a par with the dew: two of these finish one
+	# jewel path, and one core finishes a whole ladder.
+	&"cut_gemstone": 2,
 }
 
 

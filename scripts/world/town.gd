@@ -70,6 +70,7 @@ var vendor: Npc
 var smith: Npc
 var alchemist: Npc
 var keeper: Npc
+var jeweller: Npc
 var gate: Npc
 ## The twelve dark props, in `RelicDb` catalogue order. Public so a director can
 ## photograph one corner before and after, which is the only way anybody can
@@ -337,6 +338,29 @@ func _build_people() -> void:
 	# partly to keep out of her lamp post.
 	keeper = _counter(Npc.Role.KEEPER,
 		Vector3(yard.x * 0.25, 0.0, yard.y * 0.20), -140.0, Pal.GOLD)
+
+	# The jewelcrafter, hard against the WEST wall and side-on to the yard.
+	#
+	# Her place in the loop is what fixes her position, not the free floor: her
+	# whole offer is "spend back what the plate cost you" (GDD §6.6), so she has
+	# to come AFTER the smith. The smith is at the north end; the walk from him
+	# to the gate runs down this wall. Standing her beside the forge would let a
+	# player answer the heavy-or-light trade before they had felt it.
+	#
+	# Two constraints pin the exact metre, and both have already caught someone:
+	#
+	#  * **Inside the arrival frame.** z = +1.1 is forward of the arrival spot
+	#    (z ≈ +4.8) rather than behind it, so she is on screen on the one frame
+	#    every returning player sees. That is the note over the alchemist, and
+	#    the first cut of this row put her at z = +6.6 -- behind the camera.
+	#  * **Out of the relic ring.** `_build_relic_props` puts twelve lamp posts
+	#    on an ellipse of (11, 9); the two nearest this wall land at (-10.16,
+	#    3.44) and (-10.91, -1.17). This is the gap between them.
+	#
+	# Yaw 90° faces her +Z down +X, into the yard, which also means `_counter`
+	# steps her BACK toward the wall rather than out into the walk.
+	jeweller = _counter(Npc.Role.JEWELLER,
+		Vector3(-yard.x * 0.396, 0.0, yard.y * 0.05), 90.0, Color(0.80, 0.62, 0.94))
 
 	gate = Npc.new()
 	gate.role = Npc.Role.GATE

@@ -305,7 +305,8 @@ const ARROW_GRAVITY := 6.0          # [tune] OOT arrows barely drop at this rang
 
 
 # --- The forge (docs/METAGAME.md §6.5) --------------------------------------
-## Five ladders, three rungs each, bought with gold AND components at the smith.
+## Twelve ladders, three rungs each, bought with gold AND components at the
+## smith -- four scalar ones and the armour's four pieces times two paths.
 ## Every array is indexed by LEVEL 0..FORGE_MAX, so index 0 is the un-upgraded
 ## piece and the arrays are read as absolutes rather than as deltas -- a table
 ## that lists the level-0 value cannot drift from the thing it is upgrading.
@@ -321,7 +322,91 @@ const FORGE_MAX := 3
 const EDGE_DAMAGE: Array[int] = [0, 1, 2, 3]
 ## Quarter-hearts taken off every blow that lands, floored at one by `Hero.hurt`.
 ## Armour makes you last longer; it never makes you safe. [tune]
+##
+## **Superseded by the four PLATE_* tables below** (docs/GDD.md §6.6) and kept
+## only as the number the split has to land on: this array's ceiling of 3 is what
+## every enemy in the game is tuned against, and `SOAK_MAX` is measured from it.
+## Nothing reads it any more. Do not add a reader.
 const PLATE_SOAK: Array[int] = [0, 1, 2, 3]
+
+# --- The armour, split (docs/GDD.md §6.6) ------------------------------------
+## Four pieces -- chest, legs, arms, boots -- each committed to ONE of two paths,
+## each with `FORGE_MAX` rungs to buy on top of the rung 0 it comes in.
+##
+## ## Why these are floats when health is an integer
+##
+## Twelve buyable heavy rungs have to add up to about FOUR quarter-hearts, which
+## is `PLATE_SOAK`'s old ceiling and the number the whole bestiary is tuned
+## against (GDD §6.6 is explicit: sixteen rungs of `[0,1,2,3]` would be twelve
+## quarters, `Hero.hurt`'s one-quarter floor would eat the entire difficulty
+## curve, and §7's *difficulty comes from depth* would be dead).
+##
+## Four quarters across twelve rungs is a third of a quarter per rung. There is
+## no integer table that does that, so the pieces carry fractions and
+## `Game.armour_soak()` floors the SUM. A rung is still a number the player can
+## feel -- the shop line prints "1.4 -> 1.7 quarters soaked" and the equipment
+## screen prints the floored total -- but the thing that moves is the total,
+## because the total is what a blow is measured against.
+##
+## Do not "fix" these into integers. That was tried in the design and it is what
+## the paragraph above is about.
+const PLATE_PIECE_COUNT := 4
+## Soak, in quarter-hearts, contributed by ONE piece at rung 0..FORGE_MAX.
+## Four pieces at full heavy: 4.0. Four at full light: 2.0. [tune]
+const PLATE_HEAVY_SOAK: Array[float] = [0.0, 0.4, 0.7, 1.0]
+const PLATE_LIGHT_SOAK: Array[float] = [0.0, 0.2, 0.35, 0.5]
+
+## Speed multiplier contributed by ONE heavy piece, MULTIPLIED across the four.
+##
+## `0.92 ** (k / 12)`, so four pieces at rung 3 come to exactly 0.92 -- the −8%
+## GDD §6.6 authored, reached by multiplication rather than by a special case
+## watching for the fourth piece. Light costs nothing and has no table: the
+## absence IS the light path's whole selling point.
+##
+## THIS IS NOT A LICENCE TO EDIT `RUN_SPEED`. That constant is [oot], measured,
+## and pillar 1 says the feel is not negotiable. The penalty is a multiplier
+## applied on top of `speed_for_stick`, in `Hero._target_speed`, and nowhere else.
+const PLATE_HEAVY_SPEED: Array[float] = [1.0, 0.993076, 0.986199, 0.979370]
+
+# --- The jewelcrafter (docs/GDD.md §6.6) -------------------------------------
+## Four slots -- amulet, two rings, bracelet -- eight paths between them. One
+## rung deeper than a forge ladder, because a jewel has no rung 0 you already own.
+const JEWEL_MAX := 4
+
+## **Ceilings belong to the NUMBER, not to the faucet.** Armour and Ward both
+## pour into soak; the forge's `edge` and an Edge ring both pour into damage; the
+## smith's heart line and Vigor both pour into hearts. Each pair is clamped here,
+## once, so adding a third faucet later cannot quietly raise a ceiling the
+## bestiary was tuned against (GDD §6.6).
+##
+## Draughts are deliberately OUTSIDE these caps and stay additive on top, exactly
+## as they were: a draught is 45 seconds long and gone, and capping a consumable
+## against a permanent ladder would make Ironhide worthless to the player who
+## most needs it.
+const SOAK_MAX := 4.0          ## quarter-hearts, all permanent sources
+const EDGE_MAX := 5            ## quarter-hearts a swing, forge + rings
+const HEART_MAX := 8           ## heart containers: 3 start + 3 smith + 2 Vigor
+const STAMINA_MAX := 160.0     ## MAX_STAMINA 100 + four Focus rungs
+
+## Per rung. Ward is HALF a heavy plate rung, so a full bracelet (2.0) plus full
+## light armour (2.0) reaches heavy's ceiling of 4 -- the light build buys its
+## soak back with a slot instead of with speed, which is the decision GDD §6.6
+## wants the jewelcrafter to pose. [tune]
+const JEWEL_WARD_SOAK := 0.5
+## Two rings at four rungs is +2 quarters, on top of the forge's +3. [tune]
+const JEWEL_EDGE_DAMAGE := 0.25
+## Multiplier per rung, MULTIPLIED like the plate penalty. Two Swift rings at
+## rung 4 come to 1.0834, which is more than enough to undo a full heavy suit --
+## and `Game.speed_mult()` clamps the product at 1.0 so it can never make the
+## hero faster than [oot]'s measured run. Buying speed BACK is the promise; going
+## past the source material is not. [tune]
+const JEWEL_SWIFT_SPEED := 1.0101
+## Heart containers per rung: two rungs buy one. Four rungs, two hearts. [tune]
+const JEWEL_VIGOR_HEARTS := 0.5
+## Stamina points per rung. Four rungs takes 100 -> 160. [tune]
+const JEWEL_FOCUS_STAMINA := 15.0
+## Fraction of the base regen added per rung. Four rungs is +40%. [tune]
+const JEWEL_WIND_REGEN := 0.1
 ## Half-angle of the shield's guard arc, degrees. The shield's upgrade is not
 ## "less damage" -- damage it already stops completely -- it is WHICH blows it
 ## stops. Widening the arc buys back the flank, and it stays strictly frontal at

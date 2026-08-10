@@ -1,12 +1,15 @@
 class_name ShopDb
 extends Catalogue
-## What the smith sells. Up to eight lines, and every one of them changes a
+## What the smith sells. Up to fifteen lines, and every one of them changes a
 ## number the player can feel inside one run.
 ##
-## "Up to" because three of them are gated on ownership (see GATED_BY): a fresh
-## save is offered five, and the bow's two and the hookshot's one appear when
-## those items are found. The counter GROWS as you earn things, which is the
-## smith's half of docs/GDD.md §5.2.
+## "Up to" because the counter both GROWS and SHRINKS. Three lines are gated on
+## ownership (see GATED_BY) -- a fresh save is offered twelve, and the bow's two
+## and the hookshot's one appear when those items are found, which is the smith's
+## half of docs/GDD.md §5.2. Against that, eight of the twelve are the armour's
+## four pieces offered twice, and each piece loses its second row the moment it
+## commits (GDD §6.6), so a hero who has answered all four questions is back down
+## to a board of eleven.
 ##
 ## A `Catalogue`, which is the whole of what `TradeScreen` knows about it -- see
 ## that file for the contract and for why a third counter is a subclass rather
@@ -16,7 +19,7 @@ extends Catalogue
 ##
 ##  * **Stock** -- arrows, a bag slot, a heart container. Gold only. These are
 ##    things the smith HAS, and money is the whole transaction.
-##  * **Forge** -- the five gear ladders (docs/METAGAME.md §6.5). Gold AND
+##  * **Forge** -- the twelve gear ladders (docs/METAGAME.md §6.5). Gold AND
 ##    components, because the smith cannot make a longer chain out of coin. The
 ##    rung sits in `Game.upgrades` and the gear reads it back through the
 ##    accessors on `Game`; nothing here knows what an arc or a draw time is.
@@ -60,14 +63,28 @@ const GATED_BY := {
 ## Purchases you can only make so many times, and how many. Every forge track is
 ## capped at K.FORGE_MAX because that is how many rungs its ladder has -- the
 ## limit is not a balance choice here, it is the length of the table.
+##
+## The eight plate tracks are spelled out rather than generated from
+## `Game.PLATE_TRACKS`, because a `const` initialiser cannot run a loop and a
+## `static var` one would touch the `Game` autoload at class-load time, which is
+## before autoloads exist. The cost of spelling them is a typo that reads as "the
+## smith will sell that one forever"; `forge_loop.gd` beat P0 asserts every id in
+## `Game.PLATE_TRACKS` appears here, which is where that typo gets caught.
 const LIMITS := {
 	&"bag_slot": 4,
 	&"heart": 3,
 	&"edge": K.FORGE_MAX,
-	&"plate": K.FORGE_MAX,
 	&"guard": K.FORGE_MAX,
 	&"string": K.FORGE_MAX,
 	&"chain": K.FORGE_MAX,
+	&"plate_chest_heavy": K.FORGE_MAX,
+	&"plate_chest_light": K.FORGE_MAX,
+	&"plate_legs_heavy": K.FORGE_MAX,
+	&"plate_legs_light": K.FORGE_MAX,
+	&"plate_arms_heavy": K.FORGE_MAX,
+	&"plate_arms_light": K.FORGE_MAX,
+	&"plate_boots_heavy": K.FORGE_MAX,
+	&"plate_boots_light": K.FORGE_MAX,
 }
 
 ## track id -> the recipe for each rung, in order. Index 0 is what rung ONE
@@ -75,21 +92,48 @@ const LIMITS := {
 ##
 ## Read the columns, not the rows: grit is the cheap, common tax on the two
 ## melee ladders; plate is armour's spine and the shield's second ingredient;
-## coil belongs to the two things under tension, the bow and the chain. **Every
-## third rung wants a Cold Iron Core**, which is the pacing gate -- the top of
-## any ladder is an event, and which ladder gets the core is the only genuinely
-## hard spending decision the smith ever poses.
+## coil belongs to the two things under tension, the bow and the chain. **The top
+## rung of every ladder that has a top wants a Cold Iron Core**, which is the
+## pacing gate -- the top of any ladder is an event, and which ladder gets the
+## core is the only genuinely hard spending decision the smith ever poses.
+##
+## The split raised the core bill for the Chord Ending (GDD §8, every ladder at
+## rung 3) from five to eight, because four heavy pieces each finish on one. That
+## is deliberate: it is the completionist ending, and it is also the reason light
+## finishes on coil instead -- an all-light hero never queues for a core at all.
+##
+## **The armour is eight tracks reading two recipes.** A piece's PATH is the
+## price, never which piece it is: a heavy boot and a heavy chest cost the same,
+## because the difference the player is buying is soak-versus-speed and pricing
+## the chest higher would quietly make one of the four pieces the "real" one.
+## Light is cheaper in components and asks for no Cold Iron Core at all (GDD
+## §6.6) -- the core is the pacing gate, and light's whole offer is that it does
+## not make you wait for one.
+const PLATE_HEAVY_PARTS := [
+	{&"riveted_plate": 2},
+	{&"riveted_plate": 4, &"whetstone_grit": 2},
+	{&"riveted_plate": 6, &"cold_iron_core": 1},
+]
+const PLATE_LIGHT_PARTS := [
+	{&"riveted_plate": 1},
+	{&"riveted_plate": 2, &"tension_coil": 1},
+	{&"riveted_plate": 4, &"tension_coil": 2},
+]
+
 const PARTS := {
 	&"edge": [
 		{&"whetstone_grit": 3},
 		{&"whetstone_grit": 6, &"riveted_plate": 2},
 		{&"whetstone_grit": 10, &"cold_iron_core": 1},
 	],
-	&"plate": [
-		{&"riveted_plate": 3},
-		{&"riveted_plate": 6, &"whetstone_grit": 2},
-		{&"riveted_plate": 10, &"cold_iron_core": 1},
-	],
+	&"plate_chest_heavy": PLATE_HEAVY_PARTS,
+	&"plate_chest_light": PLATE_LIGHT_PARTS,
+	&"plate_legs_heavy": PLATE_HEAVY_PARTS,
+	&"plate_legs_light": PLATE_LIGHT_PARTS,
+	&"plate_arms_heavy": PLATE_HEAVY_PARTS,
+	&"plate_arms_light": PLATE_LIGHT_PARTS,
+	&"plate_boots_heavy": PLATE_HEAVY_PARTS,
+	&"plate_boots_light": PLATE_LIGHT_PARTS,
 	&"guard": [
 		{&"riveted_plate": 2, &"whetstone_grit": 2},
 		{&"riveted_plate": 5, &"whetstone_grit": 4},
@@ -142,6 +186,14 @@ static func lines() -> Array[Dictionary]:
 ## row at all. A finished ladder and an unearned one look nothing alike, and
 ## collapsing them would put "NOTHING LEFT TO DO THERE" on a bow you never found.
 static func stocked(id: StringName) -> bool:
+	# A committed piece's losing path. Hidden rather than greyed, which is the
+	# OPPOSITE of the call made for the bow above, and on purpose: a greyed bow
+	# ladder is a spoiler for something you might still find, while a greyed
+	# `plate_chest_light` is a row for a thing that can never happen again (GDD
+	# §6.6, no re-spec). Leaving it would cost a line of a counter that already
+	# runs to fifteen, forever, to say "no" over and over.
+	if Game.path_closed(id):
+		return false
 	if not GATED_BY.has(id):
 		return true
 	# Indexing an untyped const Dictionary hands back a Variant (CLAUDE.md §3).
@@ -182,9 +234,14 @@ static func _board() -> Array[Dictionary]:
 		_forge(&"edge", "SHARPEN THE BLADE", 120, 2.1,
 			"Takes a quarter-heart more off whatever it meets.",
 			K.EDGE_DAMAGE, "+%d", "quarters"),
-		_forge(&"plate", "TEMPER THE ARMOUR", 140, 2.1,
-			"Every blow lands a quarter-heart lighter. Never lighter than one.",
-			K.PLATE_SOAK, "-%d", "quarters soaked"),
+		# The armour, eight rows deep on a fresh save and four once every piece
+		# has committed. Grouped piece by piece rather than all-heavy-then-all-
+		# light, because the choice the player is making is "what do I do about my
+		# chest", and the two answers to it have to be adjacent to be a choice.
+		_plate(&"chest", Game.PLATE_HEAVY), _plate(&"chest", Game.PLATE_LIGHT),
+		_plate(&"legs", Game.PLATE_HEAVY), _plate(&"legs", Game.PLATE_LIGHT),
+		_plate(&"arms", Game.PLATE_HEAVY), _plate(&"arms", Game.PLATE_LIGHT),
+		_plate(&"boots", Game.PLATE_HEAVY), _plate(&"boots", Game.PLATE_LIGHT),
 		_forge(&"guard", "BIND THE SHIELD", 110, 2.2,
 			"A wider face. It catches what comes in off the shoulder.",
 			K.GUARD_ARC, "%.0f", "degree guard"),
@@ -225,6 +282,59 @@ static func _forge(id: StringName, label: String, base: int, growth: float,
 	}
 
 
+## One armour row. Its own builder rather than another `_forge` call, because a
+## plate rung is the only purchase in the shop that moves TWO numbers and the
+## second one is a cost -- `_forge`'s one-ladder-one-format shape cannot say
+## "this buys you soak and takes some of your step".
+##
+## The before/after is the WHOLE hero, not this piece: `Game.armour_soak_exact()`
+## is what the blow will actually be reduced by, and a row that said "0.0 -> 0.4"
+## about one boot while the player had three other pieces on would be arithmetic
+## the player has to do in their head. It is printed to one decimal on purpose --
+## `armour_soak()` floors, so a rung that moves 0.7 to 1.0 is the one that
+## actually pays, and a row rounded to whole quarters would show three purchases
+## in a row doing nothing and then a fourth doing everything (see the note over
+## `K.PLATE_HEAVY_SOAK`).
+static func _plate(piece: StringName, path: StringName) -> Dictionary:
+	var heavy := path == Game.PLATE_HEAVY
+	var id := Game.plate_track(piece, path)
+	var lvl: int = Game.forge_level(id)
+	var ladder: Array = K.PLATE_HEAVY_SOAK if heavy else K.PLATE_LIGHT_SOAK
+	var soak := Game.armour_soak_exact()
+
+	var detail := ""
+	if lvl < K.FORGE_MAX:
+		var after := minf(soak + (float(ladder[lvl + 1]) - float(ladder[lvl])),
+			K.SOAK_MAX)
+		detail = "%.1f -> %.1f quarters soaked" % [soak, after]
+		if heavy:
+			# Clamped from the RAW product, not from `speed_mult()`. Two Swift
+			# rings can be holding the hero at the 1.0 ceiling with headroom to
+			# spare, and in that case this rung genuinely costs nothing -- the row
+			# has to be able to say 100.0% -> 100.0%.
+			var raw := Game.speed_mult_raw()
+			var step := float(K.PLATE_HEAVY_SPEED[lvl + 1]) \
+				/ float(K.PLATE_HEAVY_SPEED[lvl])
+			detail += ",  speed %.1f%% -> %.1f%%" % [
+				clampf(raw, 0.5, 1.0) * 100.0, clampf(raw * step, 0.5, 1.0) * 100.0]
+	else:
+		detail = "%.1f quarters soaked  (finished)" % soak
+
+	return {
+		"id": id,
+		"label": "%s - %s" % [String(piece).to_upper(),
+			"HEAVY" if heavy else "LIGHT"],
+		# Heavy is dearer in gold as well as in components, and light's rungs stay
+		# inside one good run's takings so the early game has an armour answer it
+		# can actually afford.
+		"cost": _scaled(65 if heavy else 35, id, 1.9 if heavy else 1.8),
+		"parts": next_parts(id),
+		"blurb": "Thicker plate. It takes the blow, and a little of your step." \
+			if heavy else "Thinner plate. Less of the blow, all of your step.",
+		"detail": detail,
+	}
+
+
 ## What the NEXT rung of `id` costs in components, or `{}` when the ladder is
 ## finished or `id` is not a forge track.
 static func next_parts(id: StringName) -> Dictionary:
@@ -249,7 +359,7 @@ static func _scaled(base: int, id: StringName, factor: float) -> int:
 ## A STOCK line's price: the scaled cost with the mill's discount on it.
 ##
 ## The three lines the smith BUYS IN -- arrows, a bag slot, a heart container --
-## and not the five forge ladders, which is the whole reason this is a second
+## and not the twelve forge ladders, which is the whole reason this is a second
 ## helper rather than a multiply inside `_scaled`. A rung is not something the
 ## smith buys in, and discounting it would make the Waterwheel Gear the strongest
 ## relic on the list by a distance (`RelicDb.SMITH_MULT_MILL`).
@@ -279,6 +389,13 @@ static func remaining(id: StringName) -> int:
 ## Public so `refusal()` can tell the two ceilings apart, and so a director can
 ## ask without re-deriving it.
 static func cap_of(id: StringName) -> int:
+	# A committed piece's other path. Zero, not "hidden": `lines()` already drops
+	# the row, and this is the answer for everything that does not go through
+	# `lines()` -- a director, a save that arrived with both siblings set, a
+	# future screen. GDD §6.6's commitment is enforced HERE, where the ceiling
+	# lives, rather than in the row-building code that only draws it.
+	if Game.path_closed(id):
+		return 0
 	var limit: int = int(LIMITS.get(id, -1))
 	if not PARTS.has(id):
 		return limit
@@ -303,10 +420,13 @@ static func can_buy(line: Dictionary) -> bool:
 static func refusal(line: Dictionary) -> String:
 	var id: StringName = line["id"]
 	if remaining(id) == 0:
-		# Two different ceilings, and telling the player the wrong one sends them
-		# to the wrong place. A ladder at the top of its own table is FINISHED;
-		# a ladder stopped short of it is a rung the smith has not been taught,
-		# and the answer to that is a relic, not another run's worth of grit.
+		# THREE different ceilings now, and telling the player the wrong one sends
+		# them to the wrong place. A path whose sibling has a rung in it is closed
+		# for good and the answer is nothing; a ladder at the top of its own table
+		# is FINISHED; a ladder stopped short of it is a rung the smith has not
+		# been taught, and the answer to that is a relic, not another run's grit.
+		if Game.path_closed(id):
+			return "THAT PIECE IS ALREADY COMMITTED"
 		if int(LIMITS.get(id, 0)) > cap_of(id):
 			return "HE HAS NOT BEEN TAUGHT THAT RUNG"
 		return "NOTHING LEFT TO DO THERE"

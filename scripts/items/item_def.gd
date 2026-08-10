@@ -17,8 +17,9 @@ enum Rarity { COMMON, UNCOMMON, RARE }
 ## What the thing is FOR, which is the only question the economy asks of it.
 ##
 ##  * `INGREDIENT` is merchandise. It exists to be sold; its `value` is the point.
-##  * `COMPONENT` is material. A bench eats it -- the forge (ShopDb) or the
-##    alchemist (AlchemyDb) -- and extraction sorts it out of the bag into
+##  * `COMPONENT` is material. A bench eats it -- the forge (ShopDb), the
+##    alchemist (AlchemyDb) or the jewelcrafter (JewelDb) -- and extraction sorts
+##    it out of the bag into
 ##    `Game.components` instead of handing it to the vendor. It still has a
 ##    `value`, because the extraction fee is a share of what you are carrying and
 ##    a component you carried is something you carried.
@@ -47,14 +48,20 @@ var tint: Color
 ## player learns what an ingredient is for.
 var blurb: String
 var kind: Kind = Kind.INGREDIENT
-## Who wants it, for COMPONENTs only: `&"forge"` or `&"alchemy"`. Nothing
-## branches on this except the words a screen prints -- the pouch's caption and
-## the counter it sends you to. A material the wrong counter refused would be a
-## rule; this is a signpost.
+## Who wants it, for COMPONENTs only: `&"forge"`, `&"alchemy"` or `&"jewel"`.
+## Nothing branches on this except the words a screen prints -- the pouch's
+## caption and the counter it sends you to. A material the wrong counter refused
+## would be a rule; this is a signpost.
+##
+## **A signpost that has to stay true.** No id may appear in two counters'
+## recipes, because the pouch prints one bench name per material and a coil the
+## jewelcrafter also ate would send the player to the forge holding her price.
+## `alchemy_loop` beat A6 asserts the benches do not overlap.
 var bench: StringName = BENCH_FORGE
 
 const BENCH_FORGE := &"forge"
 const BENCH_ALCHEMY := &"alchemy"
+const BENCH_JEWEL := &"jewel"
 
 
 static func make(p_id: StringName, p_name: String, p_value: int,
@@ -88,6 +95,14 @@ static func brew(p_id: StringName, p_name: String, p_value: int,
 	return d
 
 
+## And again, for the counter that sets stones.
+static func gem(p_id: StringName, p_name: String, p_value: int,
+		p_rarity: Rarity, p_stack: int, p_tint: Color, p_blurb: String) -> ItemDef:
+	var d := part(p_id, p_name, p_value, p_rarity, p_stack, p_tint, p_blurb)
+	d.bench = BENCH_JEWEL
+	return d
+
+
 func is_component() -> bool:
 	return kind == Kind.COMPONENT
 
@@ -97,7 +112,10 @@ func is_component() -> bool:
 func bench_name() -> String:
 	if not is_component():
 		return ""
-	return "THE ALCHEMIST" if bench == BENCH_ALCHEMY else "THE FORGE"
+	match bench:
+		BENCH_ALCHEMY: return "THE ALCHEMIST"
+		BENCH_JEWEL: return "THE JEWELCRAFTER"
+		_: return "THE FORGE"
 
 
 ## The short tag a recipe column uses: "GRIT", "PLATE", "CORE". A forge row has

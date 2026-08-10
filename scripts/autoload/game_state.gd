@@ -179,6 +179,10 @@ func _grant_starter_kit() -> void:
 func reset() -> void:
 	max_quarters = K.START_HEARTS * K.HEART
 	quarters = max_quarters
+	# Focus raises this, so a reset has to put it back. It did not need clearing
+	# while nothing could buy it.
+	max_stamina = K.MAX_STAMINA
+	stamina = max_stamina
 	max_magic = 0
 	magic = 0
 	rupees = 0
@@ -236,10 +240,36 @@ func heal(amount_quarters: int) -> void:
 	Bus.player_health_changed.emit(quarters, max_quarters)
 
 
+## One more heart, from either faucet -- the smith's `heart` line or a Vigor
+## amulet. Ceiling enforced HERE rather than in the two shops, so a third source
+## cannot arrive and quietly raise it (K.HEART_MAX, and the note over K.SOAK_MAX
+## about why ceilings belong to the number).
+##
+## Stored rather than derived, unlike soak and speed, and that is on purpose:
+## `max_quarters` is read straight by the HUD, by `hurt` and by `heal`, and a
+## Vigor amulet that returned its hearts from an accessor would need every one of
+## those to change. The smith's heart line already worked this way; Vigor is the
+## same purchase with a different sign over the counter.
 func add_heart_container() -> void:
+	if max_quarters >= K.HEART_MAX * K.HEART:
+		return
 	max_quarters += K.HEART
 	quarters = max_quarters
 	Bus.player_health_changed.emit(quarters, max_quarters)
+
+
+## How many heart containers the player has. The unit the shops and the
+## equipment screen both count in.
+func heart_containers() -> int:
+	return max_quarters / K.HEART
+
+
+## More bar, from a Focus amulet. Stored for the same reason hearts are: the HUD
+## and every `spend_stamina` caller read `max_stamina` directly.
+func add_max_stamina(points: float) -> void:
+	max_stamina = minf(K.STAMINA_MAX, max_stamina + points)
+	stamina = max_stamina
+	Bus.stamina_changed.emit(stamina, max_stamina)
 
 
 # --- Magic ------------------------------------------------------------------
@@ -277,7 +307,9 @@ func _process(delta: float) -> void:
 		return
 	if stamina >= max_stamina:
 		return
-	stamina = minf(max_stamina, stamina + K.STAMINA_REGEN * delta)
+	# `stamina_regen()`, not `K.STAMINA_REGEN`: the Wind bracelet lives in that
+	# accessor and this is the only place the bar actually refills.
+	stamina = minf(max_stamina, stamina + stamina_regen() * delta)
 	Bus.stamina_changed.emit(stamina, max_stamina)
 
 
@@ -378,7 +410,7 @@ func spend_gold(n: int) -> bool:
 
 
 # --- The forge --------------------------------------------------------------
-# Five ladders (K.FORGE_MAX rungs each), bought at the smith with gold AND
+# Twelve ladders (K.FORGE_MAX rungs each), bought at the smith with gold AND
 # components. Everything below is a READ of `upgrades`; ShopDb is the only thing
 # that writes a rung, because a rung is a purchase and purchases have one till.
 #
@@ -391,13 +423,98 @@ func spend_gold(n: int) -> bool:
 ## the save file -- three places that have already drifted apart once in this
 ## repo over how &"bow" is spelled (see ArmamentDb's header).
 const FORGE_EDGE := &"edge"      ## the sword
-const FORGE_PLATE := &"plate"    ## the armour
+## RETIRED 2026-08-09 by the four-piece split (docs/GDD.md §6.6). Kept as a
+## spelling, not as a track: `ShopDb` no longer stocks it, nothing reads it, and
+## a v3 slot that still holds it is REFUSED rather than migrated (see
+## `SaveGame.VERSION` for why). Nothing may put it back in `FORGE_TRACKS`.
+const FORGE_PLATE := &"plate"    ## the armour, until it became four
 const FORGE_GUARD := &"guard"    ## the shield
 const FORGE_STRING := &"string"  ## the bow
 const FORGE_CHAIN := &"chain"    ## the hookshot
-const FORGE_TRACKS: Array[StringName] = [
-	FORGE_EDGE, FORGE_PLATE, FORGE_GUARD, FORGE_STRING, FORGE_CHAIN,
+
+## The armour's four pieces and its two paths, spelled once.
+##
+## A track id is `plate_<piece>_<path>` and that is the WHOLE of the split's
+## storage: `upgrades` stays `{track: int}`, no piece has a record of its own,
+## and "which path did this piece commit to" is answered by asking which of the
+## two siblings has a rung in it. Nothing new is saved (GDD §6.6).
+const PLATE_PIECES: Array[StringName] = [&"chest", &"legs", &"arms", &"boots"]
+const PLATE_HEAVY := &"heavy"
+const PLATE_LIGHT := &"light"
+const PLATE_TRACKS: Array[StringName] = [
+	&"plate_chest_heavy", &"plate_chest_light",
+	&"plate_legs_heavy", &"plate_legs_light",
+	&"plate_arms_heavy", &"plate_arms_light",
+	&"plate_boots_heavy", &"plate_boots_light",
 ]
+
+## The jewelcrafter's four slots. Both rings draw on the same pair of paths on
+## purpose -- two Edge rings and one of each are different builds, and that is
+## where the variety comes from without a ninth path existing (GDD §6.6).
+const JEWEL_SLOTS: Array[StringName] = [&"amulet", &"ring1", &"ring2", &"bracelet"]
+const JEWEL_TRACKS: Array[StringName] = [
+	&"jewel_amulet_vigor", &"jewel_amulet_focus",
+	&"jewel_ring1_edge", &"jewel_ring1_swift",
+	&"jewel_ring2_edge", &"jewel_ring2_swift",
+	&"jewel_bracelet_ward", &"jewel_bracelet_wind",
+]
+
+const FORGE_TRACKS: Array[StringName] = [
+	FORGE_EDGE, FORGE_GUARD, FORGE_STRING, FORGE_CHAIN,
+	&"plate_chest_heavy", &"plate_chest_light",
+	&"plate_legs_heavy", &"plate_legs_light",
+	&"plate_arms_heavy", &"plate_arms_light",
+	&"plate_boots_heavy", &"plate_boots_light",
+]
+
+
+## The two track ids a piece can commit to, heavy first.
+static func plate_track(piece: StringName, path: StringName) -> StringName:
+	return StringName("plate_%s_%s" % [piece, path])
+
+
+static func jewel_track(slot: StringName, path: StringName) -> StringName:
+	return StringName("jewel_%s_%s" % [slot, path])
+
+
+## The other path for the same piece or slot -- `plate_chest_heavy` <->
+## `plate_chest_light`. Empty for anything that is not a two-path track.
+##
+## String surgery rather than a lookup table because the table would be a
+## sixteen-row restatement of the naming rule, and the two would drift. The rule
+## is: everything up to the last underscore is WHICH THING, and after it is WHICH
+## PATH. `_pair_of` is the only place that knows it.
+static func sibling_of(track: StringName) -> StringName:
+	var s := String(track)
+	var cut := s.rfind("_")
+	if cut < 0:
+		return &""
+	var stem := s.substr(0, cut)
+	var path := s.substr(cut + 1)
+	var pair := _pair_of(path)
+	if pair == &"":
+		return &""
+	return StringName("%s_%s" % [stem, pair])
+
+
+static func _pair_of(path: String) -> StringName:
+	match path:
+		"heavy": return PLATE_LIGHT
+		"light": return PLATE_HEAVY
+		"vigor": return &"focus"
+		"focus": return &"vigor"
+		"edge": return &"swift"
+		"swift": return &"edge"
+		"ward": return &"wind"
+		"wind": return &"ward"
+		_: return &""
+
+
+## True once this piece or slot has taken a rung on the OTHER path, which closes
+## this one for good. GDD §6.6: "A path you committed is a path you committed."
+func path_closed(track: StringName) -> bool:
+	var other := sibling_of(track)
+	return other != &"" and int(upgrades.get(other, 0)) > 0
 
 
 ## How many rungs of `track` are bought, clamped so a corrupt save can never
@@ -414,7 +531,13 @@ func forge_level(track: StringName) -> int:
 ## the smith's own "+2 -> +3" line all read this one function, so a potion that
 ## makes the blade bite harder needed no code in any of them.
 func sword_bonus() -> int:
-	return K.EDGE_DAMAGE[forge_level(FORGE_EDGE)] \
+	var permanent := float(K.EDGE_DAMAGE[forge_level(FORGE_EDGE)])
+	for slot: StringName in [&"ring1", &"ring2"]:
+		permanent += K.JEWEL_EDGE_DAMAGE * float(jewel_level(jewel_track(slot, &"edge")))
+	# Floored, then capped, then the draught on top. The cap is the NUMBER's
+	# (K.EDGE_MAX), not the forge's and not the rings' -- see the note over
+	# K.SOAK_MAX about faucets.
+	return mini(int(floorf(permanent)), K.EDGE_MAX) \
 		+ (K.DRAUGHT_EDGE if draught_left(DRAUGHT_EDGE_ID) > 0.0 else 0)
 
 
@@ -422,8 +545,62 @@ func sword_bonus() -> int:
 ## result at one -- armour makes you last longer, never invincible, and that
 ## floor is what stops Ironhide on a full plate ladder from being immunity.
 func armour_soak() -> int:
-	return K.PLATE_SOAK[forge_level(FORGE_PLATE)] \
+	return int(floorf(armour_soak_exact())) \
 		+ (K.DRAUGHT_PLATE if draught_left(DRAUGHT_PLATE_ID) > 0.0 else 0)
+
+
+## The permanent soak before flooring, in quarter-hearts. Public because the
+## shop's before/after line and the equipment screen both want to show the
+## fraction -- a heavy chest rung that moves 0.7 -> 1.0 has to be able to SAY so,
+## or it reads as a purchase that did nothing (see the note over K.PLATE_HEAVY_SOAK).
+##
+## Draughts are not in here. They are 45 seconds long; this is the build.
+func armour_soak_exact() -> float:
+	var total := 0.0
+	for piece: StringName in PLATE_PIECES:
+		total += K.PLATE_HEAVY_SOAK[forge_level(plate_track(piece, PLATE_HEAVY))]
+		total += K.PLATE_LIGHT_SOAK[forge_level(plate_track(piece, PLATE_LIGHT))]
+	total += K.JEWEL_WARD_SOAK * float(jewel_level(jewel_track(&"bracelet", &"ward")))
+	return minf(total, K.SOAK_MAX)
+
+
+## What every locomotion speed is multiplied by: heavy plate takes it away and a
+## Swift ring buys it back.
+##
+## Clamped to 1.0 at the top. Pillar 1 -- `K.RUN_SPEED` is [oot], measured, and
+## the feel is not negotiable -- so jewellery can undo a penalty and can never
+## make the hero faster than the source material. Clamped to 0.5 at the bottom
+## as a corrupt-save guard; the authored floor is 0.92.
+func speed_mult() -> float:
+	return clampf(speed_mult_raw(), 0.5, 1.0)
+
+
+## The same product BEFORE the clamp. Public for one reason: the smith's
+## before/after line has to be able to say that a heavy rung will cost you
+## nothing because two Swift rings are already holding you at the ceiling.
+## Multiplying the CLAMPED figure would print a drop that is not going to happen,
+## which is a shop lying about its own prices.
+func speed_mult_raw() -> float:
+	var m := 1.0
+	for piece: StringName in PLATE_PIECES:
+		m *= K.PLATE_HEAVY_SPEED[forge_level(plate_track(piece, PLATE_HEAVY))]
+	for slot: StringName in [&"ring1", &"ring2"]:
+		m *= pow(K.JEWEL_SWIFT_SPEED, float(jewel_level(jewel_track(slot, &"swift"))))
+	return m
+
+
+## Stamina points a second, with the Wind bracelet on it. Read by `tick_stamina`;
+## nothing else may read `K.STAMINA_REGEN` directly any more.
+func stamina_regen() -> float:
+	var rungs := jewel_level(jewel_track(&"bracelet", &"wind"))
+	return K.STAMINA_REGEN * (1.0 + K.JEWEL_WIND_REGEN * float(rungs))
+
+
+## How many rungs of a JEWEL path are bought. Separate from `forge_level` only
+## because the ceiling differs -- `K.JEWEL_MAX` is 4, one deeper than a forge
+## ladder, since a jewel has no rung 0 you already own (GDD §6.6).
+func jewel_level(track: StringName) -> int:
+	return clampi(int(upgrades.get(track, 0)), 0, K.JEWEL_MAX)
 
 
 ## Half-angle, in degrees, of the arc the raised shield covers.

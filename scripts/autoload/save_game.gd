@@ -16,7 +16,19 @@ const SLOTS := 3
 ## was paid for, so both have to survive quitting exactly as a forge rung does.
 ## `_read` still refuses a version it does not recognise, so a v2 slot reads as
 ## empty rather than as a hero whose glass quietly vanished.
-const VERSION := 3
+##
+## Bumped to 4 when `plate` became four pieces and the jewelcrafter opened
+## (docs/GDD.md §6.6). REFUSED, NOT MIGRATED, and that is a decision rather than
+## laziness: a v3 slot holds `{"plate": 3}`, which is three quarter-hearts of
+## soak, and there is no honest place to put it. Spending it on one piece
+## (`plate_chest_heavy` at rung 3) is 1.0 quarters -- a silent two-thirds cut to
+## a number the player paid for. Spreading it over four pieces commits all four
+## to heavy, which is the one thing GDD §6.6 says can never be undone, on the
+## player's behalf, without asking. Refusing reads as an empty slot, which is
+## honest and loud; the alternatives read as a save that loaded fine and lied.
+## `max_stamina` joins the format in the same bump -- Focus buys it now, so a
+## slot that did not record it would reload the amulet as unpurchased.
+const VERSION := 4
 
 signal saved(slot: int)
 signal loaded(slot: int)
@@ -84,12 +96,15 @@ func save(slot: int) -> bool:
 		"played": Time.get_ticks_msec() / 1000.0,
 		"quarters": Game.quarters,
 		"max_quarters": Game.max_quarters,
+		# A Focus amulet raises this permanently, so it is a purchase and it saves.
+		"max_stamina": Game.max_stamina,
 		"magic": Game.magic,
 		"max_magic": Game.max_magic,
 		"gold": Game.gold,
 		"bag_slots": Game.bag_slots,
 		# Every permanent purchase, forge rungs included -- the ladders live in
-		# `upgrades` (see Game.FORGE_*), so one key carries all five.
+		# `upgrades` (see Game.FORGE_TRACKS), so one key carries all twelve, and
+		# the jewelcrafter's eight after it.
 		"upgrades": Game.upgrades,
 		"components": Game.components,
 		# The array's size is how many bottles there are, so one key carries both
@@ -185,6 +200,11 @@ func load_slot(slot: int) -> Dictionary:
 
 	Game.max_quarters = d.get("max_quarters", K.START_HEARTS * K.HEART)
 	Game.quarters = d.get("quarters", Game.max_quarters)
+	# Clamped rather than trusted: `K.STAMINA_MAX` is the ceiling every Focus
+	# purchase already respects, and a hand-edited slot must not out-buy the shop.
+	Game.max_stamina = minf(K.STAMINA_MAX,
+		float(d.get("max_stamina", K.MAX_STAMINA)))
+	Game.stamina = Game.max_stamina
 	Game.max_magic = d.get("max_magic", 0)
 	Game.magic = d.get("magic", 0)
 	Game.gold = d.get("gold", 0)
