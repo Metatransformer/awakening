@@ -175,8 +175,55 @@ const QUARTER := 1
 const HEART := 4
 const START_HEARTS := 3
 const MAX_MAGIC := 48
-## [oot] 20 ticks of invulnerability after taking damage.
+## What one charged spin costs out of that 48.
+##
+## **This is the price of the power attack, and it exists because the spin was
+## free.** Stamina was supposed to be its cost, and stamina is the wrong shape
+## for the job: it refills in a couple of seconds on its own (STAMINA_REGEN),
+## so the only thing it prices is how fast you may spin, never how often. A
+## player who backed off for two seconds between releases could clear a floor
+## with one button and never learn any other one -- which the player found
+## immediately and reported as "can cheese with power attack".
+##
+## Magic is the right shape because it does NOT come back underground. Twelve
+## against a 48 bar is **four spins per trip into the dungeon**, whatever route
+## you take and however long you stay, and the bar is on screen the whole time
+## so the fourth one is a decision you can see coming. Deeper floors do not
+## grant more; going home is the only refill (`Run.enter`/`extract`/`die`).
+##
+## The spin is the only blow that pays it. The overhead, the leap and the dash
+## are single-target and already priced in commitment; the air slam costs a jump
+## you can be punished for taking. What made the spin different was that it is
+## the one attack that answers a ROOM, and an unlimited answer to a room is the
+## room not being a question. [tune]
+const MAGIC_SPIN := 12
+## [oot] 20 ticks of invulnerability after taking damage. **THE HERO'S NUMBER.**
 const IFRAME_TIME := 20.0 * TICK    # 1.0 s
+
+## A MONSTER'S, and it is a quarter of the hero's on purpose.
+##
+## The two are not the same rule wearing different hats. The hero's second is
+## recovery time -- it is what lets you back out of a corner after a hit lands,
+## and it is long because being surrounded should not be a death sentence you
+## cannot escape. A monster's exists only to stop ONE blow being counted twice
+## when two damage paths arrive together (a sword and an arrow in the same
+## frame), because per-swing repeats are already handled where they belong:
+## `HeroCombat._hit_this_swing` and `DamageArea._already_hit`.
+##
+## `Enemy` inherited `IFRAME_TIME` by leaving `HealthComponent.iframe_time` at
+## its default, and a whole second is longer than the light chain. Step one
+## landed, **step two was swallowed**, step three landed as the finisher -- the
+## player's report was "the second attack isn't hitting even though the
+## animation is going", and it was exactly right. The chain's blows are ~0.59 s
+## apart at the tightest (contact at 0.22 of a 0.60 s swing, then 0.22 of a
+## 0.55 s step two), so anything at or above that eats a step.
+##
+## 0.20 s is under the 0.22 s the struck body spends reeling (`Enemy._on_damaged`
+## sets `_timer = maxf(hit.stun, 0.22)`), which is the honest line: a monster is
+## hittable again the moment it has finished reeling from the last one, and
+## never during. Do not raise this to "space out" a chain -- the thing that
+## spaces a chain is the swing clock, and it is visible on screen.
+const ENEMY_IFRAME_TIME := 4.0 * TICK   # 0.20 s
 
 # --- Stamina ----------------------------------------------------------------
 ## DELIBERATE DEVIATION: OOT has NO stamina. Link rolls forever, and that is
@@ -267,6 +314,30 @@ const HITSTOP_LIGHT := 4
 const HITSTOP_HEAVY := 9
 const KNOCKBACK_LIGHT := 4.0
 const KNOCKBACK_HEAVY := 8.0
+
+## Seconds a struck monster is held in its reel. **This is the flinch**, and it
+## has to be read against the clip and not against the number: the shared roster
+## library's `hurt` is 0.60 s, and `Enemy._play` cross-fades into it. So a reel
+## shorter than the fade is a monster that never visibly leaves the pose it was
+## already in.
+##
+## It shipped at ZERO, and that is the whole of the "there's no flinch off the
+## first attack" report. `HeroCombat._maybe_hit` built its `Hit` without a stun
+## argument -- every other blow in the kit passes one, the slam most obviously --
+## so `Enemy._on_damaged` fell through to its own `maxf(hit.stun, 0.22)` floor,
+## and 0.22 s of a 0.60 s clip entered through a 0.15 s fade is about a third of
+## a blend. The white flash and the 0.05 s recoil kick were doing all the work.
+##
+## 0.30 is deliberately WELL UNDER the light chain's own rhythm -- consecutive
+## steps land ~0.59 s apart -- so the flinch never becomes a stun-lock the player
+## can stand in. What the chain does to a monster is three reels, not one long
+## paralysis. [tune]
+const STUN_LIGHT := 0.30
+## The finisher, the overhead, the leap, the spin. Longer because those are the
+## blows the player pays commitment for, and the reward for a committed blow is
+## that the thing stops coming at you for a moment. Still under a second: a
+## monster you can safely ignore is not a monster. [tune]
+const STUN_HEAVY := 0.45
 
 # --- Economy ----------------------------------------------------------------
 ## [tune] Enough gold to afford exactly two bail-outs at the minimum fee, so a

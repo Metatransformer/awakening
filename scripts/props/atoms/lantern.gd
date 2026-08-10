@@ -165,12 +165,26 @@ func _process(delta: float) -> void:
 # --- Construction -------------------------------------------------------------
 
 func _build() -> void:
-	# One body, on the world layer, so the sword's sweep finds it the way it finds
-	# an urn. It is also a real obstacle: a grid of lanterns you can walk through
-	# is a grid with no shape, and the walk between two posts is part of reading it.
+	# One body, on the world layer AND the interact layer, so the sword's sweep
+	# finds it the way it finds an urn. It is also a real obstacle: a grid of
+	# lanterns you can walk through is a grid with no shape, and the walk between
+	# two posts is part of reading it.
+	#
+	# **`L_INTERACT` is not optional and its absence shipped.** `HeroCombat`'s
+	# blade masks `L_ENEMY | L_INTERACT` and nothing else, so a post on `L_WORLD`
+	# alone is a post the sword cannot see -- and this file carried the comment
+	# above, claiming parity with the urn, while `Urn` had both bits and this had
+	# one. Every lantern in the game was scenery: the lights-out grid could not be
+	# pressed and the maze room's chest stood walled off behind gates nothing
+	# could open.
+	#
+	# It was invisible to every proof because every proof calls `apply_hit`
+	# directly (`lights_out.gd`, `maze.gd`, `puzzle_atoms.gd`) -- the right call
+	# for checking a board's arithmetic and the wrong one for checking that a
+	# blade can reach it. `tools/directors/sword_contact.gd` swings the button.
 	var body := StaticBody3D.new()
 	body.name = "Post"
-	body.collision_layer = K.L_WORLD
+	body.collision_layer = K.L_WORLD | K.L_INTERACT
 	body.collision_mask = 0
 	add_child(body)
 

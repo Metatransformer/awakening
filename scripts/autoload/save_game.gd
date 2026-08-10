@@ -121,7 +121,10 @@ func save(slot: int) -> bool:
 		"max_quarters": Game.max_quarters,
 		# A Focus amulet raises this permanently, so it is a purchase and it saves.
 		"max_stamina": Game.max_stamina,
-		"magic": Game.magic,
+		# The SIZE of the blue bar saves; how much is in it does not, for the reason
+		# `stamina` is absent from this block -- see the loader. A `"magic"` key was
+		# written here and it is gone rather than left unread: a save field nothing
+		# restores is the next reader's wrong conclusion about what persists.
 		"max_magic": Game.max_magic,
 		"gold": Game.gold,
 		"deaths": Game.deaths,
@@ -232,8 +235,19 @@ func load_slot(slot: int) -> Dictionary:
 	Game.max_stamina = minf(K.STAMINA_MAX,
 		float(d.get("max_stamina", K.MAX_STAMINA)))
 	Game.stamina = Game.max_stamina
-	Game.max_magic = d.get("max_magic", 0)
-	Game.magic = d.get("magic", 0)
+	# A slot written before the blue bar was switched on holds `max_magic: 0`, and
+	# restoring that verbatim gives a returning player a HUD row that is a black
+	# slot for ever and a spin they can never throw. Clamped up to the ceiling and
+	# then FILLED, for the reason stamina above is filled: a load puts you in the
+	# garrison, and the garrison is where the bar is full (`Run.extract`).
+	Game.max_magic = maxi(int(d.get("max_magic", K.MAX_MAGIC)), K.MAX_MAGIC)
+	# **How much is IN the bar is not restored**, exactly as `stamina` above is not:
+	# a load puts the player in the garrison, and the garrison is where the bar is
+	# full by rule (`Run.extract` fills it). Reading the saved level back would
+	# restore a number that is about to be `max_magic` anyway -- and on a slot
+	# saved mid-run it would hand back a half-spent bar to a player standing in
+	# town, which is the one state the design says cannot happen.
+	Game.fill_magic()
 	Game.gold = d.get("gold", 0)
 	Game.deaths = int(d.get("deaths", 0))
 	Game.bag_slots = int(d.get("bag_slots", K.START_BAG_SLOTS))

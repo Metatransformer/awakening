@@ -211,6 +211,12 @@ var _canvas: Control
 var _icons: Dictionary[StringName, Texture2D] = {}
 ## Stamina, mirrored from Game so the bar can be redrawn without polling.
 var _stamina: float = K.MAX_STAMINA
+## The blue bar, mirrored the same way and off the same kind of signal. Kept as a
+## local rather than read live off `Game` in `_draw` for the reason the stamina
+## mirror exists: the paint is event-driven, and a value the draw pulls itself is
+## a value that can change without anything asking for a repaint.
+var _magic: int = K.MAX_MAGIC
+var _max_magic: int = K.MAX_MAGIC
 
 # Animation state. The HUD only runs `_process` while one of these is live --
 # a HUD that repaints every frame to draw nothing is a HUD that costs a
@@ -288,6 +294,7 @@ func _ready() -> void:
 
 	Bus.player_health_changed.connect(_on_health)
 	Bus.stamina_changed.connect(_on_stamina)
+	Bus.magic_changed.connect(_on_magic)
 	Bus.bag_changed.connect(_on_bag)
 	Bus.loot_gained.connect(_on_loot)
 	Bus.gold_changed.connect(_on_gold)
@@ -414,6 +421,12 @@ func _on_loot(item_id: StringName, _count: int) -> void:
 
 func _on_stamina(value: float, _max_s: float) -> void:
 	_stamina = value
+	_repaint()
+
+
+func _on_magic(value: int, max_value: int) -> void:
+	_magic = value
+	_max_magic = max_value
 	_repaint()
 
 
@@ -673,6 +686,7 @@ func _draw_hud() -> void:
 		return
 	_draw_health(s)
 	_draw_stamina(s)
+	_draw_magic(s)
 	_draw_heat(s)
 	_draw_draughts(s)
 	_draw_hands(s)
@@ -969,7 +983,7 @@ func _ghost_visible() -> int:
 
 func _draw_stamina(s: Vector2) -> void:
 	var origin := Pal.HEALTH_ORIGIN * s
-	var top := origin.y + Pal.px(Pal.HEALTH_H, s.y) + Pal.px(Pal.STAMINA_GAP, s.y)
+	var top := _pole_top(s, 1)
 	var w := Pal.HEALTH_W * s.x * Pal.STAMINA_RATIO
 	var h := Pal.px(Pal.STAMINA_H, s.y)
 	var rect := Rect2(origin.x, top, w, h)
@@ -993,6 +1007,76 @@ func _draw_stamina(s: Vector2) -> void:
 			Pal.px(1.0, s.y), h), Pal.VOID)
 
 
+## The y each bar in the "you" pole starts at, so the four of them cannot drift.
+##
+## It used to be spelled out per bar -- health's height plus stamina's gap plus
+## stamina's height plus heat's gap, written twice -- and inserting the magic bar
+## between stamina and heat meant editing an expression in a function that has
+## nothing to do with magic. One walk down the stack instead: add a row here and
+## everything below it moves.
+func _pole_top(s: Vector2, row: int) -> float:
+	var y := (Pal.HEALTH_ORIGIN * s).y + Pal.px(Pal.HEALTH_H, s.y)
+	if row >= 1:
+		y += Pal.px(Pal.STAMINA_GAP, s.y)
+	if row >= 2:
+		y += Pal.px(Pal.STAMINA_H, s.y) + Pal.px(Pal.MAGIC_GAP, s.y)
+	if row >= 3:
+		y += Pal.px(Pal.MAGIC_H, s.y) + Pal.px(Pal.HEAT_GAP, s.y)
+	return y
+
+
+# --- Magic ------------------------------------------------------------------
+## Third in the "you" stack, under stamina and over heat. **The cost of the
+## charged spin, and the only bar on this HUD that does not come back on its own.**
+##
+## It is the same instrument as stamina wearing a different colour, deliberately:
+## the same left edge, the same ticks, the same "the colour IS the answer" rule.
+## What differs is the question. Stamina asks "can I dodge in the next second",
+## and its answer changes constantly. This asks "how much of this trip's power is
+## left", and its answer only ever goes down until you go home (K.MAGIC_SPIN).
+## Two bars that behave that differently must not look identical, which is what
+## the blue is for.
+##
+## COBALT, which is also the rare-loot tier in `Pal.RARITY`. That reuse is
+## deliberate and safe: rarity colour appears on item names and loot rims, never
+## as a meter in the vitals pole, and COBALT is the only saturated blue the
+## palette has that is not CYAN -- and CYAN is reserved for the way out
+## (STYLEGUIDE §2), which a magic bar must never be mistaken for.
+
+func _draw_magic(s: Vector2) -> void:
+	if _max_magic <= 0:
+		return
+	var origin := Pal.HEALTH_ORIGIN * s
+	var top := _pole_top(s, 2)
+	var w := Pal.HEALTH_W * s.x * Pal.MAGIC_RATIO
+	var h := Pal.px(Pal.MAGIC_H, s.y)
+	var rect := Rect2(origin.x, top, w, h)
+
+	_canvas.draw_rect(rect.grow(Pal.px(1.0, s.y)), Pal.VOID)
+	_canvas.draw_rect(rect, Color(Pal.ASH, 0.6))
+
+	var frac: float = clampf(float(_magic) / float(maxi(_max_magic, 1)), 0.0, 1.0)
+	# The whole point of the bar, and the same sentence the stamina bar's RUST
+	# says: dim means the trigger's hold will not light the blade. Drawn in MOTH
+	# rather than RUST because this is not a danger -- you have not lost anything,
+	# you have simply spent your spins, and the fight is still perfectly winnable
+	# with the sword. RUST here would read as "you are about to die".
+	var spent: bool = _magic < K.MAGIC_SPIN
+	_canvas.draw_rect(Rect2(origin.x, top, w * frac, h),
+		Pal.MOTH if spent else Pal.COBALT)
+
+	# Boundaries at each spin still in the bar, so it reads in SPINS rather than
+	# in percent -- the only unit it is ever spent in. Exactly the argument the
+	# stamina bar's roll ticks make, and the reason both bars are ticked and the
+	# heat bar is not: here the fill and the ticks measure the same quantity.
+	var per := float(K.MAGIC_SPIN) / float(maxi(_max_magic, 1))
+	var i := 1
+	while per > 0.0 and per * float(i) < 1.0:
+		_canvas.draw_rect(Rect2(origin.x + w * per * float(i) - Pal.px(1.0, s.y) * 0.5,
+			top, Pal.px(1.0, s.y), h), Pal.VOID)
+		i += 1
+
+
 # --- Heat -------------------------------------------------------------------
 ## Third in the "you" stack, under stamina. Two facts, one instrument:
 ##
@@ -1013,8 +1097,7 @@ func _draw_heat(s: Vector2) -> void:
 		return
 
 	var origin := Pal.HEALTH_ORIGIN * s
-	var top := origin.y + Pal.px(Pal.HEALTH_H, s.y) + Pal.px(Pal.STAMINA_GAP, s.y) \
-		+ Pal.px(Pal.STAMINA_H, s.y) + Pal.px(Pal.HEAT_GAP, s.y)
+	var top := _pole_top(s, 3)
 	var w := Pal.HEALTH_W * s.x * Pal.HEAT_RATIO
 	var h := Pal.px(Pal.HEAT_H, s.y)
 	var rect := Rect2(origin.x, top, w, h)

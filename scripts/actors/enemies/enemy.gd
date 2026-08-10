@@ -328,6 +328,12 @@ func _build_combat() -> void:
 	# keeps the forge worth buying (docs/GDD.md §5).
 	var mult := Prog.health_mult(level) * (Prog.ELITE_HEALTH if elite else 1.0)
 	health.max_quarters = maxi(int(roundf(float(_def["health"]) * mult)), 1)
+	# **A monster's i-frames are not the hero's**, and leaving this at the default
+	# is what made the light chain's second step do nothing (see
+	# K.ENEMY_IFRAME_TIME for the arithmetic). Set explicitly rather than by
+	# changing the component's default, because the hero's second is right for the
+	# hero and `HealthComponent` is shared.
+	health.iframe_time = K.ENEMY_IFRAME_TIME
 	add_child(health)
 	health.damaged.connect(_on_damaged)
 	health.died.connect(_on_died)
@@ -378,15 +384,34 @@ static func _meshes(n: Node) -> Array[MeshInstance3D]:
 	return out
 
 
-func _play(clip: StringName, loop: bool = false, speed: float = 1.0) -> void:
+## `blend` is the cross-fade INTO `clip`, in seconds. 0.15 everywhere by default,
+## because walking into a wind-up should ease -- but a flinch passes something
+## much shorter, and that is not a detail. A blow is the one thing in this file
+## that has to CUT: a 0.15 s fade into a reel the body only holds for 0.30 s
+## spends half of it still standing in the pose it was already in, which is what
+## "there's no flinch off the first attack" looked like from the player's seat.
+func _play(clip: StringName, loop: bool = false, speed: float = 1.0,
+		blend: float = 0.15) -> void:
 	if _anim == null or not _anim.has_animation(clip):
 		return
 	if _anim.current_animation == String(clip) and loop:
 		return
-	_anim.play(String(clip), 0.15, speed)
+	_anim.play(String(clip), blend, speed)
 	var a := _anim.get_animation(clip)
 	if a != null:
 		a.loop_mode = Animation.LOOP_LINEAR if loop else Animation.LOOP_NONE
+
+
+## The `speed` that makes `clip` last exactly `seconds`. 1.0 when the clip is
+## missing or the window is nonsense, so a body with a short library plays at its
+## own pace rather than at infinity.
+func _clip_speed(clip: StringName, seconds: float) -> float:
+	if _anim == null or not _anim.has_animation(clip) or seconds <= 0.01:
+		return 1.0
+	var a := _anim.get_animation(clip)
+	if a == null or a.length <= 0.01:
+		return 1.0
+	return a.length / seconds
 
 
 # --- Frame ------------------------------------------------------------------
@@ -865,7 +890,25 @@ func _on_damaged(hit: Hit) -> void:
 	state = State.HURT
 	_timer = maxf(hit.stun, 0.22)
 	_cooldown = maxf(_cooldown, _timer + (0.45 if interrupted else 0.2))
-	_play(&"hurt")
+	# Two reels, and which one is the size of the blow rather than the name of the
+	# attack. `hurt_heavy` is 0.87 s against `hurt`'s 0.60 -- a bigger movement, so
+	# a finisher, a spin or an overhead reads as a different event from a jab
+	# without the roster needing a per-attack table. A whole heart is the line
+	# because that is what separates the light chain's steps (2 quarters) from
+	# everything the player pays commitment for (4 and up).
+	#
+	# Sped up to fit the reel it is given, never left to run at its own pace: both
+	# clips outlast the stun, and a body still swinging back through its recovery
+	# while `_tick_hurt` has already handed it to CHASE is the stagger visibly
+	# disagreeing with the state machine.
+	#
+	# The length is ASKED FOR, not written down. A literal here is a number that
+	# is right until somebody retrims the shared library, and the failure it would
+	# ship is a reel that plays at the wrong speed in a file that never mentions
+	# animation lengths.
+	var heavy := hit.amount >= K.HEART
+	var clip: StringName = &"hurt_heavy" if heavy else &"hurt"
+	_play(clip, false, _clip_speed(clip, _timer), 0.04)
 
 	# What a blow is made of, in the order the player receives it: the world
 	# stops, the body goes white, it reels, the camera kicks, and it makes a

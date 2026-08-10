@@ -55,7 +55,18 @@ const T3 := 3000
 # --- Layout, as fractions of the viewport (STYLEGUIDE §5.7) -----------------
 const SAFE := Vector2(0.025, 0.031)
 
-const HEALTH_ORIGIN := Vector2(0.031, 0.899)
+## The top of the "you" pole. **It moved up by exactly one bar row (MAGIC_GAP +
+## MAGIC_H = 12 px @720) when magic was inserted into the stack.** The pole hangs
+## DOWNWARDS from here and the garrison control legend is drawn UPWARDS from
+## KEYS_BASELINE, so the two grow towards each other and the only slack in the
+## frame is the ~3 px between them. Before magic, the garrison pole ended at
+## stamina and just cleared the legend's first line; adding a row without moving
+## this printed the blue bar straight through "WASD MOVE".
+##
+## So: add a row to the pole, subtract its height here and from CLUSTER_BOTTOM.
+## The heat bar is exempt from the sum -- it is dungeon-only and the legend is
+## garrison-only, which is why the two have never had to clear each other.
+const HEALTH_ORIGIN := Vector2(0.031, 0.882)
 ## Health is a BAR, not a row of cells (styleguide §5.1 specifies cells; this is
 ## a deliberate override -- see the note on _draw_health). Width is fixed rather
 ## than growing with max health: a bar that gets longer as you buy containers
@@ -67,6 +78,18 @@ const HEALTH_H := 15.0             ## reference px
 const STAMINA_RATIO := 0.62
 const STAMINA_H := 8.0
 const STAMINA_GAP := 4.0
+## Magic, third in the "you" stack. Narrower than stamina and wider than heat, so
+## the pole tapers -- four bars of the same length is a block, and the taper is
+## what lets the stack be told apart at the edge of vision without reading any
+## of it.
+##
+## It sits under stamina rather than over it because the two are read in that
+## order: "can I dodge" is asked every second and "can I still spin" is asked
+## before a fight. Above health was never a candidate -- health is the top of the
+## pole and the eye starts there.
+const MAGIC_RATIO := 0.52
+const MAGIC_H := 8.0
+const MAGIC_GAP := 4.0
 ## The heat bar, third in the "you" stack and shortest of the three. It belongs
 ## in this pole rather than the money pole even though it PAYS in money: what it
 ## reports is a state of the body -- how fast you are killing and how long you
@@ -118,9 +141,10 @@ const CLUSTER_GAP := 22.0
 ## protecting against and is still the rule, just about a different corner.
 const CLUSTER_LEFT := 0.031
 ## The baseline the cluster's LAST row (the loadout line) sits on. Clear of
-## HEALTH_ORIGIN.y (0.899) by enough that the key caps under the cells never
-## touch the health bar's VOID hairline.
-const CLUSTER_BOTTOM := 0.872
+## HEALTH_ORIGIN.y (0.882) by enough that the key caps under the cells never
+## touch the health bar's VOID hairline. Moves with it, by the same row height --
+## see the note on HEALTH_ORIGIN.
+const CLUSTER_BOTTOM := 0.855
 ## --- The minimap, top-right --------------------------------------------------
 ## The floor plan, in the corner the button cluster used to have. It is the only
 ## corner it can be in: top-left is the floor card, bottom-left is the body,

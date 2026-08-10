@@ -923,6 +923,18 @@ NPCs). Query with `get_tree().get_nodes_in_group(&"targetable")`.
 | 7 | pit | floor hazards |
 | 8 | hookshot_target | wooden/grate surfaces the hookshot bites |
 
+**A prop the sword is meant to hit needs `L_INTERACT`, not just `L_WORLD`.**
+The blade's hitbox masks `L_ENEMY | L_INTERACT` and nothing else, so a body on
+`L_WORLD` alone is scenery no matter what `apply_hit` it has. Every lantern in
+the game shipped that way: the lights-out grids could not be pressed and the
+maze room's chest sat behind gates nothing could open. `Urn` had both bits the
+whole time, under a comment in `Lantern` claiming the two matched.
+
+The two bits answer different questions — `L_WORLD` is "does the hero walk into
+it", `L_INTERACT` is "can it be struck or used" — and a struck prop is nearly
+always both. Neither implies the other, which is why the rule has to be written
+down rather than inferred from the layer names.
+
 ---
 
 ## 7. File ownership
@@ -992,6 +1004,22 @@ signal died
 
 Anything that deals damage puts a `DamageArea` in group `hitbox` and opens its
 window. **Do not invent a second damage path.**
+
+**I-frames belong to the VICTIM, and the hero's number is not the roster's.**
+`K.IFRAME_TIME` (1.0 s) is a mercy rule for the player and reads as one on him;
+inherited by an enemy it is a wall the light chain cannot get through. The chain
+lands its steps about 0.59 s apart, so every enemy in the game swallowed step two
+and step three for the whole length of a swing the player could see connecting.
+Bodies use `K.ENEMY_IFRAME_TIME` (0.20 s) — long enough to stop one swing's
+Area3D counting twice, short enough that the next swing is a new blow.
+`Enemy._build_combat` and `Boss` both set it; a new actor with a
+`HealthComponent` must too, because the component's own default is the hero's.
+
+**A swing that means to stagger must pass `Hit.stun`.** `Enemy._on_damaged` has
+a 0.22 s floor and the reel clip blends in over 0.15 s, so a hit with no stun on
+it produces a body that technically enters HURT and visibly does nothing. The
+sword passes `K.STUN_LIGHT` (0.30) on chain steps and `K.STUN_HEAVY` (0.45) on
+everything that hits harder — spin, dash, overhead, lunge, finisher.
 
 `source` is set once, on the `DamageArea` (`@export var source`), and `Enemy`
 fills its contact hitbox in from its own kind. It exists so the end-of-run screen

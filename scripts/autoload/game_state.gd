@@ -8,8 +8,23 @@ extends Node
 var max_quarters: int = K.START_HEARTS * K.HEART
 var quarters: int = K.START_HEARTS * K.HEART
 
-var max_magic: int = 0  ## 0 until the magic meter is unlocked
-var magic: int = 0
+## The blue bar. **Full from the first frame of a new save**, which is a change
+## from the meter this started as: it was OOT's, granted by a Great Fairy, and
+## `unlock_magic` sat here for months with nothing in the game ever calling it.
+##
+## It is on from the start because of what it now prices. Magic is the cost of
+## the charged spin (K.MAGIC_SPIN), and the spin is in the player's hands on the
+## first floor -- a resource that gates a move you already have cannot be a
+## reward you find later without the move being free until you find it, which is
+## exactly the state that got reported as cheesing.
+##
+## The one rule that makes it work: **it does not regenerate underground.**
+## `Run.enter`, `Run.extract` and `Run.die` fill it and nothing else does, so
+## what the bar measures is how much of this TRIP you have spent. Contrast
+## stamina above, which comes back in two seconds and therefore prices rhythm
+## rather than frequency.
+var max_magic: int = K.MAX_MAGIC
+var magic: int = K.MAX_MAGIC
 
 ## Stamina is what makes the dodge a decision -- see K.MAX_STAMINA for why this
 ## exists at all when the source material has no such thing. Unlike everything
@@ -206,8 +221,8 @@ func reset() -> void:
 	# while nothing could buy it.
 	max_stamina = K.MAX_STAMINA
 	stamina = max_stamina
-	max_magic = 0
-	magic = 0
+	max_magic = K.MAX_MAGIC
+	magic = max_magic
 	rupees = 0
 	# A new save has died no times. Mercy stays switched on if the player had it
 	# on -- that is a preference and lives in `Settings` -- but it goes back to its
@@ -357,12 +372,32 @@ func heart_containers() -> int:
 
 # --- Magic ------------------------------------------------------------------
 
-func unlock_magic() -> void:
-	max_magic = K.MAX_MAGIC
+## Top the bar right up. **The only way magic ever comes back**, and its three
+## callers are all on `Run` -- entering a dungeon, extracting from one, and
+## dying in one. There is deliberately no trickle, no potion and no drop: the
+## whole reason the spin is priced in magic rather than in stamina is that magic
+## is a per-TRIP budget, and anything that refills it underground turns it back
+## into a cooldown (see K.MAGIC_SPIN).
+##
+## Named for the intent rather than spelled `restore_magic(max_magic)` at three
+## call sites, so a fourth caller has to say out loud that it is filling the bar.
+func fill_magic() -> void:
+	# Repairs an old save, which is the one path that can arrive here with a dead
+	# meter: `max_magic` was 0 until the bar was switched on and the loader reads
+	# whatever the file holds. Without this the blue bar would be a black slot for
+	# anyone who had played before.
+	if max_magic <= 0:
+		max_magic = K.MAX_MAGIC
 	magic = max_magic
 	Bus.magic_changed.emit(magic, max_magic)
 
 
+## Pay for a spin. **All or nothing**, unlike `spend_stamina`'s partial mode, and
+## the difference is the point: a swing that goes out on the last drop of stamina
+## is Elden Ring's "you are never told no mid-commitment", but the spin has not
+## been committed to yet at the moment this is asked -- the wind-up is still in
+## the player's hand. A half-priced spin would be a budget of four-and-a-bit,
+## which is a budget nobody can count.
 func spend_magic(cost: int) -> bool:
 	if cost <= 0:
 		return true
@@ -372,10 +407,12 @@ func spend_magic(cost: int) -> bool:
 	Bus.magic_changed.emit(magic, max_magic)
 	return true
 
-
-func restore_magic(amount: int) -> void:
-	magic = mini(max_magic, magic + amount)
-	Bus.magic_changed.emit(magic, max_magic)
+# THERE IS NO `restore_magic`. A partial top-up existed here, uncalled, and it
+# went with the unlock: an API that can hand back some magic is an invitation to
+# hang a drop or a potion off it, and the entire value of this bar is that
+# nothing underground refills it. `fill_magic` above is the whole of the other
+# direction. If a green potion is ever designed, it should have to argue with
+# K.MAGIC_SPIN's note first.
 
 
 # --- Stamina ----------------------------------------------------------------

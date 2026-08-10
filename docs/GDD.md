@@ -953,6 +953,15 @@ the longer list and the rule for adding to it.
   own it wants ranks, then schools, then a class — and `docs/SCOPE.md` §2 has
   already refused classes. The cap is the ring: six stops, `docs/CONTRACT.md`
   §4.1.
+
+  **A blue bar shipped anyway, and the refusal still stands** — because what
+  shipped is not what this line refuses. It is a **price on one sword move**: the
+  charged spin costs `K.MAGIC_SPIN` out of `K.MAX_MAGIC`, four spins a trip, and
+  it refills only when you leave the dungeon (`RunState.enter/extract/die`). No
+  spell is attached to it, nothing casts from it, and no item spends it — the
+  three workings still run on their own charges. It exists because the spin was
+  free and free swept every room; see `docs/SCOPE.md` §2 for the line it must not
+  cross.
 - **A relic that works when you pick it up.** §6.4. It was the one thing in the
   design breaking pillar 4.
 - **A map screen.** The floors are ten rooms and the Sounding-Rod is the answer

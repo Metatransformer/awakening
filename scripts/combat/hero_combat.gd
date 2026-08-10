@@ -385,6 +385,11 @@ var _swing_dur: float = 0.0
 var _swing_window := Vector2.ZERO
 var _swing_damage: int = 0
 var _swing_knock: float = 0.0
+## Seconds the victim reels. Captured per swing beside the knockback because it
+## is the same KIND of number -- what the blow does to the body rather than to
+## its health -- and because it was the one of the three that never existed. See
+## K.STUN_LIGHT for what its absence looked like.
+var _swing_stun: float = K.STUN_LIGHT
 var _swing_hitstop: int = K.HITSTOP_LIGHT
 ## The arc this swing is allowed to reach around, degrees. Captured like every
 ## other number above, and for the same reason: the spin reshapes the hitbox on
@@ -1156,12 +1161,20 @@ func _tick_heavy_button(delta: float) -> void:
 	# charge arms. A pose that waited for `charge_time` would tell the player the
 	# thing they can already see coming and nothing on the way there.
 	_hero.charging = true
-	if not charged and _charge_t >= charge_time:
+	# **An empty blue bar cannot arm.** See `_can_spin`: the hold still happens and
+	# the release still throws the overhead, but nothing winds up and nothing
+	# glows, which is the player being told what they can afford by looking at the
+	# hero instead of at the HUD.
+	if not charged and _charge_t >= charge_time and _can_spin():
 		_set_charged(true)
 	# Every frame, not just at the threshold: the glow and the motes ARE the
 	# "nearly there" tell now that the ping has moved to the release, and a tell
 	# that only exists at the moment it completes tells you nothing on the way up.
-	if _vfx != null:
+	#
+	# Gated on the same affordability, and that is the point of drawing it here
+	# rather than at the arm-up: a blade that gathered light for four tenths of a
+	# second and then refused to arm would be a promise the bar cannot keep.
+	if _vfx != null and _can_spin():
 		_vfx.charge(clampf(_charge_t / maxf(charge_time, 0.01), 0.0, 1.0))
 
 
@@ -1223,6 +1236,24 @@ func _set_charged(on: bool) -> void:
 ## you already know is the game shouting at you.
 func _can_swing() -> bool:
 	return Game.stamina > 0.0
+
+
+## Is there magic in the bar for a spin?
+##
+## **The spin is the one blow in the kit that costs something the dungeon will
+## not give back** (K.MAGIC_SPIN). It is asked in two places and they do
+## different jobs: `_tick_heavy_button` asks it to decide whether the wind-up may
+## ARM at all, and `_spin_swing` asks it again as it pays.
+##
+## The first of those is the whole tell. An empty bar means the blade never
+## lights and the motes never gather, so a player holding the trigger can SEE
+## that the charged release is not available before they commit to waiting for
+## it -- and the hold then comes out as the overhead on release, through the
+## `live and not armed` path that a short tap already uses. No new refusal, no
+## buzzer, no dead button: the trigger still means "hit it hard", and an empty
+## bar only changes how hard.
+func _can_spin() -> bool:
+	return Game.magic >= K.MAGIC_SPIN
 
 
 ## An Intent the player has asked for. Mid-swing it is remembered rather
@@ -1303,6 +1334,17 @@ func _spin_swing() -> void:
 		if _vfx != null:
 			_vfx.clear()
 		return
+	# The blue bar, checked a second time on the way past. `_tick_heavy_button`
+	# will not arm a charge this cannot afford, so reaching here with an empty bar
+	# means the magic went somewhere between the arm-up and the release — and the
+	# answer to that is the overhead, exactly as a short pull would have given.
+	# Falling through rather than going silent is `_lunge_swing`'s rule: the
+	# trigger means "hit it hard" and only the bar decides how hard.
+	if not _can_spin():
+		if _vfx != null:
+			_vfx.clear()
+		_heavy_swing()
+		return
 	if not _hero.request_attack(spin_swing_time, Hero.Swing.SPIN):
 		# Refused, so the charge is spent for nothing — and the blade is still
 		# carrying the light the hold put into it, because the release deliberately
@@ -1322,6 +1364,9 @@ func _spin_swing() -> void:
 		_yell_player.play()
 	if _vfx != null:
 		_vfx.fire()
+	# Paid AFTER the hero has agreed to swing, like every other cost in this file:
+	# a spin refused by `request_attack` must not also empty a quarter of the bar.
+	Game.spend_magic(K.MAGIC_SPIN)
 	Game.spend_stamina(K.STAMINA_SPIN, true)
 	# A spin ENDS the chain rather than counting as a step in it. It is the other
 	# half of the same button; letting it slot into the light chain would make the
@@ -1332,7 +1377,7 @@ func _spin_swing() -> void:
 	# Pitched down, the cheapest honest way to make the swings sound like
 	# different amounts of effort.
 	_commit(spin_swing_time, spin_damage_window, spin_damage, spin_knockback,
-		K.HITSTOP_HEAVY, randf_range(0.68, 0.78))
+		K.HITSTOP_HEAVY, randf_range(0.68, 0.78), K.STUN_HEAVY)
 
 
 ## The stab out of the guard. Unlike the lunge it asks for no target — see
@@ -1356,7 +1401,7 @@ func _dash_swing() -> void:
 	_chain_timer = 0.0
 	_aim_sword()
 	_commit(dash_swing_time, dash_damage_window, dash_damage, dash_knockback,
-		K.HITSTOP_HEAVY, randf_range(0.86, 0.94))
+		K.HITSTOP_HEAVY, randf_range(0.86, 0.94), K.STUN_HEAVY)
 
 
 ## The ordinary forward box, which is every swing except the spin. Called by
@@ -1373,6 +1418,10 @@ func _light_swing(step: int) -> void:
 	var dmg := damage
 	var knock := knockback
 	var hitstop := K.HITSTOP_LIGHT
+	# The finisher reels a body for longer, exactly as it shoves harder and stops
+	# the world for longer. Three identical staggers would make the chain's third
+	# step a bigger number and nothing else.
+	var stun := K.STUN_LIGHT
 	match step:
 		1:
 			variant = Hero.Swing.LIGHT2
@@ -1383,6 +1432,7 @@ func _light_swing(step: int) -> void:
 			dmg += chain_finisher_bonus
 			knock = chain_finisher_knockback
 			hitstop = K.HITSTOP_HEAVY
+			stun = K.STUN_HEAVY
 	if not _can_swing():
 		return
 	# Only commit the swing's numbers once the hero has agreed to swing — he
@@ -1397,7 +1447,7 @@ func _light_swing(step: int) -> void:
 	_chain_timer = chain_window
 	_aim_sword()
 	_commit(dur, damage_window, dmg, knock, hitstop,
-		randf_range(0.94, 1.07) * _CHAIN_PITCH[step])
+		randf_range(0.94, 1.07) * _CHAIN_PITCH[step], stun)
 
 
 ## The heavy: the finisher's leaping overhead, thrown from a standing start.
@@ -1423,7 +1473,7 @@ func _heavy_swing() -> void:
 	# identical are three swings the player cannot tell apart with their eyes on
 	# the enemy.
 	_commit(heavy_swing_time, heavy_damage_window, heavy_damage, heavy_knockback,
-		K.HITSTOP_HEAVY, randf_range(0.74, 0.82))
+		K.HITSTOP_HEAVY, randf_range(0.74, 0.82), K.STUN_HEAVY)
 
 
 ## The Z-targeted leap. Returns false — having done nothing — the moment any of
@@ -1463,7 +1513,7 @@ func _lunge_swing() -> bool:
 	_chain_timer = 0.0
 	_aim_sword()
 	_commit(lunge_swing_time, lunge_damage_window, lunge_damage, lunge_knockback,
-		K.HITSTOP_HEAVY, randf_range(0.80, 0.88))
+		K.HITSTOP_HEAVY, randf_range(0.80, 0.88), K.STUN_HEAVY)
 	return true
 
 
@@ -1549,12 +1599,18 @@ func _slam_targets(at: Vector3) -> Array[Node]:
 
 ## Arm the swing the hero has just agreed to. Called only after a successful
 ## request_*, so the numbers in flight always describe a swing that is happening.
+##
+## `stun` defaults to the light reel rather than to zero, which is the shape the
+## bug this argument was added for had: a blow with no stun is a blow the victim
+## does not visibly take, and "forgot to pass it" must not be spelled the same
+## way as "this blow deliberately does not stagger".
 func _commit(dur: float, window: Vector2, dmg: int, knock: float,
-		hitstop: int, pitch: float) -> void:
+		hitstop: int, pitch: float, stun: float = K.STUN_LIGHT) -> void:
 	_swing_dur = dur
 	_swing_window = window
 	_swing_damage = dmg
 	_swing_knock = knock
+	_swing_stun = stun
 	_swing_hitstop = hitstop
 	_swing_t = 0.0
 	_hit_this_swing.clear()
@@ -1613,7 +1669,8 @@ func _maybe_hit(node: Node) -> void:
 		return
 
 	_hit_this_swing[id] = true
-	var hit := Hit.make(_swing_damage, _hero.global_position, &"sword", _swing_knock)
+	var hit := Hit.make(_swing_damage, _hero.global_position, &"sword", _swing_knock,
+		_swing_stun)
 	var landed = victim.apply_hit(hit)
 	# apply_hit returns bool on a HealthComponent and null on the duck-typed
 	# props that predate it, so absence of a false is treated as a landed blow.
@@ -1625,15 +1682,37 @@ func _maybe_hit(node: Node) -> void:
 	Bus.request_hitstop.emit(_swing_hitstop)
 
 
-## Find whatever on or under `node` answers the damage contract. Props built
-## before HealthComponent existed implement apply_hit directly, and the training
-## posts are exactly that case.
+## Find whatever on, under, or OVER `node` answers the damage contract. Props
+## built before HealthComponent existed implement apply_hit directly, and the
+## training posts are exactly that case.
+##
+## **The parent step is the one that was missing**, and its absence is why the
+## puzzle kit was unswingable. `TrainingPost` *is* a StaticBody3D with `apply_hit`
+## on it, so a scan that only looked down worked perfectly against the one target
+## anything was ever proved against. Every atom in `scripts/props/atoms/` is built
+## the other way -- a plain Node3D that owns a child body called "Body" or "Post"
+## -- so what the blade's Area3D reports overlapping is the CHILD, and the child
+## answers nothing. `Lantern` was therefore scenery (the lights-out grid could not
+## be pressed, the maze room's chest stayed walled off), and `Urn` was breakable
+## by arrows only, under a comment claiming the opposite.
+##
+## `Arrow._damageable` has always walked up, which is exactly why the two
+## diverged without anyone noticing: the same prop answered one weapon and not
+## the other, and no proof swung a sword at either. Kept as a copy of that shape
+## rather than shared, because the two run against different queries -- but they
+## are the same three questions in the same order, and they must stay that way.
 func _damageable(node: Node) -> Node:
 	if node.has_method(&"apply_hit"):
 		return node
 	for child in node.get_children():
 		if child is HealthComponent:
 			return child
+	# One level, not a walk to the root. A prop owns its own body; anything
+	# further up is the ROOM, and a sword that found a room's `apply_hit` would
+	# damage the floor it is standing on.
+	var parent := node.get_parent()
+	if parent != null and parent.has_method(&"apply_hit"):
+		return parent
 	return null
 
 

@@ -13,11 +13,14 @@ extends RefCounted
 ##      light must be step one. Otherwise the finisher is reachable by mashing
 ##      whatever, and there is no chain to learn.
 ##
-## The heavy has no button of its own any more — it is the attack button HELD —
-## so claim 4 also proves the thing that arrangement risks: that holding the
-## button does not turn the ordinary chain into a charge. A mashed chain must
-## never wind anything up, and a charged hold must still throw its light swing
-## on the press. Both are visible in the blow counts `_charge_and_land` returns.
+## **The charge is on the TRIGGER (`heavy`), not on a held `attack`.** This file
+## used to hold `attack` past `charge_time` and assert two blows out of it — the
+## light the press threw and the spin the release threw — because for a while the
+## heavy really was the attack button held. That arrangement is gone
+## (`HeroCombat._tick_heavy_button`): `attack` is the chain and nothing else, and
+## the trigger is tap-for-overhead / hold-for-spin. The old beat kept failing
+## against a game that was working, which is the same class of lie as a green
+## proof aimed one layer above the code — see tools/directors/sword_contact.gd.
 ##
 ## This director proves the CHAIN, not the poses. It deliberately photographs
 ## almost nothing: capture() stalls the game clock for longer than the chain
@@ -122,15 +125,14 @@ func run(rig) -> void:
 	await rig.capture(out.path_join("c_02_after_lapse.png"))
 
 	# --- the charge does not feed the chain ----------------------------------
-	# Two blows come out of one held button: the light the PRESS threw, and the
-	# heavy the RELEASE threw. Both are checked, because the failure mode of a
-	# hold-to-charge button is that it swallows the tap.
+	# One blow out of the held trigger — the spin the RELEASE threw — and then a
+	# light, which must come back as step one.
 	await rig.wait_seconds(LAPSE)
-	var charge_blows := await _charge_and_land(rig, combat)
+	var charge_blow := await _charge_and_land(rig, combat)
 	await rig.wait_seconds(LAPSE)
 	var after_heavy := await _press_and_land(rig, "attack")
-	print("COMBO charge: press dmg=%d release dmg=%d, then light dmg=%d (step1 was %d)"
-		% [charge_blows[0], charge_blows[1], after_heavy, step[0]])
+	print("COMBO charge: release dmg=%d, then light dmg=%d (step1 was %d)"
+		% [charge_blow, after_heavy, step[0]])
 	await rig.capture(out.path_join("c_03_after_heavy.png"))
 
 	for i in 3:
@@ -143,13 +145,12 @@ func run(rig) -> void:
 		print("COMBO FAIL after the window lapsed the swing dealt %d, not step one's %d"
 			% [after_lapse, step[0]]); fails += 1
 	if not _charge_seen:
-		print("COMBO FAIL the attack button was held well past charge_time and never charged"); fails += 1
-	if charge_blows[0] != step[0]:
-		print("COMBO FAIL the press that started the charge dealt %d, not step one's %d — a held button swallowed its own tap"
-			% [charge_blows[0], step[0]]); fails += 1
-	if charge_blows[1] <= step[0]:
+		print("COMBO FAIL the trigger was held well past charge_time and never charged"
+			+ " (magic %d/%d — an empty bar refuses to arm, by design)"
+			% [Game.magic, Game.max_magic]); fails += 1
+	if charge_blow <= step[0]:
 		print("COMBO FAIL the charge release (%d) does not out-damage step one (%d)"
-			% [charge_blows[1], step[0]]); fails += 1
+			% [charge_blow, step[0]]); fails += 1
 	if after_heavy != step[0]:
 		print("COMBO FAIL a light after a heavy dealt %d, not step one's %d — the heavy feeds the chain"
 			% [after_heavy, step[0]]); fails += 1
@@ -195,28 +196,34 @@ func _press_and_land(rig, action: String) -> int:
 	return 0
 
 
-## Hold the attack button past `charge_time` and let go. Returns [light, heavy]
-## — what the press dealt and what the release dealt, either 0 if it never came.
+## Hold the TRIGGER past `charge_time` and let go. Returns what the release
+## dealt, or 0 if nothing came out.
+##
+## ONE blow, not two. Holding the trigger throws nothing on the press — the press
+## edge only starts the wind-up clock — so there is no light swing to straddle
+## the release any more.
 ##
 ## Driven with Input.action_press/release rather than rig.hold_seconds because
-## the two blows straddle the release and the second one has to be waited for
-## AFTER the button is up. Polled actions read a synthetic press fine (this is
-## `is_action_pressed`, not `_unhandled_input` — see CLAUDE.md §3).
-func _charge_and_land(rig, combat: Node) -> Array[int]:
+## the blow has to be waited for AFTER the button is up. Polled actions read a
+## synthetic press fine (this is `is_action_pressed`, not `_unhandled_input` —
+## see CLAUDE.md §3).
+##
+## The spin is priced in magic now (`K.MAGIC_SPIN`), so the bar is filled first.
+## A director that inherited a spent bar from whatever ran before it would get
+## the overhead instead — a real swing, a smaller number, and a failure that has
+## nothing to do with the chain.
+func _charge_and_land(rig, combat: Node) -> int:
+	Game.fill_magic()
 	var before := _hits.size()
-	Input.action_press(&"attack")
+	Input.action_press(&"heavy")
 	# Past the charge, with margin: `charge_time` is an export and this must not
 	# become a director that fails when someone tunes it by a frame.
 	var wind: float = float(combat.get(&"charge_time")) + 0.35
 	await rig.wait_seconds(wind)
 	_charge_seen = bool(combat.get(&"charged"))
-	Input.action_release(&"attack")
+	Input.action_release(&"heavy")
 	for _i in 240:
-		if _hits.size() > before + 1:
+		if _hits.size() > before:
 			break
 		await rig.wait_frames(1)
-	var blows: Array[int] = [
-		_hits[before] if _hits.size() > before else 0,
-		_hits[before + 1] if _hits.size() > before + 1 else 0,
-	]
-	return blows
+	return _hits[before] if _hits.size() > before else 0

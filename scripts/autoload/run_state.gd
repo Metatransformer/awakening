@@ -157,6 +157,12 @@ func enter(run_seed: int = 0) -> void:
 	# room on the way down and walk the cycle home, once, this run. Solved on run
 	# nine, the gate room would be a corridor. See `PuzzleAtom.clear_run_flags`.
 	PuzzleAtom.clear_run_flags()
+	# A full blue bar, because the bar is a per-TRIP budget and this is the start
+	# of a trip (K.MAGIC_SPIN). Note that `descend_floor` deliberately does NOT do
+	# this: taking the stair is the same trip getting longer, and a floor change
+	# that handed back four more spins would make the stair a refill station and
+	# the budget meaningless on exactly the floors it is supposed to bite.
+	Game.fill_magic()
 	seed_used = run_seed if run_seed != 0 else int(Time.get_unix_time_from_system())
 	rng.seed = seed_used
 	Bus.bag_changed.emit(bag, bag_value())
@@ -205,6 +211,12 @@ func extract() -> bool:
 
 	Game.spend_gold(fee)
 	in_dungeon = false
+	# **The refill the whole bar is built around**: you leave, and the blue comes
+	# back. It lands here rather than only in the next `enter()` so a player
+	# standing in the garrison sees a full meter -- a bar that stayed empty
+	# between runs would read as a bar that is broken, and the garrison is where
+	# the player looks at their gear.
+	Game.fill_magic()
 	# Snapshotted BEFORE the components leave, because the ending screen is a
 	# receipt for the run and a component you carried out is the single best thing
 	# on it. `bank_components` erases those lines from the bag, so a screen built
@@ -394,6 +406,10 @@ func die() -> void:
 	var banked := bank_components()
 	_end_summary(false, lost, lost_value, banked, 0, kept, lost_hot)
 	in_dungeon = false
+	# Dying is a way of leaving the dungeon, so the bar comes back the same way it
+	# does on an extraction. Withholding it would be a second punishment stacked
+	# on losing the bag, and it would land on the run AFTER the bad one.
+	Game.fill_magic()
 	depth = 0
 	# Back to the top of the Lower Worlds, and it is reset HERE rather than left
 	# for the next `enter()` to do. Between the two the player is standing in the

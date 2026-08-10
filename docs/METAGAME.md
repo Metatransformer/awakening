@@ -55,6 +55,22 @@ The whole game is one question, asked over and over: **is what I am carrying
 worth more than the walk back?** Every system below exists to sharpen that
 question or to price it.
 
+### What the trip resets, and what it does not
+
+Three things are budgeted per TRIP rather than per second, and the arrow back to
+the garrison is the only thing that refills them: the **bottles** you bought
+before you left (§6.6), the **arrows** in the pouch (§4.6), and the **magic** the
+charged spin is priced in (`K.MAX_MAGIC` 48, `K.MAGIC_SPIN` 12 — four spins).
+`RunState.enter/extract/die` fill the blue bar; **descending a floor does not**,
+because taking the stair is the same trip getting longer, and that is the trade
+the stair is there to offer.
+
+Stamina is the counter-example and the reason the distinction is worth naming: it
+comes back on its own, in seconds, so it prices the next *dodge*. A per-trip
+budget prices the next *room*. Nothing underground tops the blue bar up — there
+is no font, no drop and no draught for it, and `GameState` has no partial-restore
+API to hang one off.
+
 ---
 
 ## 2. Gold, and the two things that hold value

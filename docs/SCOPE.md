@@ -148,6 +148,21 @@ every time someone has the idea again.
   has magic — three usable items with charges, GDD §6.5 — and that is all the
   magic it has. Every one of those four is the first step of the multi-class game
   the line above already refuses.
+
+  **A blue bar shipped anyway, and the refusal still stands** (owner directive,
+  2026-08-10). It is a **price on the charged spin and nothing else**: 48 points,
+  12 a spin, four spins a trip, refilled only on entering, extracting or dying
+  (`RunState`). Read the shape of it, because the shape is the whole defence —
+  it has no spells, no ranks, no school, no casting input, no shop that sells it,
+  and no way to top it up underground. `GameState` deliberately has **no
+  `restore_magic`**: an API that hands back *some* magic is how a potion, then a
+  font, then a school gets in. The one thing that may spend it is a sword swing
+  the player already had.
+
+  What this line still refuses, unchanged: a second thing that spends the bar, a
+  spell bound to it, a rank on that spell, and anything underground that refills
+  it. The first of those is the one that will actually be proposed, and it is the
+  one that turns a price into a resource system.
 - Mounts, fishing, farming, **housing**, cooking.
 
   **Housing shipped anyway, in one room, and the refusal still stands.** The

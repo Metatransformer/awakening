@@ -234,6 +234,11 @@ func _build_combat() -> void:
 	health = HealthComponent.new()
 	health.name = "Health"
 	health.max_quarters = maxi(int(_row.get("health", 48)), 1)
+	# The same monster i-frames `Enemy` takes, and for the same reason: the light
+	# chain has to land all three of its steps on a boss too. What makes a boss
+	# hard is the authored beats and forty-odd quarters of health, never a hidden
+	# rule that quietly deletes two thirds of the player's damage.
+	health.iframe_time = K.ENEMY_IFRAME_TIME
 	add_child(health)
 	health.damaged.connect(_on_damaged)
 	health.died.connect(_on_died)
