@@ -24,7 +24,7 @@ const ERASE_WIDTH := 150
 var mode: Mode = Mode.SAVE
 var confirm: MenuConfirm = null
 
-var _title: Label
+var _header_slot: VBoxContainer
 var _hint: Label
 var _list: VBoxContainer
 var _back: Button
@@ -35,6 +35,10 @@ var _erasers: Array[Button] = []
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# The subtree renders through the kit, overriding the `menu_theme.tres` the
+	# pause menu's Root still carries. See the same two lines on `EquipPanel`.
+	UITheme.prewarm()
+	theme = UITheme.theme()
 	_build()
 
 
@@ -51,33 +55,38 @@ func _build() -> void:
 
 	var frame := PanelContainer.new()
 	frame.name = "Frame"
-	frame.theme_type_variation = &"MenuFrame"
+	# `edge_to_edge`: the plate header and the footer reach the frame's edge and
+	# the body owns its inset.
+	UITheme.style_panel(frame, UITheme.FRAME_FACE_SOLID, true)
 	frame.custom_minimum_size = MenuUtil.FRAME_SIZE
 	center.add_child(frame)
 
 	var col := VBoxContainer.new()
-	col.theme_type_variation = &"MenuStack"
+	col.add_theme_constant_override("separation", 0)
 	frame.add_child(col)
 
-	var header := PanelContainer.new()
-	header.theme_type_variation = &"MenuHeader"
-	col.add_child(header)
-	_title = Label.new()
-	_title.theme_type_variation = &"MenuTitle"
-	_title.text = "SAVE GAME"
-	header.add_child(_title)
+	# The title is the one thing on this screen that changes with the mode, so
+	# the header is rebuilt rather than written into: a `PlateHeader` composes
+	# its kicker, emblem and title together and there is no half of it worth
+	# reaching back into.
+	_header_slot = VBoxContainer.new()
+	_header_slot.add_theme_constant_override("separation", 0)
+	col.add_child(_header_slot)
+	_rebuild_header()
 
 	var body := MarginContainer.new()
-	body.theme_type_variation = &"MenuBodyPad"
+	for side in ["left", "right", "top", "bottom"]:
+		body.add_theme_constant_override("margin_" + side, 20)
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(body)
 	_list = VBoxContainer.new()
-	_list.theme_type_variation = &"MenuList"
+	_list.add_theme_constant_override("separation", 12)
 	_list.alignment = BoxContainer.ALIGNMENT_CENTER
 	body.add_child(_list)
 
 	for i in Saves.SLOTS:
 		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
 		_list.add_child(row)
 
 		var card := MenuSlotRow.new()
@@ -90,19 +99,27 @@ func _build() -> void:
 
 		var erase := Button.new()
 		erase.text = "Erase"
-		erase.theme_type_variation = &"MenuDanger"
+		UITheme.style_pill_button(erase)
+		# The one destructive control in the menu, so it is the one control that
+		# wears DANGER. It is not a red BOX -- a filled red slab beside three
+		# quiet cards is louder than the thing it deletes; red TEXT on the same
+		# plate as everything else is the kit's way of saying the same thing.
+		for state in ["font_color", "font_hover_color", "font_focus_color",
+				"font_pressed_color"]:
+			erase.add_theme_color_override(state, UITheme.DANGER)
 		erase.custom_minimum_size = Vector2(ERASE_WIDTH, MenuSlotRow.CARD_HEIGHT)
 		erase.pressed.connect(func() -> void: _on_erase_pressed(slot_index))
 		row.add_child(erase)
 		_erasers.append(erase)
 
 	var footer := PanelContainer.new()
-	footer.theme_type_variation = &"MenuFooter"
+	footer.add_theme_stylebox_override("panel",
+		UITheme.hud_box(UITheme.GRAY_1, 20, 10, 20, 10))
 	col.add_child(footer)
 	var frow := HBoxContainer.new()
 	footer.add_child(frow)
 	_hint = Label.new()
-	_hint.theme_type_variation = &"MenuHint"
+	UITheme.apply_text_style(_hint, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
 	_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	frow.add_child(_hint)
 	var spacer := Control.new()
@@ -125,7 +142,7 @@ func open_mode(m: Mode) -> void:
 ## Re-peek every slot and re-derive what is reachable. Called on every open, so
 ## a save made a moment ago shows up without the menu being rebuilt.
 func refresh_all() -> void:
-	_title.text = "SAVE GAME" if mode == Mode.SAVE else "LOAD GAME"
+	_rebuild_header()
 	_hint.text = ("↑↓ / D-pad Select    → Erase    E / A Save    Esc / B Back"
 		if mode == Mode.SAVE
 		else "↑↓ / D-pad Select    → Erase    E / A Load    Esc / B Back")
@@ -137,6 +154,9 @@ func refresh_all() -> void:
 		# Disabled alone would still accept a grab_focus(); FOCUS_NONE is what
 		# makes the row genuinely unreachable by stick, arrow keys and Tab.
 		card.focus_mode = Control.FOCUS_ALL if usable else Control.FOCUS_NONE
+		# ...and it says why, at full contrast through the dimmed card. See
+		# `MenuSlotRow.refuse` and the refusal law it cites.
+		card.refuse("" if usable else "Nothing here to load.")
 		var e := _erasers[i]
 		e.disabled = card.is_empty
 		e.focus_mode = Control.FOCUS_NONE if card.is_empty else Control.FOCUS_ALL
@@ -240,3 +260,19 @@ func _ask(title: String, body: String, ok_text: String, cancel_text: String,
 		return true
 	confirm.ask(title, body, ok_text, cancel_text, danger, ret)
 	return await confirm.resolved
+
+
+## The plate header for the mode we are in. Rebuilt rather than edited: see the
+## note where `_header_slot` is created.
+func _rebuild_header() -> void:
+	if _header_slot == null:
+		return
+	for child in _header_slot.get_children():
+		child.queue_free()
+		_header_slot.remove_child(child)
+	var saving := mode == Mode.SAVE
+	UiKit.plate_header(_header_slot, {
+		"kicker": "Three slots  ·  on this machine",
+		"title": "Save Game" if saving else "Load Game",
+		"emblem": UiKit.action_icon("save"),
+	})
