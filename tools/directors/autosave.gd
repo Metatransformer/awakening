@@ -7,7 +7,7 @@ extends RefCounted
 ##      every autosave after it;
 ##   2. taking the stair to the next floor writes it again;
 ##   3. coming home writes it again — and every one of those saves points at
-##      TOWN, never at the dungeon it was taken in. A slot holds `Game` and
+##      GARRISON, never at the dungeon it was taken in. A slot holds `Game` and
 ##      nothing of `Run` (METAGAME §5: the run is what you are gambling), so a
 ##      save that pointed underground would reload into a generated floor with
 ##      no bag, no fee and no run behind it;
@@ -23,7 +23,7 @@ extends RefCounted
 ## anyone a save.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/autosave.gd \
 ##     --out=/tmp/save/x.png --warmup=60
 
@@ -53,7 +53,7 @@ func run(rig) -> void:
 
 	# The claim the format cannot make for itself.
 	_check("the save points HOME, not at the floor it was taken on (%s)"
-		% _scene_of(0), _scene_of(0) == Flow.TOWN)
+		% _scene_of(0), _scene_of(0) == Flow.GARRISON)
 
 	# --- 2. Down ------------------------------------------------------------
 	# `played` is `Time.get_ticks_msec()` at the moment of writing, so it is the
@@ -71,13 +71,13 @@ func run(rig) -> void:
 	await _shot(rig, "descended")
 
 	# --- 3. Home ------------------------------------------------------------
-	# The real way out, not Flow.to_town(): extraction is the transition the
+	# The real way out, not Flow.to_garrison(): extraction is the transition the
 	# player has the most to lose across, and it runs through Run.extract ->
 	# Bus.run_ended -> Flow, which is a longer path than the two above.
 	#
 	# **`Run.extract()` does not go home by itself, and this beat believed it did
 	# until 2026-08-09.** A run now ENDS on the floor it ended on, under
-	# `RunEndScreen`, and BACK TO TOWN is the press that travels
+	# `RunEndScreen`, and BACK TO THE GARRISON is the press that travels
 	# (scripts/ui/run_end/). `_on_run_ended` only raises the screen. So the old
 	# beat measured the file a second after the rope, found the second beat's
 	# write still sitting there, and reported `7.4 -> 7.4` — a red director that
@@ -96,12 +96,12 @@ func run(rig) -> void:
 	await rig.wait_seconds(RunEndScreen.SETTLE + 0.2)
 	await rig.hold_seconds([&"ui_accept"], 0.2)
 	await _settle(rig)
-	_check("...and BACK TO TOWN reached town (%s)" % rig.scene().name,
-		rig.scene() is Town)
+	_check("...and BACK TO THE GARRISON reached the garrison (%s)" % rig.scene().name,
+		rig.scene() is Garrison)
 	_check("...which wrote it a third time (%.1f -> %.1f)" % [before, _played_of(0)],
 		_played_of(0) > before)
 	_check("coming home wrote it again", Saves.active_slot == 0)
-	_check("and the notice came up in town too", float(Hud.get(&"_save_t")) >= 0.0)
+	_check("and the notice came up in the garrison too", float(Hud.get(&"_save_t")) >= 0.0)
 	await _shot(rig, "home")
 
 	# --- 4. Three saves made by hand are three saves left alone --------------
@@ -149,9 +149,9 @@ func _walk(root: Node) -> Array:
 ## beat 2's file and reported `6.8 -> 6.8`.
 ##
 ## That it passed for months is the point: it was a race this director won by a
-## few milliseconds, and it started losing the day the town grew a house to build
-## in `_ready`. Wait on the thing that actually changes — the scene node — and
-## then give the tail of `_go` a margin it does not have to win.
+## few milliseconds, and it started losing the day the garrison grew a house to
+## build in `_ready`. Wait on the thing that actually changes — the scene node —
+## and then give the tail of `_go` a margin it does not have to win.
 func _settle(rig) -> void:
 	# Annotated: `rig` is untyped here, so `scene()` hands back a Variant and
 	# `:=` cannot infer (CLAUDE.md §3).

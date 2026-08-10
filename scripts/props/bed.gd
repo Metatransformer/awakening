@@ -6,23 +6,23 @@ extends Interactable
 ##
 ## **It writes the save.** That is the load-bearing one. `Flow._go` autosaves on
 ## every scene change (game_flow.gd), which covers the four moments a run passes
-## through — but it covers nothing you do *between* them, and everything the town
-## is for happens between them. Sell the bag, forge a rung, brew two draughts,
-## quit: all of it was on the disk as of the moment you walked out of the
-## dungeon, and none of the last twenty minutes was. The bed is where a player
-## says "keep this", in the place and the gesture every game of this shape has
-## used to say it.
+## through — but it covers nothing you do *between* them, and everything the
+## garrison is for happens between them. Sell the bag, forge a rung, brew two
+## draughts, quit: all of it was on the disk as of the moment you walked out of
+## the dungeon, and none of the last twenty minutes was. The bed is where a
+## player says "keep this", in the place and the gesture every game of this
+## shape has used to say it.
 ##
 ## **It heals, and that costs the design nothing**, which is the only reason it
 ## is allowed to. `docs/GDD.md` §2 refuses "a heal you can carry without paying
-## for it" — and both doors into town already heal to full on the way through
-## (`Run.extract` and `Run.die` each call `Game.heal`). There is no state in
-## which a hero reaches this cot hurt. The heal is here so that the bed does what
-## the object says it does if one ever appears, not because it changes a number
-## anybody can reach.
+## for it" — and both doors into the garrison already heal to full on the way
+## through (`Run.extract` and `Run.die` each call `Game.heal`). There is no state
+## in which a hero reaches this cot hurt. The heal is here so that the bed does
+## what the object says it does if one ever appears, not because it changes a
+## number anybody can reach.
 ##
-## **It does not advance a clock.** There isn't one. `Town._build_env` pins the
-## sky to a single afternoon and says why: `docs/SCOPE.md` §1 freezes the
+## **It does not advance a clock.** There isn't one. `Garrison._build_env` pins
+## the sky to a single afternoon and says why: `docs/SCOPE.md` §1 freezes the
 ## mechanic count at one and a day/night cycle is not it. A bed that skipped to
 ## morning would be that system arriving through a prop.
 ##
@@ -56,12 +56,12 @@ func _ready() -> void:
 ## Refused mid-run rather than merely unreachable.
 ##
 ## Nothing can carry this prop underground today — it is built by `House`, which
-## is built by `Town`. The guard is here anyway because the rule it enforces is
-## not "the cot is in town", it is **"you cannot save your way out of a run"**,
-## and that rule is `docs/METAGAME.md` §5 and the reason `Saves._save_scene`
-## refuses to record a dungeon. A bed placed in a safe room on floor three would
-## be the whole extraction decision undone by a prop, and the file that stops it
-## should be the file the prop is in.
+## is built by `Garrison`. The guard is here anyway because the rule it enforces
+## is not "the cot is in the garrison", it is **"you cannot save your way out of
+## a run"**, and that rule is `docs/METAGAME.md` §5 and the reason
+## `Saves._save_scene` refuses to record a dungeon. A bed placed in a safe room
+## on floor three would be the whole extraction decision undone by a prop, and
+## the file that stops it should be the file the prop is in.
 func activate(_by: Node3D) -> void:
 	if Run.in_dungeon or Flow.busy:
 		return
@@ -92,11 +92,11 @@ func _sleep() -> void:
 
 
 # --- Look --------------------------------------------------------------------
-# A frame, a mattress and a blanket, in the town's own vocabulary: kit stone for
-# the base, `mat_wood` for the frame, and the one warm gold the whole garrison is
-# lit in (`TownLight`, `Npc._lamp`). Three boxes. `docs/STYLEGUIDE.md` §6 budgets
-# a prop at "the shape, not the material", and the shape of a bed is a low
-# rectangle with a pale block at one end.
+# A frame, a mattress and a blanket, in the garrison's own vocabulary: kit stone
+# for the base, `mat_wood` for the frame, and the one warm gold the whole
+# garrison is lit in (`GarrisonLight`, `Npc._lamp`). Three boxes.
+# `docs/STYLEGUIDE.md` §6 budgets a prop at "the shape, not the material", and
+# the shape of a bed is a low rectangle with a pale block at one end.
 
 const MAT_WOOD := preload("res://assets/materials/mat_wood.tres")
 
@@ -159,9 +159,9 @@ func _build() -> void:
 	add_child(_glow)
 
 
-## An unshaded material, the way `TownLight` builds its two states: these are
-## props at STYLEGUIDE §6's "a prop and a light" budget, and a lit shader on a
-## 0.1 m box buys nothing a flat colour does not.
+## An unshaded material, the way `GarrisonLight` builds its two states: these
+## are props at STYLEGUIDE §6's "a prop and a light" budget, and a lit shader on
+## a 0.1 m box buys nothing a flat colour does not.
 func _flat(c: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = c

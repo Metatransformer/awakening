@@ -94,7 +94,7 @@ var _hold_bar: HoldBar
 
 
 ## The screen makes its own CanvasLayer. A Control parented to a Node3D never
-## draws, and every caller here is a prop standing in a 3D town.
+## draws, and every caller here is a prop standing in a 3D garrison.
 ## `db` is the catalogue for a BUY screen and defaults to the smith's, which is
 ## what every existing caller meant.
 static func open(host: Node, screen_mode: Mode, screen_title: String,
@@ -153,8 +153,8 @@ func close() -> void:
 
 # --- Building ----------------------------------------------------------------
 
-## Darken the world rather than hide it. You are standing in the town while you
-## do this, and the shop is a conversation, not a menu screen.
+## Darken the world rather than hide it. You are standing in the garrison while
+## you do this, and the shop is a conversation, not a menu screen.
 func _build() -> void:
 	var dim := ColorRect.new()
 	dim.color = Color(Pal.VOID, 0.86)

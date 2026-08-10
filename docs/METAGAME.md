@@ -1,7 +1,7 @@
 # The metagame
 
 Moonlighter's structure on OOT's feel. The dungeon is where you take risk; the
-town is where you turn it into permanence. Everything below is the design of
+garrison is where you turn it into permanence. Everything below is the design of
 record for what is *implemented*, not a wishlist — every number here is read
 from the code it describes, and the file it lives in is named.
 
@@ -36,7 +36,7 @@ from the code it describes, and the file it lives in is named.
 ## 1. The loop
 
 ```
-        town                            dungeon
+        garrison                            dungeon
   ┌───────────────────┐           ┌────────────────────┐
   │  sell to vendor   │           │  clear rooms       │
   │  buy from smith   │  ──gate──▶│  kill, open chests │
@@ -134,7 +134,7 @@ They arrive three ways, and each answers a different kind of empty:
 
 | Source | Where | What it costs | Answers |
 |---|---|---|---|
-| **The smith** — `ARROWS X10` | Town (`shop_db.gd`) | 40 gold (4.0/arrow) | a purse, no bag |
+| **The smith** — `ARROWS X10` | Garrison (`shop_db.gd`) | 40 gold (4.0/arrow) | a purse, no bag |
 | **Found** — `ArrowBundle` | Dungeon floors and chests | a short detour | early, poor, and dry |
 | **Fletched** — `Fletching` | The POUCH screen, anywhere | 2 Cracked Flint + 2 Bone Shard → 5 arrows (4.8/arrow) | a full bag, no purse |
 
@@ -294,7 +294,7 @@ function of depth. Three consequences, all intended:
 - A rich run costs real money to bank — the greed curve bends but never breaks.
 - **The toll can never exceed your gold.** `Run.extract_charge()` caps it there,
   so a bag worth more than your purse takes *all* of it and the rope still works.
-  You walk into town with the haul and nothing else, and now you have to sell it.
+  You walk into the garrison with the haul and nothing else, and now you have to sell it.
 
 ### The cap, and why it replaced a refusal — 2026-08-09
 
@@ -361,14 +361,14 @@ what stops a player from farming one safe room forever.
 
 The Heart Draught (§6.6) is the only other way to get health back, and it is
 deliberately built so it cannot replace this one: it heals two hearts, not full,
-there are at most four bottles, and every one of them was paid for in town
-before the run. Healing underground is a **stock you brought with you**, which
-is a different decision from leaving — and when the stock is gone, leaving is
-still the only answer.
+there are at most four bottles, and every one of them was paid for in the
+garrison before the run. Healing underground is a **stock you brought with
+you**, which is a different decision from leaving — and when the stock is gone,
+leaving is still the only answer.
 
 **Death** (`Run.die()`) takes the whole bag and nothing else. Gold and every
-upgrade bought with it survive. You wake in town at full health — leaving you at
-zero would just kill you again before you could sell.
+upgrade bought with it survive. You wake in the garrison at full health —
+leaving you at zero would just kill you again before you could sell.
 
 ### Both endings stop and show you the receipt
 
@@ -377,9 +377,9 @@ floor the run ended on: `RunEndScreen` (`scripts/ui/run_end/`), off
 `Bus.run_ended` via `Flow`. It names the floor, what killed you, how many
 monsters you killed, and every stack you were carrying priced line by line, with
 components marked TO THE BENCH because the vendor will never pay gold for one.
-The tree is **paused** under it and the only control on it is BACK TO TOWN; that
-button is what calls `Flow.to_town()`, so the ride home is a press and not a
-timer.
+The tree is **paused** under it and the only control on it is BACK TO THE
+GARRISON; that button is what calls `Flow.to_garrison()`, so the ride home is a
+press and not a timer.
 
 One screen for both endings, and the death version is the *same list* with a
 cross struck through it. That is the whole design: the loss has to be legible as
@@ -389,10 +389,10 @@ been two places for the loot list and the arithmetic to drift apart, and would
 have made the two endings read as different games instead of two outcomes of one
 decision.
 
-It also replaced a `Label3D` in the town yard that had never once been visible
-(it sat about sixty degrees above the arrival camera's view centre), and a ride
-home on a timer that ended the run in a room the player never got to look at. A
-run that ends underground says so underground.
+It also replaced a `Label3D` in the garrison yard that had never once been
+visible (it sat about sixty degrees above the arrival camera's view centre), and
+a ride home on a timer that ended the run in a room the player never got to look
+at. A run that ends underground says so underground.
 
 ### The run is not savable, and that is what the autosave protects
 
@@ -403,8 +403,8 @@ HUD says **AUTOSAVING…** bottom-right as the world fades back in.
 What it writes is `Game`: gold, hearts, upgrades, forge rungs, key items. What
 it never writes is `Run`: no bag, no floor, no run seed, no `in_dungeon`. A save
 you could reload from the third floor would let a player undo the extraction
-decision this whole section is built on, and the fee would stop being a
-decision — so `save()` records **town** as the scene whenever `Run.in_dungeon`.
+decision this whole section is built on, and the fee would stop being a decision
+— so `save()` records **garrison** as the scene whenever `Run.in_dungeon`.
 
 So the autosave is not a safety net under the run. It is a safety net under the
 *metagame*: everything the run was being gambled **for** is committed to disk at
@@ -416,17 +416,17 @@ are already playing, or the first empty one, or it declines and says nothing
 (`save_game.gd autosave()`).
 
 **There is a fifth moment, and it is the bed.** Everything the player does *in
-town* — the selling, the forging, the brewing, the gem-setting, the stashing —
-happens between transitions and is therefore on nobody's disk until the next one.
-Sleeping in the hero's quarters calls the same `Saves.autosave()` by hand. It is
-§6.8, and it is the only autosave a player asks for rather than receives.
+garrison* — the selling, the forging, the brewing, the gem-setting, the stashing
+— happens between transitions and is therefore on nobody's disk until the next
+one. Sleeping in the hero's quarters calls the same `Saves.autosave()` by hand.
+It is §6.8, and it is the only autosave a player asks for rather than receives.
 
 ---
 
-## 6. The town
+## 6. The garrison
 
-One walled courtyard (`scripts/world/town.gd`) with five counters and a gate in
-it.
+One walled courtyard (`scripts/world/garrison.gd`) with five counters and a gate
+in it.
 
 - **The vendor.** Sells nothing; buys everything. The trade screen
   (`scripts/ui/shop/trade_screen.gd`) lists the bag sorted by value with a
@@ -669,7 +669,7 @@ holding on the carrying screen precisely because it cannot be used to change it.
 
 > **⏳ Extended, not superseded — `docs/GDD.md` §6.5, not built.** This counter
 > gains two jobs at M5. She **reads** the two Verse relics (GDD §6.2), and she
-> sells **charges** for the three workings — the same stock-you-bought-in-town
+> sells **charges** for the three workings — the same stock-you-bought-in-garrison
 > relationship the bottles below have, priced the same way, refilled only here.
 > Everything in this section is true today and stays true; nothing below changes.
 > Charges are a HUD counter beside the arrows, never a bag slot.
@@ -831,17 +831,17 @@ only honest way to say "you have bought 1.2 and the game floors it".
 comments and directors. Do not renumber them.*
 
 A lean-to in the courtyard's south-west corner (`scripts/world/house.gd`), built
-by `Town._build_house`. Three walls, a sloped roof, a lantern, and two props:
-a cot and a chest. It costs nothing, it upgrades into nothing, and it is not a
-counter — nobody stands in it. `docs/SCOPE.md` §2 refuses housing and this is the
-argued exception; the reason is that **both props close a hole the metagame
-already had**, not that the hero wanted somewhere to live.
+by `Garrison._build_house`. Three walls, a sloped roof, a lantern, and two
+props: a cot and a chest. It costs nothing, it upgrades into nothing, and it is
+not a counter — nobody stands in it. `docs/SCOPE.md` §2 refuses housing and this
+is the argued exception; the reason is that **both props close a hole the
+metagame already had**, not that the hero wanted somewhere to live.
 
 ### The bed writes the save
 
 `Flow._go` autosaves on scene transitions and only on scene transitions (§5,
 above). That covers the four moments a *run* passes through and none of the time
-between them — which is where the entire town lives. Sell the bag, forge two
+between them — which is where the entire garrison lives. Sell the bag, forge two
 rungs, blow a bottle, set a gem, quit: as of the last autosave, none of it
 happened. The cot is where a player says *keep this*, in the gesture every game
 of this shape has used to say it.
@@ -854,18 +854,19 @@ black and silently doing nothing.
 
 **The heal costs the design nothing**, which is the only reason it is allowed to
 exist next to GDD §2's refusal of "a heal you can carry without paying for it".
-Both doors into town already heal to full — `Run.extract` and `Run.die` each call
+Both doors into the garrison already heal to full — `Run.extract` and `Run.die`
+each call
 `Game.heal(Game.max_quarters)` — so there is no state in which a hero reaches
 this cot hurt. It heals so the object does what the object says, not because it
 moves a number anyone can reach. **And it is refused outright while
 `Run.in_dungeon`** (`bed.gd activate`), because the rule it enforces is not "the
-cot is in town", it is §5's *you cannot save your way out of a run*.
+cot is in the garrison", it is §5's *you cannot save your way out of a run*.
 
-**No clock advances.** `Town._build_env` pins the sky to one afternoon on
+**No clock advances.** `Garrison._build_env` pins the sky to one afternoon on
 purpose (SCOPE §1 freezes the mechanic count), and a bed that skipped to morning
 would be a day/night system arriving through a prop.
 
-### The footlocker stops the town destroying goods
+### The footlocker stops the garrison destroying goods
 
 `Run.enter()` clears the bag. That is correct and it stays — the bag is the
 pressure valve (§3) and a run must start empty. But it meant that anything
@@ -984,7 +985,7 @@ second one is a decision.
 |---|---|
 | Run state, bag, extraction, death | `scripts/autoload/run_state.gd` |
 | Persistent gold, forge rungs, workbench stock | `scripts/autoload/game_state.gd` |
-| Town↔dungeon transition and fade | `scripts/autoload/game_flow.gd` |
+| Garrison↔dungeon transition and fade | `scripts/autoload/game_flow.gd` |
 | The end-of-run receipt, both endings | `scripts/ui/run_end/run_end_screen.gd` |
 | Ingredients, components and drop tables | `scripts/items/item_db.gd` |
 | The smith's catalogue, and the forge recipes | `scripts/items/shop_db.gd` |
@@ -999,7 +1000,7 @@ second one is a decision.
 | The pouch — the bag, drawn as slots | `scripts/ui/menu/pouch_panel.gd` |
 | Vendor / smith screen | `scripts/ui/shop/trade_screen.gd` |
 | HUD | `scripts/ui/hud/hud.gd` |
-| Town | `scripts/world/town.gd`, `scenes/rooms/town.tscn` |
+| Garrison | `scripts/world/garrison.gd`, `scenes/rooms/garrison.tscn` |
 | The shopkeepers themselves — who stands where | `scripts/world/npc.gd` (`COUNTERS`, `LOOKS`) |
 | A person of one of the races, dressed and idling | `scripts/world/race_body.gd` |
 | The forge, the stall and the apothecary's bench | `scripts/props/shop_booth.gd` |
@@ -1011,16 +1012,16 @@ second one is a decision.
 | Arrows on the floor, and the pickup | `scripts/world/arrow_bundle.gd` |
 | The fletching recipe, and its refusals | `scripts/items/fletching.gd` |
 
-The game boots into **town** (`run/main_scene`). `Flow` is the only thing that
-ever calls `change_scene_to_file`; if a second caller appears, the fade stops
-being a guarantee and starts being a suggestion.
+The game boots into **garrison** (`run/main_scene`). `Flow` is the only thing
+that ever calls `change_scene_to_file`; if a second caller appears, the fade
+stops being a guarantee and starts being a suggestion.
 
 ---
 
 ## 9. Proving it still works
 
 ```bash
-godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --director=res://tools/directors/mvp_loop.gd --out=/tmp/mvp/x.png --warmup=60
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/mvp_loop.gd --out=/tmp/mvp/x.png --warmup=60
 ```
 
 `tools/directors/mvp_loop.gd` walks the whole loop through the real interaction
@@ -1034,14 +1035,14 @@ MVP after_sell  gold=346 bag=0
 MVP after_buy   gold=206 slots=13
 MVP descended   in_dungeon=true  rooms=6 enemies=17
 MVP after_chest bag=4 value=95 fee=24
-MVP home        scene=Town in_dungeon=false gold=182 bag=95 hearts=12/12
+MVP home        scene=Garrison in_dungeon=false gold=182 bag=95 hearts=12/12
 ```
 
 Arrows have two, because the supply chain has two halves — the objects, and the
 floor that has to contain them (§4.6):
 
 ```bash
-godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --director=res://tools/directors/arrow_supply.gd --out=/tmp/arrows/x.png --warmup=60
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/arrow_supply.gd --out=/tmp/arrows/x.png --warmup=60
 godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/dungeon.tscn --director=res://tools/directors/dungeon_supply.gd --out=/tmp/dun/d.png --warmup=60
 godot --path . -s tools/shoot.gd -- --scene=res://scenes/ui/menu/_menu_test.tscn --director=res://tools/directors/fletch_screen.gd --out=/tmp/fletch/f.png --warmup=50
 ```
@@ -1085,11 +1086,11 @@ HEAT OK
 The autosave has one too (§5):
 
 ```bash
-godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --director=res://tools/directors/autosave.gd --out=/tmp/save/x.png --warmup=60
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/autosave.gd --out=/tmp/save/x.png --warmup=60
 ```
 
 It drives all three transitions and asserts a slot was written each time, that
-every one of those saves points at **town** rather than at the floor it was
+every one of those saves points at **garrison** rather than at the floor it was
 taken on, and that with all three slots full of hand-made saves the autosave
 declines and the HUD stays quiet. It photographs the notice as the world comes
 back. It backs up the three real slots and puts them back, so running it cannot
@@ -1098,7 +1099,7 @@ cost you a save.
 The quarters have one (§6.8):
 
 ```bash
-godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --director=res://tools/directors/house_rest.gd --out=/tmp/house/x.png --warmup=60
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/house_rest.gd --out=/tmp/house/x.png --warmup=60
 ```
 
 It measures the billet against the relic ring, moves a stack both ways through
@@ -1127,7 +1128,7 @@ HOUSE OK
 The forge and the pouch have theirs (§6.5):
 
 ```bash
-godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --director=res://tools/directors/forge_loop.gd --out=/tmp/forge/x.png --warmup=60
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/forge_loop.gd --out=/tmp/forge/x.png --warmup=60
 ```
 
 It reads the catalogue, opens the pouch, is refused a rung it cannot pay for in
@@ -1182,7 +1183,7 @@ the screen, not another 2 px of padding.
 The alchemist has hers (§6.6):
 
 ```bash
-godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --director=res://tools/directors/alchemy_loop.gd --out=/tmp/alchemy/x.png --warmup=60
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/alchemy_loop.gd --out=/tmp/alchemy/x.png --warmup=60
 ```
 
 It reads the catalogue, opens her board, is refused a draught for want of root
@@ -1219,7 +1220,7 @@ see.
 The jewelcrafter has hers (§6.7):
 
 ```bash
-godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --director=res://tools/directors/jewel_loop.gd --out=/tmp/jewel/x.png --warmup=60
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/jewel_loop.gd --out=/tmp/jewel/x.png --warmup=60
 ```
 
 It checks her two stones are on her own bench and on nobody else's, finds her in

@@ -326,7 +326,7 @@ func _look_at_the_stair(rig, out: String) -> void:
 	# Stop the pack first. This drops the hero into the deepest room of floor 5,
 	# where 45 monsters live -- left running they mob him inside the 50 frames the
 	# camera needs, and a death here is not a quiet one: `Run.die` empties the bag
-	# and `Flow` fades to TOWN, so the "stair" photo comes out a picture of the
+	# and `Flow` fades to GARRISON, so the "stair" photo comes out a picture of the
 	# market square.
 	# Hidden as well as frozen: the deepest room opens with a wraith, it spawns
 	# near the chest, and in the first shot of this it was standing squarely in

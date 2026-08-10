@@ -20,7 +20,7 @@ extends Node
 ## Deliberately NOT here: footsteps. `footstep_*` and the 14 material folders
 ## under audio/sfx/footsteps/ need a step event off the hero's animation and a
 ## read of what is underfoot; that is a system, not a table entry, and guessing
-## at it would put grass under the town's cobbles.
+## at it would put grass under the garrison's cobbles.
 
 ## How many positional voices can overlap. Past this the oldest is recycled --
 ## a swarm dying at once should thin out, not blow the mixer up.

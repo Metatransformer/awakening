@@ -488,8 +488,8 @@ const BOTTLE_START := 1
 ## walk home (docs/METAGAME.md §5), which is why it costs a slot and a brew.
 const DRAUGHT_HEAL := 8
 ## Seconds the two lasting draughts run for. Long enough to cover a room and its
-## fight, short enough that you cannot drink one in town and still have it at the
-## stair. [tune]
+## fight, short enough that you cannot drink one in the garrison and still have
+## it at the stair. [tune]
 const DRAUGHT_TIME := 45.0
 ## Quarter-hearts Emberblood adds to a swing, and Ironhide soaks off a blow.
 ## Both are read through the SAME accessors the forge feeds (`Game.sword_bonus`,

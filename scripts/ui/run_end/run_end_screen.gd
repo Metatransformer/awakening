@@ -12,13 +12,13 @@ extends Control
 ## made the two endings feel like different games instead of two outcomes of one
 ## decision (docs/METAGAME.md §3).
 ##
-## **What it replaced.** A `Label3D` in the town scene that said "YOU DIED / LOST
-## N ITEMS" over the yard. It was authored at (0, 2.6, +6.6) and the arrival camera
-## sits at (0, 1.7, +8) pitched down about thirty degrees, so the label was roughly
-## sixty degrees above the middle of the only frame a returning player ever sees:
-## the game had a death notice that nobody had ever read. It also arrived AFTER the
-## fade, in town, which is the wrong room -- a run ends underground and the screen
-## that says so belongs over the floor it ended on.
+## **What it replaced.** A `Label3D` in the garrison scene that said "YOU DIED /
+## LOST N ITEMS" over the yard. It was authored at (0, 2.6, +6.6) and the arrival
+## camera sits at (0, 1.7, +8) pitched down about thirty degrees, so the label was
+## roughly sixty degrees above the middle of the only frame a returning player ever
+## sees: the game had a death notice that nobody had ever read. It also arrived AFTER
+## the fade, in the garrison, which is the wrong room -- a run ends underground
+## and the screen that says so belongs over the floor it ended on.
 ##
 ## ## The haul is a GRID, and it is the bag's grid
 ##
@@ -35,8 +35,8 @@ extends Control
 ## death and cyan on an extraction -- one authored colour, carrying the outcome
 ## before a word of the panel is read.
 ##
-## Flow opens it and Flow closes it -- the button calls `Flow.to_town()`, and
-## `Flow` is still the only thing in the project that changes scenes.
+## Flow opens it and Flow closes it -- the button calls `Flow.to_garrison()`,
+## and `Flow` is still the only thing in the project that changes scenes.
 
 const THEME_PATH := "res://scenes/ui/menu/menu_theme.tres"
 ## Cells across, the pouch's number for the pouch's reason.
@@ -159,7 +159,7 @@ func _build() -> void:
 	var accent: Color = Pal.VITAL if dead else Pal.CYAN
 
 	# Heavier than the shop's 0.86. The shop is a conversation you are having in
-	# a town you are safe in; this is the room going quiet.
+	# a garrison you are safe in; this is the room going quiet.
 	var dim := ColorRect.new()
 	dim.color = Color(Pal.VOID, 0.93)
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -488,7 +488,7 @@ func _leave() -> void:
 	# Flow owns the transition and the fade. It also un-pauses the tree -- this
 	# screen does not, because the fade should run over a world that is still
 	# stopped rather than let the monsters get one more swing in behind it.
-	Flow.to_town()
+	Flow.to_garrison()
 
 
 ## "ENTER", or "A" on a pad.

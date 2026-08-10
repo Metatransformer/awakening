@@ -1,11 +1,11 @@
 extends RefCounted
 ## The jewelcrafter, and the stat block she is read on.
 ##
-## Point it at TOWN. It never descends -- everything here is a town claim, and
-## what a stone does underground is `forge_loop`'s ground already.
+## Point it at GARRISON. It never descends -- everything here is a garrison
+## claim, and what a stone does underground is `forge_loop`'s ground already.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/jewel_loop.gd \
 ##     --out=/tmp/jewel/x.png --warmup=60
 ##
@@ -91,26 +91,26 @@ func _catalogue() -> void:
 # --- B and C. The counter ---------------------------------------------------
 
 func _counter(rig) -> void:
-	var town := rig.scene() as Town
-	if town == null or town.jeweller == null:
+	var garrison := rig.scene() as Garrison
+	if garrison == null or garrison.jeweller == null:
 		print("JEWEL FAIL there is no jewelcrafter in the yard")
 		_fails += 1
 		return
 	print("JEWEL she stands at %.2v facing %.0f deg" % [
-		town.jeweller.global_position, rad_to_deg(town.jeweller.rotation.y)])
+		garrison.jeweller.global_position, rad_to_deg(garrison.jeweller.rotation.y)])
 
 	# Inside the arrival frame, which is the constraint the alchemist's placement
 	# comment was written for after she ended up behind the camera. The arrival
 	# spot is z ~ +4.8 looking north, so anything the player must see has to be
 	# forward of it.
 	_ck("B0 she is forward of the arrival spot, not behind it",
-		town.jeweller.global_position.z < 4.0)
+		garrison.jeweller.global_position.z < 4.0)
 	# Two metres of clearance from the twelve relic lamp posts, so she is not
 	# standing inside one.
 	var nearest := 999.0
-	for l in town.lights:
+	for l in garrison.lights:
 		nearest = minf(nearest,
-			town.jeweller.global_position.distance_to(l.global_position))
+			garrison.jeweller.global_position.distance_to(l.global_position))
 	print("JEWEL nearest relic post = %.2f m" % nearest)
 	_ck("B1 she is clear of the relic ring", nearest > 1.6)
 
@@ -118,14 +118,14 @@ func _counter(rig) -> void:
 	for id in ItemDb.components(ItemDef.BENCH_JEWEL):
 		Game.components[id] = 120
 
-	_stand_at(rig, town.jeweller.global_position
-		+ town.jeweller.global_transform.basis * Vector3(0.0, 0.0, 1.6))
+	_stand_at(rig, garrison.jeweller.global_position
+		+ garrison.jeweller.global_transform.basis * Vector3(0.0, 0.0, 1.6))
 	await rig.wait_frames(24)
 	for _i in 90:
-		if Prompt.focus == town.jeweller:
+		if Prompt.focus == garrison.jeweller:
 			break
 		await rig.wait_frames(2)
-	_ck("B2 TALK is on her, not on the wall", Prompt.focus == town.jeweller)
+	_ck("B2 TALK is on her, not on the wall", Prompt.focus == garrison.jeweller)
 	await rig.tap(["interact"])
 	await rig.wait_frames(16)
 

@@ -26,7 +26,7 @@ extends RefCounted
 ## my trigonometry and breaks the day the camera's pitch is retuned.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/sfx_moves.gd \
 ##     --out=/tmp/sfxmoves/x.png --warmup=60
 
@@ -189,11 +189,12 @@ func _hookshot(rig, hero) -> void:
 		_fail("no camera, so there is no aim to hang an anchor on")
 		return
 	var aim: Vector3 = K.flat(-cam.global_transform.basis.z)
-	# Where he was standing before the chain moved him. The anchor beat REELS HIM
-	# IN by design, so the monster beat that follows would otherwise start with
-	# the hero pressed against a slab five metres from where this director placed
-	# everything — and the first run of it did exactly that, firing into a town
-	# wall and reporting three failures for a hookshot that was working.
+	# Where he was standing before the chain moved him. The anchor beat REELS
+	# HIM IN by design, so the monster beat that follows would otherwise start
+	# with the hero pressed against a slab five metres from where this director
+	# placed everything — and the first run of it did exactly that, firing into
+	# a garrison wall and reporting three failures for a hookshot that was
+	# working.
 	var stood: Vector3 = hero.global_position
 
 	# Something for the head to bite, on L_WORLD, well inside K.HOOK_RANGE.

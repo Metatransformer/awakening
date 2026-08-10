@@ -17,7 +17,7 @@ extends RefCounted
 ## that a single frame cannot show direction of motion -- BURST is the point.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/strafe_lookdev.gd --out=/tmp/strafe/x.png
 
 const CLIPS: Array[StringName] = [

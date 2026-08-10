@@ -2,14 +2,14 @@ extends RefCounted
 ## The relic, end to end: off the floor, through the rope, over the counter, and
 ## into a lamp you can see from where you are standing.
 ##
-## Point it at TOWN. It never changes scene on purpose -- `Run.enter()` opens a
-## run from wherever you are and the two things this card is about (the bag's
-## refusal, and the courtyard) both need the town's twelve props alive in the
-## same instance the camera is looking at. The gate's own hold is proven by
-## `run_end.gd` and does not need proving twice.
+## Point it at GARRISON. It never changes scene on purpose -- `Run.enter()`
+## opens a run from wherever you are and the two things this card is about (the
+## bag's refusal, and the courtyard) both need the garrison's twelve props alive
+## in the same instance the camera is looking at. The gate's own hold is proven
+## by `run_end.gd` and does not need proving twice.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/relic_donate.gd \
 ##     --out=/tmp/relic/x.png --warmup=60
 ##
@@ -31,10 +31,10 @@ extends RefCounted
 ##   I  The same corner of the yard, the same camera, dark and then lit.
 ##
 ## I is the one that matters, and it is the only claim here that a check cannot
-## make for you. `docs/SCOPE.md` §4.1 asks "did the town changing register, or
-## did you have to be told?" -- so the two frames are the answer, and if you have
-## to flick between them to spot the difference the mechanic has failed whatever
-## the count of green lines below says.
+## make for you. `docs/SCOPE.md` §4.1 asks "did the garrison changing register,
+## or did you have to be told?" -- so the two frames are the answer, and if you
+## have to flick between them to spot the difference the mechanic has failed
+## whatever the count of green lines below says.
 
 var out := ""
 var _fails := 0
@@ -43,8 +43,8 @@ var _fails := 0
 var _cam: Camera3D = null
 var _game_cam: Camera3D = null
 ## The two poses the before/after pairs are taken from. Stored rather than
-## recomputed: the town is rebuilt twice on the way here and two frames from two
-## slightly different eyes prove nothing.
+## recomputed: the garrison is rebuilt twice on the way here and two frames from
+## two slightly different eyes prove nothing.
 var _hall := Transform3D.IDENTITY
 var _mid := Transform3D.IDENTITY
 
@@ -265,7 +265,7 @@ func _extract(rig) -> void:
 
 	print("RELIC banked held=%s/%s bag=%s" % [
 		RelicDb.held(FIRST), RelicDb.held(SECOND), Run.bag])
-	_ck("E3 the Tally-Ledger reached town", RelicDb.held(FIRST))
+	_ck("E3 the Tally-Ledger reached the garrison", RelicDb.held(FIRST))
 	_ck("E4 so did the Rope-Drum", RelicDb.held(SECOND))
 	_ck("E5 neither is still in the bag",
 		not Run.bag.has(FIRST) and not Run.bag.has(SECOND))
@@ -281,16 +281,16 @@ func _extract(rig) -> void:
 ## close her screen and turn round. Not aimed AT the lamp: "would you notice"
 ## is the question, and a camera pointed at the answer cannot ask it.
 func _dark(rig) -> void:
-	var town := rig.scene() as Town
-	_ck("F0 the Lanternkeeper is in town", town != null and town.keeper != null)
+	var garrison := rig.scene() as Garrison
+	_ck("F0 the Lanternkeeper is in the garrison", garrison != null and garrison.keeper != null)
 	_ck("F1 the courtyard has twelve dark props",
-		town != null and town.lights.size() == 12)
-	if town == null or town.keeper == null:
+		garrison != null and garrison.lights.size() == 12)
+	if garrison == null or garrison.keeper == null:
 		return
-	var watched := town.light_of(WATCH)
+	var watched := garrison.light_of(WATCH)
 	_ck("F2 the Tally-Ledger's prop exists", watched != null)
 	var dark := 0
-	for l in town.lights:
+	for l in garrison.lights:
 		if not l.lit():
 			dark += 1
 	_ck("F3 all twelve start dark (%d)" % dark, dark == 12)
@@ -298,9 +298,9 @@ func _dark(rig) -> void:
 	_game_cam = rig.scene().get_node_or_null(^"GameCamera") as Camera3D
 	_cam = Camera3D.new()
 	_cam.fov = 55.0
-	town.add_child(_cam)
-	var front: Vector3 = town.keeper.global_transform.basis * Vector3(0.0, 0.0, 1.0)
-	_cam.global_position = town.keeper.global_position + front * 2.2 \
+	garrison.add_child(_cam)
+	var front: Vector3 = garrison.keeper.global_transform.basis * Vector3(0.0, 0.0, 1.0)
+	_cam.global_position = garrison.keeper.global_position + front * 2.2 \
 		+ Vector3(0.0, 1.68, 0.0)
 	_cam.look_at(_cam.global_position + front * 6.0 - Vector3(0.0, 0.4, 0.0), Vector3.UP)
 	_hall = _cam.global_transform
@@ -327,19 +327,19 @@ func _dark(rig) -> void:
 # --- F. The counter -----------------------------------------------------------
 
 func _counter(rig) -> void:
-	var town := rig.scene() as Town
-	if town == null or town.keeper == null:
+	var garrison := rig.scene() as Garrison
+	if garrison == null or garrison.keeper == null:
 		return
 	# Addressed the way a player addresses her. Calling `activate()` would prove
 	# the screen opens and nothing about whether she can be reached.
-	var front: Vector3 = town.keeper.global_transform.basis * Vector3(0.0, 0.0, 1.0)
+	var front: Vector3 = garrison.keeper.global_transform.basis * Vector3(0.0, 0.0, 1.0)
 	# 2.0 out, which is the far side of her counter (`ShopBooth.KEEPER_BACK` is
 	# 0.95) and still inside the 2.3 m trigger. Standing at 1.7 puts the hero
 	# inside the counter's own collider.
-	_stand_at(rig, town.keeper.global_position + front * 2.0,
-		town.keeper.global_position)
+	_stand_at(rig, garrison.keeper.global_position + front * 2.0,
+		garrison.keeper.global_position)
 	var focused := await _wait_until(rig,
-		func() -> bool: return Prompt.focus == town.keeper, 120)
+		func() -> bool: return Prompt.focus == garrison.keeper, 120)
 	_ck("G0 she owns the interact button", focused)
 	await rig.tap(["interact"])
 	await rig.wait_frames(16)
@@ -432,10 +432,10 @@ func _record(rig) -> void:
 	await rig.wait_frames(6)
 	await rig.capture(out.path_join("r_22_recorded.png"))
 
-	# Close it, and watch the lamp come on. The flare is deliberately deferred to
-	# this moment -- see `TownLight` -- because the counter draws a curtain over
-	# the world and a lamp that lit underneath it would be a town that was
-	# quietly already different.
+	# Close it, and watch the lamp come on. The flare is deliberately deferred
+	# to this moment -- see `GarrisonLight` -- because the counter draws a
+	# curtain over the world and a lamp that lit underneath it would be a
+	# garrison that was quietly already different.
 	await rig.tap(["ui_cancel"])
 	var gone := await _wait_until(rig, func() -> bool: return _screen(rig) == null, 90)
 	_ck("H8 her screen closed", gone)
@@ -452,7 +452,7 @@ func _record(rig) -> void:
 	# lands -- which is the trap the brief names outright ("MEASURE state, do not
 	# trust shutter timing"). Catching the peak is the point: the frame has to show
 	# the lamp brighter than it will settle, because that overshoot IS the event.
-	var lamp: TownLight = (rig.scene() as Town).light_of(WATCH)
+	var lamp: GarrisonLight = (rig.scene() as Garrison).light_of(WATCH)
 	# Two separate claims, because only one of them is about the game. That the
 	# lamp is LIT and lit AFTER the curtain lifted is the mechanic; catching the
 	# overshoot in the shutter is a photograph, and a slow machine missing the peak
@@ -460,7 +460,7 @@ func _record(rig) -> void:
 	_ck("H9 the lamp came on when the counter closed, not behind it",
 		await _wait_until(rig, func() -> bool: return lamp != null and lamp.lit(), 30))
 	var peaked := await _wait_until(rig,
-		func() -> bool: return lamp != null and lamp._flare >= TownLight.FLARE_TIME * 0.5,
+		func() -> bool: return lamp != null and lamp._flare >= GarrisonLight.FLARE_TIME * 0.5,
 		45)
 	if not peaked:
 		print("RELIC note: shutter missed the flare's peak; r_23 is a settled lamp")
@@ -501,8 +501,8 @@ func _bite(rig) -> void:
 		return
 	_ck("I2 the Rope-Drum can be recorded", RelicDb.can_buy(line))
 	# Straight through the catalogue this time, with no screen up: the hold is
-	# proven above, and this is also the OTHER half of `TownLight`'s wiring --
-	# a donation with nothing blocking input lights the lamp on the spot.
+	# proven above, and this is also the OTHER half of `GarrisonLight`'s wiring
+	# -- a donation with nothing blocking input lights the lamp on the spot.
 	print("RELIC recording the drum, blocked=%s" % Prompt.blocked)
 	_ck("I3 recording it took", RelicDb.buy(line))
 	var fee_after := Run.extract_cost()
@@ -526,24 +526,24 @@ func _bite(rig) -> void:
 # --- I, second half. The lit yard ---------------------------------------------
 
 func _lit(rig) -> void:
-	var town := rig.scene() as Town
-	if town == null:
+	var garrison := rig.scene() as Garrison
+	if garrison == null:
 		return
 	_ck("J0 two are recorded", RelicDb.donated_count() == 2)
-	var watched := town.light_of(WATCH)
+	var watched := garrison.light_of(WATCH)
 	_ck("J1 the Tally-Ledger's lamp is lit", watched != null and watched.lit())
-	var winch := town.light_of(&"winch_lamp")
+	var winch := garrison.light_of(&"winch_lamp")
 	_ck("J2 the Rope-Drum's lamp is lit", winch != null and winch.lit())
 	var lit_count := 0
-	for l in town.lights:
+	for l in garrison.lights:
 		if l.lit():
 			lit_count += 1
 	_ck("J3 two of twelve, and only two (%d)" % lit_count, lit_count == 2)
 
 	# Wait the flare out, so the AFTER frame is the resting brightness rather
-	# than the peak. If the difference only reads during the overshoot, the town
-	# is not actually different -- it merely blinked at you once.
-	await rig.wait_seconds(TownLight.FLARE_TIME + 0.4)
+	# than the peak. If the difference only reads during the overshoot, the
+	# garrison is not actually different -- it merely blinked at you once.
+	await rig.wait_seconds(GarrisonLight.FLARE_TIME + 0.4)
 	if _cam != null:
 		_cam.make_current()
 		_cam.global_transform = _hall
@@ -557,7 +557,7 @@ func _lit(rig) -> void:
 	# And the wide, for a human comparing the whole courtyard.
 	var wide := Camera3D.new()
 	wide.fov = 62.0
-	town.add_child(wide)
+	garrison.add_child(wide)
 	wide.global_position = Vector3(0.0, 9.5, 15.0)
 	wide.look_at(Vector3(0.0, 1.0, -3.0), Vector3.UP)
 	wide.make_current()
@@ -569,7 +569,7 @@ func _lit(rig) -> void:
 	# the counter is proven above, and this frame is about the CONTRAST.
 	for row in RelicDb.RELICS:
 		Game.set_flag(RelicDb.flag_donated(row["id"]))
-	for l in town.lights:
+	for l in garrison.lights:
 		l.sync()
 	await rig.wait_frames(6)
 	await rig.capture(out.path_join("r_13_wide_all.png"))
@@ -677,8 +677,8 @@ func _all(root: Node) -> Array:
 	return found
 
 
-## Teleport. Pathing a hero across town with synthetic input is its own project
-## and the thing under test is the counter and the bag.
+## Teleport. Pathing a hero across garrison with synthetic input is its own
+## project and the thing under test is the counter and the bag.
 func _stand_at(rig, where: Vector3, look_at: Variant = null) -> void:
 	var players: Array = rig.get_nodes_in_group(&"player")
 	if players.is_empty():

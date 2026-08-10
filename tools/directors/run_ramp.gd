@@ -14,9 +14,10 @@ extends RefCounted
 ## moment the body is actually travelling.
 ##
 ## `p2_walk_run_stop` covers the same ramp and is not this: it shoots from the
-## GAMEPLAY camera, behind the hero, in the town at night. That is the right lens
-## for "does the ramp feel continuous" and the wrong one for "what are his arms
-## doing" — from behind, at night, a hero is a silhouette with a shield edge.
+## GAMEPLAY camera, behind the hero, in the garrison at night. That is the right
+## lens for "does the ramp feel continuous" and the wrong one for "what are his
+## arms doing" — from behind, at night, a hero is a silhouette with a shield
+## edge.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \

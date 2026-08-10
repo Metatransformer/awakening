@@ -13,7 +13,7 @@ extends RefCounted
 ##
 ## Run:
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/music_beats.gd \
 ##     --out=/tmp/music/x.png --warmup=90
 
@@ -33,8 +33,8 @@ func run(rig) -> void:
 	# Which mood is correct depends on the room this was pointed at, so read it
 	# from the scene rather than hardcoding one and calling the other a failure.
 	var scene: Node = rig.current_scene
-	var in_town: bool = scene != null and scene.scene_file_path.contains("town")
-	var want_calm := "CALM" if in_town else "DELVE"
+	var in_garrison: bool = scene != null and scene.scene_file_path.contains("garrison")
+	var want_calm := "CALM" if in_garrison else "DELVE"
 
 	await rig.wait_seconds(2.5)
 

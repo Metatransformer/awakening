@@ -14,7 +14,8 @@ extends RefCounted
 ##     --director=res://tools/directors/race_lookdev.gd --out=/tmp/race/x.png
 
 ## Race, fabric and tint per shopkeeper, mirroring `Npc.COUNTERS` so this sheet
-## photographs the people the town actually gets rather than three nude bases.
+## photographs the people the garrison actually gets rather than three nude
+## bases.
 const RACES: Array[String] = ["stoneborn", "reshi", "vyr"]
 const FABRIC: Array[String] = ["homespun", "wool", "silk"]
 ## Tints MULTIPLY the fabric's own texture, which is already a dark weave, so

@@ -362,16 +362,17 @@ func _on_health(quarters: int, _max_q: int) -> void:
 	_repaint()
 
 
-## What the bag is worth, always -- in town as well, where it is normally zero.
+## What the bag is worth, always -- in the garrison as well, where it is
+## normally zero.
 ##
-## This USED to be a number in the bottom-right corner, and in town it showed the
-## purse instead. Both are gone. A running gold total on screen turns every room
-## into an accounting screen: the player reads the number, not the room, and the
-## extraction decision stops being "is this worth the walk back" and becomes
-## "has the number gone up". Money is now something you go and LOOK at -- the
-## pouch screen, or a vendor's counter -- which is where a decision about it is
-## actually made. What stays out here is only what is at stake: the rim's colour,
-## the slips, and the extraction fee beside it.
+## This USED to be a number in the bottom-right corner, and in the garrison it
+## showed the purse instead. Both are gone. A running gold total on screen turns
+## every room into an accounting screen: the player reads the number, not the
+## room, and the extraction decision stops being "is this worth the walk back"
+## and becomes "has the number gone up". Money is now something you go and LOOK
+## at -- the pouch screen, or a vendor's counter -- which is where a decision
+## about it is actually made. What stays out here is only what is at stake: the
+## rim's colour, the slips, and the extraction fee beside it.
 func _headline() -> int:
 	if Run == null:
 		return 0
@@ -660,13 +661,13 @@ func _draw_hud() -> void:
 
 
 # --- Controls -----------------------------------------------------------------
-## A one-line legend, in town only.
+## A one-line legend, in the garrison only.
 ##
 ## Not a tutorial and not a settings screen: the two combat verbs live on the
 ## mouse and there is nothing on screen that says so, which is exactly how a
-## working sword reads as a broken one. Town is where you are safe and idle, so
-## it is where the legend belongs; underground the line would be noise, and by
-## then you have already used every verb on it.
+## working sword reads as a broken one. Garrison is where you are safe and idle,
+## so it is where the legend belongs; underground the line would be noise, and
+## by then you have already used every verb on it.
 ##
 ## It has this baseline to itself now. The floor readout used to share it and is
 ## a top-left card instead (see `_draw_floor`), so nothing has to be exclusive
@@ -813,7 +814,7 @@ func _legend() -> PackedStringArray:
 ## answer, and a card that never dimmed would make the arrival mean nothing.
 ##
 ## It used to be a dim `FLOOR n` centred on the bottom edge, sharing a baseline
-## with the town controls legend. That was a perfectly good readout and a
+## with the garrison controls legend. That was a perfectly good readout and a
 ## non-existent announcement: the descent's own moment was drawn in ASH, in the
 ## strip of screen a player looks at least, three lines under the fight.
 ##
@@ -961,8 +962,8 @@ func _draw_stamina(s: Vector2) -> void:
 ## goes. A player who understands nothing else about heat can still read "big
 ## number, emptying fast" and draw the right conclusion.
 ##
-## Dungeon only. In town there is nothing to chain and the bar would be a third
-## empty meter under a control legend.
+## Dungeon only. In the garrison there is nothing to chain and the bar would be
+## a third empty meter under a control legend.
 
 func _draw_heat(s: Vector2) -> void:
 	if Run == null or not Run.in_dungeon:
@@ -1257,10 +1258,10 @@ func _draw_cpad(s: Vector2) -> void:
 ## and it is rendered at two sizes -- a corner minimap that drifted from the
 ## screen you open to read it properly is worse than having only one of them.
 ##
-## **Dungeon only, and only once you have seen a room.** In town there is no
-## floor, and an empty frame in the corner of the town screen is a widget
-## announcing that it has nothing to say. The frame appears with the first room
-## you stand in, which is also the frame the player has a reason to look at it.
+## **Dungeon only, and only once you have seen a room.** In the garrison there
+## is no floor, and an empty frame in the corner of the garrison screen is a
+## widget announcing that it has nothing to say. The frame appears with the first
+## room you stand in, which is also the frame the player has a reason to look at it.
 ##
 ## The plate is opaque VOID rather than the 0.72 the prompt box uses. Everything
 ## else on this HUD is a mark over the world; this is a document held up in
@@ -1393,9 +1394,9 @@ func _draw_draughts(s: Vector2) -> void:
 	var w := Pal.HEALTH_W * s.x * Pal.HEAT_RATIO
 	var h := Pal.px(Pal.HEAT_H, s.y)
 	# Slot four, under health -> stamina -> heat, in that order. Heat is dungeon
-	# only, so in town its slot is empty and the draughts move UP into it: two
-	# rows hanging below an absent bar would collide with the control legend,
-	# which owns the bottom of the town screen (see _draw_controls).
+	# only, so in the garrison its slot is empty and the draughts move UP into
+	# it: two rows hanging below an absent bar would collide with the control
+	# legend, which owns the bottom of the garrison screen (see _draw_controls).
 	var y := Pal.HEALTH_ORIGIN.y * s.y \
 		+ Pal.px(Pal.HEALTH_H + Pal.STAMINA_GAP + Pal.STAMINA_H + Pal.HEAT_GAP, s.y)
 	if Run != null and Run.in_dungeon:
@@ -1415,7 +1416,8 @@ func _draw_draughts(s: Vector2) -> void:
 			Vector2(x + w + Pal.px(6.0, s.y), y - Pal.px(2.0, s.y)),
 			Pal.px(1.0, s.y), tint)
 		# Tighter than HEAT_GAP between rows: two draughts plus the gap have to
-		# fit above the legend in town, and they are one fact, not two columns.
+		# fit above the legend in the garrison, and they are one fact, not two
+		# columns.
 		y += h + Pal.px(2.0, s.y)
 
 
@@ -1595,8 +1597,8 @@ func _draw_toast(s: Vector2) -> void:
 ## The same line, and not a line of its own, because the corner below it is
 ## already spoken for: the rim frames the bag from 0.786 to 0.914, the
 ## extraction fee sits at 0.940, and the control legend runs across 0.962 in
-## town. There is no free row down there, and a notice that overlapped the fee
-## would obscure the one number the player is standing still to read.
+## garrison. There is no free row down there, and a notice that overlapped the
+## fee would obscure the one number the player is standing still to read.
 ##
 ## Sharing is safe by construction rather than by luck: an autosave only fires
 ## inside a `Flow` transition, and nothing drops loot or snaps a rope during a

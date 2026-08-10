@@ -3,10 +3,10 @@ extends RefCounted
 ## What to print on screen for a button. One table, read by everything.
 ##
 ## There are three surfaces that name inputs to the player — the HUD's key caps
-## and its town legend, the `(E) OPEN` prompt, and the options screen's bind list
-## — and before this file they each decoded the InputMap themselves. Two of them
-## only understood keyboards, which is how a pad player ended up looking at a
-## HUD that said `LMB` while holding a controller.
+## and its garrison legend, the `(E) OPEN` prompt, and the options screen's bind
+## list — and before this file they each decoded the InputMap themselves. Two of
+## them only understood keyboards, which is how a pad player ended up looking at
+## a HUD that said `LMB` while holding a controller.
 ##
 ## Everything here reads the **live InputMap**, never a remembered layout:
 ## `user://settings.cfg` is replayed over the map at boot and wins, so the

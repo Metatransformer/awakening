@@ -2,11 +2,11 @@ extends RefCounted
 ## Lines the whole roster up and photographs it, so "the monsters render" is a
 ## thing someone looked at rather than a thing the log implied.
 ##
-## Spawned in town, which is lit: a monster that fails to load its model is a
-## black gap in a dungeon and an obvious hole in a courtyard.
+## Spawned in the garrison, which is lit: a monster that fails to load its model
+## is a black gap in a dungeon and an obvious hole in a courtyard.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/monster_lookdev.gd --out=/tmp/mon/x.png
 
 const KINDS: Array[StringName] = [&"skeleton", &"goblin", &"kobold", &"orc", &"wraith"]

@@ -93,7 +93,7 @@ func _process(delta: float) -> void:
 ## enemy, which is the only reason a 2.5 s window is survivable at OOT's swing
 ## lengths. It is transient, so pillar 4 survives: nothing here outlives the run.
 func _on_enemy_died(_enemy: Node3D, _position: Vector3) -> void:
-	# Town has training posts and no stakes. A chain built on the practice
+	# Garrison has training posts and no stakes. A chain built on the practice
 	# dummies would arrive in the dungeon pre-lit, which is the one thing the
 	# depth bands exist to prevent (docs/GDD.md §5).
 	if not Run.in_dungeon:

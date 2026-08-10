@@ -55,8 +55,9 @@ func run(rig) -> void:
 	var hero: Node3D = players[0]
 
 	# The camera re-derives its transform every physics frame, so parking it and
-	# waiting is parking it nowhere (the note in swing_lookdev.gd cost somebody a
-	# wide shot of the town with a 40 px hero in it). Take its hands off first.
+	# waiting is parking it nowhere (the note in swing_lookdev.gd cost somebody
+	# a wide shot of the garrison with a 40 px hero in it). Take its hands off
+	# first.
 	var cam := hero.get_viewport().get_camera_3d()
 	if cam != null:
 		cam.set_physics_process(false)

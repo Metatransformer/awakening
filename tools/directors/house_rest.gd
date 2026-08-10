@@ -4,7 +4,7 @@ extends RefCounted
 ## Six claims, and every one of them is a thing that would be invisible in a
 ## screenshot of a nice-looking room:
 ##
-##   1. the billet is BUILT and it is where the town says it is — inside the
+##   1. the billet is BUILT and it is where the garrison says it is — inside the
 ##      yard, clear of the relic ring, with two interactables in it that
 ##      `Prompt` can tell apart from four metres away;
 ##   2. the locker takes a stack out of the bag and gives it back, and both
@@ -27,7 +27,7 @@ extends RefCounted
 ## `autosave.gd` does, so a run of it cannot cost anyone a save.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/house_rest.gd \
 ##     --out=/tmp/house/x.png --warmup=60
 
@@ -44,18 +44,18 @@ func run(rig) -> void:
 		Saves.erase(i)
 	Saves.active_slot = -1
 
-	var town := rig.scene() as Town
-	if town == null:
-		print("HOUSE FAIL the scene is not the town")
+	var garrison := rig.scene() as Garrison
+	if garrison == null:
+		print("HOUSE FAIL the scene is not the garrison")
 		return
 
-	if not await _built(rig, town):
+	if not await _built(rig, garrison):
 		_restore_saves()
 		print("HOUSE FAILED (%d)" % maxi(_fail, 1))
 		return
-	await _locker(rig, town)
-	await _survives_a_run(rig, town)
-	await _sleep(rig, town)
+	await _locker(rig, garrison)
+	await _survives_a_run(rig, garrison)
+	await _sleep(rig, garrison)
 
 	_restore_saves()
 	print("HOUSE OK" if _fail == 0 else "HOUSE FAILED (%d)" % _fail)
@@ -63,43 +63,44 @@ func run(rig) -> void:
 
 # --- 1. It is built, and it is somewhere -------------------------------------
 
-func _built(rig, town: Town) -> bool:
-	var h := town.house
+func _built(rig, garrison: Garrison) -> bool:
+	var h := garrison.house
 	if h == null or h.bed == null or h.locker == null:
-		print("HOUSE FAIL the town built no quarters")
+		print("HOUSE FAIL the garrison built no quarters")
 		return false
 
-	# Inside the curtain. The yard is `town.yard` across and the walls are at
-	# half of it; a billet whose furniture had drifted outside would be furniture
-	# in a field, and it would still photograph fine from the one angle that
-	# missed the wall.
-	var hx := town.yard.x * 0.5
-	var hz := town.yard.y * 0.5
+	# Inside the curtain. The yard is `garrison.yard` across and the walls are
+	# at half of it; a billet whose furniture had drifted outside would be
+	# furniture in a field, and it would still photograph fine from the one
+	# angle that missed the wall.
+	var hx := garrison.yard.x * 0.5
+	var hz := garrison.yard.y * 0.5
 	for it in [h.bed, h.locker]:
 		var p: Vector3 = it.global_position
 		_check("%s is inside the walls (%.1f, %.1f)" % [it.prompt, p.x, p.z],
 			absf(p.x) < hx and absf(p.z) < hz)
 
-	# Clear of the relic ring. `Town._build_relic_props` is tuned so that at
+	# Clear of the relic ring. `Garrison._build_relic_props` is tuned so that at
 	# least one lamp is in frame from anywhere in the yard, and the twelve are
-	# evenly spaced for exactly that reason — a building that swallowed one would
-	# break the claim quietly, in the one system whose whole job is to be noticed.
+	# evenly spaced for exactly that reason — a building that swallowed one
+	# would break the claim quietly, in the one system whose whole job is to be
+	# noticed.
 	var nearest := 999.0
-	for l in town.lights:
+	for l in garrison.lights:
 		for it in [h.bed, h.locker]:
 			nearest = minf(nearest, K.plane(l.global_position - it.global_position).length())
 	_check("the nearest relic lamp is %.1f m clear of the furniture" % nearest,
 		nearest > 1.5)
 
-	# The two look shots come off a camera of this director's own, `town_look`'s
-	# way, and NOT off the game camera. The game rig is a follow camera with lag
-	# and a wall-avoidance swing (game_camera.gd §1.5, §1.6): teleport the hero
-	# into a corner and the boom is still pointing wherever it was a second ago,
-	# so the first run of this beat photographed the alchemist's stall and called
-	# it "the billet from the yard". A framing claim needs a camera that is
-	# pointed on purpose. Everything AFTER this beat goes back to the game rig,
-	# because the prompt and the screen are only proved at the distance and angle
-	# the player actually reads them from.
+	# The two look shots come off a camera of this director's own,
+	# `garrison_look`'s way, and NOT off the game camera. The game rig is a
+	# follow camera with lag and a wall-avoidance swing (game_camera.gd §1.5,
+	# §1.6): teleport the hero into a corner and the boom is still pointing
+	# wherever it was a second ago, so the first run of this beat photographed
+	# the alchemist's stall and called it "the billet from the yard". A framing
+	# claim needs a camera that is pointed on purpose. Everything AFTER this
+	# beat goes back to the game rig, because the prompt and the screen are only
+	# proved at the distance and angle the player actually reads them from.
 	# Annotated rather than inferred: the parser cannot infer through this chain
 	# and the file would not load at all (CLAUDE.md §3).
 	var keep: Camera3D = rig.scene().get_viewport().get_camera_3d()
@@ -131,8 +132,8 @@ func _built(rig, town: Town) -> bool:
 
 # --- 2, 3, 6. The locker -----------------------------------------------------
 
-func _locker(rig, town: Town) -> void:
-	var h := town.house
+func _locker(rig, garrison: Garrison) -> void:
+	var h := garrison.house
 	# Arrive as though a run had just paid out: the bag survives `extract()`
 	# intact, which is the state the player is actually in when they walk in here.
 	Run.in_dungeon = false
@@ -237,9 +238,9 @@ func _locker(rig, town: Town) -> void:
 
 ## The bag is cleared at the top of every run (`Run.enter`), so anything you did
 ## not sell was destroyed with no event, no notice and no receipt. That is the
-## right rule for the dungeon and a silent one in town. This is the beat that
-## says the shelf is not the bag.
-func _survives_a_run(rig, _town: Town) -> void:
+## right rule for the dungeon and a silent one in the garrison. This is the beat
+## that says the shelf is not the bag.
+func _survives_a_run(rig, _garrison: Garrison) -> void:
 	Game.stash.clear()
 	Run.bag.clear()
 	Run.in_dungeon = false
@@ -261,8 +262,8 @@ func _survives_a_run(rig, _town: Town) -> void:
 
 # --- 5. The cot ---------------------------------------------------------------
 
-func _sleep(rig, town: Town) -> void:
-	var h := town.house
+func _sleep(rig, garrison: Garrison) -> void:
+	var h := garrison.house
 	Game.damage(4)
 	await rig.wait_frames(4)
 	var hurt := Game.quarters

@@ -187,9 +187,9 @@ func _process(delta: float) -> void:
 ##
 ## **"HOLD" IS NOT DECORATION.** An Interactable with `hold_time` does nothing at
 ## all for a tap, and it does it silently -- there is no refusal, no beep, no
-## error. The town gate is the only one in the game, and it is also the door out
-## of the hub, so the one prompt in the project that had to say how to press it
-## was the one prompt that could strand a player. It read "A TO DESCEND", a
+## error. The garrison gate is the only one in the game, and it is also the door
+## out of the hub, so the one prompt in the project that had to say how to press
+## it was the one prompt that could strand a player. It read "A TO DESCEND", a
 ## player tapped A at it, and the honest bug report that came back was "A to
 ## descend doesn't work". Read off `hold_time` rather than written per prop, so
 ## the next Interactable that grows a hold cannot forget to say so.

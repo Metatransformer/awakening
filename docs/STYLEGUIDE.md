@@ -59,7 +59,7 @@ move it anyway.
 |---|---|---|
 | VOID | `#080810` | True background, deepest shadow, fog terminus deep down. Never `#000000`. |
 | MIDNIGHT SLATE | `#181828` | Dungeon fog and clear colour. HUD panel fill at 80% alpha. The colour of "far away". |
-| ASH | `#484050` | Mid surface: meter tracks, empty slots, HUD linework, town fog. |
+| ASH | `#484050` | Mid surface: meter tracks, empty slots, HUD linework, garrison fog. |
 | BONE | `#D8D0B8` | Primary text, HUD outlines, highlight flashes. The game's white. Never `#FFFFFF`. |
 | MOTH | `#807868` | Muted text, disabled state, button glyphs, **and common-tier loot** — common items render in the "not worth reading" colour. |
 | VITAL | `#E04038` | Health fill. Dirty arterial, not fire-engine. |
@@ -110,7 +110,7 @@ seven sizes reads as accreted rather than designed.
 | Role | Face | px @1280×720 |
 |---|---|---|
 | Bag total (the big number) | Departure Mono | 32 |
-| Pocket gold / town cash | Departure Mono | 20 |
+| Pocket gold / garrison cash | Departure Mono | 20 |
 | HUD numerals — ammo, extraction cost | Departure Mono | 16 |
 | Item-name drop toast | Departure Mono | 16 |
 | Body / tooltip | Departure Mono | 12 (line height 16, max 42 chars) |
@@ -246,9 +246,9 @@ horizon line, which is the thing fog exists to hide.
 > (`Color(0.16, 0.142, 0.175)`), because fog that is *darker* than the geometry
 > reads as dread and fog that is slightly lighter reads as depth. The live values
 > are in `assets/materials/env_dungeon.tres`; the depth-based table below is the
-> older town-side treatment and the dungeon now uses exponential density.
+> older garrison-side treatment and the dungeon now uses exponential density.
 
-| Property | Dungeon | Town |
+| Property | Dungeon | Garrison |
 |---|---|---|
 | `fog_mode` | `FOG_MODE_DEPTH` | `FOG_MODE_DEPTH` |
 | `fog_light_color` | MIDNIGHT SLATE `#181828` | ASH `#484050` |
@@ -620,7 +620,7 @@ already looking at, it cannot do fog of war without a second visibility system,
 and it is not line art.
 
 - **It only exists underground**, and only once at least one room is off the fog.
-  In town there is no floor and the corner is empty — an empty corner is correct,
+  In the garrison there is no floor and the corner is empty — an empty corner is correct,
   not a gap to fill.
 - **Fogged rooms are not drawn at all.** Not greyed, not outlined: absent. The
   map is fitted to the whole floor's bounds so it does not re-scale as it fills

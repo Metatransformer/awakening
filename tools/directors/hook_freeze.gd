@@ -26,7 +26,7 @@ extends RefCounted
 ## touches ALBEDO rather than emission.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/hook_freeze.gd --out=/tmp/freeze/x.png
 
 var out := ""

@@ -70,7 +70,7 @@ var _hold_bar: HoldBar
 
 ## Same construction as `TradeScreen.open`, and for the same reason its note
 ## gives: a Control parented to a Node3D never draws, and the caller is a chest
-## standing in a 3D town.
+## standing in a 3D garrison.
 static func open(from: Node) -> StashScreen:
 	var layer := CanvasLayer.new()
 	layer.name = "StashLayer"

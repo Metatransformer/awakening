@@ -11,20 +11,21 @@ config_version=5
 [application]
 
 config/name="The Lower Worlds: Awakening"
-; The loop starts in town. Booting into the dungeon dropped the player into the
-; middle of a run they never chose to take, with nowhere to spend what they
-; carried out of it.
+; The loop starts in the garrison. Booting into the dungeon dropped the player
+; into the middle of a run they never chose to take, with nowhere to spend what
+; they carried out of it.
 ;
 ; THIS LINE HAS NOW DRIFTED TO dungeon.tscn THREE TIMES, always inside a commit
 ; that was about something else, and the third one shipped: a session pointed it
 ; at a floor to look at something, never pointed it back, and the player launched
-; into a run they had not started. The damage is not the missing town -- it is
-; that booting underground SKIPS THE GATE, so the first time you ever meet the way
-; down is after your first death, and the gate is the one Interactable in the game
-; with a hold on it. It read as "A to descend stopped working when I died".
+; into a run they had not started. The damage is not the missing garrison -- it
+; is that booting underground SKIPS THE GATE, so the first time you ever meet
+; the way down is after your first death, and the gate is the one Interactable
+; in the game with a hold on it. It read as "A to descend stopped working when
+; I died".
 ; To look at a room without touching this line, pass it to the harness:
 ;   godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/dungeon.tscn ...
-run/main_scene="res://scenes/rooms/town.tscn"
+run/main_scene="res://scenes/rooms/garrison.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 
@@ -75,8 +76,8 @@ Prompt="*res://scripts/autoload/prompt.gd"
 ; Layer 100 -- above the HUD (50), below Flow's fade (200). It boots hidden, so
 ; lookdev and tool scenes stay clean. This is the ONLY instance in the project.
 Menu="*res://scenes/ui/menu/pause_menu.tscn"
-; Flow owns the town<->dungeon scene change and the fade. It must load LAST: its
-; fade veil has to sit above every other autoload's CanvasLayer.
+; Flow owns the garrison<->dungeon scene change and the fade. It must load LAST:
+; its fade veil has to sit above every other autoload's CanvasLayer.
 Flow="*res://scripts/autoload/game_flow.gd"
 
 [display]

@@ -16,7 +16,7 @@ extends RefCounted
 ## that "targeting exists" and "targeting does something" need separating.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/lockon_check.gd --out=/tmp/lock/x.png
 
 ## Degrees of facing error we will call "looking at it".

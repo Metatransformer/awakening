@@ -1,23 +1,24 @@
 @tool
 class_name Fence
 extends StaticBody3D
-## A run of wooden fence, for the edge of town.
+## A run of wooden fence, for the edge of garrison.
 ##
 ## Local frame matches `KitWall`'s deliberately: the run goes along local X,
 ## centred on the origin, rising from local y = 0, with its face looking down
 ## local +Z. So the four sides of a yard are placed exactly the way the four
 ## walls of a room are, and nobody has to learn a second convention.
 ##
-## **Why a fence and not the masonry wall.** The town used to be a walled stone
-## courtyard at night, which read as one more interior — the same kit, the same
-## dark, the same stone as the dungeon. Valenfeld is a frontier town above the
-## shaft, and the only contrast the game gets for free is that the surface is
-## *outside* and the Lower Worlds are not. A fence you can see the sky over is
-## most of that contrast, and it costs one prop.
+## **Why a fence and not the masonry wall.** The garrison used to be a walled
+## stone courtyard at night, which read as one more interior — the same kit, the
+## same dark, the same stone as the dungeon. Valenfeld is a frontier town above
+## the shaft, and the only contrast the game gets for free is that the surface
+## is *outside* and the Lower Worlds are not. A fence you can see the sky over
+## is most of that contrast, and it costs one prop.
 ##
-## Placeholder, on purpose (`docs/SCOPE.md` §3 — the gate is a played hour, not a
-## look). The model is the village kit's single fence panel, repeated. When the
-## town gets art, this file is what gets replaced, and nothing else has to.
+## Placeholder, on purpose (`docs/SCOPE.md` §3 — the gate is a played hour, not
+## a look). The model is the village kit's single fence panel, repeated. When
+## the garrison gets art, this file is what gets replaced, and nothing else has
+## to.
 
 const MODEL := "res://assets/props/fence/Prop_WoodenFence_Single.gltf"
 

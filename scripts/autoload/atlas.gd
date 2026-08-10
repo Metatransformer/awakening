@@ -45,8 +45,9 @@ var marks: Dictionary[Vector2i, Array] = {}
 var seen: Dictionary[Vector2i, bool] = {}
 ## The cell the player arrived on.
 var entrance: Vector2i = Vector2i.ZERO
-## Which floor this plan is of. 0 when there is no floor -- in town, in a lookdev
-## scene, or before the first descent. `has_floor()` is the question to ask.
+## Which floor this plan is of. 0 when there is no floor -- in the garrison, in
+## a lookdev scene, or before the first descent. `has_floor()` is the question
+## to ask.
 var level: int = 0
 
 ## Centre-to-centre spacing of the room grid, in metres. The only number that
@@ -137,7 +138,8 @@ func close_floor() -> void:
 
 func _ready() -> void:
 	# Both endings of a run, and the only two. `Run.extract()` and `Run.die()`
-	# both emit this, so there is no third path where the map survives into town.
+	# both emit this, so there is no third path where the map survives into the
+	# garrison.
 	Bus.run_ended.connect(func(_e: bool, _c: Dictionary, _v: int) -> void:
 		close_floor())
 

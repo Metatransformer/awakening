@@ -6,7 +6,7 @@ extends RefCounted
 ## rather than a boolean that flipped.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/loadout_switch.gd --out=/tmp/load/x.png
 
 

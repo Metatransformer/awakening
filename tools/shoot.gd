@@ -95,9 +95,9 @@ func _sandbox_the_settings() -> void:
 ## A controller plugged into the machine running the harness is an INPUT SOURCE
 ## the director does not control. This cost a long afternoon: a stick resting
 ## just outside its deadzone reported `move_up`, `move_right`, `cam_down` and
-## `cam_left` held, the hero walked away from the town gate mid-hold, `Prompt`
-## dropped focus, and the director reported five economy failures for a gate
-## that had simply not been reached. It was intermittent because the drift
+## `cam_left` held, the hero walked away from the garrison gate mid-hold,
+## `Prompt` dropped focus, and the director reported five economy failures for a
+## gate that had simply not been reached. It was intermittent because the drift
 ## wanders in and out, so it looked like a race in the game and not a joystick
 ## on somebody's desk.
 ##

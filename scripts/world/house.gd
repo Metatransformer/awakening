@@ -5,15 +5,15 @@ extends Node3D
 ##
 ## ## Why it is a lean-to and not a building
 ##
-## Three separate constraints all point at the same shape, so it is worth writing
-## down which ones, because the obvious "put a house in the town" is wrong for
-## each of them independently:
+## Three separate constraints all point at the same shape, so it is worth
+## writing down which ones, because the obvious "put a house in the garrison" is
+## wrong for each of them independently:
 ##
-##  1. **`docs/SCOPE.md` §1 freezes town scenes at ONE.** A house you walk into
+##  1. **`docs/SCOPE.md` §1 freezes garrison scenes at ONE.** A house you walk into
 ##     through a door is a second scene and a second load; a house you walk into
 ##     because there is no door is neither. So this is geometry inside
-##     `scenes/rooms/town.tscn` and nothing else.
-##  2. **`Town`'s own note calls the yard "deliberately TINY — about eight
+##     `scenes/rooms/garrison.tscn` and nothing else.
+##  2. **`Garrison`'s own note calls the yard "deliberately TINY — about eight
 ##     seconds corner to corner"** and says every extra metre is a tax on the
 ##     loop. The billet takes a corner nothing else was using and adds no walking
 ##     to any existing errand: the counters are all north and east, and this is
@@ -27,14 +27,14 @@ extends Node3D
 ##
 ## **Two of its four walls are the curtain**, and that is not a saving — it is
 ## what a billet is. The west and south sides of this thing are the garrison's
-## own ramparts (`Town._build_yard` builds them, blocks protruding to about
+## own ramparts (`Garrison._build_yard` builds them, blocks protruding to about
 ## 0.17 m proud of the placement plane), so building walls of its own there would
 ## be a second slab of masonry inside the first. It builds the two sides that
 ## face the yard and roofs the lot.
 ##
-## Placed by `Town._build_house`. It is authored around the CENTRE OF ITS FLOOR
-## with the two closed sides on local -X and +Z, which is exactly the south-west
-## corner of the yard and no rotation.
+## Placed by `Garrison._build_house`. It is authored around the CENTRE OF ITS
+## FLOOR with the two closed sides on local -X and +Z, which is exactly the
+## south-west corner of the yard and no rotation.
 
 const KIT_FLOOR := preload("res://scenes/kit/floor_slab.tscn")
 const KIT_WALL := preload("res://scenes/kit/wall_segment.tscn")
@@ -144,11 +144,11 @@ func _build_roof() -> void:
 	add_child(roof)
 
 	# **The room is in its own shade, and it needs a light or it is a black
-	# rectangle in a daylit yard.** `Town._build_env` runs one directional sun at
+	# rectangle in a daylit yard.** `Garrison._build_env` runs one directional sun at
 	# 1.35 and an ambient of 0.55; under a roof that leaves an interior the camera
-	# reads as unlit. Warm, and at the garrison's own gold (`TownLight`,
-	# `Npc._lamp`) — the whole town is lit in one colour and a second hue in the
-	# one room that belongs to the player would read as a different building.
+	# reads as unlit. Warm, and at the garrison's own gold (`GarrisonLight`,
+	# `Npc._lamp`) — the whole garrison is lit in one colour and a second hue in
+	# the one room that belongs to the player would read as a different building.
 	var lamp := OmniLight3D.new()
 	lamp.light_color = Color(1.0, 0.84, 0.62)
 	lamp.light_energy = 4.2
@@ -157,9 +157,9 @@ func _build_roof() -> void:
 	lamp.position = Vector3(0.0, eave_low - 0.35, -hz * 0.15)
 	add_child(lamp)
 
-	# Something for the light to be coming out of. Unshaded, for `TownLight`'s
-	# reason: a lit shader on a 0.2 m box in a shadow is a grey box, and what this
-	# has to be is the brightest thing in the room.
+	# Something for the light to be coming out of. Unshaded, for
+	# `GarrisonLight`'s reason: a lit shader on a 0.2 m box in a shadow is a
+	# grey box, and what this has to be is the brightest thing in the room.
 	var lantern := MeshInstance3D.new()
 	var lgm := BoxMesh.new()
 	lgm.size = Vector3(0.22, 0.28, 0.22)

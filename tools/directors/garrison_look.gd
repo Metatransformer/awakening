@@ -1,5 +1,6 @@
 extends RefCounted
-## The town, and everyone in it, from the distances the player actually sees.
+## The garrison, and everyone in it, from the distances the player actually
+## sees.
 ##
 ## A shopkeeper has to survive exactly two shots: the wide, where the yard has to
 ## read as three DIFFERENT shops at a glance, and standing-in-front-of, where the
@@ -8,12 +9,12 @@ extends RefCounted
 ## can be an unreadable pile of brown boxes from across the yard.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
-##     --director=res://tools/directors/town_look.gd --out=/tmp/town/x.png
+##     --scene=res://scenes/rooms/garrison.tscn \
+##     --director=res://tools/directors/garrison_look.gd --out=/tmp/garrison/x.png
 
 func run(rig) -> void:
 	var out: String = rig.arg("out", "/tmp/tl/x.png").get_base_dir()
-	var town: Town = rig.scene()
+	var garrison: Garrison = rig.scene()
 	# Long, on purpose. The bodies retarget a shared clip library at load and the
 	# booths instance about twenty GLBs between them; a shot taken too early
 	# catches bind-pose statues standing in an empty yard and looks like a bug in
@@ -22,7 +23,7 @@ func run(rig) -> void:
 
 	var cam := Camera3D.new()
 	cam.fov = 50.0
-	town.add_child(cam)
+	garrison.add_child(cam)
 	cam.make_current()
 
 	# Wide first: the whole yard from above the arrival end, which is the frame
@@ -49,10 +50,10 @@ func run(rig) -> void:
 	# keeper's own facing rather than hard-coded, so an NPC that is turned the
 	# wrong way photographs as a back, not as a mysteriously empty frame.
 	var subjects := [
-		{"name": "vendor", "at": town.vendor, "back": 3.4, "high": 1.65},
-		{"name": "smith", "at": town.smith, "back": 3.8, "high": 1.65},
-		{"name": "alchemist", "at": town.alchemist, "back": 3.4, "high": 1.65},
-		{"name": "gate", "at": town.gate, "back": 6.0, "high": 2.0},
+		{"name": "vendor", "at": garrison.vendor, "back": 3.4, "high": 1.65},
+		{"name": "smith", "at": garrison.smith, "back": 3.8, "high": 1.65},
+		{"name": "alchemist", "at": garrison.alchemist, "back": 3.4, "high": 1.65},
+		{"name": "gate", "at": garrison.gate, "back": 6.0, "high": 2.0},
 	]
 	for s in subjects:
 		var node: Node3D = s["at"]
@@ -77,4 +78,4 @@ func run(rig) -> void:
 		cam.look_at(node.global_position + Vector3(0.0, 0.9, 0.0), Vector3.UP)
 		await rig.wait_frames(3)
 		await rig.capture(out.path_join("tl_20_%s_booth.png" % s["name"]))
-	print("TOWNLOOK done")
+	print("GARRISONLOOK done")

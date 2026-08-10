@@ -8,8 +8,8 @@ extends Node
 ##
 ## What it keys off, and why it is a poll rather than a signal:
 ##
-##  * **Town vs delve** comes from the current scene's path. Flow owns the
-##    town<->dungeon change (docs/CONTRACT.md §7); rather than have Flow also
+##  * **Garrison vs delve** comes from the current scene's path. Flow owns the
+##    garrison<->dungeon change (docs/CONTRACT.md §7); rather than have Flow also
 ##    own music cues, this notices the scene it landed in. That way training,
 ##    playtest and proving_ground get music too, without Flow learning about
 ##    every scene anyone adds.
@@ -27,8 +27,9 @@ extends Node
 enum Mood { SILENT, CALM, DELVE, FIGHT, BOSS }
 
 ## Every track in the project, sorted into the mood it belongs to. There is no
-## town-specific track in the set, so town gets `title_screen` -- it is the only
-## cue in the library that is neither a dungeon ambience nor a fight.
+## garrison-specific track in the set, so the garrison gets `title_screen` -- it
+## is the only cue in the library that is neither a dungeon ambience nor a
+## fight.
 const POOLS := {
 	Mood.CALM: [
 		"res://audio/music/title_screen.ogg",
@@ -158,7 +159,7 @@ func _desired_mood() -> Mood:
 
 	var scene := get_tree().current_scene
 	var path := scene.scene_file_path if scene != null else ""
-	return Mood.CALM if path.contains("town") else Mood.DELVE
+	return Mood.CALM if path.contains("garrison") else Mood.DELVE
 
 
 func _enemies_engaged() -> bool:

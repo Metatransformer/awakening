@@ -77,7 +77,7 @@ function pickScene() {
 // Nothing is lost: the scene is passed to Godot on the command line below, so
 // `pnpm game` plays the right room regardless of what that line says. If you
 // want the editor's F5 to match, open the scene and set it there yourself.
-// `pnpm deploy` refuses to build unless the line reads town.tscn.
+// `pnpm deploy` refuses to build unless the line reads garrison.tscn.
 
 const godot = process.env.GODOT || findGodot()
 const [scene, label] = pickScene()

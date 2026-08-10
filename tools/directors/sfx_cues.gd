@@ -9,7 +9,7 @@ extends RefCounted
 ##
 ## Run:
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/sfx_cues.gd \
 ##     --out=/tmp/sfx/x.png --warmup=90
 

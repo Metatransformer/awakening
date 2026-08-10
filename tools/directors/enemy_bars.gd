@@ -10,12 +10,12 @@ extends RefCounted
 ## run of that colour at that length is a health bar. Counting them is what turns
 ## "the bars look right" into a beat that can fail.
 ##
-## Run in TOWN on purpose. It is lit, so a bar that fails to draw is a visible
+## Run in GARRISON on purpose. It is lit, so a bar that fails to draw is a visible
 ## hole rather than a black rectangle on a black wall, and the occlusion case
 ## needs a wall this director can put wherever it likes.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/enemy_bars.gd --out=/tmp/ebar/x.png
 
 ## Shortest horizontal run of RUST that counts as a bar. A full ordinary bar is
@@ -52,11 +52,11 @@ const AT_SLEEPER := Vector3(2.5, 0.05, -5.5)
 const AT_ELITE := Vector3(2.8, 0.05, 1.6)
 ## Every position above is written in world space and only frames anything if the
 ## camera is looking north, so this director has to SAY so. It did not, at first
-## -- it placed the hero and recentred, and inherited whatever facing the town
-## spawn happened to give him. That worked until a merge moved the default, and
-## then the sleeper was simply off screen: case B still "passed" (no bar, because
-## no monster) and case C failed. A director that reads its own frames must own
-## the framing.
+## -- it placed the hero and recentred, and inherited whatever facing the
+## garrison spawn happened to give him. That worked until a merge moved the
+## default, and then the sleeper was simply off screen: case B still "passed" (no
+## bar, because no monster) and case C failed. A director that reads its own
+## frames must own the framing.
 ##
 ## `facing_yaw` is the HEADING yaw (docs/CONTRACT.md §2.5): heading is
 ## (sin y, 0, cos y), so PI is heading (0,0,-1) and the camera's behind_yaw puts
@@ -347,10 +347,10 @@ func _collapse(runs: Array) -> Array:
 ## therefore found the bar in one frame, missed it in four, and the director
 ## reported the FEATURE as broken when the only broken thing was the ruler.
 ##
-## So the test is the property that survives a grade: strongly red, with red well
-## clear of the other two channels. Nothing else in the top three quarters of a
-## town frame is that -- torch flames are warm but only 1-2 px wide, and the run
-## length filter is what rejects them.
+## So the test is the property that survives a grade: strongly red, with red
+## well clear of the other two channels. Nothing else in the top three quarters
+## of a garrison frame is that -- torch flames are warm but only 1-2 px wide,
+## and the run length filter is what rejects them.
 func _is_rust(c: Color) -> bool:
 	return c.r > 0.43 and c.r > c.g * 1.8 and c.r > c.b * 2.0
 

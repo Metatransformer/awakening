@@ -2,15 +2,15 @@ extends Node
 ## Autoload `Flow`. Owns the two scenes the game actually has and the fade
 ## between them.
 ##
-## Town and dungeon are separate scenes rather than one streamed world because
-## the transition IS the mechanic: extracting has to feel like arriving
+## Garrison and dungeon are separate scenes rather than one streamed world
+## because the transition IS the mechanic: extracting has to feel like arriving
 ## somewhere, and dying has to feel like waking up somewhere. A seamless walk
 ## between them would make both of those into a corridor.
 ##
 ## Nothing else calls `change_scene_to_file`. If a second caller appears, the
 ## fade stops being a guarantee and starts being a suggestion.
 
-const TOWN := "res://scenes/rooms/town.tscn"
+const GARRISON := "res://scenes/rooms/garrison.tscn"
 const DUNGEON := "res://scenes/rooms/dungeon.tscn"
 
 const FADE_OUT := 0.35
@@ -30,15 +30,16 @@ const HOLD := 0.45
 const LOAD_HOLD := 1.30
 
 ## True while a transition is in flight. Everything that could start another one
-## checks this -- a second extract press during the fade would re-enter town.
+## checks this -- a second extract press during the fade would re-enter
+## garrison.
 var busy: bool = false
 ## True from the moment a run ends until the ending screen's button is pressed.
 ##
 ## A second guard beside `busy` rather than a reuse of it, because the two mean
-## opposite things to the one caller that matters: `to_town()` refuses while a
-## transition is in flight and is exactly what the ending screen's button calls.
-## Folding them together would leave the button unable to fire the transition it
-## exists to fire.
+## opposite things to the one caller that matters: `to_garrison()` refuses while
+## a transition is in flight and is exactly what the ending screen's button
+## calls. Folding them together would leave the button unable to fire the
+## transition it exists to fire.
 var ending: bool = false
 
 var _layer: CanvasLayer
@@ -79,13 +80,13 @@ func enter_dungeon(run_seed: int = 0) -> void:
 	_go(DUNGEON, 0.0)
 
 
-## The ride home. Called by the ending screen's BACK TO TOWN button, and by
-## anything else that just wants the hub.
-func to_town() -> void:
+## The ride home. Called by the ending screen's BACK TO THE GARRISON button,
+## and by anything else that just wants the hub.
+func to_garrison() -> void:
 	if busy:
 		return
 	ending = false
-	_go(TOWN, 0.0)
+	_go(GARRISON, 0.0)
 
 
 ## Take the stair down. The run CONTINUES: same bag, same health, same fee
@@ -114,11 +115,11 @@ func descend() -> void:
 ## `busy` is held for the whole blink, so nothing can start a scene change
 ## underneath it — a player who presses the gate through a fade would otherwise
 ## arrive in the dungeon with the veil half-lifted and a `during` callback still
-## queued against the town that no longer exists.
+## queued against the garrison that no longer exists.
 ##
-## The world is PAUSED across the dark. A rest that let the town run for a second
-## and a half behind an opaque veil is the same bug `_go`'s loading hold exists to
-## prevent, one screen smaller.
+## The world is PAUSED across the dark. A rest that let the garrison run for a
+## second and a half behind an opaque veil is the same bug `_go`'s loading hold
+## exists to prevent, one screen smaller.
 func blink(during: Callable, dark: float = 0.9) -> void:
 	if busy or ending:
 		return
@@ -151,29 +152,30 @@ func _on_player_died() -> void:
 		# the ending screen. Death does not know about scenes.
 		Run.die()
 	else:
-		# Killed somewhere with no run behind it -- town, a lookdev scene, a
-		# director's test room. There is nothing to lose and nowhere to be sent, so
-		# he just gets up.
+		# Killed somewhere with no run behind it -- garrison, a lookdev scene, a
+		# director's test room. There is nothing to lose and nowhere to be sent,
+		# so he just gets up.
 		#
-		# `busy` is deliberately NOT a guard on this branch. It used to guard the
-		# whole function, which meant a blow that landed during a fade was dropped
-		# entirely: the run had already ended and healed him to full, monsters kept
-		# swinging for the ~1 s the fade takes, and a second lethal hit hit this
-		# early return. He arrived in town on zero hearts -- and then could not
-		# die again, because Hero.take_hit refuses at zero, so nothing would ever
-		# emit `player_died` to heal him. The ending screen stops the world dead,
-		# which closes that window at the source; this makes sure the recovery
-		# still works if anything ever opens another one.
+		# `busy` is deliberately NOT a guard on this branch. It used to guard
+		# the whole function, which meant a blow that landed during a fade was
+		# dropped entirely: the run had already ended and healed him to full,
+		# monsters kept swinging for the ~1 s the fade takes, and a second
+		# lethal hit hit this early return. He arrived in the garrison on zero
+		# hearts -- and then could not die again, because Hero.take_hit refuses
+		# at zero, so nothing would ever emit `player_died` to heal him. The
+		# ending screen stops the world dead, which closes that window at the
+		# source; this makes sure the recovery still works if anything ever
+		# opens another one.
 		Game.heal(Game.max_quarters)
 
 
 ## A run ended, either way it can end. Stop the world and show the receipt.
 ##
-## It does NOT go to town. Sending the player home on a timer meant the run ended
-## in a room they never got to look at, and the summary then had to be re-staged in
-## the hub, where it was drawn as a Label3D above the arrival camera's frustum and
-## was never once seen (see run_end_screen.gd). The screen belongs over the floor
-## the run ended on, and leaving is the player's press.
+## It does NOT go to the garrison. Sending the player home on a timer meant the
+## run ended in a room they never got to look at, and the summary then had to be
+## re-staged in the hub, where it was drawn as a Label3D above the arrival
+## camera's frustum and was never once seen (see run_end_screen.gd). The screen
+## belongs over the floor the run ended on, and leaving is the player's press.
 func _on_run_ended(_extracted: bool, _contents: Dictionary, _value: int) -> void:
 	if busy or ending:
 		return
@@ -212,8 +214,9 @@ func _go(path: String, hold: float) -> void:
 	tw.tween_property(_veil, "color:a", 1.0, FADE_OUT)
 	await tw.finished
 
-	# The named card, on the two ways into the dungeon and on nothing else. Town
-	# is the place you already know; the floor is the one that needs saying.
+	# The named card, on the two ways into the dungeon and on nothing else. The
+	# garrison is the place you already know; the floor is the one that needs
+	# saying.
 	#
 	# `Run.level` is correct HERE because both callers move the run before they
 	# call this -- `Run.enter()` resets to 1 and `Run.descend_floor()` increments

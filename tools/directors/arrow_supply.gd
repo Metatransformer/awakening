@@ -19,13 +19,13 @@ extends RefCounted
 ##  6. Fletching actually moves both numbers — the bag down, the quiver up.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/arrow_supply.gd --out=/tmp/arrows/x.png
 ##
 ## Prints `ARROW FAIL …` on any beat that did not happen.
 
 ## Where the props are staged. Off to one side of whatever scene loaded, so the
-## town's own geometry is not in the shot and nothing has to be moved.
+## garrison's own geometry is not in the shot and nothing has to be moved.
 const STAGE := Vector3(0.0, 0.0, 40.0)
 
 var _fails: int = 0
@@ -58,8 +58,9 @@ func run(rig) -> void:
 	scene.add_child(stage)
 	stage.global_position = STAGE
 
-	# A floor to stand things on and a key light, because the town's own lighting
-	# is 40 m away and an unlit chest is a silhouette test, not a lookdev.
+	# A floor to stand things on and a key light, because the garrison's own
+	# lighting is 40 m away and an unlit chest is a silhouette test, not a
+	# lookdev.
 	var ground := MeshInstance3D.new()
 	var pm := PlaneMesh.new()
 	pm.size = Vector2(14.0, 14.0)
@@ -356,8 +357,8 @@ func _bundles_in(root: Node) -> Array:
 	return out
 
 
-## Put a body in the `player` group on top of `b` and let its overlap fire.
-## The real hero is 40 m away in the town and dragging him here would drag the
+## Put a body in the `player` group on top of `b` and let its overlap fire. The
+## real hero is 40 m away in the garrison and dragging him here would drag the
 ## camera, the HUD and the lock-on with him; what the bundle actually asks is
 ## "is there a body in the player group in me", so that is what this supplies.
 func _walk_onto(rig, stage: Node3D, b: ArrowBundle) -> int:

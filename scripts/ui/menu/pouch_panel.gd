@@ -453,11 +453,11 @@ func _build_detail(parent: Node) -> void:
 ##
 ## It is a card and not a cell verb, and that distinction is the whole reason it
 ## fits here. `_make_cell` says a cell does nothing when pressed and that is
-## still true: you cannot drop, sort or use an item, because the vendor buys them
-## and the forge eats them, both in town. What this adds is a verb belonging to
-## the BAG, not to any item in it — the same shape the escape rope already has,
-## sitting directly below it for the same reason. Both spend the bag; one spends
-## it on getting out and one spends it on staying in.
+## still true: you cannot drop, sort or use an item, because the vendor buys
+## them and the forge eats them, both in the garrison. What this adds is a verb
+## belonging to the BAG, not to any item in it — the same shape the escape rope
+## already has, sitting directly below it for the same reason. Both spend the
+## bag; one spends it on getting out and one spends it on staying in.
 ##
 ## Why it lives on the pouch at all: the recipe eats the cheapest two things in
 ## the grid to the left, so the price and the stock are the same picture. Putting
@@ -787,7 +787,7 @@ func _describe_rope() -> void:
 		# a refusal and never stops the hold, so it reads as a cost being named —
 		# which is what it is.
 		_detail_blurb.text += "  " + warn \
-			+ " You will reach town broke, with a bag to sell."
+			+ " You will reach the garrison broke, with a bag to sell."
 	# Both halves of the way out, in the order the player meets them: the hold in
 	# here, then the channel out there. They are separate on purpose — one cannot
 	# be fumbled, the other can be interrupted (see `_build_rope`).
@@ -800,8 +800,8 @@ func _describe_rope() -> void:
 ## sentences and the player should not have to focus the row to read the second.
 ##
 ## The row never greys out. The only thing that can refuse it now is being in
-## town, and there the fee reads "—" rather than a number, which says it on its
-## own. An expensive rope is not a disabled rope: the price is the message.
+## garrison, and there the fee reads "—" rather than a number, which says it on
+## its own. An expensive rope is not a disabled rope: the price is the message.
 func _paint_rope() -> void:
 	if _rope == null:
 		return
@@ -872,7 +872,7 @@ func _build_stock(parent: Node) -> void:
 	_stock_empty = Label.new()
 	_stock_empty.theme_type_variation = &"MenuSlotStat"
 	_stock_empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_stock_empty.text = "Nothing yet. Components reach the bench by reaching town."
+	_stock_empty.text = "Nothing yet. Components reach the bench by reaching the garrison."
 	col.add_child(_stock_empty)
 
 
@@ -1028,5 +1028,5 @@ func _describe(index: int) -> void:
 	# opposite ends of the yard; a caption that said "the forge" over a Fired
 	# Cullet would send the player to the wrong one.
 	_detail_legend.text = ("%s eats this. It goes to the workbench when you reach "
-		+ "town, not to the vendor.") % def.bench_name().capitalize() if part else \
+		+ "garrison, not to the vendor.") % def.bench_name().capitalize() if part else \
 		("The vendor buys this. What it is worth is a quarter of what leaving costs.")

@@ -136,9 +136,9 @@ static func paint(b: Button, e: Dictionary) -> void:
 
 	chip.color = e.get("tint", Pal.ASH)
 	name_label.modulate = Color.WHITE
-	# The diamond means "a counter in town wants this, the vendor does not". At
-	# cell size it is one bit of information and that is the bit that matters:
-	# do not sell it. WHICH counter is the detail pane's job.
+	# The diamond means "a counter in the garrison wants this, the vendor does
+	# not". At cell size it is one bit of information and that is the bit that
+	# matters: do not sell it. WHICH counter is the detail pane's job.
 	var text := String(e.get("label", ""))
 	name_label.text = ("◆ " + text) if bool(e.get("mark", false)) else text
 	sub.text = String(e.get("sub", ""))

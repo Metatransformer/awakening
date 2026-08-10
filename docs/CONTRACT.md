@@ -8,7 +8,7 @@ else. How you implement your piece is yours to decide.
 > `docs/CONTRACT.topdown.old.md`. That brief is dead. Do not build to it.
 >
 > **`docs/METAGAME.md` supersedes §0's structure** — the one key-locked dungeon
-> ending in a boss is replaced by a Moonlighter-style loop: a town with a vendor
+> ending in a boss is replaced by a Moonlighter-style loop: a garrison with a vendor
 > and a smith, and a procedural dungeon you leave by extracting. OOT remains the
 > bar for camera, locomotion, combat feel, and everything in `refs/`. We changed
 > what the game *is*, not how it *feels*. The currency is **gold**
@@ -183,7 +183,7 @@ These nine facts are the ones clones get wrong. Build to them:
 | `Hud` | `scripts/ui/hud/hud.gd` | the overlay, `CanvasLayer` **50** |
 | `Prompt` | `scripts/autoload/prompt.gd` | which Interactable owns the interact button |
 | `Menu` | `scenes/ui/menu/pause_menu.tscn` | the pause menu, `CanvasLayer` **100** |
-| `Flow` | `scripts/autoload/game_flow.gd` | town↔dungeon + the fade, `CanvasLayer` **200**; **loads LAST** |
+| `Flow` | `scripts/autoload/game_flow.gd` | garrison↔dungeon + the fade, `CanvasLayer` **200**; **loads LAST** |
 
 The `CanvasLayer` numbers are a stack, not preferences: the HUD draws under the
 pause menu, and Flow's fade covers both. A fade something can draw on top of is
@@ -742,7 +742,7 @@ in your report — do not reach into their folder and "fix" it.
 | P10 hud | `scripts/ui/**`, `scenes/ui/**` |
 | P11 feel | `scripts/feel/**`, `assets/audio/**` |
 | P14 menu | `scripts/ui/menu/**`, `scenes/ui/menu/**` |
-| P15 town | `scripts/world/**`, `scripts/props/**`, `scripts/ui/stash/**` |
+| P15 garrison | `scripts/world/**`, `scripts/props/**`, `scripts/ui/stash/**` |
 | orchestrator | `project.godot`, `docs/**`, `tools/**`, `scripts/core/**`, `scripts/autoload/**`, `refs/**`, `progress.html`, `assets/characters/**`, `assets/animations/**` |
 
 Shared read-only for everyone: `scripts/core/consts.gd`, `refs/**`, `assets/**`.
@@ -820,8 +820,8 @@ that makes people ill.
 becomes possible.** This is not a style preference. A required hold is the only
 input in the game that can be performed correctly for most of its duration and
 still do nothing, and the silence at 80% does not read as "not yet" — it reads
-as a broken button. The town gate shipped saying `A TO DESCEND`, a player tapped
-it, and the bug report was "A to descend doesn't work".
+as a broken button. The garrison gate shipped saying `A TO DESCEND`, a player
+tapped it, and the bug report was "A to descend doesn't work".
 
 ```gdscript
 # scripts/ui/hold_gauge.gd — the only two shapes a hold is ever drawn in.
@@ -1019,7 +1019,7 @@ class_name Item extends Resource
 @export var icon: Texture2D
 @export var magic_cost: int       # CHARGES, not mana — the bow's arrow count with
                                   # another name. Bought from the alchemist, spent
-                                  # on cast, refilled in town only. GDD §6.5.
+                                  # on cast, refilled in the garrison only. GDD §6.5.
 func use(hero: Node3D) -> void
 func release(hero: Node3D) -> void   # for held/charged items
 ```
@@ -1848,7 +1848,7 @@ the two offsets came from).
 `Music` decides what is playing from the state the game is already in. **Do not
 call it to start a track.** It reads:
 
-- the current scene's path — `town` → `CALM`, anything else → `DELVE`;
+- the current scene's path — `garrison` → `CALM`, anything else → `DELVE`;
 - the enemy roster — any node in group `enemy` whose `state` is 1..4
   (CHASE/WINDUP/STRIKE/RECOVER, the range both enemy scripts agree on) → `FIGHT`,
   held for `FIGHT_LINGER` after the last one disengages;
@@ -1968,7 +1968,7 @@ drawn by the HUD, so announcing it behind a black screen announces it to nobody.
 
 Two rules the format enforces, both proved by `tools/directors/autosave.gd`:
 
-- **A recorded scene is never a dungeon.** `_save_scene()` returns `Flow.TOWN`
+- **A recorded scene is never a dungeon.** `_save_scene()` returns `Flow.GARRISON`
   whenever `Run.in_dungeon`. A slot holds `Game` and nothing of `Run`
   (METAGAME §5), so a save pointing underground reloaded into a generated floor
   with no bag, no fee and no run behind it. That predates the autosave and was

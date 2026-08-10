@@ -186,7 +186,8 @@ func extract() -> bool:
 	banked.merge(recovered)
 	_end_summary(true, carried, carried_value, banked, fee)
 	# Same reason as in `die()`: the next run starts at the top, and until the
-	# number says so the HUD in town is reporting a floor nobody is standing on.
+	# number says so the HUD in the garrison is reporting a floor nobody is
+	# standing on.
 	level = 1
 	Bus.level_changed.emit(level)
 	# Getting your health back is what makes extracting feel like relief rather
@@ -311,14 +312,15 @@ func die() -> void:
 	in_dungeon = false
 	depth = 0
 	# Back to the top of the Lower Worlds, and it is reset HERE rather than left
-	# for the next `enter()` to do. Between the two the player is standing in town
-	# with the HUD still saying FLOOR 4, which is a floor nobody is on -- the run
-	# that reached it is over and the next one starts at 1 by rule. The ending
-	# screen has already been handed the number it needs (`_end_summary` above).
+	# for the next `enter()` to do. Between the two the player is standing in the
+	# garrison with the HUD still saying FLOOR 4, which is a floor nobody is on
+	# -- the run that reached it is over and the next one starts at 1 by rule.
+	# The ending screen has already been handed the number it needs (`_end_summary` above).
 	level = 1
 	Bus.level_changed.emit(level)
-	# You wake up in town: broke, but alive. Leaving health at zero would mean
-	# the next thing that touched you killed you again before you could sell.
+	# You wake up in the garrison: broke, but alive. Leaving health at zero
+	# would mean the next thing that touched you killed you again before you
+	# could sell.
 	Game.heal(Game.max_quarters)
 	Bus.bag_changed.emit(bag, 0)
 	Bus.run_ended.emit(false, lost, lost_value)
@@ -329,9 +331,9 @@ func die() -> void:
 ## Called by `die()` and `extract()` as their FIRST act, before either starts
 ## dismantling the run -- the bag, the premium pot, the floor number and the
 ## in_dungeon flag are all about to change, and every one of them is on the
-## receipt. The screen does not draw until a frame or two later (Flow holds on the
-## killing blow first), by which point reading `Run` live would report the state of
-## a player standing in town.
+## receipt. The screen does not draw until a frame or two later (Flow holds on
+## the killing blow first), by which point reading `Run` live would report the
+## state of a player standing in the garrison.
 func _end_summary(extracted: bool, contents: Dictionary, value: int,
 		banked: Dictionary, fee: int) -> void:
 	summary = {
@@ -365,11 +367,11 @@ func extract_cost() -> int:
 ## smaller. **This is the number the player pays and the number on the receipt.**
 ##
 ## The cap exists because the uncapped toll had no way to be complied with. It
-## rises with the bag, and the bag can only be sold in town, so a toll past your
-## gold was a wall you could only walk further away from -- every mote you picked
-## up made it taller, and the one escape (dying) destroyed the bag you were
-## trying to bank. That is not a priced decision, it is a soft-lock with a number
-## printed on it.
+## rises with the bag, and the bag can only be sold in the garrison, so a toll
+## past your gold was a wall you could only walk further away from -- every mote
+## you picked up made it taller, and the one escape (dying) destroyed the bag
+## you were trying to bank. That is not a priced decision, it is a soft-lock
+## with a number printed on it.
 ##
 ## Capping keeps the whole of what the fee is FOR. A rich run still costs
 ## everything you own to bank; it just cannot cost more than that. The greed

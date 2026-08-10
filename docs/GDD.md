@@ -9,7 +9,7 @@ that is consistent with this document but absent from SCOPE's manifest is *still
 out of scope*. Read them together or you will build a bigger game than the one
 we agreed to ship.
 
-**Status.** The moment-to-moment and the metagame are built and playable: town,
+**Status.** The moment-to-moment and the metagame are built and playable: garrison,
 vendor, smith, alchemist, forge ladders, bag, extraction, Heat, bottles, bow,
 hookshot, arrows, and a seeded dungeon with six enemy kinds. What is *not* built
 is everything in §5, §6 and §7 — the spine, the gates, the relics, the endings,
@@ -31,36 +31,37 @@ weights backwards.
 A third-person action game with **Ocarina of Time's feel** and **Moonlighter's
 structure**, played as an explorer in the Vale.
 
-You are a member of the **Far Lantern Society**, and the Society's whole creed is
-three clauses long: *go far, come home, tell true*. Under the frontier town of
-**Valenfeld** there is a shaft into the works the **Vyr** built before they
+You are a member of the **Far Lantern Society**, and the Society's whole creed
+is three clauses long: *go far, come home, tell true*. Under the frontier town
+of **Valenfeld** there is a shaft into the works the **Vyr** built before they
 withdrew to their sky-seat and left the world to fail without them. You make runs
 into it. You take what the dead empire left. You decide, every time, when to
 leave.
 
 **You never see Valenfeld.** The hub you play in is the **Highbridge garrison**
-— the walled camp the Highbridge people hold at the shaft head, a day's road from
-the town proper. That is deliberate, and it is the reason the hub gets to be four
-counters and a hole in the ground: a garrison is *supposed* to be small, purposeful
-and short of comforts, so nobody has to explain why there is no inn, no square and
-nobody to talk to who is not selling something. A town would have owed you those.
-See §6.
+— the walled camp the Highbridge people hold at the shaft head, a day's road
+from the town proper. That is deliberate, and it is the reason the hub gets to
+be four counters and a hole in the ground: a garrison is *supposed* to be small,
+purposeful and short of comforts, so nobody has to explain why there is no inn,
+no square and nobody to talk to who is not selling something. A town would have
+owed you those. See §6.
 
-The moment-to-moment is OOT: a boom camera, weighty camera-relative locomotion, a
-committed roll, a shield, a telegraphed enemy you can read. The shape around it
-is Moonlighter: a garrison, a counter, and a hole in the ground that gets worse
-the further in you go.
+The moment-to-moment is OOT: a boom camera, weighty camera-relative locomotion,
+a committed roll, a shield, a telegraphed enemy you can read. The shape around
+it is Moonlighter: a garrison, a counter, and a hole in the ground that gets
+worse the further in you go.
 
 **The one thing this game does that Moonlighter did not: the garrison changes.**
 
 The shaft under Valenfeld is called **the Sunken Cut**. That is the name of the
 *way down* — the one dungeon there is a way into — and the four authored floors
 in §5 are the places it passes through: the Cistern, the Foundry, the Hushing
-Choir, the Chord Gate. It is signed over the gate in town, said on the card the
-game shows you on the way in, and said again in the corner of the screen every
-time you take a stair. A place you are going back to a hundred times needs a name
-for the same reason the run report is a receipt and not a score — "floor 7" is a
-depth reading, and "the Sunken Cut, level 7" is somewhere you have been.
+Choir, the Chord Gate. It is signed over the gate in the garrison, said on the
+card the game shows you on the way in, and said again in the corner of the
+screen every time you take a stair. A place you are going back to a hundred
+times needs a name for the same reason the run report is a receipt and not a
+score — "floor 7" is a depth reading, and "the Sunken Cut, level 7" is somewhere
+you have been.
 
 It lives in one constant, `Prog.NAME`, because there is one shaft (§5). **The
 per-floor names in §5 are not wired up**: the card says THE SUNKEN CUT / LEVEL n
@@ -161,9 +162,9 @@ end-of-run receipt names every stack you lost, line by line.
 **4. Permanence is bought or given, never found.** No dungeon drop makes you
 stronger *by being picked up*. Ingredients are sold, gold buys upgrades,
 components buy rungs, relics are donated — and every one of those transactions
-happens **in town, over a counter, after you got home**. That indirection is what
-makes a great run a *decision* rather than an automatic one, and it is the reason
-death costs something without costing progress.
+happens **in the garrison, over a counter, after you got home**. That
+indirection is what makes a great run a *decision* rather than an automatic one,
+and it is the reason death costs something without costing progress.
 
 **This pillar is the game's power curve, and §6.6 is how much of it there is.**
 The counters are not a service on the side of the dungeon; climbing them is why
@@ -194,8 +195,8 @@ paid for the alternative (`CLAUDE.md` §0) and will not pay again.
 **Superseding the endless-only structure.** The Descent is now **finite**: four
 authored floors, each ending in a boss, and then the game *ends*. The endless
 descent is not deleted — it becomes the post-credits mode (§8). A game with no
-ending cannot be published, and the relic/town/fork design in §3 and §6 needs
-authored space to live in.
+ending cannot be published, and the relic/garrison/fork design in §3 and §6
+needs authored space to live in.
 
 | # | Floor | What it was | Boss | Model | Drops |
 |---|---|---|---|---|---|
@@ -269,13 +270,13 @@ check, and it is what makes §5.3 mean anything.
 
 **A working is a usable item and nothing more.** The Burst-Verse is a row in
 `scripts/items/armament_db.gd`, it draws to the right hand, D-pad ← → reaches it,
-RB and RT cast it, and the HUD cluster and the pouch's paper doll show it because
-they already read `Game.armament()`. Its charges are the bow's arrows with a
-different noun — a count in the HUD column, spent on cast, refilled only in town.
-There is no mana, no school, and no casting system: `docs/CONTRACT.md` §4 already
-says *fire what is in the right hand*, and a working is a thing that is in the
-right hand. The other two workings and the rules that keep them from multiplying
-are §6.5.
+RB and RT cast it, and the HUD cluster and the pouch's paper doll show it
+because they already read `Game.armament()`. Its charges are the bow's arrows
+with a different noun — a count in the HUD column, spent on cast, refilled only
+in the garrison. There is no mana, no school, and no casting system:
+`docs/CONTRACT.md` §4 already says *fire what is in the right hand*, and a
+working is a thing that is in the right hand. The other two workings and the
+rules that keep them from multiplying are §6.5.
 
 ### 5.3 The forks — two rules, eight doors
 
@@ -309,8 +310,9 @@ being a fork and started being floor 5, and floor 5 is out of scope.
 
 ## 6. The garrison — twelve relics, twelve consequences
 
-The Highbridge garrison is one walled yard over the mine mouth: curtain walls you
-cannot see out of, open sky above them, and a rail round the shaft head. It gains
+The Highbridge garrison is one walled yard over the mine mouth: curtain walls
+you cannot see out of, open sky above them, and a rail round the shaft head. It
+gains
 **one** counter and no new screens.
 
 The walls are not scenery. Everything past them is placeholder ground that runs
@@ -321,8 +323,8 @@ yard is a dungeon room whose ceiling failed to load, which is exactly what the
 hub used to be.
 
 **The Lanternkeeper** keeps the Far Lantern Society's hall against the east wall.
-She does not buy and she does not sell: you hand her a relic and something in the
-garrison changes. Mechanically she is a `Catalogue` subclass and a row in
+She does not buy and she does not sell: you hand her a relic and something in
+the garrison changes. Mechanically she is a `Catalogue` subclass and a row in
 `Npc.COUNTERS`, exactly like the smith and the alchemist, driven by the same
 `TradeScreen` — a donation is a transaction whose price is **one relic and the
 cost of making it work again** (§6.4). There is no fourth screen.
@@ -350,7 +352,7 @@ not a coincidence, it is the acceptance criterion.
 | 6 | **The Sustain-Verse** | Foundry vault | Alchemist | She **reads** it: you learn the working **Sustain** (§6.5) |
 | 7 | **The Ballast-Verse** | Choir deep chest | Alchemist | She **reads** it: you learn the working **Ballast** (§6.5) |
 | 8 | Sounding-Rod | Bellwake (boss 3) | Lanternkeeper | The deep chest **hums** on arrival — the floor's only wayfinding |
-| 9 | Warp-Stone Fragment | Choir vault | Lanternkeeper | **Shortcuts work from town.** Start a run on any floor whose shortcut you have opened |
+| 9 | Warp-Stone Fragment | Choir vault | Lanternkeeper | **Shortcuts work from the garrison.** Start a run on any floor whose shortcut you have opened |
 | 10 | Rope-Drum | Chord Gate deep chest | Lanternkeeper | Extraction fee **25% → 20%** |
 | 11 | Pillar-Shard | Riven Knight (boss 4) | Lanternkeeper | **The square lights.** A lit market pays: vendor prices **+10%** |
 | 12 | The Riven Chord | **Long Descent, floor 10** | Lanternkeeper | The last one. See §8 |
@@ -374,8 +376,8 @@ nothing a relic could unlock, and inventing one for the sake of symmetry is how
 
 **Each donation also lights one thing in the courtyard** — a lamp, the well, the
 mill wheel, the College's window. Twelve dark props, twelve of them come on. The
-town "thrives" at the cost of a prop swap and a light, and by relic twelve the
-first frame of the game and the last frame of the game are visibly different
+garrison "thrives" at the cost of a prop swap and a light, and by relic twelve
+the first frame of the game and the last frame of the game are visibly different
 places. That contrast *is* the reward; do not spend more than a prop on it.
 
 ### 6.3 What the relics deliberately do not do
@@ -407,11 +409,11 @@ that counter, and the rule that generates it needs no table of its own:
 > **A relic's home is the counter whose thing it changes.**
 
 This is not an extra system bolted onto the donation; it is the donation losing
-its special case. Pillar 4 says permanence is *bought or given, in town, over a
-counter, after you got home*, and a relic that worked the moment you touched it
-was the one thing in the design quietly breaking that. Now the Lanternkeeper
-prices a repair the way the smith prices a rung, and all four counters are the
-same transaction.
+its special case. Pillar 4 says permanence is *bought or given, in the garrison,
+over a counter, after you got home*, and a relic that worked the moment you
+touched it was the one thing in the design quietly breaking that. Now the
+Lanternkeeper prices a repair the way the smith prices a rung, and all four
+counters are the same transaction.
 
 It also sharpens §2 one more turn. A broken relic is worth **nothing** until you
 pay for it, and it still costs a bag slot and still pays the fee on the way out.
@@ -449,11 +451,11 @@ RT like the bow, selected with D-pad ← →. Nothing about the input layer chan
 
 **Charges are arrows.** You buy them from the alchemist — she is already *the
 only thing you take down with you* (`docs/METAGAME.md` §6.6), and a charge is a
-stock you paid for in town before you left, exactly like a bottle. **They do not
-refill underground.** There is no rest, there cannot be one (the run is not
-savable, `docs/METAGAME.md` §5), and a resource that comes back mid-run softens
-the walk home. Spending your last charge on floor 2 is a statement about how deep
-you were planning to go.
+stock you paid for in the garrison before you left, exactly like a bottle.
+**They do not refill underground.** There is no rest, there cannot be one (the
+run is not savable, `docs/METAGAME.md` §5), and a resource that comes back
+mid-run softens the walk home. Spending your last charge on floor 2 is a
+statement about how deep you were planning to go.
 
 **Charges live in the HUD column with arrows and stamina, never in the bag.** The
 bag is the pressure valve and it does not get taxed twice.
@@ -592,7 +594,7 @@ question, and it is the same shape as §2's — *what are you willing to carry?*
 
 #### What this loop deliberately does not become
 
-- **No relic is a stat** (§6.3). Relics change the town; the ladders change you.
+- **No relic is a stat** (§6.3). Relics change the garrison; the ladders change you.
   The moment a relic grants soak, the twelve stop being the reason to keep
   playing and become twelve more rungs.
 - **No re-spec, no refund.** A path you committed is a path you committed. A
@@ -685,7 +687,7 @@ the longer list and the rule for adding to it.
 - **Level-scaled enemies** (§7).
 - **A bag upgrade path that removes bag pressure entirely.** The cap is the game.
 - **Consumable healing found underground.** Bottles are a stock you *bought* in
-  town before you left. When the stock is gone, leaving is still the only answer.
+  garrison before you left. When the stock is gone, leaving is still the only answer.
 - **A second scene-change path.** `Flow` owns transitions.
 - **Hover boots.** They tax the authoring of every room in the game — a traversal
   item needs gaps to traverse, everywhere, forever — and they open no door the
@@ -716,7 +718,7 @@ the longer list and the rule for adding to it.
 Not by a test suite. By running it and looking:
 
 ```bash
-godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --director=res://tools/directors/mvp_loop.gd --out=/tmp/mvp/x.png --warmup=60
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/mvp_loop.gd --out=/tmp/mvp/x.png --warmup=60
 ```
 
 `mvp_loop.gd` walks sell → buy → descend → fight → loot → chest → hold the pad →

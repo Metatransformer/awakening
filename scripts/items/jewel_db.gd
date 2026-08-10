@@ -3,7 +3,7 @@ extends Catalogue
 ## What the jewelcrafter sells. Four slots, eight paths, and the place the speed
 ## heavy armour took gets bought back (docs/GDD.md §6.6).
 ##
-## The fifth counter and the last one there will be (docs/SCOPE.md §1: town NPCs
+## The fifth counter and the last one there will be (docs/SCOPE.md §1: garrison NPCs
 ## **5**). She cost this file and one row in `Npc.COUNTERS` -- no screen, no new
 ## mode, no branch in `activate` -- which is the same bill the Lanternkeeper paid
 ## and the acceptance criterion for `Catalogue` existing at all.

@@ -77,7 +77,7 @@ extends Catalogue
 ##  * `detail`  -- the consequence in the player's words, for the counter. Same
 ##                 contract as the forge's before/after text.
 ##  * `prop`    -- which dark thing in the courtyard lights when it is donated.
-##                 Twelve dark props, twelve come on (GDD §6.2). The town reads
+##                 Twelve dark props, twelve come on (GDD §6.2). The garrison reads
 ##                 `props_lit()`; the contrast between the first frame and the
 ##                 last IS the reward, and it must not cost more than a prop.
 ##  * `lore`    -- the writing. See the note above the strings.
@@ -204,8 +204,8 @@ const RELICS: Array[Dictionary] = [
 		"id": &"warp_stone",
 		"name": "Warp-Stone Fragment",
 		"level": 3, "source": &"vault",
-		"effect": &"town_shortcuts",
-		"bites": "RelicDb.town_shortcuts() -> the gate's descend",
+		"effect": &"garrison_shortcuts",
+		"bites": "RelicDb.garrison_shortcuts() -> the gate's descend",
 		"detail": "Start a run at any shortcut you have opened.",
 		"prop": &"gate_arch",
 		"lore": "A chip off something much larger, and nobody has found the rest of it. Stand it at a door you have already opened and the walk to that door stops existing. The Listening College calls this impossible and uses it weekly.",
@@ -405,8 +405,9 @@ static func flag_donated(id: StringName) -> StringName:
 	return StringName("relic_given_%s" % id)
 
 
-## The relic reached town. Idempotent, and false for anything that is not one of
-## the twelve -- a typo at the call site should not mint a thirteenth flag.
+## The relic reached the garrison. Idempotent, and false for anything that is
+## not one of the twelve -- a typo at the call site should not mint a thirteenth
+## flag.
 static func recover(id: StringName) -> bool:
 	if by_id(id).is_empty():
 		return false
@@ -414,7 +415,7 @@ static func recover(id: StringName) -> bool:
 	return true
 
 
-## In hand, in town, not yet given away.
+## In hand, in the garrison, not yet given away.
 ##
 ## The donated check is not redundant. `Game.set_flag` is ONE-WAY by design
 ## (there is no `clear_flag`), so the held flag survives the donation and
@@ -469,8 +470,8 @@ static func prop_of(id: StringName) -> StringName:
 	return row.get("prop", &"") if not row.is_empty() else &""
 
 
-## Is this prop lit? What each dark prop in the town scene asks about itself,
-## once, on ready -- and again when `Bus.item_acquired` fires, because a
+## Is this prop lit? What each dark prop in the garrison scene asks about
+## itself, once, on ready -- and again when `Bus.item_acquired` fires, because a
 ## donation is the only thing that changes the answer.
 static func prop_lit(prop: StringName) -> bool:
 	for row in RELICS:
@@ -481,11 +482,11 @@ static func prop_lit(prop: StringName) -> bool:
 
 ## The twelve dark things, in catalogue order, whether or not they are lit.
 ##
-## What `Town` builds the courtyard's props from. It iterates THIS rather than
-## `RELICS` so the yard cannot end up with eleven lamps, or a thirteenth that
-## nothing will ever light: the prop list and the relic list are the same list
-## by construction, and `TownLight` only ever asks `prop_lit()` about an id that
-## came out of here.
+## What `Garrison` builds the courtyard's props from. It iterates THIS rather
+## than `RELICS` so the yard cannot end up with eleven lamps, or a thirteenth
+## that nothing will ever light: the prop list and the relic list are the same
+## list by construction, and `GarrisonLight` only ever asks `prop_lit()` about
+## an id that came out of here.
 static func props() -> Array[StringName]:
 	var out: Array[StringName] = []
 	for row in RELICS:
@@ -493,7 +494,7 @@ static func props() -> Array[StringName]:
 	return out
 
 
-## Every prop currently lit, in catalogue order. The town can iterate this
+## Every prop currently lit, in catalogue order. The garrison can iterate this
 ## instead of asking twelve times.
 static func props_lit() -> Array[StringName]:
 	var out: Array[StringName] = []
@@ -512,8 +513,8 @@ static func props_lit() -> Array[StringName]:
 ## brews, the Lanternkeeper *records*" -- and the creed's third clause is *tell
 ## true*, which is a clause about the writing rather than about the object.
 ## ENTRUST describes handing something over and stops there. RECORD describes
-## what actually changes the town: the smith learns rung 2 because the ledger
-## was *read*, not because it is on a shelf.
+## what actually changes the garrison: the smith learns rung 2 because the
+## ledger was *read*, not because it is on a shelf.
 ##
 ## Overridden here rather than answered by the base class for the reason spelled
 ## out on `Catalogue.craft_verb` -- and reached only through the handle
@@ -607,10 +608,11 @@ static func buy(line: Dictionary) -> bool:
 		return false
 	var id: StringName = line["id"]
 	Game.set_flag(flag_donated(id))
-	# The counter's chime, and the cue every existing listener already handles by
-	# ignoring the id (`Sfx`, `HeroCombat`). What was acquired is the unlock and
-	# the lamp, not the relic -- the player just gave that away -- but the town
-	# gained something, which is the only thing this signal has ever meant.
+	# The counter's chime, and the cue every existing listener already handles
+	# by ignoring the id (`Sfx`, `HeroCombat`). What was acquired is the unlock
+	# and the lamp, not the relic -- the player just gave that away -- but the
+	# garrison gained something, which is the only thing this signal has ever
+	# meant.
 	Bus.item_acquired.emit(id)
 	return true
 
@@ -635,7 +637,7 @@ static func buy(line: Dictionary) -> bool:
 ## It is here for the other half of `Catalogue.crafts`'s reason: the thing being
 ## spent is FOUND, it is one of twelve, it never rolls and it never comes back.
 ## The half second is the game saying *this one only happens once*, which is true
-## here in a way it is not true of anything else on any counter in the town.
+## here in a way it is not true of anything else on any counter in the garrison.
 static func crafts(_line: Dictionary) -> bool:
 	return true
 
@@ -717,8 +719,8 @@ static func chest_hums() -> bool:
 	return donated(&"sounding_rod")
 
 
-## Can a run start at a shortcut you have already opened, from the town gate?
-## Still not fast travel: the only doors it offers are ones you opened by
+## Can a run start at a shortcut you have already opened, from the garrison
+## gate? Still not fast travel: the only doors it offers are ones you opened by
 ## killing the boss whose item opens them (GDD §5.3, SCOPE §2).
-static func town_shortcuts() -> bool:
+static func garrison_shortcuts() -> bool:
 	return donated(&"warp_stone")

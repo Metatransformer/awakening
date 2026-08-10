@@ -17,9 +17,9 @@ extends RefCounted
 ## sword briefly appearing beside the hero's head; from 3/4 front you can see
 ## which way the blade travels and how far the body commits to it.
 ##
-## Shot in the training room, not the town: the town is lit for night and the
-## hero reads as a silhouette in it, which is exactly the information a swing
-## lookdev needs to keep.
+## Shot in the training room, not the garrison: the garrison is lit for night
+## and the hero reads as a silhouette in it, which is exactly the information a
+## swing lookdev needs to keep.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
@@ -99,7 +99,8 @@ func run(rig) -> void:
 	# GameCamera IS the Camera3D and re-derives its own transform in
 	# _physics_process, so placing it and then waiting two frames places it
 	# nowhere. Take its hands off the wheel first — this is why the first run of
-	# this director came back with a hero 40 px tall in a wide shot of the town.
+	# this director came back with a hero 40 px tall in a wide shot of the
+	# garrison.
 	cam.set_physics_process(false)
 
 	for clip in CLIPS:

@@ -64,7 +64,7 @@ signal switch_toggled(switch_id: StringName, on: bool)
 signal puzzle_solved(puzzle_id: StringName)
 ## The floor plan the player can see has changed: a room came out of the fog, a
 ## chest was opened, a bundle was picked up, or the floor was torn down on the
-## way to town. `Atlas` is the state; this is the poke.
+## way to the garrison. `Atlas` is the state; this is the poke.
 ##
 ## It carries nothing on purpose. Both listeners -- the HUD's corner minimap and
 ## the pause menu's MAP screen -- redraw the WHOLE map from `Atlas` when it
@@ -192,7 +192,7 @@ signal screen_closed(id: StringName)
 ## The player picked up a pad, or went back to the keyboard. Emitted by
 ## `Settings`, which watches raw input for it, and only on the CHANGE. Every
 ## surface that names a button to the player listens: the HUD's key caps, its
-## town legend, and the interact prompt. Nothing else should be deciding for
+## garrison legend, and the interact prompt. Nothing else should be deciding for
 ## itself what the player is holding.
 signal input_device_changed(using_pad: bool)
 

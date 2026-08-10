@@ -9,8 +9,9 @@ gone wrong here.
 ## 0. The rule that matters most: check before you build
 
 **Two sessions once built the entire metagame in parallel** — two `Main` nodes,
-two HUDs, two dungeons, two item databases, two town scenes — because neither
-looked at what was already on `main`. Resolving it cost more than either build.
+two HUDs, two dungeons, two item databases, two garrison scenes — because
+neither looked at what was already on `main`. Resolving it cost more than either
+build.
 
 Before you write a system, in this order:
 
@@ -101,7 +102,7 @@ project's history was found by looking, and several were *hidden* by logs that
 said everything passed.
 
 ```bash
-godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --director=res://tools/directors/mvp_loop.gd --out=/tmp/mvp/x.png --warmup=60
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/mvp_loop.gd --out=/tmp/mvp/x.png --warmup=60
 ```
 
 - `tools/directors/mvp_loop.gd` — the whole loop, end to end. Prints

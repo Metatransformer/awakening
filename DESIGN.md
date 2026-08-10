@@ -16,7 +16,7 @@ tagged **[tune]** are ours to move.
 >
 > This document was written against the repo as of `0dc3c07`, when the game was
 > an Ocarina-style dungeon crawler with hearts, a magic meter and a C-pad. Commit
-> `34318cf` landed the extraction loop — town, shop, bag value, extraction cost —
+> `34318cf` landed the extraction loop — garrison, shop, bag value, extraction cost —
 > and with it `docs/STYLEGUIDE.md`, which is the HUD's actual governing document.
 >
 > **The palette in §4 did not ship and should not be used.** `Pal`

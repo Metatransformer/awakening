@@ -405,14 +405,15 @@ func _ready() -> void:
 	if _skel == null:
 		push_error("HeroCombat: no Skeleton3D on the rig")
 		return
-	# Sharpening is bought in town and has to survive the scene change, so the
-	# permanent part lives on Game and the export is only the base blade.
+	# Sharpening is bought in the garrison and has to survive the scene change,
+	# so the permanent part lives on Game and the export is only the base blade.
 	damage += Game.sword_bonus()
 	# Sharpening is sharpening. A whetstone that only improved the light swing
-	# would quietly make the spin the worse button the more you spent in town.
+	# would quietly make the spin the worse button the more you spent in the
+	# garrison.
 	spin_damage += Game.sword_bonus()
 	# And the slam, for the same reason. A blow the whetstone skipped would get
-	# quietly worse every time the player spent gold in town.
+	# quietly worse every time the player spent gold in the garrison.
 	slam_damage += Game.sword_bonus()
 	# And the heavy. Every blow the sword makes is sharpened or none of them are.
 	heavy_damage += Game.sword_bonus()

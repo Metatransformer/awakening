@@ -32,7 +32,7 @@ const ITCH_TARGET = 'metatransformer/the-lower-worlds-awakening'
 const ITCH_URL = 'https://metatransformer.itch.io/the-lower-worlds-awakening'
 
 // The scene a player must boot into. See note 2 above.
-const SHIP_SCENE = 'res://scenes/rooms/town.tscn'
+const SHIP_SCENE = 'res://scenes/rooms/garrison.tscn'
 
 // The .app / .exe basename. No colon: macOS treats it as a path separator and
 // Godot rewrites it to "-", which is why the bundle on disk is "The Lower

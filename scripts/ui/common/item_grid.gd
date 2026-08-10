@@ -12,9 +12,9 @@ extends GridContainer
 ## So there is one control and every one of those screens builds cells with it.
 ## The cell is the pouch's cell, because the pouch's is the one that was already
 ## right: the item's tint as a chip across the top, the name (with ◆ when a
-## counter in town wants it and the vendor does not), and a line under it that
-## says the thing this particular screen is about — a stack count in the bag, a
-## price at a counter, `2/4` at a bench.
+## counter in the garrison wants it and the vendor does not), and a line under
+## it that says the thing this particular screen is about — a stack count in the
+## bag, a price at a counter, `2/4` at a bench.
 ##
 ## **It is a GridContainer and not a screen.** SCOPE §1 freezes new UI screens at
 ## zero; this is a control the existing screens put inside the cards they already

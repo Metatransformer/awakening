@@ -18,7 +18,7 @@ extends RefCounted
 ## able to dig itself out of.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/monster_pack.gd --out=/tmp/pack/x.png
 
 const KINDS: Array[StringName] = [&"goblin", &"goblin", &"skeleton", &"kobold"]

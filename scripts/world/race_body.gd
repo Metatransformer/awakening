@@ -2,11 +2,11 @@ class_name RaceBody
 extends Node3D
 ## A person from one of the Vale's peoples, standing where you left them.
 ##
-## The town used to be staffed by tapered prisms with a lantern glued on. That
-## was the right call while the loop was being built -- a nearly-good stand-in
-## invites you to fix the model instead of the game -- but the loop works now,
-## and three boxes are what the town looks like to somebody who has just walked
-## out of a dungeon full of actual monsters.
+## The garrison used to be staffed by tapered prisms with a lantern glued on.
+## That was the right call while the loop was being built -- a nearly-good
+## stand-in invites you to fix the model instead of the game -- but the loop
+## works now, and three boxes are what the garrison looks like to somebody who
+## has just walked out of a dungeon full of actual monsters.
 ##
 ## The bodies come from the Valenfeld pack (`assets/characters/races/`), which is
 ## where the races themselves come from: Stoneborn, Reshi and Vyr are peoples
@@ -95,8 +95,8 @@ const CLIPS: Array[StringName] = [&"idle", &"idle3", &"idle4", &"idle9"]
 ## `PI` for the same art because it turns its bodies the OTHER way
 ## (`rotation.y = heading + PI`); the offsets differ because the holders differ,
 ## not because the art does. The first cut of this file copied the PI across and
-## the whole town stood with its back to the customer -- `race_lookdev.gd` is
-## the render that caught it, and the render is the only thing that can.
+## the whole garrison stood with its back to the customer -- `race_lookdev.gd`
+## is the render that caught it, and the render is the only thing that can.
 const MODEL_YAW := 0.0
 
 ## Metres, crown to floor, after fitting. Read by anything that has to put
@@ -132,7 +132,7 @@ static func make(race: String) -> RaceBody:
 ## `tint` multiplies the fabric's own texture rather than replacing it: a flat
 ## albedo would throw away the weave and give three shopkeepers in coloured
 ## plastic. The three tints are the robe colours the box placeholders already
-## used, so the town's palette does not move just because the people did.
+## used, so the garrison's palette does not move just because the people did.
 func wear(fabric: String, tint: Color) -> void:
 	if _skel == null:
 		return
@@ -150,7 +150,7 @@ func wear(fabric: String, tint: Color) -> void:
 		mi.get_parent().remove_child(mi)
 		# Its owner is still the garment GLB's root, which we are about to throw
 		# away; leaving it set makes Godot warn about an inconsistent owner on
-		# every piece of clothing in the town.
+		# every piece of clothing in the garrison.
 		mi.owner = null
 		_skel.add_child(mi)
 		# Identity, deliberately: the garment's vertices are authored in the same
@@ -167,8 +167,8 @@ func wear(fabric: String, tint: Color) -> void:
 			if dup == null:
 				continue
 			dup.albedo_color = tint
-			# The town is lit by torches and one cold moon; a specular highlight
-			# on homespun reads as wet plastic (STYLEGUIDE §4).
+			# The garrison is lit by torches and one cold moon; a specular
+			# highlight on homespun reads as wet plastic (STYLEGUIDE §4).
 			dup.roughness = 1.0
 			dup.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
 			mi.set_surface_override_material(s, dup)
@@ -177,7 +177,7 @@ func wear(fabric: String, tint: Color) -> void:
 
 ## Play a clip by name, looping. Unknown names are ignored rather than fatal:
 ## a role that asks for a clip this pack does not carry should stand there, not
-## take the town down with it.
+## take the garrison down with it.
 func play(clip: StringName) -> void:
 	if _anim == null or not _anim.has_animation(clip):
 		return
@@ -255,9 +255,9 @@ static func _shared_lib() -> AnimationLibrary:
 				var tt := a.track_get_type(t)
 				if tt == Animation.TYPE_POSITION_3D or tt == Animation.TYPE_SCALE_3D:
 					a.remove_track(t)
-			# Everything here is a standing loop for somebody minding a shop; the
-			# GLB import leaves loop_mode NONE, which would leave each of them
-			# frozen on their last frame a second after the town loads.
+			# Everything here is a standing loop for somebody minding a shop;
+			# the GLB import leaves loop_mode NONE, which would leave each of
+			# them frozen on their last frame a second after the garrison loads.
 			a.loop_mode = Animation.LOOP_LINEAR
 			_lib.add_animation(clip, a)
 	else:
@@ -336,12 +336,12 @@ func _install_clips() -> void:
 ##   accumulate the 0.01 down to the mesh × the mesh's 1.81 m AABB = 0.018
 ##
 ## a "native height" of 1.8 cm, so the fit multiplied the rig by 78, and the
-## town rendered as three hundred-metre giants standing outside the frame. The
-## check that was supposed to catch it computed the crown the SAME wrong way,
-## multiplied 0.78 by 1.81, printed a perfect "1.41 m", and confirmed the bug.
-## Two errors, one cancellation, one very convincing number. `MeshInstance3D`'s
-## `get_aabb()` is no help either -- for these bodies it returns the raw mesh
-## bounds unchanged, skin and all.
+## garrison rendered as three hundred-metre giants standing outside the frame.
+## The check that was supposed to catch it computed the crown the SAME wrong
+## way, multiplied 0.78 by 1.81, printed a perfect "1.41 m", and confirmed the
+## bug. Two errors, one cancellation, one very convincing number.
+## `MeshInstance3D`'s `get_aabb()` is no help either -- for these bodies it
+## returns the raw mesh bounds unchanged, skin and all.
 ##
 ## The bones do not lie: they are what the vertices are ultimately hung on, the
 ## whole pack shares the one 24-bone rig, and the rest pose is the T-pose every

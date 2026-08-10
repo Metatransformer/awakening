@@ -24,7 +24,7 @@ extends RefCounted
 ##      fires when one press reached both actions, which never happens there.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/a_button.gd --out=/tmp/abtn/x.png
 
 ## Both halves of one A press.
@@ -50,10 +50,10 @@ func run(rig) -> void:
 # --- 1. The thing in reach wins ---------------------------------------------
 
 func _talk_beats_roll(rig) -> void:
-	var town := rig.scene() as Town
+	var garrison := rig.scene() as Garrison
 	var hero := _hero(rig)
-	_stand_at(rig, town.vendor.global_position + Vector3(0.0, 0.0, 1.6),
-		town.vendor.global_position)
+	_stand_at(rig, garrison.vendor.global_position + Vector3(0.0, 0.0, 1.6),
+		garrison.vendor.global_position)
 	await _await_focus(rig)
 	if Prompt.focus == null:
 		_fail("nothing owns the button at the vendor — beat 1 proves nothing")
@@ -128,7 +128,7 @@ func _roll_when_free(rig) -> void:
 # --- 4. The held half, at the one prompt that measures a hold ----------------
 
 func _hold_at_gate(rig) -> void:
-	var town := rig.scene() as Town
+	var garrison := rig.scene() as Garrison
 	var hero := _hero(rig)
 
 	# The negative control FIRST, on clear ground: a held A must reach a sprint,
@@ -143,8 +143,8 @@ func _hold_at_gate(rig) -> void:
 	if not ran:
 		_fail("a held A did not sprint on clear ground — beat 4 proves nothing")
 
-	_stand_at(rig, town.gate.global_position + Vector3(0.0, 0.0, 1.8),
-		town.gate.global_position)
+	_stand_at(rig, garrison.gate.global_position + Vector3(0.0, 0.0, 1.8),
+		garrison.gate.global_position)
 	await _await_focus(rig)
 	if Prompt.focus == null:
 		_fail("nothing owns the button at the gate")
@@ -170,12 +170,12 @@ func _hold_at_gate(rig) -> void:
 # --- 5. The keyboard is not in the arbitration ------------------------------
 
 func _keyboard_still_rolls(rig) -> void:
-	var town := rig.scene() as Town
+	var garrison := rig.scene() as Garrison
 	var hero := _hero(rig)
 	# Standing AT the vendor, which is the case that would break if the rule were
 	# "a focus refuses the dodge" rather than "one press reached both actions".
-	_stand_at(rig, town.vendor.global_position + Vector3(2.0, 0.0, 1.6),
-		town.vendor.global_position)
+	_stand_at(rig, garrison.vendor.global_position + Vector3(2.0, 0.0, 1.6),
+		garrison.vendor.global_position)
 	await _await_focus(rig)
 	if Prompt.focus == null:
 		_fail("the vendor does not own the button — beat 5 proves nothing")
@@ -268,12 +268,12 @@ func _await_no_focus(rig) -> void:
 		await rig.wait_frames(2)
 
 
-## Somewhere in the town square with nothing in reach. Measured off the vendor
-## rather than hardcoded, so a town that moves its furniture does not quietly
-## turn beat 3 into a second copy of beat 1.
+## Somewhere in the garrison square with nothing in reach. Measured off the
+## vendor rather than hardcoded, so a garrison that moves its furniture does not
+## quietly turn beat 3 into a second copy of beat 1.
 func _clear_ground(rig) -> Vector3:
-	var town := rig.scene() as Town
-	return town.vendor.global_position + Vector3(0.0, 0.0, 9.0)
+	var garrison := rig.scene() as Garrison
+	return garrison.vendor.global_position + Vector3(0.0, 0.0, 9.0)
 
 
 ## Stand clear and FACE AWAY from the vendor. The beats that need clear ground
@@ -283,9 +283,9 @@ func _clear_ground(rig) -> Vector3:
 ## do with the button. It cannot pass wrongly (a focus refuses the roll, so the
 ## drift shows up as a FAIL) but it can waste an afternoon.
 func _stand_clear(rig) -> void:
-	var town := rig.scene() as Town
+	var garrison := rig.scene() as Garrison
 	var at := _clear_ground(rig)
-	_stand_at(rig, at, at + (at - town.vendor.global_position))
+	_stand_at(rig, at, at + (at - garrison.vendor.global_position))
 
 
 func _hero(rig) -> Hero:

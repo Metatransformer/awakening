@@ -35,9 +35,9 @@ var bag_slots: int = K.START_BAG_SLOTS
 ## reads them through the accessors below and never indexes this directly.
 var upgrades: Dictionary[StringName, int] = {}
 ## Component id -> how many are on the workbench. Persistent: components that
-## reached town survive death, because they were already paid for by the run
-## that carried them home (`Run.extract` banks them). Components still in the
-## bag when you die are gone with it.
+## reached the garrison survive death, because they were already paid for by the
+## run that carried them home (`Run.extract` banks them). Components still in
+## the bag when you die are gone with it.
 var components: Dictionary[StringName, int] = {}
 ## Item id -> how many are in the footlocker in the hero's quarters. Persistent,
 ## for the same reason `components` is: everything in it already survived a run.
@@ -60,9 +60,10 @@ var max_bombs: int = 20
 ## needs before he will brew anything.
 ##
 ## Persistent, like gold and the workbench: a bottle is a purchase and what is
-## in it was paid for in town. Death does not take it -- what death takes is the
-## bag (docs/METAGAME.md §5), and a bottle is not in the bag. That is deliberate
-## and it is the reason a draught is worth brewing before a deep run.
+## in it was paid for in the garrison. Death does not take it -- what death
+## takes is the bag (docs/METAGAME.md §5), and a bottle is not in the bag. That
+## is deliberate and it is the reason a draught is worth brewing before a deep
+## run.
 var bottle_contents: Array[StringName] = []
 
 ## Draught id -> seconds left, for the two that last. Ticked in `_process`

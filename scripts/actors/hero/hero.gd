@@ -1291,17 +1291,17 @@ func _physics_process(delta: float) -> void:
 	if _invuln > 0.0:
 		_invuln = maxf(0.0, _invuln - delta)
 
-	# A screen owning input means the hero reads NEUTRAL, not that he stops being
-	# simulated -- he still falls, still slides to a halt, still finishes a roll.
-	# Without this the shop's confirm key (space) is also the dodge key, and every
-	# purchase throws the hero across the town square behind the panel.
-	# Leaving roots him, by the same mechanism and for a related reason: the
-	# rope's channel is only a decision if walking out of it is not free. He
-	# still falls and still slides to a halt, he just does not steer.
-	# First person roots him for the same reason the rope's channel does: it is a
+	# A screen owning input means the hero reads NEUTRAL, not that he stops
+	# being simulated -- he still falls, still slides to a halt, still finishes
+	# a roll. Without this the shop's confirm key (space) is also the dodge key,
+	# and every purchase throws the hero across the garrison square behind the
+	# panel. Leaving roots him, by the same mechanism and for a related reason:
+	# the rope's channel is only a decision if walking out of it is not free. He
+	# still falls and still slides to a halt, he just does not steer. First
+	# person roots him for the same reason the rope's channel does: it is a
 	# stance you have chosen to stand still in. It is also the honest one -- his
-	# model is hidden while the lens is inside his head, so a hero who could walk
-	# in here would be an invisible hero walking.
+	# model is hidden while the lens is inside his head, so a hero who could
+	# walk in here would be an invisible hero walking.
 	var locked := (Prompt != null and Prompt.blocked) \
 		or (rope != null and rope.active()) \
 		or _first_person

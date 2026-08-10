@@ -12,7 +12,7 @@ extends RefCounted
 ## thing under test here is the loop, not the navmesh.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/mvp_loop.gd --out=/tmp/mvp/x.png
 
 var out := ""
@@ -22,9 +22,9 @@ func run(rig) -> void:
 	out = rig.arg("out", "/tmp/mvp/x.png").get_base_dir()
 	await rig.wait_frames(30)
 
-	await _town_arrival(rig)
+	await _garrison_arrival(rig)
 
-	# THE TOWN BEATS ARE A CHAIN AND THEY STOP THE RUN WHEN THEY BREAK.
+	# THE GARRISON BEATS ARE A CHAIN AND THEY STOP THE RUN WHEN THEY BREAK.
 	#
 	# Every beat after this one assumes the one before it happened: the gate beat
 	# needs the shop screens closed, the dungeon beats need a dungeon, the receipt
@@ -51,12 +51,12 @@ func run(rig) -> void:
 	await _return(rig)
 
 
-# --- Town -------------------------------------------------------------------
+# --- Garrison ---------------------------------------------------------------
 
-func _town_arrival(rig) -> void:
-	print("MVP town gold=%d hearts=%d/%d" % [
+func _garrison_arrival(rig) -> void:
+	print("MVP garrison gold=%d hearts=%d/%d" % [
 		Game.gold, Game.quarters, Game.max_quarters])
-	await rig.capture(out.path_join("m_00_town.png"))
+	await rig.capture(out.path_join("m_00_garrison.png"))
 
 
 func _sell(rig) -> bool:
@@ -69,9 +69,9 @@ func _sell(rig) -> bool:
 	Run.collect(&"bone_shard", 11)
 	await rig.wait_frames(10)
 
-	var town := rig.scene() as Town
-	if not await _approach(rig, town.vendor,
-			town.vendor.global_position + Vector3(0.0, 0.0, 1.6)):
+	var garrison := rig.scene() as Garrison
+	if not await _approach(rig, garrison.vendor,
+			garrison.vendor.global_position + Vector3(0.0, 0.0, 1.6)):
 		return false
 	print("MVP focus=%s bag=%d" % [
 		Prompt.focus.prompt if Prompt.focus != null else "<none>", Run.bag_value()])
@@ -124,9 +124,9 @@ func _sell(rig) -> bool:
 
 
 func _buy(rig) -> bool:
-	var town := rig.scene() as Town
-	if not await _approach(rig, town.smith,
-			town.smith.global_position + Vector3(0.0, 0.0, 1.6)):
+	var garrison := rig.scene() as Garrison
+	if not await _approach(rig, garrison.smith,
+			garrison.smith.global_position + Vector3(0.0, 0.0, 1.6)):
 		return false
 	await rig.tap(["interact"])
 	var opened: bool = await rig.until(func() -> bool: return _screen(rig) != null)
@@ -176,7 +176,7 @@ func _buy(rig) -> bool:
 
 
 func _descend(rig) -> bool:
-	var town := rig.scene() as Town
+	var garrison := rig.scene() as Garrison
 
 	# Wait for the GATE to actually own the interact button before holding it.
 	#
@@ -191,8 +191,8 @@ func _descend(rig) -> bool:
 	# That lesson is `_approach` now, and the sell and buy beats above -- which
 	# had the same bug against the shop triggers rather than against a closing
 	# screen -- go through it too.
-	if not await _approach(rig, town.gate,
-			town.gate.global_position + Vector3(0.0, 0.0, 1.8)):
+	if not await _approach(rig, garrison.gate,
+			garrison.gate.global_position + Vector3(0.0, 0.0, 1.8)):
 		return false
 	print("MVP gate focus=%s" % [
 		Prompt.focus.prompt if Prompt.focus != null else "<none>"])
@@ -263,11 +263,11 @@ func _fight(rig) -> void:
 	# Patched up HERE, the frame the fight ends, rather than four beats later
 	# where it used to be. The reason is unchanged -- see the note below -- but
 	# the timing was tuned against monsters that stood where they spawned. Now
-	# that they close in, the hero came out of the swing loop on two quarters and
-	# died during the WALK to the drop, which emptied the bag, sent Flow to town,
-	# and reported "no chest" and "the rope refused to start" for a run that had
-	# no chest and no dungeon left. The line above is where the balance signal
-	# lives; this is where the cascade gets cut.
+	# that they close in, the hero came out of the swing loop on two quarters
+	# and died during the WALK to the drop, which emptied the bag, sent Flow to
+	# the garrison, and reported "no chest" and "the rope refused to start" for
+	# a run that had no chest and no dungeon left. The line above is where the
+	# balance signal lives; this is where the cascade gets cut.
 	#
 	# Not cheating the test -- the opposite. The tour teleports between beats
 	# with no regard for what is standing nearby, so the hero routinely arrives
@@ -397,12 +397,13 @@ func _extract(rig) -> void:
 
 ## The receipt, and then the ride home.
 ##
-## The rope no longer lands you in town by itself: a run now ends on the floor it
-## ended on, under `RunEndScreen`, and BACK TO TOWN is the press that goes home
-## (scripts/ui/run_end/). This beat used to be a wait and a capture, and after the
-## screen landed it still passed -- while photographing the ending screen into
-## `m_18_home.png` and printing "MVP home scene=DungeonRun". A beat that asserts
-## nothing cannot notice that it has stopped testing the thing in its name.
+## The rope no longer lands you in the garrison by itself: a run now ends on the
+## floor it ended on, under `RunEndScreen`, and BACK TO THE GARRISON is the press
+## that goes home (scripts/ui/run_end/). This beat used to be a wait and a
+## capture, and after the screen landed it still passed -- while photographing
+## the ending screen into `m_18_home.png` and printing "MVP home
+## scene=DungeonRun". A beat that asserts nothing cannot notice that it has
+## stopped testing the thing in its name.
 func _return(rig) -> void:
 	await rig.wait_frames(150)
 	var screen := _run_end(rig)
@@ -420,10 +421,10 @@ func _return(rig) -> void:
 	print("MVP home scene=%s in_dungeon=%s gold=%d bag=%d hearts=%d/%d" % [
 		rig.scene().name, Run.in_dungeon, Game.gold, Run.bag_value(),
 		Game.quarters, Game.max_quarters])
-	if rig.scene() is not Town:
-		print("MVP FAIL BACK TO TOWN did not reach town (scene=%s)" % rig.scene().name)
+	if rig.scene() is not Garrison:
+		print("MVP FAIL BACK TO THE GARRISON did not reach the garrison (scene=%s)" % rig.scene().name)
 	if rig.paused:
-		print("MVP FAIL the tree is still paused in town")
+		print("MVP FAIL the tree is still paused in the garrison")
 	await rig.capture(out.path_join("m_19_home.png"))
 
 

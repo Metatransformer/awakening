@@ -167,7 +167,7 @@ const ROOM_NAME_BASELINE := 0.139
 ## it -- an announcement pinned to the very top of the frame reads as a system
 ## notification rather than as part of the game.
 const FLOOR_ORIGIN := Vector2(0.031, 0.052)
-## The control legend, town only. Bottom edge, under everything.
+## The control legend, garrison only. Bottom edge, under everything.
 const KEYS_BASELINE := 0.962
 
 ## Reference height every px measurement in the styleguide was authored against.

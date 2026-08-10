@@ -1,11 +1,11 @@
 extends RefCounted
 ## The forge, end to end: a component on the floor becomes a longer chain.
 ##
-## Point it at TOWN. It descends on its own, because half the claims here are
+## Point it at GARRISON. It descends on its own, because half the claims here are
 ## about what survives the trip and you cannot test that from one side of it.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/forge_loop.gd \
 ##     --out=/tmp/forge/x.png --warmup=60
 ##
@@ -247,8 +247,8 @@ func _smith(rig) -> void:
 	Game.grant(&"bow")
 	Game.grant(&"hookshot")
 
-	var town := rig.scene() as Town
-	_stand_at(rig, town.smith.global_position + Vector3(0.0, 0.0, 1.6))
+	var garrison := rig.scene() as Garrison
+	_stand_at(rig, garrison.smith.global_position + Vector3(0.0, 0.0, 1.6))
 	await rig.wait_frames(20)
 	await rig.tap(["interact"])
 	await rig.wait_frames(16)
@@ -317,9 +317,9 @@ func _smith(rig) -> void:
 	# Anvil-Plate -- so on a cold boot every ladder legitimately stops at rung
 	# one, and this check asserted 3 and called the game broken.
 	#
-	# It went unnoticed because it was UNREACHABLE: town.gd has not parsed since
-	# c1e53a8, so this whole beat was skipped and the run reported green on a
-	# ladder it never climbed. Asserting the taught ceiling instead of the
+	# It went unnoticed because it was UNREACHABLE: garrison.gd has not parsed
+	# since c1e53a8, so this whole beat was skipped and the run reported green
+	# on a ladder it never climbed. Asserting the taught ceiling instead of the
 	# absolute one still catches the failure this check exists for -- a ladder
 	# that stops short of what the smith knows -- and it will follow the ceiling
 	# up on its own as the relics land, with no edit here.
@@ -378,12 +378,13 @@ func _smith(rig) -> void:
 	_ck("D8 the smith's screen closed", _screen(rig) == null)
 	await rig.wait_frames(10)
 
-	# The hero standing in town was built before any of that. Prove the SPAWNED
-	# gear reads the ladder, not just the accessor -- hero_combat applies the arc
-	# in _ready, so only a fresh hero has it, and that is exactly why the descent
-	# below is part of this director rather than a separate one.
+	# The hero standing in the garrison was built before any of that. Prove the
+	# SPAWNED gear reads the ladder, not just the accessor -- hero_combat
+	# applies the arc in _ready, so only a fresh hero has it, and that is
+	# exactly why the descent below is part of this director rather than a
+	# separate one.
 	var hero: Node = rig.get_nodes_in_group(&"player")[0]
-	print("FORGE town hero block_cone=%.0f (built before the forge)"
+	print("FORGE garrison hero block_cone=%.0f (built before the forge)"
 		% hero.combat.block_cone)
 
 
@@ -472,8 +473,8 @@ func _forge_is_a_hold(rig, screen) -> void:
 # --- E and F. Underground ---------------------------------------------------
 
 func _descend(rig) -> void:
-	var town := rig.scene() as Town
-	_stand_at(rig, town.gate.global_position + Vector3(0.0, 0.0, 1.8))
+	var garrison := rig.scene() as Garrison
+	_stand_at(rig, garrison.gate.global_position + Vector3(0.0, 0.0, 1.8))
 	# Wait for THE GATE to own the button, not for "something" to. The teleport
 	# out of the smith's trigger takes a physics frame or two to register as an
 	# exit, and until it does `Prompt.focus` is still the smith -- non-null, so a
@@ -482,12 +483,12 @@ func _descend(rig) -> void:
 	# beat failed here, and the whole run then reported an economy bug it did not
 	# have. `Prompt.focus != null` is not the state you need; the gate is.
 	for _i in 90:
-		if Prompt.focus == town.gate:
+		if Prompt.focus == garrison.gate:
 			break
 		await rig.wait_frames(2)
 	print("FORGE gate focus=%s blocked=%s" % [
 		Prompt.focus.prompt if Prompt.focus != null else "<none>", Prompt.blocked])
-	_ck("E0a the gate owns the interact button", Prompt.focus == town.gate)
+	_ck("E0a the gate owns the interact button", Prompt.focus == garrison.gate)
 	# The gate wants a 0.9 s hold. A tap must not open it -- that is the whole
 	# point of the hold, and it is one press to prove.
 	await rig.tap(["interact"])
@@ -517,7 +518,7 @@ func _descend(rig) -> void:
 	# Sampled per frame and kept as a PEAK. Read once after twenty frames it
 	# failed two runs in three on a loaded machine -- twenty frames is 0.9 s if
 	# the frames are 45 ms, the descent had already happened, and the gauge it
-	# went looking for had correctly gone back to zero along with the town.
+	# went looking for had correctly gone back to zero along with the garrison.
 	var peak := 0.0
 	var required := false
 	var shot := false
@@ -538,8 +539,8 @@ func _descend(rig) -> void:
 		await rig.wait_frames(8)
 		if Run.in_dungeon:
 			break
-		if Prompt.focus != town.gate:
-			_stand_at(rig, town.gate.global_position + Vector3(0.0, 0.0, 1.8))
+		if Prompt.focus != garrison.gate:
+			_stand_at(rig, garrison.gate.global_position + Vector3(0.0, 0.0, 1.8))
 	Input.action_release(&"interact")
 	print("FORGE post_hold in_dungeon=%s busy=%s scene=%s" % [
 		Run.in_dungeon, Flow.busy, rig.scene().name])

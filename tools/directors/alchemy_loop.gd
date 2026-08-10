@@ -1,11 +1,11 @@
 extends RefCounted
 ## The alchemist, end to end: glass off a body becomes a draught you drink.
 ##
-## Point it at TOWN. It descends on its own, because half the claims here are
+## Point it at GARRISON. It descends on its own, because half the claims here are
 ## about what reaches the bench and you cannot test that from one side of it.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/alchemy_loop.gd \
 ##     --out=/tmp/alchemy/x.png --warmup=60
 ##
@@ -13,7 +13,7 @@ extends RefCounted
 ##
 ##   A  The materials are in the catalogue, on the drop tables, and marked for
 ##      the alchemist rather than the forge.
-##   B  She stands in town, she is addressable, and her board is four lines.
+##   B  She stands in the garrison, she is addressable, and her board is four lines.
 ##   C  Gold alone will not buy a draught, and the refusal names what is short.
 ##   D  A brew costs gold AND materials, and lands IN a bottle.
 ##   E  With every bottle full, brewing is refused for the right reason.
@@ -129,20 +129,20 @@ func _catalogue() -> void:
 # --- B and C. The counter ---------------------------------------------------
 
 func _counter(rig) -> void:
-	var town := rig.scene() as Town
-	_ck("B0 the alchemist is in town", town.alchemist != null)
-	if town.alchemist == null:
+	var garrison := rig.scene() as Garrison
+	_ck("B0 the alchemist is in the garrison", garrison.alchemist != null)
+	if garrison.alchemist == null:
 		return
 	# Addressed the way a player addresses her: walk up, and press the button the
 	# prompt names. Calling `activate()` directly would prove the screen opens and
 	# nothing about whether she can be reached.
-	_stand_at(rig, town.alchemist.global_position + Vector3(0.0, 0.0, 1.6))
+	_stand_at(rig, garrison.alchemist.global_position + Vector3(0.0, 0.0, 1.6))
 	await rig.wait_frames(20)
 	for _i in 60:
-		if Prompt.focus == town.alchemist:
+		if Prompt.focus == garrison.alchemist:
 			break
 		await rig.wait_frames(2)
-	_ck("B1 she owns the interact button", Prompt.focus == town.alchemist)
+	_ck("B1 she owns the interact button", Prompt.focus == garrison.alchemist)
 	await rig.tap(["interact"])
 	await rig.wait_frames(16)
 
@@ -451,21 +451,22 @@ func _drink(rig) -> void:
 # --- H. Where the materials come from ---------------------------------------
 
 func _underground(rig) -> void:
-	var town := rig.scene() as Town
-	_stand_at(rig, town.gate.global_position + Vector3(0.0, 0.0, 1.8))
+	var garrison := rig.scene() as Garrison
+	_stand_at(rig, garrison.gate.global_position + Vector3(0.0, 0.0, 1.8))
 	for _i in 90:
-		if Prompt.focus == town.gate:
+		if Prompt.focus == garrison.gate:
 			break
 		await rig.wait_frames(2)
 	# Printed, not assumed. The gate is a hold, and a hold against a prompt
 	# nobody owns is 96 frames of nothing followed by a failure that names the
 	# wrong thing ("he went down" = false, when the truth is "he was never
-	# standing at the gate"). The town has been rebuilt twice under this director.
+	# standing at the gate"). The garrison has been rebuilt twice under this
+	# director.
 	print("ALCHEMY gate focus=%s hero=%.1f,%.1f gate=%.1f,%.1f" % [
 		Prompt.focus.name if Prompt.focus != null else "<none>",
 		(rig.get_nodes_in_group(&"player")[0] as Node3D).global_position.x,
 		(rig.get_nodes_in_group(&"player")[0] as Node3D).global_position.z,
-		town.gate.global_position.x, town.gate.global_position.z])
+		garrison.gate.global_position.x, garrison.gate.global_position.z])
 	# Re-planted mid-hold: losing focus zeroes Prompt's bar with nothing printed,
 	# and the beat then lies about why it failed. See forge_loop.gd's long note.
 	# `rig.hold_seconds`, not a hand-rolled press/release around a frame count.
@@ -485,11 +486,12 @@ func _underground(rig) -> void:
 
 	# The column with EVERY bar in it. Underground the heat meter exists and the
 	# control legend does not, so the draughts sit one slot lower than they did
-	# in town -- and this is the frame that has to be looked at, because drinking
-	# happens down here and a stack that only fits upstairs fits nowhere. There
-	# is no assertion for it. A rectangle in the wrong place is not a thing a
-	# check can see; that is the whole reason the first version of this HUD row
-	# was drawn on top of the stamina bar with all sixty checks green.
+	# in the garrison -- and this is the frame that has to be looked at, because
+	# drinking happens down here and a stack that only fits upstairs fits
+	# nowhere. There is no assertion for it. A rectangle in the wrong place is
+	# not a thing a check can see; that is the whole reason the first version of
+	# this HUD row was drawn on top of the stamina bar with all sixty checks
+	# green.
 	Game.start_draught(Game.DRAUGHT_EDGE_ID, K.DRAUGHT_TIME)
 	Game.start_draught(Game.DRAUGHT_PLATE_ID, K.DRAUGHT_TIME * 0.6)
 	await rig.wait_frames(12)
@@ -646,9 +648,9 @@ func _all(root: Node) -> Array:
 	return found
 
 
-## Teleport. Pathing a hero across town with synthetic input is its own project
-## and the thing under test here is the counter. See forge_loop.gd's note on why
-## `facing_yaw` moves too.
+## Teleport. Pathing a hero across garrison with synthetic input is its own
+## project and the thing under test here is the counter. See forge_loop.gd's
+## note on why `facing_yaw` moves too.
 func _stand_at(rig, where: Vector3, look_at: Variant = null) -> void:
 	var players: Array = rig.get_nodes_in_group(&"player")
 	if players.is_empty():

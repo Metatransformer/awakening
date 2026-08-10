@@ -2,11 +2,11 @@ class_name LoadingCard
 extends Control
 ## The screen you look at on the way down. It names the place.
 ##
-## Raised by `Flow` on every transition INTO the dungeon -- walking in from town
-## and taking the stair both -- and it is the whole of what a loading screen is
-## for here: the fade already covered the load, so this covers the *arrival*.
-## Between two rooms of identical grey stone, the only thing that says you went
-## somewhere is being told where you went.
+## Raised by `Flow` on every transition INTO the dungeon -- walking in from the
+## garrison and taking the stair both -- and it is the whole of what a loading
+## screen is for here: the fade already covered the load, so this covers the
+## *arrival*. Between two rooms of identical grey stone, the only thing that
+## says you went somewhere is being told where you went.
 ##
 ## **The backdrop is `ui_title_backdrop.gdshader`, and it was written for this.**
 ## The shader shipped with the foundation commit, its own header describes "a

@@ -35,13 +35,13 @@ definition**, and §4.2 applies.
 | Locked doors | **8** | 4 shortcuts, 3 vaults, 1 to the Long Descent |
 | Vault prefabs | **3** | Three rooms each |
 | Relics | **12** | Named, hand-placed, non-rolling. **Two are Verses; all twelve arrive broken** — GDD §6.4 |
-| Town NPCs | **5** | Vendor, smith, alchemist, **Lanternkeeper (new)**, **Jewelcrafter (new)**. There is no sixth. |
+| Garrison NPCs | **5** | Vendor, smith, alchemist, **Lanternkeeper (new)**, **Jewelcrafter (new)**. There is no sixth. |
 | **Stats** | **5** | Damage, speed, max health, stamina, soak. GDD §6.6. No sixth. |
 | **Upgrade tracks** | **20** | 4 gear (edge, guard, string, chain) + 8 armour (4 pieces × 2 paths) + 8 jewel (4 slots × 2 paths) |
 | Armour pieces | **4** | Chest, legs, arms, boots. ×2 paths, ×4 rungs (rung 0 free, 3 bought — `K.FORGE_MAX`) |
 | Jewelry slots | **4** | Amulet, 2 rings, bracelet. ×2 paths, ×5 rungs (base + 4 bought) |
 | **Armour / jewelry art** | **0** | Every piece is a number. No modular meshes, no icons beyond the existing catalogue rows. |
-| Town scenes | **1** | The courtyard. There is no second settlement. |
+| Garrison scenes | **1** | The courtyard. There is no second settlement. |
 | **New UI screens** | **1** | Was 0, and the zero is still the rule — see §2's housing entry. `StashScreen` is the one exception, because a footlocker is a two-column transfer and `TradeScreen` prices things. The Lanternkeeper and the Jewelcrafter are `Catalogue`s on the existing `TradeScreen`. The stat block is a panel on the equipment screen, not a screen. |
 | Endings | **2** | Lantern, Chord |
 | Currencies | **1** | Gold. Components and relics are items, not money. |
@@ -90,11 +90,11 @@ cracked wall. Everything else in the plan is a *gate on*, a *number in*, or an
 
 Because a working is a **usable item**, not a system. `armament_db.gd` already
 holds the right hand; `Game.cycle_weapon` already steps it; CONTRACT §4 already
-says RB and RT *fire what is in the right hand*; the bow already spends a counted
-resource bought in town. Burst, Sustain and Ballast are rows in that table with a
-charge count where the arrows go. There is no mana, no school, no casting layer,
-and no new save field beyond the ones an owned item and a counted resource
-already need (GDD §6.5).
+says RB and RT *fire what is in the right hand*; the bow already spends a
+counted resource bought in the garrison. Burst, Sustain and Ballast are rows in
+that table with a charge count where the arrows go. There is no mana, no school,
+no casting layer, and no new save field beyond the ones an owned item and a
+counted resource already need (GDD §6.5).
 
 The **ring stops** row is the honest cap, and it is the one to defend. Scope
 pressure on magic will not arrive as "add a system" — it will arrive as a fourth
@@ -105,8 +105,8 @@ place. **This row is why there is no fourth working.**
 ### Broken relics cost nothing on this table
 
 GDD §6.4 — every relic arrives broken and is repaired (or, for a Verse, read) at
-a home counter for gold — moves **no number here**. Relics stay 12, town NPCs
-stay 4, new UI screens stay 0. It is a price and a `broken` flag on rows in
+a home counter for gold — moves **no number here**. Relics stay 12, garrison
+NPCs stay 4, new UI screens stay 0. It is a price and a `broken` flag on rows in
 `relic_db.gd` that the plan already required, plus a description string. It
 *removes* a special case: the Lanternkeeper stops being the one counter whose
 transaction costs no gold.
@@ -122,7 +122,7 @@ every time someone has the idea again.
 **Refused because they are a different game:**
 
 - Multiplayer or co-op of any kind.
-- A second town, an overworld, a hub outside Valenfeld.
+- A second garrison, an overworld, a hub outside Valenfeld.
 - Player-joinable factions. The Vale has fourteen of them in the lore. That is a
   reason to keep the lore, not a reason to build the game the lore implies.
 - Character creation, races, classes, skill trees.
@@ -142,11 +142,11 @@ every time someone has the idea again.
   it has no upgrade ladder, and it has nothing you can put in it that is not an
   item you already own.
 
-  It was allowed through because both props close holes the town already had.
+  It was allowed through because both props close holes the garrison already had.
   The bed **writes the save** — `Flow._go` autosaves on scene changes only, so
-  until this existed, an hour of selling, forging and brewing in town was on
+  until this existed, an hour of selling, forging and brewing in the garrison was on
   nobody's disk (`scripts/props/bed.gd` says this at the top). The footlocker
-  **stops the town silently destroying goods** — `Run.enter` clears the bag, so
+  **stops the garrison silently destroying goods** — `Run.enter` clears the bag, so
   ingredients carried home and not sold before the next descent were deleted
   without a word. Neither is a feature anyone asked for as housing; both are
   bugs wearing furniture.
@@ -169,7 +169,7 @@ every time someone has the idea again.
 - A relic that can be sold, or that rolls from a table (GDD §6.3).
 - A bag upgrade past the four already priced (GDD §10).
 - **Storage the dungeon can reach.** The footlocker holds `K.STASH_SLOTS` = 24
-  slots and it is nailed to the floor of a room in town. GDD §2 refuses
+  slots and it is nailed to the floor of a room in the garrison. GDD §2 refuses
   "infinite storage" because the question the whole game turns on is *is what I
   am carrying worth more than the walk back* — and a shelf you can reach from
   floor three answers it for you, forever. So: no portable chest, no
@@ -208,7 +208,7 @@ milestone; land it on `main` when it closes.
 | **M0** | **The freeze.** Land this doc + the GDD. Annotate `METAGAME.md` where it is superseded. No code. | Docs merged to `main` |
 | **M1** | **Gates and gear.** `Game.has()`. Sword + shield + rope at start; bow and hookshot removed from the starting kit; their forge ladders hidden at the smith until owned. Locked-door prop, keyed to an item id, with a refusal that names the item. | `gate_locks.gd` |
 | **M2** | **One boss.** The Cistern Warden. Boss door replaces the deepest room's stair; arena; a three-beat telegraphed move set; the drop (Bow + relic); the door stays open and the arena stays empty forever after. | `boss_cistern.gd` |
-| **M3** | **The relic and the hall.** `RelicDb` as a `Catalogue`; the Lanternkeeper NPC; donation on the existing `TradeScreen`; relics ride in the bag, are charged the fee, die with the bag and return to their room; **they arrive broken, name their home counter in the description, and cost gold to repair (GDD §6.4) — the first is free**; the first three unlocks live; one town prop lights per donation. | `relic_donate.gd` |
+| **M3** | **The relic and the hall.** `RelicDb` as a `Catalogue`; the Lanternkeeper NPC; donation on the existing `TradeScreen`; relics ride in the bag, are charged the fee, die with the bag and return to their room; **they arrive broken, name their home counter in the description, and cost gold to repair (GDD §6.4) — the first is free**; the first three unlocks live; one garrison prop lights per donation. | `relic_donate.gd` |
 | **M4** | **Floor 1, whole.** The Cistern's manifest: room count, band table, tint, boss door, shortcut door, vault door, deep chest. The vault prefab. **This is the demo.** | `cistern_floor.gd` |
 | — | **🛑 THE GATE. Play M4 for an hour. See §4.1.** | A human, playing |
 | **M5** | **The workings.** Burst: throw arc, fuse, blast, damage, cracked walls. The one new mechanic. Then Sustain and Ballast as rows on it, and charges on the alchemist's board. | `bomb_throw.gd` |
@@ -239,12 +239,12 @@ plan. Put it in front of people.
 ### 4.1 The gate: M4 must be fun before M5 starts
 
 At M4 the game is one floor, one boss, one item, one vault, three relics and a
-town that visibly changed three times. **Play it for an hour. Then answer, in
-writing, in the card:**
+garrison that visibly changed three times. **Play it for an hour. Then answer,
+in writing, in the card:**
 
 1. Did you want to go back down? *Why* — name the specific thing you wanted.
 2. Did you ever leave with a relic and feel the walk? Did you ever lose one?
-3. Did the town changing register at all, or did you have to be told?
+3. Did the garrison changing register at all, or did you have to be told?
 
 If the answers are weak, **the fix is at M4, not at M6.** Three more floors of a
 loop that is not compelling is three times the content and none of the fun, and
@@ -270,12 +270,12 @@ not worth adding.
 |---|---|---|
 | The Sustain-Verse, the Ballast-Verse (2 relics) | **Fletcher's Jig** and **Waterwheel Gear**, deleted | GDD §6.2 |
 | Usable items 4 → 6 | Nothing — a working is a row in `armament_db.gd`, and the **ring stops** ceiling was added in the same commit to cap it | §1 |
-| **The gear loop.** Town NPCs 4 → 5, forge ladders 5 → 12, 8 jewel tracks, 5 named stats | **Nothing. This is an owner's amendment to the manifest, made deliberately and with the cost known.** | GDD §6.6 |
+| **The gear loop.** Garrison NPCs 4 → 5, forge ladders 5 → 12, 8 jewel tracks, 5 named stats | **Nothing. This is an owner's amendment to the manifest, made deliberately and with the cost known.** | GDD §6.6 |
 
 The first line is the rule working as intended: the two deleted relics were the
 only entries on GDD §6.2's table that were numbers on a subsystem rather than
-changes to the town, which is the §3 test a relic exists to pass. The addition
-paid for itself *and* raised the average.
+changes to the garrison, which is the §3 test a relic exists to pass. The
+addition paid for itself *and* raised the average.
 
 The second line is the rule being **honest about a hole**. Two usable items
 arrived without a deletion, because they genuinely cost no new system — and that
@@ -343,9 +343,9 @@ demo. Do it at M4, not at M9, because a store page that exists early is a
 deadline that pulls the rest of the plan forward.
 
 **The demo is floor 1** — the Cistern, the Warden, the Bow, the vault, three
-relics, and the town lighting three times. It ends on the boss door to the
-Foundry. That is a complete arc, it is the M4 build with a wall at the end of it,
-and it costs nothing extra to produce.
+relics, and the garrison lighting three times. It ends on the boss door to the
+Foundry. That is a complete arc, it is the M4 build with a wall at the end of
+it, and it costs nothing extra to produce.
 
 **Definition of shipped:** a stranger installs it, plays to the Lantern Ending
 without reading anything you wrote, and the credits roll. That is the bar. Not
@@ -380,12 +380,11 @@ surprise, and so nobody rebuilds the plan around it.
 
 Four floors, four bosses built from monsters already on disk, one new mechanic —
 the working, a thrown arc and a fuse, carrying three spells on a six-stop weapon
-ring — twelve hand-placed relics that come up broken, are repaired or read at the
-counter whose thing they change, and each alter one line in the town, a gear loop
-of twenty upgrade tracks across five counters moving five stats and no sixth,
-eight
-locked doors following two rules, two endings, and the endless dungeon that
-already works as the post-credits mode. The demo is floor 1 and it exists at the
-halfway point. Everything not on that list is a sequel, and the way we know we
-are still building this game and not another one is that the numbers in §1 have
-not moved.
+ring — twelve hand-placed relics that come up broken, are repaired or read at
+the counter whose thing they change, and each alter one line in the garrison, a
+gear loop of twenty upgrade tracks across five counters moving five stats and no
+sixth, eight locked doors following two rules, two endings, and the endless
+dungeon that already works as the post-credits mode. The demo is floor 1 and it
+exists at the halfway point. Everything not on that list is a sequel, and the
+way we know we are still building this game and not another one is that the
+numbers in §1 have not moved.

@@ -2,33 +2,33 @@ class_name ShopBooth
 extends Node3D
 ## The place a shopkeeper works, as opposed to the menu they open.
 ##
-## Every counter in this town used to be a person standing on bare flagstones,
-## and the difference between the smith and the alchemist was the word floating
-## over their head. A forge is a hearth, an anvil, a quench barrel and a rack of
-## finished steel; an apothecary is a bench, a cauldron and a wall of bottles.
-## Those things say which shop this is from across the yard, before the sign is
-## readable and without anybody opening a screen.
+## Every counter in this garrison used to be a person standing on bare
+## flagstones, and the difference between the smith and the alchemist was the
+## word floating over their head. A forge is a hearth, an anvil, a quench barrel
+## and a rack of finished steel; an apothecary is a bench, a cauldron and a wall
+## of bottles. Those things say which shop this is from across the yard, before
+## the sign is readable and without anybody opening a screen.
 ##
 ## **This is dressing, not a system.** A booth has no script logic beyond a
 ## banked fire that breathes: no interaction, no state, nothing saved. The
 ## counter is still `Npc` + `TradeScreen` and a row in `Npc.COUNTERS`
 ## (docs/METAGAME.md §6.6), exactly as before. Adding a booth to a fourth
-## shopkeeper is a row in `PARTS` here and a line in `Town._build_people`.
+## shopkeeper is a row in `PARTS` here and a line in `Garrison._build_people`.
 ##
-## Counts are unchanged against docs/SCOPE.md §1: one town scene, three
+## Counts are unchanged against docs/SCOPE.md §1: one garrison scene, three
 ## counters, no new screens. These are props in the courtyard that already
 ## exists.
 
-## Which shop. One per counter, and `Town` picks by role.
+## Which shop. One per counter, and `Garrison` picks by role.
 enum Kind { STALL, FORGE, ALCHEMY }
 
 ## **The booth's +Z is the customer's side.**
 ##
 ## Same convention as `Npc`, which turns a shopkeeper with
 ## `rotation.y = atan2(to.x, to.z)` and so points the body's +Z at the player.
-## Keeping booth and keeper on one convention means `Town` gives them the same
-## yaw and the keeper ends up behind their own counter instead of in front of
-## it. Everything in `PARTS` is authored in that space: negative Z is the
+## Keeping booth and keeper on one convention means `Garrison` gives them the
+## same yaw and the keeper ends up behind their own counter instead of in front
+## of it. Everything in `PARTS` is authored in that space: negative Z is the
 ## working side, where the fire and the stock live.
 @export var kind: Kind = Kind.STALL
 
@@ -134,7 +134,7 @@ static var PARTS := {
 ## of them running the whole west half of the yard went green -- including the
 ## flagstones in front of the gate, three metres from the one cyan thing in the
 ## game that is supposed to own that end of the spectrum. She keeps the green;
-## her lamp went warm (`Town._build_people`), and the pot stopped shouting.
+## her lamp went warm (`Garrison._build_people`), and the pot stopped shouting.
 static var FIRES := {
 	Kind.FORGE: {
 		# 0.55, not the 0.72 that filled the basin lip to lip. A disc the exact

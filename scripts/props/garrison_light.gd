@@ -1,7 +1,7 @@
-class_name TownLight
+class_name GarrisonLight
 extends Node3D
-## One of the twelve dark things in the courtyard, and the whole of "the town
-## changes".
+## One of the twelve dark things in the courtyard, and the whole of "the
+## garrison changes".
 ##
 ## `docs/GDD.md` §6.2 budgets this at **a prop and a light**, and the budget is
 ## the design: the reward is the CONTRAST between the first frame of the game
@@ -14,29 +14,29 @@ extends Node3D
 ## A donation happens with a `TradeScreen` up, and that screen draws the world
 ## behind a 0.86-alpha wash of `Pal.VOID`. A lamp that came on the instant
 ## `RelicDb.buy()` set the flag would therefore light up **underneath a curtain**
-## -- the player would close the counter and find a town that was quietly already
-## different, which is precisely the Moonlighter failure §3 is built to avoid
-## ("did the town changing register, or did you have to be told?").
+## -- the player would close the counter and find a garrison that was quietly
+## already different, which is precisely the Moonlighter failure §3 is built to
+## avoid ("did the garrison changing register, or did you have to be told?").
 ##
 ## So the flag going up ARMS the lamp and the screen closing FIRES it. The
 ## discrimination is `Prompt.blocked`, which is true exactly while a full-screen
 ## UI holds input -- not a timer, because a timer would either fire under the
 ## curtain on a slow reader or leave the lamp dark on a fast one.
 ##
-## `_ready` is the other path and it is deliberately instant: a town rebuilt
+## `_ready` is the other path and it is deliberately instant: a garrison rebuilt
 ## after a run must come up with its lamps already on, with no twelve-way flare
 ## on every arrival.
 
-## Which of `RelicDb.props()` this is. Set by `Town`; a light with no prop id
-## reads `prop_lit(&"")`, which is false forever, so a mis-wired one is dark
+## Which of `RelicDb.props()` this is. Set by `Garrison`; a light with no prop
+## id reads `prop_lit(&"")`, which is false forever, so a mis-wired one is dark
 ## rather than lit-by-accident.
 @export var prop: StringName = &""
 
 # --- The two states ----------------------------------------------------------
-# Both are the town's existing warm-gold vocabulary (every lamp in `Npc` is
-# `Pal.GOLD`), so a lit relic prop reads as the same town with more of it awake
-# rather than as a new kind of object. Nothing here is a colour choice; it is
-# the difference between "off" and "on" being large enough to see from across
+# Both are the garrison's existing warm-gold vocabulary (every lamp in `Npc` is
+# `Pal.GOLD`), so a lit relic prop reads as the same garrison with more of it
+# awake rather than as a new kind of object. Nothing here is a colour choice; it
+# is the difference between "off" and "on" being large enough to see from across
 # the yard, which is the only requirement (GDD §6.2).
 
 const DARK_ALBEDO := Color(0.13, 0.12, 0.15)
@@ -46,10 +46,10 @@ const DARK_ALBEDO := Color(0.13, 0.12, 0.15)
 ## pool on the flagstones, and those shapes were metres across where the head was
 ## centimetres.
 ##
-## Then `town.gd` moved the town outdoors onto daylit grass, and that solution
-## lost its premise -- **a pool of light is invisible in daylight**. There is no
-## near-black background left for it to sit against, so the light stopped being
-## the thing you notice and the head started being it.
+## Then `garrison.gd` moved the garrison outdoors onto daylit grass, and that
+## solution lost its premise -- **a pool of light is invisible in daylight**.
+## There is no near-black background left for it to sit against, so the light
+## stopped being the thing you notice and the head started being it.
 ##
 ## So the head is now big enough to read as a SHAPE at fourteen metres, which is
 ## the distance from the hall doorway and the only distance that matters. The two
@@ -146,8 +146,8 @@ func _apply(k: float) -> void:
 ## Force the lamp to agree with `RelicDb` right now, with no flare.
 ##
 ## For the one caller that changes the flag without going through the counter --
-## a director proving the dark frame and the lit frame from the same camera, or a
-## save loaded under a town that is already built.
+## a director proving the dark frame and the lit frame from the same camera, or
+## a save loaded under a garrison that is already built.
 func sync() -> void:
 	_armed = false
 	_flare = -1.0

@@ -173,7 +173,7 @@ func save(slot: int) -> bool:
 ## was really a save that had told the truth about the wrong half of the game.
 func _save_scene() -> String:
 	if Run != null and Run.in_dungeon:
-		return Flow.TOWN
+		return Flow.GARRISON
 	if current_scene_path != "":
 		return current_scene_path
 	return _scene_path()

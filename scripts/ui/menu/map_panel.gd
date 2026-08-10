@@ -195,8 +195,8 @@ func refresh() -> void:
 			Atlas.rooms.size()]
 	else:
 		_title.text = "ABOVE GROUND"
-		# In town, and it says so rather than showing an empty frame. A blank
-		# panel reads as a screen that failed to load.
+		# In the garrison, and it says so rather than showing an empty frame. A
+		# blank panel reads as a screen that failed to load.
 		_sub.text = "You are above ground. There is nothing down here to chart."
 	for row in _legend_rows:
 		row.visible = Atlas.has_floor()

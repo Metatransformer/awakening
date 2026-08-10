@@ -2,9 +2,10 @@ extends RefCounted
 ## The money moved off the HUD. This photographs both halves of that claim.
 ##
 ## The HUD used to print a rolling gold total in the bottom-right corner — the
-## bag's worth underground, the purse in town. It is gone (hud.gd `_draw_bag`),
-## and everything it said now lives on the POUCH: the bag's worth, the purse,
-## and the fee to leave, together, on a screen you have stopped to look at.
+## bag's worth underground, the purse in the garrison. It is gone (hud.gd
+## `_draw_bag`), and everything it said now lives on the POUCH: the bag's worth,
+## the purse, and the fee to leave, together, on a screen you have stopped to
+## look at.
 ##
 ## Three claims, and a screenshot cannot check the first one on its own — a
 ## corner that is empty because the HUD failed to draw looks exactly like a

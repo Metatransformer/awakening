@@ -6,7 +6,7 @@
 //
 //   1. **`--import` rewrites `project.godot`.** It re-serialises the file, and
 //      every `;` comment in it is DELETED -- the autoload load-order notes, the
-//      reason the game boots into town, the warning that `#` is a parse error
+//      reason the game boots into the garrison, the warning that `#` is a parse error
 //      there. It has also silently dropped keys (`window/size/resizable`). The
 //      file is restored byte-for-byte below, and anything the importer tried to
 //      change is printed rather than swallowed, because a genuine settings

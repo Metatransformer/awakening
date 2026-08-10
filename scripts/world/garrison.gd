@@ -1,7 +1,7 @@
-class_name Town
+class_name Garrison
 extends Node3D
-## The hub. **A garrison, not a town** -- the Highbridge people's walled camp over
-## the mouth of the mine. Four people, a yard, and a hole in the ground.
+## The hub. **A garrison, not a town** -- the Highbridge people's walled camp
+## over the mouth of the mine. Four people, a yard, and a hole in the ground.
 ##
 ## Two mistakes are recorded here because the fix for each broke the other, and
 ## the current build is the shape that satisfies both:
@@ -23,10 +23,10 @@ extends Node3D
 ## halves; do not remove either one thinking it is decoration.
 ##
 ## Deliberately TINY -- about eight seconds of walking, corner to corner. The
-## town is not content; it is the place where the number in your bag turns into
-## a number you keep, and every extra metre of it is a tax on the loop. Moonlighter
-## earns its town by making you run a shop in it. This one does not, so it does
-## not get to be big.
+## garrison is not content; it is the place where the number in your bag turns
+## into a number you keep, and every extra metre of it is a tax on the loop.
+## Moonlighter earns its town by making you run a shop in it. This one does not,
+## so it does not get to be big.
 ##
 ## It is also the only warm, lit, safe place in the game, which is what makes the
 ## gate's cold mouth mean something.
@@ -53,11 +53,11 @@ const RAIL_GAP := 5.0
 ## position in `_build_people` and the whole prop ring in `_build_relic_props`
 ## are tuned against these numbers and against the arrival camera.
 @export var yard: Vector2 = Vector2(26.0, 22.0)
-## The grass runs well past the walls, so the garrison sits IN a landscape rather
-## than on a slab with a void around it. Placeholder ground, on purpose --
-## SCOPE §3's gate is a played hour, not a look. Nothing inside the yard can see
-## any of it now; it is for the lookdev and rampart-height cameras, and for the
-## day somebody cuts a gate in the north wall.
+## The grass runs well past the walls, so the garrison sits IN a landscape
+## rather than on a slab with a void around it. Placeholder ground, on purpose
+## -- SCOPE §3's gate is a played hour, not a look. Nothing inside the yard can
+## see any of it now; it is for the lookdev and rampart-height cameras, and for
+## the day somebody cuts a gate in the north wall.
 @export var ground: Vector2 = Vector2(300.0, 300.0)
 ## **Tall enough that you cannot see out, and that is the requirement, not a
 ## style.** The game camera sits around 3 m and pitches about thirty degrees
@@ -78,7 +78,7 @@ var house: House
 ## The twelve dark props, in `RelicDb` catalogue order. Public so a director can
 ## photograph one corner before and after, which is the only way anybody can
 ## check the claim this system exists to make.
-var lights: Array[TownLight] = []
+var lights: Array[GarrisonLight] = []
 
 
 ## Deliberately says nothing about the run you just finished.
@@ -188,7 +188,7 @@ func _build_env() -> void:
 	env.tonemap_white = 2.0
 
 	var we := WorldEnvironment.new()
-	we.name = "TownEnv"
+	we.name = "GarrisonEnv"
 	we.environment = env
 	add_child(we)
 
@@ -197,12 +197,12 @@ func _build_env() -> void:
 	# is the golden hour, below is night.
 	#
 	# Not noon, and that is a design choice rather than a taste one. Twelve dark
-	# props coming alight one at a time is the entire payoff of the relic system and
-	# one of the three questions `docs/SCOPE.md` §4.1 makes the gate answer -- "did
-	# the town changing register, or did you have to be told?" A lamp does not
-	# register at midday. A lower sun keeps ambient down far enough that a warm point
-	# light still reads, and rakes long shadows across the yard, which is the
-	# cheapest "this is outdoors" signal there is.
+	# props coming alight one at a time is the entire payoff of the relic system
+	# and one of the three questions `docs/SCOPE.md` §4.1 makes the gate answer
+	# -- "did the garrison changing register, or did you have to be told?" A
+	# lamp does not register at midday. A lower sun keeps ambient down far
+	# enough that a warm point light still reads, and rakes long shadows across
+	# the yard, which is the cheapest "this is outdoors" signal there is.
 	#
 	# But not as low as it wants to be, either. The blend is
 	# `pow(sin(pitch), sunset_exponent)`, so it collapses fast: at 24 degrees the sky
@@ -314,9 +314,9 @@ func _build_yard() -> void:
 ## room and you move a lamp**, and the ring's whole argument (§ the note on
 ## `_build_relic_props`) is that it is evenly spaced.
 ##
-## Deliberately NOT lit by a `TownLight`. The twelve are a set that comes on one
-## at a time and means something; a thirteenth warm light that was on from the
-## first frame would be the one prop in the yard whose state says nothing.
+## Deliberately NOT lit by a `GarrisonLight`. The twelve are a set that comes on
+## one at a time and means something; a thirteenth warm light that was on from
+## the first frame would be the one prop in the yard whose state says nothing.
 func _build_house() -> void:
 	house = House.new()
 	# Its own two walls go on -X and +Z, so the corner it wants is the corner of
@@ -405,7 +405,7 @@ func _build_people() -> void:
 	add_child(gate)
 
 
-## The twelve dark things, and the reason the town is worth coming home to.
+## The twelve dark things, and the reason the garrison is worth coming home to.
 ##
 ## `docs/GDD.md` §3 names the failure this is built against by name: Moonlighter's
 ## town, identical on hour forty and hour one, so that late runs were payroll.
@@ -413,14 +413,14 @@ func _build_people() -> void:
 ## come home to*, and this ring is the entire mechanism.
 ##
 ## **A RING, not a scatter, and that is the load-bearing choice.** The gate
-## question in `docs/SCOPE.md` §4.1 is "did the town changing register, or did
-## you have to be told?" -- so the test a placement has to pass is *at least one
-## of these is in frame from wherever the player is standing when a lamp comes
-## on*, and a ring around the perimeter is the only arrangement that passes it
-## from every position in the yard. Props tucked into the corners they
+## question in `docs/SCOPE.md` §4.1 is "did the garrison changing register, or
+## did you have to be told?" -- so the test a placement has to pass is *at least
+## one of these is in frame from wherever the player is standing when a lamp
+## comes on*, and a ring around the perimeter is the only arrangement that
+## passes it from every position in the yard. Props tucked into the corners they
 ## thematically belong to (the mill by the mill, the kiln by the glasshouse)
-## would read better in a screenshot of the finished town and fail the only test
-## that matters, because eleven of the twelve would be behind you.
+## would read better in a screenshot of the finished garrison and fail the only
+## test that matters, because eleven of the twelve would be behind you.
 ##
 ## Order is `RelicDb.props()`, which is catalogue order, so the FIRST relic the
 ## player can possibly find (the Cistern's deep chest, floor 1) lights the lamp
@@ -440,7 +440,7 @@ func _build_relic_props() -> void:
 		# half-step: due north is the gate's arch, and the half-step puts two of
 		# them inside the pillars at z = -0.55 * hz. A quarter-step misses both.
 		var a: float = -PI * 0.5 + (float(i) + 0.25) * TAU / float(props.size())
-		var light := TownLight.new()
+		var light := GarrisonLight.new()
 		light.prop = props[i]
 		light.position = Vector3(cos(a) * rx, 0.0, sin(a) * rz)
 		add_child(light)
@@ -449,7 +449,7 @@ func _build_relic_props() -> void:
 
 ## The prop `RelicDb` calls `prop`, or null. For a director that wants to
 ## photograph one corner twice.
-func light_of(prop: StringName) -> TownLight:
+func light_of(prop: StringName) -> GarrisonLight:
 	for l in lights:
 		if l.prop == prop:
 			return l

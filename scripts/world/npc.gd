@@ -1,6 +1,6 @@
 class_name Npc
 extends Interactable
-## The three people in town, and the gate they stand around.
+## The three people in the garrison, and the gate they stand around.
 ##
 ## They were boxes with a lantern, on purpose, for as long as the loop was the
 ## thing being built: a stand-in character model that is nearly good is worse
@@ -19,7 +19,7 @@ extends Interactable
 ## re-ordering this enum would silently turn every placed alchemist into a gate.
 enum Role { VENDOR, SMITH, GATE, ALCHEMIST, KEEPER, JEWELLER }
 
-## Everything that differs between the people in this town, on one row each.
+## Everything that differs between the people in this garrison, on one row each.
 ##
 ## It started as a name table beside a `match` in `_ready` and a second `match`
 ## in `activate`, which is three places to edit to add a fourth shopkeeper and
@@ -60,10 +60,10 @@ static var COUNTERS := {
 	# criterion for the whole relic system and not a nice outcome.
 	#
 	# She was "the last one there will be" until 2026-08-09, when GDD §6.6 added
-	# the jewelcrafter below and docs/SCOPE.md §1 moved town NPCs from 4 to 5 as
-	# an owner's amendment. The claim was not wrong about the COST -- the fifth
-	# counter cost the same row and the same subclass -- which is exactly why the
-	# ceiling now lives in SCOPE §1 rather than in a comment here.
+	# the jewelcrafter below and docs/SCOPE.md §1 moved garrison NPCs from 4 to
+	# 5 as an owner's amendment. The claim was not wrong about the COST -- the
+	# fifth counter cost the same row and the same subclass -- which is exactly
+	# why the ceiling now lives in SCOPE §1 rather than in a comment here.
 	#
 	# `hold` is 0 like the other three: the HOLD that matters here is on the
 	# LINE, not on the greeting. `RelicDb.crafts()` answers true for every row,
@@ -75,9 +75,9 @@ static var COUNTERS := {
 			"title": "THE FAR LANTERN", "mode": TradeScreen.Mode.BUY, "db": RelicDb,
 		},
 	},
-	# The fifth counter, and the last one there will be (docs/SCOPE.md §1: town
-	# NPCs **5**, "There is no sixth"). Same bill as the Lanternkeeper's, paid
-	# again: one row, one `Catalogue`.
+	# The fifth counter, and the last one there will be (docs/SCOPE.md §1:
+	# garrison NPCs **5**, "There is no sixth"). Same bill as the
+	# Lanternkeeper's, paid again: one row, one `Catalogue`.
 	#
 	# `hold` is 0 like the other four. `JewelDb.crafts()` answers true for every
 	# rung and false for the four blanks, so the gauge lands on the commits that
@@ -93,14 +93,15 @@ static var COUNTERS := {
 	# the one press in the game that ends the safe part of the session, so it is
 	# the one press that should be impossible to make by accident on the way past.
 	#
-	# `# NEEDS:` the Warp-Stone Fragment's unlock, `RelicDb.town_shortcuts()`,
-	# bites HERE -- "start a run at any shortcut you have opened" (GDD §6.2 #9).
-	# It cannot be adopted yet and faking it would be worse than leaving it: the
-	# gate would have to open a run at floor N, and `Run.enter()` hard-sets
-	# `level = 1` with a comment explaining why, so the change is one argument in
-	# `scripts/autoload/run_state.gd`. There is also nothing to offer until the
-	# shortcut doors exist on a real floor (SCOPE M4/M6). When both land, this row
-	# reads `RelicDb.town_shortcuts()` and `activate` picks the deepest floor
+	# `# NEEDS:` the Warp-Stone Fragment's unlock,
+	# `RelicDb.garrison_shortcuts()`, bites HERE -- "start a run at any shortcut
+	# you have opened" (GDD §6.2 #9). It cannot be adopted yet and faking it
+	# would be worse than leaving it: the gate would have to open a run at floor
+	# N, and `Run.enter()` hard-sets `level = 1` with a comment explaining why,
+	# so the change is one argument in `scripts/autoload/run_state.gd`. There is
+	# also nothing to offer until the shortcut doors exist on a real floor
+	# (SCOPE M4/M6). When both land, this row reads
+	# `RelicDb.garrison_shortcuts()` and `activate` picks the deepest floor
 	# whose `LockedDoor.flag_id()` is set -- still no new screen.
 	Role.GATE: {"sign": "", "prompt": "DESCEND", "hold": 0.9},
 }
@@ -113,8 +114,8 @@ static var COUNTERS := {
 ## trade modes to find the colours.
 ##
 ## The races are not cast at random. Each keeps the counter their people would
-## keep, which is why the town reads as a place with history in it rather than
-## three vendors in different hats:
+## keep, which is why the garrison reads as a place with history in it rather
+## than three vendors in different hats:
 ##
 ##   * **Stoneborn** at the forge -- short, slab-built, and by their own account
 ##     the best forges north of the river.
@@ -131,7 +132,7 @@ static var COUNTERS := {
 ##   * `tint`   -- MULTIPLIES the weave, so these run much lighter than a flat
 ##     robe colour would. The first pass fed in the box placeholders' robe
 ##     colours directly and produced three silhouettes in black.
-##   * `idle`   -- their resting loop, one each so the town is not three people
+##   * `idle`   -- their resting loop, one each so the garrison is not three people
 ##     breathing in time. All from the standing family; see `RaceBody.CLIPS`.
 ##   * `booth`  -- the shop they stand in.
 static var LOOKS := {
@@ -205,7 +206,7 @@ var _head: float = 1.75
 
 
 ## The row for this NPC. Never null -- a role added to the enum and forgotten
-## here gets a nameless prop you can walk up to, not a crash mid-town.
+## here gets a nameless prop you can walk up to, not a crash mid-garrison.
 func _row() -> Dictionary:
 	var row: Dictionary = COUNTERS.get(role, {})
 	return row
@@ -402,8 +403,9 @@ func _build_person() -> void:
 	add_child(solid)
 
 
-## The way down. A dark arch with a cold mouth: the town is warm and gold, so
-## the entrance being the only cold thing in it is the only signposting needed.
+## The way down. A dark arch with a cold mouth: the garrison is warm and gold,
+## so the entrance being the only cold thing in it is the only signposting
+## needed.
 func _build_gate() -> void:
 	var stone := StandardMaterial3D.new()
 	stone.albedo_color = Color(0.20, 0.19, 0.22)
@@ -458,10 +460,11 @@ func _build_gate() -> void:
 
 	var plate := Label3D.new()
 	# The name of the place this gate opens onto, not the name of the setting.
-	# "The Lower Worlds" is everything under the town (docs/GDD.md); THE SUNKEN
-	# CUT is the one dungeon there is a way down into, and a sign over a door
-	# should say where the door goes. It reads off `Prog.NAME` so the gate, the
-	# loading card and the HUD cannot end up calling it three different things.
+	# "The Lower Worlds" is everything under the garrison (docs/GDD.md); THE
+	# SUNKEN CUT is the one dungeon there is a way down into, and a sign over a
+	# door should say where the door goes. It reads off `Prog.NAME` so the gate,
+	# the loading card and the HUD cannot end up calling it three different
+	# things.
 	plate.text = Prog.NAME
 	plate.font_size = 40
 	plate.pixel_size = 0.0028

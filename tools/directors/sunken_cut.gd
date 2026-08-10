@@ -98,16 +98,16 @@ func _descend(rig, out: String, i: int) -> void:
 		% [i * 3 + 3, Run.level]))
 
 
-## Town and back, which is how a run actually begins.
+## Garrison and back, which is how a run actually begins.
 ##
 ## The way home is a DEATH and then the ending screen's button, not a bare
-## `Flow.to_town()`. That shortcut looks equivalent and is not: it leaves
-## `Run.in_dungeon` true, so the HUD draws the floor card over the town square
-## and the controls legend never comes back. Nothing in the game reaches town
-## that way -- `to_town()` has exactly one caller and it fires after `die()` or
-## `extract()` has already ended the run -- so a director that used it would be
-## photographing a state the game cannot be in and reporting its own shortcut as
-## a HUD bug.
+## `Flow.to_garrison()`. That shortcut looks equivalent and is not: it leaves
+## `Run.in_dungeon` true, so the HUD draws the floor card over the garrison
+## square and the controls legend never comes back. Nothing in the game reaches
+## the garrison that way -- `to_garrison()` has exactly one caller and it fires
+## after `die()` or `extract()` has already ended the run -- so a director that
+## used it would be photographing a state the game cannot be in and reporting
+## its own shortcut as a HUD bug.
 func _go_home_and_back(rig, out: String) -> void:
 	Run.die()
 	# Flow holds on the killing blow, then pauses the world and raises the
@@ -117,27 +117,27 @@ func _go_home_and_back(rig, out: String) -> void:
 		if Flow.ending:
 			break
 	await rig.wait_frames(60)
-	# What the button does, which is the only way to town there is.
-	Flow.to_town()
+	# What the button does, which is the only way to the garrison there is.
+	Flow.to_garrison()
 	for _i in PATIENCE:
 		await rig.wait_frames(1)
 		if not Flow.busy:
 			break
-	# Town is not the dungeon and must NOT get a card -- it is the place you
+	# Garrison is not the dungeon and must NOT get a card -- it is the place you
 	# already know, and a loading screen for the hub is a loading screen for
 	# nothing.
 	await rig.wait_frames(30)
 	if _card_node() != null:
-		_fail("town raised a loading card")
-	await rig.capture(out.path_join("cut_07_town.png"))
+		_fail("garrison raised a loading card")
+	await rig.capture(out.path_join("cut_07_garrison.png"))
 
 	Flow.enter_dungeon()
 	var card := await _wait_for_card(rig)
 	if card == null:
-		_fail("no loading card on the way in from town")
+		_fail("no loading card on the way in from the garrison")
 		return
 	if String(card.level_line) != "LEVEL 1":
-		_fail("walking in from town announced '%s', not LEVEL 1" % card.level_line)
+		_fail("walking in from the garrison announced '%s', not LEVEL 1" % card.level_line)
 	await rig.capture(out.path_join("cut_08_card_entry.png"))
 
 	for _i in PATIENCE:

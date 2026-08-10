@@ -1,12 +1,13 @@
 extends RefCounted
 ## Every button the HUD names, said twice: once for a keyboard, once for a pad.
 ##
-## Run it in TOWN, because town is the only room that draws the controls legend.
-## It parks the hero at the PAWNBROKER itself rather than asking whoever runs it
-## to stand somewhere first: the prompt bar is the surface most likely to be
-## wrong -- it is the only one that composes a sentence around the glyph -- and a
-## surface that is only under test when the operator remembers to walk over is
-## not under test. Three surfaces, and they are the three that name inputs:
+## Run it in GARRISON, because the garrison is the only room that draws the
+## controls legend. It parks the hero at the PAWNBROKER itself rather than
+## asking whoever runs it to stand somewhere first: the prompt bar is the
+## surface most likely to be wrong -- it is the only one that composes a
+## sentence around the glyph -- and a surface that is only under test when the
+## operator remembers to walk over is not under test. Three surfaces, and they
+## are the three that name inputs:
 ##
 ##   1. the key caps under the hands and the item cross;
 ##   2. the legend along the bottom;
@@ -19,7 +20,7 @@ extends RefCounted
 ##
 ## Needs `--keep-pad`: shoot.gd strips joypad bindings by default and the caps
 ## are read from the live InputMap, so without it the pad frames come out blank.
-##   godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn \
+##   godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn \
 ##       --director=res://tools/directors/pad_prompts.gd --keep-pad \
 ##       --out=/tmp/pad/x.png --warmup=60
 
@@ -131,16 +132,17 @@ func _check_line(what: String) -> void:
 
 
 ## Park the hero in front of the vendor so there is a prompt to photograph.
-## Teleported, not walked: pathing a body across town is a second thing that can
-## fail and it is not the thing under test (the note in mvp_loop says the same).
+## Teleported, not walked: pathing a body across garrison is a second thing that
+## can fail and it is not the thing under test (the note in mvp_loop says the
+## same).
 func _stand_at_vendor(rig) -> void:
-	var town := rig.scene() as Town
+	var garrison := rig.scene() as Garrison
 	var hero := rig.scene().get_tree().get_first_node_in_group(&"player") as Node3D
-	if town == null or hero == null:
+	if garrison == null or hero == null:
 		_fail += 1
-		print("PAD FAIL not in town -- there is no vendor to stand at")
+		print("PAD FAIL not in the garrison -- there is no vendor to stand at")
 		return
-	var at := town.vendor.global_position + Vector3(0.0, 0.0, 1.6)
+	var at := garrison.vendor.global_position + Vector3(0.0, 0.0, 1.6)
 	hero.global_position = Vector3(at.x, 0.05, at.z)
 
 

@@ -4,13 +4,13 @@ extends RefCounted
 ## Four things this has to prove and one it has to prove twice:
 ##   1. dying raises RunEndScreen with the killer named and the haul crossed out;
 ##   2. extracting raises the SAME screen with the fee and the banked components;
-##   3. BACK TO TOWN actually goes to town — and the button is the only thing
-##      that does, so a screen that ignores it strands the run;
-##   4. the town gate still opens afterwards, both times, which is the bug the
+##   3. BACK TO THE GARRISON actually goes to the garrison — and the button is
+##      the only thing that does, so a screen that ignores it strands the run;
+##   4. the garrison gate still opens afterwards, both times, which is the bug the
 ##      player reported ("A to descend doesn't work after I die").
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/run_end.gd --out=/tmp/rend/x.png
 
 var out := ""
@@ -77,16 +77,16 @@ func _death_leg(rig) -> void:
 	await rig.capture(out.path_join("e_00_died.png"))
 
 	await _press_back(rig, "death")
-	if rig.scene() is not Town:
-		_fail("BACK TO TOWN did not go to town (scene=%s)" % rig.scene().name)
+	if rig.scene() is not Garrison:
+		_fail("BACK TO THE GARRISON did not go to the garrison (scene=%s)" % rig.scene().name)
 		return
 	print("REND home paused=%s level=%d hp=%d/%d" % [
 		rig.paused, Run.level, Game.quarters, Game.max_quarters])
 	if rig.paused:
-		_fail("the tree is still paused in town")
+		_fail("the tree is still paused in the garrison")
 	if Run.level != 1:
-		_fail("town thinks we are on floor %d" % Run.level)
-	await rig.capture(out.path_join("e_01_town.png"))
+		_fail("garrison thinks we are on floor %d" % Run.level)
+	await rig.capture(out.path_join("e_01_garrison.png"))
 
 
 # --- Leg two: walked out with the bag ---------------------------------------
@@ -134,10 +134,10 @@ func _extract_leg(rig) -> void:
 	await rig.capture(out.path_join("e_02_extracted.png"))
 
 	await _press_back(rig, "extract")
-	if rig.scene() is not Town:
-		_fail("BACK TO TOWN did not go to town after an extraction")
+	if rig.scene() is not Garrison:
+		_fail("BACK TO THE GARRISON did not go to the garrison after an extraction")
 		return
-	await rig.capture(out.path_join("e_03_town_again.png"))
+	await rig.capture(out.path_join("e_03_garrison_again.png"))
 
 	# And down one more time, because the gate is the thing that broke.
 	await _gate(rig, "after extract")
@@ -150,9 +150,9 @@ func _extract_leg(rig) -> void:
 
 ## Stand at the gate, check the prompt SAYS HOLD, and hold it.
 func _gate(rig, tag: String) -> void:
-	var town := rig.scene() as Town
-	if town == null:
-		_fail("not in town for the %s descent (scene=%s)" % [tag, rig.scene().name])
+	var garrison := rig.scene() as Garrison
+	if garrison == null:
+		_fail("not in the garrison for the %s descent (scene=%s)" % [tag, rig.scene().name])
 		return
 	_said = ""
 	var probe := func(text: String) -> void:
@@ -161,15 +161,15 @@ func _gate(rig, tag: String) -> void:
 	Bus.prompt_changed.connect(probe)
 
 	var hero = rig.get_nodes_in_group(&"player")[0]
-	hero.global_position = town.gate.global_position + Vector3(0.0, 0.0, 1.8)
+	hero.global_position = garrison.gate.global_position + Vector3(0.0, 0.0, 1.8)
 	for _i in 60:
-		if Prompt.focus == town.gate:
+		if Prompt.focus == garrison.gate:
 			break
 		await rig.wait_frames(2)
 	Bus.prompt_changed.disconnect(probe)
 
 	print("REND %s gate prompt=\"%s\"" % [tag, _said])
-	if Prompt.focus != town.gate:
+	if Prompt.focus != garrison.gate:
 		_fail("nothing owns the interact button at the gate (%s)" % tag)
 		return
 	# The whole of the reported bug in one assertion: a 0.9 s hold whose prompt
@@ -197,7 +197,7 @@ func _press_back(rig, tag: String) -> void:
 	await rig.wait_seconds(RunEndScreen.SETTLE + 0.2)
 	await rig.hold_seconds([&"ui_accept"], 0.2)
 	await rig.wait_frames(240)
-	print("REND %s back-to-town -> scene=%s ending=%s busy=%s" % [
+	print("REND %s back-to-garrison -> scene=%s ending=%s busy=%s" % [
 		tag, rig.scene().name, Flow.ending, Flow.busy])
 	if _screen(rig) != null:
 		_fail("the ending screen survived the ride home (%s)" % tag)

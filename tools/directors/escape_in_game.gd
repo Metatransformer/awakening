@@ -7,13 +7,13 @@ extends RefCounted
 ## instance its own copy of pause_menu.tscn. So every check passed while the
 ## shipping game had no escape menu at all: the only PauseMenu in the project
 ## lived in the test scene. This director exists so that can never be true
-## again. Point it at town or dungeon, not at the harness.
+## again. Point it at the garrison or dungeon, not at the harness.
 ##
 ## Run:
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/escape_in_game.gd \
-##     --out=/tmp/esc/town.png --warmup=90
+##     --out=/tmp/esc/garrison.png --warmup=90
 
 const KEY_ESC := 4194305  ## physical_keycode for Escape, as bound to `pause`.
 

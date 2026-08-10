@@ -16,7 +16,7 @@ extends RefCounted
 ## a hit-stop that fails to lift is not a missing effect, it is the game hung.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/town.tscn \
+##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/monster_feel.gd --out=/tmp/feel/x.png
 
 ## How much image a unit of `Camera3D.h_offset` is worth, at 1280x720 and this

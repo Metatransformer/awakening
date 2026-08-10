@@ -5,25 +5,26 @@ extends Interactable
 ## ## The hole it fills
 ##
 ## `Run.extract()` brings the bag home intact — the fee is paid, the components
-## are sorted onto the bench, and everything else is still merchandise sitting in
-## `Run.bag`. `Run.enter()` then **clears the bag**, so anything you did not sell
-## before the next run is destroyed with no event, no notice and no receipt. That
-## is the correct rule for the dungeon (the bag is what you are gambling) and a
-## silent one in town, where the bag is just the thing you are holding.
+## are sorted onto the bench, and everything else is still merchandise sitting
+## in `Run.bag`. `Run.enter()` then **clears the bag**, so anything you did not
+## sell before the next run is destroyed with no event, no notice and no
+## receipt. That is the correct rule for the dungeon (the bag is what you are
+## gambling) and a silent one in the garrison, where the bag is just the thing
+## you are holding.
 ##
 ## So this is the shelf you put it on. Not more storage — *somewhere to put the
 ## thing down.*
 ##
 ## ## Why it does not break the one question
 ##
-## `docs/GDD.md` §2 is the test every feature has to pass: does it make *"is what
-## I am carrying worth more than the walk back"* harder to answer? A locker in
-## town is unreachable from the shaft — you have already made the walk, paid the
-## fee and won the bag before you can touch it — so it moves nothing on either
-## axis of §2. It is finite anyway (`K.STASH_SLOTS`, and see the note there),
-## because the same section names infinite storage as one of the three features
-## that delete the game and the cheap way to keep faith with that is to not build
-## the infinite version.
+## `docs/GDD.md` §2 is the test every feature has to pass: does it make *"is
+## what I am carrying worth more than the walk back"* harder to answer? A locker
+## in garrison is unreachable from the shaft — you have already made the walk,
+## paid the fee and won the bag before you can touch it — so it moves nothing on
+## either axis of §2. It is finite anyway (`K.STASH_SLOTS`, and see the note
+## there), because the same section names infinite storage as one of the three
+## features that delete the game and the cheap way to keep faith with that is to
+## not build the infinite version.
 ##
 ## ## Both doors go through `Run`
 ##
@@ -129,8 +130,8 @@ func _build() -> void:
 	_lid.add_child(lid_mesh)
 
 	# Two iron bands over the lid seam. The one detail worth a draw call: it is
-	# what separates this silhouette from the crates at the vendor's stall at the
-	# fourteen metres `TownLight` calls the only distance that matters.
+	# what separates this silhouette from the crates at the vendor's stall at
+	# the fourteen metres `GarrisonLight` calls the only distance that matters.
 	for sx in [-0.28, 0.28]:
 		var band := MeshInstance3D.new()
 		var am := BoxMesh.new()
