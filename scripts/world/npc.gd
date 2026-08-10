@@ -128,7 +128,9 @@ static var COUNTERS := {
 ## is 1.65 m, so the smith reads a head short of you and the alchemist a head
 ## tall, before either of them says a word.
 ##
-##   * `fabric` -- which cloth set to dress them in. See `RaceBody.wear`.
+##   * `suit`   -- which authored suit to dress them in (`SuitSeater.SETS`). Not a
+##     fabric name any more: a suit is a whole dressed person, so this picks their
+##     entire outfit including boots, gloves and hood. See `RaceBody.wear`.
 ##   * `tint`   -- MULTIPLIES the weave, so these run much lighter than a flat
 ##     robe colour would. The first pass fed in the box placeholders' robe
 ##     colours directly and produced three silhouettes in black.
@@ -142,21 +144,21 @@ static var LOOKS := {
 	# reads as what it is -- a smith's apron -- and it stops fighting the fire
 	# two metres behind him.
 	Role.SMITH: {
-		"race": "stoneborn", "fabric": "homespun", "idle": &"idle3",
+		"race": "stoneborn", "suit": "leather", "idle": &"idle3",
 		"tint": Color(0.95, 0.74, 0.52), "booth": ShopBooth.Kind.FORGE,
 	},
 	Role.VENDOR: {
-		"race": "reshi", "fabric": "wool", "idle": &"idle",
+		"race": "reshi", "suit": "cloth", "idle": &"idle",
 		"tint": Color(0.86, 0.52, 0.58), "booth": ShopBooth.Kind.STALL,
 	},
 	Role.ALCHEMIST: {
-		"race": "vyr", "fabric": "silk", "idle": &"idle4",
+		"race": "vyr", "suit": "cloth", "idle": &"idle4",
 		"tint": Color(0.56, 0.88, 0.68), "booth": ShopBooth.Kind.ALCHEMY,
 	},
 	# Reshi, like the pawnbroker, because there are three peoples and four
-	# counters -- the Society recruits, it is not a race. The fabric, the idle
+	# counters -- the Society recruits, it is not a race. The suit, the idle
 	# and the tint all differ from his for one reason and it is not taste: two
-	# reshi in wool at the same height, breathing in time, read as the SAME
+	# reshi in the same suit at the same height, breathing in time, read as the SAME
 	# PERSON standing in two places, and a player who cannot tell the
 	# Lanternkeeper from the pawnbroker across the yard cannot find the hall.
 	# Cool against his rose, so the two ends of the yard are told apart by
@@ -167,14 +169,14 @@ static var LOOKS := {
 	# counter is different, and a bespoke booth would be spending on the wrong
 	# half of GDD §6.2's budget.
 	Role.KEEPER: {
-		"race": "reshi", "fabric": "homespun", "idle": &"idle9",
+		"race": "reshi", "suit": "leather", "idle": &"idle9",
 		"tint": Color(0.66, 0.76, 0.94), "booth": ShopBooth.Kind.STALL,
 	},
 	# Stoneborn, like the smith, and for the same reason the Lanternkeeper is
 	# reshi like the pawnbroker: three peoples, five counters. Cutting stone is
 	# their trade twice over, so the doubling reads as a people rather than as a
 	# reused asset -- and she is told apart from him the way the keeper is told
-	# apart from the pawnbroker, by fabric, tint and idle. Violet against his tan,
+	# apart from the pawnbroker, by suit, tint and idle. Violet against his tan,
 	# which is also the tint of the stone she sets (`cut_gemstone`).
 	# The idle is the ALCHEMIST'S, not the smith's, and that is the whole reason
 	# it is a repeat rather than a fifth clip: `RaceBody.CLIPS` is four, capped by
@@ -184,7 +186,7 @@ static var LOOKS := {
 	# slab-built people breathing in time at the same end of the courtyard, which
 	# is the exact failure the keeper's row was written to avoid.
 	Role.JEWELLER: {
-		"race": "stoneborn", "fabric": "silk", "idle": &"idle4",
+		"race": "stoneborn", "suit": "mail", "idle": &"idle4",
 		"tint": Color(0.78, 0.60, 0.92), "booth": ShopBooth.Kind.STALL,
 	},
 }
@@ -320,7 +322,7 @@ func _build_person() -> void:
 		_body.add_child(_person)
 		var tint: Color = look.get("tint", Color.WHITE)
 		var idle: StringName = look.get("idle", &"idle")
-		_person.wear(str(look.get("fabric", "wool")), tint)
+		_person.wear(str(look.get("suit", "cloth")), tint)
 		_person.play(idle)
 		_head = _person.height
 
