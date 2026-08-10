@@ -63,9 +63,24 @@ static func craft_verb() -> String:
 	return "BREW"
 
 
+## Sieved through `RelicDb.knows_draught()`, exactly as the smith's ladders are
+## sieved through `RelicDb.forge_rungs_known()`.
+##
+## **A recipe she has not learned is a line that has not APPEARED yet**, not a
+## line she refuses -- same rule as `ShopDb.stocked()`, and for the same reason:
+## a greyed-out row with "NOT RECOVERED, CISTERN VAULT" under it turns her board
+## into a second copy of the Lanternkeeper's checklist, and the relic list is the
+## quest log (`docs/SCOPE.md` §1). The Cracked Still-Head and the Cinder-Retort
+## are what put Ironhide and Emberblood here (GDD §6.2, relics 3 and 4).
+##
+## Adopted with no `if`: `knows_draught()` answers true for anything not in
+## `RelicDb.DRAUGHT_RELICS`, so the Heart Draught -- and any recipe added later
+## that forgets to ask -- is hers from the start.
 static func lines() -> Array[Dictionary]:
 	var out: Array[Dictionary] = [_bottle_line()]
 	for id in PotionDb.IDS:
+		if not RelicDb.knows_draught(id):
+			continue
 		out.append(_brew_line(id))
 	return out
 
@@ -113,10 +128,16 @@ static func next_bottle_parts() -> Dictionary:
 ## How many more of `id` the player may buy. -1 means unlimited, which every
 ## draught is: what limits brewing is the empty bottle, enforced in `can_buy`,
 ## not a count of how many you have already made.
+##
+## The ceiling goes through `RelicDb.bottle_cap()`, which hands back
+## `K.BOTTLE_MAX` untouched once the Glass-Kiln Core is in the ledger and clamps
+## to two before it (GDD §6.2, relic 5). Two whole slots, so the relic is worth
+## finding rather than being a discount -- and no branch here, because the
+## accessor already contains the only `if` there is.
 static func remaining(id: StringName) -> int:
 	if id != &"bottle":
 		return -1
-	return maxi(0, K.BOTTLE_MAX - Game.bottle_count())
+	return maxi(0, RelicDb.bottle_cap(K.BOTTLE_MAX) - Game.bottle_count())
 
 
 static func can_buy(line: Dictionary) -> bool:
@@ -138,8 +159,15 @@ static func can_buy(line: Dictionary) -> bool:
 ## that is short of root sends the player back down for the wrong thing.
 static func refusal(line: Dictionary) -> String:
 	var id: StringName = line["id"]
+	# True at two bottles and true at four, which is what lets it stay one
+	# sentence. It USED to read "YOU HAVE ALL THE GLASS YOU WILL GET", which
+	# became a lie the moment `remaining()` started clamping to the Glass-Kiln
+	# Core: a player stopped at two would have been told the ceiling was
+	# permanent. The Lanternkeeper's board is where "and here is how to raise it"
+	# is written -- the relic list is the quest log (docs/SCOPE.md §1) -- so this
+	# footer states the fact and does not branch on why.
 	if remaining(id) == 0:
-		return "YOU HAVE ALL THE GLASS YOU WILL GET"
+		return "THAT IS ALL THE GLASS SHE CAN BLOW"
 	if id != &"bottle" and Game.empty_bottles() <= 0:
 		return "NO EMPTY BOTTLE"
 	var parts: Dictionary = line.get("parts", {})

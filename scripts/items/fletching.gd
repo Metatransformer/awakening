@@ -39,9 +39,29 @@ const RECIPE := {
 	&"cracked_flint": 2,  # the heads
 	&"bone_shard": 2,     # the shafts
 }
-## Arrows per batch. Half a shop bundle: enough to change the next fight, not
-## enough that one bag makes the smith irrelevant. [tune]
+## Arrows per batch, before the Fletcher's Jig is on the bench. Half a shop
+## bundle: enough to change the next fight, not enough that one bag makes the
+## smith irrelevant. [tune]
+##
+## **Read `batch()`, not this.** The constant is the un-donated number and the
+## function is what the bench actually cuts.
 const BATCH := 5
+
+
+## Arrows one batch yields right now.
+##
+## `RelicDb.fletch_yield()` hands `BATCH` straight back until the Fletcher's Jig
+## is in the Society's ledger, and 7 after (GDD §6.2, relic 6) -- so this is the
+## unlock adopted with no branch, and there is exactly one place in the codebase
+## that knows the jig exists. A caller that wrote `if RelicDb.donated(...)`
+## would be the unlock implemented twice, and the next tuning pass would move
+## only one of them.
+##
+## Public because the pouch prints the yield next to the button: what the recipe
+## PAYS OUT is part of the price, and a screen that says 5 over a bench that cuts
+## 7 is the shop lying about its own numbers.
+static func batch() -> int:
+	return RelicDb.fletch_yield(BATCH)
 
 
 ## What you are short, id -> how many more. Empty means the bag can pay.
@@ -86,7 +106,7 @@ static func fletch() -> int:
 			# batch it did not get is the one failure here nobody would notice.
 			push_error("Fletching: bag was short on '%s' after can_fletch() passed" % id)
 			return 0
-	var made := mini(BATCH, quiver_room())
+	var made := mini(batch(), quiver_room())
 	Game.add_arrows(made)
 	return made
 

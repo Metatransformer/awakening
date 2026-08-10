@@ -44,6 +44,7 @@ func run(rig) -> void:
 	# close it, the line below is the one that says when.
 	Bus.screen_closed.connect(func(what: StringName) -> void:
 		print("ALCHEMY note: %s closed" % what))
+	_unlock_her_board()
 	await rig.wait_frames(20)
 
 	_catalogue()
@@ -60,6 +61,25 @@ func run(rig) -> void:
 		print("ALCHEMY OK")
 	else:
 		print("ALCHEMY FAIL -- %d check(s) failed" % _fails)
+
+
+## The alchemist's board is now GATED on three of the twelve relics (GDD §6.2):
+## the Cracked Still-Head teaches Ironhide, the Cinder-Retort teaches Emberblood,
+## and the Glass-Kiln Core lifts the bottle ceiling from two to `K.BOTTLE_MAX`.
+## Before M3 all three were free, so every beat from B2 down was written against
+## a fully-stocked counter and nine of them now fail on a fresh save -- not
+## because the alchemy loop broke, but because this director walked up to her
+## with an empty ledger and expected her whole repertoire.
+##
+## So: donate the three, out loud, as a PRECONDITION. This director's subject is
+## what the counter does once she knows a recipe; whether the relics unlock her
+## is `relic_donate.gd`'s claim and is proved there. Setting the flags here would
+## be hiding the gate only if nothing else checked it -- something does.
+func _unlock_her_board() -> void:
+	for id: StringName in [&"still_head", &"cinder_retort", &"kiln_core"]:
+		Game.set_flag(RelicDb.flag_donated(id))
+	print("ALCHEMY precondition: donated %s -- her board is gated on them now"
+		% [[&"still_head", &"cinder_retort", &"kiln_core"]])
 
 
 func _ck(label: String, ok: bool) -> void:
@@ -437,16 +457,27 @@ func _underground(rig) -> void:
 		if Prompt.focus == town.gate:
 			break
 		await rig.wait_frames(2)
+	# Printed, not assumed. The gate is a hold, and a hold against a prompt
+	# nobody owns is 96 frames of nothing followed by a failure that names the
+	# wrong thing ("he went down" = false, when the truth is "he was never
+	# standing at the gate"). The town has been rebuilt twice under this director.
+	print("ALCHEMY gate focus=%s hero=%.1f,%.1f gate=%.1f,%.1f" % [
+		Prompt.focus.name if Prompt.focus != null else "<none>",
+		(rig.get_nodes_in_group(&"player")[0] as Node3D).global_position.x,
+		(rig.get_nodes_in_group(&"player")[0] as Node3D).global_position.z,
+		town.gate.global_position.x, town.gate.global_position.z])
 	# Re-planted mid-hold: losing focus zeroes Prompt's bar with nothing printed,
 	# and the beat then lies about why it failed. See forge_loop.gd's long note.
-	Input.action_press(&"interact")
-	for _i in 12:
-		await rig.wait_frames(8)
-		if Run.in_dungeon:
-			break
-		if Prompt.focus != town.gate:
-			_stand_at(rig, town.gate.global_position + Vector3(0.0, 0.0, 1.8))
-	Input.action_release(&"interact")
+	# `rig.hold_seconds`, not a hand-rolled press/release around a frame count.
+	# The hand-rolled version held for `12 * 8` FRAMES, which is 1.6 s at 60 Hz
+	# and 4.4 s at 22 -- and this rig's frame rate depends on whether the shader
+	# cache is warm. It failed about one run in three, always at H0, always with
+	# the gate correctly focused: the descent takes ~0.9 s of hold plus a scene
+	# change, and a frame budget that happens to land short releases the button
+	# mid-transition. `hold_seconds` waits on a real `SceneTreeTimer`, so the hold
+	# is 1.6 SECONDS whatever the renderer is doing. mvp_loop's descent has done
+	# it this way since the same bug was found there.
+	await rig.hold_seconds(["interact"], 1.6)
 	await rig.wait_frames(140)
 	_ck("H0 he went down", Run.in_dungeon)
 	if not Run.in_dungeon:

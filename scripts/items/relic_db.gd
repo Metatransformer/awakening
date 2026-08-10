@@ -102,10 +102,23 @@ extends Catalogue
 ## stops and commas only.
 ##
 ## Length is bounded by the panel, not by taste: `TradeScreen` wraps
-## `blurb + detail` upward from the bottom of the panel at ~68 characters a
-## line, and the twelve rows above it reach down to within five lines of it. Two
-## hundred characters of lore is four lines and it fits. Four hundred would draw
-## straight through the list.
+## `blurb + detail` upward from the bottom of the panel at ~63 characters a line,
+## and the twelve rows above it reach down to within five lines of it.
+##
+## **TODAY ONLY TWO OF THOSE LINES DRAW, and the entries below are longer than
+## that.** `PixelFont.wrap()` takes a `max_lines` that DEFAULTS TO 2 and
+## `trade_screen.gd` does not pass one, so every entry here is clipped mid-word
+## on the counter -- `relic_donate.gd`'s `r_21_hold.png` is the frame that caught
+## it. This comment used to claim four lines fit; it was never true.
+##
+## `# NEEDS:` one argument at the `PixelFont.wrap` call in
+## `scripts/ui/shop/trade_screen.gd` (`, 4`). The panel has the room -- the list
+## ends around 90 px above where the blurb starts -- and the fix belongs there
+## rather than here, because the smith's and the alchemist's blurbs are clipped
+## by the same default. The lore was deliberately NOT cut down to ~80 characters
+## to work around it: shortening twelve entries to fit a bug is a change that is
+## hard to undo and easy to forget, and a clipped sentence is a worse counter
+## than a short one only until that argument lands.
 const RELICS: Array[Dictionary] = [
 	{
 		"id": &"tally_ledger",
@@ -464,6 +477,20 @@ static func prop_lit(prop: StringName) -> bool:
 		if row["prop"] == prop and donated(row["id"]):
 			return true
 	return false
+
+
+## The twelve dark things, in catalogue order, whether or not they are lit.
+##
+## What `Town` builds the courtyard's props from. It iterates THIS rather than
+## `RELICS` so the yard cannot end up with eleven lamps, or a thirteenth that
+## nothing will ever light: the prop list and the relic list are the same list
+## by construction, and `TownLight` only ever asks `prop_lit()` about an id that
+## came out of here.
+static func props() -> Array[StringName]:
+	var out: Array[StringName] = []
+	for row in RELICS:
+		out.append(row["prop"])
+	return out
 
 
 ## Every prop currently lit, in catalogue order. The town can iterate this
