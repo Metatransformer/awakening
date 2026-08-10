@@ -47,7 +47,8 @@ const LEGEND_ROWS := [
 	[&"stairs", "The stair down"],
 ]
 
-var _title: Label
+var _band: Control
+var _band_slot: VBoxContainer
 var _sub: Label
 var _canvas: Control
 var _back: Button
@@ -55,6 +56,7 @@ var _back: Button
 ## the same field on `MenuEquipPanel`.
 var _hrow: HBoxContainer
 var _legend_rows: Array[Control] = []
+var _key_rule: Control
 
 
 ## Where the shared tab strip is inserted. See `_hrow`.
@@ -65,6 +67,10 @@ func tab_host() -> HBoxContainer:
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# The subtree renders through the kit, overriding the `menu_theme.tres` the
+	# pause menu's Root still carries. See the same two lines on `EquipPanel`.
+	UITheme.prewarm()
+	theme = UITheme.theme()
 	_build()
 	# The plan only changes on a signal, so the surface only repaints on one.
 	# There is no hero arrow to chase here: the world is paused behind this
@@ -83,16 +89,19 @@ func _build() -> void:
 
 	var frame := PanelContainer.new()
 	frame.name = "Frame"
-	frame.theme_type_variation = &"MenuFrame"
+	# `edge_to_edge`, like the other two tabbed screens: the strip, the band and
+	# the footer reach the frame's edge and the body owns its inset.
+	UITheme.style_panel(frame, UITheme.FRAME_FACE_SOLID, true)
 	frame.custom_minimum_size = MenuUtil.FRAME_SIZE
 	center.add_child(frame)
 
 	var col := VBoxContainer.new()
-	col.theme_type_variation = &"MenuStack"
+	col.add_theme_constant_override("separation", 0)
 	frame.add_child(col)
 
 	var header := PanelContainer.new()
-	header.theme_type_variation = &"MenuHeader"
+	header.add_theme_stylebox_override("panel",
+		UITheme.hud_box(UITheme.GRAY_1, 14, 6, 14, 0))
 	col.add_child(header)
 	_hrow = HBoxContainer.new()
 	header.add_child(_hrow)
@@ -101,16 +110,20 @@ func _build() -> void:
 	var gap := Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_hrow.add_child(gap)
-	# Which floor, on the right, where POUCH keeps its slots-and-worth. The two
-	# screens' headers read the same way on purpose: tabs on the left, the one
-	# number this screen is about on the right.
-	_title = Label.new()
-	_title.theme_type_variation = &"MenuValue"
-	_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_hrow.add_child(_title)
+
+	# "How much of this place is left" is the question this screen is opened
+	# with, and it used to be answered by one right-aligned floor label plus a
+	# line of prose beside the legend. It is four numbers, and they go in a
+	# `StatBand` under the strip, exactly where POUCH keeps its four -- the
+	# tabbed screens' headers read the same way on purpose.
+	_band_slot = VBoxContainer.new()
+	_band_slot.add_theme_constant_override("separation", 0)
+	col.add_child(_band_slot)
+	_rebuild_band()
 
 	var body := MarginContainer.new()
-	body.theme_type_variation = &"MenuBodyPad"
+	for side_name in ["left", "right", "top", "bottom"]:
+		body.add_theme_constant_override("margin_" + side_name, 20)
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(body)
 
@@ -133,14 +146,13 @@ func _build() -> void:
 	split.add_child(side)
 
 	_sub = Label.new()
-	_sub.theme_type_variation = &"MenuMuted"
+	UITheme.apply_text_style(_sub, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
 	_sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	side.add_child(_sub)
 
-	var key := Label.new()
-	key.theme_type_variation = &"MenuHeading"
-	key.text = "KEY"
-	side.add_child(key)
+	# The rule hides with the rows it heads. Above ground there is no floor to
+	# chart, and a KEY over nothing reads as a legend that failed to draw.
+	_key_rule = UITheme.section_rule(side, "KEY")
 
 	for row: Array in LEGEND_ROWS:
 		var line := HBoxContainer.new()
@@ -156,19 +168,20 @@ func _build() -> void:
 			MapDraw.draw_legend_glyph(swatch, swatch.size * 0.5, LEGEND_GLYPH, id))
 		line.add_child(swatch)
 		var label := Label.new()
-		label.theme_type_variation = &"MenuMuted"
+		UITheme.apply_text_style(label, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
 		label.text = String(row[1])
 		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		line.add_child(label)
 		_legend_rows.append(line)
 
 	var footer := PanelContainer.new()
-	footer.theme_type_variation = &"MenuFooter"
+	footer.add_theme_stylebox_override("panel",
+		UITheme.hud_box(UITheme.GRAY_1, 20, 10, 20, 10))
 	col.add_child(footer)
 	var frow := HBoxContainer.new()
 	footer.add_child(frow)
 	var hint := Label.new()
-	hint.theme_type_variation = &"MenuHint"
+	UITheme.apply_text_style(hint, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
 	hint.text = HINT
 	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	frow.add_child(hint)
@@ -185,22 +198,72 @@ func _build() -> void:
 
 
 func refresh() -> void:
+	_rebuild_band()
 	if Atlas.has_floor():
-		_title.text = Prog.label(Atlas.level)
-		# Rooms SEEN over rooms that exist. It gives away the floor's length,
-		# which the fitted bounds already give away, and it is the number the
-		# player opened this screen to find: how much of this place is left.
-		_sub.text = "%s\n%d of %d rooms walked" % [
-			FloorDb.name_of(Atlas.level), Atlas.explored_count(),
-			Atlas.rooms.size()]
+		# The floor's NAME, which the band cannot carry -- a band cell is a
+		# number under a caption and "The Foundry" is neither. It is the title
+		# of the column it heads, so it is typed as one; above ground the same
+		# Label carries a sentence instead and drops back to prose.
+		_sub.text = FloorDb.name_of(Atlas.level)
+		UITheme.apply_text_style(_sub, UITheme.TYPE_H2, UITheme.TEXT)
 	else:
-		_title.text = "ABOVE GROUND"
 		# In the garrison, and it says so rather than showing an empty frame. A
 		# blank panel reads as a screen that failed to load.
 		_sub.text = "You are above ground. There is nothing down here to chart."
+		UITheme.apply_text_style(_sub, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
 	for row in _legend_rows:
 		row.visible = Atlas.has_floor()
+	if _key_rule != null:
+		_key_rule.visible = Atlas.has_floor()
 	_canvas.queue_redraw()
+
+
+## The four numbers, or four dashes above ground. Counted off the SAME `marks`
+## the plan is drawn from, so the band cannot claim a chest the map is not
+## showing -- the whole point of this screen sharing `MapDraw` with the corner
+## minimap (see the class note) applied to its numbers as well as its shapes.
+func _band_cells() -> Array:
+	if not Atlas.has_floor():
+		return [
+			{"label": "Floor", "value": "—"},
+			{"label": "Rooms", "value": "—"},
+			{"label": "Chests", "value": "—"},
+			{"label": "Stair", "value": "—"},
+		]
+	var walked := Atlas.explored_count()
+	var total := Atlas.rooms.size()
+	var shut := _marked(Atlas.M_CHEST)
+	var stair := _marked(Atlas.M_STAIRS) > 0
+	return [
+		{"label": "Floor", "value": Prog.label(Atlas.level)},
+		{"label": "Rooms", "value": "%d / %d" % [walked, total],
+			"tone": UITheme.SUCCESS if walked >= total else null},
+		{"label": "Chests", "value": "%d shut" % shut,
+			"tone": UITheme.WARNING if shut > 0 else null},
+		{"label": "Stair", "value": "found" if stair else "not yet",
+			"tone": UITheme.SUCCESS if stair else null},
+	]
+
+
+func _rebuild_band() -> void:
+	if _band_slot == null:
+		return
+	for child in _band_slot.get_children():
+		child.queue_free()
+		_band_slot.remove_child(child)
+	_band = UiKit.stat_band(_band_slot, _band_cells())
+
+
+## How many cells carry `id`. `Atlas.marks` only holds cells the player has been
+## in, so this counts what is CHARTED, not what exists -- which is the honest
+## number for a map and the one the legend beside it describes.
+func _marked(id: StringName) -> int:
+	var n := 0
+	for cell: Vector2i in Atlas.marks:
+		for got: StringName in Atlas.marks[cell]:
+			if got == id:
+				n += 1
+	return n
 
 
 func focus_first() -> void:
@@ -212,8 +275,11 @@ func _draw_plan() -> void:
 	var box := Rect2(Vector2.ZERO, _canvas.size)
 	if box.size.x < 8.0 or box.size.y < 8.0:
 		return
-	_canvas.draw_rect(box, Color(Pal.VOID, 0.55))
-	_canvas.draw_rect(box, Pal.ASH, false, 1.0)
+	# The plan sits in a sunken well, the same recess the kit gives every other
+	# list and grid on these screens -- drawn rather than styled because this is
+	# a `_draw` surface, not a PanelContainer.
+	_canvas.draw_rect(box, UITheme.BG_INSET)
+	_canvas.draw_rect(box, UITheme.EDGE_FAINT, false, 1.0)
 	if not Atlas.has_floor():
 		return
 	# `Pal.px` measures against the viewport height, not this Control's, so the

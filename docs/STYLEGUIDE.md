@@ -846,8 +846,11 @@ it counts down to zero in RUST. The palette becomes the score.
   header's one right-aligned string became a four-cell `StatBand` — SLOTS, BAG,
   PURSE, TO LEAVE — so the extraction decision is four numbers read at once
   instead of a sentence parsed, with the fee no longer stranded two feet from
-  the purse it is measured against. Still on the old theme: options, saves, map
-  and the receipt.
+  the purse it is measured against; and the map (`MenuMapPanel`), whose floor
+  label and "6 of 8 rooms walked" subtitle became a four-cell band of their own
+  — FLOOR, ROOMS, CHESTS, STAIR — counted off the same `Atlas.marks` the plan
+  is drawn from, so the numbers cannot claim a chest the map is not showing.
+  Still on the old theme: options, saves and the receipt.
 
   The pouch's Fletch and Escape Rope rows are the documented exception to the
   refusal law: they use `UiKit.verb_meta` to write the shortfall into the meta

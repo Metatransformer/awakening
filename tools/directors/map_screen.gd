@@ -81,13 +81,14 @@ func run(rig) -> void:
 	_check("...straight onto the MAP, not the root", map.visible)
 	await rig.capture("m_02_map_screen.png")
 
-	var sub := _find_label(map, "rooms walked")
-	if sub != null:
-		print("  subtitle: %s" % sub.text.replace("\n", " / "))
-		_check("the map counts what has been walked",
-			sub.text.contains("%d of %d" % [Atlas.explored_count(), Atlas.rooms.size()]))
-	else:
-		_check("the map counts what has been walked", false)
+	# The count moved off the subtitle line and into the header's ROOMS cell, so
+	# the check reads the whole screen's text rather than one Label. What is
+	# being asserted is unchanged: the map says how much of this floor has been
+	# walked, in the same breath as showing it.
+	var said := _all_text(map)
+	print("  header: %s" % " | ".join(said.slice(0, 12)))
+	_check("the map counts what has been walked",
+		" ".join(said).contains("%d / %d" % [Atlas.explored_count(), Atlas.rooms.size()]))
 
 	# --- RB / LB page the tabs ----------------------------------------------
 	var pouch: Control = menu.get_node("Root/Screens/PouchScreen")
@@ -137,17 +138,15 @@ func run(rig) -> void:
 	print("MAP OK" if _fail == 0 else "MAP FAILED (%d)" % _fail)
 
 
-## Depth-first search for the first Label whose text contains `needle`. The map
-## panel builds its whole tree in code, so there is no scene path to name.
-func _find_label(root: Node, needle: String) -> Label:
+## Every non-empty Label string in the subtree, in tree order.
+func _all_text(root: Node) -> PackedStringArray:
+	var out := PackedStringArray()
 	var l := root as Label
-	if l != null and l.text.contains(needle):
-		return l
+	if l != null and not l.text.strip_edges().is_empty():
+		out.append(l.text)
 	for c in root.get_children():
-		var hit := _find_label(c, needle)
-		if hit != null:
-			return hit
-	return null
+		out.append_array(_all_text(c))
+	return out
 
 
 ## A real event, not `Input.action_press`: `PauseMenu` reads these in
