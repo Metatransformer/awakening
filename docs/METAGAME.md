@@ -516,9 +516,9 @@ Exactly like everything else, which is the point:
 twelve rows look the same at a glance and the difference between them is the
 entire pressure in §3. Stacks occupy one cell until they overflow, exactly as
 `Run.slots_used()` counts them, so the picture and the arithmetic cannot
-disagree. The right-hand column names what is under the cursor and shows the
-workbench stock, read-only: this screen shows what you have, the smith spends
-it.
+disagree. The right-hand column names what is under the cursor; the WORKBENCH
+runs the full width underneath, read-only: this screen shows what you have, the
+smith spends it.
 
 The right column also carries the screen's two **verbs**, in the order they
 argue: the **fletching bench** (§4.6) and then the **escape rope** (§5).
@@ -851,28 +851,32 @@ FORGE swept      bag=3 value=62        (walked over, nothing pressed)
 FORGE pre_extract bag=140 fee=35
 FORGE home       bench={grit:92 plate:82 coil:78 core:115} bag={void_pearl:1}
 FORGE after_death bench_cores=115 bag=0
-FORGE reloaded   rungs={edge:3 plate:3 guard:3 string:3 chain:3} slots=12
-FORGE pouch frame=1220x711 viewport=1280x720
+FORGE reloaded   rungs={edge:1 plate:1 guard:1 string:1 chain:1} slots=12
+FORGE rungs taught=1 of 3 (relics donated: 0)
+FORGE pouch frame=1220x637 viewport=1280x720
 FORGE OK
 ```
 
-**B4 was red for a long time and is green as of 2026-08-09.** The POUCH frame was
-1060x772 — 52 px taller than the screen, so the Back button and the bottom of the
-WORKBENCH card rendered past the edge. It was never the alchemist's doing; the
-diagnosis in this paragraph used to name THE WAY OUT as the suspect for growing
-the right column a fourth card, and that was the right suspect but the wrong
-framing. The height came from **all four** cards plus the gaps between them, and
-no one of them was removable.
+**B4 was red for a long time and is green as of 2026-08-09.** It has been red in
+two different directions, which is why the check earns its place.
 
-It was closed by spacing, not by taking anything off the screen: the right
-column's gap went 12 → 8, the three cards' inner gaps 8 → 6, the detail pane's 10
-→ 6, `MenuSection`'s vertical padding 8 → 6 and `MenuBodyPad`'s 16 → 10. That is
-28 px of air across a column that stacks four cards, and it is invisible.
+First it was too **tall**: 1060x772, 52 px past the bottom of the screen, with the
+Back button and the foot of the WORKBENCH card rendering off it. That was the
+right column, which stacked four cards — detail, fletching, the way out, and the
+bench. The bench moved to the left side, which is where it still is.
 
-**The margin is 9 px, so this check is load-bearing.** The bench pairs its
-materials into two columns precisely because a ninth material would otherwise add
-a whole row (§6.5); at this height it would add one anyway and put B4 back in the
-red. If it goes red again the answer is a card off the screen, not another 2 px.
+Then it was too **wide**: 1362 in a 1280 viewport, the moment the WORN doll
+(§6.4) arrived on the left in the same week the bench did and the two shared a
+row — doll 156 + bag 600 + bench 160 + gaps against a 776 px budget. The bench
+went *under* the grid rather than beside it, and widened from two stock columns
+to four now that it has the whole width. 1220x637, and both numbers have room.
+
+**Neither fix took anything off the screen, and the next one probably has to.**
+The two cheap moves — spending vertical slack on the left, spending horizontal
+room the doll's column freed — are now spent. A ninth material costs the bench a
+quarter of a row instead of half of one, so that is not the thing to fear; a
+fifth card in either column is. If B4 goes red again, the answer is a card off
+the screen, not another 2 px of padding.
 
 The alchemist has hers (§6.6):
 
@@ -906,8 +910,9 @@ where a bottle's name was found printing across its neighbours' cards;
 draughts — where the first version of that row was found drawn **on top of the
 stamina bar** with every check in the run green; and `a_04a_pouch.png` is where
 the WORKBENCH list was found running off the bottom of the screen once the
-alchemist's four materials joined the forge's four, which is why that list is
-two columns now. A rectangle in the wrong place is not a thing an assertion can
+alchemist's four materials joined the forge's four, which is why that list is a
+grid rather than a column at all — two columns then, four now that the card runs
+the full width under the bag. A rectangle in the wrong place is not a thing an assertion can
 see.
 
 One trap worth naming, because both these directors fell in it and the symptom
