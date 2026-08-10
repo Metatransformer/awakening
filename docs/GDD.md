@@ -463,8 +463,9 @@ not have has stopped being a puzzle and started being a mechanic
 ## 6. The garrison — twelve relics, twelve consequences
 
 The Highbridge garrison is one walled yard over the mine mouth: curtain walls
-you cannot see out of, open sky above them, and a rail round the shaft head. It
-gains
+you cannot see out of, open sky above them, a paved circle in the middle with the
+five counters round it and the Lanternkeeper on it, and a gatehouse cut through
+the north wall with the shaft under its arch. It gains
 **one** counter and no new screens.
 
 The walls are not scenery. Everything past them is placeholder ground that runs
@@ -474,7 +475,8 @@ above it is equally load-bearing in the other direction: take that away and the
 yard is a dungeon room whose ceiling failed to load, which is exactly what the
 hub used to be.
 
-**The Lanternkeeper** keeps the Far Lantern Society's hall against the east wall —
+**The Lanternkeeper** keeps the Far Lantern Society's stall on the middle of the
+plaza, under a statue of the Society's founder —
 an old man, hooded, in a mail coat set with a dozen coloured stones, which is the
 Society's whole pitch worn on a body. He does not buy and he does not sell: you
 hand him a relic and something in the garrison changes. Mechanically he is a

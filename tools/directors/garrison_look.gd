@@ -46,6 +46,28 @@ func run(rig) -> void:
 	await rig.wait_frames(4)
 	await rig.capture(out.path_join("tl_01_arrive.png"))
 
+	# The gatehouse, from where a player actually stands when they decide to go
+	# down: eight metres out on the approach, at eye height.
+	#
+	# It has its own shot because it is the only piece of ARCHITECTURE in the
+	# build, and the wide above cannot judge it -- from fifteen metres up the
+	# passage is a black slot and the whole point of the thing is that the passage
+	# has an inside. If this frame does not show cold light under the arch, the
+	# gate has stopped signposting and nothing else here will notice.
+	cam.fov = 55.0
+	cam.global_position = garrison.gate.global_position + Vector3(0.0, 1.6, 8.5)
+	cam.look_at(garrison.gate.global_position + Vector3(0.0, 3.4, 0.0), Vector3.UP)
+	await rig.wait_frames(4)
+	await rig.capture(out.path_join("tl_02_gatehouse.png"))
+
+	# And the plaza from over the south opening, which is the frame that answers
+	# "is this a circle with shops round it" -- the one claim the layout makes.
+	cam.fov = 62.0
+	cam.global_position = garrison.plaza.global_position + Vector3(0.0, 7.0, 13.0)
+	cam.look_at(garrison.plaza.global_position + Vector3(0.0, 1.6, 0.0), Vector3.UP)
+	await rig.wait_frames(4)
+	await rig.capture(out.path_join("tl_03_plaza.png"))
+
 	# Every counter from the customer's side of it. The eye is derived from the
 	# keeper's own facing rather than hard-coded, so an NPC that is turned the
 	# wrong way photographs as a back, not as a mysteriously empty frame.

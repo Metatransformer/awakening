@@ -172,6 +172,26 @@ func play(clip: StringName) -> void:
 	_anim.play(clip)
 
 
+## Hold one frame of a clip, forever. For a body that is not a person: the
+## `Statue` on the plaza is this rig in stone.
+##
+## It has to be a POSE and not the rest pose, which is the whole reason this
+## exists. These rigs import in an A-pose with the arms out and the hands open;
+## a statue left in it does not read as a carved figure, it reads as a character
+## whose animation failed to load -- which is a bug this project has shipped
+## before and would not be able to tell apart at a glance.
+##
+## `seek` with `update = true` applies the pose on the spot rather than at the
+## next process tick, so a caller can freeze in `_ready` and a screenshot taken
+## on the very next frame is already correct.
+func hold(clip: StringName, at: float) -> void:
+	if _anim == null or not _anim.has_animation(clip):
+		return
+	_anim.play(clip)
+	_anim.seek(at, true)
+	_anim.pause()
+
+
 func _setup(who: String) -> bool:
 	var row: Dictionary = PEOPLE.get(who, {})
 	if row.is_empty():

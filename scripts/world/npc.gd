@@ -356,7 +356,7 @@ func _process(delta: float) -> void:
 				var want_yaw := atan2(to.x, to.z)
 				_body.global_rotation.y = lerp_angle(_body.global_rotation.y, want_yaw, delta * 6.0)
 	elif Prompt.focus != self:
-		_lamp.light_energy = 1.4 + sin(_age * 1.7) * 0.35
+		_lamp.light_energy = 3.2 + sin(_age * 1.7) * 0.5
 		_lamp_mat.emission_energy_multiplier = 0.55
 
 
@@ -509,31 +509,21 @@ func _build_person() -> void:
 	add_child(solid)
 
 
-## The way down. A dark arch with a cold mouth: the garrison is warm and gold,
-## so the entrance being the only cold thing in it is the only signposting
-## needed.
+## The way down. A gatehouse with a cold mouth at the bottom of it: the garrison
+## is warm and gold, so the entrance being the only cold thing in it is the only
+## signposting needed.
+##
+## **The masonry is `Gatehouse` and everything that BEHAVES is here.** That split
+## is deliberate and it is the same one `ShopBooth` uses: a booth is dressing with
+## no state and a keeper is the thing you can talk to, and mixing them is how you
+## end up unable to move a stall without re-tuning a prompt. The gatehouse knows
+## where its own arch, its own passage floor and its own sign band are, and hands
+## those back as constants; the mouth, the light it throws, the plate and the
+## hold-to-descend stay on the Npc, because those are the parts the player
+## presses.
 func _build_gate() -> void:
-	var stone := StandardMaterial3D.new()
-	stone.albedo_color = Color(0.20, 0.19, 0.22)
-	stone.roughness = 1.0
-	stone.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
-
-	for sx in [-1.0, 1.0]:
-		var post := MeshInstance3D.new()
-		var pm := BoxMesh.new()
-		pm.size = Vector3(0.55, 3.4, 0.65)
-		post.mesh = pm
-		post.material_override = stone
-		post.position = Vector3(1.55 * sx, 1.7, 0.0)
-		_body.add_child(post)
-
-	var lintel := MeshInstance3D.new()
-	var lm := BoxMesh.new()
-	lm.size = Vector3(3.8, 0.6, 0.75)
-	lintel.mesh = lm
-	lintel.material_override = stone
-	lintel.position.y = 3.7
-	_body.add_child(lintel)
+	var house := Gatehouse.new()
+	_body.add_child(house)
 
 	_lamp_mat = StandardMaterial3D.new()
 	# Faint. An additive quad at full strength reads as a lit swimming pool; the
@@ -547,21 +537,33 @@ func _build_gate() -> void:
 	_lamp_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_lamp_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 
+	# **Lying flat over the shaft at the back of the passage**, not standing up in
+	# the plane of the arch. That one change is most of the difference between the
+	# old gate and this one: a vertical quad with nothing in front of it and
+	# nothing behind it photographs as a teal poster, and the same quad laid over
+	# a wellhead four metres down a dark passage photographs as light coming UP out
+	# of the floor. You do not walk through this gate, you climb down it, and the
+	# geometry should say so before the prompt does.
 	var mouth := MeshInstance3D.new()
 	var mm := QuadMesh.new()
-	mm.size = Vector2(2.5, 3.3)
+	mm.size = Gatehouse.MOUTH_SIZE
 	mouth.mesh = mm
 	mouth.material_override = _lamp_mat
-	mouth.position = Vector3(0.0, 1.7, 0.0)
+	mouth.position = Vector3(0.0, Gatehouse.MOUTH_Y, Gatehouse.MOUTH_Z)
+	mouth.rotation.x = Gatehouse.MOUTH_PITCH
 	_body.add_child(mouth)
 
+	# The light sits just ABOVE the shaft, so it rakes the coping and the underside
+	# of the headframe on its way out rather than only lighting the plate it is
+	# stuck to. Range is up from 6.0 because it now has four metres of passage to
+	# cross before it reaches anybody standing at the threshold.
 	_lamp = OmniLight3D.new()
 	_lamp.light_color = Pal.CYAN
-	_lamp.light_energy = 1.4
-	_lamp.omni_range = 6.0
+	_lamp.light_energy = 3.2
+	_lamp.omni_range = 13.0
 	_lamp.omni_attenuation = 1.3
 	_lamp.shadow_enabled = false
-	_lamp.position.y = 1.6
+	_lamp.position = Vector3(0.0, 0.55, Gatehouse.MOUTH_Z + 0.6)
 	_body.add_child(_lamp)
 
 	var plate := Label3D.new()
@@ -576,5 +578,8 @@ func _build_gate() -> void:
 	plate.pixel_size = 0.0028
 	plate.modulate = Pal.MOTH
 	plate.outline_size = 14
-	plate.position.y = 4.25
+	# On the string course over the arch, which is the band `Gatehouse` builds for
+	# it. A sign floating in front of a doorway is a label; a sign on a course of
+	# stone cut to carry one is a lintel.
+	plate.position = Vector3(0.0, Gatehouse.PLATE_Y, Gatehouse.FACE_T + 0.3)
 	_body.add_child(plate)
