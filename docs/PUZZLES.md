@@ -261,6 +261,41 @@ also mostly a key and a ladder.
 without it, and GDD §5.1's *"walking into the Cistern, filling twelve slots and
 roping out is a complete, correct, profitable run"* survives intact.
 
+
+### 5.4 The maze room — *the map is not the answer*
+
+**Built.** `scripts/world/maze.gd` (the carve, no nodes), `scripts/props/maze_room.gd`
+(the same grid stood up in `KitWall` masonry), proved by `tools/directors/maze.gd`.
+
+- **Where:** an ordinary room, not an anchor. It costs the §8 manifest nothing —
+  no new anchor kind, no new atom, no new mechanic.
+- **Shape:** a perfect maze (recursive backtracker — long corridors, few
+  junctions, because a maze you read by *walking* is the one the minimap cannot
+  hand you), carved so that the prize in the deepest cell is **walled off as
+  dealt**.
+- **The verb:** two lanterns (§2) by the mouth. Striking one opens the wall it
+  owns and **shuts the next one along** — §3's *couple*, the same combinator the
+  lights-out grid uses, so the player cannot simply open everything.
+
+**A plain maze is not a puzzle in this game and shipping one would be a mistake.**
+This game has a minimap: it answers a static maze for free, and what is left is
+the walk. The room is a puzzle only because something *changes* it — the map
+shows the maze that is, and the question is which maze to make.
+
+**The trap, which is the mirror of the lights-out one.** A gate layout can be
+legal-looking and unsolvable: `MazeRoom` opens the pressed gate and shuts the
+next, so the configurations a player can actually build are *all-shut* and
+*exactly-one-open* — and nothing else. A layout whose only solution needs two
+gates open at once generates, builds, lights, and refuses forever, and every
+frame of it looks right. `Maze.plan` therefore tests the reachable set, not
+"every gate open", and re-deals until the layout is both shut as dealt and
+solvable through a press. The director walks the hero mouth to prize against the
+real colliders, because a 3.6 m corridor cannot be photographed.
+
+**Enemies come after, not instead.** Monsters in a static maze are a tax on a
+walk, not a puzzle — they do not stop the minimap answering it. Corridors are
+sized to swing a sword in for when they arrive.
+
 ---
 
 ## 6. Echoes
