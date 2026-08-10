@@ -755,8 +755,20 @@ const LEGEND_STICKS := {
 func _draw_controls(s: Vector2) -> void:
 	if Run == null or Run.in_dungeon:
 		return
-	var scale := CanvasText.scale_for(10.0, s.y)
 	var lines := _legend()
+	# FIT TO THE FRAME, do not trust the authored size. This is the one thing on
+	# the HUD whose width is set by its TEXT and not by the layout -- it is every
+	# bound control on two lines, so a rebind, a device swap or a longer verb makes
+	# it longer, and the row is already ~150 characters on a keyboard. Under the
+	# old 5x7 table every glyph was 6 px and it happened to fit at 720p; under a
+	# proportional face it ran off both edges of the screen on the first capture.
+	var scale := CanvasText.scale_for(10.0, s.y)
+	var avail := s.x * (1.0 - Pal.SAFE.x * 2.0)
+	var widest := 0.0
+	for line in lines:
+		widest = maxf(widest, CanvasText.width(line, scale))
+	if widest > avail:
+		scale *= avail / widest
 	# Drawn UPWARDS from the baseline, so adding a row pushes the legend into the
 	# empty floor above it rather than off the bottom of the screen.
 	var step := CanvasText.height(scale) + Pal.px(5.0, s.y)
