@@ -43,6 +43,10 @@ var _applying := false
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# The subtree renders through the kit, overriding the `menu_theme.tres` the
+	# pause menu's Root still carries. See the same two lines on `EquipPanel`.
+	UITheme.prewarm()
+	theme = UITheme.theme()
 	_build_chrome()
 	Settings.changed.connect(_on_settings_changed)
 	_set_tab(Tab.AUDIO, true)
@@ -59,36 +63,40 @@ func _build_chrome() -> void:
 
 	var frame := PanelContainer.new()
 	frame.name = "Frame"
-	frame.theme_type_variation = &"MenuFrame"
+	# `edge_to_edge`: the plate header, the tab strip and the footer reach the
+	# frame's edge and the body owns its inset.
+	UITheme.style_panel(frame, UITheme.FRAME_FACE_SOLID, true)
 	frame.custom_minimum_size = MenuUtil.FRAME_SIZE
 	center.add_child(frame)
 
 	var col := VBoxContainer.new()
 	col.name = "Col"
-	col.theme_type_variation = &"MenuStack"
+	col.add_theme_constant_override("separation", 0)
 	frame.add_child(col)
 
 	# Header
-	var header := PanelContainer.new()
-	header.theme_type_variation = &"MenuHeader"
-	col.add_child(header)
-	var title := Label.new()
-	title.theme_type_variation = &"MenuTitle"
-	title.text = "OPTIONS"
-	header.add_child(title)
+	UiKit.plate_header(col, {
+		"kicker": "  ·  ".join(TAB_NAMES),
+		"title": "Options",
+		"emblem": UiKit.action_icon("options"),
+	})
 
 	# Tab bar
 	var tab_pad := MarginContainer.new()
-	tab_pad.theme_type_variation = &"MenuTabPad"
+	tab_pad.add_theme_constant_override("margin_left", 20)
+	tab_pad.add_theme_constant_override("margin_right", 20)
 	col.add_child(tab_pad)
 	var bar := HBoxContainer.new()
 	bar.name = "Tabs"
-	bar.theme_type_variation = &"MenuTabBar"
+	bar.add_theme_constant_override("separation", 6)
 	tab_pad.add_child(bar)
 	for i in TAB_NAMES.size():
 		var b := Button.new()
 		b.text = TAB_NAMES[i]
-		b.theme_type_variation = &"MenuTab"
+		# Bare text and an off-white underline -- the kit's one tab voice, the
+		# same `tab_box` the three inspection screens' strip uses. These four
+		# ARE focusable, unlike that strip's: this screen has no other way in.
+		_paint_tab(b, false)
 		b.focus_mode = Control.FOCUS_ALL
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var idx := i
@@ -100,7 +108,8 @@ func _build_chrome() -> void:
 
 	# Body
 	var body := MarginContainer.new()
-	body.theme_type_variation = &"MenuBodyPad"
+	for side in ["left", "right", "top", "bottom"]:
+		body.add_theme_constant_override("margin_" + side, 20)
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(body)
 	_scroll = ScrollContainer.new()
@@ -108,20 +117,22 @@ func _build_chrome() -> void:
 	_scroll.follow_focus = true
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	body.add_child(_scroll)
+	UITheme.style_scrollbar(_scroll)
 	_content = VBoxContainer.new()
 	_content.name = "Content"
-	_content.theme_type_variation = &"MenuList"
+	_content.add_theme_constant_override("separation", 6)
 	_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.add_child(_content)
 
 	# Footer
 	var footer := PanelContainer.new()
-	footer.theme_type_variation = &"MenuFooter"
+	footer.add_theme_stylebox_override("panel",
+		UITheme.hud_box(UITheme.GRAY_1, 20, 10, 20, 10))
 	col.add_child(footer)
 	var frow := HBoxContainer.new()
 	footer.add_child(frow)
 	var hint := Label.new()
-	hint.theme_type_variation = &"MenuHint"
+	UITheme.apply_text_style(hint, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
 	hint.text = HINT
 	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	frow.add_child(hint)
@@ -155,11 +166,19 @@ func _set_tab(t: int, move_focus: bool) -> void:
 		return
 	_tab = want
 	for i in _tab_buttons.size():
-		_tab_buttons[i].theme_type_variation = (
-			&"MenuTabActive" if i == _tab else &"MenuTab")
+		_paint_tab(_tab_buttons[i], i == _tab)
 	_rebuild()
 	if move_focus and _tab_buttons.size() > 0:
 		_tab_buttons[_tab].grab_focus()
+
+
+## `style_tab_button` plus one correction. Its focus box is a rim, which is right
+## for a tab strip you have to CONFIRM — but these four activate on focus, so the
+## focused tab is always the lit tab, and the rim is the underline's answer drawn
+## a second time in a heavier voice. The underline is the cursor here.
+func _paint_tab(b: Button, active: bool) -> void:
+	UITheme.style_tab_button(b, active)
+	b.add_theme_stylebox_override("focus", UITheme.tab_box("selected"))
 
 
 func _enter_content() -> void:
@@ -218,21 +237,21 @@ func _wire_focus() -> void:
 	focusables[0].focus_previous = focusables[0].get_path_to(tab_btn)
 
 
+## A `◆ VOLUME ◆` divider. It goes into `_rows` like everything else, because
+## `_wire_focus` filters on `focus_mode` and a rule is FOCUS_NONE by default --
+## the list is the page's reading order, not its focus ring.
 func _heading(text: String) -> void:
-	var l := Label.new()
-	l.theme_type_variation = &"MenuHeading"
-	l.text = text
-	l.focus_mode = Control.FOCUS_NONE
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_content.add_child(l)
-	_rows.append(l)
+	var rule := UITheme.section_rule(_content, text.to_upper())
+	rule.focus_mode = Control.FOCUS_NONE
+	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_rows.append(rule)
 
 
 ## Returns the label, for the one caption that has to change without the panel
 ## being rebuilt — mercy's, which says what the toggle above it is doing.
 func _caption(text: String) -> Label:
 	var l := Label.new()
-	l.theme_type_variation = &"MenuHint"
+	UITheme.apply_text_style(l, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
 	l.text = text
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.focus_mode = Control.FOCUS_NONE
@@ -351,6 +370,7 @@ func _build_controls() -> void:
 
 	var reset := Button.new()
 	reset.text = "Reset to Defaults"
+	UITheme.style_pill_button(reset)
 	reset.custom_minimum_size.y = 46
 	reset.pressed.connect(_on_reset_binds)
 	_content.add_child(reset)
@@ -362,7 +382,7 @@ func _column_header() -> void:
 	row.focus_mode = Control.FOCUS_NONE
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var a := Label.new()
-	a.theme_type_variation = &"MenuHint"
+	UITheme.apply_text_style(a, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
 	a.text = "ACTION"
 	a.custom_minimum_size.x = MenuBindRow.TITLE_WIDTH + MenuBindRow.PAD_X
 	row.add_child(a)
@@ -370,13 +390,13 @@ func _column_header() -> void:
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(spacer)
 	var k := Label.new()
-	k.theme_type_variation = &"MenuHint"
+	UITheme.apply_text_style(k, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
 	k.text = "KEYBOARD"
 	k.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	k.custom_minimum_size.x = MenuBindRow.KEY_WIDTH
 	row.add_child(k)
 	var p := Label.new()
-	p.theme_type_variation = &"MenuHint"
+	UITheme.apply_text_style(p, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
 	p.text = "GAMEPAD"
 	p.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	p.custom_minimum_size.x = MenuBindRow.PAD_WIDTH + MenuBindRow.PAD_X

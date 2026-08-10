@@ -138,6 +138,17 @@ static func build(parent: Node, config: Dictionary) -> Button:
 	return row
 
 
+## The row plate, for a row the kit cannot compose.
+##
+## `VerbRow` is a composition — icon, label, meta — and a settings row that owns
+## an HSlider, or cycles a value on left/right, is not that shape. What it IS is
+## the same PLATE, and a settings row painted a second way would put two row
+## voices on one screen. So the box is public; `UiKit.style_row_button` hangs
+## all five states off it.
+static func row_box(state: String) -> StyleBoxFlat:
+	return _row_box(state, false)
+
+
 ## The row plate.
 ##
 ## StyleBoxFlat carries ONE border colour for every side, so the top hairline and

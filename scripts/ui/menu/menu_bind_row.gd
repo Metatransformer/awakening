@@ -23,7 +23,6 @@ var _pad: Label
 
 
 func _init() -> void:
-	theme_type_variation = &"MenuRow"
 	focus_mode = Control.FOCUS_ALL
 	custom_minimum_size.y = ROW_HEIGHT
 
@@ -39,7 +38,10 @@ func _ready() -> void:
 	box.offset_top = PAD_Y
 	box.offset_bottom = -PAD_Y
 
+	UiKit.style_row_button(self)
+
 	_title = Label.new()
+	UITheme.apply_text_style(_title, UITheme.TYPE_PARAGRAPH_1, UITheme.TEXT)
 	_title.custom_minimum_size.x = TITLE_WIDTH
 	_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -51,7 +53,7 @@ func _ready() -> void:
 	box.add_child(spacer)
 
 	_key = Label.new()
-	_key.theme_type_variation = &"MenuValue"
+	UITheme.apply_text_style(_key, UITheme.TYPE_LABEL_MD, UITheme.ACCENT)
 	_key.custom_minimum_size.x = KEY_WIDTH
 	_key.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_key.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -59,7 +61,7 @@ func _ready() -> void:
 	box.add_child(_key)
 
 	_pad = Label.new()
-	_pad.theme_type_variation = &"MenuMuted"
+	UITheme.apply_text_style(_pad, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
 	_pad.custom_minimum_size.x = PAD_WIDTH
 	_pad.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_pad.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
