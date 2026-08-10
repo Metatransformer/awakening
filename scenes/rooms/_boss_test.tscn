@@ -207,6 +207,18 @@ boss_offset = Vector3(0, 0, -5)
 ; Set 50 mm back into the reveal, the same as _gate_test's doors, so the
 ; doorway's surround frames the leaves instead of the leaves standing proud of
 ; it. The opening matches the hole the wall segments leave.
+; KNOWN, AND NOT A TRANSFORM PROBLEM: the shut leaves photograph as an
+; untextured black slab five metres square (see /tmp/boss/b_01, b_02). The
+; obvious fix -- yaw this node 180, since a `LockedDoor`'s leaves face down its
+; own -basis.z and the chamber is south of this wall -- was tried on 2026-08-09
+; and is WRONG: `boss_cistern.gd` derives its camera from this node's basis, so
+; turning the door turns the shot, and b_01 comes back as a green screenful of
+; boss. Forty assertions stayed green through both orientations, because a door
+; that refuses BY NAME refuses just as correctly backwards.
+;
+; The same `LockedDoor` shut in a generated floor renders properly -- plate,
+; leaves, lock sigil (/tmp/cf/f_02_vault_locked.png) -- so this is the fixture,
+; not the prop, and no player sees it. Fix the door and the camera together.
 [node name="BossDoor" type="Area3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -13.05)
 script = ExtResource("bossdoor")
