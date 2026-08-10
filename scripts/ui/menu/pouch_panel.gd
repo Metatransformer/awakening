@@ -126,7 +126,10 @@ var _grid: ItemGrid
 var _case_ids: Array[StringName] = []
 var _case_counts: Array[int] = []
 var _case_grid: ItemGrid
-var _header: Label
+## The `StatBand` and the slot it is rebuilt into. It replaced `_header`, which
+## was one right-aligned string carrying three numbers.
+var _band: Control
+var _band_slot: VBoxContainer
 var _stock: GridContainer
 var _stock_empty: Label
 var _back: Button
@@ -136,7 +139,6 @@ var _detail_value: Label
 var _detail_blurb: Label
 var _detail_legend: Label
 var _rope: Button
-var _rope_fee: Label
 var _rope_bar: HoldBar
 var _rope_say: Label
 ## Seconds of Y accumulated. Snapped to 0 on release, never decayed.
@@ -146,13 +148,18 @@ var _rope_hold: float = 0.0
 ## arrives on this screen part-way through leaving the dungeon.
 var _rope_armed: bool = false
 var _fletch: Button
-var _fletch_have: Label
 var _fletch_cost: Label
 
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# The subtree renders through the kit, overriding the `menu_theme.tres` the
+	# pause menu's Root still carries — which is also what puts the two ItemGrids
+	# into kit paint, via the shared-cell names `UITheme.theme()` defines. The bag
+	# grid's own code is untouched; only what it renders through moved.
+	UITheme.prewarm()
+	theme = UITheme.theme()
 	_build()
 	# The bag changes while this screen is open in exactly one case that matters
 	# — a director driving a run with the menu up — but it also changes under a
@@ -182,35 +189,44 @@ func _build() -> void:
 
 	var frame := PanelContainer.new()
 	frame.name = "Frame"
-	frame.theme_type_variation = &"MenuFrame"
+	# `edge_to_edge`, like the Items screen and the counters: the tab strip, the
+	# stat band and the footer reach the frame's edge; the body owns its inset.
+	UITheme.style_panel(frame, UITheme.FRAME_FACE_SOLID, true)
 	frame.custom_minimum_size = MenuUtil.FRAME_SIZE
 	center.add_child(frame)
 
 	var col := VBoxContainer.new()
 	col.name = "Col"
-	col.theme_type_variation = &"MenuStack"
+	col.add_theme_constant_override("separation", 0)
 	frame.add_child(col)
 
 	var header := PanelContainer.new()
-	header.theme_type_variation = &"MenuHeader"
+	header.add_theme_stylebox_override("panel",
+		UITheme.hud_box(UITheme.GRAY_1, 14, 6, 14, 0))
 	col.add_child(header)
 	# The shared tab strip is inserted here by `PauseMenu` and there is no title
 	# Label: the lit tab is the title. See `MenuPageTabs`.
 	_hrow = HBoxContainer.new()
 	header.add_child(_hrow)
-	var hrow := _hrow
 	var gap := Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hrow.add_child(gap)
-	# Slots and worth, in the header, because they are the two numbers the
-	# extraction decision is made out of and neither should require a focus.
-	_header = Label.new()
-	_header.theme_type_variation = &"MenuValue"
-	_header.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	hrow.add_child(_header)
+	_hrow.add_child(gap)
+
+	# The four numbers the extraction decision is made out of, in a `StatBand`
+	# under the tab strip. They were one right-aligned string in the header row —
+	# "4 / 12 SLOTS   BAG 334 ◇   PURSE 30 ◇" — which is three answers the eye has
+	# to parse a sentence to separate, and it had no room for the fee at all. The
+	# fee lived only on the rope row, two feet away from the purse it is measured
+	# against, and this screen's whole argument (see the class doc) is that those
+	# numbers ARE one decision.
+	_band_slot = VBoxContainer.new()
+	_band_slot.add_theme_constant_override("separation", 0)
+	col.add_child(_band_slot)
+	_rebuild_band()
 
 	var body := MarginContainer.new()
-	body.theme_type_variation = &"MenuBodyPad"
+	for side in ["left", "right", "top", "bottom"]:
+		body.add_theme_constant_override("margin_" + side, 20)
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(body)
 
@@ -271,12 +287,13 @@ func _build() -> void:
 	_build_rope(right)
 
 	var footer := PanelContainer.new()
-	footer.theme_type_variation = &"MenuFooter"
+	footer.add_theme_stylebox_override("panel",
+		UITheme.hud_box(UITheme.GRAY_1, 20, 10, 20, 10))
 	col.add_child(footer)
 	var frow := HBoxContainer.new()
 	footer.add_child(frow)
 	var hint := Label.new()
-	hint.theme_type_variation = &"MenuHint"
+	UITheme.apply_text_style(hint, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
 	hint.text = HINT
 	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	frow.add_child(hint)
@@ -297,21 +314,17 @@ func _build() -> void:
 ## cells of a measured 140 px and it cannot give any of that back (see `COLS`);
 ## the doll gets the width the frame grew by and not a pixel of the grid's.
 func _build_doll(parent: Node) -> void:
-	var card := PanelContainer.new()
-	card.name = "Worn"
-	card.theme_type_variation = &"MenuSection"
-	card.custom_minimum_size.x = DOLL_W
-	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	parent.add_child(card)
-
+	# A column, not a card. See the same note on `MenuEquipPanel._build_doll`:
+	# nested boxes inside a boxed frame are the read the kit undoes, and their
+	# padding is width this screen has never had to spare.
 	var inner := VBoxContainer.new()
+	inner.name = "Worn"
+	inner.custom_minimum_size.x = DOLL_W
+	inner.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	inner.add_theme_constant_override("separation", 6)
-	card.add_child(inner)
+	parent.add_child(inner)
 
-	var caption := Label.new()
-	caption.theme_type_variation = &"MenuHeading"
-	caption.text = "WORN"
-	inner.add_child(caption)
+	UITheme.section_rule(inner, "WORN")
 
 	# The three "LEFT · Kite Shield" lines that used to sit under the figure are
 	# gone: they are the doll's own three `SlotTile`s now, which say the same
@@ -333,7 +346,10 @@ func _paint_doll() -> void:
 func _build_grid(parent: Node) -> void:
 	var card := PanelContainer.new()
 	card.name = "Bag"
-	card.theme_type_variation = &"MenuSection"
+	# A `well()`, not a raised card: the bag is a thing you reach INTO, and the
+	# recess is what tells the two grids apart from the columns beside them now
+	# that nothing else here is boxed.
+	card.add_theme_stylebox_override("panel", UITheme.well())
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	parent.add_child(card)
@@ -345,12 +361,13 @@ func _build_grid(parent: Node) -> void:
 	# THE CASE FIRST, and above. It is the top of the bag in the fiction and it
 	# has to be the top of the picture, because the sentence this card makes when
 	# you read it downwards is the design: this comes home, this does not.
+	# A styled Label rather than a `section_rule`, because the rule is gold and
+	# this caption is CYAN: the way out is CYAN and nothing else is (STYLEGUIDE
+	# §1), and the case is the OTHER way out — the one that works when you did not
+	# make it to the rope. That colour is load-bearing and a divider would eat it.
 	var case_cap := Label.new()
-	case_cap.theme_type_variation = &"MenuHeading"
 	case_cap.text = "THE DOCUMENT CASE  ·  COMES HOME"
-	# CYAN is the way out (STYLEGUIDE §1), and the case is the other way out --
-	# the one that works when you did not make it to the rope.
-	case_cap.modulate = Pal.CYAN
+	UITheme.apply_text_style(case_cap, UITheme.TYPE_H3, Pal.CYAN)
 	inner.add_child(case_cap)
 
 	_case_grid = ItemGrid.new()
@@ -360,10 +377,7 @@ func _build_grid(parent: Node) -> void:
 	_case_grid.cell_activated.connect(_on_case_activated)
 	inner.add_child(_case_grid)
 
-	var caption := Label.new()
-	caption.theme_type_variation = &"MenuHeading"
-	caption.text = "CARRIED  ·  DIES WITH YOU"
-	inner.add_child(caption)
+	UITheme.section_rule(inner, "CARRIED  ·  DIES WITH YOU")
 
 	# `ItemGrid` rather than a GridContainer full of hand-built cells. The cell
 	# below used to be written out here, and it is the cell every other screen
@@ -453,37 +467,36 @@ func _cells_of(ids: Array[StringName], counts: Array[int]) -> Array:
 
 
 func _build_detail(parent: Node) -> void:
-	var card := PanelContainer.new()
-	card.name = "Detail"
-	card.theme_type_variation = &"MenuSection"
-	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	parent.add_child(card)
-
+	# The kicker / title / value stack of a `PlateHeader`, by hand: this pane is
+	# rewritten on every cursor move, and a `PlateHeader` is a panel's IDENTITY,
+	# built once. Same call as `MenuEquipPanel._build_detail`.
 	var col := VBoxContainer.new()
+	col.name = "Detail"
+	col.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_theme_constant_override("separation", 6)
-	card.add_child(col)
+	parent.add_child(col)
 
 	_detail_kind = Label.new()
-	_detail_kind.theme_type_variation = &"MenuHint"
+	UITheme.apply_text_style(_detail_kind, UITheme.TYPE_CAPTION, UITheme.ACCENT)
 	col.add_child(_detail_kind)
 
 	_detail_name = Label.new()
-	_detail_name.theme_type_variation = &"MenuSlotTitle"
+	UITheme.apply_text_style(_detail_name, UITheme.TYPE_H1, UITheme.TEXT)
 	_detail_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(_detail_name)
 
 	_detail_value = Label.new()
-	_detail_value.theme_type_variation = &"MenuValue"
+	UITheme.apply_text_style(_detail_value, UITheme.TYPE_LABEL_MD, UITheme.ACCENT)
 	col.add_child(_detail_value)
 
 	_detail_blurb = Label.new()
-	_detail_blurb.theme_type_variation = &"MenuSlotStat"
+	UITheme.apply_text_style(_detail_blurb, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
 	_detail_blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_detail_blurb.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(_detail_blurb)
 
 	_detail_legend = Label.new()
-	_detail_legend.theme_type_variation = &"MenuHint"
+	UITheme.apply_text_style(_detail_legend, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
 	_detail_legend.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(_detail_legend)
 
@@ -505,36 +518,29 @@ func _build_detail(parent: Node) -> void:
 ## quantity on another, and the whole argument of this screen is that the
 ## extraction decision is made by stopping and LOOKING at what you have.
 func _build_fletch(parent: Node) -> void:
-	var card := PanelContainer.new()
-	card.name = "Fletch"
-	card.theme_type_variation = &"MenuSection"
-	parent.add_child(card)
-
 	var inner := VBoxContainer.new()
+	inner.name = "Fletch"
 	inner.add_theme_constant_override("separation", 6)
-	card.add_child(inner)
+	parent.add_child(inner)
 
-	var caption := Label.new()
-	caption.theme_type_variation = &"MenuHeading"
-	caption.text = "FLETCHING"
-	inner.add_child(caption)
+	UITheme.section_rule(inner, "FLETCHING")
 
-	_fletch = Button.new()
+	# A `VerbRow`, with the batch size in its META column — which is what the
+	# hand-anchored "+7" Label over the right end of the button was reinventing.
+	# The glyph moved out of the text for the same reason: "➶  Fletch Arrows" put
+	# an icon inside a string, where it cannot be sized or dimmed with the row.
+	#
+	# NOT built `refused` when the bench cannot fletch. That is deliberate and it
+	# is the same call the rope makes below: a refused row is inert AND
+	# unfocusable, and this screen answers "what am I short of" in the detail pane
+	# beside it, which needs the focus to land. The reason goes in the meta column
+	# in DANGER instead — see `_paint_fletch`.
+	_fletch = UiKit.verb_row(inner, {
+		"label": "Fletch Arrows",
+		"icon": UiKit.action_icon("fletch"),
+		"meta": "",
+	})
 	_fletch.name = "Fletch"
-	_fletch.theme_type_variation = &"MenuRow"
-	_fletch.focus_mode = Control.FOCUS_ALL
-	_fletch.text = "➶  Fletch Arrows"
-	inner.add_child(_fletch)
-
-	_fletch_have = Label.new()
-	_fletch_have.name = "Have"
-	_fletch_have.theme_type_variation = &"MenuValue"
-	_fletch_have.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_fletch_have.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_fletch_have.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_fletch.add_child(_fletch_have)
-	_fletch_have.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_fletch_have.offset_right = -16
 
 	# The recipe, under the row rather than only in the detail pane, for the same
 	# reason the rope's fee is: "fletch arrows" and "fletch arrows for two flint
@@ -542,7 +548,7 @@ func _build_fletch(parent: Node) -> void:
 	# second one is the only one you can act on.
 	_fletch_cost = Label.new()
 	_fletch_cost.name = "Cost"
-	_fletch_cost.theme_type_variation = &"MenuSlotStat"
+	UITheme.apply_text_style(_fletch_cost, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
 	_fletch_cost.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	inner.add_child(_fletch_cost)
 
@@ -595,9 +601,14 @@ func _paint_fletch() -> void:
 		return
 	_fletch_cost.text = Fletching.cost_line()
 	var ready := Fletching.can_fletch()
-	_fletch_have.text = "+%d" % mini(Fletching.batch(), Fletching.quiver_room()) \
-		if ready else "—"
-	_fletch_have.modulate = Color.WHITE if ready else Pal.RUST
+	if ready:
+		UiKit.verb_meta(_fletch, "+%d"
+			% mini(Fletching.batch(), Fletching.quiver_room()), UITheme.SUCCESS)
+	else:
+		# The REASON, not a dash. The row said "—" and left the player to find
+		# what they were short of in the pane beside it; the meta column is where
+		# the kit puts a refusal, and `Fletching.refusal()` already names it.
+		UiKit.verb_meta(_fletch, Fletching.refusal(), UITheme.DANGER)
 	_fletch_cost.modulate = Color.WHITE if ready else Color(1, 1, 1, 0.55)
 
 
@@ -627,36 +638,28 @@ func _paint_fletch() -> void:
 ## only job is to be deliberate is exactly the right shape for a press made one
 ## row below the button you spam to fletch arrows.
 func _build_rope(parent: Node) -> void:
-	var card := PanelContainer.new()
-	card.name = "Use"
-	card.theme_type_variation = &"MenuSection"
-	parent.add_child(card)
-
 	var inner := VBoxContainer.new()
+	inner.name = "Use"
 	inner.add_theme_constant_override("separation", 6)
-	card.add_child(inner)
+	parent.add_child(inner)
 
-	var caption := Label.new()
-	caption.theme_type_variation = &"MenuHeading"
-	caption.text = "THE WAY OUT"
-	inner.add_child(caption)
+	UITheme.section_rule(inner, "THE WAY OUT")
 
-	_rope = Button.new()
+	# `primary`: the display face, on the one row this screen exists to lead you
+	# to. Exactly one per panel, and on the pouch it is not in doubt — everything
+	# above this row is a picture of what you are carrying, and this is the row
+	# that spends it.
+	#
+	# Live even when it will refuse, for the reason the class doc argues: the fee
+	# and the refusal are things you READ, and a `refused` row cannot be focused
+	# to be read. The meta column carries the toll — see `_paint_rope`.
+	_rope = UiKit.verb_row(inner, {
+		"label": "Escape Rope",
+		"icon": UiKit.action_icon("rope"),
+		"meta": "",
+		"primary": true,
+	})
 	_rope.name = "Rope"
-	_rope.theme_type_variation = &"MenuRow"
-	_rope.focus_mode = Control.FOCUS_ALL
-	_rope.text = "◈  Escape Rope"
-	inner.add_child(_rope)
-
-	_rope_fee = Label.new()
-	_rope_fee.name = "Fee"
-	_rope_fee.theme_type_variation = &"MenuValue"
-	_rope_fee.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_rope_fee.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_rope_fee.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_rope.add_child(_rope_fee)
-	_rope_fee.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_rope_fee.offset_right = -16
 
 	# CYAN, because the way out is CYAN and nothing else is (STYLEGUIDE §1) —
 	# the same colour the rope's slats climb the hero in and the same colour the
@@ -673,7 +676,7 @@ func _build_rope(parent: Node) -> void:
 	# knowing they are the one filling it.
 	_rope_say = Label.new()
 	_rope_say.name = "Say"
-	_rope_say.theme_type_variation = &"MenuSlotStat"
+	UITheme.apply_text_style(_rope_say, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
 	_rope_say.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	inner.add_child(_rope_say)
 
@@ -863,31 +866,28 @@ func _paint_rope() -> void:
 		# it, still drawn, is what tells the two apart.
 		_rope_say.modulate = Pal.RUST if not warn.is_empty() else Color.WHITE
 	if not Run.in_dungeon:
-		_rope_fee.text = "—"
-		_rope_fee.modulate = Color(1, 1, 1, 0.5)
+		UiKit.verb_meta(_rope, "—")
 		return
 	# The charge, for the same reason the detail pane shows it: this figure is a
 	# promise about the purse and it has to be the one that comes true.
-	_rope_fee.text = "%d ◇" % Run.extract_charge()
-	_rope_fee.modulate = Pal.RUST if Run.extract_takes_all() else Color.WHITE
+	#
+	# WARNING, not DANGER, when it takes everything: the hold still works. DANGER
+	# on this screen means "this will not happen", and the difference between
+	# "this empties you" and "this is refused" is the whole reason the empty track
+	# stays drawn under the row above.
+	UiKit.verb_meta(_rope, "%d ◇" % Run.extract_charge(),
+		UITheme.WARNING if Run.extract_takes_all() else UITheme.ACCENT)
 
 
 ## What made it home. Not focusable and not editable — it is the answer to "can
 ## I afford the next rung", shown next to the bag it came out of.
 func _build_stock(parent: Node) -> void:
-	var card := PanelContainer.new()
-	card.name = "Bench"
-	card.theme_type_variation = &"MenuSection"
-	parent.add_child(card)
-
 	var col := VBoxContainer.new()
+	col.name = "Bench"
 	col.add_theme_constant_override("separation", 6)
-	card.add_child(col)
+	parent.add_child(col)
 
-	var caption := Label.new()
-	caption.theme_type_variation = &"MenuHeading"
-	caption.text = "WORKBENCH"
-	col.add_child(caption)
+	UITheme.section_rule(col, "WORKBENCH")
 
 	# Four columns, not one line per material. The bench held four things when
 	# this was a single autowrapping Label; the alchemist's four brought it to
@@ -910,7 +910,7 @@ func _build_stock(parent: Node) -> void:
 	# The empty case cannot live in the grid: a GridContainer has no column
 	# span, so one long sentence in cell 0 would set the width of column 1.
 	_stock_empty = Label.new()
-	_stock_empty.theme_type_variation = &"MenuSlotStat"
+	UITheme.apply_text_style(_stock_empty, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
 	_stock_empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_stock_empty.text = "Nothing yet. Components reach the bench by reaching the garrison."
 	col.add_child(_stock_empty)
@@ -1065,14 +1065,43 @@ func _on_case_activated(index: int) -> void:
 ## BAG and PURSE are labelled rather than left as two bare figures with a diamond
 ## each. Unlabelled, they read as one number that changed, and the whole point of
 ## showing them together is that they are the two sides of the extraction trade.
-func _paint_header() -> void:
+## Slots, worth, purse, fee — the extraction decision, in the order you make it:
+## how full am I, what is it worth, what have I got, what will leaving cost.
+##
+## Slots goes WARNING at the brim and it means one thing: the next mote you walk
+## over is going to stay on the floor. The fee goes WARNING when it takes the
+## whole purse, which is a different statement from "you cannot leave" and has to
+## look like one — DANGER on this band would say the door was shut.
+func _band_cells() -> Array:
 	var used := Run.slots_used()
-	var full := used >= Game.bag_slots
-	_header.text = "%d / %d SLOTS      BAG %d ◇      PURSE %d ◇" \
-		% [used, Game.bag_slots, Run.bag_value(), Game.gold]
-	# The only colour on the header, and it means one thing: the next mote you
-	# walk over is going to stay on the floor.
-	_header.modulate = Pal.RUST if full else Color.WHITE
+	var fee := "—"
+	var fee_tone: Variant = null
+	if Run.in_dungeon:
+		fee = "%d ◇" % Run.extract_charge()
+		fee_tone = UITheme.WARNING if Run.extract_takes_all() else null
+	return [
+		{"key": &"slots", "label": "Slots",
+			"value": "%d / %d" % [used, Game.bag_slots],
+			"icon": UiKit.action_icon("bag"),
+			"tone": UITheme.WARNING if used >= Game.bag_slots else null},
+		{"key": &"worth", "label": "Bag", "value": "%d ◇" % Run.bag_value()},
+		{"key": &"purse", "label": "Purse", "value": "%d ◇" % Game.gold,
+			"icon": UiKit.action_icon("coin")},
+		{"key": &"fee", "label": "To leave", "value": fee, "tone": fee_tone},
+	]
+
+
+func _rebuild_band() -> void:
+	if _band_slot == null:
+		return
+	for child in _band_slot.get_children():
+		child.queue_free()
+		_band_slot.remove_child(child)
+	_band = UiKit.stat_band(_band_slot, _band_cells())
+
+
+func _paint_header() -> void:
+	_rebuild_band()
 
 
 func _paint_stock() -> void:
@@ -1089,7 +1118,7 @@ func _paint_stock() -> void:
 			continue
 		var def := ItemDb.get_def(id)
 		var row := Label.new()
-		row.theme_type_variation = &"MenuSlotStat"
+		UITheme.apply_text_style(row, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT)
 		row.text = "%s  ×%d" % [def.display_name, have]
 		_stock.add_child(row)
 		any = true

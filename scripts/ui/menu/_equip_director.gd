@@ -205,9 +205,12 @@ func run(rig) -> void:
 	# The rope has to be REACHABLE by keyboard alone, like everything else on
 	# this screen -- it is the only control in the menu that ends a run, and a
 	# pad user who cannot get focus onto it cannot leave the dungeon at all.
-	await _nav_to_button(rig, "◈  Escape Rope")
+	# The label is read through `UiKit.label_of`, not `Button.text`: the row is a
+	# composed VerbRow now, so its own `text` is empty and the words live in a
+	# child Label. The diamond that used to prefix it is the row's icon.
+	await _nav_to_button(rig, "Escape Rope")
 	_check("the Escape Rope is reachable by keyboard",
-		_focused(rig) != null and (_focused(rig) as Button).text.ends_with("Escape Rope"))
+		_focused(rig) != null and UiKit.label_of(_focused(rig) as Button) == "Escape Rope")
 	await rig.capture("eq_06_rope.png")
 
 	# This scene is not a dungeon. Using it must refuse, and must NOT close the

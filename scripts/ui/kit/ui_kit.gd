@@ -135,6 +135,14 @@ static func verb_row(parent: Node, config: Dictionary) -> Button:
 	return VerbRowScript.build(parent, config)
 
 
+## Rewrite one row's meta column in place, for a cost that MOVES with the state
+## the panel is drawing. Requires the row to have been built with a `meta` key,
+## even an empty one. See `VerbRow.set_meta_text` for when this is legitimate and
+## when the row should have been built `refused` instead.
+static func verb_meta(row: Button, text: String, tone: Variant = null) -> void:
+	VerbRowScript.set_meta_text(row, text, tone)
+
+
 ## An outcome message, pinned to the panel FOOTER. The panel is responsible for
 ## parenting it into the footer — the kit builds the toast, it cannot enforce
 ## where you put it, and putting it above the content is the bug this component

@@ -839,8 +839,21 @@ it counts down to zero in RUST. The palette becomes the score.
   and the Far Lantern (`TradeScreen`); and the footlocker (`StashScreen`), whose
   refusal moved off the hint line and into a `FooterToast`, so "← STOW
   RETRIEVE →" no longer vanishes at the moment a refused transfer has the player
-  hunting for it. Still on the old theme: equipment, pouch chrome, options,
-  saves, map and the receipt.
+  hunting for it; the Items screen (`EquipPanel`), whose three columns are
+  divided by `section_rule` rather than nested cards — three `style_panel`
+  cards' worth of 22px margins pushed the frame past `MenuUtil.FRAME_SIZE` and
+  it silently filled the viewport; and the pouch (`MenuPouchPanel`), where the
+  header's one right-aligned string became a four-cell `StatBand` — SLOTS, BAG,
+  PURSE, TO LEAVE — so the extraction decision is four numbers read at once
+  instead of a sentence parsed, with the fee no longer stranded two feet from
+  the purse it is measured against. Still on the old theme: options, saves, map
+  and the receipt.
+
+  The pouch's Fletch and Escape Rope rows are the documented exception to the
+  refusal law: they use `UiKit.verb_meta` to write the shortfall into the meta
+  column and stay FOCUSABLE, rather than `VerbRow`'s `refused` state, which is
+  not. This screen answers "what am I short of" in the detail pane, and a row
+  you cannot focus is a pane you cannot open.
 
   The bag grid — `ItemGrid` / `ItemCell` — is NOT on the list; it stays as it
   is. What it renders THROUGH moved, though: `MenuSlot`, `MenuSlotStat`,

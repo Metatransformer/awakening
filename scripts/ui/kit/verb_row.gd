@@ -87,8 +87,13 @@ static func build(parent: Node, config: Dictionary) -> Button:
 	line.add_child(name_label)
 
 	# The meta column. A refused row spends it on the REASON.
+	#
+	# Built whenever the caller PASSED a `meta` key, even an empty one, so a row
+	# whose cost is not known until the panel refreshes has somewhere to write it
+	# (`set_meta_text`). A Label conjured on the second call would land after the
+	# chevron instead of before it.
 	var meta_text := refused if is_refused else String(config.get("meta", ""))
-	if not meta_text.is_empty():
+	if not meta_text.is_empty() or (config.has("meta") and not is_refused):
 		var meta := Label.new()
 		meta.text = meta_text
 		meta.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -101,6 +106,7 @@ static func build(parent: Node, config: Dictionary) -> Button:
 			# the explanation may not. A reason nobody can read is no reason.
 			meta.modulate.a = minf(1.0 / REFUSED_ALPHA, 4.0)
 		line.add_child(meta)
+		row.set_meta(&"verb_meta", meta)
 
 	if bool(config.get("submenu", false)):
 		var chev := Label.new()
@@ -155,3 +161,27 @@ static func _row_box(state: String, refused: bool) -> StyleBoxFlat:
 				UITheme.HIGHLIGHT.r, UITheme.HIGHLIGHT.g, UITheme.HIGHLIGHT.b, 0.09)
 			box.border_color = UITheme.HIGHLIGHT
 	return box
+
+
+## Rewrite a row's meta column after the fact, for a cost that MOVES — a batch
+## size that follows the bag, a toll that follows the purse.
+##
+## Requires the row to have been built with a `meta` key, even an empty one.
+##
+## This is NOT the refusal law's back door. A row that cannot be used at all
+## should be built `refused`, which also makes it inert and unfocusable. This is
+## for the rows that stay usable and merely cost something different than they
+## did a moment ago — and for the handful that are deliberately kept live while
+## they will refuse, so the panel beside them can say what you are short of
+## (`MenuPouchPanel._build_rope` argues that case at length).
+static func set_meta_text(row: Button, text: String, tone: Variant = null) -> void:
+	if row == null or not row.has_meta(&"verb_meta"):
+		return
+	var label := row.get_meta(&"verb_meta") as Label
+	if label == null:
+		return
+	label.text = text
+	var color: Color = UITheme.TEXT_DIM
+	if tone is Color:
+		color = tone as Color
+	label.add_theme_color_override("font_color", color)

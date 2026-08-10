@@ -69,20 +69,20 @@ func run(rig) -> void:
 	_check("...already ON the pouch, not at the root", pouch.visible)
 	await rig.capture("f_01_pouch.png")
 
-	var header := _find_label(pouch, "SLOTS")
-	if header != null:
-		print("  header: %s" % header.text)
-		_check("the header names the bag's worth", header.text.contains("BAG"))
-		_check("the header names the purse", header.text.contains("PURSE"))
-		_check("the purse is the real number (%d)" % Game.gold,
-			header.text.contains(str(Game.gold)))
-	else:
-		_fail += 1
-		print("POUCH FAIL no header label found on the pouch")
-
-	var fee: Label = _find_label(pouch, "◇")
-	if fee != null and fee != header:
-		print("  fee row: %s" % fee.text)
+	# The three figures live in the header's StatBand, one cell each — a caption
+	# and a number in separate Labels — so the check is against everything the
+	# screen says, not against one line. It used to be a single header string;
+	# what matters was never that they shared a Label, only that a player who
+	# stops on this screen can read all three at once.
+	var said := _all_text(pouch)
+	print("  band: %s" % " | ".join(said))
+	var blob := " ".join(said)
+	_check("the header names the bag's worth", blob.contains("BAG"))
+	_check("the header names the purse", blob.contains("PURSE"))
+	_check("the purse is the real number (%d)" % Game.gold,
+		blob.contains(str(Game.gold)))
+	_check("the fee to leave is named too",
+		blob.contains("TO LEAVE") and blob.contains(str(Run.extract_charge())))
 	_check("the way out is on this screen", pouch.find_child("Rope", true, false) != null)
 	_check("...and it is gone from the items screen",
 		menu.get_node("Root/Screens/EquipScreen").find_child("Rope", true, false) == null)
@@ -96,17 +96,17 @@ func run(rig) -> void:
 	print("POUCH OK" if _fail == 0 else "POUCH FAILED (%d)" % _fail)
 
 
-## Depth-first search for the first Label whose text contains `needle`. The
-## pouch builds its whole tree in code, so there is no scene path to name.
-func _find_label(root: Node, needle: String) -> Label:
+## Every non-empty Label string in the subtree, in tree order. The pouch builds
+## its whole tree in code, so there is no scene path to name — and the header is
+## now a band of one-Label-per-fact cells, which is exactly what this flattens.
+func _all_text(root: Node) -> PackedStringArray:
+	var out := PackedStringArray()
 	var l := root as Label
-	if l != null and l.text.contains(needle):
-		return l
+	if l != null and not l.text.strip_edges().is_empty():
+		out.append(l.text)
 	for c in root.get_children():
-		var hit := _find_label(c, needle)
-		if hit != null:
-			return hit
-	return null
+		out.append_array(_all_text(c))
+	return out
 
 
 ## A real event, not `Input.action_press`: PauseMenu reads the pouch button in
