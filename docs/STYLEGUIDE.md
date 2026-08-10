@@ -836,8 +836,11 @@ it counts down to zero in RUST. The palette becomes the score.
   screen (plate header, a live stat band, and `VerbRow`s with a meta column,
   replacing eight identical full-width buttons); and all five counters, which
   are one screen — the pawnbroker, the smith, the alchemist, the setting bench
-  and the Far Lantern (`TradeScreen`). Still on the old theme: equipment, pouch
-  chrome, options, saves, map, the locker and the receipt.
+  and the Far Lantern (`TradeScreen`); and the footlocker (`StashScreen`), whose
+  refusal moved off the hint line and into a `FooterToast`, so "← STOW
+  RETRIEVE →" no longer vanishes at the moment a refused transfer has the player
+  hunting for it. Still on the old theme: equipment, pouch chrome, options,
+  saves, map and the receipt.
 
   The bag grid — `ItemGrid` / `ItemCell` — is NOT on the list; it stays as it
   is. What it renders THROUGH moved, though: `MenuSlot`, `MenuSlotStat`,
