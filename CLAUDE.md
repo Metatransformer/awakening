@@ -183,6 +183,7 @@ class is not knowing the pattern.
 | `docs/GDD.md` | What the game is. The north star; everything else serves it. |
 | `docs/SCOPE.md` | **How much of it there is.** The frozen manifest, the no-list, the build order. It is the doc that gets to say no — check it before you build anything the GDD merely permits. |
 | `docs/METAGAME.md` | The economy: loot, bag, gold, extraction, the shops. |
+| `docs/PUZZLES.md` | The puzzle verb ladder, the atoms and combinators, the three puzzle shapes, the four minibosses, and where Echoes come from. `docs/GDD.md` §5.3 is the summary; this is the design of record. |
 | `docs/CONTRACT.md` | Interfaces, units, autoloads, collision layers, file ownership. |
 | `docs/STYLEGUIDE.md` | Palette, type, the PSX treatment, the anti-slop list. |
 

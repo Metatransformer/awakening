@@ -9,13 +9,22 @@ that is consistent with this document but absent from SCOPE's manifest is *still
 out of scope*. Read them together or you will build a bigger game than the one
 we agreed to ship.
 
-**Status.** The moment-to-moment and the metagame are built and playable: garrison,
-vendor, smith, alchemist, forge ladders, bag, extraction, Heat, bottles, bow,
-hookshot, arrows, and a seeded dungeon with six enemy kinds. What is *not* built
-is everything in §5, §6 and §7 — the spine, the gates, the relics, the endings,
-the three workings (§6.5) and the gear loop's expansion (§6.6).
+**Status.** The moment-to-moment and the metagame are built and playable:
+garrison, vendor, smith, alchemist, bag, extraction, Heat, bottles, bow,
+hookshot, arrows, a seeded dungeon with six enemy kinds, and the whole gear loop
+in §6.6 — twelve forge ladders, four armour pieces on two paths, and the
+jewelcrafter. What is *not* built is everything in §5, the relics and the
+Lanternkeeper in §6, the endings, and the three workings (§6.5).
 `docs/METAGAME.md` is the design of record for what exists today and every number
 in it is read from the code it names.
+
+**Also not built, and newer than the rest of this document — the 2026-08-10
+session.** §3.1 the document case, §5.3's three puzzle shapes and everything in
+`docs/PUZZLES.md`, §6.6's Reforge and Recut, and §7.1's mercy. Those five arrived
+together because they answer one diagnosis: the game asks a great question and
+then punishes a wrong answer harder than any of its comparables, while borrowing
+Zelda's locked door without paying for Zelda's verb. Read §5.3 and §3.1 as a pair
+— one adds what the player has to *do*, the other lowers what it costs to fail.
 
 **Read §6.6 before §5 if you are here to build.** The gear loop — the ladders,
 the armour paths, the jewelcrafter — is the reason the player descends, and it is
@@ -31,8 +40,15 @@ weights backwards.
 A third-person action game with **Ocarina of Time's feel** and **Moonlighter's
 structure**, played as an explorer in the Vale.
 
-You are a member of the **Far Lantern Society**, and the Society's whole creed
-is three clauses long: *go far, come home, tell true*. Under the frontier town
+You play **Kael** *(tentative, 2026-08-10)* — a member of the **Far Lantern
+Society**, whose whole creed is three clauses long: *go far, come home, tell
+true*.
+
+**The name is the only thing about Kael this document fixes.** No backstory, no
+family, no arc: the Society's creed is the characterisation, and a game with zero
+dialogue trees and zero voiced lines (`docs/SCOPE.md` §1) has nowhere to put more
+than that. What the name buys is that the receipt, the plaque and the
+Lanternkeeper's board can say something other than "the player." Under the frontier town
 of **Valenfeld** there is a shaft into the works the **Vyr** built before they
 withdrew to their sky-seat and left the world to fail without them. You make runs
 into it. You take what the dead empire left. You decide, every time, when to
@@ -141,6 +157,35 @@ it returns to the room it was placed in, and you can go down and get it again.
 The sting is the walk, not the loss. A permanently missable unique in a game with
 a death-loses-everything rule is not tension, it is a corrupt save.
 
+### 3.1 Every run pays — the document case
+
+**Added 2026-08-10.** Death took the whole bag. That is harsher than Souls, which
+lets you walk back and pick your runes up, and much harsher than the modern
+roguelite rule that every run pays something. A death five rooms down with twelve
+full slots returned **nothing**, and a loop that can hand a player forty minutes
+of zero is a loop that gets closed.
+
+> **The top row of the bag — three of twelve slots — is the Society's document
+> case. What is in the case comes home. What is not, does not.**
+
+Three of twelve is 25%, and the case is the reason it is *not* a dice roll.
+Pillar 3 says loss is legible and *you always knew the risk*; a roll made at the
+moment of death is the opposite of knowing, and it is anti-dramatic besides — you
+die carrying two Void Pearls and ten Bone Shards and the game hands back three
+Bone Shards. A consolation prize that consoles nobody.
+
+The case is legible for the whole run instead. You know at every moment exactly
+what you would keep, which means **packing is a decision** — the one this game's
+flat twelve slots did not previously have. It is Escape from Tarkov's secure
+container, which is the most-praised item in that game, and it removes the
+catastrophe without removing the cost: nine slots still die.
+
+**A relic does not fit in the case.** It is a broken lump of Vyr machinery, not a
+document. This is the one line that has to be written down, because without it a
+relic in the case never dies and the hardest question in the design — the one two
+paragraphs up — quietly stops being asked. **An Echo does not fit either**, for
+the same reason and to the same end.
+
 ---
 
 ## 4. Pillars
@@ -176,6 +221,16 @@ own.
 The boss items in §5 are the one deliberate exception, and they are an exception
 about *verbs*, not about power: a bow you own is a thing you can now do, not a
 number that went up. See §5.2.
+
+**Echoes are not an exception to this pillar, and the word doing the work is
+*permanence*.** An Echo (`docs/PUZZLES.md` §6) is found power that **dies with
+the run** — home, garrison or death, it goes quiet — so it never becomes
+permanence and never competes with the counters. What it costs is a **bag slot**,
+which is the only price this game has that sharpens §2 instead of softening it:
+getting stronger costs you the capacity you came down for. It is worth 0 gold, so
+it can never be sold and never raises the fee. And it never moves one of the five
+stats in §6.6 — those are the smith's and the jeweller's, and that boundary is
+what keeps a found thing from quietly replacing a bought one.
 
 **5. Light is a material.** Torches make warm pools, and the stone between them
 is *dimmer*, not black — a lit place with shape, not a string of spotlights in a
@@ -268,6 +323,16 @@ ladders do not appear at the smith until the item is owned. This converts system
 that are already built into progression, at the cost of one `Game.has()`
 check, and it is what makes §5.3 mean anything.
 
+**Each floor is about the item the previous floor's boss handed you.** Ocarina
+puts the dungeon item in the *middle* of the dungeon so the back half can be
+about it. This design puts it at the *end* — you kill the Warden, take the Bow
+and leave — so the toy you just earned had nowhere to be used. Displacing it by
+one floor gets that shape back without moving a single boss: the Foundry is the
+temple that is **about the bow**, the Choir is about Burst, the Chord Gate is
+about the hookshot. `docs/PUZZLES.md` §1 is that diagonal written out, and it is
+also why a floor's gate room can never ask for something the player lacks — the
+same table generates both facts.
+
 **A working is a usable item and nothing more.** The Burst-Verse is a row in
 `scripts/items/armament_db.gd`, it draws to the right hand, D-pad ← → reaches it,
 RB and RT cast it, and the HUD cluster and the pouch's paper doll show it
@@ -278,22 +343,58 @@ in the garrison. There is no mana, no school, and no casting system:
 working is a thing that is in the right hand. The other two workings and the
 rules that keep them from multiplying are §6.5.
 
-### 5.3 The forks — two rules, eight doors
+### 5.3 The forks — three shapes, and they are puzzles
+
+**Superseded 2026-08-10. `docs/PUZZLES.md` is the design of record for
+everything in this section**; what follows is the shape and the reasons, and that
+file carries the verb ladder, the atoms, the combinators and the prefabs.
 
 The fantasy is: *the dungeon reshapes itself around what you have proved you can
-do.* The implementation is two sentences.
+do.* The version of this section that shipped implemented that as **a locked
+door**, and a locked door is the wrong noun. **A door that opens because you own
+item X is a check, not a challenge.** Zelda's actual verb is that the item lets
+you see and change the room, and a game that calls itself a Zelda-like has to
+pay that.
 
-> **The shortcut on floor N is opened by floor N's own boss item, and skips
-> floor N.**
+So the forks are **puzzles**, and there are three shapes of them.
+
+> **Shortcut.** Near the entrance. Needs **floor N's own boss item**, and skips
+> floor N.
 >
-> **The vault on floor N is opened by floor N+1's boss item, and holds a relic.**
+> **Gate room.** On the way to the boss. Needs an item **you already own** —
+> never anything else — and opens a **cycle** back toward the entrance.
+>
+> **Treasure.** Off the mid-ring, optional. Holds a **miniboss** and a rich
+> chest. The **vault** is the rich case of this shape and keeps its own rule:
+> needs **floor N+1's boss item**, and holds a relic.
 
-That is all of it. Eight doors, one rule each.
+**The gate room is the new one, and it is the one that makes this a Zelda-like.**
+A puzzle is required to walk the critical path. That is a real change to what the
+game asks of a player and it was the owner's call: it is the differentiator, and
+it is true to the core the pitch claims.
+
+**The rule that keeps it from ever blocking anyone** is that a gate room may only
+ask for a verb the player already has. Floor 1's is a key hunt, because T0 is all
+it may ask for and a key hunt is the honest T0 puzzle — Ocarina's first dungeon
+is also mostly a key and a ladder. Pillar 2 survives: *a cautious player is never
+blocked.*
+
+**And the cycle is the walk home.** The loop a gate room opens comes out near the
+entrance, so solving the puzzle physically shortens the extraction walk. §2 asks
+*is what I am carrying worth more than the walk back*, and a puzzle that answers
+it with **less walk** pays in this game's own currency instead of in power. That
+is why cycles belong here rather than in a generic Zelda-like, and it is the
+reason `dungeon.gd`'s room **tree** grows exactly one extra edge per floor.
 
 **The shortcut says: prove you have done this, and never do it again.** Once the
-Warden is dead you own the Bow, and a bow-locked door twenty metres from the
+Warden is dead you own the Bow, and a bow *puzzle* twenty metres from the
 Cistern's entrance drops you at the Foundry's mouth. On your fifth run you are at
 the Choir in ninety seconds.
+
+That promise is why **a shortcut is drawn from exactly tier N** and never from
+"N or above" (`docs/PUZZLES.md` §1). If a seed can put a hookshot puzzle on floor
+1's shortcut, floor 1's shortcut does not open until floor 3 is dead and the
+ninety seconds quietly become two floors away.
 
 **The vault says: come back with the thing from downstairs.** It is the classic
 Zelda backtrack and it is what makes floor 1 worth re-entering on hour ten. Three
@@ -302,9 +403,12 @@ rooms, a harder pack than the floor around it, one relic, one rich chest.
 Floor 4 has no vault — the boss room is the vault. Floor 4's shortcut is opened
 by the Far Lantern and leads to the Long Descent.
 
-**A fork is a door and a three-room prefab. It is not an alternate level.** The
+**A fork is a puzzle and a three-room prefab. It is not an alternate level.** The
 moment a fork wants its own tint, its own roster or its own boss, it has stopped
-being a fork and started being floor 5, and floor 5 is out of scope.
+being a fork and started being floor 5, and floor 5 is out of scope. The same
+ceiling applies one level down: a *puzzle* that wants a prop the atom list does
+not have has stopped being a puzzle and started being a mechanic
+(`docs/PUZZLES.md` §8).
 
 ---
 
@@ -524,9 +628,38 @@ picking *one* answer, you are picking a mix: heavy chest and light boots is a
 build, and so is the opposite.
 
 **A piece commits.** Once a piece has taken a rung on one path, the other path is
-closed for that piece — you cannot buy three heavy rungs and then re-spec light.
+closed for that piece — you cannot buy three heavy rungs and then walk into light.
 Implementation: the two paths are two track ids and the sibling's ceiling drops
 to zero, so `Game.upgrades` stays `{track: int}` and nothing new is stored.
+
+**But it can be undone at the counter, and the price is the point.** *Added
+2026-08-10.* "No re-spec" was written against a re-spec that costs **gold**, and
+that objection is right — a build you can undo for gold is a menu. §3 supplies a
+better price:
+
+> **Reforge (smith).** The plate goes back in the fire. **The components come
+> back. The gold does not.** The piece returns to rung 0 on the opposite path.
+>
+> **Recut (jewelcrafter).** You cannot melt a stone. **It comes back one rung
+> lower and the material is lost to the wheel.**
+
+**Components are the pacing gate and gold is the grind** (§3), so changing your
+mind should cost you *time in the grind* and never *progress through the gate*.
+A player who reforges a full-heavy chest at hour twelve is out a couple of runs'
+takings and keeps every Cold Iron Core — they can rebuild at once, and what they
+actually paid was the walk. It stops being a menu because the purse feels it, and
+it stops being a wall because the scarce thing is conserved.
+
+The asymmetry between the two counters is physical rather than balance-driven:
+**metal is conserved, stone is not.** The jeweller stays the harder commitment,
+which is correct, because she already ships a hedge the smith does not — two ring
+slots drawing on the same pair, so *one Edge and one Swift* is a legitimate build
+rather than a mistake you have to buy your way out of.
+
+**Eight decisions, not twenty.** The four gear ladders (edge, guard, string,
+chain) have no fork and nothing to undo. The commitment only ever bites on four
+armour pieces and four jewel slots, which is what makes this cheap to offer: two
+rows on catalogues that already exist.
 
 **The speed cost never touches `K.RUN_SPEED`.** That constant is `[oot]`,
 measured, and pillar 1 says the feel is not negotiable. The penalty is a
@@ -597,8 +730,9 @@ question, and it is the same shape as §2's — *what are you willing to carry?*
 - **No relic is a stat** (§6.3). Relics change the garrison; the ladders change you.
   The moment a relic grants soak, the twelve stop being the reason to keep
   playing and become twelve more rungs.
-- **No re-spec, no refund.** A path you committed is a path you committed. A
-  build you can undo for gold is not a build, it is a menu.
+- **No re-spec *for gold*.** A build you can undo for gold is not a build, it is
+  a menu. Reforge and Recut are above, and they are priced in the currency that
+  makes them cost something without costing progress.
 - **No sixth stat, no ninth path, no second jewelcrafter.** `docs/SCOPE.md` §1
   carries all three as counts.
 - **No armour visuals.** Every piece is a number. Modular armour art is four
@@ -627,6 +761,34 @@ The per-floor curve lives in one file, `scripts/core/progression.gd`, and nothin
 else gets a curve of its own. It stops in exactly the places where continuing
 would make the game unreadable: the telegraph never compresses past 60%, and a
 room never holds more than seven.
+
+### 7.1 The slider that goes the other way
+
+**Added 2026-08-10.** Pillar 2 says *greed is the difficulty slider* — and it is
+a good line, but it is a **one-directional** slider. It lets a player make the
+game harder and offers nothing at all to a player who is stuck. Every game this
+one is measured against ships both halves: Hades has the Pact of Punishment going
+up and God Mode coming down, Celeste has assists, Returnal relented.
+
+So: **an options toggle, driven by deaths rather than by a menu.** It starts at a
+small damage resistance, climbs a couple of points every time you die, and caps
+well short of invulnerable. It can be switched on or off at any moment and it
+disables nothing — no ending, no plaque, no relic.
+
+Three properties, and each one is the reason it is this design and not a
+difficulty menu:
+
+- **It is driven by deaths**, so it only ever reaches the player who is actually
+  stuck. Nobody is asked to declare themselves bad at the game before they have
+  played it, which is the thing an EASY / NORMAL / HARD screen asks on the title
+  card.
+- **It does not touch the world.** The bands, the spawns and the telegraphs are
+  untouched, so §7 is intact — this is not level-scaling by another name. The Cut
+  stays exactly as dangerous; the hero stops dying to it.
+- **It lives in options and not in the fiction.** Hades can make it a boon
+  because Hades has gods who talk to you. This game has five counters and no
+  dialogue (`docs/SCOPE.md`: dialogue trees, 0), and inventing an NPC to hand
+  over a mercy is how §6.1 gets broken. Name it plainly and put it in the menu.
 
 ---
 
@@ -705,11 +867,17 @@ the longer list and the rule for adding to it.
 - **Relics as a drop table.** Twelve named objects in twelve named places. The
   moment a relic can *roll*, it stops being a thing you remember finding.
 - **A thirteenth relic.**
-- **A sixth stat, a ninth upgrade path, a re-spec, and armour you can see.** All
-  four are §6.6, which holds the reasons. The short forms: a stat that needs a
-  tooltip does not matter; a build you can undo for gold is a menu; and modular
-  armour art is four meshes × two paths × four rungs against a rig this project
-  has already had to fix three times.
+- **A sixth stat, a ninth upgrade path, a re-spec priced in gold, and armour you
+  can see.** All four are §6.6, which holds the reasons. The short forms: a stat
+  that needs a tooltip does not matter; a build you can undo *for gold* is a
+  menu — which is why Reforge is priced in the grind and refunds the gate; and
+  modular armour art is four meshes × two paths × four rungs against a rig this
+  project has already had to fix three times.
+- **A difficulty menu on the title card.** §7.1 is the answer instead, and the
+  difference is that it never asks anyone to rank themselves before they have
+  played.
+- **A locked door standing in for a puzzle.** §5.3. It was the thing in this
+  design most obviously borrowing Zelda's noun without paying for the verb.
 
 ---
 

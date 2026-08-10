@@ -26,14 +26,20 @@ definition**, and §4.2 applies.
 |---|---|---|
 | Dungeon floors | **4** | + 1 endless mode, already built |
 | Bosses | **4** | Warden, Slag Ogre, Bellwake, Riven Knight |
-| **New monster models** | **0** | Bosses are scaled/re-tinted `golem`, `ogre`, `wraith`, `knight_iron` — all on disk |
+| **New monster models** | **0** | Bosses are scaled/re-tinted `golem`, `ogre`, `wraith`, `knight_iron`. The four **minibosses** take four of the five the bosses leave — `troll`, `orc`, `skeleton`, `kobold` — the same way, and their move sets are the design, not the silhouettes. **No floor's miniboss shares a model with its boss**; that is the rule that picks these four |
 | Enemy kinds in rotation | **9** | Everything in `assets/monsters/`. No tenth. |
 | Dungeon kits | **1** | The P6 kit, four tints |
 | Usable items | **6** | Bow (built), Hookshot (built), **Burst**, **Sustain**, **Ballast** (new), Far Lantern (no verb) |
 | **Ring stops** | **6** | Sword, bow, hookshot, Burst, Sustain, Ballast. **Hard ceiling** — `docs/CONTRACT.md` §4.1 |
-| **New mechanics** | **1** | The working. Same arc, fuse and sphere query the Bomb Bag was; Sustain and Ballast are rows on it. That is the entire mechanical invention budget. |
-| Locked doors | **8** | 4 shortcuts, 3 vaults, 1 to the Long Descent |
+| **New mechanics** | **2** | The working, and **the puzzle**. Was 1. See §4.2's fourth ledger line — this is an owner's amendment, not an absorption. |
+| Locked doors | **8** | 4 shortcuts, 3 vaults, 1 to the Long Descent. **They are puzzles now, not checks** — `docs/PUZZLES.md`, GDD §5.3 |
 | Vault prefabs | **3** | Three rooms each |
+| **Puzzle atoms** | **8** | Phase 1: key door, urn, plate, push block, eye switch, cracked pillar, hookshot target, sun switch. Phase 2's four are not committed |
+| **Puzzle prefabs** | **12** | 4 verb tiers × 3 shapes (shortcut, gate room, treasure) |
+| **Puzzle combinators** | **5** | Nest, sequence, time, displace, cycle. This is where the variety lives, which is why the prefab count is 12 and not 40 |
+| **Chord edges** | **1 / floor** | The cycle. `dungeon.gd` builds a tree today; one extra edge per floor is the whole change |
+| **Echoes** | **12** | Run-scoped, 1 bag slot, worth 0 gold, dies with the run. Named — no thirteenth, same discipline as the relics |
+| **Minibosses** | **4** | One per floor, behind the treasure puzzle, **two** beats each (a boss gets three) |
 | Relics | **12** | Named, hand-placed, non-rolling. **Two are Verses; all twelve arrive broken** — GDD §6.4 |
 | Garrison NPCs | **5** | Vendor, smith, alchemist, **Lanternkeeper (new)**, **Jewelcrafter (new)**. There is no sixth. |
 | **Stats** | **5** | Damage, speed, max health, stamina, soak. GDD §6.6. No sixth. |
@@ -55,15 +61,22 @@ definition**, and §4.2 applies.
 
 ### What "new" actually costs, and why the zeroes matter
 
-The three zeroes are the reason this plan is small enough to finish.
+The two zeroes and the small integer are the reason this plan is small enough to
+finish. The integer moved from 1 to 2 on 2026-08-10 and **the zeroes did not**,
+which is the thing to check first when the next amendment is proposed.
 
 **Zero new monster models.** Ten `.glb` files are already imported, rigged
 against the shared 81-clip `monster_library.res`, and proven by
 `monster_lookdev.gd`. Four of them become bosses by scale, tint and an authored
-move set. Commissioning or generating four boss models — and rigging them, and
-fixing the facing bug that has bitten this project three times
-(`CLAUDE.md` §4) — is weeks, and it buys silhouettes the player sees for four
-minutes each.
+move set, and **four more become minibosses the same way** — a different four, so
+no floor's miniboss shares a silhouette with its boss. Commissioning or
+generating eight of them — and rigging them, and fixing the facing bug that has
+bitten this project three times (`CLAUDE.md` §4) — is weeks, and it buys
+silhouettes the player sees for four minutes each.
+
+**The move set is the design; the model is a placeholder.** That is the whole
+reason this row survived the 2026-08-10 amendment without moving: a miniboss is
+two authored beats and a telegraph, and none of that is art.
 
 **Zero new UI screens** *(one, since the footlocker; the rule is unchanged).*
 `TradeScreen` already drives two catalogues that behave differently (gold-only
@@ -82,9 +95,13 @@ is on the shelf, beside what is in the bag, moving both ways. Bending
 would have left the smith's counter carrying a branch for a case it never sees.
 **One exception, argued. Not a precedent.**
 
-**One new mechanic.** The working — a thrown arc, a fuse, a sphere query, a
-cracked wall. Everything else in the plan is a *gate on*, a *number in*, or an
-*arrangement of* something that already runs.
+**Two new mechanics** *(was one, amended 2026-08-10 — §4.2's fourth line)*. The
+working — a thrown arc, a fuse, a sphere query, a cracked wall. And the puzzle —
+eight props that emit `solved`, five combinators, and one extra edge in the room
+planner. Everything else in the plan is still a *gate on*, a *number in*, or an
+*arrangement of* something that already runs, and that includes the two things
+that arrived alongside the puzzle and are **not** mechanics: an Echo is a bag row
+worth zero, and the shield reflect is a raycast off a shield that exists.
 
 ### Why "usable items" went 4 → 6 and nothing else moved
 
@@ -206,13 +223,14 @@ milestone; land it on `main` when it closes.
 | M | What | Closed by |
 |---|---|---|
 | **M0** | **The freeze.** Land this doc + the GDD. Annotate `METAGAME.md` where it is superseded. No code. | Docs merged to `main` |
-| **M1** | **Gates and gear.** `Game.has()`. Sword + shield + rope at start; bow and hookshot removed from the starting kit; their forge ladders hidden at the smith until owned. Locked-door prop, keyed to an item id, with a refusal that names the item. | `gate_locks.gd` |
+| **MF** | **The forgiveness pass.** Four independent changes to systems that are already built, and **none of them depends on anything else in this table**: the document case (GDD §3.1), Reforge and Recut (§6.6), the receipt's second column, and the mercy toggle (§7.1). Lettered rather than numbered because it does not sit in the dependency chain — but it lands **before M4**, because the demo is a design instrument and a stranger's first hour is exactly what forgiveness is for. | `forgive_loop.gd` |
+| **M1** | **Gates and gear.** `Game.has()`. Sword + shield + rope at start; bow and hookshot removed from the starting kit; their forge ladders hidden at the smith until owned. **The atom kit** — the eight phase-1 puzzle props (`docs/PUZZLES.md` §2), each a body that emits `solved` and a door that listens, with a refusal that names the verb. This replaces the locked-door prop that used to be this row: a door keyed to an item id is the check §5.3 stopped being. | `gate_locks.gd`, `puzzle_atoms.gd` |
 | **M2** | **One boss.** The Cistern Warden. Boss door replaces the deepest room's stair; arena; a three-beat telegraphed move set; the drop (Bow + relic); the door stays open and the arena stays empty forever after. | `boss_cistern.gd` |
 | **M3** | **The relic and the hall.** `RelicDb` as a `Catalogue`; the Lanternkeeper NPC; donation on the existing `TradeScreen`; relics ride in the bag, are charged the fee, die with the bag and return to their room; **they arrive broken, name their home counter in the description, and cost gold to repair (GDD §6.4) — the first is free**; the first three unlocks live; one garrison prop lights per donation. | `relic_donate.gd` |
-| **M4** | **Floor 1, whole.** The Cistern's manifest: room count, band table, tint, boss door, shortcut door, vault door, deep chest. The vault prefab. **This is the demo.** | `cistern_floor.gd` |
+| **M4** | **Floor 1, whole.** The Cistern's manifest: room count, band table, tint, boss door, shortcut door, vault door, deep chest. The vault prefab. **Plus the whole puzzle spine, proven once**: the chord edge in `dungeon.gd`'s planner, the `gate_room` and `puzzle_room` anchors, the Cistern's T0 gate room (a key hunt) with its cycle back to the entrance, its treasure puzzle, **the Sluice-Keeper**, and the Echo pedestal. **This is the demo.** | `cistern_floor.gd`, `puzzle_loop.gd` |
 | — | **🛑 THE GATE. Play M4 for an hour. See §4.1.** | A human, playing |
-| **M5** | **The workings.** Burst: throw arc, fuse, blast, damage, cracked walls. The one new mechanic. Then Sustain and Ballast as rows on it, and charges on the alchemist's board. | `bomb_throw.gd` |
-| **M6** | **Floors 2–4 and bosses 2–4.** Repetition of M2 and M4 with the pattern proven. Three manifests, three move sets, two vault prefabs, six doors. **Invent nothing here.** | `foundry_floor.gd`, `choir_floor.gd`, `chord_floor.gd` |
+| **M5** | **The workings.** Burst: throw arc, fuse, blast, damage, cracked walls. Then Sustain and Ballast as rows on it, and charges on the alchemist's board. **This is also what switches the T2 atoms on** — the cracked pillar is built in M1 and inert until here, which is the correct order: a prop with no verb is a prop, and a verb with no prop is a dead end. | `bomb_throw.gd` |
+| **M6** | **Floors 2–4, bosses 2–4, minibosses 2–4.** Repetition of M2 and M4 with the pattern proven. Three manifests, three boss move sets, three miniboss move sets, two vault prefabs, six doors, three gate rooms, three treasure puzzles. **Invent nothing here.** | `foundry_floor.gd`, `choir_floor.gd`, `chord_floor.gd` |
 | **M7** | **The endings.** Lantern ending + credits; the Long Descent gate and the floor-10 relic; the plaque; the Chord ending. Relics 4–12 wired. | `endings.gd` |
 | **M8** | **Audio.** `Bus.request_sfx` is emitted today and nothing listens (`GDD` §8, as it stood). Music, ambience, the whole SFX vocabulary. This is a ship blocker, not a polish item. | `sfx_cues.gd`, extended |
 | **M9** | **Ship.** Settings, rebinding, export presets, controller glyphs on every platform, save migration, the store page, the trailer. | A build a stranger can install |
@@ -245,6 +263,10 @@ in writing, in the card:**
 1. Did you want to go back down? *Why* — name the specific thing you wanted.
 2. Did you ever leave with a relic and feel the walk? Did you ever lose one?
 3. Did the garrison changing register at all, or did you have to be told?
+4. **The gate room: was it a puzzle or a chore?** And when the cycle opened, did
+   you recognise where you had come out — or did you just walk through a door?
+   That recognition is the entire claim `docs/PUZZLES.md` §4 makes, and M4 is the
+   only cheap place to find out it is false.
 
 If the answers are weak, **the fix is at M4, not at M6.** Three more floors of a
 loop that is not compelling is three times the content and none of the fun, and
@@ -271,6 +293,7 @@ not worth adding.
 | The Sustain-Verse, the Ballast-Verse (2 relics) | **Fletcher's Jig** and **Waterwheel Gear**, deleted | GDD §6.2 |
 | Usable items 4 → 6 | Nothing — a working is a row in `armament_db.gd`, and the **ring stops** ceiling was added in the same commit to cap it | §1 |
 | **The gear loop.** Garrison NPCs 4 → 5, forge ladders 5 → 12, 8 jewel tracks, 5 named stats | **Nothing. This is an owner's amendment to the manifest, made deliberately and with the cost known.** | GDD §6.6 |
+| **Puzzles, Echoes and minibosses.** New mechanics 1 → 2, 8 atoms, 12 prefabs, 12 Echoes, 4 minibosses, 2 anchor kinds, 1 chord edge per floor | **Nothing. The second owner's amendment, 2026-08-10.** The jewelcrafter's 8 tracks were offered as the deletion and the owner declined | `docs/PUZZLES.md` |
 
 The first line is the rule working as intended: the two deleted relics were the
 only entries on GDD §6.2's table that were numbers on a subsystem rather than
@@ -304,6 +327,30 @@ What the ledger asks in return is that the cost is not pretended away:
 - **The ceilings in §1 are now doing the work §4.2 used to.** Five stats, four
   pieces, four slots, no sixth NPC, zero armour art. Those counts are the whole
   brake, so a proposal that moves one of them is back to needing a deletion.
+
+The fourth line is the same call made a second time, and it needs the same
+honesty. The owner's position is that **a locked door standing in for a puzzle**
+was the design borrowing Zelda's noun without paying for Zelda's verb, and that
+the gate room — a puzzle you must solve to walk the critical path — is the
+differentiator rather than a garnish. The jewelcrafter was put on the table to
+pay for it and was declined, on the same grounds as the third line: the gear loop
+is *why you delve*, not a service beside it.
+
+What it costs, stated rather than pretended away:
+
+- **The bill is art and tuning, not engineering.** Eight props, four miniboss
+  move sets and twelve prefabs. The mechanism is genuinely small — the atoms are
+  bodies that emit `solved` and doors that listen, the cycle is one extra edge in
+  `dungeon.gd`'s planner, and an Echo is a bag row worth zero.
+- **This is the second amendment in two days.** That is the number to watch. Two
+  is a pattern forming, and the rule §4.2 exists to enforce has now been set
+  aside twice by the only person allowed to set it aside. A third should be
+  hard, and the counts in §1 are what make it hard.
+- **`New mechanics` is now 2 and that row is the one to defend.** The puzzle is
+  a whole mechanic; the Echo is not, because it is a bag row and a pedestal, and
+  the shield reflect is not, because it is a raycast off a shield that exists.
+  Anything that claims to be free the way those two are should have to prove it
+  the way those two did.
 
 ### 4.3 Three questions before any new system
 
