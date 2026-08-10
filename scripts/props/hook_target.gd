@@ -18,6 +18,12 @@ extends Node3D
 ## face it is mounted on. `pull_point()` nudges up and out so the hero lands ON
 ## the ledge rather than embedded in the wall.
 
+## The hook head caught this ring. Emitted by the firer, once, at the instant it
+## bites — which is the instant `HookRing` (`docs/PUZZLES.md` §2, atom 8) has to
+## know about, and there is no other way for it to find out: a ring is a MARKER,
+## it has no collision of its own and nothing ever calls it.
+signal bitten(by: Node3D)
+
 ## Aim-assist tolerance, metres. Kept as data so dungeon gates can widen a
 ## deliberately generous ring without touching the firer.
 @export var snap_radius: float = 1.5
@@ -53,6 +59,15 @@ func pull_point() -> Vector3:
 ## ring itself, not the landing spot.
 func anchor_point() -> Vector3:
 	return global_position
+
+
+## The firer telling this ring it won the aim-assist. Called from
+## `HeroRanged._fire_hookshot`, and the only thing in the codebase that does.
+##
+## A method and not just the signal, so a subclass can react without a connect —
+## and so the firer has one name to call whether or not anyone is listening.
+func on_bitten(by: Node3D = null) -> void:
+	bitten.emit(by)
 
 
 func _build_ring() -> void:

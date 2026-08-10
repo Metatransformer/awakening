@@ -1,0 +1,45 @@
+[gd_scene load_steps=5 format=3]
+
+; The atom fixture: the proving ground with a PuzzleGate in its north doorway.
+; Owned by tools/directors/puzzle_atoms.gd.
+;
+; Underscore-prefixed like _gate_test.tscn and _lookdev.tscn -- it is a harness,
+; not a room the game ships.
+;
+; **The eight atoms are NOT in this file.** The director builds them through
+; `PuzzleAtoms.make()`, which is the same call a generator will make, so the
+; factory and the table are under test rather than being bypassed by eight
+; hand-placed nodes. A fixture that instanced the scripts directly would prove
+; the props and nothing about the kit.
+;
+; The gate IS authored here, because its exports are the interesting half of it
+; and a door built in code hides the thing a placer has to get right.
+
+[ext_resource type="PackedScene" path="res://scenes/rooms/proving_ground.tscn" id="ground"]
+[ext_resource type="PackedScene" path="res://scenes/actors/hero/hero.tscn" id="hero"]
+[ext_resource type="PackedScene" path="res://scenes/camera/game_camera.tscn" id="camera"]
+[ext_resource type="Script" path="res://scripts/props/puzzle_gate.gd" id="gate"]
+
+[node name="AtomTest" type="Node3D"]
+
+[node name="Ground" parent="." instance=ExtResource("ground")]
+
+; Set 50 mm back into the reveal, exactly as _gate_test.tscn seats its doors, so
+; the doorway's surround frames the leaves instead of the leaves standing proud.
+;
+; `mark_tier = 1` so it wears the bow's sigil out of LockedDoor.SIGILS -- the
+; whole claim of PuzzleGate's class note about there being one sigil table. Its
+; atoms are three eye switches (T1), which is what makes that mark honest.
+[node name="Gate" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -10.05)
+script = ExtResource("gate")
+puzzle_id = &"demo"
+mark_tier = 1
+label = "The Sounding Gate"
+destination = &"atom_demo"
+
+[node name="Hero" parent="." instance=ExtResource("hero")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 7)
+
+[node name="GameCamera" parent="." instance=ExtResource("camera")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 10)

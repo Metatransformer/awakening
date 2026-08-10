@@ -364,6 +364,10 @@ func _fire_hookshot() -> bool:
 		anchor = ring.anchor_point()
 		pull = ring.pull_point()
 		bit = true
+		# Told, at the instant it wins. A ring has no collision of its own — it is
+		# a marker the scan above prefers — so this call is the ONLY way a
+		# `HookRing` puzzle atom can ever learn it was the one caught.
+		ring.on_bitten(_hero)
 	else:
 		_query.from = from
 		_query.to = from + aim * reach
