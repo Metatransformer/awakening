@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
-"""Build the menu action glyphs as deterministic SVG source.
+"""Build the menu glyphs as deterministic SVG source.
 
-    python3 tools/gen_icons/build_action_icons.py
-    python3 tools/gen_icons/build_action_icons.py --check
+    python3 tools/gen_icons/build_ui_icons.py
+    python3 tools/gen_icons/build_ui_icons.py --check
+
+Two families, one generator, because they have to look like each other:
+
+    actions/   the verbs -- what a VerbRow or a menu button DOES
+    worn/      the eight body slots -- what a SlotTile beside the doll marks
 
 Ported from ~/valenfeld's tools/gen_icons/build_campaign_action_icons.py, with
-this game's verb vocabulary. The shared ones (back, coin, crafting, leave, read,
-shops, trade, places, enter_dungeon) are its glyphs unchanged, so the two games
-draw the same idea the same way.
+this game's vocabulary. The shared ones (back, coin, crafting, leave, read,
+shops, trade, places) are its glyphs unchanged, so the two games draw the same
+idea the same way.
 
 WHY GENERATED, AND WHY 24px LINE ART
 
@@ -16,9 +21,9 @@ a VerbRow gives an icon it turns to mud -- a dark smudge that reads as a
 rendering fault, which is exactly what the first pass of this port looked like.
 A row glyph has to be line art authored AT the size it is drawn.
 
-One stroke weight, one colour, one cap and one join across the whole family, so
-twenty icons read as one set instead of twenty decisions. STROKE is the theme's
-TEXT vellum: the glyph is a letterform in the row, not a picture in it.
+One stroke weight, one colour, one cap and one join across BOTH families, so
+thirty-seven icons read as one set instead of thirty-seven decisions. STROKE is
+the theme's TEXT vellum: the glyph is a letterform in the row, not a picture.
 
 Godot imports the committed SVGs directly -- no raster copy, no art service. The
 --check mode is the drift gate: an icon edited by hand instead of here will fail
@@ -31,13 +36,13 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-OUTPUT = ROOT / "assets" / "icons" / "actions"
+ICONS = ROOT / "assets" / "icons"
 ## UITheme.TEXT (0.902, 0.867, 0.788). The glyphs are authored in the body-text
 ## colour and tinted per-row by modulate when a row needs a different voice.
 STROKE = "#e6ddc9"
 
 # Fragments live in the same 24x24 space VerbRow's 19px slot samples from.
-GLYPHS = {
+ACTIONS = {
     # --- shared with valenfeld, unchanged -------------------------------------
     "back": '<path d="M20 12H5M10 6l-6 6 6 6"/>',
     "coin": '<ellipse cx="12" cy="7" rx="7" ry="3"/><path d="M5 7v5c0 1.7 3.1 3 7 3s7-1.3 7-3V7"/>'
@@ -109,6 +114,44 @@ GLYPHS = {
     "upgrade": '<path d="M12 20V6"/><path d="m6 12 6-6 6 6"/><path d="M6.5 21h11"/>',
 }
 
+## The eight worn slots, as the PIECE rather than the body part. A tile already
+## says "CHEST" in words directly under the glyph, so a torso outline would be
+## the caption drawn twice; what the player cannot read off the caption is what
+## kind of thing goes there, and that is what these draw.
+##
+## Drawn front-on and symmetric, because they sit in a stacked column where a
+## row of leaning shapes reads as a wobble.
+WORN = {
+    # A cuirass: shoulder line, waist taper, a V neckline and a belt. The first
+    # pass had a centre seam and a chest line instead, which at 19px is a
+    # four-pane window -- two straight lines beat the silhouette outright.
+    "chest": '<path d="M7 4h10l1.5 4.5-1.5 1.5v9H7v-9L5.5 8.5z"/>'
+             '<path d="M9.5 4 12 7.5 14.5 4"/><path d="M7.5 15.5h9"/>',
+    # A vambrace, laced. Not a whole arm -- the caption says ARMS, the glyph
+    # says the thing you buy for them.
+    "arms": '<path d="M8.5 4h7l1 6-1.5 9h-6L7.5 10z"/>'
+            '<path d="M9 8h6M9.5 12h5M10 16h4"/>',
+    # Greaves: two plates over a shin, with the knee line that stops the pair
+    # reading as the numeral II.
+    "legs": '<path d="M6 4h5v7l-1 9H6.5L6 11z"/><path d="M13 4h5l-.5 7-.5 9h-3.5l-1-9z"/>'
+            '<path d="M6.2 10.5h4.7M13.4 10.5h4.4"/>',
+    # A boot, in profile -- the ONE asymmetric glyph in the family, because a
+    # symmetric boot is a bucket.
+    "boots": '<path d="M8 3h5v9l5 4v4H8z"/><path d="M8 16h6"/><path d="M8 20h10"/>',
+    # A pendant on a cord. The cord is the whole tell: without it the drop is a
+    # gem, which is what `jewel` already means in the other family.
+    # Kept NARROW and short: a wide cord arc over a small drop is a wishbone,
+    # which is what the first pass read as at every size.
+    "amulet": '<path d="M8 3.5 12 8l4-4.5"/><path d="m12 8 4 5-4 7-4-7z"/>',
+    # A band, seen at an angle, with the stone on top. A flat circle is `coin`.
+    "ring": '<ellipse cx="12" cy="14.5" rx="5.5" ry="6"/><path d="m12 4 2.5 3-2.5 2.5L9.5 7z"/>',
+    # A bangle: an OPEN band, so it is not the ring at a different size. The gap
+    # is at the bottom where a bracelet's clasp is.
+    "bracelet": '<path d="M8.5 19.5a7.5 7.5 0 1 1 7 0"/><path d="M8.5 19.5h2M13.5 19.5h2"/>',
+}
+
+FAMILIES = {"actions": ACTIONS, "worn": WORN}
+
 
 def render(fragment: str) -> str:
     return (
@@ -125,24 +168,28 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="fail if committed SVGs drift")
     args = parser.parse_args()
     mismatches: list[str] = []
-    if not args.check:
-        OUTPUT.mkdir(parents=True, exist_ok=True)
-    for name, fragment in sorted(GLYPHS.items()):
-        path = OUTPUT / f"{name}.svg"
-        expected = render(fragment)
-        if args.check:
-            if not path.exists() or path.read_text(encoding="utf-8") != expected:
-                mismatches.append(path.relative_to(ROOT).as_posix())
-        else:
-            path.write_text(expected, encoding="utf-8")
+    total = 0
+    for family, glyphs in sorted(FAMILIES.items()):
+        out = ICONS / family
+        if not args.check:
+            out.mkdir(parents=True, exist_ok=True)
+        for name, fragment in sorted(glyphs.items()):
+            path = out / f"{name}.svg"
+            expected = render(fragment)
+            if args.check:
+                if not path.exists() or path.read_text(encoding="utf-8") != expected:
+                    mismatches.append(path.relative_to(ROOT).as_posix())
+            else:
+                path.write_text(expected, encoding="utf-8")
+            total += 1
     if args.check and mismatches:
-        print("action icons drifted from the generator:")
+        print("ui icons drifted from the generator:")
         for name in mismatches:
             print("  %s" % name)
-        print("re-run: python3 tools/gen_icons/build_action_icons.py")
+        print("re-run: python3 tools/gen_icons/build_ui_icons.py")
         return 1
-    print("action icons: %d glyphs %s %s" % (
-        len(GLYPHS), "checked" if args.check else "written", OUTPUT.relative_to(ROOT)))
+    print("ui icons: %d glyphs in %d families %s" % (
+        total, len(FAMILIES), "checked" if args.check else "written"))
     return 0
 
 

@@ -146,43 +146,49 @@ func _icon_sheet(rig, panel: Panel) -> void:
 	col.add_theme_constant_override("separation", 14)
 	pad.add_child(col)
 
-	var title := Label.new()
-	title.text = "Action glyphs"
-	UITheme.apply_text_style(title, UITheme.TYPE_H1)
-	col.add_child(title)
+	# Both families on one sheet, because the point of generating them from one
+	# file is that they look like each other — and that is a claim you can only
+	# check side by side.
+	for family: String in ["actions", "worn"]:
+		var title := Label.new()
+		title.text = "%s glyphs" % family
+		UITheme.apply_text_style(title, UITheme.TYPE_H2)
+		col.add_child(title)
 
-	var grid := GridContainer.new()
-	grid.columns = 8
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 14)
-	col.add_child(grid)
+		var grid := GridContainer.new()
+		grid.columns = 8
+		grid.add_theme_constant_override("h_separation", 10)
+		grid.add_theme_constant_override("v_separation", 14)
+		col.add_child(grid)
 
-	var dir := DirAccess.open("res://assets/icons/actions")
-	if dir == null:
-		push_error("[kit_lookdev] the action-glyph family is missing; run tools/gen_icons/build_action_icons.py")
-		return
-	var names: Array[String] = []
-	for f in dir.get_files():
-		if f.ends_with(".svg"):
-			names.append(f.trim_suffix(".svg"))
-	names.sort()
+		var dir := DirAccess.open("res://assets/icons/%s" % family)
+		if dir == null:
+			push_error("[kit_lookdev] family='%s' is missing; run tools/gen_icons/build_ui_icons.py"
+				% family)
+			continue
+		var names: Array[String] = []
+		for f in dir.get_files():
+			if f.ends_with(".svg"):
+				names.append(f.trim_suffix(".svg"))
+		names.sort()
 
-	for n in names:
-		var cell := VBoxContainer.new()
-		cell.add_theme_constant_override("separation", 4)
-		# Drawn at BOTH sizes the kit uses: 19px is the verb row, 42px is the
-		# plate-header emblem. A glyph that survives one and not the other is
-		# a glyph that is about to look wrong in exactly one place.
-		var pair := HBoxContainer.new()
-		pair.alignment = BoxContainer.ALIGNMENT_CENTER
-		pair.add_theme_constant_override("separation", 8)
-		var tex := UiKitScript.resolve_icon(UiKitScript.action_icon(n))
-		pair.add_child(KitIconScript.rect(tex, 42))
-		pair.add_child(KitIconScript.rect(tex, 19))
-		cell.add_child(pair)
-		var cap := Label.new()
-		cap.text = n
-		cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		UITheme.apply_text_style(cap, UITheme.TYPE_CAPTION)
-		cell.add_child(cap)
-		grid.add_child(cell)
+		for n in names:
+			var cell := VBoxContainer.new()
+			cell.add_theme_constant_override("separation", 4)
+			# Drawn at every size the kit uses: 42 is the plate-header emblem, 22
+			# the slot tile, 19 the verb row. A glyph that survives one and not
+			# the others is about to look wrong in exactly one place.
+			var pair := HBoxContainer.new()
+			pair.alignment = BoxContainer.ALIGNMENT_CENTER
+			pair.add_theme_constant_override("separation", 8)
+			var tex := UiKitScript.resolve_icon("res://assets/icons/%s/%s.svg" % [family, n])
+			pair.add_child(KitIconScript.rect(tex, 42))
+			pair.add_child(KitIconScript.rect(tex, 22))
+			pair.add_child(KitIconScript.rect(tex, 19))
+			cell.add_child(pair)
+			var cap := Label.new()
+			cap.text = n
+			cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			UITheme.apply_text_style(cap, UITheme.TYPE_CAPTION)
+			cell.add_child(cap)
+			grid.add_child(cell)
