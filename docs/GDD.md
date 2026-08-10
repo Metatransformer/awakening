@@ -12,9 +12,17 @@ we agreed to ship.
 **Status.** The moment-to-moment and the metagame are built and playable: town,
 vendor, smith, alchemist, forge ladders, bag, extraction, Heat, bottles, bow,
 hookshot, arrows, and a seeded dungeon with six enemy kinds. What is *not* built
-is everything in §5, §6 and §7 — the spine, the gates, the relics, the endings.
+is everything in §5, §6 and §7 — the spine, the gates, the relics, the endings,
+the three workings (§6.5) and the gear loop's expansion (§6.6).
 `docs/METAGAME.md` is the design of record for what exists today and every number
 in it is read from the code it names.
+
+**Read §6.6 before §5 if you are here to build.** The gear loop — the ladders,
+the armour paths, the jewelcrafter — is the reason the player descends, and it is
+the half of this document with the most code already standing behind it. The
+Descent is what the loop is *for*; the loop is what makes the Descent worth
+repeating. A build that treats §5 as the game and §6.6 as shopping has the
+weights backwards.
 
 ---
 
@@ -488,6 +496,29 @@ measured, and pillar 1 says the feel is not negotiable. The penalty is a
 multiplier applied on top of the curve, and **all four pieces at full heavy caps
 at −8%** — enough to feel in a corridor, not enough to stop being Ocarina.
 
+**Rung 0 is the piece you start in, and there are three to buy** — `K.FORGE_MAX`,
+same as every other ladder, so the split changes the table's width and not its
+height.
+
+**The constraint that matters more than any starting value: the four pieces
+*together* must land about where the one `plate` ladder landed.** `K.PLATE_SOAK`
+is `[0, 1, 2, 3]` today — a maximum of three quarter-hearts off a blow — and
+every enemy in the game is tuned against that ceiling. Four pieces each running
+0→3 would be **twelve**, which is not four times better armour, it is the floor
+in `Hero.hurt` (never lighter than one quarter) absorbing the whole difficulty
+curve. Every hit in the game would land for one quarter and §7's *difficulty
+comes from depth* would be dead.
+
+So: **full heavy across all four pieces should total roughly 4, and full light
+roughly 2.** How that distributes across sixteen rungs is a tuning question, it
+is answered by `forge_loop.gd` and by playing, and it is the *first* thing to get
+wrong. Do not carry a per-piece array over from `PLATE_SOAK` — that array was
+written for one piece.
+
+The speed multiplier is the safer half: per-piece heavy rungs multiply, and four
+pieces at heavy rung 3 must come to **≈0.92**. Multiplication rather than a
+special case that watches for the fourth piece.
+
 #### The jewelcrafter — four slots, eight specializations
 
 A fifth counter, and the only new NPC this game gets. She is a `Catalogue`
@@ -496,7 +527,12 @@ four (`docs/SCOPE.md` §1 keeps **new UI screens at 0**, and this does not break
 it).
 
 Four slots: **an amulet, two rings, and a bracelet.** Each is bought as a plain
-base, then specialized once, then climbed **four rungs**.
+base, then specialized once, then climbed **four rungs** — one deeper than a
+forge ladder, because a jewel has no rung 0 you already own.
+
+The same soak warning applies to **Ward** and the same speed warning to
+**Swift**: a jewel path and an armour path that both move the same stat are two
+faucets on one number, and the ceiling is the number's, not each faucet's.
 
 | Slot | Path A | Path B |
 |---|---|---|
@@ -625,6 +661,11 @@ the longer list and the rule for adding to it.
 - **Relics as a drop table.** Twelve named objects in twelve named places. The
   moment a relic can *roll*, it stops being a thing you remember finding.
 - **A thirteenth relic.**
+- **A sixth stat, a ninth upgrade path, a re-spec, and armour you can see.** All
+  four are §6.6, which holds the reasons. The short forms: a stat that needs a
+  tooltip does not matter; a build you can undo for gold is a menu; and modular
+  armour art is four meshes × two paths × four rungs against a rig this project
+  has already had to fix three times.
 
 ---
 
