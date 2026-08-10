@@ -840,7 +840,20 @@ func _physics_process(delta: float) -> void:
 	# The button is still down, so the guard comes straight back up on landing.
 	var rolling := _hero.state == Hero.MoveState.ROLL \
 		or _hero.state == Hero.MoveState.ROLL_RECOVER
-	var want_block := not locked and not rolling \
+	#
+	# AND NOT IN FIRST PERSON, which is the one place this button means something
+	# else. The left trigger (and RMB, its keyboard twin) is OOT's Z and does four
+	# things at once; from inside the hero's own head only two of them survive.
+	# Locking on still does — pull it at a goblin and `Targeting` acquires, which
+	# drops you back out into the lock, and that is the right way out. But the
+	# guard itself does not: his model is not drawn, so the shield is a pose
+	# nobody can see, and `Hero._tick_camera_facing` would spin his rooted body to
+	# wherever the player had just glanced. That last part is not merely untidy —
+	# it EATS the recentre. Pull the trigger at an empty corridor and the fourth
+	# thing Z does is put the camera back behind him, and a hero who turns to the
+	# lens at the same time leaves that ease with no error to close. So in here
+	# the button is the camera half of Z and nothing else.
+	var want_block := not locked and not rolling and not _hero.first_person() \
 		and Input.is_action_pressed(&"shield") and _swing_t < 0.0
 	if want_block != blocking:
 		blocking = want_block
