@@ -547,6 +547,18 @@ func _approach(rig, it: Interactable, at: Vector3, look_at = null) -> bool:
 	_stand_at(rig, at, look_at)
 	var seen: bool = await rig.until(func() -> bool: return Prompt.focus == it)
 	if not seen:
+		# **Say "he died" when he died.** A hero killed on the walk over is freed,
+		# so `Prompt._nearest` has no hero to measure from and takes focus off
+		# everything -- while `player_inside` stays true, because `body_exited`
+		# never fires for a body that was deleted rather than moved. The generic
+		# line below then reads as "the chest is broken" for a run that simply
+		# ended, and two of the four runs that produced it were spent looking at
+		# `Interactable` instead of at the health bar.
+		if rig.scene().get_tree().get_first_node_in_group(&"player") == null \
+				or not Run.in_dungeon:
+			print("MVP FAIL the hero died before he reached %s (in_dungeon=%s)"
+				% [it.prompt, Run.in_dungeon])
+			return false
 		print(("MVP FAIL %s never took the interact button after three seconds"
 			+ " standing in front of it (focus=%s, inside=%s, blocked=%s)") % [
 			it.prompt, Prompt.focus.prompt if Prompt.focus != null else "<none>",
