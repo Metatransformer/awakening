@@ -114,9 +114,13 @@ set it below ~14px, where the flared serifs close up — that is the floor the
 Retired in the same change, and not to be re-added without a reason written at
 `UITheme.BODY_TTF`: **Alegreya** (the variable serif that was the display face —
 Cinzel does that job now, and two serifs on one panel is drift, not hierarchy)
-and **Pixel Operator Bold** (its `keycap_font()` had no callers at all; the
-hard-edged voice on the HUD is `scripts/ui/pixel_font.gd`, which is drawn rects
-and not a font file).
+and **Pixel Operator Bold** (its `keycap_font()` had no callers at all).
+
+The HUD is on the same two faces. `scripts/ui/canvas_text.gd` paints
+`UITheme.display_font()` onto a CanvasItem for everything drawn rather than
+typeset — the vitals, the legend, the floor card, the key caps, the world
+prompts. Until 2026-08-10 that file was a 5×7 bitmap of its own, which made the
+HUD the one surface in the build that ignored the shipped pair.
 
 Two reasons this is an amendment and not a betrayal:
 
@@ -137,10 +141,10 @@ and `UITheme`.
 ### 3.1 The world faces
 
 **Neither of these is wired, and neither ships.** The HUD and the world draw
-through `scripts/ui/pixel_font.gd` — a 5×7 bitmap made of `draw_rect`, with no
-font file behind it. What follows is the intention this section was written
-with; treat the sizes as the type scale the HUD still obeys, and the two names
-as unbought. If you wire either one, delete this paragraph.
+through `scripts/ui/canvas_text.gd`, which sets §3.0's display face — Cinzel —
+on a CanvasItem. What follows is the intention this section was written with;
+treat the sizes as the type scale the HUD still obeys, and the two names as
+unbought. If you wire either one, delete this paragraph.
 
 **Display — Jacquard 24** (Google Fonts, OFL). A bitmap-grid pixel blackletter.
 Integer sizes only: 24 / 48 / 72. No smoothing, no subpixel positioning. Used
@@ -529,8 +533,9 @@ would come back as a quieter one.
 MIDNIGHT @80% plate: `↑ PRIMARY` or `↑ ALTERNATE`. A set is not a thing with an
 icon — it is which pair of hands you are looking at — and the two cells above it
 already show it. It is plated because it sits over the world with nothing else
-behind it, and it uses a real `↑` because `PixelFont.GLYPHS` has arrows and does
-NOT have ▲ ▼ ◄ ►, which render as the solid MISSING block.
+behind it, and it uses a thin `↑` rather than ▲: neither is in Cinzel, both
+arrive from the system fallback, and the solid triangle looms over the word
+beside it at cap height.
 
 **Only the item cell carries a key cap that fires it** — `X`, read from the live
 `InputMap` like every other cap (§5.2). The hands are not fired from the cluster;
@@ -752,7 +757,7 @@ Fractions of viewport, origin top-left; px at 1280×720.
 | Caret band | above every cell | 21 tall (8·2 + 5) | ← → right hand, ↓ item |
 | Loadout line | right-align to the cluster | below the key caps + 9 | plated, `↑ PRIMARY` |
 | Minimap frame | right-align 0.969 (1240) | 0.052 (37) | 148×148, 8 px pad |
-| Key caps | centred under cell | cell bottom + 4 | PixelFont ×2 (14 tall) |
+| Key caps | centred under cell | cell bottom + 4 | CanvasText, 14 tall |
 | Bag numeral baseline | right-align 0.969 | 0.900 (648) | 32 px |
 | Value slips | right-align 0.969, max w 0.094 | 0.803→0.858 | 3 px + 2 gutter |
 | Item toast baseline | right-align 0.969 | 0.767 (552) | 16 px |

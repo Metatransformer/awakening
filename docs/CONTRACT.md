@@ -1073,7 +1073,7 @@ locker's case, where the number of cells you own IS the information.
 
 **Every screen that shows more than one thing uses it.** The pouch, both sides of
 `TradeScreen`, the footlocker and the run-end receipt. Until 2026-08-09 only the
-pouch was a grid and the rest were columns of `PixelFont` text, so the same deep
+pouch was a grid and the rest were columns of canvas-drawn text, so the same deep
 amber was a tinted cell in your bag, a line of type at the vendor, and a third
 thing again on the receipt that took it away from you. The cell is the pouch's
 cell: the item's own `tint` as a chip, the name, and one line saying whatever
