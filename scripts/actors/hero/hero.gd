@@ -812,6 +812,12 @@ func _on_first_person_changed(on: bool) -> void:
 		_model.visible = not on
 
 
+## Whether the lens is inside his head. `HeroCombat` asks so the guard can stand
+## down in there — see the `want_block` note.
+func first_person() -> bool:
+	return _first_person
+
+
 ## A short-range lamp that travels with the hero.
 ##
 ## "Torches make pools of light and the space between them is dark" is the right

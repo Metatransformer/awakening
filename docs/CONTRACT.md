@@ -293,6 +293,23 @@ got there before the autoload menu: the menu recorded "visible" as the state to
 put back, restored "visible" on close, and mouse-look was dead for the rest of
 the session.
 
+The camera also **re-grabs on every entry into first person** (`_grab_cursor`,
+called from `_ready` and `set_first_person`). Not a second owner and not a
+release — the restore rule above is unchanged. It is the one moment where a free
+pointer is indistinguishable from a mode that ignores the mouse, so the stance
+asserts the grab rather than trusting that nothing in the session dropped it.
+
+**Mouse look reads `InputEventMouseMotion.screen_relative`, never `relative`.**
+By the time an event reaches `_unhandled_input` the viewport has divided
+`relative` by the canvas stretch, so it arrives in 1280x720 base units instead of
+in the units the hand moved. The game ships fullscreen (`window/size/mode=2`), so
+that divisor was measured at **3.8x** on the author's display: the documented
+0.2°/px was really 0.05°/px, the mouse felt disconnected from the camera, and the
+sensitivity silently changed with the window size with no setting to explain it.
+`screen_relative` (4.3+) is the same motion before that transform, which is the
+same contract the stick already had — `stick_speed_deg` is an angular rate and
+nothing scales it by the viewport.
+
 `LoadingCard` (`scripts/ui/loading/loading_card.gd`) is not in that stack because
 it is not a screen anyone opens: it is a child of Flow's own **200** layer, in
 front of the fade veil, raised and freed by `Flow._go` on the two transitions
@@ -332,7 +349,7 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `cam_up/down/left/right` | mouse motion (read in code) | right stick | camera |
 | `attack` | **LMB** | **RB / R1** (pad10) | light attack — the chain, or fire what is in the right hand |
 | `heavy` | **Shift+LMB** | **RT / R2** (axis5+) | heavy — one pull, one blow, on the **release**: **tap** = overhead, **hold** = spin, **airborne** = jump attack, **locked** = leap, or fire what is in the right hand. **The modifier only works because `attack` is read exactly** — see below |
-| `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held**, and it targets, and it recentres |
+| `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held**, and it targets, and it recentres. In first person the guard drops out and only the target/recentre halves remain |
 | `context` | **Space** | **B / Circle** (pad1) | **tap** = dodge — **hold** = run, and then it is not a dodge |
 | `use_item` | **R** | **X / Square** (pad2) | drink the selected bottle — §4.1 |
 | `jump` | **F** | **Y / Triangle** (pad3) | jump |
@@ -768,6 +785,27 @@ per event, because three listeners is three places for the fourth path in to be
 forgotten. `tools/directors/first_person.gd` is the proof, and it asserts that
 he *can* walk once he is back out: "he did not move" passes just as loudly when
 hero.gd failed to compile.
+
+**In first person, `shield` is the camera half of Z and nothing else.** RMB (and
+the left trigger, its pad twin) still acquires — pull it at a goblin and
+`Targeting` locks, which drops you back out into the lock, and that is the right
+way out. But the guard itself stands down: `HeroCombat._tick_combat` gates
+`want_block` on `Hero.first_person()`, because his model is not drawn — the
+shield would be a pose nobody can see — and because `Hero._tick_camera_facing`
+would spin his rooted body onto whatever the player had just glanced at, which
+**eats the recentre** the same press is asking for. With nothing lockable the
+press does the fourth thing Z does: it puts the view back down his facing. That
+was silent in here until `_apply_parallel` stopped refusing every recentre while
+`_fp01 > 0` — the one mode with no boom to read a room off was the one with no
+way to face forward again. Only a recentre *already in flight* when the toggle
+lands is unasked-for, and `set_first_person` clears that one at the entry.
+
+The recentre also **levels the pitch, but only in first person**. Out on the boom
+the pitch is the shot and the player picked it; in here it is where their face is
+pointing, and a face-forward that leaves them staring at the ceiling has not
+faced them forward. `tools/directors/fp_look.gd` is the proof for all of it —
+mouse look on both axes, the recentre landing on his facing, and the control that
+the *camera* moved rather than the hero.
 
 Read movement as
 `Input.get_vector("move_left","move_right","move_up","move_down")` so stick and

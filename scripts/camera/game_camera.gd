@@ -197,15 +197,29 @@ func _ready() -> void:
 	Bus.aim_changed.connect(set_aiming)
 	Bus.guard_changed.connect(set_guarding)
 
-	# The screenshot harness runs windowed; grabbing the cursor there would
-	# hijack the machine mid-capture. Its SceneTree carries a script, the
-	# shipping one does not — that is the cheapest reliable discriminator.
-	if capture_mouse and get_tree().get_script() == null:
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_grab_cursor()
 
 	if take_over_on_ready:
 		make_current.call_deferred()
 	set_physics_process(true)
+
+
+## Take the pointer, so the mouse steers the way the right stick does.
+##
+## The screenshot harness runs windowed; grabbing the cursor there would hijack
+## the machine mid-capture. Its SceneTree carries a script, the shipping one does
+## not — that is the cheapest reliable discriminator.
+##
+## Called on spawn AND on every entry into first person. The second call is not
+## redundant: the grab is a piece of state any full-screen menu is allowed to
+## take away (`PauseMenu`, the shop, the stash, the run-end screen all save and
+## restore it), and the window losing focus takes it away too. Entering first
+## person is the player saying "I am looking around now", which is exactly the
+## moment a free pointer reads as a mode that ignores the mouse — so the stance
+## re-asserts it rather than trusting that nothing dropped it.
+func _grab_cursor() -> void:
+	if capture_mouse and get_tree().get_script() == null:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -213,7 +227,26 @@ func _unhandled_input(event: InputEvent) -> void:
 		if mouse_look_requires_capture and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 			return
 		var mm := event as InputEventMouseMotion
-		_look_input += mm.relative * mouse_sensitivity
+		# `screen_relative`, NOT `relative`, and this is the whole of "the mouse
+		# barely turns the camera".
+		#
+		# By the time an event reaches `_unhandled_input` the viewport has already
+		# transformed it by the inverse of the canvas stretch, so `relative` is in
+		# 1280x720 BASE units rather than in the units the hand moved. The game
+		# ships fullscreen (`window/size/mode=2`) on a display far wider than the
+		# base, so every mouse movement arrived divided by the stretch factor —
+		# measured on this machine at 3.8x, which turns a documented 0.2°/px into
+		# 0.05°/px and makes the mouse feel like it is not connected to the camera
+		# at all. Worse, the divisor is the WINDOW's, so the sensitivity silently
+		# changed when the player resized or went windowed, and no setting the
+		# player could reach explained it.
+		#
+		# `screen_relative` (4.3+) is the same motion before that transform. It is
+		# what a look control wants: an angle per unit of hand movement, fixed, no
+		# matter what the window is doing. The stick has always worked this way —
+		# `stick_speed_deg` is an angular rate and nothing scales it by the
+		# viewport — so this is the mouse being held to the same contract.
+		_look_input += mm.screen_relative * mouse_sensitivity
 	elif event.is_action_pressed(&"first_person"):
 		set_first_person(not _fp)
 	# `attack` exactly (HeroCombat.ATTACK_EXACT): plain LMB is the light swing and
@@ -307,6 +340,16 @@ func set_first_person(on: bool) -> void:
 		return
 	_fp = on
 	if on:
+		# The mouse IS the right stick in here. See `_grab_cursor`.
+		_grab_cursor()
+		# Drop a recentre that was already in flight when the toggle landed.
+		# `_apply_parallel` honours a recentre from inside the head now, and a
+		# leftover one is the single case that rule must not cover: press Q at an
+		# empty corridor and V half a tick later, and the ease would carry on
+		# turning the player's own head for the rest of its four ticks with
+		# nothing asking it to. A recentre requested IN here is the player's; one
+		# that merely survived the entry is not.
+		_recenter_timer = 0.0
 		# Entering with the stick already held is the ordinary case — you press
 		# R3 out of a run — and the eject below would cancel that press on the
 		# very next frame, so the toggle would read as broken. It arms only once
@@ -527,13 +570,45 @@ func _apply_parallel(delta: float) -> void:
 	var want_fov := base + Settings.fov_offset
 	fov = lerpf(fov, want_fov, 1.0 - exp(-(1.0 / maxf(fov_blend_time, 0.001)) * delta))
 
-	# A recentre landing while the player is looking around from inside his own
-	# head would swing the whole world under a thumb that was not asking for it.
-	if _recenter_timer <= 0.0 or _fp01 > 0.0:
+	# THIS USED TO REFUSE TO RUN AT ALL WHILE `_fp01 > 0.0`, on the reasoning that
+	# a recentre landing inside the player's own head swings the whole world under
+	# a thumb that was not asking for it. The reasoning was right and the guard was
+	# too wide: EVERY recentre is a deliberate press (`Targeting` emits
+	# `Bus.camera_recenter` only on a `z_target` tap or a `shield` pull that found
+	# nothing lockable — RMB and the left trigger), so the only unasked-for one is
+	# a recentre that was already in flight when first person began. That is
+	# cleared at the entry instead, in `set_first_person`.
+	#
+	# What the wide guard cost: first person is the mode with no boom to read the
+	# room off, so "put me back facing the way I am standing" is MORE useful in
+	# here than out there — and the button that does it everywhere else was silent.
+	if _recenter_timer <= 0.0:
 		return
+	# `delta / REMAINING`, not `delta / recenter_time`, and the difference is
+	# whether this finishes. A fixed fraction-per-frame run for exactly its own
+	# time constant is the classic asymptote: it closes 1 - 1/e of the error and
+	# stops, so every recentre left about 37% of the angle behind. Out on the boom
+	# that hid — autoswing quietly finishes the job the next time the hero runs —
+	# but autoswing is off in first person, so in there the leftover simply stayed
+	# and the button read as a recentre that half-worked. Measured: a 31° shove
+	# came back to 10° and sat.
+	#
+	# Dividing by what is LEFT makes the last frame's fraction exactly 1, so the
+	# ease lands on the target instead of near it. It also turns the curve into a
+	# constant angular rate over the same 4 ticks, which is what "snap" meant.
 	_recenter_timer = maxf(_recenter_timer - delta, 0.0)
+	var k := clampf(delta / maxf(_recenter_timer + delta, 0.001), 0.0, 1.0)
 	var err := wrapf(behind_yaw() - _yaw, -PI, PI)
-	_yaw += err * clampf(delta / maxf(recenter_time, 0.001), 0.0, 1.0)
+	_yaw += err * k
+	# The PITCH comes back too, but only in first person, and the asymmetry is the
+	# point. Out on the boom the pitch is the SHOT — how high the camera stands
+	# over him — and the player picked it; a recentre that flattened it would undo
+	# a framing decision they never asked to undo. In here the pitch is where their
+	# face is pointing, and a "face forward again" that leaves them looking at the
+	# ceiling has not faced them forward. Scaled by `_fp01` so the blend out of the
+	# head does not step.
+	if _fp01 > 0.0:
+		_pitch += (pitch_deg - _pitch) * k * _fp01
 
 
 ## Battle1: frame the hero and what he is locked onto.
