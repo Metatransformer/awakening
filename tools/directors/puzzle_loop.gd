@@ -210,8 +210,15 @@ func _the_gate_room(rig, d: Node, hero: Node3D) -> void:
 		and bool(key.get(&"armed")))
 	await rig.capture(out.path_join("p_02_key_woken.png"))
 
+	# Stand on it until it is taken, not for a fixed ten frames. An `Area3D`
+	# registers a body that was TELEPORTED into it on the next physics tick that
+	# actually resolves the overlap, and how many process frames that takes is a
+	# property of the machine, not of the puzzle -- this beat failed about one run
+	# in ten with the fixed wait, always here, and the fix is to wait for the fact
+	# rather than for a number. The bound is still a real failure: if the key never
+	# grants, `_until` gives up and C9 fails, which is the outcome it always had.
 	hero.global_position = key.global_position
-	await rig.wait_frames(10)
+	await _until(rig, func() -> bool: return Game.small_keys > keys_before, 90)
 	_ck("C9 taking it grants a key (%d)" % Game.small_keys,
 		Game.small_keys == keys_before + 1)
 	_ck("C10 and solves the door's atom", bool(key.call(&"is_solved")))
@@ -543,6 +550,17 @@ func _stand_in_front(rig, hero: Node3D, at: Node3D, back: float,
 	stop.y = 0.15
 	hero.global_position = stop
 	await _look_at(rig, hero, at)
+
+
+## Wait until `cond` is true, or `frames` have gone by. Returns nothing: the
+## CHECK is still the caller's `_ck`, so a condition that never comes true fails
+## exactly as loudly as it did with a fixed wait -- this only stops a slow machine
+## from failing a beat that a fast one passes.
+func _until(rig, cond: Callable, frames: int) -> void:
+	for _i in frames:
+		if bool(cond.call()):
+			return
+		await rig.wait_frames(1)
 
 
 func _look_at(rig, hero: Node3D, at: Node3D) -> void:
