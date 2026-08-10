@@ -39,6 +39,14 @@ var upgrades: Dictionary[StringName, int] = {}
 ## that carried them home (`Run.extract` banks them). Components still in the
 ## bag when you die are gone with it.
 var components: Dictionary[StringName, int] = {}
+## Item id -> how many are in the footlocker in the hero's quarters. Persistent,
+## for the same reason `components` is: everything in it already survived a run.
+##
+## Here rather than on `Run` because the whole point of it is that it does NOT
+## die with the bag -- and here rather than folded into `components` because the
+## bench is material the forge eats and this is merchandise the player decided
+## not to sell yet. See `scripts/props/footlocker.gd`.
+var stash: Dictionary[StringName, int] = {}
 var arrows: int = 0
 var max_arrows: int = 30
 var bombs: int = 0
@@ -186,6 +194,7 @@ func reset() -> void:
 	bag_slots = K.START_BAG_SLOTS
 	upgrades.clear()
 	components.clear()
+	stash.clear()
 	arrows = 0
 	bombs = 0
 	small_keys = 0
@@ -210,6 +219,7 @@ func reset() -> void:
 	Bus.item_selected_changed.emit(item_selected)
 	Bus.bottles_changed.emit(bottle_contents)
 	Bus.components_changed.emit(components)
+	Bus.stash_changed.emit(stash)
 	Bus.ammo_changed.emit(&"arrows", arrows)
 	Bus.gold_changed.emit(gold)
 	Bus.key_count_changed.emit(small_keys)
@@ -481,6 +491,81 @@ func can_afford_parts(parts: Dictionary) -> bool:
 		if component_count(id) < int(parts[id]):
 			return false
 	return true
+
+
+# --- The footlocker ---------------------------------------------------------
+# The chest at the foot of the bed in the hero's quarters. Merchandise you
+# carried home and decided not to sell yet.
+#
+# **It is the bag's shelf, not a second bag.** The only doors in and out are
+# `Footlocker`'s screen, both sides of which go through `Run` -- so the bag's
+# bookkeeping (the erase, the heat premium, the slot count) stays in the one
+# file that owns it, exactly as `consume()` says. Nothing here ever creates an
+# item; an ingredient that appeared in the locker without a run behind it would
+# make the dungeon optional, which is the rule `add_component` keeps about the
+# workbench and the same rule.
+#
+# It counts SLOTS the way the bag does -- `ceil(count / def.stack)` -- because
+# it is the same objects on the same shelves and a locker that measured its
+# space differently would be a second answer to "how much is a lot".
+
+func stash_count(id: StringName) -> int:
+	return int(stash.get(id, 0))
+
+
+func stash_slots_used() -> int:
+	var used := 0
+	for id: StringName in stash:
+		var def := ItemDb.get_def(id)
+		var per: int = def.stack if def != null else 1
+		used += int(ceil(float(stash[id]) / float(maxi(per, 1))))
+	return used
+
+
+func stash_full() -> bool:
+	return stash_slots_used() >= K.STASH_SLOTS
+
+
+## How many more of `id` the locker will take. Asked rather than assumed, so the
+## screen can grey a row out instead of finding out halfway through a transfer.
+func stash_room_for(id: StringName) -> int:
+	var def := ItemDb.get_def(id)
+	if def == null:
+		return 0
+	var per: int = maxi(def.stack, 1)
+	var have := stash_count(id)
+	# The part-filled stack this id already owns is free space nobody else can
+	# use, so it is room whether or not a slot is left.
+	var slack := (per - have % per) % per
+	var free_slots := maxi(K.STASH_SLOTS - stash_slots_used(), 0)
+	return slack + free_slots * per
+
+
+## Put `n` of `id` in the locker. Returns how many fit -- a full locker is a real
+## event the caller has to show, not an error to swallow (`Run.collect`'s rule).
+func stash_add(id: StringName, n: int) -> int:
+	if n <= 0 or ItemDb.get_def(id) == null:
+		return 0
+	var took := mini(n, stash_room_for(id))
+	if took <= 0:
+		return 0
+	stash[id] = stash_count(id) + took
+	Bus.stash_changed.emit(stash)
+	return took
+
+
+## Take `n` of `id` back off the shelf. Returns how many came out.
+func stash_take(id: StringName, n: int) -> int:
+	var have := stash_count(id)
+	if have <= 0 or n <= 0:
+		return 0
+	var took := mini(n, have)
+	if took >= have:
+		stash.erase(id)
+	else:
+		stash[id] = have - took
+	Bus.stash_changed.emit(stash)
+	return took
 
 
 # --- Bottles and draughts (docs/METAGAME.md §6.6) ---------------------------

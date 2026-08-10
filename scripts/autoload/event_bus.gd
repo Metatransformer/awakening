@@ -138,6 +138,15 @@ signal components_banked(moved: Dictionary)
 ## The gear does not listen -- it reads Game on spawn -- but the smith screen and
 ## anything that wants to celebrate do.
 signal gear_forged(track: StringName, level: int)
+## Something went into or came out of the footlocker in the hero's quarters.
+## `stock` is `Game.stash` -- id -> count. Same contract as `components_changed`:
+## the shelf is drawn by a screen and by nothing that should poll it.
+signal stash_changed(stock: Dictionary)
+## The hero slept. Fired after the heal and the save, on the frame the world
+## comes back, so a listener that wants to say something says it to a screen the
+## player can see. `slot` is where the rest was written, or -1 if all three slots
+## were spoken for and the autosave declined (`Saves.autosave`).
+signal rested(slot: int)
 
 # --- Bottles and draughts (docs/METAGAME.md §6.6) ---------------------------
 ## A bottle was blown, filled or drunk. `contents` is `Game.bottle_contents` --

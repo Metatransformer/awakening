@@ -277,6 +277,16 @@ const START_GOLD := 30
 ## run and not enough to clear a floor with, which is what makes a bag a
 ## decision rather than a container. [tune]
 const START_BAG_SLOTS := 12
+## Slots in the footlocker in the hero's quarters (`scripts/props/footlocker.gd`).
+##
+## **Finite on purpose, and the reason is `docs/GDD.md` §2**, which names
+## "infinite storage" as one of the three features that delete this game. The
+## locker cannot be reached from underground, so it does not touch the walk-back
+## question directly -- but a bottomless one turns every run into "keep
+## everything, decide later", and deciding later is not deciding. Twice the bag
+## is a footlocker: enough to hold back two runs' worth of picks you are saving,
+## not enough to be a warehouse. [tune]
+const STASH_SLOTS := 24
 
 # --- Items ------------------------------------------------------------------
 ## [oot] Hookshot flies perfectly STRAIGHT — gravity is never applied to it.

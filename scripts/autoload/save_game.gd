@@ -16,7 +16,19 @@ const SLOTS := 3
 ## was paid for, so both have to survive quitting exactly as a forge rung does.
 ## `_read` still refuses a version it does not recognise, so a v2 slot reads as
 ## empty rather than as a hero whose glass quietly vanished.
-const VERSION := 3
+## Bumped to 4 when the footlocker landed (`Game.stash`).
+const VERSION := 4
+## Versions this build will still read. **Not every bump refuses the one before
+## it, and 4 is the first that does not.**
+##
+## The two refusals above were bumps that changed the MEANING of what was already
+## in the file: v1 had no `upgrades` at all, so reading one meant inventing a
+## hero who had never bought anything and calling it his save. The footlocker is
+## purely additive -- a v3 slot has no `stash` key, and the honest reconstruction
+## of a v3 hero is one whose locker is empty, which is exactly what
+## `d.get("stash", {})` builds. Refusing it would delete a live save to avoid a
+## migration that is one default value long.
+const READABLE: Array[int] = [3, 4]
 
 signal saved(slot: int)
 signal loaded(slot: int)
@@ -92,6 +104,9 @@ func save(slot: int) -> bool:
 		# `upgrades` (see Game.FORGE_*), so one key carries all five.
 		"upgrades": Game.upgrades,
 		"components": Game.components,
+		# The footlocker. Merchandise the player carried home and chose not to
+		# sell -- it already survived a run, so it has to survive a quit.
+		"stash": Game.stash,
 		# The array's size is how many bottles there are, so one key carries both
 		# the glass and the contents. The DRAUGHT CLOCKS are deliberately not
 		# saved -- see Game.draughts.
@@ -200,6 +215,12 @@ func load_slot(slot: int) -> Dictionary:
 	Game.components.clear()
 	for k in (d.get("components", {}) as Dictionary):
 		Game.components[StringName(k)] = int((d["components"] as Dictionary)[k])
+	# Same rebuild, same reason. A v3 slot has no "stash" key at all and comes
+	# back with an empty locker, which is the truth about a hero who never had
+	# one -- see the note on READABLE.
+	Game.stash.clear()
+	for k in (d.get("stash", {}) as Dictionary):
+		Game.stash[StringName(k)] = int((d["stash"] as Dictionary)[k])
 	# Rebuilt element by element for the reason `upgrades` is: JSON has no
 	# StringName, so an assigned array would come back full of Strings and
 	# `bottle_index()` would parse fine while `PotionDb.has()` missed every
@@ -258,6 +279,7 @@ func load_slot(slot: int) -> Dictionary:
 	Bus.item_selected_changed.emit(Game.item_selected)
 	Bus.bottles_changed.emit(Game.bottle_contents)
 	Bus.components_changed.emit(Game.components)
+	Bus.stash_changed.emit(Game.stash)
 	Bus.loadout_changed.emit(Game.loadout_set,
 		Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_LEFT))
 	loaded.emit(slot)
@@ -286,7 +308,7 @@ func _read(slot: int) -> Dictionary:
 		return {}
 	var parsed: Variant = JSON.parse_string(f.get_as_text())
 	f.close()
-	if parsed is Dictionary and (parsed as Dictionary).get("version", 0) == VERSION:
+	if parsed is Dictionary and READABLE.has(int((parsed as Dictionary).get("version", 0))):
 		return parsed
 	return {}
 

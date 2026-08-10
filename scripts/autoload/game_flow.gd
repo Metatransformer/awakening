@@ -103,6 +103,44 @@ func descend() -> void:
 	_go(DUNGEON, 0.0)
 
 
+## Fade to black, run `during`, fade back — without changing scenes.
+##
+## The bed's transition, and it is HERE rather than in `Bed` because the veil is
+## Flow's and there is exactly one of it. A prop that made its own ColorRect
+## would be a second black rectangle on a second CanvasLayer, and the day the two
+## overlapped one of them would be the one that never came down. Same reason
+## CLAUDE.md §6 gives for `change_scene_to_file` living in one file.
+##
+## `busy` is held for the whole blink, so nothing can start a scene change
+## underneath it — a player who presses the gate through a fade would otherwise
+## arrive in the dungeon with the veil half-lifted and a `during` callback still
+## queued against the town that no longer exists.
+##
+## The world is PAUSED across the dark. A rest that let the town run for a second
+## and a half behind an opaque veil is the same bug `_go`'s loading hold exists to
+## prevent, one screen smaller.
+func blink(during: Callable, dark: float = 0.9) -> void:
+	if busy or ending:
+		return
+	busy = true
+	Prompt.blocked = true
+
+	var tw := create_tween().set_ignore_time_scale(true)
+	tw.tween_property(_veil, "color:a", 1.0, FADE_OUT)
+	await tw.finished
+
+	get_tree().paused = true
+	await get_tree().create_timer(dark, true, false, true).timeout
+	if during.is_valid():
+		during.call()
+	get_tree().paused = false
+
+	Prompt.blocked = false
+	busy = false
+	var tin := create_tween().set_ignore_time_scale(true)
+	tin.tween_property(_veil, "color:a", 0.0, FADE_IN)
+
+
 # --- The two things that end a run ------------------------------------------
 
 func _on_player_died() -> void:

@@ -71,6 +71,9 @@ var smith: Npc
 var alchemist: Npc
 var keeper: Npc
 var gate: Npc
+## The hero's billet, in the south-west corner. Public so a director can walk to
+## it without knowing where the corner is.
+var house: House
 ## The twelve dark props, in `RelicDb` catalogue order. Public so a director can
 ## photograph one corner before and after, which is the only way anybody can
 ## check the claim this system exists to make.
@@ -91,6 +94,7 @@ var lights: Array[TownLight] = []
 func _ready() -> void:
 	_build_env()
 	_build_yard()
+	_build_house()
 	_build_people()
 	_build_relic_props()
 
@@ -289,6 +293,39 @@ func _build_yard() -> void:
 		rail.rng_seed = 540 + int(sx)
 		rail.position = Vector3((RAIL_GAP * 0.5 + 2.5) * sx, 0.0, -yard.y * 0.40 + 1.4)
 		add_child(rail)
+
+
+## The hero's quarters, tucked into the south-west corner.
+##
+## **The corner is the whole of the placement argument, and it is arithmetic
+## rather than taste.** Everything else in the yard is spoken for: the gate and
+## the shaft head are due north, the vendor and the smith flank them, the
+## alchemist stands on the west side inside the arrival frame that `_build_people`
+## says must not be broken, and the Lanternkeeper has the south-east with her
+## facing tuned so that turning away from her shows eight relic props. The
+## south-west is the one quadrant no existing tuning reads.
+##
+## It also has to miss the relic ring, which is the constraint that actually
+## fixes the size. `_build_relic_props` puts twelve lamps on an ellipse of
+## (11.0, 9.0) at quarter-step offsets; the two either side of this corner land
+## at (-10.16, 3.44) and (-6.70, 7.14). A 5.2 m room whose outer corner is the
+## yard's clears the first by 2.2 m in z and the second by 0.9 m in x. **Grow the
+## room and you move a lamp**, and the ring's whole argument (§ the note on
+## `_build_relic_props`) is that it is evenly spaced.
+##
+## Deliberately NOT lit by a `TownLight`. The twelve are a set that comes on one
+## at a time and means something; a thirteenth warm light that was on from the
+## first frame would be the one prop in the yard whose state says nothing.
+func _build_house() -> void:
+	house = House.new()
+	# Its own two walls go on -X and +Z, so the corner it wants is the corner of
+	# the yard, inset by half the room plus enough to clear the curtain's block
+	# relief (KitStyle.RELIEF, 0.17 proud of the placement plane).
+	var hx := yard.x * 0.5
+	var hz := yard.y * 0.5
+	var half := house.room * 0.5
+	house.position = Vector3(-hx + half.x + 0.2, 0.0, hz - half.y - 0.2)
+	add_child(house)
 
 
 func _build_people() -> void:
