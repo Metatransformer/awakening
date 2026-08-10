@@ -1,14 +1,14 @@
 class_name NpcBody
 extends Node3D
-## One of the four AUTHORED people in the garrison -- a body that arrived already
+## One of the five AUTHORED people in the garrison -- a body that arrived already
 ## dressed, and is not allowed anywhere near the clothing system.
 ##
 ## `RaceBody` builds a shopkeeper out of parts: a bare race base from the
 ## Valenfeld pack plus a suit seated onto its skeleton, tinted so three people in
 ## the same cloth are still three people. That is the right machine for a pack of
-## interchangeable bases, and it is exactly the wrong machine for these four. The
-## smith, the pawnbroker, the Lanternkeeper and the jewelcrafter were each
-## modelled as a whole person, dressed, with their leather and their buckles and
+## interchangeable bases, and it is exactly the wrong machine for these five. The
+## smith, the pawnbroker, the Lanternkeeper, the jewelcrafter and the alchemist
+## were each modelled as a whole person, dressed, with their buckles and
 ## their beard painted into one atlas. There is no bare body underneath to seat a
 ## suit onto, no normalised UV layout for a garment to share, and no seam that a
 ## fitting pass could close. **Do not call anything in `SuitSeater` on these.**
@@ -19,9 +19,10 @@ extends Node3D
 ## different spine order and their own bone rolls. `_install_clips` maps one onto
 ## the other exactly (see the derivation there) so the garrison still breathes.
 ##
-## `Npc.LOOKS` picks the body. The alchemist and the elder stay on `RaceBody`,
-## which is not a transitional state -- the two systems answer different
-## questions and both are wanted.
+## `Npc.LOOKS` picks the body. The elder is still built by `RaceBody`, and that
+## is not a transitional state waiting for a sixth model -- the two systems
+## answer different questions and both are wanted. `RaceBody` is also what the
+## dungeon and the monster roster run on, so it does not go anywhere.
 
 const DIR := "res://assets/characters/npc/"
 ## The clip library, shared with `RaceBody`. Same four idles, same reason: these
@@ -32,7 +33,7 @@ const CLIPS: Array[StringName] = [&"idle", &"idle3", &"idle4", &"idle9"]
 ## Radians the imported art is turned away from the body it hangs on.
 ##
 ## ZERO, and **measured** (docs/CONTRACT.md §2.5, and this project has paid for
-## guessing it four times). `tools/directors/npc_raw.gd` puts all four in front
+## guessing it four times). `tools/directors/npc_raw.gd` puts them all in front
 ## of a camera on +Z and they look back at it: the art is modelled facing +Z.
 ## `Npc` turns a shopkeeper with `_body.global_rotation.y = atan2(to.x, to.z)`,
 ## which sends +Z to the player, so art and holder already agree and the
@@ -43,7 +44,7 @@ const MODEL_YAW := 0.0
 
 ## Who each body is, and how tall they stand.
 ##
-## `height` is METRES to the crown and it is the only scale input. All four import
+## `height` is METRES to the crown and it is the only scale input. They all import
 ## normalised into a unit box (Tripo does that, and `npc_raw.gd` measured it:
 ## every one is 0.998047 tall), so the fit is very nearly a straight multiply --
 ## but it is still measured per body in `_native_height`, because "they all
@@ -67,6 +68,10 @@ static var PEOPLE := {
 	# and she should read that way from across the flagstones.
 	"lanternkeeper": {"fbx": "lanternkeeper.fbx", "height": 1.74},
 	"jewelcrafter": {"fbx": "jewelcrafter.fbx", "height": 1.63},
+	# The tallest person in the yard, and she keeps the 1.82 she had as a Vyr --
+	# the height was doing work (she looks DOWN at you over the alembics) and the
+	# model arriving is no reason to renegotiate it.
+	"alchemist": {"fbx": "alchemist.fbx", "height": 1.82},
 }
 
 ## The retarget map: **this rig's bone -> `[the clip library's bone, the bone to

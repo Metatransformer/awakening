@@ -50,20 +50,18 @@ func run(rig) -> void:
 	# keeper's own facing rather than hard-coded, so an NPC that is turned the
 	# wrong way photographs as a back, not as a mysteriously empty frame.
 	#
-	# All SIX people, not the three this list carried while there were three. The
-	# keeper, the jewelcrafter and the elder were added to the yard without being
-	# added here, so half the garrison had no proof shot at all -- which is how
-	# four authored bodies could have landed with only two of them ever
-	# photographed at the counter they stand behind.
+	# All FIVE people, not the three this list carried while there were three. The
+	# keeper and the jewelcrafter were added to the yard without being added here,
+	# so half the garrison had no proof shot at all -- which is how five authored
+	# bodies could have landed with only two of them ever photographed at the
+	# counter they stand behind. (The village elder was a sixth entry until he and
+	# the Lanternkeeper became one man; `keeper` is him.)
 	var subjects := [
 		{"name": "vendor", "at": garrison.vendor, "back": 3.4, "high": 1.65},
 		{"name": "smith", "at": garrison.smith, "back": 3.8, "high": 1.65},
 		{"name": "alchemist", "at": garrison.alchemist, "back": 3.4, "high": 1.65},
 		{"name": "keeper", "at": garrison.keeper, "back": 3.4, "high": 1.65},
 		{"name": "jeweller", "at": garrison.jeweller, "back": 3.4, "high": 1.65},
-		# No booth, so stand closer: the elder is addressed across a metre of
-		# grass rather than across a counter.
-		{"name": "elder", "at": garrison.elder, "back": 2.6, "high": 1.65},
 		{"name": "gate", "at": garrison.gate, "back": 6.0, "high": 2.0},
 	]
 	for s in subjects:
@@ -80,9 +78,8 @@ func run(rig) -> void:
 	# One three-quarter per shop as well. A booth is a little scene, and a
 	# straight-on shot hides everything the keeper is standing in front of.
 	for s in subjects:
-		# The gate is masonry and the elder stands in the open: neither has a booth
-		# for a three-quarter to reveal.
-		if String(s["name"]) in ["gate", "elder"]:
+		# The gate is masonry: no booth for a three-quarter to reveal.
+		if String(s["name"]) == "gate":
 			continue
 		var node: Node3D = s["at"]
 		var b := node.global_transform.basis

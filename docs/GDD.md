@@ -54,8 +54,8 @@ he is male, and he is called Kael.** No backstory, no family, no arc — the
 Society's creed is the characterisation, and a game with zero dialogue trees
 (`docs/SCOPE.md` §1) has nowhere to put more than that. **Kael himself does not
 speak**: fifteen voiced lines arrived on 2026-08-10 and every one of them is
-somebody talking *at* him — a narrator over the opening black, an elder, four
-counters. He is the one person in the garrison with no recording, and that is
+somebody talking *at* him — a narrator over the opening black, and four of the
+five counters. He is the one person in the garrison with no recording, and that is
 the characterisation holding, not a gap. What
 the name buys is that the receipt, the plaque and the Lanternkeeper's board can
 say something other than "the player."
@@ -68,22 +68,36 @@ stays `the hero`** — `Hero`, `hero.gd`, unchanged; the name lives in the
 fiction, not in the identifiers.
 
 **The counters are the other people in this game, and none of them is him.** The
-vendor and the smith are men (§6.3); the alchemist and the jewelcrafter are women
-(§6.5, §6.6); the Lanternkeeper is an old man (§6). Worth stating, because §6.6
+vendor, the smith and the alchemist are men (§6.3, §6.5); the jewelcrafter is a
+woman (§6.6); the Lanternkeeper, who is also the village elder, is an old man
+(§6). Worth stating, because §6.6
 used to lean on a bare *she* to mean the jewelcrafter in a sentence whose other
 subject was the smith, which only parses if you already knew.
 
-**Four of the five were settled by the art, not by this document, and that is the
+**Five of the six were settled by the art, not by this document, and that is the
 right way round.** The smith's was written here as *genuinely open* until
-2026-08-10, when four authored bodies landed for the smith, the vendor, the
-Lanternkeeper and the jewelcrafter (`NpcBody.PEOPLE`): a bearded dwarf at the
-forge, a road-scarred warrior at the stall, a white-bearded hooded man in
-relic-jewelled mail at the Far Lantern, a woman wearing her own stock at the
-setting bench. **The Lanternkeeper changed sex in that pass** — she had been a
-Reshi woman built out of a suit and a cool tint, and the tint was the only thing
-carrying "this counter is the strange one", which the hood and the stones now do
-on their own. Nothing mechanical moved with it. The alchemist is still a Vyr
-woman and the elder still a Reshi man, both still built from a race and a suit. Under the frontier town
+2026-08-10, when five authored bodies landed for the smith, the vendor, the
+Lanternkeeper, the jewelcrafter and the alchemist (`NpcBody.PEOPLE`): a bearded
+dwarf at the forge, a road-scarred warrior at the stall, a white-bearded hooded
+man in relic-jewelled mail at the Far Lantern, a woman wearing her own stock at
+the setting bench, and a hooded, spectacled man with a belt of stoppered flasks
+at the apothecary. **The Lanternkeeper and the alchemist both changed sex in that
+pass** — the Lanternkeeper had been a Reshi woman built out of a suit and a cool
+tint, and the tint was the only thing carrying "this counter is the strange one",
+which the hood and the stones now do on their own; the alchemist had been a Vyr
+woman, and **is no longer Vyr either** — the body that arrived is a settler, and
+the flasks hung on him say *apothecary* far more plainly than her height ever
+said *Vyr*. Nothing mechanical moved with either. **Nobody in the garrison is
+built from a race and a suit any more** — the elder was the last, and later the
+same day he and the Lanternkeeper became one man (above). `RaceBody` is not
+retired: it is what every monster in the Cut is made of.
+
+**One loose end, and it is audible.** The alchemist's two recorded lines (§6.5,
+`Voice.LINES`) were cast for the woman she was. They still play, they are still
+the right words, and they are now in a voice that does not match the face. That
+is a recasting decision and not a code one, so the lines stand until it is made.
+
+Under the frontier town
 of **Valenfeld** there is a shaft into the works the **Vyr** built before they
 withdrew to their sky-seat and left the world to fail without them. You make runs
 into it. You take what the dead empire left. You decide, every time, when to
@@ -96,11 +110,21 @@ be four counters and a hole in the ground: a garrison is *supposed* to be small,
 purposeful and short of comforts, so nobody has to explain why there is no inn
 and no square. A town would have owed you those. See §6.
 
-The one person here who is not selling anything is the **village elder**, and he
-is the exception that keeps the rule cheap: he stands in the middle of the yard,
-he is expecting you when you arrive, and he has three recorded lines and no
-counter, no quest and no dialogue tree. What a garrison owes you is somebody to
-report to. It does not owe you a conversation.
+The person you report to is the **village elder**, and he is the exception that
+keeps the rule cheap: he is expecting you when you arrive, and he has three
+recorded lines and no quest and no dialogue tree. What a garrison owes you is
+somebody to report to. It does not owe you a conversation.
+
+**He is also the Lanternkeeper** (2026-08-10, owner's call). They were written
+as two men for a day — an elder alone on the grass with the three lines, and a
+silent keeper behind the relic hall — and the art is what collapsed them: the
+body that arrived for the Far Lantern is a hooded, white-bearded old man in
+jewelled mail, which is the elder's description with the Society's pitch already
+on it. One person, one counter, five people in the yard. The relic hall is
+unchanged and so are his lines; what went is a sixth body, a lamp post, and the
+idea that the man who keeps the records and the man who is expecting you were
+different people. His counter moved to the middle-south of the yard to keep the
+opening's third beat honest — the veil lifts on somebody you can see.
 
 The moment-to-moment is OOT: a boom camera, weighty camera-relative locomotion,
 a committed roll, a shield, a telegraphed enemy you can read. The shape around
@@ -474,9 +498,10 @@ above it is equally load-bearing in the other direction: take that away and the
 yard is a dungeon room whose ceiling failed to load, which is exactly what the
 hub used to be.
 
-**The Lanternkeeper** keeps the Far Lantern Society's hall against the east wall —
-an old man, hooded, in a mail coat set with a dozen coloured stones, which is the
-Society's whole pitch worn on a body. He does not buy and he does not sell: you
+**The Lanternkeeper — the village elder, §1** keeps the Far Lantern Society's
+hall in the middle-south of the yard, inside the arrival frame — an old man,
+hooded, in a mail coat set with a dozen coloured stones, which is the Society's
+whole pitch worn on a body. He does not buy and he does not sell: you
 hand him a relic and something in the garrison changes. Mechanically he is a
 `Catalogue` subclass and a row in `Npc.COUNTERS`, exactly like the smith and the
 alchemist, driven by the same `TradeScreen` — a donation is a transaction whose
@@ -503,8 +528,8 @@ not a coincidence, it is the acceptance criterion.
 | 3 | Cracked Still-Head | Cistern vault | Alchemist | The alchemist **learns the Ironhide Draught** |
 | 4 | Cinder-Retort | Foundry deep chest | Alchemist | The alchemist **learns the Emberblood Draught** |
 | 5 | Glass-Kiln Core | Slag Ogre (boss 2) | Alchemist | The alchemist can **blow bottles 3 and 4** |
-| 6 | **The Sustain-Verse** | Foundry vault | Alchemist | She **reads** it: you learn the working **Sustain** (§6.5) |
-| 7 | **The Ballast-Verse** | Choir deep chest | Alchemist | She **reads** it: you learn the working **Ballast** (§6.5) |
+| 6 | **The Sustain-Verse** | Foundry vault | Alchemist | He **reads** it: you learn the working **Sustain** (§6.5) |
+| 7 | **The Ballast-Verse** | Choir deep chest | Alchemist | He **reads** it: you learn the working **Ballast** (§6.5) |
 | 8 | Sounding-Rod | Bellwake (boss 3) | Lanternkeeper | The deep chest **hums** on arrival — the floor's only wayfinding |
 | 9 | Warp-Stone Fragment | Choir vault | Lanternkeeper | **Shortcuts work from the garrison.** Start a run on any floor whose shortcut you have opened |
 | 10 | Rope-Drum | Chord Gate deep chest | Lanternkeeper | Extraction fee **25% → 20%** |
@@ -603,7 +628,7 @@ Three workings, and the number three is load-bearing.
 **They are usable items.** Each is a stop on the right-hand ring, cast with RB or
 RT like the bow, selected with D-pad ← →. Nothing about the input layer changes.
 
-**Charges are arrows.** You buy them from the alchemist — she is already *the
+**Charges are arrows.** You buy them from the alchemist — he is already *the
 only thing you take down with you* (`docs/METAGAME.md` §6.6), and a charge is a
 stock you paid for in the garrison before you left, exactly like a bottle.
 **They do not refill underground.** There is no rest, there cannot be one (the
@@ -850,10 +875,10 @@ difficulty menu:
   untouched, so §7 is intact — this is not level-scaling by another name. The Cut
   stays exactly as dangerous; the hero stops dying to it.
 - **It lives in options and not in the fiction.** Hades can make it a boon
-  because Hades has gods who talk to you. This game has five counters, an elder
-  with three lines, and no dialogue (`docs/SCOPE.md`: dialogue trees, 0) — and
-  the elder is the closest thing to a temptation here, which is exactly why he
-  says the same two things forever. A voice is not a conversation, and inventing
+  because Hades has gods who talk to you. This game has five counters, one of
+  whom is an elder with three lines, and no dialogue (`docs/SCOPE.md`: dialogue
+  trees, 0) — and the elder is the closest thing to a temptation here, which is
+  exactly why he says the same two things forever. A voice is not a conversation, and inventing
   an NPC to hand over a mercy is how §6.1 gets broken. Name it plainly and put it
   in the menu.
 

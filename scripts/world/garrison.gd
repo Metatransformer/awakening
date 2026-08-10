@@ -74,7 +74,6 @@ var smith: Npc
 var alchemist: Npc
 var keeper: Npc
 var jeweller: Npc
-var elder: Npc
 var gate: Npc
 ## The hero's billet, in the south-west corner. Public so a director can walk to
 ## it without knowing where the corner is.
@@ -121,13 +120,23 @@ func _ready() -> void:
 ##   1. **The narration plays over black.** Before the yard, because the yard
 ##      answers the question the narration is asking -- you arrive at the
 ##      garrison having been told what the Sunken Cut is, not while looking at it.
-##   2. **The veil lifts on the courtyard**, with the elder centre-frame.
+##   2. **The veil lifts on the courtyard**, with the Far Lantern's twelve lamp
+##      posts and the man who keeps them across the yard from you.
 ##   3. **"I've been expecting you."** After the fade rather than under it,
 ##      because it is addressed to a man who has just walked through the gate,
 ##      and a line delivered to a black screen is a line nobody is in the room
-##      for. It is also the tutorial: the first voice you hear in the world comes
-##      from the one person in it who is standing in the open, which is a cheaper
-##      way of saying "go and talk to him" than a prompt would be.
+##      for. It is also the tutorial: the first voice you hear in the world is the
+##      elder's, and he is the counter that matters least to a first run and most
+##      to a tenth, which is a cheaper way of saying "go and talk to him" than a
+##      prompt would be.
+##
+##      **He is the Lanternkeeper.** The elder used to stand alone in the middle
+##      of the yard so that the veil lifting would find him; they became one
+##      person on 2026-08-10 (`Npc.COUNTERS`) and this line now comes from behind
+##      the relic counter on the east side. `Voice.say` is not positional
+##      (`Voice`'s header, third rule) so the line is unchanged by the move -- but
+##      the FRAME is, and `v_01_arrival` in `tools/directors/voices.gd` is the
+##      thing that says whether he is still in it.
 ##
 ## Nothing here waits on a signal. `Voice.say` returns the length of what it
 ## started -- 0.0 if the file is missing -- so the worst a broken import can do is
@@ -408,21 +417,37 @@ func _build_people() -> void:
 	alchemist = _counter(Npc.Role.ALCHEMIST,
 		Vector3(-yard.x * 0.10, 0.0, yard.y * 0.11), 12.0, Color(0.96, 0.80, 0.52))
 
-	# The Far Lantern Society's hall, on the east side, south of the smith.
+	# The Far Lantern, and the man who keeps it -- who is also the village elder.
 	#
-	# Placed so that TURNING AWAY FROM HER FACES THE YARD. She is the only
-	# counter whose reward is not on the screen you just closed -- it is a lamp
-	# fifteen metres away -- so where the player is standing when they stop
-	# talking to her is a design constraint and not a decoration. Her +Z (the
-	# customer's side, see `ShopBooth`) points south-west across the open middle
-	# of the courtyard, which puts eight of the twelve props in the frame the
-	# moment the trade screen comes down.
+	# **This position answers TWO things at once and it moved on 2026-08-10 when
+	# it acquired the second.** It used to sit further east and north, at
+	# (0.25, 0.20) of the yard on a -140 deg yaw, answering only the first:
 	#
-	# Clear of the smith by five metres and of the east wall by six, and clear of
-	# the prop ring by two -- see `_build_relic_props`, which is phase-offset
-	# partly to keep out of her lamp post.
+	#  * **Turning away from him faces the yard.** He is the only counter whose
+	#    reward is not on the screen you just closed -- it is a lamp fifteen
+	#    metres away -- so where the player is standing when they stop talking to
+	#    him is a design constraint and not a decoration.
+	#  * **He is in the arrival frame.** He carries the opening's third beat now
+	#    (`_open_the_game`, `Voice.LINES` &"elder"/&"arrival"): the veil lifts and
+	#    a voice says "I've been expecting you", and it has to come from somebody
+	#    on screen. The old spot was **68 degrees off the arrival camera's axis**
+	#    -- beside and behind the player -- and only `voices.gd` C1 would ever have
+	#    said so, which is why that check exists and prints the angle.
+	#
+	# So: two and a half metres right of the centre line and forward of the
+	# spawn, which is very nearly where the elder himself used to stand, for the
+	# reasons his own placement gave and which did not stop being true when he
+	# took a counter with him. Off the gate's axis (x = 0 is the arrival camera,
+	# the hero, the walk north and the gate's cyan mouth, all on one line), out of
+	# the walk, and clear of the relic ring -- `_build_relic_props` puts its
+	# twelve posts on an ellipse of (11, 9) and nothing of it comes near the
+	# middle.
+	#
+	# Yaw 0 points his +Z (the customer's side, see `ShopBooth`) straight down
+	# +Z at the arrival spot, so the counter lands between him and the hero and
+	# turning away from it faces north up the yard.
 	keeper = _counter(Npc.Role.KEEPER,
-		Vector3(yard.x * 0.25, 0.0, yard.y * 0.20), -140.0, Pal.GOLD)
+		Vector3(2.6, 0.0, 1.5), 0.0, Pal.GOLD)
 
 	# The jewelcrafter, hard against the WEST wall and side-on to the yard.
 	#
@@ -446,41 +471,6 @@ func _build_people() -> void:
 	# steps her BACK toward the wall rather than out into the walk.
 	jeweller = _counter(Npc.Role.JEWELLER,
 		Vector3(-yard.x * 0.396, 0.0, yard.y * 0.05), 90.0, Color(0.80, 0.62, 0.94))
-
-	# The elder, in the open middle of the yard, facing the arrival.
-	#
-	# **This is the one position in this function that is about the FIRST frame
-	# rather than about the loop.** The hero spawns at (0, 0, +4) with the camera
-	# behind him at (0, 1.7, +8); everybody else in here is against a wall or in a
-	# corner, so the middle is the only place that is unambiguously *in front of
-	# you* when the opening's veil lifts. You are reporting for duty and the person
-	# you report to should not have to be found.
-	#
-	# **It was dead centre first, at (0, 0, +0.4), and the capture is why it is
-	# not** -- `v_01_arrival` from `tools/directors/voices.gd`, which is the only
-	# thing in the build that would ever have shown it. Two failures, both
-	# invisible from the code:
-	#
-	#  * **The hero stood in front of him.** The arrival camera, the hero and the
-	#    yard's centre line are all x = 0, so the one figure the frame exists to
-	#    introduce was directly behind the one figure that is always drawn.
-	#  * **He was standing IN THE GATE.** The mouth is a 2.5 m cyan quad at
-	#    x = 0, and it is the only cold thing in a warm courtyard on purpose
-	#    (`Npc._build_gate`). A person silhouetted against it stops reading as a
-	#    person and starts reading as something in the doorway, and takes the
-	#    gate's signposting down with him.
-	#
-	# So: two metres right of the centre line, which clears both the hero and the
-	# arch (posts at x = ±1.55), and two metres nearer the spawn, which makes him
-	# the largest figure in the arrival frame. Still open ground, still nobody's
-	# counter, and still off the walk from the spawn to the gate -- that runs
-	# straight down x = 0 and he is deliberately not standing in it.
-	#
-	# Yaw 0 leaves his +Z (the side a keeper is addressed from, see `ShopBooth`)
-	# pointing down +Z at the arrival spot. He has no booth, so the only thing
-	# that actually places is his lamp post.
-	elder = _stand(Npc.Role.ELDER, Vector3(2.0, 0.0, 1.8), 0.0,
-		Color(1.00, 0.92, 0.72))
 
 	gate = Npc.new()
 	gate.role = Npc.Role.GATE
@@ -559,18 +549,3 @@ func _counter(role: Npc.Role, at: Vector3, yaw_deg: float, lamp: Color) -> Npc:
 	return n
 
 
-## Somebody standing in the open, placed where they are standing.
-##
-## The difference from `_counter` is one line and it is the whole point of having
-## two functions: a keeper's coordinate is where their COUNTER goes and the
-## person steps back behind it, so passing the elder through `_counter` would
-## quietly put him 0.95 m behind the spot this file says he is on -- and the spot
-## is the entire argument for his placement.
-func _stand(role: Npc.Role, at: Vector3, yaw_deg: float, lamp: Color) -> Npc:
-	var n := Npc.new()
-	n.role = role
-	n.lamp_color = lamp
-	n.rotation.y = deg_to_rad(yaw_deg)
-	n.position = at
-	add_child(n)
-	return n

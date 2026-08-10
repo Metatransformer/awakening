@@ -1,12 +1,12 @@
 extends RefCounted
-## The four authored bodies, fitted, retargeted, and holding every idle they
+## The five authored bodies, fitted, retargeted, and holding every idle they
 ## might be given.
 ##
 ## `NpcBody._install_clips` maps a 24-bone T-posed clip library onto a 41-bone
 ## A-posed Tripo rig. The derivation there is exact, which is a claim about
 ## algebra and not about a person -- a sign error in it produces a body that is
 ## still perfectly animated and has its arms on backwards, and no log line
-## anywhere says so. So: four bodies, four idles, front and three-quarter, next
+## anywhere says so. So: every body, every idle, front and three-quarter, next
 ## to a `RaceBody` that is known to work and a post at the hero's height.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
@@ -14,10 +14,10 @@ extends RefCounted
 ##     --director=res://tools/directors/npc_lookdev.gd --out=/tmp/npc/x.png
 
 ## Left to right, and in the order the garrison meets them.
-const WHO: Array[String] = ["smith", "pawnbroker", "lanternkeeper", "jewelcrafter"]
+const WHO: Array[String] = ["smith", "pawnbroker", "lanternkeeper", "jewelcrafter", "alchemist"]
 ## The idle each is actually given in `Npc.LOOKS`, so this sheet photographs the
-## garrison and not four bodies in a pose nobody holds.
-const IDLE: Array[StringName] = [&"idle3", &"idle", &"idle9", &"idle4"]
+## garrison and not a line of bodies in a pose nobody holds.
+const IDLE: Array[StringName] = [&"idle3", &"idle", &"idle9", &"idle4", &"idle3"]
 const STEP := 1.35
 ## The line-up sits a metre and a half forward of the origin, because
 ## `_lookdev.tscn` parks a one-metre green box there and the first sheet off this
@@ -47,10 +47,11 @@ func run(rig) -> void:
 	post.position = Vector3(-STEP, K.HERO_H * 0.5, FORWARD)
 	scene.add_child(post)
 
-	# The control. The alchemist is staying on `RaceBody`, so she is both a
-	# genuine member of this line-up and the thing a broken retarget is told
-	# apart from: if every body in the frame looks stiff, the frame is the
-	# problem, not the map.
+	# The control -- a `RaceBody`, which is the kind the elder is still built as
+	# and the kind the whole monster roster runs on. It is here as the thing a
+	# broken retarget is told apart from: if every body in the frame looks stiff,
+	# the frame is the problem and not the map. (It was the alchemist until she
+	# got a model of her own; it stays because the comparison is the point.)
 	var control := RaceBody.make("vyr")
 	if control != null:
 		scene.add_child(control)
@@ -83,8 +84,14 @@ func run(rig) -> void:
 
 	# Wide first: a close shot of an empty patch of sky cannot tell you whether
 	# the subject is mis-framed or missing.
-	var mid := Vector3(STEP * 1.5, 0.9, FORWARD)
-	await _shot(rig, cam, out, "npc_0_wide", mid + Vector3(0.0, 3.1, 9.0), mid)
+	#
+	# The centre and the distance are DERIVED from how many bodies are in the row
+	# (plus the control on the end), not written down. The fifth body went into
+	# WHO against a camera still centred on four and the alchemist stood half out
+	# of the frame -- in the sheet whose entire job is showing her.
+	var wide := STEP * float(made.size())
+	var mid := Vector3(wide * 0.5, 0.9, FORWARD)
+	await _shot(rig, cam, out, "npc_0_wide", mid + Vector3(0.0, 3.1, 6.0 + wide), mid)
 
 	for i in made.size():
 		made[i].play(IDLE[i])
@@ -92,9 +99,9 @@ func run(rig) -> void:
 		control.play(&"idle4")
 	await rig.wait_frames(34)
 
-	await _shot(rig, cam, out, "npc_1_lineup", mid + Vector3(0.0, 0.7, 5.2), mid)
-	await _shot(rig, cam, out, "npc_2_threequarter", mid + Vector3(4.2, 1.2, 4.2), mid)
-	await _shot(rig, cam, out, "npc_3_behind", mid + Vector3(0.0, 0.7, -5.2), mid)
+	await _shot(rig, cam, out, "npc_1_lineup", mid + Vector3(0.0, 0.7, 2.6 + wide), mid)
+	await _shot(rig, cam, out, "npc_2_threequarter", mid + Vector3(1.6 + wide * 0.5, 1.2, 1.6 + wide * 0.5), mid)
+	await _shot(rig, cam, out, "npc_3_behind", mid + Vector3(0.0, 0.7, -2.6 - wide), mid)
 
 	# Every idle on every body: the map has to survive all four, not the one each
 	# role happens to be given today.
@@ -102,7 +109,7 @@ func run(rig) -> void:
 		for b in made:
 			b.play(clip)
 		await rig.wait_frames(34)
-		await _shot(rig, cam, out, "npc_pose_%s" % clip, mid + Vector3(0.0, 0.7, 5.2), mid)
+		await _shot(rig, cam, out, "npc_pose_%s" % clip, mid + Vector3(0.0, 0.7, 2.6 + wide), mid)
 
 	# And one close read each, from the distance a shopkeeper is judged at:
 	# standing at their own counter.
