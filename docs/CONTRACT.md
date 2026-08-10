@@ -1494,11 +1494,12 @@ Rules:
 ```gdscript
 Flow.new_game() -> void                         # reset, play the opening, land in the garrison
 Flow.continue_game(slot: int) -> bool           # await it — false means the slot would not read
+Flow.resume(dest: Dictionary) -> bool           # the second half alone: travel to an ALREADY-restored save
 ```
 
 The title screen (`res://scenes/ui/title/title_screen.tscn`, the project's
-`run/main_scene`) is the only caller of either, and it calls nothing else —
-per §10 `Flow` is still the one thing that may change a scene.
+`run/main_scene`) is the only caller of the first two, and it calls nothing else
+— per §10 `Flow` is still the one thing that may change a scene.
 
 - **`new_game` is the only caller `Game.reset()` has ever had.** Before the title
   screen there was no way to start a second game in a process: the opening's
@@ -1509,11 +1510,28 @@ per §10 `Flow` is still the one thing that may change a scene.
   so a new game costs a player with three full slots nothing until they pick one.
 - **`continue_game` is a coroutine and its bool arrives at the far end of the
   fade.** `await` it. It calls `Saves.load_slot` (which per "Settings and saves"
-  restores `Game` and deliberately does *not* change scenes), then `_go`s to the
-  recorded scene and puts the hero back at the recorded `pos`/`yaw`.
-  **That yaw is a NODE rotation, not a heading** — `Saves.save` writes
-  `global_rotation.y` verbatim, so restoring it is an assignment and the `+ PI`
-  in §2.5 does not apply here.
+  restores `Game` and deliberately does *not* change scenes) and hands the result
+  to `resume`.
+- **`resume(dest)` is the half that travels**, and it is public because a load
+  has two doors. It `_go`s to `dest.scene` and puts the hero back at the recorded
+  `pos`/`yaw`. **That yaw is a NODE rotation, not a heading** — `Saves.save`
+  writes `global_rotation.y` verbatim, so restoring it is an assignment and the
+  `+ PI` in §2.5 does not apply here. The placement happens *inside* `_go`, after
+  the new scene's `_ready` and **before** the autosave at the foot of it — the
+  autosave reads the hero out of the live tree, so placing him afterwards would
+  write the room's default spawn back over the slot just loaded.
+- **The pause menu's Load Game is the second door**, and it uses `resume`
+  directly. `MenuSavesPanel` calls `Saves.load_slot` itself and emits
+  `PauseMenu.load_requested(slot, dest)`; `Flow._ready` connects to it. Calling
+  `continue_game` from there would read the slot twice. Nothing was connected at
+  all until 2026-08-10, so a load from the pause menu restored `Game` and left
+  the player in the room they were already standing in.
+- **Loading abandons the run in flight.** `resume` calls `Run.reset()` first (and
+  re-emits `bag_changed` / `level_changed`, which `reset` does not). A slot holds
+  `Game` and nothing of `Run` — METAGAME §5 — so there is no run to restore onto,
+  and without this a load from floor 3 arrived in the garrison still holding a
+  sellable bag. It is `reset()` and not `Run.die()`: the run was discarded, not
+  ended, so there is no receipt and no death counted against mercy.
 
 ### Sleeping — `Flow.blink` fades without changing scene
 

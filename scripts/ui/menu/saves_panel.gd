@@ -8,7 +8,10 @@ extends Control
 ## impossible, not merely unwise.
 ##
 ## `Saves.load_slot()` deliberately does not change scenes (docs/CONTRACT.md §8),
-## so this panel restores the state and hands the destination upward.
+## so this panel restores the state and hands the destination upward: out through
+## `PauseMenu.load_requested` and into `Flow.resume`, which is what actually
+## travels. **`Flow.continue_game` is the wrong end to hand it to** -- the slot is
+## already spent by the time this emits, and that one starts by reading it again.
 
 signal back_requested
 signal notice(text: String, is_error: bool)

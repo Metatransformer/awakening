@@ -38,6 +38,11 @@ signal closed
 signal quit_to_title_requested
 ## A slot was loaded: `Game` is already restored, `dest` is the
 ## {scene, room, pos, yaw} that whoever owns room transitions must honour.
+##
+## `Flow` connects to this in its own `_ready` and answers it with
+## `Flow.resume(dest)` -- NOT `continue_game`, which would read the slot a second
+## time. For eight weeks nothing was connected at all and a load from this menu
+## restored `Game` and left the player standing where they already were.
 signal load_requested(slot: int, dest: Dictionary)
 signal saved_to(slot: int)
 

@@ -74,6 +74,23 @@ func _ready() -> void:
 
 	Bus.player_died.connect(_on_player_died)
 	Bus.run_ended.connect(_on_run_ended)
+	# **The other half of the pause menu's Load Game.** `MenuSavesPanel` restores
+	# the slot itself and emits `load_requested(slot, dest)` for somebody else to
+	# travel on -- and until now nobody did, so loading a save from the pause menu
+	# restored `Game` and left the player standing in the room they were already
+	# in. The save applied to the numbers and to nothing on screen.
+	#
+	# It goes to `resume` and NOT to `continue_game`: the panel has already spent
+	# `Saves.load_slot`, and calling the title screen's entry point here would read
+	# the slot a second time.
+	#
+	# The wire is on THIS side rather than the menu calling `Flow` directly, for
+	# the reason pause_menu.gd states about its own `quit_to_title_requested`: P14
+	# does not own scene transitions. Flow does, and it is the only thing that
+	# calls `change_scene_to_file` (see the header). `Menu` is safe to reach for
+	# here because Flow is the LAST autoload -- the note above it in
+	# `project.godot` is the record of why -- so the menu is already in the tree.
+	Menu.load_requested.connect(_on_menu_load_requested)
 
 
 # --- The boot is the title screen, and that is not a setting -----------------
@@ -228,35 +245,99 @@ func new_game() -> void:
 	tin.tween_callback(opening.queue_free)
 
 
-## CONTINUE. Restore a slot and go to the room it was written in.
+## CONTINUE, off the title screen. Restore a slot and go to the room it was
+## written in.
 ##
 ## Returns false without touching the screen if the slot cannot be read, so the
 ## title screen can put its menu back rather than fading to a garrison that was
-## never restored. Everything past that point is `_go`, which is why a loaded
-## save gets the same fade every other arrival in the game gets.
+## never restored.
 ##
 ## `Saves.load_slot` deliberately does not change scenes (docs/CONTRACT.md §8) --
-## it hands back where the hero was, and placing him is the caller's job because
-## only the caller knows when the scene it belongs to exists. That is the two
-## `process_frame`s below.
+## it hands back where the hero was, and travelling there is the caller's job
+## because only the caller knows when the scene it belongs to exists. That second
+## half is `resume` below, and it is a function of its own because the pause menu
+## needs it WITHOUT this one's first line.
 func continue_game(slot: int) -> bool:
 	if busy or ending:
 		return false
 	var dest := Saves.load_slot(slot)
 	if dest.is_empty():
 		return false
+	return await resume(dest)
+
+
+## **Travel to an already-restored save.** `dest` is what `Saves.load_slot`
+## handed back: `Game` is restored by the time this is called, and all that is
+## left is the half that has pixels in it -- the room, and the hero standing in
+## the right part of it.
+##
+## Split out of `continue_game` because a load has TWO doors and only one of them
+## may read the slot:
+##
+##   * the title screen's CONTINUE arrives with nothing restored, so
+##     `continue_game` does both halves;
+##   * the PAUSE MENU's Load Game arrives with the slot already spent --
+##     `MenuSavesPanel._on_slot_pressed` calls `Saves.load_slot` itself and then
+##     emits `load_requested(slot, dest)` -- so it needs this half alone.
+##
+## Pointing the second one at `continue_game` would load the same slot twice: the
+## restore is not idempotent in the way that would forgive (`Game.bottle_contents`
+## and `Game.upgrades` are cleared and rebuilt, `Saves.loaded` fires twice, and
+## every listener that draws off it repaints on a second identical event).
+##
+## Returns false without touching the screen when there is nothing to travel to
+## or a transition is already in flight, so the title screen can put its menu back
+## rather than fading to a room that was never restored.
+func resume(dest: Dictionary) -> bool:
+	if busy or ending or dest.is_empty():
+		return false
 	ending = false
-	await _go(String(dest.get("scene", GARRISON)), 0.0)
-	_place_hero(dest)
+	_abandon_run()
+	# `dest` goes THROUGH `_go` rather than being applied after it -- see the
+	# placement inside `_go` for why that ordering is the difference between a
+	# save that survives being loaded and one that does not.
+	await _go(String(dest.get("scene", GARRISON)), 0.0, dest)
 	return true
+
+
+## Loading ends whatever run was in flight, and it says so out loud.
+##
+## **A slot holds `Game` and nothing of `Run`** (docs/METAGAME.md §5): the bag is
+## the thing you are gambling and it is not savable. `Saves._save_scene` already
+## acts on that -- a save written underground records the GARRISON, never the
+## floor -- but only half the rule was implemented, because until the pause menu
+## could load at all there was no way to reach a load with a live run behind it.
+## Now there is: pause on floor three, Load Game. Without this the player arrives
+## home with `Run.in_dungeon` still true, a HUD reporting FLOOR 3 over the
+## courtyard, and a bag from a run that no longer exists -- which the vendor will
+## happily buy. Free loot, once per load.
+##
+## `reset()` and not `die()`. Dying is a run ENDING: it writes a receipt, counts
+## against the mercy that `Game.deaths` buys (GDD §7.1), and brings the document
+## case home. This run did not end, it was discarded, and none of that should
+## reach the ledger. `Bus.run_ended` is likewise not emitted -- `_on_run_ended` is
+## two lines below and would raise the receipt screen over the load.
+##
+## The two emits are here because `reset()` is deliberately silent (it is also
+## `Run._ready`'s initialiser, where there is nobody listening yet), and the HUD
+## would otherwise go on drawing the abandoned bag's value and the floor number
+## until something else happened to move them.
+func _abandon_run() -> void:
+	Run.reset()
+	Bus.bag_changed.emit(Run.bag, Run.bag_value())
+	Bus.level_changed.emit(Run.level)
+
+
+func _on_menu_load_requested(_slot: int, dest: Dictionary) -> void:
+	resume(dest)
 
 
 ## Put the hero back where the save left him.
 ##
-## After `_go`, so the scene exists and its own `_ready` has already run and
-## placed him at the room's default spawn -- this overrides that. Silent when
-## there is no hero in the tree, which is the honest answer for a save written in
-## a scene that no longer has one.
+## Called from inside `_go` once the new scene's `_ready` has run and placed him
+## at the room's default spawn -- this overrides that. Silent when there is no
+## hero in the tree, which is the honest answer for a save written in a scene that
+## no longer has one.
 func _place_hero(dest: Dictionary) -> void:
 	var hero := get_tree().get_first_node_in_group(&"player") as Node3D
 	if hero == null:
@@ -419,7 +500,10 @@ func _show_ending() -> void:
 
 # --- Transition -------------------------------------------------------------
 
-func _go(path: String, hold: float) -> void:
+## `dest` is a load's `{scene, room, pos, yaw}`, and empty for every other
+## transition — see the placement below for why it is a parameter here rather
+## than something the caller does after the `await`.
+func _go(path: String, hold: float, dest: Dictionary = {}) -> void:
 	busy = true
 	Prompt.blocked = true
 	if hold > 0.0:
@@ -459,6 +543,24 @@ func _go(path: String, hold: float) -> void:
 	# built world rather than on the old one's last frame.
 	await get_tree().process_frame
 	await get_tree().process_frame
+
+	# **A load places the hero HERE, and the position of these three lines is the
+	# whole reason `dest` is threaded through this function.**
+	#
+	# It has to be after the two frames above, because the hero does not exist
+	# until the new scene's `_ready` has run. And it has to be before
+	# `Saves.autosave()` at the foot of this function, because that reads the
+	# hero's position out of the LIVE TREE: run it while he is still standing on
+	# the room's default spawn and it writes that spawn straight back over the
+	# slot the player just loaded. The save would survive exactly one load and
+	# then quietly forget where it was written -- which is a nastier version of
+	# the bug this whole change is about, because the numbers would still be
+	# right.
+	#
+	# It is also simply earlier than it used to be: `continue_game` did this after
+	# awaiting `_go`, which is one frame into the fade-in.
+	if not dest.is_empty():
+		_place_hero(dest)
 
 	# The read. Deliberately AFTER the scene is built rather than in parallel with
 	# building it: the hold is for the player, and a hold that overlapped the work
