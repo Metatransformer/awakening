@@ -117,6 +117,11 @@ const PARTS_LADDER := [
 ## way to get there.
 const GOLD_LADDER := [90, 180, 340, 620]
 
+## The prefix a RECUT line's id carries. `recut_amulet` is not a track and never
+## reaches `Game.upgrades` -- see `ShopDb.REFORGE`, which is the same trick at the
+## other counter.
+const RECUT := "recut_"
+
 
 static func craft_verb() -> String:
 	return "SET"
@@ -143,6 +148,12 @@ static func lines() -> Array[Dictionary]:
 			if Game.path_closed(track):
 				continue
 			out.append(_rung(slot, path))
+	# The undo, after the whole board, for `ShopDb._reforge_row`'s reason: it is
+	# not a third branch of the ladder it takes apart.
+	for slot: StringName in Game.JEWEL_SLOTS:
+		var line := _recut(slot)
+		if not line.is_empty():
+			out.append(line)
 	return out
 
 
@@ -181,6 +192,16 @@ static func groups() -> Array[Dictionary]:
 			})
 		if not tracks.is_empty():
 			out.append({"title": title, "tracks": tracks})
+
+	var undo: Array = []
+	for slot: StringName in Game.JEWEL_SLOTS:
+		var i: int = at.get(StringName(RECUT + String(slot)), -1)
+		if i < 0:
+			continue
+		undo.append({"name": String(BLANKS[slot]["name"]), "line": i,
+			"owned": 0, "rungs": 1})
+	if not undo.is_empty():
+		out.append({"title": "RECUT", "tracks": undo})
 	return out
 
 
@@ -225,6 +246,54 @@ static func _rung(slot: StringName, path: StringName) -> Dictionary:
 	}
 
 
+## Which path `slot` has set, and how far up it. `[&"", 0]` when nothing is set.
+static func set_path(slot: StringName) -> Array:
+	for path: StringName in PATHS[slot]:
+		var track := Game.jewel_track(slot, path)
+		var lvl := Game.jewel_level(track)
+		if lvl > 0:
+			return [track, lvl]
+	return [&"", 0]
+
+
+## **Recut: one rung lower, and the stones are gone** (GDD §6.6).
+##
+## The asymmetry with the smith's Reforge is physical rather than balance-driven
+## -- metal is conserved and stone is not -- and it is the reason she stays the
+## harder commitment. A reforge takes a piece apart in one press and hands the
+## Cold Iron Core straight back; getting an Edge ring to rung 0 so the slot can
+## become Swift is four presses, each one feeding a cut gemstone to the wheel.
+## That is a real wall, and she is allowed one: she already ships the hedge the
+## smith does not, in two ring slots drawing on the same pair.
+##
+## Zero gold, like a reforge, and for the same reason -- what it costs is every
+## coin already in the ladder, which you must earn again.
+static func _recut(slot: StringName) -> Dictionary:
+	var pair := set_path(slot)
+	var track: StringName = pair[0]
+	var lvl: int = pair[1]
+	if track == &"" or lvl <= 0:
+		return {}
+	var path := StringName(String(track).get_slice("_", 2))
+	var label := String(PATH_INFO[path]["label"])
+	var lost: Array[String] = []
+	for pid: StringName in PARTS_LADDER[lvl - 1]:
+		var def := ItemDb.get_def(pid)
+		lost.append("%d %s" % [int(PARTS_LADDER[lvl - 1][pid]),
+			def.display_name if def != null else String(pid)])
+	return {
+		"id": StringName(RECUT + String(slot)),
+		"label": "RECUT - %s" % String(BLANKS[slot]["name"]),
+		"cost": 0,
+		"parts": {},
+		"holds": true,
+		"verb": "RECUT",
+		"blurb": "You cannot melt a stone. What was in it goes to the wheel.",
+		"detail": "%s %d -> %d,  %s lost" % [label, lvl, lvl - 1,
+			", ".join(lost) if not lost.is_empty() else "nothing"],
+	}
+
+
 ## What the number is now and what it would be, in the unit the player feels.
 ##
 ## Every arm reads the SAME accessor the game reads -- `Game.armour_soak_exact`,
@@ -240,7 +309,7 @@ static func _detail(path: StringName, lvl: int) -> String:
 	match path:
 		&"vigor":
 			# The half-containers Vigor has bought so far, which `heart_containers()`
-			# cannot see: `add_heart_container` only fires on the EVEN rung, so an
+			# cannot see: a container only arrives on the EVEN rung, so an
 			# odd rung is half a heart that has been paid for and is not on the HUD
 			# yet. A row that rounded that away would show a purchase doing nothing.
 			var h := float(Game.heart_containers()) + 0.5 * float(lvl % 2)
@@ -369,12 +438,15 @@ static func refusal(line: Dictionary) -> String:
 ## rung is read straight off `Game.upgrades` by an accessor the next time
 ## something asks -- but max health and max stamina are stored numbers rather
 ## than derived ones (the HUD's hearts, and a bar that has to refill), so their
-## rung has to push. That asymmetry is the whole reason this is a match and not
-## a comment saying there is nothing to do.
+## rung has to push. That asymmetry is the whole reason there is a branch here
+## and not a comment saying there is nothing to do.
 static func buy(line: Dictionary) -> bool:
 	if not can_buy(line):
 		return false
 	var id: StringName = line["id"]
+	# Before a coin moves. A recut is not a purchase -- see `ShopDb.buy`.
+	if String(id).begins_with(RECUT):
+		return _do_recut(StringName(String(id).substr(RECUT.length())))
 	var parts: Dictionary = line.get("parts", {})
 	if not Game.spend_gold(int(line["cost"])):
 		return false
@@ -383,15 +455,39 @@ static func buy(line: Dictionary) -> bool:
 
 	Game.upgrades[id] = int(Game.upgrades.get(id, 0)) + 1
 	var path := String(id).get_slice("_", 2)
-	match path:
-		"vigor":
-			# Half a container a rung, so four rungs is two hearts and the odd
-			# rungs are the ones that feel like nothing. Deliberate: the pair is
-			# the purchase, and `add_heart_container` will not add half of one.
-			if Game.jewel_level(id) % 2 == 0:
-				Game.add_heart_container()
-		"focus":
-			Game.add_max_stamina(K.JEWEL_FOCUS_STAMINA)
+	if path == "vigor" or path == "focus":
+		# Half a container a rung on Vigor, so four rungs is two hearts and the
+		# odd rungs are the ones that feel like nothing. Deliberate: the pair is
+		# the purchase. The arithmetic lives in `resync_maxima`, which derives both
+		# maxima from `upgrades` -- so Recut taking a rung back off is the same
+		# call with `fill` off, rather than this match run backwards.
+		Game.resync_maxima(true)
 	Bus.gear_forged.emit(id, int(Game.upgrades[id]))
 	Bus.item_acquired.emit(id)
+	return true
+
+
+## Take a rung back off the stone (GDD §6.6). Nothing is refunded and nothing is
+## charged: the material went to the wheel and the gold was always sunk.
+##
+## The key is ERASED at rung 0 rather than left at zero, for `ShopDb._do_reforge`'s
+## reason, and that erase is what re-opens the slot: `path_closed` asks whether
+## the sibling has a rung, so the last recut of an Edge ring is the press that
+## makes Swift buyable again. Four presses and four gemstones to get there, which
+## is the price the design intends.
+static func _do_recut(slot: StringName) -> bool:
+	var pair := set_path(slot)
+	var track: StringName = pair[0]
+	var lvl: int = pair[1]
+	if track == &"" or lvl <= 0:
+		return false
+	if lvl <= 1:
+		Game.upgrades.erase(track)
+	else:
+		Game.upgrades[track] = lvl - 1
+	# Vigor and Focus are stored maxima, so the number has to come back down.
+	# `fill` is off: nobody is healed for changing their mind, and a hero on two
+	# quarters who recuts a Vigor amulet is clamped, not topped up.
+	Game.resync_maxima()
+	Bus.gear_forged.emit(track, lvl - 1)
 	return true

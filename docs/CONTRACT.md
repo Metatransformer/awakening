@@ -1053,8 +1053,16 @@ static func can_buy(line: Dictionary) -> bool
 static func refusal(line: Dictionary) -> String   # "" = affordable
 static func buy(line: Dictionary) -> bool
 static func craft_verb() -> String                # FORGE, BREW, …
-static func crafts(line: Dictionary) -> bool      # concrete: has `parts`
+static func crafts(line: Dictionary) -> bool      # a HOLD: `holds`, else has `parts`
 ```
+
+Two optional keys on a line, both added for Reforge and Recut (GDD §6.6):
+`"holds": true` makes a line a hold even though it consumes no `parts` — undoing
+a commitment is exactly as irreversible as making one and must not be a tap —
+and `"verb": "REFORGE"` overrides `craft_verb()` for that one row, so the footer
+says what this press does rather than what the counter usually does. Without the
+override the smith's undo row would read `HOLD ENT TO FORGE`, which is the
+opposite of what it is about to do.
 
 `ShopDb` and `AlchemyDb` are `Catalogue` subclasses and `TradeScreen` holds
 whichever it was opened with. **A new shopkeeper is a `Catalogue` subclass plus
@@ -1247,11 +1255,55 @@ Rules:
   means "the forge's four" must say so — `forge_loop.gd` asserted a count of
   four against the unfiltered call and had to be corrected when this landed.
 - **Components bank on extraction, not on pickup.** `Run.bank_components()` is
-  called by `extract()` after the fee, and deliberately **not** by `die()`.
+  called by `extract()` after the fee. Since the document case (below) `die()`
+  calls it too — on what the case held, and on nothing else. That is the one
+  route a component has out of a lost run.
 - New on `Bus`: `components_changed(stock)`, `components_banked(moved)`,
   `gear_forged(track, level)`.
 - New on the pause menu: `PauseMenu.Screen.POUCH`, `Root/Screens/PouchScreen`
-  (`scripts/ui/menu/pouch_panel.gd`). It is read-only — the bag has no verbs.
+  (`scripts/ui/menu/pouch_panel.gd`). Its one verb is A on a cell, which moves
+  that stack across the document-case line and changes nothing about the item.
+
+### The document case — `Run.cased`, three of the bag's slots
+
+```gdscript
+# scripts/autoload/run_state.gd
+const CASE_SLOTS := 3
+var cased: Dictionary[StringName, int] = {}   # a SUBSET of `bag`, never a second pile
+
+func in_case(id: StringName) -> int            # how many of `id` are packed
+func in_hold(id: StringName) -> int            # bag - case, the part that dies
+func case_slots_used() -> int                  # ceil(n / stack) per kind, the BAG's rule
+func hold_slots_used() -> int
+func hold_slots() -> int                       # Game.bag_slots - CASE_SLOTS
+func case_fits(id: StringName) -> bool         # false for relics (GDD §3.1)
+func case_refusal(id: StringName) -> String
+func case_room_for(id: StringName) -> int
+func stow(id: StringName, n: int) -> int       # hold -> case, returns how many MOVED
+func unstow(id: StringName, n: int) -> int     # case -> hold, same
+func case_contents() -> Dictionary[StringName, int]
+```
+
+Rules, and each one is load-bearing:
+
+- **`cased` is a subset of `bag`, not a parallel container.** Every count in it
+  also appears in `bag`; `in_hold` is the subtraction. Anything that writes the
+  bag without going through `Run.consume` / `Run.collect` will desynchronise the
+  two, which is why those two are still the only writers (§ the bag, above).
+- **The total is unchanged.** `slots_used()` sums both regions, so `bag_slots`
+  still means what it always meant and a bag upgrade widens `hold_slots()`
+  alone. A stack that straddles the line costs a cell on each side, because the
+  pouch draws it as two cells and the picture may not disagree with the count.
+- **Pickup fills the case first** (`_place`), because the player who never opens
+  a menu is the player GDD §3.1 was written for. `stow` / `unstow` are the
+  repack, and they are partial by design — they return how many moved, on the
+  same reasoning as `stash_add` above.
+- **`case_fits` is the only gate**, and today it says one thing: a relic does
+  not fit. When Echoes exist they go here too, not into a second check.
+- **`die()` keeps the case and charges no fee on it.** The heat premium is
+  prorated against what the floor kept (`_premium_share` on the lost stacks,
+  measured *before* `premium` is written) so heat cannot outlive the loot it was
+  earned on.
 
 ### The footlocker — a third pile, and the only one that is finite by design
 
@@ -2007,8 +2059,35 @@ Settings.apply_video()                  # fullscreen, vsync, msaa, shadows, scal
 Settings.changed                        # signal(section, key, value)
 # fields: master/music/sfx/ui_volume, fullscreen, vsync, resolution_scale, msaa,
 #   shadow_quality, fov_offset, invert_camera_y, camera_sensitivity, rumble,
-#   camera_shake, letterbox_on_target
+#   camera_shake, letterbox_on_target, mercy
 ```
+
+**`Settings.mercy` is a preference; `Game.deaths` is save state** (GDD §7.1).
+The switch rides in `settings.cfg` under `game/mercy` because it belongs to the
+person at the keyboard, and the dial it turns rides in the save file because it
+belongs to the run history. Neither belongs in the other, and `forgive_loop`'s
+F7/F8 assert exactly that: a new game has died no times, and `deaths` comes back
+off the disk.
+
+```gdscript
+# scripts/autoload/game_state.gd
+var deaths: int = 0                       # incremented ONLY by Run.die()
+func mercy_rate() -> float                # 0.0 unless Settings.mercy; K.MERCY_* otherwise
+func resync_maxima(fill := false) -> void # rebuild max_quarters / max_stamina from `upgrades`
+```
+
+`Game.damage()` is the only place mercy applies, and it never zeroes a blow: a
+one-quarter hit lands in full, and the softened fraction is carried in
+`_mercy_carry` between hits rather than rounded per hit. **Nothing else reads
+`mercy_rate()`** — not `Prog`, not the spawner, not the telegraphs — because the
+moment the world reads it this stops being forgiveness and becomes difficulty
+scaling (GDD §7.1's second property).
+
+`resync_maxima()` exists because Recut has to run a purchase *backwards*.
+Deriving both maxima from `upgrades` means the jeweller's undo is one call, and
+it replaced `add_heart_container()` / `add_max_stamina()`, which could only ever
+count up. Pass `fill := true` on a purchase (the player should feel the new
+heart at once) and leave it false on a Recut, where clamping down is the point.
 
 ```gdscript
 Saves.peek(slot)        # header for the slot list; {empty:true} if unused
@@ -2019,14 +2098,17 @@ Saves.autosave()        # Flow calls this on EVERY transition; false = declined
 Saves.autosaved         # signal(slot) -- slot is -1 when it declined
 ```
 
-The save file is at **`VERSION = 4`**, and `READABLE` — not `VERSION` — is what
+The save file is at **`VERSION = 5`**, and `READABLE` — not `VERSION` — is what
 `load_slot` checks. v2 added `bag_slots`, `upgrades` and `components` on top of
 v1; v3 added `stash` and `max_stamina`; v4 is the gear split, where `plate`
-stopped being one rung and became eight tracks. **v3 is refused rather than
-migrated** and `READABLE` holds `[4]` alone, because a v3 `plate` key means
-something the v4 accessors would read as a different piece of armour. An
-*additive* version bump can be readable alongside its predecessor; this one was
-not additive. `save_game.gd`'s header comment carries the full argument.
+stopped being one rung and became eight tracks; v5 added `deaths`, the dial GDD
+§7.1 turns. **v3 is refused rather than migrated** and `READABLE` holds
+`[4, 5]`, because a v3 `plate` key means something the v4 accessors would read
+as a different piece of armour. An *additive* version bump can be readable
+alongside its predecessor — v5 is exactly that, and a v4 slot loads with
+`deaths` defaulting to 0, which is the truthful answer for a save written before
+anything counted. v4 was not additive. `save_game.gd`'s header comment carries
+the full argument.
 
 Every one of those dictionaries is rebuilt on load with `StringName` keys — JSON
 hands back `String` keys, and a `String` key makes `forge_level(&"edge")` and

@@ -18,13 +18,18 @@ Lanternkeeper in §6, the endings, and the three workings (§6.5).
 `docs/METAGAME.md` is the design of record for what exists today and every number
 in it is read from the code it names.
 
-**Also not built, and newer than the rest of this document — the 2026-08-10
-session.** §3.1 the document case, §5.3's three puzzle shapes and everything in
-`docs/PUZZLES.md`, §6.6's Reforge and Recut, and §7.1's mercy. Those five arrived
-together because they answer one diagnosis: the game asks a great question and
-then punishes a wrong answer harder than any of its comparables, while borrowing
-Zelda's locked door without paying for Zelda's verb. Read §5.3 and §3.1 as a pair
-— one adds what the player has to *do*, the other lowers what it costs to fail.
+**Newer than the rest of this document — the 2026-08-10 session.** §3.1 the
+document case, §5.3's three puzzle shapes and everything in `docs/PUZZLES.md`,
+§6.6's Reforge and Recut, and §7.1's mercy. Those five arrived together because
+they answer one diagnosis: the game asks a great question and then punishes a
+wrong answer harder than any of its comparables, while borrowing Zelda's locked
+door without paying for Zelda's verb. Read §5.3 and §3.1 as a pair — one adds
+what the player has to *do*, the other lowers what it costs to fail.
+
+**Of those five, four are now built** — the case, Reforge, Recut and mercy, plus
+the receipt's second column, landed together as `SCOPE.md`'s milestone MF and are
+proven by `tools/directors/forgive_loop.gd`. **§5.3 and `docs/PUZZLES.md` are
+not**; they are milestones M1, M4 and M5 and nothing of them exists yet.
 
 **Read §6.6 before §5 if you are here to build.** The gear loop — the ladders,
 the armour paths, the jewelcrafter — is the reason the player descends, and it is
@@ -159,11 +164,12 @@ a death-loses-everything rule is not tension, it is a corrupt save.
 
 ### 3.1 Every run pays — the document case
 
-**Added 2026-08-10.** Death took the whole bag. That is harsher than Souls, which
-lets you walk back and pick your runes up, and much harsher than the modern
-roguelite rule that every run pays something. A death five rooms down with twelve
-full slots returned **nothing**, and a loop that can hand a player forty minutes
-of zero is a loop that gets closed.
+**Added and built 2026-08-10** — `Run.cased` and `Run.CASE_SLOTS`, drawn as its
+own grid above CARRIED in the pouch. Death took the whole bag. That is harsher
+than Souls, which lets you walk back and pick your runes up, and much harsher
+than the modern roguelite rule that every run pays something. A death five rooms
+down with twelve full slots returned **nothing**, and a loop that can hand a
+player forty minutes of zero is a loop that gets closed.
 
 > **The top row of the bag — three of twelve slots — is the Society's document
 > case. What is in the case comes home. What is not, does not.**
@@ -179,6 +185,13 @@ what you would keep, which means **packing is a decision** — the one this game
 flat twelve slots did not previously have. It is Escape from Tarkov's secure
 container, which is the most-praised item in that game, and it removes the
 catastrophe without removing the cost: nine slots still die.
+
+**A mote fills the case first, and A repacks.** Pickup puts what it can in the
+case without being asked, because the player who never opens a menu is exactly
+the player §3.1 was written for; A on a cell moves that stack across the line in
+either direction, which is where the decision actually gets made. The case is
+three of the twelve — `hold_slots()` is `bag_slots - CASE_SLOTS`, so a bag
+upgrade widens the part that dies and never the part that comes home.
 
 **A relic does not fit in the case.** It is a broken lump of Vyr machinery, not a
 document. This is the one line that has to be written down, because without it a
@@ -632,16 +645,20 @@ closed for that piece — you cannot buy three heavy rungs and then walk into li
 Implementation: the two paths are two track ids and the sibling's ceiling drops
 to zero, so `Game.upgrades` stays `{track: int}` and nothing new is stored.
 
-**But it can be undone at the counter, and the price is the point.** *Added
-2026-08-10.* "No re-spec" was written against a re-spec that costs **gold**, and
-that objection is right — a build you can undo for gold is a menu. §3 supplies a
-better price:
+**But it can be undone at the counter, and the price is the point.** *Added and
+built 2026-08-10* — a REFORGE row at the bottom of the smith's board and a RECUT
+row at the bottom of the jeweller's, one per piece and per slot, priced at **0
+gold** on the face of the card. "No re-spec" was written against a re-spec that
+costs **gold**, and that objection is right — a build you can undo for gold is a
+menu. §3 supplies a better price:
 
 > **Reforge (smith).** The plate goes back in the fire. **The components come
-> back. The gold does not.** The piece returns to rung 0 on the opposite path.
+> back. The gold does not.** The piece returns to rung 0 and the fork opens
+> again — one press, whatever rung it had reached.
 >
 > **Recut (jewelcrafter).** You cannot melt a stone. **It comes back one rung
-> lower and the material is lost to the wheel.**
+> lower and the material is lost to the wheel.** Emptying a slot is four presses
+> and four stones.
 
 **Components are the pacing gate and gold is the grind** (§3), so changing your
 mind should cost you *time in the grind* and never *progress through the gate*.
@@ -764,16 +781,25 @@ room never holds more than seven.
 
 ### 7.1 The slider that goes the other way
 
-**Added 2026-08-10.** Pillar 2 says *greed is the difficulty slider* — and it is
-a good line, but it is a **one-directional** slider. It lets a player make the
-game harder and offers nothing at all to a player who is stuck. Every game this
-one is measured against ships both halves: Hades has the Pact of Punishment going
-up and God Mode coming down, Celeste has assists, Returnal relented.
+**Added and built 2026-08-10** — `Settings.mercy` on the GAME tab, and
+`Game.deaths` in the save file. Pillar 2 says *greed is the difficulty slider* —
+and it is a good line, but it is a **one-directional** slider. It lets a player
+make the game harder and offers nothing at all to a player who is stuck. Every
+game this one is measured against ships both halves: Hades has the Pact of
+Punishment going up and God Mode coming down, Celeste has assists, Returnal
+relented.
 
 So: **an options toggle, driven by deaths rather than by a menu.** It starts at a
 small damage resistance, climbs a couple of points every time you die, and caps
 well short of invulnerable. It can be switched on or off at any moment and it
 disables nothing — no ending, no plaque, no relic.
+
+The numbers, from `K`: **5%** at zero deaths, **+2.5%** per death, capped at
+**30%**. A one-quarter blow is never softened at all — a hit that can be reduced
+to nothing stops being a reason to move — and the fraction is carried between
+blows in `Game._mercy_carry` rather than rounded per hit, because rounding 30%
+of a two-quarter blow gives nought every single time and a dial that advertises
+a percentage has to actually charge it.
 
 Three properties, and each one is the reason it is this design and not a
 difficulty menu:

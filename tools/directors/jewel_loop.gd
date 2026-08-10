@@ -349,7 +349,7 @@ func _stat_block(rig) -> void:
 	Game.upgrades[Game.jewel_track(&"ring1", &"edge")] = 2
 	Game.upgrades[JewelDb.blank_id(&"amulet")] = 1
 	Game.upgrades[Game.jewel_track(&"amulet", &"vigor")] = 2
-	Game.add_heart_container()
+	Game.resync_maxima(true)
 	await rig.wait_frames(4)
 
 	Menu.open()

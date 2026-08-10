@@ -167,6 +167,14 @@ var camera_sensitivity: float = 1.0
 var rumble: bool = true
 var camera_shake: float = 1.0      ## 0 disables shake entirely
 var letterbox_on_target: bool = true
+## The slider that goes the other way (docs/GDD.md §7.1). A damage resistance
+## that grows with `Game.deaths`, off until the player asks for it.
+##
+## It lives HERE and not on `Game` on purpose, which is the same call §7.1 makes
+## about the fiction: it is a preference, not a state of the world, so it belongs
+## in the file that survives the save being deleted and never in the save itself.
+## The number it produces is `Game.mercy_rate()`; this is only the switch.
+var mercy: bool = false
 
 # --- Controls ---------------------------------------------------------------
 ## action name -> array of serialized InputEvents overriding the defaults.
@@ -259,6 +267,7 @@ func load_settings() -> void:
 	rumble = cfg.get_value("game", "rumble", rumble)
 	camera_shake = cfg.get_value("game", "camera_shake", camera_shake)
 	letterbox_on_target = cfg.get_value("game", "letterbox", letterbox_on_target)
+	mercy = cfg.get_value("game", "mercy", mercy)
 
 	# Binds from an older layout are discarded, not replayed. See BIND_SCHEMA.
 	var schema: int = int(cfg.get_value("controls", "schema", 1))
@@ -292,6 +301,7 @@ func save_settings() -> void:
 	cfg.set_value("game", "rumble", rumble)
 	cfg.set_value("game", "camera_shake", camera_shake)
 	cfg.set_value("game", "letterbox", letterbox_on_target)
+	cfg.set_value("game", "mercy", mercy)
 
 	cfg.set_value("controls", "schema", BIND_SCHEMA)
 	cfg.set_value("controls", "binds", _binds)

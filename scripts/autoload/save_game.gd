@@ -38,13 +38,20 @@ const SLOTS := 3
 ## So: **v3 is refused, not migrated**, and `READABLE` holds 4 alone.
 ## `max_stamina` joins the format in the same bump — Focus buys it now, so a slot
 ## that did not record it would reload the amulet as unpurchased.
-const VERSION := 4
+##
+## Bumped to 5 for `deaths`, and this is the additive bump the paragraph above
+## anticipated: mercy climbs with how many times this save has died (GDD §7.1),
+## and a v4 slot has no such key. `d.get("deaths", 0)` reconstructs it as a hero
+## who has not died yet, which understates the number and never overstates it —
+## the failure mode is a returning player getting slightly less forgiveness than
+## they had earned, not a fresh save arriving pre-softened. So v4 stays readable.
+const VERSION := 5
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4]
+const READABLE: Array[int] = [4, 5]
 
 signal saved(slot: int)
 signal loaded(slot: int)
@@ -117,6 +124,7 @@ func save(slot: int) -> bool:
 		"magic": Game.magic,
 		"max_magic": Game.max_magic,
 		"gold": Game.gold,
+		"deaths": Game.deaths,
 		"bag_slots": Game.bag_slots,
 		# Every permanent purchase, forge rungs included -- the ladders live in
 		# `upgrades` (see Game.FORGE_TRACKS), so one key carries all twelve, and
@@ -227,6 +235,7 @@ func load_slot(slot: int) -> Dictionary:
 	Game.max_magic = d.get("max_magic", 0)
 	Game.magic = d.get("magic", 0)
 	Game.gold = d.get("gold", 0)
+	Game.deaths = int(d.get("deaths", 0))
 	Game.bag_slots = int(d.get("bag_slots", K.START_BAG_SLOTS))
 	# JSON has no StringName and no typed Dictionary, so both of these come back
 	# as plain String keys in an untyped Dictionary. Rebuild rather than assign:

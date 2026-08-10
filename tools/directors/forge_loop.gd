@@ -198,11 +198,19 @@ func _pouch(rig) -> void:
 	# Counted off the shared `ItemGrid` rather than off a list of buttons the
 	# panel used to keep: the grid IS the drawn cells now, so this reads what is
 	# on screen instead of a parallel array that could agree with nothing.
-	var drawn: int = pouch.grid().count()
+	# TWO grids since the document case (GDD §3.1): three cells above the line and
+	# the rest below it. The claim being checked is unchanged -- the grids ARE the
+	# capacity -- it is just spread over two containers now, and the sum is still
+	# `Game.bag_slots` because the case is the bag's top three slots and not three
+	# extra ones.
+	var drawn: int = pouch.grid().count() + pouch._case_grid.count()
 	_ck("B1 it draws one cell per bag slot (%d of %d)" % [drawn, Game.bag_slots],
 		drawn == Game.bag_slots)
 	var filled := 0
 	for id in pouch._cell_ids:
+		if id != &"":
+			filled += 1
+	for id in pouch._case_ids:
 		if id != &"":
 			filled += 1
 	_ck("B2 filled cells match Run.slots_used() (%d of %d)" % [
@@ -625,6 +633,14 @@ func _death(rig) -> void:
 	Run.enter(4242)
 	Run.collect(&"cold_iron_core", 1)
 	Run.collect(&"tension_coil", 3)
+	# Everything OUT of the document case, because the rule under test here is the
+	# old one and it is still the rule for nine of the twelve slots: a component
+	# in the hold when you die is gone. Pickup fills the case first (GDD §3.1), so
+	# without this the core would come home and G2 would be checking the case
+	# rather than the floor. What the case does with a core is `forgive_loop`'s.
+	for id: StringName in Run.case_contents():
+		Run.unstow(id)
+	_ck("G-1 nothing is packed", Run.case_contents().is_empty())
 	var bench := Game.component_count(&"cold_iron_core")
 	_ck("G0 a core is in the bag", Run.bag.has(&"cold_iron_core"))
 	Run.die()

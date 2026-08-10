@@ -33,6 +33,9 @@ var _content: VBoxContainer
 var _scroll: ScrollContainer
 var _back: Button
 var _rows: Array[Control] = []
+## The one caption on this screen that repaints without a rebuild. See
+## `_build_game`'s mercy row.
+var _mercy_says: Label = null
 var _bind_rows: Array[MenuBindRow] = []
 var _applying := false
 
@@ -180,6 +183,9 @@ func _rebuild() -> void:
 		child.queue_free()
 	_rows.clear()
 	_bind_rows.clear()
+	# Freed above. A stale handle here would be a lambda writing into a queued
+	# node on the tab the player just left.
+	_mercy_says = null
 
 	match _tab:
 		Tab.AUDIO: _build_audio()
@@ -222,7 +228,9 @@ func _heading(text: String) -> void:
 	_rows.append(l)
 
 
-func _caption(text: String) -> void:
+## Returns the label, for the one caption that has to change without the panel
+## being rebuilt — mercy's, which says what the toggle above it is doing.
+func _caption(text: String) -> Label:
 	var l := Label.new()
 	l.theme_type_variation = &"MenuHint"
 	l.text = text
@@ -231,6 +239,7 @@ func _caption(text: String) -> void:
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_content.add_child(l)
 	_rows.append(l)
+	return l
 
 
 func _slider(title: String, minv: float, maxv: float, step: float,
@@ -418,6 +427,49 @@ func _build_game() -> void:
 		func(i: int) -> void:
 			Settings.rumble = i == 1
 			Settings.save_settings())
+
+	# The slider that goes the other way (docs/GDD.md §7.1). In OPTIONS and named
+	# plainly, which is the whole design decision: Hades can make this a boon
+	# because Hades has gods who talk to you, and inventing an NPC to hand a mercy
+	# over would break §6.1's five-counters-no-dialogue garrison. It is on the
+	# GAME tab under Combat rather than in a tab of its own because a settings
+	# page that quarantines its accessibility row is a page that has made the row
+	# a confession.
+	_heading("Mercy")
+	# The live number, not the design. A player who turns this on deserves to
+	# know exactly what it did, and a caption that said "a small resistance"
+	# while the rate was 22.5% would be the menu being coy about the one setting
+	# it should be plainest about. Off, it says what it would be -- the offer,
+	# before the acceptance. It is repainted on the press rather than left to the
+	# next rebuild, because a row whose own caption disagrees with it for as long
+	# as the screen stays open reads as a toggle that did not take.
+	#
+	# A MEMBER and not a local the lambda closes over: GDScript captures locals
+	# BY VALUE when the lambda is built, so a `var says` declared above the
+	# `_choice` call would be captured as null and the caption would never move
+	# (CLAUDE.md §3 is full of traps of exactly this shape).
+	_choice("Mercy", ONOFF, 1 if Settings.mercy else 0,
+		func(i: int) -> void:
+			Settings.mercy = i == 1
+			Settings.save_settings()
+			if _mercy_says != null:
+				_mercy_says.text = _mercy_caption())
+	_mercy_says = _caption(_mercy_caption())
+
+
+## What mercy is doing, or would do. Computed from `K` and `Game.deaths` rather
+## than written out, so the sentence cannot outlive a tuning change.
+func _mercy_caption() -> String:
+	var rate := minf(K.MERCY_BASE + K.MERCY_PER_DEATH * float(Game.deaths),
+		K.MERCY_MAX)
+	var what := "Softens every blow by %.0f%%" % (rate * 100.0)
+	# Never "you have died 7 times". §7.1 puts this in options and not in the
+	# fiction precisely so nobody is handed a tally of their failures; the number
+	# it drives is the player's business, the count behind it is not.
+	if rate < K.MERCY_MAX:
+		what += ", and by a little more each time you fall"
+	what += ". Nothing is disabled: every ending, plaque and relic stays open."
+	return what if Settings.mercy else what.replace("Softens", "Would soften")
 
 
 # --- Re-entry ---------------------------------------------------------------
