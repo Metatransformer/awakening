@@ -1050,6 +1050,12 @@ func _verb() -> String:
 			# to `Catalogue`, so the smith's FORGE never came back. See the note
 			# on `Catalogue.craft_verb`.
 			var line: Dictionary = row["line"]
+			# A line may name its own verb, and Reforge and Recut do: they are held
+			# presses at a counter whose held word is FORGE, and "HOLD ENT TO FORGE"
+			# over a row that puts the plate BACK in the fire is the footer saying
+			# the opposite of what the press does.
+			if line.has("verb"):
+				return String(line["verb"])
 			# The counter's own word, in the counter's own case. Not capitalized
 			# to match the rest of the footer: FORGE, BREW and SET are what these
 			# people call the act, `forge_loop` CH1b checks that this line says

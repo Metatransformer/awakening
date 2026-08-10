@@ -66,6 +66,7 @@ differently on death, which is the entire tension.
 |---|---|---|
 | **Gold** | yes | `Game.gold` (`scripts/autoload/game_state.gd`) |
 | **The bag** | **no** | `Run.bag` (`scripts/autoload/run_state.gd`) |
+| **The document case** | yes | `Run.cased` — three of the bag's slots (GDD §3.1) |
 | **Permanent upgrades** | yes | `Game.bag_slots`, `sword_bonus`, `armour_level`, hearts |
 
 Ingredients are never spent directly. They are sold, and gold buys upgrades.
@@ -366,9 +367,18 @@ garrison before the run. Healing underground is a **stock you brought with
 you**, which is a different decision from leaving — and when the stock is gone,
 leaving is still the only answer.
 
-**Death** (`Run.die()`) takes the whole bag and nothing else. Gold and every
-upgrade bought with it survive. You wake in the garrison at full health —
-leaving you at zero would just kill you again before you could sell.
+**Death** (`Run.die()`) takes the bag **except the document case** and nothing
+else. Gold and every upgrade bought with it survive. You wake in the garrison at
+full health — leaving you at zero would just kill you again before you could
+sell.
+
+The case is `Run.CASE_SLOTS = 3` of the twelve (GDD §3.1). What is in it is
+banked exactly as an extraction banks it — components to the bench, the rest to
+the vendor's stock — and the fee is *not* charged on it, because you did not
+buy a ride home. What is in the other nine is gone. `Run.die()` is also the only
+place that counts a death: `Game.deaths += 1`, which is the dial §7.1 turns, and
+it is counted here rather than off `Bus.player_died` because that signal fires
+for a death in the garrison too.
 
 ### Both endings stop and show you the receipt
 
@@ -388,6 +398,14 @@ room too far for — and not as a number going to zero. Two screens would have
 been two places for the loot list and the arithmetic to drift apart, and would
 have made the two endings read as different games instead of two outcomes of one
 decision.
+
+**A death draws two columns** (2026-08-10, with the case): WHAT THE FLOOR KEPT,
+struck through, beside THE CASE BROUGHT HOME in cyan, and the total block gains
+a CAME HOME line under LOST. The extraction keeps its one column, because on the
+way out there is no line to draw — everything came back. Two columns is what
+makes the case a *decision the receipt reports on* rather than a rule the player
+is told about: the three stacks on the right are the ones they chose, sitting
+next to the nine they chose against.
 
 It also replaced a `Label3D` in the garrison yard that had never once been
 visible (it sat about sixty degrees above the arrival camera's view centre), and
@@ -564,6 +582,12 @@ drops `plate_chest_light`'s ceiling to zero: `Game.path_closed()` says so,
 `THAT PIECE IS ALREADY COMMITTED`. The other three pieces stay open — the
 decision is per piece, which is the whole point of splitting it.
 
+**REFORGE undoes it, for no gold** (2026-08-10, GDD §6.6). A row per piece at
+the bottom of the smith's board, held like any other commit: it hands back every
+component the piece ever cost, erases the track, and reopens the fork. The price
+is the gold, which does not come back, and the walk it stood for. A piece that
+never took a rung has no row.
+
 `Hero.hurt` still floors damage at one quarter, so `SOAK_MAX = 4.0` is a
 ceiling on the *number*, not a promise of invulnerability.
 
@@ -617,8 +641,12 @@ Exactly like everything else, which is the point:
 - **Extraction banks them** (`Run.bank_components()`): the fee comes off the
   whole bag first, then components move to `Game.components` and the rest stays
   for the vendor. `Bus.components_banked` says what moved.
-- **Death takes them.** `die()` does not bank. Components in the bag die with
-  the bag; components already on the bench are permanent, like gold.
+- **Death takes them — unless they were packed.** Components in the hold die
+  with the bag; components already on the bench are permanent, like gold. A
+  component in the **document case** banks on death exactly as it would on
+  extraction (`die()` calls `bank_components()` on the case's contents), which
+  is the one route a component has out of a lost run and the reason packing one
+  is a real trade against packing a Void Pearl.
 
 ### The pouch
 
@@ -631,12 +659,22 @@ disagree. The right-hand column names what is under the cursor; the WORKBENCH
 runs the full width underneath, read-only: this screen shows what you have, the
 smith spends it.
 
+**Two grids, since 2026-08-10.** THE DOCUMENT CASE · COMES HOME is three cells
+across the top in cyan; CARRIED · DIES WITH YOU is the nine below it. The cells
+are the same cell and the count is one count — `slots_used()` sums both regions,
+so a stack that straddles the line costs a cell on each side and the picture
+still agrees with the header. Drawing the case as its own captioned grid rather
+than tinting the top row of one grid is the whole point: the line between what
+comes home and what does not is the screen's subject, and a border is a weaker
+claim than a heading.
+
 The right column also carries the screen's two **verbs**, in the order they
 argue: the **fletching bench** (§4.6) and then the **escape rope** (§5).
 Both spend the bag; one spends it on staying in and the other on getting out.
-Neither is a verb on an item — a *cell* still does nothing when you press it,
-because there is nothing you can do to one thing in the bag. These act on the
-bag as a whole, which is why they are cards beside the grid and not entries in
+Neither is a verb on an item — a cell's only verb is **A, which moves that stack
+across the case line** and is a statement about where the stack sits rather than
+anything done to the item. These act on the bag as a whole, which is why they
+are cards beside the grid and not entries in
 it, and why the bench is here rather than at the smith: the recipe eats the
 cheapest two things in the grid to its left, so the price and the stock are the
 same picture.
@@ -786,6 +824,16 @@ Once the blank is owned, its two path rows appear and the slot climbs
 smaller step. Committing to a path closes the sibling exactly as the plate
 pieces do. Buying a blank is a **tap**; buying a rung is a **hold**, the same
 grammar as everywhere else.
+
+**RECUT undoes it one rung at a time, and the stone does not come back**
+(2026-08-10, GDD §6.6). A row per slot at the bottom of her board, no gold: it
+drops the track a rung and refunds nothing, so walking a rung-4 amulet back to a
+free slot is four holds and four Cut Gemstones. She stays the harder commitment
+than the smith on purpose — metal is conserved and stone is not — and she can
+afford to, because two ring slots drawing on the same pair already give the
+player a hedge the plate pieces do not have. `Game.resync_maxima()` recomputes
+hearts and stamina from `upgrades` afterwards, so the maxima come down with the
+rung instead of the purchase arithmetic being run backwards.
 
 **The ceiling belongs to the number, not to each faucet.** Soak has two sources
 (heavy plate and Ward) and they share `K.SOAK_MAX = 4.0`. Damage has two (the
@@ -984,7 +1032,8 @@ second one is a decision.
 
 | Concern | File |
 |---|---|
-| Run state, bag, extraction, death | `scripts/autoload/run_state.gd` |
+| Run state, bag, the document case, extraction, death | `scripts/autoload/run_state.gd` |
+| The mercy dial and the death count | `scripts/autoload/game_state.gd` (`mercy_rate`, `deaths`), `scripts/autoload/settings.gd` (`mercy`) |
 | Persistent gold, forge rungs, workbench stock | `scripts/autoload/game_state.gd` |
 | Garrison↔dungeon transition and fade | `scripts/autoload/game_flow.gd` |
 | The end-of-run receipt, both endings | `scripts/ui/run_end/run_end_screen.gd` |
@@ -1151,7 +1200,7 @@ FORGE after_death bench_cores=112 bag=0
 FORGE reloaded   rungs={edge:3 guard:3 string:3 chain:3
                         plate_*_heavy:3 plate_*_light:0} slots=12
 FORGE rungs taught=3 of 3 (relics donated: 2)
-FORGE pouch frame=1220x637 viewport=1280x720
+FORGE pouch frame=1220x703 viewport=1280x720
 FORGE OK
 ```
 
@@ -1180,6 +1229,11 @@ room the doll's column freed — are now spent. A ninth material costs the bench
 quarter of a row instead of half of one, so that is not the thing to fear; a
 fifth card in either column is. If B4 goes red again, the answer is a card off
 the screen, not another 2 px of padding.
+
+The document case spent 66 px of what was left: **1220x703 as of 2026-08-10**,
+the case's three cells and its caption above the nine. 17 px of vertical slack
+remain, so the warning above is now the operating instruction rather than a
+prediction.
 
 The alchemist has hers (§6.6):
 
@@ -1255,6 +1309,48 @@ genuinely computes a number above 1.0 and the clamp is what makes it a ceiling.
 Printing the raw value is how we know the clamp is doing work rather than the
 ladder happening to stop short.
 
+The forgiveness pass has one, and it is one director for four systems because
+they are one argument (GDD §3.1, §6.6, §7.1):
+
+```bash
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/forgive_loop.gd --out=/tmp/forgive/x.png --warmup=60
+```
+
+Six beats. **A** packs a bag, dies, and checks that the case came home and the
+hold did not — including the heat premium, which follows the merchandise rather
+than the player. **B** opens the pouch and measures the two grids against the
+viewport. **C** kills the run twice, once each way, and counts the columns on
+the receipt. **D** and **E** buy a commitment at the smith and at the
+jeweller and then undo it, checking that the metal comes back and the stone does
+not, and that the fork reopens. **F** drives the mercy dial: that it is off
+until asked, that it climbs with deaths and caps, that a one-quarter blow still
+lands, that over forty blows it forgives what the caption advertises, that the
+Cut is exactly as dangerous either way, and that `deaths` survives the save file
+while the toggle stays in `settings.cfg`. `FORGIVE FAIL …` on anything that did
+not hold. Last run:
+
+```
+FORGIVE bag={deep_amber:1 tally_ledger:1 bone_shard:14 whetstone_grit:5 tension_coil:7}
+        cased={deep_amber:1 bone_shard:14 whetstone_grit:5}
+FORGIVE after death bag={bone_shard:14 deep_amber:1}
+FORGIVE pouch frame=1220x703 viewport=1280x720
+FORGIVE receipt grids=2 kept={deep_amber:2 bone_shard:12 tension_coil:4}
+FORGIVE mercy base=0.050  capped=0.300
+FORGIVE mercy took 113 of 160, expected about 112
+FORGIVE OK
+```
+
+`took 113 of 160` is the line that earns its place: 30% of a 4-quarter blow is
+1.2, and an engine that rounds per hit forgives 1 every time and lands on 120.
+The carry is what makes an integer resistance charge the fraction it printed.
+
+The two counter frames are the reason `_shoot_counter` moves the cursor before
+it captures. REFORGE and RECUT are deliberately the **last** rows on boards that
+are taller than the frame, so a photograph of the top of either board would
+prove nothing about the row the beat exists for. The mercy frame has the same
+problem one screen over and the same fix — focus the row, then scroll to the
+bottom so the caption with the live percentage is in shot too.
+
 One trap worth naming, because both these directors fell in it and the symptom
 blamed the wrong system. `game_flow.gd` autosaves at the **end** of a
 transition, after the fade in — so a beat that waits a fixed number of frames
@@ -1264,6 +1360,16 @@ and the late autosave lands *there*. Arrive after the beat's `Game.reset()` and
 the slot holds the wiped state: the reload checks fail and every sentence in
 them blames the save format. Wait for `Flow.busy` to clear, the way
 `autosave.gd`'s `_settle` does. A fixed frame count only moves the odds.
+
+A second one, from the same seam and found by `forgive_loop`: ending a run does
+not only write a save. `Flow._on_run_ended` **pauses the tree, sets
+`Prompt.blocked`, and raises its own `RunEndScreen`** — so a director that kills
+a run and then walks to a counter is standing in a paused world behind a screen
+it did not open, and the `interact` press meant for the smith dismisses that
+screen instead. The symptom is a counter that never opens, and every sentence in
+it blames the counter. `forgive_loop._settle` frees the leftover screen,
+unpauses and clears the block; anything that ends a run mid-director needs the
+same. Copy `Run.summary` **before** settling — the ride home clears it.
 
 **Do not pass `--headless`.** There is no rendering device in headless mode and
 every frame comes out empty.

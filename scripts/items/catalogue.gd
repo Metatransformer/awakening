@@ -108,7 +108,17 @@ static func buy(_line: Dictionary) -> bool:
 ## cursor was one row off is the one shop mistake this game cannot give back.
 ## So the irreversible commits are held and the repeatable ones are tapped --
 ## the hold is not ceremony, it is the difference between the two.
+## A line may say so itself with a `holds` key, and Reforge and Recut (GDD §6.6)
+## are why that key exists. They cost NOTHING at the counter -- a reforge refunds
+## its components and charges no gold, because the price was already paid in the
+## grind you now have to repeat -- so the recipe test above would call them
+## repeatables and let them go off on a tap. They are the most irreversible
+## presses in the game: a recut feeds a cut gemstone to the wheel and does not
+## give it back. The hold is not about what a line COSTS, it is about whether the
+## press can be taken back, and the recipe was only ever a proxy for that.
 static func crafts(line: Dictionary) -> bool:
+	if line.has("holds"):
+		return bool(line["holds"])
 	var parts: Dictionary = line.get("parts", {})
 	return not parts.is_empty()
 

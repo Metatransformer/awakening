@@ -20,8 +20,22 @@ var max_stamina: float = K.MAX_STAMINA
 var stamina: float = K.MAX_STAMINA
 ## Counts down from K.STAMINA_DELAY after a spend. Regen is frozen while > 0.
 var _stamina_hold: float = 0.0
+## Fractions of a quarter-heart that mercy has forgiven but not yet spent. See
+## `_softened`. Not saved: it is at most one quarter of one heart of credit, and
+## a number in the save file for it would be the accessibility toggle leaving
+## archaeology behind.
+var _mercy_carry: float = 0.0
 
 var rupees: int = 0
+## How many times this save has died. Bumped by `Run.die()`.
+##
+## It exists for one reason -- it is the dial mercy turns (GDD §7.1, `mercy_rate`)
+## -- and it is saved because a resistance that reset every time the player
+## quit would be forgiveness the stuck player has to earn again every evening.
+## Nothing else reads it, and nothing else should: a death count on a HUD or a
+## plaque would be the game keeping score of the thing §7.1 exists to stop
+## keeping score of.
+var deaths: int = 0
 ## Metagame currency. Survives death; the bag in `Run` does not.
 var gold: int = K.START_GOLD
 ## Bag capacity, in slots. Bought from the shop, so it lives here with the rest
@@ -195,6 +209,12 @@ func reset() -> void:
 	max_magic = 0
 	magic = 0
 	rupees = 0
+	# A new save has died no times. Mercy stays switched on if the player had it
+	# on -- that is a preference and lives in `Settings` -- but it goes back to its
+	# smallest setting, because the trouble it was answering belonged to the run
+	# that is being thrown away.
+	deaths = 0
+	_mercy_carry = 0.0
 	gold = K.START_GOLD
 	bag_slots = K.START_BAG_SLOTS
 	upgrades.clear()
@@ -240,10 +260,51 @@ func reset() -> void:
 func damage(amount_quarters: int) -> void:
 	if amount_quarters <= 0:
 		return
-	quarters = maxi(0, quarters - amount_quarters)
+	quarters = maxi(0, quarters - _softened(amount_quarters))
 	Bus.player_health_changed.emit(quarters, max_quarters)
 	if quarters == 0:
 		Bus.player_died.emit()
+
+
+## What fraction of a blow mercy forgives right now, 0.0 when it is off.
+##
+## The rate is on `Game` and the switch is on `Settings`, which is the split GDD
+## §7.1 describes: how forgiving it is comes from how much trouble this save is
+## in, and whether it is on at all is the player's preference and survives the
+## save being deleted.
+func mercy_rate() -> float:
+	if Settings == null or not Settings.mercy:
+		return 0.0
+	return minf(K.MERCY_BASE + K.MERCY_PER_DEATH * float(deaths), K.MERCY_MAX)
+
+
+## The blow after mercy, in whole quarter-hearts.
+##
+## **The carry is the whole of this function.** Health is integer quarters and a
+## 5% resistance on a two-quarter blow is a tenth of one: rounded per hit it is
+## nought every single time, so the toggle would be a switch that does nothing
+## for the first several hours and then, somewhere past 25%, starts halving
+## things. So the fraction ACCUMULATES across blows and is spent as whole quarters
+## when it comes due -- one blow in ten lands for a quarter less, which is a
+## sixteenth of a heart an hour that the player never has to understand, and it is
+## honest: over a fight, exactly the advertised fraction is forgiven.
+##
+## Never below one quarter, and never on a blow that was already one. `Hero` keeps
+## the same floor for armour and for the same reason (GDD §7.1 caps this well
+## short of invulnerable): a hit that can be reduced to nothing stops being a
+## reason to move.
+func _softened(amount: int) -> int:
+	var rate := mercy_rate()
+	if rate <= 0.0 or amount <= K.QUARTER:
+		return amount
+	_mercy_carry += float(amount) * rate
+	# Only what the floor leaves room for is actually spent, so a big carry over a
+	# one-quarter blow is banked rather than thrown away.
+	var forgive := mini(int(floorf(_mercy_carry)), amount - K.QUARTER)
+	if forgive <= 0:
+		return amount
+	_mercy_carry -= float(forgive)
+	return amount - forgive
 
 
 func heal(amount_quarters: int) -> void:
@@ -251,36 +312,47 @@ func heal(amount_quarters: int) -> void:
 	Bus.player_health_changed.emit(quarters, max_quarters)
 
 
-## One more heart, from either faucet -- the smith's `heart` line or a Vigor
-## amulet. Ceiling enforced HERE rather than in the two shops, so a third source
-## cannot arrive and quietly raise it (K.HEART_MAX, and the note over K.SOAK_MAX
-## about why ceilings belong to the number).
+## The maxima are STORED rather than returned from an accessor, unlike soak and
+## speed, and that is on purpose: `max_quarters` is read straight by the HUD, by
+## `hurt` and by `heal`, and `max_stamina` by every `spend_stamina` caller. What
+## follows is the one function that writes them.
 ##
-## Stored rather than derived, unlike soak and speed, and that is on purpose:
-## `max_quarters` is read straight by the HUD, by `hurt` and by `heal`, and a
-## Vigor amulet that returned its hearts from an accessor would need every one of
-## those to change. The smith's heart line already worked this way; Vigor is the
-## same purchase with a different sign over the counter.
-func add_heart_container() -> void:
-	if max_quarters >= K.HEART_MAX * K.HEART:
-		return
-	max_quarters += K.HEART
-	quarters = max_quarters
+## **Re-derive both stored maxima from `upgrades`.** The one place that knows how
+## many hearts and how much bar the ladders add up to.
+##
+## It used to be two `+=` calls -- a heart line that added a container and a Focus
+## rung that added points -- and that shape can only ever count UP. Recut (GDD
+## §6.6) takes a rung back off a jewel, and a maximum that was accumulated cannot
+## be un-accumulated without the shop doing the arithmetic a second time and
+## getting the odd Vigor rung wrong. Derived, the answer is the same however you
+## arrived at it, and Recut is one call.
+##
+## `fill` tops both bars up, which is what a PURCHASE does -- a container you just
+## paid for arrives full. A Recut passes false: the maxima come down, the bars are
+## clamped to them, and nobody is healed for changing their mind.
+func resync_maxima(fill: bool = false) -> void:
+	# Vigor is half a container a rung, so two rungs is one heart and an odd rung
+	# is one that has been paid for and is not on the HUD yet. Integer division is
+	# that rule; the shop's `_detail` shows the half so the odd rung does not read
+	# as a purchase that did nothing.
+	var hearts := K.START_HEARTS + int(upgrades.get(&"heart", 0)) \
+		+ jewel_level(jewel_track(&"amulet", &"vigor")) / 2
+	# Ceiling enforced HERE rather than in the two shops, so a third source cannot
+	# arrive and quietly raise it (K.HEART_MAX, and the note over K.SOAK_MAX about
+	# why ceilings belong to the number).
+	max_quarters = mini(hearts, K.HEART_MAX) * K.HEART
+	quarters = max_quarters if fill else clampi(quarters, 0, max_quarters)
+	max_stamina = minf(K.STAMINA_MAX, K.MAX_STAMINA + K.JEWEL_FOCUS_STAMINA
+		* float(jewel_level(jewel_track(&"amulet", &"focus"))))
+	stamina = max_stamina if fill else minf(stamina, max_stamina)
 	Bus.player_health_changed.emit(quarters, max_quarters)
+	Bus.stamina_changed.emit(stamina, max_stamina)
 
 
 ## How many heart containers the player has. The unit the shops and the
 ## equipment screen both count in.
 func heart_containers() -> int:
 	return max_quarters / K.HEART
-
-
-## More bar, from a Focus amulet. Stored for the same reason hearts are: the HUD
-## and every `spend_stamina` caller read `max_stamina` directly.
-func add_max_stamina(points: float) -> void:
-	max_stamina = minf(K.STAMINA_MAX, max_stamina + points)
-	stamina = max_stamina
-	Bus.stamina_changed.emit(stamina, max_stamina)
 
 
 # --- Magic ------------------------------------------------------------------

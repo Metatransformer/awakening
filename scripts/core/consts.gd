@@ -398,6 +398,23 @@ const EDGE_MAX := 5            ## quarter-hearts a swing, forge + rings
 const HEART_MAX := 8           ## heart containers: 3 start + 3 smith + 2 Vigor
 const STAMINA_MAX := 160.0     ## MAX_STAMINA 100 + four Focus rungs
 
+## **The slider that goes the other way** (GDD §7.1). A fraction of every blow
+## the hero takes, forgiven, when the player has switched mercy on in options.
+##
+## It starts small and climbs with `Game.deaths`, so it only ever reaches the
+## player who is actually stuck -- that is the whole design, and it is why there
+## is no difficulty menu on the title card. The cap is well short of invulnerable
+## and deliberately so: at 30% a wraith still takes four hearts off a careless
+## hero, and a mercy that made the Cut survivable by standing in it would have
+## deleted the extraction decision instead of softening it.
+##
+## 5% at nought deaths, +2.5 points a death, at the ceiling after ten. Ten deaths
+## is roughly where a stuck player is genuinely stuck rather than learning, and
+## the whole ramp fits inside a first evening for the player who needs it. [tune]
+const MERCY_BASE := 0.05
+const MERCY_PER_DEATH := 0.025
+const MERCY_MAX := 0.30
+
 ## Per rung. Ward is HALF a heavy plate rung, so a full bracelet (2.0) plus full
 ## light armour (2.0) reaches heavy's ceiling of 4 -- the light build buys its
 ## soak back with a slot instead of with speed, which is the decision GDD §6.6

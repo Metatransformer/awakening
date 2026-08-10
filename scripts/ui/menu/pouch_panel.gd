@@ -15,6 +15,14 @@ extends Control
 ##  * **The bag**, slot by slot. Stacks occupy one cell until they overflow,
 ##    exactly as `Run.slots_used()` counts them, so the picture and the
 ##    arithmetic cannot disagree.
+##  * **The document case** — the top three of those slots, drawn as their own
+##    row above the rest with what it means written on it (docs/GDD.md §3.1).
+##    The case is the one thing on this screen that is worth reading BEFORE you
+##    are in trouble, because it is the answer to "what happens if I do not make
+##    it back", and §3.1's whole argument is that the answer has to be legible
+##    for the entire run rather than rolled at the moment of death. So it is not
+##    a mark on three cells: it is a card, with a caption, and A moves a stack
+##    across the line in either direction.
 ##  * **A component mark.** A component and an ingredient compete for the same
 ##    cell, and which one you are looking at decides whether it is going to the
 ##    vendor or to the forge. The mark is the ◆ and the caption says which.
@@ -47,7 +55,12 @@ signal use_requested
 ## is on it rather than under the WORN card because the misconception it heads
 ## off — that the doll is where you equip — is formed by looking at the doll and
 ## then looking for the verb, and the verbs are all on this line.
-const HINT := "↑↓←→ Look   E / A Fletch   Hold Y Escape   Esc / B Back   Hands change on ITEMS"
+##
+## A does two things on this screen and the hint names both in the order the
+## focus meets them: on a bag cell it moves the stack across the document-case
+## line, on the card below it fletches. One key, two objects, and the line has
+## no room to say that twice.
+const HINT := "↑↓←→ Look   E / A Pack / Fletch   Hold Y Escape   Esc / B Back   Hands change on ITEMS"
 
 ## The action the way out is held on: Y on the pad, Y on the keyboard.
 ##
@@ -106,6 +119,13 @@ var _doll: MenuPaperDoll
 var _cell_ids: Array[StringName] = []
 var _cell_counts: Array[int] = []
 var _grid: ItemGrid
+## The same two arrays for the case's three cells, and its own grid. Parallel
+## rather than one array with an offset: the two grids are two containers, each
+## reports its own indices, and folding them into one range would mean every
+## reader doing the arithmetic to find out which side of the line it is on.
+var _case_ids: Array[StringName] = []
+var _case_counts: Array[int] = []
+var _case_grid: ItemGrid
 var _header: Label
 var _stock: GridContainer
 var _stock_empty: Label
@@ -322,9 +342,27 @@ func _build_grid(parent: Node) -> void:
 	inner.add_theme_constant_override("separation", 6)
 	card.add_child(inner)
 
+	# THE CASE FIRST, and above. It is the top of the bag in the fiction and it
+	# has to be the top of the picture, because the sentence this card makes when
+	# you read it downwards is the design: this comes home, this does not.
+	var case_cap := Label.new()
+	case_cap.theme_type_variation = &"MenuHeading"
+	case_cap.text = "THE DOCUMENT CASE  ·  COMES HOME"
+	# CYAN is the way out (STYLEGUIDE §1), and the case is the other way out --
+	# the one that works when you did not make it to the rope.
+	case_cap.modulate = Pal.CYAN
+	inner.add_child(case_cap)
+
+	_case_grid = ItemGrid.new()
+	_case_grid.name = "Case"
+	_case_grid.columns = Run.CASE_SLOTS
+	_case_grid.cell_focused.connect(_on_case_focused)
+	_case_grid.cell_activated.connect(_on_case_activated)
+	inner.add_child(_case_grid)
+
 	var caption := Label.new()
 	caption.theme_type_variation = &"MenuHeading"
-	caption.text = "CARRIED"
+	caption.text = "CARRIED  ·  DIES WITH YOU"
 	inner.add_child(caption)
 
 	# `ItemGrid` rather than a GridContainer full of hand-built cells. The cell
@@ -335,6 +373,7 @@ func _build_grid(parent: Node) -> void:
 	_grid.name = "Grid"
 	_grid.columns = COLS
 	_grid.cell_focused.connect(_on_cell_focused)
+	_grid.cell_activated.connect(_on_hold_activated)
 	inner.add_child(_grid)
 
 
@@ -350,46 +389,67 @@ func _build_grid(parent: Node) -> void:
 ## Anything that will not fit is dropped from the PICTURE only — it cannot happen
 ## while `bag_slots` and the grid agree, and if it ever does the header's number
 ## is still right, which is the number the fee is taken from.
+##
+## Two grids now, laid out from the same rule and from the two halves `Run` keeps
+## — `Run.in_case(id)` and `Run.in_hold(id)`. The case's three cells are the
+## bag's top three slots, so the HOLD is `bag_slots - CASE_SLOTS` and every slot
+## the smith sells lands in it (`Run.hold_slots`).
 func _fill_cells() -> void:
-	var want := clampi(Game.bag_slots, 1, MAX_CELLS)
-	_cell_ids.resize(want)
-	_cell_counts.resize(want)
-	_cell_ids.fill(&"")
-	_cell_counts.fill(0)
+	var want := clampi(Run.hold_slots(), 1, MAX_CELLS)
+	_lay_out(_cell_ids, _cell_counts, want, false)
+	_lay_out(_case_ids, _case_counts, Run.CASE_SLOTS, true)
 
+	# `capacity` is the point of this screen: the empty cells are the message.
+	# Out of the case comes the bag; the case is never the last row.
+	_case_grid.set_cells(_cells_of(_case_ids, _case_counts), Run.CASE_SLOTS)
+	_grid.spill_down = _fletch
+	_grid.set_cells(_cells_of(_cell_ids, _cell_counts), want)
+	_case_grid.spill_down = _grid.cell_at(0)
+	# Out of the bottom of the grid comes the bench, then the way out, and only
+	# then Back. That order is the screen's argument in one column: here is what
+	# you are carrying, here is what it can become, here is what it costs to keep
+	# it, here is the door.
+	_wire_focus()
+
+
+## One region's cells, in grid order: the item id and how many are in that cell.
+## `case_side` picks which half of each stack is being laid out — the packed one
+## or the loose one — which is why a stack split across the line draws twice, in
+## two cells, exactly as `Run.slots_used()` counts it.
+func _lay_out(ids: Array[StringName], counts: Array[int], want: int,
+		case_side: bool) -> void:
+	ids.resize(want)
+	counts.resize(want)
+	ids.fill(&"")
+	counts.fill(0)
 	var at := 0
 	for id: StringName in Run.bag:
 		var def := ItemDb.get_def(id)
 		if def == null:
 			continue
 		var per: int = maxi(def.stack, 1)
-		var left: int = Run.bag[id]
+		var left: int = Run.in_case(id) if case_side else Run.in_hold(id)
 		while left > 0 and at < want:
-			_cell_ids[at] = id
-			_cell_counts[at] = mini(left, per)
+			ids[at] = id
+			counts[at] = mini(left, per)
 			left -= per
 			at += 1
 
+
+func _cells_of(ids: Array[StringName], counts: Array[int]) -> Array:
 	var entries: Array = []
-	for i in want:
-		if _cell_ids[i] == &"":
+	for i in ids.size():
+		if ids[i] == &"":
 			continue
-		var def := ItemDb.get_def(_cell_ids[i])
+		var def := ItemDb.get_def(ids[i])
 		entries.append({
 			"index": i,
 			"label": def.display_name,
-			"sub": "×%d" % _cell_counts[i],
+			"sub": "×%d" % counts[i],
 			"tint": def.tint,
 			"mark": def.is_component(),
 		})
-	# `capacity` is the point of this screen: the empty cells are the message.
-	_grid.spill_down = _fletch
-	_grid.set_cells(entries, want)
-	# Out of the bottom of the grid comes the bench, then the way out, and only
-	# then Back. That order is the screen's argument in one column: here is what
-	# you are carrying, here is what it can become, here is what it costs to keep
-	# it, here is the door.
-	_wire_focus()
+	return entries
 
 
 func _build_detail(parent: Node) -> void:
@@ -862,7 +922,11 @@ func _build_stock(parent: Node) -> void:
 ## and every button is reachable by holding one direction — the same guarantee
 ## the ITEMS screen makes, and for the same reason.
 func _wire_focus() -> void:
-	var first := _grid.cell_at(0)
+	# The loop closes on the CASE's first cell, not the bag's, because the case is
+	# now the top of the screen and Back's job is to return you to the top.
+	var first := _case_grid.cell_at(0)
+	if first == null:
+		first = _grid.cell_at(0)
 	if first == null:
 		return
 	MenuUtil.link_down(_fletch, _rope)
@@ -886,7 +950,12 @@ func _wire_focus() -> void:
 func focus_first() -> void:
 	_rope_armed = false
 	_reset_hold()
-	var first := _grid.cell_at(0)
+	# On the case, deliberately. The first thing the screen should say when it
+	# opens is what survives you (docs/GDD.md §3.1) — a cursor that started in the
+	# hold would put the answer one flick away from a player who never asked.
+	var first := _case_grid.cell_at(0)
+	if first == null:
+		first = _grid.cell_at(0)
 	if first != null:
 		first.grab_focus()
 
@@ -919,23 +988,70 @@ func refresh() -> void:
 		# The cursor is on a cell, or on nothing at all because the screen has
 		# only just been built. Either way the detail pane describes a cell, and
 		# the grid is the one that knows which button is which index.
-		_describe(_cell_under(focused))
+		_describe_focus(focused)
 
 
-## Which bag cell the focus is on, or 0 when it is not on the grid at all. The
-## grid hands out its own buttons, so asking it beats keeping a parallel array
-## of them here — the parallel array was what `_cells` used to be, and it was one
-## more thing that could disagree with what is drawn.
-func _cell_under(focused: Control) -> int:
+## Which cell the focus is on, and which side of the line, after a refresh that
+## did not go through either grid's own signal. The grids hand out their own
+## buttons, so asking them beats keeping a parallel array of them here — the
+## parallel array was what `_cells` used to be, and it was one more thing that
+## could disagree with what is drawn. A focus on neither grid describes the
+## case's first cell, because that is where `focus_first` puts the cursor.
+func _describe_focus(focused: Control) -> void:
+	for i in _case_grid.count():
+		if _case_grid.cell_at(i) == focused:
+			_describe(i, true)
+			return
 	for i in _grid.count():
 		if _grid.cell_at(i) == focused:
-			return i
-	return 0
+			_describe(i, false)
+			return
+	_describe(0, true)
 
 
 ## The grid says a cell was looked at; the detail pane says what it is.
 func _on_cell_focused(index: int) -> void:
-	_describe(maxi(index, 0))
+	_describe(maxi(index, 0), false)
+
+
+func _on_case_focused(index: int) -> void:
+	_describe(maxi(index, 0), true)
+
+
+## A on a carried cell packs that stack into the case.
+##
+## A whole cell at a time, in both directions. Per-item packing would be the more
+## flexible verb and it is the wrong one: the case is three slots and the choice
+## §3.1 wants you making is *which things*, not how many of a thing — and a
+## part-stack moved on its own costs a slot on each side of the line for nothing.
+func _on_hold_activated(index: int) -> void:
+	if index < 0 or index >= _cell_ids.size():
+		return
+	var id: StringName = _cell_ids[index]
+	if id == &"":
+		return
+	if Run.stow(id, _cell_counts[index]) <= 0:
+		var why := Run.case_refusal(id)
+		notice.emit(why if why != "" else "That will not fit in the case.", true)
+		return
+	notice.emit("%s packed. It comes home." % ItemDb.get_def(id).display_name, false)
+	refresh()
+
+
+## A on a cased cell takes it back out. It stays in the bag — it just stops being
+## the half that survives you, which is the trade every third slot is about.
+func _on_case_activated(index: int) -> void:
+	if index < 0 or index >= _case_ids.size():
+		return
+	var id: StringName = _case_ids[index]
+	if id == &"":
+		return
+	if Run.unstow(id, _case_counts[index]) <= 0:
+		notice.emit("There is no room in the bag for that outside the case.", true)
+		return
+	notice.emit("%s unpacked. It dies with you now."
+		% ItemDb.get_def(id).display_name, false)
+	refresh()
 
 
 ## Three numbers, and this screen is now the only place two of them are said.
@@ -981,25 +1097,36 @@ func _paint_stock() -> void:
 	_stock_empty.visible = not any
 
 
-func _describe(index: int) -> void:
-	if _detail_name == null or index < 0 or index >= _cell_ids.size():
+func _describe(index: int, case_side: bool) -> void:
+	var ids: Array[StringName] = _case_ids if case_side else _cell_ids
+	var counts: Array[int] = _case_counts if case_side else _cell_counts
+	if _detail_name == null or index < 0 or index >= ids.size():
 		return
-	var id: StringName = _cell_ids[index]
+	var id: StringName = ids[index]
+	# The case's three slots are the bag's first three, so the number the player
+	# reads is continuous across the line even though the cells are two grids.
+	var slot := index + 1 if case_side else index + 1 + Run.CASE_SLOTS
 
 	if id == &"":
-		_detail_kind.text = "SLOT %d" % (index + 1)
+		_detail_kind.text = "CASE %d" % slot if case_side else "SLOT %d" % slot
 		_detail_name.text = "Empty"
 		_detail_value.text = ""
-		_detail_blurb.text = "Room for one more stack. Nothing is refused while " \
-			+ "there is a cell like this one."
-		_detail_legend.text = "Walk over a drop to fill it. There is no pick-up button."
+		if case_side:
+			_detail_blurb.text = "Room in the case. Whatever is in here when you " \
+				+ "die is what comes home with your body."
+			_detail_legend.text = "Press A on anything below to pack it. " \
+				+ "Relics will not fit."
+		else:
+			_detail_blurb.text = "Room for one more stack. Nothing is refused while " \
+				+ "there is a cell like this one."
+			_detail_legend.text = "Walk over a drop to fill it. There is no pick-up button."
 		return
 
 	var def := ItemDb.get_def(id)
-	var n: int = _cell_counts[index]
+	var n: int = counts[index]
 	var part := def.is_component()
-	_detail_kind.text = "SLOT %d  ·  %s  ·  %s" % [
-		index + 1, def.rarity_name().to_upper(),
+	_detail_kind.text = "%s %d  ·  %s  ·  %s" % [
+		"CASE" if case_side else "SLOT", slot, def.rarity_name().to_upper(),
 		def.bench_name() if part else "INGREDIENT"]
 	_detail_name.text = def.display_name
 	_detail_value.text = "%d ◇  ·  %d per slot" % [def.value * n, def.stack]
@@ -1007,6 +1134,10 @@ func _describe(index: int) -> void:
 	# WHICH bench, by name. Two counters eat components now and they are at
 	# opposite ends of the yard; a caption that said "the forge" over a Fired
 	# Cullet would send the player to the wrong one.
-	_detail_legend.text = ("%s eats this. It goes to the workbench when you reach "
+	var fate := ("%s eats this. It goes to the workbench when you reach "
 		+ "garrison, not to the vendor.") % def.bench_name().capitalize() if part else \
 		("The vendor buys this. What it is worth is a quarter of what leaving costs.")
+	# The verb, on the end, and phrased as the consequence rather than the key —
+	# what A does here is decide whether this survives you.
+	_detail_legend.text = fate + ("   A takes it out of the case." if case_side
+		else "   A packs it into the case.")

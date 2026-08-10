@@ -8,7 +8,7 @@ extends Node
 ##   enter()    you go down with an empty bag
 ##   collect()  drops and chests fill it
 ##   extract()  you pay a fee, get your health back, and keep the bag
-##   die()      you keep nothing
+##   die()      you keep what is in the document case, and nothing else
 ##
 ## Why the fee scales with the bag rather than being flat: a flat fee is free
 ## insurance on a good run and a punishment on a bad one, so it makes the
@@ -20,7 +20,26 @@ extends Node
 ## lives here (it does not).
 
 ## id -> count. Never negative, never zero-valued -- an emptied entry is erased.
+##
+## This is the WHOLE bag, case included. `cased` below says which of it is in the
+## case; every consumer that only wants to know what you are carrying (the fee,
+## the vendor, the HUD, the fletching bench) reads this and never has to know the
+## case exists.
 var bag: Dictionary[StringName, int] = {}
+## id -> how many of that id are in the **document case** (docs/GDD.md §3.1). A
+## strict subset of `bag`: an id in here is in the bag too, and never by more.
+##
+## A subset rather than a second container, and that is the decision this whole
+## feature turns on. The fee, the vendor's total, the heat premium, the receipt
+## and `slots_used()` are all arithmetic over "what you are carrying", and every
+## one of them would have needed a second term the day the case became a bag of
+## its own -- which is the drift CLAUDE.md §0 is about. What the case actually is
+## is a MARK on three of the slots, so it is stored as one.
+##
+## Cleared with the bag. `_case_trim()` is what keeps the subset true: anything
+## that takes items out of `bag` by any door calls it rather than remembering to
+## adjust this by hand.
+var cased: Dictionary[StringName, int] = {}
 ## True between enter() and extract()/die(). The extraction affordance, the
 ## death rule and the vendor all gate on it.
 var in_dungeon: bool = false
@@ -63,12 +82,24 @@ var last_attacker: StringName = &""
 ## moved to the bench, `level` goes back to 1. A screen that read `Run` directly
 ## would be reading the wreckage.
 ##
-## Keys: extracted, contents, banked, value, premium, fee, kills, level, depth,
-## killer. Empty before the first run ends.
+## Keys: extracted, contents, banked, kept, kept_value, value, premium, fee,
+## kills, level, depth, killer. Empty before the first run ends.
 var summary: Dictionary = {}
 ## Seeded per run so a dungeon can be replayed exactly.
 var rng := RandomNumberGenerator.new()
 var seed_used: int = 0
+
+## Slots of the bag that are the Society's document case, counted off the top.
+##
+## **Three of twelve, and it is not a dice roll** (docs/GDD.md §3.1). The case is
+## legible for the whole run, so the player knows at every moment exactly what
+## they would keep -- which is what makes packing a decision rather than a
+## consolation prize handed out at the moment of death.
+##
+## It is not a `Game` field and it is not bought: the four bag slots the smith
+## sells all land in the HOLD (`hold_slots()`), because a case that grew with the
+## bag would hand the player back the catastrophe the cap exists to pose.
+const CASE_SLOTS := 3
 
 ## Fraction of the bag's sale value the teleport costs. [tune]
 const EXTRACT_RATE := 0.25
@@ -86,6 +117,7 @@ func _ready() -> void:
 
 func reset() -> void:
 	bag.clear()
+	cased.clear()
 	premium = 0
 	in_dungeon = false
 	depth = 0
@@ -104,6 +136,7 @@ func _on_enemy_died(_enemy: Node3D, _position: Vector3) -> void:
 ## Start a run. Pass a seed to replay one; 0 picks a fresh one and records it.
 func enter(run_seed: int = 0) -> void:
 	bag.clear()
+	cased.clear()
 	premium = 0
 	depth = 0
 	# Every run starts at the top. The Lower Worlds are not a save file you
@@ -240,6 +273,7 @@ func bank_components() -> Dictionary:
 		moved[id] = n
 		bag.erase(id)
 		Game.add_component(id, n)
+	_case_trim()
 
 	# Heat is paid on what you sweep, and a component you swept hot was worth
 	# more to carry. It banked as gold-equivalent nothing, so its share of the
@@ -273,6 +307,10 @@ func bank_relics() -> Dictionary:
 		bag.erase(id)
 		RelicDb.recover(id)
 	if not moved.is_empty():
+		# Belt only: `case_fits` refuses a relic the case slot, so there is never a
+		# cased relic to trim. Called anyway, because "the subset is true after
+		# anything leaves the bag" is a rule with no exceptions in it.
+		_case_trim()
 		Bus.bag_changed.emit(bag, bag_value())
 	return moved
 
@@ -285,17 +323,24 @@ func bank_relics() -> Dictionary:
 ## while the number the ROPE reads (`bag_value`) keeps it. See `ItemDb.RELIC_TOLL`
 ## for why a relic weighs anything at all.
 func relic_toll() -> int:
-	var total := 0
-	for id: StringName in bag:
-		if not RelicDb.is_relic(id):
-			continue
-		var def := ItemDb.get_def(id)
-		if def != null:
-			total += def.value * int(bag[id])
-	return total
+	return _relic_toll_of(bag)
 
 
-## Die. The bag is gone; gold and anything bought with it survives.
+## Die. **The case comes home; the other nine slots are gone.** Gold and anything
+## bought with it survives, as it always did.
+##
+## Added 2026-08-10 (docs/GDD.md §3.1). Death used to take the whole bag, which is
+## harsher than Souls -- you cannot walk back for it -- and harsher than any
+## roguelite this game is measured against, all of which pay something for every
+## run. Forty minutes for nothing is how a loop gets closed, and three slots is
+## the smallest answer that is not a dice roll.
+##
+## The case's contents are handled EXACTLY as an extraction handles the bag, one
+## call short: components in it go to the bench, ingredients stay in the bag to be
+## sold, and the heat premium follows the merchandise that survived. What is not
+## repeated is `bank_relics` -- a relic cannot be in the case (`case_fits`), so on
+## a death every relic you were carrying is still down there, which is the
+## paragraph below.
 ##
 ## **A relic in the bag is NOT destroyed here** (docs/GDD.md §3). Nothing is set
 ## and nothing needs to be: the held flag was never raised, so `RelicDb.held()`
@@ -308,13 +353,37 @@ func relic_toll() -> int:
 func die() -> void:
 	if not in_dungeon:
 		return
-	var lost := bag.duplicate()
-	var lost_value := bag_value()
-	_end_summary(false, lost, lost_value, {}, 0)
+	# The dial mercy turns (GDD §7.1). Counted here rather than off
+	# `Bus.player_died` because that fires for a death in the garrison too, and
+	# this is the only place that knows a RUN ended.
+	Game.deaths += 1
+	var kept := case_contents()
+	var lost: Dictionary[StringName, int] = {}
+	for id: StringName in bag:
+		var n := in_hold(id)
+		if n > 0:
+			lost[id] = n
+	var lost_value := _value_of(lost)
+	# Measured before the pot is split, because `_premium_share` divides by the
+	# bag as it stands and the bag is about to be nine slots smaller.
+	var lost_hot := _premium_share(_base_of(lost) - _relic_toll_of(lost))
+
+	# The heat premium follows the merchandise. What the floor kept takes its
+	# share of the pot with it and the case keeps the rest -- the same
+	# proration `sell()` and `bank_components` do, because it is the same rule:
+	# heat is earned per gold of loot and it cannot outlive the loot.
+	premium = maxi(0, premium - lost_hot)
 	bag.clear()
-	# The heat premium dies with the bag it was earned into. It is the same
-	# gold; there was never a second container.
-	premium = 0
+	bag.merge(kept)
+	# The case survives the death holding exactly what it held; it is the bag
+	# around it that is gone.
+	cased.clear()
+	cased.merge(kept)
+	# The case's components reach the bench the same way an extraction's do. This
+	# is the ONE place a component survives a death, and it survives because the
+	# player packed it, which is the decision §3.1 exists to create.
+	var banked := bank_components()
+	_end_summary(false, lost, lost_value, banked, 0, kept, lost_hot)
 	in_dungeon = false
 	depth = 0
 	# Back to the top of the Lower Worlds, and it is reset HERE rather than left
@@ -328,8 +397,13 @@ func die() -> void:
 	# would mean the next thing that touched you killed you again before you
 	# could sell.
 	Game.heal(Game.max_quarters)
-	Bus.bag_changed.emit(bag, 0)
+	# `bag_value()`, not 0. The bag is not empty any more -- the case is in it --
+	# and a HUD told the bag is worth nothing over a case holding two Void Pearls
+	# is the first thing a player would file a bug about.
+	Bus.bag_changed.emit(bag, bag_value())
 	Bus.run_ended.emit(false, lost, lost_value)
+	if not banked.is_empty():
+		Bus.components_banked.emit(banked)
 
 
 ## Freeze what the run looked like, for `RunEndScreen`.
@@ -341,16 +415,28 @@ func die() -> void:
 ## the killing blow first), by which point reading `Run` live would report the
 ## state of a player standing in the garrison.
 func _end_summary(extracted: bool, contents: Dictionary, value: int,
-		banked: Dictionary, fee: int) -> void:
+		banked: Dictionary, fee: int, kept: Dictionary = {},
+		hot: int = -1) -> void:
 	summary = {
 		"extracted": extracted,
 		"contents": contents.duplicate(),
+		# The document case's contents, and what they are worth. **Only ever
+		# non-empty on a death**, because that is the only ending where the case
+		# means anything: an extraction brings the whole bag home and a "what you
+		# kept" column beside it would be the receipt reading itself back. This is
+		# the receipt's second column (docs/SCOPE.md MF).
+		"kept": kept.duplicate(),
+		"kept_value": _value_of(kept),
 		# Which of those lines went to the bench rather than the vendor. Only ever
 		# non-empty on an extraction -- components you were carrying die with the
 		# bag, same as everything else in it (see `bank_components`).
 		"banked": banked.duplicate(),
 		"value": value,
-		"premium": premium,
+		# The heat riding on `contents` -- not the pot, which on a death has
+		# already been split between the case and the floor by the time this runs.
+		# An extraction passes -1 and means the whole of it, because the whole bag
+		# is what came back.
+		"premium": premium if hot < 0 else hot,
 		"fee": fee,
 		"kills": kills,
 		"level": level,
@@ -421,13 +507,7 @@ func collect(id: StringName, count: int = 1, heat_mult: float = 1.0) -> int:
 
 	var taken := 0
 	while taken < count:
-		var have: int = bag.get(id, 0)
-		# Room in an existing stack costs no slot.
-		if have > 0 and have % def.stack != 0:
-			bag[id] = have + 1
-		elif slots_used() < Game.bag_slots:
-			bag[id] = have + 1
-		else:
+		if not _place(id, def):
 			break
 		taken += 1
 
@@ -441,6 +521,198 @@ func collect(id: StringName, count: int = 1, heat_mult: float = 1.0) -> int:
 	if taken < count:
 		Bus.bag_full.emit()
 	return taken
+
+
+## Put ONE of `id` in the bag. Returns false when nothing has room for it.
+##
+## **The case fills first, and that is the forgiving default on purpose.** A case
+## that started empty and had to be packed by hand would be a mercy only for the
+## player who reads menus, and the player MF exists for is the one who died five
+## rooms down forty minutes into their first run (docs/GDD.md §3.1). Filling it as
+## you go means the case is never idle; the decision arrives the moment it is
+## full and something better than what is in it comes off the floor, which is the
+## moment worth making a decision out of. `stow()` is that decision.
+##
+## Room in an existing part-stack costs no slot, in either region -- the same rule
+## the bag has always had, applied twice because the two regions count their slots
+## separately (`slots_used`).
+func _place(id: StringName, def: ItemDef) -> bool:
+	var per: int = maxi(def.stack, 1)
+	var have: int = bag.get(id, 0)
+	if case_fits(id):
+		var packed: int = cased.get(id, 0)
+		if (packed > 0 and packed % per != 0) or case_slots_used() < CASE_SLOTS:
+			cased[id] = packed + 1
+			bag[id] = have + 1
+			return true
+	var held: int = have - int(cased.get(id, 0))
+	if (held > 0 and held % per != 0) or hold_slots_used() < hold_slots():
+		bag[id] = have + 1
+		return true
+	return false
+
+
+# --- The document case (docs/GDD.md §3.1) -----------------------------------
+# Three slots off the top of the bag. What is in them comes home; what is not,
+# does not. Nine slots still die, which is what keeps §2's question -- is this
+# worth the walk back -- a question.
+
+## How many of `id` are in the case right now.
+func in_case(id: StringName) -> int:
+	return int(cased.get(id, 0))
+
+
+## How many of `id` you are carrying OUTSIDE the case. The half that dies.
+func in_hold(id: StringName) -> int:
+	return int(bag.get(id, 0)) - in_case(id)
+
+
+## Slots of the case that are spoken for. Counted the way the bag counts, because
+## it is the same shelves: a part-stack is a whole slot.
+func case_slots_used() -> int:
+	return _slots_of(cased)
+
+
+## Slots outside the case, and how many there are. The bag slots the smith sells
+## all land here -- see `CASE_SLOTS`.
+func hold_slots_used() -> int:
+	var held: Dictionary[StringName, int] = {}
+	for id: StringName in bag:
+		var n := in_hold(id)
+		if n > 0:
+			held[id] = n
+	return _slots_of(held)
+
+
+func hold_slots() -> int:
+	return maxi(Game.bag_slots - CASE_SLOTS, 0)
+
+
+## **May this thing go in the case at all?**
+##
+## A relic does not fit -- it is a broken lump of Vyr machinery, not a document --
+## and that one line is what keeps the hardest question in the design being asked
+## (docs/GDD.md §3.1). An Echo will not fit either for the same reason
+## (docs/PUZZLES.md §6); it has no item rows yet, and when it gets them this is
+## the function that refuses it.
+func case_fits(id: StringName) -> bool:
+	return not RelicDb.is_relic(id)
+
+
+## Why `id` cannot go in the case, in the player's words, or "" when it can.
+func case_refusal(id: StringName) -> String:
+	if not case_fits(id):
+		return "The case takes documents. That is not one."
+	if in_hold(id) <= 0:
+		return "There is none of that outside the case."
+	if case_room_for(id) <= 0:
+		return "The case is full. Take something out of it first."
+	return ""
+
+
+## How many more of `id` the case will take: the slack in the part-stack it
+## already holds, plus whatever whole slots are free. `Game.stash_room_for`'s
+## shape, and for the same reason -- asked rather than assumed, so a screen can
+## refuse before it starts a move it cannot finish.
+func case_room_for(id: StringName) -> int:
+	var def := ItemDb.get_def(id)
+	if def == null or not case_fits(id):
+		return 0
+	var per: int = maxi(def.stack, 1)
+	var have := in_case(id)
+	var slack: int = (per - have % per) % per
+	return slack + maxi(CASE_SLOTS - case_slots_used(), 0) * per
+
+
+## Move up to `n` of `id` into the case (-1 for as many as will go). Returns how
+## many moved. Nothing enters or leaves the bag here -- the case is a mark on what
+## is already in it.
+##
+## **Refused whole when it would cost a slot the bag does not have.** Splitting a
+## stack across the two regions costs a cell, because the two count separately,
+## and a move that quietly overflowed would put a stack in the bag that the pouch
+## has no cell to draw -- items that exist in the arithmetic and nowhere on the
+## screen. The screens move a whole cell at a time, so this is the guard rather
+## than the common case.
+func stow(id: StringName, n: int = -1) -> int:
+	var held := in_hold(id)
+	if held <= 0 or not case_fits(id):
+		return 0
+	var want: int = held if n < 0 else mini(n, held)
+	var moved: int = mini(want, case_room_for(id))
+	if moved <= 0:
+		return 0
+	if _slots_with(id, in_case(id) + moved) > Game.bag_slots:
+		return 0
+	cased[id] = in_case(id) + moved
+	Bus.bag_changed.emit(bag, bag_value())
+	return moved
+
+
+## Take up to `n` of `id` back out of the case. It stays in the bag; it just
+## stops being the half that comes home.
+func unstow(id: StringName, n: int = -1) -> int:
+	var have := in_case(id)
+	if have <= 0:
+		return 0
+	var moved: int = have if n < 0 else mini(n, have)
+	if _slots_with(id, have - moved) > Game.bag_slots:
+		return 0
+	if moved >= have:
+		cased.erase(id)
+	else:
+		cased[id] = have - moved
+	Bus.bag_changed.emit(bag, bag_value())
+	return moved
+
+
+## What the case is holding, as its own dictionary. The receipt's second column
+## and `die()` both want it, and neither should be iterating `cased` itself.
+func case_contents() -> Dictionary[StringName, int]:
+	return cased.duplicate()
+
+
+## Slots `counts` would occupy, at this game's one stacking rule.
+func _slots_of(counts: Dictionary) -> int:
+	var used := 0
+	for id: StringName in counts:
+		var def := ItemDb.get_def(id)
+		var per: int = def.stack if def != null else 1
+		used += int(ceil(float(counts[id]) / float(maxi(per, 1))))
+	return used
+
+
+## Slots the whole bag would occupy if `in_case` of `id` were in the case. The
+## only reason this exists is the split-stack guard in `stow`/`unstow`.
+func _slots_with(id: StringName, in_case_now: int) -> int:
+	var total := 0
+	for k: StringName in bag:
+		var def := ItemDb.get_def(k)
+		var per: int = maxi(def.stack if def != null else 1, 1)
+		var whole: int = bag[k]
+		var c: int = in_case_now if k == id else int(cased.get(k, 0))
+		c = clampi(c, 0, whole)
+		total += int(ceil(float(c) / float(per)))
+		total += int(ceil(float(whole - c) / float(per)))
+	return total
+
+
+## Force the subset true again after something left the bag by any door -- a
+## sale, a deposit in the footlocker, a fletching. Called by every one of them
+## rather than each remembering to adjust `cased` itself, which is the same
+## argument `consume()` makes about `bag` having exactly one writer.
+##
+## It takes from the HOLD first, because a clamp only bites once the hold's share
+## of that id is gone. That is the right default in both places it happens: the
+## bench eats the loose shards before the packed ones, and a sale in the garrison
+## is emptying a bag that already came home.
+func _case_trim() -> void:
+	for id: StringName in cased.keys():
+		var have: int = bag.get(id, 0)
+		if have <= 0:
+			cased.erase(id)
+		elif int(cased[id]) > have:
+			cased[id] = have
 
 
 ## Burn `count` of `id` out of the bag without selling it. Returns how many were
@@ -470,19 +742,21 @@ func consume(id: StringName, count: int = 1) -> int:
 		bag.erase(id)
 	else:
 		bag[id] = have - n
+	_case_trim()
 	Bus.bag_changed.emit(bag, bag_value())
 	return n
 
 
 ## Slots consumed. A stack of 20 bone shards with stack==20 is one slot; the
 ## twenty-first starts a second.
+##
+## The two regions are counted SEPARATELY and added, which is the one place the
+## case changes an old number: a stack split across the case and the hold sits in
+## two cells and costs two slots. That is what the pouch draws, and the picture
+## and the arithmetic are not allowed to disagree (`MenuPouchPanel`'s opening
+## argument).
 func slots_used() -> int:
-	var used := 0
-	for id: StringName in bag:
-		var def := ItemDb.get_def(id)
-		var per: int = def.stack if def != null else 1
-		used += int(ceil(float(bag[id]) / float(maxi(per, 1))))
-	return used
+	return case_slots_used() + hold_slots_used()
 
 
 func is_full() -> bool:
@@ -499,11 +773,39 @@ func bag_value() -> int:
 
 ## The same bag at flat, un-lit prices. Only the premium arithmetic needs this.
 func base_value() -> int:
+	return _base_of(bag)
+
+
+## What an arbitrary slice of the bag is worth, heat included -- the figure the
+## receipt prints over a column.
+##
+## Split out of `bag_value()` the day the bag started ending a run in two pieces
+## (`die()`): what the floor kept and what the case brought home are each a
+## sub-bag, and each has to carry its own share of the same pot. Passing `bag`
+## itself gives exactly `bag_value()`, which is the check that this is one
+## arithmetic and not two.
+func _value_of(slice: Dictionary) -> int:
+	var flat := _base_of(slice)
+	return flat + _premium_share(flat - _relic_toll_of(slice))
+
+
+func _base_of(slice: Dictionary) -> int:
 	var total := 0
-	for id: StringName in bag:
+	for id: StringName in slice:
 		var def := ItemDb.get_def(id)
 		if def != null:
-			total += def.value * int(bag[id])
+			total += def.value * int(slice[id])
+	return total
+
+
+func _relic_toll_of(slice: Dictionary) -> int:
+	var total := 0
+	for id: StringName in slice:
+		if not RelicDb.is_relic(id):
+			continue
+		var def := ItemDb.get_def(id)
+		if def != null:
+			total += def.value * int(slice[id])
 	return total
 
 
@@ -569,6 +871,7 @@ func sell_all() -> int:
 			continue
 		sold[id] = int(bag[id])
 		bag.erase(id)
+	_case_trim()
 	# `paid` was the whole merchandise value, premium included -- emptying the
 	# sellable half empties the pot with it, and neither is counted twice.
 	premium = 0
@@ -607,6 +910,7 @@ func sell(id: StringName, count: int = -1) -> int:
 		bag.erase(id)
 	else:
 		bag[id] = have - n
+	_case_trim()
 	Game.add_gold(paid)
 	Bus.bag_changed.emit(bag, bag_value())
 	Bus.items_sold.emit({id: n}, paid)

@@ -23,6 +23,10 @@ extends Catalogue
 ##    components, because the smith cannot make a longer chain out of coin. The
 ##    rung sits in `Game.upgrades` and the gear reads it back through the
 ##    accessors on `Game`; nothing here knows what an arc or a draw time is.
+##  * **Reforge** -- the undo, one cell per committed armour piece, and the only
+##    line on any counter that costs nothing and gives something back (GDD §6.6,
+##    added 2026-08-10). It is a held press, not a tap, and `Catalogue.crafts`
+##    explains why a free line is the most irreversible one on the board.
 ##
 ## One list rather than two screens because the player is answering one question
 ## -- what is the best thing I can afford right now -- and splitting the answer
@@ -152,6 +156,13 @@ const PARTS := {
 }
 
 
+## The prefix a REFORGE line's id carries, so `buy()` can tell one from a rung
+## without a table of four more ids. `reforge_chest` is not a track and never
+## appears in `Game.upgrades` -- it is a verb wearing an id, because `TradeScreen`
+## addresses everything on a counter by one.
+const REFORGE := "reforge_"
+
+
 ## One catalogue line. `cost` grows with `Game.upgrades[id]` for the repeatables,
 ## so the third sharpening is not the same price as the first, and `parts` is the
 ## component half of the same bill -- empty for anything the smith just has.
@@ -176,6 +187,13 @@ static func lines() -> Array[Dictionary]:
 	var shown: Array[Dictionary] = []
 	for line in board:
 		if stocked(line["id"]):
+			shown.append(line)
+	# After the sieve, because a reforge line is not stock and is not gated on
+	# ownership -- it exists exactly when there is something in the fire to put
+	# back, which `committed_path` is the whole test for.
+	for piece: StringName in Game.PLATE_PIECES:
+		var line := _reforge(piece)
+		if not line.is_empty():
 			shown.append(line)
 	return shown
 
@@ -210,6 +228,7 @@ static func groups() -> Array[Dictionary]:
 		_armour_row(out, at, piece)
 	_forge_row(out, at, &"string", "THE BOW")
 	_forge_row(out, at, &"chain", "THE CHAIN")
+	_reforge_row(out, at)
 	return out
 
 
@@ -254,6 +273,99 @@ static func _armour_row(out: Array[Dictionary], at: Dictionary,
 	if tracks.is_empty():
 		return
 	out.append({"title": String(piece).to_upper(), "tracks": tracks})
+
+
+## **The undo, one row, one cell per piece that has something to undo.**
+##
+## Last on the board and gathered into a single row rather than hung off each
+## piece's own row, which is the one layout decision here worth arguing about.
+## Under the piece it would sit next to the rung it cancels and read as a third
+## branch of the same ladder -- a choice between heavy, light and *unheavy*. It is
+## not a branch; it is the counter offering to undo work you paid for, and the
+## player should have to leave the ladder to find it (GDD §6.6: it stops being a
+## menu when it costs something, and it should not LOOK like a menu either).
+##
+## Absent entirely when nothing has committed, so a fresh save is never shown a
+## row about a decision it has not made.
+static func _reforge_row(out: Array[Dictionary], at: Dictionary) -> void:
+	var tracks: Array = []
+	for piece: StringName in Game.PLATE_PIECES:
+		var i: int = at.get(StringName(REFORGE + String(piece)), -1)
+		if i < 0:
+			continue
+		tracks.append({"name": String(piece).to_upper(), "line": i,
+			"owned": 0, "rungs": 1})
+	if tracks.is_empty():
+		return
+	out.append({"title": "REFORGE", "tracks": tracks})
+
+
+## Which path `piece` has committed to, and how far up it. `[&"", 0]` when it has
+## not committed at all -- rung 0 on both paths is a piece still deciding, and
+## there is nothing to put back in the fire.
+##
+## Returns the pair rather than the track alone because every caller wants both
+## and re-deriving the level from the track is another `forge_level` lookup that
+## can disagree with the branch that chose it.
+static func committed_path(piece: StringName) -> Array:
+	for path: StringName in [Game.PLATE_HEAVY, Game.PLATE_LIGHT]:
+		var id := Game.plate_track(piece, path)
+		var lvl := Game.forge_level(id)
+		if lvl > 0:
+			return [id, lvl]
+	return [&"", 0]
+
+
+## The reforge line for one piece, or `{}` when there is nothing to undo.
+##
+## **Zero gold, and that is the design and not an oversight** (GDD §6.6, §10).
+## The components come back and the gold does not: what a reforge costs is every
+## coin already sunk in the ladder you are dismantling, which you must now earn
+## again for the other path. Charging a fee on top would price the same decision
+## twice. The bill is invisible at the counter and enormous in the purse, which is
+## exactly the shape §3 asks for -- it costs time in the grind, never progress
+## through the gate.
+static func _reforge(piece: StringName) -> Dictionary:
+	var pair := committed_path(piece)
+	var track: StringName = pair[0]
+	var lvl: int = pair[1]
+	if track == &"" or lvl <= 0:
+		return {}
+	var back := refund_of(track, lvl)
+	var words: Array[String] = []
+	for pid: StringName in back:
+		var def := ItemDb.get_def(pid)
+		words.append("%d %s" % [int(back[pid]),
+			def.display_name if def != null else String(pid)])
+	var was := String(track).get_slice("_", 2).to_upper()
+	return {
+		"id": StringName(REFORGE + String(piece)),
+		"label": "REFORGE - %s" % String(piece).to_upper(),
+		"cost": 0,
+		"parts": {},
+		# The `holds` key, not an empty recipe. See `Catalogue.crafts`.
+		"holds": true,
+		"verb": "REFORGE",
+		"blurb": "Back in the fire. The metal comes back. The gold does not.",
+		"detail": "%s %d -> nothing,  returns %s" % [was, lvl,
+			", ".join(words) if not words.is_empty() else "nothing"],
+	}
+
+
+## Every component sunk into the first `rungs` rungs of `track`, summed. This is
+## what a reforge hands back, and it is read off `PARTS` rather than recorded at
+## purchase time on purpose: a receipt stored in the save would be a second copy
+## of the recipe table that a tuning change could not reach.
+static func refund_of(track: StringName, rungs: int) -> Dictionary:
+	var back := {}
+	if not PARTS.has(track):
+		return back
+	var recipes: Array = PARTS[track]
+	for i in mini(rungs, recipes.size()):
+		var recipe: Dictionary = recipes[i]
+		for pid: StringName in recipe:
+			back[pid] = int(back.get(pid, 0)) + int(recipe[pid])
+	return back
 
 
 ## The rung arithmetic, in one place. `line` is -1 when the ladder is finished or
@@ -546,6 +658,11 @@ static func buy(line: Dictionary) -> bool:
 	if not can_buy(line):
 		return false
 	var id: StringName = line["id"]
+	# Before a coin moves, because a reforge is not a purchase: nothing is spent
+	# and the rung goes DOWN. Reaching the increment below with a `reforge_chest`
+	# id would put a made-up track in `Game.upgrades` and leave it in the save.
+	if String(id).begins_with(REFORGE):
+		return _do_reforge(StringName(String(id).substr(REFORGE.length())))
 	var parts: Dictionary = line.get("parts", {})
 	if not Game.spend_gold(int(line["cost"])):
 		return false
@@ -559,7 +676,10 @@ static func buy(line: Dictionary) -> bool:
 		&"bag_slot":
 			Game.bag_slots += 1
 		&"heart":
-			Game.add_heart_container()
+			# Derived from `upgrades`, which the line above has already bumped, so
+			# there is no second copy of "how many hearts do the ladders add up to"
+			# for Recut to have to agree with (GDD §6.6).
+			Game.resync_maxima(true)
 		_:
 			# Every forge track. There is nothing to apply: the rung IS the
 			# effect, and the gear reads it off Game the next time it spawns.
@@ -567,4 +687,32 @@ static func buy(line: Dictionary) -> bool:
 			# agree with K's ladders, and it would eventually not.
 			Bus.gear_forged.emit(id, Game.upgrades[id])
 	Bus.item_acquired.emit(id)
+	return true
+
+
+## Put a piece back in the fire (GDD §6.6).
+##
+## The rung is ERASED rather than set to zero. `path_closed` asks whether the
+## sibling has a rung, `Game.upgrades.get(other, 0)` reads a stored 0 the same as
+## a missing key, and both readings work today -- but a key that says "this piece
+## once committed to heavy" left lying in the save is a fact nothing needs and the
+## next reader of `upgrades` might believe. Gone means gone.
+##
+## Nothing is charged and the components come back, so there is no half-paid
+## state to guard against; the only ordering that matters is that the refund is
+## computed from the level BEFORE it is thrown away.
+static func _do_reforge(piece: StringName) -> bool:
+	var pair := committed_path(piece)
+	var track: StringName = pair[0]
+	var lvl: int = pair[1]
+	if track == &"" or lvl <= 0:
+		return false
+	var back := refund_of(track, lvl)
+	for pid: StringName in back:
+		Game.add_component(pid, int(back[pid]))
+	Game.upgrades.erase(track)
+	# The gear reads its rung off `Game` the next time it spawns, exactly as it
+	# does after a purchase, so the same signal is the whole of the effect. The
+	# rung it carries is 0, which is what the hero is now wearing.
+	Bus.gear_forged.emit(track, 0)
 	return true

@@ -35,12 +35,28 @@ extends Control
 ## death and cyan on an extraction -- one authored colour, carrying the outcome
 ## before a word of the panel is read.
 ##
+## ## A death has two columns
+##
+## Since the document case (docs/GDD.md §3.1) there is a second grid beside the
+## crossed one: what the case brought home. It is a column and not a footnote
+## because the case is only forgiveness if the player can see it *against* what
+## it did not save — the amber they went one room too far for, crossed out, next
+## to the three slots they had the sense to pack. An extraction still shows one
+## column, because the whole bag came back and a split there would be the screen
+## inventing a distinction the ending did not make.
+##
 ## Flow opens it and Flow closes it -- the button calls `Flow.to_garrison()`,
 ## and `Flow` is still the only thing in the project that changes scenes.
 
 const THEME_PATH := "res://scenes/ui/menu/menu_theme.tres"
 ## Cells across, the pouch's number for the pouch's reason.
 const COLS := 4
+## Cells across on a death, where the haul is drawn as TWO columns: what the
+## floor kept, and what the document case brought home (docs/GDD.md §3.1). The
+## frame is 878 px of usable width, so 3 + 2 cells at 140 plus separations comes
+## to 736 and fits with room to spare — 4 + 3 does not.
+const LOST_COLS := 3
+const KEPT_COLS := 2
 ## Cells of loot, before the haul starts running off the panel. Twelve bag slots
 ## is the ceiling the forge sells up to, so this is "all of it" today and a clamp
 ## rather than a scroller on purpose: a run summary you have to page through is a
@@ -58,6 +74,10 @@ const SETTLE := 0.45
 var result: Dictionary = {}
 
 var _rows: Array[Dictionary] = []
+## The case's stacks, built the same way. Only ever non-empty on a death, because
+## an extraction brings the whole bag home and splitting it in two would be the
+## screen inventing a distinction the ending did not make.
+var _kept: Array[Dictionary] = []
 var _age: float = 0.0
 var _armed: bool = false
 var _leaving: bool = false
@@ -135,16 +155,23 @@ func died() -> bool:
 ## you should have gone home with, and burying it under eleven bone shards makes
 ## the screen a receipt instead of a lesson.
 func _build_rows() -> void:
-	_rows.clear()
-	var contents: Dictionary = result.get("contents", {})
 	var banked: Dictionary = result.get("banked", {})
+	_rows = _stacks_of(result.get("contents", {}), banked)
+	# Only on a death. `died()` is not consulted here on purpose -- `kept` is
+	# simply absent from an extraction's summary, so an empty second column and a
+	# missing one are the same thing and neither needs a branch.
+	_kept = _stacks_of(result.get("kept", {}), banked)
+
+
+func _stacks_of(contents: Dictionary, banked: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
 	for key in contents:
 		var id := StringName(key)
 		var def := ItemDb.get_def(id)
 		if def == null:
 			continue
 		var n := int(contents[key])
-		_rows.append({
+		out.append({
 			"label": def.display_name,
 			"count": n,
 			"value": def.value * n,
@@ -156,8 +183,9 @@ func _build_rows() -> void:
 			# can explain why they are missing from the vendor total.
 			"banked": banked.has(key) or banked.has(id),
 		})
-	_rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return int(a["value"]) > int(b["value"]))
+	return out
 
 
 # --- Building ----------------------------------------------------------------
@@ -309,25 +337,62 @@ func _stat_row(parent: Node, what: String, value: String, tint: Color) -> void:
 
 
 ## The bag, and the cross through it.
+##
+## **On a death this is two columns, side by side** (docs/GDD.md §3.1): the nine
+## slots the floor kept, crossed out, and next to them the three the document
+## case brought home, not crossed. They are drawn at the same moment, in the same
+## card, at the same cell size, because the case is only forgiveness if you can
+## SEE it against what it did not save — a second screen, or a line of text
+## underneath, would turn the one comparison this pass exists to make into two
+## separate facts.
+##
+## An extraction stays one column. Everything came back, so a split would be the
+## receipt inventing a distinction the ending did not make.
 func _build_loot(parent: Node, dead: bool, accent: Color) -> void:
 	var card := PanelContainer.new()
 	card.theme_type_variation = &"MenuSection"
 	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	parent.add_child(card)
 
+	if not dead:
+		_build_column(card, "WHAT CAME BACK", _rows, COLS, false, accent)
+		return
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	card.add_child(row)
+	_build_column(row, "WHAT THE FLOOR KEPT", _rows, LOST_COLS, true, accent)
+	# CYAN, the way out (docs/STYLEGUIDE.md §1). The case is the other way out --
+	# the one that worked when the rope did not.
+	#
+	# "Nothing was packed" and not "Empty handed": an empty case is not bad luck,
+	# it is a decision the player made by never opening the pouch, and that
+	# sentence is the only thing on the screen that can say so.
+	_build_column(row, "THE CASE BROUGHT HOME", _kept, KEPT_COLS, false, Pal.CYAN,
+		"Nothing was packed.")
+
+
+## One captioned grid, struck through or not.
+func _build_column(parent: Node, caption_text: String, rows: Array[Dictionary],
+		cols: int, struck: bool, accent: Color,
+		empty_text: String = "Empty handed.") -> void:
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 6)
-	card.add_child(col)
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	parent.add_child(col)
 
 	var caption := Label.new()
 	caption.theme_type_variation = &"MenuHeading"
-	caption.text = "WHAT THE FLOOR KEPT" if dead else "WHAT CAME BACK"
+	caption.text = caption_text
+	if not struck:
+		caption.modulate = accent
 	col.add_child(caption)
 
-	if _rows.is_empty():
+	if rows.is_empty():
 		var none := Label.new()
 		none.theme_type_variation = &"MenuMuted"
-		none.text = "Empty handed."
+		none.text = empty_text
 		col.add_child(none)
 		return
 
@@ -340,20 +405,20 @@ func _build_loot(parent: Node, dead: bool, accent: Color) -> void:
 	col.add_child(over)
 
 	var grid := ItemGrid.new()
-	grid.name = "Haul"
-	grid.columns = COLS
+	grid.name = "Kept" if not struck and cols == KEPT_COLS else "Haul"
+	grid.columns = cols
 	over.add_child(grid)
 
-	var shown: int = mini(_rows.size(), MAX_ROWS)
+	var shown: int = mini(rows.size(), MAX_ROWS)
 	var cells: Array = []
 	for i in shown:
-		var row := _rows[i]
+		var r := rows[i]
 		cells.append({
 			"index": i,
-			"label": "%s ×%d" % [String(row["label"]), int(row["count"])],
-			"sub": "BENCH" if bool(row["banked"]) else "%d ◇" % int(row["value"]),
-			"tint": row["color"],
-			"mark": bool(row["mark"]),
+			"label": "%s ×%d" % [String(r["label"]), int(r["count"])],
+			"sub": "BENCH" if bool(r["banked"]) else "%d ◇" % int(r["value"]),
+			"tint": r["color"],
+			"mark": bool(r["mark"]),
 		})
 	grid.set_cells(cells)
 
@@ -366,15 +431,15 @@ func _build_loot(parent: Node, dead: bool, accent: Color) -> void:
 		cell.focus_mode = Control.FOCUS_NONE
 		cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	if dead:
+	if struck:
 		_strike = Strike.new()
 		_strike.col = accent
 		over.add_child(_strike)
 
-	if _rows.size() > shown:
+	if rows.size() > shown:
 		var more := Label.new()
 		more.theme_type_variation = &"MenuMuted"
-		more.text = "+%d more" % (_rows.size() - shown)
+		more.text = "+%d more" % (rows.size() - shown)
 		col.add_child(more)
 
 
@@ -405,6 +470,28 @@ func _build_total(parent: Node, dead: bool) -> void:
 	value.text = "%d ◇" % int(result.get("value", 0))
 	value.modulate = Pal.RUST if dead else Pal.GOLD
 	row.add_child(value)
+
+	# The second figure, and it goes under the first rather than beside it: LOST
+	# and CAME HOME are not two halves of one sum, they are the two answers, and
+	# putting them on one line would invite the player to subtract.
+	if not dead:
+		return
+	var kept_row := HBoxContainer.new()
+	kept_row.theme_type_variation = &"MenuStatRow"
+	parent.add_child(kept_row)
+
+	var kept_what := Label.new()
+	kept_what.theme_type_variation = &"MenuHeading"
+	kept_what.text = "CAME HOME"
+	kept_what.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	kept_what.modulate = Pal.CYAN
+	kept_row.add_child(kept_what)
+
+	var kept_value := Label.new()
+	kept_value.theme_type_variation = &"MenuTitle"
+	kept_value.text = "%d ◇" % int(result.get("kept_value", 0))
+	kept_value.modulate = Pal.CYAN
+	kept_row.add_child(kept_value)
 
 
 ## The way home, and the one thing on this screen you can press.
