@@ -596,11 +596,12 @@ the first time a ladder changes.
 
 **And the doll is the whole build, not just the hands.** The WORN column on that
 screen is the figure with all eight slots hung off it — the four plate pieces
-down the left, her four stones down the right, each plate saying which path it
+down the left, the four stones down the right, each plate saying which path it
 committed to and how many of its rungs are bought, each wired by a leader line
 to the part of the body it is worn on. It is the only place in the game the
-eight appear together: the smith knows about plate and she knows about stones,
-and neither counter can answer *what am I wearing, all of it, at once.*
+eight appear together: the smith knows about plate and the jewelcrafter knows
+about stones, and neither counter can answer *what am I wearing, all of it, at
+once.*
 Read-only, because there is nothing to set — a piece of plate is a ladder you
 climbed and it does not come off.
 
