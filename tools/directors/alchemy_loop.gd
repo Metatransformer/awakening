@@ -144,6 +144,9 @@ func _counter(rig) -> void:
 		await rig.wait_frames(2)
 	_ck("B1 she owns the interact button", Prompt.focus == garrison.alchemist)
 	await rig.tap(["interact"])
+	# The press opens the conversation; Trade is what opens the counter
+	# (`Npc.activate`, 2026-08-10).
+	_ck("B1b she offers to trade", await rig.talk("Trade"))
 	await rig.wait_frames(16)
 
 	var screen := _screen(rig)

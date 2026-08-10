@@ -771,7 +771,7 @@ Fractions of viewport, origin top-left; px at 1280×720.
 
 ---
 
-## 6. Two deliberate departures
+## 6. Three deliberate departures
 
 ### Departure 1 — the crunch is tiered, not uniform
 
@@ -808,6 +808,26 @@ protecting is visible in your peripheral vision the whole way. This gives the ru
 a literal chromatic arc — you enter grey, you accumulate colour, the world warms
 around you, and then either you extract and the screen goes calm, or you die and
 it counts down to zero in RUST. The palette becomes the score.
+
+### Departure 3 — the talking heads are PIXEL ART, in a polygon world
+
+**The norm:** a 3D game shows a 3D speaker — the model you are standing in front
+of, framed to the shoulders, sometimes lip-synced. It never disagrees with the
+world, and it costs no art.
+
+**What we do:** the dialogue box (`scripts/ui/dialogue/dialogue_box.gd`) draws
+hand-made pixel-art busts, one per person, over the live courtyard. That is a
+deliberate register change and the only place in the game where one happens: two
+drawn faces in a polygon frame, the same way a JRPG cuts from its field map to a
+portrait. It sits with §3.0's split rather than against it — the world is PSX,
+and everything *addressed to the player* is allowed to be legible.
+
+**Why it serves this game:** the garrison's five keepers are the whole cast, and
+they have to be worth walking back to. The rigs could hold a pose but not an
+expression — the first cut of this box put a mannequin with its arms out beside
+every line of dialogue in the game. The drawings have eye contact. The rule this
+breaks is a real one and the trade was made once, on purpose; it is not licence
+for 2D art anywhere else.
 
 ---
 

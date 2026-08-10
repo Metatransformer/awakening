@@ -103,7 +103,32 @@ func _opening(rig) -> void:
 	var spoke: bool = await rig.until(
 		func() -> bool: return Voice.line() == "ive_been_expecting_you", 8.0)
 	_ck("B1 the elder is expecting you", spoke)
+	# And you can SEE who is saying it. The line goes out through a `DialogueBox`
+	# since 2026-08-10 (`Garrison._open_the_game`) -- same take, same timing, with
+	# his face and the words under it. A box with no options: he is not asking
+	# anything, so one press puts it away.
+	var box: Node = rig.dialogue()
+	_ck("B1b it is in a box with his face in it", box != null)
+	if box != null:
+		_ck("B1c and the words are the ones being said (%s)" % box.text(),
+			box.text() == "Ah, yes! I've been expecting you.")
+		_ck("B1d he is named on it (%s)" % box.speaker_name(),
+			box.speaker_name() == DialogueDb.name_of(&"elder"))
 	await rig.capture(out.path_join("v_01_arrival.png"))
+	# Put it away before anything else: it blocks the world while it is up, which
+	# is what it is for, and every beat below this one presses buttons.
+	#
+	# Tapped until it is gone and NOT a fixed two presses. The first press lands
+	# while the line is still typing and only fills it, so the count depends on how
+	# far through the sentence the capture above left us -- and one press too many
+	# would go straight into the Lanternkeeper, who is 1.9 m away and inside his
+	# own 2.3 m trigger.
+	for _i in 4:
+		if rig.dialogue() == null:
+			break
+		await rig.tap(["interact"])
+		await rig.wait_frames(2)
+	_ck("B1e and it can be pressed away", rig.dialogue() == null)
 
 	# Through `Garrison.INTRO_FLAG`, not a literal: `tools/shoot.gd` spells the
 	# same flag out by hand (it cannot name a `class_name` without compiling it
@@ -187,12 +212,23 @@ func _elder(rig) -> void:
 	var first := Voice.line()
 	print("VOICES elder says '%s'" % first)
 	_ck("C5 talking to him says something", first != "")
+	# The words on the screen are the words in the ear, because `DialogueDb` looks
+	# them up by the TAKE that is playing rather than by the cue. That is the whole
+	# design and this is the check that can see it: two takes on this cue, and the
+	# box has to be showing the one being heard.
+	var said: Node = rig.dialogue()
+	_ck("C5b in a box, with his name on it", said != null)
+	if said != null:
+		_ck("C5c showing the take that is playing (%s / %s)" % [first, said.text()],
+			said.text() == DialogueDb.SAID[&"elder"][first])
 	await rig.capture(out.path_join("v_03_elder.png"))
 
 	# **Both at once**, which no row did before the merge: the greeting plays AND
-	# the Far Lantern opens, in that order, off one press. `Npc.activate` never
-	# needed a line changed to allow it -- this is the check that says so.
-	_ck("C6 and the Far Lantern opened on the same press", _screen(rig) != null)
+	# the counter is offered, off one press. Since 2026-08-10 the counter is behind
+	# the Trade option rather than the press itself (`Npc.activate`) -- the greeting
+	# is unchanged, and this is still the check that the one press reaches both.
+	_ck("C6 and the Far Lantern is on the other side of it", await rig.talk("Trade"))
+	_ck("C6b which is the same trade screen", _screen(rig) != null)
 
 	var screen := _screen(rig)
 	if screen != null:
@@ -208,6 +244,24 @@ func _elder(rig) -> void:
 	print("VOICES elder then says '%s'" % second)
 	_ck("C7 and a different something the second time", second != first
 		and second != "")
+	var twice: Node = rig.dialogue()
+	_ck("C7b and the box moved with him (%s)" % (twice.text() if twice != null else ""),
+		twice != null and twice.text() == DialogueDb.SAID[&"elder"][second])
+	# Out through the door he offers rather than by walking off, which is the beat
+	# the Leave option exists for. His farewell has no recording yet, so this is
+	# also the check that a written line with no take behind it still reaches the
+	# screen -- `Voice.say` answers 0.0 and `DialogueDb` falls through to `WRITTEN`.
+	Voice.stop()
+	_ck("C8 he can be left", await rig.talk("Leave"))
+	var parting: Node = rig.dialogue()
+	_ck("C8b and says goodbye on the way out (%s)"
+		% (parting.text() if parting != null else ""),
+		parting != null and parting.text() == "You're doing wonderfully.")
+	for _i in 4:
+		if rig.dialogue() == null:
+			break
+		await rig.tap(["interact"])
+		await rig.wait_frames(2)
 	var again := _screen(rig)
 	if again != null:
 		again.close()
@@ -232,14 +286,18 @@ func _counter(rig) -> void:
 	_ck("D0 TALK is on her", focused)
 
 	await rig.tap(["interact"])
+	# The greeting is on the PRESS and the counter is on the option after it. D2
+	# below is read before the walk through the conversation for exactly that
+	# reason: it is the press that has to have made her speak.
+	_ck("D2 she greets you as you address her (%s)" % Voice.line(),
+		Voice.line() == "i_have_just_the_right_amulet_for_you")
+	_ck("D0b and offers the bench", await rig.talk("Trade"))
 	await rig.wait_frames(12)
 	var screen := _screen(rig)
 	if screen == null:
 		_ck("D1 her counter opened", false)
 		return
 	_ck("D1 her counter opened", true)
-	_ck("D2 she greets you as it opens (%s)" % Voice.line(),
-		Voice.line() == "i_have_just_the_right_amulet_for_you")
 	_ck("D3 and the screen knows whose voice it is", screen.speaker == &"jewelcrafter")
 	await rig.capture(out.path_join("v_04_counter.png"))
 
