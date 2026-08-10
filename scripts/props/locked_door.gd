@@ -259,8 +259,12 @@ func _on_item_acquired(id: StringName) -> void:
 
 ## The door says no with its body, not only with a line of text. A jolt against
 ## the bars and the game's one refusal noise -- `craft_fail` is what `bag_full`
-## and `extract_refused` already use, and Sfx's own note says the player should
-## learn ONE refusal sound rather than three.
+## already uses, and Sfx's own note says the player should learn ONE refusal
+## sound rather than three.
+##
+## It is one of only two refusals left. The rope was the third until 2026-08-09,
+## when the fee was capped at the purse: a locked door is a refusal you can act
+## on, and an exit you could not afford was not.
 func _refuse() -> void:
 	Bus.request_sfx.emit(&"craft_fail", global_position)
 	_say_refusal()

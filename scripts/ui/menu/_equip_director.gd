@@ -189,6 +189,30 @@ func run(rig) -> void:
 		Run.extract_cost() >= 15)
 	await rig.capture("eq_07_rope_fee.png")
 
+	# --- The toll past the purse ---------------------------------------------
+	# This was the game's one dead end until 2026-08-09: the rope refused, and
+	# refused a player who had no way to comply. The fee is capped at the purse
+	# now, so what used to be a locked row is a priced one -- and the thing to
+	# prove from the UI side is that the row still WORKS and says so in words,
+	# because a fix the player cannot read is the same dead end with better
+	# arithmetic. Dropped to one under the toll; an empty bag tolls EXTRACT_MIN.
+	var kept_gold := Game.gold
+	if Game.gold > Run.extract_cost() - 1:
+		Game.spend_gold(Game.gold - (Run.extract_cost() - 1))
+	pouch.refresh()
+	await rig.wait_frames(4)
+	_check("a toll past the purse is capped at it (toll=%d purse=%d charge=%d)"
+			% [Run.extract_cost(), Game.gold, Run.extract_charge()],
+		Run.extract_takes_all() and Run.extract_charge() == Game.gold)
+	# The hold is what must survive. A row that greyed out here would be the old
+	# refusal wearing a different colour.
+	_check("and the row still offers the hold rather than refusing it",
+		Run.can_extract())
+	await rig.capture("eq_07a_rope_takes_all.png")
+	Game.add_gold(kept_gold - Game.gold)
+	pouch.refresh()
+	await rig.wait_frames(4)
+
 	# --- The way out is a HOLD -----------------------------------------------
 	# A is the universal forward press and it is one row above this on the same
 	# screen, where it fletches arrows repeatedly and on purpose. So A here must
@@ -261,25 +285,40 @@ func run(rig) -> void:
 	menu.open_pouch()
 	await rig.wait_frames(8)
 
-	# Too poor to leave. This must refuse and SAY SO, not silently do nothing:
-	# being unable to afford the way out is a legible failure state by design
-	# (METAGAME §5), and a dead button is not legible. Refused on the FIRST frame
-	# of the press, so the gauge never moves -- making a player hold something
-	# down to be told no costs them the second and teaches them the bar lies.
+	# DEAD BROKE, AND IT STILL WORKS. This beat asserted the opposite until
+	# 2026-08-09 -- "too poor to leave: refused, still in the run" -- on the
+	# theory that an unaffordable exit was a legible failure state. It was a dead
+	# end: nothing sells underground, so the refusal named a price the player had
+	# no way to reach, and the only door left was dying with the bag the fee was
+	# charged for. The fee is capped at the purse now, so an empty purse pays
+	# nothing and the rope pulls him out anyway.
+	#
+	# This is the far end of the cap rather than the interesting middle -- the
+	# expensive exit is `eq_07a` above, where the toll is past the purse and takes
+	# all of it. Zero is here because zero is where the old refusal was loudest.
 	Game.spend_gold(Game.gold)
 	pouch.refresh()
 	await rig.wait_frames(4)
+	_check("broke, the toll charges nothing rather than refusing (charge=%d)"
+			% Run.extract_charge(), Run.extract_charge() == 0 and Run.can_extract())
 	_rope_fired = false
 	Bus.escape_rope_used.connect(_on_rope_fired)
 	await rig.hold_seconds(["ui_hold"], MenuPouchPanel.ROPE_HOLD + 0.4)
 	await rig.wait_frames(8)
 	Bus.escape_rope_used.disconnect(_on_rope_fired)
-	_check("too poor to leave: refused, still in the run, menu still open",
-		not _rope_fired and Run.in_dungeon and menu.is_open and pouch.visible)
-	_check("and the gauge never moved for it (%.2f)" % pouch._rope_hold,
-		is_zero_approx(pouch._rope_hold))
+	# The gauge is the tell that this is a working hold and not a dead button --
+	# it had to be flat for the old refusal and has to have moved for this one.
+	_check("broke and it still left: the rope fired and the menu closed for it",
+		_rope_fired and not menu.is_open)
 	await rig.capture("eq_08_rope_broke.png")
 	Run.in_dungeon = false
+
+	# Reopened because the beat above now CLOSES the menu. It did not use to --
+	# the rope refused and the pouch stayed up -- so the Escape check below
+	# inherited an open menu for free and would otherwise be asserting that
+	# Escape backed out of a screen that was already gone.
+	menu.open_pouch()
+	await rig.wait_frames(8)
 
 	# --- Back ----------------------------------------------------------------
 	await _key(rig, KEY_ESCAPE, 12)

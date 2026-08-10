@@ -260,20 +260,42 @@ func _extract(rig) -> void:
 	# after the AI landed reported "the rope stopped channelling on its own",
 	# which was the game working and the director standing in a mob.
 	await _break_off(rig, hero)
+	await rig.wait_frames(20)
 
+	# THE POOR CASE, ON PURPOSE. This beat used to leave the purse wherever the
+	# fight had left it, which meant it exercised the expensive exit only on the
+	# seeds that happened to roll a rich bag -- and on exactly those seeds it
+	# failed, because the rope refused and the run had nowhere to go. Two things
+	# were wrong with that: the dead end (fixed -- the fee is capped at the purse),
+	# and a director that tested the interesting half of its own beat by luck.
+	#
+	# One gold under the toll is the sharpest version: the cap has to bite, the
+	# charge has to be the whole purse, and he has to reach the receipt at zero.
+	var toll := Run.extract_cost()
+	if Game.gold > toll - 1:
+		Game.spend_gold(Game.gold - (toll - 1))
+	var purse := Game.gold
+	print("MVP pre_extract gold=%d toll=%d charge=%d value=%d" % [
+		purse, toll, Run.extract_charge(), Run.bag_value()])
+	if Run.extract_charge() != purse:
+		print("MVP FAIL the fee was not capped at the purse (toll=%d gold=%d charge=%d)"
+			% [toll, purse, Run.extract_charge()])
+
+	# Shot AFTER the purse is spent down, which is the whole point of the frame:
+	# it is the only capture in the suite that shows the HUD in the state this
+	# beat exists for -- EXTRACT in RUST, naming the charge rather than the toll.
+	# A wait, because `set_extract_dear` rides `gold_changed` and the sweep it
+	# fires needs frames to be worth photographing.
 	await rig.wait_frames(20)
 	await rig.capture(out.path_join("m_15_before_rope.png"))
 
-	print("MVP pre_extract gold=%d fee=%d value=%d" % [
-		Game.gold, Run.extract_cost(), Run.bag_value()])
 	if not rope.begin():
-		# begin() has three refusals and they mean completely different things:
-		# already channelling, not underground, or too poor. Printing only gold
-		# and the fee named the one cause that is almost never the real one, and
-		# sent a session hunting the economy for what was a state bug.
-		print("MVP FAIL the rope refused to start (gold=%d fee=%d in_dungeon=%s active=%s can=%s)"
-			% [Game.gold, Run.extract_cost(), Run.in_dungeon, rope.active(),
-				Run.can_extract()])
+		# begin() has two refusals left and they mean different things: already
+		# channelling, or not underground. "Too poor" was the third and is gone --
+		# printing only gold and the fee named the one cause that was almost never
+		# the real one, and sent a session hunting the economy for a state bug.
+		print("MVP FAIL the rope refused to start (gold=%d toll=%d in_dungeon=%s active=%s)"
+			% [Game.gold, toll, Run.in_dungeon, rope.active()])
 		return
 
 	# Caught mid-channel, so the ring is closing and the column of light is
@@ -287,6 +309,18 @@ func _extract(rig) -> void:
 	await rig.wait_frames(30)
 	if Run.in_dungeon:
 		print("MVP FAIL the rope finished and he is still underground")
+	# The purse is the proof the cap actually charged rather than merely allowed.
+	# He went in one gold short of the toll, so he comes out at nothing -- and the
+	# receipt has to say the same number, because the receipt is what the player
+	# reads and a fee that disagrees with the purse is the bug this beat exists for.
+	print("MVP post_extract gold=%d fee_on_receipt=%d" % [
+		Game.gold, int(Run.summary.get("fee", -1))])
+	if Game.gold != 0:
+		print("MVP FAIL the whole purse should have gone to the toll (gold=%d, was %d)"
+			% [Game.gold, purse])
+	if int(Run.summary.get("fee", -1)) != purse:
+		print("MVP FAIL the receipt names a fee the purse did not pay (fee=%d purse=%d)"
+			% [int(Run.summary.get("fee", -1)), purse])
 	await rig.capture(out.path_join("m_17_extracting.png"))
 
 

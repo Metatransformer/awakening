@@ -1119,9 +1119,14 @@ do not add a second way out (METAGAME §5).
 - **It is not on any ring.** It is not in `RIGHT_POOL` and must not be added —
   the way out of a run is a decision made from a menu, not a thing you can step
   onto with a D-pad press mid-fight.
-- **Only `Run` decides whether leaving is possible.** The rope asks
-  `Run.can_extract()` before it starts and `Run.extract()` when it finishes; the
-  fee moves with the bag, so both checks are load-bearing.
+- **Only `Run` decides whether leaving is possible, and money is not one of its
+  reasons.** The fee is capped at the purse (`Run.extract_charge()`), so a toll
+  bigger than your gold takes all of it and the rope still works. `can_extract()`
+  is `in_dungeon` and nothing else. **Do not add an affordability check** — one
+  here and one in `Run.extract()` were between them the game's only dead end, and
+  the player they caught was always the one holding the best bag of the night.
+  `Run.extract_cost()` is the toll, `Run.extract_charge()` is what leaves the
+  purse, and **every UI that names a price shows the charge**.
 - **Unowned gear is not on the body.** The bow and the hookshot each have two
   mounts, both built at `_ready` (a `BoneAttachment3D` is not something to be
   creating mid-run). The stow mount is shown only when `Game.has(id)` — without
@@ -1688,7 +1693,7 @@ Bus.request_sfx.emit(&"chest_open", global_position)   # id = a file in audio/sf
 `Sfx` also maps the events that already say what happened — `chest_opened`,
 `door_opened`, `item_acquired`, `loot_gained`, `items_sold`, `puzzle_solved`,
 `hit_landed`, `shield_blocked`, `enemy_died`, `player_died`, `target_acquired`,
-`run_started`, `run_ended`, `bag_full`, `extract_refused` — so those need no emit
+`run_started`, `run_ended`, `bag_full` — so those need no emit
 at all. Add a row to `Sfx.CUES` rather than a player to a prop.
 
 `shield_blocked` is the one that had it the other way round and was corrected:

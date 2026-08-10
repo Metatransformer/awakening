@@ -146,16 +146,19 @@ func floor_seed() -> int:
 	return absi(seed_used + level * 2654435761) % 0x7fffffff
 
 
-## Teleport out. Returns false if the player cannot afford it -- the caller
-## shows the refusal, because only it knows whether that is a UI beep or a
-## vendor line.
+## Teleport out. Returns false only when there is no run to leave.
+##
+## **It cannot fail on money.** The fee is capped at the purse (`extract_charge`),
+## so a toll bigger than your gold takes all of it and the rope still works. The
+## old version refused, and refusing was the one outcome the design never wanted:
+## the fee scales with the bag, so the player it stopped was the player holding
+## the best run of the night, and it stopped them with no way to comply --
+## nothing underground sells, and dying to clear the debt loses the bag the fee
+## was charged for. See `extract_charge` for why the cap is the right shape.
 func extract() -> bool:
 	if not in_dungeon:
 		return false
-	var fee := extract_cost()
-	if Game.gold < fee:
-		Bus.extract_refused.emit(fee, Game.gold)
-		return false
+	var fee := extract_charge()
 
 	Game.spend_gold(fee)
 	in_dungeon = false
@@ -358,8 +361,39 @@ func extract_cost() -> int:
 	return maxi(EXTRACT_MIN, int(round(bag_value() * RelicDb.extract_rate(EXTRACT_RATE))))
 
 
+## What actually leaves the purse: the toll, or everything you have, whichever is
+## smaller. **This is the number the player pays and the number on the receipt.**
+##
+## The cap exists because the uncapped toll had no way to be complied with. It
+## rises with the bag, and the bag can only be sold in town, so a toll past your
+## gold was a wall you could only walk further away from -- every mote you picked
+## up made it taller, and the one escape (dying) destroyed the bag you were
+## trying to bank. That is not a priced decision, it is a soft-lock with a number
+## printed on it.
+##
+## Capping keeps the whole of what the fee is FOR. A rich run still costs
+## everything you own to bank; it just cannot cost more than that. The greed
+## curve is unchanged right up to the purse and then flattens, and where it
+## flattens the player is walking out of the Lower Worlds with nothing but the
+## bag -- broke, and now made to sell it. Which is the loop.
+func extract_charge() -> int:
+	return mini(extract_cost(), maxi(Game.gold, 0))
+
+
+## True when the toll is past the purse, so leaving will take every coin. The UI
+## says so before the hold rather than after the charge: "it costs 36" and "it
+## costs everything you have" are different sentences and the second one is a
+## decision.
+func extract_takes_all() -> bool:
+	return in_dungeon and extract_cost() >= Game.gold and Game.gold > 0
+
+
+## Whether the rope can work at all. Poverty is not one of the answers any more
+## and there is no `Game.gold` term left here -- see `extract_charge`. Kept as a
+## function because the HUD, the pouch and the rope all ask, and a rule about
+## when leaving is possible should have exactly one home.
 func can_extract() -> bool:
-	return in_dungeon and Game.gold >= extract_cost()
+	return in_dungeon
 
 
 # --- The bag ----------------------------------------------------------------

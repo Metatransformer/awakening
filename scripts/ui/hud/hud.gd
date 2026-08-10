@@ -234,8 +234,9 @@ var _rim_flash_color: Color = Pal.MOTH
 var _sweep_t: float = -1.0
 ## 0..1 while the player holds the extract button at a node.
 var _extract_hold: float = 0.0
-var _extract_available: bool = false
-var _refuse_t: float = -1.0
+## True once the extraction toll has climbed to meet the purse, so the walk home
+## will take every coin. See `set_extract_dear`.
+var _extract_dear: bool = false
 var _block_flash_t: float = -1.0
 var _lock_target: Node3D = null
 ## Whether anything is in the `enemy` group right now. Cached off the tree's own
@@ -304,7 +305,6 @@ func _ready() -> void:
 	Bus.map_changed.connect(_repaint)
 	Bus.heat_changed.connect(_on_heat)
 	Bus.heat_tier_changed.connect(_on_heat_tier)
-	Bus.extract_refused.connect(_on_refused)
 	Bus.escape_rope_broken.connect(_on_escape_rope_broken)
 	Saves.autosaved.connect(_on_autosaved)
 	Bus.shield_blocked.connect(_on_blocked)
@@ -321,13 +321,13 @@ func _ready() -> void:
 	Bus.floor_arrived.connect(_on_floor_arrived)
 	Bus.run_started.connect(_on_headline_changed)
 	Bus.run_ended.connect(_on_headline_changed)
-	# Affordability moves when the purse moves or the bag moves, and on nothing
-	# else -- those are exactly Run.can_extract()'s two inputs.
-	Bus.gold_changed.connect(func(_g: int) -> void: _refresh_extract_available())
-	Bus.bag_changed.connect(func(_b: Dictionary, _v: int) -> void: _refresh_extract_available())
-	Bus.run_started.connect(func(_s: int) -> void: _refresh_extract_available())
+	# The toll meets the purse when the purse moves or the bag moves, and on
+	# nothing else -- those are exactly Run.extract_takes_all()'s two inputs.
+	Bus.gold_changed.connect(func(_g: int) -> void: _refresh_extract_dear())
+	Bus.bag_changed.connect(func(_b: Dictionary, _v: int) -> void: _refresh_extract_dear())
+	Bus.run_started.connect(func(_s: int) -> void: _refresh_extract_dear())
 	Bus.run_ended.connect(func(_e: bool, _c: Dictionary, _v: int) -> void:
-		_refresh_extract_available())
+		_refresh_extract_dear())
 
 	# World geometry only, for the enemy bars' occlusion test. Bodies, not areas:
 	# a doorway trigger is not a wall.
@@ -438,11 +438,6 @@ func _on_hold(t01: float, required: bool) -> void:
 	_repaint()
 
 
-func _on_refused(_cost: int, _gold: int) -> void:
-	_refuse_t = 0.0
-	_wake()
-
-
 ## Knocked out of the rope. Said as a toast rather than as a beep, because the
 ## player pressed a button in a menu and then arrived back in the world still in
 ## the dungeon -- without a sentence, that reads as the menu having eaten the
@@ -493,29 +488,41 @@ func _on_aim(active: bool) -> void:
 	_repaint()
 
 
-## "You can leave right now."
+## "Leaving now costs everything you have."
 ##
-## This used to mean "you are standing on the rune pad", and the pad called it.
-## The pad is gone (the way out is the Escape Rope, used from the menu), so
-## availability is no longer about WHERE you are -- it is about whether you can
-## afford the fee, which is the only thing that can still stop you. The sweep
-## therefore fires the moment leaving becomes possible again, which is a more
-## useful moment than the old one: crossing back over the fee line mid-run is a
-## fact the player cannot otherwise see coming.
+## This flag has had three meanings and each one was the most useful fact about
+## the way out at the time. It began as "you are standing on the rune pad"; the
+## pad went and it became "you can afford the fee". That second one is gone too:
+## the fee is capped at the purse (`Run.extract_charge`), so leaving is always
+## affordable and a light that was always on would be no light at all.
+##
+## What is left is the moment worth a screen-wide sweep -- the toll climbing to
+## meet your gold. From that moment on every mote you pick up is free to carry
+## and the walk home costs your whole purse either way, which is a different game
+## from the one you were playing a room ago and the player should be told the
+## instant it changes.
+##
+## It is close to a one-shot per run and deliberately not guaranteed to be one.
+## Nothing sells underground, so the purse cannot grow down there and the bag
+## almost only gets heavier -- but `Run.consume` exists, and fletching a batch of
+## arrows takes real value out of the bag. Burn enough of it and the toll drops
+## back under the purse and the sweep can fire a second time when the bag climbs
+## again. That is the honest answer and it is also the right one: the fact being
+## announced has genuinely changed back and then changed again.
 ##
 ## Still public because tools/directors/hud_lookdev.gd forces it on to shoot the
 ## emphasised state.
-func set_extract_available(on: bool) -> void:
-	if on == _extract_available:
+func set_extract_dear(on: bool) -> void:
+	if on == _extract_dear:
 		return
-	_extract_available = on
+	_extract_dear = on
 	if on:
 		_sweep_t = 0.0
 	_wake()
 
 
-func _refresh_extract_available() -> void:
-	set_extract_available(Run != null and Run.can_extract())
+func _refresh_extract_dear() -> void:
+	set_extract_dear(Run != null and Run.extract_takes_all())
 
 
 func set_extract_hold(t01: float) -> void:
@@ -568,7 +575,7 @@ func _process(delta: float) -> void:
 			busy = true
 
 	for t in [&"_toast_t", &"_save_t", &"_floor_t", &"_rim_flash_t", &"_sweep_t",
-			&"_refuse_t", &"_block_flash_t", &"_heat_break_t"]:
+			&"_block_flash_t", &"_heat_break_t"]:
 		var v: float = get(t)
 		if v >= 0.0:
 			set(t, v + delta)
@@ -585,8 +592,6 @@ func _process(delta: float) -> void:
 		_rim_flash_t = -1.0
 	if _sweep_t > SWEEP_TIME:
 		_sweep_t = -1.0
-	if _refuse_t > 1.2:
-		_refuse_t = -1.0
 	if _block_flash_t > 0.06:
 		_block_flash_t = -1.0
 	if _heat_break_t > HEAT_BREAK_FLASH:
@@ -1521,24 +1526,31 @@ func _draw_extraction(s: Vector2) -> void:
 		return
 	var right := Pal.BAG_RIGHT * s.x
 	var y := Pal.EXTRACT_BASELINE * s.y
-	var cost := Run.extract_cost()
-	var afford := Game.gold >= cost
+	# The CHARGE, not the toll. This line sits directly under the bag total so the
+	# player can compare two numbers at a glance, and the comparison is only
+	# honest if the second one is the gold that will actually leave. When the toll
+	# has outgrown the purse it is capped there (Run.extract_charge) and RUST is
+	# what says so: the figure is your whole purse.
+	var cost := Run.extract_charge()
 
-	var scale := Pal.px((16.0 if _extract_available else 12.0) / PixelFont.H, s.y)
-	var label_col: Color = Pal.CYAN if _extract_available else Pal.MOTH
-	var cost_col: Color = Pal.GOLD if afford else Pal.RUST
-
-	if _refuse_t >= 0.0:
-		PixelFont.draw_right(_canvas, "NEED %d" % cost, Vector2(right, y),
-			scale, Pal.RUST)
-		return
+	# `_extract_dear` is the same question as `Run.extract_takes_all()`, cached off
+	# the two signals that can change the answer. Read the flag rather than asking
+	# again: this runs inside a repaint, and one of them summing the bag per frame
+	# is enough.
+	var scale := Pal.px((16.0 if _extract_dear else 12.0) / PixelFont.H, s.y)
+	# The emphasis used to mean "you can afford this" and now means "this costs
+	# everything you have" -- see `set_extract_dear`. CYAN stays CYAN because the
+	# subject has not changed (it is still the way out, STYLEGUIDE §1); the RUST
+	# beside it is what carries the bad news.
+	var label_col: Color = Pal.CYAN if _extract_dear else Pal.MOTH
+	var cost_col: Color = Pal.RUST if _extract_dear else Pal.GOLD
 
 	var cost_s := str(cost)
 	PixelFont.draw_right(_canvas, cost_s, Vector2(right, y), scale, cost_col)
 	var label_x := right - PixelFont.width(cost_s, scale) - Pal.px(8.0, s.y)
 	PixelFont.draw_right(_canvas, "EXTRACT", Vector2(label_x, y), scale, label_col)
 
-	if _extract_available:
+	if _extract_dear:
 		# A square pip, set well clear of the word. A full-height 2px bar six
 		# pixels from the E is a capital I in this font, and the line read
 		# "IEXTRACT" on every capture until it was a pip instead.
@@ -1556,8 +1568,8 @@ func _draw_extraction(s: Vector2) -> void:
 			Pal.px(3.0, s.y), Pal.CYAN)
 
 
-## One screen-wide event, then silence. A permanent "you can extract" banner
-## nags, and a sound alone is missable in combat.
+## One screen-wide event, then silence. A permanent "the way out now costs
+## everything" banner nags, and a sound alone is missable in combat.
 func _draw_sweep(s: Vector2) -> void:
 	if _sweep_t < 0.0:
 		return
