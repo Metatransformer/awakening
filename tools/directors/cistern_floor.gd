@@ -74,6 +74,21 @@ func run(rig) -> void:
 	Game.reset()
 	Run.enter(SEED)
 
+	# The host scene, checked out loud, because getting it wrong does not look
+	# like getting it wrong. This beat ADDS a `Dungeon` to whatever scene it was
+	# pointed at, so run against town.tscn it generates a floor on top of the
+	# garrison -- and the garrison's south curtain wall stands across the first
+	# corridor at z=10.7. The result is seventeen failures that read exactly like
+	# a broken level: unreachable vault, unreachable boss, an unopened chest.
+	# One wrong --scene cost an hour of reading level-generation code that was
+	# fine. Say it in one line instead.
+	if rig.scene().name != &"DungeonRun":
+		print("FLOOR FAIL wrong host scene (%s) -- this beat replaces the "
+			% rig.scene().name
+			+ "'Dungeon' child of res://scenes/rooms/dungeon.tscn. Pass "
+			+ "--scene=res://scenes/rooms/dungeon.tscn")
+		return
+
 	var d := await _rebuild(rig, 1)
 	if d == null:
 		print("FLOOR FAIL the dungeon did not build")
