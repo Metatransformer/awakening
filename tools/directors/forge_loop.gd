@@ -195,9 +195,12 @@ func _pouch(rig) -> void:
 
 	var pouch: MenuPouchPanel = Menu.get_node("Root/Screens/PouchScreen")
 	_ck("B0 the pouch screen is showing", pouch.visible)
-	_ck("B1 it draws one cell per bag slot (%d of %d)" % [
-		pouch._cells.size(), Game.bag_slots],
-		pouch._cells.size() == Game.bag_slots)
+	# Counted off the shared `ItemGrid` rather than off a list of buttons the
+	# panel used to keep: the grid IS the drawn cells now, so this reads what is
+	# on screen instead of a parallel array that could agree with nothing.
+	var drawn: int = pouch.grid().count()
+	_ck("B1 it draws one cell per bag slot (%d of %d)" % [drawn, Game.bag_slots],
+		drawn == Game.bag_slots)
 	var filled := 0
 	for id in pouch._cell_ids:
 		if id != &"":

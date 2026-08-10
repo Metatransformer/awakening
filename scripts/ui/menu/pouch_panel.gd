@@ -76,12 +76,11 @@ const ROPE_HOLD := 0.9
 ## budget is: 1060 frame − 36 frame pad − 44 body pad − 24 split − 340 detail
 ## − 28 card pad = 588 for the grid, which is 4 × 140 with 8 between.
 const COLS := 4
-const CELL_MIN := Vector2(140, 88)
-## Cell text is deliberately smaller than the theme's Label default. A cell is
-## 140 px wide and half these names are two words, so 18 pt wrapped to three
-## lines and shoved the ×count out through the bottom border.
-const CELL_NAME_PT := 16
-const CELL_COUNT_PT := 18
+## The cell's own numbers moved to `ItemGrid` when every other screen started
+## drawing the same cell. Aliased here rather than deleted because the WORN
+## column beside the grid matches the cell's text size on purpose — see the note
+## where it is used — and a bare 16 there would drift the day the cell changes.
+const CELL_NAME_PT := ItemGrid.NAME_PT
 ## Hard ceiling on cells drawn, so a corrupt `bag_slots` cannot build a grid
 ## taller than the frame and push the footer off the screen — which is exactly
 ## how the ITEMS screen broke the first time it was built.
@@ -102,10 +101,13 @@ var _doll: MenuPaperDoll
 ## Slot key (&"left" / &"right" / &"item") -> the Label naming what is in it.
 var _worn: Dictionary[StringName, Label] = {}
 
-var _cells: Array[Button] = []
-## Parallel to `_cells`: the item id in each, or &"" for an empty slot.
+## What is in each drawn cell, in grid order: the item id and how many of it are
+## in that one cell. `&""` for a slot the bag has not filled. This is the screen's
+## own model — `ItemGrid` holds no state of its own and hands back the index into
+## this array, which is what `_describe` reads.
 var _cell_ids: Array[StringName] = []
-var _grid: GridContainer
+var _cell_counts: Array[int] = []
+var _grid: ItemGrid
 var _header: Label
 var _stock: GridContainer
 var _stock_empty: Label
@@ -345,89 +347,69 @@ func _build_grid(parent: Node) -> void:
 	caption.text = "CARRIED"
 	inner.add_child(caption)
 
-	_grid = GridContainer.new()
+	# `ItemGrid` rather than a GridContainer full of hand-built cells. The cell
+	# below used to be written out here, and it is the cell every other screen
+	# in the game now draws too (scripts/ui/common/item_grid.gd) — the bag is
+	# where the look was settled, so the bag is where it was taken from.
+	_grid = ItemGrid.new()
 	_grid.name = "Grid"
 	_grid.columns = COLS
-	_grid.add_theme_constant_override("h_separation", 8)
-	_grid.add_theme_constant_override("v_separation", 8)
+	_grid.cell_focused.connect(_on_cell_focused)
 	inner.add_child(_grid)
 
 
-## Rebuild the cell buttons to match `Game.bag_slots`. Called from `refresh()`
-## rather than once from `_build`, because a bag slot bought at the smith has to
-## show up as a new empty cell the next time the screen opens — the grid IS the
-## capacity, so it cannot be built once and trusted.
-func _rebuild_cells() -> void:
+## The bag, laid over `Game.bag_slots` cells.
+##
+## Called from `refresh()` rather than once from `_build`, because a bag slot
+## bought at the smith has to show up as a new empty cell the next time the
+## screen opens — the grid IS the capacity, so it cannot be built once and
+## trusted. `ItemGrid.set_cells` reuses the buttons when the count has not moved,
+## so the common case (a refresh after fletching) does not drop focus.
+##
+## The layout is `Run.slots_used()`'s: full stacks first, then the remainder.
+## Anything that will not fit is dropped from the PICTURE only — it cannot happen
+## while `bag_slots` and the grid agree, and if it ever does the header's number
+## is still right, which is the number the fee is taken from.
+func _fill_cells() -> void:
 	var want := clampi(Game.bag_slots, 1, MAX_CELLS)
-	if _cells.size() == want:
-		return
-	for c in _cells:
-		c.queue_free()
-	_cells.clear()
-	_cell_ids.clear()
+	_cell_ids.resize(want)
+	_cell_counts.resize(want)
+	_cell_ids.fill(&"")
+	_cell_counts.fill(0)
+
+	var at := 0
+	for id: StringName in Run.bag:
+		var def := ItemDb.get_def(id)
+		if def == null:
+			continue
+		var per: int = maxi(def.stack, 1)
+		var left: int = Run.bag[id]
+		while left > 0 and at < want:
+			_cell_ids[at] = id
+			_cell_counts[at] = mini(left, per)
+			left -= per
+			at += 1
+
+	var entries: Array = []
 	for i in want:
-		_cells.append(_make_cell(i))
-		_cell_ids.append(&"")
+		if _cell_ids[i] == &"":
+			continue
+		var def := ItemDb.get_def(_cell_ids[i])
+		entries.append({
+			"index": i,
+			"label": def.display_name,
+			"sub": "×%d" % _cell_counts[i],
+			"tint": def.tint,
+			"mark": def.is_component(),
+		})
+	# `capacity` is the point of this screen: the empty cells are the message.
+	_grid.spill_down = _fletch
+	_grid.set_cells(entries, want)
+	# Out of the bottom of the grid comes the bench, then the way out, and only
+	# then Back. That order is the screen's argument in one column: here is what
+	# you are carrying, here is what it can become, here is what it costs to keep
+	# it, here is the door.
 	_wire_focus()
-
-
-func _make_cell(index: int) -> Button:
-	var b := Button.new()
-	b.name = "Cell_%d" % index
-	b.theme_type_variation = &"MenuSlot"
-	b.focus_mode = Control.FOCUS_ALL
-	b.custom_minimum_size = CELL_MIN
-	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	b.set_meta(&"cell", index)
-	_grid.add_child(b)
-
-	var col := VBoxContainer.new()
-	col.name = "Col"
-	col.alignment = BoxContainer.ALIGNMENT_CENTER
-	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_theme_constant_override("separation", 2)
-	b.add_child(col)
-	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	col.offset_left = 7
-	col.offset_right = -7
-	col.offset_top = 4
-	col.offset_bottom = -4
-
-	# The chip is the item's own tint, which is the same colour the mote on the
-	# floor glowed and the same colour the vendor list prints its name in. Three
-	# screens, one hue per thing: that consistency is the only icon set this
-	# game has for ingredients.
-	var chip := ColorRect.new()
-	chip.name = "Chip"
-	chip.custom_minimum_size = Vector2(0, 8)
-	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_child(chip)
-
-	var label := Label.new()
-	label.name = "Name"
-	label.theme_type_variation = &"MenuSlotStat"
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.add_theme_font_size_override("font_size", CELL_NAME_PT)
-	col.add_child(label)
-
-	var count := Label.new()
-	count.name = "Count"
-	count.theme_type_variation = &"MenuValue"
-	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	count.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	count.add_theme_font_size_override("font_size", CELL_COUNT_PT)
-	col.add_child(count)
-
-	# A cell does nothing when pressed and that is correct: there is no verb here.
-	# You cannot drop, sort or use a bag item — the vendor buys them and the
-	# forge eats them, both in town. Saying so beats a button that beeps.
-	b.pressed.connect(func() -> void: _describe(b))
-	b.focus_entered.connect(func() -> void: _describe(b))
-	b.mouse_entered.connect(func() -> void: _describe(b))
-	return b
 
 
 func _build_detail(parent: Node) -> void:
@@ -894,43 +876,25 @@ func _build_stock(parent: Node) -> void:
 	col.add_child(_stock_empty)
 
 
-## Grid focus, wired by hand: left/right wraps within a row, up/down walks the
-## column and the bottom row falls to Back, which closes the loop to the top
-## left. Every cell is reachable by holding one direction — the same guarantee
+## The column BELOW the grid. The grid wires itself (left/right wraps within a
+## row, down leaves the bottom row through `spill_down`); this wires what it
+## leaves into, and closes the loop from Back back to the top left. Every cell
+## and every button is reachable by holding one direction — the same guarantee
 ## the ITEMS screen makes, and for the same reason.
 func _wire_focus() -> void:
-	var n := _cells.size()
-	if n == 0:
+	var first := _grid.cell_at(0)
+	if first == null:
 		return
-	var rows := int(ceil(float(n) / float(COLS)))
-	for i in n:
-		var row := i / COLS
-		var col := i % COLS
-		var wide: int = mini(COLS, n - row * COLS)
-		var right := row * COLS + (col + 1) % wide
-		MenuUtil.link_right(_cells[i], _cells[right])
-		var below := (row + 1) * COLS + col
-		if below < n:
-			MenuUtil.link_down(_cells[i], _cells[below])
-		else:
-			# Out of the bottom of the grid comes the bench, then the way out,
-			# and only then Back. That order is the screen's argument in one
-			# column: here is what you are carrying, here is what it can become,
-			# here is what it costs to keep it, here is the door.
-			MenuUtil.link_down(_cells[i], _fletch)
 	MenuUtil.link_down(_fletch, _rope)
 	MenuUtil.link_down(_rope, _back)
 	_fletch.focus_neighbor_left = ^"."
 	_fletch.focus_neighbor_right = ^"."
 	_rope.focus_neighbor_left = ^"."
 	_rope.focus_neighbor_right = ^"."
-	_back.focus_neighbor_bottom = _back.get_path_to(_cells[0])
-	_back.focus_next = _back.get_path_to(_cells[0])
+	_back.focus_neighbor_bottom = _back.get_path_to(first)
+	_back.focus_next = _back.get_path_to(first)
 	_back.focus_neighbor_left = ^"."
 	_back.focus_neighbor_right = ^"."
-	# `rows` only exists to make the intent above legible in a debugger; the
-	# wiring reads `n` directly so a short last row cannot walk off the end.
-	assert(rows >= 1)
 
 
 # --- State ------------------------------------------------------------------
@@ -942,8 +906,9 @@ func _wire_focus() -> void:
 func focus_first() -> void:
 	_rope_armed = false
 	_reset_hold()
-	if not _cells.is_empty():
-		_cells[0].grab_focus()
+	var first := _grid.cell_at(0)
+	if first != null:
+		first.grab_focus()
 
 
 ## Where the shared tab strip is inserted. See `_hrow`.
@@ -951,8 +916,14 @@ func tab_host() -> HBoxContainer:
 	return _hrow
 
 
+## The bag's cells, for a director that wants to count what is drawn rather than
+## what the panel believes. Public because "the grid IS the capacity" is a claim
+## worth being able to check from outside.
+func grid() -> ItemGrid:
+	return _grid
+
+
 func refresh() -> void:
-	_rebuild_cells()
 	_fill_cells()
 	_paint_doll()
 	_paint_header()
@@ -960,70 +931,31 @@ func refresh() -> void:
 	_paint_rope()
 	_paint_stock()
 	var focused := get_viewport().gui_get_focus_owner()
-	if _cells.has(focused):
-		_describe(focused as Button)
-	elif focused == _fletch:
+	if focused == _fletch:
 		_describe_fletch()
 	elif focused == _rope:
 		_describe_rope()
-	elif not _cells.is_empty():
-		_describe(_cells[0])
+	else:
+		# The cursor is on a cell, or on nothing at all because the screen has
+		# only just been built. Either way the detail pane describes a cell, and
+		# the grid is the one that knows which button is which index.
+		_describe(_cell_under(focused))
 
 
-## Lay the bag out over the cells the way `Run.slots_used()` counts it: full
-## stacks first, then the remainder. Anything that will not fit in the drawn
-## grid is dropped from the PICTURE only — it cannot happen while `bag_slots`
-## and the grid agree, and if it ever does the header's number is still right,
-## which is the number the fee is taken from.
-func _fill_cells() -> void:
-	for i in _cell_ids.size():
-		_cell_ids[i] = &""
-	var at := 0
-	for id: StringName in Run.bag:
-		var def := ItemDb.get_def(id)
-		if def == null:
-			continue
-		var per: int = maxi(def.stack, 1)
-		var left: int = Run.bag[id]
-		while left > 0 and at < _cell_ids.size():
-			_cell_ids[at] = id
-			_cells[at].set_meta(&"count", mini(left, per))
-			left -= per
-			at += 1
-	for i in _cells.size():
-		_paint_cell(_cells[i])
+## Which bag cell the focus is on, or 0 when it is not on the grid at all. The
+## grid hands out its own buttons, so asking it beats keeping a parallel array
+## of them here — the parallel array was what `_cells` used to be, and it was one
+## more thing that could disagree with what is drawn.
+func _cell_under(focused: Control) -> int:
+	for i in _grid.count():
+		if _grid.cell_at(i) == focused:
+			return i
+	return 0
 
 
-func _paint_cell(b: Button) -> void:
-	var index: int = b.get_meta(&"cell")
-	var id: StringName = _cell_ids[index]
-	var chip := b.get_node("Col/Chip") as ColorRect
-	var name_label := b.get_node("Col/Name") as Label
-	var count := b.get_node("Col/Count") as Label
-
-	if id == &"":
-		chip.color = Color(Pal.ASH, 0.35)
-		name_label.text = "—"
-		name_label.modulate = Color(1, 1, 1, 0.4)
-		count.text = ""
-		# Dimmed, never hidden. An empty cell that vanished would make the grid
-		# shrink as you spend, and the shrinking grid is the one thing this
-		# screen exists to NOT do.
-		b.modulate = Color(1, 1, 1, 0.55)
-		return
-
-	var def := ItemDb.get_def(id)
-	chip.color = def.tint
-	name_label.modulate = Color.WHITE
-	b.modulate = Color.WHITE
-	# The diamond is the bench mark. It is the same glyph the rope row uses for
-	# "this does something", and here it means "a counter in town wants this,
-	# the vendor does not" -- which is the only thing you need to know about a
-	# cell while the bag is filling up. WHICH counter is in the detail pane; at
-	# cell size it is one bit of information and the bit that matters is "do not
-	# sell it".
-	name_label.text = ("◆ " + def.display_name) if def.is_component() else def.display_name
-	count.text = "×%d" % int(b.get_meta(&"count", 1))
+## The grid says a cell was looked at; the detail pane says what it is.
+func _on_cell_focused(index: int) -> void:
+	_describe(maxi(index, 0))
 
 
 ## Three numbers, and this screen is now the only place two of them are said.
@@ -1069,10 +1001,9 @@ func _paint_stock() -> void:
 	_stock_empty.visible = not any
 
 
-func _describe(b: Button) -> void:
-	if b == null or _detail_name == null:
+func _describe(index: int) -> void:
+	if _detail_name == null or index < 0 or index >= _cell_ids.size():
 		return
-	var index: int = b.get_meta(&"cell")
 	var id: StringName = _cell_ids[index]
 
 	if id == &"":
@@ -1085,7 +1016,7 @@ func _describe(b: Button) -> void:
 		return
 
 	var def := ItemDb.get_def(id)
-	var n: int = b.get_meta(&"count", 1)
+	var n: int = _cell_counts[index]
 	var part := def.is_component()
 	_detail_kind.text = "SLOT %d  ·  %s  ·  %s" % [
 		index + 1, def.rarity_name().to_upper(),
