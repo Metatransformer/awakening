@@ -849,8 +849,14 @@ it counts down to zero in RUST. The palette becomes the score.
   the purse it is measured against; and the map (`MenuMapPanel`), whose floor
   label and "6 of 8 rooms walked" subtitle became a four-cell band of their own
   — FLOOR, ROOMS, CHESTS, STAIR — counted off the same `Atlas.marks` the plan
-  is drawn from, so the numbers cannot claim a chest the map is not showing.
-  Still on the old theme: options, saves and the receipt.
+  is drawn from, so the numbers cannot claim a chest the map is not showing;
+  the save/load screen (`MenuSavesPanel` + `MenuSlotRow`), where an empty slot
+  in LOAD mode is the refusal law rendered on a card rather than a row — 38%,
+  "Nothing here to load." at full DANGER, and still in its place; and the one
+  modal (`MenuConfirm`), which carries the kit's paint itself rather than
+  inheriting Root's, because it is raised over converted and unconverted
+  screens both and a modal that changes face depending on who asked is a modal
+  the player stops reading. Still on the old theme: options and the receipt.
 
   The pouch's Fletch and Escape Rope rows are the documented exception to the
   refusal law: they use `UiKit.verb_meta` to write the shortfall into the meta
