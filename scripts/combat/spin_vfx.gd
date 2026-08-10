@@ -43,9 +43,28 @@ extends Node3D
 ## stone, so a warm mote starts most of the way to clipping before a second one
 ## arrives. That is why FIRE_HOT — the only near-white value here — is the LIGHT
 ## colour, where nothing sums, and the motes use FIRE.
+##
+## FOUR stops, not two, because two is what made the first fire ring read as a
+## flat orange decal: a real flame is white where it is hottest, light orange
+## just off that, orange through the body and near-black at the tail, and the
+## eye reads that ramp as DEPTH even on a shape with none. The shader picks
+## along it by `heat` — proximity to the head, minus how far up the flame a
+## fragment is — so the roots are white and the tips are ember, which is the
+## right way round and the thing that gives a flat sheet a body.
+##
+## FIRE_WHITE is the one value here that would clip, and it is deliberately
+## rationed: the shader only reaches it above heat 0.82, which is a few degrees
+## behind the blade, and the flame shells carry a per-band `gain` under 1.0 so
+## three of them overlapping at that angle still sum to under two. Judge these
+## stacked, never one at a time.
+const FIRE_WHITE := Color(1.00, 0.92, 0.76)
+const FIRE_LIGHT := Color(1.00, 0.60, 0.16)
 const FIRE_HOT := Color(1.00, 0.66, 0.26)
 const FIRE := Color(0.98, 0.30, 0.03)
 const FIRE_DEEP := Color(0.50, 0.07, 0.01)
+## The scorch under the fire, and the only colour here that is SUBTRACTIVE. See
+## SCORCH_SHADER for why the effect needs a dark pass at all.
+const SOOT := Color(0.26, 0.15, 0.11)
 ## What the blade is tinted with. Not FIRE: `HitFlash` multiplies the tint by its
 ## own HIT_ENERGY of 2.4, so 0.30 of green comes back out at 0.72 and the steel
 ## reads white-hot with an orange edge. 0.22 survives the multiply at 0.45 and
@@ -116,24 +135,79 @@ const SWEEP_TIME := 0.48
 ## The particles did not go away, they went back to being what particles are good
 ## at: EMBERS spat off the head, which are meant to be discrete.
 ##
-## Inner and outer radius of the band, and where it sits off the floor. The band
-## straddles SWEEP_RADIUS (1.7) and its outer edge reaches `spin_reach` (2.1), so
-## the fire ends where the damage does. RING_LIFT flares the outer edge upward —
-## dead flat is correct for Saturn but a plane exactly edge-on to a low camera is
-## invisible, and fire flares outward anyway.
-const RING_INNER := 1.18
-const RING_OUTER := 2.20
+## **The shape, which is four swept bands and not one flat washer.**
+##
+## The first version of this was a single annulus lying on the floor. It read as
+## a ring and it read as fire, and from the over-the-shoulder camera this game
+## actually plays at it also read as a DECAL — a picture of fire printed on the
+## flagstones, because that is exactly what one horizontal sheet is. Fire has a
+## body. So the disc stayed, and three vertical shells now stand on it at rising
+## radii, each leaning outward as it climbs.
+##
+## Three rather than one for a reason worth keeping: a single vertical sheet is
+## a cardboard cut-out from every angle except dead-on, and three at different
+## radii, gains and noise phases overlap into something with a front, a middle
+## and a back. That parallax between the shells is the whole of the depth.
+##
+## A profile is [radial offset, height] from the band's base radius, swept round
+## the circle. UV.y runs 0 at the first point to 1 at the last, so "0 is the root
+## and 1 is the tip" holds for both kinds of band: the disc's tip is its outer
+## edge, a shell's tip is the top of the flame. One falloff serves both.
 const RING_BASE := 0.10
-const RING_LIFT := 0.34
+## The disc. Barely any rise left in it — it used to flare 0.34 m at the outer
+## edge, which was the only way a lone sheet could avoid vanishing edge-on to a
+## low camera, and the shells do that job properly now.
+const DISC_RADIUS := 1.18
+const DISC_PROFILE: Array[Vector2] = [
+	Vector2(0.00, 0.00), Vector2(0.34, 0.01), Vector2(0.68, 0.06), Vector2(1.02, 0.22),
+]
+## The flame shells: up and outward, with most of the height in the middle of the
+## climb so the tips lean rather than spike. 0.82 m tall, which is half the
+## hero — tall enough to have presence past his knee, short enough that it is
+## still a ring around him and not a wall he is standing inside.
+const FLAME_PROFILE: Array[Vector2] = [
+	Vector2(0.00, 0.00), Vector2(0.07, 0.26), Vector2(0.17, 0.55), Vector2(0.30, 0.82),
+]
+## Flat on the stone and wider than the flame at both ends. A scorch that only
+## reaches as far as the fire looks like a hole in the floor; one that spills
+## past it looks like the floor is dirty, which is the point.
+const SCORCH_PROFILE: Array[Vector2] = [
+	Vector2(0.00, 0.0), Vector2(0.60, 0.0), Vector2(1.20, 0.0), Vector2(1.80, 0.0),
+]
+## Base radius, noise phase, brightness — one row per shell. The LAG each one
+## takes is derived from its index below. The radii straddle
+## SWEEP_RADIUS (1.7) and the outermost tips land on `spin_reach` (2.1), so the
+## fire ends where the damage does.
+##
+## The gains are the additive budget. Where the three shells overlap on screen
+## they SUM, and 1.0 each would put 3.0 into every channel at the head and give
+## back a white blob — the exact failure this file has already had once, in blue.
+##
+## They started at 0.62 / 0.72 / 0.55 and that was still too much: three shells
+## whose plumes overlap on screen at the head, each carrying a near-white colour,
+## summed to a white slab with a flame-shaped hole in the middle of it. These
+## numbers are the ones that survived being photographed.
+const FLAME_SHELLS: Array[Vector3] = [
+	Vector3(1.36, 0.37, 0.42),
+	Vector3(1.62, 0.71, 0.50),
+	Vector3(1.88, 0.13, 0.36),
+]
 ## How many quads round the circle. 160 is ~4 cm of arc per segment at the outer
 ## edge, which is far finer than the shader's own noise and keeps the ragged
 ## flame edge from looking faceted.
+## How far behind the blade each successive shell's head sits, in turns. 0.012 is
+## about 4°, so the outermost trails the disc by 13°.
+const SHELL_LAG := 0.012
 const RING_SEGMENTS := 160
 ## How much of the circle is burning at once, in turns. 0.62 means the fire
 ## behind the blade stretches most of the way back round and the head is always
 ## clearly the head — a longer tail closes the loop into a plain ring and loses
 ## the direction, a shorter one reads as a comet with no ring at all.
 const RING_TAIL := 0.62
+## The scorch lags further: soot does not go out when the flame does, and the
+## dark band still sitting under the fading tail is most of what keeps the ring
+## legible on a torchlit floor.
+const SCORCH_TAIL := 0.95
 ## The ring grows as it burns, which is the last of the Ocarina read: the fire
 ## leaves him rather than orbiting him. Scale, not radius, so the already-drawn
 ## arc expands with the head instead of the band spiralling outward.
@@ -161,9 +235,162 @@ render_mode unshaded, blend_add, cull_disabled, depth_draw_never,
 uniform float head = -1.0;
 uniform float tail = 0.62;
 uniform float burn = 1.0;
-uniform vec3 core : source_color = vec3(1.0, 0.66, 0.26);
+uniform vec3 white_hot : source_color = vec3(1.0, 0.92, 0.76);
+uniform vec3 light : source_color = vec3(1.0, 0.60, 0.16);
 uniform vec3 mid : source_color = vec3(0.98, 0.30, 0.03);
-uniform vec3 ember : source_color = vec3(0.42, 0.05, 0.01);
+uniform vec3 ember : source_color = vec3(0.50, 0.07, 0.01);
+
+varying vec3 loc;
+// Per-band, carried in the vertex colour: which noise phase this band samples
+// at, and how much of the additive budget it is allowed to spend.
+varying float phase;
+varying float gain;
+varying float lag;
+
+float hash12(vec2 p) {
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
+}
+
+float vnoise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	float a = hash12(i);
+	float b = hash12(i + vec2(1.0, 0.0));
+	float c = hash12(i + vec2(0.0, 1.0));
+	float d = hash12(i + vec2(1.0, 1.0));
+	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+float fbm(vec2 p) {
+	return vnoise(p) * 0.60 + vnoise(p * 2.7) * 0.28 + vnoise(p * 6.1) * 0.12;
+}
+
+void vertex() {
+	loc = VERTEX;
+	phase = COLOR.r;
+	gain = COLOR.g;
+	lag = COLOR.b;
+}
+
+void fragment() {
+	// Four noise fields. `lick` decides where the flame TIPS reach, `flick` is
+	// the flicker within the band, `rise` is the one that only matters on the
+	// vertical shells — it scrolls DOWN the local Y, so the pattern climbs, and
+	// without it a standing sheet has no vertical structure at all and reads as
+	// a curtain. `ragged` bends the sweep boundary itself.
+	//
+	// All four are sampled on LOCAL POSITION, never on UV. UV.x wraps from 1 back
+	// to 0 at the seam, so any noise keyed on it draws a hard vertical crack
+	// through the fire at the hero's front; position has no seam, because the
+	// ring is a closed loop in space whatever the parameterisation says. `phase`
+	// offsets each band so the three shells do not flicker in lockstep, which is
+	// what would collapse them back into one thick sheet.
+	float lick = fbm(loc.xz * 2.6 + vec2(phase * 11.0, TIME * 1.6));
+	float flick = fbm(loc.xz * 4.6 - vec2(TIME * 2.3, -phase * 7.0));
+	float rise = fbm(vec2((loc.x + loc.z) * 3.2 + phase * 5.0, loc.y * 2.8 - TIME * 3.0));
+	float ragged = (fbm(loc.xz * 3.1 + vec2(TIME * 0.9, phase * 3.0)) - 0.5) * 0.035;
+
+	// How long ago the blade passed this angle, in turns. Negative means it has
+	// not been here yet.
+	//
+	// `ragged` bends that boundary by about ±6°, and it is doing more work than
+	// its size suggests. Without it the leading edge is a perfectly straight
+	// radial cut, and a straight radial cut across a 1 m band photographs as a
+	// paper WEDGE: the first render of this had a bright trapezoid at the head
+	// that read as a hole in the effect rather than as the front of it.
+	float age = head - UV.x - lag + ragged;
+	float life = 1.0 - clamp(age / tail, 0.0, 1.0);
+	if (age < 0.0) {
+		life = 0.0;
+	}
+	// And the cut itself is softened over ~5° so the fire arrives rather than
+	// appearing. Asymmetric on purpose: it opens fast, because the head IS the
+	// blade and a blade does not have a gradient in front of it.
+	float lead = smoothstep(-0.004, 0.012, age);
+
+	// v = 0 at the band's root, 1 at its tip — the disc's outer edge, or the top
+	// of a flame. The tip is eaten away by the noise, which is what makes both
+	// read as licking flame instead of as a gradient-filled washer.
+	float v = UV.y;
+	// Split between a floor and the noise, and both halves matter: all floor and
+	// every band is the same height and they read as walls, all noise and the
+	// bands are eaten down to wisps with no body left to them.
+	// The three weights sum to at most 0.70, and the 0.30 of falloff below takes
+	// that to exactly 1.0 — which is the point. Let rim + falloff exceed 1 and the
+	// hottest columns run all the way to the last row of vertices, where they are
+	// cut off by the GEOMETRY: a flame with a flat top, which photographed as a
+	// white brick sitting on the head of the sweep.
+	float rim = 0.22 + 0.30 * lick + 0.18 * rise;
+	float band = smoothstep(0.0, 0.18, v) * (1.0 - smoothstep(rim, rim + 0.30, v));
+
+	// The head is a hot spot about 20° long, not a step: this is the blade
+	// itself, and it is the brightest thing in the effect.
+	float hot = exp(-max(age, 0.0) * 22.0);
+	// 1.1, not the 1.6 it started at. The exponent is how much of the circle is
+	// still lit, and at 1.6 the tail was gone within a third of a turn of the
+	// head — a comet with no ring behind it. This is the number that decides
+	// whether the effect reads as Saturn or as a shooting star.
+	float body = pow(life, 1.1) * (0.50 + 0.60 * mix(flick, rise, 0.5));
+	// The head is hot in COLOUR, only slightly hotter in BRIGHTNESS — and that
+	// split is the whole fix for the white slab this had at first. Pushing both
+	// at once means the fragment that is already being tinted toward white is
+	// also the one being driven past 1.0, so it clips to pure white and the
+	// flame shape inside it is lost. Let the ramp say "hot" and keep the
+	// intensity in range.
+	float i = band * lead * (body * 0.85 + hot * 0.50) * gain * burn;
+	// A hard ceiling per band, because `gain` alone cannot stop three shells
+	// OVERLAPPING on screen from summing past white at the one angle the effect
+	// is for. Judge these numbers stacked, never one at a time.
+	i = min(i, 0.66);
+
+	// The colour ramp, and the `- v * 0.38` in it is the trick worth keeping:
+	// heat falls off UP the flame as well as behind the head, so every band is
+	// white at its root and ember at its tip. That vertical gradient is what a
+	// real flame has and what makes even the flat disc read as something with a
+	// near side and a far side.
+	float heat = clamp(hot * 0.95 + life * 0.85 - v * 0.30, 0.0, 1.0);
+	vec3 col = ember;
+	col = mix(col, mid, smoothstep(0.08, 0.42, heat));
+	col = mix(col, light, smoothstep(0.30, 0.66, heat));
+	col = mix(col, white_hot, smoothstep(0.90, 1.00, heat));
+
+	// ALPHA stays at 1.0 and every fade lives in the colour — black added to the
+	// framebuffer is nothing, whatever the blend func does with alpha.
+	ALBEDO = col * i;
+	ALPHA = 1.0;
+}
+"""
+
+## The scorch under the fire: the same sweep, drawn on the floor, MULTIPLYING.
+##
+## **Why a dark pass exists at all.** Everything else in this effect is additive,
+## and additive light can only ever brighten what is behind it — so on the
+## torchlit stone this game is mostly set on, the fire was competing with a floor
+## that was already halfway to its own colour. The band read as a wash. A flame
+## in life is legible because it darkens what it sits on as much as it lights it:
+## it scorches, and it throws the surroundings into shadow by contrast. So a
+## second, wider annulus lies on the flagstones under the flame and multiplies
+## them toward soot.
+##
+## It is drawn BEFORE the fire (`render_priority = -1`), which is not optional:
+## transparent passes composite in priority order, and a multiply landing after
+## the additive pass would darken the flame itself instead of the floor.
+##
+## The identity for a multiply is WHITE, not black — the mirror of the rule for
+## the additive passes, and the same trap. Every fade here therefore walks the
+## colour back toward vec3(1.0), which is "leave the floor alone".
+const SCORCH_SHADER := """
+shader_type spatial;
+render_mode unshaded, blend_mul, cull_disabled, depth_draw_never,
+	shadows_disabled, fog_disabled;
+
+uniform float head = -1.0;
+uniform float tail = 0.95;
+uniform float burn = 1.0;
+uniform vec3 soot : source_color = vec3(0.34, 0.20, 0.14);
 
 varying vec3 loc;
 
@@ -193,61 +420,23 @@ void vertex() {
 }
 
 void fragment() {
-	// Three noise fields. The coarse one decides where the flame TIPS reach, the
-	// fine one is the flicker inside the band, and `ragged` is the one that stops
-	// this looking like geometry.
-	float lick = fbm(loc.xz * 2.6 + vec2(0.0, TIME * 1.6));
-	float flick = fbm(loc.xz * 4.6 - vec2(TIME * 2.3, 0.0));
-	float ragged = (fbm(loc.xz * 3.1 + vec2(TIME * 0.9, 0.0)) - 0.5) * 0.035;
-
-	// How long ago the blade passed this angle, in turns. Negative means it has
-	// not been here yet.
-	//
-	// `ragged` bends that boundary by up to ±0.017 of a turn — about ±6° — and
-	// it is doing more work than its size suggests. Without it the leading edge
-	// is a perfectly straight radial cut, and a straight radial cut across a
-	// 1 m band photographs as a paper WEDGE: the first render of this had a
-	// bright trapezoid at the head that read as a hole in the effect rather than
-	// as the front of it.
+	float ragged = (fbm(loc.xz * 2.4) - 0.5) * 0.05;
 	float age = head - UV.x + ragged;
 	float life = 1.0 - clamp(age / tail, 0.0, 1.0);
 	if (age < 0.0) {
 		life = 0.0;
 	}
-	// And the cut itself is softened over ~5° so the fire arrives rather than
-	// appearing. Asymmetric on purpose: it opens fast, because the head IS the
-	// blade and a blade does not have a gradient in front of it.
-	float lead = smoothstep(-0.004, 0.012, age);
 
-	// v = 0 at the inner rim, 1 at the outer. The outer edge is eaten away by
-	// the coarse noise, which is what makes it read as licking flame instead of
-	// as a gradient-filled washer.
+	// Soft at both rims, and softer than the flame's: this is a shadow, and a
+	// shadow with a hard edge is a sticker.
 	float v = UV.y;
-	float rim = 0.28 + 0.46 * lick;
-	float band = smoothstep(0.0, 0.20, v) * (1.0 - smoothstep(rim, rim + 0.30, v));
+	float band = smoothstep(0.0, 0.30, v) * (1.0 - smoothstep(0.55, 1.0, v));
+	// The darkest point is a little BEHIND the head, not at it — under the flame
+	// itself, where a real one would be blocking the most light.
+	float dark = band * smoothstep(0.0, 0.10, age) * pow(life, 0.65) * burn;
+	dark *= 0.55 + 0.45 * fbm(loc.xz * 3.6);
 
-	// The head is a hot spot about 20° long, not a step: this is the blade
-	// itself, and it is the brightest thing in the effect. 22 rather than the 11
-	// it started at — at 11 the hot spot spanned a quarter of the circle and the
-	// ring had no head at all, just a bright half and a dim half.
-	float hot = exp(-max(age, 0.0) * 22.0);
-	// 1.1, not the 1.6 it started at. The exponent is how much of the circle is
-	// still lit, and at 1.6 the tail was gone within a third of a turn of the
-	// head — a comet with no ring behind it. This is the number that decides
-	// whether the effect reads as Saturn or as a shooting star.
-	float body = pow(life, 1.1) * (0.55 + 0.55 * flick);
-	float i = band * lead * (body + hot * 1.15) * burn;
-
-	vec3 col = mix(mid, core, hot);
-	// 0.45 keeps the tail ORANGE most of the way round and only lets it drop to
-	// the ember red at the very end. At 0.7 the band turned dark red almost
-	// immediately, and dark red on a torchlit floor is the same colour as the
-	// floor.
-	col = mix(ember, col, pow(life, 0.45));
-
-	// ALPHA stays at 1.0 and every fade lives in the colour — black added to the
-	// framebuffer is nothing, whatever the blend func does with alpha.
-	ALBEDO = col * i;
+	ALBEDO = mix(vec3(1.0), soot, clamp(dark, 0.0, 1.0));
 	ALPHA = 1.0;
 }
 """
@@ -260,9 +449,14 @@ var _pivot: Node3D
 ## Motes drawn to the blade while the button is held. Parented to the sword, so
 ## they are emitted along whatever arc the hand is travelling.
 var _gather: GPUParticles3D
-## The fire itself: one annulus, lit a piece at a time by RING_SHADER.
+## The fire itself: the disc and the three flame shells, one mesh, lit a slice at
+## a time by RING_SHADER.
 var _ring: MeshInstance3D
 var _ring_mat: ShaderMaterial
+## The dark pass on the floor beneath it. A child of `_ring`, so it inherits the
+## placement and the growth for free.
+var _scorch: MeshInstance3D
+var _scorch_mat: ShaderMaterial
 ## Embers thrown off the head of the fire. Parented to `_pivot` at
 ## `SWEEP_RADIUS`, NOT to the blade: the sword is animated and the animation is
 ## not a source of truth for where the effect should be — it dips, it
@@ -338,6 +532,8 @@ func fire() -> void:
 	if _ring_mat != null and _ring != null:
 		_ring.visible = true
 		_ring_mat.set_shader_parameter(&"burn", 1.0)
+		if _scorch_mat != null:
+			_scorch_mat.set_shader_parameter(&"burn", 1.0)
 		# ON THE RELEASE FRAME, not a tenth of a second after it. There used to be a
 		# SWEEP_DELAY of 0.10 here to let the animation's wind-up catch up, and what
 		# it actually bought was a beat of nothing between the button coming up and
@@ -348,13 +544,17 @@ func fire() -> void:
 		# circle at SWEEP_TIME and then keeps going, eating the tail out from under
 		# itself until there is nothing left burning. That extra 0.62 of a turn is
 		# where "the magic lags the sword" now lives.
-		_tween.tween_method(
-			_set_head, 0.0, 1.0 + RING_TAIL, SWEEP_TIME * (1.0 + RING_TAIL)
-		)
+		# Past 1.0 by the LONGEST tail of the two passes, at the same angular rate
+		# throughout: the head closes the circle at SWEEP_TIME and then keeps going,
+		# eating first the flame and then the scorch out from under itself until
+		# there is nothing left. Running it only to the flame's tail would cut the
+		# soot off mid-fade when `clear` hides the mesh.
+		var span := SWEEP_TIME * (1.0 + SCORCH_TAIL)
+		_tween.tween_method(_set_head, 0.0, 1.0 + SCORCH_TAIL, span)
 		_tween.tween_property(
 			_ring, ^"scale",
 			Vector3(RING_GROW.y, 1.0, RING_GROW.y),
-			SWEEP_TIME * (1.0 + RING_TAIL)
+			span
 		).from(Vector3(RING_GROW.x, 1.0, RING_GROW.x))
 
 	if _pivot != null and _burst != null:
@@ -424,11 +624,15 @@ func _sweep(on: bool) -> void:
 		_pivot.rotation.y = 0.0
 
 
-## Where the blade is, in turns round the circle. -1 parks it before the start,
-## which draws nothing at all.
+## Where the blade is, in turns round the circle. Both passes read the same
+## number — the scorch is the same sweep with a longer memory, and giving it its
+## own clock is how the shadow ends up lagging the thing casting it. -1 parks it
+## before the start, which draws nothing at all.
 func _set_head(t: float) -> void:
 	if _ring_mat != null:
 		_ring_mat.set_shader_parameter(&"head", t)
+	if _scorch_mat != null:
+		_scorch_mat.set_shader_parameter(&"head", t)
 
 
 func _set_glow(e: float) -> void:
@@ -526,62 +730,58 @@ func _build_gather() -> void:
 	_sword.add_child(_gather)
 
 
-## The fire: one annulus, built once, lit a slice at a time by RING_SHADER.
+## The fire: four swept bands in one mesh, lit a slice at a time by RING_SHADER.
 ##
-## The geometry is deliberately dumb — a flat washer with its outer edge lifted,
-## 160 segments, UV.x running once round the circle and UV.y running from the
-## inner rim to the outer. All of the effect is in the shader, and all of the
-## SHAPE is in these two radii. There is no emitter here, nothing is deposited,
-## and the frame rate therefore cannot put a hole in the ring, which is the one
-## thing the particle version could never promise.
+## The geometry is deliberately dumb — profiles swept round a circle, UV.x once
+## round, UV.y root-to-tip. There is no emitter here, nothing is deposited, and
+## the frame rate therefore cannot put a hole in the ring, which is the one thing
+## the particle version could never promise.
 ##
-## Angles are laid out so that UV.x = 0 is the hero's FORWARD and UV.x rises
-## clockwise seen from above, because that is the direction the blade travels
-## (see SWEEP_RADIUS). A Node3D's forward is -Z (docs/CONTRACT.md §2.5), so the
-## point at angle phi is (r·sin phi, y, -r·cos phi): phi = 0 gives (0, y, -r),
-## dead ahead, and a small positive phi swings it toward +X, which is his right.
+## Angles are laid out so UV.x = 0 is the hero's FORWARD and UV.x rises clockwise
+## seen from above, because that is the direction the blade travels (see
+## SWEEP_RADIUS). A Node3D's forward is -Z (docs/CONTRACT.md §2.5), so the point
+## at angle phi is (r·sin phi, y, -r·cos phi): phi = 0 gives (0, y, -r), dead
+## ahead, and a small positive phi swings it toward +X, which is his right.
 func _build_ring() -> void:
-	var verts := PackedVector3Array()
-	var uvs := PackedVector2Array()
+	var mesh := ArrayMesh.new()
+	var v := PackedVector3Array()
+	var uv := PackedVector2Array()
+	var cols := PackedColorArray()
 	var idx := PackedInt32Array()
 
-	for i in RING_SEGMENTS + 1:
-		var f := float(i) / float(RING_SEGMENTS)
-		var phi := f * TAU
-		for j in 2:
-			var v := float(j)
-			var r: float = lerpf(RING_INNER, RING_OUTER, v)
-			# v² rather than v: the lift is all in the outer third, so the band is
-			# flat where it is brightest and only the flame tips rise.
-			verts.push_back(Vector3(
-				r * sin(phi), RING_BASE + RING_LIFT * v * v, -r * cos(phi)
-			))
-			uvs.push_back(Vector2(f, v))
-
-	# The seam column is DUPLICATED (RING_SEGMENTS + 1 columns for
-	# RING_SEGMENTS quads) so the last quad can reach UV.x = 1.0. Sharing one
-	# column would wrap its U back to 0 and the final quad would be textured with
-	# the entire ring squeezed backwards into it.
-	for i in RING_SEGMENTS:
-		var a := i * 2
-		idx.append_array([a, a + 1, a + 2, a + 1, a + 3, a + 2])
+	# The disc first — the Saturn read, and the only band that survives being
+	# looked at from straight above.
+	_sweep_band(v, uv, cols, idx, DISC_RADIUS, DISC_PROFILE, 0.0, 0.90)
+	# Then the shells standing on it. x = base radius, y = noise phase, z = gain.
+	# Each shell out from the middle is dealt a little more LAG, so their heads are
+	# staggered instead of arriving as one front. Three sheets that all start at
+	# the same angle read as three parallel walls however much noise is on them;
+	# staggered by a few degrees each, the same three read as one plume being
+	# dragged round, which is the entire point of having three.
+	for k in FLAME_SHELLS.size():
+		var shell: Vector3 = FLAME_SHELLS[k]
+		_sweep_band(v, uv, cols, idx, shell.x, FLAME_PROFILE, shell.y, shell.z,
+			RING_BASE, SHELL_LAG * float(k + 1))
 
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = verts
-	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_VERTEX] = v
+	arrays[Mesh.ARRAY_TEX_UV] = uv
+	# The per-band constants ride in the vertex colour rather than in a uniform,
+	# because all four bands are ONE surface with one material: a uniform can only
+	# say one thing per draw, and splitting them into four surfaces to say four
+	# things would be four draw calls for a decoration.
+	arrays[Mesh.ARRAY_COLOR] = cols
 	arrays[Mesh.ARRAY_INDEX] = idx
-	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 
-	var sh := Shader.new()
-	sh.code = RING_SHADER
 	_ring_mat = ShaderMaterial.new()
-	_ring_mat.shader = sh
+	_ring_mat.shader = _shader(RING_SHADER)
 	_ring_mat.set_shader_parameter(&"head", -1.0)
 	_ring_mat.set_shader_parameter(&"tail", RING_TAIL)
 	_ring_mat.set_shader_parameter(&"burn", 1.0)
-	_ring_mat.set_shader_parameter(&"core", FIRE_HOT)
+	_ring_mat.set_shader_parameter(&"white_hot", FIRE_WHITE)
+	_ring_mat.set_shader_parameter(&"light", FIRE_LIGHT)
 	_ring_mat.set_shader_parameter(&"mid", FIRE)
 	_ring_mat.set_shader_parameter(&"ember", FIRE_DEEP)
 
@@ -589,13 +789,94 @@ func _build_ring() -> void:
 	_ring.name = "SpinRing"
 	_ring.mesh = mesh
 	_ring.material_override = _ring_mat
-	# The mesh never moves in its own space, so Godot's own AABB is exact — but it
-	# is a 4.4 m disc 0.4 m tall and the hero can stand with most of it inside a
-	# wall. Shadow casting off for the same reason the blade light has none: this
-	# is a glow, not a lamp.
+	# Shadow casting off for the same reason the blade light casts none: this is
+	# a glow, not a lamp — and a 4 m disc of shadow-casting fire in a torchlit
+	# room is both expensive and nonsense.
 	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_ring.visible = false
 	add_child(_ring)
+
+	_build_scorch()
+
+
+## The dark pass, parented UNDER the ring so that placing and growing the fire
+## takes the scorch with it — the shadow of a thing does not lag behind it.
+func _build_scorch() -> void:
+	var mesh := ArrayMesh.new()
+	var v := PackedVector3Array()
+	var uv := PackedVector2Array()
+	var cols := PackedColorArray()
+	var idx := PackedInt32Array()
+	_sweep_band(v, uv, cols, idx, DISC_RADIUS - 0.34, SCORCH_PROFILE, 0.0, 1.0, 0.02)
+
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = v
+	arrays[Mesh.ARRAY_TEX_UV] = uv
+	arrays[Mesh.ARRAY_COLOR] = cols
+	arrays[Mesh.ARRAY_INDEX] = idx
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+
+	_scorch_mat = ShaderMaterial.new()
+	_scorch_mat.shader = _shader(SCORCH_SHADER)
+	_scorch_mat.set_shader_parameter(&"head", -1.0)
+	_scorch_mat.set_shader_parameter(&"tail", SCORCH_TAIL)
+	_scorch_mat.set_shader_parameter(&"burn", 1.0)
+	_scorch_mat.set_shader_parameter(&"soot", SOOT)
+	# BEFORE the fire. See SCORCH_SHADER — a multiply composited after the
+	# additive pass darkens the flame instead of the floor.
+	_scorch_mat.render_priority = -1
+
+	_scorch = MeshInstance3D.new()
+	_scorch.name = "SpinScorch"
+	_scorch.mesh = mesh
+	_scorch.material_override = _scorch_mat
+	_scorch.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_ring.add_child(_scorch)
+
+
+## Sweep one profile round the circle and append it to the arrays.
+##
+## `profile` is [radial offset, height] from `radius`, root first and tip last.
+## `phase`, `gain` and `lag` go into the vertex colour for the shader to read per
+## band — three numbers, three channels, one draw call.
+func _sweep_band(
+	v: PackedVector3Array, uv: PackedVector2Array, cols: PackedColorArray,
+	idx: PackedInt32Array, radius: float, profile: Array[Vector2],
+	phase: float, gain: float, base: float = RING_BASE, lag: float = 0.0
+) -> void:
+	var rows := profile.size()
+	var first := v.size()
+	for i in RING_SEGMENTS + 1:
+		var f := float(i) / float(RING_SEGMENTS)
+		var ang := f * TAU
+		var sn := sin(ang)
+		var cs := cos(ang)
+		for j in rows:
+			var pt: Vector2 = profile[j]
+			var r := radius + pt.x
+			v.push_back(Vector3(r * sn, base + pt.y, -r * cs))
+			uv.push_back(Vector2(f, float(j) / float(rows - 1)))
+			cols.push_back(Color(phase, gain, lag, 1.0))
+
+	# The seam column is DUPLICATED (RING_SEGMENTS + 1 columns for RING_SEGMENTS
+	# quads) so the last quad can reach UV.x = 1.0. Sharing one column would wrap
+	# its U back to 0 and the final quad would be textured with the entire ring
+	# squeezed backwards into it.
+	for i in RING_SEGMENTS:
+		for j in rows - 1:
+			var a := first + i * rows + j
+			var b := a + rows
+			idx.append_array([a, a + 1, b, a + 1, b + 1, b])
+
+
+## One Shader per source string. Built here rather than authored as a .gdshader
+## so the effect owns its own look and does not depend on a resource nobody can
+## find in six months — the same call the dot texture makes.
+func _shader(src: String) -> Shader:
+	var sh := Shader.new()
+	sh.code = src
+	return sh
 
 
 ## The embers thrown off the head of the fire.
