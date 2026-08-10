@@ -96,9 +96,27 @@ Rules that keep it dirty rather than clean:
 Everything below §3.1 governs the HUD and the world — the layer the player reads
 while the game is running, at native resolution, on the RGB555 grid. The MENUS
 are a different surface with a different job, and since the Gallery Vellum port
-they are governed by `scripts/ui/ui_theme.gd`: smooth Alegreya, a 12→32 scale
-declared as `UITheme.TYPE_*` constants, and `apply_text_style()` rather than a
-raw `add_theme_font_size_override`.
+they are governed by `scripts/ui/ui_theme.gd`: a 12→32 scale declared as
+`UITheme.TYPE_*` constants, and `apply_text_style()` rather than a raw
+`add_theme_font_size_override`.
+
+**The shipped list is two faces, and only two:**
+
+| Face | Job | Loaded by |
+|---|---|---|
+| **Alegreya Sans** (OFL) | Everything the player READS — body copy, dialogue, buttons, labels, tooltips | `UITheme.body_font()`, and `ThemeDB.fallback_font`, so it is the default for every Control |
+| **Cinzel SemiBold** (OFL) | Everything that TITLES — headers, kickers, key numbers, `MenuHeading` / `MenuValue` | `UITheme.display_font()`, via `"display": true` on a `TYPE_*` |
+
+Cinzel is an inscriptional capitals face; its lowercase is a small-cap. Do not
+set it below ~14px, where the flared serifs close up — that is the floor the
+`TYPE_*` table already respects.
+
+Retired in the same change, and not to be re-added without a reason written at
+`UITheme.BODY_TTF`: **Alegreya** (the variable serif that was the display face —
+Cinzel does that job now, and two serifs on one panel is drift, not hierarchy)
+and **Pixel Operator Bold** (its `keycap_font()` had no callers at all; the
+hard-edged voice on the HUD is `scripts/ui/pixel_font.gd`, which is drawn rects
+and not a font file).
 
 Two reasons this is an amendment and not a betrayal:
 
@@ -118,7 +136,11 @@ and `UITheme`.
 
 ### 3.1 The world faces
 
-Two faces, both free to ship.
+**Neither of these is wired, and neither ships.** The HUD and the world draw
+through `scripts/ui/pixel_font.gd` — a 5×7 bitmap made of `draw_rect`, with no
+font file behind it. What follows is the intention this section was written
+with; treat the sizes as the type scale the HUD still obeys, and the two names
+as unbought. If you wire either one, delete this paragraph.
 
 **Display — Jacquard 24** (Google Fonts, OFL). A bitmap-grid pixel blackletter.
 Integer sizes only: 24 / 48 / 72. No smoothing, no subpixel positioning. Used

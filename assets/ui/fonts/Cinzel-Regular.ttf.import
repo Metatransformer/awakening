@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://ckxch3jvnly6y"
-path="res://.godot/imported/Alegreya-VF.ttf-49835f9d60d24be7b499f48d699bd9b6.fontdata"
+uid="uid://dy1nrck8p1il7"
+path="res://.godot/imported/Cinzel-Regular.ttf-fff4da7c67bb8d4018a9b3ae54ce6759.fontdata"
 
 [deps]
 
-source_file="res://assets/ui/fonts/Alegreya-VF.ttf"
-dest_files=["res://.godot/imported/Alegreya-VF.ttf-49835f9d60d24be7b499f48d699bd9b6.fontdata"]
+source_file="res://assets/ui/fonts/Cinzel-Regular.ttf"
+dest_files=["res://.godot/imported/Cinzel-Regular.ttf-fff4da7c67bb8d4018a9b3ae54ce6759.fontdata"]
 
 [params]
 

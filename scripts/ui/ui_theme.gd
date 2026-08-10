@@ -122,28 +122,32 @@ static func apply_text_style(lbl: Label, style: Dictionary, color_override = nul
 
 
 # ---- fonts -------------------------------------------------------------------
-## Three OFL/CC0 faces, all vendored under assets/ui/fonts/.
+## TWO OFL faces, vendored under assets/ui/fonts/, and that is the whole list.
+##
+##  * Alegreya Sans — everything you READ: body copy, dialogue, buttons, labels.
+##  * Cinzel — everything that TITLES: headers, kickers, key numbers.
 ##
 ## This replaces a `SystemFont` chain that started at "Trebuchet MS" — the game
 ## rendered its menus in whatever the player's machine happened to have, which is
 ## not a design decision, it is the absence of one.
 ##
-## Departure Mono and Jacquard 24 (docs/STYLEGUIDE.md §3) were never actually
-## wired to the menus; the styleguide has been amended rather than the code
-## bent to match it.
+## Retired, deliberately, and NOT to be re-added without a reason written here:
+## Alegreya (the variable serif) — Cinzel is the display voice now, and two
+## serifs in one screen is drift, not hierarchy — and Pixel Operator Bold, whose
+## `keycap_font()` had no callers at all; the HUD's hard-edged voice is
+## `PixelFont` (scripts/ui/pixel_font.gd), which is drawn rects, not a face.
+## Departure Mono and Jacquard 24 (docs/STYLEGUIDE.md §3) were never wired.
 const BODY_TTF := "res://assets/ui/fonts/AlegreyaSans-Regular.ttf"
-const DISPLAY_TTF := "res://assets/ui/fonts/Alegreya-VF.ttf"
-const KEYCAP_TTF := "res://assets/ui/fonts/PixelOperator-Bold.ttf"
+const DISPLAY_TTF := "res://assets/ui/fonts/Cinzel-SemiBold.ttf"
 
 static var _theme: Theme = null
 static var _font: Font = null
 static var _display: Font = null
-static var _keycap: Font = null
 static var _global_done := false
 
 
-## Load a .ttf SMOOTH (antialiased) — for the two Alegreya faces, whose curves
-## alias into mush under the pixel loader.
+## Load a .ttf SMOOTH (antialiased) — both faces here are curved types, which
+## alias into mush if rasterised on the pixel grid.
 ##
 ## Only WRITE a property that actually differs. Assigning `antialiasing` on a
 ## FontFile invalidates its glyph cache and TextServer re-rasterises everything
@@ -168,32 +172,6 @@ static func _smooth_font(path: String, fallback: PackedStringArray) -> Font:
 	return sys
 
 
-## Load a .ttf as a hard-edged PIXEL face: no AA, no subpixel jitter, no hinting
-## deforming the grid. Keycaps and counters, so a keycap reads as a keycap.
-static func _pixel_font(path: String, fallback: PackedStringArray) -> Font:
-	var ff := load(path) as FontFile
-	if ff:
-		if ff.antialiasing != TextServer.FONT_ANTIALIASING_NONE:
-			ff.antialiasing = TextServer.FONT_ANTIALIASING_NONE
-		if ff.subpixel_positioning != TextServer.SUBPIXEL_POSITIONING_DISABLED:
-			ff.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
-		if ff.hinting != TextServer.HINTING_NONE:
-			ff.hinting = TextServer.HINTING_NONE
-		if ff.force_autohinter:
-			ff.force_autohinter = false
-		if ff.multichannel_signed_distance_field:
-			ff.multichannel_signed_distance_field = false
-		if not ff.allow_system_fallback:
-			ff.allow_system_fallback = true
-		return ff
-	push_error("[UITheme] FONT LOAD FAILED for %s — falling back to system %s. Fix the asset/import." % [path, fallback])
-	var sys := SystemFont.new()
-	sys.font_names = fallback
-	sys.antialiasing = TextServer.FONT_ANTIALIASING_NONE
-	sys.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
-	return sys
-
-
 ## Alegreya Sans — the humanist sans every Control uses by default.
 static func body_font() -> Font:
 	if _font == null:
@@ -201,18 +179,14 @@ static func body_font() -> Font:
 	return _font
 
 
-## Alegreya — the variable serif for headers, titles, and the one primary row.
+## Cinzel SemiBold — the inscriptional display face for headers, titles, and the
+## one primary row. It is a CAPITALS face: its lowercase is a small-cap, so a
+## header reads as carved either way, but do not reach for it below ~14px, where
+## the flared serifs close up.
 static func display_font() -> Font:
 	if _display == null:
-		_display = _smooth_font(DISPLAY_TTF, PackedStringArray(["Palatino", "Georgia", "serif"]))
+		_display = _smooth_font(DISPLAY_TTF, PackedStringArray(["Trajan Pro", "Palatino", "serif"]))
 	return _display
-
-
-## Pixel Operator Bold — keycaps and hard-edged counters.
-static func keycap_font() -> Font:
-	if _keycap == null:
-		_keycap = _pixel_font(KEYCAP_TTF, PackedStringArray(["Consolas", "Menlo", "monospace"]))
-	return _keycap
 
 
 ## Make the body face the default for EVERY Control without touching each one.

@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://cp0jfxp2qch48"
-path="res://.godot/imported/PixelOperator-Bold.ttf-ca3849119e3ac992fc0da5d59a095b5d.fontdata"
+uid="uid://dblb0ipker5o6"
+path="res://.godot/imported/Cinzel-SemiBold.ttf-ef894f5e3b5095eaee3f535e9056daa7.fontdata"
 
 [deps]
 
-source_file="res://assets/ui/fonts/PixelOperator-Bold.ttf"
-dest_files=["res://.godot/imported/PixelOperator-Bold.ttf-ca3849119e3ac992fc0da5d59a095b5d.fontdata"]
+source_file="res://assets/ui/fonts/Cinzel-SemiBold.ttf"
+dest_files=["res://.godot/imported/Cinzel-SemiBold.ttf-ef894f5e3b5095eaee3f535e9056daa7.fontdata"]
 
 [params]
 
