@@ -10,6 +10,12 @@ extends Area3D
 ## refuse from -- a mote you cannot pick up stays on the floor and pulses, which
 ## is a far better "you are full" than a toast.
 
+## Picked up. Carries the id so one handler can serve several motes and still
+## know which one went -- the same shape `PuzzleAtom.solved` uses, and for the
+## same reason. `SoundingStone` is the reader: three motes over one plinth, and
+## taking one has to retire the other two.
+signal taken(item_id: StringName)
+
 ## Seconds before the mote will answer a pickup. Long enough that the kill's own
 ## knockback does not sweep the hero through it before he has seen it land.
 const ARM_TIME := 0.35
@@ -157,6 +163,12 @@ func _process(delta: float) -> void:
 func heat() -> float:
 	if heat_mult <= 1.0:
 		return 1.0
+	# The Slow Fade (`EchoDb.SLOW_FADE`): motes never cool, so a stamped
+	# multiplier holds until you sweep it and a chain can be spent on fighting
+	# instead of on tidying (`docs/PUZZLES.md` §6.1, row 3). The mote still has to
+	# be picked up -- the Echo bends the CLOCK, not the walk.
+	if Run.has_echo(EchoDb.SLOW_FADE):
+		return heat_mult
 	var t: float = clampf(_age / K.HEAT_COOL_TIME, 0.0, 1.0)
 	return lerpf(heat_mult, 1.0, t)
 
@@ -185,6 +197,7 @@ func _magnetise(delta: float) -> void:
 func _try_take() -> void:
 	if Run.collect(item_id, 1, heat()) > 0:
 		_taken = true
+		taken.emit(item_id)
 		_pop()
 	else:
 		_refused = 0.9

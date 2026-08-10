@@ -143,6 +143,14 @@ static func _build() -> void:
 	for row in RelicDb.RELICS:
 		_add(_relic(row))
 
+	# --- The twelve Echoes ---------------------------------------------------
+	# Built from `EchoDb.ECHOES`, never typed out again, for exactly the reason
+	# the relics are: `Run.collect` refuses an id this catalogue has never heard
+	# of, so WITHOUT a row here an Echo cannot be picked up at all -- and a second
+	# hand-written list here is a thirteenth Echo waiting to happen.
+	for id in EchoDb.all():
+		_add(_echo(id))
+
 
 ## What the ROPE charges to haul one relic up, and it is NOT a sale price.
 ##
@@ -180,6 +188,30 @@ static func _relic(row: Dictionary) -> ItemDef:
 		ItemDef.Rarity.RARE, 1, Pal.ARCANE,
 		"The Lanternkeeper records it. No coin buys it. %s" % row["detail"])
 	d.rarity = LEGENDARY as ItemDef.Rarity
+	return d
+
+
+## One Echo as a thing the bag can hold. Every column is the same for all twelve,
+## and every one of them is `docs/PUZZLES.md` §6 said as a number:
+##
+##   `value: 0`  — *it is worth 0 gold. It cannot be sold, so it does not raise
+##                 the extraction fee.* `base_value()` adds nothing for it, so
+##                 `extract_cost()` is untouched with no fee code knowing Echoes
+##                 exist. `Run.line_value` therefore draws 0 and `sell()` pays 0.
+##   `stack: 1`  — *an Echo costs a bag slot, and that is the only thing it
+##                 costs.* One slot, always, exactly like a relic.
+##
+## CYAN, and it is the one deliberate exception to `docs/STYLEGUIDE.md` §2's
+## reservation of that hue for the way out -- because an Echo IS the way out
+## working better. Every one of the twelve bends how fast you go or how far you
+## get back, and a pale blue mote on a pedestal is not going to be mistaken for
+## an extraction node standing three rooms away. If it ever is, the fix is the
+## pedestal's own light, not a second saturated colour on the board.
+static func _echo(id: StringName) -> ItemDef:
+	var d := ItemDef.make(id, EchoDb.name_of(id), 0,
+		ItemDef.Rarity.RARE, 1, Pal.CYAN,
+		"%s No coin buys it and it does not last the night."
+			% EchoDb.line_of(id))
 	return d
 
 

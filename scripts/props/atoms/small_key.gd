@@ -60,7 +60,13 @@ func _on_body_entered(body: Node3D) -> void:
 	# against a doubled physics callback (`PuzzleAtom.solve` is idempotent). The
 	# grant must therefore sit INSIDE the guard, or a player standing in the
 	# trigger for two frames walks away with two keys.
-	if is_solved():
+	# `armed` as well as `is_solved`, and the grant is what makes it matter.
+	# `PuzzleAtom.solve()` already refuses while disarmed, so an unarmed key was
+	# still handing out `Game.add_key(1)` on every pass and simply not counting
+	# itself solved -- a free key with no puzzle behind it. `Dungeon`'s gate room
+	# builds exactly that: the key is dark and disarmed until the sun socket
+	# lights, and an invisible node's Area3D still collides.
+	if is_solved() or not armed:
 		return
 	Game.add_key(1)
 	Bus.request_sfx.emit(&"pickup", global_position)

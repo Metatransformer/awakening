@@ -214,6 +214,35 @@ static var ANCHORS_STANDARD := {
 		"room": &"mid_ring", "at": &"wall", "side": &"blank",
 		"offset": Vector2(0.0, 0.0),
 	},
+	## `docs/PUZZLES.md` §5.2, the critical-path puzzle. **On the path to
+	## `deepest`, around 0.7 of the way** -- far enough in that the walk home is
+	## worth shortening, near enough out that a player who solves it has most of
+	## the floor still ahead. A `&"floor"` anchor rather than a wall one because
+	## what is anchored is the ROOM: the atoms stand in it and the gate goes on
+	## the doorway that leads deeper, which is a corridor side the layout already
+	## chose (`Dungeon._place_gate_room`).
+	##
+	## It is also the anchor the chord edge (§4) hangs off: the cycle's far end
+	## has to be past this gate or the loop would be a shortcut you could walk
+	## before solving anything.
+	&"gate_room": {
+		"room": &"gate_path", "at": &"floor", "side": &"",
+		"offset": Vector2(0.0, 0.0),
+	},
+	## §5.3, the treasure puzzle. **Off the mid-ring**, on a blank wall, and it
+	## shares that room with the vault door: two doors on two walls of one room
+	## is the design, not a collision. The vault is opened by floor N+1's item
+	## and the puzzle by a verb you already own, so the same room offers "come
+	## back for this" and "earn this now" side by side, which is the most
+	## interesting thing a middle room can say.
+	##
+	## Resolved AFTER `vault_door` (`Dungeon.ANCHOR_ORDER`), because the vault
+	## wants two clear cells behind it and this wants one -- the greedier
+	## structure has to pick its wall first or it is the one that fails to place.
+	&"puzzle_room": {
+		"room": &"mid_ring", "at": &"wall", "side": &"blank",
+		"offset": Vector2(0.0, 0.0),
+	},
 }
 
 ## The Long Descent authors nothing. An empty anchor set means "generate as the

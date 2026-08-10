@@ -82,6 +82,10 @@ func _ready() -> void:
 	# which has one too: Heat's is a CHAIN and it decays -- that is its whole job --
 	# so it answers "how fast are you killing", never "how many did you kill".
 	Bus.enemy_died.connect(_on_enemy_died)
+	# The Quiet Room's site. It lives here and not on the Dungeon because the
+	# Echo is a property of the RUN, and a floor generator that knew which boons
+	# the player was carrying would be the first of a dozen such places.
+	Bus.room_entered.connect(_on_room_entered)
 
 
 func reset() -> void:
@@ -185,6 +189,11 @@ func extract() -> bool:
 	# pearl home. `bank_relics` is the moment a relic stops being a thing you can
 	# lose (docs/GDD.md §3).
 	var recovered := bank_relics()
+	# And the Echoes go quiet, after the toll like everything else -- though the
+	# toll never noticed them, because an Echo is worth 0 gold. The order still
+	# matters for the RECEIPT: `carried` was snapshotted above, so the run's tones
+	# are listed on it, which is the only place they are ever written down.
+	bank_echoes()
 	# Folded into `banked` so the receipt draws a relic as "TO THE BENCH" instead
 	# of a gold figure. Those are the wrong three words for the Society's hall and
 	# the right SENTENCE -- that column means "this line is not money", and a relic
@@ -365,8 +374,14 @@ func _end_summary(extracted: bool, contents: Dictionary, value: int,
 ## untouched until the Rope-Drum is recorded and 0.20 after, so there is no `if`
 ## here and never should be. A caller that wrote `if RelicDb.donated(...)` would
 ## be the unlock implemented twice, and the next tuning pass would move one copy.
+## The Cold Ledger (`EchoDb.COLD_LEDGER`) is the one term here that is not a
+## relic: it charges on `base_value()` instead of `bag_value()`, so Heat's stamp
+## rides home untaxed. It is the only Echo that cuts GDD §2's central coupling
+## and it is MEANT to be strong -- it dies with the run and it cost a slot, which
+## is the whole reason found power is allowed to exist (`docs/PUZZLES.md` §6.2).
 func extract_cost() -> int:
-	return maxi(EXTRACT_MIN, int(round(bag_value() * RelicDb.extract_rate(EXTRACT_RATE))))
+	var taxed := base_value() if has_echo(EchoDb.COLD_LEDGER) else bag_value()
+	return maxi(EXTRACT_MIN, int(round(taxed * RelicDb.extract_rate(EXTRACT_RATE))))
 
 
 ## What actually leaves the purse: the toll, or everything you have, whichever is
@@ -404,6 +419,92 @@ func can_extract() -> bool:
 	return in_dungeon
 
 
+# --- Echoes -------------------------------------------------------------------
+## `docs/PUZZLES.md` §6. An Echo is an ordinary bag line with `value: 0` (see
+## `ItemDb._echo`), so everything about carrying one -- the slot, the refusal on
+## a full bag, the death -- is arithmetic that already existed. What lives here
+## is the two things that are not: **asking whether one is held**, and **the
+## moment it goes quiet**.
+
+## True while this Echo is in the bag. The one membership test; twelve sites read
+## it and none of them touches `bag` directly.
+func has_echo(id: StringName) -> bool:
+	return bag.get(id, 0) > 0
+
+
+## The Echo's tuning number if it is held, `fallback` if it is not.
+##
+## **This is how a bent rule reads at its site.** `Heat` asks
+## `Run.echo(EchoDb.HELD_NOTE, 0.0)` and multiplies; nothing anywhere writes
+## `if Run.has_echo(...) : window = 4.0`, because a number inlined at the site is
+## a number `EchoDb`'s table no longer owns and §6.2's last paragraph is about
+## exactly that. `has_echo` is for the on/off rules, which have no number at all.
+func echo(id: StringName, fallback: float = 0.0) -> float:
+	return EchoDb.value_of(id) if has_echo(id) else fallback
+
+
+## Every Echo in the bag right now. The pedestal reads it so it never offers a
+## stone the player is already carrying.
+func echoes_held() -> Dictionary:
+	var out: Dictionary = {}
+	for id: StringName in bag:
+		if EchoDb.is_echo(id):
+			out[id] = int(bag[id])
+	return out
+
+
+## The Echoes go quiet. Returns what left, so the receipt can say so.
+##
+## The mirror of `bank_relics`, and the exact opposite outcome: a relic leaves
+## the bag to become permanent, an Echo leaves it to become nothing. *"It does
+## not survive the run. Home, garrison or death — it goes quiet"*
+## (`docs/PUZZLES.md` §6), and GDD pillar 4 is why -- permanence is bought, never
+## found, so a boon that outlived the walk home would be a found permanent.
+##
+## No premium arithmetic, exactly as `bank_relics` has none: an Echo is worth 0
+## gold, so it never earned a share of the heat pot and `_premium_share`'s
+## denominator does not move when it leaves.
+##
+## `die()` needs no equivalent -- the whole bag goes there anyway.
+func bank_echoes() -> Dictionary:
+	var moved: Dictionary[StringName, int] = {}
+	for id: StringName in bag.keys():
+		if not EchoDb.is_echo(id):
+			continue
+		moved[id] = int(bag[id])
+		bag.erase(id)
+	if not moved.is_empty():
+		Bus.bag_changed.emit(bag, bag_value())
+	return moved
+
+
+## The Quiet Room (`EchoDb.QUIET_ROOM`): the first enemy in each room you enter
+## is held for a beat, so every room opens on your terms.
+##
+## The NEAREST body rather than a random one, because "the first enemy" is the
+## one that reached you -- holding something across the room that had not noticed
+## you yet would be an Echo the player never sees work.
+func _on_room_entered(_room_id: StringName) -> void:
+	var seconds := echo(EchoDb.QUIET_ROOM)
+	if seconds <= 0.0 or not in_dungeon:
+		return
+	var hero := get_tree().get_first_node_in_group(&"player") as Node3D
+	if hero == null:
+		return
+	var best: Node = null
+	var best_d := 1e9
+	for node in get_tree().get_nodes_in_group(&"enemy"):
+		var body := node as Node3D
+		if body == null or not body.has_method(&"freeze"):
+			continue
+		var d := hero.global_position.distance_squared_to(body.global_position)
+		if d < best_d:
+			best_d = d
+			best = body
+	if best != null:
+		best.call(&"freeze", seconds)
+
+
 # --- The bag ----------------------------------------------------------------
 
 ## Put `count` of `id` in the bag. Returns how many actually fit -- a full bag
@@ -420,10 +521,11 @@ func collect(id: StringName, count: int = 1, heat_mult: float = 1.0) -> int:
 		return 0
 
 	var taken := 0
+	var per := stack_of(id)
 	while taken < count:
 		var have: int = bag.get(id, 0)
 		# Room in an existing stack costs no slot.
-		if have > 0 and have % def.stack != 0:
+		if have > 0 and have % per != 0:
 			bag[id] = have + 1
 		elif slots_used() < Game.bag_slots:
 			bag[id] = have + 1
@@ -476,13 +578,39 @@ func consume(id: StringName, count: int = 1) -> int:
 
 ## Slots consumed. A stack of 20 bone shards with stack==20 is one slot; the
 ## twenty-first starts a second.
+## Slots the bag is using. **The two Echoes that are about the carrying itself
+## are both here**, because both of them change this arithmetic and nothing else.
+##
+##  * The Long Chord (`EchoDb.LONG_CHORD`) makes every OTHER Echo weightless. It
+##    still costs its own slot, which is what makes it worth nothing until you
+##    have already committed (`docs/PUZZLES.md` §6.2).
+##  * The Deep Pocket (`EchoDb.DEEP_POCKET`) is in `stack_of` below, so `collect`
+##    and this agree about how tall a stack is by construction. Two readers of
+##    one rule is how a bag ends up saying "full" while a stack still has room.
 func slots_used() -> int:
+	var chord := has_echo(EchoDb.LONG_CHORD)
 	var used := 0
 	for id: StringName in bag:
-		var def := ItemDb.get_def(id)
-		var per: int = def.stack if def != null else 1
-		used += int(ceil(float(bag[id]) / float(maxi(per, 1))))
+		if chord and EchoDb.is_echo(id) and id != EchoDb.LONG_CHORD:
+			continue
+		used += int(ceil(float(bag[id]) / float(stack_of(id))))
 	return used
+
+
+## How many of `id` fit in one slot, right now.
+##
+## The Deep Pocket doubles it for COMMON rows only: *it does not add a slot -- it
+## changes what is worth bending down for*, which is the more interesting half of
+## the bag (`docs/PUZZLES.md` §6.1, row 8). Public because `slots_used` and
+## `collect` are two readers of the same rule and must not each have an opinion.
+func stack_of(id: StringName) -> int:
+	var def := ItemDb.get_def(id)
+	var per: int = def.stack if def != null else 1
+	if def != null and def.rarity == ItemDef.Rarity.COMMON:
+		var mult := echo(EchoDb.DEEP_POCKET, 1.0)
+		if mult > 1.0:
+			per = int(round(float(per) * mult))
+	return maxi(per, 1)
 
 
 func is_full() -> bool:

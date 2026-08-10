@@ -16,9 +16,12 @@ extends PuzzleAtom
 ## doorway without a word of text.
 ##
 ## A placer that wants the block as *pure weight* for a plate -- no mark, no
-## solve of its own -- sets `armed = false` (`PuzzleAtom`). A gate must then not
-## watch it: the plate is the gating atom in that nest, and the block is furniture
-## the player moves onto it.
+## solve of its own -- sets `mark_offset = Vector3.ZERO`, which is the only thing
+## `_settled` reads. **Not `armed = false`**: that is `PuzzleAtom`'s "cannot be
+## solved yet" and this file also guards its MOVEMENT with it, so a disarmed block
+## is not weight, it is a wall. A gate must then not watch it either: the plate is
+## the gating atom in that nest, and the block is furniture the player moves onto
+## it.
 ##
 ## ## The shove
 ##

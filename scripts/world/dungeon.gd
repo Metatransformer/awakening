@@ -61,6 +61,13 @@ const ROOM_SCENE_PILLAR := preload("res://scenes/kit/pillar.tscn")
 const VAULT_SCRIPT := "res://scripts/world/vault.gd"
 const ARENA_SCRIPT := "res://scripts/world/boss_arena.gd"
 const BOSS_DOOR_SCRIPT := "res://scripts/world/boss_door.gd"
+## Both added in the same change as this file's use of them, so both are loaded
+## by PATH and never named: a `class_name` is not in the global class cache until
+## the project is re-imported, and naming one here is a parse error that takes the
+## whole floor down before its first frame (`CLAUDE.md` §3, and
+## `boss_arena.gd`'s own note on `BOSS_SCRIPT`).
+const STONE_SCRIPT := "res://scripts/world/sounding_stone.gd"
+const BARS_SCRIPT := "res://scripts/props/barred_passage.gd"
 
 ## Grid steps, as (x, z) cells.
 const DIRS := {
@@ -74,8 +81,14 @@ const DIRS := {
 ## alphabetical: the boss door claims the deepest room's far wall first, so the
 ## chest beside it can be measured off a side that is already decided, and the
 ## vault -- which needs the most clear ground behind it -- picks before nothing.
+## and the two puzzle anchors come last: `gate_room` needs no wall at all (it
+## claims a ROOM, and its gate goes on a doorway the layout already chose), and
+## `puzzle_room` shares the middle room with the vault, so the vault -- which
+## wants two clear cells against its one -- has to pick first or it is the one
+## left without a wall.
 const ANCHOR_ORDER: Array[StringName] = [
 	&"boss_door", &"deep_chest", &"shortcut_door", &"vault_door",
+	&"gate_room", &"puzzle_room",
 ]
 
 @export_group("Layout")
@@ -116,6 +129,30 @@ const ANCHOR_ORDER: Array[StringName] = [
 const LAND_STUB := 4.0
 const LAND_SIZE := 9.0
 
+# --- The treasure chamber -----------------------------------------------------
+## Behind the `puzzle_room` door: a stub, then a chamber with the floor's
+## miniboss, a rich chest and a sounding stone in it (`docs/PUZZLES.md` §5.3).
+##
+## Wide enough to hold the arena the miniboss table authored, measured the way
+## `_room_size_for` measures the boss's: `BossDb`'s radius, doubled, plus a
+## skirt of stone. The skirt is TEN metres and not the boss chamber's four,
+## because this room has to hold something the boss chamber does not -- the
+## chest and the sounding stone stand OUTSIDE the seal ring, which is the whole
+## reason they are unreachable until the miniboss is down. A four-metre skirt
+## would leave a two-metre band behind a 7.5 m ring, and a 2.9 m sounding stone
+## does not stand in two metres.
+##
+## The chamber is built to the miniboss it actually gets, never to a constant
+## that would be wrong the first time a floor authored a bigger one.
+const CHAMBER_STUB := 4.0
+const CHAMBER_MIN := 13.0
+const CHAMBER_SKIRT := 10.0
+
+## How far apart in tree distance the two ends of the chord edge have to be
+## (`docs/PUZZLES.md` §4: *"pick two rooms whose `dist` differs by >= 3"*). Below
+## three the shortcut saves nothing and the loop is a doorway between neighbours.
+const CHORD_SPAN := 3
+
 ## cell -> {"doors": Array[StringName], "index": int, "dist": int,
 ##          "parent": Vector2i, "size": float, "anchors": Dictionary, "node": Node3D}
 var rooms: Dictionary = {}
@@ -126,6 +163,11 @@ var deepest: Vector2i = Vector2i.ZERO
 ## anchor id -> {"cell": Vector2i, "side": StringName, "offset": Vector2,
 ##               "node": Node}. Empty on an unauthored floor.
 var placements: Dictionary = {}
+## The one extra edge that turns the tree into a graph (`docs/PUZZLES.md` §4):
+## `{"near": Vector2i, "far": Vector2i, "dir": StringName, "node": Node}`, where
+## `dir` runs near -> far and `near` is the shallow end the bars are on. Empty on
+## a floor with no gate room, because the cycle IS the gate room's reward.
+var chord: Dictionary = {}
 
 var _rng: RandomNumberGenerator
 var _seed_salt: int = 0
@@ -157,12 +199,20 @@ func _ready() -> void:
 	enemies_max = pack.y
 
 	_plan()
+	# The chord between the tree and the anchors, and it has to be exactly there.
+	# AFTER `_plan`, because it needs every room's `dist`; BEFORE `_plan_anchors`,
+	# because the edge it adds punches two more doorways and `_pick_side` chooses
+	# blank walls -- an anchor picked first would be a locked door with a corridor
+	# driven through it. `deepest` and `path_to` are untouched by it: both read
+	# `parent`, and the chord adds no parent.
+	_plan_chord()
 	# Anchors before the map, so that a future `_publish` that wants to mark the
 	# vault or the boss door has them to mark. `_publish`'s own contract is only
 	# that it runs after `_plan` and before `_build`, and it still does.
 	_plan_anchors()
 	_publish()
 	_build()
+	_build_chord()
 	_build_anchors()
 	_populate()
 
@@ -222,6 +272,90 @@ func _plan() -> void:
 	# neighbours, because a 26 m grid puts the next room's near face 18 m out and
 	# the widest chamber in the game reaches 15.
 	rooms[deepest]["size"] = _room_size_for(deepest)
+
+
+## The chord edge -- **`docs/PUZZLES.md` §4, and the reason cycles belong in this
+## game rather than in a general Zelda-like.**
+##
+## > *`dungeon.gd` builds a tree: every room has one `parent`, so every route is
+## > out-and-back and nothing can ever surprise you spatially. The fix is one
+## > extra edge. Pick two rooms whose `dist` differs by >= 3, connect them, and
+## > block the connection from the near side only.*
+##
+## Three filters, and each one is a sentence of §4 or §5.2:
+##
+## - **Grid-adjacent, no tree edge.** A chord between rooms that are not
+##   neighbours would need a corridor through a third room's masonry.
+## - **`dist` differing by at least `CHORD_SPAN`.** A loop that saves two rooms
+##   of walking is a door, not a shortcut.
+## - **The far end at or past the gate room.** §5.2 says the cycle is the gate
+##   room's REWARD, so the side you open it from has to be somewhere you only
+##   reach by solving it. A chord whose far end sat before the gate would be a
+##   loop the player walks for free on the way down.
+##
+## Ranked on the SHALLOW end, smallest first: *"the loop you open by solving the
+## gate room comes out near the entrance, so beating the puzzle physically
+## shortens the extraction walk."* That sentence is this sort key.
+func _plan_chord() -> void:
+	chord = {}
+	# No gate room on this floor means no reward to attach the cycle to. An
+	# unbarred second route through a floor is a generator being generous, which
+	# is not what §4 asked for.
+	if not FloorDb.anchors(Run.level).has(&"gate_room") \
+			or not _anchor_keyed(&"gate_room"):
+		return
+	var gate = _room_for(&"gate_path")
+	if gate == null or not rooms.has(gate):
+		return
+	var gate_dist := int(rooms[gate]["dist"])
+
+	var best_near := Vector2i.ZERO
+	var best_far := Vector2i.ZERO
+	var best_dir: StringName = &""
+	# (shallow end's dist, -span, near room's plan index). The third term is what
+	# makes a tie deterministic rather than dependent on Dictionary order.
+	var best_key := Vector3(1e9, 1e9, 1e9)
+
+	for cell: Vector2i in rooms:
+		for d: StringName in DIRS:
+			var other: Vector2i = cell + DIRS[d]
+			if not rooms.has(other) or rooms[cell]["doors"].has(d):
+				continue
+			var a := int(rooms[cell]["dist"])
+			var b := int(rooms[other]["dist"])
+			if absi(a - b) < CHORD_SPAN:
+				continue
+			# Every unordered pair is met twice, once from each end. Normalising
+			# to (shallow, deep) here rather than skipping one direction is what
+			# lets the loop not care which end it arrived from.
+			var near := cell if a < b else other
+			var far := other if a < b else cell
+			if int(rooms[far]["dist"]) < gate_dist:
+				continue
+			var key := Vector3(float(mini(a, b)), -absf(float(a - b)),
+				float(rooms[near]["index"]))
+			if key.x < best_key.x \
+					or (is_equal_approx(key.x, best_key.x) and key.y < best_key.y) \
+					or (is_equal_approx(key.x, best_key.x)
+						and is_equal_approx(key.y, best_key.y)
+						and key.z < best_key.z):
+				best_key = key
+				best_near = near
+				best_far = far
+				best_dir = d if near == cell else _opposite(d)
+
+	if best_dir == &"":
+		# A short or straight floor can simply have no pair that qualifies. Not a
+		# warning: `room_count` is the manifest's, and a five-room line has no two
+		# neighbours three apart. The floor is then a tree, exactly as it was
+		# before this function existed.
+		return
+	# Doors on BOTH sides, so `_build` punches two holes and lays one corridor --
+	# the corridor rule is "whichever end is north or west builds it", and it does
+	# not care that this edge is not in the tree.
+	rooms[best_near]["doors"].append(best_dir)
+	rooms[best_far]["doors"].append(_opposite(best_dir))
+	chord = {"near": best_near, "far": best_far, "dir": best_dir, "node": null}
 
 
 static func _opposite(d: StringName) -> StringName:
@@ -299,7 +433,7 @@ func path_to(cell: Vector2i) -> Array[Vector2i]:
 
 # --- Anchors -----------------------------------------------------------------
 
-## Turn the manifest's four RULES into four cells and four wall sides.
+## Turn the manifest's RULES into cells and wall sides.
 ##
 ## Nothing here decides what an anchor IS -- that is `_build_anchors` -- and
 ## nothing here invents a floor's contents. An anchor with no key (`vault_key`
@@ -347,32 +481,91 @@ func _anchor_keyed(id: StringName) -> bool:
 		&"boss_door": return FloorDb.boss(Run.level) != &""
 		&"shortcut_door": return FloorDb.shortcut_key(Run.level) != &""
 		&"vault_door": return FloorDb.vault_key(Run.level) != &""
+		# A treasure puzzle with nothing behind it is a door onto a chest, and
+		# `docs/PUZZLES.md` §5.3 is emphatic that what is back there is the
+		# floor's MINIBOSS. A floor without one does not get the anchor; that is
+		# the same shape `vault_key` uses to say floor 4 has no vault.
+		&"puzzle_room": return BossDb.miniboss_for(Run.level) != &""
+		# The gate room needs a verb it is allowed to ask for. §5.2 caps it at
+		# tier N-1, and floor 1's N-1 is T0 -- which `PuzzleAtoms.pool` always
+		# answers with something, so this only ever refuses on a manifest whose
+		# atom kit has been emptied. It is checked anyway: a gate room that
+		# generated with no atoms would be a locked door with no key in the
+		# world, on the critical path.
+		&"gate_room": return not PuzzleAtoms.pool(_gate_tier()).is_empty()
 	return true
 
 
-## `&"entrance"`, `&"deepest"`, `&"mid_ring"` -- the three rooms the manifest is
-## allowed to name. Returns `null` when the floor is too short to have one, which
-## the caller reads as "skip this anchor".
+## The verb ceiling for this floor's gate room: **tier N-1** (`docs/PUZZLES.md`
+## §5.2), never anything the player does not own. `PuzzleAtoms.pool` takes the
+## minimum of this and `Game.has()`, so §0 rule 1 stays one comparison in one
+## place; this half is only the SHAPE's ceiling.
+func _gate_tier() -> int:
+	return maxi(Run.level - 1, PuzzleAtoms.T0)
+
+
+## And the treasure puzzle's: **tier N** (§5.3). It is allowed to be richer than
+## the critical path because it is optional -- a player without the verb simply
+## meets a T0 puzzle instead, because `pool` clamps to what they own.
+func _treasure_tier() -> int:
+	return maxi(Run.level, PuzzleAtoms.T0)
+
+
+## `&"entrance"`, `&"deepest"`, `&"mid_ring"`, `&"gate_path"` -- the four rooms
+## the manifest is allowed to name. Returns `null` when the floor is too short to
+## have one, which the caller reads as "skip this anchor".
 func _room_for(kind: StringName):
 	match kind:
 		&"entrance":
 			return entrance
 		&"deepest":
 			return deepest
+		&"gate_path":
+			# `docs/PUZZLES.md` §5.2: on the PATH to `deepest`, around 0.7 of the
+			# way. Taken off `path_to` and not off `dist`, and the difference is
+			# the whole anchor -- a room merely 0.7 of the deepest DISTANCE can
+			# be on a spur the player never walks, and a critical-path puzzle you
+			# can stroll past is not a critical-path puzzle.
+			var route := path_to(deepest)
+			# Neither end of the route: the entrance carries the shortcut and the
+			# deepest room is the arena. A floor whose path is two rooms long has
+			# no middle and therefore no gate room -- the same "not placed" the
+			# mid-ring answers on a short floor, and for the same reason.
+			if route.size() < 3:
+				return null
+			var at := int(round(0.7 * float(route.size() - 1)))
+			return route[clampi(at, 1, route.size() - 2)]
 		&"mid_ring":
 			# The cell whose distance is nearest half the deepest's, and which is
 			# neither of the other two. Ties break on the plan index so the same
 			# seed picks the same room every time.
+			#
+			# A room that already has an anchor in it is pushed to the back of the
+			# queue rather than excluded. Floor 1 asks for TWO mid-ring anchors --
+			# the vault (GDD §5.3) and the treasure puzzle (`docs/PUZZLES.md`
+			# §5.3) -- and stacking both on the same room spent its last blank
+			# wall on the first one and dropped the second with a warning. The
+			# floor has more than one room at mid depth; this is the line that
+			# uses them. It is a penalty and not a filter because a THIRD mid-ring
+			# anchor on a short floor should still land somewhere.
 			var want := float(rooms[deepest]["dist"]) * 0.5
+			var used := {}
+			for pid: StringName in placements:
+				used[placements[pid]["cell"]] = true
 			var best = null
-			var best_key := Vector2(1e9, 1e9)
+			var best_key := Vector3(1e9, 1e9, 1e9)
 			for cell: Vector2i in rooms:
 				if cell == entrance or cell == deepest:
 					continue
-				var key := Vector2(absf(float(rooms[cell]["dist"]) - want),
+				var key := Vector3(1.0 if used.has(cell) else 0.0,
+					absf(float(rooms[cell]["dist"]) - want),
 					float(rooms[cell]["index"]))
-				if key.x < best_key.x or (is_equal_approx(key.x, best_key.x)
-						and key.y < best_key.y):
+				if key.x < best_key.x \
+						or (is_equal_approx(key.x, best_key.x)
+							and key.y < best_key.y) \
+						or (is_equal_approx(key.x, best_key.x)
+							and is_equal_approx(key.y, best_key.y)
+							and key.z < best_key.z):
 					best_key = key
 					best = cell
 			return best
@@ -389,8 +582,24 @@ func _reach_for(id: StringName, cell: Vector2i) -> int:
 	var depth := LAND_STUB + LAND_SIZE
 	if id == &"vault_door":
 		depth = _vault_depth()
+	elif id == &"puzzle_room":
+		depth = CHAMBER_STUB + _chamber_size()
 	var far_edge := size_of(cell) * 0.5 + depth
 	return maxi(1, int(floor((far_edge + room_size * 0.5) / spacing)))
+
+
+## How wide the treasure chamber is, off the miniboss the floor actually has.
+## The same shape as `_room_size_for` and for the same reason: the number that
+## decides how much stone to lay is the number the fight was authored with, asked
+## once, so a bigger miniboss cannot come with a chamber that does not fit it.
+func _chamber_size() -> float:
+	var id := BossDb.miniboss_for(Run.level)
+	if id == &"":
+		return CHAMBER_MIN
+	var row := BossDb.get_boss(id)
+	var arena: Dictionary = row.get("arena", {})
+	return maxf(CHAMBER_MIN,
+		float(arena.get("radius", 7.5)) * 2.0 + CHAMBER_SKIRT)
 
 
 ## `Vault`'s total depth, asked of the prefab rather than restated here. Read off
@@ -682,7 +891,7 @@ func _salt(cell: Vector2i, d: StringName, slot: int) -> int:
 		+ int(d.hash() % 997) * 31 + slot * 13) % 100000 + 1
 
 
-# --- The four anchors ---------------------------------------------------------
+# --- The six anchors -----------------------------------------------------------
 
 func _build_anchors() -> void:
 	for id: StringName in ANCHOR_ORDER:
@@ -693,6 +902,8 @@ func _build_anchors() -> void:
 			&"deep_chest": _place_deep_chest(id)
 			&"shortcut_door": _place_shortcut(id)
 			&"vault_door": _place_vault(id)
+			&"gate_room": _place_gate_room(id)
+			&"puzzle_room": _place_puzzle_room(id)
 
 
 ## Where an anchored WALL prop stands, in its room's local space. `offset` is
@@ -870,6 +1081,452 @@ func _place_vault(id: StringName) -> void:
 		door.opened.connect(func(_where: StringName) -> void: vault.call(&"reveal"))
 		if door.is_open():
 			vault.call(&"reveal")
+
+
+# --- The gate room ------------------------------------------------------------
+
+## `docs/PUZZLES.md` §5.2, and `docs/SCOPE.md` §3 calls it the demo: **the
+## Cistern's T0 gate room, a key hunt, with its cycle back to the entrance.**
+##
+## Three objects and one nest (§3, combinator 1 -- *one atom's reward is
+## another's input*):
+##
+## - a **sun socket** on the far wall, the one T0 atom that asks the player to
+##   aim, standing where its beam falls across the middle of the room;
+## - the **small key**, dark and unarmed until the socket lights, off to one side
+##   so finding it is a second beat and not a consolation prize;
+## - a **`PuzzleGate` with `needs_key`** in the doorway the floor continues
+##   through, so the door is on the critical path by construction rather than by
+##   a placement that happens to be in the way.
+##
+## The gate watches the KEY and not the socket. Both would be true and one is
+## redundant -- the key cannot be reached without the socket -- and a gate whose
+## refusal said "THE SOCKET IS DARK" while a key floated in plain sight would be
+## telling the player about the wrong half of their own puzzle.
+##
+## The sounding stone (§6) is dark until the door swings. The Echo is the reward
+## for the gate, not for the socket.
+func _place_gate_room(id: StringName) -> void:
+	var p: Dictionary = placements[id]
+	var cell: Vector2i = p["cell"]
+	var root: Node3D = rooms[cell]["node"]
+	var tag := StringName("gate_%d" % Run.level)
+
+	# The doorway that carries on toward the boss, and no other. A critical-path
+	# puzzle whose door is on a spur is a puzzle you walk around, which is the
+	# entire distinction §5.2 draws between this shape and the treasure one.
+	var onward := _step_toward(cell, deepest)
+	if onward == &"":
+		push_warning("dungeon: gate room %s has no way on to %s" % [cell, deepest])
+		return
+	var spot := _wall_spot({"cell": cell, "side": onward, "offset": Vector2.ZERO})
+	var facing: Vector3 = spot["facing"]
+	var along := along_of(float(spot["yaw"]))
+	var half := size_of(cell) * 0.5
+
+	var gate := PuzzleGate.new()
+	gate.name = "GateDoor"
+	gate.puzzle_id = tag
+	gate.needs_key = true
+	gate.mark_tier = PuzzleAtoms.T0
+	gate.destination = tag
+	gate.position = spot["pos"]
+	gate.rotation.y = float(spot["yaw"])
+	root.add_child(gate)
+	p["node"] = gate
+
+	# The socket stands against the wall OPPOSITE the door, looking back at it, so
+	# its beam runs the length of the room and the catch lands where the player
+	# already walks. `SunSocket` authors the grate and the catch off its own
+	# forward (`catch_offset`, `beam_from`), so aiming the prop is one rotation and
+	# the geometry cannot be positioned wrong -- see that file's class note.
+	# A tag of its own, and NOT the gate's: `PuzzleGate._adopt` collects every atom
+	# carrying its own `puzzle_id`, so a socket sharing the tag would be adopted
+	# and the door's refusal would name the wrong half of the nest. The tag is
+	# still not empty, because `PuzzleAtom.flag_id()` falls back to the node NAME
+	# and a per-run flag keyed on a name is one rename away from being a different
+	# flag.
+	var socket := PuzzleAtoms.make(PuzzleAtoms.SUN_SOCKET,
+		StringName("gate_%d_nest" % Run.level))
+	if socket == null:
+		return
+	socket.name = "GateSocket"
+	socket.position = facing * (half - 1.3)
+	# Forward is `-basis.z`, so a node whose `facing_of(yaw)` is `facing` looks
+	# back along `-facing` -- at the door (docs/CONTRACT.md §2.5).
+	socket.rotation.y = atan2(facing.x, facing.z)
+	root.add_child(socket)
+
+	var key := PuzzleAtoms.make(PuzzleAtoms.SMALL_KEY, tag)
+	if key == null:
+		return
+	key.name = "GateKey"
+	key.position = along * (half - 2.2) + facing * 1.0
+	key.set(&"armed", false)
+	root.add_child(key)
+	key.visible = false
+
+	# **A solved puzzle drops something you can carry out** (`docs/PUZZLES.md`
+	# §5.2's table). Without this the gate room pays an Echo, a shortcut and
+	# permission -- three things the player cannot weigh against the walk home,
+	# which is the one question GDD §2 asks. The floor's ordinary table, not the
+	# rich one: §5.3 is the branch that is supposed to pay better, and a critical
+	# -path chest that matched it would delete the reason to take the detour.
+	var prize := Chest.new()
+	prize.name = "GateChest"
+	prize.picks = Prog.chest_picks(Run.level, false)
+	prize.position = along * (half - 2.6) - facing * (half - 3.0)
+	prize.rotation.y = atan2(-prize.position.x, -prize.position.z)
+	# It ARRIVES on the solve, Ocarina's own beat -- the room chimes and a chest is
+	# suddenly standing where there was floor. Not "present but refuses to open":
+	# a shut chest with no stated reason is `LockedDoor`'s LOCKED, the exact
+	# failure GDD pillar 3 forbids, and there is no honest line to put on it
+	# because the thing it is waiting for is the puzzle the player is inside.
+	# `enabled` is `Interactable`'s own switch, so it cannot take focus either.
+	prize.visible = false
+	prize.enabled = false
+	root.add_child(prize)
+
+	var stone: Node3D = _make_stone(&"gate")
+	if stone != null:
+		stone.position = -along * (half - 2.4) - facing * (half - 4.2)
+		# Aimed at the middle of the room. `SoundingStone` spreads its three tones
+		# across the front half of its own -Z and puts the name plates with them, so
+		# an unaimed pedestal in a corner offers the player its back and makes them
+		# walk round it to read a choice. Forward points along `v` at
+		# `atan2(-v.x, -v.z)` (docs/CONTRACT.md §2.5), and `v` here is the way home.
+		stone.rotation.y = atan2(stone.position.x, stone.position.z)
+		root.add_child(stone)
+		gate.opened.connect(func(_where: StringName) -> void: stone.call(&"offer"))
+	gate.opened.connect(func(_where: StringName) -> void: _land_prize(prize))
+
+	# The socket may already be lit -- a floor re-entered inside one run restores
+	# its atoms from their flags and `restore_solved()` deliberately emits nothing
+	# (`PuzzleAtom._ready`). Without this line the key would stay dark for ever on
+	# the second visit, and the room would be a locked door with no key in it.
+	var atom := socket as PuzzleAtom
+	if atom.is_solved():
+		_wake_key(key)
+	else:
+		atom.solved.connect(func(_a: PuzzleAtom) -> void: _wake_key(key))
+
+
+## The gate room's chest lands. §5.2's third reward — see `_place_gate_room`.
+##
+## Dropped rather than faded in: the eye goes to motion, and a chest that eased
+## up from zero alpha in a corner is a chest the player walks past. It falls the
+## last metre and settles, which is the same read as `LootMote`'s pop.
+func _land_prize(prize: Node3D) -> void:
+	if prize == null or not is_instance_valid(prize) or prize.visible:
+		return
+	prize.visible = true
+	prize.set(&"enabled", true)
+	Bus.request_sfx.emit(&"glint_bell", prize.global_position)
+	var from := prize.position + Vector3(0.0, 1.1, 0.0)
+	var to := prize.position
+	prize.position = from
+	var tw := prize.create_tween()
+	tw.set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(prize, ^"position", to, 0.5)
+
+
+## The key rises. Separate from the connection above because the restored case
+## has to reach the same state with no tween and no noise, exactly as
+## `PuzzleAtom.restore_solved` splits from `on_solved`.
+func _wake_key(key: Node3D) -> void:
+	if key == null or not is_instance_valid(key):
+		return
+	key.visible = true
+	key.set(&"armed", true)
+	Bus.request_sfx.emit(&"glint_bell", key.global_position)
+
+
+## Which door out of `cell` leads on toward `target`, along the TREE. Empty when
+## `cell` is not on that path or is its end.
+##
+## Off `path_to` and not off the grid: two rooms can be neighbours on the grid
+## without a door between them (that is what the chord edge is), and a step that
+## trusted adjacency would put the gate in a wall.
+func _step_toward(cell: Vector2i, target: Vector2i) -> StringName:
+	var route := path_to(target)
+	var i := route.find(cell)
+	if i < 0 or i + 1 >= route.size():
+		return &""
+	var step := route[i + 1] - cell
+	for d: StringName in DIRS:
+		if DIRS[d] == step:
+			return d
+	return &""
+
+
+## One sounding stone, dark. `auto_offer` is off at every generated site: the
+## Echo is a REWARD (§6's table -- shortcut, gate room, treasure puzzle) and a
+## pedestal that offered on the frame the floor was built would be three free
+## Echoes standing in three rooms the player has not solved.
+func _make_stone(stone_id: StringName) -> Node3D:
+	var script := load(STONE_SCRIPT) as GDScript
+	if script == null:
+		push_error("dungeon: %s failed to load" % STONE_SCRIPT)
+		return null
+	var stone: Node3D = script.new()
+	stone.name = "SoundingStone_%s" % stone_id
+	stone.set(&"stone_id", stone_id)
+	stone.set(&"auto_offer", false)
+	return stone
+
+
+# --- The treasure puzzle ------------------------------------------------------
+
+## `docs/PUZZLES.md` §5.3: *optional, richer, harder* -- a puzzle on the mid-ring's
+## blank wall, and behind it the floor's **miniboss** (§7), a rich chest and an
+## Echo. Nothing here is on the critical path, so GDD §5.1's *"walking in, filling
+## twelve slots and roping out is a complete run"* survives untouched.
+##
+## The puzzle is §3's first combinator, the **nest**: a pressure plate across the
+## room from the door, and a push block to hold it down. It is the oldest pair in
+## the genre and it only works because `PressurePlate` does not latch -- stand on
+## it yourself and you cannot also be at the door.
+##
+## The block is deliberately **not** one of the gate's atoms. `mark_offset` zero
+## means it draws no chalk square and never solves; it is furniture with weight,
+## and `PushBlock`'s own class note is about exactly this case. A gate that
+## watched it would be a gate waiting for a solve that is not coming.
+func _place_puzzle_room(id: StringName) -> void:
+	var p: Dictionary = placements[id]
+	var cell: Vector2i = p["cell"]
+	var root: Node3D = rooms[cell]["node"]
+	var spot := _wall_spot(p)
+	var facing: Vector3 = spot["facing"]
+	var along := along_of(float(spot["yaw"]))
+	var half := size_of(cell) * 0.5
+	var tag := StringName("treasure_%d" % Run.level)
+
+	# §5.3 allows tier <= N and §0 rule 1 clamps that to what the player owns;
+	# `PuzzleAtoms.pool` is both of those in one call. The plate is preferred
+	# because it is the only atom in the kit with a partner built for it -- every
+	# other pick is a straight gate on one body, which is still a §3 shape and is
+	# what the richer floors will replace as their prefabs land.
+	var pool := PuzzleAtoms.pool(_treasure_tier())
+	if pool.is_empty():
+		return
+	var pick: StringName = PuzzleAtoms.PRESSURE_PLATE if \
+		pool.has(PuzzleAtoms.PRESSURE_PLATE) \
+		else pool[_rng.randi_range(0, pool.size() - 1)]
+
+	var gate := PuzzleGate.new()
+	gate.name = "TreasureGate"
+	gate.puzzle_id = tag
+	gate.mark_tier = PuzzleAtoms.tier(pick)
+	gate.destination = tag
+	gate.position = spot["pos"]
+	gate.rotation.y = float(spot["yaw"])
+	root.add_child(gate)
+	p["node"] = gate
+
+	# Across the room from the door, on purpose: "the plate you cannot stand on
+	# and reach the door from" is the whole nest, and a plate within arm's reach
+	# of the gate would make the block ornamental.
+	var atom := PuzzleAtoms.make(pick, tag)
+	if atom == null:
+		return
+	atom.name = "TreasureAtom"
+	atom.position = facing * (half - 3.5)
+	atom.rotation.y = atan2(facing.x, facing.z)
+	root.add_child(atom)
+
+	if pick == PuzzleAtoms.PRESSURE_PLATE:
+		var block := PuzzleAtoms.make(PuzzleAtoms.PUSH_BLOCK,
+			StringName("treasure_%d_weight" % Run.level))
+		if block != null:
+			block.name = "TreasureBlock"
+			# Three shoves away along the wall's own axis. `PushBlock.STEP` is the
+			# grid, so a whole number of steps lands it dead centre on the plate --
+			# a block placed off the grid can never seat, and the failure looks like
+			# a plate that does not register rather than like a placement bug.
+			# Read off the script's own constant map rather than restated here --
+			# the same trick `_vault_depth` uses, and for the same reason: a block
+			# whose stride grew and a placement rule that did not is a block that
+			# can never seat, and the symptom is a plate that looks broken.
+			var step: float = block.get_script().get_script_constant_map() \
+				.get("STEP", 1.2)
+			block.position = atom.position + along * (step * 3.0)
+			block.set(&"mark_offset", Vector3.ZERO)
+			root.add_child(block)
+
+	_place_chamber(cell, spot)
+
+
+## What is behind the treasure gate: a stub, a chamber, the miniboss in it, and
+## the chest and the Echo standing OUTSIDE its seal ring.
+##
+## Outside the ring is the whole reward structure and it is geometry, not a lock:
+## `BossArena` fences a circle of `BossDb`'s authored radius, and `CHAMBER_SKIRT`
+## is sized so the band between that fence and the back wall holds a chest and a
+## sounding stone. A player sealed in with the Sluice-Keeper can see both and
+## reach neither.
+func _place_chamber(cell: Vector2i, spot: Dictionary) -> void:
+	var boss_id := BossDb.miniboss_for(Run.level)
+	if boss_id == &"":
+		return
+	var script := load(ARENA_SCRIPT) as GDScript
+	if script == null:
+		push_error("dungeon: %s failed to load" % ARENA_SCRIPT)
+		return
+	var size := _chamber_size()
+	var root := _build_chamber(spot, cell, "TreasureChamber", size)
+	var mid := CHAMBER_STUB + size * 0.5
+	var back := CHAMBER_STUB + size
+
+	var arena: Node3D = script.new()
+	arena.name = "MinibossArena"
+	arena.set(&"boss_id", boss_id)
+	# **`&""`, not `&"boss"`.** §7: a miniboss drops nothing but the chest behind
+	# it, and `BossArena._replace_lost_relic` would otherwise put floor N's BOSS
+	# relic on the floor of a spent miniboss chamber -- the boss's drop handed out
+	# behind an optional puzzle.
+	arena.set(&"relic_slot", &"")
+	# Deeper in, away from the stub: the first thing through the hole should be a
+	# silhouette on the far side of the room, not a shape already on top of you.
+	arena.set(&"boss_offset", Vector3(0.0, 0.0, 4.5))
+	# No `door_path`. `BossArena` treats that as a valid fixture and falls back to
+	# its own `boss_dead_*` flag, which is what remembers a miniboss killed
+	# earlier in the run. The gate in front is a `PuzzleGate` and has no `unseal`.
+	arena.position = Vector3(0.0, 0.0, mid)
+	root.add_child(arena)
+
+	var chest := Chest.new()
+	chest.name = "TreasureChest"
+	# The rich table -- the same one the deep chest draws from. §5.3's promise is
+	# that this branch pays for the extra work, and `Prog` already owns what
+	# "richer" means at each depth.
+	chest.picks = Prog.chest_picks(Run.level, true)
+	chest.position = Vector3(-3.6, 0.0, back - 2.4)
+	chest.rotation.y = PI
+	root.add_child(chest)
+
+	var stone: Node3D = _make_stone(&"treasure")
+	if stone != null:
+		stone.position = Vector3(3.6, 0.0, back - 2.6)
+		# Turned back toward the arena, for the same reason the gate room's is: the
+		# player arrives from the mouth and the tones have to be facing them when
+		# the fight ends. The chest opposite gets `rotation.y = PI` for this.
+		stone.rotation.y = atan2(stone.position.x, stone.position.z - mid)
+		root.add_child(stone)
+		# On the kill, not on the gate. §5.3's reward list is miniboss + chest +
+		# Echo, and a stone that lit when the door opened would pay the puzzle
+		# before the fight it was gating.
+		var boss := arena.call(&"boss") as Node3D
+		if boss != null:
+			boss.connect(&"died_at",
+				func(_where: Vector3) -> void: stone.call(&"offer"))
+		elif bool(arena.call(&"is_spent")):
+			# Already killed this run and the floor was re-entered. The stone's own
+			# flag is what stops a second offer; this only re-opens the one that was
+			# never taken.
+			stone.call(&"offer")
+
+
+## The stone behind a treasure gate. `_build_landing`'s bigger sibling, and
+## deliberately a separate function rather than a parameterised one: a landing is
+## a threshold with a stair in it and this is a room, they share four helper
+## calls, and folding them together would put five flags on the one that is only
+## ever called twice.
+##
+## Built as a child of the Dungeon with its local +Z pointing out through the
+## wall, so every piece below is authored once in door-space instead of four
+## times with different signs.
+func _build_chamber(spot: Dictionary, cell: Vector2i, node_name: String,
+		size: float) -> Node3D:
+	var root := Node3D.new()
+	root.name = node_name
+	root.position = centre_of(cell) + spot["pos"]
+	root.rotation.y = float(spot["yaw"]) + PI
+	add_child(root)
+
+	var tag := StringName(node_name)
+	var w := K.CORRIDOR_W
+	# Room height throughout, INCLUDING the stub -- unlike `_build_landing`, which
+	# is corridor height end to end. Two different ceilings would leave a two-metre
+	# slot above the stub's mouth that is open to the void, visible from inside the
+	# chamber the moment the player turns round.
+	var h := K.CEIL_ROOM
+	var half := size * 0.5
+	var mid := CHAMBER_STUB + half
+
+	_slab(root, Vector2(w, CHAMBER_STUB), Vector3(0.0, 0.0, CHAMBER_STUB * 0.5), h)
+	_slab(root, Vector2(size, size), Vector3(0.0, 0.0, mid), h)
+
+	# The stub's two sides. A wall's face is its local +Z, so the one on -X looks
+	# toward +X and vice versa.
+	for s: float in [-1.0, 1.0]:
+		var i := 1 if s > 0.0 else 0
+		_wall(root, CHAMBER_STUB, h, Vector3(s * w * 0.5, 0.0, CHAMBER_STUB * 0.5),
+			PI * 0.5 * -s, _salt(cell, tag, 70 + i))
+
+	for s: float in [-1.0, 1.0]:
+		var i := 1 if s > 0.0 else 0
+		_wall(root, size, h, Vector3(s * half, 0.0, mid), PI * 0.5 * -s,
+			_salt(cell, tag, 72 + i))
+	_wall(root, size, h, Vector3(0.0, 0.0, CHAMBER_STUB + size), PI,
+		_salt(cell, tag, 74))
+	var flank := (size - w) * 0.5
+	if flank > 0.4:
+		for s: float in [-1.0, 1.0]:
+			var i := 1 if s > 0.0 else 0
+			_wall(root, flank, h, Vector3(s * (w + flank) * 0.5, 0.0, CHAMBER_STUB),
+				0.0, _salt(cell, tag, 76 + i))
+
+	# Two sconces on the back wall, flanking the chest. They are the only warm
+	# light in here -- the arena's seal brings its own cold one -- so the far side
+	# of the room reads as the place with the prize in it from the doorway.
+	for s: float in [-1.0, 1.0]:
+		var i := 1 if s > 0.0 else 0
+		var t := ROOM_SCENE_TORCH.instantiate()
+		t.rng_seed = _salt(cell, tag, 78 + i)
+		t.cast_shadow = false
+		t.light_range = 12.0
+		t.light_energy = 6.5
+		t.position = Vector3(s * half * 0.55, KitStyle.SCONCE_Y,
+			CHAMBER_STUB + size - 0.1)
+		t.rotation.y = PI
+		root.add_child(t)
+	return root
+
+
+# --- The chord ----------------------------------------------------------------
+
+## Bar the chord edge from the shallow side. The corridor itself was built by
+## `_build` like any other, because as far as the geometry is concerned this edge
+## is an ordinary door between two rooms -- what makes it a cycle is that one end
+## of it does not open.
+func _build_chord() -> void:
+	if chord.is_empty():
+		return
+	var near: Vector2i = chord["near"]
+	var d: StringName = chord["dir"]
+	var root: Node3D = rooms[near]["node"]
+	var script := load(BARS_SCRIPT) as GDScript
+	if script == null:
+		push_error("dungeon: %s failed to load" % BARS_SCRIPT)
+		return
+	var s: Dictionary = _sides_of(near)[d]
+	var yaw: float = s["yaw"]
+	var bars: Node3D = script.new()
+	bars.name = "ChordBars"
+	bars.set(&"tag", StringName("chord_%d" % Run.level))
+	# Set back into the reveal by the same 50 mm every anchored door in this file
+	# uses, so the kit doorway's surround frames the ironwork.
+	bars.position = s["at"] + facing_of(yaw) * -0.05
+	# The wall's own yaw and no turn of its own. `facing_of(yaw)` is the wall's +Z
+	# and points INTO the room; a Node3D's forward is `-basis.z`, so a prop set to
+	# the same yaw looks OUT of the room and down the corridor
+	# (docs/CONTRACT.md §2.5). That vector is the whole one-way rule --
+	# `BarredPassage` measures which side the player is on against it, and a prop
+	# turned the other way would be a chord that only opens from the side it is
+	# meant to refuse.
+	bars.rotation.y = yaw
+	root.add_child(bars)
+	chord["node"] = bars
 
 
 ## A `LockedDoor` in an anchored hole. Deliberately dumb, as the class says: it
