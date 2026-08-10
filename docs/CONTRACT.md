@@ -887,6 +887,31 @@ halves are load-bearing: Godot's spatial focus finds nothing to the right of a
 row's last cell, so without the wrap the stick dies every fourth cell, and
 without the spill the grid is a trap you can only leave with B.
 
+### The figure — one paper doll, two sizes of it
+
+```gdscript
+# scripts/ui/menu/paper_doll.gd — a Control that draws; nothing here takes focus.
+var full: bool    # set BEFORE add_child; _ready reads it to pick a minimum size
+```
+
+`full = false` is the pouch's card: the body, the two hands, the bound bottle.
+`full = true` is the equipment screen's WORN column: the same body with the eight
+worn slots in two plate columns — plate down the left, her stones down the right
+— each plate wired to the part of the body it is worn on.
+
+One control, not two. A second doll is the duplication CLAUDE.md §0 is about:
+the two agree the day they are written and disagree the second time a slot moves.
+
+The full doll draws **no** hand boxes and no belt. They are not missing — they
+are four cards two columns to the right on the same screen, big enough to read a
+weapon's name off, and drawn on the figure as well they were a third copy of a
+fact the screen already makes twice, sitting exactly where the ARMS and RING
+leaders come in.
+
+**Which path a slot committed to is not stored.** It is answered by asking which
+of the two sibling tracks has a rung in it (`game_state.gd`, over
+`PLATE_PIECES`). One reader of that rule per screen; the doll's is `_draw_plate`.
+
 ### Ladders — the same cell, arranged as the progression it is
 
 ```gdscript

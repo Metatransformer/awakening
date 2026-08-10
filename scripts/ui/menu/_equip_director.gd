@@ -144,6 +144,45 @@ func run(rig) -> void:
 		Game.armament_in(Game.PRIMARY, Game.HAND_RIGHT) == primary_held)
 	await rig.capture("eq_04_alternate.png")
 
+	# --- The worn column -----------------------------------------------------
+	# The eight slots nothing else in the game shows together. Owning none of
+	# them is `eq_00_unowned` above; this is the state the doll exists for -- some
+	# pieces climbed, some committed the other way, some never started.
+	#
+	# Granted straight into `upgrades` rather than through the smith, on purpose:
+	# what is being proved here is that the DOLL reads the rungs, and routing it
+	# through two counters would make a failure ambiguous between the two.
+	# By name, not by path: half the containers between here and it are built
+	# unnamed, so the path is the theme's business and not a thing to assert on.
+	var doll := equip.find_child("Doll", true, false) as MenuPaperDoll
+	_check("the worn column is on the screen", doll != null and doll.visible)
+	Game.upgrades[&"plate_chest_heavy"] = 2
+	Game.upgrades[&"plate_boots_light"] = 1
+	Game.upgrades[&"jewel_ring1_edge"] = 3
+	Game.upgrades[&"jewel_bracelet_wind"] = 1
+	Bus.item_acquired.emit(&"plate_chest_heavy")
+	await rig.wait_frames(6)
+	_check("chest committed HEAVY, so LIGHT is shut",
+		Game.path_closed(Game.plate_track(&"chest", Game.PLATE_LIGHT)))
+	_check("boots went the other way and shut HEAVY",
+		Game.path_closed(Game.plate_track(&"boots", Game.PLATE_HEAVY)))
+	_check("the ring is three rungs up EDGE",
+		Game.jewel_level(Game.jewel_track(&"ring1", &"edge")) == 3)
+	# Nothing was granted for legs, arms, the amulet or the second ring, and the
+	# doll has to say so rather than drawing four plates that look finished.
+	_check("four slots are still untouched",
+		Game.forge_level(Game.plate_track(&"legs", Game.PLATE_HEAVY)) == 0
+		and Game.forge_level(Game.plate_track(&"arms", Game.PLATE_LIGHT)) == 0
+		and Game.jewel_level(Game.jewel_track(&"amulet", &"vigor")) == 0
+		and Game.jewel_level(Game.jewel_track(&"ring2", &"swift")) == 0)
+	# The soak the plate bought has to be on the stat block in the same frame --
+	# one screen, two readers of the same accessor (see `_refresh_stats`).
+	equip.refresh()
+	await rig.wait_frames(4)
+	_check("the stat block moved with it (%.1f soaked)" % Game.armour_soak_exact(),
+		Game.armour_soak_exact() > 0.0)
+	await rig.capture("eq_05a_worn.png")
+
 	# --- Swap Set ------------------------------------------------------------
 	await _nav_to_button(rig, "Swap Set")
 	await _key(rig, KEY_ENTER, 12)

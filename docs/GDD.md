@@ -488,6 +488,16 @@ them read back through a `Game` accessor and **never recomputed in the panel**.
 A panel that does its own arithmetic is a second source of truth, and it drifts
 the first time a ladder changes.
 
+**And the doll is the whole build, not just the hands.** The WORN column on that
+screen is the figure with all eight slots hung off it — the four plate pieces
+down the left, her four stones down the right, each plate saying which path it
+committed to and how many of its rungs are bought, each wired by a leader line
+to the part of the body it is worn on. It is the only place in the game the
+eight appear together: the smith knows about plate and she knows about stones,
+and neither counter can answer *what am I wearing, all of it, at once.*
+Read-only, because there is nothing to set — a piece of plate is a ladder you
+climbed and it does not come off.
+
 > **Built, 2026-08-09.** Everything in §6.6 is in the code and asserted by
 > `tools/directors/forge_loop.gd` and `tools/directors/jewel_loop.gd`. The
 > numbers below are the shipped ones, not targets. `docs/METAGAME.md` §6.5 and

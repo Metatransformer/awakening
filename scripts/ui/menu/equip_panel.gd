@@ -30,6 +30,8 @@ const HINT := "↑↓←→ Select    Enter / A Change    Esc / B Back"
 ## minimums and a VBox grows past its parent without complaining.
 const ICON_PX := 48
 const SLOT_MIN := Vector2(228, 98)
+## The worn-slots column. See `_build_doll`.
+const DOLL_W := 284
 
 ## Row order on screen. Index into `Game.loadout`.
 ##
@@ -131,6 +133,8 @@ func _build() -> void:
 	split.add_theme_constant_override("separation", 24)
 	body.add_child(split)
 
+	_build_doll(split)
+
 	var left := VBoxContainer.new()
 	left.name = "Left"
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -176,6 +180,55 @@ func _build() -> void:
 	_back.custom_minimum_size.x = 160
 	_back.pressed.connect(func() -> void: back_requested.emit())
 	frow.add_child(_back)
+
+
+## The figure, with all ten worn slots on it.
+##
+## **The first column of this screen, and read-only.** The two hands are set here
+## by pressing a slot; the eight worn slots are not settable anywhere, because
+## there is nothing to set -- a piece of plate is a ladder you climbed at the
+## smith and a stone is one you climbed at her bench, and neither comes off. What
+## the doll is for is the question those two counters cannot answer between them:
+## *what am I wearing, all of it, at once.* The smith knows about armour and she
+## knows about stones, and until this column existed nowhere in the game put the
+## eight on one body.
+##
+## Nothing here takes focus, so the 2x2-plus-Swap graph `_wire_focus` builds is
+## untouched by the column appearing beside it.
+func _build_doll(parent: Node) -> void:
+	var card := PanelContainer.new()
+	card.name = "Worn"
+	card.theme_type_variation = &"MenuSection"
+	# A floor, not a share. The two hand slots beside it are a measured 228 px
+	# each (`SLOT_MIN`) and cannot give any of it back, and the detail column is
+	# 360; this is what is left of 1220 with the separations taken off.
+	card.custom_minimum_size.x = DOLL_W
+	parent.add_child(card)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 8)
+	card.add_child(col)
+
+	var head := Label.new()
+	head.theme_type_variation = &"MenuHeading"
+	head.text = "WORN"
+	col.add_child(head)
+
+	var doll := MenuPaperDoll.new()
+	doll.name = "Doll"
+	# Before `add_child`, because `_ready` reads it to pick a minimum size.
+	doll.full = true
+	col.add_child(doll)
+
+	# The legend. Four gold pips on a plate is a quantity with no unit until
+	# something says what one pip is, and the two ladders are different lengths
+	# -- three rungs of plate against four of a stone (K.FORGE_MAX, K.JEWEL_MAX).
+	var legend := Label.new()
+	legend.theme_type_variation = &"MenuHint"
+	legend.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	legend.text = "Plate at the smith, stones at her bench.  %d rungs of plate, %d of a stone." % [
+		K.FORGE_MAX, K.JEWEL_MAX]
+	col.add_child(legend)
 
 
 ## The button that swaps the live set.
