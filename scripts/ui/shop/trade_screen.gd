@@ -101,8 +101,10 @@ static func open(host: Node, screen_mode: Mode, screen_title: String,
 		db: GDScript = null) -> TradeScreen:
 	var layer := CanvasLayer.new()
 	layer.name = "TradeLayer"
-	# Above the HUD (50), below the pause menu (100): pausing out of the shop
-	# should still put the pause menu on top of it.
+	# Above the HUD (50), below the pause menu (100). The pause menu no longer
+	# opens over this screen at all -- Escape and Start both CLOSE it, and one
+	# press gets one response (see PauseMenu._unhandled_input) -- but the order is
+	# still the right one for anything that raises the menu while a shop is up.
 	layer.layer = 60
 	var s := TradeScreen.new()
 	s.mode = screen_mode
@@ -111,6 +113,15 @@ static func open(host: Node, screen_mode: Mode, screen_title: String,
 	layer.add_child(s)
 	host.get_tree().current_scene.add_child(layer)
 	return s
+
+
+## What the pointer was doing before this screen took the viewport.
+##
+## Saved and put back rather than forced to VISIBLE on the way out: this screen
+## can be up in the garrison (pointer captured for camera look) or over a menu
+## that already freed it, and a screen that unconditionally captures on close
+## grabs the cursor in cases where nobody had it. Same contract as `PauseMenu`.
+var _prev_mouse: int = Input.MOUSE_MODE_VISIBLE
 
 
 func _ready() -> void:
@@ -126,6 +137,10 @@ func _ready() -> void:
 
 	_shown_gold = float(Game.gold)
 	_refresh()
+	# The camera captures the pointer for look. Hand it back or not one cell on
+	# this screen can be clicked.
+	_prev_mouse = Input.mouse_mode
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	Prompt.block(self)
 	Bus.screen_opened.emit(&"trade")
 
@@ -138,6 +153,7 @@ func _fit() -> void:
 func _exit_tree() -> void:
 	Prompt.unblock(self)
 	Bus.screen_closed.emit(&"trade")
+	Input.mouse_mode = _prev_mouse as Input.MouseMode
 
 
 func close() -> void:

@@ -126,9 +126,9 @@ func open_mode(m: Mode) -> void:
 ## a save made a moment ago shows up without the menu being rebuilt.
 func refresh_all() -> void:
 	_title.text = "SAVE GAME" if mode == Mode.SAVE else "LOAD GAME"
-	_hint.text = ("↑↓ / D-pad Select    → Erase    Enter / A Save    Esc / B Back"
+	_hint.text = ("↑↓ / D-pad Select    → Erase    E / A Save    Esc / B Back"
 		if mode == Mode.SAVE
-		else "↑↓ / D-pad Select    → Erase    Enter / A Load    Esc / B Back")
+		else "↑↓ / D-pad Select    → Erase    E / A Load    Esc / B Back")
 	for i in _slots.size():
 		var card := _slots[i]
 		card.refresh()

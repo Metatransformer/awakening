@@ -230,8 +230,20 @@ func _unhandled_input(event: InputEvent) -> void:
 		# itself still counts — `HeroCombat` polls the button and does not care
 		# that the camera read it first.
 		set_first_person(false)
-	elif event.is_action_pressed(&"pause") and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	# THERE WAS A `pause` BRANCH HERE THAT RELEASED THE CURSOR, AND IT IS WHY THE
+	# MOUSE STOPPED STEERING AFTER THE FIRST PAUSE OF EVERY SESSION.
+	#
+	# Unhandled input runs deepest-child-first, and `PauseMenu` is an autoload
+	# under `root` while this camera is down in the current scene — so this ran
+	# FIRST. It set MOUSE_MODE_VISIBLE, and the menu then opened, recorded
+	# `_prev_mouse = VISIBLE` as the state to put back, and faithfully restored
+	# "visible" on close. The pointer never came back for the rest of the run and
+	# the camera had no right stick.
+	#
+	# Releasing the cursor belongs to whoever took the screen, because only that
+	# node knows when to give it back. The camera GRABS it (`_ready`) and does not
+	# arbitrate: `PauseMenu` save/restores around its own open/close, and the
+	# full-screen screens do the same around their lifetime.
 
 
 # --- Seam for P3 (targeting) ------------------------------------------------

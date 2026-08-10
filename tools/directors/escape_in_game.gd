@@ -16,6 +16,15 @@ extends RefCounted
 ##     --out=/tmp/esc/garrison.png --warmup=90
 
 const KEY_ESC := 4194305  ## physical_keycode for Escape, as bound to `pause`.
+const KEY_I := 73         ## `inventory` — opens straight onto the pouch.
+const KEY_M := 77         ## `map` — opens straight onto the map.
+const KEY_E := 69         ## `interact` in the world, CONFIRM in every menu.
+const KEY_Q := 81         ## `ui_tab_prev`.
+const KEY_R := 82         ## `ui_tab_next` (it was E until E became confirm).
+const KEY_DOWN := 4194322
+
+## How many rows down the root list to hunt for one by name before giving up.
+const ROW_LIMIT := 10
 
 var _fails := 0
 
@@ -55,10 +64,132 @@ func run(rig) -> void:
 	await rig.capture("esc_03_reopen.png")
 	await _key(rig, KEY_ESC, 16)
 
+	await _one_press_screens(rig)
+	await _e_confirms(rig)
+	await _mouse(rig)
+	await _over_a_screen(rig)
+
 	if _fails == 0:
 		print("ESCAPE OK — all checks passed")
 	else:
 		print("ESCAPE FAIL — %d check(s) failed" % _fails)
+
+
+## **THE BUG THIS FILE WAS EXTENDED FOR.** A screen you reach in ONE press has
+## nothing under it, so the press you use to LEAVE must leave.
+##
+## It used to pop onto the pause root instead: `open_pouch` called `open()` —
+## which seeds the stack with ROOT — and then pushed POUCH on top, so Escape
+## found two entries and walked you back onto a menu you never asked for.
+func _one_press_screens(rig) -> void:
+	await _key(rig, KEY_I, 16)
+	_ck("E0 I opened the menu", Menu.is_open)
+	_ck("E1 ...straight onto the pouch",
+		Menu.get_node("Root/Screens/PouchScreen").visible)
+	await rig.capture("esc_04_pouch.png")
+	await _key(rig, KEY_ESC, 16)
+	_ck("E2 Escape out of the pouch CLOSED the menu", not Menu.is_open)
+	_ck("E3 ...it did not land on the pause root",
+		not Menu.get_node("Root/Screens/RootScreen").visible)
+	_ck("E4 the tree resumed", not rig.paused)
+
+	await _key(rig, KEY_M, 16)
+	_ck("F0 M opened straight onto the map",
+		Menu.is_open and Menu.get_node("Root/Screens/MapScreen").visible)
+	# Paging moved off E when E became the universal confirm. The ring is
+	# ITEMS/POUCH/MAP, so next from MAP wraps to ITEMS and prev comes back.
+	await _key(rig, KEY_R, 16)
+	_ck("F1 R pages forward off the map",
+		Menu.get_node("Root/Screens/EquipScreen").visible)
+	await _key(rig, KEY_Q, 16)
+	_ck("F2 Q pages back to it",
+		Menu.get_node("Root/Screens/MapScreen").visible)
+	await rig.capture("esc_05_map.png")
+	# Paging REPLACES the top of the stack, so the one-press contract has to
+	# survive a lap of the ring.
+	await _key(rig, KEY_ESC, 16)
+	_ck("F3 Escape after paging still CLOSED the menu", not Menu.is_open)
+
+
+## E confirms, the way Enter and pad A do — and the screen stack still works
+## when you got there the long way, through the root menu.
+func _e_confirms(rig) -> void:
+	await _key(rig, KEY_ESC, 16)
+	if not await _focus_row(rig, "Pouch"):
+		_ck("G0 could reach the 'Pouch' row on the root menu", false)
+		await _key(rig, KEY_ESC, 16)
+		return
+	_ck("G0 could reach the 'Pouch' row on the root menu", true)
+	await _key(rig, KEY_E, 16)
+	_ck("G1 E confirmed the row (E is the world's interact key)",
+		Menu.get_node("Root/Screens/PouchScreen").visible)
+	await rig.capture("esc_06_e_confirm.png")
+	# Reached FROM the root, so the root is where you came from and Escape owes
+	# you a step back onto it — the opposite of the I/M case above.
+	await _key(rig, KEY_ESC, 16)
+	_ck("G2 Escape stepped back to the root, menu still open",
+		Menu.is_open and Menu.get_node("Root/Screens/RootScreen").visible)
+	await _key(rig, KEY_ESC, 16)
+	_ck("G3 ...and the next Escape closed it", not Menu.is_open)
+
+
+## The pointer is the right stick. It is captured while you play and handed back
+## for exactly as long as a screen is up.
+##
+## The harness never grabs the cursor itself (GameCamera checks for a scripted
+## SceneTree), so the capture is staged here. That is the whole test: the bug was
+## that GameCamera released the pointer on `pause` BEFORE the menu — unhandled
+## input runs deepest-first and the menu is an autoload — so the menu recorded
+## "visible" as the state to restore and the mouse never came back.
+func _mouse(rig) -> void:
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	await rig.wait_frames(2)
+	await _key(rig, KEY_ESC, 16)
+	_ck("H0 opening released the pointer (mode=%d)" % Input.mouse_mode,
+		Input.mouse_mode == Input.MOUSE_MODE_VISIBLE)
+	await _key(rig, KEY_ESC, 16)
+	_ck("H1 closing gave CAPTURE back (mode=%d)" % Input.mouse_mode,
+		Input.mouse_mode == Input.MOUSE_MODE_CAPTURED)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	await rig.wait_frames(2)
+
+
+## One press, one response. The shop and the stash both close on `ui_cancel` OR
+## `pause`, and Escape is bound to both — so the press that closed the vendor
+## used to open the pause menu behind it in the same frame.
+func _over_a_screen(rig) -> void:
+	var shop = TradeScreen.open(rig.scene(), TradeScreen.Mode.SELL, "TEST STALL")
+	await rig.wait_frames(12)
+	_ck("I0 the shop is up", is_instance_valid(shop) and shop.is_inside_tree())
+	_ck("I1 it took the pointer (mode=%d)" % Input.mouse_mode,
+		Input.mouse_mode != Input.MOUSE_MODE_CAPTURED)
+	await rig.capture("esc_07_shop.png")
+
+	await _key(rig, KEY_ESC, 24)
+	_ck("I2 Escape closed the shop", not is_instance_valid(shop)
+		or not shop.is_inside_tree())
+	_ck("I3 ...and did NOT open the pause menu behind it", not Menu.is_open)
+	await rig.capture("esc_08_shop_closed.png")
+	if Menu.is_open:
+		await _key(rig, KEY_ESC, 16)
+
+
+## Walk the root list with the arrow keys until the focused control SAYS `label`.
+## Returns false if it never lands on one, which is a real failure and not a
+## flaky director: the list is a closed focus loop.
+##
+## Through `UiKit.label_of` and not `Button.text`. A root row is a composed
+## VerbRow whose own `text` is empty — its label is a child Label — so matching
+## on `.text` finds nothing at all. The kit ships this reader for exactly that.
+func _focus_row(rig, label: String) -> bool:
+	for i in ROW_LIMIT:
+		# Annotated: `rig` is untyped, so `rig.root` is a Variant and `:=` cannot
+		# infer (CLAUDE.md §3).
+		var c: Control = rig.root.gui_get_focus_owner()
+		if c != null and UiKit.label_of(c) == label:
+			return true
+		await _key(rig, KEY_DOWN, 6)
+	return false
 
 
 func _ck(label: String, ok: bool) -> void:
