@@ -419,13 +419,14 @@ are already playing, or the first empty one, or it declines and says nothing
 
 ## 6. The town
 
-One walled courtyard (`scripts/world/town.gd`) with four things in it.
+One walled courtyard (`scripts/world/town.gd`) with five counters and a gate in
+it.
 
 - **The vendor.** Sells nothing; buys everything. The trade screen
   (`scripts/ui/shop/trade_screen.gd`) lists the bag sorted by value with a
   "sell everything" line, because the common case is dumping the lot and the UI
   should not make that tedious.
-- **The smith.** Eight permanent lines (`scripts/items/shop_db.gd`), priced
+- **The smith.** Fifteen permanent lines (`scripts/items/shop_db.gd`), priced
   against the drop tables — a good run extracts with roughly 250–450 gold of
   ingredients, so cheap lines land after one run and dear ones after two or
   three.
@@ -436,14 +437,16 @@ One walled courtyard (`scripts/world/town.gd`) with four things in it.
   | Bag slot | 140 | ×1.6 | 4 | — |
   | Heart container | 320 | ×1.5 | 3 | — |
   | Sharpen the blade | 120 | ×2.1 | 3 | components |
-  | Temper the armour | 140 | ×2.1 | 3 | components |
+  | Chest/legs/arms/boots — heavy | 65 | ×1.9 | 3 each | components |
+  | Chest/legs/arms/boots — light | 35 | ×1.8 | 3 each | components |
   | Bind the shield | 110 | ×2.2 | 3 | components |
   | String the bow | 130 | ×2.1 | 3 | components |
   | Lengthen the chain | 150 | ×2.1 | 3 | components |
 
   The top three are stock: things the smith HAS, and money is the whole
-  transaction. The bottom five are the **forge** (§6.5) and gold alone will not
-  buy them.
+  transaction. The rest are the **forge** (§6.5) and gold alone will not buy
+  them. **There is no armourer** — the plate ladder is the armour system, and it
+  is the smith's.
 
   Every line changes a number the player can feel inside one run. Nothing here
   is a stat-stick you have to take on faith.
@@ -451,12 +454,17 @@ One walled courtyard (`scripts/world/town.gd`) with four things in it.
   three things to put in it. Same transaction as the forge — gold **and**
   materials — over the same kind of counter, driven by the same screen. She is
   §6.6.
+- **The jewelcrafter.** Four blanks and eight paths (`scripts/items/jewel_db.gd`),
+  the west gap of the yard. She is §6.7.
 - **The gate.** Into the dungeon, and back out again on the arrival pad.
 
 The vendor and the smith share the far wall either side of the gate, because
 they are the two counters you visit with a full bag. The alchemist stands nearer
 the arrival spot: what she sells is spent on the way back *down*, and the frame
-you see when you extract has to contain her or she does not exist.
+you see when you extract has to contain her or she does not exist. The
+jewelcrafter is in the west gap between the relic posts, forward of arrival for
+the same reason — a counter behind the arrival camera does not exist either,
+which is the exact mistake her first placement made.
 
 Each of them is a person of one of the Vale's peoples (`scripts/world/race_body.gd`)
 standing behind a booth full of their own trade (`scripts/props/shop_booth.gd`):
@@ -501,32 +509,53 @@ are referenced from code comments and directors. Do not renumber them.*
 
 Gold is a grind. A grind is solvable by patience, and a metagame whose whole
 ladder is solvable by patience stops asking anything of the player after the
-first hour. So the five pieces of gear that matter each climb a ladder whose
-rungs cost **gold and components**, and components only exist underground.
+first hour. So the gear that matters climbs ladders whose rungs cost **gold and
+components**, and components only exist underground.
 
-### The five ladders
-
-> **⏳ Being split — `docs/GDD.md` §6.6. This section is true today.** `plate`
-> becomes **four pieces** (chest, legs, arms, boots), each with a **heavy** and a
-> **light** path, and a fifth counter — the jewelcrafter — adds eight more
-> tracks. The mechanism does not change: a path is a track id, a rung is a level
-> in `Game.upgrades`, and committing to one path drops the sibling's ceiling to
-> zero. Everything below stays exactly as written for the four tracks that are
-> not `plate`.
+### The twelve ladders
 
 Four rungs each: rung 0 is the piece as it comes out of the box, and there are
 three to buy. The numbers live in `scripts/core/consts.gd` and the gear reads
 them back through accessors on `Game` — `sword_bonus()`, `armour_soak()`,
-`guard_arc()`, `bow_draw_time()`, `hook_reach()` — so a rung IS the effect, and
-there is no per-track special case anywhere in the shop.
+`guard_arc()`, `bow_draw_time()`, `hook_reach()`, `speed_mult()` — so a rung IS
+the effect, and there is no per-track special case anywhere in the shop.
 
 | Track | Gear | What the rung moves | 0 → 3 |
 |---|---|---|---|
 | `edge` | sword | damage, in quarter-hearts | +0 → +3 |
-| `plate` | armour | damage soaked off every hit, floor of one quarter | −0 → −3 |
 | `guard` | shield | block arc, in degrees | 70° → 115° |
 | `string` | bow | draw time, in seconds | 0.44 → 0.26 |
 | `chain` | hookshot | **reach**, in metres | 8.74 → 18.20 |
+
+**There is no `plate` track.** Armour is four pieces — chest, legs, arms, boots
+— and each piece picks **one of two paths** and climbs that. Eight track ids,
+`plate_{chest,legs,arms,boots}_{heavy,light}`, built by `Game.plate_track()` so
+nothing spells them by hand except `ShopDb.LIMITS` (a `static var` initialiser
+runs before the autoloads exist, so it cannot loop `Game.PLATE_TRACKS`; the
+forge director's beat P0 exists to catch the typo that invites).
+
+| Path | Soak per piece, rung 0 → 3 | Speed per piece, rung 0 → 3 |
+|---|---|---|
+| heavy | 0.0 → 1.0 quarters | ×1.0 → ×0.97937 |
+| light | 0.0 → 0.5 quarters | ×1.0 (no cost) |
+
+Read it as sums, not as rows: **four heavy pieces at rung 3 soak exactly 4.00
+quarters and move you at exactly 0.9200**; four light pieces soak exactly 2.00
+and cost nothing. `4 × 0.92^(1/4)` is where `PLATE_HEAVY_SPEED` comes from, and
+the per-piece soak table is fractional for the same reason: the naïve thing —
+four copies of the old `PLATE_SOAK` `[0,1,2,3]` — would soak twelve quarters
+against a bestiary tuned for three. Both totals are asserted by
+`tools/directors/forge_loop.gd` (P1–P4), because a table whose comment claims a
+sum is the kind of thing that drifts.
+
+**A path, once bought, is committed.** Buying a rung on `plate_chest_heavy`
+drops `plate_chest_light`'s ceiling to zero: `Game.path_closed()` says so,
+`ShopDb.cap_of()` returns 0, the row leaves the board, and the refusal reads
+`THAT PIECE IS ALREADY COMMITTED`. The other three pieces stay open — the
+decision is per piece, which is the whole point of splitting it.
+
+`Hero.hurt` still floors damage at one quarter, so `SOAK_MAX = 4.0` is a
+ceiling on the *number*, not a promise of invulnerability.
 
 The top of the chain ladder is exactly `K.HOOK_LONGSHOT_RANGE` — [oot]'s
 Longshot, measured, not invented. That is asserted by the director, because a
@@ -541,11 +570,15 @@ branches on that one bit: the pouch marks them ◆, the vendor's "sell everythin
 leaves them alone, and extraction moves them to the workbench instead of the
 purse.
 
-The alchemist's four (§6.6) are the same kind and obey every one of those rules.
-What separates them is `ItemDef.bench`, a label the item carries so the pouch can
-tell you which counter wants it. `ItemDb.components(bench)` filters on it; an
-unfiltered `components()` is all eight, and code that means "the forge's" must
-say so.
+The alchemist's four (§6.6) and the jewelcrafter's two (§6.7) are the same kind
+and obey every one of those rules. What separates them is `ItemDef.bench`, a
+label the item carries so the pouch can tell you which counter wants it.
+`ItemDb.components(bench)` filters on it; an unfiltered `components()` is all
+ten, and code that means "the forge's" must say so.
+
+**No component id may appear in two counters' recipes.** The pouch prints one
+bench name per material, so a shared ingredient would print a lie. That rule is
+written on `ItemDef.bench` and asserted by `jewel_loop` beat A.
 
 | Component | Value | Rarity | Stack | Drops from |
 |---|---|---|---|---|
@@ -705,7 +738,7 @@ is handed both.
 They ride home exactly as the forge's do: motes on the floor, picked up by
 walking over them, taking bag slots, charged the extraction fee, banked to
 `Game.components` on the way out and **lost with the bag on death**. One
-workbench, two counters spending from it.
+workbench, three counters spending from it.
 
 ### What the HUD says
 
@@ -715,9 +748,70 @@ empty. A live draught adds a draining bar to the health/stamina/heat column, in
 the potion's own colour, because it is the same kind of fact as the bars above
 it: true now, and shortly not. Nothing is drawn when nothing is running.
 
-Bottles and their contents are in the save file (`VERSION = 3`). The draught
+Bottles and their contents are in the save file (`VERSION = 4`). The draught
 clocks are **not**: a 45-second buff that survives quitting is a buff you can
 bank, and the point of the timer is that it is spent in the room you drank it in.
+
+---
+
+## 6.7 The jewelcrafter — the ceiling belongs to the number
+
+The fifth counter, in the west gap of the garrison yard, forward of where you
+arrive. `JewelDb extends Catalogue`, one row in `Npc.COUNTERS`, and the **same
+`TradeScreen`** every other counter uses — SCOPE §1 freezes new UI screens at
+zero and this did not need one.
+
+Four slots, each of which you must first **buy blank** for gold alone:
+
+| Slot | Blank | Path A | Path B |
+|---|---|---|---|
+| Amulet | 220 g | **Vigor** — +0.5 heart container a rung | **Focus** — +15 stamina a rung |
+| First Ring | 150 g | **Edge** — +0.25 quarters a swing | **Swift** — ×1.0101 speed |
+| Second Ring | 150 g | Edge | Swift |
+| Bracelet | 190 g | **Ward** — +0.5 quarters soaked | **Wind** — +0.1 stamina regen |
+
+Once the blank is owned, its two path rows appear and the slot climbs
+`JEWEL_MAX = 4` rungs — one more than the forge, because a jewel rung is a
+smaller step. Committing to a path closes the sibling exactly as the plate
+pieces do. Buying a blank is a **tap**; buying a rung is a **hold**, the same
+grammar as everywhere else.
+
+**The ceiling belongs to the number, not to each faucet.** Soak has two sources
+(heavy plate and Ward) and they share `K.SOAK_MAX = 4.0`. Damage has two (the
+`edge` ladder and two Edge rings) and they share `K.EDGE_MAX = 5`. Speed has two
+(heavy plate costs it, Swift buys it back) and the product is clamped to 1.0 in
+`Game.speed_mult()` — you cannot out-run your unarmoured self. Stamina's ceiling
+is `K.STAMINA_MAX = 160`, which is `MAX_STAMINA` plus exactly four Focus rungs.
+`jewel_loop` beats F0–F4 open both faucets on each number and assert the cap
+holds.
+
+Jewel rungs are **not** rationed by `RelicDb.forge_rungs_known()`. Relics ration
+the smith; the jewelcrafter is her own economy, and gating her behind the same
+counter would make one relic drop control two counters.
+
+### Her two components
+
+| Component | Value | Rarity | Stack | Drops from |
+|---|---|---|---|---|
+| Silver Wire | 15 | common | 8 | bodies and chests |
+| Cut Gemstone | 95 | rare | 3 | **chests only** |
+
+Two rather than four, and new rather than borrowed: converting the vendor's
+three rare ingredients would have stripped his best sale lines in the middle of
+loop validation. The ladder is `2 → 4 → 6+1 gem → 8+2 gem` wire, at
+`90 / 180 / 340 / 620` gold — flat by rung, not scaled by what you already own,
+because each rung is a separate small purchase rather than one ladder's fourth
+step.
+
+### The stat block
+
+`scripts/ui/menu/equip_panel.gd` draws **five stats and no sixth** — damage,
+speed, max health, stamina, soak — in a THE HERO card under the item detail.
+Every one is read back through a `Game` accessor and **never recomputed in the
+panel**; a panel that does its own arithmetic is a second source of truth that
+drifts the first time a ladder changes. Soak prints the applied integer and, when
+they differ, the exact fraction in brackets, because `-1 quarter (1.2)` is the
+only honest way to say "you have bought 1.2 and the game floors it".
 
 ---
 
@@ -802,6 +896,8 @@ second one is a decision.
 | Ingredients, components and drop tables | `scripts/items/item_db.gd` |
 | The smith's catalogue, and the forge recipes | `scripts/items/shop_db.gd` |
 | The alchemist's catalogue, and the brew recipes | `scripts/items/alchemy_db.gd` |
+| The jewelcrafter's slots, paths and rungs | `scripts/items/jewel_db.gd` |
+| The hero's five stats, drawn | `scripts/ui/menu/equip_panel.gd` |
 | What a draught is called and what it does | `scripts/items/potion_db.gd` |
 | Bottles, their contents and the draught clocks | `scripts/autoload/game_state.gd` |
 | The upgrade ladders, rung by rung | `scripts/core/consts.gd` (`K.EDGE_DAMAGE` …) |
@@ -920,17 +1016,25 @@ saves, wipes and reloads to prove a forged rung survives quitting the game.
 `FORGE FAIL …` on any claim that did not hold. Last run:
 
 ```
+PLATE full-heavy soak=4.00 speed=0.9200
+PLATE full-light soak=2.00 speed=1.0000
 FORGE base       edge=+0 plate=-0 guard=70 draw=0.44 reach=8.74
-FORGE full       edge=+3 plate=-3 guard=115 draw=0.26 reach=18.20
+FORGE full       edge=+3 plate=-4 guard=115 draw=0.26 reach=18.20
 FORGE swept      bag=3 value=62        (walked over, nothing pressed)
 FORGE pre_extract bag=140 fee=35
-FORGE home       bench={grit:92 plate:82 coil:78 core:115} bag={void_pearl:1}
-FORGE after_death bench_cores=115 bag=0
-FORGE reloaded   rungs={edge:1 plate:1 guard:1 string:1 chain:1} slots=12
-FORGE rungs taught=1 of 3 (relics donated: 0)
+FORGE home       bench={grit:86 plate:53 coil:78 core:112} bag={void_pearl:1}
+FORGE after_death bench_cores=112 bag=0
+FORGE reloaded   rungs={edge:3 guard:3 string:3 chain:3
+                        plate_*_heavy:3 plate_*_light:0} slots=12
+FORGE rungs taught=3 of 3 (relics donated: 2)
 FORGE pouch frame=1220x637 viewport=1280x720
 FORGE OK
 ```
+
+The two `PLATE` lines are the whole reason beats P1–P4 exist: they are the sums
+§6.5 claims, printed rather than asserted-in-silence, so a drift shows up in the
+log instead of in the difficulty three months later. `plate=-4` on the full line
+is the four heavy pieces at rung 3, at the `SOAK_MAX` ceiling.
 
 **B4 was red for a long time and is green as of 2026-08-09.** It has been red in
 two different directions, which is why the check earns its place.
@@ -989,6 +1093,43 @@ alchemist's four materials joined the forge's four, which is why that list is a
 grid rather than a column at all — two columns then, four now that the card runs
 the full width under the bag. A rectangle in the wrong place is not a thing an assertion can
 see.
+
+The jewelcrafter has hers (§6.7):
+
+```bash
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/town.tscn --director=res://tools/directors/jewel_loop.gd --out=/tmp/jewel/x.png --warmup=60
+```
+
+It checks her two stones are on her own bench and on nobody else's, finds her in
+the yard and measures her clear of the relic ring, opens her board through TALK,
+watches it go four blank rows → five → eight as slots are bought, commits a path
+and watches the sibling leave, buys every rung and reads the numbers back
+through the accessors, opens **both faucets on each capped number** to prove the
+cap belongs to the number, checks she is not rationed by the smith's relics, and
+photographs the stat block. `JEWEL FAIL …` on any claim that did not hold. Last
+run:
+
+```
+JEWEL stones=[silver_wire, cut_gemstone]
+JEWEL she stands at (-11.25, 0.00, 1.10) facing 90 deg
+JEWEL nearest relic post = 2.30 m
+JEWEL widest board = 8 rows
+JEWEL full-A edge=+2 soak=2.00 hearts=5 stamina=100
+JEWEL full-B speed=1.0000 regen=64.40 stamina=160
+JEWEL both soak faucets open = 4.00 (cap 4.00)
+JEWEL swift-only raw=1.0837 clamped=1.0000
+JEWEL both edge faucets open = +5 (cap 5)
+JEWEL smith knows 1 rungs; she offers 4
+JEWEL stat block { damage: "+1 quarter", speed: "98.6%", health: "4 hearts",
+                   stamina: "100", soak: "-1 quarter  (1.2)" }
+JEWEL equip frame=1220x604 viewport=1280x720
+JEWEL OK
+```
+
+`swift-only raw=1.0837 clamped=1.0000` is the line worth keeping: the ladder
+genuinely computes a number above 1.0 and the clamp is what makes it a ceiling.
+Printing the raw value is how we know the clamp is doing work rather than the
+ladder happening to stop short.
 
 One trap worth naming, because both these directors fell in it and the symptom
 blamed the wrong system. `game_flow.gd` autosaves at the **end** of a

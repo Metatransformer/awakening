@@ -1525,8 +1525,19 @@ func _target_speed(mag: float) -> float:
 	# a half-pushed stick under a held run button that produced a jog would make
 	# the player negotiate with two analogue inputs for one intention.
 	if sprinting and s > 0.0:
-		return sprint_speed
-	return s
+		s = sprint_speed
+	# The armour, on top of the curve — never inside it. `K.RUN_SPEED` and
+	# `K.SPRINT_SPEED` are [oot]/[tune] numbers this project does not renegotiate
+	# (docs/GDD.md §6.6 says so in as many words), so a heavy suit multiplies what
+	# they produced and a Swift ring multiplies it back. `Game.speed_mult()` is
+	# 1.0 on a fresh save and clamps at 1.0 above, so this line is a no-op until
+	# somebody buys armour and can never make the hero faster than the source.
+	#
+	# HERE, and not in the roll: `ROLL_SPEED` is the i-frame dodge and the whole
+	# reason the speed cost is a real cost is that the hero still has it. Slowing
+	# the roll as well would make heavy armour a strictly worse purchase rather
+	# than a trade.
+	return s * Game.speed_mult()
 
 
 ## The whole A button, measured: how long it was held is what decides whether the

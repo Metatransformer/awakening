@@ -21,6 +21,8 @@ extends RefCounted
 ##   E  A component on the dungeon floor is picked up by WALKING OVER IT.
 ##   F  Extraction sorts components onto the bench and leaves the vendor the rest.
 ##   G  Death takes the bag, components included.
+##   P  The armour is FOUR pieces on TWO paths, a piece commits for good, and
+##      the four together land where the one `plate` ladder used to.
 ##
 ## D is the one that matters. Every other claim is bookkeeping; D is the claim
 ## that the money bought something the player can feel, and it is checked against
@@ -38,6 +40,7 @@ func run(rig) -> void:
 	await rig.wait_frames(20)
 
 	_catalogue()
+	_plate_split()
 	await _pouch(rig)
 	await _smith(rig)
 	await _descend(rig)
@@ -52,7 +55,7 @@ func run(rig) -> void:
 		print("FORGE FAIL -- %d check(s) failed" % _fails)
 
 
-## The five ladders are now RATIONED by two of the twelve relics: the smith knows
+## The ladders are now RATIONED by two of the twelve relics: the smith knows
 ## rung 1 from the start, rung 2 after the Tally-Ledger and the rest after the
 ## Imperium Anvil-Plate (`RelicDb.forge_rungs_known()`, GDD §6.2 relics 1 and 2).
 ## Every D-beat below is written about a FULLY CLIMBED ladder -- "the finished
@@ -102,6 +105,72 @@ func _catalogue() -> void:
 		_ck("A2 %s drops from chests" % id, ItemDb.CHEST_DROPS.has(id))
 	_ck("A3 three of the four drop off bodies; the core does not",
 		on_enemy == 3 and not ItemDb.ENEMY_DROPS.has(&"cold_iron_core"))
+
+
+# --- P. The armour split ----------------------------------------------------
+## docs/GDD.md §6.6, and the beat that would have caught the tuning trap the GDD
+## warns about by name: four pieces each carrying `[0, 1, 2, 3]` is TWELVE
+## quarter-hearts against a bestiary tuned for three, which would put every blow
+## in the game on `Hero.hurt`'s one-quarter floor.
+##
+## Run on a scratch `upgrades` and put back afterwards, because every later beat
+## in this file is written against the rungs it buys itself.
+func _plate_split() -> void:
+	var saved := Game.upgrades.duplicate()
+
+	# The eight tracks the smith must actually stock. The ids in `ShopDb.LIMITS`
+	# are spelled by hand (a const initialiser cannot loop), so this is the beat
+	# that catches the typo -- a missing row reads as "the smith sells that one
+	# forever" and nothing else in the build would notice.
+	var missing: Array[StringName] = []
+	for track: StringName in Game.PLATE_TRACKS:
+		if not ShopDb.LIMITS.has(track) or not ShopDb.PARTS.has(track):
+			missing.append(track)
+	_ck("P0 every plate track is stocked and has a recipe (%s)" % [missing],
+		missing.is_empty())
+	_ck("P0b `plate` itself is gone from the board",
+		not ShopDb.LIMITS.has(Game.FORGE_PLATE)
+			and not ShopDb.PARTS.has(Game.FORGE_PLATE))
+
+	# The two ceilings the GDD names. Not "about 4" -- the exact float, because
+	# the tables were written to hit it and a later hand rounding them into
+	# integers is the change this beat exists to fail on.
+	Game.upgrades.clear()
+	for piece: StringName in Game.PLATE_PIECES:
+		Game.upgrades[Game.plate_track(piece, Game.PLATE_HEAVY)] = K.FORGE_MAX
+	print("PLATE full-heavy soak=%.2f speed=%.4f" % [
+		Game.armour_soak_exact(), Game.speed_mult()])
+	_ck("P1 four heavy pieces soak 4 quarters",
+		is_equal_approx(Game.armour_soak_exact(), 4.0))
+	_ck("P2 and cost exactly 8% of the run (never K.RUN_SPEED itself)",
+		is_equal_approx(snappedf(Game.speed_mult(), 0.0001), 0.92))
+
+	Game.upgrades.clear()
+	for piece: StringName in Game.PLATE_PIECES:
+		Game.upgrades[Game.plate_track(piece, Game.PLATE_LIGHT)] = K.FORGE_MAX
+	print("PLATE full-light soak=%.2f speed=%.4f" % [
+		Game.armour_soak_exact(), Game.speed_mult()])
+	_ck("P3 four light pieces soak 2 quarters",
+		is_equal_approx(Game.armour_soak_exact(), 2.0))
+	_ck("P4 and cost nothing at all", is_equal_approx(Game.speed_mult(), 1.0))
+
+	# The commitment. One rung on one path shuts the other for that piece and
+	# leaves the other three pieces free -- which is what makes "heavy chest,
+	# light boots" a build rather than a bug.
+	Game.upgrades.clear()
+	Game.upgrades[Game.plate_track(&"chest", Game.PLATE_HEAVY)] = 1
+	var light_chest := Game.plate_track(&"chest", Game.PLATE_LIGHT)
+	_ck("P5 the chest's light path is closed", Game.path_closed(light_chest))
+	_ck("P6 the smith will not sell it", ShopDb.cap_of(light_chest) == 0)
+	_ck("P7 and says WHY (%s)" % ShopDb.refusal({"id": light_chest, "cost": 0}),
+		ShopDb.refusal({"id": light_chest, "cost": 0}).contains("COMMITTED"))
+	_ck("P8 the row is gone from the counter, not greyed",
+		not ShopDb.stocked(light_chest))
+	_ck("P9 the boots are still an open question",
+		not Game.path_closed(Game.plate_track(&"boots", Game.PLATE_LIGHT))
+			and ShopDb.cap_of(Game.plate_track(&"boots", Game.PLATE_LIGHT)) > 0)
+
+	Game.upgrades = saved
 
 
 # --- B. The pouch -----------------------------------------------------------
@@ -157,11 +226,15 @@ func _pouch(rig) -> void:
 # --- C and D. The smith -----------------------------------------------------
 
 func _smith(rig) -> void:
-	# THE COUNTER IS EIGHT LINES ONLY IF YOU OWN THE BOW AND THE HOOKSHOT.
+	# THE COUNTER IS FIFTEEN LINES ONLY IF YOU OWN THE BOW AND THE HOOKSHOT AND
+	# HAVE COMMITTED NO ARMOUR PIECE.
 	# `ShopDb.GATED_BY` hides the `string` and `chain` ladders and the arrow line
 	# until the weapon they sharpen is owned (docs/SCOPE.md M1), and
 	# `Game.STARTER_KIT` is empty now -- so a cold boot stands at this counter
-	# and sees FIVE rows, not eight.
+	# and sees TWELVE rows, not fifteen. From the other end, each of the four
+	# armour pieces drops its losing path the moment it commits (GDD §6.6), so a
+	# finished hero sees eleven. The count asserted below is the widest the board
+	# ever gets, which is also the one the panel has to be able to draw.
 	#
 	# This director is the FORGE, and the ladder it drives by name below is the
 	# chain. Granting the two weapons is the setup that makes the subject
@@ -181,7 +254,13 @@ func _smith(rig) -> void:
 	if screen == null:
 		print("FORGE FAIL the smith did not open")
 		return
-	_ck("C0 the smith lists eight lines", screen._rows.size() == 8)
+	_ck("C0 the smith lists fifteen lines (7 + the armour's 4x2)",
+		screen._rows.size() == 15)
+	# Fifteen rows against a panel that fits about thirteen. The window is the
+	# only reason the boots are reachable at all, and a list that silently ran
+	# off the bottom would look exactly like a list that was complete.
+	_ck("C0b the panel windows rather than overflowing",
+		screen._rows.size() > 8)
 
 	# --- C. Refusal, with the right reason ------------------------------------
 	# Rich, and holding nothing. The chain is the track the owner named by its

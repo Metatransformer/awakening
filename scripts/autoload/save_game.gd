@@ -16,19 +16,35 @@ const SLOTS := 3
 ## was paid for, so both have to survive quitting exactly as a forge rung does.
 ## `_read` still refuses a version it does not recognise, so a v2 slot reads as
 ## empty rather than as a hero whose glass quietly vanished.
-## Bumped to 4 when the footlocker landed (`Game.stash`).
-const VERSION := 4
-## Versions this build will still read. **Not every bump refuses the one before
-## it, and 4 is the first that does not.**
 ##
-## The two refusals above were bumps that changed the MEANING of what was already
-## in the file: v1 had no `upgrades` at all, so reading one meant inventing a
-## hero who had never bought anything and calling it his save. The footlocker is
-## purely additive -- a v3 slot has no `stash` key, and the honest reconstruction
-## of a v3 hero is one whose locker is empty, which is exactly what
-## `d.get("stash", {})` builds. Refusing it would delete a live save to avoid a
-## migration that is one default value long.
-const READABLE: Array[int] = [3, 4]
+## Bumped to 4 by two changes at once, which is why this note is long.
+##
+## The **footlocker** (`Game.stash`) is purely additive: a v3 slot has no
+## `stash` key and the honest reconstruction of a v3 hero is one whose locker is
+## empty, which is exactly what `d.get("stash", {})` builds. On its own that bump
+## would not have refused v3, and `READABLE` below exists so a future additive
+## bump does not have to.
+##
+## The **gear split** is not additive, and it wins. A v3 slot holds
+## `{"plate": 3}` — three quarter-hearts of soak — and since `plate` became four
+## pieces × two paths (docs/GDD.md §6.6) there is no honest place to put it.
+## Spending it on one piece (`plate_chest_heavy` at rung 3) is 1.0 quarters, a
+## silent two-thirds cut to a number the player paid for. Spreading it over four
+## pieces commits all four to heavy — the one thing §6.6 says can never be undone
+## — on the player's behalf, without asking. Refusing reads as an empty slot,
+## which is honest and loud; both alternatives read as a save that loaded fine
+## and lied.
+##
+## So: **v3 is refused, not migrated**, and `READABLE` holds 4 alone.
+## `max_stamina` joins the format in the same bump — Focus buys it now, so a slot
+## that did not record it would reload the amulet as unpurchased.
+const VERSION := 4
+## Versions this build will still read. **Not every bump has to refuse the one
+## before it** — a bump that only ADDS a key can list the older version here and
+## let `d.get(key, default)` do the migration. v3 is absent only because the gear
+## split changed the meaning of a key that was already in the file, which is the
+## same reason v1 and v2 were refused.
+const READABLE: Array[int] = [4]
 
 signal saved(slot: int)
 signal loaded(slot: int)
@@ -96,12 +112,15 @@ func save(slot: int) -> bool:
 		"played": Time.get_ticks_msec() / 1000.0,
 		"quarters": Game.quarters,
 		"max_quarters": Game.max_quarters,
+		# A Focus amulet raises this permanently, so it is a purchase and it saves.
+		"max_stamina": Game.max_stamina,
 		"magic": Game.magic,
 		"max_magic": Game.max_magic,
 		"gold": Game.gold,
 		"bag_slots": Game.bag_slots,
 		# Every permanent purchase, forge rungs included -- the ladders live in
-		# `upgrades` (see Game.FORGE_*), so one key carries all five.
+		# `upgrades` (see Game.FORGE_TRACKS), so one key carries all twelve, and
+		# the jewelcrafter's eight after it.
 		"upgrades": Game.upgrades,
 		"components": Game.components,
 		# The footlocker. Merchandise the player carried home and chose not to
@@ -200,6 +219,11 @@ func load_slot(slot: int) -> Dictionary:
 
 	Game.max_quarters = d.get("max_quarters", K.START_HEARTS * K.HEART)
 	Game.quarters = d.get("quarters", Game.max_quarters)
+	# Clamped rather than trusted: `K.STAMINA_MAX` is the ceiling every Focus
+	# purchase already respects, and a hand-edited slot must not out-buy the shop.
+	Game.max_stamina = minf(K.STAMINA_MAX,
+		float(d.get("max_stamina", K.MAX_STAMINA)))
+	Game.stamina = Game.max_stamina
 	Game.max_magic = d.get("max_magic", 0)
 	Game.magic = d.get("magic", 0)
 	Game.gold = d.get("gold", 0)

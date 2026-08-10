@@ -483,11 +483,19 @@ percentages, no stat sticks, nothing you have to take on faith*. A stat that
 needs a tooltip explaining why it matters is a stat that does not matter.
 
 They are listed on the equipment screen, beside the paper doll that already
-draws what you are holding.
+draws what you are holding — a THE HERO card of exactly five rows, every one of
+them read back through a `Game` accessor and **never recomputed in the panel**.
+A panel that does its own arithmetic is a second source of truth, and it drifts
+the first time a ladder changes.
+
+> **Built, 2026-08-09.** Everything in §6.6 is in the code and asserted by
+> `tools/directors/forge_loop.gd` and `tools/directors/jewel_loop.gd`. The
+> numbers below are the shipped ones, not targets. `docs/METAGAME.md` §6.5 and
+> §6.7 carry the tables and the recipes.
 
 #### The armour — four pieces, two paths
 
-`plate` was one ladder. It becomes **four**: chest, legs, arms, boots. There is
+`plate` was one ladder. It is now **four**: chest, legs, arms, boots. There is
 no modular armour art and there is not going to be — the hero's model is the
 hero's model, and every one of these is a number (`Game.armour_soak()` is
 already exactly that today).
@@ -526,15 +534,16 @@ in `Hero.hurt` (never lighter than one quarter) absorbing the whole difficulty
 curve. Every hit in the game would land for one quarter and §7's *difficulty
 comes from depth* would be dead.
 
-So: **full heavy across all four pieces should total roughly 4, and full light
-roughly 2.** How that distributes across sixteen rungs is a tuning question, it
-is answered by `forge_loop.gd` and by playing, and it is the *first* thing to get
-wrong. Do not carry a per-piece array over from `PLATE_SOAK` — that array was
-written for one piece.
+So: **full heavy across all four pieces totals exactly 4, and full light exactly
+2.** The per-piece tables are fractional for that reason — heavy runs
+`0 / 0.4 / 0.7 / 1.0` quarters and light `0 / 0.2 / 0.35 / 0.5` — and nothing
+carried over from `PLATE_SOAK`, which was written for one piece. `forge_loop`
+beats P1 and P3 print the sums every run.
 
 The speed multiplier is the safer half: per-piece heavy rungs multiply, and four
-pieces at heavy rung 3 must come to **≈0.92**. Multiplication rather than a
-special case that watches for the fourth piece.
+pieces at heavy rung 3 come to **exactly 0.92** because `PLATE_HEAVY_SPEED` is
+`0.92^(k/12)`. Multiplication rather than a special case that watches for the
+fourth piece.
 
 #### The jewelcrafter — four slots, eight specializations
 
@@ -549,7 +558,13 @@ forge ladder, because a jewel has no rung 0 you already own.
 
 The same soak warning applies to **Ward** and the same speed warning to
 **Swift**: a jewel path and an armour path that both move the same stat are two
-faucets on one number, and the ceiling is the number's, not each faucet's.
+faucets on one number, and the ceiling is the number's, not each faucet's. In
+code that is `K.SOAK_MAX`, `K.EDGE_MAX`, `K.STAMINA_MAX`, and the 1.0 clamp
+inside `Game.speed_mult()` — never a cap per ladder. `jewel_loop` beats F0–F4
+open both faucets on each and assert the cap holds.
+
+Her rungs are **not** rationed by `RelicDb.forge_rungs_known()`. Relics ration
+the smith; one relic drop must not control two counters.
 
 | Slot | Path A | Path B |
 |---|---|---|

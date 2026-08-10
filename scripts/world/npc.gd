@@ -14,10 +14,10 @@ extends Interactable
 ## none of it ever depended on the mesh, and swapping the mesh touched
 ## `_build_person` and nothing else.
 
-## KEEPER is appended rather than slotted in beside the other three counters:
-## the values are what an `@export var role` serialises, and re-ordering this
-## enum would silently turn every placed alchemist into a gate.
-enum Role { VENDOR, SMITH, GATE, ALCHEMIST, KEEPER }
+## KEEPER and JEWELLER are appended rather than slotted in beside the other
+## counters: the values are what an `@export var role` serialises, and
+## re-ordering this enum would silently turn every placed alchemist into a gate.
+enum Role { VENDOR, SMITH, GATE, ALCHEMIST, KEEPER, JEWELLER }
 
 ## Everything that differs between the people in this town, on one row each.
 ##
@@ -55,11 +55,15 @@ static var COUNTERS := {
 		"sign": "ALCHEMIST", "prompt": "TALK", "hold": 0.0,
 		"counter": {"title": "THE ALCHEMIST", "mode": TradeScreen.Mode.BUY, "db": AlchemyDb},
 	},
-	# The fourth counter, and the last one there will be (docs/GDD.md §6: "the
-	# vendor buys, the smith forges, the alchemist brews, the Lanternkeeper
-	# records"). She cost exactly this row and a `Catalogue` subclass -- no
-	# screen, no branch in `activate`, no new mode -- which is the acceptance
+	# The fourth counter. She cost exactly this row and a `Catalogue` subclass --
+	# no screen, no branch in `activate`, no new mode -- which is the acceptance
 	# criterion for the whole relic system and not a nice outcome.
+	#
+	# She was "the last one there will be" until 2026-08-09, when GDD §6.6 added
+	# the jewelcrafter below and docs/SCOPE.md §1 moved town NPCs from 4 to 5 as
+	# an owner's amendment. The claim was not wrong about the COST -- the fifth
+	# counter cost the same row and the same subclass -- which is exactly why the
+	# ceiling now lives in SCOPE §1 rather than in a comment here.
 	#
 	# `hold` is 0 like the other three: the HOLD that matters here is on the
 	# LINE, not on the greeting. `RelicDb.crafts()` answers true for every row,
@@ -69,6 +73,20 @@ static var COUNTERS := {
 		"sign": "LANTERNKEEPER", "prompt": "TALK", "hold": 0.0,
 		"counter": {
 			"title": "THE FAR LANTERN", "mode": TradeScreen.Mode.BUY, "db": RelicDb,
+		},
+	},
+	# The fifth counter, and the last one there will be (docs/SCOPE.md §1: town
+	# NPCs **5**, "There is no sixth"). Same bill as the Lanternkeeper's, paid
+	# again: one row, one `Catalogue`.
+	#
+	# `hold` is 0 like the other four. `JewelDb.crafts()` answers true for every
+	# rung and false for the four blanks, so the gauge lands on the commits that
+	# eat stones and the blanks stay a tap -- which is the rule `Catalogue.crafts`
+	# exists to state once.
+	Role.JEWELLER: {
+		"sign": "JEWELCRAFTER", "prompt": "TALK", "hold": 0.0,
+		"counter": {
+			"title": "THE SETTING BENCH", "mode": TradeScreen.Mode.BUY, "db": JewelDb,
 		},
 	},
 	# 0.9 s, and the only hold in the world. It is the door OUT of the hub and
@@ -150,6 +168,23 @@ static var LOOKS := {
 	Role.KEEPER: {
 		"race": "reshi", "fabric": "homespun", "idle": &"idle9",
 		"tint": Color(0.66, 0.76, 0.94), "booth": ShopBooth.Kind.STALL,
+	},
+	# Stoneborn, like the smith, and for the same reason the Lanternkeeper is
+	# reshi like the pawnbroker: three peoples, five counters. Cutting stone is
+	# their trade twice over, so the doubling reads as a people rather than as a
+	# reused asset -- and she is told apart from him the way the keeper is told
+	# apart from the pawnbroker, by fabric, tint and idle. Violet against his tan,
+	# which is also the tint of the stone she sets (`cut_gemstone`).
+	# The idle is the ALCHEMIST'S, not the smith's, and that is the whole reason
+	# it is a repeat rather than a fifth clip: `RaceBody.CLIPS` is four, capped by
+	# what survives dropping the position tracks, so the fifth counter has to
+	# borrow one. Borrowing across the yard from a Vyr of a different height is
+	# invisible; borrowing the Stoneborn next to her would put two short,
+	# slab-built people breathing in time at the same end of the courtyard, which
+	# is the exact failure the keeper's row was written to avoid.
+	Role.JEWELLER: {
+		"race": "stoneborn", "fabric": "silk", "idle": &"idle4",
+		"tint": Color(0.78, 0.60, 0.92), "booth": ShopBooth.Kind.STALL,
 	},
 }
 
