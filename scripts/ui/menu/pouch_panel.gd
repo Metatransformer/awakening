@@ -200,27 +200,42 @@ func _build() -> void:
 	split.add_theme_constant_override("separation", 24)
 	body.add_child(split)
 
-	# Doll, then grid: the figure on the far left, what it is carrying beside it,
-	# and what any of that is worth on the right. Left to right, the screen is a
-	# sentence about you.
-	var left := HBoxContainer.new()
+	# THE BENCH IS ON THE LEFT, UNDER the grid -- a ROW of its own, not a third
+	# column beside it. Both halves of that sentence were paid for.
+	#
+	# "On the left" is measured, not guessed: with all four cards stacked on the
+	# right the column wanted 627 px and the frame 801, inside a 720 px viewport.
+	# Forty pixels of the header and forty of the bench rendered off the top and
+	# bottom edges of the screen, and nothing complained -- the same failure the
+	# ITEMS screen hit and the same one `_build_stock`'s own comment describes
+	# surviving once already. The bench is the only card here that is not
+	# focusable and not part of the extraction arithmetic, so it is the one that
+	# moves.
+	#
+	# "Under, not beside" is the other half, and it was paid for by a merge: the
+	# bench arrived on the left in the same week the paper doll did, and three
+	# cards in one row wanted 948 px of a 776 px budget -- frame 1362 in a 1280
+	# viewport, forge_loop's B4 red. A row costs width the screen has none of and
+	# height the screen has plenty of: `Right` is 474 px tall and this side was
+	# 329, so there were 145 px of vertical slack sitting unused next to a
+	# horizontal overflow. The bench is the card that can spend it, because it is
+	# the only one whose content is a list rather than a shape.
+	var left := VBoxContainer.new()
 	left.name = "Left"
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	left.add_theme_constant_override("separation", 16)
 	split.add_child(left)
-	_build_doll(left)
-	_build_grid(left)
-	# THE BENCH IS ON THE LEFT, under the grid, and it is here for room rather
-	# than for meaning -- though the meaning survives the move, since what made it
-	# home sits directly under what has not yet.
-	#
-	# Measured, not guessed: with all four cards stacked on the right the column
-	# wanted 627 px and the frame 801, inside a 720 px viewport. Forty pixels of
-	# the header and forty of the bench rendered off the top and bottom edges of
-	# the screen, and nothing complained -- the same failure the ITEMS screen hit
-	# and the same one `_build_stock`'s own comment describes surviving once
-	# already. The bench is the only card here that is not focusable and not part
-	# of the extraction arithmetic, so it is the one that moves.
+
+	# Doll, then grid: the figure on the far left, what it is carrying beside it,
+	# and what any of that is worth on the right. Left to right, the screen is a
+	# sentence about you.
+	var carried := HBoxContainer.new()
+	carried.name = "Carried"
+	carried.add_theme_constant_override("separation", 16)
+	left.add_child(carried)
+	_build_doll(carried)
+	_build_grid(carried)
+
 	_build_stock(left)
 
 	var right := VBoxContainer.new()
@@ -820,16 +835,20 @@ func _build_stock(parent: Node) -> void:
 	caption.text = "WORKBENCH"
 	col.add_child(caption)
 
-	# Two columns, not one line per material. The bench held four things when
+	# Four columns, not one line per material. The bench held four things when
 	# this was a single autowrapping Label; the alchemist's four brought it to
 	# eight, and eight rows grew the right column until the frame was 872 px
 	# tall inside a 720 px viewport -- the bottom half of the list rendered off
-	# the screen and nothing complained. Pairing them keeps the tallest bench
-	# the same height as the forge-only one was, so adding a ninth material
-	# costs half a row instead of a whole one.
+	# the screen and nothing complained.
+	#
+	# It was two columns while the card was a 160 px sliver in a row of three.
+	# Now that it has the whole width under the doll and the grid, four fits: the
+	# full eight-material bench is two rows instead of four, which is what keeps
+	# this side under `Right`'s 474 px and the frame at the height it was before
+	# the bench moved at all. A ninth material still costs a quarter of a row.
 	_stock = GridContainer.new()
 	_stock.name = "BenchGrid"
-	_stock.columns = 2
+	_stock.columns = 4
 	_stock.add_theme_constant_override("h_separation", 14)
 	_stock.add_theme_constant_override("v_separation", 2)
 	col.add_child(_stock)

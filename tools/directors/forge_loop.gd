@@ -210,15 +210,30 @@ func _smith(rig) -> void:
 
 	await _forge_is_a_hold(rig, screen)
 
+	# The top rung the smith can currently reach, which is NOT `K.FORGE_MAX`.
+	# `ShopDb.cap_of` clamps a ladder by `RelicDb.forge_rungs_known()` -- 1 until
+	# the Tally-Ledger of Fair Weights is donated, 2 until the Imperium
+	# Anvil-Plate -- so on a cold boot every ladder legitimately stops at rung
+	# one, and this check asserted 3 and called the game broken.
+	#
+	# It went unnoticed because it was UNREACHABLE: town.gd has not parsed since
+	# c1e53a8, so this whole beat was skipped and the run reported green on a
+	# ladder it never climbed. Asserting the taught ceiling instead of the
+	# absolute one still catches the failure this check exists for -- a ladder
+	# that stops short of what the smith knows -- and it will follow the ceiling
+	# up on its own as the relics land, with no edit here.
 	for track in Game.FORGE_TRACKS:
+		var top: int = ShopDb.cap_of(track)
 		for _rung in K.FORGE_MAX:
 			var line := ShopDb.lines().filter(
 				func(l: Dictionary) -> bool: return l["id"] == track)
 			if line.is_empty() or not ShopDb.buy(line[0]):
 				break
-		_ck("D0 %s reached the top rung (%d of %d)" % [
-			track, Game.forge_level(track), K.FORGE_MAX],
-			Game.forge_level(track) == K.FORGE_MAX)
+		_ck("D0 %s reached the top rung the smith knows (%d of %d, ceiling %d)" % [
+			track, Game.forge_level(track), K.FORGE_MAX, top],
+			Game.forge_level(track) == top)
+	print("FORGE rungs taught=%d of %d (relics donated: %d)"
+		% [RelicDb.forge_rungs_known(), K.FORGE_MAX, RelicDb.donated_count()])
 
 	print("FORGE full edge=+%d plate=-%d guard=%.0f draw=%.2f reach=%.2f" % [
 		Game.sword_bonus(), Game.armour_soak(), Game.guard_arc(),
@@ -231,8 +246,14 @@ func _smith(rig) -> void:
 		before["chain"], Game.hook_reach()], Game.hook_reach() > before["chain"])
 	# The top of the chain ladder IS [oot]'s Longshot. If this drifts, the table
 	# stopped meaning what its comment says it means.
-	_ck("D6 the finished chain is exactly the Longshot",
-		is_equal_approx(Game.hook_reach(), K.HOOK_LONGSHOT_RANGE))
+	#
+	# Read off the TABLE, not off `Game.hook_reach()`. The relic gate above holds
+	# the ladder at rung one on a cold boot, so the reach the shop can actually
+	# produce here is 11.89 m -- and this check has never been about the shop. It
+	# is about `K.CHAIN_REACH`'s last entry still being the Longshot, which is a
+	# claim about the constants file and is just as true at rung one.
+	_ck("D6 the top of the chain table is exactly the Longshot",
+		is_equal_approx(K.CHAIN_REACH[K.FORGE_MAX], K.HOOK_LONGSHOT_RANGE))
 	# A finished ladder must be refused, or gold buys a fourth rung off the end
 	# of the array and the game crashes indexing K.
 	var done := _row(screen, &"chain")
