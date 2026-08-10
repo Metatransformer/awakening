@@ -68,20 +68,20 @@ a literal `2.0`. **Anything you tune that another piece can see belongs in `K`.*
 
 ## 1b. The universal character model — one rig, three peoples, four suits
 
-Every BUILT person — the alchemist, the elder, and every monster — is the SAME
+Every BUILT person — every monster, and nobody in the garrison — is the SAME
 24-bone rig (`Hips`, `Spine02`→`Spine01`→`Spine`, `neck`, `Head`, the
 `Left*`/`Right*` limbs, and the leaf markers `head_end`/`headfront`). Note the
 spine ordering: **`Spine02` is nearest the hips and `Spine` nearest the neck**,
 which is backwards from every other rig in this project, and reading it the
 obvious way puts a collar around the waist.
 
-**The four authored shopkeepers are not on it** — see §1c. Nothing in this
+**The five authored shopkeepers are not on it** — see §1c. Nothing in this
 section applies to them, and the suit system in particular must never be pointed
 at one.
 
 | What | Where | Notes |
 |---|---|---|
-| Race bodies | `assets/characters/races/*_base.glb` | Stoneborn 1.41 m, Reshi 1.65 m, Vyr 1.82 m. One mesh each, own baked atlas. |
+| Race bodies | `assets/characters/races/*_base.glb` | Stoneborn 1.41 m, Reshi 1.65 m, Vyr 1.82 m. **No garrison NPC is cast from these any more** — the elder was the last, and he is now the Lanternkeeper. All three still cast monsters. One mesh each, own baked atlas. |
 | Shared clips | `assets/characters/races/_humanoid_anims.glb` | Rotation tracks only — see `RaceBody._shared_lib` for why the position tracks must be dropped. |
 | Suits | `assets/characters/suits/<material>/` | `cloth`, `leather`, `mail`, `plate`. Each is `body_rigged.glb` + `head_rigged.glb` with its own basecolour maps. |
 
@@ -111,15 +111,15 @@ outside and render correctly.
 
 ---
 
-## 1c. The four authored shopkeepers — a second rig, and no clothing system
+## 1c. The five authored shopkeepers — a second rig, and no clothing system
 
-The smith, the pawnbroker, the Lanternkeeper and the jewelcrafter are single
-authored figures, dressed as they ship: one mesh, one surface, one baked atlas
+The smith, the pawnbroker, the Lanternkeeper (who is also the village elder),
+the jewelcrafter and the alchemist are single authored figures, dressed as they ship: one mesh, one surface, one baked atlas
 carrying the buckles, the beard and the gold. `NpcBody` owns them.
 
 | What | Where | Notes |
 |---|---|---|
-| Authored bodies | `assets/characters/npc/{smith,pawnbroker,lanternkeeper,jewelcrafter}.fbx` | Smith 1.44 m, jewelcrafter 1.63 m, pawnbroker 1.72 m, keeper 1.74 m. Each with its own extracted `*_0.png`. |
+| Authored bodies | `assets/characters/npc/{smith,pawnbroker,lanternkeeper,jewelcrafter,alchemist}.fbx` | Smith 1.44 m, jewelcrafter 1.63 m, pawnbroker 1.72 m, keeper 1.74 m, alchemist 1.82 m. Each with its own extracted `*_0.png`. |
 
 **Never point the suit system at one of these.** There is no bare body under the
 clothes to seat a garment onto, the UVs are not normalised against the pack's
@@ -134,10 +134,11 @@ The rig is Tripo's own, not §1b's, and it disagrees on all three axes at once:
 - **The spine runs the other way** — `Spine02` is the CHEST here and the belly in
   §1b. `NpcBody.BONES` is the map; matching the two `Spine02`s by name ties the
   chest to the waist.
-- **A-pose with the elbows already bent**, against §1b's flat T-pose, and each of
-  the four bends differently. This is why `NpcBody._corrected_rests` exists: a
+- **A-pose with the elbows already bent**, against §1b's flat T-pose, and every
+  body bends differently. This is why `NpcBody._corrected_rests` exists: a
   retarget that preserves the rotation a clip *adds* stacks the idle's bend on
-  the rest's, and the four bodies come out wrong in four different ways.
+  the rest's, and the bodies come out wrong in as many different ways as there
+  are bodies.
 
 They play the same four idles off the same `_humanoid_anims.glb` as everyone
 else, rotation tracks only, retargeted per body at load. Measured facing is

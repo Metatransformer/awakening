@@ -17,11 +17,16 @@ extends RefCounted
 ##     --director=res://tools/directors/npc_raw.gd --out=/tmp/npc/x.png
 
 const DIR := "res://assets/characters/npc/"
-const WHO: Array[String] = ["jewelcrafter", "pawnbroker", "lanternkeeper", "smith"]
+const WHO: Array[String] = ["jewelcrafter", "pawnbroker", "lanternkeeper", "smith", "alchemist"]
 ## Metres between bodies on the line-up. They import at roughly a unit tall, so
 ## this is generous on purpose -- a body that turns out to be five times its
 ## neighbours should overlap them visibly rather than vanish behind one.
 const STEP := 1.2
+
+
+## Where the line-up's middle is. Set in `run` from how many bodies actually
+## got built, and read by `_shot`.
+var _mid := 0.0
 
 
 func run(rig) -> void:
@@ -68,15 +73,22 @@ func run(rig) -> void:
 	# Front. The camera is on +Z looking back down -Z, which is where the player
 	# stands relative to a shopkeeper (`Npc` yaws a keeper's +Z at the hero), so
 	# "do they look at me from here" is the whole question this frame answers.
-	await _shot(rig, cam, out, "npc_raw_0_front", Vector3(1.8, 1.5, 4.6))
-	await _shot(rig, cam, out, "npc_raw_1_back", Vector3(1.8, 1.5, -4.6))
-	await _shot(rig, cam, out, "npc_raw_2_side", Vector3(6.4, 1.5, 0.6))
+	# Derived from the line-up, not written down: the fifth body was added to WHO
+	# and every one of these three cameras was still framing the middle of four,
+	# which put the alchemist half out of the frame in the shot that is supposed
+	# to prove she arrived.
+	var mid := STEP * float(made.size() - 1) * 0.5
+	var back := 3.4 + STEP * float(made.size())
+	_mid = mid
+	await _shot(rig, cam, out, "npc_raw_0_front", Vector3(mid, 1.5, back))
+	await _shot(rig, cam, out, "npc_raw_1_back", Vector3(mid, 1.5, -back))
+	await _shot(rig, cam, out, "npc_raw_2_side", Vector3(mid + back, 1.5, 0.6))
 	print("NPCRAW done")
 
 
 func _shot(rig, cam: Camera3D, out: String, name: String, at: Vector3) -> void:
 	cam.global_position = at
-	cam.look_at(Vector3(1.8, 0.85, 0.0), Vector3.UP)
+	cam.look_at(Vector3(_mid, 0.85, 0.0), Vector3.UP)
 	await rig.wait_frames(6)
 	await rig.capture(out.path_join(name + ".png"))
 

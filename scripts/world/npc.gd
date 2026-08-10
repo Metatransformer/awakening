@@ -1,6 +1,6 @@
 class_name Npc
 extends Interactable
-## The three people in the garrison, and the gate they stand around.
+## The five people in the garrison, and the gate they stand around.
 ##
 ## They were boxes with a lantern, on purpose, for as long as the loop was the
 ## thing being built: a stand-in character model that is nearly good is worse
@@ -8,11 +8,14 @@ extends Interactable
 ## of the game. The loop works, so they are people now -- standing behind a
 ## `ShopBooth` full of their own trade, and built two different ways:
 ##
-##   * Four are **authored bodies** (`NpcBody`) -- a dwarf smith, a warrior at the
-##     pawnbroker's stall, a hooded Lanternkeeper and the jewelcrafter, each
-##     modelled as a whole dressed figure. They do not go near the suit system.
-##   * Two are **built** (`RaceBody`) -- the alchemist and the elder, cast from one
-##     of the Vale's three peoples and dressed by `SuitSeater`.
+##   * **All five are authored bodies** (`NpcBody`) -- a dwarf smith, a warrior at
+##     the pawnbroker's stall, the hooded Lanternkeeper who is also the village
+##     elder, the jewelcrafter and the spectacled alchemist, each modelled as a
+##     whole dressed figure. They do not go near the suit system.
+##   * **None are built** (`RaceBody`) any more -- the elder was the last, and he
+##     is now the Lanternkeeper. `_build_person` keeps that branch on purpose: it
+##     is the machine that can put somebody new in the yard without commissioning
+##     a model, and it is what the whole monster roster still runs on.
 ##
 ## **What they DO did not change, either time, and that is the point.** Turn to
 ## face you, light up when addressed, open the right screen: all of it still lives
@@ -22,7 +25,12 @@ extends Interactable
 ## KEEPER and JEWELLER are appended rather than slotted in beside the other
 ## counters: the values are what an `@export var role` serialises, and
 ## re-ordering this enum would silently turn every placed alchemist into a gate.
-enum Role { VENDOR, SMITH, GATE, ALCHEMIST, KEEPER, JEWELLER, ELDER }
+##
+## ELDER was appended after those and has now been REMOVED, which is safe for the
+## same reason and only because it was last: it took the highest value, so every
+## other role kept its number. Nothing in `scenes/` exports a role -- `Garrison`
+## builds all six by hand -- but the rule stands for the next person.
+enum Role { VENDOR, SMITH, GATE, ALCHEMIST, KEEPER, JEWELLER }
 
 ## Everything that differs between the people in this garrison, on one row each.
 ##
@@ -78,8 +86,22 @@ static var COUNTERS := {
 	# LINE, not on the greeting. `RelicDb.crafts()` answers true for every row,
 	# so `TradeScreen` puts its gauge on the donation itself and the footer reads
 	# HOLD ENT TO RECORD.
+	#
+	# **He is also the village elder** (2026-08-10, owner's call). Those were two
+	# people for a day: an elder standing in the open grass with three recorded
+	# lines and no counter, and a silent Lanternkeeper behind the relic hall. They
+	# were always the same character description -- the old man who is expecting
+	# you, who keeps the Society's records, who is the reason the garrison has
+	# somebody to report to -- so they are one person now, and the yard is five
+	# people instead of six. That collapse is why this row has BOTH a `voice` and
+	# a `counter`, which no row had before: `activate` says the greeting and then
+	# opens the screen, in that order, and neither half knew about the other.
+	#
+	# What it cost: the elder used to be the proof that a row with a voice and NO
+	# counter works. Nothing tests that now, and no row needs it -- see the note
+	# in `activate`, which still handles it and says so.
 	Role.KEEPER: {
-		"sign": "LANTERNKEEPER", "prompt": "TALK", "hold": 0.0,
+		"sign": "LANTERNKEEPER", "prompt": "TALK", "hold": 0.0, "voice": &"elder",
 		"counter": {
 			"title": "THE FAR LANTERN", "mode": TradeScreen.Mode.BUY, "db": RelicDb,
 		},
@@ -97,23 +119,6 @@ static var COUNTERS := {
 		"counter": {
 			"title": "THE SETTING BENCH", "mode": TradeScreen.Mode.BUY, "db": JewelDb,
 		},
-	},
-	# The sixth person, and the only one who is not selling you anything.
-	#
-	# **A row with a `voice` and no `counter` is the whole of him**, which is the
-	# claim `COUNTERS` has been making since it was written and had never once
-	# been tested by a person who does not trade: `activate` opens a counter if
-	# there is one, and if there is not, the greeting it already said IS the
-	# interaction. No dialogue tree (`docs/SCOPE.md` §1 still says **0**, and a
-	# recorded line is not a tree), no screen, no branch.
-	#
-	# He is why the garrison has somebody to report to. `docs/GDD.md` §1 used to
-	# say the hub gets to be small because there is "nobody to talk to who is not
-	# selling something"; the elder is the amendment to that sentence and he is
-	# deliberately the *smallest* one available -- two takes on a greeting, and
-	# a third line the opening spends once (`Voice.LINES` &"elder"/&"arrival").
-	Role.ELDER: {
-		"sign": "VILLAGE ELDER", "prompt": "TALK", "hold": 0.0, "voice": &"elder",
 	},
 	# 0.9 s, and the only hold in the world. It is the door OUT of the hub and
 	# the one press in the game that ends the safe part of the session, so it is
@@ -149,25 +154,26 @@ static var COUNTERS := {
 ##    added.** Putting the clothing system anywhere near them seats a garment onto
 ##    a rig it was never fitted to and produces a person wearing another person.
 ##  * **`race`** -- a base from the Valenfeld pack, dressed by the suit system
-##    (`RaceBody.wear`). Two rows are left: the alchemist and the elder. That is
-##    not a leftover to be finished off. A `RaceBody` is what you reach for when a
-##    person has to be BUILT out of a race, a suit and a colour -- which is still
-##    how the Vale's three peoples are cast -- and it is the only one of the two
-##    that can put somebody new in the yard without commissioning a model.
+##    (`RaceBody.wear`). **No row uses it today**, and it is not dead: it is what
+##    you reach for when a person has to be BUILT out of a race, a suit and a
+##    colour, which is how the Vale's three peoples are cast and how every monster
+##    in the dungeon is made. It is also the only one of the two that can put
+##    somebody new in the yard without commissioning a model, so the next person
+##    to arrive here probably arrives on it.
 ##
 ## The casting is not at random on either side. Each body keeps the counter it
 ## would keep, which is why the garrison reads as a place with history in it
-## rather than six vendors in different hats: a dwarf at the forge, an old man in
-## relic-jewelled mail at the Far Lantern, a woman wearing her own trade at the
-## setting bench, a scarred road-warrior fencing goods at the stall, and the two
-## races the pack still casts -- **Vyr** at the apothecary, a head over any settler
-## and born, they say, seeing the flaw in the drawing (which is the job), and a
-## **Reshi** elder, settler height, eye to eye with you.
+## rather than five vendors in different hats: a dwarf at the forge, a scarred
+## road-warrior fencing goods at the stall, a woman wearing her own trade at the
+## setting bench, a hooded man at the apothecary who wears his stock -- spectacles
+## and a belt of stoppered flasks -- and, at the Far Lantern, the white-bearded
+## elder in relic-jewelled mail who is both the person you report to and the man
+## who keeps the records.
 ##
-## Heights are load-bearing and come off `NpcBody.PEOPLE` / `RaceBody.RACES`. The
-## hero is 1.65 m, and the row steps -- smith 1.44, jewelcrafter 1.63, elder 1.65,
-## pawnbroker 1.72, keeper 1.74, alchemist 1.82 -- so the smith reads a clear head
-## short of you and the alchemist a clear head tall, before either says a word.
+## Heights are load-bearing and come off `NpcBody.PEOPLE`. The hero is 1.65 m,
+## and the row steps -- smith 1.44, jewelcrafter 1.63, pawnbroker 1.72, keeper
+## 1.74, alchemist 1.82 -- so the smith reads a clear head short of you and the
+## alchemist a clear head tall, before either says a word.
 ##
 ##   * `model`  -- an authored body, dressed as it ships. Excludes `race`.
 ##   * `race`   -- a base to build and dress. Excludes `model`.
@@ -180,9 +186,9 @@ static var COUNTERS := {
 ##   * `idle`   -- their resting loop, so the garrison is not six people breathing
 ##     in time. All from the standing family; see `RaceBody.CLIPS`, which is the
 ##     same four clips either kind of body plays.
-##   * `booth`  -- the shop they stand in. **Absent means none**, and the elder is
-##     the one row that leaves it out: a counter is what a person who sells
-##     things stands behind, so the person who sells nothing stands in the open.
+##   * `booth`  -- the shop they stand in. **Absent means none.** Every row here
+##     has one now; the elder was the one that left it out, and he is the
+##     Lanternkeeper.
 static var LOOKS := {
 	# The dwarf: leather apron, one pauldron, a hammer on the belt and a bare
 	# forearm, at 1.44 m and half again as wide as anyone else in the yard. He is
@@ -195,16 +201,34 @@ static var LOOKS := {
 	Role.VENDOR: {
 		"model": "pawnbroker", "idle": &"idle", "booth": ShopBooth.Kind.STALL,
 	},
+	# Hooded and spectacled, with a belt of stoppered flasks and a vial at his hip:
+	# the apothecary's stock worn on the body, the same trick the jewelcrafter's
+	# emerald plays. At 1.82 m he is the tallest person in the yard, which is the
+	# height the Vyr row he replaced was carrying and the reason it survives the
+	# swap -- he looks DOWN at you over the alembics whether or not he is Vyr any
+	# more (he is not; docs/GDD.md §1).
+	#
+	# `idle3` and NOT `idle4`, which is the clip this row had while he was built
+	# from a suit. Four clips, six people, so somebody repeats and the rule is
+	# *repeat the one nobody who looks like you is using* -- and `idle4` is already
+	# the jewelcrafter's. `idle3` belongs to the smith: a 1.44 m dwarf behind a
+	# forge at the far north-east, who cannot be mistaken at any distance for a
+	# tall hooded man on the west side.
 	Role.ALCHEMIST: {
-		"race": "vyr", "suit": "cloth", "idle": &"idle4",
-		"tint": Color(0.56, 0.88, 0.68), "booth": ShopBooth.Kind.ALCHEMY,
+		"model": "alchemist", "idle": &"idle3", "booth": ShopBooth.Kind.ALCHEMY,
 	},
 	# Hooded, white-bearded, and wearing a mail coat set with a dozen coloured
-	# stones -- which is the whole of the Far Lantern's pitch worn on a body. He
-	# is the tallest of the four authored people and the only one you cannot see
-	# the face of from across the yard, so the strange counter reads as the
-	# strange one before the sign is legible. (He replaced a Reshi woman built out
-	# of suit and tint, and the tint was doing this job on its own.)
+	# stones -- the whole of the Far Lantern's pitch worn on a body. He is the
+	# second tallest person in the yard and the oldest, so the strange counter
+	# reads as the strange one before the sign is legible.
+	#
+	# **This is the village elder.** He was two people for a day and the art is
+	# what collapsed them: the body that arrived for this counter is a bearded old
+	# man in robes, which is the elder's description written down, and a garrison
+	# of five does not have room for two of him twelve metres apart. So the elder's
+	# grass, his lamp and his `Role` are gone, and his three recorded lines came
+	# here (`COUNTERS`). He is still the person you report to; he now also keeps
+	# the records, which was always what the Society's man did.
 	#
 	# A STALL, and that is the end of dressing him. The hall is not a booth kind
 	# and it does not need to be: the twelve lamps outside are what says this
@@ -219,50 +243,14 @@ static var LOOKS := {
 	# needs no tint: the violet the old Stoneborn row used was standing in for
 	# exactly this and cost a `cut_gemstone` cross-reference to explain.
 	#
-	# `idle4` is shared with the alchemist, and that is fine for the reason the
-	# old row gave and which still holds: `RaceBody.CLIPS` is four and there are
-	# six people, so somebody repeats, and you repeat the clip nobody who LOOKS
-	# like you is using. The alchemist is a 1.82 m Vyr at the far side of the yard.
+	# `idle4` is hers alone now. There are four clips and five people, so exactly
+	# one pair repeats, and the rule this row set is *repeat the one nobody who
+	# LOOKS like you is using* -- the smith and the alchemist are the pair, a
+	# 1.44 m dwarf at the forge and a 1.82 m hooded man at the far side of the
+	# yard. (This clip was shared with the elder until he and the Lanternkeeper
+	# became one person.)
 	Role.JEWELLER: {
 		"model": "jewelcrafter", "idle": &"idle4", "booth": ShopBooth.Kind.STALL,
-	},
-	# The elder, and every field here is doing the same job: making the one person
-	# in the yard who wants nothing from you legible as that from across it.
-	#
-	#  * **Reshi**, the settler height (1.65 m) -- eye to eye with the hero, which
-	#    the Stoneborn and the Vyr are deliberately not. You are being spoken to,
-	#    not sold to or looked down at.
-	#  * **Leather in warm russet, and it was authored in CLOTH first.** Cloth is
-	#    the obvious call -- a robe is what an elder wears, and undyed homespun is
-	#    the absence of a trade colour, which is what he is. It rendered as a
-	#    charcoal-blue hooded figure of exactly the hero's value, standing next to
-	#    the hero, in the one frame the whole placement exists to compose. Only the
-	#    capture could say so (`v_02_from_the_spawn` in `tools/directors/voices.gd`).
-	#
-	#    **`tint` MULTIPLIES, and every atlas in the pack is dark**, with
-	#    `SuitSeater.TINT_PULL` softening the colour halfway to white before it
-	#    even lands -- so a pale tint is very nearly no tint, and there is no
-	#    number here that makes cloth read light. **Pick saturation, never
-	#    brightness; to change VALUE, change the suit.** Leather is the lightest
-	#    atlas a non-combatant can plausibly wear, and in russet he reads warm and
-	#    a full stop lighter than the hero at fifteen metres, which is the distance
-	#    he is first seen from. (Mail was tried and works even better on legibility
-	#    and reads as a soldier, which he is not.)
-	#
-	#    The smith is also in leather, also warm. He is a 1.41 m Stoneborn behind a
-	#    forge at the far north-east; this is a 1.65 m Reshi alone in the middle of
-	#    the grass. Different height, different people, twelve metres apart, and
-	#    the tint is a stop deeper.
-	#  * **`idle4`.** `RaceBody.CLIPS` is four and there are six people, so
-	#    somebody repeats -- and the rule the jewelcrafter's row set is *repeat the
-	#    one nobody who looks like you is using*. `idle3` is the smith's and he is
-	#    the other man in leather; `idle9` is the Lanternkeeper's and she is the
-	#    other Reshi; `idle` is the pawnbroker's, also Reshi. `idle4` belongs to a
-	#    Vyr and a Stoneborn, neither of whom he could be mistaken for.
-	#  * **No booth.** See the field list above.
-	Role.ELDER: {
-		"race": "reshi", "suit": "leather", "idle": &"idle4",
-		"tint": Color(1.00, 0.82, 0.44),
 	},
 }
 
@@ -304,11 +292,15 @@ func activate(_by: Node3D) -> void:
 	var row := _row()
 	# They speak first, before the screen, because that is the order it happens
 	# in: you say hello to somebody and then look at what they have. Silent for
-	# the gate, which is masonry, and for the Lanternkeeper, who has no takes --
-	# `Voice.say` answers 0.0 and nothing happens, so neither needs a branch.
+	# the gate, which is masonry -- `Voice.say` answers 0.0 for a speaker with no
+	# takes and nothing happens, so it does not need a branch either.
 	#
-	# For the elder this call IS the interaction. He has no counter, so the
-	# function ends two lines down having done exactly what talking to him does.
+	# **Both halves are optional and always were**, which is what made the elder
+	# cheap to fold into the Lanternkeeper: a row can carry a voice and no counter
+	# (the elder, until 2026-08-10), a counter and no voice (the Lanternkeeper,
+	# until the same day), or both, and this function did not change a line to
+	# allow the third. Nothing exercises voice-without-counter now. It still
+	# works: the function simply ends two lines down.
 	var who := StringName(row.get("voice", &""))
 	if who != &"":
 		Voice.say(who, &"hello")
@@ -400,9 +392,10 @@ func _build_person() -> void:
 	# side `ShopBooth` authors its counter to face -- so aiming an Npc at the
 	# yard aims their booth at it too, and nothing has to be placed twice.
 	#
-	# Absent for the elder. `Garrison._stand` is the other half of that: a keeper
-	# is placed by where their COUNTER goes and steps back behind it, and somebody
-	# with no counter has to be placed where they are standing.
+	# Absent only for the gate now. `Garrison._stand` was the other half of this
+	# -- a keeper is placed by where their COUNTER goes and steps back behind it,
+	# so somebody with no counter had to be placed where they stood -- and it went
+	# when the elder did.
 	if look.has("booth"):
 		var booth := ShopBooth.new()
 		booth.kind = look["booth"]

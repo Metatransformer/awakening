@@ -41,7 +41,7 @@ definition**, and §4.2 applies.
 | **Echoes** | **12** | Run-scoped, 1 bag slot, worth 0 gold, dies with the run. Named — no thirteenth, same discipline as the relics |
 | **Minibosses** | **4** | One per floor, behind the treasure puzzle, **two** beats each (a boss gets three) |
 | Relics | **12** | Named, hand-placed, non-rolling. **Two are Verses; all twelve arrive broken** — GDD §6.4 |
-| Garrison NPCs | **6** | Five counters — vendor, smith, alchemist, Lanternkeeper, Jewelcrafter — and **one person who is not a counter: the village elder (new, 2026-08-10)**. Was 5. **There is no sixth counter**, and that is the half of this number that was ever the brake — see §4.2's fifth ledger line. |
+| Garrison NPCs | **5** | Five counters — vendor, smith, alchemist, Lanternkeeper, Jewelcrafter — and that is everybody. Was 6 for one day: **the village elder went in as a sixth, non-counter person and came back out the same day, folded into the Lanternkeeper** (GDD §1, §6), who now carries his three recorded lines. The count returns to 5 without a counter being added or removed. **There is no sixth counter**, and that is the half of this number that was ever the brake — see §4.2's fifth ledger line. |
 | **Stats** | **5** | Damage, speed, max health, stamina, soak. GDD §6.6. No sixth. |
 | **Upgrade tracks** | **20** | 4 gear (edge, guard, string, chain) + 8 armour (4 pieces × 2 paths) + 8 jewel (4 slots × 2 paths) |
 | Armour pieces | **4** | Chest, legs, arms, boots. ×2 paths, ×4 rungs (rung 0 free, 3 bought — `K.FORGE_MAX`) |
@@ -56,7 +56,7 @@ definition**, and §4.2 applies.
 | Draughts | **3** | As built |
 | Dialogue trees | **0** | NPCs have counters, not conversations. **Unmoved by the voice lines below** — a line you cannot answer is not a tree |
 | Quests | **0** | The relic list is the quest log |
-| Voiced lines | **15** | Was 0, recorded 2026-08-10 and **this is all of them**: 1 narrator, 3 elder, 3 each for smith / pawnbroker / jewelcrafter, 2 alchemist. The table in `scripts/autoload/voice.gd` is the manifest and a sixteenth is an amendment. The Lanternkeeper has none and is silent on purpose |
+| Voiced lines | **15** | Was 0, recorded 2026-08-10 and **this is all of them**: 1 narrator, 3 elder, 3 each for smith / pawnbroker / jewelcrafter, 2 alchemist. The table in `scripts/autoload/voice.gd` is the manifest and a sixteenth is an amendment. The elder's three are the Lanternkeeper's, those two being one man since the same day; the alchemist still has no sale line |
 | Cutscenes | **0** | Two ending sequences, in-engine, no camera authoring beyond a pan. **The opening is not a third**: it is the existing `Flow` veil held down over one recorded line, no camera, no choreography, once per save |
 
 ### What "new" actually costs, and why the zeroes matter
@@ -362,9 +362,16 @@ guarding.**
 - **The number that mattered was counters, and it did not move.** "Garrison NPCs
   5, there is no sixth" was written to stop a *sixth catalogue* — another screen,
   another price table, another draw on the same drop tables (the third ledger
-  line's second bullet is the whole argument). The elder has no `counter` key, no
-  `ShopBooth`, no `Catalogue`, and touches gold nowhere. New UI screens stay 1,
+  line's second bullet is the whole argument). The elder had no `counter` key, no
+  `ShopBooth`, no `Catalogue`, and touched gold nowhere. New UI screens stay 1,
   currencies stay 1, components stay 10 / 8.
+
+  **And then he stopped being a separate person at all** (2026-08-10, later the
+  same day): the authored body that arrived for the Far Lantern is a hooded
+  white-bearded old man, so the owner merged the elder into the Lanternkeeper.
+  The headcount is 5 again and his three lines moved onto a row that already had
+  a counter. Worth recording because it is the *opposite* of the drift this
+  ledger exists to catch — an amendment that gave the number back.
 - **Fifteen lines is a closed set, and the file says so.** `Voice.LINES` is the
   manifest, one row per recording, and a speaker with no take for a cue is
   silently skipped rather than covered by somebody else's line — which is why the

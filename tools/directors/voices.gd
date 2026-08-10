@@ -16,9 +16,9 @@ extends RefCounted
 ##   B  The opening: black BEFORE the yard, the narration over it, the world
 ##      stopped, then the veil lifts on the courtyard and the elder speaks. Once
 ##      per save -- the flag is set and a second garrison does not re-narrate.
-##   C  There is a man in the middle of the yard, in the arrival frame, with no
-##      counter, and TALK on him says something and says a DIFFERENT something
-##      the second time.
+##   C  The elder is in the arrival frame, behind the relic counter, and TALK on
+##      him both says something -- a DIFFERENT something the second time -- and
+##      opens the Far Lantern off the same press.
 ##   D  A counter greets you when you address it, says its piece on the press
 ##      that WORKED and not on the one that was refused, and says goodbye on the
 ##      way out.
@@ -117,74 +117,90 @@ func _opening(rig) -> void:
 	_ck("B6 coming home does not re-narrate", not Flow.busy)
 
 
-# --- C. The man in the middle ------------------------------------------------
+# --- C. The elder, who keeps the Far Lantern -----------------------------------
 
+## He was two people until 2026-08-10: an elder alone in the middle of the yard
+## with three lines and no counter, and a silent Lanternkeeper behind the relic
+## hall. The owner merged them, so this section changed shape -- every claim about
+## the OPEN MIDDLE is gone, because he is behind a counter now, and the one claim
+## that survived the move is the one that was always load-bearing: **he is in the
+## arrival frame.** The opening's whole third beat is a voice from somebody you
+## can see (`Garrison._open_the_game`), and moving him fifteen metres east is
+## exactly the change that could have broken it in silence.
 func _elder(rig) -> void:
 	var garrison: Garrison = rig.scene()
-	if garrison == null or garrison.elder == null:
+	if garrison == null or garrison.keeper == null:
 		_ck("C0 there is an elder in the yard", false)
 		return
 
-	var at := garrison.elder.global_position
+	var at := garrison.keeper.global_position
 	print("VOICES the elder stands at %.2v" % at)
-	# The open middle, near the arrival: the hero lands at (0, 0, +4) looking
-	# north, so this is the ground that is in front of him on the first frame.
-	_ck("C0 he is in the open middle of the yard",
-		absf(at.x) < 4.0 and absf(at.z) < 4.0)
-	_ck("C1 forward of the arrival spot, so he is in the arrival frame",
-		at.z < 3.4)
-	# **And NOT on the centre line**, which is the failure the capture caught and
-	# the code cannot: x = 0 is the arrival camera, the hero, the walk to the gate
-	# and the gate's own 2.5 m cyan mouth, all on one axis. Standing him there put
-	# him behind the hero and inside the doorway at the same time.
-	_ck("C1b and off the gate's axis, where the hero is not standing on him",
-		absf(at.x) > 1.6)
-	# Not a counter. The row in `Npc.COUNTERS` has no `counter` key and the row in
-	# `Npc.LOOKS` has no `booth`, and this is what those two absences look like
-	# from outside.
+
+	# The arrival camera, spelled out rather than read off a node: the hero lands
+	# at (0, 0, +4) and the boom sits behind him at (0, 1.7, +8) looking up -Z.
+	# "In the frame" is then just the horizontal angle off that axis against half
+	# the camera's fov, which is the cheapest true version of the claim.
+	var eye := Vector3(0.0, 1.7, 8.0)
+	var to := at - eye
+	var off := rad_to_deg(absf(atan2(to.x, -to.z)))
+	print("VOICES he is %.1f deg off the arrival camera's axis, %.1f m away"
+		% [off, to.length()])
+	_ck("C1 he is in the arrival frame (%.1f deg off axis)" % off, off < 24.0)
+
+	# And still a counter, which is the half of him that is not new.
 	var booths := 0
-	for c in garrison.elder.get_children():
+	for c in garrison.keeper.get_children():
 		if c is ShopBooth:
 			booths += 1
-	_ck("C2 he is not standing behind a shop", booths == 0)
-	var nearest := 999.0
-	for l in garrison.lights:
-		nearest = minf(nearest, at.distance_to(l.global_position))
-	_ck("C3 he is clear of the relic ring (%.2f m)" % nearest, nearest > 2.0)
+	_ck("C2 he is standing behind the relic counter", booths == 1)
 
 	# **The frame the placement is FOR**, taken before anything moves the hero:
 	# the arrival camera, untouched, on the spot every player lands on. Captured
 	# with or without `--intro`, because the opening is fifteen seconds and this
-	# is the picture somebody actually has to look at. Every claim above is about
-	# this shot and none of them can see it.
+	# is the picture somebody actually has to look at. C1 is a number about this
+	# shot and it cannot see it.
 	await rig.capture(out.path_join("v_02_from_the_spawn.png"))
 
-	_stand_at(rig, at + garrison.elder.global_transform.basis * Vector3(0.0, 0.0, 1.7))
+	_stand_at(rig, at + garrison.keeper.global_transform.basis * Vector3(0.0, 0.0, 1.7))
 	await rig.wait_physics_frames(6)
 	var focused: bool = await rig.until(
-		func() -> bool: return Prompt.focus == garrison.elder, 5.0)
+		func() -> bool: return Prompt.focus == garrison.keeper, 5.0)
 	_ck("C4 TALK is on him", focused)
 
 	Voice.stop()
 	await rig.tap(["interact"])
-	await rig.wait_frames(8)
+	# Waited for, not counted to. The greeting starts on the same press that opens
+	# the screen, and the screen's own first frame is the expensive one -- eight
+	# frames was enough while he had no counter and is not now.
+	await rig.until(func() -> bool: return Voice.line() != "", 3.0)
 	var first := Voice.line()
 	print("VOICES elder says '%s'" % first)
 	_ck("C5 talking to him says something", first != "")
 	await rig.capture(out.path_join("v_03_elder.png"))
 
+	# **Both at once**, which no row did before the merge: the greeting plays AND
+	# the Far Lantern opens, in that order, off one press. `Npc.activate` never
+	# needed a line changed to allow it -- this is the check that says so.
+	_ck("C6 and the Far Lantern opened on the same press", _screen(rig) != null)
+
+	var screen := _screen(rig)
+	if screen != null:
+		screen.close()
+		await rig.wait_frames(6)
+
 	# Two takes, alternating rather than rolled: "hail" is 0.8 s and would
 	# otherwise be the most-repeated sound in the game.
+	Voice.stop()
 	await rig.tap(["interact"])
-	await rig.wait_frames(8)
+	await rig.until(func() -> bool: return Voice.line() != "", 3.0)
 	var second := Voice.line()
 	print("VOICES elder then says '%s'" % second)
-	_ck("C6 and a different something the second time", second != first
+	_ck("C7 and a different something the second time", second != first
 		and second != "")
-
-	# And no screen came up. The elder is the proof that a row with a voice and no
-	# counter is a whole person.
-	_ck("C7 talking to him opens nothing", _screen(rig) == null)
+	var again := _screen(rig)
+	if again != null:
+		again.close()
+		await rig.wait_frames(6)
 
 
 # --- D. A counter, start to finish -------------------------------------------
