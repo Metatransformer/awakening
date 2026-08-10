@@ -58,13 +58,17 @@ var _backup: Dictionary = {}
 
 
 func run(rig) -> void:
+	_deafen_the_pad()
 	_stash()
 	for i in Saves.SLOTS:
 		Saves.erase(i)
 	Saves.active_slot = -1
 	await rig.wait_seconds(0.3)
 
-	var saved_at := await _walk_and_save(rig)
+	# Annotated, not inferred: `_walk_and_save` hands back a Variant (a Dictionary
+	# or null), and `:=` against one is a parse ERROR in this project, not a
+	# warning — CLAUDE.md §3, arriving from the same direction it always does.
+	var saved_at: Variant = await _walk_and_save(rig)
 	if saved_at != null:
 		await _load_from_menu(rig, saved_at)
 		await _dungeon_load(rig, saved_at)
@@ -128,18 +132,18 @@ func _load_from_menu(rig, saved: Dictionary) -> void:
 	await _settle(rig)
 
 	var hero := _hero(rig)
-	_ck("B4 the load landed in a garrison (%s)"
+	_ck("B1 the load landed in a garrison (%s)"
 		% (rig.scene().name if rig.scene() != null else "<null>"),
 		rig.scene() is Garrison)
-	_ck("B5 there is a hero in it", hero != null)
+	_ck("B2 there is a hero in it", hero != null)
 	if hero != null:
-		_ck("B6 **and he is back where the save was written** (%.2f m out)"
+		_ck("B3 **and he is back where the save was written** (%.2f m out)"
 			% want.distance_to(hero.global_position),
 			want.distance_to(hero.global_position) < NEAR)
-	_ck("B7 the purse came back with him (%d, wanted %d)"
+	_ck("B4 the purse came back with him (%d, wanted %d)"
 		% [Game.gold, int(saved["gold"])], Game.gold == int(saved["gold"]))
-	_ck("B8 the menu closed behind it", not Menu.is_open)
-	_ck("B9 ...and the world is running", not rig.paused)
+	_ck("B5 the menu closed behind it", not Menu.is_open)
+	_ck("B6 ...and the world is running", not rig.paused)
 	await _shot(rig, "loaded")
 
 	# --- C. Twice. -----------------------------------------------------------
@@ -158,7 +162,7 @@ func _load_from_menu(rig, saved: Dictionary) -> void:
 		return
 	await _settle(rig)
 	var again := _hero(rig)
-	_ck("C4 a SECOND load still lands on the saved spot (%.2f m out)"
+	_ck("C2 a SECOND load still lands on the saved spot (%.2f m out)"
 		% (want.distance_to(again.global_position) if again != null else -1.0),
 		again != null and want.distance_to(again.global_position) < NEAR)
 	await _shot(rig, "loaded_twice")
@@ -190,15 +194,15 @@ func _dungeon_load(rig, saved: Dictionary) -> void:
 		return
 	await _settle(rig)
 
-	_ck("D4 the load came home (%s)"
+	_ck("D2 the load came home (%s)"
 		% (rig.scene().name if rig.scene() != null else "<null>"),
 		rig.scene() is Garrison)
-	_ck("D5 **the run was abandoned**", not Run.in_dungeon)
-	_ck("D6 ...and the bag went with it (%d line(s) left)" % Run.bag.size(),
+	_ck("D3 **the run was abandoned**", not Run.in_dungeon)
+	_ck("D4 ...and the bag went with it (%d line(s) left)" % Run.bag.size(),
 		Run.bag.is_empty())
-	_ck("D7 ...and the floor number went back to 1 (level=%d)" % Run.level,
+	_ck("D5 ...and the floor number went back to 1 (level=%d)" % Run.level,
 		Run.level == 1)
-	_ck("D8 the receipt screen did NOT come up — this run did not END, it was "
+	_ck("D6 the receipt screen did NOT come up — this run did not END, it was "
 		+ "discarded", not Flow.ending)
 
 	# Measured, not asserted. See the note above.
@@ -217,17 +221,22 @@ func _dungeon_load(rig, saved: Dictionary) -> void:
 ## `action_press` sets action state without dispatching an event, so
 ## `_unhandled_input` never runs (CLAUDE.md §3).
 func _press_load(rig, tag: String) -> bool:
+	# Lettered rather than numbered, so these never collide with the numbered
+	# claims of whichever beat called them -- this runs three times.
 	await _key(rig, KEY_ESC, 16)
-	_ck("%s1 Escape opened the menu" % tag, Menu.is_open)
+	_ck("%s· Escape opened the menu" % tag, Menu.is_open)
+	if not Menu.is_open:
+		print("  note %s" % _why(rig))
+		return false
 	if not await _focus_row(rig, "Load Game"):
-		_ck("%s2 could reach the 'Load Game' row" % tag, false)
+		_ck("%s· could reach the 'Load Game' row" % tag, false)
 		await _key(rig, KEY_ESC, 16)
 		return false
-	_ck("%s2 could reach the 'Load Game' row" % tag, true)
+	_ck("%s· could reach the 'Load Game' row" % tag, true)
 	await _key(rig, KEY_E, 16)
 
 	var saves: Control = Menu.get_node("Root/Screens/SavesScreen")
-	_ck("%s3 E opened the Load screen" % tag, saves.visible)
+	_ck("%s· E opened the Load screen" % tag, saves.visible)
 	if not saves.visible:
 		await _key(rig, KEY_ESC, 16)
 		return false
@@ -268,6 +277,47 @@ func _key(rig, code: int, settle: int = 8) -> void:
 
 
 # --- Helpers -----------------------------------------------------------------
+
+## Strip the joypad bindings `PauseMenu` put BACK, and say how many.
+##
+## `shoot.gd` deafens the gamepad in `_initialize` for the reason CLAUDE.md §3
+## gives — a stick resting outside its deadzone drives the hero and fails
+## directors in beats that look like game races. But `_initialize` is *before*
+## the autoloads' `_ready`, and `PauseMenu._ensure_pad_ui_actions` runs in its
+## own `_ready` and puts five of them straight back: JOY_BUTTON_A/X on
+## `ui_accept`, **JOY_BUTTON_B on `ui_cancel`**, and the shoulders on the tab
+## actions. They are live for the rest of the run.
+##
+## For this director that is not cosmetic. `ui_cancel` is `back()`, and at the
+## root of the menu `back()` is `close()` — so a pad B firing anywhere in the
+## second between Escape and the slot press closes the menu the beat just
+## opened, and every check after it reports a wiring failure that is really a
+## controller on somebody's desk. It cost the second run of this file exactly
+## that, and the tell was in the screenshot: the HUD had flipped to pad key-caps
+## (`Settings._input` → `Bus.input_device_changed`) in a run driven entirely by
+## synthesised KEYS.
+##
+## Deliberately fixed here and not in `shoot.gd`. `critic_menu.gd` drives this
+## same menu with synthesised pad events and NEEDS those five bindings alive, so
+## a second blanket strip in the harness would break it. The harness cannot tell
+## the two intentions apart; the director that wants silence asks for it.
+func _deafen_the_pad() -> void:
+	var n := 0
+	for action in InputMap.get_actions():
+		for ev in InputMap.action_get_events(action):
+			if ev is InputEventJoypadMotion or ev is InputEventJoypadButton:
+				InputMap.action_erase_event(action, ev)
+				n += 1
+	print("  note stripped %d joypad binding(s) PauseMenu._ready put back" % n)
+
+
+## What the world looked like when a menu press did not land. Printed rather than
+## checked: it is a note for whoever reads a failing log, not a claim.
+func _why(rig) -> String:
+	return ("busy=%s ending=%s screen_up=%s pads=%s using_pad=%s paused=%s"
+		% [Flow.busy, Flow.ending, Prompt.screen_up,
+			Input.get_connected_joypads(), Settings.using_pad, rig.paused])
+
 
 func _hero(rig) -> Node3D:
 	return rig.get_first_node_in_group(&"player") as Node3D
