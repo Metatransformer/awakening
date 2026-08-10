@@ -20,15 +20,21 @@ extends Node3D
 ## Where the bodies and the one shared clip set live.
 const DIR := "res://assets/characters/races/"
 const ANIMS := DIR + "_humanoid_anims.glb"
-## Clothes. Same 24-bone rig as the bodies, which is the only reason `wear()`
-## is eight lines instead of a character-assembly system.
-const GARMENTS := "res://assets/characters/garments/"
-## The pieces an outfit is made of, in the order they go on. There is no head
-## piece: the pack's cloth hood sits badly on the Reshi's muzzle and the Vyr's
-## crown, and a shopkeeper you cannot see the face of is a shopkeeper you have
-## no reason to remember.
-const OUTFIT: Array[String] = ["legs", "feet", "chest"]
-
+## What the garrison wears, and what a "suit" is.
+##
+## Ported from Valenfeld's simple-suit mode. A row is a whole PERSON, not a wardrobe:
+## `body_rigged.glb` is the entire dressed silhouette -- collar to boot sole, gloves
+## included -- and `head_rigged.glb` is the hood or helm that goes with it. Wearing
+## one replaces the body and puts the head back inside it (`SuitSeater`).
+##
+## That is why there is no layer table here any more. An earlier cut of this file
+## carried Valenfeld's `GARMENTS` contract -- tunic over chest, sleeves over chest,
+## trousers over legs -- because that is how its PLACEHOLDER character is built, out
+## of per-slot boxes with a `hides` column to stop them z-fighting the skin. Reading
+## that as the clothing system cost a full build of constructed garments, and the
+## render is what said so: every defect in it was a SEAM, and a suit has none,
+## because it was modelled dressed.
+const SUITS := SuitSeater.SETS
 ## The peoples, and how tall each stands.
 ##
 ## `height` is METRES, measured to the crown, and it is the only scale input --
@@ -106,6 +112,13 @@ var height: float = 1.7
 var _rig: Node3D
 var _anim: AnimationPlayer
 var _skel: Skeleton3D
+var _worn: Array[MeshInstance3D] = []
+## The body's own mesh and its full uncut copy, so taking a suit off puts the rest of
+## the person back rather than leaving a floating head.
+var _body: MeshInstance3D
+var _bare: ArrayMesh
+## Which people this is.
+var _race: String = ""
 
 
 ## Build a body for `race`, or null if the pack has no such people.
@@ -120,59 +133,71 @@ static func make(race: String) -> RaceBody:
 	return body
 
 
-## Dress the body in one fabric, tinted.
+## Dress the body in one of the pack's suits.
 ##
-## The pack's cloth pieces are skinned to the SAME 24-bone rig as the bodies, so
-## dressing somebody is not a fitting problem -- it is moving one mesh under
-## this body's own `Skeleton3D` and letting the named skin bind resolve against
-## it by bone name. The garment then deforms with every clip for free, which is
-## the whole reason to do it this way rather than hanging static geometry off
-## the chest and watching it stay behind when the body moves.
+## **This used to load per-slot garment GLBs, and then it used to CONSTRUCT them, and
+## both were the wrong problem.** The pack ships `chest_/legs_/feet_` pieces on the
+## same 24-bone rig, so hanging them on the body was eight lines -- and the render
+## showed that sharing a rig is not sharing a body: the Stoneborn's chest came
+## through the front of the tabard, the Vyr's collar sat across her nose, both grew
+## black wedges where the shoulder cloth ended. Measuring each body and lofting
+## garments to fit it (`ClothingKit`, now deleted) fixed the sizes and kept every
+## other defect, because they were never size defects. They were seams: a tube around
+## the ribs cannot meet a tube around the arm without a gap at the deltoid, and no
+## amount of measuring closes it.
 ##
-## `tint` multiplies the fabric's own texture rather than replacing it: a flat
-## albedo would throw away the weave and give three shopkeepers in coloured
-## plastic. The three tints are the robe colours the box placeholders already
-## used, so the garrison's palette does not move just because the people did.
-func wear(fabric: String, tint: Color) -> void:
+## A suit has no seams. `assets/characters/suits/<material>/body_rigged.glb` is one
+## mesh of an entire dressed person, authored dressed, with the folds and the wear
+## painted into its own atlas -- which is also why it is not flat-shaded palette
+## colour any more. The only thing left to solve is that it was authored against ONE
+## figure and we have three, and that is `SuitSeater._fit_map`'s single job.
+##
+## `tint` multiplies the suit's albedo so three shopkeepers in the same cloth are
+## still three people. It multiplies a TEXTURE, so the weave survives it.
+func wear(suit: String, tint: Color = Color.WHITE) -> void:
 	if _skel == null:
 		return
-	for piece in OUTFIT:
-		var path := "%s%s_%s.glb" % [GARMENTS, piece, fabric]
-		if not ResourceLoader.exists(path):
-			push_warning("race_body: no %s in %s" % [piece, fabric])
-			continue
-		var inst := (load(path) as PackedScene).instantiate()
-		var mi := _first_mesh(inst)
-		if mi == null:
-			push_warning("race_body: %s has no mesh" % path)
-			inst.queue_free()
-			continue
-		mi.get_parent().remove_child(mi)
-		# Its owner is still the garment GLB's root, which we are about to throw
-		# away; leaving it set makes Godot warn about an inconsistent owner on
-		# every piece of clothing in the garrison.
-		mi.owner = null
-		_skel.add_child(mi)
-		# Identity, deliberately: the garment's vertices are authored in the same
-		# space as the body's, so the skeleton it now hangs on is the only
-		# transform it should be getting. Anything inherited from its own GLB's
-		# Armature would apply the unit conversion a second time.
-		mi.transform = Transform3D.IDENTITY
-		mi.skeleton = ^".."
-		for s in mi.get_surface_override_material_count():
-			var m := mi.mesh.surface_get_material(s)
-			if m == null:
-				continue
-			var dup := m.duplicate() as StandardMaterial3D
-			if dup == null:
-				continue
-			dup.albedo_color = tint
-			# The garrison is lit by torches and one cold moon; a specular
-			# highlight on homespun reads as wet plastic (STYLEGUIDE §4).
-			dup.roughness = 1.0
-			dup.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
-			mi.set_surface_override_material(s, dup)
-		inst.queue_free()
+	strip()
+	if suit not in SUITS:
+		push_warning("race_body: no suit called '%s' -- %s stays as they are" % [suit, _race])
+		return
+	var dir := SuitSeater.DIR + suit + "/"
+	_worn.append_array(SuitSeater.seat(_skel, dir + "body_rigged.glb", suit + "_body", tint))
+	if _worn.is_empty():
+		push_warning("race_body: %s's %s suit seated nothing" % [_race, suit])
+		return
+	# The head half goes on SECOND and its success is what licenses the cut below: a
+	# hood that failed to load leaves a person in a suit with a bare head, which is
+	# odd. Cutting the body first and then failing leaves a suit with no head at all.
+	var hood := SuitSeater.seat(_skel, dir + "head_rigged.glb", suit + "_head", tint)
+	_worn.append_array(hood)
+	if _body != null:
+		# The suit IS the silhouette from the collar down, so the body under it is not
+		# hidden for tidiness -- it is hidden because it has nowhere to go but through.
+		# Everything but the head, exactly as Valenfeld's simple-suit path does it.
+		var head := SuitSeater.cut_to_head(_body)
+		if head != null:
+			_body.mesh = head
+		elif not hood.is_empty():
+			_body.visible = false
+
+
+## Undress: every seated piece off, the whole body back.
+func strip() -> void:
+	for mi in _worn:
+		if is_instance_valid(mi):
+			mi.queue_free()
+	_worn.clear()
+	if _body != null and _bare != null:
+		_body.mesh = _bare
+		_body.visible = true
+
+
+static func _all(n: Node) -> Array[Node]:
+	var found: Array[Node] = [n]
+	for c in n.get_children():
+		found.append_array(_all(c))
+	return found
 
 
 ## Play a clip by name, looping. Unknown names are ignored rather than fatal:
@@ -189,6 +214,7 @@ func _setup(race: String) -> bool:
 	if row.is_empty():
 		push_error("race_body: no such people as '%s' (have %s)" % [race, RACES.keys()])
 		return false
+	_race = race
 
 	var path: String = DIR + str(row["glb"])
 	if not ResourceLoader.exists(path):
@@ -201,6 +227,18 @@ func _setup(race: String) -> bool:
 
 	_skel = _rig.find_child("Skeleton3D", true, false) as Skeleton3D
 	_anim = _rig.find_child("AnimationPlayer", true, false) as AnimationPlayer
+
+	# The skin itself, held so a suit can cut it back to a head and `strip` can put
+	# the whole person back. The cut builds a NEW ArrayMesh and swaps this instance's
+	# `mesh` over rather than editing one -- the mesh resource is shared by every body
+	# of this people, and cutting it in place would behead the entire race the first
+	# time one of them got dressed.
+	for c in _all(_skel):
+		var mi := c as MeshInstance3D
+		if mi != null and mi.mesh != null and mi.skin != null:
+			_body = mi
+			_bare = mi.mesh as ArrayMesh
+			break
 
 	height = float(row["height"])
 	var native := _native_height(_rig, _skel)
@@ -361,15 +399,3 @@ static func _native_height(rig: Node3D, skel: Skeleton3D) -> float:
 		to_rig = n.transform * to_rig
 		n = n.get_parent() as Node3D
 	return (to_rig * Vector3(0.0, top, 0.0)).y
-
-
-## The first MeshInstance3D anywhere under `n`. The cloth GLBs carry exactly one.
-static func _first_mesh(n: Node) -> MeshInstance3D:
-	var mi := n as MeshInstance3D
-	if mi != null and mi.mesh != null:
-		return mi
-	for c in n.get_children():
-		var found := _first_mesh(c)
-		if found != null:
-			return found
-	return null

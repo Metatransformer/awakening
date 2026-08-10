@@ -62,6 +62,46 @@ a literal `2.0`. **Anything you tune that another piece can see belongs in `K`.*
 
 ---
 
+## 1b. The universal character model — one rig, three peoples, four suits
+
+Everyone in the garrison is the SAME 24-bone rig (`Hips`, `Spine02`→`Spine01`→
+`Spine`, `neck`, `Head`, the `Left*`/`Right*` limbs, and the leaf markers
+`head_end`/`headfront`). Note the spine ordering: **`Spine02` is nearest the hips
+and `Spine` nearest the neck**, which is backwards from every other rig in this
+project, and reading it the obvious way puts a collar around the waist.
+
+| What | Where | Notes |
+|---|---|---|
+| Race bodies | `assets/characters/races/*_base.glb` | Stoneborn 1.41 m, Reshi 1.65 m, Vyr 1.82 m. One mesh each, own baked atlas. |
+| Shared clips | `assets/characters/races/_humanoid_anims.glb` | Rotation tracks only — see `RaceBody._shared_lib` for why the position tracks must be dropped. |
+| Suits | `assets/characters/suits/<material>/` | `cloth`, `leather`, `mail`, `plate`. Each is `body_rigged.glb` + `head_rigged.glb` with its own basecolour maps. |
+
+**A suit is a whole person, not a garment.** `body_rigged.glb` is the entire
+dressed silhouette — collar to boot sole, gloves included — and `head_rigged.glb`
+is the matching hood or helm. Wearing one REPLACES the body: `RaceBody.wear`
+seats both halves and cuts the base body back to its head
+(`SuitSeater.cut_to_head`). There is no per-slot layering and no `hides` table,
+because there are no seams to close.
+
+Suits are authored against one figure and worn by three.
+`SuitSeater._fit_map` fits a similarity (uniform scale + translation) between the
+suit's rest skeleton and the wearer's, and every Skin bind is rebased through it —
+so the suit's vertices never move, only which bone claims them. That is the whole
+reason one suit fits a 1.41 m Stoneborn and a 1.82 m Vyr with no per-race table.
+
+Ported from Valenfeld's `ArmorSeater` + `HumanoidRig._equip_armor_simple_suit`.
+**Do not port Valenfeld's `ClothingKit`/`ModularCharacter`** — those build its
+PLACEHOLDER box character, and mistaking them for the clothing system cost this
+repo a full build of procedurally-constructed garments that was then deleted.
+
+Known limit: the whole skull survives the cut, because this rig carries no
+cranium cut line (`headfront`/`head_end` have zero vertices weighted to them —
+measured). The leather coif is a close cap and ends up inside the skull, so a
+Stoneborn in leather reads bare-headed. Cloth's hood and plate's helm both sit
+outside and render correctly.
+
+---
+
 ## 2. The hero rig — already built, shared, read-only
 
 Proven working. Do not rebuild this.

@@ -17,8 +17,8 @@ extends RefCounted
 ## photographs the people the garrison actually gets rather than three nude
 ## bases.
 const RACES: Array[String] = ["stoneborn", "reshi", "vyr"]
-const FABRIC: Array[String] = ["homespun", "wool", "silk"]
-## Tints MULTIPLY the fabric's own texture, which is already a dark weave, so
+const SUIT: Array[String] = ["leather", "cloth", "plate"]
+## Tints MULTIPLY the suit's own texture, which is already a dark weave, so
 ## these are much lighter than the robe colours the box placeholders used --
 ## feeding those straight in (0.22, 0.26, 0.30 and friends) produced three
 ## silhouettes in black and cost a render to notice.
@@ -53,7 +53,7 @@ func run(rig) -> void:
 			print("RACE FAIL could not build '%s'" % RACES[i])
 			continue
 		scene.add_child(b)
-		b.wear(FABRIC[i], TINT[i])
+		b.wear(SUIT[i], TINT[i])
 		b.global_position = Vector3(-1.6 + 1.6 * float(i), 0.0, 0.0)
 		made.append(b)
 	await rig.wait_frames(20)
