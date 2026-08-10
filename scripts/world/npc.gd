@@ -14,7 +14,10 @@ extends Interactable
 ## none of it ever depended on the mesh, and swapping the mesh touched
 ## `_build_person` and nothing else.
 
-enum Role { VENDOR, SMITH, GATE, ALCHEMIST }
+## KEEPER is appended rather than slotted in beside the other three counters:
+## the values are what an `@export var role` serialises, and re-ordering this
+## enum would silently turn every placed alchemist into a gate.
+enum Role { VENDOR, SMITH, GATE, ALCHEMIST, KEEPER }
 
 ## Everything that differs between the people in this town, on one row each.
 ##
@@ -52,9 +55,35 @@ static var COUNTERS := {
 		"sign": "ALCHEMIST", "prompt": "TALK", "hold": 0.0,
 		"counter": {"title": "THE ALCHEMIST", "mode": TradeScreen.Mode.BUY, "db": AlchemyDb},
 	},
+	# The fourth counter, and the last one there will be (docs/GDD.md §6: "the
+	# vendor buys, the smith forges, the alchemist brews, the Lanternkeeper
+	# records"). She cost exactly this row and a `Catalogue` subclass -- no
+	# screen, no branch in `activate`, no new mode -- which is the acceptance
+	# criterion for the whole relic system and not a nice outcome.
+	#
+	# `hold` is 0 like the other three: the HOLD that matters here is on the
+	# LINE, not on the greeting. `RelicDb.crafts()` answers true for every row,
+	# so `TradeScreen` puts its gauge on the donation itself and the footer reads
+	# HOLD ENT TO RECORD.
+	Role.KEEPER: {
+		"sign": "LANTERNKEEPER", "prompt": "TALK", "hold": 0.0,
+		"counter": {
+			"title": "THE FAR LANTERN", "mode": TradeScreen.Mode.BUY, "db": RelicDb,
+		},
+	},
 	# 0.9 s, and the only hold in the world. It is the door OUT of the hub and
 	# the one press in the game that ends the safe part of the session, so it is
 	# the one press that should be impossible to make by accident on the way past.
+	#
+	# `# NEEDS:` the Warp-Stone Fragment's unlock, `RelicDb.town_shortcuts()`,
+	# bites HERE -- "start a run at any shortcut you have opened" (GDD §6.2 #9).
+	# It cannot be adopted yet and faking it would be worse than leaving it: the
+	# gate would have to open a run at floor N, and `Run.enter()` hard-sets
+	# `level = 1` with a comment explaining why, so the change is one argument in
+	# `scripts/autoload/run_state.gd`. There is also nothing to offer until the
+	# shortcut doors exist on a real floor (SCOPE M4/M6). When both land, this row
+	# reads `RelicDb.town_shortcuts()` and `activate` picks the deepest floor
+	# whose `LockedDoor.flag_id()` is set -- still no new screen.
 	Role.GATE: {"sign": "", "prompt": "DESCEND", "hold": 0.9},
 }
 
@@ -104,6 +133,23 @@ static var LOOKS := {
 	Role.ALCHEMIST: {
 		"race": "vyr", "fabric": "silk", "idle": &"idle4",
 		"tint": Color(0.56, 0.88, 0.68), "booth": ShopBooth.Kind.ALCHEMY,
+	},
+	# Reshi, like the pawnbroker, because there are three peoples and four
+	# counters -- the Society recruits, it is not a race. The fabric, the idle
+	# and the tint all differ from his for one reason and it is not taste: two
+	# reshi in wool at the same height, breathing in time, read as the SAME
+	# PERSON standing in two places, and a player who cannot tell the
+	# Lanternkeeper from the pawnbroker across the yard cannot find the hall.
+	# Cool against his rose, so the two ends of the yard are told apart by
+	# silhouette colour before either sign is readable.
+	#
+	# A STALL, and that is the end of dressing her. The hall is not a booth kind
+	# and it does not need to be: the twelve lamps outside are what says this
+	# counter is different, and a bespoke booth would be spending on the wrong
+	# half of GDD §6.2's budget.
+	Role.KEEPER: {
+		"race": "reshi", "fabric": "homespun", "idle": &"idle9",
+		"tint": Color(0.66, 0.76, 0.94), "booth": ShopBooth.Kind.STALL,
 	},
 }
 
