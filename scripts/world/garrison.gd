@@ -46,8 +46,27 @@ const MAT_GRASS := preload("res://assets/materials/mat_grass.tres")
 const MAT_WALL_SUNLIT := preload("res://assets/materials/mat_wall_sunlit.tres")
 const SKY_SHADER := preload("res://assets/shaders/sky.gdshader")
 
-## Clear width left between the two shaft-head rails, so the arch is walkable.
-const RAIL_GAP := 5.0
+## Where the paved circle sits, and how far out the counters ring it.
+##
+## **Every shop in the yard is placed off these two numbers**, so the layout is
+## one polar coordinate per keeper (`_ring`) instead of five hand-tuned Vector3s
+## that only agree with each other by accident. The circle is what the yard was
+## missing: five counters against four different walls is a field with furniture
+## round the edge, and no amount of tuning any single position fixes that,
+## because the problem was never any one of them.
+##
+## Two metres south of the yard's own centre. The plaza has to sit between the
+## arrival and the gate WITHOUT swallowing either -- the hero lands at (0, 0, +4)
+## and the paving now stops at +3.8, so he steps onto it rather than onto it.
+const PLAZA_AT := Vector3(0.0, 0.0, -2.0)
+const PLAZA_R := 5.8
+## Counters stand just outside the kerb: 7.0 puts the counter face about a metre
+## clear of the paving, which leaves the ring of stone unobstructed all the way
+## round. A keeper's own body steps a further `ShopBooth.KEEPER_BACK` out (see
+## `_counter`), and the deepest booth -- the forge, whose hearth is 3.05 m behind
+## its bench -- then reaches 11 m from the centre. That is the number that fixes
+## this at 7.0 and not 8: at 8 the smith's hearth is inside the north wall.
+const KIOSK_R := 7.0
 
 ## Set the first time a save sees the courtyard. See `_open_the_game`.
 const INTRO_FLAG := &"reported_for_duty"
@@ -59,8 +78,9 @@ const INTRO_FLAG := &"reported_for_duty"
 ## The grass runs well past the walls, so the garrison sits IN a landscape
 ## rather than on a slab with a void around it. Placeholder ground, on purpose
 ## -- SCOPE §3's gate is a played hour, not a look. Nothing inside the yard can
-## see any of it now; it is for the lookdev and rampart-height cameras, and for
-## the day somebody cuts a gate in the north wall.
+## see any of it now -- the gatehouse's own passage is roofed and walled all the
+## way through, so even standing under the arch you are looking at masonry and not
+## at the plain. It is for the lookdev and rampart-height cameras.
 @export var ground: Vector2 = Vector2(300.0, 300.0)
 ## **Tall enough that you cannot see out, and that is the requirement, not a
 ## style.** The game camera sits around 3 m and pitches about thirty degrees
@@ -78,6 +98,10 @@ var gate: Npc
 ## The hero's billet, in the south-west corner. Public so a director can walk to
 ## it without knowing where the corner is.
 var house: House
+## The paved circle, and the carved figure standing on the middle of it. Public
+## so a director can frame the plaza without re-deriving where it is.
+var plaza: Plaza
+var statue: Statue
 ## The twelve dark props, in `RelicDb` catalogue order. Public so a director can
 ## photograph one corner before and after, which is the only way anybody can
 ## check the claim this system exists to make.
@@ -98,6 +122,7 @@ var lights: Array[GarrisonLight] = []
 func _ready() -> void:
 	_build_env()
 	_build_yard()
+	_build_plaza()
 	_build_house()
 	_build_people()
 	_build_relic_props()
@@ -314,8 +339,21 @@ func _build_yard() -> void:
 	# +Z, which is the frame the fence borrowed, so these four lines have survived
 	# both boundaries unchanged. Different seeds, or opposite sides get an identical
 	# block field and the eye catches the mirror.
+	# **The north side is TWO runs with a hole between them**, and the hole is
+	# where the gatehouse stands. That is the difference between a fort with a way
+	# out of it and a fort with a monument parked against the inside of one wall:
+	# the arch has to be cut through the defences, or the eye reads the curtain as
+	# continuous and the gate as furniture.
+	#
+	# The gap is `Gatehouse.FACE_W` exactly. The towers are wider than the face
+	# and so bury the last metre of each run inside themselves, which is what a
+	# gatehouse does to the wall it is built into and costs nothing to allow.
+	var gap := Gatehouse.FACE_W
+	var run := (yard.x - gap) * 0.5
+	var run_x := gap * 0.5 + run * 0.5
 	var sides := [
-		{"yaw": 0.0, "at": Vector3(0, 0, -hz), "len": yard.x, "seed": 501},
+		{"yaw": 0.0, "at": Vector3(-run_x, 0, -hz), "len": run, "seed": 501},
+		{"yaw": 0.0, "at": Vector3(run_x, 0, -hz), "len": run, "seed": 505},
 		{"yaw": PI, "at": Vector3(0, 0, hz), "len": yard.x, "seed": 502},
 		{"yaw": PI * 0.5, "at": Vector3(-hx, 0, 0), "len": yard.y, "seed": 503},
 		{"yaw": -PI * 0.5, "at": Vector3(hx, 0, 0), "len": yard.y, "seed": 504},
@@ -333,7 +371,7 @@ func _build_yard() -> void:
 	# Corner towers -- pillars run a third taller than the curtain, so the yard has
 	# four hard verticals at its corners instead of a continuous band of masonry.
 	# That is most of what separates a fort from a room with no ceiling.
-	for sx in [-1.0, 1.0]:
+	for sx: float in [-1.0, 1.0]:
 		for sz in [-1.0, 1.0]:
 			var p := KIT_PILLAR.instantiate()
 			p.height = wall_height * 1.32
@@ -341,16 +379,52 @@ func _build_yard() -> void:
 			p.position = Vector3(hx * sx, 0.0, hz * sz)
 			add_child(p)
 
-	# A rail round the shaft head, either side of the arch. Two runs of the same
-	# fence the boundary used to be -- a working mine has something stopping people
-	# walking into it in the dark, and it is the one thing in the yard that says the
-	# hole is a hole before you are standing on it.
-	for sx in [-1.0, 1.0]:
+	# The rails, which used to lie ACROSS the yard either side of the shaft head
+	# and now run WITH the walk, either side of the approach to the gate.
+	#
+	# Same fence and the same job -- a working mine keeps people off the mouth of
+	# it -- but a rail turned ninety degrees stops being a barrier and becomes an
+	# avenue, and the last eight metres before the gatehouse is the one stretch of
+	# this yard that wants to be a formal approach rather than open ground.
+	#
+	# They stop at z = -9.1. The gatehouse's towers come forward to -9.15
+	# (`Gatehouse`: 3.7 m deep, centred on the wall line), so this is the fence
+	# ending against the tower rather than growing through it.
+	for sx: float in [-1.0, 1.0]:
 		var rail := Fence.new()
-		rail.length = 5.0
+		rail.length = 3.0
 		rail.rng_seed = 540 + int(sx)
-		rail.position = Vector3((RAIL_GAP * 0.5 + 2.5) * sx, 0.0, -yard.y * 0.40 + 1.4)
+		rail.position = Vector3(4.2 * sx, 0.0, -7.6)
+		rail.rotation.y = PI * 0.5
 		add_child(rail)
+
+
+## The paving, and the thing standing on the middle of it.
+##
+## Built BEFORE the people, because the people are placed off `PLAZA_AT` and the
+## statue has to be in the tree first for the Lanternkeeper's spot to have
+## anything behind it.
+##
+## The statue is set 3.9 m along the Lanternkeeper's own back. Not due north of
+## him, which was the first cut and which put a 4 m column of stone directly
+## between the arrival camera and the gate. Turning him a few degrees west of
+## south swings the monument out to x = +2.8, which clears the walk to the arch
+## and, as a bonus, is the more interesting composition: you arrive looking at a
+## figure with a bigger figure over his shoulder, rather than at two things
+## stacked.
+func _build_plaza() -> void:
+	plaza = Plaza.new()
+	plaza.radius = PLAZA_R
+	plaza.position = PLAZA_AT
+	add_child(plaza)
+
+	statue = Statue.new()
+	var behind := -Vector3(sin(deg_to_rad(KEEPER_YAW)), 0.0, cos(deg_to_rad(KEEPER_YAW)))
+	statue.position = PLAZA_AT + behind * 3.9
+	# Facing the same way she is, so the two silhouettes agree. A statue looking
+	# somewhere else turns into a second point of interest arguing with the first.
+	statue.rotation.y = deg_to_rad(KEEPER_YAW)
+	add_child(statue)
 
 
 ## The hero's quarters, tucked into the south-west corner.
@@ -386,95 +460,107 @@ func _build_house() -> void:
 	add_child(house)
 
 
+## Which way the Lanternkeeper faces, in degrees, and therefore which way the
+## statue behind her does. A shade west of due south: see `_build_plaza` for why
+## it is not zero, and `_build_people` for what it does to the frame.
+const KEEPER_YAW := -45.0
+
+
+## Five counters on one circle, and one carved figure in the middle of it.
+##
+## **The whole of this function used to be five independent placements**, each
+## with a good argument and a comment defending it: the pawnbroker and the smith
+## against the north wall either side of the arch, the alchemist on the west
+## inside the arrival frame, the jewelcrafter hard against the west wall after
+## the smith, the Lanternkeeper loose on the east. Every one of those arguments
+## was about the LOOP -- who you visit with a full bag, who you visit on the way
+## out -- and every one of them was right. What none of them could say was where
+## the middle of the garrison was, because there wasn't one.
+##
+## So the loop arguments are kept and re-expressed as bearings round a plaza,
+## which is a thing the old layout could not do and the new one gets for free:
+##
+##   * **North-east and north-west, flanking the gate: the smith and the
+##     pawnbroker.** The two counters you go to with a full bag, still nearest
+##     the way in, still the first pair a returning player walks between.
+##   * **East and west, level with the middle: the jewelcrafter and the
+##     alchemist.** The two you visit on the way back OUT, so they sit on the
+##     half of the ring you cross walking from the plaza to the arch. The
+##     jewelcrafter still comes after the smith along that walk (GDD §6.6 -- her
+##     offer only means anything once the plate has cost you something), which
+##     was the entire argument for her old spot against the west wall and
+##     survives the move intact.
+##   * **The centre: the Lanternkeeper**, which is the one placement that is
+##     better than what it replaced rather than merely equivalent, and which now
+##     answers two things at once. His reward is the only one in the garrison
+##     that is not on the screen you just closed -- it is a lamp fifteen metres
+##     away -- so where the player stands when they stop talking to him matters,
+##     and from the middle of the plaza turning away faces the yard in EVERY
+##     direction. He is also the village elder, so he has to be the figure the
+##     opening's third line comes from; see below.
 func _build_people() -> void:
-	# The two counters you visit with a FULL BAG share the far wall either side
-	# of the gate, angled in so the north end of the yard reads as a row of
-	# shops facing you rather than three strangers standing in a line.
-	vendor = _counter(Npc.Role.VENDOR,
-		Vector3(-yard.x * 0.26, 0.0, -yard.y * 0.06), 18.0, Pal.GOLD)
-	smith = _counter(Npc.Role.SMITH,
-		Vector3(yard.x * 0.26, 0.0, -yard.y * 0.06), -18.0, Color(0.98, 0.56, 0.24))
+	# North-east and north-west of the plaza, flanking the approach to the gate.
+	smith = _ring(Npc.Role.SMITH, 55.0, Color(0.98, 0.56, 0.24))
+	vendor = _ring(Npc.Role.VENDOR, -55.0, Pal.GOLD)
 
-	# West side, ahead of the arrival spot but well short of the far wall.
+	# East and west, level with the plaza's middle: the two counters you visit on
+	# the way back OUT, so the walk from the plaza to the gate crosses them.
 	#
-	# The alchemist is the one you visit on the way back OUT, bench already
-	# banked and gold in hand, so she stands nearer the near end of that walk and
-	# faces south -- you meet her front-on walking up to the gate.
-	#
-	# The z was +0.22 of the yard first, which is level with where the hero lands
-	# -- and the arrival capture showed the consequence: she was BEHIND the
-	# camera on the one frame every returning player sees. A shop you have to
-	# turn around to discover is a shop that does not exist. Anything here has to
-	# stay inside the arrival frame; the shot that proves it is `m_19_home` from
-	# `mvp_loop`, and nothing else in the build will notice if you break it.
-	#
-	# Her lamp is WARM, though every other green thing about her stayed green.
-	# It used to match her cauldron, and two green sources put a wash across the
-	# west half of the yard that reached the flagstones in front of the gate --
-	# the one place in the game that belongs to cyan (STYLEGUIDE §2). The pot,
-	# the shelf and the potions say "apothecary" perfectly well on their own; the
+	# The alchemist's lamp is WARM, though every other green thing about her stayed
+	# green. It used to match her cauldron, and two green sources put a wash across
+	# the west half of the yard that reached the flagstones in front of the gate --
+	# the one place in the game that belongs to cyan (STYLEGUIDE §2). The pot, the
+	# shelf and the potions say "apothecary" perfectly well on their own; the
 	# lamp's job is to be a warm light on a face.
-	alchemist = _counter(Npc.Role.ALCHEMIST,
-		Vector3(-yard.x * 0.10, 0.0, yard.y * 0.11), 12.0, Color(0.96, 0.80, 0.52))
+	#
+	# 118 rather than 90, on both sides. **The constraint is the ARRIVAL FRAME and
+	# it is arithmetic**: the returning camera sits at (0, 1.7, +8) on a 50°
+	# vertical fov, which is a little under 40° of half-width at 16:9. At a true
+	# east/west bearing these two land 43° off the centre line -- just outside it,
+	# which is the same failure the old west-wall placement had and which nothing
+	# in the build notices except `m_19_home` from `mvp_loop`. Swinging them 28°
+	# north brings both to 35°, comfortably inside. A shop you have to turn around
+	# to discover is a shop that does not exist.
+	alchemist = _ring(Npc.Role.ALCHEMIST, -118.0, Color(0.96, 0.80, 0.52))
+	jeweller = _ring(Npc.Role.JEWELLER, 118.0, Color(0.80, 0.62, 0.94))
 
-	# The Far Lantern, and the man who keeps it -- who is also the village elder.
+	# The Lanternkeeper, on the middle of the plaza with the First Lantern carved
+	# in stone at his back. See the note on this function, and `_build_plaza` for
+	# why he is turned a few degrees west of due south.
 	#
-	# **This position answers TWO things at once and it moved on 2026-08-10 when
-	# it acquired the second.** It used to sit further east and north, at
-	# (0.25, 0.20) of the yard on a -140 deg yaw, answering only the first:
-	#
-	#  * **Turning away from him faces the yard.** He is the only counter whose
-	#    reward is not on the screen you just closed -- it is a lamp fifteen
-	#    metres away -- so where the player is standing when they stop talking to
-	#    him is a design constraint and not a decoration.
-	#  * **He is in the arrival frame.** He carries the opening's third beat now
-	#    (`_open_the_game`, `Voice.LINES` &"elder"/&"arrival"): the veil lifts and
-	#    a voice says "I've been expecting you", and it has to come from somebody
-	#    on screen. The old spot was **68 degrees off the arrival camera's axis**
-	#    -- beside and behind the player -- and only `voices.gd` C1 would ever have
-	#    said so, which is why that check exists and prints the angle.
-	#
-	# So: two and a half metres right of the centre line and forward of the
-	# spawn, which is very nearly where the elder himself used to stand, for the
-	# reasons his own placement gave and which did not stop being true when he
-	# took a counter with him. Off the gate's axis (x = 0 is the arrival camera,
-	# the hero, the walk north and the gate's cyan mouth, all on one line), out of
-	# the walk, and clear of the relic ring -- `_build_relic_props` puts its
-	# twelve posts on an ellipse of (11, 9) and nothing of it comes near the
-	# middle.
-	#
-	# Yaw 0 points his +Z (the customer's side, see `ShopBooth`) straight down
-	# +Z at the arrival spot, so the counter lands between him and the hero and
-	# turning away from it faces north up the yard.
-	keeper = _counter(Npc.Role.KEEPER,
-		Vector3(2.6, 0.0, 1.5), 0.0, Pal.GOLD)
+	# `_counter` still applies: `PLAZA_AT` is where his COUNTER goes and he steps
+	# back behind it, which puts his body between the stall and the plinth --
+	# exactly where a keeper working under a monument would stand.
+	keeper = _counter(Npc.Role.KEEPER, PLAZA_AT, KEEPER_YAW, Pal.GOLD)
 
-	# The jewelcrafter, hard against the WEST wall and side-on to the yard.
+	# **He is also the village elder** -- one person, not two, since 2026-08-10
+	# (`4fccd0a`), and the merge is what makes the centre of the plaza the right
+	# place for him rather than merely an available one. He carries the opening's
+	# third beat: the veil lifts, and "I've been expecting you" has to come from
+	# somebody you can see (`_open_the_game`). The middle of a paved circle six
+	# metres in front of where the hero lands is the most unambiguously *in front
+	# of you* spot the yard has, and `tools/directors/voices.gd` C1 measures it --
+	# he is 0 degrees off the arrival camera's axis here, against a 24 degree
+	# bound that his previous spot fifteen metres east missed by three times over.
 	#
-	# Her place in the loop is what fixes her position, not the free floor: her
-	# whole offer is "spend back what the plate cost you" (GDD §6.6), so she has
-	# to come AFTER the smith. The smith is at the north end; the walk from him
-	# to the gate runs down this wall. Standing her beside the forge would let a
-	# player answer the heavy-or-light trade before they had felt it.
-	#
-	# Two constraints pin the exact metre, and both have already caught someone:
-	#
-	#  * **Inside the arrival frame.** z = +1.1 is forward of the arrival spot
-	#    (z ≈ +4.8) rather than behind it, so she is on screen on the one frame
-	#    every returning player sees. That is the note over the alchemist, and
-	#    the first cut of this row put her at z = +6.6 -- behind the camera.
-	#  * **Out of the relic ring.** `_build_relic_props` puts twelve lamp posts
-	#    on an ellipse of (11, 9); the two nearest this wall land at (-10.16,
-	#    3.44) and (-10.91, -1.17). This is the gap between them.
-	#
-	# Yaw 90° faces her +Z down +X, into the yard, which also means `_counter`
-	# steps her BACK toward the wall rather than out into the walk.
-	jeweller = _counter(Npc.Role.JEWELLER,
-		Vector3(-yard.x * 0.396, 0.0, yard.y * 0.05), 90.0, Color(0.80, 0.62, 0.94))
+	# The old worry about x = 0 -- that a figure on the centre line is silhouetted
+	# against the gate's cold mouth -- died with the flat arch. The mouth now lies
+	# flat over a wellhead four metres inside a roofed passage (`Gatehouse`), so
+	# there is nothing bright at head height on this axis to be a silhouette
+	# against.
 
+	# The gatehouse sits ON the wall line, in the gap `_build_yard` leaves for it,
+	# rather than 2.2 m inside the yard where the old flat arch stood. It has 3.4 m
+	# of passage behind its face and it has to be able to put that passage
+	# somewhere the player is never standing -- which is outside the curtain.
+	#
+	# `Npc`'s trigger is 2.3 m, so it reaches from here to z = -8.7: a metre short
+	# of the arch's own threshold. You have to walk INTO the gatehouse to be
+	# offered the way down, which is the read wanted and which every director that
+	# approaches this node gets for free (they aim at `gate.global_position`).
 	gate = Npc.new()
 	gate.role = Npc.Role.GATE
-	gate.position = Vector3(0.0, 0.0, -yard.y * 0.40)
+	gate.position = Vector3(0.0, 0.0, -yard.y * 0.5)
 	add_child(gate)
 
 
@@ -527,6 +613,21 @@ func light_of(prop: StringName) -> GarrisonLight:
 		if l.prop == prop:
 			return l
 	return null
+
+
+## One shopkeeper, on the plaza's ring, facing in.
+##
+## `bearing` is degrees clockwise from north -- 0 is the gate, 180 the arrival,
+## +90 due east. One number per shop, and the facing falls out of it rather than
+## being a second number that can disagree with the first: a kiosk on a circle
+## faces the middle of the circle or it is not on the circle.
+##
+## The yaw is `bearing + 180` because a booth's +Z is the CUSTOMER's side
+## (`ShopBooth`), and the customer is the one standing in the plaza.
+func _ring(role: Npc.Role, bearing: float, lamp: Color) -> Npc:
+	var b := deg_to_rad(bearing)
+	var at := PLAZA_AT + Vector3(sin(b), 0.0, -cos(b)) * KIOSK_R
+	return _counter(role, at, bearing + 180.0, lamp)
 
 
 ## One shopkeeper, standing behind their own booth.

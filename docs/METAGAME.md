@@ -479,20 +479,34 @@ in it.
   materials — over the same kind of counter, driven by the same screen. She is
   §6.6.
 - **The jewelcrafter.** Four blanks and eight paths (`scripts/items/jewel_db.gd`),
-  the west gap of the yard. She is §6.7.
+  on the west of the plaza. She is §6.7.
 - **The hero's quarters.** Not a counter — nobody stands in it, and nothing in it
   takes gold. A lean-to in the south-west corner with a cot you sleep in and a
   footlocker you stash in. It is §6.8, and `docs/SCOPE.md` §2 records why the
   no-list's housing entry let it through.
-- **The gate.** Into the dungeon, and back out again on the arrival pad.
+- **The gate.** Into the dungeon, and back out again on the arrival pad. It is a
+  **gatehouse** (`scripts/props/gatehouse.gd`) cut through the north curtain —
+  two crenellated towers, a voussoir arch, a raised portcullis, and a roofed
+  passage with a wellhead and a timber headframe at the back of it. The cold
+  light comes up out of that shaft, not off a panel hung in the arch, which is
+  what it used to be and why it photographed as a poster.
 
-The vendor and the smith share the far wall either side of the gate, because
-they are the two counters you visit with a full bag. The alchemist stands nearer
-the arrival spot: what she sells is spent on the way back *down*, and the frame
-you see when you extract has to contain her or she does not exist. The
-jewelcrafter is in the west gap between the relic posts, forward of arrival for
-the same reason — a counter behind the arrival camera does not exist either,
-which is the exact mistake her first placement made.
+**The five counters ring a paved circle** (`scripts/props/plaza.gd`) in the
+middle of the yard, and the loop is what sets each bearing. The smith and the
+pawnbroker take the two north quarters, flanking the approach to the gate,
+because they are the counters you visit with a full bag. The alchemist and the
+jewelcrafter take east and west, on the walk from the plaza back down to the
+arch — what they sell is spent on the way back *down*, and the frame you see when
+you extract has to contain them or they do not exist, which is the exact mistake
+the jewelcrafter's first placement made. Both are swung a little north of true
+east/west for that reason and no other: at a true beam they fall outside the
+arrival camera's 40°.
+
+**The Lanternkeeper stands on the middle of the circle**, with the First Lantern
+carved in stone at her back (`scripts/props/statue.gd`). Hers is the only reward
+that is not on the screen you just closed — it is a lamp fifteen metres away — so
+turning away from her has to face the yard, and from the centre it faces the yard
+in every direction.
 
 Each of them is a person of one of the Vale's peoples (`scripts/world/race_body.gd`)
 standing behind a booth full of their own trade (`scripts/props/shop_booth.gd`):

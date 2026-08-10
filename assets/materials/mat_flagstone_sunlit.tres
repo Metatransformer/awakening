@@ -1,0 +1,18 @@
+[gd_resource type="StandardMaterial3D" load_steps=3 format=3]
+
+[ext_resource type="Texture2D" uid="uid://1x65tkw08qy" path="res://assets/textures/cobble_grey.png" id="1_alb"]
+[ext_resource type="Texture2D" uid="uid://d4kcqshtp6paj" path="res://assets/textures/cobble_grey_n.png" id="2_nrm"]
+
+[resource]
+resource_name = "mat_flagstone_sunlit"
+albedo_color = Color(0.72, 0.69, 0.63, 1)
+albedo_texture = ExtResource("1_alb")
+metallic_specular = 0.2
+roughness = 0.9
+normal_enabled = true
+normal_scale = 1.2
+normal_texture = ExtResource("2_nrm")
+uv1_scale = Vector3(0.7, 0.7, 0.7)
+uv1_triplanar = true
+uv1_world_triplanar = true
+texture_filter = 5
