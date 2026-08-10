@@ -18,13 +18,14 @@ extends Control
 ## all three of them ask "which mode is this" before doing anything, which is the
 ## drift the single trade screen exists to prevent (see its class doc).
 ##
-## What IS shared is shared, and since 2026-08-09 that includes the picture: the
-## cells are `ItemGrid`, the frame and the footer are the pause menu's theme, and
-## the polled input, the panel geometry and the footer's `Glyph` caps are what
-## they always were. Nothing here re-invents a widget. This screen was the last
-## place in the game where a stack of amber was a line of text rather than an
-## amber-tinted cell, which meant the bag looked like one game and the shelf you
-## were moving it onto looked like another.
+## What IS shared is shared, and that includes the picture: the cells are
+## `ItemGrid`, the chrome is `UITheme` and `UiKit` — the same `PlateHeader`,
+## `StatBand` and `FooterToast` the counters wear — and the polled input, the
+## panel geometry and the footer's `Glyph` caps are what they always were.
+## Nothing here re-invents a widget. This screen was the last place in the game
+## where a stack of amber was a line of text rather than an amber-tinted cell,
+## which meant the bag looked like one game and the shelf you were moving it onto
+## looked like another.
 ##
 ## ## Nothing in this file writes the bag or the shelf
 ##
@@ -36,7 +37,6 @@ extends Control
 ## kind of event — a smaller number came back — and neither can duplicate a
 ## stack or drop one on the floor between two dictionaries.
 
-const THEME_PATH := "res://scenes/ui/menu/menu_theme.tres"
 ## Cells across, and the shop's number for the shop's reason: four was measured
 ## against this same frame width.
 const COLS := 4
@@ -58,7 +58,11 @@ var _refuse_why: String = ""
 var _closing: bool = false
 
 var _grid: ItemGrid
-var _cap_label: Label
+## The `StatBand` and the slot it is rebuilt into. Two of its cells move on every
+## transfer and one follows the cursor, so those are written through
+## `UiKit.band_value` rather than by rebuilding under the focused cell.
+var _band: Control
+var _band_slot: VBoxContainer
 var _empty: Label
 var _d_kind: Label
 var _d_name: Label
@@ -66,6 +70,11 @@ var _d_split: Label
 var _d_blurb: Label
 var _hint: Label
 var _hold_bar: HoldBar
+## The refusal, as a `FooterToast`. `_refuse` and `_refuse_why` survive alongside
+## it because `tools/directors/house_rest.gd` reads both to prove the screen said
+## WHY it would not take a stack.
+var _toast: Control
+var _toast_slot: VBoxContainer
 
 
 ## Same construction as `TradeScreen.open`, and for the same reason its note
@@ -97,7 +106,8 @@ var _prev_mouse: int = Input.MOUSE_MODE_VISIBLE
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	theme = load(THEME_PATH) as Theme
+	UITheme.prewarm()
+	theme = UITheme.theme()
 	_build()
 	_fit()
 	get_viewport().size_changed.connect(_fit)
@@ -147,12 +157,14 @@ func _build() -> void:
 
 	var frame := PanelContainer.new()
 	frame.name = "Frame"
-	frame.theme_type_variation = &"MenuFrame"
+	# `edge_to_edge`: the header plate, the band and the footer reach the frame
+	# edge and the body between them owns its own inset. Same as the counters.
+	UITheme.style_panel(frame, UITheme.FRAME_FACE_SOLID, true)
 	frame.custom_minimum_size = MenuUtil.FRAME_SIZE
 	centre.add_child(frame)
 
 	var stack := VBoxContainer.new()
-	stack.theme_type_variation = &"MenuStack"
+	stack.add_theme_constant_override("separation", 0)
 	frame.add_child(stack)
 
 	_build_header(stack)
@@ -161,33 +173,63 @@ func _build() -> void:
 
 
 func _build_header(parent: Node) -> void:
-	var header := PanelContainer.new()
-	header.theme_type_variation = &"MenuHeader"
-	parent.add_child(header)
+	UiKit.plate_header(parent, {
+		"kicker": "Stow · Retrieve",
+		"title": "Footlocker",
+		"emblem": UiKit.action_icon("locker"),
+	})
 
-	var row := HBoxContainer.new()
-	header.add_child(row)
-
-	var name_label := Label.new()
-	name_label.theme_type_variation = &"MenuTitle"
-	name_label.text = "FOOTLOCKER"
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(name_label)
-
-	# Where the purse sits on the trade screen, because it answers the same
+	# Where the purse sits on the trade screen, because the band answers the same
 	# glance — "how much of this have I got left". SLOTS, not coin: the locker
 	# never sees gold, and drawing a gold figure on a screen with no price on it
 	# is the lie `docs/GDD.md` §6.3 forbids of the relic receipt.
-	_cap_label = Label.new()
-	_cap_label.theme_type_variation = &"MenuValue"
-	_cap_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	row.add_child(_cap_label)
+	_band_slot = VBoxContainer.new()
+	_band_slot.add_theme_constant_override("separation", 0)
+	parent.add_child(_band_slot)
+	_rebuild_band()
+
+
+## Both capacities, then the shape of the job. SHELF and BAG are the two things
+## a transfer can run out of, so they lead and they go WARNING at the brim —
+## the refusal toast then confirms what the band already warned about, instead of
+## being the first the player hears of it.
+func _band_cells() -> Array:
+	var shelf := Game.stash_slots_used()
+	var bag := Run.slots_used()
+	return [
+		{"key": &"shelf", "label": "Shelf",
+			"value": "%d/%d" % [shelf, K.STASH_SLOTS],
+			"icon": UiKit.action_icon("locker"),
+			"tone": UITheme.WARNING if shelf >= K.STASH_SLOTS else null},
+		{"key": &"bag", "label": "Bag",
+			"value": "%d/%d" % [bag, Game.bag_slots],
+			"icon": UiKit.action_icon("bag"),
+			"tone": UITheme.WARNING if bag >= Game.bag_slots else null},
+		{"label": "Kinds", "value": str(_rows.size())},
+		# Written by `_describe`, because it follows the cursor rather than the
+		# transfer — the one cell a rebuild would get wrong.
+		{"key": &"split", "label": "This kind", "value": "—"},
+	]
+
+
+func _rebuild_band() -> void:
+	if _band_slot == null:
+		return
+	for child in _band_slot.get_children():
+		child.queue_free()
+		_band_slot.remove_child(child)
+	_band = UiKit.stat_band(_band_slot, _band_cells())
+	# The `split` cell is left at its "—" placeholder. It is the cursor's cell, and
+	# `_refresh` calls `_point_at` -> `_describe` immediately after this — which is
+	# also the only order that works, because the first band is built from
+	# `_build_header`, before the detail pane the describer writes exists.
 
 
 func _build_body(parent: Node) -> void:
 	var pad := MarginContainer.new()
-	pad.theme_type_variation = &"MenuBodyPad"
 	pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	for side in ["left", "right", "top", "bottom"]:
+		pad.add_theme_constant_override("margin_" + side, 20)
 	parent.add_child(pad)
 
 	var split := HBoxContainer.new()
@@ -200,7 +242,8 @@ func _build_body(parent: Node) -> void:
 	split.add_child(left)
 
 	var card := PanelContainer.new()
-	card.theme_type_variation = &"MenuSection"
+	# A sunken recess, not a raised card: the grid is a thing you reach INTO.
+	card.add_theme_stylebox_override("panel", UITheme.well())
 	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left.add_child(card)
 
@@ -212,10 +255,7 @@ func _build_body(parent: Node) -> void:
 	# cell are a bare pair of numbers, and a bare pair of numbers reads either way
 	# round — this is the one place that says which is which, so it is worded in
 	# the same order and with the same arrow the cells use.
-	var caption := Label.new()
-	caption.theme_type_variation = &"MenuHeading"
-	caption.text = "ON THE SHELF%sIN THE BAG" % SWAP
-	inner.add_child(caption)
+	UITheme.section_rule(inner, "ON THE SHELF%sIN THE BAG" % SWAP)
 
 	_grid = ItemGrid.new()
 	_grid.name = "Kinds"
@@ -224,8 +264,9 @@ func _build_body(parent: Node) -> void:
 	inner.add_child(_grid)
 
 	_empty = Label.new()
-	_empty.theme_type_variation = &"MenuMuted"
 	_empty.text = "Nothing to put away."
+	_empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UITheme.apply_text_style(_empty, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
 	inner.add_child(_empty)
 
 	_build_detail(split)
@@ -234,7 +275,7 @@ func _build_body(parent: Node) -> void:
 func _build_detail(parent: Node) -> void:
 	var card := PanelContainer.new()
 	card.name = "Detail"
-	card.theme_type_variation = &"MenuSection"
+	UITheme.style_panel(card, UITheme.BG_INSET)
 	card.custom_minimum_size = Vector2(DETAIL_W, 0)
 	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	parent.add_child(card)
@@ -243,41 +284,54 @@ func _build_detail(parent: Node) -> void:
 	col.add_theme_constant_override("separation", 6)
 	card.add_child(col)
 
+	# The kicker/title/number stack of a `PlateHeader`, written by hand because
+	# this one is REWRITTEN on every cursor move — see the same note on
+	# `TradeScreen._build_detail`.
 	_d_kind = Label.new()
-	_d_kind.theme_type_variation = &"MenuMuted"
+	UITheme.apply_text_style(_d_kind, UITheme.TYPE_CAPTION, UITheme.ACCENT)
 	col.add_child(_d_kind)
 
 	_d_name = Label.new()
-	_d_name.theme_type_variation = &"MenuHeading"
 	_d_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	UITheme.apply_text_style(_d_name, UITheme.TYPE_H1, UITheme.TEXT)
 	col.add_child(_d_name)
 
 	# The cell's second line, spelled out in words. The cell has room for "2 ⇄ 3"
 	# and the arrow is learnable, but there is no reason to make the player learn
 	# it when the pane beside the cursor can just say it.
 	_d_split = Label.new()
-	_d_split.theme_type_variation = &"MenuValue"
 	_d_split.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	UITheme.apply_text_style(_d_split, UITheme.TYPE_PARAGRAPH_1, UITheme.ACCENT)
 	col.add_child(_d_split)
 
 	_d_blurb = Label.new()
-	_d_blurb.theme_type_variation = &"MenuSlotStat"
 	_d_blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_d_blurb.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	UITheme.apply_text_style(_d_blurb, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
 	col.add_child(_d_blurb)
 
 
+## The refusal is a `FooterToast` and NOT the hint line recoloured, which is what
+## it used to be. "← STOW  RETRIEVE →  HOLD FOR ALL" is the one line telling a
+## player which way the thumb goes, and it vanished at exactly the moment a
+## refused transfer had them looking for it.
 func _build_footer(parent: Node) -> void:
 	var footer := PanelContainer.new()
-	footer.theme_type_variation = &"MenuFooter"
+	footer.add_theme_stylebox_override("panel",
+		UITheme.hud_box(UITheme.GRAY_1, 20, 10, 20, 10))
 	parent.add_child(footer)
 
 	var row := VBoxContainer.new()
-	row.add_theme_constant_override("separation", 2)
+	row.add_theme_constant_override("separation", 6)
 	footer.add_child(row)
 
+	_toast_slot = VBoxContainer.new()
+	_toast_slot.add_theme_constant_override("separation", 0)
+	_toast_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(_toast_slot)
+
 	_hint = Label.new()
-	_hint.theme_type_variation = &"MenuHint"
+	UITheme.apply_text_style(_hint, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
 	row.add_child(_hint)
 
 	_hold_bar = HoldBar.new()
@@ -370,10 +424,10 @@ func _refresh() -> void:
 		})
 	_grid.set_cells(cells)
 	_empty.visible = _rows.is_empty()
-
-	var used := Game.stash_slots_used()
-	_cap_label.text = "%d/%d" % [used, K.STASH_SLOTS]
-	_cap_label.modulate = Pal.RUST if used >= K.STASH_SLOTS else Color.WHITE
+	# Rebuilt rather than written cell by cell: nothing here is mid-animation, and
+	# a rebuild cannot go stale. The `split` cell is the exception and is written
+	# by `_describe`, because it follows the cursor rather than the transfer.
+	_rebuild_band()
 
 	_point_at(_cursor)
 
@@ -405,8 +459,11 @@ func _describe() -> void:
 		_d_name.text = ""
 		_d_split.text = ""
 		_d_blurb.text = ""
+		UiKit.band_value(_band, &"split", "—")
 		return
 	var row := _rows[_cursor]
+	UiKit.band_value(_band, &"split", "%s%s%s" % [
+		_fig(int(row["stored"])), SWAP, _fig(int(row["carried"]))])
 	var def := ItemDb.get_def(row["id"])
 	_d_kind.text = "%s  ·  %s" % [def.rarity_name().to_upper(),
 		def.bench_name() if def.is_component() else "INGREDIENT"]
@@ -430,6 +487,10 @@ const REPEAT_RATE := 0.09
 ## nothing here is irreversible: the worst a mis-held cell does is put the wrong
 ## pile on the wrong side of a room you are standing in.
 const ALL_HOLD := 0.4
+## How long a refusal stays on the footer. The old 0.6 s was tuned for a one-line
+## recolour; "THE LOCKER IS FULL" now arrives as its own toast, and a message
+## that leaves before it is read is the same as no message.
+const REFUSE_TIME := 1.8
 
 var _armed_cancel: bool = false
 var _armed_move: bool = false
@@ -552,12 +613,27 @@ func _move(direction: int, count: int) -> void:
 	if moved <= 0:
 		_refused("THE LOCKER IS FULL")
 		return
+	# The transfer that just landed answers whatever the last refusal said.
+	_end_refusal()
 	_refresh()
 
 
+## `_refuse` and `_refuse_why` are kept alongside the toast because
+## `tools/directors/house_rest.gd` reads them to prove the screen said WHY. They
+## are the record; the toast is the picture of it.
 func _refused(why: String) -> void:
+	_end_refusal()
 	_refuse = 0.0
 	_refuse_why = why
+	_toast = UiKit.footer_toast(_toast_slot, why, UITheme.DANGER)
+
+
+func _end_refusal() -> void:
+	_refuse = -1.0
+	_refuse_why = ""
+	if _toast != null and is_instance_valid(_toast):
+		_toast.queue_free()
+	_toast = null
 
 
 func _process(delta: float) -> void:
@@ -566,8 +642,8 @@ func _process(delta: float) -> void:
 		return
 	if _refuse >= 0.0:
 		_refuse += delta
-		if _refuse > 0.6:
-			_refuse = -1.0
+		if _refuse > REFUSE_TIME:
+			_end_refusal()
 	_paint_chrome()
 
 
@@ -581,9 +657,6 @@ func _paint_chrome() -> void:
 	var leave_cap := Glyph.cap(&"ui_cancel")
 	if leave_cap.is_empty():
 		leave_cap = "ESC"
-	if _refuse >= 0.0:
-		_hint.text = _refuse_why
-		_hint.modulate = Pal.RUST
-	else:
-		_hint.text = "← STOW    RETRIEVE →    HOLD FOR ALL    %s LEAVE" % leave_cap
-		_hint.modulate = Color.WHITE
+	# The hint says which way the thumb goes and nothing else. Why a transfer was
+	# refused is the toast's line — see `_build_footer`.
+	_hint.text = "← STOW    RETRIEVE →    HOLD FOR ALL    %s LEAVE" % leave_cap
