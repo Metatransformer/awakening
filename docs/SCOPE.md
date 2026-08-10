@@ -35,13 +35,18 @@ definition**, and §4.2 applies.
 | Locked doors | **8** | 4 shortcuts, 3 vaults, 1 to the Long Descent |
 | Vault prefabs | **3** | Three rooms each |
 | Relics | **12** | Named, hand-placed, non-rolling. **Two are Verses; all twelve arrive broken** — GDD §6.4 |
-| Town NPCs | **4** | Vendor, smith, alchemist, **Lanternkeeper (new)** |
+| Town NPCs | **5** | Vendor, smith, alchemist, **Lanternkeeper (new)**, **Jewelcrafter (new)**. There is no sixth. |
+| **Stats** | **5** | Damage, speed, max health, stamina, soak. GDD §6.6. No sixth. |
+| **Upgrade tracks** | **20** | 4 gear (edge, guard, string, chain) + 8 armour (4 pieces × 2 paths) + 8 jewel (4 slots × 2 paths) |
+| Armour pieces | **4** | Chest, legs, arms, boots. ×2 paths, ×3 rungs |
+| Jewelry slots | **4** | Amulet, 2 rings, bracelet. ×2 paths, ×4 rungs |
+| **Armour / jewelry art** | **0** | Every piece is a number. No modular meshes, no icons beyond the existing catalogue rows. |
 | Town scenes | **1** | The courtyard. There is no second settlement. |
-| **New UI screens** | **0** | The Lanternkeeper is a `Catalogue` on the existing `TradeScreen` |
+| **New UI screens** | **0** | The Lanternkeeper and the Jewelcrafter are `Catalogue`s on the existing `TradeScreen`. The stat block is a panel on the equipment screen, not a screen. |
 | Endings | **2** | Lantern, Chord |
 | Currencies | **1** | Gold. Components and relics are items, not money. |
 | Ingredients / components | **10 / 8** | As built. No new rarity band. |
-| Forge ladders | **5** | As built, ×4 rungs |
+| Forge ladders | **12** | At the smith: 4 gear + 8 armour. Was 5; `plate` became 8. ×4 rungs |
 | Draughts | **3** | As built |
 | Dialogue trees | **0** | NPCs have counters, not conversations |
 | Quests | **0** | The relic list is the quest log |
@@ -225,6 +230,7 @@ not worth adding.
 |---|---|---|
 | The Sustain-Verse, the Ballast-Verse (2 relics) | **Fletcher's Jig** and **Waterwheel Gear**, deleted | GDD §6.2 |
 | Usable items 4 → 6 | Nothing — a working is a row in `armament_db.gd`, and the **ring stops** ceiling was added in the same commit to cap it | §1 |
+| **The gear loop.** Town NPCs 4 → 5, forge ladders 5 → 12, 8 jewel tracks, 5 named stats | **Nothing. This is an owner's amendment to the manifest, made deliberately and with the cost known.** | GDD §6.6 |
 
 The first line is the rule working as intended: the two deleted relics were the
 only entries on GDD §6.2's table that were numbers on a subsystem rather than
@@ -235,6 +241,29 @@ The second line is the rule being **honest about a hole**. Two usable items
 arrived without a deletion, because they genuinely cost no new system — and that
 is exactly the argument every future addition will make. The ring-stops ceiling
 is the price: from here, a seventh stop costs a sixth.
+
+The third line is the biggest single change this manifest has taken, and it is
+recorded without a deletion **on purpose**. The owner's position is that
+upgrading gear, crafting jewelry and brewing is *the core loop* — the reason to
+delve, not a service beside it — and a manifest that refuses the core loop is
+measuring the wrong game. That is a call the owner gets to make and this document
+does not.
+
+What the ledger asks in return is that the cost is not pretended away:
+
+- **It is not free, and most of it is not code.** The mechanism is small — the
+  branch is two track ids and a ceiling (GDD §6.6) — but 20 tracks is roughly 60
+  authored rungs, each needing a price, a recipe and a sentence of detail text.
+  That is the real bill and it is paid in tuning, not in engineering.
+- **The component economy has to be re-tuned, not extended.** Armour alone goes
+  from 3 purchases to 12. `ShopDb`'s own comment says prices are set against the
+  drop tables — those tables now have four times the demand on them.
+  `docs/SCOPE.md` §1 still says **Ingredients / components 10 / 8, no new rarity
+  band**, and that row is the one to defend: the answer to a longer ladder is
+  *drops per run*, never a fifth component.
+- **The ceilings in §1 are now doing the work §4.2 used to.** Five stats, four
+  pieces, four slots, no sixth NPC, zero armour art. Those counts are the whole
+  brake, so a proposal that moves one of them is back to needing a deletion.
 
 ### 4.3 Three questions before any new system
 
@@ -298,6 +327,9 @@ surprise, and so nobody rebuilds the plan around it.
 | **Repair prices become a grind gate** | A gold cost is the easiest dial in the game to turn, and turning it up "adds pressure" without anyone having to design anything. | GDD §6.4: the first is free, none exceeds one good run, and §6.3's *no relic gates the ending* is the acceptance test. If a repair is ever worth farming for, it is priced wrong. |
 | **M6 gets special cases** | See §3. This is the big one. | Any floor 2–4 requirement that is not in a manifest goes back to M2/M4 as a pattern change, or it is cut. |
 | **The relic unlocks get "designed"** | Twelve one-line changes are unsatisfying to write; each one wants to become a feature. | The table in GDD §6.2 is the spec. A relic that needs more than a line is the wrong relic. |
+| **The gear loop eats the component economy** | 20 tracks draw on four components tuned for 5. The obvious fix — a fifth component, a new rarity band — is the wrong one and it will look right. | Tune **drops per run** and the recipes. §1's `Ingredients / components 10 / 8` does not move. If the ladders cannot be fed, shorten the ladders. |
+| **Armour wants to become visible** | Four pieces with names is one step from four meshes, and it will be argued as "it's just a model swap". | §1: **armour / jewelry art 0**. It is four meshes × two paths × four rungs against a rig this project has fixed three times (`CLAUDE.md` §4). It is a sequel's. |
+| **A sixth stat** | Every new track wants a number nothing else owns — crit, luck, poise, cast speed. | GDD §6.6: five stats, each one felt inside a run. A stat needing a tooltip is a stat that does not matter. |
 | **Audio slips to never** | It is M8, it has no gameplay, and nothing fails without it. | It is a ship blocker. A silent action game reads as a prototype and no store page survives it. |
 | **The endless mode absorbs the project** | It is already built, it is genuinely fun, and it has no bottom — so it can always be improved instead of finishing floors 2–4. | It is post-credits content. It gets the floor-10 relic and the plaque and **nothing else** until M9. |
 | **Lore gravity** | `~/valenfeld` has 109 characters, 172 places, 59 factions and 90 quests, all good. | The game uses: the Society, the College, the Vyr, Valenfeld, and the Sundering as the reason the shaft is there. Five nouns. Everything else is flavour text on a relic, at most. |
@@ -309,7 +341,9 @@ surprise, and so nobody rebuilds the plan around it.
 Four floors, four bosses built from monsters already on disk, one new mechanic —
 the working, a thrown arc and a fuse, carrying three spells on a six-stop weapon
 ring — twelve hand-placed relics that come up broken, are repaired or read at the
-counter whose thing they change, and each alter one line in the town, eight
+counter whose thing they change, and each alter one line in the town, a gear loop
+of twenty upgrade tracks across five counters moving five stats and no sixth,
+eight
 locked doors following two rules, two endings, and the endless dungeon that
 already works as the post-credits mode. The demo is floor 1 and it exists at the
 halfway point. Everything not on that list is a sequel, and the way we know we

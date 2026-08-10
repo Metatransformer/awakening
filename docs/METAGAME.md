@@ -506,6 +506,14 @@ rungs cost **gold and components**, and components only exist underground.
 
 ### The five ladders
 
+> **⏳ Being split — `docs/GDD.md` §6.6. This section is true today.** `plate`
+> becomes **four pieces** (chest, legs, arms, boots), each with a **heavy** and a
+> **light** path, and a fifth counter — the jewelcrafter — adds eight more
+> tracks. The mechanism does not change: a path is a track id, a rung is a level
+> in `Game.upgrades`, and committing to one path drops the sibling's ceiling to
+> zero. Everything below stays exactly as written for the four tracks that are
+> not `plate`.
+
 Four rungs each: rung 0 is the piece as it comes out of the box, and there are
 three to buy. The numbers live in `scripts/core/consts.gd` and the gear reads
 them back through accessors on `Game` — `sword_bonus()`, `armour_soak()`,

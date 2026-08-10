@@ -149,6 +149,13 @@ happens **in town, over a counter, after you got home**. That indirection is wha
 makes a great run a *decision* rather than an automatic one, and it is the reason
 death costs something without costing progress.
 
+**This pillar is the game's power curve, and §6.6 is how much of it there is.**
+The counters are not a service on the side of the dungeon; climbing them is why
+you go down. You delve to get rich and to find components, you spend both on
+gear, and the gear is what lets you delve deeper. The dungeon supplies the
+materials and the ladders supply the reason — neither half is the game on its
+own.
+
 The boss items in §5 are the one deliberate exception, and they are an exception
 about *verbs*, not about power: a bow you own is a thing you can now do, not a
 number that went up. See §5.2.
@@ -437,6 +444,86 @@ Sustain, Ballast is **six stops**, and `docs/CONTRACT.md` §4.1 chose rings over
 bindable slots on the grounds that a ring you can *count* beats a binding you
 have to remember. Six is where counting stops being free. **There is no fourth
 working**, and the reason is a thumb rather than a budget.
+
+---
+
+### 6.6 The gear loop — what the gold and the components are for
+
+Pillar 4 says permanence is bought. This is the shop.
+
+**Five stats, and there is no sixth.** Damage, speed, max health, stamina, soak.
+Every one of them is a number the player can feel inside one run, which is the
+rule `scripts/core/consts.gd` already states over the forge ladders: *no
+percentages, no stat sticks, nothing you have to take on faith*. A stat that
+needs a tooltip explaining why it matters is a stat that does not matter.
+
+They are listed on the equipment screen, beside the paper doll that already
+draws what you are holding.
+
+#### The armour — four pieces, two paths
+
+`plate` was one ladder. It becomes **four**: chest, legs, arms, boots. There is
+no modular armour art and there is not going to be — the hero's model is the
+hero's model, and every one of these is a number (`Game.armour_soak()` is
+already exactly that today).
+
+Every rung is a **choice of two**:
+
+> **Heavy** buys more soak and costs a little speed. **Light** buys less soak,
+> costs no speed, and is cheaper in components.
+
+That is the whole fork, and it is a real decision because speed in this game is
+not a convenience — the roll is the defence (`docs/CONTRACT.md` §4), and a hero
+who rolls slower dies to things he used to beat. Four pieces means you are not
+picking *one* answer, you are picking a mix: heavy chest and light boots is a
+build, and so is the opposite.
+
+**A piece commits.** Once a piece has taken a rung on one path, the other path is
+closed for that piece — you cannot buy three heavy rungs and then re-spec light.
+Implementation: the two paths are two track ids and the sibling's ceiling drops
+to zero, so `Game.upgrades` stays `{track: int}` and nothing new is stored.
+
+**The speed cost never touches `K.RUN_SPEED`.** That constant is `[oot]`,
+measured, and pillar 1 says the feel is not negotiable. The penalty is a
+multiplier applied on top of the curve, and **all four pieces at full heavy caps
+at −8%** — enough to feel in a corridor, not enough to stop being Ocarina.
+
+#### The jewelcrafter — four slots, eight specializations
+
+A fifth counter, and the only new NPC this game gets. She is a `Catalogue`
+subclass and a row in `Npc.COUNTERS`, on the same `TradeScreen` as the other
+four (`docs/SCOPE.md` §1 keeps **new UI screens at 0**, and this does not break
+it).
+
+Four slots: **an amulet, two rings, and a bracelet.** Each is bought as a plain
+base, then specialized once, then climbed **four rungs**.
+
+| Slot | Path A | Path B |
+|---|---|---|
+| Amulet | **Vigor** — max health | **Focus** — max stamina |
+| Ring (×2, same pair) | **Edge** — damage | **Swift** — speed |
+| Bracelet | **Ward** — soak | **Wind** — stamina regen |
+
+The two rings draw on the same pair on purpose: two Edge rings and one of each
+are different builds, and that is where the variety comes from without a ninth
+path existing.
+
+**Jewelry is where speed is bought back.** Armour trades speed for soak; a Swift
+ring trades a damage slot for it. That is the loop's one genuinely hard standing
+question, and it is the same shape as §2's — *what are you willing to carry?*
+
+#### What this loop deliberately does not become
+
+- **No relic is a stat** (§6.3). Relics change the town; the ladders change you.
+  The moment a relic grants soak, the twelve stop being the reason to keep
+  playing and become twelve more rungs.
+- **No re-spec, no refund.** A path you committed is a path you committed. A
+  build you can undo for gold is not a build, it is a menu.
+- **No sixth stat, no ninth path, no second jewelcrafter.** `docs/SCOPE.md` §1
+  carries all three as counts.
+- **No armour visuals.** Every piece is a number. Modular armour art is four
+  meshes times two paths times four rungs, against a hero rig this project has
+  already had to fix three times (`CLAUDE.md` §4).
 
 ---
 
