@@ -281,7 +281,8 @@ bottle, so no D-pad direction can ever land on it — one press that ends the ru
 is precisely the fumble the hold existed to prevent.
 
 ```
-cost = max(15, round(bag_value × 0.25))
+toll   = max(15, round(bag_value × 0.25))
+charge = min(toll, gold)          # what actually leaves the purse
 ```
 
 `EXTRACT_MIN = 15`, `EXTRACT_RATE = 0.25` (`scripts/autoload/run_state.gd`).
@@ -291,9 +292,68 @@ function of depth. Three consequences, all intended:
 
 - A poor run is cheap to abandon. You are never trapped by your own poverty.
 - A rich run costs real money to bank — the greed curve bends but never breaks.
-- You cannot extract with gold you do not have. `can_extract()` gates on it, and
-  the refusal is surfaced (`Bus.extract_refused`), so being too poor to leave
-  with treasure is a legible failure state rather than a soft-lock.
+- **The toll can never exceed your gold.** `Run.extract_charge()` caps it there,
+  so a bag worth more than your purse takes *all* of it and the rope still works.
+  You walk into town with the haul and nothing else, and now you have to sell it.
+
+### The cap, and why it replaced a refusal — 2026-08-09
+
+Until this date the third bullet read the other way: `can_extract()` gated on
+`Game.gold >= cost` and the rope refused below it, on the theory that being too
+poor to leave was "a legible failure state rather than a soft-lock". **It was a
+soft-lock.** The `mvp_loop` director found it on any seed that rolled a rich bag:
+
+```
+MVP pre_extract gold=26 fee=36 value=145
+MVP FAIL the rope refused to start
+MVP FAIL no ending screen after the rope
+```
+
+Read what that state actually offers a player. The fee rises with the bag and
+falls with nothing — **there is no shop underground**, so a bag you cannot afford
+to carry out is one you can only make heavier. Dropping loot is not implemented
+and would not be a fix if it were: the point of the fee is that the haul is what
+you pay for, and shedding it to make the toll payable means the fee no longer
+prices anything. The only exit left is dying, which destroys the entire bag the
+toll was charged against. So the refusal punished exactly one player — the one
+having the best run of the night — and offered them nothing to do about it.
+
+Four rules were considered. The owner picked the cap:
+
+| Rule | Why not |
+|---|---|
+| **Cap the fee at your gold** ✅ | Chosen. Costs everything, forfeits nothing, always resolves. |
+| Forfeit loot to cover the shortfall | The fee stops pricing the haul once the haul can pay it. |
+| Extract into debt | A second currency and a second screen, to model a bank the game does not have. |
+| Drop items to lower the fee | Turns the decision into inventory sudoku at the exit, and needs a drop UI. |
+
+**What the cap costs the design, honestly:** past the point where the toll meets
+the purse, the greed curve *flattens* — extra loot is free to carry home. That is
+a real softening and it is the price of never dead-ending. It is bounded, though,
+and the bound is the interesting part: reaching that point means you leave with
+**zero gold**, so the next run starts with no smith, no arrows, no bag slots, and
+a bag you must sell before you can do anything at all. The pressure moved from
+"can I leave" to "what does leaving leave me with", and only the second one is a
+decision the player can act on.
+
+**What the player sees**, because a dead end with no feedback was the worst part:
+
+- The HUD's `EXTRACT` line shows the **charge**, in RUST rather than GOLD once
+  the toll has eaten the purse, and the screen-wide CYAN sweep fires at the
+  moment it does (`Hud.set_extract_dear`). That moment is *usually* once per run
+  and stays — nothing sells underground, so the purse cannot grow — but fletching
+  (§4.6) burns real value out of the bag, so the toll can fall back under the
+  purse and the sweep fire again when the bag climbs back. That is intended: the
+  fact it announces really did change back.
+- The POUCH row says it in words: *"The rope wants 36 and you have 26. It will
+  take all of it."* The hold gauge stays drawn under it, because the hold works.
+- `Bus.extract_refused` is **deleted**, along with the HUD's `NEED n` flash and
+  its `craft_fail` cue. No code can reach that state, and a signal that cannot
+  fire reads to the next agent as a failure state the game still has.
+
+Proof: `tools/directors/mvp_loop.gd`, which now spends the purse down to one gold
+under the toll before using the rope, so the expensive exit is exercised on every
+seed instead of on the unlucky ones.
 
 Extracting also **heals you to full**, and it is the only *free* heal in the
 game. That is what makes leaving feel like relief instead of retreat, and it is

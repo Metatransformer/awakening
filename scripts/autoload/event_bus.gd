@@ -96,8 +96,13 @@ signal loot_gained(item_id: StringName, count: int)
 signal bag_full
 signal gold_changed(gold: int)
 signal items_sold(sold: Dictionary, paid: int)
-## The player tried to teleport out and could not afford the fee.
-signal extract_refused(cost: int, gold: int)
+## Deleted 2026-08-09: `extract_refused`. It meant "you tried to leave and could
+## not afford the fee", and no code can reach that state any more -- the fee is
+## capped at the purse (`Run.extract_charge`), so the rope always works. It is
+## named here rather than silently removed because a signal that cannot fire is
+## worse than none: the next reader takes it as evidence of a failure state the
+## game still has.
+##
 ## The Escape Rope was used from the menu. The hero's rope node picks this
 ## up and starts the channel — the menu deliberately does not reach into the
 ## hero, because the menu exists in scenes that have no hero at all.

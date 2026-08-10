@@ -50,7 +50,7 @@ func run(rig) -> void:
 	await rig.capture(out.path_join("h_06_unaffordable.png"))
 
 	# 6. Standing in an extraction node, holding the button.
-	Hud.set_extract_available(true)
+	Hud.set_extract_dear(true)
 	await rig.wait_frames(4)
 	await rig.capture(out.path_join("h_07_sweep.png"))
 	Hud.set_extract_hold(0.65)

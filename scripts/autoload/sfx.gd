@@ -65,10 +65,11 @@ const CUES := {
 	&"player_died": &"doom_stinger",
 	&"target_acquired": &"target_cycle",
 	&"run_started": &"dungeon_enter",
-	# Both of these are the game saying "no". Sharing one sound is the point:
-	# the player should learn a single refusal noise, not two.
+	# The game saying "no". One refusal noise, shared by everything that refuses
+	# -- `locked_door.gd` reaches for the same `craft_fail` by hand. There used to
+	# be an `extract_refused` row beside this one; the rope cannot refuse any more
+	# (the fee is capped at the purse), so the row went with the signal.
 	&"bag_full": &"craft_fail",
-	&"extract_refused": &"craft_fail",
 }
 
 var _pool: Array[AudioStreamPlayer3D] = []
@@ -107,8 +108,6 @@ func _ready() -> void:
 		_cue(&"target_acquired"))
 	Bus.run_started.connect(func(_s: int) -> void: _cue(&"run_started"))
 	Bus.bag_full.connect(func() -> void: _cue(&"bag_full"))
-	Bus.extract_refused.connect(func(_cost: int, _gold: int) -> void:
-		_cue(&"extract_refused"))
 	# These two carry a real world position, so they play where they happened
 	# rather than on top of the player.
 	Bus.hit_landed.connect(func(_t: Node3D, _n: int, pos: Vector3) -> void:

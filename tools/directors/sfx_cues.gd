@@ -56,9 +56,9 @@ func run(rig) -> void:
 	await _fires(rig, "target_acquired",
 		func() -> void: Bus.target_acquired.emit(null))
 	await _fires(rig, "player_died", func() -> void: Bus.player_died.emit())
+	# `extract_refused` was tested here until 2026-08-09. The signal is gone: the
+	# fee is capped at the purse, so the rope has nothing left to refuse.
 	await _fires(rig, "bag_full", func() -> void: Bus.bag_full.emit())
-	await _fires(rig, "extract_refused",
-		func() -> void: Bus.extract_refused.emit(50, 10))
 	await _fires(rig, "enemy_died",
 		func() -> void: Bus.enemy_died.emit(null, Vector3(2, 0, 2)))
 	await _fires(rig, "run_started", func() -> void: Bus.run_started.emit(1))

@@ -716,13 +716,25 @@ func _reset_hold() -> void:
 
 
 ## Why the rope will not work right now, or "" if it will.
+##
+## Being poor is no longer on this list. It was, and it was the game's one dead
+## end -- the rope told a player holding the best bag of the night that it wanted
+## more gold than they had, in a place where nothing sells. The fee is capped at
+## the purse now (`Run.extract_charge`); what used to be a refusal is `_rope_warning`
+## below, which is a sentence about a price rather than a locked door.
 func _rope_refusal() -> String:
 	if not Run.in_dungeon:
 		return "You are already home."
-	var fee := Run.extract_cost()
-	if Game.gold < fee:
-		return "The rope wants %d gold and you have %d." % [fee, Game.gold]
 	return ""
+
+
+## What the player should know before they hold, or "" if the price is ordinary.
+## Not a refusal: the hold works either way, and the track under it stays drawn.
+func _rope_warning() -> String:
+	if not Run.extract_takes_all():
+		return ""
+	return "The rope wants %d and you have %d. It will take all of it." \
+		% [Run.extract_cost(), Game.gold]
 
 
 ## A on the row. It does not leave — it points at the button that does.
@@ -777,45 +789,62 @@ func _describe_rope() -> void:
 		_detail_blurb.text = "Cold, and quiet. It only wakes underground."
 		_detail_legend.text = "Nothing to leave."
 		return
-	var fee := Run.extract_cost()
-	_detail_value.text = "%d gold" % fee
+	# The CHARGE, not the toll — this is the line that answers "what does leaving
+	# cost", so it has to name the gold that actually goes. When the two differ
+	# the blurb below spells out why, so the smaller number is never a mystery.
+	_detail_value.text = "%d gold" % Run.extract_charge()
 	_detail_blurb.text = "It pulls you home and heals what the dark took. " \
 		+ "The fee is a quarter of what you are carrying, and the fee is why " \
 		+ "the greedy run is a decision."
+	var warn := _rope_warning()
+	if not warn.is_empty():
+		# The whole purse is a real price and it earns a whole sentence. It is not
+		# a refusal and never stops the hold, so it reads as a cost being named —
+		# which is what it is.
+		_detail_blurb.text += "  " + warn \
+			+ " You will reach town broke, with a bag to sell."
 	# Both halves of the way out, in the order the player meets them: the hold in
 	# here, then the channel out there. They are separate on purpose — one cannot
 	# be fumbled, the other can be interrupted (see `_build_rope`).
 	_detail_legend.text = "Hold %s. Then it takes a moment, and a blow that lands breaks it." \
-		% _hold_glyph() if Game.gold >= fee \
-		else "You cannot afford to leave. Sell, or die trying."
+		% _hold_glyph()
 
 
 ## The fee, live. It is on the row rather than only in the detail pane because
 ## it is the whole decision: "leave" and "leave for 340 gold" are different
 ## sentences and the player should not have to focus the row to read the second.
 ##
-## The row stays ENABLED when you cannot afford it. A greyed-out control tells
-## you nothing about why; pressing it and being told "the rope wants 340 gold
-## and you have 190" tells you exactly what to do about it.
+## The row never greys out. The only thing that can refuse it now is being in
+## town, and there the fee reads "—" rather than a number, which says it on its
+## own. An expensive rope is not a disabled rope: the price is the message.
 func _paint_rope() -> void:
 	if _rope == null:
 		return
 	# The empty track is drawn whenever the hold is POSSIBLE and hidden when it is
 	# not — `HoldGauge` calls that the pre-press tell, and it is only a tell if its
-	# absence means something. A track under a rope you cannot afford would say
-	# "hold me" about a button that is going to refuse.
+	# absence means something. It stays drawn under a rope that will empty you:
+	# that hold works, and hiding the track would say the opposite.
 	var ready := _rope_refusal().is_empty()
 	_rope_bar.visible = ready
-	_rope_say.text = "Hold %s to climb out." % _hold_glyph() if ready \
-		else _rope_refusal()
-	_rope_say.modulate = Color.WHITE if ready else Pal.RUST
+	if not ready:
+		_rope_say.text = _rope_refusal()
+		_rope_say.modulate = Pal.RUST
+	else:
+		var warn := _rope_warning()
+		_rope_say.text = warn if not warn.is_empty() \
+			else "Hold %s to climb out." % _hold_glyph()
+		# RUST on a line that still ends in a hold you can do. It means "this
+		# costs you everything", not "this will not work" — and the track under
+		# it, still drawn, is what tells the two apart.
+		_rope_say.modulate = Pal.RUST if not warn.is_empty() else Color.WHITE
 	if not Run.in_dungeon:
 		_rope_fee.text = "—"
 		_rope_fee.modulate = Color(1, 1, 1, 0.5)
 		return
-	var fee := Run.extract_cost()
-	_rope_fee.text = "%d ◇" % fee
-	_rope_fee.modulate = Color.WHITE if Game.gold >= fee else Pal.RUST
+	# The charge, for the same reason the detail pane shows it: this figure is a
+	# promise about the purse and it has to be the one that comes true.
+	_rope_fee.text = "%d ◇" % Run.extract_charge()
+	_rope_fee.modulate = Pal.RUST if Run.extract_takes_all() else Color.WHITE
 
 
 ## What made it home. Not focusable and not editable — it is the answer to "can

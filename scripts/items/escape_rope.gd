@@ -61,13 +61,12 @@ func begin() -> bool:
 		return false
 	if not Run.in_dungeon:
 		return false
-	# Affordability is checked HERE as well as at the end, so being too poor is
-	# refused before the hero is rooted for a second and a bit. Run.extract()
-	# checks again on completion because the fee moves with the bag and the bag
-	# can change during the channel.
-	if not Run.can_extract():
-		Bus.extract_refused.emit(Run.extract_cost(), Game.gold)
-		return false
+	# There is deliberately no affordability check. There used to be one here and
+	# another in `Run.extract()`, and between them they were the game's only dead
+	# end: a bag rich enough to outprice the purse rooted the player underground
+	# with a refusal and nothing to do about it. The fee is capped at the purse
+	# now (`Run.extract_charge`), so the rope always works and a toll you cannot
+	# meet simply empties you. Being poor is a price here, never a wall.
 	_t = 0.0
 	set_process(true)
 	_column.scale.y = 0.001
@@ -75,9 +74,10 @@ func begin() -> bool:
 	return true
 
 
-## Something went wrong on the way out. `Bus.extract_refused` is not used here:
-## that signal means "you cannot afford this", and being hit is a different
-## sentence entirely.
+## Something went wrong on the way out. Its own signal, because being hit on the
+## way out is its own sentence: `escape_rope_broken` says the channel was
+## interrupted and the run continues, which is the only thing that can stop the
+## rope now that money cannot.
 func cancel() -> void:
 	if _t < 0.0:
 		return
@@ -109,8 +109,9 @@ func _process(delta: float) -> void:
 	set_process(false)
 	Hud.set_extract_hold(0.0)
 	if not Run.extract():
-		# The bag grew mid-channel and the fee outran the purse. Run.extract
-		# already said so on the bus; just stop looking like we left.
+		# The only remaining refusal is "there is no run to leave" -- something
+		# else ended it while the slats were climbing. Nothing to say; just stop
+		# looking like we left.
 		_show_fx(false)
 		return
 	# The scene is about to change, so there is no point animating the collapse
