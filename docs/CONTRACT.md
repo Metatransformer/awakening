@@ -851,6 +851,42 @@ Holds that are not `Interactable` still owe a gauge: the extraction hold draws a
 about, and the charged swing ramps the blade's glow through `_vfx.charge(t01)`.
 A hold with no channel of its own is a bug, not a shortcut.
 
+### Collections of things — one grid, and it is the bag's
+
+```gdscript
+# scripts/ui/common/item_grid.gd — a GridContainer, not a screen.
+signal cell_focused(index: int)     # the cursor landed here; draw the detail
+signal cell_activated(index: int)   # a real press on a cell that has an index
+func set_cells(entries: Array, capacity: int = 0) -> void
+func cell_at(i: int) -> Button      # null off the end
+func count() -> int
+func focus_first() -> bool
+var spill_down: Control             # where the bottom row hands focus on
+```
+
+An entry is a Dictionary: `label` (required), `sub`, `tint`, `mark` (prefix ◆),
+`dim`, `index`. `capacity` pads with dimmed empty cells — the bag's and the
+locker's case, where the number of cells you own IS the information.
+
+**Every screen that shows more than one thing uses it.** The pouch, both sides of
+`TradeScreen`, the footlocker and the run-end receipt. Until 2026-08-09 only the
+pouch was a grid and the rest were columns of `PixelFont` text, so the same deep
+amber was a tinted cell in your bag, a line of type at the vendor, and a third
+thing again on the receipt that took it away from you. The cell is the pouch's
+cell: the item's own `tint` as a chip, the name, and one line saying whatever
+this screen is about — `×6` in the bag, `120 ◇` at a counter, `2 ⇄ 3` at the
+locker.
+
+It owns no state past a `set_cells()` call, never reads `Game` or `Run`, and
+decides nothing. A grid that reached for the bag itself would be a second place
+the bag is interpreted. It is a **control**, not a screen — SCOPE §1 freezes new
+screens at zero and this adds none.
+
+Left/right wraps inside a row; the bottom row hands focus to `spill_down`. Both
+halves are load-bearing: Godot's spatial focus finds nothing to the right of a
+row's last cell, so without the wrap the stick dies every fourth cell, and
+without the spill the grid is a trap you can only leave with B.
+
 ### Counters — one screen, one contract, a subclass per shop
 
 ```gdscript
