@@ -860,7 +860,20 @@ it counts down to zero in RUST. The palette becomes the score.
   underline voice, `section_rule` for every group heading, and the slider,
   choice and bind rows on the shared row plate (`UiKit.style_row_button` →
   `VerbRow.row_box`, so a settings row and a verb row are the same plate by
-  construction). Still on the old theme: the receipt.
+  construction); and the receipt (`RunEndScreen`), the last one — its verdict is
+  a `PlateHeader` whose title carries the ending's own colour (`title_color`,
+  the one sanctioned tint on a headline: VITAL for "You Died", CYAN for
+  "Extracted"), the killer line sits under it, and the four-row stat tally
+  became a band — ROOMS, SLAIN, FEE, STACKS. The two loot columns kept their
+  captions as coloured Labels rather than `section_rule`s, because "WHAT THE
+  FLOOR KEPT" and "THE CASE BROUGHT HOME" are told apart by colour and a rule
+  paints both the same.
+
+  Every panel is now on the kit. `menu_theme.tres` is still what Root carries
+  and the shared-cell bridge in `UITheme._style_shared_cells` still exists;
+  collapsing Root onto `UITheme.theme()` and deleting `_build_theme.gd` is the
+  one remaining step, and it wants its own card — it touches every screen at
+  once and the proof is every director, not one.
 
   Two things were AUTHORED for that, not ported — valenfeld has no settings
   screen and so no answer for either. `UITheme._style_sliders` gives HSlider a

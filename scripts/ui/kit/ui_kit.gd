@@ -69,6 +69,8 @@ const BUTTON := "res://assets/icons/buttons/"
 ##   art     : Texture2D|String  the ARCHETYPE plate, never per-instance art
 ##   emblem  : Texture2D|String  glyph drawn beside the title
 ##   edge    : Color             a semantic edge down the left of the band
+##   title_color : Color         a headline whose colour is part of what it
+##                               says — an ending, not a decoration
 ##   height  : int               band height; defaults to the letterbox when
 ##                               there IS art, and to measured text when not
 static func plate_header(parent: Node, config: Dictionary) -> Control:
