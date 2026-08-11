@@ -1315,7 +1315,7 @@ and the smith spent a build saying `HOLD ENT TO CRAFT` because of it.
 ```gdscript
 # Targeting is a child of the hero, discoverable as:
 var t := get_tree().get_first_node_in_group(&"player").targeting
-t.current_target   # Node3D or null
+t.current_target   # Node3D or null -- and never a freed object (see below)
 t.is_locked        # bool
 signal target_acquired(t: Node3D)
 signal target_lost
@@ -1329,7 +1329,17 @@ toggles; `shield` holds and re-scans every `guard_rescan` (0.15 s) while it is
 down with nothing locked. `_lock_from_shield` records which of the two raised
 the live lock, and the trigger's release drops only its own. Leaving the
 `targetable` group is how a lock ends — that is the path a death takes out of
-`_validate`, so nothing needs a separate "my target died" hook.
+`_validate`.
+
+**`current_target` is never a freed object, and readers may rely on that.** The
+group check above is a *sweep*, one physics tick behind, and a body that is
+simply deleted — a despawn, a scene teardown, a director clearing the last
+fight's boss — never leaves the group at all. For that tick the field held a
+dangling reference, and anything that so much as **cast** it raised
+`Trying to cast a freed object`: `is_instance_valid` after an `as` is a guard
+that never runs (issue #59). The setter on `current_target` now watches the
+target's `tree_exiting` and drops the lock on the frame the body leaves the
+tree, so the window does not exist. Read the field, compare it, cast it.
 
 ### The shoulder — a prop may take hold of the hero
 

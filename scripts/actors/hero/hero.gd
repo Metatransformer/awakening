@@ -1470,8 +1470,18 @@ func lock_target() -> Node3D:
 		return null
 	if not bool(targeting.get(&"is_locked")):
 		return null
-	var t := targeting.get(&"current_target") as Node3D
-	return t if t != null and is_instance_valid(t) else null
+	# **Check, THEN cast.** The other order — which this was — reads
+	# `... as Node3D` first, and `as` on a freed instance raises
+	# `Trying to cast a freed object` before the `is_instance_valid` it was
+	# written to defer to ever runs (issue #59). A cast is not free on a dead
+	# reference, and a guard written after one is a guard that never fires.
+	# `Targeting` clears `current_target` on `tree_exiting` now, so nothing
+	# dangling should arrive here at all; this is the second line, and the point
+	# of it is that it cannot itself be the thing that raises.
+	var t: Variant = targeting.get(&"current_target")
+	if t == null or not is_instance_valid(t):
+		return null
+	return t as Node3D
 
 
 ## Heading yaw that points the hero at `t`. Heading convention, not node
