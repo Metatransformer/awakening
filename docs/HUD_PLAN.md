@@ -1610,6 +1610,37 @@ the economy's sense of "rich" as well as one brightness animation. It wants a
 card of its own against `docs/METAGAME.md`. What this card owed was to stop
 lying about it in a comment.
 
+> **Closed 2026-08-11 by card #49 — `docs/METAGAME.md` §3.1 owns this now, and
+> two paragraphs above are superseded.** `Pal.T3` is **2000**, the three tiers
+> are declared to mean *a floor of the Descent*, and the curve they are read off
+> is measured by `tools/bag_curve.gd` over 400 seeded runs rather than argued
+> from ceilings. Two corrections to what is written above, kept rather than
+> edited away because the reasoning is the useful part:
+>
+> - **The ceiling arithmetic is right and the framing is not.** 3960 is twelve
+>   slots of Deep Amber, but the bag tops out at **sixteen** slots, not twelve
+>   (`ShopDb.LIMITS[&"bag_slot"]` is 4), and a monoculture ceiling is not
+>   evidence about play — 3960 wants seventy-two Deep Amber. The number that
+>   bounds a real bag is the best *distinct* stacks it can hold: **2782 at twelve
+>   slots**, so a starting bag could not have reached a T3 of 3000 by any route
+>   the drop tables supply, ever. The finding was righter than it claimed.
+> - **"A realistic mixed bag is between 1000 and 2000" was a good guess.** The
+>   measured medians are 351 / 1052 / 1611 / 1795 at the four stairs for a
+>   sweeping 12-slot run, and 359 / 1287 / 2068 / 2372 once the four slots are
+>   bought.
+>
+> `hud_lookdev`'s `h_09_t3` no longer buys slots: it photographs a **default
+> twelve-slot bag worth 2264**, which §3.1's table says is the median a careful
+> run holds at the foot of floor 4. Decision 26's slot-mark check moved to its
+> own frame, `h_09c_slots`, at the real ceiling of sixteen.
+>
+> One correction to the sentence above about what moving T3 would change: **it
+> does not change any fog.** Nothing in the renderer reads `Pal.tier` — the only
+> two consumers are `_draw_rim`'s T2 halo and `_draw_slips`' T3 breath, which are
+> §14.5's own precedence ladder. The 2264 pair `h_09_t3` / `h_09_t3_phase` differ
+> by a mean of 5.1 and a max of 13 per channel over the slip stack, and by
+> nothing outside it, so the breath is now measured rather than described.
+
 ## 15.11 The damage flicker was a duration, and a duration cannot paint two frames
 
 Decision 17 says the rim flickers GOLD **for two frames** when you are hit. That
