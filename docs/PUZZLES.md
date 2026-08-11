@@ -369,10 +369,16 @@ that could only photograph its own seed's draw would ship the other two unproven
 - **Shape:** a perfect maze (recursive backtracker — long corridors, few
   junctions, because a maze you read by *walking* is the one the minimap cannot
   hand you), carved so that the prize in the deepest cell is **walled off as
-  dealt**.
+  dealt**. 4 cells wide by 3 deep at `MazeRoom.CELL`, and it is wider than it is
+  deep on purpose — see the apron below.
 - **The verb:** two lanterns (§2) by the mouth. Striking one opens the wall it
   owns and **shuts the next one along** — §3's *couple*, the same combinator the
   lights-out grid uses, so the player cannot simply open everything.
+- **The apron:** a band of clear floor on the mouth side, `MazeRoom.APRON`, that
+  the lantern row stands in. It is a named constant and `Dungeon.pick_maze_cell`
+  asks `MazeRoom.fits` about it, because the depth of the maze and the depth of
+  the apron come out of the same 16 m room and the version of this that did not
+  count it put both lanterns **through the room's south wall on every floor**.
 
 **A plain maze is not a puzzle in this game and shipping one would be a mistake.**
 This game has a minimap: it answers a static maze for free, and what is left is
@@ -388,6 +394,25 @@ frame of it looks right. `Maze.plan` therefore tests the reachable set, not
 "every gate open", and re-deals until the layout is both shut as dealt and
 solvable through a press. The director walks the hero mouth to prize against the
 real colliders, because a 3.6 m corridor cannot be photographed.
+
+**And the grid is not the room — the two ways that bit, 2026-08-10.** `Maze` is
+integers and `MazeRoom` is masonry, and the room shipped for a while disagreeing
+with the proof in two places at once, both of them invisible in every frame:
+
+- **The lanterns stood outside the room.** They were planted a flat 3 m past the
+  mouth with nothing checking the room had 3 m to give, and on a 16 m room they
+  landed a metre behind the south wall. Unreachable, so the maze could not be
+  opened, so the chest — which hangs on `opened` — never landed. The minimap
+  marked a chest in a room that had none. Fixed by `MazeRoom.APRON` and
+  `MazeRoom.fits`, and by beats `G3a`/`G3b`, which put the hero on his feet and
+  make him *walk* to a lantern instead of pressing it by reference.
+- **The maze had no south or east rim.** `Maze.walls` stores a north bit and a
+  west bit per cell, which covers the interior exactly once and cannot express
+  the two far edges — so they were never built, and the maze stood open along two
+  of its four sides while `Maze.reach`, which only ever steps between cells,
+  proved a sealed one. Fixed by `MazeRoom._build_rim`, and beat `A3` counts the
+  rim off the **wall nodes' positions** rather than off the grid, because every
+  beat that asks the grid agreed with the grid.
 
 **Enemies come after, not instead.** Monsters in a static maze are a tax on a
 walk, not a puzzle — they do not stop the minimap answering it. Corridors are

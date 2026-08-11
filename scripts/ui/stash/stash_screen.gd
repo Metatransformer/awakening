@@ -96,11 +96,10 @@ static func open(from: Node) -> StashScreen:
 
 ## What the pointer was doing before this screen took the viewport.
 ##
-## Saved and put back rather than forced to VISIBLE on the way out: this screen
-## can be up in the garrison (pointer captured for camera look) or over a menu
-## that already freed it, and a screen that unconditionally captures on close
-## grabs the cursor in cases where nobody had it. Same contract as `PauseMenu`.
-var _prev_mouse: int = Input.MOUSE_MODE_VISIBLE
+## FREED HERE, PUT BACK NOWHERE. `GameCamera._settle_pointer` owns the way back
+## and derives it from what is still up; a screen that remembers what it found
+## and restores it is the bug documented in that note, which has now cost this
+## project mouse look three separate times.
 
 
 func _ready() -> void:
@@ -114,7 +113,6 @@ func _ready() -> void:
 	_build_rows()
 	# The camera captures the pointer for look. Hand it back or not one cell on
 	# this screen can be clicked.
-	_prev_mouse = Input.mouse_mode
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	Prompt.block(self)
 	Bus.screen_opened.emit(&"stash")
@@ -128,7 +126,6 @@ func _fit() -> void:
 func _exit_tree() -> void:
 	Prompt.unblock(self)
 	Bus.screen_closed.emit(&"stash")
-	Input.mouse_mode = _prev_mouse as Input.MouseMode
 
 
 func close() -> void:

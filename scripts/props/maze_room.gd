@@ -34,6 +34,30 @@ extends Node3D
 const CELL := 3.1
 const WALL_H := 4.0
 
+## **The clear ground the maze needs on the mouth side, inside the dungeon room.**
+## The lantern row stands in it, and the hero has to be able to walk up to a
+## lantern and swing at it without standing in the doorway.
+##
+## This constant exists because it was once a bare `+ 3.0` inside
+## `_build_lanterns` with nothing anywhere checking that the room had 3 m to give.
+## It did not: a 16 m room puts its south wall at z = 8.0 and the lanterns landed
+## at z = 9.2, **a metre past the masonry and off the floor slab**. The room
+## generated, carved, lit and photographed perfectly, the director's own beats all
+## passed -- they press the lanterns by reference, and the fixture room they run in
+## has no walls to be outside of -- and the puzzle could not be pressed by a
+## player at all. The chest hung on `opened`, so it never landed, and the symptom
+## on the minimap was a chest marker in a room with no chest in it.
+##
+## The maze is centred in its room, so an apron on the mouth side is an equal band
+## of floor on the far side whether it is wanted or not; `fits` charges for both
+## rather than pretending otherwise.
+const APRON := 3.0
+
+## And the band on the other two sides, which only has to be walkable: a room's
+## door can open onto any of them, and a maze pressed against a doorway is a
+## corridor the floor's critical path dead-ends in.
+const WALKWAY := 1.6
+
 ## The dungeon's own wall, not a box. `KitWall` is a `StaticBody3D` already, with
 ## the masonry, the plinth and the collider the rest of the floor is built from --
 ## a maze of untextured slabs reads as programmer geometry standing in a real
@@ -49,6 +73,18 @@ const GATES := 2
 ## Cells. Odd-ish and small — this is a room inside a dungeon room, not a level.
 @export var rows: int = 5
 @export var cols: int = 5
+
+
+## **Will a maze of this shape fit in a room this wide, apron and all?**
+##
+## Asked here rather than restated at the call site, which is the whole point:
+## `Dungeon.pick_maze_cell` used to check `cols * CELL + 2.0` — the maze's own
+## width and a token walkway — and that arithmetic knew nothing about the lantern
+## apron, so it happily chose a room the lanterns could not stand in. One place
+## owns the footprint now, and it is the file that lays the room out.
+static func fits(size: float, r: int, c: int) -> bool:
+	return size >= maxf(float(r) * CELL + APRON * 2.0,
+		float(c) * CELL + WALKWAY * 2.0)
 
 ## Set before `_ready` to deal off a run's own stream. Left null it makes its own
 ## from `Run.rng`, so a replayed seed gives the same maze.
@@ -121,44 +157,70 @@ func _build_walls() -> void:
 			var standing := (maze.walls[i] & bit) != 0 or gate_keys.has(key)
 			if not standing:
 				continue
-			# The outer rim is carved through in exactly one place, the mouth, and
-			# that hole is cut here rather than in the grid: the grid's job is
-			# connectivity between cells and the rim is not between anything.
-			if _is_rim_hole(i, bit):
-				continue
 			var seg := _wall(i, bit)
 			if gate_keys.has(key):
 				seg.name = "Gate%d" % int(gate_keys[key])
 				_segments[key] = seg
 			add_child(seg)
 
+	_build_rim()
 	_apply_gates()
 
 
-## The mouth's own north wall is the doorway. Every other rim wall stands.
-func _is_rim_hole(i: int, bit: int) -> bool:
-	return bit == Maze.N and i == maze.mouth + maze.cols
+## **The south and east rim, which the grid has nowhere to put.**
+##
+## Every wall in `Maze.walls` is some cell's north or west face, which covers the
+## interior exactly once and is why that scheme was chosen. What it cannot express
+## is the two far edges: the grid's south edge is the north face of a row that does
+## not exist and its east edge the west face of a column that does not exist.
+## Neither has a byte to live in, so neither was ever built, and **the maze shipped
+## standing open along two of its four sides** — the player could step in anywhere
+## along the bottom or the right, and where the carve had put the prize in the last
+## row or the last column they could walk straight onto it with the lanterns still
+## dark and nothing there, because the chest hangs on `opened`.
+##
+## `Maze.reach` never modelled those holes — `_neighbours` only ever steps to a
+## cell inside the grid — so the solvability proof in `Maze.plan` was correct about
+## a room that was not the one being built. This pass makes the geometry the room
+## the proof is about.
+func _build_rim() -> void:
+	# The mouth is the one hole in the rim, and it is cut here rather than in the
+	# grid: the grid's job is connectivity BETWEEN cells, and the rim is not
+	# between anything.
+	for c in maze.cols:
+		var i := (maze.rows - 1) * maze.cols + c
+		if i == maze.mouth:
+			continue
+		add_child(_wall(i, Maze.N, true))
+	for r in maze.rows:
+		add_child(_wall(r * maze.cols + maze.cols - 1, Maze.W, true))
 
 
-func _wall(i: int, bit: int) -> Node3D:
+## One wall segment on a cell's face. `far` picks which of the two faces on that
+## axis: the near one (the cell's own north or west, the only two it owns) or the
+## far one, which is how `_build_rim` reaches the south and east edges no cell has
+## a bit for.
+func _wall(i: int, bit: int, far: bool = false) -> Node3D:
 	var horizontal := bit == Maze.N
 	var here := cell_centre(i)
-	# The wall sits on the cell's own face, half a cell out along the axis it
-	# blocks. Derived from `cell_centre` rather than restated, so a change to
-	# `CELL` cannot leave the walls and the grid disagreeing about where a
-	# corridor is.
-	var at := here + (Vector3(0.0, 0.0, -CELL * 0.5) if horizontal
-		else Vector3(-CELL * 0.5, 0.0, 0.0))
+	# The wall sits on the cell's face, half a cell out along the axis it blocks.
+	# Derived from `cell_centre` rather than restated, so a change to `CELL` cannot
+	# leave the walls and the grid disagreeing about where a corridor is.
+	var s := 1.0 if far else -1.0
+	var at := here + (Vector3(0.0, 0.0, s * CELL * 0.5) if horizontal
+		else Vector3(s * CELL * 0.5, 0.0, 0.0))
 
 	var w := KIT_WALL.instantiate()
-	w.name = "W_%d_%d" % [i, bit]
+	w.name = "W_%d_%d%s" % [i, bit, "f" if far else ""]
 	# One cell plus the thickness, so the corners close. A maze with hairline gaps
 	# at every junction is a maze the player tries to squeeze through.
 	w.length = CELL + float(w.thickness)
 	w.height = WALL_H
 	# Off the cell and the bit, so the same wall gets the same stones every time
-	# the floor is rebuilt inside a run.
-	w.rng_seed = i * 7 + bit
+	# the floor is rebuilt inside a run. The far faces are salted apart from the
+	# near ones or a rim segment would be a stone-for-stone twin of the interior
+	# wall on the other side of its cell.
+	w.rng_seed = i * 7 + bit + (1024 if far else 0)
 	# `KitWall` builds from -thickness to 0 in its own Z, so the finished face is
 	# at the origin and the mass is behind it. Half a thickness forward puts the
 	# wall centred on the grid line instead of hanging off one side of it.
@@ -178,6 +240,12 @@ func _wall(i: int, bit: int) -> Node3D:
 ## through a layout you already read.
 func _build_lanterns() -> void:
 	var span := float(maze.gates.size() - 1) * 2.4
+	# **Half way across the apron**, not a flat three metres past the mouth. The
+	# old number put them through the room's south wall on every real floor; see
+	# `APRON`. Half the apron is the one depth that cannot: the apron is by
+	# definition floor the room has, and the middle of it is clear of both the
+	# maze's rim and the masonry.
+	var z := mouth_point().z + APRON * 0.5
 	for i in maze.gates.size():
 		var lamp := PuzzleAtoms.make(PuzzleAtoms.LANTERN, &"") as Lantern
 		if lamp == null:
@@ -187,8 +255,7 @@ func _build_lanterns() -> void:
 		# Lit means the gate it owns is OPEN. The dealt board is every gate shut,
 		# so they all start dark and the room reads as "nothing is on yet".
 		lamp.starts_lit = false
-		lamp.position = Vector3(float(i) * 2.4 - span * 0.5, 0.0,
-			mouth_point().z + 3.0)
+		lamp.position = Vector3(float(i) * 2.4 - span * 0.5, 0.0, z)
 		add_child(lamp)
 		lamp.pressed.connect(_on_pressed.bind(i))
 		_lamps.append(lamp)

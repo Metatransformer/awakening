@@ -157,10 +157,13 @@ const CHAMBER_SKIRT := 10.0
 ## three the shortcut saves nothing and the loop is a doorway between neighbours.
 const CHORD_SPAN := 3
 
-## The maze's cells. 4x4 at `MazeRoom.CELL` is 14.4 m, which fits a 16 m room
-## with a walkway round it; 5x5 does not, and `_pick_maze_cell` checks rather
-## than assuming.
-const MAZE_ROWS := 4
+## The maze's cells. Wider than it is deep, and that is not a typo: the lantern
+## row lives in an apron on the mouth side (`MazeRoom.APRON`), the apron comes out
+## of the depth, and 4 rows at `MazeRoom.CELL` leaves a 16 m room 1.8 m of it —
+## a metre and a half short of anywhere a lantern can stand. Three rows leaves
+## 3.35 m and the lanterns land on the floor slab where the player can hit them.
+## `pick_maze_cell` asks `MazeRoom.fits` rather than restating the arithmetic.
+const MAZE_ROWS := 3
 const MAZE_COLS := 4
 
 ## cell -> {"doors": Array[StringName], "index": int, "dist": int,
@@ -1817,11 +1820,14 @@ func pick_maze_cell(forced: bool = false):
 	for cell: Vector2i in rooms:
 		if cell == entrance or cell == deepest or taken.has(cell):
 			continue
-		# It has to FIT. `MazeRoom` is `cols * CELL` across and the room is
-		# `size_of` -- a maze wider than its room pokes through four walls, and
-		# read off the script's own constants rather than restated here so the two
-		# cannot drift (the same trick `_place_puzzle_room` uses for `STEP`).
-		if size_of(cell) < float(MAZE_COLS) * MazeRoom.CELL + 2.0:
+		# It has to FIT -- and `MazeRoom` is the only thing that knows what fitting
+		# means, so it is asked rather than second-guessed. This line used to read
+		# `size_of(cell) < MAZE_COLS * MazeRoom.CELL + 2.0`, which measured the
+		# maze and a token walkway and knew nothing about the lantern apron. It
+		# passed every 16 m room on the floor and the lanterns spawned outside the
+		# masonry in all of them: a puzzle nobody could press, holding a chest
+		# nobody could open. Restating another script's geometry is what did it.
+		if not MazeRoom.fits(size_of(cell), MAZE_ROWS, MAZE_COLS):
 			continue
 		free.append(cell)
 	if free.is_empty():
