@@ -511,7 +511,7 @@ player cannot own (§0 rule 1).
 |---|---|---|
 | `sun_nest` | T0 | A beam off the grate, bounced off the **shield** into a socket |
 | `lights_out` | T0 | A 3×3 lantern grid, §3's *couple* |
-| `eye_row` | T1 | Three eyes along the door's wall, shot with the **bow** |
+| `eye_row` | T1 | Three eyes along **the wall opposite the door**, shot back down the room with the **bow** |
 
 **Every prefab ends by waking the key**, and that invariant is what makes the
 table safe to add under a shipped door. The gate keeps watching one key, keeps
