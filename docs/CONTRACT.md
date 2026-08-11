@@ -285,20 +285,43 @@ raise the pause menu in the same frame. `PauseMenu` refuses to open while
 `Prompt.screen_up` (a screen has called `Prompt.block`, as distinct from a fade,
 which sets `Prompt.blocked` and must not count). One press, one response.
 
-**The cursor belongs to whoever took the screen.** `GameCamera` GRABS it on
-spawn and never releases it — every full-screen UI saves `Input.mouse_mode` on
-the way in and restores exactly what it found on the way out (`PauseMenu`,
-`TradeScreen`, `StashScreen`, `RunEndScreen`). The camera used to release it on
-`pause` as well, and because unhandled input runs deepest-child-first the camera
-got there before the autoload menu: the menu recorded "visible" as the state to
-put back, restored "visible" on close, and mouse-look was dead for the rest of
-the session.
+**The cursor has ONE owner and it is `GameCamera`. Its state is DERIVED, never
+remembered.** Every full-screen UI frees the pointer on the way in — its own
+cells have to be clickable — and **puts it back nowhere**. The way back is
+`GameCamera._settle_pointer`, run deferred off `Bus.screen_opened` /
+`Bus.screen_closed` and off `Menu.opened` / `Menu.closed`: free while
+`Prompt.screen_up or Menu.is_open`, and the camera's while nothing is up.
+Deferred because the screens hand off to each other *within* a frame — picking
+`Trade` in a conversation opens `TradeScreen` and frees the `DialogueBox` on the
+same tick — so the stack is only settled at the end of it.
+
+It was a snapshot chain before: each screen saved `Input.mouse_mode` in `_ready`
+and restored it in `_exit_tree`. **That failed three times, always the same way
+and never visibly** — something frees the pointer, the next screen up saves
+*that* as the state to restore, and mouse look is dead for the rest of the run:
+
+1. the camera released on `pause`, and unhandled input runs deepest-child-first,
+   so it got there before the autoload `PauseMenu`, which recorded "visible" as
+   the thing to put back. The first pause of every session killed the mouse.
+2. `DialogueBox` freed it and `TradeScreen` opened on top off the Trade option,
+   saving the box's release — so **walking away from any counter left the
+   pointer free**. That is the one that shipped, on 2026-08-10, when the
+   counters grew a conversation in front of them.
+
+No screenshot can see this: the frame after the shop closes is perfect, the
+camera is simply no longer listening. `tools/directors/mouse_cursor.gd` is the
+proof, in numbers, and beat C is the one that was red.
 
 The camera also **re-grabs on every entry into first person** (`_grab_cursor`,
-called from `_ready` and `set_first_person`). Not a second owner and not a
-release — the restore rule above is unchanged. It is the one moment where a free
-pointer is indistinguishable from a mode that ignores the mouse, so the stance
-asserts the grab rather than trusting that nothing in the session dropped it.
+called from `_ready`, `set_first_person` and `_settle_pointer`). It is the one
+moment where a free pointer is indistinguishable from a mode that ignores the
+mouse, so the stance asserts the grab rather than trusting nothing dropped it.
+
+`GameCamera.may_capture` is the harness gate, resolved once in `_ready` (a real
+grab under `shoot.gd` would hijack the machine mid-capture). `mouse_cursor.gd`
+is the only caller that turns it back on, because the pointer's mode is the
+thing that director exists to assert — the same opt-in, for the same reason, as
+`mouse_look_requires_capture`.
 
 **Mouse look reads `InputEventMouseMotion.screen_relative`, never `relative`.**
 By the time an event reaches `_unhandled_input` the viewport has divided

@@ -196,6 +196,9 @@ var using_pad: bool = false
 const PAD_MOTION_WAKE := 0.5
 ## Pixels of mouse travel before the mouse counts as being used. The camera
 ## captures the pointer, so a desk bump is not the player choosing a keyboard.
+##
+## Measured in SCREEN pixels — see the read in `_input`, which uses
+## `screen_relative` for the same reason `GameCamera` does.
 const MOUSE_WAKE := 3.0
 
 
@@ -236,7 +239,17 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventKey or event is InputEventMouseButton:
 		pad = false
 	elif event is InputEventMouseMotion:
-		if (event as InputEventMouseMotion).relative.length() > MOUSE_WAKE:
+		# `screen_relative`, NOT `relative`, and it is the same trap `GameCamera`
+		# documents at length: by the time an event reaches a node the viewport
+		# has divided `relative` by the canvas stretch, so it arrives in 1280x720
+		# BASE units rather than in the units the hand moved. The game ships
+		# fullscreen on a display measured at 3.8x that here, which turned this
+		# 3 px threshold into 11 px of real hand movement — so putting the pad
+		# down and reaching for the mouse left every prompt on the HUD naming a
+		# gamepad button until the player made a big enough sweep. The stretch
+		# factor is the WINDOW's, so the amount of movement it took also changed
+		# with the resolution, which is not a thing a device switch should notice.
+		if (event as InputEventMouseMotion).screen_relative.length() > MOUSE_WAKE:
 			pad = false
 	if pad == using_pad:
 		return

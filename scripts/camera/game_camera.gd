@@ -188,6 +188,14 @@ var _fp01: float = 0.0
 ## `set_first_person` — it is false until the stick has been seen at rest.
 var _fp_stick_armed: bool = false
 
+## Whether this camera is allowed to take the pointer at all, resolved once in
+## `_ready`. False under the screenshot harness — that runs windowed and a grab
+## there hijacks the machine mid-capture — and `tools/directors/mouse_cursor.gd`
+## is the one caller that turns it back on, because the pointer's mode is the
+## thing that director exists to assert. Same shape, and the same reason, as
+## `mouse_look_requires_capture` above.
+var may_capture: bool = false
+
 var _probe: SphereShape3D = SphereShape3D.new()
 var _shape_query := PhysicsShapeQueryParameters3D.new()
 
@@ -209,6 +217,22 @@ func _ready() -> void:
 	Bus.aim_changed.connect(set_aiming)
 	Bus.guard_changed.connect(set_guarding)
 
+	# THE POINTER HAS ONE OWNER NOW AND IT IS THIS NODE. See `_settle_pointer`.
+	Bus.screen_opened.connect(_on_screen_changed)
+	Bus.screen_closed.connect(_on_screen_changed)
+	# `Menu` is a full-screen UI like the others but it does not emit those — it
+	# pauses the tree instead of registering with `Prompt`, and giving it a
+	# `screen_opened` would change what `Hud` and `GarrisonLight` do about a
+	# pause. Its own two signals say the same thing to the only listener that
+	# needs it.
+	Menu.opened.connect(_on_screen_changed.bind(&"pause"))
+	Menu.closed.connect(_on_screen_changed.bind(&"pause"))
+
+	# The harness discriminator, resolved ONCE rather than at every grab: a
+	# director that wants to prove the pointer comes back has to be able to turn
+	# this on, and it cannot change what `get_tree().get_script()` answers.
+	# `tools/directors/mouse_cursor.gd` is that director and the only caller.
+	may_capture = capture_mouse and get_tree().get_script() == null
 	_grab_cursor()
 
 	if take_over_on_ready:
@@ -218,20 +242,59 @@ func _ready() -> void:
 
 ## Take the pointer, so the mouse steers the way the right stick does.
 ##
-## The screenshot harness runs windowed; grabbing the cursor there would hijack
-## the machine mid-capture. Its SceneTree carries a script, the shipping one does
-## not — that is the cheapest reliable discriminator.
-##
-## Called on spawn AND on every entry into first person. The second call is not
-## redundant: the grab is a piece of state any full-screen menu is allowed to
-## take away (`PauseMenu`, the shop, the stash, the run-end screen all save and
-## restore it), and the window losing focus takes it away too. Entering first
-## person is the player saying "I am looking around now", which is exactly the
-## moment a free pointer reads as a mode that ignores the mouse — so the stance
-## re-asserts it rather than trusting that nothing dropped it.
+## Called on spawn, on every entry into first person, and whenever the last
+## full-screen UI comes down (`_settle_pointer`). None of those is redundant: the
+## grab is a piece of state every screen takes away, and the window losing focus
+## takes it away too. Entering first person is the player saying "I am looking
+## around now", which is exactly the moment a free pointer reads as a mode that
+## ignores the mouse — so the stance re-asserts it rather than trusting that
+## nothing dropped it.
 func _grab_cursor() -> void:
-	if capture_mouse and get_tree().get_script() == null:
+	if may_capture:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+## A screen went up or came down anywhere in the game.
+##
+## Deferred, and that is the whole reason this is not one line. The screens hand
+## off to each other WITHIN a frame — picking `Trade` in a conversation opens
+## `TradeScreen` and frees the `DialogueBox` on the same tick, in that order —
+## so the stack is only settled at the end of it. Asked mid-frame this would see
+## a gap between the two and grab the cursor back underneath an opening shop.
+func _on_screen_changed(_id: StringName) -> void:
+	_settle_pointer.call_deferred()
+
+
+## THE POINTER'S STATE IS DERIVED, NEVER REMEMBERED, AND THAT IS THE FIX.
+##
+## It used to be a snapshot passed from screen to screen: each one saved
+## `Input.mouse_mode` in `_ready` and put that value back in `_exit_tree`. That
+## chain has now failed three times, always the same way and never visibly —
+## something frees the pointer, the next screen up saves THAT as the state to
+## restore, and mouse look is dead for the rest of the run:
+##
+##   1. this camera released the cursor on `pause`, and because unhandled input
+##      runs deepest-child-first it ran BEFORE `PauseMenu`, which then recorded
+##      "visible" as the thing to restore. The first pause of every session
+##      killed the mouse.
+##   2. `DialogueBox` freed it, `TradeScreen` opened on top of it off the Trade
+##      option and saved the box's "visible" — so walking away from any counter
+##      left the pointer free. That is the one that shipped: the counters only
+##      grew a conversation in front of them on 2026-08-10.
+##
+## No screenshot can catch this. The frame after the shop closes is perfect; the
+## camera is simply no longer listening. So the question is asked of the two
+## nodes that already track the answer instead of being carried in a variable —
+## `Prompt` counts the screens that block the world, `Menu` knows about itself —
+## and the screens have no `_prev_mouse` left to poison.
+##
+## The rule: the pointer is FREE while anything is up, and the camera's while
+## nothing is. `tools/directors/mouse_cursor.gd` is the proof.
+func _settle_pointer() -> void:
+	if Prompt.screen_up or Menu.is_open:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	else:
+		_grab_cursor()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -275,20 +338,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		# itself still counts — `HeroCombat` polls the button and does not care
 		# that the camera read it first.
 		set_first_person(false)
-	# THERE WAS A `pause` BRANCH HERE THAT RELEASED THE CURSOR, AND IT IS WHY THE
-	# MOUSE STOPPED STEERING AFTER THE FIRST PAUSE OF EVERY SESSION.
-	#
-	# Unhandled input runs deepest-child-first, and `PauseMenu` is an autoload
-	# under `root` while this camera is down in the current scene — so this ran
-	# FIRST. It set MOUSE_MODE_VISIBLE, and the menu then opened, recorded
-	# `_prev_mouse = VISIBLE` as the state to put back, and faithfully restored
-	# "visible" on close. The pointer never came back for the rest of the run and
-	# the camera had no right stick.
-	#
-	# Releasing the cursor belongs to whoever took the screen, because only that
-	# node knows when to give it back. The camera GRABS it (`_ready`) and does not
-	# arbitrate: `PauseMenu` save/restores around its own open/close, and the
-	# full-screen screens do the same around their lifetime.
+	# THERE IS NO `pause` BRANCH HERE and there must never be one again. It
+	# released the cursor, and unhandled input runs deepest-child-first — this
+	# camera sits in the current scene and `PauseMenu` is an autoload under
+	# `root`, so the release landed BEFORE the menu opened and the menu dutifully
+	# saved "visible" as the state to put back. The first pause of every session
+	# killed mouse look. `_settle_pointer` is where the pointer is decided now,
+	# off the screens' own open/close signals rather than off a keypress this
+	# node happened to see first.
 
 
 # --- Seam for P3 (targeting) ------------------------------------------------

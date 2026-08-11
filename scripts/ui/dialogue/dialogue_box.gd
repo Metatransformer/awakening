@@ -109,10 +109,13 @@ var _body: RichTextLabel
 var _hint: Label
 var _caret: Label
 
-## What the pointer was doing before this box took the viewport. Same contract as
-## `TradeScreen`: saved and put back, never forced, because the box can be up over
-## a captured-pointer garrison or over a menu that already freed it.
-var _prev_mouse: int = Input.MOUSE_MODE_VISIBLE
+## THE POINTER IS FREED HERE AND PUT BACK NOWHERE. `GameCamera._settle_pointer`
+## owns the way back — see the long note there. This box saving and restoring
+## what it found is exactly the bug that note describes, and it is the half that
+## shipped: picking `Trade` opens `TradeScreen` on top of this box, so the shop
+## saved the "visible" THIS box had just set and faithfully restored it on the
+## way out. Walking away from a counter left the pointer free and mouse look
+## dead for the rest of the run.
 
 
 ## Put `who` on the screen saying `pages`, with `choices` at the end of them.
@@ -155,7 +158,6 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_fit)
 	_show_page(0)
 
-	_prev_mouse = Input.mouse_mode
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	# Blocks the interact button AND the hero's own movement -- `hero.gd` reads
 	# `Prompt.blocked` for exactly this. A conversation you can walk away from
@@ -170,14 +172,12 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	Prompt.unblock(self)
+	# The pointer is NOT put back here. `screen_closed` above is what asks for it,
+	# and `GameCamera` answers at the end of the frame — by which time the Trade
+	# option's shop has opened and the answer is "keep it free", or nothing has
+	# and the answer is "give it to the camera". See the note on `_prev_mouse`'s
+	# grave, above.
 	Bus.screen_closed.emit(&"dialogue")
-	# ...unless something else took the screen on the way out, which is exactly
-	# what the Trade option does: `TradeScreen._ready` has already run by the time
-	# this box is freed, so it has already saved the pointer state THIS box set and
-	# put the pointer where it wants it. Restoring here would capture the cursor
-	# under an open shop.
-	if not Prompt.screen_up:
-		Input.mouse_mode = _prev_mouse as Input.MouseMode
 
 
 func close() -> void:
