@@ -71,6 +71,22 @@ extends RefCounted
 ## `pgrep -f godot` is NOT good enough for this check -- it matches the shell
 ## wrappers and this director's own command line, so it never reads zero.
 ##
+## **AND AN EMPTY `grep godot` IS NOT ENOUGH EITHER** (card #50). That check was
+## written when the competitors were other directors, and it certifies only the
+## competitors it can name. Measured on this Mac with the grep reading **zero
+## before and after both runs**:
+##
+##     garrison   720 draw calls   frame_ms med = 12.19 .. 13.91 ms
+##     _lookdev     9 draw calls   frame_ms med = 13.87 ms
+##
+## Eighty times the geometry for no time at all. That is the scene-independent
+## floor this section already names as the signature of contention -- except the
+## contention was not Godot. A machine running dozens of agents has a CPU and a
+## compositor that a `comm` grep cannot see. **So run `_lookdev` as a control
+## before quoting any median.** If the trivial scene reads what the real one
+## reads, you have measured the machine; only `p95`, `draw_calls`, `primitives`
+## and `vram_mb` survive that, and the median must wait for a genuinely idle Mac.
+##
 ## **3. THE TWO `Performance` TIME MONITORS ARE PEAK-PER-SECOND, LATCHED --
 ## THEY ARE NOT PER-FRAME VALUES AND THEY NEVER WERE.** This is card #50, and it
 ## is the one defect on this list that produced a specific alarming number that
@@ -109,9 +125,13 @@ extends RefCounted
 ##
 ## So this director now reports these two monitors as **`idle_peak_ms` and
 ## `physics_peak_ms`: one value per one-second window, worst step in that
-## window, with the first window dropped** because it is inherited rather than
-## measured. That is the same remedy as `shoot.gd`'s warmup, applied to a clock
-## that warms up on its own schedule instead of on the frame counter's.
+## window, with every window whose second reaches back before the first sample
+## dropped** as inherited rather than measured. That is the same remedy as
+## `shoot.gd`'s warmup, applied to a clock that warms up on its own schedule
+## instead of on the frame counter's -- and it is more than window zero, which
+## the first version of this fix assumed and a third verification run disproved.
+## `_peak_row` carries that story.
+##
 ## `frame_ms` remains the only series that is genuinely per-frame, and it is the
 ## only one a budget may be quoted from.
 
@@ -250,6 +270,7 @@ func run(rig) -> void:
 	var proc: Array[float] = []
 	var phys: Array[float] = []
 	var win_at: Array[int] = []
+	var win_ms: Array[float] = []   ## Wall clock at which each window was observed.
 	var draws: Array[float] = []
 	var prims: Array[float] = []
 	var objs: Array[float] = []
@@ -323,6 +344,7 @@ func run(rig) -> void:
 			proc.append(p)
 			phys.append(ph)
 			win_at.append(i)
+			win_ms.append(now_us / 1000.0)
 		draws.append(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
 		prims.append(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
 		objs.append(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))
@@ -382,8 +404,8 @@ func run(rig) -> void:
 		print("PERF   gpu_ms is UNAVAILABLE on this driver (all-zero, not free)."
 			+ " Read frame_ms against cpu_ms instead.")
 	_row("cpu_ms", cpu)
-	_peak_row("idle_peak_ms", proc, win_at)
-	_peak_row("physics_peak_ms", phys, win_at)
+	_peak_row("idle_peak_ms", proc, win_at, win_ms)
+	_peak_row("physics_peak_ms", phys, win_at, win_ms)
 	_row("draw_calls", draws)
 	_row("primitives", prims)
 	_row("objects", objs)
@@ -454,27 +476,60 @@ func _row(name: String, v: Array[float]) -> void:
 		% [name, _pct(v, 0.5), _pct(v, 0.95), _pct(v, 1.0)])
 
 
+## The latch period, in ms. The engine refreshes both time monitors when its
+## accumulated frame time passes one second.
+const LATCH_MS := 1000.0
+
+## How much of a summarised second may predate the first sample before the
+## window is thrown away. A boundary observed at sample 0 was in truth latched
+## some unknown time BEFORE sampling began, so no window is ever perfectly clean;
+## 100 ms is a tenth of the period and small against any hitch worth finding.
+const LATCH_SLOP_MS := 100.0
+
+
 ## One row for a **latched peak-per-second** monitor. There is no median and no
 ## p95 here on purpose: a 240-frame run produces two or three of these, and
 ## quoting a percentile of three numbers is how card #50's `p95 = max = 371 ms`
 ## came to look like a finding instead of an artefact.
 ##
-## **Window zero is dropped and printed struck out.** It holds the worst step of
-## the second BEFORE the first sample -- engine boot, scene instantiation, shader
-## compiles, and this director's own vsync mode change. Measured with
-## `--settle=0`: 691.11 ms of "physics" on a scene whose real step is 0.90 ms.
-## Every window is still printed with the sample it appeared at, because a reader
-## who cannot see the step function will not believe the arithmetic behind it.
-func _peak_row(name: String, v: Array[float], at: Array[int]) -> void:
-	if v.size() < 2:
-		print("PERF   %-14s inherited only -- the run was shorter than one latch"
-			% name + " window, so there is no measured value. Raise --samples.")
-		return
+## **A window is only yours if the whole second it summarises is.** Window zero
+## never is: it holds the worst step of the second BEFORE the first sample --
+## engine boot, scene instantiation, shader compiles, and this director's own
+## vsync mode change. Measured with `--settle=0`: 691.11 ms of "physics" on a
+## scene whose real step is 0.90 ms.
+##
+## **AND DROPPING WINDOW ZERO IS NOT ENOUGH** -- that was this fix's first
+## version and a third verification run caught it. Run `q3` opened its second
+## window at **sample 2**, and reported `idle_peak 24.59 ms` against a
+## `frame_ms max` of 18.76: a fresh 31% disagreement in the row that had just
+## been fixed for disagreeing. The reason is that the boundary observed at sample
+## 0 had been *latched* almost a full second earlier, so the window it opened
+## reached back ~980 ms into the settle phase. The gap between two observed
+## boundaries measures exactly that: a gap shorter than the latch period is the
+## amount by which the earlier boundary was observed late, which is the amount of
+## pre-sample time the later window contains. Hence the test below -- and note it
+## can only ever discard the FIRST measured window, because every boundary after
+## that one was observed inside the loop.
+func _peak_row(name: String, v: Array[float], at: Array[int], ms: Array[float]) -> void:
 	var parts := PackedStringArray()
+	var kept: Array[float] = []
 	for i in v.size():
-		parts.append("%s#%d=%.2f" % ["INHERITED " if i == 0 else "", at[i], v[i]])
-	print("PERF   %-14s worst=%8.2f  over %d one-second window(s)"
-		% [name, _pct(v.slice(1), 1.0), v.size() - 1])
+		var tag := ""
+		if i == 0:
+			tag = "INHERITED "
+		elif ms[i] - ms[i - 1] < LATCH_MS - LATCH_SLOP_MS:
+			# Its second began before sampling did. See the note above.
+			tag = "PART-INHERITED "
+		else:
+			kept.append(v[i])
+		parts.append("%s#%d=%.2f" % [tag, at[i], v[i]])
+	if kept.is_empty():
+		print("PERF   %-14s NO CLEAN WINDOW -- the run did not span a full latch"
+			% name + " period after settling. Raise --samples and read nothing"
+			+ " off the values below.")
+	else:
+		print("PERF   %-14s worst=%8.2f  over %d one-second window(s)"
+			% [name, _pct(kept, 1.0), kept.size()])
 	print("PERF     %s" % "  ".join(parts))
 
 
