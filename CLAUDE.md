@@ -181,6 +181,24 @@ nine-minute zombie on this Mac while the paragraph above was being written. Put
 `timeout 400` in front of the command, and check `pgrep -f shoot.gd` before you
 start a burst.
 
+**A director reporting a failure is a suspect, not a witness.** The rule at the
+top of this section cuts both ways: an instrument can invent a bug as easily as
+it can hide one, and this repo has paid for that six times now — the proof frames
+were the wrong size *and* the wrong camera (#35, #40); a beat failed on an arrow
+counter that **was** drawn, in a frame that turned out to be of a shield (#52);
+the garrison's performance alarm was the instrument (#20); the harness rendered
+nineteen megapixels and called it 720p; a HUD mask was 86% fog noise (#62); and
+card #50 existed at all because a latched monitor reported a 371 ms stall that
+never happened. `perf_probe.gd` alone carries five defects in its own header.
+
+So when a director says something alarming, **the first hypothesis is the
+director** — and the cheapest way to settle it is the same as everywhere else
+here: make the instrument measure something whose answer you already know.
+`perf_probe --stall=300` blocks the main thread for exactly 300 ms so the frame
+timer has to prove it can see one; that one flag turned #50 from a hunt for a
+phantom hitch into an afternoon. **A director you have never pointed at a known
+answer has never been tested**, however many times it has passed.
+
 Before you call something done: clean `godot --path . --import`, clean boot, the
 relevant director with no failures, and *your own eyes on the output*.
 
