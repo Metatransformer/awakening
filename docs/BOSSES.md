@@ -752,8 +752,13 @@ children; no beat changes.**
 
 ### 6.3 The Bellwake — **Exposed weak point, on a timer**
 
-> **It sings through the choir it calls, and the Burst is the only thing that
-> takes a chorus out in one breath.**
+> **It sings through the choir it calls, and every way of answering the chorus
+> costs you something you wanted to spend on the boss.**
+>
+> *This epigraph used to read "and the Burst is the only thing that takes a
+> chorus out in one breath". Board card 73 measured the breath: 0.6 s off one
+> chorister and 1.5 s off the other, and two of the caster's own quarters. See
+> the measurement below.*
 
 Floor 3. The player is carrying **the Burst**, taken off the Slag Ogre, and the
 Choir is the floor that is about it.
@@ -792,9 +797,10 @@ are not currently true, so read the next two paragraphs before building to it.**
 invulnerability branch and no add-count check; it scales the impact and leaves
 the state alone, and that is the whole of it. The Bellwake's core is open before
 the choir is called, open while two choristers are standing on the floor, and
-open if the player never fires the Burst at all. **So the Burst removes two
-skeletons and opens nothing** — there is no wall, and this section should not be
-read as if there were one.
+open if the player never fires the Burst at all. **So the Burst opens nothing** —
+there is no wall, and this section should not be read as if there were one. This
+sentence used to begin "the Burst removes two skeletons and…"; board card 73
+measured that half too, and it does not remove them either. See below.
 
 The version with a wall in it is `if _summons_alive() > 0: refuse the damage`,
 five lines in the function that already receives the `Hit`. **It is refused, and
@@ -869,14 +875,88 @@ seconds exist — and these are the seconds that *do*:
   of a second before the window closes**. The window is free and then it is not.
 - After the punish, 4.00 s of cooldown remain. **That is the strip window**: six
   seconds from the moment the boss goes open, in which the player has to spend
-  the free hits *and* clear two bodies, and only one thing in the kit does both.
+  the free hits *and* deal with two bodies. This line used to end *"and only one
+  thing in the kit does both"*. **Nothing in the kit does both**, and the next
+  four paragraphs are what it cost to find that out.
 
-**Why the Burst and not the sword**, given that neither of them opens anything.
-At floor 3 the Burst is the player's only area answer, and the choristers
-converge on the hero — which is what makes them a single target rather than two.
-Clearing them with the blade costs the punish window the clearing was supposed to
-protect, and that trade is real whether or not a damage gate ever exists. It is a
-**pressure** answer rather than a **wall** answer, and §7 grades it as one.
+**What one blast actually does, measured** — board card 73, sections O3 and O4 of
+`tools/directors/boss_cistern.gd`. Both readings of "clears" are now numbers
+rather than arguments, and neither survives:
+
+- **It does not kill.** `K.BOMB_DAMAGE` is 2 quarters and a chorister curves to
+  **9** at the boss's floor, so one body is **5 blasts and the pair is 10** — the
+  whole `K.BURST_CHARGES_MAX` stock of 12, inside a 6.00 s window. Card #22 moved
+  the number under this sentence (a chorister used to read 6, which was 3 blasts
+  each), so #22 made a false sentence falser; it did not make a true one false.
+- **It does not shove them off you either, and that is the half nobody had
+  looked at.** `Enemy._on_damaged` rolls `_try_launch` on every blow and a
+  launched body is out of the fight far longer than HURT's 0.22 s floor, so the
+  whole question was whether a Burst launches a skeleton. Its `weight` is
+  `(6.0 − 4.0) / (8.0 − 4.0)` = **exactly 0.5** — mid-scale, which is where §3.5's
+  mass rule decides rather than saturating, and precisely why it could not be read
+  off the constants. **Measured over twelve seeded choristers: 1 of 12 launched**
+  (the formula gives 19% for a 1.70 m body at weight 0.5, so a dozen is a small
+  sample and not a contradiction). The eleven that did not were staggered
+  **0.25 s** and shoved **0.8–0.9 m**; the one that did was down **1.03 s** and
+  travelled **2.0 m**.
+- **So one blast buys 0.6 s off one chorister and 1.5 s off the other** — the
+  luckier of the two being the launch. Measured on the real pair in the real
+  arena, from the blast to the frame each is upright *and* back inside its own
+  reach of a hero who never moved. **In the real geometry the shove is smaller
+  than the bank's**: 0.39 m and 1.73 m rather than 0.8 m and 2.0 m. The bank
+  detonates on top of each body to sample the roll with the geometry taken out —
+  `K.flat(global_position - hit.from)` is degenerate there and falls back to the
+  body's own facing, so it measures the *magnitude* of a 6.0 knockback and not a
+  direction. On the pair, where the blast is off-centre and there is a hero and a
+  neighbour in the room, the net displacement is about half that. **The window it
+  would have had to buy is 4.66 s**: the choir arrives 1.34 s into the 6.00 s,
+  and "spend the rest of it on the boss" is a claim about all of what is left.
+- **And it costs two of the caster's own quarters.** `K.BOMB_HURTS_OWNER` is true
+  and `burst_cast.gd` has no owner check. The pair converges on the hero and
+  stands **2.65 m apart** once both are on him, so the one point that reaches both
+  is **1.38 m from him** — inside `K.BOMB_RADIUS` (1.94 m). There is no version of
+  "one blast into the pair" that does not also hit you.
+
+Quoted to the tenth of a second on purpose. The clock is accumulated scaled
+physics delta — `Feel.hitstop` sets `Engine.time_scale = 0` on every landed blow,
+so a wall clock or a frame count would have measured the hitstop as disable time —
+and it is sampled once per physics step, which is a floor of ±0.017 s on every
+figure here. The gap being argued about is four seconds wide; none of it turns on
+the third decimal.
+
+**No number fixes it, and all three candidates were checked rather than waved
+off.** `K.BOMB_DAMAGE` would have to go 2 → 9: it is `[oot]`-tagged *and* global —
+it prices the cracked pillar and every other body in the roster — so that is a
+4.5× roster-wide rebalance to repair one sentence in one fight.
+`K.BURST_KNOCKBACK` 6.0 → 8.0 puts the blow at the top of the scale, doubling the
+launch odds to 38% and lengthening the arc — but the measured launch is 1.03 s and
+it would have to be four and a half times that, on a roll that would still be a
+coin flip. A non-default `stun_time` at `burst_cast.gd`'s one call site would have
+to be about 4.5 s, against `K.PARRY_STAGGER`'s **0.95** — the largest opening the
+game sells, and the one the player pays real risk for — and it would apply to
+every body the Burst touches on every floor. **No Echo fills the gap either:**
+`EchoDb` has twelve rows and not one touches a crowd, and the nearest thing to it
+(`QUIET_ROOM`, which freezes the first body in a room on entry) is keyed to
+`Bus.room_entered` and never fires for a mid-fight summon. Writing one would be a
+new mechanic, which is `docs/SCOPE.md` §1's `New mechanics 2` — the row §4.2 names
+as the one to defend, and it is already spent twice over in this document.
+**Decision: the sentence was wrong. Nothing moves.**
+
+**What the Burst is for here, then: a panic button.** One charge, about a second
+of daylight, two quarters of your own, for the moment both choristers are on you
+and you would rather they were not. That is a real thing to own and it is not the
+answer to the beat. It is a **pressure** answer rather than a **wall** answer, and
+§7's grade of floor 3 as *pressure, not a lock* is unchanged — if anything the
+measurement says it twice over.
+
+**Why not the sword, then — and the answer is that it *is* the sword, at a
+price.** A chorister is 9 quarters against a light swing's
+`2 + K.EDGE_DAMAGE[rung]`: **5 swings on an unforged blade and 2 at rung 3**, so
+the pair is 10 swings or 4. That is arithmetic off two tables and **not** a
+measurement, and it is flagged as such — but the shape of it is the trade this
+section always described from the other side, because those swings come out of
+the punish window the clearing was supposed to protect. **Neither way over is
+free and there is no third one that is.**
 
 | | Tell | Commit | Recover | Punish | Cooldown |
 |---|---|---|---|---|---|
@@ -897,12 +977,16 @@ cants sideways and points one long hand at the floor, and a pale hairline circle
 scratches itself in under the hero and hums. Rise/violet/tightening ring,
 spread/blue/no mark, tilt/white/no mark until the commit.
 
-**The answer: the Burst, and the second way over is to let them live.**
+**The answer: there is no clean one. Both ways over cost, and that is the beat.**
 
-- *Fast:* one blast into the pair as they close, then back onto the boss inside
-  the 6 s. What that buys is the rest of the strip window spent on the boss
-  instead of on two skeletons — not access to a core that was shut, because it
-  never was.
+- *Fast, and it is not a clear:* one blast into the pair as they close. Measured,
+  above: it buys **0.6 s off one of them and 1.5 s off the other**, and takes
+  two of your own quarters doing it. What it is *for* is getting a body off you;
+  what it is *not* is a strip, and the rest of the window is bought with blade
+  swings out of the punish rather than with a charge. This bullet used to read
+  *"then back onto the boss inside the 6 s… the rest of the strip window spent on
+  the boss instead of on two skeletons"*, and that was never true — the choristers
+  are back on you a second and a half later.
 - *Worse, and it is already in the code:* clear nothing. `cap` is 4, so the
   second cast tops the choir out and the third is **refused** — `Boss._choose`
   throws a capped summon away and re-rolls, and `REPEAT_WEIGHT` makes the second
@@ -1128,7 +1212,7 @@ count you get by grading floors 1 and 3 on their prose instead of on their
 |---|---|---|---|---|---|
 | 1 Warden | shield (always owned) | Reflect | the parry on `cistern_drop` | **the body** | the verb is universal |
 | 2 Slag Ogre | **Bow** ← Warden | Receptacle | an arrow into `bellows_charge`'s travel | **the body** | **yes — and it is code now, not prose** |
-| 3 Bellwake | **Burst** ← Ogre | Exposed weak point on a timer | a blast into the choir | **the adds** | no wall today |
+| 3 Bellwake | **Burst** ← Ogre | Exposed weak point on a timer | a blast into the choir, and it buys ~1 s | **the adds** | no wall today, **and not much of a shove either** |
 | 4 Riven Knight | **Hookshot** ← Bellwake | Positional | the keystone anchor | **the room** | furniture, and late |
 
 **Floor 2 is the claim in its strong form, and it is the only one.** Four clauses
@@ -1178,11 +1262,16 @@ row keeps the honest grade.
 **Floor 3 has no wall at all today**, which is the same grade floor 4 gets and
 for a plainer reason. §6.3 works it: `Boss._on_damaged` has no invulnerability
 branch and no add-count check, so the Bellwake's core is open before the choir is
-called, during it, and if the Burst is never fired. The Burst removes two
-skeletons out of a 2.00 s punish window and **opens nothing**. That is a real
-reason to be carrying it — two bodies converging on you inside the longest window
-in the game is pressure the blade cannot clear without spending the window — but
-it is pressure, not a lock, and "exposed weak point on a timer" describes a lock.
+called, during it, and if the Burst is never fired, and it **opens nothing**.
+**And the grade got weaker still under board card 73**, which measured what the
+blast does to the choir rather than assuming it: this paragraph used to say "the
+Burst removes two skeletons out of a 2.00 s punish window", and it removes
+neither — one blast is 2 of a chorister's 9 quarters and buys 0.6 s off one of
+them and 1.5 s off the other, at the price of two of the hero's own. Two bodies
+converging on you inside the longest window in the game is still a real reason to
+be carrying it, because a blast is the only thing that answers *both at once at
+all* — but it is a shove worth about a second, so this floor is pressure, not a
+lock, and "exposed weak point on a timer" describes a lock.
 The gate that would make it true is five lines and it is refused in §6.3 —
 **deliberately, with the cost named, and on pillar 2 rather than on the manifest.**
 A gate keyed to the Burst can seal a zero-charge player in with a boss that
@@ -1421,14 +1510,32 @@ gets its own director on that pattern — `boss_foundry.gd`, `boss_choir.gd`,
 - **Bellwake:** **the summon itself is DONE** — section O of `boss_cistern.gd`
   throws `hushing_choir` and `call_the_iron`, photographs the bodies on the ring
   and asserts their quarter-hearts against the boss's band (board card 22, which
-  it found: `level=3 6q`, twice). What section O does **not** do, and what is
-  left of this line:
-  - **One blast clears both choristers.** Note the arithmetic moved under it:
-    `K.BOMB_DAMAGE` is **2 quarters** and a chorister is now **9** rather than
-    6, so "one blast" was never literally one and is now five. Whether that is
-    a wrong number in the Burst, a wrong sentence here, or a gap the Echo fills
-    is a question for its own card — but do not write the director expecting
-    the old 6.
+  it found: `level=3 6q`, twice). **The Burst against the choir is DONE too** —
+  sections O3 and O4 of the same file (board card 73). What is left of this line:
+  - ~~**One blast clears both choristers.**~~ **Struck, and O3/O4 is what struck
+    it** (board card 73). Measured rather than argued: one blast takes 2 of a
+    chorister's 9 quarters, and it buys **0.6 s off one of the pair and 1.5 s
+    off the other** against the **4.66 s** §6.3 needed. The launch — the one
+    variable the arithmetic could not settle, because a Burst's `weight` is
+    exactly 0.5 — fired on **1 of 12** seeded bodies (19% by formula) and was
+    worth 1.03 s down and 2.0 m of travel; the other eleven were staggered
+    0.25 s and shoved 0.8–0.9 m. The blast also takes **two of the caster's own**
+    quarters, because the only point that reaches both is 1.38 m from a hero they
+    have both walked onto. **No number moved**: §6.3 carries the refusal of all
+    three candidates (`K.BOMB_DAMAGE` is `[oot]` and global, `K.BURST_KNOCKBACK`
+    at the top of the scale is still a coin flip worth ~1 s, and a `stun_time`
+    that bought the window would be four and a half `K.PARRY_STAGGER`s for one
+    charge). **No Echo fills the gap either** — `EchoDb` has twelve rows and not
+    one of them touches a crowd; `QUIET_ROOM` freezes the first body in a *room*
+    on entry, off `Bus.room_entered`, which a mid-fight summon never emits.
+    Frames:
+    `b_62_bellwake_choir_closed.png`,
+    `b_63_bellwake_choir_one_blast_later.png` — the second is the whole verdict,
+    a second and a half after the blast with both choristers upright and back on
+    him and the hero's own bar two quarters down. Calibrated in both directions,
+    because the surviving claim is two-sided: `--sabotage=burst-no-relief`
+    (the blast buys nothing → O3g, O4d red) and `--sabotage=burst-endless` (the
+    blast buys the window → O3h, O4c red).
   - The boss taking measurable damage inside the 6.00 s.
   - The capped case: four alive, the beat refused by `_choose`, the fight
     visibly picking something else. Section O reaches its beat through

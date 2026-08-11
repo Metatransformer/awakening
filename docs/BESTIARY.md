@@ -339,7 +339,7 @@ three-beat cap is untouched, and so is *new monster models: 0*.
 |---|---|---|---|---|
 | **The Cistern Warden** | 1 | sword, shield, rope | **Reflect** — the one blow whose band you choose to stand in; caught on the beat, the force goes back and staggers it | `cistern_drop` |
 | **The Slag Ogre** | 2 | **the Bow** | **Receptacle** — the bellows draw before it charges; an arrow in the open intake stops the charge before it starts | `bellows_charge` |
-| **The Bellwake** | 3 | **the Burst** | **Exposed weak point, on a timer** — it sings through the choir it calls; one blast strips the chorus and the core is open until the next one is summoned | `hushing_choir` |
+| **The Bellwake** | 3 | **the Burst** | **Exposed weak point, on a timer** — *the aspiration; neither half of it is built.* It sings through the choir it calls, and a blast into the pair buys about a second before they are back on you. There is no core to open (`Boss._on_damaged` has no gate) and one blast strips nothing (2 quarters of 9). Measured, board card 73 — **`docs/BOSSES.md` §6.3 is the design of record and §7 grades this floor *pressure, not a lock*.** | `hushing_choir` |
 | **The Riven Knight** | 4 | **the Hookshot** | **Positional** — it holds the far side of the gate ring; hookshot is both the way across and the way back | `gate_lunge` |
 
 **Read that table the same way `docs/PUZZLES.md` §1 asks you to read its

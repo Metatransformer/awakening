@@ -56,6 +56,12 @@ extends RefCounted
 ##      §6.4 asks for the FAILED press as a picture, because floor 4's fight
 ##      shape is "the item is both the way across and the way back" and a count
 ##      is not the player's experience of it. See the section's own header.
+##   O  **The summoned adds are curved for the boss's floor** (board card 22),
+##      and **the Burst against the choir it is supposed to clear** (board card
+##      73): one real blast into the pair the Bellwake calls, clocked from the
+##      blast to the frame each is back on the hero, plus the same blast against
+##      a bank of twelve seeded choristers because the launch is a roll. See the
+##      section's own headers.
 ##
 ## Every beat is thrown through `force_beat`. `BossDb.pick_beat` is weighted
 ## random by design, so no amount of positioning can guarantee a particular one,
@@ -82,7 +88,24 @@ extends RefCounted
 ##                   green: the bodies are there, the beat was thrown, and only
 ##                   the numbers on them are wrong, which is the whole reason that
 ##                   bug survived as long as it did.
-const SABOTAGE: Array[String] = ["floor-1-adds"]
+##
+##   `burst-no-relief`  Hand every blasted chorister straight back to CHASE on
+##                   the tick after the blast, with its stagger, its cooldown and
+##                   its knockback all cancelled -- "the blast bought nothing",
+##                   reproduced from the outside. **O3g and O4d must go red**, and
+##                   O3a, O3e, O3f and O4b must not: the blast still landed, it
+##                   still took its two quarters off both bodies, and only the
+##                   relief it bought is gone. Card #73.
+##
+##   `burst-endless`  The same two checks from the other side: hold every blasted
+##                   chorister in HURT for the whole watch, which is a Burst that
+##                   DOES buy the strip window. **O3h and O4c must go red.**
+##                   Nothing in the game can produce this state -- that is the
+##                   point of having it. §6.3 now says the Burst is a shove and
+##                   not a strip, and a ceiling nobody has ever pushed against is
+##                   a ceiling that is not there (CLAUDE.md §2's null case, run
+##                   in the direction a false PASS would come from). Card #73.
+const SABOTAGE: Array[String] = ["floor-1-adds", "burst-no-relief", "burst-endless"]
 
 var out := ""
 var _fails := 0
@@ -2263,6 +2286,8 @@ func _summon_band(rig) -> void:
 	for id in SUMMON_FIGHTS:
 		i += 1
 		await _summon_of(rig, id, "O%d" % i, 60 + i - 1)
+	await _choir_and_the_burst(rig)
+	await _burst_bank(rig)
 
 
 ## One fight's summon, from the seal to the quarter-hearts on the bodies.
@@ -2413,3 +2438,489 @@ func _summon_beat(id: StringName) -> StringName:
 		if b["shape"] == BossDb.SHAPE_SUMMON:
 			return b["id"]
 	return &""
+
+
+# --- O3, O4. The Burst against the choir it is supposed to clear -----------------
+
+## **Board card 73**, and the first time anything in this project has pointed a
+## Burst at a chorister.
+##
+## `docs/BOSSES.md` §9 carried one surviving Bellwake line -- *"One blast clears
+## both choristers"* -- and §6.3 built the fight on it: a 6.00 s strip window
+## *"in which the player has to spend the free hits AND clear two bodies, and
+## only one thing in the kit does both"*.
+##
+## **The KILL reading is settled on paper and O3a re-derives it here** rather
+## than repeating the card's arithmetic: `K.BOMB_DAMAGE` is 2 quarters against a
+## floor-3 skeleton's 9, so "one blast" is five, twice, out of a stock of twelve.
+## Nothing had to be run to know that; it is asserted anyway because a sentence
+## nobody re-checks is how the old "one blast" survived card #22 rewriting the
+## number under it.
+##
+## **What paper could NOT settle is the DISPLACEMENT reading** -- "clears" as
+## "shoves them off you". `Enemy._on_damaged` rolls `_try_launch` on every blow
+## and a launched body is out of the fight far longer than HURT's 0.22 s floor,
+## so the whole question is whether a Burst launches a skeleton. The blow's
+## `weight` is `(K.BURST_KNOCKBACK - K.KNOCKBACK_LIGHT) / (K.KNOCKBACK_HEAVY -
+## K.KNOCKBACK_LIGHT)` = exactly **0.5**, mid-scale, which is precisely where
+## `docs/BESTIARY.md` §3.5's mass rule decides rather than saturating -- and a
+## mass rule read off constants is the class of claim CLAUDE.md §4 has caught
+## this project getting wrong three times. So it is measured.
+##
+##   O3  **The real pair, in the real arena, on the real beat.** They are watched
+##       converging on a hero who stands still, one real `BurstCast` is put on
+##       the floor between them the moment one blast can reach both, and each is
+##       clocked from the blast to the frame it is *walking at him again* and
+##       again to the frame it is *back inside its own reach of him*. Those are
+##       two different numbers and the second is the one the design cares about:
+##       a body thrown 1.8 m has to walk back.
+##   O4  **The same blast against a bank of twelve**, because the launch is a
+##       ROLL and one body is a coin flip with a screenshot attached -- the same
+##       objection this file's header makes to waiting for `pick_beat` to come
+##       up. Twelve seeds, one blast each, and the launch RATE is reported
+##       against the odds `_try_launch`'s formula says it should be.
+##
+## Calibrated in BOTH directions, because the verdict is a two-sided one -- the
+## Burst is a real shove and it is not the strip window, and a check for either
+## half alone passes for the wrong reason on a blast that does nothing.
+## `--sabotage=burst-no-relief` cancels the relief (O3g, O4d go red) and
+## `--sabotage=burst-endless` holds the bodies for the whole watch (O3h, O4c go
+## red). Neither state is one the game can reach; that is what makes them
+## calibrations rather than tests.
+
+## O4's bank: twelve bodies on a 4x3 grid, `BANK_SPACING` apart. The spacing is
+## comfortably past `2 * K.BOMB_RADIUS` (3.88 m) so no body is ever inside two
+## blasts, and 15 x 10 m fits the fixture's 26 m floor with room on every side.
+const BANK_COLS := 4
+const BANK_ROWS := 3
+const BANK_SPACING := 5.0
+
+## Longest a clocked body is watched, in GAME seconds. Deliberately longer than
+## the whole 6.00 s strip window: a disable that DID buy the window has to be
+## measured rather than clipped at the edge of the watch, or the reading would
+## be an artefact of how long this director was willing to look.
+const CLOCK_WATCH := 8.0
+
+## **What one blast would have had to buy, in seconds, for §6.3's old sentence to
+## be true.** Not a preference and not a round number -- it is the window
+## arithmetic §6.3 already worked, run to its end:
+##
+##   the punish opens 1.52 s after the commit and the 6.00 s strip window runs
+##   from there; the choristers walk 6.3 m at 2.2 m/s and are on the hero at
+##   2.86 s, which is 1.34 s into it. **6.00 - 1.34 = 4.66 s of window left when
+##   the blast goes off**, and "spend the rest of it on the boss instead of on
+##   two skeletons" was a claim about all of it.
+##
+## Held at 4.0 rather than 4.66 so the bar is not an arithmetic tightrope: a
+## blast that bought four of the remaining four and two-thirds seconds would have
+## been an answer, and this must not turn on a rounding.
+##
+## **It is now a CEILING and not a floor**, because the measurement came back
+## 1.03-1.27 s and §6.3 was rewritten around that (card #73). O3h and O4c assert
+## the Burst does NOT buy the window, which is the doc-and-code contract stated
+## as a check: the day somebody raises `K.BOMB_DAMAGE` or bolts a `stun_time`
+## onto `burst_cast.gd`'s one call site, §6.3 becomes wrong and these say so.
+const RELIEF_NEEDED := 4.0
+
+## **And the floor, which is the half that stops the ceiling passing for the
+## wrong reason.** A blast that did nothing at all would satisfy "not the window"
+## perfectly. The Burst IS a real shove -- one charge for about a second and a
+## quarter, §6.3's panic button -- and this is the smallest version of that
+## claim: every body it catches is off the hero for at least this long.
+##
+## 0.20 and not the measured 1.03: `Enemy._on_damaged` floors HURT at 0.22 s and
+## everything above that is the launch roll and where the crowd happened to be
+## standing, so a floor set near the measurement would be a check that fails on
+## variance rather than on a defect.
+const RELIEF_FLOOR := 0.20
+
+## The near-left corner of O4's grid. Chosen so the whole 15 x 10 m block sits on
+## the fixture's 26 m floor with two metres of masonry to spare on every side,
+## and so the nearest blast is 2.9 m from the hero's mark at `(0, 3.5)` --
+## outside `K.BOMB_RADIUS`, because `K.BOMB_HURTS_OWNER` is true and a hero
+## taking twelve blasts at once would end the run in the middle of a measurement.
+const BANK_AT := Vector3(-7.5, 0.05, -8.0)
+
+
+## O3. The pair the beat actually summons, and one blast into it.
+func _choir_and_the_burst(rig) -> void:
+	var b := BossDb.beat(&"bellwake", &"hushing_choir")
+	var kind: StringName = b["kind"]
+	var deep := int(BossDb.get_boss(&"bellwake").get("floor", 1))
+	var base := int((Enemy.DEFS[kind] as Dictionary)["health"])
+	var chorister_q := maxi(int(roundf(float(base) * Prog.health_mult(deep))), 1)
+	var blasts := int(ceilf(float(chorister_q) / float(K.BOMB_DAMAGE)))
+
+	# The kill reading, re-derived from the two tables rather than restated. Both
+	# halves are printed because a bare pass/fail here would hide the number that
+	# moved under §9 in the first place.
+	print("BOSS O3 the kill reading: a %s chorister is %d q on floor %d, "
+		% [kind, chorister_q, deep]
+		+ "K.BOMB_DAMAGE is %d, so one body is %d blasts and the pair is %d "
+		% [K.BOMB_DAMAGE, blasts, blasts * 2]
+		+ "of a stock of %d" % K.BURST_CHARGES_MAX)
+	_ck("O3a one blast does NOT kill a chorister (%d q of %d)"
+		% [K.BOMB_DAMAGE, chorister_q], K.BOMB_DAMAGE < chorister_q)
+
+	var arena := await _fresh_arena(rig, &"bellwake", Vector3(0.0, 0.0, -5.0))
+	var boss: Node = arena.boss()
+	_ck("O3b the arena stood the Bellwake up", boss != null)
+	if boss == null:
+		return
+	await _stand_at(rig, Vector3(3.0, 0.05, 4.5), Vector3(0.0, 0.0, -5.0))
+	await _until(rig, func() -> bool: return arena.is_sealed(), 240)
+	Game.heal(999)
+
+	boss.force_beat(&"hushing_choir")
+	await _mark_up(rig, arena, boss)
+	var telling := func() -> bool: return boss.current_beat() == &"hushing_choir" \
+		and boss.state == Enemy.State.WINDUP
+	var thrown := await _until(rig, telling, 600)
+	_ck("O3c it threw hushing_choir", thrown)
+	if not thrown:
+		return
+	_park_centre(arena, boss, _hero(rig).global_position)
+	var landed := await _until(rig,
+		func() -> bool: return boss._summons.size() >= 2, 400)
+	_ck("O3d two choristers walked in", landed)
+	if not landed:
+		return
+
+	# **The boss is stood down for the rest of O3, and that is a fixture decision
+	# with a reason.** `first_toll` is a 7.5 m ring for 5 quarters on a hero with
+	# 12, and this section leaves him standing still for the better part of ten
+	# seconds while two skeletons walk at him; a fight that killed him mid-beat
+	# would change the scene out from under the run. It costs nothing that is
+	# under test -- `Boss._victims()` returns the player group only, so the boss's
+	# beats never touch a chorister and the thing being clocked cannot notice.
+	_hold_still(boss, _hero(rig).global_position)
+
+	var hero := _hero(rig)
+	var pair: Array[Enemy] = []
+	for n in boss._summons:
+		pair.append(n as Enemy)
+
+	# They arrive on an 8 m ring around the boss, which is 16 m apart -- so the
+	# first thing to measure is not the blast, it is whether one blast can ever
+	# reach both. `CROWD_RADIUS` is 1.5 m, so the answer is expected to be yes
+	# once they are both on the hero, but "expected" is what this section exists
+	# to stop being an argument.
+	#
+	# **Waited on BOTH BEING ON HIM and not on the gap itself, and the difference
+	# is 3.86 m against 1.9.** The first cut of this waited for the pair to close
+	# to `2 * K.BOMB_RADIUS` and fired the moment the trailing one crossed it,
+	# with the leader already on the hero and the other still walking -- so the
+	# reading was "one blast reaches both, by 2 cm", which reads as a knife-edge
+	# and is really a stopwatch started early. §6.3's sentence is about casting it
+	# "into the pair as they CLOSE", which is this moment and not that one.
+	var reach := float((Enemy.DEFS[kind] as Dictionary)["reach"])
+	var on_him := func() -> bool:
+		for e in pair:
+			if not is_instance_valid(e):
+				return false
+			if K.plane(e.global_position - hero.global_position).length() \
+					> reach + 0.6:
+				return false
+		return true
+	var closed := await _until(rig, on_him, 900)
+	var gap := _pair_gap(pair)
+	# The CHECK is the gap and not `closed`: if they never both arrived, the gap
+	# is still the honest answer to "can one blast reach both" and the run should
+	# say what it measured rather than time out into a different question.
+	_ck("O3e one blast can reach both: on the hero they stand %.2f m apart, "
+		% gap + "inside the %.2f m a blast spans (both arrived: %s)"
+		% [K.BOMB_RADIUS * 2.0, closed], gap <= K.BOMB_RADIUS * 2.0)
+	await rig.capture(out.path_join("b_62_bellwake_choir_closed.png"))
+	if gap > K.BOMB_RADIUS * 2.0:
+		return
+
+	var mid := (pair[0].global_position + pair[1].global_position) * 0.5
+	# The hero is not exempt (`K.BOMB_HURTS_OWNER`, and `burst_cast.gd` has no
+	# owner check) -- so how far he is from the only point that reaches both is
+	# part of the answer and not a footnote.
+	var hero_in := K.plane(hero.global_position - mid).length() <= K.BOMB_RADIUS
+	print("BOSS O3 the blast that reaches both is %.2f m from the hero, who is "
+		% K.plane(hero.global_position - mid).length()
+		+ "%s it (K.BOMB_HURTS_OWNER)" % ("INSIDE" if hero_in else "outside"))
+
+	var rows := await _blast_and_clock(rig, [mid], pair, hero, reach)
+	# **The pair AFTER the clock has run out, not on the frame of the blast**, and
+	# that is the picture the design turns on: a second and a half later both
+	# choristers are upright and back on the hero and the only thing on screen
+	# that changed is the hero's own health bar, two quarters down.
+	await rig.capture(out.path_join("b_63_bellwake_choir_one_blast_later.png"))
+
+	var caught := 0
+	var relief := INF
+	var longest := 0.0
+	for r in rows:
+		print("BOSS O3 chorister seed=%d: %s, %d q lost, walking again after "
+			% [r["seed"], "LAUNCHED" if r["launched"] else "staggered",
+				r["lost"]]
+			+ "%.2f s, thrown %.2f m, back inside its reach of the hero after "
+			% [r["t_move"], r["out"]]
+			+ "%.2f s, free to swing after %.2f s" % [r["t_back"], r["t_swing"]])
+		if int(r["lost"]) == K.BOMB_DAMAGE:
+			caught += 1
+		relief = minf(relief, float(r["t_back"]))
+		longest = maxf(longest, float(r["t_back"]))
+	_ck("O3f the one blast caught both (%d of 2, %d q each)"
+		% [caught, K.BOMB_DAMAGE], caught == 2)
+	# **The two checks card 73 exists to settle, and they run in opposite
+	# directions on purpose.** `t_back` and not `t_move`: the question is how
+	# long the pair is OFF him, and a body thrown two metres has to walk back --
+	# relief the stagger timer alone does not show.
+	_ck("O3g the blast is a real shove: both are off him for at least %.2f s "
+		% RELIEF_FLOOR + "(the shorter of the two: %.2f s)" % relief,
+		relief >= RELIEF_FLOOR)
+	_ck("O3h and it is a shove and NOT the strip window (%.2f s of the %.2f s "
+		% [longest, RELIEF_NEEDED] + "§6.3 would have needed)",
+		longest < RELIEF_NEEDED)
+
+
+## O4. The launch is a roll, so it is sampled rather than argued about.
+func _burst_bank(rig) -> void:
+	var b := BossDb.beat(&"bellwake", &"hushing_choir")
+	var kind: StringName = b["kind"]
+	var deep := int(BossDb.get_boss(&"bellwake").get("floor", 1))
+	# The room is cleared first, arena before bodies, in `_fresh_arena`'s order
+	# and for its reason: the choristers are parented to the SCENE and outlive
+	# the arena that summoned them, so freeing the arena alone leaves O3's pair
+	# standing in the middle of O4's grid.
+	for n in (rig.scene() as Node).get_children():
+		if n.name.begins_with("Arena") or n.name.begins_with("Turn"):
+			n.queue_free()
+	await rig.wait_frames(4)
+	for n in rig.get_nodes_in_group(&"enemy"):
+		(n as Node).queue_free()
+	await rig.wait_frames(8)
+
+	var bank: Array[Enemy] = []
+	var at: Array[Vector3] = []
+	var root := rig.scene() as Node3D
+	for gr in BANK_ROWS:
+		for gc in BANK_COLS:
+			var p := BANK_AT + Vector3(float(gc) * BANK_SPACING, 0.0,
+				float(gr) * BANK_SPACING)
+			# The seed is explicit and consecutive, which is what makes this a
+			# measurement somebody else can repeat rather than a number off one
+			# run: `Enemy._ready` puts `drop_seed` straight into `_rng`, and the
+			# launch roll is `_rng.randf()`. Seed 0 means "randomise", so the
+			# bank starts at 1.
+			bank.append(Enemy.spawn(root, kind, p, 1 + bank.size(), deep))
+			at.append(p)
+	await rig.wait_physics_frames(6)
+	_ck("O4a a bank of %d floor-%d choristers is standing" % [bank.size(), deep],
+		bank.size() == BANK_COLS * BANK_ROWS)
+
+	# **No hero, so no `t_back`.** The bank stands where it was put and nothing
+	# walks at anybody: what O4 is sampling is the ROLL and the dwell it buys,
+	# and "how long until it is back on you" is a question about the arena
+	# geometry O3 measured rather than about the blast.
+	var rows := await _blast_and_clock(rig, at, bank, null,
+		float((Enemy.DEFS[kind] as Dictionary)["reach"]))
+
+	var launched := 0
+	var caught := 0
+	var moved := PackedFloat32Array()
+	# How far a blast actually MOVES a body, which is the other half of "shoves
+	# them off you" and the half a dwell in seconds cannot show: a stagger that
+	# leaves the body where it stood is not a shove however long it lasts.
+	var shoved := PackedFloat32Array()
+	var flew := PackedFloat32Array()
+	for r in rows:
+		if int(r["lost"]) == K.BOMB_DAMAGE:
+			caught += 1
+		if bool(r["launched"]):
+			launched += 1
+			flew.append(float(r["out"]))
+		else:
+			shoved.append(float(r["out"]))
+		moved.append(float(r["t_move"]))
+	_ck("O4b every body in the bank took the blast (%d of %d)"
+		% [caught, rows.size()], caught == rows.size())
+
+	# What `_try_launch` says it should be, spelled out so the measured rate has
+	# something to disagree with. `_mass_ratio` is `K.LAUNCH_MASS_REF / height`,
+	# and a skeleton is 1.70 m against a reference of 1.70 -- exactly 1.0, which
+	# is why this body and not another is the one the mid-scale weight is
+	# interesting on.
+	var weight := Enemy.blow_weight(K.BURST_KNOCKBACK)
+	var mass := K.LAUNCH_MASS_REF / float((Enemy.DEFS[kind] as Dictionary)["height"])
+	var odds := clampf(K.LAUNCH_CHANCE * pow(mass, 2.0) * weight,
+		K.LAUNCH_CHANCE_MIN, K.LAUNCH_CHANCE_MAX)
+	moved.sort()
+	var lo: float = moved[0] if moved.size() > 0 else -1.0
+	var hi: float = moved[moved.size() - 1] if moved.size() > 0 else -1.0
+	var mid: float = moved[moved.size() / 2] if moved.size() > 0 else -1.0
+	print("BOSS O4 %d of %d launched (%.0f%%), against the %.0f%% the formula "
+		% [launched, rows.size(), 100.0 * float(launched) / float(maxi(rows.size(), 1)),
+			100.0 * odds]
+		+ "gives for weight %.2f at mass ratio %.2f. Walking again after "
+		% [weight, mass]
+		+ "%.2f / %.2f / %.2f s (min / median / max), " % [lo, mid, hi]
+		+ "shoved %s m staggered and %s m launched."
+		% [_metres(shoved), _metres(flew)])
+	# **The launch was the only thing that could have rescued the displacement
+	# reading, and this is where that was settled.** If the LUCKIEST roll in a
+	# dozen does not hold a body still for the window, no roll of the dice makes
+	# the old sentence true -- the question is closed rather than left to
+	# variance, which is why a bank and not one body. The floor beside it is what
+	# stops "not the window" passing for a blast that did nothing.
+	_ck("O4c even the luckiest of %d rolls is a %.2f s dwell, not the %.2f s "
+		% [rows.size(), hi, RELIEF_NEEDED] + "§6.3 would have needed",
+		hi < RELIEF_NEEDED)
+	_ck("O4d and the unluckiest is still a stagger (%.2f s, floor %.2f)"
+		% [lo, RELIEF_FLOOR], lo >= RELIEF_FLOOR)
+
+	for e in bank:
+		if is_instance_valid(e):
+			e.queue_free()
+	await rig.wait_frames(4)
+
+
+## A run of distances as `lo-hi`, or `n/a` for an empty one -- which is the
+## honest answer when no body in the bank rolled a launch, and reads better than
+## a min and a max of the same nothing.
+func _metres(v: PackedFloat32Array) -> String:
+	if v.is_empty():
+		return "n/a"
+	var lo := INF
+	var hi := 0.0
+	for d in v:
+		lo = minf(lo, d)
+		hi = maxf(hi, d)
+	return "%.2f-%.2f" % [lo, hi]
+
+
+## Metres between the two choristers, or `INF` if one of them is gone.
+func _pair_gap(pair: Array[Enemy]) -> float:
+	if pair.size() < 2 or not is_instance_valid(pair[0]) \
+			or not is_instance_valid(pair[1]):
+		return INF
+	return K.plane(pair[0].global_position - pair[1].global_position).length()
+
+
+## Put one real `BurstCast` at each of `where`, and clock every body in `bodies`
+## from the blast until it is chasing again.
+##
+## **A real `BurstCast` and not a hand-made `Hit`.** What is under test is the
+## blow the working actually delivers, and `burst_cast.gd:245` is the only place
+## that decides what that is -- a director that assembled its own `Hit.make` would
+## be a second copy of the one line card 73 is about, and it would still pass the
+## day somebody changed the real one.
+##
+## **The fuse is cut short and the arc is not flown.** `K.BOMB_FUSE` is 3.5 s
+## from the cast, in which a chasing skeleton walks 7.7 m -- so a director that
+## let the fuse run would be measuring where the bodies went, not what the blast
+## did to them. The arc is already proved, frame by frame, in
+## `tools/directors/burst_cast.gd` §C; nothing below touches `_blast` or
+## `_hurt_what_is_in_reach`, which are the only two functions this section has an
+## opinion about.
+func _blast_and_clock(rig, where: Array, bodies: Array[Enemy], hero: Node3D,
+		reach: float) -> Array[Dictionary]:
+	var rows: Array[Dictionary] = []
+	var from: Array[Vector3] = []
+	for e in bodies:
+		rows.append({
+			"seed": e.drop_seed, "q0": e.health.quarters, "lost": 0,
+			"launched": false, "t_move": -1.0, "t_back": -1.0, "t_swing": -1.0,
+			"out": 0.0,
+		})
+		from.append(e.global_position)
+
+	var motes: Array = []
+	for p in where:
+		var at: Vector3 = p
+		var mote := BurstCast.cast_from(rig.scene(), at + Vector3(0.0, 0.9, 0.0),
+			Vector3.DOWN)
+		if mote != null:
+			# Set AFTER `cast_from`, because `_ready` runs inside its `add_child`
+			# and assigns `K.BOMB_FUSE` over anything written before it.
+			mote.set(&"_fuse", 0.12)
+			motes.append(mote)
+	# Bound to a name rather than written inline: a multi-line lambda cannot be
+	# followed by another argument in the same call.
+	var all_spent := func() -> bool:
+		for m in motes:
+			if not is_instance_valid(m) or not bool(m.get(&"_spent")):
+				return false
+		return true
+	var went := await _until(rig, all_spent, 240)
+	if not went:
+		print("BOSS FAIL the working never went off")
+		_fails += 1
+		return rows
+
+	# **GAME seconds, not wall clock and not frames.** `Feel.hitstop` sets
+	# `Engine.time_scale = 0` for several frames after every blow and the blast
+	# asks for `K.HITSTOP_HEAVY` itself, so a wall clock would charge the stagger
+	# for the freeze. `get_physics_process_delta_time()` carries the scale, which
+	# is the same delta `Enemy._timer` and `_cooldown` count down in -- and a
+	# frame count would be a measurement of this harness's ~22 fps rather than of
+	# the 60 Hz step the fight runs on (§G makes the same argument).
+	var clock := rig.scene() as Node
+	var t := 0.0
+	while t < CLOCK_WATCH:
+		await rig.wait_physics_frames(1)
+		t += clock.get_physics_process_delta_time()
+		var pending := false
+		for i in bodies.size():
+			var e := bodies[i]
+			var r: Dictionary = rows[i]
+			if not is_instance_valid(e):
+				continue
+			r["lost"] = int(r["q0"]) - e.health.quarters
+			if e.state == Enemy.State.LAUNCHED:
+				r["launched"] = true
+			if _sabotage == "burst-endless":
+				# The other direction: a blast that DOES buy the window. Nothing
+				# in the game can do this -- that is the point. O3h and O4c are
+				# the only two checks that may notice, and a ceiling nobody has
+				# ever pushed against is a ceiling that is not there.
+				e.state = Enemy.State.HURT
+				e._timer = maxf(e._timer, CLOCK_WATCH)
+			if _sabotage == "burst-no-relief":
+				# The blast buying nothing, reproduced from the outside: the body
+				# is handed straight back to CHASE with its stagger cancelled,
+				# which is what a knockback with no launch and no stun in it
+				# amounts to one tick later.
+				e.state = Enemy.State.CHASE
+				e._timer = 0.0
+				e._cooldown = 0.0
+				e._knockback = Vector3.ZERO
+			var held := e.state == Enemy.State.HURT \
+				or e.state == Enemy.State.LAUNCHED
+			if float(r["t_move"]) < 0.0:
+				if held:
+					pending = true
+				else:
+					r["t_move"] = t
+					r["out"] = K.plane(e.global_position - from[i]).length()
+			if float(r["t_swing"]) < 0.0:
+				if e._cooldown > 0.0:
+					pending = true
+				else:
+					r["t_swing"] = t
+			# **"Back on him" is BOTH conditions, and the first cut of this had
+			# only the second.** A launched chorister is in the air 1.7 m from
+			# the hero and cannot touch him, and a reach test alone reported that
+			# as `0.00 s of relief` -- the worst number in the table, for the body
+			# the blast did the most to. It is back on him when it is acting
+			# again AND standing within its own reach of him.
+			if hero != null and float(r["t_back"]) < 0.0:
+				if held or K.plane(e.global_position
+						- hero.global_position).length() > reach:
+					pending = true
+				else:
+					r["t_back"] = t
+		if not pending:
+			break
+	# A body that never came back inside reach in the whole watch is reported as
+	# the watch length and not as -1, because the number is read as "seconds of
+	# relief" and a sentinel would silently be the best result in the table.
+	for r in rows:
+		for key in ["t_move", "t_back", "t_swing"]:
+			if float(r[key]) < 0.0:
+				r[key] = t
+	return rows
