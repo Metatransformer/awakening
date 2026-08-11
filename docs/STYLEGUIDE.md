@@ -511,8 +511,10 @@ once; read the deltas, not the absolutes.
 targets at all, whereas flipping the field at runtime leaves the ones already
 made, so a paired run reports VRAM unchanged. Card #20's budget is unaffected
 either way; this is not a perf change, it is a look change that happens not to
-cost anything. **Do not quote #20's median — see the note at §4.8's budget
-citation.** The VRAM figures above are counts, not timings, and stand.
+cost anything. **Do not quote #20's median *or its p95* — see the note at §4.8's
+budget citation, where #65 struck both on 2026-08-11.** The VRAM figures above
+are counts, not timings, and stand — they are the part of this section a pitch
+can actually use.
 
 #### What it breaks, and it is one thing
 
@@ -855,8 +857,44 @@ buying one pixel.* Card #20's budget is unaffected either way.
 > primitives, 236.8 MB VRAM, down from #20's 431.8 thanks to §4.5.
 >
 > Only the median is in doubt, and it is in doubt because a Mac running dozens of
-> agents has a CPU and a compositor that no `comm` grep can see. #65 re-runs the
-> control on a genuinely idle machine.
+> agents has a CPU and a compositor that no `comm` grep can see.
+>
+> **#65 ran, the control failed again, and the p95 above does not survive it
+> either — 2026-08-11, on `23d7a47`, 1920×1080, `--warmup=90`, 240 samples:**
+>
+> | scene | draw calls | `frame_ms` med | `frame_ms` p95 | `cpu_ms` med |
+> |---|---|---|---|---|
+> | `_lookdev` | 9 | 10.92 | **19.02** | 0.13 |
+> | `garrison` | 720 | 11.01 | **16.30** | 0.54 |
+>
+> Eighty times the geometry for **0.09 ms**. Two things follow, and the second
+> is new:
+>
+> 1. **`cpu_ms` scales 4× with the scene while `frame_ms` does not move at all.**
+>    That is the cleanest statement of the problem yet: the engine's own work
+>    responds to the scene exactly as it should, and the frame time ignores it.
+>    The ~11 ms wall is not the game. Earlier runs could only show the floor;
+>    this one shows the game moving *underneath* it.
+> 2. **The p95 is contaminated too, so strike it as a pitch number.** The
+>    paragraph above says the p95 "does not track the floor". A 9-draw-call scene
+>    posting a p95 **2.7 ms worse** than a 720-draw-call one is not a number
+>    about geometry, and 16.30 also falls outside the 17.12–18.06 band cited
+>    there. Both readings cannot be right; the honest conclusion is that the tail
+>    is noise-dominated on a contended machine.
+>
+> **The precondition cannot be met from inside a Claude session.** #65 asks for
+> "no Claude agents running at all"; this run had `load average 8.37` and 17
+> Claude processes, none of them stoppable without destroying other sessions'
+> work — and one of them is always the agent doing the measuring. Like §4.1's
+> M4 gate, **this is a bar only a human at an otherwise-idle Mac can clear.**
+>
+> **What is safe to quote in a pitch, and it is not nothing:** the counts —
+> 720 draw calls, 182,989 primitives, 974 objects — and **236.8 MB VRAM against
+> 431.8 before §4.5**, which is a real 45% saving and contention-independent
+> because it is a memory figure, not a time. `cpu_ms` (0.54 ms median, 0.67 p95
+> on the garrison) is the one *time* that demonstrably tracks the scene, but it
+> is root + the 480×270 buffer and not a whole-frame cost, so quote it as what
+> it is or not at all. **No frame-rate or headroom claim survives this machine.**
 
 **What the real answer to "the edges are rough" is.** §4.5 — the 480 × 270
 internal buffer with a sharp-bilinear present. At 480 × 270 the edge question
