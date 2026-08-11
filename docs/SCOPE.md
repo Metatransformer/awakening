@@ -98,7 +98,7 @@ would have left the smith's counter carrying a branch for a case it never sees.
 
 **Two new mechanics** *(was one, amended 2026-08-10 — §4.2's fourth line)*. The
 working — a thrown arc, a fuse, a sphere query, a cracked wall. And the puzzle —
-nine props that emit `solved`, six combinators, and one extra edge in the room
+nine props that emit `solved`, nine combinators, and one extra edge in the room
 planner. Everything else in the plan is still a *gate on*, a *number in*, or an
 *arrangement of* something that already runs, and that includes the two things
 that arrived alongside the puzzle and are **not** mechanics: an Echo is a bag row

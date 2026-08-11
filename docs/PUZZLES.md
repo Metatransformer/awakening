@@ -17,6 +17,11 @@ puzzle on it is M6), and phase 2's remaining three atoms.
 rather than adding a ninth line to the ceiling; nothing yet *places* a
 `LanternGrid` on a generated floor.
 
+**Chain (§3, combinator 7) is built**, proved by `tools/directors/chain_row.gd` —
+`PuzzleAtom.propagate()` is the mechanic and `scripts/props/chain_row.gd` is the
+row with the hole in it. Same caveat as the grid: nothing yet *places* a
+`ChainRow` on a generated floor.
+
 **§3.1 and §10 are design, added 2026-08-10** after reading the 1998 Player's
 Guide end to end — `docs/OOT_CATALOGUE.md` is that pass. §3.1 adds three
 combinators (6 → 9, priced in §8.1) and §10 is the **grammar**: the rule that says
@@ -188,7 +193,7 @@ puzzle rooms.
 | **5** | **Cycle** — the atom is on the *far* side, and solving it opens a two-way link | You come round the loop and blast the pillar from inside |
 | **6** | **Couple** — solving one atom *un-solves* its neighbours | Lights out: strike a lantern and its four neighbours flip too |
 
-| **7** | **Chain** — solving one atom solves its neighbours, if they are in line | A row of cracked pillars: burst the first and it walks down the row — but there is a **gap**, and you have to stand in it |
+| **7** | **Chain** — solving one atom solves its neighbours, if they are in line | A row of cracked pillars: burst the first and it walks down the row — but there is a **gap**, and you have to stand in it. Built: `PuzzleAtom.propagate()` + `scripts/props/chain_row.gd` |
 | **8** | **Convert** — an atom does not solve; it **changes what your shot is** | Shoot an arrow through a lit lantern and it arrives burning, and *only* a burning arrow opens the frozen eye |
 | **9** | **Reconfigure** — the atom moves walls, not doors | The maze room, and the floor-wide version of it |
 
@@ -246,13 +251,53 @@ rather than absorbing it.
 is not a game with many props — it is a game that says a lot with few, and every
 one of these three is a new *sentence*, not a new *word*.
 
-**7 — Chain.** One atom's solve propagates to the next along a line of sight,
-inside a radius. Dodongo's Cavern runs a row of bomb flowers this way and puts a
-**deliberate gap** in the middle, so the player has to supply one link
-themselves. That gap is the whole puzzle: without it, chain is a domino topple
-you watch. With it, chain is *where do I stand*, which is the one question none
-of combinators 1–6 asks. It is also the natural home for the T2 cracked pillar,
-which is currently one prop that does one thing.
+**7 — Chain. BUILT, 2026-08-10** — §9's table has the files and
+`tools/directors/chain_row.gd` is the proof. One atom's solve propagates to the
+next along a line of sight, inside a radius. Dodongo's Cavern runs a row of bomb
+flowers this way and puts a **deliberate gap** in the middle, so the player has
+to supply one link themselves. That gap is the whole puzzle: without it, chain is
+a domino topple you watch. With it, chain is *where do I stand*, which is the one
+question none of combinators 1–6 asks. It is also the natural home for the T2
+cracked pillar, which was one prop that did one thing.
+
+The mechanic is `PuzzleAtom.propagate()` and it is one rule: everything in group
+`puzzle_atom` that shares this link's `chain_id`, is inside `chain_radius`, and
+can be reached by a ray on `L_WORLD` drawn between the two atoms' chest heights,
+gets `solve()` called on it. **It is delayed by `chain_delay` (0.45 s)** — a row
+that goes over in one frame is a single prop with five meshes, and what makes
+chain a combinator is that the player watches the answer walk away from them down
+the row. The delay also unrolls the recursion across frames, so the re-entrancy
+guard §8.1 priced is belt and braces rather than the only thing holding a ring
+together; it is still there, because `chain_delay` is an export and a placer may
+set it to zero.
+
+`ChainRow` is what makes it a *puzzle*, and it is a placer, not an atom — the
+same shape `LanternGrid` has and for the same reason: it hands each link the
+gate's own `puzzle_id` and the ordinary `PuzzleGate` count does the rest. **Four
+numbers, in one narrow window:**
+
+```
+K.BOMB_RADIUS  <  spacing  <=  chain_radius  <  gap  <=  2 * K.BOMB_RADIUS
+     1.94            2.6            3.0          3.7          3.88
+```
+
+One blast is never worth two pillars; a fall carries to its neighbour; a fall
+does **not** carry across the hole; and a player standing in the hole can reach
+both lips of it, which is what "supply the missing link yourself" means when the
+thing you are holding is the Burst-Verse. `ChainRow.problems()` checks all four,
+because a gap 0.2 m too wide is a room that generates, builds, photographs
+perfectly and has no puzzle in it.
+
+The window is narrow on purpose and it has a consequence: **the hole is always
+less than two normal spacings wide**, which reads as five unevenly spaced pillars
+rather than as a hole. So the row leaves the *base* of the missing link standing
+in the gap — the same mark a fallen pillar leaves (`CrackedPillar`: *the base
+stays; it is the thing that says a pillar USED to be here*). The gap then says,
+before the player has toppled anything, the sentence the rubble says afterwards.
+
+What it costs the player is the actual design: **a five-link row with one gap is
+two casts.** Not five, which is what it costs with no chain, and not one, which is
+what it costs with no gap.
 
 **8 — Convert, and it is the important one. BUILT, 2026-08-10** — §9's table has
 the files and `tools/directors/convert_arrow.gd` is the proof. An atom that is not a lock. You
@@ -598,9 +643,27 @@ guard. Neither one is a tutorial and neither one is skippable-and-then-required.
 | 3 Choir | **The Second Voice** | `skeleton`, ×1.5, pale | **Ring.** It anchors to a resonating pillar and cannot be touched while the pillar sings. **Burst the pillar** | **Keening.** A sustained cone. It lands as a blow, so it breaks Heat — the fight is a race against your own chain |
 | 4 Chord Gate | **The Gate-Hound** | `kobold`, ×1.4, iron-dark | **Retreat.** Backs across a gap and lobs from the far side. **Hookshot** closes it, or freezes it where it stands (GDD §5.2) | **Overhand.** A heavy committed slam. Rolled, not blocked — the one beat in the set the shield does not answer |
 
+**The Placeholder column is a sketch, and `BossDb.MINIBOSSES` is the record.**
+All four rows are built (2026-08-10) and three of them departed from the column
+above, each time for a reason the table writes down at the row:
+
+- **The multipliers are not heights.** `kobold` ×1.4 is 1.89 m, which is
+  *shorter than an ordinary orc*, and the whole point of a miniboss is that it
+  reads as bigger than the roster. The Gate-Hound is authored at **2.30 m**. The
+  table stores metres, never a factor.
+- **The Second Voice has no pillar.** A resonating pillar is a *puzzle atom*
+  standing in an arena, which needs a new prop and a new `arena` key, and §8.1
+  caps the atoms at nine. "Cannot be touched" is an invulnerability gate, which
+  is a new mechanic. So the ring it sings **is** the wall — a floor band with a
+  wide safe middle, answered by the Burst from outside it.
+- **The Bellows-Hand's plate is a distance, not an invulnerability.** Its
+  advance only comes out from 5 m, which is where the bow lives and the sword
+  does not.
+
 **Every telegraph obeys GDD §7**: it never compresses past 60% however deep the
 floor is. A miniboss that becomes unreadable at depth is a miniboss that has
-stopped being a design and started being a wall.
+stopped being a design and started being a wall. Measured across the built rows
+(`tools/directors/minibosses.gd`, section C): arc 73.9%, zone 76.2%, slam 121%.
 
 **They drop nothing but the chest behind them.** No miniboss drops an item, a
 stat or a relic — GDD pillar 4 holds here exactly as it does everywhere else. The
@@ -665,8 +728,26 @@ so the next amendment is priced against what building one really costs.
 | **`Lantern`'s collider shortened to the post** | **no** | It was one cylinder over post *and* cage, so "shoot **through** it" was geometrically impossible. The cage is a window now. The post is still 1.55 m of obstacle and the sword still finds it — `sword_contact`, `lights_out`, `maze` and `puzzle_atoms` all pass unchanged |
 | **`PuzzleGate.refusal_line` asks the atom** | **no** | It composed its line from the static table, so an overridden `refusal()` was written, correct and **unreachable** — CLAUDE.md §3's static-dispatch row. Without it a door onto a frozen eye says *THE EYE IS SHUT* to a player who has just put an arrow in it, which is the exact failure GDD pillar 3 forbids, and no assertion made on the prop can see it |
 
-The three unpriced items are all *plumbing that already disagreed with the
-design*, not scope: a projectile that could only ever be stopped, a lantern that
+#### What row 7 actually cost, once built (2026-08-10)
+
+Closer to its quote than row 8 was, and the two things it was short by are both
+about the puzzle rather than the mechanic.
+
+| | Priced? | What it was |
+|---|---|---|
+| `PuzzleAtom.propagate()` — radius, sight ray, guard | yes | Exactly as quoted, plus `chain_links()` split off it so a proof can assert the topology without toppling the row it is asking about |
+| `chain_id` beside `chain_radius` | **no** | `puzzle_id` cannot key a chain — a gate room's whole point is that its atoms share one tag, so two rows in one room would be one chain. One `StringName`, empty by default |
+| `chain_delay`, and the fall being a WALK | **no** | A row that topples in one frame is one prop with five meshes. It is also what unrolls the recursion the guard was priced for |
+| **`ChainRow`, the placer** | **no** — and it is the row's real cost | The mechanic is not the puzzle. The gap, the four-number window that makes it a gap, and the empty socket that makes the gap legible are ~200 lines, and none of it is a prop: `ChainRow` builds nine atoms it did not invent and the gate counts them without knowing it exists |
+
+The last one is the honest correction to the quote: **"one method on `PuzzleAtom`"
+was the price of the mechanic, not of the combinator.** A combinator is still not
+allowed a prop of its own — `ChainRow` places, it does not exist in the kit and
+`PuzzleAtoms.validate()` still asserts nine — but it is allowed a placer, exactly
+as coupling has `LanternGrid`. Price the next one that way.
+
+The three unpriced items in row 8 are all *plumbing that already disagreed with
+the design*, not scope: a projectile that could only ever be stopped, a lantern that
 could only ever be hit, and a door that could only ever read a table. None of
 them is a prop and none of them is a verb.
 
@@ -707,6 +788,9 @@ Sluice-Keeper dies and the second stone lights).
 | 6 | The Echo pedestal | `scripts/world/sounding_stone.gd`; three `LootMote`s and three name plates |
 | 6 | The twelve | `scripts/items/echo_db.gd`, `ItemDb` rows, `Run.echoes_held()` |
 | 7 | The Sluice-Keeper | `BossDb.MINIBOSSES`; two beats, a scaled troll, `relic_slot = &""` |
+| 3.1 | **Chain** — one solve carries to the next | `PuzzleAtom.propagate()` / `chain_links()` / `_can_see()`; `chain_radius`, `chain_id`, `chain_delay` |
+| 3.1 | The row with the hole in it | `scripts/props/chain_row.gd` — `ChainRow`, and `problems()` is the four-number window |
+| 3.1 | The mark that says where the link is missing | `ChainRow._build_socket()` — the base of the pillar that is not there |
 | 3.1 | **Convert** — the shot rewritten in flight | `Arrow._probe_convert` / `_ignite`, `Hit.ARROW_FIRE`, `K.L_CONVERT` |
 | 3.1 | The furnace it is rewritten by | `Lantern.convert_kind()` and its `ConvertZone`; **lit only** |
 | 3.1 | The lock that wants the rewrite | `EyeSwitch.frozen` — a variant, not a tenth atom |
