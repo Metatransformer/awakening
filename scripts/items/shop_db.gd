@@ -561,18 +561,18 @@ static func _scaled(base: int, id: StringName, factor: float) -> int:
 	return int(round(base * pow(factor, float(owned))))
 
 
-## A STOCK line's price: the scaled cost with the mill's discount on it.
+## A STOCK line's price.
 ##
 ## The three lines the smith BUYS IN -- arrows, a bag slot, a heart container --
-## and not the twelve forge ladders, which is the whole reason this is a second
-## helper rather than a multiply inside `_scaled`. A rung is not something the
-## smith buys in, and discounting it would make the Waterwheel Gear the strongest
-## relic on the list by a distance (`RelicDb.SMITH_MULT_MILL`).
-##
-## Adopted unconditionally: `smith_stock_mult()` is 1.0 until the mill turns, so
-## there is no branch here and there must never be one.
+## and not the twelve forge ladders. **No relic discounts them.** This used to
+## multiply by `RelicDb.smith_stock_mult()`, the Waterwheel Gear's bite, and GDD
+## §6.2 deleted that relic to pay for the Ballast-Verse on the grounds that a
+## percentage off a subsystem is not a change to the place you come home to
+## (`docs/ITEMS.md` §8, D1). The helper survives the relic because the three
+## stock lines are still a different kind of thing from a rung, and the next
+## number that treats them as a group wants exactly one place to land.
 static func _stock(base: int, id: StringName = &"", factor: float = 1.0) -> int:
-	return int(round(_scaled(base, id, factor) * RelicDb.smith_stock_mult()))
+	return _scaled(base, id, factor)
 
 
 ## How many more of `id` the player may buy. -1 means unlimited.

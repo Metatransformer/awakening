@@ -171,24 +171,24 @@ const RELICS: Array[Dictionary] = [
 		"lore": "How does a fire nobody has fed since the Sundering still hold its heat? The Society cannot say. It knows only that glass blown off this core comes out clear, and that four bottles is all one core will carry.",
 	},
 	{
-		"id": &"fletchers_jig",
-		"name": "Fletcher's Jig",
+		"id": &"sustain_verse",
+		"name": "The Sustain-Verse",
 		"level": 2, "source": &"vault",
-		"effect": &"fletch_seven",
-		"bites": "RelicDb.fletch_yield() -> Fletching.BATCH",
-		"detail": "Fletching cuts 7 arrows instead of 5.",
-		"prop": &"fletchers_lamp",
-		"lore": "Two clamps, a nock groove, and a spine of Vyr bronze that has never gone out of true. Hess kept it thirty years, taught nobody, and took it down the shaft with him. It cuts seven shafts where a steady hand cuts five.",
+		"effect": &"working_sustain",
+		"bites": "RelicDb.knows_working() -> Game.RIGHT_POOL's Sustain stop",
+		"detail": "He reads it. You learn Sustain.",
+		"prop": &"reading_lamp",
+		"lore": "Nine lines of Vyr script on a sheet of beaten tin, and the Society has never let it leave Valenfeld. Read aloud, it holds a thing at its own heat through one interruption. The man who copied it out worked from his copy rather than the sheet, and the College has his hands in a jar.",
 	},
 	{
-		"id": &"pillar_shard",
-		"name": "Pillar-Shard",
+		"id": &"ballast_verse",
+		"name": "The Ballast-Verse",
 		"level": 3, "source": &"deep_chest",
-		"effect": &"market_lit",
-		"bites": "RelicDb.vendor_price_mult() -> Run.line_value()",
-		"detail": "The square lights. The vendor pays +10%.",
-		"prop": &"market_lamps",
-		"lore": "Set it in stone and the stone gives light back for as long as it stays there. Lift it out and there is nothing to see. Valenfeld's square has been dark six generations, and a lit market is one people bring money to.",
+		"effect": &"working_ballast",
+		"bites": "RelicDb.knows_working() -> Game.RIGHT_POOL's Ballast stop",
+		"detail": "He reads it. You learn Ballast.",
+		"prop": &"mill_wheel",
+		"lore": "The shorter of the two verses and the crueller. It asks what you are carrying, takes the least of it, and gives back a moment that nothing reaches you through. The Listening College has read it aloud four times and written down what each reader put down to do it.",
 	},
 	{
 		"id": &"sounding_rod",
@@ -221,14 +221,18 @@ const RELICS: Array[Dictionary] = [
 		"lore": "Vyr winch-gear, cut so fine a rope over it hauls for a fifth less than anything Valenfeld can forge. There were two. The first slipped its sling coming up and is still down there, so the saving comes off the second.",
 	},
 	{
-		"id": &"waterwheel_gear",
-		"name": "Waterwheel Gear",
+		# **Boss 4's, not the Choir's deep chest** (GDD §6.2, and the paragraph
+		# under the table says why): the square coming on is the largest visible
+		# change in the game, and it belongs on the last boss of Act I rather than
+		# on a chest three rooms off the main line.
+		"id": &"pillar_shard",
+		"name": "Pillar-Shard",
 		"level": 4, "source": &"boss",
-		"effect": &"mill_turns",
-		"bites": "RelicDb.smith_stock_mult() -> ShopDb's three stock lines",
-		"detail": "The mill turns. The smith's stock costs 15% less.",
-		"prop": &"mill_wheel",
-		"lore": "One tooth. The mill has stood still since the Sundering for want of one tooth, and the smith has bought his stock in from two valleys over ever since. Grain turns again, and everything on his shelf comes down.",
+		"effect": &"market_lit",
+		"bites": "RelicDb.vendor_price_mult() -> Run.line_value()",
+		"detail": "The square lights. The vendor pays +10%.",
+		"prop": &"market_lamps",
+		"lore": "Set it in stone and the stone gives light back for as long as it stays there. Lift it out and there is nothing to see. Valenfeld's square has been dark six generations, and a lit market is one people bring money to.",
 	},
 	{
 		"id": &"riven_chord",
@@ -283,14 +287,6 @@ const BOSS_NAMES := {
 const RATE_WITH_DRUM := 0.20
 ## A lit market pays more for the same bag. [tune]
 const VENDOR_MULT_LIT := 1.10
-## The mill turning takes 15% off the smith's STOCK lines -- arrows, a bag slot,
-## a heart container. Not the forge ladders: a rung is not something the smith
-## buys in, and discounting it would make the Waterwheel Gear the strongest
-## relic on the list by a distance. [tune]
-const SMITH_MULT_MILL := 0.85
-## Arrows per fletching batch once the jig is on the bench. `Fletching.BATCH` is
-## the 5. [tune]
-const FLETCH_WITH_JIG := 7
 ## How many bottles the alchemist can blow before the Glass-Kiln Core. The
 ## ceiling is `K.BOTTLE_MAX` (4) and this is the gate in front of it, so the
 ## relic is worth two whole slots rather than a discount. [tune]
@@ -309,6 +305,23 @@ const RUNG_RELICS: Array[StringName] = [&"tally_ledger", &"anvil_plate"]
 const DRAUGHT_RELICS := {
 	&"ironhide_draught": &"still_head",
 	&"emberblood_draught": &"cinder_retort",
+}
+
+## Working id -> the Verse the alchemist has to read before the player knows it.
+## The same table shape as `DRAUGHT_RELICS` and for the same reason: what is
+## listed is what is LOCKED, so a working NOT in here is known from the start.
+## Burst is the one of those -- it comes off the Slag Ogre (GDD §6.5), not off a
+## counter -- and it is absent from this table rather than mapped to nothing.
+##
+## **This is the whole of what a Verse does in code today.** The two workings
+## themselves are not built (`docs/ITEMS.md` §8, D5): there is no row for them in
+## `ArmamentDb.NAMES` and no stop in `Game.RIGHT_POOL`, so nothing calls this yet.
+## The relic rows exist regardless, because a manifest with the wrong twelve
+## objects in it is how floor 2's vault spent M3 holding a fletching jig that GDD
+## §6.2 deleted. When D5 lands, the ring's two new stops ask this and nothing else.
+const WORKING_RELICS := {
+	&"sustain": &"sustain_verse",
+	&"ballast": &"ballast_verse",
 }
 
 
@@ -730,16 +743,21 @@ static func knows_draught(potion: StringName) -> bool:
 	return donated(id)
 
 
+## Does the player know this working? True for anything not in `WORKING_RELICS`,
+## which is Burst -- it is a boss drop and `Game.has(&"burst")` is the only thing
+## that decides it. The two Verses are read at the alchemist's counter, so the
+## ring's Sustain and Ballast stops ask HERE and never `donated()` directly.
+static func knows_working(working: StringName) -> bool:
+	if not WORKING_RELICS.has(working):
+		return true
+	var id: StringName = WORKING_RELICS[working]
+	return donated(id)
+
+
 ## How many bottles the alchemist will blow, given the ceiling she would
 ## otherwise work to (`K.BOTTLE_MAX`). Two until the Glass-Kiln Core.
 static func bottle_cap(base: int) -> int:
 	return base if donated(&"kiln_core") else mini(base, BOTTLES_WITHOUT_CORE)
-
-
-## Arrows out of one fletching batch, given the recipe's own yield
-## (`Fletching.BATCH`).
-static func fletch_yield(base: int) -> int:
-	return FLETCH_WITH_JIG if donated(&"fletchers_jig") else base
 
 
 ## Multiplier on what the vendor PAYS for a line of the bag. A lit market is a
@@ -751,12 +769,6 @@ static func fletch_yield(base: int) -> int:
 ## makes leaving cheaper is the Rope-Drum.
 static func vendor_price_mult() -> float:
 	return VENDOR_MULT_LIT if donated(&"pillar_shard") else 1.0
-
-
-## Multiplier on the smith's STOCK lines -- arrows, bag slots, heart containers.
-## Not the forge ladders (see SMITH_MULT_MILL).
-static func smith_stock_mult() -> float:
-	return SMITH_MULT_MILL if donated(&"waterwheel_gear") else 1.0
 
 
 ## The fraction of the bag's value that leaving costs, given the rate the run

@@ -43,25 +43,26 @@ const RECIPE := {
 ## bundle: enough to change the next fight, not enough that one bag makes the
 ## smith irrelevant. [tune]
 ##
-## **Read `batch()`, not this.** The constant is the un-donated number and the
-## function is what the bench actually cuts.
+## **Read `batch()`, not this.** The constant is the number and the function is
+## what the bench actually cuts -- the same two-step every other tuning value in
+## this codebase keeps, so a relic that moved it would have one place to bite.
 const BATCH := 5
 
 
 ## Arrows one batch yields right now.
 ##
-## `RelicDb.fletch_yield()` hands `BATCH` straight back until the Fletcher's Jig
-## is in the Society's ledger, and 7 after (GDD §6.2, relic 6) -- so this is the
-## unlock adopted with no branch, and there is exactly one place in the codebase
-## that knows the jig exists. A caller that wrote `if RelicDb.donated(...)`
-## would be the unlock implemented twice, and the next tuning pass would move
-## only one of them.
+## **Nothing modifies this any more.** It used to go through
+## `RelicDb.fletch_yield()`, which existed to serve the Fletcher's Jig -- a relic
+## GDD §6.2 deleted to pay for the Sustain-Verse, and which stayed in
+## `relic_db.gd` for three milestones after the doc dropped it (`docs/ITEMS.md`
+## §8, D1). The accessor went with the row rather than being left pointing at an
+## id nothing can donate.
 ##
 ## Public because the pouch prints the yield next to the button: what the recipe
 ## PAYS OUT is part of the price, and a screen that says 5 over a bench that cuts
 ## 7 is the shop lying about its own numbers.
 static func batch() -> int:
-	return RelicDb.fletch_yield(BATCH)
+	return BATCH
 
 
 ## What you are short, id -> how many more. Empty means the bag can pay.

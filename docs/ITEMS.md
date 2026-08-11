@@ -409,26 +409,33 @@ Every row is answered above; this is the index, not a second source.
 ## 8. Defects — where a doc and the code disagree
 
 Found by reading the fourteen scripts under `scripts/items/` against GDD,
-SCOPE, METAGAME, PUZZLES and BESTIARY. **Nothing here has been reconciled.**
-"Believe" names the reading that looks intended; it is a recommendation to
-whoever picks the card up, not a decision taken.
+SCOPE, METAGAME, PUZZLES and BESTIARY. "Believe" names the reading that looks
+intended; it is a recommendation to whoever picks the card up, not a decision
+taken.
 
-### D1 — the twelve relics in code are not the twelve in the GDD *(severe)*
+**D1, D2, D3 and D4 are closed** (issue #25). Their entries are kept, struck
+through, with what was actually done — a defect list whose closed rows are
+deleted is a list that cannot tell you whether a thing was decided or merely
+forgotten. D5–D12 are open and unreconciled.
 
-`scripts/items/relic_db.gd:122-243` holds twelve rows, and two of them are
-`fletchers_jig` (`:174`) and `waterwheel_gear` (`:224`). GDD §6.2 says both were
-**deleted** to pay for the Sustain-Verse and the Ballast-Verse, and
-`docs/SCOPE.md` §1 records the outcome as *"Two are Verses"*. Neither Verse has a
-row anywhere in the codebase.
+### ~~D1 — the twelve relics in code are not the twelve in the GDD~~ *(closed)*
 
-**Believe the docs.** This is an owner's amendment with an equal deletion already
-argued (`docs/SCOPE.md` §4.2), and it is load-bearing twice over: the two Verses
-are two of the six usable items, so the manifest's *usable items: 6* cannot be
-reached without them. Downstream of the same edit: `RelicDb.FLETCH_WITH_JIG`
-(`:293`), `RelicDb.fletch_yield()` (`:741`), `Fletching.BATCH`'s comment
-(`fletching.gd:44-52`), `RelicDb.SMITH_MULT_MILL` (`:290`) and
-`RelicDb.smith_stock_mult()` (`:758`) all exist only to serve the two deleted
-rows.
+`scripts/items/relic_db.gd:122-243` held twelve rows, and two of them were
+`fletchers_jig` and `waterwheel_gear`. GDD §6.2 says both were **deleted** to pay
+for the Sustain-Verse and the Ballast-Verse, and `docs/SCOPE.md` §1 records the
+outcome as *"Two are Verses"*. Neither Verse had a row anywhere in the codebase.
+
+**Closed by believing the docs.** `sustain_verse` (Foundry vault) and
+`ballast_verse` (Choir deep chest) are rows in `RELICS` now and the two deleted
+rows are gone. The effects that existed only to serve them went with them rather
+than being left pointing at ids nothing can donate: `FLETCH_WITH_JIG` /
+`fletch_yield()` and `SMITH_MULT_MILL` / `smith_stock_mult()` are deleted, and
+their two call sites (`Fletching.batch()`, `ShopDb._stock()`) read the base
+number with no accessor in the way. `RelicDb.knows_working()` replaces them: it
+is the one thing a Verse does in code, and it is the same shape as
+`knows_draught()`. **The two workings are still not built** — that is D5, which
+stays open, and this row is the manifest being right rather than the ring gaining
+two stops.
 
 ### D2 — the Pillar-Shard is on the wrong floor, and boss 4 drops a deleted relic *(severe)*
 
