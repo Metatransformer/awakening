@@ -30,6 +30,13 @@ const ICONS := {
 	"kite_shield":     Vector3(0.0, 0.0, 0.0),
 	"hookshot_pistol": Vector3(0.35, 0.55, 0.0),
 	"bow_knightly":    Vector3(0.9, 0.9, 0.4),  # three-quarter: a bow is edge-on from every axis
+	# The arrow imports lying along +Y and is laid on the frame's OTHER diagonal
+	# from the sword, head up-right. Both are long thin things photographed at
+	# 32 px and the two cells sit on the same row: down-right for the blade,
+	# up-right for the shaft, so the pair is separable before either glyph is.
+	# The Y spin is so the fletching is seen three-quarter -- a vane read straight
+	# on is one pixel and the nock end goes bald.
+	"arrow":           Vector3(0.0, 0.7, -0.80),
 }
 
 ## Rendered at SIZE, shipped at ICON_PX. Rendering large and knocking it down is
@@ -46,14 +53,41 @@ const ICON_PX := 32
 const CROP := {
 	"sword_knightly": [2.1, 0.22, -0.26],
 	"bow_knightly":   [0.92, 0.0, 0.0],  # the whole arc, or it reads as a stick
+	# Barely a crop -- an arrow is the one item in the kit whose whole length has
+	# to be in frame, because a shaft cropped at either end is a stick. 1.20 eats
+	# PAD's air instead, which is what buys the shaft its second pixel.
+	"arrow":          [1.20, 0.0, 0.0],
 }
 
 const RAMP := [Pal.VOID, Pal.ASH, Pal.MOTH, Pal.BONE]
 const CUTS := [0.16, 0.38, 0.66]
+## Multiplier on luminance before the cuts, per id. Default 1.0 and almost
+## always right.
+##
+## `arrow` needs one because the cuts are absolute and the model's albedo is
+## not: measured over the opaque pixels of the raw render, the sword's median
+## luminance is 0.699 and the kite shield's 0.639, and the arrow -- dark iron
+## head, oiled shaft -- is 0.263. Unmultiplied it lands in the bottom two ramp
+## steps and the cell photographs as a dark smudge, which is #54's own
+## acceptance criterion failing ("at the same weight as the kite shield beside
+## it"). 3.0 lands the shaft on MOTH and the point on BONE.
+##
+## Deliberately NOT more light in the rig. The two lamps are the same torchlight
+## every icon is lit by and they are what makes the set look like one set; a
+## third key aimed at one model would relight it out of the group. This is an
+## exposure on the ramp, which is the thing that is actually mis-scaled.
+const GAIN := {
+	"arrow": 3.0,
+}
 ## Icons read better with a little air; 1.0 would touch the frame edge.
 const PAD := 1.22
 
 var _out_dir := "/tmp/icons"
+## `--raw` also writes the SIZE-px render beside each icon, before the ramp and
+## the downsample. Choosing a `CROP` blind costs a bake per guess; the raw frame
+## is what says which end of the model survived and by how much. Never shipped --
+## `_out_dir` is expected to hold nothing but bakes, so point `--raw` at /tmp.
+var _raw := false
 
 
 var _frames := 0
@@ -66,6 +100,8 @@ func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--out="):
 			_out_dir = a.substr(6)
+		elif a == "--raw":
+			_raw = true
 	DirAccess.make_dir_recursive_absolute(_out_dir)
 
 	print("ICONBAKE: out=", _out_dir)
@@ -120,7 +156,9 @@ func _save() -> void:
 		if vp == null:
 			continue
 		var img := vp.get_texture().get_image()
-		_posterise(img)
+		if _raw:
+			img.save_png(_out_dir.path_join(id + "_raw.png"))
+		_posterise(img, float(GAIN.get(id, 1.0)))
 		var path := _out_dir.path_join(id + ".png")
 		var err := img.save_png(path)
 		print("%-18s %s  %dx%d" % [id, "ok" if err == OK else "FAIL", img.get_width(), img.get_height()])
@@ -203,7 +241,7 @@ func _bake(id: String, euler: Vector3) -> void:
 ## Alpha is thresholded, not blended: a half-transparent edge pixel dithers into
 ## the scene behind it and the silhouette goes soft, which is the one thing a
 ## 32px glyph cannot afford.
-func _posterise(img: Image) -> void:
+func _posterise(img: Image, gain: float) -> void:
 	img.resize(ICON_PX, ICON_PX, Image.INTERPOLATE_LANCZOS)
 	for y in ICON_PX:
 		for x in ICON_PX:
@@ -211,7 +249,15 @@ func _posterise(img: Image) -> void:
 			if c.a < 0.5:
 				img.set_pixel(x, y, Color(0, 0, 0, 0))
 				continue
-			var l := c.get_luminance()
+			# Un-premultiply before reading luminance. `Image.resize` averages
+			# RGB and A independently, so a pixel the silhouette only half covers
+			# comes back with HALF the colour as well as half the alpha -- it has
+			# been mixed with the transparent black around it. The alpha half is
+			# wanted (it is what the 0.5 test above is for); the colour half is a
+			# lie, and it is worst exactly where it hurts most: a one-pixel-wide
+			# arrow shaft survives the alpha test and then quantises a whole ramp
+			# step darker than the same shaft does in the middle of a blade.
+			var l := c.get_luminance() / maxf(c.a, 0.001) * gain
 			var step := RAMP.size() - 1
 			for i in CUTS.size():
 				if l < CUTS[i]:

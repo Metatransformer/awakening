@@ -40,11 +40,23 @@ const ICONS := {
 	&"shield": "res://assets/ui/icons/hud/kite_shield.png",
 	&"hookshot": "res://assets/ui/icons/hud/hookshot_pistol.png",
 	&"bow": "res://assets/ui/icons/hud/bow_knightly.png",
+	# Card #54. The arrow wore `LETTERS` for months on the argument that it is "a
+	# count rather than a thing you hold up" -- but it is BOTH, and every other
+	# cell that can be baked is: `assets/weapons/arrow.glb` is the same mesh the
+	# bow launches and the same one lying in an `ArrowBundle` on the floor. The
+	# cell already carries the count in its corner, so the glyph was free to say
+	# *what* is being counted, and two capitals is what it said instead.
+	&"arrow": "res://assets/ui/icons/hud/arrow.png",
 }
 
-## Two letters for anything with no icon -- the empty hand, and arrows, which
-## are a count rather than a thing you hold up. An empty cell would read as
-## "you have no bow", which is a lie the UI must never tell.
+## Two letters for anything with no icon -- the empty hand and the three
+## workings. An empty cell would read as "you have no bow", which is a lie the UI
+## must never tell.
+##
+## Every id keeps a row here even once it has a bake, because `Hud._draw_item_glyph`
+## falls through to this one when the texture will not load -- a cold
+## `.godot/imported/` is the usual reason (CLAUDE.md §3) and a HUD that drew
+## nothing at all in that state would be the worse failure.
 const LETTERS := {
 	&"": "—",
 	&"sword": "SW",

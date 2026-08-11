@@ -995,6 +995,26 @@ func type_offenders() -> Dictionary:
 	return _type_offenders
 
 
+## Which branch each item cell's glyph took last frame: cell key -> `&"icon"`,
+## `&"letters"` or `&"bottle"`. Cleared per frame with `_layout`.
+##
+## **Not a rect, on purpose.** The obvious way to publish this was a `_note`, and
+## it cannot be one: the glyph fills the cell and `ammo_<i>` sits in the cell's
+## corner *on top of it*, so two rects under the same `hand_<i>` parent would trip
+## `_hud_layout`'s assertion 1a on every frame the quiver is up. Decision 27's tree
+## can express "inside", not "over" — see `_draw_item_glyph`. What a director
+## actually wants here is not where the glyph is but *which* of the three things
+## the cell drew, and that is a name.
+var _glyphs: Dictionary[StringName, StringName] = {}
+
+
+## What each cell drew, from `_draw_item_glyph` itself. Card #54: `arrow` wore
+## `ArmamentDb.letter()`'s "AR" because it had no bake, and nothing could say so
+## without reading pixels. Debug builds only, like `layout_rects()`.
+func glyph_sources() -> Dictionary:
+	return _glyphs
+
+
 func _draw_hud() -> void:
 	var s := _canvas.size
 	if s.x < 1.0 or s.y < 1.0:
@@ -1002,6 +1022,7 @@ func _draw_hud() -> void:
 	_layout.clear()
 	_ebars.clear()
 	_type_offenders.clear()
+	_glyphs.clear()
 	_draw_health(s)
 	_draw_stamina(s)
 	_draw_magic(s)
@@ -1893,7 +1914,8 @@ func _draw_hands(s: Vector2) -> void:
 		# law ("Never `Color.BLACK` and never `Color.WHITE`"), and the point of a
 		# law like that is that `grep -r 'Color.BLACK' scripts/ui` can answer the
 		# question. STYLEGUIDE §7.2.
-		_draw_item_glyph(s, r, id, Pal.MIDNIGHT if raised else Pal.VOID,
+		_draw_item_glyph(s, r, id, &"hand_%d" % i,
+			Pal.MIDNIGHT if raised else Pal.VOID,
 			raised, counter != &"" and left <= 0)
 		if counter != &"":
 			# BONE, and it was MOTH. "How many arrows do I have" is asked in the
@@ -1968,7 +1990,7 @@ func _draw_item_cell(s: Vector2) -> void:
 		Pal.px(2.0 if potion != &"" else 1.0, s.y))
 	# `selected_item()` names the GLASS and `selected_potion()` what is in it.
 	# The glyph wants the glass: a bottle with nothing in it still has to draw.
-	_draw_item_glyph(s, r, Game.selected_item(), Pal.VOID, false,
+	_draw_item_glyph(s, r, Game.selected_item(), &"item_cell", Pal.VOID, false,
 		potion == &"")
 
 	# How many bottles there are, so the player knows the ring has more stops.
@@ -2065,15 +2087,19 @@ func _draw_caret(s: Vector2, tip: Vector2, dir: Vector2) -> void:
 ## One item's icon in a cell, or its two letters if the bake is missing. An
 ## empty hand draws nothing at all -- an "empty" glyph is still a glyph, and the
 ## cell border already says the slot is there.
-func _draw_item_glyph(s: Vector2, r: Rect2, id: StringName,
+func _draw_item_glyph(s: Vector2, r: Rect2, id: StringName, cell: StringName,
 		invert_to: Color, inverted: bool, dim: bool) -> void:
 	if id == &"":
 		return
 	var bottle_at := Game.bottle_index(id)
 	if bottle_at >= 0:
+		if OS.is_debug_build():
+			_glyphs[cell] = &"bottle"
 		_draw_bottle_glyph(s, r, Game.bottle(bottle_at))
 		return
 	var tex: Texture2D = _icons.get(id)
+	if OS.is_debug_build():
+		_glyphs[cell] = &"icon" if tex != null else &"letters"
 	if tex != null:
 		# Inset by 2 reference px so the icon's own VOID dilation never sits
 		# on the cell border and reads as a thick frame.

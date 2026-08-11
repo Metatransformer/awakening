@@ -51,6 +51,30 @@ func _one_numeral(tag: String, want: StringName) -> int:
 	return 1
 
 
+## Which branch a hand cell's glyph took on the frame just captured — the baked
+## icon, or `ArmamentDb.letter()`'s two capitals.
+##
+## Read off `Hud.glyph_sources()`, which `_draw_item_glyph` fills as it draws.
+## Card #54 is the reason it exists: the arrow cell wore "AR" for months and every
+## check in this file passed, because a cell that drew lettering and a cell that
+## drew a texture publish the same rectangle. Only the pixels differed, and no
+## director was looking at those.
+##
+## **Asserted in both directions, on the same instrument, in this same run.**
+## Beat 8's Burst cell is the calibration: it has no model to bake off and its
+## lettering is intended, so `letters` there is the known answer that says this
+## check can still see a fallback. A check that only ever demanded `icon` would
+## pass just as loudly if `glyph_sources()` returned that string unconditionally.
+func _glyph_is(tag: String, cell: StringName, want: StringName) -> int:
+	var got: Variant = Hud.glyph_sources().get(cell)
+	if got == want:
+		print("  ok   HUDGLYPH %s: %s drew %s" % [tag, cell, want])
+		return 0
+	print("HUD FAIL %s: %s drew %s, expected %s"
+		% [tag, cell, got if got != null else "nothing", want])
+	return 1
+
+
 ## How many LIT tiles the Ballast slot published on the frame just captured, and
 ## whether that is the reading the beat expected.
 ##
@@ -279,6 +303,12 @@ func run(rig) -> void:
 			+ "the h_10/h_11 frames prove nothing")
 		_fails += 1
 
+	# The lettering half of `_glyph_is`'s calibration. `HANDS` is [left, right], so
+	# the working is `hand_1`. This one is EXPECTED to be lettering forever — the
+	# paragraph above says why — which is what makes the arrow's `icon` two beats
+	# down a reading and not a tautology.
+	_fails += _glyph_is("h_11_burst_spent", &"hand_1", &"letters")
+
 	# 8b. THE QUIVER, in the hand that counts it — the other half of the numeral
 	#     the two frames above prove, and the pair card #52 asked for.
 	#
@@ -328,6 +358,12 @@ func run(rig) -> void:
 	# against giving the bow a numeral at all, and `hand_count_beside` only
 	# survives it if this frame prints exactly once.
 	_fails += _one_numeral("h_14_quiver_six", &"ammo_0")
+
+	# Card #54. The arrow cell is `hand_0` and it must draw the BAKE, not "AR".
+	# `assets/ui/icons/hud/arrow.png` is baked off `assets/weapons/arrow.glb` --
+	# the mesh the bow launches -- so this cell has no business wearing the
+	# fallback that Burst wears for a reason.
+	_fails += _glyph_is("h_14_quiver_six", &"hand_0", &"icon")
 
 	# 8c. THE SAME QUIVER, WITH THE SHIELD UP — card #53. This is the loadout a
 	#     player actually fights in: you find the bow on the Cistern Warden,
