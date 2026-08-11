@@ -24,10 +24,14 @@ extends RefCounted
 ##
 ## **The numbers that matter are GPU and CPU render time**, from
 ## `RenderingServer.viewport_get_measured_render_time_*`. Those are the
-## renderer's own timings for this viewport, in milliseconds. `Performance`'s
-## TIME_PROCESS / TIME_PHYSICS_PROCESS are script time only and will happily
-## read 0.3 ms on a frame the GPU spent 14 ms on -- which is exactly the reading
-## that would send a tuning pass after the wrong half of the engine.
+## renderer's own timings for this viewport, in milliseconds.
+##
+## `Performance.TIME_PROCESS` is **not** the "script time only" the engine docs
+## imply, and this director learned that the hard way -- see the comment at the
+## sample site. It is the whole idle step, draw included, so it reads slightly
+## LARGER than the frame rather than a fraction of it. It is printed as
+## `idle_step_ms` for that reason and it cannot tell you which half of the
+## engine is the bottleneck. `TIME_PHYSICS_PROCESS` is honest.
 ##
 ## **Median and p95, never mean.** A mean hides the frame that hitches, and the
 ## hitch is the thing a stranger playing the demo actually feels. p95 is the
@@ -88,6 +92,8 @@ func run(rig) -> void:
 	var gpu: Array[float] = []
 	var cpu: Array[float] = []
 	var wall: Array[float] = []
+	var proc: Array[float] = []
+	var phys: Array[float] = []
 	var draws: Array[float] = []
 	var prims: Array[float] = []
 	var objs: Array[float] = []
@@ -114,6 +120,24 @@ func run(rig) -> void:
 		last_us = now_us
 		gpu.append(RenderingServer.viewport_get_measured_render_time_gpu(vp))
 		cpu.append(RenderingServer.viewport_get_measured_render_time_cpu(vp))
+		# TIME_PROCESS IS NOT SCRIPT TIME. It is named `idle_step_ms` here because
+		# the first run that sampled it reported med=17.17 ms on frames whose
+		# whole wall clock was 16.25 ms, and a number cannot be a part of a frame
+		# it is bigger than. The monitor covers the entire main-loop idle step,
+		# and `RenderingServer.draw()` is called from inside that step -- so it
+		# carries the draw submission and the block waiting on present along with
+		# anything `_process` did. The header above was written believing the
+		# engine docs' "script time" gloss; the measurement disagreed, and the
+		# measurement wins.
+		#
+		# So it CANNOT separate a GPU-bound frame from one lost in `_process` --
+		# the thing it was added to do. What it is still good for is closing the
+		# books: idle_step + physics should account for essentially all of
+		# frame_ms, and if it does not, time is going somewhere neither monitor
+		# can see. TIME_PHYSICS_PROCESS is genuinely the physics step and is the
+		# one honest subdivision on this list.
+		proc.append(Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0)
+		phys.append(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0)
 		draws.append(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
 		prims.append(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
 		objs.append(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))
@@ -152,6 +176,8 @@ func run(rig) -> void:
 		print("PERF   gpu_ms is UNAVAILABLE on this driver (all-zero, not free)."
 			+ " Read frame_ms against cpu_ms instead.")
 	_row("cpu_ms", cpu)
+	_row("idle_step_ms", proc)
+	_row("physics_ms", phys)
 	_row("draw_calls", draws)
 	_row("primitives", prims)
 	_row("objects", objs)
