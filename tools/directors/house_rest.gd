@@ -164,7 +164,16 @@ func _locker(rig, garrison: Garrison) -> void:
 	await _shot(rig, "screen_open")
 
 	# --- stow one, then the rest of the stack -------------------------------
-	screen._cursor = _row_of(screen, &"deep_amber")
+	# `_point_at`, NOT `screen._cursor = i`. CLAUDE.md §3: the assignment holds for
+	# exactly one frame, because `_point_at` is the other half of a move and it is
+	# the half that calls `grab_focus`, which is DEFERRED -- the `focus_entered`
+	# lands a frame later and puts `_cursor` back on whatever row the last
+	# `_refresh` left the focus on. Card #77 counts seven directors still doing it.
+	# Here it made the beat below unreadable: the hold acted on a drifted row, and
+	# so did the screen's own bug (StashScreen._input), and the two were
+	# indistinguishable until this line stopped adding a third mover of its own.
+	screen._point_at(_row_of(screen, &"deep_amber"))
+	await rig.wait_frames(2)
 	var before: int = Run.bag.get(&"deep_amber", 0)
 	await rig.tap(["ui_left"])
 	await rig.wait_frames(8)
@@ -183,7 +192,8 @@ func _locker(rig, garrison: Garrison) -> void:
 	await _shot(rig, "stowed")
 
 	# --- and back again ------------------------------------------------------
-	screen._cursor = _row_of(screen, &"deep_amber")
+	screen._point_at(_row_of(screen, &"deep_amber"))
+	await rig.wait_frames(2)
 	await rig.hold_seconds(["ui_right"], 0.8)
 	await rig.wait_frames(8)
 	_check("retrieving put all %d back in the bag" % before,
