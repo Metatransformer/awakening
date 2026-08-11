@@ -1387,3 +1387,43 @@ at x=60 in `res://scenes/rooms/dungeon.tscn` at 1280×720, before and after:
 
 The claim holds exactly: magic's top moves by 2 px, its bottom does not move, and
 nothing below it moves at all.
+
+## 15.5 The slips are not inside the rim — §14.5 is wrong, and the frame says so
+
+§14.5 rescopes assertions 1 and 2 and adds, of the bag slips:
+
+> under decision 27's tree the slips are children of the rim and this resolves
+> correctly; say so explicitly.
+
+Saying so explicitly is what this section is. It does not resolve. Measured in
+`hud_lookdev`'s `h_09_t3` — the only frame in any director that reaches eight
+stacks:
+
+| Rect | Top | Bottom |
+|---|---|---|
+| `rim` | 563.92 | 660.08 |
+| `slips` (8 stacks) | **560.40** | 608.40 |
+
+The stack grows *upward* from `Pal.SLIPS_BOTTOM`, so its height is a function of
+how many stacks are in the bag while the rim's top is a constant. At one to seven
+stacks the containment holds and every director passes; at eight it clears the
+rim's top frame by 3.5 px. The bag caps at twelve, so this is not an edge case
+the player has to work for — it is the second half of a normal run.
+
+This is §13.7's complaint arriving as a number. The rim's anchors and the slips'
+anchors sit on the same page of §8's table and were authored independently, so
+there is no expression anywhere that makes one follow the other; they agree by
+coincidence for the first seven stacks and stop.
+
+**The fix belongs to item 6, and it is to derive the slips' extent from the
+rim** — the same move `_pole_top` already makes for the vitals stack, where one
+function is the sole expression for where each row sits and nothing else is
+allowed an opinion. What it is *not* is a larger `SLACK`: §14.5 warns in the same
+breath that "an implementer who meets that before meeting the real bug will add a
+fudge factor and lose both", and a tolerance wide enough to swallow 3.5 px is
+also wide enough to swallow the four-pixel draught collision that assertion 1
+exists to catch.
+
+The check is landed failing on this, deliberately. §13.12 orders the assertions
+before the fixes, and an assertion that is written after the thing it checks is
+an assertion written to pass.

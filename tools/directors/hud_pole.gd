@@ -25,6 +25,19 @@ extends RefCounted
 ## Two runs, one scene each, one prefix each.
 
 
+const Layout := preload("res://tools/directors/_hud_layout.gd")
+
+var _fails := 0
+
+
+## Photograph, then assert on the rectangles that were just drawn. In that order,
+## and it matters: the check reads `Hud.layout_rects()`, which the capture's own
+## repaint is what fills.
+func _shot(rig, path: String, tag: String) -> void:
+	await rig.capture(path)
+	_fails += Layout.check(tag)
+
+
 func run(rig) -> void:
 	var out: String = rig.arg("out", "/tmp/pole/x.png").get_base_dir()
 	await rig.wait_frames(30)
@@ -35,26 +48,26 @@ func run(rig) -> void:
 	# 0 draughts: the state every run starts in and spends most of its life in.
 	# Before decision 21 this frame drew NO draught row at all.
 	await rig.wait_frames(6)
-	await rig.capture(out.path_join("%s_00_dry.png" % tag))
+	await _shot(rig, out.path_join("%s_00_dry.png" % tag), "%s_00_dry" % tag)
 
 	# 1 draught: one slot lit, one slot empty. The frame that proves the slots are
 	# fixed by kind — the lit one must be the SECOND slot, because Emberblood is
 	# second in `PotionDb.IDS` order and slots do not pack leftward any more.
 	Game.start_draught(&"emberblood_draught", K.DRAUGHT_TIME)
 	await rig.wait_frames(6)
-	await rig.capture(out.path_join("%s_01_ember.png" % tag))
+	await _shot(rig, out.path_join("%s_01_ember.png" % tag), "%s_01_ember" % tag)
 
 	# The other one alone, so the pair cannot both be passing by accident.
 	Game.draughts.clear()
 	Game.start_draught(&"ironhide_draught", K.DRAUGHT_TIME)
 	await rig.wait_frames(6)
-	await rig.capture(out.path_join("%s_02_hide.png" % tag))
+	await _shot(rig, out.path_join("%s_02_hide.png" % tag), "%s_02_hide" % tag)
 
 	# 2 draughts: the row full. This is the widest the row ever gets and it is the
 	# frame the safe-margin claim is made against.
 	Game.start_draught(&"emberblood_draught", K.DRAUGHT_TIME)
 	await rig.wait_frames(6)
-	await rig.capture(out.path_join("%s_03_both.png" % tag))
+	await _shot(rig, out.path_join("%s_03_both.png" % tag), "%s_03_both" % tag)
 
 	# A draught nearly out: the tiles have to have gone out one at a time, and the
 	# last one has to still be lit. `ceil` in `_draw_draughts` is what guarantees
@@ -62,21 +75,21 @@ func run(rig) -> void:
 	Game.draughts[&"emberblood_draught"] = K.DRAUGHT_TIME * 0.2
 	Game.draughts[&"ironhide_draught"] = K.DRAUGHT_TIME * 0.6
 	await rig.wait_frames(4)
-	await rig.capture(out.path_join("%s_04_expiring.png" % tag))
+	await _shot(rig, out.path_join("%s_04_expiring.png" % tag), "%s_04_expiring" % tag)
 
 	# Magic spent. The bar's zero state is an empty track, and an empty track is
 	# the thing that has to still read as an instrument.
 	Game.magic = 0
 	Bus.magic_changed.emit(Game.magic, Game.max_magic)
 	await rig.wait_frames(4)
-	await rig.capture(out.path_join("%s_05_magic_spent.png" % tag))
+	await _shot(rig, out.path_join("%s_05_magic_spent.png" % tag), "%s_05_magic_spent" % tag)
 	Game.fill_magic()
 
 	# Low health: the pulse is VITAL <-> VOID now, and the frame this exists to
 	# disprove is the one where it borrowed BONE from the stamina bar below it.
 	Game.damage(Game.quarters - 2)
 	await rig.wait_frames(4)
-	await rig.capture(out.path_join("%s_06_low.png" % tag))
+	await _shot(rig, out.path_join("%s_06_low.png" % tag), "%s_06_low" % tag)
 
 	if underground:
 		# Each heat tier, because heat's row sits between magic and the draughts
@@ -91,7 +104,10 @@ func run(rig) -> void:
 			while Heat.kills < target:
 				Bus.enemy_died.emit(hero, at)
 			await rig.wait_frames(4)
-			await rig.capture(out.path_join("%s_07_heat_t%d.png" % [tag, Heat.tier]))
+			await _shot(rig, out.path_join("%s_07_heat_t%d.png" % [tag, Heat.tier]),
+				"%s_heat_t%d" % [tag, Heat.tier])
 
-	print("POLECHECK scene=%s draughts=%d/%d magic=%d/%d q=%d" % [
-		tag, Game.draughts.size(), 2, Game.magic, Game.max_magic, Game.quarters])
+	print("POLECHECK scene=%s draughts=%d magic=%d/%d q=%d layout_fails=%d" % [
+		tag, Game.draughts.size(), Game.magic, Game.max_magic, Game.quarters, _fails])
+	if _fails > 0:
+		print("POLE FAIL %d layout assertion(s) — see HUDLAYOUT lines above" % _fails)

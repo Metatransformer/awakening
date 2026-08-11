@@ -714,10 +714,82 @@ func _process(delta: float) -> void:
 		set_process(false)
 
 
+# --- The layout, exposed so a director can see a rectangle -------------------
+## Key -> `{ rect: Rect2, parent: StringName }`, rebuilt by `_draw_hud` **from the
+## same code that draws**. Never a second table: a hand-maintained description of
+## where things are is exactly the defect this exists to catch, one level up.
+##
+## HUD_PLAN §11's diagnosis of why the draught row shipped on top of the magic bar
+## twice is that there was *no proof that could see a rectangle* — every director
+## checked numbers off `Run` and `Game`, none of which would differ if the HUD drew
+## nothing at all. This is the fix, and `tools/directors/hud_pole.gd` is what reads
+## it.
+##
+## **A tree, not a list** (decision 27). The flat version — "no permanent element
+## overlaps any other" — fires on the first frame, because this HUD is full of
+## *deliberate* overlap: the ammo numeral inside the hand cell, the caps plate
+## under the cells, the ghost over the health bar, the slips inside the rim. The
+## repair for that is an allowlist of exempt pairs, which is a second table
+## describing the layout, which is the original defect in a new place. Declaring a
+## parent instead makes the nesting a claim the drawing code itself makes, and
+## turns one assertion into two stronger ones: siblings must not intersect, and a
+## child must be inside its parent.
+##
+## Roots (`parent == &""`) are **synthesised as the union of their children** by
+## `_seal_layout`, so a group's extent is never authored and cannot drift from
+## what it contains.
+var _layout: Dictionary = {}
+
+## The roots, and the order is only for readable failures. A group exists here iff
+## something claimed it as a parent this frame — the garrison has no minimap and
+## the dungeon has no legend, and neither absence is a special case.
+const LAYOUT_ROOTS: Array[StringName] = [
+	&"pole", &"cluster", &"money", &"floor_card", &"minimap", &"legend", &"prompt",
+]
+
+
+## Record the OUTERMOST rectangle an element paints — hairline, plate and all.
+##
+## Outermost and not the ink, deliberately (§14.5). `_draw_health` issues four
+## rects; health's ink bottom is 650 and stamina's ink top is 654, but health's
+## VOID hairline reaches 651 and stamina's starts at 653. Reporting the ink leaves
+## 2 px of margin that is not really there, and reporting the hairline is what
+## would have caught §0's collision a row earlier than it was caught.
+func _note(key: StringName, parent: StringName, r: Rect2) -> void:
+	if not OS.is_debug_build():
+		return
+	_layout[key] = {&"rect": r, &"parent": parent}
+
+
+## Build each root out of what claimed it. Called once, at the end of the frame.
+func _seal_layout() -> void:
+	if not OS.is_debug_build():
+		return
+	for root in LAYOUT_ROOTS:
+		var union := Rect2()
+		var any := false
+		for key: StringName in _layout:
+			var e: Dictionary = _layout[key]
+			if StringName(e[&"parent"]) != root:
+				continue
+			var r: Rect2 = e[&"rect"]
+			union = r if not any else union.merge(r)
+			any = true
+		if any:
+			_layout[root] = {&"rect": union, &"parent": &""}
+
+
+## What the HUD drew last frame. Debug builds only — in an export `_note` is a
+## single boolean test and this stays empty.
+func layout_rects() -> Dictionary:
+	return _layout
+
+
 func _draw_hud() -> void:
 	var s := _canvas.size
 	if s.x < 1.0 or s.y < 1.0:
 		return
+	_layout.clear()
 	_draw_health(s)
 	_draw_stamina(s)
 	_draw_magic(s)
@@ -737,6 +809,7 @@ func _draw_hud() -> void:
 	_draw_sweep(s)
 	_draw_controls(s)
 	_draw_floor(s)
+	_seal_layout()
 
 
 # --- Controls -----------------------------------------------------------------
@@ -851,6 +924,15 @@ func _draw_controls(s: Vector2) -> void:
 	# empty floor above it rather than off the bottom of the screen.
 	var step := CanvasText.height(scale) + Pal.px(5.0, s.y)
 	var top := Pal.KEYS_BASELINE * s.y - step * (lines.size() - 1)
+	var widest_drawn := 0.0
+	for line in lines:
+		widest_drawn = maxf(widest_drawn, CanvasText.width(line, scale))
+	# Transient, and reported anyway (decision 35). A transient element that
+	# overlaps a permanent one for ten seconds is a bug for ten seconds — and the
+	# legend running off both edges is one of the three defects decision 20 sells
+	# assertion 1 on, so exempting it would exempt the evidence.
+	_note(&"legend", &"", Rect2(s.x * 0.5 - widest_drawn * 0.5, top,
+		widest_drawn, step * (lines.size() - 1) + CanvasText.height(scale)))
 	for i in lines.size():
 		CanvasText.draw_centred(_canvas, lines[i],
 			Vector2(s.x * 0.5, top + step * i), scale, Pal.ASH)
@@ -944,9 +1026,10 @@ func _draw_floor(s: Vector2) -> void:
 	var pad := Pal.px(6.0, s.y)
 	var w: float = maxf(CanvasText.width(name_line, nt),
 		CanvasText.width(level_line, lt))
-	_canvas.draw_rect(Rect2(at.x - pad, at.y - pad, w + pad * 2.0,
-		level_y + CanvasText.height(lt) + pad * 2.0 - at.y),
-		Color(Pal.VOID, lerpf(0.62, 0.34, settle)))
+	var plate := Rect2(at.x - pad, at.y - pad, w + pad * 2.0,
+		level_y + CanvasText.height(lt) + pad * 2.0 - at.y)
+	_note(&"floor_card", &"", plate)
+	_canvas.draw_rect(plate, Color(Pal.VOID, lerpf(0.62, 0.34, settle)))
 
 	CanvasText.draw_text(_canvas, name_line, at, nt, Pal.BONE.lerp(Pal.MOTH, settle))
 
@@ -975,6 +1058,7 @@ func _draw_health(s: Vector2) -> void:
 		pulse = 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.001 * TAU * 2.0)
 
 	# 1px VOID hairline OUTSIDE the bar, same containment rule the cells had.
+	_note(&"health", &"pole", rect.grow(Pal.px(1.0, s.y)))
 	_canvas.draw_rect(rect.grow(Pal.px(1.0, s.y)), Pal.VOID)
 	_canvas.draw_rect(rect, Pal.VOID if low else Color(Pal.ASH, 0.6))
 
@@ -1032,6 +1116,7 @@ func _draw_stamina(s: Vector2) -> void:
 	var h := Pal.px(Pal.STAMINA_H, s.y)
 	var rect := Rect2(origin.x, top, w, h)
 
+	_note(&"stamina", &"pole", rect.grow(Pal.px(1.0, s.y)))
 	_canvas.draw_rect(rect.grow(Pal.px(1.0, s.y)), Pal.VOID)
 	_canvas.draw_rect(rect, Color(Pal.ASH, 0.6))
 
@@ -1114,6 +1199,7 @@ func _draw_magic(s: Vector2) -> void:
 	var h := Pal.px(Pal.MAGIC_H, s.y)
 	var rect := Rect2(origin.x, top, w, h)
 
+	_note(&"magic", &"pole", rect.grow(Pal.px(1.0, s.y)))
 	_canvas.draw_rect(rect.grow(Pal.px(1.0, s.y)), Pal.VOID)
 	_canvas.draw_rect(rect, Color(Pal.ASH, 0.6))
 
@@ -1167,6 +1253,7 @@ func _draw_heat(s: Vector2) -> void:
 	# The track is drawn even at zero, so the bar is a thing the player has seen
 	# before the first time it matters. An instrument that only appears once you
 	# are already doing well teaches nobody.
+	_note(&"heat", &"pole", rect.grow(Pal.px(1.0, s.y)))
 	_canvas.draw_rect(rect.grow(Pal.px(1.0, s.y)), Pal.VOID)
 	_canvas.draw_rect(rect, Color(Pal.ASH, 0.6))
 
@@ -1190,10 +1277,12 @@ func _draw_heat(s: Vector2) -> void:
 	# String.num rather than "%.2f": it drops trailing zeros, so the ramp reads
 	# X1 / X1.25 / X1.6 / X2.2 instead of a column of dead decimals.
 	var label := "x" + String.num(Heat.multiplier(), 2)
-	CanvasText.draw_centred(_canvas, label,
-		Vector2(origin.x + w + Pal.px(22.0, s.y),
-			top + (h - CanvasText.height(scale)) * 0.5),
-		scale, col)
+	var lw := CanvasText.width(label, scale)
+	var lx := origin.x + w + Pal.px(22.0, s.y)
+	var ly := top + (h - CanvasText.height(scale)) * 0.5
+	_note(&"heat_mult", &"pole",
+		Rect2(lx - lw * 0.5, ly, lw, CanvasText.height(scale)))
+	CanvasText.draw_centred(_canvas, label, Vector2(lx, ly), scale, col)
 
 
 ## RUST while a break is flashing, then the tier ramp: dim when cold, MOTH at
@@ -1294,7 +1383,7 @@ func _hotkey(action: StringName) -> String:
 
 ## The key cap: the binding, centred under its cell. Drawn BEFORE the cell so a
 ## cap never lands on top of the icon it belongs to.
-func _draw_keycap(s: Vector2, cell: Rect2, key: String) -> void:
+func _draw_keycap(s: Vector2, cell: Rect2, key: String, tag := &"") -> void:
 	if key.is_empty():
 		return
 	var scale := Pal.px(Pal.KEYCAP_SCALE, s.y)
@@ -1302,6 +1391,9 @@ func _draw_keycap(s: Vector2, cell: Rect2, key: String) -> void:
 	var w := CanvasText.width(key, scale)
 	var h := CanvasText.height(scale)
 	var pad := Pal.px(3.0, s.y)
+	if tag != &"":
+		_note(tag, &"cluster", Rect2(cell.get_center().x - w * 0.5 - pad,
+			top - pad, w + pad * 2.0, h + pad * 2.0))
 	# On its own plate, not bare on the scene. The cells have a MIDNIGHT fill and
 	# the caps hang BELOW them, so a bare cap sits on whatever the world happens
 	# to be — ASH lettering over a torchlit wall is nearly gone. It also earns the
@@ -1339,9 +1431,16 @@ func _draw_hands(s: Vector2) -> void:
 			# Both of them live in the band ABOVE the cell, at its mid-line, so
 			# neither triangle touches the icon it is describing.
 			var mid := r.position.y - Pal.px(CARET_GAP + CARET, s.y)
+			var cw := Pal.px(CARET, s.y)
+			# The two carets are one band: they straddle the cell's own left and
+			# right edges, so reported separately each would overlap the cell and
+			# the other. One rect is the honest extent of the thing.
+			_note(&"carets_hand", &"cluster", Rect2(
+				r.position.x - cw * 2.0, mid - cw,
+				r.size.x + cw * 4.0, cw * 2.0))
 			_draw_caret(s, Vector2(r.position.x, mid), Vector2(-1.0, 0.0))
 			_draw_caret(s, Vector2(r.end.x, mid), Vector2(1.0, 0.0))
-		_draw_keycap(s, r, _hotkey(KIT_ACTION.get(id, &"")))
+		_draw_keycap(s, r, _hotkey(KIT_ACTION.get(id, &"")), &"cap_%d" % i)
 
 		# The shield cell IS the block tell. It was the one thing the old strip
 		# did that nothing else does, so it survives the strip.
@@ -1351,6 +1450,7 @@ func _draw_hands(s: Vector2) -> void:
 			fill = Pal.BONE
 		if id == &"shield" and _block_flash_t >= 0.0:
 			fill = Pal.GOLD if _parry_flash else Pal.RUST
+		_note(&"hand_%d" % i, &"cluster", r)
 		_canvas.draw_rect(r, fill)
 		_canvas.draw_rect(r, Pal.ASH, false, Pal.px(1.0, s.y))
 
@@ -1371,9 +1471,16 @@ func _draw_hands(s: Vector2) -> void:
 			# things you read when you have STOPPED — the key caps, the loadout
 			# line, the floor card. A Tier 2 readout wearing Tier 3's brightness is
 			# the hierarchy saying one thing and the palette saying another.
-			CanvasText.draw_right(_canvas, str(left),
-				Vector2(r.end.x - Pal.px(3.0, s.y), r.end.y - Pal.px(10.0, s.y)),
-				Pal.px(1.0, s.y), Pal.BONE)
+			var nsc := Pal.px(1.0, s.y)
+			var nw := CanvasText.width(str(left), nsc)
+			var nr := Vector2(r.end.x - Pal.px(3.0, s.y),
+				r.end.y - Pal.px(10.0, s.y))
+			# Parent is the CELL, not the cluster: the numeral is deliberately
+			# inside it, which is precisely the nesting a flat overlap check
+			# cannot express (decision 27).
+			_note(&"ammo_%d" % i, &"hand_%d" % i,
+				Rect2(nr.x - nw, nr.y, nw, CanvasText.height(nsc)))
+			CanvasText.draw_right(_canvas, str(left), nr, nsc, Pal.BONE)
 
 
 ## The selected item — ONE cell, the bottle D-pad ↓ has stepped to and X will
@@ -1405,13 +1512,17 @@ func _draw_cpad(s: Vector2) -> void:
 	# ↓ over the cell: D-pad ↓ steps it, and the triangle POINTS AT the thing it
 	# steps. The caret rule, see `_cross_origin`. It pointed up for one render,
 	# which put its body behind the cell and its point out in the wall.
-	_draw_caret(s, Vector2(r.get_center().x, origin.y - Pal.px(CARET_GAP, s.y)),
-		Vector2(0.0, 1.0))
+	var cw := Pal.px(CARET, s.y)
+	var tip := Vector2(r.get_center().x, origin.y - Pal.px(CARET_GAP, s.y))
+	_note(&"caret_item", &"cluster",
+		Rect2(tip.x - cw, tip.y - cw * 2.0, cw * 2.0, cw * 2.0))
+	_draw_caret(s, tip, Vector2(0.0, 1.0))
 	# The cap is X, the button that USES it — not the direction that selects it.
 	# A cell caps with the button you press to make it happen, and selecting an
 	# item does not make anything happen.
-	_draw_keycap(s, r, _hotkey(&"use_item"))
+	_draw_keycap(s, r, _hotkey(&"use_item"), &"cap_item")
 
+	_note(&"item_cell", &"cluster", r)
 	_canvas.draw_rect(r, Color(Pal.MIDNIGHT, 0.8))
 	var potion := Game.selected_potion()
 	_canvas.draw_rect(r, Pal.BONE if potion != &"" else Pal.ASH, false,
@@ -1445,6 +1556,8 @@ func _draw_cpad(s: Vector2) -> void:
 		+ Pal.px(9.0, s.y)
 	var w := CanvasText.width(line, scale)
 	var pad := Pal.px(3.0, s.y)
+	_note(&"loadout", &"cluster", Rect2(r.end.x - w - pad, top - pad,
+		w + pad * 2.0, CanvasText.height(scale) + pad * 2.0))
 	_canvas.draw_rect(Rect2(r.end.x - w - pad, top - pad,
 		w + pad * 2.0, CanvasText.height(scale) + pad * 2.0),
 		Color(Pal.MIDNIGHT, 0.8))
@@ -1482,6 +1595,9 @@ func _draw_minimap(s: Vector2) -> void:
 	var size := Pal.px(Pal.MINIMAP_SIZE, s.y)
 	var frame := Rect2(
 		Pal.MINIMAP_RIGHT * s.x - size, Pal.MINIMAP_TOP * s.y, size, size)
+	# A root in its own right: it is a document held up in front of the world, not
+	# part of either pole.
+	_note(&"minimap", &"", frame)
 	_canvas.draw_rect(frame, Color(Pal.VOID, 0.88))
 	_canvas.draw_rect(frame, Pal.ASH, false, Pal.px(1.0, s.y))
 
@@ -1657,6 +1773,9 @@ func _draw_draughts(s: Vector2) -> void:
 	var line := Pal.px(1.0, s.y)
 	var gap := Pal.px(Pal.DRAUGHT_SLOT_GAP, s.y)
 	var slot_w := (w - gap * float(slots.size() - 1)) / float(slots.size())
+	# The whole row, hairlines included. The row and not the slots, because what
+	# has to clear the heat bar above and the safe margin below is the row.
+	_note(&"draughts", &"pole", Rect2(x, y, w, h).grow(line))
 
 	for i in slots.size():
 		var id: StringName = slots[i]
@@ -1818,6 +1937,14 @@ func _draw_slips(s: Vector2, right: float) -> void:
 	if entries.size() > SLIP_MAX:
 		CanvasText.draw_right(_canvas, "+%d" % (entries.size() - SLIP_MAX),
 			Vector2(right, y - Pal.px(8.0, s.y)), Pal.px(1.0, s.y), Pal.MOTH)
+		y -= Pal.px(8.0, s.y) + CanvasText.height(Pal.px(1.0, s.y))
+
+	# The stack, as one rectangle. Parent is the RIM: the slips are deliberately
+	# inside it, and §14.5 warns that the first thing a new director reports is
+	# the half-pixel overlap between the topmost slip and the rim's top frame — a
+	# real geometric fact, and not a bug, once the nesting is declared.
+	_note(&"slips", &"rim", Rect2(right - max_w, y,
+		max_w, Pal.SLIPS_BOTTOM * s.y - y))
 
 
 ## Coloured by the rarity of the single most valuable thing you carry. Silent,
@@ -1841,6 +1968,10 @@ func _draw_rim(s: Vector2, tier: int) -> void:
 	var r := Rect2(tl, br - tl)
 	var rarity := _best_rarity()
 	var col := Pal.rarity_color(rarity)
+	# The T2 halo sits 2 px outboard of the frame, so the rim's outermost extent
+	# is the grown rect and not `r` — §14.5's "report the ink and you have margin
+	# that is not really there".
+	_note(&"rim", &"money", r.grow(Pal.px(2.0, s.y)))
 	if _rim_flash_t >= 0.0:
 		_canvas.draw_rect(r, Color(_rim_flash_color, 0.25))
 		col = _rim_flash_color
