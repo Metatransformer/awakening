@@ -479,9 +479,10 @@ once; read the deltas, not the absolutes.
 #55 measured 4× MSAA costing, given back. The saving is only visible across two
 *processes*: a build with the field on never allocates the native-resolution 3D
 targets at all, whereas flipping the field at runtime leaves the ones already
-made, so a paired run reports VRAM unchanged. Card #20's budget (~8.7–9.6 ms
-median at 1080p) is unaffected either way; this is not a perf change, it is a
-look change that happens not to cost anything.
+made, so a paired run reports VRAM unchanged. Card #20's budget is unaffected
+either way; this is not a perf change, it is a look change that happens not to
+cost anything. **Do not quote #20's median — see the note at §4.8's budget
+citation.** The VRAM figures above are counts, not timings, and stand.
 
 #### What it breaks, and it is one thing
 
@@ -675,8 +676,26 @@ across the eight configs **with the ordering inverted** (some MSAA rows faster
 than none), and at 720p 5.76–7.59 ms. On a Mac shared with four other agents'
 director windows, the AA delta is below the noise floor — which is itself the
 finding. *MSAA is not costing frames here; it is costing 103 MB of VRAM and
-buying one pixel.* Card #20's budget (~8.7–9.6 ms median at 1080p, ~7 ms
-headroom) is unaffected either way.
+buying one pixel.* Card #20's budget is unaffected either way.
+
+> **Do not quote card #20's median in a pitch — card #65, 2026-08-11.** #20's
+> headline was *"~8.7–9.6 ms median at 1080p, 105–115 fps, ~7 ms of headroom"*.
+> Card #50 then ran the control #20 had asked for and could not get, on a Mac
+> with `ps -Ao pid,comm | grep -i godot` reading **zero**: the 9-draw-call
+> `_lookdev` scene measured a **13.87 ms** median against the 720-draw-call
+> garrison's 12.19–14.02. Eighty times the geometry for no time at all, which
+> means a scene-independent floor is setting the median, not the game.
+>
+> What survives, and it is most of it: **the method** — `perf_probe --stall=300`
+> injects a 300 ms block and `frame_ms` reports `max=305.29` at the exact sample,
+> so `frame_ms` is a sound basis for a budget (#50). **The p95** — #20 read
+> 16.5–17.4 ms, five runs on the current tree read 17.12–18.06; that band has not
+> moved and does not track the floor. **The counts** — 720 draw calls, 182,989
+> primitives, 236.8 MB VRAM, down from #20's 431.8 thanks to §4.5.
+>
+> Only the median is in doubt, and it is in doubt because a Mac running dozens of
+> agents has a CPU and a compositor that no `comm` grep can see. #65 re-runs the
+> control on a genuinely idle machine.
 
 **What the real answer to "the edges are rough" is.** §4.5 — the 480 × 270
 internal buffer with a sharp-bilinear present. At 480 × 270 the edge question

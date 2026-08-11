@@ -128,7 +128,7 @@ func run(rig) -> void:
 		print("RANGE FAIL no hero or no GameCamera in the scene")
 		return
 	cam.make_current()
-	_clear_the_floor(d)
+	_clear_the_floor(rig, d)
 	await rig.wait_frames(20)
 
 	_print_floor(d, 1)
@@ -193,7 +193,7 @@ func run(rig) -> void:
 	# outlier for another, and only a measurement taken in the same run can say.
 	var d2 := await _rebuild(rig, 2)
 	if d2 != null:
-		_clear_the_floor(d2)
+		_clear_the_floor(rig, d2)
 		await rig.wait_frames(20)
 		_print_floor(d2, 2)
 		var gate: Node3D = _gate_room(d2)
@@ -386,34 +386,18 @@ func _rebuild(rig, level: int) -> Node:
 	return d
 
 
-func _clear_the_floor(d: Node) -> void:
+## Clear the bodies, and hold everything that moves without the game's clock.
+##
+## The flame hold is why this matters here, and it was measured: the same
+## one-sconce corridor scored 36.0% and 40.1% under luminance 8 on consecutive
+## runs, a spread larger than most of the changes this file exists to detect,
+## because `KitTorch` swung its energy off the wall clock. The hold now lives in
+## `rig.still_the_frame()` — one copy for every director, and it pins the
+## volumetric fog's temporal reprojection in the same call (CLAUDE.md §3).
+func _clear_the_floor(rig, d: Node) -> void:
 	for e in _every(d, func(n: Node) -> bool: return n is Enemy):
 		e.queue_free()
-	_still_the_flames(d)
-
-
-## Stop the torches guttering, for the duration of the measurement only.
-##
-## `KitTorch._process` swings `light_energy` by ±16% off `Time.get_ticks_msec()`
-## — the **wall** clock, not the game clock, so `Engine.time_scale = 0` does not
-## touch it and two runs of this director photograph two different frames of two
-## different fires. That is invisible in a room lit by six sconces and it is not
-## invisible in a corridor lit by one: the same corridor scored 36.0% and 40.1%
-## under luminance 8 on consecutive runs, which is larger than most of the changes
-## this file exists to detect. So the flame is held at its nominal energy while
-## the histogram is taken. Nothing else about the lighting is touched, and the
-## number under a frame is then the room's design rather than its phase.
-##
-## Re-assigning `light_energy` to itself is deliberate: the setter runs
-## `_apply_light`, which is the only thing that puts the nominal value back into
-## the `OmniLight3D` after `_process` has been multiplying it.
-func _still_the_flames(d: Node) -> void:
-	var n := 0
-	for t in _every(d, func(x: Node) -> bool: return x is KitTorch):
-		t.flicker = 0.0
-		t.light_energy = t.light_energy
-		n += 1
-	print("RANGE held %d flame(s) at nominal energy for the measurement" % n)
+	rig.still_the_frame()
 
 
 func _stand_at(rig, hero: Node3D, door: Node3D, back: float) -> void:

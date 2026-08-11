@@ -106,9 +106,16 @@ extends RefCounted
 ##
 ## `Engine.time_scale = 0` is what makes a pair comparable: the lamps swell, the
 ## grass moves and the damage number is mid-tween, so two captures of a running
-## garrison differ everywhere. Frozen, the world differs only where the label
-## was — **but the HUD is not frozen**, because it runs off the wall clock, so
-## the count is taken inside a box and never over the whole picture.
+## garrison differ everywhere. Frozen — and with `rig.still_the_frame()` holding
+## the two things the freeze does not, card #62 — the world differs only where
+## the label was.
+##
+## The count is taken inside a box all the same, and the reason is the box and
+## not the overlay: a caption's ink has to be counted where the caption is, or a
+## label that moved four pixels reads as a label that appeared. **The HUD itself
+## is frozen** — card #62 measured 0 of the overlay's 60,194 painted pixels
+## moving between two captures of a stopped world, which is the opposite of what
+## this comment used to assert.
 ##
 ## ## Why the occluder is found rather than hard-coded
 ##
@@ -228,6 +235,13 @@ func run(rig) -> void:
 			+ "--scene=res://scenes/rooms/garrison.tscn")
 		return
 	await rig.wait_frames(30)
+
+	# The pair below is a pixel diff, so the frame has to be reproducible, and
+	# `Engine.time_scale = 0` alone does not make it one -- card #62, CLAUDE.md
+	# §3. The garrison's braziers and the volumetric fog both keep moving in a
+	# stopped world; under §4.5's RGB555 quantizer the fog's jitter alone is
+	# thousands of pixels past `INK_DELTA`, which is the number this file counts.
+	rig.still_the_frame()
 
 	# The hero is parked out of the way while the fixture is built, and then
 	# **moved to the subject by `_prove`** -- see `_park_beside`, and card #61
@@ -367,12 +381,12 @@ func _prove(rig, tag: String, what: String, subject: Node3D, hit_from: Vector3,
 	# the file name is kept so the pair still sorts next to its neighbour.
 	labels = await _arm(rig, subject, hit_from)
 	for l: Node3D in labels:
-		l.occlude = false
+		_set_occluded(l, false)
 	await rig.wait_frames(4)
 	var leak := await _read(rig, lens, labels, box,
 		out.path_join("l_%s1_behind_wall_no_depth_test.png" % tag), true)
 	for l: Node3D in labels:
-		l.occlude = true
+		_set_occluded(l, true)
 	await rig.wait_frames(4)
 	print("LABELS %s behind %s, occlusion OFF -> %d px, %s per label"
 		% [what, blocker, leak["ink"], leak["per"]])
@@ -440,6 +454,13 @@ func _prove(rig, tag: String, what: String, subject: Node3D, hit_from: Vector3,
 	await rig.wait_frames(4)
 
 
+## Give the captions their tweened opacity back. See the pin in `_read`.
+func _unpin(labels: Array, held: Array) -> void:
+	for i in labels.size():
+		if held[i] >= 0.0:
+			(labels[i] as Node3D).set(&"alpha", held[i])
+
+
 func _ck(label: String, ok: bool) -> void:
 	if ok:
 		print("LABELS ok %s" % label)
@@ -496,15 +517,18 @@ func _read(rig, cam: Camera3D, labels: Array, box: Vector2i,
 	# the tween picks up its own value again when the clock starts.
 	var held: Array[float] = []
 	for l: Node3D in labels:
-		held.append(float(l.get(&"alpha")))
-		l.set(&"alpha", 1.0)
+		# A `Label3D` has no `alpha` and does not fade, so it is left alone and
+		# recorded as -1. This file runs against both builds (`_labels_under`).
+		var a = l.get(&"alpha")
+		held.append(float(a) if a != null else -1.0)
+		if a != null:
+			l.set(&"alpha", 1.0)
 
 	await rig.wait_frames(2)
 	await rig.capture(path)
 	var lit := Image.load_from_file(path)
 	if lit == null:
-		for i in labels.size():
-			(labels[i] as Node3D).set(&"alpha", held[i])
+		_unpin(labels, held)
 		Engine.time_scale = prev
 		for o: Node3D in muted:
 			o.visible = true
@@ -544,8 +568,7 @@ func _read(rig, cam: Camera3D, labels: Array, box: Vector2i,
 				[boxes[i]])
 			per.append(int(m["n"]))
 			metrics.append(m)
-	for i in labels.size():
-		(labels[i] as Node3D).set(&"alpha", held[i])
+	_unpin(labels, held)
 	Engine.time_scale = prev
 	for o: Node3D in muted:
 		o.visible = true
