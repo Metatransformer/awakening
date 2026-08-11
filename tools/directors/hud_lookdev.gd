@@ -172,8 +172,10 @@ func run(rig) -> void:
 	# tier was never asserted, only described — so it is asserted below, and this
 	# beat now fails loudly rather than quietly photographing T2.
 	#
-	# The gold stays: T2 also lerps the fog toward GOLD, and a purse that can
-	# actually pay the extraction fee is what the other beats want on screen.
+	# The gold stays: a purse that can actually pay the extraction fee is what the
+	# other beats want on screen. (It was "T2 also lerps the fog toward GOLD".
+	# It does not — nothing in the renderer reads `Pal.tier`. The T2 effect is the
+	# GOLD halo one ring outboard of the rim, in `Hud._draw_rim`.)
 	#
 	# **The setup used to be `Game.bag_slots = 20` and 42 Deep Amber**, because a
 	# T3 of 3000 could not be reached any other way — and 20 slots is not a save a

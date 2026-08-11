@@ -1637,9 +1637,17 @@ lying about it in a comment.
 > One correction to the sentence above about what moving T3 would change: **it
 > does not change any fog.** Nothing in the renderer reads `Pal.tier` — the only
 > two consumers are `_draw_rim`'s T2 halo and `_draw_slips`' T3 breath, which are
-> §14.5's own precedence ladder. The 2264 pair `h_09_t3` / `h_09_t3_phase` differ
-> by a mean of 5.1 and a max of 13 per channel over the slip stack, and by
-> nothing outside it, so the breath is now measured rather than described.
+> §14.5's own precedence ladder. And the breath is **measured** now rather than
+> described: over the 2288 slip-bar pixels the two 2264 frames share,
+> `h_09_t3` reads a mean luminance of 132.1 and `h_09_t3_phase` 124.4 — a 5.8%
+> swing, against an authored amplitude of 0.10 sampled at two phases.
+>
+> Measure it that way and not as a raw pixel diff. Since #58 put the world on a
+> 480×270 internal buffer the dither moves a tenth of every static region between
+> any two frames, so "the slip stack changed and the wall did not" no longer
+> separates: the wall changes too, by up to 9 per channel. The luminance of a
+> fixed pixel set does separate, because the dither is unbiased and the breath is
+> not.
 
 ## 15.11 The damage flicker was a duration, and a duration cannot paint two frames
 
