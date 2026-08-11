@@ -51,8 +51,9 @@ true*.
 
 **The name and the pronoun are the only things about Kael this document fixes:
 he is male, and he is called Kael.** No backstory, no family, no arc — the
-Society's creed is the characterisation, and a game with zero dialogue trees
-(`docs/SCOPE.md` §1) has nowhere to put more than that. **Kael himself does not
+Society's creed is the characterisation, and the trees the garrison grew on
+2026-08-10 (§1) are all *other people talking about themselves*, which is where
+the characterisation of a silent protagonist belongs. **Kael himself does not
 speak**: fifteen voiced lines arrived on 2026-08-10 and every one of them is
 somebody talking *at* him — a narrator over the opening black, and four of the
 five counters. He is the one person in the garrison with no recording, and that is
@@ -110,10 +111,31 @@ be four counters and a hole in the ground: a garrison is *supposed* to be small,
 purposeful and short of comforts, so nobody has to explain why there is no inn
 and no square. A town would have owed you those. See §6.
 
-The person you report to is the **village elder**, and he is the exception that
-keeps the rule cheap: he is expecting you when you arrive, and he has three
-recorded lines and no quest and no dialogue tree. What a garrison owes you is
-somebody to report to. It does not owe you a conversation.
+**The garrison is a dig, not a posting.** Highbridge holds the walls; the
+**Explorer's Guild of Valenfeld** pays for what comes up out of the shaft, and
+owns it (2026-08-10, owner's call). That is why a walled camp has four traders
+and one soldier in it, and it is the sentence the hub had been missing: a
+*garrison* explains the lack of an inn, and only an *expedition* explains the
+pawnbroker.
+
+The person you report to is **Aldric Vane**, who commands the outpost and is also
+the Lanternkeeper. You are his cadet. **He talks, and so does everybody else** —
+that is a reversal of what this section said until 2026-08-10 ("three recorded
+lines and no quest and no dialogue tree"), and the reversal is the owner's. What
+replaced it is deliberately not a quest system:
+
+- Each of the five has an ordered run of **beats** — story pages said once, in
+  order, unlocked by how far the save has got — and a list of repeatable
+  **topics** you can ask them about. `StoryDb` (`scripts/world/story_db.gd`) is
+  the whole of it; there is no quest log, no objective, no flag a beat can set
+  except *you have heard this*.
+- **The gate is progression, and it is two numbers**: bosses felled, and gold
+  earned over the life of the save. Nothing in a conversation is bought, found,
+  or given. See `docs/METAGAME.md` §6.
+- Aldric's first beat is the game's only briefing — what the Cut is, what the
+  Guild wants out of it, that the cadet before you never came back, and where to
+  put the things you want to keep. A garrison owes you somebody to report to; it
+  turns out it also owes you the reason you are climbing down a hole.
 
 **He is also the Lanternkeeper** (2026-08-10, owner's call). They were written
 as two men for a day — an elder alone on the grass with the three lines, and a

@@ -45,13 +45,22 @@ const SLOTS := 3
 ## who has not died yet, which understates the number and never overstates it —
 ## the failure mode is a returning player getting slightly less forgiveness than
 ## they had earned, not a fresh save arriving pre-softened. So v4 stays readable.
-const VERSION := 5
+##
+## Bumped to 6 for `gold_earned`, and it is additive in the same way `deaths` was.
+## `StoryDb` gates the garrison's later conversations on how much a save has ever
+## earned, and a v5 slot has no such key. The reconstruction is `gold` — what is
+## in the purse is a floor on what was earned into it — which understates a hero
+## who has been spending and never overstates one. The failure mode is a returning
+## player waiting one extra run for a line they had already paid for; the
+## alternative, defaulting to 0, would take Aldric's story about the last cadet
+## back off a save that had unlocked it. So v5 stays readable.
+const VERSION := 6
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4, 5]
+const READABLE: Array[int] = [4, 5, 6]
 
 signal saved(slot: int)
 signal loaded(slot: int)
@@ -127,6 +136,10 @@ func save(slot: int) -> bool:
 		# restores is the next reader's wrong conclusion about what persists.
 		"max_magic": Game.max_magic,
 		"gold": Game.gold,
+		# The LIFETIME total, which is what the garrison's conversations are gated
+		# on (`StoryDb`). It is not derivable from anything else in this block —
+		# `gold` is what survived the spending — so it has to be its own key.
+		"gold_earned": Game.gold_earned,
 		"deaths": Game.deaths,
 		"bag_slots": Game.bag_slots,
 		# Every permanent purchase, forge rungs included -- the ladders live in
@@ -249,6 +262,12 @@ func load_slot(slot: int) -> Dictionary:
 	# town, which is the one state the design says cannot happen.
 	Game.fill_magic()
 	Game.gold = d.get("gold", 0)
+	# A v5 slot has no lifetime tally and falls back to the purse — see the note on
+	# VERSION. NOT clamped up to `gold` on a v6 slot, which would be the obvious
+	# belt and would be wrong: a save that has never earned anything is still
+	# holding `K.START_GOLD`, so `max(earned, gold)` would credit every new hero
+	# with a haul they were given.
+	Game.gold_earned = int(d.get("gold_earned", Game.gold))
 	Game.deaths = int(d.get("deaths", 0))
 	Game.bag_slots = int(d.get("bag_slots", K.START_BAG_SLOTS))
 	# JSON has no StringName and no typed Dictionary, so both of these come back

@@ -225,6 +225,20 @@ func _verify_sandbox() -> void:
 ## is what would fail if the two ever drift, and it says so.
 const INTRO_FLAG := &"reported_for_duty"
 
+## The flags `StoryDb.unlocked` latches when a keeper's gate is first met.
+##
+## Spelled out here for the same reason `INTRO_FLAG` is: naming `StoryDb` compiles
+## it, and everything it references, as a dependency of this file before the
+## autoloads it reads (`Game`) exist. `StoryDb.arrival_flag` is the one that must
+## not drift from these five strings.
+const ARRIVED_FLAGS: Array[StringName] = [
+	&"garrison_elder_arrived",
+	&"garrison_pawnbroker_arrived",
+	&"garrison_smith_arrived",
+	&"garrison_alchemist_arrived",
+	&"garrison_jewelcrafter_arrived",
+]
+
 
 ## Do not play the opening at a director, unless the director asked for it.
 ##
@@ -248,9 +262,33 @@ func _skip_the_opening() -> void:
 	game.call(&"set_flag", INTRO_FLAG)
 
 
+## Put all five keepers in the yard, whatever this save has killed.
+##
+## Same bargain as `_skip_the_opening`: a director starts from a fresh `Game`, and
+## a fresh `Game` has three of the five counters still on the road (`StoryDb`).
+## Every garrison director in this repo photographs the smith, the alchemist or
+## the jewelcrafter, and none of them is about the unlock — so the harness is made
+## normal by default, and the one director that cares about the empty yard says so
+## with `--fresh`.
+##
+## `--fresh` clears nothing; it only declines to stamp. The opening flag is a
+## separate switch (`--intro`) because the two are wanted separately: `mvp_loop`
+## wants the shops without the fifteen-second narration.
+func _open_the_garrison() -> void:
+	if _args.has("fresh"):
+		return
+	var game: Node = root.get_node_or_null(^"Game")
+	if game == null:
+		push_warning("shoot.gd: no /root/Game -- cannot open the garrison")
+		return
+	for flag: StringName in ARRIVED_FLAGS:
+		game.call(&"set_flag", flag)
+
+
 func _run() -> void:
 	_verify_sandbox()
 	_skip_the_opening()
+	_open_the_garrison()
 
 	var scene_path: String = _args.get("scene", "")
 	if scene_path.is_empty():
@@ -552,9 +590,12 @@ func talk(option: String = "Trade", seconds: float = 6.0) -> bool:
 		return false
 
 	# Turn pages until the question is on screen. The cap is a runaway guard, not
-	# a page count: two presses per page (fill the line, then turn it) over a
-	# conversation that is one page today.
-	for i in 16:
+	# a page count: two presses per page (fill the line, then turn it). It was 16 —
+	# eight pages — while every conversation in the game was one sentence long.
+	# `StoryDb` beats are up to nine pages (the elder's briefing), so a cap that
+	# tight now reads as "the box never offered any options" the first time a
+	# director meets somebody who has something to say.
+	for i in 64:
 		if not is_instance_valid(box) or box.is_choosing():
 			break
 		await tap(["interact"])

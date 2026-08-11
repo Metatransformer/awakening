@@ -2349,7 +2349,7 @@ shows it. Both are keyed by the same speaker id `Voice.LINES` and
 DialogueDb.name_of(&"smith")          # "Brannoc" -- the plate says who, not what
 DialogueDb.model_of(&"smith")         # an `NpcBody.PEOPLE` key, for the bust
 DialogueDb.speak(&"smith", &"hello")  # says it AND returns the pages to type
-DialogueBox.open(host, &"smith", pages, choices)   # null when `pages` is empty
+DialogueBox.open(host, &"smith", pages, choices, on_read)  # null if `pages` empty
 ```
 
 - **The text is looked up by the take that is playing, never by the cue.**
@@ -2361,9 +2361,23 @@ DialogueBox.open(host, &"smith", pages, choices)   # null when `pages` is empty
 - **A written line with no recording is legal.** `DialogueDb.WRITTEN` is the
   fallback when `Voice.say` answers 0.0 — the elder's "You're doing wonderfully."
   is text-only today. The reverse (a take with no words) is the failure above.
-- **`choices` is `{label, meta, act}` and `act` returns the NEXT pages.** Return
-  an empty array to end the conversation. That is the whole branch mechanism:
-  Trade opens the counter and returns nothing, Leave returns the farewell.
+- **`choices` is `{label, meta, act, keep}` and `act` returns the NEXT pages.**
+  Return an empty array to end the conversation. That is the whole branch
+  mechanism: Trade opens the counter and returns nothing, Leave returns the
+  farewell. **`keep: true` puts the same options back up** once the answer has
+  been read, which is what makes a topic list a list rather than a single spend —
+  a question you can only ask once punishes the player for asking early.
+- **Every option row is in ONE typeface.** `DialogueBox._ask` passes
+  `primary: false` for every row, which is the only place in the build that turns
+  the kit's promotion off — `VerbRow` otherwise renders the first row of a panel
+  in Cinzel at 19 and the rest in Alegreya Sans at 16. That is right on a shop
+  menu and wrong here: these rows are all things one person can say.
+  `tools/directors/dialogue.gd` beat G reads the RESOLVED theme font off each row
+  (`DialogueBox.choice_faces`) so a theme change cannot bring the split back
+  quietly.
+- **`on_read` fires when the last opening page is TURNED, not when the box
+  opens.** `StoryDb` hangs its "you have heard this" flag off it, so escaping out
+  of a nine-page briefing leaves the briefing owed.
 - **One button drives all of it** — `interact`, the same press that opened it:
   fill the line, turn the page, ask the question, take the answer, in that order.
   `ui_cancel` ends a conversation outright. Input is POLLED, for
@@ -2391,6 +2405,43 @@ DialogueBox.open(host, &"smith", pages, choices)   # null when `pages` is empty
 - Sized off the frame's HEIGHT and given the drawing's own aspect ratio, so
   nothing is cropped but the bottom edge. A square rect flattened the top of the
   alchemist's hood off with a straight line.
+
+### The story — `StoryDb` owns who knows what, and when
+
+`StoryDb` (`scripts/world/story_db.gd`) is the second half of the dialogue layer.
+`DialogueDb` is keyed by the audio take and therefore cannot grow a second thing
+to say; this is the table that can. Same speaker ids, no new names.
+
+```gdscript
+StoryDb.unlocked(&"smith")            # is he standing in the yard? LATCHES a flag
+StoryDb.pending(&"elder")             # the beat he owes, or {} — read-only
+StoryDb.topics(&"elder")              # the questions he will answer today
+StoryDb.pages_of(beat)                # its words, ready for DialogueBox
+StoryDb.mark_told(&"elder", &"briefing")
+```
+
+- **Two shapes.** A **beat** is an ordered, once-only story page-run: the first
+  one whose `needs` are met and which has not been heard is what `Npc.activate`
+  opens instead of the recorded greeting. A **topic** is a repeatable question,
+  offered as a `keep` row in the option list. Beats are spent; topics are not.
+- **Two metrics, and only two.** `bosses` counts `boss_dead_*` over
+  `BossDb.BOSSES` — **not** every flag of that shape, because minibosses set the
+  same one and there are several per floor. `gold` is `Game.gold_earned`, the
+  LIFETIME total, which is a separate field from `Game.gold` precisely so that
+  spending cannot take a line back off you. `told` gates a beat on an earlier one.
+- **The words here are WRITTEN and nothing plays.** Every recorded take is
+  already spoken for by `DialogueDb.SAID`; inventing cue names for lines nobody
+  has been in a booth for would fail `tools/directors/dialogue.gd` beat A0 on
+  purpose. A director that checks the RECORDINGS has to talk a person's story out
+  of them first — `voices.gd`'s `_clear_story`, `dialogue.gd`'s `_exhaust`.
+- **`unlocked()` writes.** It stamps `garrison_<who>_arrived` the first time the
+  gate is met and answers off the flag ever after, so a keeper who arrived cannot
+  un-arrive and `tools/shoot.gd` can hand every director the full yard by setting
+  five strings. `--fresh` declines that, and `tools/directors/roster.gd` is the
+  one run that uses it.
+- **A locked keeper is NOT BUILT.** `Garrison._build_people` skips them entirely —
+  no `Npc`, no booth, no lamp — and `garrison.smith` / `.alchemist` / `.jeweller`
+  are null until they arrive. Anything reaching for one must check.
 
 ### Settings and saves — built, tested, and read-only for everyone but P14
 

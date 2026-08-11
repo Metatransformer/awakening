@@ -89,6 +89,11 @@ const INTRO_FLAG := &"reported_for_duty"
 ## back into frame over the parapet.
 @export var wall_height: float = 6.0
 
+## The people. **`smith`, `alchemist` and `jeweller` are null until they arrive**
+## (`StoryDb.UNLOCKS`, and see `_build_people`) — a fresh save's yard has Aldric,
+## Kessa and the way down in it and nothing else. Anything that reaches for one of
+## these has to check; the directors get all five because `tools/shoot.gd` stamps
+## the arrival flags.
 var vendor: Npc
 var smith: Npc
 var alchemist: Npc
@@ -193,7 +198,28 @@ func _open_the_game() -> void:
 	# It is still a `Voice.say` underneath (`DialogueDb.speak`), so the line, the
 	# timing and `voices.gd` B1 are all unchanged -- what is new is that you can
 	# see who said it.
-	DialogueBox.open(self, &"elder", DialogueDb.speak(&"elder", &"arrival"))
+	var pages := DialogueDb.speak(&"elder", &"arrival")
+	# ...and then he actually says what this place is.
+	#
+	# The briefing is a `StoryDb` beat like any other and would be waiting for the
+	# player's first TALK on its own. It is pulled forward and stapled to the
+	# recorded line here because of what it contains: what the outpost is for, who
+	# pays for it, what happened to the last cadet, that Kessa buys, that the chest
+	# by the bed is the only thing the pack does not eat. A player who wandered to
+	# the gate instead of to the old man would be underground without any of it,
+	# and this is the one moment in the game where they are standing still,
+	# looking at him, with nothing else to do.
+	#
+	# `on_read` is what makes this not a second copy: the beat is marked told when
+	# these pages are turned, so his first greeting afterwards is the NEXT thing he
+	# owes. Escape out of it and it is still owed -- see `DialogueBox.open`.
+	var beat := StoryDb.pending(&"elder")
+	var on_read := Callable()
+	if not beat.is_empty():
+		pages.append_array(StoryDb.pages_of(beat))
+		var beat_id := StringName(beat.get("id", &""))
+		on_read = func() -> void: StoryDb.mark_told(&"elder", beat_id)
+	DialogueBox.open(self, &"elder", pages, [], on_read)
 
 
 # --- Look -------------------------------------------------------------------
@@ -564,10 +590,29 @@ const STATUE_YAW := -45.0
 ##     village elder and speaks the opening's third line to a player who has just
 ##     opened their eyes. A greeting has to come from somebody visibly greeting
 ##     you, and four counters is already the number of counters this yard has.
+##
+## ## Three of them are not here yet
+##
+## **The ring is the layout, not the roster.** `StoryDb.UNLOCKS` says who has
+## arrived, and a keeper who has not is simply not built -- no booth, no lamp, no
+## sign, no `Npc`. A new save's yard is Aldric, Kessa and the gate; the smith
+## comes up the road after the first boss, the alchemist after the second and the
+## jewelcrafter after the third (owner's call, 2026-08-10).
+##
+## The alternative -- five people standing there with three of their counters
+## refusing to open -- was rejected because it says the wrong thing twice: it
+## makes an outpost that is visibly finished on the first frame, and it turns the
+## reward for killing a boss into a shop that stops saying no. A trader walking
+## into the yard is a thing the player can SEE happen, and it is the only pacing
+## the garrison has.
+##
+## The three fields stay `null` until then, so anything that reaches for
+## `garrison.smith` must check. Directors get all five: `tools/shoot.gd` stamps
+## the arrival flags, for the same reason it skips the opening.
 func _build_people() -> void:
 	# North-east and north-west of the plaza, flanking the approach to the gate.
-	smith = _ring(Npc.Role.SMITH, 55.0, Color(0.98, 0.56, 0.24))
-	vendor = _ring(Npc.Role.VENDOR, -55.0, Pal.GOLD)
+	smith = _ring(Npc.Role.SMITH, &"smith", 55.0, Color(0.98, 0.56, 0.24))
+	vendor = _ring(Npc.Role.VENDOR, &"pawnbroker", -55.0, Pal.GOLD)
 
 	# East and west, level with the plaza's middle: the two counters you visit on
 	# the way back OUT, so the walk from the plaza to the gate crosses them.
@@ -587,8 +632,8 @@ func _build_people() -> void:
 	# in the build notices except `m_19_home` from `mvp_loop`. Swinging them 28°
 	# north brings both to 35°, comfortably inside. A shop you have to turn around
 	# to discover is a shop that does not exist.
-	alchemist = _ring(Npc.Role.ALCHEMIST, -118.0, Color(0.96, 0.80, 0.52))
-	jeweller = _ring(Npc.Role.JEWELLER, 118.0, Color(0.80, 0.62, 0.94))
+	alchemist = _ring(Npc.Role.ALCHEMIST, &"alchemist", -118.0, Color(0.96, 0.80, 0.52))
+	jeweller = _ring(Npc.Role.JEWELLER, &"jewelcrafter", 118.0, Color(0.80, 0.62, 0.94))
 
 	# The Lanternkeeper, on the centre line, facing the arrival. See `KEEPER_AT`.
 	#
@@ -696,7 +741,15 @@ func light_of(prop: StringName) -> GarrisonLight:
 ##
 ## The yaw is `bearing + 180` because a booth's +Z is the CUSTOMER's side
 ## (`ShopBooth`), and the customer is the one standing in the plaza.
-func _ring(role: Npc.Role, bearing: float, lamp: Color) -> Npc:
+## `who` is their `StoryDb`/`Voice` id, and it is here rather than derived from
+## `role` because the two tables are keyed differently on purpose (`Npc.COUNTERS`
+## carries the id as `voice`) and a second mapping between them is a second place
+## to get the Lanternkeeper-is-the-elder collapse wrong.
+##
+## Returns null for somebody who has not arrived yet -- see `_build_people`.
+func _ring(role: Npc.Role, who: StringName, bearing: float, lamp: Color) -> Npc:
+	if not StoryDb.unlocked(who):
+		return null
 	var b := deg_to_rad(bearing)
 	var at := PLAZA_AT + Vector3(sin(b), 0.0, -cos(b)) * KIOSK_R
 	return _counter(role, at, bearing + 180.0, lamp)
