@@ -25,7 +25,13 @@ extends RefCounted
 ##   E  Extraction is where it stops being losable.
 ##   F  The Lanternkeeper's counter offers it, on the SAME `TradeScreen`, and
 ##      says where the eleven you have not found are.
-##   G  A donation is a HOLD. A tap records nothing.
+##      **Every one of the twelve is reachable with the D-pad** -- one press of
+##      RIGHT is one line. G8 counts them, and it is the check that found the
+##      board stepping two at a time (see `TradeScreen._input`).
+##   G  A donation is a HOLD, driven by a thumb: the cursor is WALKED onto the
+##      row and the button held until the ledger says so. A tap records nothing,
+##      and holding a relic she already has is refused on the footer where the
+##      player can read it.
 ##   H  The unlock BITES: the smith's ceiling moves a rung, and the fee moves
 ##      25% -> 20%.
 ##   I  The same corner of the yard, the same camera, dark and then lit.
@@ -41,6 +47,17 @@ extends RefCounted
 ## or did you have to be told?" -- so the two frames are the answer, and if you
 ## have to flick between them to spot the difference the mechanic has failed
 ## whatever the count of green lines below says.
+##
+## The pair for ONE donation is `r_18_watch_dark.png` -> `r_23_flare.png`, and
+## the pose they share is the only one here aimed at the lamp under test. `_hall`
+## and `_mid` are the yard-scale pair and neither contains it; H9 was shot from
+## `_hall` and was therefore a photograph of two OTHER props, both dark, under a
+## green line. `F4` and `H9a` now assert the lamp is inside the frustum, so the
+## frame cannot drift off its subject again. See `_watch_pose`.
+##
+## `--wrong-row` is the null case. It skips the walk in G and reproduces card
+## #74 exactly -- eleven red checks, headed by `H0a ... (THE RIVEN CHORD)` --
+## which is what makes the green run above mean anything.
 
 var out := ""
 var _fails := 0
@@ -53,6 +70,19 @@ var _game_cam: Camera3D = null
 ## two slightly different eyes prove nothing.
 var _hall := Transform3D.IDENTITY
 var _mid := Transform3D.IDENTITY
+## And the pose that is actually ON `WATCH`.
+##
+## `_hall` and `_mid` are the two the yard-scale claim (I) is made from -- "would
+## you see it from her counter", "would you see it walking anywhere" -- and
+## neither of them contains the Tally-Ledger's lamp. That is fine for I and it
+## was quietly fatal for H9: the flare frame was shot from `_hall`, which holds
+## the two lamps at the FAR side of the ring, so `r_23_flare.png` was a picture
+## of two props that had not lit and could not, laid under a green line saying a
+## third one had. Measured -- the lit lamp sits at (1.44, 0, -8.92) and
+## `is_position_in_frustum` says false for `_hall` and true for the two in shot.
+## Card #52 is the same shape: a beat failing on an arrow counter in a frame that
+## turned out to be of a shield.
+var _watch_pose := Transform3D.IDENTITY
 
 ## The corner the two frames are about: the Tally-Ledger's lamp, which is the
 ## prop nearest the gate and therefore the first one the player can possibly
@@ -418,6 +448,17 @@ func _dark(rig) -> void:
 	_cam.global_position = Vector3(0.0, 1.75, 2.0)
 	_cam.look_at(Vector3(-3.0, 1.2, -9.0), Vector3.UP)
 	_mid = _cam.global_transform
+	# And one standing in front of the watched prop, looking at it from the yard
+	# side. Derived from the lamp rather than written down, so a prop that moves
+	# takes its camera with it instead of leaving the shutter pointed at a wall.
+	if watched != null:
+		var inward: Vector3 = -watched.global_position
+		inward.y = 0.0
+		inward = inward.normalized()
+		_cam.global_position = watched.global_position + inward * 4.5 \
+			+ Vector3(0.0, 2.0, 0.0)
+		_cam.look_at(watched.global_position + Vector3(0.0, 1.8, 0.0), Vector3.UP)
+		_watch_pose = _cam.global_transform
 
 	_cam.global_transform = _hall
 	_cam.make_current()
@@ -426,6 +467,13 @@ func _dark(rig) -> void:
 	_cam.global_transform = _mid
 	await rig.wait_frames(4)
 	await rig.capture(out.path_join("r_15_mid_dark.png"))
+	# The dark half of H9's pair, from the pose H9 will be judged in.
+	_cam.global_transform = _watch_pose
+	await rig.wait_frames(4)
+	_ck("F4 the watched lamp is IN the frame its flare will be judged in",
+		watched != null and _cam.is_position_in_frustum(
+			watched.global_position + Vector3(0.0, 1.8, 0.0)))
+	await rig.capture(out.path_join("r_18_watch_dark.png"))
 	if _game_cam != null:
 		_game_cam.make_current()
 	await rig.wait_frames(4)
@@ -472,8 +520,34 @@ func _counter(rig) -> void:
 	var why := RelicDb.refusal(havent["line"]) if not havent.is_empty() else ""
 	_ck("G7 and the refusal says WHERE, not NOT ENOUGH GOLD (%s)" % why,
 		why.begins_with("NOT RECOVERED") and why.contains("LONG DESCENT"))
+	# One press of RIGHT is ONE line, and twelve of them visit twelve.
+	#
+	# G4 above says this board IS the quest log. A quest log whose rows cannot be
+	# reached is not one, and that is what this counted: RIGHT stepped **two**
+	# cells, so over an even board the cursor ran 0,2,4,6,8,10,0,… and the six
+	# odd-numbered relics could not be selected at all -- and a relic that cannot
+	# be selected cannot be donated. `TradeScreen._input` is the fix and carries
+	# the measurement; this is the check that would notice it coming back.
+	var seen := {}
+	for _i in screen.line_count():
+		seen[screen._cursor] = true
+		await rig.tap(["ui_right"])
+		await rig.wait_frames(2)
+	# What this MEASURES is twelve presses visiting twelve distinct lines, which
+	# is the claim that matters -- every relic is selectable, so every relic is
+	# donatable. It does not, strictly, pin the step to one: a step of 5, 7 or 11
+	# is also coprime with twelve and would also visit all of them. Nothing here
+	# can produce those, and saying "RIGHT steps one line" would be the same
+	# over-claim this whole card was about.
+	_ck("G8 twelve presses of RIGHT visit twelve distinct lines (%d of %d)"
+		% [seen.size(), screen.line_count()], seen.size() == screen.line_count())
+
 	# Pressed, so the footer is in the frame. `_refuse` is set by the press.
-	screen._cursor = screen._rows.find(havent)
+	# Walked to rather than assigned -- see `_walk_to`. A cursor the board's own
+	# focus does not agree with draws the highlight on one row and refuses a
+	# different one, and a capture of that is a photograph of nothing.
+	_ck("G9 the D-pad reaches the one she has not found",
+		await _walk_to(rig, screen, &"riven_chord"))
 	screen._commit()
 	await rig.wait_frames(8)
 	await rig.capture(out.path_join("r_20_counter.png"))
@@ -491,7 +565,27 @@ func _record(rig) -> void:
 	if line.is_empty():
 		_ck("H0 the Tally-Ledger is on the board", false)
 		return
-	screen._cursor = screen._rows.find(line)
+	# `--wrong-row` is this beat's null case, and the reason it exists is that
+	# every check below was green-by-construction the moment `_walk_to` landed:
+	# a fixture fix that cannot be made to fail again is a fixture nobody can
+	# trust the next time. The flag skips the walk and leaves the cursor exactly
+	# where `_refresh`'s deferred focus grab put it -- which is card #74's
+	# reading, reproduced on demand, from H4 down.
+	if rig.arg("wrong-row", "") != "":
+		print("RELIC note: --wrong-row, the cursor is NOT being moved to the ledger")
+	else:
+		await _walk_to(rig, screen, FIRST)
+	# Asked of where the cursor IS, and never of what `_walk_to` returned. The
+	# whole of card #74 was a beat that believed its own bookkeeping about the
+	# cursor instead of reading it, so a check here that trusts a return value
+	# would be the same mistake wearing the fix's clothes -- and under
+	# `--wrong-row` it would go green over a cursor sitting on the wrong relic.
+	var on: StringName = &""
+	if screen._cursor >= 0 and screen._cursor < screen._rows.size():
+		var here: Dictionary = screen._rows[screen._cursor]
+		on = here["line"]["id"] if here.has("line") else &""
+	_ck("H0a the cursor is ON the Tally-Ledger's row (%s)" % screen.cursor_label(),
+		on == FIRST)
 	_ck("H0 the footer says her word (%s)" % screen._verb(),
 		str(screen._verb()) == "RECORD")
 
@@ -503,14 +597,19 @@ func _record(rig) -> void:
 	# is ten frames of unknown duration in this harness, and a fixed wait here
 	# read 0.00 in alchemy_loop on a slow run because the whole hold had already
 	# elapsed and the bar it was looking at had reset.
-	Input.action_press(&"ui_accept")
+	#
+	# `rig.press`, not `Input.action_press`. The bare call is CLAUDE.md §3's
+	# trap and it was sitting on both of this beat's holds; `TradeScreen` polls,
+	# so it is NOT what broke this card -- but a screen that grows one
+	# `_unhandled_input` reader would take these two beats silently dark with it.
+	await rig.press(&"ui_accept")
 	var peak := 0.0
 	for _i in 30:
 		await rig.wait_frames(1)
 		peak = maxf(peak, screen._hold)
 		if peak > 0.0:
 			break
-	Input.action_release(&"ui_accept")
+	rig.release(&"ui_accept")
 	await rig.wait_frames(6)
 	_ck("H2 the gauge fills while she writes (%.2f)" % peak, peak > 0.0)
 	_ck("H3 letting go there recorded nothing", not RelicDb.donated(FIRST))
@@ -520,16 +619,23 @@ func _record(rig) -> void:
 	# picture that proves the opposite of the beat it belongs to. A quarter of the
 	# hold is enough arc to read as a bar filling and still leaves most of the
 	# hold un-elapsed, so the frame says "mid-press" rather than "nearly done".
-	Input.action_press(&"ui_accept")
+	await rig.press(&"ui_accept")
 	var shot := await _wait_until(rig,
 		func() -> bool: return screen._hold >= TradeScreen.CRAFT_HOLD * 0.25, 60)
 	_ck("H3a the gauge is visibly part-filled for the frame (%.2f of %.2f)"
 		% [screen._hold, TradeScreen.CRAFT_HOLD], shot)
 	await rig.capture(out.path_join("r_21_hold.png"))
-	await rig.hold_seconds(["ui_accept"], 0.9)
+	# ONE unbroken press, from the shutter above through the commit. It used to
+	# be `hold_seconds` here on top of a press that was never released, which is
+	# a second press of an already-held button -- harmless as it turned out, and
+	# still nothing a player's thumb can do. The wait is generous because a
+	# refused commit has to reach its own end rather than the harness's.
+	var took := await _wait_until(rig,
+		func() -> bool: return RelicDb.donated(FIRST), 120)
+	rig.release(&"ui_accept")
 	await rig.wait_frames(10)
-	print("RELIC recorded donated=%s count=%d" % [
-		RelicDb.donated(FIRST), RelicDb.donated_count()])
+	print("RELIC recorded donated=%s count=%d held_for=%s" % [
+		RelicDb.donated(FIRST), RelicDb.donated_count(), took])
 	_ck("H4 held through, it is in the ledger", RelicDb.donated(FIRST))
 	_ck("H5 it left her hand", not RelicDb.held(FIRST))
 	screen._refresh()
@@ -538,7 +644,23 @@ func _record(rig) -> void:
 		% RelicDb.refusal(again["line"]),
 		not again.is_empty() and RelicDb.refusal(again["line"]) == "ALREADY RECORDED")
 	_ck("H7 nought left of it", RelicDb.remaining(FIRST) == 0)
-	await rig.wait_frames(6)
+
+	# Hold it AGAIN, so the refusal is on the footer for the shutter. H6 above
+	# reads `ALREADY RECORDED` off the catalogue, which is a string in a
+	# function; this is the player holding the button on a relic she has already
+	# given away and being told so, and it is the version of that claim a frame
+	# can carry. The second hold cannot re-record it -- `can_buy` is false now,
+	# so `_commit` falls to `_show_refusal` -- and H4 above is what proves the
+	# first one landed.
+	await rig.hold_seconds(["ui_accept"], 0.7)
+	await rig.wait_frames(4)
+	# Through the meta the kit puts there for exactly this, never `get_child(0)`
+	# -- `FooterToast.build` says so in its own comment.
+	var said := ""
+	if screen._toast != null and screen._toast.has_meta(&"toast_label"):
+		said = String((screen._toast.get_meta(&"toast_label") as Label).text)
+	_ck("H7a holding it again is refused ON SCREEN, not in silence (%s)" % said,
+		screen._refuse >= 0.0 and said.to_upper().contains("ALREADY RECORDED"))
 	await rig.capture(out.path_join("r_22_recorded.png"))
 
 	# Close it, and watch the lamp come on. The flare is deliberately deferred
@@ -548,13 +670,14 @@ func _record(rig) -> void:
 	await rig.tap(["ui_cancel"])
 	var gone := await _wait_until(rig, func() -> bool: return _screen(rig) == null, 90)
 	_ck("H8 her screen closed", gone)
-	# `_hall` explicitly, not "wherever the camera was left". The fixed camera is a
-	# shared prop and the dark pair moved it to `_mid` on its way out, so this
-	# capture had been quietly shooting the wrong pose -- a flare frame that cannot
-	# be laid against `r_10_hall_dark.png` is not evidence of anything.
+	# `_watch_pose` explicitly, not "wherever the camera was left" and not `_hall`.
+	# The fixed camera is a shared prop and the dark pair moved it on its way out,
+	# so this capture had been quietly shooting the wrong pose -- and `_hall`,
+	# which it was corrected to, does not contain the lamp either. See
+	# `_watch_pose`. `r_18_watch_dark.png` is this frame's before.
 	if _cam != null:
 		_cam.make_current()
-		_cam.global_transform = _hall
+		_cam.global_transform = _watch_pose
 
 	# Timed off the lamp's OWN clock, not off frames. The overshoot peaks halfway
 	# through `FLARE_TIME` and four frames of a ~22 fps harness lands wherever it
@@ -573,6 +696,12 @@ func _record(rig) -> void:
 		45)
 	if not peaked:
 		print("RELIC note: shutter missed the flare's peak; r_23 is a settled lamp")
+	# The photograph's own claim, separate from the mechanic's. A frame that does
+	# not contain the thing it is evidence of is not evidence, and nothing else
+	# in this run would have noticed.
+	_ck("H9a and r_23 is a frame OF that lamp",
+		lamp != null and _cam != null
+			and _cam.is_position_in_frustum(lamp.global_position + Vector3(0.0, 1.8, 0.0)))
 	await rig.capture(out.path_join("r_23_flare.png"))
 
 
@@ -609,11 +738,19 @@ func _bite(rig) -> void:
 		_ck("I2 the Rope-Drum is on her board", false)
 		return
 	_ck("I2 the Rope-Drum can be recorded", RelicDb.can_buy(line))
-	# Straight through the catalogue this time, with no screen up: the hold is
-	# proven above, and this is also the OTHER half of `GarrisonLight`'s wiring
-	# -- a donation with nothing blocking input lights the lamp on the spot.
+	# Straight through the catalogue this time, with no screen up. This proves
+	# the OTHER half of `GarrisonLight`'s wiring -- that a donation with nothing
+	# blocking input lights the lamp on the spot -- and **it proves nothing
+	# whatever about the hold**, because it never touches a button.
+	#
+	# This comment used to say "the hold is proven above". It was false for as
+	# long as card #74 was open: the hold above was RED, and four lines of
+	# confident prose next to a green line is how nine failing checks read as a
+	# working system. H4 is the only check in this file that a player's thumb
+	# reaches. If it is red, nothing here covers for it.
 	print("RELIC recording the drum, blocked=%s" % Prompt.blocked)
-	_ck("I3 recording it took", RelicDb.buy(line))
+	_ck("I3 the catalogue records it with no screen up (the API, NOT the hold)",
+		RelicDb.buy(line))
 	var fee_after := Run.extract_cost()
 	var rate_after := RelicDb.extract_rate(Run.EXTRACT_RATE)
 	print("RELIC fee %d -> %d  rate %.2f -> %.2f (bag %d)" % [
@@ -1025,6 +1162,46 @@ func _row(screen, id: StringName) -> Dictionary:
 		if r.get("kind") == &"buy" and r["line"]["id"] == id:
 			return r
 	return {}
+
+
+## Put the counter's cursor on `id` by PRESSING THE D-PAD, and never by
+## assigning `_cursor`.
+##
+## **The assignment is what card #74 turned out to be.** `screen._cursor = i` is
+## half a move: `TradeScreen._point_at` is the other half, and it is the half
+## that calls `grab_focus` on the row's `Button`. Godot's focus grab is
+## DEFERRED -- the `focus_entered` it queues lands a frame or more later, runs
+## `UpgradeLadder._look` -> `cell_focused` -> `TradeScreen._on_cell_looked` ->
+## `_point_at`, and puts `_cursor` **back on whatever row the last `_refresh`
+## left the focus on**. So the assignment held for one frame, the half-second
+## hold below completed on THE RIVEN CHORD -- a relic nobody has recovered, which
+## `can_buy` refuses -- and the donation that the run was built to prove never
+## happened. Nine checks went red and read as "the hold never commits".
+##
+## Measured, not reasoned: with the assignment in place the board printed
+## `ledger_idx=0` and `cur=11` in the same frame, the gauge ran 0.16 -> 0.48 ->
+## 0 with `armed` dropping to false (that IS the commit firing) and the footer's
+## refusal timer restarting from 0.02. The screen did everything right.
+##
+## `mvp_loop.gd` met the same edge from the other side in #40 and reached for
+## `screen._point_at`. Pressing the button is better: `_point_at` is still the
+## harness reaching into the screen, and a walk over the board is also a test of
+## the left/right wrap the board promises. `cursor_label`/`line_count` exist for
+## exactly this and say so in their docstrings.
+func _walk_to(rig, screen, id: StringName) -> bool:
+	# One press per row plus one, so a board that will not move terminates here
+	# rather than in the harness's wall clock.
+	for _i in screen.line_count() + 1:
+		var at: int = screen._cursor
+		if at >= 0 and at < screen._rows.size():
+			var r: Dictionary = screen._rows[at]
+			if r.get("kind") == &"buy" and r["line"]["id"] == id:
+				return true
+		await rig.tap(["ui_right"])
+		# The focus round trip above is why: the cursor this asks about next
+		# frame is not settled in the frame the press landed in.
+		await rig.wait_frames(2)
+	return false
 
 
 func _all(root: Node) -> Array:

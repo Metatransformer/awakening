@@ -615,6 +615,31 @@ func tap(actions: Array) -> void:
 	await hold(actions, 2)
 
 
+## Put a button DOWN and leave it there. Pair with `release`.
+##
+## `hold` and `hold_seconds` own the whole press, which is what a beat wants
+## almost always -- but not when the beat has to WATCH something while the button
+## is down: sample a gauge every frame and let go on a reading, or take the
+## shutter mid-fill and carry the same press on through the commit. Those wrote
+## `Input.action_press` inline instead, and that is CLAUDE.md §3's most expensive
+## row: it sets action state and dispatches **no** `InputEvent`, so a screen read
+## through `_unhandled_input` never hears it. `_send` is the fix and this is the
+## door to it, so nobody has to reach past the rig to hold a button open.
+##
+## The `await process_frame` is `hold`'s, for `hold`'s reason -- see its
+## docstring. A press issued from a `frame_post_draw` resume (where `capture()`
+## leaves you) is stamped with a frame that is already spent, and every
+## `is_action_just_pressed` in the game ignores it.
+func press(action: StringName) -> void:
+	await process_frame
+	_send(action, true)
+
+
+## Let a button that `press` put down back up.
+func release(action: StringName) -> void:
+	_send(action, false)
+
+
 ## Press or release one action so BOTH kinds of reader see it.
 ##
 ## **`Input.action_press` sets action state and dispatches no `InputEvent` at

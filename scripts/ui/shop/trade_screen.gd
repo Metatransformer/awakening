@@ -841,6 +841,40 @@ func _hold_time(i: int) -> float:
 	return 0.0
 
 
+## The board owns its four arrows, and takes them before the GUI layer runs.
+##
+## **Until this existed, one press of RIGHT moved the cursor TWO cells**, because
+## two different things moved it. `_step` polls the action below; and Godot's own
+## focus navigation reads the same `ui_left/right/up/down` off the InputEvent in
+## `Viewport::_gui_input_event`, walks the focused cell to its
+## `focus_neighbor_*` (which `UpgradeLadder._wire_focus` and `ItemGrid` wire on
+## purpose, for the mouse and for spill), and the `focus_entered` that lands runs
+## `_look` -> `cell_focused` -> `_on_cell_looked` -> `_point_at`. The docstring
+## under `_tick_input` says focus follows the cursor rather than leading it. It
+## did both.
+##
+## The cost was not cosmetic. A double step over a board with an EVEN number of
+## reachable lines never lands on an odd one, so half of every counter was
+## unreachable: on the Lanternkeeper's twelve relics the cursor ran
+## 0,2,4,6,8,10,0,2,… for as many presses as you like and **six of the twelve
+## could not be selected, and therefore could not be donated at all**. Found by
+## `relic_donate.gd`'s G8 while card #74 was being settled, and confirmed to be
+## the GAME and not the harness by driving it with a real `InputEventKey` for
+## `KEY_RIGHT` -- no `action_press`, no `InputEventAction`, exactly the bytes the
+## OS delivers -- which stepped by two in exactly the same way.
+##
+## `_input` and NOT `_unhandled_input`: the GUI phase sits between the two, and
+## the GUI phase is the thing being headed off. Marking the event handled leaves
+## the ACTION STATE untouched -- `Input` set that before dispatch -- so `_step`'s
+## poll below reads the press exactly as it always did.
+func _input(event: InputEvent) -> void:
+	if _closing:
+		return
+	if (event.is_action(&"ui_left") or event.is_action(&"ui_right")
+			or event.is_action(&"ui_up") or event.is_action(&"ui_down")):
+		get_viewport().set_input_as_handled()
+
+
 func _tick_input(delta: float) -> void:
 	if _closing:
 		return
