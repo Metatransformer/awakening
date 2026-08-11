@@ -157,9 +157,18 @@ func _sell(rig) -> bool:
 	await rig.wait_frames(20)
 	await rig.capture(out.path_join("m_03_sold_one.png"))
 
+	# `_point_at`, not `_cursor = `. **Assigning the field moved the cursor and
+	# left the FOCUS behind**, and that only went unnoticed while the harness was
+	# unable to press a button: `ItemGrid`'s cells are real `Button`s, `_point_at`
+	# is what calls `grab_focus` on them, and a `ui_accept` that reaches the
+	# focused one emits `cell_focused` -> `_on_cell_looked` -> `_point_at(0)`.
+	# `rig.tap` dispatches a real event now (#40), so the next press snapped the
+	# cursor back to the top row and sold Iron Scrap instead of holding SELL
+	# EVERYTHING -- reported as "holding SELL EVERYTHING did not empty the bag".
+	# The screen was right and the shortcut was wrong.
 	var screen := _screen(rig)
 	if screen != null:
-		screen._cursor = screen._rows.size() - 1
+		screen._point_at(screen._rows.size() - 1)
 		screen.queue_redraw()
 
 	# SELL EVERYTHING is a HOLD (`TradeScreen._hold_time`): one press should not
