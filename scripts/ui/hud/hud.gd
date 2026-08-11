@@ -1661,7 +1661,12 @@ func _draw_floor(s: Vector2) -> void:
 	var at := Pal.FLOOR_ORIGIN * s
 	var nt := _text(10.0)
 	var lt := _text(16.0)
-	var name_line := Prog.NAME
+	# The FLOOR's name, not the shaft's (GDD §3, and `FloorDb.announced_name` for
+	# why `Prog.NAME` is still the right answer over the garrison gate). The plate
+	# below is measured from whichever of the two lines is wider, so a long name
+	# widens the card rather than overrunning it -- "THE HUSHING CHOIR" is the
+	# longest of the four and it is what this was looked at with.
+	var name_line := FloorDb.announced_name(Run.level)
 	var level_line := Prog.label(Run.level)
 	var gap := Pal.px(5.0, s.y)
 	var level_y := at.y + CanvasText.height(nt) + gap

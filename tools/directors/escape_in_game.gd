@@ -142,6 +142,19 @@ func _e_confirms(rig) -> void:
 ## input runs deepest-first and the menu is an autoload — so the menu recorded
 ## "visible" as the state to restore and the mouse never came back.
 func _mouse(rig) -> void:
+	# **Setting the mode is only half the stage, and H1 failed for months on the
+	# other half.** `GameCamera._ready` computes `may_capture = capture_mouse and
+	# get_tree().get_script() == null`, which is false under every director, so the
+	# camera declines to RE-take the pointer when the menu hands it back -- and H1
+	# is exactly the assertion that it comes back. H0 passed because releasing needs
+	# nobody's permission. So the fixture has to opt the camera in, the same way
+	# `mouse_cursor.gd:57` and `p1_orbit.gd` already do; a red H1 was the harness
+	# refusing to let the game do the thing being measured.
+	var cam := rig.scene().get_viewport().get_camera_3d() as GameCamera
+	if cam == null:
+		_ck("H- there is a GameCamera to hand the pointer back to", false)
+		return
+	cam.may_capture = true
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	await rig.wait_frames(2)
 	await _key(rig, KEY_ESC, 16)
@@ -150,6 +163,11 @@ func _mouse(rig) -> void:
 	await _key(rig, KEY_ESC, 16)
 	_ck("H1 closing gave CAPTURE back (mode=%d)" % Input.mouse_mode,
 		Input.mouse_mode == Input.MOUSE_MODE_CAPTURED)
+	# Put the opt-in back where `_ready` left it before handing the run on. The
+	# beats after this one press Escape too, and a camera left free to grab would
+	# take the pointer between them -- which on this Mac means the harness window
+	# swallowing the owner's mouse, the thing `may_capture` exists to prevent.
+	cam.may_capture = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	await rig.wait_frames(2)
 

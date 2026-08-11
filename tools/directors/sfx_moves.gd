@@ -65,6 +65,16 @@ func run(rig) -> void:
 		_fail("no hero in the scene, so there are no moves to make")
 		return
 
+	# `_hookshot` needs the hookshot in hand and the hero does not start with one:
+	# `Game.STARTER_KIT` is empty on purpose and `cycle_armament` walks only owned
+	# armaments, so `rig.draw_weapon(&"hookshot")` timed out and the last three
+	# beats of this director reported a silent chain. Granted here rather than in
+	# `_hookshot` so the arrange is visible from `run` -- and it is the same grant,
+	# for the same stated reason, as `ranged_kit.gd:60`: given the kit, does the
+	# move make its noise.
+	Game.grant(&"hookshot")
+	await rig.wait_frames(4)
+
 	await _jump(rig, hero)
 	await _roll(rig, hero)
 	await _backflip(rig, hero)

@@ -518,6 +518,24 @@ func _unbar_the_puzzles(d: Node) -> void:
 	print("FLOOR opened %d puzzle gate(s) and %d barred passage(s)" % [opened, bars])
 
 
+## True when a door is `docs/PUZZLES.md` §1's PURE LOCK rather than §5.1's puzzle.
+##
+## That is floor 4 and only floor 4, and it is design and not an omission: its
+## shortcut's key is the Far Lantern, which §1 (and `docs/PUZZLES.md` §5.1's table)
+## gives no verb -- *"it is the last door in the game and a pure lock, which is the
+## correct shape for a thing that ends Act I."* `Dungeon._shortcut_pool` comes back
+## empty there and `_place_shortcut` falls through to a bare `LockedDoor`.
+##
+## **Asked of the DOOR, never of `_level`.** The level number is what chose the
+## door in the first place, so re-deriving the answer from it here would be a second
+## opinion that can drift from the one that matters. `atoms()` is `PuzzleGate`'s and
+## it is also exactly the method `_solve_gate` needs to exist -- so the predicate
+## and the thing it guards cannot disagree, which is the whole reason it is a
+## predicate rather than an `if _level == 4`.
+static func is_pure_lock(door: Node) -> bool:
+	return not door.has_method(&"atoms")
+
+
 ## Answer every atom a gate is watching, and spend a key if it wants one. Returns
 ## whether the door is open afterwards.
 ##
@@ -527,6 +545,13 @@ func _unbar_the_puzzles(d: Node) -> void:
 ## measuring. Written twice, the day somebody teaches the fixture about a new kind
 ## of atom is the day beat D stops opening the shortcut.
 func _solve_gate(node: Node) -> bool:
+	if is_pure_lock(node):
+		# There are no atoms to answer, and the loop below would call `atoms()` on a
+		# door that does not have it -- which is precisely what happened on floor 4:
+		# `SCRIPT ERROR: Nonexistent function 'atoms (via call)' in base 'LockedDoor'`.
+		# Owning the key IS the solve here, so the honest fixture is the press.
+		node.call(&"activate", null)
+		return bool(node.call(&"is_open"))
 	for atom in node.call(&"atoms"):
 		# ARMED first. The gate room's key is deliberately disarmed until the sun
 		# socket lights it (`Dungeon._place_gate_room`), and `PuzzleAtom.solve()`
@@ -679,6 +704,30 @@ func _sweep(rig, hero: Node3D, route: Array[Vector3], tol: float = 0.7) -> bool:
 	return true
 
 
+## How much empty grid the shortcut's landing was given, against how much it needs.
+##
+## **Printed on every run, not only on a failure**, because the only way to read
+## "run 0 of 1 wanted" as a fault is to have seen a floor that works print "1 of 1".
+## `Dungeon._pick_side` asks `_clear_run` for `_reach_for` cells of empty grid and
+## takes the best wall it can find **whether or not that wall has them** -- the
+## `push_warning` above it only fires when there is no free wall at all. So a
+## landing built 13 m out through the room next door (`LAND_STUB` 4 + `LAND_SIZE` 9)
+## generates, renders, lights its sconce, and looks exactly like a landing until
+## something tries to walk from the door to the stair.
+##
+## D10 is that something. This line is what tells you whether D10 red means "the
+## stair is behind a wall the generator laid on top of it" or "the sweep is bad at
+## walking", and those two have opposite fixes.
+func _landing_clearance(d: Node) -> void:
+	var cell: Vector2i = d.anchor_cell(&"shortcut_door")
+	var side: StringName = d.placements[&"shortcut_door"]["side"]
+	var want: int = d._reach_for(&"shortcut_door", cell)
+	var got: int = d._clear_run(cell, side, want)
+	print("FLOOR landing on the %s wall of %s: %d clear cell(s) of %d wanted%s"
+		% [side, cell, got, want,
+			"" if got >= want else "  <-- THE LANDING IS BUILT THROUGH OCCUPIED GRID"])
+
+
 func _leg_failed(why: String, leg: int, legs: int, hero: Node3D, target: Vector3,
 		best: float) -> void:
 	print("FLOOR   %s on leg %d/%d: at %.1f,%.1f, %.1f m short of %.1f,%.1f "
@@ -790,6 +839,13 @@ func _shortcut_refuses(rig, d: Node, hero: Node3D) -> void:
 ## above, and it still opens nothing; what opens the shortcut is the atom in front
 ## of it being answered.
 ##
+## **Two shapes, and the beat has to know which one it is standing in front of.**
+## Floors 1-3 get §5.1's `ShortcutGate`; floor 4 gets §1's pure lock, because the
+## Far Lantern has no verb. Written for the gate alone, this beat produced three red
+## checks and a `SCRIPT ERROR` on floor 4 — `_solve_gate` calling `atoms()` on a
+## `LockedDoor` — and every one of them was the director being wrong about a door
+## the docs describe twice. See `is_pure_lock`.
+##
 ## The atom is answered here rather than SHOT. `tools/directors/shortcut_puzzle.gd`
 ## fires a real `Arrow` at the real eye and that is the whole of its beat D; this
 ## file is not allowed to own that claim twice (`CLAUDE.md` §0). What is left for
@@ -813,16 +869,35 @@ func _shortcut_opens(rig, d: Node, hero: Node3D) -> void:
 	# "X TO OPEN" on the frame the key item lands, which for a puzzle is a promise
 	# the door cannot keep -- the Warden dying while the player stands here must
 	# not turn an unshot eye into an invitation.
-	_ck("D6 owning it opened nothing and promised nothing (\"%s\")" % said,
-		not door.is_open() and not said.contains("TO OPEN"))
+	# Floor 4's door is §1's pure lock and every clause of D6 inverts on it: there
+	# is no unshot eye to make a false promise about, owning the Far Lantern IS the
+	# solve, and so the invitation is the CORRECT line and its absence would be the
+	# bug. Asserted rather than skipped -- a pure lock that stayed silent while
+	# holding its own key is GDD pillar 3's failure, the refusal that says nothing.
+	var lock := is_pure_lock(door)
+	if lock:
+		_ck("D6 owning %s turned the refusal into an invitation (\"%s\")"
+			% [FloorDb.boss_item(_level), said],
+			not door.is_open() and said.contains("TO OPEN"))
+	else:
+		_ck("D6 owning it opened nothing and promised nothing (\"%s\")" % said,
+			not door.is_open() and not said.contains("TO OPEN"))
 
 	var announced: Array[StringName] = []
 	door.opened.connect(func(where: StringName) -> void: announced.append(where))
-	_solve_gate(door)
+	if lock:
+		# The press, and a REAL one through `rig.tap` -- `LockedDoor.activate` would
+		# swing it from here, but the claim being made about a pure lock is that the
+		# player's button opens it, and `Input.action_press` is the trap in CLAUDE.md
+		# §3 that made three of these beats unreachable.
+		await rig.tap(["interact"])
+	else:
+		_solve_gate(door)
 	await rig.wait_frames(9)
 	await rig.capture(out.path_join("f_08_shortcut_swinging.png"))
 	await rig.wait_frames(90)
-	_ck("D7 answering the floor's own verb opened it", door.is_open())
+	_ck("D7 %s opened it" % ("pressing it with the key owned" if lock
+		else "answering the floor's own verb"), door.is_open())
 	_ck("D8 and told the placer where it goes (%s)" % [announced],
 		announced.size() == 1)
 
@@ -834,6 +909,7 @@ func _shortcut_opens(rig, d: Node, hero: Node3D) -> void:
 	if stairs.is_empty():
 		return
 	var down: Node3D = stairs[0]
+	_landing_clearance(d)
 	var walked := await _sweep(rig, hero, [
 		door.global_position - door.global_transform.basis.z * 3.0
 			+ Vector3(0.0, 0.15, 0.0),

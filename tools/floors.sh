@@ -36,9 +36,16 @@ for n in $levels; do
 		rc=$?
 		name=$(grep -m1 '^FLOOR .* -- .* rooms' $log | sed -E 's/^FLOOR (.*) -- .*/\1/')
 		bad=$(grep -c '^FLOOR FAIL ' $log)
-		printf "%s\t%s\t%s\t%s\t%s\n" "$tag" "${name:-?}" "rc=$rc" "${bad} red" \
+		# SCRIPT ERROR gets its OWN column, because it is invisible in the other two.
+		# `rc` cannot carry it: quiet.sh's 65 yields to a run that already failed on
+		# its own, so a director that both errored and failed a check reports 66 and
+		# nothing else. Floor 4 hid `Nonexistent function 'atoms'` behind "3 red"
+		# for a whole afternoon that way -- the count was read, the log was not.
+		err=$(grep -c 'SCRIPT ERROR' $log)
+		printf "%s\t%s\t%s\t%s\t%s\t%s\n" "$tag" "${name:-?}" "rc=$rc" "${bad} red" \
+			"$([ $err -gt 0 ] && print -- "$err SCRIPT ERROR" || print -- "-")" \
 			"$(grep -m1 '^FLOOR FAIL ' $log)" >> $OUT/summary.tsv
-		print -- "rc=$rc, $bad red"
+		print -- "rc=$rc, $bad red$([ $err -gt 0 ] && print -- ", $err SCRIPT ERROR")"
 	done
 done
 
@@ -48,7 +55,7 @@ print -- "\nevery red check, by floor:"
 for n in $levels; do
 	for r in {1..$REPEAT}; do
 		tag=$n; [ $REPEAT -gt 1 ] && tag="$n.$r"
-		grep -H '^FLOOR \(FAIL\|note\) ' $OUT/floor$tag.log 2>/dev/null \
+		grep -H '^FLOOR \(FAIL\|note\) \|SCRIPT ERROR' $OUT/floor$tag.log 2>/dev/null \
 			| sed "s|$OUT/floor||"
 	done
 done

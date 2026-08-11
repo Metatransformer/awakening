@@ -391,11 +391,15 @@ static var FLOORS := {
 		## of them +75% health and +1 damage — it is keeping the room legible,
 		## which is the same reason `Prog.pack` caps at 7 in the first place.
 		"pack": Vector2i(2, 4),
-		## `troll` and `knight_iron` have NO row in `Enemy.DEFS` yet. They are
-		## named here anyway because GDD §7 assigns them to this floor and a
-		## manifest that quietly substituted orcs would hide the gap instead of
-		## reporting it. A later card adds the two stat rows; until it does, this
-		## floor spawns nothing (`Enemy._ready` falls back to the skeleton def).
+		## `troll` and `knight_iron` are `Enemy.DEFS`' two heaviest ordinary bodies
+		## (`enemy.gd:136` and `:144`) — the slow one with the longest wind-up in
+		## the roster, and a soldier you cannot outpace.
+		##
+		## This note used to say they had NO row and that the floor therefore spawned
+		## skeletons. That was true when the manifest was written and the card that
+		## added the rows did not come back to correct it, so the doc outlived the gap
+		## it was reporting — which is the exact failure CLAUDE.md §7 warns about,
+		## since the next agent reads it and believes floor 4 is unfinished.
 		"bands": {
 			0: [&"wraith", &"troll", &"troll"],
 			1: [&"troll", &"troll", &"knight_iron"],
@@ -482,6 +486,36 @@ static func name_of(level: int) -> String:
 
 static func subtitle_of(level: int) -> String:
 	return get_floor(level).get("subtitle", "")
+
+
+## The name a floor is ANNOUNCED by — the loading card and the HUD's top-left
+## card, which GDD §3 names as the two callers and the only two.
+##
+## Both drew `Prog.NAME` until this line existed, so every one of the four floors
+## arrived as THE SUNKEN CUT and the names in this table were read by nothing but
+## `MapPanel`. GDD §3 pre-authorised the wiring in so many words: *"the day the
+## Cistern and the Foundry become real places rather than a table in this document
+## … the same two callers draw it."* They are real places; `Dungeon` builds all
+## four.
+##
+## `Prog.NAME` does not go away and is not superseded. It is the name of the SHAFT,
+## and the shaft is still what is signed over the garrison gate (`Npc._plate`) —
+## one way down, four places it passes through. Nor does this replace
+## `Prog.label()`: the depth readout stays on the card's second line, because a
+## number is what you glance at and a name is what you arrive in.
+##
+## Separated from `name_of` by exactly one thing, the fallback. A surface that
+## announces a place cannot draw an empty string, so a row with no `name` gets the
+## shaft's. `name_of` stays literal because `MapPanel` wants it literal — a blank
+## line on a map is a row that simply is not drawn, which is the right answer there
+## and the wrong one here.
+##
+## No `to_upper()`: `CanvasText` uppercases in both `draw_text` and `width`, so the
+## table's title case renders as THE CISTERN and measures as it. Upper-casing here
+## would only make this file's copy of the string disagree with `MapPanel`'s.
+static func announced_name(level: int) -> String:
+	var n := name_of(level)
+	return n if n != "" else Prog.NAME
 
 
 ## Rooms on this floor. Authored, or the curve's answer where the row defers.

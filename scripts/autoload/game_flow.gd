@@ -614,9 +614,15 @@ func _go(path: String, hold: float, dest: Dictionary = {}) -> void:
 ## Free whatever is up and put a fresh card over the black. Added to `_layer`
 ## after `_veil`, which is what puts it in FRONT of the veil -- siblings draw in
 ## tree order.
+## The card names the FLOOR, not the shaft. `Prog.NAME` was what it said until
+## GDD §3's "the day the Cistern and the Foundry become real places" arrived --
+## four floors that all announced themselves as THE SUNKEN CUT. `Run.level` is
+## already the new floor by the time this runs (Flow sets it before the fade), so
+## the card is the arrival and not the departure.
 func _raise_card() -> void:
 	_drop_card()
-	_card = LoadingCard.open(_layer, Prog.NAME, Prog.label(Run.level))
+	_card = LoadingCard.open(_layer, FloorDb.announced_name(Run.level),
+		Prog.label(Run.level))
 
 
 func _drop_card() -> void:
