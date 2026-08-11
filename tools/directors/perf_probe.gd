@@ -103,6 +103,19 @@ func run(rig) -> void:
 		print("PERF   ABLATED %s on %d light(s) -- this frame is NOT the game" % [ablate, n])
 		await rig.wait_frames(30)
 
+	# `--scale3d=0.5` renders the 3D at half linear resolution and upscales.
+	# This is the honest fill-rate lever and `--size` is NOT: a `--size` sweep
+	# over 640x360 / 1280x720 / 1920x1080 came back flat at 16.40 / 16.59 /
+	# 16.70 ms, which reads as "not pixel-bound" and was very nearly written
+	# down as a finding -- except the 1280 and 1920 runs also reported the SAME
+	# `vram_mb=1519.5`, and two different framebuffer sizes cannot cost the same
+	# video memory. The window was not resizing. A flat line is what a broken
+	# knob and a genuinely free axis both look like, so this one reports what it
+	# actually got (below) rather than what it was asked for.
+	var scale3d := float(rig.arg("scale3d", "0"))
+	if scale3d > 0.0:
+		rig.root.scaling_3d_scale = scale3d
+
 	var vp: RID = rig.root.get_viewport_rid()
 	var was_vsync: int = DisplayServer.window_get_vsync_mode()
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
@@ -189,7 +202,17 @@ func run(rig) -> void:
 
 	# One machine-readable line per run, so a tuning pass can diff two of them
 	# without anybody re-reading prose. PERF is the grep handle.
-	print("PERF %s  %dx%d  n=%d" % [label, int(size.x), int(size.y), samples])
+	#
+	# THREE sizes, because they disagree and the disagreement is the point. The
+	# viewport's own rect is what `--size` sets; the OS window is what the
+	# compositor actually gave us; and `scaling_3d_scale` decides how many
+	# pixels the 3D pass really shades. A run that reports 640x360 while the
+	# window is still 1280x720 has not measured a smaller frame, and that is
+	# exactly the run whose flat timings almost became a finding here.
+	var win: Vector2i = DisplayServer.window_get_size()
+	print("PERF %s  vp=%dx%d  win=%dx%d  scale3d=%.2f  n=%d"
+		% [label, int(size.x), int(size.y), win.x, win.y,
+			rig.root.scaling_3d_scale, samples])
 	_row("frame_ms", wall)
 	_row("gpu_ms", gpu)
 	if _pct(gpu, 1.0) == 0.0:
