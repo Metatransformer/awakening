@@ -458,18 +458,28 @@ Safe area: x ∈ [0.025, 0.975] (32 … 1248), y ∈ [0.031, 0.969] (22 … 698)
 
 Code and doc land in the same commit, per CLAUDE.md §7.
 
-**Decision 14 — the bag rim moves to 0.975, the safe edge exactly.** Its right edge
-is 0.978 today, which puts 4 px of a permanent element outside a margin the
-styleguide defines and nothing enforces. Rejected: widen the safe area.
+**Decision 14 — the bag rim moves to ~~0.975, the safe edge exactly~~ `0.969`.** Its
+right edge is 0.978 today, which puts 4 px of a permanent element outside a margin
+the styleguide defines and nothing enforces. Rejected: widen the safe area.
 
-~~The margin exists for overscan and for the corner of a 16:10 display.~~ **Struck:
-the project's own stretch settings deleted that hazard before this was written.**
-`display/window/stretch/aspect` is `keep` (§13.4), so the canvas is letterboxed into
-an exact 16:9 box at every resolution and there is no 16:10 corner to lose. The
-decision survives; only its reason changes, to the one decision 4.5 already gives:
-**one right edge.** The slips, the toast and the minimap are on 0.969 and the rim is
-9 px past them, which reads as a misalignment whether or not anything is clipped.
-A right reason matters because the next agent inherits the reason, not the number.
+**Twice struck, and the second one is the plan contradicting itself.**
+
+~~The margin exists for overscan and for the corner of a 16:10 display.~~
+`display/window/stretch/aspect` is `keep` (§13.4): the canvas is letterboxed into an
+exact 16:9 box at every resolution, so nothing is ever cropped and there is no 16:10
+corner to lose. The hazard was gone before this sentence was written.
+
+~~0.975.~~ **The number is `0.969`.** Decision 4.5 says *"one left edge, one right
+edge… `0.969` for the slips, the toast and the minimap. This already holds
+everywhere except the bag rim (decision 14)"* — it forward-references this decision
+as the fix, and this decision then invents a **fourth** right edge 8 px outboard of
+the other three, on the largest element in the corner. Snapping to the safe margin
+was never the point; the safe margin only entered because the rim had wandered past
+it. The point is decision 4.5's, and the money pole reads as ragged until the rim is
+on the same edge as the three things it is supposed to be a column with.
+
+A right reason matters because the next agent inherits the reason, not the number —
+and here the wrong reason produced the wrong number.
 
 **Decision 15 — the extraction hold is drawn on the rim, not as a floating arc.**
 The arc is 54 px, centred on the anchor of a number that no longer exists. The
@@ -1048,3 +1058,241 @@ root cause of §0; only its two assertions needed repair, not its thesis.
 
 `scale_mode = integer` (decision 23) is **not on this list** — it is card #20's,
 recorded in §13.4 so the tuning pass knows the HUD is what shows the defect.
+
+**§14 amends this list.** Read it before starting item 1.
+
+---
+
+# 14. The independent voice
+
+§13 was graded by the session that commissioned the plan. This is the other reader:
+given the plan, the styleguide, the GDD and the code, told to disprove rather than
+agree, and told that vague objections are as worthless as vague praise. Its scores
+were harsher than §13.1's on every dimension (hierarchy 4, coverage 3, accessibility
+1, responsive 2, consistency 4, implementability 4, subtraction 5).
+
+**It converged with §13 on the two criticals** — colour doing unredundant work, and
+the run's first minute never being drawn — which is worth something, since neither
+reader saw the other's notes. Everything below is what it found that §13 did not,
+or found harder. **It also caught an error in §13's own edit**, which is recorded
+here rather than quietly fixed, because a review that hides its corrections is
+selling the same false confidence §11 diagnoses.
+
+## 14.1 The draught pips are the two bars above them, exactly — CRITICAL
+
+§13.3 said heart and emberblood converge under deuteranopia. That was the weaker half
+of the finding. The stronger half:
+
+| | | |
+|---|---|---|
+| `heart_draught` tint | `(0.88, 0.25, 0.22)` | `Pal.VITAL` is `e04038` = `(0.878, 0.251, 0.220)` |
+| `ironhide_draught` tint | `(0.35, 0.47, 0.78)` | `Pal.COBALT` is `5878c8` = `(0.345, 0.471, 0.784)` |
+
+**They are the same colours, to the precision the palette is written in.** So the
+pip row — under decision 4.1's mandate to use the identical VOID-hairline-over-ASH
+construction, on the identical left edge, 12 px below — is a red bar under the red
+bar and a blue bar under the blue bar. Under a Heart Draught the player reads a
+second health bar draining. That is not a legibility risk, it is a false readout.
+
+And decision 7's argument fails on its own terms independently of colour: *"the same
+colour the bottle glyph in the item cell has already taught"* — the item cell shows
+the **selected** bottle, which need not be, and usually is not, the draught that is
+running.
+
+**Decision 30 — the draught row is not a bar.** Three fixed slots (decision 21) that
+**empty** rather than drain, each carrying a one-glyph mark — a heart outline, a hide
+chevron, a flame — so identity is a shape and the row is visibly not a meter. The
+tints stay as the redundant channel and stop being the only one. This also settles
+decision 7 honestly: the captions can go, because a glyph replaced them, not because
+a colour was asserted to have taught them.
+
+Two corrections to decision 7's own text while it is open: the short names are
+`HEART` / `HIDE` / `EMBER`, not `EMB` / `IRO` — five characters, so the captions the
+decision deletes are ~60% wider than the example it argues with; and in the garrison
+the row takes heat's slot at y 678–684 while the legend's first line has its cap top
+at 677.64. **Only x separation saves them, the legend is centre-anchored, and its
+width is set by live bindings.** `hud_pole.gd` must run the garrison beat *with the
+legend up*, at three draughts, on keyboard **and** on pad, and assert non-intersection.
+`Pal.HEALTH_ORIGIN`'s comment about the two "growing towards each other" — which the
+plan quotes — is about exactly this pair, and §13 did not check it either.
+
+## 14.2 Six colour-only channels, and the worst pair is not the one §13 found
+
+Counted: bag-rim rarity (4 states), slip rarity (4), draught identity (3, stripped by
+decision 7), lock-on kind (3, **created** by decision 16), stamina affordability,
+magic affordability, shield state. The worst collision is `MOSS` (`68a050`) against
+`MOTH` (`807868`) — mid-green against mid-khaki at near-identical luminance, the
+textbook deutan pair — carried by the **bag rim**, whose entire information content
+is that hue. A colour-blind player cannot tell *I am carrying something uncommon*
+from *I am carrying junk*, which is the one thing that corner exists to whisper.
+
+**Decision 31 — every colour-coded state carries a second channel, stated as a
+construction rule in §4 rather than fixed per element.** Rarity gets rim thickness
+(2 px common / 2 px + 1 px inner rule uncommon / 3 px rare / 3 px + dithered ring
+legendary) — the T2 halo already proves that vocabulary exists. Slips get a 1 px VOID
+notch count, 0–3, at their left end. Lock brackets get arm length (8 px hostile /
+12 px hookable / 5 px neutral) **as well as** §13's decision 22 shapes.
+
+**Decision 32 — assertion 4.** No permanent element's state may be distinguishable by
+hue alone: render `hud_lookdev`'s states through a deuteranope matrix and assert the
+two rarity rims differ in luminance by more than 15%. This is the only one of the
+four assertions that cannot be written from `layout_rects()`, and it is the one that
+would have caught MOSS-against-MOTH, which has been shipping since the rim was built.
+
+## 14.3 The rim is being asked to say five things and decision 26 makes it six — HIGH
+
+`_draw_rim` already carries rarity colour, the T2 dithered halo, and the 1-frame drop
+flash. Decision 15 adds the extraction hold (CYAN, clockwise, 1.5 s). Decision 17
+adds the T3 breath at 0.5 Hz and the 2-frame GOLD damage flicker. §13's decision 26
+adds the slot marks. **Nothing arbitrates.** At T3, holding to extract, with a
+legendary in the bag, taking a hit as a drop lands, the one rectangle that means *how
+much you stand to lose* is asked to say six things in one frame — and the CYAN hold,
+the only one that is a live response to a button the player is holding down, is the
+one that loses, because it is the only one driven by an animation clock rather than
+by state.
+
+**Decision 33 — one function, one stated precedence ladder:** hold (CYAN sweep) >
+drop flash (1 frame) > damage flicker (2 frames) > T3 breath > T2 halo > rarity. The
+hold suppresses everything below it for its whole duration. The slot marks are
+**not** on this ladder — they are inside the rim, not on its frame, which is the
+second reason decision 26 puts them where it does.
+
+And **the T3 breath moves off the rim to the slips.** Decision 17 relocated it there
+because the rim was "the only thing left in that corner"; a 0.5 Hz brightness lerp on
+a 2 px frame 209 px across is invisible, and it is now the fifth thing competing for
+that frame. The slips breathing as a block is legible and is already a group.
+
+## 14.4 Assertion 3 breaks a shipping screen the day it lands — HIGH
+
+`CanvasText` is not HUD-only; its own docstring names *"the loading card, the
+world-facing prompts and the run-end tally"*. `scripts/ui/loading/loading_card.gd:107`
+calls `scale_for(TITLE_PX)` with `TITLE_PX = 32.0`. Decision 20's assertion 3, sitting
+inside `scale_for` and erroring off the {10, 14, 16} ladder, pushes an error on every
+loading screen in the game.
+
+**Decision 34 — the ladder is a HUD rule, so the check is on a HUD-scoped wrapper.**
+`Hud._text(ref_px)` asserts and forwards; `CanvasText.scale_for` stays unguarded.
+§13's decision 28 (the legend wraps instead of shrinking) is still what makes the
+assertion true rather than merely unfalsifiable — but it is now the only exception
+that needed removing, rather than one of two.
+
+## 14.5 Assertion 1 fails today on geometry that is not a bug — HIGH
+
+§13's decision 27 made `layout_rects()` a tree, which fixes the deliberate-nesting
+half. Three things it did not fix:
+
+- **Which rectangle does an element report?** `_draw_health` issues at least four
+  `draw_rect`s — grown hairline, track, fill, ticks. Health's hairline bottom is 651
+  and stamina's hairline top is 653; report the ink and you have 2 px of margin,
+  report the hairline and you have none to spare. **Report the outermost rectangle
+  the element paints, hairline and plate included** — the conservative choice, and
+  the one that would have caught §0 a row earlier.
+- **What tolerance?** `Rect2.intersects` excludes borders by default, so a shared
+  edge passes and a 0.4 px overlap fails — and fractional layout guarantees 0.4 px
+  cases. Use `a.grow(-0.5).intersects(b.grow(-0.5))`.
+- **It already fails.** At 8 stacks, slip 8 spans y 562.4 → 566.4 and the rim's top
+  frame spans 565.92 → 567.92 — a half-pixel overlap between two permanent elements,
+  today, by design. An implementer who meets that before meeting the real bug will
+  add a fudge factor and lose both. Under decision 27's tree the slips are children
+  of the rim and this resolves correctly; **say so explicitly**, because it is the
+  first thing the new director will report.
+
+**Decision 35 — assertions 1 and 2 are scoped to everything drawn in the frame under
+test, not to the permanent set.** Decision 20 sells assertion 1 on three defects —
+§0's collision, the caps-through-the-health-bar bug, and the legend running off both
+edges — and decision 8 then makes the legend transient, which exempts it from the
+check it is evidence for. It also exempts the legend's 0.976 second line from
+assertion 2, which decision 8 waves through as *"acceptable for 10 s"*. A transient
+element that overlaps a permanent one for ten seconds is a bug for ten seconds. The
+directors photograph the transient states — legend up, prompt up, toast up — as their
+own beats.
+
+## 14.6 The arc crosses the fight, and §2 rule 1 is the plan's own objection — HIGH
+
+Decision 13 rejects amending §7.10 because *"a full-screen red wash at the exact
+moment you need to read a telegraph is the cue fighting the fight."* Its replacement
+is a RUST arc at `r = 0.28h` = 202 px, which passes through y 158–562 and x 438–842:
+straight across the middle third that §2 rule 1 keeps empty *"because the
+over-the-shoulder camera puts the fight there"*. The radius was authored in §5.6 for
+a HUD that did not yet have a crosshair or an interact prompt in the centre.
+
+**Decision 36 — `r = 0.42h` (302 px).** Near the frame edge, where a directional cue
+belongs, and clear of the telegraph.
+
+And the bearing, which §13's decision 29 got half right. It named camera-relative yaw
+and did not name the expression, in a repo whose CONTRACT §2.5 exists because facing
+has been got wrong three times:
+
+```gdscript
+var local := cam.global_transform.basis.inverse() * (hit.from - hero.global_position)
+var bearing := atan2(local.x, -local.z)   # 0 at the top of the circle, clockwise
+```
+
+`-local.z` because `-basis.z` is forward — the contract, spelled out, so nobody
+derives it again. §13's three-concurrent-arcs rule is **overturned**: one arc ever,
+a second blow replaces it and restarts the 300 ms. Three arcs at 302 px is three
+RUST strokes around the frame at the moment the player is being hit twice, which is
+decision 13's own objection a third time.
+
+## 14.7 Four factual errors in the plan, and one that the branch overtook
+
+1. **`hud.gd:1336` already reads `ArmamentDb.hand_count(id)`.** Element 12 and
+   decision 12 describe a change that has since shipped — `ce6d723`, the Burst
+   commit, generalised the arrow branch exactly as decision 12 asked. The plan was
+   right when written and the branch overtook it. Only the 7 px → 10 px half of
+   element 12 remains. **This is the good outcome**, and it is the evidence for
+   decision 12's claim that a working costs zero HUD changes: it did.
+2. **Decision 10's "byte-for-byte" is true of `KIT_ICON` and false of `KIT_LABEL`.**
+   The empty-hand row differs — `&""` maps to `""` in the HUD and to `"—"` in the db.
+   Harmless today because `_draw_item_glyph` early-returns on `id == &""`, but an
+   implementer told the tables are identical will not check, and an em-dash in an
+   empty cell is what would arrive.
+3. **`Pal.KEYCAP_SCALE` has four call sites in three functions** (`hud.gd:1240`,
+   `1242`, `1272`, `1408`), not the one decision 3 counts. The decision is right; its
+   budget is low.
+4. **The draught short names are `HEART` / `HIDE` / `EMBER`.** §14.1.
+5. **Decision 19's `MIN_SIZE` claim** — independently found, already struck in place.
+
+## 14.8 Where the two readers disagree, and what this plan does about it
+
+- **Tier separation in the pole.** §13's decision 24 does it with height and gap
+  (`MAGIC_H` 6, `MAGIC_GAP` 6, zero net pixels). The independent voice proposes
+  dropping the `grow(1)` VOID hairline from magic, heat and the draughts instead, so
+  Tier 2 is a lighter *construction*. **Decision 24 stands and the hairline stays.**
+  The hairline is what keeps a 6 px row legible over torchlit brick, and §13.2's
+  whole argument is that these rows must read when they are *empty* — an empty ASH
+  track with no hairline over a lit floor is not a track, it is a smudge. The
+  proposal is recorded because it is the better idea if the empty states ever get
+  cut, and it should not have to be re-derived.
+- **Where the ammo numeral is drawn is a real hit and is adopted.** Decision 19
+  promotes it to 10 px because it is read mid-fight, and leaves it `Pal.MOTH`
+  (`hud.gd:1343`) — the colour §2 rule 3 reserves for Tier 3. **Decision 37: the
+  ammo/charge numeral is `Pal.BONE`.** Changing the size and not the colour is half a
+  decision.
+- **Cutting the magic bar** — the independent voice's strongest subtraction argument,
+  and the one this plan declines. Magic is 48 with `MAGIC_SPIN` 12, i.e. a count of
+  four, and charges are also a resource that does not come back and get 10 px of text
+  in a cell; the same fact gets a 178 px meter in one case and eight pixels in the
+  other. **The inconsistency is real and the resolution goes the other way.** Spins
+  are spent *mid-swing*, on a trigger hold, with no menu and no pause — a length read
+  peripherally is the right instrument for that, and a numeral is not. Charges are
+  spent deliberately, at a distance, on a thing you aimed at. Two resources that do
+  not refill, spent in two different tempos, correctly get two different instruments.
+  **What was wrong is that neither document said so** — written into §5.1c.
+  Recorded, not resolved: `Game.charges` is still one `int` for three workings.
+- **Decision 8's missing signal is adopted.** There is no `garrison_entered` on
+  `Bus`, and booting straight into the garrison is the one time the legend matters
+  most. **Decision 38: show on `_refresh_visibility` going visible while
+  `not Run.in_dungeon`, plus `Bus.input_device_changed`, plus `Bus.run_ended`** —
+  boot, return-from-run and pad pickup, with no new signal. The 10 s hold pauses with
+  the game; a legend that burns its window inside the Options screen is one nobody saw.
+
+## 14.9 The order of work, amended
+
+Insert into §13.12: decisions 30, 31 and 37 land with item 1 (they are the pole and
+the pips, and 30 replaces the row's construction rather than adjusting it).
+Decision 34 lands with item 4 and **before** assertion 3, or the loading screen
+starts erroring. Decisions 33 and 36 land with items 6 and 8 respectively. Decision
+35 rescopes assertions 1 and 2 wherever they appear. Decision 32's assertion 4 is its
+own commit after item 9, because it needs a colour-matrix pass no director has today
+and it is the only assertion that is not about rectangles.
