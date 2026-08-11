@@ -424,6 +424,11 @@ ever seeing the Warden is a complete, correct, profitable run.
 
 ### 5.2 The four items — verbs, not numbers
 
+**`docs/ITEMS.md` is the design of record for items** — for every one of them,
+which body or which lock it answers, where it enters the run, and what owning it
+changes about the player's options. This section is the four boss drops and the
+rule that generates them.
+
 Boss items are the one thing the dungeon hands you directly, and the rule that
 keeps pillar 4 intact is that **each one is a verb you did not have**. None of
 them raises a stat. The stats are still the smith's.
@@ -677,7 +682,8 @@ answered, it is why `docs/SCOPE.md` can keep Quests at 0, and it is a
 
 ### 6.5 The workings — charges, not mana
 
-Three workings, and the number three is load-bearing.
+Three workings, and the number three is load-bearing. What each one *answers* —
+and the fact that only Burst is built — is `docs/ITEMS.md` §1.
 
 | Working | From | Charges | What it does |
 |---|---|---|---|
