@@ -13,12 +13,23 @@ That is `docs/BESTIARY.md` §0 read from the other end, and it is GDD §5.2's ru
 ("verbs, not numbers") applied to everything on the list rather than only to the
 four boss drops.
 
+**Status: design of record, and most of it runs.** The Bow, the Hookshot and
+Burst are rows in `ArmamentDb.NAMES` and stops on `Game.RIGHT_POOL`; the Far
+Lantern's door exists; the twelve relics, the twelve Echoes, the twenty ladders
+and all five stocks are code. **Two things described below are not built.**
+Sustain and Ballast do not exist in any form — no armament row, no ring stop
+(§8, D5) — and **no relic arrives broken**: no `broken` flag, no repair price,
+no home counter, and a fix in flight but unlanded (§8, D3). So §1.5, §1.6 and
+§2.1 are design rather than descriptions of something that runs, and §7's index
+marks the rows that are.
+
 **Numbers are not here.** They live in the DB scripts beside the rows they price
 — `docs/SCOPE.md` §1 says so explicitly of `relic_db.gd`, `echo_db.gd` says it
 of the Echo tuning values, and `docs/METAGAME.md` opens with the reason: a doc
 that restates a number is a doc that will disagree with the code. What this file
-carries instead is the **citation**: every claim below names the file and line
-that decides it, so a reader who doubts one can go and look.
+carries instead is the **citation**: every claim below names the symbol that
+decides it, so a reader who doubts one can go and look. §9 says why it is the
+symbol and not the line.
 
 **Where this document and the code disagree, §8 says so** rather than
 reconciling it quietly. That list is a deliverable, not an appendix.
@@ -46,10 +57,12 @@ reconciling it quietly. That list is a deliverable, not an appendix.
 5. **Stock** — arrows, charges, bottles, draughts, keys. Counted, not held.
 
 The shelf decides the plumbing, and the plumbing is the design. A usable item is
-`Game.has(id)` (`scripts/autoload/game_state.gd:1082`) and nothing else; a relic
+`Game.has()` (`scripts/autoload/game_state.gd:~1082`) and nothing else; a relic
 and an Echo are `ItemDef` rows so that the bag's slot rule, full-bag rule, fee
-rule and drop rule apply to them for free
-(`scripts/items/item_db.gd:185`, `:210`; `scripts/items/echo_db.gd:14-23`).
+rule and drop rule apply to them for free — `ItemDb._relic()` and
+`ItemDb._echo()` (`scripts/items/item_db.gd:~194`, `:~221`), and `EchoDb`'s own
+"why an Echo is an `ItemDef` and not a second inventory"
+(`scripts/items/echo_db.gd:~14-23`).
 
 ---
 
@@ -62,112 +75,167 @@ and one of the six has no button at all.
 **The six are not the ring's six.** The ring's stops are sword, bow, hookshot,
 Burst, Sustain, Ballast — the sword is a stop and not a manifest item; the Far
 Lantern is a manifest item and not a stop. `Game.RIGHT_POOL`
-(`scripts/autoload/game_state.gd:185`) is the ring, and it holds four of the six
+(`scripts/autoload/game_state.gd:~185`) is the ring, and it holds four of the six
 today because Sustain and Ballast are not built (§8, D5).
 
 ### 1.1 The three you already have
 
 Sword, shield and rope. **They are not on the manifest's six** — they are the
-starting kit, and since M1 the kit is literally empty
-(`scripts/autoload/game_state.gd:220`): the sword and the shield are
-unconditional in `armament_owned()` and the rope is a menu verb, so none of the
-three needs a grant.
+starting kit, and since M1 the kit is literally empty (`Game.STARTER_KIT`,
+`game_state.gd:~220`): the sword and the shield are unconditional in
+`armament_owned()` and the rope is a menu verb, so none of the three needs a
+grant.
 
 - **The sword** answers everything, *and that is the problem*
-  (`docs/BESTIARY.md` §2). In the puzzle kit it is the urn and the lantern —
-  `puzzle_atoms.gd:121`, `:188`, both T0.
+  (`docs/BESTIARY.md` §2). In the puzzle kit it is the urn —
+  `PuzzleAtoms.ATOMS[URN]`, `"verb": "the sword"`
+  (`scripts/props/puzzle_atoms.gd:~121`, T0). It is **not** the lantern:
+  `ATOMS[LANTERN]` reads `"verb": "any blow"` (`scripts/props/puzzle_atoms.gd:~188`,
+  T0), and it is verb-agnostic on purpose — which is the whole reason
+  `docs/PUZZLES.md` §3's *convert* combinator works, because a lantern only one
+  answer can light is a lantern nothing else can be wired into.
+  `docs/BESTIARY.md` §2's item table gives the lantern to the sword; that is §8,
+  D16, and this document inherited the error from it.
 - **The shield** is the one starting item with a verb the roster has to earn:
-  the sun socket's beam (`puzzle_atoms.gd:171`, T0, *"your shield"*) and the
-  Thrower's returned throw (`docs/BESTIARY.md` §3, behaviour 1). It is the
-  cheapest row on that table and the most valuable, because it is owned from
-  minute one.
+  the sun socket's beam (`PuzzleAtoms.ATOMS[SUN_SOCKET]`, `"verb": "your shield"`,
+  `scripts/props/puzzle_atoms.gd:~171`, T0) and the Thrower's returned throw
+  (`docs/BESTIARY.md` §3, behaviour 1). It is the cheapest row on that table and
+  the most valuable, because it is owned from minute one.
 - **The rope** owns **no combat verb and must keep owning none**
   (`docs/BESTIARY.md` §2). It is the extraction verb, it is deliberately not
   bindable to an item button, and one D-pad press that ends the run is exactly
-  the fumble its hold exists to prevent (`scripts/items/escape_rope.gd:26-27`).
+  the fumble its hold exists to prevent (`EscapeRope`'s header,
+  `scripts/items/escape_rope.gd:~26-27`).
 
 ### 1.2 The Bow — *for the thing that has not noticed you yet*
 
-**Answers.** The **eye switch** (`puzzle_atoms.gd:144`, T1, *"the bow"*) — and
-three bodies: the **Perched** enemy that stands across a gap, the **Caller**
-before its shout lands, and the **Guard** in the beat it turns
-(`docs/BESTIARY.md` §3, behaviours 3, 5, 2). It is the only stagger that lands
-on a plated front without Burst.
+**Answers.** The **eye switch** (`PuzzleAtoms.ATOMS[EYE_SWITCH]`,
+`scripts/props/puzzle_atoms.gd:~144`, T1, *"the bow"*) — and three bodies: the **Perched**
+enemy that stands across a gap, the **Caller** before its shout lands, and the
+**Guard** in the beat it turns (`docs/BESTIARY.md` §3, behaviours 3, 5, 2).
 
-**Enters** at the Cistern Warden, floor 1 (`floor_db.gd:306`,
-`boss_db.gd:214`). Nothing before that: the bow left the starting kit in M1 and
-its forge ladder left the smith's board with it — `string` and the `arrows`
-stock line are both gated on owning it (`shop_db.gd:62-63`), because a ladder
-for a weapon you have not found is a spoiler and a dead row (`shop_db.gd:44-52`).
+Note which beat that is. The arrow answers the Guard **because the plate is
+somewhere else** — `docs/BESTIARY.md` §3 row 2 gives the fast answer as *"Burst —
+or an arrow in the beat it turns"*, against a body whose plated front makes melee
+ring off it. Burst is the answer to the plate; the arrow is the answer to the one
+moment there is no plate in the way. An arrow into a plated front does nothing,
+and a reading of this section that says otherwise has the mechanic backwards.
+
+**Enters** at the Cistern Warden, floor 1 (`FloorDb.FLOORS[1]["boss_item"]`,
+`scripts/world/floor_db.gd:~306`; `BossDb.BOSSES[&"cistern_warden"]["drop"]`,
+`scripts/actors/enemies/boss_db.gd:~214`). Nothing before that: the bow left the
+starting kit in M1 and its forge ladder left the smith's board with it —
+`ShopDb.GATED_BY` puts `string` and the `arrows` stock line both behind owning it
+(`scripts/items/shop_db.gd:~61-65`), because a ladder for a weapon you have not
+found is a spoiler and a dead row (the note above that table,
+`shop_db.gd:~44-52`).
 
 **Changes.** It converts the whole of floor 2 into a temple about itself
-(`docs/PUZZLES.md` §1's diagonal), it opens floor 1's shortcut
-(`FloorDb.shortcut_key` = that floor's own boss item, `floor_db.gd:546`), and it
-is the key to floor 1's vault, which is opened by floor N+1's item
-(`floor_db.gd:556`). Owning it also switches on a **resource** the player has to
-manage: arrows, with three sources and no fourth (`docs/METAGAME.md` §4.6), one
-of which is the bag itself (`scripts/items/fletching.gd:38`).
+(`docs/PUZZLES.md` §1's diagonal), and it opens floor 1's shortcut —
+`FloorDb.shortcut_key()` is that floor's own boss item (`floor_db.gd:~553`).
+
+**It opens no vault, and it is the only one of the four that does not.**
+`FloorDb.vault_key()` returns `boss_item(level + 1)` (`floor_db.gd:~563`): a
+floor's vault is opened by the *next* floor's item. The Bow is floor **1's**
+item, so it would be the key to floor **0**, and there is no floor 0. The three
+vaults belong to the three items below, and each of them names its own.
+
+Owning the bow also switches on a **resource** the player has to manage: arrows,
+with three sources and no fourth (`docs/METAGAME.md` §4.6), one of which is the
+bag itself (`Fletching.RECIPE`, `scripts/items/fletching.gd:~38`).
 
 ### 1.3 The Hookshot — *crosses a gap, or brings the gap to you*
 
-**Answers.** The **hook ring** (`puzzle_atoms.gd:162`, T3, *"the hookshot"*) —
-cross, or pull the block to you. On a body it does **no damage**: it is the
-expensive answer to the **Perched** enemy (close the gap, then melee), and it
-holds a body still for `K.HOOK_FREEZE` (`consts.gd:587`; applied at
-`hero_ranged.gd:613`).
+**Answers.** The **hook ring** (`PuzzleAtoms.ATOMS[HOOK_RING]`,
+`scripts/props/puzzle_atoms.gd:~162`, T3, *"the hookshot"*) — cross, or pull the block to you.
+On a body it does **no damage**: it is the expensive answer to the **Perched**
+enemy (close the gap, then melee), and it holds a body still for `K.HOOK_FREEZE`
+(`scripts/core/consts.gd:~587`; applied in `HeroRanged`,
+`scripts/combat/hero_ranged.gd:~613`).
 
-**Enters** at the Bellwake, floor 3 (`floor_db.gd:367`, `boss_db.gd:426`). Its
-`chain` ladder appears at the smith the same moment (`shop_db.gd:64`).
+**Enters** at the Bellwake, floor 3 (`floor_db.gd:~371`; `boss_db.gd:~426`). Its
+`chain` ladder appears at the smith the same moment (`ShopDb.GATED_BY`,
+`shop_db.gd:~61-65`).
 
-**Changes.** An item that pulls you across a chasm and an item that buys you a
-beat are the same item, because both answer *I am not where I need to be yet*
-(GDD §5.2). That is why it has one entry in the atom table and one column in the
-bestiary and they do not need to agree about what it is for.
+**Opens floor 2's vault**, which holds the Sustain-Verse: `vault_key(2)` is floor
+3's boss item, and floor 2's manifest puts `sustain_verse` in the vault slot
+(`FloorDb.FLOORS[2]["relics"]`, `floor_db.gd:~344`). The one item on the six that
+is not a puzzle verb sits behind the one item that is nothing but reach.
+
+**Changes** where the player is allowed to stand. Every gap the room planner drew
+as the edge of the map becomes a place to be, and every body that was safe
+because it was far away stops being — the same press does both, because an item
+that pulls you across a chasm and an item that buys you a beat answer the same
+sentence, *I am not where I need to be yet* (GDD §5.2). That is why it has one
+entry in the atom table and one column in the bestiary and they do not need to
+agree about what it is for.
 
 ### 1.4 Burst — *the game's one destructive answer*
 
-**Answers.** The **cracked pillar** (`puzzle_atoms.gd:156`, T2, *"a burst"*) —
-the only atom that removes a wall rather than opening a door. On a body it is
-the **guard-breaker** and the only blow a **Riser** does not get up from
-(`docs/BESTIARY.md` §3, behaviours 2 and 7).
+**Answers.** The **cracked pillar** (`PuzzleAtoms.ATOMS[CRACKED_PILLAR]`,
+`scripts/props/puzzle_atoms.gd:~156`, T2, *"a burst"*) — the only atom that removes a wall
+rather than opening a door. On a body it is the **guard-breaker** and the only
+blow a **Riser** does not get up from (`docs/BESTIARY.md` §3, behaviours 2 and 7).
 
-**Enters** at the Slag Ogre, floor 2 (`floor_db.gd:336`). It is **cast, not
+**Enters** at the Slag Ogre, floor 2 (`floor_db.gd:~336`). It is **cast, not
 thrown**: what you take off the Ogre is a written working, and the change from
-the old satchel is a noun and a particle colour, not a mechanic
-(GDD §5.2; `cracked_pillar.gd:49-50`). Mechanically it is a row in
-`armament_db.gd` and nowhere else — a name (`:26`), two letters instead of an
-icon because a working has no model to bake one from (`:46-50`), a blurb
-(`:62`), and an ammo counter (`:124`). That row *is* the proof there is no
-casting layer.
+the old satchel is a noun rather than a mechanic — `CrackedPillar.burst()` was
+named for the verb rather than the weapon, and its note says the naming was
+vindicated exactly as predicted when the thing that arrived turned out to be a
+working you cast (`scripts/props/atoms/cracked_pillar.gd:~45-51`). Mechanically
+it is a row in `ArmamentDb` and nowhere else — a name
+(`scripts/items/armament_db.gd:~26`), two letters instead of an icon because a
+working has no model to bake one from (`ArmamentDb.LETTERS`, `:~46-50`), a blurb
+(`ArmamentDb.BLURBS`, `:~62`), and an ammo counter (`ArmamentDb.ammo_of()`,
+`:~124`). That row *is* the proof there is no casting layer.
 
-**Changes.** It is the first thing the player owns that **changes the shape of a
-room** rather than reaching across it, which is why `docs/PUZZLES.md` gives it
-the only atom that can open a route the room planner did not draw. Its charges
-are arrows with a different noun: a count in the HUD column
-(`armament_db.gd:141-145`), spent on cast, and **never refilled underground**
-(`game_state.gd:100-103`). Spending your last charge on floor 2 is a statement
-about how deep you were planning to go.
+**Opens floor 1's vault**, which holds the Cracked Still-Head. Floor 2's manifest
+says so at the row itself rather than leaving it to be derived: this id *"is what
+floor 1's VAULT door names in its refusal (`FloorDb.vault_key`)"*
+(`floor_db.gd:~332-336`).
 
-### 1.5 Sustain — *the chain holds through one break*
+**Changes** the shape of a room rather than the reach across it, which is why
+`docs/PUZZLES.md` gives it the only atom that can open a route the room planner
+did not draw. Its charges are arrows with a different noun: a count in the HUD
+column (`ArmamentDb.hand_count()`, `armament_db.gd:~141-145`), bought upstairs
+(§5) and **never refilled underground** (`Game.charges`,
+`game_state.gd:~100-103`). Spending your last charge on floor 2 is a statement
+about how deep you were planning to go — and it is also a way to be stuck, which
+is §8, D13.
+
+### 1.5 Sustain — *hold the Heat chain through one break*
+
+**The verb**: the tempo chain survives a break it would otherwise lose, and the
+Heat you kept rides out in the bag. `docs/GDD.md` §6.2 relic 6 is the row. There
+is no code, so there is no symbol to cite, and that absence is the honest half of
+this section.
 
 **Answers** no body and no lock. `docs/PUZZLES.md` §1 is explicit: Sustain and
 Ballast are **not puzzle verbs**, because neither manipulates a room.
 
 **Enters** as **the Sustain-Verse**, a relic found in the Foundry vault and
 **read** at the alchemist's counter rather than repaired (GDD §6.2, relic 6;
-§6.4). It is the only class of item in the game that arrives as one shelf and
-leaves as another.
+§6.4). The relic exists: `RelicDb.RELICS` places it at floor 2's vault
+(`scripts/items/relic_db.gd:~192`) and `RelicDb.WORKING_RELICS` maps it to the
+working (`relic_db.gd:~351`). It is the only class of item in the game that
+arrives as one shelf and leaves as another.
 
 **Changes** the price of tempo. Heat rides in the bag, so going fast raises the
 fee — Sustain makes speed cheaper *and* the exit dearer, which is GDD §2's one
-question asked twice in one button. **Not built** (§8, D5).
+question asked twice in one button. **Not built** (§8, D5): the relic has a row,
+the working has none.
 
 ### 1.6 Ballast — *burn what you came for, to survive carrying it*
+
+**The verb**: spend a stack out of the bag to soak a blow you would otherwise
+take. `docs/GDD.md` §6.2 relic 7 is the row, and again there is no code behind
+it.
 
 **Answers** no body and no lock, for the same reason as Sustain.
 
 **Enters** as **the Ballast-Verse**, the Choir's deep chest, read at the same
-counter (GDD §6.2, relic 7).
+counter (GDD §6.2, relic 7). Placed at `relic_db.gd:~207` and mapped by
+`RelicDb.WORKING_RELICS`.
 
 **Changes** what the bag is. It is the sharpest form of §2 in the game: the
 thing you came down for is the thing that keeps you alive, and casting it is
@@ -180,14 +248,25 @@ to spend", and there are only three things a player has to spend. **Not built**
 
 **Answers** exactly one thing: the last door. It is a **pure lock**, it never
 gets a verb (`docs/PUZZLES.md` §1), and the door that names it already exists
-(`locked_door.gd:123` — `THE FAR LANTERN`, `Pal.ARCANE`).
+(`LockedDoor.SIGILS[&"far_lantern"]` — `THE FAR LANTERN`, `Pal.ARCANE`,
+`scripts/props/locked_door.gd:~122`).
 
-**Enters** at the Riven Knight, floor 4 (`floor_db.gd:400`, `boss_db.gd:538`).
+**Enters** at the Riven Knight, floor 4 (`floor_db.gd:~407`; `boss_db.gd:~546`).
+
+**Opens floor 3's vault**, which holds the Warp-Stone Fragment — the last of the
+three, and the manifest's count of vaults is three (`docs/SCOPE.md` §1: *4
+shortcuts, 3 vaults, 1 to the Long Descent*). **There is no fourth vault**, and
+that is not a rule anybody wrote: *"`vault_key(4)` comes out empty on its own,
+because there is no floor 5 to lend it a key"* (`floor_db.gd:~409-412`). Floor
+4's boss room is the vault, and floor 4's manifest says so by having no
+`&"vault"` slot rather than by a branch.
 
 **Changes** nothing about a fight or a room, and that is correct for a thing
-that ends an act. What it opens is floor 4's shortcut, and floor 4's shortcut is
-the Long Descent (`floor_db.gd:543-545`). A pure lock is the right shape here
-precisely because the reward is the ending, not a new press.
+that ends an act. What it opens besides the vault is floor 4's shortcut, and
+floor 4's shortcut is the Long Descent — which falls out of `shortcut_key()`
+rather than being special-cased, because the Far Lantern *is* floor 4's boss item
+(`floor_db.gd:~550-552`). A pure lock is the right shape here precisely because
+the reward is the ending, not a new press.
 
 ---
 
@@ -195,30 +274,54 @@ precisely because the reward is the ending, not a new press.
 
 `docs/SCOPE.md` §1 freezes **relics at 12**, named, hand-placed, non-rolling —
 **two of them Verses, and all twelve arriving broken**. The moment a relic can
-roll it stops being a thing you remember finding (`relic_db.gd:8-12`).
+roll it stops being a thing you remember finding (`RelicDb`'s header,
+`scripts/items/relic_db.gd:~8-12`).
 
 **Answers:** nothing in a fight and nothing in a room. A relic answers a
-question about the *garrison*, and the rule that generates the whole list is one
-line (GDD §6.1):
+question about the *garrison*, and GDD §6.1 (`docs/GDD.md:582`) states the rule
+that is supposed to generate the whole list:
 
 > **A relic unlocks a row in an existing catalogue, a rung on an existing
 > ladder, or a number in `K`. It never adds a screen, a system, or a fifth NPC.**
 
-`relic_db.gd`'s `bites` column is that rule made checkable: every row names the
-accessor and the call site its one line of change lands on (`relic_db.gd:74-77`).
-If you cannot write a proposed relic as one accessor and one call site, it is the
-wrong relic.
+**That is two tests, and only one of them holds for all twelve.**
+
+- **The shape test — all twelve pass.** *One accessor, one call site.* That is
+  `relic_db.gd`'s own formulation, and the `bites` column is it made checkable:
+  every row names the accessor and the call site its one line of change lands on
+  (`relic_db.gd:~91-93`). If you cannot write a proposed relic as one accessor
+  and one call site, it is the wrong relic. This is the test with teeth, and it
+  is the one to apply first.
+- **The target test — ten pass, and two are an argued exception.** *A catalogue
+  row, a ladder rung, or a number in `K`.* Ten relics land on one of those three.
+  The **Sustain-Verse** and the **Ballast-Verse** do not: what they unlock is a
+  usable item and a stop on `Game.RIGHT_POOL`, through
+  `RelicDb.knows_working()` (`relic_db.gd:~880`) — and both rows' `bites` strings
+  say exactly that. A ring stop is not a catalogue row, not a rung, and not a
+  number.
+
+The exception is deliberate, and the GDD argues it three sections later: §6.3
+says the two Verses are *"the §5.2 rule applied to relics — a verb you did not
+have, never a number that went up"* (`docs/GDD.md:635-640`). §6.1 was simply
+never updated to admit them. So the honest statement of the generating rule is:
+**one accessor and one call site, landing on a catalogue, a ladder or `K` — or,
+twice and only twice, on a verb the ring already knows how to hold.** A rule that
+does not generate two of its own twelve is not predictive, and a rule that is not
+predictive cannot be used to refuse a thirteenth.
 
 **Enters** at one of four anchors and nowhere else — deep chest, vault, boss, and
-the Long Descent's single chest (`relic_db.gd:255-258`). Four from bosses, four
-from deep chests, three from vaults, one from the endless mode; eleven are
-reachable in Act I and the twelfth is the reason to keep going after it.
+the Long Descent's single chest (`RelicDb.SOURCE_DEEP_CHEST` and its three
+siblings, `relic_db.gd:~288-291`; the note above them says why there is no
+fifth). Four from bosses, four from deep chests, three from vaults, one from the
+endless mode; eleven are reachable in Act I and the twelfth is the reason to keep
+going after it.
 
 **Changes** the place you come home to, and it changes it **twice**: the unlock,
-and a dark prop in the courtyard coming on (`relic_db.gd:79-82`). Twelve dark
-props, twelve lights. By the twelfth the first frame of the game and the last
-frame are visibly different places, and that contrast *is* the reward — it must
-not cost more than a prop.
+and a dark prop in the courtyard coming on (the `prop` column,
+`relic_db.gd:~96-99`; read by `RelicDb.props_lit()`). Twelve dark props, twelve
+lights. By the twelfth the first frame of the game and the last frame are visibly
+different places, and that contrast *is* the reward — it must not cost more than
+a prop.
 
 ### 2.1 Broken on arrival, and why that is the design and not a tax
 
@@ -236,18 +339,20 @@ relic is worth nothing until you pay, and it still costs a bag slot and still
 pays the toll on the way out. Five rooms from the rope you are carrying twelve
 slots of amber and one object currently worth less than the amber.
 
-**Unbuilt** — there is no `broken` flag, no repair price and no `home` column in
-`relic_db.gd`, and every donation line is priced at zero (`relic_db.gd:557`).
-§8, D4.
+**Unbuilt** — `RelicDb.RELICS` (`relic_db.gd:~139-276`) carries no `broken` flag,
+no repair price and no `home` column, and `RelicDb.lines()` (`relic_db.gd:~668`)
+prices every donation at zero. §8, D3, where the state of the in-flight fix is
+kept.
 
 ### 2.2 What a relic is worth on the way up
 
-Nothing, and it is charged for anyway. `ItemDb._relic` (`item_db.gd:185`) gives
-all twelve the same `RELIC_TOLL` (`item_db.gd:168`) — **not a sale price**: the
-vendor pays 0 and refuses the sale outright, and the toll exists only so that
-GDD §3's sentence *"a relic is charged the extraction fee"* is true rather than
-decorative. Uniform across all twelve **on purpose**: a per-relic toll would be a
-hidden ranking of which unique is worth the trip, and there is no such ranking.
+Nothing, and it is charged for anyway. `ItemDb._relic()`
+(`scripts/items/item_db.gd:~194`) gives all twelve the same `ItemDb.RELIC_TOLL`
+(`item_db.gd:~168`) — **not a sale price**: the vendor pays 0 and refuses the sale
+outright, and the toll exists only so that GDD §3's sentence *"a relic is charged
+the extraction fee"* is true rather than decorative. Uniform across all twelve
+**on purpose**: a per-relic toll would be a hidden ranking of which unique is
+worth the trip, and there is no such ranking.
 
 One slot, always. That slot is the sharpest form of the one question, and it is
 also why the Thief refuses to steal one (`docs/BESTIARY.md` §3).
@@ -255,14 +360,19 @@ also why the Thief refuses to steal one (`docs/BESTIARY.md` §3).
 ### 2.3 The three things a relic must never do
 
 - **No relic sells.** There is no `value` column and the vendor never sees one
-  (`relic_db.gd:42-45`). Gold buys a relic's *effect* — that runs the other way
-  and is not a violation — but gold can never buy the relic and the relic can
-  never become gold.
-- **No relic is a stat.** Read the `bites` column: catalogues, recipes, prices,
-  two workings, one wayfinding hum. The closest thing to power is the extraction
-  discount, which is a discount on *leaving* (`relic_db.gd:46-48`).
-- **No relic gates the ending.** `all_donated()` exists for the completionist
-  Chord ending only (`relic_db.gd:49-51`, `:467`).
+  (`RelicDb`'s header, `relic_db.gd:~44-47`). Gold buys a relic's *effect* — that
+  runs the other way and is not a violation — but gold can never buy the relic
+  and the relic can never become gold.
+- **No relic is a stat.** Read the `bites` column. Two documents describe what is
+  in it and they do not agree: `relic_db.gd:~50-52` says *"catalogues, recipes,
+  prices, one wayfinding hum"*, and `docs/GDD.md:635-636` says *"catalogues,
+  recipes, prices, two workings, one wayfinding hum"*. **The GDD is the one the
+  table now agrees with** — `sustain_verse` and `ballast_verse` both carry
+  `RelicDb.knows_working()` in `bites` — so the code comment is the stale half
+  (§8, D15). Either way the point survives: the closest thing to power is the
+  extraction discount, which is a discount on *leaving*.
+- **No relic gates the ending.** `RelicDb.all_donated()` exists for the
+  completionist Chord ending only (`relic_db.gd:~53-55`, `:~584`).
 
 ---
 
@@ -274,18 +384,25 @@ the other shelves.
 
 > **An Echo costs a bag slot, and that is the only thing it costs.**
 
-**Answers** neither a body nor a lock — an Echo **bends a rule the game already
-runs** (`echo_db.gd:8-12`). That is the boundary that keeps a found thing from
-quietly replacing a bought one, and `EchoDb.validate()` (`echo_db.gd:265`)
-enforces the shape of the pool rather than trusting a listing: twelve rows, five
-on tempo, five on depth, two on the carrying itself, no duplicate names, a
-catalogue row for every id, value 0 and stack 1 on every one of them.
+**Answers** neither a body nor a lock. An Echo bends a rule the game already
+runs — and the half of that sentence that does any work is the rest of it:
+*"it never moves damage, speed, max health, max stamina or soak, **which is the
+boundary** that keeps a found thing from quietly replacing a bought one"*
+(`EchoDb`'s header, `scripts/items/echo_db.gd:~8-12`). The five stats are the
+boundary. "Bends a rule the game already runs" excludes nothing — a forge rung
+bends a rule the game already runs, and so does a jewel — so it is a description
+of the shelf, not a test a proposal can fail.
+
+`EchoDb.validate()` (`echo_db.gd:~265`) enforces the shape of the pool rather
+than trusting a listing: twelve rows, five on tempo, five on depth, two on the
+carrying itself, no duplicate names, a catalogue row for every id, value 0 and
+stack 1 on every one of them.
 
 **Enters** from a sounding stone on a pedestal, as **a choice of three**
-(`echo_db.gd:49`), at three sites: the shortcut, the gate room and the treasure
-puzzle. Minimum one per floor, maximum two. One Echo — the Long Chord — is
-withheld until floor 3 (`echo_db.gd:54`), because it is worth nothing to a player
-who has not already committed slots.
+(`EchoDb.OFFER`, `echo_db.gd:~49`), at three sites: the shortcut, the gate room
+and the treasure puzzle. Minimum one per floor, maximum two. One Echo — the Long
+Chord — is withheld until floor 3 (`EchoDb.LONG_CHORD_FLOOR`, `echo_db.gd:~54`),
+because it is worth nothing to a player who has not already committed slots.
 
 **Changes** how a *single run* is played, and then stops existing. Home, garrison
 or death — it goes quiet (`Run.bank_echoes`, mirrored on `bank_relics`). GDD
@@ -299,7 +416,13 @@ rejects, by name, an Echo that reveals a chest (relic 8's job), one that holds a
 Heat chain through a break (Sustain's), one that burns a stack for soak
 (Ballast's) and one that changes a price at a counter (relic 11's). All four for
 the same reason: **an Echo may not be a weaker copy of something permanent.**
-That is the test to apply to a thirteenth, and the reason there is no thirteenth.
+
+**That test is a filter, not a generator.** It tells you whether a proposed
+thirteenth is *allowed*, and it will happily pass a dozen of them. The reason
+there is no thirteenth is not the test — it is `docs/SCOPE.md` §1's count, which
+says twelve and says *"no thirteenth, same discipline as the relics"*, and which
+`EchoDb.validate()` asserts on every run of the puzzle director. Design refuses
+the bad ones; the manifest refuses the rest.
 
 ---
 
@@ -313,27 +436,30 @@ is the one kind the player chooses rather than finds.
 **Answers** the same questions as everything above, in the same units. `edge` and
 Emberblood answer *this thing does not die fast enough*; `guard` and Ward and
 Ironhide answer *this thing hits too hard*. That overlap is deliberate and it is
-capped on the **number**, never per faucet — `K.SOAK_MAX`, `K.EDGE_MAX`,
-`K.STAMINA_MAX`, and the clamp inside `Game.speed_mult()` (`jewel_db.gd:31-37`).
-Two taps on one number is a build; two ceilings on one number is a bug that adds
-up to twice the cap.
+capped on the **number**, never per faucet — `JewelDb`'s header names
+`K.SOAK_MAX`, `K.EDGE_MAX` and the clamp inside `Game.speed_mult()`
+(`scripts/items/jewel_db.gd:~31-37`). `K.STAMINA_MAX`
+(`scripts/core/consts.gd:~718`) is the same rule on the fourth number, and it is
+the one that block does not name. Two taps on one number is a build; two ceilings
+on one number is a bug that adds up to twice the cap.
 
 **Enters** at a counter, for gold and materials, after you got home. Two of the
-four gear ladders are gated on owning the item they are about
-(`shop_db.gd:61-65`), which is what turns two systems that were already built
-into progression.
+four gear ladders are gated on owning the item they are about (`ShopDb.GATED_BY`,
+`scripts/items/shop_db.gd:~61-65`), which is what turns two systems that were
+already built into progression.
 
 **Changes** what you are willing to carry, because every rung on the armour is a
 **fork**: heavy buys soak and costs a little speed, light buys less and costs
 none. `docs/SCOPE.md` §1 freezes **jewelry at 4 slots × 2 paths × 5 rungs** —
 one deeper than a forge ladder, because a jewel has no rung 0 you already own
-(`jewel_db.gd:17-19`, `:107`, `:118`) — and the jeweller is where the speed heavy
-plate took is bought back. That is the loop's one genuinely hard standing
-question and it is the same shape as §2's.
+(`jewel_db.gd:~17-19`; `JewelDb.PARTS_LADDER` and `JewelDb.GOLD_LADDER`, `:~107`,
+`:~118`) — and the jeweller is where the speed heavy plate took is bought back.
+That is the loop's one genuinely hard standing question and it is the same shape
+as §2's.
 
-**A piece commits, and both counters sell the undo.** REFORGE at the smith
-(`shop_db.gd:163`) and RECUT at the jeweller (`jewel_db.gd:123`) are priced at
-zero gold on the face of the card, because the price is paid in the currency that
+**A piece commits, and both counters sell the undo.** `ShopDb.REFORGE`
+(`shop_db.gd:~163`) and `JewelDb.RECUT` (`jewel_db.gd:~123`) are priced at zero
+gold on the face of the card, because the price is paid in the currency that
 costs time rather than progress: **metal is conserved and stone is not**. Neither
 row is a track and neither reaches `Game.upgrades`.
 
@@ -347,24 +473,24 @@ can never grind one into another.
 
 | Stock | Lives on | Enters | The decision it creates |
 |---|---|---|---|
-| **Arrows** | `Game.arrows` | Three sources, no fourth — `docs/METAGAME.md` §4.6 | Fletching runs the right way round: it **frees** slots (`fletching.gd:38`, `:48`) |
-| **Charges** | `Game.charges` | Bought from the alchemist once the Burst is owned (`alchemy_db.gd`'s `CHARGE_ID` line), never refilled below (`game_state.gd:103`) | How deep you were planning to go |
-| **Bottles** | `Game.bottle_contents` | Blown at the alchemist, capped by a relic (`alchemy_db.gd:26`, `:168`) | The fourth bottle is an event, not a purchase |
-| **Draughts** | in a bottle | Brewed — three, and only three (`potion_db.gd:23`) | Which of the smith's three numbers you want for 45 seconds |
-| **Small keys** | `Game.small_keys` | The T0 atom (`puzzle_atoms.gd:111`) | Which door, when there is more than one |
+| **Arrows** | `Game.arrows` | Three sources, no fourth — `docs/METAGAME.md` §4.6 | Fletching runs the right way round: it **frees** slots (`Fletching.RECIPE` and `Fletching.batch()`, `scripts/items/fletching.gd:~38`, `:~64`) |
+| **Charges** | `Game.charges` | Bought from the alchemist once the Burst is owned (`AlchemyDb.CHARGE_ID`, `scripts/items/alchemy_db.gd:~76`), never refilled below (`game_state.gd:~100-103`) | How deep you were planning to go |
+| **Bottles** | `Game.bottle_contents` | Blown at the alchemist, capped by a relic (`RelicDb.bottle_cap()`, `relic_db.gd:~889`, read by `AlchemyDb.remaining()`) | The fourth bottle is an event, not a purchase |
+| **Draughts** | in a bottle | Brewed — three, and only three (`PotionDb.IDS`, `scripts/items/potion_db.gd:~23`) | Which of the smith's three numbers you want for 45 seconds |
+| **Small keys** | `Game.small_keys` | The T0 atom (`PuzzleAtoms.ATOMS[SMALL_KEY]`, `scripts/props/puzzle_atoms.gd:~111`) | Which door, when there is more than one |
 
 **The draughts are the forge's own numbers on a timer, on purpose**
-(`potion_db.gd:5-12`). Emberblood adds to `Game.sword_bonus()` and Ironhide to
-`Game.armour_soak()`, so a draught is worth two rungs for its duration and not
-one consumer of either number knows potions exist. A potion that did something no
-rung does would be a fourth kind of good for the player to learn. Their short
-names are `HEART`, `HIDE` and `EMBER` (`potion_db.gd:30`, `:36`, `:43`) — five
-characters at most, because the HUD cell is 64 px and a longer word stops being a
-word.
+(`PotionDb`'s header, `potion_db.gd:~5-12`). Emberblood adds to
+`Game.sword_bonus()` and Ironhide to `Game.armour_soak()`, so a draught is worth
+two rungs for its duration and not one consumer of either number knows potions
+exist. A potion that did something no rung does would be a fourth kind of good
+for the player to learn. Their short names are `HEART`, `HIDE` and `EMBER`
+(`PotionDb.DEFS`, `potion_db.gd:~30`, `:~36`, `:~43`) — five characters at most,
+because the HUD cell is 64 px and a longer word stops being a word.
 
-**Re-drinking replaces the clock rather than stacking it** (`potion_db.gd:113`).
-Stacking would make the answer to every hard fight *drink all four*, which is the
-one thing four slots must not be for.
+**Re-drinking replaces the clock rather than stacking it** (`PotionDb.apply()`,
+`potion_db.gd:~113`). Stacking would make the answer to every hard fight *drink
+all four*, which is the one thing four slots must not be for.
 
 ---
 
@@ -372,10 +498,11 @@ one thing four slots must not be for.
 
 - **Ingredients and components.** Merchandise and material. They are `ItemDef`
   rows and they compete for the same bag slot as everything else, which is the
-  competition the economy actually needs (`item_def.gd:17-34`). No id appears in
-  two counters' recipes — the pouch prints one bench name per material, and a
-  coil the jewelcrafter also ate would send the player to the smith holding her
-  price (`item_def.gd:51-59`).
+  competition the economy actually needs (`ItemDef.Kind`,
+  `scripts/items/item_def.gd:~17-34`). No id appears in two counters' recipes —
+  the pouch prints one bench name per material, and a coil the jewelcrafter also
+  ate would send the player to the smith holding her price (`ItemDef.bench`,
+  `item_def.gd:~51-59`).
 - **The rope.** §1.1.
 - **Armour and jewelry art.** Every piece is a number. `docs/SCOPE.md` §1 holds
   armour/jewelry art at 0 and GDD §6.6 gives the reason: four meshes × two paths
@@ -390,18 +517,20 @@ one thing four slots must not be for.
 
 ## 7. The three questions, in one table
 
-Every row is answered above; this is the index, not a second source.
+Every row is answered above; this is the index, not a second source. **⚠ marks a
+row that describes design with no code behind it** — an index is what a reader
+lands on, and it must not be the one place the gap is invisible.
 
 | Item | Answers | Enters | Changes |
 |---|---|---|---|
-| Bow | eye switch; Perched, Caller, Guard-on-the-turn | Cistern Warden, floor 1 | Range, and a resource to ration |
-| Hookshot | hook ring; Perched (the expensive answer) | The Bellwake, floor 3 | Position, and one held beat |
-| Burst | cracked pillar; Guard, Riser | The Slag Ogre, floor 2 | The shape of the room |
-| Sustain | — (not a puzzle verb) | Sustain-Verse, Foundry vault — **read** | The price of tempo |
-| Ballast | — (not a puzzle verb) | Ballast-Verse, Choir deep chest — **read** | The bag becomes armour |
-| Far Lantern | the last door | The Riven Knight, floor 4 | The act ends |
-| A relic | a question about the garrison | 4 anchors, broken | One catalogue row, one lit prop |
-| An Echo | a rule the game already runs | a pedestal, choice of three | One run, then silence |
+| Bow | eye switch; Perched, Caller, Guard-on-the-turn | Cistern Warden, floor 1 | Range, a resource to ration — and **no vault** |
+| Hookshot | hook ring; Perched (the expensive answer) | The Bellwake, floor 3 | Position, one held beat; floor 2's vault |
+| Burst | cracked pillar; Guard, Riser | The Slag Ogre, floor 2 | The shape of the room; floor 1's vault |
+| **⚠ Sustain** | — (not a puzzle verb) | Sustain-Verse, Foundry vault — **read** | The price of tempo. **No armament row and no ring stop** (D5) |
+| **⚠ Ballast** | — (not a puzzle verb) | Ballast-Verse, Choir deep chest — **read** | The bag becomes armour. **No armament row and no ring stop** (D5) |
+| Far Lantern | the last door | The Riven Knight, floor 4 | The act ends; floor 3's vault, and there is no fourth |
+| A relic | a question about the garrison | 4 anchors — **⚠ arriving broken is unbuilt** (D3) | One catalogue row, one lit prop |
+| An Echo | never the five stats | a pedestal, choice of three | One run, then silence |
 | A rung | the same questions, in the same units | a counter, after you got home | What you are willing to carry |
 
 ---
@@ -409,21 +538,21 @@ Every row is answered above; this is the index, not a second source.
 ## 8. Defects — where a doc and the code disagree
 
 Found by reading the fourteen scripts under `scripts/items/` against GDD,
-SCOPE, METAGAME, PUZZLES and BESTIARY. "Believe" names the reading that looks
-intended; it is a recommendation to whoever picks the card up, not a decision
-taken.
+SCOPE, METAGAME, PUZZLES and BESTIARY, and re-checked against the tree each time
+this file is revised. "Believe" names the reading that looks intended; it is a
+recommendation to whoever picks the card up, not a decision taken.
 
-**D1, D2, D3 and D4 are closed** (issue #25). Their entries are kept, struck
-through, with what was actually done — a defect list whose closed rows are
-deleted is a list that cannot tell you whether a thing was decided or merely
-forgotten. D5–D12 are open and unreconciled.
+**D1, D2 and D4 are closed.** Their entries are kept, struck through, with what
+was actually done — a defect list whose closed rows are deleted is a list that
+cannot tell you whether a thing was decided or merely forgotten. **D3 and D5–D17
+are open and unreconciled.**
 
 ### ~~D1 — the twelve relics in code are not the twelve in the GDD~~ *(closed)*
 
-`scripts/items/relic_db.gd:122-243` held twelve rows, and two of them were
-`fletchers_jig` and `waterwheel_gear`. GDD §6.2 says both were **deleted** to pay
-for the Sustain-Verse and the Ballast-Verse, and `docs/SCOPE.md` §1 records the
-outcome as *"Two are Verses"*. Neither Verse had a row anywhere in the codebase.
+`RelicDb.RELICS` held twelve rows, and two of them were `fletchers_jig` and
+`waterwheel_gear`. GDD §6.2 says both were **deleted** to pay for the
+Sustain-Verse and the Ballast-Verse, and `docs/SCOPE.md` §1 records the outcome
+as *"Two are Verses"*. Neither Verse had a row anywhere in the codebase.
 
 **Closed by believing the docs.** `sustain_verse` (Foundry vault) and
 `ballast_verse` (Choir deep chest) are rows in `RELICS` now and the two deleted
@@ -437,41 +566,69 @@ is the one thing a Verse does in code, and it is the same shape as
 stays open, and this row is the manifest being right rather than the ring gaining
 two stops.
 
-### D2 — the Pillar-Shard is on the wrong floor, and boss 4 drops a deleted relic *(severe)*
+### ~~D2 — the Pillar-Shard is on the wrong floor, and boss 4 drops a deleted relic~~ *(closed)*
 
-`relic_db.gd:184-186` places `pillar_shard` on **floor 3's deep chest**; GDD
-§6.2 row 11 moved it to **the Riven Knight**, and says why — the square coming on
-is the largest visible change in the game and it should land on the last boss of
-Act I. Consistent with the stale table, `scripts/actors/enemies/boss_db.gd:538`
-has the Riven Knight dropping `waterwheel_gear`.
+`RELICS` placed `pillar_shard` on **floor 3's deep chest**; GDD §6.2 row 11 moved
+it to **the Riven Knight**, and says why — the square coming on is the largest
+visible change in the game, and it should land on the last boss of Act I.
+Consistent with the stale table, `BossDb` had the Riven Knight dropping
+`waterwheel_gear`.
 
-**Believe the GDD.** Same edit as D1; listed separately because it is a different
-table and a fix to D1 that forgets this one leaves boss 4 dropping nothing.
+**Closed by believing the GDD.** `pillar_shard` is `4`/`boss` in `RELICS`
+(`relic_db.gd:~255`), floor 4's manifest puts it on the boss slot
+(`floor_db.gd:~415`), and `BossDb.BOSSES[&"riven_knight"]["drop"]` hands it over
+(`boss_db.gd:~546`).
+
+**This defect under-specified its own fix, and that is the part worth keeping.**
+D1 and D2 as written named two tables, `relic_db.gd` and `boss_db.gd`. **There
+are three.** `FloorDb.FLOORS`' per-floor `relics` dicts are the third, and at the
+time these were filed that table carried `fletchers_jig` on floor 2's vault,
+`waterwheel_gear` on floor 4's boss, and `pillar_shard` on floor 3's deep chest.
+`BossDb.validate()` cross-checked `RelicDb` against the drop tables and **never
+saw `floor_db.gd` at all** — so a session acting on D1 and D2 exactly as written
+would have fixed two files, passed the validator, and shipped a floor 2 vault
+holding a relic that no longer existed. §0's own table says *"Where the floor
+puts it — `scripts/world/floor_db.gd`"*, and both entries omitted it.
+
+The session that took the card caught it anyway and fixed all three, then closed
+the hole the omission came through: `RelicDb.validate()` (`relic_db.gd:~956`) now
+walks `FloorDb.relics()` in **both** directions — a placement naming an id with
+no row, *and* a row nothing places, which is the same bug wearing the other hat
+and is invisible in every frame of the game — as well as re-asking the drop
+question from this side. The standing sentence for the next reader: **three
+tables carry a relic's placement, not two, and until #25 the validator checked
+the first against the third and never saw the second.**
 
 ### D3 — GDD §6.4 is unbuilt, and points at numbers that do not exist *(severe)*
 
 GDD §6.4 says every relic arrives broken, is repaired (or read) at a home
 counter, that the first repair is free, that the rest scale with the floor, and
 — explicitly — that *"the numbers live in `scripts/items/relic_db.gd` beside the
-rows they price"*. They do not. `RELICS` has no `broken` flag, no price and no
-`home` column (`relic_db.gd:122-243`), and every donation line is authored at
-`"cost": 0` (`relic_db.gd:557`). `docs/SCOPE.md` §1's "Broken relics cost nothing
-on this table" paragraph describes the same unbuilt thing as though it were a
-settled implementation detail.
+rows they price"*. They do not. `RelicDb.RELICS` has no `broken` flag, no price
+and no `home` column (`relic_db.gd:~139-276`), and `RelicDb.lines()`
+(`relic_db.gd:~668`) prices every donation at zero. `docs/SCOPE.md` §1's "Broken
+relics cost nothing on this table" paragraph describes the same unbuilt thing as
+though it were a settled implementation detail.
 
 **Believe the GDD** — it is the newer design and SCOPE has already priced it at
 zero movement. But the sentence "the numbers live in `relic_db.gd`" is a doc
 describing what the code does not do, which CLAUDE.md §7 calls worse than no doc.
 Until the flag lands, that line should read *will live*.
 
+**A fix is in flight as this is filed** — a `repair` column on the rows and a
+`donated`-aware `cost` in `lines()` are sitting uncommitted in the primary
+worktree. Strike this row when it lands *and* a director has photographed a
+broken relic being paid for, not before: a `repair` column nothing charges
+against is D3 wearing a different shape.
+
 ### ~~D4 — nothing in the game sells Burst charges~~ *(closed)*
 
-GDD §6.5 says charges are bought from the alchemist, and
-`scripts/autoload/game_state.gd:100-103` repeated it. `AlchemyDb.lines()` offered
-one bottle line and three brew lines and nothing else, and `Game.add_charges()`
-(`game_state.gd:510`) had exactly one caller in the whole repo —
-`tools/directors/burst_cast.gd:139`, a director that granted itself three. A
-player who killed the Slag Ogre owned an item they could never load.
+GDD §6.5 says charges are bought from the alchemist, and `Game.charges`
+(`game_state.gd:~100-103`) repeated it. `AlchemyDb.lines()` offered one bottle
+line and three brew lines and nothing else, and `Game.add_charges()`
+(`game_state.gd:~510`) had no caller outside `tools/directors/` — directors
+granting themselves a handful so their own beats could run. A player who killed
+the Slag Ogre owned an item they could never load.
 
 **Closed by believing the GDD.** `AlchemyDb` sells `CHARGES X3` for flat gold,
 with no `parts` — a charge is stock you paid for before you left, not something
@@ -495,10 +652,13 @@ shortcut, which is a cracked pillar filling a doorway. See D13.
 
 ### D5 — two of the six usable items do not exist in any form
 
-Sustain and Ballast have no row in `ArmamentDb.NAMES` (`armament_db.gd:15-27`),
-no stop in `Game.RIGHT_POOL` (`game_state.gd:185`, whose own comment says it
-holds "four of the ring's six stops"), and no relic to arrive from (D1). Burst is
-built; the other two are not started.
+Sustain and Ballast have no row in `ArmamentDb.NAMES`
+(`scripts/items/armament_db.gd:~15-27`) and no stop in `Game.RIGHT_POOL`
+(`game_state.gd:~185`, whose own comment says it holds "four of the ring's six
+stops"). **They do now have relics to arrive from** — that half of this entry
+closed with D1, and `RelicDb.WORKING_RELICS` (`relic_db.gd:~351`) is the whole of
+what a Verse does in code today, with nothing calling it yet. Burst is built; the
+other two are not started.
 
 **Not a contradiction — a gap**, recorded because the manifest counts six and the
 code can reach four. Listed so that a reader of §1 does not mistake §1.5 and §1.6
@@ -508,20 +668,20 @@ for descriptions of something that runs.
 
 GDD lines 12-17 say what is *not* built includes "the relics and the
 Lanternkeeper in §6" and "the three workings (§6.5)". The Lanternkeeper is a row
-in `Npc.COUNTERS` and a live `Catalogue` subclass (`scripts/world/npc.gd:106`,
+in `Npc.COUNTERS` and a live `Catalogue` subclass (`scripts/world/npc.gd:~103`;
 `relic_db.gd:1-2`), the twelve relic rows exist and are placed by the floor
-manifests, and Burst casts (`scripts/combat/burst_cast.gd`, `armament_db.gd:26`).
+manifests, and Burst casts (`scripts/combat/burst_cast.gd`; `armament_db.gd:~26`).
 
 **Believe the code.** One of the three workings and most of the relic plumbing
 have landed since that paragraph was written.
 
 ### D7 — the Slag Ogre's drop is still spelled `bomb_bag`
 
-`boss_db.gd:323` drops `&"bomb_bag"`; `floor_db.gd:336` says floor 2's
-`boss_item` is `&"burst"`, and every gate compares against the latter. The two
-are reconciled by a translation on the way in
-(`game_state.gd:1058`), which the author flagged `[debt]` at `:1055` with the
-reason — the file was owned by another agent that day.
+`BossDb.BOSSES[&"slag_ogre"]["drop"]` (`boss_db.gd:~323`) drops `&"bomb_bag"`;
+floor 2's `boss_item` is `&"burst"` (`floor_db.gd:~336`), and every gate compares
+against the latter. The two are reconciled by a translation on the way in
+(`Game.grant()`, `game_state.gd:~1058`), which the author flagged `[debt]` at
+`:~1055` with the reason — the file was owned by another agent that day.
 
 **Believe `&"burst"`.** Harmless today because `grant()` translates, and worth
 closing anyway: it is a one-word change, and the second id is the kind of thing
@@ -529,19 +689,21 @@ that survives into a table nobody thought to translate.
 
 ### D8 — a code comment claims the docs say `Game.has_item()`
 
-`game_state.gd:1066-1070` says *"docs/GDD.md §5.2 and docs/SCOPE.md M1 both name
-the check `Game.has_item()` in prose … The docs are what should move."* They have
-moved: GDD §5.2 (`docs/GDD.md:453`) and SCOPE M1 (`docs/SCOPE.md:243`) both write
-`Game.has()`, and `docs/CONTRACT.md:1461` states the rule outright.
+`Game.has()`'s doc comment (`game_state.gd:~1066-1070`) says *"docs/GDD.md §5.2
+and docs/SCOPE.md M1 both name the check `Game.has_item()` in prose … The docs
+are what should move."* They have moved: GDD §5.2 (`docs/GDD.md:458`) and SCOPE
+M1 (`docs/SCOPE.md:243`) both write `Game.has()`, and `docs/CONTRACT.md:1461`
+states the rule outright.
 
 **Believe the docs.** The comment is the stale half now.
 
 ### D9 — SCOPE contradicts its own manifest about the garrison
 
-`docs/SCOPE.md` §1 counts garrison NPCs at **5** and new UI screens at **1**; the
-"Broken relics cost nothing on this table" paragraph twelve rows further down
-says the same edit leaves *"garrison NPCs … 4, new UI screens … 0"*.
-`relic_db.gd:15` cites the older zero as current.
+`docs/SCOPE.md` §1 counts garrison NPCs at **5** (`docs/SCOPE.md:45`) and new UI
+screens at **1** (`:52`); the "Broken relics cost nothing on this table"
+paragraph sixteen table rows further down (`:126-127`) says the same edit leaves
+*"garrison NPCs … 4, new UI screens … 0"*. `relic_db.gd:15` cites the older zero
+as current.
 
 **Believe the manifest rows** — they carry the jewelcrafter and the
 `StashScreen` exception, both of which are built. The paragraph was written
@@ -549,10 +711,10 @@ before either landed.
 
 ### D10 — a relic reports its rarity as "Common"
 
-`ItemDb._relic` casts the tier to a fourth, ARCANE, that `ItemDef.Rarity` does
-not name, and `ItemDef.rarity_name()` (`item_def.gd:134-138`) has no arm for it —
-so the pouch's caption calls every relic Common. Self-documented at
-`item_db.gd:180-184`.
+`ItemDb._relic()` casts the tier to a fourth, ARCANE, that `ItemDef.Rarity` does
+not name, and `ItemDef.rarity_name()` (`scripts/items/item_def.gd:~134-138`) has
+no arm for it — so the pouch's caption calls every relic Common. Self-documented
+at `item_db.gd:~180-184`.
 
 **Believe the intent** (a relic is legendary); the fix is one arm in
 `rarity_name()`.
@@ -562,8 +724,8 @@ so the pouch's caption calls every relic Common. Self-documented at
 `CanvasText.wrap()` takes a `max_lines` that defaults to 2 and
 `scripts/ui/shop/trade_screen.gd` does not pass one, so every entry in `RELICS`
 is truncated on the Lanternkeeper's board — and the smith's and the alchemist's
-blurbs with them. Self-documented with a `# NEEDS:` at `relic_db.gd:108-121`,
-caught by `relic_donate.gd`'s `r_21_hold.png`.
+blurbs with them. Self-documented with a `# NEEDS:` in the note above `RELICS`
+(`relic_db.gd:~125-138`), caught by `relic_donate.gd`'s `r_21_hold.png`.
 
 **Believe the panel has the room**; the fix is one argument at the call site, not
 twelve shortened strings.
@@ -572,12 +734,13 @@ twelve shortened strings.
 
 The card and the brief both name *"`docs/GDD.md` §7's ownership table"*. GDD §7
 is *Difficulty comes from depth, not from you*, and the GDD has no table of doc
-owners. The table is **CLAUDE.md §7**, and it is missing a row for
-`docs/BOSSES.md` as well as for this file.
+owners. The table is **CLAUDE.md §7**.
 
-**Believe CLAUDE.md §7 is the table.** This commit adds the `docs/ITEMS.md` row
-there and a pointer from GDD §5.2 and §6.5; the missing `docs/BOSSES.md` row is
-left for that document's owner rather than added on their behalf.
+**Believe CLAUDE.md §7 is the table.** The `docs/ITEMS.md` row landed there when
+this file did, and **the missing `docs/BOSSES.md` row landed with this
+revision** — leaving a one-line omission in a table already being edited "for
+that document's owner" was the wrong call. Adding it falsified the row below it,
+which is D17.
 
 ### D13 — there is no underground source of charges, and a shortcut door needs one *(severe, new 2026-08-10)*
 
@@ -597,35 +760,125 @@ not refill underground by design (GDD §6.5) and that design is right — a
 resource that comes back mid-run softens the walk home. What is missing is the
 same thing the bow already has: **the room supplies the verb it demands.**
 `ArrowBundle` (`scripts/world/arrow_bundle.gd`) is a walk-over floor pickup that
-goes on `Game` rather than in the bag, placed by `dungeon.gd:2246-2251` on a
-per-room roll and coughed up by `chest.gd:73-76`; `PuzzleAtoms.URN`'s own comment
-(`puzzle_atoms.gd:117-118`) states the rule outright — *"solvable from a cold
-start with an empty pouch, because the urns beside it hold exactly what it
-needs"* — and card #5's `eye_high` prefab puts an urn of arrows beside the eye
-for exactly this reason. **There is no charge equivalent anywhere in the repo**:
-`Game.add_charges()`'s only non-director caller is the alchemist's line.
+goes on `Game` rather than in the bag, placed by `Dungeon` on a per-room roll and
+coughed up by `Chest`; `PuzzleAtoms.ATOMS[URN]`'s own comment
+(`scripts/props/puzzle_atoms.gd:~116-119`) states the rule outright — *"solvable
+from a cold start with an empty pouch, because the urns beside it hold exactly
+what it needs"* — and card #5's `eye_high` prefab puts an urn of arrows beside
+the eye for exactly this reason. **There is no charge equivalent anywhere in the
+repo**: `Game.add_charges()`'s only non-director caller is the alchemist's line.
 
 **Believe the rule, not the convenience.** The fix is a charge pickup on the
 `ArrowBundle` pattern, placed by the prefab that demands one rather than rolled
 across every room — a floor that scattered charges would undo the "how deep were
-you planning to go" decision that `game_state.gd:100-103` is written to protect.
-Its own card: it is `scripts/props/`, `scripts/world/dungeon.gd` and a prefab
-table, none of which #25 touches, and it is a placement rule rather than a data
-defect.
+you planning to go" decision that `Game.charges` (`game_state.gd:~100-103`) is
+written to protect. Its own card: it is `scripts/props/`,
+`scripts/world/dungeon.gd` and a prefab table, none of which #25 touches, and it
+is a placement rule rather than a data defect.
+
+### D14 — GDD §6.1's generating rule says "a fifth NPC", and the fifth is built
+
+The rule at `docs/GDD.md:582` ends *"It never adds a screen, a system, or a fifth
+NPC."* `docs/SCOPE.md` §1 freezes garrison NPCs at **5** and names all five —
+vendor, smith, alchemist, Lanternkeeper, Jewelcrafter — and says *"There is no
+sixth counter"* (`docs/SCOPE.md:45`). The Jewelcrafter is built and carries her
+own note saying she is the fifth and the last (`scripts/world/npc.gd:~109-111`).
+
+**Believe SCOPE.** The clause should read *"a sixth NPC"*. Logged rather than
+fixed: this file does not own the GDD, and the rule it belongs to is quoted in
+§2, where the two-part restatement now stands beside it.
+
+### D15 — `relic_db.gd`'s header lists a `bites` column the table no longer has
+
+`relic_db.gd:~50-52` says the column reads *"catalogues, recipes, prices, one
+wayfinding hum"*. `docs/GDD.md:635-636` says *"catalogues, recipes, prices, two
+workings, one wayfinding hum"*. Since D1 closed, **the table matches the GDD**:
+`sustain_verse` and `ballast_verse` both carry
+`RelicDb.knows_working() -> Game.RIGHT_POOL's … stop` in `bites`. The code
+comment is the stale one.
+
+Worth recording for a second reason. An earlier draft of §2.3 rendered the
+comment as a near-verbatim quotation with the GDD's *"two workings"* spliced into
+it and only the code cited — a quotation that was true of neither source. **Two
+disagreeing sources get two citations, or the disagreement disappears into a
+sentence that reads as fact.** §2.3 cites both now.
+
+**Believe the GDD and the table.** The fix is three words in a comment.
+
+### D16 — `docs/BESTIARY.md` §2 gives the lantern to the sword
+
+Its item table reads `| **Sword** | urn, lantern | everything, and that is the
+problem |`. `PuzzleAtoms.ATOMS[LANTERN]` says `"verb": "any blow"`
+(`scripts/props/puzzle_atoms.gd:~188`) and is verb-agnostic deliberately — the
+atom's own note explains that an atom which could only ever be answered one way
+could not be coupled to anything, which is what `docs/PUZZLES.md` §3's *convert*
+combinator is built on.
+
+**Believe the atom table.** The sword owns the urn; the lantern is owned by no
+single item, and that is its design. §1.1 of this file carried the same error
+until it was traced back here. Flagged rather than fixed: `docs/BESTIARY.md` is
+not this file's to edit.
+
+### D17 — CLAUDE.md §7's `OOT_CATALOGUE.md` row counts the docs above it
+
+The row read *"Owns nothing — it is what the two docs above cite"*, which was
+true when the two were `PUZZLES.md` and `BESTIARY.md`. Inserting the `ITEMS.md`
+row made it three, and adding the `BOSSES.md` row (D12) made it four — neither
+edit touched the sentence that was counting them.
+
+**Fixed here**, and fixed by naming the four rather than counting them, so the
+next insertion cannot falsify it again. Recorded rather than silently corrected
+because it is the same failure this whole section exists for: a true sentence
+about a table, invalidated by an edit to the table that had no reason to look at
+it.
 
 ---
 
 ## 9. Proving a change to this file
 
 There are no frames here — an item doc has no pixels of its own. **The proof is
-the citation.** A claim in this file that could carry a `file.gd:line` and does
-not is a claim someone guessed, and this project has been bitten by exactly that
-(`potion_db.gd`'s short names were asserted as `EMB`/`IRO` in a plan; they are
-`HEART`, `HIDE` and `EMBER`, `potion_db.gd:30`, `:36`, `:43`).
+the citation.** A claim in this file that could name the symbol deciding it and
+does not is a claim someone guessed, and this project has been bitten by exactly
+that (`potion_db.gd`'s short names were asserted as `EMB`/`IRO` in a plan; they
+are `HEART`, `HIDE` and `EMBER` — `PotionDb.DEFS`, `potion_db.gd:~30`, `:~36`,
+`:~43`).
+
+**Cite the symbol. The line number is a hint, and it is written as one:**
+
+> `` `RelicDb.knows_working()` (`relic_db.gd:~880`) ``
+
+Not because a line number is useless — it lands the reader within a screen of the
+right place — but because in this repo they rot on a timescale of **hours**, and
+they rot **silently**. The first draft of this document was written against
+`7728db3`. Card #25's edits landed the same evening and moved a dozen of its
+citations inside `relic_db.gd`, `floor_db.gd` and `boss_db.gd`; two of the moved
+ones still named one function while pointing at a different one, which is the
+worst available failure, because the reader believes what they land on. While
+*this* revision was being written, `relic_db.gd` grew another hundred lines and
+moved them all again. A grep for `knows_working` survives every one of those. A
+`:750` does not.
+
+Two rules fall out of it:
+
+1. **Prefer a `const`, a `func` or a table key.** Those are greppable, and they
+   are what the next reader would search for anyway — `RelicDb.RELICS`,
+   `ShopDb.GATED_BY`, `PuzzleAtoms.ATOMS[HOOK_RING]`, `Game.RIGHT_POOL`. A
+   citation to a symbol name is durable in a way a citation to a line is not.
+2. **A citation into a comment block is the fragile kind.** Four of the five
+   wrongest citations in the first draft pointed at prose inside a `##` header —
+   prose that any session touching the file rewrites wholesale, and that has no
+   symbol to anchor to. Cite the symbol the comment sits above, and quote the
+   sentence itself when the wording is the point.
+
+**Path-qualify anything ambiguous.** There are two files named `puzzle_atoms.gd`
+— `scripts/props/puzzle_atoms.gd` (the atom table) and
+`tools/directors/puzzle_atoms.gd` (the director that photographs it) — and
+`cracked_pillar.gd` lives at `scripts/props/atoms/`, not `scripts/props/`.
 
 When an item changes, the directors that already watch one are
-`tools/directors/burst_cast.gd`, `forge_loop.gd`, `jewel_loop.gd`,
-`alchemy_loop.gd`, `relic_donate.gd`, `thief.gd` and `puzzle_atoms.gd`. Run the
-one that owns the shelf you touched, and update this file in the same commit —
-including §8, which is the part most likely to go stale, because the good outcome
-for every entry on it is that it stops being true.
+`tools/directors/burst_cast.gd`, `charge_buy.gd`, `forge_loop.gd`,
+`jewel_loop.gd`, `alchemy_loop.gd`, `relic_donate.gd`, `thief.gd` and
+`tools/directors/puzzle_atoms.gd`. Run the one that owns the shelf you touched,
+and update this file in the same commit — including §8, which is the part most
+likely to go stale, because the good outcome for every entry on it is that it
+stops being true.
