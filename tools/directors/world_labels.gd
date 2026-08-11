@@ -1,5 +1,6 @@
 extends RefCounted
 ## Card #37 — **the last three world labels stop at the first wall.**
+## Card #61 — **and you can read them.**
 ##
 ##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
@@ -14,6 +15,64 @@ extends RefCounted
 ## keeper's name was readable through the garrison's six-metre curtain wall from
 ## out on the plain, and a damage number would have been readable through it too.
 ##
+## ## What card #61 changed here, and it starts with what this file got wrong
+##
+## **This director passed, unchanged, through the whole of the defect it now
+## catches.** `docs/STYLEGUIDE.md` §4.5 put the world in a fixed 480 x 270
+## buffer; every one of these captions was a `Label3D`, so every one went into
+## that buffer with the masonry and came out an unreadable smear — and beats n4
+## and p4 below went on reporting a thousand pixels of ink, because the pixels
+## really were all there. A count of ink is a count of PRESENCE. It cannot see
+## legibility, and this file was the instrument the project trusted for it.
+##
+## So the three captions are `WorldCaption`s now, drawn on the HUD canvas at
+## native resolution (`scripts/ui/world_caption.gd`, `Hud._draw_world_captions`),
+## and **beat 6 is what this file has that it did not have**: a measurement that
+## fails on a caption that is present and unreadable.
+##
+## ## Beat 6, and why it is a size and not a contrast
+##
+## The number is the caption's **cap height in the pixels it was rasterised in**,
+## against `docs/STYLEGUIDE.md` §3.1b's 10 px floor. Two halves, and only the
+## second is arithmetic:
+##
+##  1. The cap height on the picture is measured off the frame — the bounding box
+##     of the ink the caption put there, inset by the surround it wears.
+##  2. That is then divided down by whatever buffer the glyph was RASTERISED in.
+##     A `WorldCaption` is drawn on the canvas, so a frame pixel is a rasterised
+##     pixel and the divisor is one. A `Label3D` is world geometry: it goes
+##     through §4.5's 480 x 270 buffer and is upscaled 2.67x on the way out, so
+##     fourteen pixels of frame are five pixels of glyph.
+##
+##   | caption at 3.8 m              | on frame | rasterised at |
+##   |-------------------------------|----------|---------------|
+##   | `JEWELCRAFTER` as a `Label3D` |   ~14 px |     ~5 px  ✗  |
+##   | `JEWELCRAFTER` as a caption   |    14 px |      14 px ✓  |
+##
+## **Point this file at the commit before card #61 and beat 6 fails.** That is
+## the whole test of an instrument and it is why `_labels_under` still finds
+## `Label3D`s: a caption that goes back into the buffer is measured, named and
+## failed rather than quietly not found.
+##
+## Two things were TRIED for this and are written down so nobody spends the
+## afternoon again. Both were contrast measurements — "what fraction of the ink
+## is neither ink nor ground", and "how much of the luminance range does the
+## steepest edge cross in one pixel" — and both separated the two builds on the
+## long captions (0.37 and 0.41 against 0.11 and 0.14) and then called the
+## training post's damage number, which is a perfectly crisp RUST `3` on a plate
+## over sunlit straw, worse than the smear they were built to catch. A
+## low-contrast caption is not a low-resolution one, and a metric that cannot
+## tell them apart will eventually be silenced rather than believed. Size is the
+## thing that actually changed and size is what is asked.
+##
+## What was RETIRED for all this, because the move made it untrue: beat p6, which
+## measured the bundle taking a bite out of a damage number placed back where it
+## used to be built. A `WorldCaption`'s line-of-sight ray excludes the prop the
+## caption hangs off — an enemy does not block its own health bar either — so
+## the bundle cannot bite it any more and the beat measured nothing. See
+## `TrainingPost.POPUP_CLEAR`, which keeps its placement job and loses its
+## clearance one.
+##
 ## What it claims, in the order it proves them:
 ##
 ##   A  A keeper stands in the yard with their sign up, and a training post
@@ -21,18 +80,13 @@ extends RefCounted
 ##      number are on it.
 ##   B  From a camera OUTSIDE the curtain wall, on the keeper's own radial, with
 ##      masonry proved to be in the way by a ray cast down the camera's line:
-##      with `no_depth_test` put back the name paints the wall, and as the game
-##      now builds it **not one of its pixels reaches the picture.** Both frames
-##      are kept — the first one is what the defect looked like.
-##   C  Stepped back inside the yard, on the same line, the name is readable.
+##      with occlusion turned off the name paints the wall, and as the game now
+##      builds it **not one of its pixels reaches the picture.** Both frames are
+##      kept — the first one is what the defect looked like.
+##   C  Stepped back inside the yard, on the same line, the name is readable —
+##      and **legible**, which is a different claim and a different measurement.
 ##   D  The same pair for the post's readout and its damage number, measured one
-##      label at a time.
-##   E  And from a lookdev lens with nothing in shot but the post, both labels
-##      are whole — the damage number in particular is NOT swallowed by the straw
-##      bundle it stands on. That is the half a bare `no_depth_test = false`
-##      would have got wrong, and it is why `POPUP_CLEAR` exists: every damage
-##      number this post has ever drawn was built INSIDE the bundle, at 1.62 m
-##      inside a cylinder spanning 1.20 m to 1.75 m, and the flag was hiding it.
+##      label at a time, legibility included.
 ##
 ## ## Why this diffs frames instead of reading `visible`
 ##
@@ -104,6 +158,12 @@ const FAR_MARGIN := 6.0
 ## How far in front of a subject the clear-line-of-sight lens sits. Near enough
 ## that the label is a few hundred pixels of ink, far enough that the whole
 ## subject is in the picture.
+##
+## **It is also the distance card #61 is judged at, and that is on purpose.**
+## 3.8 m is inside talking range of a keeper and inside sword range of the post:
+## it is where a player stands when they read these things, not a distance
+## chosen to flatter the caption. If a name is not legible here it is not
+## legible anywhere.
 const NEAR_AT := 3.8
 
 ## How far a channel has to move for a pixel to count as "the label was here".
@@ -118,6 +178,40 @@ const INK_DELTA := 0.02
 ## deliberately loose ones — the numbers this run actually measures are printed.
 const READABLE := 30
 const READABLE_NEAR := 200
+
+## **The legibility bar, and the whole of card #61's instrument.**
+##
+## Cap height, in the pixels the glyph was rasterised in, against
+## `docs/STYLEGUIDE.md` §3.1b's floor. Its wording is exact and it is why this is
+## a floor and not a preference: "there is no longer any margin under the floor,
+## and no viewport AA setting can add one ... font rasterisation is the only
+## antialiasing 2D type will ever get, so the answer to an illegible label is
+## fewer entries or a bigger size, never a knob."
+##
+## Scaled by the frame's height, so a run at `--size=1920x1080` asks the same
+## question of the same design rather than a laxer one.
+const CAP_MIN_PX := 10.0
+
+## How much of the caption's own surround to take off the ink's bounding box
+## before it is read as a cap height.
+##
+## §5.7's World plate pad is 6 px, and the outline the `Label3D`s wore before
+## card #61 came out at about the same width on the frame at this distance — so
+## one number covers both builds and neither is flattered. It is deliberately
+## the SMALLER estimate for the `Label3D` case: under-insetting leaves outline in
+## the measurement and makes the old build's cap height look bigger than it was,
+## which biases that build toward passing. A failure measured this way is not an
+## artefact of the inset.
+const CAP_INSET_PX := 6.0
+
+## The internal buffer §4.5 renders the world into. Spelled out rather than read
+## off `ScreenPresent.INTERNAL`, for the reason at the top of `PLAZA_AT`: this
+## file is loaded with `-s` and does not get to touch a script that names an
+## autoload. `Settings.internal_render` decides whether it applies at all, and it
+## is asked at runtime rather than assumed — a run with the pipeline switched off
+## has captions rasterised at the frame's own height, and saying otherwise would
+## make this file lie in the one configuration where the defect does not exist.
+const INTERNAL_H := 270.0
 
 var out := ""
 var _fails := 0
@@ -135,7 +229,9 @@ func run(rig) -> void:
 		return
 	await rig.wait_frames(30)
 
-	# The hero is parked in the north-west quarter and left there. He is not the
+	# The hero is parked out of the way while the fixture is built, and then
+	# **moved to the subject by `_prove`** -- see `_park_beside`, and card #61
+	# for why he can no longer be left in the north-west quarter. He is not the
 	# subject of any of these frames and he is a 1.65 m body that would confound
 	# a "the wall hid it" reading if he wandered onto one of the camera lines --
 	# which is `echo_plates.gd`'s own lesson (correct occlusion means the hero
@@ -212,6 +308,7 @@ func run(rig) -> void:
 func _prove(rig, tag: String, what: String, subject: Node3D, hit_from: Vector3,
 		box: Vector2i) -> void:
 	var dir := _radial(subject)
+	await _park_beside(rig, subject, dir)
 	var labels: Array = await _arm(rig, subject, hit_from)
 	if labels.is_empty():
 		_ck("%s0 %s has labels to measure" % [tag, what], false)
@@ -258,22 +355,28 @@ func _prove(rig, tag: String, what: String, subject: Node3D, hit_from: Vector3,
 	# **The control, and it is the bug itself.** A zero that came from a label
 	# too small to survive the downscale reads exactly like a label the wall
 	# correctly hid, which is a way for this whole file to pass while proving
-	# nothing. So the pose is photographed twice from one spot: once with
-	# `no_depth_test` forced back ON — the setting this card is about — and once
+	# nothing. So the pose is photographed twice from one spot: once with the
+	# occlusion rule switched off — the setting these cards are about — and once
 	# as the game now builds it. The first frame is kept. It is what the defect
 	# looked like, and it is the reason the second frame's zero means something.
+	#
+	# The flag moved with the text. It was `Label3D.no_depth_test = true`, the
+	# renderer's own; card #61 put these captions on the HUD canvas, where the
+	# depth buffer is not available and the rule is bought back with a ray, so
+	# the control is `WorldCaption.occlude = false`. Same claim, same frame, and
+	# the file name is kept so the pair still sorts next to its neighbour.
 	labels = await _arm(rig, subject, hit_from)
 	for l: Node3D in labels:
-		l.no_depth_test = true
+		l.occlude = false
 	await rig.wait_frames(4)
 	var leak := await _read(rig, lens, labels, box,
 		out.path_join("l_%s1_behind_wall_no_depth_test.png" % tag), true)
 	for l: Node3D in labels:
-		l.no_depth_test = false
+		l.occlude = true
 	await rig.wait_frames(4)
-	print("LABELS %s behind %s, no_depth_test ON -> %d px, %s per label"
+	print("LABELS %s behind %s, occlusion OFF -> %d px, %s per label"
 		% [what, blocker, leak["ink"], leak["per"]])
-	_ck("%s1 with `no_depth_test` %s paints the wall (%d px, >= %d)"
+	_ck("%s1 with occlusion off %s paints the wall (%d px, >= %d)"
 		% [tag, what, leak["ink"], READABLE], leak["ink"] >= READABLE)
 	_ck("%s2 and every label was framed and in front of the far lens (%d/%d)"
 		% [tag, leak["framed"], leak["count"]],
@@ -310,38 +413,28 @@ func _prove(rig, tag: String, what: String, subject: Node3D, hit_from: Vector3,
 	_ck("%s5 and no label is swallowed by the prop it hangs off (%s)"
 		% [tag, open["per"]], eaten == 0)
 
-	# --- The counterfactual --------------------------------------------------
-	# **`POPUP_CLEAR` measured rather than asserted.** The damage number used to
-	# be built at `post_height * 0.9` with a jitter that never took it outside the
-	# straw bundle, and `no_depth_test` was the only reason anybody ever saw a
-	# whole one. Put it back where it used to be, from the same lens, and count:
-	# if the number does not drop, the constant is dead weight and should come
-	# out. The jitter's MIDDLE is used, because the jitter only ever moved the
-	# label around inside the same cylinder.
-	#
-	# **What "swallowed" turns out to mean here, and it is not what the arithmetic
-	# predicted.** The bundle does not hide the digit; it CUTS IT IN HALF. The
-	# label's centre is 1.62 m and the bundle caps at 1.75 m, so the glyph stands
-	# in the straw with its top emerging over the rim — measured at 253 px against
-	# 357 at `POPUP_CLEAR`, which is the bottom of a "3" gone and reads on the
-	# frame as a digit sawn through at the waist. So this is a 0.85 bound and not
-	# the "a third or less" one it was written as: the honest claim is a
-	# measurable bite out of every damage number, not an invisible one. The
-	# `l_p4_...` frame beside `l_p3_...` is the pair to look at.
-	if hit_from != Vector3.ZERO and labels.size() > 1:
-		var number: Node3D = labels[1]
-		var kept := number.position
-		number.position = Vector3(0.0, subject.get(&"post_height") * 0.9, 0.0)
-		await rig.wait_frames(4)
-		var old := await _read(rig, lens, [number], box,
-			out.path_join("l_%s4_number_where_it_used_to_be.png" % tag))
-		number.position = kept
-		await rig.wait_frames(4)
-		print("LABELS the damage number at its OLD offset -> %d px, against "
-			% old["ink"] + "%d at POPUP_CLEAR" % open["per"][1])
-		_ck("%s6 and where it used to be built the bundle takes a bite out of "
-			% tag + "it: %d px against %d" % [old["ink"], open["per"][1]],
-			float(old["ink"]) < float(open["per"][1]) * 0.85)
+	# --- Legibility, which is card #61 and which ink cannot answer -----------
+	# Everything above this line was true of the build that shipped the defect:
+	# thousands of pixels of ink, all present, none of them readable.
+	# `l_%s3_line_of_sight.png` is the frame; look at it, and then read the
+	# numbers under it. See `CAP_MIN_PX` for where the floor comes from.
+	var frame_h := float(open["frame_h"])
+	var floor_px := CAP_MIN_PX * frame_h / 720.0
+	for i in labels.size():
+		var m: Dictionary = open["metrics"][i]
+		if int(m.get("n", 0)) <= 0:
+			continue
+		var l: Node3D = labels[i]
+		var what_i: String = str(l.get(&"text"))
+		var raster := _raster_h(l, frame_h)
+		var cap: float = float(m["cap"]) * raster / frame_h
+		print("LABELS \"%s\" is %.0f px tall on the frame, rasterised in a "
+			% [what_i, m["cap"]]
+			+ "%.0f px buffer -> %.1f px of cap height (floor %.1f)"
+			% [raster, cap, floor_px])
+		_ck("%s6 \"%s\" is LEGIBLE and not merely present: %.1f px of cap "
+			% [tag, what_i, cap]
+			+ "height where §3.1b's floor is %.1f" % floor_px, cap >= floor_px)
 
 	lens.queue_free()
 	await rig.wait_frames(4)
@@ -364,15 +457,60 @@ func _read(rig, cam: Camera3D, labels: Array, box: Vector2i,
 	# Frozen, or the lamps and the damage number's own tween would differ between
 	# the pair. Restored in every exit -- a director that leaves `time_scale` at
 	# zero hangs every beat after it, on the game clock, for ever.
+	# **Every OTHER caption in the room goes down first, and card #61 is what
+	# found out why.** The whole method here is "hide the subject and diff", and
+	# it silently assumes nothing else is drawn on top of the subject. That
+	# assumption was false the entire time and no frame could show it: the
+	# director arms a keeper by calling `on_focus(true)` straight, while `Prompt`
+	# independently focuses whoever the parked hero is nearest, so TWO signs were
+	# up — and as `Label3D`s they overlapped into one smear that read as a single
+	# blurred caption. Drawn sharp on the canvas they are plainly two words in
+	# the same place, and the diff was measuring one of them against the other.
+	# The frames are cleaner for it too: a shot of the keeper's sign should have
+	# the keeper's sign in it.
+	var muted: Array[Node] = []
+	for n in rig.get_nodes_in_group(&"world_caption"):
+		var other := n as Node3D
+		if other == null or labels.has(other) or not other.visible:
+			continue
+		other.visible = false
+		muted.append(other)
+	if not muted.is_empty():
+		await rig.wait_frames(2)
+
 	var prev := Engine.time_scale
 	Engine.time_scale = 0.0
+
+	# **Full opacity for the measurement, and the tween is what makes this
+	# necessary.** A damage number lives 0.85 s and fades out over all of it, so
+	# a frozen frame catches it at whatever alpha the clock happened to stop at
+	# — measured across three runs of this file: mush 0.062, 0.077 and 0.448 for
+	# the same digit, because a caption at 30% opacity has a luminance range too
+	# narrow for anything to sit at either end of it, and correctly reads as
+	# mush. That is a true statement about a caption on its way out and a
+	# useless one about the caption's legibility, which is a property of the
+	# glyph and is asked at the strength a player reads it at.
+	#
+	# Set AFTER the freeze and restored BEFORE it is lifted: at `time_scale = 0`
+	# the tween does not advance, so the pinned value survives the capture and
+	# the tween picks up its own value again when the clock starts.
+	var held: Array[float] = []
+	for l: Node3D in labels:
+		held.append(float(l.get(&"alpha")))
+		l.set(&"alpha", 1.0)
+
 	await rig.wait_frames(2)
 	await rig.capture(path)
 	var lit := Image.load_from_file(path)
 	if lit == null:
+		for i in labels.size():
+			(labels[i] as Node3D).set(&"alpha", held[i])
 		Engine.time_scale = prev
+		for o: Node3D in muted:
+			o.visible = true
 		print("LABELS could not re-read %s" % path)
-		return {"ink": -1, "framed": 0, "count": labels.size(), "per": []}
+		return {"ink": -1, "framed": 0, "count": labels.size(), "per": [],
+			"metrics": [], "frame_h": 720}
 
 	# Where each label lands on the picture. The count is taken INSIDE these
 	# boxes and nowhere else: `Engine.time_scale` freezes the world but not the
@@ -397,23 +535,47 @@ func _read(rig, cam: Camera3D, labels: Array, box: Vector2i,
 		boxes.append(b)
 		framed += 1
 
-	var total := await _moved(rig, lit, labels, path, labels, boxes)
+	var total: Dictionary = await _moved(rig, lit, labels, path, labels, boxes)
 	var per: Array[int] = []
+	var metrics: Array[Dictionary] = []
 	if want_per:
 		for i in labels.size():
-			per.append(await _moved(rig, lit, [labels[i]], path, labels,
-				[boxes[i]]))
+			var m: Dictionary = await _moved(rig, lit, [labels[i]], path, labels,
+				[boxes[i]])
+			per.append(int(m["n"]))
+			metrics.append(m)
+	for i in labels.size():
+		(labels[i] as Node3D).set(&"alpha", held[i])
 	Engine.time_scale = prev
+	for o: Node3D in muted:
+		o.visible = true
 	await rig.wait_frames(2)
-	return {"ink": total, "framed": framed, "count": labels.size(), "per": per}
+	return {"ink": int(total["n"]), "framed": framed, "count": labels.size(),
+		"per": per, "metrics": metrics, "frame_h": lit.get_size().y}
 
 
-## Hide `hide_these`, re-photograph the frozen pose, and count the pixels inside
+## Hide `hide_these`, re-photograph the frozen pose, and report the pixels inside
 ## `boxes` that changed against `lit`. `all` is restored visible afterwards.
 ## The reference frames are written beside `path` and deleted: they exist only to
 ## be subtracted, and a directory of near-identical PNGs is one nobody looks at.
+##
+## Returns `n` — the ink count every beat above card #61 reads — plus the two
+## numbers card #61 added:
+##
+##  * `cap` — the height of the ink's bounding box, in pixels, after the
+##    surround is taken off. For a caption that is the cap height of its
+##    capitals, which is the unit `docs/STYLEGUIDE.md` §3.1b's ladder is written
+##    in, so it can be compared against the 10 px floor directly.
+##  * `mush` — of the pixels the caption put inside that rectangle, the fraction
+##    landing between a quarter and three quarters of the way up its own
+##    luminance range. See `MUSH_MAX`.
+##
+## The range is taken as the 5th and 95th percentiles rather than min and max: a
+## single specular pixel off a lamp inside the box would otherwise set the top of
+## the scale and drag every glyph pixel into the middle band, and one such pixel
+## is enough to make this whole measurement meaningless.
 func _moved(rig, lit: Image, hide_these: Array, path: String,
-		all: Array, boxes: Array) -> int:
+		all: Array, boxes: Array) -> Dictionary:
 	for l: Node3D in hide_these:
 		l.visible = false
 	await rig.wait_frames(2)
@@ -425,8 +587,12 @@ func _moved(rig, lit: Image, hide_these: Array, path: String,
 		l.visible = true
 	await rig.wait_frames(2)
 	if bare == null or bare.get_size() != lit.get_size():
-		return -1
-	var n := 0
+		return {"n": -1, "cap": 0.0, "mush": 1.0}
+
+	# Pass one: which pixels moved, and how far the ink reaches.
+	var moved: Array[Vector2i] = []
+	var lo := Vector2i(1 << 30, 1 << 30)
+	var hi := Vector2i(-1, -1)
 	for b: Rect2i in boxes:
 		if b.size == Vector2i.ZERO:
 			continue
@@ -436,8 +602,19 @@ func _moved(rig, lit: Image, hide_these: Array, path: String,
 				var q := bare.get_pixel(x, y)
 				if absf(p.r - q.r) > INK_DELTA or absf(p.g - q.g) > INK_DELTA \
 						or absf(p.b - q.b) > INK_DELTA:
-					n += 1
-	return n
+					moved.append(Vector2i(x, y))
+					lo = lo.min(Vector2i(x, y))
+					hi = hi.max(Vector2i(x, y))
+	if moved.is_empty():
+		return {"n": 0, "cap": 0.0}
+
+	# The letters only. The bounding box of the ink includes whatever the caption
+	# wears round its edge — §5.7's plate on a `WorldCaption`, an outline on the
+	# `Label3D`s that came before — and a plate's pad is not type. See
+	# `CAP_INSET_PX`, including why under-insetting is the safe direction.
+	var inset := int(round(CAP_INSET_PX * float(lit.get_size().y) / 720.0))
+	var cap := float(hi.y - lo.y + 1 - inset * 2)
+	return {"n": moved.size(), "cap": maxf(cap, 0.0)}
 
 
 ## Is there world geometry between `from` and `to`? `K.L_WORLD` only: the
@@ -479,6 +656,41 @@ func _arm(rig, subject: Node3D, hit_from: Vector3) -> Array:
 	return _labels_under(subject)
 
 
+## Stand the hero next to the subject, square to the camera line.
+##
+## **This is card #61's, and the file was wrong without it in a way that only
+## showed up once the captions were sharp enough to look at.** A `WorldCaption`
+## fades out past `max_range` — 18 m, measured from the HERO, the same bargain
+## `Hud.EBAR_RANGE` makes for a monster's health bar, and for the same reason: a
+## caption that does not shrink with distance has to be taken off the screen
+## rather than made smaller, or the yard fills with floating names (§7.10).
+##
+## This file used to park the hero in the north-west quarter and leave him
+## there, which put him 16.8 m from the jewelcrafter — three metres inside the
+## fade — so every caption it photographed was drawn at about 40% opacity. The
+## PIXELS were all there and every count passed. The plate was a faint wash, the
+## ink was grey rather than BONE, and the legibility measurement read it as
+## mush, correctly. That is the same class of mistake as the one this card is
+## about: a number that goes up when the thing is present, and says nothing
+## about whether it is any good.
+##
+## 2.6 m, perpendicular to the radial both lenses stand on, so he is at reading
+## distance and off both camera lines. The far lens looks through the wall at a
+## subject the hero is standing beside; that is exactly the frame the claim
+## wants, because the wall is being asked to hide a caption from a camera and
+## NOT from the player.
+func _park_beside(rig, subject: Node3D, dir: Vector3) -> void:
+	var hero: Node3D = _hero(rig)
+	if hero == null:
+		return
+	var side := Vector3(-dir.z, 0.0, dir.x)
+	hero.velocity = Vector3.ZERO
+	hero.global_position = subject.global_position + side * 2.6 \
+		+ Vector3(0.0, 0.15, 0.0)
+	await rig.wait_physics_frames(6)
+	await rig.wait_frames(10)
+
+
 ## The direction to walk out from the yard's middle past a subject, flattened.
 ## Every camera in this file is placed along one of these, so the far lens and
 ## the near lens differ only by the wall between them.
@@ -516,10 +728,18 @@ func _stand_a_post(g: Node3D) -> Node3D:
 	return p
 
 
+## The captions hanging off `root`, in build order.
+##
+## `WorldCaption` and not `Label3D` since card #61 — and the change is not a
+## rename. A `Label3D` still under one of these props would NOT be found here,
+## which is deliberate: the three captions this file measures are the ones that
+## moved to the canvas, and a new `Label3D` appearing under a keeper or a post
+## is a caption that went back into §4.5's buffer. `tools/directors/art_audit.gd`
+## is the file that would notice that; this one measures what it was pointed at.
 func _labels_under(root: Node) -> Array:
 	var found: Array = []
 	for n in _all(root):
-		if n is Label3D:
+		if n is WorldCaption:
 			found.append(n)
 	return found
 

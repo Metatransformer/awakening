@@ -270,7 +270,7 @@ var _body: Node3D
 var _person: Node3D
 var _lamp: OmniLight3D
 var _lamp_mat: StandardMaterial3D
-var _sign: Label3D
+var _sign: WorldCaption
 var _lit: float = 0.0
 var _age: float = 0.0
 ## Crown height of whoever is standing here, so the name floats over the head it
@@ -474,24 +474,26 @@ func _build() -> void:
 	else:
 		_build_person()
 
-	_sign = Label3D.new()
-	_sign.text = str(_row().get("sign", ""))
-	_sign.font_size = 48
-	_sign.pixel_size = 0.0022
-	_sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	# **Depth-tested, and it shipped the other way.** `no_depth_test = true` is
-	# not "draw over the keeper" — it is draw over the world, so a shopkeeper's
-	# name plate was readable through the garrison's six-metre curtain wall from
-	# out on the plain. That is card #26's Echo bug with a different label on it;
-	# `scripts/world/sounding_stone.gd` carries the long note, and this is #37.
+	# **A `WorldCaption`, and it was a billboarded `Label3D` until card #61.**
+	# `docs/STYLEGUIDE.md` §4.5 put the world in a fixed 480 x 270 buffer, and a
+	# `Label3D` goes into that buffer with the masonry: `LANTERNKEEPER` read
+	# from four metres was about five buffer pixels of cap height and came out
+	# an unreadable smear, on a frame where `E TO TALK` — the HUD, which never
+	# enters the buffer — was crisp two inches below it. So the name is drawn on
+	# the canvas now, by `Hud._draw_world_captions`, at §3.1b's 14 px.
 	#
-	# Nothing has to move for it. The sign hangs half a metre above `_head`, so
-	# it clears the keeper's own crown, and the booth it clears by two metres —
-	# the same way `PLATE_DROP` already stood the Echo captions off their drum.
-	# `tools/directors/world_labels.gd` measures both halves.
-	_sign.no_depth_test = false
-	_sign.modulate = Pal.BONE
-	_sign.outline_size = 16
+	# The depth test that card #37 fought for is NOT given up by moving. It is
+	# bought back as a line-of-sight ray in the HUD: `occlude` defaults true, so
+	# a keeper's name is still taken away by the six-metre curtain wall it used
+	# to be readable through, and `tools/directors/world_labels.gd` still
+	# measures both halves. What changed is that a wall can now only take the
+	# whole name, never cut it in half — see `scripts/ui/world_caption.gd`.
+	#
+	# Nothing had to move for it. The sign still hangs half a metre above
+	# `_head`, clearing the keeper's own crown and the booth by two metres.
+	_sign = WorldCaption.new()
+	_sign.text = str(_row().get("sign", ""))
+	_sign.tint = Pal.BONE
 	_sign.position.y = _head + 0.5
 	_sign.visible = false
 	add_child(_sign)
@@ -687,6 +689,13 @@ func _build_gate() -> void:
 	_lamp.position = Vector3(0.0, 0.55, Gatehouse.MOUTH_Z + 0.6)
 	_body.add_child(_lamp)
 
+	# **A `Label3D`, and it STAYS one — card #61**, unlike the keeper's sign
+	# eighty lines up. The difference is the one `scripts/ui/world_caption.gd`
+	# draws: a keeper's name floats over their head and turns to face you, so it
+	# was always interface; this is cut into a course of stone the gatehouse
+	# builds to carry it, it does not billboard, and a lintel you cannot read
+	# from across the yard is a lintel. §4.5's buffer softening it at distance is
+	# the treatment working, not the defect.
 	var plate := Label3D.new()
 	# The name of the place this gate opens onto, not the name of the setting.
 	# "The Lower Worlds" is everything under the garrison (docs/GDD.md); THE

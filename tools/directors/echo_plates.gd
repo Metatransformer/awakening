@@ -6,19 +6,30 @@ extends RefCounted
 ##     --director=res://tools/directors/echo_plates.gd \
 ##     --out=/tmp/plates/x.png --warmup=60
 ##
-## `SoundingStone._raise` hangs a `Label3D` under each of its three tones. Those
-## labels shipped with `no_depth_test = true`, which is not "draw on top of the
+## `SoundingStone._raise` hangs a caption under each of its three tones. Those
+## captions shipped with `no_depth_test = true`, which is not "draw on top of the
 ## stone" — it is *draw on top of the entire world*. The three names on the
 ## landing behind a shut shortcut door were legible through the door, painted on
 ## it in cyan, from a room the player had not opened yet.
+##
+## **They are `WorldCaption`s now, not `Label3D`s — card #61.** `docs/STYLEGUIDE.md`
+## §4.5 put the world in a fixed 480 x 270 buffer and an Echo's name came out of
+## it as a cyan smear, so the names are drawn on the HUD canvas at native
+## resolution and the depth test this card fought for is bought back as a
+## line-of-sight ray (`WorldCaption.occlude`). **Nothing about this card's claim
+## changed and nothing about this file's method did.** The control below flips
+## `occlude` where it used to flip `no_depth_test`; every beat still measures
+## pixels reaching the frame, because the failure being guarded against — a
+## reward leaking through the wall that is the point of a shortcut — is
+## identical whichever surface the text is drawn on.
 ##
 ## What it claims, in the order it proves them:
 ##
 ##   A  Floor 1's shortcut door is shut, and a sounding stone stands on the
 ##      landing behind it, offering three named Echoes.
 ##   B  Standing in front of the SHUT door, with all three plates squarely
-##      inside the frame and in front of the camera: with `no_depth_test` put
-##      back the names paint the door in cyan — and as the game now builds them,
+##      inside the frame and in front of the camera: with occlusion turned
+##      off the names paint the door in cyan — and as the game now builds them,
 ##      **not one of their pixels reaches the picture.** Both frames are kept.
 ##   C  The eye is shot and the door swings. Photographed from the same spot,
 ##      for the record.
@@ -26,7 +37,7 @@ extends RefCounted
 ##      picture.
 ##   E  And from a lookdev lens with nothing in shot but the plinth, every
 ##      caption is whole — NOT swallowed by the drum it stands on. That is the
-##      half a bare `no_depth_test = false` could get wrong, and it is why this
+##      half a bare occlusion flag could get wrong, and it is why this
 ##      file measures pixels rather than asserting a flag.
 ##
 ## ## Why this diffs frames instead of reading `visible`
@@ -176,23 +187,24 @@ func run(rig) -> void:
 	# caption thirteen metres away being too small to survive the downscale would
 	# read exactly like a caption the door had hidden, and that is a way for this
 	# whole file to pass while proving nothing. So the pose is photographed twice:
-	# once with `no_depth_test` forced back ON -- the setting this card is about --
+	# once with occlusion forced OFF -- the setting this card is about, which is
+	# `WorldCaption.occlude` since card #61 and was `no_depth_test` before it --
 	# and once as the game now builds it. The first frame is kept. It is what the
 	# defect looked like, from the spot a player stands in, and it is the reason
 	# the second frame's zero means something.
 	for p: Node3D in plates:
-		p.no_depth_test = true
+		p.occlude = false
 	await rig.wait_frames(4)
 	var leak := await _read(rig, cam, plates,
 		out.path_join("e_01_door_shut_no_depth_test.png"))
 	for p: Node3D in plates:
-		p.no_depth_test = false
+		p.occlude = true
 	await rig.wait_frames(4)
 	_ck("B0 the three plates are on screen and in front of the camera",
 		leak["framed"] == plates.size())
-	print("PLATES door SHUT, no_depth_test ON -> %d pixel(s) of plate"
+	print("PLATES door SHUT, occlusion OFF -> %d pixel(s) of plate"
 		% leak["ink"])
-	_ck("B1 and with `no_depth_test` they paint the shut door (%d px)"
+	_ck("B1 and with occlusion off they paint the shut door (%d px)"
 		% leak["ink"], leak["ink"] >= READABLE)
 
 	var shut := await _read(rig, cam, plates,
@@ -498,7 +510,7 @@ func _stone_with(d: Node, id: StringName) -> Node3D:
 
 func _plates_under(stone: Node) -> Array:
 	var found: Array = []
-	for n in _every(stone, func(x: Node) -> bool: return x is Label3D):
+	for n in _every(stone, func(x: Node) -> bool: return x is WorldCaption):
 		found.append(n)
 	return found
 

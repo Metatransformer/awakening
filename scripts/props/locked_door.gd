@@ -675,9 +675,23 @@ func _build_lights() -> void:
 ## the door is shut and BONE once it is open, because the plate is the only part
 ## of the door that is still there to be read afterwards.
 ##
-## Label3D with the engine font, which is the house pattern for a plate in the
-## world (npc.gd does the same over the vendor). CanvasText is a canvas renderer
-## and there is no 3D path to it; a plate is not the HUD.
+## Label3D with the engine font. **It stays one — card #61**, and the paragraph
+## that used to be here needs correcting rather than deleting: it said "npc.gd
+## does the same over the vendor" and "CanvasText is a canvas renderer and there
+## is no 3D path to it; a plate is not the HUD". The first half is no longer
+## true — the vendor's name is a `WorldCaption` drawn on the canvas now, because
+## `docs/STYLEGUIDE.md` §4.5 renders the world at 480 x 270 and a billboarded
+## `Label3D` came out of that buffer as a smear. The second half is still the
+## right instinct and it is why this one did not move: a tablet bolted to a
+## lintel is a physical object, not a caption about one, and the comment fifteen
+## lines below already worked out that "high and proud looks like HUD" and
+## refused it. A carved name that softens as you walk away is a carved name
+## behaving correctly. It is not billboarded, which is the tell —
+## `scripts/ui/world_caption.gd` §"Which captions live here".
+##
+## What the player must ACT on at a locked door is the sigil cut into the leaves,
+## which is geometry and is unaffected; the plate names the lock for somebody
+## standing at it.
 func _build_plate(stone: Material) -> void:
 	if label.strip_edges().is_empty():
 		return

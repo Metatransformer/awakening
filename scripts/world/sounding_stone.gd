@@ -54,7 +54,7 @@ const MOTE_Y := 1.16
 const PLATE_DROP := 0.34
 
 var _motes: Array[LootMote] = []
-var _plates: Array[Label3D] = []
+var _plates: Array[WorldCaption] = []
 var _offered: Array[StringName] = []
 var _spent: bool = false
 var _lamp: OmniLight3D = null
@@ -135,34 +135,34 @@ func _raise(id: StringName, i: int, total: int) -> void:
 	m.taken.connect(_on_taken)
 	_motes.append(m)
 
-	var plate := Label3D.new()
-	plate.text = EchoDb.name_of(id)
-	plate.font_size = 44
-	# 0.0022 made "The Returning Shaft" about 1.15 m wide on a ring whose
-	# neighbours were 1.05 m apart -- a caption that overlapped its own siblings.
-	# 0.0019 on the wider ring is about 0.8 m against 1.30 m of spacing, which is
-	# a clear gap AND still readable from where the follow camera actually sits.
-	plate.pixel_size = 0.0019
-	plate.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	# **Depth-tested, and that is not what this shipped with.** It carried
-	# `no_depth_test = true`, which does not mean "draw over the plinth" -- it
-	# means DRAW OVER THE WORLD. The three names on the landing behind a shut
-	# shortcut door came out painted on the door in cyan, readable from a room
-	# the player had not opened yet, which leaks `docs/PUZZLES.md` §5.1's reward
-	# through the wall that is the entire point of a shortcut (card #26).
+	# **A `WorldCaption`, and it was a billboarded `Label3D` until card #61.**
+	# `docs/STYLEGUIDE.md` §4.5 put the world in a fixed 480 x 270 buffer, and a
+	# `Label3D` goes into that buffer with the masonry -- so an Echo's name came
+	# out of it as a cyan smear. The names are drawn on the HUD canvas now, by
+	# `Hud._draw_world_captions`, at §3.1b's 14 px.
 	#
-	# What `no_depth_test` was reaching for is real -- a caption swallowed by its
-	# own drum is no caption -- but the fix for that is the GEOMETRY, which is
-	# `CLAUDE.md` §3's standing advice for this whole class of bug: change the
-	# shape, not the material. `PLATE_DROP` hangs the plate at 0.82 m and the
-	# drum's cap tops out at 0.75 m, so the caption already stands clear of the
-	# stone it belongs to and depth testing costs it nothing.
-	# `tools/directors/echo_plates.gd` measures both halves by subtracting the
-	# labels back out of the frame.
-	plate.no_depth_test = false
-	plate.modulate = Pal.CYAN
-	plate.outline_size = 16
-	plate.outline_modulate = Pal.VOID
+	# **Card #26's rule survives the move and was the first thing checked.** The
+	# defect there was `no_depth_test = true`, which does not mean "draw over the
+	# plinth" -- it means DRAW OVER THE WORLD, and the three names on a landing
+	# behind a shut shortcut door came out painted on the door in cyan, readable
+	# from a room the player had not opened, leaking `docs/PUZZLES.md` §5.1's
+	# reward through the wall that is the entire point of a shortcut. A canvas
+	# caption would leak it the same way if it were drawn unconditionally, so
+	# `WorldCaption.occlude` casts a line-of-sight ray from the camera and the
+	# shut door takes the name away exactly as it did. `PLATE_DROP` is still
+	# what keeps the caption off the drum -- it hangs at 0.82 m against a cap
+	# topping out at 0.75 m -- but note that its job is now placement rather
+	# than clearance, because the ray excludes the prop a caption hangs off.
+	# `tools/directors/echo_plates.gd` measures both halves.
+	#
+	# The old `pixel_size = 0.0019` and the ring spacing it was tuned against are
+	# gone: a canvas caption does not scale with distance, so "0.8 m wide against
+	# 1.30 m of spacing" is not the measurement any more. What replaces it is
+	# that the three names are read from a couple of metres, where 14 px on a
+	# 1.30 m ring is a clear gap. Look at `echo_plates.gd`'s frames, not at this.
+	var plate := WorldCaption.new()
+	plate.text = EchoDb.name_of(id)
+	plate.tint = Pal.CYAN
 	plate.position = at - Vector3(0.0, PLATE_DROP, 0.0)
 	add_child(plate)
 	_plates.append(plate)
@@ -192,7 +192,9 @@ func _on_taken(id: StringName) -> void:
 	for p in _plates:
 		if is_instance_valid(p):
 			var tw := create_tween()
-			tw.tween_property(p, ^"modulate:a", 0.0, 0.35)
+			# `alpha`, not `modulate:a`: a `WorldCaption` is a bare Node3D
+			# (card #61). The property fades the plate with the ink.
+			tw.tween_property(p, ^"alpha", 0.0, 0.35)
 			tw.tween_callback(p.queue_free)
 	_plates.clear()
 	if _lamp != null:

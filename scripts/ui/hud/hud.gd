@@ -983,6 +983,7 @@ func _draw_hud() -> void:
 	_draw_crosshair(s)
 	_draw_lock_on(s)
 	_draw_enemy_bars(s)
+	_draw_world_captions(s)
 	_draw_sweep(s)
 	# Last of the world-facing cues and deliberately NOT `_note`d. It is a stroke
 	# on a circle around the whole frame, like `_draw_sweep`'s line — an event
@@ -3013,6 +3014,110 @@ func _draw_enemy_bars(s: Vector2) -> void:
 		var fill := roundf(w * hp.fraction())
 		if fill >= 1.0:
 			_canvas.draw_rect(Rect2(x, c.y, fill, h), Pal.RUST)
+
+
+## Names and readouts anchored to a point in the world and drawn HERE, at native
+## resolution, rather than in the world as a billboarded `Label3D`.
+##
+## **Card #61, and it is `docs/STYLEGUIDE.md` §4.5's one casualty.** The world
+## renders into a fixed 480 x 270 buffer now, and a `Label3D` is world geometry
+## wearing a glyph atlas -- so `LANTERNKEEPER` over a keeper four metres away
+## went through the buffer with the curtain wall and came back as a smear about
+## five buffer pixels tall. `E TO TALK`, two inches below it on the same frame,
+## stayed crisp, because the HUD never enters the buffer. That contrast is the
+## whole argument: this text was always interface, and §4.5 is what made the
+## difference visible. `scripts/ui/world_caption.gd` carries the rest of it,
+## including which captions deliberately did NOT move -- the carved ones, a
+## lintel and a monument and a door tablet, which are physical objects and are
+## allowed to be soft at distance the way a real carved sign is.
+##
+## **The three gates are `_draw_enemy_bars`', deliberately.** In range of the
+## hero, in front of the camera, and with nothing in the way. The last one is
+## not optional and it is not a nicety: a caption painted through a wall is
+## exactly the defect §4.3 spent cards #26 and #37 killing -- a keeper's name
+## readable from out on the plain, an Echo's name leaking through the shortcut
+## door that had not been opened. Moving the text onto the canvas is not a
+## licence to bring that back, so the depth test the world gave for free is
+## bought back here with one ray, and `WorldCaption.occlude` is the flag a
+## director flips to photograph what it looks like without it.
+##
+## Everything else -- the words, the size, how far it carries -- belongs to the
+## caption and not to this function. A name plate is not one widget with a
+## constant block; it is however many the room put in the group.
+func _draw_world_captions(s: Vector2) -> void:
+	var cam := _canvas.get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var hero := get_tree().get_first_node_in_group(&"player") as Node3D
+	if hero == null:
+		return
+
+	# Same 480x270 grid as the lock brackets and the enemy bars. A caption is
+	# anchored to a point in a world that snaps its vertices to that grid; left
+	# unquantized it slides half a pixel against the prop it names on every
+	# camera move, which reads as the caption being loose rather than the world
+	# being crunchy (docs/STYLEGUIDE.md §5.5).
+	var grid := s / Vector2(480.0, 270.0)
+	var space := cam.get_world_3d().direct_space_state
+	var pad := Pal.px(PLATE_WORLD_PAD, s.y)
+
+	for n in get_tree().get_nodes_in_group(WorldCaption.GROUP):
+		var cap := n as WorldCaption
+		if cap == null or not is_instance_valid(cap):
+			continue
+		# `is_visible_in_tree`, not `visible`: a keeper's sign is raised and
+		# dropped by `Prompt` with `cap.visible`, and a caption under a hidden
+		# prop must go with the prop.
+		if cap.text.is_empty() or not cap.is_visible_in_tree():
+			continue
+		var at := cap.global_position
+		var a := cap.opacity_at(hero.global_position.distance_to(at))
+		if a <= 0.004:
+			continue
+		# Behind the camera unprojects to a point in FRONT of it -- a name for
+		# something at your back, drawn over the wall you are facing.
+		if cam.is_position_behind(at):
+			continue
+		if cap.occlude and not _caption_visible(space, cam, cap):
+			continue
+
+		var scale := _text(cap.ref_px)
+		var w := CanvasText.width(cap.text, scale)
+		var h := CanvasText.height(scale)
+		var c := cam.unproject_position(at)
+		c = (c / grid).round() * grid
+		# The anchor is the caption's BASELINE-ish middle: the text is centred on
+		# the point and hangs from it, so a caption placed at the height the
+		# `Label3D` used to sit at lands where the label used to land.
+		var centre := Vector2(c.x, c.y - h * 0.5)
+		if cap.plate:
+			_canvas.draw_rect(
+				Rect2(centre.x - w * 0.5 - pad, centre.y - pad,
+					w + pad * 2.0, h + pad * 2.0),
+				Color(Pal.VOID, PLATE_WORLD.a * a))
+		CanvasText.draw_centred(_canvas, cap.text, centre, scale,
+			Color(cap.tint, cap.tint.a * a))
+
+
+## Is there world geometry between the camera and this caption?
+##
+## `K.L_WORLD` only, and the prop the caption hangs off excluded -- a training
+## post must not hide its own readout, and `_bar_visible` below documents the
+## same rule at length for monsters. The exclusion walks up the ancestors rather
+## than testing the caption itself, because a `WorldCaption` is a bare `Node3D`
+## with no collider: the body in the way of its own name is always its parent.
+func _caption_visible(space: PhysicsDirectSpaceState3D, cam: Camera3D,
+		cap: WorldCaption) -> bool:
+	_ebar_ray.from = cam.global_position
+	_ebar_ray.to = cap.global_position
+	var skip: Array[RID] = []
+	var owner: Node = cap.get_parent()
+	while owner != null:
+		if owner is CollisionObject3D:
+			skip.append((owner as CollisionObject3D).get_rid())
+		owner = owner.get_parent()
+	_ebar_ray.exclude = skip
+	return space.intersect_ray(_ebar_ray).is_empty()
 
 
 ## Is there world geometry between the camera and this monster's head?

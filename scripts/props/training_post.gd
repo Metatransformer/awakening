@@ -48,6 +48,23 @@ signal struck(amount: int, from: Vector3)
 ## of the bundle's face. The label is billboarded, so it turns to face the camera
 ## and its whole quad clears the curve at that distance; nearer and a wide number
 ## catches the shoulder of the cylinder at an oblique angle.
+##
+## **Card #61 retired half of that and it is worth being straight about which
+## half.** A damage number is a `WorldCaption` now — drawn on the HUD canvas by
+## `Hud._draw_world_captions`, not as geometry in §4.5's 480 x 270 buffer — and
+## the line-of-sight ray that replaces its depth test excludes the prop the
+## caption hangs off, exactly as an enemy's health bar is not blocked by the
+## enemy. So the bundle can no longer swallow a number wherever it is anchored,
+## and the CLEARANCE argument above is dead: `tools/directors/world_labels.gd`
+## used to measure a bite out of a number placed back inside the straw, and it
+## measures nothing now, so that beat is gone with it.
+##
+## The constant stays because its other job did not go anywhere: it puts the
+## number on the side the blow came in on, which is the side the camera is
+## standing on, and the tangential jitter around it is what stops four numbers
+## in a combo printing on one spot. That is placement, not occlusion. Do not
+## re-derive it from the bundle's radius if the bundle changes size — derive it
+## from how far apart two numbers have to land to read as two.
 const POPUP_CLEAR := 0.22
 
 @export_group("Audio")
@@ -59,7 +76,7 @@ var hit_count: int = 0
 var _pivot: Node3D
 var _pad: MeshInstance3D
 var _pad_mat: StandardMaterial3D
-var _readout: Label3D
+var _readout: WorldCaption
 var _sfx: AudioStreamPlayer3D
 var _wobble_vel: Vector2 = Vector2.ZERO   ## angular velocity, x=pitch z=roll
 var _wobble_ang: Vector2 = Vector2.ZERO   ## current lean
@@ -232,24 +249,27 @@ func _build() -> void:
 	add_child(_sfx)
 
 	if show_readout:
-		_readout = Label3D.new()
-		_readout.font_size = 64
-		_readout.pixel_size = 0.0022
-		_readout.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		# **Depth-tested, and it shipped the other way.** `no_depth_test = true`
-		# does not mean "draw over the post" — it means DRAW OVER THE WORLD, so
-		# the running total was legible through the wall of whatever room the
-		# post stands in. Same defect as the Echo name plates, same answer:
-		# `scripts/world/sounding_stone.gd` carries the long note (card #26), and
-		# this is card #37.
+		# **A `WorldCaption`, and it was a billboarded `Label3D` until card
+		# #61.** This is the readout the card was opened for: `1 HIT 3 Q (0.75
+		# ♥)` is a NUMBER the player is meant to read, and after
+		# `docs/STYLEGUIDE.md` §4.5 put the world in a 480 x 270 buffer it was
+		# an unreadable smear from 3.8 m — the distance the fixture is used
+		# from. A name you cannot read is arguably atmosphere; a readout you
+		# cannot read is a broken instrument, and this prop is the instrument
+		# every other package validates a sword swing against.
 		#
-		# Nothing has to move for it. The readout hangs at `post_height + 0.42`
-		# and the tallest thing beneath it is the straw pad, capping at
-		# `post_height * 0.82 + pad_height * 0.5` — 0.47 m of clear air. The
-		# damage numbers in `_popup` were NOT clear and did have to move.
-		_readout.no_depth_test = false
-		_readout.modulate = Color(1, 0.92, 0.6)
-		_readout.outline_size = 18
+		# It is drawn on the canvas by `Hud._draw_world_captions` now, at
+		# §3.1b's 14 px, and the depth test card #37 fought for is bought back
+		# there as a line-of-sight ray (`WorldCaption.occlude`). The running
+		# total is still not legible through the wall of the room the post
+		# stands in; `tools/directors/world_labels.gd` still measures it.
+		#
+		# Nothing had to move for it. The readout still hangs at
+		# `post_height + 0.42`, and the tallest thing beneath it is the straw
+		# pad capping at `post_height * 0.82 + pad_height * 0.5` — 0.47 m of
+		# clear air.
+		_readout = WorldCaption.new()
+		_readout.tint = Color(1, 0.92, 0.6)
 		_readout.position.y = post_height + 0.42
 		add_child(_readout)
 		_refresh_readout()
@@ -275,15 +295,19 @@ func _refresh_readout() -> void:
 ## `POPUP_CLEAR`: this used to be built inside the straw bundle and got away with
 ## it only because `no_depth_test` was hiding the fact.
 func _popup(amount: int, from: Vector3) -> void:
-	var l := Label3D.new()
+	# A `WorldCaption` — see `_readout` above, card #37 and card #61. It carries
+	# a plate rather than the 20 px outline it used to, because §5.7's World
+	# recipe is what the HUD gives text that has to survive a background it does
+	# not control, and a two-digit number in RUST on a sunlit sandstone wall
+	# needs that as much as a name does. One rule, no per-widget exceptions.
+	var l := WorldCaption.new()
 	l.text = str(amount)
-	l.font_size = 96
-	l.pixel_size = 0.0020
-	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	# Depth-tested — see `_readout` above and card #37.
-	l.no_depth_test = false
-	l.outline_size = 20
-	l.modulate = Color(1.0, 0.42, 0.32) if amount > 0 else Color(0.65, 0.65, 0.7)
+	# 16 px, the top of §3.1b's ladder: this is the biggest thing the ladder
+	# allows and a damage number should be the loudest caption on the frame. It
+	# used to be `font_size = 96` against the readout's 64, which was a hierarchy
+	# authored in a unit with no ladder behind it at all.
+	l.ref_px = 16.0
+	l.tint = Color(1.0, 0.42, 0.32) if amount > 0 else Color(0.65, 0.65, 0.7)
 
 	# Out along the line the blow came in on, which is the side the striker — and
 	# therefore the camera — is standing on. `to_local`, because the offset is
@@ -295,8 +319,9 @@ func _popup(amount: int, from: Vector3) -> void:
 	if out_dir == Vector3.ZERO:
 		out_dir = global_transform.basis.z
 	# Tangential jitter, so a fast combo still stacks legibly rather than
-	# printing four numbers on one spot. Only as much as the clearance can
-	# absorb: swung far enough round the drum, a number goes back inside it.
+	# printing four numbers on one spot. Kept at ±0.12 m: it is now free of the
+	# "or it goes back inside the drum" bound (see `POPUP_CLEAR`, card #61), and
+	# it is still what a combo needs rather than what the geometry permits.
 	var side := Vector3(-out_dir.z, 0.0, out_dir.x) * randf_range(-0.12, 0.12)
 	l.position = to_local(global_position
 		+ out_dir * (pad_radius + POPUP_CLEAR) + side
@@ -304,5 +329,8 @@ func _popup(amount: int, from: Vector3) -> void:
 	add_child(l)
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(l, "position:y", l.position.y + 1.1, 0.85).set_ease(Tween.EASE_OUT)
-	tw.tween_property(l, "modulate:a", 0.0, 0.85).set_ease(Tween.EASE_IN)
+	# `alpha`, not `modulate:a` — a `WorldCaption` is a bare `Node3D` and has no
+	# `modulate`. The property fades the plate with the ink so the number leaves
+	# as one object instead of a rectangle outliving its digit.
+	tw.tween_property(l, "alpha", 0.0, 0.85).set_ease(Tween.EASE_IN)
 	tw.chain().tween_callback(l.queue_free)

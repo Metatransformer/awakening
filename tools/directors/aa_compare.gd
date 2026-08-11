@@ -21,8 +21,16 @@ extends RefCounted
 ##
 ##   - the curtain-wall merlons and the gatehouse roofline against a flat sky —
 ##     hard geometric edges, which is all MSAA can ever touch;
-##   - the world-space `LANTERNKEEPER` plate — a Label3D, so it is 3D geometry
-##     wearing a glyph atlas, and it aliases like geometry;
+##   - ~~the world-space `LANTERNKEEPER` plate — a Label3D, so it is 3D geometry
+##     wearing a glyph atlas, and it aliases like geometry~~ — **gone since card
+##     #61.** That plate is a `WorldCaption` drawn on the HUD canvas now, so it
+##     belongs to the third bullet rather than the second, and this pose no
+##     longer holds a sample of "type rendered as world geometry" at all. The
+##     three remaining ones are carved signs (`Statue`, `LockedDoor`, the
+##     gatehouse lintel) and none of them is in this frame. Nothing in #55's
+##     conclusion turns on it: the plate aliased like geometry and MSAA smoothed
+##     it like geometry, which was one more instance of the merlons above, not a
+##     separate finding.
 ##   - the HUD's Cinzel key caps and legend — 2D canvas, which **no** viewport AA
 ##     mode reaches, MSAA or FXAA or TAA;
 ##   - the vitals pip row — `draw_rect` on the same canvas, whose steps are meant

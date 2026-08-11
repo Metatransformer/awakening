@@ -68,6 +68,15 @@ func _build_plinth() -> void:
 	# The inscription, on the face the plaza's south opening looks at. Small, and
 	# deliberately unreadable from more than a few metres: it is a texture of
 	# words at a distance and a name up close, which is how a monument works.
+	#
+	# **A `Label3D`, and it STAYS one — card #61.** That card moved three
+	# billboarded captions onto the HUD canvas because `docs/STYLEGUIDE.md` §4.5
+	# renders the world at 480 x 270 and a `Label3D` goes into that buffer with
+	# the masonry. This is the case the card kept: an inscription is not a
+	# caption ABOUT the monument, it is cut into it, and the sentence above is
+	# already asking for exactly what §4.5 now delivers for free. It is not
+	# billboarded, which is the tell — see `scripts/ui/world_caption.gd`. Making
+	# it crisp at forty metres would be the regression, not the fix.
 	var plate := Label3D.new()
 	plate.text = "THE FIRST LANTERN"
 	plate.font_size = 32
