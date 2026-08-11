@@ -347,6 +347,17 @@ whatever scene the launcher picks. It shipped built but instanced only in
 the game had none. **There is one `PauseMenu` in the project**; drive that one,
 do not instance a second.
 
+**`Settings` owns one node that is not in that table and draws the whole world.**
+`ScreenPresent` (`scripts/core/screen_present.gd`, added 2026-08-11 for card #58)
+is a child of the `Settings` autoload, not an autoload of its own: it holds
+`docs/STYLEGUIDE.md` §4.5's 480 × 270 SubViewport, the sharp-bilinear present
+layer at `CanvasLayer` **−100**, and the proxy camera that mirrors the live one.
+It lives under `Settings` precisely so this file did not need an `[autoload]`
+line — and because `Settings.apply_video()` already owned `msaa_3d`,
+`scaling_3d_scale` and the shadow atlas, which now have to land on whichever
+viewport is drawing 3D. One field, `Settings.internal_render`, turns it off; the
+root window's `disable_3d` is the only other thing it touches.
+
 Need a new autoload, input action, or project setting? **Ask the orchestrator.**
 `project.godot` is the file every agent would otherwise fight over. Edit it only
 from a claimed card, and commit that edit on its own — never bundle it into a

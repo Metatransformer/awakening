@@ -329,19 +329,41 @@ c = floor(c * 31.0 + b + 0.5) / 31.0;
 ```
 
 **`rendering/anti_aliasing/quality/use_debanding = false`.** Godot's debanding is
-a noise dither over the whole frame and it fights ours pixel for pixel.
+a noise dither over the whole frame and it fights ours pixel for pixel. It is set
+on the internal SubViewport in code (`screen_present.gd`) rather than in
+`project.godot`, which is orchestrator-owned.
+
+**Where it runs, as built (2026-08-11, #58):** in the *present* pass, in
+`assets/shaders/present_psx.gdshader`, alongside the sharp-bilinear filter — one
+pass, not two. The cell index is read off `UV * src_size`, so one Bayer cell is
+4 × 4 **internal** pixels exactly as this section demands; the present pass is
+the last place in the frame where "one internal pixel" is still a knowable
+quantity. Do it after the upscale and each cell covers 2.67 output pixels at
+720p, which is the grain overlay this section spends a paragraph refusing.
 
 The HUD is quantized to RGB555 but **not dithered** — it is authored in palette
-colours already, so dithering only adds mush.
+colours already, so dithering only adds mush. *Not built:* the HUD is drawn on a
+canvas layer above the present pass and is not quantized at all today. It is
+authored in `Pal` entries, every one of which is already on the RGB555 grid (§2's
+multiple-of-8 rule), so the quantizer would be a no-op on everything except the
+alpha blends of the plates — which is why this is a note rather than a card.
 
 ### 4.5 Internal resolution and upscale
+
+> **BUILT 2026-08-11 (card #58), and it is ON.** This section had described an
+> unbuilt pipeline since it was written; the game rendered at the window's
+> resolution and always had. It is real now, and the decision below is **this
+> session's call, made while the repo owner was asleep, and REVERSIBLE** — one
+> field, `Settings.internal_render`, and the frames re-shoot in four minutes.
+> Same shape as #55's §4.8. If the owner disagrees, set it `false`; nothing else
+> in the project branches on it.
 
 3D SubViewport at **480 × 270**, fixed. (PSX was 320×240 = 76.8k pixels;
 480×270 = 129.6k, the smallest buffer where an over-the-shoulder camera can still
 resolve an enemy wind-up at 9 m, which is the lock-on acquisition range.)
 
 `msaa_3d = DISABLED`, `screen_space_aa = DISABLED`, `scaling_3d_scale = 1.0`,
-`use_hdr_2d = false`, `texture_filter = NEAREST`.
+`use_hdr_2d = false`, `use_debanding = false`, `texture_filter = NEAREST`.
 
 Present with **sharp-bilinear**, not raw nearest and not integer-only. Raw
 nearest at a non-integer scale (720p is 2.67×) shimmers on every camera move;
@@ -349,9 +371,134 @@ integer-only forces pillarboxing at 720p.
 
 ```glsl
 vec2 px = UV * src_size;
-vec2 fl = floor(px) + 0.5;
-vec2 uv = (fl + clamp(px - fl, -0.5, 0.5) / fwidth(px)) / src_size;
+vec2 fl = floor(px) + 0.5;      // the texel centre this fragment is inside
+vec2 d  = px - fl;              // −0.5 .. 0.5, in texels
+vec2 w  = max(fwidth(px), vec2(1e-6));   // texels crossed per OUTPUT pixel
+vec2 r  = max(vec2(0.5) - w * 0.5, vec2(0.0));
+vec2 uv = (fl + (d - clamp(d, -r, r)) / w) / src_size;   // sample LINEAR
 ```
+
+**Those are not the four lines this section used to give, and the old ones did
+not work.** They read
+`uv = (fl + clamp(px - fl, -0.5, 0.5) / fwidth(px)) / src_size` — the clamp
+applied *before* the divide, where it can never fire, because `px - fl` is
+already inside ±0.5 by construction. The divide then scales it to ±1.33 texels
+at 720p, which walks the sample past the *next* texel's centre and blends two
+neighbours the fragment is not inside. It does not sharpen; it smears, doubled.
+The clamp has to act on the already-divided distance — equivalently, on `d`
+against a region that shrinks by half an output pixel, which is the form above.
+It is the Retroarch/Themaister sharp-bilinear, and this is the first time anyone
+compiled it here.
+
+The present sampler is **LINEAR**, which is not a contradiction of the `NEAREST`
+in the list above. Sharp bilinear *is* a bilinear tap: the shader snaps the
+sample to the texel centre and lets it cross the boundary over exactly one output
+pixel, and it needs the hardware blend to do that. Set the present rect to
+NEAREST and the shader degenerates to raw nearest, which is what this section
+rules out. `NEAREST` governs the SubViewport's own 2D and the world's materials.
+
+#### How it is built, and the one thing not to do
+
+`scripts/core/screen_present.gd`, instanced by `Settings` (it has no `[autoload]`
+line of its own — `project.godot` is orchestrator-owned, `docs/CONTRACT.md` §3,
+and this needed no edit to it). The SubViewport **shares the root's `World3D`**
+and carries a proxy `Camera3D` that mirrors the live one every frame; the root
+window gets `disable_3d = true` so the same scenario is not drawn twice.
+
+**The world scene is never reparented into the SubViewport**, and that is the
+load-bearing decision. `unproject_position` answers in the *camera's* viewport —
+move the camera into a 480 × 270 buffer and every world-anchored HUD widget
+starts computing 480 × 270 positions and painting them on a 1280 × 720 canvas:
+the lock brackets, the enemy bars, `Targeting`'s screen-space tie-break, `Feel`'s
+shake, `hero_ranged`'s aim. Nine call sites, all silent, all wrong by 2.67×.
+Sharing the world instead leaves the real `GameCamera` in the root viewport at
+native, so every one of them keeps answering in native pixels — which is correct,
+because the internal buffer covers the identical rectangle.
+
+#### What it actually looks like
+
+Shot at a true 1280 × 720 with `tools/directors/internal_res.gd`, which
+photographs one pose under both pipelines inside one process and composites the
+pair. The world is paused across each pair and the flames pinned, or the two
+halves are two different moments.
+
+- **The dungeon is the case for it.** At native, the 128 px stone is mipmapped
+  and linearly filtered into a soft brown wall — the texel grid §4.7 exists to
+  protect is *invisible*, smeared below one screen pixel. At 480 × 270 the same
+  wall is a crisp block-pixel wall with the Bayer dither visible in the torch
+  falloff. §4.7's mipmaps-ON deviation stops being decorative and starts doing
+  the job it was written for. `d_plain_room_zoom.png` is the frame that settles
+  this and it is not close.
+- **Silhouettes survive.** All five monsters read at 9 m in the lineup
+  (`mon_00_lineup.png`) — skeleton, goblin, kobold, orc and wraith are still told
+  apart by shape, which is the number this section's 480 × 270 was chosen for.
+- **The edges become a decision.** There is nothing left to antialias: an edge is
+  a 2.67 px step and reads as intent rather than as a defect. This is the answer
+  §4.8 said the edge question was waiting for.
+- **The HUD is untouched and it is the whole point.** Cinzel key caps, the 10 px
+  legend, the vitals ticks, the minimap's 1 px linework — all pixel-identical to
+  the native frame, because they never enter the buffer. `E TO TALK` is crisp
+  over a courtyard made of blocks.
+- **Departure 3 got louder.** The pixel-art busts and the vellum panel over a
+  genuinely chunky PSX courtyard is the register change §3.0 describes, and it
+  had been half-invisible while the world was as sharp as the panel.
+- **The dither is loud on large flat surfaces and that is correct.** The sky
+  above the curtain wall and the shortcut door's flat boards both carry a visible
+  4 × 4 checker at 3× zoom — 5 bits per channel across a slow gradient is a lot
+  of dithering, and this is precisely what a PS1 gradient looked like. At 1:1 it
+  reads as surface texture, not as noise. Do not "fix" it by softening the
+  quantizer: §4.4's whole argument is that a *visible ordered* cell is the tell
+  that separates a pipeline from a filter.
+
+#### The cost, because a recommendation without one is not a decision
+
+`gpu_ms` reads all-zero on this Metal driver (#55/#20), so this rests on the wall
+clock, on the renderer's own CPU submission, and on VRAM.
+
+| Pose (paused, one process, 300 samples) | frame_ms med | cpu_ms | draws |
+|---|---|---|---|
+| garrison arrive — native | 5.94 | 0.96 | 647 |
+| garrison arrive — 480×270 | **5.47** | **0.51** | 650 |
+| dungeon, shut shortcut door — native | 9.98 | 3.05 | 1479 |
+| dungeon, shut shortcut door — 480×270 | **8.82** | **1.51** | 1480 |
+| dungeon, plain room — native | 13.27 | 5.71 | 5254 |
+| dungeon, plain room — 480×270 | **11.49** | **2.41** | 4583 |
+
+**The renderer's own CPU time halves, in every pose, every run.** That is the one
+number that moves reliably: 0.96 → 0.51, 3.05 → 1.51, 5.71 → 2.41. Draw calls
+barely move — the scene is submitted exactly as it was, plus one call for the
+present quad — so §4.5 buys almost nothing on the CPU-side *scene walk*, which is
+what this project is actually bound by. Where it does move (5254 → 4583 in the
+busiest room) it is LOD and shadow culling: `mesh_lod_threshold` is measured in
+**pixels**, so a 480 × 270 target crosses it far sooner. Rasterised primitives
+fall 23% at 1080p on the same mechanism (236,705 → 183,013). Frame time improves
+by ~10% and that is *inside* the noise floor of a Mac running five directors at
+once; read the deltas, not the absolutes.
+
+**VRAM at 1080p: 297.0 MB native → 248.1 MB, −48.9 MB.** That is half of what
+#55 measured 4× MSAA costing, given back. The saving is only visible across two
+*processes*: a build with the field on never allocates the native-resolution 3D
+targets at all, whereas flipping the field at runtime leaves the ones already
+made, so a paired run reports VRAM unchanged. Card #20's budget (~8.7–9.6 ms
+median at 1080p) is unaffected either way; this is not a perf change, it is a
+look change that happens not to cost anything.
+
+#### What it breaks, and it is one thing
+
+**World-space `Label3D` text is illegible.** `LANTERNKEEPER` over the keeper's
+booth, the training post's readout (`1 hit 3 q (0.75 ♥)`) and its damage number
+are all 3D geometry wearing a glyph atlas, so they go through the buffer and come
+out as noise at anything past a couple of metres. `tools/directors/world_labels.gd`
+still passes — it counts pixels, and the pixels are all there — which is exactly
+how this would have shipped unnoticed. Carded separately (#61). Nothing the
+player must *act* on is affected: the interact prompt, the key caps and every
+number in §5 are HUD and stay sharp.
+
+Two things §4.4 asks for that this does **not** do yet: the HUD is not quantized
+to RGB555 (it is drawn after the present pass, in palette colours already), and
+`Pal`'s dithered derivations are unchanged. Both are cosmetic against the buffer
+and neither is worth a second full-screen pass; noted here rather than left as a
+silent divergence.
 
 ### 4.6 Fog as a draw-distance tool
 
@@ -402,6 +549,15 @@ tier 3. See Departure 2.
   - Mipmaps ON is a deliberate deviation from real PSX, which crawled. At
     480×270 an unmipped nearest floor texture shimmers hard enough to obscure
     enemy positions. We simulate the console's look, not its bugs.
+
+    **This started being true on 2026-08-11** (#58), and the frames are the
+    argument. While the game rendered at native, a 128 px wall texture sat below
+    one screen pixel per texel at any distance and the mipmap chain smeared it
+    into a soft brown sheet — the texel grid this table exists to protect was
+    invisible in the shipped renderer and the deviation was buying nothing. At
+    480 × 270 the same wall reads as a crisp block-pixel wall and the mip
+    selection is what stops the far half of it crawling. `d_plain_room_zoom.png`
+    off `tools/directors/internal_res.gd` is the pair.
   - Lossless because BPTC/DXT on a 64px texture saves nothing and shreds a
     16-colour palette.
 - **`render_mode vertex_lighting, specular_disabled, diffuse_lambert`.**
@@ -523,12 +679,17 @@ buying one pixel.* Card #20's budget (~8.7–9.6 ms median at 1080p, ~7 ms
 headroom) is unaffected either way.
 
 **What the real answer to "the edges are rough" is.** §4.5 — the 480 × 270
-internal buffer with a sharp-bilinear present. That pipeline is authored in
-this document and **has never been built**; the game currently renders at
-native and always has. At 480 × 270 the edge question changes shape entirely
-(there is nothing to antialias into), and the pixel grid becomes deliberate
-rather than incidental. Turning MSAA off is the cheap half of the right answer
-and the same direction of travel. Carded separately.
+internal buffer with a sharp-bilinear present. At 480 × 270 the edge question
+changes shape entirely (there is nothing to antialias into), and the pixel grid
+becomes deliberate rather than incidental. Turning MSAA off is the cheap half of
+the right answer and the same direction of travel.
+
+> **That half landed the same night** (2026-08-11, card #58). §4.5 is built and
+> on, and this section's conclusion survives it unchanged: with a 2.67 px edge
+> step there is nothing for MSAA to insert a partial-coverage pixel into, so the
+> `Settings.msaa = 0` default is *more* right after #58 than before it. The MSAA
+> row still applies — to the internal buffer now, routed there by
+> `Settings.apply_video` — and a player who wants it can still have it.
 
 ---
 
@@ -1337,15 +1498,22 @@ for 2D art anywhere else.
   *after* the project setting is read. The default is `0` now — one field, the
   sanctioned runtime path, no edit to the orchestrator-owned file. §4.8 holds
   the frames and the cost. What remains open from this bullet: directional
-  shadow size 8192 → 1024 (or off), `soft_shadow_filter_quality=0`, plus
-  `use_debanding=false` and `default_texture_filter=0`. `project.godot` is
-  orchestrator-owned per CONTRACT §3.
-- **§4.5's internal-resolution pipeline is authored and unbuilt.** The 480 × 270
-  SubViewport, the sharp-bilinear present and the Bayer dither at internal
-  resolution do not exist in this build; the game renders at native. This was
-  invisible for as long as the harness supersampled, because proof frames looked
-  like a 20×-sampled native render either way. It is the largest single gap
-  between this document and the repo and it now owns the edge question (§4.8).
+  shadow size 8192 → 1024 (or off), `soft_shadow_filter_quality=0`, and
+  `default_texture_filter=0`. **`use_debanding` came off this list on 2026-08-11
+  (#58)**, by the same route again: the world's 3D is drawn by a SubViewport
+  built in code now, so `screen_present.gd` sets `use_debanding = false` on the
+  viewport that matters and the project key no longer governs anything this
+  document cares about. `project.godot` is orchestrator-owned per CONTRACT §3.
+- ~~**§4.5's internal-resolution pipeline is authored and unbuilt.**~~
+  **CLOSED 2026-08-11 (#58).** The 480 × 270 SubViewport, the sharp-bilinear
+  present and the Bayer dither at internal resolution are built and on, behind
+  `Settings.internal_render`, and needed no edit to `project.godot`. §4.5 holds
+  the frames, the cost and the one thing it breaks. The four lines of shader this
+  document had been carrying were wrong and are corrected there.
+
+  What this delta became, rather than what it closed: **world-space `Label3D`
+  text is illegible through the buffer** — the keeper name plates and the
+  training post's readout. Card #61.
 
   **The HUD's half of the texture-filter delta is done** and did not need the
   project key: `Hud`'s canvas sets `TEXTURE_FILTER_NEAREST` on itself. The item
