@@ -348,7 +348,7 @@ can never grind one into another.
 | Stock | Lives on | Enters | The decision it creates |
 |---|---|---|---|
 | **Arrows** | `Game.arrows` | Three sources, no fourth — `docs/METAGAME.md` §4.6 | Fletching runs the right way round: it **frees** slots (`fletching.gd:38`, `:48`) |
-| **Charges** | `Game.charges` | Bought in the garrison, never refilled below (`game_state.gd:103`) | How deep you were planning to go |
+| **Charges** | `Game.charges` | Bought from the alchemist once the Burst is owned (`alchemy_db.gd`'s `CHARGE_ID` line), never refilled below (`game_state.gd:103`) | How deep you were planning to go |
 | **Bottles** | `Game.bottle_contents` | Blown at the alchemist, capped by a relic (`alchemy_db.gd:26`, `:168`) | The fourth bottle is an event, not a purchase |
 | **Draughts** | in a bottle | Brewed — three, and only three (`potion_db.gd:23`) | Which of the smith's three numbers you want for 45 seconds |
 | **Small keys** | `Game.small_keys` | The T0 atom (`puzzle_atoms.gd:111`) | Which door, when there is more than one |
@@ -464,17 +464,34 @@ zero movement. But the sentence "the numbers live in `relic_db.gd`" is a doc
 describing what the code does not do, which CLAUDE.md §7 calls worse than no doc.
 Until the flag lands, that line should read *will live*.
 
-### D4 — nothing in the game sells Burst charges *(severe)*
+### ~~D4 — nothing in the game sells Burst charges~~ *(closed)*
 
 GDD §6.5 says charges are bought from the alchemist, and
-`scripts/autoload/game_state.gd:100-103` repeats it. `AlchemyDb.lines()`
-(`alchemy_db.gd:83-89`) offers one bottle line and three brew lines and nothing
-else. `Game.add_charges()` (`game_state.gd:510`) has exactly one caller in the
-whole repo — `tools/directors/burst_cast.gd:139`, a director that grants itself
-three. A player who kills the Slag Ogre owns an item they can never load.
+`scripts/autoload/game_state.gd:100-103` repeated it. `AlchemyDb.lines()` offered
+one bottle line and three brew lines and nothing else, and `Game.add_charges()`
+(`game_state.gd:510`) had exactly one caller in the whole repo —
+`tools/directors/burst_cast.gd:139`, a director that granted itself three. A
+player who killed the Slag Ogre owned an item they could never load.
 
-**Believe the GDD.** This is the one defect on the list that makes a shipped
-item unusable in a real run.
+**Closed by believing the GDD.** `AlchemyDb` sells `CHARGES X3` for flat gold,
+with no `parts` — a charge is stock you paid for before you left, not something
+brewed out of what the floor dropped. The line is **gated on `Game.has(&"burst")`
+and absent until then**, which is the sieve `ShopDb.GATED_BY` already runs the
+arrow line through: ammunition for a verb you have never seen is a spoiler and a
+slot that lies. It is a **tap**, not a hold, for the same reason the smith's
+`ARROWS X10` is — `Catalogue.crafts()` makes a line a hold when it eats found
+materials, and gold you can earn again.
+
+Proved by playing to it: `tools/directors/charge_buy.gd` walks up to the
+alchemist in the garrison, presses what the prompt names, buys the bundle, takes
+the shaft down and casts it. `/tmp/charge/c_00_before.png` and `c_01_after.png`
+are the same row and the same camera reading `0 / 12 charges` and `3 / 12
+charges`; `c_03_hud.png` is the HUD's working cell carrying the 3; `c_07_blast.png`
+is the Burst going off on floor 1 with the cell reading 2.
+
+**It is not the whole hole, and the rest is D13.** Buying charges upstairs does
+not help a player who descends with none and meets floor 2's `pillar_brace`
+shortcut, which is a cracked pillar filling a doorway. See D13.
 
 ### D5 — two of the six usable items do not exist in any form
 
@@ -561,6 +578,40 @@ owners. The table is **CLAUDE.md §7**, and it is missing a row for
 **Believe CLAUDE.md §7 is the table.** This commit adds the `docs/ITEMS.md` row
 there and a pointer from GDD §5.2 and §6.5; the missing `docs/BOSSES.md` row is
 left for that document's owner rather than added on their behalf.
+
+### D13 — there is no underground source of charges, and a shortcut door needs one *(severe, new 2026-08-10)*
+
+Two sessions found the same hole from opposite ends on the same night, which is
+why this is a row rather than a footnote on D4.
+
+- **From the item side** (D4, above): nothing sold charges at all. That half is
+  closed — the alchemist sells them now.
+- **From the door side** (card #5, `d93bb6e`): floor 2's shortcut prefab is
+  `pillar_brace`, a cracked pillar filling the doorway, and its only answer is a
+  Burst. A player who descends with an empty pouch is standing in front of a
+  door with **no legal way through**, which `docs/PUZZLES.md` §0 rule 2 and GDD
+  pillar 2 both exist to forbid: *a floor must be solvable from a cold start.*
+
+**Selling charges in the garrison is necessary and not sufficient.** Charges do
+not refill underground by design (GDD §6.5) and that design is right — a
+resource that comes back mid-run softens the walk home. What is missing is the
+same thing the bow already has: **the room supplies the verb it demands.**
+`ArrowBundle` (`scripts/world/arrow_bundle.gd`) is a walk-over floor pickup that
+goes on `Game` rather than in the bag, placed by `dungeon.gd:2246-2251` on a
+per-room roll and coughed up by `chest.gd:73-76`; `PuzzleAtoms.URN`'s own comment
+(`puzzle_atoms.gd:117-118`) states the rule outright — *"solvable from a cold
+start with an empty pouch, because the urns beside it hold exactly what it
+needs"* — and card #5's `eye_high` prefab puts an urn of arrows beside the eye
+for exactly this reason. **There is no charge equivalent anywhere in the repo**:
+`Game.add_charges()`'s only non-director caller is the alchemist's line.
+
+**Believe the rule, not the convenience.** The fix is a charge pickup on the
+`ArrowBundle` pattern, placed by the prefab that demands one rather than rolled
+across every room — a floor that scattered charges would undo the "how deep were
+you planning to go" decision that `game_state.gd:100-103` is written to protect.
+Its own card: it is `scripts/props/`, `scripts/world/dungeon.gd` and a prefab
+table, none of which #25 touches, and it is a placement rule rather than a data
+defect.
 
 ---
 
