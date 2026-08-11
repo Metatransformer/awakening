@@ -9,7 +9,7 @@ extends RefCounted
 ##   4. the garrison gate still opens afterwards, both times, which is the bug the
 ##      player reported ("A to descend doesn't work after I die").
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/run_end.gd --out=/tmp/rend/x.png
 

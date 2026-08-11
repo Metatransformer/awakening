@@ -16,7 +16,7 @@ extends RefCounted
 ##   4. It stops SHORT. A leap that ends past the target puts the hero behind
 ##      the enemy he jumped at, which reads as the hitbox being broken.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/p4_lunge.gd --out=/tmp/p4l/x.png
 

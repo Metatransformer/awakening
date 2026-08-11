@@ -11,7 +11,7 @@ extends RefCounted
 ## then a man standing there. The offsets the hero uses (`slam_start_offset`,
 ## `slam_land_offset`) are read off THIS, not off the hips table:
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/slam_lookdev.gd --out=/tmp/slam/x.png
 ##   ffmpeg -y -i /tmp/slam/t%02d.png -filter_complex tile=6x2 /tmp/slam/sheet.png

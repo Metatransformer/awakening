@@ -10,7 +10,7 @@ extends RefCounted
 ## again. Point it at the garrison or dungeon, not at the harness.
 ##
 ## Run:
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/escape_in_game.gd \
 ##     --out=/tmp/esc/garrison.png --warmup=90

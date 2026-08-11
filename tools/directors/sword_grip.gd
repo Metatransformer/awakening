@@ -21,7 +21,7 @@ extends RefCounted
 ## squinted at for it. 90 deg off his facing means the edge leads; 0 means the
 ## flat does.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/sword_grip.gd --out=/tmp/sword/x.png
 

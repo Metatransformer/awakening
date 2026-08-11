@@ -31,7 +31,7 @@ extends RefCounted
 ## Both bugs are one shape: a proof aimed one layer above where the game lives.
 ## So this file swings the actual button at the actual prop, every time.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/sword_contact.gd --out=/tmp/sc/x.png
 

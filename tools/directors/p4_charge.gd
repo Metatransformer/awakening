@@ -41,7 +41,7 @@ extends RefCounted
 ## across any of that is measuring the reset. (p4_combo.gd found this the hard
 ## way and reported a swing dealing -2.)
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/p4_charge.gd --out=/tmp/p4h/x.png
 

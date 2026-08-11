@@ -24,7 +24,7 @@ extends RefCounted
 ## and 171.5° off the shot, so the numbers alone will confidently pick whichever
 ## one you assumed. Look at where the string is.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/bow_grip.gd --out=/tmp/bowgrip/x.png
 

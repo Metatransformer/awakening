@@ -1,7 +1,7 @@
 extends RefCounted
 ## **Loading a save from the pause menu actually moves the player.**
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/load_from_pause.gd \
 ##     --out=/tmp/loadpause/x.png --warmup=90

@@ -12,7 +12,7 @@ extends RefCounted
 ## So: four bodies, unscaled, unposed, unrotated, beside a 1.65 m post that is
 ## exactly the hero's height. Front, side and back.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/_lookdev.tscn \
 ##     --director=res://tools/directors/npc_raw.gd --out=/tmp/npc/x.png
 

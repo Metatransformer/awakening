@@ -15,7 +15,7 @@ extends RefCounted
 ## hanging off `Bus.enemy_died`, and pathing synthetic input to nine bodies
 ## inside a 2.5 s window is a different project (see the note in mvp_loop.gd).
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/dungeon.tscn \
 ##     --director=res://tools/directors/heat_flow.gd --out=/tmp/heat/x.png
 

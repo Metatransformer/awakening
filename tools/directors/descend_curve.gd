@@ -19,7 +19,7 @@ extends RefCounted
 ##   * **The same floor twice.** Seeding the generator off the run seed rather
 ##     than the run seed AND the level, so every floor of a run is identical.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/dungeon.tscn \
 ##     --director=res://tools/directors/descend_curve.gd --out=/tmp/dive/x.png
 

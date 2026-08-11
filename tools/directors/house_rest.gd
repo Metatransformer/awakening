@@ -26,7 +26,7 @@ extends RefCounted
 ## slots' bytes at the start and puts them back at the end, exactly as
 ## `autosave.gd` does, so a run of it cannot cost anyone a save.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/house_rest.gd \
 ##     --out=/tmp/house/x.png --warmup=60

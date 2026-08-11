@@ -24,7 +24,7 @@ extends RefCounted
 ##   7. Guarding with a neutral stick, the dodge is a BACKSTEP — he travels
 ##      behind himself and does not turn to look where he went.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/guard_lock.gd --out=/tmp/guard/x.png
 

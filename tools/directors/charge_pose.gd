@@ -23,7 +23,7 @@ extends RefCounted
 ##        under a swing. That makes this sheet a stricter test than it was —
 ##        there is no swing left to hide a weak pose behind.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/charge_pose.gd --out=/tmp/pose/x.png
 ##

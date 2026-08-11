@@ -2,7 +2,7 @@ extends RefCounted
 ## **The maze room** — `docs/PUZZLES.md` §5.4, the carve and the one thing that
 ## reconfigures it.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/_maze_test.tscn \
 ##     --director=res://tools/directors/maze.gd \
 ##     --out=/tmp/mz/x.png --warmup=60
@@ -459,7 +459,7 @@ func _look_from(rig, stand: Vector3, at: Vector3) -> void:
 ##
 ## Run separately, on the dungeon scene:
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/dungeon.tscn \
 ##     --director=res://tools/directors/maze.gd --floor \
 ##     --out=/tmp/mzf/x.png --warmup=60

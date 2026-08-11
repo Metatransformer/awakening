@@ -1,7 +1,7 @@
 extends RefCounted
 ## The front door: the title screen, and the opening it starts.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/ui/title/title_screen.tscn \
 ##     --director=res://tools/directors/title.gd \
 ##     --out=/tmp/title/x.png --warmup=30

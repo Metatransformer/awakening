@@ -24,7 +24,7 @@ extends RefCounted
 ## What we want to read: arm x ~= 0 (centred between the straps) and arm z
 ## comfortably NEGATIVE (behind the boards, on the strap side).
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/shield_arm_fit.gd --out=/tmp/saf/x.png
 ##     [--sweep=x|z]   one axis of the seat, in the shield's own frame

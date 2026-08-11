@@ -1,7 +1,7 @@
 extends RefCounted
 ## The garrison fills up as you dig.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/roster.gd \
 ##     --fresh --out=/tmp/roster/x.png --warmup=40

@@ -5,7 +5,7 @@ extends RefCounted
 ## the ninth (the owner's amendment of 2026-08-10) and `lights_out.gd` is what
 ## proves the puzzle it was added FOR.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/_atom_test.tscn \
 ##     --director=res://tools/directors/puzzle_atoms.gd \
 ##     --out=/tmp/atoms/x.png --warmup=60

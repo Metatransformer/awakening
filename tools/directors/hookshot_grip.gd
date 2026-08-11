@@ -11,7 +11,7 @@ extends RefCounted
 ## paper; every socket number in this project was settled by looking at exactly
 ## these frames (see the note at the top of hero_combat.gd).
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/hookshot_grip.gd --out=/tmp/grip/x.png
 

@@ -1,7 +1,7 @@
 extends RefCounted
 ## M2, "One boss" (docs/SCOPE.md §3): the Cistern Warden, end to end.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/_boss_test.tscn \
 ##     --director=res://tools/directors/boss_cistern.gd \
 ##     --out=/tmp/boss/x.png --warmup=60

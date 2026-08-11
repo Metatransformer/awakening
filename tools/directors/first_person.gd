@@ -21,7 +21,7 @@ extends RefCounted
 ## asserted, because a screenshot of a dark dungeon wall looks the same whether
 ## the camera is a metre from it or inside it.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/dungeon.tscn \
 ##     --director=res://tools/directors/first_person.gd \
 ##     --out=/tmp/fp/x.png --warmup=60

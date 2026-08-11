@@ -20,7 +20,7 @@ extends RefCounted
 ##
 ## Needs `--keep-pad`: shoot.gd strips joypad bindings by default and the caps
 ## are read from the live InputMap, so without it the pad frames come out blank.
-##   godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn \
 ##       --director=res://tools/directors/pad_prompts.gd --keep-pad \
 ##       --out=/tmp/pad/x.png --warmup=60
 

@@ -16,7 +16,7 @@ extends RefCounted
 ## So: a burst per clip, and eyes on the contact sheet. CLAUDE.md §2 is right
 ## that a single frame cannot show direction of motion -- BURST is the point.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/strafe_lookdev.gd --out=/tmp/strafe/x.png
 

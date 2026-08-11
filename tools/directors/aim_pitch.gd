@@ -18,7 +18,7 @@ extends RefCounted
 ## extreme — a pitch number that moved is not proof that the view moved with it,
 ## and an eye height is not proof that the frame is legible.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/aim_pitch.gd --out=/tmp/aim/x.png
 

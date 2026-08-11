@@ -2,7 +2,7 @@ extends RefCounted
 ## Does the RIGHT SHOULDER BUTTON swing the sword? Not "does `attack` swing the
 ## sword" — does the physical button.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/rb_swing.gd \
 ##     --out=/tmp/rb/x.png --warmup=60 --keep-pad

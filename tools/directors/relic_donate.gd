@@ -8,7 +8,7 @@ extends RefCounted
 ## in the same instance the camera is looking at. The gate's own hold is proven
 ## by `run_end.gd` and does not need proving twice.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/relic_donate.gd \
 ##     --out=/tmp/relic/x.png --warmup=60

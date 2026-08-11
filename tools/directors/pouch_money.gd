@@ -19,7 +19,7 @@ extends RefCounted
 ## So (1) is asserted against the HUD's own state rather than against pixels,
 ## and the frames are there to be looked at.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/dungeon.tscn \
 ##     --director=res://tools/directors/pouch_money.gd \
 ##     --out=/tmp/pouch/x.png --warmup=60

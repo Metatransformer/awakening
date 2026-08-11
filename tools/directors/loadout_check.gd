@@ -5,7 +5,7 @@ extends RefCounted
 ## from the left, with the settled mounts in place. A weapon that only looks
 ## correct in the pose you tuned it in is not correct.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/loadout_check.gd --out=/tmp/lc/x.png
 

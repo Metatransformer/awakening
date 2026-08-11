@@ -71,4 +71,6 @@ for row in "${speakers[@]}"; do
   done
 done
 
-echo "Now run:  godot --path . --import   (and see CLAUDE.md §3 about project.godot)"
+echo "Now run:  pnpm import   (headless, and it repairs project.godot itself --"
+echo "                        raw \`godot --path . --import\` opens the editor and"
+echo "                        takes the owner's keyboard. CLAUDE.md §2, §3.)"

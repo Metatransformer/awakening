@@ -7,7 +7,7 @@ extends RefCounted
 ## raised anywhere, and mercy is a number on `Game`. What the dungeon does with
 ## any of it is `mvp_loop`'s ground already.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/forgive_loop.gd \
 ##     --out=/tmp/forgive/x.png --warmup=60

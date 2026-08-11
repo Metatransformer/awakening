@@ -6,7 +6,7 @@ extends RefCounted
 ## make something happen — only to READ what happened. No mouse event is ever
 ## synthesized, not even a motion.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/ui/menu/_menu_test.tscn \
 ##     --director=res://tools/directors/critic_menu.gd \
 ##     --out=/tmp/critic2/burst/c.png --size=1280x720 --warmup=50 \

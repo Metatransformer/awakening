@@ -20,7 +20,7 @@ extends RefCounted
 ##   * the post never took a hit        — _slam_targets found nothing, which is
 ##                                        the shape query or the layer mask
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/slam_attack.gd --out=/tmp/slam/x.png
 ##   ffmpeg -y -i /tmp/slam/hit_%d.png -filter_complex tile=6x1 /tmp/slam/sheet.png

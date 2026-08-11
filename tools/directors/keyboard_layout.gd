@@ -1,7 +1,7 @@
 extends RefCounted
 ## THE KEYBOARD, pressed as keys. Elden Ring's layout, end to end.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/keyboard_layout.gd \
 ##     --out=/tmp/kbd/x.png --warmup=60

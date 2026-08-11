@@ -5,7 +5,7 @@ extends RefCounted
 ## Spawned in the garrison, which is lit: a monster that fails to load its model
 ## is a black gap in a dungeon and an obvious hole in a courtyard.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/monster_lookdev.gd --out=/tmp/mon/x.png
 

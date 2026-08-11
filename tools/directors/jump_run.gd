@@ -14,7 +14,7 @@ extends RefCounted
 ##      you the hero is playing an anticipation crouch while already rising,
 ##      which is the exact failure `jump_start_offset` exists to prevent.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/jump_run.gd --out=/tmp/jump/x.png
 ##

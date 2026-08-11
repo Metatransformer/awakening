@@ -35,7 +35,7 @@ extends RefCounted
 ## version of this file reported a swing dealing -2, which is how that was
 ## caught. The signal reports each blow's amount and cannot drift.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/p4_combo.gd --out=/tmp/p4c/x.png
 

@@ -9,7 +9,7 @@ extends RefCounted
 ## a judgement about a picture, so the picture gets taken and the roles pick
 ## their pose from this sheet.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/_lookdev.tscn \
 ##     --director=res://tools/directors/race_lookdev.gd --out=/tmp/race/x.png
 

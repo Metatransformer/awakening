@@ -18,7 +18,7 @@ extends RefCounted
 ##  5. The bundle reads as arrows from gameplay distance and not as three sticks.
 ##  6. Fletching actually moves both numbers — the bag down, the quiver up.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/arrow_supply.gd --out=/tmp/arrows/x.png
 ##

@@ -19,7 +19,7 @@ extends RefCounted
 ## ~0.3 m of the spine at chest height with a ~1 m span. That is a claim a
 ## screenshot cannot talk you out of.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/bow_stow_lookdev.gd --out=/tmp/stow/x.png
 

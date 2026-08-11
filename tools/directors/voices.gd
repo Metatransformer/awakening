@@ -5,7 +5,7 @@ extends RefCounted
 ## wants the opening (`tools/shoot.gd._skip_the_opening` turns it off for every
 ## other one, because fifteen seconds of black is not what a harness is for):
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/voices.gd \
 ##     --out=/tmp/voices/x.png --warmup=20 --intro

@@ -12,7 +12,7 @@
     "anims": "godot --path . --headless -s tools/build_anim_lib.gd",
     "deploy": "node tools/deploy.mjs",
     "progress": "open progress.html",
-    "shot": "godot --path . -s tools/shoot.gd --"
+    "shot": "tools/quiet.sh --path . -s tools/shoot.gd --"
   },
   "engines": {
     "node": ">=18"

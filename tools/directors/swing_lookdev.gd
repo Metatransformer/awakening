@@ -21,7 +21,7 @@ extends RefCounted
 ## and the hero reads as a silhouette in it, which is exactly the information a
 ## swing lookdev needs to keep.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/swing_lookdev.gd --out=/tmp/swing/x.png
 ##

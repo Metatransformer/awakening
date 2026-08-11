@@ -15,7 +15,7 @@ extends RefCounted
 ## actually moved, whether the stop ever lifted. That last one matters most --
 ## a hit-stop that fails to lift is not a missing effect, it is the game hung.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/monster_feel.gd --out=/tmp/feel/x.png
 

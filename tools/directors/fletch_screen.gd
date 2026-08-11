@@ -14,7 +14,7 @@ extends RefCounted
 ## holding one direction — and a new card wedged between the grid and the rope
 ## is exactly the change that silently orphans the way out.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/ui/menu/_menu_test.tscn \
 ##     --director=res://tools/directors/fletch_screen.gd \
 ##     --out=/tmp/fletch/f.png --size=1280x720 --warmup=50

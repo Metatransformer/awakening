@@ -21,7 +21,7 @@ extends RefCounted
 ##     hero's own right/up/back — before it photographs anything. Two runs of
 ##     guessing an axis is one run more than reading it.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/shield_lookdev.gd --out=/tmp/sl/x.png
 ##     [--target=shield|sword] [--sweep=roll|pos]

@@ -6,7 +6,7 @@ extends RefCounted
 ## it, look, and adjust. Frames 00-02 are the ones that answer "is it in his
 ## hand or growing out of his wrist".
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/p4_combat.gd --out=/tmp/p4/x.png
 

@@ -19,7 +19,7 @@ extends RefCounted
 ## arms doing" — from behind, at night, a hero is a silhouette with a shield
 ## edge.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/run_ramp.gd --out=/tmp/ramp/x.png \
 ##     --warmup=60

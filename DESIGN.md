@@ -421,7 +421,7 @@ Deliver a contact sheet driven by a director that covers: lock acquire → straf
 take a hit → kill → room transition.
 
 ```bash
-godot --path . -s tools/shoot.gd -- \
+tools/quiet.sh --path . -s tools/shoot.gd -- \
   --scene=res://scenes/rooms/training.tscn --director=res://tools/directors/p12_hud.gd \
   --out=/abs/out/hud_.png --burst=8 --burst-gap=4 --size=1280x720
 python3 tools/ab.py sheet 'out/hud_*.png' --out out/sheet.png

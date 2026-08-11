@@ -23,7 +23,7 @@ extends RefCounted
 ##   5. On a KEYBOARD, Shift at the vendor still rolls — the arbitration only
 ##      fires when one press reached both actions, which never happens there.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/a_button.gd --out=/tmp/abtn/x.png
 

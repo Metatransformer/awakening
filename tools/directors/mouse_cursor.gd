@@ -1,7 +1,7 @@
 extends RefCounted
 ## THE POINTER, across every screen that takes it away — and back again.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/mouse_cursor.gd \
 ##     --out=/tmp/cursor/x.png --warmup=60

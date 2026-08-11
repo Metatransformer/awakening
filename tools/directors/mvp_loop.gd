@@ -11,7 +11,7 @@ extends RefCounted
 ## across a procedural dungeon with synthetic input is its own project, and the
 ## thing under test here is the loop, not the navmesh.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/mvp_loop.gd --out=/tmp/mvp/x.png
 

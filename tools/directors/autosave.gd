@@ -22,7 +22,7 @@ extends RefCounted
 ## bytes at the start and puts them back at the end, so a run of it cannot cost
 ## anyone a save.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/autosave.gd \
 ##     --out=/tmp/save/x.png --warmup=60

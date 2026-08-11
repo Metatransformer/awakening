@@ -3,7 +3,7 @@ extends RefCounted
 ## the smith does not offer ladders for weapons that do not exist yet, and a
 ## locked door says which item it wants by name.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/_gate_test.tscn \
 ##     --director=res://tools/directors/gate_locks.gd \
 ##     --out=/tmp/gates/x.png --warmup=60

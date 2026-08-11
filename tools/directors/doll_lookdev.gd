@@ -9,7 +9,7 @@ extends RefCounted
 ##
 ## Also proves the fit: three stages of different aspect, one figure, no crop.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/doll_lookdev.gd --out=/tmp/doll/x.png
 

@@ -26,7 +26,7 @@ extends RefCounted
 ## from is sword range — inside the min. A gate that only refuses where nobody
 ## stands is a gate; one that refuses where everybody stands is the bug.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/lt_moveset.gd --out=/tmp/lt/x.png \
 ##     --warmup=60

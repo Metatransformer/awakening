@@ -19,7 +19,7 @@ extends RefCounted
 ## an apex is a number, a probability is a number, and a shake that is too big is
 ## the failure that looks fine in every single frame.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/monster_launch.gd --out=/tmp/launch/x.png
 

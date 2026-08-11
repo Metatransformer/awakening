@@ -11,7 +11,7 @@ extends RefCounted
 ## a fifth of the time, and "it worked when I ran it" is how a placement bug
 ## survives to the build.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/dungeon.tscn \
 ##     --director=res://tools/directors/dungeon_supply.gd --out=/tmp/dun/d.png
 

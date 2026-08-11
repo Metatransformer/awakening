@@ -4,7 +4,7 @@ extends RefCounted
 ## swords and on the shields (is the diffuse map bound, or is it grey?), and
 ## three stages of a hookshot flight (the chain cannot be judged from a model).
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://tools/scenes/_weapon_lookdev.tscn \
 ##     --director=res://tools/directors/weapon_lookdev.gd --out=/tmp/w/w.png
 

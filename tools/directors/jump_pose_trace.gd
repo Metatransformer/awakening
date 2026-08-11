@@ -14,7 +14,7 @@ extends RefCounted
 ## lands @1.10. If the hips are still at the crouch while the body is already
 ## rising, `jump_start_offset` is not being applied.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/jump_pose_trace.gd --out=/tmp/jpt/x.png
 

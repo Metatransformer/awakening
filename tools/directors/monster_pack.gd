@@ -17,7 +17,7 @@ extends RefCounted
 ## top of each other, because that is the state the separation rule has to be
 ## able to dig itself out of.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/monster_pack.gd --out=/tmp/pack/x.png
 

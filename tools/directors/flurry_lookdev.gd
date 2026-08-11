@@ -18,7 +18,7 @@ extends RefCounted
 ## rather than a punch, and whether the second's strike is overhead rather than
 ## horizontal, are render questions.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/flurry_lookdev.gd --out=/tmp/flurry/x.png
 ##

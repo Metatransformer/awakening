@@ -5,7 +5,7 @@ extends RefCounted
 ## both sets so "the bow is equipped" is a thing somebody saw on the model
 ## rather than a boolean that flipped.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/loadout_switch.gd --out=/tmp/load/x.png
 

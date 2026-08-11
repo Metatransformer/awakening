@@ -32,8 +32,8 @@ extends RefCounted
 ## A number cannot tell you the hero POPPED into the pose, and popping is the
 ## thing a start_offset gets wrong when it is set too deep.
 ##
-##   godot --path . -s tools/directors/swing_latency.gd  # (via shoot.gd:)
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/directors/swing_latency.gd  # (via shoot.gd:)
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/swing_latency.gd --out=/tmp/lat/x.png
 

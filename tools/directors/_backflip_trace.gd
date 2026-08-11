@@ -36,7 +36,7 @@ extends RefCounted
 ## `Engine.get_physics_frames()` rather than counted by the loop — the loop never
 ## sees the frames a capture consumed.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/_backflip_trace.gd --out=/tmp/bf/x.png
 ##   ffmpeg -y -i /tmp/bf/b%02d*.png -filter_complex tile=6x3 /tmp/bf/sheet.png

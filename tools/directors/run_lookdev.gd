@@ -22,7 +22,7 @@ extends RefCounted
 ## a shield strapped to his left forearm. A clip authored for empty hands can
 ## look fine bare and read as a man flapping once the props are on.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/run_lookdev.gd --out=/tmp/run/x.png
 ##

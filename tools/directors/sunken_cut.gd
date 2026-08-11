@@ -26,7 +26,7 @@ extends RefCounted
 ##     player can see it -- which is exactly what the two HUD frames per floor
 ##     are for. Look at them.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/dungeon.tscn \
 ##     --director=res://tools/directors/sunken_cut.gd --out=/tmp/cut/x.png
 

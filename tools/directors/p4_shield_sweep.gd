@@ -13,7 +13,7 @@ extends RefCounted
 ##    with no error means one of those numbers disagrees with the picture, and
 ##    this is the cheapest way to find out which.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/p4_shield_sweep.gd --out=/tmp/p4s/x.png
 

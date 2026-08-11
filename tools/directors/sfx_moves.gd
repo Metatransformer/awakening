@@ -25,7 +25,7 @@ extends RefCounted
 ## its monster, and for the same reason: a coordinate worked out on paper tests
 ## my trigonometry and breaks the day the camera's pitch is retuned.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/sfx_moves.gd \
 ##     --out=/tmp/sfxmoves/x.png --warmup=60

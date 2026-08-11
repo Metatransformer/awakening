@@ -172,6 +172,22 @@ owner's keyboard while it does. `shoot.gd` now prints
 it cannot fix it from there (the flag is read before any script exists), so that
 line is the whole remedy. If you see it in your own output, you typed `godot`.
 
+**And for a year nobody typed it — they pasted it, out of this repo.** The rule
+above has been here the whole time and the owner was still losing the keyboard,
+because a rule loses to a copy-paste block every time: **102 of the 142 director
+headers opened with `godot --path . -s tools/shoot.gd`**, `pnpm shot` in
+`package.json` ran bare `godot`, `DESIGN.md` printed a bare block, and §2 of this
+file — four paragraphs below this one — *instructed* you to write new headers
+that way. An agent following the documentation to the letter produced a
+focus-stealing run. Every windowed header now reads `tools/quiet.sh`; the
+`--headless` ones still say `godot`, because a headless run opens no window and
+there is nothing to steal.
+
+The lesson generalises past this wrapper: **if the repo tells you to do a thing
+and also hands you a paste that does the opposite, the paste wins.** When you fix
+a hazard here, grep for the command that causes it and fix every copy, or you
+have written a rule and not a fix.
+
 **A run with a `SCRIPT ERROR` in it is not proof, and `tools/quiet.sh` now
 refuses it — exit 65.** GDScript cannot see its own error stream, so no director
 can fail itself on one, and for most of this project's life nothing looked:
@@ -227,7 +243,10 @@ for.**
 Twelve directors carry no invocation in their header comment, so there is no
 record of which scene they want; `p1_*`, `p2_*`, `p4_probe`, `hud_vitals` and the
 `critic_*` probes had to be guessed at for the sweep. If you touch one, write the
-`godot --path . -s tools/shoot.gd -- …` block the other 124 have.
+`tools/quiet.sh --path . -s tools/shoot.gd -- …` block the other 124 have.
+**`tools/quiet.sh` and not `godot`** — this line used to say `godot`, and it is
+how the bare command kept being reproduced into new files faster than anyone
+removed it.
 
 **Never pass `--headless` to a screenshot run.** There is no rendering device
 and every frame comes out empty — silently.
@@ -270,8 +289,14 @@ stall.
 **A director you have never pointed at a known answer has never been tested**,
 however many times it has passed.
 
-Before you call something done: clean `godot --path . --import`, clean boot, the
-relevant director with no failures, and *your own eyes on the output*.
+Before you call something done: a clean `pnpm import`, clean boot, the relevant
+director with no failures, and *your own eyes on the output*.
+
+**`pnpm import` and not `godot --path . --import`**, which is what this line used
+to say. Raw `--import` boots the editor — window, keyboard and all — and then
+leaves you to remember the `project.godot` repair in §3 by hand. `tools/import.mjs`
+passes `--headless`, puts `project.godot` back, tells you how many comment lines
+the importer ate, and boots the project once to prove it still starts.
 
 ---
 

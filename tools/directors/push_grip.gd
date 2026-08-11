@@ -3,7 +3,7 @@ extends RefCounted
 ## along for as long as he keeps pressing -- Ocarina's block -- and lets go the
 ## moment he lets go of the stick.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/_atom_test.tscn \
 ##     --director=res://tools/directors/push_grip.gd \
 ##     --out=/tmp/grip/x.png --warmup=60

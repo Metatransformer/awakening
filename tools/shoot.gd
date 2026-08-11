@@ -5,7 +5,7 @@ extends SceneTree
 ## drive input / advance state, and writes PNG frames to disk. This is the only
 ## way the visual critics ever see the game, so it must be deterministic.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##       --scene=res://scenes/dungeon/room_a.tscn \
 ##       --out=/tmp/shot.png \
 ##       --warmup=45 \

@@ -10,7 +10,7 @@ extends RefCounted
 ## numbers in `shop_booth.gd` are transcribed from this output rather than
 ## invented.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/_lookdev.tscn \
 ##     --director=res://tools/directors/booth_props.gd --out=/tmp/booth/x.png
 

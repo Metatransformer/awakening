@@ -14,7 +14,7 @@ extends RefCounted
 ## before and after, because a fogged room and a room that failed to draw are
 ## the same pixels. (4) is asserted against which panel is visible.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/dungeon.tscn \
 ##     --director=res://tools/directors/map_screen.gd \
 ##     --out=/tmp/map/x.png --warmup=60

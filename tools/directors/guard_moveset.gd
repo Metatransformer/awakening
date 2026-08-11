@@ -30,7 +30,7 @@ extends RefCounted
 ## a facing the player can never have — and the over-the-shoulder framing it
 ## gives is exactly the one the dodges have to read in.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/guard_moveset.gd --out=/tmp/guard/x.png \
 ##     --warmup=60

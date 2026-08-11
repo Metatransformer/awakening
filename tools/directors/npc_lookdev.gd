@@ -9,7 +9,7 @@ extends RefCounted
 ## anywhere says so. So: every body, every idle, front and three-quarter, next
 ## to a `RaceBody` that is known to work and a post at the hero's height.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/_lookdev.tscn \
 ##     --director=res://tools/directors/npc_lookdev.gd --out=/tmp/npc/x.png
 

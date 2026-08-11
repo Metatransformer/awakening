@@ -14,7 +14,7 @@ extends RefCounted
 ## twin: a menu proven only in the scene built to prove it is a menu the shipping
 ## game can be missing entirely.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/dungeon.tscn \
 ##     --director=res://tools/directors/rope_hold.gd \
 ##     --out=/tmp/rope/r.png --size=1280x720 --warmup=60

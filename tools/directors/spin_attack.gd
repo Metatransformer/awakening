@@ -26,7 +26,7 @@ extends RefCounted
 ## puts three of them at arbitrary bearings for a lock-on range test, and what
 ## this needs is a ring — placing them here keeps one fixture instead of two.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/spin_attack.gd --out=/tmp/spin/x.png
 ##

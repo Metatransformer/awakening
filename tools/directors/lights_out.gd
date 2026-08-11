@@ -2,7 +2,7 @@ extends RefCounted
 ## **Lights out** — `docs/PUZZLES.md` §3, combinator 6 (*couple*), and the lantern
 ## that §2 added to the kit to serve it.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/_atom_test.tscn \
 ##     --director=res://tools/directors/lights_out.gd \
 ##     --out=/tmp/lo/x.png --warmup=60

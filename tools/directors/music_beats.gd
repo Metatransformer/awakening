@@ -12,7 +12,7 @@ extends RefCounted
 ## that silently passes because the bus is muted is worth nothing.
 ##
 ## Run:
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/music_beats.gd \
 ##     --out=/tmp/music/x.png --warmup=90

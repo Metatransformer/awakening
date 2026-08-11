@@ -25,7 +25,7 @@ extends RefCounted
 ## number of milliseconds between the press and the impact. A director that
 ## waited for a goblin to decide to attack would be measuring the goblin.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/parry_dodge.gd --out=/tmp/parry/x.png
 

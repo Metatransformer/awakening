@@ -37,7 +37,7 @@ extends RefCounted
 ##
 ## Every beat is photographed. "The hookshot is out" is a claim about his hands.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/buttons.gd --out=/tmp/btn/x.png
 

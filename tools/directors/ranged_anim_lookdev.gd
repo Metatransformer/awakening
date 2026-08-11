@@ -11,7 +11,7 @@ extends RefCounted
 ## duration so the AnimationPlayer can be scrubbed directly; the tree would
 ## otherwise overwrite the pose with the locomotion blend on the next frame.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/ranged_anim_lookdev.gd --out=/tmp/anim/x.png
 

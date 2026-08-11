@@ -2,7 +2,7 @@ extends RefCounted
 ## M4, "Floor 1, whole" (docs/SCOPE.md §3). **This is the demo**, and this is the
 ## director that says whether it exists.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/dungeon.tscn \
 ##     --director=res://tools/directors/cistern_floor.gd \
 ##     --out=/tmp/floor/x.png --warmup=60

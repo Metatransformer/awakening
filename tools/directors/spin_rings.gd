@@ -16,7 +16,7 @@ extends RefCounted
 ## is the arc the player sees. Eight spins, each photographed a little later than
 ## the last, is the sweep.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/spin_rings.gd --out=/tmp/rings/x.png
 ##

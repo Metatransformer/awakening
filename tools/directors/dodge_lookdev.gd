@@ -17,7 +17,7 @@ extends RefCounted
 ## Camera sits front-right, same as swing_lookdev, for the same reason: from
 ## behind, a backstep and a sidehop are both "the hero gets smaller".
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/dodge_lookdev.gd --out=/tmp/dodge/x.png
 ##

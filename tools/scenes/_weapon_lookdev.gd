@@ -4,7 +4,7 @@ extends Node3D
 ## by filename. Also fires a live HookshotTether at a HookTarget, because a
 ## chain is the one thing here that cannot be checked from a static model.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://tools/scenes/_weapon_lookdev.tscn \
 ##     --director=res://tools/directors/weapon_lookdev.gd --out=/tmp/w/w.png
 

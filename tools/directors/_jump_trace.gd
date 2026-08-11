@@ -8,7 +8,7 @@ extends RefCounted
 ## `p03_dy+0.55.png` is the pose at 0.55 m off the ground — and a sheet of them
 ## reads as a flipbook you can check against the arc.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/_jump_trace.gd --out=/tmp/jt/x.png
 ##   ffmpeg -y -i /tmp/jt/p%02d.png -filter_complex tile=6x2 /tmp/jt/sheet.png

@@ -12,7 +12,7 @@ extends RefCounted
 ## one press away from it at all times, so it is on screen constantly and its
 ## numbers have to be real.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/sheathe_lookdev.gd --out=/tmp/sheathe/x.png
 ##

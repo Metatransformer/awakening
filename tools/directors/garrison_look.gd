@@ -8,7 +8,7 @@ extends RefCounted
 ## the two fail in opposite directions -- a booth that reads beautifully up close
 ## can be an unreadable pile of brown boxes from across the yard.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/garrison_look.gd --out=/tmp/garrison/x.png
 

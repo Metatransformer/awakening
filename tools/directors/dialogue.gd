@@ -1,7 +1,7 @@
 extends RefCounted
 ## The conversation: two figures, a name, a line typed out, and a question.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/dialogue.gd \
 ##     --out=/tmp/dialogue/x.png --warmup=40

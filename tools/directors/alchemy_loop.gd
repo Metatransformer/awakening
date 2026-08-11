@@ -4,7 +4,7 @@ extends RefCounted
 ## Point it at GARRISON. It descends on its own, because half the claims here are
 ## about what reaches the bench and you cannot test that from one side of it.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/alchemy_loop.gd \
 ##     --out=/tmp/alchemy/x.png --warmup=60

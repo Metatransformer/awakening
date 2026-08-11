@@ -4,7 +4,7 @@ extends RefCounted
 ##      the camera — we should be looking at his back, not his face or his ribs.)
 ##   2. Do the training posts register, rock, and read out a hit?
 ##
-##   godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/training.tscn \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/orch_facing_and_posts.gd --out=/tmp/f.png
 
 func run(rig) -> void:

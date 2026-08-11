@@ -17,7 +17,7 @@ extends RefCounted
 ## camera hint, and this project shipped without a lock at all for long enough
 ## that "targeting exists" and "targeting does something" need separating.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/lockon_check.gd --out=/tmp/lock/x.png
 

@@ -25,7 +25,7 @@ extends RefCounted
 ## going to break anywhere it was going to break here, on the first write that
 ## touches ALBEDO rather than emission.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/hook_freeze.gd --out=/tmp/freeze/x.png
 

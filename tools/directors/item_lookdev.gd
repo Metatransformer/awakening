@@ -9,7 +9,7 @@ extends RefCounted
 ## Shot from four sides, because a bow on the back is only wrong from behind and
 ## a hookshot on the hip is only wrong from the side.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/item_lookdev.gd --out=/tmp/il/x.png
 

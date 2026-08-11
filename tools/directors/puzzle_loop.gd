@@ -3,7 +3,7 @@ extends RefCounted
 ## §3). `tools/directors/cistern_floor.gd` says floor 1 is the manifest's floor;
 ## this says floor 1 has a puzzle in it.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/dungeon.tscn \
 ##     --director=res://tools/directors/puzzle_loop.gd \
 ##     --out=/tmp/puzzle/x.png --warmup=60

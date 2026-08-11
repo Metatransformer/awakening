@@ -16,7 +16,7 @@ extends Node3D
 ## Must run WINDOWED. `--headless` uses the dummy renderer and every saved PNG
 ## comes back empty.
 ##
-##   godot --path . res://tools/scenes/_iconbake.tscn -- --out=res://assets/ui/icons/hud
+##   tools/quiet.sh --path . res://tools/scenes/_iconbake.tscn -- --out=res://assets/ui/icons/hud
 ##
 ## --out MUST be a directory that holds nothing but bakes. This overwrites every
 ## <id>.png in it without asking, and pointing it at assets/ui/icons/ destroyed

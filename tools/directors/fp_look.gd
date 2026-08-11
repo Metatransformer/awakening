@@ -26,7 +26,7 @@ extends RefCounted
 ## The frames are the proof for the look; the angles are asserted because a dark
 ## garrison wall photographs identically from 40° off.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/fp_look.gd \
 ##     --out=/tmp/fplook/x.png --warmup=60

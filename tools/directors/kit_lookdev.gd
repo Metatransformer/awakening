@@ -7,7 +7,7 @@ extends RefCounted
 ## exists so a regression in the SHARED layer is caught once here instead of
 ## being rediscovered five times downstream.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/kit_lookdev.gd --out=/tmp/kit/x.png
 

@@ -11,7 +11,7 @@ extends RefCounted
 ## the hero at the end of it. A boolean that flipped is not proof that a chain
 ## was drawn; every real bug in this project was found by looking at the frame.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/ranged_kit.gd --out=/tmp/ranged/x.png
 

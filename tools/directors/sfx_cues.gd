@@ -8,7 +8,7 @@ extends RefCounted
 ## noticing. So this asserts on `playing`, not on the absence of an error.
 ##
 ## Run:
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/sfx_cues.gd \
 ##     --out=/tmp/sfx/x.png --warmup=90

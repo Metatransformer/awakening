@@ -19,7 +19,7 @@ extends RefCounted
 ## the bow being in his hand, so the shot has to hand him back to an ordinary
 ## standing pose holding the bow rather than leaving him at full draw forever.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
 ##     --director=res://tools/directors/bow_charge_release.gd --out=/tmp/bow/x.png
 ##

@@ -14,7 +14,7 @@ extends RefCounted
 ## near zero. A camera dithering between two decisions reverses on most frames,
 ## and that is what the eye reads as shake.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##       --scene=res://scenes/rooms/playtest.tscn \
 ##       --director=res://tools/directors/cam_jitter.gd --warmup=20
 

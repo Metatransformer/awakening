@@ -4,7 +4,7 @@ extends RefCounted
 ## Point it at GARRISON. It never descends -- everything here is a garrison
 ## claim, and what a stone does underground is `forge_loop`'s ground already.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/jewel_loop.gd \
 ##     --out=/tmp/jewel/x.png --warmup=60
