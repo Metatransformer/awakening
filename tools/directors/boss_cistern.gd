@@ -277,9 +277,10 @@ func _tells(rig, arena: Node, boss: Node) -> void:
 		var through := 1.0 - clampf(boss._timer / total, 0.0, 1.0)
 		var shape := Vector3(boss._model.rotation.x, boss._model.scale.y,
 			boss._model.rotation.z)
-		var mark: Node = boss.get_node_or_null(^"Mark")
-		if mark == null:
-			mark = boss.get_node_or_null(^"Lane")
+		# The HANDLE, not a lookup by name: `_clear_marker` queue_frees the last
+		# one and a freed-but-not-yet-removed sibling makes Godot rename the
+		# replacement, so `get_node("Mark")` finds the corpse or nothing.
+		var mark: Node3D = boss._marker
 		print("BOSS tell %s: pose=%s %.0f%% through, model rx=%.2f sy=%.2f rz=%.2f, floor mark=%s"
 			% [id, tell["pose"], through * 100.0, shape.x, shape.y, shape.z,
 				"yes" if mark != null else "none (a zone draws at commit)"])
@@ -307,6 +308,17 @@ func _tells(rig, arena: Node, boss: Node) -> void:
 			_ck("D%dr and the ring is drawn where the damage is" % i,
 				absf(span.x - float(b["safe_inner"])) < 0.3
 				and absf(span.y - float(b["radius"])) < 0.3)
+		if b["shape"] == BossDb.SHAPE_ARC and mark != null:
+			# Board card 21. This used to be a rectangle `reach * 2 * sin(half)`
+			# across -- 6.9 m of drawn width for a 4.6 m cone -- and no check in
+			# this file noticed, because the only probe stood dead in front where
+			# the box and the cone happen to agree.
+			var fan := _fan_extent(mark)
+			print("BOSS %s fan drawn %.1f deg to %.2f m, damage %.1f deg to %.2f m"
+				% [id, fan.x, fan.y, float(b["arc_deg"]), float(b["reach"])])
+			_ck("D%df and the cone is drawn where the damage is" % i,
+				absf(fan.x - float(b["arc_deg"])) < 3.0
+				and absf(fan.y - float(b["reach"])) < 0.15)
 		await rig.capture(out.path_join(shots[id]))
 		await _until(rig, func() -> bool: return boss.state == Enemy.State.CHASE, 500)
 
@@ -687,6 +699,30 @@ func _ring_extent(mark: Node3D) -> Vector2:
 				lo = minf(lo, d)
 				hi = maxf(hi, d)
 	return Vector2(lo, hi)
+
+
+## The half-angle in DEGREES and the radius in metres an arc's floor mark
+## actually covers, read off the sector's own vertices. `Boss._fan_marker` builds
+## one `ArrayMesh` triangle fan with its apex on the boss, so the widest vertex
+## bearing off `-Z` is the drawn half-angle and the longest is the drawn reach.
+func _fan_extent(mark: Node3D) -> Vector2:
+	var wide := 0.0
+	var far := 0.0
+	for c in mark.get_children():
+		var mi := c as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		var arrays: Array = mi.mesh.surface_get_arrays(0)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		for v in verts:
+			var r := Vector2(v.x, v.z).length()
+			if r < 0.001:
+				continue
+			far = maxf(far, r)
+			# `atan2(-x, -z)`, so the fan's own `(-sin a, 0, -cos a)` reads back
+			# as `a` -- the bearing off the forward the damage measures from.
+			wide = maxf(wide, absf(atan2(-v.x, -v.z)))
+	return Vector2(rad_to_deg(wide), far)
 
 
 func _find_mote(rig, id: StringName) -> Node3D:

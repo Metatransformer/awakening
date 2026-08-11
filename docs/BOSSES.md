@@ -95,18 +95,27 @@ at all — which is why the Bellwake's answer had to be an area weapon rather th
 a timing read (§6.3).
 
 **What the ground marker actually draws** is part of the telegraph and it is not
-uniform: `slam` draws its ring (inner and outer, so the donut is visible),
-`arc` and `charge` draw a forward lane parented to the body so it turns as the
-boss tracks, and **`zone` and `summon` draw nothing during the tell** — a zone's
-discs appear at the commit and grow over their own fuse, and a summon's tell *is*
-the pose. Three different pictures for five shapes, deliberately.
+uniform: `slam` draws its ring (inner and outer, so the donut is visible), `arc`
+draws the **swept cone itself** — a filled sector at the beat's own `arc_deg` and
+`reach` — `charge` draws a forward lane the width of its body, both parented to
+the body so they turn as the boss tracks, and **`zone` and `summon` draw nothing
+during the tell** — a zone's discs appear at the commit and grow over their own
+fuse, and a summon's tell *is* the pose. Four different pictures for five shapes,
+deliberately.
 
-> **Known defect, and it is a telegraph defect: the arc lane is a bounding box,
-> not the cone it delivers** — board card 21. At `slag_backhand`'s 95° half-angle
-> the mark is 8.4 m wide over 4.2 m of reach while the damage is a 190° cone that
-> reaches around the boss's shoulders. Everything §6 says about "roll backwards,
-> never sideways" out of an arc is *already* the truth; the mark is what disagrees
-> with it. Fix the mark, not the beat.
+> **Fixed 2026-08-10, board card 21: the arc used to draw a bounding box.** Both
+> the wind-up mark and the post-commit flash were `_lane_marker(reach, reach * 2 *
+> sin(half))` — a rectangle — while `_shape_arc` resolved a cone. It was wrong at
+> both ends of the range: at `slag_backhand`'s 95° half-angle the `sin` clamped
+> and drew an 8.4 m slab over 4.2 m of reach for a 190° sweep that reaches round
+> the boss's shoulders, and at `gate_shard`'s 22° it drew a 6.7 m wall for a 44°
+> needle. A telegraph is a contract (GDD §4.1) and that one broke it in both
+> directions at once — frightening the player off safe ground *and* saying nothing
+> about lethal ground. `Boss._fan_marker` now draws the sector the damage test
+> uses, and `tools/directors/arc_telegraph.gd` stands the hero six degrees either
+> side of the drawn edge and reads his health: inside takes the beat's damage,
+> outside takes nothing. Nothing about the *beats* changed — every number in §2
+> and §3 is untouched.
 
 ---
 
@@ -471,12 +480,12 @@ Depth: none. Floor 1 numbers are the authored numbers (§4), and the 60% floor i
 against at all (§4).
 
 **Three telegraphs, three pictures.** One arm hauled back over the shoulder,
-green from the elbow out, with a *lane* on the floor in front of it. Both fists
+green from the elbow out, with a 150°-wide *fan* on the floor in front of it. Both fists
 locked overhead and dead still — the only moment it is taller than it walks —
 pale, with a *ring* on the floor that has a hole in the middle. A hard sideways
 cant and a flat palm at the floor, cold blue, with **no mark at all** until the
 commit, when two discs bloom under the hero's feet and grow for a second before
-they burst. Rear/green/lane, rise/white/ring, tilt/blue/nothing: no two share a
+they burst. Rear/green/fan, rise/white/ring, tilt/blue/nothing: no two share a
 pose, a colour or a mark.
 
 **The answer: the shield, and the second way over is to walk toward it.**
@@ -497,7 +506,7 @@ pose, a colour or a mark.
 **Parry and dodge, per beat.** `sluice_sweep`: parryable, buys **0.39 s**, which
 is a whole extra light contact and not just a riposte; rolling is still the
 ordinary answer and the roll goes *backwards*, not sideways — the cone is 150°
-wide however narrow the drawn lane looks (card 21). `cistern_drop`: the fight's
+wide and, since card 21, the mark on the floor says so. `cistern_drop`: the fight's
 parry, above. `drown_pool`: **roll, always** — a parried disc almost never
 staggers anything, because the origin the parry looks from is the disc centre and
 not the body (§3), and a disc centred on a hero who has not moved a centimetre is
@@ -619,11 +628,11 @@ line down the body and a **narrow 3 m lane** drawn forward — the tell is a
 direction, which no other tell in this fight is, and it is a direction because
 the answer to it happens *along* that lane rather than at its start. A fist
 cocked behind the head,
-the cooled crust splitting red along the knuckles, and a **wide lane**: the
-shortest tell in the fight and the widest arc in the game. A squat — the only
-time it is shorter than the hero — white-hot, with **no mark until the commit**,
-when three rings burn into the flagstones on a 1.30 s fuse. Tilt/rust/narrow
-lane, rear/red/wide lane, crouch/white/nothing.
+the cooled crust splitting red along the knuckles, and a **190° fan** that wraps
+past both shoulders: the shortest tell in the fight and the widest arc in the
+game. A squat — the only time it is shorter than the hero — white-hot, with **no
+mark until the commit**, when three rings burn into the flagstones on a 1.30 s
+fuse. Tilt/rust/narrow lane, rear/red/wide fan, crouch/white/nothing.
 
 **The answer: an arrow, and there are two other ways over the wall.**
 
@@ -696,7 +705,9 @@ not be.** Three reasons, in increasing order of how much they matter:
 2. **A pillar would not even do that.** `_shape_slam` is a pure distance query
    and ignores geometry, so a player sheltering behind a pillar would take
    `first_toll` through it. That is a telegraph that teaches a false rule, which
-   is the same failure mode board card 21 records for the arc lane.
+   is the same failure mode board card 21 recorded for the arc's bounding box —
+   and that one is now fixed, so this is the shape of defect to keep watching for
+   rather than one the game still ships.
 3. **The pillar is already spoken for, one branch away.** The floor-3 *miniboss*
    — the Second Voice, `docs/PUZZLES.md` §7 — is *"it anchors to a resonating
    pillar and cannot be touched while the pillar sings. Burst the pillar."*
@@ -888,8 +899,8 @@ it is the shortest tell of the three and tells you the most. The sword comes ove
 the shoulder in a single frame and then *holds*, dead still, with the split down
 the breastplate glowing through the gap in the plate — it is the stillness that
 reads, not the movement. It plants the sword point-down and opens both gauntlets
-away from the hilt while a horn carries. Crouch/red/narrow lane, rear/rust/wide
-lane, spread/violet/no mark.
+away from the hilt while a horn carries. Crouch/red/narrow lane, rear/rust/140°
+fan, spread/violet/no mark.
 
 **The answer: the hookshot, and there are two other ways over the wall.**
 

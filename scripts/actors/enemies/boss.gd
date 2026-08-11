@@ -522,8 +522,9 @@ func _shape_arc(b: Dictionary) -> void:
 	var reach := float(b["reach"])
 	var half := deg_to_rad(float(b["arc_deg"]))
 	var fwd := K.flat(-global_transform.basis.z)
-	_flash_marker(_lane_marker(reach, reach * 2.0 * sin(minf(half, PI * 0.49)),
-		b["tell"]["color"]))
+	# The same call `_show_tell_marker` made, so the flash after the blow and the
+	# warning before it are one shape drawn twice and cannot drift apart.
+	_flash_marker(_fan_marker(reach, half, b["tell"]["color"]))
 	for body in _victims():
 		var to := K.plane(body.global_position - global_position)
 		var d := to.length()
@@ -785,9 +786,8 @@ func _show_tell_marker() -> void:
 		BossDb.SHAPE_SLAM:
 			_marker = _ring_marker(float(b["safe_inner"]), float(b["radius"]), col)
 		BossDb.SHAPE_ARC:
-			var half := deg_to_rad(float(b["arc_deg"]))
-			_marker = _lane_marker(float(b["reach"]),
-				float(b["reach"]) * 2.0 * sin(minf(half, PI * 0.49)), col)
+			_marker = _fan_marker(float(b["reach"]),
+				deg_to_rad(float(b["arc_deg"])), col)
 		BossDb.SHAPE_CHARGE:
 			_marker = _lane_marker(float(b["reach"]), float(b["radius"]) * 2.0, col)
 		_:
@@ -875,7 +875,81 @@ func _ring_marker(inner: float, outer: float, col: Color) -> Node3D:
 	return root
 
 
+## The swept cone: a filled circular sector of radius `reach`, opening `half`
+## radians either side of `-Z`. It is `_shape_arc`'s own damage test drawn as a
+## picture -- same apex, same radius, same half-angle -- and not the smallest box
+## that test fits inside.
+##
+## A box is what stood here, `reach * 2 * sin(half)` wide, and it was wrong at
+## BOTH ends of the range (board card 21). At `slag_backhand`'s 95 degrees the
+## `sin` clamped at 89.8 and the mark was an 8.4 m slab over 4.2 m of reach --
+## while the damage was a 190 degree cone reaching round the boss's shoulders
+## into ground the box never covered. At `gate_shard`'s 22 degrees the same line
+## drew a 6.7 m wall for a 44 degree needle. The telegraph is a contract
+## (`docs/GDD.md` §4.1): a mark that frightens the player off safe floor AND says
+## nothing about lethal floor teaches him something false in both directions.
+##
+## FILLED, and not an outline or a fan of hairlines. The mark answers one
+## question from a chase camera at speed -- is the ground I am standing on about
+## to be hit -- and a shape that is geometrically right but invisible in motion is
+## a worse warning than the wrong box was. `_ring_marker` fills for the same
+## reason whenever there is no safe middle to leave open.
+##
+## The shape changed and the MATERIAL did not: no emission, no additive blend.
+## `docs/STYLEGUIDE.md` §7.5 bans the first, and `CLAUDE.md` §3 records that the
+## second is an opaque slab at every opacity over near-black.
+##
+## Safe under `_grow_marker`, which scales the root uniformly in X and Z: that
+## scales the radius and leaves the angle alone, so a half-grown mark is an
+## honest picture of the cone's WIDTH from the first frame of the tell and only
+## its reach arrives late.
+func _fan_marker(reach: float, half: float, col: Color) -> Node3D:
+	var root := Node3D.new()
+	root.name = "Fan"
+	# `PI` is the whole disc; nothing in the table is near it, but a row that went
+	# past it would wrap the sector back over itself rather than widen it.
+	var span := clampf(half, 0.01, PI)
+	# One triangle per ~6 degrees of the SWEPT angle rather than a fixed count:
+	# 32 across `slag_backhand`'s 190 degrees keeps the outer edge a curve, and 8
+	# across `gate_shard`'s 44 is enough for a needle that would otherwise read as
+	# a polygon.
+	var segs := maxi(int(ceil(span * 2.0 / deg_to_rad(6.0))), 4)
+	var verts := PackedVector3Array()
+	var norms := PackedVector3Array()
+	for i in segs:
+		var a0 := -span + 2.0 * span * float(i) / float(segs)
+		var a1 := -span + 2.0 * span * float(i + 1) / float(segs)
+		# Forward is `-basis.z` (`docs/CONTRACT.md` §2.5), so an offset of `a` off
+		# the heading is `(0,0,-1)` turned about +Y: `(-sin a, 0, -cos a)`. This is
+		# the direction `_shape_arc`'s `signed_angle_to` measures against, written
+		# the other way round.
+		verts.append(Vector3.ZERO)
+		verts.append(Vector3(-sin(a0), 0.0, -cos(a0)) * reach)
+		verts.append(Vector3(-sin(a1), 0.0, -cos(a1)) * reach)
+		for _n in 3:
+			norms.append(Vector3.UP)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = norms
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	var mat := _mark_mat(col)
+	# Double-sided. The sector is one sheet with no back to hide, and which way a
+	# hand-wound triangle faces the camera is exactly the kind of thing CLAUDE.md
+	# §4 says not to derive twice -- culling it the wrong way is an invisible
+	# telegraph, which is the failure this whole function exists to end.
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mi.material_override = mat
+	root.add_child(mi)
+	return root
+
+
 ## A flat box running `length` forward of the boss along `-Z`, `width` across.
+## The CHARGE's shape, and only the charge's: a charge really does sweep a lane
+## `radius` wide down its own heading. An `arc` draws `_fan_marker`.
 func _lane_marker(length: float, width: float, col: Color) -> Node3D:
 	var root := Node3D.new()
 	root.name = "Lane"

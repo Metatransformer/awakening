@@ -426,7 +426,18 @@ func _tell(rig, arena: Node3D, boss: Node, id: StringName, b: Dictionary,
 			_ck("%sr and the ring is drawn where the damage is" % tag,
 				mark != null and absf(span.x - float(b["safe_inner"])) < 0.3
 				and absf(span.y - float(b["radius"])) < 0.3)
-		BossDb.SHAPE_ARC, BossDb.SHAPE_CHARGE:
+		BossDb.SHAPE_ARC:
+			# The cone, not a box round it -- board card 21. Measured off the mesh
+			# and compared with the row, because "a mark is present" is what this
+			# line used to claim and an 8.4 m rectangle satisfied it.
+			var fan := _fan_extent(mark) if mark != null else Vector2.ZERO
+			print("MB   %s fan drawn %.1f deg to %.2f m, damage %.1f deg to %.2f m"
+				% [bid, fan.x, fan.y, float(b["arc_deg"]), float(b["reach"])])
+			_ck("%sr and the cone is drawn where the damage is" % tag,
+				mark != null and String(mark.name).begins_with("Fan")
+				and absf(fan.x - float(b["arc_deg"])) < 3.0
+				and absf(fan.y - float(b["reach"])) < 0.15)
+		BossDb.SHAPE_CHARGE:
 			_ck("%sr and a lane is drawn in front of it" % tag,
 				mark != null and String(mark.name).begins_with("Lane"))
 		_:
@@ -589,6 +600,34 @@ func _ring_extent(mark: Node3D) -> Vector2:
 				lo = minf(lo, d)
 				hi = maxf(hi, d)
 	return Vector2(lo, hi)
+
+
+## The half-angle in DEGREES and the radius in metres an arc's floor mark
+## actually covers, read off the sector's own vertices. `Boss._fan_marker` builds
+## one `ArrayMesh` triangle fan whose apex sits on the boss, so the widest vertex
+## bearing off `-Z` is the drawn half-angle and the longest is the drawn reach.
+##
+## Off the MESH and never off the row: the row is what the mark is supposed to
+## say, and the whole of board card 21 was a mark that said something else.
+## Unaffected by the grow tween, which scales the marker ROOT.
+func _fan_extent(mark: Node3D) -> Vector2:
+	var wide := 0.0
+	var far := 0.0
+	for c in mark.get_children():
+		var mi := c as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		var arrays: Array = mi.mesh.surface_get_arrays(0)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		for v in verts:
+			var r := Vector2(v.x, v.z).length()
+			if r < 0.001:
+				continue
+			far = maxf(far, r)
+			# `atan2(-x, -z)`, so that the fan's own `(-sin a, 0, -cos a)` reads
+			# back as `a` -- the bearing off the forward the damage measures from.
+			wide = maxf(wide, absf(atan2(-v.x, -v.z)))
+	return Vector2(rad_to_deg(wide), far)
 
 
 func _motes(root: Node) -> Array[StringName]:

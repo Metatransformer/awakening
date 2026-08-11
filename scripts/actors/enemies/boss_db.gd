@@ -1044,7 +1044,7 @@ static var MINIBOSSES := {
 					"sfx": &"cast_conjuration",
 					"read": "It draws itself up a head taller than it stands, and the "
 						+ "jaw comes open and stays open. Cold blue runs up the ribs to "
-						+ "the throat and a long narrow lane lights on the floor in front "
+						+ "the throat and a long narrow wedge lights on the floor in front "
 						+ "of it -- tall and blue and pointed, against a beat that was "
 						+ "wide and white and everywhere.",
 				},
@@ -1130,8 +1130,10 @@ static var MINIBOSSES := {
 				# shield *send a thrown thing back* as its combat verb, so the guard is
 				# a real answer here. It just spends the whole walk behind it.
 				#
-				# 22 degrees: a LINE, not a sweep. What is thrown is one piece of the
-				# Gate and it goes exactly where the lane is drawn.
+				# 22 degrees: the narrowest cone in the game, and a near-line rather
+				# than a sweep. What is thrown is one piece of the Gate and it goes
+				# exactly where the fan is drawn -- which since board card 21 is a
+				# 44-degree wedge on the floor and no longer a 6.7 m box round it.
 				"id": &"gate_shard", "name": "Gate-Shard",
 				"tell": {
 					"time": 0.85, "pose": POSE_TILT,
@@ -1140,8 +1142,8 @@ static var MINIBOSSES := {
 					"read": "It cants hard onto one shoulder and cocks the arm back "
 						+ "across its body, and the shard in that hand goes from "
 						+ "gate-violet to hot red -- the one red thing on a black body. A "
-						+ "hairline lane runs from its feet to yours and stops there. It "
-						+ "is a line, and the line is aimed.",
+						+ "narrow wedge opens from its feet toward yours and stops "
+						+ "there. It is nearly a line, and the line is aimed.",
 				},
 				"shape": SHAPE_ARC, "reach": 9.0, "arc_deg": 22.0,
 				"damage": 4, "knockback": K.KNOCKBACK_LIGHT, "stun": 0.22,
