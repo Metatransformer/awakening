@@ -34,7 +34,8 @@ extends RefCounted
 ##   C  The eye is shot and the door swings. Photographed from the same spot,
 ##      for the record.
 ##   D  Through that open door, at the stone, all three names are on the
-##      picture.
+##      picture — **and each of the three separately**, not just the row's total
+##      (card #46; see the note at the beat and `READABLE_EACH`).
 ##   E  And from a lookdev lens with nothing in shot but the plinth, every
 ##      caption is whole — NOT swallowed by the drum it stands on. That is the
 ##      half a bare occlusion flag could get wrong, and it is why this
@@ -56,6 +57,52 @@ extends RefCounted
 ## comes out of the downscale as a dim smear rather than as `Pal.CYAN`. The first
 ## cut of this file matched on the colour and scored a frame with the names
 ## plainly painted on the door at **zero**.
+##
+## ## Beat D's per-plate check — card #46, and its premise had expired
+##
+## Beat D used to assert a per-plate floor of `READABLE_NEAR / 4`, lost it to
+## card #38, and spent a while with none. Card #46's diagnosis was that the check
+## had been measuring the hero's idle: he stands between the camera and the row
+## on purpose, `Engine.time_scale = 0` stops his breath at whatever phase the
+## frame budget left it, and five identical runs scored the left plate at
+## **128, 19, 108, 5, 80** while the frame's total held to a few percent.
+##
+## **That was true, and card #61 then made it stop being true.** The captions are
+## `WorldCaption`s drawn on the HUD canvas now, occluded by ONE RAY on
+## `K.L_WORLD` with the caption's own ancestors excluded (`Hud._caption_visible`)
+## — so **the hero cannot take a caption away at all**, whatever his arms are
+## doing, because he is not world geometry. The plinth cannot swallow its own
+## names either; it is the excluded ancestor.
+##
+## Measured, not reasoned: `--sidestep=0` puts the hero back on the pedestal's
+## axis — the pose `SIDESTEP` below says hid the middle tone at 26 px — and all
+## three plates read full, `[4823, 4789, 4424]`. The magnitudes moved with the
+## mechanism too: a caption is native-resolution canvas type now, so beat D reads
+## thousands of pixels where the card recorded hundreds.
+##
+## So the per-plate claim comes back, and it is guarded by measurement rather
+## than by arithmetic on another constant:
+##
+##  * **Ten consecutive runs**, on a Mac running other agents' directors, all
+##    pass, and the three plates land in `5305–5315`, `4843–4988`, `4481–4544`.
+##    The spread is 0.2–3%, and it is not the hero: four more runs with his idle
+##    pinned to a fixed second of a fixed clip land in the same bands. It is the
+##    camera boom settling a few pixels of height differently, which shifts the
+##    whole frame — irrelevant at this floor, and named here so the next reader
+##    does not re-derive it. `READABLE_EACH` is set from those runs.
+##  * **`--blind=N` makes D2 fail**, through the real mechanism: a slab of world
+##    collision in front of plate N, which is exactly what the HUD's ray looks
+##    for. Measured: `[5719, 0, 4706]`, D2 FAIL — **while D1, the row's total,
+##    passes at 16,802 px.** That is the whole argument for a per-plate check
+##    existing. A caption can go completely and the total will not notice.
+##
+##    The blinded arm reads its two SURVIVING plates a few percent high
+##    (5719/4706 against 5299/4543). That is not the slab: it is invisible, its
+##    mask is 0, and the only thing on `K.L_WORLD` that reads it is plate N's own
+##    ray — a body that could touch plate 0's number would have to zero it, not
+##    raise it. It is the eight frames the insertion costs before the
+##    photograph, which is the same whole-frame drift as the bands above,
+##    sampled a little further along.
 ##
 ## `Engine.time_scale = 0` is what makes the pair comparable: the torches gutter,
 ## the stone's lamp swells and the motes bob, so two consecutive captures of a
@@ -98,13 +145,22 @@ const READABLE_NEAR := 400
 
 ## How far off the pedestal's axis the hero stands to be photographed reading it.
 ##
-## Dead ahead, the hero's own body is between the camera and the MIDDLE tone --
-## measured, at 26 pixels against its neighbours' 365 and 270 -- because the
-## three names hang at 0.82 m, which is his chest. That is correct occlusion and
-## not a bug: a body in the world hides what is behind it, and the version of
+## Dead ahead, the hero's own body used to be between the camera and the MIDDLE
+## tone -- measured, at 26 pixels against its neighbours' 365 and 270 -- because
+## the three names hang at 0.82 m, which is his chest. That was correct occlusion
+## and not a bug: a body in the world hides what is behind it, and the version of
 ## this that did not was the version that also painted the names on a shut door.
 ## It is a framing fact, so it is fixed in the framing, exactly as
 ## `puzzle_loop.gd` steps off the treasure chest's axis for the same reason.
+##
+## **That stopped being true at card #61 and the sidestep is kept anyway.** A
+## caption is canvas type occluded by one ray on `K.L_WORLD` now, and the hero is
+## not on that layer, so he cannot hide a name however he stands: `--sidestep=0`
+## reads all three plates full (card #46 measured it). The offset stays because
+## the FRAME is still better for it -- his shoulder sits under the middle name
+## rather than through it, and a proof frame is looked at by people. It is no
+## longer load-bearing for any number, which is why beat D's per-plate check can
+## exist again.
 ##
 ## Negative, i.e. toward the stone's own -X, and SMALL. The placer stands the
 ## pedestal 3 m off the centre line of a 9 m landing with the stair in the middle
@@ -113,6 +169,40 @@ const READABLE_NEAR := 400
 ## step 2.4 m this way and he is stood on the stair. 1.2 m clears the middle
 ## caption and keeps his feet on the floor.
 const SIDESTEP := -1.2
+
+## Per-plate floor at beat D, where the hero IS in the shot and is entitled to
+## stand in front of things.
+##
+## **Measured, not arithmetic — that distinction is the whole of card #46.** The
+## check this replaces used `READABLE_NEAR / 4`, a number nothing had justified,
+## and it failed on the run where the idle happened to lay a bow limb across the
+## left caption.
+##
+## Ten consecutive runs, on a Mac running five other agents' directors, scored
+## the three plates at:
+##
+##     [5315,4843,4481] [5312,4877,4503] [5306,4988,4544] [5305,4988,4544]
+##     [5311,4875,4501] [5311,4877,4503] [5315,4877,4503] [5312,4877,4503]
+##     [5305,4986,4543] [5311,4877,4503]
+##
+## Bands of 5305–5315, 4843–4988, 4481–4544 — 0.2%, 3%, 1.4%. (A later
+## confirming run, after the pose pinning came back out, read [5299, 4982,
+## 4543]: six pixels under the ten-run floor, i.e. the same band.) **The residue
+## is
+## not the hero**: four more runs with his idle pinned to a fixed second of a
+## fixed clip landed inside the same bands ([5316,4875,4504] [5314,4873,4503]
+## [5314,4873,4503] [5334,4851,4485]), so the pinning was removed again rather
+## than shipped as an unproven charm. What actually moves is the camera boom
+## settling a few pixels of height differently between runs, which shifts the
+## whole frame at once — visible as all three numbers drifting together, and
+## irrelevant at this floor.
+##
+## 600 is roughly 7x below the smallest reading: far enough below to survive a
+## lighting change of the kind card #38 made (which moved every near number and
+## is what surfaced this), far enough above that a caption actually swallowed by
+## something cannot clear it. `--blind=N` is the proof of the second half; see
+## beat D.
+const READABLE_EACH := 600
 
 ## How far in front of the plinth the lookdev lens sits, and the two numbers off
 ## `SoundingStone` it aims at. Spelled out rather than read off the class: this
@@ -239,37 +329,70 @@ func run(rig) -> void:
 	# --- D. At the stone -----------------------------------------------------
 	# The half a plain revert would get wrong. A caption that stops at the first
 	# wall is no use if its own plinth is the first wall.
-	await _stand_in_front(rig, hero, stone, 5.0, SIDESTEP)
+	#
+	# **`--sidestep=` overrides the framing, and it is how card #46's premise was
+	# tested rather than believed.** `0` puts the hero back on the pedestal's
+	# axis, which is the pose `SIDESTEP` below says hid the middle tone at 26 px
+	# and which card #46 blamed for beat D's wandering per-plate number. It does
+	# not hide anything any more: measured at `[4823, 4789, 4424]`, all three
+	# full. Since card #61 a caption is canvas type gated by one ray on
+	# `K.L_WORLD`, and the hero is not on that layer -- he cannot occlude a name
+	# however he stands. The flag stays because the next reader will want to check
+	# that for themselves rather than take this comment's word for it.
+	var side := float(rig.arg("sidestep", str(SIDESTEP)))
+	if not is_equal_approx(side, SIDESTEP):
+		print("PLATES --sidestep=%.2f overrides the framing (default %.2f) -- "
+			% [side, SIDESTEP] + "this is the calibration pose, not the claim")
+	await _stand_in_front(rig, hero, stone, 5.0, side)
+	# **`--blind=N` is how D2 is shown to be able to fail**, and it fails it
+	# through the real mechanism rather than by poking the number: a slab of
+	# world-layer collision goes up between the camera and plate N, which is
+	# exactly what `Hud._caption_visible`'s ray is looking for, and the HUD then
+	# declines to draw that caption at all. A per-plate check that has never been
+	# watched to fail is not a check (CLAUDE.md §2), and this one has a history of
+	# not being one.
+	var blind := int(rig.arg("blind", "-1"))
+	var slab := await _blind_one(rig, cam, plates, blind)
 	var near := await _read(rig, cam, plates,
 		out.path_join("e_04_at_the_stone.png"), true)
+	if slab != null:
+		slab.queue_free()
+		await rig.wait_frames(4)
 	print("PLATES at the stone -> %d pixel(s), %s per plate"
 		% [near["ink"], near["per"]])
 	_ck("D0 all three plates are in frame at the stone",
 		near["framed"] == plates.size())
 	_ck("D1 and the names are on the picture (%d px, >= %d)"
 		% [near["ink"], READABLE_NEAR], near["ink"] >= READABLE_NEAR)
-	# The per-plate numbers, PRINTED AND NOT ASSERTED. Beat E is where "none of
-	# the three is swallowed by the drum" is claimed, and it is the only place it
-	# can be: this pose has the hero between the camera and the row, and what the
-	# left-hand plate is behind is **his bow**, not the plinth.
+	# **The per-plate claim, and it is a claim again — card #46.**
 	#
-	# There used to be a check here with a floor of `READABLE_NEAR / 4`. It is
-	# gone rather than retuned, because retuning it would have been retuning a
-	# measurement of an idle animation. Three identical runs of this file, same
-	# seed, same pose, same code, gave the left plate **128, 19 and 108** pixels
-	# while the total stayed at 1580, 1495 and 1583 — the hero's idle breathes,
-	# `Engine.time_scale = 0` freezes it wherever the frame budget happened to
-	# leave it, and some of those frames have a bow limb across the caption. The
-	# file's own `SIDESTEP` note already records this exact fact about the MIDDLE
-	# plate ("that is correct occlusion and not a bug"); it was true of the left
-	# one too and the check had simply been lucky.
+	# It was removed rather than retuned when card #38 knocked the left plate
+	# under a floor of `READABLE_NEAR / 4`, because retuning it would have been
+	# retuning a measurement of an *idle animation*: five identical runs, same
+	# seed, same pose, same code, gave the left plate **128, 19, 108, 5 and 80**
+	# pixels while the frame's total held to a few percent. The hero stands
+	# between the camera and the row on purpose, `Engine.time_scale = 0` froze his
+	# breath wherever the frame budget left it, and some of those poses have a bow
+	# limb across the caption. The number was the animation.
 	#
-	# Card #38 is what surfaced it: lighting the entrance room changed the
-	# background these counts are diffed against, which moved every near number and
-	# put the left plate on the wrong side of a threshold nothing had justified.
-	# The claim itself survives intact one beat down, at [2649, 2781, 1912].
-	print("PLATES per-plate at the stone: %s (printed, not asserted -- see the "
-		% [near["per"]] + "note here; beat E is where the drum is judged)")
+	# **Card #61 removed that variable, not this file.** A caption is HUD canvas
+	# text now, hidden by one ray on `K.L_WORLD` — and the hero is not world
+	# geometry, so he cannot take one away however his arms are posed. Measured:
+	# `--sidestep=0` walks him back onto the pedestal's axis and all three plates
+	# still read full. Pinning his pose was tried here and changed nothing
+	# measurable, so it is not in the tree; see `READABLE_EACH` for the fourteen
+	# runs that say so.
+	#
+	# `READABLE_EACH` holds the measurement that justifies the floor, and
+	# `--blind=N` is how the check is shown to be able to fail.
+	print("PLATES per-plate at the stone: %s (floor %d each)"
+		% [near["per"], READABLE_EACH])
+	var thin: Array[int] = []
+	for i in near["per"].size():
+		if int(near["per"][i]) < READABLE_EACH:
+			thin.append(i)
+	_ck("D2 and EVERY one of the three is on it, not just the row as a whole "
+		+ "(%s, floor %d)" % [near["per"], READABLE_EACH], thin.is_empty())
 
 	# --- E. The plate at its own prop ----------------------------------------
 	# The landing is a nine-metre room with a stair down the middle of it, so the
@@ -411,6 +534,42 @@ func _moved(rig, lit: Image, hide_these: Array, path: String,
 
 
 # --- Fixture ------------------------------------------------------------------
+
+## Put a slab of world collision half a metre in front of plate `which`, so
+## `Hud._caption_visible`'s ray hits something and the HUD stops drawing that one.
+## `which < 0` builds nothing. Returns the slab so the caller can take it away.
+##
+## Half a metre out from the CAPTION and not from the camera: the plates hang in a
+## row 0.5 m apart, and a slab parked near the lens would take all three.
+##
+## `K.L_WORLD` and nothing else, because that is the only layer the ray reads --
+## a slab on the wrong layer would be an invisible no-op that made D2 look
+## unfailable, which is the exact defect this flag exists to rule out. It is
+## `visible = false` as well, so the pixels the beat counts can only have gone
+## because the HUD declined to draw them.
+func _blind_one(rig, cam: Camera3D, plates: Array, which: int) -> Node3D:
+	if which < 0 or which >= plates.size():
+		return null
+	var cap: Node3D = plates[which]
+	var body := StaticBody3D.new()
+	body.name = "PlatesBlindSlab"
+	body.collision_layer = K.L_WORLD
+	body.collision_mask = 0
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(0.35, 0.35, 0.05)
+	shape.shape = box
+	body.add_child(shape)
+	rig.scene().add_child(body)
+	var toward := (cam.global_position - cap.global_position).normalized()
+	body.global_position = cap.global_position + toward * 0.5
+	body.visible = false
+	await rig.wait_physics_frames(4)
+	await rig.wait_frames(4)
+	print("PLATES --blind=%d: a world-layer slab stands in front of plate %d "
+		% [which, which] + "(the calibration, not the claim)")
+	return body
+
 
 func _rebuild(rig, level: int) -> Node:
 	Run.level = level
