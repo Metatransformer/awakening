@@ -7,3 +7,9 @@
 
 # Export output from `pnpm deploy`. Regenerable, and ~500 MB a platform.
 /build/
+
+# Written by tools/quiet.sh for the length of a harness run: the `no_focus`
+# window flag can only be delivered at window creation, so it has to come from
+# a file. Refcounted in .godot-quiet/ and removed by the last run out.
+/override.cfg
+/.godot-quiet/

@@ -138,7 +138,7 @@ project's history was found by looking, and several were *hidden* by logs that
 said everything passed.
 
 ```bash
-godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/mvp_loop.gd --out=/tmp/mvp/x.png --warmup=60
+tools/quiet.sh --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/mvp_loop.gd --out=/tmp/mvp/x.png --warmup=60
 ```
 
 - `tools/directors/mvp_loop.gd` — the whole loop, end to end. Prints
@@ -146,8 +146,24 @@ godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --d
 - `tools/directors/monster_lookdev.gd` — the enemy roster, rendered.
 - Write a new director for anything you add that has pixels.
 
+**`tools/quiet.sh`, not bare `godot`. This machine has an owner sitting at it.**
+A director run opens a real macOS window that comes up in front of whatever they
+are typing into and takes the keystrokes with it, and four or five agents run
+directors here at once — it made the machine unusable for anything else. The
+wrapper delivers `display/window/size/no_focus`, which is read once at window
+creation and so cannot be set from GDScript afterwards. The window still appears
+(it has to — see the trap table), but it opens in a corner and never takes the
+keyboard. Measured: 0 focused frames out of 240, with the director passing
+unchanged.
+
 **Never pass `--headless` to a screenshot run.** There is no rendering device
 and every frame comes out empty — silently.
+
+**Do not leave runs behind you.** A director that hangs holds a window, a GPU and
+a share of everyone else's frame rate until someone kills it — there was a
+nine-minute zombie on this Mac while the paragraph above was being written. Put
+`timeout 400` in front of the command, and check `pgrep -f shoot.gd` before you
+start a burst.
 
 Before you call something done: clean `godot --path . --import`, clean boot, the
 relevant director with no failures, and *your own eyes on the output*.
@@ -169,6 +185,7 @@ relevant director with no failures, and *your own eyes on the output*.
 | Emissive / alpha / `BLEND_MODE_ADD` over near-black | Opaque slab at every opacity | Alpha does not attenuate ADD. Change the *shape*, not the material. |
 | Cold `.godot/imported/` | Missing `.ctex`, text-fallback HUD icons | Run `--import` before judging a frame. |
 | A gamepad plugged into this Mac | Directors fail intermittently, in beats that look like game races | Sticks resting outside the deadzone report `move_*` / `cam_*` held. The hero walks off mid-beat. `shoot.gd` strips joypad bindings now — if you write a harness that does not go through it, do the same. |
+| Minimising the harness window | Runs hang: zero PNGs, no `SHOT_OK`, timeout | The obvious way to keep the window out of the owner's way, and it silently kills capture. A minimised window still reports its size and still hands back correct pixels when a bare script asks, so it tests fine — then a real director produces nothing. `p2_walk_run_stop`: visible 23 s / 15 PNGs, minimised 75 s timeout / 0 PNGs. Use `no_focus` (`tools/quiet.sh`) and leave the window visible. |
 | `--import` rewrites `project.godot` | A clean diff you didn't make | It re-serialises the file: **every `;` comment is deleted**, and it drops settings it considers defaults — `window/size/resizable`, and **`audio/buses/default_bus_layout`, which silently unhooks the Music / SFX / UI buses and every volume slider with them**. The autoload load-order notes and the `#`-is-a-parse-error warning all vanish too. `git diff project.godot` after every `--import` — it is never a no-op — and restore from `git show HEAD:project.godot` + re-apply your line. |
 
 ---

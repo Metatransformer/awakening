@@ -54,11 +54,34 @@ func _initialize() -> void:
 	var win_size := Vector2i(int(wh[0]), int(wh[1]))
 	root.content_scale_size = win_size
 	root.size = win_size
-	# Park the window off in a corner so bursts of captures don't strobe the
-	# user's desktop any more than they have to.
-	root.position = Vector2i(40, 40)
+	_park_the_window(win_size)
 
 	_run.call_deferred()
+
+
+## Put the harness window in the far bottom-right corner, out of the owner's way.
+##
+## THE POINT IS THE OWNER'S KEYBOARD, and this is only the small half of it. A
+## director run opens a real macOS window; several agents run directors here at
+## once, and the windows came up over whatever was being typed into and took the
+## keystrokes with it. The half that actually fixes that is `no_focus`, which is
+## read once at window creation and so has to arrive before this script exists --
+## see `tools/quiet.sh`. This just moves the window off the working area; it used
+## to open at (40, 40), which on a Mac is directly on top of everything.
+##
+## DO NOT "IMPROVE" THIS BY MINIMISING THE WINDOW. It is the obvious next idea,
+## it looks like it works, and it silently breaks every capture run. A minimised
+## window still reports the right size and still answers `get_image()` with the
+## right pixels when you poke it from a bare script -- which is exactly why this
+## got written, landed, and had to be taken back out. Run a real director against
+## one and it never produces a single frame: measured on `p2_walk_run_stop`,
+## visible 23 s and 15 PNGs, minimised timed out at 75 s with 0 PNGs. The frames
+## simply stop arriving. `no_focus` on a visible window has no such problem --
+## same director, same 15 PNGs -- so take the keyboard fix and leave the window
+## on screen.
+func _park_the_window(win_size: Vector2i) -> void:
+	var usable := DisplayServer.screen_get_usable_rect(root.current_screen)
+	root.position = usable.position + usable.size - win_size - Vector2i(8, 8)
 
 
 ## Point `Settings` at a scratch config so a director can never write the
