@@ -993,6 +993,28 @@ const PLATE_CELL_PAD := 3.0
 const PLATE_WORLD := Color(Pal.VOID, 0.72)
 const PLATE_WORLD_PAD := 6.0
 
+# --- The world-caption de-collide (card #68) ----------------------------------
+## The hairline left between two captions the pass has pushed apart, in §3.1b
+## reference px.
+##
+## One px, and it is deliberately not more: each caption already carries
+## `PLATE_WORLD_PAD` of its own on both sides, so two stacked rows are 12 px
+## apart before this constant says anything. What it buys is that the two plates
+## do not share an edge and read as one taller slab.
+const CAPTION_STACK_GAP := 1.0
+
+## How far a caption may be pushed off its own anchor before it is dropped
+## instead, in rows.
+##
+## A caption is *about* the thing under it, and a name that has been walked four
+## rows down the screen to find room is a name pointing at the wrong object —
+## worse than no name, because it is confidently wrong. Past this the caption is
+## taken off the frame, which is the same bargain `WorldCaption.max_range`
+## already makes for a caption too far away to read: not shrunk, not smeared,
+## removed. Three is what a cluster of four captions needs and one more than the
+## sounding stone (the case card #68 was opened for) can ever ask for.
+const CAPTION_STACK_MAX := 3
+
 ## Sizes this frame asked for that are not on the ladder, `ref_px -> call count`.
 ## Cleared per frame with `_layout`, and read by `tools/directors/_hud_layout.gd`
 ## as assertion 3.
@@ -3155,6 +3177,35 @@ func _mark_bar(e: Node3D, r: Rect2) -> void:
 ## Everything else -- the words, the size, how far it carries -- belongs to the
 ## caption and not to this function. A name plate is not one widget with a
 ## constant block; it is however many the room put in the group.
+##
+## ## Why this lays the captions out instead of drawing them where they land
+##
+## **Card #68, and it is card #61's bill arriving.** Text on the canvas does not
+## shrink with distance, so the spacing perspective used to do for free is not
+## done at all: the sounding stone hangs three names 1.30 m apart on one drum,
+## and from the game camera across a 9 m landing THE SECOND WIND was drawn
+## through THE RETURNING SHAFT and neither could be read. The lookdev lens three
+## metres from the same drum held them apart, which is what says it is spacing
+## and not content.
+##
+## So the captions are gathered, sorted top-down, and any that would overlap one
+## already placed is pushed DOWN until it clears -- the direction perspective
+## itself picks, because for a row of captions at one height the nearer one
+## already projects lower. Nothing else moves: same words, same size, same
+## anchor in x, and a caption with nothing near it is drawn exactly where it was
+## before this pass existed.
+##
+## The two answers not taken, because the next reader will think of both:
+##
+##  * **Shrink with distance.** It un-does card #61 -- the reason a caption is
+##    here rather than in the 480x270 buffer is that it was illegible small --
+##    and it cannot be done inside §3.1b's ladder, whose floor is 10 px and
+##    whose whole point is that there is no rung under it. A name at 9 m would
+##    want about 6 px.
+##  * **A vertical stagger authored into `SoundingStone`.** It fixes one drum.
+##    The defect is not the drum's: any cluster of canvas captions has it, and a
+##    fix that has to be re-authored per prop is a fix this repo pays for twice
+##    (CLAUDE.md §0).
 func _draw_world_captions(s: Vector2) -> void:
 	var cam := _canvas.get_viewport().get_camera_3d()
 	if cam == null:
@@ -3171,7 +3222,13 @@ func _draw_world_captions(s: Vector2) -> void:
 	var grid := s / Vector2(480.0, 270.0)
 	var space := cam.get_world_3d().direct_space_state
 	var pad := Pal.px(PLATE_WORLD_PAD, s.y)
+	var gap := Pal.px(CAPTION_STACK_GAP, s.y)
 
+	# Pass one: who is drawn at all, and where each one would like to be. Nothing
+	# reaches the canvas in this loop -- the de-collide below cannot decide where
+	# the second caption goes until it knows about the first.
+	var want: Array[Dictionary] = []
+	var loose: Array[Dictionary] = []
 	for n in get_tree().get_nodes_in_group(WorldCaption.GROUP):
 		var cap := n as WorldCaption
 		if cap == null or not is_instance_valid(cap):
@@ -3201,6 +3258,74 @@ func _draw_world_captions(s: Vector2) -> void:
 		# the point and hangs from it, so a caption placed at the height the
 		# `Label3D` used to sit at lands where the label used to land.
 		var centre := Vector2(c.x, c.y - h * 0.5)
+		# The plate's rectangle whether or not this caption wears one: it is the
+		# ink's footprint plus the margin §5.7 says text needs, which is what a
+		# neighbour has to clear either way.
+		var box := Rect2(centre.x - w * 0.5 - pad, centre.y - pad,
+			w + pad * 2.0, h + pad * 2.0)
+		var e := {"cap": cap, "centre": centre, "box": box, "a": a, "scale": scale}
+		if cap.declutter:
+			want.append(e)
+		else:
+			loose.append(e)
+
+	# Pass two: top-down, and stable. Sorting by the projected anchor rather than
+	# by distance from the camera is the same order for a row of captions at one
+	# height -- the nearer one projects lower -- and it does not swap when the
+	# camera crosses the plane the anchors lie in, which a distance sort does.
+	# `x` and the instance id break ties, because two captions on one row must not
+	# change places between frames: the pass would then hand them each other's
+	# rows and the pair would flicker.
+	want.sort_custom(func(p: Dictionary, q: Dictionary) -> bool:
+		var a1: Vector2 = p["centre"]
+		var b1: Vector2 = q["centre"]
+		if not is_equal_approx(a1.y, b1.y):
+			return a1.y < b1.y
+		if not is_equal_approx(a1.x, b1.x):
+			return a1.x < b1.x
+		return (p["cap"] as Node).get_instance_id() \
+			< (q["cap"] as Node).get_instance_id())
+
+	# Pass three: place, then draw. `loose` captions are appended unplaced -- see
+	# `WorldCaption.declutter`: a damage number is already moving and is neither
+	# pushed nor pushed against.
+	var placed: Array[Rect2] = []
+	var draw_list: Array[Dictionary] = []
+	for e: Dictionary in want:
+		var box: Rect2 = e["box"]
+		var limit := (box.size.y + gap) * float(CAPTION_STACK_MAX)
+		var drop := 0.0
+		# One sweep per already-placed caption is enough to settle: each sweep
+		# either clears the box or moves it strictly below the lowest rectangle it
+		# hit, and there are only so many of those. The bound is the loop's
+		# guarantee of termination, not an estimate.
+		for _sweep: int in placed.size() + 1:
+			var hit := false
+			for p: Rect2 in placed:
+				if not p.intersects(box):
+					continue
+				var d: float = p.end.y + gap - box.position.y
+				box.position.y += d
+				drop += d
+				hit = true
+			if not hit:
+				break
+		if drop > limit:
+			# Too crowded to place honestly. See `CAPTION_STACK_MAX`.
+			continue
+		placed.append(box)
+		var centre: Vector2 = e["centre"]
+		e["centre"] = Vector2(centre.x, centre.y + drop)
+		draw_list.append(e)
+	draw_list.append_array(loose)
+
+	for e: Dictionary in draw_list:
+		var cap: WorldCaption = e["cap"]
+		var centre: Vector2 = e["centre"]
+		var scale: float = e["scale"]
+		var a: float = e["a"]
+		var w: float = CanvasText.width(cap.text, scale)
+		var h: float = CanvasText.height(scale)
 		if cap.plate:
 			_canvas.draw_rect(
 				Rect2(centre.x - w * 0.5 - pad, centre.y - pad,

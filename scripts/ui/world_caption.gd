@@ -34,7 +34,12 @@ extends Node3D
 ## A caption drawn on the canvas does not shrink as you back away, and it is
 ## occluded by a single line-of-sight ray rather than per-pixel by the depth
 ## buffer — a wall's edge can no longer cut a name in half, it can only take the
-## whole name away. That is the same deal `Hud._draw_enemy_bars` already makes
+## whole name away. **The first cost has a second half, and card #68 is it:**
+## what does not shrink does not get out of its neighbour's way either, so a
+## cluster of captions that perspective used to space — three Echo names on one
+## drum, seen from across a 9 m landing — collides at gameplay distance. That is
+## answered by `declutter` below, in the HUD, and NOT by giving the caption its
+## perspective back; §3.1b's floor is 10 px and a 9 m caption would be under it. That is the same deal `Hud._draw_enemy_bars` already makes
 ## (`docs/STYLEGUIDE.md` §5.7, "World-anchored — these obey the world's rules,
 ## not the frame's"), and these captions join that table rather than inventing a
 ## second set of rules. The honest cost is a register change: a name over a
@@ -103,6 +108,22 @@ const GROUP := &"world_caption"
 ## defect — the same control frame it used to take by forcing `no_depth_test`
 ## back on. Do not ship it off; the reason is four cards long and it is in §4.3.
 @export var occlude: bool = true
+
+## May the HUD push this caption down a row to keep it off another one?
+##
+## **Card #68, and it is the other half of the bargain this file's header
+## strikes.** A canvas caption does not shrink with distance, so a cluster that
+## perspective used to pull apart — the sounding stone's three names on one drum
+## — arrives at the frame as three full-width strings on one baseline, drawn
+## through each other. `Hud._draw_world_captions` de-collides them: same words,
+## same anchors, one of them a row lower.
+##
+## Off for anything that is **already moving**. A training post's damage numbers
+## rise and fade on a tween and jitter sideways as they spawn, so laying them out
+## against each other would fight the tween and pop them between rows as they
+## cross; they spread themselves and are gone in 0.85 s. A caption with this off
+## is neither pushed nor pushed-against — it is not in the layout at all.
+@export var declutter: bool = true
 
 ## Draw §5.7's World plate recipe behind the text (VOID@72%, 6 px pad).
 ##

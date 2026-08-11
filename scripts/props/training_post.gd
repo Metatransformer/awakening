@@ -308,6 +308,13 @@ func _popup(amount: int, from: Vector3) -> void:
 	# authored in a unit with no ladder behind it at all.
 	l.ref_px = 16.0
 	l.tint = Color(1.0, 0.42, 0.32) if amount > 0 else Color(0.65, 0.65, 0.7)
+	# **Out of the HUD's de-collide layout — card #68.** That pass pushes a caption
+	# down a row to keep it off one already placed, which is right for a name
+	# hanging off a fixed prop and wrong for this: a damage number rises on a
+	# tween, jitters sideways at spawn (see `side` below) and is gone in 0.85 s, so
+	# laying it out against its neighbours would fight the tween and pop it between
+	# rows as it crossed one. It spreads itself; that is what the jitter is for.
+	l.declutter = false
 
 	# Out along the line the blow came in on, which is the side the striker — and
 	# therefore the camera — is standing on. `to_local`, because the offset is

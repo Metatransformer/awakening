@@ -48,9 +48,11 @@ extends RefCounted
 ## `global_position` never moves. The only thing that changes is *what reaches
 ## the frame*, so that is what is measured.
 ##
-## It is measured by **taking the plates away**: freeze the clock, photograph the
-## pose, hide the three labels, photograph it again, and count the pixels that
-## moved. That number is exactly the plates' contribution to the picture — zero
+## It is measured by **taking the plates' ink away**: freeze the clock,
+## photograph the pose, draw the three names fully transparent, photograph it
+## again, and count the pixels that moved. (Transparent rather than hidden, and
+## `_moved` explains why at length — since card #68 a hidden caption frees its
+## row in the HUD's layout and its neighbours move into it.) That number is exactly the plates' contribution to the picture — zero
 ## when the door swallows them, hundreds when it does not — and unlike a colour
 ## match it cannot be fooled by the door's own green sigil sitting a few pixels
 ## above the captions, nor defeated by a caption thirteen metres away whose ink
@@ -76,7 +78,9 @@ extends RefCounted
 ##
 ## Measured, not reasoned: `--sidestep=0` puts the hero back on the pedestal's
 ## axis — the pose `SIDESTEP` below says hid the middle tone at 26 px — and all
-## three plates read full, `[4823, 4789, 4424]`. The magnitudes moved with the
+## three plates read full, `[4823, 4789, 4424]` (measured before card #68, i.e.
+## while the row still overlapped and every per-plate number read low). The
+## magnitudes moved with the
 ## mechanism too: a caption is native-resolution canvas type now, so beat D reads
 ## thousands of pixels where the card recorded hundreds.
 ##
@@ -92,25 +96,30 @@ extends RefCounted
 ##    does not re-derive it. `READABLE_EACH` is set from those runs.
 ##  * **`--blind=N` makes D2 fail**, through the real mechanism: a slab of world
 ##    collision in front of plate N, which is exactly what the HUD's ray looks
-##    for. Measured: `[5719, 0, 4706]`, D2 FAIL — **while D1, the row's total,
-##    passes at 16,802 px.** That is the whole argument for a per-plate check
+##    for. Measured: `[5720, 0, 4706]`, D2 FAIL — **while D1, the row's total,
+##    passes at 18,044 px.** That is the whole argument for a per-plate check
 ##    existing. A caption can go completely and the total will not notice.
 ##
-##    The blinded arm reads its two SURVIVING plates HIGHER — 5719 and 4706,
-##    against 5299 and 4543 — and lands on exactly the numbers beat E gets from
-##    the lookdev lens. **Look at the two frames and the reason is on them:** at
-##    the game camera the three names collapse into one another, THE SECOND WIND
-##    sitting across THE RETURNING SHAFT, while the lookdev lens is close enough
-##    to hold them apart. Each plate's diff is counted by hiding that caption and
-##    re-photographing, so where a neighbour's glyphs sit under it the pixels
-##    are still lit afterwards and do not count. Take the middle one away
-##    entirely and its neighbours stop being overlapped — hence full readings,
-##    hence the exact match with the uncrowded lens.
+## ## The gap between D and E that used to be here — card #68, and it is closed
 ##
-##    So the floor is deliberately set below the OVERLAPPED numbers, which is
-##    the state the game camera actually shows. (That the row is illegible in
-##    that state is a real fault, and not this director's to fix — it is a HUD
-##    layout question raised by card #61's move to canvas type.)
+## This block used to record that the blinded arm read its two SURVIVING plates
+## HIGHER — 5719 and 4706 against 5299 and 4543 — and landed on exactly the
+## numbers beat E got from the lookdev lens. The reason was on the frames: at the
+## game camera the three names collapsed into one another, THE SECOND WIND drawn
+## across THE RETURNING SHAFT, while the lookdev lens three metres from the drum
+## was close enough to hold them apart. Take the middle one away and its
+## neighbours stopped being overlapped, hence the full readings.
+##
+## That was a real defect and it was card #68's. `Hud._draw_world_captions`
+## de-collides world captions now — a caption that would be drawn through one
+## already placed is pushed down a row — so **beat D and beat E agree to within a
+## pixel** (`[5720, 5538, 4706]` against `[5719, 5537, 4706]`), and the blinded
+## arm's survivors read the SAME as the unblinded arm's rather than higher. That
+## agreement is worth more than either number: the same three captions, at 5 m
+## through a doorway and at 3.2 m with nothing else in shot, put the same ink on
+## the frame, which is what "canvas type does not shrink with distance" should
+## mean and is the cheapest available check that this file is looking at the
+## captions and not at the room.
 ##
 ## `Engine.time_scale = 0` is what makes the pair comparable: the torches gutter,
 ## the stone's lamp swells and the motes bob, so two consecutive captures of a
@@ -142,7 +151,28 @@ const INK_DELTA := 0.02
 ## inside one. A name is about 0.8 m of world at `pixel_size` 0.0019, which is
 ## roughly 150 px across from where the hero reads the stone and a tenth of that
 ## through the doorway, so the box is generous sideways and tight vertically.
-const BOX := Vector2i(110, 34)
+##
+## **The vertical half was 34 and card #68 grew it to 72, and that is a change to
+## the INSTRUMENT, so here is why it is not a thumb on the scale.** The HUD
+## de-collides world captions now (`Hud._draw_world_captions`): a caption that
+## would be drawn through one already placed is pushed DOWN a row — 27 px at
+## 720p, up to `Hud.CAPTION_STACK_MAX` of them — so the anchor's projection is no
+## longer where the caption is, it is where the caption's *column* starts. A box
+## that still only reached 34 px would have scored the middle name as a third
+## missing while it sat whole and legible on the frame two rows down, which is a
+## director inventing a defect (CLAUDE.md §2). 72 is one plate half-height (13)
+## plus the two rows a cluster of three can ask for (54), rounded up.
+##
+## It cannot inflate a reading either, which is the half worth checking: the
+## count is a DIFF against the same frozen frame with one caption hidden, so
+## every pixel the box gains outside the caption contributes zero. What a bigger
+## box can catch is another wall-clock HUD element inside it — the vitals bar
+## that once scored a caption at nineteen thousand — and at 72 px the nearest one
+## is `E TO DESCEND`, 170 px below the row. Sideways is unchanged at 110, which
+## does clip `THE RETURNING SHAFT` (about 240 px of plate): that clip is older
+## than this card, is the same in every arm, and is why the longest of the three
+## names is also the lowest number.
+const BOX := Vector2i(110, 72)
 
 ## What counts as "the name is on screen at all". A caption thirteen metres away,
 ## seen through a doorway, is about thirty pixels of glyph and its outline; the
@@ -210,6 +240,15 @@ const SIDESTEP := -1.2
 ## is what surfaced this), far enough above that a caption actually swallowed by
 ## something cannot clear it. `--blind=N` is the proof of the second half; see
 ## beat D.
+##
+## **Card #68 moved every one of those numbers up and did not move this floor.**
+## The bands above were measured while the three names were drawn through each
+## other; the HUD staggers them now and each plate reads its whole self:
+## `[5720, 5538, 4706]`, within a pixel of the lookdev lens's `[5719, 5537,
+## 4706]` and stable across the two runs taken. The floor stays at 600 because it
+## is not derived from the readings — it is set 7x under the smallest of them so
+## that a lighting change cannot trip it and a swallowed caption cannot clear it,
+## and both of those arguments got *stronger* when the readings rose.
 const READABLE_EACH := 600
 
 ## How far in front of the plinth the lookdev lens sits, and the two numbers off
@@ -343,7 +382,7 @@ func run(rig) -> void:
 	# axis, which is the pose `SIDESTEP` below says hid the middle tone at 26 px
 	# and which card #46 blamed for beat D's wandering per-plate number. It does
 	# not hide anything any more: measured at `[4823, 4789, 4424]`, all three
-	# full. Since card #61 a caption is canvas type gated by one ray on
+	# full (a pre-#68 reading, taken while the row still overlapped itself). Since card #61 a caption is canvas type gated by one ray on
 	# `K.L_WORLD`, and the hero is not on that layer -- he cannot occlude a name
 	# however he stands. The flag stays because the next reader will want to check
 	# that for themselves rather than take this comment's word for it.
@@ -510,20 +549,47 @@ func _read(rig, cam: Camera3D, plates: Array, path: String,
 	return {"ink": total, "framed": framed, "per": per}
 
 
-## Hide `hide_these`, re-photograph the frozen pose, and count the pixels inside
-## `boxes` that changed against `lit`. `all` is restored visible afterwards,
+## Take the INK of `hide_these` away, re-photograph the frozen pose, and count the
+## pixels inside `boxes` that changed against `lit`. `all` is restored afterwards,
 ## whichever subset was taken away.
+##
+## ## Why this is not `visible = false` any more — card #68
+##
+## Because the HUD lays these captions out against each other now. A caption that
+## would be drawn through one already placed is pushed down a row
+## (`Hud._draw_world_captions`), so **hiding one does not only remove its ink —
+## it frees its row, and its neighbours move into it.** That motion is inside
+## this box and was counted as the hidden caption's own contribution: measured,
+## the left name scored `10843` against the `4706` the same caption puts on the
+## lookdev frame, i.e. more than twice its own size, because the middle name
+## jumped 27 px the moment it was taken away. A per-plate check that reports a
+## neighbour's movement as this plate's legibility is measuring the wrong thing,
+## and it would read HIGH exactly when the layout is busiest — the case it exists
+## to police.
+##
+## So the ink goes and the SLOT stays: `tint.a = 0` draws the string fully
+## transparent and `plate = false` drops its rectangle, while the caption keeps
+## its place in the layout, so every other caption is drawn in exactly the pixel
+## it was drawn in for `lit`. It is exact rather than epsilon — nothing is
+## composited at all — and it does not depend on `INK_DELTA`.
 func _moved(rig, lit: Image, hide_these: Array, path: String,
 		all: Array, boxes: Array) -> int:
+	var ink: Array[Color] = []
+	var plated: Array[bool] = []
+	for p: Node3D in all:
+		ink.append(p.tint)
+		plated.append(p.plate)
 	for p: Node3D in hide_these:
-		p.visible = false
+		p.tint = Color(p.tint.r, p.tint.g, p.tint.b, 0.0)
+		p.plate = false
 	await rig.wait_frames(2)
 	var ref := path.get_basename() + ".ref.png"
 	await rig.capture(ref)
 	var bare := Image.load_from_file(ref)
 	DirAccess.remove_absolute(ref)
-	for p: Node3D in all:
-		p.visible = true
+	for i in all.size():
+		all[i].tint = ink[i]
+		all[i].plate = plated[i]
 	await rig.wait_frames(2)
 	if bare == null or bare.get_size() != lit.get_size():
 		return -1

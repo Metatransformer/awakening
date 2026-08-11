@@ -1543,7 +1543,47 @@ point, and a fourth right edge is what made the column read as ragged.
 |---|---|
 | Lock brackets | half-extent (26, 34), 2 px on a 1 px VOID keyline, quantized to 480×270; arm 8 inward / 12 outward / 5 on two corners (§5.5) |
 | Enemy health bar | 20 × 2 px (×2.2 locked), 1 px frame (BONE if elite), ASH@85% track, RUST fill, ≤ 22 m, LOS-gated |
-| World caption (`WorldCaption`) | §3.1b type at its own `ref_px` (14 body / 16 damage), World plate, cap TOP on the anchor, quantized to 480×270, ≤ `max_range` (18 m default) with a 3 m fade, LOS-gated, behind-camera culled. Billboarded captions only — see §4.3 |
+| World caption (`WorldCaption`) | §3.1b type at its own `ref_px` (14 body / 16 damage), World plate, cap TOP on the anchor, quantized to 480×270, ≤ `max_range` (18 m default) with a 3 m fade, LOS-gated, behind-camera culled, **de-collided against the other captions on the frame**. Billboarded captions only — see §4.3 |
+
+#### The caption de-collide — what does not shrink does not get out of the way
+
+> **Decided 2026-08-11 (card #68). This is a session's call and it is
+> REVERSIBLE** — delete the three passes in `Hud._draw_world_captions` and the
+> two constants above them (`CAPTION_STACK_GAP`, `CAPTION_STACK_MAX`), and every
+> caption is drawn at its own anchor again exactly as before. Nothing else reads
+> them; `WorldCaption.declutter` goes with them. `tools/directors/echo_plates.gd`
+> re-shoots the evidence in four minutes.
+
+§4.5 moved billboarded captions onto the canvas (card #61) because a `Label3D`
+came out of the 480×270 buffer as a smear. The bill for that arrives here: a
+canvas caption is the same width at 3 m and at 9 m, so a cluster the perspective
+used to pull apart now arrives as full-width strings on one baseline. The
+sounding stone hangs three Echo names 1.30 m apart on one drum and from the game
+camera **THE SECOND WIND was drawn straight through THE RETURNING SHAFT**.
+
+The HUD lays them out instead. Captions are gathered, sorted by their projected
+anchor top-down, and any that would overlap one already placed is pushed **down**
+a row — the direction perspective picks anyway, since for captions at one height
+the nearer one already projects lower. A caption with nothing near it does not
+move at all, and nothing moves sideways: the anchor in x is what says which prop
+a name belongs to. Past `Hud.CAPTION_STACK_MAX` rows the caption is dropped
+rather than parked somewhere misleading — the same bargain `max_range` makes.
+
+Two answers were not taken, and both are the obvious ones:
+
+- **Shrink with distance.** It un-does card #61 — a caption is on the canvas
+  precisely because it was illegible when it was small — and there is no room
+  under §3.1b's 10 px floor to shrink into. A 14 px name that shrank the way the
+  old `Label3D` did would be about 6 px at the stone.
+- **A vertical stagger authored into the prop.** It fixes one drum. The defect
+  belongs to captions, not to sounding stones, and a per-prop fix is one this
+  repo re-pays every time it adds a cluster (CLAUDE.md §0).
+
+Measured on `echo_plates` at 1280×720, 1:1: beat D's three plates went from
+`[5311, 4876, 4504]` to `[5720, 5538, 4706]` and now agree with the lookdev
+lens's `[5719, 5537, 4706]` **to within a pixel** — the same captions at 5 m and
+at 3.2 m putting the same ink on the frame, which is what canvas type not
+shrinking is supposed to mean.
 
 #### Rows deleted from the old table, and why
 
