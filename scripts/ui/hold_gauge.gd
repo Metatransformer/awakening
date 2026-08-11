@@ -72,3 +72,51 @@ static func ring(canvas: CanvasItem, centre: Vector2, radius: float, t01: float,
 		return
 	canvas.draw_arc(centre, radius, -PI * 0.5, -PI * 0.5 + TAU * f,
 		maxi(8, int(48 * f)), col, width)
+
+## A rectangle's own frame redrawn as it fills, clockwise from the top-left
+## corner. HUD_PLAN decision 15.
+##
+## The third construction, and it exists because the extraction hold had become a
+## 54 px arc floating over the bag, centred on the anchor of a gold total that was
+## deleted in 2026-08-09 — a ring around nothing, positioned by a ghost. The
+## styleguide's argument for the ring was right ("you are literally drawing a ring
+## around your money") and the BAG RIM already is that ring: it frames the bag, it
+## is already 2 px, and its colour is already the thing that says what is at
+## stake. So this deletes a widget and an anchor rather than moving them.
+##
+## Like `ring` and unlike `bar`, nothing is drawn at t01 = 0: the rim is already
+## on screen in its own colour, and a second frame at zero would be a doubled
+## border rather than an empty track.
+##
+## Drawn as four segments in corner order and not as a stroked rect, because a
+## partial rect has no stroke — the whole point is that you can see how far round
+## it has got.
+static func frame(canvas: CanvasItem, rect: Rect2, t01: float,
+		width: float, col: Color = Pal.BONE) -> void:
+	var f := clampf(t01, 0.0, 1.0)
+	if f <= 0.0:
+		return
+	# Perimeter walked clockwise from the top-left, so the four runs are the four
+	# edges in the order a clock hand would meet them if the rect were a dial.
+	var w := rect.size.x
+	var h := rect.size.y
+	var total := (w + h) * 2.0
+	if total <= 0.0:
+		return
+	var want := total * f
+	var tl := rect.position
+	var legs := [
+		[tl, Vector2(tl.x + w, tl.y), w],                              # top
+		[Vector2(tl.x + w, tl.y), Vector2(tl.x + w, tl.y + h), h],     # right
+		[Vector2(tl.x + w, tl.y + h), Vector2(tl.x, tl.y + h), w],     # bottom
+		[Vector2(tl.x, tl.y + h), tl, h],                              # left
+	]
+	for leg: Array in legs:
+		if want <= 0.0:
+			return
+		var a: Vector2 = leg[0]
+		var b: Vector2 = leg[1]
+		var len: float = leg[2]
+		var take: float = minf(want, len)
+		canvas.draw_line(a, a + (b - a).normalized() * take, col, width)
+		want -= take

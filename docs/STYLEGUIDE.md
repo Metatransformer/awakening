@@ -897,28 +897,117 @@ pause menu, with a legend.
 
 ### 5.7 Anchor table
 
-Fractions of viewport, origin top-left; px at 1280×720.
+Fractions of viewport, origin top-left; px at 1280×720. **Replaced entire by
+`docs/HUD_PLAN.md` §8**, which is where the reasoning for each row lives; this is
+the table itself, kept here because §5 is where an implementer looks.
+
+`display/window/stretch/mode` is `canvas_items` and `stretch/aspect` is `keep`,
+so the canvas is 1280 × 720 in every build on every display and letterboxed into
+an exact 16:9 box. Every fraction below resolves to exactly one set of pixels,
+forever, and nothing is ever cropped.
+
+Safe area: x ∈ [0.025, 0.975] (32 … 1248), y ∈ [0.031, 0.969] (22 … 698).
+`tools/directors/_hud_layout.gd` asserts it on every captured frame — this table
+is checked now, not merely written down.
+
+#### The vitals pole — one left edge at x 0.031 (40); rows from `_pole_top` only
+
+| Row | Element | top y | h | w |
+|---|---|---|---|---|
+| 0 | Health bar | 0.882 (635) | 15 | 0.268w (343) |
+| 1 | Stamina bar | r0 bottom + 4 (654) | 8 | 0.62× (213) |
+| 2 | Magic bar | r1 bottom + **6** (668) | **6** | 0.52× (178) |
+| 3 | Heat bar (dungeon only) | r2 bottom + 4 (678) | 6 | 0.44× (151) |
+| 3′ | Heat multiplier | bar right + 22 | 10 px, centred on r3 | — |
+| 4 | Draught slots (2, one row) | r3 bottom + 4 (688); **r3's slot (678) in the garrison** | 6 | 0.44× (151) |
+| — | pole bottom, dungeon | 694 | — | 4 px inside the safe margin |
+
+The 15 / 8 then 6 / 6 / 6 break is decision 24 and it is the whole reason the
+pole reads as two instruments: Tier 1 is read mid-fight without moving your eyes,
+Tier 2 is glanced between beats, and before this the only thing separating them
+was hue — the one channel a colour-blind player does not have.
+
+**`Hud._pole_top(s, row)` is the sole expression for this column.** Do not write
+the stack sum anywhere else; a second one put the draught row through the magic
+bar in the garrison and four pixels into the heat bar underground.
+
+#### The control cluster — same left edge, laid out upward from `CLUSTER_BOTTOM`
 
 | Element | x | y | Size |
 |---|---|---|---|
-| Health bar origin | 0.031 (40) | 0.899 (647) | 0.268 w (343) × 15 |
-| Stamina bar origin | 0.031 (40) | health bottom + 4 | 0.62× health w × 8 |
-| Hands origin | 0.031 (40) | baseline 0.872 (628) up | cell 64×64, gutter 12 |
-| Item cell origin | hands left + 2 cells + gutter + 22 | same top as the hands | cell 64×64 |
-| Caret band | above every cell | 21 tall (8·2 + 5) | ← → right hand, ↓ item |
-| Loadout line | right-align to the cluster | below the key caps + 9 | plated, `↑ PRIMARY` |
-| Minimap frame | right-align 0.969 (1240) | 0.052 (37) | 148×148, 8 px pad |
-| Key caps | centred under cell | cell bottom + 4 | CanvasText, 14 tall |
-| Bag numeral baseline | right-align 0.969 | 0.900 (648) | 32 px |
-| Value slips | right-align 0.969, max w 0.094 | 0.803→0.858 | 3 px + 2 gutter |
-| Item toast baseline | right-align 0.969 | 0.767 (552) | 16 px |
-| Bag rim | 0.812 → 0.978 | 0.786 → 0.914 | 2 px |
-| Extraction hold ring | centre 0.969 − 40 px | bag baseline − 16 px | r 54, 3 px stroke |
-| Room name baseline | centre 0.500 | 0.139 (100) | 24 px Jacquard |
-| Floor card origin | 0.031 (40) | 0.052 (37) | name 10 px over level 16 px, VOID plate, 6 px pad |
-| Extraction sweep | 0.0 → 1.0 | 0.500 | 1 px, 200 ms |
-| Damage arc | centre 0.500 | centre 0.500 | r = 0.28h, 3 px |
-| Safe margin | 0.025 w | 0.031 h | |
+| Cluster baseline | — | 0.855 (616) | — |
+| Caret band | above every cell | 490 → 511 | 21 tall (8·2 + 5); `CARET` is a HALF extent, so 16×16 triangles |
+| Left hand cell | 0.031 (40) | 511 | 64 × 64 |
+| Right hand cell | + cell + 12 (116) | 511 | 64 × 64; ← → carets over this one always |
+| Item cell | + cell + 22 (202) | 511 | 64 × 64; ↓ caret over it |
+| Ammo / charge numeral | cell right − 3 | cell bottom − 3 − its own height | **10 px** BONE |
+| Key caps | centred under each cell | cell bottom + 4 (579) | 14 px on the cell plate |
+| Loadout line | right-aligned to the item cell (266) | caps bottom + 9 (602) | 14 px on the cell plate |
+
+#### The money pole — one right edge at x 0.969 (1240)
+
+| Element | x | y | Size |
+|---|---|---|---|
+| Value slips | right-align 0.969, max w 0.094 (120) | bottom 0.845 (608), stacking up | 4 px + 2 gutter, ≤ 8 |
+| Slip overflow `+N` | right-align 0.969 | above the last slip | **10 px** MOTH |
+| Bag rim | 0.812 → **0.969** (1039 → 1240) | 0.786 → 0.914 (566 → 658) | 2 px (3 px at rarity ≥ 2) |
+| Item toast / autosave | right-align 0.969 | 0.767 (552) | 16 px toast / 14 px autosave |
+| Extraction hold | **the rim itself** | — | the rim's own frame redrawn CYAN, clockwise from the top-left |
+
+The rim's right edge was 0.978 — 5.8 px outside the safe margin, on the largest
+permanent element in the corner. It is `Pal.BAG_RIGHT` now, the same edge as the
+slips, the toast and the minimap: snapping it to the safe margin was never the
+point, and a fourth right edge is what made the column read as ragged.
+
+#### Top edge
+
+| Element | x | y | Size |
+|---|---|---|---|
+| Floor card | 0.031 (40) | 0.052 (37) | name 10 px over level 16 px, world plate fading 72% → 34% |
+| Minimap frame | right-align 0.969 (1240) | 0.052 (37) | 148 × 148, 8 px pad, VOID@88% on 1 px ASH |
+
+#### Centre and full-screen
+
+| Element | x | y | Size |
+|---|---|---|---|
+| Crosshair | screen centre, quantized to 480×270 | " | gap 7 (5 locked), arm 5, 1 px |
+| Interact prompt | centre 0.500 | 0.735 (529) | 14 px on the world plate, pad **6** |
+| Prompt hold gauge | inside the plate | the plate's bottom edge | `HoldGauge.BAR_H` |
+| Extraction sweep | 0.0 → 1.0 | 0.500 | 1 px CYAN, 200 ms |
+| Legend (garrison) | centre 0.500 | up from 0.962 (693) | **3 balanced rows**, step 15, 10 px ASH |
+
+#### World-anchored (these obey the world's rules, not the frame's)
+
+| Element | Size |
+|---|---|
+| Lock brackets | half-extent (26, 34), arm 8, 2 px, quantized to 480×270 |
+| Enemy health bar | 20 × 2 px (×2.2 locked), 1 px frame (BONE if elite), ASH@85% track, RUST fill, ≤ 22 m, LOS-gated |
+
+#### Rows deleted from the old table, and why
+
+| Row | Why |
+|---|---|
+| Bag numeral baseline (0.900) | The 32 px gold total was deleted 2026-08-09. It went on anchoring the extraction ring for a year afterwards — a ring around a number that was not there. `Pal.BAG_NUM_BASELINE` is gone with it. |
+| Extraction hold ring (r 54) | It is the rim's own frame now. A widget and an anchor deleted rather than moved. |
+| Room name baseline (0.139) | Replaced by the top-left floor card, which anchors off its own constants. `Pal.ROOM_NAME_BASELINE` gone. |
+| Slips top (0.803) | The stack grows UPWARD from its bottom; the top is derived from the count and was never authored. `Pal.SLIPS_TOP` gone. |
+| Heat premium baseline (0.735) | The premium is drawn beside the heat bar in the vitals pole, where a state of the body belongs. `Pal.PREMIUM_BASELINE` gone. |
+| Damage arc (r = 0.28h) | Still to be built — HUD_PLAN decision 13 and 29 own it, and it will land at r = 0.42h with a camera-relative bearing. Listing it here as though it shipped is how a doc starts lying. |
+
+#### The two plate recipes
+
+Two, not three, and which one you get is decided by a single question.
+
+| Recipe | Fill | Pad | For |
+|---|---|---|---|
+| **Cell** | MIDNIGHT@80% | 3 px | anything attached to a cell — the key caps, the loadout line |
+| **World** | VOID@72% | 6 px | anything floating over the world — the interact prompt, the floor card |
+
+A plate is how text survives something it does not control. The cell recipe is
+the cells’ own fill, so a cap reads as part of the cluster rather than as a label
+that landed near it; the world recipe is darker and wider because a lit wall at
+this end of the palette is brighter than MOTH, and 6 px is what keeps a descender
+off the brick outside the plate at 720p.
 
 ---
 

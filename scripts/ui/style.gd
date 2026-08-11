@@ -129,12 +129,10 @@ const DRAUGHT_GAP := 4.0
 ## containers rather than as one ticked bar -- the whole point of the row not
 ## being a meter (HUD_PLAN decision 30).
 const DRAUGHT_SLOT_GAP := 4.0
-## The heat premium, right-aligned in the bag column. It sits ABOVE the toast
-## line because everything below is spoken for -- slips at 0.845, the total at
-## 0.900, the fee at 0.940 -- and because reading down the money pole then goes
-## "+96 HOT / what you just picked up / what it all is / what leaving costs",
-## which is the order the thoughts actually arrive in.
-const PREMIUM_BASELINE := 0.735
+# PREMIUM_BASELINE (0.735) was here, and its comment described a money pole with
+# a total at 0.900 and a fee at 0.940 -- two readouts deleted in 2026-08-09. The
+# heat premium is drawn beside the heat bar in the VITALS pole now, which is
+# where a state of the body belongs. HUD_PLAN decision 14's dead-constant sweep.
 ## --- The button cluster, bottom-left ----------------------------------------
 ## The three item buttons in the physical shape of the D-pad they sit on
 ## (docs/CONTRACT.md §2.5 #6), and — since they are the same KIND of thing — the
@@ -200,8 +198,12 @@ const KEYCAP_GAP := 4.0
 # (HUD_PLAN decision 3): the ladder is only enforceable if every size is spelled
 # the one way, and a constant whose value is "2" cannot be grepped for "14".
 const BAG_RIGHT := 0.969
-const BAG_NUM_BASELINE := 0.900
-const SLIPS_TOP := 0.795
+# BAG_NUM_BASELINE (0.900) and SLIPS_TOP (0.795) were here. The first anchored a
+# 32 px gold total that was deleted in 2026-08-09 and then went on positioning
+# the extraction ring for a year of commits; the second dates from when the slip
+# stack was authored top-down, and the stack has grown UPWARD from SLIPS_BOTTOM
+# since. Both were dead and both were still load-bearing-looking, which is worse
+# than dead. HUD_PLAN decision 14/15.
 const SLIPS_BOTTOM := 0.845
 const TOAST_BASELINE := 0.767
 ## Hugs its contents. The styleguide's original 0.740 left edge left a third of
@@ -214,9 +216,22 @@ const TOAST_BASELINE := 0.767
 ## starting left of the rim and crossing it, which read as a rendering bug. That
 ## line is gone (`Hud._draw_extraction`) and the bound stayed anyway: the rim
 ## frames THE BAG, and growing it into the empty strip below would frame nothing.
+## The bag rim. Its right edge is `BAG_RIGHT`, and that is not a coincidence to
+## be maintained by hand -- HUD_PLAN decision 4.5 gives the money pole ONE right
+## edge, shared with the slips, the toast and the minimap, and the rim was the
+## only thing in the column that had wandered off it.
+##
+## It was `0.978`, which put 5.8 px of the largest permanent element in the
+## corner outside the safe margin. Decision 14 first said "snap it to the safe
+## edge, 0.975" and §9 struck that twice: snapping to the margin was never the
+## point, the margin only entered because the rim had drifted past it, and a
+## fourth right edge 8 px outboard of the other three is what makes the money
+## pole read as ragged. The number is `BAG_RIGHT`.
 const RIM_TL := Vector2(0.812, 0.786)
-const RIM_BR := Vector2(0.978, 0.914)
-const ROOM_NAME_BASELINE := 0.139
+const RIM_BR := Vector2(BAG_RIGHT, 0.914)
+# ROOM_NAME_BASELINE (0.139) was here. The room-name card was replaced by the
+# top-left floor card, which anchors off its own constants; §5.6 recorded the
+# deletion and this did not.
 ## The floor card -- the dungeon's name and the level you are on. Top-left, which
 ## was the one corner of this HUD with nothing in it: health and stamina are
 ## bottom-left, the bag and the fee bottom-right, the button cluster top-right.
@@ -240,10 +255,10 @@ static func px(base: float, screen_h: float) -> float:
 	return maxf(1.0, round(base * screen_h / REF_H))
 
 
-## Colour for a bag total. BONE below T1, GOLD from T1 up -- "you now have
-## something to lose" should be a colour change you notice without reading.
-static func bag_color(value: int) -> Color:
-	return GOLD if value >= T1 else BONE
+# bag_color(value) was here -- BONE below T1, GOLD from T1 up, for a bag TOTAL
+# that has not been drawn since 2026-08-09. `tier()` below is the live answer to
+# the same question and it has four steps rather than two, which is what the rim
+# reads. HUD_PLAN decision 14's dead-constant sweep.
 
 
 static func tier(value: int) -> int:

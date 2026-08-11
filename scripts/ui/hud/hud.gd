@@ -770,6 +770,25 @@ func layout_rects() -> Dictionary:
 ##   16  floor level, item toast
 const TYPE_LADDER: Array[float] = [10.0, 14.0, 16.0]
 
+# --- The two plate recipes (HUD_PLAN decision 4.4) ----------------------------
+# Two, and there were three. A plate is how text stays legible over something it
+# does not control, and which plate you get is decided by ONE question: is this
+# attached to a cell, or is it floating over the world?
+#
+# ATTACHED TO A CELL -- the key caps, the loadout line. MIDNIGHT@80% is the
+# cells' own fill, so a cap reads as part of the cluster it hangs off rather than
+# as a label that landed near it, and 3 px keeps the run of caps tight enough to
+# scan as a row.
+const PLATE_CELL := Color(Pal.MIDNIGHT, 0.8)
+const PLATE_CELL_PAD := 3.0
+# FREE OVER THE WORLD -- the interact prompt, the floor card. These have a lit
+# wall or a torchlit floor behind them and nothing else of their own, so they get
+# the darker VOID and a wider margin: 6 px is what stops a descender touching the
+# brick outside the plate at 720p. The prompt used 7 px and the floor card ran
+# its own 62% fade; both are on the recipe now.
+const PLATE_WORLD := Color(Pal.VOID, 0.72)
+const PLATE_WORLD_PAD := 6.0
+
 ## Sizes this frame asked for that are not on the ladder, `ref_px -> call count`.
 ## Cleared per frame with `_layout`, and read by `tools/directors/_hud_layout.gd`
 ## as assertion 3.
@@ -1133,13 +1152,16 @@ func _draw_floor(s: Vector2) -> void:
 	# acquire a permanent box: what is left after the announcement is a whisper
 	# of shade under two lines, which is what makes the dim colours legible
 	# without making the card a panel.
-	var pad := Pal.px(6.0, s.y)
+	var pad := Pal.px(PLATE_WORLD_PAD, s.y)
 	var w: float = maxf(CanvasText.width(name_line, nt),
 		CanvasText.width(level_line, lt))
 	var plate := Rect2(at.x - pad, at.y - pad, w + pad * 2.0,
 		level_y + CanvasText.height(lt) + pad * 2.0 - at.y)
 	_note(&"floor_card", &"", plate)
-	_canvas.draw_rect(plate, Color(Pal.VOID, lerpf(0.62, 0.34, settle)))
+	# Starts ON the shared recipe and fades to a whisper, rather than starting at
+	# its own 62% -- the announcement is the one moment this card is a plate like
+	# any other, and what is left afterwards is shade rather than a panel.
+	_canvas.draw_rect(plate, Color(Pal.VOID, lerpf(PLATE_WORLD.a, 0.34, settle)))
 
 	CanvasText.draw_text(_canvas, name_line, at, nt, Pal.BONE.lerp(Pal.MOTH, settle))
 
@@ -1501,7 +1523,7 @@ func _draw_keycap(s: Vector2, cell: Rect2, key: String, tag := &"") -> void:
 	var top := cell.end.y + Pal.px(Pal.KEYCAP_GAP, s.y)
 	var w := CanvasText.width(key, scale)
 	var h := CanvasText.height(scale)
-	var pad := Pal.px(3.0, s.y)
+	var pad := Pal.px(PLATE_CELL_PAD, s.y)
 	if tag != &"":
 		_note(tag, &"cluster", Rect2(cell.get_center().x - w * 0.5 - pad,
 			top - pad, w + pad * 2.0, h + pad * 2.0))
@@ -1511,7 +1533,7 @@ func _draw_keycap(s: Vector2, cell: Rect2, key: String, tag := &"") -> void:
 	# metaphor: a key cap should look like a key.
 	_canvas.draw_rect(Rect2(
 		cell.get_center().x - w * 0.5 - pad, top - pad,
-		w + pad * 2.0, h + pad * 2.0), Color(Pal.MIDNIGHT, 0.8))
+		w + pad * 2.0, h + pad * 2.0), PLATE_CELL)
 	CanvasText.draw_centred(_canvas, key,
 		Vector2(cell.get_center().x, top), scale, Pal.BONE)
 
@@ -1679,12 +1701,11 @@ func _draw_cpad(s: Vector2) -> void:
 	var top := r.end.y + Pal.px(Pal.KEYCAP_GAP, s.y) + CanvasText.height(scale) \
 		+ Pal.px(9.0, s.y)
 	var w := CanvasText.width(line, scale)
-	var pad := Pal.px(3.0, s.y)
+	var pad := Pal.px(PLATE_CELL_PAD, s.y)
 	_note(&"loadout", &"cluster", Rect2(r.end.x - w - pad, top - pad,
 		w + pad * 2.0, CanvasText.height(scale) + pad * 2.0))
 	_canvas.draw_rect(Rect2(r.end.x - w - pad, top - pad,
-		w + pad * 2.0, CanvasText.height(scale) + pad * 2.0),
-		Color(Pal.MIDNIGHT, 0.8))
+		w + pad * 2.0, CanvasText.height(scale) + pad * 2.0), PLATE_CELL)
 	CanvasText.draw_right(_canvas, line, Vector2(r.end.x, top), scale, Pal.MOTH)
 
 
@@ -2167,13 +2188,20 @@ func _best_rarity() -> int:
 func _draw_extraction(s: Vector2) -> void:
 	if not Run.in_dungeon or _extract_hold <= 0.0:
 		return
-	# Holding draws a ring around your own money while the world stays live.
-	# The cost is paid out of the thing you are protecting, and the UI says so.
-	# It is centred on the bag, NOT on the hero: the ring is about what leaving
-	# costs you, and the bag is the thing it is charged against.
-	var centre := Vector2(Pal.BAG_RIGHT * s.x - Pal.px(40.0, s.y),
-		Pal.BAG_NUM_BASELINE * s.y - Pal.px(16.0, s.y))
-	HoldGauge.ring(_canvas, centre, Pal.px(54.0, s.y), _extract_hold,
+	# **On the rim itself**, not floating over it (decision 15). Holding draws a
+	# ring around your own money while the world stays live: the cost is paid out
+	# of the thing you are protecting, and the UI says so.
+	#
+	# This was a 54 px arc centred on `Pal.BAG_NUM_BASELINE` — the anchor of a
+	# 32 px gold total deleted in 2026-08-09 — so it was a ring drawn around
+	# nothing, positioned by a ghost, and it kept that constant alive for a year
+	# of commits. The styleguide's argument for the ring was right and the RIM is
+	# already that ring: it frames the bag, it is already 2 px, and its colour is
+	# already what says how much is at stake. Redrawing its own frame in CYAN
+	# deletes a widget and an anchor instead of moving them.
+	var tl := Pal.RIM_TL * s
+	var br := Pal.RIM_BR * s
+	HoldGauge.frame(_canvas, Rect2(tl, br - tl), _extract_hold,
 		Pal.px(3.0, s.y), Pal.CYAN)
 
 
@@ -2237,10 +2265,10 @@ func _draw_prompt(s: Vector2) -> void:
 	var w := CanvasText.width(_prompt, scale)
 	var h := CanvasText.height(scale)
 	var centre := Vector2(s.x * 0.5, s.y * 0.735)
-	var pad := Pal.px(7.0, s.y)
+	var pad := Pal.px(PLATE_WORLD_PAD, s.y)
 	var box := Rect2(centre.x - w * 0.5 - pad, centre.y - pad,
 		w + pad * 2.0, h + pad * 2.0)
-	_canvas.draw_rect(box, Color(Pal.VOID, 0.72))
+	_canvas.draw_rect(box, PLATE_WORLD)
 	CanvasText.draw_centred(_canvas, _prompt, centre, scale, Pal.BONE)
 
 	# The hold gauge, along the bottom edge of the line it belongs to. Inside the

@@ -1491,3 +1491,25 @@ are the only two states in which anything reaches the lettering fallback. That i
 the check's scope arriving as evidence: it sees the sizes a frame *drew*, not the
 sizes the file contains, which is why it belongs beside the rectangle checks
 rather than in a grep.
+
+## 15.8 §8's own rim row is stale, and §9 is the one that is right
+
+§8's anchor table gives the bag rim as `0.812 → 0.975 (1039 → 1248)` with the
+note *"Snapped to the safe edge exactly."* §9 struck that number **twice** and
+settled on `0.969` — decision 4.5's single right edge, shared with the slips, the
+toast and the minimap — on the argument that snapping to the safe margin was
+never the point and a fourth right edge is what makes the money pole read as
+ragged.
+
+Built to `0.969`, i.e. `Pal.BAG_RIGHT`, which `RIM_BR` now derives from rather
+than repeating. Recorded because §8 is the table an implementer transcribes and
+it disagrees with the decision it cites; the transcription into STYLEGUIDE §5.7
+carries `0.969` and this line is why.
+
+Two other rows were corrected in the same transcription rather than copied:
+
+* the legend is **3 balanced rows**, not 2 (§15.6);
+* the damage arc is listed as *not yet built*. §8 gives it `r = 0.28h` as though
+  it shipped, and decision 29 has since moved it to `r = 0.42h` with a
+  camera-relative bearing. A doc that lists an unbuilt element beside eleven
+  built ones is how the next agent comes to believe it exists.
