@@ -422,7 +422,11 @@ tier 3. See Departure 2.
   becomes a silhouette rather than a hole in a black wall. Anchored side first
   (it is the wall the room is *about*), then the side facing it, so the fire is
   at two ends. Rooms with two or more solid sides are untouched and their
-  histograms do not move.
+  histograms do not move. **The flank sconces do not cast shadows** — a room gets
+  two shadow-casters at most and they stay on the solid walls. Measured at the
+  entrance-room pose: 955 draw calls with the flanks casting, **564 without**,
+  against 556 for the room as it was built before the card. The fire is close to
+  free; the shadows were not.
 - **The measurement is `tools/directors/room_range.gd`,** and it is the thing to
   re-run before changing any of the numbers above. Five-band luma histogram of
   the top 70% of the frame — the HUD band is excluded, or you are scoring the UI

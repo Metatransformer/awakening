@@ -242,8 +242,15 @@ func _shot(rig, stem: String, what: String) -> void:
 	_rows.append("RANGE %-26s %6.1f%% %6.1f%% %6.1f%% %6.1f%% %6.1f%% %7.1f"
 		% [stem, share[0], share[1], share[2], share[3], share[4], h["mean"]])
 	var bright: float = share[3] + share[4]
-	print("RANGE %s -- %s: <8 %.1f%%, >64 %.1f%%, mean %.1f"
-		% [stem, what, share[0], bright, h["mean"]])
+	# What the pose costs, beside what it looks like. Draw calls rather than a
+	# frame time: this harness renders a maximised retina window and shares the
+	# machine with three other directors, so a millisecond here is a number about
+	# the Mac. Draw calls are the same on a quiet machine and a busy one, and a
+	# sconce is geometry as well as a light.
+	print("RANGE %s -- %s: <8 %.1f%%, >64 %.1f%%, mean %.1f, %d draw call(s)"
+		% [stem, what, share[0], bright, h["mean"],
+			RenderingServer.get_rendering_info(
+				RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)])
 	_ck("%s is not mostly nothing (<8 is %.1f%%, cap %.0f%%)"
 		% [stem, share[0], DARK_MAX], share[0] <= DARK_MAX)
 	_ck("%s holds a real bright (>64 is %.1f%%, floor %.0f%%)"
@@ -298,6 +305,11 @@ func _ck(label: String, ok: bool) -> void:
 ## card asked for: the shortcut room's number is the answer.
 func _print_floor(d: Node, level: int) -> void:
 	var rooms: Dictionary = d.get(&"rooms")
+	var floor_lights := 0
+	for n in _all(d):
+		if n is OmniLight3D:
+			floor_lights += 1
+	print("RANGE F%d %d omni light(s) on the floor" % [level, floor_lights])
 	for cell: Vector2i in rooms:
 		var r: Dictionary = rooms[cell]
 		var node: Node = r["node"]

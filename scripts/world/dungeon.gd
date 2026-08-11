@@ -973,7 +973,17 @@ func _build_room_torches(root: Node3D, cell: Vector2i, doors: Array,
 		for s2 in [-1.0, 1.0]:
 			var t := ROOM_SCENE_TORCH.instantiate()
 			t.rng_seed = _salt(cell, d, 30 + n)
-			t.cast_shadow = n < 2
+			# Two shadow-casters a room, and never one of the flank sconces this
+			# card added. A shadowed omni is six cube faces of geometry a frame
+			# (`KitTorch`'s header), and a flank torch stands a metre from a
+			# doorway pointing across it, so most of what it would resolve is the
+			# jamb. Measured at the entrance-room pose on the shared seed: **955
+			# draw calls with the flanks casting, 564 without** — against 556 for
+			# the room as it was built before this card, so the fire is close to
+			# free and the shadows were not. The frame got brighter for losing
+			# them (mean 33.2 -> 35.8) and no shadow anyone could name went with
+			# them.
+			t.cast_shadow = n < 2 and not holed.has(d)
 			t.position = s["at"] + along * (s2 * off) \
 				+ Vector3(0.0, KitStyle.SCONCE_Y, 0.0)
 			t.rotation.y = yaw
