@@ -144,6 +144,15 @@ extends Camera3D
 @export var lift_rate_deg: float = 110.0
 ## Metres/sec the boom is allowed to extend again once the wall is gone.
 @export var push_out_speed: float = 3.2
+## How far under the floor the RESTING boom has to fall before the wall logic
+## takes over, and how far over it the resting boom has to climb before the wall
+## logic lets go again.
+##
+## The gap between the two is not polish, it is the whole of "the camera does not
+## vibrate in a corridor". A swing that is engaged and released on one threshold
+## has no fixed point: see `_place`.
+@export var wall_engage_margin: float = 0.03
+@export var wall_release_margin: float = 0.35
 
 var _hero: Node3D = null
 var _target: Node3D = null
@@ -154,6 +163,9 @@ var _at: Vector3 = Vector3.ZERO
 var _dist: float = K.CAM_DIST_MAX
 var _swing_bias_deg: float = 0.0
 var _lift_bias_deg: float = 0.0
+## Whether the wall logic currently owns the boom. LATCHED, and that is the point
+## — see `_place`.
+var _wall_engaged: bool = false
 var _look_input: Vector2 = Vector2.ZERO
 var _manual_timer: float = 0.0
 var _recenter_timer: float = 0.0
@@ -706,6 +718,19 @@ func _clear_distance(dir: Vector3, want: float, origin: Vector3) -> float:
 	return maxf(origin.distance_to(hit.position) - collide_radius, 0.0)
 
 
+## The smallest detour on `s`'s side of `_yaw` that gets the boom back out to
+## `floor_dist`, or 0.0 if nothing within `swing_max_deg` on that side does.
+func _arc_on(s: float, rest: float, want: float, floor_dist: float,
+		pivot: Vector3) -> float:
+	var off := swing_step_deg
+	while off <= swing_max_deg:
+		if _clear_distance(_orbit_dir(_yaw + deg_to_rad(off * s), rest),
+				want, pivot) >= floor_dist:
+			return off * s
+		off += swing_step_deg
+	return 0.0
+
+
 func _place(delta: float) -> void:
 	var want := lerpf(distance, aim_distance, _aim01)
 	# The boom the wall logic is defending. Aiming asks for a boom well inside
@@ -719,30 +744,60 @@ func _place(delta: float) -> void:
 	# — the wall sweep, the arc, the climb — reads `rest`; only `view`, right at
 	# the bottom, reads `_pitch`.
 	var rest := _boom_pitch()
-	var base_pitch := rest + _lift_bias_deg
-	var clear := _clear_distance(
-			_orbit_dir(_yaw + deg_to_rad(_swing_bias_deg), base_pitch), want, pivot)
 
+	# WHETHER there is a wall is asked of the RESTING boom — the yaw and pitch the
+	# rig would sit at with no wall logic running at all — and it is LATCHED.
+	#
+	# THIS IS THE CORRIDOR SHAKE, AND IT WAS A LIMIT CYCLE, NOT A SMOOTHING
+	# PROBLEM. This used to sweep the boom the wall logic was itself producing,
+	# which asks a question whose own answer changes it: the arc clears the wall,
+	# so "clear" reads true, so the arc is released, so the wall comes back, so
+	# the arc re-latches. Measured in a 4 m corridor (`tools/directors/cam_jitter.gd`)
+	# the swing bounced between -5.667° and -2.333° on ALTERNATE TICKS — exactly
+	# `swing_rate_deg / 60` — and threw the eye 14 cm back and forth thirty times
+	# a second. It fired at every camera yaw between 45° and 135° off the corridor
+	# axis, on both sides, which is most of the angles you can stand at in a hall.
+	#
+	# Two thresholds, not one. Engaging and releasing on the same number is the
+	# same trap one layer out: a hero drifting across the boundary would chatter
+	# the latch instead of the arc. The resting boom has to climb a good way clear
+	# of the floor before the rig believes the wall has gone.
+	#
 	# Being nudged from distMax down toward distMin is inside the shipped dungeon
 	# range and needs no drama. Only an obstruction that would force the boom
 	# BELOW distMin is worth reacting to (§1.6).
-	var swing_target := 0.0
-	var lift_target := 0.0
+	var rest_clear := _clear_distance(_orbit_dir(_yaw, rest), want, pivot)
 	# Not once the eye is most of the way into his head. The wall logic exists to
 	# keep a BOOM out of geometry and first person has no boom, so letting it run
 	# there would rotate the player's own view to dodge something that is nowhere
 	# near where they are looking from.
-	if clear < floor_dist - 0.03 and _fp01 < 0.5:
+	if _fp01 >= 0.5:
+		_wall_engaged = false
+	elif _wall_engaged:
+		_wall_engaged = rest_clear < floor_dist + wall_release_margin
+	else:
+		_wall_engaged = rest_clear < floor_dist - wall_engage_margin
+
+	var swing_target := 0.0
+	var lift_target := 0.0
+	if _wall_engaged:
 		# 1. Arc around it on the yaw axis — the OOT answer.
+		#
+		# Smallest detour wins from rest. Once the rig is ALREADY arced, its own
+		# side wins even when the other one is nearer, and that is not a tie-break
+		# — changing sides in a corridor is not a few degrees of camera movement,
+		# it is the boom crossing the hero from one end of the hall to the other.
+		# Turning on the spot in a 4 m corridor, "nearest side" changed its mind at
+		# 90° off the axis to save 18°, and threw the eye 0.47 m in a single tick
+		# doing it. The side is worth keeping.
 		var sign_first := 1.0 if _swing_bias_deg >= 0.0 else -1.0
-		var off := swing_step_deg
-		while off <= swing_max_deg and swing_target == 0.0:
-			for s: float in [sign_first, -sign_first]:
-				var cand := _yaw + deg_to_rad(off * s)
-				if _clear_distance(_orbit_dir(cand, rest), want, pivot) >= floor_dist:
-					swing_target = off * s
-					break
-			off += swing_step_deg
+		var here := _arc_on(sign_first, rest, want, floor_dist, pivot)
+		var there := _arc_on(-sign_first, rest, want, floor_dist, pivot)
+		var arced := absf(_swing_bias_deg) >= swing_step_deg
+		if here != 0.0 and (there == 0.0 or arced or absf(here) <= absf(there)):
+			swing_target = here
+		else:
+			swing_target = there
 		# 2. Nothing arced clear: climb, and take whatever height buys back.
 		if swing_target == 0.0:
 			var lift := lift_step_deg
@@ -760,7 +815,7 @@ func _place(delta: float) -> void:
 
 	var dir := _orbit_dir(_yaw + deg_to_rad(_swing_bias_deg),
 			minf(rest + _lift_bias_deg, K.CAM_MAX_PITCH))
-	clear = _clear_distance(dir, want, pivot)
+	var clear := _clear_distance(dir, want, pivot)
 
 	# 3. Still blocked: pull in. Immediately on the way in — a lagged pull-in is
 	# a clipped frame — and smoothly on the way back out.
