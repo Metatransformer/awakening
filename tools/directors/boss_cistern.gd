@@ -41,6 +41,11 @@ extends RefCounted
 ##      chamber and thrown `bellows_charge` three times: an arrow into the
 ##      TRAVEL, which stops it; the same arrow into the WIND-UP, which must not;
 ##      and the beat unanswered, for the contrast. See the section's own header.
+##   L  **The turn** (`docs/BOSSES.md` §5, board card 41): all four bosses'
+##      one-phase escalation, photographed either side of the
+##      `Bus.boss_phase_changed` emit, with the Warden's annulus guard as its own
+##      beat -- the hero standing at 10 m when a fence rises at 8.5. See the
+##      section's own header.
 ##
 ## Every beat is thrown through `force_beat`. `BossDb.pick_beat` is weighted
 ## random by design, so no amount of positioning can guarantee a particular one,
@@ -108,6 +113,7 @@ func run(rig) -> void:
 	await _kill(rig, arena, boss, door)
 	await _reentry(rig, arena, door)
 	await _receptacle(rig)
+	await _turns(rig)
 
 	if _fails == 0:
 		print("BOSS OK -- every check passed")
@@ -636,6 +642,8 @@ func _reentry(rig, arena: Node, door: Node) -> void:
 ##          fails here, and a positive-only director would have shipped it.
 ##   K10    The same beat with no arrow in it at all, for the contrast frame.
 ##
+## (Section L, the turn, is at the bottom of the file with its own header.)
+##
 ## ## Why the Ogre fights in the Cistern's chamber
 ##
 ## Same reason `tools/directors/minibosses.gd` gives: `_boss_test.tscn` carries
@@ -688,6 +696,8 @@ var _opened: Array[Dictionary] = []
 ## `when` -> metres the plate actually travelled. The negative cases are graded
 ## against the positive one rather than against the authored 11 m; see K8.
 var _went: Dictionary = {}
+## The `Bus.hit_landed` handler above, held so it can be taken off the bus again.
+var _k_landed: Callable = Callable()
 
 
 func _receptacle(rig) -> void:
@@ -715,13 +725,19 @@ func _receptacle(rig) -> void:
 	print("BOSS built \"%s\" model=%s hp=%d arena_r=%.1f"
 		% [boss.title(), boss.kind, boss.health.max_quarters, boss.arena_radius()])
 
-	Bus.hit_landed.connect(func(who: Node3D, amount: int, _at: Vector3) -> void:
+	# Kept as a handle so it can be DISCONNECTED at the bottom of this section.
+	# It captures `boss`, and section L frees that Ogre to stand the next fight
+	# up -- a lambda whose capture has been freed refuses to run and prints
+	# `Lambda capture at index 0 was freed` on every blow for the rest of the run,
+	# which is a page of engine errors in a log whose whole job is to be read.
+	_k_landed = func(who: Node3D, amount: int, _at: Vector3) -> void:
 		if who != boss:
 			return
 		_landed.append({
 			"amount": amount, "state": boss.state, "charging": boss._charging,
 			"beat": boss.current_beat(),
-		}))
+		})
+	Bus.hit_landed.connect(_k_landed)
 	# Filtered to the charge. The Ogre throws its own beats between the director's,
 	# and an arc committing after the plate had stopped would overwrite the mark
 	# the travel is measured from.
@@ -756,6 +772,9 @@ func _receptacle(rig) -> void:
 	await _charge_shot(rig, arena, boss, "travel")
 	await _charge_shot(rig, arena, boss, "windup")
 	await _charge_shot(rig, arena, boss, "none")
+
+	if Bus.hit_landed.is_connected(_k_landed):
+		Bus.hit_landed.disconnect(_k_landed)
 
 
 ## One `bellows_charge`, with the arrow loosed into `when` — `travel`, `windup`,
@@ -1227,6 +1246,394 @@ func _all(root: Node) -> Array:
 	for c in root.get_children():
 		found.append_array(_all(c))
 	return found
+
+
+# --- L. The turn ---------------------------------------------------------------
+
+## **`docs/BOSSES.md` §5, and board card 41: the one-phase escalation, built for
+## all four bosses and photographed either side of its own signal.**
+##
+## Here rather than in four new directors for the reason §K gives for the Ogre:
+## `_boss_test.tscn` is a 26 m chamber with a hero and a camera in it, and a
+## `BossArena` built from the bare script into the middle of it is both the
+## cheapest fixture and a test of the construction path `Dungeon._place_boss`
+## uses. Four fights, one room, one file.
+##
+##   L1  **The Warden's `shrink`, standing at 10 m** -- outside the 8.5 m fence
+##       the turn is about to raise, which is §9's own beat and the one most
+##       likely to fail. He must end up inside the new ring, on the floor, able
+##       to walk. `pulled() == 1` is the assertion that says the guard had
+##       something to DO: a frame where the hero happened to be standing in the
+##       middle proves nothing at all.
+##   L2  **The Ogre's `topple`**: three slag posts before, one after.
+##   L3  **The Bellwake's `douse`**: the Choir's sconces go out. See `_lit()` --
+##       the count is taken off the torches themselves and not off a claim.
+##   L4  **The Riven Knight's `keystone`**: nothing hookable in the room before
+##       the turn (§6.4 -- the failed press is half the fight), a mass with a
+##       `HookTarget` on it after.
+##
+## And on all four: the turn fires ONCE. Two more blows land after it and
+## `Bus.boss_phase_changed` stays at one emit.
+##
+## ## Why this section brings its own camera
+##
+## Every other section in this file frames with `_stand_at`, which recentres the
+## chase boom behind the hero's facing. That is exactly wrong here. **The
+## Warden's turn MOVES THE HERO** -- that is what the annulus guard is -- so a
+## boom would move with him, and the before/after pair would differ by the lens
+## as much as by the room. A fixed eye is what makes "different pictures" mean
+## the room changed. It is parked at `r * 0.86` and 6.2 m up: inside the fence
+## whatever the fence is, under the 7.0 m ceiling (`K.CEIL_ROOM`), and high
+## enough that the near arc of a 3.4 m seal is crossed well above its top rather
+## than photographed from behind it.
+
+## Which way the Warden's kiting player has run. Off the Z axis on purpose: dead
+## ahead of the eye puts a 3.4 m boss between the lens and the hero, and the
+## annulus frame would be a photograph of the Warden's back.
+const KITE_DIR := Vector3(0.55, 0.0, -0.835)
+
+## Every `Bus.boss_phase_changed` this director has seen, in order.
+var _phases: Array[int] = []
+
+
+func _turns(rig) -> void:
+	Bus.boss_phase_changed.connect(func(phase: int) -> void: _phases.append(phase))
+	# A clean slate, and it is `Game.reset()` rather than a flag poke because
+	# section H killed the Warden and wrote `boss_dead_cistern_warden`. A fresh
+	# Cistern arena built with that flag up comes back SPENT with no boss in it,
+	# which would read as "the turn never fired".
+	Game.reset()
+	Run.level = 1
+	await rig.wait_frames(8)
+
+	# 20 and up: section K already owns b_11 through b_13.
+	#
+	# **The Bellwake goes LAST, and that ordering is load-bearing.** `douse` is
+	# the only turn that changes the room rather than the arena, and nothing puts
+	# a sconce back -- the first run of this section had the Riven Knight's
+	# keystone photographed in a chamber the Bellwake had already darkened, and
+	# the frame is a black rectangle with two health bars in it. A relight here
+	# would be the director undoing the thing it just proved.
+	await _turn_of(rig, &"cistern_warden", "L1", 20, 10.0)
+	await _turn_of(rig, &"slag_ogre", "L2", 30, 0.0)
+	await _turn_of(rig, &"riven_knight", "L3", 40, 0.0)
+	await _turn_of(rig, &"bellwake", "L4", 50, 0.0)
+
+
+## One fight's turn, end to end. `kite_r` is how far out from the middle the hero
+## is standing when it fires -- 0.0 means "leave him on the mark", and the
+## Warden's 10.0 is the annulus.
+func _turn_of(rig, id: StringName, tag: String, shot: int, kite_r: float) -> void:
+	var root: Node = rig.scene()
+	for n in root.get_children():
+		if n.name.begins_with("Arena") or n.name.begins_with("BossDoor") \
+				or n.name.begins_with("Foundry") or n.name.begins_with("Turn"):
+			n.queue_free()
+	# And whatever the last fight left standing OUTSIDE its arena. `_shape_summon`
+	# parents the Bellwake's choristers to the scene, not to the arena, so freeing
+	# the arena leaves two hooded skeletons in the middle of the next fight's
+	# frame -- which is exactly what the first run of this section photographed.
+	for n in rig.get_nodes_in_group(&"enemy"):
+		(n as Node).queue_free()
+	await rig.wait_frames(8)
+
+	var arena := (load("res://scripts/world/boss_arena.gd") as GDScript).new() as Area3D
+	arena.name = "Turn_%s" % id
+	arena.set(&"boss_id", id)
+	# `&""`, like a miniboss chamber: this section is about the room and not the
+	# economy, and a `boss` slot here would have every fight it stands up trying
+	# to place floor 1's relic on the floor.
+	arena.set(&"relic_slot", &"")
+	arena.set(&"boss_offset", Vector3(0.0, 0.0, -5.0))
+	root.add_child(arena)
+	(arena as Node3D).global_position = Vector3.ZERO
+	await rig.wait_frames(24)
+
+	var boss: Node = arena.boss()
+	_ck("%s0 the arena stood up %s" % [tag, id], boss != null)
+	if boss == null:
+		return
+	var hp: HealthComponent = boss.get(&"health")
+	var r0: float = arena.radius()
+	var t := BossDb.turn(id)
+	print("BOSS %s \"%s\" hp=%d r=%.1f turn=%s at=%.2f"
+		% [tag, boss.title(), hp.max_quarters, r0, t.get("kind", "-"),
+			float(t.get("at", -1.0))])
+
+	# Walked in, so the room shuts the way a room shuts -- and then, for the
+	# Warden, walked back OUT to the far edge. That is the player this turn is
+	# aimed at: `docs/BOSSES.md` §6.1's whole argument for `shrink` is that it
+	# takes the far half of the arena away from someone who has been kiting in it.
+	await _stand_at(rig, Vector3(3.0, 0.05, 4.5), Vector3(0.0, 0.0, -5.0))
+	await _until(rig, func() -> bool: return arena.is_sealed(), 240)
+	_ck("%s1 the room sealed and %s woke" % [tag, id],
+		arena.is_sealed() and boss.is_awake())
+	Game.heal(999)
+
+	var hero := _hero(rig)
+	if kite_r > 0.0:
+		hero.global_position = KITE_DIR * kite_r + Vector3(0.0, 0.05, 0.0)
+		await rig.wait_frames(10)
+
+	_eye(rig, arena, kite_r > 0.0)
+	await rig.wait_frames(4)
+
+	# Down to one quarter ABOVE the threshold in a single blow, so the "before"
+	# frame is a fight that is one hit away from turning rather than a fight at
+	# full health. One blow and not several: `HealthComponent` holds 0.20 s of
+	# i-frames after every hit and a burst would be one landed hit and a swallow.
+	var half := hp.max_quarters / 2
+	_bleed(boss, hp.max_quarters - (half + 1))
+	await rig.wait_frames(4)
+
+	var before := _turn_state(arena, boss, hero)
+	print("BOSS %s before: %s" % [tag, before])
+	_ck("%s2 nothing has turned yet at %.0f%% health"
+		% [tag, hp.fraction() * 100.0],
+		not arena.has_turned() and _phases.is_empty())
+	await rig.capture(out.path_join("b_%02d_%s_before.png" % [shot, id]))
+
+	# THE BLOW. One quarter, and everything after this line is on the other side
+	# of the `Bus.boss_phase_changed` emit.
+	await _until(rig, func() -> bool: return not hp.is_invulnerable(), 60)
+	_bleed(boss, 1)
+	_ck("%s3 the turn fired at %.2f (row says %.2f)"
+		% [tag, hp.fraction(), float(t.get("at", -1.0))],
+		arena.has_turned() and _phases.size() == 1 and _phases[0] == 1)
+	# Long enough for every tween the four turns start: the pull is 0.30 s, the
+	# inner ring 0.55 s behind it, `douse` 0.80 s, `topple` 0.55 s.
+	await rig.wait_frames(70)
+
+	var after := _turn_state(arena, boss, hero)
+	print("BOSS %s after:  %s" % [tag, after])
+	await rig.capture(out.path_join("b_%02d_%s_after.png" % [shot + 1, id]))
+
+	await _turn_claims(rig, arena, boss, hero, tag, before, after, r0)
+
+	# Fires ONCE. Two more blows, spaced past the i-frames, and the emit count
+	# does not move -- a handler that latched on the wrong side of the compare
+	# would turn the room again on every hit for the rest of the fight.
+	for _i in 2:
+		await _until(rig, func() -> bool: return not hp.is_invulnerable(), 60)
+		_bleed(boss, 1)
+		await rig.wait_frames(6)
+	_ck("%s9 it turned once and stayed turned (%d emit(s))" % [tag, _phases.size()],
+		_phases.size() == 1)
+	_phases.clear()
+
+
+## The per-boss half of the claim. Everything above this is the same four lines
+## for every fight; this is what each kind actually did to the room.
+func _turn_claims(rig, arena: Node, boss: Node, hero: Node3D, tag: String,
+		before: Dictionary, after: Dictionary, r0: float) -> void:
+	match arena.turn_kind():
+		&"shrink":
+			var to_r: float = float(BossDb.turn(&"cistern_warden").get("to", 8.5))
+			_ck("%s4 the fence walked in (%.1f -> %.1f m)" % [tag, r0, after["r"]],
+				is_equal_approx(float(after["r"]), to_r))
+			# §5 note 1. The boss's own radius is what `_shape_zone` scatters
+			# against, and it is a SEPARATE number from the arena's.
+			_ck("%s5 and the boss's arena followed it (%.1f m)"
+				% [tag, boss.arena_radius()],
+				is_equal_approx(boss.arena_radius(), to_r))
+			# THE ANNULUS GUARD, and this line is the one that says the frame is
+			# worth anything: the hero was in the ring the wall came up through.
+			_ck("%s6 the guard had a body to pull (%d, from %.2f m)"
+				% [tag, arena.pulled(), float(before["hero_r"])],
+				arena.pulled() == 1 and float(before["hero_r"]) > to_r)
+			var hr := float(after["hero_r"])
+			_ck("%s7 and he is inside the new ring, not sealed into the annulus "
+				% tag + "and not shoved through the outer fence (%.2f m)" % hr,
+				hr < to_r - 0.5 and hr > 0.3)
+			_ck("%s7b standing on the floor, not on top of a wall (y=%.2f)"
+				% [tag, hero.global_position.y], absf(hero.global_position.y) < 0.6)
+			# "Able to move" is a claim about the physics and not about a
+			# coordinate: a body pushed a hair inside a `StaticBody3D` reports a
+			# perfectly good position and cannot walk out of it. Two directions,
+			# because which way is free depends on where the pull put him.
+			var walked := await _can_walk(rig, hero)
+			_ck("%s8 and the fight goes on -- he walks %.2f m" % [tag, walked],
+				walked > 0.30)
+		&"topple":
+			_ck("%s4 three posts became one (%d -> %d)"
+				% [tag, int(before["posts"]), int(after["posts"])],
+				int(before["posts"]) == 3 and int(after["posts"]) == 1)
+		&"douse":
+			print("BOSS %s lights in reach: %s" % [tag, _light_census(arena)])
+			_ck("%s4 the sconces in the room went out (%d lit -> %d, %d doused)"
+				% [tag, int(before["lit"]), int(after["lit"]), arena.doused()],
+				arena.doused() > 0 and int(after["lit"]) == 0
+				and int(before["lit"]) > 0)
+			# And the walk stayed in the room. The corridor's sconces are the
+			# control: a `douse` that reached them would be a turn putting out the
+			# lights of a whole floor, and `DOUSE_REACH` is the only thing
+			# standing between this and that.
+			_ck("%s5 and the corridor past it is still lit (%d)"
+				% [tag, int(after["lit_out"])],
+				int(after["lit_out"]) == int(before["lit_out"])
+				and int(after["lit_out"]) > 0)
+		&"keystone":
+			# §6.4: the arena has nothing hookable in it before the turn, and
+			# that absence is half the fight.
+			_ck("%s4 there was nothing to hook before it (%d)"
+				% [tag, int(before["hooks"])], int(before["hooks"]) == 0)
+			_ck("%s5 and the keystone came down with an anchor on it (%d)"
+				% [tag, int(after["hooks"])], int(after["hooks"]) == 1)
+			var mass := arena.get_node_or_null(^"Keystone") as StaticBody3D
+			_ck("%s6 it is solid, in the middle, on the floor" % tag,
+				mass != null and mass.collision_layer == K.L_WORLD
+				and K.plane(mass.global_position - (arena as Node3D).global_position) \
+					.length() < 0.5
+				and absf(mass.position.y) < 0.05)
+
+
+## Everything the four turns can change about a room, read off the room.
+func _turn_state(arena: Node, boss: Node, hero: Node3D) -> Dictionary:
+	return {
+		"r": arena.radius(),
+		"boss_r": boss.arena_radius(),
+		# `K.plane` and never `K.flat` -- `flat()` normalises (`consts.gd`:901), and
+		# reading a radius through it answers 1.00 m for a hero standing anywhere
+		# at all. That is how the first run of this section reported the Warden's
+		# kiting player one metre from the middle.
+		"hero_r": K.plane(hero.global_position
+			- (arena as Node3D).global_position).length(),
+		"posts": _posts(arena),
+		"lit": _lit(arena, true),
+		"lit_out": _lit(arena, false),
+		"hooks": _hooks(arena),
+	}
+
+
+## Cover posts still standing. Counted by NAME, because that is the handle the
+## turn uses: `_build_cover` names them `Cover%d` and `topple` sinks and frees
+## the ones past `to`. A post that had been hidden rather than freed would still
+## be counted here, which is the point.
+func _posts(arena: Node) -> int:
+	var n := 0
+	for c in (arena as Node).get_children():
+		if c.name.begins_with("Cover"):
+			n += 1
+	return n
+
+
+## Sconces still burning WITHIN THE TURN'S REACH.
+##
+## Off the TORCHES and not off the lights: a `KitTorch` rewrites its OmniLight's
+## energy every frame from its own export, so a light read at a random frame is a
+## sample of a flicker and `is_lit` is the fact.
+##
+## Bounded by the same `radius + DOUSE_REACH` the turn uses, and that bound is
+## the assertion rather than a convenience. `_boss_test.tscn` hangs ten torches
+## off the scene root and two of them are down the CORRIDOR -- so an unbounded
+## count came back "one still lit" after a douse that had worked perfectly, and
+## the corridor sconce staying lit is the bound doing its job. What must be zero
+## afterwards is the torches in the room, and what must stay lit is everything
+## past it.
+func _lit(arena: Node, within: bool) -> int:
+	var room: Node = (arena as Node).get_parent()
+	if room == null:
+		return 0
+	var here: Vector3 = (arena as Node3D).global_position
+	var reach: float = arena.radius() + 8.0
+	var n := 0
+	for c in _all(room):
+		var torch := c as KitTorch
+		if torch == null or not torch.is_lit:
+			continue
+		var d := K.plane(torch.global_position - here).length()
+		if (d <= reach) == within:
+			n += 1
+	return n
+
+
+## Every `Light3D` the douse walk can see, by path. Printed rather than asserted:
+## the question it answers is "did the turn reach for something that is not the
+## room's light" -- the hero's own lamp, a boss's glow -- and that is a thing to
+## read once with your eyes, not a number to pin.
+func _light_census(arena: Node) -> String:
+	var room: Node = (arena as Node).get_parent()
+	if room == null:
+		return "-"
+	var here: Vector3 = (arena as Node3D).global_position
+	var reach: float = arena.radius() + 8.0
+	var names: Array[String] = []
+	for c in _all(room):
+		var light := c as Light3D
+		if light == null:
+			continue
+		if K.plane(light.global_position - here).length() <= reach:
+			names.append("%s/%s" % [light.get_parent().name, light.name])
+	return ", ".join(names)
+
+
+func _hooks(arena: Node) -> int:
+	var n := 0
+	for c in _all(arena):
+		if c is HookTarget:
+			n += 1
+	return n
+
+
+## One blow straight into the health, for the threshold's sake.
+##
+## `apply_hit` and not a swing: what is under test is the arena's handler and the
+## row's fraction, and driving a sword through eleven punish windows to get a
+## boss to half health would be section G's proof done twice and a fight's worth
+## of frames to reach one signal.
+func _bleed(boss: Node, quarters: int) -> void:
+	if quarters <= 0:
+		return
+	var hp: HealthComponent = boss.get(&"health")
+	hp.apply_hit(Hit.make(quarters, (boss as Node3D).global_position
+		+ Vector3(0.0, 0.0, 3.0), &"sword"))
+
+
+## How far the hero can actually walk, in metres, trying both lateral directions.
+##
+## Two directions because which one is free depends on where the pull put him,
+## and the claim is "he is not welded into the wall" rather than "he can go
+## left". Held through `rig.hold`, which presses the real actions -- the hero
+## POLLS his movement (`Input.action_press` dispatches no `InputEvent`, CLAUDE.md
+## §3), so this is the same input a player gives.
+func _can_walk(rig, hero: Node3D) -> float:
+	var best := 0.0
+	for action in ["move_left", "move_right"]:
+		var from := hero.global_position
+		await rig.hold([action], 26)
+		await rig.wait_frames(4)
+		best = maxf(best, K.plane(hero.global_position - from).length())
+	return best
+
+
+## The fixed eye section L frames every turn through. See the section header for
+## why it is not the chase boom.
+##
+## Two marks, and the second one is a lesson rather than a preference. The
+## default is an overview from just inside the fence, which is the right picture
+## for three of the four turns -- but the FIRST run put the `shrink` there too,
+## and the near arc of the new 8.5 m ring came up a metre in front of the lens
+## and filled the bottom of the frame with a wall. The hero, standing 1.2 m
+## inside that ring, was behind it. So the annulus mark is a HIGH one near the
+## middle, looking outward down the hero's own radius: the wall then rises
+## BEYOND him and the pair reads as "the fence came in past me", which is the
+## whole claim.
+func _eye(rig, arena: Node, annulus: bool) -> Camera3D:
+	var cam := rig.scene().get_node_or_null(^"TurnEye") as Camera3D
+	if cam == null:
+		cam = Camera3D.new()
+		cam.name = "TurnEye"
+		cam.fov = 62.0
+		rig.scene().add_child(cam)
+	var at := Vector3(0.0, 6.2, minf(arena.radius() * 0.86, 11.4))
+	var look := Vector3(0.0, 1.0, -2.0)
+	if annulus:
+		at = Vector3(0.0, 6.4, 2.5)
+		look = KITE_DIR * 7.5 + Vector3(0.0, 0.8, 0.0)
+	cam.global_position = at
+	cam.look_at(look, Vector3.UP)
+	cam.current = true
+	return cam
 
 
 ## Every mote hanging under one arena. Scoped to the arena rather than to the

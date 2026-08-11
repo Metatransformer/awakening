@@ -138,6 +138,10 @@ var _fit_pos: Vector3 = Vector3.ZERO
 ## wherever it woke up, so a boss dropped into a test scene with no arena still
 ## behaves.
 var _arena_center: Vector3 = Vector3.ZERO
+## What the arena has told us the fence is now, or `-1.0` while the row still
+## owns it. See `set_arena_radius` -- this exists so a `shrink` turn has somewhere
+## to land that is NOT `_row["arena"]["radius"]`.
+var _arena_radius: float = -1.0
 var _marker: Node3D = null
 
 
@@ -192,6 +196,8 @@ func title() -> String:
 
 
 func arena_radius() -> float:
+	if _arena_radius > 0.0:
+		return _arena_radius
 	var arena: Dictionary = _row.get("arena", {})
 	return float(arena.get("radius", 11.0))
 
@@ -200,6 +206,25 @@ func arena_radius() -> float:
 ## see rather than inside a circle drawn round wherever the boss happens to be.
 func set_arena_center(at: Vector3) -> void:
 	_arena_center = at
+
+
+## Told by the arena when the turn WALKS THE FENCE IN -- `docs/BOSSES.md` §5's
+## `shrink`, and its first implementation note is this setter's whole reason to
+## exist.
+##
+## `_shape_zone` scatters its discs inside `arena_radius() - radius`, so a Warden
+## whose seal has come in from 11.0 m to 8.5 m would otherwise keep drowning the
+## floor of the room it is no longer standing in: two and a half metres of pool
+## on the far side of a wall the player cannot cross, and none of it a hazard he
+## can be asked to answer.
+##
+## It is a SEPARATE field rather than a write into `_row["arena"]["radius"]` on
+## purpose. `BossDb.get_boss` hands back the static Dictionary itself, not a copy,
+## so editing the row would shrink the Warden's arena for every fight for the rest
+## of the process -- including the next run's, which starts at 8.5 m with no turn
+## having happened.
+func set_arena_radius(r: float) -> void:
+	_arena_radius = maxf(r, 1.0)
 
 
 # --- Construction -------------------------------------------------------------

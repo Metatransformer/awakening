@@ -362,6 +362,14 @@ something hits it), the handler reads `health.fraction()`, compares it to
 That is a connect, a handler, a bool and four small effects — still small, but it
 is four things and the §8 row should say four rather than "a threshold".
 
+**This is built** (board card 41). `BossDb.TURN_*` and the `arena.turn` rows,
+`BossArena._on_boss_damaged` / `_apply_turn` and its four `_turn_*` methods,
+`Boss.set_arena_radius()`, `KitTorch.douse()`, and section L of
+`tools/directors/boss_cistern.gd`, which photographs all four either side of the
+emit. The dispatch is `if`/`elif` and not `match` on purpose: a `match` pattern
+must be a constant expression and another class's `const` does not qualify
+(CLAUDE.md §3).
+
 One threshold for all four bosses, `0.50`, because four thresholds is four
 tunings nobody can compare against each other.
 
@@ -388,7 +396,7 @@ the room a mechanic, and it goes to the owner rather than into this table.
 |---|---|---|---|
 | Warden | `shrink` | the fence walks in: 11.0 → 8.5 m | a second seal ring raised at the smaller radius, `Boss.set_arena_radius()`, **and the annulus guard below** — the most expensive of the four |
 | Slag Ogre | `topple` | two of three slag pillars slump: `cover_count` 3 → 1 | `queue_free` on two named children. Genuinely cheap: `_build_cover` names them `"Cover%d"` |
-| Bellwake | `douse` | the Choir's sconces go out | **no handle exists** — see below. This is the one with an open question in it, not a cost |
+| Bellwake | `douse` | the Choir's sconces go out | one call per sconce. **The handle turned out to exist** — see below; the open question in this row is closed |
 | Riven Knight | `keystone` | the broken keystone drops into the middle of the arena | one `StaticBody3D` with a `HookTarget` on it. Cheap and correct — but see §6.4 on when it exists |
 
 Four implementation notes an implementer should not have to re-derive, and the
@@ -422,12 +430,24 @@ obvious one:
   postpone the turn indefinitely, which is the behaviour the turn exists to
   punish — but **the unguarded version is not an option**, and §9 has a beat for
   it.
-- **`douse` is the one turn that needs a handle `BossArena` does not have**, and
-  it has no fallback path in code either. A generated room's lights belong to the
-  room. If they cannot be reached from the arena, the fallback is `shrink` to
-  10.0 m — which then inherits the annulus guard above, so the fallback is not
-  free. Try `douse` first, because it is the only turn of the four that costs no
-  geometry and it is the one the fiction is asking for.
+- **`douse` needed a handle `BossArena` did not have. It has one now, and the
+  `shrink`-to-10.0 m fallback was not taken.** `Dungeon._place_boss` adds the
+  arena to the room root and `_build_room_torches` adds the sconces to that same
+  root, so the room's lights are the arena's **siblings**: `get_parent()` plus a
+  recursive `Light3D` walk reaches every one of them without `dungeon.gd`
+  knowing the arena exists. Two things that walk taught, both of which are now
+  load-bearing:
+  - **Ask the sconce, never the light.** `KitTorch._process` rewrites its
+    `OmniLight3D`'s energy from its own `light_energy` export every frame for the
+    flicker, so a fade written onto the light is gone on the next tick — the room
+    dims for one frame and comes back. `KitTorch.douse(seconds, to)` owns the
+    knob the flicker multiplies, and takes the flame quad and the embers with it.
+  - **Only a sconce.** The first version dimmed every `Light3D` within reach, and
+    the census it printed is the argument against it: inside 19 m it also caught
+    `Env/Fill`, the hero's own `KeyLight`, the drawn sword's `SpinGlow` and a
+    rope's omni. "The room's light" in the list above means the sconces. A turn
+    that dims the hero's key light is a turn reaching outside its own list, and
+    it is also how the frame below stopped being readable.
 - **`keystone` is the cheap one and it is also the late one.** One body, one
   `HookTarget`, no guard needed — the arena has 12.5 m of radius and the mass is
   3 m across at the centre, where nothing stands. What it costs is elsewhere: see
@@ -440,6 +460,16 @@ dim is a warning you miss where you most need it"* (`boss.gd`, `_mark_mat`), and
 the Bellwake's own body is the most emissive of the four. The turn cashes in a
 decision the code already made. **The director's job is to photograph it and
 prove the claim**, not to take this paragraph's word for it.
+
+It was photographed, and the paragraph above was **not** enough on its own.
+`douse` to a true zero renders a black rectangle: no floor, no hero, nothing but
+the boss's tint and the health bar — a silhouette you cannot read, which is the
+bug GDD pillar 5 names. The row therefore doses to a **floor, not to nothing**:
+`"energy": 0.15` (§6.3 authored that number and it turns out to be the load-
+bearing part of the row, not a decoration). With the floor in place and the
+hero's key light left alone, the after-frame reads as a dark room with a pool of
+light around the hero and the Bellwake a red silhouette upstage.
+`/tmp/turn/b_50_bellwake_before.png` and `b_51_bellwake_after.png` are the pair.
 
 ---
 
@@ -1211,22 +1241,24 @@ the three:
    called from the end of `_on_damaged` and routed through `stagger()` (§6.2).
    It was genuinely one `if`. Proved by `boss_cistern.gd` §K, both the positive
    case and the negative one; the numbers are in §7's second table.
-2. `BossArena` — the turn, and it is **not** a threshold read off a row, because
-   this node has no `_process`, no `_physics_process` and no reference to the
-   boss's health today. It is: a `health.damaged` connect in `_build_boss`; a
-   handler that reads `fraction()`, compares, and latches a bool; the
-   `Bus.boss_phase_changed(1)` emit; a dispatch on `turn.kind`; and four effects
-   behind it, of which **`shrink` needs the annulus guard in §5 and `douse` has
-   no handle at all yet**. Plus `Boss.set_arena_radius()`, one setter beside the
-   `set_arena_center()` the arena already calls. Call it a day's work with a
-   director on the end of it, not a line.
-3. `BossDb` — an `arena.turn` sub-dictionary on four rows. **No tell changes**:
-   the 0.62 → 0.63 edit an earlier draft asked for was answering a 60% line that
-   does not apply to boss beats (§4). `validate()` should grow **two** assertions
-   with it — `turn.kind` is one of the four, and `turn.at` is in (0, 1). It
-   should *not* grow the third one that was proposed (no beat's tell under 60% of
-   the shallowest tell of its shape); §4 is the argument for why that assertion
-   would be checking a number it invented.
+2. ~~`BossArena` — the turn~~ — **BUILT.** A `health.damaged` connect in
+   `_build_boss`; `_on_boss_damaged`, which reads `fraction()`, compares against
+   `turn.at` and latches `_turned`; the `Bus.boss_phase_changed(1)` emit;
+   `_apply_turn` dispatching on `turn.kind`; and `_turn_shrink` / `_turn_topple`
+   / `_turn_douse` / `_turn_keystone` behind it. Plus `Boss.set_arena_radius()`
+   beside the `set_arena_center()` the arena already calls, and
+   `KitTorch.douse()`, which `douse` needed and §5 explains. The day's-work
+   estimate was right; the two things that ate the day were both in §5's notes —
+   the annulus guard and the shape of the `douse` handle — and neither was a
+   surprise. `douse` did **not** take the `shrink`-to-10.0 m fallback.
+3. ~~`BossDb` — an `arena.turn` sub-dictionary on four rows~~ — **BUILT.**
+   `TURN_SHRINK` / `TURN_TOPPLE` / `TURN_DOUSE` / `TURN_KEYSTONE`, `TURN_KINDS`,
+   `TURN_AT = 0.50`, a `turn(id)` accessor, and the sub-dictionary on the four
+   boss rows (minibosses deliberately get none). **No tell changed.**
+   `validate()` grew **exactly two** assertions — `turn.kind` is one of the four,
+   and `turn.at` is in (0, 1). It did *not* grow the third one that was proposed
+   (no beat's tell under 60% of the shallowest tell of its shape); §4 is the
+   argument for why that assertion would be checking a number it invented.
 
 ---
 
@@ -1237,10 +1269,16 @@ the three:
 > date: `boss_cistern.gd` §K throws `bellows_charge` three times, so
 > `_advance_charge`, `_end_charge` and `_commit_seconds`'s charge branch have all
 > run with a screenshot on the end of them, and §7's second table is measurement
-> rather than arithmetic. **`SHAPE_SUMMON` is still untouched.** No file in
-> `tools/` references `hushing_choir`, `call_the_iron` or `SHAPE_SUMMON`;
-> `_shape_summon`, `_summons_alive` and the `cap` refusal in `_choose` have never
-> executed, and §6.3's whole timer is still arithmetic off a table.
+> rather than arithmetic. **`SHAPE_SUMMON` is still untouched, and card 41 did
+> not change that.** Section L stands all four bosses up and takes each to half
+> health, so all four now *exist* at runtime with frames on them — but it bleeds
+> them with `HealthComponent.apply_hit` directly and lets no beat fire, on
+> purpose: the turn is a claim about the room and a `hushing_choir` mid-shot
+> would be a second variable in the picture. So no file in `tools/` still
+> references `hushing_choir`, `call_the_iron` or `SHAPE_SUMMON`; `_shape_summon`,
+> `_summons_alive` and the `cap` refusal in `_choose` have **still** never
+> executed, and §6.3's whole timer is **still** arithmetic off a table. A boss
+> that has been photographed is not a boss whose move set has run.
 >
 > **And the charge path did have its card 22 in it, exactly as this box
 > predicted — it just was not in the boss's code.** It was in the *director*:
@@ -1262,22 +1300,42 @@ the three:
 gets its own director on that pattern — `boss_foundry.gd`, `boss_choir.gd`,
 `boss_chord.gd` — and what §6 adds beyond A–I is small and specific:
 
-- **All four:** the turn fires **once**, at the authored fraction,
-  `Bus.boss_phase_changed` is emitted **exactly once** with it, and the frame
-  before and the frame after are different pictures. Photograph both.
+- **All four: DONE**, and it is section L of `tools/directors/boss_cistern.gd`
+  rather than four files — the same argument §K made, and for the same reason:
+  the arena, the hero and the bleed helper were already there. Each boss is stood
+  up in a fresh `BossArena` at the origin, sealed, bled to one quarter above
+  `turn.at`, photographed, given the crossing blow, photographed again, then hit
+  twice more to prove the latch. The turn fires **once**, at the authored
+  fraction, `Bus.boss_phase_changed` is emitted **exactly once** with it, and the
+  two frames are different pictures. Frames: `b_20/21_cistern_warden`,
+  `b_30/31_slag_ogre`, `b_40/41_riven_knight`, `b_50/51_bellwake`.
+  **The Bellwake runs last and that ordering is load-bearing**: nothing relights
+  a sconce, so a doused room persists into whatever is photographed after it —
+  the Riven Knight's after-frame was a black rectangle with two health bars in it
+  before the reorder. Its teardown also frees the `enemy` group, because the
+  choristers outlive the arena that spawned them.
 - **Warden, the parry:** the same beat, twice — once parried, once not — and
   `punish_opened` measured off the fight's own clock, **0.69 s apart** (§3: the
   0.22 s commit plus 1.10 s of recover, less the 0.627 s stagger). A director
   that asserts 0.47 is asserting the arithmetic this document had wrong for two
   drafts; it is the one number in §9 worth checking against §3 before you type
   it.
-- **Warden, the shrink:** stand the hero at **10 m — outside the new 8.5 m
-  fence** — and take the boss to half health there. The hero must end up inside
-  the new ring, on the floor, able to move, with the fight still running. This is
-  the §5 annulus guard and it is the beat most likely to fail: an unguarded
-  `shrink` either seals him into a two-and-a-half-metre gap he cannot leave or
-  pushes him through the outer fence. Photograph the frame after. And the donut's
-  second answer still works after the shrink.
+- **Warden, the shrink: DONE**, and it is its own beat because a frame where the
+  hero happened to be standing in the middle proves nothing. He is teleported to
+  10.00 m — outside the new 8.5 m fence — before the crossing blow. Measured:
+  the guard found one body to pull, from 10.00 m; he ends at **7.30 m**, inside
+  the new ring rather than sealed into the 1.2 m annulus and not shoved through
+  the outer fence; **y = 0.00**, standing on the floor rather than on top of a
+  wall; and he then walks 2.3–2.6 m under held input, so the fight goes on. The
+  after-frame is shot from a high near-centre mark looking outward down his own
+  radius (`b_21_cistern_warden_after.png`) — the first attempt used the same
+  broadside mark as everything else and put the new ring a metre in front of the
+  lens, which photographed the wall and not the hero. And the boss's
+  `arena_radius()` follows: 11.0 → 8.5 on both, asserted separately, because §5
+  note 1 is the one that scatters the Warden's discs in the room the fence used
+  to be in. **Still open, and small:** that the donut's second answer (§6.1, the
+  4.4 m `safe_inner`) still works after the shrink. Section F proves the donut
+  before the turn; nobody has re-run it at 8.5 m.
 - **Slag Ogre: DONE**, and it lives in `boss_cistern.gd` §K (`_receptacle`,
   `_charge_shot`) rather than in a `boss_foundry.gd` of its own — the Warden's
   director already had the arena, the bow and the hero in it, and a second file
@@ -1303,11 +1361,13 @@ gets its own director on that pattern — `boss_foundry.gd`, `boss_choir.gd`,
   boss takes full damage with two choristers alive**, because there is no gate.
   **No director in the project currently throws a `summon` at all** (board card
   22), so this is new ground and it is where the add-level bug will show.
-- **Riven Knight:** a charge into the keystone ends early and the punish opens
-  anyway; the hookshot pulls the hero to the keystone; **the arena has no
-  `HookTarget` in it before the turn** (§6.4 — photograph the failed press, it is
-  half the fight); and the boss does **not** stall behind the keystone — thirty
-  seconds of fight after the turn with beats still landing.
+- **Riven Knight:** **the arena has no `HookTarget` in it before the turn and one
+  after it — DONE** (section L: 0 hookables before, 1 after, and the mass is
+  asserted solid, centred and on the floor; `b_40/41_riven_knight`). §6.4 also
+  wants the *failed press* photographed, and that is not done. Still open: a
+  charge into the keystone ends early and the punish opens anyway; the hookshot
+  actually pulls the hero to it; and the boss does **not** stall behind the
+  keystone — thirty seconds of fight after the turn with beats still landing.
 
 And `--warmup`, `timeout 400`, and `tools/quiet.sh` rather than bare `godot`,
 for the reasons `CLAUDE.md` §2 gives at length.

@@ -170,6 +170,33 @@ const POSES: Array[StringName] = [
 	POSE_REAR, POSE_CROUCH, POSE_TILT, POSE_RISE, POSE_SPREAD,
 ]
 
+## What a boss's ONE escalation does to the room. `docs/BOSSES.md` §5.
+##
+## Not a phase, not a bar, not a beat: `docs/SCOPE.md` §6 caps this game at one
+## phase, and §5's reading of it is that the phase should be the room rather than
+## a second move set. So a `turn` may touch **the fence radius, the cover posts
+## and the room's light, and nothing else, ever** — a turn that edited a beat's
+## numbers or `pick_beat` would be a second phase wearing a room.
+##
+## Four kinds, one per boss, and that is the cap. A fifth is a proposal to make
+## the room a mechanic and it goes to the owner rather than into this list.
+const TURN_SHRINK := &"shrink"    ## the seal walks in; a second fence at `to` m
+const TURN_TOPPLE := &"topple"    ## cover posts slump; `cover_count` -> `to`
+const TURN_DOUSE := &"douse"      ## the room's sconces go out
+const TURN_KEYSTONE := &"keystone"  ## a hookable mass drops into the middle
+
+const TURN_KINDS: Array[StringName] = [
+	TURN_SHRINK, TURN_TOPPLE, TURN_DOUSE, TURN_KEYSTONE,
+]
+
+## One threshold for all four bosses, and it is `0.50` on every row rather than a
+## constant here so that the row still reads as the whole fight. Four different
+## thresholds would be four tunings nobody can compare against each other, which
+## is why §5 fixes it at half health and why `validate()` only checks the RANGE:
+## a row is allowed to be wrong here in a way a reader can see, and not in a way
+## that puts the turn after the kill.
+const TURN_AT := 0.50
+
 ## No two of the twelve beats share a (pose, colour) pair, and no boss uses a
 ## pose twice. That is the whole readability budget spent deliberately: three
 ## beats a player cannot tell apart is one beat with extra steps, and a fight
@@ -228,6 +255,19 @@ static var BOSSES := {
 			# would teach the player to solve beat two by standing behind
 			# something, and beat two's answer is to walk INTO it.
 			"cover": false, "cover_count": 0,
+			# THE TURN (`docs/BOSSES.md` §5, §6.1). The fence walks in from 11.0
+			# to 8.5 m at half health, and it is aimed at exactly one player: the
+			# one who has spent the first half of the fight kiting in the far
+			# side of the room. 8.5 m is still two and a half body-lengths of
+			# floor, so the donut's second answer -- standing INSIDE `safe_inner`
+			# -- survives it; taking the room below about 7 m would delete that
+			# answer and make the Warden's whole lesson unteachable.
+			#
+			# The expensive one of the four. See `BossArena._turn_shrink`: it
+			# needs a SECOND fence (scaling a ring of fixed-width panels leaves
+			# daylight at every joint), `Boss.set_arena_radius()` behind it, and
+			# the annulus guard in front of it.
+			"turn": {"kind": TURN_SHRINK, "at": TURN_AT, "to": 8.5},
 		},
 		"drop": {"item": &"bow", "relic": &"anvil_plate"},
 		"music": "res://audio/music/boss_1.ogg",
@@ -333,6 +373,14 @@ static var BOSSES := {
 			# charge lane with nothing to break it is a fight decided by
 			# footspeed. The pillars are what make the charge a decision.
 			"cover": true, "cover_count": 3,
+			# THE TURN (`docs/BOSSES.md` §5, §6.2). Two of the three pillars
+			# slump into the slag and the lane opens up: the same charge, with
+			# two thirds of its answer taken away. It escalates the fight by
+			# subtracting the player's tool rather than by adding the boss a
+			# move, which is the cheapest honest reading of "the escalation is
+			# the room" -- and `_build_cover` already names the posts `Cover%d`,
+			# so it is `to` posts kept and the rest sunk.
+			"turn": {"kind": TURN_TOPPLE, "at": TURN_AT, "to": 1},
 		},
 		# `kiln_core`, not `glass_kiln_core`. GDD §6.2 calls the object the
 		# "Glass-Kiln Core" and the obvious id is the wrong one: `RelicDb` is the
@@ -446,6 +494,23 @@ static var BOSSES := {
 			# behind the pillar" — which would delete the only shape this boss
 			# has that the other three do not.
 			"cover": false, "cover_count": 0,
+			# THE TURN (`docs/BOSSES.md` §5, §6.3). The Choir's sconces go out.
+			# The only one of the four that costs no geometry, and board card 6
+			# settled that it stays `douse` rather than being promoted to a
+			# `shrink` -- this fight's escalation is that you can no longer see
+			# the room you are being asked to read the ring across.
+			#
+			# Safe against GDD pillar 5 for a reason the code already decided:
+			# the floor markers are built SHADING_MODE_UNSHADED (`boss.gd`,
+			# `_mark_mat`) precisely so a warning does not dim with the room, and
+			# this body is the most emissive of the four. `boss_cistern.gd` §L
+			# photographs it rather than taking that on trust -- and the
+			# photograph is why `energy` is 0.15 and not 0. A true blackout was
+			# built first and it is a BLACK FRAME with a health bar in it: no
+			# floor, no hero, nothing left with an edge. §6.3's row already said
+			# 0.15 and it was right. What the turn takes away is the room's
+			# READING light, so the ring and the disc are the only edges left.
+			"turn": {"kind": TURN_DOUSE, "at": TURN_AT, "energy": 0.15},
 		},
 		"drop": {"item": &"hookshot", "relic": &"sounding_rod"},
 		"music": "res://audio/music/boss_3.ogg",
@@ -558,6 +623,17 @@ static var BOSSES := {
 			# something to put between you and the lane, floor 4's best beat is
 			# a footrace.
 			"cover": true, "cover_count": 2,
+			# THE TURN (`docs/BOSSES.md` §5, §6.4). The broken keystone comes
+			# down in the middle of the arena, and it is the only turn of the
+			# four that ADDS the player something: a `HookTarget` in a fight
+			# whose boss holds the far side of the room. Before the turn the
+			# hookshot has nothing in here to bite -- §6.4 is emphatic that the
+			# failed press is half the fight, and §9 asks for a photograph of it.
+			#
+			# `HookTarget`, not `HookRing`. SCOPE §1's puzzle-atom count is 9 and
+			# this does not move it: the target is the FIRER's contract, and the
+			# atom is the ring that reports being bitten.
+			"turn": {"kind": TURN_KEYSTONE, "at": TURN_AT},
 		},
 		# `pillar_shard`, not `waterwheel_gear`. GDD §6.2 deleted the Waterwheel
 		# Gear and moved the Pillar-Shard onto this boss to fill the freed slot,
@@ -1247,6 +1323,25 @@ static func is_miniboss(id: StringName) -> bool:
 	return MINIBOSSES.has(id)
 
 
+## `id`'s one escalation, or an empty Dictionary when it has none.
+##
+## **The minibosses have none, and the empty row is the answer rather than a
+## gap.** `docs/SCOPE.md` §6's cap is one phase per FIGHT and `docs/BESTIARY.md`
+## §4 prices a miniboss at a third of a boss; a 24-quarter Sluice-Keeper that
+## rebuilt its room halfway through would be the boss's whole structure handed
+## out behind an optional puzzle. `BossArena` connects nothing at all when this
+## comes back empty, so a miniboss chamber keeps exactly the code path it had.
+static func turn(id: StringName) -> Dictionary:
+	var row := get_boss(id)
+	if row.is_empty():
+		return {}
+	# ANNOTATED: indexing an untyped Dictionary hands back Variant, and `:=` on
+	# one is the "Cannot infer the type of X" parse error in CLAUDE.md §3.
+	var arena: Dictionary = row.get("arena", {})
+	var t: Dictionary = arena.get("turn", {})
+	return t
+
+
 ## One row, or an empty Dictionary. Empty rather than a fallback boss: a floor
 ## that asks for a boss that does not exist has a broken manifest, and quietly
 ## handing it the Warden would ship that bug into the Chord Gate.
@@ -1431,6 +1526,27 @@ static func validate() -> PackedStringArray:
 				out.append("%s: drops %s, but RelicDb puts %s on floor %d's boss"
 					% [id, relic,
 						placed.get("id", &"nothing"), int(row["floor"])])
+
+		# SCOPE §6's OTHER cap: one phase. `docs/BOSSES.md` §8 item 3 asks for
+		# exactly these two and no more -- the kind is in the vocabulary, and the
+		# threshold is a fraction of a health bar rather than a number of
+		# quarters. A `turn.at` of 0 never fires and one of 1 fires on the first
+		# blow, and both are the kind of typo that reads as "the turn is broken"
+		# from a director rather than as a bad row.
+		#
+		# The third assertion an earlier draft proposed -- no beat's tell under
+		# 60% of the shallowest tell of its shape -- is deliberately NOT here:
+		# §4 is the argument for why it would be checking a number it invented.
+		var t := turn(id)
+		if not t.is_empty():
+			var kind: StringName = t.get("kind", &"")
+			if not TURN_KINDS.has(kind):
+				out.append("%s: turn kind %s is not one of the four (BOSSES §5)"
+					% [id, kind])
+			var at := float(t.get("at", -1.0))
+			if at <= 0.0 or at >= 1.0:
+				out.append("%s: turn.at is %.2f — it is a health FRACTION and "
+					% [id, at] + "must be in (0, 1)")
 
 		# SCOPE §6: three beats, one phase, hard cap.
 		if list.size() != 3:

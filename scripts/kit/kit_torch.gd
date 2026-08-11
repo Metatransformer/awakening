@@ -96,6 +96,10 @@ var _flame: MeshInstance3D
 var _light: OmniLight3D
 var _embers: GPUParticles3D
 var _phase := 0.0
+## False once `douse()` has been called. Public because "is this sconce still
+## burning?" is a fact about the room that a director has to be able to ask
+## without reading a private light's energy through a flicker.
+var is_lit := true
 
 
 func _ready() -> void:
@@ -112,6 +116,49 @@ func _process(_delta: float) -> void:
 	var t := float(Time.get_ticks_msec()) * 0.001 * flicker_speed + _phase
 	var f := sin(t) * 0.6 + sin(t * 1.71 + 1.3) * 0.4
 	_light.light_energy = light_energy * (1.0 + f * flicker)
+
+
+## Gutter this sconce down to `to` of its current output over `seconds`.
+## `BossArena`'s `douse` turn is the caller (`docs/BOSSES.md` §5, the Bellwake).
+##
+## **`to` is a FRACTION and its authored value is 0.15, not zero, and that is the
+## design rather than a softened version of it.** `docs/BOSSES.md` §6.3's own row
+## carries `"energy": 0.15`: what the turn takes away is the room's *reading
+## light*, so that the tightening ring of `first_toll` and the hairline of
+## `undertow` become the only things in the chamber with edges. A true zero was
+## built first and photographed, and it is not that picture -- it is a black
+## frame with a health bar in it, GDD pillar 5's "a silhouette you cannot read is
+## a bug and not atmosphere" exactly. 15% keeps the floor and the hero as shapes
+## and takes everything else.
+##
+## **The knob is `light_energy` and emphatically not `_light.light_energy`.**
+## `_process` above rewrites the OmniLight's energy from this export every single
+## frame for the flicker, so a fade written onto the light itself is a value that
+## is gone on the next tick -- the room would dim for one frame and come back.
+## Faded through the export, the flicker goes on running and multiplies the
+## smaller number, which is what a guttering fire looks like.
+##
+## **The FIRE comes down with the light, and that is not decoration.** The flame
+## is an emissive quad and the embers are a particle system; neither is lit by the
+## OmniLight, so a sconce that lost only its light would keep a full-size flame
+## burning in a room it no longer lights -- which photographs as a broken light
+## rather than as a guttered torch, and this turn's entire proof is a photograph.
+func douse(seconds: float = 0.8, to: float = 0.0) -> void:
+	var f := clampf(to, 0.0, 1.0)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(self, ^"light_energy", light_energy * f, seconds)
+	if _flame != null:
+		# Scaled down rather than faded: the flame's material is a ShaderMaterial
+		# whose alpha this node does not own, so `transparency` is a knob that may
+		# or may not be wired. A quad shrinking needs nothing from the material.
+		tw.tween_property(_flame, ^"scale", Vector3.ONE * maxf(f, 0.001), seconds)
+	if _embers != null:
+		# Stopped emitting, not hidden: the embers already in the air ride out
+		# their 1.9 s lifetime and go dark, which is what a fire that has just
+		# been knocked down looks like.
+		_embers.emitting = false
+	is_lit = false
 
 
 func _rebuild() -> void:
