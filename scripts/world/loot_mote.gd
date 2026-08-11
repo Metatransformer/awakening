@@ -27,6 +27,45 @@ const SPIN_SPEED := 1.6
 ## for the overlap and then jerk.
 const MAGNET_ARM := 0.45
 
+# --- Why a mote does not light itself ---------------------------------------
+# Every drop in the dungeon rendered as the SAME flat #FFFFFF wedge -- a Bone
+# Shard and a Silver Wire were one pixel value apart at 255 -- which is the one
+# failure this object cannot have, because tint is the whole of "what did I just
+# get" (STYLEGUIDE §7.2 bans #FFFFFF outright, §7.5 bans the glow that was
+# smearing a halo round it). It read on screen as untextured missing art rather
+# than as loot.
+#
+# The cause was NOT the emission, though the emission made it worse and the
+# comment that used to sit on it blamed the FILMIC curve and turned 1.6 into 0.9
+# without ever measuring the result. It is the OmniLight below: it sits at
+# y 0.30 and the mesh's centre is at y 0.28, so the lamp whose job is to put a
+# pool on the FLOOR was also flooding the mote's own 34 cm surface from two
+# centimetres away, at an attenuation of ~0.84 of full energy. Albedo, plus that,
+# plus emission, plus `env_dungeon.tres`'s 1.06 exposure and 1.22 contrast, and
+# every channel clipped. Measured with the emission turned entirely OFF the
+# surface still came back (252, 247, 220) -- so no amount of retuning the
+# material was ever going to fix it.
+#
+# So the mesh gets its own visual layer and the lamp is told to skip that layer.
+# The pool on the flagstones is untouched -- that is the "look over here", and it
+# was always the part doing the work -- and the surface is now lit by the room
+# like everything else, which is what makes it the item's colour again.
+const ALL_LAYERS := 0xFFFFF
+## Visual layer 2, used by nothing else in the project. Other lights keep their
+## default all-layers cull mask, so a torch, the fill light and the hero's lamp
+## all still reach a mote; only its own does not.
+const SELF_BIT := 1 << 1
+## Resting emission. Small on purpose: with the self-flood gone this is only
+## there so a mote in an unlit corner is a shape and not a silhouette.
+##
+## Measured on the dungeon floor rather than reasoned about, which is the part
+## the 1.6-to-0.9 edit skipped. Six drops side by side, sampled off the render:
+## at 0.15 Rot Moss is (182, 199, 82), Ember Gland (255, 160, 43), Deep Amber
+## (255, 209, 13), Bone Shard (255, 239, 206) -- six items, six colours, facets
+## still shaded. At 0.6 and above all six are (255, 255, 2xx) and identical, and
+## at 0.9 they are the flat white slabs this whole note is about. [tune]
+const EMIT_BASE := 0.15
+
 var item_id: StringName = &""
 ## How many of `item_id` this one mote is worth.
 ##
@@ -105,10 +144,7 @@ func _build() -> void:
 	_mat.albedo_color = tint
 	_mat.emission_enabled = true
 	_mat.emission = tint
-	# 1.6 blew every pale drop out to flat white under the FILMIC curve, so the
-	# one thing a mote has to tell you -- what it is -- was the thing it lost.
-	# The OmniLight below does the "look here"; the surface does the colour.
-	_mat.emission_energy_multiplier = 0.9
+	_mat.emission_energy_multiplier = EMIT_BASE
 	_mat.roughness = 0.85
 	# Faceted, never smooth: the whole kit is hard-edged and a smooth-shaded
 	# pickup reads as an asset from a different game.
@@ -125,6 +161,7 @@ func _build() -> void:
 	_mesh.mesh = pm
 	_mesh.material_override = _mat
 	_mesh.position.y = 0.28
+	_mesh.layers = SELF_BIT
 	add_child(_mesh)
 
 	# A very short-range light so a drop in an unlit corner is still findable.
@@ -136,6 +173,8 @@ func _build() -> void:
 	_light.omni_attenuation = 1.8
 	_light.shadow_enabled = false
 	_light.position.y = 0.3
+	# EVERYTHING EXCEPT THE MOTE. See SELF_BIT.
+	_light.light_cull_mask = ALL_LAYERS & ~SELF_BIT
 	add_child(_light)
 
 
@@ -161,11 +200,15 @@ func _process(delta: float) -> void:
 		_refused = maxf(0.0, _refused - delta)
 		var p := 0.5 + 0.5 * sin(_age * 14.0)
 		_mat.emission = Pal.RUST.lerp(_def.tint if _def != null else Pal.BONE, 1.0 - p)
-		_mat.emission_energy_multiplier = 0.9 + p * 2.0
+		# Both ramps are rebased on EMIT_BASE rather than on the old 0.9. They used
+		# to top out at 2.9 and 2.5, which was inaudible: the surface was already
+		# clipped at rest, so "hot" and "refused" both looked exactly like "there".
+		# A refusal that reads has to start from a mote that is NOT white.
+		_mat.emission_energy_multiplier = EMIT_BASE + p * 0.55
 		return
 
 	if hot > 1.0:
-		_mat.emission_energy_multiplier = 0.9 + (hot - 1.0) * 1.6
+		_mat.emission_energy_multiplier = EMIT_BASE + (hot - 1.0) * 0.45
 		_light.light_energy = 1.1 + (hot - 1.0) * 1.4
 
 	if _age < ARM_TIME:
