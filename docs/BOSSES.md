@@ -17,10 +17,21 @@ It does **not** own stats. `BossDb` does, and a doc that restated the table woul
 disagree with it by Friday — so nothing below is copied out of the table except
 where the arithmetic *is* the argument.
 
-**Status: design.** The twelve beats exist and the Warden is built and proven
-(`tools/directors/boss_cistern.gd`). Everything this document adds is one `if`,
-one signal and four rooms, and §8 checks all of it against a count in
-`docs/SCOPE.md` §1. **Nothing here needs an owner's amendment.**
+**Status: design, and one third of it is proven.** The twelve beats exist, but
+only the Warden is built and photographed (`tools/directors/boss_cistern.gd`),
+and the Warden throws an `arc`, a `slam` and a `zone` — so `charge` and `summon`,
+which carry six of the twelve beats and three of the four fight shapes, have
+never executed in front of a camera. **§9's opening note is the risk register for
+that** and it should be read before this document is used to plan work.
+
+What this document adds is **one `if`, one already-declared signal, and four
+rooms** — `Bus.boss_phase_changed`, declared at `event_bus.gd:90` and emitted by
+nothing today, is the signal, and §5 names it rather than leaving it implied. §8
+checks the cost row by row against `docs/SCOPE.md` — §1 for most of it and §6 for
+the beat and phase caps, which are not §1 rows. **Nothing here needs an owner's
+amendment**, and the one change that would have — a real damage gate on the
+Bellwake — is refused in §6.3 with the consequence recorded in §7 rather than
+absorbed.
 
 ---
 
@@ -115,12 +126,31 @@ already standing in reach who presses on the frame the window opens:
 | 2nd light | **0.721 – 0.942 s** | the chain buffer |
 | 3rd light — the finisher | **1.370 – 1.766 s** | +2 quarters, `KNOCKBACK_HEAVY` |
 
-**1.37 s is the finisher line**, and it is the number a punish window should be
-authored against. Six of the twelve beats clear it (`cistern_drop`,
-`bellows_charge`, `tap_the_ladle`, `first_toll`, `hushing_choir`,
-`call_the_iron`). **Two miss it by 0.02 s** — `drown_pool` and `gate_lunge` both
-pay 1.35 s — which is almost certainly nobody's decision, and 1.40 would make
-them the fights they read as. [tune]
+**1.37 s is the finisher line.** What it gets measured against is *not* a beat's
+`punish` on its own, and an earlier draft of this section made exactly that
+mistake: it counted six beats as clearing the line and called `drown_pool` and
+`gate_lunge` "0.02 s short" at 1.35 s each. `_tick_recover` is the correction,
+and it is one function — `recover` and `punish` are **one state**, the boss is
+`_stop()`ed and rooted through both, and poise (§3) means it is hittable through
+both. The clock a finisher runs against opens at the top of the recover, not at
+the top of the window. So the number is `recover + punish`, and **all twelve
+beats clear 1.37 s.** The tightest is `riven_arc` at 0.65 + 0.90 = **1.55 s**;
+the two that looked short are nowhere near it — `drown_pool` gives **1.90 s**
+rooted and `gate_lunge` **2.40 s**.
+
+The caveat is a positioning one rather than an arithmetic one, and it is the
+part worth designing to: **the recover half is only free for a beat that leaves
+the boss where the hero already is.** After an `arc` or a `slam` it does. After a
+charge it does not — `gate_lunge` overshoots twelve metres and its recover is
+what the player spends walking back — so the two charges really do pay their
+third contact out of the punish alone, and the two `arc`s hand it over. That is a
+difference between beats, not a defect in a number, and no single `punish` figure
+can say it.
+
+Worth recording, since the "fix" was drafted before it was checked: `validate()`
+asserts `cooldown >= punish`, and `gate_lunge` is authored `punish: 1.35,
+cooldown: 1.35`. Raising that punish to 1.40 would have failed the project's own
+validator on the way in.
 
 The rest of the kit, from `K`: the parry is live `PARRY_WINDOW` 0.20 s from the
 press inside a 45° cone, costs `PARRY_RECOVER` 0.42 s guardless when it misses,
@@ -147,37 +177,81 @@ brought forward — never a new opening.
 Two consequences the design has to be built around, and neither is obvious from
 reading `stagger()`:
 
-**1. The window a parry buys is `recover − 0.627`, and nothing else.** So:
+**1. The window a parry buys is `COMMIT_TIME + recover − 0.627`, and the commit
+half of that is the half everybody forgets.** `_commit()` sets
+`_timer = _commit_seconds(_beat)` and *then* calls `_deliver_shape` — and for an
+`arc` or a `slam`, `_deliver_shape` reaches `_land` → `DamageArea._deliver` →
+the hero's `take_hit` → `HeroCombat.on_parried` → `Boss.stagger` **synchronously,
+inside that same call**, two lines after the timer was written. `stagger`
+overwrites `state` and `_timer` both. So the 0.22 s commit never runs either: a
+parry on an `arc` or a `slam` skips the commit **as well as** the recover.
+
+The two charges are the exception, and they are the exception in the other
+direction. `_commit_seconds` returns `reach / speed + 0.05` for a
+`SHAPE_CHARGE` — **0.90 s** for `bellows_charge` and **0.80 s** for `gate_lunge`
+— and the blow does not land at the commit, it lands when the body arrives
+partway through that travel. What a charge parry cancels is therefore the travel
+that was *left*, which is bounded above by those numbers and is never the whole
+of them.
 
 | Beat | `recover` | Parry buys | Plus |
 |---|---|---|---|
-| `bellows_charge` | 1.20 | **+0.57 s** | the rest of an 11 m charge, up to 0.85 s |
-| `first_toll` | 1.15 | **+0.52 s** | — |
-| `cistern_drop` | 1.10 | **+0.47 s** | — |
-| `gate_lunge` | 1.05 | **+0.42 s** | the rest of a 12 m charge, up to 0.75 s |
-| `sluice_sweep` | 0.80 | +0.17 s | — |
-| `slag_backhand` | 0.70 | +0.07 s | — |
-| `riven_arc` | 0.65 | **+0.02 s** | — |
+| `first_toll` | 1.15 | **+0.74 s** | — |
+| `cistern_drop` | 1.10 | **+0.69 s** | — |
+| `bellows_charge` | 1.20 | **+0.57 s** | the travel it had left, up to 0.90 s |
+| `gate_lunge` | 1.05 | **+0.42 s** | the travel it had left, up to 0.80 s |
+| `sluice_sweep` | 0.80 | **+0.39 s** | — |
+| `slag_backhand` | 0.70 | +0.29 s | — |
+| `riven_arc` | 0.65 | +0.24 s | — |
 | the three `zone` beats | — | **nothing** | see below |
 | the two `summon` beats | — | **nothing at all** | they deal no damage |
 
-Read the bottom of that table honestly: **at floor 4 the parry stops being a
-window and becomes a refusal.** Parrying `riven_arc` buys 0.02 s of recovery —
-what it actually pays is the damage you did not take and the 1.20 s riposte dash,
-which against a boss that has just spent its fastest beat is worth more than two
-hundredths of a second anyway. It is a different move by the end of the game,
-and the fight it belongs to is the one that gives the sword the least room.
+Read that as a curve and not as a cliff: **the parry's window narrows with depth
+and never closes.** Floor 1's `cistern_drop` hands back 0.69 s, which is most of
+a second and a whole extra light contact. Floor 4's `riven_arc` hands back
+0.24 s, which is a third of that and still a real opening — the difference
+between two contacts and two contacts with room to leave afterwards. Not quite
+three to one across four floors is a good shape for that curve, and it is the
+shape the beats already have — nobody has to author it.
 
-**2. A `zone` cannot be parried into an opening, by construction.** `Boss._land`
+**An earlier draft of this section said the opposite, and it was wrong twice
+over.** It measured the window as `recover − 0.627`, which drops the commit from
+every row, and it got +0.02 s on `riven_arc` — then built a punchline on the
+rounding error: *"at floor 4 the parry stops being a window and becomes a
+refusal."* +0.24 does not support that sentence and nothing else does either.
+There is no floor at which the parry stops paying an opening. What is true, and
+duller, is that the opening gets smaller as the beats get faster, so at floor 4
+the damage refused and the 1.20 s riposte dash are the larger share of what the
+press bought — but they were the larger share on floor 1 too, and the honest
+version of the old claim is a change of proportion rather than a change of kind.
+
+**2. A `zone` is very nearly unparryable into an opening — but "by construction"
+was overstated, and here is the band where it stops being true.** `Boss._land`
 passes the *disc centre* as the blow's origin for a zone, and
 `HeroCombat._parried_body` looks for something with a `stagger()` within **1.4 m
-of that origin** — which the boss is not. The blow is refused and the i-frames
-are granted; nothing is staggered. And the first disc of every zone is placed
-under the hero, so when a standing hero is caught by it the direction from the
-blow is zero and `parries()` and `blocks()` both return false: **the shield does
-not answer a pool you are standing in.** That is not a bug to fix. It is the
-reason every boss in the game has a zone beat — it is the beat the shield has no
-answer to, and the roll does.
+of that origin**. Across the arena the boss is not within 1.4 m of a disc and
+nothing is staggered — which is the case the design wants. At melee range it is:
+the first disc of every zone is placed at the hero's own position, the Warden's
+capsule radius is `height * 0.20` = **0.68 m**, so a hero pressed against it has
+his centre about 0.98 m from the boss's. **Anywhere from roughly 0.98 m to 1.4 m
+of the boss's centre, a parried disc does stagger it.** The scattered discs can
+land inside that radius too, at random.
+
+The second half is stronger but still not absolute. When a hero who has not moved
+is caught by the disc drawn under him, the direction from the blow is zero and
+both `parries()` and `blocks()` return false — **the shield does not answer a
+pool you are standing in.** That is `K.flat`'s epsilon rather than an exact
+comparison: it bails when the flat offset is under **0.01 m**, so it is "a hero
+who has not moved a centimetre in the fuse's 1.1–1.3 s", not "a hero who happens
+to be standing".
+
+Neither of those is a bug to fix, and the beat's job survives both: the zone is
+the beat the shield has no *reliable* answer to, and the roll does, which is why
+every boss in the game has one. But **§6's per-beat advice must not be written as
+if the code refused a zone parry**, because at contact range it does not. If a
+guarantee is ever wanted rather than a tendency, it is one line — a
+`shape == SHAPE_ZONE` bail at the top of `_parried_body`'s caller — and it should
+be taken as a deliberate change with a director beat behind it, not assumed.
 
 Which gives the rule the whole of §6 is built on, and it is one line:
 
@@ -221,11 +295,34 @@ floor 4:
 | `zone` | 0.95 | 1.15 | 1.00 | — | — |
 | `summon` | — | — | 1.40 | 1.45 | — |
 
-**The arc line is 0.01 s past the promise.** 60% of the Warden's 1.05 s sweep is
-**0.630 s**; `riven_arc`'s tell is **0.620 s**. Sixteen milliseconds nobody will
-ever feel — and that is exactly why it should be 0.63 rather than argued about:
-a contract stated as a number is only worth having if it is checked as one.
-`validate()` can assert it in four lines, and the number to change is one.
+**That last column is not a 60% line, however much it looks like one, and an
+earlier draft of this section read it as one.** GDD §7's promise — *the telegraph
+never compresses past 60%* — is `Prog.WINDUP_FLOOR` clamping
+`Prog.windup_scale(level)`, and what that curve does is compress **one authored
+body as it descends floors**. `docs/PUZZLES.md` §7 states it in the only form
+it has: *"it never compresses past 60% however deep the floor is."* Boss beats
+have no depth axis at all — the first paragraph of this section is that fact, and
+`boss.gd` reads `_beat["tell"]["time"]` raw, with no `Prog` anywhere near it. So
+`riven_arc`'s 0.620 s measured against `sluice_sweep`'s 1.05 s is 59% of *a
+different body, on a different floor, authored by a different hand*. There is no
+promise in the project it can be past, and 0.63 is not a fix because there was
+nothing to fix. **`riven_arc` stays at 0.62.**
+
+The version of that mistake which got as far as a proposed `validate()`
+assertion is worth naming so nobody re-proposes it: *no beat's tell under 60% of
+the shallowest tell of the same attack shape*. That manufactures five per-shape
+floors out of nothing, each anchored to whichever row happens to be shallowest
+today, and every one of them moves the moment somebody retunes a **floor-1**
+beat — an assertion that fires on an edit to a beat it is not about is worse than
+no assertion, because the next agent will believe it is protecting something.
+A contract stated as a number is only worth checking when the number means
+something; this one would mean "the Warden's sweep, until it doesn't".
+
+**What the F4 / F1 column actually is** is a taste measure — how much faster the
+last fight reads than the first — and it should be read as one and never asserted
+on. 59% on the arc is the intended shape of the ladder: the Chord Gate's cheapest
+beat comes at you in six tenths of a second and floor 1's comes in a second, and
+that is what floor 4 is for.
 
 The zone row going *up* with depth is correct and not a slip: a zone's tell is
 not its warning. The discs carry their own `fuse` (1.10 / 1.30 / 1.20 s) which is
@@ -240,14 +337,36 @@ Every boss escalates once, at half health, and **the escalation is the room**.
 Not a phase, not a bar, not a beat: `docs/OOT_CATALOGUE.md` §3 is emphatic that
 not one Ocarina boss has a second health bar and that the change is always Ganon
 ringing the floor with fire or Volvagia taking to the air, and
-`docs/SCOPE.md` §1's one-phase cap turns out to be the design answer rather than
-only the budget one.
+`docs/SCOPE.md` §6's one-phase cap (*"Three beats, one phase, hard cap"* — it is
+in the risk table, not the manifest) turns out to be the design answer rather
+than only the budget one.
 
-**The mechanism, once.** `BossArena` — which already builds the seal and the
-cover posts off the row — watches the boss's health and, the first time it is at
-or under `arena.turn.at` of maximum, applies `arena.turn` and sets a bool. One
-threshold for all four, `0.50`, because four thresholds is four tunings nobody
-can compare against each other.
+**The mechanism, once, and it is more wiring than the first draft of this
+section priced.** `BossArena` builds the seal and the cover posts off the row
+today — but it has **no `_process`, no `_physics_process` and no reference to
+the boss's health at all**, so "watches the boss's health" is new plumbing and
+not a threshold read off a row. What it actually is: `_build_boss` connects
+`(_boss as Enemy).health.damaged` (`HealthComponent` already emits it, and a
+signal is right where a poll would be wrong — the fraction only moves when
+something hits it), the handler reads `health.fraction()`, compares it to
+`arena.turn.at`, sets a bool so it fires once, and dispatches on `turn.kind`.
+That is a connect, a handler, a bool and four small effects — still small, but it
+is four things and the §8 row should say four rather than "a threshold".
+
+One threshold for all four bosses, `0.50`, because four thresholds is four
+tunings nobody can compare against each other.
+
+**And the signal has a name already: `Bus.boss_phase_changed(phase: int)`,
+declared at `scripts/autoload/event_bus.gd:90` and emitted by nothing.** This
+document has said "one signal" three times — the header, §0's third refusal and
+this section's own title — without ever naming it, which is exactly how a
+declared-and-dead signal stays dead. **The turn emits it**, `phase` 1, on the
+frame it applies — that is what it was declared for, it costs one line, and it
+gives the director an event to photograph either side of instead of diffing two
+screenshots and hoping. It does **not** make the turn a phase: nothing listens
+today, `pick_beat` never sees it, and §5's "what a turn may touch" list is
+unchanged. If a later listener tries to change a move set off the back of it,
+that listener is the amendment, not this emit.
 
 **What a turn may touch: the fence radius, the cover posts, the room's light.**
 Nothing else, ever. It may not touch a beat's numbers, the move set, `pick_beat`,
@@ -258,12 +377,14 @@ the room a mechanic, and it goes to the owner rather than into this table.
 
 | Boss | Kind | The change | What it costs |
 |---|---|---|---|
-| Warden | `shrink` | the fence walks in: 11.0 → 8.5 m | a second seal ring, built at the smaller radius and raised |
-| Slag Ogre | `topple` | two of three slag pillars slump: `cover_count` 3 → 1 | `queue_free` on two named children |
-| Bellwake | `douse` | the Choir's sconces go out | a light tween — see the caveat |
-| Riven Knight | `keystone` | the broken keystone drops into the middle of the arena | one `StaticBody3D` with a `HookTarget` on it |
+| Warden | `shrink` | the fence walks in: 11.0 → 8.5 m | a second seal ring raised at the smaller radius, `Boss.set_arena_radius()`, **and the annulus guard below** — the most expensive of the four |
+| Slag Ogre | `topple` | two of three slag pillars slump: `cover_count` 3 → 1 | `queue_free` on two named children. Genuinely cheap: `_build_cover` names them `"Cover%d"` |
+| Bellwake | `douse` | the Choir's sconces go out | **no handle exists** — see below. This is the one with an open question in it, not a cost |
+| Riven Knight | `keystone` | the broken keystone drops into the middle of the arena | one `StaticBody3D` with a `HookTarget` on it. Cheap and correct — but see §6.4 on when it exists |
 
-Two implementation notes an implementer should not have to re-derive:
+Four implementation notes an implementer should not have to re-derive, and the
+first two are the ones that make `shrink` the expensive turn rather than the
+obvious one:
 
 - **`shrink` needs `Boss.arena_radius()` to follow it.** `_shape_zone` scatters
   its discs inside `arena_radius() - radius`, read off the row, so a Warden whose
@@ -273,11 +394,35 @@ Two implementation notes an implementer should not have to re-derive:
   fence built at 8.5 m and raised — scaling a ring of fixed-width panels leaves
   daylight at every joint, which is the bug `boss_arena.gd`'s own comment records
   having shipped once already.
-- **`douse` is the one turn that needs a handle `BossArena` does not have.** A
-  generated room's lights belong to the room. If they cannot be reached from the
-  arena, the fallback is `shrink` to 10.0 m and the Bellwake loses nothing
-  structural — but try `douse` first, because it is the only turn of the four
-  that costs no geometry and it is the one the fiction is asking for.
+- **`shrink` must not raise a wall through the hero, and by default it would.**
+  The seal is a `StaticBody3D` on `K.L_WORLD` — solid, and raised by moving a
+  node, not by enabling a shape. Raising a second one at 8.5 m while the hero is
+  standing at 9–11 m either shuts him into an annulus he cannot leave or shoves
+  him out through the outer fence, and **the Warden's turn is aimed at precisely
+  that player**: the whole argument for `shrink` (§6.1) is that it takes the far
+  half of the arena away from someone who has been kiting in it. The fix is one
+  of two, and either is fine as long as one of them is there:
+  - *Pull, then raise.* Before `_move_seal`, tween any body in `K.L_PLAYER`
+    that is outside the new radius to a point just inside it, then raise. Reads
+    as the water pulling him in with it, which is also the fiction.
+  - *Refuse, then retry.* Do not raise while a player body is in the annulus;
+    re-check on the next `damaged` and raise the first frame the annulus is
+    clear. Cheaper, and it costs a moment of the turn's timing.
+
+  The pull is the better one — the refusal hands a kiting player a way to
+  postpone the turn indefinitely, which is the behaviour the turn exists to
+  punish — but **the unguarded version is not an option**, and §9 has a beat for
+  it.
+- **`douse` is the one turn that needs a handle `BossArena` does not have**, and
+  it has no fallback path in code either. A generated room's lights belong to the
+  room. If they cannot be reached from the arena, the fallback is `shrink` to
+  10.0 m — which then inherits the annulus guard above, so the fallback is not
+  free. Try `douse` first, because it is the only turn of the four that costs no
+  geometry and it is the one the fiction is asking for.
+- **`keystone` is the cheap one and it is also the late one.** One body, one
+  `HookTarget`, no guard needed — the arena has 12.5 m of radius and the mass is
+  3 m across at the centre, where nothing stands. What it costs is elsewhere: see
+  §6.4 on the first sixty-four quarters.
 
 **Why `douse` is safe at all**, since GDD pillar 5 says a silhouette you cannot
 read is a bug and not atmosphere: the beats' floor markers are built
@@ -319,10 +464,11 @@ does not need to be the one that throws.
 |---|---|---|---|---|---|
 | `sluice_sweep` | 1.05 | 0.22 | 0.80 | 1.10 → **2 contacts** | 1.10 |
 | `cistern_drop` | 1.30 | 0.22 | 1.10 | 1.60 → **3, the finisher lands** | 1.60 |
-| `drown_pool` | 0.95 (+1.10 fuse) | 0.22 | 0.55 | 1.35 → 2, misses the finisher by 0.02 | 1.60 |
+| `drown_pool` | 0.95 (+1.10 fuse) | 0.22 | 0.55 | 1.35 → 2, and **3** counting the recover (§2) | 1.60 |
 
-Depth: none. Floor 1 numbers are the authored numbers (§4), and the 60% floor —
-0.6 of a tell — is what the rest of the roster is measured against, never this.
+Depth: none. Floor 1 numbers are the authored numbers (§4), and the 60% floor is
+`Prog`'s curve on the generated roster — not a line these beats can be measured
+against at all (§4).
 
 **Three telegraphs, three pictures.** One arm hauled back over the shoulder,
 green from the elbow out, with a *lane* on the floor in front of it. Both fists
@@ -336,8 +482,10 @@ pose, a colour or a mark.
 **The answer: the shield, and the second way over is to walk toward it.**
 
 - *Fast:* parry `cistern_drop` from inside the ring band. It opens the beat's
-  1.60 s punish 0.47 s early and hands over a 1.20 s riposte dash on top — the
-  best single opening on floor 1.
+  1.60 s punish **0.69 s** early — the commit and most of the recover, §3 — and
+  hands over a 1.20 s riposte dash on top. The best single opening on floor 1,
+  and the second-widest fixed parry window in the game behind the Bellwake's
+  `first_toll`.
 - *Worse, and always available:* step inside 2.1 m and take nothing at all. The
   Warden's arena has no cover for exactly this reason; its own row says a pillar
   here would teach the player to solve beat two by hiding, and beat two's answer
@@ -346,12 +494,17 @@ pose, a colour or a mark.
   standing — so the safe answer costs you the next beat's positioning, which is
   what makes the greedy one worth learning.
 
-**Parry and dodge, per beat.** `sluice_sweep`: parryable, buys 0.17 s, so throw
-it for the riposte; rolling is the ordinary answer and the roll goes *backwards*,
-not sideways — the cone is 150° wide however narrow the drawn lane looks (card
-21). `cistern_drop`: the fight's parry, above. `drown_pool`: **roll, always** —
-a parried disc refuses the damage and staggers nothing (§3), and a disc centred
-on a hero who has not moved is not even blocked.
+**Parry and dodge, per beat.** `sluice_sweep`: parryable, buys **0.39 s**, which
+is a whole extra light contact and not just a riposte; rolling is still the
+ordinary answer and the roll goes *backwards*, not sideways — the cone is 150°
+wide however narrow the drawn lane looks (card 21). `cistern_drop`: the fight's
+parry, above. `drown_pool`: **roll, always** — a parried disc almost never
+staggers anything, because the origin the parry looks from is the disc centre and
+not the body (§3), and a disc centred on a hero who has not moved a centimetre is
+not even blocked. *Almost*: inside about 1.4 m of the Warden it does stagger, so
+a hero who parries a pool while standing on the boss will occasionally get an
+opening the rest of the fight is not teaching him to expect. That is a quirk to
+photograph, not a rule to build on.
 
 **The turn, at 24 of 48 quarters: `shrink`, 11.0 → 8.5 m.** The intake it has
 been guarding for four hundred years finally gives, the standing water drops, and
@@ -389,56 +542,83 @@ becomes the only one. **No new beat, no number in the move set touched.**
 Floor 2. The player is carrying **the Bow**, taken off the Warden, and the
 Foundry is the floor that is about it (`docs/PUZZLES.md` §1).
 
-**The beat that carries it: `bellows_charge`.** It is the only beat in the game
-with a `min_range` — 4.5 m — so it is the only beat that *happens where the bow
-lives*. King Dodongo inhales and you throw a bomb into the mouth; the Ogre draws
-and you put an arrow in the draw.
+**The beat that carries it: `bellows_charge`.** It is the beat with the widest
+`min_range` in the game — 4.5 m, against `gate_lunge`'s 1.0 m, which is the only
+other one — so it is the beat that *happens where the bow lives*: it cannot be
+thrown at contact range, and the player it is thrown at is by definition standing
+where a bow is the weapon in hand. King Dodongo inhales and you throw a bomb into
+the mouth; the Ogre lights the bellows and you put an arrow in them.
 
-**The rule, exactly, so nobody has to derive it:**
+**The rule, exactly, so nobody has to derive it — and read the state, because it
+is the whole design:**
 
-> While `bellows_charge` is in `State.WINDUP`, **and only then**, a `Hit` whose
-> `kind` is `Hit.ARROW` or `Hit.ARROW_FIRE` calls
+> While `bellows_charge` is in `State.STRIKE` **with `_charging` true** — that is,
+> after the commit, while eleven metres of ogre are actually moving — a `Hit`
+> whose `kind` is `Hit.ARROW` or `Hit.ARROW_FIRE` calls
 > `stagger(hit.from, K.PARRY_STAGGER, 0.0)` instead of falling through to the
-> ordinary poise path.
+> ordinary poise path. **Not during the tell.**
 
-`Boss._on_damaged` already receives the whole `Hit`, and `Hit.kind` already
-distinguishes an arrow from a sword — this is one `if` in a function that exists.
-The consequences are all the fight's own vocabulary: `_commit` never runs so the
-charge never happens and `beat_committed` never fires, the body drops into
-`RECOVER` for 0.627 s, and then the beat's authored **1.70 s** punish opens with
-`punish_opened` exactly as it would have.
+`Boss._on_damaged` already receives the whole `Hit`, `Hit.kind` already
+distinguishes an arrow from a sword, and `state` and `_charging` are both fields
+on the same object — this is still one `if` in a function that exists. The
+consequences are all the fight's own vocabulary, and they are the *parry's*
+vocabulary specifically: `stagger` already calls `_end_charge()`, so the charge
+stops dead where the arrow found it; the body drops into `RECOVER` for 0.627 s;
+and then the beat's authored **1.70 s** punish opens with `punish_opened` exactly
+as it would have. `beat_committed` fires normally, because the beat committed.
 
-**Why this does not break poise, which is the objection it will get.** `boss.gd`
-refuses every other interruption on two grounds: a beat the player can interrupt
-is a beat they can delete, and a tell that never lands makes the telegraph a lie.
-Neither applies here. The beat is not deleted — **its punish is paid in full and
-immediately**, so the player buys the window early rather than skipping it, which
-is precisely the shape of the parry exemption §3.6 already argued for. And the
-telegraph is not made a lie: the tell is the thing being answered, not the thing
-being cancelled. What it costs is a **counted resource bought in the garrison**,
-which is a price the parry does not even have. What keeps it from becoming *"the
-bow cancels bosses"* is that it is one beat on one boss: an arrow into
-`slag_backhand`'s tell does nothing, an arrow during a punish is just damage, and
-the other three bosses have no receptacle at all.
+**Why the tell is the wrong window, which is where an earlier draft of this
+section had it.** `boss.gd`'s poise comment gives two grounds for refusing every
+interruption, not one: *a beat the player can interrupt is a beat they can
+delete*, **and** *a tell that never lands makes the telegraph a lie*. An
+arrow-into-the-tell answers the first — the punish is paid in full and
+immediately — and simply ignores the second. It also breaks the scoping
+`docs/BESTIARY.md` §3.6 uses to license the parry at all, which is **ordering**:
+*"safe precisely because the parry can only be thrown after the boss has
+committed."* And it puts the project in the position of granting an arrow a
+tell-cut that §6.4 approvingly records `Boss.freeze` **refusing the hookshot** —
+*"a barb that could cut a tell short would let the player delete a beat they were
+supposed to read."* Two items, one rule, opposite answers, scoped by which item
+is holding it. That is not a design; that is an exception with a name on it.
+
+**Scoped to the travel instead, every one of those objections goes away**, and
+none of the fight's value does. The tell lands: the ogre commits, the lane is
+real, the eleven metres begin. The player is answering something already in the
+air, which is the parry's exact shape and §3.6's exact licence. And the read is
+*better*, not worse — a tell you shoot on sight is a reflex, a charge you shoot
+while it crosses the floor at you is a nerve test with a counted resource on it.
+What keeps it from becoming *"the bow cancels bosses"* is unchanged and now
+sharper: one beat on one boss, and the beat has to have started.
+
+**The intake is the charge**, and the pull-quote is not being retrofitted to say
+so — `_commit_seconds` for `bellows_charge` is `11.0 / 13.0 + 0.05` = **0.90 s**,
+which is the travel time, and it is the same nine tenths of a second the tell
+takes. The bellows are what drives the run; the run is the window.
 
 **The receptacle is a window in time, not a hitbox in space**, and that is
 deliberate. This project has no per-limb hitboxes — a boss does not even have a
 contact hitbox — and adding one is a new system, which `docs/SCOPE.md` §4.3's
-second question refuses. What the player reads is the tell itself: the whole body
-lights RUST over 0.90 s and the bellows-scar is the brightest line on it.
+second question refuses. There is no aim gate either, and with the rule scoped to
+the travel it does not need one: the thing you are shooting is a body crossing
+the floor at 13 m/s, and geometry supplies what a cone check would have. What the
+player reads is the commit itself — the whole body lit RUST, the lane drawn
+forward, the bellows-scar the brightest line on it.
 
 | | Tell | Commit | Recover | Punish | Cooldown |
 |---|---|---|---|---|---|
-| `bellows_charge` | 0.90 | 0.85 travel | 1.20 | 1.70 → **3 contacts** | 1.70 |
+| `bellows_charge` | 0.90 | **0.90 travel** (`11.0 / 13.0 + 0.05`) | 1.20 | 1.70 → **3 contacts** | 1.70 |
 | `slag_backhand` | 0.72 | 0.22 | 0.70 | 1.00 → 2 | 1.00 |
 | `tap_the_ladle` | 1.15 (+1.30 fuse) | 0.22 | 0.90 | 1.45 → **3** | 1.70 |
 
 Depth: none, per §4. The authored compression from floor 1 is 86.7% on the charge
-and 68.6% on the arc, both clear of the 0.6 line by a distance.
+and 68.6% on the arc — a taste measure of how much faster this fight reads than
+the Cistern, and not a line anything is "clear of" (§4).
 
 **Three telegraphs.** A dropped head and a planted back foot with one hard orange
 line down the body and a **narrow 3 m lane** drawn forward — the tell is a
-direction, which no other tell in this fight is. A fist cocked behind the head,
+direction, which no other tell in this fight is, and it is a direction because
+the answer to it happens *along* that lane rather than at its start. A fist
+cocked behind the head,
 the cooled crust splitting red along the knuckles, and a **wide lane**: the
 shortest tell in the fight and the widest arc in the game. A squat — the only
 time it is shorter than the hero — white-hot, with **no mark until the commit**,
@@ -447,8 +627,9 @@ lane, rear/red/wide lane, crouch/white/nothing.
 
 **The answer: an arrow, and there are two other ways over the wall.**
 
-- *Fast:* the arrow in the intake. It costs one arrow and deletes the fight's
-  hardest beat.
+- *Fast:* the arrow in the intake, thrown into the charge and not into the
+  wind-up. It costs one arrow and stops the fight's hardest beat eleven metres
+  short of wherever it was going, paying the 1.70 s punish on the spot.
 - *Worse, and free:* sidestep and hit the back. The 1.70 s punish is the longest
   in the fight for exactly this reason — the row says it overshoots and has to
   turn around — and the beat's own comment calls sidestep-and-hit-the-back the
@@ -462,10 +643,13 @@ lane, rear/red/wide lane, crouch/white/nothing.
 game**: the blow lands when the body arrives, so the timing depends on where the
 player is standing — at 13 m/s a 0.20 s window is ±2.6 m of position error — and
 landing it calls `_end_charge()`, stopping eleven metres of ogre dead and opening
-0.57 s early on top of the 1.70. `slag_backhand` is a 190° cone at 4.2 m, so it
-cannot be side-stepped: the answer is backwards past 4.2 m, a roll through it for
-the perfect dodge, or the shield — and the parry there is worth 0.07 s of window,
-so throw it for the riposte and the refusal, not for the opening.
+0.57 s early on top of the 1.70, **plus whatever travel was left of the 0.90 s**.
+It is the same window the arrow buys, bought with timing instead of ammunition,
+and the two answers being the same shape is the point rather than a duplication.
+`slag_backhand` is a 190° cone at 4.2 m, so it cannot be side-stepped: the answer
+is backwards past 4.2 m, a roll through it for the perfect dodge, or the shield —
+and the parry there is worth **0.29 s**, which is small but is a real extra
+contact, so throw it for the opening as well as for the refusal.
 `tap_the_ladle`: roll, and walk out early; three discs on a 1.30 s fuse is the
 most floor-reading the game asks for anywhere.
 
@@ -520,26 +704,53 @@ not be.** Three reasons, in increasing order of how much they matter:
    §4.3's rule applied at floor scale instead of beat scale.
 
 **The beat that carries it, unchanged: `hushing_choir`.** The shell is the
-choristers. This is Barinade, exactly: strip the shell, hit the thing under it
-before the shell reforms — and the reform is not a new timer, it is the beat's
-own `cooldown` of **6.00 s** and its `cap` of 4.
+choristers. The intended sentence is Barinade's, exactly — strip the shell, hit
+the thing under it before the shell reforms — and **two of the three words in it
+are not currently true, so read the next two paragraphs before building to it.**
+
+**"The core is open" is not a state the code has.** `Boss._on_damaged` has no
+invulnerability branch and no add-count check; it scales the impact and leaves
+the state alone, and that is the whole of it. The Bellwake's core is open before
+the choir is called, open while two choristers are standing on the floor, and
+open if the player never fires the Burst at all. **So the Burst removes two
+skeletons and opens nothing** — there is no wall, and this section should not be
+read as if there were one.
+
+The version with a wall in it is `if _summons_alive() > 0: refuse the damage`,
+five lines in the function that already receives the `Hit`. It is refused here,
+and the reason is not that it is hard: a boss that cannot be hurt while its adds
+live is **a new mechanic**, it is the second one in this document after the
+receptacle, and `docs/SCOPE.md` §1's `New mechanics 2` is the row §4.2 names as
+the one to defend. A fight shape that costs a manifest row is not the "naming one
+per boss must cost nothing" claim §0 makes; it is a different claim. §7 records
+what taking the free option costs the diagonal, and it is not nothing.
+
+**"Before the shell reforms" is not a 6.00 s clock either.** `hushing_choir`
+carries `weight: 1.0` against `first_toll`'s 3.0 and `undertow`'s 3.0, so when
+the cooldown expires the choir is a **1-in-7 roll, about 14%** — and the very
+first roll after it is nearer **3%**, because `REPEAT_WEIGHT` (0.22) softens the
+beat that just played. The shell does not come back on a timer. It comes back
+when the dice say so, and most of the time they do not.
 
 **The timer, worked in seconds**, because "on a timer" is only a design if the
-seconds exist:
+seconds exist — and these are the seconds that *do*:
 
 - Commit → 1.30 s recover → **2.00 s punish**, the longest window in the game.
 - The two choristers appear 8.0 m from the boss at the commit and walk at 2.2 m/s
-  (`skeleton`), so a hero standing on the boss has roughly **3.1 s** before the
-  first one is on him — i.e. the choir arrives about three tenths of a second
-  before the punish closes. The window is free and then it is not.
+  with a 1.7 m reach (`skeleton`), so 6.3 m of walking: a hero standing on the
+  boss has **2.86 s** before the first one is on him. The punish opens 1.52 s
+  after the commit and shuts at 3.52 s, so the choir arrives about **six tenths
+  of a second before the window closes**. The window is free and then it is not.
 - After the punish, 4.00 s of cooldown remain. **That is the strip window**: six
   seconds from the moment the boss goes open, in which the player has to spend
   the free hits *and* clear two bodies, and only one thing in the kit does both.
 
-**Why the Burst and not the sword.** At floor 3 the Burst is the player's only
-area answer, and the choristers converge on the hero — which is what makes them a
-single target rather than two. Clearing them with the blade costs the punish
-window it was supposed to protect.
+**Why the Burst and not the sword**, given that neither of them opens anything.
+At floor 3 the Burst is the player's only area answer, and the choristers
+converge on the hero — which is what makes them a single target rather than two.
+Clearing them with the blade costs the punish window the clearing was supposed to
+protect, and that trade is real whether or not a damage gate ever exists. It is a
+**pressure** answer rather than a **wall** answer, and §7 grades it as one.
 
 | | Tell | Commit | Recover | Punish | Cooldown |
 |---|---|---|---|---|---|
@@ -563,7 +774,9 @@ spread/blue/no mark, tilt/white/no mark until the commit.
 **The answer: the Burst, and the second way over is to let them live.**
 
 - *Fast:* one blast into the pair as they close, then back onto the boss inside
-  the 6 s.
+  the 6 s. What that buys is the rest of the strip window spent on the boss
+  instead of on two skeletons — not access to a core that was shut, because it
+  never was.
 - *Worse, and it is already in the code:* clear nothing. `cap` is 4, so the
   second cast tops the choir out and the third is **refused** — `Boss._choose`
   throws a capped summon away and re-rolls, and `REPEAT_WEIGHT` makes the second
@@ -577,7 +790,8 @@ Worth knowing and not guessing: **the boss's own beats never hurt its adds.**
 `_victims()` returns the player group only, so nobody should design around
 walking a chorister into `first_toll`.
 
-**Parry and dodge.** `first_toll` is parryable from inside 7.5 m and buys 0.52 s
+**Parry and dodge.** `first_toll` is parryable from inside 7.5 m and buys
+**0.74 s**, the widest fixed parry window in the game
 — the deliberate mirror of the Warden's donut, where the Warden asks you to step
 *in* and the Bellwake asks you to step *out*, and both can be answered with the
 shield instead by the player who would rather stand and read.
@@ -653,13 +867,20 @@ sentence (GDD §5.2).
 
 | | Tell | Commit | Recover | Punish | Cooldown |
 |---|---|---|---|---|---|
-| `gate_lunge` | 0.78 | 0.75 travel | 1.05 | 1.35 → 2, misses the finisher by 0.02 | 1.35 |
+| `gate_lunge` | 0.78 | **0.80 travel** (`12.0 / 16.0 + 0.05`) | 1.05 | 1.35 → 2, and **3** counting the recover — but see §2 | 1.35 |
 | `riven_arc` | 0.62 | 0.22 | 0.65 | 0.90 → 2 | 0.90 |
 | `call_the_iron` | 1.45 | 0.22 | 1.40 | 2.10 → **3** | 8.00 |
 
+`gate_lunge` is the beat §2's caveat is about: 1.05 + 1.35 = 2.40 s of rooted,
+hittable boss, which clears the 1.37 s finisher line twice over — and the boss
+spends the first of those seconds twelve metres away, because it just charged
+past. The recover is real time and it is time the player walks in. Two contacts
+is the honest expectation and the third is what closing fast buys.
+
 Depth: none. The authored compression against floor 1 is 86.7% on the charge and
-**59.0% on the arc, which is 0.01 s past GDD §7's 60% line** — 0.63 s is the
-number, `riven_arc` says 0.62, and §4 recommends the one-character fix.
+**59.0% on the arc** — which is a taste measure and not a 60% breach, because
+GDD §7's floor is `Prog`'s per-depth curve on the generated roster and no boss
+beat is on it (§4). `riven_arc` stays at 0.62.
 
 **Three telegraphs.** It sinks onto its back leg and levels the blade at hip
 height with one red line running the length of it — **the line is the lane**, and
@@ -675,7 +896,16 @@ lane, spread/violet/no mark.
 - *Fast:* the keystone. After the turn there is a `HookTarget` at the centre of
   the arena, and a hookshot to it is the fastest exit from a 1.2 m lane in the
   game — and the fastest way back in afterwards, which is the half that makes it
-  a reposition rather than an escape.
+  a reposition rather than an escape. **"After the turn" is doing a great deal of
+  work in that sentence, and it should be said out loud: the keystone is the only
+  `HookTarget` in the arena, the turn puts it there at half health, and the
+  Knight's bar is 128 quarters. For the first 64 of them — half the fight, and
+  the half in which the player is learning it — the item the whole floor-4
+  diagonal is built on has nothing in the room to attach to.** The hookshot is
+  not useless before the turn (it is still a freeze on a wraith and still a pull
+  to the pylons if the pylons ever carry a target), but the *answer to this fight*
+  arrives in the second half of it. §7 counts that against the diagonal, and so
+  should anyone reading this section for a build order.
 - *Worse, and free:* sidestep. A 1.2 m lane at 16 m/s is readable off a 0.78 s
   tell and the roll is faster than the run.
 - *Worse still, and built:* the two broken gate pylons. `is_on_wall()` ends the
@@ -689,12 +919,15 @@ them. So the hookshot answers this fight through the **room**, never through the
 body. That is the weakest link in the diagonal and §7 says so.
 
 **Parry and dodge.** `gate_lunge` is the game's hardest parry — the fastest
-charge on the shortest tell — and it pays 0.42 s plus up to three quarters of a
-second of aborted travel. `riven_arc` is the beat that shows what the parry
-becomes at floor 4: 0.02 s of window, so what you are buying is six quarters of
-damage refused and a 1.20 s dash into a body that has just spent its fastest
-move. `call_the_iron` is unparryable and undodgeable, like every summon, and pays
-the longest punish in the game (2.10 s) for it.
+charge on the shortest tell — and it pays 0.42 s plus whatever was left of
+**0.80 s** of travel. `riven_arc` is the beat that shows what the parry becomes
+at floor 4, and what it becomes is *smaller, not different*: **0.24 s** of window
+— a third of what `cistern_drop` hands over on floor 1, still an extra contact,
+and on top of it six quarters of damage refused and a 1.20 s dash into a body
+that has just spent its fastest move. The parry never stops being worth throwing;
+it stops being worth throwing *for the window alone*. `call_the_iron` is
+unparryable and undodgeable, like every summon, and pays the longest punish in
+the game (2.10 s) for it.
 
 **Balance note, and it is the honest one about this fight.** Intended, the two
 called wraiths are 35 quarters and 6 damage each at floor 4 — **55% of the boss's
@@ -742,35 +975,74 @@ should be enough, and "should be enough" is not the bar this repo uses.
 
 `docs/BESTIARY.md` §5 claims each boss's fight shape is answered by the item the
 *previous* boss dropped, the same way `docs/PUZZLES.md` §1 claims it for the
-floors. Walked one floor at a time, **it holds three and a half times out of
-four**, and here is the half.
+floors. Walked one floor at a time against what the code actually does,
+**it holds once cleanly, once partially, and twice not at all** — and an earlier
+draft of this section said "three and a half times out of four", which was the
+count you get by grading floors 1 and 3 on their prose instead of on their
+`if`s.
 
-| Floor | Carrying | Fight shape | Answered by | Through |
-|---|---|---|---|---|
-| 1 Warden | shield (always owned) | Reflect | the parry on `cistern_drop` | **the body** |
-| 2 Slag Ogre | **Bow** ← Warden | Receptacle | an arrow in `bellows_charge`'s tell | **the body** |
-| 3 Bellwake | **Burst** ← Ogre | Exposed weak point on a timer | a blast into the choir | **the adds** |
-| 4 Riven Knight | **Hookshot** ← Bellwake | Positional | the keystone anchor | **the room** |
+| Floor | Carrying | Fight shape | Answered by | Through | Holds? |
+|---|---|---|---|---|---|
+| 1 Warden | shield (always owned) | Reflect | the parry on `cistern_drop` | **the body** | the verb is universal |
+| 2 Slag Ogre | **Bow** ← Warden | Receptacle | an arrow into `bellows_charge`'s travel | **the body** | **yes** |
+| 3 Bellwake | **Burst** ← Ogre | Exposed weak point on a timer | a blast into the choir | **the adds** | no wall today |
+| 4 Riven Knight | **Hookshot** ← Bellwake | Positional | the keystone anchor | **the room** | furniture, and late |
 
-**Floors 1 and 2 are the claim in its strong form.** The item acts on the boss
-itself, on a specific beat, with a visible cue and an immediate consequence, and
-in both cases the boss is *worse off* for it. This is the shape the other two
-should be measured against.
+**Floor 2 is the claim in its strong form, and it is the only one.** Four clauses
+have to hold — the item acts on the boss itself, on a specific beat, with a
+visible cue, and the boss is measurably worse off. The arrow into the charge
+satisfies all four, and it does so through a branch that names one beat by
+`shape` and one hit by `kind`. This is the shape the other three get measured
+against.
 
-**Floor 3 is one step weaker but still honest.** The Burst does not touch the
-Bellwake; it deletes what the Bellwake is hiding behind, which is exactly
-Barinade's shell and exactly what "exposed weak point" means. The thing it is
-hiding behind happens to be alive.
+**Floor 1 is a teaching diagonal, not a mechanical one, and two of those four
+clauses fail.** What the design substitutes for "the shield answers the Warden"
+is `HeroCombat.on_parried` → `Boss.stagger`, and that path is **identical on all
+twelve boss beats and on every ordinary enemy in the game**. Nothing in it knows
+`cistern_drop` from `sluice_sweep`, or the Warden from a goblin — so "on a
+specific beat" is simply false, and "the item acts on the boss itself" is true
+only in the sense in which it is true of a skeleton. What *is* true, and is worth
+having, is that `cistern_drop` is the beat best shaped to **teach** the parry: a
+donut whose safe band the player chooses to stand in, on the first boss in the
+game, with the widest window on floor 1 behind it (§3). Teaching is a real job.
+It is not the same job as the other rows in this table, and the table should not
+have implied it was.
 
-**Floor 4 is where it breaks, and it breaks quietly.** The hookshot answers the
-Riven Knight through *arena furniture the arena did not have until half health*.
-The Knight would fight identically if the player had no hookshot — a sidestep
-answers `gate_lunge` and always did — so floor 4 is the one fight where the
-diagonal is a convenience rather than a lock. Three reasons it is still the right
+The alternative — giving `cistern_drop` a parry reward the other eleven beats do
+not get, a longer stagger or a beat-specific opening — is rejected, and not on
+cost: §3's whole rule is that a parry brings forward *the beat's own authored
+punish* and never invents an opening, and a per-beat parry bonus would be the
+second reward vocabulary the fight has. Floor 1 keeps the universal verb and this
+row keeps the honest grade.
+
+**Floor 3 has no wall at all today**, which is the same grade floor 4 gets and
+for a plainer reason. §6.3 works it: `Boss._on_damaged` has no invulnerability
+branch and no add-count check, so the Bellwake's core is open before the choir is
+called, during it, and if the Burst is never fired. The Burst removes two
+skeletons out of a 2.00 s punish window and **opens nothing**. That is a real
+reason to be carrying it — two bodies converging on you inside the longest window
+in the game is pressure the blade cannot clear without spending the window — but
+it is pressure, not a lock, and "exposed weak point on a timer" describes a lock.
+The gate that would make it true is five lines and it is refused in §6.3 on the
+`New mechanics 2` row, deliberately and with the cost named.
+
+**Floor 4 breaks quietly, and in two places rather than one.** The hookshot
+answers the Riven Knight through *arena furniture the arena did not have until
+half health* — and for the first 64 of 128 quarters it does not have it at all
+(§6.4), so the item arrives as an answer only once the fight is half over. The
+Knight would also fight identically if the player had no hookshot, because a
+sidestep answers `gate_lunge` and always did. Three reasons it is still the right
 call: `Boss.freeze` refusing the barb is load-bearing poise and must not be
 softened to rescue a table; the alternative (disarm) is four ceilings deep
 (§6.4); and a floor-4 boss that *requires* a counted-charge item is a boss that
 can be arrived at unanswerable, which pillar 2 forbids.
+
+**What that leaves is a set with one strong row in it**, and saying so is the
+point of the section. `docs/BESTIARY.md` §5's diagonal is a good claim about the
+*floors* (`docs/PUZZLES.md` §1 earns it there, with locked doors and verbs) and a
+mostly aspirational one about the *bosses*. Nobody should read §5 and expect four
+locks, and no card should be closed on the strength of the table above without
+reading these five paragraphs under it.
 
 **And the audit `docs/BESTIARY.md` §4.3 started, finished.** Across all eight
 authored fights:
@@ -795,21 +1067,27 @@ the Thrower behaviour that is already on the manifest.
 
 ## 8. What this costs the manifest
 
-`docs/SCOPE.md` §1 speaks in counts, so:
+`docs/SCOPE.md` §1 speaks in counts — but **not in all of these counts**, and an
+earlier draft of this table presented every row as if it were §1's. Two of them
+are not. `docs/SCOPE.md` §1 has no `Boss beats` row and no `Boss phases` row;
+both caps live in §6's risk table, under *"Boss move sets balloon"*, whose answer
+is *"Three beats, one phase, hard cap."* They are cited here as §6 accordingly,
+and they are no less binding for it — `BossDb.validate()` enforces the beat cap
+in code, which §1 does for nothing.
 
-| | Count | Moved? |
-|---|---|---|
-| Bosses | **4** | No |
-| **Boss beats** | **12** | **No.** All four shapes are re-readings of `cistern_drop`, `bellows_charge`, `hushing_choir`, `gate_lunge` |
-| **Boss phases** | **1** | **No.** The turn changes the room. No beat, no stat, no move-set change, no second bar — §5 lists exactly what a turn may touch |
-| **New monster models** | **0** | No |
-| **Puzzle atoms** | **9** | **No.** The keystone carries a `HookTarget` (the firer's contract), not a `HookRing` |
-| **New mechanics** | **2** | **No.** The receptacle is one `if` in a function that exists; the turn is one threshold and a room. Both are held to the same test the Echo and the shield reflect passed |
-| Usable items / ring stops | **6 / 6** | No |
-| Enemy behaviours | **8**, 4 committed | No |
-| Minibosses | **4** | No |
-| New UI screens | **1** | No |
-| **Boss attack shapes** | **5** | **No — and this is the row that was at risk.** Reflect-with-an-object wanted a sixth and did not get one (§6.1) |
+| | Count | Where it lives | Moved? |
+|---|---|---|---|
+| Bosses | **4** | §1 | No |
+| **Boss beats** | **3 per boss, 12** | **§6**, and `validate()` | **No.** All four shapes are re-readings of `cistern_drop`, `bellows_charge`, `hushing_choir`, `gate_lunge` |
+| **Boss phases** | **1** | **§6** | **No.** The turn changes the room. No beat, no stat, no move-set change, no second bar — §5 lists exactly what a turn may touch, and the `boss_phase_changed` emit is an announcement with no listener that acts on it |
+| **New monster models** | **0** | §1 | No |
+| **Puzzle atoms** | **9** | §1 | **No.** The keystone carries a `HookTarget` (the firer's contract), not a `HookRing` |
+| **New mechanics** | **2** | §1 | **No** — and this is the row that is now doing the work. The receptacle is one `if` in a function that exists; the turn is a connect, a handler, a bool and four effects. **The Bellwake's damage gate would have been the third and it is refused in §6.3**, which is the whole reason §7 grades floor 3 the way it does |
+| Usable items / ring stops | **6 / 6** | §1 | No |
+| Enemy behaviours | **8**, 4 committed | §1 | No |
+| Minibosses | **4** | §1 | No |
+| New UI screens | **1** | §1 | No |
+| **Boss attack shapes** | **5** | `boss_db.gd`'s header | **No — and this is the row that was at risk.** Reflect-with-an-object wanted a sixth and did not get one (§6.1) |
 
 **Nothing here needs an owner's amendment**, which is the point: §5 said naming a
 fight shape should cost nothing, and this is that claim checked line by line.
@@ -822,44 +1100,96 @@ one to defend. Do not absorb it. If it is wanted, price it and take it to the
 owner, and note first that the game already gets reflect-with-an-object for free
 from the Thrower behaviour that is on the manifest.
 
-**Three code changes, named, so nobody thinks this is only prose:**
+**Three code changes, named, and priced at what they actually are** — the second
+one was under-priced as "one threshold" for two drafts and it is the largest of
+the three:
 
-1. `Boss._on_damaged` — the arrow-into-the-tell branch, one `if` (§6.2).
-2. `BossArena` — the turn: a threshold read off the row, a bool, and four small
-   effects (§5). Plus `Boss.set_arena_radius()`, one setter beside the
-   `set_arena_center()` the arena already calls.
-3. `BossDb` — an `arena.turn` sub-dictionary on four rows, and one tell of
-   0.62 → 0.63 (§4). `validate()` should grow three assertions with it:
-   `turn.kind` is one of the four, `turn.at` is in (0, 1), and no beat's tell is
-   under 60% of the shallowest tell of the same attack shape.
+1. `Boss._on_damaged` — the arrow-into-the-**travel** branch, one `if` on
+   `state`, `_charging` and `hit.kind` (§6.2). Genuinely one `if`.
+2. `BossArena` — the turn, and it is **not** a threshold read off a row, because
+   this node has no `_process`, no `_physics_process` and no reference to the
+   boss's health today. It is: a `health.damaged` connect in `_build_boss`; a
+   handler that reads `fraction()`, compares, and latches a bool; the
+   `Bus.boss_phase_changed(1)` emit; a dispatch on `turn.kind`; and four effects
+   behind it, of which **`shrink` needs the annulus guard in §5 and `douse` has
+   no handle at all yet**. Plus `Boss.set_arena_radius()`, one setter beside the
+   `set_arena_center()` the arena already calls. Call it a day's work with a
+   director on the end of it, not a line.
+3. `BossDb` — an `arena.turn` sub-dictionary on four rows. **No tell changes**:
+   the 0.62 → 0.63 edit an earlier draft asked for was answering a 60% line that
+   does not apply to boss beats (§4). `validate()` should grow **two** assertions
+   with it — `turn.kind` is one of the four, and `turn.at` is in (0, 1). It
+   should *not* grow the third one that was proposed (no beat's tell under 60% of
+   the shallowest tell of its shape); §4 is the argument for why that assertion
+   would be checking a number it invented.
 
 ---
 
 ## 9. What a director has to show
+
+> **Read this before anything else in §9, because it is the largest risk in the
+> document.** `SHAPE_CHARGE` and `SHAPE_SUMMON` have **zero runtime coverage**.
+> No file anywhere in `tools/` references `bellows_charge`, `gate_lunge`,
+> `hushing_choir`, `call_the_iron`, `SHAPE_CHARGE` or `SHAPE_SUMMON`, and
+> `boss_cistern.gd` is the only boss director in the project — the Warden throws
+> an `arc`, a `slam` and a `zone`, and those three shapes are the entirety of
+> what has ever executed with a screenshot on the end of it.
+>
+> So: **six of the twelve beats and three of the four fight shapes in this
+> document rest on code paths that have never run.** `_advance_charge`,
+> `_end_charge`, `_shape_summon`, `_summons_alive`, the `cap` refusal in
+> `_choose`, and `_commit_seconds`'s charge branch are all read-and-reasoned-about
+> here and unexercised in fact. Every number in §3's charge rows, §6.2's whole
+> answer and §6.3's whole timer is arithmetic off a table, not a measurement off
+> a frame.
+>
+> That is also **why board card 22 was found by reading rather than by running**
+> — `_shape_summon` writes `e.level` after `Enemy.spawn` has already built the
+> combat block, and nothing has ever spawned a boss add to notice. Assume there
+> is a second card 22 in the charge path and write the directors expecting to
+> find it.
 
 `CLAUDE.md` §2: the proof is exercising the thing and looking at the frames, and
 `tools/directors/boss_cistern.gd` already does A–I for the Warden. Each new fight
 gets its own director on that pattern — `boss_foundry.gd`, `boss_choir.gd`,
 `boss_chord.gd` — and what §6 adds beyond A–I is small and specific:
 
-- **All four:** the turn fires **once**, at the authored fraction, and the frame
+- **All four:** the turn fires **once**, at the authored fraction,
+  `Bus.boss_phase_changed` is emitted **exactly once** with it, and the frame
   before and the frame after are different pictures. Photograph both.
-- **Warden:** the same beat, twice — once parried, once not — and
-  `punish_opened` measured off the fight's own clock, 0.47 s apart. And the
-  donut's second answer still works after the shrink.
-- **Slag Ogre:** an arrow into `bellows_charge`'s wind-up, after which
-  `beat_committed` **never fires for that beat**, `punish_opened` fires with
-  1.70, and the hero's health is unchanged. Then the same beat with no arrow, for
-  the contrast frame.
+- **Warden, the parry:** the same beat, twice — once parried, once not — and
+  `punish_opened` measured off the fight's own clock, **0.69 s apart** (§3: the
+  0.22 s commit plus 1.10 s of recover, less the 0.627 s stagger). A director
+  that asserts 0.47 is asserting the arithmetic this document had wrong for two
+  drafts; it is the one number in §9 worth checking against §3 before you type
+  it.
+- **Warden, the shrink:** stand the hero at **10 m — outside the new 8.5 m
+  fence** — and take the boss to half health there. The hero must end up inside
+  the new ring, on the floor, able to move, with the fight still running. This is
+  the §5 annulus guard and it is the beat most likely to fail: an unguarded
+  `shrink` either seals him into a two-and-a-half-metre gap he cannot leave or
+  pushes him through the outer fence. Photograph the frame after. And the donut's
+  second answer still works after the shrink.
+- **Slag Ogre:** let `bellows_charge` commit, then put an arrow into it **while
+  it is travelling**. `beat_committed` **does** fire (the beat committed — that
+  is the design, §6.2); the charge stops short of its 11 m; `punish_opened` fires
+  with 1.70; and the hero's health is unchanged. Then an arrow into the same
+  beat's **wind-up**, which must do nothing but damage — that is the negative
+  case, and it is the one that proves the rule is scoped by ordering and not by
+  weapon. Then the beat with no arrow at all, for the contrast frame. **This is
+  the first `SHAPE_CHARGE` any director has ever thrown.**
 - **Bellwake:** one blast clears both choristers; the boss takes measurable
   damage inside the 6.00 s; and the capped case — four alive, the beat refused by
-  `_choose`, the fight visibly picking something else. **No director in the
-  project currently throws a `summon` at all** (board card 22), so this is new
-  ground and it is where the add-level bug will show.
+  `_choose`, the fight visibly picking something else. Also assert the thing
+  §6.3 and §7 are honest about, so no later reader has to rediscover it: **the
+  boss takes full damage with two choristers alive**, because there is no gate.
+  **No director in the project currently throws a `summon` at all** (board card
+  22), so this is new ground and it is where the add-level bug will show.
 - **Riven Knight:** a charge into the keystone ends early and the punish opens
-  anyway; the hookshot pulls the hero to the keystone; and the boss does **not**
-  stall behind it — thirty seconds of fight after the turn with beats still
-  landing.
+  anyway; the hookshot pulls the hero to the keystone; **the arena has no
+  `HookTarget` in it before the turn** (§6.4 — photograph the failed press, it is
+  half the fight); and the boss does **not** stall behind the keystone — thirty
+  seconds of fight after the turn with beats still landing.
 
 And `--warmup`, `timeout 400`, and `tools/quiet.sh` rather than bare `godot`,
 for the reasons `CLAUDE.md` §2 gives at length.
