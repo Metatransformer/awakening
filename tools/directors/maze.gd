@@ -3,7 +3,7 @@ extends RefCounted
 ## reconfigures it.
 ##
 ##   godot --path . -s tools/shoot.gd -- \
-##     --scene=res://scenes/rooms/_atom_test.tscn \
+##     --scene=res://scenes/rooms/_maze_test.tscn \
 ##     --director=res://tools/directors/maze.gd \
 ##     --out=/tmp/mz/x.png --warmup=60
 ##
@@ -31,10 +31,11 @@ extends RefCounted
 ## looks exactly like a maze that works.
 
 const SEED := 20260810
-## Match `Dungeon.MAZE_ROWS/COLS`. Wider than deep because the lantern apron comes
-## out of the depth -- see `MazeRoom.APRON`.
-const R := 3
-const C := 4
+## Match `Dungeon.MAZE_ROWS/COLS`. Square, because the maze's room is built to the
+## maze (`Dungeon.MAZE_ROOM`) rather than the maze squeezed into a 16 m room --
+## the apron still comes out of the depth, there is just depth to pay it with.
+const R := 5
+const C := 5
 
 var out := ""
 var _fails := 0
@@ -81,29 +82,34 @@ func run(rig) -> void:
 		print("MAZE FAIL -- %d check(s) failed" % _fails)
 
 
-## **Take the proving ground's furniture out before standing a maze on it.**
+## **The fixture has to be as big as the room the generator builds, and empty.**
 ##
-## `proving_ground.tscn` is a showroom: a raised ledge over the east half, two
-## pillars, two pushable blocks and a pair of floor braziers. A 12.4 x 9.3 m maze
-## has nowhere in that chamber to stand clear of all of it, and beat F's walk does
-## not care whether the thing it wedged against is a maze wall or a brazier — it
-## just reports "stuck", which is a false failure and, worse, would mask a true
-## one. So the fixture is cleared first and said out loud, rather than the maze
-## being nudged to a corner where today's furniture happens not to be.
-func _clear_the_floor(rig) -> void:
+## This used to be a function that took the proving ground's furniture out — a
+## raised ledge, two pillars, two pushable blocks, two braziers — because a
+## 12.4 x 9.3 m maze had nowhere in that showroom to stand clear of all of it, and
+## beat F's walk cannot tell a maze wall it wedged against from a brazier: it just
+## reports "stuck", which is a false failure and, worse, would mask a true one.
+##
+## Clearing is not enough any more. A 5x5 maze is 20.15 m across and the proving
+## ground's interior is 20, so the rim would have stood in the fixture's own walls
+## and the lantern apron would have put both lanterns a metre and a half BEHIND the
+## south wall — the exact geometry `MazeRoom.APRON` documents as having shipped
+## once, reproduced inside the instrument meant to catch it, and invisible because
+## the fixture beats press the lanterns by reference. So the maze has its own
+## fixture now (`scenes/rooms/_maze_test.tscn`, 27 m square = `Dungeon.MAZE_ROOM`)
+## and this only checks it is the one running: standing this maze up in a 22 m
+## showroom is a run whose every beat is a lie.
+func _check_the_fixture(rig) -> void:
 	# Untyped: `rig` is untyped, so everything off it is a Variant (CLAUDE.md §3).
-	var ground = rig.scene().get_node_or_null(^"Ground")
-	if ground == null:
-		return
-	var freed := 0
-	for path: NodePath in [^"Ledge", ^"Props", ^"Torches/StairN",
-			^"Torches/WestPost"]:
-		var n: Node = ground.get_node_or_null(path)
-		if n != null:
-			n.free()
-			freed += 1
-	print("MAZE cleared %d fixture prop group(s) out of the maze's footprint"
-		% freed)
+	var chamber = rig.scene().get_node_or_null(^"Chamber/Floor")
+	var span := 0.0
+	if chamber != null:
+		span = float(chamber.get(&"size").x)
+	# The room the maze needs, asked of `MazeRoom` rather than restated -- the same
+	# rule the generator's `pick_maze_cell` follows.
+	var want := MazeRoom.CELL * float(maxi(R, C)) + MazeRoom.APRON * 2.0
+	_ck("A- the fixture is a chamber the maze fits in (%.1f m of %.1f m needed)"
+		% [span, want], span >= want)
 
 
 func _ck(label: String, ok: bool) -> void:
@@ -117,12 +123,12 @@ func _ck(label: String, ok: bool) -> void:
 # --- A. The carve -------------------------------------------------------------
 
 func _a_carve(rig) -> void:
-	_clear_the_floor(rig)
+	_check_the_fixture(rig)
 	var room := MazeRoom.new()
 	room.name = "MazeRoom"
 	room.rows = R
 	room.cols = C
-	# Centred on the chamber, which is 22 m square once the furniture is out of it.
+	# Centred on the chamber, exactly as `Dungeon.place_maze` centres it in a room.
 	room.position = Vector3(0.0, 0.02, 0.0)
 	rig.scene().add_child(room)
 	_room = room
@@ -155,7 +161,7 @@ func _a_carve(rig) -> void:
 	print("MAZE mouth=%d prize=%d gates=%s" % [m.mouth, m.prize, m.gates])
 	_a3_rim(room, m)
 
-	await _look(rig, room.cell_centre(m.mouth) + room.global_position, 5.5)
+	await _stand_in_the_apron(rig, room)
 	await rig.capture(out.path_join("m_01_dealt.png"))
 
 
@@ -251,7 +257,7 @@ func _c_press(rig) -> void:
 	_ck("C2 every gate's mesh AND collider match the grid (%d wrong)" % wrong,
 		wrong == 0)
 
-	await _look(rig, _room.call(&"mouth_point") + _room.global_position, 5.5)
+	await _stand_in_the_apron(rig, _room)
 	await rig.capture(out.path_join("m_02_pressed.png"))
 
 
@@ -277,7 +283,13 @@ func _d_opens(rig) -> void:
 	_ck("D1 and `opened` fired exactly once across the whole run (%d)" % _fired,
 		_fired == 1)
 
-	await _look(rig, _room.call(&"mouth_point") + _room.global_position, 5.5)
+	# Standing in the mouth cell looking down the corridor that just opened, which
+	# is the one frame the apron shot cannot give: the apron shows the lanterns and
+	# the rim, and this shows what pressing them DID.
+	var route := _route(m)
+	if route.size() > 1:
+		await _look_from(rig, _room.call(&"cell_centre", route[0]),
+			_room.call(&"cell_centre", route[1]))
 	await rig.capture(out.path_join("m_03_open.png"))
 
 
@@ -414,17 +426,24 @@ func _e_every_room() -> void:
 
 # --- Camera -------------------------------------------------------------------
 
-func _look(rig, at: Vector3, back: float) -> void:
+## Stand the hero on one cell and face them at another, both in the maze's local
+## space. The follow camera rides the hero and there is no second camera in this
+## project; a director that added one would be shooting a frame nobody ever sees.
+## An overhead of the layout is what the minimap is for.
+##
+## **Two cells and not "a cell and a distance back".** It used to take a metre
+## count and stand the hero that far along +Z, which put the lens outside the room
+## the moment the maze grew: the mouth is now 10.07 m out from the centre and the
+## apron behind it is 3.4 m, against a 4.13 m boom (`K.CAM_DIST_MAX`). Every shot
+## south of the mouth collapses to `hard_min_distance` and photographs the inside
+## of the hero's hood. Standing on a cell can't: every cell is inside the maze.
+func _look_from(rig, stand: Vector3, at: Vector3) -> void:
 	if _hero == null:
 		return
-	# Standing IN the maze, looking down a corridor -- the view the player has.
-	# The follow camera rides the hero and there is no second camera in this
-	# project; a director that added one would be shooting a frame nobody ever
-	# sees. An overhead of the layout is what the minimap is for.
-	var stop := at + Vector3(0.0, 0.0, back)
+	var stop := stand + _room.global_position
 	stop.y = 0.15
 	_hero.global_position = stop
-	var to := K.flat(at - _hero.global_position)
+	var to := K.flat(at + _room.global_position - _hero.global_position)
 	if to != Vector3.ZERO:
 		_hero.facing_yaw = atan2(to.x, to.z)
 		_hero.rotation.y = _hero.facing_yaw + PI
@@ -562,6 +581,20 @@ func _g_on_a_floor(rig) -> void:
 		_ck("G0a and the dungeon knows which room it is in", false)
 		return
 	_ck("G1 shut as generated", not bool(found.call(&"is_open")))
+	# **The room is built to the maze, and the maze is cut to the room.** Printed
+	# and then asserted, because the interesting case is the one that shrank: a
+	# room next door to a 30 m boss chamber cannot be 27 m, so `Dungeon._maze_grid`
+	# hands back fewer cells instead of the floor handing back no maze. The failure
+	# that shape invites is a grid one size too big for the room it was cut for --
+	# which is the lantern-in-the-masonry bug again, arrived at by arithmetic.
+	var fm: Maze = found.get(&"maze")
+	var room_w: float = float(dungeon.call(&"size_of", cell))
+	print("MAZE room %s is %.1f m wide, grid %dx%d, cell %.2f m"
+		% [cell, room_w, fm.rows, fm.cols, MazeRoom.CELL])
+	_ck("G1a and the room it is in is wide enough for the grid it got",
+		MazeRoom.fits(room_w, fm.rows, fm.cols))
+	_ck("G1b with enough cells to be a puzzle (%d)" % (fm.rows * fm.cols),
+		fm.rows * fm.cols >= 9)
 	var chest = found.get_parent().get_node_or_null(^"MazeChest")
 	_ck("G2 with a chest standing hidden at the prize",
 		chest != null and not chest.visible)
@@ -606,11 +639,15 @@ func _g_on_a_floor(rig) -> void:
 ## it, with both lanterns in shot and the maze's rim running along the left.
 ##
 ## **Along the apron rather than across it, and that is forced, not a preference.**
-## The boom is 4.13 m (`K.CAM_DIST_MAX`) and the apron is 3.35 m deep, so a shot
+## The boom is 4.13 m (`K.CAM_DIST_MAX`) and the apron is 3.4 m deep, so a shot
 ## taken facing the maze puts the lens through the room's south wall — it
 ## collapses to `hard_min_distance` and the frame is the inside of the hero's
 ## hood, which is precisely what the first version of this shot produced. Along
-## the room's 16 m width there is boom room to spare.
+## the room's 27 m width there is boom room to spare.
+##
+## Used by the fixture beats as well as the floor ones now: the apron is the same
+## depth in both, so a shot that fits one fits the other, and the fixture's frames
+## are then the same picture the floor's are.
 func _stand_in_the_apron(rig, room: Node3D) -> void:
 	if _hero == null or room == null:
 		return

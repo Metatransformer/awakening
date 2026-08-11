@@ -638,21 +638,32 @@ that could only photograph its own seed's draw would ship the other two unproven
 **Built.** `scripts/world/maze.gd` (the carve, no nodes), `scripts/props/maze_room.gd`
 (the same grid stood up in `KitWall` masonry), proved by `tools/directors/maze.gd`.
 
-- **Where:** an ordinary room, not an anchor. It costs the §8 manifest nothing —
-  no new anchor kind, no new atom, no new mechanic.
+- **Where:** a room of the floor's own tree, not an anchor — but built **wider
+  than the rest of it**, `Dungeon.MAZE_ROOM` (27 m square, ~3x the ordinary
+  room's floor), the way the deepest room is built wider for a boss. It still
+  costs the §8 manifest nothing: no new anchor kind, no new atom, no new
+  mechanic. The room is chosen in `Dungeon._plan_maze`, before `_build`, because
+  a room's masonry is laid to a width and a maze cannot be dropped into a room
+  that was already built too small for it.
 - **Shape:** a perfect maze (recursive backtracker — long corridors, few
   junctions, because a maze you read by *walking* is the one the minimap cannot
   hand you), carved so that the prize in the deepest cell is **walled off as
-  dealt**. 4 cells wide by 3 deep at `MazeRoom.CELL`, and it is wider than it is
-  deep on purpose — see the apron below.
+  dealt**. 5 by 5 cells at `MazeRoom.CELL`.
+- **Scale, and why it was wrong at first.** `CELL` was 3.1 m and the grid 4 x 3,
+  both of them dictated by fitting inside a 16 m room. That is a hedge maze: a
+  2.6 m corridor against a 1.65 m hero keeps both walls inside the camera's boom
+  the whole time, and nine cells means every cell is a turn. The cell is 4.03 m
+  now — **30% wider**, ~3.5 m of clear floor — and the room is sized to the maze
+  instead of the maze to the room. Long enough between decisions that the layout
+  registers as a layout.
 - **The verb:** two lanterns (§2) by the mouth. Striking one opens the wall it
   owns and **shuts the next one along** — §3's *couple*, the same combinator the
   lights-out grid uses, so the player cannot simply open everything.
 - **The apron:** a band of clear floor on the mouth side, `MazeRoom.APRON`, that
   the lantern row stands in. It is a named constant and `Dungeon.pick_maze_cell`
   asks `MazeRoom.fits` about it, because the depth of the maze and the depth of
-  the apron come out of the same 16 m room and the version of this that did not
-  count it put both lanterns **through the room's south wall on every floor**.
+  the apron come out of the same room and the version of this that did not count
+  it put both lanterns **through the room's south wall on every floor**.
 
 **A plain maze is not a puzzle in this game and shipping one would be a mistake.**
 This game has a minimap: it answers a static maze for free, and what is left is
@@ -667,7 +678,7 @@ gates open at once generates, builds, lights, and refuses forever, and every
 frame of it looks right. `Maze.plan` therefore tests the reachable set, not
 "every gate open", and re-deals until the layout is both shut as dealt and
 solvable through a press. The director walks the hero mouth to prize against the
-real colliders, because a 3.6 m corridor cannot be photographed.
+real colliders, because a corridor this narrow cannot be photographed.
 
 **And the grid is not the room — the two ways that bit, 2026-08-10.** `Maze` is
 integers and `MazeRoom` is masonry, and the room shipped for a while disagreeing

@@ -26,12 +26,20 @@ extends Node3D
 
 ## Metres per maze cell. Two things set this and they pull opposite ways: a
 ## corridor you cannot swing a sword in is a corridor the sword does not work in
-## (the maze takes enemies later, `docs/PUZZLES.md` §5.4), and a 4x4 maze has to
-## FIT inside a 16 m dungeon room with a walkway round it. 3.1 leaves ~2.6 m of
-## clear corridor against a 1.65 m hero, and 12.4 m across the room. 3.6 was the
-## first number here and it did not fit -- `Dungeon.pick_maze_cell` refused every
-## room on the floor, which is the correct failure but not a shipped room.
-const CELL := 3.1
+## (the maze takes enemies later, `docs/PUZZLES.md` §5.4), and the grid has to FIT
+## inside its dungeon room with the lantern apron and a walkway round it.
+##
+## **3.1 x 1.3 = 4.03**, and the 30% is the point rather than a rounding: at 3.1 a
+## corridor was ~2.6 m of clear floor against a 1.65 m hero, which is a hedge maze
+## -- the walls are inside the camera's boom the whole time and every cell is a
+## turn. 4.03 leaves ~3.5 m, so a corridor reads as a corridor and the walk
+## between decisions is long enough that the layout registers as one.
+##
+## It does NOT fit a 16 m room any more, and that is deliberate: the maze claims a
+## room built wider (`Dungeon.MAZE_ROOM`). 3.6 was the first number ever tried
+## here and it was backed out because it did not fit the ordinary room; the answer
+## this time was to size the room to the maze rather than the maze to the room.
+const CELL := 4.03
 const WALL_H := 4.0
 
 ## **The clear ground the maze needs on the mouth side, inside the dungeon room.**
@@ -70,7 +78,10 @@ const KIT_WALL := preload("res://scenes/kit/wall_segment.tscn")
 ## to interfere with.
 const GATES := 2
 
-## Cells. Odd-ish and small — this is a room inside a dungeon room, not a level.
+## Cells. Still a room inside a dungeon room and not a level — but the room it
+## sits in is `Dungeon.MAZE_ROOM` wide now, so the grid is square rather than the
+## 3x4 letterbox the 16 m room forced. `Dungeon.MAZE_ROWS/COLS` is the number the
+## generator actually uses; these are the defaults a hand-placed one gets.
 @export var rows: int = 5
 @export var cols: int = 5
 
