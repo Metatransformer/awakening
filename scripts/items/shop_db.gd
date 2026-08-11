@@ -1,15 +1,14 @@
 class_name ShopDb
 extends Catalogue
-## What the smith sells. Up to fifteen lines, and every one of them changes a
+## What the smith sells. Up to thirteen lines, and every one of them changes a
 ## number the player can feel inside one run.
 ##
 ## "Up to" because the counter both GROWS and SHRINKS. Three lines are gated on
-## ownership (see GATED_BY) -- a fresh save is offered twelve, and the bow's two
+## ownership (see GATED_BY) -- a fresh save is offered eight, and the bow's one
 ## and the hookshot's one appear when those items are found, which is the smith's
-## half of docs/GDD.md §5.2. Against that, eight of the twelve are the armour's
+## half of docs/GDD.md §5.2. Against that, eight of the ten are the armour's
 ## four pieces offered twice, and each piece loses its second row the moment it
-## commits (GDD §6.6), so a hero who has answered all four questions is back down
-## to a board of eleven.
+## commits (GDD §6.6).
 ##
 ## A `Catalogue`, which is the whole of what `TradeScreen` knows about it -- see
 ## that file for the contract and for why a third counter is a subclass rather
@@ -17,8 +16,6 @@ extends Catalogue
 ##
 ## Two shapes of line, on one list on purpose:
 ##
-##  * **Stock** -- arrows, a bag slot, a heart container. Gold only. These are
-##    things the smith HAS, and money is the whole transaction.
 ##  * **Forge** -- the twelve gear ladders (docs/METAGAME.md §6.5). Gold AND
 ##    components, because the smith cannot make a longer chain out of coin. The
 ##    rung sits in `Game.upgrades` and the gear reads it back through the
@@ -28,9 +25,13 @@ extends Catalogue
 ##    added 2026-08-10). It is a held press, not a tap, and `Catalogue.crafts`
 ##    explains why a free line is the most irreversible one on the board.
 ##
-## One list rather than two screens because the player is answering one question
-## -- what is the best thing I can afford right now -- and splitting the answer
-## across two menus makes them hold half of it in their head.
+## **There used to be a third shape -- STOCK: arrows, a bag slot, a heart
+## container, gold only.** They went to `SupplyDb` and the quartermaster's counter
+## on 2026-08-11 (card #91), when the smith stopped being in the yard on the first
+## frame: with Brannoc held back until the floor 1 miniboss is down, three
+## purchases every first-hour player needs were behind a counter that did not
+## exist yet. See that file. Nothing about the lines changed in the move, which is
+## why a save's `Game.upgrades` needs no migration.
 ##
 ## Prices are set against the drop tables rather than against each other: a good
 ## run extracts with roughly 250-450 gold of ingredients, so the cheap lines are
@@ -51,15 +52,16 @@ extends Catalogue
 ## have not found is a spoiler and a dead row, and the smith has no reason to
 ## offer to restring something you are not carrying.
 ##
-## `arrows` follows the bow for the reason `Game.armament_owned(&"arrow")` does:
-## ammunition you cannot fire is a slot that lies.
+## The `arrows` row was the third one here and it went to `SupplyDb` with the rest
+## of the stock; it keeps the identical gate over there, for the reason
+## `Game.armament_owned(&"arrow")` does -- ammunition you cannot fire is a slot
+## that lies.
 ##
 ## A table rather than a branch, because the acceptance test for the next gated
 ## line has to be "one row in a dictionary". StringName values only, so this is
 ## a genuine constant expression — a `class_name` or another class's enum in here
 ## would not be (CLAUDE.md §3).
 const GATED_BY := {
-	&"arrows": &"bow",
 	&"string": &"bow",
 	&"chain": &"hookshot",
 }
@@ -74,9 +76,10 @@ const GATED_BY := {
 ## before autoloads exist. The cost of spelling them is a typo that reads as "the
 ## smith will sell that one forever"; `forge_loop.gd` beat P0 asserts every id in
 ## `Game.PLATE_TRACKS` appears here, which is where that typo gets caught.
+##
+## `bag_slot` and `heart` were here and are `SupplyDb.LIMITS` now. Every ceiling
+## lives beside the counter that sells the thing.
 const LIMITS := {
-	&"bag_slot": 4,
-	&"heart": 3,
 	&"edge": K.FORGE_MAX,
 	&"guard": K.FORGE_MAX,
 	&"string": K.FORGE_MAX,
@@ -208,10 +211,6 @@ static func lines() -> Array[Dictionary]:
 ## other is not the same as on the same row, and eight lines that happened to be
 ## in pairs read as eight lines. Once a piece commits, the losing branch is not
 ## in `lines()` at all and the row is simply the one ladder.
-##
-## The stock lines are ladders too and were never drawn as such: BAG SLOT is four
-## purchases at rising prices, and a player who had bought two of them had no way
-## to see they were two from the end.
 static func groups() -> Array[Dictionary]:
 	var rows: Array[Dictionary] = lines()
 	var at := {}
@@ -219,9 +218,6 @@ static func groups() -> Array[Dictionary]:
 		at[rows[i]["id"]] = i
 
 	var out: Array[Dictionary] = []
-	_stock_row(out, at, rows, &"arrows", "ARROWS", 1)
-	_stock_row(out, at, rows, &"bag_slot", "THE BAG", int(LIMITS[&"bag_slot"]))
-	_stock_row(out, at, rows, &"heart", "HEARTS", int(LIMITS[&"heart"]))
 	_forge_row(out, at, &"edge", "THE BLADE")
 	_forge_row(out, at, &"guard", "THE SHIELD")
 	for piece: StringName in Game.PLATE_PIECES:
@@ -241,23 +237,6 @@ static func _forge_row(out: Array[Dictionary], at: Dictionary,
 	if not stocked(id):
 		return
 	out.append({"title": title, "tracks": [_track(at, id, "", K.FORGE_MAX)]})
-
-
-static func _stock_row(out: Array[Dictionary], at: Dictionary,
-		rows: Array[Dictionary], id: StringName, title: String,
-		rungs: int) -> void:
-	if not stocked(id):
-		return
-	# Arrows are the one line here with no ceiling, so they get the plain named
-	# cell a repeatable gets rather than a one-rung ladder with a numeral on it.
-	if rungs <= 1:
-		var i: int = at.get(id, -1)
-		if i < 0:
-			return
-		out.append({"title": title, "tracks": [{
-			"name": String(rows[i]["label"]), "line": i, "owned": 0, "rungs": 1}]})
-		return
-	out.append({"title": title, "tracks": [_track(at, id, "", rungs)]})
 
 
 ## A piece of armour: one row, and its two paths are two branches on it until one
@@ -411,31 +390,6 @@ static func stocked(id: StringName) -> bool:
 ## literal stays a literal.
 static func _board() -> Array[Dictionary]:
 	return [
-		{
-			"id": &"arrows",
-			"label": "ARROWS X10",
-			"cost": _stock(40),
-			"parts": {},
-			"blurb": "Fletched from something that used to fly.",
-			"detail": _arrow_detail(),
-		},
-		{
-			"id": &"bag_slot",
-			"label": "BAG SLOT",
-			"cost": _stock(140, &"bag_slot", 1.6),
-			"parts": {},
-			"blurb": "One more thing you can carry, and lose.",
-			"detail": "%d slots -> %d" % [Game.bag_slots, Game.bag_slots + 1],
-		},
-		{
-			"id": &"heart",
-			"label": "HEART CONTAINER",
-			"cost": _stock(320, &"heart", 1.5),
-			"parts": {},
-			"blurb": "One more heart. It does not grow back on its own.",
-			"detail": "%d hearts -> %d" % [
-				Game.max_quarters / K.HEART, Game.max_quarters / K.HEART + 1],
-		},
 		_forge(&"edge", "SHARPEN THE BLADE", 120, 2.1,
 			"Takes a quarter-heart more off whatever it meets.",
 			K.EDGE_DAMAGE, "+%d", "quarters"),
@@ -552,27 +506,9 @@ static func next_parts(id: StringName) -> Dictionary:
 	return recipes[owned]
 
 
-static func _arrow_detail() -> String:
-	return "%d / %d arrows" % [Game.arrows, Game.max_arrows]
-
-
 static func _scaled(base: int, id: StringName, factor: float) -> int:
 	var owned: int = Game.upgrades.get(id, 0)
 	return int(round(base * pow(factor, float(owned))))
-
-
-## A STOCK line's price.
-##
-## The three lines the smith BUYS IN -- arrows, a bag slot, a heart container --
-## and not the twelve forge ladders. **No relic discounts them.** This used to
-## multiply by `RelicDb.smith_stock_mult()`, the Waterwheel Gear's bite, and GDD
-## §6.2 deleted that relic to pay for the Ballast-Verse on the grounds that a
-## percentage off a subsystem is not a change to the place you come home to
-## (`docs/ITEMS.md` §8, D1). The helper survives the relic because the three
-## stock lines are still a different kind of thing from a rung, and the next
-## number that treats them as a group wants exactly one place to land.
-static func _stock(base: int, id: StringName = &"", factor: float = 1.0) -> int:
-	return _scaled(base, id, factor)
 
 
 ## How many more of `id` the player may buy. -1 means unlimited.
@@ -611,8 +547,6 @@ static func can_buy(line: Dictionary) -> bool:
 	var id: StringName = line["id"]
 	if remaining(id) == 0:
 		return false
-	if id == &"arrows" and Game.arrows >= Game.max_arrows:
-		return false
 	if not Game.can_afford_parts(line.get("parts", {})):
 		return false
 	return Game.gold >= int(line["cost"])
@@ -635,8 +569,6 @@ static func refusal(line: Dictionary) -> String:
 		if int(LIMITS.get(id, 0)) > cap_of(id):
 			return "HE HAS NOT BEEN TAUGHT THAT RUNG"
 		return "NOTHING LEFT TO DO THERE"
-	if id == &"arrows" and Game.arrows >= Game.max_arrows:
-		return "THE QUIVER IS FULL"
 	var parts: Dictionary = line.get("parts", {})
 	for pid: StringName in parts:
 		if Game.component_count(pid) < int(parts[pid]):
@@ -670,22 +602,15 @@ static func buy(line: Dictionary) -> bool:
 		Game.spend_component(pid, int(parts[pid]))
 
 	Game.upgrades[id] = int(Game.upgrades.get(id, 0)) + 1
-	match id:
-		&"arrows":
-			Game.add_arrows(10)
-		&"bag_slot":
-			Game.bag_slots += 1
-		&"heart":
-			# Derived from `upgrades`, which the line above has already bumped, so
-			# there is no second copy of "how many hearts do the ladders add up to"
-			# for Recut to have to agree with (GDD §6.6).
-			Game.resync_maxima(true)
-		_:
-			# Every forge track. There is nothing to apply: the rung IS the
-			# effect, and the gear reads it off Game the next time it spawns.
-			# Adding a per-track branch here would be a second place that has to
-			# agree with K's ladders, and it would eventually not.
-			Bus.gear_forged.emit(id, Game.upgrades[id])
+	# Every line here is a forge track, and there is nothing to apply: the rung IS
+	# the effect, and the gear reads it off `Game` the next time it spawns. A
+	# per-track branch here would be a second place that has to agree with K's
+	# ladders, and it would eventually not.
+	#
+	# There used to be a `match` in front of this, for the three stock lines that
+	# DID have an effect to apply -- ten arrows, a slot, a heart. They are
+	# `SupplyDb.buy` now and the match went with them.
+	Bus.gear_forged.emit(id, Game.upgrades[id])
 	Bus.item_acquired.emit(id)
 	return true
 

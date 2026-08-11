@@ -126,10 +126,12 @@ and a reading of this section that says otherwise has the mechanic backwards.
 `scripts/world/floor_db.gd:~306`; `BossDb.BOSSES[&"cistern_warden"]["drop"]`,
 `scripts/actors/enemies/boss_db.gd:~214`). Nothing before that: the bow left the
 starting kit in M1 and its forge ladder left the smith's board with it —
-`ShopDb.GATED_BY` puts `string` and the `arrows` stock line both behind owning it
-(`scripts/items/shop_db.gd:~61-65`), because a ladder for a weapon you have not
-found is a spoiler and a dead row (the note above that table,
-`shop_db.gd:~44-52`).
+`ShopDb.GATED_BY` puts `string` behind owning it and `SupplyDb.GATED_BY` does the
+same for the `arrows` stock line, because a ladder for a weapon you have not found
+is a spoiler and a dead row (the note above that table, `shop_db.gd`). **Two
+tables and not one since card #91**: arrows, bag slots and hearts moved from the
+forge to the quartermaster's stores when the smith went behind the floor 1
+miniboss. The sieve is the same sieve — it just runs on two boards now.
 
 **Changes.** It converts the whole of floor 2 into a temple about itself
 (`docs/PUZZLES.md` §1's diagonal), and it opens floor 1's shortcut —
@@ -612,7 +614,7 @@ as *"Two are Verses"*. Neither Verse had a row anywhere in the codebase.
 rows are gone. The effects that existed only to serve them went with them rather
 than being left pointing at ids nothing can donate: `FLETCH_WITH_JIG` /
 `fletch_yield()` and `SMITH_MULT_MILL` / `smith_stock_mult()` are deleted, and
-their two call sites (`Fletching.batch()`, `ShopDb._stock()`) read the base
+their two call sites (`Fletching.batch()`, `SupplyDb._board()`) read the base
 number with no accessor in the way. `RelicDb.knows_working()` replaces them: it
 is the one thing a Verse does in code, and it is the same shape as
 `knows_draught()`. **The two workings were not built here** — that was D5, and
@@ -695,7 +697,7 @@ the Slag Ogre owned an item they could never load.
 **Closed by believing the GDD.** `AlchemyDb` sells `CHARGES X3` for flat gold,
 with no `parts` — a charge is stock you paid for before you left, not something
 brewed out of what the floor dropped. The line is **gated on `Game.has(&"burst")`
-and absent until then**, which is the sieve `ShopDb.GATED_BY` already runs the
+and absent until then**, which is the sieve `SupplyDb.GATED_BY` already runs the
 arrow line through: ammunition for a verb you have never seen is a spoiler and a
 slot that lies. It is a **tap**, not a hold, for the same reason the smith's
 `ARROWS X10` is — `Catalogue.crafts()` makes a line a hold when it eats found

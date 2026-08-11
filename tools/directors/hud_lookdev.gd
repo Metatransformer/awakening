@@ -203,7 +203,7 @@ func run(rig) -> void:
 	#
 	# **The setup used to be `Game.bag_slots = 20` and 42 Deep Amber**, because a
 	# T3 of 3000 could not be reached any other way — and 20 slots is not a save a
-	# player can have (`ShopDb.LIMITS[&"bag_slot"]` is 4 over a start of 12, so 16
+	# player can have (`SupplyDb.LIMITS[&"bag_slot"]` is 4 over a start of 12, so 16
 	# is the ceiling). Card #49 moved `Pal.T3` to 2000 against the measured curve
 	# in `docs/METAGAME.md` §3.1, and this is what the beat costs now: **the
 	# default twelve slots, and a bag a real run reaches.**

@@ -13,13 +13,17 @@ extends RefCounted
 ##   A  A fresh `Game` owns the sword and the shield. No bow, no hookshot, no
 ##      arrows -- and `armament_owned(&"arrow")` says no too, because arrows
 ##      follow the bow.
-##   B  The smith's counter has no `string` row, no `chain` row and no arrow row.
-##      Photographed, because "the row is absent" is a claim about a screen.
+##   B  The smith's counter has no `string` row and no `chain` row, and the
+##      quartermaster's stores have no arrow row. Photographed, because "the row
+##      is absent" is a claim about a screen. **Two counters and not one since
+##      card #91** -- the stock lines moved to the quartermaster when the smith
+##      went behind the floor 1 miniboss; the gate did not move with them.
 ##   C  A door keyed to the bow refuses, and the refusal NAMES THE BOW on the
 ##      HUD. Not "LOCKED". Photographed from the game camera, at the distance a
 ##      player stands at, with the hero in frame.
-##   D  `Game.grant(&"bow")` grows the counter by exactly the bow's two lines,
-##      and the same door now opens -- captured mid-swing and open.
+##   D  `Game.grant(&"bow")` grows the forge by the string ladder and the stores
+##      by the arrow line, and the same door now opens -- captured mid-swing and
+##      open.
 ##   E  The second door, keyed to the hookshot, is still shut and wearing a
 ##      different mark. One row in `LockedDoor.SIGILS` is the whole difference,
 ##      and that is the M6 acceptance test arriving four milestones early.
@@ -32,6 +36,9 @@ extends RefCounted
 
 var out := ""
 var _fails := 0
+## How many rows the forge showed before the bow was granted, so D3 can assert a
+## DIFFERENCE rather than a hard-coded total. See the note there.
+var _forge_rows := 0
 
 
 func run(rig) -> void:
@@ -116,25 +123,6 @@ func _counter(rig, owns_bow: bool) -> void:
 			ids.append(r["line"]["id"])
 	print("GATE counter(%s) rows=%s" % [tag, ids])
 
-	if owns_bow:
-		_ck("D0 the bow grew the string ladder", ids.has(&"string"))
-		_ck("D1 and the arrow line with it", ids.has(&"arrows"))
-		_ck("D2 the chain is STILL hidden -- one grant, one item",
-			not ids.has(&"chain"))
-		_ck("D3 the counter is seven lines now (%d)" % ids.size(), ids.size() == 7)
-	else:
-		_ck("B0 no string ladder for a bow he has not found",
-			not ids.has(&"string"))
-		_ck("B1 no chain ladder either", not ids.has(&"chain"))
-		_ck("B2 and no arrows to buy for it", not ids.has(&"arrows"))
-		# The rest of the board must be untouched. A filter that hid three lines
-		# by hiding everything would pass all three checks above.
-		_ck("B3 the five ungated lines are all there (%d)" % ids.size(),
-			ids.size() == 5 and ids.has(&"edge") and ids.has(&"plate")
-			and ids.has(&"guard") and ids.has(&"bag_slot") and ids.has(&"heart"))
-		_ck("B4 ShopDb agrees the bow's lines are not stocked",
-			not ShopDb.stocked(&"string") and not ShopDb.stocked(&"arrows"))
-
 	await rig.capture(out.path_join("g_%s_counter_%s.png" % [
 		"04" if owns_bow else "01", tag]))
 
@@ -149,6 +137,64 @@ func _counter(rig, owns_bow: bool) -> void:
 		await rig.wait_frames(2)
 	_ck("%s the smith's screen closed" % ("D4" if owns_bow else "B5"),
 		not is_instance_valid(screen))
+	await rig.wait_frames(8)
+
+	# **The arrow row is not at the forge any more and that is not a regression.**
+	# Card #91 put the smith behind the floor 1 miniboss, so the three stock lines
+	# -- arrows, bag slots, hearts -- moved to the quartermaster (`SupplyDb`), or
+	# the first hour of the game would have had no counter that sold them. The GATE
+	# is unchanged and is still what this director claims: owning the bow is what
+	# grows the arrow row. It grows on a different board now, so the sieve gets
+	# checked on both.
+	#
+	# Opened AFTER the smith's has gone, never alongside it: two `TradeScreen`s at
+	# once is two `Prompt.block` holders, and the second one to close hands the
+	# pointer back over the first one's grave.
+	var stores := TradeScreen.open(rig.scene(), TradeScreen.Mode.BUY,
+		"THE STORES", SupplyDb)
+	await rig.wait_frames(16)
+	var stock: Array[StringName] = []
+	for r in stores._rows:
+		if r.get("kind") == &"buy":
+			stock.append(r["line"]["id"])
+	print("GATE stores(%s) rows=%s" % [tag, stock])
+
+	if owns_bow:
+		_ck("D0 the bow grew the string ladder", ids.has(&"string"))
+		_ck("D1 and the arrow line at the stores", stock.has(&"arrows"))
+		_ck("D2 the chain is STILL hidden -- one grant, one item",
+			not ids.has(&"chain"))
+		# **Exactly one more row than before, whatever that number is.** It used
+		# to be spelled `== 7` and had been wrong for a while: the plate ladder
+		# split into eight heavy/light rows and nobody re-counted, so this beat
+		# was failing on arithmetic and not on a gate. A gate is a DIFFERENCE, so
+		# the honest assertion is the difference.
+		_ck("D3 the forge grew by exactly one row (%d -> %d)"
+			% [_forge_rows, ids.size()], ids.size() == _forge_rows + 1)
+	else:
+		_ck("B0 no string ladder for a bow he has not found",
+			not ids.has(&"string"))
+		_ck("B1 no chain ladder either", not ids.has(&"chain"))
+		_ck("B2 and no arrows to buy for it", not stock.has(&"arrows"))
+		# The rest of the board must be untouched. A filter that hid the two gated
+		# ladders by hiding everything would pass B0 and B1 as well.
+		_forge_rows = ids.size()
+		_ck("B3 the ungated forge lines are all there (%d)" % ids.size(),
+			ids.has(&"edge") and ids.has(&"guard")
+			and ids.has(&"plate_chest_heavy") and ids.size() >= 10)
+		_ck("B3b and the stores still sell the bag and the hearts (%d)"
+			% stock.size(),
+			stock.has(&"bag_slot") and stock.has(&"heart"))
+		_ck("B4 the catalogues agree the bow's lines are not stocked",
+			not ShopDb.stocked(&"string") and not SupplyDb.stocked(&"arrows"))
+
+	await rig.capture(out.path_join("g_%s_stores_%s.png" % [
+		"05" if owns_bow else "02", tag]))
+	stores.close()
+	for _i in 60:
+		if not is_instance_valid(stores):
+			break
+		await rig.wait_frames(2)
 	await rig.wait_frames(8)
 
 

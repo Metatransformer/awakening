@@ -1619,7 +1619,8 @@ lying about it in a comment.
 >
 > - **The ceiling arithmetic is right and the framing is not.** 3960 is twelve
 >   slots of Deep Amber, but the bag tops out at **sixteen** slots, not twelve
->   (`ShopDb.LIMITS[&"bag_slot"]` is 4), and a monoculture ceiling is not
+>   (`SupplyDb.LIMITS[&"bag_slot"]` is 4 — it was `ShopDb`'s until card #91 moved
+>   the three utility lines to the quartermaster), and a monoculture ceiling is not
 >   evidence about play — 3960 wants seventy-two Deep Amber. The number that
 >   bounds a real bag is the best *distinct* stacks it can hold: **2782 at twelve
 >   slots**, so a starting bag could not have reached a T3 of 3000 by any route

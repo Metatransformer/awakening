@@ -131,9 +131,18 @@ replaced it is deliberately not a quest system:
   **topics** you can ask them about. `StoryDb` (`scripts/world/story_db.gd`) is
   the whole of it; there is no quest log, no objective, no flag a beat can set
   except *you have heard this*.
-- **The gate is progression, and it is two numbers**: bosses felled, and gold
-  earned over the life of the save. Nothing in a conversation is bought, found,
-  or given. See `docs/METAGAME.md` §6.
+- **The gate is progression**: bosses felled, gold earned over the life of the
+  save, and — since card #91 — **one object**, the maker's mark the floor 1
+  miniboss drops, which is what brings the smith to the yard. Nothing said in a
+  conversation is bought, found or given; the mark is a gate on who is STANDING
+  there, not on what anybody will tell you. See `docs/METAGAME.md` §6.
+- **An arrival is introduced, not discovered.** The first time you walk back into
+  the yard after somebody new has moved in, Aldric turns and presents them, and
+  the camera turns with him — a two-hander in the ordinary dialogue box with the
+  frame pivoting on the hero's own head (`StoryDb.INTRODUCTIONS`,
+  `scripts/world/introduction.gd`, `scripts/camera/convo_camera.gd`). It runs
+  once per save per person, it plays for Kessa at the very start too, and it is
+  the only camera in the game that looks at something other than the hero.
 - Aldric's first beat is the game's only briefing — what the Cut is, what the
   Guild wants out of it, that the cadet before you never came back, and where to
   put the things you want to keep. A garrison owes you somebody to report to; it

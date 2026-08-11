@@ -1330,9 +1330,12 @@ tick on a relic that is in. It is authored per line and never inferred from
 `remaining() == 0`: that is equally true of a maxed jewel slot, whose free Recut
 row means the exact opposite of done.
 
-`ShopDb` and `AlchemyDb` are `Catalogue` subclasses and `TradeScreen` holds
-whichever it was opened with. **A new shopkeeper is a `Catalogue` subclass plus
-a row in `Npc.COUNTERS` — never a second screen and never a new branch.** The
+`ShopDb`, `SupplyDb`, `AlchemyDb`, `JewelDb` and `RelicDb` are `Catalogue`
+subclasses and `TradeScreen` holds whichever it was opened with. **A new
+shopkeeper is a `Catalogue` subclass plus a row in `Npc.COUNTERS` — never a
+second screen and never a new branch.** That is not a slogan: card #91 needed
+the quartermaster to grow a second counter (THE STORES, beside her BUY/SELL
+board) and the whole cost was `scripts/items/supply_db.gd` and one row. The
 recipe column, the per-token affordability colouring, the refusal footer and the
 hold-to-craft gauge are written once; the last time this project grew a second
 copy of a system it cost more than either copy (CLAUDE.md §0).
@@ -2637,30 +2640,92 @@ StoryDb.pending(&"elder")             # the beat he owes, or {} — read-only
 StoryDb.topics(&"elder")              # the questions he will answer today
 StoryDb.pages_of(beat)                # its words, ready for DialogueBox
 StoryDb.mark_told(&"elder", &"briefing")
+
+StoryDb.pending_introduction()        # the first arrival nobody has been presented
+StoryDb.introduction(&"smith")        # the two-hander's pages, [] if none owed
+StoryDb.mark_introduced(&"smith")     # stamps `met_smith`
+StoryDb.SMITH_TOKEN                   # &"makers_mark" — the object the gate reads
 ```
 
 - **Two shapes.** A **beat** is an ordered, once-only story page-run: the first
   one whose `needs` are met and which has not been heard is what `Npc.activate`
   opens instead of the recorded greeting. A **topic** is a repeatable question,
   offered as a `keep` row in the option list. Beats are spent; topics are not.
-- **Two metrics, and only two.** `bosses` counts `boss_dead_*` over
-  `BossDb.BOSSES` — **not** every flag of that shape, because minibosses set the
-  same one and there are several per floor. `gold` is `Game.gold_earned`, the
-  LIFETIME total, which is a separate field from `Game.gold` precisely so that
-  spending cannot take a line back off you. `told` gates a beat on an earlier one.
+- **Three metrics.** `bosses` counts `boss_dead_*` over `BossDb.BOSSES` — **not**
+  every flag of that shape, because minibosses set the same one and there are
+  several per floor. `gold` is `Game.gold_earned`, the LIFETIME total, which is a
+  separate field from `Game.gold` precisely so that spending cannot take a line
+  back off you. `told` gates a beat on an earlier one. And since card #91,
+  `item` gates on `Game.has(id)` — one object, the maker's mark the floor 1
+  miniboss drops, which is what brings the smith back. It is the only rung on the
+  arrival ladder that is not a body count, and the asymmetry is deliberate: the
+  smith has to be reachable on the first descent or `arrows`, `bag_slot` and
+  `heart` are unreachable for an hour. See `docs/METAGAME.md` §6.
+- **The latch is what makes an object safe to gate on.** `unlocked()` stamps the
+  arrival flag the first time the metric is met, so spending, dropping or losing
+  the mark cannot un-arrive Brannoc. `tools/directors/roster.gd` beat D erases
+  both the mark and the boss flag and asserts both keepers stay.
 - **The words here are WRITTEN and nothing plays.** Every recorded take is
   already spoken for by `DialogueDb.SAID`; inventing cue names for lines nobody
   has been in a booth for would fail `tools/directors/dialogue.gd` beat A0 on
   purpose. A director that checks the RECORDINGS has to talk a person's story out
   of them first — `voices.gd`'s `_clear_story`, `dialogue.gd`'s `_exhaust`.
 - **`unlocked()` writes.** It stamps `garrison_<who>_arrived` the first time the
-  gate is met and answers off the flag ever after, so a keeper who arrived cannot
-  un-arrive and `tools/shoot.gd` can hand every director the full yard by setting
-  five strings. `--fresh` declines that, and `tools/directors/roster.gd` is the
-  one run that uses it.
+  gate is met and answers off the flag ever after (the latch above), which is
+  also how `tools/shoot.gd` hands every director the full yard: it sets the
+  strings rather than simulating the runs. `--fresh` declines that, and
+  `tools/directors/roster.gd` is the one run that uses it.
 - **A locked keeper is NOT BUILT.** `Garrison._build_people` skips them entirely —
   no `Npc`, no booth, no lamp — and `garrison.smith` / `.alchemist` / `.jeweller`
   are null until they arrive. Anything reaching for one must check.
+
+### Introductions — the arrival two-hander, and the only camera that leaves the hero
+
+Arriving is not the same as being met. `INTRODUCTIONS` is a second, independent
+latch (`met_<who>`) holding the scene Aldric plays the first time you walk into
+the yard after somebody new has moved in, and the schedule is
+`INTRO_ORDER` — quartermaster, smith, alchemist, jewelcrafter.
+
+```gdscript
+Introduction.play(host, &"smith")     # await-able; the whole scene, camera included
+Introduction.person_of(host, &"smith")  # the Npc in the scene with that voice id, or null
+ConvoCamera.stage(host)               # null when the scene has no hero
+cam.watch(subject, subject.head_y())  # ease the frame onto somebody
+cam.settled()                         # yaw within 1 deg AND aim within 0.10 m
+cam.release()                         # hand the previous camera back, free itself
+```
+
+- **A scene is pages plus a camera and nothing else.** `Introduction` is ~20
+  lines: it asks `StoryDb` for the pages, opens a plain `DialogueBox`
+  (`open_scene`, which takes `[{who, pages}, …]` instead of one speaker), frames
+  whoever is talking, and stamps `met_<who>` when the box says `finished`. There
+  is no cutscene player, no timeline, no second dialogue path. **A new arrival is
+  a row in `INTRODUCTIONS` and nothing else.**
+- **`DialogueBox` gained exactly two things for this**: `speaker_changed(who)`,
+  emitted whenever the page turns to a different mouth, and `finished()`. It
+  still never chooses a line and never plays a sound — the presenter contract
+  above is unchanged.
+- **`_ready` runs INSIDE `add_child`, so page 0's `speaker_changed` fires before
+  any caller can connect to it.** Frame the opening shot off `box.speaker`, then
+  connect. Every caller that forgets this opens on the wrong person for one pan.
+- **The camera pivots on the HERO'S HEAD, it does not travel.** `ConvoCamera` is
+  a second `Camera3D` that `make_current()`s, eases yaw + a world-space aim point
+  + FOV, and hands the previous camera back on `release()`. It is a point of
+  view, so it stays where the player is standing; reading a speaker forty feet
+  off is the LENS's job (`FOV_MIN` 20°, `FOV_MAX` 52°). A camera that walks
+  across the yard on its own stops being yours.
+- **Aim at a POINT, never along the hero→subject line.** The eye stands
+  `SHOULDER` = 0.30 m to one side, so pointing the camera down that line puts the
+  speaker `atan(SHOULDER / distance)` off centre — 6.6° on the elder, which is
+  what `npc_intro.gd` beat D4 caught. `_aim` eases toward the subject's crown and
+  `look_at` uses it.
+- **A `ConvoCamera` never coexists with `GameCamera`'s opinions.** It stores the
+  camera that was current, becomes current, and restores. There is no branch
+  inside the 1035-line `GameCamera` for this and there must not be one.
+- **Directors do not want this by default.** `tools/shoot.gd` stamps every
+  `met_*` flag for the same reason it stamps the arrival flags; pass **`--meet`**
+  to the one run that is about the scene (`tools/directors/npc_intro.gd`), the
+  same bargain `--intro` already strikes for the opening.
 
 ### Settings and saves — built, tested, and read-only for everyone but P14
 

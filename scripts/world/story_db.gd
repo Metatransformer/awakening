@@ -26,19 +26,23 @@ extends RefCounted
 ## And **UNLOCKS** — who is in the yard at all. `Garrison._build_people` reads it
 ## and simply does not construct the ones who have not arrived.
 ##
-## ## The two metrics, and why there are exactly two
+## ## The three metrics, and why there are exactly three
 ##
 ##   * `bosses` — how many of `BossDb.BOSSES` are dead on this save. It is the
 ##     coarse one: four of them exist in the whole Descent, so it is worth roughly
-##     a chapter each, and it is what admits the three traders (smith at 1,
-##     alchemist at 2, jewelcrafter at 3 — owner's call, 2026-08-10).
+##     a chapter each, and it is what admits the last two traders (alchemist at 1,
+##     jewelcrafter at 2).
+##   * `item` — a `Game.has()` id. The one metric that is an OBJECT rather than a
+##     count, and it exists for the smith: the floor 1 miniboss drops a Vyr
+##     maker's mark, and that mark in your pack is what brings Brannoc up the road
+##     (card #91). See `SMITH_TOKEN`.
 ##   * `gold` — `Game.gold_earned`, the LIFETIME total, not the purse. It is the
 ##     fine one: it moves every single run, it cannot go backwards, and spending
 ##     does not undo it. That last part is the whole reason it is a separate field
 ##     from `Game.gold` — gating a line on what is in your pocket would make an
 ##     old man's story disappear the moment you bought a sharpening.
 ##
-## A third was considered and refused: "runs survived". `Game.deaths` exists and
+## A fourth was considered and refused: "runs survived". `Game.deaths` exists and
 ## is deliberately unread by anything that shows the player a number (see its note
 ## in `game_state.gd`); a keeper who says a different sentence to a player who has
 ## died a lot is that scoreboard, wearing a face.
@@ -63,13 +67,32 @@ extends RefCounted
 ## counters get useful in — you cannot forge without components, cannot brew
 ## without a bottle, cannot set a stone you have not found — so a player who meets
 ## them in this order never stands in front of a shop that has nothing for them.
+##
+## **The gates moved down one whole floor on 2026-08-11** (owner's call, card
+## #91). They were 1, 2 and 3 BOSSES, which put the smith behind the end of floor
+## 1 and the jewelcrafter behind the end of floor 3 — so a player could finish
+## three quarters of the game having met one trader. Now the smith comes up on the
+## floor 1 MINIBOSS, which is an optional room most of the way down the first
+## floor, and each boss after that brings one more.
+##
+## The smith's gate is also the only one in the table that is an OBJECT. Killing
+## something is not a reason for a tradesman to move house; a Vyr maker's mark,
+## struck in a metal nobody in Valenfeld can name, is — Aldric sends it up the
+## road and the Guild sends the man who can read it. `BossDb.MINIBOSSES` drops it
+## off the Sluice-Keeper through the same `Boss._drop_loot` path the Warden's bow
+## takes.
 static var UNLOCKS := {
 	&"elder": {},
 	&"quartermaster": {},
-	&"smith": {"bosses": 1},
-	&"alchemist": {"bosses": 2},
-	&"jewelcrafter": {"bosses": 3},
+	&"smith": {"item": SMITH_TOKEN},
+	&"alchemist": {"bosses": 1},
+	&"jewelcrafter": {"bosses": 2},
 }
+
+## The artifact that brings the smith. Named here rather than spelled twice,
+## because `BossDb.MINIBOSSES` has to drop exactly this id and a typo in either
+## place is a trader who never arrives and nothing that says why.
+const SMITH_TOKEN := &"makers_mark"
 
 ## Speaker -> beats, IN ORDER. The first unmet-and-unheard one is what they say.
 ##
@@ -104,18 +127,13 @@ static var BEATS := {
 			"You have coin on you. Good — that means you came back up, which is the half of this work nobody can be trained for.",
 			"Spend it. A cadet with a full purse and a dull blade is a cadet with a well-attended funeral.",
 		]},
-		{"id": &"smith_arrived", "needs": {"bosses": 1}, "pages": [
-			"You killed something down there that had a name. Word of that travels faster than either of us walk.",
-			"The Guild's smith came up the road this morning. Brannoc — short, loud, entirely worth it. Anything you bring up broken goes to him now.",
-		]},
-		{"id": &"alchemist_arrived", "needs": {"bosses": 2}, "pages": [
-			"Two of them. I am beginning to think the Guild sent me the right cadet.",
-			"Ysolt has taken the west shelf. Guild as well, and he is not here for us — he is here for what grows down there. Be civil. He brews the only thing that will keep you standing on the fourth floor.",
-		]},
-		{"id": &"jewelcrafter_arrived", "needs": {"bosses": 3}, "pages": [
-			"Marisel is here. She followed the stones up, the way her sort always does.",
-			"Four traders and one soldier. That is the wrong proportion for a garrison and exactly the right one for a dig. I have stopped pretending otherwise.",
-		]},
+		# **The three `*_arrived` beats are gone and they are `INTRODUCTIONS` now.**
+		# They were the elder describing a person standing twenty metres behind him,
+		# which is the one thing a beat cannot do well: the player heard that Brannoc
+		# was short and loud and had to go and find out where. An introduction is
+		# two people in one box with the camera panning between them, so the sentence
+		# and the man arrive together (card #91).
+		#
 		# The one he does not volunteer early. Gated on gold rather than on a boss
 		# because it is about the walk home, and gold IS the walk home.
 		{"id": &"the_last_cadet", "needs": {"gold": 1200, "told": &"briefing"}, "pages": [
@@ -230,6 +248,104 @@ static var TOPICS := {
 }
 
 
+## Speaker -> the scene in which the elder puts a new person in front of you.
+##
+## **The one table in this file whose rows have more than one mouth in them.** A
+## beat and a topic are one person talking; this is a conversation, and the two
+## shapes are kept apart rather than folded together because everything about them
+## differs — when they fire (on ARRIVAL in the yard, not on a press), what they
+## cost (the camera, for the length of them), and how many times (once per save,
+## `intro_flag`).
+##
+## Each row is an ordered list of `{"who": StringName, "text": String}`. `who` is
+## a `DialogueDb.PEOPLE` key, and it is what `DialogueBox` reads to swap the plate
+## and the portrait — and what `Introduction` reads to swing the camera onto the
+## person now speaking. **Write them so the speaker changes at least once**; a
+## scene with one speaker throughout is a beat, and belongs in `BEATS`.
+##
+## Short on purpose — four pages, five at the outside. The player has just walked
+## through the gate with a bag to sell, and every page here is a page they did not
+## ask for. What the scene is FOR is that the new trader is a person who spoke to
+## you before they were a menu; their own pitch is still waiting at their counter
+## (their `arrival` beat), and saying it twice would make the second one furniture.
+static var INTRODUCTIONS := {
+	# The opening's last beat. It runs straight off the back of the briefing on a
+	# new save, so Aldric hands the player to the one counter that is open on the
+	# first frame instead of naming her and letting them go and find her.
+	&"quartermaster": [
+		{"who": &"elder", "text": "Kessa. Leave the ledger a moment and come and look at what the Guild has sent me."},
+		{"who": &"quartermaster", "text": "That's a cadet, Aldric. They sent you a cadet."},
+		{"who": &"quartermaster", "text": "Anything you drag up out of that hole, I'll put a number on it. The number's fair. You'll hate it anyway."},
+		{"who": &"elder", "text": "She is the reason a sack of Vyr scrap is worth carrying up four flights. Sell to her before you spend anything on yourself."},
+	],
+	# The payoff for the floor 1 miniboss. The mark itself is the hinge: the player
+	# picked an object up off a body, and here is what the object DID.
+	&"smith": [
+		{"who": &"elder", "text": "That mark you brought up went to Valenfeld on the evening cart. Brannoc came back on the morning one."},
+		{"who": &"smith", "text": "They pulled me off a perfectly good bridge contract for this, and I'd have walked here barefoot."},
+		{"who": &"smith", "text": "Somebody struck that mark in a metal I have never held. I've been awake since three about it. Bring me anything you find bent and I'll put it back the way it was meant to be."},
+		{"who": &"elder", "text": "The forge is yours, cadet. He is short, loud and entirely worth it."},
+	],
+	&"alchemist": [
+		{"who": &"elder", "text": "Ysolt has taken the west shelf. Guild, like the rest of us, and not here for you — he is here for what grows down there."},
+		{"who": &"alchemist", "text": "Don't touch the green one."},
+		{"who": &"alchemist", "text": "Bring me a bottle and whatever you scrape off the second floor, and I will send you back down considerably harder to kill. I would like that understood as a trade."},
+		{"who": &"elder", "text": "He brews the only thing that will keep you standing on the fourth floor. Be civil."},
+	],
+	&"jewelcrafter": [
+		{"who": &"elder", "text": "And this is Marisel, who followed the stones up the way her sort always does."},
+		{"who": &"jewelcrafter", "text": "Four crates of cut gems out of a camp that officially produces ore. Somebody was setting stones down there a very long time ago, and doing it better than I do."},
+		{"who": &"jewelcrafter", "text": "So bring me what you find in the walls. You'll be prettier, and considerably harder to kill."},
+		{"who": &"elder", "text": "Four traders and one soldier. That is the wrong proportion for a garrison and exactly the right one for a dig. I have stopped pretending otherwise."},
+	],
+}
+
+## The order they are offered in, which is `UNLOCKS`' trade ladder. Spelled out
+## rather than read off `INTRODUCTIONS.keys()`: a Dictionary's key order is its
+## insertion order and would work today, and the day somebody re-sorts that
+## literal alphabetically the jewelcrafter would introduce herself first.
+const INTRO_ORDER: Array[StringName] = [
+	&"quartermaster", &"smith", &"alchemist", &"jewelcrafter",
+]
+
+
+## The flag stamped once an introduction has been played to the end.
+static func intro_flag(who: StringName) -> StringName:
+	return StringName("met_%s" % who)
+
+
+## Whoever the elder still owes the player an introduction to, or `&""`.
+##
+## Only somebody who has actually ARRIVED (`unlocked`) and whose scene has never
+## run, and the FIRST such in ladder order — `Garrison._do_the_rounds` calls this
+## again after each one, so a walk-in that owes two plays both, back to back.
+##
+## Two at once is a real case and not a corner: the floor 1 miniboss and the floor
+## 1 boss are the same run, so a good first descent brings the smith and the
+## alchemist home together. Eight pages is a lot to hand somebody who just wanted
+## to sell a bag — and the alternative is a stranger standing at a new counter
+## with nobody having said who he is, which is the exact thing this system was
+## built to stop.
+static func pending_introduction() -> StringName:
+	for who in INTRO_ORDER:
+		if Game.flag(intro_flag(who)):
+			continue
+		if not INTRODUCTIONS.has(who):
+			continue
+		if unlocked(who):
+			return who
+	return &""
+
+
+## The scene, as `Introduction` wants it. Empty for anybody with none.
+static func introduction(who: StringName) -> Array:
+	return INTRODUCTIONS.get(who, []) as Array
+
+
+static func mark_introduced(who: StringName) -> void:
+	Game.set_flag(intro_flag(who))
+
+
 # --- Who is in the yard --------------------------------------------------------
 
 ## The flag stamped the moment somebody's gate is first met.
@@ -311,6 +427,7 @@ static func mark_told(who: StringName, beat: StringName) -> void:
 ## Are `needs` satisfied? `{}` always is.
 ##
 ##   bosses : int         how many of `BossDb.BOSSES` are dead on this save
+##   item   : StringName  an id `Game.has()` must answer true for
 ##   gold   : int         `Game.gold_earned` — LIFETIME, not the purse
 ##   told   : StringName  a beat id of `who` that must already have been heard
 ##
@@ -320,6 +437,13 @@ static func met(needs: Dictionary, who: StringName = &"") -> bool:
 	if needs.is_empty():
 		return true
 	if int(needs.get("bosses", 0)) > bosses_felled():
+		return false
+	# `Game.has` and NOT the bag: this is ownership, the one-way flag a boss drop
+	# sets (`Game.grant`), so a maker's mark cannot be sold to Kessa by mistake and
+	# it cannot die with the bag on the walk home. A gate that a bad run can undo
+	# is a trader who leaves town.
+	var item := StringName(needs.get("item", &""))
+	if item != &"" and not Game.has(item):
 		return false
 	if int(needs.get("gold", 0)) > Game.gold_earned:
 		return false

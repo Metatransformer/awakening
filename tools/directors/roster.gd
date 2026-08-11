@@ -16,9 +16,12 @@ extends RefCounted
 ##   A  A new save's yard is Aldric, Kessa and the way down. The smith, the
 ##      alchemist and the jewelcrafter are not standing in it -- not greyed out,
 ##      not refusing to trade, NOT THERE.
-##   B  Kill the first boss and the smith is in the yard next time you walk into
-##      it, with his booth and his lamp and his own arrival line.
-##   C  And he stays. The gate latches to a flag, so a keeper who arrived cannot
+##   B  Bring up the maker's mark off the floor 1 miniboss and the smith is in
+##      the yard next time you walk into it, with his booth and his lamp.
+##   C  Kill the first BOSS and the alchemist follows him. Two different kinds of
+##      key on one ladder, which is card #91's whole shape: the smith is behind an
+##      OBJECT you carried home and the other two are behind a body count.
+##   D  And they stay. The gate latches to a flag, so a keeper who arrived cannot
 ##      un-arrive.
 ##
 ## The frames are the point (CLAUDE.md §2): `r_01_before` and `r_02_after` are the
@@ -76,18 +79,24 @@ func _before(rig) -> void:
 	await rig.capture(out.path_join("r_01_before.png"))
 
 
-# --- B/C. One boss later -------------------------------------------------------
+# --- B. The mark comes home -----------------------------------------------------
 
+## **An object and not a kill count**, which is what changed on card #91. The
+## sluice keeper -- the floor 1 miniboss -- drops `makers_mark`
+## (`BossDb.MINIBOSSES`), the mark goes to Valenfeld, and Brannoc comes back on
+## the next cart. Granted by hand here for the reason the boss flag below is: this
+## director is about the garrison and not about the fight, and one that had to
+## survive a miniboss to photograph a shopkeeper is a director nobody runs.
 func _after(rig) -> void:
-	# The flag a killed boss leaves behind (`BossDoor.dead_flag`). Set by hand
-	# because this director is about the garrison and not about the fight -- and
-	# because a director that had to survive `cistern_warden` to photograph a
-	# shopkeeper would be a director nobody runs.
-	Game.set_flag(&"boss_dead_cistern_warden")
-	_ck("B0 one boss counts as one", StoryDb.bosses_felled() == 1)
+	Game.grant(StoryDb.SMITH_TOKEN)
+	_ck("B0 the mark is in the pack", Game.has(StoryDb.SMITH_TOKEN))
 	_ck("B1 which admits the smith and nobody else",
 		StoryDb.unlocked(&"smith") and not StoryDb.unlocked(&"alchemist")
 			and not StoryDb.unlocked(&"jewelcrafter"))
+	# Still zero. The point of the amendment is that the smith arrives WITHOUT a
+	# boss being dead, so a save can reach the forge on its first descent.
+	_ck("B1b and no boss has been felled (%d)" % StoryDb.bosses_felled(),
+		StoryDb.bosses_felled() == 0)
 
 	var g: Garrison = await _rebuild(rig)
 	if g == null:
@@ -100,12 +109,38 @@ func _after(rig) -> void:
 		g.alchemist == null and g.jeweller == null)
 
 	await rig.capture(out.path_join("r_02_after.png"))
+	await _boss(rig)
 
-	# C. The latch. `unlocked` stamps a flag the first time the metric is met, so
-	# an arrival cannot be undone by anything that touches the metric afterwards.
+
+# --- C. One boss later ----------------------------------------------------------
+
+## The flag a killed boss leaves behind (`BossDoor.dead_flag`).
+func _boss(rig) -> void:
+	Game.set_flag(&"boss_dead_cistern_warden")
+	_ck("C0 one boss counts as one", StoryDb.bosses_felled() == 1)
+	_ck("C1 which admits the alchemist and not the jewelcrafter",
+		StoryDb.unlocked(&"alchemist") and not StoryDb.unlocked(&"jewelcrafter"))
+
+	var g: Garrison = await _rebuild(rig)
+	if g == null:
+		_ck("C2 the yard came back again", false)
+		return
+	_ck("C2 and Ysolt is standing in it", g.alchemist != null)
+	_ck("C3 with the smith still beside him", g.smith != null)
+	_ck("C4 and the setting bench still empty", g.jeweller == null)
+
+	await rig.capture(out.path_join("r_03_alchemist.png"))
+
+	# D. The latch. `unlocked` stamps a flag the first time the metric is met, so
+	# an arrival cannot be undone by anything that touches the metric afterwards
+	# -- including losing the object the gate was keyed to, which is the case the
+	# smith's rung newly has and the other two do not.
 	Game.flags.erase(&"boss_dead_cistern_warden")
-	_ck("C0 the count went back down", StoryDb.bosses_felled() == 0)
-	_ck("C1 and the smith is here regardless", StoryDb.unlocked(&"smith"))
+	Game.items.erase(StoryDb.SMITH_TOKEN)
+	_ck("D0 the count went back down", StoryDb.bosses_felled() == 0)
+	_ck("D1 and the mark is gone from the pack", not Game.has(StoryDb.SMITH_TOKEN))
+	_ck("D2 the smith is here regardless", StoryDb.unlocked(&"smith"))
+	_ck("D3 and so is the alchemist", StoryDb.unlocked(&"alchemist"))
 
 
 # --- helpers -------------------------------------------------------------------

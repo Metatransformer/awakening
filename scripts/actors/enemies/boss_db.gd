@@ -748,10 +748,25 @@ static var BOSSES := {
 ##    So the treasure branch is where the game teaches *in combat* what the gate
 ##    room taught in a puzzle.
 ##
-## **2. It drops NOTHING.** No item, no stat, no relic -- GDD pillar 4 holds here
-##    exactly as it does everywhere else. The chest behind it is the reward and
-##    the Echo on that branch comes from the puzzle, not from the kill. The empty
-##    `drop` row is what makes `BossArena`'s relic replacement skip it.
+## **2. It drops no VERB and no RELIC.** GDD pillar 4 holds here exactly as it
+##    does everywhere else: the chest behind it is the reward and the Echo on that
+##    branch comes from the puzzle, not from the kill. The empty `relic` half of
+##    the `drop` row is what makes `BossArena`'s relic replacement skip it.
+##
+##    **This rule read "it drops NOTHING" until 2026-08-11**, and it was that
+##    strict for one reason, which is written into `validate()`: an item here
+##    would put something the player NEEDS behind an optional puzzle, and floor 1
+##    would stop being completable without solving one. That reason is about
+##    verbs and keys — a bow, a hookshot, a Burst — and it does not reach a token
+##    that only moves the METAGAME. The owner's call (card #91) is that the
+##    Sluice-Keeper drops a Vyr maker's mark and the mark is what brings the smith
+##    up the road; a player who never solves a treasure puzzle can still finish
+##    every floor, they just run the whole descent without a forge, which is the
+##    branch paying extra for extra work exactly as §7 intends.
+##
+##    So the rule is now a list: `PROGRESS_TOKENS` names what a miniboss may hand
+##    over, `validate()` refuses anything else, and a relic is still refused
+##    outright. **Do not put a kit item on this list.**
 ##
 ## **3. No floor's miniboss shares a model with its boss.** Floor 3's boss is a
 ##    `wraith`, so a `wraith` miniboss there would be two fights against one
@@ -794,6 +809,19 @@ static var BOSSES := {
 ## of numbers already in the table is beat two's `KNOCKBACK_HEAVY` throwing the
 ## hero back out past beat one's `min_range`. The gap is opened by the fight
 ## rather than by the body's feet, and closing it is still the hookshot's job.
+## The only ids a miniboss's `drop.item` may name. See rule 2.
+##
+## **A token, and never a verb.** Everything on this list has to be a thing that
+## changes the garrison and nothing else: no kit item, no door key, nothing
+## `Game.wheel_bindable` will put on the ring, or floor 1 becomes uncompletable
+## without an optional puzzle. There is one, and one is a reasonable ceiling.
+##
+## `static var` and not `const`: the value is another class's constant, which the
+## parser will not take in a `const` initialiser (CLAUDE.md §3). Read off
+## `StoryDb` rather than spelled again, because the id has to be identical in both
+## files or the smith never arrives and nothing says why.
+static var PROGRESS_TOKENS: Array[StringName] = [StoryDb.SMITH_TOKEN]
+
 static var MINIBOSSES := {
 	# =========================================================================
 	&"sluice_keeper": {
@@ -834,8 +862,22 @@ static var MINIBOSSES := {
 			# the same reason the Warden's arena is bare.
 			"cover": false, "cover_count": 0,
 		},
-		# Nothing. See rule 2 above -- the empty row is load-bearing, not a gap.
-		"drop": {"item": &"", "relic": &""},
+		# **A Vyr maker's mark, and it is the only thing any miniboss hands over**
+		# (rule 2, `PROGRESS_TOKENS`). Not a verb, not a stat, not a relic: it is a
+		# stamped disc of a metal nobody in Valenfeld can name, Aldric sends it up
+		# the road, and the Guild sends back the man who can read it
+		# (`StoryDb.UNLOCKS`, card #91).
+		#
+		# It hangs off THIS body rather than off floor 1's boss because of what the
+		# smith is for. His counter is where a bent Vyr thing becomes a working one,
+		# and the treasure branch is the part of the floor that is made of bent Vyr
+		# things; a player who works for the optional room is the player who has
+		# something to take to him.
+		#
+		# `relic` stays empty and must. See `_place_chamber` in `dungeon.gd`: the
+		# arena is built with `relic_slot = &""` so `BossArena._replace_lost_relic`
+		# cannot put floor 1's BOSS relic on the floor of this room.
+		"drop": {"item": &"makers_mark", "relic": &""},
 		"music": "",
 		"lore": "It worked the intake gates on a rota nobody has kept since the "
 			+ "Sundering, and it is still on shift. The wheel it turns has not "
@@ -1661,14 +1703,18 @@ static func validate() -> PackedStringArray:
 			out.append("%s: %d beats — a miniboss gets exactly 2 (PUZZLES §7)"
 				% [id, list.size()])
 
-		# Rule 2: it drops nothing. An item or a relic here would put something
+		# Rule 2: no verb and no relic. An arbitrary item here would put something
 		# GDD pillar 4 cares about behind an OPTIONAL puzzle, and floor 1 would
-		# stop being completable without solving one.
+		# stop being completable without solving one — which is why the item half
+		# is an allow-list and not a free field.
 		var drop: Dictionary = row.get("drop", {})
-		if StringName(drop.get("item", &"")) != &"" \
-				or StringName(drop.get("relic", &"")) != &"":
-			out.append("%s: drops something — a miniboss drops nothing but the "
-				% id + "chest behind it (PUZZLES §7)")
+		var token := StringName(drop.get("item", &""))
+		if token != &"" and not PROGRESS_TOKENS.has(token):
+			out.append("%s: drops %s — a miniboss may only hand over a "
+				% [id, token] + "PROGRESS_TOKENS id, never a verb (PUZZLES §7)")
+		if StringName(drop.get("relic", &"")) != &"":
+			out.append("%s: drops a relic — the chest behind it is the reward "
+				% id + "(PUZZLES §7)")
 
 		# Rule 3: not the same silhouette as its own floor's boss.
 		var boss_id := for_floor(level)

@@ -1203,8 +1203,9 @@ func grant(item_id: StringName) -> void:
 ##
 ## Everything that asks "may this happen yet" comes through here:
 ##
-##  * `ShopDb.lines()` hides the bow and hookshot forge ladders, and the arrow
-##    stock line, until the item behind them is owned.
+##  * `ShopDb.lines()` hides the bow and hookshot forge ladders, and
+##    `SupplyDb.lines()` hides the quartermaster's arrow stock line (it was the
+##    smith's until card #91), until the item behind them is owned.
 ##  * `LockedDoor` refuses, and names the item it wants, off one call.
 ##  * `armament_owned()` gates the weapon ring, and hangs `&"arrow"` off the bow.
 ##

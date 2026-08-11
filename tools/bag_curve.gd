@@ -80,7 +80,7 @@ func _initialize() -> void:
 	_defs = load("res://scripts/actors/enemies/enemy.gd").DEFS
 	var k: GDScript = load("res://scripts/core/consts.gd")
 	_start_slots = k.START_BAG_SLOTS
-	# `ShopDb.LIMITS[&"bag_slot"]` is 4, and that is the whole of the ladder: a
+	# `SupplyDb.LIMITS[&"bag_slot"]` is 4, and that is the whole of the ladder: a
 	# bag can never be bigger than this, on any save, ever.
 	_max_slots = _start_slots + 4
 

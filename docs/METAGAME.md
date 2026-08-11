@@ -104,7 +104,7 @@ late in a run, picking up a Bone Shard means declining a Void Pearl.
 
 Bag slots are purchasable (4 more, at rising cost), so the pressure eases as a
 deliberate reward rather than disappearing. **Four is the whole ladder**
-(`ShopDb.LIMITS[&"bag_slot"]`), so the biggest bag that can exist on any save,
+(`SupplyDb.LIMITS[&"bag_slot"]`), so the biggest bag that can exist on any save,
 ever, is **16 slots** — three of which are the document case (§5) and are counted
 separately, which matters below.
 
@@ -265,7 +265,7 @@ They arrive three ways, and each answers a different kind of empty:
 
 | Source | Where | What it costs | Answers |
 |---|---|---|---|
-| **The smith** — `ARROWS X10` | Garrison (`shop_db.gd`) | 40 gold (4.0/arrow) | a purse, no bag |
+| **The quartermaster** — `ARROWS X10` | Garrison, THE STORES (`supply_db.gd`) | 40 gold (4.0/arrow) | a purse, no bag |
 | **Found** — `ArrowBundle` | Dungeon floors and chests | a short detour | early, poor, and dry |
 | **Fletched** — `Fletching` | The POUCH screen, anywhere | 2 Cracked Flint + 2 Bone Shard → 5 arrows (4.8/arrow) | a full bag, no purse |
 
@@ -290,7 +290,7 @@ see — so the trade is *the floor of my bag, for shots*, which is §5's questio
 round: fletching **frees slots**, so a nearly-full bag and an empty quiver solve
 each other.
 
-Priced above the smith on purpose. Convenience underground is the thing being
+Priced above the stores on purpose. Convenience underground is the thing being
 sold, and a recipe that undercut the shop would kill the shop line — which is
 what a player with gold and no bag is supposed to reach for.
 
@@ -462,7 +462,7 @@ Four rules were considered. The owner picked the cap:
 the purse, the greed curve *flattens* — extra loot is free to carry home. That is
 a real softening and it is the price of never dead-ending. It is bounded, though,
 and the bound is the interesting part: reaching that point means you leave with
-**zero gold**, so the next run starts with no smith, no arrows, no bag slots, and
+**zero gold**, so the next run starts with no forging, no arrows, no bag slots, and
 a bag you must sell before you can do anything at all. The pressure moved from
 "can I leave" to "what does leaving leave me with", and only the second one is a
 decision the player can act on.
@@ -589,9 +589,24 @@ owner's call 2026-08-10):
 |---|---|---|
 | Aldric, the Lanternkeeper | — | he sent for you |
 | Kessa, the quartermaster | — | you cannot bank a run without her |
-| Brannoc, the smith | 1 boss | the forge eats components you do not have on day one |
-| Ysolt, the alchemist | 2 bosses | a draught prices a deep run, and there are none yet |
-| Marisel, the jewelcrafter | 3 bosses | §6.7's ceiling means nothing before the plate has cost you something |
+| Brannoc, the smith | **the maker's mark** | you carried a thing home that says a smith is wanted here |
+| Ysolt, the alchemist | 1 boss | a draught prices a deep run, and there are none yet |
+| Marisel, the jewelcrafter | 2 bosses | §6.7's ceiling means nothing before the plate has cost you something |
+
+**The smith's key is an OBJECT and the other two are a body count**, and that is
+the one asymmetry on the ladder (owner's call 2026-08-11, card #91). The floor 1
+miniboss — the sluice keeper — drops `makers_mark`, `Game.grant` records it like
+any other item, and `StoryDb.UNLOCKS` reads it with `{"item": …}` instead of
+`{"bosses": …}`. Two reasons it is worth the asymmetry: the forge is the counter
+a first-time player most wants and a whole boss is a long wait for it, and a drop
+you can hold makes the unlock something you DID rather than something that
+happened. It also moved everyone else up a rung — the alchemist and the
+jewelcrafter each arrive one boss earlier than they used to.
+
+It cost an amendment to the miniboss rule, which said a miniboss "drops
+NOTHING" so that no floor could be made uncompletable by skipping one. The rule
+is now *no verb and no relic* — `BossDb.PROGRESS_TOKENS` is the allow-list, and a
+token that only moves the metagame cannot lock a door.
 
 A keeper who has not arrived **is not in the yard at all** — no booth, no lamp,
 no sign. The alternative, five people standing there with three counters refusing
@@ -620,20 +635,38 @@ the only thing your pack does not eat (§6.8), and what happened to the cadet
 before you. It is stapled to his "I've been expecting you" so a player who walks
 straight to the gate still gets it.
 
-- **The vendor.** Sells nothing; buys everything. The trade screen
+- **The quartermaster.** **Two counters, and she is the only person in the yard
+  with two** (`Npc.COUNTERS`). *Trade* buys: the trade screen
   (`scripts/ui/shop/trade_screen.gd`) lists the bag sorted by value with a
   "sell everything" line, because the common case is dumping the lot and the UI
-  should not make that tedious.
-- **The smith.** Fifteen permanent lines (`scripts/items/shop_db.gd`), priced
-  against the drop tables — a good run extracts with roughly 250–450 gold of
-  ingredients, so cheap lines land after one run and dear ones after two or
-  three.
+  should not make that tedious. *The Stores* sells the three utility lines
+  (`scripts/items/supply_db.gd`):
 
   | Line | Base cost | Growth | Limit | Also costs |
   |---|---|---|---|---|
   | Arrows ×10 | 40 | — | unlimited | — |
   | Bag slot | 140 | ×1.6 | 4 | — |
   | Heart container | 320 | ×1.5 | 3 | — |
+
+  **These three were the smith's until card #91** and moved with him. Same ids,
+  same prices, same limits — `Game.upgrades` is keyed by the id, so a save that
+  had bought two bag slots keeps them and buys the third at the third price. They
+  had to move: with Brannoc behind the floor 1 miniboss, a new save could not
+  reach a bag slot, a heart or an arrow for its whole first hour, and those are
+  exactly the purchases the first hour is for. They also belong here — a
+  quartermaster issuing stores is what a quartermaster is, and the forge is left
+  as one thing: gold **and** materials, on every line.
+
+  Two rows on one person rather than a second `Npc` standing inside the first:
+  `TradeScreen` is pointed at a catalogue and never learns which counter it is
+  at, so the whole cost was one row in `COUNTERS` and one `Catalogue` subclass.
+- **The smith.** Twelve permanent lines (`scripts/items/shop_db.gd`), priced
+  against the drop tables — a good run extracts with roughly 250–450 gold of
+  ingredients, so cheap lines land after one run and dear ones after two or
+  three.
+
+  | Line | Base cost | Growth | Limit | Also costs |
+  |---|---|---|---|---|
   | Sharpen the blade | 120 | ×2.1 | 3 | components |
   | Chest/legs/arms/boots — heavy | 65 | ×1.9 | 3 each | components |
   | Chest/legs/arms/boots — light | 35 | ×1.8 | 3 each | components |
@@ -641,10 +674,10 @@ straight to the gate still gets it.
   | String the bow | 130 | ×2.1 | 3 | components |
   | Lengthen the chain | 150 | ×2.1 | 3 | components |
 
-  The top three are stock: things the smith HAS, and money is the whole
-  transaction. The rest are the **forge** (§6.5) and gold alone will not buy
-  them. **There is no armourer** — the plate ladder is the armour system, and it
-  is the smith's.
+  Every line is the **forge** (§6.5) and gold alone will not buy any of them —
+  the three stock lines that used to sit above them are the quartermaster's now.
+  **There is no armourer** — the plate ladder is the armour system, and it is the
+  smith's.
 
   Every line changes a number the player can feel inside one run. Nothing here
   is a stat-stick you have to take on faith.
@@ -1238,6 +1271,7 @@ second one is a decision.
 | Ingredients, components and drop tables | `scripts/items/item_db.gd` |
 | The bag's value tiers (§3.1), and the curve they are read off | `scripts/ui/style.gd` (`Pal.T1/T2/T3`), `tools/bag_curve.gd` |
 | The smith's catalogue, and the forge recipes | `scripts/items/shop_db.gd` |
+| The quartermaster's stores — arrows, bag slots, hearts | `scripts/items/supply_db.gd` |
 | The alchemist's catalogue, and the brew recipes | `scripts/items/alchemy_db.gd` |
 | The jewelcrafter's slots, paths and rungs | `scripts/items/jewel_db.gd` |
 | The hero's five stats, drawn | `scripts/ui/menu/equip_panel.gd` |
@@ -1298,8 +1332,23 @@ godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --d
 `dialogue.gd` walks the box itself — the tables, the typing, one typeface across
 the option list, a nine-page briefing that only counts as read when it is read to
 the end, and a topic that can be asked twice. `roster.gd` photographs the yard
-with three counters missing, sets one boss flag, rebuilds it, and photographs the
-smith standing in the corner that was grass.
+with three counters missing, grants the maker's mark, rebuilds it, photographs
+the smith standing in the corner that was grass, and then does the same again
+with one boss flag for the alchemist.
+
+The **introductions** have their own, and it is the one run that asks for them —
+`shoot.gd` stamps `met_*` for everybody by default, or every garrison director
+would have a four-page conversation open itself over the frame it was taking:
+
+```bash
+tools/quiet.sh --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/npc_intro.gd --out=/tmp/intro/x.png --warmup=20 --meet
+```
+
+It shoots both ends of the pan and measures two things about each frame: the
+angle from the camera's axis to the speaker's head, and how much of the frame
+height that speaker's body actually fills. The second one is why `FOV_MIN` is 20
+— at 28 the smith came out correctly aimed and a quarter of the frame tall,
+behind a dialogue box.
 
 Arrows have two, because the supply chain has two halves — the objects, and the
 floor that has to contain them (§4.6):

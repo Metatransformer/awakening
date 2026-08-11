@@ -183,6 +183,10 @@ func _ready() -> void:
 ## starts when the world does, which is the frame the picture begins to lift.
 func _open_the_game() -> void:
 	if Game.flag(INTRO_FLAG):
+		# Every OTHER arrival in the yard, which is most of them: home from a run,
+		# or a save loaded. Nothing is owed here except the introductions -- see
+		# `_do_the_rounds`, and the short wait it starts with.
+		_do_the_rounds()
 		return
 	Game.set_flag(INTRO_FLAG)
 
@@ -219,7 +223,42 @@ func _open_the_game() -> void:
 		pages.append_array(StoryDb.pages_of(beat))
 		var beat_id := StringName(beat.get("id", &""))
 		on_read = func() -> void: StoryDb.mark_told(&"elder", beat_id)
-	DialogueBox.open(self, &"elder", pages, [], on_read)
+	var box := DialogueBox.open(self, &"elder", pages, [], on_read)
+	# And straight into "this is Kessa, she buys". The briefing ends by telling you
+	# to go and see the quartermaster, so the introduction is the next sentence out
+	# of the same man's mouth and not a second conversation you have to start.
+	if box != null:
+		await box.finished
+	_do_the_rounds()
+
+
+## Play whatever introductions are owed, in ladder order.
+##
+## **This is the "cutscene" half of an unlock.** Beating the sluice keeper puts a
+## maker's mark in your pack and the smith in the yard (`StoryDb.UNLOCKS`), but a
+## new shopkeeper who simply APPEARS between one run and the next is a change the
+## player has to notice on their own -- and the person most likely to miss it is
+## the one who came home with three hearts left and walked straight to their bed.
+## So the elder introduces them, once, the first time you are back in the yard
+## after they arrive.
+##
+## A loop and not a single call: a good run can take the miniboss and the boss
+## together, and two people arriving at once should be two scenes back to back
+## rather than one scene and one silent stranger.
+##
+## Fire-and-forget from `_open_the_game` -- nothing awaits this, and the yard is
+## fully built and playable underneath it. `DialogueBox` blocks the hero for the
+## length of each box on its own (`Prompt.block`), which is the whole of the
+## "cutscene" this needs to be.
+func _do_the_rounds() -> void:
+	# A beat of quiet first, for the same reason the opening has one: `_ready` runs
+	# during `change_scene_to_file`, so with no wait the first line of the scene is
+	# typed behind `Flow`'s fade and the pan happens where nobody can see it.
+	await get_tree().create_timer(1.2, false).timeout
+	var who := StoryDb.pending_introduction()
+	while who != &"":
+		await Introduction.play(self, who)
+		who = StoryDb.pending_introduction()
 
 
 # --- Look -------------------------------------------------------------------

@@ -196,18 +196,34 @@ func _sell(rig) -> bool:
 	return emptied
 
 
+## **The bag slot is bought at the QUARTERMASTER, not at the smith.**
+##
+## It was the forge's until card #91, which put Brannoc behind the floor 1
+## miniboss -- and a new save that cannot reach the smith for its whole first hour
+## cannot buy a bag slot, a heart or an arrow either. So the three stock lines
+## moved to Kessa's second counter (`SupplyDb`, `Npc.COUNTERS`), and the MVP loop
+## follows them: the loop this director exists to prove is *sell the bag, spend
+## the gold, go back down*, and every step of it is now reachable on the first
+## descent, which it was not while this beat walked to a man who is not there.
+##
+## She is where `_sell` left the hero standing, so the approach is usually a
+## no-op. It is still made, because `_sell` can leave him a pace off.
 func _buy(rig) -> bool:
 	var garrison := rig.scene() as Garrison
-	if not await _approach(rig, garrison.smith,
-			garrison.smith.global_position + Vector3(0.0, 0.0, 1.6)):
+	if not await _approach(rig, garrison.vendor,
+			garrison.vendor.global_position + Vector3(0.0, 0.0, 1.6)):
 		return false
 	await rig.tap(["interact"])
-	if not await rig.talk("Trade"):
-		print("MVP FAIL the smith would not offer to trade")
+	# Her SECOND option, and the reason it is named rather than a second "Trade":
+	# one person, two counters, and the list reads `Trade / The Stores / Leave`
+	# (`Npc._options`). "Trade" here would open the SELL screen and this beat would
+	# hunt for a BAG SLOT row on a board made of the hero's own loot.
+	if not await rig.talk("The Stores"):
+		print("MVP FAIL the quartermaster would not open the stores")
 		return false
 	var opened: bool = await rig.until(func() -> bool: return _screen(rig) != null)
 	if not opened:
-		print("MVP FAIL the smith took the press and no shop screen came up")
+		print("MVP FAIL the stores took the press and no shop screen came up")
 		return false
 	await rig.wait_frames(14)
 	await rig.capture(out.path_join("m_05_shop.png"))
@@ -216,7 +232,7 @@ func _buy(rig) -> bool:
 	#
 	# By NAME, not by counting presses. This beat used to tap down once, on the
 	# strength of a comment saying the bag slot was the second line. It is not:
-	# the smith hides ARROWS until you own a bow, so on this save the bag slot is
+	# the stores hide ARROWS until you own a bow, so on this save the bag slot is
 	# the FIRST line and one press walked past it onto the heart container. The
 	# board's length is a function of what you own, so no fixed count is safe.
 	var screen := _screen(rig)
@@ -227,7 +243,7 @@ func _buy(rig) -> bool:
 		await rig.wait_frames(4)
 		walked += 1
 	if screen.cursor_label() != "BAG SLOT":
-		print("MVP FAIL the smith has no BAG SLOT line to buy")
+		print("MVP FAIL the stores have no BAG SLOT line to buy")
 		return false
 	var was_gold := Game.gold
 	var was_slots := Game.bag_slots
