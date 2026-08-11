@@ -146,6 +146,49 @@ does not put a specific item in the player's hand is a stat with a name on it.
 
 ---
 
+## 3.5 The reaction — one number, four channels
+
+A behaviour is what a body *asks*. This is what it does when the answer lands,
+and it is deliberately **not** per-enemy design: one number, derived from the
+blow, drives every channel, so they can never fall out of step.
+
+```
+weight = (hit.knockback - K.KNOCKBACK_LIGHT) / (K.KNOCKBACK_HEAVY - K.KNOCKBACK_LIGHT)
+```
+
+Clamped `0..1`. A jab is `0`; a committed swing or the spin is `1`. Every enemy
+contact hitbox carries `KNOCKBACK_LIGHT`, so **monsters can never launch each
+other** — the weight is zero by construction, not by a check.
+
+That one number scales, together:
+
+| Channel | Light (0) | Heavy (1) |
+|---|---|---|
+| Scuff burst at the contact point (`ImpactVfx`) | 8 motes | 26 motes |
+| Hit-stop | `K.HITSTOP_LIGHT` | `K.HITSTOP_HEAVY` |
+| Screen shake | `K.SHAKE_TAP` | `K.SHAKE_HIT` |
+| Launch odds and launch force | never | `K.LAUNCH_CHANCE` × mass² |
+
+**The crit *is* the launch.** There is no second roll and no separate crit
+stat — when a body leaves the ground it gets the gold starburst, `SHAKE_CRIT`
+and a full `HITSTOP_HEAVY`, because that is the frame worth holding. A jab can
+never produce one.
+
+**Mass resists it for free.** The odds scale by the *square* of
+`height / K.LAUNCH_MASS_REF` and the speeds only *linearly*, so a goblin
+(1.25 m) goes up often and far, a troll (2.60 m) rarely and barely — and an
+elite, being `Prog.ELITE_SCALE` taller, resists harder with no extra code. Death
+always launches; that is BOTW's rule and it is the one the player reads as
+"I killed it" rather than "it stopped".
+
+Bosses override `_can_launch()` to `false`. Their impact still scales — a heavy
+blow on a boss shakes and bursts like a heavy blow — but the **state** does not
+move. That is poise, and it is the difference between a set-piece and a mob.
+
+Proven by `tools/directors/monster_launch.gd`.
+
+---
+
 ## 4. Minibosses — the wall, and the second way over it
 
 `docs/PUZZLES.md` §7 owns the four and their beats. Three rules from the
