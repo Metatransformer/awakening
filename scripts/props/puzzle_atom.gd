@@ -31,6 +31,15 @@ extends Node3D
 ## one gate room must not share a flag -- and the whole set is cleared by
 ## `Run.enter()` per run, not per floor, so a NEW run gets a fresh puzzle.
 ## See `clear_run_flags()`.
+##
+## ## Chain lives here, and that is the whole of combinator 7
+##
+## `docs/PUZZLES.md` §3's seventh combinator is one solve carrying to the next
+## along a line of sight. It is `propagate()` below and nothing else: no chain
+## prop, no manager, no second signal -- the atoms already emit `solved`, and a
+## combinator that arrived needing a prop of its own would have stopped being a
+## combinator (§8.1). `ChainRow` is the PLACER that switches it on for a row and
+## puts the gap in the middle; it is not a thing the base class knows about.
 
 ## Solved. `atom` is `self`, so a gate can connect the same handler to all of its
 ## atoms and still know which one moved.
@@ -51,7 +60,27 @@ signal unsolved(atom: PuzzleAtom)
 ## can prove the body works by turning it on.
 @export var armed: bool = true
 
+## **Chain** (`docs/PUZZLES.md` §3, combinator 7). Metres this atom's solve
+## carries to its neighbours, along a line of sight. `0.0` means it is not a
+## link, which is every atom in the game unless a placer says otherwise -- see
+## `propagate()` for the whole rule, and `ChainRow` for the thing that sets it.
+@export var chain_radius: float = 0.0
+## Which chain. Two rows standing within a radius of each other must not set each
+## other off, and `puzzle_id` cannot be that key: a gate room's whole point is
+## that its atoms share one tag. Empty matches only empty.
+@export var chain_id: StringName = &""
+## Seconds between one link falling and the next going. **Not a flourish** -- a
+## row that topples in a single frame is one prop with five meshes, and the thing
+## the player has to read is that the fall TRAVELLED. It is also what turns the
+## recursion below into a walk across frames.
+@export var chain_delay: float = 0.45
+
 var _solved: bool = false
+## Has this link already passed the fall on? The re-entrancy guard: a ring of
+## atoms each in reach of the next comes back round to its own starting link, and
+## without this the ring re-fires forever (or, at `chain_delay = 0`, recurses
+## until the stack goes).
+var _chained: bool = false
 
 
 func _ready() -> void:
@@ -140,6 +169,11 @@ func solve() -> void:
 	# gate's, and it carries the node so one handler can serve a whole set.
 	Bus.switch_toggled.emit(flag_id(), true)
 	solved.emit(self)
+	# **Chain, and it is deliberately the LAST thing.** The gate has counted this
+	# link before the next one goes, so a row whose final link finishes the puzzle
+	# opens its door once rather than racing the count. `_arm_chain` is a no-op on
+	# every atom that is not a link, which is all of them by default.
+	_arm_chain()
 
 
 ## Let go. Only a non-latching atom may -- a latching one that could be un-solved
@@ -148,9 +182,139 @@ func unsolve() -> void:
 	if not _solved or latching():
 		return
 	_solved = false
+	# Let go of the guard with the state. A non-latching link that could never
+	# chain a second time would be a coupled row that works once per floor, and the
+	# bug would look like the chain having stopped working rather than like a flag.
+	_chained = false
 	on_unsolved()
 	Bus.switch_toggled.emit(flag_id(), false)
 	unsolved.emit(self)
+
+
+# --- Chain (`docs/PUZZLES.md` §3, combinator 7) --------------------------------
+#
+# The whole combinator, and it is one method: **a radius, a line-of-sight ray and
+# a re-entrancy guard.** There is no chain prop, no chain manager and no second
+# signal -- the atoms already emit `solved` and this is a second thing that
+# listens. `docs/PUZZLES.md` §8.1 priced combinator 7 at exactly this and the
+# price held.
+#
+# ## Why it is delayed rather than immediate
+#
+# A row that goes over in one frame is a single prop with five meshes. What makes
+# chain a combinator is that the fall TRAVELS -- the player bursts one pillar,
+# steps back, and watches the answer walk away from them down the row -- and a
+# player who cannot see it travel cannot learn that the gap is a gap.
+#
+# The delay also unrolls the recursion across frames, which is why the guard
+# below is belt and braces rather than the only thing holding a ring together.
+# It is still needed: `chain_delay` is an export and a placer may set it to zero.
+
+## The height the sight line is drawn at. Chest on a 1.65 m hero, mid-shaft on a
+## cracked pillar -- the point of a chain is that the player can SEE it is a
+## chain, and a ray along the floor is one that a lip of stair breaks for reasons
+## nothing in the frame explains.
+const CHAIN_EYE_Y := 1.2
+
+
+## Schedule the pass-along, once. Called from `solve()` and from nowhere else --
+## in particular NOT from the `restore_solved()` path, because a floor re-entered
+## inside one run would otherwise re-topple its whole row, with the noise.
+func _arm_chain() -> void:
+	if chain_radius <= 0.0 or _chained or not is_inside_tree():
+		return
+	_chained = true
+	if chain_delay <= 0.0:
+		propagate()
+		return
+	# Connected rather than awaited. A `SceneTreeTimer` that resumed an `await` on
+	# an atom the floor had already freed is an error in a log nobody reads; a
+	# connection to a freed object is dropped by the engine.
+	get_tree().create_timer(chain_delay).timeout.connect(propagate)
+
+
+## **Pass the solve to everything this link can reach and see.** Public because a
+## director (and a placer proving its own geometry) has to be able to fire one
+## link by hand without going through the verb the atom answers to.
+##
+## Idempotent by way of `solve()`, which is idempotent -- a link woken twice by
+## two neighbours in the same wave solves once and chains once.
+func propagate() -> void:
+	if not is_inside_tree():
+		return
+	for link in chain_links():
+		link.solve()
+
+
+## Who this link would wake: in the same chain, inside the radius, unsolved, and
+## with a clear line of sight. **Separated from `propagate()` on purpose** -- the
+## topology is the thing a proof wants to assert, and asserting it by toppling
+## the row destroys the row you were asking about.
+##
+## The group walk is `BurstCast._wake_the_burstable`'s move and for its reason: an
+## atom is a marker, not a body, so a shape query would hand this the same
+## collider it hands back for a wall.
+func chain_links() -> Array[PuzzleAtom]:
+	var out: Array[PuzzleAtom] = []
+	if chain_radius <= 0.0:
+		return out
+	var r2 := chain_radius * chain_radius
+	for node in get_tree().get_nodes_in_group(&"puzzle_atom"):
+		var other := node as PuzzleAtom
+		if other == null or other == self or not is_instance_valid(other):
+			continue
+		# Both ends have to be links, and of the SAME chain. A row that set off the
+		# row in the next room would be a puzzle solved from a doorway.
+		if other.chain_radius <= 0.0 or other.chain_id != chain_id:
+			continue
+		if other.is_solved() or not other.armed:
+			continue
+		if global_position.distance_squared_to(other.global_position) > r2:
+			continue
+		if not _can_see(other):
+			continue
+		out.append(other)
+	return out
+
+
+## The sight line, drawn between the two atoms' eyes and blocked by the world.
+##
+## Both ends' own colliders are excluded, and they have to be: this one's body may
+## be a `queue_free()` that has not landed yet (`CrackedPillar.on_solved` frees
+## its shaft the instant it solves, and a freed node is still in the physics
+## world until the end of the frame), and the far one's body is the thing the ray
+## is aimed AT. What is left in between is the wall, the ledge or the third pillar
+## standing in the way -- which is the whole of "along a line of sight", and the
+## reason a chain does not go round corners.
+func _can_see(other: PuzzleAtom) -> bool:
+	var space := get_world_3d().direct_space_state
+	var q := PhysicsRayQueryParameters3D.create(chain_eye(), other.chain_eye(),
+		K.L_WORLD, _chain_exclude() + other._chain_exclude())
+	q.collide_with_areas = false
+	return space.intersect_ray(q).is_empty()
+
+
+## Where this atom is looked at from and to. Overridable: an atom whose body is
+## not around its origin (a ring bolted high on a wall) gets to say so.
+func chain_eye() -> Vector3:
+	return global_position + Vector3.UP * CHAIN_EYE_Y
+
+
+## This atom's own collision bodies, for the ray to ignore. Walked rather than
+## cached: an atom that has already fallen has freed its shaft, and a cached list
+## would hold a RID that no longer means anything.
+func _chain_exclude() -> Array[RID]:
+	var out: Array[RID] = []
+	_gather_rids(self, out)
+	return out
+
+
+func _gather_rids(node: Node, into: Array[RID]) -> void:
+	var body := node as CollisionObject3D
+	if body != null:
+		into.append(body.get_rid())
+	for child in node.get_children():
+		_gather_rids(child, into)
 
 
 # --- Overridables -------------------------------------------------------------
