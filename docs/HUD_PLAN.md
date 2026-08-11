@@ -1427,3 +1427,67 @@ exists to catch.
 The check is landed failing on this, deliberately. §13.12 orders the assertions
 before the fixes, and an assertion that is written after the thing it checks is
 an assertion written to pass.
+
+## 15.6 The wrap fixes the type and makes the collision worse, measured
+
+Decision 28 replaces the legend's `scale *= avail / widest` with a wrap. It
+works, and §15.3's diagnosis of why the shrink could not was right. Measured in
+the garrison at 1280×720, `hud_pole`'s `g_00_dry`, on keyboard:
+
+| | Before (shrink) | Wrap, greedy | Wrap, balanced |
+|---|---|---|---|
+| Rows | 2 | 3 | 3 |
+| Type | ~8 px, below the ladder | 10 px | 10 px |
+| Rect | (18.5, 677.9) 1243 × 24.6 | (50.5, 662.6) 1179 × 40 | **(283.0, 662.6) 714 × 40** |
+| Off the left edge | 13.5 px | none | none |
+| Off the right edge | 13.5 px | none | none |
+
+Three things the frames decided that the decision did not say:
+
+**It breaks between ENTRIES, not on spaces.** `CanvasText.wrap` was the obvious
+implementation and is the wrong one: every entry on this line contains a space
+(`"LMB SWORD"`), so word wrapping splits a cap from its verb, and it collapses
+the four-space separators that are the only thing making the row read as a list
+rather than as a sentence. `_pack_legend` packs whole entries and honours the
+authored `LEGEND_BREAK` as a hard row start.
+
+**Greedy packing is legal and looks like a bug.** The first render filled row one
+to 1179 px and left `E JUMP` alone in the middle of the screen underneath. Once
+the row count is known, the narrowest width that still fits in that many rows
+balances them — same rows, same order, no orphan, and 714 px instead of 1179.
+
+**It does not resolve §14.1's collision, and it costs a row.** §14.1 says of the
+legend and the vitals pole: *"Only x separation saves them, the legend is
+centre-anchored, and its width is set by live bindings."* At three rows the
+legend spans y 662.6–702.6 and the pole spans 634.0–685.0, so rows one and two
+are both in the pole's band; centred at 640 the legend spans x 283–997 and the
+pole reaches 383.7. `WASD MOVE` is drawn over the magic bar. The old two-row
+version overlapped in one row; this overlaps in two.
+
+Recording it rather than fixing it here, because the fix is a re-anchor and the
+legend's home belongs to decision 8 (item 7) — and because assertion 2 also has
+the legend 5 px below the bottom safe margin, which is a *pre-existing* fault of
+`Pal.KEYS_BASELINE` that neither the shrink nor the wrap touches. **Item 7 now
+has a measured brief:** at three balanced rows the legend is 714 × 40, and to
+satisfy both assertions its box must clear x ≤ 383.7 and y ≥ 697.7. Making it
+transient (decision 8) does not do that on its own — decision 35 checks
+transients too, deliberately, because the legend is the evidence assertion 1 was
+sold on.
+
+## 15.7 Assertion 3 was made to fire before it was believed
+
+An assertion that has only ever passed is unfalsifiable, which is the complaint
+§11 makes about every HUD director that came before it. So `_text(14.0)` in the
+cell-lettering fallback was temporarily changed to `_text(13.0)` and the director
+re-run. It reported:
+
+```
+HUDLAYOUT FAIL h_10_burst: text drawn at 13.0 px (1 call) is not on the type
+ladder [10.0, 14.0, 16.0]
+```
+
+— on `h_10_burst` and `h_11_burst_spent` and **on no other frame**, because those
+are the only two states in which anything reaches the lettering fallback. That is
+the check's scope arriving as evidence: it sees the sizes a frame *drew*, not the
+sizes the file contains, which is why it belongs beside the rectangle checks
+rather than in a grep.

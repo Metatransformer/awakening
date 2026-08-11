@@ -195,7 +195,10 @@ const MINIMAP_SIZE := 148.0    ## reference px, square
 const MINIMAP_PAD := 8.0
 ## Room under a cell for its key cap.
 const KEYCAP_GAP := 4.0
-const KEYCAP_SCALE := 2.0
+# KEYCAP_SCALE was here, and it was `2.0` — a multiplier on `CanvasText.H`, i.e.
+# 14 px said in units nobody reads sizes in. It is `Hud._text(14.0)` now
+# (HUD_PLAN decision 3): the ladder is only enforceable if every size is spelled
+# the one way, and a constant whose value is "2" cannot be grepped for "14".
 const BAG_RIGHT := 0.969
 const BAG_NUM_BASELINE := 0.900
 const SLIPS_TOP := 0.795

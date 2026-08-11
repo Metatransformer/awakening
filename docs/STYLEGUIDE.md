@@ -167,24 +167,50 @@ native resolution. Monospace tabular figures, because a gold counter that rolls
 up must not reflow while it counts. Antialiasing **off**, subpixel positioning
 **disabled**, sizes rounded to integers.
 
-Type scale is **8 / 12 / 16 / 20 / 24 / 32 only**. Nothing between. A HUD with
-seven sizes reads as accreted rather than designed.
+### 3.1b The HUD type ladder
 
-| Role | Face | px @1280×720 |
-|---|---|---|
-| Bag total (the big number) | Departure Mono | 32 |
-| Pocket gold / garrison cash | Departure Mono | 20 |
-| HUD numerals — ammo | Departure Mono | 16 |
-| Item-name drop toast | Departure Mono | 16 |
-| Body / tooltip | Departure Mono | 12 (line height 16, max 42 chars) |
-| Vendor row name + price | Departure Mono | 20 |
-| Vendor description | Departure Mono | 12 |
-| Column header | Departure Mono | 12, +1px tracking, MOTH |
-| Shop screen title | Jacquard 24 | 48 |
-| Room name card | Jacquard 24 | 24, BONE @30% |
+**Three sizes. 10 / 14 / 16, in reference px at 720p.** A HUD with seven sizes
+reads as accreted rather than designed — that rule is the part of the old scale
+worth keeping, and it is about a *count*, not about a particular set of integers.
 
-All HUD sizes are `roundi(base_px * viewport_height / 720.0)`. A 1.5× scale must
-land on whole pixels or the glyph edges go soft and the treatment collapses.
+| px @720 | Used for |
+|---|---|
+| **10** | ammo / charge numeral, bottle count `n/m`, slips `+N`, heat multiplier, floor name, legend |
+| **14** | key caps, loadout line, interact prompt, autosave notice, cell lettering |
+| **16** | floor level, item toast |
+
+~~Type scale is **8 / 12 / 16 / 20 / 24 / 32 only**.~~ That list was authored for
+Departure Mono, which the paragraph above admits was never bought and never
+wired — a table of sizes for a face that does not exist in this build. The
+shipped sizes were 7, 10, 14 and 16; three of those were already a coherent
+ladder and the fourth was a hierarchy error. **7 px is gone**: it set the ammo
+count, the bottle count and the slips' `+N`, which made the smallest text on the
+screen also the text you read mid-fight (§2's second rule).
+
+**Spelled one way, and enforced.** Every size in the HUD is `Hud._text(ref_px)`,
+never `Pal.px(some_scale, h)` and never `CanvasText.scale_for` directly. The same
+14 px used to be written three ways, one of which was the constant `2.0`, and a
+ladder you cannot grep for is a ladder nobody can keep. `_text` pushes an error
+and records the offender for `tools/directors/_hud_layout.gd`, which reports it
+as assertion 3 beside the rectangle checks. The check lives on the HUD wrapper
+and **not** inside `CanvasText.scale_for`, because the loading card legitimately
+sets 32 px through the same function and the ladder has no authority over it.
+
+~~All HUD sizes are `roundi(base_px * viewport_height / 720.0)`.~~ **Deleted.**
+That was correct when this text was a 5×7 bitmap drawn one `draw_rect` per lit
+pixel — a bitmap glyph off the pixel grid is a smeared glyph. It has been wrong
+since the HUD moved onto Cinzel: `CanvasText.scale_for` deliberately does not
+round, because rounding buys pixel-grid alignment on a face that has no pixel
+grid and pays for it in the legibility of the smallest labels (it costs a 10 px
+label 30% of its height at 720p). What still binds from that paragraph is the
+antialiasing and subpixel-positioning note above it.
+
+**A legend that does not fit is not shrunk.** There is nothing under 10 px, so a
+line too wide for the safe area has too many entries on it, not type that is too
+big — and shrinking could not work anyway: `CanvasText.size_of` clamps the em at
+`MIN_SIZE`, so past a point the scale keeps falling while the glyphs do not, and
+the line renders *wider* than the width it was asked to fit. Break between
+entries and balance the rows.
 
 ---
 

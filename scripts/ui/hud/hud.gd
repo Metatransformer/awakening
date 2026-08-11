@@ -757,11 +757,64 @@ func layout_rects() -> Dictionary:
 	return _layout
 
 
+# --- The type ladder (HUD_PLAN §3) --------------------------------------------
+## Every size the HUD is allowed to set type at, in reference px at 720p.
+## HUD_PLAN decision 2, and the argument under it is about a COUNT, not about
+## these particular integers: *"a HUD with seven sizes reads as accreted rather
+## than designed"*. A fourth entry is an amendment to that document, argued in
+## the same breath — not a number added here because one label was awkward.
+##
+##   10  ammo / charge numeral, bottle count, slips +N, heat multiplier,
+##       floor name, legend
+##   14  key caps, loadout line, interact prompt, autosave notice, cell lettering
+##   16  floor level, item toast
+const TYPE_LADDER: Array[float] = [10.0, 14.0, 16.0]
+
+## Sizes this frame asked for that are not on the ladder, `ref_px -> call count`.
+## Cleared per frame with `_layout`, and read by `tools/directors/_hud_layout.gd`
+## as assertion 3.
+var _type_offenders: Dictionary = {}
+
+
+## **The one spelling for "text this many pixels tall."** HUD_PLAN decisions 3
+## and 34.
+##
+## The same 14 px used to be written three ways — `_text(14.0)`
+## in one function, `_text(14.0)` in another — and
+## `Pal.px(1.0, s.y)` meant 7 px in a third. Only one of those spellings says
+## what size it is, which is why the ladder was unenforceable and why nobody
+## noticed the numeral was the smallest text on the screen and also the one read
+## mid-fight.
+##
+## **Why here and not in `CanvasText.scale_for`** (decision 34): the ladder is a
+## HUD rule, not a text-drawing rule. `scale_for` is also called by the loading
+## card at 32 px and by the run-end tally, and an assert inside it would fail a
+## shipping screen that this document has no authority over. So the check lives
+## on a HUD-scoped wrapper and `scale_for` stays unguarded.
+##
+## It records rather than only shouting. `push_error` goes to stderr, where a
+## director does not look; the offenders dictionary is what makes assertion 3 a
+## countable failure in the same line as assertions 1 and 2.
+func _text(ref_px: float) -> float:
+	if OS.is_debug_build() and not TYPE_LADDER.has(ref_px):
+		if not _type_offenders.has(ref_px):
+			push_error(("Hud: text at %.1f px is not on the type ladder %s "
+				+ "— HUD_PLAN decision 2") % [ref_px, TYPE_LADDER])
+		_type_offenders[ref_px] = int(_type_offenders.get(ref_px, 0)) + 1
+	return CanvasText.scale_for(ref_px, _canvas.size.y)
+
+
+## Off-ladder sizes drawn in the last frame. Empty is the passing state.
+func type_offenders() -> Dictionary:
+	return _type_offenders
+
+
 func _draw_hud() -> void:
 	var s := _canvas.size
 	if s.x < 1.0 or s.y < 1.0:
 		return
 	_layout.clear()
+	_type_offenders.clear()
 	_draw_health(s)
 	_draw_stamina(s)
 	_draw_magic(s)
@@ -817,6 +870,15 @@ const LEGEND_LITERAL := &"__literal"
 ## where the verbs change subject: what you do with the sword, then what you do
 ## with your gear.
 const LEGEND_BREAK := &"__break"
+## Between two entries on a row. Four spaces and not one: at 10 px in a face with
+## this much serif, a single space between "R3 LOCK-ON" and "LMB SWORD" makes the
+## row read as one sentence, and the whole value of the legend is that the eye
+## can find the verb it came looking for.
+const LEGEND_SEP := "    "
+## What decision 28 budgets: two authored rows, plus one for the combat row to
+## overflow into. `_pack_legend` complains rather than truncating if the entry
+## list ever needs a fourth.
+const LEGEND_MAX_LINES := 3
 
 const LEGEND := [
 	[&"", "MOVE"],
@@ -878,20 +940,28 @@ const LEGEND_STICKS := {
 func _draw_controls(s: Vector2) -> void:
 	if Run == null or Run.in_dungeon:
 		return
-	var lines := _legend()
-	# FIT TO THE FRAME, do not trust the authored size. This is the one thing on
+	# FIT TO THE FRAME, do not trust the authored width. This is the one thing on
 	# the HUD whose width is set by its TEXT and not by the layout -- it is every
-	# bound control on two lines, so a rebind, a device swap or a longer verb makes
-	# it longer, and the row is already ~150 characters on a keyboard. Under the
-	# old 5x7 table every glyph was 6 px and it happened to fit at 720p; under a
+	# bound control, so a rebind, a device swap or a longer verb makes it longer,
+	# and the row is already ~150 characters on a keyboard. Under the old 5x7
+	# table every glyph was 6 px and it happened to fit at 720p; under a
 	# proportional face it ran off both edges of the screen on the first capture.
-	var scale := CanvasText.scale_for(10.0, s.y)
+	#
+	# **It WRAPS. It used to shrink, and shrinking could not work** (decision 28,
+	# and HUD_PLAN §15.3 for the measurement). The old line here was
+	# `if widest > avail: scale *= avail / widest`, which looks like it must fit
+	# by construction and does not: `CanvasText.size_of` clamps the em size at
+	# `MIN_SIZE`, so below about 9 px the scale keeps falling, the rendered glyphs
+	# stop shrinking with it, and the line comes out WIDER than the width it was
+	# asked to fit. That is why the strip was illegible AND still ran off both
+	# edges -- it was being punished for being long twice and fixed by neither.
+	#
+	# 10 px is the bottom of the ladder and there is nothing under it, so a legend
+	# that does not fit at 10 px has too many entries on a row, not type that is
+	# too big. Decision 8 draws it upward into empty floor, so a third row is free.
+	var scale := _text(10.0)
 	var avail := s.x * (1.0 - Pal.SAFE.x * 2.0)
-	var widest := 0.0
-	for line in lines:
-		widest = maxf(widest, CanvasText.width(line, scale))
-	if widest > avail:
-		scale *= avail / widest
+	var lines := _pack_legend(_legend_groups(), scale, avail)
 	# Drawn UPWARDS from the baseline, so adding a row pushes the legend into the
 	# empty floor above it rather than off the bottom of the screen.
 	var step := CanvasText.height(scale) + Pal.px(5.0, s.y)
@@ -910,16 +980,84 @@ func _draw_controls(s: Vector2) -> void:
 			Vector2(s.x * 0.5, top + step * i), scale, Pal.ASH)
 
 
-func _legend() -> PackedStringArray:
+## Pack the authored groups into rows no wider than `avail`.
+##
+## **Between ENTRIES, never inside one** — which is why `_legend_groups` hands
+## back a list of entries rather than a joined string, and why this does not use
+## `CanvasText.wrap`. That function breaks on spaces, and every entry on this
+## line has a space in it ("LMB SWORD"); word wrapping would split a cap from its
+## verb and collapse the four-space separators that are the only thing making the
+## row read as a list rather than as a sentence.
+##
+## The authored break (`LEGEND_BREAK`) is still honoured — a group always starts
+## a new row. Rows are RESERVED for the groups still to come, so a long combat
+## group cannot push POUCH off the legend; the gear group is guaranteed its row.
+func _pack_legend(groups: Array, scale: float, avail: float) -> PackedStringArray:
+	var out: PackedStringArray = []
+	for gi in groups.size():
+		var entries: PackedStringArray = groups[gi]
+		var rows := _greedy_rows(entries, scale, avail).size()
+		# BALANCED, not merely legal. Greedy packing at the full width fills row
+		# one to the brim and leaves the remainder alone underneath, and the first
+		# render of this did exactly that: the combat group came out as a full
+		# 1179 px row followed by "E JUMP" by itself in the middle of the screen,
+		# which reads as a mistake rather than as a second row. Once the row count
+		# is known, the narrowest width that still fits in that many rows spreads
+		# the entries evenly — same rows, same order, no orphan.
+		var lo := 0.0
+		for e in entries:
+			lo = maxf(lo, CanvasText.width(e, scale))
+		var hi := avail
+		for _i in 12:
+			var mid := (lo + hi) * 0.5
+			if _greedy_rows(entries, scale, mid).size() <= rows:
+				hi = mid
+			else:
+				lo = mid
+		out.append_array(_greedy_rows(entries, scale, hi))
+	# Not truncated when it overflows, said out loud instead. Dropping a row would
+	# hide a binding the player has no other way to learn, which is worse than a
+	# legend one row taller than the plan budgeted for — and a silent drop is how
+	# you find out months later that POUCH stopped being on screen.
+	if OS.is_debug_build() and out.size() > LEGEND_MAX_LINES:
+		push_error(("Hud: the legend packed to %d rows and decision 28 budgets "
+			+ "%d — the entry list has outgrown the screen, so cut an entry "
+			+ "rather than the type") % [out.size(), LEGEND_MAX_LINES])
+	return out
+
+
+## Entries packed left to right into rows no wider than `w`. The first entry
+## always goes on the row it is offered, so an entry wider than `w` overhangs
+## rather than vanishing — a binding the player cannot see is worse than a
+## binding that is slightly too long.
+func _greedy_rows(entries: PackedStringArray, scale: float,
+		w: float) -> PackedStringArray:
+	var rows: PackedStringArray = []
+	var line := ""
+	for e in entries:
+		var candidate: String = e if line.is_empty() else line + LEGEND_SEP + e
+		if line.is_empty() or CanvasText.width(candidate, scale) <= w:
+			line = candidate
+			continue
+		rows.append(line)
+		line = e
+	if not line.is_empty():
+		rows.append(line)
+	return rows
+
+
+## The legend's entries, grouped by authored row. Joined and re-broken to fit by
+## `_pack_legend`, which is the only thing that knows how wide the screen is.
+func _legend_groups() -> Array[PackedStringArray]:
 	var sticks: Array = LEGEND_STICKS[Settings != null and Settings.using_pad]
-	var lines: PackedStringArray = []
+	var lines: Array[PackedStringArray] = []
 	var parts: PackedStringArray = []
 	var stick := 0
 	for entry: Array in LEGEND:
 		var action: StringName = entry[0]
 		var verb: String = entry[1]
 		if action == LEGEND_BREAK:
-			lines.append("    ".join(parts))
+			lines.append(parts)
 			parts = PackedStringArray()
 			continue
 		if action == LEGEND_LITERAL:
@@ -945,7 +1083,7 @@ func _legend() -> PackedStringArray:
 		elif action == &"interact" and _hotkey(&"context") == cap:
 			continue  # already said, on the merged row above
 		parts.append("%s %s" % [cap, verb])
-	lines.append("    ".join(parts))
+	lines.append(parts)
 	return lines
 
 
@@ -978,8 +1116,8 @@ func _draw_floor(s: Vector2) -> void:
 			else clampf((_floor_t - FLOOR_HOLD) / FLOOR_SETTLE, 0.0, 1.0)
 
 	var at := Pal.FLOOR_ORIGIN * s
-	var nt := CanvasText.scale_for(10.0, s.y)
-	var lt := CanvasText.scale_for(16.0, s.y)
+	var nt := _text(10.0)
+	var lt := _text(16.0)
 	var name_line := Prog.NAME
 	var level_line := Prog.label(Run.level)
 	var gap := Pal.px(5.0, s.y)
@@ -1245,7 +1383,7 @@ func _draw_heat(s: Vector2) -> void:
 	# The multiplier, right of the bar. Drawn at every tier including x1.0: the
 	# number is the whole point of the meter, and hiding it until tier 1 means
 	# the player meets it for the first time in the middle of a fight.
-	var scale := CanvasText.scale_for(10.0, s.y)
+	var scale := _text(10.0)
 	# String.num rather than "%.2f": it drops trailing zeros, so the ramp reads
 	# X1 / X1.25 / X1.6 / X2.2 instead of a column of dead decimals.
 	var label := "x" + String.num(Heat.multiplier(), 2)
@@ -1326,9 +1464,9 @@ func _cross_origin(s: Vector2) -> Vector2:
 ## is where those two rows are actually drawn.
 func _cluster_top(s: Vector2) -> float:
 	var caps := Pal.px(Pal.KEYCAP_GAP, s.y) + CanvasText.height(
-		Pal.px(Pal.KEYCAP_SCALE, s.y))
+		_text(14.0))
 	var loadout := Pal.px(9.0, s.y) + CanvasText.height(
-		Pal.px(Pal.KEYCAP_SCALE, s.y))
+		_text(14.0))
 	# No allowance for the caret band above the cells, and that is not an
 	# oversight. The cluster used to be pinned to the TOP of the screen, where a
 	# caret drawn above a cell would have gone off the frame, so the origin had
@@ -1359,7 +1497,7 @@ func _hotkey(action: StringName) -> String:
 func _draw_keycap(s: Vector2, cell: Rect2, key: String, tag := &"") -> void:
 	if key.is_empty():
 		return
-	var scale := Pal.px(Pal.KEYCAP_SCALE, s.y)
+	var scale := _text(14.0)
 	var top := cell.end.y + Pal.px(Pal.KEYCAP_GAP, s.y)
 	var w := CanvasText.width(key, scale)
 	var h := CanvasText.height(scale)
@@ -1444,10 +1582,19 @@ func _draw_hands(s: Vector2) -> void:
 			# things you read when you have STOPPED — the key caps, the loadout
 			# line, the floor card. A Tier 2 readout wearing Tier 3's brightness is
 			# the hierarchy saying one thing and the palette saying another.
-			var nsc := Pal.px(1.0, s.y)
+			# 10 px, and it was 7 (decision 19). §2's second rule: the smallest
+			# text on the screen must not be the thing you read mid-fight, and
+			# "how many arrows do I have" was set three pixels under the key cap
+			# that fires them.
+			#
+			# The corner inset is derived from the drawn height rather than from
+			# a constant that happened to equal the old size plus three — that
+			# constant is precisely why promoting the size would otherwise have
+			# put the digits on the cell's bottom border.
+			var nsc := _text(10.0)
 			var nw := CanvasText.width(str(left), nsc)
 			var nr := Vector2(r.end.x - Pal.px(3.0, s.y),
-				r.end.y - Pal.px(10.0, s.y))
+				r.end.y - Pal.px(3.0, s.y) - CanvasText.height(nsc))
 			# Parent is the CELL, not the cluster: the numeral is deliberately
 			# inside it, which is precisely the nesting a flat overlap check
 			# cannot express (decision 27).
@@ -1509,10 +1656,14 @@ func _draw_cpad(s: Vector2) -> void:
 	# Only past one — "1" under a single bottle is a count of a thing nobody is
 	# counting.
 	if Game.bottle_count() > 1:
+		# 10 px and inset off its own height, for the reason the ammo numeral is
+		# — same corner, same question, same decision 19.
+		var csc := _text(10.0)
 		CanvasText.draw_right(_canvas,
 			"%d/%d" % [Game.item_selected + 1, Game.bottle_count()],
-			Vector2(r.end.x - Pal.px(3.0, s.y), r.end.y - Pal.px(10.0, s.y)),
-			Pal.px(1.0, s.y), Pal.MOTH)
+			Vector2(r.end.x - Pal.px(3.0, s.y),
+				r.end.y - Pal.px(3.0, s.y) - CanvasText.height(csc)),
+			csc, Pal.MOTH)
 
 	# The loadout, on its own row under the key caps.
 	#
@@ -1522,7 +1673,7 @@ func _draw_cpad(s: Vector2) -> void:
 	# over a torchlit wall was barely there. Right-aligned to the cluster's edge
 	# like everything else in it, so the widest word (ALTERNATE) grows leftwards
 	# under the hands rather than off the screen.
-	var scale := Pal.px(Pal.KEYCAP_SCALE, s.y)
+	var scale := _text(14.0)
 	var line := "\u2191 PRIMARY" if Game.loadout_set == Game.PRIMARY \
 		else "\u2191 ALTERNATE"
 	var top := r.end.y + Pal.px(Pal.KEYCAP_GAP, s.y) + CanvasText.height(scale) \
@@ -1628,7 +1779,7 @@ func _draw_item_glyph(s: Vector2, r: Rect2, id: StringName,
 	# so do not remove that early return believing this line is a safe fallback.
 	CanvasText.draw_centred(_canvas, ArmamentDb.letter(id),
 		Vector2(r.get_center().x, r.position.y + r.size.y * 0.32),
-		Pal.px(2.0, s.y), label_col)
+		_text(14.0), label_col)
 
 
 ## A bottle, drawn rather than baked: the glass is the same for all four and the
@@ -1915,9 +2066,13 @@ func _draw_slips(s: Vector2, right: float) -> void:
 		y -= h + gap
 
 	if entries.size() > SLIP_MAX:
+		# 10 px, decision 19. "+4" is the only thing on this stack that says how
+		# much of the bag you cannot see, so it is not the place for the smallest
+		# type on the screen.
+		var osc := _text(10.0)
 		CanvasText.draw_right(_canvas, "+%d" % (entries.size() - SLIP_MAX),
-			Vector2(right, y - Pal.px(8.0, s.y)), Pal.px(1.0, s.y), Pal.MOTH)
-		y -= Pal.px(8.0, s.y) + CanvasText.height(Pal.px(1.0, s.y))
+			Vector2(right, y - Pal.px(8.0, s.y)), osc, Pal.MOTH)
+		y -= Pal.px(8.0, s.y) + CanvasText.height(osc)
 
 	# The stack, as one rectangle. Parent is the RIM: the slips are deliberately
 	# inside it, and §14.5 warns that the first thing a new director reports is
@@ -2041,7 +2196,7 @@ func _draw_toast(s: Vector2) -> void:
 		a = 1.0 - (_toast_t - TOAST_HOLD) / TOAST_FADE
 	CanvasText.draw_right(_canvas, _toast,
 		Vector2(Pal.BAG_RIGHT * s.x, Pal.TOAST_BASELINE * s.y),
-		CanvasText.scale_for(16.0, s.y), Color(_toast_color, clampf(a, 0.0, 1.0)))
+		_text(16.0), Color(_toast_color, clampf(a, 0.0, 1.0)))
 
 
 ## AUTOSAVING…, bottom right, on the toast's baseline.
@@ -2068,7 +2223,7 @@ func _draw_save(s: Vector2) -> void:
 		a = 1.0 - (_save_t - SAVE_HOLD) / SAVE_FADE
 	CanvasText.draw_right(_canvas, "AUTOSAVING...",
 		Vector2(Pal.BAG_RIGHT * s.x, Pal.TOAST_BASELINE * s.y),
-		CanvasText.scale_for(14.0, s.y), Color(Pal.MOTH, clampf(a, 0.0, 1.0)))
+		_text(14.0), Color(Pal.MOTH, clampf(a, 0.0, 1.0)))
 
 
 ## The interact line. Centred and low -- under the action, above the kit strip,
@@ -2078,7 +2233,7 @@ func _draw_save(s: Vector2) -> void:
 func _draw_prompt(s: Vector2) -> void:
 	if _prompt.is_empty():
 		return
-	var scale := CanvasText.scale_for(14.0, s.y)
+	var scale := _text(14.0)
 	var w := CanvasText.width(_prompt, scale)
 	var h := CanvasText.height(scale)
 	var centre := Vector2(s.x * 0.5, s.y * 0.735)

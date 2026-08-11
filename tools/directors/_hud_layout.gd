@@ -129,8 +129,26 @@ static func check(tag: String) -> int:
 				% [tag, key, r, safe])
 			fails += 1
 
+	# Assertion 3: every size drawn is on the type ladder.
+	#
+	# On a HUD-scoped wrapper rather than inside `CanvasText.scale_for` (decision
+	# 34): the ladder is a HUD rule, and `scale_for` is also what the loading card
+	# sets 32 px type with. An assert in the shared function would fail a shipping
+	# screen this plan has no authority over, on the day it landed.
+	#
+	# It can only see call sites that actually RAN, which is the right scope and
+	# is why it lives beside the rectangle checks instead of in a grep: the size a
+	# frame drew is the only size that was on screen.
+	var offenders: Dictionary = Hud.type_offenders()
+	for ref_px: float in offenders:
+		print("  HUDLAYOUT FAIL %s: text drawn at %.1f px (%d call%s) is not on "
+			% [tag, ref_px, offenders[ref_px], "" if offenders[ref_px] == 1 else "s"]
+			+ "the type ladder %s" % [Hud.TYPE_LADDER])
+		fails += 1
+
 	if fails == 0:
-		print("  ok   HUDLAYOUT %s (%d rects)" % [tag, layout.size()])
+		print("  ok   HUDLAYOUT %s (%d rects, %d sizes on the ladder)"
+			% [tag, layout.size(), Hud.TYPE_LADDER.size()])
 	return fails
 
 
