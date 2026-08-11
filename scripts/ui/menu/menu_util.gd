@@ -46,6 +46,10 @@ const ACTION_NAMES := {
 	&"interact": "Interact / Talk",
 	&"use_item": "Use Item",
 	&"jump": "Jump",
+	# Named for the HOLD, because the press on its own does nothing at all -- a
+	# row reading "Kit Wheel" would be a button the player tapped once and
+	# concluded was broken.
+	&"kit_wheel": "Kit Wheel (hold)",
 	# The three cycles. Named as cycles, because "Weapon ←" would read as a slot
 	# and the whole point of the change that made these is that there are no
 	# slots -- see the D-pad note in project.godot.

@@ -31,7 +31,8 @@ definition**, and §4.2 applies.
 | Dungeon kits | **1** | The P6 kit, four tints |
 | Usable items | **6** | Bow, Hookshot, **Burst**, **Sustain**, **Ballast** — all built, the last two on 2026-08-11 (`docs/ITEMS.md` §8, D5) — and the Far Lantern, which has no verb |
 | **Ring stops** | **6** | Sword, bow, hookshot, Burst, Sustain, Ballast. **Hard ceiling** — `docs/CONTRACT.md` §4.1. `Game.RIGHT_POOL` holds all six now, so this row is no longer a plan: a seventh entry in that array is an amendment |
-| **New mechanics** | **2** | The working, and **the puzzle**. Was 1. See §4.2's fourth ledger line — this is an owner's amendment, not an absorption. |
+| **Kit wheel slots** | **8** | New row, 2026-08-11, owner's call. Hold LB, point, release — `docs/CONTRACT.md` §4.2. **Eight is short of the ten a player can own on purpose** (6 ring stops + 4 bottles), because a wheel with room for everything is a hotbar nobody curates. It adds no screen (a card on the existing Items panel), no new id vocabulary (armament ids and `bottle_N` tokens) and no new field the D-pad did not already write. A ninth slot is an amendment to the sentence above, not a constant. |
+| **New mechanics** | **2** | The working, and **the puzzle**. Was 1. See §4.2's fourth ledger line — this is an owner's amendment, not an absorption. **The kit wheel is not a third**: it is a faster door onto `Game.loadout` and `Game.item_selected`, both of which the D-pad already wrote. |
 | Locked doors | **8** | 4 shortcuts, 3 vaults, 1 to the Long Descent. **They are puzzles now, not checks** — `docs/PUZZLES.md`, GDD §5.3 |
 | Vault prefabs | **3** | Three rooms each |
 | **Puzzle atoms** | **9** | Phase 1: key door, urn, plate, push block, eye switch, cracked pillar, hookshot target, sun switch, **lantern**. The lantern was pulled forward out of phase 2 (2026-08-10), leaving three there, uncommitted |

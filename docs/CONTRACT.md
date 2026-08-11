@@ -396,7 +396,7 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `weapon_prev` / `weapon_next` | 1 / 3 | dpad ← / → | step the right hand through the weapons you own — §4.1 |
 | `item_next` | 4 | dpad ↓ | step the selected item — §4.1 |
 | `loadout_swap` | 2 | dpad ↑ | primary ↔ alternate — §4.1 |
-| — | — | **LB** (pad9) | **deliberately empty in the world**, held for spells — it pages menu tabs, see below |
+| `kit_wheel` | **Ctrl** | **LB** (pad9) | **hold** to open the kit wheel, aim with the right stick or the mouse, **release to commit** — §4.2. The one hold in the game whose release is the press. It still pages menu tabs while a menu is up, see below |
 | `first_person` | **V** | **R3** (pad8) | look out of his own eyes — he roots. No Elden Ring equivalent; V because `use_item` took R |
 | — | **X** | — | **deliberately unbound**, held for a crouch. Elden Ring's crouch key, and the one row of its layout this game has no ability for. CONTRACT §4: it stays unbound until the verb exists |
 | `pause` / `inventory` / `map` | Esc / **I** / **M**, Tab | Start (pad6) / **Select** (pad4) / L3 (pad7) | menu / pouch / map |
@@ -905,7 +905,10 @@ The D-pad does not hold items. It **steps rings**, and each direction owns one:
 the player chose in a menu, exactly as Ocarina's C buttons do, and picking one up
 auto-bound it to the first free button. It is all deleted — `quick_slots`,
 `bind_quick`, `cycle_quick_bind`, `use_quick`, `Bus.quick_slots_changed`, the
-ITEM BUTTONS card on the equipment screen, and the auto-bind on pickup.
+ITEM BUTTONS card on the equipment screen, and the auto-bind on pickup. Those
+symbols are gone and are not coming back; **the kit wheel is a different shape
+answering the same want**, and the last paragraph of this section is the
+argument for why it clears the bar this one did not.
 
 What killed it was that it made every direction mean *whatever you last decided*,
 which is only worth its cost when you own more things than you have buttons. This
@@ -933,6 +936,35 @@ and on that argument it is a row, and the row is the problem.
 too: a ring whose length changed every time you drank is a ring you cannot count.
 `Game.selected_item()` / `selected_potion()` name what ↓ landed on; the HUD draws
 one cell for it instead of the four the old C-pad needed. See §8 *Armaments*.
+
+**The kit wheel (§4.2) binds things, and it is not the system above coming
+back.** The two objections that deleted the quick slots were *you have to
+remember which button it is on* and *a bow you just found means nothing until
+you visit a menu*, and a wheel is the only shape that answers both: it **shows
+every binding for as long as you hold it**, so there is nothing to remember, and
+it binds on pickup, so the menu trip is optional rather than the price of
+admission. The three rings on this page are untouched — the wheel writes the
+same two fields they do and is a faster door onto them, never a second copy.
+
+### 4.2 The kit wheel — hold LB, point, let go
+
+Eight slots. Hold `kit_wheel`, aim with the right stick or the mouse, and the
+**release** is the commit. `scripts/ui/hud/kit_wheel.gd` owns the input;
+`Hud._draw_wheel` owns the pixels; `Game.wheel` owns the eight ids.
+
+| | |
+|---|---|
+| Slots | `Game.WHEEL_SLOTS` = **8**. A player can own ten bindable things (six ring stops + four bottles), so the wheel is deliberately short of the set — a wheel with room for everything is a hotbar you never curate. |
+| What may go on one | Anything `Game.wheel_bindable()` accepts: a `RIGHT_POOL` armament, or a `bottle_N` token from `Game.bottle_id()`. Not the left hand. |
+| Routing | `Game.wheel_select()`, off the id alone: a bottle moves `item_selected`, anything else fills the right hand of the live set. One `if`, one place. |
+| Auto-bind | `Game.wheel_auto_bind()`, called from `grant()` and `add_bottle()`. Lowest free slot; a full wheel refuses and **evicts nobody**. |
+| Editing by hand | The KIT WHEEL card on the Items screen (`MenuEquipPanel._build_wheel`). Optional — the wheel works without ever opening it. |
+| Sector 0 | **Centred on straight up, not started there** (`KitWheel.sector_of`). The obvious formula puts up on a boundary, which makes the most natural flick a coin toss between the first cell and the last. |
+| Cancel | `ui_cancel` while the button is down. It is the only way out of a hold whose release commits. |
+| The camera | Goes deaf while it is up. Mouse motion is consumed in `_input`; the stick cannot be, so `GameCamera._apply_look` reads the static `KitWheel.open`. |
+| Save | `SaveGame.VERSION` 7, key `"wheel"`, additive — a slot without it leaves the wheel alone rather than blanking it. |
+
+`tools/directors/kit_wheel.gd` is the proof, beats A–K.
 
 ---
 

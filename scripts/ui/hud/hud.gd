@@ -312,6 +312,8 @@ var _prompt: String = ""
 ## the number so the empty track can be drawn before the player presses anything.
 var _hold01: float = 0.0
 var _hold_required: bool = false
+## The kit wheel's input half; this file draws it. See `_draw_wheel`.
+var _wheel: KitWheel = null
 
 
 func _ready() -> void:
@@ -342,6 +344,14 @@ func _ready() -> void:
 	_canvas.draw.connect(_draw_hud)
 	add_child(_canvas)
 
+	# The kit wheel's input half. A child of this layer rather than an autoload of
+	# its own, because everything that hides the HUD has to hide the wheel too and
+	# `_refresh_visibility` already owns that question -- a hidden CanvasLayer's
+	# children get no input, so a wheel that could not be seen also cannot be
+	# opened, for free and in one place.
+	_wheel = KitWheel.new()
+	add_child(_wheel)
+
 	_target_value = _headline()
 	_last_quarters = Game.quarters
 
@@ -362,6 +372,12 @@ func _ready() -> void:
 	Bus.ammo_changed.connect(_repaint)
 	Bus.loadout_changed.connect(_repaint)
 	Bus.item_selected_changed.connect(_repaint)
+	# A binding moved — on a pickup, or on the equipment screen's card. The wheel
+	# is usually shut when this fires and the repaint is then a no-op; it is
+	# connected anyway because the auto-bind CAN land while the wheel is open
+	# (a chest opened with LB held), and a cell that filled in silently would be
+	# the one moment the wheel is teaching what it is for.
+	Bus.wheel_changed.connect(_repaint)
 	# A bound bottle's cell draws what is IN it, so filling or draining one moves
 	# the HUD without the binding changing. `_wake` rather than `_repaint` for the
 	# draught: the bar it starts has to keep draining after this frame.
@@ -649,6 +665,23 @@ func set_extract_hold(t01: float) -> void:
 func _wake() -> void:
 	set_process(true)
 	_canvas.queue_redraw()
+
+
+## Repaint because the wheel opened, moved a sector, or shut. Public because
+## `KitWheel` is the only thing that knows when any of those happened, and it
+## draws nothing itself — see that file's header for why the two halves are
+## split. A plain repaint and not `_wake`: the wheel has no animation to tick,
+## so a frame per input event is exactly the right number of frames.
+func wake_wheel() -> void:
+	_repaint()
+
+
+## The wheel's input half, for a director that wants to read `sector` back rather
+## than infer which way it thinks it is pointing. Named rather than left to
+## `get_node("KitWheel")` so the node's path is this file's business and not
+## every harness's.
+func wheel() -> KitWheel:
+	return _wheel
 
 
 func _on_tree_changed(_n: Node) -> void:
@@ -1111,6 +1144,9 @@ func _draw_hud() -> void:
 	_draw_arc(s)
 	_draw_controls(s)
 	_draw_floor(s)
+	# Last, because it is the only thing on this canvas that is MODAL — it dims
+	# everything above and expects to be read instead of them, not alongside.
+	_draw_wheel(s)
 	_seal_layout()
 
 
@@ -1452,6 +1488,130 @@ func _legend_groups() -> Array[PackedStringArray]:
 		parts.append("%s %s" % [cap, verb])
 	lines.append(parts)
 	return lines
+
+
+# --- The kit wheel -----------------------------------------------------------
+## How far each cell's CENTRE sits from the middle of the screen, in reference
+## px. 132 puts the ring's outer edge at 164 px from centre — comfortably inside
+## the safe area at 720p, and wide enough that the eight cells do not touch at
+## `Pal.CELL`. It is a fraction of screen HEIGHT like everything else here, so it
+## stays a ring rather than an ellipse on an ultrawide.
+const WHEEL_R := 132.0
+## What the world dims to behind it. VOID rather than black, per STYLEGUIDE §7.2,
+## and 0.62 rather than the 0.4-ish a lighter overlay would use: this is the one
+## overlay in the game the player is meant to LOOK at rather than through, and at
+## 0.4 a torchlit dungeon wall reads straight through the empty cells.
+const WHEEL_SCRIM := 0.62
+
+
+## The wheel, while `KitWheel` says the button is down.
+##
+## **Its rectangles are `_note`d under a parent that is NOT a layout root**, and
+## that is deliberate rather than an oversight. `LAYOUT_ROOTS` roots are siblings
+## of each other, and `_hud_layout`'s assertion 1a fails any two siblings that
+## intersect — a modal ring across the middle of the screen intersects every one
+## of them by design. Leaving `wheel` off that list gets exactly the check that
+## is worth having and none of the one that is not: the eight cells are compared
+## against EACH OTHER (they share a parent, and two overlapping cells would be a
+## real defect) and against the safe area, while nothing compares them to the
+## health pole they are deliberately sitting on top of. The scrim is not noted at
+## all, for the reason `_draw_arc` is not: a full-screen wash is an event painted
+## over everything, not an element with a place in the tree.
+func _draw_wheel(s: Vector2) -> void:
+	if _wheel == null or not KitWheel.open:
+		return
+	var centre := s * 0.5
+	var radius := Pal.px(WHEEL_R, s.y)
+	var cell := Pal.px(Pal.CELL, s.y)
+	var line := Pal.px(1.0, s.y)
+
+	_canvas.draw_rect(Rect2(Vector2.ZERO, s), Color(Pal.VOID, WHEEL_SCRIM))
+	# The ring the cells sit on. It is what makes eight boxes read as one control
+	# with a centre to point away from, rather than as a scattered grid.
+	_canvas.draw_arc(centre, radius, 0.0, TAU, 64, Color(Pal.ASH, 0.8), line, true)
+
+	var at := _wheel.sector
+	for slot in Game.WHEEL_SLOTS:
+		var mid := centre + KitWheel.direction_of(slot) * radius
+		var r := Rect2(mid - Vector2(cell, cell) * 0.5, Vector2(cell, cell))
+		var id := Game.wheel_at(slot)
+		var ready := Game.wheel_ready(slot)
+		var picked := slot == at
+
+		_note(&"wheel_%d" % slot, &"wheel", r)
+		_canvas.draw_rect(r, Pal.BONE if picked else Color(Pal.MIDNIGHT, 0.92))
+		# An EMPTY slot draws a hairline and a filled one draws a full stroke —
+		# the same one-versus-two-pixel distinction `_draw_item_cell` uses to say
+		# "you have the button but not the draught". A player learns the rule once
+		# and it means the same thing in both places.
+		var edge := Pal.BONE if ready else Pal.ASH
+		_canvas.draw_rect(r, Pal.MIDNIGHT if picked else edge, false,
+			Pal.px(2.0 if id != &"" else 1.0, s.y))
+		# `inverted` on the picked cell, exactly as the raised shield is: the fill
+		# went BONE, so the glyph has to come back the other way or it vanishes
+		# into it. Dimmed when the binding is cold — a working you have not read,
+		# a bottle that was sold — because that is a slot the release will refuse
+		# and the refusal has to be visible BEFORE the thumb lets go.
+		_draw_item_glyph(s, r, id, &"wheel_%d" % slot, Pal.MIDNIGHT, picked,
+			not ready)
+
+	_draw_wheel_caption(s, centre, radius, at)
+
+
+## The two lines under the ring: what the thumb is on, and what letting go will
+## do with it.
+##
+## The second line is the whole of the routing, said out loud. EQUIP and SELECT
+## are different words because they are different outcomes — one fills the right
+## hand, the other moves what X drinks — and a player who has just bound a bottle
+## next to a hookshot has no other way to learn that the wheel knows the
+## difference. It is also the line that makes an empty sector honest: pointing at
+## nothing says CANCEL rather than saying nothing at all.
+func _draw_wheel_caption(s: Vector2, centre: Vector2, radius: float, at: int) -> void:
+	var id := Game.wheel_at(at) if at >= 0 else &""
+	var name_scale := _text(16.0)
+	var verb_scale := _text(10.0)
+	var top := centre.y + radius + Pal.px(Pal.CELL * 0.5 + 18.0, s.y)
+
+	var label := "— nothing —" if id == &"" else _wheel_label(id)
+	var verb := "RELEASE TO CANCEL"
+	if id != &"":
+		if not Game.wheel_ready(at):
+			verb = "NOT YOURS YET"
+		elif Game.bottle_index(id) >= 0:
+			verb = "RELEASE TO SELECT"
+		else:
+			verb = "RELEASE TO EQUIP"
+
+	var name_h := CanvasText.height(name_scale)
+	var verb_h := CanvasText.height(verb_scale)
+	var gap := Pal.px(4.0, s.y)
+	# One rect for the pair. Reported together because they are one caption: two
+	# entries stacked 4 px apart would be two siblings the layout check has to be
+	# told are allowed to be that close.
+	var w := maxf(CanvasText.width(label, name_scale),
+		CanvasText.width(verb, verb_scale))
+	_note(&"wheel_caption", &"wheel",
+		Rect2(centre.x - w * 0.5, top, w, name_h + gap + verb_h))
+
+	CanvasText.draw_centred(_canvas, label, Vector2(centre.x, top),
+		name_scale, Pal.BONE if id != &"" else Pal.MOTH)
+	CanvasText.draw_centred(_canvas, verb,
+		Vector2(centre.x, top + name_h + gap), verb_scale, Pal.MOTH)
+
+
+## What a wheel entry is called, asked of whichever table owns the id.
+##
+## A bottle's name is what is IN it, because that is what the player is reaching
+## for — "Ironhide Draught" and not "Bottle 2". An empty one says so, and that
+## is a real thing to want: selecting the empty bottle is how you walk to the
+## alchemist knowing which glass she will fill.
+func _wheel_label(id: StringName) -> String:
+	var bottle := Game.bottle_index(id)
+	if bottle < 0:
+		return ArmamentDb.name_of(id)
+	var potion := Game.bottle(bottle)
+	return "Empty Bottle" if potion == &"" else PotionDb.name_of(potion)
 
 
 ## Where you are: the dungeon's name, and how far down it you have got.

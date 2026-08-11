@@ -565,6 +565,18 @@ func _follow_at(want: Vector3, speed01: float, delta: float) -> void:
 
 
 func _apply_look(delta: float) -> void:
+	# **The right stick is aiming the kit wheel, not the lens.** The mouse half of
+	# this needs no code here — `KitWheel` takes motion in `_input` and marks it
+	# handled, so it never reaches the `_unhandled_input` above — but `cam_*` is
+	# POLLED, and a poll cannot be consumed. Without this the lens swings a full
+	# circle while the player picks a weapon, and lets go looking at a wall.
+	#
+	# `_look_input` is dropped rather than kept: a mouse event that arrived in the
+	# same frame the wheel opened is motion the player meant for the wheel.
+	if KitWheel.open:
+		_look_input = Vector2.ZERO
+		_manual_timer = maxf(_manual_timer - delta, 0.0)
+		return
 	var stick := Input.get_vector(&"cam_left", &"cam_right", &"cam_up", &"cam_down")
 	var look := _look_input
 	_look_input = Vector2.ZERO
