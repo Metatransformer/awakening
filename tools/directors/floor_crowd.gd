@@ -259,6 +259,17 @@ func _census(rig, d: Node, level: int) -> Dictionary:
 			continue
 		per[owner_of[home]] = int(per.get(owner_of[home], 0)) + 1
 	var behind := 0
+	# **These lines print before the per-room ones. That is a report layout and
+	# NOT the group's iteration order** -- card #42 read it as one and card #60
+	# was filed on the strength of it ("the Arena/Vault/MinibossArena bodies
+	# iterate first on every seed"). Measured afterwards on 40 seeds: `foes[0]`
+	# was a ROOM body on 40 of 40. `Vault` and `MinibossArena` hang off the
+	# Dungeon rather than off a room root and are built after every room, so
+	# they come LAST; the boss's `Arena` does precede its own room's pack, but
+	# its room is the deepest and lands 3rd-5th in `rooms` while the first
+	# populated room lands 1st or 2nd.
+	# The order above is a fact about this loop, which walks `sealed` before it
+	# reaches `per`. Do not quote it as a fact about the scene tree.
 	for where: String in sealed:
 		behind += int(sealed[where])
 		print("CROWD %d bodie(s) under %s -- not on the walked floor"
