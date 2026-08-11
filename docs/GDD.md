@@ -337,6 +337,42 @@ light. `docs/STYLEGUIDE.md` §1.
 receipt. A second is a second place for the arithmetic to drift. This repo has
 paid for the alternative (`CLAUDE.md` §0) and will not pay again.
 
+### 4.1 The telegraph is a contract, and this is the other half of it
+
+Pillar 3 promises that enemies wind up before they commit. A telegraph the
+player can only *retreat* from is half a promise: it makes the fight fair, but
+it never makes reading it the interesting choice. So there are exactly two
+answers, and both are the same buttons meaning something better for a moment
+because you read the fight right. Neither adds an input. `docs/BESTIARY.md` §3.6
+is the design of record.
+
+**The parry** — guard held, sword pressed, in the quarter-second before the blow
+arrives. It drops the shield to do it, so a miss is a hole you take the blow
+through; a hit costs nothing, throws the thing that swung, and opens a window in
+which the sword button is the dash into the gap it just made. It is the only
+thing in the game that moves a boss, and that is safe precisely because it can
+only be thrown after the boss has already committed.
+
+**The perfect dodge** — the roll, *into* the blow instead of away from it. Time
+slows for half a second and the sword button becomes a leaping overhead that
+sends the body flying (§4 pillar 1's roll, earning its keep). It asks for no
+prediction at all: the reward fires only if a blow genuinely reached you while
+you were rolling through it, so rolling early just misses and rolling late just
+hurts.
+
+They are deliberate opposites, and that is the whole design rather than a
+symmetry for its own sake. **The parry is aggressive and punished; the dodge is
+safe and passive.** The parry costs no stamina because the guardless recovery
+after a miss is already the price, and it pays in *initiative* — a body on its
+back. The dodge costs only what the roll already cost and pays in *time* — the
+one currency a player who is losing actually wants. A game with only the first
+punishes panic; a game with only the second never rewards nerve.
+
+Both announce themselves loudly and differently, because a reaction the player
+cannot see did not happen: a gold burst at the shield for the parry, the same
+gold as a critical launch, and a cold ring on the floor for the dodge. One reads
+as a hit. The other reads as the world bending.
+
 ---
 
 ## 5. The Descent — four floors, four bosses, and an ending
@@ -964,7 +1000,8 @@ button meaning something better for a moment because you read the fight right:
   and RB becomes a **leaping overhead** for a second and a half.
 
 They are deliberate opposites: the parry is aggressive and punished, the dodge is
-safe and passive, and neither adds an input. `docs/BESTIARY.md` §3.6.
+safe and passive, and neither adds an input. Why, at length: §4.1. The numbers:
+`docs/BESTIARY.md` §3.6.
 
 Full input map and pad bindings: `docs/CONTRACT.md` §4.
 
