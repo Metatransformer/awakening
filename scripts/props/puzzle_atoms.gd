@@ -246,6 +246,41 @@ static func refusal_for(id: StringName, left: int = 1, total: int = 1) -> String
 		String(r.get("state", "SHUT"))]
 
 
+## What an **ordered** gate says (`docs/PUZZLES.md` §3, combinator 2 --
+## *sequence*): which one of the run is next, counting from 1.
+##
+## A separate sentence rather than a longer `refusal_for`, because the two say
+## opposite things with the same numbers. *"2 OF 3 EYES STILL SHUT"* is how many
+## are LEFT; *"THE 2ND OF 3 EYES IS NEXT"* is which one to hit. A player who read
+## the first line at an ordered gate would learn the count and nothing about the
+## order, which is the whole of what this combinator asks them for.
+static func refusal_next_for(id: StringName, at: int, total: int) -> String:
+	var r := row(id)
+	if r.is_empty():
+		return "IT WILL NOT OPEN"
+	# One of its kind cannot be a sequence, so it falls back to the plain line
+	# rather than saying "THE 1ST OF 1".
+	if total <= 1:
+		return String(r["refusal"])
+	return "THE %s OF %d %s IS NEXT" % [ordinal(at), total, String(r["plural"])]
+
+
+## `1` -> `1ST`. Public because a placer or a director naming a run's position
+## should read the same words the door does.
+##
+## The teens are the reason this is not `n % 10` alone -- 11TH, 12TH, 13TH -- and
+## a gate will never have thirteen of one atom, which is exactly the argument
+## that leaves the bug in. It costs one line.
+static func ordinal(n: int) -> String:
+	var tail := "TH"
+	if n % 100 < 11 or n % 100 > 13:
+		match n % 10:
+			1: tail = "ST"
+			2: tail = "ND"
+			3: tail = "RD"
+	return "%d%s" % [n, tail]
+
+
 ## The item a gate wearing this atom's tier should carry as its MARK.
 ##
 ## `LockedDoor.SIGILS` is keyed on item id and already holds rows for the bow,

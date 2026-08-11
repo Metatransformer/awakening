@@ -134,6 +134,18 @@ func refusal(left: int = 1, total: int = 1) -> String:
 	return PuzzleAtoms.refusal_for(atom_id, left, total)
 
 
+## What an **ordered** gate says while this one is the next of `total` in the run
+## (`docs/PUZZLES.md` §3, combinator 2). `at` counts from 1.
+##
+## A method on the atom rather than a call into the table at the gate, for the
+## same reason `refusal()` is one: `EyeSwitch.refusal()` overrides its row for the
+## frozen variant, and a line composed from `PuzzleAtoms` at the door would be a
+## line no variant could ever change (CLAUDE.md §3's static-dispatch row, and
+## §8.1's third unpriced item -- this project has already paid for that once).
+func refusal_next(at: int, total: int) -> String:
+	return PuzzleAtoms.refusal_next_for(atom_id, at, total)
+
+
 func is_solved() -> bool:
 	return _solved
 
@@ -186,6 +198,36 @@ func unsolve() -> void:
 	# chain a second time would be a coupled row that works once per floor, and the
 	# bug would look like the chain having stopped working rather than like a flag.
 	_chained = false
+	on_unsolved()
+	Bus.switch_toggled.emit(flag_id(), false)
+	unsolved.emit(self)
+
+
+## **Put it back, whatever the `latching` column says.**
+##
+## `docs/PUZZLES.md` §3's second combinator -- *sequence* -- needs a third case
+## that neither `solve()` nor `unsolve()` covers: an atom that answered its verb
+## honestly and should not have, because it was not its turn. `unsolve()` refuses
+## a latching atom on purpose (a smashed urn does not reassemble), and that rule
+## is right for the world and wrong for a sequence, so this is the door the
+## sequence gets rather than a hole knocked in that one. The only caller is
+## `PuzzleGate._break_the_sequence`.
+##
+## **The flag goes with it, and that is not tidiness.** A latching atom writes
+## `atom_*` in `solve()` and `PuzzleAtom._ready` restores from it, so an eye left
+## flagged after the player watched it go dark would come back LIT the next time
+## the floor was rebuilt inside the run -- a row that half-remembers a sequence
+## the player has already lost. Erased here, in the same breath, so the flag and
+## the frame agree.
+func reset() -> void:
+	if not _solved:
+		return
+	_solved = false
+	# Same reason `unsolve()` drops it: a link that could never chain again would
+	# look like the chain having broken rather than like a flag.
+	_chained = false
+	if latching():
+		Game.flags.erase(flag_id())
 	on_unsolved()
 	Bus.switch_toggled.emit(flag_id(), false)
 	unsolved.emit(self)

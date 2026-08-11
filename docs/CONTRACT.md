@@ -1410,10 +1410,22 @@ casting layer. Its charges are the bow's arrows with a different noun:
 
 ```gdscript
 ArmamentDb.hand_count(id) -> StringName   # &"arrows" / &"charges" / &"" — what
-                                          # this hand's cell counts, if anything
+                                          # this id IS, on its own
+ArmamentDb.hand_count_beside(id, other)   # what its CELL draws, given the other
+                                          # hand. The one a HUD asks.
 Game.ammo_count(&"charges") -> int        # the count itself; Game.charges
 Game.spend_ammo(&"charges", 1) -> bool    # refuses at zero; the cast never fires
 ```
+
+**The bow borrows the quiver's numeral when the arrow cell is not up** (#53), and
+that is the whole of the difference between those two calls. A working IS its
+count and answers on the first line of `hand_count_beside`; the bow only SPENDS
+one, and the objection to giving it a numeral — the same number twice on one row,
+once under the stave and once under the arrows — can only happen while `arrow` is
+in the other hand. `LEFT_POOL` defaults to the shield, so bow-right + shield-left
+is the loadout a player fights in, and it used to be the one with no arrow count
+anywhere on screen. `hud_lookdev.gd`'s `h_14`/`h_15` are the pair that hold the
+rule to one numeral per row.
 
 `Game.charges` / `Game.max_charges` **are the old `bombs` / `max_bombs` renamed**
 rather than a new pair, and `save_game.gd` reads the old `"bombs"` key as a

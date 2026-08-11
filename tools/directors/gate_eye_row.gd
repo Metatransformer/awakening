@@ -92,9 +92,17 @@ extends RefCounted
 ## What was wrong was HERE. `ArmamentDb.hand_count` answers about the id **in the
 ## hand**, and the id in the hand was `shield`: this director granted the bow and
 ## never touched the left hand, whose pool default (`Game.LEFT_POOL`) is the
-## shield. The bow gets no numeral on purpose -- its own docstring says a bow cell
-## carrying the quiver's count would print the same number twice on one row -- so
-## both frames were photographs of a shield cell, correctly showing nothing.
+## shield. The bow got no numeral on purpose -- a bow cell carrying the quiver's
+## count would print the same number twice on one row -- so both frames were
+## photographs of a shield cell, correctly showing nothing.
+##
+## **That last clause is what card #53 then closed** (`ArmamentDb`
+## `hand_count_beside`): the bow BORROWS the numeral when the arrow cell is not
+## up, so a shield-and-bow frame carries the count now and the loadout a player
+## actually fights in is no longer the one with no quiver on screen. The double
+## print it was guarding against is still impossible -- the borrow stops the
+## moment `arrow` is in the other hand, which is the state this director puts it
+## in and the reason its own assertions below are untouched by that card.
 ##
 ## F3 and G6 asserted `ArmamentDb.hand_count(&"arrow")`, a call on a **string
 ## literal**, which is true of the table whatever the hero is holding. That is the

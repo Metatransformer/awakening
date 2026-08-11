@@ -145,6 +145,15 @@ Owning the bow also switches on a **resource** the player has to manage: arrows,
 with three sources and no fourth (`docs/METAGAME.md` §4.6), one of which is the
 bag itself (`Fletching.RECIPE`, `scripts/items/fletching.gd:~38`).
 
+**The count is on the bow's own cell whenever the arrows are not on a cell of
+their own** (`ArmamentDb.hand_count_beside`, #53). `arrow` is a stop in
+`Game.LEFT_POOL` and it is not the default one — the shield is — so the loadout
+this item is actually fought in is bow-right with the guard up, and nothing in
+the hero gates firing on the left hand. Until #53 that loadout had no readout of
+the quiver anywhere on the HUD. The bow borrows the numeral there and gives it
+back the moment the arrow cell is up, so the row never prints the same number
+twice.
+
 ### 1.3 The Hookshot — *crosses a gap, or brings the gap to you*
 
 **Answers.** The **hook ring** (`PuzzleAtoms.ATOMS[HOOK_RING]`,

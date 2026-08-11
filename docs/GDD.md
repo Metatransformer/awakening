@@ -721,6 +721,14 @@ statement about how deep you were planning to go.
 **Charges live in the HUD column with arrows and stamina, never in the bag.** The
 bag is the pressure valve and it does not get taxed twice.
 
+**And the numeral is on the hand that spends it, whichever hand that is.** A
+working is its own count, so its cell carries the number outright. The bow only
+spends one, so its cell **borrows** the quiver's count — unless the arrows are
+in the other hand, which is the one loadout where the number is already on the
+row (`ArmamentDb.hand_count_beside`, #53). One numeral per row, and never a row
+without one: *"how many arrows do I have"* is asked mid-fight, and the loadout it
+is asked in most is bow-right with the guard still up.
+
 **Sustain and Ballast both sharpen §2 rather than softening it.** Sustain makes
 speed cheaper *and* raises the fee, because Heat rides in the bag — the one
 question asked twice in one button. Ballast is the sharpest form of it in the

@@ -158,6 +158,13 @@ static func ammo_of(id: StringName) -> StringName:
 ## numeral: a bow cell carrying the quiver's count would print the same number
 ## twice on one row, once under the stave and once under the arrows themselves.
 ##
+## **That objection is about the ROW, not about the bow**, and `hand_count_beside`
+## below is where it is stated as such (#53). Nothing here changes -- this is
+## still the id-only fact, and it is the one the directors assert against -- but
+## a cell asks the widened question, because "the same number twice" can only
+## happen while the arrow is in the other hand and the shield is what is there by
+## default.
+##
 ## Here rather than in `hud.gd` because the equipment screen asks the same
 ## question, and the header above this file is about exactly the drift that
 ## starts when the HUD keeps its own copy of a table.
@@ -167,6 +174,50 @@ static func hand_count(id: StringName) -> StringName:
 		&"burst": return &"charges"
 		&"sustain": return &"charges"
 		&"ballast": return &"charges"
+	return &""
+
+
+## What a hand's cell actually DRAWS, given what is in the other hand. This is
+## the question a HUD cell asks; `hand_count` above is the question about the id
+## alone, and the two are different because of one loadout.
+##
+## **The bow borrows the quiver's numeral when the arrow cell is not up** (#53).
+## `hand_count`'s objection is real and survives intact -- the same number twice
+## on one row is exactly what this must not do -- but it only ever held while the
+## arrow WAS in the other hand, and the arrow is not the default there.
+## `Game.LEFT_POOL` starts on the shield, nothing in the hero gates firing on the
+## left hand (`grep -n 'armament(&"left")' scripts/actors/hero/` is empty, and
+## `gate_eye_row.gd` fires nine arrows with the guard up), so bow-right +
+## shield-up is a loadout the player fights in for whole floors with no readout
+## of the quiver anywhere on screen.
+##
+## That is the one thing this numeral is not allowed to be. `hud.gd`'s own note
+## at the draw site promoted it from 7 px to 10 px (decision 19) on the grounds
+## that *"how many arrows do I have"* is asked in the MIDDLE of a fight, against
+## STYLEGUIDE §2's rule that the smallest text on screen must not be the thing
+## you read mid-fight. A readout promoted for being mid-fight-critical cannot
+## then be absent from the loadout you actually fight in.
+##
+## Written as spend-borrows-when-nothing-beside-it-IS-that-count rather than as
+## an `id == &"bow"` arm, because that is the actual rule and it is stable under
+## the ring growing: the three workings each already ARE their count and return
+## on the first line, so they can never reach the borrow, and no id in
+## `LEFT_POOL` spends anything. A fourth id that spends a pool it is not would
+## get the same behaviour without a second branch to remember.
+##
+## The two rejected options, so this is not re-opened: making the absence
+## deliberate (option 2) contradicts decision 19 above, and moving the quiver off
+## the hands to the vitals pole (option 3) takes the count off the hand it
+## belongs to and buys nothing.
+static func hand_count_beside(id: StringName, other: StringName) -> StringName:
+	var own := hand_count(id)
+	if own != &"":
+		return own
+	# The borrow, and the guard on it: if the other hand IS this count, that cell
+	# is already printing the number and this one must stay blank.
+	var spends := ammo_of(id)
+	if spends != &"" and hand_count(other) != spends:
+		return spends
 	return &""
 
 

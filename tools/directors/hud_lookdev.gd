@@ -25,6 +25,32 @@ func _shot(rig, path: String, tag: String) -> void:
 	_fails += Layout.check(tag)
 
 
+## Exactly ONE ammo numeral was drawn on the hand row, and it was in `want`.
+##
+## `_draw_hands` notes each numeral as `ammo_<i>` under its own cell, so the keys
+## the HUD published for the frame just captured are the number of numerals that
+## reached the screen. That is the assertion #53's borrow has to pass and the one
+## `hand_count`'s docstring predicted it would fail: give the bow the quiver's
+## count unconditionally and bow + arrow prints six twice, once under the stave
+## and once under the arrows.
+##
+## Deliberately NOT `ArmamentDb.hand_count_beside(&"bow", &"shield")`. That is a
+## call on two string literals — true of the table whatever the hero is holding,
+## and #52 closed on exactly that shape of assertion sitting under a label that
+## read as a claim about the cell. `layout_rects()` is the drawn frame.
+func _one_numeral(tag: String, want: StringName) -> int:
+	var keys: Array = []
+	for k: StringName in Hud.layout_rects().keys():
+		if String(k).begins_with("ammo_"):
+			keys.append(k)
+	if keys.size() == 1 and keys[0] == want:
+		print("  ok   HUDAMMO %s: one numeral, in %s" % [tag, want])
+		return 0
+	print("HUD FAIL %s: expected exactly one ammo numeral in %s, drew %s"
+		% [tag, want, keys])
+	return 1
+
+
 func run(rig) -> void:
 	var out: String = rig.arg("out", "/tmp/hd/x.png").get_base_dir()
 
@@ -195,11 +221,11 @@ func run(rig) -> void:
 	#
 	#     #52 reported the numeral as never drawn, off `gate_eye_row.gd`'s
 	#     `g_03`/`g_06`. Those frames had the BOW in the right hand and the
-	#     default SHIELD in the left, and `ArmamentDb.hand_count` gives the bow no
-	#     numeral on purpose (its own docstring: a bow cell carrying the quiver's
-	#     count prints the same number twice on one row). The cell that counts
-	#     arrows is `arrow`, which lives in LEFT_POOL and which nothing in that
-	#     director ever equipped — so both frames were photographing a shield.
+	#     default SHIELD in the left, and `ArmamentDb.hand_count` gave the bow no
+	#     numeral (its own docstring: a bow cell carrying the quiver's count
+	#     prints the same number twice on one row). The cell that counts arrows is
+	#     `arrow`, which lives in LEFT_POOL and which nothing in that director
+	#     ever equipped — so both frames were photographing a shield.
 	#
 	#     Two ids reach this numeral and they arrive by different routes:
 	#     `burst` out of RIGHT_POOL, `arrow` out of LEFT_POOL behind
@@ -231,6 +257,61 @@ func run(rig) -> void:
 			% [Game.armament(&"right"), Game.armament(&"left")]
 			+ "the h_13/h_14 frames prove nothing")
 		_fails += 1
+
+	# **The negative case for #53's borrow, and it is asserted on this frame
+	# rather than the next one.** With bow + arrow up, the arrow cell IS the
+	# count and the bow must stay blank — one numeral on the row, in the LEFT
+	# cell. That is the objection `ArmamentDb.hand_count`'s docstring raised
+	# against giving the bow a numeral at all, and `hand_count_beside` only
+	# survives it if this frame prints exactly once.
+	_fails += _one_numeral("h_14_quiver_six", &"ammo_0")
+
+	# 8c. THE SAME QUIVER, WITH THE SHIELD UP — card #53. This is the loadout a
+	#     player actually fights in: you find the bow on the Cistern Warden,
+	#     cycle right to it, and keep the guard. Nothing in the hero gates firing
+	#     on the left hand, so the shield costs you no arrows — it used to cost
+	#     you the only readout of how many you had left.
+	#
+	#     Option 1 of the three the card offered: the bow borrows the numeral
+	#     when the arrow cell is not up. The frame above and this one are the
+	#     pair that settle it — one number in the LEFT cell there, one number in
+	#     the RIGHT cell here, never two.
+	#
+	#     Asked as `Game.armament(&"left")`, never as `hand_count(&"shield")`:
+	#     #52 closed on a director that asserted a call on a **string literal**,
+	#     which is true of the table whatever the hero is holding, under a label
+	#     that read as a claim about the cell. The rect keys below are stronger
+	#     still — they are what the HUD actually drew.
+	for _i in Game.LEFT_POOL.size():
+		if Game.armament(&"left") == &"shield":
+			break
+		Game.cycle_armament(&"left")
+	await rig.wait_frames(6)
+	await _shot(rig, out.path_join("h_15_bow_shield.png"), "h_15_bow_shield")
+
+	if Game.armament(&"left") != &"shield" or Game.armament(&"right") != &"bow":
+		print("HUD FAIL the shield never came back up beside the bow (%s/%s) — "
+			% [Game.armament(&"right"), Game.armament(&"left")]
+			+ "the h_15 frame proves nothing")
+		_fails += 1
+	_fails += _one_numeral("h_15_bow_shield", &"ammo_1")
+
+	# The borrowed cell at ZERO, because the borrow reaches a path the arrow cell
+	# never did. `_draw_item_glyph` dims a spent count two ways — 30% alpha on a
+	# TEXTURE, `Pal.MOTH` at 30% on the two-letter fallback — and `arrow` and
+	# `burst` are both letter cells (#54: `arrow` has no baked icon). The bow is
+	# the first thing to dim an actual icon, and "I have the bow and nothing to
+	# fire" is the sentence that has to survive it: the cell must not read as an
+	# empty hand.
+	Game.arrows = 0
+	Bus.ammo_changed.emit(&"arrows", 0)
+	await rig.wait_frames(6)
+	await _shot(rig, out.path_join("h_16_bow_shield_spent.png"),
+		"h_16_bow_shield_spent")
+	_fails += _one_numeral("h_16_bow_shield_spent", &"ammo_1")
+	# Back to six for the arc frames below, which photograph the whole HUD and
+	# should not be photographing a spent one by accident.
+	Game.add_arrows(6)
 
 	# 9. The damage arc, at the four cardinal bearings. It replaced `Feel`'s
 	#    full-screen vignette (decision 13), and the ONLY thing it adds over that

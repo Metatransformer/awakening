@@ -1839,7 +1839,16 @@ func _draw_hands(s: Vector2) -> void:
 		# corner, dimming the same way when the pouch runs out. A second branch
 		# drawing its own numeral is two places for the number to end up, and
 		# they would not have stayed in the same one.
-		var counter := ArmamentDb.hand_count(id)
+		#
+		# `_beside`, and the other hand's id is the whole of what it adds: the BOW
+		# borrows the quiver's numeral when the arrow cell is not up (#53), so
+		# bow-right + shield-left -- the loadout a player actually fights in --
+		# stops being the one loadout with no arrow count on screen. The rule and
+		# the argument for it are on `ArmamentDb.hand_count_beside`; what matters
+		# here is that this stays ONE numeral per row, which is the objection the
+		# borrow had to survive and the reason it is asked as a pair.
+		var other: StringName = Game.armament(&"right" if hand == &"left" else &"left")
+		var counter := ArmamentDb.hand_count_beside(id, other)
 		var left := Game.ammo_count(counter)
 		# `Pal.VOID`, not `Color.BLACK`. It never reaches a pixel — `inverted` is
 		# only true for the raised shield, where the argument is `Pal.MIDNIGHT` —
