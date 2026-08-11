@@ -374,20 +374,34 @@ class is not knowing the pattern.
 
 ---
 
-## 7. The docs, and which one owns what
+## 7. Design work and documentation
 
-| File | Owns |
-|---|---|
-| `docs/GDD.md` | What the game is. The north star; everything else serves it. |
-| `docs/SCOPE.md` | **How much of it there is.** The frozen manifest, the no-list, the build order. It is the doc that gets to say no — check it before you build anything the GDD merely permits. |
-| `docs/METAGAME.md` | The economy: loot, bag, gold, extraction, the shops. |
-| `docs/PUZZLES.md` | The puzzle verb ladder, the atoms and combinators, **the grammar** (§10 — how a floor gets harder), the three puzzle shapes, the four minibosses, and where Echoes come from. `docs/GDD.md` §5.3 is the summary; this is the design of record. |
-| `docs/BESTIARY.md` | **Encounter design.** What a body asks the player and which item answers it: the enemy behaviours, the miniboss rules, and one fight shape per boss. Not stats — those are `Enemy.DEFS` and `BossDb`. |
-| `docs/BOSSES.md` | **The four fights, worked.** The beat that carries each shape, its timings against the hero's clock, where the parry and the roll land inside it, what the arena does at the threshold, and the rows to paste. `docs/BESTIARY.md` §5 says *what* each boss is; this says *how*. Not stats — `BossDb` owns those. |
-| `docs/ITEMS.md` | **Items.** For each one: which body or which lock it answers, where it enters the run, and what owning it changes. The six usable items, the twelve relics, the twelve Echoes, the twenty ladders, the stock. Not numbers — those are the DBs under `scripts/items/`. Its §8 is the standing list of places the docs and those DBs disagree. |
-| `docs/OOT_CATALOGUE.md` | The source material. Ocarina dungeon by dungeon, as mechanics, with the twelve patterns worth stealing. **Owns nothing** — it is what `PUZZLES.md`, `BESTIARY.md`, `BOSSES.md` and `ITEMS.md` cite. Named rather than counted: this row used to say "the two docs above" and two later insertions made it false without touching it. |
-| `docs/CONTRACT.md` | Interfaces, units, autoloads, collision layers, file ownership. |
-| `docs/STYLEGUIDE.md` | Palette, type, the PSX treatment, the anti-slop list. |
+Start at **`docs/README.md`**, which owns the authority map. Then read
+**`docs/NOW.md` before proposing or implementing gameplay work**. The GDD and
+SCOPE describe the game we may make; NOW says what this stage authorises us to
+learn and change.
 
-Update the doc in the same commit as the code. A design doc describing something
-the code no longer does is worse than no doc — the next agent will believe it.
+The current stage is **Pre-production — Core Loop Proof**. The first-floor M4
+prototype exists, but its human fun gate has not passed. M5 also exists; that is
+accepted sequencing debt, not permission to continue. **Do not begin M6,
+production content, or broad lore expansion until the active measurable design
+record is resolved.**
+
+For uncertain design work:
+
+1. Open one **Measurable Design Record (MDR)** under `docs/records/`.
+2. State the player-facing hypothesis and pass/revise/stop criteria before
+   changing the build.
+3. Build only the smallest test the record needs.
+4. Put raw observations in `docs/playtests/`; put the decision and result in the
+   MDR; update canon only after the decision.
+
+Canonical docs describe **current truth, not the history of arriving at it**.
+Edit the governing rule in place. Do not append dated debates, implementation
+diaries, or duplicate summaries to the GDD and system docs; those belong in an
+MDR, the archive, or git history. A fact has one document owner and every other
+document links to it.
+
+Update the owning doc in the same commit as code that changes its truth. A
+design doc describing something the code no longer does is worse than no doc —
+the next agent will believe it.

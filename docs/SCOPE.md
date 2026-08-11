@@ -1,7 +1,8 @@
-# SCOPE — the shipping contract
+# SCOPE — the prototype boundary and release ceiling
 
 `docs/GDD.md` says what the game is. **This document says how much of it there
-is, and it is the one that gets to say no.**
+may be, and it is the one that gets to say no.** `docs/NOW.md` is narrower: it
+says which part of that ceiling the current stage authorises us to touch.
 
 It exists because this project's failure mode is not "we cannot build it." Every
 system in `docs/METAGAME.md` is built and works. The failure mode is that the
@@ -11,9 +12,19 @@ item, one more vendor, forever, until there is no version of it that is finished
 So: everything below is a **count**. Counts can be checked. "Is this scope creep"
 is an argument; "is this number in the manifest" is not.
 
-> **The test, for any proposal, in one line:**
-> *Is it on the manifest in §1? If no, it is out — unless you are deleting
-> something of equal size in the same breath (§4.2).*
+The manifest is a ceiling, not a backlog. A row below can be valid for the
+eventual prologue and still be the wrong thing to build in pre-production.
+
+**Current freeze — 2026-08-11.** M4's first-floor prototype is built, but its
+human fun gate is unpassed. M5 exists beyond that gate as accepted sequencing
+debt. **M6 and all production-content expansion are frozen** while
+`docs/records/MDR-001-PROVE-THE-CORE-LOOP.md` tests whether one descent creates a
+specific voluntary desire for another.
+
+> **The two tests for any proposal:**
+> 1. *Does `docs/NOW.md` authorise it at this stage?*
+> 2. *Is it on the manifest in §1? If no, it is out unless an approved design
+>    decision deletes something of equal size (§4.2).*
 
 ---
 
@@ -235,13 +246,16 @@ idea stops costing you attention.
 
 ---
 
-## 3. The build order
+## 3. The build record and intended order
 
-Each milestone is closed by **a director that runs, produces frames, and prints
-no `FAIL`** — this repo's bar, not a checkbox (`CLAUDE.md` §2). One card per
-milestone; land it on `main` when it closes.
+This table records what was built and the dependency order the release plan
+expects. A checkmark proves implementation, not player value, and completing a
+later row does not waive an earlier human gate. **`docs/NOW.md` owns the next
+authorised move.**
 
-**The order is not negotiable, and the reason is M4.**
+Each implementation milestone is closed by **a director that runs, produces
+frames, and prints no `FAIL`** (`CLAUDE.md` §2). Human design gates are closed by
+playtests against a precommitted MDR, never by a director or an agent's opinion.
 
 | M | What | Closed by |
 |---|---|---|
@@ -277,11 +291,17 @@ plan. Put it in front of people.
 
 ## 4. The four rules
 
-### 4.1 The gate: M4 must be fun before M5 starts
+### 4.1 The gate: prove M4 before production starts
+
+The original gate was one designer playing for an hour. That remains useful
+self-play, but it is weak evidence for desire because the designer already knows
+what comes next. **`docs/records/MDR-001-PROVE-THE-CORE-LOOP.md` now owns the
+gate:** five cold first-hour sessions, observed and assessed against criteria
+written before the sessions. `docs/PLAYTESTING.md` owns the method.
 
 At M4 the game is one floor, one boss, one item, one vault, three relics and a
-garrison that visibly changed three times. **Play it for an hour. Then answer,
-in writing, in the card:**
+garrison that visibly changed three times. These remain the four diagnostic
+questions after each session:
 
 1. Did you want to go back down? *Why* — name the specific thing you wanted.
 2. Did you ever leave with a relic and feel the walk? Did you ever lose one?

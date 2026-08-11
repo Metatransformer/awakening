@@ -1,44 +1,29 @@
 # The Lower Worlds: Awakening — Game Design Document
 
-The north star. When a decision is contested, it is settled here; the other docs
-describe *how* this gets built, not *what* it is.
+This is the north star: the player experience and the promises the finished
+game must keep. It is not a work queue, a status log, or a place to preserve the
+history of every design argument.
 
-**`docs/SCOPE.md` is this document's enforcement arm.** The GDD says what the
-game is; SCOPE says how much of it there is and what gets refused. A feature
-that is consistent with this document but absent from SCOPE's manifest is *still
-out of scope*. Read them together or you will build a bigger game than the one
-we agreed to ship.
+Read it with three other authorities:
 
-**Status.** The moment-to-moment and the metagame are built and playable:
-garrison, vendor, smith, alchemist, bag, extraction, Heat, bottles, bow,
-hookshot, arrows, a seeded dungeon with six enemy kinds, and the whole gear loop
-in §6.6 — twelve forge ladders, four armour pieces on two paths, and the
-jewelcrafter. What is *not* built is everything in §5, the relics and the
-Lanternkeeper in §6, and the endings. **The three workings (§6.5) are built** and
-this paragraph is otherwise stale in the same direction — see `docs/ITEMS.md` §8,
-D6, which is the entry that owns it.
-`docs/METAGAME.md` is the design of record for what exists today and every number
-in it is read from the code it names.
+- **`docs/NOW.md`** says what pre-production is trying to prove *now*.
+- **`docs/SCOPE.md`** sets the prototype boundary and release ceiling. A feature
+  may fit this GDD and still be unauthorised by the current stage.
+- The system documents named in **`docs/README.md`** own their detailed designs
+  and as-built truth.
 
-**Newer than the rest of this document — the 2026-08-10 session.** §3.1 the
-document case, §5.3's three puzzle shapes and everything in `docs/PUZZLES.md`,
-§6.6's Reforge and Recut, and §7.1's mercy. Those five arrived together because
-they answer one diagnosis: the game asks a great question and then punishes a
-wrong answer harder than any of its comparables, while borrowing Zelda's locked
-door without paying for Zelda's verb. Read §5.3 and §3.1 as a pair — one adds
-what the player has to *do*, the other lowers what it costs to fail.
+**Current status — 2026-08-11.** The M4 first-floor core-loop prototype is built
+and playable. Its human fun gate has not passed. M5 was implemented beyond that
+gate and is accepted sequencing debt, not evidence that the loop works. The
+project is therefore in **Pre-production — Core Loop Proof**: no floors 2–4,
+bosses 2–4, production content, or broad lore expansion are authorised until
+`docs/records/MDR-001-PROVE-THE-CORE-LOOP.md` is resolved. See `docs/NOW.md` for
+the active question and permitted work.
 
-**Of those five, four are now built** — the case, Reforge, Recut and mercy, plus
-the receipt's second column, landed together as `SCOPE.md`'s milestone MF and are
-proven by `tools/directors/forgive_loop.gd`. **§5.3 and `docs/PUZZLES.md` are
-not**; they are milestones M1, M4 and M5 and nothing of them exists yet.
-
-**Read §6.6 before §5 if you are here to build.** The gear loop — the ladders,
-the armour paths, the jewelcrafter — is the reason the player descends, and it is
-the half of this document with the most code already standing behind it. The
-Descent is what the loop is *for*; the loop is what makes the Descent worth
-repeating. A build that treats §5 as the game and §6.6 as shopping has the
-weights backwards.
+The gear loop is the reason the player descends; the Descent is what gives that
+loop meaning. A design that treats §5 as the game and §6.6 as shopping has the
+weights backwards. The current playtest must prove that the two halves actually
+re-prime one another.
 
 ---
 
@@ -48,8 +33,7 @@ A third-person action game with **Ocarina of Time's feel** and **Roguelite
 structure**, played as an explorer in the Vale.
 
 You play **Kael** *(tentative, 2026-08-10)* — a member of the **Far Lantern
-Society**, whose whole creed is three clauses long: *go far, come home, tell
-true*.
+Society**, whose whole creed is three clauses long: *Dive deep, Unearth treasures and Return safely*
 
 **The name and the pronoun are the only things about Kael this document fixes:
 he is male, and he is called Kael.** No backstory, no family, no arc — the
@@ -1121,7 +1105,7 @@ the longer list and the rule for adding to it.
 Not by a test suite. By running it and looking:
 
 ```bash
-godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/mvp_loop.gd --out=/tmp/mvp/x.png --warmup=60
+tools/quiet.sh --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/mvp_loop.gd --out=/tmp/mvp/x.png --warmup=60
 ```
 
 `mvp_loop.gd` walks sell → buy → descend → fight → loot → chest → hold the pad →
