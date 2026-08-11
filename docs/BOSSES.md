@@ -721,11 +721,17 @@ not be.** Three reasons, in increasing order of how much they matter:
    is the same failure mode board card 21 recorded for the arc's bounding box —
    and that one is now fixed, so this is the shape of defect to keep watching for
    rather than one the game still ships.
-3. **The pillar is already spoken for, one branch away.** The floor-3 *miniboss*
-   — the Second Voice, `docs/PUZZLES.md` §7 — is *"it anchors to a resonating
-   pillar and cannot be touched while the pillar sings. Burst the pillar."*
-   Giving the boss the same wall is the floor asking one question twice, which is
-   §4.3's rule applied at floor scale instead of beat scale.
+3. ~~**The pillar is already spoken for, one branch away.**~~ **Withdrawn — the
+   competitor does not exist.** This cited the floor-3 *miniboss*, the Second
+   Voice, as *"it anchors to a resonating pillar and cannot be touched while the
+   pillar sings"* — which is `docs/PUZZLES.md`:710, a row the next line marks as
+   *"a sketch; `BossDb.MINIBOSSES` is the record"*. The record at
+   `docs/PUZZLES.md`:721-725 says **"The Second Voice has no pillar"**, removed on
+   2026-08-10 for the same two reasons this section gives, and replaced with
+   geometry: *"the ring it sings **is** the wall"*. Citing a deleted design as a
+   reason to refuse is how a refusal outlives its argument, so it is struck rather
+   than quietly edited. Reasons 1 and 2 stand on their own and are the ones doing
+   the work.
 
 **The beat that carries it, unchanged: `hushing_choir`.** The shell is the
 choristers. The intended sentence is Barinade's, exactly — strip the shell, hit
@@ -741,13 +747,59 @@ skeletons and opens nothing** — there is no wall, and this section should not 
 read as if there were one.
 
 The version with a wall in it is `if _summons_alive() > 0: refuse the damage`,
-five lines in the function that already receives the `Hit`. It is refused here,
-and the reason is not that it is hard: a boss that cannot be hurt while its adds
-live is **a new mechanic**, it is the second one in this document after the
-receptacle, and `docs/SCOPE.md` §1's `New mechanics 2` is the row §4.2 names as
-the one to defend. A fight shape that costs a manifest row is not the "naming one
-per boss must cost nothing" claim §0 makes; it is a different claim. §7 records
-what taking the free option costs the diagonal, and it is not nothing.
+five lines in the function that already receives the `Hit`. **It is refused, and
+the grounds below are the second set** — the first set was the manifest, and an
+adversarial re-reading (board card #6, 2026-08-11) showed the manifest does not
+convict it. Both are kept, in the order they actually bear weight.
+
+**1. It can seal a player into a fight they cannot finish. This is decisive on
+its own.** The Burst is a counted-charge item. `Boss._drop_loot`
+(`boss.gd`:1111-1116) grants the *item* and no charges; `BossArena` seals the
+room (`boss_arena.gd`:5-12). A damage gate keyed to the Burst therefore has a
+reachable state where a zero-charge player is shut in with a boss that cannot be
+hurt — and `docs/GDD.md`:513-514, pillar 2, is *"a cautious player is never
+blocked"*. **Card #29 does not fix this**: `ChargeCache` is gate-local
+(`dungeon.gd`:1296 stands the urn beside the pillar it exists to answer, no
+`charge_chance`, no room roll), so spending both charges on floor 2's brace and
+descending is an ordinary way to arrive here empty. The same sentence is already
+written at §7 under **floor 4**, where it does not apply — the hookshot spends
+nothing (`armament_db.gd`:120-125 has no hookshot case) — and it is decisive one
+floor up. **This refusal would stand with the mechanic budget empty.**
+
+**2. The manifest, which is the weaker of the two and was the only one stated for
+two drafts.** A boss that cannot be hurt while its adds live is a new mechanic,
+the second in this document after the receptacle, and `docs/SCOPE.md` §1's
+`New mechanics 2` is the row §4.2 names as the one to defend. But **`docs/SCOPE.md`
+:99-105 and :375-378 give the test** — *a gate on, a number in, or an arrangement
+of something that already runs* — and acquit the shield reflect explicitly
+*because "it is a raycast off a shield that exists"*. `_on_damaged`
+(`boss.gd`:995) and `_summons_alive()` (`boss.gd`:674) both exist; the gate is
+smaller than the raycast SCOPE waved through, and §7 acquits the receptacle by
+that same test. **On SCOPE's own test this is one `if` in a function that exists,
+not a third mechanic.** Reason 1 is why it is still refused.
+
+**The option the review named, and why it is not taken: promoting this fight's
+arena turn from `douse` to `shrink`** (§5), on the precedent of the Second Voice
+— refuse the invulnerability gate, and make the wall *geometry* instead. It is a
+good precedent and it does not transfer, for two reasons. A smaller room raises
+the pressure the choristers apply; it does not make the core shut, so it fixes
+nothing about the thing it was proposed to fix, and §7 would still grade this
+floor **pressure, not a lock**. And it costs: floors 1 and 3 would then escalate
+with the same event, against §5's "one signal, four rooms"; and `douse` is the
+turn `boss.gd`'s `_mark_mat` already spent a decision on, building every floor
+marker `SHADING_MODE_UNSHADED` so that a dimmed room does not dim its warnings.
+Deleting `douse` orphans that. **Decision: keep `douse`, keep the refusal, and
+let §7 go on saying floor 3 is pressure rather than claiming a wall it does not
+have.** `douse`'s open question is a handle, not a design (§5), and §5's own
+`shrink`-at-10.0 m fallback covers it if the handle is not there.
+
+> **Whose decision this is.** The owner was asleep; this is the session's call,
+> not theirs, and it is recorded here so it can be reversed by someone who
+> disagrees rather than re-derived. It also **reverses this session's own earlier
+> recommendation**, which was `shrink` over `douse` — that recommendation was made
+> before anyone checked whether `shrink` fixed floor 3, and it does not.
+
+§7 records what taking the free option costs the diagonal, and it is not nothing.
 
 **"Before the shell reforms" is not a 6.00 s clock either.** `hushing_choir`
 carries `weight: 1.0` against `first_toll`'s 3.0 and `undertow`'s 3.0, so when
@@ -1064,8 +1116,11 @@ skeletons out of a 2.00 s punish window and **opens nothing**. That is a real
 reason to be carrying it — two bodies converging on you inside the longest window
 in the game is pressure the blade cannot clear without spending the window — but
 it is pressure, not a lock, and "exposed weak point on a timer" describes a lock.
-The gate that would make it true is five lines and it is refused in §6.3 on the
-`New mechanics 2` row, deliberately and with the cost named.
+The gate that would make it true is five lines and it is refused in §6.3 —
+**deliberately, with the cost named, and on pillar 2 rather than on the manifest.**
+A gate keyed to the Burst can seal a zero-charge player in with a boss that
+cannot be hurt. That grade does not move, and §6.3 also records why promoting
+this fight's arena turn to `shrink` would not move it either.
 
 **Floor 4 breaks quietly, and in two places rather than one.** The hookshot
 answers the Riven Knight through *arena furniture the arena did not have until
@@ -1129,7 +1184,7 @@ in code, which §1 does for nothing.
 | **Boss phases** | **1** | **§6** | **No.** The turn changes the room. No beat, no stat, no move-set change, no second bar — §5 lists exactly what a turn may touch, and the `boss_phase_changed` emit is an announcement with no listener that acts on it |
 | **New monster models** | **0** | §1 | No |
 | **Puzzle atoms** | **9** | §1 | **No.** The keystone carries a `HookTarget` (the firer's contract), not a `HookRing` |
-| **New mechanics** | **2** | §1 | **No** — and this is the row that is now doing the work. The receptacle is one `if` in a function that exists; the turn is a connect, a handler, a bool and four effects. **The Bellwake's damage gate would have been the third and it is refused in §6.3**, which is the whole reason §7 grades floor 3 the way it does |
+| **New mechanics** | **2** | §1 | **No** — and this is the row that is now doing the work. The receptacle is one `if` in a function that exists; the turn is a connect, a handler, a bool and four effects. **The Bellwake's damage gate is refused in §6.3** — but on GDD pillar 2, not on this row. SCOPE's own test (:99-105) acquits it, the way it acquits the shield raycast; what convicts it is that it can seal a zero-charge player into an unwinnable fight. **Do not cite this row as the reason** |
 | Usable items / ring stops | **6 / 6** | §1 | No |
 | Enemy behaviours | **8**, 4 committed | §1 | No |
 | Minibosses | **4** | §1 | No |

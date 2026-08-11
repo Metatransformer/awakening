@@ -343,10 +343,23 @@ three-beat cap is untouched, and so is *new monster models: 0*.
 | **The Riven Knight** | 4 | **the Hookshot** | **Positional** — it holds the far side of the gate ring; hookshot is both the way across and the way back | `gate_lunge` |
 
 **Read that table the same way `docs/PUZZLES.md` §1 asks you to read its
-diagonal.** Every boss's fight shape is answered by the item the *previous* boss
-dropped. The Warden — floor 1, nothing earned yet — is answered by the shield,
-which the player has always had and has never been asked to use offensively. That
-is where the shield stops being a wall.
+diagonal**: each fight shape is meant to be answered by the item the *previous*
+boss dropped. **Walked against the code rather than against this prose, it holds
+once — and this section used to claim four.** `docs/BOSSES.md` §7 is the audit;
+the grades, so nobody re-derives them from the table above:
+
+| Floor | Grade | Why |
+|---|---|---|
+| 2 Slag Ogre | **Holds.** The item acts on the boss, on a named beat, with a cue, and the boss is measurably worse off | Built — `Boss._is_receptacle_hit`, and the frames are in §7 |
+| 1 Warden | **A *teaching* diagonal, not a mechanical one** | The parry path is identical on all twelve boss beats and on every ordinary enemy; nothing in it tells `cistern_drop` from a goblin. `cistern_drop` is still the beat best *shaped* to teach the parry, and a beat-specific reward is refused |
+| 3 Bellwake | **No wall.** Pressure, not a lock | The core is open whether or not the Burst is ever fired. The gate that would shut it is refused on GDD pillar 2 |
+| 4 Riven Knight | **Not a diagonal.** The item changes nothing about how the fight plays | The furniture it answers through does not exist until half health, and a sidestep — now also an arrow — already answers `gate_lunge` |
+
+The Warden's row is still the one worth keeping in the pitch: floor 1, nothing
+earned yet, and the answer is the shield the player has always had and has never
+been asked to use offensively. That is where the shield stops being a wall — it
+is just a teaching claim rather than a mechanical one, and saying so is cheaper
+than being caught at it.
 
 **Four of Ocarina's five shapes, one per floor.** The fifth is *disarm* in its
 full form — Ganon knocking the Master Sword out of the ring — and it belongs to
@@ -378,9 +391,11 @@ shapes cannot deliver:
   is a decision rather than a consequence. The game gets reflect-with-an-object
   anyway, and cheaper, from §3's Thrower.
 - **The Bellwake has no pillar.** Its arena is authored `cover: false` and its own
-  row says why; `_shape_slam` is a distance query and would hit *through* a
-  pillar anyway, teaching a false rule; and the resonating pillar is already
-  floor 3's *miniboss* wall (`docs/PUZZLES.md` §7, the Second Voice). The shell
+  row says why; and `_shape_slam` is a distance query and would hit *through* a
+  pillar anyway, teaching a false rule. (A third reason used to stand here — that
+  the pillar was already floor 3's *miniboss* wall — and it is **withdrawn**: the
+  Second Voice's pillar was deleted on 2026-08-10 and replaced with geometry,
+  `docs/PUZZLES.md`:721-725. The two reasons above never needed it.) The shell
   is the choir it summons — Barinade exactly — and the reform clock is the beat's
   own 6 s cooldown.
 
