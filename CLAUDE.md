@@ -172,6 +172,63 @@ owner's keyboard while it does. `shoot.gd` now prints
 it cannot fix it from there (the flag is read before any script exists), so that
 line is the whole remedy. If you see it in your own output, you typed `godot`.
 
+**A run with a `SCRIPT ERROR` in it is not proof, and `tools/quiet.sh` now
+refuses it — exit 65.** GDScript cannot see its own error stream, so no director
+can fail itself on one, and for most of this project's life nothing looked:
+card #47's `boss_cistern.gd` printed `SCRIPT ERROR: Trying to cast a freed
+object` out of `Hero.lock_target` and `BOSS OK -- every check passed` in the same
+output, and the bug shipped. The wrapper reads the run's own log (godot's
+`--log-file`, not a pipe — your terminal gets exactly the bytes it always did),
+prints a count and one line per distinct site, and fails the run. `timeout` owns
+124, signals own 128+n and `shoot.gd` owns 2–6, so 65 collides with nothing; a
+run that already failed on its own keeps its own status.
+
+**`SCRIPT ERROR` and nothing wider.** Every one of the 136 runs below ended with
+`ERROR: N resources still in use at exit` and `WARNING: N ObjectDB instances were
+leaked at exit`, so a gate on the bare `ERROR:` prefix would have failed the
+entire harness on its first day. `push_error` prints `USER ERROR`, so the
+harness's own deliberate refusals do not trip it. Parse and compile failures
+*do* come under this prefix, which is wanted — see the note about in-flight edits
+below.
+
+**The survey, 2026-08-11, `main` at `661582b`** — every director in
+`tools/directors/` run once, 136 runs, 34 minutes of GPU:
+
+| | |
+|---|---|
+| Clean | **132.** Including `boss_cistern.gd`: #47's cast failure is gone, #59 fixed it, and the `Lambda capture at index 0 was freed` shape its comment warns about did not fire once in 136 runs. |
+| `critic_menu_hold.gd`, `critic_menu_hold2.gd` | `Invalid access to property or key 'name' on a base object of type 'null instance'` — the loop that walks settings focus is null-guarded and the line after it is not. Both are pad-driven probes from `34318cf` that can no longer reach the rows (`--keep-pad` does not help; measured). **Card #70.** |
+| `voices.gd` | `Invalid access to property or key of type 'String' on a base object of type 'Dictionary'` — `DialogueDb.SAID[&"elder"][first]` on a take id that is not a key. It is a symptom: the same run fails seven of its own checks. **Card #71.** |
+| `_error_selftest.gd` | Wrong on purpose. It frees a node and casts the dangling reference from a *helper*, so the error aborts only the helper and `run` carries on to print `SELFTEST OK -- every check passed`. That is #47 exactly, and it is how you watch the gate fire. |
+
+Those three are the whole of `tools/script_errors.allow` — per director **and**
+per message, each row carrying the card that deletes it. There is deliberately no
+switch that turns the gate off wholesale. An exempt error is still printed and
+still counted; the row only withholds the exit code.
+
+**Two things the survey found that are worse than the cast error it went looking
+for.**
+
+1. **A director's own `FAIL` never reaches the exit code.** Sixteen of the 136
+   failed checks they had written for themselves — `relic_donate` failed nine,
+   `voices` seven, `critic_menu` printed 26 FAIL lines — and **all 136 exited
+   0**, because `shoot.gd._run` ends in `quit(0)` unconditionally. If you wrap a
+   director in `timeout 400` and read `$?`, you are reading nothing at all. Card
+   #72. Until it closes, **read the output; the status is not a verdict.**
+2. **Five directors were dirty only because another agent was mid-edit.**
+   `hookshot_grip`, `monster_feel`, `p4_combo`, `p4_lunge` and `p4_probe` caught
+   `hud.gd` and `enemy.gd` in states that would not parse; all five are clean on
+   a checked-out `main`. The whole HUD was failing to load and the directors
+   photographed it and said OK. That is the shared worktree working normally —
+   so when a `SCRIPT ERROR` is a `Parse Error` in `scripts/`, it is somebody
+   else's half-saved file and not your bug. **Re-run it against a clean
+   worktree before you believe it**, and do not put it in the allow file.
+
+Twelve directors carry no invocation in their header comment, so there is no
+record of which scene they want; `p1_*`, `p2_*`, `p4_probe`, `hud_vitals` and the
+`critic_*` probes had to be guessed at for the sweep. If you touch one, write the
+`godot --path . -s tools/shoot.gd -- …` block the other 124 have.
+
 **Never pass `--headless` to a screenshot run.** There is no rendering device
 and every frame comes out empty — silently.
 

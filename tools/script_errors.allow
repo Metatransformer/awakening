@@ -1,0 +1,26 @@
+# SCRIPT ERROR lines `tools/quiet.sh` will not fail a run for. Card #63.
+#
+# THIS FILE IS A DEBT LEDGER AND NOT A CONFIGURATION. Every row is a director
+# that is printing a real GDScript error and getting away with it, held open
+# only until the card in column three closes. An exempt error is still printed
+# and still counted; it just does not set exit 65. Nothing here is a decision
+# that the error is acceptable.
+#
+# Three tab-separated columns, `#` starts a comment:
+#
+#   <director file name>  <substring of the message>  <card>
+#
+# The director is matched on the BASENAME of `--director=`, so an exemption can
+# never leak to another director. The message is matched as a plain substring of
+# the text after `SCRIPT ERROR: `, so it can never leak to another failure in the
+# same file either -- which is the whole rule the card set: per-director AND
+# per-message, never a blanket "ignore stderr". There is deliberately no switch
+# that turns the gate off wholesale; a run you cannot make clean is a card, and
+# adding the row here is how you file it.
+#
+# Taken 2026-08-11 from a sweep of all 136 directors on `main` at 661582b. Three
+# were dirty. See CLAUDE.md §2.
+
+critic_menu_hold.gd	Invalid access to property or key 'name' on a base object of type 'null instance'.	#70
+critic_menu_hold2.gd	Invalid access to property or key 'name' on a base object of type 'null instance'.	#70
+voices.gd	Invalid access to property or key of type 'String' on a base object of type 'Dictionary'.	#71

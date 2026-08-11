@@ -125,19 +125,64 @@ $GODOT "${HUSH[@]}" "${LOGGING[@]}" "$@"
 # trap never fired, and override.cfg was left pinned for the next person.
 rc=$?
 
-# Print the SCRIPT ERROR lines this run buried, loudly, with a count and one
-# entry per distinct site. On stderr, because it is a verdict about the run and
-# not part of it, and after the run, because that is the only moment the whole
+# Fail the run on any SCRIPT ERROR that is not on the exemption list, and say
+# which ones and where. On stderr, because it is a verdict about the run rather
+# than part of it, and after the run, because that is the only moment the whole
 # log exists.
 #
-# REPORT ONLY, for now: the run's own exit status is passed through untouched.
-# The gate is the second half of card #63 and lands once the survey it exists to
-# produce has been taken -- turning the whole harness red in one commit is how a
-# guard gets deleted at 3am by whoever needed a green run.
+# `SCRIPT ERROR:` and nothing wider. Measured over all 136 directors on
+# 2026-08-11: EVERY run ends with `ERROR: N resources still in use at exit` and
+# `WARNING: N ObjectDB instances were leaked at exit`, so a gate on the bare
+# `ERROR:` prefix would have failed all 136 on its first day and been deleted by
+# lunchtime. `SCRIPT ERROR` is the prefix that discriminates -- and `push_error`
+# prints `USER ERROR`, so the harness's own deliberate refusals do not trip it.
+# Compile and parse failures arrive under this prefix too, which is wanted: a
+# scene whose script would not compile has been photographed by a director that
+# then said OK, twice, during that same survey.
+#
+# EXIT 65, chosen to collide with nothing a caller already reads: `timeout` owns
+# 124, a signal owns 128+n, and shoot.gd's own refusals own 2 through 6. A run
+# that already failed on its own keeps ITS status -- the first cause is the
+# useful one.
+#
+# The exemption list is `tools/script_errors.allow`, per DIRECTOR and per
+# MESSAGE, never a blanket switch, and every row carries the card that will
+# delete it. An exempt error is still printed, still counted and still labelled
+# with its card, because the point of the row is that the debt stays visible.
+GATE_EXIT=65
+ALLOW=${0:A:h}/script_errors.allow
+
 _script_errors() {
 	[ -s "$ERRLOG" ] || return 0
+	# Which director this was, so an exemption can be scoped to it. A run with no
+	# `--director=` (a scene harness) simply has nothing to match, which is the
+	# right answer rather than a hole: there is no name to exempt.
+	local who=""
+	local a
+	for a in "$@"; do
+		case $a in --director=*) who=${a##*/} ;; esac
+	done
+
 	local report
-	report=$(awk '
+	report=$(awk -v allow="$ALLOW" -v who="$who" '
+		# Pass one: the allow file. <director><TAB><message substring><TAB><card>
+		#
+		# A `#` only starts a comment at the START of a line. Stripping from any
+		# `#` is the obvious way to write this and it silently ate the CARD
+		# column -- every row is "... <TAB> #70" -- which left the exemption
+		# holding an empty card, and the test below reads an empty card as "not
+		# exempt". The gate fired on the three directors it was built to spare.
+		FILENAME == allow {
+			if ($0 ~ /^[ \t]*(#|$)/) next
+			split($0, f, "\t")
+			gsub(/^[ \t]+|[ \t]+$/, "", f[1])
+			gsub(/^[ \t]+|[ \t]+$/, "", f[2])
+			gsub(/^[ \t]+|[ \t]+$/, "", f[3])
+			if (f[1] != who || f[2] == "") next
+			ex[++exn] = f[2]
+			card[exn] = (f[3] == "" ? "no card" : f[3])
+			next
+		}
 		/^SCRIPT ERROR: / {
 			msg = substr($0, 15)
 			site = ""
@@ -145,30 +190,51 @@ _script_errors() {
 				sub(/^[ \t]*/, "", nxt)
 				if (nxt ~ /^at: /) site = nxt
 			}
-			key = msg "\t" site
+			hit = ""
+			for (i = 1; i <= exn; i++)
+				if (index(msg, ex[i]) > 0) { hit = card[i]; break }
+			key = msg "\t" site "\t" hit
 			n[key]++
 			total++
+			if (hit != "") spared++
 			next
 		}
 		END {
 			if (total == 0) exit 1
-			printf "%d\n", total
+			printf "%d\t%d\n", total, total - spared
 			for (k in n) {
 				split(k, p, "\t")
-				printf "  %dx  %s\n", n[k], p[1]
+				printf "  %dx  %s%s\n", n[k], p[1], \
+					(p[3] == "" ? "" : "   [exempt, " p[3] "]")
 				if (p[2] != "") printf "        %s\n", p[2]
 			}
 		}
-	' "$ERRLOG") || return 0
-	local count=${report%%$'\n'*}
+	' "$ALLOW" "$ERRLOG") || return 0
+
+	local head=${report%%$'\n'*}
+	local total=${head%%$'\t'*}
+	local live=${head##*$'\t'}
 	{
 		print -r -- "------------------------------------------------------------"
-		print -r -- "quiet.sh: $count SCRIPT ERROR line(s) in this run. Whatever the"
-		print -r -- "director said above, it did not account for these (card #63):"
+		if [ "$live" -gt 0 ]; then
+			print -r -- "quiet.sh: FAILED -- $total SCRIPT ERROR line(s), $live of them"
+			print -r -- "not exempt. Whatever the director said above, it did not"
+			print -r -- "account for these, and a run with one in it is not proof"
+			print -r -- "(CLAUDE.md §2, card #63):"
+		else
+			print -r -- "quiet.sh: $total SCRIPT ERROR line(s), all of them exempt in"
+			print -r -- "tools/script_errors.allow. The run stands; the debt does not"
+			print -r -- "go away (CLAUDE.md §2, card #63):"
+		fi
 		print -r -- "${report#*$'\n'}"
 		print -r -- "------------------------------------------------------------"
 	} >&2
+	[ "$live" -gt 0 ] && return 1
+	return 0
 }
-_script_errors
+
+if ! _script_errors "$@"; then
+	[ $rc -eq 0 ] && rc=$GATE_EXIT
+fi
 
 exit $rc
