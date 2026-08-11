@@ -21,9 +21,19 @@ extends RefCounted
 ##      along the tree, with the hero's own capsule swept through every doorway.
 ##      A node that exists in a sealed pocket of geometry passes an assertion and
 ##      fails a player.
-##   D  The shortcut refuses by name without the Bow, opens with it, and what is
-##      behind it is a `Stairs` that skips this floor -- floor 1's shortcut lands
-##      you at the Foundry's mouth.
+##   D  The shortcut refuses by name, goes on refusing after the Warden hands the
+##      Bow over, opens on the floor's own verb, and what is behind it is a
+##      `Stairs` that skips this floor -- floor 1's shortcut lands you at the
+##      Foundry's mouth.
+##
+##      This beat used to say "refuses without the Bow, opens WITH it", and card
+##      #5 made that sentence false: `docs/PUZZLES.md` §5.1 turned the shortcut
+##      from a `LockedDoor` into a `ShortcutGate`, because *a door that opens
+##      because you own item X is a check, not a puzzle*. Owning the bow is worth
+##      nothing until it is used. The arrow itself belongs to
+##      `tools/directors/shortcut_puzzle.gd` and is not restated here (`CLAUDE.md`
+##      §0); what this file owns is that the door is REACHABLE, that it TALKS, and
+##      that there is a floor behind it you can walk onto.
 ##   E  The vault refuses without the FOUNDRY's item (floor N+1's, GDD §5.3), and
 ##      behind it are three rooms, a harder pack, one relic and one rich chest.
 ##   F  The deep chest carries the relic `FloorDb` names for floor 1's
@@ -62,14 +72,49 @@ const STEP := 0.45
 ## at one step a frame a sixty-metre corridor is four hundred frames of nothing.
 const STEPS_PER_FRAME := 8
 
+## `--sabotage=<name>`: break ONE thing on purpose and see whether the check
+## whose job it is says so. **`CLAUDE.md` §2 -- a director you have never pointed
+## at a known answer has never been tested**, however many times it has passed,
+## and card #67 is that section's other half: four checks reported a broken door
+## on a floor whose door was fine, because one of them could not fail on its own
+## and the other three could not fail at all.
+##
+## The null case is the ordinary run: no flag, `FLOOR ok` on every one of these.
+## These three are the positive controls, one per way the shortcut beat can be
+## wrong, and each names the check that MUST go red:
+##
+##   `stand-off`   Park the hero 6 m further out than `_walk_to` puts him, past
+##                 `LockedDoor`'s 2.9 m trigger. **C1 fails, and the beat bails.**
+##                 This is the shape card #67 arrived in -- and the bail is the
+##                 fix for the half of it that was the instrument: D1/D2/D3 must
+##                 NOT run, because a check measured against a null focus is a
+##                 check that cannot fail for its own reason.
+##   `wrong-line`  Say a line over the HUD that the door never said. **D1 and D2
+##                 fail**, C1 stays green -- they read the prompt, and they are
+##                 reading it rather than reading `""`.
+##   `pre-open`    Solve the gate after the refusal is photographed and before the
+##                 button is pressed. **D3 fails**, and D5 fails later for the
+##                 same reason -- an open door owns no button.
+const SABOTAGE: Array[String] = ["stand-off", "wrong-line", "pre-open"]
+
 var out := ""
 var _fails := 0
 var _notes: Array[String] = []
+var _sabotage := ""
 
 
 func run(rig) -> void:
 	out = rig.arg("out", "/tmp/floor/x.png").get_base_dir()
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+
+	_sabotage = rig.arg("sabotage", "")
+	if _sabotage != "":
+		if not SABOTAGE.has(_sabotage):
+			print("FLOOR FAIL unknown --sabotage=%s (have %s)" % [_sabotage, SABOTAGE])
+			return
+		print("FLOOR CALIBRATION --sabotage=%s -- this run is SUPPOSED to fail. "
+			% _sabotage
+			+ "A green run under a sabotage flag is a broken check, not a pass.")
 
 	Game.reset()
 	Run.enter(SEED)
@@ -346,25 +391,40 @@ func _clear_the_floor(d: Node) -> void:
 ## That the gate GATES is `tools/directors/puzzle_loop.gd`'s claim, and it is the
 ## whole of that file. This one is not allowed to make it and must not silently
 ## depend on it either way.
+##
+## ## The shortcut door is HELD SHUT here, and that is card #67
+##
+## This loop was written when `puzzle_gate` meant one thing: §5.2's gate room, in
+## a doorway, on the critical path. Card #5 then made the SHORTCUT a `PuzzleGate`
+## too (`ShortcutGate`), so it joined the group -- and this function, running six
+## lines before the beat that is about it, solved its eye and swung it open.
+##
+## `LockedDoor._swing()` sets `enabled = false`, which drops `Prompt`'s focus for
+## ever. So beat D walked to a door that was already open, could not acquire the
+## interact button (C1), read `Hud._prompt` as `""` (D1), and found the door open
+## when it asserted a press had not opened it (D3). Four red checks, on a door
+## that `tools/directors/shortcut_puzzle.gd` proves is fine, out of one line of
+## fixture code that could not know what it was reaching for.
+##
+## The rule that keeps it fixed is the one the docstring above already states and
+## this loop had outgrown: **unbar what stands between the hero and a ROOM.** The
+## shortcut is not on the way to anywhere -- it stands in the entrance room's
+## blank wall and opens onto its own landing, which beat D walks after opening it
+## deliberately. A fixture is allowed to remove the locks a measurement is not
+## about. It is not allowed to remove the lock the measurement IS about.
 func _unbar_the_puzzles(d: Node) -> void:
 	var opened := 0
 	var shut := 0
+	# Named rather than "the one in the entrance room": the anchor id is what
+	# `Dungeon` placed it under and what beat D asks for it by, so the two cannot
+	# drift apart into a fixture holding one door and a beat testing another.
+	var mine: Node = d.anchor_node(&"shortcut_door")
 	for node in _every(d, func(n: Node) -> bool:
 			return n.is_in_group(&"puzzle_gate")):
-		for atom in node.call(&"atoms"):
-			# ARMED first. The gate room's key is deliberately disarmed until the
-			# sun socket lights it (`Dungeon._place_gate_room`), and
-			# `PuzzleAtom.solve()` refuses while it is -- so a loop that only
-			# called `solve` opened nothing, said it had opened one, and left the
-			# reachability sweep rubbing along a shut door for four hundred steps.
-			atom.set(&"armed", true)
-			atom.call(&"solve")
-		# `needs_key` gates spend one at the door. The hunt that produces it is
-		# `puzzle_loop`'s beat; here the key is simply given.
-		if bool(node.get(&"needs_key")):
-			Game.add_key(1)
-		node.call(&"activate", null)
-		if bool(node.call(&"is_open")):
+		if node == mine:
+			print("FLOOR held %s shut -- beat D is about it" % node.name)
+			continue
+		if _solve_gate(node):
 			opened += 1
 		else:
 			shut += 1
@@ -381,6 +441,34 @@ func _unbar_the_puzzles(d: Node) -> void:
 		node.call(&"lift")
 		bars += 1
 	print("FLOOR opened %d puzzle gate(s) and %d barred passage(s)" % [opened, bars])
+
+
+## Answer every atom a gate is watching, and spend a key if it wants one. Returns
+## whether the door is open afterwards.
+##
+## One function because it has two callers with opposite intents and they must not
+## drift: the fixture above uses it to REMOVE a lock a measurement is not about,
+## and beat D uses it to PERFORM the floor's own verb in front of the door it is
+## measuring. Written twice, the day somebody teaches the fixture about a new kind
+## of atom is the day beat D stops opening the shortcut.
+func _solve_gate(node: Node) -> bool:
+	for atom in node.call(&"atoms"):
+		# ARMED first. The gate room's key is deliberately disarmed until the sun
+		# socket lights it (`Dungeon._place_gate_room`), and `PuzzleAtom.solve()`
+		# refuses while it is -- so a loop that only called `solve` opened nothing,
+		# said it had opened one, and left the reachability sweep rubbing along a
+		# shut door for four hundred steps.
+		atom.set(&"armed", true)
+		atom.call(&"solve")
+	# `needs_key` gates spend one at the door. The hunt that produces it is
+	# `puzzle_loop`'s beat; here the key is simply given.
+	if bool(node.get(&"needs_key")):
+		Game.add_key(1)
+	# `auto_open` gates have already swung on the last solve; this is the second
+	# half of `needs_key`, and a no-op on a door that is open (`PuzzleGate.activate`
+	# returns on `is_open()`).
+	node.call(&"activate", null)
+	return bool(node.call(&"is_open"))
 
 
 # --- C. Walking it ----------------------------------------------------------------
@@ -538,6 +626,20 @@ func _focus(rig, prop: Node) -> bool:
 
 # --- D. The shortcut ---------------------------------------------------------------
 
+## **C1 is a gate on the three checks under it, not a check beside them.**
+##
+## D1, D2 and D3 all read something that only exists while the door is focused --
+## the HUD line it puts up, and the press it answers. Run against a null focus
+## they measure nothing: card #67 is four red checks of which exactly one was
+## real, and the three passengers made a one-line fixture bug look like a broken
+## door. `Hud._prompt` is `""` when nothing is focused, so "the refusal NAMES the
+## bow" failed on an empty string; "pressing it opened nothing" is the shape a
+## LOCKED door is supposed to have and failed on the door being open already.
+## A check that cannot fail for its own reason is not a check, and three of them
+## reporting one fault four times is worse than silence -- it is four faults.
+##
+## So the beat bails, loudly, naming what it did not get to measure. Proven with
+## `--sabotage=stand-off`.
 func _shortcut_refuses(rig, d: Node, hero: Node3D) -> void:
 	var door: Node3D = d.anchor_node(&"shortcut_door")
 	if door == null:
@@ -545,20 +647,79 @@ func _shortcut_refuses(rig, d: Node, hero: Node3D) -> void:
 		return
 	var walked := await _walk_to(rig, d, hero, d.anchor_cell(&"shortcut_door"), door)
 	_ck("C0 the shortcut door is reachable on foot from the entrance", walked)
-	_ck("C1 and it owns the interact button", await _focus(rig, door))
+	if _sabotage == "stand-off":
+		# Out along the door's own +basis.z -- the side the player stands on
+		# (`docs/CONTRACT.md` §2.5) -- to about 7.9 m, well past the 2.9 m trigger
+		# `LockedDoor._ready` sets. Deliberately NOT through the door or into the
+		# masonry: the known answer being installed is "the hero is standing too far
+		# away", not "the hero is somewhere impossible".
+		hero.global_position += door.global_transform.basis.z * 6.0
+		await rig.wait_frames(6)
+	if not await _focus(rig, door):
+		_ck("C1 and it owns the interact button", false)
+		print("FLOOR   so D1, D2 and D3 did not run -- they read the prompt and "
+			+ "the press, and there is no focused prop to read either from. The "
+			+ "hero is at %.1f,%.1f and the door is at %.1f,%.1f (%.1f m, trigger "
+			% [hero.global_position.x, hero.global_position.z,
+				door.global_position.x, door.global_position.z,
+				K.plane(door.global_position - hero.global_position).length()]
+			+ "is %.1f m)." % float(door.get(&"radius")))
+		return
+	_ck("C1 and it owns the interact button", true)
+
+	if _sabotage == "wrong-line":
+		# A line the door never said, over the top of the one it did. `Hud._prompt`
+		# is whatever came last down `Bus.prompt_changed`, which is exactly the
+		# channel D1 and D2 claim to be reading.
+		Bus.prompt_changed.emit("LOCKED")
+		await rig.wait_frames(2)
 
 	var said: String = Hud._prompt
-	print("FLOOR shortcut locked prompt=\"%s\"" % said)
+	# What the door itself would say, asked of the door. Compared rather than
+	# matched against a word, because the word moved: this check said
+	# `contains("BOW")` when the shortcut was a `LockedDoor` keyed on the bow, and
+	# `docs/PUZZLES.md` §5.1 replaced that refusal with the ATOM'S -- "THE EYE IS
+	# SHUT". A director carrying floor 1's word would go red on floor 2's pillar
+	# for no better reason than that it is a different puzzle.
+	#
+	# It is not a tautology, and this is the one line in the beat where that has to
+	# be argued: `LockedDoor.on_focus` deliberately FIGHTS `Prompt` to get a
+	# refusal onto the HUD unformatted (a locked door has no verb, and "E TO NEEDS
+	# THE BOW" is nonsense), one frame deferred, against a `_say_prompt()` that is
+	# about to overwrite it. That race is what is being measured. It resolves the
+	# wrong way as an empty string or as "E TO ...", and both are red here.
+	var mouth: String = door.refusal_line()
+	print("FLOOR shortcut locked prompt=\"%s\" (the door says \"%s\")" % [said, mouth])
 	_ck("D0 the hero does not own the Bow yet", not Game.has(&"bow"))
-	_ck("D1 the refusal NAMES the bow (\"%s\")" % said, said.contains("BOW"))
+	_ck("D1 the HUD carries the door's own refusal, verbatim (\"%s\")" % said,
+		said != "" and said == mouth)
 	_ck("D2 and does not just say LOCKED", not said.contains("LOCKED"))
 	await rig.capture(out.path_join("f_01_shortcut_locked.png"))
+
+	if _sabotage == "pre-open":
+		# The floor's verb performed by nobody, after the refusal has been read and
+		# before the button is pressed. D3 is the only check that may notice.
+		_solve_gate(door)
+		await rig.wait_frames(12)
 
 	await rig.tap(["interact"])
 	await rig.wait_frames(24)
 	_ck("D3 pressing it opened nothing", not door.is_open())
 
 
+## The other half of §5.1: **owning the bow is not using it.**
+##
+## This beat used to press `interact` and expect the door to swing, which is what
+## a `LockedDoor` did. Card #5 deleted that door. The press is D3's, one beat
+## above, and it still opens nothing; what opens the shortcut is the atom in front
+## of it being answered.
+##
+## The atom is answered here rather than SHOT. `tools/directors/shortcut_puzzle.gd`
+## fires a real `Arrow` at the real eye and that is the whole of its beat D; this
+## file is not allowed to own that claim twice (`CLAUDE.md` §0). What is left for
+## the floor's own director is what a floor is: the door swings, it tells the
+## placer where it goes, and there is a way down behind it that the hero can walk
+## to.
 func _shortcut_opens(rig, d: Node, hero: Node3D) -> void:
 	var door: Node3D = d.anchor_node(&"shortcut_door")
 	if door == null:
@@ -568,25 +729,31 @@ func _shortcut_opens(rig, d: Node, hero: Node3D) -> void:
 	if not await _focus(rig, door):
 		_ck("D5 the shortcut door owns the button again", false)
 		return
+	_ck("D5 the shortcut door owns the button again", true)
 	var said: String = Hud._prompt
-	print("FLOOR shortcut unlocked prompt=\"%s\"" % said)
-	_ck("D5 the prompt is a verb now (\"%s\")" % said, said.contains("OPEN"))
+	print("FLOOR shortcut with the Bow owned prompt=\"%s\"" % said)
+	# `ShortcutGate._on_item_acquired` exists for this line. `LockedDoor` announces
+	# "X TO OPEN" on the frame the key item lands, which for a puzzle is a promise
+	# the door cannot keep -- the Warden dying while the player stands here must
+	# not turn an unshot eye into an invitation.
+	_ck("D6 owning the Bow opened nothing and promised nothing (\"%s\")" % said,
+		not door.is_open() and not said.contains("TO OPEN"))
 
 	var announced: Array[StringName] = []
 	door.opened.connect(func(where: StringName) -> void: announced.append(where))
-	await rig.tap(["interact"])
+	_solve_gate(door)
 	await rig.wait_frames(9)
 	await rig.capture(out.path_join("f_08_shortcut_swinging.png"))
 	await rig.wait_frames(90)
-	_ck("D6 the shortcut opened", door.is_open())
-	_ck("D7 and told the placer where it goes (%s)" % [announced],
+	_ck("D7 answering the floor's own verb opened it", door.is_open())
+	_ck("D8 and told the placer where it goes (%s)" % [announced],
 		announced.size() == 1)
 
 	# Through it, to what is on the other side.
 	var landing: Node = d.get_node_or_null(^"ShortcutLanding")
 	var stairs: Array = _every(landing, func(n: Node) -> bool: return n is Stairs) \
 		if landing != null else []
-	_ck("D8 there is a way down behind the shortcut", stairs.size() == 1)
+	_ck("D9 there is a way down behind the shortcut", stairs.size() == 1)
 	if stairs.is_empty():
 		return
 	var down: Node3D = stairs[0]
@@ -597,8 +764,8 @@ func _shortcut_opens(rig, d: Node, hero: Node3D) -> void:
 			+ Vector3(0.0, 0.15, 0.0)])
 	Bus.camera_recenter.emit()
 	await rig.wait_frames(24)
-	_ck("D9 and it is reachable through the opened door", walked)
-	_ck("D10 the stair offers itself (\"%s\")" % Hud._prompt,
+	_ck("D10 and it is reachable through the opened door", walked)
+	_ck("D11 the stair offers itself (\"%s\")" % Hud._prompt,
 		await _focus(rig, down))
 	await rig.capture(out.path_join("f_09_shortcut_stair.png"))
 
@@ -607,12 +774,12 @@ func _shortcut_opens(rig, d: Node, hero: Node3D) -> void:
 	# `Run.descend_floor` and then a scene change -- the scene change would take
 	# this director down with it, so the half that carries the CLAIM is called
 	# directly and the half that loads a floor is left to Flow (CLAUDE.md §6).
-	_ck("D11 the shortcut sits at depth 0, twenty metres from the way in",
+	_ck("D12 the shortcut sits at depth 0, twenty metres from the way in",
 		int(d.rooms[d.anchor_cell(&"shortcut_door")]["dist"]) == 0)
 	Run.descend_floor()
 	print("FLOOR shortcut lands on level %d -- %s"
 		% [Run.level, FloorDb.name_of(Run.level)])
-	_ck("D12 taking it skips the Cistern and lands on the Foundry",
+	_ck("D13 taking it skips the Cistern and lands on the Foundry",
 		Run.level == 2 and FloorDb.name_of(2) == "The Foundry")
 	# Back, because the beats after this one are still about floor 1. Emitted as
 	# well as assigned: the HUD's depth card reads the signal, not the field.
