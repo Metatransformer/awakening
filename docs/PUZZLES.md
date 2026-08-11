@@ -206,6 +206,33 @@ Every press is its own inverse, so solvability is a property of construction at
 any grid size. The grid is **not an atom** — it hands each lantern the gate's own
 `puzzle_id` and the ordinary `PuzzleGate` count does the rest.
 
+**Solvable is not the same as finishable, and a playtest found the gap
+(2026-08-10).** A player worked a board down to one dark lantern, swung at it,
+and watched it light and its four neighbours go out. That board is not one press
+from done — on a 3×3 it is four or five, none of them on the dark lantern — but
+it *looks* like the last step, so the room reads as a puzzle that undoes itself.
+Every state is solvable (3×3 is non-singular, all 512 boards), which means the
+room was never stuck; the player was, and from inside the room those are the same
+thing. Two changes, both in `lantern_grid.gd`:
+
+- **The deal presses distinct CORNERS.** A corner's cross is three cells, so the
+  board reads as L-shapes rather than noise; the answer is then corners all the
+  way down, so **the last step is always a corner**; and corner presses are
+  closed over corners and edges, so a player who only hits corners stays in a
+  16-board subspace that always contains the solved board and **can never reach
+  the one-dark trap**. Boards come out 2–3 presses deep, which is the right size
+  for a T0 gate on floor 1.
+- **After eight presses that do not finish it, the grid points** — one lantern's
+  brass breathes, re-picked after each blow, preferring a corner. Coupling is the
+  combinator that lets you lose ground, and an action game hands the player no
+  notepad.
+
+Also: **one swing is one press for the board**, not just per post. `HeroCombat`
+damages everything under the blade in a single pass and the spin's sphere is
+2.1 m across a full circle, so without the guard one spin in the middle of a
+2.3 m grid presses four lanterns at once. A light swing cannot — the sphere
+reaches 1.14 m past its centre — which is exactly why it would have shipped.
+
 ### 3.1 Combinators 7–9 — read off Ocarina, 2026-08-10
 
 **Design, not built.** These three came out of reading the 1998 Player's Guide

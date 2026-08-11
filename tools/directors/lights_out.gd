@@ -30,9 +30,18 @@ extends RefCounted
 ##      real seeds, each one solved. This is the beat that exists because the
 ##      obvious implementation — deal each cell at random — ships a room that
 ##      cannot be finished on a seed nobody can predict.
+##   H  **The answer is always corners**, and no dealt board is the one-dark trap
+##      a playtester walked into (`LanternGrid`'s class note). Over the same two
+##      hundred deals, because "the board I looked at read fine" is the check
+##      that passes on 199 seeds.
+##   I  **One swing is one press for the BOARD.** Two lanterns struck in a single
+##      frame — which is what the spin's 2.1 m sphere does standing in a 2.3 m
+##      grid — move one cross, not two.
+##   J  **The room cannot be made unfinishable.** Eight blows that do not get the
+##      board out and the grid points at one press, a real one, a corner.
 ##
-## G is the reason this file is worth its length. Everything else here would pass
-## against a random deal.
+## G–J are the reason this file is worth its length. Everything above them would
+## pass against a random deal.
 
 const SEED := 20260810
 const GRID := 3
@@ -59,6 +68,8 @@ func run(rig) -> void:
 	await _d_involution(rig)
 	await _e_solve(rig)
 	_g_every_board()
+	await _i_one_swing(rig)
+	await _j_hint(rig)
 
 	if _fails == 0:
 		print("LIGHTS ok -- every check passed")
@@ -295,6 +306,9 @@ func _g_every_board() -> void:
 	var bad := 0
 	var worst := 0
 	var total := 0
+	var off_corner := 0
+	var one_dark := 0
+	var corners := [0, GRID - 1, (GRID - 1) * GRID, GRID * GRID - 1]
 	for i in 200:
 		# A real seed each time, through `Run.enter`, so this is the same RNG the
 		# floor generator hands the grid and not a private one that could differ.
@@ -305,9 +319,15 @@ func _g_every_board() -> void:
 		g.call(&"_deal")
 		# `_build` never runs, so `board()` is empty -- drive the solver off the
 		# dealt array directly, which is what `_build` would have posed.
-		var plan: Array = _solve_array(g.get(&"_dealt"))
+		var dealt: Array = g.get(&"_dealt")
+		var plan: Array = _solve_array(dealt)
 		if plan.is_empty():
 			bad += 1
+		for at in plan:
+			if not corners.has(at):
+				off_corner += 1
+		if dealt.count(false) == 1:
+			one_dark += 1
 		total += plan.size()
 		worst = maxi(worst, plan.size())
 		g.free()
@@ -318,7 +338,158 @@ func _g_every_board() -> void:
 	# A dial that does nothing is a dial somebody will turn. If the hardest board
 	# in two hundred is one press, the scramble is not scrambling.
 	_ck("G1 and they are not all trivial (longest %d presses)" % worst, worst >= 3)
+	# **H.** The playtest fix, checked over the whole seed space rather than over
+	# the one board this run happened to draw.
+	_ck("H0 every press of every answer is a corner (%d off-corner)" % off_corner,
+		off_corner == 0)
+	# The trap itself: a board showing one dark lantern reads as one blow from
+	# done and is four or five, none of them on the dark one.
+	_ck("H1 and no dealt board is the one-dark trap (%d dealt)" % one_dark,
+		one_dark == 0)
 	Run.enter(SEED)
+
+
+# --- I/J. One swing, and a room that cannot be made unfinishable --------------
+
+## A board of its own for each beat below, off to the side and with no gate over
+## it: E left the first grid lit out and its door open, and a beat that pressed
+## THAT board would be proving things about a solved puzzle.
+## Stood where the first one was -- E has had its four frames and the beats below
+## want the same framing, not a board out in the void past the north wall. The
+## first grid goes with it: nine lanterns and nine more in one room is a photo
+## nobody can read.
+func _spare(rig, label: String) -> Node:
+	if is_instance_valid(_grid):
+		_grid.queue_free()
+		await rig.wait_frames(4)
+	var g := LanternGrid.new()
+	g.name = label
+	g.rows = GRID
+	g.cols = GRID
+	g.puzzle_id = &"lights_spare"
+	g.position = Vector3(0.0, 0.02, -1.2)
+	rig.scene().add_child(g)
+	_grid = g
+	await rig.wait_frames(12)
+	return g
+
+
+## **Two lanterns, one frame, one press.** This is what the spin attack does:
+## `HeroCombat._scan` damages everything overlapping the blade in a single pass,
+## and the spin's sphere is 2.1 m over a full circle while the posts stand 2.3 m
+## apart. Without the guard, one spin in the middle of the board moves four or
+## five crosses at once and the player's read of the room is gone.
+##
+## Struck cell by cell against a copy, like C -- "the board moved a bit less"
+## would pass with the wrong cross taken.
+func _i_one_swing(rig) -> void:
+	var g: Node = await _spare(rig, "SpareSwing")
+	var before: Array = (g.call(&"board") as Array).duplicate()
+	# No await between them, so both land inside one process frame -- the same
+	# thing `_scan`'s loop does.
+	(g.call(&"cell", 0) as Node).call(&"apply_hit", null)
+	(g.call(&"cell", GRID * GRID - 1) as Node).call(&"apply_hit", null)
+	await rig.wait_frames(8)
+	var after: Array = g.call(&"board")
+	var want := {}
+	for i in _cross(0):
+		want[i] = true
+	var wrong := 0
+	for i in before.size():
+		if (before[i] != after[i]) != want.has(i):
+			wrong += 1
+	_ck("I0 two lanterns struck in one frame move ONE cross (%d wrong)" % wrong,
+		wrong == 0)
+	g.queue_free()
+
+
+## The safety net. Eight presses that do not finish the board and the grid starts
+## pointing -- at a press that is really in the answer, and at a corner, because
+## a corner is the move whose consequences a player can see all of.
+##
+## The centre, eight times: an even number of presses on one cell is the board it
+## started from (D), so this arrives at `HINT_AFTER` with the dealt board still
+## on the posts and nothing solved by accident.
+func _j_hint(rig) -> void:
+	var g: Node = await _spare(rig, "SpareHint")
+	var lit := [false]
+	g.connect(&"lit_out", func() -> void: lit[0] = true)
+	var centre := (GRID * GRID) / 2
+	for _p in 8:
+		await _swing(rig, g, centre)
+	_ck("J0 eight presses that do not solve it (solved=%s)" % lit[0], not lit[0])
+
+	var hinted: Array = []
+	for i in GRID * GRID:
+		var lamp: Node = g.call(&"cell", i)
+		if lamp != null and bool(lamp.get(&"_hinted")):
+			hinted.append(i)
+	_ck("J1 and the grid is pointing at exactly one lantern (%s)" % [hinted],
+		hinted.size() == 1)
+	# **Two frames, top of the breath and bottom of it, one camera.** The tell has
+	# to be visible and not merely true in a bool -- and a pulse cannot be proved
+	# by one photograph, because a single frame of a lantern breathing is a
+	# lantern. Framed on the post that is pointing rather than on the whole board:
+	# the tell is brass, and at board distance brass is four pixels.
+	var post: Node = g.call(&"cell", hinted[0])
+	await _look(rig, post as Node3D, 4.6)
+	# Let the follow camera finish easing in, or the pair differs by a camera move
+	# and proves nothing about a lantern.
+	await rig.wait_seconds(1.2)
+	# Restart the breath so its phase is known: `Lantern.set_hint` zeroes the
+	# clock, and a cosine at HINT_RATE tops out half a period later.
+	post.call(&"set_hint", false)
+	post.call(&"set_hint", true)
+	await rig.wait_seconds(PI / Lantern.HINT_RATE)
+	print("LIGHTS hint post %d at screen %s" % [hinted[0], _screen(rig, post)])
+	await rig.capture(out.path_join("l_05_hint_on.png"))
+	# **The pair is swelled-versus-none, not swelled-versus-ebbed.** A lit lantern's
+	# lamp flickers every frame by design, so two frames of the same board differ
+	# all over and a pulse cannot be picked out of that. The hinted post here is
+	# dark, and a dark post has nothing else moving on it -- so every pixel that
+	# changes between these two frames is the tell.
+	post.call(&"set_hint", false)
+	await rig.wait_frames(6)
+	await rig.capture(out.path_join("l_06_hint_off.png"))
+	if hinted.size() != 1:
+		g.queue_free()
+		return
+	var plan: Array = g.call(&"solution")
+	_ck("J2 which is really in the answer (%s of %s)" % [hinted[0], plan],
+		plan.has(hinted[0]))
+	var corners := [0, GRID - 1, (GRID - 1) * GRID, GRID * GRID - 1]
+	_ck("J3 and it is a corner (%d)" % hinted[0], corners.has(hinted[0]))
+
+	# It has to stop pointing when the room is done, or an opened door still has a
+	# lantern breathing "not yet" underneath it.
+	for at: int in plan:
+		await _swing(rig, g, at)
+	await rig.wait_frames(10)
+	var still := 0
+	for i in GRID * GRID:
+		var lamp: Node = g.call(&"cell", i)
+		if lamp != null and bool(lamp.get(&"_hinted")):
+			still += 1
+	_ck("J4 the hint clears when the board comes out (%d still pointing, lit_out=%s)"
+		% [still, g.call(&"is_lit_out")], still == 0 and bool(g.call(&"is_lit_out")))
+	g.queue_free()
+
+
+## Swing until the board moves. Same reason E does: a wall-clock sleep of `REARM`
+## plus a bit is a coin flip on a cold run, and a swallowed blow here would drop
+## a press out of the count `HINT_AFTER` is watching.
+func _swing(rig, g: Node, at: int) -> void:
+	var lamp: Node = g.call(&"cell", at)
+	if lamp == null:
+		return
+	for _try in 6:
+		var before: Array = (g.call(&"board") as Array).duplicate()
+		lamp.call(&"apply_hit", null)
+		await rig.wait_frames(6)
+		if (g.call(&"board") as Array) != before:
+			break
+		await rig.wait_seconds(0.4)
+	await rig.wait_seconds(0.4)
 
 
 ## The same first-row brute force `LanternGrid.solution()` runs, over a plain
@@ -354,6 +525,17 @@ func _flip(board: Array, at: int) -> void:
 
 
 # --- Camera -------------------------------------------------------------------
+
+## Where a post's cage lands in the frame, so a reader of the log knows which
+## pixels to go and look at. A capture nobody can locate the subject in is a
+## capture that proves whatever you already believed.
+func _screen(rig, at: Node) -> Vector2i:
+	var cam: Camera3D = rig.scene().get_viewport().get_camera_3d()
+	var n := at as Node3D
+	if cam == null or n == null:
+		return Vector2i(-1, -1)
+	return Vector2i(cam.unproject_position(
+		n.global_position + Vector3(0.0, Lantern.POST_H + Lantern.CAGE_H * 0.5, 0.0)))
 
 func _show(board: Array) -> String:
 	var s := ""
