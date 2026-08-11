@@ -33,6 +33,23 @@ signal struck(amount: int, from: Vector3)
 ## Seconds of no hits before the running total clears itself.
 @export var readout_reset: float = 4.0
 
+## How far outside the straw bundle a floating damage number stands.
+##
+## **This exists because the number used to be built inside the bundle.** It was
+## placed at `post_height * 0.9` — 1.62 m — with a ±0.28 m jitter in x and z, and
+## the pad is a cylinder of `pad_radius` 0.34 spanning 1.20 m to 1.75 m. Every
+## damage number this post has ever drawn was standing in the middle of the straw
+## it belongs to. `no_depth_test = true` hid that, at the price of painting the
+## number through every wall in the room, which is card #37 and, before it, card
+## #26's Echo plates. The flag is off, so the geometry has to be honest: change
+## the shape, not the material (`CLAUDE.md` §3).
+##
+## 0.22 m past `pad_radius` puts the label's plane about a fifth of a metre proud
+## of the bundle's face. The label is billboarded, so it turns to face the camera
+## and its whole quad clears the curve at that distance; nearer and a wide number
+## catches the shoulder of the cylinder at an oblique angle.
+const POPUP_CLEAR := 0.22
+
 @export_group("Audio")
 @export var hit_sfx: AudioStream = preload("res://audio/sfx/block_impact_1.ogg")
 
@@ -101,7 +118,7 @@ func _register(amount: int, from: Vector3) -> void:
 		_sfx.pitch_scale = randf_range(0.92, 1.08)
 		_sfx.play()
 	if show_readout:
-		_popup(amount)
+		_popup(amount, from)
 		_refresh_readout()
 
 	struck.emit(amount, from)
@@ -219,7 +236,18 @@ func _build() -> void:
 		_readout.font_size = 64
 		_readout.pixel_size = 0.0022
 		_readout.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		_readout.no_depth_test = true
+		# **Depth-tested, and it shipped the other way.** `no_depth_test = true`
+		# does not mean "draw over the post" — it means DRAW OVER THE WORLD, so
+		# the running total was legible through the wall of whatever room the
+		# post stands in. Same defect as the Echo name plates, same answer:
+		# `scripts/world/sounding_stone.gd` carries the long note (card #26), and
+		# this is card #37.
+		#
+		# Nothing has to move for it. The readout hangs at `post_height + 0.42`
+		# and the tallest thing beneath it is the straw pad, capping at
+		# `post_height * 0.82 + pad_height * 0.5` — 0.47 m of clear air. The
+		# damage numbers in `_popup` were NOT clear and did have to move.
+		_readout.no_depth_test = false
 		_readout.modulate = Color(1, 0.92, 0.6)
 		_readout.outline_size = 18
 		_readout.position.y = post_height + 0.42
@@ -242,16 +270,37 @@ func _refresh_readout() -> void:
 
 
 ## A single damage number that floats up and fades, so a fast combo still reads.
-func _popup(amount: int) -> void:
+##
+## `from` is where the blow came from, and it is what places the number. See
+## `POPUP_CLEAR`: this used to be built inside the straw bundle and got away with
+## it only because `no_depth_test` was hiding the fact.
+func _popup(amount: int, from: Vector3) -> void:
 	var l := Label3D.new()
 	l.text = str(amount)
 	l.font_size = 96
 	l.pixel_size = 0.0020
 	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	l.no_depth_test = true
+	# Depth-tested — see `_readout` above and card #37.
+	l.no_depth_test = false
 	l.outline_size = 20
 	l.modulate = Color(1.0, 0.42, 0.32) if amount > 0 else Color(0.65, 0.65, 0.7)
-	l.position = Vector3(randf_range(-0.28, 0.28), post_height * 0.9, randf_range(-0.1, 0.1))
+
+	# Out along the line the blow came in on, which is the side the striker — and
+	# therefore the camera — is standing on. `to_local`, because the offset is
+	# reasoned in world space and a post may be placed at any yaw.
+	# `K.flat` normalises on the way out, so this is already a unit direction --
+	# see its own note in `consts.gd`. It is exactly what `_register` above reads
+	# it for, one line up the same call.
+	var out_dir := K.flat(from - global_position)
+	if out_dir == Vector3.ZERO:
+		out_dir = global_transform.basis.z
+	# Tangential jitter, so a fast combo still stacks legibly rather than
+	# printing four numbers on one spot. Only as much as the clearance can
+	# absorb: swung far enough round the drum, a number goes back inside it.
+	var side := Vector3(-out_dir.z, 0.0, out_dir.x) * randf_range(-0.12, 0.12)
+	l.position = to_local(global_position
+		+ out_dir * (pad_radius + POPUP_CLEAR) + side
+		+ Vector3(0.0, post_height * 0.9, 0.0))
 	add_child(l)
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(l, "position:y", l.position.y + 1.1, 0.85).set_ease(Tween.EASE_OUT)

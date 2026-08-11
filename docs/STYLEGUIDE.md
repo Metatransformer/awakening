@@ -278,6 +278,23 @@ Harvest the legible half of the same look instead:
   scenes look the way they do.
 - Allowlist for blended alpha, four things, each with explicit `render_priority`:
   fog volume (−10), hookshot line (5), extraction beam (5), HUD (own layer).
+- **A world-space `Label3D` is depth-tested. `no_depth_test = true` is never the
+  fix for a caption swallowed by its own prop.** The flag does not mean "draw
+  over the thing I hang off" — it means *draw over the world*, and the world
+  includes every wall between the label and the camera. This has now been found
+  four times in four places: an Echo's name painted on the shut shortcut door it
+  was hidden behind (card #26), a shopkeeper's name plate readable through six
+  metres of garrison curtain wall, and the training post's readout and damage
+  numbers alongside it (card #37). What the flag is reaching for is real — a
+  caption inside its own geometry is no caption — and the answer is the same one
+  §4.3 gives everywhere else: **move the label, keep the depth buffer.**
+  `SoundingStone.PLATE_DROP` and `TrainingPost.POPUP_CLEAR` are what that looks
+  like in code. `tools/directors/echo_plates.gd` and
+  `tools/directors/world_labels.gd` prove both halves by subtracting the labels
+  back out of a frozen frame, which is the only instrument that works here —
+  every property involved is identical in the broken and the fixed build.
+  The two deliberate exceptions are `impact_vfx.gd` and `flourish_vfx.gd`, whose
+  flashes are depth-tested *on purpose* and carry notes saying why.
 
 ### 4.4 Dither and colour depth
 

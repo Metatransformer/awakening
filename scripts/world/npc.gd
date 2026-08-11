@@ -479,7 +479,17 @@ func _build() -> void:
 	_sign.font_size = 48
 	_sign.pixel_size = 0.0022
 	_sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_sign.no_depth_test = true
+	# **Depth-tested, and it shipped the other way.** `no_depth_test = true` is
+	# not "draw over the keeper" — it is draw over the world, so a shopkeeper's
+	# name plate was readable through the garrison's six-metre curtain wall from
+	# out on the plain. That is card #26's Echo bug with a different label on it;
+	# `scripts/world/sounding_stone.gd` carries the long note, and this is #37.
+	#
+	# Nothing has to move for it. The sign hangs half a metre above `_head`, so
+	# it clears the keeper's own crown, and the booth it clears by two metres —
+	# the same way `PLATE_DROP` already stood the Echo captions off their drum.
+	# `tools/directors/world_labels.gd` measures both halves.
+	_sign.no_depth_test = false
 	_sign.modulate = Pal.BONE
 	_sign.outline_size = 16
 	_sign.position.y = _head + 0.5
