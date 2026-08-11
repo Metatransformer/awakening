@@ -202,13 +202,17 @@ const CAP_MIN_PX := 10.0
 ## How much of the caption's own surround to take off the ink's bounding box
 ## before it is read as a cap height.
 ##
-## §5.7's World plate pad is 6 px, and the outline the `Label3D`s wore before
-## card #61 came out at about the same width on the frame at this distance — so
-## one number covers both builds and neither is flattered. It is deliberately
-## the SMALLER estimate for the `Label3D` case: under-insetting leaves outline in
-## the measurement and makes the old build's cap height look bigger than it was,
-## which biases that build toward passing. A failure measured this way is not an
-## artefact of the inset.
+## §5.7's World plate pad is 6 px, which is what a `WorldCaption` wears, and one
+## number is used for both builds rather than two tuned ones.
+##
+## **It over-subtracts on a `Label3D` and the verdict does not depend on that.**
+## A `Label3D`'s outline comes out thinner than 6 px on the frame at this
+## distance, so taking 6 off each edge eats into the glyph as well: measured on
+## the old build, `JEWELCRAFTER` reported a 14 px ink box and a 2 px cap. Take
+## the inset to zero and the same caption is 14 px of frame, which through the
+## 480 x 270 buffer is **5.25 px of type against a floor of 10** — still failing
+## by half. The inset changes how badly the old build fails and not whether it
+## does, which is the only property it needs to have.
 const CAP_INSET_PX := 6.0
 
 ## The internal buffer §4.5 renders the world into. Spelled out rather than read

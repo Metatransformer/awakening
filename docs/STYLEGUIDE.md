@@ -307,6 +307,36 @@ Harvest the legible half of the same look instead:
   every property involved is identical in the broken and the fixed build.
   The two deliberate exceptions are `impact_vfx.gd` and `flourish_vfx.gd`, whose
   flashes are depth-tested *on purpose* and carry notes saying why.
+- **If it is billboarded, it was interface all along — draw it on the canvas.**
+  This is the criterion, and it is greppable: `billboard = BILLBOARD_ENABLED` on
+  a `Label3D` says the text turns to face the player, which is a thing no object
+  in a world does. A carved sign does not turn. §4.5 renders the world at
+  480 × 270 and a `Label3D` goes into that buffer with the masonry, so a
+  billboarded caption gets 5.25 px of type where §3.1b's floor is 10 and no
+  font size fixes it — the buffer, not the glyph, is the limit. Making it big
+  enough to survive would put a plate the size of a road sign in the courtyard,
+  which §5.5b and §7.10 both refuse for the same reason.
+
+  `scripts/ui/world_caption.gd` is the answer: a `Node3D` that carries text and
+  a world position, drawn by `Hud` at native resolution through the same
+  `unproject_position` the enemy bars and lock brackets already use (§4.5's
+  "never reparent the world scene" is what keeps that answering in native
+  pixels). Four moved — the keeper's sign, the training-post readout, its damage
+  numbers, and the Echo plates. **Three did not**, and they are the honest half
+  of the rule: the gatehouse lintel, the statue's inscription and the locked
+  door's tablet are cut into their objects, do not billboard, and are *supposed*
+  to go soft with distance — `statue.gd` was already asking for that in a
+  comment before this card existed.
+
+  What it costs, said out loud: a canvas caption **does not shrink with
+  distance** (the range gate in `WorldCaption.opacity_at` is a clutter limit
+  now, not perspective), and occlusion is one LOS ray for the whole caption
+  rather than per-pixel depth — a wall edge can no longer cut a name in half.
+  `TrainingPost.POPUP_CLEAR` keeps its placement job and loses its clearance
+  one. The deeper price is a sentence about the world: a name over a booth is
+  now interface *about* a thing rather than a thing. That is the trade §4.5
+  forced, and it is **this session's call, made while the repo owner was asleep,
+  and REVERSIBLE** — one class swap per caption.
 
 ### 4.4 Dither and colour depth
 
@@ -495,6 +525,17 @@ how this would have shipped unnoticed. Carded separately (#61). Nothing the
 player must *act* on is affected: the interact prompt, the key caps and every
 number in §5 are HUD and stay sharp.
 
+> **FIXED 2026-08-11 (card #61) — §4.3's caption rule below is the answer, and
+> the fix was to move four captions onto the canvas rather than to fight the
+> buffer.** Measured at 1280 × 720, 1:1: `JEWELCRAFTER` at 3.8 m went from **0.8
+> px of cap height to 14.0**, against §3.1b's 10 px floor. The director can now
+> fail on legibility instead of on presence — it measures cap height *through
+> the rasterisation buffer the caption actually lives in*, so the same file run
+> against the pre-#61 build reports three FAILs (0.8 / 3.8 / 4.9 px). This is
+> **this session's call and REVERSIBLE**: the four captions are `WorldCaption`
+> nodes and the three that stayed are still `Label3D`s, so reverting one is
+> swapping a class back, not unpicking a pipeline.
+
 Two things §4.4 asks for that this does **not** do yet: the HUD is not quantized
 to RGB555 (it is drawn after the present pass, in palette colours already), and
 `Pal`'s dithered derivations are unchanged. Both are cosmetic against the buffer
@@ -635,7 +676,11 @@ inherited twice over. It is now measured.
 (`garrison_look.tl_01_arrive`: curtain-wall merlons against flat sky, the
 `LANTERNKEEPER` Label3D, the HUD's Cinzel caps, the vitals pips) photographed
 under eight configurations inside a single process, so machine noise is
-common-mode. Run at 1280×720 and again at 1920×1080.
+common-mode. Run at 1280×720 and again at 1920×1080. (That plate is a
+`WorldCaption` on the canvas since #61, so the pose no longer holds a sample of
+type-rendered-as-geometry at all. Nothing below turns on it — the plate aliased
+like geometry and MSAA smoothed it like geometry, which was one more instance of
+the merlons, not a separate finding.)
 
 **What the frames show.**
 
@@ -1382,6 +1427,7 @@ point, and a fourth right edge is what made the column read as ragged.
 |---|---|
 | Lock brackets | half-extent (26, 34), 2 px on a 1 px VOID keyline, quantized to 480×270; arm 8 inward / 12 outward / 5 on two corners (§5.5) |
 | Enemy health bar | 20 × 2 px (×2.2 locked), 1 px frame (BONE if elite), ASH@85% track, RUST fill, ≤ 22 m, LOS-gated |
+| World caption (`WorldCaption`) | §3.1b type at its own `ref_px` (14 body / 16 damage), World plate, cap TOP on the anchor, quantized to 480×270, ≤ `max_range` (18 m default) with a 3 m fade, LOS-gated, behind-camera culled. Billboarded captions only — see §4.3 |
 
 #### Rows deleted from the old table, and why
 
@@ -1530,9 +1576,12 @@ for 2D art anywhere else.
   the frames, the cost and the one thing it breaks. The four lines of shader this
   document had been carrying were wrong and are corrected there.
 
-  What this delta became, rather than what it closed: **world-space `Label3D`
+  ~~What this delta became, rather than what it closed: **world-space `Label3D`
   text is illegible through the buffer** — the keeper name plates and the
-  training post's readout. Card #61.
+  training post's readout. Card #61.~~ **CLOSED 2026-08-11 (#61).** A
+  billboarded caption is interface, so it is drawn on the canvas now
+  (`scripts/ui/world_caption.gd`); the three carved signs stayed in the world.
+  §4.3's caption bullet holds the criterion and the cost, §4.5 the measurement.
 
   **The HUD's half of the texture-filter delta is done** and did not need the
   project key: `Hud`'s canvas sets `TEXTURE_FILTER_NEAREST` on itself. The item
