@@ -9,8 +9,12 @@ atoms and the door that listens are in the code —
 gate room, the treasure puzzle, the Sluice-Keeper and the Echo pedestal — is
 proved end to end by `tools/directors/puzzle_loop.gd`. See **§9, as built**.
 
-Still design: **§5.1**, the shortcut puzzle (the door exists and is a check; the
-puzzle on it is M6), and phase 2's remaining three atoms.
+**§5.1 is built** — the shortcut door has stopped being a check. It is a
+`ShortcutGate` (`scripts/props/shortcut_gate.gd`) watching an atom of **exactly
+tier N**, proved by `tools/directors/shortcut_puzzle.gd`. Owning the Bow no
+longer opens floor 1's; shooting the eye does.
+
+Still design: phase 2's remaining three atoms.
 
 **The lantern (§2) and coupling (§3, combinator 6) are built**, proved by
 `tools/directors/lights_out.gd`. The lantern spends one of phase 2's four slots
@@ -367,6 +371,42 @@ puzzle that pays in the game's own currency instead of in power.
 - **Shape:** a straight solve, not a cycle. You already own the item; the puzzle
   is the receipt, not the challenge.
 
+**As built.** `Dungeon._place_shortcut` builds a `ShortcutGate` and one atom
+beside it; `tools/directors/shortcut_puzzle.gd` is the proof, 54 checks.
+
+- **The pool is three prefabs, not four**, and that is §1 rather than an
+  omission. Floor N's shortcut key is floor N's boss item, and tiers 1/2/3 hold
+  exactly one gating atom each — so `_shortcut_pool()` returns a single answer
+  per floor and there is nothing to roll. **Floor 4 stays a plain `LockedDoor`:**
+  the Far Lantern has no verb and never gets one, so its shortcut is a pure lock.
+  Three is under §8's ceiling of 12 and moves no number.
+- **The gesture does not vary by seed**, unlike `GATE_PREFABS`. GDD §5.3 asks for
+  *ninety seconds on your fifth run*, and a shortcut that re-rolls its verb every
+  descent is a shortcut you have to read every time.
+- **It never promises what it cannot pay.** `LockedDoor` flips its prompt to
+  *TO OPEN* the moment you acquire the key item; `ShortcutGate` overrides
+  `_on_item_acquired` so the door goes on naming the atom — *THE EYE IS SHUT* —
+  with the Bow in hand and the eye unshot.
+- **The flag is `LockedDoor`'s, not `PuzzleGate`'s.** `door_open_shortcut_N` is
+  permanent and saved, so a shortcut proved once stays open for ever, while the
+  eye beside it is `atom_…` and resets every run with the rest of them. The door
+  refuses to be re-adopted once open, so the reset atom cannot re-lock it.
+- **Wall-mounted atoms stand off the masonry** — `Dungeon.WALL_STANDOFF`. See
+  §9's decisions.
+
+| Floor | Key | Atom | Prefab |
+|---|---|---|---|
+| 1 | Bow | `eye_switch` | `eye_high` — eye at 2.05 m, above the sword's reach, with an urn of arrows beside it (§0 rule 2) |
+| 2 | Burst | `cracked_pillar` | `pillar_brace` — a pillar standing in the door's own mouth; the fall is the opening |
+| 3 | Hookshot | `hook_ring` | `ring_span` — a ring over the lintel |
+| 4 | Far Lantern | — | none; a plain lock (§1) |
+
+**It pays §5.2's amendment**, which is a rule for all three shapes: the landing
+behind the door holds the way down, **a chest**, and a sounding stone offering
+three Echoes. Both land on `opened`, and both are restored on a later run where
+the door comes up already open and `opened` never fires — §6 pays the Echo for
+*taking* the shortcut, not for having once solved it.
+
 ### 5.2 Critical-path puzzle — *the gate room*
 
 - **Anchor:** new, `gate_room` — on the path to `deepest`, around 0.7 of the way.
@@ -682,7 +722,7 @@ argue about**, and every one of them is a ceiling.
 | Puzzle atoms | **9** | Phase 1 + the lantern, pulled forward. Phase 2's remaining three are flavour and are not committed |
 | Combinators | **9** | Was 6. Nest, sequence, time, displace, cycle, couple, **+ chain, convert, reconfigure** (§3.1, 2026-08-10). One of the three is already on disk under another name — §5.4's maze room *is* reconfigure |
 | Puzzle shapes | **3** | Shortcut, critical, treasure |
-| Puzzle prefabs | **12** | 4 tiers × 3 shapes. The generator picks by (floor, shape, owned verb). **3 built**: `Dungeon.GATE_PREFABS` — sun nest (T0), lights out (T0), eye row (T1) |
+| Puzzle prefabs | **12** | 4 tiers × 3 shapes. The generator picks by (floor, shape, owned verb). **6 built**: `Dungeon.GATE_PREFABS` — sun nest (T0), lights out (T0), eye row (T1); `Dungeon.SHORTCUT_PREFABS` — eye high (T1), pillar brace (T2), ring span (T3). The shortcut shape is **three, not four**, and stays three: floor 4's key is the Far Lantern, which §1 gives no verb (§5.1) |
 | New anchor kinds | **2** | `gate_room`, `puzzle_room` |
 | Chord edges per floor | **1** | The cycle |
 | **Echoes** | **12** | Named. No thirteenth, same discipline as the relics |
@@ -778,6 +818,11 @@ Sluice-Keeper dies and the second stone lights).
 |---|---|---|
 | 4 | The chord edge | `Dungeon._plan_chord` / `_build_chord`; one per floor, ranked on (depth, span) |
 | 4 | Barred from the near side only | `scripts/props/barred_passage.gd` — `BarredPassage`, refuses with *BARRED FROM THE OTHER SIDE* |
+| 5.1 | The shortcut door, no longer a check | `scripts/props/shortcut_gate.gd` — `ShortcutGate`, a `PuzzleGate` keeping `LockedDoor`'s **permanent** flag |
+| 5.1 | The pool, exactly tier N | `Dungeon._shortcut_pool` / `_shortcut_tier`; one atom per floor, no seed roll |
+| 5.1 | The three prefabs | `Dungeon.SHORTCUT_PREFABS` — `_shortcut_eye_high` (T1), `_shortcut_pillar_brace` (T2), `_shortcut_ring_span` (T3) |
+| 5.1 | The room that brings its own ammunition | `_shortcut_eye_high`'s `ShortcutUrn` — §0 rule 2 |
+| 5.1 | The landing's chest and stone | `Dungeon._land_shortcut_rewards`, on `opened`, with the already-open restore |
 | 5.2 | `gate_room` anchor | `Dungeon._room_for(&"gate_path")` — 0.7 along the route to `deepest`, never either end |
 | 5.2 | The gate itself | A `PuzzleGate` **in the doorway the floor continues through**, not on a blank wall |
 | 5.2 | Floor 1's key hunt | `Dungeon._place_gate_room` — sun socket → key → door, §3's *nest* |
@@ -808,6 +853,20 @@ Sluice-Keeper dies and the second stone lights).
   cone on the front of the arrow, and only the broadside lens said so. The core
   is RUST dithered toward BONE because a mid-orange plume in a torchlit hall is
   a shape you have to already know is there.
+
+- **A wall-mounted atom flush against `KitWall` renders perfectly and cannot be
+  hit.** `KitWall` collides with one box covering the slab *and its relief*
+  (`kit_wall.gd`), so the stone stands 0.26 m proud of the visible face over the
+  whole height, not just along the plinth course it is named for. The shortcut's
+  eye sat 0.12 m out and passed every wiring check in `shortcut_puzzle.gd` — it
+  was in the room, it faced the player, it was above the sword's reach, and it
+  answered `apply_hit` the instant anything handed it one. Then the beat fired a
+  real `Arrow` and the eye stayed dark, because the ray had ended on the room's
+  own wall body a centimetre short of the pupil. `Dungeon.WALL_STANDOFF` is the
+  fix and `_clear_line` is the check that would have caught it on the first run:
+  **poking a prop by hand proves the wiring and says nothing about whether the
+  verb can arrive.** The hook ring had the same defect and no symptom at all,
+  because the hookshot snaps by angle and never casts a ray.
 
 - **The gate stands in the doorway, not on a wall.** A critical-path puzzle is
   critical *by construction* that way — there is no version of the floor where

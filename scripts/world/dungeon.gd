@@ -68,6 +68,8 @@ const BOSS_DOOR_SCRIPT := "res://scripts/world/boss_door.gd"
 ## `boss_arena.gd`'s own note on `BOSS_SCRIPT`).
 const STONE_SCRIPT := "res://scripts/world/sounding_stone.gd"
 const BARS_SCRIPT := "res://scripts/props/barred_passage.gd"
+## And the third, for the same reason: `docs/PUZZLES.md` §5.1's door.
+const SHORTCUT_GATE_SCRIPT := "res://scripts/props/shortcut_gate.gd"
 
 ## Grid steps, as (x, z) cells.
 const DIRS := {
@@ -1048,18 +1050,320 @@ func _place_deep_chest(id: StringName) -> void:
 # --- The two forks ------------------------------------------------------------
 
 ## GDD §5.3, sentence one: *the shortcut on floor N is opened by floor N's own
-## boss item, and skips floor N.* Both halves are one line: the key is
-## `FloorDb.shortcut_key`, and what is behind the door is the same `Stairs` every
-## other way down in the game uses, so "skips this floor" is `Run.level + 1` and
-## not a second descent path.
+## boss item, and skips floor N.* The second half is still one line -- what is
+## behind the door is the same `Stairs` every other way down in the game uses, so
+## "skips this floor" is `Run.level + 1` and not a second descent path.
+##
+## **The first half stopped being a line and became a puzzle** (`docs/PUZZLES.md`
+## §5.1). It was a `LockedDoor` keyed on `FloorDb.shortcut_key`, which is the
+## exact shape that document opens by refusing: *a door that opens because you own
+## item X is a check, not a puzzle.* Now the door is a `ShortcutGate` and the item
+## has to be **used** in front of it -- one atom of exactly tier N, one gesture,
+## and the door swings on it.
+##
+## Three things this shape does not share with §5.2's gate room, each of them a
+## sentence in §5.1:
+##
+## - **Exactly tier N, never "N or above"** (§1). `_shortcut_pool` is that word
+##   `exactly`; `PuzzleAtoms.pool()` is the wrong function here and would let a
+##   seed put the hookshot on floor 1's shortcut, delaying GDD §5.3's ninety
+##   seconds by two floors.
+## - **Not seed-driven.** §5.2's prefab is rolled because a replayed gate room
+##   should surprise; this one must NOT, because the whole promise being kept is
+##   that on your fifth run you are past this floor in ninety seconds, and a
+##   ninety-second route you have to read first is not one. The tier picks the
+##   prefab and nothing else does.
+## - **A straight solve, not a cycle.** You already own the item. The puzzle is
+##   the receipt, not the challenge -- one atom, in front of the door, done.
+##
+## Floor 4 keeps the `LockedDoor`, and that is §1 rather than an omission: its
+## shortcut takes the **Far Lantern**, which *"has no verb and never gets one --
+## it is the last door in the game and a pure lock, which is the correct shape for
+## a thing that ends Act I."* `_shortcut_pool` comes back empty for it and this
+## function falls through to what was always there.
 func _place_shortcut(id: StringName) -> void:
 	var p: Dictionary = placements[id]
 	var cell: Vector2i = p["cell"]
 	var key := FloorDb.shortcut_key(Run.level)
-	if _place_locked(p, "ShortcutDoor", key, "", StringName(
-			"shortcut_%d" % Run.level)) == null:
+	if key == &"":
 		return
-	_build_landing(_wall_spot(p), cell, "ShortcutLanding")
+	var spot := _wall_spot(p)
+	var tag := StringName("shortcut_%d" % Run.level)
+	var pool := _shortcut_pool()
+
+	var door: Node3D = null
+	if pool.is_empty():
+		# The Far Lantern's floor. See the class note above.
+		door = _place_locked(p, "ShortcutDoor", key, "", tag)
+		if door == null:
+			return
+	else:
+		door = _build_shortcut_gate(p, spot, tag)
+		if door == null or not _shortcut_prefab(rooms[cell]["node"], spot, tag,
+				pool[0]):
+			return
+
+	var landing := _build_landing(spot, cell, "ShortcutLanding")
+	_land_shortcut_rewards(landing, door)
+
+
+## The `ShortcutGate` itself, in the entrance room's blank wall.
+##
+## Loaded by PATH and never named, the same way `VAULT_SCRIPT` and `BARS_SCRIPT`
+## are: `ShortcutGate` is a `class_name` added in the same change as this call, so
+## it is not in the global script class cache until somebody runs `--import` and
+## naming it is a parse error that takes the whole floor down (`CLAUDE.md` §3).
+##
+## `mark_tier` is set BEFORE the node enters the tree, because `PuzzleGate._ready`
+## reads it to choose `key_item` and `LockedDoor._ready` carves the medallion off
+## that -- a tier assigned afterwards is a mark on a glyph already cut.
+func _build_shortcut_gate(p: Dictionary, spot: Dictionary,
+		tag: StringName) -> Node3D:
+	var script := load(SHORTCUT_GATE_SCRIPT) as GDScript
+	if script == null:
+		push_error("dungeon: %s failed to load" % SHORTCUT_GATE_SCRIPT)
+		return null
+	var root: Node3D = rooms[p["cell"]]["node"]
+	var gate: Node3D = script.new()
+	gate.name = "ShortcutDoor"
+	gate.set(&"puzzle_id", tag)
+	gate.set(&"mark_tier", _shortcut_tier())
+	# `destination` is the flag's identity (`ShortcutGate.flag_id`), and it is the
+	# SAME string the `LockedDoor` wrote before this card. A shortcut opened on a
+	# save made last week is still open.
+	gate.set(&"destination", tag)
+	gate.position = spot["pos"]
+	gate.rotation.y = float(spot["yaw"])
+	root.add_child(gate)
+	p["node"] = gate
+	return gate
+
+
+## **Exactly** tier N (`docs/PUZZLES.md` §1), and the emphasis is the design.
+##
+## Not `PuzzleAtoms.pool()`, which answers *at or below* and clamps to what the
+## player owns -- both of those are §5.2's rules and both are wrong here. This
+## shape's verb is the floor's own boss item and the player is expected to arrive
+## without it: the refusal ("THE EYE IS SHUT") is the door telling them what the
+## Warden is holding.
+##
+## Comes back **empty** for any floor whose tier is off §1's ladder, which is
+## floor 4 and the Long Descent -- see `_place_shortcut`.
+func _shortcut_pool() -> Array[StringName]:
+	var want := _shortcut_tier()
+	var out: Array[StringName] = []
+	if want <= PuzzleAtoms.T0 or want >= PuzzleAtoms.TIER_ITEM.size():
+		return out
+	for atom: StringName in PuzzleAtoms.all():
+		if PuzzleAtoms.tier(atom) == want and PuzzleAtoms.gates(atom):
+			out.append(atom)
+	return out
+
+
+## Floor N's shortcut is opened by floor N's verb, so the tier IS the level.
+## One line, for the same reason `FloorDb.shortcut_key` is one line.
+func _shortcut_tier() -> int:
+	return Run.level
+
+
+## The shortcut's prefabs (`docs/PUZZLES.md` §5.1), in tier order: `eye_high` is
+## T1, `pillar_brace` is T2, `ring_span` is T3. **Picked by tier, not by seed** --
+## see `_place_shortcut`, and note there is no `--shortcut-prefab=` twin of
+## `--gate-prefab=`. That flag exists because the gate room's pick IS a roll and a
+## director could otherwise only photograph its own seed's draw; here the floor
+## number is the pick, so `tools/directors/shortcut_puzzle.gd` rebuilds at levels
+## 1, 2, 3 and 4 and gets all four answers with no debug hook at all.
+##
+## There are three and not four. §1 gives floor 4's shortcut the **Far Lantern**,
+## which has no verb, so there is no T0 row to write -- and a T0 row written
+## anyway would be a prefab the generator can never pick and no director can ever
+## photograph. Three is under `docs/SCOPE.md` §1's ceiling, which is what a
+## ceiling is for.
+##
+## An `Array` of names rather than a `Dictionary` keyed on atom ids, for the
+## reason `CLAUDE.md` §3 gives: a `const` Dictionary holding another class's
+## constants is not a constant expression, and the error it throws names the
+## assignment rather than the lookup.
+const SHORTCUT_PREFABS: Array[StringName] = [
+	&"eye_high", &"pillar_brace", &"ring_span",
+]
+
+## How high the shortcut's eye sits. Above the sword's reach and below the
+## sconces, so the only thing in the kit that answers it is an arrow -- and the
+## same 2.05 m `tools/directors/convert_arrow.gd` stands its two eyes at, because
+## a shot the player has already learned to take should be the same shot.
+const EYE_Y := 2.05
+
+## How far a WALL-MOUNTED atom has to stand off the masonry to be reachable.
+##
+## **A flush atom renders perfectly and cannot be hit**, which is the worst shape
+## a bug can have here. `KitWall` collides with ONE box covering the slab and its
+## relief -- `scripts/kit/kit_wall.gd`: `depth = thickness + max(relief,
+## plinth_relief)` -- so the stone stands `plinth_relief` (0.26 m) proud of the
+## *visible* face over the whole height, not just along the plinth course it is
+## named for. `_wall_spot` hands back a point a further 0.05 m back into the
+## reveal, so the stone's front face is 0.31 m along `facing` from `spot["pos"]`.
+##
+## `EyeSwitch`'s own box reaches 0.20 m forward of its origin, so at the 0.12 m
+## this used to sit at, the plate ended a centimetre INSIDE the wall's collider
+## and the ray from the hero stopped on masonry. `shortcut_puzzle.gd` printed
+## exactly that -- a 3.40 m line of sight ending on `Room_0_0`'s wall body -- and
+## the beat read as "the arrow missed" when nothing had missed.
+##
+## At 0.55 the origin clears the stone by 0.24 m and the plate by 0.44 m. The
+## hook ring gets the same treatment for the same reason: its bracket has to
+## clear that stone before a chain can reach it, and a ring that only answers a
+## director calling `on_bitten()` directly is a ring nobody can shoot.
+const WALL_STANDOFF := 0.55
+
+
+func _shortcut_prefab(root: Node3D, spot: Dictionary, tag: StringName,
+		atom: StringName) -> bool:
+	var tier := PuzzleAtoms.tier(atom)
+	print("dungeon: shortcut prefab %s (T%d)"
+		% [SHORTCUT_PREFABS[clampi(tier - 1, 0, SHORTCUT_PREFABS.size() - 1)], tier])
+	# `if`, not `match`: a match pattern has to be a constant expression and
+	# another class's `const StringName` is not one (`CLAUDE.md` §3).
+	if atom == PuzzleAtoms.CRACKED_PILLAR:
+		return _shortcut_pillar_brace(root, spot, tag)
+	if atom == PuzzleAtoms.HOOK_RING:
+		return _shortcut_ring_span(root, spot, tag)
+	return _shortcut_eye_high(root, spot, tag)
+
+
+## T1, `eye_high` -- **the bow.** One eye set into the wall beside the door at
+## 2.05 m, which is above the sword's reach and below the sconces, so the only
+## thing in the kit that answers it is an arrow.
+##
+## The eye is built looking down its own -Z (`EyeSwitch._build` puts the pupil at
+## `z = -0.14`), and the door's `facing` points INTO the room, so `atan2(-f.x, -f.z)`
+## turns the node's forward onto `facing` and the eye looks at the player standing
+## in the room (`docs/CONTRACT.md` §2.5). The gate room's eye row does the opposite
+## turn because its eyes are on the FAR wall looking back.
+##
+## **The urn is §0 rule 2 and it is not optional**: *every puzzle room is solvable
+## from a cold start with an empty pouch, because the urns beside it hold exactly
+## what it needs.* A bow puzzle met with no arrows is a dead end. Its tag is its
+## own -- `PuzzleAtoms.gates(URN)` is false, so a gate would never adopt it, but a
+## flag keyed on a node NAME is one rename from being a different flag.
+func _shortcut_eye_high(root: Node3D, spot: Dictionary, tag: StringName) -> bool:
+	var facing: Vector3 = spot["facing"]
+	var along := along_of(float(spot["yaw"]))
+	var at: Vector3 = spot["pos"]
+	var eye := PuzzleAtoms.make(PuzzleAtoms.EYE_SWITCH, tag)
+	if eye == null:
+		return false
+	eye.name = "ShortcutEye"
+	eye.position = at + along * 2.3 + facing * WALL_STANDOFF \
+		+ Vector3(0.0, EYE_Y, 0.0)
+	eye.rotation.y = atan2(-facing.x, -facing.z)
+	root.add_child(eye)
+
+	var pot := PuzzleAtoms.make(PuzzleAtoms.URN,
+		StringName("%s_pot" % tag))
+	if pot != null:
+		pot.name = "ShortcutUrn"
+		pot.position = at + along * 2.3 + facing * 1.5
+		root.add_child(pot)
+	return true
+
+
+## T2, `pillar_brace` -- **a burst.** A cracked pillar standing in the door's own
+## mouth, holding it shut with its body.
+##
+## `CrackedPillar`'s class note says this is what it is for: *"Not a door -- a
+## wall. §3's third combinator is the pillar that holds a slab over the way on,
+## and the fall is the opening."* It is on `K.L_WORLD` and not `L_INTERACT`, so it
+## blocks the way without stealing the door's prompt, and `on_solved()` frees the
+## shaft -- the opening is the fall, with no second thing to press.
+##
+## `SHAFT_R + 0.85` out from the face: clear of the leaves, which swing INTO the
+## room (`LockedDoor.OPEN_DEG`), and still inside the 2.4 m doorway, so it reads
+## as bracing the door rather than standing near it.
+func _shortcut_pillar_brace(root: Node3D, spot: Dictionary,
+		tag: StringName) -> bool:
+	var facing: Vector3 = spot["facing"]
+	var pillar := PuzzleAtoms.make(PuzzleAtoms.CRACKED_PILLAR, tag)
+	if pillar == null:
+		return false
+	pillar.name = "ShortcutPillar"
+	var out: float = pillar.get_script().get_script_constant_map() \
+		.get("SHAFT_R", 0.42) + 0.85
+	pillar.position = spot["pos"] + facing * out
+	root.add_child(pillar)
+	return true
+
+
+## T3, `ring_span` -- **the hookshot.** One ring bolted above the lintel, where
+## nothing that is not a chain reaches it.
+##
+## `HookRing` builds along its own **+Z** (the bracket runs out from the wall), so
+## this is `atan2(f.x, f.z)` -- the opposite turn from the eye above, and the two
+## sitting three functions apart is deliberate: they are the two conventions in the
+## kit and the one thing this project has paid for three times is assuming which
+## way a prop faces (`CLAUDE.md` §4).
+##
+## `K.DOOR_H + 0.6` puts it at 3.8 m, over the door and well under `K.CEIL_ROOM`.
+## `HookRing` widens its own `snap_radius` to 2.2 m for exactly this shot.
+func _shortcut_ring_span(root: Node3D, spot: Dictionary,
+		tag: StringName) -> bool:
+	var facing: Vector3 = spot["facing"]
+	var ring := PuzzleAtoms.make(PuzzleAtoms.HOOK_RING, tag)
+	if ring == null:
+		return false
+	ring.name = "ShortcutRing"
+	ring.position = spot["pos"] + facing * WALL_STANDOFF \
+		+ Vector3(0.0, K.DOOR_H + 0.6, 0.0)
+	ring.rotation.y = atan2(facing.x, facing.z)
+	root.add_child(ring)
+	return true
+
+
+## §5.1's other two rewards, standing in the landing behind the door.
+##
+## `docs/PUZZLES.md` §5.2's amendment is a rule for all three shapes, not a prop
+## for one of them: *a solved puzzle drops something you can carry out.* So the
+## shortcut pays **the way down, +1 Echo and a chest** -- the same three columns
+## §5.2's table gives it -- and both of the new two land on `opened`.
+##
+## Behind the door rather than in front of it, and flanking the stair rather than
+## beside the atom: the reward for a shortcut is the walk you did not take, and a
+## chest on the near side would be a chest the player loots and then leaves by the
+## way they came.
+##
+## The already-open case is not a nicety. `ShortcutGate` keeps `LockedDoor`'s
+## PERMANENT flag, so on every run after the one that solved it the door comes up
+## posed open and `opened` never fires -- and §6's table pays the Echo for *taking*
+## the shortcut, every run, not for having once solved it.
+func _land_shortcut_rewards(landing: Node3D, door: Node3D) -> void:
+	if landing == null or door == null:
+		return
+	var back := LAND_STUB + LAND_SIZE
+
+	var chest := Chest.new()
+	chest.name = "ShortcutChest"
+	chest.picks = Prog.chest_picks(Run.level, false)
+	chest.position = Vector3(-3.0, 0.0, back - 2.3)
+	# Facing back toward the mouth, so the fan of motes lands in the floor between
+	# the chest and the stair instead of in the back wall.
+	chest.rotation.y = PI
+	chest.visible = false
+	chest.enabled = false
+	landing.add_child(chest)
+
+	var stone: Node3D = _make_stone(&"shortcut")
+	if stone != null:
+		stone.position = Vector3(3.0, 0.0, back - 2.5)
+		# Turned back at the stair, which is where the player is standing when they
+		# decide. `SoundingStone` spreads its three tones across its own -Z.
+		stone.rotation.y = atan2(stone.position.x, stone.position.z - LAND_STUB)
+		landing.add_child(stone)
+		door.connect(&"opened", func(_where: StringName) -> void: stone.call(&"offer"))
+	door.connect(&"opened", func(_where: StringName) -> void: _land_prize(chest))
+	if bool(door.call(&"is_open")):
+		_land_prize(chest)
+		if stone != null:
+			stone.call(&"offer")
 
 
 ## GDD §5.3, sentence two: *the vault on floor N is opened by floor N+1's boss
@@ -1717,7 +2021,12 @@ func _place_locked(p: Dictionary, node_name: String, key: StringName,
 ## Built as a child of the Dungeon rather than of the room, with its local +Z
 ## pointing out through the wall, so every piece below is authored once in
 ## door-space instead of four times with different signs.
-func _build_landing(spot: Dictionary, cell: Vector2i, node_name: String) -> void:
+##
+## Returns that root, because §5.1's chest and sounding stone stand in the
+## shortcut's landing and want to be authored in the same door-space everything
+## else in here is (`_land_shortcut_rewards`). `_place_boss` ignores it.
+func _build_landing(spot: Dictionary, cell: Vector2i,
+		node_name: String) -> Node3D:
 	var root := Node3D.new()
 	root.name = node_name
 	root.position = centre_of(cell) + spot["pos"]
@@ -1771,6 +2080,7 @@ func _build_landing(spot: Dictionary, cell: Vector2i, node_name: String) -> void
 	down.name = "Down"
 	down.position = Vector3(0.0, 0.0, mid + 0.6)
 	root.add_child(down)
+	return root
 
 
 func _slab(root: Node3D, size: Vector2, at: Vector3, ceiling: float) -> void:
