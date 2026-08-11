@@ -740,8 +740,11 @@ lives:
 - **Ballast's window rides in `Game.draughts`** under `Game.BALLAST_ID`. That
   dictionary is the game's one table of "true now, not shortly", with one tick
   and one signal; a second timer for a working would be a second `_tick_draughts`
-  to forget to call. It earns no slot on the HUD's draught row, which filters on
-  `PotionDb.IDS` — see the open half below.
+  to forget to call. **It has the third slot on the HUD's draught row** (#39):
+  that row is derived from `Game.LASTING_IDS` — everything that rides in
+  `draughts` and therefore everything with a clock — and not from `PotionDb.IDS`,
+  which is what used to keep a non-potion out of it. Storage is still one table;
+  what changed is only who reads it.
 - **Ownership is asked once**, in `Game.armament_owned()`, which routes the two
   Verses to `RelicDb.knows_working()`. `has()` would answer no forever: a Verse is
   read, not picked up.
@@ -755,11 +758,14 @@ six (`r_35_*`), and `r_42`–`r_44` are the chain warded, held through a blow an
 then broken by the next one, `r_52`–`r_54` the burned stack and the same blow
 costing less and then full price again.
 
-**What is still open, and it is small**: the Ballast window has no instrument.
-The player reads it off the health bar and the missing stack, which is honest but
-late. `Hud._draught_slots()` derives its row from `PotionDb.IDS`, so giving the
-window a slot means teaching that row about a non-potion — worth doing, and not
-worth forking the row for inside this card.
+**~~What is still open, and it is small~~: closed by #39.** The window has an
+instrument: the third slot on the HUD's draught row, a weight mark in ARCANE and
+four tiles that go out one at a time over the eight seconds. The row is derived
+from `Game.LASTING_IDS` rather than from `PotionDb.IDS`, so teaching it about a
+non-potion took no fork — see `docs/HUD_PLAN.md` §15.16, which also records that
+the seam §15.1 promised this would slot into did not exist as described.
+Photographed running, half spent and **absent** in `hud_lookdev.gd`'s
+`h_17`–`h_20`.
 
 ### D6 — GDD's status paragraph is stale
 

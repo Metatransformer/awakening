@@ -689,11 +689,11 @@ time in the middle of a fight.
 
 ### 5.1e The draught row — slots, not a meter
 
-The last row of the pole, and the only one that is **not a bar**. Two slots
-today, one per draught that has a clock, in `PotionDb.IDS` order and fixed by
-kind forever. Each slot is a VOID-hairlined ASH@60% track holding a **mark** on a
-VOID chip — identity, a shape — and **four tiles** that go out one at a time —
-time, a count.
+The last row of the pole, and the only one that is **not a bar**. Three slots
+today, one per *effect* that has a clock — `Game.LASTING_IDS`, and the third of
+them is not a draught at all — fixed by kind forever. Each slot is a
+VOID-hairlined ASH@60% track holding a **mark** on a VOID chip — identity, a
+shape — and **four tiles** that go out one at a time — time, a count.
 
 Three rules, each of which replaced something that had shipped:
 
@@ -714,16 +714,26 @@ Three rules, each of which replaced something that had shipped:
    that empties in steps is visibly not one of the bars above it.
 
 **Heart Draught has no slot**, because `PotionDb.apply` sends it to `Game.heal()`
-and never to `Game.start_draught` — a third slot would be a container that can
-never fill. The row is derived from which draughts have a clock, so it grows by a
-slot the day a third one is brewed, with no edit to `hud.gd`.
+and never to `Game.start_draught` — a slot for it would be a container that can
+never fill.
+
+**The Ballast window does** (#39), and it is not a potion: eight seconds of soak
+bought with a bag stack, which before this row grew was legible only as a health
+bar that did not move. The row is derived from `Game.LASTING_IDS` — everything
+that has a clock — so membership grows for free; the **mark and the hue do not**,
+and `docs/HUD_PLAN.md` §15.16 records that the older claim of "a slot the day a
+third one is brewed, with no edit to `hud.gd`" was never true of either half.
+
+Each slot is divided by its **own** span (`Game.draught_span`): a draught runs 45
+seconds and Ballast eight, and one shared divisor would open Ballast's slot at one
+tile of four.
 
 | | |
 |---|---|
 | Origin | x `0.031` (40), top y heat bottom + 4 px (688); **heat's own slot (678) in the garrison, where heat is not drawn** |
-| Row | `0.44 ×` health width (151 px) × 6 px, slots split evenly with a 4 px gap |
-| Mark | 6 × 6 chip, VOID @85%, shape inset 1 px: ■ Ironhide (a plate), ▲ Emberblood (a point), ✚ reserved for a Heart Draught given a clock |
-| Tiles | 4 per slot, 2 px apart; lit in the draught's tint, spent as a VOID @30% notch |
+| Row | `0.44 ×` health width (151 px) × 6 px, slots split evenly with a 4 px gap — 47 px each at three |
+| Mark | 6 × 6 chip, VOID @85%, shape inset 1 px: ■ Ironhide (a plate), ▲ Emberblood (a point), ▄ Ballast (a weight, sitting on the floor of the chip, in ARCANE), ✚ the fallback for the next one |
+| Tiles | 4 per slot, 2 px apart (8 px wide at three slots); lit in the effect's tint, spent as a VOID @30% notch |
 
 ### 5.2 The hands — left and right, beside the item
 

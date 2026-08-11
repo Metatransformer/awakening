@@ -63,17 +63,27 @@ func run(rig) -> void:
 	await rig.wait_frames(6)
 	await _shot(rig, out.path_join("%s_02_hide.png" % tag), "%s_02_hide" % tag)
 
-	# 2 draughts: the row full. This is the widest the row ever gets and it is the
-	# frame the safe-margin claim is made against.
+	# The row full — all THREE slots, because the third one is the Ballast window
+	# (#39) and it is not a draught. The row is the same width whatever is in it
+	# (`Pal.DRAUGHT_RATIO` off the health bar), so the safe-margin claim is still
+	# made against this frame; what three slots changes is the slot, from 73 px to
+	# 47, and this is the frame that says whether a 47 px slot still reads as a
+	# mark and four countable tiles.
 	Game.start_draught(&"emberblood_draught", K.DRAUGHT_TIME)
+	Game.start_draught(Game.BALLAST_ID, K.BALLAST_TIME)
 	await rig.wait_frames(6)
 	await _shot(rig, out.path_join("%s_03_both.png" % tag), "%s_03_both" % tag)
 
 	# A draught nearly out: the tiles have to have gone out one at a time, and the
 	# last one has to still be lit. `ceil` in `_draw_draughts` is what guarantees
 	# the second half of that.
+	#
+	# Three different fills, one per slot, and Ballast's is SET rather than left
+	# running: it is an 8 s window against a draught's 45, so a frame that let it
+	# tick would photograph a different number of tiles on every machine.
 	Game.draughts[&"emberblood_draught"] = K.DRAUGHT_TIME * 0.2
 	Game.draughts[&"ironhide_draught"] = K.DRAUGHT_TIME * 0.6
+	Game.draughts[Game.BALLAST_ID] = K.BALLAST_TIME * 0.4
 	await rig.wait_frames(4)
 	await _shot(rig, out.path_join("%s_04_expiring.png" % tag), "%s_04_expiring" % tag)
 

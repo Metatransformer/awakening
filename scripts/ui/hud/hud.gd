@@ -2105,16 +2105,22 @@ func _draw_bottle_glyph(s: Vector2, r: Rect2, potion: StringName) -> void:
 const DRAUGHT_TILES := 4
 
 
-## The row's slots, left to right, fixed forever. A draught earns a slot by having
-## a duration, and `Game` already names the two that do — reading them from there
-## rather than listing them here is the whole of decision 10's argument applied to
-## a smaller table: a second copy is the one that goes stale.
+## The row's slots, left to right. A thing earns a slot by having a CLOCK, and
+## `Game.LASTING_IDS` is the list of things that have one — this function is a
+## rename of that list and nothing else, which is decision 10's argument applied
+## to a smaller table.
+##
+## **It used to be a filter, and the filter is why #39 happened.** It walked
+## `PotionDb.IDS` and kept `id == Game.DRAUGHT_PLATE_ID or id ==
+## Game.DRAUGHT_EDGE_ID`, under a docstring — and a HUD_PLAN §15.1 entry — saying
+## the row would grow by a slot the day a third lasting effect existed with no
+## edit to this file. It could not have. The two names in that condition ARE the
+## row's membership list, written here, however respectably they were spelled: a
+## third brewed draught would have needed a third clause, and Ballast — which is
+## not a potion and is not in `PotionDb.IDS` — could not have got in through it at
+## all. See docs/HUD_PLAN.md §15.16.
 func _draught_slots() -> Array[StringName]:
-	var out: Array[StringName] = []
-	for id in PotionDb.IDS:
-		if id == Game.DRAUGHT_PLATE_ID or id == Game.DRAUGHT_EDGE_ID:
-			out.append(id)
-	return out
+	return Game.LASTING_IDS
 
 
 ## The lasting draughts, as a fixed row of slots at the foot of the "you" pole.
@@ -2155,17 +2161,27 @@ func _draught_slots() -> Array[StringName]:
 ## Four discrete steps is exactly what §7.4 permits where it bans a lerp, and a
 ## row that empties in steps is visibly not one of the bars above it.
 ##
-## ## There are two slots, and the plan asked for three
+## ## There are three slots, and none of them is the one the plan asked for
 ##
 ## HUD_PLAN decision 21 specifies *"slot 0 heart, slot 1 ironhide, slot 2
 ## emberblood, in `PotionDb.IDS` order"*. **Heart Draught has no clock.**
 ## `PotionDb.apply` sends it to `Game.heal()` and never to `Game.start_draught`,
 ## so `Game.draught_left(&"heart_draught")` is 0.0 for the entire life of the
 ## game and slot 0 would be a container that can never fill — a worse lie than the
-## empty row it was drawn to replace. So the row is every draught that HAS a
-## clock, in `PotionDb.IDS` order: two today, three the day a third lasting
-## draught is brewed, with no edit to this file. Recorded in docs/HUD_PLAN.md
-## §15 rather than diverged from silently.
+## empty row it was drawn to replace.
+##
+## So the row is every effect that HAS a clock, and the third one is not a
+## draught at all: **the Ballast-Verse** (#39), which soaks three quarters for
+## eight seconds and is paid for with a bag stack. Before this it was invisible —
+## the player inferred a live ward from the health bar not moving, which says a
+## ward is up only after something has already hit you and never says how much is
+## left. An eight-second window with that price is exactly the thing a clock is
+## for.
+##
+## The row is `Game.LASTING_IDS` and the geometry divides by it, so the slots
+## narrow from 73 px to 47 px at three. That is the cost, it was paid on purpose,
+## and the tiles stay 8 px wide — countable, which is the whole requirement. See
+## docs/HUD_PLAN.md §15.16 for what joining this row cost and what it did not.
 func _draw_draughts(s: Vector2) -> void:
 	var slots := _draught_slots()
 	if slots.is_empty():
@@ -2193,10 +2209,22 @@ func _draw_draughts(s: Vector2) -> void:
 	for i in slots.size():
 		var id: StringName = slots[i]
 		var rect := Rect2(x + float(i) * (slot_w + gap), y, slot_w, h)
-		var t01: float = clampf(Game.draught_left(id) / K.DRAUGHT_TIME, 0.0, 1.0)
+		# **Each slot against its OWN span**, not against a shared `K.DRAUGHT_TIME`.
+		# Ballast is 8 s and a draught is 45; fed through one divisor the Ballast
+		# slot would open at 8/45 — one tile of four, on a window running at full
+		# strength — and be dark two seconds in. See `Game.draught_span`.
+		var t01: float = clampf(
+			Game.draught_left(id) / maxf(Game.draught_span(id), 0.001), 0.0, 1.0)
 		# An unlit slot's mark is ASH, not a dim tint: "you are not running this"
 		# and "you are nearly out of this" must not be the same picture.
-		var tint: Color = PotionDb.tint_of(id) if t01 > 0.0 else Color(Pal.ASH, 0.9)
+		var tint: Color = _draught_tint(id) if t01 > 0.0 else Color(Pal.ASH, 0.9)
+		# The slot, so a director can ask what the row actually drew rather than
+		# what `Game` says is running — and, below, the LIT tiles one key each.
+		# Those keys are the clock as it reached the screen: none of them means an
+		# empty container, which is the state this row spends most of a run in and
+		# the one #39 insisted be proved on its own.
+		var slot_key := StringName("draught_%s" % id)
+		_note(slot_key, &"draughts", rect.grow(line))
 
 		# The hairline-over-track construction the rest of the pole uses, kept —
 		# and it is doing MORE work here than it does up there. An empty ASH track
@@ -2225,6 +2253,8 @@ func _draw_draughts(s: Vector2) -> void:
 			/ float(DRAUGHT_TILES)
 		for t in DRAUGHT_TILES:
 			var tile := Rect2(tx + float(t) * (tw + tgap), rect.position.y, tw, h)
+			if t < lit:
+				_note(StringName("draught_%s_lit_%d" % [id, t]), slot_key, tile)
 			# A spent tile is a notch cut INTO the ash track rather than a paler
 			# tile drawn on top of it, so the row reads as something emptying
 			# instead of as something greying out. LIGHT, at 0.3: the first render
@@ -2234,10 +2264,32 @@ func _draw_draughts(s: Vector2) -> void:
 			_canvas.draw_rect(tile, tint if t < lit else Color(Pal.VOID, 0.3))
 
 
-## A draught's identity, as a shape. Two of these are drawn today and the third is
-## written because the row grows by a slot the moment a third draught gets a clock
-## (see `_draught_slots`) and a mark that arrives with it is one fewer thing to
-## remember.
+## A slot's lit colour. `PotionDb.tint_of` for the two that come out of a bottle,
+## and one line here for the one that does not.
+##
+## **This function is the honest half of #39.** `_draught_slots` now derives
+## membership from `Game.LASTING_IDS` with no per-id knowledge at all, so a fourth
+## lasting effect joins the row for free — but it cannot be DRAWN for free, and
+## this is where that shows. A slot needs a hue and a mark, both are decisions
+## nobody outside this file is qualified to make, and `PotionDb` is the wrong
+## place to keep a colour for something that is not in a bottle. HUD_PLAN §15.1's
+## claim that the row grows "with no edit to `hud.gd`" was wrong about this even
+## before Ballast existed; §15.16 records it.
+##
+## ARCANE, out of the four saturated hues the palette has: CYAN is reserved for
+## the way out and GOLD for money (STYLEGUIDE §2), COBALT is the magic bar
+## directly above this row AND Ironhide's own tint two slots to the left, and MOSS
+## against Emberblood's orange next door is the one deutan-confusable pair the row
+## could still have made. Purple is also the only hue on the pole that is not a
+## vital, which is right for the one slot that is not a potion.
+func _draught_tint(id: StringName) -> Color:
+	return Pal.ARCANE if id == Game.BALLAST_ID else PotionDb.tint_of(id)
+
+
+## A slot's identity, as a shape. Three are drawn today and the fourth case is the
+## fallback, kept because `_draught_slots` will hand this function any id that
+## `Game.LASTING_IDS` grows by and a mark that is already there is one fewer thing
+## to remember.
 ##
 ## Shapes rather than hues, because the hues are already spoken for by the bars
 ## directly above this row — see the note on `_draw_draughts`. They are chosen for
@@ -2262,6 +2314,15 @@ func _draw_draught_mark(s: Vector2, box: Rect2, id: StringName, col: Color) -> v
 				Vector2(r.end.x, r.end.y),
 				Vector2(r.position.x, r.end.y),
 			]), col)
+		&"ballast":
+			# A weight, sitting on the floor of the chip. The only mark in the row
+			# whose mass is off-centre, which is what separates it from Ironhide's
+			# plate at six pixels — a plate fills, this one sinks — and the honest
+			# reduction of a working whose whole idea is that you put something
+			# heavy on. Half height rather than a third: at 6 px a third is 2 px
+			# and 2 px of ARCANE on a VOID chip is a smudge, not a shape.
+			_canvas.draw_rect(Rect2(r.position.x, r.get_center().y,
+				r.size.x, r.size.y * 0.5), col)
 		_:
 			# The cross, for a Heart Draught that has been given a clock. Two
 			# rects, and the only mark in the row with a hole in its silhouette.

@@ -1323,10 +1323,19 @@ worse lie than the empty row decision 21 was written to replace, and one that
 would be on screen permanently.
 
 **Built:** the row is every draught that *has* a clock, in `PotionDb.IDS` order.
-Two today. `Hud._draught_slots` derives it from `Game.DRAUGHT_PLATE_ID` /
+Two today. ~~`Hud._draught_slots` derives it from `Game.DRAUGHT_PLATE_ID` /
 `Game.DRAUGHT_EDGE_ID` rather than listing it, so the row grows by a slot the day
-a third lasting draught is brewed with no edit to `hud.gd` — decision 10's
+a third lasting draught is brewed with no edit to `hud.gd`~~ — decision 10's
 argument at a smaller scale.
+
+> **The struck sentence was false when it was written — §15.16, card #39.** What
+> stood under it was a loop over `PotionDb.IDS` keeping
+> `id == DRAUGHT_PLATE_ID or id == DRAUGHT_EDGE_ID`: the two names came from
+> `Game`, but the `or` was the membership list, and it would have needed a third
+> clause for the third brewed draught this paragraph promises to admit for free.
+> The row **is** three slots now — Ballast joined it — and it took `hud.gd`
+> edits, one of which (the slot's mark and hue) no seam could ever have avoided.
+> The rest of this entry stands: heart still has no clock and still has no slot.
 
 Decision 21's own reasoning survives intact and one clause of §13.3's does not.
 §13.3 argued that fixed slots fix the heart-vs-emberblood deutan convergence by
@@ -1924,3 +1933,124 @@ ok HUDCONTRAST common/rare luminance only 0.1% — carried by weight (2, 0) vs (
 
 A reviewer should have to read that. It is the sentence that says what deleting the
 ladder would cost.
+
+## 15.16 §15.1's seam did not exist, and the row grew anyway — card #39
+
+**§15.1 claims** the draught row *"derives it from `Game.DRAUGHT_PLATE_ID` /
+`Game.DRAUGHT_EDGE_ID` rather than listing it, so the row grows by a slot the day
+a third lasting draught is brewed with no edit to `hud.gd`"*. Card #39 asked
+whether the Ballast window — `K.BALLAST_SOAK` for `K.BALLAST_TIME`, bought with a
+bag stack, and until now invisible — could join the row through that seam. It was
+asked as a question and it is answered here as a finding, because **the seam was
+not there**. The row grew, but nothing that was written down is why.
+
+### What was actually in the file
+
+```gdscript
+func _draught_slots() -> Array[StringName]:
+    var out: Array[StringName] = []
+    for id in PotionDb.IDS:
+        if id == Game.DRAUGHT_PLATE_ID or id == Game.DRAUGHT_EDGE_ID:
+            out.append(id)
+    return out
+```
+
+That is not a derivation, it is **a membership list spelled in two constants**.
+The names came from `Game`, which is the part §15.1 was proud of and the part
+that never mattered: what decides who is in the row is the `or`. Three ways it
+fails the claim, in increasing order of how much they cost:
+
+1. **A third brewed draught needs a third clause.** The case §15.1 describes by
+   name — "the day a third lasting draught is brewed" — requires an edit to
+   `hud.gd`, because the new id would sit in `PotionDb.IDS` and be filtered
+   straight back out.
+2. **Ballast cannot get in at all.** It is not brewed, not bottled, not a row in
+   `PotionDb`, and never will be (`Game.BALLAST_ID`'s own note says so). The loop
+   walks `PotionDb.IDS`; there is no clause that could have admitted it.
+3. **Even with membership solved, a slot cannot be *drawn* for free.** A slot
+   needs a mark, a lit hue, and a full duration to divide by. All three are
+   per-effect decisions and two of them live in `hud.gd` by right. "No edit to
+   `hud.gd`" was never available for any new slot, potion or not.
+
+### What was built
+
+- **`Game.LASTING_IDS`** — the ordered list of everything that rides in
+  `Game.draughts`, which is to say everything with a clock.
+  `Hud._draught_slots()` is now a rename of that list and holds no opinion about
+  who is in it. This is the seam §15.1 believed it had.
+- **`Game.draught_span(id)`** — the denominator. The row used to divide every
+  slot by `K.DRAUGHT_TIME` flat; Ballast's window is 8 s against a draught's 45,
+  so through the old divisor its slot would have opened at **one tile of four on
+  a window running at full strength** and gone dark two seconds in. A function
+  over the `K` constants rather than a `{id: seconds}` table, and deliberately
+  not stored beside the running window: #39's brief is that `Game.draughts`
+  stays the one table of what is running, and a remembered "started at" is a
+  second timer table wearing a hat.
+- **`Hud._draught_tint(id)`** — one line for the one slot that is not in a
+  bottle. `Pal.ARCANE`: CYAN is reserved for the way out and GOLD for money
+  (STYLEGUIDE §2), COBALT is the magic bar directly above this row *and*
+  Ironhide's own tint two slots left, and MOSS against Emberblood's orange next
+  door is the one deutan-confusable pair the row could still have made.
+- **A weight mark** — a bar sitting on the floor of the chip, the only mark in
+  the row whose mass is off-centre. A plate fills, a point has the diagonal, this
+  one sinks.
+
+**Storage did not move.** The window still rides in `Game.draughts` under
+`Game.BALLAST_ID`, which is what `f9c8604` chose and what #39 said not to fork.
+The whole change is on the reading side.
+
+### The cost, measured
+
+Three slots split the same 151 px row, so a slot goes from **73 px to 47 px** and
+its four tiles from 15 px to **8 px** wide with 2 px between them. The row's outer
+rectangle is unchanged — it is `Pal.HEALTH_W × DRAUGHT_RATIO` whatever is in it —
+so every safe-margin and collision claim ever made against this row still holds
+of the same pixels, and `_hud_layout` reports `layout_fails=0` with the row at
+three in both scenes.
+
+### The negative case, and a disagreement worth naming
+
+#39 says *"a row that is always drawn is not an instrument"* and asks for the
+window's absence as its own proved case. `_draw_draughts` says the opposite in as
+many words — *"it is drawn when it is empty"*, because a player who meets an
+instrument for the first time in the moment it matters has no attention to spare
+for learning it.
+
+Both are right about different objects. **The container is permanent; the clock
+is not.** An idle slot is a VOID-hairlined ash track with an ASH mark and four
+unlit notches — "you own this dial and it is not running". A live one is an
+ARCANE mark and tiles that go out one at a time. What #39 is refusing is a
+readout that looks the same whether or not you have anything, and this row does
+not: the assertion in `hud_lookdev.gd` is that the Ballast slot publishes **zero**
+`draught_ballast_lit_*` rects when the window is down and four when it is up.
+
+That assertion reads `Hud.layout_rects()` and never `Game.draught_left`.
+`draught_left` is the *input* the HUD is supposed to be drawing; it would report a
+healthy window on a HUD that drew nothing at all, which is precisely the state
+#39 was filed about — and the shape of assertion #52 was closed on and reopened
+for.
+
+### The frames
+
+`hud_lookdev.gd`, one run, 1280×720 at 1:1 (no supersample — #35, and so §15.9's
+caveat does not apply to these four):
+
+| Frame | Lit tiles | Left | ARCANE px in the row band |
+|---|---|---|---|
+| `h_17_ballast_off` | 0 | 0.00 s | **0** |
+| `h_18_ballast_full` | 4 | 7.89 s | 206 |
+| `h_19_ballast_late` | 1 | 1.89 s | 56 |
+| `h_20_ballast_over` | 0 | 0.00 s | **0** |
+
+`h_18` and `h_19` are the same window in the same run, which is what makes the
+clock's movement a photograph rather than two states of two different runs.
+`h_20` is waited on the ERASE and then repainted: `Game._tick_draughts` emits
+`draught_changed(id, 0.0)`, which wakes the HUD for one more paint, and without
+that a HUD that simply stopped redrawing would leave a lit slot on screen forever.
+A stale frame and a correct one look identical in a screenshot.
+
+`hud_pole.gd`'s `g_03_both` and `g_04_expiring` carry the row at three slots in
+the **garrison**, where it is drawn one row higher (heat is not drawn) — the row
+index that put the draughts through the magic bar twice, §11. `g_04` is the
+frame worth looking at: Ironhide at 3/4 blue, Emberblood at 1/4 orange, Ballast at
+2/4 purple, three marks and three fills in 151 px.

@@ -51,6 +51,42 @@ func _one_numeral(tag: String, want: StringName) -> int:
 	return 1
 
 
+## How many LIT tiles the Ballast slot published on the frame just captured, and
+## whether that is the reading the beat expected.
+##
+## `Hud._draw_draughts` notes each lit tile as `draught_ballast_lit_<t>` under its
+## own slot, so these keys are the clock as it reached the SCREEN — not
+## `Game.draught_left`, which is the thing the HUD is supposed to be drawing and
+## would report a running window whether or not a single pixel of it was drawn.
+## That distinction is the whole of #39: the window already worked and nothing
+## said so.
+##
+## `want < 0` means "any number of tiles, but the slot exists" — used where the
+## exact count is a race against the harness's frame rate rather than a claim.
+func _ballast_tiles(tag: String, want: int) -> int:
+	var layout: Dictionary = Hud.layout_rects()
+	var slot := StringName("draught_%s" % Game.BALLAST_ID)
+	var lit := 0
+	for k: StringName in layout.keys():
+		if String(k).begins_with("draught_%s_lit_" % Game.BALLAST_ID):
+			lit += 1
+	# The container must be there in EVERY frame, lit or not. "It is drawn when it
+	# is empty" is `_draw_draughts`'s own rule and the reason a player has met this
+	# instrument before the first time it matters — so a beat that only ever
+	# checked the lit tiles would pass on a HUD that drew the row solely while the
+	# window was up, which is the version that teaches nobody.
+	if not layout.has(slot):
+		print("HUD FAIL %s: no Ballast slot in the row at all (%d lit)" % [tag, lit])
+		return 1
+	if want >= 0 and lit != want:
+		print("HUD FAIL %s: Ballast slot drew %d lit tile(s), expected %d (%.2f s left)"
+			% [tag, lit, want, Game.draught_left(Game.BALLAST_ID)])
+		return 1
+	print("  ok   HUDBALLAST %s: slot drawn, %d/%d tiles lit, %.2f s left"
+		% [tag, lit, Hud.DRAUGHT_TILES, Game.draught_left(Game.BALLAST_ID)])
+	return 0
+
+
 func run(rig) -> void:
 	var out: String = rig.arg("out", "/tmp/hd/x.png").get_base_dir()
 
@@ -343,6 +379,65 @@ func run(rig) -> void:
 			Bus.hero_struck.emit(world)
 			await _shot(rig, out.path_join("h_12_arc_%s.png" % name),
 				"h_12_arc_%s" % name)
+
+	# 10. THE BALLAST WINDOW — card #39, and it is three frames because the card
+	#     asks for three and the third is the one that gets skipped.
+	#
+	#     Ballast soaks three quarters for eight seconds and is paid for with a bag
+	#     stack; until now nothing on the HUD said it was running, so the player
+	#     read a live ward off the health bar not moving — which only speaks after
+	#     something has already hit you, and never says how long is left.
+	#
+	#     **Driven through `Game.start_draught`, which is the one call
+	#     `HeroRanged._cast_ballast` makes to raise this window** (its other three
+	#     lines are the burn and the charge). The cast itself is proven in
+	#     `relic_donate.gd` K21–K25, on the real ring, in a scene with a bag to
+	#     burn; reproducing it here would mean granting the working, faking the
+	#     alchemist's reading, and burning the T3 bag three beats above out from
+	#     under the frames that need it. This director's subject is the pixels.
+	#
+	#     The assertions read `Hud.layout_rects()`, never `Game.draught_left` —
+	#     `draught_left` is the input the HUD is supposed to be drawing and would
+	#     report a healthy window on a HUD that drew nothing at all, which is the
+	#     exact state #39 was filed about and the shape of assertion #52 closed on.
+	_fails += _ballast_tiles("h_12_arc_left (before any cast)", 0)
+	await _shot(rig, out.path_join("h_17_ballast_off.png"), "h_17_ballast_off")
+	_fails += _ballast_tiles("h_17_ballast_off", 0)
+
+	Game.start_draught(Game.BALLAST_ID, K.BALLAST_TIME)
+	await rig.wait_frames(2)
+	await _shot(rig, out.path_join("h_18_ballast_full.png"), "h_18_ballast_full")
+	_fails += _ballast_tiles("h_18_ballast_full", Hud.DRAUGHT_TILES)
+
+	# The SAME window, most of the way through. Waited on the WINDOW rather than on
+	# a frame count or a sleep: `wait_frames` is the harness's clock and this is the
+	# game's, and the whole claim of this pair of frames is that the clock moved
+	# between them. `lit = ceil(t01 * 4)`, so ANY remainder in (0, 2.0 s] is one
+	# tile: waiting for 1.92 s left puts the reading a whole tick inside that band
+	# at the top and the band runs to zero at the bottom, so neither a slow tick
+	# nor a slow capture can turn this frame into a 2 or a 0.
+	var moved: bool = await rig.until(func() -> bool:
+		return Game.draught_left(Game.BALLAST_ID) < K.BALLAST_TIME * 0.24,
+		K.BALLAST_TIME + 2.0)
+	if not moved:
+		print("HUD FAIL the Ballast window never drained — h_19 proves nothing")
+		_fails += 1
+	await _shot(rig, out.path_join("h_19_ballast_late.png"), "h_19_ballast_late")
+	_fails += _ballast_tiles("h_19_ballast_late", 1)
+
+	# And gone. `Game._tick_draughts` erases the id and emits `draught_changed`,
+	# which wakes the HUD for one more paint — so an expired window is a repainted
+	# empty container and not a stale one left on screen by a HUD that stopped
+	# redrawing. Those two look identical in a screenshot and only one of them is
+	# correct, which is why this waits on the erase and then repaints twice.
+	var over: bool = await rig.until(func() -> bool:
+		return Game.draught_left(Game.BALLAST_ID) <= 0.0, 6.0)
+	if not over:
+		print("HUD FAIL the Ballast window never expired — h_20 proves nothing")
+		_fails += 1
+	await rig.wait_frames(4)
+	await _shot(rig, out.path_join("h_20_ballast_over.png"), "h_20_ballast_over")
+	_fails += _ballast_tiles("h_20_ballast_over", 0)
 
 	# Assertion 4 (decision 32). Once, not per capture — it is a property of the
 	# palette and of `Hud.rarity_weight`, not of any one frame. See the long note

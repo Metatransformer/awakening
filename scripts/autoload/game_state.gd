@@ -136,10 +136,32 @@ const DRAUGHT_EDGE_ID := &"emberblood_draught"
 const DRAUGHT_PLATE_ID := &"ironhide_draught"
 ## Ballast's window (`docs/GDD.md` §6.5). Deliberately NOT spelled
 ## `ballast_draught`: it is not brewed, not bottled and not on the alchemist's
-## board, and the HUD's draught row filters on `PotionDb.IDS` so this id earns no
-## slot there by accident. What makes it visible is the health bar -- a blow that
-## costs one quarter instead of three -- and the stack it burned leaving the bag.
+## board, so it is not a row in `PotionDb` and never will be.
+##
+## **It has a slot on the HUD's draught row anyway** (#39). It used to be kept out
+## of that row by the row deriving itself from `PotionDb.IDS`, and the argument
+## written here was that the health bar was enough -- a blow that costs one
+## quarter instead of three, and the stack that left the bag paying for it. That
+## is inference, not an instrument: it says a ward is up only once you have
+## already been hit by something, and it never says HOW LONG IS LEFT, which for an
+## eight-second window bought with a bag stack is the only question the player is
+## actually asking. So the row is derived from `LASTING_IDS` below instead.
 const BALLAST_ID := &"ballast"
+
+## Everything that rides in `draughts`, in the order the HUD draws it. **This is
+## the draught row's slot list**, and it lives here rather than in `hud.gd`
+## because the ids do -- `Hud._draught_slots` used to walk `PotionDb.IDS` and keep
+## its own `id == DRAUGHT_PLATE_ID or id == DRAUGHT_EDGE_ID` filter, which is a
+## second copy of this list wearing a different hat: it could not have grown by a
+## slot without being edited, whatever it was reading the names from (#39,
+## docs/HUD_PLAN.md §15.16).
+##
+## Order is Ironhide, Emberblood, Ballast rather than alphabetical or historical:
+## the two brewed ones stay adjacent and in `PotionDb.IDS` order, so a player who
+## learned the row before Ballast existed finds both where they left them.
+const LASTING_IDS: Array[StringName] = [
+	DRAUGHT_PLATE_ID, DRAUGHT_EDGE_ID, BALLAST_ID,
+]
 
 var small_keys: int = 0
 var has_boss_key: bool = false
@@ -1030,6 +1052,25 @@ func bottle_index(id: StringName) -> int:
 
 func draught_left(id: StringName) -> float:
 	return float(draughts.get(id, 0.0))
+
+
+## How long this window is when it is FULL -- the denominator `draught_left()` is
+## the numerator of, and the only thing anything needs to draw a clock rather than
+## a number of seconds.
+##
+## A function and not a table, deliberately: the durations are already spelled in
+## `K` and a `{id: seconds}` dictionary here would be a second place for them to
+## be wrong. It is also not stored beside the running window -- #39's brief is
+## that `draughts` stays the one table of what is running, and a remembered
+## "started at" would be a second timer table by another name.
+##
+## Ballast is 8 s against a draught's 45 (`K.BALLAST_TIME`, and the note over it
+## says why they are that far apart). The HUD used to divide every slot by
+## `K.DRAUGHT_TIME` flat, so a Ballast slot fed through that would open at 8/45 --
+## ONE tile of four, on a window that is running at full strength -- and go dark
+## two seconds in. A clock that starts at nearly empty is worse than no clock.
+func draught_span(id: StringName) -> float:
+	return K.BALLAST_TIME if id == BALLAST_ID else K.DRAUGHT_TIME
 
 
 func start_draught(id: StringName, seconds: float) -> void:
