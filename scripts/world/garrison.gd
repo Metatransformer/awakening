@@ -559,7 +559,7 @@ const STATUE_YAW := -45.0
 ## Five counters on one circle, and one carved figure in the middle of it.
 ##
 ## **The whole of this function used to be five independent placements**, each
-## with a good argument and a comment defending it: the pawnbroker and the smith
+## with a good argument and a comment defending it: the quartermaster and the smith
 ## against the north wall either side of the arch, the alchemist on the west
 ## inside the arrival frame, the jewelcrafter hard against the west wall after
 ## the smith, the Lanternkeeper loose on the east. Every one of those arguments
@@ -571,7 +571,7 @@ const STATUE_YAW := -45.0
 ## which is a thing the old layout could not do and the new one gets for free:
 ##
 ##   * **North-east and north-west, flanking the gate: the smith and the
-##     pawnbroker.** The two counters you go to with a full bag, still nearest
+##     quartermaster.** The two counters you go to with a full bag, still nearest
 ##     the way in, still the first pair a returning player walks between.
 ##   * **East and west, level with the middle: the jewelcrafter and the
 ##     alchemist.** The two you visit on the way back OUT, so they sit on the
@@ -612,7 +612,7 @@ const STATUE_YAW := -45.0
 func _build_people() -> void:
 	# North-east and north-west of the plaza, flanking the approach to the gate.
 	smith = _ring(Npc.Role.SMITH, &"smith", 55.0, Color(0.98, 0.56, 0.24))
-	vendor = _ring(Npc.Role.VENDOR, &"pawnbroker", -55.0, Pal.GOLD)
+	vendor = _ring(Npc.Role.VENDOR, &"quartermaster", -55.0, Pal.GOLD)
 
 	# East and west, level with the plaza's middle: the two counters you visit on
 	# the way back OUT, so the walk from the plaza to the gate crosses them.

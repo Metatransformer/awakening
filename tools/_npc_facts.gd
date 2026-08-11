@@ -10,7 +10,7 @@ extends Node
 ##
 ##   godot --path . --headless res://tools/scenes/_npc_facts.tscn
 
-const BODIES := ["jewelcrafter", "pawnbroker", "lanternkeeper", "smith"]
+const BODIES := ["jewelcrafter", "quartermaster", "lanternkeeper", "smith"]
 const LIB := "res://assets/characters/races/_humanoid_anims.glb"
 
 

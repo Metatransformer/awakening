@@ -348,7 +348,7 @@ const INTRO_FLAG := &"reported_for_duty"
 ## not drift from these five strings.
 const ARRIVED_FLAGS: Array[StringName] = [
 	&"garrison_elder_arrived",
-	&"garrison_pawnbroker_arrived",
+	&"garrison_quartermaster_arrived",
 	&"garrison_smith_arrived",
 	&"garrison_alchemist_arrived",
 	&"garrison_jewelcrafter_arrived",

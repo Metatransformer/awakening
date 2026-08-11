@@ -60,8 +60,8 @@ static var PEOPLE := {
 		"portrait": PORTRAITS + "elder.png"},
 	&"smith": {"name": "Brannoc", "model": "smith",
 		"portrait": PORTRAITS + "smith.png"},
-	&"pawnbroker": {"name": "Kessa", "model": "pawnbroker",
-		"portrait": PORTRAITS + "pawnbroker.png"},
+	&"quartermaster": {"name": "Kessa", "model": "quartermaster",
+		"portrait": PORTRAITS + "quartermaster.png"},
 	&"alchemist": {"name": "Ysolt", "model": "alchemist",
 		"portrait": PORTRAITS + "alchemist.png"},
 	# `jeweler.png`, one L and no "crafter": the drawing is named the way the owner
@@ -92,7 +92,7 @@ static var SAID := {
 		"thats_a_good_deal": "That's a good deal.",
 		"take_care": "Take care.",
 	},
-	&"pawnbroker": {
+	&"quartermaster": {
 		"ive_just_the_deal_for_you": "I have just the deal for you.",
 		"good_price": "Good price.",
 		"come_back_with_more_treasures": "Come back soon with more treasures.",

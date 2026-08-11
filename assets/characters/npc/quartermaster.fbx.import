@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://bu80sha5mqx63"
-path="res://.godot/imported/pawnbroker.fbx-8b4db41a921e85c1e0cef1ab88262f2a.scn"
+path="res://.godot/imported/quartermaster.fbx-5995535632c48fb0f147acea068c6f13.scn"
 
 [deps]
 
-source_file="res://assets/characters/npc/pawnbroker.fbx"
-dest_files=["res://.godot/imported/pawnbroker.fbx-8b4db41a921e85c1e0cef1ab88262f2a.scn"]
+source_file="res://assets/characters/npc/quartermaster.fbx"
+dest_files=["res://.godot/imported/quartermaster.fbx-5995535632c48fb0f147acea068c6f13.scn"]
 
 [params]
 

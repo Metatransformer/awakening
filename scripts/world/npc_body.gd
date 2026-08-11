@@ -7,7 +7,7 @@ extends Node3D
 ## Valenfeld pack plus a suit seated onto its skeleton, tinted so three people in
 ## the same cloth are still three people. That is the right machine for a pack of
 ## interchangeable bases, and it is exactly the wrong machine for these five. The
-## smith, the pawnbroker, the Lanternkeeper, the jewelcrafter and the alchemist
+## smith, the quartermaster, the Lanternkeeper, the jewelcrafter and the alchemist
 ## were each modelled as a whole person, dressed, with their buckles and
 ## their beard painted into one atlas. There is no bare body underneath to seat a
 ## suit onto, no normalised UV layout for a garment to share, and no seam that a
@@ -53,7 +53,7 @@ const MODEL_YAW := 0.0
 ## The numbers do the same work heights have always done here (`RaceBody.RACES`):
 ## the hero is 1.65 m, so the smith reads a clear head SHORT of you and the
 ## Lanternkeeper a little over. Read the garrison as a row and it steps --
-## smith 1.44, jewelcrafter 1.63, elder 1.65, pawnbroker 1.72, keeper 1.74,
+## smith 1.44, jewelcrafter 1.63, elder 1.65, quartermaster 1.72, keeper 1.74,
 ## alchemist 1.82 -- which is six people, not one body at six sizes.
 ##
 ## `static var`, not `const`: nothing here needs to be a constant expression, and
@@ -63,7 +63,7 @@ static var PEOPLE := {
 	# silhouette the forge wants and the reason he keeps roughly the Stoneborn's
 	# 1.41 he replaced rather than growing into the gap.
 	"smith": {"fbx": "smith.fbx", "height": 1.44},
-	"pawnbroker": {"fbx": "pawnbroker.fbx", "height": 1.72},
+	"quartermaster": {"fbx": "quartermaster.fbx", "height": 1.72},
 	# Hooded, and the tallest of the four. The Far Lantern is the strange counter
 	# and she should read that way from across the flagstones.
 	"lanternkeeper": {"fbx": "lanternkeeper.fbx", "height": 1.74},

@@ -24,7 +24,7 @@ const SUIT: Array[String] = ["leather", "cloth", "plate"]
 ## silhouettes in black and cost a render to notice.
 const TINT: Array[Color] = [
 	Color(0.62, 0.70, 0.82),   # smith, cold slate
-	Color(0.86, 0.52, 0.58),   # pawnbroker, wine
+	Color(0.86, 0.52, 0.58),   # quartermaster, wine
 	Color(0.56, 0.88, 0.68),   # alchemist, green
 ]
 ## The four that survived. `cast`, `cast_buff`, `block`, `collect` and `wave`

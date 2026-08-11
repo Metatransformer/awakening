@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cgewkswcj2lgd"
-path="res://.godot/imported/pawnbroker.png-d1554cebc2f8fc76adacea0e9a60bfa1.ctex"
+path="res://.godot/imported/quartermaster.png-5d7d2501e77da98bbd809198bcbb50ed.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/ui/portraits/pawnbroker.png"
-dest_files=["res://.godot/imported/pawnbroker.png-d1554cebc2f8fc76adacea0e9a60bfa1.ctex"]
+source_file="res://assets/ui/portraits/quartermaster.png"
+dest_files=["res://.godot/imported/quartermaster.png-5d7d2501e77da98bbd809198bcbb50ed.ctex"]
 
 [params]
 

@@ -49,7 +49,7 @@ def cut(src: str, dst: str, pad: int = 8) -> None:
 
     # The backdrop colour is the modal colour of the whole BORDER, not of the four
     # corners. Two of these portraits are drawn on white and two on black -- but
-    # the smith and the pawnbroker are also cut off by the bottom edge, so their
+    # the smith and the quartermaster are also cut off by the bottom edge, so their
     # lower corners are dark clothing and a corner vote ties 2-2 and picks the
     # coat. Sampling the full border outvotes the two corners the figure is in.
     border = [px[x, y][:3] for x in range(w) for y in (0, h - 1)]

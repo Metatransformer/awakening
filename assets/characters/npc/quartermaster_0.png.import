@@ -3,8 +3,8 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c8coxt15jcb3m"
-path.s3tc="res://.godot/imported/pawnbroker_0.png-de2f79bd552ffc4424745680cd7a97a3.s3tc.ctex"
-path.etc2="res://.godot/imported/pawnbroker_0.png-de2f79bd552ffc4424745680cd7a97a3.etc2.ctex"
+path.s3tc="res://.godot/imported/quartermaster_0.png-fd1c3560e154fd95162c0bf0a426fa48.s3tc.ctex"
+path.etc2="res://.godot/imported/quartermaster_0.png-fd1c3560e154fd95162c0bf0a426fa48.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
@@ -15,8 +15,8 @@ generator_parameters={
 
 [deps]
 
-source_file="res://assets/characters/npc/pawnbroker_0.png"
-dest_files=["res://.godot/imported/pawnbroker_0.png-de2f79bd552ffc4424745680cd7a97a3.s3tc.ctex", "res://.godot/imported/pawnbroker_0.png-de2f79bd552ffc4424745680cd7a97a3.etc2.ctex"]
+source_file="res://assets/characters/npc/quartermaster_0.png"
+dest_files=["res://.godot/imported/quartermaster_0.png-fd1c3560e154fd95162c0bf0a426fa48.s3tc.ctex", "res://.godot/imported/quartermaster_0.png-fd1c3560e154fd95162c0bf0a426fa48.etc2.ctex"]
 
 [params]
 

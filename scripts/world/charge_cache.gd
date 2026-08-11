@@ -13,7 +13,7 @@ extends Area3D
 ## **It is `ArrowBundle`'s shape, not `LootMote`'s, and that is the whole design
 ## decision.** A mote goes in the BAG -- a slot, heat, gold, dead on death. A
 ## charge is none of those: it lives on `Game`, it survives the run, it costs no
-## slot, and nobody ever sold one to a pawnbroker. Routing ammunition through the
+## slot, and nobody ever sold one to a quartermaster. Routing ammunition through the
 ## bag would put the extraction fee on the thing that opens the door.
 ##
 ## **What it is NOT is a second supply channel.** `Dungeon` rolls arrow bundles

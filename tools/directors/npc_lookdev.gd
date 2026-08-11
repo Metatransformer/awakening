@@ -14,7 +14,7 @@ extends RefCounted
 ##     --director=res://tools/directors/npc_lookdev.gd --out=/tmp/npc/x.png
 
 ## Left to right, and in the order the garrison meets them.
-const WHO: Array[String] = ["smith", "pawnbroker", "lanternkeeper", "jewelcrafter", "alchemist"]
+const WHO: Array[String] = ["smith", "quartermaster", "lanternkeeper", "jewelcrafter", "alchemist"]
 ## The idle each is actually given in `Npc.LOOKS`, so this sheet photographs the
 ## garrison and not a line of bodies in a pose nobody holds.
 const IDLE: Array[StringName] = [&"idle3", &"idle", &"idle9", &"idle4", &"idle3"]

@@ -9,7 +9,7 @@ extends Interactable
 ## `ShopBooth` full of their own trade, and built two different ways:
 ##
 ##   * **All five are authored bodies** (`NpcBody`) -- a dwarf smith, a warrior at
-##     the pawnbroker's stall, the hooded Lanternkeeper who is also the village
+##     the quartermaster's stall, the hooded Lanternkeeper who is also the village
 ##     elder, the jewelcrafter and the spectacled alchemist, each modelled as a
 ##     whole dressed figure. They do not go near the suit system.
 ##   * **None are built** (`RaceBody`) any more -- the elder was the last, and he
@@ -61,8 +61,8 @@ enum Role { VENDOR, SMITH, GATE, ALCHEMIST, KEEPER, JEWELLER }
 ## the table is still built once for the whole game rather than per shopkeeper.
 static var COUNTERS := {
 	Role.VENDOR: {
-		"sign": "PAWNBROKER", "prompt": "TALK", "hold": 0.0, "voice": &"pawnbroker",
-		"counter": {"title": "PAWNBROKER", "mode": TradeScreen.Mode.SELL, "db": null},
+		"sign": "QUARTERMASTER", "prompt": "TALK", "hold": 0.0, "voice": &"quartermaster",
+		"counter": {"title": "QUARTERMASTER", "mode": TradeScreen.Mode.SELL, "db": null},
 	},
 	Role.SMITH: {
 		"sign": "SMITH", "prompt": "TALK", "hold": 0.0, "voice": &"smith",
@@ -171,7 +171,7 @@ static var COUNTERS := {
 ## who keeps the records.
 ##
 ## Heights are load-bearing and come off `NpcBody.PEOPLE`. The hero is 1.65 m,
-## and the row steps -- smith 1.44, jewelcrafter 1.63, pawnbroker 1.72, keeper
+## and the row steps -- smith 1.44, jewelcrafter 1.63, quartermaster 1.72, keeper
 ## 1.74, alchemist 1.82 -- so the smith reads a clear head short of you and the
 ## alchemist a clear head tall, before either says a word.
 ##
@@ -199,7 +199,7 @@ static var LOOKS := {
 		"model": "smith", "idle": &"idle3", "booth": ShopBooth.Kind.FORGE,
 	},
 	Role.VENDOR: {
-		"model": "pawnbroker", "idle": &"idle", "booth": ShopBooth.Kind.STALL,
+		"model": "quartermaster", "idle": &"idle", "booth": ShopBooth.Kind.STALL,
 	},
 	# Hooded and spectacled, with a belt of stoppered flasks and a vial at his hip:
 	# the apothecary's stock worn on the body, the same trick the jewelcrafter's
@@ -566,7 +566,7 @@ func _build_person() -> void:
 	# CLEAR of the counter's right-hand end, and only just forward of it.
 	#
 	# 1.18 out and 0.30 forward was the first try, and from any three-quarter
-	# angle the post stood squarely in front of the keeper -- the pawnbroker was
+	# angle the post stood squarely in front of the keeper -- the quartermaster was
 	# a lamp with a stall behind it. 1.52 puts it outside both the stall's posts
 	# and the workbench's top, so it lights the keeper's face across the counter
 	# without ever being between them and you.

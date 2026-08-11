@@ -481,7 +481,7 @@ func _gallery(rig) -> void:
 	var who := {
 		"d_07_alchemist.png": garrison.alchemist,
 		"d_08_keeper.png": garrison.keeper,
-		"d_09_pawnbroker.png": garrison.vendor,
+		"d_09_quartermaster.png": garrison.vendor,
 		"d_10_jewelcrafter.png": garrison.jeweller,
 	}
 	for shot: String in who:

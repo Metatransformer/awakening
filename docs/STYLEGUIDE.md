@@ -1797,7 +1797,7 @@ for 2D art anywhere else.
   On the kit: the paper doll and its slot tiles; the pause menu's ROOT
   screen (plate header, a live stat band, and `VerbRow`s with a meta column,
   replacing eight identical full-width buttons); and all five counters, which
-  are one screen — the pawnbroker, the smith, the alchemist, the setting bench
+  are one screen — the quartermaster, the smith, the alchemist, the setting bench
   and the Far Lantern (`TradeScreen`); and the footlocker (`StashScreen`), whose
   refusal moved off the hint line and into a `FooterToast`, so "← STOW
   RETRIEVE →" no longer vanishes at the moment a refused transfer has the player

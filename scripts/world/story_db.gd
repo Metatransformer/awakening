@@ -59,13 +59,13 @@ extends RefCounted
 ## Everything else is a reward for going down.
 ##
 ## **The order is fixed and it is the trade ladder** (owner's call, 2026-08-10):
-## pawnbroker -> smith -> alchemist -> jewelcrafter. It is also the order the four
+## quartermaster -> smith -> alchemist -> jewelcrafter. It is also the order the four
 ## counters get useful in — you cannot forge without components, cannot brew
 ## without a bottle, cannot set a stone you have not found — so a player who meets
 ## them in this order never stands in front of a shop that has nothing for them.
 static var UNLOCKS := {
 	&"elder": {},
-	&"pawnbroker": {},
+	&"quartermaster": {},
 	&"smith": {"bosses": 1},
 	&"alchemist": {"bosses": 2},
 	&"jewelcrafter": {"bosses": 3},
@@ -125,7 +125,7 @@ static var BEATS := {
 			"When the walk back looks long, cadet, it is long. Take the walk.",
 		]},
 	],
-	&"pawnbroker": [
+	&"quartermaster": [
 		{"id": &"arrival", "needs": {}, "pages": [
 			"You'll be the new one. Kessa. I buy.",
 			"Anything that came up out of that hole and isn't nailed to you, I'll put a number on it. The number's fair. You'll hate it anyway — they all do.",
@@ -203,7 +203,7 @@ static var TOPICS := {
 			"I will send it when we find him. Not before.",
 		]},
 	],
-	&"pawnbroker": [
+	&"quartermaster": [
 		{"id": &"prices", "label": "Your prices", "needs": {"told": &"arrival"}, "pages": [
 			"My prices are what somebody in Valenfeld will pay me, less the cart, less the road, less the fact that I am the only cart on it.",
 			"You're welcome to walk it to Valenfeld yourself. It's a day each way and the road is not friendly after dark.",

@@ -113,13 +113,13 @@ outside and render correctly.
 
 ## 1c. The five authored shopkeepers — a second rig, and no clothing system
 
-The smith, the pawnbroker, the Lanternkeeper (who is also the village elder),
+The smith, the quartermaster, the Lanternkeeper (who is also the village elder),
 the jewelcrafter and the alchemist are single authored figures, dressed as they ship: one mesh, one surface, one baked atlas
 carrying the buckles, the beard and the gold. `NpcBody` owns them.
 
 | What | Where | Notes |
 |---|---|---|
-| Authored bodies | `assets/characters/npc/{smith,pawnbroker,lanternkeeper,jewelcrafter,alchemist}.fbx` | Smith 1.44 m, jewelcrafter 1.63 m, pawnbroker 1.72 m, keeper 1.74 m, alchemist 1.82 m. Each with its own extracted `*_0.png`. |
+| Authored bodies | `assets/characters/npc/{smith,quartermaster,lanternkeeper,jewelcrafter,alchemist}.fbx` | Smith 1.44 m, jewelcrafter 1.63 m, quartermaster 1.72 m, keeper 1.74 m, alchemist 1.82 m. Each with its own extracted `*_0.png`. |
 
 **Never point the suit system at one of these.** There is no bare body under the
 clothes to seat a garment onto, the UVs are not normalised against the pack's

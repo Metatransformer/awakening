@@ -339,7 +339,7 @@ func _counter(rig) -> void:
 func _one_mouth() -> void:
 	Voice.say(&"smith", &"hello")
 	var first := Voice.line()
-	Voice.say(&"pawnbroker", &"hello")
+	Voice.say(&"quartermaster", &"hello")
 	print("VOICES '%s' interrupted by '%s'" % [first, Voice.line()])
 	_ck("E0 the second line is the one playing",
 		Voice.line() == "ive_just_the_deal_for_you")

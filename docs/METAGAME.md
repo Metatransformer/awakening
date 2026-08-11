@@ -581,14 +581,14 @@ in it.
 ### Who is in it, and when
 
 **A new save's yard is two people and a hole.** Aldric — the elder, who is also
-the Lanternkeeper — and Kessa at the pawnbroker's stall. The other three arrive
+the Lanternkeeper — and Kessa at the quartermaster's stall. The other three arrive
 as you dig, in the order their counters become worth anything (`StoryDb.UNLOCKS`,
 owner's call 2026-08-10):
 
 | Who | Arrives after | Because |
 |---|---|---|
 | Aldric, the Lanternkeeper | — | he sent for you |
-| Kessa, the pawnbroker | — | you cannot bank a run without her |
+| Kessa, the quartermaster | — | you cannot bank a run without her |
 | Brannoc, the smith | 1 boss | the forge eats components you do not have on day one |
 | Ysolt, the alchemist | 2 bosses | a draught prices a deep run, and there are none yet |
 | Marisel, the jewelcrafter | 3 bosses | §6.7's ceiling means nothing before the plate has cost you something |
@@ -667,7 +667,7 @@ straight to the gate still gets it.
 
 **The five counters ring a paved circle** (`scripts/props/plaza.gd`) in the
 middle of the yard, and the loop is what sets each bearing. The smith and the
-pawnbroker take the two north quarters, flanking the approach to the gate,
+quartermaster take the two north quarters, flanking the approach to the gate,
 because they are the counters you visit with a full bag. The alchemist and the
 jewelcrafter take east and west, on the walk from the plaza back down to the
 arch — what they sell is spent on the way back *down*, and the frame you see when

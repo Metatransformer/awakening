@@ -2,7 +2,7 @@ extends RefCounted
 ## Every button the HUD names, said twice: once for a keyboard, once for a pad.
 ##
 ## Run it in GARRISON, because the garrison is the only room that draws the
-## controls legend. It parks the hero at the PAWNBROKER itself rather than
+## controls legend. It parks the hero at the QUARTERMASTER itself rather than
 ## asking whoever runs it to stand somewhere first: the prompt bar is the
 ## surface most likely to be wrong -- it is the only one that composes a
 ## sentence around the glyph -- and a surface that is only under test when the
@@ -51,7 +51,7 @@ func run(rig) -> void:
 
 	# RB, and it has to be a button bound to NOTHING. This used to press A, which
 	# was harmless right up until A became `interact`: the press that was only
-	# meant to say "a pad is in hand" also talked to the pawnbroker the hero is
+	# meant to say "a pad is in hand" also talked to the quartermaster the hero is
 	# standing at, the shop took input, `Prompt` dropped focus, and the prompt
 	# under test went blank. The watcher does not care which button it is.
 	_push(_pad_button(JOY_BUTTON_RIGHT_SHOULDER))
@@ -115,7 +115,7 @@ func _check(what: String, caps: Dictionary, want_pad: bool) -> void:
 	print("  %-8s %s" % [what, caps])
 
 
-## The prompt bar, standing at the PAWNBROKER. Two things have to hold and they
+## The prompt bar, standing at the QUARTERMASTER. Two things have to hold and they
 ## fail separately: the sentence has to be ABOUT the person ("TO TALK", not the
 ## shop's menu), and the glyph in front of it has to be the button on the device
 ## in hand -- which is exactly the pairing a hardcoded "(E)" got wrong.

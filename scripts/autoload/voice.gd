@@ -82,7 +82,7 @@ const LINES := {
 		&"deal": ["thats_a_good_deal"],
 		&"farewell": ["take_care"],
 	},
-	&"pawnbroker": {
+	&"quartermaster": {
 		&"hello": ["ive_just_the_deal_for_you"],
 		&"deal": ["good_price"],
 		&"farewell": ["come_back_with_more_treasures"],

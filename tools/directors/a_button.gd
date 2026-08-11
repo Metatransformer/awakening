@@ -279,7 +279,7 @@ func _clear_ground(rig) -> Vector3:
 ## Stand clear and FACE AWAY from the vendor. The beats that need clear ground
 ## all run forward for half a second before they press anything, and the stick is
 ## camera-relative — pointed the other way that run walks straight back into the
-## pawnbroker's radius, and the beat then fails for a reason that has nothing to
+## quartermaster's radius, and the beat then fails for a reason that has nothing to
 ## do with the button. It cannot pass wrongly (a focus refuses the roll, so the
 ## drift shows up as a FAIL) but it can waste an afternoon.
 func _stand_clear(rig) -> void:

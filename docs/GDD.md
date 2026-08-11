@@ -118,7 +118,7 @@ and no square. A town would have owed you those. See §6.
 owns it (2026-08-10, owner's call). That is why a walled camp has four traders
 and one soldier in it, and it is the sentence the hub had been missing: a
 *garrison* explains the lack of an inn, and only an *expedition* explains the
-pawnbroker.
+quartermaster.
 
 The person you report to is **Aldric Vane**, who commands the outpost and is also
 the Lanternkeeper. You are his cadet. **He talks, and so does everybody else** —

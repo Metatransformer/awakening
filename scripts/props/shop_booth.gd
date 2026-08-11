@@ -61,8 +61,8 @@ const DIR := "res://assets/props/booth/"
 ## `static var`, not `const`: the rows hold Colors and the parser will not take
 ## a const Dictionary indexed for typed values (CLAUDE.md §3).
 static var PARTS := {
-	# --- The pawnbroker's stall ------------------------------------------
-	# A canopied market stall, because the pawnbroker is the one counter that
+	# --- The quartermaster's stall ------------------------------------------
+	# A canopied market stall, because the quartermaster is the one counter that
 	# is pure commerce -- no craft behind it, just a table and what is on it.
 	Kind.STALL: [
 		{"f": "Stall_Empty.gltf", "at": Vector3(0.0, 0.0, 0.0), "yaw": 0.0},

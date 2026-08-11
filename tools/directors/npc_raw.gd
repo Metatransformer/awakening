@@ -17,7 +17,7 @@ extends RefCounted
 ##     --director=res://tools/directors/npc_raw.gd --out=/tmp/npc/x.png
 
 const DIR := "res://assets/characters/npc/"
-const WHO: Array[String] = ["jewelcrafter", "pawnbroker", "lanternkeeper", "smith", "alchemist"]
+const WHO: Array[String] = ["jewelcrafter", "quartermaster", "lanternkeeper", "smith", "alchemist"]
 ## Metres between bodies on the line-up. They import at roughly a unit tall, so
 ## this is generous on purpose -- a body that turns out to be five times its
 ## neighbours should overlap them visibly rather than vanish behind one.

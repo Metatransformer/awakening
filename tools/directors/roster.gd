@@ -67,7 +67,7 @@ func _before(rig) -> void:
 		return
 	print("ROSTER bosses=%d gold_earned=%d" % [StoryDb.bosses_felled(), Game.gold_earned])
 	_ck("A0 Aldric is here from the first frame", g.keeper != null)
-	_ck("A1 and so is the pawnbroker", g.vendor != null)
+	_ck("A1 and so is the quartermaster", g.vendor != null)
 	_ck("A2 the smith is not", g.smith == null)
 	_ck("A3 nor the alchemist", g.alchemist == null)
 	_ck("A4 nor the jewelcrafter", g.jeweller == null)

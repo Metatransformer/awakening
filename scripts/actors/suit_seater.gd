@@ -45,7 +45,7 @@ const SETS: Array[String] = ["cloth", "leather", "mail", "plate"]
 ## a flat colour. These atlases are already dark -- tooled black leather, a maroon
 ## robe, blued steel -- so a multiply by a role colour lands somewhere near black and
 ## takes the weave down with it. The first render of the seated suits had a
-## pawnbroker who read as a silhouette. Softening the tint toward white before it
+## quartermaster who read as a silhouette. Softening the tint toward white before it
 ## multiplies keeps the role legible and leaves the material visible underneath,
 ## which is the whole reason for using authored art instead of a palette.
 const TINT_PULL := 0.5

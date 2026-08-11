@@ -288,7 +288,7 @@ func _act() -> String:
 
 
 ## The header glyph. `Catalogue.emblem()` for a counter, and the trade glyph for
-## the pawnbroker, who has no catalogue at all.
+## the quartermaster, who has no catalogue at all.
 func _emblem() -> String:
 	return "trade" if mode == Mode.SELL else String(_db().emblem())
 

@@ -43,7 +43,7 @@ speakers=(
   "Narrator:narrator"
   "Village  Elder:elder"
   "Smith:smith"
-  "Pawnbroker:pawnbroker"
+  "Quartermaster:quartermaster"
   "Alchemist:alchemist"
   "Jewelcrafter:jewelcrafter"
 )
