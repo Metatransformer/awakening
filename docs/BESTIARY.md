@@ -446,3 +446,85 @@ director proves it.
 
 **What it must not become.** A behaviour that needs its own model, its own screen,
 or its own arena is a miniboss, and there are four of those and no fifth.
+
+---
+
+## 7. The roster budget — and the unit it is counted in
+
+**The encounter is a room. It is never a floor.** That sentence is the whole of
+this section and it is here because a card was opened on the other reading
+(#42): `tools/directors/mvp_loop.gd` printed `MVP enemies=24`, twenty-four
+sounded like a swarm, and the number is not a swarm and never was.
+
+### The budget
+
+| | Owned by | Floor 1 | Floor 2 | Floor 3 | Floor 4 |
+|---|---|---|---|---|---|
+| Rooms | `FloorDb.FLOORS[n].rooms` | 6 | 8 | 9 | 10 |
+| Bodies per room | `FloorDb.pack` → `Prog.pack` | **2–4** | 2–5 | 3–6 | **2–4** (authored) |
+| Rooms that hold none | `Dungeon._populate` | 3 | 3 | 3 | 3 |
+| **Bodies on the walked floor** | the two rows above | **6–12** | 10–25 | 18–36 | 14–28 |
+
+Three rooms on every floor hold nobody, and each has a reason already written
+down: the **entrance** (the way in is not a fight), the **boss's chamber** (§5 —
+three beats plus four bodies is unreadable), and the **maze**, which is masonry
+wall to wall. On a six-room floor that is half the floor, which is why floor 1's
+walked total is so much smaller than `6 × 4` suggests.
+
+**The ceiling is `docs/GDD.md` §7, verbatim: *"a room never holds more than
+seven."*** `Prog.pack`'s `mini(4 + l, 7)` is that sentence in code, and floor
+4 buys back below it on purpose (`FloorDb`, floor 4's `pack` note) because seven
+iron knights is a different problem from seven skeletons. **This document adds no
+number to that** — it names the unit the number is counted in, which is the half
+that was missing.
+
+### What the `enemy` group total is not
+
+`get_nodes_in_group(&"enemy")` on floor 1 answers **18–27**. Measured across
+three seeds, the split is:
+
+| seed | in rooms | behind a door | total |
+|---|---|---|---|
+| 4004 | 10 | 14 | 24 |
+| 1234 | 6 | 12 | 18 |
+| 777 | 9 | 15 | 24 |
+
+**Ten to fifteen of them are behind a locked door on every seed** — the vault's
+guards (the vault is opened by floor 2's boss item, so on floor 1 it cannot be
+opened at all), the boss in its arena behind the boss door, and the miniboss in
+its arena behind the treasure puzzle. None of them can be walked into, and the
+group total counts all of them. `mvp_loop` prints the split now rather than the
+sum, because a number that has to be explained every time it is read is a number
+that will be misread again.
+
+### What actually converges
+
+Measured by `tools/directors/floor_crowd.gd`, which walks the hero in down a
+corridor on held input rather than setting him down in the middle of a room:
+
+- **Peak bodies engaged at one instant: 2–4.** That is `Prog.pack(1)` exactly —
+  the room, and nothing but the room.
+- **Peak rooms contributing at one instant: 2**, and only while standing in a
+  doorway or a corridor. A corridor midpoint is 13 m from both room centres
+  against an 11–15 m `detect`, so this is the leash and the grid behaving, not
+  failing. Three has never been seen.
+- **A hero who walks in and swings clears a 3–4 body room in 3–6 s**, losing 2–6
+  of 12 quarter-hearts — and the director's hero never blocks, never rolls and
+  never parries, so that is the floor of what a player does, not the ceiling.
+- **A hero who walks in and does nothing at all dies in 11–13 s.** That is not a
+  bug and it is not in tension with GDD §7's *"the Cistern's mouth stays easy
+  forever"*: easy means a fight you win with the verbs you have on run one, and
+  four bodies beating a statue in twelve seconds is the fight being a fight.
+
+### The rule
+
+> **A body budget is per room, and a per-floor total is not a design number.**
+
+If a floor ever reads as crowded, the thing to change is `FloorDb`'s `pack` row
+for that floor — one number, in the manifest, which is where floor 4 already
+does it. Not the detect radius, not the leash, and **not a navmesh** —
+`Enemy`'s own header says why, and it is still true: a room is an open box with
+nothing to path around, so the problem four bodies pose is *spacing*, and
+`Enemy._separation` is the six lines that already answer it. A navmesh is a new
+system, it is not on `docs/SCOPE.md`'s manifest, and it would be answering a
+question the measurement above says nobody asked.

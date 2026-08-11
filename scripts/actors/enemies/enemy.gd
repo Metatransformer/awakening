@@ -663,9 +663,12 @@ func _stop() -> void:
 ## the difference between a crowd and a smear.
 ##
 ## Linear in the number of monsters and run per monster, so quadratic overall --
-## which is fine at the 13 a floor spawns and would not be at 300. If a room ever
-## holds a swarm this wants a grid; it does not want a NavigationAgent3D, because
-## the problem is spacing and not pathing.
+## which is fine at the two dozen a floor holds and would not be at 300. Note
+## that the number that matters for the SPACING is much smaller than that:
+## measured, floor 1 puts 6-12 bodies in its rooms and never engages more than
+## four at once (`docs/BESTIARY.md` §7). If a room ever holds a swarm this wants
+## a grid; it does not want a NavigationAgent3D, because the problem is spacing
+## and not pathing.
 func _separation() -> Vector3:
 	var push := Vector3.ZERO
 	for other in get_tree().get_nodes_in_group(&"enemy"):

@@ -298,7 +298,22 @@ func _fight(rig) -> bool:
 		dun.rooms.size(), dun.deepest, Run.seed_used])
 
 	var foes: Array = rig.scene().get_tree().get_nodes_in_group(&"enemy")
-	print("MVP enemies=%d" % foes.size())
+	# **Split, because the bare total opened a card that then had to be closed.**
+	# `enemies=24` reads as a crowd and is not one: on floor 1 between ten and
+	# fifteen of those bodies are the vault's guards, the boss and the miniboss,
+	# each behind a door that cannot be opened on the way past, and the rest are
+	# 2-4 per room across six rooms (`Prog.pack(1)`). Issue #42 was opened on the
+	# undivided number and closed by measuring the divided one --
+	# `tools/directors/floor_crowd.gd` is what measures it, and
+	# `docs/BESTIARY.md` §7 is what the split means.
+	var walked := 0
+	for e in foes:
+		for cell: Vector2i in dun.rooms:
+			if dun.rooms[cell]["node"] == (e as Node).get_parent():
+				walked += 1
+				break
+	print("MVP enemies=%d (%d in rooms, %d behind a door)" % [
+		foes.size(), walked, foes.size() - walked])
 	if foes.is_empty():
 		print("MVP FAIL no enemies spawned")
 		return false
