@@ -984,6 +984,11 @@ func _physics_process(delta: float) -> void:
 		# a plain "an item owns the right hand" bail instead of both carrying half
 		# the ranged state machine.
 		_tick_item_trigger()
+		# BEFORE the two swing ticks, because it is the only one of the three
+		# that can be refused by a swing already running (`_press` does not
+		# buffer a PARRY) and the only one whose window is worth frames. Order
+		# does not otherwise matter — they read three different buttons now.
+		_tick_parry_button()
 		_tick_light_button()
 		_tick_heavy_button(delta)
 	else:
@@ -1178,21 +1183,58 @@ func _tick_light_button() -> void:
 	if _riposte_t > 0.0:
 		_press(Intent.DASH)
 		return
-	# Shield up, sword out: the press is the PARRY.
+	# THE GUARD NO LONGER CHANGES WHAT THIS BUTTON MEANS. RB out of a raised
+	# shield is the light swing, exactly as it is from neutral, and RT is the
+	# heavy — you go straight from blocking to attacking with the button you
+	# already know, and the guard drops on the commit like it always did.
 	#
-	# This input used to be the dash — OOT's R+B, the stab out of the guard — and
-	# the two genuinely collide, because there is exactly one attack button and a
-	# raised shield is exactly one modifier. Resolved rather than split: the parry
-	# takes the input because it is the move that must be reachable in the quarter
-	# second before a blow lands, and the dash moves to `_riposte_t`, where it is
-	# the answer to a body you have just knocked over rather than a thing you can
-	# throw at any moment from a stance you were already holding.
+	# It used to be the PARRY, and before that the dash, all three fighting over
+	# one attack button because a raised shield was the only modifier anyone had.
+	# That is over: the parry has its own button now (`_tick_parry_button`), so
+	# nothing here has to ask what stance the player is in.
 	#
-	# What the guard buys is therefore no longer "a better opener". It is a bet.
-	if blocking:
-		_press(Intent.PARRY)
-		return
+	# What that buys is the thing the modifier cost: the sword is reachable out
+	# of a guard. Under the old arrangement a guarded player who pressed attack
+	# got a 0.62 s commitment with no hitbox, so the only way to swing at the
+	# thing you were guarding against was to let the shield down FIRST and press
+	# on a later frame — a whole button's worth of latency charged to the stance
+	# you adopt when something is about to hit you.
 	_press(Intent.LIGHT)
+
+
+## A — THE PARRY, and only from behind a raised shield.
+##
+## It is on `interact` rather than on the attack button, and the guard is what
+## tells the two apart: shield up, A is the parry; shield down, A is the same
+## "talk to that / open that" it has always been. `Prompt` owns the other half of
+## that split and refuses the press for as long as the guard is up, so one press
+## can never both catch a blow and open the chest behind it.
+##
+## WHY IT MOVED. The parry is a claim about a moment, and the moment it is a
+## claim about is the quarter-second before a blow lands — which is precisely
+## when the player is holding the guard and watching a wind-up. Sharing the
+## attack button meant the two things a guarded player might want, "catch this"
+## and "hit it", were one press arbitrated by a stance, and the sword lost:
+## attacking out of a block was unreachable without dropping the guard first.
+## Splitting them across two fingers costs nothing — the left index holds the
+## stance, the right index swings, and the thumb, which was doing nothing at all
+## behind a raised shield, catches.
+##
+## THE GUARD GATE IS THE WHOLE BINDING. There is no parry from neutral, which is
+## what keeps A meaning one thing at a time and keeps the move a bet you have to
+## already be committed to.
+func _tick_parry_button() -> void:
+	# An item drawn takes the shield off the arm (`_mount_left`), so there is no
+	# shield to throw. `_begin` would swallow this anyway — it refuses every
+	# Intent while something is equipped — but bailing here keeps the refusal
+	# where the reason for it is, and matches how the two swing ticks open.
+	if equipped != &"":
+		return
+	if not blocking:
+		return
+	if not Input.is_action_just_pressed(&"interact"):
+		return
+	_press(Intent.PARRY)
 
 
 ## RT — the heavy, and everything the heavy becomes:

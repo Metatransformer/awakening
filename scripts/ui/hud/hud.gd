@@ -1438,7 +1438,15 @@ func _legend_groups() -> Array[PackedStringArray]:
 		if cap.is_empty():
 			continue  # nothing bound on this device — say nothing rather than lie
 		if action == &"shield":
-			verb = "GUARD/LOCK (+%s DASH)" % _hotkey(&"attack")
+			# THE MODIFIED PRESS IS THE PARRY, and it is on `interact` rather than
+			# on the sword. This line said "+LMB DASH" for a long time after that
+			# stopped being true twice over -- the dash moved to the riposte
+			# window (`K.RIPOSTE_WINDOW`), the parry took shield+attack, and then
+			# the parry moved off the sword so that RB and RT would mean the same
+			# thing from every stance. A legend is the only place most players
+			# will ever read a modifier, so it is the one string in the HUD that
+			# cannot be allowed to lag the binding.
+			verb = "GUARD/LOCK (+%s PARRY)" % _hotkey(&"interact")
 		# The dodge and the interact were ONE button on a pad for a while, and this
 		# merge is what kept the legend from printing "A DODGE   A INTERACT" and
 		# asking the player to work out which one they got. They are B and A now

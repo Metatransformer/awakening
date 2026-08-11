@@ -451,7 +451,9 @@ const STUN_HEAVY := 0.45
 # These two turn both defences into openings, and they are deliberately
 # opposites so a player can want each of them at different moments:
 #
-#   THE PARRY is aggressive and it is punished. Shield + attack. Get it right
+#   THE PARRY is aggressive and it is punished. Shield held, A pressed — it has
+#   its own button now rather than a modifier on the sword's, so the sword is
+#   reachable straight out of a guard. Get it right
 #   and the thing that swung at you is thrown off its feet; get it wrong and
 #   your guard is DOWN for the rest of the move. It is the read.
 #
@@ -491,7 +493,10 @@ const PARRY_STAGGER := 0.95
 ## Seconds after a successful parry in which `attack` comes out as the DASH —
 ## the stab out of the guard, which is exactly the move a body knocked away
 ## from you asks for. This is where the dash LIVES now: it used to be on
-## shield+attack, which is the input the parry took. [tune]
+## shield+attack, which the parry took and then gave back — the parry is on A
+## behind a raised shield, and shield+attack is a plain light swing again. The
+## dash stays here regardless: this window is a better home for it than any
+## stance modifier was. [tune]
 const RIPOSTE_WINDOW := 1.20
 
 ## How fresh a roll has to be for the blow it eats to count as a PERFECT dodge,

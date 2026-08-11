@@ -256,14 +256,25 @@ z_target={
 ; a charged release, a guard on the opposite trigger and four dodges. OOT put the
 ; sword on a face button because OOT's sword had one move.
 ;
-; The face buttons are verbs now and nothing else: A talks, B dodges, X puts your
-; gear away, Y jumps. A thumb that never has to leave the stick to swing is the
-; whole point -- the old X-swings layout meant every attack was a thumb leaving
-; the camera.
+; The face buttons are verbs now and nothing else: A talks -- and parries, from
+; behind a raised shield, see `interact` -- B dodges, X puts your gear away, Y
+; jumps. A thumb that never has to leave the stick to swing is the whole point --
+; the old X-swings layout meant every attack was a thumb leaving the camera.
 ;
-; The dash (guard + this) and the air slam (this, off the floor) stay here: they
-; are the same finger asking for the same swing in a different situation, which
-; is what a modified press is for. hero_combat.gd's `_tick_light_button` owns it.
+; THE GUARD DOES NOT MODIFY THIS BUTTON ANY MORE. Shield up, RB is the light
+; swing; shield up, RT is the heavy. Both come straight out of a block with no
+; frame spent lowering it, and the guard drops on the commit the way it drops for
+; any other swing.
+;
+; It carried the PARRY on `guard + this`, and before that the dash, and the cost
+; of both was the same one: the one press a guarded player might most want -- hit
+; the thing I am guarding against -- was the press that stance had taken away.
+; The parry is on A now (`interact`), which the thumb was not using behind a
+; shield anyway. Nothing on this button asks what stance you are in.
+;
+; The air slam (this, off the floor) does stay: that is not a stance, it is a
+; situation the player is already committed to, and there is no other swing the
+; press could have meant. hero_combat.gd's `_tick_light_button` owns it.
 ;
 ; The HOLD went with the heavy. This button no longer charges anything -- tap it
 ; as fast as you can and the chain is all you get.
@@ -505,18 +516,43 @@ jump={
 , Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":3,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
-; SELECT AND TALK, and A/Cross -- button 0 -- has it to itself now.
+; SELECT AND TALK -- A/Cross, button 0 -- AND, BEHIND A RAISED SHIELD, THE PARRY.
 ;
 ; This button has carried three other things at various points: the jump attack
 ; (gone to `heavy`, under the lock where OOT's Z+A lived), the dodge (gone to B,
 ; see `context`), and stowing a drawn item (gone to the D-pad weapon ring, which
 ; hands the sword back without a button that only means "undo"). What is left is
-; the one thing a player at a chest, a vendor or an NPC is pressing it for.
+; the one thing a player at a chest, a vendor or an NPC is pressing it for --
+; plus one move, on one stance.
+;
+; THE PARRY LIVES HERE NOW and it is gated on `shield` being held. It was
+; shield+attack, and the trouble with that was not the parry, it was the SWORD:
+; with the guard rewriting what RB meant, a player behind a shield could not
+; swing at the thing they were guarding against without first letting the shield
+; down and pressing on a later frame. A whole button of latency, charged at the
+; exact moment something is about to hit you. Moving the parry off the sword
+; makes RB and RT mean the same thing from every stance -- you go block -> R1 or
+; block -> R2 straight through -- and puts the parry on the digit that was doing
+; nothing at all behind a guard.
+;
+; THE TWO CLAIMS ON THIS BUTTON NEVER OVERLAP, because the stance decides and a
+; guard is unambiguous: shield up, A is the parry and the world does not answer
+; (`Prompt._guarding` disarms it); shield down, A is talk/open exactly as before.
+; You cannot be addressing a chest and guarding against it in the same moment, so
+; there is nothing here for the player to arbitrate and no rule to learn.
+;
+; The disarm is NOT a plain "ignore it while guarding", and the reason is worth
+; the line: HeroCombat._parry drops the guard on the same tick it starts, so a
+; parry press is still held for 0.62 s AFTER `shield` stops reading as blocking.
+; Gate on the live stance alone and that press opens the chest as the recovery
+; ends, having both parried and interacted. Prompt clears `_armed` instead, which
+; only comes back on a RELEASE.
 ;
 ; A shares this button with ui_accept, which has always been safe: trade_screen's
 ; accept edge starts DISARMED, so the press that opens a screen cannot also
-; confirm inside it. That is the ONLY arbitration left on this button, and it is
-; a one-frame one inside a single screen rather than a rule about the world.
+; confirm inside it. A shop is up or it is not, and the guard cannot be up while
+; one is (`Prompt.blocked` gates the whole of HeroCombat's input), so the parry
+; adds nothing for that arbitration to collide with.
 ;
 ; Keyboard E, which is its own key and shares nothing.
 interact={

@@ -348,12 +348,18 @@ answers, and both are the same buttons meaning something better for a moment
 because you read the fight right. Neither adds an input. `docs/BESTIARY.md` §3.6
 is the design of record.
 
-**The parry** — guard held, sword pressed, in the quarter-second before the blow
+**The parry** — guard held, **A** pressed, in the quarter-second before the blow
 arrives. It drops the shield to do it, so a miss is a hole you take the blow
 through; a hit costs nothing, throws the thing that swung, and opens a window in
 which the sword button is the dash into the gap it just made. It is the only
 thing in the game that moves a boss, and that is safe precisely because it can
 only be thrown after the boss has already committed.
+
+It is on A rather than on the sword because the sword had to stay reachable out
+of a guard: with the parry riding the attack button, a guarded player could not
+swing at the thing they were guarding against without dropping the shield on an
+earlier frame. A raised shield takes A away from the world for as long as it is
+up — behind a guard there is nothing to talk to.
 
 **The perfect dodge** — the roll, *into* the blow instead of away from it. Time
 slows for half a second and the sword button becomes a leaping overhead that
@@ -1022,10 +1028,15 @@ costing.
 Three more verbs have no button of their own either, and all three are the same
 button meaning something better for a moment because you read the fight right:
 
-- **The parry** — LT held, RB pressed, in the quarter-second before a blow. It
+- **The parry** — LT held, **A** pressed, in the quarter-second before a blow. It
   drops the guard to do it, so a miss is a hole; a hit throws the attacker and
   opens a window in which RB is the **dash**. It is the only thing in the kit
-  that moves a boss.
+  that moves a boss. A is the interact button everywhere else, and a raised
+  shield is what tells the two apart — you cannot be talking to something and
+  guarding against it at the same time, so the stance arbitrates and no press is
+  ever ambiguous. It sat on RB until it was moved, and moving it is what made
+  **RB and RT reachable straight out of a block**: the sword no longer waits for
+  the shield to come down.
 - **The perfect dodge** — B, into a blow rather than away from it. Time slows,
   and RB becomes a **leaping overhead** for a second and a half.
 

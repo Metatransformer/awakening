@@ -64,6 +64,24 @@ var _hold: float = 0.0
 ## to let go before the next world can take the same press.
 var _armed: bool = false
 
+## True while the hero's shield is up, mirrored off `Bus.guard_changed`.
+##
+## **A raised shield takes this button away.** Behind a guard, A is the PARRY
+## (`HeroCombat._tick_parry_button`) and nothing in the world answers it — which
+## is the whole reason the parry could be given a face button at all. The two
+## claims on A are separated by the stance and by nothing else, so this flag is
+## the entirety of the arbitration.
+##
+## IT CANNOT BE READ AS "is the hero blocking RIGHT NOW", and that is the trap
+## this comment exists for. A landed press drops the guard on the same tick it
+## starts the parry (`HeroCombat._parry`), so by the next `_process` the guard is
+## already down while the button is still held — and `_armed`, which only ever
+## comes back on a RELEASE, is what carries the refusal across the rest of that
+## press. Disarming here rather than gating below is therefore load-bearing: gate
+## on `_guarding` alone and the parry press opens the chest 0.62 s later, as the
+## recovery ends, having done both.
+var _guarding: bool = false
+
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_PAUSABLE
@@ -71,6 +89,19 @@ func _ready() -> void:
 	# under it. Nothing else about the focus moves — the same thing is still in
 	# reach, it is just reached with a different thumb.
 	Bus.input_device_changed.connect(func(_pad: bool) -> void: _say_prompt())
+	Bus.guard_changed.connect(_on_guard_changed)
+
+
+## The guard went up or down. Going UP is the interesting edge: it takes the
+## button, so anything half-held at the prop in front of the player is dropped
+## rather than left to complete behind a shield.
+func _on_guard_changed(active: bool) -> void:
+	_guarding = active
+	if not active:
+		return
+	if _hold > 0.0:
+		_hold = 0.0
+		_set_hold(0.0)
 
 
 ## Claim input for `by`, for exactly as long as `by` is in the tree.
@@ -178,6 +209,13 @@ func _process(delta: float) -> void:
 		if _hold > 0.0:
 			_hold = 0.0
 			_set_hold(0.0)
+
+	# THE SHIELD OWNS THIS BUTTON. Disarmed rather than merely ignored — see
+	# `_guarding` — so the press that threw a parry stays spent for the whole of
+	# the time it is held, including the 0.42 s of recovery in which the guard is
+	# already back down.
+	if _guarding:
+		_armed = false
 
 	if focus == null or not _armed or not down:
 		return
