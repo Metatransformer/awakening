@@ -16,9 +16,20 @@ OUT=${OUT:-/tmp/floors}
 REPEAT=${REPEAT:-1}
 levels=(${@:-1 2 3 4})
 
-if ps -Ao pid,comm | grep -qi godot; then
-	print -u2 "floors.sh: godot is already running -- a contended GPU is not a measurement."
+# `cistern_floor` asserts BEHAVIOUR, not frame times, so a contended GPU costs it
+# wall clock and nothing else -- and this Mac routinely has three or four agents
+# running directors at once (CLAUDE.md §2), so a hard refusal here means waiting on
+# somebody else's mvp_loop to finish. It is still worth SAYING, because a run that
+# took four minutes instead of one is a fact about the machine and not the floor.
+#
+# The refusal stays for a full house. Four windows plus these is what made the Mac
+# unusable in the first place, and `ALLOW_BUSY=1` is the way to say you meant it.
+busy=$(ps -Ao pid,comm | grep -ci '[g]odot')
+if [ $busy -ge 3 ] && [ -z "${ALLOW_BUSY:-}" ]; then
+	print -u2 "floors.sh: $busy godot processes already up. Wait, or ALLOW_BUSY=1."
 	exit 1
+elif [ $busy -gt 0 ]; then
+	print -- "floors.sh: $busy other godot run(s) up -- correctness is unaffected, the clock is not."
 fi
 
 mkdir -p $OUT

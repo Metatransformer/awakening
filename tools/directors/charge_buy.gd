@@ -143,11 +143,21 @@ func _buy(rig) -> void:
 	_ck("C5 he will sell it (%s)" % AlchemyDb.refusal(row["line"]),
 		AlchemyDb.can_buy(row["line"]))
 
-	screen._cursor = screen._rows.find(row)
+	# `_point_at`, and not `screen._cursor = i` (CLAUDE.md §3, card #77). The
+	# assignment is half a move: `_point_at` is the half that calls `grab_focus`,
+	# which is DEFERRED, so the `focus_entered` it queues lands a frame later, runs
+	# back through `_on_cell_looked`, and puts `_cursor` on whatever row the last
+	# `_refresh` left the focus on. Card #74 was nine red checks of exactly that.
+	#
+	# Going through `_point_at` makes the round trip IDEMPOTENT -- it re-points at
+	# the row that was asked for -- so a beat that waits a frame before acting is
+	# safe rather than racing. That is why no wait is added here: the fix is the
+	# call, not a sleep.
+	screen._point_at(screen._rows.find(row))
 	screen._refresh()
 	# The cursor has to be back on the row after a refresh, or the "before" frame
 	# is a photograph of the bottle line.
-	screen._cursor = screen._rows.find(_row(screen, AlchemyDb.CHARGE_ID))
+	screen._point_at(screen._rows.find(_row(screen, AlchemyDb.CHARGE_ID)))
 	await rig.wait_frames(8)
 	var gold_before := Game.gold
 	var charges_before := Game.charges
@@ -179,7 +189,7 @@ func _buy(rig) -> void:
 		Game.gold == gold_before - AlchemyDb.CHARGE_GOLD)
 
 	screen._refresh()
-	screen._cursor = screen._rows.find(_row(screen, AlchemyDb.CHARGE_ID))
+	screen._point_at(screen._rows.find(_row(screen, AlchemyDb.CHARGE_ID)))
 	# **Wait for the PURSE to stop rolling.** `TradeScreen` lerps `_shown_gold`
 	# towards `Game.gold` (`:1048`) -- the purse is the one thing on that header
 	# that animates -- so a frame taken ten frames after the press photographs a
@@ -204,7 +214,7 @@ func _buy(rig) -> void:
 	_ck("C10 and the refusal says the pouch, not the money (%s)"
 		% AlchemyDb.refusal(full["line"]),
 		AlchemyDb.refusal(full["line"]).contains("POUCH"))
-	screen._cursor = screen._rows.find(full)
+	screen._point_at(screen._rows.find(full))
 	screen._commit()
 	await rig.wait_frames(8)
 	await rig.capture(out.path_join("c_02_full.png"))

@@ -171,7 +171,17 @@ func _counter(rig) -> void:
 	_ck("C3 the refusal names the root, not the money (%s)"
 		% AlchemyDb.refusal(heart["line"]),
 		AlchemyDb.refusal(heart["line"]).contains("ROOT"))
-	screen._cursor = screen._rows.find(heart)
+	# `_point_at`, and not `screen._cursor = i` (CLAUDE.md §3, card #77). The
+	# assignment is half a move: `_point_at` is the half that calls `grab_focus`,
+	# which is DEFERRED, so the `focus_entered` it queues lands a frame later, runs
+	# back through `_on_cell_looked`, and puts `_cursor` on whatever row the last
+	# `_refresh` left the focus on. Card #74 was nine red checks of exactly that.
+	#
+	# Going through `_point_at` makes the round trip IDEMPOTENT -- it re-points at
+	# the row that was asked for -- so a beat that waits a frame before acting is
+	# safe rather than racing. That is why no wait is added here: the fix is the
+	# call, not a sleep.
+	screen._point_at(screen._rows.find(heart))
 	screen._commit()
 	await rig.wait_frames(12)
 	_ck("C4 the press changed nothing", Game.bottle(0) == &"")
@@ -217,7 +227,7 @@ func _brew(rig) -> void:
 	if heart.is_empty():
 		_ck("D1 the draught is in the bottle", false)
 		return
-	screen._cursor = screen._rows.find(heart)
+	screen._point_at(screen._rows.find(heart))
 
 	# Brewed the way a player brews it: the button, HELD. This was a direct
 	# `screen._commit()`, which would still pass with the hold, the gauge and the
@@ -273,7 +283,7 @@ func _brew(rig) -> void:
 	# Press it, so the capture below has the FOOTER in it and not just three grey
 	# rows. `_refuse` is set by the press, not by the state, and the sentence in
 	# that footer is the only place the game explains what is stopping you.
-	screen._cursor = screen._rows.find(again)
+	screen._point_at(screen._rows.find(again))
 	screen._commit()
 	await rig.wait_frames(8)
 	await rig.capture(out.path_join("a_02_full.png"))

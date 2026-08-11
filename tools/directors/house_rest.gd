@@ -222,7 +222,17 @@ func _locker(rig, garrison: Garrison) -> void:
 		% [Game.stash_slots_used(), K.STASH_SLOTS, n], Game.stash_full())
 
 	screen._refresh()
-	screen._cursor = _row_of(screen, &"ghost_silk")
+	# `_point_at`, and not `screen._cursor = i` (CLAUDE.md §3, card #77). The
+	# assignment is half a move: `_point_at` is the half that calls `grab_focus`,
+	# which is DEFERRED, so the `focus_entered` it queues lands a frame later, runs
+	# back through `_on_cell_looked`, and puts `_cursor` on whatever row the last
+	# `_refresh` left the focus on. Card #74 was nine red checks of exactly that.
+	#
+	# Going through `_point_at` makes the round trip IDEMPOTENT -- it re-points at
+	# the row that was asked for -- so a beat that waits a frame before acting is
+	# safe rather than racing. That is why no wait is added here: the fix is the
+	# call, not a sleep.
+	screen._point_at(_row_of(screen, &"ghost_silk"))
 	var silk: int = Run.bag.get(&"ghost_silk", 0)
 	await rig.tap(["ui_left"])
 	await rig.wait_frames(8)
