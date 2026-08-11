@@ -643,6 +643,41 @@ static var BOSSES := {
 ##    they are looking at cannot tell which move set to expect. The bosses take
 ##    `golem`, `ogre`, `wraith` and `knight_iron`; the minibosses draw from what
 ##    is left. **New monster models stays 0.**
+##
+## ## Three places the fiction asked for something the vocabulary cannot deliver
+##
+## `docs/PUZZLES.md` §7's table is the design of record and the four rows below
+## are it, worked. Three cells were corrected on the way down, each for the reason
+## `docs/BOSSES.md` §6.1 and §6.3 correct two of `docs/BESTIARY.md` §5's: the
+## sentence needs an attack shape, a prop or a mechanic that does not exist, and
+## this file's own header says there is no sixth shape. Written down rather than
+## absorbed, because a row that quietly does something other than the doc it cites
+## is how the next session learns the doc is a lie.
+##
+## **1. The Bellows-Hand's plate is not a damage gate.** §7 says *"melee rings off
+## it"*, which is `docs/BESTIARY.md` §3 behaviour 2 -- a front-facing damage gate
+## on `Enemy`, uncommitted, and not a thing a row here can express. What IS
+## expressible, and does the same job, is **`min_range`**: the advance only
+## happens from 5 m out, which is where the bow lives and where the sword does
+## not. The wall is the distance, not an invulnerable plate.
+##
+## **2. The Second Voice has no pillar.** §7 says it *"anchors to a resonating
+## pillar and cannot be touched while the pillar sings"*. `CrackedPillar` is a
+## PUZZLE ATOM, not an arena feature: standing one in a `BossArena` needs a new
+## `arena` key and a prop placer, and the expensive half -- *cannot be touched* --
+## is an invulnerability gate, a new mechanic against `docs/SCOPE.md` §4.3 and the
+## same refusal `docs/BOSSES.md` §6.3 makes for the Bellwake one branch away.
+## `docs/PUZZLES.md` §8.1's ceiling is explicit that nothing on this ledger may
+## buy a tenth prop. So **the ring it sings IS the wall**, drawn on the floor as a
+## `slam` band with a wide `safe_inner`, and the Burst is what answers it from
+## outside the band.
+##
+## **3. The Gate-Hound does not back away.** `Boss._tick_chase` closes to
+## `ROAM_RING` and nothing in the executor retreats; a retreat behaviour is a
+## fourth thing this card would have had to build. What produces the same loop out
+## of numbers already in the table is beat two's `KNOCKBACK_HEAVY` throwing the
+## hero back out past beat one's `min_range`. The gap is opened by the fight
+## rather than by the body's feet, and closing it is still the hookshot's job.
 static var MINIBOSSES := {
 	# =========================================================================
 	&"sluice_keeper": {
@@ -746,6 +781,402 @@ static var MINIBOSSES := {
 				"sfx": &"spell_impact_frost",
 				"recover": 0.60, "punish": 1.15, "cooldown": 1.40,
 				"weight": 2.0, "min_range": 0.0, "max_range": 7.0,
+			},
+		],
+	},
+
+	# =========================================================================
+	&"bellows_hand": {
+		"floor": 2,
+		"title": "THE BELLOWS-HAND",
+		"model": &"orc",
+		# 2.55 m. `docs/PUZZLES.md` §7 writes this as "orc, x1.3", and the orc is
+		# 1.95 m in `Enemy.DEFS`, so x1.3 is 2.535 and this is that rounded to the
+		# centimetre. **The metres are the contract and the multiplier is the
+		# sketch** -- there is deliberately no `scale` key in this table (executor
+		# contract §1b), and the rule the number has to satisfy is that a miniboss
+		# reads as *bigger than anything in the roster* (the orc's own 1.95 m is the
+		# tallest) and *clearly not the floor boss* (the Slag Ogre is 3.80, so the
+		# gap is a metre and a quarter).
+		"height": 2.55,
+		# Iron plate over cooling slag, and deliberately NOT the Slag Ogre's scheme:
+		# the Ogre is a rust body with molten VITAL in the cracks, so a second
+		# rust-and-red thing on the same floor would be the Sluice-Keeper's
+		# cousins-not-twins problem all over again. This one is grey plate carrying
+		# rust in its seams.
+		"tint": {
+			"albedo": Pal.ASH, "albedo_mix": 0.36,
+			"emission": Pal.RUST, "energy": 0.24,
+		},
+		# 36 q = 9 hearts, HALF the Slag Ogre. That halving is the rule all four
+		# minibosses are authored on -- the Sluice-Keeper is 24 against the Warden's
+		# 48 -- and it is what keeps an optional side branch a fight rather than a
+		# second boss. THE ARITHMETIC, as the bosses show it:
+		#
+		#   A light swing is 2 q at blade rung 0 and 5 q at rung 3.
+		#     rung 0 -> 36/2 = 18 swings.   rung 2 -> 9.   rung 3 -> 8.
+		#   A punish window here averages 1.38 s, which is two light swings, and the
+		#   average beat cycle is 4.2 s -- the advance is a slow beat, 1.00 s of tell
+		#   and a full second of travel.
+		#   So 18 swings is 9 windows: about 38 s on an unforged blade, about 21 s
+		#   for the player who took the Warden's relic to the smith.
+		"health": 36,
+		"arena": {
+			"radius": 8.0,
+			# Two slag posts, and they are beat one's cheapest answer rather than set
+			# dressing: `Boss._advance_charge` ends the commit on `is_on_wall()` and
+			# the punish opens anyway, so a plate walked into a post is a plate that
+			# bought the player a window for nothing. That is LIVE CODE, which is why
+			# this arena gets cover and the Gate-Hound's does not (see its row).
+			"cover": true, "cover_count": 2,
+		},
+		# Nothing. Rule 2 above -- the empty row is load-bearing, not a gap.
+		"drop": {"item": &"", "relic": &""},
+		"music": "",
+		"lore": "The crews called it the bellows-hand because it worked the great "
+			+ "pair on the west wall, and because after a while that was all there "
+			+ "was of it. It still carries the shield plate they gave it for standing "
+			+ "in front of the tap. The tap has been cold for four hundred years.",
+		"beats": [
+			{
+				# THE WALL, and floor 2's verb is T1 -- the BOW (`docs/PUZZLES.md`
+				# §1), which is what the Warden dropped and what the Foundry's gate
+				# room teaches on an eye switch.
+				#
+				# **`min_range` 5.0 is the wall.** This is the only beat the fight has
+				# past five metres, so a hero at bow range is a hero being walked at
+				# behind a plate with nothing but the bow in reach -- the same trick
+				# `bellows_charge` uses to be "the only beat that happens where the bow
+				# lives" (`docs/BOSSES.md` §6.2), one branch earlier and half the size.
+				#
+				# **The second way over, and it is two ways** (`docs/BESTIARY.md` §4.2
+				# -- the floor's verb is the *fast* answer, never the only one).
+				# Sidestep the lane and hit the back of it: 1.45 s is the longest window
+				# in this fight and it is long for exactly that reason, because the
+				# plate overshoots and has to be turned round. Or put one of the two
+				# slag posts in the lane, which ends the commit early and opens the same
+				# window for free.
+				#
+				# # NEEDS: the one `if` in `Boss._on_damaged` that `docs/BOSSES.md`
+				# §6.2 specifies for the Slag Ogre -- an arrow landing during
+				# `State.WINDUP` calling `stagger()` instead of falling through to
+				# poise. With it, *one arrow opens him* is literal and this beat is the
+				# receptacle §7 describes. Without it the bow is still the answer, paid
+				# for in arrows rather than in one. Nothing below depends on it.
+				"id": &"plate_advance", "name": "Plate-Advance",
+				"tell": {
+					"time": 1.00, "pose": POSE_CROUCH,
+					"color": Pal.RUST, "energy": 0.75,
+					"sfx": &"ogre_alert",
+					"read": "It drops in behind the plate until the plate is most of "
+						+ "what there is of it -- the one beat where it is shorter than "
+						+ "the hero -- and the slag in the seams down its arm goes from "
+						+ "ember to orange. A narrow lane burns onto the flagstones in "
+						+ "front of it, and the lane is where it is going.",
+				},
+				# Slow, and that is the difference between an advance and a charge. The
+				# Slag Ogre crosses eleven metres at 13 m/s; this crosses eight at 8, so
+				# the commit is a full second of a plate coming at you rather than a hit
+				# you either read or did not. A wall you can walk out of is a wall; a
+				# wall you cannot is a check.
+				"shape": SHAPE_CHARGE, "reach": 8.0, "radius": 1.4,
+				"speed": 8.0,
+				"damage": 3, "knockback": K.KNOCKBACK_HEAVY, "stun": 0.30,
+				"sfx": &"weapon_impact_blunt_2h_heavy",
+				"recover": 1.10, "punish": 1.45, "cooldown": 1.45,
+				"weight": 3.0, "min_range": 5.0, "max_range": 16.0,
+			},
+			{
+				# THE THREAT, and it is a `zone` rather than the cone §7's prose asks
+				# for. `docs/BESTIARY.md` §4.3 wants one beat the shield answers and one
+				# it does not, and `docs/BOSSES.md` §3 says which is which: *arc, slam
+				# and charge are the shield's beats; zone is the roll's*. An `arc` here
+				# would have been a second shield beat, and a fight both of whose beats
+				# answer the same way is one beat played twice.
+				#
+				# So the cough is read as WHERE THE EMBERS LAND rather than as the
+				# breath that threw them: three fires start, the first under the hero,
+				# and they burn up over their own fuse. Same fiction, and the only
+				# version of it the five shapes can deliver.
+				"id": &"ember_cough", "name": "Ember-Cough",
+				"tell": {
+					"time": 1.05, "pose": POSE_SPREAD,
+					"color": Pal.VITAL, "energy": 0.62,
+					"sfx": &"spell_charge_fire",
+					"read": "The bellows on its back fill, and it opens both arms away "
+						+ "from the plate to let them -- the one beat where the plate is "
+						+ "not between you and it, and the widest the body ever gets. The "
+						+ "whole thing lights red from the spine outward, and nothing is "
+						+ "drawn on the floor at all until it coughs.",
+				},
+				"shape": SHAPE_ZONE, "radius": 2.2, "fuse": 1.20, "count": 3,
+				"damage": 3, "knockback": K.KNOCKBACK_LIGHT, "stun": 0.20,
+				"sfx": &"spell_impact_fire",
+				# 1.30 s is two contacts and misses the finisher line (1.37 s,
+				# `docs/BOSSES.md` §2) on purpose: the cheap beat buys the cheap
+				# opening, and the wall's 1.45 s is where the third swing lands.
+				"recover": 0.75, "punish": 1.30, "cooldown": 1.55,
+				"weight": 2.0, "min_range": 0.0, "max_range": 16.0,
+			},
+		],
+	},
+
+	# =========================================================================
+	&"second_voice": {
+		"floor": 3,
+		"title": "THE SECOND VOICE",
+		"model": &"skeleton",
+		# 2.55 m. §7's "skeleton, x1.5" against `Enemy.DEFS`' 1.70 m skeleton is
+		# 2.55 exactly. Half a metre over the roster's tallest and a metre and a
+		# half under the Bellwake's 4.20 -- and the Bellwake does not touch the
+		# floor, which is most of what tells the two apart before either moves.
+		"height": 2.55,
+		# Pale. The Choir's own body is MIDNIGHT under ARCANE; this is the opposite
+		# reading of the same room -- bleached bone lit cold -- so the two floor-3
+		# silhouettes are a white one and a violet one and never two shades of the
+		# same dark.
+		#
+		# The mix is high and the energy is LOW, and both numbers were moved after
+		# looking at the frame rather than authored from the palette. At the
+		# table's usual 0.34/0.26 the emission simply wins: `Boss._style_model`
+		# lerps the albedo but ASSIGNS the emission outright, so a quarter of a
+		# unit of COBALT over a dark cave floods the whole mesh and the body came
+		# out the same saturated blue as the floor-1 Sluice-Keeper -- two floors
+		# apart, so never side by side, but "a white one" was a claim the render
+		# flatly contradicted. 0.55 of BONE is what makes it bleached; 0.16 of
+		# COBALT is a cast over it rather than a colour of its own.
+		#
+		# It also has to stay dark enough for `sounding_ring` to read: the tell
+		# glows BONE at 0.72, and a body already lit bone-white would telegraph
+		# its biggest beat by getting very slightly brighter.
+		"tint": {
+			"albedo": Pal.BONE, "albedo_mix": 0.55,
+			"emission": Pal.COBALT, "energy": 0.16,
+		},
+		# 48 q = 12 hearts, half the Bellwake's 96 -- and exactly the Cistern
+		# Warden's number, which is the ladder working rather than a coincidence:
+		# floor 3's optional branch is worth the whole of floor 1's boss, and the
+		# player meets it holding two more verbs.
+		#
+		#   rung 0 -> 48/2 = 24 swings.   rung 2 -> 12.   rung 3 -> 10.
+		#   Punish averages 1.30 s = two light swings; the cycle averages 3.6 s. So
+		#   at the rung 2-3 this floor is met at, 5-6 windows -- about 21 s.
+		"health": 48,
+		"arena": {
+			"radius": 9.0,
+			# No cover, and for a sharper reason than the Bellwake's. Beat one is a
+			# BAND with safe floor on both sides of it, so the fight is already about
+			# where you stand; a post would add a third safe place that the `slam` --
+			# a pure distance query -- would reach straight through anyway.
+			# `docs/BOSSES.md` §6.3's second reason, one branch over: a mark that
+			# teaches a false rule is worse than no mark.
+			"cover": false, "cover_count": 0,
+		},
+		"drop": {"item": &"", "relic": &""},
+		"music": "",
+		"lore": "The College's record of the Hushing Choir names one singer and one "
+			+ "date. Whatever is standing in the treasure vault has been holding the "
+			+ "harmony under that note ever since, and it has never once had to take "
+			+ "a breath.",
+		"beats": [
+			{
+				# THE WALL, and floor 3's verb is T2 -- the BURST
+				# (`docs/PUZZLES.md` §1), taken off the Slag Ogre.
+				#
+				# **The ring is the wall.** A band from 3.0 m to 7.5 m in a 9.0 m room:
+				# there is safe floor under its feet and a metre and a half of safe rim
+				# at the wall, and everything a sword can reach from is in between. The
+				# question the beat asks is *which side of the note are you on*, and the
+				# fast answer is the one that needs to be on neither -- **the Burst
+				# reaches across the band from the rim**, and at floor 3 it is the only
+				# thing in the kit that does area damage at range.
+				#
+				# **The second way over** (`docs/BESTIARY.md` §4.2): walk THROUGH the
+				# band and be inside 3.0 m before the tell ends. That is the Warden's
+				# donut, which floor 1 already taught -- and it costs more here, because
+				# `keening` reaches 7.0 m straight in front and the inside of the ring
+				# is not a rest position. Slower still, and always available: the bow
+				# from the rim, one arrow at a time.
+				#
+				# Read `Boss._shape_slam` before touching `safe_inner`: it hurts
+				# BETWEEN inner and outer, so beyond `radius` is safe, and that outer
+				# rim is half the design.
+				"id": &"sounding_ring", "name": "The Sounding Ring",
+				"tell": {
+					"time": 1.15, "pose": POSE_SPREAD,
+					"color": Pal.BONE, "energy": 0.72,
+					"sfx": &"glint_bell",
+					"read": "It opens its arms to their full span and goes completely "
+						+ "still, and the note it has been holding becomes visible: a "
+						+ "white band scratched onto the floor with a hole in the middle "
+						+ "of it and clear stone outside. The band is drawn before it is "
+						+ "thrown and it does not move. The standing wave has a node at "
+						+ "its own feet.",
+				},
+				"shape": SHAPE_SLAM, "radius": 7.5, "safe_inner": 3.0,
+				"damage": 4, "knockback": K.KNOCKBACK_HEAVY, "stun": 0.32,
+				"sfx": &"spell_impact_dark",
+				"recover": 1.00, "punish": 1.40, "cooldown": 1.65,
+				"weight": 3.0, "min_range": 0.0, "max_range": 16.0,
+			},
+			{
+				# THE THREAT, and §7's line about it is a fact about the game rather
+				# than a feature to build: *it lands as a blow, so it breaks Heat.*
+				# Every blow does (`docs/METAGAME.md` §4.5), which is the point -- the
+				# chain is what makes this optional branch cost something even when it
+				# is won, and nothing in this row has to arrange it.
+				#
+				# The shield answers this one and does not answer the ring (§4.3's two
+				# beats, two tools), and the 8.0 m gate is what stops the rim from being
+				# somewhere to stand and shoot from: the note reaches the wall.
+				"id": &"keening", "name": "The Keening",
+				"tell": {
+					"time": 0.95, "pose": POSE_RISE,
+					"color": Pal.COBALT, "energy": 0.66,
+					"sfx": &"cast_conjuration",
+					"read": "It draws itself up a head taller than it stands, and the "
+						+ "jaw comes open and stays open. Cold blue runs up the ribs to "
+						+ "the throat and a long narrow lane lights on the floor in front "
+						+ "of it -- tall and blue and pointed, against a beat that was "
+						+ "wide and white and everywhere.",
+				},
+				"shape": SHAPE_ARC, "reach": 7.0, "arc_deg": 38.0,
+				"damage": 4, "knockback": K.KNOCKBACK_LIGHT, "stun": 0.26,
+				"sfx": &"spell_impact",
+				"recover": 0.70, "punish": 1.20, "cooldown": 1.20,
+				"weight": 3.0, "min_range": 0.0, "max_range": 8.0,
+			},
+		],
+	},
+
+	# =========================================================================
+	&"gate_hound": {
+		"floor": 4,
+		"title": "THE GATE-HOUND",
+		"model": &"kobold",
+		# 2.30 m, and this is the one height of the four that is NOT §7's
+		# multiplier. "kobold, x1.4" against `Enemy.DEFS`' 1.35 m kobold is
+		# **1.89 m** -- shorter than an ordinary orc, which fails the one rule the
+		# placeholder column exists to serve: a miniboss has to read as *bigger than
+		# the roster* from the doorway. The metres are the contract (there is no
+		# `scale` key here, executor contract §1b) and the multiplier was a sketch,
+		# so the sketch loses. 2.30 m is a kobold at about x1.7: a clear head over
+		# the orc, a full 1.30 m under the Riven Knight, and still the SHORTEST of
+		# the four minibosses -- which mirrors the Riven Knight being the shortest of
+		# the four bosses, and costs nothing.
+		"height": 2.30,
+		# Iron-dark, with the Chord Gate's own violet in the seams. The Riven Knight
+		# is VOID under VITAL -- one red seam on black -- so this is the same black
+		# wearing the other hue, and the two are told apart by COLOUR rather than by
+		# asking a player to judge 2.30 m against 3.60 m through a doorway.
+		"tint": {
+			"albedo": Pal.VOID, "albedo_mix": 0.40,
+			"emission": Pal.ARCANE, "energy": 0.22,
+		},
+		# 64 q = 16 hearts, half the Riven Knight's 128.
+		#
+		#   rung 0 -> 32 swings.   rung 3 -> 13.
+		#   Floor 4 assumes rung 3, so 13 swings is 7 windows at ~3.2 s a cycle: a
+		#   22-second fight for the player who forged and a 50-second one for the
+		#   player who did not. The Chord Gate is allowed to answer that honestly on
+		#   the optional branch exactly as it does at the boss.
+		"health": 64,
+		"arena": {
+			"radius": 8.5,
+			# **No cover, and the asymmetry with the Bellows-Hand is principled.** A
+			# post breaks a `charge`, because `_advance_charge` ends the commit on
+			# `is_on_wall()` -- live code. It does NOT break an `arc`, which is a
+			# distance-and-angle query resolved once at the commit and blind to
+			# geometry, so a pylon here would draw a shadow the shard goes straight
+			# through. That is board card 21's failure mode wearing a prop instead of
+			# a mark, and `docs/BOSSES.md` §6.3 refuses it for the same reason.
+			"cover": false, "cover_count": 0,
+		},
+		"drop": {"item": &"", "relic": &""},
+		"music": "",
+		"lore": "The Imperium kept dogs at the Chord Gate for the same reason "
+			+ "anyone keeps dogs at a gate, and then the Gate went through them as "
+			+ "well. This one has not left the threshold and it does not come to the "
+			+ "door. It waits at the far end of the room and throws the door at you.",
+		"beats": [
+			{
+				# THE WALL, and floor 4's verb is T3 -- the HOOKSHOT
+				# (`docs/PUZZLES.md` §1), taken off the Bellwake.
+				#
+				# **`min_range` 5.0 IS the lock and the hookshot IS the key.** The beat
+				# cannot be picked from inside five metres -- `pick_beat`'s range gate
+				# refuses it and only the overhand is left -- so closing the gap does
+				# not merely make the lob easier to survive, it DELETES it. Nothing in
+				# the kit closes five metres in one press except the hookshot.
+				#
+				# §7's *"or freezes it where it stands"* is the other half and it is
+				# deliberately NOT built: `Boss.freeze` refuses the chain on poise
+				# grounds and that argument is good -- a hookshot that could cut a tell
+				# short is a beat the player can delete, and one that could cut a punish
+				# short takes the window away from them. **The pull is the answer; the
+				# freeze is not, and should not be made one here.**
+				#
+				# **The second way over** (`docs/BESTIARY.md` §4.2): run it down on
+				# foot, eating shards on the way in -- or block them. An `arc` is a
+				# shield beat (`docs/BOSSES.md` §3) and `docs/BESTIARY.md` §2 gives the
+				# shield *send a thrown thing back* as its combat verb, so the guard is
+				# a real answer here. It just spends the whole walk behind it.
+				#
+				# 22 degrees: a LINE, not a sweep. What is thrown is one piece of the
+				# Gate and it goes exactly where the lane is drawn.
+				"id": &"gate_shard", "name": "Gate-Shard",
+				"tell": {
+					"time": 0.85, "pose": POSE_TILT,
+					"color": Pal.VITAL, "energy": 0.68,
+					"sfx": &"glint_hiss",
+					"read": "It cants hard onto one shoulder and cocks the arm back "
+						+ "across its body, and the shard in that hand goes from "
+						+ "gate-violet to hot red -- the one red thing on a black body. A "
+						+ "hairline lane runs from its feet to yours and stops there. It "
+						+ "is a line, and the line is aimed.",
+				},
+				"shape": SHAPE_ARC, "reach": 9.0, "arc_deg": 22.0,
+				"damage": 4, "knockback": K.KNOCKBACK_LIGHT, "stun": 0.22,
+				"sfx": &"weapon_impact_stab_1",
+				"recover": 0.60, "punish": 1.15, "cooldown": 1.40,
+				"weight": 3.0, "min_range": 5.0, "max_range": 16.0,
+			},
+			{
+				# THE THREAT, and §7 is emphatic: *rolled, not blocked -- the one beat
+				# in the set the shield does not answer.* `docs/BOSSES.md` §3 says which
+				# shape that is and there is exactly one: a `zone`, whose first disc is
+				# drawn under the hero, so a standing hero is caught by a blow whose
+				# direction is zero and `blocks()` and `parries()` both return false.
+				# **A `slam` would have been blockable and the doc's line would have
+				# been wrong**; this is the overhand's landing spot marked on the stone
+				# on a short fuse, which is the same picture and the only unblockable
+				# one.
+				#
+				# `KNOCKBACK_HEAVY` is not flavour here, it is the fight's engine. Six
+				# quarters and a heavy shove put the hero back outside beat one's 5.0 m
+				# gate, where the lob is the only thing left, and closing again is the
+				# hookshot's job. That loop is what "it backs across a gap" comes out as
+				# when nothing in the executor retreats.
+				"id": &"overhand", "name": "The Overhand",
+				"tell": {
+					"time": 0.80, "pose": POSE_REAR,
+					"color": Pal.BONE, "energy": 0.70,
+					"sfx": &"attack_prepare_1",
+					"read": "Both arms go over and behind the head and the whole body "
+						+ "comes up with them, pale white, for four fifths of a second. "
+						+ "Nothing is drawn while it is up there. The disc arrives on the "
+						+ "floor WITH the blow and burns for the last second before it "
+						+ "lands, under whoever it was aimed at.",
+				},
+				"shape": SHAPE_ZONE, "radius": 3.0, "fuse": 0.95, "count": 1,
+				"damage": 6, "knockback": K.KNOCKBACK_HEAVY, "stun": 0.34,
+				"sfx": &"jump_slam",
+				# 1.40 s clears the 1.37 s finisher line (`docs/BOSSES.md` §2) and it is
+				# the only window in this fight that does. The Chord Gate's dog gives
+				# the third swing away exactly once a cycle, and takes six quarters for
+				# it.
+				"recover": 0.85, "punish": 1.40, "cooldown": 1.40,
+				"weight": 4.0, "min_range": 0.0, "max_range": 6.0,
 			},
 		],
 	},
@@ -1024,6 +1455,36 @@ static func validate() -> PackedStringArray:
 	# kind a plausible edit breaks silently: a third beat, a relic drop that
 	# would make an optional branch mandatory, and a silhouette a player cannot
 	# tell from the floor's boss.
+	# **Rule 0: four of them, and one per floor.** This check is here because its
+	# absence is what card 23 was: `BOSSES` had a manifest count from the day it
+	# was written and `MINIBOSSES` had none, so a table holding ONE row passed
+	# `validate()` clean for as long as it took somebody to open the file.
+	# Nothing raised -- `miniboss_for(2)`, `(3)` and `(4)` answered `&""`,
+	# `Dungeon._place_chamber` returned on the first line without a word, and
+	# three quarters of the treasure branch was simply not in the game. A
+	# director that called `validate()` and photographed floor 1 saw nothing at
+	# all wrong.
+	#
+	# **A bare count of four is not enough**, which is the second half of the
+	# lesson: two minibosses on floor 2 and none on floor 3 also counts to four,
+	# and it fails in exactly the same silent way -- `miniboss_for(3)` answers
+	# `&""`, one chamber comes up empty, and the other floor's `for` loop returns
+	# whichever of its two rows `Dictionary.keys()` happened to order first. So
+	# the floors are counted, not the rows.
+	if all_minibosses().size() != 4:
+		out.append("the manifest says 4 minibosses; this table has %d"
+			% all_minibosses().size())
+	for level: int in range(1, 5):
+		var on_floor: Array[StringName] = []
+		for id in all_minibosses():
+			if int(MINIBOSSES[id]["floor"]) == level:
+				on_floor.append(id)
+		if on_floor.size() != 1:
+			out.append("floor %d has %d miniboss(es) %s -- exactly one per floor, "
+				% [level, on_floor.size(), on_floor]
+				+ "always (PUZZLES §7). A floor with none builds an empty "
+				+ "treasure chamber and says nothing about it")
+
 	for id in all_minibosses():
 		var row := get_boss(id)
 		var list := beats(id)

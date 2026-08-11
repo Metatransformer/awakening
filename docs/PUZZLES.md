@@ -598,9 +598,27 @@ guard. Neither one is a tutorial and neither one is skippable-and-then-required.
 | 3 Choir | **The Second Voice** | `skeleton`, ×1.5, pale | **Ring.** It anchors to a resonating pillar and cannot be touched while the pillar sings. **Burst the pillar** | **Keening.** A sustained cone. It lands as a blow, so it breaks Heat — the fight is a race against your own chain |
 | 4 Chord Gate | **The Gate-Hound** | `kobold`, ×1.4, iron-dark | **Retreat.** Backs across a gap and lobs from the far side. **Hookshot** closes it, or freezes it where it stands (GDD §5.2) | **Overhand.** A heavy committed slam. Rolled, not blocked — the one beat in the set the shield does not answer |
 
+**The Placeholder column is a sketch, and `BossDb.MINIBOSSES` is the record.**
+All four rows are built (2026-08-10) and three of them departed from the column
+above, each time for a reason the table writes down at the row:
+
+- **The multipliers are not heights.** `kobold` ×1.4 is 1.89 m, which is
+  *shorter than an ordinary orc*, and the whole point of a miniboss is that it
+  reads as bigger than the roster. The Gate-Hound is authored at **2.30 m**. The
+  table stores metres, never a factor.
+- **The Second Voice has no pillar.** A resonating pillar is a *puzzle atom*
+  standing in an arena, which needs a new prop and a new `arena` key, and §8.1
+  caps the atoms at nine. "Cannot be touched" is an invulnerability gate, which
+  is a new mechanic. So the ring it sings **is** the wall — a floor band with a
+  wide safe middle, answered by the Burst from outside it.
+- **The Bellows-Hand's plate is a distance, not an invulnerability.** Its
+  advance only comes out from 5 m, which is where the bow lives and the sword
+  does not.
+
 **Every telegraph obeys GDD §7**: it never compresses past 60% however deep the
 floor is. A miniboss that becomes unreadable at depth is a miniboss that has
-stopped being a design and started being a wall.
+stopped being a design and started being a wall. Measured across the built rows
+(`tools/directors/minibosses.gd`, section C): arc 73.9%, zone 76.2%, slam 121%.
 
 **They drop nothing but the chest behind them.** No miniboss drops an item, a
 stat or a relic — GDD pillar 4 holds here exactly as it does everywhere else. The
