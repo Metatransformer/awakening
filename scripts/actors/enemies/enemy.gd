@@ -1480,8 +1480,17 @@ func _drop_stolen() -> void:
 ## works perfectly and reads as a goblin walking away is a bag slot that vanished
 ## for no reason the player can name.
 
-## Build the empty sack, at the start of the reach. Pale `Pal.BONE` and unlit —
-## it is a container, not a prize, until there is something in it.
+## Build the empty sack, at the start of the reach. Pale `Pal.BONE` and barely
+## lit — it is a container, not a prize, until there is something in it.
+##
+## The emission and the visual layer are `LootMote`'s, by reference and not by
+## eye, because this prism IS a mote as far as the player is concerned and the
+## two drifting apart is how the vocabulary argument under `_fill_sack` stops
+## being true. It also shipped the exact failure that file documents: `Pal.BONE`
+## is (0.847, 0.816, 0.722) and the old 0.25 multiplier drove it to 1.06 and 1.02
+## in red and green **before a single light reached it**, so the sack rendered as
+## a hard-edged white wedge on the goblin's chest — measured off the fight frame
+## at (255, 255, 240), red and green clipped, blue not. It read as missing art.
 func _build_sack() -> void:
 	if _sack != null:
 		return
@@ -1489,7 +1498,7 @@ func _build_sack() -> void:
 	_sack_mat.albedo_color = Pal.BONE
 	_sack_mat.emission_enabled = true
 	_sack_mat.emission = Pal.BONE
-	_sack_mat.emission_energy_multiplier = 0.25
+	_sack_mat.emission_energy_multiplier = LootMote.EMIT_BASE
 	_sack_mat.roughness = 0.85
 	# Faceted like every other pickup in the game. A smooth-shaded one would read
 	# as an asset from a different project (`LootMote._build`).
@@ -1507,6 +1516,8 @@ func _build_sack() -> void:
 	# tumbled by `_tick_flight`.
 	_sack.position = Vector3(0.0, _height() * 0.62, -_height() * 0.34)
 	_sack.scale = Vector3.ONE * 0.45
+	# Off the default layer so `_fill_sack`'s lamp can be told to skip it.
+	_sack.layers = LootMote.SELF_BIT
 	add_child(_sack)
 
 
@@ -1522,7 +1533,12 @@ func _fill_sack(id: StringName) -> void:
 	var tint: Color = def.tint if def != null else Pal.BONE
 	_sack_mat.albedo_color = tint
 	_sack_mat.emission = tint
-	_sack_mat.emission_energy_multiplier = 1.4
+	# Was 1.4, which is 2.4x the tint on every channel and therefore WHITE for
+	# every item worth stealing -- a Void Pearl and a Deep Amber came out the same
+	# colour, which is the one thing the paragraph above says this must not do.
+	# Full is already said three other ways: the tint, the full scale, and the
+	# lamp. It does not also need to be said in clipping.
+	_sack_mat.emission_energy_multiplier = LootMote.EMIT_BASE
 	_sack.scale = Vector3.ONE
 
 	_sack_light = OmniLight3D.new()
@@ -1531,6 +1547,11 @@ func _fill_sack(id: StringName) -> void:
 	_sack_light.omni_range = 2.2
 	_sack_light.omni_attenuation = 1.6
 	_sack_light.shadow_enabled = false
+	# Parented to the MESH, so without this it sits dead centre inside the prism
+	# and floods the surface whose colour is the whole point from zero distance --
+	# `LootMote`'s bug exactly, and worse here because the lamp is 1.6 rather than
+	# 1.1 and the prism is smaller. It lights the goblin and the floor, not itself.
+	_sack_light.light_cull_mask = LootMote.ALL_LAYERS & ~LootMote.SELF_BIT
 	_sack.add_child(_sack_light)
 
 
