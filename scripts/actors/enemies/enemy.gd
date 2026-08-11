@@ -147,7 +147,26 @@ const DEFS := {
 ## Which floor this one was built for. Everything that scales with depth reads it
 ## through `Prog`, and it is set by the dungeon rather than read off `Run` so a
 ## monster spawned by a director or a test scene is a floor-1 monster.
-@export var level: int = Prog.FIRST
+##
+## **Write it whenever you like; the curve follows.** That setter is not tidiness.
+## The wind-up reads `Prog.windup_scale(level)` live, but health and damage are
+## LATCHED once by `_build_combat` -- and `_build_combat` runs inside `_ready`,
+## which `add_child` runs synchronously. So for as long as this was a plain field
+## the only correct place to write it was BEFORE the body entered the tree, and
+## nothing said so. `Dungeon._spawn_foe` and `Vault._populate` happened to get it
+## right; `Boss._shape_summon` wrote it on the line after `Enemy.spawn`, and the
+## Bellwake and the Riven Knight summoned floor-1 adds on floors 3 and 4 for as
+## long as that function's own comment claimed the opposite (card #22 -- measured
+## at `level=3` on a 6-quarter skeleton that should have had 9, and `level=4` on
+## a 20-quarter wraith that should have had 35).
+##
+## The ORDER is what was wrong, so the fix is to stop the order mattering rather
+## than to move one line and leave the next caller the same trap. `Enemy.spawn`
+## takes the level as a required argument for the same reason from the other end.
+@export var level: int = Prog.FIRST:
+	set(value):
+		level = value
+		_apply_level_curve()
 ## A bigger, tougher single body. Deliberately not a stat nudge: a room of six
 ## ordinary monsters and a room of five plus one you can SEE coming are different
 ## rooms, and only the second one is a decision (scripts/core/progression.gd).
@@ -266,10 +285,21 @@ var _exit: Vector3 = Vector3.ZERO
 var _ribbon: Node3D = null
 
 
-static func spawn(parent: Node3D, p_kind: StringName, at: Vector3, seed_val: int) -> Enemy:
+## Build one, level it, and put it in the world -- in that order, which is the
+## whole point of the helper.
+##
+## `p_level` is a REQUIRED argument with no default, and that is the load-bearing
+## part. `add_child` runs `_ready` synchronously and `_ready` latches the floor's
+## curve (see `level`), so a level written on the line AFTER this call is a level
+## the curve never saw -- card #22, two floors of adds at floor-1 health. A
+## default here would make it possible to forget again; an argument makes the
+## question unaskable at the call site.
+static func spawn(parent: Node3D, p_kind: StringName, at: Vector3, seed_val: int,
+		p_level: int) -> Enemy:
 	var e := Enemy.new()
 	e.kind = p_kind
 	e.drop_seed = seed_val
+	e.level = p_level
 	parent.add_child(e)
 	e.global_position = at
 	return e
@@ -428,28 +458,17 @@ func _build_model() -> void:
 func _build_combat() -> void:
 	health = HealthComponent.new()
 	health.name = "Health"
-	# Bands, not level-scaling: this reads the FLOOR, never the player's power.
-	# That is what keeps floor 1 genuinely easy on your fiftieth run and what
-	# keeps the forge worth buying (docs/GDD.md §5).
-	var mult := Prog.health_mult(level) * (Prog.ELITE_HEALTH if elite else 1.0)
-	health.max_quarters = maxi(int(roundf(float(_def["health"]) * mult)), 1)
 	# **A monster's i-frames are not the hero's**, and leaving this at the default
 	# is what made the light chain's second step do nothing (see
 	# K.ENEMY_IFRAME_TIME for the arithmetic). Set explicitly rather than by
 	# changing the component's default, because the hero's second is right for the
 	# hero and `HealthComponent` is shared.
 	health.iframe_time = K.ENEMY_IFRAME_TIME
-	add_child(health)
-	health.damaged.connect(_on_damaged)
-	health.died.connect(_on_died)
 
 	_hitbox = DamageArea.new()
 	_hitbox.name = "Claw"
 	_hitbox.collision_layer = K.L_ENEMY_HITBOX
 	_hitbox.collision_mask = K.L_PLAYER
-	_damage = int(_def["damage"]) + Prog.damage_bonus(level) \
-		+ (Prog.ELITE_DAMAGE if elite else 0)
-	_hitbox.amount = _damage
 	_hitbox.kind = &"contact"
 	# What the run-ending screen prints after "KILLED BY". The elite prefix is on
 	# the name and not only on the stats because "ELITE ORC" is the whole story of
@@ -464,7 +483,52 @@ func _build_combat() -> void:
 	sphere.radius = float(_def["reach"]) * 0.62
 	col.shape = sphere
 	_hitbox.add_child(col)
+
+	# Both numbers the floor's band owns, in ONE place, before either object is in
+	# the tree. See `_apply_level_curve` -- the `level` setter calls it too, so
+	# where the curve gets applied is no longer a question of call order.
+	_apply_level_curve()
+
+	add_child(health)
+	health.damaged.connect(_on_damaged)
+	health.died.connect(_on_died)
 	add_child(_hitbox)
+
+
+## The floor's curve, on the two things that latch it: this one's health and the
+## damage its claw carries.
+##
+## Called from `_build_combat` and again from the `level` setter, which is what
+## makes a late write correct rather than merely loud. Everything else that
+## scales with depth (`Prog.windup_scale`, the drop rolls) is read live at the
+## moment it is used and was never exposed to this.
+##
+## Bands, not level-scaling: this reads the FLOOR, never the player's power. That
+## is what keeps floor 1 genuinely easy on your fiftieth run and what keeps the
+## forge worth buying (docs/GDD.md §5).
+##
+## `elite` is deliberately NOT given the same setter. It curves the model's scale
+## and the name on the death screen as well as the stats, and those are built once
+## by `_build_model`; a setter here would half-fix a late `elite` write -- bigger
+## numbers on a body that is still the ordinary size -- which is worse than the
+## trap it replaced, because THAT one is visible.
+func _apply_level_curve() -> void:
+	# Before `_build_combat`. It reads `level` itself when it gets there.
+	if health == null:
+		return
+	# A body that has already been hit keeps the damage it has taken; one that has
+	# not stays full. `HealthComponent._ready` fills `quarters` from `max_quarters`
+	# and has not run yet on the `_build_combat` path, where this reads 0 >= 16 and
+	# leaves the fill to it.
+	var was_full := health.quarters >= health.max_quarters
+	var mult := Prog.health_mult(level) * (Prog.ELITE_HEALTH if elite else 1.0)
+	health.max_quarters = maxi(int(roundf(float(_def["health"]) * mult)), 1)
+	health.quarters = health.max_quarters if was_full \
+		else mini(health.quarters, health.max_quarters)
+	_damage = int(_def["damage"]) + Prog.damage_bonus(level) \
+		+ (Prog.ELITE_DAMAGE if elite else 0)
+	if _hitbox != null:
+		_hitbox.amount = _damage
 
 
 static func _model_height(n: Node3D) -> float:

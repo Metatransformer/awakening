@@ -285,12 +285,15 @@ having, because both are routinely mis-stated:
   compressed by nine percent, not by forty. **The 0.6 clamp is never reached
   anywhere in the four authored floors** — it first engages at **floor 15** of the
   Long Descent (floor 14 computes 0.61; floor 15 computes 0.58 and is clamped).
-- A boss's summoned adds *should* carry the boss's floor — `_shape_summon` sets
-  `e.level` — but **they do not today**: `Enemy.spawn` has already added the child
-  and run `_build_combat` before the level is written, so every chorister and
-  every called wraith arrives with floor-1 stats (board card 22). Intended, a
-  `call_the_iron` wraith is 35 quarters and 6 damage; built, it is 20 and 5.
-  Nothing in §6 depends on the bug being fixed, but §6.4's balance note does.
+- A boss's summoned adds carry the **boss's** floor, not `Run.level`:
+  `_shape_summon` passes it to `Enemy.spawn` as an argument. A `call_the_iron`
+  wraith is **35 quarters and 6 damage**, and a `hushing_choir` skeleton is 9.
+  For most of this document's life they were 20 and 5, and 6 — the level was
+  written on the line *after* `spawn`, which had already run `add_child` and let
+  `_build_combat` latch the curve off the `Prog.FIRST` default, so both fights
+  summoned floor-1 bodies with a perfectly correct `level` sitting on them
+  (board card 22, fixed 2026-08-11). The check is `boss_cistern.gd` section O,
+  which is the only director in the project that throws `SHAPE_SUMMON`.
 
 **What stands in for the curve is authored compression across the four fights**,
 and it should be checkable rather than felt. Same attack shape, floor 1 against
@@ -1052,12 +1055,14 @@ it stops being worth throwing *for the window alone*. `call_the_iron` is
 unparryable and undodgeable, like every summon, and pays the longest punish in
 the game (2.10 s) for it.
 
-**Balance note, and it is the honest one about this fight.** Intended, the two
-called wraiths are 35 quarters and 6 damage each at floor 4 — **55% of the boss's
-own 128-quarter bar, standing next to it.** Built, they are 20 and 5, because of
-board card 22. Whichever number is true, `cap: 2` and an 8.00 s cooldown are the
-only things holding the fight's length down, and this is the beat to watch when
-the Chord Gate is first played end to end.
+**Balance note, and it is the honest one about this fight.** The two called
+wraiths are 35 quarters and 6 damage each at floor 4 — **55% of the boss's own
+128-quarter bar, standing next to it.** They were 20 and 5 until card 22 landed
+on 2026-08-11, so this is now a heavier beat than anything anyone has played,
+and it is measured: `boss_cistern.gd` section O prints the quarter-hearts off
+the bodies themselves. `cap: 2` and an 8.00 s cooldown are the only things
+holding the fight's length down, and this is the beat to watch when the Chord
+Gate is first played end to end.
 
 **The turn, at 64 of 128 quarters: `keystone`.** The Chord Gate's broken keystone
 comes down into the middle of the arena — one mass about 3 m across, with a
@@ -1301,15 +1306,18 @@ the three:
 > date: `boss_cistern.gd` §K throws `bellows_charge` three times, so
 > `_advance_charge`, `_end_charge` and `_commit_seconds`'s charge branch have all
 > run with a screenshot on the end of them, and §7's second table is measurement
-> rather than arithmetic. **`SHAPE_SUMMON` is still untouched, and card 41 did
-> not change that.** Section L stands all four bosses up and takes each to half
-> health, so all four now *exist* at runtime with frames on them — but it bleeds
-> them with `HealthComponent.apply_hit` directly and lets no beat fire, on
-> purpose: the turn is a claim about the room and a `hushing_choir` mid-shot
-> would be a second variable in the picture. So no file in `tools/` still
-> references `hushing_choir`, `call_the_iron` or `SHAPE_SUMMON`; `_shape_summon`,
-> `_summons_alive` and the `cap` refusal in `_choose` have **still** never
-> executed, and §6.3's whole timer is **still** arithmetic off a table. A boss
+> rather than arithmetic. **`SHAPE_SUMMON` was untouched for longer**, and card
+> 41 did not change that either: section L stands all four bosses up and takes
+> each to half health, so all four *exist* at runtime with frames on them — but
+> it bleeds them with `HealthComponent.apply_hit` directly and lets no beat
+> fire, on purpose, because the turn is a claim about the room and a
+> `hushing_choir` mid-shot would be a second variable in the picture. **Section
+> O (card 22, 2026-08-11) is what finally threw it** — both summon beats, both
+> fights, the bodies photographed on the ring the beat put them on — so
+> `_shape_summon` and `_summons_alive` have executed now. §6.3's whole timer is
+> **still** arithmetic off a table, and so is the `cap` refusal in `_choose`:
+> section O reaches its beat through `force_beat`, which returns before the
+> refusal can look at it. A boss
 > that has been photographed is not a boss whose move set has run.
 >
 > **And the charge path did have its card 22 in it, exactly as this box
@@ -1321,11 +1329,20 @@ the three:
 > different actor in it: facing is measured, not derived. Both parkers set
 > `_facing` now.
 >
-> The original warning's point stands for the rest: **three of the twelve beats
-> and one of the four fight shapes still rest on code paths that have never
-> run**, and board card 22 (`_shape_summon` writing `e.level` after
-> `Enemy.spawn` has already built the combat block) was found by reading rather
-> than by running. Write the summon director expecting to find a second one.
+> **And then the summon path ran, and the box was right a second time.** Board
+> card 22 (`_shape_summon` writing `e.level` *after* `Enemy.spawn` had already
+> built the combat block) was found by *reading*; section O of
+> `boss_cistern.gd` — added 2026-08-11, and still the only director anywhere
+> that throws `SHAPE_SUMMON` — is what *ran* it, and the first frames printed
+> `level=3 6q` twice. Note which half of that reading was green: the `level`
+> was right. A check written against the field the fix touches would have
+> passed. It is `health.max_quarters` — the number the player actually fights —
+> that told the truth, and the moral is the box's own: **the beat that has never
+> executed is where the bug is, and the field that looks like the bug is not
+> necessarily the field that carries it.**
+>
+> `_summons_alive` and the `cap` refusal in `_choose` have executed now too. Of
+> the paths this box named, what remains unrun is §6.3's timer.
 
 `CLAUDE.md` §2: the proof is exercising the thing and looking at the frames, and
 `tools/directors/boss_cistern.gd` already does A–I for the Warden. Each new fight
@@ -1401,13 +1418,25 @@ gets its own director on that pattern — `boss_foundry.gd`, `boss_choir.gd`,
   the toggle in `_unhandled_input` — so the director never locked on, the bow
   fell through to its crosshair raycast, and arrows missed a body 7 m away
   intermittently. `_z_target()` sends a real `InputEventAction`).
-- **Bellwake:** one blast clears both choristers; the boss takes measurable
-  damage inside the 6.00 s; and the capped case — four alive, the beat refused by
-  `_choose`, the fight visibly picking something else. Also assert the thing
-  §6.3 and §7 are honest about, so no later reader has to rediscover it: **the
-  boss takes full damage with two choristers alive**, because there is no gate.
-  **No director in the project currently throws a `summon` at all** (board card
-  22), so this is new ground and it is where the add-level bug will show.
+- **Bellwake:** **the summon itself is DONE** — section O of `boss_cistern.gd`
+  throws `hushing_choir` and `call_the_iron`, photographs the bodies on the ring
+  and asserts their quarter-hearts against the boss's band (board card 22, which
+  it found: `level=3 6q`, twice). What section O does **not** do, and what is
+  left of this line:
+  - **One blast clears both choristers.** Note the arithmetic moved under it:
+    `K.BOMB_DAMAGE` is **2 quarters** and a chorister is now **9** rather than
+    6, so "one blast" was never literally one and is now five. Whether that is
+    a wrong number in the Burst, a wrong sentence here, or a gap the Echo fills
+    is a question for its own card — but do not write the director expecting
+    the old 6.
+  - The boss taking measurable damage inside the 6.00 s.
+  - The capped case: four alive, the beat refused by `_choose`, the fight
+    visibly picking something else. Section O reaches its beat through
+    `force_beat`, which returns *before* the cap refusal, so that branch is
+    still unrun.
+  - The thing §6.3 and §7 are honest about, so no later reader has to
+    rediscover it: **the boss takes full damage with two choristers alive**,
+    because there is no gate.
 - **Riven Knight:** **the arena has no `HookTarget` in it before the turn and one
   after it — DONE** (section L: 0 hookables before, 1 after, and the mass is
   asserted solid, centred and on the floor; `b_40/41_riven_knight`).

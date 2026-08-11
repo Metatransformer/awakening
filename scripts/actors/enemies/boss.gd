@@ -269,6 +269,23 @@ func _build_combat() -> void:
 	health.died.connect(_on_died)
 
 
+## A no-op, and the emptiness IS the override.
+##
+## `Enemy` re-runs the floor's curve every time `level` is written now (card #22),
+## which is right for a generated body and would be a disaster here: contract §2
+## authors a boss's health ABSOLUTE for the one floor it stands on, so a single
+## stray `boss.level = 3` would otherwise rewrite the Bellwake's 96 quarters as
+## `_row["health"] * Prog.health_mult(3)` and make the swing arithmetic in the
+## row's own comment a lie. Nothing writes it today. This is what keeps that from
+## being a thing anyone has to remember.
+##
+## Virtual dispatch is real for methods -- it is only STATIC calls that bind to
+## the base class at parse time (CLAUDE.md §3), and the setter reaches this
+## through `self`.
+func _apply_level_curve() -> void:
+	pass
+
+
 ## The authored tint, painted into per-surface OVERRIDES before `HitFlash.bind`.
 ##
 ## See deviation 1 in the header: the contract says tint before binding, and the
@@ -704,17 +721,31 @@ func _burst(z: Dictionary) -> void:
 ## because `Enemy._ready` swaps an unknown kind for skeleton's STATS while
 ## keeping the requested MODEL -- a boss that summons a troll-shaped six-quarter
 ## skeleton is a fight nobody can tune.
+##
+## **The level is an ARGUMENT to `spawn` and not a write afterwards.** It used to
+## be the write, one line below the call, under a comment claiming the adds were
+## curved by the boss's band -- and they were not: `spawn` calls `add_child`,
+## `add_child` runs `_ready`, and `_ready` had already latched health and damage
+## off the `Prog.FIRST` default by the time the write landed. The Bellwake's
+## choristers came out at 6 quarters instead of 9 and the Riven Knight's wraiths
+## at 20 instead of 35, with a perfectly correct `level` sitting on both, on
+## floors 3 and 4. Nothing on screen said so -- the bodies looked right and simply
+## hit for less, which is the one place `docs/GDD.md` §7's "difficulty comes from
+## depth" was quietly false. Card #22; `boss_cistern.gd` section O is the check.
 func _shape_summon(b: Dictionary) -> void:
 	var room := int(b["cap"]) - _summons_alive()
 	var n := mini(int(b["count"]), maxi(room, 0))
 	var radius := float(b["radius"])
+	# The floor the BOSS is authored for, so an add is curved by the same `Prog`
+	# band as the room it appeared in rather than by `Run.level` -- which is not
+	# the same number the moment anything (a director, a vault) fights a boss on a
+	# floor other than its own.
+	var floor_n := int(_row.get("floor", 1))
 	for i in n:
 		var a := TAU * (float(i) + _rng.randf()) / float(maxi(n, 1))
 		var at := global_position + Vector3(cos(a) * radius, 0.0, sin(a) * radius)
-		var e := Enemy.spawn(get_parent() as Node3D, b["kind"], at, _rng.randi())
-		# The floor the BOSS is authored for, so an add is curved by the same
-		# `Prog` band as the room it appeared in rather than by `Run.level`.
-		e.level = int(_row.get("floor", 1))
+		var e := Enemy.spawn(get_parent() as Node3D, b["kind"], at, _rng.randi(),
+			floor_n)
 		_summons.append(e)
 
 

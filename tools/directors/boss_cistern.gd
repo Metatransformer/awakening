@@ -69,10 +69,26 @@ extends RefCounted
 ## `tools/directors/gate_locks.gd`. Everything below goes through node handles,
 ## public accessors and `load(path).new()`.
 
+## `--sabotage=<name>`: break ONE thing on purpose and see whether the check whose
+## job it is says so. **`CLAUDE.md` §2 -- a director you have never pointed at a
+## known answer has never been tested**, however many times it has passed.
+##
+## The null case is the ordinary run: no flag, `BOSS ok` on every line.
+##
+##   `floor-1-adds`  Write `Prog.FIRST` over each summoned add's `level` the frame
+##                   after it lands, which is precisely the state card #22 found
+##                   the game in -- a floor-3 skeleton carrying floor-1 health.
+##                   **O1f/O1g and O2f/O2g must go red.** Everything else stays
+##                   green: the bodies are there, the beat was thrown, and only
+##                   the numbers on them are wrong, which is the whole reason that
+##                   bug survived as long as it did.
+const SABOTAGE: Array[String] = ["floor-1-adds"]
+
 var out := ""
 var _fails := 0
 var _engaged: Array = []
 var _defeated := 0
+var _sabotage := ""
 ## beat id -> the punish window the fight actually held open, in seconds.
 var _punish: Dictionary = {}
 
@@ -91,6 +107,14 @@ const WATCH_DIST := 7.0
 func run(rig) -> void:
 	out = rig.arg("out", "/tmp/boss/x.png").get_base_dir()
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+
+	_sabotage = rig.arg("sabotage", "")
+	if _sabotage != "":
+		if not SABOTAGE.has(_sabotage):
+			print("BOSS FAIL unknown --sabotage=%s (have %s)" % [_sabotage, SABOTAGE])
+			return
+		print("BOSS CALIBRATION --sabotage=%s -- this run is SUPPOSED to fail. " % _sabotage
+			+ "A green run under a sabotage flag is a broken check, not a pass.")
 
 	Game.reset()
 	Run.level = 1
@@ -123,6 +147,10 @@ func run(rig) -> void:
 	await _kill(rig, arena, boss, door)
 	await _reentry(rig, arena, door)
 	await _receptacle(rig)
+	# BEFORE `_turns`, and for the reason `_turns` puts the Bellwake last: `douse`
+	# darkens the room and nothing puts a sconce back, so a summon photographed
+	# after it is two skeletons in a black rectangle.
+	await _summon_band(rig)
 	await _turns(rig)
 
 	if _fails == 0:
@@ -2182,3 +2210,206 @@ func _first_hook(arena: Node) -> HookTarget:
 		if c is HookTarget:
 			return c as HookTarget
 	return null
+
+
+# --- O. The adds are curved for the floor the boss is standing on ---------------
+
+## **Board card 22, and the first director in this project to throw
+## `SHAPE_SUMMON`.** The two summon beats in the game are the Bellwake's
+## `hushing_choir` (2x `skeleton`, floor 3) and the Riven Knight's
+## `call_the_iron` (2x `wraith`, floor 4), and until this section existed nothing
+## anywhere had ever looked at what came out of one.
+##
+## What it is for. `docs/GDD.md` §7 is "difficulty comes from depth, not from
+## you", and `Prog` is the one file allowed a curve. An add that arrives at
+## `Prog.FIRST` is the single place in the game where that rule is quietly false
+## -- and it is INVISIBLE. The body is the right body, the model is the right
+## model, the tell is the right tell; it simply has floor-1 health and floor-1
+## damage in it. Nothing on screen says so, which is why the numbers below are
+## printed as well as asserted.
+##
+##   a-e  The arena stands the fight up, the room seals, the beat is thrown and
+##        the bodies land. Photographed on the frame they land on.
+##   f    **`level` is the BOSS's floor**, and `Run.level` is deliberately left at
+##        1 for the whole of this section, so a body reading 3 or 4 here can only
+##        have read it off the row.
+##   g    **`health.max_quarters` is that band's number**, which is the claim that
+##        actually matters: `level` is an input and the quarter-hearts are what
+##        the player fights. `Enemy._build_combat` latches it, so a `level`
+##        written a line too late leaves this at the floor-1 value with a
+##        perfectly correct `level` sitting beside it -- which is exactly what
+##        this section found on its first run: `level=3 6q`, twice. **f passed and
+##        g failed**, and that pair is the whole reason card #22 could sit in the
+##        game unnoticed. A check that had read `level` would have been green.
+##   h    And the two numbers differ, so g is capable of telling them apart. A
+##        band whose floor-N health equalled its floor-1 health would make g pass
+##        for ever without ever having been a test of anything.
+##
+## Calibrated both ways: `--sabotage=floor-1-adds` writes `Prog.FIRST` back over
+## each add and O_2/O_3 go red while the rest of the section stays green.
+const SUMMON_FIGHTS: Array[StringName] = [&"bellwake", &"riven_knight"]
+
+
+func _summon_band(rig) -> void:
+	# A clean slate for the same reason `_turns` takes one: section H killed the
+	# Warden and the flags it wrote have nothing to do with these two fights.
+	Game.reset()
+	# **Left at floor 1 on purpose.** `_shape_summon` must read the boss's row and
+	# never `Run`, so the run being on floor 1 while the adds come out at 3 and 4
+	# is half of what this section proves.
+	Run.level = 1
+	await rig.wait_frames(8)
+	var i := 0
+	for id in SUMMON_FIGHTS:
+		i += 1
+		await _summon_of(rig, id, "O%d" % i, 60 + i - 1)
+
+
+## One fight's summon, from the seal to the quarter-hearts on the bodies.
+func _summon_of(rig, id: StringName, tag: String, shot: int) -> void:
+	var row := BossDb.get_boss(id)
+	var beat_id := _summon_beat(id)
+	_ck("%sa %s has a summon beat" % [tag, id], beat_id != &"")
+	if beat_id == &"":
+		return
+	var b := BossDb.beat(id, beat_id)
+	var kind: StringName = b["kind"]
+	var deep := int(row.get("floor", 1))
+	# The expected number, derived from `Enemy.DEFS` and `Prog` rather than typed
+	# in: a literal here would be a second copy of the curve, and the first thing
+	# a second copy does is stop agreeing with the first (`progression.gd`'s own
+	# header makes this argument about the game and it is no less true of a check).
+	var base := int((Enemy.DEFS[kind] as Dictionary)["health"])
+	var want := maxi(int(roundf(float(base) * Prog.health_mult(deep))), 1)
+	var shallow := maxi(int(roundf(float(base) * Prog.health_mult(Prog.FIRST))), 1)
+
+	var arena := await _fresh_arena(rig, id, Vector3(0.0, 0.0, -5.0))
+	var boss: Node = arena.boss()
+	_ck("%sb the arena stood up %s" % [tag, id], boss != null)
+	if boss == null:
+		return
+	await _stand_at(rig, Vector3(3.0, 0.05, 4.5), Vector3(0.0, 0.0, -5.0))
+	await _until(rig, func() -> bool: return arena.is_sealed(), 240)
+	_ck("%sc the room sealed and %s woke" % [tag, id],
+		arena.is_sealed() and boss.is_awake())
+	Game.heal(999)
+
+	boss.force_beat(beat_id)
+	await _mark_up(rig, arena, boss)
+	var thrown := await _until(rig, func() -> bool:
+		return boss.current_beat() == beat_id and boss.state == Enemy.State.WINDUP, 600)
+	_ck("%sd it threw %s" % [tag, beat_id], thrown)
+	if not thrown:
+		return
+	# **The MIDDLE of the arena, not `_park_boss`'s mark 3.5 m off it.** Every
+	# other section parks the boss on the mark because it is photographing the
+	# boss; this one is photographing an 8-9 m ring drawn around it, and off-centre
+	# that ring reaches 11.5 m -- past an 11 m fence, so half of each summon landed
+	# outside the room. The frames show it: two runs of "where did the other one
+	# go". In a real fight the arena builds its boss at the centre and the ring
+	# fits, so the off-centre mark was the director inventing a case the game does
+	# not have.
+	_park_centre(arena, boss, _hero(rig).global_position)
+	# The lens goes up DURING the tell, so the shutter can open on the frame the
+	# bodies are still standing where the ring put them. Ten frames later they are
+	# already 0.6 m into a chase and the picture is of two monsters walking.
+	_summon_eye(rig, arena, boss as Node3D)
+	# The bodies exist from the frame of the commit, which is the far end of the
+	# tell -- 2.00 s on the Bellwake, the longest in the game.
+	var want_n := int(b["count"])
+	var landed := await _until(rig,
+		func() -> bool: return boss._summons.size() >= want_n, 400)
+	_ck("%se %d body/bodies walked in" % [tag, boss._summons.size()], landed)
+	if not landed:
+		return
+	# **Not on the frame `_until` returned on.** The bodies are appended during a
+	# physics tick and the shutter would hand back the frame rendered before it:
+	# the first version of this shot is the boss alone in an empty ring, which
+	# looks exactly like a summon that did not happen. Four frames is under a fifth
+	# of a second -- half a metre of chase, and they are still on their ring.
+	await rig.wait_frames(4)
+	await rig.capture(out.path_join("b_%02d_%s_summon.png" % [shot, id]))
+	_game_eye(rig)
+
+	if _sabotage == "floor-1-adds":
+		# The bug as filed, reproduced from the outside: `Boss._shape_summon` wrote
+		# `e.level` AFTER `Enemy.spawn` had already run `_ready`, so the curve never
+		# saw it. Writing `Prog.FIRST` here puts the same numbers on the same
+		# bodies, one frame later.
+		for n in boss._summons:
+			(n as Enemy).level = Prog.FIRST
+		await rig.wait_frames(2)
+
+	var lines := PackedStringArray()
+	var ok_level := true
+	var ok_health := true
+	var centre: Vector3 = (arena as Node3D).global_position
+	for n in boss._summons:
+		var e := n as Enemy
+		# The distance from the middle is printed because the first two runs of
+		# this section photographed an empty ring and the numbers are what said
+		# why: bodies placed past the fence. It is a reading about the FIXTURE and
+		# not a claim about the game, which is why it prints rather than asserts.
+		lines.append("level=%d %dq at %.1f m" % [e.level, e.health.max_quarters,
+			K.plane(e.global_position - centre).length()])
+		ok_level = ok_level and e.level == deep
+		ok_health = ok_health and e.health.max_quarters == want
+	print("BOSS %s %s/%s summons %d %s: floor %d wants %d q, floor 1 would be %d q -- got %s"
+		% [tag, id, beat_id, boss._summons.size(), kind, deep, want, shallow,
+			", ".join(lines)])
+	_ck("%sf every add is levelled for floor %d, with Run.level still %d"
+		% [tag, deep, Run.level], ok_level)
+	_ck("%sg and carries the band's health: %d q, not floor 1's %d"
+		% [tag, want, shallow], ok_health)
+	# The null guard on the check above. See the header.
+	_ck("%sh the two bands are different numbers (%d vs %d)" % [tag, want, shallow],
+		want != shallow)
+
+
+## The lens for one summon: the whole ring the adds are placed on, in one frame.
+##
+## **It is a WIDE lens and not a distant one, and it took two wrong frames to
+## learn why.** `hushing_choir` rings its adds at 8 m and `call_the_iron` at 9,
+## so the thing to photograph is 16-18 m across in a chamber whose fence is 11 m
+## from the middle -- there is nowhere in the room far enough back to see it at a
+## normal focal length, and the arithmetic says so: you would need about two and
+## a half ring-radii of stand-off. Both earlier attempts failed in ways worth
+## keeping written down:
+##
+##   * `_eye`'s overview (section L's, from just inside the fence) put ONE add in
+##     frame out of two -- the near half of the ring falls below the bottom edge.
+##     A picture of half a summon is worse than none: it reads as a beat that
+##     half-worked.
+##   * Backing off to `radius * 2.2` -- 17.6 m behind an 11 m arena -- put the
+##     camera INSIDE the chamber wall. The frame is black except for the HUD, and
+##     nothing in the run says so; every check above it still passed. `_ck` cannot
+##     see the shutter, which is the whole reason CLAUDE.md §2 asks for eyes.
+##
+## So: the height and the stand-off `_eye` already proved are inside the room, and
+## a 95 degree lens instead of a 62 degree one. The far edges bow a little. That
+## is the correct trade for a frame whose only job is to show two bodies where the
+## ring put them.
+func _summon_eye(rig, arena: Node, boss: Node3D) -> void:
+	var cam := rig.scene().get_node_or_null(^"SummonEye") as Camera3D
+	if cam == null:
+		cam = Camera3D.new()
+		cam.name = "SummonEye"
+		cam.fov = 95.0
+		rig.scene().add_child(cam)
+	# Placed off the ARENA and not off the boss, which is what keeps it indoors:
+	# the arena knows where its fence is and the boss does not.
+	cam.global_position = (arena as Node3D).global_position \
+		+ Vector3(0.0, 6.4, minf(arena.radius() * 0.92, 11.4))
+	cam.look_at(boss.global_position + Vector3(0.0, 1.0, 0.0), Vector3.UP)
+	cam.current = true
+
+
+## The one summon beat in a fight's list, or `&""`.
+##
+## Looked up rather than tabled beside `SUMMON_FIGHTS`: a fifth boss, or a second
+## summon on one of these two, should widen this section rather than slip past it.
+func _summon_beat(id: StringName) -> StringName:
+	for b in BossDb.beats(id):
+		if b["shape"] == BossDb.SHAPE_SUMMON:
+			return b["id"]
+	return &""
