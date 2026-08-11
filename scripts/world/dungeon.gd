@@ -159,14 +159,45 @@ const CHAMBER_SKIRT := 10.0
 ## three the shortcut saves nothing and the loop is a doorway between neighbours.
 const CHORD_SPAN := 3
 
-## The maze's cells. Wider than it is deep, and that is not a typo: the lantern
-## row lives in an apron on the mouth side (`MazeRoom.APRON`), the apron comes out
-## of the depth, and 4 rows at `MazeRoom.CELL` leaves a 16 m room 1.8 m of it —
-## a metre and a half short of anywhere a lantern can stand. Three rows leaves
-## 3.35 m and the lanterns land on the floor slab where the player can hit them.
-## `pick_maze_cell` asks `MazeRoom.fits` rather than restating the arithmetic.
-const MAZE_ROWS := 3
-const MAZE_COLS := 4
+## **The maze gets a room of its own size, and this is that size.**
+##
+## 27 m square: 729 m² against the ordinary room's 256, so a shade under three
+## times the floor. The maze used to be squeezed into whatever 16 m room was
+## going, which cost it twice over — 3 rows deep once the lantern apron was paid
+## for, and 3.1 m cells, which together is a nine-cell letterbox of corridors
+## narrower than the camera's boom. A room sized to the puzzle instead of the
+## puzzle sized to the room is the whole of this change.
+##
+## The number is `MazeRoom.fits`'s answer for a 5x5 grid — 5 * 4.03 + 2 * 3.0 =
+## 26.15 — with the rest as slack. It is a CEILING and not a promise:
+## `_build_corridor` measures face to face, so two rooms whose halves sum past
+## `spacing` share masonry and get **no corridor at all**, and the deepest room is
+## a 30 m boss chamber. `_maze_room_size` is what reconciles the two.
+const MAZE_ROOM := 27.0
+
+## A metre of stone between two rooms' faces, at the least. Two rooms that meet
+## exactly at their faces share a wall and read as one room, and `_build_corridor`
+## gives up under half a metre and leaves them with no corridor.
+const MAZE_CLEAR := 1.0
+
+## The maze's cells, at `MAZE_ROOM`. Square now, because that room has depth to
+## spare for the apron — the old 3x4 was letterboxed by a 16 m room, not by the
+## design. 5x5 at `MazeRoom.CELL` is 20.15 m across, which leaves 3.4 m of clear
+## floor on every side: the apron `MazeRoom.APRON` wants on the mouth side, and a
+## walkway on the other three.
+##
+## A ceiling, like `MAZE_ROOM` — `_maze_grid` cuts the grid down to whatever room
+## the floor could actually spare, and asks `MazeRoom.fits` rather than restating
+## any of that arithmetic.
+const MAZE_ROWS := 5
+const MAZE_COLS := 5
+
+## Below this a maze is not worth building: `Maze.plan` refuses to deal gates into
+## a grid smaller than nine cells (it cannot find a layout that is both shut as
+## dealt and openable), and a room that fell through to a plain maze would be a
+## walk with no puzzle in it. The number is `Maze.plan`'s and is restated here
+## only because a `const` cannot read one out of another script.
+const MAZE_MIN_CELLS := 9
 
 ## cell -> {"doors": Array[StringName], "index": int, "dist": int,
 ##          "parent": Vector2i, "size": float, "anchors": Dictionary, "node": Node3D}
@@ -183,6 +214,29 @@ var placements: Dictionary = {}
 ## `dir` runs near -> far and `near` is the shallow end the bars are on. Empty on
 ## a floor with no gate room, because the cycle IS the gate room's reward.
 var chord: Dictionary = {}
+## **The room widened for the maze, chosen in `_plan_maze`.**
+##
+## Untyped, because "this floor had nowhere to put one" has to be expressible and
+## `Vector2i` has no null (CLAUDE.md §3 — `:=` cannot infer off a Variant either,
+## so every read of this is `var x =`, not `var x :=`).
+##
+## Reserved at PLAN time and not at populate time, which is the ordering this
+## whole change turns on: the room is 27 m instead of 16, and `_build_room` lays
+## its masonry from `size_of(cell)`. A cell picked in `_populate` — where the maze
+## used to be chosen — is a cell whose walls are already standing, so the maze
+## would be a 20 m grid inside a 16 m room with its lanterns buried in the stone.
+## That exact bug shipped once already for a different reason; see `MazeRoom.APRON`.
+var maze_reserved = null
+## The grid that room can hold, as (rows, cols). `MAZE_ROWS` x `MAZE_COLS` on a
+## floor with the space for it, cut down by `_maze_grid` on one without.
+var maze_grid: Vector2i = Vector2i(MAZE_ROWS, MAZE_COLS)
+## Whether the roll said to actually build one there. The room is widened either
+## way -- `pick_maze_cell(true)` exists so a director can place a maze on a seed
+## whose roll said no, and it can only do that if the masonry it needs is already
+## standing. A floor that rolled no therefore has one wide hall in it with
+## ordinary bodies in it, which is a floor with some variety in its rooms and not
+## a defect.
+var _maze_rolled: bool = false
 
 var _rng: RandomNumberGenerator
 var _seed_salt: int = 0
@@ -232,6 +286,10 @@ func _ready() -> void:
 	# vault or the boss door has them to mark. `_publish`'s own contract is only
 	# that it runs after `_plan` and before `_build`, and it still does.
 	_plan_anchors()
+	# AFTER the anchors, because the maze may not take a room something else has
+	# claimed and `placements` is where that is written down; BEFORE `_build`,
+	# because it widens the room it picks and `_build_room` reads that width.
+	_plan_maze()
 	_publish()
 	_build()
 	_build_chord()
@@ -411,11 +469,11 @@ func _publish() -> void:
 	Atlas.mark(entrance, Atlas.M_ENTRANCE)
 
 
-## The deepest room is built wider than the rest when a boss lives in it, so a
-## caller that needs a room's real footprint has to ask rather than read
-## `room_size`. NOTE: `_publish` above still hands `Atlas` the DEFAULT size, so
-## the minimap draws the arena at ordinary width. Cosmetic, and left alone here
-## rather than fixed inside a merge.
+## Two rooms are built wider than the rest — the deepest when a boss lives in it,
+## and the maze's (`MAZE_ROOM`) — so a caller that needs a room's real footprint
+## has to ask rather than read `room_size`. NOTE: `_publish` above still hands
+## `Atlas` the DEFAULT size, so the minimap draws both of them at ordinary width.
+## Cosmetic, and left alone here rather than fixed inside a merge.
 func size_of(cell: Vector2i) -> float:
 	return float(rooms.get(cell, {}).get("size", room_size))
 
@@ -2411,21 +2469,53 @@ func _wall(root: Node3D, length: float, height: float, at: Vector3, yaw: float,
 
 # --- Population -------------------------------------------------------------
 
+## **Pick the room and widen it, before a stone of it is laid.**
+##
+## Two decisions, deliberately split: WHICH room the maze may have, and whether
+## this floor gets one. The first is made for every floor and the room is widened
+## either way, because `pick_maze_cell(true)` is a director's way of placing a
+## maze on a seed whose roll said no — and a maze can only go into a room that was
+## already built wide enough to hold it. The roll is remembered in `_maze_rolled`
+## and read by `_populate`.
+func _plan_maze() -> void:
+	maze_reserved = null
+	maze_grid = Vector2i(MAZE_ROWS, MAZE_COLS)
+	# Rolled here rather than inside `pick_maze_cell` so that the pick and the roll
+	# come off `_rng` in a fixed order -- a roll that only happened on some floors
+	# would shift every later draw and change the whole floor, not just the maze.
+	_maze_rolled = _rng.randf() < maze_chance
+	var cell = pick_maze_cell(true)
+	if cell == null:
+		_maze_rolled = false
+		push_warning("dungeon: no room on level %d a maze fits in" % Run.level)
+		return
+	maze_reserved = cell
+	var size := _maze_room_size(cell)
+	maze_grid = _maze_grid(size)
+	rooms[cell]["size"] = size
+
+
 ## One plain room per floor becomes a maze (`docs/PUZZLES.md` §5.4), or none.
 ##
 ## **Plain is the requirement, and it is not fussiness.** A maze fills its room
 ## wall to wall; dropped on an anchored room it would bury the gate, the chest or
 ## the sounding stone inside masonry, and the symptom would be a floor whose
 ## critical path silently cannot be finished. Anchors are placed before
-## `_populate` runs (`_plan_anchors` -> `_build_anchors`), so `placements` is
-## already the authority on which rooms are spoken for and this only has to read
-## it.
+## `_plan_maze` runs, so `placements` is already the authority on which rooms are
+## spoken for and this only has to read it.
 ##
 ## The entrance and the deepest room are excluded for reasons of their own: the
 ## entrance is deliberately empty, and `deepest` is where the good chest and the
 ## boss live.
+##
+## `forced` skips the roll. It is what a director calls, and after `_plan_maze`
+## has run it answers the room that was actually widened -- asking a second time
+## and getting a different, 16 m room would hand back a room the maze does not fit
+## in, which is the bug this whole reordering exists to remove.
 func pick_maze_cell(forced: bool = false):
-	if not forced and _rng.randf() >= maze_chance:
+	if maze_reserved != null:
+		return maze_reserved if forced or _maze_rolled else null
+	if not forced and not _maze_rolled:
 		return null
 	var taken := {}
 	for id: StringName in placements:
@@ -2441,26 +2531,85 @@ func pick_maze_cell(forced: bool = false):
 		# passed every 16 m room on the floor and the lanterns spawned outside the
 		# masonry in all of them: a puzzle nobody could press, holding a chest
 		# nobody could open. Restating another script's geometry is what did it.
-		if not MazeRoom.fits(size_of(cell), MAZE_ROWS, MAZE_COLS):
+		#
+		# Measured against the size the room WILL BE, not the size it is: this runs
+		# before `_build` and the room is about to be rebuilt to `_maze_room_size`.
+		var grid := _maze_grid(_maze_room_size(cell))
+		if grid.x * grid.y < MAZE_MIN_CELLS:
 			continue
 		free.append(cell)
 	if free.is_empty():
 		return null
-	return free[_rng.randi_range(0, free.size() - 1)]
+	# Widest first. Every candidate below holds a legal maze, but only some of them
+	# hold the whole one -- a floor that put a 3x4 maze in a corner while a room
+	# with space for 5x5 stood empty would be obeying the letter of `fits` and
+	# throwing the room away. Ties go to the die, so the choice is still the seed's.
+	var best := 0.0
+	for one: Vector2i in free:
+		best = maxf(best, _maze_room_size(one))
+	var widest: Array[Vector2i] = []
+	for one: Vector2i in free:
+		if _maze_room_size(one) >= best - 0.01:
+			widest.append(one)
+	return widest[_rng.randi_range(0, widest.size() - 1)]
+
+
+## **How wide the maze's room may actually be built here.**
+##
+## `MAZE_ROOM`, unless a neighbour is in the way. `_build_corridor` measures face
+## to face and gives up below half a metre, so two rooms whose half-widths sum past
+## `spacing` do not get a short corridor — they get **none at all**, and a room
+## with no corridor into it is a room the floor's critical path may run through and
+## nobody can reach. Nothing had to check this while every room was 16 m and the
+## one exception was `deepest`, which is sized to clear by construction.
+##
+## It bites for real: the Bellwake's chamber is 30 m, so 13.5 + 15 leaves 28.5 m
+## wanted out of a 26 m grid. **The first spelling of this refused those cells
+## outright and that was wrong** — measured, one floor in five then had nowhere to
+## put a maze at all, because a six-room tree with four anchors on it has one or
+## two spare rooms and the boss's neighbour is usually one of them. Shrinking the
+## room and cutting the grid down to match loses a couple of cells on those floors;
+## refusing loses the room.
+func _maze_room_size(cell: Vector2i) -> float:
+	var room := MAZE_ROOM
+	for d: StringName in DIRS:
+		var other: Vector2i = cell + DIRS[d]
+		if not rooms.has(other):
+			continue
+		room = minf(room, (spacing - MAZE_CLEAR - size_of(other) * 0.5) * 2.0)
+	return maxf(room, room_size)
+
+
+## The biggest grid `MazeRoom` will admit in a room this wide, capped at the
+## shipped `MAZE_ROWS` x `MAZE_COLS`. Rows and columns are cut independently
+## because they are charged differently — the lantern apron comes out of the DEPTH
+## and only a walkway out of the width — and `MazeRoom` owns both numbers, so this
+## reads them off it rather than repeating them.
+func _maze_grid(size: float) -> Vector2i:
+	var r := mini(MAZE_ROWS, int(floor((size - MazeRoom.APRON * 2.0) / MazeRoom.CELL)))
+	var c := mini(MAZE_COLS,
+		int(floor((size - MazeRoom.WALKWAY * 2.0) / MazeRoom.CELL)))
+	if r < 1 or c < 1 or not MazeRoom.fits(size, r, c):
+		return Vector2i.ZERO
+	return Vector2i(r, c)
 
 
 ## Build it, and hang the loot on it opening.
 ##
-## Public, and `_pick_maze_cell` is too: `maze_chance` means a given seed may not
+## Public, and `pick_maze_cell` is too: `maze_chance` means a given seed may not
 ## place one, and a director that could only photograph the lucky seeds would be
 ## proving the roll rather than the room. `tools/directors/maze.gd` beat G asks
-## for a free cell and places one itself, through this exact function.
+## for a free cell and places one itself, through this exact function -- and gets
+## `maze_reserved` back, the room `_plan_maze` widened, which is the only room on
+## the floor a maze fits in.
 func place_maze(cell: Vector2i) -> void:
 	var root: Node3D = rooms[cell]["node"]
 	var maze := MazeRoom.new()
 	maze.name = "MazeRoom"
-	maze.rows = MAZE_ROWS
-	maze.cols = MAZE_COLS
+	# The grid the ROOM can hold, not the ceiling -- `_plan_maze` already measured
+	# it against the room's neighbours and this is where that measurement is spent.
+	maze.rows = maze_grid.x
+	maze.cols = maze_grid.y
 	# Off the floor's own stream, so a replayed seed deals the same maze -- the
 	# same reason `SoundingStone.offer` and `LanternGrid` use it.
 	maze.rng = _rng
@@ -2484,8 +2633,10 @@ func place_maze(cell: Vector2i) -> void:
 func _populate() -> void:
 	var has_boss := placements.has(&"boss_door")
 	var boss_cell := anchor_cell(&"boss_door")
-	# Untyped on purpose: `_pick_maze_cell` answers `null` when the floor has no
+	# Untyped on purpose: `pick_maze_cell` answers `null` when the floor has no
 	# room to spare, and `:=` cannot infer a type from a Variant (CLAUDE.md §3).
+	# The choice itself was made back in `_plan_maze`, before the masonry went up;
+	# this only reads it.
 	var maze_cell = pick_maze_cell()
 
 	for cell: Vector2i in rooms:

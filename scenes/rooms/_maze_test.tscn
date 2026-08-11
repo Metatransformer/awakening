@@ -1,0 +1,81 @@
+[gd_scene load_steps=7 format=3]
+
+; The maze fixture: one empty dungeon room, built to the size the generator
+; actually gives a maze. Owned by tools/directors/maze.gd.
+;
+; Underscore-prefixed like _atom_test.tscn and _lookdev.tscn -- it is a harness,
+; not a room the game ships.
+;
+; **Why this is not _atom_test.tscn any more.** The maze's fixture beats used to
+; stand a maze up in the proving ground, which is 22 m of slab with a 20 m
+; interior and a showroom's worth of furniture in it -- a ledge, two pillars,
+; two pushable blocks, two braziers -- so the director's first act was to free
+; four node groups and say so. That worked while the maze was 12.4 x 9.3 m. It
+; does not now: 5x5 cells at MazeRoom.CELL is 20.15 m across, which is WIDER
+; than the chamber's interior, and the lantern apron would have put both
+; lanterns a metre and a half behind the south wall. Every fixture beat would
+; still have passed -- they press the lanterns by reference -- and that is
+; precisely the failure MazeRoom.APRON's note is about, reproduced in the one
+; place that is supposed to catch it.
+;
+; So: 27 m square, which is Dungeon.MAZE_ROOM, with nothing in it. A fixture the
+; size of the thing it fixtures. The room the generator builds has doorways in
+; it and this one does not, because a doorway is a hole the hero can walk out
+; through mid-beat and beat F reports that as "stuck".
+
+[ext_resource type="PackedScene" path="res://scenes/kit/dungeon_env.tscn" id="env"]
+[ext_resource type="PackedScene" path="res://scenes/kit/floor_slab.tscn" id="slab"]
+[ext_resource type="PackedScene" path="res://scenes/kit/ceiling_slab.tscn" id="ceil"]
+[ext_resource type="PackedScene" path="res://scenes/kit/wall_segment.tscn" id="wall"]
+[ext_resource type="PackedScene" path="res://scenes/actors/hero/hero.tscn" id="hero"]
+[ext_resource type="PackedScene" path="res://scenes/camera/game_camera.tscn" id="camera"]
+
+[node name="MazeTest" type="Node3D"]
+
+[node name="Env" parent="." instance=ExtResource("env")]
+
+[node name="Chamber" type="Node3D" parent="."]
+
+[node name="Floor" parent="Chamber" instance=ExtResource("slab")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+size = Vector2(27, 27)
+thickness = 0.6
+
+[node name="Ceiling" parent="Chamber" instance=ExtResource("ceil")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 7, 0)
+size = Vector2(27, 27)
+
+; Faces inward, same convention as proving_ground.tscn: a wall_segment builds
+; from -thickness to 0 in its own Z, so the finished face lands on the line the
+; transform puts it on and the mass goes behind it.
+[node name="WallSouth" parent="Chamber" instance=ExtResource("wall")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 13.5)
+length = 27.0
+height = 7.0
+rng_seed = 81
+
+[node name="WallNorth" parent="Chamber" instance=ExtResource("wall")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -13.5)
+length = 27.0
+height = 7.0
+rng_seed = 82
+
+[node name="WallWest" parent="Chamber" instance=ExtResource("wall")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -13.5, 0, 0)
+length = 27.0
+height = 7.0
+rng_seed = 83
+
+[node name="WallEast" parent="Chamber" instance=ExtResource("wall")]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 13.5, 0, 0)
+length = 27.0
+height = 7.0
+rng_seed = 84
+
+; In the apron, south of where the mouth will be, facing the maze -- the place a
+; player walks in from.
+[node name="Hero" parent="." instance=ExtResource("hero")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 11.6)
+
+[node name="GameCamera" parent="." instance=ExtResource("camera")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 13)
