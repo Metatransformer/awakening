@@ -189,6 +189,63 @@ Proven by `tools/directors/monster_launch.gd`.
 
 ---
 
+## 3.6 The two answers — the parry and the perfect dodge
+
+§3.5 is what a body does when the player's blow lands. This is what the player
+does when the *body's* blow lands, and there are exactly two answers because a
+telegraph (§0) is worth reading only if reading it pays.
+
+They are **deliberate opposites**, and every number below follows from that:
+
+| | Parry — `shield` + `attack` | Perfect dodge — roll into the blow |
+|---|---|---|
+| Asks for | a commitment, before the blow | nothing; the roll you already threw |
+| Window | `K.PARRY_WINDOW` 0.20 s from the press | `K.DODGE_GRACE` 0.30 s from the roll's start |
+| Costs | no stamina — the recovery *is* the price | the roll's stamina, and nothing more |
+| Gets it wrong | `K.PARRY_RECOVER` 0.42 s with **no guard** | nothing; you were rolling anyway |
+| Pays | throws the attacker, opens the riposte | slows the world, opens the flurry |
+
+**The parry is aggressive and punished.** Pressing it drops the shield on the
+same frame — `blocking` goes false and `guard_changed` fires — so a miss is a
+0.42 s hole in the middle of a fight, taking blows at full price. That hole is
+why the move costs no stamina: a resource price *and* a timing price would make
+it a thing nobody throws. What it buys is the one thing nothing else in the
+hero's kit buys, which is **an opening on a body that had the initiative**:
+`stagger()` cancels the swing mid-frame, shoves the attacker `K.PARRY_SHOVE`
+back, and opens `K.RIPOSTE_WINDOW` — 1.20 s in which the attack button comes out
+as the dash, closing the gap the shove just made.
+
+**A parry moves a boss.** It is the *only* thing that does — §3.5's poise rule
+holds against every blow the sword can throw. `Boss.stagger()` cuts the beat
+short into `RECOVER`, which is the beat's own authored punish window opening
+early, so the reward is the fight's existing vocabulary rather than a new one.
+The exemption is safe precisely because the parry can only be thrown *after* the
+boss has committed.
+
+**The perfect dodge is safe and passive.** It asks for no prediction at all: the
+reward fires only when a blow genuinely reached the hero during the roll's first
+`K.DODGE_GRACE`. Roll early and the blow misses in space and never calls in;
+roll late and it hits. Once per roll, so a pack cannot pay out three times.
+The payoff is `K.SLOWMO_SCALE` 0.34 for `K.SLOWMO_TIME` 0.55 s — enough to see
+the opening — and `K.FLURRY_WINDOW` 1.40 s in which the attack button becomes
+the **jump attack**: a hopping, driving overhead that carries `KNOCKBACK_HEAVY`
+and therefore, by §3.5, launches.
+
+Slow-mo and hit-stop share one writer (`Feel._apply_time_scale`) and **a stop
+outranks a dip**, both timed on the wall clock. A dip that a hit-stop could
+cancel would read as a stutter, and every reaction VFX runs on the wall clock
+for the same reason — a tween gets delta 0 at `time_scale = 0`.
+
+The two are told apart at a glance, on purpose: the parry is a **gold burst** at
+the shield — a spinning ring and an eight-spike star, the same gold as a crit
+launch, plus a `SHAKE_CRIT` and the HUD's guard pip flashing gold. The dodge is
+a **cold ring on the floor**, frost to cyan, no star, no sparks, barely a shake.
+One is a hit; the other is time bending.
+
+Proven by `tools/directors/parry_dodge.gd`.
+
+---
+
 ## 4. Minibosses — the wall, and the second way over it
 
 `docs/PUZZLES.md` §7 owns the four and their beats. Three rules from the

@@ -245,6 +245,9 @@ var _extract_hold: float = 0.0
 ## will take every coin. See `set_extract_dear`.
 var _extract_dear: bool = false
 var _block_flash_t: float = -1.0
+## Whether the flash on that clock is a PARRY rather than a block. See
+## `_on_parried` -- one flag, because the two states are exclusive.
+var _parry_flash: bool = false
 var _lock_target: Node3D = null
 ## Whether anything is in the `enemy` group right now. Cached off the tree's own
 ## add/remove signals rather than polled, so `_process` does not walk a group every
@@ -321,6 +324,7 @@ func _ready() -> void:
 	Bus.escape_rope_broken.connect(_on_escape_rope_broken)
 	Saves.autosaved.connect(_on_autosaved)
 	Bus.shield_blocked.connect(_on_blocked)
+	Bus.parried.connect(_on_parried)
 	Bus.target_acquired.connect(_on_target)
 	Bus.target_lost.connect(_on_target_lost)
 	Bus.aim_changed.connect(_on_aim)
@@ -490,6 +494,25 @@ func _on_floor_arrived(_level: int) -> void:
 
 func _on_blocked(_at: Vector3, _normal: Vector3) -> void:
 	_block_flash_t = 0.0
+	_parry_flash = false
+	_wake()
+
+
+## A parry rides the SAME cell and the same clock as a block, in GOLD instead of
+## RUST and held four times as long.
+##
+## The world already carries the loud half of this cue — the burst, the freeze,
+## the body going backwards (`FlourishVfx.parry`). What the HUD adds is the one
+## thing the world cannot say: *that was the shield*. A player who catches a blow
+## by accident and a player who caught it on purpose see the same fight from the
+## outside, and the difference between rust and gold on the cell they were
+## holding is where they learn which one they did.
+##
+## One flag over a second timer, because the two states are exclusive: a parry is
+## a block that went further, and there is no frame in which both should draw.
+func _on_parried(_at: Vector3, _attacker: Node) -> void:
+	_block_flash_t = 0.0
+	_parry_flash = true
 	_wake()
 
 
@@ -637,8 +660,12 @@ func _process(delta: float) -> void:
 		_rim_flash_t = -1.0
 	if _sweep_t > SWEEP_TIME:
 		_sweep_t = -1.0
-	if _block_flash_t > 0.06:
+	# A parry holds four times as long as a block. 0.06 s is right for "that one
+	# bounced off" — it is a tick, and it is meant to be. A parry is the rarest
+	# thing a player will do all fight and 0.24 s is still under a quarter second.
+	if _block_flash_t > (0.24 if _parry_flash else 0.06):
 		_block_flash_t = -1.0
+		_parry_flash = false
 	if _heat_break_t > HEAT_BREAK_FLASH:
 		_heat_break_t = -1.0
 
@@ -1288,7 +1315,7 @@ func _draw_hands(s: Vector2) -> void:
 		if raised:
 			fill = Pal.BONE
 		if id == &"shield" and _block_flash_t >= 0.0:
-			fill = Pal.RUST
+			fill = Pal.GOLD if _parry_flash else Pal.RUST
 		_canvas.draw_rect(r, fill)
 		_canvas.draw_rect(r, Pal.ASH, false, Pal.px(1.0, s.y))
 

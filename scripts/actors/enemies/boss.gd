@@ -966,6 +966,43 @@ func _can_launch() -> bool:
 	return false
 
 
+## **The parry is the one thing that DOES move it, and that is deliberate.**
+##
+## Poise refuses the hookshot and refuses every blow, on the argument above: a
+## beat the player can interrupt is a beat they can delete. A parry is the one
+## input in the game that cannot delete a beat, because it can only be thrown
+## AFTER the beat has committed — the blow is already in the air by the time
+## `HeroCombat.parries` can be true. So this does not shorten a telegraph or skip
+## a phase; it takes the swing the boss has already spent and turns it into a
+## window, which is exactly what a parry is for and the only reason a player
+## would ever risk one against something this big.
+##
+## What it does NOT do is throw the body. `_can_launch` is still false and this
+## does not go near it: a boss that slid across its own arena would take its
+## placed relic into the scenery, and the recovery is the reward here, not the
+## distance. It is also SHORTER than a mob's — `stagger` is asked for
+## `K.PARRY_STAGGER` and this spends two thirds of it, because an opening on a
+## set-piece is worth more per second than an opening on a goblin.
+func stagger(from: Vector3, seconds: float, _shove: float) -> void:
+	if state == State.DEAD or state == State.IDLE:
+		return
+	_end_charge()
+	# Into RECOVER with the punish NOT yet open, which is the fight's own
+	# vocabulary rather than a second one bolted on: `_tick_recover` runs the
+	# short timer down and then opens the beat's authored punish window and emits
+	# `punish_opened` exactly as it would have. A parry therefore does not invent
+	# an opening — it brings the one the beat already owed forward.
+	state = State.RECOVER
+	_punishing = false
+	_timer = seconds * 0.66
+	var away := K.flat(global_position - from)
+	if away != Vector3.ZERO:
+		_flinch(away)
+	_glowing = false
+	_flash.hit()
+	Bus.request_sfx.emit(&"hit_armor", global_position)
+
+
 func _on_died() -> void:
 	_clear_marker()
 	_end_charge()
