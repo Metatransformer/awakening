@@ -31,10 +31,11 @@ extends Node3D
 ## the lock must not still pay out a leap at nothing.
 ##
 ## SPIN is not a button either. It is what the trigger's HOLD releases into, and
-## DASH is the light button pressed from behind a raised shield. They stay
-## Intents because the buffer is the thing that makes them feel honest: a charge
-## released during the swing that started it has to come out when that swing
-## ends, not vanish.
+## DASH is what the attack button means inside the riposte window (see below —
+## it USED to be the light button from behind a raised shield, and the line
+## saying so outlived the move by several commits). They stay Intents because
+## the buffer is the thing that makes them feel honest: a charge released during
+## the swing that started it has to come out when that swing ends, not vanish.
 ## SLAM is the light button pressed in the AIR, and it is the one Intent that is
 ## never buffered: it is only legal while the hero is off the floor, and a press
 ## honoured two swings later would fire it at a hero standing still. See `_press`.
@@ -48,7 +49,10 @@ extends Node3D
 ## The dash did not lose its home, it got a better one: `_riposte_t`. It is now
 ## what an attack press means in the window a successful parry opens, which is
 ## the exact situation the move was designed for — a body knocked away from you
-## and a gap to close before it gets up.
+## and a gap to close before it gets up. It is also the one swing in the kit
+## that cannot be interrupted: the riposte carries i-frames for its whole
+## duration, because the window is a reward for reading one monster and it is
+## spent in a room that holds three. See `_dash_swing`.
 ##
 ## FLURRY is the leaping overhead, and it is what an attack press means in the
 ## window a PERFECT DODGE opens (`_flurry_t`). Not buffered either: the window it
@@ -481,6 +485,9 @@ var _parry_t: float = -1.0
 ##
 ##   `_riposte_t`  a parry landed -> `attack` is the DASH (`K.RIPOSTE_WINDOW`)
 ##   `_flurry_t`   a dodge landed -> `attack` is the LEAP (`K.FLURRY_WINDOW`)
+##
+## Both are spent by the swing they authorise (`_dash_swing`, `_flurry_swing`)
+## and not merely allowed to run out. One read, one reward.
 var _riposte_t: float = 0.0
 var _flurry_t: float = 0.0
 var _hit_this_swing: Dictionary = {}
@@ -1559,19 +1566,56 @@ func _spin_swing() -> void:
 		K.HITSTOP_HEAVY, randf_range(0.68, 0.78), K.STUN_HEAVY)
 
 
-## The stab out of the guard. Unlike the lunge it asks for no target — see
-## Hero.request_dash for why the shield has already earned it a direction.
+## THE RIPOSTE: the stab a landed parry buys. Unlike the lunge it asks for no
+## target — see Hero.request_dash for why the facing is already a direction the
+## player chose.
 ##
-## Note that this can arrive from the BUFFER, a swing or two after the shield it
-## was pressed behind came down. That is correct and it is how the spin behaves
-## too: the player asked for a dash while guarding, and the answer to a press
-## made half a swing early is the move they asked for, late — not a different
-## move, and not silence.
+## The docstring here used to describe a stab thrown "out of the guard", which
+## is where this move lived before the parry took shield+attack and `_riposte_t`
+## took the dash. It matters for the two things below: both are correct because
+## the ONLY way into this function is the riposte window, and if the dash is ever
+## re-homed onto a stance again, both have to move to the riposte path with it.
+##
+## Note that it can still arrive from the BUFFER, a swing after the press. That
+## is correct and it is how the spin behaves: the answer to a press made half a
+## swing early is the move they asked for, late — not a different move, and not
+## silence. It is also why neither of the two below may be conditioned on
+## `_riposte_t` being live at this instant; by the time a buffered riposte pays
+## out, the window that authorised it can have run out.
 func _dash_swing() -> void:
 	if not _can_swing():
 		return
 	if not _hero.request_dash(dash_swing_time, dash_drive_time, dash_speed):
 		return
+	# THE WINDOW IS SPENT, exactly as `_flurry_swing` spends its own — and spent
+	# HERE rather than at the press, so a riposte the hero refused (mid-swing,
+	# off the floor, no stamina) does not eat the reward. Both returns above are
+	# that refusal.
+	#
+	# It went unspent for as long as the dash has lived in this window, and that
+	# was survivable while the dash was only damage: 1.20 s of window against a
+	# 0.62 s swing is room for two, so a parry bought a stab and a bit. With the
+	# i-frames below it is not survivable — the same mash would buy 1.24 s of
+	# uninterruptible immunity off one read, which is a stronger thing than the
+	# parry was ever priced to grant.
+	_riposte_t = 0.0
+	# THE I-FRAMES, and the actual answer to the problem the riposte has: the
+	# window is a reward for reading ONE monster, and it is spent standing in a
+	# room that usually holds three. A 0.62 s commitment thrown into a crowd was
+	# a swing the player paid a parry for and then got punished for taking, so
+	# the correct read on a gang was to walk away from the opening — which makes
+	# the whole reaction a move you use in duels and nowhere else.
+	#
+	# For EXACTLY as long as the swing commits him, and that rule is the one the
+	# dodges already live by: "i-frames run for exactly as long as the dodge
+	# does" (`Hero.backflip_time`, `K.ROLL_IFRAMES`). No tail, deliberately — a
+	# bubble that outlives the animation is a bubble the player cannot see the
+	# edge of, and this way the frame he gets his input back on is the frame he
+	# can be hit on.
+	#
+	# This does NOT stack into a second riposte: `_riposte_t` is spent above.
+	# It is the flurry that has no i-frames — see `_flurry_swing`.
+	_hero.grant_iframes(dash_swing_time)
 	Game.spend_stamina(K.STAMINA_DASH, true)
 	# Ends the chain rather than stepping it, exactly as the spin does. The dash
 	# is how you OPEN on something, so letting it count as step one would make

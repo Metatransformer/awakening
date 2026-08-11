@@ -269,7 +269,7 @@ They are **deliberate opposites**, and every number below follows from that:
 | Window | `K.PARRY_WINDOW` 0.20 s from the press | `K.DODGE_GRACE` 0.30 s from the roll's start |
 | Costs | no stamina — the recovery *is* the price | the roll's stamina, and nothing more |
 | Gets it wrong | `K.PARRY_RECOVER` 0.42 s with **no guard** | nothing; you were rolling anyway |
-| Pays | throws the attacker, opens the riposte | slows the world, opens the flurry |
+| Pays | throws the attacker, opens the riposte — which cannot be interrupted | slows the world, opens the flurry |
 
 **The parry is aggressive and punished.** Pressing it drops the shield on the
 same frame — `blocking` goes false and `guard_changed` fires — so a miss is a
@@ -280,6 +280,25 @@ hero's kit buys, which is **an opening on a body that had the initiative**:
 `stagger()` cancels the swing mid-frame, shoves the attacker `K.PARRY_SHOVE`
 back, and opens `K.RIPOSTE_WINDOW` — 1.20 s in which the attack button comes out
 as the dash, closing the gap the shove just made.
+
+**The riposte carries i-frames, for exactly as long as it commits you**
+(`dash_swing_time` 0.62 s, granted in `HeroCombat._dash_swing`). This is the
+only swing in the kit that does, and the reason is the room rather than the
+move: a parry is a read on ONE monster and it is thrown in a room that holds
+three, so a 0.62 s commitment spent inside a pack was a reward the pack
+collected. Without them the correct play against a gang was to *decline* the
+opening you had just paid a 0.42 s recovery for, which made the game's best
+defensive read a duelling-only move. No tail beyond the swing, by the same rule
+the dodges live by — the frame the hero gets his input back is the frame he can
+be hit on. The window is also **spent by the swing**, so one parry buys one
+riposte and not the two that 1.20 s of window and a 0.62 s swing left room to
+mash out.
+
+The **flurry does not** carry them, and that asymmetry is not settled design —
+it is a longer commitment (1.02 s) thrown from the same crowded room, and the
+slow-mo it opens under is not the same thing as immunity. If a pack starts
+eating perfect dodges the way it used to eat parries, this is the row to
+revisit.
 
 **A parry moves a boss.** It is the *only* thing that does — §3.5's poise rule
 holds against every blow the sword can throw. `Boss.stagger()` cuts the beat

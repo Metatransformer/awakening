@@ -163,7 +163,11 @@ validator on the way in.
 
 The rest of the kit, from `K`: the parry is live `PARRY_WINDOW` 0.20 s from the
 press inside a 45° cone, costs `PARRY_RECOVER` 0.42 s guardless when it misses,
-and opens `RIPOSTE_WINDOW` 1.20 s of dash. The perfect dodge fires only when a
+and opens `RIPOSTE_WINDOW` 1.20 s of dash — one dash, which the swing spends,
+and which is **invulnerable for its whole 0.62 s** (`docs/BESTIARY.md` §3.6). That
+matters more against a boss's adds than against the boss: it means a summoned
+pack cannot collect the opening the boss just handed you. The perfect dodge
+fires only when a
 blow genuinely reached the hero inside `DODGE_GRACE` 0.30 s of the roll starting,
 and pays `SLOWMO_SCALE` 0.34 for 0.55 s plus `FLURRY_WINDOW` 1.40 s of leaping
 overhead.

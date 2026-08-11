@@ -2,7 +2,7 @@ extends RefCounted
 ## The two reactions: does the parry pay, does it PUNISH, and does a well-timed
 ## dodge buy time?
 ##
-## Six beats, and five of them are numbers rather than pictures — which is the
+## Seven beats, and six of them are numbers rather than pictures — which is the
 ## point. Almost everything that can be wrong here is invisible in a still:
 ##
 ##   * **the parry lands** — a blow caught inside `K.PARRY_WINDOW` costs no
@@ -16,6 +16,9 @@ extends RefCounted
 ##     Without this beat "perfect" would be a word for "mid-roll".
 ##   * **the flurry** — the window turns the attack button into the leap, and
 ##     the leap leaves the ground and lands a heavy blow.
+##   * **the riposte's i-frames** — a blow thrown into the dash costs nothing,
+##     the same blow into an ordinary swing costs full price, and the same blow
+##     one frame after the dash ends costs full price too.
 ##   * **the look** — the two bursts, held, so the gold and the cold ring can be
 ##     told apart at a glance.
 ##
@@ -52,6 +55,7 @@ func run(rig) -> void:
 	await _perfect_dodge(rig, out)
 	await _stale_dodge(rig)
 	await _flurry(rig, out)
+	await _riposte_iframes(rig, out)
 	await _look(rig, out)
 
 	if _fails == 0:
@@ -321,7 +325,121 @@ func _flurry(rig, out: String) -> void:
 	await rig.wait_frames(6)
 
 
-# --- Beat six: the look -------------------------------------------------------
+# --- Beat six: the riposte cannot be interrupted -------------------------------
+
+## Three swings at a hero mid-riposte, and the beat is only worth anything
+## because of the second and third.
+##
+##   1. **the riposte is invulnerable** — a blow thrown into the middle of the
+##      dash costs nothing. On its own this proves very little: a director that
+##      failed to deliver a blow at all would print exactly the same thing.
+##   2. **THE NULL CASE** — the same blow, from the same goblin, at the same
+##      point in an ORDINARY light swing, has to land in full. This is what
+##      makes beat one mean "the riposte is immune" instead of "attacks are
+##      safe" or, worse, "`_swing_at` stopped working five beats ago". CLAUDE.md
+##      §2: an instrument that has only ever been pointed at the answer you want
+##      has not been tested.
+##   3. **it ENDS with the swing** — the same blow again, after the dash is over,
+##      lands. i-frames run for exactly as long as the move commits you, and a
+##      bubble that outlives the animation is the version of this that turns the
+##      riposte into a panic button.
+##
+## And the window is spent by the swing, which is asserted on the way past: 1.20 s
+## of window against a 0.62 s dash is room for a second one, and a second one
+## would be a second helping of the immunity above.
+func _riposte_iframes(rig, out: String) -> void:
+	var hero: Node3D = _hero(rig)
+	if hero == null:
+		return
+	var combat = hero.get(&"combat")
+	var foe := _foe(rig, 7006)
+	await rig.wait_frames(16)
+	Bus.camera_recenter.emit()
+	foe.health.max_quarters = 100000
+	foe.health.quarters = 100000
+	foe.set_physics_process(false)
+	foe.state = Enemy.State.IDLE
+	hero.set(&"_invuln", 0.0)
+	Game.stamina = K.MAX_STAMINA
+	Game.heal(Game.max_quarters)
+	# Handed over directly, exactly as the flurry beat hands over its own and for
+	# the same reason: earning it again here would make this beat fail whenever
+	# beat one fails, and a director whose beats cascade reports one bug five
+	# times.
+	combat.set(&"_riposte_t", K.RIPOSTE_WINDOW)
+	await rig.tap([&"attack"])
+
+	var swung: float = combat.get(&"_swing_t")
+	var dur: float = combat.get(&"dash_swing_time")
+	if swung < 0.0:
+		_fail("the attack button in the riposte window started no swing at all")
+		foe.queue_free()
+		return
+	if combat.get(&"_riposte_t") > 0.0:
+		_fail("the riposte window survived the dash it paid for (%.2f s left)"
+			% combat.get(&"_riposte_t"))
+	if not hero.call(&"is_invulnerable"):
+		_fail("the riposte is running and the hero is not invulnerable")
+
+	# 1. INTO the swing. Half of it has gone by, so the blow lands nowhere near
+	# either edge of the window -- a beat that passed only because it grazed the
+	# first frame would be measuring the frame and not the rule.
+	await rig.wait_seconds(dur * 0.5)
+	var hp_before: int = Game.quarters
+	await _swing_at(rig, foe, hero)
+	await rig.wait_physics_frames(2)
+	var during := hp_before - Game.quarters
+	await rig.capture(out.path_join("parry_40_riposte_hit.png"))
+
+	# 3. AFTER it. Wait the swing out, and check with the state rather than the
+	# clock -- `_commit` owns when a swing ends and this beat should not be a
+	# second, quietly disagreeing copy of that arithmetic.
+	await rig.until(func() -> bool: return hero.get(&"state") != 4, 2.0)
+	await rig.wait_physics_frames(2)
+	var after_free: bool = not hero.call(&"is_invulnerable")
+	var hp_mid: int = Game.quarters
+	await _swing_at(rig, foe, hero)
+	await rig.wait_physics_frames(2)
+	var after := hp_mid - Game.quarters
+
+	# 2. THE NULL CASE. An ordinary light swing, hit at the same point in it.
+	# `_invuln` is cleared by hand first: the blow above just landed and bought
+	# him a full second of `K.IFRAME_TIME`, which would swallow this one and
+	# report the control as a pass for the wrong reason.
+	await rig.until(func() -> bool: return hero.get(&"state") != 4, 2.0)
+	hero.set(&"_invuln", 0.0)
+	Game.stamina = K.MAX_STAMINA
+	Game.heal(Game.max_quarters)
+	combat.set(&"_riposte_t", 0.0)
+	await rig.tap([&"attack"])
+	var light: float = combat.get(&"_swing_t")
+	var light_dur: float = combat.get(&"_swing_dur")
+	if light < 0.0:
+		_fail("the control swing never started, so the null case proved nothing")
+	await rig.wait_seconds(light_dur * 0.5)
+	var hp_ctrl: int = Game.quarters
+	await _swing_at(rig, foe, hero)
+	await rig.wait_physics_frames(2)
+	var control := hp_ctrl - Game.quarters
+
+	print("PARRY riposte during=%d after=%d control=%d  dash=%.2f s free_after=%s"
+		% [during, after, control, dur, after_free])
+	if during != 0:
+		_fail("a blow during the riposte cost %d quarters -- it has no i-frames"
+			% during)
+	if control <= 0:
+		_fail("the NULL CASE cost nothing: a blow into an ordinary swing landed"
+			+ " for 0, so beat one's zero says nothing about the riposte")
+	if after <= 0:
+		_fail("a blow AFTER the riposte cost nothing -- the i-frames outlive the"
+			+ " swing that granted them")
+	if not after_free:
+		_fail("the hero is still invulnerable with the riposte over")
+	foe.queue_free()
+	await rig.wait_frames(6)
+
+
+# --- Beat seven: the look -----------------------------------------------------
 
 ## The two bursts, held at their peak so they can be looked at side by side.
 ##

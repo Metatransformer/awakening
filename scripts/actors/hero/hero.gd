@@ -2946,6 +2946,32 @@ func is_invulnerable() -> bool:
 	return _invuln > 0.0
 
 
+## Hand the hero i-frames a MOVE has earned, rather than ones a blow granted.
+##
+## The clock is the same one `take_hit` writes after a hit and reads before
+## everything except the parry and the roll, which is the whole reason this is a
+## setter and not a second timer: a move-granted immunity and a hit-granted one
+## are the same fact about the body, and two clocks would mean two places to ask
+## and one of them eventually gets forgotten.
+##
+## NEVER SHORTENS. `maxf`, not assignment: the caller is a swing that lasts a
+## fraction of `K.IFRAME_TIME`, so a bare write would mean a hero who riposted
+## right after taking a hit threw away most of the second the hit bought him —
+## a reward that makes you MORE killable, which is the exact opposite of what a
+## window a player earned is for.
+##
+## The roll does not come through here. Its immunity is read off
+## `state == MoveState.ROLL` in `take_hit` and so ends with the dive whatever
+## the clock says, which is correct for a move that can be cut short. A swing
+## cannot be cut short by the player, so a clock is enough for it — with one
+## exception worth knowing about: `end_commitment` hands the hero back early
+## after a landed parry, and i-frames granted before that call would outlive the
+## move. Nothing does that today (the parry grants none), and anything that
+## starts to must clear them itself.
+func grant_iframes(seconds: float) -> void:
+	_invuln = maxf(_invuln, seconds)
+
+
 func skeleton() -> Skeleton3D:
 	if _rig == null:
 		return null
