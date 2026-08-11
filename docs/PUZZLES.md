@@ -511,7 +511,33 @@ player cannot own (§0 rule 1).
 |---|---|---|
 | `sun_nest` | T0 | A beam off the grate, bounced off the **shield** into a socket |
 | `lights_out` | T0 | A 3×3 lantern grid, §3's *couple* |
-| `eye_row` | T1 | Three eyes along **the wall opposite the door**, shot back down the room with the **bow** |
+| `eye_row` | T1 | Three eyes along **the wall opposite the door**, shot back down the room with the **bow**, with an urn of arrows beside the gate (§0 rule 2) |
+
+**Rule 2 is harder here than at either shortcut, and `eye_row` shipped without
+it** (card #43). A shortcut is optional by construction — a player who cannot
+open it walks the long way — but the gate stands *in the doorway the floor
+continues through*, so a bow puzzle with no arrows in the room is a floor that
+ends. Arrows do reach a generated floor by other routes (`Dungeon.arrow_chance`
+per room, chests, `Fletching.RECIPE`) and every one of them is a **probability**,
+which is exactly what §0 rule 2 exists to refuse; card #29 made the same argument
+about scattering Burst charges.
+
+`GateUrn` holds **`Dungeon.EYE_ROW_ARROWS` = two per eye, six**, and the ratio is
+`ShortcutCache`'s applied to a row of three: every required shot may be missed
+once. It is written as `EYE_ROW_EYES * 2` rather than as `6` or as
+`ArrowBundle.FLOOR_COUNT` — which happens to be the same number today — because
+that constant is tagged `[tune]`, and a pass that took it to four would silently
+thin the critical path with nothing in either file saying the two were related.
+Six is still the *tightest* urn in the game per shot it pays for:
+`_shortcut_eye_high` hands the same six over for a single eye.
+
+It stands 2.6 m off the door line (clear of the doorway the floor continues
+through and of the leaves' swing) and 2.2 m out from the gate on the near side —
+in the same look as the refusal — which is 13.3 m behind the row it supplies, so
+it is never in the firing line. `tools/directors/gate_eye_row.gd` is the proof and
+it grants itself nothing: `Game.reset()`, the Bow but never its ammunition, the
+quiver photographed at zero *before* the urn, and every arrow it fires came off
+the floor and went through the real trigger.
 
 **Every prefab ends by waking the key**, and that invariant is what makes the
 table safe to add under a shipped door. The gate keeps watching one key, keeps
@@ -883,12 +909,13 @@ Sluice-Keeper dies and the second stone lights).
 | 5.1 | The shortcut door, no longer a check | `scripts/props/shortcut_gate.gd` — `ShortcutGate`, a `PuzzleGate` keeping `LockedDoor`'s **permanent** flag |
 | 5.1 | The pool, exactly tier N | `Dungeon._shortcut_pool` / `_shortcut_tier`; one atom per floor, no seed roll |
 | 5.1 | The three prefabs | `Dungeon.SHORTCUT_PREFABS` — `_shortcut_eye_high` (T1), `_shortcut_pillar_brace` (T2), `_shortcut_ring_span` (T3) |
-| 5.1 | The room that brings its own ammunition | `_shortcut_eye_high`'s `ShortcutUrn` and `_shortcut_pillar_brace`'s `ShortcutCache` — §0 rule 2, both halves of it |
+| 5.1 | The room that brings its own ammunition | `_shortcut_eye_high`'s `ShortcutUrn`, `_shortcut_pillar_brace`'s `ShortcutCache` and `_gate_eye_row`'s `GateUrn` — §0 rule 2 at both shortcuts *and* on the critical path |
 | 5.1 | Charges on a floor | `scripts/world/charge_cache.gd` — `ChargeCache`, `Urn.holds = &"charges"`; proved by `tools/directors/charge_supply.gd` |
 | 5.1 | The landing's chest and stone | `Dungeon._land_shortcut_rewards`, on `opened`, with the already-open restore |
 | 5.2 | `gate_room` anchor | `Dungeon._room_for(&"gate_path")` — 0.7 along the route to `deepest`, never either end |
 | 5.2 | The gate itself | A `PuzzleGate` **in the doorway the floor continues through**, not on a blank wall |
 | 5.2 | Floor 1's key hunt | `Dungeon._place_gate_room` — sun socket → key → door, §3's *nest* |
+| 5.2 | Arrows for the eye row | `_gate_eye_row`'s `GateUrn` — `Dungeon.EYE_ROW_ARROWS`, two per eye; proved by `tools/directors/gate_eye_row.gd` beats E–I |
 | 5.2 | The chest | `Dungeon._land_prize`, on `opened` |
 | 5.3 | `puzzle_room` anchor | `Dungeon._room_for(&"mid_ring")`, off the critical path, always |
 | 5.3 | Floor 1's treasure puzzle | `Dungeon._place_puzzle_room` — plate + block, §3's *nest* again, different atoms |

@@ -1314,6 +1314,28 @@ const SHORTCUT_PREFABS: Array[StringName] = [
 ## a shot the player has already learned to take should be the same shot.
 const EYE_Y := 2.05
 
+## How many eyes `_gate_eye_row` builds, and how many arrows the urn beside them
+## holds. **Two per eye** (card #43).
+##
+## The ratio is `ShortcutCache`'s, deliberately: that one holds two charges for a
+## one-charge pillar because *"one charge and one missed arc puts the player back
+## at the pillar with nothing"* (`docs/PUZZLES.md` §5.1). Every required shot may
+## be missed once, and a row that needs three of them gets six.
+##
+## Written as `EYES * 2` and not as `6`, and NOT left to `ArrowBundle.FLOOR_COUNT`
+## which happens to be the same number today. Both of those would decouple the
+## supply from the demand: `FLOOR_COUNT` is tagged `[tune]` and a pass that took
+## it to four would silently thin the critical path to one spare arrow across
+## three shots, with nothing in either file saying the two were related.
+##
+## Six is also the TIGHTEST urn in the game per shot it has to pay for --
+## `_shortcut_eye_high`'s pot hands the same six over for a single eye. It is a
+## floor under a guarantee, not a handout, which is why it stays well inside
+## `Game.max_arrows` (30) and does not make `Fletching.RECIPE` or the smith's
+## line pointless (`ArrowBundle.FLOOR_COUNT`'s own note). [tune]
+const EYE_ROW_EYES := 3
+const EYE_ROW_ARROWS := EYE_ROW_EYES * 2
+
 ## How far a WALL-MOUNTED atom has to stand off the masonry to be reachable.
 ##
 ## **A flush atom renders perfectly and cannot be hit**, which is the worst shape
@@ -1830,14 +1852,34 @@ func _gate_lights_out(root: Node3D, cell: Vector2i, _tag: StringName,
 ## clear that or it renders perfectly and no arrow can reach it. 0.9 m was clear
 ## by luck; `WALL_STANDOFF` is clear on purpose, and it is the number every other
 ## wall-mounted atom in this file is placed with.
-func _gate_eye_row(root: Node3D, cell: Vector2i, _tag: StringName,
+##
+## ## The urn is §0 rule 2 and it is not optional (card #43)
+##
+## *Every puzzle room is solvable from a cold start with an empty pouch, because
+## the urns beside it hold exactly what it needs.* Both shortcut prefabs carry
+## that sentence and this one shipped without it -- three eyes that only an arrow
+## opens, and no arrows anywhere in the room.
+##
+## **It is worse here than at either shortcut, not better.** A shortcut is
+## optional by construction: a player who cannot open it walks the long way. This
+## gate stands **in the doorway the floor continues through** (`_place_gate_room`
+## picks `_step_toward(cell, deepest)` and nothing else), so there is no
+## walk-around. Arrows do have other underground sources -- `arrow_chance` per
+## room, chests, `Fletching.RECIPE` out of the bag -- and every one of them is a
+## *probability*, which is the exact thing rule 2 exists to refuse. Card #29 made
+## the same argument about scattering Burst charges across a floor.
+##
+## Its tag is its own -- `PuzzleAtoms.gates(URN)` is false so the gate would never
+## adopt it, but a flag keyed on a node NAME is one rename from being a different
+## flag, and `_shortcut_eye_high` and `_shortcut_pillar_brace` both say so too.
+func _gate_eye_row(root: Node3D, cell: Vector2i, tag: StringName,
 		spot: Dictionary, key: Node3D) -> bool:
 	var facing: Vector3 = spot["facing"]
 	var along := along_of(float(spot["yaw"]))
 	var half := size_of(cell) * 0.5
 	var nest := StringName("gate_%d_nest" % Run.level)
 	var eyes: Array[Node3D] = []
-	for i in 3:
+	for i in EYE_ROW_EYES:
 		var eye := PuzzleAtoms.make(PuzzleAtoms.EYE_SWITCH, nest)
 		if eye == null:
 			return false
@@ -1858,6 +1900,36 @@ func _gate_eye_row(root: Node3D, cell: Vector2i, _tag: StringName,
 	for e in eyes:
 		e.connect(&"solved", func(_a) -> void: lit.call())
 	lit.call()
+
+	# The supply. See the class note -- this is §0 rule 2, on the critical path.
+	#
+	# Placed off `spot["pos"]`, which is the GATE's wall, so it stands on the near
+	# side of the door the room is about to refuse: the player reads *THE KEY IS
+	# ELSEWHERE*, turns round, and the answer is in the same look as the question.
+	# `_shortcut_pillar_brace` puts its cache at `along * 2.3 + facing * 2.6` for
+	# that reason and this is the same offset within a few centimetres.
+	#
+	# Three numbers are load-bearing and none of them is arbitrary:
+	#
+	# * `along * 2.6` is OFF THE DOOR LINE. The doorway is 2.4 m wide and the
+	#   leaves swing INTO the room (`LockedDoor.OPEN_DEG`), so anything inside
+	#   ~1.2 m of the centre line is either in the opening or under a leaf.
+	# * `facing * 2.2` is far enough out of the reveal to be visible from inside
+	#   the room and near enough to the door to be in frame while reading it.
+	# * Both put it BEHIND the firing line. The eyes are on the far wall at
+	#   `facing * (half - WALL_STANDOFF)` and the player shoots up the room at
+	#   them; an urn out in the middle of that would eat arrows aimed at the row.
+	var pot := PuzzleAtoms.make(PuzzleAtoms.URN, StringName("%s_pot" % tag))
+	if pot != null:
+		pot.name = "GateUrn"
+		# Spelled out rather than left to `Urn`'s default, exactly as
+		# `_shortcut_pillar_brace` spells out `&"charges"`: what an urn holds is
+		# the PLACER's decision (`Urn`'s class note), and a rule-2 guarantee
+		# resting on someone else's default is a guarantee one edit from gone.
+		pot.set(&"holds", &"arrows")
+		pot.set(&"amount", EYE_ROW_ARROWS)
+		pot.position = spot["pos"] + along * 2.6 + facing * 2.2
+		root.add_child(pot)
 	return true
 
 
