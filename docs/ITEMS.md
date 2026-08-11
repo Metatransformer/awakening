@@ -842,6 +842,31 @@ space ("LMB SWORD") and breaking on spaces splits a cap from its verb. The
 `# NEEDS:` note above `RELICS` is struck through in place
 (`relic_db.gd:~125-138`).
 
+**Verified 2026-08-11 (issue #31), by rendering all of it.** The paragraph above
+was written from the diff, and a rebuild that removes the mechanism is not the
+same claim as *the text fits* — nobody had drawn the twelve. `lore_panes.gd`
+does: every row of the Lanternkeeper's board cold (twelve `_unwritten` lines) and
+again with all twelve in hand (twelve lore lines), then the smith's twelve and
+the alchemist's four, forty panes in all. **Nothing clips.** The longest is the
+Sustain-Verse at six wrapped lines; the tightest pane still had eight lines
+spare, and the card holds eighteen at 720p. So the headroom question this entry's
+card asked is answered with a number rather than a shrug, and no string was
+shortened to get it.
+
+Two things that only came out of pointing the instrument at a known-bad case
+first, and which are the reason there is a director here at all:
+
+- **The pane does not clip — it grows.** `SIZE_EXPAND_FILL` plus autowrap means
+  the `Label`'s minimum size follows the wrap, so a blurb past the card's
+  capacity pushes the card taller and leaves by the bottom of the *screen* with
+  every line still counted as drawn. A check written as
+  `get_visible_line_count() < get_line_count()` therefore passes on a paragraph
+  that is 1160 px off screen. `lore_panes._fits` measures both.
+- **`RelicDb.lines()` is the only reader of `lore` in the codebase**
+  (`grep '\["lore"\]' scripts/ tools/` returns one line). `BossDb` authors a
+  `lore` per boss and nothing draws it — which is a separate question about the
+  bestiary, not about wrapping, and is not filed here.
+
 **The lore was never cut down to fit the bug**, and that is the part of this
 entry worth keeping: shortening twelve entries to work around a wrap default is
 a change that is hard to undo and easy to forget, and it would have outlived the
