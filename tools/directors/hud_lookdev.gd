@@ -27,7 +27,21 @@ func _shot(rig, path: String, tag: String) -> void:
 
 func run(rig) -> void:
 	var out: String = rig.arg("out", "/tmp/hd/x.png").get_base_dir()
+
+	# **Shoot at 1280x720 for real.** This is a LOOKDEV director -- every frame it
+	# produces exists to be judged by eye -- and until now every one of them was a
+	# 6880x2756 render Lanczos-downscaled to 720p by `shoot.gd`. A 5.4x supersample
+	# flatters exactly what this HUD is made of: hairlines, 1 px rules, 10 px type.
+	# `enemy_bars.gd` measured the cost — an 8-stroke bracket of one flat palette
+	# colour survived the downscale as FIVE correct pixels (HUD_PLAN §15.14).
+	#
+	# `--size` alone will not do it: that sets the viewport inside a window
+	# `project.godot` opens MAXIMIZED. The window itself has to be resized, which is
+	# `perf_probe.gd`'s trick.
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	DisplayServer.window_set_size(Vector2i(1280, 720))
 	await rig.wait_frames(30)
+	print("HUDCHECK render size=%s" % [DisplayServer.window_get_size()])
 
 	# 1. Fresh: full health, empty bag, in the dungeon.
 	Run.enter(1234)
@@ -126,6 +140,24 @@ func run(rig) -> void:
 	#     Diff the two slips and the animation is either there or it is not.
 	await rig.wait_frames(60)
 	await _shot(rig, out.path_join("h_09_t3_phase.png"), "h_09_t3_phase")
+
+	# 7c. The floor card, announcing and settled (decision 18).
+	#
+	#     Nothing in this repo photographed this card in either state, which is how
+	#     it kept a permanent BONE level line through every review: the announcement
+	#     and the readout are the SAME two lines in two colours, so a director that
+	#     shoots one of them cannot tell you the other one exists.
+	#
+	#     `Bus.floor_arrived` is the real trigger -- the frame the loading card
+	#     lifts -- so this drives it rather than poking `_floor_t`, and the settle
+	#     is walked by `Hud._process` on the game clock exactly as it is in play.
+	#     FLOOR_HOLD is 2.4 s and FLOOR_SETTLE 0.9, so 200 frames is comfortably
+	#     past the end of the ramp at any rate this harness runs at.
+	Bus.floor_arrived.emit(Run.level)
+	await rig.wait_frames(2)
+	await _shot(rig, out.path_join("h_09a_floor_lit.png"), "h_09a_floor_lit")
+	await rig.wait_frames(200)
+	await _shot(rig, out.path_join("h_09b_floor_dim.png"), "h_09b_floor_dim")
 
 	# 8. A WORKING in the right hand, with charges and without. HUD_PLAN §11 asks
 	#    for these two frames by name and they are the proof of decisions 10-12:

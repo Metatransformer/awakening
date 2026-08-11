@@ -1380,11 +1380,24 @@ func _draw_floor(s: Vector2) -> void:
 
 	CanvasText.draw_text(_canvas, name_line, at, nt, Pal.BONE.lerp(Pal.MOTH, settle))
 
-	# The level does NOT dim. It is the half of the card that carries the
-	# information -- the name is a constant and you only need to be told it once
-	# -- and a readout you have to squint at between rooms is one the player
-	# stops consulting, which was the exact failure of the old bottom-edge line.
-	CanvasText.draw_text(_canvas, level_line, Vector2(at.x, level_y), lt, Pal.BONE)
+	# **Both lines dim** (decision 18). This used to draw the level in permanent
+	# BONE, on the argument that it is the half of the card carrying information --
+	# the name is a constant you only need told once -- and that a readout you have
+	# to squint at is one the player stops consulting.
+	#
+	# The first half of that is true and is exactly why it dims. A question you ask
+	# BETWEEN rooms, with a second to spare, is the definition of Tier 3, and §2
+	# rule 3 reserves BONE for a Tier 3 element's announcement and never for its
+	# resting state. A permanent BONE line in the top-left corner is a Tier 3
+	# element wearing Tier 1's brightness, competing with the fight for the one
+	# channel the fight needs.
+	#
+	# The second half is answered by the plate above rather than by the ink: MOTH
+	# over torchlit brick is unreadable and MOTH over shade is not, and making that
+	# true is what the plate was added for. It is 16 px type -- the top of the
+	# ladder, twice the name's size -- so nothing about this line is a squint.
+	CanvasText.draw_text(_canvas, level_line, Vector2(at.x, level_y), lt,
+		Pal.BONE.lerp(Pal.MOTH, settle))
 
 
 # --- Health -----------------------------------------------------------------

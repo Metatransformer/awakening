@@ -1075,7 +1075,7 @@ point, and a fourth right edge is what made the column read as ragged.
 
 | Element | x | y | Size |
 |---|---|---|---|
-| Floor card | 0.031 (40) | 0.052 (37) | name 10 px over level 16 px, world plate fading 72% → 34% |
+| Floor card | 0.031 (40) | 0.052 (37) | name 10 px over level 16 px, **both BONE announcing and both MOTH settled**, world plate fading 72% → 34% |
 | Minimap frame | right-align 0.969 (1240) | 0.052 (37) | 148 × 148, 8 px pad, VOID@88% on 1 px ASH |
 
 #### Centre and full-screen

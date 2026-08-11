@@ -156,8 +156,11 @@ The four separations, written as construction rules rather than as intentions:
    position; if it has to be a number, it is Tier 2 by definition.
 3. **Colour.** VITAL / RUST / GOLD are alarm colours and appear only on Tier 1 and
    on events. Tier 3 is MOTH and ASH, with BONE reserved for the *announcement*
-   frame of a Tier 3 element and never for its resting state. The floor card breaks
-   this today — its level line is BONE and deliberately never dims (decision 18).
+   frame of a Tier 3 element and never for its resting state. The floor card used
+   to break this — its level line was BONE and never dimmed. Decision 18 closed it,
+   and the card's two states are now photographed: `hud_lookdev`'s `h_09a_floor_lit`
+   and `h_09b_floor_dim`. Settled, the level line is still the dominant one, because
+   it is 16 px against the name's 10 — the emphasis moved to size.
 4. **Motion.** Only Tier 1 and events move. A Tier 3 element that animates is
    stealing a channel it does not need. The two sanctioned resting pulses are the
    low-health pulse and heat's Blazing breath — both Tier 1/2, both carrying
