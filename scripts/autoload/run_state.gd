@@ -89,6 +89,20 @@ var summary: Dictionary = {}
 var rng := RandomNumberGenerator.new()
 var seed_used: int = 0
 
+## The seed the NEXT run will use, if non-zero. Consumed and cleared by `enter()`.
+##
+## `enter()` already takes a seed, but nothing that STARTS a run is a function
+## call a test can reach: the run begins when the player finishes a 0.9 s hold on
+## the garrison gate, and `Npc.activate` calls `Flow.enter_dungeon()` with no
+## argument. So a director driving the real gate had no way to choose a floor,
+## and a seed-dependent bug in the dungeon could only be hunted by re-running
+## until it showed up. That is what #36 cost: a chest beat that failed two runs
+## in three and could not be summoned on demand.
+##
+## Cleared on use rather than left set, so a harness that pins one floor cannot
+## silently pin every run after it.
+var seed_next: int = 0
+
 ## Slots of the bag that are the Society's document case, counted off the top.
 ##
 ## **Three of twelve, and it is not a dice roll** (docs/GDD.md §3.1). The case is
@@ -163,6 +177,9 @@ func enter(run_seed: int = 0) -> void:
 	# that handed back four more spins would make the stair a refill station and
 	# the budget meaningless on exactly the floors it is supposed to bite.
 	Game.fill_magic()
+	if run_seed == 0:
+		run_seed = seed_next
+	seed_next = 0
 	seed_used = run_seed if run_seed != 0 else int(Time.get_unix_time_from_system())
 	rng.seed = seed_used
 	Bus.bag_changed.emit(bag, bag_value())
@@ -901,6 +918,42 @@ func consume(id: StringName, count: int = 1) -> int:
 ## is up to one stack (`stack_of`), which is the same unit `slots_used` counts
 ## in -- steal a 20-deep pile of shards and you lose the pile, not the cell.
 func steal_slot() -> Dictionary:
+	return _take_slot(true)
+
+
+## **The Ballast-Verse burns a slot** (`docs/GDD.md` §6.5 -- "burn the cheapest
+## stack in the bag for a soak window"). Same three rules as the thief above,
+## same door out of the bag, and the ONE difference is which end of the bag it
+## reaches into: the cheapest line rather than the richest.
+##
+## That difference is the design and not a preference. The thief has to hurt or
+## chasing it is not a question; Ballast has to be affordable in the moment or
+## nobody would ever cast it, and a working that ate your Deep Amber would be a
+## button the player learns never to press. What it still costs is real -- it is
+## a slot, and a slot is a slot whatever is in it, so the fee and the walk home
+## both notice.
+##
+## Returns `{"id": ..., "count": ...}` for what burned, or `{}` when the hold was
+## empty -- which is the caller's cue to refuse the cast and keep the charge.
+func burn_slot() -> Dictionary:
+	return _take_slot(false)
+
+
+## Is there anything Ballast could burn? The same scan without the taking, so the
+## cast can refuse BEFORE it spends a charge -- a working that goes off, finds an
+## empty hold and quietly costs you a charge is the pouch lying at the worst
+## moment, which is the argument `_read_burst` already makes about the quiver.
+func burnable() -> bool:
+	return not _take_slot(false, true).is_empty()
+
+
+## The one walk over the hold, from both ends. Written once because the callers
+## differ by a comparison, and two copies of "which slots may be taken" is how a
+## relic or an Echo eventually becomes stealable in one of them.
+##
+## `dry` answers the question without emptying the bag to find out. It returns
+## the row it WOULD take, so a caller that wants to name it in a prompt can.
+func _take_slot(richest: bool, dry: bool = false) -> Dictionary:
 	var best_id: StringName = &""
 	var best_n := 0
 	var best_worth := -1
@@ -915,12 +968,17 @@ func steal_slot() -> Dictionary:
 			continue
 		var n: int = mini(held, stack_of(id))
 		var worth: int = def.value * n
-		if worth > best_worth:
+		# `best_worth < 0` is the first candidate and takes it either way, so the
+		# cheapest search does not need a sentinel of its own.
+		var better := worth > best_worth if richest else (best_worth < 0 or worth < best_worth)
+		if better:
 			best_worth = worth
 			best_id = id
 			best_n = n
 	if best_id == &"" or best_n <= 0:
 		return {}
+	if dry:
+		return {"id": best_id, "count": best_n}
 	var took := consume(best_id, best_n)
 	if took <= 0:
 		return {}

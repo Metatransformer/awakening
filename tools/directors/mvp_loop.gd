@@ -20,6 +20,16 @@ var out := ""
 
 func run(rig) -> void:
 	out = rig.arg("out", "/tmp/mvp/x.png").get_base_dir()
+
+	# `--run-seed=N` pins the FLOOR, which `--seed` does not: `--seed` seeds the
+	# global RNG, and the dungeon is built from `Run.rng`, which `Run.enter()`
+	# seeds off the wall clock. So every run of this director drew a different
+	# floor and a floor-shaped bug (#36) could only be met by re-running until it
+	# turned up. `Run.seed_next` is consumed by the `enter()` the gate triggers.
+	var run_seed := int(rig.arg("run-seed", "0"))
+	if run_seed != 0:
+		Run.seed_next = run_seed
+
 	await rig.wait_frames(30)
 
 	await _garrison_arrival(rig)
@@ -303,7 +313,14 @@ func _fight(rig) -> void:
 
 	# The chest, which is where the run-defining drops live.
 	var chest := _chest(rig)
-	if chest != null:
+	if chest == null:
+		# Said out loud rather than skipped in silence: a floor whose only chests
+		# are unsolved prizes is a floor on which this beat proved nothing, and a
+		# reader has to be able to tell that from a beat that passed.
+		print("MVP no openable chest on this floor -- every one of them is still a"
+			+ " prize waiting on its puzzle. Not a failure; nothing was tested.")
+	else:
+		print("MVP chest=%s" % chest.name)
 		# Through `_approach` for the reason it exists: a chest is an Interactable
 		# and being next to one is not being noticed by one.
 		if not await _approach(rig, chest,
@@ -311,9 +328,23 @@ func _fight(rig) -> void:
 			return
 		await rig.capture(out.path_join("m_13_chest_prompt.png"))
 		await rig.tap(["interact"])
-		await rig.until(func() -> bool: return chest.opened)
+		if not await rig.until(func() -> bool: return chest.opened):
+			print("MVP FAIL the chest took the interact button and never opened")
+			return
 		await rig.wait_frames(40)
+		# **Re-checked every turn, and this is not belt-and-braces.** A `LootMote`
+		# frees itself the instant the hero overlaps it, the chest fans its drops
+		# 1.15 m apart, and standing on one routinely collects its neighbour too --
+		# so the next turn of this loop reads `global_position` off an object that
+		# is already gone. That is a hard SCRIPT ERROR, and a SCRIPT ERROR aborts
+		# `_fight` outright: the chest opened, the loot went in the bag, and the
+		# beat printed neither `MVP after_chest` nor `m_14_chest_loot.png` while
+		# reporting no failure at all. It had been doing that for as long as it has
+		# existed and nobody could see it, because #36 stopped the run one line
+		# earlier on two seeds in three. Same lesson as `_nearest_foe` below.
 		for m in _motes(rig):
+			if not is_instance_valid(m):
+				continue
 			_stand_at(rig, m.global_position)
 			await rig.wait_frames(18)
 		print("MVP after_chest bag=%d value=%d fee=%d" % [
@@ -561,10 +592,18 @@ func _approach(rig, it: Interactable, at: Vector3, look_at = null) -> bool:
 			print("MVP FAIL the hero died before he reached %s (in_dungeon=%s)"
 				% [it.prompt, Run.in_dungeon])
 			return false
+		# **`enabled` is in this line because its absence cost #36 a session.**
+		# The three facts printed before it — focus, inside, blocked — were the
+		# three that `Prompt._nearest` does NOT gate on in the failing case, so the
+		# report read "the hero is standing in it, nothing is refusing, and the
+		# prompt never came" and sent two readers into `Prompt`. `enabled` is the
+		# fourth term of the same `if`, and it was the false one. Print every term
+		# of the condition you are complaining about.
 		print(("MVP FAIL %s never took the interact button after three seconds"
-			+ " standing in front of it (focus=%s, inside=%s, blocked=%s)") % [
+			+ " standing in front of it (focus=%s, inside=%s, enabled=%s,"
+			+ " blocked=%s)") % [
 			it.prompt, Prompt.focus.prompt if Prompt.focus != null else "<none>",
-			it.player_inside, Prompt.blocked])
+			it.player_inside, it.enabled, Prompt.blocked])
 		return false
 	# One more physics tick before the press. Focus is live the frame the trigger
 	# reports the hero, and `Prompt.drop_focus` DISARMS on that same frame -- so a
@@ -599,9 +638,25 @@ func _dungeon(rig) -> Dungeon:
 	return null
 
 
+## A chest the player could actually walk up to and open.
+##
+## **`enabled` IS HALF THE QUESTION AND LEAVING IT OUT WAS #36.** Three of the
+## floor's chests are prizes that do not exist yet: the gate room's, the maze's
+## and the shortcut landing's are each built up-front with `visible = false` and
+## `enabled = false`, and land only when the puzzle they belong to is solved
+## (`Dungeon._land_prize`). This used to take the first unopened `Chest` in TREE
+## ORDER — and on any floor that rolled one of those three, tree order handed
+## back an invisible box that `Prompt._nearest` is right to skip. The beat then
+## teleported the hero into it and printed `MVP FAIL OPEN ... (inside=true,
+## blocked=false)`, which reads as a broken prompt system and is a game working
+## exactly as designed. Two seeds in three, for as long as the beat existed.
+##
+## `visible` as well as `enabled`, because the three sites set them together and
+## a chest that answered the button while being invisible would be a different
+## bug — one this beat should notice rather than photograph its way past.
 func _chest(rig) -> Chest:
 	for n in _all(rig.scene()):
-		if n is Chest and not n.opened:
+		if n is Chest and not n.opened and n.enabled and n.visible:
 			return n
 	return null
 
