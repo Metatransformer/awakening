@@ -41,8 +41,38 @@ extends Node3D
 signal target_acquired(target: Node3D)
 signal target_lost
 
-## The locked target, or null. Read-only outside this script.
-var current_target: Node3D = null
+## The locked target, or null — and **never a freed object**, which is a
+## stronger promise than "or null" and the one that had to be made explicit.
+##
+## The field used to hold a dangling reference for up to one physics tick:
+## `_validate` swept for `is_instance_valid` on the NEXT tick, so every locked-on
+## kill — the common case, since you generally kill what you are locked on —
+## opened a window in which a reader touching this got
+## `Trying to cast a freed object`. `Hero.lock_target()` is where it surfaced
+## (issue #59), but it was never the only reader: the HUD keeps its own copy off
+## `Bus.target_acquired`, and `lockon_check.gd` reads this field directly and
+## asks the node for its `kind`.
+##
+## So the fix is here, at the field, and not at any one reader: the setter
+## watches the target's `tree_exiting` and the lock is dropped **on the frame the
+## body leaves the tree**, before anything can observe the corpse. A setter
+## rather than bookkeeping inside `_acquire`/`_release` because `_switch` moves
+## the lock without releasing it first, and because directors assign this
+## directly (`ranged_kit.gd`) — one seam catches all three.
+var current_target: Node3D = null:
+	set(value):
+		if value == current_target:
+			return
+		# Still valid here even mid-`tree_exiting`: the node is leaving the tree,
+		# not yet deleted, so the disconnect lands.
+		if current_target != null and is_instance_valid(current_target) \
+				and current_target.tree_exiting.is_connected(_on_target_gone):
+			current_target.tree_exiting.disconnect(_on_target_gone)
+		# Assigning the member inside its own setter writes the backing field
+		# directly; it does not call the setter again.
+		current_target = value
+		if value != null and not value.tree_exiting.is_connected(_on_target_gone):
+			value.tree_exiting.connect(_on_target_gone)
 ## True while a target is held. `current_target != null` says the same thing;
 ## both exist because docs/CONTRACT.md §8 promises both.
 var is_locked: bool = false
@@ -253,11 +283,33 @@ func _release() -> void:
 	Bus.target_lost.emit()
 
 
+## The locked body is leaving the tree — despawned, freed, or carried out by a
+## scene change. Connected by the `current_target` setter, and it is what makes
+## the "never a freed object" promise up there true: `_validate` would catch this
+## too, one physics tick later, and that tick is the whole of issue #59.
+##
+## Emitting `target_lost` from inside `tree_exiting` is safe and is the point —
+## the camera drops its `_target` and the HUD drops the bracket on the same frame
+## the body goes, rather than drawing one more frame of reticle over a corpse.
+func _on_target_gone() -> void:
+	if is_locked:
+		_release()
+	else:
+		# A target set around the lock — `ranged_kit.gd` assigns the field
+		# directly. Clear it anyway: the field must not outlive the node it names.
+		current_target = null
+
+
 # --- Holding it -------------------------------------------------------------
 
 ## Drop the lock when the target stops being a thing worth locking. Death and
 ## despawn are checked first and hardest: `Enemy` leaves the `targetable` group
 ## as it dies, so the group is the authority on "still a target", not liveness.
+##
+## The liveness line below is now a backstop rather than the mechanism — the
+## `current_target` setter drops a lock the instant its body leaves the tree, so
+## nothing freed should ever reach a sweep. It stays because a sweep that assumes
+## an invariant it does not enforce is how #59 happened in the first place.
 func _validate(delta: float) -> void:
 	if current_target == null or not is_instance_valid(current_target):
 		_release()

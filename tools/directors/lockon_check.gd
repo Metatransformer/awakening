@@ -10,6 +10,8 @@ extends RefCounted
 ##   5. a flick switches to the other enemy
 ##   6. a second press releases
 ##   7. killing the target releases it (the group is the authority)
+##   8. FREEING the target releases it too, in the same frame, with no cast
+##      failure in the log (issue #59)
 ##
 ## Beat 4 is the one worth the trouble. A lock that only moves the camera is a
 ## camera hint, and this project shipped without a lock at all for long enough
@@ -164,6 +166,52 @@ func run(rig) -> void:
 			else:
 				print("LOCK ok  the lock dropped when the target died")
 	await rig.capture(out.path_join("lock_03_after_death.png"))
+
+	# --- 8. the target being FREED under the lock ----------------------------
+	#
+	# Beat 7 is the game's own death, and it passes on the group: `Enemy` leaves
+	# `targetable` as it dies and `_validate` drops the lock long before anything
+	# is deleted. This beat is the other half — the body simply GONE — and it is
+	# the one that caught issue #59: `boss_cistern.gd`'s section L frees the last
+	# fight's boss while the hero still holds a lock on it, then asks
+	# `hero.lock_target()`, and the answer was
+	# `SCRIPT ERROR: Trying to cast a freed object` for one tick. **That run
+	# passed with the error in its output**, which is why the beat is written to
+	# ask the question at the exact instant it is unanswerable.
+	#
+	# `free()` and not `queue_free()`, deliberately: a queued free lands at the
+	# end of the frame and `_validate` runs at 60 Hz against a harness drawing at
+	# about 22, so `queue_free` + `wait_frames(1)` gives the sweep three chances
+	# to close the window before this beat can look through it. The dangling-field
+	# state would then be real in the game and absent from the director, which is
+	# exactly the failure mode being fixed. An immediate free reproduces it on
+	# demand — and if the lock is dropped on `tree_exiting`, both spellings are
+	# equally safe.
+	await rig.tap(["z_target"])
+	await rig.wait_frames(6)
+	if not t.is_locked:
+		print("LOCK skip nothing left to lock for the freed-target beat")
+	else:
+		# Read the name BEFORE the free; asking a corpse for its `kind` is the
+		# same class of error this beat exists to catch.
+		var doomed: String = _name_of(t.current_target)
+		(t.current_target as Node).free()
+		# No `await`. Every line below runs in the same frame as the free, which
+		# is the whole window.
+		var after = hero.lock_target()
+		if after != null:
+			print("LOCK FAIL lock_target() still returns something after %s was freed"
+				% doomed)
+		else:
+			print("LOCK ok  lock_target() is null the instant %s is freed" % doomed)
+		if t.current_target != null:
+			print("LOCK FAIL Targeting still holds %s after it left the tree" % doomed)
+		elif t.is_locked:
+			print("LOCK FAIL Targeting is still locked with no target")
+		else:
+			print("LOCK ok  the lock dropped on the frame the body left the tree")
+	await rig.wait_frames(6)
+	await rig.capture(out.path_join("lock_04_after_free.png"))
 	print("LOCK done")
 
 
