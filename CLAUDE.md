@@ -156,6 +156,22 @@ creation and so cannot be set from GDScript afterwards. The window still appears
 keyboard. Measured: 0 focused frames out of 240, with the director passing
 unchanged.
 
+It also delivers `--audio-driver Dummy`, so **a harness run is silent** — no
+audio device is ever opened. `shoot.gd` separately mutes the MASTER bus, but
+that only covers runs that go through `shoot.gd`: a scene harness launched as
+`godot --path . res://tools/scenes/x.tscn` boots the autoloads and plays the
+score out of the owner's speakers, and six overlapping soundtracks out of
+background jobs is a machine shouting at whoever launched it. `AudioServer` is
+unaffected — buses, volumes and `playing` all behave, and `music_beats`,
+`sfx_moves` and `critic_menu` still assert exactly what they did. Pass `--sound`
+to opt back in.
+
+A bare `godot -s tools/shoot.gd` still runs and still passes; it just takes the
+owner's keyboard while it does. `shoot.gd` now prints
+`shoot: WARNING - launched as bare godot` when the `no_focus` flag is missing —
+it cannot fix it from there (the flag is read before any script exists), so that
+line is the whole remedy. If you see it in your own output, you typed `godot`.
+
 **Never pass `--headless` to a screenshot run.** There is no rendering device
 and every frame comes out empty — silently.
 

@@ -23,12 +23,29 @@
 #      created WITHOUT it can never be talked into giving focus up later.
 #      `override.cfg` beside the executable is not read -- only the project dir.
 #
-#   2. Minimising the window -- `shoot.gd`'s job, see `_hide_the_window`.
-#      no_focus alone still leaves a window sitting on top of the desktop.
+#   2. Parking the window in the corner -- `shoot.gd`'s job, see
+#      `_park_the_window`. no_focus alone still leaves a window sitting on top
+#      of the desktop. (Do NOT minimise it instead; that kills capture. The
+#      measurement is in shoot.gd's comment and in CLAUDE.md §3.)
 #
-# Neither half is sufficient. no_focus without minimising leaves a window in the
-# way; minimising without no_focus still steals the keyboard for the second
-# before the minimise lands.
+# Neither half is sufficient. no_focus without parking leaves a window in the
+# owner's way; parking without no_focus still steals the keyboard for the second
+# before the move lands.
+#
+# THE THIRD THING IS SILENCE, and it is here rather than only in `shoot.gd`
+# because the device is opened before any `-s` script exists. `shoot.gd` mutes
+# the MASTER bus in `_initialize` (`_hush_the_speakers`), which covers director
+# runs -- but a scene-based harness (`tools/scenes/*.tscn`, launched as
+# `godot --path . res://tools/scenes/x.tscn`) never runs shoot.gd at all, boots
+# the autoloads, and starts playing the score out of the owner's speakers. The
+# driver flag has no such hole: with `Dummy` no audio device is ever opened, so
+# there is no window in which anything can leak. AudioServer still works
+# normally -- buses, volumes, `AudioStreamPlayer.playing` -- so `music_beats`,
+# `sfx_moves` and `critic_menu` still assert what they always did.
+#
+# `--sound` opts back in, matching shoot.gd's own flag, for a director proving
+# that a cue actually reaches the speakers. An explicit `--audio-driver` wins
+# over both.
 #
 # override.cfg is SHARED STATE in a repo that runs several agents at once, and a
 # stale one is worse than no feature: the owner's own `pnpm play` would come up
@@ -64,4 +81,11 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-$GODOT "$@"
+# See the SILENCE note at the top. `$*` is padded so `--sound` matches as a whole
+# word and `--soundtrack` does not.
+HUSH=(--audio-driver Dummy)
+case " $* " in
+	*" --sound "*|*" --audio-driver "*) HUSH=() ;;
+esac
+
+$GODOT "${HUSH[@]}" "$@"
