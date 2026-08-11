@@ -1,4 +1,4 @@
-# MDR-NNN — Short title
+# Design test — Short title
 
 - **Status:** Draft
 - **Owner:**
@@ -9,10 +9,19 @@
 
 What uncertain player-experience claim are we resolving?
 
+## MDA frame
+
+- **Target aesthetic:** What should the player feel or want?
+- **Desired dynamics:** What observable behaviour would produce or demonstrate
+  that experience?
+- **Failure dynamics:** What behaviour would indicate a different experience?
+- **Mechanics under test:** Which existing or proposed rules, resources,
+  constraints or content are expected to cause those dynamics?
+
 ## Player-facing hypothesis
 
-After/when [player context], players will [observable behavior] because [specific
-in-game reason].
+After/when [player context], players will [observable behaviour] because
+[specific in-game reason].
 
 ## Why it matters
 
@@ -21,15 +30,15 @@ What decision depends on this being true?
 ## Canon and thematic contract (when applicable)
 
 - **Parent canon entity ids:**
-- **Ludic contract:** What behavior the mechanic asks of the player.
-- **Narrative contract:** What that behavior says is true or important in the
+- **Ludic contract:** What behaviour the mechanic asks of the player.
+- **Narrative contract:** What that behaviour says is true or important in the
   world.
 - **Alignment:** `ALIGNED` / `INTENTIONAL_TENSION` / `UNRESOLVED`
 - **Player-facing reveal:** What the test must communicate, and through which
   channel.
 
-An `UNRESOLVED` contract may be prototyped only when the MDR is explicitly
-testing it; it cannot enter production canon.
+An `UNRESOLVED` contract may be prototyped only when the design test explicitly
+tests it; it cannot enter production canon.
 
 ## Current evidence
 
@@ -44,7 +53,7 @@ can resolve the question.
 
 ## Observation plan
 
-- What behavior and timing will be recorded?
+- What behaviour and timing will be recorded?
 - What neutral interview questions follow observation?
 - What counts as an intervention or blocked session?
 - Where will raw notes live under `docs/playtests/`?
@@ -73,7 +82,7 @@ Write these before testing. Do not edit them after testing starts.
 
 ## Result
 
-Append after the batch. Link the playtest files, report behavior against every
+Append after the batch. Link the playtest files, report behaviour against every
 criterion and keep interpretation separate from the observations.
 
 ## Decision

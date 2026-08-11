@@ -27,8 +27,9 @@ does not authorise the next milestone.
 - More content volume.
 - Polish unrelated to the active proof question.
 
-The active record is
-[`records/MDR-001-PROVE-THE-CORE-LOOP.md`](records/MDR-001-PROVE-THE-CORE-LOOP.md).
+The active design test is
+[`design-tests/CORE_LOOP_PROOF.md`](design-tests/CORE_LOOP_PROOF.md). Its MDA
+hypothesis is mapped in [`MDA.md`](MDA.md).
 
 ## Possible result
 

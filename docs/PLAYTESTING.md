@@ -1,7 +1,7 @@
 # Playtesting
 
-Playtesting collects behavior before explanation. The active MDR says what claim
-is being tested and what evidence can change the decision.
+Playtesting collects behaviour before explanation. The active design test says
+which MDA hypothesis is being tested and what evidence can change the decision.
 
 ## During a session
 
@@ -18,9 +18,10 @@ is being tested and what evidence can change the decision.
 6. Tag friction as `control`, `comprehension`, `readability`, `decision`, `pace`
    or `desire`. Use more than one tag when needed.
 
-Do not coach toward MDR criteria, defend the game or turn an interview into a
-design workshop. Compare behavior with the criteria after the session. Synthesize
-only after the full batch, not while one player is still setting the story.
+Do not coach toward the design-test criteria, defend the game or turn an
+interview into a design workshop. Compare behaviour with the criteria after the
+session. Synthesise only after the full batch, not while one player is still
+setting the story.
 
 ## Two evidence channels
 
@@ -32,4 +33,5 @@ the test.
 slice and should not be briefed on what the design hopes they will want.
 
 Use [`playtests/PLAYTEST_TEMPLATE.md`](playtests/PLAYTEST_TEMPLATE.md) for raw
-session notes. Put batch results and the resulting decision in the active MDR.
+session notes. Put batch results and the resulting decision in the active design
+test.

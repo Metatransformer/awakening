@@ -1,4 +1,4 @@
-# Playtest — MDR-NNN — PNN
+# Playtest — Test slug — PNN
 
 - **Date:** YYYY-MM-DD
 - **Build/commit:**
@@ -10,7 +10,7 @@
 
 ## Test context
 
-- MDR and hypothesis under test:
+- Design test and hypothesis under test:
 - Starting state:
 - Instructions given verbatim:
 - Known technical issues before play:
@@ -55,7 +55,7 @@ Record answers as close to verbatim as practical.
 ## Researcher interpretation
 
 Keep this separate from observed facts. Note possible explanations and missing
-evidence, not a design decision. Batch conclusions belong in the MDR.
+evidence, not a design decision. Batch conclusions belong in the design test.
 
 ## Session validity
 

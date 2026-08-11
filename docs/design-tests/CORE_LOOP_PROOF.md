@@ -1,4 +1,4 @@
-# MDR-001 — Prove the core loop
+# Design test — Core Loop Proof
 
 - **Status:** Ready to test
 - **Owner:** Project owner
@@ -8,6 +8,25 @@
 ## Question
 
 Does finishing one descent create a specific, voluntary desire for another?
+
+## MDA frame
+
+The full current hypothesis is mapped in [`../MDA.md`](../MDA.md).
+
+- **Target aesthetic:** specific anticipation for another descent, supported by
+  tense self-authored risk, readable mastery, meaningful homecoming and
+  curiosity about Valenfeld.
+- **Desired dynamics:** players weigh pushing deeper against returning,
+  prioritise secure and exposed inventory, connect different rewards to
+  different goals, notice persistent change at home, then choose a concrete
+  reason to descend again.
+- **Failure dynamics:** players complete the loop but continue only from habit,
+  prompting or abstract completionism; return without understanding what
+  changed; or avoid expedition decisions because controls and feedback obscure
+  them.
+- **Mechanics under test:** the finite bag and document case, death loss,
+  extraction and return, Heat and readable first-floor encounters, distinct
+  reward categories, and persistent garrison changes.
 
 ## Player-facing hypothesis
 
@@ -34,7 +53,7 @@ Only a passed core-loop gate can authorise production planning.
 
 Run five cold first-hour sessions on the existing M4 slice. Participants must
 not have helped design or build it. Tell each player they may stop whenever they
-choose; do not suggest that a second descent is expected. Use observed behavior
+choose; do not suggest that a second descent is expected. Use observed behaviour
 first, followed by a short interview.
 
 Do not add production content for this test. Make only changes required to let a
@@ -55,12 +74,12 @@ For each session, record:
 - friction tags from `docs/PLAYTESTING.md`.
 
 After observation, ask neutral recall and counterfactual questions. Store each
-session in `docs/playtests/`; synthesize only after all five valid sessions.
+session in `docs/playtests/`; synthesise only after all five valid sessions.
 
 ### Diagnostic prompts
 
 These preserve the four questions from `docs/SCOPE.md` §4.1 as diagnostics.
-They do not replace the behavioral criteria and should not reveal the expected
+They do not replace the behavioural criteria and should not reveal the expected
 answer.
 
 1. What, if anything, would you choose to do next? Why that specifically?
@@ -86,17 +105,17 @@ All four must be true:
 - Onboarding blocks no more than **1/5** players. A block means the researcher
   must teach or take over so the player can continue the loop.
 
-Passing resolves this MDR as `Accepted` and authorises production planning. It
-does not automatically authorise production.
+Passing resolves this design test as `Accepted` and authorises production
+planning. It does not automatically authorise production.
 
 ### Revise — `Promising`
 
-Revise when behavior shows a credible loop but the batch misses the full pass:
+Revise when behaviour shows a credible loop but the batch misses the full pass:
 
 - exactly **2/5** players show specific voluntary second-descent desire; or
 - the desire threshold passes but one supporting threshold misses; or
 - a repeated control, comprehension, readability, decision or pace friction
-  plausibly masks the intended behavior.
+  plausibly masks the intended behaviour.
 
 Make the smallest correction supported by the batch and precommit another test.
 Do not reward a promising result with floors, bosses or content volume.

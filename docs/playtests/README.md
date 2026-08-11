@@ -7,11 +7,11 @@ Create one file per session from [`PLAYTEST_TEMPLATE.md`](PLAYTEST_TEMPLATE.md).
 Name it:
 
 ```text
-YYYY-MM-DD-mdr-NNN-pNN.md
+YYYY-MM-DD-test-slug-pNN.md
 ```
 
-Example: `2026-08-15-mdr-001-p03.md`.
+Example: `2026-08-15-core-loop-proof-p03.md`.
 
 Use participant codes, not names or contact details. Keep facts separate from
 researcher interpretations. After the full batch, compare the files with the
-MDR's frozen criteria and append the synthesis and decision to the MDR.
+design test's frozen criteria and append the synthesis and decision there.

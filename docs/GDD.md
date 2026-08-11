@@ -17,7 +17,7 @@ and playable. Its human fun gate has not passed. M5 was implemented beyond that
 gate and is accepted sequencing debt, not evidence that the loop works. The
 project is therefore in **Pre-production — Core Loop Proof**: no floors 2–4,
 bosses 2–4, production content, or broad lore expansion are authorised until
-`docs/records/MDR-001-PROVE-THE-CORE-LOOP.md` is resolved. See `docs/NOW.md` for
+`docs/design-tests/CORE_LOOP_PROOF.md` is resolved. See `docs/NOW.md` for
 the active question and permitted work.
 
 The gear loop is the reason the player descends; the Descent is what gives that

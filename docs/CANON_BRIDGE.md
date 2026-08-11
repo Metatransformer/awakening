@@ -36,9 +36,10 @@ Valenfeld project first; this file then records the resolved dependency.
 | `place.vallenfield-town` | Valenfeld stays off-screen and the garrison carries the whole home loop. | Valenfeld is the starting frontier town and the canonical Cut is one of its nearby delves. | **Potential match.** This works if the time, geography and outpost relationship above are reconciled. |
 
 These are design dependencies, not permission to expand the lore. The first
-question after `MDR-001` closes should be the prologue's temporal and geographic
-relationship to the canonical Sunken Cut; that answer will resolve most of the
-table. Do not open a second active MDR while core-loop proof is running.
+question after the Core Loop Proof design test closes should be the prologue's
+temporal and geographic relationship to the canonical Sunken Cut; that answer
+will resolve most of the table. Do not open a second active design test while
+core-loop proof is running.
 
 ## Surface-artifact contract
 
@@ -52,4 +53,3 @@ Before approving dialogue, item text, an environmental clue or a story beat:
 4. Do not ship an `Undecided` root as mystery. A mystery needs a decided hidden
    truth and at least two visible anchors.
 5. Check the artifact against every open collision above.
-

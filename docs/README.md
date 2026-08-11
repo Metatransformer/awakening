@@ -15,9 +15,10 @@ that truth.
 | Implementation contract, units and interfaces | [`CONTRACT.md`](CONTRACT.md), then [`../CLAUDE.md`](../CLAUDE.md) |
 | Visual style and HUD authority | [`STYLEGUIDE.md`](STYLEGUIDE.md) |
 | Evidence and reference material | [`OOT_CATALOGUE.md`](OOT_CATALOGUE.md) and [`../refs/REFERENCE.md`](../refs/REFERENCE.md) |
+| How mechanics should produce the intended experience | [`MDA.md`](MDA.md) |
 | How design work proceeds | [`DESIGN_PROCESS.md`](DESIGN_PROCESS.md) |
 | How playtests are run | [`PLAYTESTING.md`](PLAYTESTING.md) and [`playtests/`](playtests/) |
-| Design hypotheses and decisions | [`records/`](records/) |
+| Design hypotheses, tests and decisions | [`design-tests/`](design-tests/) |
 | Story and lore discipline | [`LORE_AND_STORY.md`](LORE_AND_STORY.md) |
 | Shared canon between Awakening and Valenfeld | [`CANON_BRIDGE.md`](CANON_BRIDGE.md) |
 | Historical or superseded material | [`archive/`](archive/) |
@@ -28,7 +29,9 @@ that truth.
   may someday contain.
 - The GDD, SCOPE and system documents are current canon, not chronological
   diaries. Edit the owner of a changed fact in place.
-- Measurable Design Records (MDRs) hold uncertain hypotheses, rationale,
+- `MDA.md` maps intended aesthetics to hypothesised dynamics and the mechanics
+  expected to produce them. It is a model to test, not evidence that they occur.
+- Files under `design-tests/` hold uncertain hypotheses, rationale,
   precommitted criteria, results and decisions.
 - Files under `playtests/` hold observations, timecodes and player quotes. They
   do not hold design conclusions.

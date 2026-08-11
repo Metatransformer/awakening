@@ -384,23 +384,24 @@ learn and change.
 The current stage is **Pre-production — Core Loop Proof**. The first-floor M4
 prototype exists, but its human fun gate has not passed. M5 also exists; that is
 accepted sequencing debt, not permission to continue. **Do not begin M6,
-production content, or broad lore expansion until the active measurable design
-record is resolved.**
+production content, or broad lore expansion until the active design test is
+resolved.**
 
 For uncertain design work:
 
-1. Open one **Measurable Design Record (MDR)** under `docs/records/`.
-2. State the player-facing hypothesis and pass/revise/stop criteria before
+1. Read `docs/MDA.md` and open one design test under `docs/design-tests/`.
+2. Name the target aesthetic, observable dynamics and minimum mechanics, then
+   state the player-facing hypothesis and pass/revise/stop criteria before
    changing the build.
-3. Build only the smallest test the record needs.
+3. Build only the smallest test that could change the decision.
 4. Put raw observations in `docs/playtests/`; put the decision and result in the
-   MDR; update canon only after the decision.
+   design test; update canon only after the decision.
 
 Canonical docs describe **current truth, not the history of arriving at it**.
 Edit the governing rule in place. Do not append dated debates, implementation
 diaries, or duplicate summaries to the GDD and system docs; those belong in an
-MDR, the archive, or git history. A fact has one document owner and every other
-document links to it.
+a design test, the archive, or git history. A fact has one document owner and
+every other document links to it.
 
 Update the owning doc in the same commit as code that changes its truth. A
 design doc describing something the code no longer does is worse than no doc —

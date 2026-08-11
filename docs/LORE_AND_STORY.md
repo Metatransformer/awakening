@@ -20,7 +20,7 @@ Story work that serves none of these jobs waits.
 |---|---|---|
 | World canon | Frozen, typed truth about the larger Valenfeld setting. | The sibling Valenfeld lore graph, starting at [`../../valenfeld/world/LORE_INDEX.md`](../../valenfeld/world/LORE_INDEX.md). |
 | Prologue canon | Truth Awakening commits to. | `GDD.md`, `SCOPE.md` and the relevant system document. |
-| Current reveal | The small subset this stage needs the player to encounter. | The active MDR and approved player-facing artifact. |
+| Current reveal | The small subset this stage needs the player to encounter. | The active design test and approved player-facing artifact. |
 | Player-facing delivery | What the player can actually see, hear or read. | The implemented scene, environment, item text or existing story beat. |
 
 Do not collapse these layers. A world fact does not need to be revealed, and a
@@ -46,6 +46,12 @@ generate a competing one. Every proposed lore beat must answer:
 
 If the answers do not affect one of the four story jobs, defer the beat.
 
+In MDA terms, a lore or story beat is authored content: a mechanic-side input
+intended to affect player behaviour and experience. During Core Loop Proof it
+earns inclusion only when it supports the active target aesthetic, an observable
+dynamic in [`MDA.md`](MDA.md), and one of the four story jobs above. Strong lore
+that does not help this test remains deferred.
+
 ## Cold-playtest questions
 
 Ask after observation, without supplying the nouns:
@@ -58,9 +64,9 @@ Ask after observation, without supplying the nouns:
 
 Promote tentative lore to canon only when it serves a story job, stays within
 the scope and noun ceilings, does not contradict an existing owner, and survives
-the relevant comprehension test. Record the decision in an MDR, then update the
-single owning canon document. Do not promote a detail merely because it sounds
-good in isolation.
+the relevant comprehension test. Record the decision in the active design test,
+then update the single owning canon document. Do not promote a detail merely
+because it sounds good in isolation.
 
 If a detail changes shared world truth, promote or retcon it in the Valenfeld
 canon first, then update `CANON_BRIDGE.md`. If it is prologue-only, record that

@@ -18,7 +18,7 @@ eventual prologue and still be the wrong thing to build in pre-production.
 **Current freeze — 2026-08-11.** M4's first-floor prototype is built, but its
 human fun gate is unpassed. M5 exists beyond that gate as accepted sequencing
 debt. **M6 and all production-content expansion are frozen** while
-`docs/records/MDR-001-PROVE-THE-CORE-LOOP.md` tests whether one descent creates a
+`docs/design-tests/CORE_LOOP_PROOF.md` tests whether one descent creates a
 specific voluntary desire for another.
 
 > **The two tests for any proposal:**
@@ -282,7 +282,8 @@ authorised move.**
 
 Each implementation milestone is closed by **a director that runs, produces
 frames, and prints no `FAIL`** (`CLAUDE.md` §2). Human design gates are closed by
-playtests against a precommitted MDR, never by a director or an agent's opinion.
+playtests against a precommitted design test, never by a director or an agent's
+opinion.
 
 | M | What | Closed by |
 |---|---|---|
@@ -322,7 +323,7 @@ plan. Put it in front of people.
 
 The original gate was one designer playing for an hour. That remains useful
 self-play, but it is weak evidence for desire because the designer already knows
-what comes next. **`docs/records/MDR-001-PROVE-THE-CORE-LOOP.md` now owns the
+what comes next. **`docs/design-tests/CORE_LOOP_PROOF.md` now owns the
 gate:** five cold first-hour sessions, observed and assessed against criteria
 written before the sessions. `docs/PLAYTESTING.md` owns the method.
 

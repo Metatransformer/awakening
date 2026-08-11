@@ -6,37 +6,48 @@ content volume stand in for proof.
 
 ## The loop
 
-1. **Orient.** Read `README.md`, `NOW.md`, the owning canon and the active MDR.
-2. **Ask.** Ask at most three high-leverage questions that could change the
-   test or decision.
-3. **Hypothesise.** State one testable, player-facing claim.
-4. **Make a paper pass.** Resolve the first version in markdown, a sketch or a
+1. **Orient.** Read `README.md`, `NOW.md`, `MDA.md`, the owning canon and the
+   active design test.
+2. **Choose the aesthetic question.** Name one thing the player should feel,
+   understand or want. During Core Loop Proof, that is specific voluntary
+   anticipation for another descent.
+3. **Name the dynamics.** Describe the observable player behaviour that would
+   support the aesthetic, plus the failure dynamics that would contradict it.
+4. **Inventory the mechanics.** Identify only the rules, resources, constraints
+   and content that might cause those dynamics. Ask what interesting decision
+   each creates.
+5. **Ask.** Ask at most three high-leverage questions whose answers could change
+   the test or decision.
+6. **Make a paper pass.** Resolve the first version in markdown, a sketch or a
    table before changing the build.
-5. **Open one MDR.** Write the evidence and pass/revise/stop criteria before
-   testing.
-6. **Build the smallest test.** Change only what the claim requires.
-7. **Self-play.** Remove obvious blockers and tighten the test quickly.
-8. **Cold playtest.** Observe someone who did not help make the test.
-9. **Synthesize.** Compare the batch with the precommitted criteria.
-10. **Decide.** Accept, revise or reject the claim; then update its canon owner
-    if the decision changes current truth.
+7. **Write one design test.** Record the MDA hypothesis, evidence plan and
+   pass/revise/stop criteria before testing.
+8. **Build the smallest test.** Change only the mechanic needed to distinguish
+   the hypothesis from its alternatives.
+9. **Self-play.** Remove obvious blockers and tighten the test quickly.
+10. **Cold playtest.** Observe someone who did not help make the test.
+11. **Diagnose.** Compare observed dynamics with the target aesthetic. If the
+    aesthetic is absent, locate the dynamic that broke before changing a
+    mechanic.
+12. **Decide.** Accept, revise or cut the claim or mechanic; then update its
+    canon owner if the decision changes current truth.
 
-During pre-production, keep one active proof question and one active MDR. Finish
-or close it before opening another.
+During pre-production, keep one active proof question and one active design
+test. Finish or close it before opening another.
 
 ## Two kinds of session
 
-A **design session** resolves an uncertain player-experience claim. It changes a
-hypothesis, paper artifact, MDR or canon after evidence.
+A **design session** resolves an uncertain player-experience claim. It changes
+the MDA hypothesis, a paper artifact, a design test or canon after evidence.
 
-An **implementation session** executes an already-decided test or specification.
-It may reveal a design problem, but it does not silently redesign the claim. Put
-the uncertainty back into the MDR.
+An **implementation session** executes an already-decided test or
+specification. It may reveal a design problem, but it does not silently redesign
+the claim. Put the uncertainty back into the active design test.
 
 Every session ends with:
 
+- one updated MDA relationship or confirmed assumption;
 - one decision;
-- one changed artifact;
 - one next test.
 
 ## Stage gates
