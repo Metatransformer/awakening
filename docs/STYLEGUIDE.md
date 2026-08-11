@@ -691,9 +691,36 @@ the merlons, not a separate finding.)
   cannot touch texture crawl, interior contrast, or type — the three things
   that actually read as "rough" here.
 - **8× MSAA is 4× MSAA on this Metal driver.** Identical VRAM to 0.1 MB at
-  both resolutions and edge statistics inside noise. The options menu presents
-  it as a fourth distinct choice and on macOS it is not one. Left in place
-  because it is likely genuine on Vulkan/Windows; carded separately.
+  both resolutions and edge statistics inside noise. The options menu presented
+  it as a fourth distinct choice and on macOS it is not one. Carded separately
+  as #57 and **settled there — see the box below.**
+
+> **#57, 2026-08-11: it is a clamp, and the row is gone on Apple silicon.**
+> Identical VRAM and an edge histogram inside noise were consistent with a clamp
+> and *also* with "8× is real and its extra samples land in the same places" —
+> two different claims, and only one justifies deleting a menu row. The
+> distinguishing measurement is the frame itself, and
+> `tools/directors/msaa_clamp.gd` takes it: freeze the garrison, render the pose
+> at each level, subtract.
+>
+> | pair | native | 480×270 |
+> |---|---|---|
+> | null (4× → 4×, nothing touched) | 0–3 px | 0–2 px |
+> | off → 2× | 45,048 px | 96,035 px |
+> | 2× → 4× | 45,420 px | 87,575 px |
+> | **4× → 8×** | **0 px** | **0 px** |
+>
+> of 921,600. Eight samples and four cannot resolve to a **bit-identical** frame
+> unless the driver handed back the same framebuffer, and the two rows above it
+> are what make that zero mean something rather than mean the instrument
+> (CLAUDE.md §2, both directions).
+>
+> So `Settings.max_msaa()` returns 2 on an **Apple** adapter and 3 elsewhere,
+> `apply_video()` clamps the stored value to it, and the options row is built
+> from a slice of `MSAA_NAMES` with a caption naming the GPU. Gated on the
+> adapter **vendor** and not on `OS.get_name()`: Apple is what was photographed,
+> and hiding a working setting on an Intel Mac would be the other half of the
+> same mistake.
 - **FXAA halves the hard edge steps (2090 → 1036) and visibly blurs the
   128 px nearest-filtered stone**, and softens the world-space label. That is
   a direct fight with §4.7 (Nearest, no anisotropy) and with §7 item 6. It buys
@@ -712,7 +739,7 @@ the merlons, not a separate finding.)
 | none | 290.1 MB | — | 254.8 MB | — |
 | MSAA 2× | 340.5 MB | +50.4 | 277.8 MB | +23.0 |
 | MSAA 4× | 393.1 MB | **+103.0** | 301.0 MB | +46.2 |
-| MSAA 8× | 393.1 MB | +103.0 | 301.0 MB | +46.2 |
+| MSAA 8× *(= 4×, #57)* | 393.1 MB | +103.0 | 301.0 MB | +46.2 |
 | FXAA | 290.3 MB | +0.2 | — | — |
 | TAA | 347.2 MB | +57.1 | — | — |
 

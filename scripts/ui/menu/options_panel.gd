@@ -21,6 +21,11 @@ enum Tab { AUDIO, GRAPHICS, CONTROLS, GAME }
 
 const TAB_NAMES: Array[String] = ["AUDIO", "GRAPHICS", "CONTROLS", "GAME"]
 
+## Indexed by `Settings.msaa`. **The row is built from a SLICE of this, not from
+## all of it** — see `_build_graphics`. Card #57: on Apple silicon the driver
+## clamps 8x to 4x and reports success, so offering the fourth notch was offering
+## a setting that did nothing. `Settings.max_msaa()` owns where the list ends and
+## holds the measurement.
 const MSAA_NAMES: Array[String] = ["Off", "2x", "4x", "8x"]
 const SHADOW_NAMES: Array[String] = ["Off", "Low", "Medium", "High"]
 const ONOFF: Array[String] = ["Off", "On"]
@@ -330,10 +335,22 @@ func _build_graphics() -> void:
 		func(v: float) -> void:
 			Settings.resolution_scale = v
 			_apply_video())
-	_choice("Anti-Aliasing (MSAA)", MSAA_NAMES, Settings.msaa,
+	# Only the notches this GPU will actually render. `Settings.msaa` is clamped
+	# by `apply_video()` on the same rule, so the index handed in here is always
+	# inside the slice even if the config file arrived from another machine.
+	var msaa_max: int = Settings.max_msaa()
+	var msaa_names: Array[String] = MSAA_NAMES.slice(0, msaa_max + 1)
+	_choice("Anti-Aliasing (MSAA)", msaa_names, mini(Settings.msaa, msaa_max),
 		func(i: int) -> void:
 			Settings.msaa = i
 			_apply_video())
+	if msaa_max < MSAA_NAMES.size() - 1:
+		# Say it rather than let a player hunt for a notch a guide told them
+		# about. The alternative -- greying the row's fourth stop out -- draws
+		# MORE attention to a setting that can never do anything.
+		_caption("%s does not support %s MSAA; this GPU renders it as %s."
+			% [RenderingServer.get_video_adapter_name(),
+				MSAA_NAMES[MSAA_NAMES.size() - 1], MSAA_NAMES[msaa_max]])
 	_choice("Shadow Quality", SHADOW_NAMES, Settings.shadow_quality,
 		func(i: int) -> void:
 			Settings.shadow_quality = i

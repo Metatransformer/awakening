@@ -166,7 +166,8 @@ var resolution_scale: float = 1.0  ## 0.5 .. 1.0, renders below native and upsca
 ## cost 103 MB of VRAM at 1080p for that one pixel. `project.godot` has said
 ## `anti_aliasing/quality/msaa_3d=0` all along; this line was quietly overriding
 ## it at boot, because `apply_video()` runs after the project setting is read.
-## The row stays in the options menu — a player who wants it can have it.
+## The row stays in the options menu — a player who wants it can have it, up to
+## `max_msaa()`, which on Apple silicon is 4x and not 8x (#57).
 var msaa: int = 0
 var shadow_quality: int = 2        ## 0=off 1=low 2=med 3=high
 var fov_offset: float = 0.0        ## added to K.CAM_FOV, -10 .. +15
@@ -409,6 +410,34 @@ func _set_bus(bus_name: StringName, linear: float) -> void:
 
 # --- Video ------------------------------------------------------------------
 
+## The highest `msaa` index this GPU will actually render — 3 (8x) everywhere the
+## project has not measured otherwise, 2 (4x) on Apple silicon.
+##
+## **Card #57: 8x MSAA is 4x MSAA on this Mac, and the driver reports success.**
+## #55 saw it as identical VRAM (393.1 MB at both, to 0.1 MB) and an edge
+## histogram inside noise, which is consistent with a clamp and *also* with "the
+## extra four samples land in the same places". `tools/directors/msaa_clamp.gd`
+## settled it the only way that can: it freezes the garrison and subtracts the
+## frames. `off -> 2x` moves 44,964 px and `2x -> 4x` moves 45,436 of 921,600;
+## `4x -> 8x` moves **0**, which is below the 3 px two captures of one unchanged
+## config differ by. Eight samples and four cannot resolve to a bit-identical
+## frame unless the driver handed back the same framebuffer. Same answer under
+## §4.5's 480x270 buffer.
+##
+## So the options row offered a fourth choice that did nothing. It is gated here
+## rather than in the menu because `apply_video()` must clamp too — a
+## `settings.cfg` carried from a machine where 8x is real would otherwise leave
+## `msaa = 3` selected against a three-item row.
+##
+## **Gated on the GPU VENDOR and not on `OS.get_name()` on purpose.** Apple is
+## what was measured; an Intel Mac on MoltenVK with an AMD part is a different
+## adapter this project has never photographed, and hiding a working setting
+## there would be the other half of the same mistake. If you get an 8x-capable
+## Mac in front of you, re-run the director before widening this.
+func max_msaa() -> int:
+	return 2 if RenderingServer.get_video_adapter_vendor() == "Apple" else 3
+
+
 func apply_video() -> void:
 	# Only touch the window mode if it is actually wrong. On macOS a
 	# window_set_mode call pumps the OS event queue, which runs a NESTED main
@@ -431,10 +460,15 @@ func apply_video() -> void:
 		DisplayServer.VSYNC_ENABLED if vsync else DisplayServer.VSYNC_DISABLED
 	)
 	var atlas: int = [0, 1024, 2048, 4096][clampi(shadow_quality, 0, 3)]
+	# Write the clamp BACK into the field rather than only using a clamped copy:
+	# a stored 3 on a GPU that renders 4x is a preference that does not refer to
+	# anything, and the options row would show a selection it cannot offer. Same
+	# reasoning as INPUT_LAYOUT above, one field down. See `max_msaa()`.
+	msaa = clampi(msaa, 0, max_msaa())
 	var vp := get_viewport()
 	if vp:
 		vp.scaling_3d_scale = clampf(resolution_scale, 0.5, 1.0)
-		vp.msaa_3d = clampi(msaa, 0, 3) as Viewport.MSAA
+		vp.msaa_3d = msaa as Viewport.MSAA
 		vp.positional_shadow_atlas_size = atlas
 	# The same three knobs on the viewport that is actually drawing 3D. They are
 	# pushed whether or not §4.5's pipeline is on, so flipping `internal_render`
