@@ -272,6 +272,24 @@ func run(rig) -> void:
 	print("PERF %s  budget60=%s  worst_p95=%.2fms of 16.67ms  headroom=%.0f%%"
 		% [label, verdict, worst, (1.0 - worst / 16.67) * 100.0])
 
+	# WHETHER THE TAIL IS EVEN YOURS. p95 is the right thing to budget against --
+	# the hitch is what a stranger playing the demo feels -- but on this machine
+	# it is frequently not the game's. The control that showed it: a 9-draw-call
+	# lookdev scene came back med 6.40 / p95 18.18 while the 715-draw-call
+	# garrison beside it read med 16.15 / p95 17.51. The medians differ by 2.5x
+	# in the direction you would expect and THE p95s CROSS. A tail that is worse
+	# on the trivial scene is not made of scene cost; it is other agents' windows
+	# and the OS.
+	#
+	# So a wide spread means "go and get a quiet machine", not "optimise
+	# something". Only the median is safely attributable when this fires.
+	var med := _pct(wall, 0.5)
+	if med > 0.0 and worst / med > 2.0:
+		print("PERF %s  TAIL NOT ATTRIBUTABLE: p95 is %.1fx the median."
+			% [label, worst / med]
+			+ " Budget on med=%.2fms; re-measure on a quiet machine" % med
+			+ " before believing the p95.")
+
 
 ## Turn one renderer feature off across the whole live tree and say how many
 ## nodes it touched. `shadows` leaves the lights lighting and stops them casting;
