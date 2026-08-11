@@ -144,7 +144,22 @@ func _raise(id: StringName, i: int, total: int) -> void:
 	# a clear gap AND still readable from where the follow camera actually sits.
 	plate.pixel_size = 0.0019
 	plate.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	plate.no_depth_test = true
+	# **Depth-tested, and that is not what this shipped with.** It carried
+	# `no_depth_test = true`, which does not mean "draw over the plinth" -- it
+	# means DRAW OVER THE WORLD. The three names on the landing behind a shut
+	# shortcut door came out painted on the door in cyan, readable from a room
+	# the player had not opened yet, which leaks `docs/PUZZLES.md` §5.1's reward
+	# through the wall that is the entire point of a shortcut (card #26).
+	#
+	# What `no_depth_test` was reaching for is real -- a caption swallowed by its
+	# own drum is no caption -- but the fix for that is the GEOMETRY, which is
+	# `CLAUDE.md` §3's standing advice for this whole class of bug: change the
+	# shape, not the material. `PLATE_DROP` hangs the plate at 0.82 m and the
+	# drum's cap tops out at 0.75 m, so the caption already stands clear of the
+	# stone it belongs to and depth testing costs it nothing.
+	# `tools/directors/echo_plates.gd` measures both halves by subtracting the
+	# labels back out of the frame.
+	plate.no_depth_test = false
 	plate.modulate = Pal.CYAN
 	plate.outline_size = 16
 	plate.outline_modulate = Pal.VOID
