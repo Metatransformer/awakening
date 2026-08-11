@@ -871,8 +871,9 @@ func talk(option: String = "Trade", seconds: float = 6.0) -> bool:
 ##     quantizes to RGB555, one step of which is 8/255, so the same sub-LSB
 ##     jitter lands on the wrong side of a step and **2.6k px cross the 0.02 both
 ##     `echo_plates.gd` and `world_labels.gd` call ink**, on a floor where a
-##     failing beat is 93 px. `internal_render` defaults to TRUE, so that is the
-##     shipping configuration, not an exotic one.
+##     failing beat is 93 px. `internal_render` defaults to FALSE as of 2026-08-11,
+##     so this is now the hazard a director hits only when it turns §4.5 on
+##     itself — which `frame_repro.gd` and `fog_crawl.gd` both do.
 ##  2. **The flames**, historically. `KitTorch` read the wall clock; it
 ##     accumulates game time as of card #45, so the freeze now holds them. The
 ##     `flicker = 0` below is belt and braces for a director that photographs a

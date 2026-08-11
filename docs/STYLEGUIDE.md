@@ -380,13 +380,15 @@ alpha blends of the plates — which is why this is a note rather than a card.
 
 ### 4.5 Internal resolution and upscale
 
-> **BUILT 2026-08-11 (card #58), and it is ON.** This section had described an
-> unbuilt pipeline since it was written; the game rendered at the window's
-> resolution and always had. It is real now, and the decision below is **this
-> session's call, made while the repo owner was asleep, and REVERSIBLE** — one
-> field, `Settings.internal_render`, and the frames re-shoot in four minutes.
-> Same shape as #55's §4.8. If the owner disagrees, set it `false`; nothing else
-> in the project branches on it.
+> **BUILT 2026-08-11 (card #58), and it is now OFF by default.** The pipeline
+> below is real and still works — the SubViewport, the sharp-bilinear present and
+> §4.4's quantizer are all in `scripts/core/screen_present.gd`. It shipped ON for
+> a day, made while the repo owner was asleep, and the owner turned it off on
+> 2026-08-11: `Settings.internal_render` now defaults to `false`, so the game
+> renders at the window's resolution as it did before #58. Everything below
+> describes what you get by setting that field back to `true`; nothing else in
+> the project branches on it, and the directors that want §4.5 (`frame_repro`,
+> `fog_crawl`, `internal_res`, `msaa_clamp`) each turn it on themselves.
 
 3D SubViewport at **480 × 270**, fixed. (PSX was 320×240 = 76.8k pixels;
 480×270 = 129.6k, the smallest buffer where an over-the-shoulder camera can still

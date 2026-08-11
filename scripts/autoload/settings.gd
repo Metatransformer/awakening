@@ -188,7 +188,7 @@ var fov_offset: float = 0.0        ## added to K.CAM_FOV, -10 .. +15
 ## Not persisted as a player preference on purpose: this is the game's look, not
 ## a quality slider. `resolution_scale` is still the slider, and it now scales
 ## the internal buffer rather than the window.
-var internal_render: bool = true
+var internal_render: bool = false
 
 ## §4.5's SubViewport + present layer. Built in `_ready`, driven by
 ## `apply_video()`, and the only thing in the project that reads
