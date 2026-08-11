@@ -31,7 +31,9 @@ extends RefCounted
 ## looks exactly like a maze that works.
 
 const SEED := 20260810
-const R := 4
+## Match `Dungeon.MAZE_ROWS/COLS`. Wider than deep because the lantern apron comes
+## out of the depth -- see `MazeRoom.APRON`.
+const R := 3
 const C := 4
 
 var out := ""
@@ -79,6 +81,31 @@ func run(rig) -> void:
 		print("MAZE FAIL -- %d check(s) failed" % _fails)
 
 
+## **Take the proving ground's furniture out before standing a maze on it.**
+##
+## `proving_ground.tscn` is a showroom: a raised ledge over the east half, two
+## pillars, two pushable blocks and a pair of floor braziers. A 12.4 x 9.3 m maze
+## has nowhere in that chamber to stand clear of all of it, and beat F's walk does
+## not care whether the thing it wedged against is a maze wall or a brazier — it
+## just reports "stuck", which is a false failure and, worse, would mask a true
+## one. So the fixture is cleared first and said out loud, rather than the maze
+## being nudged to a corner where today's furniture happens not to be.
+func _clear_the_floor(rig) -> void:
+	# Untyped: `rig` is untyped, so everything off it is a Variant (CLAUDE.md §3).
+	var ground = rig.scene().get_node_or_null(^"Ground")
+	if ground == null:
+		return
+	var freed := 0
+	for path: NodePath in [^"Ledge", ^"Props", ^"Torches/StairN",
+			^"Torches/WestPost"]:
+		var n: Node = ground.get_node_or_null(path)
+		if n != null:
+			n.free()
+			freed += 1
+	print("MAZE cleared %d fixture prop group(s) out of the maze's footprint"
+		% freed)
+
+
 func _ck(label: String, ok: bool) -> void:
 	if ok:
 		print("MAZE ok %s" % label)
@@ -90,11 +117,13 @@ func _ck(label: String, ok: bool) -> void:
 # --- A. The carve -------------------------------------------------------------
 
 func _a_carve(rig) -> void:
+	_clear_the_floor(rig)
 	var room := MazeRoom.new()
 	room.name = "MazeRoom"
 	room.rows = R
 	room.cols = C
-	room.position = Vector3(0.0, 0.02, -2.0)
+	# Centred on the chamber, which is 22 m square once the furniture is out of it.
+	room.position = Vector3(0.0, 0.02, 0.0)
 	rig.scene().add_child(room)
 	_room = room
 	room.opened.connect(func() -> void: _fired += 1)
@@ -124,9 +153,56 @@ func _a_carve(rig) -> void:
 		% [corridors, R * C], corridors == R * C - 1)
 	_ck("A2 it planned %d gates" % m.gates.size(), m.gates.size() == MazeRoom.GATES)
 	print("MAZE mouth=%d prize=%d gates=%s" % [m.mouth, m.prize, m.gates])
+	_a3_rim(room, m)
 
 	await _look(rig, room.cell_centre(m.mouth) + room.global_position, 5.5)
 	await rig.capture(out.path_join("m_01_dealt.png"))
+
+
+## **The rim is solid, on all four sides, with one hole in it.**
+##
+## Measured off the WALL NODES' positions, not off `Maze.walls`, and that is the
+## entire point of the beat. The grid stores two bits per cell — a north and a
+## west — so its south and east edges have no byte to live in, and for a while the
+## room simply did not build them: `Maze.reach` proved a sealed maze while
+## `_build_walls` stood up one that was open along its whole bottom and right-hand
+## side. Every integer beat in this file passed, because every integer beat asks
+## the grid. This one asks the geometry.
+func _a3_rim(room: Node3D, m: Maze) -> void:
+	var half_x := float(m.cols) * MazeRoom.CELL * 0.5
+	var half_z := float(m.rows) * MazeRoom.CELL * 0.5
+	var count := {"n": 0, "s": 0, "w": 0, "e": 0}
+	# A wall standing ON an edge line, within a wall's thickness of it. Cell
+	# centres are a whole cell in from those lines, so nothing interior can be
+	# miscounted.
+	for child in room.get_children():
+		var n3 := child as Node3D
+		if n3 == null or not n3.name.begins_with("W_"):
+			continue
+		var p := n3.position
+		if absf(p.z + half_z) < 0.5:
+			count["n"] += 1
+		elif absf(p.z - half_z) < 0.5:
+			count["s"] += 1
+		elif absf(p.x + half_x) < 0.5:
+			count["w"] += 1
+		elif absf(p.x - half_x) < 0.5:
+			count["e"] += 1
+	_ck("A3 the rim is solid on all four sides -- N%d S%d W%d E%d, of %d/%d"
+		% [count["n"], count["s"], count["w"], count["e"], m.cols, m.rows],
+		count["n"] == m.cols and count["s"] == m.cols - 1
+			and count["w"] == m.rows and count["e"] == m.rows)
+	# ...and exactly one hole, at the mouth. `s` is one short above; this says the
+	# short one is the right one.
+	var mouth_x: float = room.call(&"cell_centre", m.mouth).x
+	var plugged := false
+	for child in room.get_children():
+		var n3 := child as Node3D
+		if n3 == null or not n3.name.begins_with("W_"):
+			continue
+		if absf(n3.position.z - half_z) < 0.5 and absf(n3.position.x - mouth_x) < 0.5:
+			plugged = true
+	_ck("A4 and the one hole in it is the mouth", not plugged)
 
 
 # --- B. Shut as dealt ---------------------------------------------------------
@@ -368,6 +444,82 @@ func _look(rig, at: Vector3, back: float) -> void:
 ##     --scene=res://scenes/rooms/dungeon.tscn \
 ##     --director=res://tools/directors/maze.gd --floor \
 ##     --out=/tmp/mzf/x.png --warmup=60
+## **The beat this director did not have, and the bug it did not catch.**
+##
+## G4 above presses the lanterns by holding a reference to them. That proves the
+## wiring and nothing about the world: for as long as this room has existed, both
+## lanterns spawned at `mouth_point().z + 3.0`, which on every 16 m room on every
+## floor is **1.2 m past the south wall** — off the floor slab, inside the
+## masonry, unreachable. G4 passed anyway, every time, and so did the whole
+## fixture half of this file, because `_atom_test.tscn` is a room with no walls to
+## be outside of. What shipped was a chest marker on the minimap over a room whose
+## puzzle could not be touched.
+##
+## So this asks two things a reference-press cannot: is the lantern inside the
+## room's own footprint, and can the **hero walk to it** from the mouth and land a
+## blow.
+func _g_lanterns_are_reachable(rig, dungeon, room: Node3D, cell) -> void:
+	var half: float = float(dungeon.call(&"size_of", cell)) * 0.5
+	var origin: Vector3 = room.get_parent().global_position
+	var outside := 0
+	for i in MazeRoom.GATES:
+		var lamp = room.call(&"lantern", i)
+		if lamp == null:
+			outside += 1
+			continue
+		var at: Vector3 = lamp.global_position - origin
+		if absf(at.x) > half or absf(at.z) > half:
+			outside += 1
+			print("MAZE lantern %d at room-local %s, room half %.2f" % [i, at, half])
+	_ck("G3a every lantern stands INSIDE its room, on the floor (%d outside)"
+		% outside, outside == 0)
+
+	# And the hero reaches one. Walked, not teleported -- a lantern half inside the
+	# wall is inside the room's footprint and still unhittable.
+	#
+	# From the far end of the apron, not from the mouth: the mouth is a metre from
+	# lantern 1, so a walk that started there would pass whatever the lanterns'
+	# positions were. Crossing the room is the claim worth making.
+	var lamp0 = room.call(&"lantern", 0)
+	if lamp0 == null or _hero == null:
+		_ck("G3b the hero can walk to a lantern and hit it", false)
+		return
+	var z: float = float(room.call(&"mouth_point").z) + MazeRoom.APRON * 0.5
+	_hero.global_position = room.global_position + Vector3(-5.0, 0.15, z)
+	await rig.wait_frames(4)
+	var target: Vector3 = lamp0.global_position
+	var near := false
+	for _i in 300:
+		var to := target - _hero.global_position
+		to.y = 0.0
+		# A lantern is a body on a post; stop at arm's length rather than trying to
+		# stand inside it. `Lantern.CAGE_R` plus a hero is about a metre.
+		if to.length() < 1.1:
+			near = true
+			break
+		_step(to.normalized() * 0.12)
+		await rig.wait_frames(1)
+	_ck("G3b the hero WALKS the room to a lantern (gap %.2f m)"
+		% (_hero.global_position - target).length(), near)
+
+
+## One step against the real colliders, sliding off whatever it grazes.
+##
+## `move_and_collide` alone stops dead on contact, so a hero who clipped a lantern
+## post on the way past another one simply stood there for the rest of the beat
+## and the director reported the room unreachable. Sliding is what a player does
+## with a stick in their hand, so it is what the proof should do.
+func _step(motion: Vector3) -> void:
+	var body := _hero as CharacterBody3D
+	var hit := body.move_and_collide(motion)
+	if hit == null:
+		return
+	var left := motion.slide(hit.get_normal())
+	left.y = 0.0
+	if left.length() > 0.001:
+		body.move_and_collide(left)
+
+
 func _g_on_a_floor(rig) -> void:
 	# Untyped: `rig` is untyped, so everything off it is a Variant (CLAUDE.md §3).
 	var dungeon = rig.scene().get_tree().get_first_node_in_group(&"dungeon")
@@ -385,11 +537,11 @@ func _g_on_a_floor(rig) -> void:
 		# dungeon's OWN placer rather than skipping the beat -- a director that
 		# quietly passed on the unlucky seeds would be proving `maze_chance` and
 		# nothing else.
-		var cell = dungeon.call(&"pick_maze_cell", true)
-		if cell == null:
+		var pick = dungeon.call(&"pick_maze_cell", true)
+		if pick == null:
 			_ck("G0 the floor has a room a maze fits in", false)
 			return
-		dungeon.call(&"place_maze", cell)
+		dungeon.call(&"place_maze", pick)
 		await rig.wait_frames(20)
 		for n in rig.scene().get_tree().get_nodes_in_group(&"maze_room"):
 			found = n as Node3D
@@ -398,6 +550,17 @@ func _g_on_a_floor(rig) -> void:
 		_ck("G0 the floor placed a maze", false)
 		return
 	_ck("G0 the floor placed a maze", true)
+	# Which room it landed in, read back off the dungeon rather than remembered:
+	# on a lucky seed the maze was placed by `_populate` and this beat never saw
+	# the cell go by.
+	var cell = null
+	for c: Vector2i in dungeon.rooms:
+		if dungeon.rooms[c].get("node") == found.get_parent():
+			cell = c
+			break
+	if cell == null:
+		_ck("G0a and the dungeon knows which room it is in", false)
+		return
 	_ck("G1 shut as generated", not bool(found.call(&"is_open")))
 	var chest = found.get_parent().get_node_or_null(^"MazeChest")
 	_ck("G2 with a chest standing hidden at the prize",
@@ -409,6 +572,19 @@ func _g_on_a_floor(rig) -> void:
 		if c is PuzzleGate or c is LockedDoor:
 			siblings += 1
 	_ck("G3 in a room with no door anchor in it (%d)" % siblings, siblings == 0)
+
+	# **The arrival frame, shot first.** This is the picture that should have shown
+	# the bug and never got taken: the room as the player walks into it, standing
+	# in the apron looking north at the mouth, with the two lanterns in front of
+	# them. It used to be shot last and from +11 m, which on a 16 m room is three
+	# metres outside the south wall -- the lens inside the masonry, the frame
+	# black, and a floor's worth of unreachable lanterns invisible in it. Shot
+	# before the walking beats as well, because the floor has bodies on it and a
+	# goblin finding the hero mid-beat turns the last frame into a death screen.
+	await _stand_in_the_apron(rig, found)
+	await rig.capture(out.path_join("m_05_on_a_floor.png"))
+
+	await _g_lanterns_are_reachable(rig, dungeon, found, cell)
 
 	var lamp = found.call(&"lantern", 0)
 	if lamp != null:
@@ -422,11 +598,25 @@ func _g_on_a_floor(rig) -> void:
 	await rig.wait_frames(30)
 	_ck("G5 which is what lands the chest -- the puzzle pays (§5.2)",
 		chest != null and chest.visible)
-	if found != null:
-		_hero.global_position = found.global_position + Vector3(0.0, 0.15, 11.0)
-		var to := K.flat(found.global_position - _hero.global_position)
-		_hero.facing_yaw = atan2(to.x, to.z)
-		_hero.rotation.y = _hero.facing_yaw + PI
-		Bus.camera_recenter.emit()
-		await rig.wait_frames(24)
-	await rig.capture(out.path_join("m_05_on_a_floor.png"))
+	await _stand_in_the_apron(rig, found)
+	await rig.capture(out.path_join("m_06_lanterns_lit.png"))
+
+
+## The player's own view of the apron: standing at its west end looking east down
+## it, with both lanterns in shot and the maze's rim running along the left.
+##
+## **Along the apron rather than across it, and that is forced, not a preference.**
+## The boom is 4.13 m (`K.CAM_DIST_MAX`) and the apron is 3.35 m deep, so a shot
+## taken facing the maze puts the lens through the room's south wall — it
+## collapses to `hard_min_distance` and the frame is the inside of the hero's
+## hood, which is precisely what the first version of this shot produced. Along
+## the room's 16 m width there is boom room to spare.
+func _stand_in_the_apron(rig, room: Node3D) -> void:
+	if _hero == null or room == null:
+		return
+	var z: float = float(room.call(&"mouth_point").z) + MazeRoom.APRON * 0.5
+	_hero.global_position = room.global_position + Vector3(-5.0, 0.15, z)
+	_hero.facing_yaw = atan2(1.0, 0.0)
+	_hero.rotation.y = _hero.facing_yaw + PI
+	Bus.camera_recenter.emit()
+	await rig.wait_frames(24)
