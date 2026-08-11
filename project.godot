@@ -614,6 +614,37 @@ item_next={
 , Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":12,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
+; The kit wheel. HELD, not tapped: hold it and the eight bindings come up, point
+; the RIGHT STICK or the mouse at one, and letting go is what commits it.
+;
+; LB -- button 9, JOY_BUTTON_LEFT_SHOULDER. CONTRACT §4 held this button empty
+; "for spells" and said not to fill it because it looks empty; that reservation
+; is spent here, deliberately and with the argument written down. There are no
+; spells and there will not be: the three workings (GDD §6.5) are stops on the
+; weapon ring, which is the decision that says this game has no casting layer.
+; So the button was being kept for a system that has already been designed out,
+; and the wheel has the strongest possible claim on it -- it is the left index
+; finger raising a STANCE while the right hand picks out of it, which is exactly
+; the pairing §4 calls the layout's spine.
+;
+; It does NOT collide with the shoulder that pages menu tabs. `ui_tab_prev` is
+; registered at runtime by PauseMenu and only exists while the world is paused,
+; where the hero reads nothing.
+;
+; THE KEY IS CTRL -- physical_keycode 4194326, KEY_CTRL, which on a Mac is
+; Control and not Command (that is KEY_META). It is a modifier held with the
+; left hand while WASD keeps working, which is the keyboard's honest translation
+; of a shoulder button; every letter key near the left hand is either taken or a
+; home-row raid. Holding it makes `attack` read false on plain LMB, because that
+; action is read exactly (see the modifier note at the top of this block) -- and
+; that is wanted rather than tolerated: the wheel is up, and swinging out of it
+; would be the one press the player cannot have meant.
+kit_wheel={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":4194326,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":9,"pressure":0.0,"pressed":false,"script":null)
+]
+}
 ; Look around out of his own eyes. R3 -- button 8, JOY_BUTTON_RIGHT_STICK --
 ; because BOTW clicks the right stick for exactly this and the thumb is already
 ; on that stick doing exactly this with the camera.

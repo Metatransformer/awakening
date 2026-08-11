@@ -509,7 +509,8 @@ func rebindable_actions() -> Array[StringName]:
 	return [
 		&"move_up", &"move_down", &"move_left", &"move_right",
 		&"z_target", &"attack", &"heavy", &"shield", &"context", &"interact",
-		&"use_item", &"jump", &"weapon_prev", &"weapon_next", &"item_next",
+		&"use_item", &"jump", &"kit_wheel",
+		&"weapon_prev", &"weapon_next", &"item_next",
 		&"loadout_swap", &"first_person",
 		&"pause", &"inventory", &"map",
 	]

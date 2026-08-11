@@ -54,13 +54,21 @@ const SLOTS := 3
 ## player waiting one extra run for a line they had already paid for; the
 ## alternative, defaulting to 0, would take Aldric's story about the last cadet
 ## back off a save that had unlocked it. So v5 stays readable.
-const VERSION := 6
+##
+## Bumped to 7 for `wheel`, the kit wheel's eight bindings, and it is additive in
+## exactly the way `deaths` and `gold_earned` were. A v6 slot has no such key and
+## is reconstructed as the blank-plus-sword seed rather than as a wheel rebuilt
+## out of `items` — see the read, which explains why guessing would be worse than
+## an honest empty. The failure mode is a returning player pressing LB once and
+## finding one slot filled, on a wheel whose entire teaching move is that you can
+## see what is on it. So v6 stays readable.
+const VERSION := 7
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4, 5, 6]
+const READABLE: Array[int] = [4, 5, 6, 7]
 
 signal saved(slot: int)
 signal loaded(slot: int)
@@ -165,6 +173,11 @@ func save(slot: int) -> bool:
 		"has_compass": Game.has_compass,
 		"items": Game.items,
 		"item_selected": Game.item_selected,
+		# The kit wheel's eight bindings. A flat array of ids, which is the whole
+		# reason the wheel encodes a bottle as a `bottle_N` token rather than as a
+		# typed record -- the save file is ids everywhere else and this row did
+		# not have to invent a shape for itself.
+		"wheel": Game.wheel,
 		"loadout": Game.loadout,
 		"loadout_set": Game.loadout_set,
 		"flags": Game.flags,
@@ -325,6 +338,27 @@ func load_slot(slot: int) -> Dictionary:
 	# a game with one is a `bottle_contents[3]` on the first press of X.
 	Game.item_selected = int(d.get("item_selected", 0))
 
+	# The kit wheel. Rebuilt slot by slot through `wheel_bind` rather than
+	# assigned wholesale, and that is not defensiveness for its own sake -- the
+	# bind is the only thing that knows a `bottle_4` token is meaningless in a
+	# game with three bottles, and it is the only thing that refuses a duplicate.
+	# JSON hands back plain Strings, so every entry needs the StringName anyway.
+	#
+	# A save written before the wheel existed has no "wheel" key: the loop does
+	# not run, and what survives is the blank-plus-sword `Game.reset()` seeded,
+	# which is exactly what an old save should come back as. The auto-bind then
+	# fills it from `items` on the next pickup rather than at load time -- a load
+	# that silently rebuilt the wheel out of everything you own would overwrite a
+	# curated one on the first save/load cycle after this landed.
+	#
+	# This runs AFTER "items" and "bottles" above, and the order is load-bearing
+	# for the same reason `add_bottle`'s is: `wheel_bindable` asks what you own.
+	var bound: Array = d.get("wheel", [])
+	if not bound.is_empty():
+		Game.wheel.fill(&"")
+		for i in mini(bound.size(), Game.wheel.size()):
+			Game.wheel_bind(i, StringName(bound[i]))
+
 	# Armaments. Read defensively and per-hand rather than assigning the array
 	# wholesale: JSON hands back plain Strings in untyped Dictionaries, and a
 	# save written before the loadout existed has no "loadout" key at all, so
@@ -349,6 +383,7 @@ func load_slot(slot: int) -> Dictionary:
 	Bus.key_count_changed.emit(Game.small_keys)
 	Bus.gold_changed.emit(Game.gold)
 	Bus.item_selected_changed.emit(Game.item_selected)
+	Bus.wheel_changed.emit(Game.wheel)
 	Bus.bottles_changed.emit(Game.bottle_contents)
 	Bus.components_changed.emit(Game.components)
 	Bus.stash_changed.emit(Game.stash)

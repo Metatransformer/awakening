@@ -53,6 +53,9 @@ const HAND_NAMES := {&"left": "LEFT HAND", &"right": "RIGHT HAND"}
 var _hrow: HBoxContainer
 
 var _slots: Array[Button] = []
+## The eight kit-wheel cells, in slot order — index IS the sector. See
+## `_build_wheel`.
+var _wheel_cells: Array[Button] = []
 var _set_frames: Array[PanelContainer] = []
 var _set_marks: Array[Label] = []
 var _swap: Button
@@ -83,6 +86,9 @@ func _ready() -> void:
 	# A bound bottle's cell shows what is IN it, so brewing, drinking or blowing
 	# one changes this screen without the binding changing at all.
 	Bus.bottles_changed.connect(func(_c: Array) -> void: refresh())
+	# And the wheel can change without this screen touching it: picking something
+	# up auto-binds it, and a save loaded from the Saves screen replaces all eight.
+	Bus.wheel_changed.connect(func(_s: Array) -> void: refresh())
 	refresh()
 
 
@@ -153,6 +159,7 @@ func _build() -> void:
 
 	_build_sets(left)
 	_build_swap(left)
+	_build_wheel(left)
 
 	# The right column is where the screen talks back: the detail pane for
 	# whatever has focus on the left.
@@ -264,6 +271,184 @@ func _build_swap(parent: Node) -> void:
 			value_settled.emit(),
 	})
 	_swap.name = "SwapRow"
+
+
+## The kit wheel's eight bindings, and the only place they can be edited by hand.
+##
+## **This screen used to have an ITEM BUTTONS card and it was deleted; this is
+## not it coming back.** That card was the *only* way an item became reachable,
+## so every player had to come here before a new bow meant anything — which is
+## the complaint CONTRACT §4.1 records and the reason the bindings went. The
+## wheel auto-binds on pickup (`Game.wheel_auto_bind`), so this card is where you
+## go to *rearrange* a wheel that already works, or to fill a slot after the
+## eighth thing you own found the wheel full. Nobody has to visit it. That is the
+## whole difference, and it is the difference the deletion was about.
+##
+## Laid out as ONE ROW rather than as a ring or a 4x2 grid, with each cell
+## captioned by the direction it lives on. A grid is not a wheel either — no
+## rectangular arrangement of eight cells maps onto eight compass points — so
+## rather than imply a layout that is a lie, the direction is written on the
+## cell. `↑→` and not `↗`: the arrows in `HINT` are known to render in this face
+## and the diagonals are not, and a card whose labels come out as boxes is worse
+## than a card with two-character labels.
+const WHEEL_DIRS: Array[String] = ["↑", "↑→", "→", "↓→", "↓", "↓←", "←", "↑←"]
+const WHEEL_CELL := Vector2(50, 50)
+
+
+func _build_wheel(parent: Node) -> void:
+	var col := VBoxContainer.new()
+	col.name = "Wheel"
+	col.add_theme_constant_override("separation", 6)
+	parent.add_child(col)
+
+	UITheme.section_rule(col, "KIT WHEEL")
+
+	var row := HBoxContainer.new()
+	row.name = "Cells"
+	row.add_theme_constant_override("separation", 6)
+	col.add_child(row)
+	for slot in Game.WHEEL_SLOTS:
+		_wheel_cells.append(_make_wheel_cell(row, slot))
+
+	var hint := Label.new()
+	UITheme.apply_text_style(hint, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# It names the button and the RELEASE, because the release is the half a
+	# player will not guess: every other hold in this game commits on the way
+	# down. New things bind themselves, which is the sentence that stops this card
+	# reading as a chore you have to do before playing.
+	hint.text = "Hold %s in play, point, and let go. New kit binds itself to a free slot." % (
+		MenuUtil.pad_label(&"kit_wheel"))
+	col.add_child(hint)
+
+
+## One wheel slot: the direction over the icon. Smaller than a hand cell and
+## deliberately so — there are eight of them and they are a reference, not the
+## decision this screen is about.
+func _make_wheel_cell(parent: Node, slot: int) -> Button:
+	var b := Button.new()
+	b.name = "Wheel_%d" % slot
+	b.theme_type_variation = &"MenuSlot"
+	b.focus_mode = Control.FOCUS_ALL
+	b.custom_minimum_size = WHEEL_CELL
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.set_meta(&"slot", slot)
+	parent.add_child(b)
+
+	var col := VBoxContainer.new()
+	col.name = "Col"
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(col)
+	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	var caption := Label.new()
+	caption.name = "Dir"
+	UITheme.apply_text_style(caption, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
+	caption.text = WHEEL_DIRS[slot]
+	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(caption)
+
+	var art := CenterContainer.new()
+	art.name = "Art"
+	art.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(art)
+	art.add_child(_new_icon(26))
+
+	var letters := Label.new()
+	letters.name = "Letters"
+	letters.theme_type_variation = &"MenuValue"
+	letters.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	art.add_child(letters)
+
+	b.pressed.connect(func() -> void: _cycle_wheel(b))
+	b.focus_entered.connect(func() -> void: _describe_wheel(b))
+	b.mouse_entered.connect(func() -> void: _describe_wheel(b))
+	return b
+
+
+## What this slot may be set to, in cycle order: nothing, then everything the
+## hero owns that is not already parked somewhere else on the wheel.
+##
+## The "not already elsewhere" filter is why this cycles rather than calling
+## `Game.wheel_bind` with whatever comes next in `wheel_pool()`. `wheel_bind`
+## SWAPS when the id is already bound — which is the right answer for a player
+## deliberately moving something, and the wrong one for a cycle, where stepping
+## past the bow would silently drag it out of the slot it was in and leave the
+## bottle it displaced somewhere the player was not looking.
+func _wheel_options(slot: int) -> Array[StringName]:
+	var out: Array[StringName] = [&""]
+	for id in Game.wheel_pool():
+		var at := Game.wheel_slot_of(id)
+		if at < 0 or at == slot:
+			out.append(id)
+	return out
+
+
+func _cycle_wheel(b: Button) -> void:
+	var slot: int = b.get_meta(&"slot")
+	var options := _wheel_options(slot)
+	if options.size() <= 1:
+		notice.emit("Nothing to bind yet.", true)
+		return
+	var next := options[posmod(options.find(Game.wheel_at(slot)) + 1, options.size())]
+	if not Game.wheel_bind(slot, next):
+		notice.emit("Nothing else to put on that slot yet.", true)
+		return
+	refresh()
+	_describe_wheel(b)
+	value_settled.emit()
+
+
+func _describe_wheel(b: Button) -> void:
+	if b == null or _detail_name == null:
+		return
+	var slot: int = b.get_meta(&"slot")
+	var id := Game.wheel_at(slot)
+	var bottle := Game.bottle_index(id)
+
+	_detail_hand.text = "KIT WHEEL  ·  %s" % WHEEL_DIRS[slot]
+	if id == &"":
+		_detail_name.text = "Empty"
+		_detail_blurb.text = "Nothing on this direction. Confirm to put something on it."
+	elif bottle >= 0:
+		var potion := Game.bottle(bottle)
+		_detail_name.text = "Empty Bottle" if potion == &"" else PotionDb.name_of(potion)
+		# The routing, told to the player at the one moment it is a surprise: they
+		# have just put a draught on the same ring as the hookshot, and the wheel
+		# has to say that it knows the difference between the two.
+		_detail_blurb.text = "Bottle %d. Releasing here selects it — %s drinks what is selected." % [
+			bottle + 1, MenuUtil.pad_label(&"use_item")]
+	else:
+		_detail_name.text = ArmamentDb.name_of(id)
+		_detail_blurb.text = "%s Releasing here puts it in the right hand." % ArmamentDb.blurb(id)
+
+	_detail_ammo.visible = false
+	_detail_legend.text = "Confirm to change it. In play, hold %s and point." % (
+		MenuUtil.pad_label(&"kit_wheel"))
+
+
+func _paint_wheel(b: Button) -> void:
+	var slot: int = b.get_meta(&"slot")
+	var id := Game.wheel_at(slot)
+	var icon := b.get_node("Col/Art/Icon") as TextureRect
+	var letters := b.get_node("Col/Art/Letters") as Label
+
+	# A bottle has no baked icon — the HUD DRAWS its glass, which a TextureRect
+	# cannot do — so it wears the two letters the rest of this kit falls back to.
+	# `BT` and not the potion's own initials: what is bound is the GLASS, and the
+	# cell would otherwise change identity every time the player drank.
+	var tex := ArmamentDb.icon(id) if Game.bottle_index(id) < 0 else null
+	icon.texture = tex
+	icon.visible = tex != null
+	letters.visible = tex == null
+	letters.text = "" if id == &"" else ("BT" if Game.bottle_index(id) >= 0
+		else ArmamentDb.letter(id))
+	# Dimmed when the binding is cold, the same rule the HUD's wheel draws: a
+	# working you have not read at the counter yet is still worth SEEING here.
+	b.modulate = Color.WHITE if Game.wheel_ready(slot) else Color(1, 1, 1, 0.45)
 
 
 func _build_sets(parent: Node) -> void:
@@ -525,14 +710,27 @@ func _wire_focus() -> void:
 		var bottom := _slots[cols + col]
 		MenuUtil.link_down(top, bottom)
 		MenuUtil.link_down(bottom, _swap)
-	# Swap Set is the last control on the screen, so it closes the loop back to
+	# Swap Set drops into the wheel row, and the wheel row closes the loop back to
 	# the top-left hand -- everything here is reachable by pressing one direction
 	# repeatedly and nothing is an orphan. The way out used to be this last stop;
 	# it lives on the POUCH now, with the numbers it is decided from.
-	_swap.focus_neighbor_bottom = _swap.get_path_to(_slots[0])
-	_swap.focus_next = _swap.get_path_to(_slots[0])
 	_swap.focus_neighbor_left = ^"."
 	_swap.focus_neighbor_right = ^"."
+	if _wheel_cells.is_empty():
+		_swap.focus_neighbor_bottom = _swap.get_path_to(_slots[0])
+		_swap.focus_next = _swap.get_path_to(_slots[0])
+		return
+	# ← / → walk the eight cells and wrap, which is the ONE place on this screen
+	# where wrapping is more than a convenience: the row is a ring flattened out,
+	# and ↑← sitting next to ↑ is the only thing on screen that says so.
+	MenuUtil.chain_row(_wheel_cells)
+	for i in _wheel_cells.size():
+		var cell := _wheel_cells[i]
+		cell.focus_neighbor_top = cell.get_path_to(_swap)
+		cell.focus_previous = cell.get_path_to(_swap)
+		cell.focus_neighbor_bottom = cell.get_path_to(_slots[0])
+		cell.focus_next = cell.get_path_to(_slots[0])
+	MenuUtil.link_down(_swap, _wheel_cells[0])
 
 
 # --- State ------------------------------------------------------------------
@@ -560,9 +758,16 @@ func refresh() -> void:
 		_set_frames[i].modulate = Color.WHITE if live else Color(1, 1, 1, 0.62)
 	for b in _slots:
 		_paint(b)
+	for b in _wheel_cells:
+		_paint_wheel(b)
 	_refresh_stats()
+	# The detail pane follows focus, and focus can be on a wheel cell — a refresh
+	# that always re-described a HAND would throw away the wheel's blurb every time
+	# a binding changed, which is precisely when the player is reading it.
 	var focused := get_viewport().gui_get_focus_owner()
-	if _slots.has(focused):
+	if _wheel_cells.has(focused):
+		_describe_wheel(focused as Button)
+	elif _slots.has(focused):
 		_describe(focused as Button)
 	else:
 		_describe(_slots[HANDS.find(Game.HAND_RIGHT)])

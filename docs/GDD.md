@@ -1019,6 +1019,16 @@ than holding bindings: ← → walk the right hand through the weapons you own, 
 steps the bottle, ↑ swaps the whole loadout. Extraction is a **hold** — a
 decision you can make by fumbling a button is not a decision.
 
+**LB is the kit wheel**, and it is the one hold whose *release* is the press.
+Hold it and eight slots come up around the hero with everything on them showing;
+point the right stick or the mouse at one and let go, and it goes where it
+belongs — a weapon to the right hand, a bottle to the slot X drinks from. It
+binds a new item to a free slot the moment you pick it up, so it is never a menu
+you have to visit first, and it never asks you to remember which direction
+anything is on, because it is showing you for as long as you are holding it.
+That is the whole reason it can exist beside rings that were chosen to avoid
+exactly those two costs (`docs/CONTRACT.md` §4.1, §4.2).
+
 The **air slam** is the one verb with no button of its own: either sword button,
 pressed while airborne and unarmed, hangs the hero for a beat and drives him into
 the floor. Jump is already the commitment — you are in the air with no way to

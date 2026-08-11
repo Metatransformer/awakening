@@ -40,6 +40,19 @@ signal item_selected_changed(index: int)
 ## An armament changed hands, or the whole set was swapped. `set_index` is which
 ## loadout is live (0 primary, 1 alternate). See Game.loadout.
 signal loadout_changed(set_index: int, right: StringName, left: StringName)
+## A kit-wheel binding moved. `slots` is `Game.wheel` itself — eight entries,
+## each an armament id, a `bottle_N` token, or `&""`.
+##
+## It is about the BINDINGS and never about the release. Committing a slot
+## already emits `loadout_changed` or `item_selected_changed` through
+## `Game.wheel_select`, and a third signal saying the same thing a different way
+## is how two listeners end up disagreeing about what the hero is holding —
+## which is the exact failure `quick_slots_changed` was deleted for (see
+## `item_selected_changed` above).
+##
+## The array is passed live rather than duplicated: every listener here draws it
+## and none of them keeps it.
+signal wheel_changed(slots: Array)
 signal player_died
 
 # --- Camera and targeting ---------------------------------------------------

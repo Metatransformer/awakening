@@ -234,6 +234,47 @@ var loadout: Array[Dictionary] = [
 	{HAND_RIGHT: &"bow", HAND_LEFT: &"arrow"},
 ]
 var loadout_set: int = PRIMARY
+
+# --- The kit wheel ----------------------------------------------------------
+## Eight slots, held on LB, pointed at with the right stick or the mouse, and
+## committed on the RELEASE. Each holds one thing the hero owns, and the wheel
+## does not care which kind: a right-hand armament goes into the right hand, a
+## bottle becomes the selected item that X drinks. `wheel_select()` is the one
+## place that decides which, off the id alone.
+##
+## **This is not the quick-slot system CONTRACT §4.1 deleted**, and the
+## difference is worth writing down because the argument that deleted it is a
+## good one and still stands. What killed the D-pad bindings was that every
+## direction meant *whatever you last decided* — you had to REMEMBER which of
+## four buttons the bow was on, and you had to visit a menu before a bow you
+## just found meant anything at all. A wheel answers both, and it is the only
+## shape that does: it **shows you every binding while you hold it**, so there is
+## nothing to remember, and `wheel_auto_bind()` puts a new item on a free slot at
+## the moment it is picked up, so the menu trip is optional rather than the price
+## of admission. The three D-pad rings are untouched (`cycle_weapon`,
+## `cycle_item`, `swap_loadout`); the wheel is a faster door onto the same two
+## fields, never a second copy of them.
+##
+## **Eight, and the number is doing work.** Six is the weapon ring's ceiling
+## (`RIGHT_POOL`, `docs/SCOPE.md` §1) and four is the bottle ceiling
+## (`K.BOTTLE_MAX`), so ten is what a player can own — and eight is deliberately
+## short of it. A wheel with a slot for everything is a wheel you never curate,
+## which is the same failure as a hotbar: the point of holding LB is that the
+## four things you actually reach for are each a flick away, and a flick has to
+## be a DIRECTION rather than a search. Eight sectors are the eight compass
+## points, which is the largest set a thumb can hit blind. A ninth is not a
+## constant, it is an amendment to that sentence.
+##
+## Entries are the SAME id vocabulary `Hud._draw_item_glyph` already reads — an
+## armament id, or a `bottle_N` token from `bottle_id()`. That is why routing is
+## a pure function of the entry (`bottle_index(id) >= 0` and nothing else) and
+## why the HUD needed no new drawing rule to put one in a cell. A second
+## encoding here — a Dictionary with a "kind", a parallel array of types — would
+## be a second answer to a question `bottle_index` has answered since the HUD
+## drew its first cell.
+const WHEEL_SLOTS := 8
+var wheel: Array[StringName] = _blank_wheel()
+
 ## One-way world flags: chests opened, doors unlocked, puzzles solved.
 var flags: Dictionary[StringName, bool] = {}
 
@@ -281,6 +322,7 @@ func _ready() -> void:
 func _grant_starter_kit() -> void:
 	for id in STARTER_KIT:
 		grant(id)
+	_seed_wheel()
 	while bottle_count() < K.BOTTLE_START:
 		add_bottle()
 
@@ -322,6 +364,13 @@ func reset() -> void:
 		{HAND_RIGHT: &"bow", HAND_LEFT: &"arrow"},
 	]
 	loadout_set = PRIMARY
+	# The wheel is bindings, and a binding is a claim about something you own —
+	# a new save owns none of it. Blanked and reseeded rather than left alone,
+	# because the failure of leaving it is silent and specific: the wheel would
+	# still show the last hero's hookshot, and releasing on it would be refused
+	# by `wheel_ready` with no explanation the player could see.
+	wheel = _blank_wheel()
+	_seed_wheel()
 	flags.clear()
 	# Say that the hands and the selection emptied. Without this, resetting
 	# cleared `items` and `loadout` in silence and every listener kept drawing
@@ -329,6 +378,7 @@ func reset() -> void:
 	# longer owns. Announcing state is not optional for state nobody polls.
 	_announce_loadout()
 	Bus.item_selected_changed.emit(item_selected)
+	Bus.wheel_changed.emit(wheel)
 	Bus.bottles_changed.emit(bottle_contents)
 	Bus.components_changed.emit(components)
 	Bus.stash_changed.emit(stash)
@@ -986,6 +1036,12 @@ func add_bottle() -> bool:
 	bottle_contents.append(&"")
 	# The new bottle is on the ring the moment it is bought -- that is what a
 	# cycle gives you for free, and it is what the auto-bind existed to fake.
+	#
+	# It is on the WHEEL too, if there is room. The bind has to happen after the
+	# append and not before: `wheel_bindable` asks `bottle_index`, which answers
+	# for bottles that exist, so a token bound for glass the alchemist has not
+	# blown yet would be refused.
+	wheel_auto_bind(bottle_id(bottle_contents.size() - 1))
 	Bus.bottles_changed.emit(bottle_contents)
 	return true
 
@@ -1130,6 +1186,12 @@ func grant(item_id: StringName) -> void:
 	if items.get(item_id, false):
 		return
 	items[item_id] = true
+	# **The auto-bind, and it is a no-op for most of what comes through here.**
+	# `wheel_bindable` refuses the map, the compass and everything else that is
+	# not a stop on the right-hand ring, so this line does not need a filter of
+	# its own — which is the point of routing off the id rather than off the
+	# call site. A bow found underground is on the wheel before the chest shuts.
+	wheel_auto_bind(item_id)
 	Bus.item_acquired.emit(item_id)
 
 
@@ -1324,6 +1386,192 @@ func armament_owned(id: StringName) -> bool:
 
 func _announce_loadout() -> void:
 	Bus.loadout_changed.emit(loadout_set, armament(HAND_RIGHT), armament(HAND_LEFT))
+
+
+# --- The kit wheel ----------------------------------------------------------
+
+## Eight empty slots. `Array[StringName].resize()` fills with `&""`, which is
+## exactly what an empty slot is, so there is no second spelling of "nothing
+## here" for a reader to get wrong.
+static func _blank_wheel() -> Array[StringName]:
+	var out: Array[StringName] = []
+	out.resize(WHEEL_SLOTS)
+	return out
+
+
+## What a hero who owns nothing has on the wheel: the sword, and nothing else.
+##
+## The sword is not in `items` and never will be — `armament_owned` answers for
+## it unconditionally — so it has no `grant()` to auto-bind off, and both the
+## cold boot and `reset()` have to say so themselves. A wheel that came up empty
+## on a fresh save would teach the player, on the one screen where they are
+## learning what it is for, that it is a place for things they do not have yet.
+##
+## Idempotent, and silent: `wheel_auto_bind` returns -1 on a wheel that already
+## holds the sword, and emits nothing when it does.
+func _seed_wheel() -> void:
+	wheel_auto_bind(&"sword")
+
+
+## What is on `slot`, or `&""`. Out-of-range answers `&""` rather than throwing:
+## every caller here is drawing a cell or committing a release, and both want
+## "nothing" for a slot that is not there.
+func wheel_at(slot: int) -> StringName:
+	return wheel[slot] if slot >= 0 and slot < wheel.size() else &""
+
+
+## **May `id` go on the wheel at all** — and this is the "smart choice between
+## weapon and item" asked as one question instead of two.
+##
+## A bottle token answers yes through `bottle_index`, which is already the
+## project's parser for one (`bottle_id` writes them, `Hud._draw_item_glyph`
+## reads them), and it answers no for a bottle you do not own — so a save
+## carrying `bottle_4` into a game with three bottles cannot bind it back.
+## Everything else has to be a stop on the RIGHT-hand ring.
+##
+## The left hand is deliberately not bindable. `LEFT_POOL` is shield / arrows /
+## empty, and none of the three is a thing you *reach for* mid-fight: arrows
+## follow the bow, and dropping the shield is a decision you make on the
+## equipment screen with both hands visible. A wheel that offered them would be
+## offering a way to two-hand the sword by accident.
+func wheel_bindable(id: StringName) -> bool:
+	if bottle_index(id) >= 0:
+		return true
+	return RIGHT_POOL.has(id)
+
+
+## Which slot `id` is on, or -1. An id is on the wheel at most once — see
+## `wheel_bind`.
+func wheel_slot_of(id: StringName) -> int:
+	if id == &"":
+		return -1
+	return wheel.find(id)
+
+
+## Put `id` on `slot`. `&""` clears it. False when nothing moved.
+##
+## **Binding a thing that is already somewhere else SWAPS the two slots** rather
+## than leaving a duplicate behind. Two cells holding the bow is the wheel
+## lying about how much you own, and it is worse than that on a release: the
+## player flicks at the sector they remember and lands on the copy they forgot
+## about. The swap is also what makes rearranging the wheel one press instead of
+## two — you never have to clear a slot before filling it.
+func wheel_bind(slot: int, id: StringName) -> bool:
+	if slot < 0 or slot >= wheel.size():
+		return false
+	if id != &"" and not wheel_bindable(id):
+		return false
+	if wheel[slot] == id:
+		return false
+	var was := wheel_slot_of(id)
+	var displaced := wheel[slot]
+	wheel[slot] = id
+	if was >= 0 and was != slot:
+		wheel[was] = displaced
+	Bus.wheel_changed.emit(wheel)
+	return true
+
+
+func wheel_clear(slot: int) -> bool:
+	return wheel_bind(slot, &"")
+
+
+## **Auto-bind on pickup.** The first free slot, or -1 if the wheel is full or
+## already holds it. Returns the slot so the caller can say where it landed.
+##
+## This is the half of the wheel that answers CONTRACT §4.1's second complaint —
+## that the old bindings made every player visit a menu before a new item meant
+## anything. A bow found on floor 3 is on the wheel before the chest lid is shut.
+##
+## **It never displaces an existing binding**, and a full wheel is a silent no
+## rather than an eviction: the eight things on there are the eight the player
+## chose, and a pickup that quietly threw one out would be the wheel editing
+## itself behind their back at the worst possible moment. `-1` is what the
+## equipment screen exists for.
+func wheel_auto_bind(id: StringName) -> int:
+	if not wheel_bindable(id) or wheel_slot_of(id) >= 0:
+		return -1
+	var free := wheel.find(&"")
+	if free < 0:
+		return -1
+	wheel[free] = id
+	Bus.wheel_changed.emit(wheel)
+	return free
+
+
+## Is what is on `slot` usable right now? The HUD dims a slot that is not.
+##
+## A slot can go cold without the binding changing: a working is READ at the
+## alchemist's counter rather than picked up (`armament_owned`), and a bottle
+## can be sold out from under a `bottle_N` token. Both are drawn — a wheel that
+## silently hid the Sustain stop until you had read it would never teach anyone
+## that the stop exists.
+##
+## An EMPTY bottle is ready. It is a thing you own and can select; what is in it
+## is the cell's business, not the wheel's.
+func wheel_ready(slot: int) -> bool:
+	var id := wheel_at(slot)
+	if id == &"":
+		return false
+	if bottle_index(id) >= 0:
+		return true
+	return armament_owned(id)
+
+
+## **The release.** Commit the slot the player let go on, and route it by what
+## it is: a bottle becomes the selection X drinks, an armament goes into the
+## right hand of the live set.
+##
+## One function and one `if`, because the routing is not a decision the CALLER
+## should be making — the equipment screen, the HUD's release and a director all
+## hand over a slot index and none of them should have to know that Sustain is a
+## weapon and Ironhide is not. That knowledge is `bottle_index`, and it is here.
+##
+## **It does not use anything.** Selecting a bottle is not drinking it and
+## drawing the bow is not firing it — the same split `_tick_dpad` is built on,
+## and the one thing Ocarina's C-buttons got wrong (pulling the bow out was also
+## loosing an arrow at whatever you were facing).
+##
+## False means NOTHING MOVED: an empty slot, a cold one, or the thing you were
+## already holding. Callers use it for the confirmation click, which is why
+## "already there" and "refused" answer the same — neither is a change and
+## neither should click.
+func wheel_select(slot: int) -> bool:
+	var id := wheel_at(slot)
+	if id == &"":
+		return false
+	var at := bottle_index(id)
+	if at >= 0:
+		if at == item_selected:
+			return false
+		item_selected = at
+		Bus.item_selected_changed.emit(item_selected)
+		return true
+	if not armament_owned(id):
+		return false
+	var live := clampi(loadout_set, 0, loadout.size() - 1)
+	if loadout[live][HAND_RIGHT] == id:
+		return false
+	loadout[live][HAND_RIGHT] = id
+	_announce_loadout()
+	return true
+
+
+## Everything that could go on the wheel right now, in the order the equipment
+## screen offers it: the owned right-hand ring first, then the bottles you have.
+##
+## Derived rather than written down, for the reason `cycle_armament` derives its
+## own: a hand-kept list here would be a second answer to "what do you own", and
+## the first thing it would get wrong is the two Verses, which are not in
+## `items` at all.
+func wheel_pool() -> Array[StringName]:
+	var out: Array[StringName] = []
+	for id in RIGHT_POOL:
+		if armament_owned(id):
+			out.append(id)
+	for i in bottle_count():
+		out.append(bottle_id(i))
+	return out
 
 
 func set_flag(id: StringName) -> void:
