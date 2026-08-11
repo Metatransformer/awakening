@@ -196,8 +196,22 @@ director** — and the cheapest way to settle it is the same as everywhere else
 here: make the instrument measure something whose answer you already know.
 `perf_probe --stall=300` blocks the main thread for exactly 300 ms so the frame
 timer has to prove it can see one; that one flag turned #50 from a hunt for a
-phantom hitch into an afternoon. **A director you have never pointed at a known
-answer has never been tested**, however many times it has passed.
+phantom hitch into an afternoon.
+
+**That is only half the calibration, and it is the half that cannot catch a
+false positive.** `--stall=300` proves an instrument can *see* something that is
+there; it would not have caught a single one of the six failures above, because
+every one of them was a director reporting something that was **not**. The other
+half is a null case — point it at a scene where the honest answer is *nothing*
+and check that nothing is what it says. `frame_repro.gd` freezes the world with
+the flames and the fog stopped and reports **0 differing pixels of 921,600**
+(#62); that number is what makes its non-zero readings mean anything. Whichever
+direction your director's suspected defect runs, the control runs the other way:
+#64 is a suspected false positive, so a null case is what will settle it, not a
+stall.
+
+**A director you have never pointed at a known answer has never been tested**,
+however many times it has passed.
 
 Before you call something done: clean `godot --path . --import`, clean boot, the
 relevant director with no failures, and *your own eyes on the output*.
