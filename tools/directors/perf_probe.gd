@@ -12,6 +12,8 @@ extends RefCounted
 ##     --warmup=90
 ##
 ## Optional: --label=garrison  --samples=240  --settle=90
+##           --ablate=shadows|lights  --scale3d=0.5  --internal=0
+##           --stall=300  (a CONTROL, not a measurement -- see 3 below)
 ##
 ## **Do not read FPS off this, and do not add it back.** `project.godot` sets no
 ## `display/window/vsync` key, so the default is VSYNC_ENABLED and the window is
@@ -30,8 +32,10 @@ extends RefCounted
 ## imply, and this director learned that the hard way -- see the comment at the
 ## sample site. It is the whole idle step, draw included, so it reads slightly
 ## LARGER than the frame rather than a fraction of it. It is printed as
-## `idle_step_ms` for that reason and it cannot tell you which half of the
-## engine is the bottleneck. `TIME_PHYSICS_PROCESS` is honest.
+## `idle_peak_ms` for that reason and it cannot tell you which half of the
+## engine is the bottleneck. `TIME_PHYSICS_PROCESS` measures the honest thing --
+## the physics step and nothing else -- but see #3 below: it is latched exactly
+## the same way, so it is not a per-frame reading either.
 ##
 ## **Median and p95, never mean.** A mean hides the frame that hitches, and the
 ## hitch is the thing a stranger playing the demo actually feels. p95 is the
@@ -39,9 +43,9 @@ extends RefCounted
 ##
 ## ---
 ##
-## **TWO THINGS THE FIRST RUNS OF THIS DIRECTOR TAUGHT IT.** Both are here
-## because a tuning pass that reads the output without knowing them will tune
-## the wrong thing, confidently.
+## **THREE THINGS THE FIRST RUNS OF THIS DIRECTOR TAUGHT IT.** All three are
+## here because a tuning pass that reads the output without knowing them will
+## tune the wrong thing, confidently.
 ##
 ## **1. `gpu_ms` does not work on this machine.** It reported
 ## med = p95 = max = 0.00 across 240 samples on Metal -- the failure the header
@@ -66,10 +70,76 @@ extends RefCounted
 ##
 ## `pgrep -f godot` is NOT good enough for this check -- it matches the shell
 ## wrappers and this director's own command line, so it never reads zero.
+##
+## **3. THE TWO `Performance` TIME MONITORS ARE PEAK-PER-SECOND, LATCHED --
+## THEY ARE NOT PER-FRAME VALUES AND THEY NEVER WERE.** This is card #50, and it
+## is the one defect on this list that produced a specific alarming number that
+## a tuning pass would have chased for a day.
+##
+## The report was `idle_step_ms p95 = max = 371.5 ms` on 240 samples, twice,
+## while `frame_ms max` on the same runs was 19.6 and 23.6. A 371 ms step inside
+## a 20 ms frame is not possible, so either the frame timer was blind to a
+## visible demo hitch or the monitor was lying. **The monitor was lying**, and
+## here is the mechanism, measured rather than reasoned:
+##
+##   * The engine refreshes `TIME_PROCESS` and `TIME_PHYSICS_PROCESS` **once per
+##     second**, and what it stores is the **maximum** step seen during that
+##     second -- not the last one, not an average. Between refreshes the monitor
+##     hands back the identical latched float to every caller.
+##   * So sampling it 240 times gets you **two or three real numbers repeated
+##     ~100 times each**. Measured: `TIME_PROCESS changed at #0, #100, #172` on
+##     a 240-sample run. A median, a p95 and a max over that are statistics of a
+##     step function, and `p95 == max` merely means the last window happened to
+##     be the worst one -- it does NOT mean "one outlier sample", which is what
+##     card #50 opened by assuming.
+##   * Worst of all, **window zero carries whatever happened before the
+##     measurement started**: engine boot, scene instantiation, shader compiles,
+##     the vsync mode change this director itself performs. Measured with
+##     `--settle=0 --warmup=0`: `physics_ms p95 = max = 691.11 ms`, latched at
+##     sample 0 and held for 56 samples, on a scene whose real physics step is
+##     0.90 ms. That is #50's 371 ms, caught in the act.
+##
+## **`frame_ms` is not blind, and that was proved rather than assumed.**
+## `--stall=300` blocks the main thread for 300 ms inside one sampled frame.
+## `frame_ms` reported `max = 305.29` **at sample 120, the exact frame it was
+## injected into**; `idle_step` reported 305.79 at sample **172** -- 52 samples
+## and half a second late -- and then held it to the end of the run, manufacturing
+## the `p95 == max` signature to order. Run it yourself before doubting a
+## `frame_ms` number: the calibration is one flag.
+##
+## So this director now reports these two monitors as **`idle_peak_ms` and
+## `physics_peak_ms`: one value per one-second window, worst step in that
+## window, with the first window dropped** because it is inherited rather than
+## measured. That is the same remedy as `shoot.gd`'s warmup, applied to a clock
+## that warms up on its own schedule instead of on the frame counter's.
+## `frame_ms` remains the only series that is genuinely per-frame, and it is the
+## only one a budget may be quoted from.
 
 
 const WARM_DISCARD := 30  ## Samples thrown away after vsync is cut; the first
                           ## frames off a mode change are not representative.
+
+var _phase: Array[String] = []   ## Worst wall-clock frame of each pre-sample phase.
+
+
+## Walk n frames, timing each one, and say which was the worst. The sampling loop
+## below only watches the frames it samples, so a stall that lands in `settle` or
+## in the post-vsync warm-up is invisible to it -- and that is exactly where #50's
+## 371 ms turned out to live. Costs one `Time` read per frame.
+func _walk(name: String, rig, n: int) -> void:
+	var worst := 0.0
+	var worst_i := -1
+	var t := Time.get_ticks_usec()
+	for i in n:
+		await rig.wait_frames(1)
+		var now := Time.get_ticks_usec()
+		var ms := (now - t) / 1000.0
+		t = now
+		if ms > worst:
+			worst = ms
+			worst_i = i
+	if worst_i >= 0:
+		_phase.append("%s worst=%.1fms @frame %d/%d" % [name, worst, worst_i, n])
 
 
 func run(rig) -> void:
@@ -78,10 +148,20 @@ func run(rig) -> void:
 	var samples: int = maxi(int(rig.arg("samples", "240")), 60)
 	var settle: int = maxi(int(rig.arg("settle", "90")), 0)
 
+	# `--stall=300` -- CALIBRATE THE INSTRUMENT AGAINST A STALL IT ALREADY KNOWS
+	# THE SIZE OF. Card #50 asked whether `frame_ms` can even see a 371 ms hitch,
+	# and no amount of staring at a series that does not contain one can answer
+	# that. This blocks the main thread for N ms inside one sampled frame; if
+	# `frame_ms max` does not then read ~N at that sample index, the frame timer
+	# is blind and every budget quoted off it is worthless. It is a control, not
+	# a measurement: a run with `--stall` set is NOT a reading of the game.
+	var stall_ms: int = int(rig.arg("stall", "0"))
+	var stall_at: int = samples / 2
+
 	# Let shaders finish compiling and the scene finish waking up. A frame
 	# measured while a shader is still compiling is a measurement of the
 	# compiler. CLAUDE.md 3's cold-import row is the same trap one layer down.
-	await rig.wait_frames(settle)
+	await _walk("settle", rig, settle)
 
 	# `--ablate=shadows|lights|none`. An ABLATION, not a setting: it turns one
 	# thing off at runtime so the difference between two runs names the cost.
@@ -161,13 +241,15 @@ func run(rig) -> void:
 		RenderingServer.viewport_set_measure_render_time(world_vp, true)
 		print("PERF §4.5 on -- cpu_ms/gpu_ms are root + the %v internal buffer"
 			% Settings._screen.internal_size())
-	await rig.wait_frames(WARM_DISCARD)
+	await _walk("warm", rig, WARM_DISCARD)
 
 	var gpu: Array[float] = []
 	var cpu: Array[float] = []
 	var wall: Array[float] = []
+	# NOT per-frame series -- one entry per one-second latch window. See header 3.
 	var proc: Array[float] = []
 	var phys: Array[float] = []
+	var win_at: Array[int] = []
 	var draws: Array[float] = []
 	var prims: Array[float] = []
 	var objs: Array[float] = []
@@ -176,6 +258,8 @@ func run(rig) -> void:
 
 	for i in samples:
 		await rig.wait_frames(1)
+		if stall_ms > 0 and i == stall_at:
+			OS.delay_msec(stall_ms)
 		# WALL CLOCK IS THE PRIMARY NUMBER, and it is here because the first run
 		# of this director reported gpu_ms med=p95=max=0.00 across all 240
 		# samples on Metal. The header already says a series that never varies
@@ -199,24 +283,46 @@ func run(rig) -> void:
 			c += RenderingServer.viewport_get_measured_render_time_cpu(world_vp)
 		gpu.append(g)
 		cpu.append(c)
-		# TIME_PROCESS IS NOT SCRIPT TIME. It is named `idle_step_ms` here because
-		# the first run that sampled it reported med=17.17 ms on frames whose
-		# whole wall clock was 16.25 ms, and a number cannot be a part of a frame
-		# it is bigger than. The monitor covers the entire main-loop idle step,
-		# and `RenderingServer.draw()` is called from inside that step -- so it
-		# carries the draw submission and the block waiting on present along with
-		# anything `_process` did. The header above was written believing the
-		# engine docs' "script time" gloss; the measurement disagreed, and the
-		# measurement wins.
+		# TIME_PROCESS IS NOT SCRIPT TIME, AND IT IS NOT THIS FRAME. Two separate
+		# defects live in this one monitor and only the first was known before
+		# card #50.
 		#
-		# So it CANNOT separate a GPU-bound frame from one lost in `_process` --
-		# the thing it was added to do. What it is still good for is closing the
-		# books: idle_step + physics should account for essentially all of
-		# frame_ms, and if it does not, time is going somewhere neither monitor
-		# can see. TIME_PHYSICS_PROCESS is genuinely the physics step and is the
-		# one honest subdivision on this list.
-		proc.append(Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0)
-		phys.append(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0)
+		# **What it covers**: the entire main-loop idle step, with
+		# `RenderingServer.draw()` called from inside it -- so it carries the draw
+		# submission and the block waiting on present along with anything
+		# `_process` did. The header was originally written believing the engine
+		# docs' "script time" gloss; the measurement disagreed and the measurement
+		# won. It therefore CANNOT separate a GPU-bound frame from one lost in
+		# `_process`, which is the thing it was added to do.
+		#
+		# **When it covers it**: not now. It is refreshed once a second with the
+		# WORST step of that second (header 3). The observation that used to sit
+		# here -- "med=17.17 ms on frames whose whole wall clock was 16.25 ms" --
+		# is fully explained by that and was never the paradox it reads as: a
+		# per-second peak is *supposed* to exceed a median frame. It also kills
+		# the consolation prize this comment used to offer, that idle_step plus
+		# physics should account for all of frame_ms. Two peaks do not sum to a
+		# frame. There is no honest subdivision of `frame_ms` on this list;
+		# TIME_PHYSICS_PROCESS is honest about WHAT it measures and latched
+		# exactly the same way about WHEN.
+		#
+		# ONE APPEND PER LATCH WINDOW, NOT PER FRAME. Appending these every frame
+		# is what built card #50's 371 ms: the engine refreshes both monitors once
+		# a second with the WORST step of that second and hands back the identical
+		# float to every caller in between, so a per-frame array is one real number
+		# repeated ~100 times and `p95 == max` is guaranteed the moment the last
+		# window is the worst one. Recording the transitions instead makes the
+		# sample count honest -- a 240-frame run yields two or three windows, and
+		# the printout says so rather than implying 240 measurements.
+		var p := Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
+		var ph := Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
+		# EITHER changing opens a new window: they are refreshed together, but a
+		# second whose idle peak happens to repeat to the float would otherwise
+		# desync the two arrays and mislabel every window after it.
+		if proc.is_empty() or not is_equal_approx(p, proc[-1]) or not is_equal_approx(ph, phys[-1]):
+			proc.append(p)
+			phys.append(ph)
+			win_at.append(i)
 		draws.append(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
 		prims.append(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
 		objs.append(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))
@@ -261,14 +367,23 @@ func run(rig) -> void:
 	print("PERF %s  vp=%dx%d  win=%dx%d  scale3d=%.2f  n=%d"
 		% [label, int(size.x), int(size.y), win.x, win.y,
 			rig.root.scaling_3d_scale, samples])
+	if stall_ms > 0:
+		print("PERF   CALIBRATION: %d ms blocked at sample %d -- this run is NOT the game"
+			% [stall_ms, stall_at])
+	# WHERE the worst frame landed, not just how big it was. A hitch at sample 0
+	# is the scene still waking up; one in the middle of a static run is the game.
+	# Card #50 was a whole investigation for want of this one integer.
+	for p in _phase:
+		print("PERF   PRE-SAMPLE  %s" % p)
 	_row("frame_ms", wall)
+	print("PERF     frame_ms max was sample %d of %d" % [_argmax(wall), samples])
 	_row("gpu_ms", gpu)
 	if _pct(gpu, 1.0) == 0.0:
 		print("PERF   gpu_ms is UNAVAILABLE on this driver (all-zero, not free)."
 			+ " Read frame_ms against cpu_ms instead.")
 	_row("cpu_ms", cpu)
-	_row("idle_step_ms", proc)
-	_row("physics_ms", phys)
+	_peak_row("idle_peak_ms", proc, win_at)
+	_peak_row("physics_peak_ms", phys, win_at)
 	_row("draw_calls", draws)
 	_row("primitives", prims)
 	_row("objects", objs)
@@ -337,6 +452,38 @@ func _ablate(node: Node, what: String) -> int:
 func _row(name: String, v: Array[float]) -> void:
 	print("PERF   %-12s med=%8.2f  p95=%8.2f  max=%8.2f"
 		% [name, _pct(v, 0.5), _pct(v, 0.95), _pct(v, 1.0)])
+
+
+## One row for a **latched peak-per-second** monitor. There is no median and no
+## p95 here on purpose: a 240-frame run produces two or three of these, and
+## quoting a percentile of three numbers is how card #50's `p95 = max = 371 ms`
+## came to look like a finding instead of an artefact.
+##
+## **Window zero is dropped and printed struck out.** It holds the worst step of
+## the second BEFORE the first sample -- engine boot, scene instantiation, shader
+## compiles, and this director's own vsync mode change. Measured with
+## `--settle=0`: 691.11 ms of "physics" on a scene whose real step is 0.90 ms.
+## Every window is still printed with the sample it appeared at, because a reader
+## who cannot see the step function will not believe the arithmetic behind it.
+func _peak_row(name: String, v: Array[float], at: Array[int]) -> void:
+	if v.size() < 2:
+		print("PERF   %-14s inherited only -- the run was shorter than one latch"
+			% name + " window, so there is no measured value. Raise --samples.")
+		return
+	var parts := PackedStringArray()
+	for i in v.size():
+		parts.append("%s#%d=%.2f" % ["INHERITED " if i == 0 else "", at[i], v[i]])
+	print("PERF   %-14s worst=%8.2f  over %d one-second window(s)"
+		% [name, _pct(v.slice(1), 1.0), v.size() - 1])
+	print("PERF     %s" % "  ".join(parts))
+
+
+func _argmax(v: Array[float]) -> int:
+	var best := -1
+	for i in v.size():
+		if best < 0 or v[i] > v[best]:
+			best = i
+	return best
 
 
 func _pct(v: Array[float], q: float) -> float:
