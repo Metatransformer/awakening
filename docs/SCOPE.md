@@ -124,10 +124,16 @@ place. **This row is why there is no fourth working.**
 
 GDD §6.4 — every relic arrives broken and is repaired (or, for a Verse, read) at
 a home counter for gold — moves **no number here**. Relics stay 12, garrison
-NPCs stay 4, new UI screens stay 0. It is a price and a `broken` flag on rows in
+NPCs stay 4, new UI screens stay 0. It is a price and a home on rows in
 `relic_db.gd` that the plan already required, plus a description string. It
 *removes* a special case: the Lanternkeeper stops being the one counter whose
 transaction costs no gold.
+
+**Built, and it cost exactly that** (`docs/ITEMS.md` §8, D3). This paragraph said
+"a price and a `broken` flag"; the flag turned out to be one column too many —
+all twelve arrive broken, so the state is `not RelicDb.donated(id)` and a column
+saying `true` twelve times is a second copy of it with a way to disagree. Two
+columns landed, `home` and `repair`, and no count moved.
 
 ---
 

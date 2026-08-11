@@ -16,12 +16,13 @@ four boss drops.
 **Status: design of record, and most of it runs.** The Bow, the Hookshot and
 Burst are rows in `ArmamentDb.NAMES` and stops on `Game.RIGHT_POOL`; the Far
 Lantern's door exists; the twelve relics, the twelve Echoes, the twenty ladders
-and all five stocks are code. **Two things described below are not built.**
-Sustain and Ballast do not exist in any form — no armament row, no ring stop
-(§8, D5) — and **no relic arrives broken**: no `broken` flag, no repair price,
-no home counter, and a fix in flight but unlanded (§8, D3). So §1.5, §1.6 and
-§2.1 are design rather than descriptions of something that runs, and §7's index
-marks the rows that are.
+and all five stocks are code, and **a relic now arrives broken** — `home` and
+`repair` columns on every row of `RelicDb.RELICS`, the price on the
+Lanternkeeper's line, `Broken Tally-Ledger of Fair Weights` in the bag (§8, D3,
+closed). **One thing described below is not built.** Sustain and Ballast do not
+exist in any form — no armament row, no ring stop (§8, D5) — so §1.5 and §1.6
+are design rather than descriptions of something that runs, and §7's index marks
+the rows that are.
 
 **Numbers are not here.** They live in the DB scripts beside the rows they price
 — `docs/SCOPE.md` §1 says so explicitly of `relic_db.gd`, `echo_db.gd` says it
@@ -339,10 +340,26 @@ relic is worth nothing until you pay, and it still costs a bag slot and still
 pays the toll on the way out. Five rooms from the rope you are carrying twelve
 slots of amber and one object currently worth less than the amber.
 
-**Unbuilt** — `RelicDb.RELICS` (`relic_db.gd:~139-276`) carries no `broken` flag,
-no repair price and no `home` column, and `RelicDb.lines()` (`relic_db.gd:~668`)
-prices every donation at zero. §8, D3, where the state of the in-flight fix is
-kept.
+**Built** (§8, D3, closed). Every row of `RelicDb.RELICS` carries a `home` and a
+`repair`; `RelicDb.lines()` prices the line at `repair` and drops it to 0 once
+the relic is in, so the board's tick is never buried under a price that is no
+longer owed; `can_buy()` reads the purse and `refusal()` says
+`REPAIR COSTS 140 ◇` — after `NOT RECOVERED`, because *where it is* is the
+useful answer for eleven of the twelve rows. `ItemDb._relic()` builds the bag's
+copy from `RelicDb.arrival_name()` / `arrival_hint()`, so a relic is picked up as
+`Broken Tally-Ledger of Fair Weights`, described *Take it to the smith.*
+
+**There is no `broken` column and there should not be.** All twelve arrive
+broken, so the state is `not RelicDb.donated(id)`; a column that said `true`
+twelve times would be a second copy of that with a way to disagree. Likewise
+`is_verse()` is derived from `WORKING_RELICS` rather than authored — the table
+naming which relic teaches which working already **is** the list of Verses.
+
+**The home is the sign-post, not the till.** The transaction is the
+Lanternkeeper's, and GDD §6.4 now says so outright. Paying at the home counter
+would mean a fourth kind of line — with its own refusal — on the vendor's, the
+smith's and the alchemist's catalogues, which is three systems bought to save one
+walk across the yard.
 
 ### 2.2 What a relic is worth on the way up
 
@@ -529,7 +546,7 @@ lands on, and it must not be the one place the gap is invisible.
 | **⚠ Sustain** | — (not a puzzle verb) | Sustain-Verse, Foundry vault — **read** | The price of tempo. **No armament row and no ring stop** (D5) |
 | **⚠ Ballast** | — (not a puzzle verb) | Ballast-Verse, Choir deep chest — **read** | The bag becomes armour. **No armament row and no ring stop** (D5) |
 | Far Lantern | the last door | The Riven Knight, floor 4 | The act ends; floor 3's vault, and there is no fourth |
-| A relic | a question about the garrison | 4 anchors — **⚠ arriving broken is unbuilt** (D3) | One catalogue row, one lit prop |
+| A relic | a question about the garrison | 4 anchors, and it arrives **broken** (§2.1) | One catalogue row, one repair price, one lit prop |
 | An Echo | never the five stats | a pedestal, choice of three | One run, then silence |
 | A rung | the same questions, in the same units | a counter, after you got home | What you are willing to carry |
 
@@ -542,10 +559,10 @@ SCOPE, METAGAME, PUZZLES and BESTIARY, and re-checked against the tree each time
 this file is revised. "Believe" names the reading that looks intended; it is a
 recommendation to whoever picks the card up, not a decision taken.
 
-**D1, D2 and D4 are closed.** Their entries are kept, struck through, with what
-was actually done — a defect list whose closed rows are deleted is a list that
-cannot tell you whether a thing was decided or merely forgotten. **D3 and D5–D17
-are open and unreconciled.**
+**D1, D2, D3 and D4 are closed** (issue #25). Their entries are kept, struck
+through, with what was actually done — a defect list whose closed rows are
+deleted is a list that cannot tell you whether a thing was decided or merely
+forgotten. **D5–D17 are open and unreconciled.**
 
 ### ~~D1 — the twelve relics in code are not the twelve in the GDD~~ *(closed)*
 
@@ -599,27 +616,36 @@ question from this side. The standing sentence for the next reader: **three
 tables carry a relic's placement, not two, and until #25 the validator checked
 the first against the third and never saw the second.**
 
-### D3 — GDD §6.4 is unbuilt, and points at numbers that do not exist *(severe)*
+### ~~D3 — GDD §6.4 is unbuilt, and points at numbers that do not exist~~ *(closed)*
 
-GDD §6.4 says every relic arrives broken, is repaired (or read) at a home
+GDD §6.4 said every relic arrives broken, is repaired (or read) at a home
 counter, that the first repair is free, that the rest scale with the floor, and
 — explicitly — that *"the numbers live in `scripts/items/relic_db.gd` beside the
-rows they price"*. They do not. `RelicDb.RELICS` has no `broken` flag, no price
-and no `home` column (`relic_db.gd:~139-276`), and `RelicDb.lines()`
-(`relic_db.gd:~668`) prices every donation at zero. `docs/SCOPE.md` §1's "Broken
-relics cost nothing on this table" paragraph describes the same unbuilt thing as
-though it were a settled implementation detail.
+rows they price"*. They did not. `RelicDb.RELICS` had no price and no `home`
+column, and `RelicDb.lines()` priced every donation at zero.
 
-**Believe the GDD** — it is the newer design and SCOPE has already priced it at
-zero movement. But the sentence "the numbers live in `relic_db.gd`" is a doc
-describing what the code does not do, which CLAUDE.md §7 calls worse than no doc.
-Until the flag lands, that line should read *will live*.
+**Closed by building it, not by amending the doc** — GDD §6.4 scoped itself as a
+price and a description string, `docs/SCOPE.md` §1 priced it at zero movement,
+and that is what it cost: two columns on the twelve rows, four accessors
+(`home_of`, `repair_cost`, `is_verse`, `arrival_name` / `arrival_hint`), the
+price wired through `lines()` / `can_buy()` / `refusal()` / `buy()`, and
+`ItemDb._relic()` reading the bag's name and description off them. **No new
+screen and no new state**: the transaction is the board that already existed, and
+"broken" is `not donated(id)` rather than a thirteenth column.
 
-**A fix is in flight as this is filed** — a `repair` column on the rows and a
-`donated`-aware `cost` in `lines()` are sitting uncommitted in the primary
-worktree. Strike this row when it lands *and* a director has photographed a
-broken relic being paid for, not before: a `repair` column nothing charges
-against is D3 wearing a different shape.
+**One direction was chosen where §6.4 read two ways, and §6.4 now says which.**
+"Walked it to the right counter and paid" implied the money changes hands at the
+smith or the alchemist; "the Lanternkeeper prices a repair the way the smith
+prices a rung" implied her board. Her board won, and §6.4 gained a paragraph
+saying the home is the sign-post and she is the till — paying at three counters
+would have put a fourth kind of line, with its own refusal, on three catalogues
+that sell nothing of the sort, which is the fourth screen arriving in
+instalments.
+
+**Proved on frames**, `relic_donate.gd` beats A8–A13 and `r_20_counter.png`: the
+board carries eleven prices and the Tally-Ledger free, a relic you are holding
+and cannot afford is refused with `REPAIR COSTS 80 ◇`, and the pickup toast in
+`r_01_inbag.png` reads BROKEN TALLY-LEDGER OF FAIR WEIGHTS.
 
 ### ~~D4 — nothing in the game sells Burst charges~~ *(closed)*
 

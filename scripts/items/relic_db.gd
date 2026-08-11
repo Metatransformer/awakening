@@ -14,7 +14,9 @@ extends Catalogue
 ##     `Npc.COUNTERS` and a subclass here and NOT a fourth screen
 ##     (`docs/SCOPE.md` §1 says zero new UI screens; `docs/METAGAME.md` §6.6
 ##     says a third counter is a subclass and a row, nothing else). A donation
-##     is a transaction whose price is one relic and zero gold.
+##     is a transaction whose price is one relic and the cost of making it work
+##     again (GDD §6.4) -- which is why it fits the screen the other two counters
+##     already use, with no arm added anywhere.
 ##
 ## **Every unlock below is one line of change to something that already works.**
 ## That is not a coincidence, it is the acceptance criterion (GDD §6.1) and it
@@ -40,9 +42,11 @@ extends Catalogue
 ## ## The three things the relics deliberately do not do (GDD §6.3)
 ##
 ##  * **No relic sells.** There is no `value` on a row here and the vendor never
-##    sees one. A relic with a gold price is a relic the player converts into
-##    the grind, and §3's whole point is that gold, components and relics do not
-##    touch.
+##    sees one. A relic the player can turn into gold is a relic they convert
+##    into the grind, and §3's whole point is that gold, components and relics do
+##    not touch. **`repair` is not that** and GDD §6.3 says so outright: it runs
+##    the other way. Gold buys the relic's *effect*, exactly as it buys a forge
+##    rung. It can never buy the relic and the relic can never become gold.
 ##  * **No relic is a stat.** Read the `bites` column: catalogues, recipes,
 ##    prices, one wayfinding hum. The closest thing to power is `extract_rate()`,
 ##    and that is a discount on leaving, not a bigger sword.
@@ -68,6 +72,19 @@ extends Catalogue
 ##                 floor because the main line stops at four (GDD §5).
 ##  * `source`  -- SOURCE_* below. The four anchors a floor manifest places
 ##                 (GDD §5.1) plus the endless mode's one chest.
+##  * `home`    -- the counter whose thing this relic changes, which GDD §6.4
+##                 generates from one line: *a relic's home is the counter whose
+##                 thing it changes.* It is what the broken description points
+##                 at ("Take it to the smith"), and it is NOT where the
+##                 transaction happens -- see the note over `repair_cost`.
+##  * `repair`   -- what making it work again costs in gold, and GDD §6.4 says
+##                 this column exists here rather than in the doc, "beside the
+##                 rows they price". **The first repair is free** (the
+##                 Tally-Ledger, 0): a tutorial you cannot afford is not a
+##                 tutorial. The rest scale with the floor and none of them is
+##                 more than one good run's takings (`item_db.gd:163` puts that
+##                 at 250-450), because a repair is a ritual and a delay and
+##                 never a grind. [tune]
 ##  * `effect`  -- the flag id of the unlock, so a reader can grep the
 ##                 consequence and land on the accessor that serves it. It is
 ##                 NOT the donation flag -- see `flag_donated`.
@@ -122,6 +139,7 @@ extends Catalogue
 const RELICS: Array[Dictionary] = [
 	{
 		"id": &"tally_ledger",
+		"home": &"smith", "repair": 0,
 		"name": "Tally-Ledger of Fair Weights",
 		"level": 1, "source": &"deep_chest",
 		"effect": &"forge_rung_2",
@@ -132,6 +150,7 @@ const RELICS: Array[Dictionary] = [
 	},
 	{
 		"id": &"anvil_plate",
+		"home": &"smith", "repair": 80,
 		"name": "Imperium Anvil-Plate",
 		"level": 1, "source": &"boss",
 		"effect": &"forge_rung_3",
@@ -142,6 +161,7 @@ const RELICS: Array[Dictionary] = [
 	},
 	{
 		"id": &"still_head",
+		"home": &"alchemist", "repair": 80,
 		"name": "Cracked Still-Head",
 		"level": 1, "source": &"vault",
 		"effect": &"draught_ironhide",
@@ -152,6 +172,7 @@ const RELICS: Array[Dictionary] = [
 	},
 	{
 		"id": &"cinder_retort",
+		"home": &"alchemist", "repair": 140,
 		"name": "Cinder-Retort",
 		"level": 2, "source": &"deep_chest",
 		"effect": &"draught_emberblood",
@@ -162,6 +183,7 @@ const RELICS: Array[Dictionary] = [
 	},
 	{
 		"id": &"kiln_core",
+		"home": &"alchemist", "repair": 140,
 		"name": "Glass-Kiln Core",
 		"level": 2, "source": &"boss",
 		"effect": &"bottles_3_4",
@@ -172,6 +194,7 @@ const RELICS: Array[Dictionary] = [
 	},
 	{
 		"id": &"sustain_verse",
+		"home": &"alchemist", "repair": 140,
 		"name": "The Sustain-Verse",
 		"level": 2, "source": &"vault",
 		"effect": &"working_sustain",
@@ -182,6 +205,7 @@ const RELICS: Array[Dictionary] = [
 	},
 	{
 		"id": &"ballast_verse",
+		"home": &"alchemist", "repair": 200,
 		"name": "The Ballast-Verse",
 		"level": 3, "source": &"deep_chest",
 		"effect": &"working_ballast",
@@ -192,6 +216,7 @@ const RELICS: Array[Dictionary] = [
 	},
 	{
 		"id": &"sounding_rod",
+		"home": &"lanternkeeper", "repair": 200,
 		"name": "Sounding-Rod",
 		"level": 3, "source": &"boss",
 		"effect": &"chest_hum",
@@ -202,6 +227,7 @@ const RELICS: Array[Dictionary] = [
 	},
 	{
 		"id": &"warp_stone",
+		"home": &"lanternkeeper", "repair": 200,
 		"name": "Warp-Stone Fragment",
 		"level": 3, "source": &"vault",
 		"effect": &"garrison_shortcuts",
@@ -212,6 +238,7 @@ const RELICS: Array[Dictionary] = [
 	},
 	{
 		"id": &"rope_drum",
+		"home": &"lanternkeeper", "repair": 250,
 		"name": "Rope-Drum",
 		"level": 4, "source": &"deep_chest",
 		"effect": &"rope_toll",
@@ -226,6 +253,7 @@ const RELICS: Array[Dictionary] = [
 		# change in the game, and it belongs on the last boss of Act I rather than
 		# on a chest three rooms off the main line.
 		"id": &"pillar_shard",
+		"home": &"lanternkeeper", "repair": 250,
 		"name": "Pillar-Shard",
 		"level": 4, "source": &"boss",
 		"effect": &"market_lit",
@@ -236,6 +264,7 @@ const RELICS: Array[Dictionary] = [
 	},
 	{
 		"id": &"riven_chord",
+		"home": &"lanternkeeper", "repair": 250,
 		"name": "The Riven Chord",
 		"level": 10, "source": &"long_descent",
 		"effect": &"chord",
@@ -398,6 +427,85 @@ static func where_text(id: StringName) -> String:
 		SOURCE_LONG_DESCENT:
 			return "%s, FLOOR %d" % [floor_name, level]
 	return "%s, THE DEEP CHEST" % floor_name
+
+
+# --- Broken on arrival (GDD §6.4) ---------------------------------------------
+# A relic you find does not work. It comes up out of the Cut broken, it does
+# nothing at all until it has been carried home and paid for, and it costs a bag
+# slot and pays the extraction toll while being worth nothing -- which is GDD §2
+# sharpened one more turn.
+#
+# **WHERE THE MONEY CHANGES HANDS, because GDD §6.4 reads two ways and only one
+# of them is buildable.** The `home` column is the counter whose thing the relic
+# changes, and the description points the player at it -- but the transaction is
+# the Lanternkeeper's board, because GDD §6 says so in the same breath ("a
+# donation is a transaction whose price is one relic and the cost of making it
+# work again ... there is no fourth screen") and because §6.1 forbids a relic
+# from adding one. Putting the payment at three different counters would mean
+# relic rows on `ShopDb` and `AlchemyDb` as well, each with its own refusal --
+# three catalogues carrying a fourth kind of line for a thing none of them
+# sells. GDD §6.4's own last paragraph is the version that is built here: *"Now
+# the Lanternkeeper prices a repair the way the smith prices a rung, and all
+# four counters are the same transaction."*
+#
+# There is NO `broken` flag on a row, and there should not be: all twelve arrive
+# broken, so the state is `not donated(id)` and a column saying `true` twelve
+# times would be a second copy of that with a way to disagree.
+
+## The counter this relic's description sends the player to.
+static func home_of(id: StringName) -> StringName:
+	var row := by_id(id)
+	return row.get("home", &"") if not row.is_empty() else &""
+
+
+## What making it work again costs. 0 for the Tally-Ledger, which is the game
+## teaching you what the counter does.
+static func repair_cost(id: StringName) -> int:
+	var row := by_id(id)
+	return int(row.get("repair", 0)) if not row.is_empty() else 0
+
+
+## A Verse is READ, not repaired (GDD §6.4). Derived from `WORKING_RELICS` rather
+## than authored as a thirteenth column: the table that says which relic teaches
+## which working is already the list of Verses, and a second one would be a list
+## that can disagree with it.
+static func is_verse(id: StringName) -> bool:
+	return WORKING_RELICS.values().has(id)
+
+
+## How the counter says what has to happen to it. RECORD is what the
+## Lanternkeeper does with either.
+static func repair_verb(id: StringName) -> String:
+	return "READ" if is_verse(id) else "REPAIRED"
+
+
+## What the thing in the bag is CALLED before it works. GDD §6.4 spells it
+## `BROKEN TALLY-LEDGER`, and a Verse is not broken -- it is unread.
+##
+## Inserted after a leading "The" rather than pasted on the front, because three
+## of the twelve are named "The ..." and "Broken The Riven Chord" is not English.
+static func arrival_name(id: StringName) -> String:
+	var row := by_id(id)
+	if row.is_empty():
+		return ""
+	var what := "Unread" if is_verse(id) else "Broken"
+	var name_of: String = row["name"]
+	if name_of.begins_with("The "):
+		return "The %s %s" % [what, name_of.substr(4)]
+	return "%s %s" % [what, name_of]
+
+
+## "Take it to the smith." The description of the thing while it is still in the
+## bag, and the whole of what the `home` column is for.
+static func arrival_hint(id: StringName) -> String:
+	match home_of(id):
+		&"smith":
+			return "Take it to the smith."
+		&"alchemist":
+			return "Take it to the alchemist."
+		&"lanternkeeper":
+			return "Take it to the Lanternkeeper."
+	return ""
 
 
 # --- State: found, and given away -------------------------------------------
@@ -565,9 +673,19 @@ static func lines() -> Array[Dictionary]:
 		out.append({
 			"id": id,
 			"label": String(row["name"]).to_upper(),
-			# Zero gold, and the column says so. She does not buy and she does
-			# not sell (GDD §6): the price of a donation is the object.
-			"cost": 0,
+			# The repair (GDD §6.4). She still does not buy and does not sell --
+			# gold never turns into a relic here and a relic never turns into
+			# gold (§6.3). What the price buys is the relic's *effect*, exactly
+			# the way the smith's rung price does, which is why it can sit in the
+			# same column the other two counters use with nothing else changed.
+			#
+			# **Zero once it is in**, which is not decoration: `TradeScreen`
+			# draws the price cell when `cost > 0` and the line's `tally` when it
+			# is 0 (`trade_screen.gd:647`), so a recorded relic that kept its
+			# price would print "80 ◇" forever over the tick that is the whole
+			# point of the board. It is also just true -- there is nothing left
+			# to pay on a relic that is already working.
+			"cost": 0 if donated(id) else int(row["repair"]),
 			# Where a priced counter puts the price, hers puts the tally. Twelve
 			# cells reading "0 ◇" said nothing twelve times; a tick on the ones
 			# that are in makes the board the checklist this list has always
@@ -650,34 +768,46 @@ static func remaining(id: StringName) -> int:
 	return 0 if donated(id) else 1
 
 
+## In hand AND paid for. Both halves, in that order, because the order is what
+## the refusal below reads out.
 static func can_buy(line: Dictionary) -> bool:
-	return held(line["id"])
+	var id: StringName = line["id"]
+	return held(id) and Game.gold >= repair_cost(id)
 
 
-## Why not, in the player's words. The same contract the smith's keeps and for a
-## sharper version of the same reason: "NOT ENOUGH GOLD" on this counter would
-## be a lie every single time, and the only useful thing this footer can say
-## about a relic you do not have is **where it is**.
+## Why not, in the player's words. The same contract the smith's keeps.
+##
+## **The order of these arms is the design.** "NOT ENOUGH GOLD" on a relic you
+## have never found would be answering the wrong question -- the useful thing to
+## say about eleven of the twelve rows is *where the object is*, and only once it
+## is on the counter does the price become the reason.
 static func refusal(line: Dictionary) -> String:
 	var id: StringName = line["id"]
 	if donated(id):
 		return "ALREADY RECORDED"
 	if not held(id):
 		return "NOT RECOVERED. %s" % where_text(id)
+	var cost := repair_cost(id)
+	if Game.gold < cost:
+		# Named for what it buys rather than for the coin, because the player is
+		# looking at an object they are already carrying and "NOT ENOUGH GOLD"
+		# alone reads as though she wanted to be paid for taking it.
+		return "%s COSTS %d ◇" % ["READING" if is_verse(id) else "REPAIR", cost]
 	return ""
 
 
-## Hand it over. No gold moves and no component moves -- the whole bill is the
-## object, and the object is a flag.
+## Hand it over and pay for the repair. No component moves -- the object is a
+## flag, and the gold is what makes the flag mean something (GDD §6.4).
 ##
-## Checked-then-charged like the other two counters, even though there is
-## nothing here to leave half-paid: the shape is the contract, and the next
-## person to add a line to this function will add it under a guard that already
-## holds.
+## Checked-then-charged like the other two counters. That shape is no longer
+## merely the contract now that there is money in it: `can_buy` is the only
+## place the purse is read, so a relic can never be recorded on gold the player
+## does not have.
 static func buy(line: Dictionary) -> bool:
 	if not can_buy(line):
 		return false
 	var id: StringName = line["id"]
+	Game.spend_gold(repair_cost(id))
 	Game.set_flag(flag_donated(id))
 	# The counter's chime, and the cue every existing listener already handles
 	# by ignoring the id (`Sfx`, `HeroCombat`). What was acquired is the unlock
@@ -859,6 +989,35 @@ static func validate() -> PackedStringArray:
 		# The bag has to be able to hold one, or the relic cannot come home.
 		if ItemDb.get_def(id) == null:
 			out.append("%s: ItemDb has no def, so the bag cannot carry it" % id)
+		# GDD §6.4. A `home` outside the three counters is a broken relic whose
+		# description sends the player nowhere, and it is silent -- `arrival_hint`
+		# would just return "" and the bag would print a description with a hole
+		# at the front of it.
+		if not [&"smith", &"alchemist", &"lanternkeeper"].has(row["home"]):
+			out.append("%s: home %s is not a counter" % [id, row["home"]])
+		if int(row["repair"]) < 0:
+			out.append("%s: a repair cannot cost %d" % [id, int(row["repair"])])
+		# "None of them is more than one good run's takings" (GDD §6.4), and one
+		# good run is `ItemDb.RELIC_TOLL`'s own stated 250-450. A price above that
+		# is the grind §6.4 forbids, and it would arrive as a tuning typo rather
+		# than as a decision.
+		if int(row["repair"]) > 250:
+			out.append("%s: %d gold is more than a run's takings" % [id, int(row["repair"])])
+
+	# "The first repair is free" is a tutorial, and a tutorial is one thing. Two
+	# free repairs is a second freebie nobody decided on; none is a first relic
+	# the player may be unable to afford, which is the exact failure §6.4 names.
+	var free := 0
+	for row in RELICS:
+		if int(row["repair"]) == 0:
+			free += 1
+	if free != 1:
+		out.append("%d relics repair for free; GDD §6.4 says exactly one" % free)
+	# And it is the FIRST one, not whichever one happens to be zero: the free
+	# repair is the tutorial, so it has to be the relic the player meets first.
+	elif int(RELICS[0]["repair"]) != 0:
+		out.append("the free repair is %s, not the first relic (%s)"
+			% [_free_relic(), RELICS[0]["id"]])
 
 	# --- The placement tables ----------------------------------------------------
 	# Every slot a floor manifest fills, against this table, in both directions.
@@ -903,3 +1062,12 @@ static func validate() -> PackedStringArray:
 			out.append("boss %s drops %s, which is not one of the twelve"
 				% [id, relic])
 	return out
+
+
+## Which row carries the free repair, for the message above. Never called on the
+## happy path.
+static func _free_relic() -> StringName:
+	for row in RELICS:
+		if int(row["repair"]) == 0:
+			return row["id"]
+	return &""

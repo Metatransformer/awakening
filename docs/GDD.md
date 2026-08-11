@@ -646,11 +646,21 @@ places. That contrast *is* the reward; do not spend more than a prop on it.
 
 **A relic you find does not work.** It comes up out of the Cut as
 `BROKEN TALLY-LEDGER`, its description reads *Take it to the smith*, and it does
-nothing at all until you have carried it home, walked it to the right counter and
-paid to have it repaired — or, for a Verse, **read**. The Home column above is
-that counter, and the rule that generates it needs no table of its own:
+nothing at all until you have carried it home and paid to have it repaired — or,
+for a Verse, **read**. The Home column above names the counter whose thing it
+changes, and the rule that generates it needs no table of its own:
 
 > **A relic's home is the counter whose thing it changes.**
+
+**The home is the sign-post; the Lanternkeeper is the till.** The description
+sends you to the smith because the smith is what changes, but the money and the
+hold are hers, on the board that already lists all twelve — the same screen, the
+same RECORD, one more column filled in. This is deliberate and it is §6.1: a
+repair that had to be paid for at three different counters would put a fourth
+kind of line on the vendor's, the smith's and the alchemist's catalogues, each
+with its own refusal, which is three systems bought to avoid one walk across the
+yard. §6 already promised there is no fourth screen; three fourth *lines* is the
+same promise broken in instalments.
 
 This is not an extra system bolted onto the donation; it is the donation losing
 its special case. Pillar 4 says permanence is *bought or given, in the garrison,

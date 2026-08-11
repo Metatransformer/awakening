@@ -182,11 +182,22 @@ const RELIC_TOLL := 200
 ## fourth; the cast is deliberate, `Pal.rarity_color` clamps to it, and
 ## `ItemDef.rarity_name()` has no arm for it yet (it reports "Common" in the
 ## pouch's caption -- one line, in a file this change does not own).
+## **It arrives BROKEN** (GDD §6.4). The name in the bag is `Broken Tally-Ledger`
+## and the description is *Take it to the smith* -- both built by `RelicDb` from
+## the row's `home` and its place in `WORKING_RELICS`, because the naming rule is
+## the table's business and this file only holds the bag's copy of it.
+##
+## Static, and it can be: a relic is in the bag only while it is broken. Donating
+## it is what takes it out (`Run` drops the held flag, `RelicDb.buy` sets the
+## donated one), so there is no state in which a working relic wants a different
+## row here.
 static func _relic(row: Dictionary) -> ItemDef:
 	const LEGENDARY := 3
-	var d := ItemDef.make(row["id"], String(row["name"]), RELIC_TOLL,
+	var id: StringName = row["id"]
+	var d := ItemDef.make(id, RelicDb.arrival_name(id), RELIC_TOLL,
 		ItemDef.Rarity.RARE, 1, Pal.ARCANE,
-		"The Lanternkeeper records it. No coin buys it. %s" % row["detail"])
+		"%s It does nothing until then, and the rope charges for it anyway. %s"
+			% [RelicDb.arrival_hint(id), row["detail"]])
 	d.rarity = LEGENDARY as ItemDef.Rarity
 	return d
 

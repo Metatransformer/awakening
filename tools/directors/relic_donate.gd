@@ -133,10 +133,42 @@ func _table() -> void:
 		if not RelicDb.crafts(line):
 			tapped += 1
 	_ck("A7 every line is a hold (%d taps)" % tapped, tapped == 0)
-	_ck("A8 no line costs gold", priced == 0)
+	# GDD §6.4: a relic arrives broken and gold is what fixes it. Eleven priced
+	# and the first one free -- a tutorial you cannot afford is not a tutorial.
+	# This beat used to assert `priced == 0` and it was right to, until §6.4 was
+	# built; it is written the other way round now so the next person to zero the
+	# column has to argue with the doc rather than with a passing run.
+	_ck("A8 eleven lines carry a repair price (%d priced)" % priced, priced == 11)
+	_ck("A9 and the first repair is free",
+		RelicDb.repair_cost(FIRST) == 0 and RelicDb.repair_cost(&"riven_chord") > 0)
+	# The price BITES: a relic in your hand you cannot pay for is refused, and the
+	# footer says so in the counter's words rather than the bank's.
+	var purse := Game.gold
+	var plate: Dictionary = {}
+	for line in lines:
+		if line["id"] == &"anvil_plate":
+			plate = line
+	Game.gold = 0
+	Game.set_flag(RelicDb.flag_held(&"anvil_plate"))
+	_ck("A10 a repair you cannot afford is refused (%s)" % RelicDb.refusal(plate),
+		not RelicDb.can_buy(plate) and RelicDb.refusal(plate).contains("REPAIR"))
+	Game.gold = RelicDb.repair_cost(&"anvil_plate")
+	_ck("A11 and allowed the moment the purse covers it", RelicDb.can_buy(plate))
+	# Put the world back: the beats below are about the Tally-Ledger and a stray
+	# held flag would have the board writing up a relic nobody carried in.
+	Game.flags.erase(RelicDb.flag_held(&"anvil_plate"))
+	Game.gold = purse
+	# A Verse is READ, not repaired, and the bag says so before either happens.
+	_ck("A12 a Verse is unread, not broken (%s / %s)"
+		% [RelicDb.arrival_name(&"sustain_verse"), RelicDb.arrival_name(FIRST)],
+		RelicDb.arrival_name(&"sustain_verse") == "The Unread Sustain-Verse"
+			and RelicDb.arrival_name(FIRST) == "Broken Tally-Ledger of Fair Weights")
+	_ck("A13 and the bag points at the home counter (%s)"
+		% ItemDb.get_def(FIRST).blurb,
+		ItemDb.get_def(FIRST).blurb.begins_with("Take it to the smith."))
 	# The first cut priced a row at "1 of yourself" and the screen drew a RUST
 	# "1 WEIGHTS" over a relic the player was holding. See `RelicDb.lines`.
-	_ck("A9 no line prices a component", with_parts == 0)
+	_ck("A14 no line prices a component", with_parts == 0)
 
 
 # --- B. Off the floor and into the bag ---------------------------------------
