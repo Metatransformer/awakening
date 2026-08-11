@@ -1673,8 +1673,43 @@ func _gate_lights_out(root: Node3D, cell: Vector2i, _tag: StringName,
 ## means never and on floor 2 means always -- `_prefab_fits` reads the same pool
 ## the ceiling does, so this cannot strand a floor.
 ##
-## Three, spread along the wall the door is in, so the shot and the door are in
-## the same view and the player can see what each arrow bought.
+## Three, spread along the wall OPPOSITE the door and looking back down the room
+## at it -- the same arrangement `_gate_sun_nest` uses and for its reason: the
+## shot runs the length of the room, so the player is firing across the floor
+## they already walk rather than at the wall they are standing against. (This
+## note used to say "the wall the door is in", which the arithmetic below has
+## never done: `facing` points INTO the room from the doorway.)
+##
+## ## The height, and the facing, and which of the two was actually wrong
+##
+## They stood at `y = 0` -- half sunk in the floor, a switch you could trip over,
+## below the sword's reach and below anything a bow is aimed at. That is fixed
+## here: `EYE_Y`, the same 2.05 m the shortcut's eye and `convert_arrow.gd`'s
+## pair use, because a shot the player has already learned to take should be the
+## same shot. It is not cosmetic -- a real arrow fired at the old row went into
+## the floor in front of it, and `tools/directors/gate_eye_row.gd` beat E is that
+## arrow.
+##
+## **The facing was already right, and this is the record of it having been
+## measured rather than argued.** Card #27 said `atan2(facing.x, facing.z)`
+## pointed the pupils into the stone. It does not, and `CLAUDE.md` §4's rule cuts
+## both ways -- you do not get to *break* a facing from a code comment either.
+## `facing` is the way a wall looks INTO the room (`facing_of`), so a node given
+## that yaw has `basis.z == facing` and therefore `-basis.z == -facing`, which
+## from the FAR wall is back down the room. Measured on the built nodes, before
+## anything here changed: forward `(0.00, -1.00)` on all three, dotted with the
+## way to the middle of the room `0.91 / 1.00 / 0.91`, and a ray out of each
+## eye's own nose travelling its full 1.20 m without meeting stone. Photographed
+## too, which is the half no number replaces: `g_02_eye_close.png` shows three
+## pale pupils facing the camera out of three sockets sitting in the floor.
+## `_shortcut_eye_high` takes the opposite turn because its eye is in the wall
+## the door is in; these two are the kit's two conventions and both are correct.
+##
+## The standoff is the third fix and it comes from card #5: `KitWall` collides
+## with one box covering the slab *and* its 0.26 m relief, so a wall prop has to
+## clear that or it renders perfectly and no arrow can reach it. 0.9 m was clear
+## by luck; `WALL_STANDOFF` is clear on purpose, and it is the number every other
+## wall-mounted atom in this file is placed with.
 func _gate_eye_row(root: Node3D, cell: Vector2i, _tag: StringName,
 		spot: Dictionary, key: Node3D) -> bool:
 	var facing: Vector3 = spot["facing"]
@@ -1687,7 +1722,8 @@ func _gate_eye_row(root: Node3D, cell: Vector2i, _tag: StringName,
 		if eye == null:
 			return false
 		eye.name = "GateEye%d" % i
-		eye.position = facing * (half - 0.9) + along * (float(i) - 1.0) * 3.2
+		eye.position = facing * (half - WALL_STANDOFF) \
+			+ along * (float(i) - 1.0) * 3.2 + Vector3(0.0, EYE_Y, 0.0)
 		eye.rotation.y = atan2(facing.x, facing.z)
 		root.add_child(eye)
 		eyes.append(eye)
