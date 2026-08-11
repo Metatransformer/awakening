@@ -44,7 +44,7 @@ weights backwards.
 
 ## 1. The pitch
 
-A third-person action game with **Ocarina of Time's feel** and **Moonlighter's
+A third-person action game with **Ocarina of Time's feel** and **Roguelite
 structure**, played as an explorer in the Vale.
 
 You play **Kael** *(tentative, 2026-08-10)* — a member of the **Far Lantern
