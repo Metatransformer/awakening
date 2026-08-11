@@ -241,6 +241,13 @@ var _rim_flash_t: float = -1.0
 ## A frame COUNT, and the only clock on this HUD that is one. See
 ## `DAMAGE_FLICKER_FRAMES`.
 var _damage_flicker: int = 0
+
+## Where the control legend is in its fade-in / hold / fade-out. -1 is "not up",
+## which is its resting state — see `KEYS_FADE`.
+var _keys_t: float = -1.0
+## True once this garrison visit has had its legend. Cleared on the way
+## underground, so coming back up shows it again. See `_refresh_visibility`.
+var _keys_armed: bool = false
 var _rim_flash_color: Color = Pal.MOTH
 var _sweep_t: float = -1.0
 ## 0..1 while the player holds the extract button at a node.
@@ -337,10 +344,20 @@ func _ready() -> void:
 	# Every button this overlay names is named for the device in the player's
 	# hands, so picking up a pad repaints all of it: the caps, the legend, and
 	# the prompt (which Prompt re-emits on the same signal).
-	Bus.input_device_changed.connect(func(_pad: bool) -> void: _repaint())
+	# ...and it re-shows the legend, which is the half of decision 8 that matters.
+	# Picking up a pad is precisely the moment every cap in the player's head goes
+	# wrong, and it is the one re-show that cannot be inferred from anything else.
+	Bus.input_device_changed.connect(func(_pad: bool) -> void:
+		show_controls()
+		_repaint())
 	Bus.level_changed.connect(func(_l: int) -> void: _repaint())
 	Bus.floor_arrived.connect(_on_floor_arrived)
 	Bus.run_started.connect(_on_headline_changed)
+	# Coming back up. A player who has been underground for twenty minutes is
+	# back in the one room the legend is about, and `_refresh_visibility` will not
+	# fire for it — the hero never left the tree. Decision 38.
+	Bus.run_ended.connect(func(_e: bool, _c: Dictionary, _v: int) -> void:
+		show_controls())
 	Bus.run_ended.connect(_on_headline_changed)
 	# The toll meets the purse when the purse moves or the bag moves, and on
 	# nothing else -- those are exactly Run.extract_takes_all()'s two inputs.
@@ -625,6 +642,24 @@ func _refresh_visibility() -> void:
 	if visible != showing:
 		visible = showing
 
+	# Booting straight into the garrison is the one time the legend matters most,
+	# and there is no `garrison_entered` on `Bus` to hang it on — so "this overlay
+	# is up and there is no dungeon around it" IS the signal (decision 38).
+	#
+	# **Latched, not edge-triggered on `visible`.** The obvious version fires
+	# inside the `visible != showing` branch above and never runs in the garrison
+	# at all: the courtyard has a hero in it before this autoload's `_ready`, so
+	# `visible` is already true and there is no edge to catch. That is precisely
+	# the case decision 38 exists for. The latch also stops the ten seconds
+	# restarting every time a torch is added to the tree, which is what this
+	# function is deferred off.
+	var in_garrison := showing and Run != null and not Run.in_dungeon
+	if in_garrison and not _keys_armed:
+		_keys_armed = true
+		show_controls()
+	elif not in_garrison:
+		_keys_armed = false
+
 	# Deferred off node_added/node_removed, which is exactly when this answer can
 	# change, so the enemy bars get their frame ticker the moment a dungeon builds
 	# and lose it on the last corpse. `_wake` and not just a repaint: a bar that
@@ -656,6 +691,18 @@ func _process(delta: float) -> void:
 	# set to FRAMES + 1 because this runs BEFORE the draw it is meant to colour.
 	if _damage_flicker > 0:
 		_damage_flicker -= 1
+		busy = true
+
+	# The legend's window is deliberately NOT in the list below, because it is the
+	# one clock here that must stop when the game does. Decision 38: "a legend
+	# that burns its window inside the Options screen is one nobody saw" — and the
+	# Options screen is exactly where a player goes when they cannot find a
+	# control. `visible` covers the dialogue box, which hides this overlay whole.
+	if _keys_t >= 0.0:
+		if visible and not get_tree().paused:
+			_keys_t += delta
+			if _keys_t > KEYS_FADE + KEYS_HOLD + KEYS_FADE:
+				_keys_t = -1.0
 		busy = true
 
 	for t in [&"_toast_t", &"_save_t", &"_floor_t", &"_rim_flash_t", &"_sweep_t",
@@ -934,7 +981,24 @@ const LEGEND_SEP := "    "
 ## What decision 28 budgets: two authored rows, plus one for the combat row to
 ## overflow into. `_pack_legend` complains rather than truncating if the entry
 ## list ever needs a fourth.
-const LEGEND_MAX_LINES := 3
+## Four, not decision 28's three. The re-anchor (§15.12) put the legend in the
+## 641 px column between the vitals pole and the bag rim instead of across the
+## whole frame, and §15.6 said in advance that fixing the collision "costs a
+## row". `_pack_legend` still complains rather than truncating past this.
+const LEGEND_MAX_LINES := 4
+
+## **The legend is transient** (decision 8). It fades in, holds, fades out, and
+## comes back on the three moments a player needs it (decision 38, `_show_keys`).
+##
+## It is the largest block of text on this HUD — three rows, ~150 characters —
+## and by §5.6's test it fails outright: nothing on it feeds push-on-or-leave.
+## Permanent, it is a manual stapled to the floor of every garrison visit. Ten
+## seconds is long enough to read the row you came for and short enough that the
+## courtyard is not competing with it for the rest of the visit.
+##
+## The permanent reference is Options → Controls, which already ships.
+const KEYS_FADE := 0.6
+const KEYS_HOLD := 10.0
 
 const LEGEND := [
 	[&"", "MOVE"],
@@ -993,9 +1057,41 @@ const LEGEND_STICKS := {
 }
 
 
-func _draw_controls(s: Vector2) -> void:
-	if Run == null or Run.in_dungeon:
+## Start the legend's ten seconds, or restart them. Idempotent and cheap — the
+## three callers (boot/garrison-visible, device change, run end) can all fire in
+## the same frame on a return from a dungeon and the player should see one window.
+##
+## Public because "show me the controls" is a real request and not only a test
+## seam: an Options → Controls screen closing is the obvious fourth caller, and
+## `hud_pole` needs it to photograph the legend at all now that it is transient
+## (decision 35 — the check must still see the rectangle it was sold on).
+func show_controls() -> void:
+	if Run != null and Run.in_dungeon:
 		return
+	_keys_t = 0.0
+	_wake()
+
+
+## Put it away early. There is no in-game caller today — the window expires on
+## its own — but a director that cannot photograph the ABSENCE has only checked
+## the legend's first ten seconds, and "it goes away" is the whole of decision 8.
+func hide_controls() -> void:
+	_keys_t = -1.0
+	_repaint()
+
+
+func _draw_controls(s: Vector2) -> void:
+	if Run == null or Run.in_dungeon or _keys_t < 0.0:
+		return
+	# Fade in, hold, fade out. The fades are what stop it reading as a popup: a
+	# block of text that appears instantly at the bottom of the frame is a system
+	# message, and this is meant to be part of the room.
+	var a := 1.0
+	if _keys_t < KEYS_FADE:
+		a = _keys_t / KEYS_FADE
+	elif _keys_t > KEYS_FADE + KEYS_HOLD:
+		a = 1.0 - (_keys_t - KEYS_FADE - KEYS_HOLD) / KEYS_FADE
+	a = clampf(a, 0.0, 1.0)
 	# FIT TO THE FRAME, do not trust the authored width. This is the one thing on
 	# the HUD whose width is set by its TEXT and not by the layout -- it is every
 	# bound control, so a rebind, a device swap or a longer verb makes it longer,
@@ -1016,7 +1112,25 @@ func _draw_controls(s: Vector2) -> void:
 	# that does not fit at 10 px has too many entries on a row, not type that is
 	# too big. Decision 8 draws it upward into empty floor, so a third row is free.
 	var scale := _text(10.0)
-	var avail := s.x * (1.0 - Pal.SAFE.x * 2.0)
+	# **Left-anchored to the right of the vitals pole, not centred on 0.500.**
+	# Centred and three rows deep it spanned x 283-997 while the pole reaches
+	# 383.7, so two of its three rows crossed the magic and stamina bars — the
+	# collision §14.1 says only x separation can fix, measured in §15.6. Starting
+	# at `KEYS_LEFT` fixes the one edge that has to hold; the width may then do
+	# whatever the live bindings make it do, because it grows into empty frame.
+	var gutter := Pal.px(Pal.KEYS_GUTTER, s.y)
+	# The TEXT's left edge. The plate reaches `PLATE_WORLD_PAD` further left than
+	# this, and the plate is the thing that must clear the pole, so its padding is
+	# in the sum on both sides.
+	var left := ((Pal.HEALTH_ORIGIN.x + Pal.HEALTH_W) * s.x + gutter
+		+ Pal.px(PLATE_WORLD_PAD, s.y))
+	# And the right edge is the money pole's, not the safe margin's. The bag rim
+	# hangs to y 660 and the legend's top row is at 654, so "inside the safe area"
+	# is not the constraint that binds — the rim is. Derived from `RIM_TL` rather
+	# than written down again, for the reason `Pal.KEYS_GUTTER` gives.
+	# Less the plate's padding at both ends: the plate is what the assertions see
+	# and what the player sees, so it is what has to fit between the two poles.
+	var avail := Pal.RIM_TL.x * s.x - gutter - Pal.px(PLATE_WORLD_PAD, s.y) - left
 	var lines := _pack_legend(_legend_groups(), scale, avail)
 	# Drawn UPWARDS from the baseline, so adding a row pushes the legend into the
 	# empty floor above it rather than off the bottom of the screen.
@@ -1025,15 +1139,38 @@ func _draw_controls(s: Vector2) -> void:
 	var widest_drawn := 0.0
 	for line in lines:
 		widest_drawn = maxf(widest_drawn, CanvasText.width(line, scale))
+	var block := Rect2(left, top,
+		widest_drawn, step * (lines.size() - 1) + CanvasText.height(scale))
+
+	# **A plate, and BONE on it — not bare ASH over the courtyard.** This is the
+	# second half of the legibility defect and the geometry above is only the
+	# first: re-anchored, correctly sized, on the ladder and passing every
+	# assertion, the strip was still four rows of `484050` over sunlit grass, and
+	# a rectangle check cannot see that. ASH is the colour of an EMPTY TRACK in
+	# this palette. It was never a text colour, and over the world it is not one.
+	#
+	# The recipe is `_draw_prompt`'s, unchanged, because this is the same problem:
+	# HUD text standing on live world rather than on the frame's dark edges. The
+	# prompt is the one thing in the garrison frame that has always read cleanly,
+	# and it reads cleanly because of this plate.
+	var pad := Pal.px(PLATE_WORLD_PAD, s.y)
+	_canvas.draw_rect(block.grow(pad), Color(Pal.VOID, PLATE_WORLD.a * a))
+
 	# Transient, and reported anyway (decision 35). A transient element that
 	# overlaps a permanent one for ten seconds is a bug for ten seconds — and the
 	# legend running off both edges is one of the three defects decision 20 sells
-	# assertion 1 on, so exempting it would exempt the evidence.
-	_note(&"legend", &"", Rect2(s.x * 0.5 - widest_drawn * 0.5, top,
-		widest_drawn, step * (lines.size() - 1) + CanvasText.height(scale)))
+	# assertion 1 on, so exempting it would exempt the evidence. The PLATE is what
+	# gets reported, not the ink: §14.5's rule, and the plate is 6 px larger on
+	# every side than the text that decided the number.
+	_note(&"legend", &"", block.grow(pad))
+	# BONE, at 10 px, on the plate. Reference material wants to be readable and
+	# then to be gone — that is what the ten seconds are for. Dimming the type as
+	# well would be saying the same thing twice and would put it back where it
+	# started.
+	var col := Color(Pal.BONE, a)
 	for i in lines.size():
-		CanvasText.draw_centred(_canvas, lines[i],
-			Vector2(s.x * 0.5, top + step * i), scale, Pal.ASH)
+		CanvasText.draw_text(_canvas, lines[i],
+			Vector2(left, top + step * i), scale, col)
 
 
 ## Pack the authored groups into rows no wider than `avail`.

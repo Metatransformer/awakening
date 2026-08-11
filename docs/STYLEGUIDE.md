@@ -915,7 +915,12 @@ at the counter, where you have stopped to think about it.
 promotion and sweep; the room name card (Jacquard 24 @24 px, BONE 30%, centre
 x `0.5`, baseline y `0.139`, 1.4 s on room entry); damage-direction arc (3 px
 RUST, 40°, radius `0.28h` about centre, 300 ms); interaction prompts; gold
-floaters.
+floaters; **and the garrison control legend** — 0.6 s in, 10 s, 0.6 s out, on
+three moments only: the overlay coming up in a garrison, a device change, and a
+run ending. It is the largest block of text on the HUD and it feeds nothing about
+push-on-or-leave, so it has no claim on permanent pixels; the permanent reference
+is Options → Controls. Picking up a pad is the re-show that matters, because that
+is the instant every cap in the player's head goes wrong.
 
 **NEVER:** quest text, objective markers, floating damage numbers, an XP bar.
 
@@ -1019,7 +1024,7 @@ point, and a fourth right edge is what made the column read as ragged.
 | Interact prompt | centre 0.500 | 0.735 (529) | 14 px on the world plate, pad **6** |
 | Prompt hold gauge | inside the plate | the plate's bottom edge | `HoldGauge.BAR_H` |
 | Extraction sweep | 0.0 → 1.0 | 0.500 | 1 px CYAN, 200 ms |
-| Legend (garrison) | centre 0.500 | up from 0.962 (693) | **3 balanced rows**, step 15, 10 px ASH |
+| Legend (garrison, **transient**) | left edge derived from the vitals pole's right + `KEYS_GUTTER` | up from 0.942 (678) | **4 balanced rows**, step 15, 10 px BONE on a `PLATE_WORLD` plate |
 
 #### World-anchored (these obey the world's rules, not the frame's)
 

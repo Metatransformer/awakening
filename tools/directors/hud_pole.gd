@@ -107,6 +107,32 @@ func run(rig) -> void:
 			await _shot(rig, out.path_join("%s_07_heat_t%d.png" % [tag, Heat.tier]),
 				"%s_heat_t%d" % [tag, Heat.tier])
 
+	if not underground:
+		# **The legend, up.** It is transient now (decision 8), so it is absent
+		# from every frame above — and decision 35 is explicit that the check has
+		# to keep seeing it, because the legend running off both edges is one of
+		# the three defects assertion 1 was sold on. An element that is only
+		# checked while it happens to be off screen is not checked.
+		#
+		# Three beats, because a transient goes wrong in its fades: coming in,
+		# fully up, and gone. A rect drawn at 20% alpha is still a rect in the
+		# same place, so the check has to see the faint one too.
+		Hud.show_controls()
+		await rig.wait_frames(1)
+		await _shot(rig, out.path_join("g_08_keys_in.png"), "g_08_keys_in")
+		await rig.wait_frames(45)
+		await _shot(rig, out.path_join("g_09_keys.png"), "g_09_keys")
+
+		# And gone. The whole point of decision 8 is that the frame comes back,
+		# so a director that never photographs the empty bottom strip has not
+		# checked the feature — only its first ten seconds.
+		Hud.hide_controls()
+		await rig.wait_frames(4)
+		await _shot(rig, out.path_join("g_10_keys_gone.png"), "g_10_keys_gone")
+		if Hud.layout_rects().has(&"legend"):
+			print("POLE FAIL the legend is still drawing after hide_controls()")
+			_fails += 1
+
 	print("POLECHECK scene=%s draughts=%d magic=%d/%d q=%d layout_fails=%d" % [
 		tag, Game.draughts.size(), Game.magic, Game.max_magic, Game.quarters, _fails])
 	if _fails > 0:

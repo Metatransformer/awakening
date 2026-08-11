@@ -434,7 +434,7 @@ Safe area: x ∈ [0.025, 0.975] (32 … 1248), y ∈ [0.031, 0.969] (22 … 698)
 | Prompt hold gauge | inside the plate | plate's bottom edge | `HoldGauge.BAR_H` | New row. |
 | Extraction sweep | 0.0 → 1.0 | 0.500 | 1 px CYAN, 200 ms | No. |
 | Damage-direction arc | centre 0.500 | centre 0.500 | r = 0.28h (202), 3 px RUST, 40°, 300 ms, at `Hit.from`'s bearing | **New — replaces `Feel`'s vignette.** Decision 13. |
-| Legend (garrison, transient) | centre 0.500 | up from 0.962 (693); 2 lines, step 15 | 10 px ASH | **Moved to transient.** Decision 8. Its second line reaches 0.976, past the safe margin — acceptable for 10 s, not acceptable permanently. |
+| Legend (garrison, transient) | left, **derived**: pole right + 12 + plate pad | up from 0.942 (678); **4 rows**, step 15 | 10 px **BONE on a world plate** | **Built, and three things in this row changed — §15.12.** Centre 0.500 put two rows through the magic bar; the column between the poles is 641 px, which costs a fourth row. 10 px ASH over sunlit grass was illegible whatever the geometry did. The safe-margin violation is fixed, not waved through. |
 
 ### World-anchored (these obey the world's rules, not the frame's)
 
@@ -1624,3 +1624,108 @@ Caught by writing the beat that photographs it — `h_08a_flicker`, deliberately
 with no `wait_frames` in front of the capture, because `rig.capture` awaits
 exactly one `frame_post_draw`. The first run of that beat came back COBALT and
 that is the whole reason any of this is known.
+
+## 15.12 The legend had two defects and only one of them was a rectangle
+
+Item 7 is decision 8 (make the legend transient) plus §15.6's measured brief: at
+three balanced rows it is 714 × 40 and its box must clear x ≤ 383.7 and
+y ≥ 697.7. Both were done. Neither was the thing that made the strip *"the single
+worst thing in the frame"*.
+
+### The column is 641 px, and 714 does not fit in it
+
+§15.6 gives the brief as one inequality — clear the vitals pole — which reads as
+though moving right solves it. It does not. The bottom strip has a pole in each
+corner: the vitals pole ends at x 383.7 and the bag rim's union starts at
+x 1037.4, so the clear column is **653.6 px** before the plate's padding and
+**641 px** after it. Three balanced rows are 714. The first attempt cleared the
+vitals pole and the assertion immediately reported the collision at the other end:
+
+```
+HUDLAYOUT FAIL g_00_dry: money [P: (1037.36, 563.92), S: (204.96, 96.16)]
+overlaps legend [P: (409.6, 654.0), S: (714.0, 40.0)]
+```
+
+So `LEGEND_MAX_LINES` goes to **4**. §15.6 predicted the cost — *"it does not
+resolve §14.1's collision, and it costs a row"* — and it turns out to cost two,
+because the fix is a narrower column and not just a different centre.
+
+Both edges of that column are **derived**, not authored: the left is
+`(HEALTH_ORIGIN.x + HEALTH_W) · w + KEYS_GUTTER + PLATE_WORLD_PAD` and the right
+is `RIM_TL.x · w − KEYS_GUTTER − PLATE_WORLD_PAD`. A third fraction in `Pal`
+saying where the poles are is the `SLIPS_BOTTOM` defect (§15.5) with a new name,
+and it would drift the first time either pole moved. `KEYS_LEFT` was written and
+then deleted for exactly that reason.
+
+`KEYS_BASELINE` goes 0.962 → **0.942**, and the 20 thousandths are not a taste
+call: the plate reaches `PLATE_WORLD_PAD` below the last row's descender, so what
+has to clear 697.68 is 678.2 + 10 + 6. 0.950 was tried first and was 2.3 px over.
+`KEYS_GUTTER` is 12 rather than 8 for the mirror reason — at 8 the plate's left
+edge landed **1 px** clear of the pole, which is inside the noise of a font
+metric.
+
+`HEALTH_ORIGIN`'s docstring is rewritten with this. It said the pole and the
+legend "grow towards each other" and that the ~3 px between them is the only
+slack in the frame, so adding a pole row meant subtracting its height there and
+from `CLUSTER_BOTTOM` in sympathy, forever. That was true and it is the reason
+the magic bar once printed through `WASD MOVE`. It is no longer true, and a
+comment stating a constraint that has been dissolved is worse than no comment —
+the next agent obeys it.
+
+### The other defect is not a rectangle, and no assertion can see it
+
+With the geometry fixed, every check passed and the frame still looked like this:
+four rows of `484050` over sunlit grass, at 10 px. Unreadable. **ASH is the
+colour of an empty track in this palette — it was never a text colour**, and the
+brief's "10 px ASH" had been carried forward from §8's table through every
+revision without anyone asking what it was going to be drawn *on*.
+
+The fix is `_draw_prompt`'s recipe, unchanged: a `PLATE_WORLD` plate
+(`VOID` at 0.72, 6 px pad) with BONE type on it. That is not a new idea invented
+here — `E TO TALK` is the one element of the garrison frame that has always read
+cleanly, and the plate is why. HUD text that stands on live world needs the
+plate; HUD text that stands on the frame's dark edges does not. The two recipes
+landed in item 5 and this is the first thing to reach for the world one on
+purpose.
+
+**This is the item's real lesson.** Decision 20 sells the layout assertions on
+three defects and one of them is the legend, so it is easy to read the assertions
+as *the* check on this element. They are not. They found the collision and the
+safe-margin overrun, they were right about both, and a frame where all of them
+pass can still be the worst thing on screen. §2's rule holds: the proof is the
+frame.
+
+*(Legibility judged on a supersampled capture — §15.9. The call here is a
+contrast one, BONE on VOID against ASH on lit grass, which is the kind least
+sensitive to resolution.)*
+
+### Transience, and the trigger decision 38 nearly missed
+
+Fade in 0.6 s, hold 10 s, fade out 0.6 s. `show_controls()` starts the window and
+is public — an Options → Controls screen closing is the obvious fourth caller,
+and `hud_pole` needs it to photograph a transient at all (decision 35).
+`hide_controls()` exists so a director can photograph the *absence*; a check that
+only ever sees the first ten seconds has not checked the feature.
+
+The window does not tick while the tree is paused or while the overlay is hidden,
+per decision 38 — a legend that burns its ten seconds behind the Options screen
+is one nobody saw.
+
+Decision 38 lists three re-shows: `_refresh_visibility` going visible while not in
+a dungeon, `Bus.input_device_changed`, and `Bus.run_ended`. **The first one, as
+written, never fires.** The obvious implementation hangs it off the
+`visible != showing` edge — and the garrison has a hero in it before this
+autoload's `_ready` runs, so `visible` is already true and there is no edge to
+catch. Booting straight into the garrison is the exact case decision 38 exists
+for, and it was the one case the edge missed. It is a latch instead: armed while
+the overlay is up with no dungeon around it, cleared on the way underground. That
+also stops the ten seconds restarting every time a torch is added to the tree,
+which is what `_refresh_visibility` is deferred off.
+
+### Where this leaves the standing failures
+
+All three of §13.12's deliberate reds are now closed — the rim's safe area (item
+5), the slips' containment (item 6), and the legend's collision and safe area
+(here). `hud_pole` garrison 10/10, `hud_pole` dungeon 10/10, `hud_lookdev` 14/14,
+zero layout failures anywhere.
+

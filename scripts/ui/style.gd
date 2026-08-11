@@ -56,16 +56,19 @@ const T3 := 3000
 const SAFE := Vector2(0.025, 0.031)
 
 ## The top of the "you" pole. **It moved up by exactly one bar row (MAGIC_GAP +
-## MAGIC_H = 12 px @720) when magic was inserted into the stack.** The pole hangs
-## DOWNWARDS from here and the garrison control legend is drawn UPWARDS from
-## KEYS_BASELINE, so the two grow towards each other and the only slack in the
-## frame is the ~3 px between them. Before magic, the garrison pole ended at
-## stamina and just cleared the legend's first line; adding a row without moving
-## this printed the blue bar straight through "WASD MOVE".
+## MAGIC_H = 12 px @720) when magic was inserted into the stack.**
 ##
-## So: add a row to the pole, subtract its height here and from CLUSTER_BOTTOM.
-## The heat bar is exempt from the sum -- it is dungeon-only and the legend is
-## garrison-only, which is why the two have never had to clear each other.
+## It used to say: the pole hangs downwards from here, the garrison legend is
+## drawn upwards from KEYS_BASELINE, the two grow towards each other, and the
+## ~3 px between them is the only slack in the frame — so adding a row to the
+## pole meant subtracting its height here and from CLUSTER_BOTTOM, in sympathy,
+## forever. That was true, it was the reason the magic bar once printed through
+## "WASD MOVE", and **it is no longer true**: `KEYS_LEFT` moves the legend to the
+## right of the pole entirely (decision 8, HUD_PLAN §15.12), so the two no longer
+## share a column and neither constrains the other's height.
+##
+## What survives is the reason the number is what it is. Do not read the old rule
+## back out of it — the pole may grow downwards now without the legend moving.
 const HEALTH_ORIGIN := Vector2(0.031, 0.882)
 ## Health is a BAR, not a row of cells (styleguide §5.1 specifies cells; this is
 ## a deliberate override -- see the note on _draw_health). Width is fixed rather
@@ -248,7 +251,34 @@ const RIM_BR := Vector2(BAG_RIGHT, 0.914)
 ## notification rather than as part of the game.
 const FLOOR_ORIGIN := Vector2(0.031, 0.052)
 ## The control legend, garrison only. Bottom edge, under everything.
-const KEYS_BASELINE := 0.962
+##
+## **0.962 was 5 px past the bottom safe margin** and had been since the legend
+## went to two rows: the baseline is the TOP of the last row's glyphs, so the ink
+## reaches `0.962 · 720 + 10 = 702.6` against a limit of 697.68. Decision 8 waved
+## that through as "acceptable for 10 s" once the legend became transient, and
+## decision 35 correctly refuses to: a transient element outside the safe area is
+## outside it for ten seconds.
+##
+## 0.942 is the baseline of the LAST row, and what has to clear 697.68 is the
+## bottom of the plate under it — baseline + one glyph height + `PLATE_WORLD_PAD`
+## = 678.2 + 10 + 6 = 694.2. Measured, not derived: the first attempt at 0.950
+## was 2.3 px over and the assertion said so.
+const KEYS_BASELINE := 0.942
+## The legend is no longer centred on 0.500, and it has no x fraction of its own.
+## `Hud._draw_controls` derives its column from the two poles it has to clear:
+## the left edge is `HEALTH_ORIGIN.x + HEALTH_W` plus `KEYS_GUTTER`, the right is
+## `RIM_TL.x` minus the same. A third authored fraction here would be a second
+## opinion about where those poles are, which is the defect item 6 just deleted
+## `SLIPS_BOTTOM` for. HUD_PLAN §15.12.
+##
+## Centred, the legend spanned x 283–997 at three rows while the pole reaches
+## 383.7, so `WASD MOVE` was drawn straight through the magic bar — the collision
+## `HEALTH_ORIGIN` above describes, arriving from the other side. Only x
+## separation could fix it (§14.1).
+## 12 and not 8 because the plate reaches 6 px further left than the text: at 8
+## the plate's left edge landed 1 px clear of the pole's right, which is inside
+## the noise of a font metric. HUD_PLAN §15.12.
+const KEYS_GUTTER := 12.0
 
 ## Reference height every px measurement in the styleguide was authored against.
 const REF_H := 720.0
