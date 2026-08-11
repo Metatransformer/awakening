@@ -116,6 +116,35 @@ func run(rig) -> void:
 	if scale3d > 0.0:
 		rig.root.scaling_3d_scale = scale3d
 
+	# `--win=1280x720` makes the OS window ACTUALLY that size, which `--size`
+	# does not and cannot.
+	#
+	# THIS IS THE ONE THAT EXPLAINS EVERYTHING ELSE. `project.godot` has
+	# `window/size/mode=2` -- WINDOW_MODE_MAXIMIZED -- so the window comes up
+	# filling the display no matter what `shoot.gd` assigns to `root.size`; and
+	# `window/stretch/mode="canvas_items"` scales only the 2D, leaving the 3D to
+	# render at the window's true backing resolution. On this Mac that measured
+	# `win=6880x2756`: nineteen megapixels, twenty times the 1280x720 the whole
+	# harness believes it is running at, every frame.
+	#
+	# So `--size` was never a resolution knob, the flat 640/1280/1920 sweep was
+	# three runs of the identical 19 MP frame, and the garrison's 16 ms is the
+	# cost of a resolution no demo will ever use. Set this to what the demo
+	# window will be before quoting a budget number at anyone.
+	#
+	# It is also why every proof frame this repo has judged is a ~20x
+	# supersampled render downscaled by Lanczos in `shoot.gd`. Aliasing, thin
+	# geometry and HUD type all look better in a proof than they will on screen.
+	# That is a separate problem and a real one; it is not this director's to
+	# fix, and it should not be fixed under a deadline while other sessions are
+	# mid-run against the same harness.
+	var win_arg: String = rig.arg("win", "")
+	if win_arg != "":
+		var wh := win_arg.split("x")
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+		DisplayServer.window_set_size(Vector2i(int(wh[0]), int(wh[1])))
+		await rig.wait_frames(30)
+
 	var vp: RID = rig.root.get_viewport_rid()
 	var was_vsync: int = DisplayServer.window_get_vsync_mode()
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
