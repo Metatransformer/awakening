@@ -81,6 +81,38 @@ func run(rig) -> void:
 	await rig.wait_frames(50)
 	await _shot(rig, out.path_join("h_09_t3.png"), "h_09_t3")
 
+	# 8. A WORKING in the right hand, with charges and without. HUD_PLAN §11 asks
+	#    for these two frames by name and they are the proof of decisions 10-12:
+	#    Burst is the one armament with no baked icon (`_iconbake.gd` bakes off
+	#    real MODELS and he casts it from an empty hand), so its cell is the ONLY
+	#    one that reaches the lettering fallback. Under the deleted `KIT_LABEL`
+	#    that cell drew "BU" from the HUD's own copy of the table; it now draws it
+	#    from `ArmamentDb.letter()`, and if those two had disagreed about the row
+	#    the frame would say "?".
+	#
+	#    The numeral must draw BOTH times. At zero charges it dims rather than
+	#    disappearing — "I have the working and no charges" is a different
+	#    sentence from "I have no working", and a cell that goes blank at zero
+	#    tells the second one.
+	Game.grant(&"burst")
+	Game.add_charges(3)
+	for _i in Game.RIGHT_POOL.size():
+		if Game.armament(&"right") == &"burst":
+			break
+		Game.cycle_armament(&"right")
+	await rig.wait_frames(6)
+	await _shot(rig, out.path_join("h_10_burst.png"), "h_10_burst")
+
+	Game.charges = 0
+	Bus.ammo_changed.emit(&"charges", 0)
+	await rig.wait_frames(6)
+	await _shot(rig, out.path_join("h_11_burst_spent.png"), "h_11_burst_spent")
+
+	if Game.armament(&"right") != &"burst":
+		print("HUD FAIL could not put a working in the right hand — "
+			+ "the h_10/h_11 frames prove nothing")
+		_fails += 1
+
 	print("HUDCHECK bag=%d value=%d slots=%d/%d fee=%d gold=%d" % [
 		Run.bag_count(), Run.bag_value(), Run.slots_used(), Game.bag_slots,
 		Run.extract_cost(), Game.gold])

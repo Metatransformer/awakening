@@ -143,3 +143,36 @@ static func hand_count(id: StringName) -> StringName:
 		&"arrow": return &"arrows"
 		&"burst": return &"charges"
 	return &""
+
+
+## The INPUT ACTION that fires the thing, or `&""` for anything that is not fired
+## from a hand. HUD_PLAN decision 11.
+##
+## Keyed by ITEM and not by which hand or which corner, because that is the
+## honest question: two-handing the sword moves the sword to the other hand and
+## the button that swings it does not change.
+##
+## Note what this returns and what it does not. It is the *action*, never the cap
+## text — `Glyph.cap()` reads the LIVE InputMap for that, because
+## `user://settings.cfg` is replayed over the InputMap at boot and wins
+## (CONTRACT §"The two ways this table has lied" #2), so the shipped binding and
+## the player's binding are different questions and only one of them is on the
+## player's keyboard. A table of cap strings here would be the second copy, and
+## the second copy is the one that goes stale.
+##
+## Here rather than in `hud.gd` for the reason in this file's header: the HUD
+## kept its own `KIT_ACTION` and the equipment screen wants the same fact, which
+## is the shape every drift in this project has started in.
+static func action_of(id: StringName) -> StringName:
+	match id:
+		&"sword": return &"attack"
+		&"shield": return &"shield"
+		# Both shoulder buttons fire a drawn item (`Hud._tick_item_trigger`); the
+		# cap names the one a player already associates with "use what is in my
+		# hand", rather than making the cell ask which trigger they meant.
+		&"bow": return &"attack"
+		&"hookshot": return &"attack"
+		# A working is cast with the same two shoulders (`docs/GDD.md` §6.5 --
+		# "nothing about the input layer changes"), so it takes the same cap.
+		&"burst": return &"attack"
+	return &""

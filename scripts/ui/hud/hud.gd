@@ -115,25 +115,6 @@ const HEAT_BREAK_FLASH := 0.35
 ## Cell geometry lives in Pal now (Pal.CELL / CELL_GAP / CLUSTER_*), because the
 ## hands and the D-pad share one cluster and one right edge — see the note there.
 ##
-## Which action fires the thing in a cell. Keyed by ITEM, not by which hand or
-## which corner, because that is the honest question: two-handing the sword moves
-## the sword to the other hand and the button that swings it does not change.
-## Rendered through _hotkey(), which reads the LIVE InputMap rather than printing
-## a remembered "LMB" — CONTRACT §"The two ways this table has lied" #2:
-## user://settings.cfg is replayed over the InputMap at boot and wins, so the
-## shipped binding and the player's binding are different questions.
-const KIT_ACTION := {
-	&"sword": &"attack",
-	&"shield": &"shield",
-	# Both shoulder buttons fire a drawn item (`_tick_item_trigger`); the cap
-	# names RB, the one a player already associates with "use what is in my
-	# hand", rather than making the cell ask which trigger they meant.
-	&"bow": &"attack",
-	&"hookshot": &"attack",
-	# A working is cast with the same two shoulders (`docs/GDD.md` §6.5 --
-	# "nothing about the input layer changes"), so it takes the same cap.
-	&"burst": &"attack",
-}
 ## Half-height of a D-pad caret, in reference px. Also its half-width — they are
 ## drawn as equilateral-ish triangles so ← ↓ → read at a glance in a HUD that is
 ## 40 px tall in the corner.
@@ -152,32 +133,6 @@ const CARET_GAP := 5.0
 ## whether or not the player had found it, with an underline marking which was
 ## out. That is a picture of the game's item table, not of the hero.
 const HANDS := [&"left", &"right"]
-## Icons baked from the REAL item models by tools/scenes/_iconbake.gd, then
-## posterised into the Pal ramp so they read as authored in-palette rather than
-## as photographs dropped into a 5-bit HUD. Regenerate with:
-##   godot --path . res://tools/scenes/_iconbake.tscn -- --out=<abs>/assets/ui/icons/hud
-##
-## icons/hud/ is GENERATED and the baker overwrites all of it. Hand-authored or
-## imported art belongs in icons/ proper -- do not put anything here you cannot
-## afford to lose, and do not point this at icons/ or the next bake eats the
-## imported source art (it already did once, to hookshot_pistol.png).
-const KIT_ICON := {
-	&"sword": "res://assets/ui/icons/hud/sword_knightly.png",
-	&"shield": "res://assets/ui/icons/hud/kite_shield.png",
-	&"hookshot": "res://assets/ui/icons/hud/hookshot_pistol.png",
-	&"bow": "res://assets/ui/icons/hud/bow_knightly.png",
-}
-## Fallback lettering, used only for an icon that failed to load. A missing
-## texture must not leave an empty cell -- an empty cell reads as "you have no
-## sword", which is a lie the HUD should never tell.
-## Burst is in here and NOT in `KIT_ICON`, which is the one row that is a
-## decision rather than a copy: `_iconbake.gd` bakes those textures off the real
-## MODELS, and a working has no model -- he casts it out of an empty hand. Two
-## letters is the honest cell.
-const KIT_LABEL := {
-	&"sword": "SW", &"shield": "SH", &"hookshot": "HK", &"bow": "BW",
-	&"arrow": "AR", &"burst": "BU", &"": "",
-}
 
 # --- Bag (§5.3) --------------------------------------------------------------
 const SLIP_H := 4.0
@@ -215,6 +170,23 @@ const SWEEP_TIME := 0.20
 const HOLD_TO_EXTRACT := 1.50
 
 var _canvas: Control
+## The kit icons, loaded once at `_ready` and held so a repaint is not a disk
+## question. **A cache of `ArmamentDb.ICONS`, not a second list of it** —
+## HUD_PLAN decision 10. This file used to spell the four paths out in its own
+## `KIT_ICON`, and `ArmamentDb`'s header names that as the drift it exists to
+## end. The loop that fills this walks the db's keys, so adding an armament is
+## still one row in one table and the HUD needs no edit at all.
+##
+## Those textures are baked from the REAL item models by
+## `tools/scenes/_iconbake.gd`, then posterised into the Pal ramp so they read
+## as authored in-palette rather than as photographs dropped into a 5-bit HUD:
+##   godot --path . res://tools/scenes/_iconbake.tscn -- --out=<abs>/assets/ui/icons/hud
+##
+## `icons/hud/` is GENERATED and the baker overwrites all of it. Hand-authored
+## or imported art belongs in `icons/` proper -- do not put anything there you
+## cannot afford to lose, and do not point the baker at `icons/` or the next
+## bake eats the imported source art (it already did once, to
+## hookshot_pistol.png).
 var _icons: Dictionary[StringName, Texture2D] = {}
 ## Stamina, mirrored from Game so the bar can be redrawn without polling.
 var _stamina: float = K.MAX_STAMINA
@@ -295,8 +267,8 @@ func _ready() -> void:
 	_target_value = _headline()
 	_last_quarters = Game.quarters
 
-	for id: StringName in KIT_ICON:
-		var tex := load(String(KIT_ICON[id])) as Texture2D
+	for id: StringName in ArmamentDb.ICONS:
+		var tex := ArmamentDb.icon(id)
 		if tex == null:
 			push_warning("Hud: kit icon missing for '%s' — falling back to lettering" % id)
 		else:
@@ -1376,7 +1348,8 @@ func _cluster_top(s: Vector2) -> float:
 ##
 ## Read from the LIVE InputMap every repaint rather than from a table, because a
 ## table would be a second copy of the bindings and the second copy is the one
-## that goes stale — see the note on KIT_ACTION.
+## that goes stale — see the note on `ArmamentDb.action_of`, which answers the
+## other half of this question (WHICH action, as opposed to which key).
 func _hotkey(action: StringName) -> String:
 	return Glyph.cap(action)
 
@@ -1440,7 +1413,7 @@ func _draw_hands(s: Vector2) -> void:
 				r.size.x + cw * 4.0, cw * 2.0))
 			_draw_caret(s, Vector2(r.position.x, mid), Vector2(-1.0, 0.0))
 			_draw_caret(s, Vector2(r.end.x, mid), Vector2(1.0, 0.0))
-		_draw_keycap(s, r, _hotkey(KIT_ACTION.get(id, &"")), &"cap_%d" % i)
+		_draw_keycap(s, r, _hotkey(ArmamentDb.action_of(id)), &"cap_%d" % i)
 
 		# The shield cell IS the block tell. It was the one thing the old strip
 		# did that nothing else does, so it survives the strip.
@@ -1646,7 +1619,14 @@ func _draw_item_glyph(s: Vector2, r: Rect2, id: StringName,
 	var label_col: Color = Color(Pal.MOTH, 0.3) if dim else Pal.BONE
 	if inverted:
 		label_col = invert_to
-	CanvasText.draw_centred(_canvas, String(KIT_LABEL.get(id, "?")),
+	# `ArmamentDb.letter()`, not a `KIT_LABEL` of our own -- decision 10. The two
+	# tables were NOT byte-for-byte identical and HUD_PLAN §14.7.2 caught it: the
+	# empty-hand row was `""` here and is `"—"` in the db. That difference cannot
+	# reach the screen, because the `id == &""` early return at the top of this
+	# function fires first and an empty hand draws nothing at all -- but it is
+	# exactly the kind of quiet disagreement that made two tables worth deleting,
+	# so do not remove that early return believing this line is a safe fallback.
+	CanvasText.draw_centred(_canvas, ArmamentDb.letter(id),
 		Vector2(r.get_center().x, r.position.y + r.size.y * 0.32),
 		Pal.px(2.0, s.y), label_col)
 

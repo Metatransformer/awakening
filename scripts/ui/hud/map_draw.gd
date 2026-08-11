@@ -17,7 +17,7 @@ extends RefCounted
 ##     happens beats a second viewport rendering the world twice a frame.
 ##
 ## **Every glyph is drawn, not baked.** The HUD's item icons are baked renders
-## of the real models (`Hud.KIT_ICON`) and that is right for a 64 px cell of a
+## of the real models (`ArmamentDb.ICONS`) and that is right for a 64 px cell of a
 ## sword you own. A map marker is 6 px on the minimap, so it has to be a SHAPE:
 ## a gold box with a dark band is a chest at six pixels and a photograph of a
 ## chest is four brown pixels. The valenfeld world-map token set was the obvious
