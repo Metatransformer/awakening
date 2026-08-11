@@ -289,14 +289,22 @@ stall.
 **A director you have never pointed at a known answer has never been tested**,
 however many times it has passed.
 
-Before you call something done: a clean `pnpm import`, clean boot, the relevant
-director with no failures, and *your own eyes on the output*.
+Before you call something done: a clean `pnpm run import`, clean boot, the
+relevant director with no failures, and *your own eyes on the output*.
 
-**`pnpm import` and not `godot --path . --import`**, which is what this line used
-to say. Raw `--import` boots the editor — window, keyboard and all — and then
-leaves you to remember the `project.godot` repair in §3 by hand. `tools/import.mjs`
-passes `--headless`, puts `project.godot` back, tells you how many comment lines
-the importer ate, and boots the project once to prove it still starts.
+**`pnpm run import` and not `godot --path . --import`**, which is what this line
+used to say. Raw `--import` boots the editor — window, keyboard and all — and
+then leaves you to remember the `project.godot` repair in §3 by hand.
+`tools/import.mjs` passes `--headless`, puts `project.godot` back, tells you how
+many comment lines the importer ate, and boots the project once to prove it
+still starts.
+
+**`pnpm run import`, with the `run`.** Bare `pnpm import` is one of pnpm's OWN
+built-in commands — it generates a `pnpm-lock.yaml` from another lockfile — and
+it shadows the script of the same name. There is no lockfile here, so it exits
+`ERR_PNPM_LOCKFILE_NOT_FOUND` having imported nothing. That is a loud failure
+today, but the moment this repo grows a lockfile it becomes a silent one: the
+importer never runs and you go on to judge a frame off a cold cache.
 
 ---
 

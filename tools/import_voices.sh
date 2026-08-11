@@ -71,6 +71,8 @@ for row in "${speakers[@]}"; do
   done
 done
 
-echo "Now run:  pnpm import   (headless, and it repairs project.godot itself --"
-echo "                        raw \`godot --path . --import\` opens the editor and"
-echo "                        takes the owner's keyboard. CLAUDE.md §2, §3.)"
+echo "Now run:  pnpm run import   (headless, and it repairs project.godot itself --"
+echo "                            raw \`godot --path . --import\` opens the editor"
+echo "                            and takes the owner's keyboard. CLAUDE.md §2, §3."
+echo "                            With the \`run\`: bare \`pnpm import\` is pnpm's own"
+echo "                            lockfile command and shadows this script.)"
