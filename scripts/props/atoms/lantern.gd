@@ -42,6 +42,22 @@ extends PuzzleAtom
 ## a toggle it is a lantern that flips twice and looks like it ignored you.
 const REARM := 0.30
 
+## Radians/sec of the hint's swell (`set_hint`). A hair over three is a
+## two-second breath -- the slowest movement in the room, which is what makes it
+## read as deliberate. Faster and it is a lantern with a fault in it.
+const HINT_RATE := 3.1
+## How far the brass swells at the top of that breath, over whichever pose is
+## underneath -- **and the two poses need different numbers.** A dark post's cage
+## sits at 0.06, so nine tenths is the difference between unlit iron and glowing
+## brass and any more of it starts reading as a lit lantern, which is the one
+## fact the puzzle is actually made of. A LIT post's cage already sits at 0.55
+## and lives next to eight others at 0.55: the same nine tenths there is a shade,
+## visible in a crop and invisible across the room. Measured on
+## `l_05_hint_on.png` -- the first pass shipped one constant and the lit case was
+## the one that needed the bigger one.
+const HINT_SWELL := 0.9
+const HINT_SWELL_LIT := 2.4
+
 const POST_H := 1.55
 const POST_R := 0.09
 const CAGE_R := 0.30
@@ -54,6 +70,11 @@ var _glow: StandardMaterial3D
 var _cage: StandardMaterial3D
 var _cool: float = 0.0
 var _age: float = 0.0
+var _hinted: bool = false
+## Seconds since the hint came on. Its OWN clock, not `_age`: the swell has to
+## start at the bottom so the first thing the eye catches is a rise, and sharing
+## the flame's clock would start it at whatever phase the room happened to be at.
+var _hint_t: float = 0.0
 
 ## Lit when the room is built. **Set by `LanternGrid` before this enters the
 ## tree**, so the scramble is already on the posts the first time anybody looks --
@@ -117,6 +138,21 @@ func set_lit(on: bool) -> void:
 		unsolve()
 
 
+## Breathe, because the grid is pointing at this one -- `LanternGrid.HINT_AFTER`.
+##
+## **The cage breathes, not the flame's colour.** A dark lantern nudged toward
+## gold is a lantern that reads as half-lit, and the one fact this puzzle is made
+## of is which posts are lit. So the hue never moves: only the brass swells, on a
+## cycle slow enough to be a signal rather than a fault.
+func set_hint(on: bool) -> void:
+	if on == _hinted:
+		return
+	_hinted = on
+	_hint_t = 0.0
+	if not on:
+		_pose(is_solved())
+
+
 func on_solved() -> void:
 	_pose(true)
 	Bus.request_sfx.emit(&"glint_bell", global_position)
@@ -154,9 +190,21 @@ func _pose(lit: bool) -> void:
 
 func _process(delta: float) -> void:
 	_cool = maxf(0.0, _cool - delta)
-	if _lamp == null or not is_solved():
+	if _lamp == null:
 		return
 	_age += delta
+	if _hinted and _cage != null:
+		_hint_t += delta
+		# 0..1, starting at 0 -- a cosine, not a sine, so the breath begins at the
+		# bottom and the first thing that happens is a rise. Rides on top of
+		# whichever pose is underneath, so a hinted post that is already lit swells
+		# its brass without touching its flame.
+		var swell := 0.5 - cos(_hint_t * HINT_RATE) * 0.5
+		var lit := is_solved()
+		_cage.emission_energy_multiplier = (
+			(0.55 if lit else 0.06) + swell * (HINT_SWELL_LIT if lit else HINT_SWELL))
+	if not is_solved():
+		return
 	# A guttering flame, unlike `SoundingStone`'s slow swell -- this one IS a
 	# torch, and it is the one prop in the kit that is allowed to flicker.
 	_lamp.light_energy = 2.9 + sin(_age * 6.3) * 0.28 + sin(_age * 2.1) * 0.16

@@ -44,17 +44,57 @@ extends Node3D
 ##
 ## The same trick is why the grid may grow to 4x4 or take a diagonal toggle rule
 ## later without anyone re-deriving a rank over GF(2).
+##
+## ## The deal presses CORNERS, and that is a playtest fix, not a flourish
+##
+## Solvable is not the same as finishable by a person holding a sword. A player
+## works the board down to **one dark lantern**, walks up to it, swings -- and the
+## rule lights it and darkens its four neighbours. It reads exactly like the
+## puzzle undoing itself at the last step, and the honest arithmetic is worse
+## than it looks: on a 3x3 the one-dark board is **four or five presses from
+## done, none of them on the dark lantern**. Every state is solvable (the 3x3
+## toggle matrix is non-singular, all 512 boards), so the room was never stuck --
+## the *player* was, which is the same thing from inside the room.
+##
+## Five random presses, repeats allowed, deal a board indistinguishable from an
+## arbitrary one of those 512. So the deal is narrowed instead: **a set of
+## DISTINCT corner presses.** Three things fall out of it, and they are the whole
+## reason for the change.
+##
+##   - A corner's cross is three cells, so the board reads as clean L-shapes in
+##     the corners rather than as noise, and 3x3 being non-singular means that
+##     set is *the* answer, not *an* answer.
+##   - Every press of that answer is a corner, so **the last step is a corner** --
+##     the shape the player was reaching for when they found the trap instead.
+##   - Corner presses are closed over corners and edges: a player who only ever
+##     hits corners stays inside a 16-board subspace that always contains the
+##     solved board, and **can never reach the one-dark trap at all**.
+##
+## A player who hits an edge or the centre leaves that subspace, and for them
+## there is `HINT_AFTER`.
 
 ## Spacing between posts. Wide enough to walk between -- reading the board is
 ## done ON it, and a grid you can only see from outside is a picture of a puzzle.
 const STEP := 2.3
-## Presses used to deal the board, by grid size. More is not harder past a point:
+## Distinct corner presses used to deal, fewest and most. Not "more is harder":
 ## the presses commute and each is its own inverse, so a long scramble wanders
-## back toward solved. These are the counts that leave a board looking dealt.
-const SCRAMBLE := 5
-## How many times to re-deal a board that came out already solved. It happens: a
-## scramble whose presses cancel is a legal outcome, just a boring one.
+## back toward solved and past four corners there is nothing left to press twice.
+## One is a board you solve by walking to the only dark L and swinging, which is
+## a decoration rather than a gate.
+const SCRAMBLE_MIN := 2
+const SCRAMBLE_MAX := 3
+## How many times to re-deal a board that came out already solved. It happens on
+## a grid whose toggle matrix is singular -- 4x4 has quiet patterns, sets of
+## presses that cancel to nothing. 3x3 has none, and this costs nothing there.
 const REDEALS := 8
+## Presses that moved the board without finishing it before the grid starts
+## pointing at the next one. **The room does not get to be unfinishable.**
+## Coupling is the combinator that lets you lose ground (`docs/PUZZLES.md` §3),
+## and an action game hands the player no notepad -- so a board that has taken
+## eight blows and is not out has stopped teaching and started blocking. It
+## points at ONE press, re-picked after each blow, preferring a corner: enough to
+## break a wander, not the answer.
+const HINT_AFTER := 8
 
 ## Rows and columns. 3x3 is the shipped shape; the code is size-agnostic and the
 ## scramble above is why that is safe.
@@ -62,7 +102,7 @@ const REDEALS := 8
 @export var cols: int = 3
 ## The gate these belong to. Handed to every lantern, so the door adopts them.
 @export var puzzle_id: StringName = &""
-## Presses used to deal. 0 means `SCRAMBLE`.
+## Presses used to deal. 0 means a roll in `SCRAMBLE_MIN..SCRAMBLE_MAX`.
 @export var presses: int = 0
 
 ## The board came good. Edge-triggered -- it fires on the press that lights the
@@ -78,6 +118,11 @@ signal lit_out
 
 var _cells: Array[Lantern] = []
 var _dealt: Array[bool] = []
+## Presses that moved the board and did not finish it. Feeds `HINT_AFTER`.
+var _tries: int = 0
+## The frame the last press was taken on. See `_on_pressed` -- one swing is one
+## press for the BOARD, not just for a post.
+var _pressed_frame: int = -1
 
 
 func _ready() -> void:
@@ -94,20 +139,58 @@ func _ready() -> void:
 ## same board. Same reason `SoundingStone.offer` uses it.
 func _deal() -> void:
 	var n := rows * cols
-	var k: int = presses if presses > 0 else SCRAMBLE
 	for _redeal in REDEALS:
 		_dealt = []
 		_dealt.resize(n)
 		_dealt.fill(true)
-		for _p in k:
-			_apply(_dealt, Run.rng.randi_range(0, n - 1))
+		for at in _press_set():
+			_apply(_dealt, at)
 		if _dealt.has(false):
 			return
-	# Eight deals in a row that cancelled themselves out. Vanishingly unlikely and
-	# not worth a loop that cannot end: one guaranteed press leaves a board that
-	# is solvable in exactly one move, which is a dull puzzle and never a broken
-	# one.
-	_apply(_dealt, 0)
+	# Eight deals in a row that cancelled themselves out -- only possible on a
+	# singular grid, and vanishingly unlikely even there. Not worth a loop that
+	# cannot end: one guaranteed corner press leaves a board that is solvable in
+	# exactly one move, which is a dull puzzle and never a broken one.
+	_apply(_dealt, _corners()[0])
+
+
+## The cells the deal presses: **distinct, and corners first.** See the class
+## note -- this is the whole playtest fix, and it is one function because the
+## room's readability is a property of the SET, not of the order (presses
+## commute, so the player picks the order and can always take a corner last).
+##
+## Corners run out at four. A grid asking for more presses than it has corners
+## takes the rest from the remaining cells rather than pressing a corner twice --
+## a repeat is a press that undoes itself, which is a scramble dial that lies.
+func _press_set() -> Array[int]:
+	var pool := _corners()
+	var rest: Array[int] = []
+	for i in rows * cols:
+		if not pool.has(i):
+			rest.append(i)
+	# Off `Run.rng`, and drawn by index rather than by `Array.shuffle` -- shuffle
+	# runs on the global generator, so a shuffled deal would come out different on
+	# a replayed seed and every board in the director's beat G would be a
+	# different board from the one the player got.
+	var k: int = presses if presses > 0 else Run.rng.randi_range(SCRAMBLE_MIN, SCRAMBLE_MAX)
+	var out: Array[int] = []
+	while out.size() < k:
+		var from: Array[int] = pool if not pool.is_empty() else rest
+		if from.is_empty():
+			break
+		out.append(from.pop_at(Run.rng.randi_range(0, from.size() - 1)))
+	return out
+
+
+## The four corner cells, deduplicated -- a 1xN grid has two, and a 1x1 has one.
+func _corners() -> Array[int]:
+	var out: Array[int] = []
+	for r: int in [0, rows - 1]:
+		for c: int in [0, cols - 1]:
+			var i := r * cols + c
+			if not out.has(i):
+				out.append(i)
+	return out
 
 
 ## One press, on a plain bool array. **The rule lives here, once**, and both the
@@ -164,6 +247,20 @@ func _on_pressed(lamp: Lantern) -> void:
 	var at := _cells.find(lamp)
 	if at < 0:
 		return
+	# **One swing is one press for the BOARD**, which is the grid-scale version of
+	# the rule `Lantern.REARM` enforces per post. `HeroCombat._scan` damages
+	# everything overlapping the blade in a single pass, and the spin's hitbox is
+	# a 2.1 m sphere over 360 degrees -- so one spin standing in the middle of a
+	# 2.3 m grid presses four or five lanterns at once and scrambles a board the
+	# player was in the middle of reading. A light swing cannot do it (the sphere
+	# reaches 1.14 m past its centre and the posts are 2.3 m apart, so two never
+	# fit), which is exactly why this would have shipped: it is invisible until
+	# somebody spins.
+	var frame := int(Engine.get_process_frames())
+	if frame == _pressed_frame:
+		return
+	_pressed_frame = frame
+
 	var was := is_lit_out()
 	for i in _cross(at):
 		var cell := _cells[i]
@@ -171,6 +268,33 @@ func _on_pressed(lamp: Lantern) -> void:
 			cell.set_lit(not cell.is_solved())
 	if not was and is_lit_out():
 		lit_out.emit()
+	_tries += 1
+	_point()
+
+
+## Show the player one press, once they have spent `HINT_AFTER` blows without
+## getting out. Re-picked after every press, so it walks rather than pointing
+## once and going stale, and **it prefers a corner** -- the shortest cross, the
+## easiest move to see the consequences of, and the step this whole file was
+## rewritten around.
+##
+## Cleared on the way out: a lit-out board with a lantern still breathing at the
+## player is a room saying "not yet" through a door that just opened.
+func _point() -> void:
+	var want := -1
+	if _tries >= HINT_AFTER and not is_lit_out():
+		var plan := solution()
+		if not plan.is_empty():
+			want = plan[0]
+			var corners := _corners()
+			for at in plan:
+				if corners.has(at):
+					want = at
+					break
+	for i in _cells.size():
+		var cell := _cells[i]
+		if is_instance_valid(cell):
+			cell.set_hint(i == want)
 
 
 # --- What a director asks it --------------------------------------------------
