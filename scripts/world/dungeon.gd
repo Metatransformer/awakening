@@ -2663,7 +2663,25 @@ func _plan_maze() -> void:
 	var cell = pick_maze_cell(true)
 	if cell == null:
 		_maze_rolled = false
-		push_warning("dungeon: no room on level %d a maze fits in" % Run.level)
+		# **Say which filter emptied the pool.** This was a bare "no room fits in",
+		# and three floor-1 seeds in five printing it is either the one-doorway rule
+		# being too strict or the anchors having eaten the floor -- two different
+		# problems with one message, and no way to tell them apart without a
+		# breakpoint. `PUZZLES.md` §5.4's room going missing is worth a sentence.
+		var spare := 0
+		var lone := 0
+		var taken := {}
+		for id: StringName in placements:
+			taken[placements[id]["cell"]] = true
+		for c: Vector2i in rooms:
+			if c == entrance or c == deepest or taken.has(c):
+				continue
+			spare += 1
+			if (rooms[c]["doors"] as Array).size() == 1:
+				lone += 1
+		push_warning(("dungeon: no room on level %d a maze fits in -- %d room(s) of "
+			+ "%d spare after the anchors, %d of those with the one doorway the rim "
+			+ "needs") % [Run.level, spare, rooms.size(), lone])
 		return
 	maze_reserved = cell
 	var size := _maze_room_size(cell)
