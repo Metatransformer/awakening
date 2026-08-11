@@ -71,15 +71,61 @@ func run(rig) -> void:
 	Hud.set_extract_hold(0.0)
 
 	# 6. Near death: cells pulse, empties go VOID.
+	#
+	#    And, on the way there, the damage flicker — the rim goes GOLD for two
+	#    frames at the instant you are hurt (decision 17, ranked by 33). Two
+	#    FRAMES, so it cannot be photographed after a `wait_frames`: this capture
+	#    deliberately has none in front of it, because `rig.capture` awaits
+	#    exactly one `frame_post_draw`. The rim is COBALT here, so GOLD over it
+	#    is unmistakable.
+	#
+	#    Writing this beat is what caught the flicker being unpaintable at all:
+	#    it was a 0.034 s timer, `_process` adds a whole delta before the draw,
+	#    and this harness runs well under 30 fps — so it expired every time,
+	#    unseen. HUD_PLAN §15.11.
 	Game.damage(Game.quarters - 2)
+	await _shot(rig, out.path_join("h_08a_flicker.png"), "h_08a_flicker")
 	await rig.wait_frames(50)
 	await _shot(rig, out.path_join("h_08_low.png"), "h_08_low")
 
-	# 7. Rich enough for T3, so the number breathes.
+	# 7. Rich enough for T3, so the slips breathe.
+	#
+	# **This beat did not reach T3 and never had.** It was `Game.add_gold(5000)`
+	# plus two signets: gold is the PURSE and `Pal.tier` reads the BAG, so the
+	# frame this director exists to produce sat at 1130 — T2 — under a comment
+	# saying T3, for the whole life of the file. Nothing caught it because the
+	# tier was never asserted, only described — so it is asserted below, and this
+	# beat now fails loudly rather than quietly photographing T2.
+	#
+	# The gold stays: T2 also lerps the fog toward GOLD, and a purse that can
+	# actually pay the extraction fee is what the other beats want on screen.
+	#
+	# **And signets could not get there either.** They stack 2 to a slot at 90
+	# each, so a whole 12-slot bag of nothing else is 1080 against a T3 of 3000.
+	# The best slot in the game is Deep Amber (55 × 6 = 330), which puts the
+	# STARTING bag's absolute ceiling at 3960 and a realistic mixed one nowhere
+	# near it. So this beat also buys slots, which is what a player would have
+	# done by the time this frame is true of them. See HUD_PLAN §15.10 — T3 being
+	# this hard to reach is a finding about the thresholds, not a quirk here.
+	#
+	# 20 slots is also the only thing that ever checks decision 26's claim that
+	# the slot-mark row is read from `Run` rather than hard-coded at twelve.
 	Game.add_gold(5000)
-	Run.collect(&"kings_signet", 2)
+	Game.bag_slots = 20
+	Run.collect(&"deep_amber", 42)
+	if Pal.tier(Run.bag_value()) < 3:
+		push_error("HUDLOOKDEV h_09_t3: bag is %d, T3 is %d — this frame is not T3"
+			% [Run.bag_value(), Pal.T3])
+		_fails += 1
 	await rig.wait_frames(50)
 	await _shot(rig, out.path_join("h_09_t3.png"), "h_09_t3")
+
+	# 7b. The SAME frame one second later. The breath is 0.5 Hz, so one second is
+	#     half a period and this is the opposite phase — a single T3 capture can
+	#     land anywhere on the sine and proves nothing about whether it moves.
+	#     Diff the two slips and the animation is either there or it is not.
+	await rig.wait_frames(60)
+	await _shot(rig, out.path_join("h_09_t3_phase.png"), "h_09_t3_phase")
 
 	# 8. A WORKING in the right hand, with charges and without. HUD_PLAN §11 asks
 	#    for these two frames by name and they are the proof of decisions 10-12:

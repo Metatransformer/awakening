@@ -705,44 +705,89 @@ bottom the band extends into empty screen.
 
 ### 5.3 The bag — the most important object on screen
 
-Bottom-right, right-anchored at x `0.969` (1240). Four components, bottom-up.
+Bottom-right, right-anchored at x `0.969` (1240). **One rectangle with three
+things in it, and not a single figure anywhere.** HUD_PLAN decisions 14, 17, 26
+and 33; `Hud._draw_bag`.
 
-1. **The number.** Running sale value. 32 px tabular, right-aligned, baseline
-   y `0.900` (648), followed by a 16 px `◇` in GOLD. Below tier 1 it renders in
-   BONE; from tier 1 up in GOLD — "you now have something to lose" should be a
-   colour change you notice without reading.
-2. **The value stack.** A right-aligned column of up to 8 slips, 3 px tall, 2 px
-   gutter, bottom y `0.858`, top `0.803`. One slip per carried stack; **slip
-   width is proportional to that stack's share of total value**, max 120 px; slip
-   colour is the rarity tier. This is a value histogram, not an inventory list —
-   the useful thought is "most of my money is that one violet slip", and no list
-   gives you that in a glance. The 9th and beyond collapse into `+N` in MOTH.
-3. **The rim.** A 2 px frame from `(0.812, 0.786)` to `(0.978, 0.914)`, coloured
-   by the rarity of the single most valuable thing you carry. Silent, permanent,
-   peripheral. It is how the bag whispers.
-4. **Nothing under it.** There was an extraction line on the bottom tier of this
-   cluster and there isn't one now — see §5.4. The strip below the rim stays
-   empty on purpose.
+The number this section used to open with is gone. It was 32 px, it rolled up on
+every pickup, and it was the most-read thing on the screen — which is the case
+against it. A player watching a running total is doing bookkeeping in the middle
+of a dungeon, and the extraction decision degrades from *is this worth the walk
+back* into *has the number gone up*. The figure did not disappear; it moved to
+the pouch and the vendor's counter, which is where you go to think about money.
+What is left out here is the part that is about **risk** rather than arithmetic.
 
-**When a drop lands:** 1-frame full-rim fill in the drop's rarity colour; a new
-slip slides in from the right over 120 ms while the others re-proportion; the
-number **rolls up over 300 ms, ease-out — never snaps** (the roll is the
-dopamine, take the 300 ms); a 16 px item-name toast right-aligned at baseline
-y `0.767` in the rarity colour holds 1.6 s then fades over 200 ms; a GOLD floater
-rises 24 px over 600 ms from the loot's screen position.
+1. **The rim.** A frame from `(0.812, 0.786)` to `(0.969, 0.914)`, coloured by
+   the rarity of the single most valuable thing you carry. Silent, permanent,
+   peripheral — it is how the bag whispers. **Rarity is a thickness as well as a
+   hue**, because the pair this has to separate hardest is MOSS `68a050` against
+   MOTH `807868`, mid-green on mid-khaki at near-identical luminance and the
+   textbook deutan collision: 2 px common, 2 px with an inner rule uncommon, 3 px
+   rare, 3 px with a dithered inner ring legendary. Four weights, four hues,
+   either channel sufficient on its own.
+2. **The slot marks**, along the rim's bottom inside edge. One mark per bag slot:
+   the first `Run.CASE_SLOTS` at full height (8 px), the rest at half. The case
+   is the part you keep when you die, so *what does the case save* and *how full
+   am I* are one row read two ways — and again that is a **height**, not a hue.
+   Unused slots draw as ASH notches rather than as nothing, or a half-full bag
+   and a small bag look identical. The count is read from `Run`, not hard-coded:
+   the player buys slots, and `mvp_loop` is at 13 by the second shop.
+   **This is what the empty rim was missing.** A rim with nothing in it is a bare
+   rectangle in the corner for the whole first half of a run, and an instrument
+   that only appears once you are already doing well teaches nobody.
+3. **The value stack**, sitting on the marks and growing upward. Up to 8 slips,
+   4 px tall, 2 px gutter, max width `0.094` of the screen, coloured by rarity
+   tier with 0–3 hairline notches cut into the **left** end — the end that moves.
+   Width is that stack's share, normalised **to the largest stack, not to the
+   bag total**: against the total, eight roughly-even stacks are eight 14 px
+   stubs and the histogram says nothing. The 9th and beyond collapse into `+N`
+   in MOTH at 10 px. This is a value histogram, not an inventory list — the
+   useful thought is "most of my money is that one violet slip", and no list
+   gives you that in a glance.
+
+Every one of those three derives its geometry from the rim rect. There is no
+second anchor for the slips and none for the marks; `Pal.SLIPS_BOTTOM` was one
+and it drifted 3.5 px outside the rim at eight stacks before the layout
+assertions caught it (HUD_PLAN §15.5).
+
+**When a drop lands:** a 1-frame full-rim fill in the drop's rarity colour, a new
+slip appearing while the others re-proportion, and a 16 px item-name toast
+right-aligned at baseline y `0.767` in the rarity colour, holding 1.6 s then
+fading over 200 ms.
 
 **As the bag gets valuable** — thresholds T1/T2/T3 at 250 / 1000 / 3000:
 
-- T1: number goes BONE → GOLD.
-- T2: the cluster gains a 1 px dithered GOLD halo, **and `fog_light_color` lerps
-  8% toward GOLD**. The dungeon warms up because you are rich in it.
-- T3: the number breathes in brightness at 0.5 Hz, and **every hit you take
-  triggers a 2-frame GOLD flicker on the number** — the game reminds you what is
-  at stake at the exact instant you are hurt. Fog lerp goes to 15%.
+- T1: nothing out here. The tier is real but it is the *quietest* one, and it is
+  legible in the pouch.
+- T2: a 1 px dithered GOLD halo 2 px outboard of the frame, **and
+  `fog_light_color` lerps 8% toward GOLD**. The dungeon warms up because you are
+  rich in it. The halo is about VALUE and sits outside the frame; the legendary
+  ring is about RARITY and sits inside it, so both can be on screen and still be
+  two sentences.
+- T3: the **slips** breathe in brightness at 0.5 Hz. It moved off the frame,
+  where the T3 breath was specified and where it was invisible under 2 px of
+  everything else. It is the one Tier 3 element allowed to move, and it moves
+  only at T3.
 
-**On death the number does not vanish.** The death card holds and the number
-counts down to 0 over 1.2 s in RUST. Losing it has to be watched, not elided
-into a fade.
+**Every hit you take triggers a 2-frame GOLD flicker on the rim** — the game
+reminding you what is at stake at the exact instant losing it becomes possible.
+Underground only; in the garrison there is nothing at stake to remind anyone of.
+
+**Six things want this one rectangle**, so they are ranked (decision 33), and the
+order is written down because at T3, holding to extract, with a legendary in the
+bag, taking a hit as a drop lands, all six are true at once:
+
+> hold > drop flash > damage flicker > T3 breath > T2 halo > rarity
+
+The hold wins outright and suppresses the rest for its whole duration: it is the
+only one driven by a button the player is holding down right now rather than by
+state, and a CYAN sweep under a gold halo and a rarity ring is unreadable.
+
+**On death the bag does not just vanish.** `Bus.run_ended` carries the contents
+and the value, and `scripts/ui/run_end/run_end_screen.gd` itemises what was lost.
+The receipt is somewhere you have *stopped*, which is the same argument as the
+number's: the loss is worth watching, and the corner of a live dungeon is not
+where you watch it.
 
 ### 5.4 Extraction affordance
 

@@ -201,10 +201,16 @@ const BAG_RIGHT := 0.969
 # BAG_NUM_BASELINE (0.900) and SLIPS_TOP (0.795) were here. The first anchored a
 # 32 px gold total that was deleted in 2026-08-09 and then went on positioning
 # the extraction ring for a year of commits; the second dates from when the slip
-# stack was authored top-down, and the stack has grown UPWARD from SLIPS_BOTTOM
+# stack was authored top-down, and the stack grew UPWARD from SLIPS_BOTTOM
 # since. Both were dead and both were still load-bearing-looking, which is worse
 # than dead. HUD_PLAN decision 14/15.
-const SLIPS_BOTTOM := 0.845
+#
+# SLIPS_BOTTOM (0.845) has now gone the same way, and for a sharper reason:
+# it was a SECOND opinion about where the inside of the rim is. The rim is
+# RIM_TL..RIM_BR, the slips sit on the slot-mark row inside it, and a constant
+# that has to be kept in agreement with two others by hand is a bug with a
+# schedule. `Hud._draw_slips` derives its floor from the rim rect it is passed.
+# HUD_PLAN §15.5.
 const TOAST_BASELINE := 0.767
 ## Hugs its contents. The styleguide's original 0.740 left edge left a third of
 ## the box empty at every bag size a player will actually see, and an empty

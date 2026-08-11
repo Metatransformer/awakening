@@ -17,22 +17,24 @@ extends RefCounted
 ## ## It fails on the tree it was written against, on purpose
 ##
 ## HUD_PLAN §13.12 puts this before the fixes it is meant to catch, so landing it
-## green would have meant landing it blind. Three real defects fire today, each
-## owned by a later item in the order of work — if you are running a director
-## tonight and see these, you have not broken anything:
+## green would have meant landing it blind. Three real defects fired on the tree
+## it landed against, each owned by a later item in the order of work. Two are
+## closed; the list is kept because *which* assertion caught *which* defect is
+## the only evidence this file works:
 ##
-##   * `rim` crosses the safe area by 5.8 px on the right. Its right edge is at
-##     0.978 and decision 4.5 puts it at 0.969 — HUD_PLAN item 5.
+##   * ~~`rim` crosses the safe area by 5.8 px on the right~~ — closed by item 5
+##     (`7d6659e`). Its right edge was 0.978; decision 4.5 puts it at 0.969.
 ##   * `legend` crosses the safe area on three sides AND overlaps `pole`, in the
-##     garrison only. Decision 28's wrap and §14.1's x separation — item 4/7.
-##   * `slips` is not inside `rim`, and ONLY at eight stacks: the stack grows
-##     upward from `Pal.SLIPS_BOTTOM` and clears the rim's top frame at 560.4 vs
-##     563.92. HUD_PLAN §14.5 states this case "resolves correctly" under
-##     decision 27's tree and it does not — see §15.5. It is §13.7's complaint
-##     measured: the rim's numbers and the slips' numbers are authored
-##     separately and do not fit each other. The fix is to derive the slips from
-##     the rim (item 6), NOT to widen SLACK, which is the repair §14.5 warns
-##     about by name.
+##     garrison only. Decision 28's wrap and §14.1's x separation — item 7. This
+##     one is still red.
+##   * ~~`slips` is not inside `rim`, and ONLY at eight stacks~~ — closed by item
+##     6. The stack grew upward from `Pal.SLIPS_BOTTOM` and cleared the rim's top
+##     frame at 560.4 vs 563.92. HUD_PLAN §14.5 stated this case "resolves
+##     correctly" under decision 27's tree and it did not — see §15.5. It was
+##     §13.7's complaint measured: the rim's numbers and the slips' numbers were
+##     authored separately and did not fit each other. The fix was to derive the
+##     slips from the rim, NOT to widen SLACK, which is the repair §14.5 warns
+##     about by name — and `SLIPS_BOTTOM` is deleted, so it cannot come back.
 ##
 ## ## Assertion 1 — nothing collides, and nesting is declared rather than exempted
 ##

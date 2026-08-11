@@ -139,9 +139,26 @@ const SLIP_H := 4.0
 const SLIP_GAP := 2.0
 const SLIP_MAX := 8
 const SLIP_MAX_W := 0.094          ## fraction of screen
+## How tall a CASE slot mark is, in reference px. A hold mark is half of it.
+const SLOT_MARK_H := 8.0
+## The T3 breath, in Hz. Decision 17 specified it for the 32 px gold total and
+## decision 33 moved it here: a 0.5 Hz brightness lerp on a 2 px frame 209 px
+## across is invisible, and the rim already has five other claimants. The slips
+## are a block, so they breathe as one and you can see it.
+const BREATH_HZ := 0.5
 const TOAST_HOLD := 1.60
 const TOAST_FADE := 0.20
 const RIM_FLASH := 0.10
+## **Frames, not seconds.** Everything else on this HUD is a duration because
+## everything else is a fade or a drain, and those want wall-clock. This one is
+## literally "two frames" — decision 17's word — and writing it as 0.034 s made
+## it *frame-rate dependent in the wrong direction*: a hit arrives between one
+## draw and the next, `_process` adds a whole delta before the next draw, and on
+## any machine slower than 30 fps the flicker expired before it was ever painted.
+## It was invisible in the harness for exactly that reason and the frame proved
+## it (HUD_PLAN §15.11). Counted down in `_process`, so two draws happen at any
+## frame rate. Any longer reads as a state rather than as an event.
+const DAMAGE_FLICKER_FRAMES := 2
 
 ## The autosave notice. Longer than a toast on purpose: it goes up as the world
 ## fades back in (game_flow.gd `_go`), so the first third of it is spent behind
@@ -216,6 +233,14 @@ var _save_t: float = -1.0
 ## spends most of a floor.
 var _floor_t: float = -1.0
 var _rim_flash_t: float = -1.0
+## Two frames of GOLD on the rim at the instant you are hurt (decision 17, placed
+## by decision 33's ladder). Deliberately shorter than the drop flash: a drop
+## landing is news, a hit is a thing you already know — you felt it in the health
+## bar, which is Tier 1 and much louder.
+##
+## A frame COUNT, and the only clock on this HUD that is one. See
+## `DAMAGE_FLICKER_FRAMES`.
+var _damage_flicker: int = 0
 var _rim_flash_color: Color = Pal.MOTH
 var _sweep_t: float = -1.0
 ## 0..1 while the player holds the extract button at a node.
@@ -350,6 +375,11 @@ func _on_health(quarters: int, _max_q: int) -> void:
 		# one four-cell loss, not restart at two.
 		_ghost_quarters += lost
 		_ghost_t = 0.0
+		# The bag flickers with it, underground only: "here is what you stand to
+		# lose" lands at the instant losing it becomes possible, and in the
+		# garrison there is nothing at stake to remind anyone of.
+		if Run != null and Run.in_dungeon:
+			_damage_flicker = DAMAGE_FLICKER_FRAMES + 1
 		_wake()
 	elif quarters > _last_quarters:
 		_ghost_quarters = 0
@@ -620,6 +650,13 @@ func _process(delta: float) -> void:
 			_ghost_quarters = 0
 		else:
 			busy = true
+
+	# The damage flicker is a frame count, not a duration, so it is decremented
+	# here rather than accumulated below — one draw per tick, guaranteed. It is
+	# set to FRAMES + 1 because this runs BEFORE the draw it is meant to colour.
+	if _damage_flicker > 0:
+		_damage_flicker -= 1
+		busy = true
 
 	for t in [&"_toast_t", &"_save_t", &"_floor_t", &"_rim_flash_t", &"_sweep_t",
 			&"_block_flash_t", &"_heat_break_t"]:
@@ -2032,9 +2069,11 @@ func _hero_combat() -> Node:
 ## says how rare the best thing in the bag is, the slips say whether your money
 ## is one stack or eight, and neither is a figure you can read while running.
 func _draw_bag(s: Vector2) -> void:
-	var right := Pal.BAG_RIGHT * s.x
+	var tl := Pal.RIM_TL * s
+	var br := Pal.RIM_BR * s
+	var rim := Rect2(tl, br - tl)
 	_draw_rim(s, Pal.tier(_target_value))
-	_draw_slips(s, right)
+	_draw_slips(s, rim)
 
 
 ## A value histogram, not an inventory list. Slip width is that stack's share of
@@ -2042,7 +2081,7 @@ func _draw_bag(s: Vector2) -> void:
 ## slip" -- is available at a glance, which no list gives you. With the total
 ## gone this is the only reading of the bag left out here, and it is deliberately
 ## a shape and not a figure.
-func _draw_slips(s: Vector2, right: float) -> void:
+func _draw_slips(s: Vector2, rim: Rect2) -> void:
 	var total := Run.bag_value()
 	if total <= 0:
 		return
@@ -2061,8 +2100,35 @@ func _draw_slips(s: Vector2, right: float) -> void:
 
 	var h := Pal.px(SLIP_H, s.y)
 	var gap := Pal.px(SLIP_GAP, s.y)
-	var max_w := SLIP_MAX_W * s.x
-	var y := Pal.SLIPS_BOTTOM * s.y
+	# **Derived from the rim, not authored beside it** — HUD_PLAN §15.5. This was
+	# `Pal.SLIPS_BOTTOM`, a constant on the same page of the anchor table as the
+	# rim's own and fitting it only by coincidence: the stack grows UPWARD, so its
+	# height is a function of how many stacks are in the bag while the rim's top
+	# was a constant, and at eight stacks the top slip cleared the rim's top frame
+	# by 3.5 px. §14.5 claims the tree resolves this case and it does not.
+	#
+	# The fix is the move `_pole_top` already makes for the vitals column: one
+	# expression owns where a thing sits and nothing else gets an opinion. The
+	# floor is the slot-mark row's top, so the slips now sit ON the marks rather
+	# than floating in the middle of an empty box.
+	# The T3 breath (decision 17, relocated by decision 33). A 0.5 Hz brightness
+	# lerp, on the whole stack rather than on the rim's 2 px frame where it was
+	# invisible. It is the one Tier 3 element allowed to move, and it moves only
+	# at T3 — "you are carrying more than you can afford to lose" is the sentence,
+	# and it should not be sayable at any other time.
+	var breath := 0.0
+	if Pal.tier(_target_value) >= 3:
+		breath = 0.10 * (0.5 + 0.5 * sin(
+			Time.get_ticks_msec() * 0.001 * TAU * BREATH_HZ))
+		# No `_wake()` here. `_process` already holds `busy` while the tier is 3
+		# ("T3 breathes, so the HUD keeps ticking"), and calling `queue_redraw`
+		# from inside `_draw` to drive an animation is how a paint loop turns into
+		# a spin loop that nothing can switch off.
+	var frame := Pal.px(3.0, s.y)
+	var inner := rim.grow(-(frame + Pal.px(4.0, s.y)))
+	var right := inner.end.x
+	var max_w: float = minf(SLIP_MAX_W * s.x, inner.size.x)
+	var y := inner.end.y - Pal.px(SLOT_MARK_H, s.y) - gap
 
 	# Normalised to the LARGEST stack, not to the bag total. Against the total,
 	# eight roughly-even stacks each render as a 14 px stub and the histogram
@@ -2075,7 +2141,7 @@ func _draw_slips(s: Vector2, right: float) -> void:
 		var e: Dictionary = entries[i]
 		var w: float = maxf(Pal.px(3.0, s.y), max_w * (float(e["v"]) / top_v))
 		var slip := Rect2(right - w, y - h, w, h)
-		_canvas.draw_rect(slip, e["c"])
+		_canvas.draw_rect(slip, (e["c"] as Color).lightened(breath))
 		# Rarity's second channel, matching the rim's (see `_draw_rim`): 0-3
 		# hairline notches cut into the LEFT end, which is the end that moves, so
 		# they never sit under the right edge every slip shares. Common gets none
@@ -2095,12 +2161,11 @@ func _draw_slips(s: Vector2, right: float) -> void:
 			Vector2(right, y - Pal.px(8.0, s.y)), osc, Pal.MOTH)
 		y -= Pal.px(8.0, s.y) + CanvasText.height(osc)
 
-	# The stack, as one rectangle. Parent is the RIM: the slips are deliberately
-	# inside it, and §14.5 warns that the first thing a new director reports is
-	# the half-pixel overlap between the topmost slip and the rim's top frame — a
-	# real geometric fact, and not a bug, once the nesting is declared.
+	# The stack, as one rectangle. Parent is the RIM, and now it genuinely is
+	# inside it in every state — the assertion that used to fail at eight stacks
+	# is the proof, not the comment.
 	_note(&"slips", &"rim", Rect2(right - max_w, y,
-		max_w, Pal.SLIPS_BOTTOM * s.y - y))
+		max_w, inner.end.y - Pal.px(SLOT_MARK_H, s.y) - gap - y))
 
 
 ## Coloured by the rarity of the single most valuable thing you carry. Silent,
@@ -2128,9 +2193,36 @@ func _draw_rim(s: Vector2, tier: int) -> void:
 	# is the grown rect and not `r` — §14.5's "report the ink and you have margin
 	# that is not really there".
 	_note(&"rim", &"money", r.grow(Pal.px(2.0, s.y)))
+
+	# **The precedence ladder** (decision 33). Six things want this one rectangle:
+	# the hold, the drop flash, the damage flicker, the T3 breath, the T2 halo and
+	# rarity. At T3, holding to extract, with a legendary in the bag, taking a hit
+	# as a drop lands, all six are true at once and nothing used to arbitrate — so
+	# the CYAN hold lost, because it is the only one driven by an animation clock
+	# rather than by state, and it is the only one that is a live response to a
+	# button the player is holding down.
+	#
+	#   hold > drop flash > damage flicker > T3 breath > T2 halo > rarity
+	#
+	# The hold suppresses everything below it for its whole duration. It is drawn
+	# by `_draw_extraction` onto this same rect, so all this branch does is get
+	# out of its way: a halo and a rarity ring under a CYAN sweep are what made
+	# the sweep unreadable.
+	var holding := Run.in_dungeon and _extract_hold > 0.0
+	if holding:
+		_canvas.draw_rect(r, col.darkened(0.6), false, Pal.px(2.0, s.y))
+		_draw_slot_marks(s, r, col)
+		return
+
 	if _rim_flash_t >= 0.0:
 		_canvas.draw_rect(r, Color(_rim_flash_color, 0.25))
 		col = _rim_flash_color
+	elif _damage_flicker > 0:
+		# Two frames of GOLD at the instant you are hurt: the game reminding you
+		# what is at stake exactly when losing it becomes possible. Below the drop
+		# flash because a drop landing is news and a hit is a thing you already
+		# know — you felt it in the health bar, which is Tier 1 and louder.
+		col = Pal.GOLD
 	elif tier >= 2:
 		# The dithered gold halo. One ring of 50% gold reads as a dither at the
 		# distance a player actually sits from the screen. This one is about
@@ -2151,6 +2243,57 @@ func _draw_rim(s: Vector2, tier: int) -> void:
 	elif rarity >= 3:
 		_canvas.draw_rect(r.grow(-(thick + Pal.px(2.0, s.y))), Color(col, 0.4),
 			false, Pal.px(1.0, s.y))
+
+	_draw_slot_marks(s, r, col)
+
+
+## How full the bag is, and what the case is saving — one row of marks along the
+## rim's bottom inside edge. HUD_PLAN decision 26.
+##
+## **This is what the empty rim was missing.** A rim with nothing in it is a bare
+## rectangle in the corner for the whole first half of a run, and §13.2's rule —
+## the same one `_draw_heat` states — is that an instrument which only appears
+## once you are already doing well teaches nobody. The marks are there at zero
+## stacks, so the histogram above them is explained before the player has one.
+##
+## The first `Run.CASE_SLOTS` are FULL height and the rest are half: the case is
+## the part you keep when you die, so "what does the case save" and "how full am
+## I" are the same row read two ways. That difference is a HEIGHT and not a hue,
+## which is the same argument the rim's own rarity thickness makes.
+##
+## Not twelve hard-coded. The case is `Run.CASE_SLOTS` and the hold is
+## `Run.hold_slots()`, which the player buys upgrades to — `mvp_loop` reaches 13
+## slots on a normal run, so a fixed twelve would have been wrong by the second
+## shop visit.
+##
+## **Deliberately INSIDE the rim, not on its frame**, which is decision 33's
+## second reason for putting them here: the frame already has a six-way
+## precedence ladder on it, and a seventh claimant would have had to join it.
+func _draw_slot_marks(s: Vector2, r: Rect2, col: Color) -> void:
+	var case_n: int = Run.CASE_SLOTS
+	var hold_n: int = maxi(Run.hold_slots(), 0)
+	var total := case_n + hold_n
+	if total <= 0:
+		return
+	var full := Pal.px(SLOT_MARK_H, s.y)
+	var pad := Pal.px(4.0, s.y)
+	var inner := r.grow(-(Pal.px(3.0, s.y) + pad))
+	var gap := Pal.px(2.0, s.y)
+	var w := (inner.size.x - gap * float(total - 1)) / float(total)
+	if w <= 0.0:
+		return
+	var used_case: int = Run.case_slots_used()
+	var used_hold: int = Run.hold_slots_used()
+	var bottom := inner.end.y
+	for i in total:
+		var is_case := i < case_n
+		var h := full if is_case else full * 0.5
+		var lit := (i < used_case) if is_case else (i - case_n < used_hold)
+		var box := Rect2(inner.position.x + (w + gap) * float(i), bottom - h, w, h)
+		# An unused slot is a NOTCH and not nothing. The row has to read as a
+		# capacity at a glance, which means the empties have to be visible —
+		# otherwise a half-full bag and a small bag look identical.
+		_canvas.draw_rect(box, col if lit else Color(Pal.ASH, 0.6))
 
 
 func _best_rarity() -> int:

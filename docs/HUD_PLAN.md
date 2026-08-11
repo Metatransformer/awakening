@@ -1428,6 +1428,14 @@ The check is landed failing on this, deliberately. §13.12 orders the assertions
 before the fixes, and an assertion that is written after the thing it checks is
 an assertion written to pass.
 
+**Closed by item 6.** `_draw_slips` takes the rim `Rect2` as an argument and
+derives everything from it: `inner = rim.grow(-(frame + 4))`, the right edge is
+`inner.end.x`, the width cap is `min(SLIP_MAX_W · w, inner.size.x)`, and the
+floor is the top of the slot-mark row rather than a y of its own. `SLIPS_BOTTOM`
+is **deleted**, which is the part that matters — a fix that leaves the second
+opinion in the file is a fix with a schedule. `hud_lookdev` now reaches fourteen
+stacks (§15.10) and passes containment at every one of them.
+
 ## 15.6 The wrap fixes the type and makes the collision worse, measured
 
 Decision 28 replaces the legend's `scale *= avail / widest` with a wrap. It
@@ -1546,3 +1554,73 @@ What it means for the decisions already landed:
 Not re-opening any landed item over this. From here on a legibility judgement in
 this document says which resolution it was made at, and a director that wants a
 true-native frame can do what `perf_probe.gd` does and set `--win=` itself.
+
+## 15.10 T3 is nearly unreachable, and the frame that proves T3 never showed it
+
+`hud_lookdev`'s seventh beat is captioned "Rich enough for T3, so the number
+breathes". It was `Game.add_gold(5000)` and two King's Signets. **Gold is the
+purse and `Pal.tier` reads the bag**, so that frame sat at a bag value of 1130 —
+T2 — under a comment claiming T3, for the whole life of the file. Nothing caught
+it because the tier was described in a comment and never asserted. It is now
+asserted, and the beat fails loudly rather than quietly photographing T2.
+
+Fixing it turned up the larger thing. Ranked by value per bag slot:
+
+| Item | Value | Stack | Per slot |
+|---|---|---|---|
+| Deep Amber | 55 | 6 | **330** |
+| Ember Gland | 32 | 10 | 320 |
+| Void Pearl | 78 | 4 | 312 |
+| Ghost Silk | 24 | 12 | 288 |
+| Cut Gemstone | 95 | 3 | 285 |
+| Iron Scrap | 18 | 12 | 216 |
+| Cold Iron Core | 100 | 2 | 200 |
+| King's Signet | 90 | 2 | **180** |
+
+`K.START_BAG_SLOTS` is 12, so a starting bag's **absolute** ceiling — twelve
+slots of nothing but Deep Amber, which no drop table will ever hand anyone — is
+3960 against a T3 of 3000. A signet bag, the most valuable-*sounding* thing a
+player can carry, tops out at 1080. A realistic mixed bag on a normal run is
+between 1000 and 2000, which is T2 for the whole run.
+
+So **the T3 breath is a state almost no player reaches at the starting bag
+size**, and the whole T3 row of §5.3 is written about a case that needs bought
+slot upgrades before it can happen at all. The director now buys them: it sets
+`Game.bag_slots = 20` and fills to 3260, which is what a player would have done
+by the time this frame is true of them — and 20 slots is also the only thing that
+ever tests decision 26's claim that the slot-mark row is read from `Run` rather
+than hard-coded at twelve. (It is. Twenty marks, fourteen lit.)
+
+This is a *thresholds* finding, not a HUD one, and it is deliberately not fixed
+here: `Pal.T1/T2/T3` are 250 / 1000 / 3000 and moving T3 changes the fog lerp and
+the economy's sense of "rich" as well as one brightness animation. It wants a
+card of its own against `docs/METAGAME.md`. What this card owed was to stop
+lying about it in a comment.
+
+## 15.11 The damage flicker was a duration, and a duration cannot paint two frames
+
+Decision 17 says the rim flickers GOLD **for two frames** when you are hit. That
+went in as `DAMAGE_FLICKER := 0.034` — two frames at 60 Hz, expressed in seconds
+because every other clock on this HUD is a duration. It never rendered once.
+
+The order inside a frame is `_process` → draw. A hit arrives between one draw and
+the next; the next `_process` adds a whole `delta` to the timer *before* the draw
+that was supposed to be gold. At 60 fps `delta` is 0.0167 and it survives; at
+anything under ~30 fps `delta` exceeds 0.034 and the flicker expires unpainted.
+This harness runs well under 30 fps — a 6880×2756 backbuffer (§15.9) is not
+cheap — so the effect was invisible in every frame this project has ever taken,
+and would have been invisible on any player's machine having a bad moment, which
+is precisely the moment you are being hit in.
+
+Written as a duration it is frame-rate dependent in the wrong direction: it
+degrades exactly when frames get expensive. So it is a frame **count** now —
+`DAMAGE_FLICKER_FRAMES := 2`, decremented in `_process`, set to `FRAMES + 1` on
+the hit because `_process` runs before the draw it is meant to colour. Two drawn
+frames at any frame rate. It is the only clock on this HUD that is a count, and
+it should be: everything else here is a fade or a drain and those genuinely want
+wall-clock.
+
+Caught by writing the beat that photographs it — `h_08a_flicker`, deliberately
+with no `wait_frames` in front of the capture, because `rig.capture` awaits
+exactly one `frame_post_draw`. The first run of that beat came back COBALT and
+that is the whole reason any of this is known.
