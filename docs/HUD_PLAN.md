@@ -1642,12 +1642,28 @@ lying about it in a comment.
 > `h_09_t3` reads a mean luminance of 132.1 and `h_09_t3_phase` 124.4 — a 5.8%
 > swing, against an authored amplitude of 0.10 sampled at two phases.
 >
-> Measure it that way and not as a raw pixel diff. Since #58 put the world on a
-> 480×270 internal buffer the dither moves a tenth of every static region between
-> any two frames, so "the slip stack changed and the wall did not" no longer
-> separates: the wall changes too, by up to 9 per channel. The luminance of a
-> fixed pixel set does separate, because the dither is unbiased and the breath is
-> not.
+> Measure it that way and not as a raw pixel diff — **the method is right and the
+> reason recorded here was wrong**, corrected by card #62. This paragraph used to
+> say that #58's dither moved a tenth of every static region between any two
+> frames. It does not move anything: `assets/shaders/present_psx.gdshader` takes
+> its Bayer cell from `ivec2(mod(floor(px), 4.0))` with `px = UV * src_size`,
+> which is fixed per output pixel, and `frame_repro.gd` shot a frozen room twice
+> with §4.5's buffer on and got **0 differing pixels out of 921,600**.
+>
+> What moved the wall control "by up to 9 per channel" was the **volumetric fog**.
+> Godot reprojects it from the previous frame with a per-frame jitter that never
+> converges, so the room is never twice the same. At native that jitter is
+> **1/255** and no instrument in this repo sees it — but §4.5 quantizes to RGB555,
+> one step of which is 8/255, so the same sub-LSB wobble lands on the far side of
+> a step and reads as 9. Same number, different culprit, and the difference is
+> worth having: a dither is a property of the pipeline and could only be measured
+> around, while the fog's reprojection is a switch. `rig.still_the_frame()` throws
+> it (and holds the torches), after which a raw pixel diff of a frozen pose
+> separates cleanly again.
+>
+> The luminance of a fixed pixel set is still the better instrument for *this*
+> beat, for the reason given above rather than the one deleted: the breath is a
+> biased change and anything left over is not.
 
 ## 15.11 The damage flicker was a duration, and a duration cannot paint two frames
 

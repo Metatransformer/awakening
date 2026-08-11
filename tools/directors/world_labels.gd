@@ -52,9 +52,16 @@ extends RefCounted
 ##
 ## `Engine.time_scale = 0` is what makes a pair comparable: the lamps swell, the
 ## grass moves and the damage number is mid-tween, so two captures of a running
-## garrison differ everywhere. Frozen, the world differs only where the label
-## was — **but the HUD is not frozen**, because it runs off the wall clock, so
-## the count is taken inside a box and never over the whole picture.
+## garrison differ everywhere. Frozen — and with `rig.still_the_frame()` holding
+## the two things the freeze does not, card #62 — the world differs only where
+## the label was.
+##
+## The count is taken inside a box all the same, and the reason is the box and
+## not the overlay: a caption's ink has to be counted where the caption is, or a
+## label that moved four pixels reads as a label that appeared. **The HUD itself
+## is frozen** — card #62 measured 0 of the overlay's 60,194 painted pixels
+## moving between two captures of a stopped world, which is the opposite of what
+## this comment used to assert.
 ##
 ## ## Why the occluder is found rather than hard-coded
 ##
@@ -134,6 +141,13 @@ func run(rig) -> void:
 			+ "--scene=res://scenes/rooms/garrison.tscn")
 		return
 	await rig.wait_frames(30)
+
+	# The pair below is a pixel diff, so the frame has to be reproducible, and
+	# `Engine.time_scale = 0` alone does not make it one -- card #62, CLAUDE.md
+	# §3. The garrison's braziers and the volumetric fog both keep moving in a
+	# stopped world; under §4.5's RGB555 quantizer the fog's jitter alone is
+	# thousands of pixels past `INK_DELTA`, which is the number this file counts.
+	rig.still_the_frame()
 
 	# The hero is parked in the north-west quarter and left there. He is not the
 	# subject of any of these frames and he is a 1.65 m body that would confound

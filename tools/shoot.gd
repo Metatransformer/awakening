@@ -832,6 +832,61 @@ func talk(option: String = "Trade", seconds: float = 6.0) -> bool:
 	return true
 
 
+## Make the frame reproducible, for any director that subtracts one capture from
+## another. Call it once, after the scene is built, before the first pair.
+##
+## **`Engine.time_scale = 0` is not enough and never was — CLAUDE.md §3 has the
+## row.** Card #62 shot the same frozen dungeon twice and diffed it, and two
+## things move in a world that has stopped:
+##
+##  1. **The volumetric fog.** Godot reprojects it from the previous frame with a
+##     per-frame jitter, so it never converges: 74k px of a 921k frame differ
+##     between two captures of a stopped scene. At native that is a delta of
+##     **1/255** and no director's threshold sees it — but §4.5's internal buffer
+##     quantizes to RGB555, one step of which is 8/255, so the same sub-LSB
+##     jitter lands on the wrong side of a step and **2.6k px cross the 0.02 both
+##     `echo_plates.gd` and `world_labels.gd` call ink**, on a floor where a
+##     failing beat is 93 px. `internal_render` defaults to TRUE, so that is the
+##     shipping configuration, not an exotic one.
+##  2. **The flames**, historically. `KitTorch` read the wall clock; it
+##     accumulates game time as of card #45, so the freeze now holds them. The
+##     `flicker = 0` below is belt and braces for a director that photographs a
+##     pair WITHOUT stopping the world, and it is what `echo_plates.gd` and
+##     `room_range.gd` each used to keep a private copy of.
+##
+## Both are set for the rest of the process. Nothing here is worth restoring: a
+## harness run ends at the last capture, and a director that wants the fog's
+## temporal filter back is a director measuring something this cannot help with.
+func still_the_frame() -> void:
+	var fires := 0
+	var airs := 0
+	for n in _walk(root):
+		if n is KitTorch:
+			n.set(&"flicker", 0.0)
+			# The setter runs `_apply_light`, which is the only thing that puts
+			# the nominal energy back after `_process` has been multiplying it.
+			n.set(&"light_energy", n.get(&"light_energy"))
+			fires += 1
+		elif n is WorldEnvironment:
+			var env: Environment = (n as WorldEnvironment).environment
+			if env != null:
+				env.volumetric_fog_temporal_reprojection_enabled = false
+				airs += 1
+	print("shoot: still_the_frame -- %d flame(s) held, %d fog volume(s) "
+		% [fires, airs] + "un-reprojected (see CLAUDE.md §3)")
+
+
+func _walk(from: Node) -> Array[Node]:
+	var out: Array[Node] = []
+	var stack: Array[Node] = [from]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		out.append(n)
+		for c in n.get_children():
+			stack.append(c)
+	return out
+
+
 ## The live scene root.
 func scene() -> Node:
 	return current_scene

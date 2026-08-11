@@ -97,6 +97,15 @@ func run(rig) -> void:
 	# got, because a resize that stops taking must not be silent here.
 	print("BARS render size=%s" % [DisplayServer.window_get_size()])
 
+	# And it has to render the SAME frame twice, which is a separate claim — card
+	# #62, CLAUDE.md §3. This file never subtracts two captures, so it looks
+	# exempt; it is exposed the other way round. `_is_rust` is a threshold, and a
+	# torch pool guttering across it (or, under §4.5, a fog jitter quantized onto
+	# the far side of an RGB555 step) changes a COUNT with no second frame
+	# involved anywhere. Fire orange sits close enough to the test to matter:
+	# `r > g * 1.8` is the line, and a lit wall is on the near side of it.
+	rig.still_the_frame()
+
 	var scene: Node = rig.current_scene
 	var hero: Node3D = rig.get_nodes_in_group(&"player")[0]
 	hero.global_position = AT_HERO

@@ -13,8 +13,15 @@ extends Node3D
 ##   * `light_range` short (~9 m, less than half the room), so the far wall is unlit
 ##   * `light_attenuation` above 1, which curves the falloff and gives the pool a
 ##     visible edge instead of an infinite soft gradient
-##   * ambient in the Environment kept near zero, so "unlit" really means black
+##   * a low ambient, so the gap between a pool and the dark stays readable
 ## Turning any one of them toward "sensible" gives you an evenly lit grey box.
+##
+## That third line used to read "ambient kept near zero, so 'unlit' really means
+## black", and it argued for a room this project no longer wants: `docs/STYLEGUIDE.md`
+## §1 was reversed on the owner's instruction and `env_dungeon.tres` has carried
+## `ambient_light_energy = 0.38` since. The falloff is still what makes a pool a
+## pool; the black between them is now a dim blue, on purpose (GDD pillar 5 — a
+## silhouette you cannot read is a bug and not atmosphere).
 ##
 ## Shadows are OFF by default. The N64 had no dynamic shadows and the look survives
 ## without them; more practically, a room full of shadow-casting omni lights costs
@@ -96,6 +103,9 @@ var _flame: MeshInstance3D
 var _light: OmniLight3D
 var _embers: GPUParticles3D
 var _phase := 0.0
+## Seconds of GAME time this fire has burned, times `flicker_speed`. The flicker's
+## whole clock — see `_process`.
+var _burned := 0.0
 ## False once `douse()` has been called. Public because "is this sconce still
 ## burning?" is a fact about the room that a director has to be able to ask
 ## without reading a private light's energy through a flicker.
@@ -107,13 +117,24 @@ func _ready() -> void:
 	set_process(not Engine.is_editor_hint())
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if _light == null or flicker <= 0.001:
 		return
-	# Two incommensurate sines, not a random walk: a screenshot taken at frame 45 has
-	# to look the same every run, and RNG-driven flicker would make every capture a
-	# different frame of a different fire.
-	var t := float(Time.get_ticks_msec()) * 0.001 * flicker_speed + _phase
+	# Two incommensurate sines, not a random walk: RNG-driven flicker would make
+	# every capture a different frame of a different fire.
+	#
+	# **The clock is the GAME's, accumulated out of `delta`, and that is card #45.**
+	# It used to be `Time.get_ticks_msec()` — milliseconds since engine start, a
+	# WALL clock that `Engine.time_scale = 0` does not stop and that no harness
+	# can hold — under a comment claiming a screenshot at frame 45 looked the
+	# same every run. It did not. Card #62 measured it: with 41 sconces alight,
+	# two consecutive frames of a **frozen** room differed over 654k of the
+	# frame's 921k pixels, 111k of them past the 0.02 that `echo_plates.gd` and
+	# `world_labels.gd` both call ink — on a floor where a failing beat is 93 px.
+	# Accumulated, the freeze stops the fire for free, the perfect-dodge slow-mo
+	# guts it in step with everything else, and a paused world has still flames.
+	_burned += delta * flicker_speed
+	var t := _burned + _phase
 	var f := sin(t) * 0.6 + sin(t * 1.71 + 1.3) * 0.4
 	_light.light_energy = light_energy * (1.0 + f * flicker)
 

@@ -142,7 +142,7 @@ func run(rig) -> void:
 		print("PLATES FAIL no hero or no GameCamera in the scene")
 		return
 	cam.make_current()
-	_clear_the_floor(d)
+	_clear_the_floor(rig, d)
 	await rig.wait_frames(20)
 
 	var door: Node3D = d.anchor_node(&"shortcut_door")
@@ -417,43 +417,37 @@ func _rebuild(rig, level: int) -> Node:
 	return d
 
 
-func _clear_the_floor(d: Node) -> void:
+## Clear the bodies, then hold everything that does not move on the game clock.
+##
+## The note above `_read` says the freeze is *"what makes the pair comparable"*,
+## and it is — for everything that moves on the game clock. Two things here do
+## not, and both were found the hard way:
+##
+##  * **The flames.** `KitTorch` swung `light_energy` off the wall clock, so the
+##    two captures of a "frozen" pose differed wherever a torch reached. It was
+##    invisible until card #38, and only because of what #38 was about: these
+##    boxes land on the shut shortcut door, which stood in a room with no
+##    sconces, and on near-black masonry a 16% swing is under `INK_DELTA`. The
+##    moment the entrance room got its fire, **B2 failed at 93 px with no name
+##    anywhere on the door** — `/tmp/lit_after/plates/e_02_door_shut.png`, not a
+##    cyan pixel in it. `KitTorch` accumulates game time as of card #45, so the
+##    freeze holds it now; the hold below is belt and braces.
+##  * **The volumetric fog**, which Godot reprojects with a per-frame jitter that
+##    never converges (card #62). Under §4.5's RGB555 quantizer that sub-LSB
+##    jitter crosses a step and lands 2.6k px past `INK_DELTA` — twenty-eight
+##    times the 93 px that was a failure above.
+##
+## Both live in `rig.still_the_frame()` now — one copy for every director, which
+## is what card #45 asked for. A measurement that reports a leak because a fire
+## flickered is a measurement that will one day report no leak for an equally
+## bad reason.
+func _clear_the_floor(rig, d: Node) -> void:
 	var freed := 0
 	for e in _every(d, func(n: Node) -> bool: return n is Enemy):
 		freed += 1
 		e.queue_free()
 	print("PLATES cleared %d bodies" % freed)
-	_still_the_flames(d)
-
-
-## Hold every flame at its nominal energy, because `Engine.time_scale = 0` does
-## not.
-##
-## The note above `_read` says the freeze is *"what makes the pair comparable"* —
-## and it is, for everything that moves on the game clock. `KitTorch._process`
-## does not: it swings `light_energy` by ±16% off `Time.get_ticks_msec()`, the
-## **wall** clock, which keeps running while the world is stopped. So the two
-## captures of a "frozen" pose differ wherever a torch reaches, and the diff picks
-## that up as ink.
-##
-## It was invisible until card #38 and only because of what card #38 was about:
-## the boxes here land on the shut shortcut door, and that door stood in a room
-## with no sconces in it. On near-black masonry a 16% swing is under `INK_DELTA`.
-## The moment the entrance room got the fire it should always have had, the same
-## boxes covered lit stone, the same swing cleared the threshold, and **B2 failed
-## at 93 px with no name anywhere on the door** — the frame is
-## `/tmp/lit_after/plates/e_02_door_shut.png` and there is not a cyan pixel in it.
-## A measurement that reports a leak because a fire flickered is a measurement
-## that will one day report no leak for an equally bad reason.
-func _still_the_flames(d: Node) -> void:
-	var n := 0
-	for t in _every(d, func(x: Node) -> bool: return x is KitTorch):
-		t.flicker = 0.0
-		# The setter runs `_apply_light`, which is the only thing that puts the
-		# nominal energy back after `_process` has been multiplying it.
-		t.light_energy = t.light_energy
-		n += 1
-	print("PLATES held %d flame(s) still -- time_scale does not stop them" % n)
+	rig.still_the_frame()
 
 
 ## Out along the door's own `+basis.z`, which is the side the player stands on
