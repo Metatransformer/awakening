@@ -2,44 +2,72 @@ extends RefCounted
 ## Proves the little health bars over the monsters, and proves the three
 ## conditions that keep them from being icon vomit (docs/STYLEGUIDE.md §5.5).
 ##
-## The bars are drawn by `Hud._draw_enemy_bars` straight into the overlay, so
-## there is no node to inspect and no property to assert on -- the only honest
-## check is the picture. So this director READS ITS OWN CAPTURES back: it scans
-## the frame for horizontal runs of `Pal.RUST` in the top three quarters of the
-## screen (the HUD's own bars live in the bottom corner and are excluded), and a
-## run of that colour at that length is a health bar. Counting them is what turns
-## "the bars look right" into a beat that can fail.
+## ## How this director counts a bar, and why it stopped counting red pixels
+##
+## The bars are drawn by `Hud._draw_enemy_bars` straight into the overlay, so there
+## is no node to inspect. This file used to answer that by scanning the WHOLE FRAME
+## for flat horizontal runs of red and calling each one a bar -- and cards #51 and
+## #64 are both that scan, failing on the courtyard rather than on the HUD:
+##
+##   * the smith's crate stack is a 12-14 px flat orange band at (866, 350), and it
+##     was counted as a monster's bar in three of the four counting cases. Every
+##     failure was "one more bar than the case spawned", every time the same band;
+##   * it moved run to run, because a threshold sitting on the edge of a lit prop
+##     is decided by whatever the torches did that frame;
+##   * and case D "passed" only because the wall this director builds for the
+##     occlusion case happens to stand in front of the crates.
+##
+## Two of those are a green beat that means nothing and one is a red beat about
+## nothing, which is worse than no check at all. The scan's own discriminator had
+## also quietly died: `_flat` separated the overlay from the world by "the HUD
+## writes ONE colour, the world is a gradient" -- and since §4.5 the world renders
+## into a 480x270 buffer quantized to RGB555, so a lit crate arrives as flat blocks
+## of exactly one colour, several pixels wide. The ruler had become softer than the
+## thing it was measuring.
+##
+## So the HUD publishes what it drew -- `Hud.enemy_bar_rects()`, populated inside
+## `_draw_enemy_bars` by the same code that issues the draw calls, exactly as
+## `_note`/`layout_rects()` does for the fixed furniture and for the same reason
+## (HUD_PLAN decision 20). This director asserts on WHICH monsters got a bar, by
+## identity, so no prop the garrison ever grows can add one.
+##
+## **It is still a photograph, and that is the point.** A rect list on its own is a
+## claim that `draw_rect` was called, which is not a claim that anything is on
+## screen -- so every published bar is then read back OUT OF THE CAPTURE: the fill
+## must be `Pal.RUST` inside that rect, as many pixels wide as the monster's health
+## says, and the frame must be the right colour. The rect says where to look; the
+## ink says the bar exists. Deleting either half leaves a beat that cannot fail for
+## the right reason.
 ##
 ## Run in GARRISON on purpose. It is lit, so a bar that fails to draw is a visible
-## hole rather than a black rectangle on a black wall, and the occlusion case
-## needs a wall this director can put wherever it likes.
+## hole rather than a black rectangle on a black wall, and the occlusion case needs
+## a wall this director can put wherever it likes.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/enemy_bars.gd --out=/tmp/ebar/x.png
 
-## Shortest horizontal run of RUST that counts as a bar. A full ordinary bar is
-## `Pal.px(20)` = 20 px at 720p and a full locked one 44; every monster here is
-## deliberately damaged, so the runs to catch are the FILLS -- 12 to 26 px. Ten
-## catches all of them and rejects a torch flame, which is 1-2 px wide.
-const MIN_RUN := 10
-## Longer than any bar can be, so a red wall or a lit banner cannot pass as one.
-const MAX_RUN := 70
-## How much a run's channels may vary and still count as one flat colour. 20/255,
-## against ~10 measured across a real bar and 31 at best for a torch flame. See
-## `_flat`.
-const FLAT_EPS := 20.0 / 255.0
-## Tallest band of red that can still be a bar. The fill is 2 px; 4 leaves room for
-## a blended edge row without admitting a torch flame, which is 9 or more.
-const MAX_THICK := 4
-## Everything below this fraction of the screen is the player's own instrument
-## cluster -- the health bar's RUST ghost lives there and is not a monster.
-const SCAN_BOTTOM := 0.75
-
 ## How far a pixel may sit from an authored palette colour and still count as that
-## colour, per channel, in `_bracket_hues`. Nearly exact on purpose: the lock
-## brackets carry no alpha, so at native resolution they ARE the palette bytes.
+## colour, per channel. Nearly exact on purpose, in `_bracket_hues` and in the bar
+## ink alike: the HUD is composited at native resolution AFTER the world's buffer
+## is upscaled, and it carries no alpha over the fill, so its pixels ARE the palette
+## bytes. Measured on this tree: the goblin's fill reads (184, 56, 24) at x=457 and
+## again at x=705, against a `Pal.RUST` of (184, 56, 24).
+##
+## The old whole-frame matcher believed otherwise -- it tested "red-dominant"
+## because an exact compare had once found the bar in one frame and missed it in
+## four. That was the 6880x2756 window being Lanczos-downscaled to 720p (#35, and
+## CLAUDE.md §3's proof-frame row); `shoot.gd` renders 1:1 now. If a grade is ever
+## put back over the overlay this tolerance is what will say so, loudly, instead of
+## the beat quietly going soft.
 const HUE_TOL := 0.012
+
+## How far a published bar may sit from the monster's own unprojected head, in
+## pixels. `_draw_enemy_bars` quantizes the anchor to the world's 480x270 grid --
+## 2.67 px at 720p -- so a bar is never exactly over the head and must not be far
+## from it either. This is the check that the rect list is about the monster the
+## director means and not merely about a monster.
+const NEAR_HEAD := Vector2(5.0, 8.0)
 
 ## Where each case stands. Off the hero's own axis on purpose -- a monster parked
 ## dead ahead is behind the hero's shoulders from a boom camera, and a shot of a
@@ -85,25 +113,17 @@ func run(rig) -> void:
 	# back as **5**. Every other pixel of it was an intermediate blend of RUST and
 	# the courtyard.
 	#
-	# Which is fatal to a director whose entire method is "count pixels of a
-	# palette colour". `MOTH` (`807868`) sits in the middle of the palette, so it
-	# collects those blends from every direction: the hostile bracket measured
-	# rust=99 moth=95, and "the hostile bracket is not mostly its own colour" was
-	# a true statement about a blurred photograph of a correct bracket.
-	#
 	# `shoot.gd._size_the_window` does it for every director now (#35), so at
 	# native resolution a 2 px stroke is 2 pixels of the exact authored colour and
-	# `_flat`'s tolerances mean what they say they mean. This only reports what it
-	# got, because a resize that stops taking must not be silent here.
+	# `HUE_TOL` means what it says it means. This only reports what it got, because
+	# a resize that stops taking must not be silent here.
 	print("BARS render size=%s" % [DisplayServer.window_get_size()])
 
-	# And it has to render the SAME frame twice, which is a separate claim — card
-	# #62, CLAUDE.md §3. This file never subtracts two captures, so it looks
-	# exempt; it is exposed the other way round. `_is_rust` is a threshold, and a
-	# torch pool guttering across it (or, under §4.5, a fog jitter quantized onto
-	# the far side of an RGB555 step) changes a COUNT with no second frame
-	# involved anywhere. Fire orange sits close enough to the test to matter:
-	# `r > g * 1.8` is the line, and a lit wall is on the near side of it.
+	# And it has to render the SAME frame twice — card #62, CLAUDE.md §3. Less
+	# load-bearing than it was, now that the counting is done off the rect list
+	# rather than off a threshold that a guttering torch could tip, but the ink
+	# checks below are still colour compares inside a lit room and the brackets in
+	# case G always were.
 	rig.still_the_frame()
 
 	var scene: Node = rig.current_scene
@@ -122,18 +142,17 @@ func run(rig) -> void:
 	_hurt(goblin, 2)
 	await _settle(rig, [[goblin, AT_GOBLIN]])
 	var a := await _shot(rig, "eb_00_engaged.png")
-	print("BARS engaged bars=%d lengths=%s state=%d" % [
-		a.size(), _lengths(a), goblin.state])
-	_want(a.size() == 1, "an engaged, bleeding goblin 5 m away drew %d bars, wanted 1"
-		% a.size())
+	print("BARS engaged %s state=%d" % [_seen(a), goblin.state])
+	_only(a, [[goblin, "goblin"]], "engaged")
+	_ink_ok(a, hero, goblin, "goblin", false)
 
 	# --- B. Asleep and unhurt earns nothing ---------------------------------
 	var sleeper := _spawn(scene, &"skeleton", AT_SLEEPER, false)
 	await rig.wait_frames(24)
 	await _settle(rig, [[goblin, AT_GOBLIN], [sleeper, AT_SLEEPER]])
 	var b := await _shot(rig, "eb_01_asleep.png")
-	print("BARS asleep bars=%d lengths=%s sleeper_state=%d engaged=%s" % [
-		b.size(), _lengths(b), sleeper.state, sleeper.is_engaged()])
+	print("BARS asleep %s sleeper_state=%d engaged=%s" % [
+		_seen(b), sleeper.state, sleeper.is_engaged()])
 	_want(not sleeper.is_engaged(),
 		"the distant skeleton woke up on its own; case B proves nothing")
 	# The two ways this case lies, both of which it has already told: the monster
@@ -141,16 +160,29 @@ func run(rig) -> void:
 	# is a tautology). Assert the head is somewhere the bar COULD have been drawn.
 	_want(_framed(hero, sleeper),
 		"the sleeping skeleton was not on camera; case B proves nothing")
-	_want(b.size() == 1,
-		"a sleeping, unhurt skeleton drew a bar (%d on screen, wanted 1)" % b.size())
+	_only(b, [[goblin, "goblin"]], "asleep")
 
 	# --- C. Bleeding earns a bar even asleep --------------------------------
+	# **And it has to still be asleep when the shutter opens**, which it was not.
+	# `_on_damaged` puts the body in HURT and `_tick_hurt` hands it to `_wake()`
+	# when the stagger ends, so a struck monster is CHASE a few frames later and
+	# `is_engaged()` is true -- which is the OTHER clause of the HUD's condition.
+	# Photographed like that, this case was case A a second time and the "or
+	# already bleeding" half of §5.5 had no proof at all. Putting it back to IDLE
+	# holds: the sleeper stands 12.7 m out, past its own 11 m detect, so
+	# `_tick_idle` leaves it alone. The assertion below is what says so.
 	_hurt(sleeper, 2)
 	await _settle(rig, [[goblin, AT_GOBLIN], [sleeper, AT_SLEEPER]])
+	sleeper.state = Enemy.State.IDLE
+	await _settle(rig, [[goblin, AT_GOBLIN], [sleeper, AT_SLEEPER]])
 	var c := await _shot(rig, "eb_02_asleep_hurt.png")
-	print("BARS asleep_hurt bars=%d lengths=%s" % [c.size(), _lengths(c)])
-	_want(c.size() == 2,
-		"a hurt monster did not get a bar while idle (%d on screen, wanted 2)" % c.size())
+	print("BARS asleep_hurt %s sleeper_state=%d engaged=%s" % [
+		_seen(c), sleeper.state, sleeper.is_engaged()])
+	_want(not sleeper.is_engaged(),
+		"the hurt skeleton is engaged, so case C is testing the same clause as "
+		+ "case A and 'bleeding earns a bar' is unproven")
+	_only(c, [[goblin, "goblin"], [sleeper, "sleeper"]], "asleep_hurt")
+	_ink_ok(c, hero, sleeper, "sleeper", false)
 
 	# --- D. A wall takes it away -------------------------------------------
 	# The whole reason the occlusion ray exists: without it this feature is an
@@ -159,24 +191,26 @@ func run(rig) -> void:
 	var wall := _wall(scene, cam.global_position, sleeper.global_position)
 	await _settle(rig, [[goblin, AT_GOBLIN], [sleeper, AT_SLEEPER]])
 	var d := await _shot(rig, "eb_03_occluded.png")
-	print("BARS occluded bars=%d lengths=%s" % [d.size(), _lengths(d)])
-	_want(d.size() == 1,
-		"a wall between the camera and a hurt monster did not hide its bar"
-		+ " (%d on screen, wanted 1)" % d.size())
+	print("BARS occluded %s" % [_seen(d)])
+	_only(d, [[goblin, "goblin"]], "occluded")
 	wall.queue_free()
 	await rig.wait_frames(4)
 
 	# --- E. The locked target's bar is wider --------------------------------
-	var plain := _longest(c)
+	var plain: float = _rect(c, goblin).size.x
 	Bus.target_acquired.emit(goblin)
 	await _settle(rig, [[goblin, AT_GOBLIN], [sleeper, AT_SLEEPER]])
 	var e := await _shot(rig, "eb_04_locked.png")
-	var locked := _longest(e)
-	print("BARS locked plain=%d locked=%d ratio=%.2f" % [
-		plain, locked, float(locked) / maxf(float(plain), 1.0)])
+	var locked: float = _rect(e, goblin).size.x
+	# Both halves reported: the rect the HUD says it drew, and the RUST actually in
+	# the picture. A widening that exists only in the layout would be a lie the ink
+	# catches, and vice versa.
+	print("BARS locked plain=%.0f locked=%.0f ratio=%.2f ink=%d" % [
+		plain, locked, locked / maxf(plain, 1.0), _run(e, _rect(e, goblin), Pal.RUST)])
 	_want(locked > plain,
-		"the locked target's bar (%d px) is not wider than an ordinary one (%d px)"
+		"the locked target's bar (%.0f px) is not wider than an ordinary one (%.0f px)"
 			% [locked, plain])
+	_ink_ok(e, hero, goblin, "locked goblin", false)
 	Bus.target_lost.emit()
 	await rig.wait_frames(6)
 
@@ -185,9 +219,12 @@ func run(rig) -> void:
 	await rig.wait_frames(24)
 	_hurt(elite, 4)
 	await _settle(rig, [[goblin, AT_GOBLIN], [sleeper, AT_SLEEPER], [elite, AT_ELITE]])
-	await _shot(rig, "eb_05_elite.png")
-	print("BARS elite height=%.2f elite=%s" % [
-		elite.head_point().y - elite.global_position.y, elite.elite])
+	var f := await _shot(rig, "eb_05_elite.png")
+	print("BARS elite %s height=%.2f elite=%s bone=%d/%d" % [
+		_seen(f), elite.head_point().y - elite.global_position.y, elite.elite,
+		_ink(f, _rect(f, elite), Pal.BONE), _ink(f, _rect(f, goblin), Pal.BONE)])
+	_only(f, [[goblin, "goblin"], [sleeper, "sleeper"], [elite, "elite"]], "elite")
+	_ink_ok(f, hero, elite, "elite", true)
 
 	# --- G. The lock bracket says WHAT KIND, three ways ---------------------
 	# Decisions 16, 22 and 31. The bracket used to be RUST for everything; it now
@@ -287,8 +324,7 @@ func _bracket_hues(img: Image, hero: Node3D, target: Node3D) -> Array:
 			var px := img.get_pixel(x, y)
 			for i in 3:
 				var w: Color = wants[i]
-				if (absf(px.r - w.r) < HUE_TOL and absf(px.g - w.g) < HUE_TOL
-						and absf(px.b - w.b) < HUE_TOL):
+				if _same(px, w):
 					out[i] = int(out[i]) + 1
 	return out
 
@@ -299,6 +335,9 @@ func _spawn(scene: Node, kind: StringName, at: Vector3, elite: bool) -> Enemy:
 	e.kind = kind
 	e.drop_seed = 4400 + int(absf(at.x) * 7.0)
 	e.elite = elite
+	# Named, because `_only`'s failure line prints the node behind every bar the
+	# HUD drew, and `@CharacterBody3D@894` names nothing.
+	e.name = String(kind) + ("_elite" if elite else "")
 	scene.add_child(e)
 	e.global_position = at
 	return e
@@ -371,136 +410,159 @@ func _wall(scene: Node, from: Vector3, to: Vector3) -> StaticBody3D:
 
 # --- Reading the picture back -----------------------------------------------
 
-func _shot(rig, name: String) -> Array:
+## One beat: the capture, and the bars the HUD says it drew on it.
+##
+## The rect list is read straight after the shutter and never earlier. `Hud`
+## repaints every frame while there are monsters in the tree (`_wake`), so the
+## dictionary belongs to the frame in the PNG -- and every case holds its monsters
+## still with `_settle` first, so a frame either side of the shutter would say the
+## same thing anyway.
+func _shot(rig, name: String) -> Dictionary:
 	var path := _out.path_join(name)
 	await rig.capture(path)
+	var rects: Dictionary = Hud.enemy_bar_rects().duplicate()
 	var img := Image.load_from_file(path)
 	if img == null:
 		_want(false, "could not read back the capture at %s" % path)
-		return []
-	return _bars(img)
+	return {&"img": img, &"rects": rects, &"name": name}
 
 
-## Horizontal runs of Pal.RUST long enough to be a bar, one entry per run, as
-## [x, y, length]. Adjacent rows of the same bar collapse into the longest row.
-func _bars(img: Image) -> Array:
-	var found: Array = []
-	var limit := int(float(img.get_height()) * SCAN_BOTTOM)
-	for y in range(0, limit):
-		var run := 0
-		for x in img.get_width():
-			if _is_rust(img.get_pixel(x, y)):
-				run += 1
-				continue
-			_keep(img, found, x - run, y, run)
-			run = 0
-		_keep(img, found, img.get_width() - run, y, run)
-	return _collapse(found)
-
-
-func _keep(img: Image, found: Array, x0: int, y: int, run: int) -> void:
-	if run < MIN_RUN or run > MAX_RUN:
-		return
-	if not _flat(img, x0, y, run):
-		return
-	if not _thin(img, x0 + run / 2, y):
-		return
-	found.append([x0, y, run])
-
-
-## Is this run of red a FLAT one?
+## The published bars must be EXACTLY the monsters this case expects -- no fewer,
+## and just as importantly no more.
 ##
-## The second half of telling a health bar from a torch. Red-dominance alone is not
-## enough in a lit courtyard: a flame 12 px across is red, wide enough, and in the
-## top of the frame, and three of them were being counted as monsters. But a flame
-## is a GRADIENT -- its red channel swings 30 to 107 values across the run -- and
-## the HUD writes one flat colour, which comes back out of the grade swinging about
-## 10. So flatness is the thing that separates the overlay from the world, and it
-## does not care what the grade did to the absolute value.
-## The END PIXELS ARE EXCLUDED, and that is not a fudge -- it is the difference
-## between this working and this rejecting every bar on screen. A bar's first and
-## last pixel sit against its 1 px frame and come back blended: measured across a
-## real 13 px bar the interior held 203-218 and the two ends read 222 and 135, so
-## the full-run spread was 87 against an interior spread of 15. The first version
-## measured the ends and threw the feature out as a gradient.
-func _flat(img: Image, x0: int, y: int, run: int) -> bool:
-	var lo := Color(1.0, 1.0, 1.0)
-	var hi := Color(0.0, 0.0, 0.0)
-	for x in range(x0 + 1, x0 + run - 1):
-		var c := img.get_pixel(x, y)
-		lo = Color(minf(lo.r, c.r), minf(lo.g, c.g), minf(lo.b, c.b))
-		hi = Color(maxf(hi.r, c.r), maxf(hi.g, c.g), maxf(hi.b, c.b))
-	return hi.r - lo.r <= FLAT_EPS and hi.g - lo.g <= FLAT_EPS \
-		and hi.b - lo.b <= FLAT_EPS
+## "No more" is the whole of cards #51 and #64. The old whole-frame scan could only
+## say "three red runs", so an orange crate and a monster were the same observation;
+## this says WHICH bodies drew, by instance, and prints the node behind any id it
+## did not expect. A garrison prop cannot be one of those ids, and if a keeper ever
+## did join the `enemy` group with a health component, this is the beat that would
+## name him instead of silently counting him.
+func _only(shot: Dictionary, want: Array, tag: String) -> void:
+	var rects: Dictionary = shot[&"rects"]
+	var missing: Array = []
+	var ids: Array = []
+	for w: Array in want:
+		var n: Node3D = w[0]
+		ids.append(n.get_instance_id())
+		if not rects.has(n.get_instance_id()):
+			missing.append(w[1])
+	var extra: Array = []
+	for id: int in rects:
+		if ids.has(id):
+			continue
+		var n := instance_from_id(id) as Node
+		extra.append("%s(%s)" % [n.name if n != null else "<freed>",
+			n.get_class() if n != null else id])
+	_want(missing.is_empty(),
+		"%s: no bar was drawn for %s (drew %d: %s)"
+			% [tag, str(missing), rects.size(), _seen(shot)])
+	_want(extra.is_empty(),
+		"%s: the HUD drew a bar for %s, which this case does not expect to have one"
+			% [tag, str(extra)])
 
 
-## Is this red only a couple of pixels TALL?
+## The bar the HUD says it drew for this monster is actually in the picture, is
+## over that monster's head, and is as full as its health.
 ##
-## The other half of telling the overlay from the world, and the one that catches
-## what flatness misses. A bar is `Pal.px(2)` = 2 px tall, 3 with the blended edge.
-## A torch flame is nine or more rows of red, and a flame's individual rows can be
-## flat enough to pass `_flat` on their own. Nothing in this HUD draws a red band
-## thicker than a bar, so thickness is decisive and needs no colour constant.
-func _thin(img: Image, x: int, y: int) -> bool:
-	var thick := 0
-	var top := maxi(y - MAX_THICK - 1, 0)
-	var bottom := mini(y + MAX_THICK + 2, img.get_height())
-	for row in range(top, bottom):
-		if _is_rust(img.get_pixel(x, row)):
-			thick += 1
-	return thick <= MAX_THICK
-
-
-## One bar is 2 px tall, so it reports two runs at the same x. Keep the longest
-## row per cluster rather than counting the same bar twice.
-func _collapse(runs: Array) -> Array:
-	var out: Array = []
-	for r: Array in runs:
-		var merged := false
-		for i in out.size():
-			var o: Array = out[i]
-			if absf(float(r[0]) - float(o[0])) <= 4.0 \
-					and absf(float(r[1]) - float(o[1])) <= 6.0:
-				if int(r[2]) > int(o[2]):
-					out[i] = r
-				merged = true
-				break
-		if not merged:
-			out.append(r)
-	return out
-
-
-## Red-dominant rather than equal to `Pal.RUST`, and this is the whole reason this
-## helper has a comment.
+## Three separate claims and all three are the point of the beat:
 ##
-## The HUD writes RUST flat and unshaded, so matching the constant looks like the
-## obvious test -- and it FAILS, silently and selectively. The capture is graded
-## after the overlay is composited, and the grade is position-dependent: the same
-## bar reads (206, 65, 28) near the middle of the screen and (142, 37, 15) out
-## towards the edge, against a constant of (184, 56, 24). An exact compare
-## therefore found the bar in one frame, missed it in four, and the director
-## reported the FEATURE as broken when the only broken thing was the ruler.
-##
-## So the test is the property that survives a grade: strongly red, with red
-## well clear of the other two channels. Nothing else in the top three quarters
-## of a garrison frame is that -- torch flames are warm but only 1-2 px wide,
-## and the run length filter is what rejects them.
-func _is_rust(c: Color) -> bool:
-	return c.r > 0.43 and c.r > c.g * 1.8 and c.r > c.b * 2.0
+##   * `Pal.RUST` inside the rect, at all -- a bar that was "drawn" into a
+##     zero-sized rect, or over itself in `Pal.VOID`, publishes exactly the same
+##     dictionary entry as a working one;
+##   * the widest run of it matching `round(inner_width * fraction)` to a pixel --
+##     which ties the ink to the monster's own health rather than to a constant, so
+##     a fill that stops tracking damage is a red beat;
+##   * the rect sitting over the head the HUD unprojected, within the 480x270
+##     quantization step -- so this is a bar over THIS monster and not merely a bar.
+func _ink_ok(shot: Dictionary, hero: Node3D, e: Enemy, label: String,
+		elite: bool) -> void:
+	var img: Image = shot[&"img"]
+	var rects: Dictionary = shot[&"rects"]
+	if img == null or not rects.has(e.get_instance_id()):
+		return  # `_only` has already reported this one.
+	var r: Rect2 = rects[e.get_instance_id()]
+	var b := Pal.px(Hud.EBAR_BORDER, float(img.get_height()))
+	var inner := r.size.x - b * 2.0
+	var want_fill := roundf(inner * e.health.fraction())
+	var got := _run(shot, r, Pal.RUST)
+	_want(absf(float(got) - want_fill) <= 1.0,
+		"%s's bar is %d px of RUST in the frame, and its health says %.0f of %.0f"
+			% [label, got, want_fill, inner])
+
+	# The frame around it. BONE for an elite is the only per-kind mark on the HUD
+	# (`Hud._draw_enemy_bars`), so it is worth a pixel and not just a print.
+	var bone := _ink(shot, r, Pal.BONE)
+	_want(bone > 0 if elite else bone == 0,
+		"%s's bar frame is %s BONE (%d px) — an elite's frame is BONE and an "
+			% [label, "not" if elite else "wrongly", bone]
+			+ "ordinary one is VOID")
+
+	# `_draw_enemy_bars` hangs the bar's top-left off the unprojected head, so the
+	# rect's centre sits half a bar below it -- 1 px at 720p, inside the tolerance
+	# the quantization already forces. Comparing centres keeps this a statement
+	# about WHERE, not a re-derivation of the HUD's own arithmetic.
+	var cam := hero.get_viewport().get_camera_3d()
+	var head := cam.unproject_position(e.head_point())
+	var off := (r.get_center() - head).abs()
+	_want(off.x <= NEAR_HEAD.x and off.y <= NEAR_HEAD.y,
+		"%s's bar %s is %s px from its own head at %s" % [label, r, off, head])
 
 
-func _lengths(bars: Array) -> String:
-	var out: Array = []
-	for b: Array in bars:
-		out.append(int(b[2]))
-	return str(out)
+## Pixels of `col` inside `r`.
+func _ink(shot: Dictionary, r: Rect2, col: Color) -> int:
+	var img: Image = shot[&"img"]
+	if img == null:
+		return 0
+	var box := r.intersection(Rect2(Vector2.ZERO, Vector2(img.get_size())))
+	var n := 0
+	for y in range(int(box.position.y), int(box.end.y)):
+		for x in range(int(box.position.x), int(box.end.x)):
+			if _same(img.get_pixel(x, y), col):
+				n += 1
+	return n
 
 
-func _longest(bars: Array) -> int:
+## Longest horizontal run of `col` inside `r`. The fill's width, in other words --
+## the number the health has to explain.
+func _run(shot: Dictionary, r: Rect2, col: Color) -> int:
+	var img: Image = shot[&"img"]
+	if img == null:
+		return 0
+	var box := r.intersection(Rect2(Vector2.ZERO, Vector2(img.get_size())))
 	var best := 0
-	for b: Array in bars:
-		best = maxi(best, int(b[2]))
+	for y in range(int(box.position.y), int(box.end.y)):
+		var run := 0
+		for x in range(int(box.position.x), int(box.end.x)):
+			if _same(img.get_pixel(x, y), col):
+				run += 1
+				best = maxi(best, run)
+			else:
+				run = 0
 	return best
+
+
+## Is this pixel that palette colour? See `HUE_TOL`.
+func _same(px: Color, col: Color) -> bool:
+	return absf(px.r - col.r) < HUE_TOL and absf(px.g - col.g) < HUE_TOL \
+		and absf(px.b - col.b) < HUE_TOL
+
+
+func _rect(shot: Dictionary, e: Node3D) -> Rect2:
+	var rects: Dictionary = shot[&"rects"]
+	return rects.get(e.get_instance_id(), Rect2())
+
+
+## What the HUD says it drew, as `name@x,y w x h`, for the log line of each case.
+func _seen(shot: Dictionary) -> String:
+	var rects: Dictionary = shot[&"rects"]
+	var out: Array = []
+	for id: int in rects:
+		var n := instance_from_id(id) as Node
+		var r: Rect2 = rects[id]
+		out.append("%s@%.0f,%.0f %.0fx%.0f" % [
+			n.name if n != null else "<freed>", r.position.x, r.position.y,
+			r.size.x, r.size.y])
+	out.sort()
+	return "bars=%d %s" % [rects.size(), str(out)]
 
 
 func _want(ok: bool, why: String) -> void:

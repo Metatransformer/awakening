@@ -845,6 +845,10 @@ func _process(delta: float) -> void:
 ## what it contains.
 var _layout: Dictionary = {}
 
+## The world-anchored half of the same idea: see `enemy_bar_rects()` for what it
+## holds and why it is a second dictionary rather than four more `_layout` entries.
+var _ebars: Dictionary = {}
+
 ## The roots, and the order is only for readable failures. A group exists here iff
 ## something claimed it as a parent this frame — the garrison has no minimap and
 ## the dungeon has no legend, and neither absence is a special case.
@@ -888,6 +892,36 @@ func _seal_layout() -> void:
 ## single boolean test and this stays empty.
 func layout_rects() -> Dictionary:
 	return _layout
+
+
+## Every enemy bar drawn last frame: `enemy instance_id -> Rect2` of the OUTER
+## frame, hairline and all, exactly as `_note` records the furniture.
+##
+## **Why this exists** (cards #51 and #64). These bars are painted straight into
+## the canvas, so there is no node to inspect — and `tools/directors/enemy_bars.gd`
+## therefore counted them by scanning the whole frame for flat horizontal runs of
+## red. That is a threshold over a photograph of a room, and the room won: the
+## smith's crate stack is a 12–14 px flat orange run at (866, 350) in the garrison
+## and was counted as a monster's bar in three of that director's four cases.
+## Worse since §4.5 — the world is quantized to RGB555 and upscaled from 480×270,
+## so *flatness*, the property that was separating the overlay from the world, is
+## now a property the world has too. The instrument was less trustworthy than the
+## thing it measured.
+##
+## So the HUD publishes what it drew, and a director asserts on **which monsters
+## got a bar** instead of on how many red runs a courtyard contains. It is still
+## checked photographically — the rect says where to look, and the ink inside it is
+## what says the bar exists.
+##
+## **Deliberately not `_note`**, for the reason `_draw_arc` gives two functions up:
+## a bar is anchored to a monster's head, so two monsters near each other put two
+## of these on top of one another, and any of them may sit outside the safe area or
+## across the minimap. `_hud_layout.check()`'s assertions — siblings do not
+## intersect, everything is inside the safe area — are true of furniture and false
+## of a world-anchored cue. Entering these there would turn assertion 1 into a table
+## of exemptions, which is what decision 27's tree exists to avoid.
+func enemy_bar_rects() -> Dictionary:
+	return _ebars
 
 
 # --- The type ladder (HUD_PLAN §3) --------------------------------------------
@@ -966,6 +1000,7 @@ func _draw_hud() -> void:
 	if s.x < 1.0 or s.y < 1.0:
 		return
 	_layout.clear()
+	_ebars.clear()
 	_type_offenders.clear()
 	_draw_health(s)
 	_draw_stamina(s)
@@ -3007,13 +3042,26 @@ func _draw_enemy_bars(s: Vector2) -> void:
 		# only per-kind mark on the HUD, and it is on the one monster whose whole
 		# design is "you can see this one coming" (scripts/core/progression.gd).
 		var elite: bool = bool(e.get(&"elite")) if &"elite" in e else false
-		_canvas.draw_rect(Rect2(x - b, c.y - b, w + b * 2.0, h + b * 2.0),
-			Pal.BONE if elite else Pal.VOID)
+		var frame := Rect2(x - b, c.y - b, w + b * 2.0, h + b * 2.0)
+		_canvas.draw_rect(frame, Pal.BONE if elite else Pal.VOID)
 		_canvas.draw_rect(Rect2(x, c.y, w, h), Color(Pal.ASH, 0.85))
 		# Rounded to whole pixels, and never eased. Anti-slop §7.4.
 		var fill := roundf(w * hp.fraction())
 		if fill >= 1.0:
 			_canvas.draw_rect(Rect2(x, c.y, fill, h), Pal.RUST)
+		# Said by the code that drew it, on the frame it drew it — see
+		# `enemy_bar_rects()`. Recorded after the draw calls and not before the
+		# gates above, so a monster that was skipped for any of the three reasons
+		# is absent here as well as absent from the picture.
+		_mark_bar(e, frame)
+
+
+## Record one bar. Debug builds only, like `_note` — in an export this is a single
+## boolean test and `enemy_bar_rects()` stays empty.
+func _mark_bar(e: Node3D, r: Rect2) -> void:
+	if not OS.is_debug_build():
+		return
+	_ebars[e.get_instance_id()] = r
 
 
 ## Names and readouts anchored to a point in the world and drawn HERE, at native
