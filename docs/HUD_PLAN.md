@@ -1903,6 +1903,10 @@ artefacts. The two that remain are scene drift and are not the HUD: a persistent
 orange-red crates**, which the room gained after this director was written. That
 belongs to whoever holds the flaky-directors card, not to this one.
 
+> Closed by §15.17 (cards #51 and #64). The crates were the whole of it, in every
+> failing case; the repair was to stop counting red pixels across a room and have
+> the HUD publish the bars it drew.
+
 ### And then the frame said the neutral bracket was invisible
 
 With every count passing, the picture disagreed. Of the neutral bracket's two 5 px
@@ -2133,3 +2137,90 @@ the **garrison**, where it is drawn one row higher (heat is not drawn) — the r
 index that put the draughts through the magic bar twice, §11. `g_04` is the
 frame worth looking at: Ironhide at 3/4 blue, Emberblood at 1/4 orange, Ballast at
 2/4 purple, three marks and three fills in 151 px.
+
+## 15.17 The enemy-bar director was counting the courtyard — cards #51 and #64
+
+Two cards, one root cause, and neither of them the HUD.
+
+`enemy_bars.gd` had no node to inspect, so it counted bars by scanning the whole
+capture for flat horizontal runs of red 10–70 px long in the top three quarters of
+the frame. On `main` that reported three failures, each of the same shape — *one
+more bar than the case spawned*. Card #64 guessed the extras were bars over the
+garrison's NPCs, which would have been a real defect in the game. They were not.
+Re-running the director's own matcher over the four captures, with positions
+printed, gives the entire story in one table:
+
+| capture | runs found | colour |
+|---|---|---|
+| `eb_00_engaged` | (457, 315) len 12 · **(872, 350) len 11** | `b83818` · **`bd4a3a…944a3a`** |
+| `eb_01_asleep` | (459, 315) len 12 · **(866, 350) len 14** | `b83818` · **`a55a52…bd5242`** |
+| `eb_02_asleep_hurt` | (705, 291) len 13 · (459, 315) len 12 · **(866, 350) len 14** | `b83818` ×2 · **`a55a52…c55242`** |
+| `eb_03_occluded` | (459, 315) len 12 | `b83818` |
+
+`Pal.RUST` is `b83818`. Every real bar is exactly that, at every position on the
+screen; every extra run is a *different* orange and is at the same place in every
+frame — (866, 350), the **smith's crate stack**, exactly where §15.14 and card #51
+said it was. Case D was not a fourth pass, it was the crates being hidden by the
+slab the occlusion case builds. So #51 and #64 are one bug reported twice: not
+NPCs, not the HUD, and not the drift between two runs either — the counts moved
+run to run because a threshold resting on a lit prop is decided by that frame's
+torches.
+
+**The scan's own discriminator had also died under §4.5.** `_flat` separated the
+overlay from the world on the argument that *the HUD writes one flat colour and the
+world is a gradient*. The world now renders into a 480×270 buffer quantized to
+RGB555 and is upscaled from there, so a lit crate arrives as flat blocks of one
+colour several pixels wide. The ruler had become softer than the thing it measured,
+which is this repo's recurring failure — an instrument less trustworthy than the
+code under it.
+
+### What replaced it
+
+`Hud.enemy_bar_rects()`, populated inside `_draw_enemy_bars` by the same code that
+issues the draw calls: `enemy instance_id -> Rect2` of the outer frame. It is
+decision 20's argument — *the check that can see a rectangle* — applied to the one
+element of the HUD that is anchored in the world, and it is #39's argument about
+reading `layout_rects()` rather than `Game.draught_left`: the published rect is
+what the HUD **drew**, not the input it was drawn from.
+
+**It is deliberately not `_note`d into `layout_rects()`.** A bar hangs off a
+monster's head, so two monsters standing near each other put two of them on top of
+one another, and any of them may sit outside the safe area or across the minimap.
+Assertion 1 (siblings do not intersect) and assertion 2 (everything is inside the
+safe area) are true of furniture and false of a world-anchored cue; entering these
+there would turn assertion 1 into a table of exemptions, which is what decision
+27's tree exists to avoid. Same reasoning `_draw_hud` already gives for the damage
+arc (§15.13). A second dictionary, one accessor, no exemptions.
+
+**The director still reads the picture, and that is the point.** A rect list alone
+says `draw_rect` was called, which is not a claim that anything is on screen — so
+each published bar is read back out of the capture: `Pal.RUST` inside that rect,
+its widest run equal to `round(inner_width × health.fraction())` to a pixel, the
+frame BONE for an elite and VOID for everyone else, and the rect centred on the
+monster's own unprojected head within the quantization step. The rect says where to
+look; the ink says the bar exists.
+
+### The guards, fired on purpose
+
+Three sabotages of `_draw_enemy_bars`, one run each, all reverted:
+
+| sabotage | what the director said |
+|---|---|
+| the *or already bleeding* clause deleted (`if not engaged: continue`) | `BARS FAIL asleep_hurt: no bar was drawn for ["sleeper"]`, and again in the elite case |
+| the fill drawn in `Pal.VOID` instead of `Pal.RUST` — rect still published | `BARS FAIL goblin's bar is 0 px of RUST in the frame, and its health says 12 of 20`, four times, while the rect assertions stayed green |
+| the occlusion ray deleted (`_bar_visible` bypassed) | `BARS FAIL occluded: the HUD drew a bar for ["skeleton(CharacterBody3D)"], which this case does not expect to have one` |
+
+The middle row is the one worth keeping: it is the failure mode a rect list on its
+own cannot see, and it proves the photograph is still doing work.
+
+### And case C was testing case A's clause
+
+Found while proving the first sabotage, which did nothing. `_on_damaged` puts a
+body in HURT and `_tick_hurt` hands it to `_wake()`, so a struck monster is CHASE a
+few frames later and `is_engaged()` is true — meaning "bleeding earns a bar even
+asleep" was being satisfied by *engagement* every time it was photographed, and the
+second clause of §5.5's condition had no proof at all. The sleeper is put back to
+`State.IDLE` before the shutter now (it stands 12.7 m out, past its own 11 m
+detect, so `_tick_idle` leaves it there) and the case asserts `not is_engaged()`.
+`sleeper_state=0 engaged=false` with a bar on screen is the beat that means what it
+says.
