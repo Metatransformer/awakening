@@ -1,6 +1,6 @@
 extends RefCounted
-## Cards #27 and #43 — **the gate room's eye row: aimed at, and paid for by the
-## room it stands in.**
+## Cards #27, #43 and #44 — **the gate room's eye row: aimed at, paid for by the
+## room it stands in, and answered in an order.**
 ##
 ##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/dungeon.tscn \
@@ -70,6 +70,29 @@ extends RefCounted
 ##      arrow per eye is for.
 ##   I  Three real shots into three eyes wake the key, and the quiver still has
 ##      something in it afterwards.
+##   J  **Card #44, the wrong way.** On a second, cold build of the same floor:
+##      the door is an `ordered` gate, it counts the eyes as well as the key, and
+##      `index` runs left to right as the player reads the wall — *measured off
+##      the door's own transform*, never off the placer's arithmetic. Then three
+##      real shots RIGHT TO LEFT: the first one does not stay lit, the row is
+##      dark, the key never wakes, and the door's refusal names the **1st of 3**.
+##      A fourth shot proves the part a still frame cannot: the leftmost eye,
+##      correctly lit, **goes out again** when the rightmost is struck out of
+##      turn. You can lose ground.
+##   K  **Card #44, the right way.** A third cold build, three real shots LEFT TO
+##      RIGHT, and the key wakes. Both directions or the beat proves nothing —
+##      a frame of a lit row is a frame the relaxed version produced too.
+##
+## ## Why J and K each get their own floor
+##
+## An ordered row can only be answered wrongly ONCE per build, because the last
+## shot of a right-to-left pass is by definition the first of a left-to-right one:
+## the leftmost eye is `index 0` and striking it is always in turn. So the two
+## directions want two cold rows, and `_fresh_row` is that — `_rebuild` is
+## deterministic on `SEED`, and `PuzzleAtom.clear_run_flags()` is what makes the
+## eyes cold again, because they are latching and wrote `atom_*` on the way up.
+## Each rebuilt room brings a fresh `GateUrn`, so the arrows below are still the
+## room's own and this file still never calls `Game.add_arrows`.
 ##
 ## ## Why every shot goes through the trigger now
 ##
@@ -319,6 +342,12 @@ func run(rig) -> void:
 		return
 	await _h_a_miss_costs_an_arrow(rig, hero, cam, eyes[1])
 	await _i_three_arrows_three_eyes(rig, hero, cam, root, eyes)
+
+	# --- J and K. The order (card #44) ---------------------------------------
+	# Two more cold builds of the same floor, one per direction. See the class
+	# note for why one build cannot carry both.
+	await _j_the_wrong_way(rig, hero, cam)
+	await _k_the_right_way(rig, hero, cam)
 
 	if _fails == 0:
 		print("EYES ok -- every check passed")
@@ -611,6 +640,265 @@ func _i_three_arrows_three_eyes(rig, hero: Node3D, cam: Camera3D,
 		% Game.arrows, Game.arrows > 0)
 	await _stand_off(rig, hero, eyes[1], 7.0)
 	await rig.capture(out.path_join("g_08_row_lit.png"))
+
+
+# --- J and K. The order (card #44) --------------------------------------------
+
+## A cold gate room on floor 2, its row dark and the quiver stocked out of the
+## room's own urn. Returns `{}` and says so if anything is missing.
+##
+## `clear_run_flags()` before the rebuild and not after: `PuzzleAtom._ready`
+## reads the flag as it enters the tree, so an eye whose `atom_*` key was still
+## written would come up already lit and `restore_solved()` emits nothing to say
+## it did — a silently pre-solved row, which is the one failure mode that would
+## make every claim below vacuous.
+func _fresh_row(rig, hero: Node3D, tag: String) -> Dictionary:
+	PuzzleAtom.clear_run_flags()
+	var d := await _rebuild(rig, LEVEL)
+	if d == null:
+		_ck("%s0 the floor rebuilt" % tag, false)
+		return {}
+	_clear_the_floor(d)
+	await rig.wait_frames(20)
+	var cell: Vector2i = d.anchor_cell(&"gate_room")
+	if not d.rooms.has(cell):
+		_ck("%s0 the rebuilt floor has a gate room" % tag, false)
+		return {}
+	var root: Node3D = d.rooms[cell]["node"]
+	var eyes: Array[Node3D] = []
+	for i in EYES:
+		var e := root.get_node_or_null(NodePath("GateEye%d" % i)) as Node3D
+		if e != null:
+			eyes.append(e)
+	var gate := root.get_node_or_null(^"GateDoor") as Node3D
+	var pot := root.get_node_or_null(^"GateUrn") as Node3D
+	if eyes.size() != EYES or gate == null or pot == null:
+		_ck("%s0 the rebuilt room has the row, the door and the urn" % tag, false)
+		return {}
+	var lit := 0
+	for e: Node3D in eyes:
+		if bool(e.call(&"is_solved")):
+			lit += 1
+	_ck("%s0 the rebuilt row is COLD -- not one eye is lit (%d of 3)"
+		% [tag, lit], lit == 0)
+	await _restock(rig, hero, pot)
+	print("EYES %s quiver after the room's own urn: %d" % [tag, Game.arrows])
+	return {"root": root, "eyes": eyes, "gate": gate,
+		"key": root.get_node_or_null(^"GateKey")}
+
+
+## Break this build's urn and pick the bundle up. Beat G is the beat that PROVES
+## the urn; this is the same walk with the claims left off, because a rebuilt
+## floor's supply is a fixture here and not the thing being measured.
+func _restock(rig, hero: Node3D, pot: Node3D) -> void:
+	if bool(pot.call(&"is_solved")):
+		return
+	await rig.draw_weapon(&"sword")
+	hero.velocity = Vector3.ZERO
+	var away := K.flat(hero.global_position - pot.global_position)
+	if away == Vector3.ZERO:
+		away = Vector3.FORWARD
+	hero.global_position = pot.global_position + away * SWING_AT \
+		+ Vector3(0.0, 0.15, 0.0)
+	_face_at(hero, pot.global_position)
+	Bus.camera_recenter.emit()
+	await rig.wait_physics_frames(6)
+	await rig.wait_frames(18)
+	await rig.tap([&"attack"])
+	await rig.until(func() -> bool: return bool(pot.call(&"is_solved")), 4.0)
+	# Off the spill before it arms -- beat G's finding, and it is the same 0.35 s.
+	hero.global_position = pot.global_position + away * 3.4 \
+		+ Vector3(0.0, 0.15, 0.0)
+	Bus.camera_recenter.emit()
+	await rig.wait_physics_frames(2)
+	var bundle := await _find_bundle(rig, 4.0)
+	if bundle != null:
+		await _walk_onto(rig, hero, bundle)
+
+
+## How many of the row are lit right now, asked of the atoms themselves.
+func _lit(eyes: Array) -> int:
+	var n := 0
+	for e in eyes:
+		if bool((e as Node3D).call(&"is_solved")):
+			n += 1
+	return n
+
+
+## **The wrong way.** Three real arrows, right to left, into an ordered row.
+func _j_the_wrong_way(rig, hero: Node3D, cam: Camera3D) -> void:
+	var room := await _fresh_row(rig, hero, "J")
+	if room.is_empty():
+		return
+	var eyes: Array = room["eyes"]
+	var gate: Node3D = room["gate"]
+	var key: Node = room["key"]
+
+	_ck("J1 the gate room's door is an ORDERED gate", bool(gate.get(&"ordered")))
+	# The set, asked of the DOOR. Card #52's lesson is that an assertion naming a
+	# constant is not an assertion about the world, so this counts the actual
+	# nodes the actual gate is holding and matches them against the actual eyes.
+	var watched: Array = gate.call(&"atoms")
+	var eyes_watched := 0
+	for a in watched:
+		if eyes.has(a):
+			eyes_watched += 1
+	_ck("J2 and it counts the three eyes as well as the key (%d eyes of %d atoms)"
+		% [eyes_watched, watched.size()],
+		eyes_watched == EYES and watched.size() == EYES + 1)
+
+	# **Which end of the wall is index 0, measured off the door's own transform.**
+	# `CLAUDE.md` §4: a viewer's right is `forward x UP`, so a viewer's left is
+	# `UP x forward`, and the door's forward into the room is its `basis.z`
+	# (`Dungeon.facing_of(yaw)`). Nothing here trusts `along_of`'s sign -- the
+	# sequence reads left to right or the room asks for an order the frame does
+	# not show.
+	var facing := gate.global_transform.basis.z
+	var left := Vector3.UP.cross(facing).normalized()
+	var spread := left.dot(eyes[0].global_position - eyes[EYES - 1].global_position)
+	print("EYES index 0 stands %.2f m to the LEFT of index %d, seen from the door"
+		% [spread, EYES - 1])
+	_ck("J3 index 0 is the LEFTMOST eye as the player reads the wall (%.2f m)"
+		% spread, spread > 1.0)
+	var indices: Array[int] = []
+	var named_right := true
+	for i in eyes.size():
+		var idx := int((eyes[i] as Node3D).get(&"index"))
+		indices.append(idx)
+		if idx != i:
+			named_right = false
+	_ck("J4 and GateEye0..2 carry index %s -- the name and the order agree"
+		% str(indices), named_right)
+
+	# --- The pass itself, right to left --------------------------------------
+	var i := EYES - 1
+	var before := Game.arrows
+	var went := await _shoot(rig, hero, cam, eyes[i])
+	_ck("J5 an arrow really left for the RIGHTMOST eye (quiver %d -> %d)"
+		% [before, Game.arrows], went and Game.arrows < before)
+	# The claim. It answered its verb -- an arrow hit it -- and the sequence put
+	# it straight back, so nothing in the row is lit.
+	_ck("J6 the rightmost eye did NOT stay lit -- it was not its turn",
+		not bool(eyes[i].call(&"is_solved")))
+	_ck("J7 and the whole row is dark (%d of 3 lit)" % _lit(eyes),
+		_lit(eyes) == 0)
+	var next: Node = gate.call(&"next_in", &"eye_switch")
+	_ck("J8 the door is waiting for the LEFTMOST eye (%s)"
+		% (next.name if next != null else "none"), next == eyes[0])
+	var line: String = gate.call(&"refusal_line")
+	print("EYES the door says \"%s\"" % line)
+	_ck("J9 and its refusal names the 1st of 3 (\"%s\")" % line,
+		line.contains("1ST") and line.contains("3") and line.contains("EYES"))
+	if key != null:
+		_ck("JA the key never woke", not key.visible)
+
+	await _stand_off(rig, hero, eyes[1], 7.0)
+	await rig.capture(out.path_join("g_09_wrong_way_dark.png"))
+	await _read_the_door(rig, hero, gate, "JF")
+	await rig.capture(out.path_join("g_10_the_refusal.png"))
+
+	# The rest of the right-to-left pass, so the direction is a PASS and not one
+	# shot. Neither of these can light anything either: the middle eye is out of
+	# turn while the leftmost is dark.
+	await _shoot(rig, hero, cam, eyes[1])
+	_ck("JB the middle eye is out of turn too (%d of 3 lit)" % _lit(eyes),
+		_lit(eyes) == 0)
+	await _shoot(rig, hero, cam, eyes[0])
+	# **The honest end of a right-to-left pass.** The last shot of it is the FIRST
+	# of the sequence, so the leftmost eye stays -- and saying so is the point:
+	# an ordered row is not a row that refuses arrows, it is a row that only keeps
+	# the ones taken in order.
+	_ck("JC the LEFTMOST eye, struck last, is in turn and stays lit (%d of 3)"
+		% _lit(eyes), _lit(eyes) == 1 and bool(eyes[0].call(&"is_solved")))
+	if key != null:
+		_ck("JD and three arrows right to left still did not wake the key",
+			not key.visible)
+	await _stand_off(rig, hero, eyes[1], 7.0)
+	await rig.capture(out.path_join("g_11_one_eye_lit.png"))
+
+	# --- The thing a still frame cannot show ---------------------------------
+	# One more arrow into the rightmost eye. The leftmost is lit and correct; this
+	# takes it away. That is the combinator: you can lose ground.
+	await _shoot(rig, hero, cam, eyes[EYES - 1])
+	_ck("JE one shot out of turn puts the lit eye OUT again (%d of 3)"
+		% _lit(eyes), _lit(eyes) == 0)
+	await _stand_off(rig, hero, eyes[1], 7.0)
+	await rig.capture(out.path_join("g_12_lost_ground.png"))
+
+
+## **The right way**, on a third cold build: three arrows left to right.
+func _k_the_right_way(rig, hero: Node3D, cam: Camera3D) -> void:
+	var room := await _fresh_row(rig, hero, "K")
+	if room.is_empty():
+		return
+	var eyes: Array = room["eyes"]
+	var gate: Node3D = room["gate"]
+	var key: Node = room["key"]
+
+	for i in EYES:
+		var before := Game.arrows
+		var went := await _shoot(rig, hero, cam, eyes[i])
+		print("EYES K shot GateEye%d: loosed=%s lit=%d quiver %d -> %d"
+			% [i, went, _lit(eyes), before, Game.arrows])
+		_ck("K%d eye %d of 3, in turn, stays lit (%d of 3 lit)"
+			% [i + 1, i + 1, _lit(eyes)], _lit(eyes) == i + 1)
+	await rig.wait_frames(30)
+	if key != null:
+		_ck("K4 left to right wakes the key", key.visible
+			and bool(key.get(&"armed")))
+	# And the door stops naming an eye the moment there is no eye left to name --
+	# `PuzzleGate._the_sequence` skips a kind with one member, so the line hands
+	# over to the key by itself.
+	var line: String = gate.call(&"refusal_line")
+	print("EYES the door now says \"%s\"" % line)
+	_ck("K5 and the door's line hands over to the key (\"%s\")" % line,
+		line.contains("KEY"))
+	await _stand_off(rig, hero, eyes[1], 7.0)
+	await rig.capture(out.path_join("g_13_in_order_lit.png"))
+	await _read_the_door(rig, hero, gate, "K6")
+	await rig.capture(out.path_join("g_14_in_order_at_the_door.png"))
+
+
+## One real bow shot at an eye, from the spot that eye is answered from, and a
+## wait for the world to settle. Returns whether an arrow left the quiver.
+func _shoot(rig, hero: Node3D, cam: Camera3D, eye: Node3D) -> bool:
+	if Game.arrows <= 0:
+		_ck("the quiver ran dry before the shot at %s" % eye.name, false)
+		return false
+	await _stand_off(rig, hero, eye, SHOOT_FROM)
+	var went := await _loose(rig, hero, cam, eye.global_position)
+	# The arrow is in flight when `_loose` returns -- it returns on the quiver
+	# dropping, which happens at the loose. `EyeSwitch.on_solved` and the gate's
+	# break both land inside a physics tick after the hit.
+	await rig.until(func() -> bool: return bool(eye.call(&"is_solved")), 2.5)
+	await rig.wait_frames(24)
+	return went
+
+
+## Stand where the refusal is read and press the button, so the line on the HUD
+## is the door's own and not a string this file printed.
+##
+## `Prompt` picks focus by proximity in `_process` and `LockedDoor.on_focus`
+## defers its own re-emit, so this waits for the focus rather than counting
+## frames. The press is `rig.tap`, which dispatches a real `InputEvent` as well as
+## setting the action -- `Prompt` polls, so either would do, but a director that
+## presses buttons the way a player does cannot drift from one that does not.
+func _read_the_door(rig, hero: Node3D, gate: Node3D, tag: String) -> void:
+	var facing := gate.global_transform.basis.z
+	hero.velocity = Vector3.ZERO
+	# The near side: into the room, which is the side the player is standing on
+	# when the door refuses them (beat E4's `out_from`).
+	hero.global_position = gate.global_position + facing * 2.1
+	hero.global_position.y = 0.15
+	_face_at(hero, gate.global_position)
+	Bus.camera_recenter.emit()
+	await rig.wait_physics_frames(6)
+	var focused: bool = await rig.until(func() -> bool:
+		return Prompt.focus == gate, 3.0)
+	_ck("%s the door takes focus, so the line on the screen is its own"
+		% tag, focused)
+	await rig.tap([&"interact"])
+	await rig.wait_frames(20)
 
 
 # --- The shot -----------------------------------------------------------------

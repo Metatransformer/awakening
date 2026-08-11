@@ -64,6 +64,11 @@ var _lid_bot: Node3D
 var _lamp: OmniLight3D
 var _rime: Node3D
 var _age: float = 0.0
+## The open/shut tween, held so the other one can kill it. An ordered row breaks
+## on the SAME FRAME the eye lights (`PuzzleGate._break_the_sequence` runs inside
+## `solved`), so the opening tween and the closing tween are otherwise both alive
+## on the same two lids and the eye settles wherever the interleave leaves it.
+var _tw: Tween
 
 
 func _ready() -> void:
@@ -149,7 +154,10 @@ func on_solved() -> void:
 		melt.tween_property(_rime, "scale", Vector3.ONE * 0.01, 0.22)
 		melt.chain().tween_callback(_rime.queue_free)
 		_rime = null
-	var tw := create_tween().set_parallel(true)
+	if _tw != null and _tw.is_valid():
+		_tw.kill()
+	_tw = create_tween().set_parallel(true)
+	var tw := _tw
 	tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(_lid_top, "position:y", SOCKET_R * 0.95, 0.26)
 	tw.tween_property(_lid_bot, "position:y", -SOCKET_R * 0.95, 0.26)
@@ -157,6 +165,35 @@ func on_solved() -> void:
 	tw.tween_property(_pupil_mat, "emission_energy_multiplier", 3.2, 0.26)
 	tw.tween_property(_lamp, "light_color", Pal.MOSS, 0.26)
 	tw.tween_property(_lamp, "light_energy", 2.4, 0.26)
+
+
+## **Shut again.** Reached only through `PuzzleAtom.reset()`, which is only
+## reached from `PuzzleGate._break_the_sequence` -- an eye is latching, so nothing
+## in the world can close one except a sequence answered out of turn
+## (`docs/PUZZLES.md` §3, combinator 2).
+##
+## It SLAMS, at half the time the opening takes and with no overshoot, because
+## the read the player needs is *you lost that*. The open is a reward and eases;
+## this is not one.
+##
+## The pupil's energy is set and not tweened: `_process` writes that same property
+## every frame the eye is shut (the slow breath), so a tween on it would be
+## overwritten mid-flight and the two would fight for a quarter of a second.
+##
+## An eye that was FROZEN does not get its ice back -- `on_solved` frees the crust
+## rather than hiding it, deliberately. No prefab puts a frozen eye in an ordered
+## row today; the one that does has to decide whether the ice is part of what the
+## sequence costs, and this comment is where it will find the question.
+func on_unsolved() -> void:
+	if _tw != null and _tw.is_valid():
+		_tw.kill()
+	_pupil_mat.emission = Pal.FROST if frozen else Pal.COBALT
+	_lamp.light_color = Pal.FROST if frozen else Pal.COBALT
+	_lamp.light_energy = 0.7
+	_tw = create_tween().set_parallel(true)
+	_tw.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	_tw.tween_property(_lid_top, "position:y", SOCKET_R * 0.62, 0.13)
+	_tw.tween_property(_lid_bot, "position:y", -SOCKET_R * 0.62, 0.13)
 
 
 func restore_solved() -> void:

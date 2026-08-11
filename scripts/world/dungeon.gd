@@ -1810,10 +1810,36 @@ func _gate_lights_out(root: Node3D, cell: Vector2i, _tag: StringName,
 	return true
 
 
-## Prefab 3, a row of eyes (§3, combinator 2 -- *sequence*, relaxed to "all of
-## them"). **T1**: it only appears once the player owns the Bow, which on floor 1
-## means never and on floor 2 means always -- `_prefab_fits` reads the same pool
-## the ceiling does, so this cannot strand a floor.
+## Prefab 3, a row of eyes -- **`docs/PUZZLES.md` §3, combinator 2, *sequence*,
+## and since card #44 it is actually one.** **T1**: it only appears once the
+## player owns the Bow, which on floor 1 means never and on floor 2 means always
+## -- `_prefab_fits` reads the same pool the ceiling does, so this cannot strand
+## a floor.
+##
+## ## The order, and why the DOOR owns it
+##
+## This header said *"relaxed to 'all of them'"* for a release, and that was the
+## honest label on a row you could shoot in any order. It is a real sequence now:
+## `gate.ordered = true`, the eyes are handed to the door with `watch()`, and
+## `index` runs left to right along the wall. Shoot them out of order and
+## `PuzzleGate._break_the_sequence` puts the whole row back — the lit ones go dark
+## — and the door's refusal names the one it wants next.
+##
+## **The eyes join the door's set, and the sun socket deliberately does not.**
+## §9's fourth decision says an atom the key cannot be reached without is
+## redundant in the set and would make the refusal name the wrong half — *THE
+## SOCKET IS DARK* beside a key you can see. Both halves of that reasoning invert
+## here. A sequence has to be counted somewhere, and `PuzzleGate` is the thing in
+## this project that counts atoms; and the gate room's key is `visible = false`
+## until the row is finished, so there is no key in sight for the eye to be the
+## wrong half OF. While the row is unfinished the door names an eye, which is the
+## only object the player can act on; the frame the row completes, the key appears
+## and the door starts naming that instead (`PuzzleGate._the_sequence` skips a
+## kind with one member, which is what makes that handover automatic).
+##
+## `needs_key` and the key hunt are untouched: the door still refuses without the
+## key and still spends it. The row is a second thing it counts, not a second
+## contract.
 ##
 ## Three, spread along the wall OPPOSITE the door and looking back down the room
 ## at it -- the same arrangement `_gate_sun_nest` uses and for its reason: the
@@ -1878,17 +1904,35 @@ func _gate_eye_row(root: Node3D, cell: Vector2i, tag: StringName,
 	var along := along_of(float(spot["yaw"]))
 	var half := size_of(cell) * 0.5
 	var nest := StringName("gate_%d_nest" % Run.level)
+	# The door, so the row can be handed to it -- see the ORDER note in the class
+	# comment. `_place_gate_room` built it before it called this, and it is the
+	# only `PuzzleGate` in the room.
+	var gate := root.get_node_or_null(^"GateDoor") as PuzzleGate
+	if gate != null:
+		gate.ordered = true
 	var eyes: Array[Node3D] = []
 	for i in EYE_ROW_EYES:
 		var eye := PuzzleAtoms.make(PuzzleAtoms.EYE_SWITCH, nest)
 		if eye == null:
 			return false
 		eye.name = "GateEye%d" % i
+		# **`index` runs LEFT to RIGHT as the player reads the wall**, which is the
+		# example §3's table gives for this combinator verbatim -- *"three eyes, left
+		# to right"*. `along_of(yaw)` is the doorway's own left (a viewer's right is
+		# `facing x UP`, which works out to `-along`), so index 0 has to sit at
+		# `+along` and count down. Written the other way the row is a sequence the
+		# player answers backwards, and nothing in the frame says why.
+		eye.index = i
 		eye.position = facing * (half - WALL_STANDOFF) \
-			+ along * (float(i) - 1.0) * 3.2 + Vector3(0.0, EYE_Y, 0.0)
+			+ along * (1.0 - float(i)) * 3.2 + Vector3(0.0, EYE_Y, 0.0)
 		eye.rotation.y = atan2(facing.x, facing.z)
 		root.add_child(eye)
 		eyes.append(eye)
+		# Wired by hand rather than by tag, which is exactly what `watch()` is for.
+		# The row keeps its own `puzzle_id` -- `_adopt` must not collect it, or a
+		# second prefab sharing the gate's tag would join this sequence.
+		if gate != null:
+			gate.watch(eye)
 	# The key wakes on the LAST one. Counted here rather than by a second
 	# `PuzzleGate`, because a door watching the eyes and a door watching the key
 	# would be two doors, and §5.2 wants one.

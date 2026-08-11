@@ -42,9 +42,22 @@ extends LockedDoor
 ## Open by itself when the last atom lands. Forced off by `needs_key`: a key door
 ## that opened itself would never spend the key.
 @export var auto_open: bool = true
+## **Sequence** (`docs/PUZZLES.md` §3, combinator 2). Atoms of one kind must be
+## answered in ascending `PuzzleAtom.index`; one out of turn puts that whole kind
+## back to the start. See `_break_the_sequence`.
+##
+## Off by default and a no-op unless a placer sets distinct indices -- every atom
+## in the kit is born at `index = 0`, and a run whose members all share an index
+## can never be out of turn. A gate does not become a sequence by accident.
+@export var ordered: bool = false
 
 var _atoms: Array[PuzzleAtom] = []
 var _key_spent: bool = false
+## Inside `_break_the_sequence`. The re-entrancy guard, and it is not optional:
+## `PuzzleAtom.reset()` emits `unsolved`, which is wired to `_on_atom_changed`,
+## which is what called the reset -- three atoms would otherwise each re-enter the
+## break for the other two.
+var _breaking: bool = false
 
 
 func _ready() -> void:
@@ -127,6 +140,31 @@ func unsolved_count() -> int:
 	return n
 
 
+## The run of one kind, lowest `index` first. **Sorted here rather than trusted
+## from `_atoms`**: adoption order is a race between `_adopt`'s deferred walk of
+## the `puzzle_atom` group and a placer's own `watch()` calls, and a sequence
+## whose order depended on which won would be a different puzzle on a different
+## frame. `index` is the placer's stated intent and it is the only thing read.
+func kin(id: StringName) -> Array[PuzzleAtom]:
+	var out: Array[PuzzleAtom] = []
+	for a in _atoms:
+		if a.atom_id == id:
+			out.append(a)
+	out.sort_custom(func(x: PuzzleAtom, y: PuzzleAtom) -> bool:
+		return x.index < y.index)
+	return out
+
+
+## The one an ordered gate is waiting for: lowest `index` of its kind still
+## unsolved. `null` once the run is complete. Public because a director has to be
+## able to ask which atom is next separately from whether the door opened.
+func next_in(id: StringName) -> PuzzleAtom:
+	for a in kin(id):
+		if not a.is_solved():
+			return a
+	return null
+
+
 # --- The gate -----------------------------------------------------------------
 
 ## Every atom answered, and the key spent if one is wanted.
@@ -147,6 +185,19 @@ func unlocked() -> bool:
 ## verb -- "THE EYE IS SHUT", not "LOCKED" -- and counts the work left when there
 ## is more than one of a kind.
 func refusal_line() -> String:
+	# **An ordered gate speaks for the sequence it is still inside** -- which one
+	# is next, not how many are left. The two lines carry the same numbers and mean
+	# opposite things (`PuzzleAtoms.refusal_next_for`), and a player being asked for
+	# an ORDER who is told a COUNT has been told the wrong fact about their own
+	# room. Once the run is complete this falls through to the ordinary line below,
+	# which is how the eye row's door goes from naming an eye to naming the key.
+	if ordered:
+		var next := _the_sequence()
+		if next != null:
+			var run := kin(next.atom_id)
+			# Through the atom, never through the table -- `refusal_next` is
+			# overridable for the same reason `refusal` is.
+			return next.refusal_next(run.find(next) + 1, run.size())
 	var left := 0
 	var id: StringName = &""
 	var speaker: PuzzleAtom = null
@@ -179,6 +230,27 @@ func refusal_line() -> String:
 	return speaker.refusal(left, total)
 
 
+## The unfinished run this gate is standing in front of, if there is one.
+##
+## A kind with only ONE member in the set is not a sequence and is skipped -- the
+## gate room's small key is exactly that, so the eye row's door names an eye while
+## the row is unfinished and the key once it is not. If two kinds were both runs
+## and both unfinished the first in adoption order wins, and no gate in the game
+## is built that way; the rule is written down so the next one is deliberate.
+func _the_sequence() -> PuzzleAtom:
+	var seen: Array[StringName] = []
+	for a in _atoms:
+		if seen.has(a.atom_id):
+			continue
+		seen.append(a.atom_id)
+		if kin(a.atom_id).size() < 2:
+			continue
+		var next := next_in(a.atom_id)
+		if next != null:
+			return next
+	return null
+
+
 ## Spend the key here, at the door, and then open as a `LockedDoor` does.
 ##
 ## `_key_spent` is what stops `super()`'s own `unlocked()` check failing on the
@@ -200,8 +272,16 @@ func activate(by: Node3D) -> void:
 
 # --- Atoms moving -------------------------------------------------------------
 
-func _on_atom_changed(_atom: PuzzleAtom) -> void:
-	if is_open():
+func _on_atom_changed(atom: PuzzleAtom) -> void:
+	if is_open() or _breaking:
+		return
+	# **Sequence, and it is the whole of combinator 2.** Checked before anything
+	# else looks at the count, because an out-of-turn solve must never be a solve
+	# the door counted for even one frame -- `unsolved_count()` reaching zero here
+	# is `_swing()`, and a door that opened on the way past would be a sequence
+	# that was decoration.
+	if ordered and atom != null and atom.is_solved() and _out_of_turn(atom):
+		_break_the_sequence(atom)
 		return
 	_refresh_prompt()
 	if unsolved_count() > 0:
@@ -221,3 +301,53 @@ func _on_atom_changed(_atom: PuzzleAtom) -> void:
 		_swing()
 	elif Prompt.focus == self:
 		Bus.prompt_changed.emit("%s TO OPEN" % Glyph.cap(&"interact"))
+
+
+# --- Sequence (`docs/PUZZLES.md` §3, combinator 2) -----------------------------
+#
+# Two short methods and one guard, which is the price §8.1 would have quoted for
+# this row: no prop, no manager, no second signal. The atoms already emit
+# `solved`, the gate is already listening, and `PuzzleAtom.index` was already
+# exported and already set by every placer that builds more than one of a kind --
+# it was simply read by nothing but the flag.
+#
+# **The order is per KIND, not across the whole set.** A gate room's set is three
+# eyes AND a small key; a rule that ordered those together would make picking the
+# key up out of turn undo the row that produced it. Two runs of different atoms in
+# one gate are independent sequences, which is also the only reading of "trip N
+# atoms in order" that survives §3's nest sitting on top of it.
+
+
+## Did this atom answer out of turn? True when something of its own kind, lower
+## in the run, is still unsolved.
+func _out_of_turn(atom: PuzzleAtom) -> bool:
+	for a in _atoms:
+		if a.atom_id != atom.atom_id or a == atom:
+			continue
+		if not a.is_solved() and a.index < atom.index:
+			return true
+	return false
+
+
+## **Put the whole run back.** The player watched the row light and watched it go
+## out; that is the combinator, and a version that merely refused the offending
+## atom would be a lock with a hint rather than a sequence.
+##
+## `reset()` and not `unsolve()` -- the eye is latching, and the flag has to go
+## with the light or the row comes back lit on the next rebuild (see that method).
+##
+## The noise is the game's one refusal sound, fired ONCE and from the atom that
+## was struck rather than from the door: the player is standing at the row with a
+## bow, not at the door, and three `craft_fail`s in a frame is a buzzer.
+func _break_the_sequence(atom: PuzzleAtom) -> void:
+	_breaking = true
+	for a in kin(atom.atom_id):
+		a.reset()
+	_breaking = false
+	Bus.request_sfx.emit(&"craft_fail", atom.global_position)
+	_tint_sigil(0.0)
+	_refresh_prompt()
+	# The line is now naming a different atom, so a player standing at the door
+	# when the row went out is told so without walking away and back.
+	if Prompt.focus == self:
+		Bus.prompt_changed.emit(refusal_line())
