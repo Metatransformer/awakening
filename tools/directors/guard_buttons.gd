@@ -26,7 +26,7 @@ extends RefCounted
 ## pressed. (`rig._send` does the `InputEventAction` half as well as the action
 ## state — CLAUDE.md §3's `Input.action_press` row.)
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/guard_buttons.gd --out=/tmp/guard/x.png
 

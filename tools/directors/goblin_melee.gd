@@ -37,7 +37,7 @@ extends RefCounted
 ##   * **corpses** — twelve kills, because a corpse flies down a different path
 ##     and that path was wiping its own arc (card #87).
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/goblin_melee.gd --out=/tmp/gob/x.png
 

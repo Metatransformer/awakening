@@ -6,7 +6,7 @@ extends RefCounted
 ## needs the real camera in the scene, because beat G is about the camera going
 ## deaf while the wheel is up.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/kit_wheel.gd \
 ##     --out=/tmp/wheel/x.png --warmup=60
