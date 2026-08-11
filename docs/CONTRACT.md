@@ -1068,6 +1068,21 @@ one hero, one room, so the honest impact frame is the cheap one. Shake obeys
 `Settings.camera_shake`; hit-stop and sound do not, because shake is the one
 that makes people ill.
 
+There is a second, slower way to bend time — `Feel.slowmo(scale, seconds)`, which
+the perfect dodge uses (`docs/BESTIARY.md` §3.6). It is called directly rather
+than through a signal because, unlike a hit-stop, it is not a reaction anything
+else should be able to trigger by accident.
+
+**`Engine.time_scale` has exactly one writer**, `Feel._apply_time_scale()`, and
+**a stop outranks a dip**. Both deadlines live on the wall clock
+(`Time.get_ticks_msec()`) for the obvious reason: a scaled clock cannot measure
+its own scaling, and a hit-stop landing inside a slow-mo would otherwise stretch
+to three times its length. The corollary belongs to everything that *draws* a
+reaction: **a `Tween` receives delta 0 while time is stopped**, so any VFX that
+must keep moving through a hit-stop is a `Node3D` with `PROCESS_MODE_ALWAYS` that
+animates itself in `_process` off the wall clock — `ImpactVfx` and `FlourishVfx`
+are both built that way, and neither is negotiable.
+
 ### Holds — every required hold shows a gauge, and there is one gauge
 
 **A hold the player can fail must draw its progress, from the moment the hold

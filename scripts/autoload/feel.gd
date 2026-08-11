@@ -54,6 +54,10 @@ var _noise: FastNoiseLite
 var _noise_t: float = 0.0
 ## Wall-clock deadline for the current hit-stop, in msec. Zero when not stopped.
 var _stop_until: int = 0
+## The slow-motion, on the same wall clock and for the same reason (`_tick_stop`).
+## Zero when time is running at speed.
+var _slow_until: int = 0
+var _slow_scale: float = 1.0
 ## The roll `_tick_shake` computed this frame, restamped just before the draw.
 ## See `_on_pre_draw`.
 var _roll: float = 0.0
@@ -134,7 +138,41 @@ func hitstop(frames: int) -> void:
 	var seconds := minf(float(frames) / 60.0, MAX_STOP_SECONDS)
 	var until := Time.get_ticks_msec() + int(seconds * 1000.0)
 	_stop_until = maxi(_stop_until, until)
-	Engine.time_scale = 0.0
+	_apply_time_scale()
+
+
+## Run the world slow for `seconds` of REAL time. `scale` is the multiplier —
+## `K.SLOWMO_SCALE` (0.34) is the perfect dodge's dip.
+##
+## Two things make this different from `hitstop` rather than a softer version of
+## it, and both are why they are separate verbs:
+##
+##   A stop is an IMPACT and a dip is a WINDOW. `hitstop` takes the later of two
+##   deadlines because three deaths in one frame must not multiply; this takes
+##   the SLOWER of two scales and the later deadline, because a second perfect
+##   dodge inside the first one's window is a player doing well and the answer to
+##   that is more time, not a scale that fights itself.
+##
+##   A stop outranks a dip. Land a blow during the slow-motion and the world
+##   still freezes on the contact frame — see `_apply_time_scale`, which is why
+##   neither of these writes `Engine.time_scale` directly any more. The first cut
+##   did, and a hit-stop that ended inside a dip restored time to 1.0 and
+##   cancelled the rest of the dodge's reward.
+##
+## `seconds` is wall-clock and NOT scaled by `scale`: 0.55 s at a third speed is
+## 0.55 s of the player's life either way, and it is the player's life this is
+## budgeted against.
+func slowmo(scale: float, seconds: float) -> void:
+	if seconds <= 0.0:
+		return
+	var s := clampf(scale, 0.05, 1.0)
+	var until := Time.get_ticks_msec() + int(seconds * 1000.0)
+	if _slow_until == 0:
+		_slow_scale = s
+	else:
+		_slow_scale = minf(_slow_scale, s)
+	_slow_until = maxi(_slow_until, until)
+	_apply_time_scale()
 
 
 ## Shake the camera. `strength` is trauma in 0..1 (0.2 a tap, 0.5 a solid hit,
@@ -177,23 +215,49 @@ func damage_vignette(strength: float = 0.55) -> void:
 ## it -- the offsets would still work and only the roll would go missing, which
 ## is the kind of half-working that takes an afternoon to see.
 func _process(delta: float) -> void:
-	_tick_hitstop()
+	_tick_time()
 	_tick_shake(delta)
 	_tick_vignette(delta)
 
 
-## The stop ends on the WALL clock, not on a timer awaited inside the freeze.
+## Both clocks end on the WALL clock, not on a timer awaited inside the freeze.
 ## `Engine.time_scale = 0.0` stops the entire simulation, so a stop that failed
 ## to lift would not be a missing effect -- it would be the game hung solid with
 ## no error printed. This runs every idle frame (delta is 0 while frozen, but the
 ## callback still fires) and cannot be orphaned by a scene change or a pause.
-func _tick_hitstop() -> void:
-	if _stop_until == 0:
-		return
-	if Time.get_ticks_msec() < _stop_until:
-		return
-	_stop_until = 0
-	Engine.time_scale = 1.0
+##
+## The dip is on the same clock for the same reason and for one more: a slow
+## world would stretch a timer measured in game seconds by exactly the factor
+## the dip applies, so `K.SLOWMO_TIME` would mean 1.6 s rather than 0.55.
+func _tick_time() -> void:
+	var now := Time.get_ticks_msec()
+	var changed := false
+	if _stop_until != 0 and now >= _stop_until:
+		_stop_until = 0
+		changed = true
+	if _slow_until != 0 and now >= _slow_until:
+		_slow_until = 0
+		_slow_scale = 1.0
+		changed = true
+	if changed:
+		_apply_time_scale()
+
+
+## The ONE writer of `Engine.time_scale`, and the only reason both effects can
+## coexist. A stop outranks a dip: an impact frame during a perfect dodge's
+## slow-motion still freezes, and when it lifts, time goes back to the DIP
+## rather than to full speed.
+##
+## Written as a recompute from both deadlines rather than as "restore what it
+## was", because "what it was" is a fourth piece of state and the bug it ships
+## is a world permanently stuck at a third speed after two effects overlap once.
+func _apply_time_scale() -> void:
+	if _stop_until != 0:
+		Engine.time_scale = 0.0
+	elif _slow_until != 0:
+		Engine.time_scale = _slow_scale
+	else:
+		Engine.time_scale = 1.0
 
 
 func _tick_shake(delta: float) -> void:

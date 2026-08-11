@@ -99,7 +99,21 @@ const LOOPING := [
 ## man standing there holding an axe. Cut here rather than in hero.gd so the
 ## clip's length keeps meaning "the move", which is what `_jump_anim` sizes the
 ## impact half of the slam off (see Hero.clip_slam for the frame table).
+## `ex_parry` is 0.67 s of which the SHOVE is 0.00-0.43: bone rotation peaks at
+## 0.20 and is down to a fifth of that by 0.50, while the hips climb 0.409 ->
+## 0.480 and stop. Everything after is the actor standing in a guard. Cut at
+## 0.50 so `K.PARRY_WINDOW` + `K.PARRY_RECOVER` (0.62 s) compresses onto the
+## bash and not onto the bash plus a quarter-second of nothing.
+## `ex_jump_attack` is the leaping overhead and it is 2.33 s of which the game
+## uses all but the tail: it crouches to 0.467 by 0.37, leaves the ground,
+## apexes at 1.001 around 0.87, comes down through the strike (the rotation
+## peak, at 1.20), bottoms out in a deep kneeling landing at 0.202 by 1.50, and
+## is back on its feet by 2.10. After that: a man standing there holding a
+## sword. Unlike the other entries here this one is trimmed for the LANDING and
+## not for the strike -- the kneel is what the clip is worth having.
 const TRIM := {
+	"ex_parry": 0.50,
+	"ex_jump_attack": 2.10,
 	"ex_backflip": 1.45,
 	"ax_melee_attack_360_low": 1.35,
 	"ex_jump": 1.67,

@@ -38,7 +38,22 @@ extends Node3D
 ## SLAM is the light button pressed in the AIR, and it is the one Intent that is
 ## never buffered: it is only legal while the hero is off the floor, and a press
 ## honoured two swings later would fire it at a hero standing still. See `_press`.
-enum Intent { LIGHT, HEAVY, SPIN, DASH, SLAM }
+##
+## PARRY is the light button pressed from behind a raised shield — the input the
+## DASH used to have. It is the SECOND never-buffered Intent, and for a sharper
+## version of the slam's reason: a parry is a claim about WHEN, and a claim about
+## when that is honoured a third of a second late is not a late parry, it is a
+## different one. See `_press`.
+##
+## The dash did not lose its home, it got a better one: `_riposte_t`. It is now
+## what an attack press means in the window a successful parry opens, which is
+## the exact situation the move was designed for — a body knocked away from you
+## and a gap to close before it gets up.
+##
+## FLURRY is the leaping overhead, and it is what an attack press means in the
+## window a PERFECT DODGE opens (`_flurry_t`). Not buffered either: the window it
+## belongs to is short and running on a clock the buffer knows nothing about.
+enum Intent { LIGHT, HEAVY, SPIN, DASH, SLAM, PARRY, FLURRY }
 
 ## Read `attack` with exact modifier matching. THIS IS WHAT MAKES THE HEAVY A
 ## SEPARATE BUTTON ON THE KEYBOARD, and without it the strong attack is unusable.
@@ -310,6 +325,54 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 @export_group("Shield")
 ## Half-angle of the block cone, degrees. A blow from outside it is not blocked.
 @export var block_cone: float = 70.0
+## Half-angle of the PARRY cone, degrees. Tighter than the block, and that is the
+## only thing about the parry that is harsher than the guard it comes out of.
+##
+## A block is a wall — it is reasonable for it to stop anything the shield is
+## roughly pointed at. A parry is a meeting: the hero throws the shield at one
+## specific thing, and catching a blow arriving from 65 degrees off that would
+## read as the game being generous with a move that is supposed to be a read.
+## Still wide enough that aiming is not the skill being tested; the timing is.
+@export var parry_cone: float = 45.0
+
+@export_group("Flurry")
+## The leaping overhead thrown out of a perfect dodge. It is the biggest single
+## sword blow in the kit outside the slam, and it should be: the price is the
+## hardest defensive read in the game, and a reward smaller than the charged spin
+## would make the correct play "dodge, then do the thing you could always do".
+@export var flurry_damage: int = 5 * K.QUARTER
+## Longer than the lunge's 0.78, because this leap carries its own anticipation
+## crouch (`Hero.clip_flurry`) where the lunge's clip does not. It is also thrown
+## in slow motion more often than not, so the wall-clock cost is smaller than the
+## number looks. [tune]
+@export var flurry_swing_time: float = 1.02
+## Opens at 0.57 because that is where `ex_jump_attack` strikes — 1.20 of its
+## 2.10 — and the window was fitted to the clip rather than the clip to the
+## window. See `Hero._SWING_START_OFFSET` for why that direction round.
+@export var flurry_damage_window := Vector2(0.57, 0.74)
+## It LAUNCHES, and that is most of the payoff. `K.KNOCKBACK_HEAVY` is weight 1
+## on the impact scale, so a goblin caught by this goes up nearly every time
+## (docs/BESTIARY.md §3.5) — which is precisely the "sent flying" this whole
+## reaction system exists for, arriving on the move you had to earn.
+@export var flurry_knockback: float = K.KNOCKBACK_HEAVY
+## Seconds of forward drive and the hop off the floor. The drive is longer than
+## the lunge's 0.24 because the leap is higher and the clip spends real time in
+## the air. See `Hero.request_flurry`.
+@export var flurry_drive_time: float = 0.34
+## Metres per second UP, and it is priced against the clip rather than picked.
+## `K.GRAVITY` is 22, so 5.5 buys 0.69 m of rise and about half a second of air —
+## which puts touchdown a breath BEFORE `flurry_damage_window` opens at 0.57, so
+## the blow reads as the landing rather than as a swing taken in mid-air. It
+## started at 2.4, matching the lunge's hop, and 2.4 is 0.13 m: a jump attack
+## that never visibly left the floor. [tune]
+@export var flurry_hop: float = 5.5
+## How far short of the target the leap aims to land, metres. Also doubles as the
+## stride when there is genuinely nothing in front — see `Hero.request_flurry`.
+@export var flurry_stop_short: float = 1.5
+## How far and how wide the leap looks for something to land on when the player
+## is not locked on, which after a dodge is most of the time. See `_leap_target`.
+@export var flurry_seek_range: float = 6.0
+@export var flurry_seek_cone: float = 75.0
 
 @export_group("Audio")
 @export var sfx_swing: AudioStream = preload("res://audio/sfx/swing.ogg")
@@ -406,6 +469,20 @@ var _chain_step: int = 0
 var _chain_timer: float = 0.0
 ## An Intent pressed mid-swing and owed to the player, or -1.
 var _buffer: int = -1
+## Seconds into the parry, or -1.0 when there is no parry running. Its own clock
+## and not `_swing_t`, because the parry has no hitbox, no damage window and
+## nothing for `_advance_swing` to do — the two share only the fact that both
+## commit the hero.
+var _parry_t: float = -1.0
+## Seconds left in the two windows a successful reaction opens. Both make the
+## SAME BUTTON mean something else for a moment, which is the whole idea: the
+## player does not learn a new input, they learn that the one they have gets
+## better when they read the fight correctly.
+##
+##   `_riposte_t`  a parry landed -> `attack` is the DASH (`K.RIPOSTE_WINDOW`)
+##   `_flurry_t`   a dodge landed -> `attack` is the LEAP (`K.FLURRY_WINDOW`)
+var _riposte_t: float = 0.0
+var _flurry_t: float = 0.0
 var _hit_this_swing: Dictionary = {}
 ## Seconds the attack button has been held, or -1.0 when it is not down. The
 ## sentinel matters: 0.0 is a legitimate reading on the frame of the press.
@@ -882,8 +959,15 @@ func _physics_process(delta: float) -> void:
 	# thing Z does is put the camera back behind him, and a hero who turns to the
 	# lens at the same time leaves that ease with no error to close. So in here
 	# the button is the camera half of Z and nothing else.
+	#
+	# AND NOT DURING A PARRY, which is the entire price of the move. The window is
+	# 0.20 s and the recovery behind it is 0.42, and for all 0.62 the shield is
+	# DOWN even though the button is still held — that is what "get it wrong and
+	# you are vulnerable" is, expressed as the one line that makes it true. It
+	# also makes a landed parry honest in the other direction: you cannot catch a
+	# blow and be back behind the guard for the next one on the same press.
 	var want_block := not locked and not rolling and not _hero.first_person() \
-		and Input.is_action_pressed(&"shield") and _swing_t < 0.0
+		and Input.is_action_pressed(&"shield") and _swing_t < 0.0 and _parry_t < 0.0
 	if want_block != blocking:
 		blocking = want_block
 		_hero.set_blocking(blocking)
@@ -941,6 +1025,17 @@ func _physics_process(delta: float) -> void:
 
 	if _swing_t >= 0.0:
 		_advance_swing(delta)
+
+	# The parry's own clock and the two windows a landed reaction opens. Ticked
+	# OUTSIDE the `locked` gate, exactly as the chain window above is and for the
+	# same reason: a shop opening mid-parry should let the move finish and the
+	# windows lapse, not freeze the player behind a panel holding a shield out.
+	if _parry_t >= 0.0:
+		_parry_t += delta
+		if _parry_t >= K.PARRY_WINDOW + K.PARRY_RECOVER:
+			_parry_t = -1.0
+	_riposte_t = maxf(_riposte_t - delta, 0.0)
+	_flurry_t = maxf(_flurry_t - delta, 0.0)
 
 
 ## The D-pad, which is the whole equipment screen: three cycles and no bindings.
@@ -1066,13 +1161,36 @@ func _tick_light_button() -> void:
 	if not _hero.is_on_floor():
 		_press(Intent.SLAM)
 		return
-	# Shield up, sword out: the press is the DASH ATTACK, not a light swing.
-	# This is OOT's R+B and it is the shield's other half — the guard has
-	# always been a way of standing still, and the stab is how you come off
-	# it. A guarded player who presses attack is not asking for the ordinary
-	# swing he could have thrown from anywhere.
-	if blocking:
+	# THE TWO EARNED WINDOWS, ahead of everything else including the guard.
+	#
+	# Both are short, both were paid for with a read the player got right, and
+	# both make this one button mean something better for a moment. Checking them
+	# first is what stops the reward being silently eaten by a stance the player
+	# happens to be in — a hero who parries and then raises his shield again while
+	# the enemy is still on its back must not press attack and get another parry.
+	#
+	# FLURRY outranks RIPOSTE when both are somehow live. It is the rarer read and
+	# the bigger blow, and a player who has just done both should be shown the
+	# better of the two.
+	if _flurry_t > 0.0:
+		_press(Intent.FLURRY)
+		return
+	if _riposte_t > 0.0:
 		_press(Intent.DASH)
+		return
+	# Shield up, sword out: the press is the PARRY.
+	#
+	# This input used to be the dash — OOT's R+B, the stab out of the guard — and
+	# the two genuinely collide, because there is exactly one attack button and a
+	# raised shield is exactly one modifier. Resolved rather than split: the parry
+	# takes the input because it is the move that must be reachable in the quarter
+	# second before a blow lands, and the dash moves to `_riposte_t`, where it is
+	# the answer to a body you have just knocked over rather than a thing you can
+	# throw at any moment from a stance you were already holding.
+	#
+	# What the guard buys is therefore no longer "a better opener". It is a bet.
+	if blocking:
+		_press(Intent.PARRY)
 		return
 	_press(Intent.LIGHT)
 
@@ -1272,7 +1390,17 @@ func _press(intent: int) -> void:
 		# press pays out. Buffered, it came out as a hero snapping into a dive
 		# pose on the floor and rooting himself there for no reason the player
 		# could connect to the button they pressed a swing ago.
-		if intent != Intent.SLAM and _swing_t / maxf(_swing_dur, 0.01) >= chain_buffer_from:
+		# A PARRY is never owed either, and for a sharper version of the same
+		# reason. Every other Intent describes a move the hero could make whenever
+		# it is finally honoured; a parry is a claim about a specific moment, and
+		# one paid out a third of a second late is not a late parry — it is the
+		# guard dropping for 0.62 s at a moment the player did not choose.
+		#
+		# The FLURRY is not buffered for a third reason: its window is running on
+		# a clock the buffer cannot see, so a press owed across a long swing could
+		# pay out a leap after the window that authorised it had closed.
+		if intent != Intent.SLAM and intent != Intent.PARRY and intent != Intent.FLURRY \
+				and _swing_t / maxf(_swing_dur, 0.01) >= chain_buffer_from:
 			_buffer = intent
 		return
 	_begin(intent)
@@ -1309,6 +1437,10 @@ func _begin(intent: int) -> void:
 			_spin_swing()
 		Intent.DASH:
 			_dash_swing()
+		Intent.PARRY:
+			_parry()
+		Intent.FLURRY:
+			_flurry_swing()
 		Intent.HEAVY:
 			# THE LOCK DECIDES, and it decides HERE rather than at the press, so a
 			# trigger buffered during a swing that broke the lock comes out as the
@@ -1407,6 +1539,212 @@ func _dash_swing() -> void:
 	_aim_sword()
 	_commit(dash_swing_time, dash_damage_window, dash_damage, dash_knockback,
 		K.HITSTOP_HEAVY, randf_range(0.86, 0.94), K.STUN_HEAVY)
+
+
+## The parry: the shield thrown out to meet a blow that has not landed yet.
+##
+## It is the only move in the file that does not go through `_commit`, and that
+## is the definition of it rather than an omission — `_commit` is what gives a
+## move a hitbox and a damage window, and a parry damages nothing. What it has
+## instead is `_parry_t`, a window `Hero.take_hit` asks about (`parries`).
+##
+## IT COSTS NO STAMINA, deliberately, and it is the only committed move in the
+## kit that does not. The price is already paid in `K.PARRY_RECOVER` — 0.42 s
+## with the guard down — and that price is the mechanic. A stamina cost on top
+## would mean a player who reads the fight correctly is also poorer for it, and
+## a bar that decides whether a REACTION is available turns a timing move into a
+## resource move. See K's note on the two reactions.
+func _parry() -> void:
+	# A parry already running does not restart. Mashing must not refresh the
+	# window — that would turn the one move in the game with a real punish into a
+	# button you hold down.
+	if _parry_t >= 0.0:
+		return
+	if not _hero.request_parry(K.PARRY_WINDOW + K.PARRY_RECOVER):
+		return
+	_parry_t = 0.0
+	# The guard comes down NOW rather than on the next frame's `want_block` pass.
+	# One frame of a raised shield inside a parry is one frame in which a blow
+	# would be BLOCKED instead of parried, and it is the first frame — the one a
+	# player aiming at the front of the window is most likely to hit.
+	if blocking:
+		blocking = false
+		_hero.set_blocking(false)
+		Bus.guard_changed.emit(false)
+	# The chain does not survive it. A parry is not step one of anything.
+	_chain_step = 0
+	_chain_timer = 0.0
+	# The swing's own whoosh, pitched up: it is a shield being shoved, not a
+	# blade, and the shove is a lighter, faster movement than any swing here.
+	if _swing_player != null:
+		_swing_player.pitch_scale = randf_range(1.18, 1.28)
+		_swing_player.play()
+
+
+## True while a blow arriving from `from_pos` would be PARRIED rather than
+## merely survived. Asked by `Hero.take_hit`, which owns the order the defences
+## are tried in.
+##
+## Two gates, and the cone is the less interesting one. The window is what this
+## is: `_parry_t` counts from the press, and only its first `K.PARRY_WINDOW` are
+## live. Everything after that is the recovery, during which this returns false
+## and `blocks()` also returns false — which is the hole, stated twice, in the
+## two functions that would otherwise fill it.
+func parries(from_pos: Vector3) -> bool:
+	if _parry_t < 0.0 or _parry_t > K.PARRY_WINDOW or _hero == null:
+		return false
+	var to := K.flat(from_pos - _hero.global_position)
+	if to == Vector3.ZERO:
+		return false
+	var fwd := -_hero.global_transform.basis.z
+	return rad_to_deg(fwd.angle_to(to)) <= parry_cone
+
+
+## A blow was caught. Everything a successful parry IS happens here.
+##
+## The order is the order the player receives it, which is the same order
+## `Enemy._on_damaged` uses: the world stops, the thing that swung is thrown, the
+## burst goes off, the camera kicks, and the window opens.
+func on_parried(hit: Hit) -> void:
+	var at := _hero.global_position + Vector3(0.0, 1.0, 0.0) \
+		+ K.flat(hit.from - _hero.global_position) * 0.55
+	# The hardest stop in the game, on the one frame that most deserves it. A
+	# parry is a read that came off and it should land like the game agreeing
+	# with you.
+	Bus.request_hitstop.emit(K.HITSTOP_HEAVY)
+	Bus.request_shake.emit(K.SHAKE_CRIT, 0.22)
+	FlourishVfx.parry(get_tree().current_scene, at)
+	# THE OPENING, which is the thing that was actually asked for. The attacker
+	# is thrown and staggered rather than damaged — a parry that also hurt would
+	# be a free attack, and what makes it worth the risk is the second you get
+	# afterwards, not the quarter-heart.
+	var body := _parried_body(hit.from)
+	if body != null:
+		body.call(&"stagger", _hero.global_position, K.PARRY_STAGGER, K.PARRY_SHOVE)
+	_riposte_t = K.RIPOSTE_WINDOW
+	# The parry itself is over the instant it lands. Leaving the recovery to run
+	# would mean the reward window opened onto a hero who could not use it — and
+	# the recovery is a punish for MISSING, which this did not.
+	_parry_t = -1.0
+	_hero.end_commitment()
+	Bus.parried.emit(at, body)
+	Bus.request_sfx.emit(&"shield_block", at)
+
+
+## WHO to throw, found from where the blow came from rather than from the blow.
+##
+## `Hit` carries `source` as a NAME and not a node, and the note on it explains
+## why: the only other thing that reads it is the run-ending screen, which draws
+## after the floor and everything standing on it has been freed. A node reference
+## added for this would be a field that is valid for one frame and dangling for
+## the one that matters. So this asks the world instead.
+##
+## Nearest body to `hit.from` wins, and the radius is tight — a swing's `from` is
+## the attacker's own position (see `DamageArea`), so the nearest enemy to it is
+## the attacker unless two are standing inside each other. Returning null is a
+## perfectly good outcome: an arrow, a spike floor or a hazard can all be parried
+## and none of them can be knocked over.
+func _parried_body(from: Vector3) -> Node:
+	var best: Node = null
+	var best_d := 1.4
+	for group in [&"enemy", &"boss"]:
+		for n in get_tree().get_nodes_in_group(group):
+			var body := n as Node3D
+			if body == null or not body.has_method(&"stagger"):
+				continue
+			var d := body.global_position.distance_to(from)
+			if d < best_d:
+				best_d = d
+				best = body
+	return best
+
+
+## A roll went through a live blow inside `K.DODGE_GRACE`. The dodge's whole
+## reward, which is deliberately the opposite shape to the parry's: nothing is
+## thrown, nothing is staggered, and the hero gets TIME instead.
+##
+## No hit-stop. A stop and a dip are both "the world slows down" and firing them
+## together reads as a stutter into slow motion rather than as slow motion —
+## `Feel._apply_time_scale` would hold the freeze first and the dip would begin
+## from behind it. The dodge is the one reaction in the game whose feedback is
+## not an impact, because nothing was impacted.
+func on_perfect_dodge(_hit: Hit) -> void:
+	Feel.slowmo(K.SLOWMO_SCALE, K.SLOWMO_TIME)
+	FlourishVfx.dodge(get_tree().current_scene, _hero.global_position)
+	# Gentle, and it is the only shake in the file below a landed jab. Something
+	# happened — but what happened is that nothing hit you, and a camera kick
+	# would say the opposite.
+	Bus.request_shake.emit(K.SHAKE_TAP * 0.7, 0.18)
+	_flurry_t = K.FLURRY_WINDOW
+	Bus.perfect_dodge.emit(_hero.global_position)
+	Bus.request_sfx.emit(&"dodge_roll", _hero.global_position)
+
+
+## The leaping overhead the dodge opens. The lunge's shape without the lock, and
+## the heaviest sword blow that does not need a jump under it.
+##
+## The window is spent whether or not this connects, which is the same rule the
+## rest of the kit lives by — a swing that whiffs is still a swing. What it is
+## NOT spent by is a refusal: `request_flurry` bails before anything happens if
+## the hero is mid-swing or off the floor, and eating the reward for a press the
+## game declined to honour is the one version of this that would feel unfair.
+func _flurry_swing() -> void:
+	if not _can_swing():
+		return
+	if not _hero.request_flurry(flurry_swing_time, flurry_drive_time, flurry_hop,
+			flurry_stop_short, _leap_target()):
+		return
+	_flurry_t = 0.0
+	Game.spend_stamina(K.STAMINA_LUNGE, true)
+	_chain_step = 0
+	_chain_timer = 0.0
+	if _yell_player != null:
+		_yell_player.pitch_scale = randf_range(0.97, 1.03)
+		_yell_player.play()
+	_aim_sword()
+	_commit(flurry_swing_time, flurry_damage_window, flurry_damage, flurry_knockback,
+		K.HITSTOP_HEAVY, randf_range(0.72, 0.80), K.STUN_HEAVY)
+
+
+## WHAT to leap at. The lock if there is one, otherwise the nearest body in front.
+##
+## The fallback is the whole reason this exists, because **after a dodge there is
+## almost never a lock**: the perfect dodge is thrown mid-panic, and asking the
+## player to have also been holding the shoulder button would make the reward for
+## the game's hardest read pay out into thin air most of the times it was earned.
+##
+## Without it, an unlocked leap covered a fixed stride — `flurry_stop_short * 1.6`
+## — and that number is 2.4 m, which is FURTHER than the range anything attacks
+## the hero from. The director caught it exactly: airborne, 0.68 m of rise, a
+## clean arc, and a goblin standing at full health behind the hero's back when the
+## blade came down.
+##
+## `seek_cone` is generous where `parry_cone` is tight, and deliberately so. A
+## parry is a claim about a direction the player chose; this is a leap the player
+## has already earned and only needs aimed.
+func _leap_target() -> Node3D:
+	var locked := _hero.lock_target()
+	if locked != null:
+		return locked
+	var here := _hero.global_position
+	var face := -_hero.global_transform.basis.z
+	var best: Node3D = null
+	var best_d := flurry_seek_range
+	for group in [&"enemy", &"boss"]:
+		for n in get_tree().get_nodes_in_group(group):
+			var body := n as Node3D
+			if body == null:
+				continue
+			var to := K.flat(body.global_position - here)
+			if to == Vector3.ZERO:
+				continue
+			if rad_to_deg(acos(clampf(to.dot(K.flat(face)), -1.0, 1.0))) > flurry_seek_cone:
+				continue
+			var d := body.global_position.distance_to(here)
+			if d < best_d:
+				best_d = d
+				best = body
+	return best
 
 
 ## The ordinary forward box, which is every swing except the spin. Called by

@@ -53,7 +53,14 @@ enum Dodge { FORWARD, BACK, LEFT, RIGHT }
 ## The three lights are separate values rather than an index into one clip
 ## because the animation tree needs one node per variant (see _add_swing), and a
 ## node cannot be addressed by a number that only exists in the combat script.
-enum Swing { LIGHT1, LIGHT2, LIGHT3, SPIN, LUNGE, DASH }
+##
+## PARRY is in here despite doing no damage, and that is not a hack: everything
+## `Swing` actually means is "a pose the hero is committed to for a while", and
+## the parry is the most committed thing in the kit (`K.PARRY_RECOVER`). What it
+## does NOT do is go through `HeroCombat._commit`, which is where a swing gets a
+## hitbox — so the parry is a swing to the animation tree and to the state
+## machine, and nothing at all to the damage system.
+enum Swing { LIGHT1, LIGHT2, LIGHT3, SPIN, LUNGE, DASH, PARRY, FLURRY }
 
 ## The hero's voice — the one grunt of effort the project has, spent on the jump
 ## and on the backflip (`_fire_jump`, `_fire_dodge`).
@@ -429,6 +436,26 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## every `slash` is an arc, and an arc played on a lunge reads as a man swinging
 ## at the air beside the thing he just closed on.
 @export var clip_dash: StringName = &"ss_attack_03"
+## The parry — the shield thrown forward out of a braced crouch. It is NOT one
+## of the two `ss_block_*` clips, which are a body absorbing something; this one
+## is a body going to meet it, and that is the whole read the parry needs. Also
+## picked off the render (tools/directors/flurry_lookdev.gd), which is where it
+## was confirmed that the arm being thrown is the LEFT one — a "block" clip that
+## turned out to be a sword shove would have been a parry the shield never
+## touched.
+@export var clip_parry: StringName = &"ex_parry"
+## The flurry attack — the leaping overhead the perfect dodge opens. A full
+## crouch, a launch, a fall with the blade held overhead, a strike, and a
+## landing on one knee with the point in the ground.
+##
+## It is a SECOND leaping strike in a library that already had two, and it earns
+## the slot rather than duplicating them: `clip_lunge` (ss_attack_01) is a
+## standing hop under a lock and `ax_melee_run_jump_attack` is cut to start
+## mid-descent because the SLAM's leap is a real jump the player already made.
+## This one carries its own anticipation and its own landing, which is exactly
+## what a move thrown from a standing start out of slow-motion needs and what
+## neither of the other two has.
+@export var clip_flurry: StringName = &"ex_jump_attack"
 ## A bow shot is TWO clips, not one, and they fire from two separate one-shots.
 ##
 ## It was one for a while — `bow_aim_recoil` alone, time-scaled across the whole
@@ -661,6 +688,19 @@ var _lunge_dir: Vector3 = Vector3.FORWARD
 var _lunge_speed: float = 0.0
 ## Seconds of damage immunity left. See take_hit().
 var _invuln: float = 0.0
+## Seconds since the current roll STARTED, and whether its perfect dodge has
+## already been paid out.
+##
+## The age is what makes the dodge about timing rather than about being mid-roll:
+## a dive travels, so without it an enemy swinging at the floor the hero has
+## already left would reward a dodge thrown half a second early. See
+## `K.DODGE_GRACE` and `take_hit`.
+##
+## Once per roll, because a pack is the common case: three goblins committing
+## together would otherwise pay out three slow-motions inside one dive, and the
+## second and third would be free.
+var _roll_age: float = 0.0
+var _perfect_spent: bool = false
 
 const _P_BLEND := "parameters/Loco/blend_position"
 const _P_STRIDE := "parameters/LocoScale/scale"
@@ -694,6 +734,7 @@ const _DODGE_FADE_OUT: Array[float] = [0.16, 0.14, 0.12, 0.12]
 ## a swing with no node fails loudly at build rather than silently not playing.
 const _SWING_NODES: Array[StringName] = [
 	&"Swing1", &"Swing2", &"Swing3", &"SwingSpin", &"SwingLunge", &"SwingDash",
+	&"SwingParry", &"SwingFlurry",
 ]
 ## Fades, in seconds, per Swing. The mid-chain lights are the tightest because a
 ## chain that fades between steps reads as lag.
@@ -705,8 +746,16 @@ const _SWING_NODES: Array[StringName] = [
 ## Easing into either one spends the release on a blend — which on the spin is
 ## the worst place to spend it, because the first thing the clip does is turn,
 ## and a turn eased out of locomotion reads as the hero losing his footing.
-const _SWING_FADE_IN: Array[float] = [0.06, 0.04, 0.05, 0.04, 0.08, 0.04]
-const _SWING_FADE_OUT: Array[float] = [0.16, 0.12, 0.18, 0.22, 0.20, 0.18]
+##
+## The PARRY has the tightest fade-in in the file, and it is the one place where
+## that is a correctness question rather than a feel one: the move is live for
+## `K.PARRY_WINDOW` (0.20 s), so a 0.06 s ease would spend nearly a third of the
+## active window on a blend out of the guard pose. The player has to be able to
+## see, on the frame they pressed, that the shield went out.
+## The FLURRY is the loosest, for the opposite reason: it comes out of a dodge's
+## recovery in slow-motion, where there is time to see the hero gather.
+const _SWING_FADE_IN: Array[float] = [0.06, 0.04, 0.05, 0.04, 0.08, 0.04, 0.02, 0.09]
+const _SWING_FADE_OUT: Array[float] = [0.16, 0.12, 0.18, 0.22, 0.20, 0.18, 0.14, 0.22]
 ## Seconds of each swing clip that are never played, indexed by Swing. This is
 ## the jump's trick (`jump_start_offset`) applied to the sword, and it is here
 ## for the same reason: the clip opens with an anticipation the game has no
@@ -746,7 +795,27 @@ const _SWING_FADE_OUT: Array[float] = [0.16, 0.12, 0.18, 0.22, 0.20, 0.18]
 ##
 ## Every offset was checked against the hips track for exactly the pop that
 ## caught LIGHT3: none of these starts more than 0.03 m off standing height.
-const _SWING_START_OFFSET: Array[float] = [0.22, 0.46, 0.47, 0.41, 0.00, 0.17]
+##
+## The two additions are the two places the formula does not apply, and for
+## opposite reasons:
+##
+##   PARRY   has no damage window at all, so there is no `f` to solve for. What
+##           it has instead is `K.PARRY_WINDOW`, which is live on the frame of
+##           the press — so the number wanted is simply "where does the shield
+##           start going forward", and that is 0.08 (`ex_parry` holds a braced
+##           crouch for two frames before the hips begin to climb). Cutting more
+##           than that pops the body 0.09 m upward on the first frame.
+##   FLURRY  needs NO cut, like the lunge, and for the same reason plus a
+##           better one. `ex_jump_attack` strikes at 1.20 of its 2.10 — 0.57 of
+##           its length — and `flurry_damage_window` is set to 0.57 to match,
+##           rather than the offset being solved to fit a window picked first.
+##           That direction round is what keeps the anticipation crouch: it runs
+##           to 0.37 and skipping into it would launch the hero from a pose that
+##           is already 0.09 m off the floor. A wind-up you can see is worth
+##           keeping on the one move in the kit that is thrown IN SLOW MOTION.
+const _SWING_START_OFFSET: Array[float] = [
+	0.22, 0.46, 0.47, 0.41, 0.00, 0.17, 0.08, 0.00,
+]
 
 const _P_BOW_DRAW := "parameters/BowDraw/request"
 const _P_BOW_DRAW_SCALE := "parameters/BowDrawScale/scale"
@@ -1144,6 +1213,8 @@ func _swing_clip(variant: int) -> StringName:
 		Swing.SPIN: return clip_spin
 		Swing.LUNGE: return clip_lunge
 		Swing.DASH: return clip_dash
+		Swing.PARRY: return clip_parry
+		Swing.FLURRY: return clip_flurry
 		_: return clip_attack
 
 
@@ -1823,6 +1894,8 @@ func _try_start_roll(wish: Vector3, mag: float) -> bool:
 	if not Game.spend_stamina(roll_stamina):
 		return false
 	state = MoveState.ROLL
+	_roll_age = 0.0
+	_perfect_spent = false
 	_roll_dir = dir.normalized()
 	_roll_keeps_facing = target != null or blocking
 	# Locked or guarding, the body keeps watching through the whole dodge; the
@@ -1957,6 +2030,7 @@ func _tick_turn180(delta: float) -> void:
 
 func _tick_roll(delta: float) -> void:
 	_state_timer -= delta
+	_roll_age += delta
 	_track_lock(delta)
 	_speed = _dodge_speed
 	_set_planar_velocity(_roll_dir * _dodge_speed)
@@ -2215,6 +2289,106 @@ func request_dash(duration: float, drive_time: float, speed: float) -> bool:
 	_lunge_speed = speed
 	_lunge_left = drive_time
 	_speed = speed
+	return true
+
+
+## Hand the hero back to locomotion NOW, cutting short whatever commitment he is
+## serving. The one caller is the landed parry (`HeroCombat.on_parried`): the
+## recovery it cancels is a punish for MISSING, and a player who did not miss
+## should not be standing in it while the body they just threw is still in
+## the air.
+##
+## It does not touch the animation. The one-shot in flight fades out on its own
+## `_SWING_FADE_OUT`, which is a shield arm settling back down over a fifth of a
+## second — and the alternative, snapping the pose off on the frame of the catch,
+## would cut the most legible thing on screen at the moment it is most worth
+## looking at.
+##
+## Deliberately narrow: it refuses anything that is not an ATTACK, so it can
+## never be the thing that yanks the hero out of a roll or off a hookshot chain.
+func end_commitment() -> void:
+	if state != MoveState.ATTACK:
+		return
+	state = MoveState.GROUND
+	_state_timer = 0.0
+	_lunge_left = 0.0
+
+
+## The parry: the shield thrown forward, and the hero planted behind it.
+##
+## It goes through `request_attack` like every other commitment, which is what
+## gives it the thing it most needs — you cannot steer out of it. `MoveState`
+## has no PARRY value and does not want one: the difference between this and a
+## swing is entirely what HeroCombat does with the window, and a state that
+## behaves identically to ATTACK is a state that exists to be forgotten in one
+## of the six places `state` is matched on.
+##
+## Rooted rather than driven. The dash explodes out of the guard and this does
+## not, because a parry that also closed distance would be strictly better than
+## the dash at the dash's own job — and because the whole move is a bet that the
+## thing in front of you is about to arrive where you are already standing.
+func request_parry(duration: float) -> bool:
+	if not request_attack(duration, Swing.PARRY):
+		return false
+	_speed = 0.0
+	_set_planar_velocity(Vector3.ZERO)
+	return true
+
+
+## The flurry attack: a leap onto whatever is in front, thrown out of the window
+## a perfect dodge opens.
+##
+## The lunge's machinery with the lock requirement removed, and that removal is
+## the design rather than a shortcut. `request_lunge` refuses without a target
+## because the leap is what Z-targeting BUYS; this one has already been paid for
+## by the dodge, so demanding a lock as well would mean the reward for the
+## hardest defensive read in the game silently did nothing whenever the player
+## had not also pressed the shoulder button.
+##
+## It still aims at a `target` when there is one — `HeroCombat._leap_target()`
+## picks it, the lock if the player has one and the nearest body in front if not
+## — for the same reason `request_attack` turns the body: a leap that lands
+## somewhere other than where the player was looking is a leap they will read as
+## broken, and after a dodge the hero is very often facing away from the thing
+## he just dodged. WHO to jump at is a combat question; this only does the
+## arithmetic that turns "there is a goblin 1.9 m away" into a speed.
+func request_flurry(duration: float, drive_time: float, hop: float,
+		stop_short: float, target: Node3D = null) -> bool:
+	if not request_attack(duration, Swing.FLURRY):
+		return false
+	var to := _forward()
+	var dist := 0.0
+	if target != null:
+		# Flattened by hand, NOT with K.flat — that normalises, and a distance read
+		# off it is 1.0 for everything in the world. `request_lunge` carries the
+		# same note and the same bug behind it.
+		var delta := target.global_position - global_position
+		var flat := Vector3(delta.x, 0.0, delta.z)
+		dist = flat.length()
+		if dist > 0.001:
+			to = flat / dist
+			facing_yaw = atan2(to.x, to.z)
+	_lunge_dir = to
+	# With no target there is nothing to close on, so the leap covers a fixed
+	# stride instead of a computed gap. `stop_short` is doing double duty as that
+	# stride, which is honest: it is the distance the hero wants to end up from
+	# whatever he jumped at, and with nothing there that is the whole jump.
+	var gap := maxf(dist - stop_short, 0.0) if target != null else stop_short * 1.6
+	_lunge_speed = minf(gap / maxf(drive_time, 0.05), lunge_max_speed)
+	_lunge_left = drive_time
+	_speed = _lunge_speed
+	# THROUGH `_jump_impulse`, NOT `velocity.y`. Writing the vertical here does
+	# nothing at all: `is_on_floor()` still reports the last `move_and_slide`, so
+	# on the frame the leap starts it is true and `_apply_gravity` overwrites the
+	# launch with its -0.5 snap bias before the body has moved a millimetre. The
+	# jump is applied inside `_apply_gravity` for exactly this reason and the
+	# comment there says so.
+	#
+	# `request_lunge` above still writes `velocity.y` and is still wrong in the
+	# same way — left alone here because the lock-on leap is a separate move with
+	# its own director, and a silent fix riding along in this commit is how the
+	# next session ends up debugging a change nobody recorded.
+	_jump_impulse = maxf(hop, 0.0)
 	return true
 
 
@@ -2519,7 +2693,35 @@ func set_blocking(on: bool) -> void:
 func take_hit(hit: Hit) -> bool:
 	if hit == null or hit.amount <= 0 or Game.quarters <= 0:
 		return false
-	if _invuln > 0.0 or state == MoveState.ROLL:
+
+	# THE PARRY IS CHECKED FIRST, ahead of the i-frames and ahead of the roll.
+	#
+	# Ahead of the i-frames because a parry has to be able to catch the SECOND
+	# blow of a flurry: `K.SHIELD_IFRAMES` is 0.4 s and `K.PARRY_WINDOW` is 0.2,
+	# so a parry thrown at a two-hit combo would have been swallowed by the
+	# immunity its own first catch granted, and the player would have watched a
+	# correctly-timed press do nothing.
+	#
+	# It cannot collide with the roll below: `HeroCombat` refuses the press
+	# unless the hero is on the ground and standing (`request_parry` goes through
+	# `request_attack`, which requires MoveState.GROUND), so `parries()` is false
+	# for every frame of a dive.
+	if combat != null and combat.parries(hit.from):
+		combat.on_parried(hit)
+		_invuln = K.SHIELD_IFRAMES
+		return false
+
+	# The dodge, and the one thing that separates a PERFECT one from an ordinary
+	# roll: a blow actually arrived, and the roll was fresh enough to have been an
+	# answer to it. A roll thrown too early does not fail here — the blow simply
+	# misses in space and never calls this at all, which is the honest version of
+	# "you dodged too soon" and costs nothing to implement.
+	if state == MoveState.ROLL:
+		if not _perfect_spent and _roll_age <= K.DODGE_GRACE and combat != null:
+			_perfect_spent = true
+			combat.on_perfect_dodge(hit)
+		return false
+	if _invuln > 0.0:
 		return false
 
 	# The shield is a direction, not a toggle: blocking with your back turned is

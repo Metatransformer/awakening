@@ -431,6 +431,83 @@ const STUN_LIGHT := 0.30
 ## monster you can safely ignore is not a monster. [tune]
 const STUN_HEAVY := 0.45
 
+# --- The two reactions ------------------------------------------------------
+#
+# The kit has always had a guard and a dodge, and both of them were ways of
+# NOT being hit. Neither one paid anything back, so the correct play against
+# every telegraph in the game was to walk out of its arc — which is why the
+# hero's most expensive animations were the ones nobody ever needed.
+#
+# These two turn both defences into openings, and they are deliberately
+# opposites so a player can want each of them at different moments:
+#
+#   THE PARRY is aggressive and it is punished. Shield + attack. Get it right
+#   and the thing that swung at you is thrown off its feet; get it wrong and
+#   your guard is DOWN for the rest of the move. It is the read.
+#
+#   THE PERFECT DODGE is safe and it is passive. It costs a dodge you were
+#   allowed to throw anyway, and if you mistime it nothing bad happens — the
+#   attack simply misses or connects as it always did. It is the reflex.
+#
+# One pays in risk, the other pays in stamina, and neither is a strict upgrade
+# on the other. See docs/BESTIARY.md §3.6.
+
+## Seconds the parry is LIVE from the frame of the press. Anything the shield
+## would have blocked in this window is parried instead.
+##
+## 0.20 is twelve frames, which is generous next to Dark Souls (~5) and about
+## right next to Breath of the Wild — the reference this game is aimed at is
+## "fun to kill", and a parry that only a frame counter can land is a mechanic
+## most players will conclude is broken. What keeps it honest is the recovery
+## below, not the width of this. [tune]
+const PARRY_WINDOW := 0.20
+## And the price. Seconds the hero is rooted with his guard DOWN after the
+## window closes — a whiffed parry is a hole, and this is the size of it.
+##
+## Deliberately longer than the window it follows: a player who mashes the
+## button is guardless more than half the time, which is the whole reason the
+## parry does not also cost stamina. Two prices for one press would just make
+## it a move nobody throws. [tune]
+const PARRY_RECOVER := 0.42
+## How hard a parried body is thrown, in the same units as KNOCKBACK_HEAVY.
+## Above it, because this is the one blow in the game that costs the player
+## real risk to land and it should read as the biggest shove they own.
+const PARRY_SHOVE := 11.0
+## Seconds the parried body is out of the fight. This is "you created an
+## opening", stated as a number: comfortably longer than STUN_HEAVY (0.45),
+## because a parry has to buy more than a finisher does or nobody will take
+## the risk over simply swinging. [tune]
+const PARRY_STAGGER := 0.95
+## Seconds after a successful parry in which `attack` comes out as the DASH —
+## the stab out of the guard, which is exactly the move a body knocked away
+## from you asks for. This is where the dash LIVES now: it used to be on
+## shield+attack, which is the input the parry took. [tune]
+const RIPOSTE_WINDOW := 1.20
+
+## How fresh a roll has to be for the blow it eats to count as a PERFECT dodge,
+## in seconds since the roll started.
+##
+## Without this, any blow refused by the roll's i-frames would pay out — and a
+## dive travels, so an enemy swinging at where you *were* would reward a dodge
+## thrown half a second too early. With it, the dodge has to have been an
+## answer to the blow rather than a thing that happened to be running. [tune]
+const DODGE_GRACE := 0.30
+## Seconds after a perfect dodge in which `attack` comes out as the FLURRY —
+## the leaping overhead. Longer than RIPOSTE_WINDOW because the slow-motion
+## eats into it: 1.4 s of game time with 0.55 s of it at a third speed is about
+## a second of thinking, which is the point of the reward. [tune]
+const FLURRY_WINDOW := 1.40
+
+## What a perfect dodge does to time, and for how long on the WALL clock.
+##
+## "A slight bit", which is what was asked for and also what the reference
+## does: BOTW's flurry-rush window is a dip and not a stop. A third speed is
+## unmistakable without being a cutscene, and half a second is long enough to
+## re-aim and short enough that it never feels like the game took the controller
+## off you. [tune]
+const SLOWMO_SCALE := 0.34
+const SLOWMO_TIME := 0.55
+
 # --- Economy ----------------------------------------------------------------
 ## [tune] Enough gold to afford exactly two bail-outs at the minimum fee, so a
 ## new player who panics twice is broke and has to finish a run to recover.

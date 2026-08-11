@@ -953,6 +953,19 @@ the floor. Jump is already the commitment — you are in the air with no way to
 change your mind — and the slam only charges for what that commitment was already
 costing.
 
+Three more verbs have no button of their own either, and all three are the same
+button meaning something better for a moment because you read the fight right:
+
+- **The parry** — LT held, RB pressed, in the quarter-second before a blow. It
+  drops the guard to do it, so a miss is a hole; a hit throws the attacker and
+  opens a window in which RB is the **dash**. It is the only thing in the kit
+  that moves a boss.
+- **The perfect dodge** — B, into a blow rather than away from it. Time slows,
+  and RB becomes a **leaping overhead** for a second and a half.
+
+They are deliberate opposites: the parry is aggressive and punished, the dodge is
+safe and passive, and neither adds an input. `docs/BESTIARY.md` §3.6.
+
 Full input map and pad bindings: `docs/CONTRACT.md` §4.
 
 ---

@@ -842,6 +842,53 @@ func _can_launch() -> bool:
 	return true
 
 
+## Thrown off its feet without being hurt. **This is the parry's whole payout**,
+## and it is the one thing in this file that moves a body without damaging it.
+##
+## `from` is where the shove came from — the hero's position, not the blow's,
+## because the blow being parried was the MONSTER'S and its `from` is this
+## body's own feet.
+##
+## It borrows the launch roll rather than reimplementing a knockback, which is
+## what makes a parried goblin behave exactly like a critically-struck one:
+## `weight` 0.95 is nearly the top of the impact scale (docs/BESTIARY.md §3.5),
+## so the small bodies go up almost every time and a troll takes the stagger
+## standing. That mass rule is the reason a parry does not need a per-enemy
+## table — it already reads differently against every body in the roster.
+##
+## A launched body does NOT also get the HURT state: `_launch` has taken the
+## state, and setting HURT over it would land the thing mid-flight into a reel
+## it should be in the air for. Same rule `_on_damaged` follows.
+func stagger(from: Vector3, seconds: float, shove: float) -> void:
+	if state == State.DEAD:
+		return
+	# The wind-up it was in is over. `_struck` guards a live contact hitbox, and
+	# a monster parried mid-commit that kept its box would go on to hit the hero
+	# with the swing he just caught.
+	if _struck:
+		_hitbox.deactivate()
+		_struck = false
+	var away := K.flat(global_position - from)
+	if away == Vector3.ZERO:
+		away = Vector3(0, 0, 1).rotated(Vector3.UP, _facing)
+	_last_hit_dir = away
+	_last_hit_weight = 1.0
+	_knockback = away * shove
+	if not _try_launch(away, 0.95):
+		state = State.HURT
+		_timer = seconds
+		var clip := &"hurt_heavy"
+		_play(clip, false, _clip_speed(clip, seconds), 0.04)
+		_flinch(away)
+	# The opening, stated as a number the AI obeys: it does not get to swing
+	# again the instant it is upright. Longer than the stagger itself, which is
+	# the difference between "it stopped" and "you have a moment".
+	_cooldown = maxf(_cooldown, seconds + 0.5)
+	_glowing = false
+	_thaw_body()
+	_flash.hit()
+
+
 ## How hard `knock` shoved, as 0..1. See `K.SHAKE_TAP` for why every channel of
 ## an impact reads this one number. Public and static so a director can assert on
 ## the same value the game used, rather than on a re-derivation of it.

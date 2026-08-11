@@ -51,6 +51,18 @@ signal guard_changed(active: bool)
 # --- Combat -----------------------------------------------------------------
 signal hit_landed(target: Node3D, amount: int, position: Vector3)
 signal shield_blocked(position: Vector3, normal: Vector3)
+## A blow was PARRIED — caught inside `K.PARRY_WINDOW` rather than merely
+## stopped. Separate from `shield_blocked` on purpose: a block is a thing that
+## did not hurt you and a parry is a thing you did, and the HUD, the sound and
+## the camera all want to say so differently.
+##
+## `attacker` may be null — the parry works on anything that swings, and not
+## everything that swings is a body (see `HeroCombat.on_parried`).
+signal parried(position: Vector3, attacker: Node)
+## A dodge went through a live blow inside `K.DODGE_GRACE`. The slow-motion and
+## the flurry window are `Hero`'s and `HeroCombat`'s; this is for everything
+## that only wants to know it happened.
+signal perfect_dodge(position: Vector3)
 signal enemy_died(enemy: Node3D, position: Vector3)
 
 # --- Dungeon progression ----------------------------------------------------
