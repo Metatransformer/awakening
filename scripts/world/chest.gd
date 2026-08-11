@@ -27,6 +27,12 @@ extends Interactable
 ## Marks the chest as already-looted for the rest of the run.
 @export var opened: bool = false
 
+## How many times one pick may be re-rolled off a unique this chest already spat
+## (see `activate`). Four, because the chest table has a dozen-odd entries and the
+## relics are its rare end -- four consecutive draws landing on the SAME relic is a
+## table so degenerate that dropping the pick is the honest answer.
+const REROLLS := 4
+
 var _lid: Node3D
 var _glow: OmniLight3D
 var _rim: MeshInstance3D
@@ -62,10 +68,32 @@ func activate(by: Node3D) -> void:
 	var fan := maxi(picks, 1) + (1 if arrows else 0)
 	var slot := 0
 
+	# **No unique twice out of ONE chest.** Every pick was an independent roll with
+	# no memory of the others, so a three-pick chest could roll `tally_ledger` twice
+	# and spit two motes of it -- and `Run.collect` refuses the second, because a
+	# relic is a unique. The player sees a relic mote glowing on the floor that
+	# cannot be picked up, next to a chest they have already emptied.
+	#
+	# Found by `cistern_floor --level=1` beat F6 going red one run in two: "1 loose,
+	# 1 in the bag", the loose one 1.5 m from the chest. It read as the re-open
+	# minting a copy for three runs, which `activate`'s own first line makes
+	# impossible -- the count could not tell where the mote came from and the check
+	# only started naming the position once it was asked to.
+	#
+	# Re-rolled rather than skipped, so a chest still pays what it promised. It stays
+	# a function of the seed alone (the class doc's rule): the extra draws come off
+	# `Run.rng` like every other one. Only uniques are checked -- two Iron Scraps out
+	# of one chest is a stack of two and completely fine.
+	var spat: Dictionary = {}
 	for i in maxi(picks, 1):
 		var id := ItemDb.roll(ItemDb.chest_drops(Run.level), Run.rng)
-		if id == &"":
+		var tries := 0
+		while id != &"" and RelicDb.is_relic(id) and spat.has(id) and tries < REROLLS:
+			id = ItemDb.roll(ItemDb.chest_drops(Run.level), Run.rng)
+			tries += 1
+		if id == &"" or (RelicDb.is_relic(id) and spat.has(id)):
 			continue
+		spat[id] = true
 		LootMote.drop(get_tree().current_scene, id,
 			global_position + Vector3.UP * 0.7, _fan(slot, fan) * 1.15)
 		slot += 1

@@ -1295,6 +1295,19 @@ func _deep_chest(rig, d: Node, hero: Node3D) -> void:
 	await rig.wait_frames(30)
 	var again := _every(rig.scene(), func(n: Node) -> bool:
 		return n is LootMote and (n as LootMote).item_id == want)
+	# **Say WHERE the extra copy is, because `Chest.activate` cannot have minted
+	# it.** chest.gd:44 is `if opened: return`, so the press above is a no-op and a
+	# second `cinder_verse` on the floor came from somewhere else entirely. This
+	# check has been intermittently red for three runs on the strength of a count,
+	# and a count cannot tell a double-pick at the chest from a relic replaced by a
+	# spent arena thirty metres away.
+	for m in again:
+		var mote: Node3D = m
+		print("FLOOR   loose %s at %.1f,%.2f,%.1f -- %.1f m from the chest, %s" % [
+			want, mote.global_position.x, mote.global_position.y,
+			mote.global_position.z,
+			mote.global_position.distance_to(chest.global_position),
+			mote.get_path()])
 	_ck("F6 and re-opening the chest mints no second copy (%d loose, %d in the bag)"
 		% [again.size(), Run.bag.get(want, 0)],
 		again.is_empty() and Run.bag.get(want, 0) == 1)
