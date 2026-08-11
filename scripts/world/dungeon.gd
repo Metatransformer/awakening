@@ -311,6 +311,29 @@ func _plan() -> void:
 	}
 	var placed: Array[Vector2i] = [entrance]
 
+	# **One cell beside the entrance is held empty, and it is a fix rather than a
+	# nicety.** The shortcut is anchored at the entrance by every row of
+	# `FloorDb.ANCHORS` -- *"a shortcut you have to cross the floor to reach is not a
+	# shortcut"* -- and its landing is `LAND_STUB + LAND_SIZE` = 13 m of stone driven
+	# out through a blank wall. `_pick_side` asks `_clear_run` whether that room is
+	# there and then takes the best wall it can find WHETHER OR NOT the clearance
+	# exists, so a tree that spent all four of the entrance's walls left the shortcut
+	# nowhere to go and the landing was laid inside the neighbour.
+	#
+	# Measured, on floor 2 of seed-as-shipped: room (0,0) had doors s, n and w, the
+	# only free wall was e, and room (1,0) is a 27 m chamber whose west face is 4.5 m
+	# past that wall. The landing was therefore built 8.5 m INSIDE it -- it
+	# generated, it lit its sconce, and `cistern_floor --level=2` could open the door
+	# and then not walk to the stair behind it (D10/D11). Nothing looked wrong in a
+	# frame; the hero was simply jammed in a corner of somebody else's masonry.
+	#
+	# Held here rather than patched in `_pick_side`, because by the time that runs
+	# the rooms exist and there is nothing left to choose. One cell is enough:
+	# `_reach_for` answers 1 for a 16 m room and a 13 m landing at `spacing` 26.
+	var keep_dirs: Array = DIRS.keys()
+	var keep: StringName = keep_dirs[_rng.randi_range(0, keep_dirs.size() - 1)]
+	var kept: Vector2i = entrance + DIRS[keep]
+
 	var guard := 0
 	while placed.size() < room_count and guard < 400:
 		guard += 1
@@ -320,8 +343,9 @@ func _plan() -> void:
 
 		var options: Array[StringName] = []
 		for d: StringName in DIRS:
-			if not rooms.has(from + DIRS[d]):
-				options.append(d)
+			if rooms.has(from + DIRS[d]) or from + DIRS[d] == kept:
+				continue
+			options.append(d)
 		if options.is_empty():
 			continue
 
@@ -547,6 +571,18 @@ func _plan_anchors() -> void:
 		if side == &"":
 			push_warning("dungeon: no wall for anchor %s in room %s" % [id, cell])
 			continue
+		# **The alarm `_pick_side` does not raise itself.** It returns the best wall
+		# it can find, which is not the same as a wall with the clearance asked for,
+		# and the silence between those two is what built floor 2's shortcut landing
+		# inside room (1, 0) -- see `_plan`, which now keeps a cell beside the
+		# entrance so the shortcut always has one. This says so for every OTHER
+		# anchor: a vault or a treasure chamber driven through a neighbour's masonry
+		# looks exactly like one that fits until something walks to it.
+		if _clear_run(cell, side, reach) < reach:
+			push_warning(("dungeon: anchor %s takes the %s wall of %s with %d clear "
+				+ "cell(s) of %d needed -- its structure is built through occupied "
+				+ "grid and what is behind it may be unreachable")
+				% [id, side, cell, _clear_run(cell, side, reach), reach])
 		rooms[cell]["anchors"][side] = id
 		_reserve(cell, side, reach)
 		placements[id] = {"cell": cell, "side": side, "offset": offset,

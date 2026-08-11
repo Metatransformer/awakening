@@ -686,19 +686,24 @@ func _sweep(rig, hero: Node3D, route: Array[Vector3], tol: float = 0.7) -> bool:
 				elif not hero.test_move(hero.global_transform, -side):
 					hero.global_position -= side
 				else:
-					_leg_failed("walled in", leg, route.size(), hero, target, best)
+					_leg_failed("walled in", leg, route.size(), hero, target, best,
+						step)
 					return false
 				# Sliding is for getting round furniture. Thirty strides of it in
 				# a row is not a detour, it is a hero rubbing along a wall.
 				if blocked > 30:
 					_leg_failed("sliding, not advancing", leg, route.size(),
-						hero, target, best)
+						hero, target, best, step)
 					return false
 			n += 1
 			if n % STEPS_PER_FRAME == 0:
 				await rig.wait_frames(1)
 		if guard >= 400:
-			_leg_failed("out of steps", leg, route.size(), hero, target, best)
+			# `to` is the last step this leg wanted, which is the direction the report
+			# below should probe -- a hero who has run out of strides is standing
+			# against whatever he could not get past.
+			_leg_failed("out of steps", leg, route.size(), hero, target, best,
+				K.plane(target - hero.global_position).limit_length(STEP))
 			return false
 	await rig.wait_frames(2)
 	return true
@@ -722,18 +727,75 @@ func _landing_clearance(d: Node) -> void:
 	var cell: Vector2i = d.anchor_cell(&"shortcut_door")
 	var side: StringName = d.placements[&"shortcut_door"]["side"]
 	var want: int = d._reach_for(&"shortcut_door", cell)
-	var got: int = d._clear_run(cell, side, want)
-	print("FLOOR landing on the %s wall of %s: %d clear cell(s) of %d wanted%s"
-		% [side, cell, got, want,
-			"" if got >= want else "  <-- THE LANDING IS BUILT THROUGH OCCUPIED GRID"])
+	# **`_clear_run` is the wrong question asked after the fact.** It treats a
+	# RESERVED cell as occupied, and `_plan_anchors` reserved this very anchor's run
+	# before the floor was built -- so it answers 0 on a floor whose landing has all
+	# the room in the world. The first version of this line printed
+	# "0 clear cell(s) of 1 wanted" on floor 1, which works, and on floor 2, which
+	# does not, and looked like a diagnosis. CLAUDE.md §2, from the other side: the
+	# instrument invented a fault, and the null case is what caught it.
+	#
+	# The honest question is whether a ROOM is in the way. `rooms` is what the
+	# geometry was actually built from.
+	var step: Vector2i = d.DIRS[side]
+	var hit := Vector2i.ZERO
+	var found := false
+	for k in range(1, want + 1):
+		var at: Vector2i = cell + step * k
+		if d.rooms.has(at):
+			hit = at
+			found = true
+			break
+	print("FLOOR landing %.1f m out of the %s wall of %s (wants %d cell(s))"
+		% [d.LAND_STUB + d.LAND_SIZE, side, cell, want])
+	if not found:
+		print("FLOOR   nothing occupies that run -- the landing has the grid to itself")
+		return
+	# The overlap in METRES, because the cell count cannot say whether a neighbour is
+	# a 16 m room 3 m away or a 27 m one that starts inside the stub.
+	var gap: float = d.centre_of(hit).distance_to(d.centre_of(cell)) \
+		- d.size_of(cell) * 0.5 - d.size_of(hit) * 0.5
+	print("FLOOR   ROOM %s (%.0f m wide) is %.1f m past that wall, so the landing is "
+		% [hit, d.size_of(hit), gap]
+		+ "built %.1f m INSIDE it" % (d.LAND_STUB + d.LAND_SIZE - gap))
+	print("FLOOR   `Dungeon._pick_side` took this wall with a clear run of 0 because "
+		+ "it was the room's ONLY free wall, and it takes the best it can find "
+		+ "whether or not the clearance is there.")
 
 
+## **NAME THE COLLIDER.** Without this the report is a pair of coordinates and a
+## distance, which is enough to know a walk failed and not enough to know whether
+## the fault is the floor or the sweep -- floor 2's D10 spent an afternoon being
+## blamed on `Dungeon._pick_side` laying the landing through occupied grid, and the
+## clearance readout then showed floor 1 doing exactly the same thing and passing.
+##
+## `move_and_collide(step, true)` is test-only: it moves nothing and returns the
+## `KinematicCollision3D`, so the thing in the way can be asked its own name. `y` is
+## printed for both ends too, because a step up onto a lip reads in x/z as a hero
+## standing still against nothing.
 func _leg_failed(why: String, leg: int, legs: int, hero: Node3D, target: Vector3,
-		best: float) -> void:
-	print("FLOOR   %s on leg %d/%d: at %.1f,%.1f, %.1f m short of %.1f,%.1f "
-		% [why, leg + 1, legs, hero.global_position.x, hero.global_position.z,
-			K.plane(target - hero.global_position).length(), target.x, target.z]
-		+ "(closest approach %.1f m)" % best)
+		best: float, step: Vector3 = Vector3.ZERO) -> void:
+	print("FLOOR   %s on leg %d/%d: at %.1f,%.2f,%.1f, %.1f m short of "
+		% [why, leg + 1, legs, hero.global_position.x, hero.global_position.y,
+			hero.global_position.z, K.plane(target - hero.global_position).length()]
+		+ "%.1f,%.2f,%.1f (closest approach %.1f m)"
+		% [target.x, target.y, target.z, best])
+	if step == Vector3.ZERO or not (hero is CharacterBody3D):
+		return
+	# Probed in the wanted direction and then either side of it, which is the same
+	# three tries the sweep itself makes -- so the three names below ARE the reason
+	# it gave up, not a fourth guess about it.
+	var side := Vector3(-step.z, 0.0, step.x).normalized() * step.length()
+	for pair in [["ahead", step], ["left", side], ["right", -side]]:
+		var hit := (hero as CharacterBody3D).move_and_collide(pair[1], true)
+		if hit == null:
+			print("FLOOR     %-5s clear" % pair[0])
+			continue
+		var who := hit.get_collider()
+		print("FLOOR     %-5s blocked by %s (%s) at %.1f,%.2f,%.1f" % [pair[0],
+			who.name if who != null else "?",
+			who.get_class() if who != null else "?",
+			hit.get_position().x, hit.get_position().y, hit.get_position().z])
 
 
 ## Wait for `prop` to own the interact button. The hero has usually just left
