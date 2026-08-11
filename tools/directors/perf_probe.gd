@@ -83,6 +83,26 @@ func run(rig) -> void:
 	# compiler. CLAUDE.md 3's cold-import row is the same trap one layer down.
 	await rig.wait_frames(settle)
 
+	# `--ablate=shadows|lights|none`. An ABLATION, not a setting: it turns one
+	# thing off at runtime so the difference between two runs names the cost.
+	# It exists because the two measurements that come free -- resolution and
+	# draw calls -- had already answered as far as they can. The garrison reads
+	# the same 16.4 / 16.6 / 16.7 ms at 640x360, 1280x720 and 1920x1080, so
+	# NINE TIMES the fill costs 0.3 ms and the frame is not pixel-bound; but a
+	# 9-draw-call scene runs at 6.40 ms against the garrison's 16.15, so it is
+	# very much scene-bound. Geometry that is resolution-independent and paid
+	# per draw call is what a shadow pass is, and this is how you find out
+	# without guessing.
+	#
+	# Ablating is deliberately cruder than tuning: it answers "is this the wall"
+	# before anyone argues about which value to pick. Do not leave a run's
+	# verdict standing on an ablated frame -- it is not the game.
+	var ablate: String = rig.arg("ablate", "none")
+	if ablate != "none":
+		var n := _ablate(rig.root, ablate)
+		print("PERF   ABLATED %s on %d light(s) -- this frame is NOT the game" % [ablate, n])
+		await rig.wait_frames(30)
+
 	var vp: RID = rig.root.get_viewport_rid()
 	var was_vsync: int = DisplayServer.window_get_vsync_mode()
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
@@ -199,6 +219,27 @@ func run(rig) -> void:
 	var verdict := "OK" if worst < 16.67 else ("TIGHT" if worst < 20.0 else "OVER")
 	print("PERF %s  budget60=%s  worst_p95=%.2fms of 16.67ms  headroom=%.0f%%"
 		% [label, verdict, worst, (1.0 - worst / 16.67) * 100.0])
+
+
+## Turn one renderer feature off across the whole live tree and say how many
+## nodes it touched. `shadows` leaves the lights lighting and stops them casting;
+## `lights` puts the scene in flat ambient. Returns the count so a run that
+## ablated nothing says so rather than reporting a null result as a finding --
+## an ablation that hit zero lights and "made no difference" is the most
+## convincing wrong answer this director could produce.
+func _ablate(node: Node, what: String) -> int:
+	var n := 0
+	for child in node.get_children():
+		n += _ablate(child, what)
+	if node is Light3D:
+		var light := node as Light3D
+		match what:
+			"shadows":
+				light.shadow_enabled = false
+			"lights":
+				light.visible = false
+		n += 1
+	return n
 
 
 ## Median, p95 and max for one series. Mean is deliberately absent -- see the
