@@ -17,9 +17,21 @@ extends RefCounted
 
 var out := ""
 
+## `Game.deaths` as it stood when this director started.
+##
+## **The one fact that tells a beat "the run you are testing is over".** `Run.die()`
+## is the only thing that increments it and the only thing that empties the bag
+## mid-floor, so it is the sentinel every beat below the gate checks — and it is a
+## COUNTER rather than `Run.in_dungeon`, because the garrison beats run with
+## `in_dungeon = false` on purpose (`_sell`) and a check on that flag reads every
+## garrison prompt failure as a death. That is not a hypothetical: it is the line
+## `_approach` used to print, and issue #14 spent two runs of somebody's time on it.
+var _deaths := 0
+
 
 func run(rig) -> void:
 	out = rig.arg("out", "/tmp/mvp/x.png").get_base_dir()
+	_deaths = Game.deaths
 
 	# `--run-seed=N` pins the FLOOR, which `--seed` does not: `--seed` seeds the
 	# global RNG, and the dungeon is built from `Run.rng`, which `Run.enter()`
@@ -56,9 +68,45 @@ func run(rig) -> void:
 			+ " the dungeon, the fight and the rope as broken from up here")
 		return
 
-	await _fight(rig)
+	# Same chain rule as the three above, and it is the other half of #14. The
+	# fight beat can end with the run itself over -- the hero killed by the floor
+	# while this director stood on a drop -- and every beat after it then reports
+	# a chest that is not there and a rope that "refused to start" for a hero who
+	# is standing in the garrison. One cause, one message.
+	if not await _fight(rig):
+		print("MVP ABORT the fight beat ended the run -- stopping rather than"
+			+ " reporting the chest and the rope as broken from the garrison")
+		return
 	await _extract(rig)
 	await _return(rig)
+
+
+## Has the run ended under us, and if so say which way.
+##
+## Called at the seams of `_fight`, because that is where it happens: the tour
+## teleports the hero next to whatever is nearest with no regard for the twenty-odd
+## monsters converging on him, and `Run.die()` empties the bag, sets `in_dungeon`
+## false and sends `Flow` home. Every later beat then reports a failure it did not
+## cause -- which is exactly what issue #14 read like from the outside, complete
+## with `MVP after_pickup bag=0 value=0` under a log line saying `hero 12/12`.
+##
+## **The healths in this director's log are not evidence and this is why.**
+## `Game.heal(Game.max_quarters)` runs twice inside `_fight`, deliberately (see
+## the note there), so a hero who died a frame earlier is reported at full health
+## a frame later. The death has to be read off the counter, never off the bar.
+func _ended(where: String) -> bool:
+	if Game.deaths > _deaths:
+		print(("MVP FAIL the hero died %s -- deaths %d -> %d, the floor killed him"
+			+ " while this beat was waiting. Nothing after this line was tested,"
+			+ " and the health in the lines above it is the heal, not the truth.")
+			% [where, _deaths, Game.deaths])
+		return true
+	if not Run.in_dungeon:
+		print(("MVP FAIL the run ended %s without a death (in_dungeon=false,"
+			+ " deaths=%d) -- something took the hero out of the dungeon that was"
+			+ " not the rope and was not dying") % [where, Game.deaths])
+		return true
+	return false
 
 
 # --- Garrison ---------------------------------------------------------------
@@ -232,11 +280,11 @@ func _descend(rig) -> bool:
 
 # --- Dungeon ----------------------------------------------------------------
 
-func _fight(rig) -> void:
+func _fight(rig) -> bool:
 	var dun := _dungeon(rig)
 	if dun == null:
 		print("MVP FAIL no dungeon in %s" % rig.scene().name)
-		return
+		return false
 	print("MVP layout rooms=%d deepest=%s seed=%d" % [
 		dun.rooms.size(), dun.deepest, Run.seed_used])
 
@@ -244,7 +292,7 @@ func _fight(rig) -> void:
 	print("MVP enemies=%d" % foes.size())
 	if foes.is_empty():
 		print("MVP FAIL no enemies spawned")
-		return
+		return false
 	# CharacterBody3D, not a concrete enemy class. The dungeon spawns only `Enemy`
 	# now, but this stays loose on purpose: it used to be typed to the box-built
 	# `Crawler`, and the moment the nearest foe was a goblin the assignment threw
@@ -261,8 +309,27 @@ func _fight(rig) -> void:
 	await rig.wait_frames(30)
 	await rig.capture(out.path_join("m_09_enemy.png"))
 
+	var hero: Hero = rig.scene().get_tree().get_first_node_in_group(&"player")
 	var before: int = foe.health.quarters
 	# Close, then swing until it dies or we run out of patience.
+	#
+	# **EVERY WAIT IN THIS LOOP IS A GAME-CLOCK WAIT, AND THAT IS ISSUE #14.** It
+	# used to press `attack` and then `wait_frames(34)`, a count of RENDERED
+	# frames standing in for the length of a sword swing -- and `swing_time` is
+	# 0.60 game seconds, 0.99 on the third step of the chain
+	# (`HeroCombat.chain_time_scale`). 34 frames is 0.28 s on the 120 Hz Mac this
+	# was written on and several seconds on a machine with four other directors
+	# rendering: so on a fast tree the next press landed in the FRONT half of the
+	# swing that was still running, where `HeroCombat._press` drops it on purpose
+	# (a press on the first frame is the player mashing), and eleven of twelve
+	# swings went nowhere. That is the log everybody read as "damage is broken":
+	# `foe hp 5 -> 1`, one blow's worth of damage out of a dozen presses.
+	#
+	# So the loop waits for the swing it just asked for: into ATTACK, out of
+	# ATTACK, then a beat. `Hero.state` is the public one and `rig.until` now
+	# spends its budget in game seconds.
+	var taken := 0
+	var refused := 0
 	for swing in 12:
 		# `health.dead` rather than a state enum. The health component is what
 		# every hurtable thing in the game shares (docs/CONTRACT.md §8); a state
@@ -271,13 +338,38 @@ func _fight(rig) -> void:
 			break
 		var toe := K.flat(foe.global_position - Vector3.ZERO)
 		_stand_at(rig, foe.global_position - toe * 1.1, foe.global_position)
-		await rig.wait_frames(2)
+		await rig.wait_physics_frames(2)
 		await rig.tap(["attack"])
-		await rig.wait_frames(34)
+		# Did the button come out as a swing at all? A refusal is silent by design
+		# (`HeroCombat._can_swing` -- an empty stamina bar makes no noise), so a
+		# beat that does not ask cannot tell "the sword missed" from "the sword
+		# never moved", and those are different bugs in different files.
+		if await rig.until(func() -> bool:
+				return hero.state == Hero.MoveState.ATTACK, 0.5):
+			taken += 1
+			await rig.until(func() -> bool:
+				return hero.state != Hero.MoveState.ATTACK, 2.5)
+			await rig.wait_seconds(0.12)
+		else:
+			refused += 1
+			await rig.wait_seconds(0.35)
+	print("MVP swings=%d taken=%d refused=%d stamina=%.0f" % [
+		taken + refused, taken, refused, Game.stamina])
 	print("MVP foe hp %d -> %s (hero %d/%d)" % [before,
 		foe.health.quarters if is_instance_valid(foe) else "dead",
 		Game.quarters, Game.max_quarters])
 	await rig.capture(out.path_join("m_10_swung.png"))
+	# Said in the beat's own words, which is what #14's "done looks like" asked
+	# for. Three different things end this loop and they used to look identical.
+	if _ended("during the fight"):
+		return false
+	if refused > 0:
+		print("MVP FAIL the attack button was refused %d times of %d -- the hero"
+			% [refused, taken + refused] + " never entered ATTACK for those presses"
+			+ " (stamina=%.0f)" % Game.stamina)
+	if is_instance_valid(foe) and not foe.health.dead:
+		print("MVP FAIL %d swings did not kill a %d-quarter %s: it is on %d"
+			% [taken, before, str(foe.get("kind")), foe.health.quarters])
 
 	# Patched up HERE, the frame the fight ends, rather than four beats later
 	# where it used to be. The reason is unchanged -- see the note below -- but
@@ -302,11 +394,22 @@ func _fight(rig) -> void:
 	await rig.capture(out.path_join("m_11_drop.png"))
 
 	# Walk onto the drop -- LootMote answers overlap, not a button.
+	#
+	# On the PHYSICS clock: the pickup is an Area3D noticing a teleported body,
+	# which is the one thing rendered frames have never been a unit of, and this
+	# is also the window issue #14's hero kept dying in.
 	if not motes.is_empty():
 		_stand_at(rig, motes[0].global_position)
-		await rig.wait_frames(30)
+		await rig.wait_physics_frames(30)
 	print("MVP after_pickup bag=%d value=%d" % [Run.bag_count(), Run.bag_value()])
 	await rig.capture(out.path_join("m_12_picked_up.png"))
+	# **`bag=0 value=0` with a mote on the floor was the whole of #14's tell**, and
+	# it took a session to read because nothing said what it meant. `Run.die()` is
+	# the only thing that empties a bag mid-floor, so an empty bag here is a run
+	# that has already ended -- and the heal two lines up is what made the log say
+	# the hero was on 12/12 throughout.
+	if _ended("standing on the drop"):
+		return false
 
 	# Topped up again on the way to the chest, for the same reason.
 	Game.heal(Game.max_quarters)
@@ -325,12 +428,12 @@ func _fight(rig) -> void:
 		# and being next to one is not being noticed by one.
 		if not await _approach(rig, chest,
 				chest.global_position + Vector3(0.0, 0.0, 1.3)):
-			return
+			return false
 		await rig.capture(out.path_join("m_13_chest_prompt.png"))
 		await rig.tap(["interact"])
 		if not await rig.until(func() -> bool: return chest.opened):
 			print("MVP FAIL the chest took the interact button and never opened")
-			return
+			return false
 		await rig.wait_frames(40)
 		# **Re-checked every turn, and this is not belt-and-braces.** A `LootMote`
 		# frees itself the instant the hero overlaps it, the chest fans its drops
@@ -350,6 +453,7 @@ func _fight(rig) -> void:
 		print("MVP after_chest bag=%d value=%d fee=%d" % [
 			Run.bag_count(), Run.bag_value(), Run.extract_cost()])
 		await rig.capture(out.path_join("m_14_chest_loot.png"))
+	return not _ended("on the way out of the fight beat")
 
 
 ## Leaving. There is no pad to walk to any more -- the way out is the Escape
@@ -580,17 +684,28 @@ func _approach(rig, it: Interactable, at: Vector3, look_at = null) -> bool:
 	_stand_at(rig, at, look_at)
 	var seen: bool = await rig.until(func() -> bool: return Prompt.focus == it)
 	if not seen:
-		# **Say "he died" when he died.** A hero killed on the walk over is freed,
-		# so `Prompt._nearest` has no hero to measure from and takes focus off
-		# everything -- while `player_inside` stays true, because `body_exited`
-		# never fires for a body that was deleted rather than moved. The generic
-		# line below then reads as "the chest is broken" for a run that simply
-		# ended, and two of the four runs that produced it were spent looking at
-		# `Interactable` instead of at the health bar.
-		if rig.scene().get_tree().get_first_node_in_group(&"player") == null \
-				or not Run.in_dungeon:
-			print("MVP FAIL the hero died before he reached %s (in_dungeon=%s)"
-				% [it.prompt, Run.in_dungeon])
+		# **Say "he died" when he died — and only then.** A hero killed on the walk
+		# over is freed, so `Prompt._nearest` has no hero to measure from and takes
+		# focus off everything -- while `player_inside` stays true, because
+		# `body_exited` never fires for a body that was deleted rather than moved.
+		# The generic line below then reads as "the chest is broken" for a run that
+		# simply ended, and two of the four runs that produced it were spent looking
+		# at `Interactable` instead of at the health bar.
+		#
+		# **THREE CAUSES, THREE LINES, AND THAT IS THE POINT (#14).** This branch
+		# used to be one `if` over `no player node OR not Run.in_dungeon` printing
+		# "the hero died" for both -- so a prompt that failed in the GARRISON, where
+		# `_sell` sets `in_dungeon = false` on purpose, reported a death that had not
+		# happened and sent the card's first reader to the health bar. `Game.deaths`
+		# is the only one of the three that actually means somebody died.
+		if Game.deaths > _deaths:
+			print(("MVP FAIL the hero died before he reached %s -- deaths %d -> %d,"
+				+ " and the run ended with him") % [it.prompt, _deaths, Game.deaths])
+			return false
+		if rig.scene().get_tree().get_first_node_in_group(&"player") == null:
+			print(("MVP FAIL there is no hero in the scene at all while waiting on"
+				+ " %s -- nobody died (deaths=%d), the player node is simply gone")
+				% [it.prompt, Game.deaths])
 			return false
 		# **`enabled` is in this line because its absence cost #36 a session.**
 		# The three facts printed before it — focus, inside, blocked — were the
@@ -599,11 +714,11 @@ func _approach(rig, it: Interactable, at: Vector3, look_at = null) -> bool:
 		# prompt never came" and sent two readers into `Prompt`. `enabled` is the
 		# fourth term of the same `if`, and it was the false one. Print every term
 		# of the condition you are complaining about.
-		print(("MVP FAIL %s never took the interact button after three seconds"
-			+ " standing in front of it (focus=%s, inside=%s, enabled=%s,"
-			+ " blocked=%s)") % [
+		print(("MVP FAIL %s never took the interact button after three seconds of"
+			+ " GAME TIME standing in front of it (focus=%s, inside=%s, enabled=%s,"
+			+ " blocked=%s, in_dungeon=%s)") % [
 			it.prompt, Prompt.focus.prompt if Prompt.focus != null else "<none>",
-			it.player_inside, it.enabled, Prompt.blocked])
+			it.player_inside, it.enabled, Prompt.blocked, Run.in_dungeon])
 		return false
 	# One more physics tick before the press. Focus is live the frame the trigger
 	# reports the hero, and `Prompt.drop_focus` DISARMS on that same frame -- so a

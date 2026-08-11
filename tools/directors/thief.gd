@@ -117,10 +117,12 @@ func _telegraph(rig, out: String) -> void:
 
 	# Nothing in the bag yet, so this grab is guaranteed to close on nothing --
 	# which is what makes it a clean look at the TELL with no theft on top of it.
+	var watch := _watch()
 	var reached: bool = await rig.until(func() -> bool:
 		return foe.state == Enemy.State.GRAB, 8.0)
 	if not reached:
-		_fail("the goblin never reached for the bag in 8 s")
+		_fail("the goblin never reached for the bag in 8 s of game time"
+			+ _why(watch, foe, hero))
 		foe.queue_free()
 		await rig.wait_frames(4)
 		return
@@ -184,10 +186,12 @@ func _theft_and_kill(rig, out: String) -> void:
 	await rig.wait_frames(20)
 	await rig.capture(out.path_join("thief_03_before.png"))
 
+	var watch := _watch()
 	var robbed: bool = await rig.until(func() -> bool:
 		return not foe.carrying().is_empty(), 12.0)
 	if not robbed:
-		_fail("it never took anything in 12 s")
+		_fail("it never took anything in 12 s of game time"
+			+ _why(watch, foe, hero))
 		return
 
 	var loot: Dictionary = foe.carrying()
@@ -329,10 +333,11 @@ func _escape(rig, out: String) -> void:
 		gone["loot"] = loot)
 	Bus.camera_recenter.emit()
 
+	var watch := _watch()
 	var robbed: bool = await rig.until(func() -> bool:
 		return not foe.carrying().is_empty(), 12.0)
 	if not robbed:
-		_fail("the second thief never took anything")
+		_fail("the second thief never took anything" + _why(watch, foe, hero))
 		return
 	var loot: Dictionary = foe.carrying()
 	await rig.wait_frames(30)
@@ -358,6 +363,44 @@ func _escape(rig, out: String) -> void:
 
 
 # --- Helpers ------------------------------------------------------------------
+
+## Both clocks, stamped, so a wait that ends badly can say WHICH one ran out.
+func _watch() -> Array:
+	return [Time.get_ticks_msec(), Engine.get_physics_frames()]
+
+
+## Why a wait on the goblin ended without the goblin doing the thing.
+##
+## **This exists because issue #33 was a FAIL nobody could act on.** "The goblin
+## never reached for the bag in 8 s" names the symptom and nothing else, so the
+## session that met it could not tell a goblin stuck on a keeper from a goblin
+## that was walking normally while the director's stopwatch ran fast -- and those
+## live in different files. Two runs went into the difference and neither settled
+## it. So the line now carries every term the wait depended on: where the body
+## got to, what it was doing, whether its own cooldown was refusing it, and both
+## clocks side by side.
+##
+## The clocks are the pair that mattered. `rig.until` spends its budget in GAME
+## seconds now (`shoot.gd`), and the ratio between the two is the thing that moves
+## when the machine is busy: a report of `8.0 s game / 8.2 s wall` is a goblin that
+## genuinely did not arrive, and `8.0 s game / 31 s wall` is a machine at 0.25x
+## that the old wall-clock deadline would have cut off at a quarter of the wait.
+func _why(watch: Array, foe: Enemy, hero: Node3D) -> String:
+	if not is_instance_valid(foe):
+		return " -- and the goblin is gone: it was freed while the beat waited"
+	var reach: float = float(Enemy.DEFS[&"goblin"]["reach"])
+	var step: float = 1.0 / float(Engine.physics_ticks_per_second)
+	var game := float(Engine.get_physics_frames() - int(watch[1])) * step
+	var wall := float(Time.get_ticks_msec() - int(watch[0])) / 1000.0
+	return (" -- it is in state %d at %v, %.2f m from the hero (it grabs inside"
+		+ " %.2f m), cooldown %.2f, carrying %s. The wait spent %.1f s of game"
+		+ " time over %.1f s of wall clock (%.2fx); at 1.00x these are the same"
+		+ " number and anything lower is the machine, not the goblin.") % [
+		foe.state, foe.global_position,
+		K.plane(foe.global_position - hero.global_position).length(), reach,
+		foe._cooldown, foe.carrying(), game, wall,
+		game / wall if wall > 0.0 else 0.0]
+
 
 func _spawn(scene: Node, seed_val: int) -> Enemy:
 	var e := Enemy.new()

@@ -15,6 +15,9 @@ extends SceneTree
 ##   --director=res://tools/directors/combat.gd   script with `func run(rig)`
 ##   --burst=8 --burst-gap=6                      contact sheet of N frames
 ##   --seed=12345                                 deterministic RNG
+##   --max-fps=3                                  throttle the render, to
+##                                                reproduce a loaded machine
+##                                                (see `_throttle_the_render`)
 ##   --intro                                      let the garrison play its
 ##                                                opening (off by default --
 ##                                                see `_skip_the_opening`)
@@ -49,6 +52,7 @@ func _initialize() -> void:
 	_deafen_the_gamepad()
 	_hush_the_speakers()
 	_warn_if_launched_bare()
+	_throttle_the_render()
 
 	var size_str: String = _args.get("size", "1280x720")
 	var wh := size_str.split("x")
@@ -194,6 +198,30 @@ func _warn_if_launched_bare() -> void:
 	printerr("shoot: WARNING - launched as bare `godot`, so this window WILL "
 		+ "steal the owner's keyboard. Use `tools/quiet.sh` in place of "
 		+ "`godot` (CLAUDE.md §2).")
+
+
+## `--max-fps=N` — render this slowly on purpose.
+##
+## **This is the reproduction lever for the busy-machine failures**, and it exists
+## because "run it again when four other agents are rendering" is not a test
+## anybody can repeat. Godot clamps how many physics steps one rendered frame is
+## allowed to catch up (`physics/common/max_physics_steps_per_frame`, default 8),
+## so below ~7.5 fps the GAME CLOCK falls behind the wall clock and cannot get
+## back: measured on the garrison at `--max-fps=5`, 1.00 s of wall time bought
+## 0.67 s of game time, every slice, for eight slices. That ratio is the whole of
+## issue #33 — a director whose deadlines were denominated in wall seconds got a
+## third less of the thing it was actually waiting for.
+##
+## It is a knob and not a default because a throttled run is a SLOWER run in
+## every other respect too; reach for it when a beat only fails on somebody
+## else's machine, and to prove that a watchdog can still fire.
+func _throttle_the_render() -> void:
+	var cap := int(_args.get("max-fps", "0"))
+	if cap <= 0:
+		return
+	Engine.max_fps = cap
+	print("shoot: --max-fps=%d, the render is throttled and the game clock will "
+		% cap + "lag the wall clock below ~7.5 fps")
 
 
 ## Put `instance` under the root and wait until it is really in the tree.
@@ -440,15 +468,63 @@ func wait_seconds(s: float) -> void:
 ## the beat had went into a world where nothing was focused, the shop never
 ## opened, and four later beats reported failures they had not caused.
 ##
-## The timeout is REAL seconds on purpose: it is a watchdog, not a measurement.
-## A game clock that has stopped is one of the things it exists to catch, so it
-## cannot be counted on the game clock.
+## **TWO CLOCKS, TWO LIMITS — and `seconds` is the GAME one.** This used to count
+## its whole deadline in `Time.get_ticks_msec()`, on the argument quoted below:
+## a watchdog cannot be counted on a clock that may have stopped. That argument
+## is right about the watchdog and wrong about the budget, and the difference is
+## issue #33.
+##
+## Everything a director waits on through here is a game-clock event: a windup
+## finishing, a body walking to a place at its own speed, a screen easing shut.
+## Godot clamps how many physics steps one rendered frame may catch up
+## (`physics/common/max_physics_steps_per_frame`, default 8), so on a machine
+## rendering below ~7.5 fps the game clock falls behind the wall clock and never
+## catches up. Measured with `--max-fps=5`: 1.00 s of wall time, 0.67 s of game
+## time, eight slices out of eight. A `until(grab_started, 8.0)` was therefore
+## worth 8 s on an idle machine and 5.4 s on a busy one — so `thief.gd` printed
+## "the goblin never reached for the bag in 8 s" and then went on to photograph
+## the theft it had just declared impossible. A check that gets stricter the
+## busier the machine is is a check that cries wolf exactly when somebody is
+## least able to look into it, and this repo's proof discipline (CLAUDE.md §2)
+## is worth precisely what a FAIL line is worth.
+##
+## So the budget is spent in game seconds — counted off `Engine.get_physics_frames()`
+## rather than accumulated process deltas, because the physics frame IS the tick
+## the world moves on, and it is the one the clamp starves. The wall clock stays,
+## demoted to what it always claimed to be: the outer "the game has stopped"
+## watchdog, generous enough (4x + 3 s, the same allowance `hold_seconds` uses)
+## that it can only fire on a game that has genuinely stalled — and it SAYS SO
+## when it fires, naming both clocks, so the next reader can tell a stalled game
+## from an event that never arrived.
+##
+## **A PAUSED TREE STOPS THE PHYSICS FRAME COUNTER**, so a wait that is going to
+## fail while a screen has the tree paused (`RunEndScreen`, the pause menu) spends
+## no game time at all and runs to the wall watchdog instead — several seconds
+## rather than `seconds`. That is the honest answer, because a paused world is a
+## world in which the thing being waited for genuinely cannot happen, and the
+## watchdog line says `paused=true` so nobody has to guess. It costs a failing
+## beat a few seconds; it costs a passing one nothing, because the predicate is
+## still polled every rendered frame.
 func until(test: Callable, seconds: float = 3.0) -> bool:
-	var deadline := Time.get_ticks_msec() + int(seconds * 1000.0)
+	var step := root.get_physics_process_delta_time()
+	var ticks0 := Engine.get_physics_frames()
+	var wall0 := Time.get_ticks_msec()
+	# 4x the budget plus 3 s. The worst game:wall ratio this project has measured
+	# is 0.67 at 5 fps; 0.25 is well past anything a machine with four directors
+	# on it produces, so a run that reaches this line is stalled and not merely busy.
+	var wall_deadline := wall0 + int(seconds * 4000.0) + 3000
 	while true:
 		if test.call():
 			return true
-		if Time.get_ticks_msec() >= deadline:
+		var spent := float(Engine.get_physics_frames() - ticks0) * step
+		if spent >= seconds:
+			return false
+		if Time.get_ticks_msec() >= wall_deadline:
+			print(("shoot: until() gave up on the WALL clock after %.1f s having "
+				+ "spent only %.2f s of game time out of %.2f -- the game is not "
+				+ "advancing (Engine.time_scale=%.2f, paused=%s)")
+				% [float(Time.get_ticks_msec() - wall0) / 1000.0, spent, seconds,
+					Engine.time_scale, paused])
 			return false
 		await process_frame
 	return false
