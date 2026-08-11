@@ -9,6 +9,21 @@ extends Node
 signal player_spawned(player: Node3D)
 ## Health is in QUARTER hearts. See K.HEART.
 signal player_health_changed(quarters: int, max_quarters: int)
+## A blow landed on the hero, and WHERE IT CAME FROM -- the world position of the
+## thing that threw it, straight off `Hit.from`.
+##
+## It exists because the direction is not derivable from anything else on this
+## bus: `player_health_changed` has neither a delta nor a bearing, and
+## `hit_landed` is emitted by enemies about themselves. `Hud` turns it into the
+## damage-direction arc (HUD_PLAN decision 13/29/36), which is what replaced
+## `Feel`'s full-screen vignette -- a cue that said "you were hit", which the
+## player already knew, for one that says "from behind you, on the left", which
+## an over-the-shoulder camera cannot otherwise tell them.
+##
+## Emitted only for blows that LAND. A parry, a perfect dodge, a block or an
+## i-frame all return before this, and an arc for a blow you just answered
+## correctly would be the game arguing with the player about what happened.
+signal hero_struck(from: Vector3)
 signal magic_changed(magic: int, max_magic: int)
 ## Fires on every spend and on every regen step, so the HUD never polls for it.
 signal stamina_changed(stamina: float, max_stamina: float)

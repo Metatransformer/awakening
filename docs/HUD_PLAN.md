@@ -1729,3 +1729,56 @@ All three of §13.12's deliberate reds are now closed — the rim's safe area (i
 (here). `hud_pole` garrison 10/10, `hud_pole` dungeon 10/10, `hud_lookdev` 14/14,
 zero layout failures anywhere.
 
+## 15.13 The arc is built, and RUST alone was not enough to see it
+
+Item 8 is decisions 13, 29 and 36. `Feel.damage_vignette` is deleted, `Feel` is a
+plain `Node` again (it was a `CanvasLayer` only to own the vignette's
+`ColorRect`), `Bus.hero_struck(from: Vector3)` is added and emitted from
+`Hero.take_hit`, and `Hud` draws the arc.
+
+**Emitted only for blows that land.** Every branch above the emit in `take_hit`
+is a blow the player *answered* — a parry, a perfect dodge, a block, an i-frame —
+and an arc for a parried hit is the game arguing with them about what happened.
+
+Decision 36's expression is used verbatim, `-local.z` and all, because
+`docs/CONTRACT.md` §2.5 exists for the three times facing has been derived wrong
+here. Verified by rendering it, per §4's last line: four beats at four
+camera-relative bearings put the arc at the top, right, bottom and left of the
+frame, in that order. One arc, per decision 36's overturn of 29's three.
+
+### The one thing the frames changed
+
+3 px of RUST at r = 0.42h is unmissable against sky or stone and **nearly
+invisible against grass**. The four-bearing beat showed it plainly: front, left
+and right read clean, and `behind` — over the courtyard's lit lawn — was a faint
+line you had to be told was there.
+
+That is the bearing the entire feature exists for. Front, left and right are all
+recoverable from the camera; *behind you* is the only one that is not, and it was
+the one the cue could not carry. A legibility that depends on what the floor
+happens to be made of is not a legibility.
+
+So the arc is drawn twice: a `VOID` stroke 4 px wider underneath at 0.8 alpha,
+then the RUST stroke on top. **The RUST is still exactly 3 px** — nothing about
+decision 13's restraint or §7.10's ban on a red wash is loosened; what changed is
+that the 3 px is guaranteed to arrive. It is the same underline the slip notches
+and the world plates use, which is why it needed no new idea.
+
+### Not in the layout tree, and why that is not an exemption
+
+`_draw_arc` does not `_note` itself. Decision 35 says transients are checked, and
+it is right, but it is written about the legend and the prompt — elements that
+have a *place*. A 302 px arc about screen centre has no parent it could be a
+child of and no sibling it could be asked not to touch; entering it would turn
+assertion 1 into a table of exemptions, which is the thing decision 27's tree was
+built to avoid. `_draw_sweep`'s screen-wide line is already outside the tree on
+the same grounds. The rule this settles: **the layout tree holds things that have
+a position; it does not hold things that are painted across the frame.**
+
+The radius still earns its keep here. At §5.6's original `0.28h` the arc crosses
+x 438–842 and y 158–562 — the middle third §2 rule 1 keeps empty — and it would
+have been drawn straight through the interact prompt and the crosshair, neither
+of which existed when that number was written. At `0.42h` a hit from directly
+behind puts the arc at (640, 662), which threads between the vitals pole's right
+edge (384) and the bag rim's left (1037) without touching either.
+

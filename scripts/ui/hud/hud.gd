@@ -160,6 +160,24 @@ const RIM_FLASH := 0.10
 ## frame rate. Any longer reads as a state rather than as an event.
 const DAMAGE_FLICKER_FRAMES := 2
 
+## The damage-direction arc — HUD_PLAN decisions 13, 29 and 36. It replaces
+## `Feel`'s full-screen vignette, and the trade is the whole point: a red wash
+## says *you were hit*, which the player already knows and which §7.10 bans
+## anyway; an arc at a bearing says *from behind you, on the left*, which an
+## over-the-shoulder camera cannot otherwise tell them.
+##
+## **`0.42h`, not §5.6's `0.28h`.** At 0.28 the arc passes through y 158–562 and
+## x 438–842 — straight across the middle third that STYLEGUIDE §2 rule 1 keeps
+## empty because the camera puts the fight there. That radius was authored for a
+## HUD with nothing in the centre; there is a prompt and a hold gauge there now.
+## 0.42h puts it near the frame edge, where a directional cue belongs, and it is
+## the one radius that also threads between the vitals pole and the bag rim when
+## the blow came from directly behind.
+const ARC_R := 0.42               ## fraction of screen HEIGHT
+const ARC_SPAN := deg_to_rad(40.0)
+const ARC_TIME := 0.30
+const ARC_W := 3.0
+
 ## The autosave notice. Longer than a toast on purpose: it goes up as the world
 ## fades back in (game_flow.gd `_go`), so the first third of it is spent behind
 ## a screen that is still dark. 2.2 s leaves about a second and a half of it
@@ -242,6 +260,17 @@ var _rim_flash_t: float = -1.0
 ## `DAMAGE_FLICKER_FRAMES`.
 var _damage_flicker: int = 0
 
+## The live damage arc: -1 when there is none, otherwise seconds since the blow.
+##
+## **One arc, not three.** Decision 29 allowed up to three concurrent, each on its
+## own clock, with a fourth replacing the oldest; decision 36 overturned that and
+## it is right to. Three RUST strokes around the frame at the moment the player is
+## being hit twice is decision 13's own objection — the cue fighting the fight —
+## arriving a third time. A second blow replaces this one and restarts the clock.
+var _arc_t: float = -1.0
+## Camera-relative yaw of the last blow. 0 is the TOP of the circle, clockwise.
+var _arc_bearing: float = 0.0
+
 ## Where the control legend is in its fade-in / hold / fade-out. -1 is "not up",
 ## which is its resting state — see `KEYS_FADE`.
 var _keys_t: float = -1.0
@@ -307,6 +336,7 @@ func _ready() -> void:
 			_icons[id] = tex
 
 	Bus.player_health_changed.connect(_on_health)
+	Bus.hero_struck.connect(_on_hero_struck)
 	Bus.stamina_changed.connect(_on_stamina)
 	Bus.magic_changed.connect(_on_magic)
 	Bus.bag_changed.connect(_on_bag)
@@ -706,7 +736,7 @@ func _process(delta: float) -> void:
 		busy = true
 
 	for t in [&"_toast_t", &"_save_t", &"_floor_t", &"_rim_flash_t", &"_sweep_t",
-			&"_block_flash_t", &"_heat_break_t"]:
+			&"_block_flash_t", &"_heat_break_t", &"_arc_t"]:
 		var v: float = get(t)
 		if v >= 0.0:
 			set(t, v + delta)
@@ -723,6 +753,8 @@ func _process(delta: float) -> void:
 		_rim_flash_t = -1.0
 	if _sweep_t > SWEEP_TIME:
 		_sweep_t = -1.0
+	if _arc_t > ARC_TIME:
+		_arc_t = -1.0
 	# A parry holds four times as long as a block. 0.06 s is right for "that one
 	# bounced off" — it is a tick, and it is meant to be. A parry is the rarest
 	# thing a player will do all fight and 0.24 s is still under a quarter second.
@@ -935,6 +967,15 @@ func _draw_hud() -> void:
 	_draw_lock_on(s)
 	_draw_enemy_bars(s)
 	_draw_sweep(s)
+	# Last of the world-facing cues and deliberately NOT `_note`d. It is a stroke
+	# on a circle around the whole frame, like `_draw_sweep`'s line — an event
+	# painted over everything, not an element with a place in the layout tree.
+	# Decision 35 rightly says transients are checked, and it says so about the
+	# legend and the prompt, which HAVE places. A 302 px arc has no parent it
+	# could be a child of and no sibling it could be asked not to touch; entering
+	# it would turn assertion 1 into a table of exemptions, which is exactly what
+	# decision 27's tree exists to avoid. HUD_PLAN §15.13.
+	_draw_arc(s)
 	_draw_controls(s)
 	_draw_floor(s)
 	_seal_layout()
@@ -2483,6 +2524,71 @@ func _draw_extraction(s: Vector2) -> void:
 	var br := Pal.RIM_BR * s
 	HoldGauge.frame(_canvas, Rect2(tl, br - tl), _extract_hold,
 		Pal.px(3.0, s.y), Pal.CYAN)
+
+
+## Where the blow came from, in camera space, as a bearing with 0 at the top of
+## the circle and increasing clockwise.
+##
+## **The expression is written out because `docs/CONTRACT.md` §2.5 exists.**
+## Facing has been derived wrong three times in this repo — the hero rig, the
+## weapon socket, and the whole monster roster — so this is not left to whoever
+## reads "camera-relative yaw" next:
+##
+##     local   = cam.basis.inverse() * (from - hero.global_position)
+##     bearing = atan2(local.x, -local.z)
+##
+## `-local.z` because a Node3D's forward is `-basis.z`. A blow from straight
+## ahead is 0 and draws at the TOP; one from straight behind is PI and draws at
+## the BOTTOM. That is the near-universal convention and it is fine — what is not
+## fine is leaving it unwritten, because "behind me" rendered at the bottom of
+## the screen reads as "below me" to anyone who has not been told.
+func _on_hero_struck(from: Vector3) -> void:
+	var hero := get_tree().get_first_node_in_group(&"player") as Node3D
+	var cam := _canvas.get_viewport().get_camera_3d()
+	if hero == null or cam == null:
+		return
+	var local := cam.global_transform.basis.inverse() * (from - hero.global_position)
+	# A blow with no direction — a floor spike, a drown, `Hit.from` left at ZERO
+	# on a hero standing at the origin. Draw nothing rather than draw "north": an
+	# arrow pointing at a lie is worse than no arrow.
+	if absf(local.x) < 0.001 and absf(local.z) < 0.001:
+		return
+	_arc_bearing = atan2(local.x, -local.z)
+	_arc_t = 0.0
+	_wake()
+
+
+## The arc itself. 3 px RUST, 40 degrees, 300 ms, at `ARC_R` about screen centre.
+##
+## Godot's `draw_arc` measures from +X and runs clockwise on a screen whose y
+## grows downward, so the bearing is turned a quarter-turn to put 0 at the top.
+## That single `- PI * 0.5` is the whole of the convention above, and it is here
+## rather than in `_on_hero_struck` so the stored bearing stays a bearing.
+func _draw_arc(s: Vector2) -> void:
+	if _arc_t < 0.0:
+		return
+	# Fades out over its whole life rather than holding then dropping. It is a
+	# 300 ms stroke; a hold would need a fade shorter than three frames to fit,
+	# and a cue that vanishes is a cue the player is not sure they saw.
+	var a := 1.0 - clampf(_arc_t / ARC_TIME, 0.0, 1.0)
+	var mid := _arc_bearing - PI * 0.5
+	var r := ARC_R * s.y
+	var from := mid - ARC_SPAN * 0.5
+	var to := mid + ARC_SPAN * 0.5
+	# **A VOID underline first.** RUST on a sunlit wall is unmissable and RUST on
+	# dark grass is nearly nothing, and the frames say so: the four-bearing beat
+	# reads clean at front, left and right and almost vanishes at BEHIND — which
+	# is the one bearing this whole feature exists for, because it is the only one
+	# the player cannot get any other way. A cue whose legibility depends on what
+	# the courtyard is made of is not a cue.
+	#
+	# The same trick as the slip notches and the world plates, and the cheapest
+	# form of it: the RUST stroke stays exactly 3 px, so nothing about §7.10's
+	# restraint changes — what changes is that the 3 px is guaranteed to be seen.
+	_canvas.draw_arc(s * 0.5, r, from, to, 24, Color(Pal.VOID, a * 0.8),
+		Pal.px(ARC_W + 4.0, s.y), true)
+	_canvas.draw_arc(s * 0.5, r, from, to, 24, Color(Pal.RUST, a),
+		Pal.px(ARC_W, s.y), true)
 
 
 ## One screen-wide event, then silence. A permanent "the way out now costs

@@ -914,7 +914,8 @@ at the counter, where you have stopped to think about it.
 **FADES IN:** item toasts; lock-on brackets and target health; the extraction
 promotion and sweep; the room name card (Jacquard 24 @24 px, BONE 30%, centre
 x `0.5`, baseline y `0.139`, 1.4 s on room entry); damage-direction arc (3 px
-RUST, 40°, radius `0.28h` about centre, 300 ms); interaction prompts; gold
+RUST, 40°, radius **`0.42h`** about centre, 300 ms, camera-relative bearing with
+0° at the top and clockwise — one arc, a second blow replaces it); interaction prompts; gold
 floaters; **and the garrison control legend** — 0.6 s in, 10 s, 0.6 s out, on
 three moments only: the overlay coming up in a garrison, a device change, and a
 run ending. It is the largest block of text on the HUD and it feeds nothing about
@@ -1042,7 +1043,7 @@ point, and a fourth right edge is what made the column read as ragged.
 | Room name baseline (0.139) | Replaced by the top-left floor card, which anchors off its own constants. `Pal.ROOM_NAME_BASELINE` gone. |
 | Slips top (0.803) | The stack grows UPWARD from its bottom; the top is derived from the count and was never authored. `Pal.SLIPS_TOP` gone. |
 | Heat premium baseline (0.735) | The premium is drawn beside the heat bar in the vitals pole, where a state of the body belongs. `Pal.PREMIUM_BASELINE` gone. |
-| Damage arc (r = 0.28h) | Still to be built — HUD_PLAN decision 13 and 29 own it, and it will land at r = 0.42h with a camera-relative bearing. Listing it here as though it shipped is how a doc starts lying. |
+| Damage arc | **Built, at r = 0.42h.** `0.28h` passes through x 438–842 and y 158–562 — straight across the middle third §2 rule 1 keeps empty for the fight, on a HUD that has since gained a prompt and a crosshair there. `Feel.damage_vignette` is deleted and `Feel` is no longer a `CanvasLayer`; the bearing rides `Bus.hero_struck(from)`. |
 
 #### The two plate recipes
 

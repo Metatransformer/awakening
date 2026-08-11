@@ -159,6 +159,37 @@ func run(rig) -> void:
 			+ "the h_10/h_11 frames prove nothing")
 		_fails += 1
 
+	# 9. The damage arc, at the four cardinal bearings. It replaced `Feel`'s
+	#    full-screen vignette (decision 13), and the ONLY thing it adds over that
+	#    vignette is the direction — so a director that photographs one arc has
+	#    checked nothing. Four frames, four quadrants, or the convention in
+	#    `Hud._on_hero_struck` is unverified.
+	#
+	#    Driven through `Bus.hero_struck` with a world position built from the
+	#    CAMERA's basis, which is the same transform the HUD inverts. Feeding it
+	#    world axes instead would pass or fail on where the courtyard happens to
+	#    be pointing.
+	var hero3 := rig.get_first_node_in_group(&"player") as Node3D
+	var cam := rig.root.get_camera_3d() as Camera3D
+	if hero3 == null or cam == null:
+		print("HUD FAIL no hero or no camera — the arc frames prove nothing")
+		_fails += 1
+	else:
+		# local -Z is forward, so this is: in front, to the right, behind, to the
+		# left. The arc must land top, right, bottom, left in that order.
+		var dirs := {
+			"front": Vector3(0.0, 0.0, -3.0),
+			"right": Vector3(3.0, 0.0, 0.0),
+			"behind": Vector3(0.0, 0.0, 3.0),
+			"left": Vector3(-3.0, 0.0, 0.0),
+		}
+		for name: String in dirs:
+			var world: Vector3 = (hero3.global_position
+				+ cam.global_transform.basis * (dirs[name] as Vector3))
+			Bus.hero_struck.emit(world)
+			await _shot(rig, out.path_join("h_12_arc_%s.png" % name),
+				"h_12_arc_%s" % name)
+
 	print("HUDCHECK bag=%d value=%d slots=%d/%d fee=%d gold=%d" % [
 		Run.bag_count(), Run.bag_value(), Run.slots_used(), Game.bag_slots,
 		Run.extract_cost(), Game.gold])

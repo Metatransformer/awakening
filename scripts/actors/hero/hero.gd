@@ -2780,6 +2780,12 @@ func take_hit(hit: Hit) -> bool:
 		_speed = 0.0
 	Bus.request_hitstop.emit(K.HITSTOP_LIGHT)
 	Bus.request_shake.emit(0.80, 0.18)
+	# WHERE it came from, which nothing else on the bus carries. The HUD draws one
+	# arc at that bearing (HUD_PLAN decision 36) in place of the full-screen red
+	# wash this used to get. Emitted here and not earlier on purpose: every branch
+	# above is a blow the player ANSWERED, and an arc for a parried hit would be
+	# the game arguing with them about what just happened.
+	Bus.hero_struck.emit(hit.from)
 	return true
 
 

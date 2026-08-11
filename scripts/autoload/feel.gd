@@ -1,4 +1,4 @@
-extends CanvasLayer
+extends Node
 ## Autoload `Feel`. The screen's reaction to a blow: hit-stop, camera shake, and
 ## the red edge flash when it is the hero who got hit.
 ##
@@ -21,10 +21,13 @@ extends CanvasLayer
 ## that shipped, passed its own beat, and could not be seen. Landing a blow is
 ## ~0.5, killing something ~0.65, being hit yourself ~0.8.
 ##
-## A CanvasLayer rather than a plain Node because the damage vignette is a
-## full-screen overlay this owns. Layer 60: above the HUD (50), below the pause
-## menu (100) and Flow's fade (200) -- being hurt should tint the health bar, and
-## should not tint the menu you opened to look at it.
+## **A plain Node.** It was a `CanvasLayer` at layer 60, because it owned a
+## full-screen damage vignette. That vignette is gone (HUD_PLAN decision 13/37):
+## a red wash at the moment you need to read a telegraph is the cue fighting the
+## fight, and it said "you were hit", which the player already knew. Its budget
+## bought the damage-direction arc in `Hud`, which says the thing an
+## over-the-shoulder camera cannot: *from behind you, on the left*. Feel keeps
+## hit-stop, slow-motion and shake, and draws nothing.
 
 ## Frustum shift at full trauma. h_offset moves the VIEW, not the eye, so the
 ## shake can be as big as it likes without ever clipping the boom through a wall
@@ -62,19 +65,16 @@ var _slow_scale: float = 1.0
 ## See `_on_pre_draw`.
 var _roll: float = 0.0
 
-var _vignette: ColorRect
-var _vig: float = 0.0
-## Mirrored so a health signal reads as "he was hurt" rather than "health is now
-## N" -- Bus.player_health_changed carries no delta. Seeded from Game for the
-## reason heat.gd documents: nothing emits the signal at spawn, so a sentinel
-## makes the FIRST blow of a session look like a heal and eat its own feedback.
-var _last_quarters: int = 0
+# `_last_quarters` was here, mirroring health so that a signal carrying no delta
+# could be read as "he was hurt". Nothing in this file needs to know that any
+# more: the vignette was its only reader, and the cue that replaced it wants a
+# DIRECTION, which no health signal has ever carried. See `Bus.hero_struck`.
 
 
 func _ready() -> void:
-	layer = 60
-	# The stop has to be able to end while the world is frozen, and the vignette
-	# has to be able to fade while the pause menu is up.
+	# The stop has to be able to end while the world is frozen: `hitstop` sets
+	# `Engine.time_scale = 0.0`, so a stop that failed to lift would be the game
+	# hung solid rather than an effect that went missing.
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 	_noise = FastNoiseLite.new()
@@ -100,23 +100,9 @@ func _ready() -> void:
 	# and physics callback and before the picture is taken.
 	RenderingServer.frame_pre_draw.connect(_on_pre_draw)
 
-	_vignette = ColorRect.new()
-	_vignette.name = "Vignette"
-	_vignette.color = Color(Pal.VITAL, 0.0)
-	_vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_vignette.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_vignette.material = _edge_only()
-	add_child(_vignette)
 
 	Bus.request_hitstop.connect(hitstop)
 	Bus.request_shake.connect(shake)
-	Bus.player_health_changed.connect(_on_health_changed)
-	# Both ends of a run heal the hero, and neither is a blow. Re-read rather
-	# than let the heal register as a delta.
-	Bus.run_started.connect(func(_s: int) -> void: _last_quarters = Game.quarters)
-	Bus.run_ended.connect(func(_e: bool, _c: Dictionary, _v: int) -> void:
-		_last_quarters = Game.quarters)
-	_last_quarters = Game.quarters
 
 
 # --- The public verbs -------------------------------------------------------
@@ -197,10 +183,11 @@ func shake(strength: float, duration: float) -> void:
 	_decay = _trauma / maxf(duration, 0.05)
 
 
-## Red at the edges of the screen. Fired by the health signal below rather than
-## called, so nothing has to remember to ask.
-func damage_vignette(strength: float = 0.55) -> void:
-	_vig = maxf(_vig, clampf(strength, 0.0, 0.85))
+# `damage_vignette()` was here. It is deleted, not moved -- HUD_PLAN decision 37.
+# It fired off `Bus.player_health_changed`, which is why this file also lost
+# `_last_quarters` and its whole reason for tracking a health delta: the
+# direction a blow came from is not derivable from a health signal, so the
+# replacement rides `Bus.hero_struck(from)` and belongs to `Hud`.
 
 
 # --- Frame ------------------------------------------------------------------
@@ -217,7 +204,6 @@ func damage_vignette(strength: float = 0.55) -> void:
 func _process(delta: float) -> void:
 	_tick_time()
 	_tick_shake(delta)
-	_tick_vignette(delta)
 
 
 ## Both clocks end on the WALL clock, not on a timer awaited inside the freeze.
@@ -306,43 +292,6 @@ func _tick_shake(delta: float) -> void:
 	cam.v_offset = MAX_OFFSET * s * _noise.get_noise_2d(_noise_t, 53.1)
 	_roll = MAX_ROLL * s * _noise.get_noise_2d(_noise_t, 97.3)
 	cam.rotation.z = _roll
-
-
-func _tick_vignette(delta: float) -> void:
-	if _vig <= 0.0:
-		if _vignette.color.a != 0.0:
-			_vignette.color.a = 0.0
-		return
-	var dt := delta if Engine.time_scale > 0.0 else 1.0 / 60.0
-	_vig = maxf(0.0, _vig - dt * 1.9)
-	_vignette.color.a = _vig
-
-
-func _on_health_changed(quarters: int, _max_quarters: int) -> void:
-	var hurt := quarters < _last_quarters
-	_last_quarters = quarters
-	if hurt:
-		damage_vignette()
-
-
-## A radial gradient in a shader rather than a generated texture: the fade has to
-## follow the window when it resizes, and a baked 192px image stretched to
-## ultrawide bands visibly. Also nothing to import.
-func _edge_only() -> ShaderMaterial:
-	var sh := Shader.new()
-	sh.code = """
-shader_type canvas_item;
-
-void fragment() {
-	// UV is 0..1 across the rect, so this is aspect-stretched on purpose -- the
-	// dark band should hug the frame's edges, not describe a circle inside it.
-	float d = distance(UV, vec2(0.5)) * 1.41421;
-	COLOR.a *= smoothstep(0.45, 1.0, d);
-}
-"""
-	var m := ShaderMaterial.new()
-	m.shader = sh
-	return m
 
 
 ## Restamp the roll onto the camera immediately before the frame is drawn.
