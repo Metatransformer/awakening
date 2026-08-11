@@ -555,6 +555,23 @@ player has left is the floor that gets drowned; and the donut's 6.2 m outer ring
 becomes most of the room, so *walk toward it* stops being the clever answer and
 becomes the only one. **No new beat, no number in the move set touched.**
 
+**Measured, after the fact, because "becomes most of the room" is the kind of
+sentence that turns out to mean "becomes all of it".** Board card 47, section M
+of `tools/directors/boss_cistern.gd`: the fence's *inner face* — twenty 0.45 m
+panels centred on the radius, so the floor stops about 0.23 m inside the authored
+number — goes **10.77 m → 8.27 m**, and the standable floor outside the 6.2 m
+ring with it, **4.22 m → 1.72 m**. Both of the section's answers survive: the
+hole under the chin is 0 → 2.1 m either side of the turn, because it is a fact
+about the beat and the fence cannot reach it, and the slam still takes nothing at
+1.4 m and its full four at 4.4 m after the shrink. What the turn takes away is
+the *choice* between them, which is the paragraph above stated as an annulus.
+
+**The margin, so the next person to tune 8.5 knows what they are spending.** The
+outer band is `to − 0.58` metres wide (0.23 of panel, 0.35 of hero radius) less
+the ring's 6.2, so it closes to nothing at a fence of about **6.8 m**. 8.5 is
+1.7 m clear of that. Below 6.8 the only floor in the room is the hole, and the
+Warden stops being a fight with two answers and becomes a fight with one.
+
 **The row.** Only `arena` changes; every other key stays exactly where it is.
 
 ```gdscript
@@ -1075,6 +1092,17 @@ should be enough, and "should be enough" is not the bar this repo uses.
 },
 ```
 
+**And the last two keys in that row do not exist, which board card 47 found by
+aiming at one of them.** `BossDb`'s Riven Knight carries
+`{"kind": TURN_KEYSTONE, "at": TURN_AT}` and nothing else; the mass is
+`BossArena.KEYSTONE_SIZE`, a single `Vector3(3.0, 2.4, 3.0)`, and the anchor is
+built at `KEYSTONE_SIZE.y + 0.15` = **2.55 m**. That is the right shape and not a
+gap to fill: the anchor has to sit on top of the mass, so a row that carried both
+would be two numbers that must agree, and the first person to change one of them
+would get a ring floating over a block or buried in it. Read the height off the
+built `HookTarget`, never off a row key — **the block above is the doc being wrong
+and is left standing only so this paragraph has something to point at.**
+
 ---
 
 ## 7. The diagonal, walked
@@ -1333,9 +1361,24 @@ gets its own director on that pattern — `boss_foundry.gd`, `boss_choir.gd`,
   lens, which photographed the wall and not the hero. And the boss's
   `arena_radius()` follows: 11.0 → 8.5 on both, asserted separately, because §5
   note 1 is the one that scatters the Warden's discs in the room the fence used
-  to be in. **Still open, and small:** that the donut's second answer (§6.1, the
-  4.4 m `safe_inner`) still works after the shrink. Section F proves the donut
-  before the turn; nobody has re-run it at 8.5 m.
+  to be in.
+- **Warden, the donut on the far side of the shrink: DONE**, and it is section M
+  of the same file (board card 47). This used to be the last open line on the
+  turn, and it used to name the number wrong: `cistern_drop`'s `safe_inner` is
+  **2.1 m**, not the 4.4 m section F probes the *ring* at. Both halves of the
+  donut re-measured after the turn has fired, with F's own function and F's own
+  expected quarters: **1.4 m takes 0, 4.4 m takes 4**
+  (`b_06_commit_m3/m4_cistern_drop.png`). The floor itself is measured rather
+  than read off the row — twenty-four rays out of the arena's pivot, because a
+  seal is twenty 0.45 m panels *centred* on the radius and the floor stops
+  ~0.23 m inside the number. **The fence's inner face goes 10.77 m → 8.27 m, so
+  the standable floor outside the 6.2 m ring goes 4.22 m → 1.72 m** and the hole
+  under the chin is 0 → 2.1 m on both sides of the turn, because the fence
+  cannot reach it. `b_22_cistern_warden_band.png` is the picture: the Warden on
+  the pivot with its ring filling the room, and the hero on the strip of floor
+  left between the ring's edge and the new wall. **The verdict: both of §6.1's
+  answers survive, and what the turn takes is the choice between them** — which
+  is what §6.1 says it is for.
 - **Slag Ogre: DONE**, and it lives in `boss_cistern.gd` §K (`_receptacle`,
   `_charge_shot`) rather than in a `boss_foundry.gd` of its own — the Warden's
   director already had the arena, the bow and the hero in it, and a second file
@@ -1363,11 +1406,30 @@ gets its own director on that pattern — `boss_foundry.gd`, `boss_choir.gd`,
   22), so this is new ground and it is where the add-level bug will show.
 - **Riven Knight:** **the arena has no `HookTarget` in it before the turn and one
   after it — DONE** (section L: 0 hookables before, 1 after, and the mass is
-  asserted solid, centred and on the floor; `b_40/41_riven_knight`). §6.4 also
-  wants the *failed press* photographed, and that is not done. Still open: a
-  charge into the keystone ends early and the punish opens anyway; the hookshot
-  actually pulls the hero to it; and the boss does **not** stall behind the
-  keystone — thirty seconds of fight after the turn with beats still landing.
+  asserted solid, centred and on the floor; `b_40/41_riven_knight`).
+  **The failed press §6.4 asks for is photographed too — DONE**, section N of the
+  same file (board card 47), and with it the second still-open line: the hookshot
+  really does pull the hero to the keystone. One function fires both presses so
+  the only difference between them is the room, and both are shot from the hero's
+  own shoulder at the same instant of the same flight — the barb at 0.80 of its
+  reach, because the tether is torn down on the frame the chain *arrives* and a
+  shutter waiting for full extension photographs an empty room in both cases.
+  Before: `bit=false`, and he is standing exactly where he pressed, 0.00 m
+  (`b_44_riven_knight_press_drops.png` — the chain sails past the middle of the
+  arena and drops). After: the barb catches, and it moves him **6.09 m to
+  (0.00, 2.40, 0.41)** — 0.41 m off the pivot and standing on top of the mass, not
+  beside it (`b_45_..._press_catches.png`, `b_46_..._crossed.png`). The Knight is
+  held in `State.IDLE` for both, which is section L's argument about the bleed
+  with a sharper edge on it: `HeroRanged._fire_hookshot`'s raycast carries
+  `K.L_ENEMY`, so a Knight that had walked into the lane would be *bitten* — a
+  third outcome that photographs almost exactly like the failed press it is
+  standing next to. **And aiming at the anchor found a stale row**: §6.4's pasted
+  block ends `"radius": 1.5, "hook_y": 2.4` and **neither key exists** — the mass
+  is `BossArena.KEYSTONE_SIZE` and the anchor is built at 2.55 m, not 2.4. §6.4
+  now says so; the doc was the thing that was wrong.
+  Still open: a charge into the keystone ends early and the punish opens anyway;
+  and the boss does **not** stall behind the keystone — thirty seconds of fight
+  after the turn with beats still landing.
 
 And `--warmup`, `timeout 400`, and `tools/quiet.sh` rather than bare `godot`,
 for the reasons `CLAUDE.md` §2 gives at length.

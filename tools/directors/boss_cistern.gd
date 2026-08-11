@@ -46,6 +46,16 @@ extends RefCounted
 ##      `Bus.boss_phase_changed` emit, with the Warden's annulus guard as its own
 ##      beat -- the hero standing at 10 m when a fence rises at 8.5. See the
 ##      section's own header.
+##   M  **The Warden's floor AFTER the shrink** (board card 47). Section F above
+##      proves the donut at the 11.0 m arena and only there. This runs the same
+##      measurement on the other side of the turn, and measures how much floor is
+##      left outside the ring with a raycast rather than reading it off the row.
+##      See the section's own header.
+##   N  **The Riven Knight's hookshot press, photographed** (board card 47).
+##      Section L counts the hookables either side of the turn; `docs/BOSSES.md`
+##      §6.4 asks for the FAILED press as a picture, because floor 4's fight
+##      shape is "the item is both the way across and the way back" and a count
+##      is not the player's experience of it. See the section's own header.
 ##
 ## Every beat is thrown through `force_beat`. `BossDb.pick_beat` is weighted
 ## random by design, so no amount of positioning can guarantee a particular one,
@@ -1296,15 +1306,24 @@ func _turns(rig) -> void:
 	# the frame is a black rectangle with two health bars in it. A relight here
 	# would be the director undoing the thing it just proved.
 	await _turn_of(rig, &"cistern_warden", "L1", 20, 10.0)
+	# **M and N sit INSIDE L's ordering and not after it**, for the same reason
+	# the Bellwake is last: both stand up a fight of their own, and a section that
+	# ran after a `douse` would photograph a barb in a black room.
+	await _warden_floor(rig)
 	await _turn_of(rig, &"slag_ogre", "L2", 30, 0.0)
 	await _turn_of(rig, &"riven_knight", "L3", 40, 0.0)
+	await _keystone_press(rig)
 	await _turn_of(rig, &"bellwake", "L4", 50, 0.0)
 
 
-## One fight's turn, end to end. `kite_r` is how far out from the middle the hero
-## is standing when it fires -- 0.0 means "leave him on the mark", and the
-## Warden's 10.0 is the annulus.
-func _turn_of(rig, id: StringName, tag: String, shot: int, kite_r: float) -> void:
+## A fight standing alone in the middle of the chamber, with whatever the last
+## one left behind cleared out from under it.
+##
+## Shared by L, M and N. Building a `BossArena` from the bare script into
+## `_boss_test.tscn` is both the cheapest fixture and a test of the construction
+## path `Dungeon._place_boss` uses -- and it is the same fifteen lines three
+## times if each section keeps its own copy, which is how the second one drifts.
+func _fresh_arena(rig, id: StringName, offset: Vector3) -> Area3D:
 	var root: Node = rig.scene()
 	for n in root.get_children():
 		if n.name.begins_with("Arena") or n.name.begins_with("BossDoor") \
@@ -1321,14 +1340,35 @@ func _turn_of(rig, id: StringName, tag: String, shot: int, kite_r: float) -> voi
 	var arena := (load("res://scripts/world/boss_arena.gd") as GDScript).new() as Area3D
 	arena.name = "Turn_%s" % id
 	arena.set(&"boss_id", id)
-	# `&""`, like a miniboss chamber: this section is about the room and not the
-	# economy, and a `boss` slot here would have every fight it stands up trying
-	# to place floor 1's relic on the floor.
+	# `&""`, like a miniboss chamber: these sections are about the room and not
+	# the economy, and a `boss` slot here would have every fight they stand up
+	# trying to place floor 1's relic on the floor.
 	arena.set(&"relic_slot", &"")
-	arena.set(&"boss_offset", Vector3(0.0, 0.0, -5.0))
+	arena.set(&"boss_offset", offset)
 	root.add_child(arena)
 	(arena as Node3D).global_position = Vector3.ZERO
 	await rig.wait_frames(24)
+	return arena
+
+
+## Give the lens back to the hero's own camera.
+##
+## `Camera3D.current` is a single global fact and nothing in the game ever takes
+## it back, so section L's fixed `TurnEye` owns every frame shot after it until
+## something says otherwise. That is right for L -- a before/after pair of one
+## room must not differ by the lens -- and wrong for M's commits and N's presses,
+## which are photographs of what the PLAYER is looking at.
+func _game_eye(rig) -> void:
+	var cam := rig.scene().get_node_or_null(^"GameCamera") as Camera3D
+	if cam != null:
+		cam.make_current()
+
+
+## One fight's turn, end to end. `kite_r` is how far out from the middle the hero
+## is standing when it fires -- 0.0 means "leave him on the mark", and the
+## Warden's 10.0 is the annulus.
+func _turn_of(rig, id: StringName, tag: String, shot: int, kite_r: float) -> void:
+	var arena := await _fresh_arena(rig, id, Vector3(0.0, 0.0, -5.0))
 
 	var boss: Node = arena.boss()
 	_ck("%s0 the arena stood up %s" % [tag, id], boss != null)
@@ -1626,3 +1666,519 @@ func _motes(arena: Node) -> Array[LootMote]:
 		if n is LootMote:
 			out.append(n as LootMote)
 	return out
+
+
+# --- M. The Warden's floor, after the fence walked in --------------------------
+
+## **`docs/BOSSES.md` §6.1 and §9's last open line on the shrink. Board card 47.**
+##
+## Section F above proves the donut at the **11.0 m** arena and only there:
+## `cistern_drop` takes its four quarters at 4.4 m and takes NOTHING under the
+## chin at 1.4 m, which is floor 1's whole fight shape — the answer to the
+## biggest, loudest attack in the fight is to walk toward it. Card 41 then moved
+## the fence to **8.5 m** at half health and nobody re-ran F on the other side of
+## it. If the donut and the shrunken fence leave nowhere to stand, floor 1's
+## escalation deletes floor 1's fight shape, silently, at half health, in front of
+## an audience.
+##
+##   M1  **The floor BEFORE**, measured off the fence rather than read off the
+##       row — twenty-four rays out of the arena's own pivot. The row says 11.0
+##       and the floor stops about a fifth of a metre inside it, because a seal is
+##       twenty 0.45 m panels centred ON that radius; it is the floor the player
+##       stands on that this section is about and not the number.
+##   M2  The turn fires and the fence's inner face moves with it.
+##   M3  **The hole still works.** Section F's own measurement — `cistern_drop`,
+##       1.4 m, zero quarters — after the shrink.
+##   M4  **And it is still a donut.** The same beat at 4.4 m still lands its four.
+##       A slam whose safe hole had swallowed the ring would pass M3 and be a
+##       fight with no attack in it, which is the failure M3 alone cannot see.
+##   M5  **There is still floor outside the ring to stand on**, and it is the one
+##       claim the shrink could actually break. The boss parked in the middle of
+##       its own arena, the hero at 7.0 m — outside the 6.2 m ring, inside the new
+##       fence — taking nothing from the slam and able to walk out of where he is
+##       standing.
+##
+## The verdict M reports is an ANNULUS and not a yes/no, because the two answers
+## §6.1 gives the player are on opposite sides of the ring and the shrink only
+## touches one of them. The hole (0 → 2.1 m) is a fact about the beat and the
+## fence cannot reach it. The kiting ground (6.2 m → the fence) is what the turn
+## is aimed at, and §6.1 says out loud that taking it away is the point.
+
+## Bearings the fence is measured on. Twenty against twenty panels would sample
+## one point per panel and could sit on the joints for ever; twenty-four walks
+## across them.
+const FENCE_BEARINGS := 24
+
+## Where M5 stands the hero: outside `cistern_drop`'s 6.2 m ring and inside the
+## 8.5 m fence, on the same bearing L1's kiting player ran down so the two frames
+## read as the same corner of the same room.
+const BAND_STAND := 7.0
+
+
+func _warden_floor(rig) -> void:
+	var arena := await _fresh_arena(rig, &"cistern_warden",
+		Vector3(0.0, 0.0, -WATCH_DIST * 0.5))
+	var boss: Node = arena.boss()
+	_ck("M0 the arena stood the Warden up again", boss != null)
+	if boss == null:
+		return
+	_game_eye(rig)
+	var hp: HealthComponent = boss.get(&"health")
+	var b := BossDb.beat(&"cistern_warden", &"cistern_drop")
+	var inner := float(b["safe_inner"])
+	var outer := float(b["radius"])
+
+	# Walked in, so the fence that is about to be measured is the fence a fight
+	# actually raises.
+	await _stand_at(rig, Vector3(3.0, 0.05, 4.5), (boss as Node3D).global_position)
+	await _until(rig, func() -> bool: return arena.is_sealed(), 240)
+	# `SEAL_RISE` is a tween and the ray does not care what the mesh is doing --
+	# but the COLLISION rides the same node, so a ray fired while the ring is
+	# still coming up out of the floor passes over the top of it and reports the
+	# masonry at 13 m. Waited out rather than assumed.
+	await rig.wait_frames(40)
+	Game.heal(999)
+
+	var face0 := _fence_face(arena)
+	_ck("M1 the room sealed at the authored 11.0 m (inner face %.2f m)" % face0.x,
+		arena.is_sealed() and absf(face0.x - 11.0) < 0.6)
+	print("BOSS M1 before: fence face %.2f..%.2f m, standable to %.2f m; "
+		% [face0.x, face0.y, face0.x - K.HERO_RADIUS]
+		+ "donut %.1f..%.1f m -> %.2f m of floor outside the ring"
+		% [inner, outer, face0.x - K.HERO_RADIUS - outer])
+
+	# One blow to a quarter above the threshold, one more to cross it. The same
+	# two-step section L uses, and for the same reason: `HealthComponent` holds
+	# 0.20 s of i-frames and a burst would be one landed hit and a swallow.
+	var half := hp.max_quarters / 2
+	_bleed(boss, hp.max_quarters - (half + 1))
+	await rig.wait_frames(4)
+	await _until(rig, func() -> bool: return not hp.is_invulnerable(), 60)
+	_bleed(boss, 1)
+	await rig.wait_frames(70)
+
+	var face1 := _fence_face(arena)
+	var band0 := face0.x - K.HERO_RADIUS - outer
+	var band1 := face1.x - K.HERO_RADIUS - outer
+	_ck("M2 the fence walked in (%.2f -> %.2f m of inner face)"
+		% [face0.x, face1.x],
+		arena.has_turned() and absf(face1.x - 8.5) < 0.6 and face1.x < face0.x)
+	print("BOSS M2 after:  fence face %.2f..%.2f m, standable to %.2f m; "
+		% [face1.x, face1.y, face1.x - K.HERO_RADIUS]
+		+ "donut %.1f..%.1f m -> %.2f m of floor outside the ring"
+		% [inner, outer, band1])
+	print("BOSS M2 THE ANNULUS: outside the ring %.2f m -> %.2f m of standable "
+		% [band0, band1] + "floor; the hole is 0.00 -> %.2f m either way" % inner)
+
+	# **Section F, re-run, on the other side of the turn.** Same function, same
+	# two distances, same expected quarters -- the only thing that has changed
+	# between F and this is the fence, which is the whole question.
+	await _commit_beat(rig, arena, boss, &"cistern_drop", 1.4, false, "M3", 0)
+	await _commit_beat(rig, arena, boss, &"cistern_drop", 4.4, false, "M4", 4)
+
+	await _band_stand(rig, arena, boss, b)
+	# **`_phases` is `_turn_of`'s ledger and this section fires a turn into it.**
+	# Left behind, it is a `boss_phase_changed` the NEXT fight's L2 blames on
+	# itself: "nothing has turned yet" reads a non-empty array and fails, and the
+	# emit count comes out at two. Six checks in L failed exactly this way the
+	# first time M and N were run inside its ordering.
+	_phases.clear()
+
+
+## M5. The floor left OUTSIDE the ring, stood on.
+##
+## Written out rather than handed to `_commit_beat` because that function measures
+## from the boss's own mark (`_park_boss`, half a `WATCH_DIST` up the room) and
+## this claim is about the arena's middle: "is there floor between the ring and
+## the fence" only means anything when the two circles share a centre. So the
+## boss is parked ON the pivot and the hero put out on L1's kiting bearing, which
+## also puts the pair where `_eye`'s annulus mark can see both.
+func _band_stand(rig, arena: Node, boss: Node, b: Dictionary) -> void:
+	var here: Vector3 = (arena as Node3D).global_position
+	var at := here + KITE_DIR * BAND_STAND + Vector3(0.0, 0.05, 0.0)
+	_park_centre(arena, boss, at)
+	await _stand_at(rig, at, here)
+	boss.force_beat(&"cistern_drop")
+	await _until(rig, func() -> bool: return boss.current_beat() == &"cistern_drop" \
+		and boss.state == Enemy.State.WINDUP, 600)
+	# Re-parked during the tell, the one window where the boss is rooted, so the
+	# distance under test is the distance at the commit -- `_commit_beat` makes
+	# the same move for the same reason.
+	_park_centre(arena, boss, at)
+	await _stand_at(rig, at, here, false)
+	_eye(rig, arena, true)
+	Game.heal(999)
+	var hero := _hero(rig)
+	var stand := K.plane(hero.global_position - here).length()
+	var gap := K.plane(hero.global_position - (boss as Node3D).global_position).length()
+	var before := Game.quarters
+	await _until(rig, func() -> bool: return boss.state == Enemy.State.STRIKE, 300)
+	await rig.capture(out.path_join("b_22_cistern_warden_band.png"))
+	await rig.wait_seconds(0.7)
+	var took := before - Game.quarters
+	print("BOSS M5 standing at %.2f m of the pivot, %.2f m of the boss: %d -> %d q"
+		% [stand, gap, before, Game.quarters])
+	_ck("M5 the band outside the ring is inside the fence (%.2f m of %.2f)"
+		% [stand, _fence_face(arena).x], stand < _fence_face(arena).x - K.HERO_RADIUS)
+	_ck("M5b and the slam does not reach it (took %d, ring ends at %.1f m)"
+		% [took, float(b["radius"])], took == 0)
+	# "There is floor" is a claim about the physics and not about a coordinate: a
+	# body a hair inside a `StaticBody3D` reports a perfectly good position and
+	# cannot walk out of it. L1's own check, on the band rather than on the pull.
+	var walked := await _can_walk(rig, hero)
+	_ck("M5c and he can stand and move in it -- he walks %.2f m" % walked,
+		walked > 0.30)
+	await _until(rig, func() -> bool: return boss.state == Enemy.State.CHASE, 500)
+
+
+## The fence's inner face, in metres off the arena's pivot, measured.
+##
+## Read rather than derived, which is `CLAUDE.md` §4 wearing a different hat. The
+## row says 11.0 and 8.5; a seal is twenty 0.45 m panels CENTRED on that radius
+## and overlapped 1.2x at the joints, so the floor stops somewhere inside the
+## number and the amount is not a thing to work out on paper. Returns the nearest
+## and furthest hit, because the spread between them IS the panelling.
+##
+## `K.L_WORLD` only: the hero is on `L_PLAYER` and the boss on `L_ENEMY`, so
+## neither body can stand in for a wall. The chamber's own masonry is at 13 m and
+## every fence this measures is inside it.
+func _fence_face(arena: Node) -> Vector2:
+	var here: Vector3 = (arena as Node3D).global_position + Vector3(0.0, 0.9, 0.0)
+	var space := (arena as Node3D).get_world_3d().direct_space_state
+	var q := PhysicsRayQueryParameters3D.new()
+	q.collision_mask = K.L_WORLD
+	q.collide_with_bodies = true
+	q.collide_with_areas = false
+	var lo := INF
+	var hi := 0.0
+	for i in FENCE_BEARINGS:
+		var a := TAU * float(i) / float(FENCE_BEARINGS)
+		q.from = here
+		q.to = here + Vector3(cos(a), 0.0, sin(a)) * 20.0
+		var hit := space.intersect_ray(q)
+		if hit.is_empty():
+			continue
+		# `K.plane` and never `K.flat` -- `flat()` NORMALISES (`consts.gd`:901),
+		# and a fence measured through it is 1.00 m away whatever it is doing.
+		var d := K.plane((hit["position"] as Vector3) - here).length()
+		lo = minf(lo, d)
+		hi = maxf(hi, d)
+	return Vector2(0.0 if lo == INF else lo, hi)
+
+
+## Put the boss on the arena's own pivot, facing `look_at`.
+##
+## `_facing` and not just `rotation.y`, for the reason `_park_boss` spells out at
+## length: `Enemy._physics_process` writes `rotation.y = _facing` every frame and
+## a parker that sets only the node has set nothing. The `+ PI` is
+## `docs/CONTRACT.md` §2.5 from the other side -- a Node3D's forward is `-basis.z`.
+func _park_centre(arena: Node, boss: Node, look_at: Vector3) -> void:
+	var at: Vector3 = (arena as Node3D).global_position
+	at.y = boss.global_position.y
+	boss.global_position = at
+	var to := K.flat(look_at - at)
+	var yaw := (atan2(to.x, to.z) + PI) if to != Vector3.ZERO else PI
+	boss.rotation.y = yaw
+	boss._facing = yaw
+
+
+# --- N. The Riven Knight's press ----------------------------------------------
+
+## **`docs/BOSSES.md` §6.4, and the half of §9's Riven Knight line that section L
+## does not do. Board card 47.**
+##
+## L4 counts the hookables either side of the turn -- nought before, one after --
+## and a count is not the player's experience of it. §6.4 asks for the FAILED
+## press as a picture, because floor 4's fight shape is *"the item is both the way
+## across and the way back"* and the first sixty-four quarters of the fight are
+## the half where the item has nothing in the room to attach to. That claim is a
+## photograph or it is a sentence.
+##
+##   N1  **The press that finds nothing.** The chain goes out its full 8.74 m at
+##       the middle of the arena, bites nothing, and drops. The hero does not
+##       move a centimetre.
+##   N2  **The same press, after the keystone lands.** The barb catches, the chain
+##       goes taut, and the hero crosses the room on it -- and ends up ON the
+##       mass, which is what makes it a reposition rather than an escape.
+##
+## ## The Knight stands still for both, and that is deliberate
+##
+## The same argument section L makes for bleeding with `apply_hit` rather than
+## fighting: the claim here is about the item and the room, and a `gate_lunge` --
+## twelve metres at 16 m/s down a 1.2 m lane, on a 0.78 s tell -- through the
+## middle of the shot is a second variable in a photograph that has one subject.
+## Worse than untidy: `HeroRanged._fire_hookshot`'s raycast has `K.L_ENEMY` in its
+## mask, so a Knight that had walked into the lane would be BITTEN, which is a
+## third outcome (`Boss.freeze` clangs and nothing moves) that photographs almost
+## exactly like the failed press it is standing next to. The room is sealed --
+## the fence is up, the bar is up, the fight has started -- and then the boss is
+## held in the guard it has been standing in for four hundred years.
+##
+## ## Why the engine is slowed and nothing measured is
+##
+## `K.HOOK_SPEED` is 34 m/s, so a full-reach chain is out and back in 0.26 s. The
+## harness renders at about 22 fps: the whole flight is five or six frames and
+## `progress` steps by about half a chain per rendered frame, so "photograph the
+## barb in the air" is a coin toss at real time. `Engine.time_scale` buys the
+## shutter the frames and changes nothing this section asserts -- every claim
+## below is a position, a boolean or a node, and not one of them is a duration.
+## Restored on every exit, including the failed ones.
+
+## Where the hero presses from. Inside `Game.hook_reach()` (8.74 m at rung 0) of
+## an anchor 2.4 m up over the middle, and far enough out that the crossing is a
+## crossing.
+const PRESS_STAND := 6.5
+## Where the Knight is held. Off the lane by four metres -- clear of the chain's
+## line and of the 3 m keystone, and still inside the frame at the aim stance's
+## 42 degrees of lens.
+const PRESS_BOSS := Vector3(-4.0, 0.0, -2.5)
+## How slowly the two flights are photographed. See the section header.
+const PRESS_TIME_SCALE := 0.20
+## Where both presses are aimed, in metres above the arena's pivot. `docs/
+## BOSSES.md` §6.4's number; the built anchor is 2.55 and `_press_of` prints both.
+const PRESS_AIM_Y := 2.4
+
+
+func _keystone_press(rig) -> void:
+	var arena := await _fresh_arena(rig, &"riven_knight", PRESS_BOSS)
+	var boss: Node = arena.boss()
+	_ck("N0 the arena stood the Riven Knight up again", boss != null)
+	if boss == null:
+		return
+	_game_eye(rig)
+	var hp: HealthComponent = boss.get(&"health")
+	var here: Vector3 = (arena as Node3D).global_position
+	# Where the anchor is GOING to be, and it has to be a constant here rather
+	# than a read: the two presses must be aimed at the same place, and on the
+	# first one there is nothing in the room to read a height off.
+	#
+	# **It is not a row key either**, which is what this section found. `docs/
+	# BOSSES.md` §6.4's pasted row ends `"radius": 1.5, "hook_y": 2.4` and
+	# `BossDb`'s Riven Knight carries neither: the mass is
+	# `BossArena.KEYSTONE_SIZE`, one `Vector3(3, 2.4, 3)`, and the anchor is built
+	# on top of it at `KEYSTONE_SIZE.y + 0.15`. So this aims where §6.4 SAYS the
+	# ring is, the check below prints where it actually got built, and the 0.15 m
+	# between them is nothing against an assist cone 19 degrees wide.
+	var at := here + Vector3(0.0, PRESS_AIM_Y, 0.0)
+
+	# The Hookshot is the Bellwake's drop and this section is not the economy.
+	Game.grant(&"hookshot")
+	_ck("N0b the hero is carrying the Hookshot", Game.has(&"hookshot"))
+	await _stand_at(rig, here + Vector3(0.0, 0.05, PRESS_STAND), here)
+	if not arena.is_sealed():
+		arena.seal()
+	await _until(rig, func() -> bool: return arena.is_sealed(), 120)
+	await rig.wait_frames(40)
+	_ck("N0c the Chord Gate sealed", arena.is_sealed())
+	if not await rig.draw_weapon(&"hookshot"):
+		_ck("N0d the weapon ring put the Hookshot in his hand", false)
+		return
+	_ck("N0d the weapon ring put the Hookshot in his hand", true)
+
+	await _press_of(rig, arena, boss, at, "N1", 44, false)
+
+	# THE TURN, exactly as section L fires it: one blow to a quarter above the
+	# threshold and one more across it.
+	var half := hp.max_quarters / 2
+	_bleed(boss, hp.max_quarters - (half + 1))
+	await rig.wait_frames(4)
+	await _until(rig, func() -> bool: return not hp.is_invulnerable(), 60)
+	_bleed(boss, 1)
+	_ck("N3 the keystone came down", arena.has_turned() and _hooks(arena) == 1)
+	await rig.wait_frames(50)
+
+	await _press_of(rig, arena, boss, at, "N4", 45, true)
+	# See `_warden_floor`: this section's turn is not the Bellwake's to answer for.
+	_phases.clear()
+
+
+## One press, from the brace to whatever the chain found.
+##
+## ONE function for both cases, the argument `_charge_shot` makes above: the only
+## difference between the proof and the disproof has to be the state of the room,
+## and a negative case written as its own routine is a negative case that can
+## differ from the positive one in some other way that nobody ever sees.
+func _press_of(rig, arena: Node, boss: Node, at: Vector3, tag: String,
+		shot: int, want_bite: bool) -> void:
+	var here: Vector3 = (arena as Node3D).global_position
+	var hero := _hero(rig) as Hero
+	if hero == null or hero.ranged == null:
+		_ck("%s the hero has a ranged component" % tag, false)
+		return
+	_hold_still(boss, here + Vector3(0.0, 0.0, PRESS_STAND))
+	await _stand_at(rig, here + Vector3(0.0, 0.05, PRESS_STAND), here)
+
+	# The brace. Re-pressed rather than pressed once, for the reason `_nock`
+	# gives: `use_press` REFUSES outright unless the hero is standing on the
+	# floor, so a press made a frame after a teleport is declined for good and a
+	# director that pressed and then waited would sit out its whole timeout.
+	var braced := false
+	for _attempt in 8:
+		Input.action_release(&"heavy")
+		await rig.wait_frames(2)
+		Input.action_press(&"heavy")
+		if await _until(rig, func() -> bool: return hero.ranged._hook_ready, 24):
+			braced = true
+			break
+	_ck("%sa the Hookshot came up into its brace" % tag, braced)
+	if not braced:
+		Input.action_release(&"heavy")
+		return
+	# The aim stance takes the boom to the shoulder and the lens to 42 degrees,
+	# and the crosshair the shot converges on is only where it belongs once that
+	# has arrived.
+	await rig.wait_frames(20)
+	var off := await _aim_camera_at(rig, at, 40)
+	# A DIAGNOSTIC and not the claim -- the claim is what the chain found, below.
+	# 9 degrees because the assist cone this feeds is about 19 wide at this range
+	# and one held frame of look is already five or six of them.
+	_ck("%sb and the crosshair is on the anchor (%.1f deg off)" % [tag, off],
+		absf(off) < 9.0)
+
+	var from := hero.global_position
+	Engine.time_scale = PRESS_TIME_SCALE
+	Input.action_release(&"heavy")
+	var fired := await _until(rig,
+		func() -> bool: return hero.ranged._hook_active, 40)
+	_ck("%sc the chain went out" % tag, fired)
+	if not fired:
+		Engine.time_scale = 1.0
+		return
+	var bit: bool = hero.ranged._hook_bit
+	var foe: Node = hero.ranged._hook_foe
+	var pull: Vector3 = hero.ranged._hook_pull
+	var tether: HookshotTether = hero.ranged._tether
+
+	# **The picture, and it is the SAME instant in both cases**: the barb at the
+	# far end of its flight, from the hero's own shoulder, with the room in front
+	# of it either holding an anchor or not. 0.80 and not 1.0 because the tether
+	# is torn down on the frame the chain ARRIVES -- a shot that found nothing
+	# calls `_end_hook()` on that tick (`HeroRanged._tick_hook`), so a shutter
+	# waiting for full extension photographs an empty room in both cases.
+	var caught := ""
+	for _i in 300:
+		if tether.is_extending() and tether.progress > 0.80:
+			caught = "extending at %.2f" % tether.progress
+			break
+		if not hero.ranged._hook_active:
+			break
+		await rig.wait_frames(1)
+	if caught != "":
+		await rig.capture(out.path_join("b_%02d_riven_knight_press_%s.png"
+			% [shot, "catches" if want_bite else "drops"]))
+	_ck("%sd the shutter found the chain (%s)" % [tag, caught], caught != "")
+
+	await _until(rig, func() -> bool: return not hero.ranged._hook_active, 400)
+	await rig.wait_frames(8)
+	Engine.time_scale = 1.0
+	await rig.wait_frames(10)
+	# **Where it put him**, and only for the shot that landed. §6.4's sentence is
+	# "the item is both the way across and the way back", and the half of it that
+	# is not in the flight is a hero standing on top of the thing he shot at with
+	# the room he came from behind him.
+	if want_bite:
+		Bus.camera_recenter.emit()
+		await rig.wait_frames(22)
+		await rig.capture(out.path_join("b_%02d_riven_knight_crossed.png"
+			% [shot + 1]))
+
+	var went := K.plane(hero.global_position - from).length()
+	var ended := K.plane(hero.global_position - here).length()
+	print("BOSS %s press: bit=%s foe=%s pull=%.2v; hero %.2v -> %.2v (%.2f m, "
+		% [tag, bit, "-" if foe == null else "A BODY", pull, from,
+			hero.global_position, went]
+		+ "%.2f m of the pivot, y=%.2f)" % [ended, hero.global_position.y])
+	# A monster is the third outcome and it photographs like the first one.
+	_ck("%se the chain did not bite the Knight" % tag, foe == null)
+	if want_bite:
+		var hook := _first_hook(arena)
+		_ck("%sf the barb caught the keystone" % tag, bit and hook != null)
+		_ck("%sg and it landed him on it, not beside it (%.2f m, y=%.2f)"
+			% [tag, ended, hero.global_position.y],
+			ended < 1.2 and hero.global_position.y > 1.6)
+		if hook != null:
+			print("BOSS %s aimed at the doc's %.2f m; the anchor is built at %.2f m"
+				% [tag, at.y - here.y, hook.anchor_point().y - here.y])
+	else:
+		_ck("%sf the barb found nothing and dropped" % tag, not bit)
+		_ck("%sg and he is standing exactly where he pressed (%.2f m)"
+			% [tag, went], went < 0.35)
+	# Put the trigger down whatever happened -- a held `heavy` carried into the
+	# Bellwake's section would raise a brace in the middle of somebody else's
+	# frame.
+	Input.action_release(&"heavy")
+	await rig.wait_frames(4)
+
+
+## Hold the boss in the guard it has been standing in for four hundred years.
+##
+## `State.IDLE` is what `is_awake()` reads as asleep and what `Boss._tick_idle`
+## answers with a `_stop()` and a looping idle clip -- so this is a body that is
+## in the room, lit, on the health bar, and not moving. Nothing wakes it again:
+## `wake()` is `BossArena.seal()`'s call and the room is already sealed.
+##
+## Re-applied before every press because a `_bleed` in between puts it back into
+## a hurt state and out the far side into `CHASE`.
+func _hold_still(boss: Node, look_at: Vector3) -> void:
+	var at: Vector3 = (boss as Node3D).global_position
+	var to := K.flat(look_at - at)
+	var yaw := (atan2(to.x, to.z) + PI) if to != Vector3.ZERO else PI
+	boss.rotation.y = yaw
+	boss._facing = yaw
+	boss.state = Enemy.State.IDLE
+
+
+## Point the hero's own camera at `at` by pushing the look stick, and say how many
+## degrees of elevation it ended up off by.
+##
+## The stick and not a write to `_pitch`, because the pitch is the thing the
+## player steers with and `HeroRanged._aim_from` converges the muzzle on whatever
+## the CROSSHAIR is over -- so a camera aimed by hand is the only thing that makes
+## this the player's press rather than the director's.
+##
+## MEASURED and not counted (`CLAUDE.md` §4). `stick_speed_deg`, the sensitivity
+## slider and `_fov_gain()` all multiply into one degree of look, so a fixed
+## number of held frames is a fixed number of frames and not a fixed angle. This
+## reads the camera's own forward back every iteration and stops when it is on
+## the mark. In the aim stance the LOOK is exactly `_orbit_dir(_yaw, _pitch)`
+## (`game_camera.gd`, `_place`) while the EYE is frozen at the rig's resting
+## elevation, so the forward is the honest thing to read and `_pitch` is not.
+func _aim_camera_at(rig, at: Vector3, tries: int) -> float:
+	var cam := rig.scene().get_node_or_null(^"GameCamera") as Camera3D
+	if cam == null:
+		return 90.0
+	var off := 0.0
+	var was := 0.0
+	for i in tries:
+		var to := at - cam.global_position
+		if to.length() < 0.5:
+			break
+		var want := asin(clampf(to.normalized().y, -1.0, 1.0))
+		var have := asin(clampf((-cam.global_transform.basis.z).y, -1.0, 1.0))
+		off = rad_to_deg(want - have)
+		# **The tolerance is the STEP and not a preference.** `stick_speed_deg` is
+		# 170 deg/s against a 60 Hz `_apply_look`, so the shortest hold this rig
+		# can issue -- one rendered frame, which is about three physics ticks at
+		# the harness's 22 fps -- is already five or six degrees of pitch. Asking
+		# for two would hunt back and forth for ever. Five is well inside the cone
+		# it is feeding: `HeroRanged._best_hookable` allows
+		# `atan2(snap_radius, dist) + 6`, about 19 degrees at this range.
+		if absf(off) < 5.0:
+			break
+		# Crossed it. One more push would only take it back the other way, and the
+		# side of the mark it lands on does not matter at this tolerance.
+		if i > 0 and signf(off) != signf(was):
+			break
+		was = off
+		# `cam_up` LOWERS `_pitch` (`Input.get_vector(cam_left, cam_right, cam_up,
+		# cam_down)` puts `cam_down` on +y and `_apply_look` adds it), and a lower
+		# pitch is an eye that has come down off its arc and is looking further up.
+		await rig.hold(["cam_up" if off > 0.0 else "cam_down"], 1)
+	return off
+
+
+func _first_hook(arena: Node) -> HookTarget:
+	for c in _all(arena):
+		if c is HookTarget:
+			return c as HookTarget
+	return null

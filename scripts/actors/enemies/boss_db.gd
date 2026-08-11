@@ -258,10 +258,18 @@ static var BOSSES := {
 			# THE TURN (`docs/BOSSES.md` §5, §6.1). The fence walks in from 11.0
 			# to 8.5 m at half health, and it is aimed at exactly one player: the
 			# one who has spent the first half of the fight kiting in the far
-			# side of the room. 8.5 m is still two and a half body-lengths of
-			# floor, so the donut's second answer -- standing INSIDE `safe_inner`
-			# -- survives it; taking the room below about 7 m would delete that
-			# answer and make the Warden's whole lesson unteachable.
+			# side of the room.
+			#
+			# **8.5 IS THE NUMBER THE OUTER BAND CAN AFFORD, AND IT IS MEASURED**
+			# (board card 47, `boss_cistern.gd` §M). What the shrink can delete is
+			# not the donut's hole -- that is `safe_inner`, a fact about the beat,
+			# and no fence reaches it -- but the ring of floor OUTSIDE the 6.2 m
+			# slam, which is the only other place in the room a hero may stand.
+			# A seal is twenty 0.45 m panels centred ON the radius, so the floor
+			# stops ~0.23 m inside the number and a 0.35 m hero stops 0.35 further
+			# in: the band is `to - 0.58 - 6.2` metres wide. Measured at 8.5 it is
+			# 1.72 m, against 4.22 m at 11.0. It closes to NOTHING at about 6.8 m,
+			# and a Warden below that is a fight with one answer instead of two.
 			#
 			# The expensive one of the four. See `BossArena._turn_shrink`: it
 			# needs a SECOND fence (scaling a ring of fixed-width panels leaves
