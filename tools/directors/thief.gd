@@ -115,8 +115,16 @@ func _telegraph(rig, out: String) -> void:
 	await rig.wait_frames(24)
 	await rig.capture(out.path_join("thief_00_closing.png"))
 
-	# Nothing in the bag yet, so this grab is guaranteed to close on nothing --
-	# which is what makes it a clean look at the TELL with no theft on top of it.
+	# **The hold is packed to START the reach and emptied to END it**, which is
+	# how this beat still gets a clean look at the TELL with no theft on top of
+	# it. It used to just leave the bag empty, and that stopped working the day a
+	# thief learned to check: a body only reaches when `Run.stealable()` says
+	# there is something to reach for (`Enemy._tick_chase`), because reaching at
+	# a player carrying nothing is what cost the goblin its swing. So the hold is
+	# full at the moment of the commit and empty at the moment it closes -- which
+	# is `_close_grab`'s "closed on an empty hold" branch exactly, and the same
+	# two frames as before.
+	_fill_bag()
 	var watch := _watch()
 	var reached: bool = await rig.until(func() -> bool:
 		return foe.state == Enemy.State.GRAB, 8.0)
@@ -126,6 +134,7 @@ func _telegraph(rig, out: String) -> void:
 		foe.queue_free()
 		await rig.wait_frames(4)
 		return
+	Run.bag.clear()
 
 	# Two thirds of the way through the commit, on the GAME clock rather than in
 	# rendered frames: the lean is eased (`e = t*t`), so where in the telegraph a
@@ -402,9 +411,16 @@ func _why(watch: Array, foe: Enemy, hero: Node3D) -> String:
 		game / wall if wall > 0.0 else 0.0]
 
 
+## **Asks for the behaviour rather than inheriting it**, and that is not
+## boilerplate. `K.THIEF_SHARE` makes only a quarter of the goblins the dungeon
+## scatters into thieves -- the row default used to be all of them, which is what
+## took the goblin's swing away -- so a director that relied on the default would
+## now be a coin flip and this file would fail three runs in four. Beat 0 still
+## asserts the row carries the key; this asserts the BODY does.
 func _spawn(scene: Node, seed_val: int) -> Enemy:
 	var e := Enemy.new()
 	e.kind = &"goblin"
+	e.behaviour = &"thief"
 	e.drop_seed = seed_val
 	scene.add_child(e)
 	e.global_position = THIEF_AT
