@@ -169,3 +169,104 @@ static func _has_children(layout: Dictionary, key: StringName) -> bool:
 		if _parent(layout, k) == key:
 			return true
 	return false
+
+
+# --- Assertion 4: no state is separable by hue alone ------------------------
+## HUD_PLAN decision 32. Every pair of rarity rims must differ by more than
+## `MIN_LUM_SEP` in luminance **after a deuteranope simulation**, or else differ in
+## a channel that is not colour at all.
+##
+## ## Why this is not measured off a frame, which is what decision 32 asked for
+##
+## The decision says "render `hud_lookdev`'s states through a deuteranope matrix".
+## Two things are wrong with that and both were found trying to write it.
+##
+## First, a director can only photograph the rarity states it can MANUFACTURE, and
+## the rim shows the best thing in the bag: getting all four on camera means four
+## bag-stuffing beats and four captures to test a property of four constants. The
+## palette check covers all six pairs unconditionally and cannot be defeated by a
+## beat that failed to reach the state it claimed.
+##
+## Second and worse, the rule has an escape hatch -- "or separable by another
+## channel" -- and a luminance histogram cannot see a channel. A 2 px frame and a
+## 3 px frame in two colours of identical luminance is a PASS under this rule and a
+## fail under any measurement of the pixels. Checking the frame would have made the
+## thickness ladder invisible to the assertion that exists to require it.
+##
+## So: the matrix runs over `Pal.RARITY`, and the escape hatch reads
+## `Hud.rarity_weight` -- the same function `_draw_rim` draws from. HUD_PLAN §15.15.
+##
+## ## What it found
+##
+## Not the pair the code confidently named. `MOSS` against `MOTH` was written up in
+## `_draw_rim` as "the textbook deutan collision" and it separates by 30%. The real
+## collision is **common against rare** -- `MOTH` khaki against `COBALT` blue, 0.1%
+## apart -- which reads to a deuteranope as *I cannot tell junk from treasure*.
+## It passes only on the thickness channel, which is exactly what that channel is
+## for, and this assertion is what stops anyone deleting it.
+
+## Minimum deuteranope luminance separation, as a fraction of the brighter of the
+## two. 15% by decision 32.
+const MIN_LUM_SEP := 0.15
+
+## Brettel/Vienot deuteranope simulation. RGB -> LMS, kill the M cone by
+## reconstructing it from L and S, LMS -> RGB. Operates on LINEAR light, which is
+## the reason `_to_linear` exists below -- running this on sRGB bytes is the
+## classic way to get a plausible-looking picture and the wrong numbers.
+const LMS := [Vector3(17.8824, 43.5161, 4.11935),
+	Vector3(3.45565, 27.1554, 3.86714),
+	Vector3(0.0299566, 0.184309, 1.46709)]
+const LMS_INV := [Vector3(0.0809445, -0.130504, 0.116721),
+	Vector3(-0.0102485, 0.0540194, -0.113615),
+	Vector3(-0.000365294, -0.00412163, 0.693513)]
+
+
+## Returns the number of failures, having printed one line per pair.
+##
+## Called once per director run rather than per capture: it is a property of the
+## palette and the ladder, not of a frame, so photographing it four times would be
+## four copies of one answer.
+static func check_contrast() -> int:
+	var fails := 0
+	var names := ["common", "uncommon", "rare", "legendary"]
+	for i in Pal.RARITY.size():
+		for j in range(i + 1, Pal.RARITY.size()):
+			var ya := _deutan_luma(Pal.RARITY[i])
+			var yb := _deutan_luma(Pal.RARITY[j])
+			var sep: float = absf(ya - yb) / maxf(maxf(ya, yb), 0.0001)
+			var wa: Vector2i = Hud.rarity_weight(i)
+			var wb: Vector2i = Hud.rarity_weight(j)
+			if sep >= MIN_LUM_SEP:
+				print("  ok   HUDCONTRAST %s/%s luminance %.1f%%"
+					% [names[i], names[j], sep * 100.0])
+			elif wa != wb:
+				# The escape hatch, and it is REPORTED rather than silent: a pair
+				# riding entirely on its second channel is a thing a reviewer
+				# should have to read, because deleting the ladder deletes it.
+				print("  ok   HUDCONTRAST %s/%s luminance only %.1f%% — carried by "
+					% [names[i], names[j], sep * 100.0]
+					+ "weight %s vs %s" % [wa, wb])
+			else:
+				print("  HUDCONTRAST FAIL %s/%s differ by hue ALONE: deuteranope "
+					% [names[i], names[j]]
+					+ "luminance %.1f%% (need %.0f%%) and both draw weight %s"
+						% [sep * 100.0, MIN_LUM_SEP * 100.0, wa])
+				fails += 1
+	return fails
+
+
+## Relative luminance of a colour as a deuteranope sees it, in linear light.
+static func _deutan_luma(c: Color) -> float:
+	var v := Vector3(_to_linear(c.r), _to_linear(c.g), _to_linear(c.b))
+	var lms := Vector3(LMS[0].dot(v), LMS[1].dot(v), LMS[2].dot(v))
+	# The M cone is gone; a deuteranope's brain reconstructs it from L and S.
+	lms.y = 0.494207 * lms.x + 1.24827 * lms.z
+	var d := Vector3(LMS_INV[0].dot(lms), LMS_INV[1].dot(lms), LMS_INV[2].dot(lms))
+	d = d.clampf(0.0, 1.0)
+	return 0.2126 * d.x + 0.7152 * d.y + 0.0722 * d.z
+
+
+## sRGB byte to linear light. Godot's `Color` is sRGB here because every palette
+## entry is authored as a hex string.
+static func _to_linear(c: float) -> float:
+	return c / 12.92 if c <= 0.04045 else pow((c + 0.055) / 1.055, 2.4)

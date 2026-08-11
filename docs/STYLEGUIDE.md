@@ -765,11 +765,18 @@ What is left out here is the part that is about **risk** rather than arithmetic.
 1. **The rim.** A frame from `(0.812, 0.786)` to `(0.969, 0.914)`, coloured by
    the rarity of the single most valuable thing you carry. Silent, permanent,
    peripheral — it is how the bag whispers. **Rarity is a thickness as well as a
-   hue**, because the pair this has to separate hardest is MOSS `68a050` against
-   MOTH `807868`, mid-green on mid-khaki at near-identical luminance and the
-   textbook deutan collision: 2 px common, 2 px with an inner rule uncommon, 3 px
-   rare, 3 px with a dithered inner ring legendary. Four weights, four hues,
-   either channel sufficient on its own.
+   hue**: 2 px common, 2 px with an inner rule uncommon, 3 px rare, 3 px with a
+   dithered inner ring legendary. Four weights, four hues, either channel
+   sufficient on its own.
+
+   The pair this exists for is **common against rare** — MOTH `807868` khaki
+   against COBALT `5878c8` blue, which a deuteranope sees **0.1%** apart in
+   luminance, i.e. as the same rim. (This paragraph used to name MOSS against
+   MOTH; measured through the matrix, that pair separates by 30%. See HUD_PLAN
+   §15.15.) Common/rare passes on its thickness alone, and the assertion that
+   requires it reads the ladder out of `Hud.rarity_weight`, so flattening the
+   weights in the drawing code turns the check red rather than silently
+   removing the only channel a colour-blind player has.
 2. **The slot marks**, along the rim's bottom inside edge. One mark per bag slot:
    the first `Run.CASE_SLOTS` at full height (8 px), the rest at half. The case
    is the part you keep when you die, so *what does the case save* and *how full
@@ -1219,9 +1226,6 @@ for 2D art anywhere else.
   `soft_shadow_filter_quality=0`, plus `use_debanding=false` and
   `default_texture_filter=0`. `project.godot` is orchestrator-owned per
   CONTRACT §3.
-- `scripts/ui/hud/hud.gd` is a full replacement, not an edit. What survives is
-  the architecture: autoload + `_draw`, screen-fraction coordinates, repaint on
-  signal rather than per frame, and the `player`-group visibility gate.
 - `docs/CONTRACT.md` still describes an OOT-fidelity crawler with a key-locked
   dungeon and mandates the OOT HUD in §7.1. That section is superseded here and
   the contract needs amending rather than silently diverging, because other

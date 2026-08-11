@@ -222,6 +222,11 @@ func run(rig) -> void:
 			await _shot(rig, out.path_join("h_12_arc_%s.png" % name),
 				"h_12_arc_%s" % name)
 
+	# Assertion 4 (decision 32). Once, not per capture — it is a property of the
+	# palette and of `Hud.rarity_weight`, not of any one frame. See the long note
+	# in `_hud_layout.gd` for why it does not read pixels.
+	_fails += Layout.check_contrast()
+
 	print("HUDCHECK bag=%d value=%d slots=%d/%d fee=%d gold=%d" % [
 		Run.bag_count(), Run.bag_value(), Run.slots_used(), Game.bag_slots,
 		Run.extract_cost(), Game.gold])

@@ -557,11 +557,10 @@ is exactly the class of claim this document exists to stop.
   card from FADES IN; add the damage arc, the autosave notice and the interact
   prompt.
 - **§5.7** — replaced wholesale by §8 above.
-- **§7.2** — unchanged; **the code changes.** `_draw_hands` and `_draw_cpad` pass
-  `Color.BLACK` as `invert_to`. It never reaches a pixel today (`inverted` is only
-  true for the raised shield, where the argument is `Pal.MIDNIGHT`), which makes it
-  a trap that is armed and not fired. Pass `Pal.VOID`. The point of the rule is that
-  `grep -r 'Color.BLACK' scripts/ui` must be able to answer the question.
+- **§7.2** — unchanged; **the code changed.** ~~`_draw_hands` and `_draw_cpad` pass
+  `Color.BLACK` as `invert_to`.~~ Done (item 11): both pass `Pal.VOID`, and
+  `grep -r 'Color.BLACK' scripts/ui` now returns only the line in `Pal`'s header
+  that states the law.
 - **§7.10** — unchanged. `Feel`'s vignette goes (decision 13).
 - **§8 — delete the `hud.gd` bullet.** It says *"`scripts/ui/hud/hud.gd` is a full
   replacement, not an edit. What survives is the architecture: autoload + `_draw`,
@@ -571,8 +570,10 @@ is exactly the class of claim this document exists to stop.
   `Control` drawing in `_draw`, every coordinate a `Pal` fraction, `set_process`
   gated on live animations, `_refresh_visibility` gated on group `player`. There
   are no hearts, no OOT magic meter, no N64 C-pad. The bullet is stale, and a reader
-  would believe a rewrite is still owed. The last fossil is a function name:
-  `_draw_cpad` draws one item cell and should be `_draw_item_cell`.
+  would believe a rewrite is still owed. ~~The last fossil is a function name:
+  `_draw_cpad` draws one item cell and should be `_draw_item_cell`.~~ Both done
+  (item 11): the bullet is deleted from STYLEGUIDE §8 and the function is
+  `_draw_item_cell`.
 - **`docs/CONTRACT.md` §7.1** — still mandates the OOT HUD replica. §8's third
   bullet has been asking for that amendment for weeks and other agents build against
   it. Out of scope for this card; recorded here so it does not stay invisible.
@@ -1857,3 +1858,69 @@ legibility. An outline spends none of them, and the counts above are unchanged b
 it — the same 124 / 188 / 38 before and after. Both neutral corners are now plainly
 legible as a diagonal pair, which is the entire message that shape was chosen to
 send.
+
+## 15.15 Assertion 4 was pointed at the wrong pair, and cannot be measured off a frame
+
+Decision 32 asks for one thing and names one defect, and the measurement disagreed
+with the defect.
+
+### The pair the code confidently named is fine
+
+`_draw_rim`'s docstring called `MOSS` (`68a050`) against `MOTH` (`807868`) "the
+textbook deutan collision" and built the whole thickness ladder on it. Run through
+a Brettel deuteranope simulation in linear light, all six pairs of `Pal.RARITY`:
+
+| pair | deutan luminance separation |
+|---|---|
+| common / uncommon | 30.1% |
+| **common / rare** | **0.1%** |
+| common / legendary | 17.4% |
+| uncommon / rare | 30.2% |
+| uncommon / legendary | 15.4% |
+| rare / legendary | 17.5% |
+
+MOSS against MOTH separates by 30%. The collision is `MOTH` khaki against `COBALT`
+blue at **one part in a thousand** — a deuteranope cannot tell *I am carrying junk*
+from *I am carrying something rare*, which is the worst thing this corner could get
+wrong. §14.3's whole argument for the ladder was correct and its stated reason was
+not, and nothing caught that for the life of the rim because the claim was written
+in prose rather than measured.
+
+Also worth a note: uncommon / legendary clears the 15% bar by 0.4 points. Any future
+nudge to `ARCANE` or `MOSS` will land on it.
+
+### It is not a frame check, and trying to write one is what showed why
+
+Decision 32 says "render `hud_lookdev`'s states through a deuteranope matrix". Two
+things are wrong with that.
+
+**A director can only photograph the states it can manufacture.** The rim shows the
+best thing in the bag, so all four rarities on camera means four bag-stuffing beats
+and four captures to test a property of four constants — and a beat that quietly
+fails to reach its state photographs a passing frame, which is §15.10's `h_09_t3`
+exactly. The palette check covers all six pairs unconditionally.
+
+**Worse: a luminance histogram cannot see the escape hatch.** The rule is "not
+distinguishable by hue *alone*", so a pair may pass on a second channel — and that
+is precisely how common/rare survives, on 2 px of frame against 3 px. A frame-based
+check would read two colours of identical luminance and fail the very design that
+answers it. Checking the pixels would have made the thickness ladder invisible to
+the assertion whose entire purpose is to require it.
+
+So assertion 4 runs over `Pal.RARITY` and reads its escape hatch from
+`Hud.rarity_weight` — a new static function that `_draw_rim` also draws from, so
+there is one ladder and not a checker's copy of one. That is decision 27's argument
+about `layout_rects()` applied to the one property of this widget that is not a
+rectangle: flatten the ladder in the drawing code and the assertion goes red on the
+next run. Verified both ways — with the ladder, six greens; with `rarity_weight`
+stubbed to a constant, exactly one failure, on common/rare and on nothing else.
+
+The pass line is deliberately loud rather than silent when a pair rides on its
+second channel:
+
+```
+ok HUDCONTRAST common/rare luminance only 0.1% — carried by weight (2, 0) vs (3, 0)
+```
+
+A reviewer should have to read that. It is the sentence that says what deleting the
+ladder would cost.

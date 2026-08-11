@@ -956,7 +956,7 @@ func _draw_hud() -> void:
 	_draw_heat(s)
 	_draw_draughts(s)
 	_draw_hands(s)
-	_draw_cpad(s)
+	_draw_item_cell(s)
 	_draw_minimap(s)
 	_draw_bag(s)
 	_draw_extraction(s)
@@ -1710,7 +1710,7 @@ func _cross_origin(s: Vector2) -> Vector2:
 ## Spelled out term by term rather than folded into one constant, for the same
 ## reason `_draw_draughts` spells its stack out: the rows below the cells are the
 ## key caps and then the loadout line, and a version of this that forgot one of
-## them put the caps THROUGH the health bar. Read it against `_draw_cpad`, which
+## them put the caps THROUGH the health bar. Read it against `_draw_item_cell`, which
 ## is where those two rows are actually drawn.
 func _cluster_top(s: Vector2) -> float:
 	var caps := Pal.px(Pal.KEYCAP_GAP, s.y) + CanvasText.height(
@@ -1824,7 +1824,14 @@ func _draw_hands(s: Vector2) -> void:
 		# they would not have stayed in the same one.
 		var counter := ArmamentDb.hand_count(id)
 		var left := Game.ammo_count(counter)
-		_draw_item_glyph(s, r, id, Pal.MIDNIGHT if raised else Color.BLACK,
+		# `Pal.VOID`, not `Color.BLACK`. It never reaches a pixel — `inverted` is
+		# only true for the raised shield, where the argument is `Pal.MIDNIGHT` —
+		# which is exactly what made it worth changing: a trap that is armed and
+		# not fired is one an author trips later. `Pal`'s own header states the
+		# law ("Never `Color.BLACK` and never `Color.WHITE`"), and the point of a
+		# law like that is that `grep -r 'Color.BLACK' scripts/ui` can answer the
+		# question. STYLEGUIDE §7.2.
+		_draw_item_glyph(s, r, id, Pal.MIDNIGHT if raised else Pal.VOID,
 			raised, counter != &"" and left <= 0)
 		if counter != &"":
 			# BONE, and it was MOTH. "How many arrows do I have" is asked in the
@@ -1874,7 +1881,7 @@ func _draw_hands(s: Vector2) -> void:
 ## fact about a screen you are not on. It is named rather than marked for the
 ## same reason — "↑ PRIMARY" is readable cold, and a filled-vs-hollow pip is a
 ## convention the player has to be taught.
-func _draw_cpad(s: Vector2) -> void:
+func _draw_item_cell(s: Vector2) -> void:
 	var cell := Pal.px(Pal.CELL, s.y)
 	var origin := _cross_origin(s)
 	var r := Rect2(origin, Vector2(cell, cell))
@@ -1899,7 +1906,7 @@ func _draw_cpad(s: Vector2) -> void:
 		Pal.px(2.0 if potion != &"" else 1.0, s.y))
 	# `selected_item()` names the GLASS and `selected_potion()` what is in it.
 	# The glyph wants the glass: a bottle with nothing in it still has to draw.
-	_draw_item_glyph(s, r, Game.selected_item(), Color.BLACK, false,
+	_draw_item_glyph(s, r, Game.selected_item(), Pal.VOID, false,
 		potion == &"")
 
 	# How many bottles there are, so the player knows the ring has more stops.
@@ -2359,17 +2366,46 @@ func _draw_slips(s: Vector2, rim: Rect2) -> void:
 		max_w, inner.end.y - Pal.px(SLOT_MARK_H, s.y) - gap - y))
 
 
+## The rim's NON-HUE channel, as (frame thickness in reference px, ornament).
+## Ornament is 0 none, 1 an inner rule, 2 a dithered inner ring.
+##
+## Exists so that `_draw_rim` and `_hud_layout.check_contrast` read one ladder
+## rather than two. Assertion 4's whole job is to catch a rarity pair that is
+## separable by hue alone, and a hand-copied table of "what the thicknesses are"
+## in the checker would let someone flatten the ladder in the drawing code and
+## still pass -- which is decision 27's argument about `layout_rects()`, applied
+## to the one property of this widget that is not a rectangle.
+static func rarity_weight(rarity: int) -> Vector2i:
+	var r := clampi(rarity, 0, 3)
+	# thickness: common and uncommon 2 px, rare and legendary 3 px.
+	# ornament: uncommon takes the inner rule, legendary the dithered ring.
+	return Vector2i(3 if r >= 2 else 2, 1 if r == 1 else (2 if r >= 3 else 0))
+
+
 ## Coloured by the rarity of the single most valuable thing you carry. Silent,
 ## permanent, peripheral -- it is how the bag whispers.
 ##
 ## **And it is not coloured ONLY.** The rim's entire information content used to
-## be its hue, and the pair it has to separate hardest is `MOSS` (`68a050`)
-## against `MOTH` (`807868`) — mid-green against mid-khaki at near-identical
-## luminance, which is the textbook deutan collision. A colour-blind player could
-## not tell *I am carrying something uncommon* from *I am carrying junk*, which is
-## the one thing this corner exists to whisper. So rarity is now a THICKNESS as
-## well: 2 px common, 2 px with an inner rule uncommon, 3 px rare, 3 px with a
-## dithered ring legendary. Four weights, four hues, either channel sufficient.
+## be its hue. This comment used to name `MOSS` against `MOTH` as the hardest pair
+## -- mid-green against mid-khaki, the textbook deutan collision -- and decision
+## 32's assertion 4 then went and MEASURED all six pairs through a Brettel
+## deuteranope simulation. MOSS/MOTH was never the problem. It separates by 30%:
+##
+##   common vs uncommon    30.1%      uncommon vs rare        30.2%
+##   common vs rare       ** 0.1% **  uncommon vs legendary   15.4%
+##   common vs legendary   17.4%      rare vs legendary       17.5%
+##
+## The collision is `MOTH` (`807868`) against `COBALT` (`5878c8`) — khaki against
+## blue, one part in a thousand of luminance apart to a deuteranope, which means a
+## colour-blind player cannot tell *I am carrying junk* from *I am carrying
+## something rare*. That is the single worst thing this corner could get wrong,
+## and the comment that was here confidently pointed at the wrong pair.
+##
+## So rarity is a THICKNESS as well: 2 px common, 2 px with an inner rule
+## uncommon, 3 px rare, 3 px with a dithered ring legendary. Four weights, four
+## hues, either channel sufficient -- and it is `rarity_weight` below rather than
+## a literal here, so the assertion can read the same ladder the drawing does
+## instead of describing it a second time.
 ##
 ## The vocabulary is not new — the T2 value halo below is the same dither, and
 ## that is the argument for reusing it rather than inventing a second language for
@@ -2423,7 +2459,8 @@ func _draw_rim(s: Vector2, tier: int) -> void:
 		_canvas.draw_rect(r.grow(Pal.px(2.0, s.y)), Color(Pal.GOLD, 0.18), false,
 			Pal.px(1.0, s.y))
 
-	var thick := Pal.px(3.0 if rarity >= 2 else 2.0, s.y)
+	var weight := rarity_weight(rarity)
+	var thick := Pal.px(float(weight.x), s.y)
 	_canvas.draw_rect(r, col, false, thick)
 	if rarity == 1:
 		# Uncommon: a second, thinner rule inboard of the frame. Deliberately a
