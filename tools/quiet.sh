@@ -53,6 +53,13 @@
 # broken". So it is refcounted -- every run drops a pidfile, the last one out
 # removes the file, and a run that was killed -9 gets swept by the next one
 # rather than pinning it forever.
+#
+# THE FOURTH THING IS THAT A RUN WITH A SCRIPT ERROR IN IT CANNOT PASS, and it
+# is here because GDScript cannot see its own error stream -- a director has no
+# way to fail itself on one. Card #47's `boss_cistern.gd` printed
+# `SCRIPT ERROR: Trying to cast a freed object` out of `Hero.lock_target` and
+# `BOSS OK -- every check passed`, in the same output, and the bug shipped. Card
+# #63 is this. See `_script_errors` at the bottom.
 
 set -u
 ROOT=${ZL_ROOT:-${0:A:h:h}}
@@ -64,15 +71,25 @@ mkdir -p $LOCKS
 
 # A run that died without its trap left a pidfile behind. Sweep those first, or
 # the first crash of the session pins override.cfg until someone notices.
-for f in $LOCKS/*(N); do
-	kill -0 ${f:t} 2>/dev/null || rm -f $f
+#
+# `<->` (any number) and not `*`, because the pidfile is no longer the only
+# thing in here: each run also drops `<pid>.log` for the SCRIPT ERROR check at
+# the bottom, and a bare `*` would hand `kill -0` the string "39769.log", get a
+# refusal, and delete a LIVE run's log out from under it. The dead run's log
+# goes with its pidfile, so the "last one out" test below still sees an empty
+# directory.
+for f in $LOCKS/<->(N); do
+	kill -0 ${f:t} 2>/dev/null && continue
+	rm -f $f $f.log
 done
 
 touch $LOCKS/$$
 printf '[display]\n\nwindow/size/no_focus=true\n' > $OVERRIDE
 
+ERRLOG=$LOCKS/$$.log
+
 cleanup() {
-	rm -f $LOCKS/$$
+	rm -f $LOCKS/$$ $ERRLOG
 	# Last one out. `ls -A` rather than a glob: an empty dir must read as empty.
 	if [ -z "$(ls -A $LOCKS 2>/dev/null)" ]; then
 		rm -f $OVERRIDE
@@ -88,4 +105,70 @@ case " $* " in
 	*" --sound "*|*" --audio-driver "*) HUSH=() ;;
 esac
 
-$GODOT "${HUSH[@]}" "$@"
+# `--log-file` and NOT a `| tee`, which is the obvious way to read a run's own
+# output and the wrong one here. A pipeline puts godot's stdout on a pipe, and
+# the harness's output is a thing PEOPLE read while it runs; a pipe would also
+# have to carry the exit status back out through `$pipestatus`, and merging
+# stderr into stdout to catch it would reorder the two streams the reader is
+# comparing. Godot writes this file itself, both streams, in order, while the
+# terminal gets exactly the bytes it always did. An explicit `--log-file` from
+# the caller wins -- their file, their business, and no guard rather than a
+# guard reading the wrong file.
+LOGGING=(--log-file $ERRLOG)
+case " $* " in
+	*" --log-file "*) LOGGING=() ;;
+esac
+
+$GODOT "${HUSH[@]}" "${LOGGING[@]}" "$@"
+# `rc`, not `status`: `status` is zsh's own read-only alias for `$?`, and
+# assigning to it is a FATAL shell error -- the run had already finished, the
+# trap never fired, and override.cfg was left pinned for the next person.
+rc=$?
+
+# Print the SCRIPT ERROR lines this run buried, loudly, with a count and one
+# entry per distinct site. On stderr, because it is a verdict about the run and
+# not part of it, and after the run, because that is the only moment the whole
+# log exists.
+#
+# REPORT ONLY, for now: the run's own exit status is passed through untouched.
+# The gate is the second half of card #63 and lands once the survey it exists to
+# produce has been taken -- turning the whole harness red in one commit is how a
+# guard gets deleted at 3am by whoever needed a green run.
+_script_errors() {
+	[ -s "$ERRLOG" ] || return 0
+	local report
+	report=$(awk '
+		/^SCRIPT ERROR: / {
+			msg = substr($0, 15)
+			site = ""
+			if ((getline nxt) > 0) {
+				sub(/^[ \t]*/, "", nxt)
+				if (nxt ~ /^at: /) site = nxt
+			}
+			key = msg "\t" site
+			n[key]++
+			total++
+			next
+		}
+		END {
+			if (total == 0) exit 1
+			printf "%d\n", total
+			for (k in n) {
+				split(k, p, "\t")
+				printf "  %dx  %s\n", n[k], p[1]
+				if (p[2] != "") printf "        %s\n", p[2]
+			}
+		}
+	' "$ERRLOG") || return 0
+	local count=${report%%$'\n'*}
+	{
+		print -r -- "------------------------------------------------------------"
+		print -r -- "quiet.sh: $count SCRIPT ERROR line(s) in this run. Whatever the"
+		print -r -- "director said above, it did not account for these (card #63):"
+		print -r -- "${report#*$'\n'}"
+		print -r -- "------------------------------------------------------------"
+	} >&2
+}
+_script_errors
+
+exit $rc

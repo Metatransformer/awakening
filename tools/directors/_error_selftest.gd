@@ -18,13 +18,21 @@ extends RefCounted
 
 
 func run(rig) -> void:
-	var doomed := Node3D.new()
-	rig.scene().add_child(doomed)
-	await rig.wait_frames(2)
-	doomed.free()
-	# The cast is the error. `doomed` still holds the freed instance id, and
-	# `as Node3D` on it is what boss_cistern's lock-target path was doing.
-	var revived := doomed as Node3D
-	print("selftest: cast gave %s" % [revived])
+	_cast_a_freed_object(rig)
+	# A script error ABORTS THE FUNCTION IT HAPPENS IN and returns to the caller,
+	# which is the whole reason #47 got away with it: the failure was inside
+	# `Hero.lock_target`, so the director above it carried on, checked everything
+	# it meant to check, and printed its OK line. Put the error in `run` itself
+	# and this director would stop here -- which would prove nothing, because the
+	# case that matters is the one where the run looks finished.
+	print("selftest: still going, and about to claim a pass")
 	await rig.capture(rig.out_base())
 	print("SELFTEST OK -- every check passed")
+
+
+func _cast_a_freed_object(rig) -> void:
+	var doomed := Node3D.new()
+	rig.scene().add_child(doomed)
+	doomed.free()
+	var revived := doomed as Node3D
+	print("selftest: unreachable -- the cast above aborted this function, %s" % [revived])
