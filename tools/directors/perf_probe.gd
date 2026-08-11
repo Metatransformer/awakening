@@ -32,6 +32,36 @@ extends RefCounted
 ## **Median and p95, never mean.** A mean hides the frame that hitches, and the
 ## hitch is the thing a stranger playing the demo actually feels. p95 is the
 ## budget; the median is the headroom.
+##
+## ---
+##
+## **TWO THINGS THE FIRST RUNS OF THIS DIRECTOR TAUGHT IT.** Both are here
+## because a tuning pass that reads the output without knowing them will tune
+## the wrong thing, confidently.
+##
+## **1. `gpu_ms` does not work on this machine.** It reported
+## med = p95 = max = 0.00 across 240 samples on Metal -- the failure the header
+## above already describes as "pinned by something", pinned at zero. Zero is
+## the reading most likely to be mistaken for a free GPU, so the director now
+## says so in words when the whole series is zero. `frame_ms`, added for this,
+## is the wall-clock interval between two `process_frame`s and is the only
+## series that contains the entire frame. Read it against `cpu_ms`: `cpu_ms` is
+## the renderer's CPU half only, so `frame_ms` >> `cpu_ms` means the GPU is the
+## wall.
+##
+## **2. THE MACHINE MUST BE EXCLUSIVELY YOURS OR THE NUMBER IS FICTION.** This
+## repo runs several agents at once and each director opens a real window on
+## the same GPU. Measured here: with four `godot` processes alive, `frame_ms`
+## quantised to multiples of 33.3 ms -- 120 Hz divided four ways -- on BOTH a
+## 713-draw-call garrison AND a 9-draw-call lookdev scene. Nine draw calls
+## cannot cost 33 ms on an M2 Max; the floor was the other three windows. A
+## scene-independent floor is the signature, so if two very different scenes
+## report the same median, stop and count processes rather than believing it.
+##
+##     ps -Ao pid,comm | grep -i godot     # must be empty before you launch
+##
+## `pgrep -f godot` is NOT good enough for this check -- it matches the shell
+## wrappers and this director's own command line, so it never reads zero.
 
 
 const WARM_DISCARD := 30  ## Samples thrown away after vsync is cut; the first
@@ -57,12 +87,31 @@ func run(rig) -> void:
 
 	var gpu: Array[float] = []
 	var cpu: Array[float] = []
+	var wall: Array[float] = []
 	var draws: Array[float] = []
 	var prims: Array[float] = []
 	var objs: Array[float] = []
 
+	var last_us := Time.get_ticks_usec()
+
 	for i in samples:
 		await rig.wait_frames(1)
+		# WALL CLOCK IS THE PRIMARY NUMBER, and it is here because the first run
+		# of this director reported gpu_ms med=p95=max=0.00 across all 240
+		# samples on Metal. The header already says a series that never varies
+		# means the measurement is pinned by something; that one was pinned at
+		# zero, which is the reading a tuning pass would have mistaken for a
+		# free GPU.
+		#
+		# With vsync off (above) and no max_fps in project.godot, the interval
+		# between two frames IS the cost of a frame -- the whole frame, both
+		# halves of the engine, whichever one is the bottleneck. It cannot tell
+		# you WHICH half, but cpu_ms next to it does: wall >> cpu means the GPU
+		# is the wall. That is the classification a tuning pass needs, and it
+		# survives a driver that will not hand over a timestamp.
+		var now_us := Time.get_ticks_usec()
+		wall.append((now_us - last_us) / 1000.0)
+		last_us = now_us
 		gpu.append(RenderingServer.viewport_get_measured_render_time_gpu(vp))
 		cpu.append(RenderingServer.viewport_get_measured_render_time_cpu(vp))
 		draws.append(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
@@ -70,7 +119,15 @@ func run(rig) -> void:
 		objs.append(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))
 
 	var vram := Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0
-	var tex := Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED) / 1048576.0
+	# RENDER_TEXTURE_MEM_USED is not implemented on this build: it hands back -1
+	# already widened through a uint64, so it arrives as +1.8e19 and prints as
+	# 17592186043439.8 MB -- 17.6 PETABYTES of texture on a Mac. The sentinel is
+	# POSITIVE, which is why the first guard here (`>= 0.0`) let it straight
+	# through; the test has to be an absurdity ceiling, not a sign check. No
+	# consumer GPU has a terabyte of anything, so 1e6 MB is a safe wall.
+	var tex_raw := Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED)
+	var tex_mb := tex_raw / 1048576.0
+	var tex := tex_mb if tex_mb >= 0.0 and tex_mb < 1.0e6 else NAN
 	var nodes := Performance.get_monitor(Performance.OBJECT_NODE_COUNT)
 	var mem := Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0
 
@@ -79,12 +136,21 @@ func run(rig) -> void:
 
 	await rig.capture(out.path_join("perf_%s.png" % label))
 
-	var size := rig.root.get_visible_rect().size
+	# Annotated, not inferred. `rig` is untyped, so `rig.root` is a Variant and
+	# every call through it returns one -- `:=` here is a parse error, not a
+	# runtime one, so the whole director fails to load and shoot.gd reports
+	# "Nonexistent function 'new'" instead of anything about types.
+	# CLAUDE.md 3, the untyped-indexing row, one layer along.
+	var size: Vector2 = rig.root.get_visible_rect().size
 
 	# One machine-readable line per run, so a tuning pass can diff two of them
 	# without anybody re-reading prose. PERF is the grep handle.
 	print("PERF %s  %dx%d  n=%d" % [label, int(size.x), int(size.y), samples])
+	_row("frame_ms", wall)
 	_row("gpu_ms", gpu)
+	if _pct(gpu, 1.0) == 0.0:
+		print("PERF   gpu_ms is UNAVAILABLE on this driver (all-zero, not free)."
+			+ " Read frame_ms against cpu_ms instead.")
 	_row("cpu_ms", cpu)
 	_row("draw_calls", draws)
 	_row("primitives", prims)
@@ -97,7 +163,13 @@ func run(rig) -> void:
 	# of the two is worse, at p95, against the frame. Stated as a verdict rather
 	# than a number so a run that has gone over says so without anybody doing
 	# arithmetic at 3am.
-	var worst := maxf(_pct(gpu, 0.95), _pct(cpu, 0.95))
+	# frame_ms is the verdict because it is the only series that contains the
+	# whole frame. Taking max() of gpu and cpu was the original test and it was
+	# wrong twice over: gpu reads 0 here, so the max was silently just cpu, and
+	# cpu is only the renderer's own CPU half -- it does not include script,
+	# physics, or the wait on the GPU. A budget built on it would have called a
+	# 9 ms frame a 1 ms one.
+	var worst := _pct(wall, 0.95)
 	var verdict := "OK" if worst < 16.67 else ("TIGHT" if worst < 20.0 else "OVER")
 	print("PERF %s  budget60=%s  worst_p95=%.2fms of 16.67ms  headroom=%.0f%%"
 		% [label, verdict, worst, (1.0 - worst / 16.67) * 100.0])
