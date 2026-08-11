@@ -14,14 +14,22 @@ extends Node3D
 ## unsolved atoms off a doubled signal opens early. `solve()` is idempotent, it
 ## is the only thing that emits, and the subclasses do not own the flag.
 ##
-## ## Latching, and the one atom that does not
+## ## Latching, and the two atoms that do not
 ##
-## Seven of the eight stick: a smashed urn does not reassemble and a cracked
-## pillar does not stand back up. The pressure plate is the exception -- step off
-## and it rises -- which is why `latching` is a row in `PuzzleAtoms.ATOMS` and a
-## real `unsolved` signal exists. `docs/PUZZLES.md` §4 makes the way home the
-## REWARD for solving the gate room, and a cycle that closed itself behind you
-## because you walked off a plate would take that reward back.
+## Seven of the nine stick: a smashed urn does not reassemble and a cracked
+## pillar does not stand back up. The exceptions are the pressure plate -- step
+## off and it rises -- and the lantern, which has to be able to go dark because
+## §3's sixth combinator is one press turning others OFF. That is why `latching`
+## is a row in `PuzzleAtoms.ATOMS` and a real `unsolved` signal exists.
+## `docs/PUZZLES.md` §4 makes the way home the REWARD for solving the gate room,
+## and a cycle that closed itself behind you because you walked off a plate would
+## take that reward back.
+##
+## **The three doors out of solved are a CONTRACT, not an implementation detail
+## -- `docs/CONTRACT.md` §8, "Puzzle atoms".** `unsolve()`'s refusal of a
+## latching atom is what makes `is_solved()` a permanent fact anything may hold
+## onto, `reset()` is the one narrow exception, and the contract says who may
+## call it and what a new caller owes. Read it before you add a second caller.
 ##
 ## ## The flag, and floors you come back to
 ##
@@ -211,7 +219,9 @@ func unsolve() -> void:
 ## a latching atom on purpose (a smashed urn does not reassemble), and that rule
 ## is right for the world and wrong for a sequence, so this is the door the
 ## sequence gets rather than a hole knocked in that one. The only caller is
-## `PuzzleGate._break_the_sequence`.
+## `PuzzleGate._break_the_sequence`, and **`docs/CONTRACT.md` §8 ("Puzzle atoms")
+## is where that restriction is written down** -- with what a second caller owes,
+## which is the flag below and `PuzzleGate._breaking`'s re-entrancy guard.
 ##
 ## **The flag goes with it, and that is not tidiness.** A latching atom writes
 ## `atom_*` in `solve()` and `PuzzleAtom._ready` restores from it, so an eye left

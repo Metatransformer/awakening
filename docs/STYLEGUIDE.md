@@ -542,6 +542,95 @@ to RGB555 (it is drawn after the present pass, in palette colours already), and
 and neither is worth a second full-screen pass; noted here rather than left as a
 silent divergence.
 
+#### The volumetric fog crawls one colour step through it — and it does not read
+
+> **Measured, LOOKED AT, and closed as not a defect — card #66, 2026-08-11.**
+> Nothing was changed. This subsection exists so that the next session to run a
+> pixel differ over a frozen dungeon finds the answer instead of re-opening the
+> question, which is the whole reason the card was worth spending.
+
+**The finding.** Godot's volumetric fog is temporally reprojected with a
+per-frame jitter that never converges, so a *stopped* room is never twice the
+same. At native that wobble is 1/255 and nothing can see it. §4.5's buffer
+quantizes to RGB555, whose step is 8/255, so the same sub-LSB wobble lands on
+the far side of a colour step and becomes a real, countable change. Card #62
+found it with a differ; #66 went and looked at it.
+
+**How it was looked at, because a still frame cannot show a temporal artefact.**
+`tools/directors/fog_crawl.gd` photographs **twelve consecutive 1280 × 720
+frames at 1:1** (not the pre-#35 supersample, which would average the artefact
+away) under six conditions from one pinned hero pose, in one process.
+`tools/fog_crawl.py` turns each sequence into the per-pixel temporal range —
+unamplified and at gain 12 — a magnified flipbook of the hottest neighbourhood,
+and a panel with every moving pixel painted red so the artefact can be judged
+*knowing exactly where it is*. Floor 1, 44 sconces:
+
+| condition | px crossing a step, per frame pair | share of frame |
+|---|---|---|
+| **the fog alone** — world frozen, flames held, §4.5 on | **5,112** | 0.55% |
+| the same with `volumetric_fog_temporal_reprojection_enabled = false` | 0 | 0 |
+| the same at native (`internal_render = false`) | 0 (max delta **1**/255) | 0 |
+| **standing still in a live room** — torches burning, hero idle | 107,464 | 11.7% |
+| **walking forward** | 646,096 | 70.1% |
+| walking forward, reprojection off | 655,314 | 71.1% |
+
+(The floor is a fresh roll each run and the fog row moves with the room — 5.1k,
+5.9k and 7.9k over three runs of 42–44 sconces. The finding is an order of
+magnitude, not a constant, and every row above comes from one process so the
+comparisons inside it are like for like. A second run put the walking pair at
+652,107 against 652,073, which is the same answer with the difference gone
+entirely.)
+
+**The verdict is that it is invisible, and here is why rather than merely that.**
+The moving pixels never move by more than **one** step (worst delta 9/255,
+never two). They are an even, structureless dust — no bank, no edge, no shape —
+covering 1.7% of the frame across twelve frames, and the **densest 32 × 32
+neighbourhood anywhere in the frame is 12.4% moving pixels**, so there is
+nowhere it gathers into a patch. Each speck is one 480 × 270 texel (clustered
+fraction 0.96, which is the 2.67 px present block) toggling on roughly one
+frame boundary in three, irregularly — the statistics of a quantizer boundary,
+not of moving air. And it is 4.8% of what already changes when you *stand still*
+in a room with the torches lit, and 0.8% of what changes when you walk.
+
+Looked at: consecutive full frames at 1:1; four consecutive frames of the
+hottest 320 × 180 window at 2× nearest; the worst adjacent pair of the hottest
+160 × 90 window at 4× nearest; and that same pair beside its red-marked
+difference map. **At 4× magnification, on the worst pair in the frame, having
+just been shown a map of exactly which pixels moved, the two frames could not be
+told apart.** The unamplified range image is black.
+
+**What the alternatives would have cost, since one was nearly taken.**
+
+- *Turn the fog's temporal reprojection off.* It is bit-exact and, in a still
+  frame at 4× against the shipping build, indistinguishable — reprojection is a
+  temporal accumulator and a stopped camera converges either way. Its cost is
+  meant to be paid in motion, and the walking pair above says it buys nothing
+  there either: 655,314 px/pair against 646,096, a 1.4% *increase*. So the
+  remedy is cheap and it is also pointless — it removes an artefact nobody can
+  see and gives up the accumulator on a fog this project may yet make thicker.
+- *Dither the fog before quantization rather than after.* A second full-screen
+  pass, a new shader, and §4.4's argument turned inside out — the ordered cell
+  is deliberate here (see "the dither is loud on large flat surfaces and that is
+  correct", above). Rejected on cost against a benefit of zero.
+- *Accept it as a deliberate look.* Also wrong, in the other direction: PSX-era
+  dithered volumetrics genuinely crawled, but that crawl was visible and this
+  one is not, so calling it a look would be claiming credit for something the
+  player never sees.
+
+**Read the quantizer as the general hazard and not the fog as a special one.**
+§4.5's step is 8/255, so *any* temporal wobble smaller than that — the next
+accumulating, reprojected or TAA-ish thing anyone switches on — is invisible at
+native and countable here. The fog is the first case, not the last, and the
+instrument for the next one is `fog_crawl.gd` plus a pair of eyes, not a differ.
+The harness's own answer is separate and unaffected: `rig.still_the_frame()`
+turns reprojection off for *directors*, which is correct and stays (card #62).
+
+> **Reversible, the way §4.8 is.** If the owner looks at a dark room on a good
+> panel and sees the crawl, the one-line change is
+> `env.volumetric_fog_temporal_reprojection_enabled = false` in
+> `assets/materials/env_dungeon.tres` — the only environment in the project with
+> volumetric fog at all — and nothing else in the game branches on it.
+
 ### 4.6 Fog as a draw-distance tool
 
 Fog is the far clip plane wearing a coat. **Fog colour must be a palette entry

@@ -1366,6 +1366,65 @@ are each other's silent halves, and a symmetric pair here is an infinite loop.
 While gripped the hero walks at the speed he was handed and ignores lateral
 stick; that is the mechanic, not a limitation.
 
+### Puzzle atoms — three doors out of solved, and only one of them un-latches
+
+```gdscript
+# scripts/props/puzzle_atom.gd
+class_name PuzzleAtom extends Node3D
+signal solved(atom: PuzzleAtom)
+signal unsolved(atom: PuzzleAtom)
+
+func is_solved() -> bool
+func latching() -> bool            # PuzzleAtoms.ATOMS' own column
+func flag_id() -> StringName       # atom_<puzzle>_<kind>_<index>, a Game flag
+
+func solve() -> void               # idempotent. Latching -> writes the flag
+func unsolve() -> void             # REFUSES a latching atom
+func reset() -> void               # un-latches, and ERASES the flag
+```
+
+Seven of the nine atoms latch. The two that do not are the **pressure plate**
+(step off and it rises) and the **lantern** (§3's sixth combinator is that
+pressing one turns others off, so it has to be able to go back). That column is
+the whole of the difference, and it is why there are three doors and not two.
+
+**`unsolve()` refuses a latching atom on purpose, and that refusal is
+load-bearing.** A smashed urn does not reassemble. The refusal is what makes
+`is_solved()` on a latching atom a *permanent fact* that a gate, a placer or a
+prompt may hold onto, and it means the only atoms that ever call it are the two
+that own their own rising edge — `PressurePlate` and `Lantern`, each on itself.
+
+**`reset()` is the exception, and it is a narrow one.** `docs/PUZZLES.md` §3's
+second combinator — *sequence* — needs a case neither of the other two covers:
+an atom that answered its verb honestly and should not have, because it was not
+its turn. It gets its own door rather than a hole knocked in `unsolve()`'s
+refusal.
+
+| | non-latching | latching |
+|---|---|---|
+| `unsolve()` | clears state, emits `unsolved` | **no-op** |
+| `reset()` | same as `unsolve()` | clears state, **erases the flag**, emits `unsolved` |
+
+**Who may call it: a gate breaking its own sequence, and nothing else.** Today
+that is exactly one caller, `PuzzleGate._break_the_sequence`. It is not a general
+"put the puzzle back" — `PuzzleAtom.clear_run_flags()` (called by `Run.enter()`)
+is that, and it works per *run*, not per floor.
+
+**What a new caller owes.** If you reach for `reset()` you are taking back a
+permanent fact, and two things have to travel with it:
+
+1. **The flag goes, or the state comes back.** A latching atom writes `atom_*` in
+   `solve()` and `PuzzleAtom._ready` restores from it, so an eye left flagged
+   after the player watched it go dark comes back **lit** the next time the floor
+   is rebuilt inside the run. `reset()` erases it in the same breath for exactly
+   this reason; anything that clears `_solved` by another route has to do the
+   same or it is writing a row that half-remembers a sequence the player has
+   already lost.
+2. **`unsolved` is wired to the gate.** `reset()` emits it, `PuzzleGate` listens,
+   and a gate that resets its own atoms from inside that handler re-enters
+   itself — which is what `PuzzleGate._breaking` is for. A new caller resetting
+   atoms in a loop needs the same guard or it needs to not be in that handler.
+
 ### Items — the bottle ring
 
 ```gdscript

@@ -810,6 +810,14 @@ func _j_the_wrong_way(rig, hero: Node3D, cam: Camera3D) -> void:
 	# the ones taken in order.
 	_ck("JC the LEFTMOST eye, struck last, is in turn and stays lit (%d of 3)"
 		% _lit(eyes), _lit(eyes) == 1 and bool(eyes[0].call(&"is_solved")))
+	# **The control for JE2 below, and it has to come first.** An eye is latching,
+	# so a solve that STANDS writes `atom_*` into `Game.flags` and `_ready`
+	# restores from it. Reading the flag here proves the flag exists to be erased
+	# -- without this line, JE2's "the flag is gone" would pass just as happily on
+	# a build where no eye ever wrote one (docs/CONTRACT.md §8, "Puzzle atoms").
+	var lit_flag: StringName = eyes[0].call(&"flag_id")
+	_ck("JC2 and an eye that KEEPS its solve writes the run flag (%s)" % lit_flag,
+		Game.flag(lit_flag))
 	if key != null:
 		_ck("JD and three arrows right to left still did not wake the key",
 			not key.visible)
@@ -822,6 +830,14 @@ func _j_the_wrong_way(rig, hero: Node3D, cam: Camera3D) -> void:
 	await _shoot(rig, hero, cam, eyes[EYES - 1])
 	_ck("JE one shot out of turn puts the lit eye OUT again (%d of 3)"
 		% _lit(eyes), _lit(eyes) == 0)
+	# **The half of `PuzzleAtom.reset()` a frame cannot show, and the reason it is
+	# not `unsolve()`.** The light going out is only half of un-latching a latching
+	# atom: the `atom_*` flag JC2 just read has to go with it, or the row comes
+	# back LIT the next time this floor is rebuilt inside the run -- a row that
+	# half-remembers a sequence the player has already lost. Card #56;
+	# docs/CONTRACT.md §8, "Puzzle atoms", is where the rule is written down.
+	_ck("JE2 and its run flag went with the light (%s)" % lit_flag,
+		not Game.flag(lit_flag))
 	await _stand_off(rig, hero, eyes[1], 7.0)
 	await rig.capture(out.path_join("g_12_lost_ground.png"))
 
