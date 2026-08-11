@@ -1088,20 +1088,24 @@ should be enough, and "should be enough" is not the bar this repo uses.
 	# and the punish still opens), and the hookshot gets an anchor at the
 	# centre of the arena. `hook` is a HookTarget -- the firer's contract, not
 	# the HookRing puzzle atom -- so `Puzzle atoms 9` does not move.
-	"turn": {"at": 0.50, "kind": &"keystone", "radius": 1.5, "hook_y": 2.4},
+	#
+	# Two keys and no more. The mass is `BossArena.KEYSTONE_SIZE`, a single
+	# `Vector3(3.0, 2.4, 3.0)`, and the anchor is built at
+	# `KEYSTONE_SIZE.y + 0.15` = 2.55 m. Do not add `radius` or `hook_y`:
+	# the anchor has to sit on top of the mass, so a row carrying both would
+	# be two numbers that must agree, and the first person to change one of
+	# them gets a ring floating over a block or buried in it. Read the height
+	# off the built `HookTarget`, never off a row key.
+	"turn": {"at": 0.50, "kind": &"keystone"},
 },
 ```
 
-**And the last two keys in that row do not exist, which board card 47 found by
-aiming at one of them.** `BossDb`'s Riven Knight carries
-`{"kind": TURN_KEYSTONE, "at": TURN_AT}` and nothing else; the mass is
-`BossArena.KEYSTONE_SIZE`, a single `Vector3(3.0, 2.4, 3.0)`, and the anchor is
-built at `KEYSTONE_SIZE.y + 0.15` = **2.55 m**. That is the right shape and not a
-gap to fill: the anchor has to sit on top of the mass, so a row that carried both
-would be two numbers that must agree, and the first person to change one of them
-would get a ring floating over a block or buried in it. Read the height off the
-built `HookTarget`, never off a row key — **the block above is the doc being wrong
-and is left standing only so this paragraph has something to point at.**
+**This row said `"radius": 1.5, "hook_y": 2.4` until 2026-08-11, and neither key
+has ever existed** — board card 47 found it by aiming a hookshot at the anchor and
+having to ask the built node where it was. The correction is the row above, not a
+footnote: a wrong block under a heading that says **The row** is a block someone
+pastes. `BossDb`'s Riven Knight has always carried
+`{"kind": TURN_KEYSTONE, "at": TURN_AT}` and nothing else, and it was right.
 
 ---
 
@@ -1424,9 +1428,9 @@ gets its own director on that pattern — `boss_foundry.gd`, `boss_choir.gd`,
   `K.L_ENEMY`, so a Knight that had walked into the lane would be *bitten* — a
   third outcome that photographs almost exactly like the failed press it is
   standing next to. **And aiming at the anchor found a stale row**: §6.4's pasted
-  block ends `"radius": 1.5, "hook_y": 2.4` and **neither key exists** — the mass
-  is `BossArena.KEYSTONE_SIZE` and the anchor is built at 2.55 m, not 2.4. §6.4
-  now says so; the doc was the thing that was wrong.
+  block ended `"radius": 1.5, "hook_y": 2.4` and **neither key exists** — the mass
+  is `BossArena.KEYSTONE_SIZE` and the anchor is built at 2.55 m, not 2.4. The row
+  itself is corrected now; the doc was the thing that was wrong.
   Still open: a charge into the keystone ends early and the punish opens anyway;
   and the boss does **not** stall behind the keystone — thirty seconds of fight
   after the turn with beats still landing.
