@@ -1226,6 +1226,13 @@ for 2D art anywhere else.
   `soft_shadow_filter_quality=0`, plus `use_debanding=false` and
   `default_texture_filter=0`. `project.godot` is orchestrator-owned per
   CONTRACT §3.
+
+  **The HUD's half of the texture-filter delta is done** and did not need the
+  project key: `Hud`'s canvas sets `TEXTURE_FILTER_NEAREST` on itself. The item
+  icons are baked at HUD resolution, so linear filtering bought no antialiasing
+  and only smeared their VOID dilation into a halo. Type is unaffected either way
+  (`draw_string` rasterises its own glyphs) and 3D materials carry their own
+  filter, so the global key remains open for whatever OTHER 2D this project grows.
 - `docs/CONTRACT.md` still describes an OOT-fidelity crawler with a key-locked
   dungeon and mandates the OOT HUD in §7.1. That section is superseded here and
   the contract needs amending rather than silently diverging, because other

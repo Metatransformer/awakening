@@ -322,6 +322,23 @@ func _ready() -> void:
 	_canvas.name = "HudCanvas"
 	_canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_canvas.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# **Nearest, not linear** — STYLEGUIDE §8's `default_texture_filter=0`, taken
+	# here on the HUD's own Control rather than as the project-wide setting.
+	#
+	# Two reasons it lands locally. `project.godot` is orchestrator-owned
+	# (CONTRACT §3) and is the file `--import` silently re-serialises, dropping
+	# comments and the default bus layout with them (CLAUDE.md §3); and the
+	# project key governs ALL canvas textures, which is a claim about screens this
+	# card has no authority over. This line is the HUD's half of the same delta and
+	# nothing else's.
+	#
+	# It only touches TEXTURES: the baked item icons. `draw_string` rasterises its
+	# own glyphs, so every piece of type on this HUD is byte-identical either way,
+	# and 3D materials carry their own filter — no other session's frames move.
+	# What it changes is the thing the treatment is about: the icons are baked at
+	# HUD resolution by `_iconbake.gd`, so there is no minification to alias, and
+	# under linear filtering their deliberate VOID dilation smeared into a halo.
+	_canvas.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_canvas.draw.connect(_draw_hud)
 	add_child(_canvas)
 
