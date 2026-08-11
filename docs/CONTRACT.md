@@ -945,6 +945,15 @@ NPCs). Query with `get_tree().get_nodes_in_group(&"targetable")`.
 | 6 | interact | triggers, chests, switches |
 | 7 | pit | floor hazards |
 | 8 | hookshot_target | wooden/grate surfaces the hookshot bites |
+| 9 | convert | volumes that CHANGE a projectile instead of stopping it |
+
+**Layer 9 exists because a convert volume must not be an obstacle.** `Arrow`'s
+flight query masks `world | enemy | interact` with `collide_with_areas` on, so a
+lantern's flame wearing the interact bit is a flame the arrow sticks in — the
+exact opposite of `docs/PUZZLES.md` §3.1's *you shoot through it*. Nothing masks
+bit 9 but `Arrow._probe_convert`, a second ray cast on the same segment, which is
+what keeps the volume invisible to the sword's sweep, the hero's interact scan
+and the camera's collision alike. `Lantern.ConvertZone` is the only one so far.
 
 **A prop the sword is meant to hit needs `L_INTERACT`, not just `L_WORLD`.**
 The blade's hitbox masks `L_ENEMY | L_INTERACT` and nothing else, so a body on
@@ -1373,7 +1382,7 @@ var loadout: Array[Dictionary] = [
 ]
 var loadout_set: int = PRIMARY
 
-const RIGHT_POOL: Array[StringName] = [&"sword", &"bow", &"hookshot"]
+const RIGHT_POOL: Array[StringName] = [&"sword", &"bow", &"hookshot", &"burst"]
 const LEFT_POOL:  Array[StringName] = [&"shield", &"arrow", &""]
 
 func armament(hand: StringName) -> StringName     # what is in that hand, now
@@ -1393,6 +1402,24 @@ dropping the shield to two-hand the sword is a decision, not a broken state.
 
 `swap_loadout()` has exactly two callers, the button and the screen, for the same
 reason.
+
+**The Burst-Verse is the fourth stop and not a fourth system** (M5, GDD §6.5). A
+working is cast from the right hand like any other armament, so it is a row in
+`RIGHT_POOL`, a row in `ArmamentDb`, and nothing else — no mana, no school, no
+casting layer. Its charges are the bow's arrows with a different noun:
+
+```gdscript
+ArmamentDb.hand_count(id) -> StringName   # &"arrows" / &"charges" / &"" — what
+                                          # this hand's cell counts, if anything
+Game.ammo_count(&"charges") -> int        # the count itself; Game.charges
+Game.spend_ammo(&"charges", 1) -> bool    # refuses at zero; the cast never fires
+```
+
+`Game.charges` / `Game.max_charges` **are the old `bombs` / `max_bombs` renamed**
+rather than a new pair, and `save_game.gd` reads the old `"bombs"` key as a
+fallback so a save written before M5 keeps its count. There is no underground
+refill: charges come from the alchemist's board in the garrison, which is what
+makes spending one a decision.
 
 Two sets rather than one, because the primary answers "something is in front of
 me" and the alternate answers "something is not" — and a weapon switch you have

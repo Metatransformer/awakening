@@ -155,7 +155,10 @@ func save(slot: int) -> bool:
 		# saved -- see Game.draughts.
 		"bottles": Game.bottle_contents,
 		"arrows": Game.arrows,
-		"bombs": Game.bombs,
+		# Was "bombs". The satchel became a working (GDD §6.5) and the field went
+		# with the noun; the READ below still answers to the old key, so this is a
+		# rename rather than the new save field `docs/SCOPE.md` §1 refuses.
+		"charges": Game.charges,
 		"small_keys": Game.small_keys,
 		"has_boss_key": Game.has_boss_key,
 		"has_map": Game.has_map,
@@ -299,7 +302,10 @@ func load_slot(slot: int) -> Dictionary:
 		var potion := StringName(c)
 		Game.bottle_contents.append(potion if PotionDb.has(potion) else &"")
 	Game.arrows = d.get("arrows", 0)
-	Game.bombs = d.get("bombs", 0)
+	# The old key is the FALLBACK, not a second field: a save written before
+	# Burst had a name carried its stock under "bombs", and dropping it would
+	# quietly empty the pouch of anyone who had bought some.
+	Game.charges = d.get("charges", d.get("bombs", 0))
 	Game.small_keys = d.get("small_keys", 0)
 	Game.has_boss_key = d.get("has_boss_key", false)
 	Game.has_map = d.get("has_map", false)

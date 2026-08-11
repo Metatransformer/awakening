@@ -49,7 +49,12 @@ const T3 := 3  ## hookshot -- the Bellwake
 ## rows -- so a gate keyed to a tier wears the mark of the tier's own item with
 ## no second sigil table. That reuse is the reason this is a lookup and not a
 ## `match` in the gate.
-const TIER_ITEM: Array[StringName] = [&"", &"bow", &"bomb_bag", &"hookshot"]
+##
+## T2 was `&"bomb_bag"` until M5. The satchel became a WORKING you cast
+## (`docs/GDD.md` §5.2) and the id went with the noun; `Game.grant` translates
+## the old spelling on the way in, so `BossDb`'s Slag Ogre row still hands the
+## right thing over while it waits for its own one-word change.
+const TIER_ITEM: Array[StringName] = [&"", &"bow", &"burst", &"hookshot"]
 
 # --- The eight ----------------------------------------------------------------
 ## Ids, spelled once. Nothing outside this file writes one of these as a literal:
@@ -141,11 +146,12 @@ static var ATOMS := {
 		"refusal": "THE EYE IS SHUT", "plural": "EYES",
 		"latching": true, "gates": true,
 	},
-	## Built at M1 and INERT until M5 (`docs/SCOPE.md` §3): burst does not exist
-	## yet, so nothing in the game can crack it. That is the correct order and the
-	## row says so -- a prop with no verb is a prop, and a verb with no prop is a
-	## dead end. `CrackedPillar.burst()` is public so a director can prove the
-	## body works before the bomb that will call it is written.
+	## Built at M1, inert until M5, and **live since M5** (`docs/SCOPE.md` §3):
+	## `BurstCast._wake_the_burstable` walks group `&"burstable"` inside the blast
+	## radius and calls `burst()`. That was the entire integration -- one line in
+	## the working, nothing in the prop -- which is what the year the row spent
+	## inert bought. A prop with no verb is a prop; a verb with no prop is a dead
+	## end, and the dead end is the expensive one.
 	CRACKED_PILLAR: {
 		"tier": T2, "verb": "a burst",
 		"script": "res://scripts/props/atoms/cracked_pillar.gd",

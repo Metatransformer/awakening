@@ -2521,6 +2521,21 @@ func request_hookshot(duration: float, aim: Vector3) -> bool:
 	return true
 
 
+## Commit to a CAST — the Burst-Verse's arm, thrown down `aim` (`docs/GDD.md`
+## §6.5). Same shape as the hookshot's: one phase, and the mote's flight is the
+## rest of it.
+##
+## **It fires the hookshot's one-shot on purpose.** `clip_hook_shot`
+## (`ex_hookshot_fire`) is an arm punched out along the aim with nothing visible
+## in the hand, which is exactly what casting a working looks like — and the
+## working renders NO model at all, so there is nothing in the frame that could
+## give the borrowed clip away. The alternative is a second copy of the same
+## third of a second of arm, authored and imported, for a pose the player cannot
+## tell apart. If the two ever need different arms, this one line is the split.
+func request_cast(duration: float, aim: Vector3) -> bool:
+	return request_hookshot(duration, aim)
+
+
 ## The half of a shot that is the same for every ranged item: take the hero for
 ## `duration` seconds and point him down the aim. False if he is busy, exactly as
 ## `request_attack` is.

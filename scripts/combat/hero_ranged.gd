@@ -113,9 +113,13 @@ const HOOK_FIRE_TIME := 0.34
 ## demanding pixel aim across a chasm is how a traversal item becomes a chore.
 const HOOK_ASSIST_CONE := 22.0
 
-## The two items that put the camera on the shoulder. A set rather than a pair of
-## comparisons so adding a third — a slingshot, a wand — is one entry.
-const AIMED: Array[StringName] = [&"bow", &"hookshot"]
+## The items that put the camera on the shoulder. A set rather than a pair of
+## comparisons so adding one is one entry — and `&"burst"` is that entry cashed
+## in. A working is thrown in an ARC, which is the one thing in this game you
+## genuinely cannot aim from the hip: the mote falls under full gravity
+## (`K.BURST_GRAVITY_SCALE`), so where it lands is a function of pitch, and pitch
+## only exists on the camera (see "Aim comes from the camera" above).
+const AIMED: Array[StringName] = [&"bow", &"hookshot", &"burst"]
 
 var _hero: Hero
 var _tether: HookshotTether
@@ -145,6 +149,18 @@ var _bow_fired: bool = false
 ## no pull clock — a grapple pistol is either pointed at something or it is not —
 ## so this flag is the whole of its held state.
 var _hook_ready: bool = false
+
+## The working is READ and waiting for the trigger to come off. The same shape as
+## the hookshot's brace and for the same reason — an arc has no charge and no
+## pull, so "he is holding it up" is the whole of its held state. It is where the
+## camera drops to his shoulder, which is the only thing that makes the arc
+## aimable at all.
+##
+## There is no `_burst_active`: the mote owns its own flight, its own fuse and
+## its own blast (`BurstCast`), and nothing here has to watch it. That is the
+## difference between an item that leaves and one that drags the hero along
+## behind it.
+var _burst_ready: bool = false
 
 ## The chain is out. `_hook_bit` distinguishes a shot that found an anchor from
 ## one that played out to maximum range and found nothing — both draw the chain,
@@ -197,6 +213,8 @@ func aim_item() -> StringName:
 		return &""
 	if held == &"bow":
 		return &"bow" if _bow_t >= 0.0 else &""
+	if held == &"burst":
+		return &"burst" if _burst_ready else &""
 	return &"hookshot" if _hook_ready or _hook_active else &""
 
 
@@ -242,6 +260,7 @@ func use_press(id: StringName) -> bool:
 	match id:
 		&"bow": return _draw_bow()
 		&"hookshot": return _ready_hookshot()
+		&"burst": return _read_burst()
 	return false
 
 
@@ -258,6 +277,9 @@ func use_release() -> void:
 	if _hook_ready:
 		_hook_ready = false
 		_fire_hookshot()
+	if _burst_ready:
+		_burst_ready = false
+		_cast_burst()
 
 
 ## Put down whatever is raised without firing it. The shop, the escape rope's
@@ -266,6 +288,9 @@ func use_release() -> void:
 func cancel_use() -> void:
 	_using = false
 	_hook_ready = false
+	# A working put away unread costs nothing, exactly like an abandoned pull:
+	# the charge is spent at the CAST and nowhere else.
+	_burst_ready = false
 	if _bow_t >= 0.0 and not _bow_fired:
 		_bow_t = -1.0
 
@@ -450,6 +475,45 @@ func _end_hook() -> void:
 	_tether.clear()
 
 
+# --- The Burst-Verse ----------------------------------------------------------
+# `docs/GDD.md` §6.5. **A working is a usable item and this is the whole of the
+# "casting layer" it gets**: two functions beside the hookshot's two, spending a
+# count that is bought in the garrison. No mana, no school, no cast bar.
+
+## Read it and hold it. The charge is checked HERE, on the press, for the reason
+## the quiver is: a working that comes up, is read, and then declines to go off
+## has told you about the empty pouch at the worst possible moment.
+func _read_burst() -> bool:
+	if Game.charges <= 0:
+		# Audible, unlike an unbound button. You asked for a cast with a working
+		# you are holding, and silence there reads as a dropped input rather than
+		# as an empty pouch — the same argument `_draw_bow` makes.
+		Bus.request_sfx.emit(&"craft_fail", _hero.global_position)
+		return false
+	_burst_ready = true
+	Bus.request_sfx.emit(&"hookshot_load", _hero.global_position)
+	return true
+
+
+## The trigger came up: the mote leaves.
+##
+## Aimed at RELEASE, off the camera, exactly as the arrow is — that is the entire
+## point of a trigger you hold, and it matters more here than anywhere else in
+## the kit because the arc falls under full gravity and its landing point is a
+## function of the pitch the player has spent the hold setting.
+func _cast_burst() -> bool:
+	var dir := _aim_at_target_or_camera(&"burst")
+	if not _hero.request_cast(K.BURST_CAST_TIME, dir):
+		return false
+	# Spent at the CAST and not at the press. A read abandoned costs nothing,
+	# which is the only reading of the pouch that is not a lie.
+	if not Game.spend_ammo(&"charges"):
+		return false
+	BurstCast.cast_from(_scene_root(), _muzzle(&"burst"), dir, _hero)
+	Bus.request_sfx.emit(&"crossbow_shoot", _hero.global_position)
+	return true
+
+
 # --- Frame ------------------------------------------------------------------
 
 func _physics_process(delta: float) -> void:
@@ -457,6 +521,11 @@ func _physics_process(delta: float) -> void:
 		return
 	_tick_bow(delta)
 	_tick_hook(delta)
+	# Knocked out of the read, or the working left his hand mid-hold. Put it away
+	# rather than casting it: a blast that went off because he got hit is a blast
+	# the player did not aim, and this one hurts him too.
+	if _burst_ready and not _can_hold(&"burst"):
+		_burst_ready = false
 	# POLLED, at the end, after both items have had their say. The raised state
 	# ends in half a dozen places — the seam, the follow-through running out, a
 	# roll or a hit taking the pose away, `cancel_use` from the shop — and a
@@ -575,6 +644,13 @@ func _tick_hook(delta: float) -> void:
 ## eye line otherwise, which is what a director rendering a bare hero gets.
 func _muzzle(id: StringName) -> Vector3:
 	var model: Node3D = null
+	# The working has NO model — he casts it out of an empty hand — so it takes
+	# the fallback below deliberately rather than by accident. Written as an
+	# early return because the line beneath it is an either/or between two real
+	# meshes, and a third id falling through it silently picked the bow.
+	if id == &"burst":
+		return _hero.global_position + Vector3.UP * K.HERO_EYE_Y \
+			+ (-_hero.global_transform.basis.z) * 0.35
 	if _hero.combat != null:
 		model = _hero.combat.hookshot if id == &"hookshot" else _hero.combat.bow
 	if model != null and model.is_inside_tree() and model.is_visible_in_tree():

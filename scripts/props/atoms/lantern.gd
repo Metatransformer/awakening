@@ -35,6 +35,19 @@ extends PuzzleAtom
 ## version of a lights-out grid is the one across a gap. Refusing the arrow would
 ## be inventing a restriction the verb ladder does not ask for. `EyeSwitch` is the
 ## atom that discriminates, and it does so because the bow is its whole point.
+##
+## ## It is also the room's furnace -- combinator 8
+##
+## `docs/PUZZLES.md` §3.1: a shot that crosses this lantern **while it is lit**
+## arrives as `Hit.ARROW_FIRE`, and a frozen `EyeSwitch` accepts nothing else. So
+## a floor-2 room can pose a question that looks like it needs Burst and be
+## answered with the Bow the player already owns, plus a lantern on the sight
+## line. See `convert_kind()` and the `ConvertZone` in `_build()`.
+##
+## **No new atom, and that is the test the combinator was chosen to pass.** This
+## is the same prop, the same verb and the same toggle; what is new is a sentence
+## the kit could always have said. `docs/PUZZLES.md` §8.1 is explicit that a
+## combinator arriving with a prop of its own has stopped being a combinator.
 
 ## Seconds after a press before this lantern will take another. **One swing is
 ## one press.** A sword arc reports `apply_hit` on more than one frame while it
@@ -63,6 +76,12 @@ const POST_R := 0.09
 const CAGE_R := 0.30
 const CAGE_H := 0.52
 const FLAME_R := 0.16
+
+## Radius of the convert volume around the flame -- `docs/PUZZLES.md` §3.1,
+## combinator 8. Bigger than the flame and a shade bigger than the cage, so a
+## shot that visibly passes through the brass catches; smaller than a metre, so
+## an arrow that visibly misses the lantern does not.
+const CONVERT_R := 0.40
 
 var _flame: MeshInstance3D
 var _lamp: OmniLight3D
@@ -136,6 +155,23 @@ func set_lit(on: bool) -> void:
 		solve()
 	else:
 		unsolve()
+
+
+# --- Convert (docs/PUZZLES.md §3.1, combinator 8) -----------------------------
+
+## What a shot crossing this lantern's flame becomes, or `&""` for nothing.
+##
+## **The "only while lit" rule, and it lives here rather than on the arrow.** A
+## projectile that reached in and asked `lantern.is_solved()` would be a
+## projectile that knows what a lantern is; this way the arrow asks a volume what
+## it does and the volume answers, and the next thing that wants to rewrite a
+## shot writes this one method and nothing in `Arrow` changes.
+##
+## A DARK lantern is a dark lantern and the shot goes through it unchanged. That
+## is the sentence the whole combinator is made of: the room's question is not
+## "is there a lantern on the line" but "did you light it first".
+func convert_kind() -> StringName:
+	return Hit.ARROW_FIRE if is_solved() else &""
 
 
 ## Breathe, because the grid is pointing at this one -- `LanternGrid.HINT_AFTER`.
@@ -236,12 +272,26 @@ func _build() -> void:
 	body.collision_mask = 0
 	add_child(body)
 
+	# **The solid part stops at the top of the POST. The cage is open air.**
+	#
+	# This used to be one cylinder over post AND cage, and that made combinator 8
+	# impossible: `docs/PUZZLES.md` §3.1 is *you shoot **through** it*, and an
+	# arrow aimed at the flame buried itself in an invisible collider around the
+	# brass instead. Every torch in Ocarina you can put an arrow through is this
+	# shape.
+	#
+	# Nothing else notices. The post is still 1.55 m of obstacle, which is what
+	# the walk between two lanterns in a grid is made of; the sword's sweep is
+	# around a 1.65 m hero's chest and still finds it; and a low shot at the post
+	# still presses the lantern the way it always did. What changed is that the
+	# 0.52 m of cage above it is now a window rather than a wall — which is
+	# exactly the aim the puzzle asks for.
 	var cs := CollisionShape3D.new()
 	var cyl := CylinderShape3D.new()
 	cyl.radius = CAGE_R
-	cyl.height = POST_H + CAGE_H
+	cyl.height = POST_H
 	cs.shape = cyl
-	cs.position.y = (POST_H + CAGE_H) * 0.5
+	cs.position.y = POST_H * 0.5
 	body.add_child(cs)
 
 	var iron := _mat(Color(0.22, 0.20, 0.19), 0.55, 0.85)
@@ -288,3 +338,27 @@ func _build() -> void:
 	_lamp.shadow_enabled = false
 	_lamp.position.y = y0 + CAGE_H * 0.5
 	add_child(_lamp)
+
+	# The convert volume -- combinator 8, and the whole of the lantern's half of
+	# it (`docs/PUZZLES.md` §8.1: *one `Area3D` on `Lantern` that rewrites it in
+	# flight*).
+	#
+	# It monitors NOTHING and is monitored by nothing: `collision_mask` is 0 and
+	# no signal is connected. It exists purely as a shape in the physics space for
+	# `Arrow._probe_convert` to find with a ray, which is why it can sit on its own
+	# layer and be invisible to every other system in the game. An Area3D that
+	# emitted `body_entered` would be useless here anyway — `Arrow` is a Node3D
+	# with no collision body at all (see its class note on why it raycasts), so
+	# there is nothing for an area to detect entering.
+	var flame_zone := Area3D.new()
+	flame_zone.name = "ConvertZone"
+	flame_zone.collision_layer = K.L_CONVERT
+	flame_zone.collision_mask = 0
+	flame_zone.monitoring = false
+	flame_zone.position.y = y0 + CAGE_H * 0.5
+	add_child(flame_zone)
+	var zone_cs := CollisionShape3D.new()
+	var sphere := SphereShape3D.new()
+	sphere.radius = CONVERT_R
+	zone_cs.shape = sphere
+	flame_zone.add_child(zone_cs)

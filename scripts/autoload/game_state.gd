@@ -89,8 +89,19 @@ var components: Dictionary[StringName, int] = {}
 var stash: Dictionary[StringName, int] = {}
 var arrows: int = 0
 var max_arrows: int = 30
-var bombs: int = 0
-var max_bombs: int = 20
+## Burst charges (`docs/GDD.md` §6.5). **This is the field that used to be
+## `bombs`, renamed and not added to** -- the working replaced the satchel, so
+## the counted resource behind it is the same counted resource with the noun the
+## design settled on. `docs/SCOPE.md` §1 allows the working "no new save field
+## beyond the ones an owned item and a counted resource already need", and this
+## is that field; `save_game.gd` still reads the old `bombs` key so a save made
+## before the rename keeps its stock.
+##
+## Bought from the alchemist and **never refilled underground**: there is no
+## rest, the run is not savable, and a resource that came back mid-run would
+## soften the walk home that `docs/METAGAME.md` §2 is built on.
+var charges: int = 0
+var max_charges: int = K.BURST_CHARGES_MAX
 
 # --- Bottles (docs/METAGAME.md §6.6) ----------------------------------------
 ## What is in each bottle you own, in order. The ARRAY'S SIZE is how many
@@ -166,7 +177,12 @@ const HAND_LEFT := &"left"
 ## What each hand may hold, in cycle order. `&""` is the empty hand and is a
 ## legitimate choice: two-handing the sword and dropping the shield is a real
 ## decision, not a broken state.
-const RIGHT_POOL: Array[StringName] = [&"sword", &"bow", &"hookshot"]
+## **Four of the ring's six stops** (`docs/CONTRACT.md` §4.1 -- sword, bow,
+## hookshot, Burst, Sustain, Ballast, and a seventh costs a sixth). Burst goes in
+## here and nowhere else: a working is a usable item, so what makes it castable
+## is a row in this array, a row in `ArmamentDb`, and `has()` saying you own it.
+## There is no casting layer and this line is the proof of it.
+const RIGHT_POOL: Array[StringName] = [&"sword", &"bow", &"hookshot", &"burst"]
 const LEFT_POOL: Array[StringName] = [&"shield", &"arrow", &""]
 
 var loadout: Array[Dictionary] = [
@@ -248,7 +264,7 @@ func reset() -> void:
 	components.clear()
 	stash.clear()
 	arrows = 0
-	bombs = 0
+	charges = 0
 	small_keys = 0
 	has_boss_key = false
 	has_map = false
@@ -273,6 +289,7 @@ func reset() -> void:
 	Bus.components_changed.emit(components)
 	Bus.stash_changed.emit(stash)
 	Bus.ammo_changed.emit(&"arrows", arrows)
+	Bus.ammo_changed.emit(&"charges", charges)
 	Bus.gold_changed.emit(gold)
 	Bus.key_count_changed.emit(small_keys)
 	Bus.player_health_changed.emit(quarters, max_quarters)
@@ -490,9 +507,9 @@ func add_arrows(n: int) -> void:
 	Bus.ammo_changed.emit(&"arrows", arrows)
 
 
-func add_bombs(n: int) -> void:
-	bombs = clampi(bombs + n, 0, max_bombs)
-	Bus.ammo_changed.emit(&"bombs", bombs)
+func add_charges(n: int) -> void:
+	charges = clampi(charges + n, 0, max_charges)
+	Bus.ammo_changed.emit(&"charges", charges)
 
 
 ## Spend one unit of a consumable. Returns false if the player has none.
@@ -502,14 +519,25 @@ func spend_ammo(id: StringName) -> bool:
 			if arrows <= 0:
 				return false
 			arrows -= 1
-		&"bombs":
-			if bombs <= 0:
+		&"charges":
+			if charges <= 0:
 				return false
-			bombs -= 1
+			charges -= 1
 		_:
 			return true
-	Bus.ammo_changed.emit(id, arrows if id == &"arrows" else bombs)
+	Bus.ammo_changed.emit(id, ammo_count(id))
 	return true
+
+
+## How many of `id` are left. One reader, because the HUD, the equipment screen
+## and the item that spends it must not each pick their own field -- the count
+## and the cell drawing it disagreeing is the class of bug that only shows up
+## when the number is nearly gone.
+func ammo_count(id: StringName) -> int:
+	match id:
+		&"arrows": return arrows
+		&"charges": return charges
+	return 0
 
 
 func add_rupees(n: int) -> void:
@@ -1017,6 +1045,18 @@ func spend_key() -> bool:
 ## bow you just found is one press of D-pad → away, which is what the auto-bind
 ## was for.
 func grant(item_id: StringName) -> void:
+	# `BossDb` still spells the Slag Ogre's drop &"bomb_bag" -- the satchel's
+	# noun, from before GDD §5.2 made Burst a WORKING you cast rather than a bag
+	# you throw. Translated on the way IN rather than aliased in `has()`, so
+	# there is still exactly one ownership id and exactly one gate: an alias in
+	# `has()` would have to be repeated by every caller that walks a tier table
+	# (`PuzzleAtoms.owned_tier`) and the first one to forget it would be a floor
+	# that silently generates no cracked pillars.
+	# [debt] Delete this pair of lines and the `&"bomb_bag"` in
+	# `scripts/actors/enemies/boss_db.gd` together; it is a one-word change there
+	# and that file was owned by another agent on the day this landed.
+	if item_id == &"bomb_bag":
+		item_id = &"burst"
 	if items.get(item_id, false):
 		return
 	items[item_id] = true

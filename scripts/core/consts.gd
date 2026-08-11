@@ -600,6 +600,38 @@ const BOMB_HURTS_OWNER := true
 const ARROW_SPEED := 42.0
 const ARROW_GRAVITY := 6.0          # [tune] OOT arrows barely drop at this range
 
+# --- The Burst-Verse (docs/GDD.md §5.2, §6.5) --------------------------------
+# **The four BOMB_* numbers above are Burst's.** GDD §5.2 changed the NOUN — you
+# cast a written working, you do not throw a satchel — and said in the same
+# breath that "the arc, the fuse, the sphere query and the cracked walls are
+# identical". So the [oot] measurements stay where they are and stay named for
+# what they were measured from; a second BURST_FUSE beside BOMB_FUSE would be
+# two numbers for one fact, and the one below it would be the one nobody
+# updated. What is here is only what the working needs and the satchel did not.
+
+## Charges you can carry. `max_arrows` with a different noun (GDD §6.5), and
+## deliberately less than half of it: an arrow is the answer to one body and a
+## charge is the answer to one WALL, so a dozen is several floors' worth of
+## doors and still not enough to burst your way past thinking. Bought from the
+## alchemist, never refilled underground. [tune]
+const BURST_CHARGES_MAX := 12
+## Metres per second the mote leaves his hand at. Slower than an arrow by a
+## factor of three and a half on purpose — the arc is the aim, and a throw you
+## cannot see travel is a throw you cannot lead. [tune]
+const BURST_THROW_SPEED := 12.0
+## Share of the world's gravity the mote falls under. FULL, unlike the arrow's
+## tenth: an arrow that drops reads as a bad shot and a working that drops reads
+## as a lob, which is the whole difference between the two verbs.
+const BURST_GRAVITY_SCALE := 1.0
+## Seconds of arm the cast takes. Matched to `HeroRanged.HOOK_FIRE_TIME` because
+## it is the same one-shot (`Hero.request_cast`) — see that method's note.
+const BURST_CAST_TIME := 0.34
+## How hard the blast throws what it catches, in `KNOCKBACK_*` units. Heavier
+## than the sword's light blow and lighter than its committed one: a blast is
+## not a swing, and a body launched across the room by it would out-carry the
+## move the whole kit is built around.
+const BURST_KNOCKBACK := 6.0
+
 
 # --- The forge (docs/METAGAME.md §6.5) --------------------------------------
 ## Twelve ladders, three rungs each, bought with gold AND components at the

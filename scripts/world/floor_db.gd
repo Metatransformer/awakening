@@ -329,7 +329,11 @@ static var FLOORS := {
 		"bands_deep": [&"orc", &"orc", &"kobold"],
 		"tint": &"slag_light",
 		"boss": &"slag_ogre",
-		"boss_item": &"bomb_bag",
+		# The Burst-Verse, not a satchel (`docs/GDD.md` §5.2). This id is what
+		# floor 1's VAULT door names in its refusal (`FloorDb.vault_key`) and what
+		# `PuzzleAtoms.TIER_ITEM[T2]` gates the cracked pillar on, so the three
+		# have to agree on the spelling or the vault says "NEEDS A KEY".
+		"boss_item": &"burst",
 		"anchors": ANCHORS_STANDARD,
 		"relics": {
 			&"deep_chest": &"cinder_retort",

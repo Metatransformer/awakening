@@ -9,11 +9,31 @@ extends PuzzleAtom
 ##
 ## ## Only an arrow
 ##
-## `apply_hit` refuses anything whose `kind` is not `&"arrow"`. That check is the
-## whole tier: an eye a sword could open is a T0 atom wearing a T1 label, and
+## `apply_hit` refuses anything that is not an arrow of some kind. That check is
+## the whole tier: an eye a sword could open is a T0 atom wearing a T1 label, and
 ## `PuzzleAtoms.pool()` would then be handing the generator a rung the player has
 ## not climbed. A sword swing gets a visible refusal rather than silence -- a
 ## switch that ignores you is a switch you conclude is broken.
+##
+## ## The frozen variant -- combinator 8, convert
+##
+## `frozen` is the SAME CHECK WITH A DIFFERENT CONSTANT (`docs/PUZZLES.md` §8.1,
+## which prices combinator 8 at exactly that and no more): an iced eye accepts
+## `Hit.ARROW_FIRE` and refuses `Hit.ARROW`, so the answer is a shot routed
+## through a lit `Lantern` rather than a shot aimed better. It is a VARIANT and
+## not a tenth atom -- same script, same row in `PuzzleAtoms.ATOMS`, same tier,
+## one exported bool -- because §8.1's ceiling is that a combinator needing a
+## prop of its own has stopped being a combinator.
+##
+## Note what that does to the ladder: the frozen eye asks a question that LOOKS
+## like it wants a verb the player has not earned, and is answerable with the bow
+## plus a lantern they walked past. That is §0 rule 1 being relaxed honestly,
+## which §3.1 says is the whole reason convert was worth having.
+##
+## **A plain eye accepts a burning arrow.** It reads `is_arrow` and not
+## `kind == ARROW`, deliberately: fire is a strictly longer sentence in the same
+## word, and an eye that shut its lid on a lit arrow would be teaching the player
+## that the lantern is sometimes a mistake.
 ##
 ## It sits on `L_WORLD | L_INTERACT` because that is the pair `Arrow`'s query
 ## masks (`docs/CONTRACT.md` §8), and it answers on `apply_hit` because that is
@@ -26,11 +46,23 @@ const LAMP_RANGE := 4.2
 ## Seconds of the closing-lid blink when something that is not an arrow lands.
 const REFUSE_TIME := 0.30
 
+## Shards in the rime crust the frozen variant wears. Enough to break the
+## socket's clean circle into a jagged outline and not so many that the pupil
+## behind them stops showing -- the player still has to read this as an EYE.
+const RIME_SHARDS := 7
+
+## Iced over. **Set BEFORE this enters the tree**, exactly as `Lantern.starts_lit`
+## is: `_build()` runs from `_ready` and the crust is geometry, so a placer that
+## sets this after `add_child` gets a plain eye that refuses plain arrows for no
+## visible reason -- the worst possible version of this prop.
+@export var frozen: bool = false
+
 var _pupil: MeshInstance3D
 var _pupil_mat: StandardMaterial3D
 var _lid_top: Node3D
 var _lid_bot: Node3D
 var _lamp: OmniLight3D
+var _rime: Node3D
 var _age: float = 0.0
 
 
@@ -53,14 +85,45 @@ func _process(delta: float) -> void:
 
 ## The damage contract's entry point (`docs/CONTRACT.md` §8). Arrows only -- see
 ## the class note.
+##
+## A `null` hit is a director or a fixture saying "the right thing landed" and is
+## accepted by BOTH variants; every real blow in the game carries a `Hit`.
 func apply_hit(hit) -> void:
 	if is_solved():
 		return
-	if hit != null and hit.kind != &"arrow":
+	if hit != null and not _accepts(hit.kind):
 		_refuse()
 		return
 	Bus.request_sfx.emit(&"glint_bell", global_position)
 	solve()
+
+
+## The tier check, and the frozen variant is the same line with a different
+## constant -- `docs/PUZZLES.md` §8.1, verbatim.
+func _accepts(kind: StringName) -> bool:
+	if frozen:
+		return kind == Hit.ARROW_FIRE
+	# Both, and a burning arrow is not an accident here -- see the class note.
+	return kind == Hit.ARROW or kind == Hit.ARROW_FIRE
+
+
+## What a gate says while this one is unsolved.
+##
+## **Overridden rather than added to `PuzzleAtoms.ATOMS`, and that is the point.**
+## A row for the frozen eye would be a TENTH atom against a kit `PuzzleAtoms
+## .validate()` freezes at nine, and §8.1 spends its last paragraph saying a
+## combinator must not buy one. §8.1's own bill says "one `refusal` string **on
+## the atom**", so it is on the atom.
+##
+## It names the verb, which is GDD pillar 3's whole demand of a refusal: not
+## "THE EYE IS SHUT" -- the player can see that, and they have already put an
+## arrow in it -- but the thing the arrow was missing.
+func refusal(left: int = 1, total: int = 1) -> String:
+	if not frozen:
+		return super(left, total)
+	if total <= 1 or left <= 1:
+		return "THE ICE WANTS A LIT ARROW"
+	return "%d OF %d EYES STILL ICED" % [left, total]
 
 
 ## Shut, hard, for a third of a second. The player who swung at it learns the
@@ -77,6 +140,15 @@ func _refuse() -> void:
 # --- Open ---------------------------------------------------------------------
 
 func on_solved() -> void:
+	# The ice goes first, and it GOES -- freed, not hidden. A crust left in the
+	# tree at zero scale is an invisible thing in front of an open eye, and the
+	# next hand to touch this file will make it visible again by accident.
+	if _rime != null:
+		var melt := create_tween().set_parallel(true)
+		melt.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+		melt.tween_property(_rime, "scale", Vector3.ONE * 0.01, 0.22)
+		melt.chain().tween_callback(_rime.queue_free)
+		_rime = null
 	var tw := create_tween().set_parallel(true)
 	tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(_lid_top, "position:y", SOCKET_R * 0.95, 0.26)
@@ -88,6 +160,9 @@ func on_solved() -> void:
 
 
 func restore_solved() -> void:
+	if _rime != null:
+		_rime.queue_free()
+		_rime = null
 	_lid_top.position.y = SOCKET_R * 0.95
 	_lid_bot.position.y = -SOCKET_R * 0.95
 	_pupil_mat.emission = Pal.MOSS
@@ -131,7 +206,7 @@ func _build() -> void:
 
 	# The pupil. Emission only -- `PuzzleAtom._glow_mat`'s note: a coloured albedo
 	# under the socket's own lamp clips to white and photographs as a smear.
-	_pupil_mat = _glow_mat(Pal.COBALT, 0.9)
+	_pupil_mat = _glow_mat(Pal.FROST if frozen else Pal.COBALT, 0.9)
 	_pupil = _box(self, _pupil_mat, Vector3(PUPIL_R * 2.0, PUPIL_R * 2.0, 0.06),
 		Vector3(0.0, 0.0, -0.14))
 	# A darker iris ring, so the lit part is a pupil and not a glowing tile.
@@ -158,10 +233,51 @@ func _build() -> void:
 
 	_lamp = OmniLight3D.new()
 	_lamp.name = "Lamp"
-	_lamp.light_color = Pal.COBALT
+	_lamp.light_color = Pal.FROST if frozen else Pal.COBALT
 	_lamp.light_energy = 0.7
 	_lamp.omni_range = LAMP_RANGE
 	_lamp.omni_attenuation = 1.6
 	_lamp.shadow_enabled = false
 	_lamp.position.z = -0.5
 	add_child(_lamp)
+
+	if frozen:
+		_build_rime()
+
+
+## The crust, and it is a SILHOUETTE change and not a tint.
+##
+## A frozen eye that differed from a plain one only in hue would be unreadable at
+## the range this puzzle is shot from -- and CLAUDE.md §3 records the specific
+## way that fails here, which is that emissive over near-black photographs as an
+## opaque slab whatever the colour. So the ice is seven shards standing PROUD of
+## the socket at broken angles: the plain eye is a clean disc, the frozen one has
+## a jagged outline you can pick out of a still frame across the room.
+##
+## FROST (`Pal.FROST`) rather than COBALT, and it is the palette's existing ice:
+## `docs/STYLEGUIDE.md` §2 already spends it on a body the hookshot has frozen,
+## which is the same fact about the same world.
+func _build_rime() -> void:
+	_rime = Node3D.new()
+	_rime.name = "Rime"
+	add_child(_rime)
+	# Glassy rather than matte -- the one thing in the atom kit allowed a
+	# highlight besides iron, because a specular that MOVES is most of what makes
+	# a surface read as ice instead of as blue stone.
+	var ice := _mat(Pal.FROST.darkened(0.45), 0.22, 0.0)
+	ice.emission_enabled = true
+	ice.emission = Pal.FROST
+	# Low. The crust has to sit in FRONT of a breathing pupil without drowning
+	# it, and the shard shapes are doing the work the brightness would otherwise
+	# have to.
+	ice.emission_energy_multiplier = 0.55
+	for i in RIME_SHARDS:
+		# Deliberately not TAU/RIME_SHARDS: an even ring reads as a manufactured
+		# collar. Seven shards on a golden-ratio walk around the socket land
+		# unevenly and never repeat.
+		var a := TAU * float(i) * 0.618034
+		var r := SOCKET_R * (0.34 + fmod(float(i) * 0.37, 0.52))
+		var long := 0.20 + fmod(float(i) * 0.29, 0.26)
+		_box(_rime, ice, Vector3(0.10, long, 0.13),
+			Vector3(cos(a) * r, sin(a) * r, -0.24),
+			Vector3(0.0, 0.0, a + fmod(float(i) * 0.9, 1.1)))

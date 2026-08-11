@@ -19,6 +19,11 @@ const NAMES := {
 	&"bow": "Knightly Bow",
 	&"hookshot": "Hookshot",
 	&"arrow": "Arrows",
+	# The first of the three workings (`docs/GDD.md` §6.5). It is a ROW here and
+	# nothing else -- no school, no mana, no casting layer. What makes a working
+	# a working rather than a spell is that it arrives as a stop on the same ring
+	# the sword is on, and this table is where that is decided.
+	&"burst": "The Burst-Verse",
 }
 
 const ICONS := {
@@ -38,6 +43,11 @@ const LETTERS := {
 	&"bow": "BW",
 	&"hookshot": "HK",
 	&"arrow": "AR",
+	# No icon, and not because one is missing: `tools/scenes/_iconbake.gd` bakes
+	# these off the real MODELS, and a working has no model -- he casts it with
+	# an empty hand. Two letters is the honest cell rather than a placeholder
+	# glyph that would have to be un-drawn the day somebody asks what it is.
+	&"burst": "BU",
 }
 
 ## One line, present tense, about what carrying it costs or buys. Shown on the
@@ -49,6 +59,7 @@ const BLURBS := {
 	&"bow": "For the thing that has not noticed you yet.",
 	&"hookshot": "Crosses a gap, or brings the gap to you.",
 	&"arrow": "Useless without the bow, which is why the bow gates them.",
+	&"burst": "Read it and the air comes apart. Doors, mostly.",
 }
 
 
@@ -110,4 +121,25 @@ static func ammo_of(id: StringName) -> StringName:
 	match id:
 		&"arrow": return &"arrows"
 		&"bow": return &"arrows"
+		&"burst": return &"charges"
+	return &""
+
+
+## The counter an armament **is**, rather than the one it spends -- `&""` for
+## anything that is not itself a count.
+##
+## The difference is one cell on the HUD. Arrows are a count you put in the LEFT
+## hand and charges are a count you put in the right one (`docs/GDD.md` §6.5 --
+## "charges are arrows with a different noun"), and both of those cells want the
+## number drawn in them. The BOW spends arrows and is not one, so it gets no
+## numeral: a bow cell carrying the quiver's count would print the same number
+## twice on one row, once under the stave and once under the arrows themselves.
+##
+## Here rather than in `hud.gd` because the equipment screen asks the same
+## question, and the header above this file is about exactly the drift that
+## starts when the HUD keeps its own copy of a table.
+static func hand_count(id: StringName) -> StringName:
+	match id:
+		&"arrow": return &"arrows"
+		&"burst": return &"charges"
 	return &""

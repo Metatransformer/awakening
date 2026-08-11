@@ -2,15 +2,17 @@ class_name CrackedPillar
 extends PuzzleAtom
 ## Atom 6 of 8 (`docs/PUZZLES.md` §2): the cracked pillar. **T2 -- a burst.**
 ##
-## **Built now, inert until M5** (`docs/SCOPE.md` §3). Burst does not exist yet,
-## so nothing in the game can crack this -- and that is the correct order, not an
-## omission. A prop with no verb is a prop; a verb with no prop is a dead end, and
-## the dead end is the expensive one.
+## **Built at M1, inert until M5, live now** (`docs/SCOPE.md` §3). It stood here
+## for a whole milestone with nothing in the game able to crack it, and that was
+## the correct order rather than an omission: a prop with no verb is a prop, and
+## a verb with no prop is a dead end, and the dead end is the expensive one.
 ##
-## `burst()` is public and `armed` starts true so a director can prove the body
-## works before the bomb that will one day call it is written. When M5 lands, the
-## bomb's blast calls `burst()` on everything in group `&"burstable"` inside its
-## radius -- one line, in the bomb, and nothing here changes.
+## The bet paid. `BurstCast._wake_the_burstable` walks group `&"burstable"`
+## inside the blast radius and calls `burst()`, and **nothing in this file
+## changed to make that work** -- which is what a public entry point named for
+## the verb rather than for the weapon is worth. `armed` starting true is the
+## other half: the director could prove the body toppled a milestone before
+## anything existed that could topple it.
 ##
 ## It does NOT answer `apply_hit`. A pillar that a sword could chip would be a T0
 ## atom with a T2 label, and `PuzzleAtoms.pool()` would hand the generator a rung
@@ -40,12 +42,13 @@ func _ready() -> void:
 	super()
 
 
-## Crack it. The M5 entry point -- the bomb's blast will walk group
-## `&"burstable"` and call this, and nothing in this file will need to change.
+## Crack it. **The M5 entry point, and it is live**: `BurstCast` walks group
+## `&"burstable"` and calls this on everything inside the blast.
 ##
-## Named for the verb rather than the weapon on purpose: the burst is the verb
-## (§1's ladder), and a method called `bomb()` would have to be renamed the day a
-## second thing bursts.
+## Named for the verb rather than the weapon on purpose, and the naming was
+## vindicated exactly as predicted: the weapon that arrived is not a bomb at all
+## but a working you CAST (`docs/GDD.md` §5.2), so a method called `bomb()`
+## would have needed renaming before its first caller existed.
 func burst() -> void:
 	if is_solved():
 		return
@@ -109,7 +112,7 @@ func _landed(from: Vector3, i: int, count: int) -> Vector3:
 # --- Construction -------------------------------------------------------------
 
 func _build() -> void:
-	# Group first, so a director (or M5's bomb) can find it whether or not it has
+	# Group first, so a director (or the blast) can find it whether or not it has
 	# finished building.
 	add_to_group(&"burstable")
 

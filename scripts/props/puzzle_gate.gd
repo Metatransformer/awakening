@@ -149,6 +149,7 @@ func unlocked() -> bool:
 func refusal_line() -> String:
 	var left := 0
 	var id: StringName = &""
+	var speaker: PuzzleAtom = null
 	for a in _atoms:
 		if a.is_solved():
 			continue
@@ -157,6 +158,7 @@ func refusal_line() -> String:
 		# eyes would be a count of nothing the player can see.
 		if id == &"":
 			id = a.atom_id
+			speaker = a
 		if a.atom_id == id:
 			left += 1
 	if id == &"":
@@ -166,7 +168,15 @@ func refusal_line() -> String:
 	for a in _atoms:
 		if a.atom_id == id:
 			total += 1
-	return PuzzleAtoms.refusal_for(id, left, total)
+	# **Asked of the ATOM, not of the table**, and the difference is the whole of
+	# CLAUDE.md §3's static-dispatch row. `PuzzleAtom.refusal()` IS this same call
+	# to `PuzzleAtoms.refusal_for` -- nothing about the eight stock atoms changes
+	# -- but a VARIANT that overrides it (`EyeSwitch.frozen`, combinator 8) can
+	# only ever be heard through the handle. Written the other way, a door onto a
+	# frozen eye said "THE EYE IS SHUT" at a player who had just put an arrow in
+	# it: the wrong refusal, silently, which is exactly the failure GDD pillar 3
+	# exists to forbid.
+	return speaker.refusal(left, total)
 
 
 ## Spend the key here, at the door, and then open as a `LockedDoor` does.

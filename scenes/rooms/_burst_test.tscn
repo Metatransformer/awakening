@@ -1,0 +1,47 @@
+[gd_scene load_steps=5 format=3]
+
+; The Burst fixture: the proving ground with a T2 PuzzleGate in its north
+; doorway. Owned by tools/directors/burst_cast.gd.
+;
+; Underscore-prefixed like _atom_test.tscn and _gate_test.tscn -- it is a
+; harness, not a room the game ships.
+;
+; **The pillars are NOT in this file**, for the reason _atom_test.tscn gives:
+; the director builds them through `PuzzleAtoms.make()`, which is the same call
+; the room planner will make, so the factory and the table are under test rather
+; than being bypassed by hand-placed nodes.
+;
+; A SECOND fixture rather than a second gate in _atom_test.tscn, because the two
+; gates disagree about the only export that matters here. That one wears
+; `mark_tier = 1` and adopts eye switches; this one is floor 3's gate room and
+; has to wear the tier the pillar answers to, which is what proves
+; `PuzzleAtoms.mark_item` reaches `LockedDoor.SIGILS` for T2 at all.
+
+[ext_resource type="PackedScene" path="res://scenes/rooms/proving_ground.tscn" id="ground"]
+[ext_resource type="PackedScene" path="res://scenes/actors/hero/hero.tscn" id="hero"]
+[ext_resource type="PackedScene" path="res://scenes/camera/game_camera.tscn" id="camera"]
+[ext_resource type="Script" path="res://scripts/props/puzzle_gate.gd" id="gate"]
+
+[node name="BurstTest" type="Node3D"]
+
+[node name="Ground" parent="." instance=ExtResource("ground")]
+
+; Set 50 mm back into the reveal, exactly as _atom_test.tscn seats its gate, so
+; the doorway's surround frames the leaves instead of the leaves standing proud.
+;
+; `mark_tier = 2` so it wears the Burst-Verse's row out of LockedDoor.SIGILS.
+; Its atoms are cracked pillars (T2), which is what makes that mark honest --
+; and floor 3's gate room is exactly a T2 ask (`docs/PUZZLES.md` §1).
+[node name="Gate" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -10.05)
+script = ExtResource("gate")
+puzzle_id = &"burstgate"
+mark_tier = 2
+label = "The Slag Gate"
+destination = &"burst_demo"
+
+[node name="Hero" parent="." instance=ExtResource("hero")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 7)
+
+[node name="GameCamera" parent="." instance=ExtResource("camera")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 10)

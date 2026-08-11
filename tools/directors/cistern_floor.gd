@@ -641,14 +641,17 @@ func _vault_refuses(rig, d: Node, hero: Node3D) -> void:
 	await rig.wait_frames(24)
 	_ck("E4 and it stays shut", not door.is_open())
 	await rig.capture(out.path_join("f_02_vault_locked.png"))
-	# The refusal is drawn, but it cannot name the Bomb Bag: `LockedDoor.SIGILS`
-	# has rows for the bow and the hookshot only, so every other key falls through
-	# to SIGIL_DEFAULT's "A KEY". That is one row in a table this card does not
-	# own -- reported rather than hidden, and rather than failed, because the
-	# door is correct and the table is short.
-	if not said.contains("BOMB"):
+	# The refusal has to NAME floor 2's boss item, which is the whole of GDD
+	# pillar 3 on the one door whose job is to say what is worth going deeper
+	# for. It said "A KEY" for a while -- `LockedDoor.SIGILS` had rows for the
+	# bow and the hookshot only and everything else fell through to
+	# SIGIL_DEFAULT -- and M5 filled the row in, under the name the item
+	# actually has now (`docs/GDD.md` §5.2: the satchel is a Verse you cast).
+	# Still a NOTE and not a failure: the door was always correct and the table
+	# was short, and this line is the tell if it ever goes short again.
+	if not said.contains("BURST"):
 		_notes.append("the vault says \"%s\" -- LockedDoor.SIGILS has no "
-			% said + "`bomb_bag` row, so GDD pillar 3's named refusal is one "
+			% said + "`burst` row, so GDD pillar 3's named refusal is one "
 			+ "line short. scripts/props/locked_door.gd, not this card.")
 
 

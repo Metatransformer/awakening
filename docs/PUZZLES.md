@@ -132,7 +132,7 @@ the whole reason combinator 6 below can exist. It costs the manifest one atom
 | Pressure plate | `scripts/props/atoms/pressure_plate.gd` | the hero, or anything in group `plate_weight` |
 | Push block | `scripts/props/atoms/push_block.gd` | shoved onto its mark, one 1.2 m step at a time — **held**, see below |
 | Eye switch | `scripts/props/atoms/eye_switch.gd` | `apply_hit` with `kind == &"arrow"`, and nothing else |
-| Cracked pillar | `scripts/props/atoms/cracked_pillar.gd` | `burst()` — **inert until M5** |
+| Cracked pillar | `scripts/props/atoms/cracked_pillar.gd` | `burst()` — **live since M5**; `BurstCast` walks group `&"burstable"` inside the blast |
 | Hook ring | `scripts/props/atoms/hook_ring.gd` | `HookTarget.on_bitten`, from the firer |
 | Sun socket | `scripts/props/atoms/sun_socket.gd` | guard up in the shaft, aimed at the socket |
 | Lantern | `scripts/props/atoms/lantern.gd` | any `apply_hit` — and it **toggles**, so it can be un-solved |
@@ -254,7 +254,8 @@ you watch. With it, chain is *where do I stand*, which is the one question none
 of combinators 1–6 asks. It is also the natural home for the T2 cracked pillar,
 which is currently one prop that does one thing.
 
-**8 — Convert, and it is the important one.** An atom that is not a lock. You
+**8 — Convert, and it is the important one. BUILT, 2026-08-10** — §9's table has
+the files and `tools/directors/convert_arrow.gd` is the proof. An atom that is not a lock. You
 shoot *through* it and your arrow arrives as something else; the lock on the far
 side only accepts the something else. Ocarina does this twice — Forest Temple's
 ice-covered eye switch and the Water Temple's torches — and both times the effect
@@ -650,6 +651,25 @@ here is the specific work, per row, so it can be checked rather than believed.
 | 8 | **Convert** | One `StringName` on the projectile's `HitInfo` (`arrow` → `arrow_fire`), one `Area3D` on `Lantern` that rewrites it in flight, and one `refusal` string on the atom that only accepts the rewritten kind | `EyeSwitch` already refuses on `kind != &"arrow"`. Convert is that same check with a different constant |
 | 9 | **Reconfigure** | **Zero at room scale — it is shipped.** `MazeRoom` moves walls and colliders off a lantern press today. The floor-scale version is one lever that re-runs `Dungeon`'s barred-passage pass | §5.4 |
 
+#### What row 8 actually cost, once built (2026-08-10)
+
+The bill above was right about the shape and short by three items. Written down
+so the next amendment is priced against what building one really costs.
+
+| | Priced? | What it was |
+|---|---|---|
+| `Hit.ARROW` / `Hit.ARROW_FIRE`, and `Arrow._kind` | yes | One `StringName`, exactly as quoted |
+| `Lantern.ConvertZone` + `convert_kind()` | yes | One `Area3D`, and the "only while lit" rule lives on the lantern rather than in the projectile |
+| `EyeSwitch.frozen` + its `refusal()` override | yes | The same tier check with a different constant. **A variant, not a row** — the kit is still nine and `PuzzleAtoms.validate()` still asserts it |
+| **Collision layer 9, `K.L_CONVERT`** | **no** | `Arrow`'s flight query masks `interact` and *stops* on it. A convert volume on any existing bit is a flame the arrow sticks in. One bit, one extra ray a frame (`Arrow._probe_convert`) |
+| **`Lantern`'s collider shortened to the post** | **no** | It was one cylinder over post *and* cage, so "shoot **through** it" was geometrically impossible. The cage is a window now. The post is still 1.55 m of obstacle and the sword still finds it — `sword_contact`, `lights_out`, `maze` and `puzzle_atoms` all pass unchanged |
+| **`PuzzleGate.refusal_line` asks the atom** | **no** | It composed its line from the static table, so an overridden `refusal()` was written, correct and **unreachable** — CLAUDE.md §3's static-dispatch row. Without it a door onto a frozen eye says *THE EYE IS SHUT* to a player who has just put an arrow in it, which is the exact failure GDD pillar 3 forbids, and no assertion made on the prop can see it |
+
+The three unpriced items are all *plumbing that already disagreed with the
+design*, not scope: a projectile that could only ever be stopped, a lantern that
+could only ever be hit, and a door that could only ever read a table. None of
+them is a prop and none of them is a verb.
+
 **What it does not buy, and must not be allowed to buy:** a tenth atom. Every one
 of the three is a way to make the nine props on disk say more, and the moment a
 combinator arrives needing a prop of its own it has stopped being a combinator.
@@ -687,8 +707,23 @@ Sluice-Keeper dies and the second stone lights).
 | 6 | The Echo pedestal | `scripts/world/sounding_stone.gd`; three `LootMote`s and three name plates |
 | 6 | The twelve | `scripts/items/echo_db.gd`, `ItemDb` rows, `Run.echoes_held()` |
 | 7 | The Sluice-Keeper | `BossDb.MINIBOSSES`; two beats, a scaled troll, `relic_slot = &""` |
+| 3.1 | **Convert** — the shot rewritten in flight | `Arrow._probe_convert` / `_ignite`, `Hit.ARROW_FIRE`, `K.L_CONVERT` |
+| 3.1 | The furnace it is rewritten by | `Lantern.convert_kind()` and its `ConvertZone`; **lit only** |
+| 3.1 | The lock that wants the rewrite | `EyeSwitch.frozen` — a variant, not a tenth atom |
+| 3.1 | The refusal that names the verb | `EyeSwitch.refusal()`, reached through `PuzzleGate.refusal_line`'s handle |
 
-### Three decisions worth not re-deriving
+### Four decisions worth not re-deriving
+
+- **A burning arrow is a change of SHAPE, not a brighter arrow.** CLAUDE.md §3
+  records that emissive over near-black photographs as an opaque slab at every
+  opacity, so a converted shot grows a plume of real geometry: five splayed licks
+  and a hot core, tapering *backward* off the head, which makes the burning arrow
+  a ~1.0 m streak where a plain one is a 0.7 m splinter. Length is what survives
+  ten metres; width does not. The first pass built the cones nose-forward and
+  they nested into one clean outline — the frame came back with an orange traffic
+  cone on the front of the arrow, and only the broadside lens said so. The core
+  is RUST dithered toward BONE because a mid-orange plume in a torchlit hall is
+  a shape you have to already know is there.
 
 - **The gate stands in the doorway, not on a wall.** A critical-path puzzle is
   critical *by construction* that way — there is no version of the floor where

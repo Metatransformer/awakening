@@ -130,6 +130,9 @@ const KIT_ACTION := {
 	# hand", rather than making the cell ask which trigger they meant.
 	&"bow": &"attack",
 	&"hookshot": &"attack",
+	# A working is cast with the same two shoulders (`docs/GDD.md` §6.5 --
+	# "nothing about the input layer changes"), so it takes the same cap.
+	&"burst": &"attack",
 }
 ## Half-height of a D-pad caret, in reference px. Also its half-width — they are
 ## drawn as equilateral-ish triangles so ← ↓ → read at a glance in a HUD that is
@@ -167,9 +170,13 @@ const KIT_ICON := {
 ## Fallback lettering, used only for an icon that failed to load. A missing
 ## texture must not leave an empty cell -- an empty cell reads as "you have no
 ## sword", which is a lie the HUD should never tell.
+## Burst is in here and NOT in `KIT_ICON`, which is the one row that is a
+## decision rather than a copy: `_iconbake.gd` bakes those textures off the real
+## MODELS, and a working has no model -- he casts it out of an empty hand. Two
+## letters is the honest cell.
 const KIT_LABEL := {
 	&"sword": "SW", &"shield": "SH", &"hookshot": "HK", &"bow": "BW",
-	&"arrow": "AR", &"": "",
+	&"arrow": "AR", &"burst": "BU", &"": "",
 }
 
 # --- Bag (§5.3) --------------------------------------------------------------
@@ -1319,10 +1326,19 @@ func _draw_hands(s: Vector2) -> void:
 		_canvas.draw_rect(r, fill)
 		_canvas.draw_rect(r, Pal.ASH, false, Pal.px(1.0, s.y))
 
+		# The cell's own COUNT, if it is one. This was `id == &"arrow"` spelled
+		# twice, and it is a lookup now because the Burst-Verse put a second
+		# count in a hand -- charges are arrows with a different noun
+		# (`docs/GDD.md` §6.5) and they belong in the same numeral, in the same
+		# corner, dimming the same way when the pouch runs out. A second branch
+		# drawing its own numeral is two places for the number to end up, and
+		# they would not have stayed in the same one.
+		var counter := ArmamentDb.hand_count(id)
+		var left := Game.ammo_count(counter)
 		_draw_item_glyph(s, r, id, Pal.MIDNIGHT if raised else Color.BLACK,
-			raised, id == &"arrow" and Game.arrows <= 0)
-		if id == &"arrow":
-			CanvasText.draw_right(_canvas, str(Game.arrows),
+			raised, counter != &"" and left <= 0)
+		if counter != &"":
+			CanvasText.draw_right(_canvas, str(left),
 				Vector2(r.end.x - Pal.px(3.0, s.y), r.end.y - Pal.px(10.0, s.y)),
 				Pal.px(1.0, s.y), Pal.MOTH)
 

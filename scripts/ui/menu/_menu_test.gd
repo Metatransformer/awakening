@@ -58,7 +58,10 @@ func _stage(hearts: int, quarters: int, rupees: int, keys: int, room: StringName
 	Game.quarters = quarters
 	Game.rupees = rupees
 	Game.small_keys = keys
-	Game.grant(&"bombs")
+	# `&"bombs"` for a while, which was never an item id at all -- the count was
+	# `Game.bombs` and the OWNED thing was the bag. It granted nothing for as
+	# long as it stood here. The working is a real id (`docs/GDD.md` §6.5).
+	Game.grant(&"burst")
 	Game.grant(&"bow")
 	Saves.current_room = room
 	Saves.current_scene_path = "res://scenes/rooms/proving_ground.tscn"

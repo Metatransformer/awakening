@@ -112,13 +112,13 @@ static var SIGILS := {
 	# deeper for, and a straight miss of GDD pillar 3.
 	#
 	# Both wear the fallback KEYHOLE on purpose. The WORDS are the gap; authoring
-	# a bomb and a lantern glyph is art, and art is not this card. `shape` is
+	# a verse and a lantern glyph is art, and art is not this card. `shape` is
 	# still spelled out rather than left to `SIGIL_DEFAULT`, because `_sigil`
 	# indexes the row directly and a row missing the key is a crash, not a
 	# fallback. The hues are pulled apart from each other and from the two above
 	# so four doors are still four colours across a dark room -- and neither is
 	# `Pal.GOLD`, which STYLEGUIDE §2 reserves for currency.
-	&"bomb_bag": {"noun": "THE BOMB BAG", "hue": Pal.RUST, "shape": &"keyhole"},
+	&"burst": {"noun": "THE BURST-VERSE", "hue": Pal.RUST, "shape": &"keyhole"},
 	&"far_lantern": {"noun": "THE FAR LANTERN", "hue": Pal.ARCANE, "shape": &"keyhole"},
 }
 
