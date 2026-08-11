@@ -337,7 +337,11 @@ static var FLOORS := {
 		"anchors": ANCHORS_STANDARD,
 		"relics": {
 			&"deep_chest": &"cinder_retort",
-			&"vault": &"fletchers_jig",
+			# The Sustain-Verse, and it replaced `fletchers_jig` here rather than
+			# being added beside it -- GDD §6.2 deleted the jig to PAY for this
+			# row, and the two standing together would be a thirteenth relic in a
+			# manifest frozen at twelve (`docs/SCOPE.md` §1).
+			&"vault": &"sustain_verse",
 			# `kiln_core`, NOT `glass_kiln_core`. GDD §6.2 prints the DISPLAY
 			# name "Glass-Kiln Core"; `RelicDb` owns the id and spells it short.
 			# The long form was written here from the table and it is not one of
@@ -367,7 +371,10 @@ static var FLOORS := {
 		"boss_item": &"hookshot",
 		"anchors": ANCHORS_STANDARD,
 		"relics": {
-			&"deep_chest": &"pillar_shard",
+			# The Ballast-Verse. `pillar_shard` was here and moved to floor 4's
+			# BOSS (GDD §6.2 row 11) -- these two edits are one edit, and doing
+			# only one of them leaves either a duplicate or a hole.
+			&"deep_chest": &"ballast_verse",
 			&"vault": &"warp_stone",
 			&"boss": &"sounding_rod",
 		},
@@ -405,7 +412,7 @@ static var FLOORS := {
 		## no floor 5 to lend it a key.
 		"relics": {
 			&"deep_chest": &"rope_drum",
-			&"boss": &"waterwheel_gear",
+			&"boss": &"pillar_shard",
 		},
 	},
 }

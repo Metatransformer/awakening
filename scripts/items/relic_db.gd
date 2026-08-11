@@ -794,3 +794,112 @@ static func chest_hums() -> bool:
 ## killing the boss whose item opens them (GDD §5.3, SCOPE §2).
 static func garrison_shortcuts() -> bool:
 	return donated(&"warp_stone")
+
+
+# --- Proving the table ---------------------------------------------------------
+
+## Every rule this file claims about itself and about the tables that PLACE its
+## rows, checked. One line per problem, empty when the manifest is sound.
+##
+## It exists because of the failure it is named after. GDD §6.2 deleted two
+## relics and moved a third onto boss 4; `relic_db.gd` kept the deleted rows,
+## `floor_db.gd` kept placing them, and `boss_db.gd` had the Riven Knight
+## dropping `waterwheel_gear` -- an id with no row. **Nothing raised.** A player
+## would have killed the last boss of Act I, carried the thing home, and been
+## refused at the counter by a Lanternkeeper who had never heard of it, and the
+## first person to find out would have been them (`docs/ITEMS.md` §8, D1 and D2).
+##
+## The direction that matters is BOTH of them, and only one is obvious:
+##
+##  * a placement naming an id with no row is a relic that cannot be recorded;
+##  * a row nothing places is a relic that cannot be FOUND, which is the same
+##    bug wearing the other hat and is invisible in every frame of the game.
+##
+## `BossDb.validate()` asks a narrower version of the drop question from the
+## other side (its `drop.relic` against `relic_at(floor, boss)`). The overlap is
+## deliberate: whichever table a session is editing, the director it is already
+## running is the one that catches it.
+##
+## Reads `FloorDb` and `BossDb`. That is the ONE place in this file that touches
+## another package's table, exactly as `BossDb.validate()` is the one place in
+## that file that touches this one -- the rows themselves stay dependency-free.
+static func validate() -> PackedStringArray:
+	var out := PackedStringArray()
+	var sources := [SOURCE_DEEP_CHEST, SOURCE_VAULT, SOURCE_BOSS,
+		SOURCE_LONG_DESCENT]
+
+	# `docs/SCOPE.md` §1: twelve, named, hand-placed, non-rolling.
+	if RELICS.size() != 12:
+		out.append("the manifest says 12 relics; this table has %d" % RELICS.size())
+
+	var seen_id: Dictionary = {}
+	var seen_prop: Dictionary = {}
+	var seen_anchor: Dictionary = {}
+	for row in RELICS:
+		var id: StringName = row["id"]
+		if seen_id.has(id):
+			out.append("%s: two rows share the id" % id)
+		seen_id[id] = true
+		# Twelve dark props, twelve come on (GDD §6.2). Two relics on one prop is
+		# eleven lamps for twelve donations, and the twelfth changes nothing
+		# anybody can see.
+		if seen_prop.has(row["prop"]):
+			out.append("%s: lights %s, which %s already lights"
+				% [id, row["prop"], seen_prop[row["prop"]]])
+		seen_prop[row["prop"]] = id
+		if not sources.has(row["source"]):
+			out.append("%s: source %s is not one of the four anchors"
+				% [id, row["source"]])
+		# `relic_at()` answers with the FIRST row at an anchor, so two relics in
+		# one deep chest is a relic that silently never appears.
+		var anchor := "%d/%s" % [int(row["level"]), row["source"]]
+		if seen_anchor.has(anchor):
+			out.append("%s: shares %s with %s" % [id, anchor, seen_anchor[anchor]])
+		seen_anchor[anchor] = id
+		# The bag has to be able to hold one, or the relic cannot come home.
+		if ItemDb.get_def(id) == null:
+			out.append("%s: ItemDb has no def, so the bag cannot carry it" % id)
+
+	# --- The placement tables ----------------------------------------------------
+	# Every slot a floor manifest fills, against this table, in both directions.
+	for level in range(1, FloorDb.floor_count() + 1):
+		for slot: StringName in FloorDb.relics(level):
+			var id: StringName = FloorDb.relic_in(level, slot)
+			if not is_relic(id):
+				out.append("floor %d's %s holds %s, which is not one of the twelve"
+					% [level, slot, id])
+				continue
+			var row := by_id(id)
+			if int(row["level"]) != level or row["source"] != slot:
+				out.append("floor %d's %s holds %s, but RelicDb puts it at %d/%s"
+					% [level, slot, id, int(row["level"]), row["source"]])
+
+	for row in RELICS:
+		var level: int = int(row["level"])
+		if level > FloorDb.floor_count():
+			# The twelfth. It is a named row on `FloorDb` rather than a slot in
+			# `ENDLESS.relics`, because `ENDLESS` answers for every level past 4
+			# and a unique in that row would drop on 5, 6, 7 and forever. Its
+			# `slot` is the chest it lies in and this table's `source` is the MODE
+			# it lies in, so the two spell it differently on purpose -- the id and
+			# the floor are what have to agree.
+			var last: Dictionary = FloorDb.LONG_DESCENT_RELIC
+			if StringName(last["id"]) != row["id"] or int(last["level"]) != level:
+				out.append("%s sits on floor %d and nothing in FloorDb places it"
+					% [row["id"], level])
+			continue
+		if FloorDb.relic_in(level, row["source"]) != row["id"]:
+			out.append("%s says it is at %d/%s and floor %d's manifest puts %s there"
+				% [row["id"], level, row["source"], level,
+					FloorDb.relic_in(level, row["source"])])
+
+	# --- The drop tables ---------------------------------------------------------
+	# The question the card asked for: a drop naming an id with no row should fail
+	# loudly here rather than be found by the next reader.
+	for id in BossDb.all():
+		var drop: Dictionary = BossDb.get_boss(id).get("drop", {})
+		var relic: StringName = StringName(drop.get("relic", &""))
+		if relic != &"" and not is_relic(relic):
+			out.append("boss %s drops %s, which is not one of the twelve"
+				% [id, relic])
+	return out

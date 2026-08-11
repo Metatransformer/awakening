@@ -94,19 +94,27 @@ func _table() -> void:
 	_ck("A0 twelve relics, no thirteenth", RelicDb.RELICS.size() == 12)
 	_ck("A1 twelve props to light", RelicDb.props().size() == 12)
 
-	var seen_id := {}
-	var seen_prop := {}
-	for row in RelicDb.RELICS:
-		_ck("A2 %s is a unique id" % row["id"], not seen_id.has(row["id"]))
-		seen_id[row["id"]] = true
-		# Two relics sharing a prop would mean eleven lamps for twelve donations,
-		# and the twelfth would change nothing anybody could see.
-		_ck("A3 %s lights its own prop (%s)" % [row["id"], row["prop"]],
-			not seen_prop.has(row["prop"]))
-		seen_prop[row["prop"]] = true
-		# The bag has to be able to HOLD one, or the whole card is unreachable.
-		_ck("A4 %s is a thing ItemDb knows" % row["id"],
-			ItemDb.get_def(row["id"]) != null)
+	# The unique ids, the unique props, the bag's def for each one AND -- the part
+	# no director had -- the two tables that PLACE these rows. `RelicDb.validate()`
+	# owns all of it now; this beat used to hand-roll the first three and had
+	# nothing at all to say about `FloorDb` or `BossDb`, which is how boss 4 spent
+	# three milestones dropping a relic that had been deleted from the manifest
+	# (`docs/ITEMS.md` §8, D1 and D2). Printed line by line rather than as a count,
+	# because "3 problems" sends the reader to the wrong file.
+	var problems := RelicDb.validate()
+	for p in problems:
+		print("RELIC FAIL A2 %s" % p)
+	_fails += problems.size()
+	_ck("A2 the manifest and the tables that place it agree (%d problems)"
+		% problems.size(), problems.is_empty())
+	# The two Verses exist and are two of the twelve (GDD §6.2 rows 6 and 7).
+	# Named outright rather than left to the count above: the count was twelve on
+	# the day the jig and the gear were still in it.
+	for id: StringName in [&"sustain_verse", &"ballast_verse"]:
+		_ck("A3 %s is one of the twelve" % id, RelicDb.is_relic(id))
+	_ck("A4 and the two rows they were paid for are gone",
+		not RelicDb.is_relic(&"fletchers_jig")
+			and not RelicDb.is_relic(&"waterwheel_gear"))
 
 	_ck("A5 she RECORDS, in her own word (%s)" % RelicDb.craft_verb(),
 		RelicDb.craft_verb() == "RECORD")
