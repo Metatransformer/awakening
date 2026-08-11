@@ -835,9 +835,63 @@ func _place(delta: float) -> void:
 	else:
 		_wall_engaged = rest_clear < floor_dist - wall_engage_margin
 
+	# THE WALL'S ANGLES ARE FROZEN WHILE THE PLAYER STEERS, AND THAT IS THE WHOLE
+	# OF "the camera gets stuck on a wall in a hallway and I cannot move it".
+	#
+	# `view` below is built from `_yaw + _swing_bias_deg`, so the arc rotates what
+	# the player SEES and not merely where the eye sits. In a 4 m corridor with a
+	# 4.13 m boom the only directions that clear `min_distance` lie within ~47° of
+	# the corridor axis — so as the stick walked `_yaw` off the axis, `_arc_on`
+	# walked the bias back the other way and THE TWO CANCELLED. Measured by
+	# `tools/directors/cam_hall_steer.gd`, holding the stick for 2.2 s in the
+	# proving ground's corridor: the bias latched to 72° of its 78° budget, the
+	# wall logic owned 80 of 133 ticks, and over the worst 0.4 s window **21% of
+	# the commanded turn reached the screen**. The same sweep on certified-open
+	# ground is 1.00 with the bias at 0.0°. Then the bias saturated and let go,
+	# which is the 6.2°-in-one-tick jump-cut in the same run — 2.2x what the stick
+	# can ask for in a tick.
+	#
+	# THIS IS THE THIRD TIME THIS FILE HAS BUILT TWO MOVERS FOR ONE VALUE and it
+	# is the same bug each time: autoswing vs. the hero's camera-relative steering
+	# corkscrewed him into a corridor wall (see `autoswing_fade_from_deg`),
+	# `_apply_battle` vs. autoswing both wrote `_yaw` until one was made to stand
+	# down, and CLAUDE.md §3 has the menu-cursor row for the same shape. The rule
+	# that resolved the other two resolves this one: **while the player is
+	# steering, the player owns the yaw.**
+	#
+	# WHICH CONTRADICTS refs/REFERENCE.md §1.6, on purpose, and the acceptance line
+	# there ("a camera that collides by shortening its boom is WRONG. OOT swings
+	# around corners on the yaw axis") is still correct about OOT. It is not
+	# transferable to this game, and the reason is a control scheme and not a taste:
+	# **N64 OOT has no free camera orbit.** The player cannot continuously steer the
+	# yaw — §1.7 is explicit that there is no recentre button and that Z-with-no-
+	# target is the whole of the player's yaw authority — so in OOT the arc is never
+	# a second mover on a value the player is holding. We ship a right stick and a
+	# mouse. Importing the arc wholesale imported a conflict OOT could not have.
+	#
+	# So the arc is kept for the case §1.6 was actually about — the camera moving
+	# ITSELF, where nothing else owns the yaw and shortening the boom really is the
+	# worse-looking answer — and it stands down for the case OOT never had. Frozen
+	# rather than unwound: a bias easing to zero at `swing_rate_deg` under a moving
+	# stick is a THIRD rate on the same value and lands the realized turn anywhere
+	# between -30 and +370°/s. Held still, `view`'s delta is exactly `_yaw`'s delta
+	# and the stick is 1:1, which is the only thing the player asked for.
+	#
+	# `_manual_timer` is already the file's answer to "the player is steering" —
+	# `_apply_battle` and `_apply_autoswing` both stand down on it, and it holds for
+	# `manual_hold_time` after the stick is released so the wall does not re-solve
+	# under a hand that is still on it. GEOMETRY KEEPS THE DISTANCE THROUGHOUT:
+	# the pull-in below is not gated on any of this, which is what keeps the eye out
+	# of the wall while the angles are the player's. That is the ordinary
+	# spring-arm contract — input owns the angles, collision owns the length.
 	var swing_target := 0.0
 	var lift_target := 0.0
-	if _wall_engaged:
+	if _manual_timer > 0.0:
+		# Frozen. Holding the targets AT the live biases is what makes
+		# `move_toward` below a no-op without special-casing it.
+		swing_target = _swing_bias_deg
+		lift_target = _lift_bias_deg
+	elif _wall_engaged:
 		# 1. Arc around it on the yaw axis — the OOT answer.
 		#
 		# Smallest detour wins from rest. Once the rig is ALREADY arced, its own

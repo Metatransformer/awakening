@@ -212,6 +212,23 @@ than snapping or pushing in** `[decomp: z_camera.c:1786-1795]`. `func_80043F94` 
 
 > **Acceptance:** a camera that collides by shortening its boom (the naive spring-arm approach) is
 > **wrong**. OOT swings around corners on the yaw axis.
+>
+> **This acceptance line is TRUE ABOUT OOT AND WE DELIBERATELY DO NOT FOLLOW IT WHILE THE PLAYER IS
+> STEERING (card #81).** The reason is a control scheme, not taste. **N64 OOT has no free camera
+> orbit** — §1.7 below is explicit that there is no recentre button and that Z-with-no-target is the
+> whole of the player's yaw authority — so in OOT the arc can never be a second mover on a yaw the
+> player is holding. We ship a right stick and a mouse, and `GameCamera` builds its look direction
+> from `_yaw + _swing_bias_deg`, so importing the arc wholesale imported a conflict OOT could not
+> have: in a 4 m corridor the arc walked the bias against the stick and cancelled it. Measured by
+> `tools/directors/cam_hall_steer.gd` — **21% of the commanded turn reached the screen** over the
+> worst 0.4 s window, against 100% on open ground, then a 6.2°/tick jump-cut when the bias saturated
+> at `swing_max_deg`.
+>
+> So we keep the arc for what this section is actually describing — the camera moving **itself**,
+> where nothing else owns the yaw and a shortening boom really is the worse-looking answer — and we
+> stand it down while `_manual_timer > 0.0`. Geometry keeps the **distance** either way. Do not
+> "restore fidelity" here by re-enabling the arc under the stick; that is the bug, and the director
+> above is the gate that catches it.
 
 ### 1.7 Recentring behind Link
 
