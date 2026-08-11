@@ -236,14 +236,28 @@ func run(rig) -> void:
 		near["framed"] == plates.size())
 	_ck("D1 and the names are on the picture (%d px, >= %d)"
 		% [near["ink"], READABLE_NEAR], near["ink"] >= READABLE_NEAR)
-	# Per-plate, not just the total: one caption swallowed by the drum while the
-	# other two carry the count is exactly the failure this beat is for.
-	var thin := 0
-	for n: int in near["per"]:
-		if n < READABLE_NEAR / 4:
-			thin += 1
-	_ck("D2 and none of the three is swallowed by the drum (%s)"
-		% [near["per"]], thin == 0)
+	# The per-plate numbers, PRINTED AND NOT ASSERTED. Beat E is where "none of
+	# the three is swallowed by the drum" is claimed, and it is the only place it
+	# can be: this pose has the hero between the camera and the row, and what the
+	# left-hand plate is behind is **his bow**, not the plinth.
+	#
+	# There used to be a check here with a floor of `READABLE_NEAR / 4`. It is
+	# gone rather than retuned, because retuning it would have been retuning a
+	# measurement of an idle animation. Three identical runs of this file, same
+	# seed, same pose, same code, gave the left plate **128, 19 and 108** pixels
+	# while the total stayed at 1580, 1495 and 1583 — the hero's idle breathes,
+	# `Engine.time_scale = 0` freezes it wherever the frame budget happened to
+	# leave it, and some of those frames have a bow limb across the caption. The
+	# file's own `SIDESTEP` note already records this exact fact about the MIDDLE
+	# plate ("that is correct occlusion and not a bug"); it was true of the left
+	# one too and the check had simply been lucky.
+	#
+	# Card #38 is what surfaced it: lighting the entrance room changed the
+	# background these counts are diffed against, which moved every near number and
+	# put the left plate on the wrong side of a threshold nothing had justified.
+	# The claim itself survives intact one beat down, at [2649, 2781, 1912].
+	print("PLATES per-plate at the stone: %s (printed, not asserted -- see the "
+		% [near["per"]] + "note here; beat E is where the drum is judged)")
 
 	# --- E. The plate at its own prop ----------------------------------------
 	# The landing is a nine-metre room with a stair down the middle of it, so the
@@ -409,6 +423,37 @@ func _clear_the_floor(d: Node) -> void:
 		freed += 1
 		e.queue_free()
 	print("PLATES cleared %d bodies" % freed)
+	_still_the_flames(d)
+
+
+## Hold every flame at its nominal energy, because `Engine.time_scale = 0` does
+## not.
+##
+## The note above `_read` says the freeze is *"what makes the pair comparable"* —
+## and it is, for everything that moves on the game clock. `KitTorch._process`
+## does not: it swings `light_energy` by ±16% off `Time.get_ticks_msec()`, the
+## **wall** clock, which keeps running while the world is stopped. So the two
+## captures of a "frozen" pose differ wherever a torch reaches, and the diff picks
+## that up as ink.
+##
+## It was invisible until card #38 and only because of what card #38 was about:
+## the boxes here land on the shut shortcut door, and that door stood in a room
+## with no sconces in it. On near-black masonry a 16% swing is under `INK_DELTA`.
+## The moment the entrance room got the fire it should always have had, the same
+## boxes covered lit stone, the same swing cleared the threshold, and **B2 failed
+## at 93 px with no name anywhere on the door** — the frame is
+## `/tmp/lit_after/plates/e_02_door_shut.png` and there is not a cyan pixel in it.
+## A measurement that reports a leak because a fire flickered is a measurement
+## that will one day report no leak for an equally bad reason.
+func _still_the_flames(d: Node) -> void:
+	var n := 0
+	for t in _every(d, func(x: Node) -> bool: return x is KitTorch):
+		t.flicker = 0.0
+		# The setter runs `_apply_light`, which is the only thing that puts the
+		# nominal energy back after `_process` has been multiplying it.
+		t.light_energy = t.light_energy
+		n += 1
+	print("PLATES held %d flame(s) still -- time_scale does not stop them" % n)
 
 
 ## Out along the door's own `+basis.z`, which is the side the player stands on

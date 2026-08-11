@@ -407,6 +407,30 @@ tier 3. See Departure 2.
   there so every block has a lit face and a turned-away face. Ambient alone
   raises all surfaces equally, which lifts the black *and* flattens the masonry
   into one sheet; "brighter" and "lower contrast" otherwise arrive together.
+- **Every room carries at least four sconces of its own** (added 2026-08-11,
+  card #38). The placement rule is *a walled side gets two, a holed side gets
+  none* — an exit should read as the dark hole it is, and a locked door's cold
+  lamp should not have a torch beside it. That rule had no floor under it, and
+  the number of unlit sides is the number of exits: floor 1's **entrance room**,
+  three doorways and the shortcut-door anchor on its fourth wall, was built with
+  **zero**. Measured on the demo path, world area only: **72–76% of the frame
+  under luminance 8, mean 8.6/255**, against the gate room's 0.6% and 45.2 off
+  the same generator and the same `env_dungeon.tres`. Rule 1's black cut-out,
+  exactly. A room short of the floor now lights the **flanks** of its holes —
+  `_build_side` already splits a holed wall into two runs either side of the gap,
+  so a pool at each end leaves the doorway the darkest thing in shot and an exit
+  becomes a silhouette rather than a hole in a black wall. Anchored side first
+  (it is the wall the room is *about*), then the side facing it, so the fire is
+  at two ends. Rooms with two or more solid sides are untouched and their
+  histograms do not move.
+- **The measurement is `tools/directors/room_range.gd`,** and it is the thing to
+  re-run before changing any of the numbers above. Five-band luma histogram of
+  the top 70% of the frame — the HUD band is excluded, or you are scoring the UI
+  — over seven poses on the demo path, against three bounds: no frame more than
+  half under luminance 8, at least 3% above 64, mean at least 18. The second and
+  third are what stop "fix the dark" being answered with lifted ambient; one
+  beige sheet clears the first bound trivially and §1 rule 1 calls that a
+  *lower*-contrast image than the black one.
 - **No real-time shadows in the dungeon.** Actors get a blob shadow: a 1-bit
   alpha unshaded quad decal, 0.7 m across, scaled by ground proximity.
 - Tri budgets: hero ≤900, standard enemy ≤500, boss ≤2000, chest ≤120, wall ≤32.

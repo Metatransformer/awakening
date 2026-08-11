@@ -870,39 +870,149 @@ func _build_corridor(cell: Vector2i, d: StringName) -> void:
 
 	# One sconce per corridor, on alternating sides, so a corridor is a dark
 	# stretch with a single landmark rather than an evenly-lit tube.
+	#
+	# Card #38 widened the pool and left the peak alone: `light_energy` stays at
+	# 6.5, two thirds of a room sconce, so the landmark is still dimmer than the
+	# rooms at either end of it, while `light_range` goes to the room's 15 m
+	# because 11 m in a tube whose walls are 1.5 m either side spends most of its
+	# reach on masonry and dies well before the far door.
+	#
+	# It is a small win and it is written down as one. Measured on the demo path's
+	# corridor with the flames held still: **40.0% of the frame under luminance 8
+	# at range 11, 38.0% at range 15**, mean 19.6 -> 20.4, and the share above 64
+	# 3.3% -> 3.7%. The corridor is the darkest frame on the path either way, and
+	# that is the design rather than the defect — `room_range.gd` scores it, and
+	# what it now has that it did not have before this card is a *real bright*,
+	# because the rooms at both ends stopped being black. Raising the ENERGY would
+	# have bought more and is the wrong lever: a hotter flame lifts the whole tube
+	# toward `docs/STYLEGUIDE.md` §1 rule 1's one beige sheet.
 	var side := 0 if (cell.x + cell.y) % 2 == 0 else 1
 	var torch := ROOM_SCENE_TORCH.instantiate()
 	torch.rng_seed = _salt(cell, d, 20)
-	torch.light_range = 11.0
+	torch.light_range = 15.0
 	torch.light_energy = 6.5
 	torch.position = offs[side] + Vector3(0.0, KitStyle.SCONCE_Y, 0.0)
 	torch.rotation.y = yaws[side]
 	root.add_child(torch)
 
 
+## The fewest sconces a room may be built with. Two walled sides' worth — which
+## is what a room with one or two exits already got, and those rooms measured
+## right (`tools/directors/room_range.gd`).
+const ROOM_SCONCE_FLOOR := 4
+
+
+## A walled side gets two sconces; a holed side gets none, **unless the room would
+## otherwise be dark, in which case a hole gets its flanks lit instead**.
+##
+## ## What the floor is for, and the frame that put it here (card #38)
+##
+## The first clause is the old rule and it is a good one: an exit should read as
+## the dark hole it is, and a locked door brings its own cold lamp that a torch
+## beside it would fight. What it lacked was a floor. The number of unlit sides is
+## the number of exits and nothing capped it, so floor 1's **entrance room** —
+## three doorways, and the shortcut-door anchor on the fourth wall — was built
+## with **zero sconces of its own**, lit only by the gate's cold lamp and whatever
+## spilled in through the corridors. Measured off the demo path: 76.3% of that
+## frame under luminance 8, mean 8.6/255, 1.5% above 64, and the hero a black
+## cut-out against a black wall — `docs/STYLEGUIDE.md` §17's old failure in the
+## same words. Its neighbour (0,1) was built the same way for the same reason.
+##
+## ## Why the fix is a floor and not more fire everywhere
+##
+## The first cut of this lit every holed side. It moved the shortcut room to mean
+## 48.9 and it also moved the rooms that were *already right* — the plain
+## generated room went 35.4 → 60.2 with four torches across its back wall, which
+## is §1 rule 1's "one beige sheet" in orange. So the flanking only happens where
+## the count comes up short: a room with two or more solid sides is built exactly
+## as it was, and its histogram does not move at all.
+##
+## ## Why flanking a hole is more range than lighting a wall, not less
+##
+## `_build_side` already splits a holed side into two flank walls with a gap
+## between them. A sconce on the middle of each flank puts a pool at either end
+## and leaves the doorway the darkest thing in shot, so the exit stops being a
+## dark hole in a black wall — no information — and becomes a dark hole between
+## two fires, which is a silhouette. Nothing global moves: no ambient, no
+## exposure, no albedo. The dark end and the lit end are both still in frame.
+##
+## The cold lamp keeps its job. A flank sconce sits half a door plus half a flank
+## from the middle of the wall — five metres on a sixteen-metre side — so it is
+## nowhere near "beside" the lamp, and §1 rule 2 wants that warmth there anyway:
+## a cold light reads as cold only against something warmer.
 func _build_room_torches(root: Node3D, cell: Vector2i, doors: Array,
 		anchors: Dictionary, half: float) -> void:
-	var n := 0
 	var sides := _sides_of(cell)
+	var solid: Array[StringName] = []
+	var holed: Array[StringName] = []
 	for d: StringName in sides:
+		if doors.has(d) or anchors.has(d):
+			holed.append(d)
+		else:
+			solid.append(d)
+
+	# A flank too narrow to be a wall gets nothing, using `_build_side`'s own
+	# threshold rather than a second opinion about it — a sconce bolted to a
+	# quarter-metre of masonry hangs in the doorway.
+	var flank := (half * 2.0 - door_span) * 0.5
+	var order := solid.duplicate()
+	if flank > 0.4:
+		for d: StringName in _lit_holes(holed, anchors):
+			if order.size() * 2 >= ROOM_SCONCE_FLOOR:
+				break
+			order.append(d)
+
+	var n := 0
+	for d: StringName in order:
 		var s: Dictionary = sides[d]
 		var yaw: float = s["yaw"]
 		var along := along_of(yaw)
-		# A walled side gets two sconces; a doorway side gets none, so the exits
-		# read as the dark holes they are. An anchored side is an exit too -- and
-		# a locked door brings its own cold lamp, which is the one light in the
-		# room that must not have a torch beside it.
-		if doors.has(d) or anchors.has(d):
-			continue
+		# A solid side spreads its pair wide across the whole run; a holed side
+		# puts one on the middle of each flank, which is closer in.
+		var off := (door_span + flank) * 0.5 if holed.has(d) else half * 0.52
 		for s2 in [-1.0, 1.0]:
 			var t := ROOM_SCENE_TORCH.instantiate()
 			t.rng_seed = _salt(cell, d, 30 + n)
 			t.cast_shadow = n < 2
-			t.position = s["at"] + along * (s2 * half * 0.52) \
+			t.position = s["at"] + along * (s2 * off) \
 				+ Vector3(0.0, KitStyle.SCONCE_Y, 0.0)
 			t.rotation.y = yaw
 			root.add_child(t)
 			n += 1
+
+
+## Which holes to light first when a room comes up short, and it is an ordering
+## rather than a set because the floor usually stops after one or two.
+##
+## **An anchored side first.** It is the wall the room is *about* — a shortcut
+## door, a vault, a boss door — so it is the wall the player walks up to and
+## reads, and it is the one that has to hold a silhouette. Then **the side facing
+## it**, so the fire is at two ends of the room and the middle is the dark, rather
+## than two adjacent walls lighting one corner and leaving the diagonal black.
+## Whatever is left keeps `_sides_of`'s order, which is stable, so the same seed
+## builds the same room.
+func _lit_holes(holed: Array[StringName],
+		anchors: Dictionary) -> Array[StringName]:
+	const OPPOSITE := {&"n": &"s", &"s": &"n", &"w": &"e", &"e": &"w"}
+	var first: Array[StringName] = []
+	var rest: Array[StringName] = []
+	for d: StringName in holed:
+		if anchors.has(d):
+			first.append(d)
+		else:
+			rest.append(d)
+	# `first + rest` on two `Array[StringName]`s comes back as a plain `Array`,
+	# which then will not assign to a typed return. Two appends keep the element
+	# type.
+	var order: Array[StringName] = []
+	order.append_array(first)
+	order.append_array(rest)
+	if not order.is_empty():
+		var facing: StringName = OPPOSITE[order[0]]
+		if order.has(facing):
+			order.erase(facing)
+			order.insert(1, facing)
+	return order
 
 
 ## A stable per-piece seed. Two walls sharing a seed are visibly identical, and
