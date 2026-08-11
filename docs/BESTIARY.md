@@ -12,9 +12,10 @@ parry-and-roll map, the arena's turn and the rows to paste.
 Everything here is read off `docs/OOT_CATALOGUE.md` §3, which is the 1998 Player's
 Guide gone through dungeon by dungeon and written down as mechanics.
 
-**Status: design.** Nothing in §3 is built. §5's boss shapes are a re-reading of
-beats that already exist in `BossDb` — no new beats, no second phase, no new
-models.
+**Status: design, except §3's number 4.** The **Thief is built** — see §3's
+"Built" note. The other seven behaviours in §3 are still design. §5's boss shapes
+are a re-reading of beats that already exist in `BossDb` — no new beats, no
+second phase, no new models.
 
 ---
 
@@ -137,6 +138,43 @@ extract.
 Everything it needs exists: the bag is `Run`'s, `LootMote` already knows how to
 drop a stack on the floor, and "run for the nearest exit" is the leash logic
 inverted. **It is the cheapest new *decision* available anywhere in the project.**
+
+### Built — and what the build settled
+
+`"behaviour": &"thief"` is a key on the existing `goblin` row of `Enemy.DEFS`,
+with an `@export var behaviour` on `Enemy` so any body can be given one in a
+scene. **A key and not a boolean**, because this table hangs *two* behaviours off
+that same goblin row (1 Thrower, 4 Thief) and a `is_thief` flag would have made
+the second one a schema change. No new kind, no new model — `docs/SCOPE.md` §1's
+counts do not move.
+
+Four things the build had to decide that the table above does not say:
+
+- **The grab is a distance check, not a hitbox.** It costs a bag slot and no
+  hearts. That is what makes stepping out of the tell the whole defence — the
+  player is not trading health for loot, they are choosing whether to be there.
+- **The telegraph is `K.THIEF_GRAB` = 0.75 s**, more than twice a goblin's 0.32 s
+  swing, scaled by `Prog.windup_scale(level)` like every other beat, so it floors
+  at 60% (0.45 s) at depth — GDD §7's rule, not a second one.
+- **It is distinguished from the swing by the direction of the lean, not the
+  colour.** Same `Pal.RUST` wind-up glow; the swing leans *back*
+  (`K.WINDUP_LEAN_DEG`), the grab leans *forward* (`K.THIEF_LEAN_DEG`). §1's one
+  grammar, and CLAUDE.md §3's "change the shape, not the material". `Pal.GOLD` is
+  currency and `Pal.CYAN` is the way out; neither was available.
+- **What it took and where it went are both world-space objects**, because a HUD
+  toast was not available (`Bus.request_message` has emitters and no listener).
+  The sack on its chest is literally `LootMote`'s prism, tinted and lit with the
+  stolen item's own colour, so a player who has picked that item up already knows
+  what is being carried away; the door it picked wears a `Pal.CYAN` ring **and a
+  vertical beam**. The ring alone was the first cut and the render is what
+  rejected it — in the garrison it sat behind a knee-high planter.
+
+It steals the **richest reachable slot in the HOLD only**. The three-slot document
+case is never touched (`docs/METAGAME.md` — that is what the case is *for*), and
+relics and Echoes are refused outright. Kill it and one `LootMote` carrying the
+whole stack drops where it fell; let it reach the door and the loss is permanent.
+
+Proven by `tools/directors/thief.gd`.
 
 ### The rule that keeps this at eight
 

@@ -853,10 +853,10 @@ func _case_trim() -> void:
 ## and the pot has to shrink with it, or the stacks that are left would inherit
 ## a bonus they never earned and the vendor would pay for arrows.
 ##
-## Only the fletching calls this today. It is on Run rather than on Fletching
-## because the bag's bookkeeping -- the erase, the premium, the signal -- is
-## Run's and nobody else's, and a second writer of `bag` is how the two halves
-## of a total start to disagree.
+## The fletching calls this, and so does `steal_slot` below. It is on Run rather
+## than on Fletching because the bag's bookkeeping -- the erase, the premium, the
+## signal -- is Run's and nobody else's, and a second writer of `bag` is how the
+## two halves of a total start to disagree.
 func consume(id: StringName, count: int = 1) -> int:
 	var have: int = bag.get(id, 0)
 	if have <= 0 or count <= 0:
@@ -874,6 +874,57 @@ func consume(id: StringName, count: int = 1) -> int:
 	_case_trim()
 	Bus.bag_changed.emit(bag, bag_value())
 	return n
+
+
+## **The Thief takes a slot** (docs/BESTIARY.md §3, behaviour 4). Returns
+## `{"id": StringName, "count": int}` for what left, or `{}` when there was
+## nothing here to take.
+##
+## Three rules, and each one is a decision rather than an implementation detail:
+##
+##  * **The HOLD only. The document case is never reachable.** The case is the
+##    game's one promise -- what is in it comes home (GDD §3.1) -- and a monster
+##    that could reach into it would make packing meaningless in exactly the
+##    moment packing is supposed to pay. Nine slots is plenty to steal from, and
+##    a player who has packed the good things is a player who prepared.
+##  * **The richest slot it can reach**, not a random one. That is what makes
+##    chasing it a real question: a thief that took the cheapest line would
+##    always be worth ignoring, and an enemy with one right answer is the thing
+##    `docs/PUZZLES.md` §10.6 rules out.
+##  * **Merchandise only.** A relic is not loot and an Echo is worth 0 gold, so
+##    neither can ever be the richest slot -- but both are refused explicitly
+##    rather than left to the arithmetic, because "the goblin ran off with the
+##    only one of these there is" is a sentence this game must never produce.
+##
+## The removal goes through `consume` like every other door out of the bag, so
+## the heat premium follows the merchandise and `bag_changed` fires once. A slot
+## is up to one stack (`stack_of`), which is the same unit `slots_used` counts
+## in -- steal a 20-deep pile of shards and you lose the pile, not the cell.
+func steal_slot() -> Dictionary:
+	var best_id: StringName = &""
+	var best_n := 0
+	var best_worth := -1
+	for id: StringName in bag:
+		if RelicDb.is_relic(id) or EchoDb.is_echo(id):
+			continue
+		var held := in_hold(id)
+		if held <= 0:
+			continue
+		var def := ItemDb.get_def(id)
+		if def == null:
+			continue
+		var n: int = mini(held, stack_of(id))
+		var worth: int = def.value * n
+		if worth > best_worth:
+			best_worth = worth
+			best_id = id
+			best_n = n
+	if best_id == &"" or best_n <= 0:
+		return {}
+	var took := consume(best_id, best_n)
+	if took <= 0:
+		return {}
+	return {"id": best_id, "count": took}
 
 
 ## Slots consumed. A stack of 20 bone shards with stack==20 is one slot; the

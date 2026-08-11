@@ -28,6 +28,20 @@ const SPIN_SPEED := 1.6
 const MAGNET_ARM := 0.45
 
 var item_id: StringName = &""
+## How many of `item_id` this one mote is worth.
+##
+## 1 for every drop the dungeon rolls, and it stays 1 — a kill drops N motes
+## because N things fell off the body, and that is the picture. What needs more
+## than one is the **Thief** (docs/BESTIARY.md §3): it takes a whole bag SLOT,
+## and a slot is up to a full stack, so the thing it drops when you cut it down
+## has to be the slot coming back. Twenty motes bursting out of one goblin would
+## read as twenty drops rather than as your pearls, and the player would spend
+## the recovery hoovering instead of seeing it.
+##
+## A short count means a FULL bag refuses the rest and the mote stays on the
+## floor holding what would not fit — see `_try_take`, which is the same refusal
+## a single mote already had, counted.
+var count: int = 1
 ## What the chain was worth at the instant this came off the corpse. It COOLS on
 ## the floor over K.HEAT_COOL_TIME back to 1.0, which is the rule that makes
 ## sweeping-while-fighting the mastery move: the loot goes cold whether or not
@@ -50,9 +64,10 @@ var _hero: Node3D = null
 
 ## Drop one at `at`, with a short arc so it reads as having come off the corpse.
 static func drop(parent: Node, id: StringName, at: Vector3,
-		fling: Vector3 = Vector3.ZERO) -> LootMote:
+		fling: Vector3 = Vector3.ZERO, n: int = 1) -> LootMote:
 	var m := LootMote.new()
 	m.item_id = id
+	m.count = maxi(n, 1)
 	# Stamped at the drop, not read at the pickup. The chain that earned this is
 	# the chain that was live when the thing died.
 	m.heat_mult = Heat.multiplier()
@@ -101,7 +116,12 @@ func _build() -> void:
 
 	_mesh = MeshInstance3D.new()
 	var pm := PrismMesh.new()
-	pm.size = Vector3(0.26, 0.34, 0.26)
+	# A stack is BIGGER, and only a little: the size says "there is more than one
+	# here" without a number floating over it. Capped, because a stolen slot can
+	# be twenty bone shards and a prism the size of the goblin that dropped it
+	# would read as a chest.
+	var bulk := clampf(1.0 + 0.06 * float(count - 1), 1.0, 1.5)
+	pm.size = Vector3(0.26, 0.34, 0.26) * bulk
 	_mesh.mesh = pm
 	_mesh.material_override = _mat
 	_mesh.position.y = 0.28
@@ -194,13 +214,21 @@ func _magnetise(delta: float) -> void:
 	global_position += to / d * K.HEAT_MAGNET_SPEED * delta
 
 
+## Walked over. **A partial pickup leaves the remainder on the floor** rather
+## than swallowing it: `Run.collect` answers how many actually fit, and a mote
+## carrying a stolen slot into a bag with one cell free would otherwise delete
+## the rest of the stack at the moment of recovery — the exact loss the player
+## just killed something to undo.
 func _try_take() -> void:
-	if Run.collect(item_id, 1, heat()) > 0:
+	var got := Run.collect(item_id, count, heat())
+	if got >= count:
 		_taken = true
 		taken.emit(item_id)
 		_pop()
-	else:
-		_refused = 0.9
+		return
+	if got > 0:
+		count -= got
+	_refused = 0.9
 
 
 ## Rise and fade. Cheap, but it is the only confirmation the player gets that the

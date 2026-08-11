@@ -15,10 +15,32 @@ extends CharacterBody3D
 ## **No navmesh.** Rooms are open boxes with nothing to path around, so this
 ## steers straight at the hero. If rooms ever grow interior obstacles this wants
 ## a NavigationAgent3D — direct steering will walk into pillars and stick.
+##
+## **Behaviours** (`docs/BESTIARY.md` §3). A behaviour is a key on a `DEFS` row
+## naming which item answers this body; it is never a tenth `kind` and never a
+## model (`docs/SCOPE.md` §1). One is built — `thief`, which takes a bag slot and
+## runs for the door. It lives in this file rather than in a subclass because it
+## is two states on the machine below and reuses every other part of it: the same
+## steering, the same telegraph grammar, the same reactions.
 
 signal died_at(position: Vector3)
 
-enum State { IDLE, CHASE, CIRCLE, WINDUP, STRIKE, RECOVER, HURT, LAUNCHED, FROZEN, DEAD }
+## The thief got away with it. `loot` is `{"id": StringName, "count": int}` —
+## what left the bag and is not coming back. Emitted instead of `died_at`,
+## because escaping is the opposite of dying and a listener that counted this as
+## a kill would be counting the player's loss as a win.
+signal escaped_with(loot: Dictionary, position: Vector3)
+
+## APPENDED TO, never inserted into. GRAB and FLEE sit after DEAD rather than
+## next to WINDUP where they read better, because `Music` once carried a literal
+## `[1, 2, 3, 4]` of raw indices into this enum (see `is_engaged`) and the lesson
+## from that is that the ordinals are load-bearing until proven otherwise.
+##
+## `is_engaged()` answers true for both by construction — it excludes IDLE and
+## DEAD and nothing else — which is the right answer: a thief winding up a grab
+## or running off with your pearls is very much in the fight.
+enum State { IDLE, CHASE, CIRCLE, WINDUP, STRIKE, RECOVER, HURT, LAUNCHED, FROZEN, DEAD,
+	GRAB, FLEE }
 
 const LIBRARY := "res://assets/animations/monster_library.res"
 const MODEL_DIR := "res://assets/monsters/"
@@ -51,6 +73,21 @@ const DEFS := {
 	&"goblin": {
 		"health": 5, "damage": 2, "speed": 3.0, "height": 1.25,
 		"detect": 12.0, "reach": 1.5, "windup": 0.32, "recover": 0.40, "cooldown": 0.7,
+		# **The Thief** (`docs/BESTIARY.md` §3, behaviour 4). A KEY on the row, which
+		# is the whole of what a behaviour costs: no tenth kind, no tenth model, no
+		# second script (`docs/SCOPE.md` §1's two zeroes).
+		#
+		# The goblin wears it because the goblin is the roster's cheapest and
+		# fastest body — 5 quarters, 3.0 m/s — and both halves of that are the
+		# design. Fast enough that letting it go is a real option, and soft enough
+		# that chasing it is a real option too. On a troll the answer would always
+		# be "let it go"; on a wraith it would always be "kill it", and an enemy
+		# with one right answer is a knowledge check (`docs/PUZZLES.md` §10.6).
+		#
+		# `behaviour` is the DEFAULT and `Enemy.behaviour` overrides it, because
+		# §3's table hangs two behaviours (Thrower and Thief) on this one row and
+		# a body has to be able to be told which one it is.
+		"behaviour": &"thief",
 	},
 	&"kobold": {
 		"health": 8, "damage": 3, "speed": 3.2, "height": 1.35,
@@ -115,6 +152,10 @@ const DEFS := {
 ## ordinary monsters and a room of five plus one you can SEE coming are different
 ## rooms, and only the second one is a decision (scripts/core/progression.gd).
 @export var elite: bool = false
+## Which behaviour this body wears (`docs/BESTIARY.md` §3). Empty means "whatever
+## the `DEFS` row says", which is the ordinary case; a spawner or a director sets
+## it to force one, and `&"none"` forces the plain melee body back.
+@export var behaviour: StringName = &""
 
 var state: State = State.IDLE
 var health: HealthComponent
@@ -130,6 +171,11 @@ var _knockback: Vector3 = Vector3.ZERO
 var _facing: float = 0.0
 var _rng := RandomNumberGenerator.new()
 var _struck: bool = false
+## The behaviour this body actually wears, resolved once in `_ready` from the
+## `behaviour` export falling back to the `DEFS` row. Resolved rather than read
+## live so a director can set it before the body enters the tree and nothing
+## downstream has to know there were two places to look.
+var _behave: StringName = &""
 ## `Hit.kind` of the last blow that damaged this body -- `&"sword"`, `&"arrow"`,
 ## `&"bomb"`, `&"contact"`, `&"fire"` (`docs/CONTRACT.md` §8). Written by
 ## `_on_damaged` and read once, by `_die`, for the Returning Shaft.
@@ -192,6 +238,33 @@ var _bounced: bool = false
 ## Seconds a landed body stays down before it gets up. Living bodies only.
 var _down: float = 0.0
 
+# --- The Thief (docs/BESTIARY.md §3, behaviour 4) ---------------------------
+## What it took out of the bag: `{"id": StringName, "count": int}`, empty while
+## its hands are. This is the ONLY copy of that stack in the world between the
+## grab and the recovery — `Run.steal_slot` erased it from the bag — so every
+## way this body can leave the scene has to put it somewhere: `_on_died` drops
+## it on the floor, `_escape` announces it gone.
+var _loot: Dictionary = {}
+## The stolen goods, made visible: the same faceted prism and short-range light
+## `LootMote` uses, carried in front of the chest. Built pale and empty when the
+## grab telegraphs and recoloured to the item's own tint the instant it lands, so
+## the player reads "it is reaching for the bag" and then "it has my pearls" as
+## two different pictures. `docs/BESTIARY.md` §1: a biped has hands, so its
+## threat is in its silhouette.
+var _sack: MeshInstance3D = null
+var _sack_mat: StandardMaterial3D = null
+var _sack_light: OmniLight3D = null
+## Where it decided to run, chosen ONCE at the moment of the theft and never
+## re-evaluated. A fleeing body that re-picks its exit every frame wanders, and a
+## wandering escape is one the player cannot read or cut off.
+var _exit: Vector3 = Vector3.ZERO
+## The mark on the floor at that exit, in EXTRACT CYAN — "the only cool saturated
+## hue, reserved for the way out" (`Pal.CYAN`). It is the other half of the read:
+## the sack says what it took and this says where it is going, from the far side
+## of a dark room. Parented to the scene, not to this body, because it marks a
+## place and not a thing.
+var _ribbon: Node3D = null
+
 
 static func spawn(parent: Node3D, p_kind: StringName, at: Vector3, seed_val: int) -> Enemy:
 	var e := Enemy.new()
@@ -204,6 +277,10 @@ static func spawn(parent: Node3D, p_kind: StringName, at: Vector3, seed_val: int
 
 func _ready() -> void:
 	_def = _resolve_def()
+	# The export wins, then the row, then nothing. `&"none"` is a real answer and
+	# not a missing one: it is how a director or a spawner asks for the plain
+	# melee body out of a row that carries a behaviour.
+	_behave = behaviour if behaviour != &"" else StringName(_def.get("behaviour", &""))
 	_rng.seed = drop_seed if drop_seed != 0 else randi()
 
 	add_to_group(&"enemy")
@@ -471,7 +548,11 @@ func _physics_process(delta: float) -> void:
 	# would ship is a monster standing in a quiet room glowing hot for ever.
 	# `_on_damaged` clears the flag before calling `_flash.hit()`, because the
 	# white flash supersedes the glow and must not be wiped by this the next frame.
-	if _glowing and state != State.WINDUP:
+	# GRAB is here for exactly the reason WINDUP is: it writes the glow every
+	# frame and owns no timer, so leaving it is the only thing that can take the
+	# colour back down, and a thief interrupted mid-reach would otherwise walk
+	# away lit for the rest of the run.
+	if _glowing and state != State.WINDUP and state != State.GRAB:
 		_glowing = false
 		_flash.restore()
 	# The same guard, for the same reason, over the ice. There are three ways out
@@ -483,6 +564,14 @@ func _physics_process(delta: float) -> void:
 	if _frozen and state != State.FROZEN:
 		_thaw_body()
 		_flash.restore()
+	# And the same guard over the empty sack, for the third time and the same
+	# reason. It is raised by GRAB and there are four ways out of GRAB -- it
+	# lands, it closes on air, a blow interrupts it, a hookshot freezes it -- so
+	# clearing it off the STATE rather than at each exit is what stops the next
+	# way out from shipping a goblin carrying a bag it never filled. A sack with
+	# loot in it is exempt: that one is owned by `_loot` and outlives every state.
+	if _sack != null and _loot.is_empty() and state != State.GRAB:
+		_clear_sack()
 
 	match state:
 		State.IDLE:
@@ -503,6 +592,10 @@ func _physics_process(delta: float) -> void:
 			_tick_launched(delta)
 		State.FROZEN:
 			_tick_frozen(delta)
+		State.GRAB:
+			_tick_grab(delta)
+		State.FLEE:
+			_tick_flee(delta)
 
 	# ONE owner for the vertical, chosen by whether this body is in the air.
 	#
@@ -634,6 +727,27 @@ func _tick_chase(delta: float) -> void:
 		return
 
 	_face_player(delta)
+	# The Thief goes for the bag instead of the throat. It only ever grabs with
+	# empty hands -- one slot per body, and a thief already carrying is running,
+	# not shopping.
+	if is_thief() and _loot.is_empty() and dist <= float(_def["reach"]) \
+			and _cooldown <= 0.0:
+		state = State.GRAB
+		# Through `Prog.windup_scale` like every other telegraph in the game, so
+		# the grab compresses 3% a floor and stops dead at 60% of K.THIEF_GRAB.
+		# GDD §7's floor is not a decoration on the melee wind-up; it is the rule,
+		# and the one blow in the roster that costs something you cannot heal is
+		# the last place to make an exception to it.
+		_timer = K.THIEF_GRAB * Prog.windup_scale(level)
+		_stop()
+		_play(&"attack_1")
+		_build_sack()
+		# The reach itself, so the tell has a noise as well as a shape. Deliberately
+		# the LIGHT swing sound on a 1.25 m body -- Sfx owns the table
+		# (docs/CONTRACT.md §8) and a grab is not a heavier event than a swing, it
+		# is a different one.
+		Bus.request_sfx.emit(&"swing", global_position)
+		return
 	if dist <= float(_def["reach"]) and _cooldown <= 0.0:
 		state = State.WINDUP
 		# Compressed with depth, but never past Prog.WINDUP_FLOOR. The telegraph
@@ -806,7 +920,7 @@ func _tick_hurt(delta: float) -> void:
 	velocity.z = _knockback.z + push.z
 	if _timer <= 0.0:
 		_knockback = Vector3.ZERO
-		state = State.CHASE
+		state = _wake()
 
 
 # --- The launch -------------------------------------------------------------
@@ -970,7 +1084,7 @@ func _tick_launched(delta: float) -> void:
 	_down -= delta
 	_stop()
 	if _down <= 0.0:
-		state = State.CHASE
+		state = _wake()
 
 
 ## The arc, shared by a living body and a corpse. Owns the vertical while
@@ -1149,12 +1263,368 @@ func _tick_frozen(delta: float) -> void:
 	_freeze_left -= delta
 	if _freeze_left <= 0.0:
 		# Out into CHASE, not back into whatever was interrupted. `_cooldown`
-		# above is what stops that from being a free swing.
-		state = State.CHASE
+		# above is what stops that from being a free swing. A thief comes out of
+		# the ice still running -- see `_wake`.
+		state = _wake()
 		return
 	# 1.0 for the solid half, then down to 0 across the tail — the thaw.
 	var thaw := maxf(K.HOOK_THAW * _freeze_total, 0.001)
 	_flash.ice(Pal.FROST, clampf(_freeze_left / thaw, 0.0, 1.0))
+
+
+# --- The Thief --------------------------------------------------------------
+## `docs/BESTIARY.md` §3, behaviour 4, and §0's argument for building it first:
+## every other body in the roster asks *can you swing back*, and this one asks
+## **GDD §2's question — is what I am carrying worth more than the walk back —
+## in the middle of a fight**, with a real answer on either side. Chase it and
+## you are spending Heat, stamina and position on loot you already had; let it go
+## and the run just got cheaper to extract.
+##
+## Two states and no new systems. GRAB is a telegraph that ends in
+## `Run.steal_slot` instead of a hitbox; FLEE is `_tick_idle`'s walk home with
+## the sign flipped — the same `_steer`, the same `_face_heading`, the same
+## `LEASH` measured from the same `_anchor`, aimed at a door instead of at bed.
+## There is no second pathfinder here and there must never be one.
+
+## Does this body take your bag? Public so the HUD, a spawner or a director can
+## ask without knowing how behaviours are stored.
+func is_thief() -> bool:
+	return _behave == &"thief"
+
+
+## What it is carrying, or `{}`. Public for the same reason `is_frozen` is: a
+## director has to be able to assert on it.
+func carrying() -> Dictionary:
+	return _loot.duplicate()
+
+
+## The reach. The same shape as `_tick_windup` — stand still, track slowly, ease
+## the tell into its last third — and deliberately the same GLOW, because a
+## telegraph is a telegraph and `docs/BESTIARY.md` §1 is that the grammar has to
+## transfer across the roster.
+##
+## **What differs is the direction of the lean, and that is the whole tell.** A
+## swing rears BACK (`WINDUP_LEAN_DEG`, negative pitch); a grab reaches FORWARD.
+## Colour could not have carried this: `Pal.GOLD` is currency and only currency,
+## `Pal.CYAN` is the way out, and the styleguide's own trap table says to change
+## the shape rather than the material. So the body crouches into you with an
+## empty sack coming up in front of it, which is a silhouette and not a tint.
+func _tick_grab(delta: float) -> void:
+	_stop()
+	_timer -= delta
+	_face_player(delta, 130.0)
+
+	var grab: float = maxf(K.THIEF_GRAB * Prog.windup_scale(level), 0.001)
+	var t := clampf(1.0 - _timer / grab, 0.0, 1.0)
+	var e := t * t
+	if _model != null:
+		_model.rotation.x = _model_rest.x + deg_to_rad(K.THIEF_LEAN_DEG) * e
+		_flash.glow(Pal.RUST, e * 0.22)
+		_glowing = true
+	# The sack rises with the commit, so the thing it wants is on screen before it
+	# has it. Half size at the start of the reach, full at the moment it closes.
+	if _sack != null:
+		_sack.scale = Vector3.ONE * lerpf(0.45, 1.0, e)
+
+	if _timer <= 0.0:
+		_close_grab()
+
+
+## The grab lands, or it does not.
+##
+## The check is a DISTANCE and not a hitbox, and that is a design choice rather
+## than a shortcut: the contact `_hitbox` deals damage, and a grab that also took
+## a quarter-heart would let the player read it as an attack that happens to
+## steal. It costs you loot and nothing else, so stepping out of reach during the
+## tell is the whole defence — which is what makes the tell worth reading.
+func _close_grab() -> void:
+	_glowing = false
+	_flash.restore()
+	_lunge_pose()
+	var reach: float = float(_def["reach"]) * 1.15
+	var loot: Dictionary = Run.steal_slot() if _distance() <= reach else {}
+	if loot.is_empty():
+		# Closed on empty air, or on an empty hold. Either way it got nothing, and
+		# the pause before it tries again is the reward for having stepped back.
+		_clear_sack()
+		state = State.RECOVER
+		_timer = float(_def["recover"])
+		_cooldown = K.THIEF_REGRAB
+		Bus.request_sfx.emit(&"craft_fail", global_position)
+		return
+
+	_loot = loot
+	_fill_sack(StringName(loot["id"]))
+	_exit = _pick_exit()
+	_raise_ribbon()
+	state = State.FLEE
+	# It cannot be re-grabbed out of its own escape, and nothing else reads this
+	# while it flees -- but a thief staggered back into CHASE with a spent
+	# cooldown would immediately reach for a second slot, and one slot per body is
+	# the rule that keeps a room of goblins from emptying the bag in four seconds.
+	_cooldown = 1e9
+	Bus.request_sfx.emit(&"pickup", global_position)
+	Bus.request_shake.emit(K.SHAKE_HIT, 0.18)
+	print("THIEF took %s x%d" % [String(loot["id"]), int(loot["count"])])
+
+
+## Run for the door. **`_tick_idle`'s walk home, inverted**: same `K.plane`
+## vector to a fixed point, same `_face_heading`, same `_steer`, same `LEASH`
+## measured off the same `_anchor` — only the destination and the sign of the
+## speed multiplier are different. A monster that has lost interest walks back to
+## where it woke up at 55%; a monster that has your pearls runs for the way out
+## at 150%.
+##
+## It never stops to fight and it never checks `detect`. That is the point: it is
+## not a monster any more, it is a timer, and the player either catches it or
+## does not.
+func _tick_flee(delta: float) -> void:
+	var to_exit := K.plane(_exit - global_position)
+	# Two ways out, and the second one is the leash doing its ordinary job from
+	# the other side: a thief that cannot reach the door it picked -- because the
+	# hero body-blocked it, because the exit was a fallback bearing in an open
+	# room -- still leaves the moment it is further from home than a chase would
+	# ever have taken it.
+	if to_exit.length() <= K.THIEF_DOOR \
+			or K.plane(global_position - _anchor).length() > LEASH:
+		_escape()
+		return
+	_face_heading(to_exit, delta, 300.0)
+	var speed: float = float(_def["speed"]) * K.THIEF_FLEE
+	_steer(to_exit.normalized(), speed)
+	_play(&"walk_fwd", true, clampf(speed / 2.2, 0.7, 1.8))
+
+
+## Where the nearest way out is, decided ONCE (see `_exit`).
+##
+## `&"exit"` is `KitDoorway`'s group and today it is the only member. The
+## fallback is not a defensive branch — a lookdev scene, the garrison and the
+## training room have no doorways at all, and "run away from him until you are
+## past the leash" is the same escape with the door left implicit.
+func _pick_exit() -> Vector3:
+	var best := Vector3.ZERO
+	var best_d := INF
+	for node in get_tree().get_nodes_in_group(&"exit"):
+		var door := node as Node3D
+		if door == null or not is_instance_valid(door):
+			continue
+		var d := K.plane(door.global_position - global_position).length()
+		if d < best_d:
+			best_d = d
+			best = door.global_position
+	if best_d < INF:
+		# Flattened to this body's own height: a doorway's origin sits at the wall
+		# base and steering at a point below the feet would tilt the heading.
+		return Vector3(best.x, global_position.y, best.z)
+	var away := K.flat(global_position - (_player.global_position if _player != null
+		else _anchor))
+	if away == Vector3.ZERO:
+		away = Vector3(0, 0, 1).rotated(Vector3.UP, _facing)
+	return _anchor + away * (LEASH + 2.0)
+
+
+## It got away. **Not a death** — no drop, no corpse, no `enemy_died`, and the
+## kill tally does not move, because the player did not kill it. What they get
+## instead is the sound of a door and an empty room.
+func _escape() -> void:
+	var gone := _loot.duplicate()
+	_loot = {}
+	_clear_ribbon()
+	_clear_sack()
+	# DEAD is the state that means "this body has stopped taking part". It is not
+	# a claim that it died: `_on_died` is the only thing that kills, and it is not
+	# being called. The state exists so `_physics_process` stops steering a body
+	# that is mid-fade.
+	state = State.DEAD
+	collision_layer = 0
+	remove_from_group(&"targetable")
+	remove_from_group(&"enemy")
+	_stop()
+	print("THIEF escaped with %s x%d" % [String(gone.get("id", &"?")),
+		int(gone.get("count", 0))])
+	escaped_with.emit(gone, global_position)
+	Bus.request_sfx.emit(&"door_open", global_position)
+	var tw := create_tween()
+	tw.tween_property(self, ^"scale", Vector3.ONE * 0.01, 0.35).set_ease(Tween.EASE_IN)
+	await tw.finished
+	if is_instance_valid(self):
+		queue_free()
+
+
+## Put the stolen slot back on the floor, as ONE mote holding the whole stack.
+## Called from `_on_died` — killing it is the fast answer (`docs/BESTIARY.md` §3)
+## and this is what makes that answer pay.
+##
+## Flung back along the blow that killed it, so the thing you were chasing lands
+## between you and it rather than sailing off with the corpse.
+func _drop_stolen() -> void:
+	_clear_ribbon()
+	_clear_sack()
+	if _loot.is_empty():
+		return
+	var id: StringName = StringName(_loot.get("id", &""))
+	var n: int = int(_loot.get("count", 0))
+	_loot = {}
+	if id == &"" or n <= 0:
+		return
+	var back := -_last_hit_dir
+	if back == Vector3.ZERO:
+		back = Vector3(0, 0, 1).rotated(Vector3.UP, _facing)
+	LootMote.drop(get_tree().current_scene, id,
+		global_position + Vector3.UP * 0.6, back * 0.9, n)
+
+
+# --- What the theft looks like ----------------------------------------------
+## The half of this behaviour that is easy to skip and the half that matters:
+## **it has to be visible what it took and visible where it went.** A thief that
+## works perfectly and reads as a goblin walking away is a bag slot that vanished
+## for no reason the player can name.
+
+## Build the empty sack, at the start of the reach. Pale `Pal.BONE` and unlit —
+## it is a container, not a prize, until there is something in it.
+func _build_sack() -> void:
+	if _sack != null:
+		return
+	_sack_mat = StandardMaterial3D.new()
+	_sack_mat.albedo_color = Pal.BONE
+	_sack_mat.emission_enabled = true
+	_sack_mat.emission = Pal.BONE
+	_sack_mat.emission_energy_multiplier = 0.25
+	_sack_mat.roughness = 0.85
+	# Faceted like every other pickup in the game. A smooth-shaded one would read
+	# as an asset from a different project (`LootMote._build`).
+	_sack_mat.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+
+	_sack = MeshInstance3D.new()
+	var pm := PrismMesh.new()
+	pm.size = Vector3(0.26, 0.34, 0.26)
+	_sack.mesh = pm
+	_sack.material_override = _sack_mat
+	# In FRONT of the chest. `-basis.z` is forward on this body by contract
+	# (`docs/CONTRACT.md` §2.5) and the body's yaw is `_facing`, so a negative Z
+	# offset rides in front of it through every turn without a line of code.
+	# On the body and NOT on the model, which carries art-space's 180° and gets
+	# tumbled by `_tick_flight`.
+	_sack.position = Vector3(0.0, _height() * 0.62, -_height() * 0.34)
+	_sack.scale = Vector3.ONE * 0.45
+	add_child(_sack)
+
+
+## It has your pearls. Recolour to the item's own tint and light it, so the sack
+## becomes the exact thing the player has seen lying on floors all run — same
+## prism, same tint, same short-range light as `LootMote`. That is the whole
+## readability argument: the game already taught this vocabulary, and a thief
+## holding a Void Pearl coloured like a Void Pearl needs no label.
+func _fill_sack(id: StringName) -> void:
+	if _sack == null:
+		_build_sack()
+	var def := ItemDb.get_def(id)
+	var tint: Color = def.tint if def != null else Pal.BONE
+	_sack_mat.albedo_color = tint
+	_sack_mat.emission = tint
+	_sack_mat.emission_energy_multiplier = 1.4
+	_sack.scale = Vector3.ONE
+
+	_sack_light = OmniLight3D.new()
+	_sack_light.light_color = tint
+	_sack_light.light_energy = 1.6
+	_sack_light.omni_range = 2.2
+	_sack_light.omni_attenuation = 1.6
+	_sack_light.shadow_enabled = false
+	_sack.add_child(_sack_light)
+
+
+func _clear_sack() -> void:
+	if _sack != null and is_instance_valid(_sack):
+		_sack.queue_free()
+	_sack = null
+	_sack_mat = null
+	_sack_light = null
+
+
+## Mark the door it is running for, in `Pal.CYAN` — "the only cool saturated
+## hue. Reserved for the way out" (`scripts/ui/style.gd`), which is exactly what
+## this is. A ring on the floor and a light over it: unmissable across a dark
+## room, and it answers the second question a robbed player has, which is not
+## *what did it take* but *where did it go*.
+##
+## Unshaded on purpose. The dungeon is lit at a level where a lit material would
+## read as dark blue paint on stone, and this has to hold its colour at any
+## distance from a torch.
+func _raise_ribbon() -> void:
+	_clear_ribbon()
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	_ribbon = Node3D.new()
+	scene.add_child(_ribbon)
+	_ribbon.global_position = Vector3(_exit.x, _exit.y + 0.06, _exit.z)
+
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Pal.CYAN
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.emission_enabled = true
+	mat.emission = Pal.CYAN
+	mat.emission_energy_multiplier = 2.0
+
+	var ring := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = K.THIEF_DOOR * 0.72
+	torus.outer_radius = K.THIEF_DOOR * 0.86
+	torus.rings = 5
+	torus.ring_segments = 4
+	ring.mesh = torus
+	ring.material_override = mat
+	_ribbon.add_child(ring)
+
+	# **A ring on the floor is not enough, and the render is what said so.** The
+	# first cut was the ring alone, and in `thief_05_running.png` it was behind a
+	# knee-high planter -- a mark the player cannot see is not a mark. Rooms have
+	# furniture in them, so the marker has to stand UP out of the floor plane. A
+	# slim column, not a pillar of light: it has to be findable across a room and
+	# it must not become the brightest object in the frame.
+	var beam := MeshInstance3D.new()
+	var post := CylinderMesh.new()
+	post.top_radius = 0.06
+	post.bottom_radius = 0.16
+	post.height = 3.4
+	post.radial_segments = 6
+	post.rings = 1
+	beam.mesh = post
+	beam.material_override = mat
+	beam.position.y = 1.7
+	_ribbon.add_child(beam)
+
+	var lamp := OmniLight3D.new()
+	lamp.light_color = Pal.CYAN
+	lamp.light_energy = 2.4
+	lamp.omni_range = 5.0
+	lamp.shadow_enabled = false
+	lamp.position.y = 1.2
+	_ribbon.add_child(lamp)
+
+	# A slow pulse, so it reads as live rather than as scenery. On the WALL clock
+	# is not needed here -- nothing about this survives a hit-stop that matters --
+	# but it must loop, because the chase can take as long as the player takes.
+	var tw := _ribbon.create_tween().set_loops()
+	tw.tween_property(ring, ^"scale", Vector3.ONE * 1.16, 0.5) \
+		.set_trans(Tween.TRANS_SINE)
+	tw.tween_property(ring, ^"scale", Vector3.ONE, 0.5).set_trans(Tween.TRANS_SINE)
+
+
+func _clear_ribbon() -> void:
+	if _ribbon != null and is_instance_valid(_ribbon):
+		_ribbon.queue_free()
+	_ribbon = null
+
+
+## Which state a body comes back to after something stopped it — a blow, a
+## launch, the hookshot. CHASE for everything in the roster; **FLEE for a thief
+## that is still holding your loot**, because a stagger that quietly turned a
+## robbery back into a fistfight would mean the only way to lose the bag is to
+## ignore the thing entirely, and hitting it once would be a free undo.
+func _wake() -> State:
+	return State.FLEE if not _loot.is_empty() else State.CHASE
 
 
 # --- Damage and death -------------------------------------------------------
@@ -1345,6 +1815,12 @@ func _on_died() -> void:
 	Bus.request_hitstop.emit(K.HITSTOP_HEAVY)
 	Bus.request_shake.emit(lerpf(0.38, 0.68, _last_hit_weight), 0.26)
 
+	# **What it took comes back**, and it comes back FIRST -- before the kind's own
+	# drop roll, so the thing the player was chasing lands in front of the corpse
+	# rather than somewhere inside a scatter of bone shards. This is the fast
+	# answer to the Thief paying out (`docs/BESTIARY.md` §3); a no-op on every
+	# other body in the roster.
+	_drop_stolen()
 	_drop_loot()
 	# The Returning Shaft (`EchoDb.RETURNING_SHAFT`): an arrow is recovered from
 	# what it killed. `_last_hit_kind` is the killing blow's -- an enemy softened

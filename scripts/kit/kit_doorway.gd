@@ -67,6 +67,17 @@ var _mi: MeshInstance3D
 func _ready() -> void:
 	collision_layer = K.L_WORLD
 	collision_mask = 0
+	# **The only thing in this project that knows where a way out is.** The Thief
+	# runs for the nearest door (docs/BESTIARY.md §3, behaviour 4) and there was
+	# no way to ask: rooms are open boxes, the doorways are built by name into a
+	# room's node tree and nothing indexes them. A group is the whole answer --
+	# `Enemy._exit_point` reads it, nothing else does yet, and a door that is not
+	# in it simply is not a door the thief will aim at.
+	#
+	# Not in the editor. `@tool` runs this at design time too, and an editor-side
+	# group membership is a scene-tree side effect nobody asked for.
+	if not Engine.is_editor_hint():
+		add_to_group(&"exit")
 	_rebuild()
 
 

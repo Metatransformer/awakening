@@ -54,6 +54,16 @@ const L_ENEMY_HITBOX := 1 << 4
 const L_INTERACT := 1 << 5
 const L_PIT := 1 << 6
 const L_HOOK := 1 << 7
+## Volumes a projectile is CHANGED by rather than stopped by -- combinator 8,
+## convert (`docs/PUZZLES.md` §3.1). A lantern's flame is the only one so far.
+##
+## It has to be its own bit and cannot borrow `L_INTERACT`. `Arrow`'s flight
+## query masks `L_WORLD | L_ENEMY | L_INTERACT` with `collide_with_areas` on, so
+## a flame volume wearing the interact bit is a flame that STOPS the arrow -- the
+## exact opposite of "you shoot *through* it". Nothing masks this bit but the
+## arrow's second, separate probe, which is what makes the volume invisible to
+## the sword's sweep, the hero's interact scan and the camera's collision alike.
+const L_CONVERT := 1 << 8
 
 # --- Hero body --------------------------------------------------------------
 ## The source mesh is 1.0 units tall; this scales it to adult-Link height.
@@ -507,6 +517,43 @@ const FLURRY_WINDOW := 1.40
 ## off you. [tune]
 const SLOWMO_SCALE := 0.34
 const SLOWMO_TIME := 0.55
+
+# --- The Thief (docs/BESTIARY.md §3, behaviour 4) ---------------------------
+## Seconds the grab telegraphs before it lands, at floor 1. **More than twice a
+## goblin's 0.32 s swing, and the asymmetry is the design**: a claw costs you
+## health, which the walk home gives back; a grab costs you a bag slot, which
+## nothing does. A cost you cannot heal has to be one you can see coming from
+## further away.
+##
+## Read through `Prog.windup_scale(level)` exactly like `DEFS["windup"]`, so it
+## compresses 3% a floor and stops at 60% of this — 0.45 s at the Chord Gate.
+## GDD §7's floor is a floor for the telegraph that matters most, not only for
+## the ones that were easy to leave alone. [tune]
+const THIEF_GRAB := 0.75
+## Multiplier on the body's own speed once it is carrying your loot. A goblin
+## runs 3.0 m/s and flees at 4.5, which is faster than the hero walks and slower
+## than he sprints: catchable, and only if you commit to catching it. Any
+## slower and letting it go is never a real option, which would delete the
+## decision this whole behaviour exists to pose (GDD §2). [tune]
+const THIEF_FLEE := 1.5
+## Metres from the doorway it picked at which a fleeing thief is through it and
+## gone. Roughly the door's own half-span, so it disappears IN the opening
+## rather than a stride short of it. [tune]
+const THIEF_DOOR := 1.7
+## Seconds before a thief whose grab closed on empty air tries again. Longer
+## than the swing cooldown it replaces: a whiffed grab is the player having read
+## the tell and stepped out of it, and the reward for reading a tell is time.
+## [tune]
+const THIEF_REGRAB := 1.6
+## How far the body leans FORWARD over a grab, in degrees.
+##
+## The number is bigger than `Enemy.WINDUP_LEAN_DEG`'s 17 and it points the
+## other way, and that is the whole tell: a swing rears BACK and a grab reaches
+## FORWARD, so the two commits are told apart by the direction of the lean at
+## any distance and in any light. Same glow, same colour, same grammar
+## (docs/BESTIARY.md §1) — only the shape differs, which is the lesson in
+## `CLAUDE.md` §3's last row. [tune]
+const THIEF_LEAN_DEG := 26.0
 
 # --- Economy ----------------------------------------------------------------
 ## [tune] Enough gold to afford exactly two bail-outs at the minimum fee, so a

@@ -71,10 +71,15 @@ func run(rig) -> void:
 
 	# Did anyone actually get a swing in? A pack that spaces beautifully and
 	# never commits is a worse fight than the one it replaced.
+	# GRAB and FLEE count. The two goblins in this pack wear the Thief behaviour
+	# (`docs/BESTIARY.md` §3), so "committed" for them is a reach for the bag and
+	# not a swing -- and this beat is about whether four bodies engage at all, not
+	# about which verb they engaged with.
 	var committed := 0
 	for e in pack:
 		if e.state == Enemy.State.WINDUP or e.state == Enemy.State.STRIKE \
-				or e.state == Enemy.State.RECOVER or e.state == Enemy.State.CIRCLE:
+				or e.state == Enemy.State.RECOVER or e.state == Enemy.State.CIRCLE \
+				or e.state == Enemy.State.GRAB or e.state == Enemy.State.FLEE:
 			committed += 1
 	print("PACK in a fighting state=%d/%d" % [committed, pack.size()])
 	if committed == 0:
