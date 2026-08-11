@@ -100,12 +100,21 @@ const BLURBS := {
 ## screen) route every id through here. Answering for bottles in this one place
 ## is what keeps them from each growing a bottle branch of their own, which is
 ## exactly the drift the header above is about.
+##
+## **A RATION is the second thing here that is not an armament**, and it arrived
+## through the same door for the same reason: it is a stop on the carry ring, so
+## the wheel and the Items screen both draw one, and neither should learn what a
+## biscuit is. Its name carries the STACK -- "Hardtack x12" -- because unlike a
+## bottle (whose count is the ring's length) how many you have is invisible
+## everywhere else on those two surfaces.
 static func name_of(id: StringName) -> String:
 	var b := Game.bottle_index(id)
 	if b >= 0:
 		var held := Game.bottle(b)
 		return "Bottle %d — %s" % [b + 1,
 			PotionDb.name_of(held) if held != &"" else "Empty"]
+	if RationDb.has(id):
+		return "%s x%d" % [RationDb.name_of(id), Game.ration_count(id)]
 	return NAMES.get(id, String(id).capitalize())
 
 
@@ -120,7 +129,14 @@ static func name_of(id: StringName) -> String:
 ## draught's short name, and the detail pane spells the whole thing out.
 static func slot_name(id: StringName) -> String:
 	var b := Game.bottle_index(id)
-	return "Bottle %d" % (b + 1) if b >= 0 else name_of(id)
+	if b >= 0:
+		return "Bottle %d" % (b + 1)
+	# The ration's plain name, without the stack `name_of` appends: the card is
+	# ~200 px and "Hardtack" fits where "Hardtack x12" is the shape that ran off
+	# it last time (see above). The count is on the HUD cell either way.
+	if RationDb.has(id):
+		return RationDb.name_of(id)
+	return name_of(id)
 
 
 static func letter(id: StringName) -> String:
@@ -128,6 +144,8 @@ static func letter(id: StringName) -> String:
 	if b >= 0:
 		var short := PotionDb.short_of(Game.bottle(b))
 		return short if short != "" else "—"
+	if RationDb.has(id):
+		return RationDb.short_of(id)
 	return LETTERS.get(id, "?")
 
 
@@ -135,6 +153,11 @@ static func blurb(id: StringName) -> String:
 	var b := Game.bottle_index(id)
 	if b >= 0:
 		return PotionDb.blurb_of(Game.bottle(b))
+	if RationDb.has(id):
+		# The effect too, and it is the one place a player can read WHY the button
+		# sits them down before they press it. `RationDb.effect_of` names the
+		# twelve seconds, which is the whole of what makes this not a potion.
+		return "%s %s" % [RationDb.blurb_of(id), RationDb.effect_of(id)]
 	return BLURBS.get(id, "")
 
 

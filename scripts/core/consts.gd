@@ -206,6 +206,17 @@ const MAX_MAGIC := 48
 ## you can be punished for taking. What made the spin different was that it is
 ## the one attack that answers a ROOM, and an unlimited answer to a room is the
 ## room not being a question. [tune]
+##
+## **A drink refills it now, and the paragraph above is what shaped the drink**
+## (owner directive, 2026-08-11; `docs/SCOPE.md` §2 carries the amendment). Small
+## Beer is `MEAL_MAGIC` = 12 = exactly this constant, so it buys back ONE spin and
+## never a fraction of one, and it costs twelve seconds of sitting still that no
+## fight will give you. What the argument above actually defends is "the fourth
+## spin is a decision you can see coming" -- a drink that had to be bought in the
+## garrison, carried down, and paid for in a room you have already cleared does
+## not soften that; it moves the fourth spin's price from the walk home to the bag
+## slot and the clock. What would break it is a refill that is FREE or FAST, and
+## `MEAL_TIME` is the whole reason this one is neither.
 const MAGIC_SPIN := 12
 ## [oot] 20 ticks of invulnerability after taking damage. **THE HERO'S NUMBER.**
 const IFRAME_TIME := 20.0 * TICK    # 1.0 s
@@ -880,6 +891,52 @@ const DRAUGHT_TIME := 45.0
 ## nothing downstream needed a line of code to know potions exist.
 const DRAUGHT_EDGE := 2
 const DRAUGHT_PLATE := 2
+
+
+# --- Rations (docs/METAGAME.md §6.4) ----------------------------------------
+## The quartermaster's food and drink, and every number below exists to keep them
+## BELOW the alchemist rather than beside him. A ration is the stopgap you carry
+## on the trip before you own a bottle: it is cheap, it stacks, and it costs the
+## one thing a draught never asks for, which is time standing still.
+##
+## How many of one ration you may carry. Twenty, and it is a stack rather than a
+## bottle's slot on purpose: what limits a draught is the GLASS (BOTTLE_MAX), and
+## if food were limited the same way it would be a fifth bottle that heals less.
+## Rations are limited by the clock instead -- twenty of them is over four minutes
+## of sitting down, which nothing underground will give you. [tune]
+const RATION_STACK := 20
+## How many come in one purchase at the counter. Five, so filling a stack is four
+## presses rather than twenty, and so the price the player reads is a trip's worth
+## rather than a mouthful's.
+const RATION_BATCH := 5
+
+## Seconds one ration takes to finish, and how often it pays out inside that.
+##
+## Twelve seconds is the whole design of the thing. A Heart Draught is instant and
+## is the answer to the fight you are IN; food is the answer to the corridor
+## AFTER it, and twelve seconds is comfortably longer than any enemy in the game
+## will leave you alone for. Any hit, any step and any swing cancels it (see
+## `Game.cancel_meal`), so the cost of eating is a room you have already cleared.
+##
+## The tick is what makes a cancelled meal partial rather than wasted: stand up
+## after nine seconds and you keep three ticks of it. Without that the button
+## would be all-or-nothing on a channel the player cannot always control, which
+## is the shape that teaches people never to press it. [tune]
+const MEAL_TIME := 12.0
+const MEAL_TICK := 3.0
+
+## What one whole ration puts back, spread across the four ticks above.
+##
+## Food is FOUR quarters -- one heart, against the Heart Draught's two, and taking
+## twelve seconds to do what the draught does in a frame. That ratio is the
+## sentence "a weak version of a potion" written as numbers.
+##
+## Drink is TWELVE points of the blue bar, which is exactly `MAGIC_SPIN`: one
+## drink buys one charged spin back and never a fraction of one. A number that did
+## not divide into the spin would make the bar something you sip at rather than
+## something you spend, and the spin is the only thing that spends it.
+const MEAL_HEAL := 4
+const MEAL_MAGIC := 12
 
 
 ## Depth band (1..3) for a number of rooms cleared this run.

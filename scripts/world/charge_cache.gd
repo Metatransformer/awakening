@@ -6,7 +6,7 @@ extends Area3D
 ## the rule was unmet: *every puzzle room is solvable from a cold start with an
 ## empty pouch, because the urns beside it hold exactly what it needs.* Floor 2's
 ## shortcut is a cracked pillar and the only answer to a cracked pillar is a
-## Burst; charges could be bought in the garrison (`AlchemyDb`) and nowhere else,
+## Burst; charges could be bought in the garrison (`SupplyDb`) and nowhere else,
 ## so a player who descended with none met a door with no legal way through.
 ## `docs/ITEMS.md` §8 D13 is the defect and card #29 is this file.
 ##
@@ -26,7 +26,7 @@ extends Area3D
 ## What one cache is worth. **Two, not one**: one charge and one missed arc is
 ## the same dead end this prop was built to close, and a player meeting the
 ## working's parabola for the first time in a corridor is exactly who this is
-## for. Two, not three, because three is `AlchemyDb.CHARGE_BATCH` -- the floor
+## for. Two, not three, because three is `SupplyDb.CHARGE_BATCH` -- the floor
 ## must not be a cheaper counter. [tune]
 const HOLDS := 2
 
@@ -212,8 +212,8 @@ func _process(delta: float) -> void:
 			return
 
 
-## `Game.add_charges()` and nothing else. It is the seam the alchemist's counter
-## already uses (`AlchemyDb._charge_line`), it clamps at `max_charges`, and it is
+## `Game.add_charges()` and nothing else. It is the seam the counter that sells
+## them already uses (`SupplyDb.buy`), it clamps at `max_charges`, and it is
 ## what emits `Bus.ammo_changed` -- so the HUD cell under the working updates for
 ## the same reason it does after a purchase. A second path that wrote `charges`
 ## directly would be a counter the HUD does not redraw.

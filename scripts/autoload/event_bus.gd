@@ -202,6 +202,21 @@ signal potion_drunk(potion: StringName)
 ## same way it reads health.
 signal draught_changed(potion: StringName, seconds_left: float)
 
+# --- Rations and the meal (docs/METAGAME.md §6.4) ---------------------------
+## A ration stack changed -- bought, or a mouthful started. `stock` is
+## `Game.rations` whole, for `bottles_changed`'s reason: which ids are non-empty
+## is what the carry ring is made of, and a listener that had to keep its own
+## tally of that would be the second copy of it.
+signal rations_changed(stock: Dictionary)
+## The hero sat down to eat (`seconds_left` == K.MEAL_TIME), stood up again
+## (`ration` `&""`), or crossed a tick.
+##
+## Emitted per TICK rather than per frame, which is the same bargain
+## `draught_changed` strikes: the HUD reads `Game.meal_progress()` as it draws,
+## and what a listener actually needs an edge for is the sitting and the standing.
+## The hero listens to exactly those two to take the seated pose.
+signal meal_changed(ration: StringName, seconds_left: float)
+
 # --- Heat: momentum, and what it is worth -----------------------------------
 ## The chain moved. `window01` is how much of the current tier's window is left,
 ## so a listener can draw the countdown without polling Heat every frame.

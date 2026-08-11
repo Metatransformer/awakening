@@ -520,6 +520,25 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## Seconds the shield takes to come up and go down. Fast enough to be a
 ## reaction, slow enough that you can see it happen.
 @export var block_fade: float = 0.12
+
+## The seated pose he eats a ration in (`docs/METAGAME.md` §6.4). A HELD pose, so
+## it blends rather than fires — the same arrangement `clip_block` gets, for the
+## same reason: a one-shot would end on its own while the meal was still running.
+##
+## `ss_crouch_idle_01` is the library's only settled-on-the-ground loop and it is
+## a placeholder with a real job. What the pose has to do is say *he is not
+## fighting and he is not going anywhere*, from the game camera, in the corner of
+## the player's eye, and a low crouched idle says it. A proper sit is one word
+## change here and a re-import; nothing downstream reads the clip's name.
+@export var clip_rest: StringName = &"ss_crouch_idle_01"
+## Seconds the seated pose takes to fold down into and to come up out of.
+##
+## Slower than the shield's 0.12 on purpose, and it is the only fade in this file
+## tuned to be slow. Sitting down is the one thing the hero does that the player
+## must never read as instant: the whole item is that eating costs you the twelve
+## seconds AND the two beats at either end of it, and a hero who snapped into a
+## crouch and back could be eaten mid-corridor with no felt cost at all.
+@export var rest_fade: float = 0.30
 ## Speeds, in m/s, the walk and run clips are authored to read as.
 @export var walk_blend_speed: float = K.WALK_SPEED
 @export var run_blend_speed: float = K.RUN_SPEED
@@ -857,6 +876,17 @@ const _P_AIM := "parameters/Aim/blend_amount"
 const _P_AIM_HOOK := "parameters/HookAim/blend_amount"
 const _P_AIM_BLEND := "parameters/AimLoco/blend_position"
 const _P_BLOCK := "parameters/Block/blend_amount"
+const _P_REST := "parameters/Rest/blend_amount"
+
+## Every button that means "I am not sitting down any more". Spelled out here
+## rather than inline in `_tick_meal_cancel` so the list is readable as a list:
+## swing, heavy, shield, roll/sprint, jump. All five are the real action names in
+## `project.godot` — `attack_heavy` and `parry` are NOT actions and a typo in here
+## is a meal that cannot be interrupted by the button it names, which is a defect
+## that shows up as "eating is overpowered" and never as an error.
+const MEAL_BREAKERS: Array[StringName] = [
+	&"attack", &"heavy", &"shield", &"context", &"jump",
+]
 const _P_CHARGE := "parameters/Charge/blend_amount"
 const _P_CHARGE_FREEZE := "parameters/ChargeFreeze/scale"
 const _P_CHARGE_SEEK := "parameters/ChargeSeek/seek_request"
@@ -1203,6 +1233,27 @@ func _build_anim_tree() -> void:
 	prev = &"HookShot"
 
 	prev = _add_oneshot(tree_root, &"Land", prev, _anim_node(clip_land), Vector2(2160, 0), 0.06, 0.20)
+
+	# The seated pose, and it is the LAST thing in the tree — above the landing,
+	# above the swings, above the stances. Every other held pose in here occupies
+	# part of him (the shield is one arm, the aim is the upper body); sitting down
+	# occupies all of him, and at a blend of 1.0 a Blend2 outputs its second input
+	# and nothing else. Anywhere lower and a fading swing or a bow stance would
+	# still be showing through a man who is eating a biscuit on the floor.
+	#
+	# It can afford to be a plain blend rather than a state because nothing can
+	# reach it by accident: `Game.eating()` is only true between `begin_meal` and
+	# `cancel_meal`, and every input that could contradict the pose calls the
+	# second one (see `_tick_meal_cancel`).
+	var rest_pose := _anim_node(clip_rest)
+	rest_pose.loop_mode = Animation.LOOP_LINEAR
+	tree_root.add_node(&"RestAnim", rest_pose, Vector2(2160, 300))
+	var rest_blend := AnimationNodeBlend2.new()
+	tree_root.add_node(&"Rest", rest_blend, Vector2(2280, 0))
+	tree_root.connect_node(&"Rest", 0, prev)
+	tree_root.connect_node(&"Rest", 1, &"RestAnim")
+	prev = &"Rest"
+
 	tree_root.connect_node(&"output", 0, prev)
 
 	_tree = AnimationTree.new()
@@ -1225,6 +1276,7 @@ func _build_anim_tree() -> void:
 	_tree.set(_P_BLEND, 0.0)
 	_tree.set(_P_STRIDE, 1.0)
 	_tree.set(_P_BLOCK, 0.0)
+	_tree.set(_P_REST, 0.0)
 	_tree.set(_P_CHARGE, 0.0)
 	# 0.0 is what makes the pose a POSE. The clip sits at charge_pose_time and
 	# never moves off it.
@@ -1428,9 +1480,20 @@ func _physics_process(delta: float) -> void:
 	# stance you have chosen to stand still in. It is also the honest one -- his
 	# model is hidden while the lens is inside his head, so a hero who could
 	# walk in here would be an invisible hero walking.
-	var locked := (Prompt != null and Prompt.blocked) \
+	var busy := (Prompt != null and Prompt.blocked) \
 		or (rope != null and rope.active()) \
 		or _first_person
+	# EATING roots him by the same mechanism and for the rope's exact reason: a
+	# channel is only a decision if walking out of it is not free. The difference
+	# is what "walking out" costs — the rope breaks, and a meal simply STOPS, with
+	# whatever ticks already paid kept and the rest of the biscuit gone
+	# (`Game.begin_meal`). `_tick_meal_cancel` is the half that notices.
+	#
+	# Cancelled BEFORE `locked` is read, so the frame the player pushes the stick
+	# is the frame he stands up and starts moving, rather than one where he is
+	# still rooted with the meal already over.
+	_tick_meal_cancel(busy)
+	var locked := busy or Game.eating()
 
 	# Everything that is not standing on the floor in control of himself lets go
 	# of the block, in one line and BEFORE the state match, so a roll, a swing, a
@@ -1479,6 +1542,51 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	_after_move(pre_fall, delta)
 	_drive_animation(delta)
+
+
+## **Anything that is not sitting still ends the meal.** WoW's rule, and it is the
+## whole reason a ration is not simply a cheap potion: the twelve seconds have to
+## be twelve seconds of doing nothing, or the item is a heal you press mid-fight
+## with extra steps.
+##
+## Read as RAW input rather than as velocity, and that matters — velocity is zero
+## while `locked` is holding him still, so a check on movement would never fire
+## and the player would be pinned to the floor pushing a stick that did nothing.
+## What ends it is the INTENT to do something else.
+##
+## The action buttons are polled with `is_action_pressed` rather than
+## `just_pressed` for the same reason: a button already held when he sat down is
+## still a player who wants to be fighting.
+##
+## **`use_item` is deliberately NOT in the list**, and it is the one absence worth
+## writing down. It is the button that STARTS the meal, and a held press — which
+## is every press, for a frame or two — would sit him down and stand him straight
+## back up, an item that visibly does nothing. Pressing X again mid-meal is a
+## silent no-op instead: `Game.begin_meal` refuses while one is running. Standing
+## up is what the stick is for.
+##
+## `screen` cancels outright and does not wait for input. Opening a shop, taking
+## the rope or dropping into first person are all "he is doing something else
+## now", and a hero who kept eating through a trade screen would finish the meal
+## while the player was reading a price list — which is the free version of the
+## item this whole function exists to prevent.
+func _tick_meal_cancel(screen: bool) -> void:
+	if not Game.eating():
+		return
+	if screen:
+		Game.cancel_meal()
+		return
+	# The same deadzone the locomotion uses, so "he stood up" and "he started
+	# walking" are the same threshold. A drifting pad that could cancel a meal
+	# without moving him is the gamepad trap in CLAUDE.md §3 wearing a new hat.
+	var stick := Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down")
+	if stick.length() > 0.2:
+		Game.cancel_meal()
+		return
+	for action: StringName in MEAL_BREAKERS:
+		if Input.is_action_pressed(action):
+			Game.cancel_meal()
+			return
 
 
 ## The one rule that makes a third-person game feel right: the stick is read in
@@ -2862,6 +2970,14 @@ func take_hit(hit: Hit) -> bool:
 	if hit == null or hit.amount <= 0 or Game.quarters <= 0:
 		return false
 
+	# **A blow ends the meal, and it ends it BEFORE anything below decides whether
+	# the blow lands.** A parry or a roll he was in the middle of is a hero who was
+	# never eating in the first place (both buttons are in `MEAL_BREAKERS`), so
+	# there is no case where this cancels a meal the hit was going to be denied
+	# by — and putting it under the parry check would mean the one blow he catches
+	# on the shield is the one that lets him keep eating.
+	Game.cancel_meal()
+
 	# THE PARRY IS CHECKED FIRST, ahead of the i-frames and ahead of the roll.
 	#
 	# Ahead of the i-frames because a parry has to be able to catch the SECOND
@@ -3132,6 +3248,14 @@ func _drive_animation(delta: float) -> void:
 	var want := 1.0 if blocking else 0.0
 	var now: float = _tree.get(_P_BLOCK)
 	_tree.set(_P_BLOCK, move_toward(now, want, delta / maxf(block_fade, 0.01)))
+
+	# Sitting down and getting back up, on the same easing and off `Game.eating()`
+	# rather than off an edge. A flag polled every frame cannot be left stuck by a
+	# missed signal, a scene change or a load — and a hero frozen in a crouch with
+	# no meal running is the exact failure this pose could ship.
+	var sit_now: float = _tree.get(_P_REST)
+	_tree.set(_P_REST, move_toward(sit_now, 1.0 if Game.eating() else 0.0,
+		delta / maxf(rest_fade, 0.01)))
 
 	# The wind-up pose, eased the same way. `charging` is set by HeroCombat every
 	# frame the button is down; it is a flag rather than a request because the

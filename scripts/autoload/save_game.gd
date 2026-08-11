@@ -62,13 +62,18 @@ const SLOTS := 3
 ## an honest empty. The failure mode is a returning player pressing LB once and
 ## finding one slot filled, on a wheel whose entire teaching move is that you can
 ## see what is on it. So v6 stays readable.
-const VERSION := 7
+## Bumped to 8 for `rations`, the quartermaster's food and drink (card #98), and
+## it is additive in the same way `wheel` was. A v7 slot has no such key and comes
+## back with an empty pack, which is the TRUTH about a hero who played before the
+## counter stocked any — nothing is lost and nothing has to be guessed at. So v7
+## stays readable, and so does everything v7 read.
+const VERSION := 8
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4, 5, 6, 7]
+const READABLE: Array[int] = [4, 5, 6, 7, 8]
 
 signal saved(slot: int)
 signal loaded(slot: int)
@@ -167,6 +172,11 @@ func save(slot: int) -> bool:
 		# with the noun; the READ below still answers to the old key, so this is a
 		# rename rather than the new save field `docs/SCOPE.md` §1 refuses.
 		"charges": Game.charges,
+		# The pack: ration id -> how many. The MEAL is deliberately not here --
+		# twelve seconds of sitting restored by a load would be a meal you spend
+		# the loading screen on, which is the bargain `draughts` already struck
+		# (see `Game.meal_id`).
+		"rations": Game.rations,
 		"small_keys": Game.small_keys,
 		"has_boss_key": Game.has_boss_key,
 		"has_map": Game.has_map,
@@ -314,6 +324,19 @@ func load_slot(slot: int) -> Dictionary:
 			break
 		var potion := StringName(c)
 		Game.bottle_contents.append(potion if PotionDb.has(potion) else &"")
+	# Rebuilt key by key for `upgrades`' reason -- JSON has no StringName, so an
+	# assigned dictionary comes back keyed by String and `RationDb.has()` misses
+	# every lookup: food that draws in the cell and cannot be eaten. Sieved
+	# through the catalogue and clamped to the stack, so a hand-edited slot cannot
+	# hand out an id that does not exist or a twenty-first biscuit.
+	Game.rations.clear()
+	for k in (d.get("rations", {}) as Dictionary):
+		var rid := StringName(k)
+		if not RationDb.has(rid):
+			continue
+		var n := clampi(int((d["rations"] as Dictionary)[k]), 0, K.RATION_STACK)
+		if n > 0:
+			Game.rations[rid] = n
 	Game.arrows = d.get("arrows", 0)
 	# The old key is the FALLBACK, not a second field: a save written before
 	# Burst had a name carried its stock under "bombs", and dropping it would
@@ -385,6 +408,7 @@ func load_slot(slot: int) -> Dictionary:
 	Bus.item_selected_changed.emit(Game.item_selected)
 	Bus.wheel_changed.emit(Game.wheel)
 	Bus.bottles_changed.emit(Game.bottle_contents)
+	Bus.rations_changed.emit(Game.rations)
 	Bus.components_changed.emit(Game.components)
 	Bus.stash_changed.emit(Game.stash)
 	Bus.loadout_changed.emit(Game.loadout_set,

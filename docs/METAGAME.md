@@ -639,16 +639,37 @@ straight to the gate still gets it.
   with two** (`Npc.COUNTERS`). *Trade* buys: the trade screen
   (`scripts/ui/shop/trade_screen.gd`) lists the bag sorted by value with a
   "sell everything" line, because the common case is dumping the lot and the UI
-  should not make that tedious. *The Stores* sells the three utility lines
+  should not make that tedious. *The Stores* sells everything you carry more of
   (`scripts/items/supply_db.gd`):
 
-  | Line | Base cost | Growth | Limit | Also costs |
+  | Line | Base cost | Growth | Limit | Gated on |
   |---|---|---|---|---|
-  | Arrows ×10 | 40 | — | unlimited | — |
+  | Arrows ×10 | 40 | — | quiver | owning the bow |
+  | Charges ×3 | 90 | — | pouch | owning Burst |
+  | Hardtack ×5 | 25 | — | 20 in the pack | — |
+  | Small Beer ×5 | 45 | — | 20 in the pack | — |
   | Bag slot | 140 | ×1.6 | 4 | — |
   | Heart container | 320 | ×1.5 | 3 | — |
 
-  **These three were the smith's until card #91** and moved with him. Same ids,
+  The top four are one row on the board, titled **STORES**, and that grouping is
+  the argument rather than a layout choice: a quartermaster issues expendables,
+  and which bar or which hand a given one feeds is the cell's business, not the
+  counter's. Everything in it is a thing you buy in the yard, take down, and come
+  back without. The two ladders below it are drawn as ladders because they have
+  ends.
+
+  **Charges arrived from the alchemist on 2026-08-11** (card #98). His own file
+  had the reason written on it while they sat there — a charge is not brewed out
+  of anything the floor drops, it is issued out of a store — and the move closed a
+  real hole: he does not stand in the yard until a boss is dead (`StoryDb.UNLOCKS`)
+  and she is unconditional, so a hero who took Burst off the Slag Ogre used to
+  have nowhere to spend gold on ammunition for it. Nothing else changed: same
+  bundle of three, same 90 gold, same gate on owning the working.
+
+  **Hardtack and Small Beer are new in the same card.** §6.4 is the whole of them.
+
+  **The bag slot, the heart and the arrows were the smith's until card #91** and
+  moved with him. Same ids,
   same prices, same limits — `Game.upgrades` is keyed by the id, so a save that
   had bought two bag slots keeps them and buys the third at the third price. They
   had to move: with Brannoc behind the floor 1 miniboss, a new save could not
@@ -748,6 +769,88 @@ The held rows say so twice — `HOLD ENT TO FORGE` in the footer, and a gauge
 filling along the row (docs/CONTRACT.md §8, "Holds"). The word and the bar are
 one statement in two languages, and this project has shipped the bug that each
 one alone leaves behind.
+
+---
+
+## 6.4 Rations — the stopgap you sit down for
+
+*Card #98, 2026-08-11. Numbered 6.4 because 6.5 onwards are cited from code
+comments and directors and must not move; the number is referenced back from
+`RationDb`, `SupplyDb`, `GameState` and `tools/directors/rations.gd`.*
+
+The alchemist is the answer to a half-empty heart row, and for the first hours of
+a save he is not there. Brannoc is behind the floor 1 miniboss (card #91) and the
+alchemist behind a boss (`StoryDb.UNLOCKS`), the hero starts with **one** bottle,
+and until one of those two happens the only thing a player can do about damage is
+walk home. Rations are the second answer, and they are deliberately a bad one.
+
+| | Hardtack | Small Beer |
+|---|---|---|
+| Bought at | The Stores, 25 gold for five | The Stores, 45 gold for five |
+| Gives back | 1 heart (`K.MEAL_HEAL` = 4 quarters) | 12 magic (`K.MEAL_MAGIC`) — **exactly one spin** |
+| Over | 12 s (`K.MEAL_TIME`), in 4 ticks of 3 s | the same |
+| Carried | 20 in the pack (`K.RATION_STACK`) | 20, counted separately |
+| Costs a bag slot | no — `Game.rations`, not the bag | no |
+
+**The twelve seconds is the item.** Everything else about a ration is a worse
+Heart Draught: it heals less, it is bought rather than found, and it does not
+stack with anything. What it has instead is that you must **sit down** for it —
+`Hero` roots himself and holds a seated pose for the whole meal, and a step, a
+swing, a guard, a jump, a context press, a screen, or **being hit** ends it on the
+frame it happens. It is the game's only action that asks you to be certain the
+room is empty.
+
+**And it is paid for up front.** The ration leaves the pack when you sit, not
+when you finish, so a meal interrupted at nine seconds has cost you the whole
+biscuit and paid you three quarters of it. Refunding on a cancel would make
+interruption free, and interruption is the entire design.
+
+**It is meant to stop mattering.** By the time you own three bottles, twelve
+seconds is a price you stop being willing to pay — which is what a stopgap is. It
+does not compete with the alchemist because it cannot be drunk while anything is
+looking at you.
+
+### The drink, and the blue bar
+
+`docs/SCOPE.md` §2 no-lists anything that refills magic, and says in as many
+words that `GameState` deliberately has no `restore_magic` because *"an API that
+hands back some magic is how a potion, then a font, then a school gets in"*.
+**The owner directed the drink on 2026-08-11 and it shipped**; SCOPE §2 records
+the amendment and the fence that came with it. The fence is what keeps the
+original argument intact:
+
+- **One caller.** `RationDb.apply_tick` is the only thing in the project that
+  calls `Game.restore_magic`. If rations go, so does the accessor.
+- **No drop, no font, no pickup.** Nothing underground refills the blue bar and
+  nothing rolls a drink into a room or a chest. You buy it in the yard or you do
+  not have it.
+- **Nothing pays without a clock in front of it.** Twelve seated seconds for one
+  spin is not a mana potion; a mana potion is a button.
+- **One spin exactly.** `K.MEAL_MAGIC == K.MAGIC_SPIN`, asserted by the director.
+  The bar is four spins per trip and a cup buys you back one of them, so the
+  arithmetic the bar was designed around — how many spins does this trip get —
+  still has an answer a player can hold in their head.
+
+### Where it lives
+
+Stacks are on `Game.rations` (id → count), saved with the file at version 8; the
+**meal is not saved**, because twelve seconds of sitting restored by a load is a
+meal you spend the loading screen on. `RationDb` is the catalogue and answers
+only "what is it" and "what does it do". `SupplyDb` has the price. The kit wheel
+takes a ration in any of its eight slots, and D-pad ↓ steps onto it — the carry
+ring is bottles first and then rations (`Game.carry_ids`), so every index that
+meant a bottle before still does. **X is the button**, the same one that drinks.
+
+The HUD draws the meal as a fill along the foot of the item cell
+(`HoldGauge.bar`), which is the widget this game already uses for "keep doing
+this or it does not count". While a meal runs the ring is frozen, so the cell the
+gauge is drawn in is always the ration being eaten.
+
+`tools/directors/rations.gd` is the proof, and its calibration is a **null case**
+rather than an injected signal — the failure this instrument could invent is a
+false positive, so beat A asserts the gauge is absent before anything is eaten
+and beat G points the whole chain at a full heart row and asserts nothing
+happened.
 
 ---
 
@@ -927,14 +1030,20 @@ holding on the carrying screen precisely because it cannot be used to change it.
 *Numbered 6.6 for the same reason §6.5 is 6.5. Do not renumber.*
 
 > **⏳ Extended, not superseded — `docs/GDD.md` §6.5, not built.** This counter
-> gains two jobs at M5. She **reads** the two Verse relics (GDD §6.2), and she
-> sells **charges** for the three workings — the same stock-you-bought-in-garrison
-> relationship the bottles below have, priced the same way, refilled only here.
-> Everything in this section is true today and stays true; nothing below changes.
-> Charges are a HUD counter beside the arrows, never a bag slot.
+> gains one more job at M5: she **reads** the two Verse relics (GDD §6.2).
+> Everything in this section is true today and stays true.
 >
-> **"Refilled only here" is now "refilled here, and once on floor 2"** (card #29,
-> 2026-08-11). It is not a softening of the rule above and it is not an arrow
+> **Charges are NOT hers, as of card #98 (2026-08-11).** This block used to say
+> she sold them, and for a while she did. They are the quartermaster's stores now
+> (§6.4's table) for two reasons, one of which was already written on her own
+> file: a charge is not brewed out of anything the floor drops, and this counter
+> does not exist until a boss is dead while hers does. The relationship the
+> paragraph described is unchanged and still the point — charges are a
+> stock-you-bought-in-garrison, a HUD counter beside the arrows, never a bag slot.
+> Only the face behind the counter moved.
+>
+> **"Refilled only in the garrison" is now "refilled there, and once on floor 2"**
+> (card #29, 2026-08-11). It is not a softening of the rule above and it is not an arrow
 > supply: **nothing rolls charges into a room or a chest**, and the walk home is
 > still spent with what you bought. There is exactly one `ChargeCache`
 > underground and it is inside the urn braced against floor 2's shortcut, because
@@ -1271,7 +1380,9 @@ second one is a decision.
 | Ingredients, components and drop tables | `scripts/items/item_db.gd` |
 | The bag's value tiers (§3.1), and the curve they are read off | `scripts/ui/style.gd` (`Pal.T1/T2/T3`), `tools/bag_curve.gd` |
 | The smith's catalogue, and the forge recipes | `scripts/items/shop_db.gd` |
-| The quartermaster's stores — arrows, bag slots, hearts | `scripts/items/supply_db.gd` |
+| The quartermaster's stores — arrows, charges, rations, bag slots, hearts | `scripts/items/supply_db.gd` |
+| What a ration is called and what it does (§6.4) | `scripts/items/ration_db.gd` |
+| The pack's stacks and the meal's clock | `scripts/autoload/game_state.gd` (`rations`, `meal_id`) |
 | The alchemist's catalogue, and the brew recipes | `scripts/items/alchemy_db.gd` |
 | The jewelcrafter's slots, paths and rungs | `scripts/items/jewel_db.gd` |
 | The hero's five stats, drawn | `scripts/ui/menu/equip_panel.gd` |
