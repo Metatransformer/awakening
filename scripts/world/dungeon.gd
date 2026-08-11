@@ -1280,9 +1280,23 @@ func _shortcut_eye_high(root: Node3D, spot: Dictionary, tag: StringName) -> bool
 ## `SHAFT_R + 0.85` out from the face: clear of the leaves, which swing INTO the
 ## room (`LockedDoor.OPEN_DEG`), and still inside the 2.4 m doorway, so it reads
 ## as bracing the door rather than standing near it.
+##
+## **The urn is §0 rule 2 and it is not optional**, exactly as it is not optional
+## beside the eye above -- and this one was missing for a week, which is
+## `docs/ITEMS.md` §8 D13 and card #29. Burst charges are bought in the garrison
+## (`AlchemyDb`) and *nowhere else*: a player who descended with an empty pouch
+## stood in front of a pillar with no legal way through and no way to earn one,
+## which is the one thing GDD pillar 2 forbids. The urn holds a `ChargeCache` and
+## the sword breaks the urn, so the answer is reachable from a cold start.
+##
+## It holds **charges and not arrows**, and the difference between this line and
+## `_shortcut_eye_high`'s is the whole of `Urn`'s class note: *what it holds is
+## decided by the placer.* A room that rolled for its contents would make rule 2
+## a probability.
 func _shortcut_pillar_brace(root: Node3D, spot: Dictionary,
 		tag: StringName) -> bool:
 	var facing: Vector3 = spot["facing"]
+	var along := along_of(float(spot["yaw"]))
 	var pillar := PuzzleAtoms.make(PuzzleAtoms.CRACKED_PILLAR, tag)
 	if pillar == null:
 		return false
@@ -1291,6 +1305,24 @@ func _shortcut_pillar_brace(root: Node3D, spot: Dictionary,
 		.get("SHAFT_R", 0.42) + 0.85
 	pillar.position = spot["pos"] + facing * out
 	root.add_child(pillar)
+
+	# Off to the side of the doorway and further into the room than the pillar,
+	# for two reasons that point the same way: the blast has a 1.94 m radius
+	# (`K.BOMB_RADIUS`) and an urn inside it would be smashed by the cast that
+	# needed its contents, and a player has to be able to see the supply while
+	# standing where he reads the refusal. `_shortcut_eye_high` puts its pot at
+	# `along * 2.3`; this one goes the same distance sideways and a little
+	# further out, which clears the leaves' swing as well.
+	#
+	# Its own tag, like the eye's pot: `PuzzleAtoms.gates(URN)` is false so no
+	# gate would ever adopt it, but a flag keyed on a node NAME is one rename
+	# from being a different flag.
+	var pot := PuzzleAtoms.make(PuzzleAtoms.URN, StringName("%s_pot" % tag))
+	if pot != null:
+		pot.name = "ShortcutCache"
+		pot.set(&"holds", &"charges")
+		pot.position = spot["pos"] + along * 2.3 + facing * 2.6
+		root.add_child(pot)
 	return true
 
 

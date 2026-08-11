@@ -785,6 +785,16 @@ holding on the carrying screen precisely because it cannot be used to change it.
 > relationship the bottles below have, priced the same way, refilled only here.
 > Everything in this section is true today and stays true; nothing below changes.
 > Charges are a HUD counter beside the arrows, never a bag slot.
+>
+> **"Refilled only here" is now "refilled here, and once on floor 2"** (card #29,
+> 2026-08-11). It is not a softening of the rule above and it is not an arrow
+> supply: **nothing rolls charges into a room or a chest**, and the walk home is
+> still spent with what you bought. There is exactly one `ChargeCache`
+> underground and it is inside the urn braced against floor 2's shortcut, because
+> that door is a cracked pillar and a cracked pillar has no other answer — a
+> player who descended with an empty pouch met a gate he could not open and could
+> not earn (`docs/PUZZLES.md` §0 rule 2, `docs/ITEMS.md` §8 D13). The room
+> supplies the verb it demands. It supplies nothing else.
 
 The forge sells **permanence**: you buy a rung and it is yours. The alchemist
 sells a **stock** — four glass bottles, and what is in them at the moment you

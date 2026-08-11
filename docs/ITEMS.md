@@ -199,10 +199,14 @@ floor 1's VAULT door names in its refusal (`FloorDb.vault_key`)"*
 `docs/PUZZLES.md` gives it the only atom that can open a route the room planner
 did not draw. Its charges are arrows with a different noun: a count in the HUD
 column (`ArmamentDb.hand_count()`, `armament_db.gd:~141-145`), bought upstairs
-(§5) and **never refilled underground** (`Game.charges`,
-`game_state.gd:~100-103`). Spending your last charge on floor 2 is a statement
-about how deep you were planning to go — and it is also a way to be stuck, which
-is §8, D13.
+(§5) and **never refilled underground, with one exception that is a gate and not
+a supply** (`Game.charges`, `game_state.gd:~100-103`). Spending your last charge
+on floor 2 is a statement about how deep you were planning to go — and it used to
+be a way to be stuck, which was §8, D13. The exception is the `ChargeCache` in
+the urn braced against floor 2's shortcut: the one door in the game whose only
+answer is a Burst brings its own, the way the bow's eye brings its own arrows
+(`docs/PUZZLES.md` §0 rule 2). Nothing else on any floor hands out a charge, and
+the sentence above stays true everywhere else.
 
 ### 1.5 Sustain — *hold the Heat chain through one break*
 
@@ -559,10 +563,11 @@ SCOPE, METAGAME, PUZZLES and BESTIARY, and re-checked against the tree each time
 this file is revised. "Believe" names the reading that looks intended; it is a
 recommendation to whoever picks the card up, not a decision taken.
 
-**D1, D2, D3 and D4 are closed** (issue #25). Their entries are kept, struck
-through, with what was actually done — a defect list whose closed rows are
-deleted is a list that cannot tell you whether a thing was decided or merely
-forgotten. **D5–D17 are open and unreconciled.**
+**D1, D2, D3 and D4 are closed** (issue #25), and **D13 is closed** (issue #29,
+2026-08-11). Their entries are kept, struck through, with what was actually done
+— a defect list whose closed rows are deleted is a list that cannot tell you
+whether a thing was decided or merely forgotten. **D5–D12 and D14–D17 are open
+and unreconciled.**
 
 ### ~~D1 — the twelve relics in code are not the twelve in the GDD~~ *(closed)*
 
@@ -672,9 +677,9 @@ are the same row and the same camera reading `0 / 12 charges` and `3 / 12
 charges`; `c_03_hud.png` is the HUD's working cell carrying the 3; `c_07_blast.png`
 is the Burst going off on floor 1 with the cell reading 2.
 
-**It is not the whole hole, and the rest is D13.** Buying charges upstairs does
-not help a player who descends with none and meets floor 2's `pillar_brace`
-shortcut, which is a cracked pillar filling a doorway. See D13.
+**It was not the whole hole, and the rest was D13** — closed 2026-08-11. Buying
+charges upstairs does not help a player who descends with none and meets floor
+2's `pillar_brace` shortcut; the floor supplies them now. See D13.
 
 ### D5 — two of the six usable items do not exist in any form
 
@@ -768,10 +773,24 @@ revision** — leaving a one-line omission in a table already being edited "for
 that document's owner" was the wrong call. Adding it falsified the row below it,
 which is D17.
 
-### D13 — there is no underground source of charges, and a shortcut door needs one *(severe, new 2026-08-10)*
+### D13 — there is no underground source of charges, and a shortcut door needs one *(severe, new 2026-08-10; **CLOSED** 2026-08-11, card #29)*
 
 Two sessions found the same hole from opposite ends on the same night, which is
 why this is a row rather than a footnote on D4.
+
+> **Closed as prescribed.** `ChargeCache` (`scripts/world/charge_cache.gd`) is
+> the charge pickup, on `ArrowBundle`'s pattern and through
+> `Game.add_charges()`; `Urn.holds` gained a `&"charges"` row so the contents
+> stay the placer's decision; and `Dungeon._shortcut_pillar_brace` stands one urn
+> wide of floor 2's doorway and outside `K.BOMB_RADIUS`. **Nothing rolls it** —
+> there is no `charge_chance` and there must not be, for the reason the last
+> paragraph below gives. `tools/directors/charge_supply.gd` walks a hero from an
+> empty pouch to an open shortcut without granting itself a charge anywhere.
+> No number in `docs/SCOPE.md` §1 moved: no item row, no new atom (the urn is
+> the atom), no screen, no mechanic.
+
+The rest of this entry is the defect as it was found, kept because the argument
+in it is what the fix had to obey.
 
 - **From the item side** (D4, above): nothing sold charges at all. That half is
   closed — the alchemist sells them now.

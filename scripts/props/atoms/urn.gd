@@ -21,11 +21,13 @@ extends PuzzleAtom
 ## scan both look for (`docs/CONTRACT.md` §8). Any blow breaks it -- there is no
 ## health, because an urn with hit points is a fight.
 
-## What comes out. `&"arrows"` for a bundle, `&"hearts"` for health, `&""` for
-## nothing. Set by whoever placed it (see the class note).
+## What comes out. `&"arrows"` for a bundle, `&"charges"` for a Burst cache,
+## `&"hearts"` for health, `&""` for nothing. Set by whoever placed it (see the
+## class note).
 @export var holds: StringName = &"arrows"
-## How many arrows, or how many quarter-hearts. `ArrowBundle.FLOOR_COUNT` and one
-## half-heart are the defaults, which is what a single urn is worth.
+## How many arrows, how many charges, or how many quarter-hearts.
+## `ArrowBundle.FLOOR_COUNT`, `ChargeCache.HOLDS` and one half-heart are the
+## defaults, which is what a single urn is worth.
 @export var amount: int = 0
 
 const HEIGHT := 0.92
@@ -102,6 +104,25 @@ func _spill() -> void:
 		&"arrows":
 			var n := amount if amount > 0 else ArrowBundle.FLOOR_COUNT
 			ArrowBundle.drop(scene, at, n, Vector3.UP * 0.4)
+		&"charges":
+			# The same shape as the arrows, for the same rule -- a `ChargeCache`
+			# is `ArrowBundle` for the working (`docs/PUZZLES.md` §0 rule 2,
+			# `docs/ITEMS.md` §8 D13). NOT a direct `Game.add_charges()` the way
+			# the hearts below are: hearts have no pickup prop in this game and
+			# inventing one would be a new system, whereas charges are a counted
+			# consumable that the bow's supply already showed how to lie on a
+			# floor. It also keeps the take REFUSABLE -- a hero who arrives
+			# already stocked leaves the cache standing instead of having the
+			# overflow clamped away by a grant he never asked for.
+			# Flung DOWN, unlike the arrows above, and the difference is measured
+			# rather than stylistic: `at` is the pot's mouth at 0.45 m and the
+			# arrows' `UP * 0.4` leaves a bundle hanging at 0.85 m, which is
+			# chest height on a 1.65 m hero. A `ChargeCache` is a walk-over floor
+			# pickup and it has to LIE on the floor -- one that floats reads as a
+			# thing the room is presenting rather than a thing that fell out of a
+			# broken pot, and the tween is the only gravity either pickup has.
+			var c := amount if amount > 0 else ChargeCache.HOLDS
+			ChargeCache.drop(scene, at, c, Vector3(0.0, -0.30, 0.0))
 		&"hearts":
 			# Straight to the hero. There is no heart pickup prop in this game --
 			# health comes from rest, potions and this -- and inventing one to

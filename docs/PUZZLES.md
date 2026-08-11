@@ -12,7 +12,11 @@ proved end to end by `tools/directors/puzzle_loop.gd`. See **§9, as built**.
 **§5.1 is built** — the shortcut door has stopped being a check. It is a
 `ShortcutGate` (`scripts/props/shortcut_gate.gd`) watching an atom of **exactly
 tier N**, proved by `tools/directors/shortcut_puzzle.gd`. Owning the Bow no
-longer opens floor 1's; shooting the eye does.
+longer opens floor 1's; shooting the eye does. **And since 2026-08-11 it obeys
+§0 rule 2 on both floors that have an ammunition cost**: floor 2's braced pillar
+stands beside an urn of Burst charges (`scripts/world/charge_cache.gd`), proved
+by `tools/directors/charge_supply.gd`. It shipped without one for a week, which
+is `docs/ITEMS.md` §8 D13 and card #29.
 
 Still design: phase 2's remaining three atoms.
 
@@ -397,9 +401,32 @@ beside it; `tools/directors/shortcut_puzzle.gd` is the proof, 54 checks.
 | Floor | Key | Atom | Prefab |
 |---|---|---|---|
 | 1 | Bow | `eye_switch` | `eye_high` — eye at 2.05 m, above the sword's reach, with an urn of arrows beside it (§0 rule 2) |
-| 2 | Burst | `cracked_pillar` | `pillar_brace` — a pillar standing in the door's own mouth; the fall is the opening |
+| 2 | Burst | `cracked_pillar` | `pillar_brace` — a pillar standing in the door's own mouth; the fall is the opening. An urn of **charges** stands wide of the doorway (§0 rule 2, and see below) |
 | 3 | Hookshot | `hook_ring` | `ring_span` — a ring over the lintel |
 | 4 | Far Lantern | — | none; a plain lock (§1) |
+
+**Rule 2 is not decoration on the eye row, and floor 2 shipped a week without
+it** (card #29, `docs/ITEMS.md` §8 D13). Burst charges are sold in the garrison
+and nowhere else, so `pillar_brace` was a gate whose only answer could not be
+obtained underground — the exact dead end §0 forbids. It now carries a
+`ShortcutCache`: an `Urn` with `holds = &"charges"`, spilling a `ChargeCache`
+(`scripts/world/charge_cache.gd`, `ArrowBundle`'s shape for the working).
+
+Three things about it are load-bearing and none is obvious:
+
+- **It stands clear of the blast.** 2.66 m from the pillar against a 1.94 m
+  `K.BOMB_RADIUS` — an urn inside the radius is an urn destroyed by the cast that
+  needed what was in it, which is the dead end again with one extra step.
+- **It holds two, not one.** One charge and one missed arc puts the player back
+  in front of the pillar with nothing. Two is still under `AlchemyDb`'s batch of
+  three, so the floor is not a cheaper counter.
+- **A sword opens it, because a sword is all a cold start guarantees** — and the
+  ring has to be stepped back onto the sword to swing, since a drawn working owns
+  both shoulder buttons (`HeroCombat._tick_light_button`).
+
+`tools/directors/charge_supply.gd` is the proof and it grants itself nothing:
+`Game.reset()`, the item but never its ammunition, and every charge it spends came
+off the floor.
 
 **It pays §5.2's amendment**, which is a rule for all three shapes: the landing
 behind the door holds the way down, **a chest**, and a sounding stone offering
@@ -821,7 +848,8 @@ Sluice-Keeper dies and the second stone lights).
 | 5.1 | The shortcut door, no longer a check | `scripts/props/shortcut_gate.gd` — `ShortcutGate`, a `PuzzleGate` keeping `LockedDoor`'s **permanent** flag |
 | 5.1 | The pool, exactly tier N | `Dungeon._shortcut_pool` / `_shortcut_tier`; one atom per floor, no seed roll |
 | 5.1 | The three prefabs | `Dungeon.SHORTCUT_PREFABS` — `_shortcut_eye_high` (T1), `_shortcut_pillar_brace` (T2), `_shortcut_ring_span` (T3) |
-| 5.1 | The room that brings its own ammunition | `_shortcut_eye_high`'s `ShortcutUrn` — §0 rule 2 |
+| 5.1 | The room that brings its own ammunition | `_shortcut_eye_high`'s `ShortcutUrn` and `_shortcut_pillar_brace`'s `ShortcutCache` — §0 rule 2, both halves of it |
+| 5.1 | Charges on a floor | `scripts/world/charge_cache.gd` — `ChargeCache`, `Urn.holds = &"charges"`; proved by `tools/directors/charge_supply.gd` |
 | 5.1 | The landing's chest and stone | `Dungeon._land_shortcut_rewards`, on `opened`, with the already-open restore |
 | 5.2 | `gate_room` anchor | `Dungeon._room_for(&"gate_path")` — 0.7 along the route to `deepest`, never either end |
 | 5.2 | The gate itself | A `PuzzleGate` **in the doorway the floor continues through**, not on a blank wall |

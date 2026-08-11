@@ -2190,6 +2190,27 @@ the chest's roll happens **before** its loot rolls and always, whether or not it
 lands, so adding it cannot shift a seed's contents.
 
 ```gdscript
+# scripts/world/charge_cache.gd — Burst charges on the floor. NOT a LootMote.
+ChargeCache.drop(parent, at, count := HOLDS, fling := Vector3.ZERO) -> ChargeCache
+ChargeCache.HOLDS                   # 2 — what one cache is worth
+```
+
+`ArrowBundle`'s shape for the working, and everything in the paragraph above is
+true of it: charges live on `Game`, so it never touches the bag, it is walk-over
+with no button, and a **full pouch** refuses and leaves it lit on the floor.
+`Game.add_charges()` is the only writer it goes through — the same seam the
+alchemist's `CHARGES X3` line uses, and the one that emits `Bus.ammo_changed`.
+
+**Nothing rolls it.** Unlike arrows there is no `charge_chance` on `Dungeon` or
+`Chest` and there must not be: `docs/GDD.md` §6.5 makes charges a stock you
+bought before you left, and a floor that scattered them would undo the decision
+`Game.charges` exists to pose. Exactly one enters a floor, out of the `Urn` that
+`Dungeon._shortcut_pillar_brace` braces beside floor 2's shortcut
+(`Urn.holds = &"charges"`), because that door is the one gate in the game whose
+only answer is a Burst — `docs/PUZZLES.md` §0 rule 2. It carries no `Atlas`
+marker: it is never placed by `_populate`, so it has none to clear.
+
+```gdscript
 # scripts/items/fletching.gd — arrows out of the bag, anywhere.
 Fletching.can_fletch() -> bool      # short() is empty AND quiver_room() > 0
 Fletching.fletch() -> int           # arrows made; 0 means it refused
