@@ -1782,3 +1782,75 @@ of which existed when that number was written. At `0.42h` a hit from directly
 behind puts the arc at (640, 662), which threads between the vitals pole's right
 edge (384) and the bag rim's left (1037) without touching either.
 
+
+## 15.14 The lock-on bracket was correct and the director could not see it
+
+Decision 31 asks the reticle to say *what kind of thing is this* in three channels
+at once — hue, corner count, arm length — so that any one of them is sufficient on
+its own. `Hud._draw_lock_on` implements it exactly as written. Proving it took
+three attempts, and the first two failed on the photograph rather than on the HUD.
+
+**Attempt 1 — count palette pixels in the bracket's box.** The hostile case came
+back `rust=73 cyan=0 moth=178` and the director declared the RUST bracket "not
+mostly its own colour". `MOTH` is `807868`, a mid-khaki, and the garrison is a
+sunlit courtyard of khaki grass and pine.
+
+**Attempt 2 — photograph the same box with the lock off and again with it on, and
+count only what changed.** Better in principle and still wrong: 43% of the frame
+differed between the two shots, because the courtyard is full of walking NPCs and
+guttering torches. `rust=99 moth=95` is a four-pixel margin over a moving scene.
+
+**Attempt 3 — render at 1280×720 and count exactly.** This is the real diagnosis,
+and it is §15.9's supersampling arriving somewhere it does actual damage rather
+than merely flattering a hairline. `project.godot` sets `window/size/mode=2`
+(MAXIMIZED); this Mac opens the harness window at 6880×2756, `stretch/mode` is
+`canvas_items` so the 3D renders at the window's true backing resolution, and
+`shoot.gd` Lanczos-downscales the result to 1280×720. That is a 5.4× supersample,
+and **a supersample is a blur**: measured on `eb_06_lock_hostile.png`, an
+eight-stroke RUST bracket that should be ~128 pixels of exactly `b83818` came back
+as **5**. Everything else was an intermediate blend of RUST and courtyard — and
+MOTH, sitting in the middle of the palette, collected those blends from every
+direction.
+
+`enemy_bars.gd` now does what `perf_probe.gd` already did: sets the OS window to
+1280×720 for real (`--size` alone does not — that sets the viewport *inside* the
+window). At native resolution the brackets carry no alpha and land as the exact
+authored bytes, so a tolerance of 3/255 is meaningful:
+
+| lock | rust | cyan | moth | strokes × arm × width | ink bbox |
+|---|---|---|---|---|---|
+| hostile | **124** | 0 | 0 | 8 × 8 × 2 = 128 | 54 px wide |
+| hookable | 0 | **188** | 0 | 8 × 12 × 2 = 192 | 76 px wide |
+| neutral | 0 | 0 | **38** | 4 × 5 × 2 = 40 | — |
+
+All three channels are now measured rather than described. The bbox column proves
+decision 22's sign flip without reference to hue: the target box is 52 px across,
+so arms lying *inward* along it give 54 px of ink and arms pointing *outward* give
+52 + 2×12 = 76.
+
+**Two of `enemy_bars`' four standing failures were the same blur.** `asleep` and
+`asleep_hurt` both pass at native resolution and had been failing on blend
+artefacts. The two that remain are scene drift and are not the HUD: a persistent
+13 px × 3 px band of near-RUST at x≈864, y≈350 is the **garrison smith's stack of
+orange-red crates**, which the room gained after this director was written. That
+belongs to whoever holds the flaky-directors card, not to this one.
+
+### And then the frame said the neutral bracket was invisible
+
+With every count passing, the picture disagreed. Of the neutral bracket's two 5 px
+MOTH corners, exactly one could be found by eye — and only because it happened to
+fall across a dark stone step. Its diagonal partner was gone into the grass.
+
+This is the same defect as §15.13's arc, and the HUD already knew the answer two
+functions away: `_draw_enemy_bars` frames every bar in VOID precisely because "2 px
+of RUST on a lit sandstone wall is nearly the wall". The reticle never got that
+treatment and it is the element that needs it most, being the one thing on the HUD
+whose background is *whatever the player happens to be aiming at*.
+
+So every bracket stroke is now laid on a VOID keyline 1 px proud on each side.
+Deliberately not the other two repairs available: a longer arm or a brighter hue
+would each spend one of decision 31's three meaning-carrying channels to buy
+legibility. An outline spends none of them, and the counts above are unchanged by
+it — the same 124 / 188 / 38 before and after. Both neutral corners are now plainly
+legible as a diagonal pair, which is the entire message that shape was chosen to
+send.

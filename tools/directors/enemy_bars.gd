@@ -36,6 +36,11 @@ const MAX_THICK := 4
 ## cluster -- the health bar's RUST ghost lives there and is not a monster.
 const SCAN_BOTTOM := 0.75
 
+## How far a pixel may sit from an authored palette colour and still count as that
+## colour, per channel, in `_bracket_hues`. Nearly exact on purpose: the lock
+## brackets carry no alpha, so at native resolution they ARE the palette bytes.
+const HUE_TOL := 0.012
+
 ## Where each case stands. Off the hero's own axis on purpose -- a monster parked
 ## dead ahead is behind the hero's shoulders from a boom camera, and a shot of a
 ## bar floating over the player's head proves nothing about whose bar it is.
@@ -70,6 +75,35 @@ var _fails := 0
 func run(rig) -> void:
 	_out = rig.arg("out", "/tmp/ebar/x.png").get_base_dir()
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+
+	# **Render at 1280x720 for real, because this director reads pixels.**
+	#
+	# `project.godot` sets `window/size/mode=2` (MAXIMIZED) and this Mac opens the
+	# harness window at 6880x2756 — nineteen megapixels for a 1280x720 canvas.
+	# `stretch/mode=canvas_items` scales the 2D but the 3D renders at the window's
+	# true backing resolution, and `shoot.gd` then Lanczos-downscales the shot to
+	# 1280x720. That is a 5.4x supersample, and a supersample is a BLUR: measured
+	# on `eb_06_lock_hostile.png`, an eight-stroke RUST bracket that should be ~128
+	# pixels of exactly `c85038` came back as **5**. Every other pixel of it was an
+	# intermediate blend of RUST and the courtyard.
+	#
+	# Which is fatal to a director whose entire method is "count pixels of a
+	# palette colour". `MOTH` (`807868`) sits in the middle of the palette, so it
+	# collects those blends from every direction: the hostile bracket measured
+	# rust=99 moth=95, and "the hostile bracket is not mostly its own colour" was
+	# a true statement about a blurred photograph of a correct bracket.
+	#
+	# `perf_probe.gd` already has the fix — make the OS window ACTUALLY the size,
+	# which `--size` alone does not do (that sets the viewport inside the window).
+	# At native resolution a 2 px stroke is 2 pixels of the exact authored colour
+	# and `_flat`'s tolerances mean what they say they mean.
+	#
+	# The supersampling itself is not this director's to fix (it is carded as #35).
+	# This is one director declining to measure through it.
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	DisplayServer.window_set_size(Vector2i(1280, 720))
+	await rig.wait_frames(4)
+	print("BARS render size=%s" % [DisplayServer.window_get_size()])
 
 	var scene: Node = rig.current_scene
 	var hero: Node3D = rig.get_nodes_in_group(&"player")[0]
@@ -154,11 +188,110 @@ func run(rig) -> void:
 	print("BARS elite height=%.2f elite=%s" % [
 		elite.head_point().y - elite.global_position.y, elite.elite])
 
+	# --- G. The lock bracket says WHAT KIND, three ways ---------------------
+	# Decisions 16, 22 and 31. The bracket used to be RUST for everything; it now
+	# carries hue, shape and arm length together, so that "can I hook that" is not
+	# a red-against-cyan judgement made mid-fight — which is the commonest form of
+	# colour blindness there is, on the one element the player is looking directly
+	# at.
+	#
+	# The targets are bare `Node3D`s in the groups `Targeting` walks, and the lock
+	# is driven straight through `Bus.target_acquired` exactly as case E does.
+	# Building a real hookshot anchor would be testing the anchor.
+	Bus.target_lost.emit()
+	# Beside the GOBLIN and not beside the sleeper: the sleeper stands in front of
+	# the garrison's cyan-lit gate, and a bracket measured against that background
+	# answers a question about the courtyard. The hostile case measured clean here
+	# (rust=124, cyan=0) which is what makes this the honest spot.
+	var hookable := _dummy(scene, AT_GOBLIN + Vector3(2.2, 0.0, 0.0),
+		[&"targetable", &"hookable"])
+	var neutral := _dummy(scene, AT_GOBLIN + Vector3(-2.2, 0.0, 0.0),
+		[&"targetable"])
+	await rig.wait_frames(6)
+
+	# Three locks, three photographs, and the count of each bracket colour inside
+	# the box the bracket occupies. What makes this measurable at all is `run`'s
+	# native-resolution window: two earlier attempts at this beat both failed on
+	# the courtyard rather than on the HUD, because a supersampled 2 px stroke is
+	# not the colour it was drawn in.
+	for case: Array in [[goblin, Pal.RUST, "hostile"],
+			[hookable, Pal.CYAN, "hookable"], [neutral, Pal.MOTH, "neutral"]]:
+		var node: Node3D = case[0]
+		var want: Color = case[1]
+		var label: String = case[2]
+
+		Bus.target_acquired.emit(node)
+		await _settle(rig, [[goblin, AT_GOBLIN], [sleeper, AT_SLEEPER]])
+		var on_path := _out.path_join("eb_06_lock_%s.png" % label)
+		await rig.capture(on_path)
+
+		var on := Image.load_from_file(on_path)
+		if on == null:
+			_want(false, "could not read back %s" % on_path)
+			continue
+		var counts := _bracket_hues(on, hero, node)
+		print("BARS lock_%s rust=%d cyan=%d moth=%d" % [
+			label, counts[0], counts[1], counts[2]])
+		var got: int = counts[[Pal.RUST, Pal.CYAN, Pal.MOTH].find(want)]
+		var most: int = maxi(counts[0], maxi(counts[1], counts[2]))
+		_want(got > 0 and got == most,
+			"the %s bracket is not mostly its own colour (rust=%d cyan=%d moth=%d)"
+				% [label, counts[0], counts[1], counts[2]])
+	Bus.target_lost.emit()
+
 	if _fails == 0:
 		print("BARS OK all cases passed")
 
 
 # --- Setup helpers ----------------------------------------------------------
+
+## A bare targetable. It has no health, no model and no `target_point()`, which
+## is the point: `Hud._lock_kind` reads GROUPS, and a dummy proves it reads them
+## rather than sniffing for an `Enemy`.
+func _dummy(scene: Node, at: Vector3, groups: Array) -> Node3D:
+	var n := Node3D.new()
+	scene.add_child(n)
+	n.global_position = at
+	for g: StringName in groups:
+		n.add_to_group(g)
+	return n
+
+
+## How many pixels of each of the three bracket colours are inside the box the
+## bracket is drawn in. Returns [rust, cyan, moth].
+##
+## The box is the bracket's own half-extents (26 x 34 reference px) plus the
+## longest arm, unprojected about the same point `Hud._draw_lock_on` uses. It has
+## to be tight: this scene has a cyan-lit gate in it and every monster on screen
+## wears a RUST health bar, so a whole-frame count answers a different question
+## every time the camera moves.
+##
+## `HUE_TOL` does the other half. The brackets are drawn with no alpha, straight
+## from `Pal`, so at the native resolution `run` forces they land as the EXACT
+## authored bytes -- and nothing in a courtyard of photographed sandstone is
+## exactly `807868`. A loose tolerance is what made the hostile case read moth=95
+## against rust=99 off the flagstones.
+func _bracket_hues(img: Image, hero: Node3D, target: Node3D) -> Array:
+	var cam := hero.get_viewport().get_camera_3d()
+	if cam == null:
+		return [0, 0, 0]
+	var c := cam.unproject_position(target.global_position + Vector3(0.0, 0.8, 0.0))
+	var s := Vector2(img.get_size())
+	var half := Vector2(Pal.px(26.0, s.y), Pal.px(34.0, s.y)) + Vector2.ONE * Pal.px(14.0, s.y)
+	var box := Rect2(c - half, half * 2.0).intersection(Rect2(Vector2.ZERO, s))
+	var out := [0, 0, 0]
+	var wants := [Pal.RUST, Pal.CYAN, Pal.MOTH]
+	for y in range(int(box.position.y), int(box.end.y)):
+		for x in range(int(box.position.x), int(box.end.x)):
+			var px := img.get_pixel(x, y)
+			for i in 3:
+				var w: Color = wants[i]
+				if (absf(px.r - w.r) < HUE_TOL and absf(px.g - w.g) < HUE_TOL
+						and absf(px.b - w.b) < HUE_TOL):
+					out[i] = int(out[i]) + 1
+	return out
+
+
 
 func _spawn(scene: Node, kind: StringName, at: Vector3, elite: bool) -> Enemy:
 	var e := Enemy.new()

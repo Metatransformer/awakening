@@ -863,8 +863,24 @@ are protecting, and the UI should say so.
 
 Not a fairy, not a triangle.
 
-- **Four corner brackets**, 8 px arms, 2 px thick, framing the target's projected
-  AABB. RUST hostile, EXTRACT CYAN hookable/interactable, MOTH neutral.
+- **Three kinds, three channels, any one sufficient.** Hue alone was the whole
+  answer once, and RUST against CYAN is the commonest colour-blind pair there is —
+  on the one widget the player looks directly at while fighting. So each kind
+  differs in hue, corner count *and* arm length:
+
+  | kind | hue | corners | arms |
+  |---|---|---|---|
+  | hostile | RUST | four, arms **inward** along the edges | 8 px |
+  | hookable | CYAN | four, arms **outward** off the corners | 12 px |
+  | neutral | MOTH | **two** (top-left, bottom-right) | 5 px |
+
+  2 px thick, framing the target's projected AABB at half-extents (26, 34).
+- **Every stroke sits on a 1 px VOID keyline.** This is the only widget whose
+  background is *whatever the player is aiming at*, and without the keyline the
+  neutral bracket was invisible in the garrison — MOTH is a mid-khaki and so is
+  sunlit grass. Same fix as the enemy bar's frame and the damage arc's underline;
+  deliberately not a longer arm or a brighter hue, because both of those are
+  already carrying meaning in the table above.
 - **Bracket positions quantize to the 480×270 internal grid before scaling up**,
   so the reticle jitters in lockstep with the world's vertex snapping. This is
   the cohesion detail that sells the treatment: the UI element that touches the
@@ -1076,7 +1092,7 @@ point, and a fourth right edge is what made the column read as ragged.
 
 | Element | Size |
 |---|---|
-| Lock brackets | half-extent (26, 34), arm 8, 2 px, quantized to 480×270 |
+| Lock brackets | half-extent (26, 34), 2 px on a 1 px VOID keyline, quantized to 480×270; arm 8 inward / 12 outward / 5 on two corners (§5.5) |
 | Enemy health bar | 20 × 2 px (×2.2 locked), 1 px frame (BONE if elite), ASH@85% track, RUST fill, ≤ 22 m, LOS-gated |
 
 #### Rows deleted from the old table, and why

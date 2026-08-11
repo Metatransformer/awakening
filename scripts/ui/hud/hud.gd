@@ -2702,6 +2702,24 @@ func _draw_crosshair(s: Vector2) -> void:
 		_canvas.draw_rect(Rect2(a, (b - a) + Vector2(w, w)), col)
 
 
+## What the lock is pointing at, as one of three words. `targetable` is the group
+## the targeting system walks, and it is deliberately wider than `enemy` — a
+## hookshot anchor and a shopkeeper are both things you can put the reticle on,
+## and the bracket has to say which without the player reading anything.
+##
+## Order matters: a hookable ENEMY exists (a chandelier-hanging wraith is the
+## obvious one) and it should read as hostile first, because what it is going to
+## do to you outranks what you could do to it.
+func _lock_kind(t: Node3D) -> StringName:
+	if t == null:
+		return &"neutral"
+	if t.is_in_group(&"enemy") or t.is_in_group(&"boss"):
+		return &"hostile"
+	if t.is_in_group(&"hookable"):
+		return &"hookable"
+	return &"neutral"
+
+
 ## Four corner brackets, not a fairy and not a triangle. Positions quantize to
 ## the 480x270 internal grid so the reticle jitters in lockstep with the world's
 ## own vertex snapping -- the UI element that touches the world obeys the world's
@@ -2721,18 +2739,74 @@ func _draw_lock_on(s: Vector2) -> void:
 	var grid := s / Vector2(480.0, 270.0)
 	c = (c / grid).round() * grid
 
-	var arm := Pal.px(8.0, s.y)
-	var w := Pal.px(2.0, s.y)
+	# **What KIND of thing is this**, in three channels at once — decisions 16, 22
+	# and 31. Colour was the whole answer before, and "can I hook that" being a hue
+	# on a bracket mid-fight is the exact failure §13.3 raises: RUST against CYAN
+	# is a red/green pair, which is the commonest form of colour blindness there
+	# is, and this is the reticle you are looking directly at while fighting.
+	#
+	#   hostile  RUST  four corners, arms INWARD along the edges   8 px
+	#   hookable CYAN  four corners, arms OUTWARD off the corners  12 px
+	#   neutral  MOTH  TWO corners (top-left, bottom-right)        5 px
+	#
+	# Shape, hue and arm length. Any one of the three is sufficient on its own,
+	# which is the construction rule decision 31 states — and none of it is a new
+	# widget: it is this same loop with a sign, a length and a corner count.
+	var kind := _lock_kind(_lock_target)
 	var col := Pal.RUST
-	for sx in [-1.0, 1.0]:
-		for sy in [-1.0, 1.0]:
-			var corner := c + Vector2(half.x * sx, half.y * sy)
-			_canvas.draw_rect(Rect2(
-				corner.x - (arm if sx > 0 else 0.0), corner.y - w * 0.5,
-				arm, w), col)
-			_canvas.draw_rect(Rect2(
-				corner.x - w * 0.5, corner.y - (arm if sy > 0 else 0.0),
-				w, arm), col)
+	var arm := Pal.px(8.0, s.y)
+	var outward := false
+	# Two corners and not two edges: a diagonal pair still reads as a box, and it
+	# is unmistakably LESS than four at a glance, which is the whole message —
+	# this is a thing you can talk to, not a thing you are fighting.
+	var corners := [Vector2(-1.0, -1.0), Vector2(1.0, 1.0), Vector2(-1.0, 1.0),
+		Vector2(1.0, -1.0)]
+	if kind == &"hookable":
+		col = Pal.CYAN
+		arm = Pal.px(12.0, s.y)
+		# The arms point away from the box rather than lying along it, which is
+		# the hookshot's own ring rather than a gunsight. §2 makes CYAN mean the
+		# way out, and this is the one shape that means it too.
+		outward = true
+	elif kind == &"neutral":
+		col = Pal.MOTH
+		arm = Pal.px(5.0, s.y)
+		corners.resize(2)
+
+	# **Every stroke is laid on a VOID keyline first**, 1 px proud on each side.
+	#
+	# This bracket is drawn over the WORLD, not over a known background, and the
+	# HUD already knows what that costs: `_draw_enemy_bars` two functions down
+	# frames every bar for exactly this reason, because "2 px of RUST on a lit
+	# sandstone wall is nearly the wall". The reticle never got the same
+	# treatment and it needed it most — rendered in the garrison, the neutral
+	# bracket was INVISIBLE. MOTH (`807868`) is a mid-khaki, the courtyard is lit
+	# khaki grass and pine, and of its two 5 px corners exactly one could be found
+	# by eye, and only because it happened to fall across a dark step.
+	#
+	# The keyline is the right repair rather than a longer arm or a brighter hue,
+	# because arm length and hue are two of the three channels decision 31 uses to
+	# say WHICH KIND of thing this is. Changing either to fix legibility spends a
+	# channel that is already carrying meaning. An outline costs none of them.
+	#
+	# Same argument as §15.13's damage arc, which was invisible over the same
+	# grass and was fixed the same way.
+	var w := Pal.px(2.0, s.y)
+	var key := Pal.px(1.0, s.y)
+	for k: Vector2 in corners:
+		var sx := k.x
+		var sy := k.y
+		var corner := c + Vector2(half.x * sx, half.y * sy)
+		# Inward: from a right-hand corner the arm runs back to the LEFT. Outward
+		# flips exactly that, which is decision 22's "sign flip" and nothing else.
+		var hx := (arm if (sx > 0) != outward else 0.0)
+		var vy := (arm if (sy > 0) != outward else 0.0)
+		var across := Rect2(corner.x - hx, corner.y - w * 0.5, arm, w)
+		var down := Rect2(corner.x - w * 0.5, corner.y - vy, w, arm)
+		_canvas.draw_rect(across.grow(key), Pal.VOID)
+		_canvas.draw_rect(down.grow(key), Pal.VOID)
+		_canvas.draw_rect(across, col)
+		_canvas.draw_rect(down, col)
 
 	# The bar that used to hang 6 px under this bracket is gone. It is now drawn by
 	# `_draw_enemy_bars`, over the target's HEAD, through the same path every other
