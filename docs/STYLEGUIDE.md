@@ -423,7 +423,7 @@ being a shape you recognise peripherally. More containers means denser ticks.
 
 | | |
 |---|---|
-| Origin | x `0.031` (40), top y `0.899` (647) |
+| Origin | x `0.031` (40), top y `0.882` (635) |
 | Bar | `0.268` w (343 px) × 15 px, fixed at every max-health value |
 | Ticks | 2 px VOID full height at heart boundaries; 1 px VOID at 45% height at quarters |
 | Filled | VITAL | Empty | ASH @60% |
@@ -452,11 +452,116 @@ unit it is ever spent in.
 - **Damage ghost:** cells just lost stay lit in RUST for 400 ms, then drain
   right-to-left over 250 ms in 4 discrete steps. *How much you just lost* is the
   information; the new total is secondary.
-- **Low health (≤3 quarters):** empty cells go VOID, filled cells pulse
-  VITAL↔BONE at 2 Hz. No red screen vignette.
+- **Low health (≤3 quarters):** the track goes VOID and the fill pulses
+  **VITAL↔VOID** at 2 Hz. No red screen vignette.
+
+  It was VITAL↔BONE until 2026-08-10 and that was wrong in two ways a rendered
+  frame shows and a reading of the source does not. BONE is *exactly* the stamina
+  fill's colour in the row 19 px below, so for half of every cycle the most
+  urgent state in the game wore another instrument's hue; and BONE is *brighter*
+  than VITAL, so the bar got lighter as the player got closer to death — the
+  alarm running backwards. Blinking to the track colour reads as the bar failing,
+  which is the sentence. RUST was the other candidate and is stamina's
+  *exhausted* colour, which trades one collision for the same one a row down.
 - **Extraction restore:** cells refill left-to-right at 40 ms/cell with a 1-frame
   BONE flash each — a full bar takes 0.8 s. The heal is the reward for leaving
   and it should be watched and counted, not granted in a frame.
+
+### 5.1c Magic — the only bar that does not come back
+
+Third in the pole, under stamina. It is the charged spin's cost (`K.MAGIC_SPIN`,
+a budget of four) and **the only meter here that never refills on its own** —
+`Game.fill_magic` is called on entering a dungeon, on extracting and on dying,
+and nowhere else. COBALT, which is also `Pal.RARITY`'s rare tier; the reuse is
+safe because rarity colour appears on item names and loot rims and never as a
+meter in this pole, and COBALT is the only saturated blue that is not CYAN, which
+is reserved for the way out. The fill drops to MOTH below one spin: you have not
+lost anything, you have simply spent your spins, so RUST would overstate it.
+
+Ticked, at each spin still in the bar, because here the fill and the ticks
+measure the same quantity — the rule in §5.1d's second paragraph.
+
+**Why a bar and not a numeral, when charges are a numeral.** Both are resources
+that do not come back, and they get a 178 px meter and eight pixels of text
+respectively, which looks like an inconsistency and is a real one until you say
+why. Spins are spent *mid-swing*, on a trigger hold, with no menu and no pause; a
+length read peripherally is the right instrument for that and a numeral is not.
+Charges are spent deliberately, at a distance, on a thing you aimed at. Two
+resources that do not refill, spent at two tempos, correctly get two instruments.
+Neither document said so before 2026-08-10 and that omission is what made it look
+like drift.
+
+| | |
+|---|---|
+| Origin | x `0.031` (40), top y stamina bottom + 6 px (668) |
+| Bar | `0.52 ×` health width (178 px) × **6 px** |
+| Filled | COBALT, or MOTH below `K.MAGIC_SPIN` | Empty | ASH @60% |
+| Ticks | 1 px VOID at each `K.MAGIC_SPIN` boundary |
+
+### 5.1d Heat — dungeon only, and deliberately not ticked
+
+The fill is **time** — how much of the window is left before the chain steps down
+— and the number beside it is **money**, what loot swept right now is worth. They
+are adjacent because the decision the bar exists to provoke is the trade between
+them: the multiplier is only worth chasing for as long as the fill lasts, and the
+fill gets *shorter* the higher the multiplier goes.
+
+**No tier ticks.** This was tried the other way first and photographed: health
+and stamina are both ticked, so ticking this looked like consistency — but on
+those two the fill and the ticks measure the *same quantity*, and here they would
+not. Four ticked segments under a nearly-full bar read as "4 of 4 tiers" at Warm,
+which is the exact opposite of true.
+
+**The track is drawn at zero.** This is the rule the whole of §5.6's ALWAYS list
+now obeys, and it was written here first: *an instrument that only appears once
+you are already doing well teaches nobody.* The multiplier is drawn at `x1.0` for
+the same reason — hiding it until tier 1 means the player meets it for the first
+time in the middle of a fight.
+
+| | |
+|---|---|
+| Origin | x `0.031` (40), top y magic bottom + 4 px (678) |
+| Bar | `0.44 ×` health width (151 px) × 6 px |
+| Fill | dim cold, MOTH at Warm, GOLD from Hot, breathing toward BONE at Blazing; RUST for 350 ms on a break |
+| Multiplier | 10 px, bar right + 22 px, centred on the row, in the fill's colour |
+
+### 5.1e The draught row — slots, not a meter
+
+The last row of the pole, and the only one that is **not a bar**. Two slots
+today, one per draught that has a clock, in `PotionDb.IDS` order and fixed by
+kind forever. Each slot is a VOID-hairlined ASH@60% track holding a **mark** on a
+VOID chip — identity, a shape — and **four tiles** that go out one at a time —
+time, a count.
+
+Three rules, each of which replaced something that had shipped:
+
+1. **It is drawn when it is empty**, per §5.1d. It used to draw nothing at all
+   until the first draught was drunk, so the player met the instrument in the one
+   moment they had no attention to spare for learning it.
+2. **The slots never pack.** Live draughts used to be collected and drawn
+   leftmost-first, so a slot's position carried no information — the first slot
+   meant Ironhide or Emberblood depending on what else happened to be running.
+   Fixed slots make position the identity channel and colour the redundant one.
+3. **It is not a meter, and that is why it is tiles.** `heart_draught`'s tint is
+   `(0.88, 0.25, 0.22)` and `Pal.VITAL` is `(0.878, 0.251, 0.220)`;
+   `ironhide_draught`'s is `(0.35, 0.47, 0.78)` and `Pal.COBALT` is
+   `(0.345, 0.471, 0.784)`. To the precision this palette is written in, a
+   draining tinted bar in this column *is* the health bar's colour and the magic
+   bar's colour repeated 12 px lower — a false readout, not merely a legibility
+   risk. Four discrete steps is what §7.4 permits where it bans a lerp, and a row
+   that empties in steps is visibly not one of the bars above it.
+
+**Heart Draught has no slot**, because `PotionDb.apply` sends it to `Game.heal()`
+and never to `Game.start_draught` — a third slot would be a container that can
+never fill. The row is derived from which draughts have a clock, so it grows by a
+slot the day a third one is brewed, with no edit to `hud.gd`.
+
+| | |
+|---|---|
+| Origin | x `0.031` (40), top y heat bottom + 4 px (688); **heat's own slot (678) in the garrison, where heat is not drawn** |
+| Row | `0.44 ×` health width (151 px) × 6 px, slots split evenly with a 4 px gap |
+| Mark | 6 × 6 chip, VOID @85%, shape inset 1 px: ■ Ironhide (a plate), ▲ Emberblood (a point), ✚ reserved for a Heart Draught given a clock |
+| Tiles | 4 per slot, 2 px apart; lit in the draught's tint, spent as a VOID @30% notch |
 
 ### 5.2 The hands — left and right, beside the item
 

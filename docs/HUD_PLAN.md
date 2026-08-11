@@ -1296,3 +1296,94 @@ starts erroring. Decisions 33 and 36 land with items 6 and 8 respectively. Decis
 35 rescopes assertions 1 and 2 wherever they appear. Decision 32's assertion 4 is its
 own commit after item 9, because it needs a colour-matrix pass no director has today
 and it is the only assertion that is not about rectangles.
+
+---
+
+# 15. What the build found — decisions the frames changed
+
+§§0–12 are the plan, §13 is its self-administered review and §14 is the
+independent reader. **This section is the implementation**, and it exists for the
+reason §14.7 gives: a document that quietly diverges from the code it authorises
+is worse than no document, and §13.8 had already found one decision that could
+not be written as specified. Each entry names the decision, what was built, and
+the evidence.
+
+## 15.1 The draught row has two slots, not three — decision 21
+
+**Decision 21 asks for three fixed slots: "slot 0 heart, slot 1 ironhide, slot 2
+emberblood, in `PotionDb.IDS` order". Heart Draught has no clock.**
+`PotionDb.apply` sends `heart_draught` to `Game.heal()` and never to
+`Game.start_draught`, so `Game.draught_left(&"heart_draught")` is `0.0` for the
+entire life of the game. Slot 0 would be a container that can never fill — a
+worse lie than the empty row decision 21 was written to replace, and one that
+would be on screen permanently.
+
+**Built:** the row is every draught that *has* a clock, in `PotionDb.IDS` order.
+Two today. `Hud._draught_slots` derives it from `Game.DRAUGHT_PLATE_ID` /
+`Game.DRAUGHT_EDGE_ID` rather than listing it, so the row grows by a slot the day
+a third lasting draught is brewed with no edit to `hud.gd` — decision 10's
+argument at a smaller scale.
+
+Decision 21's own reasoning survives intact and one clause of §13.3's does not.
+§13.3 argued that fixed slots fix the heart-vs-emberblood deutan convergence by
+making position primary; heart is not in the row at all, so that pair never
+appears in it, and the remaining pair — Ironhide blue against Emberblood orange —
+was never the confusable one. The redundancy still had to be built, for the reason
+§14.1 gives instead, which is the stronger one anyway: **the tints are the bars
+above, not each other.**
+
+## 15.2 The marks are a plate, a point and a cross — decision 30
+
+Decision 30 specifies "a heart outline, a hide chevron, a flame". **At six pixels
+a heart outline is a blob**, and the row is 6 px tall by decision 24, which is not
+negotiable because the 4 px of slack under the pole is what §0 was about.
+
+**Built:** ■ Ironhide (a solid plate — the shape of something that stops arguing
+with what hits it), ▲ Emberblood (a point — the flame, and equally the edge it is
+put on), ✚ reserved for a Heart Draught that is ever given a clock. Chosen for
+*separation at 6 px* rather than for iconography, on the same principle §5.6's
+minimap markers already use.
+
+Two things the first render changed, and neither could have been decided from
+source:
+
+- **The mark needs a chip.** Drawn straight onto the ash track it is the same
+  colour and about the same size as the tiles beside it, and the slot came out as
+  five blocks in a row with no way to tell which was the label. It now sits on a
+  VOID@85% chip, which makes it read as the slot's name instead of as its first
+  step.
+- **A spent tile is a VOID notch at 30%, not 55%.** At 55% an *empty* row — which
+  is the row's commonest state and the entire reason decision 21 draws it — came
+  out as two black bars under the pole rather than as two empty containers. The
+  zero state is the state this row has to get right.
+
+## 15.3 The legend's shrink cannot make the legend fit — decision 28
+
+§13.8 says `_draw_controls`'s `scale *= avail / widest` renders the legend at "an
+arbitrary fraction of 10 px" and that assertion 3 is blind to it. Both true, and
+**the shrink does not even work.** `CanvasText.size_of` clamps the em size at
+`MIN_SIZE`, so once the computed scale falls under that floor the line renders at
+a size the layout did not choose and *wider than `avail`* — which is why the
+garrison capture at `4c04427` has the first line running from x≈0 to x≈1280,
+off both edges, with the words overlapping each other.
+
+So decision 28's wrap is not only what makes the ladder assertion true; it is the
+only thing that makes the legend fit at all. Recorded because the plan justifies
+the wrap on tidiness grounds and the actual defect is a functional one.
+
+## 15.4 The geometry claim in decision 24, measured
+
+Decision 24 claims `MAGIC_H` 8→6 and `MAGIC_GAP` 4→6 cost zero pixels. Measured
+at x=60 in `res://scenes/rooms/dungeon.tscn` at 1280×720, before and after:
+
+| Row | Before | After |
+|---|---|---|
+| Health | 635–650 | 635–650 |
+| Stamina | 654–662 | 654–662 |
+| Magic | 666–674 | **668**–674 |
+| Heat | 678–684 | 678–684 |
+| Draughts | — (not drawn) | 688–694 |
+| Pole bottom | 694 | 694 |
+
+The claim holds exactly: magic's top moves by 2 px, its bottom does not move, and
+nothing below it moves at all.

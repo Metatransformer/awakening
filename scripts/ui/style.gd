@@ -87,9 +87,24 @@ const STAMINA_GAP := 4.0
 ## order: "can I dodge" is asked every second and "can I still spin" is asked
 ## before a fight. Above health was never a candidate -- health is the top of the
 ## pole and the eye starts there.
+##
+## **6 tall, not 8, and 6 px of gap above it rather than 4.** That pair is what
+## makes the pole read as TWO instruments instead of four (HUD_PLAN decision 24).
+## Health 15 and stamina 8 are Tier 1 -- read mid-fight without moving your eyes;
+## magic, heat and draughts are Tier 2, glanced between beats. Before this, magic
+## and stamina were the same height, the same construction, the same ticks and the
+## same left edge, differing only in hue and 35 px of width -- so the only thing
+## separating a Tier 1 row from a Tier 2 one was colour, which is exactly the
+## channel a colour-blind player does not have. Now proximity groups them and
+## uniform weight finishes the job: 15 / 8, a 6 px break, then 6 / 6 / 6.
+##
+## **It costs zero pixels, and that is checkable.** At 720p magic's top moves
+## 666 -> 668 and its bottom stays at 674, so heat (678), the draught row (688)
+## and the pole bottom (694) do not move, and the 4 px of safe-margin slack under
+## the pole is unchanged. Verified in a rendered frame, not derived here.
 const MAGIC_RATIO := 0.52
-const MAGIC_H := 8.0
-const MAGIC_GAP := 4.0
+const MAGIC_H := 6.0
+const MAGIC_GAP := 6.0
 ## The heat bar, third in the "you" stack and shortest of the three. It belongs
 ## in this pole rather than the money pole even though it PAYS in money: what it
 ## reports is a state of the body -- how fast you are killing and how long you
@@ -99,6 +114,21 @@ const MAGIC_GAP := 4.0
 const HEAT_RATIO := 0.44
 const HEAT_H := 6.0
 const HEAT_GAP := 4.0
+## The draught row -- the LAST row of the pole, and the only one that is not a
+## meter. Same width as heat so the pole's taper ends cleanly, same height so the
+## three Tier 2 rows are one weight (see MAGIC_H), and its own gap constant so
+## that adding a row below it never means editing heat's.
+##
+## Its geometry is here and its ROW INDEX is `Hud._pole_top(s, 4)`. Do not write
+## the stack sum anywhere else: two expressions for one stack is how the row
+## landed on the stamina bar once and on the magic bar a second time.
+const DRAUGHT_RATIO := 0.44
+const DRAUGHT_H := 6.0
+const DRAUGHT_GAP := 4.0
+## Gap between two draught slots. Wide enough that three slots read as three
+## containers rather than as one ticked bar -- the whole point of the row not
+## being a meter (HUD_PLAN decision 30).
+const DRAUGHT_SLOT_GAP := 4.0
 ## The heat premium, right-aligned in the bag column. It sits ABOVE the toast
 ## line because everything below is spoken for -- slips at 0.845, the total at
 ## 0.900, the fee at 0.940 -- and because reading down the money pole then goes

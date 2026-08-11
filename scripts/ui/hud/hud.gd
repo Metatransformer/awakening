@@ -986,7 +986,17 @@ func _draw_health(s: Vector2) -> void:
 		_canvas.draw_rect(Rect2(origin.x + Game.quarters * per, origin.y,
 			ghost * per, h), Pal.RUST)
 
-	var fill: Color = Pal.VITAL.lerp(Pal.BONE, pulse) if low else Pal.VITAL
+	# VITAL <-> VOID, and it used to be VITAL <-> BONE. Two things were wrong with
+	# BONE and both are only visible in a frame: it is EXACTLY the stamina fill's
+	# colour in the row 19 px below, so for half of every cycle the most urgent
+	# state in the game wore another instrument's hue; and it is BRIGHTER than
+	# VITAL, so the bar got lighter as the player got closer to death -- the alarm
+	# running backwards. Blinking to the TRACK colour reads as the bar failing,
+	# which is the sentence. Still a blink and not an ease, so §7.4 holds.
+	#
+	# RUST was the other candidate and it is stamina's EXHAUSTED colour, which
+	# trades this collision for the same one a row down.
+	var fill: Color = Pal.VITAL.lerp(Pal.VOID, pulse) if low else Pal.VITAL
 	_canvas.draw_rect(Rect2(origin.x, origin.y, Game.quarters * per, h), fill)
 
 	# Ticks last, cutting through fill and track alike -- that is what keeps the
@@ -1048,6 +1058,22 @@ func _draw_stamina(s: Vector2) -> void:
 ## between stamina and heat meant editing an expression in a function that has
 ## nothing to do with magic. One walk down the stack instead: add a row here and
 ## everything below it moves.
+##
+## **THIS IS THE ONLY EXPRESSION FOR THE STACK, and that is the whole of the fix
+## for a defect that shipped twice.** `_draw_draughts` used to keep a second,
+## hand-rolled sum of the same walk. The first version of that sum left out
+## `HEALTH_H` and the row landed exactly on the stamina bar; it was repaired by
+## fixing the sum rather than by deleting it, and when the magic bar was inserted
+## HERE the second copy was not updated -- so the draught row went back to being
+## drawn on top of the magic bar in the garrison and four pixels into the heat bar
+## underground. Every check in `alchemy_loop.gd` passed both times, because none of
+## them can see a rectangle.
+##
+## Rows: 0 health, 1 stamina, 2 magic, 3 heat, 4 draughts. In the garrison heat is
+## not drawn, so the draught row asks for row **3** -- its slot -- rather than
+## carrying a second arithmetic branch of its own. That is the same defect in
+## miniature and it is why the garrison case is a different ARGUMENT here and not
+## a different SUM somewhere else.
 func _pole_top(s: Vector2, row: int) -> float:
 	var y := (Pal.HEALTH_ORIGIN * s).y + Pal.px(Pal.HEALTH_H, s.y)
 	if row >= 1:
@@ -1056,6 +1082,8 @@ func _pole_top(s: Vector2, row: int) -> float:
 		y += Pal.px(Pal.STAMINA_H, s.y) + Pal.px(Pal.MAGIC_GAP, s.y)
 	if row >= 3:
 		y += Pal.px(Pal.MAGIC_H, s.y) + Pal.px(Pal.HEAT_GAP, s.y)
+	if row >= 4:
+		y += Pal.px(Pal.HEAT_H, s.y) + Pal.px(Pal.DRAUGHT_GAP, s.y)
 	return y
 
 
@@ -1338,9 +1366,14 @@ func _draw_hands(s: Vector2) -> void:
 		_draw_item_glyph(s, r, id, Pal.MIDNIGHT if raised else Color.BLACK,
 			raised, counter != &"" and left <= 0)
 		if counter != &"":
+			# BONE, and it was MOTH. "How many arrows do I have" is asked in the
+			# middle of a fight, and MOTH is the colour §2 rule 3 reserves for the
+			# things you read when you have STOPPED — the key caps, the loadout
+			# line, the floor card. A Tier 2 readout wearing Tier 3's brightness is
+			# the hierarchy saying one thing and the palette saying another.
 			CanvasText.draw_right(_canvas, str(left),
 				Vector2(r.end.x - Pal.px(3.0, s.y), r.end.y - Pal.px(10.0, s.y)),
-				Pal.px(1.0, s.y), Pal.MOTH)
+				Pal.px(1.0, s.y), Pal.BONE)
 
 
 ## The selected item — ONE cell, the bottle D-pad ↓ has stepped to and X will
@@ -1536,58 +1569,175 @@ func _draw_bottle_glyph(s: Vector2, r: Rect2, potion: StringName) -> void:
 	_canvas.draw_rect(lip, edge)
 
 
-## The lasting draughts, as a countdown under the heat bar: a pip in the potion's
-## own colour, draining left to right.
+## How many tiles a draught slot empties through. Four, because four is the
+## largest count §7.4 sanctions where it bans a lerp — the ghost drain uses the
+## same number for the same reason — and because a 73 px slot divides into four
+## tiles a player can count without counting.
+const DRAUGHT_TILES := 4
+
+
+## The row's slots, left to right, fixed forever. A draught earns a slot by having
+## a duration, and `Game` already names the two that do — reading them from there
+## rather than listing them here is the whole of decision 10's argument applied to
+## a smaller table: a second copy is the one that goes stale.
+func _draught_slots() -> Array[StringName]:
+	var out: Array[StringName] = []
+	for id in PotionDb.IDS:
+		if id == Game.DRAUGHT_PLATE_ID or id == Game.DRAUGHT_EDGE_ID:
+			out.append(id)
+	return out
+
+
+## The lasting draughts, as a fixed row of slots at the foot of the "you" pole.
 ##
 ## It shares the stamina/heat column because it is the same KIND of fact — a
 ## thing that is true right now and will not be shortly — and because the player
 ## is already watching that column when they are deciding whether to drink.
-## Nothing is drawn when nothing is running: an empty slot for a buff you do not
-## have is a permanent reminder of an absence.
 ##
-## The stack arithmetic below is spelled out term by term ON PURPOSE. It was
-## written once as a short sum that left `HEALTH_H` out, and the row landed
-## exactly ON the stamina bar -- two instruments in one rectangle, the label
-## sitting inside the dodge meter. Every check in alchemy_loop.gd passed while
-## it did that, because none of them can see a rectangle. Copy the shape of
-## `_draw_stamina` / `_draw_heat` rather than deriving a new offset.
+## ## Three things about this row are decisions and not defaults
+##
+## **It is drawn when it is empty.** This function used to open
+## `if live.is_empty(): return`, so the row was invisible for the whole of every
+## run until the first draught was drunk — and a player meets an instrument for
+## the first time in the one moment they have no attention to spare for learning
+## it. `_draw_heat` already carries the rule that settles this, in these words:
+## *"the track is drawn even at zero, so the bar is a thing the player has seen
+## before the first time it matters. An instrument that only appears once you are
+## already doing well teaches nobody."* That argument was written for heat and
+## applied to heat alone. It is the same argument here.
+##
+## **The slots are fixed by kind and never pack.** Live draughts used to be
+## collected into a list and drawn leftmost-first, so a slot's POSITION carried no
+## information — the first slot meant Ironhide or Emberblood depending on what
+## else happened to be running at the time. Fixing them makes position the
+## identity channel and colour the redundant one, which is the right way round,
+## because the colours cannot carry it alone: `heart_draught`'s tint is
+## `(0.88, 0.25, 0.22)` and `Pal.VITAL` is `(0.878, 0.251, 0.220)`;
+## `ironhide_draught`'s is `(0.35, 0.47, 0.78)` and `Pal.COBALT` is
+## `(0.345, 0.471, 0.784)`. To the precision the palette is written in, a tinted
+## draught bar in this column IS the health bar's colour and the magic bar's
+## colour, printed 12 px lower.
+##
+## **It is not a meter, and that is why it is built out of tiles.** Given the
+## previous paragraph, a smoothly draining tinted bar directly under three bars
+## reads as a fourth vital draining — under an Ironhide the player watches what
+## looks like their magic empty. So a slot carries a MARK, which is identity and a
+## shape, and four TILES that go out one at a time, which is time and a count.
+## Four discrete steps is exactly what §7.4 permits where it bans a lerp, and a
+## row that empties in steps is visibly not one of the bars above it.
+##
+## ## There are two slots, and the plan asked for three
+##
+## HUD_PLAN decision 21 specifies *"slot 0 heart, slot 1 ironhide, slot 2
+## emberblood, in `PotionDb.IDS` order"*. **Heart Draught has no clock.**
+## `PotionDb.apply` sends it to `Game.heal()` and never to `Game.start_draught`,
+## so `Game.draught_left(&"heart_draught")` is 0.0 for the entire life of the
+## game and slot 0 would be a container that can never fill — a worse lie than the
+## empty row it was drawn to replace. So the row is every draught that HAS a
+## clock, in `PotionDb.IDS` order: two today, three the day a third lasting
+## draught is brewed, with no edit to this file. Recorded in docs/HUD_PLAN.md
+## §15 rather than diverged from silently.
 func _draw_draughts(s: Vector2) -> void:
-	var live: Array[StringName] = []
-	for id in PotionDb.IDS:
-		if Game.draught_left(id) > 0.0:
-			live.append(id)
-	if live.is_empty():
+	var slots := _draught_slots()
+	if slots.is_empty():
 		return
 
 	var x := Pal.HEALTH_ORIGIN.x * s.x
-	var w := Pal.HEALTH_W * s.x * Pal.HEAT_RATIO
-	var h := Pal.px(Pal.HEAT_H, s.y)
-	# Slot four, under health -> stamina -> heat, in that order. Heat is dungeon
-	# only, so in the garrison its slot is empty and the draughts move UP into
-	# it: two rows hanging below an absent bar would collide with the control
-	# legend, which owns the bottom of the garrison screen (see _draw_controls).
-	var y := Pal.HEALTH_ORIGIN.y * s.y \
-		+ Pal.px(Pal.HEALTH_H + Pal.STAMINA_GAP + Pal.STAMINA_H + Pal.HEAT_GAP, s.y)
-	if Run != null and Run.in_dungeon:
-		y += Pal.px(Pal.HEAT_H + Pal.HEAT_GAP, s.y)
+	var w := Pal.HEALTH_W * s.x * Pal.DRAUGHT_RATIO
+	var h := Pal.px(Pal.DRAUGHT_H, s.y)
+	# Row 4 underground. In the garrison heat is not drawn, so the row asks for
+	# row **3** — heat's own slot — and that is an ARGUMENT rather than a second
+	# sum. This function used to keep its own hand-rolled walk down the stack; it
+	# left out `MAGIC_GAP + MAGIC_H` and drew this row straight through the magic
+	# bar in the garrison and four pixels into the heat bar underground. See
+	# `_pole_top`, which is now the only expression for the stack.
+	var underground: bool = Run != null and Run.in_dungeon
+	var y := _pole_top(s, 4 if underground else 3)
 
-	for id in live:
+	var line := Pal.px(1.0, s.y)
+	var gap := Pal.px(Pal.DRAUGHT_SLOT_GAP, s.y)
+	var slot_w := (w - gap * float(slots.size() - 1)) / float(slots.size())
+
+	for i in slots.size():
+		var id: StringName = slots[i]
+		var rect := Rect2(x + float(i) * (slot_w + gap), y, slot_w, h)
 		var t01: float = clampf(Game.draught_left(id) / K.DRAUGHT_TIME, 0.0, 1.0)
-		var tint := PotionDb.tint_of(id)
-		var rect := Rect2(x, y, w, h)
-		# Same two-layer construction as the bars above it -- a hairline of VOID
-		# around an ASH track -- so the column reads as one instrument family
-		# rather than as a loose pip that wandered in.
-		_canvas.draw_rect(rect.grow(Pal.px(1.0, s.y)), Pal.VOID)
+		# An unlit slot's mark is ASH, not a dim tint: "you are not running this"
+		# and "you are nearly out of this" must not be the same picture.
+		var tint: Color = PotionDb.tint_of(id) if t01 > 0.0 else Color(Pal.ASH, 0.9)
+
+		# The hairline-over-track construction the rest of the pole uses, kept —
+		# and it is doing MORE work here than it does up there. An empty ASH track
+		# with no VOID hairline, laid over torchlit brick or over the garrison's
+		# lit grass, is a smudge rather than a container, and this row has to read
+		# in exactly that state for most of every run.
+		_canvas.draw_rect(rect.grow(line), Pal.VOID)
 		_canvas.draw_rect(rect, Color(Pal.ASH, 0.6))
-		_canvas.draw_rect(Rect2(x, y, w * t01, h), tint)
-		CanvasText.draw_text(_canvas, PotionDb.short_of(id),
-			Vector2(x + w + Pal.px(6.0, s.y), y - Pal.px(2.0, s.y)),
-			Pal.px(1.0, s.y), tint)
-		# Tighter than HEAT_GAP between rows: two draughts plus the gap have to
-		# fit above the legend in the garrison, and they are one fact, not two
-		# columns.
-		y += h + Pal.px(2.0, s.y)
+
+		# The mark sits on its own VOID chip rather than straight on the track.
+		# Drawn without one it is the same colour and about the same size as the
+		# tiles beside it, and the first render came out as five blocks in a row
+		# with no way to tell which was the label — the chip is what makes it read
+		# as the slot's name instead of as the slot's first step.
+		var chip := Rect2(rect.position, Vector2(h, h))
+		_canvas.draw_rect(chip, Color(Pal.VOID, 0.85))
+		_draw_draught_mark(s, chip, id, tint)
+
+		# The tiles. `ceil`, so any time at all leaves at least one tile lit: the
+		# last tile is the warning, and a draught that reached zero is a slot with
+		# none, which are two different frames.
+		var lit := int(ceil(t01 * float(DRAUGHT_TILES)))
+		var tgap := Pal.px(2.0, s.y)
+		var tx := chip.end.x + Pal.px(3.0, s.y)
+		var tw := (rect.end.x - tx - tgap * float(DRAUGHT_TILES - 1)) \
+			/ float(DRAUGHT_TILES)
+		for t in DRAUGHT_TILES:
+			var tile := Rect2(tx + float(t) * (tw + tgap), rect.position.y, tw, h)
+			# A spent tile is a notch cut INTO the ash track rather than a paler
+			# tile drawn on top of it, so the row reads as something emptying
+			# instead of as something greying out. LIGHT, at 0.3: the first render
+			# used 0.55 and an empty row — which is the row's commonest state and
+			# the whole reason it is drawn at all — came out as two black bars
+			# under the pole rather than as two empty containers.
+			_canvas.draw_rect(tile, tint if t < lit else Color(Pal.VOID, 0.3))
+
+
+## A draught's identity, as a shape. Two of these are drawn today and the third is
+## written because the row grows by a slot the moment a third draught gets a clock
+## (see `_draught_slots`) and a mark that arrives with it is one fewer thing to
+## remember.
+##
+## Shapes rather than hues, because the hues are already spoken for by the bars
+## directly above this row — see the note on `_draw_draughts`. They are chosen for
+## separation at SIX PIXELS and not for iconography: a heart outline at 6 px is a
+## blob, and the honest reduction of "soak" and "edge" is a solid plate against a
+## point. HUD_PLAN decision 30 asks for "a heart outline, a hide chevron, a
+## flame"; this is that decision at the size it actually renders, recorded in §15.
+func _draw_draught_mark(s: Vector2, box: Rect2, id: StringName, col: Color) -> void:
+	# Inset so the mark never touches the slot's own VOID hairline, which would
+	# make a 6 px slot read as a solid block with a bite out of it.
+	var r := box.grow(-Pal.px(1.0, s.y))
+	match id:
+		&"ironhide_draught":
+			# A plate. Solid, square, nothing sticking out of it — the shape of
+			# something that stops arguing with what hits it.
+			_canvas.draw_rect(r, col)
+		&"emberblood_draught":
+			# A point: the flame, and equally the edge it is put on. The only
+			# thing in the row with a diagonal in it.
+			_canvas.draw_colored_polygon(PackedVector2Array([
+				Vector2(r.get_center().x, r.position.y),
+				Vector2(r.end.x, r.end.y),
+				Vector2(r.position.x, r.end.y),
+			]), col)
+		_:
+			# The cross, for a Heart Draught that has been given a clock. Two
+			# rects, and the only mark in the row with a hole in its silhouette.
+			var t := maxf(Pal.px(2.0, s.y), 1.0)
+			_canvas.draw_rect(Rect2(r.get_center().x - t * 0.5, r.position.y,
+				t, r.size.y), col)
+			_canvas.draw_rect(Rect2(r.position.x, r.get_center().y - t * 0.5,
+				r.size.x, t), col)
 
 
 func _hero_combat() -> Node:
@@ -1634,6 +1784,7 @@ func _draw_slips(s: Vector2, right: float) -> void:
 		entries.append({
 			"v": def.value * int(Run.bag[id]),
 			"c": Pal.rarity_color(int(def.rarity)),
+			"r": int(def.rarity),
 		})
 	entries.sort_custom(func(a, b): return a["v"] > b["v"])
 
@@ -1652,7 +1803,16 @@ func _draw_slips(s: Vector2, right: float) -> void:
 	for i in mini(entries.size(), SLIP_MAX):
 		var e: Dictionary = entries[i]
 		var w: float = maxf(Pal.px(3.0, s.y), max_w * (float(e["v"]) / top_v))
-		_canvas.draw_rect(Rect2(right - w, y - h, w, h), e["c"])
+		var slip := Rect2(right - w, y - h, w, h)
+		_canvas.draw_rect(slip, e["c"])
+		# Rarity's second channel, matching the rim's (see `_draw_rim`): 0-3
+		# hairline notches cut into the LEFT end, which is the end that moves, so
+		# they never sit under the right edge every slip shares. Common gets none
+		# — the absence is itself the reading, and it is the commonest case.
+		var notches: int = clampi(int(e["r"]), 0, 3)
+		for n in notches:
+			_canvas.draw_rect(Rect2(slip.position.x + float(n) * Pal.px(2.0, s.y),
+				slip.position.y, Pal.px(1.0, s.y), h), Pal.VOID)
 		y -= h + gap
 
 	if entries.size() > SLIP_MAX:
@@ -1662,20 +1822,48 @@ func _draw_slips(s: Vector2, right: float) -> void:
 
 ## Coloured by the rarity of the single most valuable thing you carry. Silent,
 ## permanent, peripheral -- it is how the bag whispers.
+##
+## **And it is not coloured ONLY.** The rim's entire information content used to
+## be its hue, and the pair it has to separate hardest is `MOSS` (`68a050`)
+## against `MOTH` (`807868`) — mid-green against mid-khaki at near-identical
+## luminance, which is the textbook deutan collision. A colour-blind player could
+## not tell *I am carrying something uncommon* from *I am carrying junk*, which is
+## the one thing this corner exists to whisper. So rarity is now a THICKNESS as
+## well: 2 px common, 2 px with an inner rule uncommon, 3 px rare, 3 px with a
+## dithered ring legendary. Four weights, four hues, either channel sufficient.
+##
+## The vocabulary is not new — the T2 value halo below is the same dither, and
+## that is the argument for reusing it rather than inventing a second language for
+## the second thing this rectangle has to say.
 func _draw_rim(s: Vector2, tier: int) -> void:
 	var tl := Pal.RIM_TL * s
 	var br := Pal.RIM_BR * s
 	var r := Rect2(tl, br - tl)
-	var col := Pal.rarity_color(_best_rarity())
+	var rarity := _best_rarity()
+	var col := Pal.rarity_color(rarity)
 	if _rim_flash_t >= 0.0:
 		_canvas.draw_rect(r, Color(_rim_flash_color, 0.25))
 		col = _rim_flash_color
 	elif tier >= 2:
 		# The dithered gold halo. One ring of 50% gold reads as a dither at the
-		# distance a player actually sits from the screen.
+		# distance a player actually sits from the screen. This one is about
+		# VALUE, not rarity — it is outside the frame and gold; the legendary
+		# ring below is inside it and the rarity's own colour, so the two can be
+		# on screen together and still be two sentences.
 		_canvas.draw_rect(r.grow(Pal.px(2.0, s.y)), Color(Pal.GOLD, 0.18), false,
 			Pal.px(1.0, s.y))
-	_canvas.draw_rect(r, col, false, Pal.px(2.0, s.y))
+
+	var thick := Pal.px(3.0 if rarity >= 2 else 2.0, s.y)
+	_canvas.draw_rect(r, col, false, thick)
+	if rarity == 1:
+		# Uncommon: a second, thinner rule inboard of the frame. Deliberately a
+		# GAP and a line rather than a fatter frame — 3 px is rare's weight and
+		# the two must not converge.
+		_canvas.draw_rect(r.grow(-(thick + Pal.px(2.0, s.y))), col, false,
+			Pal.px(1.0, s.y))
+	elif rarity >= 3:
+		_canvas.draw_rect(r.grow(-(thick + Pal.px(2.0, s.y))), Color(col, 0.4),
+			false, Pal.px(1.0, s.y))
 
 
 func _best_rarity() -> int:
