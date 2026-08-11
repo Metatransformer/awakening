@@ -58,20 +58,37 @@ func run(rig) -> void:
 	print("autoswing err %5.1f -> %5.1f deg over 1.6 s of running" % [err0, _behind_err_deg(hero)])
 	await rig.wait_seconds(0.5)
 
-	# Parallel: a Z tap with nothing lockable must close the whole error in the
-	# 4 ticks of CAM_DEFAULT_ANIM_TIME, and drop the FOV to CAM_FOV_PARALLEL.
+	# Parallel: a Z tap with nothing lockable must close the whole error inside the
+	# 4 ticks of CAM_DEFAULT_ANIM_TIME, and pull the FOV toward CAM_FOV_PARALLEL
+	# while it does.
+	#
+	# **Both of these lines used to print numbers that could not mean what they
+	# said** — this was the one director that never worked around #40. The presses
+	# were `Input.action_press`, which sets action state and dispatches no
+	# `InputEvent` (CLAUDE.md §3), and `Targeting` reads `z_target` in
+	# `_unhandled_input`; so nothing was ever delivered, and the audit reported
+	# "recentre err 52.9 -> 52.9 deg" and "held fov=60.0" as though the camera had
+	# been asked and declined. `rig.tap` sends the event now.
+	#
+	# ONE TAP, and no hold. `z_target` is a TOGGLE that `Targeting` owns
+	# (docs/CONTRACT.md §4), and the parallel FOV is keyed off the recentre TIMER
+	# rather than off the button being down (`GameCamera._apply_parallel` says so in
+	# as many words) — so "hold Z and read the FOV" measures nothing at all, and a
+	# second press would only fire a second recentre. What is honest here is the
+	# LOW-WATER MARK across the recentre: 4 ticks of a 0.25 s FOV blend cannot
+	# arrive at 45, so the assertion is that it leaves CAM_FOV in the direction of
+	# CAM_FOV_PARALLEL and comes back.
 	await _drag(rig, Vector2(-22.0, 0.0), 12)
 	var before := _behind_err_deg(hero)
-	Input.action_press(&"z_target")
-	await rig.wait_seconds(0.03)
-	Input.action_release(&"z_target")
-	await rig.wait_seconds(4.0 * K.TICK + 0.02)
+	var fov0 := _cam.fov
+	await rig.tap(["z_target"])
+	var fov_low := _cam.fov
+	for i in 12:
+		await rig.wait_seconds(4.0 * K.TICK / 12.0)
+		fov_low = minf(fov_low, _cam.fov)
 	print("Z tap recentre err %5.1f -> %5.1f deg in 4 ticks" % [before, _behind_err_deg(hero)])
-
-	Input.action_press(&"z_target")
-	await rig.wait_seconds(0.6)
-	print("Z held fov=%4.1f (free %4.1f, parallel %4.1f)" % [_cam.fov, K.CAM_FOV, K.CAM_FOV_PARALLEL])
-	Input.action_release(&"z_target")
+	print("Z tap fov %4.1f -> %4.1f low (free %4.1f, parallel %4.1f)"
+			% [fov0, fov_low, K.CAM_FOV, K.CAM_FOV_PARALLEL])
 
 
 func _yaw_deg() -> float:

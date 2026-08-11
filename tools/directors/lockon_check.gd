@@ -38,7 +38,7 @@ func run(rig) -> void:
 		return
 
 	# --- 1. empty press ------------------------------------------------------
-	_press(t)
+	await rig.tap(["z_target"])
 	await rig.wait_frames(4)
 	if t.is_locked:
 		print("LOCK FAIL locked onto something with nothing in range")
@@ -65,7 +65,7 @@ func run(rig) -> void:
 	await rig.wait_frames(30)
 
 	# --- 2. acquire ----------------------------------------------------------
-	_press(t)
+	await rig.tap(["z_target"])
 	await rig.wait_frames(6)
 	if not t.is_locked:
 		print("LOCK FAIL press with two enemies in the cone acquired nothing")
@@ -104,10 +104,32 @@ func run(rig) -> void:
 	await rig.capture(out.path_join("lock_01_strafe.png"))
 
 	# --- 5. switch -----------------------------------------------------------
+	# **Put him back first.** Beat 4 walks him 26 frames to the left, which under
+	# an honest 16:9 frame carries the skeleton off the side of the screen -- and
+	# `_best_candidate` searches SCREEN SPACE, so a flick then has nothing to find
+	# and this beat failed on a lock-on that was working perfectly. It passed for as
+	# long as the harness rendered a 2.5:1 window and squashed it into the PNG (#35):
+	# the camera keeps its HEIGHT, so that window saw about 40% more of the yard
+	# sideways than a player ever will, and the skeleton stayed in shot. The beat is
+	# about the flick, not about how far off-screen the previous beat left things.
+	hero.global_position = Vector3(0.0, 0.05, 8.0)
+	Bus.camera_recenter.emit()
+	await rig.wait_frames(30)
+
 	# Straight at the switch entry point: the stick flick is read by polling and
 	# action_press does not dispatch an event, but _read_stick_flick polls too.
+	#
+	# The direction is taken from where the OTHER body is relative to the one we
+	# hold, which is the question `_best_candidate(side)` actually asks. It used to
+	# be `1 if _screen_x(before) < 0 else -1` -- flick away from whichever half of
+	# the screen the current target sits in -- and that is only the same thing while
+	# the frame is wide enough to keep the hero between the two of them. On the
+	# honest 16:9 frame the goblin sits just right of centre with the skeleton
+	# further right again, so the old rule flicked LEFT into an empty half and
+	# reported a switch failure against a lock-on that had done nothing wrong.
 	var before = t.current_target
-	t._switch(1 if _screen_x(t, before) < 0.0 else -1)
+	var other: Node3D = b if before == a else a
+	t._switch(1 if _screen_x(t, other) > _screen_x(t, before) else -1)
 	await rig.wait_frames(8)
 	if t.current_target == before:
 		print("LOCK FAIL flick did not move the lock off %s" % _name_of(before))
@@ -117,7 +139,7 @@ func run(rig) -> void:
 	await rig.capture(out.path_join("lock_02_switched.png"))
 
 	# --- 6. release ----------------------------------------------------------
-	_press(t)
+	await rig.tap(["z_target"])
 	await rig.wait_frames(4)
 	if t.is_locked:
 		print("LOCK FAIL second press did not release")
@@ -125,7 +147,7 @@ func run(rig) -> void:
 		print("LOCK ok  second press released")
 
 	# --- 7. the target dying releases it -------------------------------------
-	_press(t)
+	await rig.tap(["z_target"])
 	await rig.wait_frames(6)
 	if not t.is_locked:
 		print("LOCK FAIL could not re-acquire for the death test")
@@ -144,16 +166,6 @@ func run(rig) -> void:
 	await rig.capture(out.path_join("lock_03_after_death.png"))
 	print("LOCK done")
 
-
-## The button, not the binding. `Input.action_press` sets action state but
-## dispatches NO InputEvent (CLAUDE.md §3), and Targeting reads the press in
-## _unhandled_input precisely so it cannot miss an edge -- so a director has to
-## deliver a real event or nothing happens at all.
-func _press(t) -> void:
-	var ev := InputEventAction.new()
-	ev.action = &"z_target"
-	ev.pressed = true
-	Input.parse_input_event(ev)
 
 
 func _facing_error(hero, target) -> float:

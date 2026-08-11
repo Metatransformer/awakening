@@ -386,16 +386,16 @@ func _stand_at(hero, at: Vector3, yaw: float) -> void:
 	Bus.camera_recenter.emit()
 
 
-## The lock-on button, delivered as a real event. `Input.action_press` sets
-## action state but dispatches NO InputEvent (CLAUDE.md §3), and Targeting reads
-## the toggle in _unhandled_input — so a director that presses the action the
-## ordinary way toggles nothing. The GUARD is deliberately not like this: it is
-## polled, precisely so a held control cannot miss an edge.
+## The lock-on button, and the 20 frames Targeting needs to act on it.
+##
+## This used to hand-build an `InputEventAction` here, because `rig.tap` went
+## through `Input.action_press` alone, which dispatches no `InputEvent` at all
+## (CLAUDE.md §3) — and Targeting reads the toggle in `_unhandled_input`, so the
+## ordinary press toggled nothing. `rig.tap` sends the event itself now (#40).
+## The GUARD below is deliberately not like this: it is polled, precisely so a
+## held control cannot miss an edge.
 func _z_target(rig) -> void:
-	var ev := InputEventAction.new()
-	ev.action = &"z_target"
-	ev.pressed = true
-	Input.parse_input_event(ev)
+	await rig.tap(["z_target"])
 	await rig.wait_frames(20)
 
 

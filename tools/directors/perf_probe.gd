@@ -116,34 +116,26 @@ func run(rig) -> void:
 	if scale3d > 0.0:
 		rig.root.scaling_3d_scale = scale3d
 
-	# `--win=1280x720` makes the OS window ACTUALLY that size, which `--size`
-	# does not and cannot.
+	# **`--size` IS the resolution knob now, and `--win=` is gone.**
 	#
-	# THIS IS THE ONE THAT EXPLAINS EVERYTHING ELSE. `project.godot` has
-	# `window/size/mode=2` -- WINDOW_MODE_MAXIMIZED -- so the window comes up
-	# filling the display no matter what `shoot.gd` assigns to `root.size`; and
+	# THIS IS THE ONE THAT EXPLAINED EVERYTHING ELSE. `project.godot` has
+	# `window/size/mode=2` -- WINDOW_MODE_MAXIMIZED -- so the window came up
+	# filling the display no matter what `shoot.gd` assigned to `root.size`; and
 	# `window/stretch/mode="canvas_items"` scales only the 2D, leaving the 3D to
 	# render at the window's true backing resolution. On this Mac that measured
 	# `win=6880x2756`: nineteen megapixels, twenty times the 1280x720 the whole
-	# harness believes it is running at, every frame.
+	# harness believed it was running at, every frame. So the flat 640/1280/1920
+	# `--size` sweep was three runs of the identical 19 MP frame -- the tell was
+	# that 1280 and 1920 also reported the SAME `vram_mb=1519.5`, and two
+	# framebuffer sizes cannot cost the same video memory.
 	#
-	# So `--size` was never a resolution knob, the flat 640/1280/1920 sweep was
-	# three runs of the identical 19 MP frame, and the garrison's 16 ms is the
-	# cost of a resolution no demo will ever use. Set this to what the demo
-	# window will be before quoting a budget number at anyone.
-	#
-	# It is also why every proof frame this repo has judged is a ~20x
-	# supersampled render downscaled by Lanczos in `shoot.gd`. Aliasing, thin
-	# geometry and HUD type all look better in a proof than they will on screen.
-	# That is a separate problem and a real one; it is not this director's to
-	# fix, and it should not be fixed under a deadline while other sessions are
-	# mid-run against the same harness.
-	var win_arg: String = rig.arg("win", "")
-	if win_arg != "":
-		var wh := win_arg.split("x")
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
-		DisplayServer.window_set_size(Vector2i(int(wh[0]), int(wh[1])))
-		await rig.wait_frames(30)
+	# `shoot.gd._size_the_window` resizes the real window to `--size` for every
+	# director now (#35), so this director's local `--win=` had become a second
+	# spelling of the same knob. Say `--size=1920x1080` and mean it. Quote a
+	# budget number only against the resolution the demo will actually run at,
+	# and read `win=` in the PERF line below to confirm you got it.
+	if rig.arg("win", "") != "":
+		print("PERF NOTE --win= is gone: --size resizes the real window now (#35)")
 
 	var vp: RID = rig.root.get_viewport_rid()
 	var was_vsync: int = DisplayServer.window_get_vsync_mode()

@@ -28,19 +28,18 @@ func _shot(rig, path: String, tag: String) -> void:
 func run(rig) -> void:
 	var out: String = rig.arg("out", "/tmp/hd/x.png").get_base_dir()
 
-	# **Shoot at 1280x720 for real.** This is a LOOKDEV director -- every frame it
-	# produces exists to be judged by eye -- and until now every one of them was a
-	# 6880x2756 render Lanczos-downscaled to 720p by `shoot.gd`. A 5.4x supersample
-	# flatters exactly what this HUD is made of: hairlines, 1 px rules, 10 px type.
-	# `enemy_bars.gd` measured the cost — an 8-stroke bracket of one flat palette
-	# colour survived the downscale as FIVE correct pixels (HUD_PLAN §15.14).
+	# **This director is judged by eye, so it has to be shot at 1:1.** It used to
+	# resize the OS window itself, because `shoot.gd` opened a 6880x2756 window for
+	# a 1280x720 canvas and Lanczos-downscaled the result -- a 5.4x supersample,
+	# which flatters exactly what this HUD is made of: hairlines, 1 px rules, 10 px
+	# type. `enemy_bars.gd` measured the cost: an 8-stroke bracket of one flat
+	# palette colour survived the downscale as FIVE correct pixels (HUD_PLAN
+	# §15.14).
 	#
-	# `--size` alone will not do it: that sets the viewport inside a window
-	# `project.godot` opens MAXIMIZED. The window itself has to be resized, which is
-	# `perf_probe.gd`'s trick.
-	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
-	DisplayServer.window_set_size(Vector2i(1280, 720))
-	await rig.wait_frames(30)
+	# `shoot.gd._size_the_window` does it for every director now (#35), so the two
+	# lines that used to be here are gone. This only reports what it got -- a
+	# resize that stops taking must not be silent in a director whose whole output
+	# is pixels.
 	print("HUDCHECK render size=%s" % [DisplayServer.window_get_size()])
 
 	# 1. Fresh: full health, empty bag, in the dungeon.
@@ -189,6 +188,48 @@ func run(rig) -> void:
 	if Game.armament(&"right") != &"burst":
 		print("HUD FAIL could not put a working in the right hand — "
 			+ "the h_10/h_11 frames prove nothing")
+		_fails += 1
+
+	# 8b. THE QUIVER, in the hand that counts it — the other half of the numeral
+	#     the two frames above prove, and the pair card #52 asked for.
+	#
+	#     #52 reported the numeral as never drawn, off `gate_eye_row.gd`'s
+	#     `g_03`/`g_06`. Those frames had the BOW in the right hand and the
+	#     default SHIELD in the left, and `ArmamentDb.hand_count` gives the bow no
+	#     numeral on purpose (its own docstring: a bow cell carrying the quiver's
+	#     count prints the same number twice on one row). The cell that counts
+	#     arrows is `arrow`, which lives in LEFT_POOL and which nothing in that
+	#     director ever equipped — so both frames were photographing a shield.
+	#
+	#     Two ids reach this numeral and they arrive by different routes:
+	#     `burst` out of RIGHT_POOL, `arrow` out of LEFT_POOL behind
+	#     `armament_owned`'s "arrow follows the bow". Photographing one of them
+	#     is why the other could be reported missing for a whole card.
+	Game.grant(&"bow")
+	for _i in Game.RIGHT_POOL.size():
+		if Game.armament(&"right") == &"bow":
+			break
+		Game.cycle_armament(&"right")
+	for _i in Game.LEFT_POOL.size():
+		if Game.armament(&"left") == &"arrow":
+			break
+		Game.cycle_armament(&"left")
+	Game.arrows = 0
+	Bus.ammo_changed.emit(&"arrows", 0)
+	await rig.wait_frames(6)
+	await _shot(rig, out.path_join("h_13_quiver_empty.png"), "h_13_quiver_empty")
+
+	# Six, because that is what `GateUrn` holds and what #43's `g_06` had in the
+	# quiver — the same number, so the two directors' frames can be read side by
+	# side.
+	Game.add_arrows(6)
+	await rig.wait_frames(6)
+	await _shot(rig, out.path_join("h_14_quiver_six.png"), "h_14_quiver_six")
+
+	if Game.armament(&"left") != &"arrow" or Game.armament(&"right") != &"bow":
+		print("HUD FAIL the bow and quiver never reached the hands (%s/%s) — "
+			% [Game.armament(&"right"), Game.armament(&"left")]
+			+ "the h_13/h_14 frames prove nothing")
 		_fails += 1
 
 	# 9. The damage arc, at the four cardinal bearings. It replaced `Feel`'s

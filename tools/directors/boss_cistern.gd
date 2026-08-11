@@ -1051,9 +1051,9 @@ func _lock_on(rig, boss: Node) -> bool:
 	if hero.lock_target() == boss:
 		return true
 	if hero.lock_target() != null:
-		_z_target()
+		await rig.tap(["z_target"])
 		await rig.wait_frames(4)
-	_z_target()
+	await rig.tap(["z_target"])
 	# WAITED for rather than counted: `lock_target()` reads `is_locked` off the
 	# targeting component, and a tap is an edge that has to survive a frame of
 	# input polling and an acquire before that flag is up. A fixed handful of
@@ -1063,25 +1063,6 @@ func _lock_on(rig, boss: Node) -> bool:
 	# wait that outlasts the tell would push the "windup" arrow into the commit
 	# and quietly turn the negative case into a second positive one.
 	return await _until(rig, func() -> bool: return hero.lock_target() == boss, 24)
-
-
-## The lock-on button, delivered as a REAL event.
-##
-## `rig.tap(["z_target"])` -- which is what this used to do, and what reads as the
-## obvious thing -- locks onto nothing at all. `rig.tap` goes through
-## `Input.action_press`, which sets action state and dispatches no `InputEvent`
-## (CLAUDE.md §3), and `Targeting` reads the button in `_unhandled_input` on
-## purpose so that a toggle cannot miss an edge. So the press was never delivered,
-## `is_locked` never came up, and `HeroRanged._aim_at_target_or_camera` fell
-## through to its CROSSHAIR raycast every time. That is the whole story of the
-## lost arrows: an unlocked shot goes wherever the boom is pointing, which on a
-## teleported hero is down the lane often enough to look like it works.
-## `p4_lunge._z_target` had already paid for this; the fix is copied from it.
-func _z_target() -> void:
-	var ev := InputEventAction.new()
-	ev.action = &"z_target"
-	ev.pressed = true
-	Input.parse_input_event(ev)
 
 
 ## The Ogre's mark: eleven metres of lane, aimed down +Z, with the hero standing

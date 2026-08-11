@@ -58,10 +58,50 @@ func _initialize() -> void:
 	var wh := size_str.split("x")
 	var win_size := Vector2i(int(wh[0]), int(wh[1]))
 	root.content_scale_size = win_size
-	root.size = win_size
+	_size_the_window(win_size)
 	_park_the_window(win_size)
 
 	_run.call_deferred()
+
+
+## Make the OS window ACTUALLY `--size`, so a capture is 1:1 with what a player
+## would see.
+##
+## **Every proof frame in this repo's history before this line was a ~20x
+## supersample.** `project.godot` has `window/size/mode=2` -- WINDOW_MODE_MAXIMIZED
+## -- so the window came up filling the display no matter what this script
+## assigned to `root.size`, and `window/stretch/mode="canvas_items"` scales only
+## the 2D and leaves the 3D rendering at the window's true backing resolution.
+## Measured on this Mac: `win=6880x2756`, nineteen megapixels for a 1280x720
+## canvas. `capture()` then Lanczos-downscales that to `--size`, which is textbook
+## supersampling -- so aliasing, thin geometry and small HUD type all came out of
+## a proof looking better than they will on screen. `enemy_bars.gd` put a number
+## on it: an eight-stroke bracket that should be ~128 pixels of one exact palette
+## colour survived the downscale as FIVE.
+##
+## `root.size` is not the knob and never was -- a maximized window ignores it, and
+## the tell was two "different" `--size` runs reporting the same `vram_mb`.
+## `window_set_mode(WINDOW_MODE_WINDOWED)` first, THEN `window_set_size`: the mode
+## call is what releases the maximize, and a size set while still maximized is
+## silently dropped. `perf_probe.gd --win=`, `enemy_bars.gd` and `hud_lookdev.gd`
+## had each grown a local copy of these two lines; this is that fix, once, for
+## every director (#35).
+##
+## `Settings.apply_video` will not undo it: it only ever leaves FULLSCREEN, and
+## deliberately does not force a mode otherwise (see its comment).
+##
+## It prints what it GOT and not what it asked for, because a resize that does not
+## take is exactly the failure this whole card is about, and it must not be silent.
+func _size_the_window(win_size: Vector2i) -> void:
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	DisplayServer.window_set_size(win_size)
+	root.size = win_size
+	var got := DisplayServer.window_get_size()
+	if got != win_size:
+		push_warning("shoot.gd: asked for a %dx%d window and got %dx%d -- the "
+			% [win_size.x, win_size.y, got.x, got.y]
+			+ "capture will be resampled, so do not judge edges on it")
+	print("shoot: rendering at %dx%d" % [got.x, got.y])
 
 
 ## Put the harness window in the far bottom-right corner, out of the owner's way.
@@ -564,17 +604,57 @@ func capture(path: String) -> void:
 func hold(actions: Array, frames: int) -> void:
 	await process_frame
 	for a in actions:
-		if InputMap.has_action(a):
-			Input.action_press(a)
+		_send(a, true)
 	await _wait_frames(frames)
 	for a in actions:
-		if InputMap.has_action(a):
-			Input.action_release(a)
+		_send(a, false)
 
 
 ## Tap actions for a single frame.
 func tap(actions: Array) -> void:
 	await hold(actions, 2)
+
+
+## Press or release one action so BOTH kinds of reader see it.
+##
+## **`Input.action_press` sets action state and dispatches no `InputEvent` at
+## all** (CLAUDE.md §3), so until this existed, every action the game reads in
+## `_unhandled_input` was UNREACHABLE from a director: the press was issued,
+## nothing was delivered, and the beat silently measured the game not doing the
+## thing. `Targeting` (the z_target toggle), `PauseMenu` (inventory, map, pause,
+## the tab keys, ui_cancel) and `GameCamera` (first person) are all read that way
+## -- on purpose, so a toggle cannot miss an edge -- and all three were deaf.
+##
+## It cost two wrong readings before it was carded as #40. `p1_orbit`'s recentre
+## step photographed a camera that never moved for as long as it was written the
+## obvious way, and card #34's Slag Ogre session spent a run chasing arrows that
+## missed a body seven metres off, because `tap(["z_target"])` never locked on and
+## `HeroRanged._aim_at_target_or_camera` fell through to a crosshair raycast. Five
+## directors had each grown their own two-line copy of the block below; this is
+## that fix, once, where every director gets it.
+##
+## BOTH calls, and in this order. `parse_input_event` alone would satisfy the
+## event readers, but `Input.use_accumulated_input` is on by default, so the event
+## sits in the buffer until the main loop's next flush -- and a poller reading
+## `is_action_just_pressed` in THIS frame would miss an edge that the old code
+## delivered (`hold`'s docstring below the `await` explains why that frame matters
+## and is still correct). `action_press` puts the state in immediately; the event
+## arrives a flush later for the `_unhandled_input` readers.
+##
+## It cannot double-fire a poller. `Input` only stamps `pressed_process_frame` on
+## a not-pressed -> pressed transition, and the state is already pressed by the
+## time the event lands, so `is_action_just_pressed` is true in exactly one frame.
+func _send(action: StringName, pressed: bool) -> void:
+	if not InputMap.has_action(action):
+		return
+	if pressed:
+		Input.action_press(action)
+	else:
+		Input.action_release(action)
+	var ev := InputEventAction.new()
+	ev.action = action
+	ev.pressed = pressed
+	Input.parse_input_event(ev)
 
 
 ## Put `id` in the hero's right hand by PRESSING D-pad →, the way a player does.
@@ -631,8 +711,7 @@ func draw_weapon(id: StringName, limit: int = 8) -> bool:
 func hold_seconds(actions: Array, seconds: float) -> void:
 	await process_frame
 	for a in actions:
-		if InputMap.has_action(a):
-			Input.action_press(a)
+		_send(a, true)
 	var spent := 0.0
 	var deadline := Time.get_ticks_msec() + int(seconds * 4000.0) + 3000
 	while spent < seconds:
@@ -645,8 +724,7 @@ func hold_seconds(actions: Array, seconds: float) -> void:
 				% [actions, spent, seconds, Engine.time_scale, paused])
 			break
 	for a in actions:
-		if InputMap.has_action(a):
-			Input.action_release(a)
+		_send(a, false)
 
 
 ## The `DialogueBox` that is up, or null.

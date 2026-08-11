@@ -76,16 +76,14 @@ func run(rig) -> void:
 	_out = rig.arg("out", "/tmp/ebar/x.png").get_base_dir()
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
-	# **Render at 1280x720 for real, because this director reads pixels.**
+	# **This director reads pixels, so it has to render at 1:1.**
 	#
-	# `project.godot` sets `window/size/mode=2` (MAXIMIZED) and this Mac opens the
-	# harness window at 6880x2756 — nineteen megapixels for a 1280x720 canvas.
-	# `stretch/mode=canvas_items` scales the 2D but the 3D renders at the window's
-	# true backing resolution, and `shoot.gd` then Lanczos-downscales the shot to
-	# 1280x720. That is a 5.4x supersample, and a supersample is a BLUR: measured
-	# on `eb_06_lock_hostile.png`, an eight-stroke RUST bracket that should be ~128
-	# pixels of exactly `c85038` came back as **5**. Every other pixel of it was an
-	# intermediate blend of RUST and the courtyard.
+	# It used to resize the OS window itself. `shoot.gd` opened a 6880x2756 window
+	# for a 1280x720 canvas and Lanczos-downscaled the shot — a 5.4x supersample,
+	# and a supersample is a BLUR: measured on `eb_06_lock_hostile.png`, an
+	# eight-stroke RUST bracket that should be ~128 pixels of exactly `c85038` came
+	# back as **5**. Every other pixel of it was an intermediate blend of RUST and
+	# the courtyard.
 	#
 	# Which is fatal to a director whose entire method is "count pixels of a
 	# palette colour". `MOTH` (`807868`) sits in the middle of the palette, so it
@@ -93,16 +91,10 @@ func run(rig) -> void:
 	# rust=99 moth=95, and "the hostile bracket is not mostly its own colour" was
 	# a true statement about a blurred photograph of a correct bracket.
 	#
-	# `perf_probe.gd` already has the fix — make the OS window ACTUALLY the size,
-	# which `--size` alone does not do (that sets the viewport inside the window).
-	# At native resolution a 2 px stroke is 2 pixels of the exact authored colour
-	# and `_flat`'s tolerances mean what they say they mean.
-	#
-	# The supersampling itself is not this director's to fix (it is carded as #35).
-	# This is one director declining to measure through it.
-	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
-	DisplayServer.window_set_size(Vector2i(1280, 720))
-	await rig.wait_frames(4)
+	# `shoot.gd._size_the_window` does it for every director now (#35), so at
+	# native resolution a 2 px stroke is 2 pixels of the exact authored colour and
+	# `_flat`'s tolerances mean what they say they mean. This only reports what it
+	# got, because a resize that stops taking must not be silent here.
 	print("BARS render size=%s" % [DisplayServer.window_get_size()])
 
 	var scene: Node = rig.current_scene

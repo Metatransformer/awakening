@@ -75,14 +75,16 @@ func run(rig) -> void:
 	#
 	# On a pad this is R3 — the standing toggle. Step 6 covers the trigger.
 	#
-	# A real InputEventAction, not `Input.action_press`: `Targeting` reads this
-	# button in `_unhandled_input` (it queues the press so a slow physics tick
-	# cannot drop the edge), and `action_press` sets the action's state without
-	# dispatching any InputEvent at all — CLAUDE.md §3. This step photographed a
-	# camera that never moved for as long as it was written that way.
+	# `rig.tap`, which sends a real InputEventAction as well as setting the action
+	# state (#40). `Targeting` reads this button in `_unhandled_input` — it queues
+	# the press so a slow physics tick cannot drop the edge — and the harness's old
+	# `Input.action_press` set the state while dispatching no InputEvent at all
+	# (CLAUDE.md §3). This step photographed a camera that never moved for as long
+	# as it was written that way, which is what carded #40; the local workaround it
+	# grew is gone now that `rig.tap` is honest.
 	await _drag(rig, Vector2(-22.0, 0.0), 12)
 	await _shot(rig, "preZ")
-	_tap(&"z_target")
+	await rig.tap(["z_target"])
 	await rig.wait_seconds(0.03)
 	for i in 5:
 		await rig.wait_seconds(0.05)
@@ -106,14 +108,6 @@ func run(rig) -> void:
 		await _shot(rig, "guardRecenter")
 	Input.action_release(&"shield")
 
-
-## One press-and-release of `action`, down the real event path.
-func _tap(action: StringName) -> void:
-	for pressed: bool in [true, false]:
-		var ev := InputEventAction.new()
-		ev.action = action
-		ev.pressed = pressed
-		Input.parse_input_event(ev)
 
 
 ## Push `count` real mouse-motion events, then let a physics tick consume them.

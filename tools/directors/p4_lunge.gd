@@ -234,7 +234,7 @@ func _lock_on(rig, hero: Node3D) -> int:
 	for i in 4:
 		if hero.call(&"lock_target") != null:
 			return i
-		_z_target()
+		await rig.tap(["z_target"])
 		await rig.wait_frames(SETTLE)
 	return 4
 
@@ -243,19 +243,9 @@ func _lock_off(rig, hero: Node3D) -> void:
 	for _i in 4:
 		if hero.call(&"lock_target") == null:
 			return
-		_z_target()
+		await rig.tap(["z_target"])
 		await rig.wait_frames(20)
 
-
-## The lock-on button, delivered as a real event. `Input.action_press` sets
-## action state but dispatches NO InputEvent (CLAUDE.md §3), and Targeting reads
-## the press in _unhandled_input precisely so it cannot miss an edge — so a
-## director that presses the action the ordinary way locks onto nothing.
-func _z_target() -> void:
-	var ev := InputEventAction.new()
-	ev.action = &"z_target"
-	ev.pressed = true
-	Input.parse_input_event(ev)
 
 
 func _on_struck(amount: int, _from: Vector3) -> void:
