@@ -47,10 +47,23 @@ const FROST := Color("48a8c8")
 
 # --- Bag value tiers --------------------------------------------------------
 ## The thresholds at which the bag stops being pocket change and starts being
-## something you can lose. [tune]
-const T1 := 250
-const T2 := 1000
-const T3 := 3000
+## something you can lose. **A tier is a floor of the Descent**: each number is
+## about where the median bag stands when the player takes a stair. The economy
+## owns them -- `docs/METAGAME.md` §3.1 is the design of record and
+## `tools/bag_curve.gd` is the measurement it is read off, re-runnable in ten
+## seconds with no GPU. [tune]
+##
+## **T3 was 3000 and no bag could hold it** (card #49, 2026-08-11). The best
+## selection of distinct full stacks a 12-slot bag can carry is 2782, so a
+## starting bag could not reach it by any route the drop tables supply -- and the
+## behaviour it gates (`Hud._draw_slips`' 0.5 Hz breath, and the repaint that
+## keeps it moving) shipped dead.
+## 2000 sits above the largest floor-2 bag in 400 simulated runs (2177, on a
+## maxed save chaining the whole floor) and below the end of a careful floor 3-4,
+## which is what makes it a threshold rather than a wall.
+const T1 := 250      ## partway through floor 1 -- the median bag at that stair is 351
+const T2 := 1000     ## the end of floor 2 -- median 1052
+const T3 := 2000     ## the deep half: floor 3 on a bought bag, or floor 4 carried well
 
 # --- Layout, as fractions of the viewport (STYLEGUIDE §5.7) -----------------
 const SAFE := Vector2(0.025, 0.031)

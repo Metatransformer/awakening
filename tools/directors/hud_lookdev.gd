@@ -139,23 +139,36 @@ func run(rig) -> void:
 	# The gold stays: T2 also lerps the fog toward GOLD, and a purse that can
 	# actually pay the extraction fee is what the other beats want on screen.
 	#
-	# **And signets could not get there either.** They stack 2 to a slot at 90
-	# each, so a whole 12-slot bag of nothing else is 1080 against a T3 of 3000.
-	# The best slot in the game is Deep Amber (55 × 6 = 330), which puts the
-	# STARTING bag's absolute ceiling at 3960 and a realistic mixed one nowhere
-	# near it. So this beat also buys slots, which is what a player would have
-	# done by the time this frame is true of them. See HUD_PLAN §15.10 — T3 being
-	# this hard to reach is a finding about the thresholds, not a quirk here.
+	# **The setup used to be `Game.bag_slots = 20` and 42 Deep Amber**, because a
+	# T3 of 3000 could not be reached any other way — and 20 slots is not a save a
+	# player can have (`ShopDb.LIMITS[&"bag_slot"]` is 4 over a start of 12, so 16
+	# is the ceiling). Card #49 moved `Pal.T3` to 2000 against the measured curve
+	# in `docs/METAGAME.md` §3.1, and this is what the beat costs now: **the
+	# default twelve slots, and a bag a real run reaches.**
 	#
-	# 20 slots is also the only thing that ever checks decision 26's claim that
-	# the slot-mark row is read from `Run` rather than hard-coded at twelve.
+	# 2264 is deliberately not a round number. It is the MEDIAN bag a careful
+	# 12-slot run is holding at the foot of floor 4 (§3.1's table says 2239), so
+	# the frame photographs the state at the moment it is typically true rather
+	# than at some ceiling — which is the whole complaint #49 was filed about.
 	Game.add_gold(5000)
-	Game.bag_slots = 20
-	Run.collect(&"deep_amber", 42)
+	Run.collect(&"ghost_silk", 6)
+	Run.collect(&"ember_gland", 5)
+	Run.collect(&"deep_amber", 8)
+	Run.collect(&"void_pearl", 5)
+	Run.collect(&"kings_signet", 2)
 	if Pal.tier(Run.bag_value()) < 3:
 		push_error("HUDLOOKDEV h_09_t3: bag is %d, T3 is %d — this frame is not T3"
 			% [Run.bag_value(), Pal.T3])
 		_fails += 1
+	# The bag must not have needed a slot the smith cannot sell. If a later tune
+	# pushes T3 back out of a starting bag's reach, this is the line that says so
+	# rather than the frame quietly going back to being an upgrade screenshot.
+	if Run.slots_used() > Game.bag_slots:
+		push_error("HUDLOOKDEV h_09_t3: %d slots used of %d"
+			% [Run.slots_used(), Game.bag_slots])
+		_fails += 1
+	print("  ok   HUDT3 bag=%d slots=%d/%d (default bag, no upgrades)"
+		% [Run.bag_value(), Run.slots_used(), Game.bag_slots])
 	await rig.wait_frames(50)
 	await _shot(rig, out.path_join("h_09_t3.png"), "h_09_t3")
 
@@ -165,6 +178,18 @@ func run(rig) -> void:
 	#     Diff the two slips and the animation is either there or it is not.
 	await rig.wait_frames(60)
 	await _shot(rig, out.path_join("h_09_t3_phase.png"), "h_09_t3_phase")
+
+	# 7b². The slot-mark row at the BIGGEST BAG THAT CAN EXIST — 12 start plus the
+	#      smith's four (`ShopDb.LIMITS`). This is decision 26's claim that the row
+	#      is read from `Run` rather than hard-coded at twelve, and until #49 it
+	#      rode along on the T3 setup's `bag_slots = 20`: a number no save can
+	#      hold, checking a rule at a value the rule never has to serve. It gets
+	#      its own frame and the real ceiling now. Sixteen marks, ten lit — the
+	#      same bag as the frame above, in a bag that has been paid for.
+	Game.bag_slots = 16
+	Bus.bag_changed.emit(Run.bag, Run.bag_value())
+	await rig.wait_frames(6)
+	await _shot(rig, out.path_join("h_09c_slots.png"), "h_09c_slots")
 
 	# 7c. The floor card, announcing and settled (decision 18).
 	#

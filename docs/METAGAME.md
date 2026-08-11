@@ -103,7 +103,121 @@ see exactly what they are leaving behind. That is the anti-hoarding pressure —
 late in a run, picking up a Bone Shard means declining a Void Pearl.
 
 Bag slots are purchasable (4 more, at rising cost), so the pressure eases as a
-deliberate reward rather than disappearing.
+deliberate reward rather than disappearing. **Four is the whole ladder**
+(`ShopDb.LIMITS[&"bag_slot"]`), so the biggest bag that can exist on any save,
+ever, is **16 slots** — three of which are the document case (§5) and are counted
+separately, which matters below.
+
+## 3.1 What the bag is worth, floor by floor — and what a tier means
+
+> **Decided 2026-08-11 (card #49). This is a session's call, made while the repo
+> owner was asleep, and it is REVERSIBLE**: the change is one constant, `Pal.T3`
+> in `scripts/ui/style.gd`, from `3000` to `2000`, and the frame that proves it
+> re-shoots in three minutes (`tools/directors/hud_lookdev.gd`, beat `h_09_t3`).
+> If the owner disagrees, put `3000` back; nothing else in the economy reads it.
+
+The HUD reads the bag through three thresholds — `Pal.T1/T2/T3` and `Pal.tier()`
+in `scripts/ui/style.gd` — and they drive real behaviour, not just a colour. Two
+things, exactly, both in `scripts/ui/hud/hud.gd`: **at T2** a dithered GOLD halo
+one ring outboard of the bag rim (`_draw_rim`), and **at T3** a 0.5 Hz brightness
+breath over the whole slip stack (`_draw_slips`), which is also the one thing on
+this HUD that holds `busy` and keeps it repainting frame by frame. Card #49's own
+description — "the fog lerp" — is wrong; nothing in the renderer reads
+`Pal.tier`, and `docs/HUD_PLAN.md` decision 33 ranks the two effects above as the
+T2 and T3 rungs of the rim's precedence ladder.
+
+Until this section existed **nothing said what a tier was meant to represent**,
+which is why nobody noticed that T3 was set to a number the game does not
+produce.
+
+**A tier is a floor of the Descent.** Each threshold sits at roughly the median
+bag a player is holding when they take a stair:
+
+| Tier | Bag value | What it says | Where a run crosses it |
+|---|---|---|---|
+| T0 | under 250 | pocket change — under 60 the fee is still the `EXTRACT_MIN` floor of 15 | the first rooms |
+| **T1** | **250** | a floor's worth. Worth the walk home. | partway through floor 1 (median at the stair: 351) |
+| **T2** | **1000** | two floors' worth. The run is worth protecting now. | the end of floor 2 (median 1052) |
+| **T3** | **2000** | the deep half. More than you can afford to lose. | the end of floor 3 on a bought bag (median 2068), or floor 4 (median 2239 for a player who chose what to carry) |
+
+### The curve those numbers are read off
+
+`tools/bag_curve.gd` is the evidence and it is re-runnable —
+`godot --path . --headless -s tools/bag_curve.gd`, no GPU, about ten seconds. It
+does not build a dungeon; it rebuilds the *counts* one produces (`FloorDb.rooms`
+/ `pack` / `roster`, `Dungeon.chest_chance` 0.55, `Prog.chest_picks`,
+`Prog.drop_rolls`, `Enemy.DEFS` health), rolls them through the real
+`ItemDb.roll` tables, and pushes every mote through the real `Run.collect` — so
+the slot arithmetic is the shipped one, case-first and all. 400 seeds, bag
+carried down all four floors because the stair carries it.
+
+Three readings, because one would hide the argument. **SWEPT** is a player who
+walks over everything: their bag fills with whatever fell first and then refuses
+the good stuff, and since there is no drop verb that is a real ceiling for them,
+not a strawman. **BEST** is the best selection of slots out of everything that
+fell on floors 1..N — nobody plays that well, it needs foresight about which
+motes to step around, so it is an upper bound on careful play. **HOT** is BEST
+plus the heat premium a strong chain stamps on body loot (§4.5), modelled at a
+generous ×1.4 sustained.
+
+Bag value at the moment the stair is taken, median across 400 seeds:
+
+| | floor 1 | floor 2 | floor 3 | floor 4 |
+|---|---|---|---|---|
+| **12 slots** — swept | 351 | 1052 | 1611 | 1795 |
+| **12 slots** — careful | 356 | 1141 | 1782 | 2239 |
+| **12 slots** — careful + hot | 420 | 1426 | 2292 | 2829 |
+| **16 slots** — swept | 359 | 1287 | 2068 | 2372 |
+| **16 slots** — careful | 359 | 1307 | 2172 | 2792 |
+| **16 slots** — careful + hot | 422 | 1634 | 2788 | 3560 |
+
+Two things fall out of that table and they are the whole of the decision.
+
+**The top of the ladder has to be out of reach on the shallow half, and 2000
+is.** Floor 1 never approaches it — the best bag in 400 seeds was 746. Floor 2's
+*median* is 1052 on a starting bag and 1287 on a bought one, and its 90th
+percentile is 1596 / 1862; only the extreme tail touches T3 at all, and that tail
+is a specific run — a maxed sixteen-slot save that held a chain across the whole
+floor, topping out at 2177. A player who did that is carrying more than the floor
+usually gives up and the breath is not a lie about them. Put T3 anywhere lower
+and it stops being the deep half; the next round number down, 1500, is inside
+floor 2's ordinary spread.
+
+**And the deep half sits squarely on either side of it**, which is what makes
+2000 a threshold rather than a wall: the sweeper who took every Bone Shard on the
+way down ends floor 4 at 1795 and does *not* get the breath; the same run played
+with §3's pressure respected ends at 2239 and does. T3 is therefore a statement
+about how you filled the bag as well as how far down you went — which is the
+question §3 exists to ask.
+
+### Why 3000 was unreachable, and why the reason matters
+
+Card #49 reported the ceiling of a starting bag as 3960 — twelve slots of Deep
+Amber at 55 × 6 — and concluded that "the best bag in the game barely clears
+3000". **The arithmetic is right and the conclusion is the wrong shape**, in both
+directions, which is worth writing down because the corrected version is a
+stronger argument:
+
+- The best bag in the game is not twelve slots, it is **sixteen** (above), whose
+  Deep Amber ceiling is 5280. T3 was never "barely clearable".
+- But a monoculture ceiling is not evidence about anything. 3960 needs
+  **seventy-two Deep Amber**, which drop from chests at weight 12 of 166 — about
+  0.5 per floor. The number that bounds real play is the best *distinct* stacks a
+  bag can hold, and `bag_curve.gd` prints it: **2782 for twelve slots, 3312 for
+  sixteen**. So a starting bag could not reach a T3 of 3000 **at all**, by any
+  route the drop tables can supply, and a fully bought one had to be filled
+  almost perfectly. That is a harder failure than "barely clears it".
+
+The behaviour behind T3 was therefore dead code for every player who had not
+bought four bag slots, and close to it for those who had. The alternative
+resolution — declare the thresholds to be about a late bag and say so in the
+docs — was considered and rejected: it would leave the game's top HUD state
+gated on a shop purchase rather than on the run, and a rung the player reaches by
+*shopping* is not a reading of the bag. The number moved instead.
+
+`Pal.T1` and `Pal.T2` are unchanged. They were already sitting where the measured
+curve puts them (T1 under floor 1's 351, T2 on floor 2's 1052), which is the
+other half of why only T3 moved.
 
 ---
 
@@ -1122,6 +1236,7 @@ second one is a decision.
 | Garrison↔dungeon transition and fade | `scripts/autoload/game_flow.gd` |
 | The end-of-run receipt, both endings | `scripts/ui/run_end/run_end_screen.gd` |
 | Ingredients, components and drop tables | `scripts/items/item_db.gd` |
+| The bag's value tiers (§3.1), and the curve they are read off | `scripts/ui/style.gd` (`Pal.T1/T2/T3`), `tools/bag_curve.gd` |
 | The smith's catalogue, and the forge recipes | `scripts/items/shop_db.gd` |
 | The alchemist's catalogue, and the brew recipes | `scripts/items/alchemy_db.gd` |
 | The jewelcrafter's slots, paths and rungs | `scripts/items/jewel_db.gd` |
