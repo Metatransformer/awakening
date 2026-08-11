@@ -535,7 +535,15 @@ static var BOSSES := {
 			# a footrace.
 			"cover": true, "cover_count": 2,
 		},
-		"drop": {"item": &"far_lantern", "relic": &"waterwheel_gear"},
+		# `pillar_shard`, not `waterwheel_gear`. GDD §6.2 deleted the Waterwheel
+		# Gear and moved the Pillar-Shard onto this boss to fill the freed slot,
+		# and this row was still naming the deleted one -- an id no longer in
+		# `RelicDb.RELICS`, so boss 4 was dropping an object the Lanternkeeper
+		# had never heard of. `validate()` below has caught exactly this class of
+		# error since the Glass-Kiln Core was misspelled; it only ever runs when
+		# a director asks it to, which is why `RelicDb.validate()` now asks the
+		# same question from the relic side as well.
+		"drop": {"item": &"far_lantern", "relic": &"pillar_shard"},
 		"music": "res://audio/music/boss_4.ogg",
 		"lore": "It held the Chord Gate for the Imperium and it is still "
 			+ "holding it, split from gorget to hip by whatever came through. "
