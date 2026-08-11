@@ -122,14 +122,17 @@ extends Catalogue
 ## `blurb + detail` upward from the bottom of the panel at ~63 characters a line,
 ## and the twelve rows above it reach down to within five lines of it.
 ##
-## **TODAY ONLY TWO OF THOSE LINES DRAW, and the entries below are longer than
-## that.** `CanvasText.wrap()` takes a `max_lines` that DEFAULTS TO 2 and
-## `trade_screen.gd` does not pass one, so every entry here is clipped mid-word
-## on the counter -- `relic_donate.gd`'s `r_21_hold.png` is the frame that caught
-## it. This comment used to claim four lines fit; it was never true.
+## ~~TODAY ONLY TWO OF THOSE LINES DRAW~~ **Fixed, and not the way this note
+## expected.** The clipping was `CanvasText.wrap()`'s `max_lines` defaulting to 2
+## with `trade_screen.gd` not passing one -- `relic_donate.gd`'s `r_21_hold.png`
+## is the frame that caught it. The trade screen was then rebuilt out of Control
+## nodes, so the blurb is a `Label` with `AUTOWRAP_WORD_SMART` and
+## `SIZE_EXPAND_FILL` and wraps to the panel with no line cap at all.
+## `CanvasText.wrap` had no callers left after that and is deleted.
 ##
-## `# NEEDS:` one argument at the `CanvasText.wrap` call in
-## `scripts/ui/shop/trade_screen.gd` (`, 4`). The panel has the room -- the list
+## ~~`# NEEDS:` one argument at the `CanvasText.wrap` call in
+## `scripts/ui/shop/trade_screen.gd` (`, 4`).~~ Done by the rebuild; there is no
+## such call any more. The panel has the room -- the list
 ## ends around 90 px above where the blurb starts -- and the fix belongs there
 ## rather than here, because the smith's and the alchemist's blurbs are clipped
 ## by the same default. The lore was deliberately NOT cut down to ~80 characters

@@ -1513,3 +1513,36 @@ Two other rows were corrected in the same transcription rather than copied:
   it shipped, and decision 29 has since moved it to `r = 0.42h` with a
   camera-relative bearing. A doc that lists an unbuilt element beside eleven
   built ones is how the next agent comes to believe it exists.
+
+## 15.9 Every legibility call in this document was made on a supersampled frame
+
+`project.godot`'s `window/size/mode` is `2` (`WINDOW_MODE_MAXIMIZED`), so the
+window fills the display whatever `shoot.gd` assigns to `root.size`, and
+`stretch/mode = canvas_items` scales the 2D while leaving the 3D at the window's
+true backing resolution. Measured live on this machine: `win=6880x2756` —
+nineteen megapixels — which `shoot.gd`:462-466 then Lanczos-downscales to
+1280×720.
+
+**This flatters exactly the things this card is about.** A 1 px VOID hairline is
+20 px before the downscale; 10 px type is 200 px of vector outline resolved down
+to ten rows of grey. Hairline weight, small-type legibility and edge quality all
+come back better than a player's screen will give them. Carded as **#35**, and
+not this card's to fix — `tools/shoot.gd` is shared and several sessions run
+directors against it at once.
+
+What it means for the decisions already landed:
+
+* **Decision 2's ladder and decision 28's "10 px is the bottom" were chosen
+  against supersampled frames.** The argument for both is a hierarchy argument
+  and does not depend on the render path — 10 px is the bottom because there is
+  nothing below it and because §2's second rule forbids the smallest text being
+  the text you read mid-fight. But the *empirical* half — "and it reads fine at
+  10 px" — has not actually been tested at native 720p.
+* **Decision 4.1's VOID hairline** (kept over §14.8's proposal to drop it) rests
+  on an empty ASH track being legible over torchlit brick. That is the claim most
+  likely to be wrong at true resolution, and it is worth re-checking when #35
+  lands rather than re-litigating now.
+
+Not re-opening any landed item over this. From here on a legibility judgement in
+this document says which resolution it was made at, and a director that wants a
+true-native frame can do what `perf_probe.gd` does and set `--win=` itself.

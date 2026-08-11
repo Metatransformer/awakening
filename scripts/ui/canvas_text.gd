@@ -81,33 +81,25 @@ static func height(scale: float) -> float:
 	return H * scale
 
 
-## Break `text` on spaces so no line exceeds `max_width` screen pixels, capped at
-## `max_lines` (the overflow is dropped, not squeezed).
-##
-## This measures now rather than counting characters — the old version could do
-## the latter only because every glyph was the same width. It exists because the
-## shop drew its blurb as one unwrapped line and the longer forge blurbs ran out
-## through the right edge of the panel and kept going.
-static func wrap(text: String, scale: float, max_width: float,
-		max_lines: int = 2) -> PackedStringArray:
-	var lines := PackedStringArray()
-	var line := ""
-	for word in text.split(" ", false):
-		var candidate: String = word if line.is_empty() else line + " " + word
-		if width(candidate, scale) <= max_width:
-			line = candidate
-			continue
-		if not line.is_empty():
-			lines.append(line)
-			if lines.size() >= max_lines:
-				return lines
-		# A single word wider than the line gets cut rather than overhanging.
-		line = word
-		while line.length() > 1 and width(line, scale) > max_width:
-			line = line.substr(0, line.length() - 1)
-	if not line.is_empty() and lines.size() < max_lines:
-		lines.append(line)
-	return lines
+# `wrap(text, scale, max_width, max_lines)` was here: greedy word wrapping that
+# measured with `width()` and dropped the overflow. It had exactly one caller,
+# `trade_screen.gd`, which drew its blurbs with `draw_*` at the time and did not
+# pass `max_lines`, so every relic blurb was clipped at two lines and mid-word --
+# `relic_donate.gd`'s `r_21_hold.png` is the frame that caught it. The trade
+# screen was later rebuilt out of Control nodes, and a `Label` with
+# `autowrap_mode = AUTOWRAP_WORD_SMART` and `SIZE_EXPAND_FILL` answers the same
+# question better: it re-wraps when the panel resizes, which a measured-once
+# `PackedStringArray` cannot.
+#
+# It is deleted rather than kept for a future canvas-drawn screen, because a
+# helper nothing calls is a helper nobody maintains, and this one was already
+# carrying a lie in `relic_db.gd`'s header about a defect it no longer had.
+#
+# **If you are about to reinstate it for a HUD line, read `Hud._pack_legend`
+# first.** The legend does NOT want this function and says why: it breaks on
+# spaces, and a HUD line is a list of ENTRIES that each contain a space
+# ("LMB SWORD"), so word wrapping splits a cap from its verb and collapses the
+# separators that make the row read as a list. Break between entries instead.
 
 
 ## Draw `text` with the TOP of its capitals at `at`. Returns the advance width.
