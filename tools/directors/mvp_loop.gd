@@ -297,8 +297,8 @@ func _fight(rig) -> bool:
 	print("MVP layout rooms=%d deepest=%s seed=%d" % [
 		dun.rooms.size(), dun.deepest, Run.seed_used])
 
-	var foes: Array = rig.scene().get_tree().get_nodes_in_group(&"enemy")
-	# **Split, because the bare total opened a card that then had to be closed.**
+	# **Split, because the bare total opened a card that then had to be closed --
+	# and then PICKED FROM, because the split was being printed and ignored.**
 	# `enemies=24` reads as a crowd and is not one: on floor 1 between ten and
 	# fifteen of those bodies are the vault's guards, the boss and the miniboss,
 	# each behind a door that cannot be opened on the way past, and the rest are
@@ -306,16 +306,48 @@ func _fight(rig) -> bool:
 	# undivided number and closed by measuring the divided one --
 	# `tools/directors/floor_crowd.gd` is what measures it, and
 	# `docs/BESTIARY.md` §7 is what the split means.
-	var walked := 0
-	for e in foes:
-		for cell: Vector2i in dun.rooms:
-			if dun.rooms[cell]["node"] == (e as Node).get_parent():
-				walked += 1
-				break
+	var split := _split_foes(rig, dun)
+	var open: Array = split["walked"]
+	var sealed: Array = split["sealed"]
+	var foes: Array = split["all"]
 	print("MVP enemies=%d (%d in rooms, %d behind a door)" % [
-		foes.size(), walked, foes.size() - walked])
+		foes.size(), open.size(), sealed.size()])
 	if foes.is_empty():
 		print("MVP FAIL no enemies spawned")
+		return false
+	# **THE PICK IS FROM THE ROOMS, AND `foes[0]` WAS NOT (#60).**
+	#
+	# What was measured, because #60 was opened on a guess and the guess was
+	# wrong in the reassuring direction. `get_nodes_in_group` answers in TREE
+	# ORDER, and the tree order is:
+	#
+	#   * `Vault` and `MinibossArena` hang off the `Dungeon` itself, not off a
+	#     room root, and are built after every room -- so their 12-15 bodies come
+	#     LAST in the group, never first;
+	#   * the boss's `Arena` IS a child of its room root, and `_build_anchors`
+	#     runs before `_populate`, so the boss precedes that room's own pack --
+	#     but the arena's room is the DEEPEST one, which lands 3rd to 5th in the
+	#     rooms dict, while the first populated room is the 1st or 2nd.
+	#
+	# So `foes[0]` was a room body on 40 of 40 seeds probed, and this beat has
+	# NOT been measuring a vault fight. The card's premise -- "the sealed bodies
+	# iterate first on every seed" -- came from `floor_crowd._census`, which
+	# PRINTS its sealed tally before its per-room lines; that is a report layout,
+	# not an iteration order, and nobody had checked which.
+	#
+	# The pick is still wrong, and stays fixed, because nothing above is a
+	# property anyone maintains: it holds only while the deepest room is never
+	# the first populated one and the vault is never parented into a room. Either
+	# of those is one anchor-ordering commit away, and the failure it would cause
+	# is silent -- the hero teleported inside a sealed vault, with the fight, the
+	# drop, the chest and the extraction beats all reporting on a run no player
+	# could have had. The diagnosis is printed EVERY run below, so the day the
+	# order does change, the log says so instead of going quiet.
+	if open.is_empty():
+		print(("MVP FAIL every one of this floor's %d bodies is behind a door"
+			+ " (vault / arena / miniboss) -- there is no fight a player could"
+			+ " reach here, and fighting a sealed one would measure a run that"
+			+ " cannot happen. Refusing to pick.") % foes.size())
 		return false
 	# CharacterBody3D, not a concrete enemy class. The dungeon spawns only `Enemy`
 	# now, but this stays loose on purpose: it used to be typed to the box-built
@@ -324,8 +356,13 @@ func _fight(rig) -> bool:
 	# the drops and the chest, while the log still ended with a tidy "MVP home".
 	# Anything that reaches for a specific enemy class here will break again the
 	# next time the roster grows.
-	var foe: CharacterBody3D = foes[0]
-	print("MVP foe kind=%s" % str(foe.get("kind")))
+	var foe: CharacterBody3D = open[0]
+	var owner_of: Dictionary = split["owner_of"]
+	print("MVP foe kind=%s in room %s (group head was %s, %s)" % [
+		str(foe.get("kind")), owner_of[foe.get_parent()],
+		str(foes[0].get("kind")),
+		"the same body" if foes[0] == foe else "sealed under %s -- SKIPPED"
+			% (foes[0] as Node).get_parent().name])
 
 	# Stand just outside its reach, facing it, so the telegraph is on camera.
 	var toward := K.flat(foe.global_position - Vector3.ZERO)
@@ -613,6 +650,43 @@ func _walk(root: Node) -> Array:
 
 
 # --- Helpers ----------------------------------------------------------------
+
+## Every body in the `enemy` group, split by whether a player could ever reach it.
+##
+## Returns `{"all", "walked", "sealed", "owner_of"}` -- the group verbatim, the
+## bodies parented to a ROOM ROOT, the bodies parented to anything else, and the
+## room-root -> cell map the attribution is made through.
+##
+## **Parentage, not position, and that is the whole of the attribution.**
+## `Dungeon._spawn_foe` parents every room body to `rooms[cell]["node"]`, so this
+## is the generator's own answer to "whose is it". A body that has walked out into
+## the corridor is still its room's; attributing it by where it stands would let a
+## conga line read as a tidy census, and would let a vault guard that happened to
+## stand near a doorway read as walkable. `floor_crowd._census` makes the same
+## call for the same reason -- these two are the only places in the repo that
+## divide this group, and they must agree.
+##
+## Anything NOT under a room root belongs to something the generator built beside
+## the room tree: the vault (`Vault`), the boss's `Arena`, the miniboss's
+## `MinibossArena`. Every one of those is behind a door the player cannot open on
+## the way past (`docs/BESTIARY.md` §7), and every one of them is nevertheless in
+## the `enemy` group.
+func _split_foes(rig, dun: Dungeon) -> Dictionary:
+	var owner_of: Dictionary = {}
+	for cell: Vector2i in dun.rooms:
+		var node: Node = dun.rooms[cell].get("node")
+		if node != null:
+			owner_of[node] = cell
+	var all: Array = rig.scene().get_tree().get_nodes_in_group(&"enemy")
+	var walked: Array = []
+	var sealed: Array = []
+	for e in all:
+		if owner_of.has((e as Node).get_parent()):
+			walked.append(e)
+		else:
+			sealed.append(e)
+	return {"all": all, "walked": walked, "sealed": sealed, "owner_of": owner_of}
+
 
 ## Walk out of the fight and wait for the pack to lose interest.
 ##
