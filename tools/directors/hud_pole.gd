@@ -38,6 +38,61 @@ func _shot(rig, path: String, tag: String) -> void:
 	_fails += Layout.check(tag)
 
 
+## Card #48. **A counter takes the screen, so the HUD stands down for it** — and
+## the frame that carded this had the two-row control legend reading out below the
+## Lanternkeeper's panel, naming RMB GUARD and D-PAD WEAPON while the counter had
+## the input and none of them did anything.
+##
+## Read off `Hud.layout_rects()` and not `Hud.visible`, which is the property the
+## fix sets and would therefore agree with itself. The layout dictionary is filled
+## by `_draw_hud` and cleared when the overlay stands down, so "empty" here means
+## *the HUD published no rectangle for this frame* — the same instrument every
+## other assertion in this file reads, pointed at the one state where it used to
+## go stale rather than empty.
+##
+## **Both answers are known and both are demanded, in this order.** With the
+## counter up the honest answer is nothing at all; four frames after it closes the
+## honest answer is the full pole again, legend included, passing assertion 2.
+## Only the second half can catch an instrument that has quietly stopped
+## reporting, which is exactly how a check like this rots into a no-op.
+func _counter_stands_the_hud_down(rig, out: String) -> int:
+	var fails := 0
+	var before: int = Hud.layout_rects().size()
+
+	# Her own catalogue, so the board that appears is the one the carded frame
+	# was of. Opened directly rather than walked to: `relic_donate.gd` owns
+	# whether she can be reached, and this is a question about layering.
+	var screen := TradeScreen.open(rig.scene(), TradeScreen.Mode.BUY,
+		"THE FAR LANTERN", RelicDb, &"keeper")
+	await rig.wait_frames(12)
+	await rig.capture(out.path_join("g_11_counter.png"))
+
+	var during: Dictionary = Hud.layout_rects()
+	if during.is_empty():
+		print("  ok   POLESHOP counter up: the HUD published 0 rects (was %d)"
+			% before)
+	else:
+		print("POLE FAIL the counter is up and the HUD still drew %d rect(s), "
+			% during.size() + "including %s" % [during.keys().slice(0, 6)])
+		fails += 1
+
+	screen.close()
+	# The layer is `queue_free`d, so the HUD's own `node_removed` deferral needs a
+	# frame to land before the second half of the calibration is asked.
+	await rig.wait_frames(8)
+	Hud.show_controls()
+	await rig.wait_frames(2)
+	await _shot(rig, out.path_join("g_12_counter_gone.png"), "g_12_counter_gone")
+	if Hud.layout_rects().has(&"legend"):
+		print("  ok   POLESHOP counter closed: the pole and the legend are back "
+			+ "(%d rects)" % Hud.layout_rects().size())
+	else:
+		print("POLE FAIL the counter closed and the legend never came back — "
+			+ "the frame above proves nothing about the counter")
+		fails += 1
+	return fails
+
+
 func run(rig) -> void:
 	var out: String = rig.arg("out", "/tmp/pole/x.png").get_base_dir()
 	await rig.wait_frames(30)
@@ -142,6 +197,8 @@ func run(rig) -> void:
 		if Hud.layout_rects().has(&"legend"):
 			print("POLE FAIL the legend is still drawing after hide_controls()")
 			_fails += 1
+
+		_fails += await _counter_stands_the_hud_down(rig, out)
 
 	print("POLECHECK scene=%s draughts=%d magic=%d/%d q=%d layout_fails=%d" % [
 		tag, Game.draughts.size(), Game.magic, Game.max_magic, Game.quarters, _fails])

@@ -372,11 +372,11 @@ func _ready() -> void:
 	# plan itself only changes on these, so the minimap is not asking `Atlas`
 	# anything it has not been told.
 	Bus.map_changed.connect(_repaint)
-	# Somebody is talking to you, and the overlay stands down for it. See
-	# `_refresh_visibility` -- this is a flag and not a direct `visible` because
+	# A full-screen UI took input, and the overlay stands down for it. See
+	# `_refresh_visibility` -- these are a set and not a direct `visible` because
 	# that function has the last word on this property.
-	Bus.screen_opened.connect(func(id: StringName) -> void: _on_conversation(id, true))
-	Bus.screen_closed.connect(func(id: StringName) -> void: _on_conversation(id, false))
+	Bus.screen_opened.connect(func(id: StringName) -> void: _on_screen(id, true))
+	Bus.screen_closed.connect(func(id: StringName) -> void: _on_screen(id, false))
 	Bus.heat_changed.connect(_on_heat)
 	Bus.heat_tier_changed.connect(_on_heat_tier)
 	Bus.escape_rope_broken.connect(_on_escape_rope_broken)
@@ -655,39 +655,76 @@ func _on_tree_changed(_n: Node) -> void:
 	_refresh_visibility.call_deferred()
 
 
-## True while a `DialogueBox` is up. See `_refresh_visibility`.
-var _conversing: bool = false
+## Which full-screen UIs are up, by the id `Bus.screen_opened` carried. See
+## `_refresh_visibility`.
+##
+## **A set and not a boolean, and it listens to every id and not one of them.**
+## This was `_conversing`, filtered to `&"dialogue"`, and card #48 is what that
+## filter cost: the Lanternkeeper's counter emits `screen_opened(&"trade")` and
+## the HUD ignored it, so a shop modal shipped with the world control legend
+## reading out from under its bottom edge -- RMB GUARD, SPC DODGE, D-PAD WEAPON,
+## every one of them a button that does nothing while a counter has the input.
+## `screen_opened`'s own docstring already said the rule ("a full-screen UI took
+## or gave back input"); the HUD just was not applying it.
+##
+## The set matters because these nest: the stash screen opens over the trade
+## screen at the smith's, and a boolean would be cleared by the inner one closing
+## while the outer is still up.
+var _screens: Dictionary[StringName, bool] = {}
 
 
-func _on_conversation(id: StringName, up: bool) -> void:
-	if id != &"dialogue":
-		return
-	_conversing = up
+func _on_screen(id: StringName, up: bool) -> void:
+	if up:
+		_screens[id] = true
+	else:
+		_screens.erase(id)
 	_refresh_visibility()
 
 
 ## Gameplay scenes have a hero; lookdev boxes and tool scenes do not, and an
 ## overlay on a weapon rack is just noise in a contact sheet.
 ##
-## **And nobody is talking to you.** The dialogue box is a strip across the
-## bottom of a LIVE courtyard -- it does not cover this the way the trade screen
-## does -- and it lands in the same two corners as the bars and the key legend.
-## The first frame of it had "RMB GUARD | LMB DASH" reading out from under the
-## panel while a dwarf introduced himself. It also says nothing useful there:
-## `Prompt.blocked` has the hero's controls for the length of a conversation, so
-## every button on that line is a button that does nothing.
+## **And no full-screen UI has the input.** The dialogue box is a strip across
+## the bottom of a LIVE courtyard and it lands in the same two corners as the
+## bars and the key legend. The first frame of it had "RMB GUARD | LMB DASH"
+## reading out from under the panel while a dwarf introduced himself. It also
+## says nothing useful there: `Prompt.blocked` has the hero's controls for the
+## length of a conversation, so every button on that line is a button that does
+## nothing.
 ##
-## The flag is the reason this is here and not a `Hud.visible = false` in the
-## box: this function runs deferred off `node_added`/`node_removed` and forces
-## `visible` back to `has_player` -- and the box's own construction is a tree
+## **Every one of them, not the dialogue box alone** -- card #48. The argument
+## above was written as if the trade screen covered the HUD; it does not. It is a
+## panel with a scrim on `CanvasLayer` 60, and the strip below its bottom edge is
+## bare, so the whole two-row control legend read out under the Lanternkeeper's
+## counter naming buttons the counter had taken. The comment that used to sit
+## here said "it does not cover this the way the trade screen does" and that
+## clause was the bug, in prose, for as long as the frame existed. Everything
+## that emits `screen_opened` is a full-screen UI by that signal's own
+## definition, and the HUD stands down for all of them: `trade`, `stash`,
+## `run_end`, `dialogue`.
+##
+## The set is the reason this is here and not a `Hud.visible = false` in each
+## screen: this function runs deferred off `node_added`/`node_removed` and forces
+## `visible` back to `has_player` -- and a screen's own construction is a tree
 ## change. Anything setting `visible` from outside is overwritten within a frame.
 func _refresh_visibility() -> void:
 	if not is_inside_tree():
 		return
 	var has_player := get_tree().get_first_node_in_group(&"player") != null
-	var showing := has_player and not _conversing
+	var showing := has_player and _screens.is_empty()
 	if visible != showing:
 		visible = showing
+		# A hidden `CanvasLayer` never calls `_draw_hud`, so nothing clears these
+		# and `layout_rects()` would go on reporting the last frame the HUD DID
+		# draw -- for as long as a counter is open. That is the instrument lying
+		# in the one state card #48 is about, and a director asking "did the HUD
+		# draw under the shop" off a stale dictionary would have got a confident
+		# yes either way. Empty is what "drew nothing" looks like, and
+		# `_hud_layout.check` already treats an empty layout as a failure, which
+		# is the correct reading of calling it while a screen is up.
+		if not showing:
+			_layout.clear()
+			_glyphs.clear()
 
 	# Booting straight into the garrison is the one time the legend matters most,
 	# and there is no `garrison_entered` on `Bus` to hang it on — so "this overlay

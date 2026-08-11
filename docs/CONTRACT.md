@@ -2563,10 +2563,19 @@ DialogueBox.open(host, &"smith", pages, choices, on_read)  # null if `pages` emp
 - **The counter is behind the Trade option, not behind the press.** Since
   2026-08-10 `Npc.activate` opens a box; `TradeScreen` opens from a choice inside
   it. Every director that addresses a keeper goes through `shoot.gd`'s `talk()`.
-- **A box blocks the world** (`Prompt.block`) and the HUD stands down for it
-  (`Hud._refresh_visibility`, off `Bus.screen_opened(&"dialogue")`). The overlay
-  cannot be switched off from outside — the HUD forces its own `visible` on every
-  tree change, and building the box is a tree change.
+- **A box blocks the world** (`Prompt.block`) and the HUD stands down for it —
+  and for **every** full-screen UI, not the box alone: `Hud._refresh_visibility`
+  keeps a set of the ids `Bus.screen_opened` has announced and hides while any of
+  them is up (`dialogue`, `trade`, `stash`, `run_end`). A set rather than a flag
+  because they nest — the stash opens over the smith's counter. This line used to
+  name `&"dialogue"` alone, and card #48 is what that cost: the trade screen is a
+  panel with a scrim on `CanvasLayer` 60, the strip under its bottom edge is
+  bare, and the two-row control legend read out beneath the Lanternkeeper's board
+  naming buttons the counter had taken. The overlay cannot be switched off from
+  outside — the HUD forces its own `visible` on every tree change, and building a
+  screen is a tree change. While it is down, `Hud.layout_rects()` is **empty**:
+  a hidden `CanvasLayer` never calls `_draw_hud`, so anything that read a stale
+  dictionary there was reading the last frame before the counter opened.
 - **The figures are painted portraits**, one PNG per person in
   `assets/ui/portraits/`, listener (always the hero) left and speaker right. The
   first cut rendered the game's own rigs through two bust-cropped `DollStage`s,
