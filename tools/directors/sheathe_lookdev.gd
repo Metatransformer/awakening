@@ -73,6 +73,18 @@ const VIEWS := [
 const FACE_OFFSET := 2.5
 
 
+## Counted, not just printed. `shoot.gd` harvests `_fails` and exits 66 on it
+## (card #72); before that existed this director printed `SHEATHE FAIL the weapon
+## ring never reached the bow`, captured nothing, and exited 0 -- which is how a
+## missing `Game.grant(&"bow")` survived in a file whose whole output is frames.
+var _fails := 0
+
+
+func _fail(what: String) -> void:
+	_fails += 1
+	print("SHEATHE FAIL %s" % what)
+
+
 func run(rig) -> void:
 	var out: String = rig.arg("out", "/tmp/sheathe/x.png").get_base_dir()
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
@@ -84,21 +96,32 @@ func run(rig) -> void:
 	var tree: AnimationTree = hero._tree
 	var cam: Camera3D = hero.get_viewport().get_camera_3d()
 	if cam == null or combat == null or player == null:
-		print("SHEATHE FAIL no camera / no rig")
+		_fail("no camera / no rig")
 		return
+
+	# **The bow has to be OWNED before the ring can reach it**, and this director
+	# assumed it was. `Game.STARTER_KIT` is empty on purpose and `cycle_armament`
+	# only walks armaments the player owns, so the ring stepped from the sword to
+	# the sword and `draw_weapon` timed out -- SHEATHE FAIL on a hero who never had
+	# a bow rather than on anything about the scabbard. `ranged_kit.gd:59` hands
+	# itself the same gear for the same reason: given the kit, does the thing work.
+	Game.grant(&"bow")
+	if Game.arrows < 1:
+		Game.add_arrows(10)
+	await rig.wait_frames(4)
 
 	# Put something else in his hand, through the BUTTON, so the scabbard appears
 	# for the reason the player would make it appear. Setting `Game.loadout`
 	# directly here would photograph a state the D-pad might no longer reach.
 	if not await rig.draw_weapon(&"bow"):
-		print("SHEATHE FAIL the weapon ring never reached the bow")
+		_fail("the weapon ring never reached the bow")
 		return
 	await rig.wait_frames(10)
 	if combat.sword_stow == null:
-		print("SHEATHE FAIL no scabbard mount")
+		_fail("no scabbard mount")
 		return
 	if not combat.sword_stow.visible:
-		print("SHEATHE FAIL the scabbard is hidden with the bow in hand")
+		_fail("the scabbard is hidden with the bow in hand")
 		return
 
 	var to_cam: Vector3 = K.flat(cam.global_position - hero.global_position)
@@ -124,7 +147,7 @@ func run(rig) -> void:
 		var rot: Vector3 = c["rot"]
 		var m: Node3D = combat._mount(combat.sword_id, STOW_BONE, pos, rot)
 		if m == null:
-			print("SHEATHE FAIL no bone %s" % STOW_BONE)
+			_fail("no bone %s" % STOW_BONE)
 			return
 		m.visible = false
 		mounts.append(m)
@@ -145,7 +168,7 @@ func run(rig) -> void:
 		for j in STANCES.size():
 			var clip: StringName = STANCES[j]["clip"]
 			if not player.has_animation(clip):
-				print("SHEATHE FAIL missing clip %s" % clip)
+				_fail("missing clip %s" % clip)
 				continue
 			player.play(clip)
 			# 60 %, not the first frame: the aim clip opens from a neutral stand

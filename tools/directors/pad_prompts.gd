@@ -24,11 +24,35 @@ extends RefCounted
 ##       --director=res://tools/directors/pad_prompts.gd --keep-pad \
 ##       --out=/tmp/pad/x.png --warmup=60
 
-## Actions whose cap has to differ between the two devices. `interact` is the
-## one the prompt line prints, so it is the load-bearing one.
+## Actions whose cap has to differ between the two devices AND exist on both.
+## `interact` is the one the prompt line prints, so it is the load-bearing one.
 const WATCH := [&"attack", &"heavy", &"shield", &"context", &"interact",
 	&"use_item", &"jump", &"weapon_next", &"item_next", &"loadout_swap",
-	&"z_target", &"inventory"]
+	&"inventory", &"first_person"]
+
+## Actions bound on the KEYBOARD ONLY, on purpose, with the reason. Checked in
+## the other direction: they must still have no pad cap.
+##
+## `z_target` was in `WATCH` and failed there for eight days (card #83), and the
+## failure was the list rather than the binding. `scripts/autoload/settings.gd`
+## round 6 put the guard, the lock and the recentre on ONE button because they are
+## one intention and that is what OOT did, so on a pad the lock IS `shield`'s left
+## trigger; round 9 then took R3 off `z_target` as "a second pad route to the same
+## lock", and gave it to `first_person`. Q and the middle mouse button remain,
+## because a keyboard has no trigger to hold.
+##
+## Nothing renders blank as a result -- `Hud._legend_lines` drops a row whose cap
+## is empty rather than drawing a verb with no glyph, and the `shield` row's own
+## text is "GUARD/LOCK", so the pad player is told. `InputGlyphs.event_for` says
+## the same thing in its docstring: no binding on a device is a real answer.
+##
+## THIS IS THE CHECK THAT WOULD HAVE CAUGHT THE DRIFT. Asserting the absence pins
+## the decision: give `z_target` a pad button and this goes red, which is the
+## moment to revisit `Hud.LEGEND` and round 9 together rather than six months
+## later. Deleting the row from `WATCH` alone would have asserted nothing.
+const KEYBOARD_ONLY := {
+	&"z_target": "the pad's lock is shield/LT (settings.gd rounds 6 and 9)",
+}
 
 var _fail := 0
 ## The last thing the prompt bar was TOLD to say. Taken off the signal rather
@@ -68,6 +92,20 @@ func run(rig) -> void:
 		if String(pad.get(action, "")).is_empty():
 			_fail += 1
 			print("PAD FAIL %s has no pad cap" % action)
+
+	# The other direction. See `KEYBOARD_ONLY`.
+	for action: StringName in KEYBOARD_ONLY:
+		var k := _caps_of(action, false)
+		var p := _caps_of(action, true)
+		if p != "":
+			_fail += 1
+			print("PAD FAIL %s grew a pad cap ('%s') -- %s. Hud.LEGEND draws a "
+				% [action, p, KEYBOARD_ONLY[action]]
+				+ "row for it now, so check what it says before deleting this line.")
+		if k == "":
+			_fail += 1
+			print("PAD FAIL %s has no KEYBOARD cap either, so it is unreachable "
+				% action + "on both devices")
 
 	# Resting-stick drift must NOT count as the player reaching for the pad, and
 	# the mirror of it: a nudged mouse must not throw the HUD back to keyboard
@@ -176,3 +214,14 @@ func _mouse_move(rel: Vector2) -> InputEventMouseMotion:
 	e.relative = rel
 	e.screen_relative = rel
 	return e
+
+
+## The cap `action` would draw on a named device, regardless of what is in hand.
+##
+## `Glyph.cap` asks `Settings.using_pad`, which is the right question for a
+## surface and the wrong one here: the absence being asserted is a property of the
+## BINDING, and reading it through the live device would make the check depend on
+## which frame the watcher last flipped.
+func _caps_of(action: StringName, want_pad: bool) -> String:
+	var e := Glyph.event_for(action, want_pad)
+	return Glyph.cap_for(e) if e != null else ""

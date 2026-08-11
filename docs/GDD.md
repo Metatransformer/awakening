@@ -160,12 +160,26 @@ times needs a name for the same reason the run report is a receipt and not a
 score — "floor 7" is a depth reading, and "the Sunken Cut, level 7" is somewhere
 you have been.
 
-It lives in one constant, `Prog.NAME`, because there is one shaft (§5). **The
-per-floor names in §5 are not wired up**: the card says THE SUNKEN CUT / LEVEL n
-today, and the day the Cistern and the Foundry become real places rather than a
-table in this document, `Prog` grows a name per level and the same two callers
-draw it — the loading card and the HUD's floor card. Nothing else says the name,
-by design.
+The shaft's name lives in one constant, `Prog.NAME`, because there is one shaft
+(§5), and that is the one signed over the garrison gate.
+
+**The per-floor names in §5 are wired up now.** The two callers that ANNOUNCE a
+floor draw it — the loading card and the HUD's floor card — and nothing else says
+it, by design. The name comes from `FloorDb.announced_name(level)` and not from
+`Prog`, which is where this paragraph said to put it: the four names were already
+authored in `FloorDb.FLOORS` by the time the wiring happened, `MapPanel` was
+already reading them from there, and `FloorDb` calls `Prog.rooms`/`Prog.pack`, so
+a name on `Prog` would have made the two classes call each other.
+
+The depth readout does not move. Both surfaces still put `Prog.label(level)` under
+the name — THE FOUNDRY over LEVEL 2 — because a number is what you glance at and a
+name is what you arrive in.
+
+The per-floor **subtitles** in `FloorDb` are still drawn by nothing. That is not
+the same omission: the loading card leaves its bottom two thirds to the backdrop's
+fire on purpose, and the four authored subtitles are two and three sentences long,
+so there is a real design question about where a paragraph of flavour goes and it
+is not answered by dropping it under the rule.
 
 ---
 

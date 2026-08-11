@@ -246,6 +246,16 @@ against a bag full of Grave Wax, not a strictly better one.
 Enemies roll from a weighted table; chests roll richer ones. Rarity also drives
 the mote's glow radius, which is the only "look over here" the game does.
 
+**A chest never spits the same unique twice.** Each of a chest's picks is its own
+roll, so a three-pick chest could land the same relic twice — and `Run.collect`
+refuses the second copy, because a relic is a unique. What the player saw was a
+relic glowing on the floor beside a chest they had already emptied, and no way to
+pick it up. `Chest.activate` re-rolls a repeat (bounded, `Chest.REROLLS`) rather
+than dropping the pick, so a chest still pays what it promised, and the extra draws
+come off `Run.rng` like every other one — contents stay a function of the seed
+alone. Ordinary stock is untouched: two Iron Scraps out of one chest is a stack of
+two and always was.
+
 Eight more items drop from the same tables and share the same bag, but they are
 not ingredients and the vendor will not take them: they are **components**, and
 they go to a workbench instead of the purse. Four belong to the forge (§6.5) and

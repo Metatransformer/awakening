@@ -1223,9 +1223,17 @@ const LEGEND := [
 	[&"heavy", "HEAVY (HOLD=SPIN) / ITEM"],
 	# Two things are named here that a button-masher would never find: the dash,
 	# which is a button you already know pressed in a stance you already know, and
-	# the fact that the guard LOCKS. On the pad `shield` is the left trigger and
-	# it is the whole of OOT's Z — the R3 above is only the standing toggle — so a
-	# line that called this button GUARD would be hiding its main use.
+	# the fact that the guard LOCKS. On the pad `shield` is the left trigger and it
+	# is the whole of OOT's Z, so a line that called this button GUARD would be
+	# hiding its main use.
+	#
+	# This used to add "— the R3 above is only the standing toggle", and that is no
+	# longer true: `settings.gd` round 9 took R3 off `z_target` and gave it to
+	# `first_person`, so `z_target` has NO pad binding and the LOCK-ON row above
+	# does not render on a pad at all (`_legend_lines` drops a capless row rather
+	# than drawing a verb with no glyph). This row is therefore the ONLY place a
+	# pad player is told the lock exists, which is why it says LOCK and not GUARD.
+	# `tools/directors/pad_prompts.gd`'s `KEYBOARD_ONLY` pins that arrangement.
 	[&"shield", "GUARD/LOCK"],
 	# The hold is named because nothing else can name it. A tap rolls and a hold
 	# runs off the same button, and a player who only ever taps it will never
@@ -1653,7 +1661,12 @@ func _draw_floor(s: Vector2) -> void:
 	var at := Pal.FLOOR_ORIGIN * s
 	var nt := _text(10.0)
 	var lt := _text(16.0)
-	var name_line := Prog.NAME
+	# The FLOOR's name, not the shaft's (GDD §3, and `FloorDb.announced_name` for
+	# why `Prog.NAME` is still the right answer over the garrison gate). The plate
+	# below is measured from whichever of the two lines is wider, so a long name
+	# widens the card rather than overrunning it -- "THE HUSHING CHOIR" is the
+	# longest of the four and it is what this was looked at with.
+	var name_line := FloorDb.announced_name(Run.level)
 	var level_line := Prog.label(Run.level)
 	var gap := Pal.px(5.0, s.y)
 	var level_y := at.y + CanvasText.height(nt) + gap

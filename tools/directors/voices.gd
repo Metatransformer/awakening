@@ -307,7 +307,17 @@ func _counter(rig) -> void:
 	# The press that WORKED.
 	var blank := _row(screen, JewelDb.blank_id(&"amulet"))
 	_ck("D4 there is a blank to buy", not blank.is_empty())
-	screen._cursor = screen._rows.find(blank)
+	# `_point_at`, and not `screen._cursor = i` (CLAUDE.md §3, card #77). The
+	# assignment is half a move: `_point_at` is the half that calls `grab_focus`,
+	# which is DEFERRED, so the `focus_entered` it queues lands a frame later, runs
+	# back through `_on_cell_looked`, and puts `_cursor` on whatever row the last
+	# `_refresh` left the focus on. Card #74 was nine red checks of exactly that.
+	#
+	# Going through `_point_at` makes the round trip IDEMPOTENT -- it re-points at
+	# the row that was asked for -- so a beat that waits a frame before acting is
+	# safe rather than racing. That is why no wait is added here: the fix is the
+	# call, not a sleep.
+	screen._point_at(screen._rows.find(blank))
 	Voice.stop()
 	screen._commit()
 	await rig.wait_frames(6)
@@ -319,7 +329,7 @@ func _counter(rig) -> void:
 	Game.gold = 0
 	screen._refresh()
 	var ring := _row(screen, JewelDb.blank_id(&"ring1"))
-	screen._cursor = screen._rows.find(ring)
+	screen._point_at(screen._rows.find(ring))
 	Voice.stop()
 	screen._commit()
 	await rig.wait_frames(6)

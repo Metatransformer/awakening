@@ -151,7 +151,17 @@ func _counter(rig) -> void:
 	_ck("C4 and it names the question it opens (%s)" % blank["line"]["detail"],
 		String(blank["line"]["detail"]).to_upper().contains("VIGOR"))
 
-	screen._cursor = screen._rows.find(blank)
+	# `_point_at`, and not `screen._cursor = i` (CLAUDE.md §3, card #77). The
+	# assignment is half a move: `_point_at` is the half that calls `grab_focus`,
+	# which is DEFERRED, so the `focus_entered` it queues lands a frame later, runs
+	# back through `_on_cell_looked`, and puts `_cursor` on whatever row the last
+	# `_refresh` left the focus on. Card #74 was nine red checks of exactly that.
+	#
+	# Going through `_point_at` makes the round trip IDEMPOTENT -- it re-points at
+	# the row that was asked for -- so a beat that waits a frame before acting is
+	# safe rather than racing. That is why no wait is added here: the fix is the
+	# call, not a sleep.
+	screen._point_at(screen._rows.find(blank))
 	screen._commit()
 	await rig.wait_frames(20)
 	_ck("C5 buying it opened the two paths", JewelDb.owns_blank(&"amulet"))

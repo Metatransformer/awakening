@@ -503,8 +503,7 @@ func _g_lanterns_are_reachable(rig, dungeon, room: Node3D, cell) -> void:
 	if lamp0 == null or _hero == null:
 		_ck("G3b the hero can walk to a lantern and hit it", false)
 		return
-	var z: float = float(room.call(&"mouth_point").z) + MazeRoom.APRON * 0.5
-	_hero.global_position = room.global_position + Vector3(-5.0, 0.15, z)
+	_hero.global_position = _apron_point(room, -5.0)
 	await rig.wait_frames(4)
 	var target: Vector3 = lamp0.global_position
 	var near := false
@@ -606,6 +605,30 @@ func _g_on_a_floor(rig) -> void:
 			siblings += 1
 	_ck("G3 in a room with no door anchor in it (%d)" % siblings, siblings == 0)
 
+	# **One doorway, and the mouth pointing at it.** `MazeRoom._build_rim` closes the
+	# grid on four sides and cuts exactly one hole, so a maze in a room with two
+	# doorways stands a rim across one of them -- and on floor 3 that was the west
+	# door the critical path arrived by AND the east door to the leaf behind it: the
+	# boss chamber, the deep chest and the way down all unreachable on foot, with
+	# `cistern_floor --level=3` reporting ten red checks off one stranded hero.
+	#
+	# Both halves asserted here because both halves are the fix. The count is
+	# `pick_maze_cell`'s rule; the aim is `place_maze`'s, and a rotation that went the
+	# wrong way round would seal the one doorway just as completely as no rotation at
+	# all on the three floors in four whose room does not face south.
+	var doors: Array = dungeon.rooms[cell]["doors"]
+	_ck("G3c its room has exactly one doorway (%s)" % [doors], doors.size() == 1)
+	if doors.size() == 1:
+		var side: StringName = doors[0]
+		# Where the doorway is, in the room's frame: the outward normal of that wall.
+		var step: Vector2i = Dungeon.DIRS[side]
+		var out := Vector3(float(step.x), 0.0, float(step.y))
+		# And where the mouth points: the maze's own +Z, taken off the basis rather
+		# than recomputed from the yaw (CLAUDE.md §4 -- measured, not derived).
+		var aim := found.global_transform.basis.z.normalized()
+		_ck("G3d and the mouth faces it (%s wall, mouth %.2f,%.2f -- dot %.2f)"
+			% [side, aim.x, aim.z, out.dot(aim)], out.dot(aim) > 0.9)
+
 	# **The arrival frame, shot first.** This is the picture that should have shown
 	# the bug and never got taken: the room as the player walks into it, standing
 	# in the apron looking north at the mouth, with the two lanterns in front of
@@ -651,9 +674,28 @@ func _g_on_a_floor(rig) -> void:
 func _stand_in_the_apron(rig, room: Node3D) -> void:
 	if _hero == null or room == null:
 		return
-	var z: float = float(room.call(&"mouth_point").z) + MazeRoom.APRON * 0.5
-	_hero.global_position = room.global_position + Vector3(-5.0, 0.15, z)
-	_hero.facing_yaw = atan2(1.0, 0.0)
+	_hero.global_position = _apron_point(room, -5.0)
+	# Along the apron, which is the maze's own +X and no longer the world's. Looking
+	# ACROSS the mouth rather than at it, the way a player walking in does.
+	var along := room.global_transform.basis.x
+	_hero.facing_yaw = atan2(along.x, along.z)
 	_hero.rotation.y = _hero.facing_yaw + PI
 	Bus.camera_recenter.emit()
 	await rig.wait_frames(24)
+
+
+## A point in the maze's apron, `off` metres along the mouth edge from its middle.
+##
+## **Through the maze's own transform**, because on a real floor the maze is turned
+## so its one hole faces the room's one doorway (`Dungeon.place_maze`) -- so
+## `mouth_point().z` is a distance along the MAZE's +Z and there is no reason for
+## that to be the world's. Both fixtures here used to add it to
+## `room.global_position` as a world offset, which was true for exactly as long as
+## every maze faced south, and would have put the hero outside the room on three
+## floors in four while G3b reported an unreachable lantern.
+func _apron_point(room: Node3D, off: float) -> Vector3:
+	var local: Vector3 = room.call(&"mouth_point")
+	local.z += MazeRoom.APRON * 0.5
+	local.x = off
+	local.y = 0.15
+	return room.global_transform * local

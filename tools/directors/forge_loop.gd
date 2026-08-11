@@ -297,7 +297,17 @@ func _smith(rig) -> void:
 	_ck("C4 the refusal names the component, not the money (%s)"
 		% ShopDb.refusal(chain["line"]),
 		ShopDb.refusal(chain["line"]).contains("COIL"))
-	screen._cursor = screen._rows.find(chain)
+	# `_point_at`, and not `screen._cursor = i` (CLAUDE.md §3, card #77). The
+	# assignment is half a move: `_point_at` is the half that calls `grab_focus`,
+	# which is DEFERRED, so the `focus_entered` it queues lands a frame later, runs
+	# back through `_on_cell_looked`, and puts `_cursor` on whatever row the last
+	# `_refresh` left the focus on. Card #74 was nine red checks of exactly that.
+	#
+	# Going through `_point_at` makes the round trip IDEMPOTENT -- it re-points at
+	# the row that was asked for -- so a beat that waits a frame before acting is
+	# safe rather than racing. That is why no wait is added here: the fix is the
+	# call, not a sleep.
+	screen._point_at(screen._rows.find(chain))
 	screen._commit()
 	await rig.wait_frames(20)
 	_ck("C5 the press changed nothing", Game.forge_level(Game.FORGE_CHAIN) == 0)
@@ -426,7 +436,7 @@ func _forge_is_a_hold(rig, screen) -> void:
 	if chain.is_empty():
 		_ck("CH0 there is a chain rung to hold", false)
 		return
-	screen._cursor = screen._rows.find(chain)
+	screen._point_at(screen._rows.find(chain))
 	screen._hold = 0.0
 	await rig.wait_frames(4)
 

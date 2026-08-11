@@ -659,6 +659,18 @@ that could only photograph its own seed's draw would ship the other two unproven
 - **The verb:** two lanterns (§2) by the mouth. Striking one opens the wall it
   owns and **shuts the next one along** — §3's *couple*, the same combinator the
   lights-out grid uses, so the player cannot simply open everything.
+- **One doorway, and the mouth turned to face it.** The rim closes the grid on all
+  four sides and cuts **exactly one hole** — the mouth — and `Maze.plan`'s
+  solvability proof is about *that* room. So the maze takes only a room of the tree
+  with a single doorway, and `Dungeon.place_maze` rotates it so its hole faces that
+  doorway. Two holes would be a different room and a different proof; see the
+  paragraph below on floor 3.
+  This is the leaf the shape already assumed — "the reward is on the far side and
+  the lock is the geometry" only reads as a puzzle in a room you enter and leave by
+  the mouth — and until 2026-08-11 nothing enforced it. The cost is that a floor
+  whose spare rooms all have two doorways gets no maze; `_plan_maze`'s warning says
+  so, with the counts, and `_room_for(&"mid_ring")` breaks its own ties away from
+  one-doorway rooms so the treasure anchor does not take the only candidate.
 - **The apron:** a band of clear floor on the mouth side, `MazeRoom.APRON`, that
   the lantern row stands in. It is a named constant and `Dungeon.pick_maze_cell`
   asks `MazeRoom.fits` about it, because the depth of the maze and the depth of
@@ -698,6 +710,16 @@ with the proof in two places at once, both of them invisible in every frame:
   proved a sealed one. Fixed by `MazeRoom._build_rim`, and beat `A3` counts the
   rim off the **wall nodes' positions** rather than off the grid, because every
   beat that asks the grid agreed with the grid.
+- **And the third, 2026-08-11: the room the maze took had four doorways.** One
+  rim hole, four openings — so the rim stood across the other three. On floor 3 the
+  maze landed on the path to the Bellwake and sealed the west door the critical
+  path arrives by *and* the east door to the leaf behind it: the boss chamber, the
+  deep chest and the way down all unreachable on foot, in the game, not just for a
+  director. `cistern_floor --level=3` reported eleven red checks of which one was
+  the fault and ten were a hero stranded at `W_5_2`. Fixed by the one-doorway rule
+  above and by rotating the mouth, both asserted in `maze.gd` beats `G3c`/`G3d`.
+  This is the same failure as the two above — the grid's proof describing a room
+  nobody built — arrived at from outside the room instead of inside it.
 
 **Enemies come after, not instead.** Monsters in a static maze are a tax on a
 walk, not a puzzle — they do not stop the minimap answering it. Corridors are

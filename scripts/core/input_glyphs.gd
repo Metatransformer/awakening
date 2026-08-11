@@ -87,7 +87,14 @@ static func cap(action: StringName) -> String:
 
 ## The first event on `action` belonging to the pad (or to the keyboard and
 ## mouse). Returns null when that device has nothing on this action — which is a
-## real answer, not a failure: `first_person` has no pad binding at all.
+## real answer, not a failure: `z_target` has no PAD binding at all, because on a
+## pad the lock is `shield`'s left trigger (`settings.gd` rounds 6 and 9) and a
+## second route to it was deleted as a duplicate.
+##
+## This line used to name `first_person` as the example and that had gone stale:
+## round 9 handed it R3, so it has both. Caught by `pad_prompts.gd`'s
+## `KEYBOARD_ONLY`, which asserts the absence rather than merely not asserting the
+## presence — the difference between pinning a decision and forgetting it.
 static func event_for(action: StringName, want_pad: bool) -> InputEvent:
 	if action == &"" or not InputMap.has_action(action):
 		return null

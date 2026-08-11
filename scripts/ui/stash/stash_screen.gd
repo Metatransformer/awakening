@@ -496,6 +496,36 @@ var _hold: float = 0.0
 var _hold_dir: int = 0
 
 
+## The board owns its four arrows, and takes them before the GUI layer runs.
+##
+## THE SAME TWO-MOVER BUG `TradeScreen._input` FIXED, on a screen where it was
+## worse. Card #74 found it there: `_tick_input` polls the actions, and Godot's
+## focus navigation separately reads the same `ui_left/right/up/down` off the
+## InputEvent for the focused cell, walks it to its `focus_neighbor_*`, and the
+## `focus_entered` that lands runs `_on_cell_looked` -> `_point_at`. Two movers,
+## one press.
+##
+## On `TradeScreen` that cost a double step. **Here it corrupted the transfer
+## itself**, because on this screen left and right are not navigation -- they are
+## the verb. `_move` reads `_rows[_cursor]`, and while LEFT was held for the
+## whole-stack transfer the focus walk was dragging `_cursor` sideways across the
+## grid underneath it: the tap stowed one from the row you were on, then the hold
+## fired `_move(want, -1)` against whatever row the drift had reached. Measured by
+## `tools/directors/house_rest.gd`, which stowed one deep amber and then held, and
+## got a bag still holding 3 with 1 on the shelf.
+##
+## `_input` and NOT `_unhandled_input`: the GUI phase sits between the two and the
+## GUI phase is what is being headed off. Marking the event handled leaves the
+## ACTION STATE alone -- `Input` set that before dispatch -- so every poll in
+## `_tick_input` reads the press exactly as it did before.
+func _input(event: InputEvent) -> void:
+	if _closing:
+		return
+	if (event.is_action(&"ui_left") or event.is_action(&"ui_right")
+			or event.is_action(&"ui_up") or event.is_action(&"ui_down")):
+		get_viewport().set_input_as_handled()
+
+
 func _tick_input(delta: float) -> void:
 	if _closing:
 		return

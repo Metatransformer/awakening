@@ -43,6 +43,10 @@ func run(rig) -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	await rig.wait_frames(20)
 
+	# The SHAFT's name, which is still a constant and still what is signed over the
+	# garrison gate (`Npc._plate`). It is no longer what the card says -- see
+	# `_descend` -- and the two are not in competition: one way down, four places it
+	# passes through (GDD §3).
 	if Prog.NAME != "THE SUNKEN CUT":
 		_fail("the dungeon is called '%s'" % Prog.NAME)
 
@@ -77,8 +81,18 @@ func _descend(rig, out: String, i: int) -> void:
 	await rig.capture(out.path_join("cut_%02d_card_level%d.png" % [i * 3 + 1, before + 1]))
 
 	var want := "LEVEL %d" % (before + 1)
-	if String(card.title) != Prog.NAME:
-		_fail("the card is titled '%s', not '%s'" % [card.title, Prog.NAME])
+	# The FLOOR's name. This check read `Prog.NAME` and passed for months while all
+	# four floors announced themselves as THE SUNKEN CUT -- it was asserting the
+	# constant, which is the one string that could not be wrong. Asked of `FloorDb`
+	# now, which is where the four names live and where `MapPanel` already read them.
+	var want_title := FloorDb.announced_name(before + 1)
+	if String(card.title) != want_title:
+		_fail("the card to floor %d is titled '%s', not '%s'"
+			% [before + 1, card.title, want_title])
+	elif want_title == Prog.NAME:
+		# A floor whose name fell back to the shaft's is the fallback firing, and the
+		# check above cannot tell that from a floor genuinely named THE SUNKEN CUT.
+		_fail("floor %d has no name of its own in FloorDb.FLOORS" % (before + 1))
 	if String(card.level_line) != want:
 		_fail("the card says '%s' on the way to floor %d -- wanted '%s'"
 			% [card.level_line, before + 1, want])
@@ -138,6 +152,10 @@ func _go_home_and_back(rig, out: String) -> void:
 		return
 	if String(card.level_line) != "LEVEL 1":
 		_fail("walking in from the garrison announced '%s', not LEVEL 1" % card.level_line)
+	# And the name, on the one entry a real run actually starts with.
+	if String(card.title) != FloorDb.announced_name(1):
+		_fail("walking in from the garrison is titled '%s', not '%s'"
+			% [card.title, FloorDb.announced_name(1)])
 	await rig.capture(out.path_join("cut_08_card_entry.png"))
 
 	for _i in PATIENCE:

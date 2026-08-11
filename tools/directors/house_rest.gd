@@ -164,7 +164,16 @@ func _locker(rig, garrison: Garrison) -> void:
 	await _shot(rig, "screen_open")
 
 	# --- stow one, then the rest of the stack -------------------------------
-	screen._cursor = _row_of(screen, &"deep_amber")
+	# `_point_at`, NOT `screen._cursor = i`. CLAUDE.md §3: the assignment holds for
+	# exactly one frame, because `_point_at` is the other half of a move and it is
+	# the half that calls `grab_focus`, which is DEFERRED -- the `focus_entered`
+	# lands a frame later and puts `_cursor` back on whatever row the last
+	# `_refresh` left the focus on. Card #77 counts seven directors still doing it.
+	# Here it made the beat below unreadable: the hold acted on a drifted row, and
+	# so did the screen's own bug (StashScreen._input), and the two were
+	# indistinguishable until this line stopped adding a third mover of its own.
+	screen._point_at(_row_of(screen, &"deep_amber"))
+	await rig.wait_frames(2)
 	var before: int = Run.bag.get(&"deep_amber", 0)
 	await rig.tap(["ui_left"])
 	await rig.wait_frames(8)
@@ -183,7 +192,8 @@ func _locker(rig, garrison: Garrison) -> void:
 	await _shot(rig, "stowed")
 
 	# --- and back again ------------------------------------------------------
-	screen._cursor = _row_of(screen, &"deep_amber")
+	screen._point_at(_row_of(screen, &"deep_amber"))
+	await rig.wait_frames(2)
 	await rig.hold_seconds(["ui_right"], 0.8)
 	await rig.wait_frames(8)
 	_check("retrieving put all %d back in the bag" % before,
@@ -212,7 +222,17 @@ func _locker(rig, garrison: Garrison) -> void:
 		% [Game.stash_slots_used(), K.STASH_SLOTS, n], Game.stash_full())
 
 	screen._refresh()
-	screen._cursor = _row_of(screen, &"ghost_silk")
+	# `_point_at`, and not `screen._cursor = i` (CLAUDE.md §3, card #77). The
+	# assignment is half a move: `_point_at` is the half that calls `grab_focus`,
+	# which is DEFERRED, so the `focus_entered` it queues lands a frame later, runs
+	# back through `_on_cell_looked`, and puts `_cursor` on whatever row the last
+	# `_refresh` left the focus on. Card #74 was nine red checks of exactly that.
+	#
+	# Going through `_point_at` makes the round trip IDEMPOTENT -- it re-points at
+	# the row that was asked for -- so a beat that waits a frame before acting is
+	# safe rather than racing. That is why no wait is added here: the fix is the
+	# call, not a sleep.
+	screen._point_at(_row_of(screen, &"ghost_silk"))
 	var silk: int = Run.bag.get(&"ghost_silk", 0)
 	await rig.tap(["ui_left"])
 	await rig.wait_frames(8)
