@@ -5,7 +5,9 @@ answers it, and the rules the four bosses and four minibosses are built against.
 It does **not** own which four minibosses floors 1–4 get — that is a reward-branch
 decision and `docs/PUZZLES.md` §7 keeps it. It does not own stats; those are
 `Enemy.DEFS` and `BossDb`, and a doc that restated them would disagree with them
-by Friday.
+by Friday. **It does not own the bosses' working either** — §5 names each fight's
+shape and `docs/BOSSES.md` is the worked spec that carries the timings, the
+parry-and-roll map, the arena's turn and the rows to paste.
 
 Everything here is read off `docs/OOT_CATALOGUE.md` §3, which is the 1998 Player's
 Guide gone through dungeon by dungeon and written down as mechanics.
@@ -297,10 +299,10 @@ three-beat cap is untouched, and so is *new monster models: 0*.
 
 | Boss | Floor | The player is carrying | Fight shape | The beat that carries it |
 |---|---|---|---|---|
-| **The Cistern Warden** | 1 | sword, shield, rope | **Reflect** — it hurls sluice debris; blocked on the beat, it goes back and staggers it | `cistern_drop` |
+| **The Cistern Warden** | 1 | sword, shield, rope | **Reflect** — the one blow whose band you choose to stand in; caught on the beat, the force goes back and staggers it | `cistern_drop` |
 | **The Slag Ogre** | 2 | **the Bow** | **Receptacle** — the bellows draw before it charges; an arrow in the open intake stops the charge before it starts | `bellows_charge` |
-| **The Bellwake** | 3 | **the Burst** | **Exposed weak point, on a timer** — it anchors to a resonating pillar to sing; Burst the pillar and the core is open until it finds another | `hushing_choir` |
-| **The Riven Knight** | 4 | **the Hookshot** | **Disarm and reposition** — it takes the gate ring and holds the far side; hookshot is both the way across and the way back | `gate_lunge` |
+| **The Bellwake** | 3 | **the Burst** | **Exposed weak point, on a timer** — it sings through the choir it calls; one blast strips the chorus and the core is open until the next one is summoned | `hushing_choir` |
+| **The Riven Knight** | 4 | **the Hookshot** | **Positional** — it holds the far side of the gate ring; hookshot is both the way across and the way back | `gate_lunge` |
 
 **Read that table the same way `docs/PUZZLES.md` §1 asks you to read its
 diagonal.** Every boss's fight shape is answered by the item the *previous* boss
@@ -312,7 +314,41 @@ is where the shield stops being a wall.
 full form — Ganon knocking the Master Sword out of the ring — and it belongs to
 the Riven Knight at the Chord Gate or to nothing at all. A boss that takes the
 sword away is a boss that has to be answerable without it, and floor 4 is the only
-floor where the player owns enough to be answerable without it.
+floor where the player owns enough to be answerable without it. **It resolves to
+nothing at all**, for four reasons priced in `docs/BOSSES.md` §6.4 — the shortest
+of which is that the three items that are not the sword all spend counted
+charges, and a hero out of charges with no blade is a hero who is stuck.
+
+### The worked spec is `docs/BOSSES.md`
+
+**This section still owns the encounter design** — which shape each boss is, why
+the diagonal reads the way it does, and the two rules below. **`docs/BOSSES.md`
+owns the working**: each carrying beat's timings against the hero's own clock,
+where the parry and the roll land inside it, what the arena does at the health
+threshold, the exact rows to paste, and the manifest check. When the two
+disagree, this section says *what* and that file says *how*.
+
+**Two cells in the table above were corrected there rather than here**, and both
+corrections are the same kind — the fiction asked for something the five attack
+shapes cannot deliver:
+
+- **The Warden hurls nothing.** No attack shape in `BossDb` throws an object, and
+  a hurled, blockable, returning piece of debris needs a **sixth** — against a
+  table header that says there is no sixth shape and no thirteenth beat. What
+  goes back is the *force*: `cistern_drop`'s donut is the only beat whose damage
+  band the player chooses to stand in, so it is the only beat where catching it
+  is a decision rather than a consequence. The game gets reflect-with-an-object
+  anyway, and cheaper, from §3's Thrower.
+- **The Bellwake has no pillar.** Its arena is authored `cover: false` and its own
+  row says why; `_shape_slam` is a distance query and would hit *through* a
+  pillar anyway, teaching a false rule; and the resonating pillar is already
+  floor 3's *miniboss* wall (`docs/PUZZLES.md` §7, the Second Voice). The shell
+  is the choir it summons — Barinade exactly — and the reform clock is the beat's
+  own 6 s cooldown.
+
+The cost of the disarm refusal, stated there and not softened: across the four
+bosses and the four minibosses, **positional is five of the eight fights** and
+disarm is none of them.
 
 ### The two rules the catalogue is emphatic about
 
