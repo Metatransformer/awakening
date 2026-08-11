@@ -39,7 +39,20 @@ func run(rig) -> void:
 	await rig.capture(out.path_join("w_01_swords.png"))
 
 	# 3. Shields, face-on. A bound diffuse is obvious here; grey is obvious too.
-	await _look(rig, cam, Vector3(0.0, 1.0, 4.3), Vector3(0.0, 0.6, 1.6))
+	#
+	# THE EYE MOVED BACK 0.9 m ON 2026-08-11 (#55) and the arithmetic is the whole
+	# reason. `Camera3D.fov` is the VERTICAL angle, so when `shoot.gd` stopped
+	# rendering a 2.5:1 window and squeezing it into a 16:9 PNG, every horizontal
+	# field in this file narrowed by a factor of 0.71 and nothing else changed. At
+	# the old (0, 1.0, 4.3) the half-width at the shield plane was
+	# tan(25 deg) * 16/9 * 2.73 m = 2.26 m; the rank runs to x = +-2.125 and the
+	# end shields are 0.65-0.72 m across, so both of them fell off the edges --
+	# `shield_knightly` and `kite_shield`, the two the sheet is least able to spare.
+	# 3.6 m of distance puts the half-width at 2.98 m and the rank back inside it.
+	# **Do not "fix" a crop like this by widening `fov`:** 2.5:1 needs a 99 deg
+	# horizontal field, and a 99 deg lens on a rack of flat shields bows the ones
+	# at the ends until the sheet is about the lens.
+	await _look(rig, cam, Vector3(-0.25, 1.13, 5.16), Vector3(-0.25, 0.6, 1.6))
 	await rig.capture(out.path_join("w_02_shields.png"))
 
 	# 4. The hookshot pistol on its own.

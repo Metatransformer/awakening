@@ -212,6 +212,18 @@ big — and shrinking could not work anyway: `CanvasText.size_of` clamps the em 
 the line renders *wider* than the width it was asked to fit. Break between
 entries and balance the rows.
 
+**The 10 px floor became load-bearing on 2026-08-11** (card #55) and it is worth
+knowing why. Every HUD frame judged before that date was rendered at 6880 × 2756
+and downscaled into the PNG, so a label authored a size too small still came back
+crisp — a ~20× supersample was quietly rescuing it, and it will not be there in
+the shipped build. Captures are 1:1 now. Type was re-checked at 3× nearest zoom
+at 720p under the new harness and is fine as it stands: Cinzel's serifs survive
+at 10 px and the garrison legend is fully legible. But there is no longer any
+margin under the floor, and no viewport AA setting can add one — §4.8 measured
+this: the HUD canvas is *pixel-identical* under MSAA, FXAA, TAA and `msaa_2d`
+alike. Font rasterisation is the only antialiasing 2D type will ever get, so the
+answer to an illegible label is fewer entries or a bigger size, never a knob.
+
 ---
 
 ## 4. The PSX treatment
@@ -438,6 +450,85 @@ tier 3. See Departure 2.
 - **No real-time shadows in the dungeon.** Actors get a blob shadow: a 1-bit
   alpha unshaded quad decal, 0.7 m across, scaled by ground proximity.
 - Tri budgets: hero ≤900, standard enemy ≤500, boss ≤2000, chest ≤120, wall ≤32.
+
+### 4.8 Anti-aliasing — the decision, and why it had never been made
+
+> **Decided 2026-08-11 (card #55). This is a session's call, made while the
+> repo owner was asleep, and it is REVERSIBLE** — one field in
+> `scripts/autoload/settings.gd` and the frames below can be re-shot in four
+> minutes. If the owner disagrees, the change to revert is `Settings.msaa`
+> back to `2`; nothing else here touches the renderer.
+
+**The decision.** Ship with **no anti-aliasing on the 3D viewport**:
+`msaa_3d = DISABLED`, `screen_space_aa = DISABLED`, `use_taa = false`. The
+aliased silhouette is part of the treatment, not a defect to be papered over.
+The MSAA row stays in the options menu for the player who wants it; it is the
+*default* that moves, 4× → off. Nothing changes for 2D type (see below), and
+**no post-process AA pass — FXAA or TAA — ships in this project, ever** (§7,
+item 11).
+
+**Why this was never actually decided.** Until 2026-08-11 `tools/shoot.gd`
+rendered 6880 × 2756 and Lanczos-downscaled into the requested PNG, so every
+proof frame this project has ever judged carried a ~20× supersample that nobody
+chose, nobody paid for and nobody could ship. Meanwhile `project.godot` said
+`msaa_3d=0` and `Settings.msaa = 2` silently overrode it at boot. The look was
+inherited twice over. It is now measured.
+
+**The instrument** is `tools/directors/aa_compare.gd` — one garrison pose
+(`garrison_look.tl_01_arrive`: curtain-wall merlons against flat sky, the
+`LANTERNKEEPER` Label3D, the HUD's Cinzel caps, the vitals pips) photographed
+under eight configurations inside a single process, so machine noise is
+common-mode. Run at 1280×720 and again at 1920×1080.
+
+**What the frames show.**
+
+- **MSAA at 2×/4×/8× is not visually distinguishable from none** at 3–5×
+  nearest zoom, on merlons, on the statue silhouette, or on the Label3D.
+  Quantitatively it inserts *one* partial-coverage pixel per silhouette edge
+  and drops hard edge steps over a fixed box by about 6% (2090 → 1960). It
+  cannot touch texture crawl, interior contrast, or type — the three things
+  that actually read as "rough" here.
+- **8× MSAA is 4× MSAA on this Metal driver.** Identical VRAM to 0.1 MB at
+  both resolutions and edge statistics inside noise. The options menu presents
+  it as a fourth distinct choice and on macOS it is not one. Left in place
+  because it is likely genuine on Vulkan/Windows; carded separately.
+- **FXAA halves the hard edge steps (2090 → 1036) and visibly blurs the
+  128 px nearest-filtered stone**, and softens the world-space label. That is
+  a direct fight with §4.7 (Nearest, no anisotropy) and with §7 item 6. It buys
+  a smoother edge by destroying the texel grid the whole look is built on.
+- **TAA blurs comparably and is structurally incompatible with §4.1's
+  per-frame vertex snapping** — a jitter accumulator fed deliberately unstable
+  vertices is a smear generator.
+- **No viewport AA mode reaches the 2D canvas.** The HUD crop is
+  *pixel-identical* across all eight configs, including `msaa_2d = 4×`. So
+  "the type looks rough" was never an AA-setting question; see §3.1b.
+
+**The cost, because a recommendation without one is not a decision.**
+
+| Config | VRAM @1080p | Δ | VRAM @720p | Δ |
+|---|---|---|---|---|
+| none | 290.1 MB | — | 254.8 MB | — |
+| MSAA 2× | 340.5 MB | +50.4 | 277.8 MB | +23.0 |
+| MSAA 4× | 393.1 MB | **+103.0** | 301.0 MB | +46.2 |
+| MSAA 8× | 393.1 MB | +103.0 | 301.0 MB | +46.2 |
+| FXAA | 290.3 MB | +0.2 | — | — |
+| TAA | 347.2 MB | +57.1 | — | — |
+
+Frame time is the honest disappointment: at 1080p the medians ran 6.25–9.47 ms
+across the eight configs **with the ordering inverted** (some MSAA rows faster
+than none), and at 720p 5.76–7.59 ms. On a Mac shared with four other agents'
+director windows, the AA delta is below the noise floor — which is itself the
+finding. *MSAA is not costing frames here; it is costing 103 MB of VRAM and
+buying one pixel.* Card #20's budget (~8.7–9.6 ms median at 1080p, ~7 ms
+headroom) is unaffected either way.
+
+**What the real answer to "the edges are rough" is.** §4.5 — the 480 × 270
+internal buffer with a sharp-bilinear present. That pipeline is authored in
+this document and **has never been built**; the game currently renders at
+native and always has. At 480 × 270 the edge question changes shape entirely
+(there is nothing to antialias into), and the pixel grid becomes deliberate
+rather than incidental. Turning MSAA off is the cheap half of the right answer
+and the same direction of travel. Carded separately.
 
 ---
 
@@ -1216,16 +1307,35 @@ for 2D art anywhere else.
     glyph is drawn procedurally as polygons or hand-authored at 16×16 in the
     palette. Also banned here: white-flash-on-hit as the only impact cue, a red
     screen vignette at low health, and a two-row heart layout.
+11. **No post-process anti-aliasing. No FXAA, no TAA, ever** (§4.8, measured
+    2026-08-11). Both buy a smoother silhouette by blurring the 128 px nearest
+    texel grid §4.7 exists to preserve, and TAA additionally fights §4.1's
+    per-frame vertex snapping. MSAA is *permitted* — it ships off by default and
+    stays as a player option — because it touches geometric edges only and
+    cannot smear a texture. If edges need fixing, the fix is §4.5's internal
+    resolution, not a filter over the top.
 
 ---
 
 ## 8. Open deltas against the repo
 
-- `project.godot` currently pushes the opposite way and needs: `msaa_3d=0`,
-  `screen_space_aa=0`, directional shadow size 8192 → 1024 (or off),
-  `soft_shadow_filter_quality=0`, plus `use_debanding=false` and
-  `default_texture_filter=0`. `project.godot` is orchestrator-owned per
-  CONTRACT §3.
+- ~~`project.godot` currently pushes the opposite way and needs: `msaa_3d=0`,
+  `screen_space_aa=0`,~~ **the AA half of this delta is CLOSED (2026-08-11,
+  #55), and it turned out not to be a `project.godot` problem at all.** Both
+  keys already read `0` there and had for some time; what actually shipped 4×
+  MSAA was `Settings.msaa = 2`, applied by `Settings.apply_video()` at boot,
+  *after* the project setting is read. The default is `0` now — one field, the
+  sanctioned runtime path, no edit to the orchestrator-owned file. §4.8 holds
+  the frames and the cost. What remains open from this bullet: directional
+  shadow size 8192 → 1024 (or off), `soft_shadow_filter_quality=0`, plus
+  `use_debanding=false` and `default_texture_filter=0`. `project.godot` is
+  orchestrator-owned per CONTRACT §3.
+- **§4.5's internal-resolution pipeline is authored and unbuilt.** The 480 × 270
+  SubViewport, the sharp-bilinear present and the Bayer dither at internal
+  resolution do not exist in this build; the game renders at native. This was
+  invisible for as long as the harness supersampled, because proof frames looked
+  like a 20×-sampled native render either way. It is the largest single gap
+  between this document and the repo and it now owns the edge question (§4.8).
 
   **The HUD's half of the texture-filter delta is done** and did not need the
   project key: `Hud`'s canvas sets `TEXTURE_FILTER_NEAREST` on itself. The item

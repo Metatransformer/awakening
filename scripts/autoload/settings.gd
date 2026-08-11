@@ -157,7 +157,17 @@ var ui_volume: float = 0.8
 var fullscreen: bool = false
 var vsync: bool = true
 var resolution_scale: float = 1.0  ## 0.5 .. 1.0, renders below native and upscales
-var msaa: int = 2                  ## 0=off 1=2x 2=4x 3=8x
+## 0=off 1=2x 2=4x 3=8x.
+##
+## **DEFAULT OFF SINCE 2026-08-11 (#55), AND THAT IS A LOOK DECISION, NOT A PERF
+## ONE** — docs/STYLEGUIDE.md §4.9 owns it and holds the frames. In short: MSAA
+## only ever touched the geometric silhouettes, it bought exactly one partial
+## pixel per edge, and the hard silhouette is the thing §4.3 is *for*. It also
+## cost 103 MB of VRAM at 1080p for that one pixel. `project.godot` has said
+## `anti_aliasing/quality/msaa_3d=0` all along; this line was quietly overriding
+## it at boot, because `apply_video()` runs after the project setting is read.
+## The row stays in the options menu — a player who wants it can have it.
+var msaa: int = 0
 var shadow_quality: int = 2        ## 0=off 1=low 2=med 3=high
 var fov_offset: float = 0.0        ## added to K.CAM_FOV, -10 .. +15
 
