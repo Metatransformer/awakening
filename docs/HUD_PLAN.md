@@ -460,9 +460,16 @@ Code and doc land in the same commit, per CLAUDE.md §7.
 
 **Decision 14 — the bag rim moves to 0.975, the safe edge exactly.** Its right edge
 is 0.978 today, which puts 4 px of a permanent element outside a margin the
-styleguide defines and nothing enforces. Rejected: widen the safe area. The margin
-exists for overscan and for the corner of a 16:10 display; the rim is the thing
-that is wrong.
+styleguide defines and nothing enforces. Rejected: widen the safe area.
+
+~~The margin exists for overscan and for the corner of a 16:10 display.~~ **Struck:
+the project's own stretch settings deleted that hazard before this was written.**
+`display/window/stretch/aspect` is `keep` (§13.4), so the canvas is letterboxed into
+an exact 16:9 box at every resolution and there is no 16:10 corner to lose. The
+decision survives; only its reason changes, to the one decision 4.5 already gives:
+**one right edge.** The slips, the toast and the minimap are on 0.969 and the rim is
+9 px past them, which reads as a misalignment whether or not anything is clipped.
+A right reason matters because the next agent inherits the reason, not the number.
 
 **Decision 15 — the extraction hold is drawn on the rim, not as a floating arc.**
 The arc is 54 px, centred on the anchor of a number that no longer exists. The
@@ -509,9 +516,15 @@ that was always the plate's job.
 
 **Decision 19 — the ammo/charge numeral, the bottle count and the slips' `+N` go
 from 7 px to 10 px.** Section 2's second rule: the smallest text on the screen must
-not be a thing you read mid-fight. 7 px also sits below `CanvasText.MIN_SIZE`'s
-clamp, so it is already being rendered at an em size the layout does not think it
-asked for.
+not be a thing you read mid-fight.
+
+~~7 px also sits below `CanvasText.MIN_SIZE`'s clamp.~~ **Struck: that is false,
+and false permanently.** `scale_for(7.0, 720)` is `max(9 · 0.70 / 7, 1.0)` = 1.0,
+and `size_of(1.0)` is `max(9, 10)` = 10 — above the clamp, not under it. The clamp
+would only bite below a 648-tall canvas, and §13.4 shows the canvas is 720 tall in
+every build on every display. The size rule stands on its own; it did not need a
+second reason and the second reason was wrong. Checking it was the review, and it
+is exactly the class of claim this document exists to stop.
 
 ### The styleguide edits
 
@@ -641,3 +654,397 @@ Each of these leaves the tree consistent and is one commit.
 7. **Lock-on colour** (16) + the `enemy_bars.gd` beat.
 8. **The bag and the floor card** (17, 18).
 9. **The styleguide**, §9's list, in the same commits as the code each item names.
+
+**§13.12 replaces this list.** Two of the findings below have to land before item 1,
+and one of them is the reason item 1's director exists.
+
+---
+
+# 13. The design review
+
+Run against §§0–12 as they stood at commit `aa43e7b`, under `/plan-design-review`.
+**The review was self-administered** — the same session that commissioned the plan
+graded it — plus one independent voice given the plan, the styleguide, the GDD and
+the code, and told to disprove rather than to agree. Where that voice and this
+section agree the finding is marked; agreement between two readers of one document
+is not evidence, and neither of us built the HUD.
+
+**Four of the fourteen findings came from looking at rendered frames, and could not
+have come from anywhere else.** The plan is 643 lines of careful reading of
+`hud.gd`, and the defects it missed are the ones that are invisible in source and
+obvious in a screenshot. That is CLAUDE.md §2's whole argument arriving on schedule:
+
+```
+timeout 400 tools/quiet.sh --path . -s tools/shoot.gd -- \
+  --scene=res://scenes/rooms/training.tscn \
+  --director=res://tools/directors/hud_lookdev.gd --out=/tmp/hd/x.png --warmup=60
+```
+
+`hud_lookdev.gd`'s own header opens *"An empty HUD always looks fine."* Finding 1 is
+that sentence being wrong, in the director's own first frame, for the whole life of
+the file.
+
+## 13.1 The scores
+
+| Dimension | Score | Why it is not a 10 |
+|---|---|---|
+| Information hierarchy | **6** | The three tiers are the best thing in the plan. It never checks its own pole against its own four separation rules, and the pole fails them. §13.5 |
+| State coverage | **3** | Twelve permanent elements, no zero state specified for any of them. Four are empty in the first frame of every run. §13.2 |
+| Accessibility | **2** | 643 lines, no mention of colour vision. The plan *removes* a redundant channel and *adds* a colour-only one. §13.3 |
+| Responsive | **7** | Safe, but not for the reason the plan gives, and one real defect on the machine a pitch runs on. §13.4 |
+| Internal consistency | **5** | Three places where the plan makes an argument and declines to apply it one line over. §13.10 |
+| Implementability | **6** | Decision 20 is the linchpin and cannot be written as specified. §13.8 |
+| Subtraction | **5** | Honest that ALWAYS is twelve. Converts one element, cuts none, and leaves standing the two its own decision 8 reaches. §13.10 |
+
+A 10 on state coverage is every permanent element having a specified zero state that
+*teaches the instrument*, which is an argument this codebase has already made and
+won — see §13.2. A 10 on accessibility is every colour-only channel carrying a
+redundant channel of shape or position. A 10 on hierarchy is the pole reading as two
+groups without anyone being told it is two groups.
+
+## 13.2 The screen is mostly empty and nobody had looked — CRITICAL
+
+`h_00_fresh.png` is the dungeon at run start: the first frame of every run, and the
+frame anyone shown this game sees first. In it:
+
+- **The bag rim is a bare 209 × 92 px rectangle containing nothing.** It is the
+  largest single element on the HUD and in the fresh state it holds no information
+  at all. It does not read as an empty container; it reads as a panel that failed to
+  load.
+- **The heat bar is an empty track** with `X1.0` beside it — two of the twelve
+  permanent elements spending pixels to say *nothing is happening*.
+- **The draught row draws nothing whatsoever.** `_draw_draughts` opens
+  `if live.is_empty(): return`.
+- **The minimap is not there.**
+
+So of twelve ALWAYS elements, four are blank and one of those is the biggest thing
+on screen. The plan discusses the rim twice — move its right edge 4 px, redraw its
+frame for the extraction hold — and never asks what is inside it.
+
+**The codebase has already settled this question and the plan did not notice.**
+`_draw_heat`, in its own comment:
+
+> *The track is drawn even at zero, so the bar is a thing the player has seen before
+> the first time it matters. An instrument that only appears once you are already
+> doing well teaches nobody.*
+
+That is the rule. It is right, it is written down, and exactly one of the four blank
+elements obeys it.
+
+**Decision 21 — every permanent element has a zero state, and the zero state is what
+teaches the instrument.** Applied:
+
+- **The draught row draws its three slots always, and the slots are fixed by kind** —
+  slot 0 heart, slot 1 ironhide, slot 2 emberblood, in `PotionDb.IDS` order, each an
+  empty ASH@60% track when that draught is not running. This replaces
+  `if live.is_empty(): return` and it replaces packing live draughts leftward. Four
+  things fall out of one change: the row has a constant silhouette, the pole's shape
+  stops depending on inventory, **position becomes a channel** (§13.3), and the
+  player has seen the instrument before the first draught they drink.
+- **The rim's empty state is §13.7's slot marks**, which is a better answer than
+  either hiding it or leaving it blank.
+- **The minimap's absence in the fresh frame is unexplained and is now a question,
+  not a decision.** §1 element 18 says KEEP and "§5.5b is current and correct", on a
+  reading of the source. It is not on the screen. Whoever implements item 1 finds
+  out why before touching it.
+
+**Rejected:** hide the rim until the bag has something. It puts a 209 px element on
+and off the screen during play, which is motion in Tier 3 (§2 rule 4), and it means
+the corner that carries the extraction decision is unlearnable until you are already
+carrying something worth extracting — heat's argument, exactly.
+
+## 13.3 Colour is doing work nothing else does, and the plan takes away a crutch — CRITICAL
+
+There is no mention of colour vision anywhere in the plan, the styleguide, or
+`hud.gd`. That would be an omission on its own. What makes it a finding is the
+direction the plan moves:
+
+**Decision 7 deletes the draught captions.** Its argument is that
+`PotionDb.tint_of` has already taught the colour. The three tints are:
+
+| Draught | tint | |
+|---|---|---|
+| heart | `(0.88, 0.25, 0.22)` | red |
+| ironhide | `(0.35, 0.47, 0.78)` | blue |
+| emberblood | `(0.95, 0.55, 0.18)` | orange |
+
+Heart and emberblood are two reds separated by hue and about 0.23 of relative
+luminance. Under deuteranopia or protanopia they converge. The carrier is a **6 px
+tall pip**, and the plan's fix deletes `HEART` / `HIDE` / `EMBER`, which is the only
+other channel there was. That is a redundancy removal shipped as a decluttering.
+
+**Decision 16 adds a new colour-only channel**: lock brackets take RUST hostile /
+CYAN hookable / MOTH neutral, where today they are one colour. The decision is right
+— CYAN-is-the-way-out is a §2 law and RUST on a hookshot target breaks it — but it
+means the answer to *can I hook that* is hue and nothing else, on a bracket, mid-fight.
+
+**Decision 21's fixed slots already solve the first one** at zero cost: with slot 0
+always heart and slot 2 always emberblood, position is the primary channel and
+colour is the redundant one, which is the right way round. The captions can go, and
+they should — for the reason decision 7 gives, once the reason is true.
+
+**Decision 22 — the lock bracket's kind is a shape, and the colour is the
+redundancy.** Hostile keeps the four-corner bracket as drawn. Hookable draws the
+same bracket with its corner arms turned **inward** — the same 8 px arm, mirrored —
+which reads as a target closing rather than a target framed, and is the shape the
+hookshot's own ring already uses. Neutral drops to two corners instead of four.
+Three shapes, three colours, either one sufficient. This is `_draw_lock`'s existing
+polygon with a sign flip and an arm count; it is not a new widget.
+
+**Not in scope, and say so rather than let it look considered:** a colourblind mode,
+a palette option, or any Settings row. SCOPE §1's one UI screen is spent. The point
+of decisions 21 and 22 is that the fix is *construction*, not a toggle — and every
+channel this HUD encodes in colour alone should get the same treatment as it is
+touched, starting with the two the plan was already opening.
+
+## 13.4 What the project's stretch settings actually guarantee
+
+The plan specifies everything in fractions of viewport and says "scaled by viewport"
+in three places. Measured from `ProjectSettings`, not from memory:
+
+```
+display/window/stretch/mode       = canvas_items
+display/window/stretch/aspect     = keep
+display/window/stretch/scale_mode = fractional
+rendering/.../default_texture_filter = 1   (Linear)
+rendering/2d/snap/snap_2d_transforms_to_pixel = false
+```
+
+`canvas_items` + `keep` means **the root viewport is 1280 × 720 in every build on
+every display, and the canvas is letterboxed into a 16:9 box.** `_canvas` is a
+`Control` at `PRESET_FULL_RECT`, so `_draw_hud`'s `s` is `(1280, 720)`, always.
+Three consequences the plan does not know:
+
+1. **Every fraction in §8 resolves to exactly one set of pixels, forever.** The
+   anchor table is not a scaling scheme, it is a layout at one size. Decision 20's
+   assertions can be written in absolute pixels with no viewport clause, which makes
+   them simpler than §11 assumes.
+2. **Decision 14's stated reason is void** — there is no 16:10 corner to lose.
+   Corrected in place; the decision stands on decision 4.5.
+3. **The one real responsive defect is `scale_mode = fractional` with a Linear
+   filter.** On a 16:10 laptop at 1728 × 1117 the whole canvas is resampled by
+   1.5514×, filtered. This HUD is built out of 1 px VOID hairlines, a 2 px rim and
+   4 px slips; at 1.5514× with linear filtering some hairlines land on one pixel and
+   some smear across two, and the pole shimmers when the window is resized. That is
+   not a PSX treatment, it is a soft one.
+
+**Decision 23 — `display/window/stretch/scale_mode` becomes `integer`.** The canvas
+then scales by whole numbers only, every 1 px hairline is exactly N px wide, and the
+posterised icon bakes stop being resampled into mush. The cost is a slightly smaller
+image inside a slightly larger border on non-integer displays, which is the correct
+trade for a game whose entire visual argument is that pixels are deliberate.
+`project.godot` is orchestrator-owned (CONTRACT §3) and this belongs with card #20's
+render-setting pass, not with the HUD commits — **recorded here so it does not stay
+invisible**, and flagged because the HUD is the surface that shows the defect.
+
+## 13.5 The pole reads as four of the same instrument — HIGH
+
+§2 says the tiers must be separated *"by construction, not by intention"* and lists
+the four separators: position, weight, colour, motion. Then §4's decision 4 gives
+every meter one track recipe and one tick rule. Put the two together against the
+actual pole and:
+
+| Row | Tier | h | recipe | ticked | left edge |
+|---|---|---|---|---|---|
+| Stamina | **1** | 8 | VOID hairline / ASH@60% / fill | yes | 0.031 |
+| Magic | **2** | 8 | identical | yes | 0.031 |
+
+Two adjacent rows, same height, same construction, same tick treatment, same edge,
+differing in hue and in 35 px of width. **None of §2's four separators separates
+them.** `_draw_magic`'s own comment says *"Two bars that behave that differently must
+not look identical, which is what the blue is for"* — which concedes that colour is
+carrying it alone, and §13.3 is what that costs. In `z_pole_fresh.png` the four bars
+read as one instrument in four colours.
+
+**Decision 24 — the pole is built as two groups: `MAGIC_H` 8 → 6 and `MAGIC_GAP`
+4 → 6.** That is the whole change.
+
+```
+health 15 ─┐ Tier 1: two rows, 4 px apart, 15 and 8 tall
+stamina  8 ─┘
+           ── 6 px ──          the break
+magic    6 ─┐
+heat     6 ─┤ Tier 2: three rows, 4 px apart, all 6 tall
+draughts 6 ─┘
+```
+
+Gestalt proximity does the tier separation and uniform weight does the rest. **It
+costs nothing:** magic's top moves 666 → 668 and its bottom stays at 674, so heat
+(678), the draught row (688) and the pole bottom (694) do not move by a pixel, and
+the 4 px of safe-margin slack in §8's table is unchanged. Magic keeps its ticks — at
+6 px a 1 px VOID tick still reads, and the fill/ticks-measure-the-same-quantity rule
+(decision 4.2) is why it has them.
+
+**Rejected:** widen the Tier 1 / Tier 2 gap by adding pixels. The pole has 4 px of
+slack and §0 is what happens when it runs out.
+
+## 13.6 At low health the health bar borrows the stamina bar's colour — HIGH
+
+From `h_08_low.png`, caught mid-pulse: at ≤3 quarters the health fill alternates
+VITAL ↔ BONE at 2 Hz, and **BONE is exactly the stamina fill's colour, in the row
+directly underneath.** For half of every cycle the most urgent state in the game is
+the same hue as a full stamina bar 19 px below it. Worse, BONE is *brighter* than
+VITAL, so the bar gets lighter as the player gets closer to death — the alarm
+inverted. §1 element 3 marks this KEEP with no comment, because it is invisible in
+source.
+
+**Decision 25 — the low-health pulse is VITAL ↔ VOID, not VITAL ↔ BONE.** The fill
+blinks to the track colour: the bar reads as failing rather than as brightening, it
+never borrows another row's colour, and it stays inside §7.4 because a blink is a
+pulse and not an ease. RUST was the other candidate and is rejected — it is stamina's
+*exhausted* colour, which trades one collision for another.
+
+## 13.7 The plan applies §5.6's test in one direction only — HIGH
+
+§5.6's test is *"anything that does not feed push-on-or-leave has no claim on
+permanent pixels."* The plan runs all twenty-nine elements through it and asks, each
+time, *should this go?* It never once runs it the other way: **is anything that does
+feed push-on-or-leave missing?**
+
+It is. `HUDCHECK` prints `slots=8/12`, and `RunState` splits those twelve into a
+3-slot **case** that comes home when you die and a 9-slot **hold** that does not.
+That is the most push-on-or-leave fact in the game — it is literally what you lose —
+and no pixel on the screen says it. The rim says the best rarity, the slips say the
+distribution of value, and nothing says *how full* or *how much of this survives*.
+
+Meanwhile `z_bag_rich.png` shows the same corner in the plan's own richest state: 38
+items, 1130 value, seven slips crowded into the top 42 px of the rim, and **the
+bottom 50 px of a 92 px box empty**. The rim spans y 566 → 658; the slips' bottom is
+authored at 0.845 = 608. Those two numbers are on the same page of §8's anchor table
+and they do not fit each other. That is the §5.2-versus-§5.2b failure this document
+opens by criticising, recurring inside the document's own replacement table.
+
+**Decision 26 — the dead band under the slips becomes the slot readout.** One row of
+twelve marks along the rim's bottom inside edge: the first three (the case) full
+height, the other nine half height, each filled when its slot is used and an empty
+ASH@60% notch when it is not. Then, in one change:
+
+- the rim's empty state has content and teaches the histogram before the player has
+  one (§13.2, and heat's argument);
+- the void under the slips is filled in **every** state, not just the empty one;
+- the slips stop floating and get a floor to sit on;
+- *how full is the bag* and *what does the case save* arrive on screen, both of them
+  push-on-or-leave questions, in pixels that were already being spent;
+- **no new element, no new corner, no new screen** — SCOPE §1 does not move.
+
+It also gives decision 15's CYAN frame something to enclose, which the empty box did
+not.
+
+**Rejected:** a `n/12` numeral. This corner deleted two numbers on purpose (§1
+element 22) and the argument holds — twelve marks is a shape you read without
+counting, which is the whole reason the slips are a histogram.
+
+## 13.8 Decision 20 cannot be written as specified — HIGH
+
+Decision 20 is the linchpin: it is what makes §0 impossible a third time, and it is
+item 1 of the order of work. Two holes.
+
+**Assertion 1 — "nothing permanent overlaps anything permanent", pairwise
+`Rect2.intersects`.** Written literally it fires on the first frame, because the HUD
+is full of *deliberate* overlap: the ammo numeral inside the hand cell, the key caps
+plate under the cells, the damage ghost over the health bar, the parry flash on the
+cell fill, the slips inside the rim, the `X1.0` beside the heat track, and — after
+decision 26 — the slot marks inside the rim. An implementer meeting this discovers
+the assertion is unwritable, and the likely repair is an allowlist of pairs, which is
+a second table describing the layout: §0 in a new place.
+
+**Decision 27 — `layout_rects()` returns a tree, not a list.** Each entry carries its
+parent key (`""` for a root). Assertion 1 is then *no two rects with the same parent
+intersect, and every child is contained by its parent* — which is stronger than the
+flat version, catches everything the flat version was meant to catch, and needs no
+exemptions because containment is declared by the same code that draws, exactly as
+decision 20 requires. Roots: the vitals pole, the control cluster, the money pole,
+the floor card, the minimap. The ammo numeral's parent is the hand cell; the slot
+marks' parent is the rim; the ghost's parent is the health bar.
+
+**Assertion 3 — "every text size is on the ladder", enforced inside
+`CanvasText.scale_for`.** It cannot see the one element on the screen that renders
+off the ladder. `_draw_controls` calls `scale_for(10.0, s.y)` — which passes — and
+then does `scale *= avail / widest` when the legend is wider than the safe area. The
+rendered size is an arbitrary fraction of 10 px and the assertion is blind to it, so
+it reports a clean ladder while the largest block of text on the HUD sits off it.
+
+**Decision 28 — the legend wraps instead of shrinking.** 10 px is the bottom of the
+ladder; there is nothing under it, so a legend that does not fit at 10 px has too
+many words on a line, not type that is too big. Replace `scale *= avail / widest`
+with `CanvasText.wrap(..., max_lines: 3)`. Decision 8 already makes the legend draw
+upward into empty floor and already makes it transient, so a third line is free —
+and the ladder assertion becomes true rather than merely unfalsifiable.
+
+## 13.9 The damage arc needs a projection and a collision rule — MEDIUM
+
+Decision 13 is the plan's best idea and is under-specified in the two places that
+decide whether it works.
+
+**The projection is never stated.** "At the bearing from the hero to the blow" does
+not say bearing in what frame. It must be **camera-relative yaw**, or the arc points
+at world north. And the convention has to be written down, because it is the whole
+feature: a hit from directly in front puts the arc at the **top** of the circle, and
+a hit from directly behind puts it at the **bottom** — which a player will read as
+"below me" unless the game has taught otherwise. It is the near-universal convention
+and it is fine; it is not fine to leave it to whoever writes the function.
+
+**Simultaneous hits are not addressed.** Two blows inside 300 ms from different
+bearings is common — it is what a pack does. One arc that jumps, two arcs at once,
+or the newer one restarting the older one's clock are three different feels.
+
+**Decision 29 — camera-relative yaw, 0° at the top of the circle, clockwise; up to
+three concurrent arcs, each on its own 300 ms clock; a fourth replaces the oldest.**
+Three because a fourth simultaneous bearing is not information a player can use, and
+because `Hud` already runs one animation clock and this is a small array on it.
+`Bus.hero_struck(from: Vector3)` is unchanged.
+
+## 13.10 Three arguments the plan declines to apply one line over — MEDIUM
+
+1. **Decision 8 makes the garrison legend transient** because controls are reference
+   material and fail §5.6's test. The **key caps and the loadout line are the same
+   information by the same test** and stay permanent, unargued. The plan should
+   either say why a 4-character cap under a cell survives a test a 150-character
+   line fails — and there is a real answer, that the cap is *attached to the thing it
+   names* and so is read as part of the cell rather than as a sentence — or it should
+   cut them. **Write the answer down.** An unstated distinction is how §5.2b happened.
+2. **`_draw_heat`'s zero-state argument** is applied to heat and to nothing else.
+   §13.2, decision 21.
+3. **The plan's own opening complaint** — two numbers on one page for one thing —
+   recurs in §8's anchor table for the rim and the slips. §13.7, decision 26.
+
+## 13.11 What the review did not move
+
+Said plainly, because a review that finds fault everywhere has not read carefully.
+§0's collision is real and the arithmetic checks. Decision 6 is the right fix and
+decision 9's refusal to bottom-anchor the pole is right for the right reason.
+Decisions 10–12 are correct and the `hand_count` route is the one that makes a
+working cost zero HUD changes. Decision 13's trade — a full-screen wash out, a
+directional cue in — is the best single change in the document. Decision 17's
+deletion of the slip slide-in, and decision 16's refusal of the lock-on converge, are
+both §7.4 applied against the author's own instinct, which is the hard direction.
+The type ladder is right and decision 3's greppability argument is the reason it will
+survive. And §11's diagnosis — *no proof that can see a rectangle* — is the correct
+root cause of §0; only its two assertions needed repair, not its thesis.
+
+## 13.12 The revised order of work
+
+1. **The zero states and the pole grouping** (21, 24, 25): fixed draught slots, the
+   VITAL ↔ VOID pulse, `MAGIC_H` 6 / `MAGIC_GAP` 6. **This lands before the
+   collision fix**, because decision 21 deletes the early return and the leftward
+   packing that decision 7 was going to rewrite anyway, and because the pole is one
+   commit's worth of thinking, not two.
+2. **The collision** (6, 7) + `hud_pole.gd` + assertion 1 **as decision 27's tree**.
+   Make the director fail on the old code first. `hud_pole.gd` runs both scenes and
+   photographs 0 / 1 / 2 / 3 draughts, which is now also the proof of decision 21.
+3. **The tables** (10–12). Unchanged. Coordinate with the Burst session.
+4. **The type ladder** (1–3, 19) + assertion 3 + **decision 28's wrap**, which has to
+   land in the same commit or assertion 3 ships blind.
+5. **The plates and the edges** (4, 14, 15) + assertion 2 + the five dead constants.
+6. **The bag** (17, 26): the slot marks, the T3 breath onto the rim, §5.3 rewritten.
+   Promoted above the legend — it is the corner a stranger looks at first.
+7. **The legend** (8).
+8. **The vignette → the arc** (13, 29), including `Bus.hero_struck`.
+9. **Lock-on colour and shape** (16, 22) + the `enemy_bars.gd` beat, which now asserts
+   three shapes as well as three colours.
+10. **The floor card** (18).
+11. **The styleguide**, §9's list plus §13's decisions, in the same commits as the
+    code each item names.
+
+`scale_mode = integer` (decision 23) is **not on this list** — it is card #20's,
+recorded in §13.4 so the tuning pass knows the HUD is what shows the defect.
