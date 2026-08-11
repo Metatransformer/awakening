@@ -87,7 +87,16 @@ const DEFS := {
 		# `behaviour` is the DEFAULT and `Enemy.behaviour` overrides it, because
 		# §3's table hangs two behaviours (Thrower and Thief) on this one row and
 		# a body has to be able to be told which one it is.
+		#
+		# **`share` is what stops the default being "all of them".** Without it
+		# this key made every goblin in the game a thief, and a thief never
+		# swings -- `_tick_chase` reaches for the bag before it checks the swing
+		# -- so the roster's cheapest body silently lost its attack. See
+		# `K.THIEF_SHARE` for the measurement and `_resolve_behaviour` for the
+		# roll. An `Enemy.behaviour` written by hand skips it: a spawner or a
+		# director asking for a thief gets a thief, every time.
 		"behaviour": &"thief",
+		"share": K.THIEF_SHARE,
 	},
 	&"kobold": {
 		"health": 8, "damage": 3, "speed": 3.2, "height": 1.35,
@@ -307,11 +316,12 @@ static func spawn(parent: Node3D, p_kind: StringName, at: Vector3, seed_val: int
 
 func _ready() -> void:
 	_def = _resolve_def()
-	# The export wins, then the row, then nothing. `&"none"` is a real answer and
-	# not a missing one: it is how a director or a spawner asks for the plain
-	# melee body out of a row that carries a behaviour.
-	_behave = behaviour if behaviour != &"" else StringName(_def.get("behaviour", &""))
+	# BEFORE `_resolve_behaviour`, which rolls against this stream. Seeding after
+	# it would make the roll `randi()`'s and a run stops being reproducible from
+	# `Game.run_seed` -- the same body would be a thief on one replay and not on
+	# the next.
 	_rng.seed = drop_seed if drop_seed != 0 else randi()
+	_behave = _resolve_behaviour()
 
 	add_to_group(&"enemy")
 	add_to_group(&"targetable")
@@ -378,6 +388,33 @@ func _height() -> float:
 ## and `knight_iron` rows for as long as it did -- see the comment on those rows.
 func _resolve_def() -> Dictionary:
 	return DEFS.get(kind, DEFS[&"skeleton"])
+
+
+## Which behaviour this body wears (`docs/BESTIARY.md` §3). The export wins, then
+## the row's roll, then nothing. `&"none"` is a real answer and not a missing
+## one: it is how a director or a spawner asks for the plain melee body out of a
+## row that carries a behaviour.
+##
+## **The export skips the roll entirely, and that asymmetry is the point.** A
+## `share` on the row answers "how many of the ones the dungeon scatters wear
+## this" — it is a property of a POPULATION. A caller that names the behaviour is
+## asking for one specific body and must get it, or every director testing a
+## behaviour becomes a coin flip and `thief.gd` starts failing one run in four.
+##
+## An INSTANCE method rather than a static for the reason `_resolve_def` is one
+## (CLAUDE.md §3): a bare static call written inside this class binds to `Enemy`'s
+## copy at parse time and a `Boss` override would never run.
+func _resolve_behaviour() -> StringName:
+	if behaviour != &"":
+		return behaviour
+	var row := StringName(_def.get("behaviour", &""))
+	if row == &"":
+		return &""
+	# No `share` key means the row's behaviour is what that kind IS, every time.
+	# Only the goblin carries one today, because only the goblin's behaviour is
+	# one a body can be without (`K.THIEF_SHARE`).
+	var share := float(_def.get("share", 1.0))
+	return row if _rng.randf() < share else &""
 
 
 ## Last chance to touch the model's SURFACES before `HitFlash` binds them. A
@@ -794,11 +831,20 @@ func _tick_chase(delta: float) -> void:
 		return
 
 	_face_player(delta)
-	# The Thief goes for the bag instead of the throat. It only ever grabs with
-	# empty hands -- one slot per body, and a thief already carrying is running,
-	# not shopping.
-	if is_thief() and _loot.is_empty() and dist <= float(_def["reach"]) \
-			and _cooldown <= 0.0:
+	# The Thief goes for the bag instead of the throat -- **when there is a bag
+	# worth going for.** It only ever grabs with empty hands (one slot per body,
+	# and a thief already carrying is running, not shopping) and only when the
+	# hold holds something it can reach.
+	#
+	# `Run.stealable()` is the condition this branch shipped without, and its
+	# absence is the whole of the bug the player reported: a grab is checked
+	# BEFORE the swing, so a thief facing a player carrying nothing reached,
+	# closed on air, sat out `K.THIEF_REGRAB` and reached again, for ever. It was
+	# in the fight, it posed, it circled, and it could not attack. Falling
+	# THROUGH to the wind-up below is the fix and not a special case: a thief
+	# with nothing to steal is a goblin, and a goblin swings.
+	if is_thief() and _loot.is_empty() and Run.stealable() \
+			and dist <= float(_def["reach"]) and _cooldown <= 0.0:
 		state = State.GRAB
 		# Through `Prog.windup_scale` like every other telegraph in the game, so
 		# the grab compresses 3% a floor and stops dead at 60% of K.THIEF_GRAB.
@@ -1856,7 +1902,26 @@ func _kill_recoil() -> void:
 
 func _on_died() -> void:
 	state = State.DEAD
-	_stop()
+	# **Not an unconditional `_stop()`, and the guard is the whole of card #87.**
+	#
+	# A corpse must not keep walking, which is what the stop is for. But the
+	# killing blow may ALREADY have thrown this body: `_on_damaged` rolls
+	# `_try_launch` before `HealthComponent` emits `died`, so on any kill that
+	# also crit the living body, `_airborne` is true and `velocity` is the arc it
+	# was thrown along. `_stop()` zeroed the horizontal half of that arc -- and
+	# the `not _airborne` guard below then correctly refused to re-launch it,
+	# because from its point of view the body was already flying. It was not. It
+	# had `velocity.y` and nothing else, so it went straight UP and came straight
+	# back DOWN on the spot it died on.
+	#
+	# That is what "they don't fly away from my sword, they just go up" was, and
+	# it hit goblins hardest: 1.25 m is the biggest `_mass_ratio` in the roster,
+	# so the small bodies take the crit branch most often and the small bodies
+	# are the ones you watch fly. `tools/directors/goblin_melee.gd` measures it
+	# across twelve seeds, because whether a given kill takes this branch is a
+	# coin flip and four samples once agreed with the bug.
+	if not _airborne:
+		_stop()
 	# Guarded, because a body is allowed not to have one. `Boss` builds no contact
 	# hitbox at all -- every quarter-heart it deals comes from an authored beat's
 	# shape -- and an unguarded `queue_free()` here killed it on the frame it died,

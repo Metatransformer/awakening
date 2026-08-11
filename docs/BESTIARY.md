@@ -148,8 +148,25 @@ that same goblin row (1 Thrower, 4 Thief) and a `is_thief` flag would have made
 the second one a schema change. No new kind, no new model — `docs/SCOPE.md` §1's
 counts do not move.
 
-Four things the build had to decide that the table above does not say:
+**A behaviour is worn by a SHARE of a kind, not by the kind** (`share` on the
+row, `K.THIEF_SHARE` = 0.25, rolled in `Enemy._ready` off the body's own seeded
+RNG). This paragraph used to stop at the line above, and the omission deleted the
+goblin: the key was an unconditional default, nothing ever set `Enemy.behaviour`,
+and **a thief cannot swing** — `_tick_chase` checks the grab before the wind-up —
+so every goblin in the game spent its life reaching, whiffing and circling
+without ever attacking (card #86). The table two sections up was always the
+argument against "all of them": it hangs two behaviours off this one row. An
+explicit `Enemy.behaviour` skips the roll, because a spawner or a director asking
+for a thief must get one every time.
 
+Five things the build had to decide that the table above does not say:
+
+- **It only reaches when there is something to reach for** (`Run.stealable()`,
+  the dry counterpart of `burnable()`), and otherwise it swings like any other
+  goblin. Not a special case: GDD §2's question is *is what I am carrying worth
+  more than the walk back*, and a body that asks it of a player carrying nothing
+  is asking nothing at all. Without this the grab check — which sits ahead of
+  the wind-up — turned an empty-handed run into a monster that could not attack.
 - **The grab is a distance check, not a hitbox.** It costs a bag slot and no
   hearts. That is what makes stepping out of the tell the whole defence — the
   player is not trading health for loot, they are choosing whether to be there.
@@ -174,7 +191,16 @@ case is never touched (`docs/METAGAME.md` — that is what the case is *for*), a
 relics and Echoes are refused outright. Kill it and one `LootMote` carrying the
 whole stack drops where it fell; let it reach the door and the loss is permanent.
 
-Proven by `tools/directors/thief.gd`.
+Proven by `tools/directors/thief.gd` — which now **asks for** the behaviour
+rather than inheriting it, because a share makes the default a coin flip.
+
+And by `tools/directors/goblin_melee.gd`, which exists because none of the above
+could see the failure that mattered. Every beat in `thief.gd` names the thief it
+wants, so all of them passed while the behaviour was eating the whole kind.
+`goblin_melee` asks the two questions from the other side — *does a goblin ever
+swing* (with a skeleton in the same room as its control) and *how many of them
+are thieves* — and the second one is the beat that fails the day the share goes
+back to 1.0.
 
 ### The rule that keeps this at eight
 

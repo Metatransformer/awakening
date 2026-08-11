@@ -554,6 +554,22 @@ const THIEF_REGRAB := 1.6
 ## (docs/BESTIARY.md §1) — only the shape differs, which is the lesson in
 ## `CLAUDE.md` §3's last row. [tune]
 const THIEF_LEAN_DEG := 26.0
+## What fraction of goblins actually wear the behaviour.
+##
+## **It was 1.0 by omission and that deleted the goblin.** `"behaviour": &"thief"`
+## went on the `DEFS` row as an unconditional default, nothing anywhere ever set
+## `Enemy.behaviour`, and `_tick_chase` reaches for the bag BEFORE it checks the
+## swing — so every goblin in the game stopped being able to attack. What the
+## player saw was a body that closed, posed, orbited and never once hit them
+## (`tools/directors/goblin_melee.gd`, which measures a skeleton in the same room
+## as its control: 4 swings to the goblin's 0).
+##
+## A share and not a boolean, because `docs/BESTIARY.md` §3's table hangs TWO
+## behaviours off the goblin row — 1 Thrower and 4 Thief — so "all of them" was
+## never what that table said. A quarter is enough that a room of four usually
+## holds one and a player learns the tell within a floor, and low enough that a
+## goblin is still a goblin. [tune]
+const THIEF_SHARE := 0.25
 
 # --- Economy ----------------------------------------------------------------
 ## [tune] Enough gold to afford exactly two bail-outs at the minimum fee, so a

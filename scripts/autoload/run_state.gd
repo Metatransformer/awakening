@@ -921,6 +921,21 @@ func steal_slot() -> Dictionary:
 	return _take_slot(true)
 
 
+## Is there anything a thief could take? The same scan without the taking, and
+## the exact counterpart of `burnable()` below — both exist because the caller
+## has to be able to refuse BEFORE it commits.
+##
+## **This is what stops a thief miming at an empty hold.** `Enemy._tick_chase`
+## reaches for the bag ahead of the swing, so without this question a goblin
+## carrying nothing spent an empty-handed run reaching, whiffing, waiting out
+## `K.THIEF_REGRAB` and reaching again — a monster in the fight that could not
+## attack. And it is not merely a bug fix: GDD §2's question is *is what I am
+## carrying worth more than the walk back*, and a body that asks it of a player
+## carrying nothing is asking nothing at all.
+func stealable() -> bool:
+	return not _take_slot(true, true).is_empty()
+
+
 ## **The Ballast-Verse burns a slot** (`docs/GDD.md` §6.5 -- "burn the cheapest
 ## stack in the bag for a soak window"). Same three rules as the thief above,
 ## same door out of the bag, and the ONE difference is which end of the bag it
