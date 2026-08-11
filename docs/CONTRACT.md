@@ -2791,9 +2791,18 @@ because a relic in that row would drop on floor 5, 6, 7 and forever.
 There is **one** map in this game. `Atlas` holds the plan; `MapDraw.draw_map` is
 the only thing that draws it, and it is called twice — by `Hud._draw_minimap`
 into a 148 px square in the top-right corner, and by `MenuMapPanel` into the MAP
-tab of the pause menu. The only difference between them is the size of the box.
-Do not write a second map; a menu map that re-derived the layout is the one that
-goes stale.
+tab of the pause menu. Do not write a second map; a menu map that re-derived the
+layout is the one that goes stale.
+
+The two differ in the size of the box and in **one flag**, `follow`. The MAP
+screen fits the whole floor into its well and centres it there. The corner
+minimap holds the hero dead centre at a fixed pitch (`MapDraw.FOLLOW_SPAN`, 3.4
+cells across the box) and lets the floor scroll under him — so it is also the
+only one of the two that draws outside its box, and `box` is therefore its clip
+as well as its frame. Every fill goes through `MapDraw._rect`, which intersects;
+there is no `clip_contents` Control to set, because the HUD is one `_draw`
+surface and clipping it would clip the whole overlay. Glyphs are dropped whole
+rather than cut — half a chest is a gold bar, not a smaller chest.
 
 `Dungeon._publish()` is the **only writer** of the room graph, and it writes it
 in the same pass that builds the geometry. Markers go on from `_populate` and
@@ -2809,11 +2818,31 @@ trigger's `visited` gate so the two rules stay independent. Nothing may reveal a
 room by proximity, by line of sight, or by owning an item — that would be a
 second definition of "have I been here" sitting next to `Run.descend()`'s.
 
+**Everything behind an anchored door is an `Atlas` annex, not a cell.** The
+landing behind a boss door, the shortcut's landing, the treasure chamber and the
+vault's three rooms are built outside `rooms` (`Dungeon._reserved` keeps the grid
+clear for them), and none of them lands on a cell — the vault's second and third
+rooms sit 1.25 and 1.83 cells out of their host room, so rounding them onto the
+grid would put two rooms in one square. `Atlas.annexes` is therefore metric where
+the rest of the plan is a grid: a chain of boxes measured in cells from the host
+room's centre, along one compass side of it. The builders publish their own
+(`Dungeon._publish_annex`), never `_publish`, for the same reason markers are
+placed rather than predicted — a shortcut whose prefab failed to load builds no
+landing.
+
+Fog is per box and is the same rule: `_publish_annex` hangs one `Area3D` per box
+and it writes `Atlas.see_annex`. `MapDraw` cuts a doorway in the host room's wall
+for an annex exactly as it does for a corridor (`Atlas.annex_dirs_of`), and stubs
+the first box the player has not walked into. Before this existed, going through
+a boss door walked you off the edge of the map.
+
 The plan is not persisted and does not survive the run: `open_floor` wipes the
 previous floor, and `Bus.run_ended` wipes it entirely. `Atlas.bounds()` is the
-whole floor including fogged rooms, deliberately — fitting to the explored subset
-would re-scale and re-centre the map every time a door opened, which makes the
-one instrument whose job is orientation the least stable thing on screen.
+whole floor including fogged rooms **and its annexes**, deliberately — fitting to
+the explored subset would re-scale and re-centre the map every time a door
+opened, which makes the one instrument whose job is orientation the least stable
+thing on screen. (The annexes are in it because the MAP screen clips to its well,
+and a vault reaching two cells past the grid was drawn outside it.)
 
 Markers are drawn shapes in `Pal` colours, not textures. At 6 px on the minimap
 a photograph of a chest is four brown pixels; a gold box with a dark band is a

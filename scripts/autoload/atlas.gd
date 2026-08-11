@@ -25,7 +25,9 @@ extends Node
 ## room is on the map for exactly the same reason it counts toward the
 ## extraction fee: the player walked into it. Anything that decided to reveal a
 ## room by proximity, or by line of sight, would be a second definition of "have
-## I been here" sitting next to `Run.descend()`'s.
+## I been here" sitting next to `Run.descend()`'s. `annexes` -- everything behind
+## an anchored door -- fogs by the same rule and through the same kind of
+## trigger; see `add_annex`.
 
 ## Marker ids. Deliberately a short closed set: the map is a schematic, and a
 ## schematic with nine symbols is a legend the player has to learn rather than a
@@ -39,6 +41,26 @@ const M_ENTRANCE := &"entrance"
 
 ## cell -> Array[StringName] of the four compass doors out of it.
 var rooms: Dictionary[Vector2i, Array] = {}
+## Everything the floor has that is NOT on the room grid: the landing behind a
+## boss door, the shortcut's landing, the treasure chamber, and the vault's three
+## rooms. They hang off one wall of one room and run away from it in a straight
+## line, and none of them lands on a cell -- the vault's second and third rooms
+## are 1.25 and 1.83 cells out, so rounding them onto the grid would put two
+## rooms in one square and call it a map.
+##
+## So an annex is METRIC where the rest of this file is a grid: a chain of boxes
+## measured in cells-from-the-host-room's-centre, drawn at the same pitch as
+## everything else and aligned to nothing.
+##
+##   {"cell": Vector2i, "dir": StringName, "boxes": Array[Dictionary]}
+##
+## and a box is `{"near", "far", "wide": float, "room": bool, "seen": bool}` --
+## `near`/`far` along `dir`, `wide` across it, all three in cells. `room` is what
+## gets an outline and a trigger; the links between are corridor, exactly as on
+## the grid.
+##
+## Fog is per box and written by the same rule as `seen`: you walked into it.
+var annexes: Array[Dictionary] = []
 ## cell -> Array[StringName] of marker ids standing in it.
 var marks: Dictionary[Vector2i, Array] = {}
 ## cell -> true once the player has stood in it. Absent means fogged.
@@ -74,6 +96,7 @@ func open_floor(floor_level: int, cell_spacing: float, room_size: float,
 	rooms.clear()
 	marks.clear()
 	seen.clear()
+	annexes.clear()
 	level = floor_level
 	spacing = maxf(cell_spacing, 0.001)
 	room_frac = clampf(room_size / spacing, 0.05, 1.0)
@@ -83,6 +106,58 @@ func open_floor(floor_level: int, cell_spacing: float, room_size: float,
 
 func add_room(cell: Vector2i, doors: Array) -> void:
 	rooms[cell] = doors.duplicate()
+
+
+## Publish a structure hanging off `cell`'s `dir` wall. `face` is metres from the
+## room's centre to that wall, and `parts` is the chain outward from it --
+## `[{"len": float, "wide": float, "room": bool}, ...]`, in METRES, because that
+## is the only unit the generator has and converting here is the one place that
+## has `spacing` to convert with.
+##
+## Returns the annex's index, which is half of the handle `see_annex` wants. The
+## builder keeps it and hands it to the triggers it is about to hang, the same
+## way `_add_room_trigger` closes over a cell.
+##
+## Called from the BUILDERS and not from `Dungeon._publish`, for the reason that
+## function's own note gives about markers: a shortcut whose prefab failed to
+## load builds no landing, and a map that drew one anyway because the anchor was
+## planned is a map that lies about a wall you can walk through.
+func add_annex(cell: Vector2i, dir: StringName, face: float,
+		parts: Array) -> int:
+	var boxes: Array[Dictionary] = []
+	var at := face
+	for part: Dictionary in parts:
+		var run := float(part.get("len", 0.0))
+		boxes.append({
+			"near": at / spacing,
+			"far": (at + run) / spacing,
+			"wide": float(part.get("wide", 1.0)) / spacing,
+			"room": bool(part.get("room", false)),
+			"seen": false,
+		})
+		at += run
+	annexes.append({"cell": cell, "dir": dir, "boxes": boxes})
+	_changed()
+	return annexes.size() - 1
+
+
+## The player is standing in box `box` of annex `a`. The annex twin of `see`, and
+## idempotent for the same reason: it is an `Area3D` the player walks in and out
+## of all the way back down the vault.
+func see_annex(a: int, box: int) -> void:
+	if a < 0 or a >= annexes.size():
+		return
+	var boxes: Array = annexes[a]["boxes"]
+	if box < 0 or box >= boxes.size():
+		return
+	# Bound to a name rather than written through `boxes[box]["seen"]`: a
+	# Dictionary is a reference either way, and this is the form the type checker
+	# can see the `bool` in.
+	var it: Dictionary = boxes[box]
+	if bool(it["seen"]):
+		return
+	it["seen"] = true
+	_changed()
 
 
 ## Put a marker in a room. Silently ignores a duplicate: the generator places a
@@ -132,6 +207,7 @@ func close_floor() -> void:
 	rooms.clear()
 	marks.clear()
 	seen.clear()
+	annexes.clear()
 	level = 0
 	_changed()
 
@@ -166,6 +242,31 @@ func marks_of(cell: Vector2i) -> Array:
 	return marks.get(cell, [])
 
 
+## The wall sides of `cell` that an annex leaves by. `MapDraw` cuts a doorway in
+## each of them for exactly the reason it cuts one for a corridor: an unbroken
+## square with a passage touching it reads as a box with a pipe stuck on the
+## side. That the passage is behind a locked door changes nothing the player does
+## not already know -- they are in the room, they can see the door.
+func annex_dirs_of(cell: Vector2i) -> Array[StringName]:
+	var out: Array[StringName] = []
+	for a: Dictionary in annexes:
+		var dir: StringName = a["dir"]
+		if a["cell"] == cell and not out.has(dir):
+			out.append(dir)
+	return out
+
+
+## The compass step for a door id. It lives here rather than in `MapDraw`
+## because `bounds()` needs it too, and two copies of this match is two answers
+## to which way north is.
+static func step_of(d: StringName) -> Vector2i:
+	match d:
+		&"n": return Vector2i(0, -1)
+		&"s": return Vector2i(0, 1)
+		&"w": return Vector2i(-1, 0)
+	return Vector2i(1, 0)
+
+
 func explored_count() -> int:
 	return seen.size()
 
@@ -178,6 +279,10 @@ func explored_count() -> int:
 ## thing on the screen. Fitting to the full floor costs nothing in secrets -- a
 ## rectangle says how big the floor is and not one thing about where anything in
 ## it stands -- and buys a map that sits still while it fills in.
+##
+## Annexes are folded in because the vault reaches 2.04 cells out of its host
+## room's centre, and a box fitted to the grid alone cropped its last room off
+## the bottom of the MAP screen.
 func bounds() -> Rect2i:
 	if rooms.is_empty():
 		return Rect2i(0, 0, 1, 1)
@@ -188,6 +293,20 @@ func bounds() -> Rect2i:
 		lo.y = mini(lo.y, cell.y)
 		hi.x = maxi(hi.x, cell.x)
 		hi.y = maxi(hi.y, cell.y)
+	for a: Dictionary in annexes:
+		var cell: Vector2i = a["cell"]
+		var axis := Vector2(step_of(a["dir"]))
+		var side := Vector2(-axis.y, axis.x)
+		for box: Dictionary in a["boxes"]:
+			# The far corners are the only two that can be outside a box the near
+			# end is already inside, and `wide` is symmetric about the axis.
+			for s: float in [-1.0, 1.0]:
+				var p := Vector2(cell) + axis * float(box["far"]) \
+					+ side * float(box["wide"]) * 0.5 * s
+				lo.x = mini(lo.x, int(floor(p.x)))
+				lo.y = mini(lo.y, int(floor(p.y)))
+				hi.x = maxi(hi.x, int(ceil(p.x)))
+				hi.y = maxi(hi.y, int(ceil(p.y)))
 	return Rect2i(lo, hi - lo + Vector2i.ONE)
 
 

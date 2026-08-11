@@ -1129,7 +1129,7 @@ func _place_boss(id: StringName) -> void:
 	arena.set(&"boss_offset", -facing * 5.0)
 	root.add_child(arena)
 
-	_build_landing(spot, cell, "BossLanding")
+	_build_landing(spot, cell, p["side"], "BossLanding")
 
 
 ## Beside the boss door, carrying the floor's `deep_chest` relic.
@@ -1223,7 +1223,7 @@ func _place_shortcut(id: StringName) -> void:
 				pool[0]):
 			return
 
-	var landing := _build_landing(spot, cell, "ShortcutLanding")
+	var landing := _build_landing(spot, cell, p["side"], "ShortcutLanding")
 	_land_shortcut_rewards(landing, door)
 
 
@@ -1569,6 +1569,21 @@ func _place_vault(id: StringName) -> void:
 	vault.position = centre_of(cell) + pos
 	vault.rotation.y = float(spot["yaw"]) + PI
 	add_child(vault)
+
+	# Read off the prefab's own constants, the same way `_vault_depth` does and
+	# for the same reason: a vault that grows a fourth room and a map that still
+	# draws three is the drift this trick exists to make impossible.
+	var c := script.get_script_constant_map()
+	var link := float(c.get("LINK", 4.0))
+	var chamber := float(c.get("ROOM", 11.0))
+	var gap := float(c.get("GAP", 4.0))
+	var parts: Array = [{"len": link, "wide": K.CORRIDOR_W, "room": false}]
+	for i in int(c.get("ROOMS", 3)):
+		if i > 0:
+			parts.append({"len": gap, "wide": K.CORRIDOR_W, "room": false})
+		parts.append({"len": chamber, "wide": chamber, "room": true})
+	_publish_annex(vault, cell, side, float(c.get("CEIL", K.CEIL_CORRIDOR)),
+		parts)
 
 	# The prize is minted when the door opens, not when the floor is built --
 	# `Vault.reveal()` carries the reason. The already-open case is not a
@@ -2119,7 +2134,7 @@ func _place_puzzle_room(id: StringName) -> void:
 			block.set(&"mark_offset", Vector3.ZERO)
 			root.add_child(block)
 
-	_place_chamber(cell, spot)
+	_place_chamber(cell, p["side"], spot)
 
 
 ## What is behind the treasure gate: a stub, a chamber, the miniboss in it, and
@@ -2130,7 +2145,8 @@ func _place_puzzle_room(id: StringName) -> void:
 ## is sized so the band between that fence and the back wall holds a chest and a
 ## sounding stone. A player sealed in with the Sluice-Keeper can see both and
 ## reach neither.
-func _place_chamber(cell: Vector2i, spot: Dictionary) -> void:
+func _place_chamber(cell: Vector2i, side: StringName,
+		spot: Dictionary) -> void:
 	var boss_id := BossDb.miniboss_for(Run.level)
 	if boss_id == &"":
 		return
@@ -2139,7 +2155,7 @@ func _place_chamber(cell: Vector2i, spot: Dictionary) -> void:
 		push_error("dungeon: %s failed to load" % ARENA_SCRIPT)
 		return
 	var size := _chamber_size()
-	var root := _build_chamber(spot, cell, "TreasureChamber", size)
+	var root := _build_chamber(spot, cell, side, "TreasureChamber", size)
 	var mid := CHAMBER_STUB + size * 0.5
 	var back := CHAMBER_STUB + size
 
@@ -2201,8 +2217,8 @@ func _place_chamber(cell: Vector2i, spot: Dictionary) -> void:
 ## Built as a child of the Dungeon with its local +Z pointing out through the
 ## wall, so every piece below is authored once in door-space instead of four
 ## times with different signs.
-func _build_chamber(spot: Dictionary, cell: Vector2i, node_name: String,
-		size: float) -> Node3D:
+func _build_chamber(spot: Dictionary, cell: Vector2i, side: StringName,
+		node_name: String, size: float) -> Node3D:
 	var root := Node3D.new()
 	root.name = node_name
 	root.position = centre_of(cell) + spot["pos"]
@@ -2256,6 +2272,11 @@ func _build_chamber(spot: Dictionary, cell: Vector2i, node_name: String,
 			CHAMBER_STUB + size - 0.1)
 		t.rotation.y = PI
 		root.add_child(t)
+
+	_publish_annex(root, cell, side, h, [
+		{"len": CHAMBER_STUB, "wide": w, "room": false},
+		{"len": size, "wide": size, "room": true},
+	])
 	return root
 
 
@@ -2329,7 +2350,7 @@ func _place_locked(p: Dictionary, node_name: String, key: StringName,
 ## Returns that root, because §5.1's chest and sounding stone stand in the
 ## shortcut's landing and want to be authored in the same door-space everything
 ## else in here is (`_land_shortcut_rewards`). `_place_boss` ignores it.
-func _build_landing(spot: Dictionary, cell: Vector2i,
+func _build_landing(spot: Dictionary, cell: Vector2i, side: StringName,
 		node_name: String) -> Node3D:
 	var root := Node3D.new()
 	root.name = node_name
@@ -2384,6 +2405,11 @@ func _build_landing(spot: Dictionary, cell: Vector2i,
 	down.name = "Down"
 	down.position = Vector3(0.0, 0.0, mid + 0.6)
 	root.add_child(down)
+
+	_publish_annex(root, cell, side, h, [
+		{"len": LAND_STUB, "wide": w, "room": false},
+		{"len": LAND_SIZE, "wide": LAND_SIZE, "room": true},
+	])
 	return root
 
 
@@ -2611,6 +2637,56 @@ func _scatter(i: int, total: int, radius: float) -> Vector3:
 	var a := TAU * (float(i) + _rng.randf_range(-0.18, 0.18)) / float(maxi(total, 1))
 	var r := radius * _rng.randf_range(0.55, 1.0)
 	return Vector3(sin(a) * r, 0.0, cos(a) * r)
+
+
+## Put a structure that hangs off a wall on the map, and hang the triggers that
+## take it out of the fog.
+##
+## Everything behind an anchored door -- both landings, the treasure chamber and
+## the vault's three rooms -- was invisible to the minimap and to the MAP screen
+## until this existed, because none of it is in `rooms` and `_publish` only walks
+## `rooms`. Going through a boss door meant walking off the edge of the map.
+##
+## `parts` runs outward from the wall, in metres: `_build_landing`'s stub and
+## chamber, the vault's link/room/gap/room/gap/room. `root`'s local +Z points out
+## through that wall (every builder in this file sets `yaw + PI` for exactly
+## that), so one box per part lands without a single per-compass sign -- the same
+## trick the geometry above it is authored with.
+##
+## `face` is `size_of(cell) * 0.5` and not the door's own position: the door is
+## set 50 mm back into the reveal (`_wall_spot`) and a schematic that carried
+## that would be lying with more precision.
+func _publish_annex(root: Node3D, cell: Vector2i, side: StringName,
+		height: float, parts: Array) -> void:
+	if side == &"":
+		return
+	var index := Atlas.add_annex(cell, side, size_of(cell) * 0.5, parts)
+	var at := 0.0
+	for i in parts.size():
+		var part: Dictionary = parts[i]
+		var run := float(part["len"])
+		var area := Area3D.new()
+		area.name = "MapTrigger%d" % i
+		area.collision_layer = 0
+		area.collision_mask = K.L_PLAYER
+		var cs := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		# 0.9 across, full length. Across, because a trigger the exact width of
+		# the room pokes into the masonry either side; along, because the boxes
+		# are butted end to end and a gap between two of them is a stride of
+		# corridor that never lights up.
+		box.size = Vector3(float(part["wide"]) * 0.9, height, run)
+		cs.shape = box
+		cs.position = Vector3(0.0, height * 0.5, at + run * 0.5)
+		area.add_child(cs)
+		root.add_child(area)
+		# `slot`, captured by value. `i` is the loop's own variable and a lambda
+		# that closed over it would report the last box from every trigger.
+		var slot := i
+		area.body_entered.connect(func(body: Node3D) -> void:
+			if body.is_in_group(&"player"):
+				Atlas.see_annex(index, slot))
+		at += run
 
 
 ## Counts a room the first time the player walks into it. Depth drives the
