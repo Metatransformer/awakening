@@ -633,6 +633,32 @@ const BURST_CAST_TIME := 0.34
 const BURST_KNOCKBACK := 6.0
 
 
+# --- The other two workings (docs/GDD.md §6.5) -------------------------------
+# Sustain and Ballast. **They spend the same `Game.charges` Burst does** and
+# there is no second pool: GDD §6.5 says "charges are arrows", and a quiver is
+# one number however many things draw from it. Three counted resources bought
+# at one counter would also be three lines on the alchemist's catalogue and
+# three cells in the HUD column, which is a system where the design asked for a
+# stock.
+#
+# Neither has a speed, a gravity or a knockback, because neither leaves his
+# hand -- both are cast at the hero. That is why there is no BALLAST_THROW_*
+# beside the Burst block above.
+
+## Seconds the Ballast soak window lasts. Short on purpose and much shorter than
+## `DRAUGHT_TIME`'s 45: a draught is a decision you made in the garrison and this
+## is a decision you made in the half second before a blow lands. Long enough to
+## cover the swing you saw coming and the one behind it, and not long enough to
+## be a stance. [tune]
+const BALLAST_TIME := 8.0
+## Quarter-hearts the window takes off every blow, on top of armour and any
+## draught. Three, which is `PLATE_SOAK`'s whole ceiling -- the point of eating
+## your own profit is that it is worth more than a rung of plate for those eight
+## seconds, or nobody would ever pay for it. `Hero.hurt` still floors a blow at
+## one quarter, so this is never immunity. [tune]
+const BALLAST_SOAK := 3
+
+
 # --- The forge (docs/METAGAME.md §6.5) --------------------------------------
 ## Twelve ladders, three rungs each, bought with gold AND components at the
 ## smith -- four scalar ones and the armour's four pieces times two paths.

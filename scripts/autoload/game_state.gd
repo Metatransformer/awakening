@@ -120,12 +120,26 @@ var bottle_contents: Array[StringName] = []
 ## Draught id -> seconds left, for the two that last. Ticked in `_process`
 ## beside stamina. Not saved: a 45-second buff restored by a load is a buff you
 ## spend the loading screen on, and every other timer in the game is the same.
+##
+## **Ballast's soak window rides in here too** (`BALLAST_ID`), and it is not a
+## draught. This is the game's one table of "a thing that is true right now and
+## will not be shortly", with one tick, one clamp and one signal; a second timer
+## dictionary for a working would be a second `_tick_draughts` to forget to call
+## and a second way for a window to be left running through a scene change. What
+## the field is named after is the only thing that ever used it, which is a worse
+## reason to fork it than to widen this note.
 var draughts: Dictionary[StringName, float] = {}
 ## Spelled once, here, for the same reason FORGE_* is: `sword_bonus()` and
 ## `armour_soak()` below read these ids, and a typo in either would be a potion
 ## that costs a slot and does nothing.
 const DRAUGHT_EDGE_ID := &"emberblood_draught"
 const DRAUGHT_PLATE_ID := &"ironhide_draught"
+## Ballast's window (`docs/GDD.md` §6.5). Deliberately NOT spelled
+## `ballast_draught`: it is not brewed, not bottled and not on the alchemist's
+## board, and the HUD's draught row filters on `PotionDb.IDS` so this id earns no
+## slot there by accident. What makes it visible is the health bar -- a blow that
+## costs one quarter instead of three -- and the stack it burned leaving the bag.
+const BALLAST_ID := &"ballast"
 
 var small_keys: int = 0
 var has_boss_key: bool = false
@@ -177,12 +191,20 @@ const HAND_LEFT := &"left"
 ## What each hand may hold, in cycle order. `&""` is the empty hand and is a
 ## legitimate choice: two-handing the sword and dropping the shield is a real
 ## decision, not a broken state.
-## **Four of the ring's six stops** (`docs/CONTRACT.md` §4.1 -- sword, bow,
-## hookshot, Burst, Sustain, Ballast, and a seventh costs a sixth). Burst goes in
-## here and nowhere else: a working is a usable item, so what makes it castable
-## is a row in this array, a row in `ArmamentDb`, and `has()` saying you own it.
-## There is no casting layer and this line is the proof of it.
-const RIGHT_POOL: Array[StringName] = [&"sword", &"bow", &"hookshot", &"burst"]
+## **All six of the ring's stops** (`docs/CONTRACT.md` §4.1, `docs/SCOPE.md` §1 --
+## sword, bow, hookshot, Burst, Sustain, Ballast, and a seventh costs a sixth).
+## The three workings go in here and nowhere else: a working is a usable item, so
+## what makes it castable is a row in this array, a row in `ArmamentDb`, and
+## `armament_owned()` saying you own it. There is no casting layer and this line
+## is the proof of it.
+##
+## This array is the manifest's **ring stops: 6** row, spelled out. Six is where
+## counting stops being free, so a seventh entry here is not a feature, it is an
+## amendment to `docs/SCOPE.md` -- and the argument it has to beat is CONTRACT
+## §4.1's, which chose a ring over bindable slots precisely because a ring can be
+## counted.
+const RIGHT_POOL: Array[StringName] = [&"sword", &"bow", &"hookshot",
+	&"burst", &"sustain", &"ballast"]
 const LEFT_POOL: Array[StringName] = [&"shield", &"arrow", &""]
 
 var loadout: Array[Dictionary] = [
@@ -709,9 +731,16 @@ func sword_bonus() -> int:
 ## Quarter-hearts subtracted from every blow taken. `Hero.hurt` floors the
 ## result at one -- armour makes you last longer, never invincible, and that
 ## floor is what stops Ironhide on a full plate ladder from being immunity.
+## Ballast is added HERE, on top of the cap, exactly as Ironhide is: `SOAK_MAX`
+## is the ceiling on what you can BUILD (see its note about faucets), and a
+## window you paid a stack of merchandise for is not a build. Stacking it with a
+## draught is allowed and is meant to be -- both are consumed, and `Hero.hurt`
+## still floors every blow at one quarter, so the two together are a very good
+## eight seconds and never immunity.
 func armour_soak() -> int:
 	return int(floorf(armour_soak_exact())) \
-		+ (K.DRAUGHT_PLATE if draught_left(DRAUGHT_PLATE_ID) > 0.0 else 0)
+		+ (K.DRAUGHT_PLATE if draught_left(DRAUGHT_PLATE_ID) > 0.0 else 0) \
+		+ (K.BALLAST_SOAK if draught_left(BALLAST_ID) > 0.0 else 0)
 
 
 ## The permanent soak before flooring, in quarter-hearts. Public because the
@@ -1241,6 +1270,14 @@ func armament_owned(id: StringName) -> bool:
 		&"sword": return true
 		&"shield": return true
 		&"arrow": return has(&"bow")
+		# The two Verses are READ at the alchemist's counter, not picked up, so
+		# there is no `items` row to find and `has()` would answer no forever.
+		# `knows_working()` is the accessor `RelicDb` built for exactly this and
+		# it is asked HERE rather than at the ring, the HUD and the equipment
+		# screen separately -- the ownership question has one reader for the
+		# reason the docstring above gives.
+		&"sustain": return RelicDb.knows_working(&"sustain")
+		&"ballast": return RelicDb.knows_working(&"ballast")
 	return has(id)
 
 

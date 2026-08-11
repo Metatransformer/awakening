@@ -345,12 +345,15 @@ const DRAUGHT_RELICS := {
 ## Burst is the one of those -- it comes off the Slag Ogre (GDD §6.5), not off a
 ## counter -- and it is absent from this table rather than mapped to nothing.
 ##
-## **This is the whole of what a Verse does in code today.** The two workings
-## themselves are not built (`docs/ITEMS.md` §8, D5): there is no row for them in
-## `ArmamentDb.NAMES` and no stop in `Game.RIGHT_POOL`, so nothing calls this yet.
-## The relic rows exist regardless, because a manifest with the wrong twelve
-## objects in it is how floor 2's vault spent M3 holding a fletching jig that GDD
-## §6.2 deleted. When D5 lands, the ring's two new stops ask this and nothing else.
+## **This is the whole of what a Verse does in code.** `Game.armament_owned()` is
+## the one caller (`docs/ITEMS.md` §8, D5, closed 2026-08-11): the ring's Sustain
+## and Ballast stops ask it there and nothing else asks it anywhere, which is what
+## keeps the ownership question from being re-derived by the HUD and the
+## equipment screen the way it was about to be.
+##
+## The relic rows existed before the workings did, because a manifest with the
+## wrong twelve objects in it is how floor 2's vault spent M3 holding a fletching
+## jig that GDD §6.2 deleted.
 const WORKING_RELICS := {
 	&"sustain": &"sustain_verse",
 	&"ballast": &"ballast_verse",

@@ -14,7 +14,9 @@ garrison, vendor, smith, alchemist, bag, extraction, Heat, bottles, bow,
 hookshot, arrows, a seeded dungeon with six enemy kinds, and the whole gear loop
 in §6.6 — twelve forge ladders, four armour pieces on two paths, and the
 jewelcrafter. What is *not* built is everything in §5, the relics and the
-Lanternkeeper in §6, the endings, and the three workings (§6.5).
+Lanternkeeper in §6, and the endings. **The three workings (§6.5) are built** and
+this paragraph is otherwise stale in the same direction — see `docs/ITEMS.md` §8,
+D6, which is the entry that owns it.
 `docs/METAGAME.md` is the design of record for what exists today and every number
 in it is read from the code it names.
 
@@ -692,8 +694,12 @@ answered, it is why `docs/SCOPE.md` can keep Quests at 0, and it is a
 
 ### 6.5 The workings — charges, not mana
 
-Three workings, and the number three is load-bearing. What each one *answers* —
-and the fact that only Burst is built — is `docs/ITEMS.md` §1.
+Three workings, and the number three is load-bearing. What each one *answers* is
+`docs/ITEMS.md` §1. **All three are built** — Burst off the Slag Ogre, Sustain
+and Ballast off the two Verses read at the alchemist's counter — and they are
+three rows in `ArmamentDb` and three of the six entries in `Game.RIGHT_POOL`,
+which is the whole of what "a working is a usable item" was ever allowed to cost
+(`docs/ITEMS.md` §8, D5, closed 2026-08-11).
 
 | Working | From | Charges | What it does |
 |---|---|---|---|

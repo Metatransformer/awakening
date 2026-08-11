@@ -29,6 +29,12 @@ extends RefCounted
 ##   H  The unlock BITES: the smith's ceiling moves a rung, and the fee moves
 ##      25% -> 20%.
 ##   I  The same corner of the yard, the same camera, dark and then lit.
+##   K  **The two Verses pay out something playable** (`docs/ITEMS.md` §8, D5).
+##      Before the donation the ring will not step onto either one; after it,
+##      both are stops the D-pad reaches, and each does what GDD §6.2 says --
+##      Sustain holds the chain through a break, Ballast burns the cheapest
+##      stack for a soak window. Both halves are photographed, because a ring
+##      that showed everything always would pass a positive-only check.
 ##
 ## I is the one that matters, and it is the only claim here that a check cannot
 ## make for you. `docs/SCOPE.md` §4.1 asks "did the garrison changing register,
@@ -64,6 +70,7 @@ func run(rig) -> void:
 	await rig.wait_frames(24)
 
 	_table()
+	await _verse_dark(rig)
 	await _pickup(rig)
 	await _full_bag(rig)
 	await _death(rig)
@@ -72,6 +79,7 @@ func run(rig) -> void:
 	await _counter(rig)
 	await _record(rig)
 	await _bite(rig)
+	await _verse_lit(rig)
 	await _lit(rig)
 
 	if _fails == 0:
@@ -169,6 +177,59 @@ func _table() -> void:
 	# The first cut priced a row at "1 of yourself" and the screen drew a RUST
 	# "1 WEIGHTS" over a relic the player was holding. See `RelicDb.lines`.
 	_ck("A14 no line prices a component", with_parts == 0)
+
+
+# --- K, first half. The ring without the Verses -------------------------------
+
+## The NEGATIVE case, and it is the half of this card that is easy to skip.
+##
+## `docs/ITEMS.md` §8 D5 was two rows and two ring stops that did not exist, and
+## the obvious way to close it is to add them and photograph them working. That
+## proves nothing on its own: a ring that carried every stop unconditionally
+## would take exactly the same picture. So this runs FIRST, before anything has
+## been recorded, and presses the D-pad the way a player does — `rig.draw_weapon`
+## walks the ring and comes back false when the ring never lands on the id.
+##
+## The other four stops are granted here because the ring has to have somewhere
+## to go. With only the sword owned the walk is one entry long and
+## `cycle_armament` early-returns, so a refusal would prove the early return
+## rather than the ownership gate -- and the six-stop walk after the donation
+## would be a four-stop walk for a reason that has nothing to do with the Verses.
+func _verse_dark(rig) -> void:
+	for id: StringName in [&"bow", &"hookshot", &"burst"]:
+		Game.grant(id)
+	Game.add_arrows(12)
+	Game.add_charges(6)
+	await rig.wait_frames(4)
+
+	_ck("K0 neither Verse has been read", not RelicDb.donated(&"sustain_verse")
+		and not RelicDb.donated(&"ballast_verse"))
+	_ck("K1 so the game says you do not own the workings",
+		not Game.armament_owned(&"sustain") and not Game.armament_owned(&"ballast"))
+	# Both stops are IN the pool -- they are two of the manifest's six
+	# (`docs/SCOPE.md` §1) -- and the pool is not what decides. This beat is here
+	# because "it is not on the ring" and "it is not in RIGHT_POOL" are two
+	# different claims and only the first one is the player's.
+	_ck("K2 both are among the ring's six stops (%d)" % Game.RIGHT_POOL.size(),
+		Game.RIGHT_POOL.size() == 6 and Game.RIGHT_POOL.has(&"sustain")
+			and Game.RIGHT_POOL.has(&"ballast"))
+
+	var stops := await _walk_ring(rig, "K3 before", out.path_join("r_30_ring_before"))
+	_ck("K3 the ring is sword/bow/hookshot/burst and stops there (%s)" % [stops],
+		not stops.has(&"sustain") and not stops.has(&"ballast"))
+	# Assigned before asserting, never `not await f()` inside the argument list:
+	# an `await` buried in a call's arguments is the kind of expression that
+	# parses today and resumes somewhere surprising the day the callee changes.
+	var reached_sustain: bool = await rig.draw_weapon(&"sustain", 10)
+	_ck("K4 D-pad → never lands on Sustain, however long you press it",
+		not reached_sustain)
+	var reached_ballast: bool = await rig.draw_weapon(&"ballast", 10)
+	_ck("K5 nor on Ballast", not reached_ballast)
+	# The frame the two checks above are about: the hand after ten presses of →,
+	# which is a hand holding something that is not a Verse.
+	await rig.wait_frames(6)
+	await rig.capture(out.path_join("r_31_ring_refused.png"))
+	await rig.draw_weapon(&"sword", 10)
 
 
 # --- B. Off the floor and into the bag ---------------------------------------
@@ -571,13 +632,230 @@ func _bite(rig) -> void:
 	await rig.wait_frames(6)
 
 
+# --- K, second half. The two Verses pay out ------------------------------------
+
+## Read both Verses over the counter, then use what they bought.
+##
+## `docs/ITEMS.md` §8 D5 in one beat: the ring gains two stops it did not have,
+## and each of them does the thing GDD §6.2 names. Every claim below is read off
+## the same accessors the game reads -- `Game.armament_owned`, `Heat.tier`,
+## `Game.armour_soak()`, `Run.bag` -- and the presses go through the D-pad and
+## the shoulder button rather than through the functions underneath them, because
+## the defect being closed was precisely that the functions existed and no button
+## reached them.
+func _verse_lit(rig) -> void:
+	Game.gold = 60000
+	# A stock of charges, because these two spend the same pool Burst does and
+	# the run between here and `_verse_dark` may have taken them.
+	Game.add_charges(6)
+	for id: StringName in [&"sustain_verse", &"ballast_verse"]:
+		Game.set_flag(RelicDb.flag_held(id))
+	var read := 0
+	for line in RelicDb.lines():
+		if line["id"] == &"sustain_verse" or line["id"] == &"ballast_verse":
+			if RelicDb.buy(line):
+				read += 1
+	_ck("K6 both Verses were read at the counter (%d)" % read, read == 2)
+	_ck("K7 the alchemist taught the workings",
+		RelicDb.knows_working(&"sustain") and RelicDb.knows_working(&"ballast"))
+	_ck("K8 so the game now says you own them",
+		Game.armament_owned(&"sustain") and Game.armament_owned(&"ballast"))
+
+	var stops := await _walk_ring(rig, "K9 after", out.path_join("r_35_ring_after"))
+	_ck("K9 the ring is six stops now, with both Verses on it (%s)" % [stops],
+		stops.size() == 6 and stops.has(&"sustain") and stops.has(&"ballast"))
+
+	await _sustain(rig)
+	await _ballast(rig)
+
+
+## GDD §6.2 row 6: *the Heat chain holds through one break.*
+##
+## Photographed at a real tier, with the control shot beside it -- the second
+## break, with the ward already spent, has to actually cost the chain or the
+## first frame is a picture of a bar that never drops.
+func _sustain(rig) -> void:
+	Run.enter(31340)
+	Game.heal(99)
+	# Through the Bus, not through `Heat._advance`: the door a kill comes in by is
+	# part of what is being proved, and `Heat` refuses to advance outside a run.
+	for _i in 5:
+		Bus.enemy_died.emit(null, Vector3.ZERO)
+	await rig.wait_frames(4)
+	print("RELIC heat kills=%d tier=%d window=%.2f" % [
+		Heat.kills, Heat.tier, Heat.window])
+	_ck("K10 the chain is lit (%d kills, tier %d)" % [Heat.kills, Heat.tier],
+		Heat.tier >= 2 and Heat.kills >= 5)
+	await rig.capture(out.path_join("r_40_heat_lit.png"))
+
+	var drawn: bool = await rig.draw_weapon(&"sustain", 10)
+	_ck("K11 D-pad → now reaches the Sustain-Verse", drawn)
+	await rig.wait_frames(6)
+	# The HUD cell, which is the whole of "it is on the ring and selectable":
+	# `ArmamentDb.letter()` draws SU and `hand_count()` puts the charge tally
+	# under it, exactly as it does for Burst.
+	await rig.capture(out.path_join("r_41_sustain_hand.png"))
+
+	var charges_before := Game.charges
+	var tier_before := Heat.tier
+	# Pressed. The shoulder button, on the hero, with nothing else driving it.
+	await rig.tap(["attack"])
+	await rig.wait_frames(8)
+	print("RELIC sustain charges %d -> %d armed=%s" % [
+		charges_before, Game.charges, Heat.sustained])
+	_ck("K12 casting it spent a charge (%d -> %d)" % [charges_before, Game.charges],
+		Game.charges == charges_before - 1)
+	_ck("K13 and the chain is warded", Heat.sustained)
+	await rig.capture(out.path_join("r_42_sustain_armed.png"))
+
+	# Topped up first, so the window is not about to run out under the blow and
+	# make this beat a race between two doors into the same break.
+	Bus.enemy_died.emit(null, Vector3.ZERO)
+	await rig.wait_frames(2)
+	var kills_before := Heat.kills
+	Game.damage(K.QUARTER)
+	await rig.wait_frames(6)
+	print("RELIC struck: tier %d -> %d, kills %d -> %d, armed=%s" % [
+		tier_before, Heat.tier, kills_before, Heat.kills, Heat.sustained])
+	_ck("K14 the blow landed and the chain HELD (tier %d, %d kills)"
+		% [Heat.tier, Heat.kills],
+		Heat.tier == tier_before and Heat.kills == kills_before)
+	_ck("K15 and the ward is spent -- one break, not a stance", not Heat.sustained)
+	await rig.capture(out.path_join("r_43_sustain_held.png"))
+
+	# The control. Same blow, no ward: if this one does not cost the chain, the
+	# frame above is a picture of a bar that never drops.
+	Game.damage(K.QUARTER)
+	await rig.wait_frames(6)
+	print("RELIC struck again: tier %d kills %d" % [Heat.tier, Heat.kills])
+	_ck("K16 the NEXT break costs the chain (tier %d, %d kills)"
+		% [Heat.tier, Heat.kills], Heat.tier < tier_before)
+	await rig.capture(out.path_join("r_44_chain_broken.png"))
+
+
+## GDD §6.2 row 7: *burn the cheapest stack in the bag for a soak window.*
+##
+## Two things have to be true and only one of them is the buff. The bag has to
+## lose the CHEAP line and keep the dear one -- a working that ate the Deep Amber
+## is a button nobody presses twice -- and a blow has to visibly cost less while
+## the window is up and full price once it is not.
+func _ballast(rig) -> void:
+	Game.heal(99)
+	Run.collect(&"bone_shard", 4)
+	Run.collect(&"deep_amber", 3)
+	await rig.wait_frames(6)
+
+	var drawn: bool = await rig.draw_weapon(&"ballast", 10)
+	_ck("K17 D-pad → reaches the Ballast-Verse", drawn)
+	await rig.wait_frames(6)
+	await rig.capture(out.path_join("r_51_ballast_hand.png"))
+
+	# --- The case is not reachable, and this beat was not planned -------------
+	# `Run.collect` FILLS THE CASE FIRST (its own note: the forgiving default),
+	# so a fresh bag of two lines is two lines that are entirely in the document
+	# case -- and the first run of this director cast Ballast into that and got
+	# nothing at all. That is the working being right: the case is the game's one
+	# promise (GDD §3.1) and `Run._take_slot` walks the HOLD, exactly as the
+	# thief does. It is asserted here rather than quietly worked around, because
+	# a director that only ever tests the reachable case would not notice the day
+	# somebody widened the scan.
+	var cased_charges := Game.charges
+	_ck("K18 everything is in the case, so there is nothing to burn (%s)"
+		% [Run.cased], not Run.burnable())
+	await rig.tap(["attack"])
+	await rig.wait_frames(8)
+	_ck("K19 casting into a case-only bag costs no charge (%d)" % Game.charges,
+		Game.charges == cased_charges
+			and Game.draught_left(Game.BALLAST_ID) <= 0.0)
+
+	# Out of the case and into the hold, which is where a player's overflow lives
+	# by the time they are deep enough to want this.
+	Run.unstow(&"bone_shard")
+	Run.unstow(&"deep_amber")
+	await rig.wait_frames(6)
+	var amber_before: int = Run.in_hold(&"deep_amber")
+	var soak_before := Game.armour_soak()
+	print("RELIC ballast hold bone=%d amber=%d case=%s soak=%d" % [
+		Run.in_hold(&"bone_shard"), amber_before, Run.cased, soak_before])
+	_ck("K20 there is something cheap and something dear in the HOLD",
+		Run.in_hold(&"bone_shard") > 0 and amber_before > 0)
+	await rig.capture(out.path_join("r_50_bag_before.png"))
+
+	var charges_before := Game.charges
+	await rig.tap(["attack"])
+	await rig.wait_frames(8)
+	print("RELIC ballast bag=%s charges %d -> %d soak %d -> %d window=%.2f" % [
+		Run.bag, charges_before, Game.charges, soak_before, Game.armour_soak(),
+		Game.draught_left(Game.BALLAST_ID)])
+	_ck("K21 the cheapest stack burned", Run.in_hold(&"bone_shard") == 0)
+	_ck("K22 the dear one is untouched -- it burns what you can spare (%d)"
+		% Run.in_hold(&"deep_amber"), Run.in_hold(&"deep_amber") == amber_before)
+	_ck("K23 a charge went with it (%d -> %d)" % [charges_before, Game.charges],
+		Game.charges == charges_before - 1)
+	_ck("K24 the window is up (%.1f s)" % Game.draught_left(Game.BALLAST_ID),
+		Game.draught_left(Game.BALLAST_ID) > 0.0)
+	_ck("K25 and it is worn: soak %d -> %d" % [soak_before, Game.armour_soak()],
+		Game.armour_soak() == soak_before + K.BALLAST_SOAK)
+	await rig.capture(out.path_join("r_52_bag_burned.png"))
+
+	# --- The blow, twice -----------------------------------------------------
+	# `take_hit`, not `Game.damage`: the soak lives on the damage path and calling
+	# past it would be the director proving its own arithmetic.
+	var hero := _hero(rig)
+	if hero == null:
+		_ck("K26 there is a hero to hit", false)
+		return
+	Game.heal(99)
+	await rig.wait_frames(4)
+	var before := Game.quarters
+	var landed: bool = hero.take_hit(Hit.make(K.HEART,
+		hero.global_position + Vector3(0.0, 0.0, 2.0), &"contact"))
+	await rig.wait_frames(6)
+	var soaked := before - Game.quarters
+	print("RELIC soaked blow: %d quarters (landed=%s)" % [soaked, landed])
+	_ck("K26 a four-quarter blow cost %d while the window was up" % soaked,
+		landed and soaked < K.HEART)
+	await rig.capture(out.path_join("r_53_hit_soaked.png"))
+
+	# The control, and it doubles as proof the window ENDS. Waited out on the
+	# game's clock rather than erased, because a window nobody can outlast is a
+	# permanent soak with a countdown drawn on it.
+	await rig.wait_seconds(K.BALLAST_TIME + 0.6)
+	_ck("K27 the window ran out on its own",
+		Game.draught_left(Game.BALLAST_ID) <= 0.0)
+	Game.heal(99)
+	await rig.wait_seconds(K.IFRAME_TIME + 0.2)
+	var bare_before := Game.quarters
+	var bare_landed: bool = hero.take_hit(Hit.make(K.HEART,
+		hero.global_position + Vector3(0.0, 0.0, 2.0), &"contact"))
+	await rig.wait_frames(6)
+	var bare := bare_before - Game.quarters
+	print("RELIC bare blow: %d quarters (landed=%s)" % [bare, bare_landed])
+	_ck("K28 the same blow costs %d with the window gone -- %d more"
+		% [bare, bare - soaked], bare_landed and bare > soaked)
+	await rig.capture(out.path_join("r_54_hit_bare.png"))
+
+	Run.bag.clear()
+	Run.in_dungeon = false
+	Bus.bag_changed.emit(Run.bag, 0)
+	await rig.draw_weapon(&"sword", 10)
+	await rig.wait_frames(6)
+
+
 # --- I, second half. The lit yard ---------------------------------------------
 
 func _lit(rig) -> void:
 	var garrison := rig.scene() as Garrison
 	if garrison == null:
 		return
-	_ck("J0 two are recorded", RelicDb.donated_count() == 2)
+	# FOUR, not two: the Tally-Ledger and the Rope-Drum from `_record`/`_bite`,
+	# plus the two Verses `_verse_lit` reads over the same counter. This beat
+	# asserted two until the K beats landed, and the count is the point of it --
+	# what it is checking is that a donation lights ONE prop and not the yard, so
+	# it has to move with the donations rather than be relaxed into a `>=`.
+	const DONATED_BY_NOW := 4
+	_ck("J0 four are recorded (%d)" % RelicDb.donated_count(),
+		RelicDb.donated_count() == DONATED_BY_NOW)
 	var watched := garrison.light_of(WATCH)
 	_ck("J1 the Tally-Ledger's lamp is lit", watched != null and watched.lit())
 	var winch := garrison.light_of(&"winch_lamp")
@@ -586,7 +864,8 @@ func _lit(rig) -> void:
 	for l in garrison.lights:
 		if l.lit():
 			lit_count += 1
-	_ck("J3 two of twelve, and only two (%d)" % lit_count, lit_count == 2)
+	_ck("J3 four of twelve, and only four (%d)" % lit_count,
+		lit_count == DONATED_BY_NOW)
 
 	# Wait the flare out, so the AFTER frame is the resting brightness rather
 	# than the peak. If the difference only reads during the overshoot, the
@@ -654,12 +933,42 @@ const ASIDE := 1.6
 
 
 func _place(rig, id: StringName, ahead: float) -> LootMote:
-	var players: Array = rig.get_nodes_in_group(&"player")
-	if players.is_empty():
+	var hero := _hero(rig)
+	if hero == null:
 		return null
-	var hero: Node3D = players[0]
 	return RelicPickup.place(rig.scene(), id,
 		hero.global_position + Vector3(ASIDE, 0.0, -ahead))
+
+
+func _hero(rig) -> Hero:
+	var players: Array = rig.get_nodes_in_group(&"player")
+	return players[0] as Hero if not players.is_empty() else null
+
+
+## Step the right hand all the way round the ring with D-pad →, one frame per
+## stop, and hand back the ids it actually landed on.
+##
+## The FRAMES are the point and the returned array is the caption. A ring is a
+## thing you press your way round, so "Sustain is on it" is a sequence of HUD
+## cells and not a single capture -- one photograph of a cell reading SU would be
+## a photograph of a hand, which is what `Game.loadout` could have been made to
+## say without a ring stop existing at all.
+##
+## Stops when it comes back to something it has already seen, so the walk's
+## LENGTH is the ring's length rather than a number this function chose.
+func _walk_ring(rig, tag: String, prefix: String) -> Array:
+	var seen: Array = []
+	for _i in Game.RIGHT_POOL.size() + 2:
+		var id: StringName = Game.armament(Game.HAND_RIGHT)
+		if seen.has(id):
+			break
+		seen.append(id)
+		await rig.wait_frames(4)
+		await rig.capture("%s_%d_%s.png" % [prefix, seen.size() - 1, id])
+		await rig.tap(["weapon_next"])
+		await rig.wait_frames(2)
+	print("RELIC %s ring = %s" % [tag, seen])
+	return seen
 
 
 ## Poll a condition rather than waiting a fixed number of frames. The harness

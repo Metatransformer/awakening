@@ -29,8 +29,8 @@ definition**, and §4.2 applies.
 | **New monster models** | **0** | Bosses are scaled/re-tinted `golem`, `ogre`, `wraith`, `knight_iron`. The four **minibosses** take four of the five the bosses leave — `troll`, `orc`, `skeleton`, `kobold` — the same way, and their move sets are the design, not the silhouettes. **No floor's miniboss shares a model with its boss**; that is the rule that picks these four |
 | Enemy kinds in rotation | **9** | Everything in `assets/monsters/`. No tenth. |
 | Dungeon kits | **1** | The P6 kit, four tints |
-| Usable items | **6** | Bow (built), Hookshot (built), **Burst**, **Sustain**, **Ballast** (new), Far Lantern (no verb) |
-| **Ring stops** | **6** | Sword, bow, hookshot, Burst, Sustain, Ballast. **Hard ceiling** — `docs/CONTRACT.md` §4.1 |
+| Usable items | **6** | Bow, Hookshot, **Burst**, **Sustain**, **Ballast** — all built, the last two on 2026-08-11 (`docs/ITEMS.md` §8, D5) — and the Far Lantern, which has no verb |
+| **Ring stops** | **6** | Sword, bow, hookshot, Burst, Sustain, Ballast. **Hard ceiling** — `docs/CONTRACT.md` §4.1. `Game.RIGHT_POOL` holds all six now, so this row is no longer a plan: a seventh entry in that array is an amendment |
 | **New mechanics** | **2** | The working, and **the puzzle**. Was 1. See §4.2's fourth ledger line — this is an owner's amendment, not an absorption. |
 | Locked doors | **8** | 4 shortcuts, 3 vaults, 1 to the Long Descent. **They are puzzles now, not checks** — `docs/PUZZLES.md`, GDD §5.3 |
 | Vault prefabs | **3** | Three rooms each |

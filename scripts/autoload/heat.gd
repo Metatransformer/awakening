@@ -36,6 +36,17 @@ var window: float = 0.0
 ## Highest tier reached this run. Nothing reads it yet; the run summary will.
 var peak_tier: int = 0
 
+## The Sustain-Verse is cast and waiting to be spent (`docs/GDD.md` §6.5 -- "the
+## Heat chain holds through **one** break"). Public because the HUD and the
+## director both want to say whether it is up, and because a working you cannot
+## see the state of is a charge you will spend twice.
+##
+## It is ONE break and not a duration, which is the whole shape of the item: a
+## timed ward would be a buff you cast before a fight, and this is a thing you
+## cast because you can feel the window running out. It survives a scene change
+## and dies with the run, like the chain it defends -- `reset()` clears it.
+var sustained: bool = false
+
 ## Mirrored so a health signal can be read as "he was hurt" rather than "health
 ## is now N" -- Bus.player_health_changed carries no delta.
 ##
@@ -64,6 +75,7 @@ func reset() -> void:
 	tier = 0
 	window = 0.0
 	peak_tier = 0
+	sustained = false
 	# Both ends of a run restore health, and re-reading it here is what stops the
 	# heal that follows a death from being mistaken for a blow on the next run.
 	_last_quarters = Game.quarters
@@ -163,6 +175,24 @@ func _on_health_changed(quarters: int, _max_quarters: int) -> void:
 func _step_down(struck: bool) -> void:
 	if kills <= 0:
 		return
+	# The Sustain-Verse eats this one. Both doors into `_step_down` are covered
+	# on purpose -- the design says "a break", and to a player the window running
+	# out and a spear landing are the same event seen from two sides.
+	#
+	# The window is REFRESHED rather than left where it was, and that is the half
+	# of this that is not obvious: an expiry arrives with `window` at or below
+	# zero, so absorbing without refilling it would step down again on the very
+	# next frame with the ward already spent. "Holds through one break" means the
+	# chain comes out of it live, which means it comes out of it with a clock.
+	if sustained:
+		sustained = false
+		window = K.HEAT_TIER_WINDOW[maxi(tier, 1)]
+		# Reported as a tier change that did not change tier, which is exactly
+		# what the HUD's flash is for: something happened to the chain and it is
+		# still lit. `_announce` alone would repaint the bar with no event in it.
+		Bus.heat_tier_changed.emit(tier, true)
+		_announce()
+		return
 	kills = K.HEAT_TIER_KILLS[tier - 1] if tier > 0 else 0
 	var next := _tier_for(kills)
 	window = K.HEAT_TIER_WINDOW[maxi(next, 1)] if kills > 0 else 0.0
@@ -174,6 +204,26 @@ func _step_down(struck: bool) -> void:
 		# chain still broke and the HUD needs the flash or the hit reads as free.
 		Bus.heat_tier_changed.emit(tier, false)
 	_announce()
+
+
+## Cast the Sustain-Verse: the next break is absorbed. `HeroRanged._cast_sustain`
+## is the only caller.
+##
+## **Refused when there is no chain to hold.** A ward armed at zero kills would
+## sit there through the whole walk to the next fight and then be spent on the
+## first expiry of a chain the player had not decided to defend yet -- a charge
+## gone on a decision nobody made. Refusing here rather than at the hero is the
+## same argument `spend_ammo` makes: the thing that owns the state owns the no.
+##
+## Re-casting an armed ward is also refused, and that is not politeness. It would
+## be a second charge bought for nothing, because one break is one break however
+## many times you say it.
+func sustain() -> bool:
+	if kills <= 0 or sustained:
+		return false
+	sustained = true
+	_announce()
+	return true
 
 
 # --- Queries ----------------------------------------------------------------

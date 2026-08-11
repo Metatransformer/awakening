@@ -13,16 +13,15 @@ That is `docs/BESTIARY.md` §0 read from the other end, and it is GDD §5.2's ru
 ("verbs, not numbers") applied to everything on the list rather than only to the
 four boss drops.
 
-**Status: design of record, and most of it runs.** The Bow, the Hookshot and
-Burst are rows in `ArmamentDb.NAMES` and stops on `Game.RIGHT_POOL`; the Far
-Lantern's door exists; the twelve relics, the twelve Echoes, the twenty ladders
-and all five stocks are code, and **a relic now arrives broken** — `home` and
-`repair` columns on every row of `RelicDb.RELICS`, the price on the
-Lanternkeeper's line, `Broken Tally-Ledger of Fair Weights` in the bag (§8, D3,
-closed). **One thing described below is not built.** Sustain and Ballast do not
-exist in any form — no armament row, no ring stop (§8, D5) — so §1.5 and §1.6
-are design rather than descriptions of something that runs, and §7's index marks
-the rows that are.
+**Status: design of record, and it runs.** All five verbs — the Bow, the
+Hookshot, Burst, Sustain and Ballast — are rows in `ArmamentDb.NAMES` and stops
+on `Game.RIGHT_POOL`; the Far Lantern's door exists; the twelve relics, the
+twelve Echoes, the twenty ladders and all five stocks are code, and **a relic now
+arrives broken** — `home` and `repair` columns on every row of `RelicDb.RELICS`,
+the price on the Lanternkeeper's line, `Broken Tally-Ledger of Fair Weights` in
+the bag (§8, D3, closed). Sustain and Ballast were the last two that were only
+described here; they landed with §8's D5 (2026-08-11), so §1.5 and §1.6 now
+describe something that runs.
 
 **Numbers are not here.** They live in the DB scripts beside the rows they price
 — `docs/SCOPE.md` §1 says so explicitly of `relic_db.gd`, `echo_db.gd` says it
@@ -76,8 +75,9 @@ and one of the six has no button at all.
 **The six are not the ring's six.** The ring's stops are sword, bow, hookshot,
 Burst, Sustain, Ballast — the sword is a stop and not a manifest item; the Far
 Lantern is a manifest item and not a stop. `Game.RIGHT_POOL`
-(`scripts/autoload/game_state.gd:~185`) is the ring, and it holds four of the six
-today because Sustain and Ballast are not built (§8, D5).
+(`scripts/autoload/game_state.gd:~185`) is the ring, and it holds **all six**
+since §8's D5 closed. Six is the hard ceiling (`docs/SCOPE.md` §1), so that array
+is now full: a seventh entry is an amendment, not a feature.
 
 ### 1.1 The three you already have
 
@@ -211,9 +211,13 @@ the sentence above stays true everywhere else.
 ### 1.5 Sustain — *hold the Heat chain through one break*
 
 **The verb**: the tempo chain survives a break it would otherwise lose, and the
-Heat you kept rides out in the bag. `docs/GDD.md` §6.2 relic 6 is the row. There
-is no code, so there is no symbol to cite, and that absence is the honest half of
-this section.
+Heat you kept rides out in the bag. `docs/GDD.md` §6.2 relic 6 is the row.
+Mechanically it is a stop on the ring (`Game.RIGHT_POOL`), four rows in
+`ArmamentDb` exactly like Burst's, one function on the hero
+(`HeroRanged._cast_sustain`) and one flag on the chain it defends
+(`Heat.sustained`, `Heat.sustain()`). **One break, not a duration** — a timed
+ward would be something you cast before a fight, and this is something you cast
+because you can feel the window running out.
 
 **Answers** no body and no lock. `docs/PUZZLES.md` §1 is explicit: Sustain and
 Ballast are **not puzzle verbs**, because neither manipulates a room.
@@ -227,14 +231,19 @@ arrives as one shelf and leaves as another.
 
 **Changes** the price of tempo. Heat rides in the bag, so going fast raises the
 fee — Sustain makes speed cheaper *and* the exit dearer, which is GDD §2's one
-question asked twice in one button. **Not built** (§8, D5): the relic has a row,
-the working has none.
+question asked twice in one button. **Both doors into a break are covered**: the
+window running out and a blow landing are the same event to a player, so
+`Heat._step_down` absorbs either one and refreshes the window, because a chain
+that "held" and then expired on the next frame did not hold.
 
 ### 1.6 Ballast — *burn what you came for, to survive carrying it*
 
 **The verb**: spend a stack out of the bag to soak a blow you would otherwise
-take. `docs/GDD.md` §6.2 relic 7 is the row, and again there is no code behind
-it.
+take. `docs/GDD.md` §6.2 relic 7 is the row. `HeroRanged._cast_ballast` burns
+`Run.burn_slot()` — the **cheapest** line in the hold, the thief's scan run from
+the other end — and starts a window in `Game.draughts` under `Game.BALLAST_ID`
+that `Game.armour_soak()` adds `K.BALLAST_SOAK` for. The case is never reachable,
+for the same reason the thief cannot reach it (GDD §3.1).
 
 **Answers** no body and no lock, for the same reason as Sustain.
 
@@ -246,8 +255,11 @@ counter (GDD §6.2, relic 7). Placed at `relic_db.gd:~207` and mapped by
 thing you came down for is the thing that keeps you alive, and casting it is
 eating your own profit. It is also the reason the manifest can hold at three
 workings — a fourth would have to be a *fourth* answer to "what are you willing
-to spend", and there are only three things a player has to spend. **Not built**
-(§8, D5).
+to spend", and there are only three things a player has to spend. **It burns the
+cheapest line and never the dearest**, which is a decision and not an
+optimisation: a working that ate your Deep Amber is a button a player learns
+never to press, and the cost that has to bite is the slot, which bites whatever
+was in it.
 
 ### 1.7 The Far Lantern — *the one with no button*
 
@@ -547,8 +559,8 @@ lands on, and it must not be the one place the gap is invisible.
 | Bow | eye switch; Perched, Caller, Guard-on-the-turn | Cistern Warden, floor 1 | Range, a resource to ration — and **no vault** |
 | Hookshot | hook ring; Perched (the expensive answer) | The Bellwake, floor 3 | Position, one held beat; floor 2's vault |
 | Burst | cracked pillar; Guard, Riser | The Slag Ogre, floor 2 | The shape of the room; floor 1's vault |
-| **⚠ Sustain** | — (not a puzzle verb) | Sustain-Verse, Foundry vault — **read** | The price of tempo. **No armament row and no ring stop** (D5) |
-| **⚠ Ballast** | — (not a puzzle verb) | Ballast-Verse, Choir deep chest — **read** | The bag becomes armour. **No armament row and no ring stop** (D5) |
+| Sustain | — (not a puzzle verb) | Sustain-Verse, Foundry vault — **read** | The price of tempo. One break of the chain, kept |
+| Ballast | — (not a puzzle verb) | Ballast-Verse, Choir deep chest — **read** | The bag becomes armour. The cheapest stack burns |
 | Far Lantern | the last door | The Riven Knight, floor 4 | The act ends; floor 3's vault, and there is no fourth |
 | A relic | a question about the garrison | 4 anchors, and it arrives **broken** (§2.1) | One catalogue row, one repair price, one lit prop |
 | An Echo | never the five stats | a pedestal, choice of three | One run, then silence |
@@ -563,11 +575,11 @@ SCOPE, METAGAME, PUZZLES and BESTIARY, and re-checked against the tree each time
 this file is revised. "Believe" names the reading that looks intended; it is a
 recommendation to whoever picks the card up, not a decision taken.
 
-**D1, D2, D3 and D4 are closed** (issue #25), and **D13 is closed** (issue #29,
-2026-08-11). Their entries are kept, struck through, with what was actually done
-— a defect list whose closed rows are deleted is a list that cannot tell you
-whether a thing was decided or merely forgotten. **D5–D12 and D14–D17 are open
-and unreconciled.**
+**D1, D2, D3 and D4 are closed** (issue #25), **D13 is closed** (issue #29,
+2026-08-11), and **D5 is closed** (issue #30, 2026-08-11). Their entries are
+kept, struck through, with what was actually done — a defect list whose closed
+rows are deleted is a list that cannot tell you whether a thing was decided or
+merely forgotten. **D6–D12 and D14–D17 are open and unreconciled.**
 
 ### ~~D1 — the twelve relics in code are not the twelve in the GDD~~ *(closed)*
 
@@ -584,9 +596,9 @@ than being left pointing at ids nothing can donate: `FLETCH_WITH_JIG` /
 their two call sites (`Fletching.batch()`, `ShopDb._stock()`) read the base
 number with no accessor in the way. `RelicDb.knows_working()` replaces them: it
 is the one thing a Verse does in code, and it is the same shape as
-`knows_draught()`. **The two workings are still not built** — that is D5, which
-stays open, and this row is the manifest being right rather than the ring gaining
-two stops.
+`knows_draught()`. **The two workings were not built here** — that was D5, and
+this row is the manifest being right rather than the ring gaining two stops. D5
+closed a day later and `knows_working()` is what its ownership gate asks.
 
 ### ~~D2 — the Pillar-Shard is on the wrong floor, and boss 4 drops a deleted relic~~ *(closed)*
 
@@ -681,19 +693,54 @@ is the Burst going off on floor 1 with the cell reading 2.
 charges upstairs does not help a player who descends with none and meets floor
 2's `pillar_brace` shortcut; the floor supplies them now. See D13.
 
-### D5 — two of the six usable items do not exist in any form
+### ~~D5 — two of the six usable items do not exist in any form~~ *(closed)*
 
-Sustain and Ballast have no row in `ArmamentDb.NAMES`
-(`scripts/items/armament_db.gd:~15-27`) and no stop in `Game.RIGHT_POOL`
-(`game_state.gd:~185`, whose own comment says it holds "four of the ring's six
-stops"). **They do now have relics to arrive from** — that half of this entry
-closed with D1, and `RelicDb.WORKING_RELICS` (`relic_db.gd:~351`) is the whole of
-what a Verse does in code today, with nothing calling it yet. Burst is built; the
-other two are not started.
+Sustain and Ballast had no row in `ArmamentDb.NAMES` and no stop in
+`Game.RIGHT_POOL`, whose own comment said it held "four of the ring's six stops".
+`RelicDb.WORKING_RELICS` had landed with D1 and nothing called it — so the game
+told a player they had learned a working and then offered no way to perform one.
+A donated Verse paid out nothing playable.
 
-**Not a contradiction — a gap**, recorded because the manifest counts six and the
-code can reach four. Listed so that a reader of §1 does not mistake §1.5 and §1.6
-for descriptions of something that runs.
+**Closed by copying Burst's path and inventing nothing** (issue #30, 2026-08-11).
+Burst is four rows in `ArmamentDb` (name, letters, blurb, ammo), one entry in
+`Game.RIGHT_POOL`, one arm in `Game.armament_owned()` and two functions on
+`HeroRanged`. Sustain and Ballast are the same four rows, the same array, the
+same two functions each, and **the same charges** — GDD §6.5's "charges are
+arrows", and a quiver is one number however many things draw from it. The ring is
+six stops now and `docs/SCOPE.md` §1's ceiling is reached rather than exceeded;
+no count moved.
+
+Three things in it are decisions rather than copies, and each is written where it
+lives:
+
+- **They cast on the PRESS, not the release** (`HeroRanged.SELF_CAST`). The three
+  held items are held because the hold is the aim. Neither of these has a target,
+  so a hold would be a delay, and these are cast in the half second where a delay
+  is the whole cost. The input layer is unchanged — same two shoulders, same
+  `ArmamentDb.action_of`.
+- **Ballast's window rides in `Game.draughts`** under `Game.BALLAST_ID`. That
+  dictionary is the game's one table of "true now, not shortly", with one tick
+  and one signal; a second timer for a working would be a second `_tick_draughts`
+  to forget to call. It earns no slot on the HUD's draught row, which filters on
+  `PotionDb.IDS` — see the open half below.
+- **Ownership is asked once**, in `Game.armament_owned()`, which routes the two
+  Verses to `RelicDb.knows_working()`. `has()` would answer no forever: a Verse is
+  read, not picked up.
+
+**Proved** by `tools/directors/relic_donate.gd`'s K beats, which press the D-pad
+and the shoulder rather than calling the functions underneath them — the defect
+was that the functions existed and no button reached them. The negative case is
+photographed too (`r_30_*`, `r_31_ring_refused.png`): before the donation the
+ring walks four stops and `draw_weapon` never lands on either Verse. After it,
+six (`r_35_*`), and `r_42`–`r_44` are the chain warded, held through a blow and
+then broken by the next one, `r_52`–`r_54` the burned stack and the same blow
+costing less and then full price again.
+
+**What is still open, and it is small**: the Ballast window has no instrument.
+The player reads it off the health bar and the missing stack, which is honest but
+late. `Hud._draught_slots()` derives its row from `PotionDb.IDS`, so giving the
+window a slot means teaching that row about a non-potion — worth doing, and not
+worth forking the row for inside this card.
 
 ### D6 — GDD's status paragraph is stale
 

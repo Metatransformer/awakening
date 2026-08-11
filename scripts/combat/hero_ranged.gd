@@ -121,6 +121,20 @@ const HOOK_ASSIST_CONE := 22.0
 ## only exists on the camera (see "Aim comes from the camera" above).
 const AIMED: Array[StringName] = [&"bow", &"hookshot", &"burst"]
 
+## The workings that go off AT HIM. Sustain and Ballast leave nothing in the
+## world — one holds the chain, the other burns a stack out of his own bag — so
+## there is nothing to lead, nothing to lob, and no reason at all to put the
+## camera on his shoulder. Adding them to `AIMED` would zoom the lens in on a
+## self-cast and hand the player a crosshair over a decision that has no target.
+##
+## They therefore go off on the PRESS rather than on the release. Both of the
+## held items above are held because the hold is the aim; take the aim away and a
+## hold is a delay, and these two are cast in the half second where a delay is
+## the whole cost. This is still `use_press`/`use_release`, still both shoulders,
+## still `ArmamentDb.action_of` — the input layer did not change (GDD §6.5), only
+## which half of the press the working answers.
+const SELF_CAST: Array[StringName] = [&"sustain", &"ballast"]
+
 var _hero: Hero
 var _tether: HookshotTether
 
@@ -250,7 +264,7 @@ func _refresh_aiming() -> void:
 ## Nothing LEAVES here. That is `use_release`.
 func use_press(id: StringName) -> bool:
 	_using = true
-	if _bow_t >= 0.0 or _hook_active or not AIMED.has(id):
+	if _bow_t >= 0.0 or _hook_active or not (AIMED.has(id) or SELF_CAST.has(id)):
 		return false
 	# Rolling, swinging, in the air. Refused for the reasons a swing is refused,
 	# and refused HERE rather than by the hero, because the hookshot's brace fires
@@ -261,6 +275,8 @@ func use_press(id: StringName) -> bool:
 		&"bow": return _draw_bow()
 		&"hookshot": return _ready_hookshot()
 		&"burst": return _read_burst()
+		&"sustain": return _cast_sustain()
+		&"ballast": return _cast_ballast()
 	return false
 
 
@@ -511,6 +527,78 @@ func _cast_burst() -> bool:
 		return false
 	BurstCast.cast_from(_scene_root(), _muzzle(&"burst"), dir, _hero)
 	Bus.request_sfx.emit(&"crossbow_shoot", _hero.global_position)
+	return true
+
+
+# --- Sustain and Ballast ------------------------------------------------------
+# `docs/GDD.md` §6.5, the other two thirds of "the three workings". Read at the
+# alchemist's counter off the two Verses, cast off the same ring stop and the
+# same two shoulders, spending the same charges.
+#
+# **Neither of them exists below this file.** There is no projectile, no query
+# and no prop: Sustain arms a flag on `Heat` and Ballast starts a window on
+# `Game` and takes a slot out of `Run`. That is the whole implementation, and it
+# is why `docs/SCOPE.md` can still call a working a usable item rather than a
+# system — the two functions here are the entire "casting layer" these two get,
+# the way `_read_burst`/`_cast_burst` are Burst's.
+
+## Both of them, up to the point where they differ. Refuse an empty pouch out
+## loud (`_read_burst`'s argument), take the body for the cast, and hand back the
+## direction the pose is thrown down.
+##
+## Returns `Vector3.ZERO` when the cast did not start, which is the caller's cue
+## to spend nothing. The direction is where he is ALREADY facing: there is no
+## target, and turning the hero to a camera that happens to be swung round would
+## be the body answering a question the player did not ask.
+func _begin_self_cast() -> Vector3:
+	if Game.charges <= 0:
+		Bus.request_sfx.emit(&"craft_fail", _hero.global_position)
+		return Vector3.ZERO
+	var dir := -_hero.global_transform.basis.z
+	if not _hero.request_cast(K.BURST_CAST_TIME, dir):
+		return Vector3.ZERO
+	return dir
+
+
+## The Sustain-Verse: the Heat chain keeps the next break.
+##
+## `Heat.sustain()` owns the refusals — no chain to hold, or a ward already up —
+## and this spends nothing when it says no, which is the same order `_cast_burst`
+## spends its charge in: the effect first, the pouch second, so a working that
+## did nothing never cost anything.
+func _cast_sustain() -> bool:
+	if _begin_self_cast() == Vector3.ZERO:
+		return false
+	if not Heat.sustain():
+		Bus.request_sfx.emit(&"craft_fail", _hero.global_position)
+		return false
+	if not Game.spend_ammo(&"charges"):
+		return false
+	Bus.request_sfx.emit(&"hookshot_load", _hero.global_position)
+	return true
+
+
+## The Ballast-Verse: the cheapest stack in the hold burns, and for eight seconds
+## he wears it (`K.BALLAST_SOAK`, `K.BALLAST_TIME`).
+##
+## Asked BEFORE the burn, so an empty hold refuses instead of costing a charge
+## for nothing — `Run.burnable()` exists for this one call. The order after that
+## is burn, pay, wear: the window must never start off a burn that found nothing,
+## because a soak you did not pay for is the one thing that would make this a
+## buff instead of the trade GDD §6.5 describes.
+func _cast_ballast() -> bool:
+	if _begin_self_cast() == Vector3.ZERO:
+		return false
+	if not Run.burnable():
+		Bus.request_sfx.emit(&"craft_fail", _hero.global_position)
+		return false
+	var burned := Run.burn_slot()
+	if burned.is_empty():
+		return false
+	if not Game.spend_ammo(&"charges"):
+		return false
+	Game.start_draught(Game.BALLAST_ID, K.BALLAST_TIME)
+	Bus.request_sfx.emit(&"hookshot_load", _hero.global_position)
 	return true
 
 

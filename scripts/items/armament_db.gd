@@ -24,6 +24,15 @@ const NAMES := {
 	# a working rather than a spell is that it arrives as a stop on the same ring
 	# the sword is on, and this table is where that is decided.
 	&"burst": "The Burst-Verse",
+	# The other two (`docs/GDD.md` §6.5). They arrive by a different door -- Burst
+	# comes off the Slag Ogre and these two are READ at the alchemist's counter,
+	# which `Game.armament_owned()` asks `RelicDb.knows_working()` about -- and
+	# once they are here they are the same kind of thing as Burst and get the
+	# same four rows. That sameness is the acceptance criterion: if either of
+	# these had needed a table of its own, the working would have stopped being a
+	# usable item and started being a casting layer.
+	&"sustain": "The Sustain-Verse",
+	&"ballast": "The Ballast-Verse",
 }
 
 const ICONS := {
@@ -48,6 +57,12 @@ const LETTERS := {
 	# an empty hand. Two letters is the honest cell rather than a placeholder
 	# glyph that would have to be un-drawn the day somebody asks what it is.
 	&"burst": "BU",
+	# Same reason, and the two letters are the first two of each name rather than
+	# an initial and a flourish -- three cells reading BU / SU / BA on one ring
+	# is a set a player can learn in one look, and a player who has all three has
+	# them side by side.
+	&"sustain": "SU",
+	&"ballast": "BA",
 }
 
 ## One line, present tense, about what carrying it costs or buys. Shown on the
@@ -60,6 +75,11 @@ const BLURBS := {
 	&"hookshot": "Crosses a gap, or brings the gap to you.",
 	&"arrow": "Useless without the bow, which is why the bow gates them.",
 	&"burst": "Read it and the air comes apart. Doors, mostly.",
+	# Both blurbs name the COST, because that is what these two are for -- neither
+	# raises a number (GDD §6.3), and a line that only said what you get would be
+	# describing a buff.
+	&"sustain": "The chain keeps one break. The fee keeps the difference.",
+	&"ballast": "Burn the cheapest thing you came for. Wear it instead.",
 }
 
 
@@ -122,6 +142,9 @@ static func ammo_of(id: StringName) -> StringName:
 		&"arrow": return &"arrows"
 		&"bow": return &"arrows"
 		&"burst": return &"charges"
+		# One pool for all three workings -- see the note over `K.BALLAST_TIME`.
+		&"sustain": return &"charges"
+		&"ballast": return &"charges"
 	return &""
 
 
@@ -142,6 +165,8 @@ static func hand_count(id: StringName) -> StringName:
 	match id:
 		&"arrow": return &"arrows"
 		&"burst": return &"charges"
+		&"sustain": return &"charges"
+		&"ballast": return &"charges"
 	return &""
 
 
@@ -174,5 +199,9 @@ static func action_of(id: StringName) -> StringName:
 		&"hookshot": return &"attack"
 		# A working is cast with the same two shoulders (`docs/GDD.md` §6.5 --
 		# "nothing about the input layer changes"), so it takes the same cap.
+		# All three of them, which is what that sentence is worth: the ring grew
+		# by two stops and the input layer did not grow at all.
 		&"burst": return &"attack"
+		&"sustain": return &"attack"
+		&"ballast": return &"attack"
 	return &""
