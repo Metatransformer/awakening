@@ -142,13 +142,18 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## 0.48 s — starting on the release frame, so the ring is now well ahead of this
 ## lockout rather than a hair behind it — and the motes it leaves live another
 ## half-second in world space, which is what still puts the last of the circle at
-## ~1.0 s against this 0.68. The hero has his feet back while the circle behind
+## ~1.0 s against this 0.523. The hero has his feet back while the circle behind
 ## him is burning; the lag is the mote lifetime, not the sweep rate. That
 ## split second is not sloppiness, it is the read: the magic lags the sword, the
 ## way it does in the game this is taken from. A lockout that outlasted the
 ## effect would make the recovery feel like the cost of the picture rather than
 ## the cost of the blow. [tune]
-@export var spin_swing_time: float = 0.68
+##
+## Sped up 30% from 0.68 (2026-08-10): the release read as a stall. The mote lag
+## above widens as a result — the sword is now further ahead of its own magic —
+## which is the same read, only stronger. The window below is fractional, so the
+## live slice scales with this and needs no edit.
+@export var spin_swing_time: float = 0.523
 ## The live slice, as fractions of spin_swing_time. It opens LATE and stays open
 ## LONG, which is the opposite shape to every other swing here and is the whole
 ## point: the blade is genuinely travelling through 360 degrees, so the window
