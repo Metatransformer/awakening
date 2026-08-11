@@ -593,8 +593,30 @@ func _end_charge() -> void:
 ## `count` discs marked on the floor at commit -- the first under the hero, the
 ## rest scattered inside the arena -- detonating `fuse` seconds later.
 ##
-## The boss is not placed in one and is NOT protected from one: it is in
-## `_victims()` for a zone, so a Warden standing in its own pool wears it.
+## **The boss is not placed in one and is not hurt by one either.** The first
+## disc goes under the HERO and never under the boss, which is the placement half
+## of `BossDb`'s executor contract §5; the damage half of that row used to say the
+## boss "is not protected from them" and this file said so twice, and neither was
+## ever true -- `_victims()` has only ever returned the player. The code is the
+## side that was kept, and the contract now says what it does. Three reasons, in
+## the order they decided it:
+##
+##  1. The boss cannot leave a disc that lands on it. It is ROOTED through the
+##     whole of `RECOVER` and the punish window, which is most of a zone's fuse,
+##     so a scattered disc landing on it is not a hazard it answers -- it is a
+##     coin flip. A hazard the actor has no move against is not gameplay.
+##  2. Contract §2: a boss's health is ABSOLUTE and authored for one floor. A
+##     second damage source on that health nobody tuned makes the swing counts in
+##     every row's comment arithmetic about a number that is no longer true.
+##  3. It buys nothing. Measured against the scatter, a disc lands on the boss on
+##     the order of once a fight for three quarters out of seventy-two -- so the
+##     rule costs a random hitstop, a camera kick and a health bar that moves when
+##     the player did nothing, and returns about two percent of a fight.
+##
+## If it is ever wanted, it is `_victims()` growing an `include_self` argument
+## that only `_burst` passes -- and emphatically not the boss joining `_victims()`
+## outright, which would put it inside its own `slam` at range zero on every
+## beat that has one.
 func _shape_zone(b: Dictionary) -> void:
 	var radius := float(b["radius"])
 	var count := maxi(int(b["count"]), 1)
@@ -688,8 +710,18 @@ func _summons_alive() -> int:
 
 # --- Landing a blow -----------------------------------------------------------
 
-## Everything a beat can hurt. The player, plus -- for a zone -- the boss itself,
-## which contract §5 says is not protected from its own pools.
+## Everything a beat can hurt: the player, and only the player.
+##
+## This docstring used to add "plus -- for a zone -- the boss itself, which
+## contract §5 says is not protected from its own pools", and the function under
+## it has never done that. The contract row was the side that moved
+## (`boss_db.gd` §5's `zone` row, and `_shape_zone` above carries the argument):
+## a rooted boss cannot answer a disc that lands on it, and its health is
+## authored absolute with no second damage source in it.
+##
+## "Contract §5" throughout this file means `BossDb`'s EXECUTOR contract, the
+## numbered header in `boss_db.gd` -- not `docs/CONTRACT.md` §5, which is the
+## group list and says nothing about who a beat may hurt.
 func _victims() -> Array[Node3D]:
 	var out: Array[Node3D] = []
 	for n in get_tree().get_nodes_in_group(&"player"):
@@ -1019,6 +1051,38 @@ func _on_damaged(hit: Hit) -> void:
 	_glowing = false
 	_flash.hit()
 	Bus.hit_landed.emit(self, hit.amount, global_position)
+	# THE RECEPTACLE, and it is the one thing that gets past poise from a weapon
+	# (`docs/BOSSES.md` §6.2). Deliberately AFTER the impact block rather than
+	# instead of it: the blow is still a blow -- the hitstop, the shake, the scuff
+	# and `hit_landed` all happen exactly as they would for any other arrow -- and
+	# what the branch adds is the state change on top. Routed through `stagger()`
+	# and never by writing `state` here, so a receptacle hit and a parry are the
+	# same transition and cannot drift apart.
+	if _is_receptacle_hit(hit):
+		stagger(hit.from, K.PARRY_STAGGER, 0.0)
+
+
+## An arrow into a charge that is already crossing the floor.
+##
+## `docs/BOSSES.md` §6.2, exactly: **`State.STRIKE` with `_charging` true**, which
+## is the travel and not the tell. The tell is the wrong window and the doc says
+## why at length -- a tell that never lands makes the telegraph a lie, and
+## `freeze` refuses the hookshot a tell-cut on that same argument (§6.4), so
+## granting the bow one would be an exception with a name on it rather than a
+## rule. Scoped to the travel it is the parry's own shape: the beat committed,
+## the lane is real, and the player is answering something already in the air.
+##
+## **It is scoped by SHAPE, not by beat id, and that is worth saying out loud.**
+## `_charging` is only ever true for a `SHAPE_CHARGE` commit, so this reads as
+## "one beat" on floor 2 -- `bellows_charge` is the Slag Ogre's only charge -- and
+## it equally answers the Riven Knight's `gate_lunge` and the Bellows-Hand's
+## `plate_advance`. That is the rule §6.2 specifies and it is the honest one: a
+## body committed to eleven metres of travel is the same receptacle whoever is
+## wearing it, and a branch that named `bellows_charge` by id would be a
+## per-boss special case for a shape the game implements once.
+func _is_receptacle_hit(hit: Hit) -> bool:
+	return state == State.STRIKE and _charging \
+		and (hit.kind == Hit.ARROW or hit.kind == Hit.ARROW_FIRE)
 
 
 ## The chain does not stop it. Same reason as poise: a hookshot that could cut a

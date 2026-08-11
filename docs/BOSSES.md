@@ -597,7 +597,20 @@ air, which is the parry's exact shape and §3.6's exact licence. And the read is
 *better*, not worse — a tell you shoot on sight is a reflex, a charge you shoot
 while it crosses the floor at you is a nerve test with a counted resource on it.
 What keeps it from becoming *"the bow cancels bosses"* is unchanged and now
-sharper: one beat on one boss, and the beat has to have started.
+sharper: one **shape**, and the beat has to have started.
+
+**Built, and it is scoped by SHAPE rather than by beat id — say it out loud,
+because it is three beats and not one.** `Boss._is_receptacle_hit` reads
+`state == State.STRIKE and _charging`, which is true of every `SHAPE_CHARGE` in
+the game: `bellows_charge` (the Ogre, floor 2), `gate_lunge` (the Riven Knight,
+floor 4) and `plate_advance` (the Bellows-Hand miniboss). Two drafts of this
+section wrote "one beat on one boss" and that was never what a `_charging` test
+could mean. It is the right scope anyway — a rule keyed on a `StringName` is a
+rule the fourth charge beat silently does not get, and "a charge can be shot out
+of the air" is a sentence a player can learn once — but the table in §7 and the
+paragraph on floor 4 both had to be re-graded for it, and they have been.
+`tools/directors/boss_cistern.gd` §K is the proof: it throws the beat three
+times, with the arrow in the travel, in the wind-up, and not at all.
 
 **The intake is the charge**, and the pull-quote is not being retrofitted to say
 so — `_commit_seconds` for `bellows_charge` is `11.0 / 13.0 + 0.05` = **0.90 s**,
@@ -995,16 +1008,33 @@ count you get by grading floors 1 and 3 on their prose instead of on their
 | Floor | Carrying | Fight shape | Answered by | Through | Holds? |
 |---|---|---|---|---|---|
 | 1 Warden | shield (always owned) | Reflect | the parry on `cistern_drop` | **the body** | the verb is universal |
-| 2 Slag Ogre | **Bow** ← Warden | Receptacle | an arrow into `bellows_charge`'s travel | **the body** | **yes** |
+| 2 Slag Ogre | **Bow** ← Warden | Receptacle | an arrow into `bellows_charge`'s travel | **the body** | **yes — and it is code now, not prose** |
 | 3 Bellwake | **Burst** ← Ogre | Exposed weak point on a timer | a blast into the choir | **the adds** | no wall today |
 | 4 Riven Knight | **Hookshot** ← Bellwake | Positional | the keystone anchor | **the room** | furniture, and late |
 
 **Floor 2 is the claim in its strong form, and it is the only one.** Four clauses
 have to hold — the item acts on the boss itself, on a specific beat, with a
 visible cue, and the boss is measurably worse off. The arrow into the charge
-satisfies all four, and it does so through a branch that names one beat by
-`shape` and one hit by `kind`. This is the shape the other three get measured
-against.
+satisfies all four, and it does so through a branch that names one attack
+`shape` and one hit by `kind`: `Boss._is_receptacle_hit`, one `if` on `state`,
+`_charging` and `hit.kind`, routed through `stagger()` so a receptacle hit and a
+parry cannot drift apart. This is the shape the other three get measured against.
+
+**Measured, not asserted** (`tools/directors/boss_cistern.gd` §K, `_charge_shot`,
+one function run three times so the only difference between the cases is the
+instant the string leaves his fingers):
+
+| The arrow | The plate travelled | Boss | Hero | `punish_opened` |
+|---|---|---|---|---|
+| into the **travel** | **2.38 m** of 11.0 | −2 q | **untouched, 12 q** | 1.70 s |
+| into the **wind-up** | 10.83 m of 11.0 | −2 q | 12 → 8 q | 1.70 s |
+| none | 10.83 m of 11.0 | — | 12 → 8 q | 1.70 s |
+
+The wind-up row is the one that matters, and it is why the director throws the
+beat three times instead of once: a branch that fired on *every* arrow would pass
+a positive-only check and would have looked identical in the first row. The
+arrow at the wrong instant buys nothing at all — the same 10.83 m and the same
+four quarters as not shooting.
 
 **Floor 1 is a teaching diagonal, not a mechanical one, and two of those four
 clauses fail.** What the design substitutes for "the shield answers the Warden"
@@ -1042,7 +1072,13 @@ answers the Riven Knight through *arena furniture the arena did not have until
 half health* — and for the first 64 of 128 quarters it does not have it at all
 (§6.4), so the item arrives as an answer only once the fight is half over. The
 Knight would also fight identically if the player had no hookshot, because a
-sidestep answers `gate_lunge` and always did. Three reasons it is still the right
+sidestep answers `gate_lunge` and always did — **and since the receptacle
+landed, so does an arrow.** `_is_receptacle_hit` is scoped by `SHAPE_CHARGE`
+(§6.2), so `gate_lunge` and the Bellows-Hand's `plate_advance` both stop dead to
+a shot in the travel too. That is deliberate and it is the better rule, but it
+makes this row *worse*, not better: floor 4's own beat now has an answer the
+player has been carrying since floor 2, which is one more reason the hookshot is
+not what is answering this fight. Three reasons it is still the right
 call: `Boss.freeze` refusing the barb is load-bearing poise and must not be
 softened to rescue a table; the alternative (disarm) is four ceilings deep
 (§6.4); and a floor-4 boss that *requires* a counted-charge item is a boss that
@@ -1115,8 +1151,11 @@ from the Thrower behaviour that is on the manifest.
 one was under-priced as "one threshold" for two drafts and it is the largest of
 the three:
 
-1. `Boss._on_damaged` — the arrow-into-the-**travel** branch, one `if` on
-   `state`, `_charging` and `hit.kind` (§6.2). Genuinely one `if`.
+1. ~~`Boss._on_damaged` — the arrow-into-the-**travel** branch~~ — **BUILT.**
+   `Boss._is_receptacle_hit`, one `if` on `state`, `_charging` and `hit.kind`,
+   called from the end of `_on_damaged` and routed through `stagger()` (§6.2).
+   It was genuinely one `if`. Proved by `boss_cistern.gd` §K, both the positive
+   case and the negative one; the numbers are in §7's second table.
 2. `BossArena` — the turn, and it is **not** a threshold read off a row, because
    this node has no `_process`, no `_physics_process` and no reference to the
    boss's health today. It is: a `health.damaged` connect in `_build_boss`; a
@@ -1138,27 +1177,30 @@ the three:
 
 ## 9. What a director has to show
 
-> **Read this before anything else in §9, because it is the largest risk in the
-> document.** `SHAPE_CHARGE` and `SHAPE_SUMMON` have **zero runtime coverage**.
-> No file anywhere in `tools/` references `bellows_charge`, `gate_lunge`,
-> `hushing_choir`, `call_the_iron`, `SHAPE_CHARGE` or `SHAPE_SUMMON`, and
-> `boss_cistern.gd` is the only boss director in the project — the Warden throws
-> an `arc`, a `slam` and a `zone`, and those three shapes are the entirety of
-> what has ever executed with a screenshot on the end of it.
+> **Read this before anything else in §9.** It used to say `SHAPE_CHARGE` and
+> `SHAPE_SUMMON` had **zero runtime coverage**, and half of that is now out of
+> date: `boss_cistern.gd` §K throws `bellows_charge` three times, so
+> `_advance_charge`, `_end_charge` and `_commit_seconds`'s charge branch have all
+> run with a screenshot on the end of them, and §7's second table is measurement
+> rather than arithmetic. **`SHAPE_SUMMON` is still untouched.** No file in
+> `tools/` references `hushing_choir`, `call_the_iron` or `SHAPE_SUMMON`;
+> `_shape_summon`, `_summons_alive` and the `cap` refusal in `_choose` have never
+> executed, and §6.3's whole timer is still arithmetic off a table.
 >
-> So: **six of the twelve beats and three of the four fight shapes in this
-> document rest on code paths that have never run.** `_advance_charge`,
-> `_end_charge`, `_shape_summon`, `_summons_alive`, the `cap` refusal in
-> `_choose`, and `_commit_seconds`'s charge branch are all read-and-reasoned-about
-> here and unexercised in fact. Every number in §3's charge rows, §6.2's whole
-> answer and §6.3's whole timer is arithmetic off a table, not a measurement off
-> a frame.
+> **And the charge path did have its card 22 in it, exactly as this box
+> predicted — it just was not in the boss's code.** It was in the *director*:
+> `_park_boss` set `boss.rotation.y` and nothing else, `Enemy._physics_process`
+> writes `rotation.y = _facing` every frame, and the parked yaw was gone on the
+> next tick. The Ogre charged 119° off-axis into a wall, and every distance
+> check still passed, because the plate had travelled. `CLAUDE.md` §4 with a
+> different actor in it: facing is measured, not derived. Both parkers set
+> `_facing` now.
 >
-> That is also **why board card 22 was found by reading rather than by running**
-> — `_shape_summon` writes `e.level` after `Enemy.spawn` has already built the
-> combat block, and nothing has ever spawned a boss add to notice. Assume there
-> is a second card 22 in the charge path and write the directors expecting to
-> find it.
+> The original warning's point stands for the rest: **three of the twelve beats
+> and one of the four fight shapes still rest on code paths that have never
+> run**, and board card 22 (`_shape_summon` writing `e.level` after
+> `Enemy.spawn` has already built the combat block) was found by reading rather
+> than by running. Write the summon director expecting to find a second one.
 
 `CLAUDE.md` §2: the proof is exercising the thing and looking at the frames, and
 `tools/directors/boss_cistern.gd` already does A–I for the Warden. Each new fight
@@ -1181,14 +1223,24 @@ gets its own director on that pattern — `boss_foundry.gd`, `boss_choir.gd`,
   `shrink` either seals him into a two-and-a-half-metre gap he cannot leave or
   pushes him through the outer fence. Photograph the frame after. And the donut's
   second answer still works after the shrink.
-- **Slag Ogre:** let `bellows_charge` commit, then put an arrow into it **while
-  it is travelling**. `beat_committed` **does** fire (the beat committed — that
-  is the design, §6.2); the charge stops short of its 11 m; `punish_opened` fires
-  with 1.70; and the hero's health is unchanged. Then an arrow into the same
-  beat's **wind-up**, which must do nothing but damage — that is the negative
-  case, and it is the one that proves the rule is scoped by ordering and not by
-  weapon. Then the beat with no arrow at all, for the contrast frame. **This is
-  the first `SHAPE_CHARGE` any director has ever thrown.**
+- **Slag Ogre: DONE**, and it lives in `boss_cistern.gd` §K (`_receptacle`,
+  `_charge_shot`) rather than in a `boss_foundry.gd` of its own — the Warden's
+  director already had the arena, the bow and the hero in it, and a second file
+  would have re-derived all three. It builds a second `BossArena` on the
+  Foundry's row once the Cistern is spent, then throws `bellows_charge` three
+  times: arrow into the travel, arrow into the wind-up, no arrow. `beat_committed`
+  **does** fire in all three (the beat committed — that is the design, §6.2), the
+  charge stops at 2.38 m of 11.0 in the first case and runs 10.83 m in the other
+  two, `punish_opened` fires with its authored 1.70 in all three, and the hero
+  keeps all twelve quarters only in the first. Frames: `b_11_*_tell.png`,
+  `b_12_*_travel.png`, `b_13_*_punish.png`, the last three from one fixed
+  broadside mark so that how far up the room the Ogre finished is the picture.
+  Two traps it cost, both written up where they bit: the parked yaw (`_facing`,
+  see the box above) and the lock-on button (`rig.tap` goes through
+  `Input.action_press`, which dispatches no `InputEvent`, and `Targeting` reads
+  the toggle in `_unhandled_input` — so the director never locked on, the bow
+  fell through to its crosshair raycast, and arrows missed a body 7 m away
+  intermittently. `_z_target()` sends a real `InputEventAction`).
 - **Bellwake:** one blast clears both choristers; the boss takes measurable
   damage inside the 6.00 s; and the capped case — four alive, the beat refused by
   `_choose`, the fight visibly picking something else. Also assert the thing

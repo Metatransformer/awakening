@@ -35,6 +35,12 @@ extends RefCounted
 ##      drops and the door opens. Photographed.
 ##   I  Re-entry with the flag set: an open door and an EMPTY arena. GDD §5.1 --
 ##      the game never asks you to re-fight something you have already beaten.
+##   K  **Floor 2's receptacle** (`docs/BOSSES.md` §6.2, board card 34), which is
+##      in the Warden's director because the Warden is the fight that drops the
+##      Bow and this is what the Bow is for. A Slag Ogre is stood up in the same
+##      chamber and thrown `bellows_charge` three times: an arrow into the
+##      TRAVEL, which stops it; the same arrow into the WIND-UP, which must not;
+##      and the beat unanswered, for the contrast. See the section's own header.
 ##
 ## Every beat is thrown through `force_beat`. `BossDb.pick_beat` is weighted
 ## random by design, so no amount of positioning can guarantee a particular one,
@@ -101,6 +107,7 @@ func run(rig) -> void:
 	await _windows(rig, arena, boss)
 	await _kill(rig, arena, boss, door)
 	await _reentry(rig, arena, door)
+	await _receptacle(rig)
 
 	if _fails == 0:
 		print("BOSS OK -- every check passed")
@@ -606,6 +613,478 @@ func _reentry(rig, arena: Node, door: Node) -> void:
 	await rig.capture(out.path_join("b_10_relic_back.png"))
 
 
+# --- K. Floor 2's receptacle --------------------------------------------------
+
+## **The one row on `docs/BOSSES.md` §7's diagonal that holds in its strong
+## form** — and until this section it held only in prose. The branch §6.2
+## specifies did not exist, and §9's own warning box says why nobody noticed:
+## `SHAPE_CHARGE` had **zero runtime coverage**. `bellows_charge` is the first
+## charge any director in this project has ever thrown.
+##
+## The rule is scoped by ORDERING and not by weapon, so proving it takes two
+## shots and never one:
+##
+##   K1–K5  An arrow into `bellows_charge` **while it is travelling** stops the
+##          charge where the arrow found it, brings the beat's authored 1.70 s
+##          punish forward, and leaves the hero standing untouched with the plate
+##          stopped short of him.
+##   K6–K9  **The negative, and it is the half that can fail silently.** The same
+##          bow, the same arrow, the same boss, the same beat — loosed into the
+##          WIND-UP. It damages, and it changes nothing: the tell lands, the beat
+##          commits, and the charge runs its full length through where the hero
+##          was standing. A branch that fired on every arrow passes K1–K5 and
+##          fails here, and a positive-only director would have shipped it.
+##   K10    The same beat with no arrow in it at all, for the contrast frame.
+##
+## ## Why the Ogre fights in the Cistern's chamber
+##
+## Same reason `tools/directors/minibosses.gd` gives: `_boss_test.tscn` carries
+## one `Arena` wired to `cistern_warden`, and a fresh `BossArena` built from the
+## bare script into the same 26 x 26 room is both the cheapest fixture and a test
+## of the construction path `Dungeon._place_chamber` uses. The Ogre's row asks for
+## a 12 m arena and three slag posts, and it gets both — the posts are built at
+## `radius * 0.55` on 0/120/240 degrees, which puts the nearest one 3.3 m off the
+## Z axis this section charges along. That clearance is deliberate: a charge
+## stopped by a post is `is_on_wall()` ending the commit early (which is the
+## fight's own second answer, `boss_db.gd`'s row says so) and it would read
+## exactly like the arrow working.
+##
+## ## What throwing the first charge in the project's history actually found
+##
+## `docs/BOSSES.md` §9 says to expect a bug in the charge path, and there was one
+## — **in the director, not in `Boss`.** `_park_boss` set `rotation.y` and
+## nothing else, and `Enemy._physics_process` writes `rotation.y = _facing` every
+## frame, so the parked body's yaw was gone by the next tick. It never showed on
+## the Warden, whose beats resolve on the frame of the commit; the Ogre
+## committed `bellows_charge` 119 degrees off the hero and ran nine metres into a
+## masonry wall — and every check still passed, because the plate had travelled.
+## `CLAUDE.md` §4 with a different actor in it: facing is measured, not derived.
+## Both parkers set `_facing` now. With that fixed the shape is sound: an
+## unanswered charge runs 10.83 m of its authored 11.0 and takes the hero's four
+## quarters off him on the way through.
+const OGRE_BOSS_Z := -3.5
+const OGRE_HERO_Z := 4.0
+## Where the punish frame is taken from, every time, and it is BROADSIDE to the
+## lane rather than down it. Standing behind the far end put the boss 12 m up the
+## room in one case and inside the lens in the other — the same camera cannot do
+## both, because the two outcomes are nine metres apart along the axis it would
+## be looking down. Side-on at 8 m, with the eye on the middle of the lane, holds
+## a plate stopped at z = -1.8 and a plate that finished at z = +7.3 in one frame
+## and puts the difference across the picture where it can be seen.
+const WATCH_MARK := Vector3(8.0, 0.05, 3.0)
+const WATCH_EYE := Vector3(0.0, 0.0, 3.0)
+
+## Recorded off `Bus.hit_landed`, which `Boss._on_damaged` emits BEFORE the
+## receptacle branch runs — so this is the boss's state at the instant the arrow
+## connected, which is the thing the rule is scoped by. Reading it off
+## `health.damaged` instead would be too late: `Enemy._ready` connects
+## `_on_damaged` first, so by the time a second handler ran the state would
+## already be whatever the branch changed it to.
+var _landed: Array[Dictionary] = []
+## `beat_committed` → where and when the plate started moving.
+var _commit_at: Vector3 = Vector3.ZERO
+var _commit_ms: int = 0
+var _opened: Array[Dictionary] = []
+## `when` -> metres the plate actually travelled. The negative cases are graded
+## against the positive one rather than against the authored 11 m; see K8.
+var _went: Dictionary = {}
+
+
+func _receptacle(rig) -> void:
+	var root: Node = rig.scene()
+	# The Cistern's leftovers go first. `arena3` is spent and harmless, but it
+	# still holds a seal fence and J's replacement mote in the middle of the
+	# chamber the Ogre is about to charge across.
+	for n in root.get_children():
+		if n.name.begins_with("Arena") or n.name.begins_with("BossDoor"):
+			n.queue_free()
+	await rig.wait_frames(8)
+
+	var arena := (load("res://scripts/world/boss_arena.gd") as GDScript).new() as Area3D
+	arena.name = "Foundry"
+	arena.set(&"boss_id", &"slag_ogre")
+	arena.set(&"boss_offset", Vector3(0.0, 0.0, OGRE_BOSS_Z))
+	root.add_child(arena)
+	(arena as Node3D).global_position = Vector3.ZERO
+	await rig.wait_frames(20)
+
+	var boss: Node = arena.boss()
+	_ck("K0 the Foundry arena built the Slag Ogre", boss != null)
+	if boss == null:
+		return
+	print("BOSS built \"%s\" model=%s hp=%d arena_r=%.1f"
+		% [boss.title(), boss.kind, boss.health.max_quarters, boss.arena_radius()])
+
+	Bus.hit_landed.connect(func(who: Node3D, amount: int, _at: Vector3) -> void:
+		if who != boss:
+			return
+		_landed.append({
+			"amount": amount, "state": boss.state, "charging": boss._charging,
+			"beat": boss.current_beat(),
+		}))
+	# Filtered to the charge. The Ogre throws its own beats between the director's,
+	# and an arc committing after the plate had stopped would overwrite the mark
+	# the travel is measured from.
+	boss.beat_committed.connect(func(id: StringName) -> void:
+		if id != &"bellows_charge":
+			return
+		_commit_at = boss.global_position
+		_commit_ms = Time.get_ticks_msec())
+	boss.punish_opened.connect(func(id: StringName, seconds: float) -> void:
+		if id == &"bellows_charge":
+			_opened.append({"id": id, "seconds": seconds}))
+
+	# The bow the Warden dropped, and something to put in it. H4 already granted
+	# the bow off the kill; the quiver is the harness's own, because what is under
+	# test is the branch and not the economy.
+	_ck("K0b the hero is carrying the Bow the Warden dropped", Game.has(&"bow"))
+	if Game.arrows < 20:
+		Game.add_arrows(20 - Game.arrows)
+	Game.heal(999)
+
+	# Walked in, so the fight starts the way a fight starts.
+	await _stand_at(rig, Vector3(0.0, 0.05, OGRE_HERO_Z), Vector3(0.0, 0.0, OGRE_BOSS_Z))
+	await _until(rig, func() -> bool: return arena.is_sealed(), 240)
+	_ck("K0c the Foundry sealed and the Ogre woke",
+		arena.is_sealed() and boss.is_awake())
+
+	if not await rig.draw_weapon(&"bow"):
+		_ck("K0d the weapon ring put the bow in his hand", false)
+		return
+	_ck("K0d the weapon ring put the bow in his hand", true)
+
+	await _charge_shot(rig, arena, boss, "travel")
+	await _charge_shot(rig, arena, boss, "windup")
+	await _charge_shot(rig, arena, boss, "none")
+
+
+## One `bellows_charge`, with the arrow loosed into `when` — `travel`, `windup`,
+## or `none` at all.
+##
+## The three cases are ONE function on purpose. The only difference between the
+## proof and the disproof has to be the instant the string leaves his fingers; a
+## negative case written as its own routine is a negative case that can differ
+## from the positive one in some other way and nobody would see it.
+func _charge_shot(rig, arena: Node, boss: Node, when: String) -> void:
+	# ANNOTATED, not inferred: indexing an untyped `const`/literal Dictionary
+	# yields Variant and `:=` on one is the "Cannot infer the type of X" parse
+	# error CLAUDE.md §3 lists.
+	var tag: String = {"travel": "K1", "windup": "K6", "none": "K10"}[when]
+	var b := BossDb.beat(&"slag_ogre", &"bellows_charge")
+	var reach := float(b["reach"])
+	var travel := reach / float(b["speed"])
+
+	await _mark_ogre(rig, arena, boss)
+	# **At full draw BEFORE the beat is queued**, which is where the first version
+	# of this had it wrong. `Game.bow_draw_time()` is around half of the 0.90 s
+	# tell, so a pull started inside the wind-up spent most of the window it was
+	# aiming at and the "windup" arrow left too late to land in it -- once. The
+	# other time it landed in the tell and the check passed, which is the worst
+	# possible way for a director to be wrong. `HeroRanged._tick_bow` parks the
+	# clock at full draw for as long as the trigger is down, so a bow drawn here
+	# waits at his ear for as long as the beat takes to arrive and costs nothing.
+	if when != "none":
+		# Topped up first: a hero who is being knocked about by a beat he is
+		# standing in cannot start a pull at all, and the quiver is not what is
+		# under test.
+		Game.heal(999)
+		if Game.arrows < 3:
+			Game.add_arrows(10)
+		if not await _nock(rig):
+			_ck("%s he got to full draw" % tag, false)
+			return
+
+	if not await _queue_charge(rig, boss, 600):
+		_ck("%s the Ogre threw bellows_charge" % tag, false)
+		return
+	_park_ogre(arena, boss)
+	# **Re-acquired here, after the roam, and this is what run 8 was missing.**
+	# `_mark_ogre` locks on before the beat is queued, but `_queue_charge` then
+	# lets the Ogre wander the 12 m arena for as long as it takes to roll the
+	# charge, and `K.LOCK_BREAK_RANGE` is 10.40 m -- so the lock can be gone by the
+	# time the string is let go, and nothing puts it back. It matters because
+	# `HeroRanged._aim_at_target_or_camera` falls through to a CROSSHAIR raycast
+	# when there is no lock: the shot then goes wherever the boom happens to be
+	# pointing, which on a teleported hero is not down the lane. That is exactly
+	# what a lost travel arrow looked like -- `landed=[]`, boss untouched, charge
+	# unstopped -- and it read as the branch not firing.
+	var locked := await _lock_on(rig, boss)
+	Game.heal(999)
+	# Cleared HERE and not before the queue: the Ogre may have been finishing a
+	# beat of its own while the mark was being set, and that beat's own
+	# `punish_opened` would otherwise be sitting in `_opened` pretending to be
+	# this one's.
+	_landed.clear()
+	_opened.clear()
+	var hp_before: int = boss.health.quarters
+	var hero_q := Game.quarters
+	# The pull can be lost while the beat is being waited for -- a stray beat that
+	# stuns him drops it (`HeroRanged._can_hold`) -- and a lost pull is an arrow
+	# that never leaves, which would read downstream as the branch not firing.
+	# Said out loud rather than silently re-drawn into the tell.
+	if when != "none":
+		_ck("%sd he is still at full draw when the tell starts" % tag,
+			_at_full_draw(rig))
+		_ck("%sl he is locked onto the Ogre, so the shot is aimed at a body" % tag,
+			locked)
+
+	# Loosed into the tell FIRST and photographed after, so the frame carries the
+	# arrow in the air over the lane rather than a wind-up that has not been
+	# answered yet. 0.90 s of tell against about 0.20 s of flight.
+	if when == "windup":
+		_ck("%sa the arrow left the bow" % tag, await _loose(rig))
+	await rig.capture(out.path_join("b_11_%s_tell.png" % when))
+
+	# `current_beat` in the test as well as the state: without it a charge that
+	# had already been and gone would be answered by whatever the Ogre rolled
+	# NEXT, and the distance measured would be an arc's zero.
+	if not await _until(rig, func() -> bool:
+			return boss.state == Enemy.State.STRIKE \
+				and boss.current_beat() == &"bellows_charge", 400):
+		_ck("%s the beat committed while the director was watching" % tag, false)
+		return
+	# The instant the plate is moving and not one beat before it. This line is
+	# the whole scoping claim.
+	if when == "travel":
+		_ck("%sa the arrow left the bow" % tag, await _loose(rig))
+	await rig.capture(out.path_join("b_12_%s_travel.png" % when))
+
+	# Out the far side of the commit, however it ended -- sampling the gap between
+	# the two bodies on the way, because "the hero never wore it" wants to say
+	# whether the plate got near him and not only whether his health moved.
+	var hero: Node3D = _hero(rig)
+	var near := INF
+	for _i in 600:
+		if boss.state != Enemy.State.STRIKE:
+			break
+		if hero != null:
+			near = minf(near, K.plane(hero.global_position - boss.global_position).length())
+		await rig.wait_frames(1)
+	var went := K.plane(boss.global_position - _commit_at).length()
+	_went[when] = went
+	print("BOSS %s lane: commit at %.2v, ended %.2v, hero %.2v, lane dir %.2v"
+		% [tag, _commit_at, boss.global_position,
+			Vector3.ZERO if hero == null else hero.global_position,
+			K.flat(boss.global_position - _commit_at)])
+	# WALL clock, and printed rather than asserted for that reason: the harness
+	# renders at about 22 fps and `Feel.hitstop` stops the engine outright at
+	# every commit, so this is not the fight's own clock. `went` is.
+	var wall := (Time.get_ticks_msec() - _commit_ms) / 1000.0
+	print(("BOSS %s (%s): the plate went %.2f m of %.1f (%.2f s of travel authored)"
+		+ " in %.2f s wall, closest approach %.2f m; boss %d -> %d q,"
+		+ " hero %d -> %d q; landed=%s")
+		% [tag, when, went, reach, travel, wall, near, hp_before,
+			boss.health.quarters, hero_q, Game.quarters, _landed])
+
+	var stopped := float(_went.get("travel", 0.0))
+	match when:
+		"travel":
+			_ck("K2 the arrow landed while the charge was travelling",
+				_landed.size() == 1 and bool(_landed[0]["charging"])
+				and int(_landed[0]["state"]) == int(Enemy.State.STRIKE))
+			_ck("K3 and the charge stopped dead -- %.2f m of %.1f" % [went, reach],
+				went < reach * 0.5)
+			_ck("K4 the hero never wore it -- %.2f m short, %d -> %d q"
+				% [reach - went, hero_q, Game.quarters],
+				Game.quarters == hero_q and near > 2.0)
+		"windup":
+			_ck("K6 the arrow landed during the TELL",
+				_landed.size() == 1
+				and int(_landed[0]["state"]) == int(Enemy.State.WINDUP))
+			_ck("K7 and it took health off it (%d -> %d q)"
+				% [hp_before, boss.health.quarters],
+				boss.health.quarters < hp_before)
+			# **The claim is comparative and it has to be**: an unanswered charge
+			# does not always reach its authored 11 m, because the hero is standing
+			# in the lane and the Ogre's own capsule shoulders past him -- see the
+			# note under K10. What the negative case proves is that the arrow at the
+			# wrong instant bought NOTHING, and the honest measure of that is the
+			# distance against the one that did.
+			_ck("K8 and changed nothing -- %.2f m against the stopped charge's %.2f"
+				% [went, stopped], went > maxf(stopped * 3.0, reach * 0.6))
+		"none":
+			_ck("K10 an unanswered charge crosses the floor -- %.2f m of %.1f"
+				% [went, reach], went > maxf(stopped * 3.0, reach * 0.6))
+
+	# The punish is the beat's own, both ways round -- a receptacle hit brings the
+	# window forward and never invents one (§6.2).
+	await _until(rig, func() -> bool: return not _opened.is_empty(), 600)
+	var got := -1.0 if _opened.is_empty() else float(_opened[0]["seconds"])
+	_ck("%sw the beat still opened its authored %.2f s window (got %.2f)"
+		% [tag, float(b["punish"]), got], absf(got - float(b["punish"])) < 0.01)
+	await _until(rig, func() -> bool: return boss.is_punishable(), 300)
+	# **Photographed from one fixed mark in all three cases, and that IS the
+	# contrast.** The camera rides behind the hero, so a punish shot taken from
+	# wherever he is standing frames the boss at the same size every time and
+	# says nothing; from a mark the plate never reaches, how far up the room the
+	# Ogre is IS the measurement — near the far wall when the arrow stopped it,
+	# on top of the viewer when it did not. The unanswered case previously put
+	# the lens INSIDE the ogre's mesh and photographed a screenful of red.
+	await _stand_at(rig, WATCH_MARK, WATCH_EYE)
+	# Recentred TWICE, with frames in between. The hero is Z-locked onto the boss
+	# and the lock owns the boom, so the first `camera_recenter` is spent fighting
+	# it -- the shot came back with the Ogre hard against the edge of the frame.
+	# The second one lands after the teleport has settled the lock.
+	Bus.camera_recenter.emit()
+	await rig.wait_frames(22)
+	await rig.capture(out.path_join("b_13_%s_punish.png" % when))
+	await _until(rig, func() -> bool: return boss.state == Enemy.State.CHASE, 600)
+
+
+## Wait for a `bellows_charge` WIND-UP, re-queueing it every frame the Ogre is
+## between beats.
+##
+## **A single `force_beat` is not enough here, and the first run of this section
+## proved it by hanging for forty seconds.** `_forced` is a one-shot flag that
+## `_choose` consumes on the next pick, so a queue placed while the boss is
+## finishing a beat of its own is spent on a wind-up the director was still
+## walking the hero into position for — and then it never comes back, because
+## `pick_beat`'s range gate excludes `bellows_charge` from every later roll: the
+## Ogre closes to `ROAM_RING` (3.8 m) between beats and the beat's own
+## `min_range` is 4.5. The Warden's `_tells` above can queue once and walk away
+## because none of its three beats has a `min_range` at all.
+func _queue_charge(rig, boss: Node, frames: int) -> bool:
+	for _i in frames:
+		if boss.current_beat() == &"bellows_charge" \
+				and boss.state == Enemy.State.WINDUP:
+			return true
+		if boss.state == Enemy.State.CHASE:
+			boss.force_beat(&"bellows_charge")
+		await rig.wait_frames(1)
+	return false
+
+
+## Pull the trigger and hold it at full draw.
+##
+## `Input.action_press` and not `rig.hold`, because the release has to be timed
+## against the FIGHT rather than counted in frames -- which is the entire
+## difference between the two cases this section proves. The button is polled
+## (`HeroCombat._tick_item_trigger`), so a pressed action is seen; CLAUDE.md §3's
+## trap is about `_unhandled_input`, which nothing on this path uses.
+##
+## The arrow does not leave here. `HeroRanged._tick_bow` parks the clock at full
+## draw for as long as the trigger is down and looses at the SEAM, so this is a
+## bow held at his ear waiting for the beat.
+func _nock(rig) -> bool:
+	var hero := _hero(rig) as Hero
+	if hero == null or hero.ranged == null:
+		return false
+	# **Re-pressed, and that is the whole of this loop.** The trigger is read as
+	# an EDGE (`HeroCombat._tick_item_trigger` polls `is_action_just_pressed`) and
+	# `HeroRanged.use_press` REFUSES one outright when the hero is not standing on
+	# the floor -- reeling from a beat, mid-roll, a frame after a teleport. So a
+	# press declined on frame one is declined for good, and a director that
+	# pressed once and then waited would sit out its whole timeout waiting for a
+	# draw that was never going to start. It did, intermittently, and only in the
+	# runs where the freshly-woken Ogre got a beat off first.
+	for _attempt in 12:
+		Input.action_release(&"heavy")
+		await rig.wait_frames(2)
+		Input.action_press(&"heavy")
+		if await _until(rig, func() -> bool: return _at_full_draw(rig), 30):
+			return true
+	Input.action_release(&"heavy")
+	return false
+
+
+## String at his ear, waiting. `_bow_t` is parked ON `_bow_draw` while the
+## trigger is down, and set to -1 the moment the pull is abandoned.
+func _at_full_draw(rig) -> bool:
+	var hero := _hero(rig) as Hero
+	if hero == null or hero.ranged == null:
+		return false
+	return hero.ranged._bow_t >= hero.ranged._bow_draw
+
+
+## Let go, and say whether an arrow actually left.
+##
+## The seam is the next tick of `_tick_bow`, so the arrow exists within a frame or
+## two of this returning — but it may not exist at all, and that is the failure
+## this return value exists to name. `_tick_bow` drops the pull silently the
+## moment `_can_hold` goes false (knocked off `MoveState.GROUND`, the bow out of
+## his right hand), and a director that assumed the shot left would then measure
+## an unanswered charge and report it as the branch not firing. **The quiver is
+## the witness**: `_release_arrow` spends the ammo AT the seam and nowhere else,
+## so one arrow gone is one arrow in the air.
+func _loose(rig) -> bool:
+	var before := Game.arrows
+	Input.action_release(&"heavy")
+	# Up to four render frames: the harness draws at about 22 fps against 60 Hz of
+	# physics, so one frame is already three chances at the seam, but a hitstop at
+	# the commit can stall the game clock across it.
+	for _i in 4:
+		await rig.wait_frames(1)
+		if Game.arrows < before:
+			return true
+	return false
+
+
+## Hold a Z-lock on the boss, taking one if there is not one already.
+##
+## `z_target` is ONE button that both locks and releases, so a director cannot
+## just press it — it has to know what it is holding first. A lock pointing at
+## something else (or at a freed Warden) is released and re-taken rather than
+## left, because the bow aims at `lock_target()` before it aims at anything else.
+func _lock_on(rig, boss: Node) -> bool:
+	var hero := _hero(rig) as Hero
+	if hero == null:
+		return false
+	if hero.lock_target() == boss:
+		return true
+	if hero.lock_target() != null:
+		_z_target()
+		await rig.wait_frames(4)
+	_z_target()
+	# WAITED for rather than counted: `lock_target()` reads `is_locked` off the
+	# targeting component, and a tap is an edge that has to survive a frame of
+	# input polling and an acquire before that flag is up. A fixed handful of
+	# frames read the lock as still absent and then it appeared during the tell --
+	# which is why the aim was fine and the check said it was not.
+	# Bounded at 24 because this can be called INSIDE the 0.90 s wind-up, and a
+	# wait that outlasts the tell would push the "windup" arrow into the commit
+	# and quietly turn the negative case into a second positive one.
+	return await _until(rig, func() -> bool: return hero.lock_target() == boss, 24)
+
+
+## The lock-on button, delivered as a REAL event.
+##
+## `rig.tap(["z_target"])` -- which is what this used to do, and what reads as the
+## obvious thing -- locks onto nothing at all. `rig.tap` goes through
+## `Input.action_press`, which sets action state and dispatches no `InputEvent`
+## (CLAUDE.md §3), and `Targeting` reads the button in `_unhandled_input` on
+## purpose so that a toggle cannot miss an edge. So the press was never delivered,
+## `is_locked` never came up, and `HeroRanged._aim_at_target_or_camera` fell
+## through to its CROSSHAIR raycast every time. That is the whole story of the
+## lost arrows: an unlocked shot goes wherever the boom is pointing, which on a
+## teleported hero is down the lane often enough to look like it works.
+## `p4_lunge._z_target` had already paid for this; the fix is copied from it.
+func _z_target() -> void:
+	var ev := InputEventAction.new()
+	ev.action = &"z_target"
+	ev.pressed = true
+	Input.parse_input_event(ev)
+
+
+## The Ogre's mark: eleven metres of lane, aimed down +Z, with the hero standing
+## in it at 7.5 m -- inside `K.LOCK_RANGE` (8.49 m) so the bow's aim resolves on
+## the locked body rather than on wherever the crosshair happened to be, and far
+## enough that a charge stopped in the first third of its travel is visibly short
+## of him.
+func _mark_ogre(rig, arena: Node, boss: Node) -> void:
+	_park_ogre(arena, boss)
+	await _stand_at(rig, Vector3(0.0, 0.05, OGRE_HERO_Z), (boss as Node3D).global_position)
+	await _lock_on(rig, boss)
+
+
+## `_facing` and not just `rotation.y` -- see `_park_boss` for what that cost.
+func _park_ogre(arena: Node, boss: Node) -> void:
+	var at: Vector3 = (arena as Node3D).global_position + Vector3(0.0, 0.0, OGRE_BOSS_Z)
+	at.y = boss.global_position.y
+	boss.global_position = at
+	boss.rotation.y = PI
+	boss._facing = PI
+
+
 # --- Helpers ------------------------------------------------------------------
 
 func _hero(rig) -> Node3D:
@@ -643,12 +1122,23 @@ func _stand_at(rig, at: Vector3, look_at: Vector3, settle: bool = true) -> void:
 ## at the hero's half of the mark -- has `rotation.y = PI`. The art-space 180 is
 ## not this rotation and must not be folded into it: that one lives on the MODEL
 ## node, where `Boss._ready` put it (CLAUDE.md §4).
+##
+## **`_facing` as well as `rotation.y`, and that is not a belt-and-braces line.**
+## `Enemy._physics_process` writes `rotation.y = _facing` every frame, so a
+## director that sets only the node has set nothing that survives the next tick
+## -- exactly the trap `_stand_at` documents on the hero's side. It was invisible
+## on the Warden, whose three beats all resolve on the frame of the commit and
+## whose tell has 1.0-1.4 s to turn the body back. It is NOT invisible on a
+## charge: parked at the mark with a stale `_facing`, the Slag Ogre committed
+## `bellows_charge` 119 degrees off the hero and ran nine metres into a wall, and
+## the frame of it looks exactly like a fight working.
 func _park_boss(arena: Node, boss: Node) -> void:
 	var at: Vector3 = (arena as Node3D).global_position \
 		+ Vector3(0.0, 0.0, -WATCH_DIST * 0.5)
 	at.y = boss.global_position.y
 	boss.global_position = at
 	boss.rotation.y = PI
+	boss._facing = PI
 
 
 ## Both bodies on the mark in the middle of the arena, facing each other, with

@@ -78,14 +78,32 @@ extends RefCounted
 ##   |---|---|---|
 ##   | `arc`    | `reach`, `arc_deg` | a cone in front of the boss, `reach` m long, `arc_deg` HALF-angle either side of `-basis.z`. Resolved once at commit. |
 ##   | `slam`   | `radius`, `safe_inner` | a ring centred on the boss: hurts between `safe_inner` and `radius`. `safe_inner == 0` is a solid disc. |
-##   | `charge` | `reach`, `radius`, `speed` | the boss travels up to `reach` m at `speed` m/s along the heading it locked at commit, damaging bodies within `radius` of its path. Once per charge, per body. Stops on a wall. |
-##   | `zone`   | `radius`, `fuse`, `count` | `count` discs marked on the floor at commit — the first under the hero, the rest scattered inside the arena — which detonate `fuse` seconds later. The boss is not in them and is not protected from them. |
+##   | `charge` | `reach`, `radius`, `speed` | the boss travels up to `reach` m at `speed` m/s along the heading it locked at commit, damaging bodies within `radius` of its path. Once per charge, per body. Stops on a wall — **and on an arrow, §5b.** |
+##   | `zone`   | `radius`, `fuse`, `count` | `count` discs marked on the floor at commit — the first under the hero, the rest scattered inside the arena — which detonate `fuse` seconds later. **They hurt the player and nothing else.** |
 ##   | `summon` | `kind`, `count`, `cap`, `radius` | `count` ordinary `Enemy`s of `kind` at `radius` from the boss. Deals no damage. Refuse the beat if `cap` of its summons are already alive. |
 ##
 ##   `kind` is always a key of `Enemy.DEFS`, and it has to be: `Enemy._ready`
 ##   does `DEFS.get(kind, DEFS[&"skeleton"])`, so summoning a `troll` — whose
 ##   GLB exists but whose stats do not — silently spawns a troll-shaped skeleton.
 ##   `validate()` checks this.
+##
+## **5b. THE RECEPTACLE — the one exception poise has, and it belongs to a
+## shape rather than to a beat.** `docs/BOSSES.md` §6.2. An `arrow` or
+## `arrow_fire` blow landing while a `charge` is in `State.STRIKE` **with the
+## travel already under way** calls `stagger()` instead of falling through to
+## poise: the charge stops dead where the arrow found it, the body drops into
+## `RECOVER`, and the beat's own authored punish opens exactly as it would have.
+## `beat_committed` still fires, because the beat committed.
+##
+##   * **Not during the tell.** §4's TELL is unbreakable and stays that way — a
+##     tell that never lands makes the telegraph a lie, and `Boss.freeze` refuses
+##     the hookshot a tell-cut on precisely that argument. Two items, one rule.
+##   * **It invents no opening.** Same vocabulary as a parry (`Boss.stagger`):
+##     the window the beat already owed is brought forward, never lengthened.
+##   * **Three beats carry it**, because three beats are charges:
+##     `bellows_charge`, `gate_lunge`, `plate_advance`. Floor 2 is the one the
+##     design is *about* — it is the only beat in the game past 4.5 m, so it is
+##     the beat that happens where the bow lives.
 ##
 ## **6. Choosing is `pick_beat`, not a sequence.** Call it; do not re-implement
 ## the weights, the repeat penalty or the range gate anywhere else. A scripted
@@ -339,6 +357,12 @@ static var BOSSES := {
 						+ "exactly where it is about to go — the tell is a "
 						+ "direction, not just a warning.",
 				},
+				# **THE RECEPTACLE** (§5b, `docs/BOSSES.md` §6.2). This is the beat
+				# the floor's verb answers, and the numbers are why: 11.0 / 13.0 is
+				# 0.85 s of travel, and `min_range` 4.5 is the widest in the game --
+				# it cannot be thrown at contact range, so the player it is thrown at
+				# is by definition standing where a bow is the weapon in hand. An
+				# arrow into that travel stops it dead. Not into the tell.
 				"shape": SHAPE_CHARGE, "reach": 11.0, "radius": 1.5,
 				"speed": 13.0,
 				"damage": 4, "knockback": K.KNOCKBACK_HEAVY, "stun": 0.40,
@@ -865,12 +889,13 @@ static var MINIBOSSES := {
 				# slag posts in the lane, which ends the commit early and opens the same
 				# window for free.
 				#
-				# # NEEDS: the one `if` in `Boss._on_damaged` that `docs/BOSSES.md`
-				# §6.2 specifies for the Slag Ogre -- an arrow landing during
-				# `State.WINDUP` calling `stagger()` instead of falling through to
-				# poise. With it, *one arrow opens him* is literal and this beat is the
-				# receptacle §7 describes. Without it the bow is still the answer, paid
-				# for in arrows rather than in one. Nothing below depends on it.
+				# **The fast way over is BUILT** (§5b above, `Boss._is_receptacle_hit`),
+				# and this beat carries it because it is a charge: an arrow into the
+				# TRAVEL stops the plate where it finds it. This comment used to be a
+				# `# NEEDS:` asking for the branch during `State.WINDUP`, which is the
+				# window `docs/BOSSES.md` §6.2 examines and rejects -- a tell-cut for the
+				# bow is the thing `Boss.freeze` refuses the hookshot. The shipped rule
+				# is scoped to the commit.
 				"id": &"plate_advance", "name": "Plate-Advance",
 				"tell": {
 					"time": 1.00, "pose": POSE_CROUCH,
