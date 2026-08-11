@@ -53,6 +53,17 @@ var rupees: int = 0
 var deaths: int = 0
 ## Metagame currency. Survives death; the bag in `Run` does not.
 var gold: int = K.START_GOLD
+## Every coin this save has ever been GIVEN, and never a coin back.
+##
+## Separate from `gold` above because the two answer different questions and the
+## difference is the whole point: `gold` is what you can spend and it goes down
+## every time you do, and this is how far you have got, which cannot. `StoryDb`
+## gates the garrison's later conversations on it (`StoryDb.met`) — an old man's
+## story that vanished the moment you bought a sharpening would be a bug the
+## player could cause and never explain.
+##
+## Not seeded with `K.START_GOLD`: the purse you arrive with was not earned.
+var gold_earned: int = 0
 ## Bag capacity, in slots. Bought from the shop, so it lives here with the rest
 ## of the metagame rather than in `Run`, which is wiped every time you die.
 var bag_slots: int = K.START_BAG_SLOTS
@@ -231,6 +242,7 @@ func reset() -> void:
 	deaths = 0
 	_mercy_carry = 0.0
 	gold = K.START_GOLD
+	gold_earned = 0
 	bag_slots = K.START_BAG_SLOTS
 	upgrades.clear()
 	components.clear()
@@ -513,6 +525,11 @@ func add_rupees(n: int) -> void:
 func add_gold(n: int) -> void:
 	if n == 0:
 		return
+	# A NEGATIVE n is a fine (the extraction fee takes this door), so the lifetime
+	# tally only ever counts the positive side. Otherwise "gold earned" would be
+	# net worth, which is the number `gold` already is.
+	if n > 0:
+		gold_earned += n
 	gold = maxi(0, gold + n)
 	Bus.gold_changed.emit(gold)
 

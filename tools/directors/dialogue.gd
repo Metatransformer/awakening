@@ -11,7 +11,9 @@ extends RefCounted
 ##   A  Every recorded take has words written for it, and every person in the
 ##      garrison has a name and a face. This is the table check, and it is the
 ##      cheapest one: a typo in `DialogueDb.SAID` is a line that types nothing,
-##      in a build where nothing warns and nothing crashes.
+##      in a build where nothing warns and nothing crashes. It now also walks
+##      `StoryDb`: every beat has pages, every `told` gate names a beat that
+##      exists, and every unlock names somebody with a face.
 ##   B  TALK opens a BOX, not a shop. The speaker's name is on it, their body is
 ##      in it, the hero's is opposite, and the line arrives a character at a time.
 ##   C  The button that opened it is the button that drives it: fill the line,
@@ -21,6 +23,12 @@ extends RefCounted
 ##      there is not -- and hands the world back.
 ##   F  The world is HELD while a box is up: no walking off mid-sentence, and
 ##      nothing else can take the interact button.
+##   G  **One typeface across the option list.** `Trade` used to render in Cinzel
+##      at 19 and `Leave` in the sans at 16, which is the kit's primary promotion
+##      doing exactly what it is for on a screen it is wrong for.
+##   H  **The tree.** A topic is asked, answered, and the same list comes back;
+##      a story beat is heard once and is gone; and the gate is progression --
+##      Aldric owes the briefing on a fresh save and does not owe it twice.
 ##
 ## The frames are the point (CLAUDE.md §2). `d_02` and `d_03` are the same
 ## sentence half a second apart and are the only proof that the typing is typing.
@@ -34,8 +42,11 @@ func run(rig) -> void:
 
 	_table()
 	await _arrival(rig)
+	await _story(rig)
+	await _tree(rig)
 	await _open(rig)
 	await _options(rig)
+	await _faces(rig)
 	await _trade(rig)
 	await _leave(rig)
 	await _gallery(rig)
@@ -99,6 +110,44 @@ func _table() -> void:
 	# walk over `COUNTERS` can see him.
 	_ck("A3 and so does the listener", not DialogueDb.name_of(&"hero").is_empty())
 
+	# `StoryDb`'s tables, walked the same way and for the same reason: a beat with
+	# no pages is a press that opens nothing, a `told` gate naming a beat that was
+	# renamed is a line the player can never reach, and both are silent.
+	var empty: Array[String] = []
+	var dangling: Array[String] = []
+	var unknown: Array[String] = []
+	for who: StringName in StoryDb.BEATS:
+		if DialogueDb.name_of(who).is_empty():
+			unknown.append(String(who))
+		var ids := {}
+		for beat: Dictionary in (StoryDb.BEATS[who] as Array):
+			var id := StringName(beat.get("id", &""))
+			ids[id] = true
+			if StoryDb.pages_of(beat).is_empty():
+				empty.append("%s/%s" % [who, id])
+		# Read AFTER the whole list is collected, so a beat may gate on one that
+		# comes later in the table without this reporting it as missing. Nothing
+		# does today; the check is about the id existing, not about the order.
+		for entry: Dictionary in ((StoryDb.BEATS[who] as Array)
+				+ (StoryDb.TOPICS.get(who, []) as Array)):
+			var after := StringName((entry.get("needs", {}) as Dictionary).get("told", &""))
+			if after != &"" and not ids.has(after):
+				dangling.append("%s/%s -> %s" % [who, entry.get("id", &""), after])
+		for topic: Dictionary in (StoryDb.TOPICS.get(who, []) as Array):
+			if StoryDb.pages_of(topic).is_empty():
+				empty.append("%s/%s" % [who, topic.get("id", &"")])
+	_ck("A4 every story beat and topic has words (%s)" % [empty], empty.is_empty())
+	_ck("A5 and every `told` gate names a beat that exists (%s)" % [dangling],
+		dangling.is_empty())
+	_ck("A6 and everybody with a story has a face (%s)" % [unknown], unknown.is_empty())
+
+	var strangers: Array[String] = []
+	for who: StringName in StoryDb.UNLOCKS:
+		if DialogueDb.name_of(who).is_empty():
+			strangers.append(String(who))
+	_ck("A7 and everybody who can be unlocked is somebody (%s)" % [strangers],
+		strangers.is_empty())
+
 
 # --- The arrival beat, got out of the way --------------------------------------
 
@@ -129,6 +178,127 @@ func _arrival(rig) -> void:
 		await rig.until(func() -> bool: return not Prompt.blocked, 2.0))
 
 
+# --- H. The story, and the gate on it ------------------------------------------
+## The elder is the one who has something long to say, so he is the one this beat
+## uses. On a harness save he owes the briefing: nine pages that say what the
+## outpost is for, who pays for it and what happened to the cadet before you.
+
+func _story(rig) -> void:
+	var garrison: Garrison = rig.scene()
+	if garrison == null or garrison.keeper == null:
+		_ck("H0 the elder is in the yard", false)
+		return
+
+	var owed: Dictionary = StoryDb.pending(&"elder")
+	_ck("H0 a fresh save is owed the briefing (%s)" % [owed.get("id", "-")],
+		StringName(owed.get("id", &"")) == &"briefing")
+	_ck("H1 and has not been told it yet",
+		not Game.flag(StoryDb.told_flag(&"elder", &"briefing")))
+
+	await _walk_to(rig, garrison.keeper)
+	Voice.stop()
+	await rig.tap(["interact"])
+	var up: bool = await rig.until(func() -> bool: return rig.dialogue() != null, 3.0)
+	var box: Node = rig.dialogue()
+	if not up or box == null:
+		_ck("H2 he opens a box", false)
+		return
+	_ck("H2 and it is the briefing, not his greeting (%s)" % box.text(),
+		box.text().begins_with("Aldric Vane."))
+	await rig.tap(["interact"])
+	await rig.wait_frames(3)
+	await rig.capture(out.path_join("d_11_briefing.png"))
+
+	# Turn the whole thing. The count is generous rather than exact -- the beat is
+	# nine pages today and the point of the check is that it ENDS, not that it is
+	# nine.
+	var pages := 0
+	for _i in 40:
+		if rig.dialogue() == null or box.is_choosing():
+			break
+		pages += 1
+		await rig.tap(["interact"])
+		await rig.wait_frames(2)
+	_ck("H3 it is a long one and it finishes (%d presses)" % pages, pages > 6)
+	_ck("H4 and reading it to the end is what marks it told",
+		Game.flag(StoryDb.told_flag(&"elder", &"briefing")))
+	_ck("H5 so he does not owe it twice",
+		StringName(StoryDb.pending(&"elder").get("id", &"")) != &"briefing")
+
+
+# --- J. The tree ---------------------------------------------------------------
+## A topic is a question, not a spend: it is answered, and the same list comes
+## back up. Everything in this repo's dialogue before today ended the conversation
+## on the first choice, which is the shape a shop menu has and not the shape a
+## person has.
+
+func _tree(rig) -> void:
+	var garrison: Garrison = rig.scene()
+	if garrison == null or garrison.keeper == null:
+		return
+	# Out of the briefing's box and back to him with a clean press.
+	await _dismiss(rig)
+	await _walk_to(rig, garrison.keeper)
+	Voice.stop()
+	await rig.tap(["interact"])
+	if not await rig.until(func() -> bool: return rig.dialogue() != null, 3.0):
+		_ck("J0 he can be addressed again", false)
+		return
+	var box: Node = rig.dialogue()
+	_ck("J0 and now says his recorded greeting (%s)" % box.text(),
+		box.text() in ["Hail!", "How go your explorations?"])
+
+	# Press through to the list. This is a loop and not two taps on purpose: a
+	# press that lands while the typewriter is still running COMPLETES the page
+	# instead of turning it, so how many presses a one-page greeting costs is a
+	# function of how long "Hail!" takes to type versus how long a tap takes to
+	# land. Guessing the number made this beat a coin toss -- and losing the toss
+	# meant the extra press hit the option list and picked something, which reads
+	# as "the box vanished" three checks later.
+	for _i in 8:
+		if rig.dialogue() == null or box.is_choosing():
+			break
+		await rig.tap(["interact"])
+		await rig.wait_frames(3)
+	if rig.dialogue() == null or not box.is_choosing():
+		_ck("J1 the options come up", false)
+		return
+	var labels: PackedStringArray = box.choice_labels()
+	print("DIALOGUE elder options %s" % [labels])
+	_ck("J1 the briefing unlocked topics to ask about (%s)" % [labels],
+		labels.size() > 2 and labels[0] == "Trade"
+			and labels[labels.size() - 1] == "Leave")
+	await rig.capture(out.path_join("d_12_topics.png"))
+
+	# Walk to the first topic -- index 1, straight under Trade -- and ask it.
+	await rig.tap(["ui_down"])
+	await rig.wait_frames(2)
+	var asked := labels[1] if labels.size() > 1 else ""
+	await rig.tap(["interact"])
+	await rig.wait_frames(4)
+	box = rig.dialogue()
+	_ck("J2 asking '%s' is answered rather than ending it" % asked,
+		box != null and not box.text().is_empty())
+	if box == null:
+		return
+	await rig.capture(out.path_join("d_13_answer.png"))
+
+	# Press through the answer. The list has to be waiting on the other side.
+	for _i in 12:
+		if rig.dialogue() == null or box.is_choosing():
+			break
+		await rig.tap(["interact"])
+		await rig.wait_frames(2)
+	_ck("J3 and the same questions are waiting afterwards (%s)"
+		% [box.choice_labels() if rig.dialogue() != null else []],
+		rig.dialogue() != null and box.is_choosing()
+			and box.choice_labels() == labels)
+	# ...and the same question can be asked again. A topic is not consumed.
+	_ck("J4 including the one just asked",
+		rig.dialogue() != null and asked in box.choice_labels())
+	await _dismiss(rig)
+
+
 # --- B. The box opens ----------------------------------------------------------
 
 func _open(rig) -> void:
@@ -136,6 +306,11 @@ func _open(rig) -> void:
 	if garrison == null or garrison.smith == null:
 		_ck("B0 there is a smith in the yard", false)
 		return
+
+	# He owes an arrival beat of his own -- he walked into this yard after the
+	# first boss died. Get it out of the way so the beats below are about the
+	# recorded greeting, which is what they have always been about.
+	await _exhaust(rig, garrison.smith, &"smith")
 
 	await _walk_to(rig, garrison.smith)
 	_ck("B0 TALK is on him", Prompt.focus == garrison.smith)
@@ -186,17 +361,50 @@ func _options(rig) -> void:
 	_ck("C1 the second press asks the question", box.is_choosing())
 	var labels: PackedStringArray = box.choice_labels()
 	print("DIALOGUE options %s" % [labels])
-	_ck("C2 which is Trade or Leave (%s)" % [labels],
-		labels.size() == 2 and labels[0] == "Trade" and labels[1] == "Leave")
+	# Trade first and Leave last, with whatever he will answer questions about in
+	# between. Asserted by the ENDS rather than by the whole list: the middle grows
+	# as `StoryDb.TOPICS` does, and a check that pinned the exact list would fail
+	# every time somebody wrote him a new question.
+	_ck("C2 Trade first, Leave last (%s)" % [labels],
+		labels.size() >= 2 and labels[0] == "Trade"
+			and labels[labels.size() - 1] == "Leave")
 	await rig.capture(out.path_join("d_04_options.png"))
 
-	# The stick walks the list and wraps, so a player never dead-ends on it.
+	# The stick walks the list and wraps, so a player never dead-ends on it. It
+	# also has to come back to 0, because `_trade` below takes whatever the cursor
+	# is on -- one press per row, whatever the row count is today.
 	await rig.tap(["ui_down"])
 	await rig.wait_frames(2)
 	_ck("C3 the stick moves the cursor", box.choice_index() == 1)
-	await rig.tap(["ui_down"])
-	await rig.wait_frames(2)
-	_ck("C4 and wraps", box.choice_index() == 0)
+	for _i in labels.size() - 1:
+		await rig.tap(["ui_down"])
+		await rig.wait_frames(2)
+	_ck("C4 and wraps (%d)" % box.choice_index(), box.choice_index() == 0)
+
+
+# --- G. One typeface -----------------------------------------------------------
+## `Trade` rendered in Cinzel at 19 and `Leave` in Alegreya Sans at 16, because
+## `VerbRow` promotes the first row of a panel to the display face. That is the
+## kit's rule and it is right on a shop menu; on a list of things one person can
+## say it reads as two different kinds of object. `DialogueBox._ask` turns it off,
+## and this is the check that it stays off -- read off the resolved theme font,
+## not off the config, so a theme change cannot bring it back in silence.
+
+func _faces(rig) -> void:
+	var box: Node = rig.dialogue()
+	if box == null or not box.is_choosing():
+		_ck("G0 there are options to measure", false)
+		return
+	var faces: PackedStringArray = box.choice_faces()
+	print("DIALOGUE option faces %s" % [faces])
+	var one := true
+	for f in faces:
+		if f != faces[0]:
+			one = false
+	_ck("G0 every option is in the same face at the same size (%s)" % [faces],
+		faces.size() >= 2 and one)
+	_ck("G1 and it is the body face, not the display one (%s)" % [faces],
+		faces.size() > 0 and not faces[0].begins_with("Cinzel"))
 
 
 # --- D. Trade ------------------------------------------------------------------
@@ -325,6 +533,37 @@ func _walk_to(rig, who: Node3D) -> void:
 			   0.0 if hero == null else hero.global_position.distance_to(who.global_position),
 			   who.player_inside, who.enabled, rig.paused],
 			false)
+
+
+## Close whatever box is up, with the button a player would use.
+func _dismiss(rig) -> void:
+	for _i in 6:
+		if rig.dialogue() == null:
+			break
+		await rig.tap(["ui_cancel"])
+		await rig.wait_frames(2)
+	await rig.until(func() -> bool: return not Prompt.blocked, 2.0)
+
+
+## Talk to somebody until they have no story left to tell, so the beat that
+## follows is about their recorded greeting rather than about their arrival.
+func _exhaust(rig, who: Node3D, voice: StringName) -> void:
+	for _round in 8:
+		if StoryDb.pending(voice).is_empty():
+			return
+		await _walk_to(rig, who)
+		Voice.stop()
+		await rig.tap(["interact"])
+		if not await rig.until(func() -> bool: return rig.dialogue() != null, 3.0):
+			return
+		var box: Node = rig.dialogue()
+		for _page in 40:
+			if rig.dialogue() == null or box.is_choosing():
+				break
+			await rig.tap(["interact"])
+			await rig.wait_frames(2)
+		await _dismiss(rig)
+	_ck("%s still owes a story after 8 conversations" % voice, false)
 
 
 func _stand_at(rig, where: Vector3) -> void:

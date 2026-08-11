@@ -197,6 +197,8 @@ func _elder(rig) -> void:
 	# shot and it cannot see it.
 	await rig.capture(out.path_join("v_02_from_the_spawn.png"))
 
+	await _clear_story(rig, garrison.keeper, &"elder")
+
 	_stand_at(rig, at + garrison.keeper.global_transform.basis * Vector3(0.0, 0.0, 1.7))
 	await rig.wait_physics_frames(6)
 	var focused: bool = await rig.until(
@@ -277,6 +279,7 @@ func _counter(rig) -> void:
 		return
 
 	Game.gold = 40000
+	await _clear_story(rig, garrison.jeweller, &"jewelcrafter")
 	Voice.stop()
 	_stand_at(rig, garrison.jeweller.global_position
 		+ garrison.jeweller.global_transform.basis * Vector3(0.0, 0.0, 1.6))
@@ -382,6 +385,40 @@ func _all(root: Node) -> Array:
 	for c in root.get_children():
 		found.append_array(_all(c))
 	return found
+
+
+## Talk somebody's STORY out of them, so what is left is the recorded greeting.
+##
+## `StoryDb` beats come first on a press and they are WRITTEN, not spoken --
+## nobody has been in a booth for the elder's briefing. This director is about the
+## recordings, so it gets the written half out of the way first rather than
+## reporting "he said nothing" the first time it addresses anybody.
+func _clear_story(rig, who: Node3D, voice: StringName) -> void:
+	for _round in 8:
+		if StoryDb.pending(voice).is_empty():
+			return
+		_stand_at(rig, who.global_position
+			+ who.global_transform.basis * Vector3(0.0, 0.0, 1.6))
+		await rig.wait_physics_frames(6)
+		if not await rig.until(func() -> bool: return Prompt.focus == who, 5.0):
+			return
+		Voice.stop()
+		await rig.tap(["interact"])
+		if not await rig.until(func() -> bool: return rig.dialogue() != null, 3.0):
+			return
+		var box: Node = rig.dialogue()
+		for _page in 40:
+			if rig.dialogue() == null or box.is_choosing():
+				break
+			await rig.tap(["interact"])
+			await rig.wait_frames(2)
+		for _i in 6:
+			if rig.dialogue() == null:
+				break
+			await rig.tap(["ui_cancel"])
+			await rig.wait_frames(2)
+		await rig.until(func() -> bool: return not Prompt.blocked, 2.0)
+	_ck("%s still owes a story after 8 conversations" % voice, false)
 
 
 func _stand_at(rig, where: Vector3) -> void:

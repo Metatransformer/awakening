@@ -319,10 +319,31 @@ func activate(_by: Node3D) -> void:
 
 	var row := _row()
 	var who := StringName(row.get("voice", &""))
-	# The mouth picks the take and `DialogueDb` reads the words off the take that
-	# is playing, so the elder's two greetings alternate in the ear and on the
-	# screen together. See `DialogueDb.speak`.
-	var pages := DialogueDb.speak(who, &"hello")
+
+	# **The story first, and only then the greeting.** `StoryDb` holds an ordered
+	# list per person -- the briefing, a trader's arrival, the thing an old man
+	# will only tell you once you have earned it -- and `pending` hands back the
+	# first one that is due. It is WRITTEN, so nothing is played: these are lines
+	# nobody has been in a booth for, and `Voice`'s "a speaker with no take is
+	# silent" rule is what lets that be normal rather than a gap.
+	#
+	# `on_read` and not a `mark_told` here: the flag belongs on the last page
+	# actually being turned. Escaping out of Aldric's nine-page briefing has to
+	# leave it owed, or the one conversation that explains the game is one stray
+	# press from being gone for the save.
+	var beat := StoryDb.pending(who)
+	var pages: PackedStringArray
+	var on_read := Callable()
+	if beat.is_empty():
+		# The mouth picks the take and `DialogueDb` reads the words off the take
+		# that is playing, so the elder's two greetings alternate in the ear and on
+		# the screen together. See `DialogueDb.speak`.
+		pages = DialogueDb.speak(who, &"hello")
+	else:
+		pages = StoryDb.pages_of(beat)
+		var beat_id := StringName(beat.get("id", &""))
+		on_read = func() -> void: StoryDb.mark_told(who, beat_id)
+
 	if pages.is_empty():
 		# Nobody has written them a line. Straight to the counter, exactly as this
 		# function behaved before there was a dialogue box -- a keeper with no words
@@ -330,16 +351,26 @@ func activate(_by: Node3D) -> void:
 		# than no box.
 		_choose_trade(who, row)
 		return
-	DialogueBox.open(self, who, pages, _options(who, row))
+	DialogueBox.open(self, who, pages, _options(who, row), on_read)
 
 
 ## What the conversation offers when the line is finished.
 ##
-## Trade only for somebody with a counter, and Leave always -- so the one person
-## with no counter (there is none today; the elder was the last, `COUNTERS`) still
-## gets a box that can be closed by saying goodbye rather than only by walking
-## off. The order is the kit's rule about primary rows: the thing you came for is
-## first.
+## Three kinds of row and they are in the order a player wants them:
+##
+##   1. **Trade**, for somebody with a counter -- the thing you walked over here
+##      for. Absent for anybody without one (there is nobody today; the elder was
+##      the last, `COUNTERS`), which still leaves a box you can say goodbye to
+##      rather than only walk away from.
+##   2. **Topics** (`StoryDb.topics`) -- the questions this person will answer
+##      today. They are `keep` rows, so asking one puts the list straight back up;
+##      see `DialogueBox.open`. What is in the list grows as the save does, which
+##      is the whole tree: the same man has more to say about Deryn after he has
+##      told you Deryn's name.
+##   3. **Leave**, always last.
+##
+## They are all one typeface -- `DialogueBox._ask` turns the kit's primary
+## promotion off, and says why.
 func _options(who: StringName, row: Dictionary) -> Array:
 	var out: Array = []
 	var counter: Dictionary = row.get("counter", {})
@@ -350,6 +381,12 @@ func _options(who: StringName, row: Dictionary) -> Array:
 			# Lanternkeeper is visibly not the same act as picking it at the smith.
 			"meta": _titled(str(counter.get("title", ""))),
 			"act": _choose_trade.bind(who, row),
+		})
+	for topic: Dictionary in StoryDb.topics(who):
+		out.append({
+			"label": String(topic.get("label", "")),
+			"keep": true,
+			"act": func() -> PackedStringArray: return StoryDb.pages_of(topic),
 		})
 	out.append({"label": "Leave", "act": _choose_leave.bind(who)})
 	return out

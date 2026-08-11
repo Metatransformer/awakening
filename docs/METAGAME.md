@@ -464,6 +464,48 @@ It is §6.8, and it is the only autosave a player asks for rather than receives.
 One walled courtyard (`scripts/world/garrison.gd`) with five counters and a gate
 in it.
 
+### Who is in it, and when
+
+**A new save's yard is two people and a hole.** Aldric — the elder, who is also
+the Lanternkeeper — and Kessa at the pawnbroker's stall. The other three arrive
+as you dig, in the order their counters become worth anything (`StoryDb.UNLOCKS`,
+owner's call 2026-08-10):
+
+| Who | Arrives after | Because |
+|---|---|---|
+| Aldric, the Lanternkeeper | — | he sent for you |
+| Kessa, the pawnbroker | — | you cannot bank a run without her |
+| Brannoc, the smith | 1 boss | the forge eats components you do not have on day one |
+| Ysolt, the alchemist | 2 bosses | a draught prices a deep run, and there are none yet |
+| Marisel, the jewelcrafter | 3 bosses | §6.7's ceiling means nothing before the plate has cost you something |
+
+A keeper who has not arrived **is not in the yard at all** — no booth, no lamp,
+no sign. The alternative, five people standing there with three counters refusing
+to open, was rejected: it makes an outpost that is visibly finished on the first
+frame, and it turns the reward for a boss into a shop that stops saying no. A
+trader walking in is the only pacing the garrison has.
+
+Arrival **latches** to a flag the first time the metric is met, so nobody can
+un-arrive. `tools/directors/roster.gd` is the proof, and it is the one director
+run with `--fresh` — every other one gets all five counters from `shoot.gd`.
+
+### What the counters say
+
+Talking is not the same as trading. TALK opens a dialogue box; the counter is one
+option inside it (`docs/CONTRACT.md`, *Dialogue*). What a person says grows with
+the save: `StoryDb` holds an ordered run of once-only **beats** per person and a
+list of repeatable **topics** you can ask about, gated on two numbers and nothing
+else — how many of the four bosses are dead, and `Game.gold_earned`, the LIFETIME
+total. Lifetime and not the purse, so that buying a sharpening cannot take one of
+Aldric's stories back off you.
+
+Aldric's first beat is the game's only briefing: what the outpost is (a mining
+expedition sworn jointly to the Crown and the Explorer's Guild of Valenfeld),
+what is below it, that Kessa buys, that the footlocker at the foot of the bed is
+the only thing your pack does not eat (§6.8), and what happened to the cadet
+before you. It is stapled to his "I've been expecting you" so a player who walks
+straight to the gate still gets it.
+
 - **The vendor.** Sells nothing; buys everything. The trade screen
   (`scripts/ui/shop/trade_screen.gd`) lists the bag sorted by value with a
   "sell everything" line, because the common case is dumping the lot and the UI
@@ -1119,6 +1161,20 @@ MVP descended   in_dungeon=true  rooms=6 enemies=17
 MVP after_chest bag=4 value=95 fee=24
 MVP home        scene=Garrison in_dungeon=false gold=182 bag=95 hearts=12/12
 ```
+
+The garrison's people have two, and the second is the only run in the repo that
+declines `shoot.gd`'s unlock-everybody default:
+
+```bash
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/dialogue.gd --out=/tmp/dlg/x.png --warmup=40
+godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/roster.gd --fresh --out=/tmp/roster/x.png --warmup=40
+```
+
+`dialogue.gd` walks the box itself — the tables, the typing, one typeface across
+the option list, a nine-page briefing that only counts as read when it is read to
+the end, and a topic that can be asked twice. `roster.gd` photographs the yard
+with three counters missing, sets one boss flag, rebuilds it, and photographs the
+smith standing in the corner that was grass.
 
 Arrows have two, because the supply chain has two halves — the objects, and the
 floor that has to contain them (§4.6):

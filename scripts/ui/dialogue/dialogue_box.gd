@@ -96,6 +96,9 @@ var _closing: bool = false
 ## second one a no-op rather than a second purchase screen.
 var _picked: bool = false
 var _age: float = 0.0
+## Fired once, when the opening pages have all been turned. See `open`.
+var _on_read: Callable = Callable()
+var _read_acked: bool = false
 
 var _panel: PanelContainer
 var _choice_panel: PanelContainer
@@ -125,15 +128,28 @@ var _caret: Label
 ##   meta  : String    the right-hand column -- the counter's name, a cost.
 ##   act   : Callable  run when it is picked. **Returns the pages to say next**
 ##                     (a `PackedStringArray`), or nothing to end the conversation.
+##   keep  : bool      put the SAME options back up once those pages are read,
+##                     instead of ending the conversation. This is what makes a
+##                     topic list a list rather than a single spend: you ask
+##                     Aldric about the Guild, he answers, and you are standing in
+##                     front of the same questions. Without it every question in
+##                     the game would cost the conversation.
 ##
 ## An empty `choices` is a statement rather than a question: the last page ends
 ## the conversation on the next press. That is the arrival beat.
+##
+## `on_read` fires once, the moment the last of the OPENING `pages` has been
+## turned -- not when the box opens. `StoryDb` hangs the "you have heard this"
+## flag off it, and the distinction is the whole reason it is a callback rather
+## than something the caller does before it calls: a player who presses Escape
+## half way through Aldric's briefing has not been briefed, and should get it
+## again next time they say hello.
 ##
 ## Returns null for an empty `pages`, and that is not an error -- it is a speaker
 ## with nothing written for this cue, and an empty box is a UI that appeared in
 ## order to say nothing. Callers should treat null as "they had nothing to say".
 static func open(host: Node, who: StringName, pages: PackedStringArray,
-		choices: Array = []) -> DialogueBox:
+		choices: Array = [], on_read: Callable = Callable()) -> DialogueBox:
 	if pages.is_empty():
 		return null
 	var layer := CanvasLayer.new()
@@ -143,6 +159,7 @@ static func open(host: Node, who: StringName, pages: PackedStringArray,
 	box.speaker = who
 	box._pages = pages
 	box._choices = choices
+	box._on_read = on_read
 	layer.add_child(box)
 	host.get_tree().current_scene.add_child(layer)
 	return box
@@ -192,7 +209,7 @@ func close() -> void:
 
 
 # --- What a director asks ------------------------------------------------------
-## Five readers and one verb, because a director has to be able to hold a
+## Readers and one verb, because a director has to be able to hold a
 ## conversation without knowing how this file is built. `tools/shoot.gd`'s `talk`
 ## finds this node by `has_method("choice_labels")` -- it is loaded with `-s` and
 ## cannot name a `class_name` (CLAUDE.md §3) -- so these names are the interface
@@ -219,6 +236,30 @@ func choice_labels() -> PackedStringArray:
 ## Which option the cursor is on, or -1 before the options are up.
 func choice_index() -> int:
 	return _cursor if _choosing else -1
+
+
+## The typeface each option ACTUALLY rendered in, as "file@size", one per row.
+##
+## Read off `get_theme_font`, which is the resolved answer — override first, theme
+## behind it — rather than off the config that was passed in. That is the point:
+## the bug this exists to catch is a row that asked for the body face and got the
+## display one anyway, and a check that reads the request cannot see it. A
+## director asserts every entry is the same string.
+func choice_faces() -> PackedStringArray:
+	var out := PackedStringArray()
+	if _choice_box == null:
+		return out
+	for row in _choice_box.get_children():
+		if not (row is Button) or not (row as Button).has_meta(&"verb_name"):
+			continue
+		var lbl := (row as Button).get_meta(&"verb_name") as Label
+		if lbl == null:
+			continue
+		var face := lbl.get_theme_font(&"font")
+		out.append("%s@%d" % [
+			"none" if face == null else face.resource_path.get_file(),
+			lbl.get_theme_font_size(&"font_size")])
+	return out
 
 
 ## The name on the plate.
@@ -252,6 +293,14 @@ func _say(pages: PackedStringArray) -> void:
 ## Put the options up. Built here rather than at `_ready` so the panel cannot be
 ## on screen half a beat before the line that asks the question.
 func _ask() -> void:
+	# The last page of what they came to say has now been turned, whether or not
+	# there is anything to choose after it -- so this is where "you have heard
+	# this" is true, and it is true for the arrival beat (no choices, closes on
+	# the next line) exactly as it is for a counter's greeting.
+	if not _read_acked:
+		_read_acked = true
+		if _on_read.is_valid():
+			_on_read.call()
 	if _choices.is_empty():
 		close()
 		return
@@ -262,9 +311,16 @@ func _ask() -> void:
 		var row := UiKit.verb_row(_choice_box, {
 			"label": String(c.get("label", "")),
 			"meta": String(c.get("meta", "")),
-			# The first option is the one you came here for -- Trade at a counter.
-			# Exactly one primary per panel, which is the kit's rule.
-			"primary": i == 0,
+			# **No primary, deliberately, and this is the one place in the game
+			# that turns the kit's promotion off.** `VerbRow` puts a primary row in
+			# the display face at 19 and everything else in the sans at 16, which
+			# is right on a shop menu where one row is the verb and the rest are
+			# exits. It is wrong here: these rows are all things ONE PERSON can
+			# say, and Trade in Cinzel over Leave in the body face reads as two
+			# different kinds of object rather than as two answers (owner's call,
+			# 2026-08-10). The lit edge is already the cursor; the list does not
+			# need a second way to point at itself.
+			"primary": false,
 			"on_press": _take.bind(i),
 		})
 		if row != null:
@@ -278,7 +334,11 @@ func _ask() -> void:
 	# rows are added can be a row short.
 	_layout()
 	_layout.call_deferred()
-	_point_at(0)
+	# Back where the player left it, not back at the top. The list only comes up
+	# twice when a `keep` question has just been answered, and a cursor that jumped
+	# to Trade every time you asked something would make a four-topic list four
+	# presses deep on every question after the first.
+	_point_at(_cursor)
 
 
 func _point_at(i: int) -> void:
@@ -307,10 +367,16 @@ func _take(i: int) -> void:
 	if next.is_empty():
 		close()
 		return
-	# There is more to hear, so the box stays and the next press ends it. The
-	# latch comes off with the options -- nothing left to pick twice.
+	# There is more to hear, so the box stays. The latch comes off either way --
+	# what differs is whether there is still anything to pick.
 	_picked = false
-	_choices = []
+	# A `keep` option is a QUESTION: the answer is not the end of the conversation,
+	# it is a thing said in the middle of one, so the same list goes back up when
+	# the answer runs out (`_advance` -> `_ask`). Everything else -- Trade, Leave --
+	# is a door, and a door that put its own menu back would be a door you cannot
+	# walk through.
+	if not bool((_choices[i] as Dictionary).get("keep", false)):
+		_choices = []
 	_say(next)
 
 

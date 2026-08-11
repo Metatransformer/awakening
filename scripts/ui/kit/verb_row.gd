@@ -85,6 +85,11 @@ static func build(parent: Node, config: Dictionary) -> Button:
 	UITheme.apply_text_style(name_label,
 		UITheme.TYPE_H2 if is_primary else UITheme.TYPE_PARAGRAPH_1, UITheme.TEXT)
 	line.add_child(name_label)
+	# Kept as a handle for the same reason `verb_meta` is: the row's own
+	# `Button.text` is empty, so the only way anything outside this file can ask
+	# what FACE a row ended up in is to be given the Label. `DialogueBox` uses it
+	# to prove its option list is one typeface (`choice_faces`).
+	row.set_meta(&"verb_name", name_label)
 
 	# The meta column. A refused row spends it on the REASON.
 	#

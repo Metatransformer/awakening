@@ -111,6 +111,15 @@ Cinzel is an inscriptional capitals face; its lowercase is a small-cap. Do not
 set it below ~14px, where the flared serifs close up — that is the floor the
 `TYPE_*` table already respects.
 
+**One exception, and it is the dialogue option list.** `VerbRow` promotes the
+first row of a panel to the display face (`primary`), which is right on a shop
+menu where one row is the verb and the rest are exits. It is wrong in a
+`DialogueBox`: those rows are all things ONE PERSON can say, and `TRADE` in
+Cinzel over `Leave` in the body face reads as two different kinds of object
+rather than as two answers (owner's call, 2026-08-10). `DialogueBox._ask` passes
+`primary: false` for every row and the lit edge stays the only cursor. If you add
+a new list of things a character says, it goes in one face too.
+
 Retired in the same change, and not to be re-added without a reason written at
 `UITheme.BODY_TTF`: **Alegreya** (the variable serif that was the display face —
 Cinzel does that job now, and two serifs on one panel is drift, not hierarchy)
