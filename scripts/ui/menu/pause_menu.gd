@@ -143,7 +143,6 @@ const SND_CONFIRM := preload("res://audio/sfx/ui_confirm.ogg")
 
 var _is_open := false
 var _stack: Array[Dictionary] = []
-var _prev_mouse: int = Input.MOUSE_MODE_VISIBLE
 var _listening: StringName = &""
 var _listen_return: Control = null
 
@@ -221,8 +220,12 @@ func open() -> void:
 		return
 	_is_open = true
 	# The game captures the pointer for camera look; hand it back or the player
-	# cannot click a single thing in here.
-	_prev_mouse = Input.mouse_mode
+	# cannot click a single thing in here. FREED HERE, PUT BACK NOWHERE: the
+	# `closed` signal below is what asks for it, and `GameCamera._settle_pointer`
+	# answers. This menu remembering what it found and restoring it is the FIRST
+	# of the three times that arrangement has killed mouse look — the camera used
+	# to release the cursor on `pause` before this ran, so what it remembered was
+	# already "visible".
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().paused = true
 	_root.visible = true
@@ -245,7 +248,6 @@ func close() -> void:
 	_hide_notice()
 	_root.visible = false
 	get_tree().paused = false
-	Input.mouse_mode = _prev_mouse as Input.MouseMode
 	_play(SND_CLOSE)
 	closed.emit()
 

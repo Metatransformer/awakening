@@ -160,9 +160,16 @@ func run(rig) -> void:
 
 	await _key(rig, KEY_ESCAPE, 10)
 	await _key(rig, KEY_ESCAPE, 14)
-	_check("mouse capture restored on close",
-		Input.mouse_mode == Input.MOUSE_MODE_CAPTURED)
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	# THE MENU DOES NOT PUT THE POINTER BACK, and that is the fix rather than the
+	# regression. It used to restore what it found on the way in, which is how
+	# mouse look died the first time (`GameCamera._settle_pointer` tells the
+	# whole story). The way back is derived from what is still up and belongs to
+	# the camera — and THIS SCENE HAS NO CAMERA, so the honest assertion here is
+	# that closing left the cursor free rather than that something re-took it.
+	# `tools/directors/mouse_cursor.gd` is where the real path is proved, in the
+	# garrison, with a camera in it.
+	_check("the menu left the pointer free (nothing here wants it)",
+		Input.mouse_mode == Input.MOUSE_MODE_VISIBLE)
 
 	print("DIRECTOR %d passed, %d failed" % [_pass, _fail])
 	print("DIRECTOR_SHOTS %s" % ", ".join(_shots))

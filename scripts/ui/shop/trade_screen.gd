@@ -147,13 +147,11 @@ static func open(host: Node, screen_mode: Mode, screen_title: String,
 	return s
 
 
-## What the pointer was doing before this screen took the viewport.
-##
-## Saved and put back rather than forced to VISIBLE on the way out: this screen
-## can be up in the garrison (pointer captured for camera look) or over a menu
-## that already freed it, and a screen that unconditionally captures on close
-## grabs the cursor in cases where nobody had it. Same contract as `PauseMenu`.
-var _prev_mouse: int = Input.MOUSE_MODE_VISIBLE
+## THE POINTER IS FREED HERE AND PUT BACK NOWHERE — `GameCamera._settle_pointer`
+## owns the way back. This screen used to save what it found and restore it, and
+## that is precisely how mouse look died: it opens off a `DialogueBox`'s Trade
+## option, so what it found was the box's own release, and it put "visible" back
+## every time the player walked away from a counter.
 
 
 func _ready() -> void:
@@ -172,7 +170,6 @@ func _ready() -> void:
 	_refresh()
 	# The camera captures the pointer for look. Hand it back or not one cell on
 	# this screen can be clicked.
-	_prev_mouse = Input.mouse_mode
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	Prompt.block(self)
 	Bus.screen_opened.emit(&"trade")
@@ -186,7 +183,6 @@ func _fit() -> void:
 func _exit_tree() -> void:
 	Prompt.unblock(self)
 	Bus.screen_closed.emit(&"trade")
-	Input.mouse_mode = _prev_mouse as Input.MouseMode
 
 
 func close() -> void:
