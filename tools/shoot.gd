@@ -39,8 +39,28 @@ const HARNESS_META := &"zl_harness_settings_path"
 ## `Settings.DEFAULT_PATH`, for the same reason HARNESS_META is spelled out.
 const PLAYER_SETTINGS := "user://settings.cfg"
 
+## Exit code for "the director ran to the end and failed its own checks".
+##
+## Deliberately distinct from every status already read around here: `timeout`
+## owns 124, signals own 128+n, `shoot.gd`'s setup failures own 2-6, and #63's
+## SCRIPT ERROR gate owns 65. A run that fails a check AND printed a script
+## error keeps 65 -- the wrapper sees the error first and an error is the bigger
+## fact.
+const EXIT_DIRECTOR_FAIL := 66
+
 var _args := {}
 var _out_paths: Array[String] = []
+
+## Failures a director has reported through `fail()`. See `_harvest_failures`.
+##
+## **THE PROTOCOL, for anything written from 2026-08-11 on.** Before this
+## existed a director had no way to say "I failed" except putting the word in
+## its stdout, and `_run` ended in `quit(0)` unconditionally -- so sixteen of
+## the 136 directors were failing checks they had written for themselves and all
+## 136 exited 0 (card #72). An agent that wraps the command and reads `$?`, which
+## is the normal thing to do, recorded a pass on a director printing nine
+## failures.
+var fails := 0
 
 
 func _initialize() -> void:
@@ -448,7 +468,8 @@ func _run() -> void:
 			return
 		var director = director_script.new()
 		if director.has_method("run"):
-			await director.run(self)
+			var returned = await director.run(self)
+			_harvest_failures(director, returned)
 		else:
 			push_error("shoot.gd: director has no run(rig): %s" % director_path)
 			quit(4)
@@ -462,10 +483,76 @@ func _run() -> void:
 				await _wait_frames(gap)
 
 	print("SHOT_OK %s" % ", ".join(_out_paths))
+
+	# ONE canonical verdict line, whatever the director spelled its own failures.
+	# The eight spellings in the tree (`RELIC FAIL -- 9 check(s) failed`,
+	# `PAD FAIL z_target has no pad cap`, `HOUSE FAILED (3)`, prose, ...) are why
+	# card #72 rejected gating on a grep for "FAIL": that is a guess about a
+	# convention which does not exist, and the word also appears in directors'
+	# own legend text. This line is the convention.
+	if fails > 0:
+		print("DIRECTOR FAIL %d" % fails)
+		quit(EXIT_DIRECTOR_FAIL)
+		return
+	print("DIRECTOR OK")
 	quit(0)
 
 
+## Read the director's failure count out of whichever place it keeps one.
+##
+## Three routes, and the second and third exist only because 136 directors were
+## written before the first one did:
+##
+##  1. `rig.fail("...")` -- the protocol. New directors use this and nothing else.
+##  2. `return N` from `run()` -- an int return is a count of failures.
+##  3. an int `_fails` / `_fail` / `fails` on the director itself -- harvested,
+##     because 66 directors already keep one under one of those three names and
+##     rewriting all 66 in a single commit is how you get a silent typo in 66
+##     files. The other 51 print a failure and tally nothing; those have to be
+##     migrated to `fail()` one at a time, and until a director is migrated it
+##     still cannot fail its own run. `tools/director_selftally.sh` lists which.
+##
+## **A migrated director must DELETE its own counter**, because these add. That
+## is safe to state as a rule today: `fail()` is new, so nothing increments both.
+func _harvest_failures(director, returned) -> void:
+	if returned is int and returned > 0:
+		fails += returned
+
+	# `get()` on an absent property returns null quietly, but only for a property
+	# the class never declared -- so read the declaration list instead of
+	# guessing, and never confuse "declared 0" with "not declared".
+	var declared := {}
+	for p in director.get_property_list():
+		declared[p.get("name", "")] = true
+	for name in [&"_fails", &"_fail", &"fails"]:
+		if not declared.has(String(name)):
+			continue
+		var n = director.get(name)
+		if n is int and n > 0:
+			fails += n
+		# One counter per director. Two would be the same failures counted twice.
+		break
+
+
 # --- API available to director scripts -------------------------------------
+
+## Report a failed check. THIS is how a director fails its run (card #72).
+##
+## Prints the message with a stable prefix and counts it, so `_run` can end in a
+## non-zero status. A director that only `print`s its failures exits 0 and is
+## read as a pass by anything that checks the status instead of the prose.
+func fail(message: String) -> void:
+	fails += 1
+	print("FAIL %s" % message)
+
+
+## Assert `ok`, reporting `message` if it does not hold. Returns `ok`, so a beat
+## can stop rather than cascade -- see `mvp_loop`'s abort comment for why four
+## downstream failures caused by one upstream cause is worse than one.
+func check(ok: bool, message: String) -> bool:
+	if not ok:
+		fail(message)
+	return ok
 
 ## Wait n rendered frames.
 ##
