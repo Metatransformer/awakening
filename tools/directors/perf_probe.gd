@@ -137,10 +137,30 @@ func run(rig) -> void:
 	if rig.arg("win", "") != "":
 		print("PERF NOTE --win= is gone: --size resizes the real window now (#35)")
 
+	# `--internal=0` prices the same scene with STYLEGUIDE §4.5 turned off, so a
+	# tuning pass can put a number on the pipeline with the standard instrument
+	# instead of trusting `internal_res.gd`'s paired run. Two perf_probe runs
+	# minutes apart on this Mac are not a controlled comparison (see the header's
+	# second lesson) -- for that, use `internal_res.gd`, which shoots both inside
+	# one process.
+	if rig.arg("internal", "") != "":
+		Settings.set_internal_render(rig.arg("internal", "1") != "0")
+
 	var vp: RID = rig.root.get_viewport_rid()
+	# **THE WORLD IS NOT DRAWN BY THE ROOT VIEWPORT ANY MORE** (card #58,
+	# STYLEGUIDE §4.5): with `Settings.internal_render` on, the root draws a
+	# single textured quad and a 480x270 SubViewport draws the scene. Measure the
+	# root alone and `cpu_ms` collapses to ~0.2 ms and the probe reports a free
+	# renderer -- which is the exact "pinned at zero" failure the header above
+	# already caught once on `gpu_ms`. Both viewports are measured and summed.
+	var world_vp: RID = Settings._screen.viewport_rid() if Settings.internal_render else RID()
 	var was_vsync: int = DisplayServer.window_get_vsync_mode()
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	RenderingServer.viewport_set_measure_render_time(vp, true)
+	if world_vp.is_valid():
+		RenderingServer.viewport_set_measure_render_time(world_vp, true)
+		print("PERF §4.5 on -- cpu_ms/gpu_ms are root + the %v internal buffer"
+			% Settings._screen.internal_size())
 	await rig.wait_frames(WARM_DISCARD)
 
 	var gpu: Array[float] = []
@@ -172,8 +192,13 @@ func run(rig) -> void:
 		var now_us := Time.get_ticks_usec()
 		wall.append((now_us - last_us) / 1000.0)
 		last_us = now_us
-		gpu.append(RenderingServer.viewport_get_measured_render_time_gpu(vp))
-		cpu.append(RenderingServer.viewport_get_measured_render_time_cpu(vp))
+		var g := RenderingServer.viewport_get_measured_render_time_gpu(vp)
+		var c := RenderingServer.viewport_get_measured_render_time_cpu(vp)
+		if world_vp.is_valid():
+			g += RenderingServer.viewport_get_measured_render_time_gpu(world_vp)
+			c += RenderingServer.viewport_get_measured_render_time_cpu(world_vp)
+		gpu.append(g)
+		cpu.append(c)
 		# TIME_PROCESS IS NOT SCRIPT TIME. It is named `idle_step_ms` here because
 		# the first run that sampled it reported med=17.17 ms on frames whose
 		# whole wall clock was 16.25 ms, and a number cannot be a part of a frame
@@ -210,6 +235,8 @@ func run(rig) -> void:
 	var mem := Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0
 
 	RenderingServer.viewport_set_measure_render_time(vp, false)
+	if world_vp.is_valid():
+		RenderingServer.viewport_set_measure_render_time(world_vp, false)
 	DisplayServer.window_set_vsync_mode(was_vsync)
 
 	await rig.capture(out.path_join("perf_%s.png" % label))

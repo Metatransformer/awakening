@@ -171,6 +171,29 @@ var msaa: int = 0
 var shadow_quality: int = 2        ## 0=off 1=low 2=med 3=high
 var fov_offset: float = 0.0        ## added to K.CAM_FOV, -10 .. +15
 
+## **THE 480x270 INTERNAL BUFFER — docs/STYLEGUIDE.md §4.5, and this is the one
+## field that turns it on or off.**
+##
+## True renders the world into a fixed 480 x 270 SubViewport and presents it to
+## the window sharp-bilinear with §4.4's Bayer RGB555 dither applied at that
+## internal resolution; the HUD, the menus and the fade stay at native. False is
+## the renderer this project shipped with from the first commit until 2026-08-11:
+## everything at the window's resolution.
+##
+## It is a LOOK decision, not a performance one (§4.5 is most of what separates
+## "PSX" from "low-poly indie"), and it is decided on frames in §4.5. It happens
+## to be a large perf win as well, which is recorded there rather than here.
+##
+## Not persisted as a player preference on purpose: this is the game's look, not
+## a quality slider. `resolution_scale` is still the slider, and it now scales
+## the internal buffer rather than the window.
+var internal_render: bool = true
+
+## §4.5's SubViewport + present layer. Built in `_ready`, driven by
+## `apply_video()`, and the only thing in the project that reads
+## `internal_render`.
+var _screen: ScreenPresent = null
+
 # --- Gameplay / accessibility ----------------------------------------------
 var invert_camera_y: bool = false
 var camera_sensitivity: float = 1.0
@@ -224,6 +247,14 @@ func _ready() -> void:
 	# the pause screen is exactly where a player switches to a pad, and a paused
 	# node is not offered input at all.
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# §4.5's present pipeline. It lives under this autoload because it has no
+	# `[autoload]` line of its own -- `project.godot` is orchestrator-owned
+	# (CONTRACT §3) -- and because `apply_video()` below already owned the three
+	# viewport knobs it has to be handed. Built before `apply_all()`, which drives
+	# it on its first call.
+	_screen = ScreenPresent.new()
+	_screen.name = &"ScreenPresent"
+	add_child(_screen)
 	_capture_defaults()
 	load_settings()
 	apply_all()
@@ -399,15 +430,35 @@ func apply_video() -> void:
 	DisplayServer.window_set_vsync_mode(
 		DisplayServer.VSYNC_ENABLED if vsync else DisplayServer.VSYNC_DISABLED
 	)
+	var atlas: int = [0, 1024, 2048, 4096][clampi(shadow_quality, 0, 3)]
 	var vp := get_viewport()
 	if vp:
 		vp.scaling_3d_scale = clampf(resolution_scale, 0.5, 1.0)
 		vp.msaa_3d = clampi(msaa, 0, 3) as Viewport.MSAA
-		vp.positional_shadow_atlas_size = [0, 1024, 2048, 4096][clampi(shadow_quality, 0, 3)]
+		vp.positional_shadow_atlas_size = atlas
+	# The same three knobs on the viewport that is actually drawing 3D. They are
+	# pushed whether or not §4.5's pipeline is on, so flipping `internal_render`
+	# never loses the player's shadow or MSAA choice -- and the root keeps its
+	# copy for the same reason in reverse.
+	if _screen != null:
+		_screen.apply_video(msaa, atlas, resolution_scale)
+		_screen.set_enabled(internal_render)
 	# Directional shadows are a project setting, so they move via RenderingServer.
 	RenderingServer.directional_shadow_atlas_set_size(
 		[0, 2048, 4096, 8192][clampi(shadow_quality, 0, 3)], true
 	)
+
+
+## Flip §4.5's pipeline without going through `apply_video()`.
+##
+## `apply_video()` also re-asserts the window mode and the vsync mode, and a
+## director measuring frame times has deliberately turned vsync off — calling it
+## mid-run puts vsync back and every row after that reads 8.33 ms. This is the
+## same one field; it just does not drag the window with it.
+func set_internal_render(on: bool) -> void:
+	internal_render = on
+	if _screen != null:
+		_screen.set_enabled(on)
 
 
 # --- Controls ---------------------------------------------------------------
