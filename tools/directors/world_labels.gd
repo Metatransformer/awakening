@@ -587,7 +587,7 @@ func _moved(rig, lit: Image, hide_these: Array, path: String,
 		l.visible = true
 	await rig.wait_frames(2)
 	if bare == null or bare.get_size() != lit.get_size():
-		return {"n": -1, "cap": 0.0, "mush": 1.0}
+		return {"n": -1, "cap": 0.0}
 
 	# Pass one: which pixels moved, and how far the ink reaches.
 	var moved: Array[Vector2i] = []
@@ -730,18 +730,54 @@ func _stand_a_post(g: Node3D) -> Node3D:
 
 ## The captions hanging off `root`, in build order.
 ##
-## `WorldCaption` and not `Label3D` since card #61 — and the change is not a
-## rename. A `Label3D` still under one of these props would NOT be found here,
-## which is deliberate: the three captions this file measures are the ones that
-## moved to the canvas, and a new `Label3D` appearing under a keeper or a post
-## is a caption that went back into §4.5's buffer. `tools/directors/art_audit.gd`
-## is the file that would notice that; this one measures what it was pointed at.
+## **Both kinds, on purpose.** Card #61 moved these three onto the HUD canvas as
+## `WorldCaption`s, and the obvious edit here was to look for that class alone —
+## which would have made this file silently find nothing on the build it was
+## written to fail. It finds `Label3D`s too, so that pointing it at the commit
+## before #61, or at a caption somebody puts back in the world, produces a named
+## failure at beat 6 rather than an empty run. Every other beat is written
+## against whichever kind it got: see `_set_occluded` and `_raster_h`.
 func _labels_under(root: Node) -> Array:
 	var found: Array = []
 	for n in _all(root):
-		if n is WorldCaption:
+		if n is WorldCaption or n is Label3D:
 			found.append(n)
 	return found
+
+
+## Turn a caption's occlusion rule on or off, whichever build this is.
+##
+## `Label3D.no_depth_test` is the renderer's own flag and the one cards #26 and
+## #37 are about; `WorldCaption.occlude` is the line-of-sight ray that replaced
+## it when card #61 moved the text off the depth buffer and onto the canvas. The
+## claim being controlled for is identical, so one call site should not have to
+## know which it is holding.
+func _set_occluded(l: Node3D, on: bool) -> void:
+	if l is WorldCaption:
+		(l as WorldCaption).occlude = on
+	elif l is Label3D:
+		(l as Label3D).no_depth_test = not on
+
+
+## The height of the buffer this caption's glyphs were RASTERISED in.
+##
+## The frame's own height for a `WorldCaption`, which is drawn on the HUD canvas
+## after §4.5's present pass and is therefore 1:1 with the picture. 270 for a
+## `Label3D`, which is world geometry and goes through the internal buffer with
+## the masonry — unless the pipeline is off, in which case the world is drawn at
+## the frame's height and so was the glyph.
+##
+## This is the divisor beat 6 turns fourteen pixels of frame into five pixels of
+## type with, and it is the only part of that measurement that is not read off
+## the picture. It is knowledge the frame cannot carry: a 2.67x upscale of a
+## five-pixel glyph and a fourteen-pixel glyph occupy the same rectangle, which
+## is exactly why a count of ink could not tell them apart for a whole card.
+func _raster_h(l: Node3D, frame_h: float) -> float:
+	if l is WorldCaption:
+		return frame_h
+	if not bool(Settings.internal_render):
+		return frame_h
+	return INTERNAL_H
 
 
 func _hero(rig) -> Node3D:
