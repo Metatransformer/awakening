@@ -80,22 +80,29 @@ extends RefCounted
 ## is `heavy` pressed and released on the real bow, so the arrows are the room's
 ## and the count is the game's rather than this file's.
 ##
-## ## What the frames could NOT show, measured 2026-08-11
+## ## Why the counter was missing, and what it was, measured 2026-08-11 (#52)
 ##
 ## The card asked for the arrow counter photographed at zero before the urn and
-## non-zero after. **It is not on the screen.** `g_03_empty_quiver.png` and
-## `g_06_quiver_filled.png` are the same stance, the same cell and the same
-## lighting with the quiver at 0 and at 6, and at 6x magnification the hand cells
-## are pixel-alike: no numeral is drawn in any of the three. `Hud._draw_hands`
-## has the code for it (`ArmamentDb.hand_count(id)` -> `Game.ammo_count`, 10 px,
-## `Pal.BONE`, bottom-right of the cell) and the lookups it reads are both
-## correct here -- F3 and G6 assert exactly those two and pass -- so the numeral
-## is drawn by nothing or drawn somewhere nobody can see it. `hud.gd` is card
-## #19's file and mid-rewrite, so this file records the finding and does not
-## touch it. **F3 and G6 are claims about the LOOKUP, not about the frame**, and
-## they are labelled that way on purpose: a check whose wording outruns what the
-## screenshot beside it shows is how this project gets a passing director over a
-## broken feature.
+## non-zero after, and the first pair of frames did not have one. This file
+## reported that as "the numeral is never drawn" and card #52 was opened against
+## `Hud._draw_hands`. **The HUD was innocent.** `hud_lookdev.gd`'s
+## `h_13_quiver_empty` / `h_14_quiver_six` show the same numeral at 0 and at 6 at
+## a true 1280x720, in `Pal.BONE`, exactly where the code says it is.
+##
+## What was wrong was HERE. `ArmamentDb.hand_count` answers about the id **in the
+## hand**, and the id in the hand was `shield`: this director granted the bow and
+## never touched the left hand, whose pool default (`Game.LEFT_POOL`) is the
+## shield. The bow gets no numeral on purpose -- its own docstring says a bow cell
+## carrying the quiver's count would print the same number twice on one row -- so
+## both frames were photographs of a shield cell, correctly showing nothing.
+##
+## F3 and G6 asserted `ArmamentDb.hand_count(&"arrow")`, a call on a **string
+## literal**, which is true of the table whatever the hero is holding. That is the
+## whole lesson: a check that names a constant instead of the live state passes
+## while the frame beside it shows something else, and its label ("the cell's
+## lookup reads zero") is then read as a claim about the cell. They ask
+## `Game.armament(&"left")` now, and the quiver goes in that hand at the top of
+## `run` so the claim and the pixels are the same sentence.
 ##
 ## The cost of that is the aim, and it is worth knowing about: `HeroRanged`
 ## builds the shot from **the camera's ray** and aims the muzzle at whatever that
@@ -181,6 +188,18 @@ func run(rig) -> void:
 	Game.reset()
 	Run.enter(SEED)
 	Game.grant(&"bow")
+	# **The quiver into the LEFT hand**, which is the cell that counts arrows
+	# (`ArmamentDb.hand_count`). Without this the hand holds `Game.LEFT_POOL`'s
+	# default shield and there is no counter anywhere on the screen -- which is
+	# what card #52 was opened about, against the HUD. See the class note.
+	#
+	# `arrow` is only owned once the bow is (`Game.armament_owned`), so this has to
+	# come after the grant; `cycle_armament` skips what is not owned, which is why
+	# it is a loop over the pool and not one step.
+	for _i in Game.LEFT_POOL.size():
+		if Game.armament(&"left") == &"arrow":
+			break
+		Game.cycle_armament(&"left")
 
 	var d := await _rebuild(rig, LEVEL)
 	if d == null:
@@ -381,13 +400,13 @@ func _f_the_cold_start(rig, hero: Node3D, at: Node3D) -> void:
 	# of the bow's set, so a frame taken with the sword out would photograph a
 	# sword and prove that the checks had run.
 	#
-	# **This is the LOOKUP the cell reads, and not the pixels.** See the class
-	# note -- the numeral is not currently drawn, so this frame and G6's are the
-	# honest record of the two states and not a reading of a counter.
-	_ck("F3 and the cell's lookup reads zero (%s = %d)"
-		% [ArmamentDb.hand_count(&"arrow"), Game.ammo_count(&"arrows")],
-		ArmamentDb.hand_count(&"arrow") == &"arrows"
-		and Game.ammo_count(&"arrows") == 0)
+	# Asked of `Game.armament(&"left")` -- THE HAND -- and not of the string
+	# `&"arrow"`. The literal version of this line passed for a run in which the
+	# hero was holding a shield (#52, and the class note).
+	var counted := ArmamentDb.hand_count(Game.armament(&"left"))
+	_ck("F3 and the cell counts them, at zero (%s hand, %s = %d)"
+		% [Game.armament(&"left"), counted, Game.ammo_count(&"arrows")],
+		counted == &"arrows" and Game.ammo_count(&"arrows") == 0)
 	await rig.capture(out.path_join("g_03_empty_quiver.png"))
 
 
@@ -483,13 +502,14 @@ func _g_the_sword_breaks_it(rig, hero: Node3D, pot: Node3D,
 		+ "second dead end (%d)" % Game.arrows, Game.arrows == SUPPLY)
 	# Non-zero now, in the same cell and the same stance as F3, so the two frames
 	# differ in one thing only. The ring goes back on the bow BEFORE the shutter
-	# for that reason. As at F3 this is the LOOKUP and not the pixels -- see the
-	# class note.
+	# for that reason.
 	var back_on_the_bow: bool = await rig.draw_weapon(&"bow")
-	_ck("G6 and the cell's lookup reads six (bow in hand=%s, %s = %d)"
-		% [back_on_the_bow, ArmamentDb.hand_count(&"arrow"),
+	var counted := ArmamentDb.hand_count(Game.armament(&"left"))
+	_ck("G6 and the cell counts them, at six (bow in hand=%s, %s hand, %s = %d)"
+		% [back_on_the_bow, Game.armament(&"left"), counted,
 			Game.ammo_count(&"arrows")],
-		back_on_the_bow and Game.ammo_count(&"arrows") == SUPPLY)
+		back_on_the_bow and counted == &"arrows"
+		and Game.ammo_count(&"arrows") == SUPPLY)
 	await rig.wait_frames(24)
 	await rig.capture(out.path_join("g_06_quiver_filled.png"))
 
