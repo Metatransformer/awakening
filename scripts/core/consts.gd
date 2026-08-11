@@ -315,6 +315,98 @@ const HITSTOP_HEAVY := 9
 const KNOCKBACK_LIGHT := 4.0
 const KNOCKBACK_HEAVY := 8.0
 
+# --- The weight of a blow ----------------------------------------------------
+## **Everything an impact does reads off ONE number**, and `Hit.knockback` is
+## already it: how hard this blow shoved. Every swing in the kit sets it, so
+##
+##     weight = (knockback - KNOCKBACK_LIGHT) / (KNOCKBACK_HEAVY - KNOCKBACK_LIGHT)
+##
+## clamped to 0..1, is 0 for a jab and 1 for anything the player paid commitment
+## for -- the chain finisher, the overhead, the spin, the lunge, the slam. The
+## burst at the impact site, the screen shake, the hit-stop and the chance of a
+## launch are all scaled by that one number.
+##
+## One number rather than a per-move table on purpose. A table is a thing that
+## goes stale the first time a move is retuned, and the failure it ships is a
+## spin that shoves a body across the room under a jab's puff of dust. This
+## cannot fall out of step with itself, because there is nothing to keep in step.
+##
+## Enemy contact hitboxes carry KNOCKBACK_LIGHT, so a monster's blow is always
+## weight 0: monsters cannot launch each other, and the hero taking a hit does
+## not get the crit treatment meant for landing one.
+
+## Trauma a jab asks for, against a committed blow. `Feel`'s own docstring sets
+## the scale -- "0.2 a tap, 0.5 a solid hit" -- and `Enemy` was asking **0.52 for
+## every landed blow including the cheapest jab in the game**. Trauma
+## ACCUMULATES in Feel and the light chain lands three inside 1.2 s, so the
+## cheapest attack available pinned the camera at maximum. A tap is a twitch.
+## **In pixels, because trauma is squared and nobody can judge it otherwise.**
+## `Feel` squares trauma before it moves anything and `MAX_OFFSET` is 1.4, so the
+## image moves `t^2 * 1.4 * 37.5` px (`monster_feel.gd`'s measured PX_PER_OFFSET):
+##
+##   jab       0.26 ->  3.5 px      committed  0.46 -> 11.1 px
+##   crit      0.72 -> 27.2 px      the old flat 0.52 -> 14.2 px, for everything
+##
+## The first cut of this put the tap at 0.16 and `monster_feel` caught it: 0.4 px
+## is not a reeled-in shake, it is no shake, and the director that measures the
+## image in pixels rather than in trauma is the only reason that was visible at
+## all. A jab should be *cheap*, not absent.
+##
+## The accumulation is the other half. Three jabs land inside 1.2 s and Feel sums
+## them: at 0.52 each that is 1.56, clamped to a saturated 1.0, so the cheapest
+## attack in the game held the camera at maximum and left the spin nothing to
+## escalate to. At 0.26 the same chain peaks under 0.8 and decays between steps.
+const SHAKE_TAP := 0.26    # [tune]
+const SHAKE_HIT := 0.46    # [tune]
+## The crit. Above SHAKE_HIT because a launch is the one blow in the game where
+## a body leaves the ground, and the screen should agree with the body. [tune]
+const SHAKE_CRIT := 0.72
+
+# --- The launch --------------------------------------------------------------
+## Nothing in this game could leave the ground before this: `Enemy._tick_hurt`
+## wrote velocity.x and velocity.z and never y, so the heaviest blow in the kit
+## shoved a body a metre along the floor and it walked back at you.
+##
+## The body height a launch is tuned against -- the skeleton, the middle of the
+## roster. Everything below scales by `LAUNCH_MASS_REF / _height()`, so mass
+## needs no table: `Enemy._height()` already separates a 1.25 m goblin from a
+## 2.60 m troll, and an elite is that height times `Prog.ELITE_SCALE`, so the
+## bigger variant resists being thrown for free.
+const LAUNCH_MASS_REF := 1.70
+## Chance a committed blow sends a REFERENCE-mass body flying, scaled by the
+## SQUARE of the mass ratio. Squared, where the speeds below are linear, because
+## "less common for the big guys" should read more strongly than "less far" --
+## at 0.38 that is roughly two heavy blows in three on a goblin, one in three on
+## a skeleton, and one in seven on a troll.
+const LAUNCH_CHANCE := 0.38        # [tune]
+## Nothing is ever certain and nothing is ever impossible. A guaranteed launch
+## stops being an event; a troll that can never be thrown teaches the player the
+## move does not work on big bodies, which is not true.
+const LAUNCH_CHANCE_MIN := 0.05
+const LAUNCH_CHANCE_MAX := 0.85
+## Straight up, m/s, at reference mass. Against GRAVITY = 22 this apexes at
+## v^2/2g = 0.99 m and stays airborne 2v/g = 0.60 s -- deliberately just past the
+## hero's own JUMP_SPEED arc (0.96 m, 0.59 s), so a launched body plainly
+## outflies anything he can do on his own legs. A goblin scales it by 1.36
+## (1.83 m, 0.82 s) and a troll by 0.65 (0.42 m, 0.39 s): one sails, one hops.
+const LAUNCH_UP := 6.6             # [tune]
+## And away from the blow, m/s, at reference mass. Over a 0.60 s flight that is
+## 3.3 m of ground -- a fifth of a 16 m room, so a launched body lands somewhere
+## you have to walk to rather than back at your feet.
+const LAUNCH_OUT := 5.5            # [tune]
+## Degrees/sec the model tumbles while airborne, at reference mass. About two
+## turns across a goblin's flight and under one across a troll's, which is most
+## of the difference between reading as *thrown* and reading as *shoved*.
+const LAUNCH_SPIN := 780.0         # [tune]
+## How much of the landing speed comes back as a second, smaller hop. **One
+## bounce only** -- see `Enemy._tick_flight`. A body that pinballs is a physics
+## bug wearing a feature, and the second hop is what sells the first as weight.
+const LAUNCH_BOUNCE := 0.34        # [tune]
+## Seconds a LIVING body lies there after it lands before it gets up. This is the
+## reward for the launch and the reason it is worth spending a committed swing
+## on: the thing is out of the fight for a moment, and you chose where it went.
+const LAUNCH_DOWN := 0.55          # [tune]
+
 ## Seconds a struck monster is held in its reel. **This is the flinch**, and it
 ## has to be read against the clip and not against the number: the shared roster
 ## library's `hurt` is 0.60 s, and `Enemy._play` cross-fades into it. So a reel

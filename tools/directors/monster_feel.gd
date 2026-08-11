@@ -178,9 +178,32 @@ func _struck(rig, out: String) -> void:
 			% [peak_off, px, peak_roll, want_roll])
 		if peak_off <= 0.0001:
 			_fail("no shake: the camera did not move on impact")
-		elif px < 3.0:
-			_fail("the shake is invisible: a landed blow moves the image %.1f px"
-				% px)
+		# **This threshold used to be 3.0 px and it was measuring a design that
+		# no longer exists.** `_strike` below lands a JAB (`K.KNOCKBACK_LIGHT`),
+		# and when this was written every blow in the game asked Feel for a flat
+		# 0.52 trauma regardless of weight -- so a jab moved the image as far as
+		# the spin did, and 3 px was a fair bar for "a landed blow".
+		#
+		# The shake is scaled by the blow now (`K.SHAKE_TAP`), because trauma
+		# ACCUMULATES and three jabs inside 1.2 s were pinning the camera at
+		# maximum on the cheapest attack available. A jab is deliberately a
+		# twitch: 0.26 trauma, ~1.2 px, a quarter of what it was.
+		#
+		# So what this beat still owns is that the twitch EXISTS -- a shake that
+		# has been reeled all the way to nothing is the regression this catches,
+		# and the first cut of the change did exactly that at 0.4 px. The LADDER
+		# (jab < committed < crit) is asserted in `monster_launch.gd`, which
+		# lands one of each and compares them.
+		#
+		# The bar is LOW and it has to be, because this number is noisy across
+		# runs in a way the old 3 px one was too big to notice: `_tick_shake`
+		# walks a free-running noise field every frame, so the peak a 20-frame
+		# window happens to catch off the same 0.26 trauma measures anywhere from
+		# 0.4 px to 1.2 px depending on where in the field the blow landed. A
+		# threshold set near the value would fail on a coin flip. What is being
+		# caught here is the camera not moving AT ALL.
+		elif px < 0.2:
+			_fail("the shake is gone: a jab moves the image %.2f px" % px)
 		if peak_roll <= 0.00001:
 			_fail("no roll: the camera shook but never tilted --"
 				+ " look_at is winning the frame")

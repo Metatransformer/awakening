@@ -921,8 +921,22 @@ func _physics_process(delta: float) -> void:
 func _on_damaged(hit: Hit) -> void:
 	if state == State.DEAD:
 		return
-	Bus.request_hitstop.emit(K.HITSTOP_LIGHT)
-	Bus.request_shake.emit(0.52, 0.16)
+	# Scaled by the blow like every other body's (`Enemy._on_damaged`, and
+	# `K.SHAKE_TAP` for the argument). This asked for 0.52 trauma on every hit
+	# too, so chipping away at a boss with the light chain -- which is most of
+	# what a boss fight IS -- held the camera at maximum trauma for the whole
+	# fight and left the beats nothing to escalate to.
+	#
+	# The IMPACT scales; the STATE still does not. That is poise, and it is the
+	# whole point of this override.
+	var weight := blow_weight(hit.knockback)
+	Bus.request_hitstop.emit(int(roundf(
+		lerpf(float(K.HITSTOP_LIGHT), float(K.HITSTOP_HEAVY), weight))))
+	Bus.request_shake.emit(lerpf(K.SHAKE_TAP, K.SHAKE_HIT, weight),
+		lerpf(0.12, 0.2, weight))
+	# The mark at the spot. A boss gets the scuff and never the star: the star is
+	# the crit, the crit is the launch, and `_can_launch` refuses it one.
+	ImpactVfx.spawn(get_tree().current_scene, _impact_point(hit.from), weight)
 	# Cleared before the flash for the reason `Enemy._on_damaged` gives: the white
 	# supersedes the wind-up glow, and a flag left set would have the guard in
 	# `_physics_process` restore over it next frame. A tell in progress simply
@@ -941,6 +955,15 @@ func freeze(_seconds: float = K.HOOK_FREEZE) -> void:
 	if state == State.DEAD:
 		return
 	Bus.request_sfx.emit(&"hit_armor", global_position)
+
+
+## And neither does a blow throw it. Same argument as poise above, one step
+## further: a beat the player can knock the boss out of is a beat they can
+## delete, and the arena is authored around a body that stays in it. The corpse
+## does not fly either -- `Enemy._on_died` launches every other kill, and a boss
+## sliding into the scenery would take its placed relic with it (`_drop_loot`).
+func _can_launch() -> bool:
+	return false
 
 
 func _on_died() -> void:

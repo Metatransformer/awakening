@@ -18,7 +18,7 @@ extends CharacterBody3D
 
 signal died_at(position: Vector3)
 
-enum State { IDLE, CHASE, CIRCLE, WINDUP, STRIKE, RECOVER, HURT, FROZEN, DEAD }
+enum State { IDLE, CHASE, CIRCLE, WINDUP, STRIKE, RECOVER, HURT, LAUNCHED, FROZEN, DEAD }
 
 const LIBRARY := "res://assets/animations/monster_library.res"
 const MODEL_DIR := "res://assets/monsters/"
@@ -134,6 +134,13 @@ var _struck: bool = false
 ## `&"bomb"`, `&"contact"`, `&"fire"` (`docs/CONTRACT.md` §8). Written by
 ## `_on_damaged` and read once, by `_die`, for the Returning Shaft.
 var _last_hit_kind: StringName = &""
+## Which way the last blow pushed, and how hard it was (`blow_weight`). Stamped
+## by `_on_damaged` and read by `_on_died`, which launches every corpse along the
+## blow that killed it — so a body jabbed to death slumps and one finished with
+## the spin sails. `_knockback` cannot be used for this: `_launch` zeroes it, and
+## on a killing crit it is already zero by the time `died` fires.
+var _last_hit_dir: Vector3 = Vector3.ZERO
+var _last_hit_weight: float = 0.0
 ## What this one hits for, after the floor's curve and the elite bonus. Resolved
 ## once in `_build_combat` because the wind-up re-arms the hitbox on every swing
 ## and two places computing the same curve is one place to forget it.
@@ -163,6 +170,27 @@ var _frozen: bool = false
 ## blue am I".
 var _freeze_left: float = 0.0
 var _freeze_total: float = 0.0
+
+# --- The launch -------------------------------------------------------------
+## True from the moment a blow throws this body until it comes to rest.
+##
+## Tracked as a FLAG and not read off the state, because the two states that can
+## be airborne want completely different things from the rest of this file:
+## LAUNCHED is a living body that will get up, and DEAD is a corpse that will
+## not. Both fly on the same arc, and `_tick_flight` is the one piece of code
+## that knows how.
+var _airborne: bool = false
+## Seconds this body has been off the ground. Only used to keep the landing check
+## from firing on the launch frame itself, where `is_on_floor()` is still true.
+var _air: float = 0.0
+## Radians/sec the MODEL tumbles while airborne, signed. On the model and never
+## on the body, for the reason `_flinch` gives: the body's yaw is the facing
+## contract everything else reads (`docs/CONTRACT.md` §2.5).
+var _tumble: float = 0.0
+## One bounce, ever. See `_tick_flight`.
+var _bounced: bool = false
+## Seconds a landed body stays down before it gets up. Living bodies only.
+var _down: float = 0.0
 
 
 static func spawn(parent: Node3D, p_kind: StringName, at: Vector3, seed_val: int) -> Enemy:
@@ -418,8 +446,19 @@ func _clip_speed(clip: StringName, seconds: float) -> float:
 
 func _physics_process(delta: float) -> void:
 	if state == State.DEAD:
-		velocity = Vector3(0, velocity.y - K.GRAVITY * delta, 0)
+		# A corpse that was thrown finishes its arc. `_on_died` launches every
+		# kill, so this is the usual path and not the exception -- and it has to
+		# be checked BEFORE the line below, which zeroes the horizontal velocity
+		# and would drop every launched body straight down out of the air.
+		if _airborne:
+			_tick_flight(delta)
+		else:
+			velocity = Vector3(0, velocity.y - K.GRAVITY * delta, 0)
 		move_and_slide()
+		# NOT `rotation.y = _facing`: a corpse mid-flight is being tumbled by
+		# `_tick_flight` and re-stamping the yaw here is harmless, but the DEAD
+		# branch has always returned before that line and the sink tween below
+		# depends on nothing else touching this transform.
 		return
 
 	_cooldown = maxf(_cooldown - delta, 0.0)
@@ -460,10 +499,20 @@ func _physics_process(delta: float) -> void:
 			_tick_recover(delta)
 		State.HURT:
 			_tick_hurt(delta)
+		State.LAUNCHED:
+			_tick_launched(delta)
 		State.FROZEN:
 			_tick_frozen(delta)
 
-	if not is_on_floor():
+	# ONE owner for the vertical, chosen by whether this body is in the air.
+	#
+	# The `_airborne` arm is not defensive. A launch is set up on a frame where
+	# the body is still standing ON the ground, so the floor clamp below would
+	# overwrite the upward velocity between the blow and the next frame -- and
+	# every launch in the game would be a monster sliding along the floor.
+	if _airborne:
+		_tick_flight(delta)
+	elif not is_on_floor():
 		velocity.y -= K.GRAVITY * delta
 	else:
 		velocity.y = -0.5
@@ -760,6 +809,195 @@ func _tick_hurt(delta: float) -> void:
 		state = State.CHASE
 
 
+# --- The launch -------------------------------------------------------------
+## What a committed blow does that a jab does not: it takes the body off the
+## ground. This is the game's critical hit — there is no separate crit roll and
+## no crit multiplier, because a launch already IS the thing a crit is for. The
+## screen shakes harder, the world stops longer, a star goes off at the contact
+## point and the monster is out of the fight while it flies and while it gets up.
+##
+## Two ways in, and they are deliberately different:
+##
+##   * **A living body** is launched by CHANCE, on committed blows only, and the
+##     odds are the square of the mass ratio (`K.LAUNCH_CHANCE`). A goblin flies
+##     two heavy blows in three; a troll flies one in seven.
+##   * **A death always launches**, with no roll, because the force is already
+##     continuous — a body killed by a jab barely leaves the floor and one killed
+##     by the spin sails. A coin flip on top of that would only mean some kills
+##     end with a corpse standing perfectly still, which is the one thing a kill
+##     must never look like.
+
+## May this body be thrown at all? True for a monster; `Boss` says no.
+##
+## An INSTANCE method, not a static, and CLAUDE.md §3 is why: a bare static call
+## written inside this class binds to `Enemy`'s copy at parse time and the
+## subclass's override never runs, silently. Same reason `_resolve_def` is one.
+##
+## A boss is a set-piece in an authored arena — it has poise (`Boss._on_damaged`
+## does not even take the state), its beats are what the fight is, and a body
+## that can be knocked out of one is a fight the player can delete. The corpse
+## does not fly either: the arena unseals around it and the drop is placed where
+## it fell, so a boss sliding into a wall is a relic behind the scenery.
+func _can_launch() -> bool:
+	return true
+
+
+## How hard `knock` shoved, as 0..1. See `K.SHAKE_TAP` for why every channel of
+## an impact reads this one number. Public and static so a director can assert on
+## the same value the game used, rather than on a re-derivation of it.
+static func blow_weight(knock: float) -> float:
+	var span := K.KNOCKBACK_HEAVY - K.KNOCKBACK_LIGHT
+	if span <= 0.0:
+		return 0.0
+	return clampf((knock - K.KNOCKBACK_LIGHT) / span, 0.0, 1.0)
+
+
+## `K.LAUNCH_MASS_REF / _height()`. Above 1 for the small bodies, below 1 for the
+## big ones, and an elite is scaled taller so it resists for free.
+func _mass_ratio() -> float:
+	return K.LAUNCH_MASS_REF / maxf(_height(), 0.4)
+
+
+## Roll for it. True if this blow threw the body, in which case the caller must
+## not also put it into HURT — `_launch` has already taken the state.
+func _try_launch(away: Vector3, weight: float) -> bool:
+	if weight <= 0.0 or state == State.DEAD or not _can_launch():
+		return false
+	var odds := clampf(K.LAUNCH_CHANCE * pow(_mass_ratio(), 2.0) * weight,
+		K.LAUNCH_CHANCE_MIN, K.LAUNCH_CHANCE_MAX)
+	if _rng.randf() > odds:
+		return false
+	_launch(away, weight)
+	return true
+
+
+## Throw this body along `away` at a force set by the blow and the body's mass.
+##
+## Safe to call on a corpse — `_on_died` does exactly that — and the state is
+## only taken for a LIVING one, because DEAD outranks it and a corpse must not be
+## resurrected into LAUNCHED by its own killing blow.
+func _launch(away: Vector3, weight: float) -> void:
+	var dir := K.flat(away)
+	if dir == Vector3.ZERO:
+		dir = Vector3(0, 0, 1).rotated(Vector3.UP, _facing)
+	var mass := _mass_ratio()
+	# Linear in the mass ratio where the ODDS are squared: "less far for big
+	# guys" is real but it is the smaller half of the read. See K.LAUNCH_CHANCE.
+	var force := mass * (0.45 + 0.55 * weight)
+
+	velocity.x = dir.x * K.LAUNCH_OUT * force
+	velocity.z = dir.z * K.LAUNCH_OUT * force
+	velocity.y = K.LAUNCH_UP * force
+
+	_airborne = true
+	_air = 0.0
+	_bounced = false
+	_knockback = Vector3.ZERO
+	# Which way it spins is which way it was hit, so a body knocked to the left
+	# and one knocked to the right do not perform the same canned somersault.
+	var right := Vector3(cos(_facing), 0.0, -sin(_facing))
+	var side := signf(right.dot(dir))
+	if side == 0.0:
+		side = 1.0
+	_tumble = deg_to_rad(K.LAUNCH_SPIN) * mass * side
+
+	# The wind-up is off the table: a monster thrown mid-commit must not land
+	# still holding the swing. Same argument as `freeze`, and the same fix.
+	if _struck and _hitbox != null:
+		_hitbox.deactivate()
+		_struck = false
+	_kill_recoil()
+	if state != State.DEAD:
+		state = State.LAUNCHED
+		# It cannot swing the instant it gets up either -- the launch is supposed
+		# to buy the player the moment it costs to land one.
+		_cooldown = maxf(_cooldown, K.LAUNCH_DOWN + 0.35)
+
+
+## Alive and in the air. The arc is `_tick_flight`'s; this only decides what
+## happens once it stops, which is the half a corpse does not want.
+func _tick_launched(delta: float) -> void:
+	if _airborne:
+		return
+	# Down, then up. `_down` is set by `_land`.
+	_down -= delta
+	_stop()
+	if _down <= 0.0:
+		state = State.CHASE
+
+
+## The arc, shared by a living body and a corpse. Owns the vertical while
+## `_airborne` is set — see the call site in `_physics_process`.
+##
+## Horizontal velocity is left ALONE rather than damped: air does not slow a
+## thrown goblin down enough to matter over 0.8 s, and `_separation`'s crowd
+## shove is deliberately not applied here. A launched body being nudged by the
+## monsters it flies past is an arc that bends for no reason the player can see.
+func _tick_flight(delta: float) -> void:
+	_air += delta
+	velocity.y -= K.GRAVITY * delta
+	if _model != null:
+		_model.rotation.x += _tumble * delta
+
+	# `_air` guards the launch frame, where the body has upward velocity but has
+	# not left the ground yet and `is_on_floor()` is still true.
+	if _air < 0.05 or not is_on_floor():
+		return
+
+	# One bounce, and only off a landing hard enough to earn it. A second would
+	# be a body pinballing around the room, which reads as a physics bug rather
+	# than as weight.
+	var speed := absf(velocity.y)
+	if not _bounced and speed > 3.0:
+		_bounced = true
+		_air = 0.0
+		velocity.y = speed * K.LAUNCH_BOUNCE
+		velocity.x *= 0.45
+		velocity.z *= 0.45
+		_tumble *= 0.4
+		Bus.request_sfx.emit(&"land", global_position)
+		return
+	_touch_down()
+
+
+## Down, and everything the landing owes the player.
+func _touch_down() -> void:
+	_airborne = false
+	_air = 0.0
+	_tumble = 0.0
+	velocity.x = 0.0
+	velocity.z = 0.0
+	_down = K.LAUNCH_DOWN
+	# Back to rest, always. A body left at whatever pitch the tumble stopped on
+	# is a monster that gets up and walks around lying on its side.
+	if _model != null:
+		_kill_recoil()
+		_recoil = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		_recoil.tween_property(_model, ^"rotation:x", _model_rest.x, 0.3)
+	# The landing is the punchline of the launch and it needs a noise and a
+	# nudge, or a body arrives back on the floor silently and the throw ends on
+	# nothing. Heavier bodies land harder -- height is already the number that
+	# says which is which, exactly as it is for the swing sound.
+	var heavy := _height() >= 1.70
+	Bus.request_sfx.emit(&"land_hard" if heavy else &"land", global_position)
+	Bus.request_shake.emit(0.24 if heavy else 0.16, 0.16)
+
+
+## Where on the body a blow landed, in world space: the point on its near surface
+## facing whatever hit it, at chest height.
+##
+## `Hit.from` is the ATTACKER's hitbox centre, not a contact point — a sword's
+## DamageArea is a sphere hanging off the hero, so drawing the burst there would
+## put it on the hero's blade rather than on the thing that got hit. The radius
+## below is `_build_body`'s capsule radius, so the mark sits on the silhouette.
+func _impact_point(from: Vector3) -> Vector3:
+	var chest := global_position + Vector3.UP * (_height() * 0.55)
+	var toward := K.flat(from - chest)
+	if toward == Vector3.ZERO:
+		return chest
+	return chest + toward * clampf(_height() * 0.22, 0.22, 0.55)
+
+
 # --- The freeze -------------------------------------------------------------
 ## What the hookshot does to a body. Not damage — `HealthComponent.apply_hit`
 ## refuses a zero-quarter blow outright, and it should: a chain with a barb on
@@ -787,6 +1025,13 @@ func freeze(seconds: float = K.HOOK_FREEZE) -> void:
 		_struck = false
 	_stop()
 	_knockback = Vector3.ZERO
+	# Hooked out of the air. The arc ends where the chain caught it and the body
+	# drops rather than completing the throw — leaving `_airborne` set would have
+	# `_tick_flight` keep flying it across the room while it sat there frozen and
+	# blue, which is the freeze visibly not working.
+	_airborne = false
+	_air = 0.0
+	_tumble = 0.0
 	_kill_recoil()
 	if _model != null:
 		# Back to rest before the ice, not left mid-lean: the pose a body holds
@@ -887,9 +1132,23 @@ func _on_damaged(hit: Hit) -> void:
 	# was decoration. The push NEVER shortens an existing cooldown -- `maxf` --
 	# or a flurry of light hits would be a way to make an orc attack faster.
 	var interrupted := state == State.WINDUP
-	state = State.HURT
-	_timer = maxf(hit.stun, 0.22)
-	_cooldown = maxf(_cooldown, _timer + (0.45 if interrupted else 0.2))
+	_last_hit_dir = dir
+
+	# **How hard this one hit, as one number** (`K.SHAKE_TAP`). Everything below
+	# is scaled by it, so a jab and the spin cannot end up wearing each other's
+	# feedback and there is no per-move table to keep in step.
+	var weight := blow_weight(hit.knockback)
+	_last_hit_weight = weight
+	# The crit IS the launch. Rolled before the feedback rather than after,
+	# because every channel below wants to know: a blow that threw the body gets
+	# the star, the longer stop and the bigger shake, and one that did not gets a
+	# scuff. Two rolls would be two answers to one question.
+	var crit := _try_launch(dir, weight)
+
+	if not crit:
+		state = State.HURT
+		_timer = maxf(hit.stun, 0.22)
+	_cooldown = maxf(_cooldown, maxf(_timer, 0.22) + (0.45 if interrupted else 0.2))
 	# Two reels, and which one is the size of the blow rather than the name of the
 	# attack. `hurt_heavy` is 0.87 s against `hurt`'s 0.60 -- a bigger movement, so
 	# a finisher, a spin or an overhead reads as a different event from a jab
@@ -908,14 +1167,30 @@ func _on_damaged(hit: Hit) -> void:
 	# animation lengths.
 	var heavy := hit.amount >= K.HEART
 	var clip: StringName = &"hurt_heavy" if heavy else &"hurt"
-	_play(clip, false, _clip_speed(clip, _timer), 0.04)
+	_play(clip, false, _clip_speed(clip, maxf(_timer, 0.22)), 0.04)
 
 	# What a blow is made of, in the order the player receives it: the world
 	# stops, the body goes white, it reels, the camera kicks, and it makes a
 	# noise. Every one of these is a request -- Feel and Sfx own the answers, so
 	# nothing here holds a player or a camera (docs/CONTRACT.md §8).
-	Bus.request_hitstop.emit(K.HITSTOP_LIGHT)
-	Bus.request_shake.emit(0.52, 0.16)
+	#
+	# **All of it scales with `weight` now, and the shake is why.** This asked for
+	# 0.52 trauma on EVERY landed blow including the cheapest jab in the game --
+	# and `Feel` accumulates trauma while the light chain lands three hits inside
+	# 1.2 s, so the weakest attack available pinned the camera at maximum and
+	# there was nothing left for the spin to escalate to. Feel's own scale reads
+	# "0.2 a tap, 0.5 a solid hit"; a tap is now a twitch and the committed blows
+	# have the top of the range to themselves.
+	Bus.request_hitstop.emit(K.HITSTOP_HEAVY if crit
+		else int(roundf(lerpf(float(K.HITSTOP_LIGHT), float(K.HITSTOP_HEAVY), weight))))
+	Bus.request_shake.emit(
+		K.SHAKE_CRIT if crit else lerpf(K.SHAKE_TAP, K.SHAKE_HIT, weight),
+		lerpf(0.12, 0.2, weight))
+	# The mark at the spot, which is the one channel that says WHERE it landed
+	# rather than only that it did. Parented to the scene and not to this body:
+	# a launched monster leaves at 6 m/s and a burst riding its chest would fly
+	# away with it, when the whole point is that the hit happened HERE.
+	ImpactVfx.spawn(get_tree().current_scene, _impact_point(hit.from), weight, crit)
 	# Cleared before the flash, not after: the white supersedes any wind-up glow
 	# and any ice, and leaving a flag set would have the guard restore over it
 	# next frame. Hitting a frozen monster therefore THAWS it — it takes the blow
@@ -924,7 +1199,11 @@ func _on_damaged(hit: Hit) -> void:
 	_glowing = false
 	_thaw_body()
 	_flash.hit()
-	_flinch(dir)
+	# Not on a crit: the reel is a tween on the model's rotation and the tumble is
+	# writing that same property every frame. Two owners of one transform is a
+	# body that twitches in mid-air instead of somersaulting.
+	if not crit:
+		_flinch(dir)
 	# The noise is NOT requested here. `hit_landed` already says exactly what
 	# happened and where, and Sfx owns the signal->sound table -- an enemy that
 	# picked its own impact sound is how the goblin ends up louder than the orc
@@ -995,10 +1274,29 @@ func _on_died() -> void:
 	_flash.clear()
 	if _model != null:
 		_model.rotation = _model_rest
+
+	# **Every kill throws the body**, along the blow that killed it and scaled by
+	# how hard that blow was — so a monster jabbed to death crumples where it
+	# stood and one finished with the spin is launched across the room. No roll
+	# here, unlike a living body (`_try_launch`): the force is already continuous,
+	# and a coin flip on top of it would only mean some kills end with a corpse
+	# standing perfectly still, which is the one thing a kill must never look
+	# like.
+	#
+	# Guarded, because the killing blow may ALREADY have launched this body as a
+	# crit while it was alive. Re-launching would add a second impulse to a corpse
+	# mid-flight and bend the arc in the air.
+	if not _airborne and _can_launch():
+		# `+ 0.35` so even a jab-kill leaves the floor a little. A corpse that
+		# only ever slumps when you finish it cheaply is honest; one that never
+		# moves at all reads as the body freezing on the frame it died.
+		_launch(_last_hit_dir, minf(_last_hit_weight + 0.35, 1.0))
+
 	# A kill is a heavier event than a hit and has to feel like one. Sfx already
-	# answers `enemy_died`; this is the part of it the screen does.
+	# answers `enemy_died`; this is the part of it the screen does. Scaled by the
+	# killing blow like everything else -- see `_on_damaged`.
 	Bus.request_hitstop.emit(K.HITSTOP_HEAVY)
-	Bus.request_shake.emit(0.68, 0.26)
+	Bus.request_shake.emit(lerpf(0.38, 0.68, _last_hit_weight), 0.26)
 
 	_drop_loot()
 	# The Returning Shaft (`EchoDb.RETURNING_SHAFT`): an arrow is recovered from
