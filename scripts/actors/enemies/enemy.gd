@@ -870,6 +870,20 @@ func _tick_chase(delta: float) -> void:
 		_struck = false
 		_stop()
 		_play(&"attack_1")
+		# THE TELL HAS A NOISE NOW, and it is the half that was missing. The lean
+		# and the glow `_tick_windup` drives are only legible to a player who is
+		# already looking at this monster -- and in a crowd, on the floor this
+		# game puts you on, that is one of them at a time. The one sound the
+		# fight made was `swing`, emitted on the frame `_hitbox.activate()` is
+		# called, which is not a warning: by the time you hear it the blow is
+		# live and `K.PARRY_WINDOW` is already draining.
+		#
+		# One sound for every kind, deliberately, where the commit splits by
+		# weight (`swing` / `swing_heavy`). The commit's job is to say what hit
+		# you; this one's job is to be LEARNED, and a cue the player has to learn
+		# nine times is not a cue. The thief's grab has done this since it landed
+		# -- see the branch above, and its comment.
+		Bus.request_sfx.emit(&"attack_prepare", global_position)
 		return
 
 	# Stop short of the hero's own capsule so a crowd does not shove him around.

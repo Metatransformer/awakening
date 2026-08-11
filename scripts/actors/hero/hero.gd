@@ -436,14 +436,40 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## every `slash` is an arc, and an arc played on a lunge reads as a man swinging
 ## at the air beside the thing he just closed on.
 @export var clip_dash: StringName = &"ss_attack_03"
-## The parry — the shield thrown forward out of a braced crouch. It is NOT one
-## of the two `ss_block_*` clips, which are a body absorbing something; this one
-## is a body going to meet it, and that is the whole read the parry needs. Also
-## picked off the render (tools/directors/flurry_lookdev.gd), which is where it
-## was confirmed that the arm being thrown is the LEFT one — a "block" clip that
-## turned out to be a sword shove would have been a parry the shield never
-## touched.
+## The parry. **It IS a block clip**, and the comment that used to sit here said
+## the opposite in as many words — "NOT one of the two `ss_block_*` clips, which
+## are a body absorbing something; this one is a body going to meet it".
+##
+## `tools/_clip_shield.gd` prints `ex_parry` and `ss_block_02` side by side and
+## they agree to three decimals on every sample: 0.076 m of forearm excursion,
+## 0.520 m/s peak, 0.070 m of hips rise. They are one Mixamo take exported under
+## two filenames, and the filename is the whole of what the old comment was
+## reasoning from. That is CLAUDE.md §4's rule about facing, in a different
+## costume: the answer is in the render, not in the metadata.
+##
+## THE LIBRARY HAS NO SHIELD BASH. Every clip in `hero_anims.res` was ranked by
+## left-forearm speed and the best forward extension of the shield arm anywhere
+## in it is ~0.11 m (`bow_punch`, whose headline 3.67 m/s is the arm being pulled
+## back ACROSS the body, not thrust out). So this is not a pick that can be
+## improved by picking again, and it is left pointing at `ex_parry` on purpose:
+## the raise it does play is a fine FIRST half. What it has no second half of is
+## supplied by `_bash_pose` below, which is `Enemy._tick_windup`'s answer to the
+## identical problem — that file's comment opens "the animation cannot carry
+## this on its own and it never could".
+##
+## Card #89 holds the other option, which is sourcing a real bash clip.
 @export var clip_parry: StringName = &"ex_parry"
+## How far forward the MODEL is driven on a parry, in metres, and how far it
+## pitches into the shove. See `_bash_pose`.
+##
+## The model and not the body: `request_parry` zeroes the velocity on purpose
+## (a parry that closed distance would be strictly better than the dash at the
+## dash's own job), so this has to read as commitment without being travel.
+## 0.26 m is about a shield's width and it is the number the render was checked
+## at — far enough to be a lunge from the game camera, near enough that the hero
+## does not visibly detach from the capsule the world collides against.
+@export var parry_bash_reach: float = 0.26
+@export var parry_bash_pitch: float = 16.0
 ## The flurry attack — the leaping overhead the perfect dodge opens. A full
 ## crouch, a launch, a fall with the blade held overhead, a strike, and a
 ## landing on one knee with the point in the ground.
@@ -611,6 +637,10 @@ var _grip_axis: Vector3 = Vector3.ZERO
 var _grip_speed: float = 0.0
 
 var _model: Node3D
+## The parry's shove, held so it can be killed. See `_bash_pose`.
+var _bash: Tween = null
+## Where that shove starts from and returns to. Captured in `_build_rig`.
+var _bash_rest: Vector3 = Vector3.ZERO
 var _rig: Node3D
 var _anim_player: AnimationPlayer
 var _tree: AnimationTree
@@ -930,6 +960,12 @@ func _build_rig() -> void:
 		add_child(_model)
 	_model.scale = Vector3.ONE * model_scale
 	_model.rotation.y = deg_to_rad(model_yaw_offset)
+	# Where the parry's shove returns to. Read off the node rather than assumed
+	# to be the origin: `Model` may come from the scene with an authored offset
+	# (the branch above only builds one when it does not), and a settle that
+	# unwinds to a hard zero would silently re-home the rig on the first parry.
+	# `Enemy` keeps `_model_rest` for the same reason.
+	_bash_rest = _model.position
 
 	_rig = hero_model.instantiate() as Node3D
 	_rig.name = "Rig"
@@ -2342,7 +2378,114 @@ func request_parry(duration: float) -> bool:
 		return false
 	_speed = 0.0
 	_set_planar_velocity(Vector3.ZERO)
+	_bash_pose()
 	return true
+
+
+## The shove, driven from here because no clip in the library contains one.
+##
+## This is `Enemy._tick_windup`'s trade made in the other direction. That file
+## drives a monster's tell from code because the monster GLBs ship near-empty
+## clip sets; this drives the hero's because the clip he does have is a BLOCK
+## (see `clip_parry`) — 0.076 m of forearm over 0.13 s and then a static hold
+## for the remaining two thirds of the move. Played at the 0.677x `_clip_scale`
+## hands it, the shield goes out at 0.352 m/s against a standing idle's 0.279:
+## the most committed action in the kit was reading as a man breathing.
+##
+## The MODEL, not the body, for the reason `parry_bash_reach` gives — and the
+## same split `Enemy._lunge_pose` makes, which shoves a monster's model through
+## a blow the physics body never travels.
+##
+## Three beats, sized off the windows that already exist rather than off numbers
+## picked to look nice:
+##
+##   out    `K.PARRY_WINDOW * 0.5` — the shield is where it is claiming to be by
+##          the middle of the window it is live for, not after it. EASE_OUT so
+##          the throw is front-loaded; a shove that accelerates is a reach.
+##   held   to the end of `K.PARRY_WINDOW`. This is the frame a caught blow
+##          lands on, and it should land on a hero who has arrived.
+##   back   all of `K.PARRY_RECOVER`, EASE_IN_OUT. The recovery is the price of
+##          missing and it is the longest part of the move, so it is the part
+##          that has to look like a price: he does not snap back, he unwinds.
+##
+## The settle is NOT cancelled when a parry lands. `HeroCombat.on_parried` calls
+## `end_commitment` to hand the hero back early, and the pose unwinding under
+## the riposte he throws is correct — the same reasoning `end_commitment`'s own
+## comment gives about leaving the one-shot to fade rather than snapping it off
+## on the frame of the catch.
+func _bash_pose() -> void:
+	if _model == null:
+		return
+	# One tween per property, killed before the next: two parries inside one
+	# settle would otherwise stack and fight over `position:z`, and the loser
+	# leaves the model parked off-centre for the rest of the run.
+	_kill_bash()
+	# FORWARD IS -Z AND THE FIRST CUT OF THIS SHOVED HIM BACKWARDS, under a
+	# comment claiming the opposite had been "checked on the render". It had not
+	# been: `parry_lookdev` measured `model.position.z - rest` and reported the
+	# MAGNITUDE of a local axis, which is the same number whichever way the body
+	# went, and the render it was supposedly checked against is a chase camera
+	# sitting behind the hero — where a backwards lunge reads as him getting
+	# BIGGER, which is what the frames actually showed once anyone looked.
+	# CLAUDE.md §4, fourth time: facing is measured, not derived.
+	#
+	# `position` is in the PARENT's space and the model's own 180 does not touch
+	# it. The hero body carries `rotation.y = facing_yaw + PI`, so hero-local -Z
+	# is the heading (docs/CONTRACT.md §2.5) and the shove is NEGATIVE z.
+	#
+	# The PITCH is positive and that is not an inconsistency: `rotation.x` IS
+	# taken through the model's own basis, Godot composes Euler as Y*X*Z, and the
+	# 180 about Y flips the X axis — so +16 tips the top toward parent -Z, which
+	# is forward. Two properties on the same node, two different frames. The
+	# director below now measures both against the hero's world heading instead
+	# of trusting either.
+	# SEQUENTIAL, with `parallel()` marking the individual tweeners that ride
+	# alongside the one before them. The first cut of this built the same five
+	# steps out of `set_parallel(true)` plus two `chain()` calls and came out
+	# MANGLED: `parry_lookdev` measured the shove reaching 0.126 m of its 0.26
+	# and the pitch reaching 15.6 deg of its 16 — two halves of one parallel pair
+	# ending in different places, which is only possible if they were not a pair.
+	# The settle then never ran at all and left the model parked 0.127 m in front
+	# of its own collision capsule.
+	#
+	# `chain()` and `set_parallel()` are the same knob reached from two
+	# directions and interleaving them is how that happened. One default, set
+	# once, and `parallel()` per exception.
+	var out_t := K.PARRY_WINDOW * 0.5
+	_bash = create_tween()
+	_bash.tween_property(_model, ^"position:z", _bash_rest.z - parry_bash_reach,
+			out_t).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_bash.parallel().tween_property(_model, ^"rotation:x",
+			deg_to_rad(parry_bash_pitch), out_t) \
+			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_bash.tween_interval(K.PARRY_WINDOW - out_t)
+	_bash.tween_property(_model, ^"position:z", _bash_rest.z, K.PARRY_RECOVER) \
+			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	_bash.parallel().tween_property(_model, ^"rotation:x", 0.0, K.PARRY_RECOVER) \
+			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+
+
+## Stop a bash settle and put the model back where every other pose expects it.
+##
+## `_bash_pose` is the ONLY caller, and this comment said "called on death and
+## on a scene handover as well" until the claim was checked. It is not, and it
+## does not need to be: the hero has no death routine to hang it off — `Game.damage`
+## emits `player_died`, `Flow` changes the scene, and the node is freed with the
+## old one. A Tween created by `create_tween()` is bound to the node that made it
+## and dies with it, so there is nothing left running to strand a pose.
+##
+## `Enemy._kill_recoil` DOES have those call sites, and the difference is that a
+## monster survives its own states — it is frozen, launched and revived inside one
+## scene, and each of those transitions is a place a running tween would fight the
+## next pose. The hero's parry has exactly one such transition, which is a second
+## parry inside the first one's settle, and that is the call above.
+func _kill_bash() -> void:
+	if _bash != null and _bash.is_valid():
+		_bash.kill()
+	_bash = null
+	if _model != null:
+		_model.position.z = _bash_rest.z
+		_model.rotation.x = 0.0
 
 
 ## The flurry attack: a leap onto whatever is in front, thrown out of the window

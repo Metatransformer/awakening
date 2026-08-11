@@ -35,11 +35,17 @@ const VOICES := 12
 ## the death sting was missing on the first pass -- the file list had been
 ## grouped with its numeric suffix stripped, and the stripped name read like the
 ## real one.
+## `attack_prepare` is the second sound to need this row for the second reason:
+## it ships as `attack_prepare_1.ogg` with no sibling, so `Enemy`'s wind-up cue
+## would have resolved to nothing, pushed one warning, cached the null and gone
+## quiet for the rest of the run. A monster telegraph that is SILENTLY missing is
+## the exact failure this table was written for.
 const VARIANTS := {
 	&"coin_trade": 3,
 	&"coin_drop": 3,
 	&"doom_stinger": 1,
 	&"ui_move_selection": 1,
+	&"attack_prepare": 1,
 }
 
 ## The whole signal→sound table. Every entry is an event that already carries

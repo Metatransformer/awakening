@@ -1616,11 +1616,19 @@ func _parry() -> void:
 	# The chain does not survive it. A parry is not step one of anything.
 	_chain_step = 0
 	_chain_timer = 0.0
-	# The swing's own whoosh, pitched up: it is a shield being shoved, not a
-	# blade, and the shove is a lighter, faster movement than any swing here.
-	if _swing_player != null:
-		_swing_player.pitch_scale = randf_range(1.18, 1.28)
-		_swing_player.play()
+	# A SHIELD noise, and not the sword's.
+	#
+	# This used to play `_swing_player` at pitch 1.18-1.28 under a comment saying
+	# it is a shield being shoved and not a blade -- which is the right sentence
+	# and the wrong sound. A pitched-up whoosh is still the whoosh a sword makes,
+	# and the press that throws thirty kilos of kite shield at something is the
+	# one input in the kit that should not be arriving on the sword's channel.
+	# `shield_bash` is on disk and had never been wired to anything.
+	#
+	# Positional rather than through `_swing_player`, so it rings where the
+	# shield is rather than flat on the camera -- the same reason `on_parried`
+	# takes a contact point.
+	Bus.request_sfx.emit(&"shield_bash", _hero.global_position + Vector3(0.0, 1.0, 0.0))
 
 
 ## True while a blow arriving from `from_pos` would be PARRIED rather than
@@ -1670,7 +1678,16 @@ func on_parried(hit: Hit) -> void:
 	_parry_t = -1.0
 	_hero.end_commitment()
 	Bus.parried.emit(at, body)
-	Bus.request_sfx.emit(&"shield_block", at)
+	# `parry_clang` and NOT `shield_block`, which is what this emitted for its
+	# whole life. A parry's entire reward is that it is not a block -- the world
+	# stops, the attacker is thrown, and a second of riposte opens -- and it was
+	# confirming all of that with the exact sound a block makes. The one moment
+	# in a fight the player most needs told apart from the ordinary one was the
+	# one moment that sounded identical to it.
+	#
+	# NOT routed through `Bus.shield_blocked`: that signal means "the guard
+	# stopped something" and `Sfx.CUES` owns its sound. Two different events.
+	Bus.request_sfx.emit(&"parry_clang", at)
 
 
 ## WHO to throw, found from where the blow came from rather than from the blow.
