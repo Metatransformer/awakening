@@ -888,9 +888,19 @@ floor is. A miniboss that becomes unreadable at depth is a miniboss that has
 stopped being a design and started being a wall. Measured across the built rows
 (`tools/directors/minibosses.gd`, section C): arc 73.9%, zone 76.2%, slam 121%.
 
-**They drop nothing but the chest behind them.** No miniboss drops an item, a
-stat or a relic — GDD pillar 4 holds here exactly as it does everywhere else. The
-Echo on that branch comes from the puzzle, not from the kill.
+**No miniboss drops a VERB or a RELIC**, and that is the whole of the rule — GDD
+pillar 4 holds here exactly as it does everywhere else, and the Echo on that
+branch comes from the puzzle rather than from the kill.
+
+It read "**they drop nothing but the chest behind them**" until 2026-08-11, and
+the amendment (card #91, owner's call) is worth stating rather than hiding: the
+floor 1 sluice keeper now drops **the maker's mark**, which is the object that
+brings Brannoc to the garrison (`docs/METAGAME.md` §6.4). The rule the old
+sentence was protecting is *a floor must stay completable by somebody who walked
+past its miniboss*, and a progress token cannot threaten that: it opens no door,
+answers no lock, and changes nothing underground. `BossDb.PROGRESS_TOKENS` is the
+allow-list and `BossDb.validate()` refuses anything else — an item off it, or any
+relic at all, still fails the table.
 
 ---
 

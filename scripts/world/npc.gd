@@ -46,31 +46,54 @@ enum Role { VENDOR, SMITH, GATE, ALCHEMIST, KEEPER, JEWELLER }
 ##   * `prompt` -- the verb. TALK, not SELL/FORGE: the verb on a person should be
 ##     the thing you do to a person, and the sign already says which one this is.
 ##   * `hold`   -- seconds on the button, 0 to fire on press. See `Prompt`.
-##   * `counter`-- present only for those who stand behind one. `db` null means
+##   * `counters`-- what this person will open, IN ORDER, one row per screen.
+##     Absent or empty for somebody who stands behind nothing. `db` null means
 ##     SELL (the screen reads the bag, not a catalogue).
 ##   * `voice`  -- their key in `Voice.LINES`, or absent for the ones nobody has
 ##     recorded. `activate` says their `hello` and the screen says the other two;
 ##     a speaker with no take for a cue is silent and that is not an error, so
 ##     the Lanternkeeper simply has no row here and no branch anywhere.
 ##
-## The GATE has no counter, so `activate` has exactly one branch: open a counter,
+## **`counters` is a LIST and was a single `counter` until 2026-08-11.** The
+## quartermaster is the reason: she buys what you bring up AND issues the stores
+## (`SupplyDb`, card #91), which is two screens behind one person. A list costs
+## one loop in `_options` and nothing anywhere else -- the alternative, a second
+## `Npc` standing inside the first one, is the thing this file exists to avoid.
+##
+## The GATE has no counters, so `activate` has exactly one branch: open a counter,
 ## or do the role's own thing.
 ##
 ## `static var`, not `const`: a catalogue is a script reference and an enum from
 ## another class, and neither is a constant expression to the parser. Static, so
 ## the table is still built once for the whole game rather than per shopkeeper.
 static var COUNTERS := {
+	# **The only person in the yard with two counters.** She buys -- that is what
+	# she says about herself, "Kessa. I buy." -- and she also issues the stores: a
+	# bag slot, a heart container, ten arrows (`SupplyDb`). Those three were the
+	# SMITH's until card #91 held him back behind the floor 1 miniboss, at which
+	# point the first hour of the game had no counter that sold them.
+	#
+	# Two rows and not one screen with a mode switch: selling reads the bag and
+	# buying reads a catalogue, and `TradeScreen` is deliberately built not to know
+	# which counter it is standing at.
 	Role.VENDOR: {
 		"sign": "QUARTERMASTER", "prompt": "TALK", "hold": 0.0, "voice": &"quartermaster",
-		"counter": {"title": "QUARTERMASTER", "mode": TradeScreen.Mode.SELL, "db": null},
+		"counters": [
+			{"title": "QUARTERMASTER", "mode": TradeScreen.Mode.SELL, "db": null},
+			{"title": "THE STORES", "mode": TradeScreen.Mode.BUY, "db": SupplyDb},
+		],
 	},
 	Role.SMITH: {
 		"sign": "SMITH", "prompt": "TALK", "hold": 0.0, "voice": &"smith",
-		"counter": {"title": "THE FORGE", "mode": TradeScreen.Mode.BUY, "db": ShopDb},
+		"counters": [
+			{"title": "THE FORGE", "mode": TradeScreen.Mode.BUY, "db": ShopDb},
+		],
 	},
 	Role.ALCHEMIST: {
 		"sign": "ALCHEMIST", "prompt": "TALK", "hold": 0.0, "voice": &"alchemist",
-		"counter": {"title": "THE ALCHEMIST", "mode": TradeScreen.Mode.BUY, "db": AlchemyDb},
+		"counters": [
+			{"title": "THE ALCHEMIST", "mode": TradeScreen.Mode.BUY, "db": AlchemyDb},
+		],
 	},
 	# The fourth counter. She cost exactly this row and a `Catalogue` subclass --
 	# no screen, no branch in `activate`, no new mode -- which is the acceptance
@@ -102,9 +125,9 @@ static var COUNTERS := {
 	# in `activate`, which still handles it and says so.
 	Role.KEEPER: {
 		"sign": "LANTERNKEEPER", "prompt": "TALK", "hold": 0.0, "voice": &"elder",
-		"counter": {
-			"title": "THE FAR LANTERN", "mode": TradeScreen.Mode.BUY, "db": RelicDb,
-		},
+		"counters": [
+			{"title": "THE FAR LANTERN", "mode": TradeScreen.Mode.BUY, "db": RelicDb},
+		],
 	},
 	# The fifth counter, and the last one there will be (docs/SCOPE.md §1:
 	# garrison NPCs **5**, "There is no sixth"). Same bill as the
@@ -116,9 +139,9 @@ static var COUNTERS := {
 	# exists to state once.
 	Role.JEWELLER: {
 		"sign": "JEWELCRAFTER", "prompt": "TALK", "hold": 0.0, "voice": &"jewelcrafter",
-		"counter": {
-			"title": "THE SETTING BENCH", "mode": TradeScreen.Mode.BUY, "db": JewelDb,
-		},
+		"counters": [
+			{"title": "THE SETTING BENCH", "mode": TradeScreen.Mode.BUY, "db": JewelDb},
+		],
 	},
 	# 0.9 s, and the only hold in the world. It is the door OUT of the hub and
 	# the one press in the game that ends the safe part of the session, so it is
@@ -279,6 +302,25 @@ var _age: float = 0.0
 var _head: float = 1.75
 
 
+## Crown height, for anything that has to aim at this person's FACE rather than
+## at the point on the floor they stand on. `ConvoCamera` is the caller; it asks
+## rather than measuring an `AABB` off the body, because a rigged idle with a
+## raised hammer reads forty centimetres taller than the Stoneborn holding it.
+func head_y() -> float:
+	return _head
+
+
+## Which person in `DialogueDb.PEOPLE` / `StoryDb` this is -- `&"elder"`,
+## `&"smith"`, and `&""` for the gate, which is furniture and not a person.
+##
+## The id lives in `COUNTERS` and this is the only way to read it off a node in
+## the yard. `Introduction` is the caller: it is handed a name by `StoryDb` and
+## has to find the body it belongs to, and a second table mapping `Role` back to
+## an id is exactly the kind of duplicate this file's header refuses.
+func voice_id() -> StringName:
+	return StringName(_row().get("voice", &""))
+
+
 ## The row for this NPC. Never null -- a role added to the enum and forgotten
 ## here gets a nameless prop you can walk up to, not a crash mid-garrison.
 func _row() -> Dictionary:
@@ -345,23 +387,28 @@ func activate(_by: Node3D) -> void:
 		on_read = func() -> void: StoryDb.mark_told(who, beat_id)
 
 	if pages.is_empty():
-		# Nobody has written them a line. Straight to the counter, exactly as this
-		# function behaved before there was a dialogue box -- a keeper with no words
-		# is still a keeper, and a box that opened to say nothing would be worse
-		# than no box.
-		_choose_trade(who, row)
+		# Nobody has written them a line. Straight to their first counter, exactly
+		# as this function behaved before there was a dialogue box -- a keeper with
+		# no words is still a keeper, and a box that opened to say nothing would be
+		# worse than no box.
+		_choose_trade(who, _counters(row), 0)
 		return
 	DialogueBox.open(self, who, pages, _options(who, row), on_read)
+
+
+## The screens this person will open, in order. Never null.
+func _counters(row: Dictionary) -> Array:
+	return row.get("counters", []) as Array
 
 
 ## What the conversation offers when the line is finished.
 ##
 ## Three kinds of row and they are in the order a player wants them:
 ##
-##   1. **Trade**, for somebody with a counter -- the thing you walked over here
-##      for. Absent for anybody without one (there is nobody today; the elder was
-##      the last, `COUNTERS`), which still leaves a box you can say goodbye to
-##      rather than only walk away from.
+##   1. **Trade**, one row per counter this person keeps -- the thing you walked
+##      over here for. Absent for anybody with none (there is nobody today; the
+##      elder was the last, `COUNTERS`), which still leaves a box you can say
+##      goodbye to rather than only walk away from.
 ##   2. **Topics** (`StoryDb.topics`) -- the questions this person will answer
 ##      today. They are `keep` rows, so asking one puts the list straight back up;
 ##      see `DialogueBox.open`. What is in the list grows as the save does, which
@@ -369,18 +416,26 @@ func activate(_by: Node3D) -> void:
 ##      told you Deryn's name.
 ##   3. **Leave**, always last.
 ##
+## **A person with two counters gets two rows, and the SECOND one is named after
+## the counter rather than called Trade.** Two rows both saying Trade would put
+## the whole of the distinction in the meta column, which is the dim right-hand
+## half of the row; the quartermaster's list reads `Trade / The Stores / Leave`
+## and the player can see what the second press does without reading twice.
+##
 ## They are all one typeface -- `DialogueBox._ask` turns the kit's primary
 ## promotion off, and says why.
 func _options(who: StringName, row: Dictionary) -> Array:
 	var out: Array = []
-	var counter: Dictionary = row.get("counter", {})
-	if not counter.is_empty():
+	var counters := _counters(row)
+	for i in counters.size():
+		var counter: Dictionary = counters[i]
+		var name := _titled(str(counter.get("title", "")))
 		out.append({
-			"label": "Trade",
+			"label": "Trade" if i == 0 else name,
 			# The counter's own name in the meta column, so picking Trade at the
 			# Lanternkeeper is visibly not the same act as picking it at the smith.
-			"meta": _titled(str(counter.get("title", ""))),
-			"act": _choose_trade.bind(who, row),
+			"meta": name,
+			"act": _choose_trade.bind(who, counters, i),
 		})
 	for topic: Dictionary in StoryDb.topics(who):
 		out.append({
@@ -397,10 +452,10 @@ func _options(who: StringName, row: Dictionary) -> Array:
 ## Returns nothing to say, which `DialogueBox` reads as "the conversation is
 ## over": the shop is the rest of this interaction, and it says the farewell
 ## itself when it comes down (`TradeScreen.close`).
-func _choose_trade(who: StringName, row: Dictionary) -> PackedStringArray:
-	var counter: Dictionary = row.get("counter", {})
-	if counter.is_empty():
+func _choose_trade(who: StringName, counters: Array, i: int) -> PackedStringArray:
+	if i < 0 or i >= counters.size():
 		return PackedStringArray()
+	var counter: Dictionary = counters[i]
 	TradeScreen.open(self, int(counter["mode"]), str(counter["title"]),
 		counter["db"] as GDScript, who)
 	return PackedStringArray()

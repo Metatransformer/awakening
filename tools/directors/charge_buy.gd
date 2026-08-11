@@ -20,7 +20,7 @@ extends RefCounted
 ##
 ##   A  Before the Slag Ogre, she does not sell them. The line is ABSENT, not
 ##      greyed -- ammunition for a verb you have never seen is a spoiler and a
-##      slot that lies (`ShopDb.GATED_BY` makes the same argument for arrows).
+##      slot that lies (`SupplyDb.GATED_BY` makes the same argument for arrows).
 ##   B  Owning the working, her board grows a CHARGES row of its own.
 ##   C  It is bought the way a player buys it: walk up, Trade, cursor onto the
 ##      row, HOLD. The gold goes down and the pouch goes UP, and the frames

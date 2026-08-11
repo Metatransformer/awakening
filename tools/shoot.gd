@@ -21,6 +21,12 @@ extends SceneTree
 ##   --intro                                      let the garrison play its
 ##                                                opening (off by default --
 ##                                                see `_skip_the_opening`)
+##   --fresh                                      do NOT stamp the keepers into
+##                                                the yard (see
+##                                                `_open_the_garrison`)
+##   --meet                                       let the elder introduce the
+##                                                new keepers (off by default --
+##                                                see `_skip_the_introductions`)
 
 ## The scratch config every harness run writes instead of `user://settings.cfg`.
 ## See `_sandbox_the_settings`.
@@ -354,6 +360,21 @@ const ARRIVED_FLAGS: Array[StringName] = [
 	&"garrison_jewelcrafter_arrived",
 ]
 
+## The flags `StoryDb.pending_introduction` reads -- `StoryDb.intro_flag`, spelled
+## out for the third time for the reason above.
+##
+## These are NOT the same thing as `ARRIVED_FLAGS` and the pair has to be settable
+## separately: arrived is "she is standing at her counter", met is "the elder has
+## already introduced her". A director that stamps the first and not the second
+## gets a full yard that opens a four-page conversation over whatever it was about
+## to photograph, one and a bit seconds in.
+const MET_FLAGS: Array[StringName] = [
+	&"met_quartermaster",
+	&"met_smith",
+	&"met_alchemist",
+	&"met_jewelcrafter",
+]
+
 
 ## Do not play the opening at a director, unless the director asked for it.
 ##
@@ -400,10 +421,34 @@ func _open_the_garrison() -> void:
 		game.call(&"set_flag", flag)
 
 
+## Do not introduce anybody at a director, unless the director asked.
+##
+## The yard plays a four-page scene with a camera move in it the first time you
+## come home after somebody new arrives (`Garrison._do_the_rounds`), and
+## `_open_the_garrison` above has just made every keeper new. Without this, EVERY
+## garrison director would sit through four introductions -- sixteen pages, four
+## camera takeovers -- starting one and a bit seconds after the scene loads, which
+## is exactly when most of them take their first frame.
+##
+## `--meet` opts back in, and `tools/directors/npc_intro.gd` is the one that does.
+## Same shape as `--intro` and for the same reason: the harness is quiet by
+## default whether or not the author of the next director knew this existed.
+func _skip_the_introductions() -> void:
+	if _args.has("meet"):
+		return
+	var game: Node = root.get_node_or_null(^"Game")
+	if game == null:
+		push_warning("shoot.gd: no /root/Game -- cannot skip the introductions")
+		return
+	for flag: StringName in MET_FLAGS:
+		game.call(&"set_flag", flag)
+
+
 func _run() -> void:
 	_verify_sandbox()
 	_skip_the_opening()
 	_open_the_garrison()
+	_skip_the_introductions()
 
 	var scene_path: String = _args.get("scene", "")
 	if scene_path.is_empty():

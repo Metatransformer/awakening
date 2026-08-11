@@ -237,15 +237,20 @@ func _pouch(rig) -> void:
 # --- C and D. The smith -----------------------------------------------------
 
 func _smith(rig) -> void:
-	# THE COUNTER IS FIFTEEN LINES ONLY IF YOU OWN THE BOW AND THE HOOKSHOT AND
+	# THE COUNTER IS TWELVE LINES ONLY IF YOU OWN THE BOW AND THE HOOKSHOT AND
 	# HAVE COMMITTED NO ARMOUR PIECE.
-	# `ShopDb.GATED_BY` hides the `string` and `chain` ladders and the arrow line
-	# until the weapon they sharpen is owned (docs/SCOPE.md M1), and
-	# `Game.STARTER_KIT` is empty now -- so a cold boot stands at this counter
-	# and sees TWELVE rows, not fifteen. From the other end, each of the four
-	# armour pieces drops its losing path the moment it commits (GDD §6.6), so a
-	# finished hero sees eleven. The count asserted below is the widest the board
-	# ever gets, which is also the one the panel has to be able to draw.
+	# `ShopDb.GATED_BY` hides the `string` and `chain` ladders until the weapon
+	# they sharpen is owned (docs/SCOPE.md M1), and `Game.STARTER_KIT` is empty
+	# now -- so a cold boot stands at this counter and sees TEN rows, not twelve.
+	# From the other end, each of the four armour pieces drops its losing path the
+	# moment it commits (GDD §6.6), so a finished hero sees eight. The count
+	# asserted below is the widest the board ever gets, which is also the one the
+	# panel has to be able to draw.
+	#
+	# **It was fifteen until card #91.** Arrows, bag slots and hearts left the
+	# forge for the quartermaster's stores (`SupplyDb`) when the smith went behind
+	# the floor 1 miniboss -- with him gone for the whole first hour, those three
+	# were the lines a new save could not otherwise reach.
 	#
 	# This director is the FORGE, and the ladder it drives by name below is the
 	# chain. Granting the two weapons is the setup that makes the subject
@@ -269,9 +274,9 @@ func _smith(rig) -> void:
 	if screen == null:
 		print("FORGE FAIL the smith did not open")
 		return
-	_ck("C0 the smith lists fifteen lines (7 + the armour's 4x2)",
-		screen._rows.size() == 15)
-	# Fifteen rows against a panel that fits about thirteen. The window is the
+	_ck("C0 the smith lists twelve lines (4 + the armour's 4x2), got %d"
+		% screen._rows.size(), screen._rows.size() == 12)
+	# Twelve rows against a panel that fits about thirteen. The window is the
 	# only reason the boots are reachable at all, and a list that silently ran
 	# off the bottom would look exactly like a list that was complete.
 	_ck("C0b the panel windows rather than overflowing",
@@ -430,13 +435,24 @@ func _forge_is_a_hold(rig, screen) -> void:
 	var need: float = screen._hold_time(screen._cursor)
 	var before := Game.forge_level(Game.FORGE_CHAIN)
 	_ck("CH0 the chain rung wants a hold (%.2f s)" % need, need > 0.0)
-	# The other kind of line, and the reason `_hold_time` asks the catalogue
-	# rather than the mode: arrows are gold-only, re-buyable, and a hold on them
-	# would be the ceremony that teaches players to stop reading holds.
-	var arrows := _row(screen, &"arrows")
-	_ck("CH1 a gold-only line is still a tap",
-		not arrows.is_empty()
-		and is_zero_approx(screen._hold_time(screen._rows.find(arrows))))
+	# The other kind of line, and the reason `_hold_time` asks the CATALOGUE rather
+	# than the mode: arrows are gold-only, re-buyable, and a hold on them would be
+	# the ceremony that teaches players to stop reading holds.
+	#
+	# **`SupplyDb.crafts` and not a row on this screen, since card #91.** The
+	# arrow line is the quartermaster's now, so the contrast is between two
+	# catalogues rather than between two rows of one board -- which is where it
+	# always belonged, because `crafts()` is what `_hold_time` asks and the mode
+	# is the same BUY on both counters. The screen half of it is proven where the
+	# line actually lives: `tools/directors/mvp_loop.gd` buys a bag slot at the
+	# stores with a tap.
+	# The REAL row off her board and not `{"id": &"arrows"}` -- `crafts` answers
+	# off `holds`/`parts`, so a hand-made stub with neither key returns false for
+	# free and the check would pass against a catalogue that had changed its mind.
+	var arrow_line := SupplyDb.lines().filter(
+		func(l: Dictionary) -> bool: return StringName(l["id"]) == &"arrows")
+	_ck("CH1 a gold-only line at the stores is still a tap",
+		not arrow_line.is_empty() and not SupplyDb.crafts(arrow_line[0]))
 	# The footer says the SMITH's word, not the UI's. It shipped as "CRAFT" for
 	# one build because a static in `Catalogue` calling another static in
 	# `Catalogue` never reaches `ShopDb` -- caught by looking at the frame, so it

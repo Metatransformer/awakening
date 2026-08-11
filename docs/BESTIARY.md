@@ -352,6 +352,15 @@ who has not worked it out is paying more, not standing still.
 one beat the shield answers and one it does not. A fight that both beats answer
 the same way is one beat played twice.
 
+**4.4 — No miniboss drops a verb or a relic.** The chest behind it is the reward;
+what the body leaves is at most a **progress token** — an object with no use, no
+row on any counter and no bag slot, whose only job is to be a key somewhere else
+(`BossDb.PROGRESS_TOKENS`). Floor 1's Sluice-Keeper leaves the **maker's mark**,
+and that is what brings the smith back to the yard. This used to read "they drop
+nothing but the chest behind them", and card #91 is the amendment: a token is
+still not a verb and still not power, so the rule the sentence was protecting is
+intact. `docs/PUZZLES.md` §4 owns it.
+
 **The audit.** Against `docs/OOT_CATALOGUE.md` §3's five boss shapes, the four
 minibosses cover two:
 

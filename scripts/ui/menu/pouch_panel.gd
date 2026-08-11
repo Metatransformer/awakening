@@ -79,7 +79,7 @@ const HOLD_ACTION := &"ui_hold"
 const ROPE_HOLD := 0.9
 
 ## Cells per row. Twelve slots is the start, sixteen the bought maximum
-## (K.START_BAG_SLOTS + ShopDb.LIMITS.bag_slot): four across is three clean rows
+## (K.START_BAG_SLOTS + SupplyDb.LIMITS.bag_slot): four across is three clean rows
 ## at the low end and four at the high end, and four is as many as fit.
 ##
 ## Six across was the first try and it pushed the frame to ~1400 px inside a

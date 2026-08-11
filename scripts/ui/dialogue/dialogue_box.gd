@@ -45,6 +45,17 @@ extends Control
 ## capture harness drives the game with `Input.action_press`, which sets action
 ## state and synthesises no `InputEvent` (CLAUDE.md §3), so a screen that only
 ## listens to `_unhandled_input` is a screen no director can exercise.
+##
+## ## The right-hand seat can change hands mid-conversation
+##
+## `open()` is one speaker for the whole box, which is every counter greeting,
+## every beat and every topic. `open_scene()` (card #91) takes pages that each
+## name their own speaker, so Aldric can turn and introduce Brannoc inside one
+## box: the plate and the portrait follow the page, and `speaker_changed` fires so
+## `Introduction` can swing the camera onto whoever is talking. **The listener on
+## the left never changes** — this box is somebody talking to YOU, and a
+## two-shot that swapped both seats would be a film, not a conversation you are
+## standing in.
 
 const UITheme := preload("res://scripts/ui/ui_theme.gd")
 
@@ -79,10 +90,31 @@ const BUST_BLEED := 0.03
 const BUST_OFF := 0.14
 
 
+## Fired when the right-hand seat changes hands, including once for the FIRST
+## page. `Introduction` pans the camera on it; nothing else listens today.
+##
+## It is emitted from `_show_page`, which is where the change actually becomes
+## visible, rather than from `open` — a listener that had to know the first
+## speaker before the box was built would be a second place that reads the table.
+signal speaker_changed(who: StringName)
+
+## Fired as the box leaves the tree, whatever ended it: the last page, a chosen
+## door, or Escape. What a caller awaits when there is something to do AFTER the
+## conversation — put the camera back, play the next scene.
+signal finished()
+
 ## Who is talking, as `DialogueDb`/`Voice` key them. Read by the directors.
+##
+## On a `open_scene()` box this is the CURRENT speaker and it changes as the pages
+## turn; on an `open()` box it is set once and never moves.
 var speaker: StringName = &""
 
 var _pages: PackedStringArray = PackedStringArray()
+## Who says each page, one entry per page of `_pages`, or empty on a single-
+## speaker box. An entry of `&""` means "whoever was already talking", which is
+## what lets a two-page speech from one person be written as two rows without
+## repeating the id.
+var _voices: Array[StringName] = []
 var _page: int = 0
 ## Characters revealed so far, as a float so the reveal is frame-rate independent.
 var _typed: float = 0.0
@@ -150,14 +182,59 @@ var _caret: Label
 ## order to say nothing. Callers should treat null as "they had nothing to say".
 static func open(host: Node, who: StringName, pages: PackedStringArray,
 		choices: Array = [], on_read: Callable = Callable()) -> DialogueBox:
+	return _stage(host, who, pages, [], choices, on_read)
+
+
+## A conversation with more than one person in it.
+##
+## `lines` is an Array of Dictionaries, in order:
+##   who  : StringName   a `DialogueDb.PEOPLE` key. Omit or `&""` to carry the
+##                       previous page's speaker on.
+##   text : String       the page, exactly as it will be typed.
+##
+## No choices and no `on_read`: this is a SCENE. It is not offering the player
+## anything and there is nothing at the end of it to pick — the flag that says it
+## has been watched belongs to whoever staged it (`StoryDb.mark_introduced`), and
+## hanging it off `finished` rather than off the last page is deliberate, because
+## a player who escapes out of an introduction has still met the person. They are
+## standing there.
+##
+## Returns null when there is nothing to say, exactly as `open` does.
+static func open_scene(host: Node, lines: Array) -> DialogueBox:
+	var pages := PackedStringArray()
+	var voices: Array[StringName] = []
+	var last := &""
+	for line: Dictionary in lines:
+		var text := String(line.get("text", "")).strip_edges()
+		if text.is_empty():
+			continue
+		var who := StringName(line.get("who", &""))
+		if who == &"":
+			who = last
+		last = who
+		pages.append(text)
+		voices.append(who)
 	if pages.is_empty():
 		return null
+	return _stage(host, voices[0], pages, voices, [], Callable())
+
+
+## Build it, fill it, put it on screen. One place, because everything below
+## `add_child` is timing-sensitive: `_ready` runs INSIDE that call and shows the
+## first page, so every field the box reads has to be written before it, and the
+## first `speaker_changed` is therefore emitted before any caller can have
+## connected to it. That is why `Introduction` frames its opening shot off
+## `box.speaker` and only listens for the CHANGES.
+static func _stage(host: Node, who: StringName, pages: PackedStringArray,
+		voices: Array[StringName], choices: Array,
+		on_read: Callable) -> DialogueBox:
 	var layer := CanvasLayer.new()
 	layer.name = "DialogueLayer"
 	layer.layer = LAYER
 	var box := DialogueBox.new()
 	box.speaker = who
 	box._pages = pages
+	box._voices = voices
 	box._choices = choices
 	box._on_read = on_read
 	layer.add_child(box)
@@ -195,6 +272,7 @@ func _exit_tree() -> void:
 	# and the answer is "give it to the camera". See the note on `_prev_mouse`'s
 	# grave, above.
 	Bus.screen_closed.emit(&"dialogue")
+	finished.emit()
 
 
 func close() -> void:
@@ -276,9 +354,33 @@ func text() -> String:
 
 func _show_page(i: int) -> void:
 	_page = clampi(i, 0, maxi(_pages.size() - 1, 0))
+	# BEFORE the text, so a page never types under the previous speaker's name.
+	if _page < _voices.size():
+		_set_speaker(_voices[_page])
 	_body.text = _pages[_page] if _page < _pages.size() else ""
 	_body.visible_characters = 0
 	_typed = 0.0
+
+
+## Hand the right-hand seat to `who`. A no-op when they already have it, which is
+## what keeps a four-page speech from re-laying-out the portrait four times and,
+## more importantly, from panning the camera onto somebody it is already on.
+func _set_speaker(who: StringName) -> void:
+	if who == &"" or (who == speaker and _name != null and not _name.text.is_empty()):
+		return
+	speaker = who
+	if _name != null:
+		_name.text = DialogueDb.name_of(who)
+		_name.visible = not _name.text.is_empty()
+	if _right != null:
+		# A speaker nobody has drawn simply has no figure on their side of the box
+		# -- the same legible degrade `_portrait` makes, arrived at by a different
+		# road, so a scene may hand the seat to somebody with no portrait without
+		# leaving the previous person's face over their words.
+		_right.texture = _art_of(who)
+		_right.visible = _right.texture != null
+	_layout()
+	speaker_changed.emit(who)
 
 
 ## Replace what is being said and start typing again. The choices come down with
@@ -520,7 +622,7 @@ func _build() -> void:
 
 	# The listener is always the hero: this box is somebody talking to YOU.
 	_left = _portrait(&"hero")
-	_right = _portrait(speaker)
+	_right = _portrait(speaker, true)
 
 	_build_panel()
 	_build_choices()
@@ -531,20 +633,30 @@ func _build() -> void:
 ## `KEEP_ASPECT` and no clipping, because `_layout` gives the rect the drawing's
 ## own aspect: there is nothing to crop. The only thing that cuts a portrait is
 ## the bottom of the screen, and that one is on purpose.
-func _portrait(who: StringName) -> TextureRect:
-	var path := DialogueDb.portrait_of(who)
-	if path.is_empty() or not ResourceLoader.exists(path):
-		return null
-	var art := load(path) as Texture2D
-	if art == null:
+##
+## `always` is what the SPEAKER's side passes: the rect is built even when this
+## person has no drawing, because on a multi-speaker scene the next person may
+## have one, and a rect that was never created cannot be filled in later.
+func _portrait(who: StringName, always: bool = false) -> TextureRect:
+	var art := _art_of(who)
+	if art == null and not always:
 		return null
 	var rect := TextureRect.new()
 	rect.texture = art
+	rect.visible = art != null
 	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(rect)
 	return rect
+
+
+## The drawing of `who`, or null when nobody drew them or the file has gone.
+static func _art_of(who: StringName) -> Texture2D:
+	var path := DialogueDb.portrait_of(who)
+	if path.is_empty() or not ResourceLoader.exists(path):
+		return null
+	return load(path) as Texture2D
 
 
 func _build_panel() -> void:
