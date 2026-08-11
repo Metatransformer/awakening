@@ -1554,7 +1554,8 @@ func _hero_combat() -> Node:
 
 # --- The bag (§5.3) ---------------------------------------------------------
 ## What you are carrying, said WITHOUT a number: the rim's colour and the value
-## histogram. The extraction line below it is the only figure left in this corner.
+## histogram. There is no figure left in this corner at all -- the extraction
+## line under it went the same way and for the same reason (§5.4).
 ##
 ## There used to be a 32 px gold total here, rolling up on every pickup, and it
 ## was the most-read thing on the screen. That is the problem with it. A player
@@ -1646,54 +1647,37 @@ func _best_rarity() -> int:
 
 
 # --- Extraction (§5.4) ------------------------------------------------------
-## Directly under the bag number, because the decision is a comparison between
-## two numbers and they must be adjacent.
-
+## The hold, and nothing else. **There is no standing readout of the fee out
+## here.**
+##
+## There used to be an `EXTRACT <charge>` line under the bag, RUST once the toll
+## had eaten the purse. It is gone for the same reason the 32 px gold total above
+## it went (`_draw_bag`, §5.3): a figure pinned to the corner of the screen gets
+## read constantly, and a player watching the fee tick is doing bookkeeping in
+## the middle of a dungeon instead of playing one. Two numbers in the corner made
+## that worse than one, because a pair invites arithmetic.
+##
+## The fee did not become hidden. The pouch says it in words -- "The rope wants
+## 36 and you have 26. It will take all of it." -- the rope's own verb meta
+## carries the charge, the pause menu's "Way out" row names it, and the receipt
+## says what was actually paid. Every one of those is somewhere the player has
+## STOPPED, which is where a money decision belongs.
+##
+## What is left here is the part that is not a figure at all: the screen-wide
+## sweep at the moment leaving starts costing everything (`set_extract_dear` ->
+## `_draw_sweep`), and this ring, which is feedback for a button being held right
+## now and vanishes with it.
 func _draw_extraction(s: Vector2) -> void:
-	if not Run.in_dungeon:
+	if not Run.in_dungeon or _extract_hold <= 0.0:
 		return
-	var right := Pal.BAG_RIGHT * s.x
-	var y := Pal.EXTRACT_BASELINE * s.y
-	# The CHARGE, not the toll. This line sits directly under the bag total so the
-	# player can compare two numbers at a glance, and the comparison is only
-	# honest if the second one is the gold that will actually leave. When the toll
-	# has outgrown the purse it is capped there (Run.extract_charge) and RUST is
-	# what says so: the figure is your whole purse.
-	var cost := Run.extract_charge()
-
-	# `_extract_dear` is the same question as `Run.extract_takes_all()`, cached off
-	# the two signals that can change the answer. Read the flag rather than asking
-	# again: this runs inside a repaint, and one of them summing the bag per frame
-	# is enough.
-	var scale := CanvasText.scale_for(16.0 if _extract_dear else 12.0, s.y)
-	# The emphasis used to mean "you can afford this" and now means "this costs
-	# everything you have" -- see `set_extract_dear`. CYAN stays CYAN because the
-	# subject has not changed (it is still the way out, STYLEGUIDE §1); the RUST
-	# beside it is what carries the bad news.
-	var label_col: Color = Pal.CYAN if _extract_dear else Pal.MOTH
-	var cost_col: Color = Pal.RUST if _extract_dear else Pal.GOLD
-
-	var cost_s := str(cost)
-	CanvasText.draw_right(_canvas, cost_s, Vector2(right, y), scale, cost_col)
-	var label_x := right - CanvasText.width(cost_s, scale) - Pal.px(8.0, s.y)
-	CanvasText.draw_right(_canvas, "EXTRACT", Vector2(label_x, y), scale, label_col)
-
-	if _extract_dear:
-		# A square pip, set well clear of the word. A full-height 2px bar six
-		# pixels from the E is a capital I in this font, and the line read
-		# "IEXTRACT" on every capture until it was a pip instead.
-		var pip := Pal.px(6.0, s.y)
-		var lx := label_x - CanvasText.width("EXTRACT", scale) - Pal.px(14.0, s.y)
-		_canvas.draw_rect(Rect2(lx - pip, y + (CanvasText.height(scale) - pip) * 0.5,
-			pip, pip), Pal.CYAN)
-
 	# Holding draws a ring around your own money while the world stays live.
 	# The cost is paid out of the thing you are protecting, and the UI says so.
-	if _extract_hold > 0.0:
-		var centre := Vector2(right - Pal.px(40.0, s.y),
-			Pal.BAG_NUM_BASELINE * s.y - Pal.px(16.0, s.y))
-		HoldGauge.ring(_canvas, centre, Pal.px(54.0, s.y), _extract_hold,
-			Pal.px(3.0, s.y), Pal.CYAN)
+	# It is centred on the bag, NOT on the hero: the ring is about what leaving
+	# costs you, and the bag is the thing it is charged against.
+	var centre := Vector2(Pal.BAG_RIGHT * s.x - Pal.px(40.0, s.y),
+		Pal.BAG_NUM_BASELINE * s.y - Pal.px(16.0, s.y))
+	HoldGauge.ring(_canvas, centre, Pal.px(54.0, s.y), _extract_hold,
+		Pal.px(3.0, s.y), Pal.CYAN)
 
 
 ## One screen-wide event, then silence. A permanent "the way out now costs

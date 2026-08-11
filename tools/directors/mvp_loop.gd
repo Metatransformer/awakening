@@ -363,7 +363,9 @@ func _extract(rig) -> void:
 
 	# Shot AFTER the purse is spent down, which is the whole point of the frame:
 	# it is the only capture in the suite that shows the HUD in the state this
-	# beat exists for -- EXTRACT in RUST, naming the charge rather than the toll.
+	# beat exists for. There is no EXTRACT line to photograph any more -- the
+	# standing readout is gone (`Hud._draw_extraction`) -- so what this frame is
+	# now proving is the SWEEP, which is the whole announcement that remains.
 	# A wait, because `set_extract_dear` rides `gold_changed` and the sweep it
 	# fires needs frames to be worth photographing.
 	await rig.wait_frames(20)

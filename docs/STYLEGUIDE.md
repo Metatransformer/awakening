@@ -165,7 +165,7 @@ seven sizes reads as accreted rather than designed.
 |---|---|---|
 | Bag total (the big number) | Departure Mono | 32 |
 | Pocket gold / garrison cash | Departure Mono | 20 |
-| HUD numerals — ammo, extraction cost | Departure Mono | 16 |
+| HUD numerals — ammo | Departure Mono | 16 |
 | Item-name drop toast | Departure Mono | 16 |
 | Body / tooltip | Departure Mono | 12 (line height 16, max 42 chars) |
 | Vendor row name + price | Departure Mono | 20 |
@@ -577,10 +577,12 @@ Bottom-right, right-anchored at x `0.969` (1240). Four components, bottom-up.
    colour is the rarity tier. This is a value histogram, not an inventory list —
    the useful thought is "most of my money is that one violet slip", and no list
    gives you that in a glance. The 9th and beyond collapse into `+N` in MOTH.
-3. **The rim.** A 2 px frame from `(0.740, 0.786)` to `(0.978, 0.958)`, coloured
+3. **The rim.** A 2 px frame from `(0.812, 0.786)` to `(0.978, 0.914)`, coloured
    by the rarity of the single most valuable thing you carry. Silent, permanent,
    peripheral. It is how the bag whispers.
-4. **The extraction line.** §5.4 — the bottom tier of the same cluster.
+4. **Nothing under it.** There was an extraction line on the bottom tier of this
+   cluster and there isn't one now — see §5.4. The strip below the rim stays
+   empty on purpose.
 
 **When a drop lands:** 1-frame full-rim fill in the drop's rarity colour; a new
 slip slides in from the right over 120 ms while the others re-proportion; the
@@ -604,14 +606,17 @@ into a fade.
 
 ### 5.4 Extraction affordance
 
-Same cluster, bottom tier, right-aligned, baseline y `0.940` (677) — because the
-decision is a comparison between two numbers and they must be adjacent.
+**Nothing standing.** There is no `EXTRACT <charge>` line, and the y `0.940`
+baseline it sat on is gone from the layout. A figure pinned to the corner of the
+screen gets read constantly, and a player watching the fee tick is doing
+bookkeeping in the middle of a dungeon instead of playing one — the same reason
+the 32 px bag total went (§5.3). Two numbers there was worse than one: a pair
+invites arithmetic.
 
-| State | Render |
-|---|---|
-| Unavailable | `EXTRACT  340◇` — 12 px, label MOTH, cost GOLD |
-| Unaffordable | Cost in RUST. On press: `NEED 340◇` for 1.2 s, no arc |
-| Available | Promotes to 16 px EXTRACT CYAN, 2 px cyan left rule, button glyph |
+The fee is not hidden, it is *somewhere you have stopped*. The pouch says it in
+words ("The rope wants 36 and you have 26. It will take all of it."), the rope's
+verb meta carries the charge, the pause menu's **Way out** row names it, and the
+receipt says what was paid. Everything below is an EVENT, not a readout.
 
 **The "you can leave now" moment:** entering a node's radius sweeps a 1 px
 EXTRACT CYAN rule across the full screen width at y `0.500` over 200 ms, once,
@@ -707,13 +712,19 @@ map most needed.
 
 ### 5.6 Always visible vs. transient
 
-**ALWAYS — eight things, nothing else:** the health bar, the stamina bar, the
-hands, the item buttons, bag total, extraction line, ammo numerals, and — under
-ground only — the minimap. Each is a number or a binding the player must be able
-to consult unprompted, because each feeds the single recurring decision — push
-on, or leave. The minimap earns the eighth slot on that same test: how far from
-the stair you are is the other half of "can I afford one more room". Anything
-that does not feed that decision has no claim on permanent pixels.
+**ALWAYS — seven things, nothing else:** the health bar, the stamina bar, the
+hands, the item buttons, the bag (rim and slips — no total), ammo numerals, and
+— underground only — the minimap. Each is a number or a binding the player must
+be able to consult unprompted, because each feeds the single recurring decision
+— push on, or leave. The minimap earns the seventh slot on that same test: how
+far from the stair you are is the other half of "can I afford one more room".
+Anything that does not feed that decision has no claim on permanent pixels.
+
+This list has *shrunk* twice, both times by deleting a figure: the bag total
+(§5.3) and the extraction line (§5.4). Both were the most-read things on the
+screen, which is exactly what was wrong with them — a running number turns the
+recurring decision into arithmetic. The money still gets said, in the pouch and
+at the counter, where you have stopped to think about it.
 
 **FADES IN:** item toasts; lock-on brackets and target health; the extraction
 promotion and sweep; the room name card (Jacquard 24 @24 px, BONE 30%, centre
@@ -761,8 +772,8 @@ Fractions of viewport, origin top-left; px at 1280×720.
 | Bag numeral baseline | right-align 0.969 | 0.900 (648) | 32 px |
 | Value slips | right-align 0.969, max w 0.094 | 0.803→0.858 | 3 px + 2 gutter |
 | Item toast baseline | right-align 0.969 | 0.767 (552) | 16 px |
-| Extraction baseline | right-align 0.969 | 0.940 (677) | 12 / 16 px |
-| Bag rim | 0.740 → 0.978 | 0.786 → 0.958 | 2 px |
+| Bag rim | 0.812 → 0.978 | 0.786 → 0.914 | 2 px |
+| Extraction hold ring | centre 0.969 − 40 px | bag baseline − 16 px | r 54, 3 px stroke |
 | Room name baseline | centre 0.500 | 0.139 (100) | 24 px Jacquard |
 | Floor card origin | 0.031 (40) | 0.052 (37) | name 10 px over level 16 px, VOID plate, 6 px pad |
 | Extraction sweep | 0.0 → 1.0 | 0.500 | 1 px, 200 ms |

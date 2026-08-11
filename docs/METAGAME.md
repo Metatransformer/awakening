@@ -355,9 +355,11 @@ decision the player can act on.
 
 **What the player sees**, because a dead end with no feedback was the worst part:
 
-- The HUD's `EXTRACT` line shows the **charge**, in RUST rather than GOLD once
-  the toll has eaten the purse, and the screen-wide CYAN sweep fires at the
-  moment it does (`Hud.set_extract_dear`). That moment is *usually* once per run
+- **The HUD says it once, not continuously.** There is no `EXTRACT <charge>`
+  line in the corner — a standing figure gets read constantly, and a player
+  watching the fee tick is doing bookkeeping in a dungeon instead of playing
+  one. What fires instead is the screen-wide CYAN sweep, at the moment the toll
+  eats the purse (`Hud.set_extract_dear`). That moment is *usually* once per run
   and stays — nothing sells underground, so the purse cannot grow — but fletching
   (§4.6) burns real value out of the bag, so the toll can fall back under the
   purse and the sweep fire again when the bag climbs back. That is intended: the

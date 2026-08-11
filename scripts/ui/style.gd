@@ -171,14 +171,16 @@ const BAG_NUM_BASELINE := 0.900
 const SLIPS_TOP := 0.795
 const SLIPS_BOTTOM := 0.845
 const TOAST_BASELINE := 0.767
-const EXTRACT_BASELINE := 0.940
 ## Hugs its contents. The styleguide's original 0.740 left edge left a third of
 ## the box empty at every bag size a player will actually see, and an empty
 ## frame reads as a panel someone forgot to fill rather than as an instrument.
 ## 0.812 fits a six-digit total, which is past anything the drop tables produce.
-## The rim frames THE BAG -- slips and total -- and stops above the extraction
-## line. Enclosing the extract line too meant "EXTRACT 238" started left of the
-## rim and crossed it, which reads as a rendering bug rather than a frame.
+##
+## The bottom edge stops at 0.914 because it used to have to clear an
+## `EXTRACT <charge>` line at 0.940 -- enclosing that too put "EXTRACT 238"
+## starting left of the rim and crossing it, which read as a rendering bug. That
+## line is gone (`Hud._draw_extraction`) and the bound stayed anyway: the rim
+## frames THE BAG, and growing it into the empty strip below would frame nothing.
 const RIM_TL := Vector2(0.812, 0.786)
 const RIM_BR := Vector2(0.978, 0.914)
 const ROOM_NAME_BASELINE := 0.139
