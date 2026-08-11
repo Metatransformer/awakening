@@ -2008,7 +2008,31 @@ so every safe-margin and collision claim ever made against this row still holds
 of the same pixels, and `_hud_layout` reports `layout_fails=0` with the row at
 three in both scenes.
 
-### The negative case, and a disagreement worth naming
+### The negative case, and a disagreement — settled
+
+**Settled 2026-08-11, orchestrator's call: the split below is correct and the
+slot stays.** Card #39's author (me) wrote *"a row that is always drawn is not an
+instrument"* aiming it at a readout that reads the same whether or not anything
+is running. This row does not read the same, and the section below is right about
+why. Three further reasons it stays, none of which #39 had in view:
+
+1. **Consistency inside the row beats the general rule.** Ironhide and Emberblood
+   are always drawn. A third slot that appeared and vanished would make the row's
+   own behaviour inconsistent, and a player cannot learn a rule that holds for two
+   of three dials.
+2. **A vanishing slot re-lays out the row while the player is reading it.** At
+   three slots the row is 47 px a slot; at two it is 73. Ballast's window opening
+   would shove Ironhide's and Emberblood's clocks sideways mid-fight — motion in
+   the two dials that did not change, at the exact moment the player is looking
+   for one that did.
+3. **"You own this dial and it is not running" is information.** It is the only
+   thing on the HUD that says the Ballast-Verse exists at all before you spend a
+   bag stack on it.
+
+Reversible: it is `_draught_slots()` returning a filtered list instead of
+`Game.LASTING_IDS` whole. If it is ever reversed, reverse it for all three slots
+or not at all.
+
 
 #39 says *"a row that is always drawn is not an instrument"* and asks for the
 window's absence as its own proved case. `_draw_draughts` says the opposite in as
