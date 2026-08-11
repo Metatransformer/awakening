@@ -1417,12 +1417,22 @@ and it is not line art.
 - **It only exists underground**, and only once at least one room is off the fog.
   In the garrison there is no floor and the corner is empty — an empty corner is correct,
   not a gap to fill.
-- **Fogged rooms are not drawn at all.** Not greyed, not outlined: absent. The
-  map is fitted to the whole floor's bounds so it does not re-scale as it fills
-  in, which means the blank space IS the information.
+- **It follows the hero.** He is pinned to the middle of the square and the floor
+  scrolls under him, at a fixed pitch of 3.4 cells across the box
+  (`MapDraw.FOLLOW_SPAN`). The MAP tab still fits the whole floor, and the two
+  wanting opposite things is the point: a full-floor fit is the right picture
+  when you have stopped to read it, and the wrong one at 132 px in a corner,
+  where a six-room floor puts every room under 40 px and "where am I" has to be
+  answered by finding a 5 px arrow. Following answers it by never moving the
+  arrow. The square is a clip as well as a frame; rooms are cut at its edge and
+  glyphs are dropped whole rather than sliced.
+- **Fogged rooms are not drawn at all.** Not greyed, not outlined: absent. Which
+  means the blank space IS the information.
 - **A corridor to a room you have seen is drawn whole; one to a room you have not
   is a stub** that stops short of it. A promise that there is more that way, and
-  no claim about what.
+  no claim about what. A locked door gets the same treatment — a gap in the wall
+  and a stub — because what is behind it is on the map too (`docs/CONTRACT.md`
+  §8, annexes), fogged until you walk in like everything else.
 - **The room you are standing in draws a heavier, brighter outline** (2 px BONE
   against 1 px MOTH). That is the "you are here" that survives at this size — the
   hero arrow is 5 px and reads as a dot from a normal seat.

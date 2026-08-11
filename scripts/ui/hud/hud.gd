@@ -2133,8 +2133,11 @@ func _draw_minimap(s: Vector2) -> void:
 	_canvas.draw_rect(frame, Pal.ASH, false, Pal.px(1.0, s.y))
 
 	var pad := Pal.px(Pal.MINIMAP_PAD, s.y)
+	# `follow`: the hero sits still in the middle of this one and the floor moves
+	# under him. The MAP screen still fits the whole floor -- `MapDraw.FOLLOW_SPAN`
+	# carries why the two want opposite things.
 	MapDraw.draw_map(_canvas, frame.grow(-pad), s.y,
-		get_tree().get_first_node_in_group(&"player") as Node3D)
+		get_tree().get_first_node_in_group(&"player") as Node3D, true)
 
 
 ## One caret, `dir` being the unit direction it points. `tip` is where the point
