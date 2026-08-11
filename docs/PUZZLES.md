@@ -22,13 +22,37 @@ Still design: phase 2's remaining three atoms.
 
 **The lantern (§2) and coupling (§3, combinator 6) are built**, proved by
 `tools/directors/lights_out.gd`. The lantern spends one of phase 2's four slots
-rather than adding a ninth line to the ceiling; nothing yet *places* a
-`LanternGrid` on a generated floor.
+rather than adding a ninth line to the ceiling. ~~Nothing yet *places* a
+`LanternGrid` on a generated floor.~~ **False since the gate room's prefab table
+landed; struck 2026-08-11.** `lights_out` is one of `Dungeon.GATE_PREFABS` and
+`Dungeon._gate_lights_out` stands a 3×3 grid in the middle of the gate room; it
+is **T0** (`_prefab_fits` asks only for `LANTERN`), so every floor can draw it.
+§5.2a below has said *Built* all along, and this header said the opposite — which
+is the worse of the two places to be wrong, because a reader who stops at the
+status paragraph concludes that coupling is unreachable on a real floor.
 
 **Chain (§3, combinator 7) is built**, proved by `tools/directors/chain_row.gd` —
 `PuzzleAtom.propagate()` is the mechanic and `scripts/props/chain_row.gd` is the
-row with the hole in it. Same caveat as the grid: nothing yet *places* a
-`ChainRow` on a generated floor.
+row with the hole in it.
+
+**Built but not placed, in one list** — checked against `scripts/world/dungeon.gd`
+on 2026-08-11. They were scattered one caveat per paragraph, which is how the
+grid's went stale without anyone noticing and how convert's never got written:
+
+- **`ChainRow`.** `scripts/props/chain_row.gd` exists and nothing but
+  `tools/directors/chain_row.gd` builds one. No gate, shortcut or treasure prefab
+  places a row.
+- **`convert` (§3.1, combinator 8).** The whole chain is in the code and none of
+  it is on a floor: `Lantern.convert_kind()` and the `ConvertZone` it puts on
+  `K.L_CONVERT` (`scripts/props/atoms/lantern.gd:~173`, `~348-355`),
+  `Arrow._probe_convert` (`scripts/combat/arrow.gd:~239`) and `EyeSwitch.frozen`
+  (`scripts/props/atoms/eye_switch.gd:~58`) all work, and `frozen` is set in
+  exactly one place in the whole tree — `tools/directors/convert_arrow.gd:~173`.
+  Lanterns *do* reach a generated floor now, through `lights_out`, so a fire
+  arrow can be lit down there; nothing down there asks for one.
+  **§10.5's worked floor-4 room is assembled from convert + nest + displace +
+  reconfigure**, so that room is a design and not something the generator can
+  currently build.
 
 **§3.1 and §10 are design, added 2026-08-10** after reading the 1998 Player's
 Guide end to end — `docs/OOT_CATALOGUE.md` is that pass. §3.1 adds three
@@ -708,11 +732,12 @@ guard. Neither one is a tutorial and neither one is skippable-and-then-required.
 | 1 Cistern | **The Sluice-Keeper** | `troll`, ×1.2, wet bronze | **Wheel-swing.** A full-beat overhead wind-up. *Blockable*, and blocking is the answer — a blocked blow never changes health, so the shield is how a Heat chain survives this fight (`docs/METAGAME.md` §4.5) | **Flood-stomp.** He plants and the water pulls back off his feet; a floor-tracking ring that must be rolled, never blocked |
 | 2 Foundry | **The Bellows-Hand** | `orc`, ×1.3, slag-red | **Guard.** Advances behind a plate; melee rings off it. The bellows on his back is exposed when he turns — **one arrow opens him** | **Ember-cough.** The bellows swell for a beat, then a cone of sparks |
 | 3 Choir | **The Second Voice** | `skeleton`, ×1.5, pale | **Ring.** It anchors to a resonating pillar and cannot be touched while the pillar sings. **Burst the pillar** | **Keening.** A sustained cone. It lands as a blow, so it breaks Heat — the fight is a race against your own chain |
-| 4 Chord Gate | **The Gate-Hound** | `kobold`, ×1.4, iron-dark | **Retreat.** Backs across a gap and lobs from the far side. **Hookshot** closes it, or freezes it where it stands (GDD §5.2) | **Overhand.** A heavy committed slam. Rolled, not blocked — the one beat in the set the shield does not answer |
+| 4 Chord Gate | **The Gate-Hound** | `kobold`, ×1.4, iron-dark | **Retreat.** Backs across a gap and lobs from the far side. **Hookshot** closes it ~~, or freezes it where it stands~~ (GDD §5.2) — the freeze half was never built and should not be; see the fourth departure below | **Overhand.** A heavy committed slam. Rolled, not blocked — the one beat in the set the shield does not answer |
 
 **The Placeholder column is a sketch, and `BossDb.MINIBOSSES` is the record.**
-All four rows are built (2026-08-10) and three of them departed from the column
-above, each time for a reason the table writes down at the row:
+All four rows are built (2026-08-10) and ~~three of them departed~~ **four things
+in the table above departed** from what shipped, each time for a reason the table
+writes down at the row:
 
 - **The multipliers are not heights.** `kobold` ×1.4 is 1.89 m, which is
   *shorter than an ordinary orc*, and the whole point of a miniboss is that it
@@ -726,6 +751,16 @@ above, each time for a reason the table writes down at the row:
 - **The Bellows-Hand's plate is a distance, not an invulnerability.** Its
   advance only comes out from 5 m, which is where the bow lives and the sword
   does not.
+- **The Gate-Hound is not frozen where it stands** *(added 2026-08-11 — the row
+  above advertised a freeze that nothing has ever built)*. `Boss.freeze()`
+  (`scripts/actors/enemies/boss.gd:~1117-1120`) overrides the chain to play
+  `hit_armor` and return — *"the barb rings off the plate and buys nothing"* — on
+  the same poise argument that refuses every blow: a hookshot that could cut a
+  tell short is a beat the player can delete, and one that could cut a punish
+  short takes the window away from them. **The pull is the answer and the freeze
+  is not**, which is what `BossDb`'s `gate_shard` beat says at its own row: the
+  `min_range` of 5.0 IS the lock, because a beat that cannot be picked from
+  inside five metres is deleted by closing the gap rather than merely survived.
 
 **Every telegraph obeys GDD §7**: it never compresses past 60% however deep the
 floor is. A miniboss that becomes unreadable at depth is a miniboss that has
@@ -1062,13 +1097,31 @@ finale shape that pays off a run-based inventory.
 **The expensive version is not on the manifest and should not go on it** — six
 authored trial rooms is six prefabs and a new anchor kind.
 
-**The cheap version costs zero new counts.** Floor 4 already gets three puzzle
+**The cheap version costs no new anchors.** Floor 4 already gets three puzzle
 anchors: the shortcut, the gate room and the treasure room. Draw them **one per
 verb — T1, T2, T3 — instead of by the normal rule**, and the Chord Gate becomes
 the floor that asks for the bow, the Burst and the hookshot in three separate
-rooms before it asks for the Riven Knight. That is a change to one selection
-function in `Dungeon`, and it is the difference between a fourth floor and a
-finale.
+rooms before it asks for the Riven Knight. It is the difference between a fourth
+floor and a finale.
+
+~~That is a change to one selection function in `Dungeon`.~~ **It is not, and
+this was re-priced against the tree on 2026-08-11.** The gate room can only build
+what `Dungeon.GATE_PREFABS` holds, and that is `sun_nest` (T0), `lights_out` (T0)
+and `eye_row` (T1) — `_prefab_fits` asks for `LANTERN`, `EYE_SWITCH` or
+`SUN_SOCKET` and for nothing else. **There is no T2 gate prefab and no T3 gate
+prefab**, so a floor 4 told to draw its gate room at the Burst or the hookshot
+draws nothing at all and `_gate_prefab` refuses loudly. The real price is
+**two prefabs that do not exist**, written on the pattern `_gate_lights_out`
+sets, *and then* the selection change.
+
+The other two anchors are the cheap part, and are worth separating out so the
+next reader prices the right thing: the shortcut is already picked by tier rather
+than by seed (`SHORTCUT_PREFABS` is T1/T2/T3 in order), and the treasure room
+already clamps to tier N and gates on whatever atom the pool hands it. The
+shortcut has a different bill instead — §1 gives floor 4's the **Far Lantern**,
+which has no verb, so `_shortcut_pool` comes back empty and that anchor is a
+plain `LockedDoor` today. Drawing it at a verb means taking the Far Lantern's
+door off it, which is a §1 design decision and not a selection function.
 
 ---
 

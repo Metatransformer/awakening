@@ -550,9 +550,17 @@ all four*, which is the one thing four slots must not be for.
 
 ## 7. The three questions, in one table
 
-Every row is answered above; this is the index, not a second source. **⚠ marks a
-row that describes design with no code behind it** — an index is what a reader
-lands on, and it must not be the one place the gap is invisible.
+Every row is answered above; this is the index, not a second source. ~~**⚠ marks
+a row that describes design with no code behind it** — an index is what a reader
+lands on, and it must not be the one place the gap is invisible.~~ **Dropped
+2026-08-11: no row carried the mark and none has anything left to carry it for.**
+It arrived on 2026-08-10 marking three rows — **⚠ Sustain**, **⚠ Ballast** and
+the relic row's *arriving broken is unbuilt* — and D3 and D5 took all three marks
+off it without taking the legend with them. Both Verses are rows in `ArmamentDb`
+and `RelicDb.RELICS` now, like the other four, and every remaining row here —
+relic, Echo, rung, Far Lantern — has code under it. A legend for a glyph the table does not use is itself something a
+reader lands on and believes, which is the failure the legend existed to
+prevent. **If a row ever loses its code, bring the mark back with it.**
 
 | Item | Answers | Enters | Changes |
 |---|---|---|---|
@@ -576,10 +584,12 @@ this file is revised. "Believe" names the reading that looks intended; it is a
 recommendation to whoever picks the card up, not a decision taken.
 
 **D1, D2, D3 and D4 are closed** (issue #25), **D13 is closed** (issue #29,
-2026-08-11), and **D5 is closed** (issue #30, 2026-08-11). Their entries are
-kept, struck through, with what was actually done — a defect list whose closed
-rows are deleted is a list that cannot tell you whether a thing was decided or
-merely forgotten. **D6–D12 and D14–D17 are open and unreconciled.**
+2026-08-11), **D5 is closed** (issue #30, 2026-08-11), and **D11 is closed**
+(2026-08-11, by the trade-screen rebuild rather than by a card of its own). Their
+entries are kept, struck through, with what was actually done — a defect list
+whose closed rows are deleted is a list that cannot tell you whether a thing was
+decided or merely forgotten. **D6–D10, D12 and D14–D17 are open and
+unreconciled.**
 
 ### ~~D1 — the twelve relics in code are not the twelve in the GDD~~ *(closed)*
 
@@ -797,16 +807,30 @@ at `item_db.gd:~180-184`.
 **Believe the intent** (a relic is legendary); the fix is one arm in
 `rarity_name()`.
 
-### D11 — all twelve relic lore strings are clipped mid-word on the counter
+### ~~D11 — all twelve relic lore strings are clipped mid-word on the counter~~ *(closed 2026-08-11)*
 
-`CanvasText.wrap()` takes a `max_lines` that defaults to 2 and
-`scripts/ui/shop/trade_screen.gd` does not pass one, so every entry in `RELICS`
-is truncated on the Lanternkeeper's board — and the smith's and the alchemist's
-blurbs with them. Self-documented with a `# NEEDS:` in the note above `RELICS`
-(`relic_db.gd:~125-138`), caught by `relic_donate.gd`'s `r_21_hold.png`.
+`CanvasText.wrap()` took a `max_lines` that defaulted to 2 and
+`scripts/ui/shop/trade_screen.gd` did not pass one, so every entry in `RELICS`
+was truncated on the Lanternkeeper's board — and the smith's and the alchemist's
+blurbs with them. Caught by `relic_donate.gd`'s `r_21_hold.png`.
 
-**Believe the panel has the room**; the fix is one argument at the call site, not
-twelve shortened strings.
+**Closed, and not the way this entry expected.** It was not one argument at the
+call site: the trade screen was rebuilt out of Control nodes, so the blurb is a
+`Label` with `AUTOWRAP_WORD_SMART` and `SIZE_EXPAND_FILL`
+(`trade_screen.gd:~443`, `~460`) and wraps to the panel with no line cap at all —
+which re-wraps when the panel resizes, as a measured-once `PackedStringArray`
+never could. That left `CanvasText.wrap()` with no callers and **it is deleted**;
+`scripts/ui/canvas_text.gd:84-102` is the tombstone, and it carries the warning
+for anyone about to reinstate it for a HUD line — `Hud._pack_legend` does not
+want word wrapping, because a HUD row is a list of entries that each contain a
+space ("LMB SWORD") and breaking on spaces splits a cap from its verb. The
+`# NEEDS:` note above `RELICS` is struck through in place
+(`relic_db.gd:~125-138`).
+
+**The lore was never cut down to fit the bug**, and that is the part of this
+entry worth keeping: shortening twelve entries to work around a wrap default is
+a change that is hard to undo and easy to forget, and it would have outlived the
+default by a mile.
 
 ### D12 — the ownership table this file was asked to join is not in the GDD
 
