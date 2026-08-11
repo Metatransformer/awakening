@@ -96,13 +96,21 @@ extends RefCounted
 ##    passes at 16,802 px.** That is the whole argument for a per-plate check
 ##    existing. A caption can go completely and the total will not notice.
 ##
-##    The blinded arm reads its two SURVIVING plates a few percent high
-##    (5719/4706 against 5299/4543). That is not the slab: it is invisible, its
-##    mask is 0, and the only thing on `K.L_WORLD` that reads it is plate N's own
-##    ray — a body that could touch plate 0's number would have to zero it, not
-##    raise it. It is the eight frames the insertion costs before the
-##    photograph, which is the same whole-frame drift as the bands above,
-##    sampled a little further along.
+##    The blinded arm reads its two SURVIVING plates HIGHER — 5719 and 4706,
+##    against 5299 and 4543 — and lands on exactly the numbers beat E gets from
+##    the lookdev lens. **Look at the two frames and the reason is on them:** at
+##    the game camera the three names collapse into one another, THE SECOND WIND
+##    sitting across THE RETURNING SHAFT, while the lookdev lens is close enough
+##    to hold them apart. Each plate's diff is counted by hiding that caption and
+##    re-photographing, so where a neighbour's glyphs sit under it the pixels
+##    are still lit afterwards and do not count. Take the middle one away
+##    entirely and its neighbours stop being overlapped — hence full readings,
+##    hence the exact match with the uncrowded lens.
+##
+##    So the floor is deliberately set below the OVERLAPPED numbers, which is
+##    the state the game camera actually shows. (That the row is illegible in
+##    that state is a real fault, and not this director's to fix — it is a HUD
+##    layout question raised by card #61's move to canvas type.)
 ##
 ## `Engine.time_scale = 0` is what makes the pair comparable: the torches gutter,
 ## the stone's lamp swells and the motes bob, so two consecutive captures of a
