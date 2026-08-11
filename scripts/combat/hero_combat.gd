@@ -1070,11 +1070,27 @@ func _tick_dpad() -> void:
 		Game.cycle_weapon(-1)
 	if Input.is_action_just_pressed(&"weapon_next"):
 		Game.cycle_weapon(1)
-	if Input.is_action_just_pressed(&"item_next"):
+	# **The ring is frozen while a meal is running**, and that is a rule about the
+	# HUD rather than about what a seated hero may do. `Game.begin_meal` was handed
+	# `selected_item()`, and the item cell draws the meal's twelve seconds inside
+	# the SELECTED item's frame (`Hud._draw_item_cell`) on the strength of those
+	# two being the same id. Let the ring turn under a live meal and the gauge is
+	# filling in a cell showing a bottle the hero is not drinking. The alternative
+	# -- draw `Game.meal_id` in the cell regardless of the selection -- makes the
+	# D-pad press do nothing visible, which is the same lie told from the far end.
+	#
+	# It costs the player nothing: the meal is twelve seconds and a step in any
+	# direction ends it (`Hero._tick_meal_cancel`), so "I need the other bottle
+	# NOW" is already answered by standing up.
+	if Input.is_action_just_pressed(&"item_next") and not Game.eating():
 		# The blip is refused on a ring of one, because there `cycle_item` is a
 		# no-op and a click that says "moved" when nothing moved is worse than
 		# silence -- the player looks at the HUD for a change that is not there.
-		if Game.bottle_count() > 1:
+		#
+		# `carry_count`, not `bottle_count`: the ring is bottles AND rations now
+		# (`Game.carry_ids`), so a hero with one bottle and a stack of hardtack has
+		# two stops and both of them have to click.
+		if Game.carry_count() > 1:
 			_select_blip()
 		Game.cycle_item(1)
 	if Input.is_action_just_pressed(&"loadout_swap"):
@@ -1100,7 +1116,12 @@ func _select_blip() -> void:
 		Bus.request_sfx.emit(&"ui_move_selection", _hero.global_position)
 
 
-## X — drink the selected bottle. One press, no draw, no aim.
+## X — use what is selected. One press, no draw, no aim.
+##
+## **What "use" means is the selection's business, not this button's**
+## (`Game.use_selected_item`): a bottle is swallowed and a ration sits him down
+## for twelve seconds. Everything below describes the bottle, and every word of it
+## is deliberately false for a ration — that is the item, not an inconsistency.
 ##
 ## Elden Ring's X and it is the reason items and weapons are on different inputs
 ## at all: a flask is a thing you swallow, and the two-press version of it (take

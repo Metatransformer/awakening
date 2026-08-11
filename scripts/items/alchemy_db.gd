@@ -1,8 +1,19 @@
 class_name AlchemyDb
 extends Catalogue
 ## What the alchemist will make you. Four lines: the bottle, and three things to
-## put in it -- and a fifth, once you own the working, that goes in nothing:
-## **the Burst's charges** (GDD §6.5, `CHARGE_ID` below).
+## put in it. **Everything here is BREWED**, and that is the whole of what he is
+## for.
+##
+## **The Burst's charges were a fifth line here until 2026-08-11 and they are the
+## quartermaster's now** (card #98, `SupplyDb`). Nothing about them changed --
+## same batch of three, same 90 gold, same gate on owning the working -- and the
+## argument for moving them was written on this file before anyone acted on it:
+## `_charge_line`'s own comment said a charge "is not brewed out of anything the
+## floor drops... which is the smith's arrow line and not her bench". The arrow
+## line is Kessa's now, so the charges went where they had always belonged. It
+## also unhid them by a whole boss: he does not stand in the yard until one is
+## dead (`StoryDb.UNLOCKS`) and she is unconditional, so a hero who took Burst off
+## the Slag Ogre no longer has to wait for a counter to spend gold at.
 ##
 ## **The same shape as `ShopDb`, deliberately and exactly** -- which is now a
 ## thing the parser knows rather than a promise in a comment: both extend
@@ -56,38 +67,6 @@ const BREW_GOLD := {
 const BOTTLE_GOLD := 110
 const BOTTLE_GROWTH := 2.4
 
-## --- Charges (`docs/GDD.md` §6.5) --------------------------------------------
-##
-## **Charges are arrows.** GDD §6.5 says it in three words and then says where
-## they come from: *"You buy them from the alchemist -- he is already the only
-## thing you take down with you, and a charge is a stock you paid for in the
-## garrison before you left, exactly like a bottle."* `game_state.gd:100-103`
-## repeats it over the field itself.
-##
-## **Until this line existed, nothing in the shipped game called
-## `Game.add_charges()`.** Its only caller in the whole repo was
-## `tools/directors/burst_cast.gd`, which grants itself three -- so a player
-## could kill the Slag Ogre, take the Burst, reach it on the ring, and never put
-## a charge in it. That is `docs/ITEMS.md` §8 D4, and it is the one defect on
-## that list that made a shipped item unusable in a real run.
-##
-## The id is the one `Game.ammo_count()` and `ArmamentDb.hand_count(&"burst")`
-## already use. A second spelling here would be a counter the HUD does not draw.
-const CHARGE_ID := &"charges"
-## Three at a time, and this is the arrow bundle's argument at a different
-## scale: `ShopDb` sells `ARROWS X10` against a quiver of 30, so a bundle is a
-## third of full and the walk back to the counter is not the game. `K.BURST_CHARGES_MAX`
-## is 12, so three is the same fraction. [tune]
-const CHARGE_BATCH := 3
-## Gold per bundle. Flat, like a brew and unlike the glass: a charge is gone by
-## the next room, and a ramp would make the tenth cast cost more than the first
-## for no reason the player could name.
-##
-## 90 for three is 30 gold a charge against the smith's 4 a arrow, which is the
-## honest ratio -- a charge opens a wall or breaks a guard, and an arrow is one
-## body at range. Against a good run's 250-450 gold it is a real line on the
-## bill and never the reason you go back down. [tune]
-const CHARGE_GOLD := 90
 
 
 ## The board, top to bottom. The bottle first: it is the line that makes the
@@ -120,14 +99,6 @@ static func lines() -> Array[Dictionary]:
 		if not RelicDb.knows_draught(id):
 			continue
 		out.append(_brew_line(id))
-	# **Last, and only once the working is owned.** Same sieve `ShopDb.GATED_BY`
-	# runs the arrow line through, for the same reason spelled out there: a line
-	# for ammunition you cannot fire is a slot that lies, and it is a spoiler as
-	# well -- a player who has not reached the Foundry should not be sold charges
-	# for a verb they have never seen. Absent rather than greyed out, so the
-	# board grows by one row on the walk back from the Slag Ogre.
-	if Game.has(&"burst"):
-		out.append(_charge_line())
 	return out
 
 
@@ -153,29 +124,19 @@ static func groups() -> Array[Dictionary]:
 		"owned": Game.bottle_count() - K.BOTTLE_START,
 		"rungs": K.BOTTLE_MAX - K.BOTTLE_START,
 	}]})
-	# THREE rows now, and the third is why `flat_group` is not used any more:
-	# it takes everything from an index to the end, and the charge line lives at
-	# the end. Sorted by id instead of by position, so a fourth thing she sells
-	# lands in the row it belongs in rather than in whichever one happens to
-	# reach that far. `line` still indexes `lines()`, which is the only coupling
-	# either of these rows has.
+	# Everything after the glass is a draught, and `flat_group` is still not what
+	# builds it. A third row (CHARGES) lived here until the charges moved to the
+	# quartermaster, and the loop is kept in that shape on purpose: `flat_group`
+	# takes everything from an index to the END, so the day he sells a fourth kind
+	# of thing it would swallow it into the draughts silently. Sorting by id is
+	# what makes a new line land in the row it belongs in. `line` still indexes
+	# `lines()`, which is the only coupling this row has.
 	var draughts: Array = []
-	var charges: Array = []
 	for i in range(1, rows.size()):
-		var track := {"name": String(rows[i].get("label", "")), "line": i,
-			"owned": 0, "rungs": 1}
-		if rows[i]["id"] == CHARGE_ID:
-			charges.append(track)
-		else:
-			draughts.append(track)
+		draughts.append({"name": String(rows[i].get("label", "")), "line": i,
+			"owned": 0, "rungs": 1})
 	if not draughts.is_empty():
 		out.append({"title": "DRAUGHTS", "tracks": draughts})
-	# Its own row rather than a fourth cell under DRAUGHTS: a charge is not
-	# something you drink and it does not go in the glass, and the group titles
-	# are the only thing on this board that says which of her two trades a line
-	# belongs to.
-	if not charges.is_empty():
-		out.append({"title": "CHARGES", "tracks": charges})
 	return out
 
 
@@ -211,22 +172,6 @@ static func _brew_line(id: StringName) -> Dictionary:
 	}
 
 
-## Gold only, and no `parts`. A charge is not brewed out of anything the floor
-## drops -- GDD §6.5 calls it a stock you paid for before you left, which is the
-## smith's arrow line and not her bench -- and giving it a recipe would make the
-## working's ammunition compete with the draughts for the same four materials.
-static func _charge_line() -> Dictionary:
-	return {
-		"id": CHARGE_ID,
-		"label": "CHARGES X%d" % CHARGE_BATCH,
-		"cost": CHARGE_GOLD,
-		"parts": {},
-		"blurb": "Stoppered, and heavier than it looks. It does not come back once it is spent.",
-		# The number the decision is actually about. They do NOT refill
-		# underground (GDD §6.5), so what is in the pouch when you take the rope
-		# down is the whole of what you get.
-		"detail": "%d / %d charges" % [Game.charges, Game.max_charges],
-	}
 
 
 ## What the NEXT bottle costs in materials, or `{}` when you own all four.
@@ -247,22 +192,16 @@ static func next_bottle_parts() -> Dictionary:
 ## finding rather than being a discount -- and no branch here, because the
 ## accessor already contains the only `if` there is.
 static func remaining(id: StringName) -> int:
-	if id == CHARGE_ID:
-		# The pouch's headroom in BUNDLES, rounded up, so a player one charge
-		# short of full still sees a line they can press. `add_charges` clamps,
-		# so the last bundle is a partial fill rather than a refusal -- exactly
-		# what the smith's ARROWS X10 does against a quiver of 30.
-		return int(ceil(float(maxi(0, Game.max_charges - Game.charges))
-			/ float(CHARGE_BATCH)))
 	if id != &"bottle":
 		return -1
 	return maxi(0, RelicDb.bottle_cap(K.BOTTLE_MAX) - Game.bottle_count())
 
 
-## Is this line a draught, as opposed to the glass it goes in or the charges
-## that never go in glass at all? Asked rather than inferred from `id !=
-## &"bottle"`, which is what the two lines below used to do and which quietly
-## made the charge line require an empty bottle.
+## Is this line a draught, as opposed to the glass it goes in? Asked rather than
+## inferred from `id != &"bottle"`, which is what the two lines below used to do
+## and which quietly made the charge line -- when there was one here -- require an
+## empty bottle. Every non-glass row is a brew again today; the question is kept
+## asked properly because that is exactly the state it was in last time.
 static func _is_brew(id: StringName) -> bool:
 	return PotionDb.IDS.has(id)
 
@@ -294,12 +233,6 @@ static func refusal(line: Dictionary) -> String:
 	# is written -- the relic list is the quest log (docs/SCOPE.md §1) -- so this
 	# footer states the fact and does not branch on why.
 	if remaining(id) == 0:
-		# Two ceilings on one board now, and telling the player the wrong one is
-		# the failure this footer exists to prevent (`ShopDb.refusal` says the
-		# same thing over three of them). The pouch being full is not a thing a
-		# relic lifts, so this arm does not point anywhere.
-		if id == CHARGE_ID:
-			return "THE POUCH WILL NOT TAKE ANOTHER"
 		return "THAT IS ALL THE GLASS SHE CAN BLOW"
 	if _is_brew(id) and Game.empty_bottles() <= 0:
 		return "NO EMPTY BOTTLE"
@@ -329,11 +262,6 @@ static func buy(line: Dictionary) -> bool:
 
 	if id == &"bottle":
 		Game.add_bottle()
-	elif id == CHARGE_ID:
-		# The call that had no caller. `add_charges` clamps at `max_charges` and
-		# emits `Bus.ammo_changed`, which is what puts the new numeral in the
-		# HUD's working cell -- so the counter and the cell cannot disagree.
-		Game.add_charges(CHARGE_BATCH)
 	elif Game.fill_bottle(id) < 0:
 		# Unreachable while `can_buy` gates on an empty bottle, and checked
 		# anyway: this is the one branch where the player has already been

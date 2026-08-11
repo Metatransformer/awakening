@@ -1468,8 +1468,10 @@ class_name Item extends Resource
 @export var id: StringName        # &"bow" &"hookshot" &"burst" &"sustain" &"ballast"
 @export var icon: Texture2D
 @export var magic_cost: int       # CHARGES, not mana — the bow's arrow count with
-                                  # another name. Bought from the alchemist, spent
-                                  # on cast, refilled in the garrison only. GDD §6.5.
+                                  # another name. Bought from the quartermaster's
+                                  # stores (card #98; the alchemist's until
+                                  # 2026-08-11), spent on cast, refilled in the
+                                  # garrison only. GDD §6.5.
 func use(hero: Node3D) -> void
 func release(hero: Node3D) -> void   # for held/charged items
 ```
@@ -1545,8 +1547,11 @@ rule to one numeral per row.
 `Game.charges` / `Game.max_charges` **are the old `bombs` / `max_bombs` renamed**
 rather than a new pair, and `save_game.gd` reads the old `"bombs"` key as a
 fallback so a save written before M5 keeps its count. There is no underground
-refill: charges come from the alchemist's board in the garrison, which is what
-makes spending one a decision.
+refill worth planning around: charges come from the **quartermaster's stores** in
+the garrison (`SupplyDb`; they were the alchemist's until card #98, 2026-08-11),
+which is what makes spending one a decision. The single `ChargeCache` braced
+against floor 2's shortcut is the one exception and it exists to keep that door
+openable, not to supply a run — see `docs/METAGAME.md` §6.6.
 
 Two sets rather than one, because the primary answers "something is in front of
 me" and the alternate answers "something is not" — and a weapon switch you have
@@ -1849,6 +1854,52 @@ Rules:
 - `AlchemyDb` exposes the identical five statics `ShopDb` does, and
   `TradeScreen.open(host, mode, title, db)` takes whichever. **Add a method to
   one and you add it to the other.**
+
+### Rations and the meal — card #98, `docs/METAGAME.md` §6.4
+
+```gdscript
+# scripts/autoload/game_state.gd
+var rations: Dictionary[StringName, int]      # id -> count, capped K.RATION_STACK
+var meal_id: StringName                       # &"" when nobody is eating
+var meal_left: float                          # seconds, counts down to 0
+
+func ration_count(id: StringName) -> int
+func add_rations(id: StringName, n: int) -> int   # returns how many FIT
+func ration_ids() -> Array[StringName]            # only stacks you have
+
+func eating() -> bool
+func meal_progress() -> float                 # 0 -> 1, for the gauge
+func begin_meal(id: StringName) -> bool       # false at a full bar / empty stack
+func cancel_meal() -> void                    # silent, idempotent, no refund
+
+func restore_magic(amount: int) -> void       # ONE caller: RationDb.apply_tick
+```
+
+Rules:
+
+- **`Game.carry_ids()` is the item ring, and it is bottles THEN rations.**
+  `item_selected` indexes it. The order is load-bearing: every index below
+  `bottle_count()` still means exactly what it meant before rations existed, so
+  old saves, `bottle_index()` and every director asserting a bottle index keep
+  working. A ration can only ever lengthen the ring.
+- **X is the only button.** `use_selected_item()` routes off the id —
+  `RationDb.has(id)` starts a meal, anything else drinks a bottle. There is no
+  second verb and no second input.
+- **The hero owns the pose and the cancel; `Game` owns the counter.** `Hero`
+  roots himself on `Game.eating()`, holds `clip_rest`, and calls `cancel_meal()`
+  on a step, on any of `Hero.MEAL_BREAKERS`, on a screen or a rope, and at the
+  top of `take_hit`. A second clock living on an actor is a second thing to leave
+  running through a scene change.
+- **The ration is spent when the meal STARTS.** No refund on a cancel — that is
+  the item (`docs/METAGAME.md` §6.4).
+- **`restore_magic` has exactly one caller** and `docs/SCOPE.md` §2 is why.
+  Adding a second is a SCOPE amendment, not a patch.
+- New on `Bus`: `rations_changed(stock)`, `meal_changed(ration, seconds_left)` —
+  the latter per TICK, not per frame; the HUD reads `meal_progress()` as it
+  draws, the way it reads health.
+- **Stacks are saved (`VERSION = 8`); the meal is not.** Rebuild key by key
+  through `RationDb.has()` on load, for the reason the bottle array is rebuilt
+  with `StringName(c)`.
 
 ### The way out — the Escape Rope
 
@@ -2326,7 +2377,8 @@ ChargeCache.HOLDS                   # 2 — what one cache is worth
 true of it: charges live on `Game`, so it never touches the bag, it is walk-over
 with no button, and a **full pouch** refuses and leaves it lit on the floor.
 `Game.add_charges()` is the only writer it goes through — the same seam the
-alchemist's `CHARGES X3` line uses, and the one that emits `Bus.ammo_changed`.
+quartermaster's `CHARGES X3` line uses, and the one that emits
+`Bus.ammo_changed`.
 
 **Nothing rolls it.** Unlike arrows there is no `charge_chance` on `Dungeon` or
 `Chest` and there must not be: `docs/GDD.md` §6.5 makes charges a stock you

@@ -7,6 +7,17 @@ extends RefCounted
 ## with no way to load it. Kill the Slag Ogre, take the Burst, reach it on the
 ## ring, and there was nothing in the shipped game that would sell you a charge.
 ##
+## **The counter moved on 2026-08-11 and this director moved with it** (card #98).
+## Charges were the alchemist's fifth line and they are the QUARTERMASTER's stores
+## now, for the reason the alchemist's own file had written down while they sat
+## there: a charge is not brewed out of anything, it is issued out of a store. The
+## move also closed a hole this director could not have seen from where it was
+## standing -- the alchemist does not appear in the yard until a boss is down
+## (`StoryDb.UNLOCKS`), so the beats below used to prove that a hero who had just
+## taken Burst off the Slag Ogre could buy ammunition at a counter that only
+## exists once the Slag Ogre is dead. True, and true by a coincidence of ordering.
+## Kessa is unconditional.
+##
 ## Point it at GARRISON. It descends on its own, because the claim is not "a
 ## counter took some gold" -- it is that a charge bought upstairs is in the pouch
 ## when you get down there and comes out of it when you pull the trigger.
@@ -21,10 +32,13 @@ extends RefCounted
 ##   A  Before the Slag Ogre, she does not sell them. The line is ABSENT, not
 ##      greyed -- ammunition for a verb you have never seen is a spoiler and a
 ##      slot that lies (`SupplyDb.GATED_BY` makes the same argument for arrows).
-##   B  Owning the working, her board grows a CHARGES row of its own.
-##   C  It is bought the way a player buys it: walk up, Trade, cursor onto the
-##      row, HOLD. The gold goes down and the pouch goes UP, and the frames
-##      either side of the press are the same row with a different number in it.
+##   B  Owning the working, the line appears in her STORES row -- beside the
+##      arrows, which is the whole argument for the move: both are things you buy
+##      in the yard, take down, and come back without.
+##   C  It is bought the way a player buys it: walk up, ask for The Stores, walk
+##      the cursor onto the row, press. The gold goes down and the pouch goes UP,
+##      and the frames either side of the press are the same row with a different
+##      number in it.
 ##   D  It reaches the HUD -- the working's hand cell is a counter and the
 ##      numeral in it is the one the counter just sold.
 ##   E  It survives the shaft. He goes down with three and the trigger spends
@@ -33,7 +47,7 @@ extends RefCounted
 ## C and E are the two the card asked for and they are the two with frames. The
 ## rest is the plumbing that makes them reachable.
 
-## The bundle's price is `AlchemyDb.CHARGE_GOLD`; this is enough to buy one and
+## The bundle's price is `SupplyDb.CHARGE_GOLD`; this is enough to buy one and
 ## not so much that "the gold went down" is invisible against it.
 const PURSE := 600
 
@@ -54,7 +68,7 @@ func run(rig) -> void:
 	await _underground(rig)
 
 	if _fails == 0:
-		print("CHARGE OK the alchemist sells them, the pouch carries them, the trigger spends one")
+		print("CHARGE OK the stores sell them, the pouch carries them, the trigger spends one")
 	else:
 		print("CHARGE FAIL -- %d check(s) failed" % _fails)
 
@@ -79,7 +93,7 @@ func _cold(rig) -> void:
 	# has to be scrolled past, which is the argument `shop_db.gd:44-52` makes
 	# about the bow's ladder in more words than this needs.
 	_ck("A2 she does not sell charges to someone with no working",
-		not ids.has(AlchemyDb.CHARGE_ID))
+		not ids.has(&"charges"))
 	await rig.wait_frames(4)
 
 
@@ -95,15 +109,19 @@ func _owned(rig) -> void:
 	_ck("B0 the working is owned", Game.has(&"burst"))
 	var ids := _ids()
 	print("CHARGE warm board=%s" % [ids])
-	_ck("B1 her board grew the charge line", ids.has(AlchemyDb.CHARGE_ID))
+	_ck("B1 her board grew the charge line", ids.has(&"charges"))
 	# The row, not just the line. A line with no group is a line the board never
 	# draws, which is exactly how the Lanternkeeper's counter shipped blank once
 	# (`RelicDb.groups`'s note).
 	var titles: Array = []
-	for g in AlchemyDb.groups():
+	for g in SupplyDb.groups():
 		titles.append(String(g["title"]))
-	_ck("B2 and a row of its own to draw it in (%s)" % [titles],
-		titles.has("CHARGES"))
+	# STORES and not a CHARGES row of its own, which is what this asserted while
+	# the line was the alchemist's. Four expendables sharing one title IS the move
+	# (`SupplyDb.groups`): what the row says is "these are the things you take down
+	# and come back without", and which bar or which hand each one feeds is the
+	# cell's business rather than the counter's.
+	_ck("B2 and a row to draw it in (%s)" % [titles], titles.has("STORES"))
 	await rig.wait_frames(4)
 
 
@@ -111,28 +129,32 @@ func _owned(rig) -> void:
 
 func _buy(rig) -> void:
 	var garrison := rig.scene() as Garrison
-	if garrison == null or garrison.alchemist == null:
-		_ck("C0 the alchemist is in the garrison", false)
+	if garrison == null or garrison.vendor == null:
+		_ck("C0 the quartermaster is in the garrison", false)
 		return
-	_ck("C0 the alchemist is in the garrison", true)
-	# Addressed the way a player addresses him: stand where the prompt reaches,
+	_ck("C0 the quartermaster is in the garrison", true)
+	# Addressed the way a player addresses her: stand where the prompt reaches,
 	# press what it names. Calling `activate()` would prove the screen opens and
-	# nothing about whether he can be reached.
-	_stand_at(rig, garrison.alchemist.global_position + Vector3(0.0, 0.0, 1.6),
-		garrison.alchemist.global_position)
+	# nothing about whether she can be reached.
+	_stand_at(rig, garrison.vendor.global_position + Vector3(0.0, 0.0, 1.6),
+		garrison.vendor.global_position)
 	var focused := await _wait_until(rig,
-		func() -> bool: return Prompt.focus == garrison.alchemist, 120)
-	_ck("C1 he owns the interact button", focused)
+		func() -> bool: return Prompt.focus == garrison.vendor, 120)
+	_ck("C1 she owns the interact button", focused)
 	await rig.tap(["interact"])
-	_ck("C1b he offers to trade", await rig.talk("Trade"))
+	# **"The Stores" and not "Trade".** Kessa keeps two counters and her list reads
+	# `Trade / The Stores / Leave` (`Npc._options`); "Trade" opens the SELL screen
+	# and this beat would then hunt for a CHARGES row on a board made of the hero's
+	# own loot. `mvp_loop._buy` carries the same note for the same reason.
+	_ck("C1b she offers the stores", await rig.talk("The Stores"))
 	await rig.wait_frames(16)
 
 	var screen := _screen(rig)
 	if screen == null:
-		_ck("C2 his counter opened", false)
+		_ck("C2 her counter opened", false)
 		return
-	_ck("C2 his counter opened", true)
-	var row := _row(screen, AlchemyDb.CHARGE_ID)
+	_ck("C2 her counter opened", true)
+	var row := _row(screen, &"charges")
 	if row.is_empty():
 		_ck("C3 CHARGES is on the board", false)
 		return
@@ -140,25 +162,15 @@ func _buy(rig) -> void:
 	_ck("C4 it costs gold and NOT materials -- a charge is stock, not a brew",
 		int(row["line"]["cost"]) > 0
 			and (row["line"].get("parts", {}) as Dictionary).is_empty())
-	_ck("C5 he will sell it (%s)" % AlchemyDb.refusal(row["line"]),
-		AlchemyDb.can_buy(row["line"]))
+	_ck("C5 she will sell it (%s)" % SupplyDb.refusal(row["line"]),
+		SupplyDb.can_buy(row["line"]))
 
-	# `_point_at`, and not `screen._cursor = i` (CLAUDE.md §3, card #77). The
-	# assignment is half a move: `_point_at` is the half that calls `grab_focus`,
-	# which is DEFERRED, so the `focus_entered` it queues lands a frame later, runs
-	# back through `_on_cell_looked`, and puts `_cursor` on whatever row the last
-	# `_refresh` left the focus on. Card #74 was nine red checks of exactly that.
-	#
-	# Going through `_point_at` makes the round trip IDEMPOTENT -- it re-points at
-	# the row that was asked for -- so a beat that waits a frame before acting is
-	# safe rather than racing. That is why no wait is added here: the fix is the
-	# call, not a sleep.
-	screen._point_at(screen._rows.find(row))
+	# Refreshed and then re-aimed: the cursor has to be back on the row after a
+	# rebuild, or the "before" frame is a photograph of whatever line the focus
+	# landed on.
 	screen._refresh()
-	# The cursor has to be back on the row after a refresh, or the "before" frame
-	# is a photograph of the bottle line.
-	screen._point_at(screen._rows.find(_row(screen, AlchemyDb.CHARGE_ID)))
-	await rig.wait_frames(8)
+	var aimed := await _aim(rig, screen, &"charges")
+	_ck("C5b the cursor is on the charge row (%s)" % screen.cursor_label(), aimed)
 	var gold_before := Game.gold
 	var charges_before := Game.charges
 	# **The frame the card asked for, first half.** The row, the price, and the
@@ -166,30 +178,36 @@ func _buy(rig) -> void:
 	await rig.capture(out.path_join("c_00_before.png"))
 
 	# **A TAP, and that is the right answer.** `Catalogue.crafts()` makes a line a
-	# hold when it eats `parts`, and the charge line has none -- so it presses
-	# exactly like the smith's ARROWS X10 and unlike every brew on this same
-	# board. The hold is not ceremony: it protects a press that spends materials
-	# the floor gave you and cannot give back. Gold you can earn again.
+	# hold when it eats `parts`; the hold is not ceremony, it protects a press that
+	# spends materials the floor gave you and cannot give back. Gold you can earn
+	# again.
 	#
-	# Asserted rather than assumed, because "which press is this" is the kind of
-	# thing that drifts silently: the first cut of this director expected a hold
-	# here and reported three failures for a counter that was behaving correctly.
-	var brew := _row(screen, &"heart_draught")
-	_ck("C6 it is a tap, like the smith's arrows, and not a hold like a brew",
-		not AlchemyDb.crafts(row["line"])
-			and not brew.is_empty() and AlchemyDb.crafts(brew["line"]))
+	# It used to be asserted against a BREW on the same board -- the charge taps,
+	# the Heart Draught holds -- and that contrast died with the move: nothing on
+	# this counter is crafted, which is the sentence `SupplyDb`'s header opens with.
+	# So the claim is now the whole board's and it is the stronger one: every row a
+	# quartermaster issues is a tap, and the day one of them grows a `parts` entry
+	# this fails rather than silently turning the stores into a bench.
+	var held: Array = []
+	for r in screen._rows:
+		if r.get("kind") == &"buy" and SupplyDb.crafts(r["line"]):
+			held.append(String(r["line"]["id"]))
+	_ck("C6 nothing on the stores is a hold -- she issues, she does not make (%s)"
+		% [held], held.is_empty())
 	await rig.tap(["ui_accept"])
 	await rig.wait_frames(12)
 	print("CHARGE bought gold %d -> %d  charges %d -> %d" % [
 		gold_before, Game.gold, charges_before, Game.charges])
 	_ck("C7 the pouch went up by a bundle (%d -> %d)"
 		% [charges_before, Game.charges],
-		Game.charges == charges_before + AlchemyDb.CHARGE_BATCH)
+		Game.charges == charges_before + SupplyDb.CHARGE_BATCH)
 	_ck("C8 and it cost the counter's price (%d -> %d)" % [gold_before, Game.gold],
-		Game.gold == gold_before - AlchemyDb.CHARGE_GOLD)
+		Game.gold == gold_before - SupplyDb.CHARGE_GOLD)
 
+	# Rebuilt before it is aimed at, so the "after" frame's detail pane reads the
+	# count the press produced rather than the one it started from.
 	screen._refresh()
-	screen._point_at(screen._rows.find(_row(screen, AlchemyDb.CHARGE_ID)))
+	await _aim(rig, screen, &"charges")
 	# **Wait for the PURSE to stop rolling.** `TradeScreen` lerps `_shown_gold`
 	# towards `Game.gold` (`:1048`) -- the purse is the one thing on that header
 	# that animates -- so a frame taken ten frames after the press photographs a
@@ -208,25 +226,25 @@ func _buy(rig) -> void:
 	# And the ceiling, which is the other thing the row has to be able to say.
 	Game.add_charges(Game.max_charges)
 	screen._refresh()
-	var full := _row(screen, AlchemyDb.CHARGE_ID)
+	var full := _row(screen, &"charges")
 	_ck("C9 a full pouch refuses (%d/%d)" % [Game.charges, Game.max_charges],
-		not full.is_empty() and not AlchemyDb.can_buy(full["line"]))
+		not full.is_empty() and not SupplyDb.can_buy(full["line"]))
 	_ck("C10 and the refusal says the pouch, not the money (%s)"
-		% AlchemyDb.refusal(full["line"]),
-		AlchemyDb.refusal(full["line"]).contains("POUCH"))
-	screen._point_at(screen._rows.find(full))
+		% SupplyDb.refusal(full["line"]),
+		SupplyDb.refusal(full["line"]).contains("POUCH"))
+	await _aim(rig, screen, &"charges")
 	screen._commit()
 	await rig.wait_frames(8)
 	await rig.capture(out.path_join("c_02_full.png"))
 
 	# Back to three, so what goes down the shaft is what the counter sold and not
 	# what this beat topped it up with.
-	Game.charges = AlchemyDb.CHARGE_BATCH
-	Bus.ammo_changed.emit(AlchemyDb.CHARGE_ID, Game.charges)
+	Game.charges = SupplyDb.CHARGE_BATCH
+	Bus.ammo_changed.emit(&"charges", Game.charges)
 
 	await rig.tap(["ui_cancel"])
 	var gone := await _wait_until(rig, func() -> bool: return _screen(rig) == null, 90)
-	_ck("C11 his screen closed", gone)
+	_ck("C11 her screen closed", gone)
 	await rig.wait_frames(10)
 
 
@@ -239,10 +257,10 @@ func _hud(rig) -> void:
 	_ck("D0 D-pad steps the right hand onto the working", reached)
 	_ck("D1 the working's hand cell is a charge counter (%s)"
 		% ArmamentDb.hand_count(&"burst"),
-		ArmamentDb.hand_count(&"burst") == AlchemyDb.CHARGE_ID)
+		ArmamentDb.hand_count(&"burst") == &"charges")
 	_ck("D2 and it counts what the counter sold (%d)"
-		% Game.ammo_count(AlchemyDb.CHARGE_ID),
-		Game.ammo_count(AlchemyDb.CHARGE_ID) == AlchemyDb.CHARGE_BATCH)
+		% Game.ammo_count(&"charges"),
+		Game.ammo_count(&"charges") == SupplyDb.CHARGE_BATCH)
 	await rig.wait_frames(20)
 	await rig.capture(out.path_join("c_03_hud.png"))
 
@@ -267,7 +285,7 @@ func _underground(rig) -> void:
 	# **They do not refill underground and they do not evaporate either**
 	# (GDD §6.5). What you paid for upstairs is what you have down here.
 	_ck("E1 the charges came down with him (%d)" % Game.charges,
-		Game.charges == AlchemyDb.CHARGE_BATCH)
+		Game.charges == SupplyDb.CHARGE_BATCH)
 
 	var players: Array = rig.get_nodes_in_group(&"player")
 	if players.is_empty():
@@ -342,9 +360,37 @@ func _underground(rig) -> void:
 
 # --- Helpers ------------------------------------------------------------------
 
+## Put the cursor on `id`'s row and prove it stayed there.
+##
+## **Assigning `screen._cursor` is what this used to do and it is a trap the repo
+## has paid for three times** (CLAUDE.md §3; cards #40, #74 and #77). `_point_at`
+## is the other half of a cursor move and it is the half that calls `grab_focus`,
+## which is DEFERRED -- so an assignment holds for exactly one frame and then the
+## `focus_entered` it queued lands, runs back through `_on_cell_looked`, and puts
+## the cursor on whatever row the last `_refresh` left the focus on. `mvp_loop`
+## sold the wrong stack that way and `relic_donate` held half a second on the
+## wrong relic.
+##
+## Card #77 replaced the assignment with a bare `_point_at`, which is the fix:
+## the round trip is IDEMPOTENT, so it re-points at the row that was asked for
+## rather than racing. This wraps that and adds the half #77 did not need -- the
+## aim is CHECKED. A drifted cursor is a failing beat here rather than a
+## photograph of the arrow line captioned CHARGES.
+func _aim(rig, screen, id: StringName) -> bool:
+	var row := _row(screen, id)
+	if row.is_empty():
+		return false
+	screen._point_at(screen._rows.find(row))
+	# Long enough for the deferred focus to land AND for anything it kicked off to
+	# settle, which is the whole reason a fixed 1-frame wait would not do.
+	await rig.wait_frames(8)
+	var at := _row(screen, id)
+	return not at.is_empty() and screen._cursor == screen._rows.find(at)
+
+
 func _ids() -> Array:
 	var ids: Array = []
-	for l in AlchemyDb.lines():
+	for l in SupplyDb.lines():
 		ids.append(l["id"])
 	return ids
 

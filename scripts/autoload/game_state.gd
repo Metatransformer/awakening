@@ -117,6 +117,42 @@ var max_charges: int = K.BURST_CHARGES_MAX
 ## run.
 var bottle_contents: Array[StringName] = []
 
+# --- Rations (docs/METAGAME.md §6.4) ----------------------------------------
+## Ration id -> how many are in the pack, capped at `K.RATION_STACK` each. The
+## quartermaster's food and drink; see `RationDb` for what they do.
+##
+## A DICTIONARY of stacks rather than a second `bottle_contents`-shaped array,
+## because the two items are the opposite shape to a draught: what limits a
+## draught is the glass it is in (a slot), and what limits a ration is the stack
+## and the twelve seconds it takes to eat. There are two ids and there will not be
+## a third without a design change, so the dictionary is doing one job -- keeping
+## "which ration" and "how many" in one place that `save_game.gd` can write out as
+## it stands.
+##
+## Persistent, like `bottle_contents` and for the same reason: a ration is a
+## purchase made in the garrison. Death takes the BAG (docs/METAGAME.md §5), and
+## the pack is not the bag.
+var rations: Dictionary[StringName, int] = {}
+
+## The meal in progress: which ration is being eaten, how long is left of it, and
+## how long until the next tick pays out. `&""` is nobody eating.
+##
+## **This is a clock, and it goes here beside the draughts' clock rather than on
+## the hero for the reason spelled out on `draughts`**: this file is the one thing
+## in the project with a tick, a clamp and a signal already, and a second timer
+## living on an actor is a second thing to leave running through a scene change.
+## The hero owns the POSE and the cancel; `Game` owns the counter.
+##
+## Not saved. Twelve seconds of sitting restored by a load would be a meal you
+## spend the loading screen on, which is the argument `draughts` makes and the
+## same answer: `cancel_meal()` runs on `reset()` and on every scene change that
+## touches the hero.
+var meal_id: StringName = &""
+var meal_left: float = 0.0
+## How many of the meal's ticks have already been paid into a bar. A COUNT and not
+## a second countdown -- see `_tick_meal` for why the countdown was wrong.
+var _meal_paid: int = 0
+
 ## Draught id -> seconds left, for the two that last. Ticked in `_process`
 ## beside stamina. Not saved: a 45-second buff restored by a load is a buff you
 ## spend the loading screen on, and every other timer in the game is the same.
@@ -357,6 +393,11 @@ func reset() -> void:
 	has_compass = false
 	items.clear()
 	bottle_contents.clear()
+	rations.clear()
+	# Through `cancel_meal` rather than by clearing the three fields, so the hero
+	# hears about it and stands up. A reset that left `meal_id` set would root him
+	# on a save he no longer belongs to.
+	cancel_meal()
 	draughts.clear()
 	item_selected = 0
 	loadout = [
@@ -380,6 +421,7 @@ func reset() -> void:
 	Bus.item_selected_changed.emit(item_selected)
 	Bus.wheel_changed.emit(wheel)
 	Bus.bottles_changed.emit(bottle_contents)
+	Bus.rations_changed.emit(rations)
 	Bus.components_changed.emit(components)
 	Bus.stash_changed.emit(stash)
 	Bus.ammo_changed.emit(&"arrows", arrows)
@@ -530,12 +572,32 @@ func spend_magic(cost: int) -> bool:
 	Bus.magic_changed.emit(magic, max_magic)
 	return true
 
-# THERE IS NO `restore_magic`. A partial top-up existed here, uncalled, and it
-# went with the unlock: an API that can hand back some magic is an invitation to
-# hang a drop or a potion off it, and the entire value of this bar is that
-# nothing underground refills it. `fill_magic` above is the whole of the other
-# direction. If a green potion is ever designed, it should have to argue with
-# K.MAGIC_SPIN's note first.
+## Hand back SOME magic. **This function was refused for months and it is here on
+## an owner directive** (2026-08-11, `docs/SCOPE.md` §2); the note that stood in
+## its place said "an API that can hand back some magic is an invitation to hang a
+## drop or a potion off it", and the invitation has now been accepted on purpose.
+## What is written below is the fence that replaced the wall.
+##
+## **It has exactly one caller and the type system cannot say so, so this can.**
+## `RationDb.apply_tick` calls it, Small Beer is the only ration that feeds this
+## bar, and the drink costs `K.MEAL_TIME` seconds of sitting perfectly still --
+## which is the thing that keeps `K.MAGIC_SPIN`'s argument standing (read its note
+## before you add a second caller). What the bar defends is that the fourth spin
+## of a trip is a decision you can see coming. A refill you buy in the garrison,
+## carry down a slot, and pay for with a room you have already cleared does not
+## touch that. A refill that is free, fast, or dropped by a body does.
+##
+## So: **no drop, no font, no pickup, and nothing that pays this without a clock
+## in front of it.** A second caller is an amendment to SCOPE §2, not a line of
+## code.
+##
+## Clamped rather than checked, so a tick near the top of the bar is a partial
+## fill and never a refusal -- the same shape `add_charges` and `add_arrows` have.
+func restore_magic(amount: int) -> void:
+	if amount <= 0 or magic >= max_magic:
+		return
+	magic = clampi(magic + amount, 0, max_magic)
+	Bus.magic_changed.emit(magic, max_magic)
 
 
 # --- Stamina ----------------------------------------------------------------
@@ -545,6 +607,7 @@ func spend_magic(cost: int) -> bool:
 
 func _process(delta: float) -> void:
 	_tick_draughts(delta)
+	_tick_meal(delta)
 	if _stamina_hold > 0.0:
 		_stamina_hold = maxf(0.0, _stamina_hold - delta)
 		return
@@ -1134,6 +1197,147 @@ func start_draught(id: StringName, seconds: float) -> void:
 	Bus.draught_changed.emit(id, seconds)
 
 
+# --- Rations and the meal (docs/METAGAME.md §6.4) ---------------------------
+
+## How many of `id` are in the pack. One reader, for `ammo_count`'s reason: the
+## HUD cell, the counter's refusal and the thing that spends it must not each
+## pick their own field.
+func ration_count(id: StringName) -> int:
+	return int(rations.get(id, 0))
+
+
+## Put `n` in the pack, clamped at the stack. Returns how many actually FIT --
+## the counter needs that to refuse a purchase that would be thrown away, and
+## `add_arrows` gets away without it only because the arrow line checks the
+## quiver itself.
+func add_rations(id: StringName, n: int) -> int:
+	if not RationDb.has(id) or n <= 0:
+		return 0
+	var was := ration_count(id)
+	var now := clampi(was + n, 0, K.RATION_STACK)
+	if now == was:
+		return 0
+	rations[id] = now
+	Bus.rations_changed.emit(rations)
+	return now - was
+
+
+## Every ration you are carrying at least one of, in `RationDb.IDS` order. The
+## carry ring and the wheel both walk this, so an emptied stack leaves both in
+## the same step rather than in two.
+func ration_ids() -> Array[StringName]:
+	var out: Array[StringName] = []
+	for id in RationDb.IDS:
+		if ration_count(id) > 0:
+			out.append(id)
+	return out
+
+
+## Eat one. **Consumed on the FIRST tick, not on the last** -- see `_tick_meal`.
+func _spend_ration(id: StringName) -> bool:
+	var have := ration_count(id)
+	if have <= 0:
+		return false
+	if have == 1:
+		rations.erase(id)
+	else:
+		rations[id] = have - 1
+	Bus.rations_changed.emit(rations)
+	return true
+
+
+## Is the hero eating right now? The hero reads this to root himself and to hold
+## the seated pose; the HUD reads it to draw the gauge.
+func eating() -> bool:
+	return meal_id != &""
+
+
+## How far through the meal, 0 to 1. For the gauge, and for a director that wants
+## to assert a meal is actually running down.
+func meal_progress() -> float:
+	if not eating() or K.MEAL_TIME <= 0.0:
+		return 0.0
+	return clampf(1.0 - meal_left / K.MEAL_TIME, 0.0, 1.0)
+
+
+## **Sit down and start eating `id`.** False if there is none of it, if a meal is
+## already running, or if the bar it feeds is already full.
+##
+## The last refusal is the one worth naming: eating at full health is not a
+## mistake the player should be allowed to make silently. A ration spent for
+## nothing is twenty seconds of a stack thrown away for a press, and unlike a
+## bottle there is no cell that would have shown them it did nothing.
+##
+## The ration is **taken out of the pack here**, before a single tick has paid
+## out, and that is deliberate: a meal cancelled at nine seconds has cost you the
+## biscuit and paid you three quarters of it. Refunding the item on a cancel would
+## make interruption free, and the whole item is that it is not.
+func begin_meal(id: StringName) -> bool:
+	if eating() or not RationDb.has(id) or ration_count(id) <= 0:
+		return false
+	match RationDb.kind_of(id):
+		RationDb.HEALS:
+			if quarters >= max_quarters:
+				return false
+		RationDb.RESTORES:
+			if magic >= max_magic:
+				return false
+	if not _spend_ration(id):
+		return false
+	meal_id = id
+	meal_left = K.MEAL_TIME
+	_meal_paid = 0
+	Bus.meal_changed.emit(meal_id, meal_left)
+	return true
+
+
+## Stand up. Silent and idempotent -- every caller is an interruption (a step, a
+## swing, a blow, a scene change) and none of them wants to check first.
+##
+## **No refund**, see `begin_meal`. What you keep is the ticks that already paid.
+func cancel_meal() -> void:
+	if not eating():
+		return
+	meal_id = &""
+	meal_left = 0.0
+	_meal_paid = 0
+	Bus.meal_changed.emit(&"", 0.0)
+
+
+## The meal's clock, ticked beside the draughts' for the reason `draughts` gives:
+## one `_process`, one place to forget to call.
+##
+## **How many ticks are OWED is derived from `meal_left`, and that is the whole
+## design of this function.** It ran off a second countdown for an afternoon --
+## `_meal_tick -= delta`, wrapping by `+= MEAL_TICK` -- and that is a quiet way to
+## lose the last tick of every meal. The two clocks fall due on the same frame
+## (`Sigma delta >= 12` ends the meal and also owes tick four), but they are not the
+## same arithmetic: `meal_left` is one long chain of subtractions and `_meal_tick`
+## is that chain with three additions folded into it, so whether the final tick
+## lands before `meal_left` clamps to zero comes down to a float ULP. Half the
+## time the player eats a whole biscuit and gets three quarters of it.
+##
+## Derived, there is nothing to disagree with. `ceil` and not `floor`: any elapsed
+## time past a boundary owes that tick, and at `meal_left == 0` it owes all four.
+## The loop is still a loop so a frame long enough to span two ticks -- a scene
+## load, a stall -- pays both instead of dropping one.
+func _tick_meal(delta: float) -> void:
+	if not eating():
+		return
+	meal_left = maxf(0.0, meal_left - delta)
+	var due := RationDb.ticks() - int(ceil(meal_left / K.MEAL_TICK))
+	while _meal_paid < due:
+		_meal_paid += 1
+		if not RationDb.apply_tick(meal_id):
+			# An id the catalogue does not know. Ending rather than ticking
+			# against nothing, which is the state a hand-edited save could reach.
+			cancel_meal()
+			return
+	Bus.meal_changed.emit(meal_id, meal_left)
+	if meal_left <= 0.0:
+		cancel_meal()
+
+
 ## Run the clocks down. The only thing announced is the one that MATTERS -- a
 ## draught running out -- rather than a signal every frame: the HUD reads
 ## `draught_left()` while it draws its bar, the same way it reads health.
@@ -1218,27 +1422,69 @@ func has(item_id: StringName) -> bool:
 
 # --- The selected item ------------------------------------------------------
 
-## Which bottle is under D-pad ↓ right now, or `&""` if you own none.
+## **Everything D-pad ↓ steps through: the bottles you own, then the rations you
+## are carrying.** `item_selected` indexes THIS, not `bottle_contents`.
+##
+## Bottles first, and that ordering is load-bearing rather than cosmetic. For
+## every index below `bottle_count()` this list is exactly what the ring was
+## before rations existed, so an old save's `item_selected`, every director that
+## asserts a bottle index, and `bottle_index()` itself all keep meaning what they
+## meant. A ration appended at the end can only ever lengthen the ring.
+##
+## Rebuilt on each call rather than cached, for `wheel_pool`'s reason: a stack
+## that empties, a bottle that is bought and a ration that is eaten all change it,
+## and a stored copy is a fourth place for "what am I carrying" to be answered
+## differently.
+func carry_ids() -> Array[StringName]:
+	var out: Array[StringName] = []
+	for i in bottle_count():
+		out.append(bottle_id(i))
+	out.append_array(ration_ids())
+	return out
+
+
+func carry_count() -> int:
+	return bottle_count() + ration_ids().size()
+
+
+## Which thing is under D-pad ↓ right now, or `&""` if you carry nothing. A
+## `bottle_N` token, or a ration id.
 func selected_item() -> StringName:
 	_clamp_item()
-	return bottle_id(item_selected) if bottle_count() > 0 else &""
+	var ids := carry_ids()
+	return ids[item_selected] if item_selected < ids.size() else &""
 
 
-## What is IN the selected bottle, or `&""` for empty and for no bottle at all.
-## The HUD draws this; `selected_item()` is what names the glass around it.
+## What is IN the selected bottle, or `&""` for an empty one, for no bottle at
+## all, and for a ration -- a ration is not in glass, and every caller of this is
+## drawing the liquid inside one. The HUD draws this; `selected_item()` is what
+## names the vessel around it.
 func selected_potion() -> StringName:
 	_clamp_item()
-	return bottle(item_selected)
+	return bottle(item_selected) if item_selected < bottle_count() else &""
 
 
-## D-pad ↓. Steps to the next bottle, wrapping.
+## The ration under D-pad ↓, or `&""` when the selection is a bottle. The mirror
+## of `selected_potion`, and the two are never both non-empty.
+func selected_ration() -> StringName:
+	var id := selected_item()
+	return id if RationDb.has(id) else &""
+
+
+## D-pad ↓. Steps to the next thing you carry, wrapping.
 ##
-## Steps through ALL of them, empties included, and that is deliberate: an empty
-## bottle is a thing you own and are about to fill, and a cycle that silently
-## skipped it would put the player's four bottles on a ring whose length changed
-## every time they drank. A ring you can count is a ring you can use blind.
+## Steps through ALL of them, empty bottles included, and that is deliberate: an
+## empty bottle is a thing you own and are about to fill, and a cycle that
+## silently skipped it would put the player's four bottles on a ring whose length
+## changed every time they drank. A ring you can count is a ring you can use
+## blind.
+##
+## An EMPTIED ration stack is the one thing that does leave the ring, and it has
+## to: unlike glass, there is no such thing as an empty biscuit. Eating your last
+## one shortens the ring by a stop, `_clamp_item` catches the selection, and the
+## HUD's count says so on the same frame.
 func cycle_item(dir: int = 1) -> void:
-	var n := bottle_count()
+	var n := carry_count()
 	if n <= 1:
 		return
 	item_selected = posmod(_clamped_item() + signi(dir), n)
@@ -1255,9 +1501,21 @@ func cycle_item(dir: int = 1) -> void:
 ## draught is a thing you swallow. Making the bottle a two-press item -- draw it,
 ## then press the trigger -- would put the slowest input in the game on the
 ## button you reach for when you are about to die.
+##
+## **A RATION IS THE EXCEPTION TO EVERY WORD ABOVE, and that is the item.** It is
+## not swallowed on the press: it sits the hero down for `K.MEAL_TIME` and any
+## step, swing or blow stands him back up with the rest of it uneaten. So the
+## paragraph above — "the button you reach for when you are about to die" — is
+## exactly what a ration is NOT for, and the difference is meant to be felt on the
+## first press rather than read anywhere. Routed off the id here for
+## `wheel_select`'s reason: neither the X button, the wheel nor a director should
+## have to know which of the two the selection is.
 func use_selected_item() -> bool:
-	if bottle_count() == 0:
+	var id := selected_item()
+	if id == &"":
 		return false
+	if RationDb.has(id):
+		return begin_meal(id)
 	return drink_bottle(_clamped_item())
 
 
@@ -1292,12 +1550,14 @@ func stow_item() -> bool:
 	return true
 
 
-## The selection, forced back inside the bottles that exist. Bottles are bought,
-## emptied and refilled, so an index that was valid when it was set is not an
-## index that stays valid -- and the failure is silent (you press X and drink a
-## bottle you were not looking at) rather than loud.
+## The selection, forced back inside what you are actually carrying. Bottles are
+## bought, emptied and refilled and ration stacks run out, so an index that was
+## valid when it was set is not an index that stays valid -- and the failure is
+## silent (you press X and drink a bottle you were not looking at) rather than
+## loud. Eating the last biscuit is the shortest path to it: the ring loses its
+## final stop while the cursor is standing on it.
 func _clamped_item() -> int:
-	return clampi(item_selected, 0, maxi(0, bottle_count() - 1))
+	return clampi(item_selected, 0, maxi(0, carry_count() - 1))
 
 
 func _clamp_item() -> void:
@@ -1435,9 +1695,17 @@ func wheel_at(slot: int) -> StringName:
 ## follow the bow, and dropping the shield is a decision you make on the
 ## equipment screen with both hands visible. A wheel that offered them would be
 ## offering a way to two-hand the sword by accident.
+##
+## A RATION answers yes while you are carrying one, by the same rule and for the
+## same reason a bottle does: it is a stop on the carry ring, so it is a thing the
+## flick is for. Binding is gated on the stack (you cannot put food you have never
+## bought on the wheel) but an existing binding SURVIVES the stack emptying -- see
+## `wheel_ready` for why those two are deliberately different answers.
 func wheel_bindable(id: StringName) -> bool:
 	if bottle_index(id) >= 0:
 		return true
+	if RationDb.has(id):
+		return ration_count(id) > 0
 	return RIGHT_POOL.has(id)
 
 
@@ -1510,12 +1778,21 @@ func wheel_auto_bind(id: StringName) -> int:
 ##
 ## An EMPTY bottle is ready. It is a thing you own and can select; what is in it
 ## is the cell's business, not the wheel's.
+##
+## A ration goes cold when the stack runs out, which makes it the one binding here
+## that can be emptied by being USED. It is drawn cold and **kept**, not cleared:
+## the slot is where the player decided food goes, and buying five more at the
+## counter should light their own flick back up rather than hand them an empty
+## wheel to re-bind. Same argument the Verses get one line down, arrived at from
+## the other direction.
 func wheel_ready(slot: int) -> bool:
 	var id := wheel_at(slot)
 	if id == &"":
 		return false
 	if bottle_index(id) >= 0:
 		return true
+	if RationDb.has(id):
+		return ration_count(id) > 0
 	return armament_owned(id)
 
 
@@ -1541,7 +1818,12 @@ func wheel_select(slot: int) -> bool:
 	var id := wheel_at(slot)
 	if id == &"":
 		return false
-	var at := bottle_index(id)
+	# A bottle AND a ration both land here, and they land the same way: both are
+	# stops on the carry ring, so committing either one is a move of
+	# `item_selected` and nothing else. `carry_ids().find()` is asked rather than
+	# `bottle_index` alone, because that is the list the index means -- see
+	# `carry_ids`.
+	var at := carry_ids().find(id)
 	if at >= 0:
 		if at == item_selected:
 			return false
@@ -1559,7 +1841,8 @@ func wheel_select(slot: int) -> bool:
 
 
 ## Everything that could go on the wheel right now, in the order the equipment
-## screen offers it: the owned right-hand ring first, then the bottles you have.
+## screen offers it: the owned right-hand ring first, then everything on the carry
+## ring -- the bottles you have, then the rations you are carrying.
 ##
 ## Derived rather than written down, for the reason `cycle_armament` derives its
 ## own: a hand-kept list here would be a second answer to "what do you own", and
@@ -1570,8 +1853,7 @@ func wheel_pool() -> Array[StringName]:
 	for id in RIGHT_POOL:
 		if armament_owned(id):
 			out.append(id)
-	for i in bottle_count():
-		out.append(bottle_id(i))
+	out.append_array(carry_ids())
 	return out
 
 

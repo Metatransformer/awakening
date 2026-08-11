@@ -723,9 +723,14 @@ which is the whole of what "a working is a usable item" was ever allowed to cost
 **They are usable items.** Each is a stop on the right-hand ring, cast with RB or
 RT like the bow, selected with D-pad ← →. Nothing about the input layer changes.
 
-**Charges are arrows.** You buy them from the alchemist — he is already *the
-only thing you take down with you* (`docs/METAGAME.md` §6.6), and a charge is a
-stock you paid for in the garrison before you left, exactly like a bottle.
+**Charges are arrows**, and as of card #98 (2026-08-11) they are sold beside
+them: **the quartermaster's stores** (`docs/METAGAME.md` §6.4's table). This
+paragraph said "the alchemist" and it was wrong twice over. A charge is not
+brewed out of anything the floor drops — the sentence that made the case for it
+was already on his own catalogue file — and he does not stand in the yard until a
+boss is dead, so a hero who had just taken Burst off the Slag Ogre had no counter
+to buy ammunition at. What survives unchanged is the *relationship*: a charge is
+a stock you paid for in the garrison before you left, exactly like a bottle.
 **They do not refill underground.** There is no rest, there cannot be one (the
 run is not savable, `docs/METAGAME.md` §5), and a resource that comes back
 mid-run softens the walk home. Spending your last charge on floor 2 is a

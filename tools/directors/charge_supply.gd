@@ -9,9 +9,10 @@ extends RefCounted
 ## `docs/PUZZLES.md` §0 rule 2: *every puzzle room is solvable from a cold start
 ## with an empty pouch, because the urns beside it hold exactly what it needs.*
 ## Floor 2's shortcut is a cracked pillar, the only answer to a cracked pillar is
-## a Burst, and until this card charges had **one** source in the whole game — the
-## alchemist's counter, upstairs, before you left. A player who descended with
-## none met a door with no legal way through and no way to earn one.
+## a Burst, and until this card charges had **one** source in the whole game — a
+## counter upstairs, before you left (the alchemist's then; the quartermaster's
+## stores since card #98). A player who descended with none met a door with no
+## legal way through and no way to earn one.
 ##
 ## So the claim is not "a burst opens the pillar" — `shortcut_puzzle.gd` beat G
 ## proves that, and it proves it while handing itself three charges out of thin
@@ -30,7 +31,8 @@ extends RefCounted
 ##      `ChargeCache` falls out. The pouch is still at zero: it is a pickup, not
 ##      a grant.
 ##   D  Walking over it fills the pouch through `Game.add_charges` — the one seam
-##      the alchemist's line already uses — and the HUD's cell counts it.
+##      the counter that sells them uses too (`SupplyDb.buy`) — and the HUD's cell
+##      counts it.
 ##   E  One real cast, and the brace falls. Exactly one charge is spent, so the
 ##      cache's two were one more than the door asked for, which is the point:
 ##      one charge and one missed arc is the dead end again.

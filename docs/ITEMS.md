@@ -518,7 +518,8 @@ can never grind one into another.
 | Stock | Lives on | Enters | The decision it creates |
 |---|---|---|---|
 | **Arrows** | `Game.arrows` | Three sources, no fourth — `docs/METAGAME.md` §4.6 | Fletching runs the right way round: it **frees** slots (`Fletching.RECIPE` and `Fletching.batch()`, `scripts/items/fletching.gd:~38`, `:~64`) |
-| **Charges** | `Game.charges` | Bought from the alchemist once the Burst is owned (`AlchemyDb.CHARGE_ID`, `scripts/items/alchemy_db.gd:~76`), never refilled below (`game_state.gd:~100-103`) | How deep you were planning to go |
+| **Charges** | `Game.charges` | Bought from the **quartermaster's stores** once the Burst is owned (`SupplyDb._board()`, `scripts/items/supply_db.gd`), never refilled below except the one `ChargeCache` on floor 2 (D13) | How deep you were planning to go |
+| **Rations** | `Game.rations` | Bought from the quartermaster's stores, five at a time, twenty to a stack (`RationDb`, `scripts/items/ration_db.gd`) | Whether the room is quiet enough to sit down for twelve seconds |
 | **Bottles** | `Game.bottle_contents` | Blown at the alchemist, capped by a relic (`RelicDb.bottle_cap()`, `relic_db.gd:~889`, read by `AlchemyDb.remaining()`) | The fourth bottle is an event, not a purchase |
 | **Draughts** | in a bottle | Brewed — three, and only three (`PotionDb.IDS`, `scripts/items/potion_db.gd:~23`) | Which of the smith's three numbers you want for 45 seconds |
 | **Small keys** | `Game.small_keys` | The T0 atom (`PuzzleAtoms.ATOMS[SMALL_KEY]`, `scripts/props/puzzle_atoms.gd:~111`) | Which door, when there is more than one |
@@ -535,6 +536,23 @@ because the HUD cell is 64 px and a longer word stops being a word.
 **Re-drinking replaces the clock rather than stacking it** (`PotionDb.apply()`,
 `potion_db.gd:~113`). Stacking would make the answer to every hard fight *drink
 all four*, which is the one thing four slots must not be for.
+
+**A ration is not a cheap draught, and the twelve seconds is what makes it one
+thing rather than the other** (card #98, `docs/METAGAME.md` §6.4). Hardtack pays
+one heart and Small Beer one spin's worth of magic, both over `K.MEAL_TIME`
+seconds of **sitting down**, and a step, a swing, a guard, a jump, a screen or a
+blow ends it (`Hero.MEAL_BREAKERS`, `Hero._tick_meal_cancel`). The ration is
+spent when you sit, not when you finish, so an interrupted meal has cost you the
+whole biscuit — refunding it would make interruption free, and interruption is
+the design. It is a **stopgap and it is meant to stop mattering**: the hero
+starts with one bottle and meets the alchemist only after a boss is dead, and by
+the time you own three bottles twelve seconds is a price you stop paying.
+
+Small Beer is the only thing in the game that puts magic back outside a run
+boundary. It exists by owner directive (`docs/SCOPE.md` §2, 2026-08-11) with a
+fence: one caller (`RationDb.apply_tick`), no underground source, nothing that
+pays without a clock in front of it, and `K.MEAL_MAGIC == K.MAGIC_SPIN` so a cup
+is exactly one of the trip's four spins.
 
 ---
 
@@ -713,6 +731,16 @@ is the Burst going off on floor 1 with the cell reading 2.
 **It was not the whole hole, and the rest was D13** — closed 2026-08-11. Buying
 charges upstairs does not help a player who descends with none and meets floor
 2's `pillar_brace` shortcut; the floor supplies them now. See D13.
+
+**And it was not the whole hole in the other direction either** (card #98,
+2026-08-11). The counter above was the *alchemist's*, and he does not stand in
+the yard until a boss is dead (`StoryDb.UNLOCKS`) — so "you can buy a charge the
+moment you own Burst" was true only by the coincidence that Burst comes off the
+Slag Ogre, and would have stopped being true the moment a working entered the run
+any other way. The line is the **quartermaster's** now: same bundle, same 90 gold,
+same gate on owning the working, behind a face that is in the yard on frame one.
+`charge_buy.gd` walks to her instead; the paragraph above is otherwise unchanged
+and its frames still say what they said.
 
 ### ~~D5 — two of the six usable items do not exist in any form~~ *(closed)*
 

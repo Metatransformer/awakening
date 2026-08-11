@@ -177,11 +177,38 @@ every time someone has the idea again.
   font, then a school gets in. The one thing that may spend it is a sword swing
   the player already had.
 
+  **`restore_magic` now exists, and it is a fence rather than a hole** (owner
+  directive, 2026-08-11, card #98). The quartermaster sells **Small Beer**, a
+  ration you sit down for; it is the drink half of `docs/METAGAME.md` §6.4. The
+  paragraph above was right that an accessor which hands back *some* magic is how
+  a potion gets in, so the accessor shipped with the potion's whole shape refused
+  around it, and every clause of that is checkable rather than promised:
+
+  - **One caller, and it is named.** `RationDb.apply_tick` is the only thing in
+    the project that calls it. If rations go, so does the accessor. Anything that
+    wants to be the second caller is a SCOPE amendment, not a patch.
+  - **Nothing underground refills the bar.** No drop, no font, no chest roll, no
+    pickup. You buy the cup in the yard or you do not have it. The clause above
+    that refuses this is *unchanged and was not amended*.
+  - **Nothing pays without a clock in front of it.** Twelve seated seconds
+    (`K.MEAL_TIME`), cancelled by a step, a swing or a blow. A mana potion is a
+    button; this is a decision to stop playing for twelve seconds.
+  - **One spin, exactly.** `K.MEAL_MAGIC == K.MAGIC_SPIN`, asserted by
+    `tools/directors/rations.gd` beat E8. A cup buys back one of the trip's four
+    spins, so "how many spins does this trip get" still has an answer.
+
   What this line still refuses, unchanged: a second thing that spends the bar, a
   spell bound to it, a rank on that spell, and anything underground that refills
   it. The first of those is the one that will actually be proposed, and it is the
   one that turns a price into a resource system.
 - Mounts, fishing, farming, **housing**, cooking.
+
+  **Cooking is still refused and rations are not it** (card #98). There is no
+  recipe, no ingredient, no station and no skill: hardtack and small beer are two
+  rows on a shop board that put a fixed number back into a bar you already have.
+  What this line refuses is food as a *system* — things you combine, a bench you
+  combine them at, buffs with durations and names. If a ration ever gains an
+  ingredient it has become cooking and this line applies to it again.
 
   **Housing shipped anyway, in one room, and the refusal still stands.** The
   hero's quarters (`scripts/world/house.gd`) is a lean-to in the courtyard's

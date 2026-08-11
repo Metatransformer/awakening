@@ -383,6 +383,14 @@ func _ready() -> void:
 	# draught: the bar it starts has to keep draining after this frame.
 	Bus.bottles_changed.connect(_repaint)
 	Bus.draught_changed.connect(func(_p: StringName, _s: float) -> void: _wake())
+	# A meal is the same shape of thing as a draught and wakes the overlay the same
+	# way: the gauge in the item cell has to keep filling for twelve seconds after
+	# this edge, and `_process` keeps itself alive off `Game.eating()` until it
+	# stops. `rations_changed` is a plain `_repaint` because a stack that changed
+	# size only moves the numeral in the corner of a wheel glyph, which is a
+	# one-frame fact.
+	Bus.meal_changed.connect(func(_r: StringName, _s: float) -> void: _wake())
+	Bus.rations_changed.connect(func(_stock: Dictionary) -> void: _repaint())
 	# A room came out of the fog, or a chest on the plan was opened. The hero
 	# ARROW does not need this -- it rides the per-frame repaint below -- but the
 	# plan itself only changes on these, so the minimap is not asking `Atlas`
@@ -862,6 +870,12 @@ func _process(delta: float) -> void:
 	# Same argument as the chain: a draught bar is a countdown, and it drains for
 	# 45 s off a single signal. Stops the moment the last one runs out.
 	if not Game.draughts.is_empty():
+		busy = true
+	# And the meal, for the same reason at a twelfth of the length. `meal_changed`
+	# fires once a TICK -- four times across twelve seconds -- so a gauge that
+	# repainted only on the signal would advance in four visible jumps and read as
+	# broken. This is what makes it a fill.
+	if Game.eating():
 		busy = true
 	# The other one, and it is a deliberate widening of this file's "repaint on
 	# signal, never per frame" rule. An enemy bar is pinned to a body that walks, so
@@ -1593,8 +1607,12 @@ func _draw_wheel_caption(s: Vector2, centre: Vector2, radius: float, at: int) ->
 	var verb := "RELEASE TO CANCEL"
 	if id != &"":
 		if not Game.wheel_ready(at):
-			verb = "NOT YOURS YET"
-		elif Game.bottle_index(id) >= 0:
+			# A ration that has run out is the one cold slot the player can fix
+			# without leaving the yard, so it says WHICH kind of not-yet it is.
+			# "NOT YOURS YET" over an empty biscuit stack would be the wheel
+			# claiming they never bought any.
+			verb = "NONE LEFT" if RationDb.has(id) else "NOT YOURS YET"
+		elif Game.bottle_index(id) >= 0 or RationDb.has(id):
 			verb = "RELEASE TO SELECT"
 		else:
 			verb = "RELEASE TO EQUIP"
@@ -1625,6 +1643,10 @@ func _draw_wheel_caption(s: Vector2, centre: Vector2, radius: float, at: int) ->
 func _wheel_label(id: StringName) -> String:
 	var bottle := Game.bottle_index(id)
 	if bottle < 0:
+		# Rations included: `ArmamentDb.name_of` answers for one with its stack on
+		# the end ("Hardtack x12"), which is exactly what the caption wants — this
+		# is the widest text either surface draws, and how many you have left is
+		# what decides whether you flick at it.
 		return ArmamentDb.name_of(id)
 	var potion := Game.bottle(bottle)
 	return "Empty Bottle" if potion == &"" else PotionDb.name_of(potion)
@@ -2226,22 +2248,59 @@ func _draw_item_cell(s: Vector2) -> void:
 	_note(&"item_cell", &"cluster", r)
 	_canvas.draw_rect(r, Color(Pal.MIDNIGHT, 0.8))
 	var potion := Game.selected_potion()
-	_canvas.draw_rect(r, Pal.BONE if potion != &"" else Pal.ASH, false,
-		Pal.px(2.0 if potion != &"" else 1.0, s.y))
+	# A RATION is a full cell, like a full bottle: the thing the border is saying
+	# is "there is something here to press X on", and a stack of hardtack is. Only
+	# an empty bottle gets the thin ASH rim, because it is the one state where you
+	# own the button and have nothing behind it.
+	var loaded := potion != &"" or Game.selected_ration() != &""
+	_canvas.draw_rect(r, Pal.BONE if loaded else Pal.ASH, false,
+		Pal.px(2.0 if loaded else 1.0, s.y))
 	# `selected_item()` names the GLASS and `selected_potion()` what is in it.
 	# The glyph wants the glass: a bottle with nothing in it still has to draw.
 	_draw_item_glyph(s, r, Game.selected_item(), &"item_cell", Pal.VOID, false,
-		potion == &"")
+		not loaded)
 
-	# How many bottles there are, so the player knows the ring has more stops.
-	# Only past one — "1" under a single bottle is a count of a thing nobody is
-	# counting.
-	if Game.bottle_count() > 1:
+	# **A meal in progress fills the cell's foot**, and it takes the numeral's turn
+	# rather than sharing the corner with it.
+	#
+	# `HoldGauge.bar` and not a new widget: this is the same fact its docstring was
+	# written for — an input that is performed correctly for most of its duration
+	# and does nothing if you stop early — and its rule is that such a thing lives
+	# INSIDE the box it is about. The ration is the selection (`HeroCombat._tick_dpad`
+	# freezes the ring while a meal runs, precisely so that stays true), so the box
+	# is this cell and the bar needs no anchor of its own.
+	#
+	# It is not in the draught row, and that was the first place it was tried. That
+	# row is things that are true about the WORLD for a while — a ward, a burning
+	# edge — and it is read at a glance while moving. A meal is the opposite: it is
+	# true only as long as you are sitting still doing nothing else, and the player
+	# reading it is a player with nothing to do but read it. Putting it there would
+	# also have made it the fourth slot and narrowed the other three to 35 px.
+	#
+	# The two are mutually exclusive on purpose. "2/3" answers "are there more
+	# stops on this ring", which is a question for a hand hovering over the D-pad;
+	# the ring is frozen for the whole twelve seconds, so during a meal it is an
+	# answer to a question nobody can act on, occupying the one strip of cell the
+	# gauge wants.
+	if Game.eating():
+		var gline := Pal.px(2.0, s.y)
+		var gh := Pal.px(HoldGauge.BAR_H, s.y)
+		var gr := Rect2(r.position.x + gline, r.end.y - gline - gh,
+			r.size.x - gline * 2.0, gh)
+		# Noted so a director can assert the gauge REACHED THE SCREEN rather than
+		# that `Game.meal_left` is counting down — those came apart once already,
+		# on the arrow counter in #52.
+		_note(&"meal_gauge", &"item_cell", gr)
+		HoldGauge.bar(_canvas, gr, Game.meal_progress(),
+			RationDb.tint_of(Game.meal_id))
+	# How many stops the ring has, so the player knows there are more. Only past
+	# one — "1" under a single bottle is a count of a thing nobody is counting.
+	elif Game.carry_count() > 1:
 		# 10 px and inset off its own height, for the reason the ammo numeral is
 		# — same corner, same question, same decision 19.
 		var csc := _text(10.0)
 		CanvasText.draw_right(_canvas,
-			"%d/%d" % [Game.item_selected + 1, Game.bottle_count()],
+			"%d/%d" % [Game.item_selected + 1, Game.carry_count()],
 			Vector2(r.end.x - Pal.px(3.0, s.y),
 				r.end.y - Pal.px(3.0, s.y) - CanvasText.height(csc)),
 			csc, Pal.MOTH)
@@ -2340,6 +2399,11 @@ func _draw_item_glyph(s: Vector2, r: Rect2, id: StringName, cell: StringName,
 			_glyphs[cell] = &"bottle"
 		_draw_bottle_glyph(s, r, Game.bottle(bottle_at))
 		return
+	if RationDb.has(id):
+		if OS.is_debug_build():
+			_glyphs[cell] = &"ration"
+		_draw_ration_glyph(s, r, id, dim)
+		return
 	var tex: Texture2D = _icons.get(id)
 	if OS.is_debug_build():
 		_glyphs[cell] = &"icon" if tex != null else &"letters"
@@ -2401,6 +2465,59 @@ func _draw_bottle_glyph(s: Vector2, r: Rect2, potion: StringName) -> void:
 	_canvas.draw_rect(body, edge, false, line)
 	_canvas.draw_rect(neck, edge, false, line)
 	_canvas.draw_rect(lip, edge)
+
+
+## A ration, drawn rather than baked, for `_draw_bottle_glyph`'s reason and one
+## more: at 320x240 (`docs/STYLEGUIDE.md` §4.5) a baked biscuit and a baked cup
+## are the same beige smudge, and the thing that has to survive the downscale is
+## WHICH ONE THIS IS. So the two are separated by SILHOUETTE first — food is a
+## squat wide block, drink is a tall narrow cup with a handle — and by tint
+## second, which is the ordering §4.5 asks for everywhere.
+##
+## It is also the cell that has to answer "how many". The stack is drawn INSIDE
+## the glyph rather than in the corner where the bottle count goes, because on a
+## ration the two numbers are different questions: the corner says which stop of
+## the ring you are on, and this says how many mouthfuls are left.
+func _draw_ration_glyph(s: Vector2, r: Rect2, id: StringName, dim: bool) -> void:
+	var line := Pal.px(1.0, s.y)
+	var w := r.size.x
+	var tint := RationDb.tint_of(id)
+	var edge: Color = Color(Pal.MOTH, 0.3) if dim else Pal.BONE
+	if dim:
+		tint = Color(tint, 0.3)
+
+	if RationDb.kind_of(id) == RationDb.HEALS:
+		# The biscuit: wide, flat, and scored across the middle the way hardtack
+		# is actually baked. The score line is what stops it reading as a crate.
+		var slab := Rect2(r.position.x + w * 0.20, r.position.y + w * 0.34,
+			w * 0.60, w * 0.34)
+		_canvas.draw_rect(slab, tint)
+		_canvas.draw_rect(slab, edge, false, line)
+		_canvas.draw_line(Vector2(slab.get_center().x, slab.position.y + line),
+			Vector2(slab.get_center().x, slab.end.y - line), edge, line)
+	else:
+		# The cup: tall, narrow, with a handle on the right. Filled two thirds
+		# like the bottle, and for the same reason — a rectangle that touches its
+		# own outline reads as a solid block rather than as something with drink
+		# in it.
+		var cup := Rect2(r.position.x + w * 0.28, r.position.y + w * 0.24,
+			w * 0.34, w * 0.48)
+		var fill := Rect2(cup.position.x + line,
+			cup.position.y + cup.size.y * 0.34,
+			cup.size.x - line * 2.0, cup.size.y * 0.66 - line)
+		_canvas.draw_rect(fill, tint)
+		_canvas.draw_rect(cup, edge, false, line)
+		var handle := Rect2(cup.end.x, cup.position.y + cup.size.y * 0.24,
+			w * 0.12, cup.size.y * 0.36)
+		_canvas.draw_rect(handle, edge, false, line)
+
+	# The stack, bottom-left — the opposite corner from the ring's "2/3", so the
+	# two numerals can never be read as one.
+	var csc := _text(10.0)
+	CanvasText.draw_text(_canvas, "x%d" % Game.ration_count(id),
+		Vector2(r.position.x + Pal.px(3.0, s.y),
+			r.end.y - Pal.px(3.0, s.y) - CanvasText.height(csc)),
+		csc, Pal.MOTH if not dim else Color(Pal.MOTH, 0.3))
 
 
 ## How many tiles a draught slot empties through. Four, because four is the
