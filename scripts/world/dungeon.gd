@@ -93,6 +93,16 @@ const ANCHOR_ORDER: Array[StringName] = [
 	&"gate_room", &"puzzle_room",
 ]
 
+## Anchors a floor is allowed to arrive without, and therefore the ones
+## `_plan_anchors` may DROP when there is no wall with clear ground behind it.
+##
+## `docs/PUZZLES.md` §5.3: the treasure branch is *optional, richer, harder* and
+## off the critical path, so a floor missing one still plays. The vault is not in
+## here even though floor 4 has none — "this floor authors no vault" is the
+## manifest's decision (`FloorDb.vault_key`), not a fallback for a floor that
+## wanted one and could not fit it. The rest ARE the floor.
+const OPTIONAL_ANCHORS: Array[StringName] = [&"puzzle_room"]
+
 @export_group("Layout")
 ## Fallback only. `_ready` asks `FloorDb` for the real number -- see the note
 ## there about why the manifest wins even when a seed is forced.
@@ -558,7 +568,7 @@ func _plan_anchors() -> void:
 		# Untyped on purpose: `_room_for` answers `null` on a floor too short to
 		# have a middle ring, and `:=` cannot infer a type from a Variant
 		# (CLAUDE.md §3).
-		var cell = _room_for(StringName(rule.get("room", &"")))
+		var cell = _room_for(StringName(rule.get("room", &"")), id)
 		if cell == null or not rooms.has(cell):
 			continue
 		var offset: Vector2 = rule.get("offset", Vector2.ZERO)
@@ -579,10 +589,24 @@ func _plan_anchors() -> void:
 		# anchor: a vault or a treasure chamber driven through a neighbour's masonry
 		# looks exactly like one that fits until something walks to it.
 		if _clear_run(cell, side, reach) < reach:
+			# **And an OPTIONAL anchor is dropped rather than built through.** §5.3
+			# says nothing behind the treasure gate is on the critical path, so a
+			# floor without one is a poorer floor and a floor with one laid across
+			# the shortcut's landing is a broken one. The two doors and the boss are
+			# the floor, so those still go in under the warning -- there is nowhere
+			# else for them to be, and a warning is the most this can honestly do.
+			#
+			# `_room_for` now scores a room that cannot hold the structure below one
+			# that can, so reaching here at all means every candidate room was full.
 			push_warning(("dungeon: anchor %s takes the %s wall of %s with %d clear "
-				+ "cell(s) of %d needed -- its structure is built through occupied "
-				+ "grid and what is behind it may be unreachable")
-				% [id, side, cell, _clear_run(cell, side, reach), reach])
+				+ "cell(s) of %d needed -- its structure would be built through "
+				+ "occupied grid and what is behind it unreachable%s. (Straight out "
+				+ "only: a structure WIDER than its room also overhangs the two "
+				+ "cells beside the run, which nothing checks.)")
+				% [id, side, cell, _clear_run(cell, side, reach), reach,
+					" -- dropped" if OPTIONAL_ANCHORS.has(id) else ""])
+			if OPTIONAL_ANCHORS.has(id):
+				continue
 		rooms[cell]["anchors"][side] = id
 		_reserve(cell, side, reach)
 		placements[id] = {"cell": cell, "side": side, "offset": offset,
@@ -630,7 +654,7 @@ func _treasure_tier() -> int:
 ## `&"entrance"`, `&"deepest"`, `&"mid_ring"`, `&"gate_path"` -- the four rooms
 ## the manifest is allowed to name. Returns `null` when the floor is too short to
 ## have one, which the caller reads as "skip this anchor".
-func _room_for(kind: StringName):
+func _room_for(kind: StringName, id: StringName = &""):
 	match kind:
 		&"entrance":
 			return entrance
@@ -669,23 +693,113 @@ func _room_for(kind: StringName):
 			for pid: StringName in placements:
 				used[placements[pid]["cell"]] = true
 			var best = null
-			var best_key := Vector3(1e9, 1e9, 1e9)
+			var best_key: Array[float] = [1e9, 1e9, 1e9, 1e9, 1e9]
 			for cell: Vector2i in rooms:
 				if cell == entrance or cell == deepest:
 					continue
-				var key := Vector3(1.0 if used.has(cell) else 0.0,
+				# **A room with no wall the structure fits behind is not a placement,
+				# so it outranks even "already has an anchor in it".** Sharing a room
+				# is crowded; a room whose only blank wall backs onto occupied grid
+				# is a chamber built THROUGH something.
+				#
+				# Floor 2 is what added this term. `puzzle_room` landed on (1, -1),
+				# whose doors are [w, e, n] -- one blank wall, `s`, and the cell
+				# behind it was already reserved by the shortcut landing. The alarm
+				# in `_plan_anchors` said so ("0 clear cell(s) of 1 needed") and then
+				# it was built anyway: a 26 m `TreasureChamber` whose west wall stood
+				# at x = 13 straight across a landing spanning x = 8..21, so the
+				# stair behind the shortcut could not be walked to. Two rooms at the
+				# same depth were free the whole time.
+				var key: Array[float] = [
+					0.0 if _wall_room_for(cell, id) else 1.0,
+					1.0 if used.has(cell) else 0.0,
 					absf(float(rooms[cell]["dist"]) - want),
-					float(rooms[cell]["index"]))
-				if key.x < best_key.x \
-						or (is_equal_approx(key.x, best_key.x)
-							and key.y < best_key.y) \
-						or (is_equal_approx(key.x, best_key.x)
-							and is_equal_approx(key.y, best_key.y)
-							and key.z < best_key.z):
+					# **Leave the maze the only kind of room it can use.**
+					# `pick_maze_cell` needs a room with exactly one doorway, and a
+					# tree this size has one or two. An anchor is indifferent between
+					# two rooms at the same depth; the maze is not, so this breaks
+					# that tie away from it -- ABOVE the plan index, because the
+					# index is what decided such ties before and it decides for no
+					# reason at all.
+					#
+					# Measured: with the one-door rule and without this term, the
+					# treasure anchor took the single one-door room on floors 1 AND 2
+					# and both printed "no room a maze fits in" -- §5.4's room gone
+					# from half the game to settle a tie that had no stake in it.
+					1.0 if (rooms[cell]["doors"] as Array).size() == 1 else 0.0,
+					float(rooms[cell]["index"]),
+				]
+				if _key_before(key, best_key):
 					best_key = key
 					best = cell
 			return best
 	return null
+
+
+## **Which way out of the room's middle the scatter chest goes, and it is not a
+## constant.**
+##
+## It was `Vector3(0, 0, -size * 0.32)` — 32% of the way toward the room's north
+## wall, whatever was standing on that wall. On floor 1 the vault door takes the
+## north wall of room (0, -1), so the chest stood **2.9 m in front of it**, inside
+## the door's own trigger and nearer to the player than the door: walk up to the one
+## door in the game whose whole job is to name the thing worth going deeper for
+## (GDD pillar 3) and the HUD says `E TO OPEN` on a chest. `cistern_floor --level=1`
+## read that prompt as the vault's and filed a note blaming `LockedDoor.SIGILS`.
+##
+## So: a wall with **nothing** on it first, a wall with only a DOORWAY second, and
+## the old constant last. A doorway is an opening and not an interactable, so a
+## chest 2.9 m off one competes with nothing; an anchored wall carries a door, a
+## chest or a gate, and every one of those has a trigger.
+##
+## Ties go to the floor's own generator, so a replayed seed puts it back.
+func _chest_dir(cell: Vector2i) -> Vector3:
+	var doors: Array = rooms[cell]["doors"]
+	var anchors: Dictionary = rooms[cell]["anchors"]
+	var empty: Array[StringName] = []
+	var doorways: Array[StringName] = []
+	for d: StringName in DIRS:
+		if anchors.has(d):
+			continue
+		if doors.has(d):
+			doorways.append(d)
+		else:
+			empty.append(d)
+	var pool := empty if not empty.is_empty() else doorways
+	if pool.is_empty():
+		return Vector3.FORWARD
+	var pick: StringName = pool[_rng.randi_range(0, pool.size() - 1)]
+	var step: Vector2i = DIRS[pick]
+	return Vector3(float(step.x), 0.0, float(step.y))
+
+
+## Is there a blank, unclaimed wall of `cell` with the clear ground `id`'s structure
+## needs behind it? The question `_pick_side` answers with a wall; this only wants
+## the yes or no, and it is asked while CHOOSING the room rather than after.
+##
+## `id` empty means "any anchor", which is the `reach = 1` case — a landing.
+func _wall_room_for(cell: Vector2i, id: StringName) -> bool:
+	var reach := _reach_for(id, cell)
+	var doors: Array = rooms[cell]["doors"]
+	var taken: Dictionary = rooms[cell]["anchors"]
+	for d: StringName in DIRS:
+		if doors.has(d) or taken.has(d):
+			continue
+		if _clear_run(cell, d, reach) >= reach:
+			return true
+	return false
+
+
+## Lexicographic on however many components the key has, which is what the
+## `is_equal_approx` ladder this replaced was spelling out by hand for three — and
+## an array rather than a `Vector4` because the ladder grew past four the first time
+## anyone added a term to it. Floats, so the comparisons are approximate on the way
+## down and strict at the component that decides.
+func _key_before(a: Array[float], b: Array[float]) -> bool:
+	for i in mini(a.size(), b.size()):
+		if not is_equal_approx(a[i], b[i]):
+			return a[i] < b[i]
+	return false
 
 
 ## How many grid cells of empty ground this anchor needs behind its wall.
@@ -2586,6 +2700,33 @@ func pick_maze_cell(forced: bool = false):
 	for cell: Vector2i in rooms:
 		if cell == entrance or cell == deepest or taken.has(cell):
 			continue
+		# **ONE doorway, because the maze only has one hole.**
+		#
+		# `MazeRoom._build_rim` closes the grid on all four sides and cuts exactly
+		# one opening — the mouth — and the solvability proof in `Maze.plan` is
+		# about that room and no other (its own comment says so: two holes and
+		# `Maze.reach` is answering a question about a grid nobody built). The maze
+		# fills its room wall to wall. So a maze in a room with two doorways stands
+		# a rim across one of them, and a room the floor's tree passes THROUGH
+		# becomes a wall across the dungeon.
+		#
+		# Measured on floor 3: the maze took (1, -1), doors [w, e, n, s], on the
+		# path to the Bellwake. The critical path arrives by the west door and the
+		# rim was in it, so the boss chamber, the deep chest and the way down were
+		# all unreachable ON FOOT IN THE GAME, and the leaf behind the east door
+		# with it. Ten of `cistern_floor --level=3`'s checks went red off that one
+		# fact, and only the first of them was the fault.
+		#
+		# This is also just the room `MazeRoom`'s own design describes — "the reward
+		# is on the far side of the maze and the lock is the geometry" only reads as
+		# a puzzle in a room you enter and leave by the mouth. A leaf, in other
+		# words; the requirement was always there and nothing enforced it.
+		#
+		# The mouth is rotated onto whichever side that doorway is (`place_maze`),
+		# so this costs the three-in-four floors whose one-door rooms do not happen
+		# to face south — which is what refusing them instead would have cost.
+		if (rooms[cell]["doors"] as Array).size() != 1:
+			continue
 		# It has to FIT -- and `MazeRoom` is the only thing that knows what fitting
 		# means, so it is asked rather than second-guessed. This line used to read
 		# `size_of(cell) < MAZE_COLS * MazeRoom.CELL + 2.0`, which measured the
@@ -2675,12 +2816,37 @@ func place_maze(cell: Vector2i) -> void:
 	# Off the floor's own stream, so a replayed seed deals the same maze -- the
 	# same reason `SoundingStone.offer` and `LanternGrid` use it.
 	maze.rng = _rng
+	# **Turn the mouth to face the room's doorway.**
+	#
+	# The grid is authored with its one opening at +Z (`MazeRoom.cell_centre`), and
+	# nothing used to move it, so the maze faced south whatever side the player
+	# came in by — three floors in four entering through solid rim. `pick_maze_cell`
+	# guarantees exactly one doorway; this points the hole at it.
+	#
+	# `yaw + PI` and not `yaw`, per CLAUDE.md §4: `_sides_of` gives the yaw a wall
+	# FACES, which is inward, and the mouth has to face out. s(PI)->0, n(0)->PI,
+	# e(-PI/2)->PI/2, w(PI/2)->-PI/2. Checked against `facing_of`, not derived from
+	# the rest pose of anything.
+	# Public function, so the count is asserted here too rather than trusted from
+	# `pick_maze_cell`. A director placing a maze by hand on a two-door room would
+	# otherwise silently rebuild the bug this warning names.
+	var doors: Array = rooms[cell]["doors"]
+	if doors.size() != 1:
+		push_warning(("dungeon: maze into %s, which has %d doorways -- the rim has "
+			+ "one hole and will stand across the other %d, and anything behind "
+			+ "them is unreachable")
+			% [cell, doors.size(), maxi(doors.size() - 1, 0)])
+	var side: StringName = doors[0] if not doors.is_empty() else &"s"
+	maze.rotation.y = float(_sides_of(cell)[side]["yaw"]) + PI
 	root.add_child(maze)
 
 	var prize := Chest.new()
 	prize.name = "MazeChest"
 	prize.picks = Prog.chest_picks(Run.level, false)
-	prize.position = maze.prize_point()
+	# Through the maze's transform. `prize_point` is in MAZE space and the chest is
+	# a sibling in ROOM space; those were the same thing only while the maze sat
+	# unrotated at the room's origin, and the line above just stopped being true.
+	prize.position = maze.transform * maze.prize_point()
 	prize.visible = false
 	prize.enabled = false
 	root.add_child(prize)
@@ -2728,6 +2894,12 @@ func _populate() -> void:
 
 		var size := size_of(cell)
 		var dist := int(rooms[cell]["dist"])
+		# Rolled once for the room and shared by the chest and the arrows, because
+		# the arrows are placed OPPOSITE the chest and `_chest_dir` draws from the
+		# floor's generator -- calling it twice would answer twice and the two would
+		# stop being opposite. Rolled outside the chest branch for the same reason
+		# the arrows are: a room with no chest still needs the direction.
+		var chest_dir := _chest_dir(cell)
 		# The manifest chooses WHICH body (`FloorDb.roster`, keyed on distance from
 		# the entrance) and `Prog` chooses how hard it is (`elite_chance`, and the
 		# health/damage/wind-up curve inside `Enemy`). Keeping those two apart is
@@ -2750,8 +2922,12 @@ func _populate() -> void:
 			and anchor_cell(&"deep_chest") == cell
 		if not anchored and (cell == deepest or _rng.randf() < chest_chance):
 			var chest := Chest.new()
+			# Named, because the next thing to read this node is an instrument. It
+			# was a bare `Chest.new()` and the reading that found the bug below came
+			# back as `/root/DungeonRun/Dungeon/Room_0_-1/@Area3D@2750`.
+			chest.name = "RoomChest"
 			chest.picks = Prog.chest_picks(Run.level, cell == deepest)
-			chest.position = Vector3(0.0, 0.0, -size * 0.32)
+			chest.position = chest_dir * (size * 0.32)
 			root.add_child(chest)
 			Atlas.mark(cell, Atlas.M_CHEST)
 
@@ -2762,8 +2938,14 @@ func _populate() -> void:
 		# room a dry quiver needs supply in.
 		if _rng.randf() < arrow_chance:
 			var bundle := ArrowBundle.new()
+			bundle.name = "RoomArrows"
 			bundle.count = ArrowBundle.FLOOR_COUNT
-			bundle.position = Vector3(size * 0.30, 0.0, -size * 0.24)
+			# Across the room's middle from the chest, plus a stride to one side so
+			# the two are not on one line. Derived from `chest_dir` instead of the
+			# constants this used to be, which were opposite a chest that no longer
+			# always stands where they were written against.
+			var side_step := Vector3(-chest_dir.z, 0.0, chest_dir.x)
+			bundle.position = -chest_dir * (size * 0.24) + side_step * (size * 0.30)
 			root.add_child(bundle)
 			Atlas.mark(cell, Atlas.M_ARROWS)
 

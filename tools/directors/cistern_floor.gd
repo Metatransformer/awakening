@@ -792,21 +792,60 @@ func _leg_failed(why: String, leg: int, legs: int, hero: Node3D, target: Vector3
 			print("FLOOR     %-5s clear" % pair[0])
 			continue
 		var who := hit.get_collider()
+		# **The PATH, not the name.** Half the colliders down here are
+		# `StaticBody3D.new()` with no name assigned -- `Chest`, `SoundingStone`,
+		# `CrackedPillar._shaft`, `LockedDoor._blocker` -- so the leaf name comes back
+		# as `@StaticBody3D@2971` and identifies nothing. Floor 2's D10 was read off
+		# one of those for an afternoon: the coordinates put it at the shortcut
+		# landing's stub mouth and the candidate list was seventeen `.new()` sites.
+		# The parent chain names the prop even when the body is anonymous.
+		var who3 := who as Node3D
 		print("FLOOR     %-5s blocked by %s (%s) at %.1f,%.2f,%.1f" % [pair[0],
-			who.name if who != null else "?",
+			who.get_path() if who is Node else "?",
 			who.get_class() if who != null else "?",
 			hit.get_position().x, hit.get_position().y, hit.get_position().z])
+		if who3 != null:
+			print("FLOOR           its origin is %.1f,%.2f,%.1f" % [
+				who3.global_position.x, who3.global_position.y,
+				who3.global_position.z])
 
 
 ## Wait for `prop` to own the interact button. The hero has usually just left
 ## another prop's trigger and the exit takes a physics frame or two, during which
 ## `Prompt.focus` is still the thing he walked away from -- a `focus != null`
 ## wait breaks instantly on the wrong one (gate_locks.gd learned this).
+##
+## **NAME THE THIEF.** A bare false here says "not the door" and nothing about what
+## it was, and on floor 1 that cost an afternoon: E1 went red with `Hud._prompt`
+## reading "E TO OPEN", which is not a line `LockedDoor` ever says while shut -- it
+## comes out of `puzzle_gate.gd:303`, on a gate whose puzzle is solved. The beat's
+## own fixture opens the floor's puzzle gates so the walks can happen, so the red
+## was one of them standing in the same trigger and winning. Reading it as the
+## DOOR's line instead produced a note blaming `LockedDoor.SIGILS` for a missing
+## `burst` row that is right there at line 121.
 func _focus(rig, prop: Node) -> bool:
 	for _i in 90:
 		if Prompt.focus == prop:
 			return true
 		await rig.wait_frames(2)
+	var who: Node = Prompt.focus
+	# The PATH again, for the reason `_leg_failed` gives: the thief is as likely as
+	# not an `Area3D.new()` nobody named, and `@Area3D@2953` identifies nothing.
+	print("FLOOR   %s never took the button -- %s has it (%s), saying \"%s\"" % [
+		prop.name,
+		who.get_path() if who != null else "<nothing>",
+		who.get_class() if who != null else "-",
+		Hud._prompt])
+	# The gap between the two, which is the number that says whether this is a prop
+	# competing for one trigger or a hero parked somewhere else entirely.
+	if who is Node3D and prop is Node3D:
+		print("FLOOR     the two stand %.1f m apart (%s at %.1f,%.1f, %s at %.1f,%.1f)"
+			% [(who as Node3D).global_position.distance_to(
+					(prop as Node3D).global_position),
+				prop.name, (prop as Node3D).global_position.x,
+				(prop as Node3D).global_position.z,
+				who.name, (who as Node3D).global_position.x,
+				(who as Node3D).global_position.z])
 	return false
 
 
@@ -1012,7 +1051,8 @@ func _vault_refuses(rig, d: Node, hero: Node3D) -> void:
 		return
 	var walked := await _walk_to(rig, d, hero, d.anchor_cell(&"vault_door"), door)
 	_ck("E0 the vault door is reachable on foot from the entrance", walked)
-	_ck("E1 and it owns the interact button", await _focus(rig, door))
+	var owns := await _focus(rig, door)
+	_ck("E1 and it owns the interact button", owns)
 
 	var key := FloorDb.vault_key(_level)
 	var said: String = Hud._prompt
@@ -1037,8 +1077,15 @@ func _vault_refuses(rig, d: Node, hero: Node3D) -> void:
 	# Far Lantern -- it filed a note saying `SIGILS has no burst row` about a
 	# refusal that was perfectly correct. A note that cries wolf on three floors
 	# out of four is how a real short row gets scrolled past.
+	#
+	# **And only when the DOOR is the thing talking.** `Hud._prompt` is whatever holds
+	# the button, so with E1 red this line reads another prop's text as the vault's:
+	# floor 1 filed "the vault says E TO OPEN, SIGILS may have no `burst` row" about
+	# a solved `PuzzleGate` standing in the same trigger, and `SIGILS` has had a
+	# `burst` row at locked_door.gd:121 the whole time. A note sourced from a reading
+	# its own gate check just failed is a manufactured bug (CLAUDE.md §2).
 	var word := String(key).to_upper().replace("_", " ")
-	if not said.contains(word):
+	if owns and not said.contains(word):
 		_notes.append("the vault says \"%s\" and does not name %s -- "
 			% [said, word] + "LockedDoor.SIGILS may have no `%s` row, so GDD " % key
 			+ "pillar 3's named refusal is one line short. "
