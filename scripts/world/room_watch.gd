@@ -124,4 +124,6 @@ func _confirm() -> void:
 		return
 	_done = true
 	cleared.emit()
-	Bus.room_cleared.emit(room_id)
+	# MINOR: an ordinary room. `BossArena` emits the same signal MAJOR for a
+	# chamber, and `Sfx` picks the cue off the grade -- see `Bus.room_cleared`.
+	Bus.room_cleared.emit(room_id, RewardVfx.MINOR)

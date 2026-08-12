@@ -85,6 +85,11 @@ const SWING := 12
 var out := ""
 var _fails := 0
 var _defeated := 0
+## The grades `Bus.room_cleared` carried, in order. A chamber is a room being
+## beaten and it has to say so at MAJOR -- until 2026-08-12 it said nothing at all
+## about grade and `Sfx` played the ordinary room-clear take, so killing the floor
+## 1 miniboss and killing three goblins were the same noise.
+var _clear_grades: Array[int] = []
 ## "<miniboss>/<beat>" -> the punish window the fight actually held open.
 var _punish: Dictionary = {}
 
@@ -96,6 +101,8 @@ func run(rig) -> void:
 	Game.reset()
 	Run.level = 1
 	Bus.boss_defeated.connect(func() -> void: _defeated += 1)
+	Bus.room_cleared.connect(func(_id: StringName, grade: int) -> void:
+		_clear_grades.append(grade))
 
 	var fixture: Node = rig.scene().get_node_or_null(^"Arena")
 	if fixture != null:
@@ -458,6 +465,7 @@ func _tell(rig, arena: Node3D, boss: Node, id: StringName, b: Dictionary,
 func _kill(rig, arena: Node3D, boss: Node, id: StringName, n: int,
 		authored: int) -> void:
 	var before := _defeated
+	var clears_before := _clear_grades.size()
 	var start_q: int = boss.health.quarters
 	_ck("F%d.0 it comes to the kill on the row's %d q (%d)" % [n, authored, start_q],
 		start_q == authored)
@@ -484,6 +492,19 @@ func _kill(rig, arena: Node3D, boss: Node, id: StringName, n: int,
 		_defeated - before == 1)
 	_ck("F%d.3 the arena is spent and the seal came down" % n,
 		bool(arena.call(&"is_spent")) and not bool(arena.call(&"is_sealed")))
+	# The victory sound, end to end and through the real kill rather than through
+	# a hand-emitted signal: the chamber announces itself beaten exactly once, at
+	# MAJOR, and `Sfx` resolves that grade to a take that is not the one an
+	# ordinary room gets. This is the beat the player complained about -- a
+	# miniboss that went down to the old library horn.
+	var grades := _clear_grades.slice(clears_before)
+	print("MB   room_cleared grades at the kill: %s" % [grades])
+	_ck("F%d.5 the chamber announced itself beaten once, at MAJOR (%s)"
+		% [n, grades], grades == [RewardVfx.MAJOR])
+	_ck("F%d.6 MAJOR resolves to a take an ordinary room never plays (%s)"
+		% [n, Sfx.CLEAR_CUES[RewardVfx.MAJOR]],
+		Sfx.CLEAR_CUES[RewardVfx.MAJOR] != Sfx.CLEAR_CUES[RewardVfx.MINOR]
+		and Sfx._load(Sfx.CLEAR_CUES[RewardVfx.MAJOR]) != null)
 	# §7's whole reason for the empty `drop` row: nothing on the floor, and
 	# nothing in the item list either. `Boss._drop_loot` reads both keys, and a
 	# non-empty one would be a verb or a relic handed out behind an OPTIONAL
