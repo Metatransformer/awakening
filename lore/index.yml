@@ -1,0 +1,37 @@
+schema_version: 1
+subset: awakening_prologue
+authority:
+  local_scope: The machine-readable Awakening prologue subset.
+  shared_roots: The parent Valenfeld canon graph remains authoritative.
+  bridge: docs/CANON_BRIDGE.md
+sources:
+  - path: docs/CANON_BRIDGE.md
+    authority: Shared-root bridge and unresolved collision register.
+  - path: docs/LORE_AND_STORY.md
+    authority: Prologue canon, reveal-budget, and delivery rules.
+  - path: docs/GDD.md
+    authority: Section 1 owns the current pitch, people, place, and prologue reveal.
+  - path: scripts/world/dialogue_db.gd
+    authority: Dialogue ids and displayed person names.
+  - path: scripts/world/story_db.gd
+    authority: Current prologue beats, introductions, and story-bearing objects.
+never_violate:
+  - Parent Valenfeld canon is authoritative for every shared root.
+  - Never silently resolve a collision recorded in lore/world.yml.
+  - Never invent a backbone fact while writing surface dialogue or another leaf artifact.
+  - Kael is male, uses he/him pronouns, and does not speak.
+  - Use only person dialogue ids present in DialogueDb.PEOPLE, with matching display names.
+  - No god or deity may be named or attributed until sourced from the parent Valenfeld graph.
+  - Do not broaden the Awakening prologue reveal budget.
+files:
+  - lore/README.md
+  - lore/index.yml
+  - lore/world.yml
+  - lore/gods.yml
+  - lore/story_items.yml
+  - lore/people/kael.yml
+  - lore/people/aldric_vane.yml
+  - lore/people/kessa.yml
+  - lore/people/brannoc.yml
+  - lore/people/ysolt.yml
+  - lore/people/marisel.yml

@@ -8,6 +8,7 @@
     "play": "node tools/play.mjs",
     "editor": "godot --path . --editor",
     "check": "godot --path . --headless --import > /dev/null 2>&1 && godot --path . --headless --quit-after 5 2>&1 | grep -iE 'error|script.*failed' || echo CLEAN",
+    "lore:check": "python3 tools/validate_lore.py",
     "import": "node tools/import.mjs",
     "anims": "godot --path . --headless -s tools/build_anim_lib.gd",
     "deploy": "node tools/deploy.mjs",

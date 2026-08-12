@@ -1,0 +1,68 @@
+schema_version: 1
+id: world.awakening_prologue
+scope: The fixed Awakening prologue reveal and its open parent-canon collisions.
+fixed_reveal:
+  - id: reveal.awakening_is_prologue
+    status: fixed
+    facts:
+      - Awakening is a prologue whose story should make the player want the larger world of Valenfeld.
+      - The player descends into the Sunken Cut and returns to a garrison that changes.
+      - The current story jobs are orientation, motivation to descend and return, meaningful garrison change, and one unanswered promise about the larger world.
+    sources:
+      - docs/LORE_AND_STORY.md
+      - docs/GDD.md
+  - id: reveal.sunken_cut_name
+    status: fixed_name_parent_identity_unresolved
+    facts:
+      - The prologue calls its way down the Sunken Cut.
+      - Its relationship to the parent-canon Sunken Cut is unresolved.
+    sources:
+      - docs/GDD.md
+      - docs/CANON_BRIDGE.md
+open_parent_canon_collisions:
+  - id: collision.sunken_cut_identity
+    parent_entity_id: place.the-sunken-cut
+    status: unresolved
+    awakening_claim: The Sunken Cut is a four-floor route into ancient Vyr works reached through a purpose-built garrison.
+    parent_claim: The Sunken Cut is a flooded silver prospect southwest of Valenfeld, driven by Alder Venn and later held by the Silt Hands.
+    decision_needed: Decide whether these are the same place and when Awakening occurs.
+    sources:
+      - docs/CANON_BRIDGE.md
+  - id: collision.far_lantern_creed_and_salvage
+    parent_entity_id: faction.the-far-lantern-society
+    status: unresolved
+    awakening_claim: The creed is "Dive deep, Unearth treasures and Return safely," and the expedition owns what leaves the shaft.
+    parent_claim: The creed is "Go far. Come home. Tell true," and discovery alone grants no ownership.
+    decision_needed: Decide whether Awakening shows an earlier or local doctrine, a compromised expedition, or a parent-canon retcon.
+    sources:
+      - docs/CANON_BRIDGE.md
+  - id: collision.highbridge_outpost
+    parent_entity_id: place.highbridge
+    status: unresolved
+    awakening_claim: A Highbridge garrison stands at the shaft head a day's road from Valenfeld.
+    parent_claim: Highbridge is the lower world's human capital, while the canonical Cut is attached to Valenfeld.
+    decision_needed: Decide who sponsors and names the outpost.
+    sources:
+      - docs/CANON_BRIDGE.md
+  - id: collision.vyr_vallen_authorship
+    parent_entity_id: concept.race-vyr
+    related_parent_entity_ids:
+      - concept.the-vallen-imperium
+    status: unresolved
+    awakening_claim: The Vyr built the works beneath the Cut and are treated as the dead empire behind the salvage.
+    parent_claim: Vyr artifice and the Vallen Imperium's Old Work are distinct traditions, although the Vyr caused the Sundering.
+    decision_needed: Assign the mine, buried machinery, and deeper structure to their canonical makers separately.
+    sources:
+      - docs/CANON_BRIDGE.md
+  - id: collision.valenfeld_garrison_relationship
+    parent_entity_id: place.vallenfield-town
+    status: unresolved_potential_match
+    awakening_claim: Valenfeld remains off-screen while the garrison carries the home loop.
+    parent_claim: Valenfeld is the starting frontier town and the canonical Cut is a nearby delve.
+    decision_needed: Reconcile the time, geography, and outpost relationship before treating this as a match.
+    sources:
+      - docs/CANON_BRIDGE.md
+sources:
+  - docs/CANON_BRIDGE.md
+  - docs/LORE_AND_STORY.md
+  - docs/GDD.md

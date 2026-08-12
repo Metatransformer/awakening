@@ -1,0 +1,21 @@
+schema_version: 1
+id: person.brannoc
+canonical_name: Brannoc
+display_name: Brannoc
+name_status: placeholder
+role: Smith sent by the Guild to mend recovered work.
+gender: male
+pronouns:
+  subject: he
+  object: him
+  possessive: his
+  reflexive: himself
+dialogue_id: smith
+voice_status: partially_voiced
+fixed_facts:
+  - Brannoc arrives after the maker's mark is recovered and sent to Valenfeld.
+  - He mends recovered made things rather than making new ones at the garrison.
+sources:
+  - docs/GDD.md
+  - scripts/world/dialogue_db.gd
+  - scripts/world/story_db.gd
