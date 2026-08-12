@@ -75,6 +75,45 @@ func _glyph_is(tag: String, cell: StringName, want: StringName) -> int:
 	return 1
 
 
+## The equipment strip's structural contract, read from the frame just captured.
+## Geometry is stable across its content states; checking both the fresh strip
+## and bow-plus-shield catches a state-dependent return of the deleted clutter.
+func _equipment_bar_contract(tag: String) -> int:
+	var layout: Dictionary = Hud.layout_rects()
+	var slots: Array[StringName] = [&"hand_0", &"hand_1", &"item_cell"]
+	var required: Array[StringName] = [&"equipment_bar"]
+	required.append_array(slots)
+	var problems: Array[String] = []
+	for key: StringName in required:
+		if not layout.has(key):
+			problems.append("missing %s" % key)
+
+	if layout.has(&"equipment_bar"):
+		var bar_entry: Dictionary = layout[&"equipment_bar"]
+		var bar: Rect2 = bar_entry[&"rect"]
+		for key: StringName in slots:
+			if not layout.has(key):
+				continue
+			var slot_entry: Dictionary = layout[key]
+			var slot: Rect2 = slot_entry[&"rect"]
+			if not bar.encloses(slot):
+				problems.append("bar does not enclose %s" % key)
+			if slot.size.y <= slot.size.x:
+				problems.append("%s is not tall" % key)
+
+	var obsolete_keys: Array[StringName] = [&"carets_hand", &"caret_item", &"loadout"]
+	for obsolete: StringName in obsolete_keys:
+		if layout.has(obsolete):
+			problems.append("obsolete %s present" % obsolete)
+
+	if problems.is_empty():
+		print("  ok   HUDEQUIP %s: bar encloses three tall slots; clutter absent" % tag)
+		return 0
+	print("HUD FAIL %s equipment strip: %s"
+		% [tag, "; ".join(PackedStringArray(problems))])
+	return 1
+
+
 ## How many LIT tiles the Ballast slot published on the frame just captured, and
 ## whether that is the reading the beat expected.
 ##
@@ -132,6 +171,7 @@ func run(rig) -> void:
 	Run.enter(1234)
 	await rig.wait_frames(6)
 	await _shot(rig, out.path_join("h_00_fresh.png"), "h_00_fresh")
+	_fails += _equipment_bar_contract("h_00_fresh")
 
 	# 2. A few commons in. Below tier 1, so the number is still BONE.
 	Run.collect(&"bone_shard", 6)
@@ -387,6 +427,7 @@ func run(rig) -> void:
 		Game.cycle_armament(&"left")
 	await rig.wait_frames(6)
 	await _shot(rig, out.path_join("h_15_bow_shield.png"), "h_15_bow_shield")
+	_fails += _equipment_bar_contract("h_15_bow_shield")
 
 	if Game.armament(&"left") != &"shield" or Game.armament(&"right") != &"bow":
 		print("HUD FAIL the shield never came back up beside the bow (%s/%s) — "

@@ -112,21 +112,7 @@ const STAMINA_TICKS := 3           ## rolls-from-full, drawn as boundaries
 ## is a fair proxy for the shortest one a player will reliably notice.
 const HEAT_BREAK_FLASH := 0.35
 
-# --- Hands and item buttons (§5.2) -------------------------------------------
-## Cell geometry lives in Pal now (Pal.CELL / CELL_GAP / CLUSTER_*), because the
-## hands and the D-pad share one cluster and one right edge — see the note there.
-##
-## Half-height of a D-pad caret, in reference px. Also its half-width — they are
-## drawn as equilateral-ish triangles so ← ↓ → read at a glance in a HUD that is
-## 40 px tall in the corner.
-##
-## The band above the cells is CARET * 2 + CARET_GAP tall and every caret is
-## drawn INSIDE it. The first version had them straddling the cell edges — the
-## left one hung over the icon's top-left corner and the down one had its body
-## behind the cell — which made a 64 px cell look like a rendering fault.
-const CARET := 8.0
-## The gap between a cell and the caret sitting over it.
-const CARET_GAP := 5.0
+# --- Equipment strip (§5.2) --------------------------------------------------
 ## The hands, left to right as they are on the body. What is IN them comes from
 ## Game.armament(); this is no longer a fixed list of everything that exists.
 ##
@@ -453,7 +439,7 @@ func _ready() -> void:
 	Bus.prompt_changed.connect(_on_prompt)
 	Bus.hold_changed.connect(_on_hold)
 	# Every button this overlay names is named for the device in the player's
-	# hands, so picking up a pad repaints all of it: the caps and the prompt
+	# hands, so picking up a pad repaints all of it: the action hints and the prompt
 	# (which Prompt re-emits on the same signal).
 	Bus.input_device_changed.connect(func(_pad: bool) -> void: _repaint())
 	Bus.level_changed.connect(func(_l: int) -> void: _repaint())
@@ -955,8 +941,8 @@ func _process(delta: float) -> void:
 ##
 ## **A tree, not a list** (decision 27). The flat version — "no permanent element
 ## overlaps any other" — fires on the first frame, because this HUD is full of
-## *deliberate* overlap: the ammo numeral inside the hand cell, the caps plate
-## under the cells, the ghost over the health bar, the slips inside the rim. The
+## *deliberate* overlap: the ammo numeral and action hint inside a hand slot, the
+## ghost over the health bar, the slips inside the rim. The
 ## repair for that is an allowlist of exempt pairs, which is a second table
 ## describing the layout, which is the original defect in a new place. Declaring a
 ## parent instead makes the nesting a claim the drawing code itself makes, and
@@ -1054,24 +1040,14 @@ func enemy_bar_rects() -> Dictionary:
 ## than designed"*. A fourth entry is an amendment to that document, argued in
 ## the same breath — not a number added here because one label was awkward.
 ##
-##   10  ammo / charge numeral, bottle count, slips +N, heat multiplier,
-##       floor name
-##   14  key caps, loadout line, interact prompt, autosave notice, cell lettering
+##   10  action hints, ammo / charge numeral, bottle count, slips +N,
+##       heat multiplier, floor name
+##   14  interact prompt, autosave notice, cell lettering
 ##   16  floor level, item toast
 const TYPE_LADDER: Array[float] = [10.0, 14.0, 16.0]
 
-# --- The two plate recipes (HUD_PLAN decision 4.4) ----------------------------
-# Two, and there were three. A plate is how text stays legible over something it
-# does not control, and which plate you get is decided by ONE question: is this
-# attached to a cell, or is it floating over the world?
-#
-# ATTACHED TO A CELL -- the key caps, the loadout line. MIDNIGHT@80% is the
-# cells' own fill, so a cap reads as part of the cluster it hangs off rather than
-# as a label that landed near it, and 3 px keeps the run of caps tight enough to
-# scan as a row.
-const PLATE_CELL := Color(Pal.MIDNIGHT, 0.8)
-const PLATE_CELL_PAD := 3.0
-# FREE OVER THE WORLD -- the interact prompt, the floor card. These have a lit
+# --- The world-text plate recipe (HUD_PLAN decision 4.4) ----------------------
+# The interact prompt and floor card have a lit
 # wall or a torchlit floor behind them and nothing else of their own, so they get
 # the darker VOID and a wider margin: 6 px is what stops a descender touching the
 # brick outside the plate at 720p. The prompt used 7 px and the floor card ran
@@ -1173,6 +1149,7 @@ func _draw_hud() -> void:
 	_draw_magic(s)
 	_draw_heat(s)
 	_draw_draughts(s)
+	_draw_equipment_plate(s)
 	_draw_hands(s)
 	_draw_item_cell(s)
 	_draw_minimap(s)
@@ -1440,7 +1417,7 @@ func _draw_floor(s: Vector2) -> void:
 
 	# The plate, and it is not decoration. This card is the only text on the HUD
 	# with a LIT WALL behind it -- health and the bag sit over floor and shadow,
-	# the button cluster carries its own cells -- and torchlit brick at this end
+	# the equipment strip carries its own housing -- and torchlit brick at this end
 	# of the palette is brighter than MOTH. The first version had no plate and
 	# the settled name was invisible from two metres back.
 	#
@@ -1543,46 +1520,6 @@ func _draw_player_meter(s: Vector2, key: StringName, rect: Rect2,
 	return track
 
 
-## Sparse ordered chips and hairline cracks inside a fill segment. Columns are
-## anchored to the screen rather than the segment width, so losing resource
-## reveals the same stone instead of making the grain swim. Each complete mark
-## must clear both sloped edges by a pixel; narrow boundary cells are skipped.
-func _draw_meter_grain(s: Vector2, segment: Rect2, diagonal: float,
-		left_diagonal: bool) -> void:
-	var pixel := maxf(Pal.px(1.0, s.y), 1.0)
-	var step := Pal.px(Pal.METER_GRAIN_STEP, s.y)
-	var inner_top := segment.position.y + pixel
-	var inner_bottom := segment.end.y - pixel
-	if inner_bottom - inner_top < pixel:
-		return
-
-	var first_column := int(ceil((segment.position.x + pixel) / step))
-	var last_column := int(floor((segment.end.x - pixel) / step))
-	var row_count := maxi(int(floor((inner_bottom - inner_top) / pixel)), 1)
-	var meter_row := int(round(segment.position.y / pixel))
-	var cut := minf(diagonal, segment.size.x)
-	for column in range(first_column, last_column + 1):
-		var order := (column * 11 + meter_row * 7) % 9
-		if order > 2:
-			continue
-		var mark_x := float(column) * step
-		var mark_y := inner_top + float((column * 3 + meter_row) % row_count) * pixel
-		var mark_w := pixel * (2.0 if order == 0 else 1.0)
-		var t0 := (mark_y - segment.position.y) / segment.size.y
-		var t1 := (mark_y + pixel - segment.position.y) / segment.size.y
-		var left0 := segment.position.x + (cut * (1.0 - t0) if left_diagonal else 0.0)
-		var left1 := segment.position.x + (cut * (1.0 - t1) if left_diagonal else 0.0)
-		var right0 := segment.end.x - cut * t0
-		var right1 := segment.end.x - cut * t1
-		var safe_left := maxf(left0, left1) + pixel
-		var safe_right := minf(right0, right1) - pixel
-		if mark_x < safe_left or mark_x + mark_w > safe_right:
-			continue
-		var mark_color := Color(Pal.BONE, Pal.METER_GRAIN_LIGHT_ALPHA) \
-			if order == 1 else Color(Pal.VOID, Pal.METER_GRAIN_DARK_ALPHA)
-		_canvas.draw_rect(Rect2(mark_x, mark_y, mark_w, pixel), mark_color)
-
-
 ## Fill a fraction of the recessed track. Only a segment that reaches the
 ## left edge starts on the track's diagonal; every visible end is diagonal too.
 ## A later segment underlaps that end by one diagonal, leaving its left edge flat
@@ -1603,7 +1540,6 @@ func _draw_meter_segment(s: Vector2, track: Rect2, from: float, to: float,
 		track.position.x + track.size.x * last - first_x, track.size.y)
 	_canvas.draw_colored_polygon(
 		_meter_shape(segment, diagonal, left_diagonal), color)
-	_draw_meter_grain(s, segment, diagonal, left_diagonal)
 	_canvas.draw_colored_polygon(
 		_meter_band_shape(segment, diagonal, Pal.px(1.0, s.y), true, left_diagonal),
 		Color(Pal.BONE, Pal.METER_FILL_LIGHT_ALPHA))
@@ -1868,75 +1804,108 @@ func _heat_color() -> Color:
 			return Pal.GOLD.lerp(Pal.BONE, b * 0.55)
 
 
-# --- The hands and the item buttons (§5.2, §5.2b) ---------------------------
-## Two instruments, deliberately in opposite corners. The hands sit above health
-## because what he is holding is a fact about his BODY. The item buttons sit
-## top-right because they are not a readout at all -- they are a picture of the
-## D-pad, and a control surface belongs where the thumb is.
-##
-## The hands cells carry the block tell and the ammo count as well as the
-## armament; that state has nowhere else to live.
-##
-## The glyph is a render of the ACTUAL model, baked and posterised into the Pal
-## ramp. Lettering ("SW", "SH") only ever appears if a bake is missing.
-
-## Where the two groups sit. Laid out from the cluster's LEFT edge -- shared with
-## health and stamina, so the bottom-left pole hangs off one margin -- and
-## UPWARDS from `Pal.CLUSTER_BOTTOM`, so adding a row pushes the cluster into the
-## empty middle of the screen instead of down through the health bar.
-##
-## THE CLUSTER IS THREE CELLS, not six: [left hand][right hand] and one selected
-## item beside them. There were four bindable D-pad cells here and the D-pad does
-## not bind anything any more.
-##
-## THE CARET RULE, which the whole cluster reads by: a caret ABOVE a cell is the
-## D-pad direction that cycles that cell. ← → over the right hand, ↓ over the
-## item. Nothing else in the cluster draws a triangle, so a triangle always means
-## "a direction changes this".
-##
-## The hands come first because that is the order they are on the body, and the
-## item cell sits to their right across the wider CLUSTER_GAP.
-func _hands_origin(s: Vector2) -> Vector2:
-	return Vector2(Pal.CLUSTER_LEFT * s.x, _cluster_top(s))
+# --- The compact equipment strip (§5.2, §5.2b) -------------------------------
+## One Valenfeld-style cave-rock housing contains [left hand][right hand]
+## [selected item]. The paintings identify the contents; each live action binding
+## is a small overlay inside its slot. Blocking, ammunition and consumable state
+## remain on the same cells they occupied before the housing was added.
+func _equipment_bar_rect(s: Vector2) -> Rect2:
+	var slot_w := Pal.px(Pal.EQUIPMENT_SLOT_W, s.y)
+	var slot_h := Pal.px(Pal.EQUIPMENT_SLOT_H, s.y)
+	var pad := Pal.px(Pal.EQUIPMENT_HOUSING_PAD, s.y)
+	var width := slot_w * 3.0 + Pal.px(
+		Pal.EQUIPMENT_HAND_GAP + Pal.EQUIPMENT_ITEM_GAP, s.y) + pad * 2.0
+	var size := Vector2(width, slot_h + pad * 2.0)
+	return Rect2(Vector2(Pal.CLUSTER_LEFT * s.x,
+		Pal.CLUSTER_BOTTOM * s.y - size.y), size)
 
 
-## The item cell sits to the RIGHT of the hands pair and shares its top edge.
-func _cross_origin(s: Vector2) -> Vector2:
-	var cell := Pal.px(Pal.CELL, s.y)
-	var gap := Pal.px(Pal.CELL_GAP, s.y)
+func _equipment_shape(r: Rect2, chamfer: float) -> PackedVector2Array:
+	var cut := minf(chamfer, minf(r.size.x, r.size.y) * 0.5)
+	return PackedVector2Array([
+		Vector2(r.position.x + cut, r.position.y),
+		Vector2(r.end.x - cut, r.position.y),
+		Vector2(r.end.x, r.position.y + cut),
+		Vector2(r.end.x, r.end.y - cut),
+		Vector2(r.end.x - cut, r.end.y),
+		Vector2(r.position.x + cut, r.end.y),
+		Vector2(r.position.x, r.end.y - cut),
+		Vector2(r.position.x, r.position.y + cut),
+	])
+
+
+## Hard-edged cave rock, drawn before every slot. Chips run along the exposed top
+## and bottom lips; the two fixed cracks live in the semantic gaps, so the marks
+## remain visible without painting noise over the item art.
+func _draw_equipment_plate(s: Vector2) -> void:
+	var bar := _equipment_bar_rect(s)
+	var pixel := maxf(Pal.px(1.0, s.y), 1.0)
+	var chamfer := Pal.px(Pal.EQUIPMENT_CHAMFER, s.y)
+	_note(&"equipment_bar", &"cluster", bar)
+	_canvas.draw_colored_polygon(_equipment_shape(bar, chamfer), Pal.VOID)
+	var face := bar.grow(-pixel)
+	_canvas.draw_colored_polygon(
+		_equipment_shape(face, maxf(chamfer - pixel, 0.0)), Color(Pal.ASH, 0.92))
+
+	var step := Pal.px(Pal.EQUIPMENT_GRAIN_STEP, s.y)
+	var first_x := face.position.x + chamfer + pixel
+	var last_x := face.end.x - chamfer - pixel
+	var chip_count := maxi(int(floor((last_x - first_x) / step)), 0)
+	for i in range(chip_count + 1):
+		var x := first_x + float(i) * step
+		var width := pixel * (2.0 if i % 4 == 0 else 1.0)
+		var color := Color(Pal.BONE, Pal.EQUIPMENT_GRAIN_LIGHT_ALPHA) \
+			if i % 3 == 0 else Color(Pal.VOID, Pal.EQUIPMENT_GRAIN_DARK_ALPHA)
+		var top_y := face.position.y + pixel * float(2 + (i * 2) % 3)
+		var bottom_y := face.end.y - pixel * float(3 + (i * 5) % 3)
+		_canvas.draw_rect(Rect2(x, top_y, width, pixel), color)
+		_canvas.draw_rect(Rect2(x + pixel, bottom_y, width, pixel), color)
+
 	var hands := _hands_origin(s)
-	return Vector2(
-		hands.x + cell * 2.0 + gap + Pal.px(Pal.CLUSTER_GAP, s.y), hands.y)
+	var slot_w := Pal.px(Pal.EQUIPMENT_SLOT_W, s.y)
+	var hand_gap := Pal.px(Pal.EQUIPMENT_HAND_GAP, s.y)
+	var item_gap := Pal.px(Pal.EQUIPMENT_ITEM_GAP, s.y)
+	var seams: Array[float] = [
+		hands.x + slot_w + hand_gap * 0.5,
+		hands.x + slot_w * 2.0 + hand_gap + item_gap * 0.5,
+	]
+	for i in seams.size():
+		var x := seams[i]
+		var y := hands.y + Pal.px(14.0 + float(i) * 19.0, s.y)
+		_canvas.draw_polyline(PackedVector2Array([
+			Vector2(x - pixel, y), Vector2(x + pixel, y + pixel * 3.0),
+			Vector2(x, y + pixel * 7.0), Vector2(x + pixel * 2.0, y + pixel * 10.0),
+		]), Color(Pal.VOID, Pal.EQUIPMENT_GRAIN_DARK_ALPHA), pixel, false)
 
 
-## The top of the CELL ROW, worked back from the bottom of the whole cluster.
-##
-## Spelled out term by term rather than folded into one constant, for the same
-## reason `_draw_draughts` spells its stack out: the rows below the cells are the
-## key caps and then the loadout line, and a version of this that forgot one of
-## them put the caps THROUGH the health bar. Read it against `_draw_item_cell`, which
-## is where those two rows are actually drawn.
-func _cluster_top(s: Vector2) -> float:
-	var caps := Pal.px(Pal.KEYCAP_GAP, s.y) + CanvasText.height(
-		_text(14.0))
-	var loadout := Pal.px(9.0, s.y) + CanvasText.height(
-		_text(14.0))
-	# No allowance for the caret band above the cells, and that is not an
-	# oversight. The cluster used to be pinned to the TOP of the screen, where a
-	# caret drawn above a cell would have gone off the frame, so the origin had
-	# to reserve CARET * 2 + CARET_GAP before anything else was placed. Growing
-	# upwards from the bottom, the band extends into empty screen instead.
-	return Pal.CLUSTER_BOTTOM * s.y - (caps + loadout) - Pal.px(Pal.CELL, s.y)
+func _hands_origin(s: Vector2) -> Vector2:
+	var bar := _equipment_bar_rect(s)
+	var pad := Pal.px(Pal.EQUIPMENT_HOUSING_PAD, s.y)
+	return bar.position + Vector2(pad, pad)
+
+
+## The selected item follows the hands across the deliberately wider semantic gap.
+func _cross_origin(s: Vector2) -> Vector2:
+	var slot_w := Pal.px(Pal.EQUIPMENT_SLOT_W, s.y)
+	var hands := _hands_origin(s)
+	return Vector2(hands.x + slot_w * 2.0 + Pal.px(
+		Pal.EQUIPMENT_HAND_GAP + Pal.EQUIPMENT_ITEM_GAP, s.y), hands.y)
+
+
+## Square art inside a narrow, taller equipment slot. Procedural bottles and
+## rations use this same box, so they retain the proportions they were authored at.
+func _equipment_art_rect(s: Vector2, slot: Rect2) -> Rect2:
+	var inset := Pal.px(2.0, s.y)
+	var edge := minf(slot.size.x, slot.size.y) - inset * 2.0
+	return Rect2(slot.get_center() - Vector2(edge, edge) * 0.5, Vector2(edge, edge))
 
 
 ## The button that fires `action`, as the player would say it out loud, or "" for
 ## an action the device they are holding has nothing bound to.
 ##
-## This used to be keyboard-and-mouse only, under a comment claiming a pad player
-## "has the arrangement itself". They do not: the cells here are the only thing
-## that says which of the four face buttons swings, and a controller in hand next
-## to a cap reading LMB is the HUD lying about the game. `Glyph` answers for
-## whichever device was touched last (`Settings.using_pad`).
+## This used to be keyboard-and-mouse only. `Glyph` answers for whichever device
+## was touched last (`Settings.using_pad`), so an in-slot hint never describes the
+## wrong controller.
 ##
 ## Read from the LIVE InputMap every repaint rather than from a table, because a
 ## table would be a second copy of the bindings and the second copy is the one
@@ -1946,35 +1915,31 @@ func _hotkey(action: StringName) -> String:
 	return Glyph.cap(action)
 
 
-## The key cap: the binding, centred under its cell. Drawn BEFORE the cell so a
-## cap never lands on top of the icon it belongs to.
-func _draw_keycap(s: Vector2, cell: Rect2, key: String, tag := &"") -> void:
+## The live action binding, drawn over the art in the slot's upper-left corner.
+## It is intentionally small: the painting names the item and this only answers
+## which current binding activates it.
+func _draw_action_hint(s: Vector2, cell: Rect2, key: String, tag: StringName,
+		parent: StringName) -> void:
 	if key.is_empty():
 		return
-	var scale := _text(14.0)
-	var top := cell.end.y + Pal.px(Pal.KEYCAP_GAP, s.y)
+	var scale := _text(10.0)
 	var w := CanvasText.width(key, scale)
 	var h := CanvasText.height(scale)
-	var pad := Pal.px(PLATE_CELL_PAD, s.y)
-	if tag != &"":
-		_note(tag, &"cluster", Rect2(cell.get_center().x - w * 0.5 - pad,
-			top - pad, w + pad * 2.0, h + pad * 2.0))
-	# On its own plate, not bare on the scene. The cells have a MIDNIGHT fill and
-	# the caps hang BELOW them, so a bare cap sits on whatever the world happens
-	# to be — ASH lettering over a torchlit wall is nearly gone. It also earns the
-	# metaphor: a key cap should look like a key.
-	_canvas.draw_rect(Rect2(
-		cell.get_center().x - w * 0.5 - pad, top - pad,
-		w + pad * 2.0, h + pad * 2.0), PLATE_CELL)
-	CanvasText.draw_centred(_canvas, key,
-		Vector2(cell.get_center().x, top), scale, Pal.BONE)
+	var pad := Pal.px(2.0, s.y)
+	var hint := Rect2(cell.position + Vector2(Pal.px(3.0, s.y), Pal.px(3.0, s.y)),
+		Vector2(w + pad * 2.0, h + pad * 2.0))
+	_note(tag, parent, hint)
+	_canvas.draw_rect(hint, Color(Pal.VOID, 0.88))
+	_canvas.draw_rect(hint, Pal.ASH, false, maxf(Pal.px(1.0, s.y), 1.0))
+	CanvasText.draw_text(_canvas, key, hint.position + Vector2(pad, pad), scale, Pal.BONE)
 
 
 ## The hands: what he is holding, left then right. Two cells, and both of them
 ## can be empty -- two-handing the sword is a real choice, not a broken state.
 func _draw_hands(s: Vector2) -> void:
-	var cell := Pal.px(Pal.CELL, s.y)
-	var gap := Pal.px(Pal.CELL_GAP, s.y)
+	var slot_size := Vector2(Pal.px(Pal.EQUIPMENT_SLOT_W, s.y),
+		Pal.px(Pal.EQUIPMENT_SLOT_H, s.y))
+	var gap := Pal.px(Pal.EQUIPMENT_HAND_GAP, s.y)
 	var origin := _hands_origin(s)
 	var combat := _hero_combat()
 	var blocking: bool = bool(combat.get(&"blocking")) if combat != null else false
@@ -1982,30 +1947,7 @@ func _draw_hands(s: Vector2) -> void:
 	for i in HANDS.size():
 		var hand: StringName = HANDS[i]
 		var id: StringName = Game.armament(hand)
-		var r := Rect2(origin.x + i * (cell + gap), origin.y, cell, cell)
-		# ← → OVER THE RIGHT HAND: this is the cell D-pad ← / → step, and it is
-		# the only thing on screen that says so. Without it the weapon ring is
-		# invisible — a player who has found a bow has no way to learn it is one
-		# press away, and the question the old bindable cross answered loudly
-		# ("which direction is my bow on?") would come back as a quieter one.
-		#
-		# Drawn for the right hand ALWAYS, even owning nothing but the sword: a
-		# ring of one is still the ring, and a caret that appears the moment you
-		# pick up a bow is a control the player has to notice arriving.
-		if hand == &"right":
-			# Both of them live in the band ABOVE the cell, at its mid-line, so
-			# neither triangle touches the icon it is describing.
-			var mid := r.position.y - Pal.px(CARET_GAP + CARET, s.y)
-			var cw := Pal.px(CARET, s.y)
-			# The two carets are one band: they straddle the cell's own left and
-			# right edges, so reported separately each would overlap the cell and
-			# the other. One rect is the honest extent of the thing.
-			_note(&"carets_hand", &"cluster", Rect2(
-				r.position.x - cw * 2.0, mid - cw,
-				r.size.x + cw * 4.0, cw * 2.0))
-			_draw_caret(s, Vector2(r.position.x, mid), Vector2(-1.0, 0.0))
-			_draw_caret(s, Vector2(r.end.x, mid), Vector2(1.0, 0.0))
-		_draw_keycap(s, r, _hotkey(ArmamentDb.action_of(id)), &"cap_%d" % i)
+		var r := Rect2(Vector2(origin.x + i * (slot_size.x + gap), origin.y), slot_size)
 
 		# The shield cell IS the block tell. It was the one thing the old strip
 		# did that nothing else does, so it survives the strip.
@@ -2015,7 +1957,7 @@ func _draw_hands(s: Vector2) -> void:
 			fill = Pal.BONE
 		if id == &"shield" and _block_flash_t >= 0.0:
 			fill = Pal.GOLD if _parry_flash else Pal.RUST
-		_note(&"hand_%d" % i, &"cluster", r)
+		_note(&"hand_%d" % i, &"equipment_bar", r)
 		_canvas.draw_rect(r, fill)
 		_canvas.draw_rect(r, Pal.ASH, false, Pal.px(1.0, s.y))
 
@@ -2044,19 +1986,18 @@ func _draw_hands(s: Vector2) -> void:
 		# law ("Never `Color.BLACK` and never `Color.WHITE`"), and the point of a
 		# law like that is that `grep -r 'Color.BLACK' scripts/ui` can answer the
 		# question. STYLEGUIDE §7.2.
-		_draw_item_glyph(s, r, id, &"hand_%d" % i,
+		_draw_item_glyph(s, _equipment_art_rect(s, r), id, &"hand_%d" % i,
 			Pal.MIDNIGHT if raised else Pal.VOID,
-			raised, counter != &"" and left <= 0)
+			raised, counter != &"" and left <= 0, true)
 		if counter != &"":
 			# BONE, and it was MOTH. "How many arrows do I have" is asked in the
 			# middle of a fight, and MOTH is the colour §2 rule 3 reserves for the
-			# things you read when you have STOPPED — the key caps, the loadout
-			# line, the floor card. A Tier 2 readout wearing Tier 3's brightness is
+			# things you read when you have STOPPED — action hints and the floor
+			# card. A Tier 2 readout wearing Tier 3's brightness is
 			# the hierarchy saying one thing and the palette saying another.
 			# 10 px, and it was 7 (decision 19). §2's second rule: the smallest
 			# text on the screen must not be the thing you read mid-fight, and
-			# "how many arrows do I have" was set three pixels under the key cap
-			# that fires them.
+			# "how many arrows do I have" was smaller than its action hint.
 			#
 			# The corner inset is derived from the drawn height rather than from
 			# a constant that happened to equal the old size plus three — that
@@ -2072,48 +2013,24 @@ func _draw_hands(s: Vector2) -> void:
 			_note(&"ammo_%d" % i, &"hand_%d" % i,
 				Rect2(nr.x - nw, nr.y, nw, CanvasText.height(nsc)))
 			CanvasText.draw_right(_canvas, str(left), nr, nsc, Pal.BONE)
+		_draw_action_hint(s, r, _hotkey(ArmamentDb.action_of(id)),
+			&"cap_%d" % i, &"hand_%d" % i)
 
 
-## The selected item — ONE cell, the bottle D-pad ↓ has stepped to and X will
-## drink. It replaced a four-cell bindable cross, and the cell count is the point
-## rather than a side effect: the cross existed so the player could answer "which
-## direction is this on", and nothing asks that any more.
-##
-## The same SIZE as a hand cell, after one render at 46 px against their 64. The
-## smaller cell was meant to say "this is not a hand"; what it actually said was
-## "this is misaligned" — tops in a line and bottoms ragged, with its key cap
-## floating half a row above RMB and LMB. Three cells in a row is what a cluster
-## is, and the caret over each one is what says which is which.
+## The selected item — the third tall slot, aligned with both hands. Its icon and
+## live use-item hint carry the identity and action without directional prose.
 ##
 ## The bottle it draws is the SELECTION, not the bottle you own most of. An empty
 ## bottle is drawn empty rather than skipped — you own it, you are about to fill
 ## it, and a ring whose length changed every time you drank would be a ring you
 ## could not count (Game.cycle_item).
 ##
-## The loadout line under it is text and not a cell, because it is the only thing
-## in the cluster you cannot look at and see: which of the two sets is live is a
-## fact about a screen you are not on. It is named rather than marked for the
-## same reason — "↑ PRIMARY" is readable cold, and a filled-vs-hollow pip is a
-## convention the player has to be taught.
 func _draw_item_cell(s: Vector2) -> void:
-	var cell := Pal.px(Pal.CELL, s.y)
 	var origin := _cross_origin(s)
-	var r := Rect2(origin, Vector2(cell, cell))
+	var r := Rect2(origin, Vector2(Pal.px(Pal.EQUIPMENT_SLOT_W, s.y),
+		Pal.px(Pal.EQUIPMENT_SLOT_H, s.y)))
 
-	# ↓ over the cell: D-pad ↓ steps it, and the triangle POINTS AT the thing it
-	# steps. The caret rule, see `_cross_origin`. It pointed up for one render,
-	# which put its body behind the cell and its point out in the wall.
-	var cw := Pal.px(CARET, s.y)
-	var tip := Vector2(r.get_center().x, origin.y - Pal.px(CARET_GAP, s.y))
-	_note(&"caret_item", &"cluster",
-		Rect2(tip.x - cw, tip.y - cw * 2.0, cw * 2.0, cw * 2.0))
-	_draw_caret(s, tip, Vector2(0.0, 1.0))
-	# The cap is X, the button that USES it — not the direction that selects it.
-	# A cell caps with the button you press to make it happen, and selecting an
-	# item does not make anything happen.
-	_draw_keycap(s, r, _hotkey(&"use_item"), &"cap_item")
-
-	_note(&"item_cell", &"cluster", r)
+	_note(&"item_cell", &"equipment_bar", r)
 	_canvas.draw_rect(r, Color(Pal.MIDNIGHT, 0.8))
 	var potion := Game.selected_potion()
 	# A RATION is a full cell, like a full bottle: the thing the border is saying
@@ -2125,8 +2042,8 @@ func _draw_item_cell(s: Vector2) -> void:
 		Pal.px(2.0 if loaded else 1.0, s.y))
 	# `selected_item()` names the GLASS and `selected_potion()` what is in it.
 	# The glyph wants the glass: a bottle with nothing in it still has to draw.
-	_draw_item_glyph(s, r, Game.selected_item(), &"item_cell", Pal.VOID, false,
-		not loaded)
+	_draw_item_glyph(s, _equipment_art_rect(s, r), Game.selected_item(),
+		&"item_cell", Pal.VOID, false, not loaded, true)
 
 	# **A meal in progress fills the cell's foot**, and it takes the numeral's turn
 	# rather than sharing the corner with it.
@@ -2172,27 +2089,7 @@ func _draw_item_cell(s: Vector2) -> void:
 			Vector2(r.end.x - Pal.px(3.0, s.y),
 				r.end.y - Pal.px(3.0, s.y) - CanvasText.height(csc)),
 			csc, Pal.MOTH)
-
-	# The loadout, on its own row under the key caps.
-	#
-	# ON A PLATE, and with an ARROW the font actually has. It was "\u25b2 PRIMARY"
-	# in bare ASH for one render: a solid triangle overpowers the word beside it
-	# at cap height in this face, and ASH lettering laid straight
-	# over a torchlit wall was barely there. Right-aligned to the cluster's edge
-	# like everything else in it, so the widest word (ALTERNATE) grows leftwards
-	# under the hands rather than off the screen.
-	var scale := _text(14.0)
-	var line := "\u2191 PRIMARY" if Game.loadout_set == Game.PRIMARY \
-		else "\u2191 ALTERNATE"
-	var top := r.end.y + Pal.px(Pal.KEYCAP_GAP, s.y) + CanvasText.height(scale) \
-		+ Pal.px(9.0, s.y)
-	var w := CanvasText.width(line, scale)
-	var pad := Pal.px(PLATE_CELL_PAD, s.y)
-	_note(&"loadout", &"cluster", Rect2(r.end.x - w - pad, top - pad,
-		w + pad * 2.0, CanvasText.height(scale) + pad * 2.0))
-	_canvas.draw_rect(Rect2(r.end.x - w - pad, top - pad,
-		w + pad * 2.0, CanvasText.height(scale) + pad * 2.0), PLATE_CELL)
-	CanvasText.draw_right(_canvas, line, Vector2(r.end.x, top), scale, Pal.MOTH)
+	_draw_action_hint(s, r, _hotkey(&"use_item"), &"cap_item", &"item_cell")
 
 
 # --- The minimap -------------------------------------------------------------
@@ -2240,25 +2137,12 @@ func _draw_minimap(s: Vector2) -> void:
 		get_tree().get_first_node_in_group(&"player") as Node3D, true)
 
 
-## One caret, `dir` being the unit direction it points. `tip` is where the point
-## lands. Drawn rather than typeset: a caret that has to point at a moving
-## direction wants a rotation, not a glyph, and a "^" is not a caret.
-func _draw_caret(s: Vector2, tip: Vector2, dir: Vector2) -> void:
-	var w := Pal.px(CARET, s.y)
-	# The back edge is perpendicular to `dir`, so one function draws all four
-	# directions and none of them is a special case.
-	var back := tip - dir * w * 2.0
-	var side := Vector2(-dir.y, dir.x) * w
-	_canvas.draw_colored_polygon(PackedVector2Array([
-		back + side, back - side, tip,
-	]), Pal.ASH)
-
-
 ## One item's icon in a cell, or its two letters if the bake is missing. An
 ## empty hand draws nothing at all -- an "empty" glyph is still a glyph, and the
 ## cell border already says the slot is there.
 func _draw_item_glyph(s: Vector2, r: Rect2, id: StringName, cell: StringName,
-		invert_to: Color, inverted: bool, dim: bool) -> void:
+		invert_to: Color, inverted: bool, dim: bool,
+		preserve_aspect: bool = false) -> void:
 	if id == &"":
 		return
 	var bottle_at := Game.bottle_index(id)
@@ -2277,10 +2161,16 @@ func _draw_item_glyph(s: Vector2, r: Rect2, id: StringName, cell: StringName,
 		_glyphs[cell] = &"icon" if tex != null else &"letters"
 	if tex != null:
 		# Inset by 2 reference px so the icon's own VOID dilation never sits
-		# on the cell border and reads as a thick frame.
+		# on the cell border and reads as a thick frame. Equipment aspect-fits inside
+		# that box: Valenfeld's paintings must never stretch to fill a tall slot.
 		var inset := Pal.px(2.0, s.y)
 		var box := Rect2(r.position + Vector2(inset, inset),
 			r.size - Vector2(inset, inset) * 2.0)
+		var source_size := tex.get_size()
+		if preserve_aspect and source_size.x > 0.0 and source_size.y > 0.0:
+			var fit := minf(box.size.x / source_size.x, box.size.y / source_size.y)
+			var fitted_size := source_size * fit
+			box = Rect2(box.get_center() - fitted_size * 0.5, fitted_size)
 		var mod := Color(1, 1, 1, 0.3 if dim else 1.0)
 		if inverted:
 			mod = Color(invert_to, 1.0)
