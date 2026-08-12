@@ -85,7 +85,7 @@ func sleep_to_dawn() -> bool:
 	return true
 
 
-func services_available() -> bool:
+func effective_service_open_hour() -> float:
 	var opening_hour: float = SERVICE_OPEN_HOUR
 	var game: Node = get_node_or_null("/root/Game")
 	if game != null:
@@ -94,6 +94,19 @@ func services_available() -> bool:
 			var upgrades: Dictionary = upgrades_value
 			if int(upgrades.get(&"elder_reveille", 0)) > 0:
 				opening_hour = REVEILLE_OPEN_HOUR
+	return opening_hour
+
+
+## Dawn remains the 05:00 civil boundary. Waking is the later settlement that
+## hands control back when the garrison can actually serve the player.
+func settle_wake_after_dawn() -> void:
+	var opening_hour: float = effective_service_open_hour()
+	if hour < opening_hour:
+		set_time(day, opening_hour)
+
+
+func services_available() -> bool:
+	var opening_hour: float = effective_service_open_hour()
 	return hour >= opening_hour and hour < SERVICE_CLOSE_HOUR
 
 

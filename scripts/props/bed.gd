@@ -72,6 +72,8 @@ func _sleep() -> void:
 	# curfew handler does not try to start a second fade inside this one.
 	Flow.deliberate_rest = true
 	var reached_dawn: bool = Clock.sleep_to_dawn()
+	if reached_dawn:
+		Clock.settle_wake_after_dawn()
 	Flow.deliberate_rest = false
 	if not reached_dawn:
 		return

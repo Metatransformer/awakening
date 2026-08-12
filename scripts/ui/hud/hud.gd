@@ -30,6 +30,7 @@ extends CanvasLayer
 ## font -- see the anti-slop list.
 
 const DRAW_LAYER := 50  ## under the pause menu, which sits at 100
+const CivilInstrumentsScript := preload("res://scripts/ui/hud/civil_instruments.gd")
 
 # --- Health -----------------------------------------------------------------
 ## OVERRIDES STYLEGUIDE §5.1, which specifies a row of discrete quarter cells.
@@ -338,6 +339,7 @@ var _hold01: float = 0.0
 var _hold_required: bool = false
 ## The kit wheel's input half; this file draws it. See `_draw_wheel`.
 var _wheel: KitWheel = null
+var _civil_instruments: CivilInstruments = null
 var _clock_text := ""
 
 
@@ -368,6 +370,12 @@ func _ready() -> void:
 	_canvas.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_canvas.draw.connect(_draw_hud)
 	add_child(_canvas)
+
+	# One reusable top-right stack. It sits below the canvas in draw order so the
+	# kit wheel's full-screen scrim still dims every HUD instrument together.
+	_civil_instruments = CivilInstrumentsScript.new()
+	_civil_instruments.z_index = -1
+	add_child(_civil_instruments)
 
 	# The kit wheel's input half. A child of this layer rather than an autoload of
 	# its own, because everything that hides the HUD has to hide the wheel too and
@@ -1168,9 +1176,10 @@ func _draw_hud() -> void:
 	_draw_hands(s)
 	_draw_item_cell(s)
 	_draw_minimap(s)
+	if _civil_instruments != null:
+		_note(&"civil_instruments", &"", _civil_instruments.instrument_rect())
 	_draw_bag(s)
 	_draw_extraction(s)
-	_draw_clock(s)
 	_draw_garrison_integrity(s)
 	_draw_toast(s)
 	_draw_save(s)
@@ -1197,24 +1206,6 @@ func _draw_hud() -> void:
 	# everything above and expects to be read instead of them, not alongside.
 	_draw_wheel(s)
 	_seal_layout()
-
-
-func _draw_clock(s: Vector2) -> void:
-	if _clock_text.is_empty():
-		return
-	var scale := CanvasText.scale_for(14.0, s.y)
-	var phase := SkyCycle.phase_of(Clock.hour)
-	var tint := Pal.MOTH
-	if phase == &"dawn" or phase == &"dusk":
-		tint = Pal.GOLD
-	elif phase == &"night":
-		tint = Pal.CYAN
-	CanvasText.draw_centred(_canvas, _clock_text,
-		Vector2(s.x * 0.5, Pal.px(12.0, s.y)), scale, tint)
-	if not Run.in_dungeon and not Clock.services_available():
-		var small := CanvasText.scale_for(11.0, s.y)
-		CanvasText.draw_centred(_canvas, "SERVICES CLOSED",
-			Vector2(s.x * 0.5, Pal.px(30.0, s.y)), small, Pal.RUST)
 
 
 func _draw_garrison_integrity(s: Vector2) -> void:

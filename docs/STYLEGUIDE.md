@@ -1006,9 +1006,10 @@ movement *is* the game's central decision.
 hands and the item cell, one cluster, every cell captioned with the key that
 fires it.
 
-**Top-right is WHERE YOU ARE** (§5.5b): the minimap. It is the only readout on
-the screen that is about the ROOM rather than about the hero, and it is the one
-thing that wants the corner the over-the-shoulder camera leaves emptiest.
+**Top-right is WHERE AND WHEN YOU ARE** (§5.5b): the minimap plus the civil
+instrument. Underground, the compass and sun/moon clock sit directly below the
+map; on the surface they move into the map's otherwise-empty slot. They are one
+navigation column: room, heading, and civil time, in that order.
 
 The cluster has been in both corners and the reasoning each way is worth keeping,
 because the second move is not the first one undone. It sat bottom-left until
@@ -1536,6 +1537,7 @@ and it is not line art.
   glyphs are dropped whole rather than sliced.
 - **Fogged rooms are not drawn at all.** Not greyed, not outlined: absent. Which
   means the blank space IS the information.
+
 - **A corridor to a room you have seen is drawn whole; one to a room you have not
   is a stub** that stops short of it. A promise that there is more that way, and
   no claim about what. A locked door gets the same treatment — a gap in the wall
@@ -1557,6 +1559,15 @@ and it is not line art.
   is four brown pixels; a gold box with a lid is a chest.
 - Lines are `draw_rect`, not `draw_line`. At 1–2 px `draw_line` lands on half
   pixels and comes out soft, which is the treatment collapsing (§1).
+
+The map's right edge is also the civil instrument's right edge. A 15-degree
+heading strip scrolls N/NE/E/SE/S/SW/W/NW beneath a fixed centre pointer and
+spells out the nearest point plus bearing. Below it, a 24-hour line marks dawn
+and dusk, carries the current **DAY X · time**, and moves a gently pulsing sun or
+crescent across the day. The clock eases between minute targets and through
+forward time jumps in absolute campaign minutes, so midnight wraps forward
+rather than making the marker run backward. On the surface this 224×96 stack
+occupies the minimap slot; underground it begins 8 px below the 148 px map.
 
 The one glyph set this project did NOT use: `~/valenfeld`'s map icons. They are
 256 px painterly round world-map POI tokens in a warmer palette, they are

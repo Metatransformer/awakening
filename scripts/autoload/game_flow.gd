@@ -39,6 +39,7 @@ const NIGHT_TITLE: String = "Night falls"
 const DAWN_TITLE: String = "The sun rises"
 const NIGHT_CUE: StringName = &"nightfall_owl"
 const DAWN_CUE: StringName = &"dawn_birds"
+const CLOCK_CUE: StringName = &"clock_ticking"
 
 enum ArrivalIntent {
 	DEFAULT,
@@ -521,7 +522,7 @@ func blink(during: Callable, dark: float = 0.9) -> void:
 	busy = false
 	# A sleep can cross dawn while this blink owns Flow. Hand the blocker directly
 	# to the queued title card so there is no one-frame input window between the
-	# black rest screen and the five-second announcement.
+	# black rest screen and the three-second announcement.
 	_try_present_day_title()
 	var tin := create_tween().set_ignore_time_scale(true)
 	tin.tween_property(_veil, "color:a", 0.0, FADE_IN)
@@ -593,7 +594,7 @@ func _on_bonfire_started(day: int) -> void:
 		_queue_day_title(NIGHT_TITLE, day, NIGHT_CUE, false)
 
 
-## Dawn is announced first. Only after its complete five-second card does a
+## Dawn is announced first. Only after its complete three-second card does a
 ## natural overnight outing resolve; deliberate bed rest receives the same card
 ## without becoming curfew travel.
 func _on_dawn_started(day: int) -> void:
@@ -650,6 +651,9 @@ func _present_next_day_title() -> void:
 		resolve_natural_dawn = resolve_natural_dawn or request.natural_dawn
 		_day_title_card = DayTitleCard.open(
 			_layer, request.title, request.day, request.cue)
+		# One quiet mechanical bed under both visual variants. The owl/birds stay
+		# the named event; Sfx trims this supporting cue independently.
+		Bus.request_global_sfx.emit(CLOCK_CUE)
 		Bus.request_global_sfx.emit(request.cue)
 		await _day_title_card.finished
 		if _day_title_card != null:
@@ -686,6 +690,7 @@ func _return_at_dawn() -> void:
 	if busy:
 		return
 	ending = false
+	Clock.settle_wake_after_dawn()
 	_wake_at_bunk = true
 	_go(GARRISON, 0.0)
 

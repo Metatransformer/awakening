@@ -93,13 +93,16 @@ func _define_ports() -> void:
 			hearth_at + Vector3(0.0, 0.0, 3.1), hearth_at),
 		&"builder_bonfire": _facing_port(
 			hearth_at + Vector3(0.0, 0.0, -3.2), hearth_at),
-		&"quartermaster_sleep": _sleep_port(Vector3(BUNK_X, 0.58, -6.6), PI * 0.5),
-		&"smith_sleep": _sleep_port(Vector3(BUNK_X, 0.58, -2.3), PI * 0.5),
-		&"alchemist_sleep": _sleep_port(Vector3(BUNK_X, 0.58, 2.0), PI * 0.5),
-		&"jewelcrafter_sleep": _sleep_port(Vector3(BUNK_X, 0.58, 6.3), PI * 0.5),
+		&"quartermaster_sleep": _sleep_port(
+			Vector3(BUNK_X, 0.58, -6.6), PI * 0.5, 1.72),
+		&"smith_sleep": _sleep_port(Vector3(BUNK_X, 0.58, -2.3), PI * 0.5, 1.44),
+		&"alchemist_sleep": _sleep_port(
+			Vector3(BUNK_X, 0.58, 2.0), PI * 0.5, 1.82),
+		&"jewelcrafter_sleep": _sleep_port(
+			Vector3(BUNK_X, 0.58, 6.3), PI * 0.5, 1.63),
 		&"player_bunk": _port_at(Vector3(-16.0, 0.05, 10.6), PI * 0.5),
-		&"elder_sleep": _sleep_port(Vector3(-19.4, 0.58, -14.8), 0.0),
-		&"builder_sleep": _sleep_port(Vector3(-12.6, 0.58, -16.3), 0.0),
+		&"elder_sleep": _sleep_port(Vector3(-19.4, 0.58, -14.8), 0.0, 1.74),
+		&"builder_sleep": _sleep_port(Vector3(-12.6, 0.58, -16.3), 0.0, 1.82),
 		&"elder_room_camera": _camera_port(
 			Vector3(-14.7, 2.25, -10.2), Vector3(-18.6, 1.0, -14.4)
 		),
@@ -522,8 +525,15 @@ func _facing_port(at: Vector3, target: Vector3) -> Transform3D:
 	return Transform3D(Basis.IDENTITY, at).looking_at(target, Vector3.UP)
 
 
-func _sleep_port(at: Vector3, yaw: float) -> Transform3D:
-	return Transform3D(Basis.from_euler(Vector3(PI * 0.5, yaw, 0.0)), at)
+func _sleep_port(bed_center: Vector3, yaw: float, sleeper_height: float) -> Transform3D:
+	# Keep yaw as the authored facing basis, then tip only the person art in its
+	# local space: +Z is the model's face and +Y runs from feet to head.
+	var facing_basis := Basis(Vector3.UP, yaw)
+	var face_up_art_basis := Basis(Vector3.RIGHT, -PI * 0.5)
+	var sleep_basis := facing_basis * face_up_art_basis
+	var head_direction: Vector3 = sleep_basis.y.normalized()
+	var feet_at: Vector3 = bed_center - head_direction * sleeper_height * 0.5
+	return Transform3D(sleep_basis, feet_at)
 
 
 func _camera_port(at: Vector3, target: Vector3) -> Transform3D:
