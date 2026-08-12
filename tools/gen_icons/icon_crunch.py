@@ -222,11 +222,25 @@ def is_palette_image(image: Image.Image) -> bool:
     return True
 
 
+# A family is a FOLDER, so `--check assets/icons/tracks` has to mean the 22
+# PNGs in it. Without this the checker took files only, the docs told people to
+# point it at a directory, and it answered `Is a directory` -- a green tick
+# nobody could get and so a check nobody ran.
+def _expand(paths: Iterable[str]) -> list[Path]:
+    out: list[Path] = []
+    for raw_path in paths:
+        path = Path(raw_path)
+        if path.is_dir():
+            out.extend(sorted(path.glob("*.png")))
+        else:
+            out.append(path)
+    return out
+
+
 def _run(paths: Iterable[str], *, check: bool, internal: int, gain: float,
          adaptive: int) -> int:
     failed = False
-    for raw_path in paths:
-        path = Path(raw_path)
+    for path in _expand(paths):
         try:
             if check:
                 with Image.open(path) as image:

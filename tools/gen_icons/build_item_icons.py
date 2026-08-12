@@ -38,6 +38,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 OUT_DIR = ROOT / "assets" / "icons" / "items"
 SPEC = pathlib.Path(__file__).resolve().parent / "_specs_items.json"
 ITEM_DB = ROOT / "scripts" / "items" / "item_db.gd"
+RATION_DB = ROOT / "scripts" / "items" / "ration_db.gd"
+POTION_DB = ROOT / "scripts" / "items" / "potion_db.gd"
 
 ## The same two sentences `build_track_icons.py` uses, and the sameness is the
 ## point: one lighting rig described in words is what makes forty icons from two
@@ -97,6 +99,22 @@ ITEMS = {
     # --- stones: what the jewelcrafter eats ----------------------------------
     "silver_wire": "a loose coil of fine drawn silver wire",
     "cut_gemstone": "one large marquise-cut gemstone, a long pointed almond shape with faceted sides, standing upright",
+
+    # --- the consumables the counters sell -----------------------------------
+    # Not `ItemDb` rows: rations live in `RationDb` and draughts in `PotionDb`,
+    # each with its own registry. They are here because they are the things the
+    # quartermaster's and the alchemist's stock cells actually hold, and a trade
+    # window where only the player's half of the screen has pictures is worse
+    # than one where neither half does.
+    "hardtack": "one square hard ship's biscuit with a grid of docking holes "
+                "punched through it",
+    "small_beer": "a squat wooden tankard of beer with an iron band and a handle",
+    "heart_draught": "a rounded glass flask of thick dark liquid, corked, a "
+                     "heart-shaped wax seal on its neck",
+    "ironhide_draught": "a squat heavy glass flask of opaque liquid, corked, "
+                        "bound in an iron cage",
+    "emberblood_draught": "a tall narrow glass flask of liquid, corked, glowing "
+                          "faintly from within",
 }
 
 ## Exposure on the ramp for subjects that are dark by nature. Same knob and same
@@ -130,13 +148,19 @@ def specs() -> list[dict]:
 
 
 def _db_ids() -> tuple[set[str], set[str]]:
-    """Every id `ItemDb._build` adds directly, and the two families it loops in.
+    """Every id the three catalogues name, and the two families `ItemDb` loops in.
 
     Parsed rather than imported, because the alternative is booting Godot to ask
     a question a regex answers in a millisecond. It is a COVERAGE check, so a
-    parse that misses a row shows up as a spurious gap and never as a false OK."""
+    parse that misses a row shows up as a spurious gap and never as a false OK.
+
+    Three files and not one: a stack in the bag comes from `ItemDb`, but the
+    rations and draughts a counter SELLS live in their own registries, and the
+    trade window draws all three side by side."""
     src = ITEM_DB.read_text()
     direct = set(re.findall(r'ItemDef\.(?:make|part|brew|gem)\(&"(\w+)"', src))
+    for extra in (RATION_DB, POTION_DB):
+        direct |= set(re.findall(r'^\t&"(\w+)": \{$', extra.read_text(), re.M))
     looped = set()
     if "for row in RelicDb.RELICS" in src:
         looped |= {"<the twelve relics>"}

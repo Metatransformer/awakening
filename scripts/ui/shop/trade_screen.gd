@@ -759,6 +759,7 @@ func _refresh() -> void:
 			"label": String(row["label"]),
 			"sub": String(row["sub"]),
 			"tint": row["color"],
+			"icon": _row_icon(row),
 			"sub_tint": row.get("sub_tint", Color.WHITE),
 			"mark": bool(row.get("mark", false)),
 			"star": bool(row.get("star", false)),
@@ -810,6 +811,28 @@ func _refresh() -> void:
 func _at() -> int:
 	var i := _order.find(_cursor)
 	return maxi(i, 0)
+
+
+## The glyph for a row, or "" — which is most rows.
+##
+## Two kinds of row can name a thing that exists: a SELL row carries the bag id
+## it came from, and a BUY row's catalogue line id is the item id when the
+## counter is selling an object (`SupplyDb.STOCK_IDS` is hardtack and small beer,
+## `AlchemyDb`'s is the three draughts). Every other line id is an UPGRADE token —
+## `edge`, `bag_slot`, `chest_heavy` — and naming one of those is the whole
+## hazard here: `UiKit.item_icon` answers by file existence alone, so the day
+## somebody bakes `assets/icons/items/heart.png` the quartermaster's HEARTS ladder
+## would silently start wearing it. So the id is asked of the REGISTRIES first,
+## and a token no registry claims gets no glyph however many files match it.
+func _row_icon(row: Dictionary) -> String:
+	var id: StringName = row.get("id", &"")
+	if id == &"" and row.has("line"):
+		id = (row["line"] as Dictionary).get("id", &"")
+	if id == &"":
+		return ""
+	if ItemDb.get_def(id) == null and not RationDb.has(id) and not PotionDb.has(id):
+		return ""
+	return UiKit.item_icon(id)
 
 
 func _build_sell_rows() -> void:

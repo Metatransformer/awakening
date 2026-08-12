@@ -182,5 +182,45 @@
     "px": 256,
     "internal": 64,
     "gain": 1.0
+  },
+  {
+    "prompt": "one square hard ship's biscuit with a grid of docking holes punched through it; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/hardtack.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  },
+  {
+    "prompt": "a squat wooden tankard of beer with an iron band and a handle; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/small_beer.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  },
+  {
+    "prompt": "a rounded glass flask of thick dark liquid, corked, a heart-shaped wax seal on its neck; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/heart_draught.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  },
+  {
+    "prompt": "a squat heavy glass flask of opaque liquid, corked, bound in an iron cage; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/ironhide_draught.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  },
+  {
+    "prompt": "a tall narrow glass flask of liquid, corked, glowing faintly from within; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/emberblood_draught.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
   }
 ]
