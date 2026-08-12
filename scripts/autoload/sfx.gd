@@ -78,7 +78,9 @@ const CUES := {
 	&"player_died": &"game_over",
 	&"target_acquired": &"target_cycle",
 	&"run_started": &"dungeon_enter",
-	&"item_get_started": &"dungeon_complete",
+	# The great chest already hands control to ItemGet. This voices that existing
+	# ceremony; it is not another presentation layered on top of it.
+	&"item_get_started": &"great_chest_fanfare",
 	# The full bag saying "no". Doors use their own `door_refused` cue because the
 	# blocked-door message and body jolt are a different event. There used to be an
 	# `extract_refused` row beside this one; the rope cannot refuse any more (the

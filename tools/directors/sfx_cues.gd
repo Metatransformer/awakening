@@ -85,6 +85,10 @@ func run(rig) -> void:
 	await _fires(rig, "enemy_died",
 		func() -> void: Bus.enemy_died.emit(null, Vector3(2, 0, 2)))
 	await _fires(rig, "run_started", func() -> void: Bus.run_started.emit(1))
+	_ck("item-get ceremony is voiced by the big treasure fanfare",
+		Sfx.CUES[&"item_get_started"] == &"great_chest_fanfare")
+	await _fires(rig, "item_get_started",
+		func() -> void: Bus.item_get_started.emit(&"bow", Vector3.ZERO))
 	await _fires(rig, "run_ended (extracted)",
 		func() -> void: Bus.run_ended.emit(true, {}, 100))
 	await _fires(rig, "request_sfx (the declared interface)",
