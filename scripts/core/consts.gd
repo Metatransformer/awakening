@@ -365,7 +365,7 @@ const KNOCKBACK_HEAVY := 8.0
 ## `Feel` squares trauma before it moves anything and `MAX_OFFSET` is 1.4, so the
 ## image moves `t^2 * 1.4 * 37.5` px (`monster_feel.gd`'s measured PX_PER_OFFSET):
 ##
-##   jab       0.26 ->  3.5 px      committed  0.46 -> 11.1 px
+##   jab       0.26 ->  3.5 px      committed  0.20 ->  2.1 px
 ##   crit      0.72 -> 27.2 px      the old flat 0.52 -> 14.2 px, for everything
 ##
 ## The first cut of this put the tap at 0.16 and `monster_feel` caught it: 0.4 px
@@ -378,7 +378,7 @@ const KNOCKBACK_HEAVY := 8.0
 ## attack in the game held the camera at maximum and left the spin nothing to
 ## escalate to. At 0.26 the same chain peaks under 0.8 and decays between steps.
 const SHAKE_TAP := 0.26    # [tune]
-const SHAKE_HIT := 0.46    # [tune]
+const SHAKE_HIT := 0.20    # [tune]
 ## The crit. Above SHAKE_HIT because a launch is the one blow in the game where
 ## a body leaves the ground, and the screen should agree with the body. [tune]
 const SHAKE_CRIT := 0.72
