@@ -44,6 +44,9 @@ enum State { IDLE, CHASE, CIRCLE, WINDUP, STRIKE, RECOVER, HURT, LAUNCHED, FROZE
 
 const LIBRARY := "res://assets/animations/monster_library.res"
 const MODEL_DIR := "res://assets/monsters/"
+## Visual layer 3. World lights still reach the model through its authored
+## layer(s); the camera's EnemyReadFill reaches only this additional bit.
+const READABILITY_LAYER := 1 << 2
 
 ## How far the body rears back over a wind-up, in degrees. Big enough to read
 ## across a dark room, small enough that it is a tell and not a backflip.
@@ -479,6 +482,10 @@ func _build_model() -> void:
 	# would undo the 180° the GLBs need and turn every struck monster around to
 	# face away mid-flinch (docs/CONTRACT.md §2.5).
 	_model_rest = _model.rotation
+	# OR, never replace: ordinary world lighting and texture still sculpt the
+	# body. This only lets the camera's low-energy fill reach enemy surfaces.
+	for mesh: MeshInstance3D in _meshes(_model):
+		mesh.layers |= READABILITY_LAYER
 	# Before `bind`, never after. See `_style_model`.
 	_style_model()
 	_flash.bind(self, _model)

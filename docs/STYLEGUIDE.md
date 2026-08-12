@@ -709,6 +709,16 @@ tier 3. See Departure 2.
   there so every block has a lit face and a turned-away face. Ambient alone
   raises all surfaces equally, which lifts the black *and* flattens the masonry
   into one sheet; "brighter" and "lower contrast" otherwise arrive together.
+- **Enemy bodies remain readable for as long as their health bars do.** Every
+  enemy mesh keeps its normal visual layer(s) and also carries visual layer 3;
+  `GameCamera/EnemyReadFill` is a cool blue-violet, 1.5-energy, shadowless
+  directional light culled to that layer with zero indirect or fog contribution.
+  Its broad specular response is load-bearing for the skeleton's fully metallic,
+  fully rough authored material. Normal world lighting and the texture still
+  sculpt the body — this is not a rim, emissive, outline, cel band or unshaded
+  material. Its cost is one extra directional-light evaluation on enemy meshes
+  only; room lighting is unchanged and no HUD information is faded or hidden to
+  conceal an unreadable actor.
 - **Every room carries at least four sconces of its own** (added 2026-08-11,
   card #38). The placement rule is *a walled side gets two, a holed side gets
   none* — an exit should read as the dark hole it is, and a locked door's cold
