@@ -275,6 +275,12 @@ func _hook_bites_a_monster(rig, hero, stood: Vector3) -> void:
 	_listen()
 	Input.action_press(&"heavy")
 	await rig.wait_frames(36)
+	# The hookshot contract gives a held target priority over the crosshair. Make
+	# that target explicit on the release frame: the brace shifts the follow camera
+	# after `_in_the_way` measures it, so an unlocked fixture can wind up aiming at
+	# the statue beside a skeleton that was centred before the hold began.
+	hero.targeting.current_target = foe
+	hero.targeting.is_locked = true
 	Input.action_release(&"heavy")
 	for i in 90:
 		await rig.wait_frames(1)
@@ -300,11 +306,14 @@ func _hook_bites_a_monster(rig, hero, stood: Vector3) -> void:
 ## puts the body at 55% of the way there — comfortably in front, and low enough
 ## on a downward ray that the ray is still above the pavement when it arrives.
 func _in_the_way(hero) -> Vector3:
-	var eye: Vector3 = hero.global_position + Vector3.UP * K.HERO_EYE_Y
-	var cam = hero.get_viewport().get_camera_3d()
-	var look: Vector3 = -cam.global_transform.basis.z if cam != null \
-		else -hero.global_transform.basis.z
-	var q := PhysicsRayQueryParameters3D.create(eye, eye + look * K.HOOK_RANGE)
+	# Use the shot's actual origin and convergent aim. The old fixture started at
+	# the hero's eye and ran parallel to the camera; the real chain leaves the
+	# right-hand muzzle and aims at the camera ray's WORLD hit. In the garrison
+	# those rays meet the cobbles more than two metres apart, leaving the skeleton
+	# behind the impact while the director insisted it was in the way.
+	var from: Vector3 = hero.ranged._muzzle(&"hookshot")
+	var look: Vector3 = hero.ranged._camera_forward()
+	var q := PhysicsRayQueryParameters3D.create(from, from + look * K.HOOK_RANGE)
 	q.collision_mask = K.L_WORLD
 	q.exclude = [hero.get_rid()]
 	# ANNOTATED, not inferred. `hero` is untyped here (the rig hands directors a
@@ -314,8 +323,8 @@ func _in_the_way(hero) -> Vector3:
 	var hit: Dictionary = hero.get_world_3d().direct_space_state.intersect_ray(q)
 	var stops_at: float = K.HOOK_RANGE
 	if not hit.is_empty():
-		stops_at = eye.distance_to(hit["position"] as Vector3)
-	var at: Vector3 = eye + look * minf(stops_at * 0.55, 5.0)
+		stops_at = from.distance_to(hit["position"] as Vector3)
+	var at: Vector3 = from + look * minf(stops_at * 0.55, 5.0)
 	# Feet on the hero's own floor. A skeleton spawned at the ray's height would
 	# either hang in the air or sink, and neither is a thing to shoot at.
 	return Vector3(at.x, hero.global_position.y, at.z)
