@@ -691,6 +691,9 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 var targeting: Node = null
 
 var state: MoveState = MoveState.GROUND
+## Measured seconds from an accepted slam's commit through airborne contact.
+## Public so combat VFX can use the exact interval that scales the dive clip.
+var slam_strike_time: float = 0.0
 ## Which of the three reactions the blow in progress rolled. Only meaningful
 ## while `state == MoveState.HURT`; LIGHT never gets there (see `_enter_hurt`).
 var _hurt_tier: Hit.Tier = Hit.Tier.HEAVY
@@ -2531,6 +2534,7 @@ func request_slam() -> bool:
 	if drop < slam_min_height:
 		return false
 
+	slam_strike_time = slam_hang + drop / maxf(slam_speed, 0.1)
 	state = MoveState.SLAM
 	_state_timer = 0.0
 	_slam_hang_left = slam_hang
@@ -2552,9 +2556,8 @@ func request_slam() -> bool:
 		facing_yaw = _yaw_to(target)
 
 	if _tree != null:
-		var air := slam_hang + drop / maxf(slam_speed, 0.1)
 		_tree.set(_P_SLAM_SCALE,
-			(slam_land_offset - slam_start_offset) / maxf(air, 0.05))
+			(slam_land_offset - slam_start_offset) / maxf(slam_strike_time, 0.05))
 		_tree.set(_P_SLAM_LAND_SCALE,
 			(_clip_length(clip_slam) - slam_land_offset) / maxf(slam_recover, 0.05))
 	_fire(_P_SLAM)

@@ -2156,25 +2156,33 @@ past before you could see it was an overhead. `chain_time_scale` (0.92, 1.65)
 multiplies it, so steps 2 and 3 move with it, and the damage windows are
 fractions of it, so the blade's live slice sits in the same place in the swing.
 
-**The three ordinary lights, tap-heavy, and parry counter own a blade trail.**
+**The three ordinary lights, tap-heavy, parry counter, and air slam own a blade
+trail.**
 `HeroCombat` creates and publishes `SwordSlashTrail`
 (`scripts/combat/sword_slash_trail.gd`), binds it to the mounted sword holder,
 and starts a stroke only from the accepted move path: `_light_swing` after
 `Hero.request_attack` accepts `LIGHT1`, `LIGHT2` or `LIGHT3`, `_heavy_swing`
 after the tap-heavy is accepted, and `_dash_swing` after the parry riposte is
-accepted. Each passes its own damage window. The ribbon samples the real weapon
-convention — an inner point at 0.12 m and an outer point at 0.88 m along the
-holder's local `+Y` — into world space, so the down, up, overhead and thrust
-clips leave their own swept surfaces. The tap-heavy happens to reuse the
-`LIGHT3` clip, while the counter uses the riposte dash; both enter only through
-their named accepted paths. Held charge/wind-up, spin, lunge, slam, parry and
+accepted, and the `Intent.SLAM` branch after `Hero.request_slam()` accepts the
+airborne strike. Each ordinary swing passes its own damage window. The slam
+passes its full measured airborne interval, `Hero.slam_strike_time`, with an
+active window of 0.0–1.0; this is the
+same exact value `Hero` uses to scale the dive clip, so the water sheet runs from
+commit through contact on every measured drop. The ribbon samples the real
+weapon convention — an inner point at 0.12 m and an outer point at 0.88 m along
+the holder's local `+Y` — into world space, so the down, up, overhead, thrust,
+and jump-slam clips leave their own swept surfaces. The tap-heavy happens to
+reuse the `LIGHT3` clip, while the counter uses the riposte dash; all enter only
+through their named accepted paths. Held charge/wind-up, spin, lunge, parry and
 flurry produce no ordinary trail.
 
-Sampling is confined to the light's existing `damage_window` (0.22–0.62 of the
-move). Redundant points under 0.025 m are discarded, expired points are pruned,
-and the ribbon is capped at 22 sampled sections. Each span is subdivided four
-times with a Catmull-Rom curve for a rounded render silhouette, without adding
-history or extending its lifetime; its last samples die 0.083 s
+Sampling is confined to each ordinary sword attack's existing damage window
+(0.22–0.62 of the move for the light chain), while the slam samples its full
+measured airborne strike interval. Redundant points under 0.025 m are discarded,
+expired points are pruned, and the ribbon is capped at 22 sampled sections. Each
+span is subdivided four times with a Catmull-Rom curve for a rounded render
+silhouette, without adding history or extending its lifetime; its last samples
+die 0.083 s
 (about five 60 Hz physics frames) after the active slice and processing sleeps
 when the stroke is empty. Five tapered blade rails make the soft interior
 falloff about twice as broad beneath a narrow cobalt-under-bone cutting rim. It
@@ -2186,10 +2194,12 @@ strongly. Three parallel highlight currents break up the interior; travelling
 brightness runs along them without displacing their clean arc silhouettes. A
 sub-pixel screen-texture offset refracts the room through the darker gaps,
 producing a layered water-sheet read without changing the global environment.
-The finisher uses the same timing with only a modest opacity lift, keeping the
-whole ordinary and earned sword attacks visibly below `SpinVfx`'s charged spectacle.
-Proved at gameplay camera distance for all three lights, the tap-heavy, the
-parry counter, and the charged-spin null control by
+The finisher intensity gives the chain finisher, tap-heavy, parry counter, and
+slam the same modest opacity lift, keeping ordinary and earned sword attacks
+visibly below `SpinVfx`'s charged spectacle. Proved at gameplay camera distance
+for all three lights, the tap-heavy, the parry counter, the real jump +
+held-heavy slam (including one stroke, a visible captured arc, follow-through
+cleanup, and exit from `SLAM`), and the charged-spin null control by
 `tools/directors/sword_slash_trail.gd`.
 
 **The chain is buffered.** A press in the back half of a swing

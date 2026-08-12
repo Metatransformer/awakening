@@ -453,8 +453,8 @@ var _hero: Hero
 var _skel: Skeleton3D
 ## The mounted models. Public so a director can sweep their placement.
 var sword: Node3D
-## The ordinary light-combo ribbon. Public so its proof director can distinguish
-## a real LIGHT1/2/3 stroke from every other move that happens to use a sword.
+## The water-sheet sword ribbon. Public so its proof director can distinguish
+## each accepted stroke from moves that happen to use the same sword or clip.
 var slash_trail: SwordSlashTrail
 ## The same blade, on his hip. Exactly one of this and `sword` is visible, and
 ## the pair is what makes "the bow is out" read as a place the sword WENT rather
@@ -1627,6 +1627,12 @@ func _begin(intent: int) -> void:
 			# before `request_slam` so a refused slam is not also a refund problem,
 			# and the spend is after it so a slam refused for height costs nothing.
 			if _can_swing() and _hero.request_slam():
+				# The dive clip is scaled to this measured commit-to-contact interval.
+				# Sample all of it: unlike ordinary swings, the airborne strike has no
+				# narrower damage slice, and held-heavy retries are refused by SLAM.
+				if slash_trail != null:
+					slash_trail.begin_stroke(
+						_hero.slam_strike_time, Vector2(0.0, 1.0), true)
 				Game.spend_stamina(K.STAMINA_SLAM, true)
 		Intent.SPIN:
 			_spin_swing()

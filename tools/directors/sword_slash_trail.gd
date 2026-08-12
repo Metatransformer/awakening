@@ -1,6 +1,6 @@
 extends RefCounted
-## The ordinary sword trail follows the real LIGHT1/2/3, tap-heavy, and parry
-## counter blades. The held charged spin remains the null control.
+## The sword trail follows the real LIGHT1/2/3, tap-heavy, parry counter, and
+## jump + held-heavy slam blades. The held charged spin remains the null control.
 ##
 ##   timeout 400 tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
@@ -12,8 +12,8 @@ extends RefCounted
 ## so attempting to photograph a live three-press chain would make the camera
 ## break the combo it claims to prove. The null case uses the real held trigger:
 ## the hold must arm and release a spin without advancing the light serial or
-## producing even one neutral ribbon section. Heavy and counter use their real
-## input paths so a direct helper call cannot hide a missing gameplay wire.
+## producing even one neutral ribbon section. Heavy, counter, and slam use their
+## real input paths so a direct helper call cannot hide a missing gameplay wire.
 
 const MIN_LIVE_SECTIONS := 8
 
@@ -56,6 +56,10 @@ func run(rig) -> void:
 	await _prove_counter(rig, hero, combat, trail, out)
 	if trail.stroke_serial != first_serial + 5:
 		rig.fail("SLASH TRAIL lights + heavy + counter advanced serial %d times, not 5"
+			% (trail.stroke_serial - first_serial))
+	await _prove_slam(rig, hero, trail, out)
+	if trail.stroke_serial != first_serial + 6:
+		rig.fail("SLASH TRAIL lights + heavy + counter + slam advanced serial %d times, not 6"
 			% (trail.stroke_serial - first_serial))
 
 	await _prove_spin_control(rig, hero, combat, trail)
@@ -155,6 +159,56 @@ func _capture_special(rig, hero: Hero, trail: SwordSlashTrail,
 	if not cleared:
 		rig.fail("SLASH TRAIL %s left %d sections past follow-through"
 			% [label, trail.section_count])
+
+
+func _prove_slam(rig, hero: Hero, trail: SwordSlashTrail, out: String) -> void:
+	Game.stamina = Game.max_stamina
+	Bus.stamina_changed.emit(Game.stamina, Game.max_stamina)
+	var before := trail.stroke_serial
+	var floor_y := hero.global_position.y
+	await rig.tap([&"jump"])
+	var high_enough: bool = await rig.until(func() -> bool:
+		return not hero.is_on_floor() \
+			and hero.global_position.y - floor_y >= hero.slam_min_height, 0.6)
+	if not high_enough:
+		rig.fail("SLASH TRAIL real jump never reached slam_min_height")
+		return
+
+	# Keep the real heavy action held through the whole move. HeroCombat polls it
+	# every frame, so the unchanged serial below proves refused retries do not
+	# restart the accepted stroke.
+	await rig.press(&"heavy")
+	var started: bool = await rig.until(func() -> bool:
+		return trail.stroke_serial == before + 1, 0.5)
+	if not started:
+		rig.release(&"heavy")
+		rig.fail("SLASH TRAIL jump + held-heavy did not start one slam stroke")
+		return
+
+	var built: bool = await rig.until(func() -> bool:
+		return trail.section_count >= MIN_LIVE_SECTIONS, 1.0)
+	if not built:
+		rig.fail("SLASH TRAIL slam never built %d live sections (got %d)"
+			% [MIN_LIVE_SECTIONS, trail.section_count])
+	else:
+		var ribbon := trail.get_node_or_null(^"Ribbon") as MeshInstance3D
+		if ribbon == null or not ribbon.visible or trail.render_section_count <= 0:
+			rig.fail("SLASH TRAIL slam built samples without a visible ribbon")
+		await rig.capture(out.path_join("jump_slam_arc.png"))
+
+	var cleared: bool = await rig.until(func() -> bool:
+		return trail.section_count == 0, 1.0)
+	if not cleared:
+		rig.fail("SLASH TRAIL slam left %d sections past follow-through"
+			% trail.section_count)
+	var finished: bool = await rig.until(func() -> bool:
+		return hero.state != Hero.MoveState.SLAM, 2.0)
+	rig.release(&"heavy")
+	if not finished:
+		rig.fail("SLASH TRAIL slam never left the real SLAM state")
+	if trail.stroke_serial != before + 1:
+		rig.fail("SLASH TRAIL held-heavy slam advanced serial %d times, not 1"
+			% (trail.stroke_serial - before))
 
 
 func _prove_spin_control(rig, hero: Hero, combat: HeroCombat,
