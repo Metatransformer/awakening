@@ -27,6 +27,12 @@ const SLOT_MIN := Vector2(228, 98)
 ## The worn-slots column. See `_build_doll`.
 const DOLL_W := 284
 
+## The stat block's column. It was 360 while the detail pane lived under it and
+## the pane was what wanted the width -- five stat rows are a label and a number.
+## The hundred pixels go to the doll and the wheel, which are the things on this
+## screen a player actually looks AT.
+const RIGHT_W := 260
+
 ## Row order on screen. Index into `Game.loadout`.
 ##
 ## Spelled as literals, not as `Game.PRIMARY`: `const` is evaluated at parse
@@ -54,11 +60,10 @@ var _set_frames: Array[PanelContainer] = []
 var _set_marks: Array[Label] = []
 var _swap: Button
 var _back: Button
-var _detail_name: Label
-var _detail_hand: Label
-var _detail_blurb: Label
-var _detail_legend: Label
-var _detail_ammo: Label
+## The hover card, shared with the bag, the locker and the five counters
+## (`ItemTip`). It replaced this screen's right-hand detail column -- see
+## `_build`.
+var _tip: ItemTip
 ## Stat id -> the right-hand Label on its row. See `_build_stats`.
 var _stat_values: Dictionary[StringName, Label] = {}
 ## Permanent utility tools are inspection-only Labels under the worn column.
@@ -158,21 +163,24 @@ func _build() -> void:
 	_build_swap(left)
 	_build_wheel(left)
 
-	# The right column is where the screen talks back: the detail pane for
-	# whatever has focus on the left.
+	# The right column USED to be two things stacked: a detail pane that rewrote
+	# itself on every focus change, and the stat block. The pane is gone -- what
+	# has focus is described by the hover card built at the bottom of this
+	# function, beside the thing it is about, the same card the bag, the locker
+	# and the five counters use. What is left here is the stat block, which is
+	# NOT about the focused slot: it is the hero, and it has to stay readable
+	# while the cursor moves.
 	#
-	# The way out USED to sit under it. It moved to INVENTORY, which is the screen
-	# that now carries every number the decision is made out of -- the bag's
+	# The way out used to sit under the pane. It moved to INVENTORY, which is the
+	# screen that carries every number the decision is made out of -- the bag's
 	# worth, the purse, and the fee. This screen is about what is in your HANDS;
-	# leaving is about what is in your BAG, and the two questions had no business
-	# sharing a frame.
+	# leaving is about what is in your BAG.
 	var right := VBoxContainer.new()
 	right.name = "Right"
-	right.custom_minimum_size.x = 360
+	right.custom_minimum_size.x = RIGHT_W
 	right.add_theme_constant_override("separation", 12)
 	split.add_child(right)
 
-	_build_detail(right)
 	_build_stats(right)
 	_wire_focus()
 
@@ -190,6 +198,10 @@ func _build() -> void:
 	_back.custom_minimum_size.x = 160
 	_back.pressed.connect(func() -> void: back_requested.emit())
 	frow.add_child(_back)
+
+	# LAST, so it draws over the doll, the sets and the wheel rather than under
+	# any of them.
+	_tip = ItemTip.make(self)
 
 
 ## The figure, with all ten worn slots on it.
@@ -214,8 +226,9 @@ func _build_doll(parent: Node) -> void:
 	var col := VBoxContainer.new()
 	col.name = "Worn"
 	# A floor, not a share. The two hand slots beside it are a measured 228 px
-	# each (`SLOT_MIN`) and cannot give any of it back, and the detail column is
-	# 360; this is what is left of 1220 with the separations taken off.
+	# each (`SLOT_MIN`) and cannot give any of it back; this is what is left of
+	# 1220 with the stat column (`RIGHT_W`) and the separations taken off. It grew
+	# by the hundred pixels the detail pane gave back when the card replaced it.
 	col.custom_minimum_size.x = DOLL_W
 	col.add_theme_constant_override("separation", 8)
 	parent.add_child(col)
@@ -405,31 +418,32 @@ func _cycle_wheel(b: Button) -> void:
 
 
 func _describe_wheel(b: Button) -> void:
-	if b == null or _detail_name == null:
+	if b == null or _tip == null:
 		return
 	var slot: int = b.get_meta(&"slot")
 	var id := Game.wheel_at(slot)
 	var bottle := Game.bottle_index(id)
 
-	_detail_hand.text = "KIT WHEEL  ·  %s" % WHEEL_DIRS[slot]
+	_tip.clear()
+	_tip.point_at(b)
+	_tip.kicker.text = "KIT WHEEL  ·  %s" % WHEEL_DIRS[slot]
 	if id == &"":
-		_detail_name.text = "Empty"
-		_detail_blurb.text = "Nothing on this direction. Confirm to put something on it."
+		_tip.title.text = "Empty"
+		_tip.blurb.text = "Nothing on this direction. Confirm to put something on it."
 	elif bottle >= 0:
 		var potion := Game.bottle(bottle)
-		_detail_name.text = "Empty Bottle" if potion == &"" else PotionDb.name_of(potion)
+		_tip.title.text = "Empty Bottle" if potion == &"" else PotionDb.name_of(potion)
 		# The routing, told to the player at the one moment it is a surprise: they
 		# have just put a draught on the same ring as the hookshot, and the wheel
 		# has to say that it knows the difference between the two.
-		_detail_blurb.text = "Bottle %d. Releasing here selects it — %s drinks what is selected." % [
+		_tip.blurb.text = "Bottle %d. Releasing here selects it — %s drinks what is selected." % [
 			bottle + 1, MenuUtil.pad_label(&"use_item")]
 	else:
-		_detail_name.text = ArmamentDb.name_of(id)
-		_detail_blurb.text = "%s Releasing here puts it in the right hand." % ArmamentDb.blurb(id)
+		_tip.title.text = ArmamentDb.name_of(id)
+		_tip.blurb.text = "%s Releasing here puts it in the right hand." % ArmamentDb.blurb(id)
 
-	_detail_ammo.visible = false
-	_detail_legend.text = "Confirm to change it. In play, hold %s and point." % (
-		MenuUtil.pad_label(&"kit_wheel"))
+	_tip.say_note("Confirm to change it. In play, hold %s and point." % (
+		MenuUtil.pad_label(&"kit_wheel")), UITheme.TEXT_DIM)
 
 
 func _paint_wheel(b: Button) -> void:
@@ -575,41 +589,6 @@ func _new_icon(px: int) -> TextureRect:
 	return icon
 
 
-func _build_detail(parent: Node) -> void:
-	var col := VBoxContainer.new()
-	col.name = "Detail"
-	col.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	col.add_theme_constant_override("separation", 10)
-	parent.add_child(col)
-
-	# The kicker / title / value stack of a `PlateHeader`, written by hand because
-	# this one is REWRITTEN on every focus change — an identity that flickers is
-	# not one, so the composite is built once and this pane is not it.
-	_detail_hand = Label.new()
-	UITheme.apply_text_style(_detail_hand, UITheme.TYPE_CAPTION, UITheme.ACCENT)
-	col.add_child(_detail_hand)
-
-	_detail_name = Label.new()
-	UITheme.apply_text_style(_detail_name, UITheme.TYPE_H1, UITheme.TEXT)
-	_detail_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	col.add_child(_detail_name)
-
-	_detail_ammo = Label.new()
-	UITheme.apply_text_style(_detail_ammo, UITheme.TYPE_LABEL_MD, UITheme.ACCENT)
-	col.add_child(_detail_ammo)
-
-	_detail_blurb = Label.new()
-	UITheme.apply_text_style(_detail_blurb, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
-	_detail_blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_detail_blurb.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	col.add_child(_detail_blurb)
-
-	_detail_legend = Label.new()
-	UITheme.apply_text_style(_detail_legend, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
-	_detail_legend.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	col.add_child(_detail_legend)
-
-
 ## **Five stats, and there is no sixth** (docs/GDD.md §6.6, docs/SCOPE.md §1).
 ## Damage, speed, max health, stamina, soak. Every one is a number the player can
 ## feel inside one run; a stat that needs a tooltip explaining why it matters is
@@ -624,9 +603,10 @@ func _build_detail(parent: Node) -> void:
 ## second faucet on soak and the panel did not know.
 ##
 ## Here rather than on the pouch because this is the screen about WHAT YOU ARE:
-## the pouch is what you are carrying and what leaving will cost. It sits under
-## the detail pane on the right, which is the column that already answers
-## "and what does that mean" for whatever has focus.
+## the pouch is what you are carrying and what leaving will cost. It has the
+## right-hand column to itself now — what has focus is described by the hover
+## card, beside the slot, and the stat block is the one thing on this screen that
+## is NOT about whatever the cursor is on.
 ##
 ## No art, per STYLEGUIDE §5 -- the menu owns no art. Five labelled rows.
 const STATS: Array[StringName] = [
@@ -778,7 +758,7 @@ func refresh() -> void:
 	for b in _wheel_cells:
 		_paint_wheel(b)
 	_refresh_stats()
-	# The detail pane follows focus, and focus can be on a wheel cell — a refresh
+	# The card follows focus, and focus can be on a wheel cell — a refresh
 	# that always re-described a HAND would throw away the wheel's blurb every time
 	# a binding changed, which is precisely when the player is reading it.
 	var focused := get_viewport().gui_get_focus_owner()
@@ -869,28 +849,33 @@ func _cycle(b: Button) -> void:
 
 
 func _describe(b: Button) -> void:
-	if b == null or _detail_name == null:
+	if b == null or _tip == null:
 		return
 	var set_index: int = b.get_meta(&"set_index")
 	var hand: StringName = b.get_meta(&"hand")
 	var id := _armament(set_index, hand)
 
-	_detail_hand.text = "%s  ·  %s" % [SET_NAMES[set_index], HAND_NAMES[hand]]
-	_detail_name.text = ArmamentDb.name_of(id)
-	_detail_blurb.text = ArmamentDb.blurb(id)
+	_tip.clear()
+	_tip.point_at(b)
+	_tip.kicker.text = "%s  ·  %s" % [SET_NAMES[set_index], HAND_NAMES[hand]]
+	_tip.title.text = ArmamentDb.name_of(id)
+	_tip.blurb.text = ArmamentDb.blurb(id)
 
+	# The count, in the card's number line -- the same slot the counters put a
+	# price in and the bag puts a stack's worth in. A bow whose quiver is empty
+	# is the one fact about it that changes between two looks at this screen.
 	var ammo := ArmamentDb.ammo_of(id)
-	_detail_ammo.visible = ammo != &""
 	if ammo == &"arrows":
-		_detail_ammo.text = "%d arrows" % Game.arrows
+		_tip.price.text = "%d arrows" % Game.arrows
 
 	# The two hands are not symmetrical in play and the legend has to say which
 	# one you are looking at. ← / → walk the RIGHT hand through the same pool this
 	# cell cycles; the left hand is set here and here only, because the D-pad has
 	# no spare direction for it and a shield you can lose mid-fight is a bug.
 	if hand == Game.HAND_RIGHT:
-		_detail_legend.text = "Confirm to change it. In play, %s / %s step this hand." % [
-			MenuUtil.pad_label(&"weapon_prev"), MenuUtil.pad_label(&"weapon_next")]
+		_tip.say_note("Confirm to change it. In play, %s / %s step this hand." % [
+			MenuUtil.pad_label(&"weapon_prev"), MenuUtil.pad_label(&"weapon_next")],
+			UITheme.TEXT_DIM)
 	else:
-		_detail_legend.text = "Confirm to change it. In play, %s swaps the whole set." % (
-			MenuUtil.pad_label(&"loadout_swap"))
+		_tip.say_note("Confirm to change it. In play, %s swaps the whole set." % (
+			MenuUtil.pad_label(&"loadout_swap")), UITheme.TEXT_DIM)

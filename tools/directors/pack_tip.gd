@@ -7,11 +7,18 @@ extends RefCounted
 ##     --out=/tmp/pack/x.png --size=1280x720 --warmup=60
 ##
 ## Card #156 took the counter's hover card (`ItemTip`, card #119) and gave it to
-## the pouch and the locker, deleting their right-hand detail columns. That is
-## the same widget on a screen with a shape it has never been on: **two grids**
-## (the case and the bag), a button that is not in either of them (the escape
-## rope), and a left-hand column that puts the cells further left than any
-## counter's board does.
+## every other screen that draws items — the bag, the locker, the EQUIP page and
+## the receipt — deleting three more right-hand detail columns. `shop_tip.gd`
+## owns the counters; this owns the rest, and each of the three has a shape the
+## widget has never been on:
+##
+##   the BAG      two grids (the case and the bag), a button in neither of them
+##                (the escape rope), and a left-hand column that puts the cells
+##                further left than any counter's board does
+##   EQUIP        slots in the MIDDLE of the frame, where the card cannot go
+##                right and has to fall through to the second candidate
+##   the RECEIPT  cells that cannot take focus at all, so the hover route is the
+##                only route in
 ##
 ## `tools/directors/shop_tip.gd` is the same proof for the counter and this is
 ## deliberately its twin — the three ways the card goes wrong do not change with
@@ -75,6 +82,8 @@ func run(rig) -> void:
 	await _walk(pouch, "b_bag")
 	await _mouse_path(pouch, "c_mouse")
 	await _rope(pouch)
+	await _equip(menu)
+	await _receipt()
 	print("PACK done (%d passed, %d failed)" % [_pass, _fail])
 
 
@@ -313,6 +322,140 @@ func _rope(pouch) -> void:
 	await _rig.capture(_out.path_join("d_rope.png"))
 
 
+## EQUIP. The same card, on the screen whose "items" are the two hands, the
+## alternate set and the eight directions of the kit wheel.
+##
+## Its detail column went the same way the bag's did, and it is the screen where
+## the placement is hardest: the hand slots are 228 px wide and sit in the MIDDLE
+## of the frame, so the card cannot go right (the stat column is there) and has
+## to fall through to the second candidate. That fallback is exactly what
+## `ItemTip.spot_for` is four candidates long for, and nothing else in the game
+## exercises it from the middle.
+func _equip(menu: PauseMenu) -> void:
+	var equip = menu.get_node("Root/Screens/EquipScreen")
+	if menu.is_open:
+		menu.close()
+		await _rig.wait_frames(6)
+	menu.open()
+	await _rig.wait_frames(8)
+	# `_open_onto` is how the menu's own buttons land on a page — the same call
+	# `open_pouch` makes. Setting `visible` by hand would skip the focus the page
+	# grabs on arriving, and focus is what this beat reads.
+	menu._open_onto(PauseMenu.Screen.EQUIP)
+	await _rig.wait_frames(14)
+	if not equip.visible:
+		_rig.fail("E: the EQUIP page never came up")
+		return
+
+	_ck(equip.find_child("Detail", true, false) == null,
+		"E0 the EQUIP page has no detail column either")
+	_ck(equip._tip != null and equip._tip.get_index() == equip.get_child_count() - 1,
+		"E1 its card is the last thing it draws")
+
+	# Every hand slot and every wheel cell, driven by the real focus rather than
+	# by `_describe` — a director that called the writer would prove the writer
+	# and not the four routes into it.
+	var bad_cover := 0
+	var bad_edge := 0
+	var bad_anchor := 0
+	var seen := 0
+	var cells: Array = []
+	for b: Button in equip._slots:
+		cells.append(b)
+	for b: Button in equip._wheel_cells:
+		cells.append(b)
+	for b: Button in cells:
+		b.grab_focus()
+		await _rig.wait_frames(5)
+		seen += 1
+		if equip._tip.anchor != b:
+			bad_anchor += 1
+			print("  PACK anchor: EQUIP card is on %s, focus is %s"
+				% [equip._tip.anchor, b.name])
+		elif _hits(equip._tip.get_global_rect(), b.get_global_rect()):
+			bad_cover += 1
+			print("  PACK cover: EQUIP tip %s over slot %s"
+				% [equip._tip.get_global_rect(), b.get_global_rect()])
+		if not _fits(equip._tip.get_global_rect(), _view(equip)):
+			bad_edge += 1
+			print("  PACK edge: EQUIP tip %s in %s"
+				% [equip._tip.get_global_rect(), _view(equip)])
+	_ck(seen > 0, "E2 the EQUIP page has slots to describe (%d)" % seen)
+	_ck(bad_anchor == 0,
+		"E3 the card hung off the focused slot at all %d of them (%d wrong)"
+			% [seen, bad_anchor])
+	_ck(bad_cover == 0, "E4 it never covered the slot it describes (%d)" % bad_cover)
+	_ck(bad_edge == 0, "E5 it never left the screen (%d)" % bad_edge)
+	_ck(String(equip._tip.kicker.text).contains("KIT WHEEL"),
+		"E6 the last cell walked was a wheel direction ('%s')" % equip._tip.kicker.text)
+	await _rig.capture(_out.path_join("e_equip.png"))
+	menu.close()
+	await _rig.wait_frames(8)
+
+
+## The RECEIPT, which is the one screen where a stack cannot be acted on — and
+## the one where the player is most likely to be looking at something they have
+## never seen before, because it is what the floor just took off them.
+##
+## Its cells are deliberately unfocusable (a highlight on a stack you cannot
+## touch, over the cross), so this beat is MOUSE ONLY. That is the whole risk
+## worth checking: the hover route is the only route in, and it goes through a
+## `mouse_filter` that was `IGNORE` until the card existed.
+func _receipt() -> void:
+	Run.enter(9101)
+	Run.collect(&"deep_amber", 2)
+	Run.collect(&"bone_shard", 6)
+	Run.extract()
+	# Copied BEFORE the ride home is stood down, and the ride home stood down
+	# before a receipt of our own is opened. `Run.extract()` starts the real
+	# ending, and the real ending opens its OWN `RunEndScreen` a second or so
+	# later -- on the same layer, later in the scene, so it draws OVER this
+	# beat's screen. The first version of this beat did not wait, and every check
+	# below passed off a widget that was underneath another receipt: the card was
+	# visible, anchored, correctly placed, and photographed as a blank strip of
+	# somebody else's screen. `forgive_loop._settle`, whole, and for the reason
+	# its own comment gives.
+	var summary: Dictionary = Run.summary.duplicate(true)
+	await _rig.wait_seconds(1.2)
+	Flow.ending = false
+	for n in _all(_rig.scene()):
+		if n is RunEndScreen:
+			n.get_parent().queue_free()
+	_rig.paused = false
+	await _rig.wait_frames(10)
+
+	var screen := RunEndScreen.open(_rig.scene(), summary)
+	await _rig.wait_frames(16)
+	_ck(_receipts() == 1,
+		"F0 exactly one receipt is up (%d)" % _receipts())
+
+	var grid: ItemGrid = null
+	for n in _all(screen):
+		if n is ItemGrid:
+			grid = n
+			break
+	if grid == null or grid.count() == 0:
+		_ck(false, "F1 the receipt drew a grid of stacks")
+		screen.get_parent().queue_free()
+		return
+	var cell: Button = grid.cell_at(0)
+	_ck(cell.focus_mode == Control.FOCUS_NONE,
+		"F1 the receipt's stacks still cannot take focus")
+	await _hover(cell.get_global_rect().get_center())
+	_ck(screen._tip.visible and screen._tip.anchor == cell,
+		"F2 hovering a stack put the card on it")
+	_ck(screen._tip.title.text != "",
+		"F3 ...and the card names it ('%s')" % screen._tip.title.text)
+	_ck(not _hits(screen._tip.get_global_rect(), cell.get_global_rect()),
+		"F4 the card is not on the stack it describes")
+	_ck(_fits(screen._tip.get_global_rect(), _view(screen)),
+		"F5 the card is on screen (%s in %s)"
+			% [screen._tip.get_global_rect(), _view(screen)])
+	await _rig.capture(_out.path_join("f_receipt.png"))
+	screen.get_parent().queue_free()
+	await _rig.wait_frames(6)
+
+
 # --- plumbing ----------------------------------------------------------------
 
 ## What the card SHOULD say about `cell`, or "" if that is not a cell of either
@@ -337,6 +480,16 @@ func _expect(pouch, cell: Button) -> String:
 			var id: StringName = ids[i]
 			return "Empty" if id == &"" else ItemDb.get_def(id).display_name
 	return ""
+
+
+## How many receipts are in the scene. One, or this beat is reading a widget
+## that is underneath another one.
+func _receipts() -> int:
+	var n := 0
+	for x in _all(_rig.scene()):
+		if x is RunEndScreen:
+			n += 1
+	return n
 
 
 func _focused() -> Control:
