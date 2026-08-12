@@ -1748,7 +1748,7 @@ Rules:
 - New on the save: a `stash` key. It arrived at `VERSION = 3` and rides in v4;
   see "Settings and saves" below for why v3 itself is no longer readable.
 
-### Starting a game — the two doors, and both of them are `Flow`'s
+### Starting a game — the save list and `Flow`'s two doors
 
 ```gdscript
 Flow.new_game() -> void                         # reset, play the opening, land in the garrison
@@ -1758,7 +1758,11 @@ Flow.resume(dest: Dictionary) -> bool           # the second half alone: travel 
 
 The title screen (`res://scenes/ui/title/title_screen.tscn`, the project's
 `run/main_scene`) is the only caller of the first two, and it calls nothing else
-— per §10 `Flow` is still the one thing that may change a scene.
+— per §10 `Flow` is still the one thing that may change a scene. **CONTINUE does
+not choose a slot for the player.** It opens the readable three-slot list,
+ordered by `last_played_unix` descending. Each row shows last played, current
+progress (GARRISON or the active dungeon floor/depth), and gold; choosing a row
+is what calls `continue_game(slot)`.
 
 - **`new_game` is the only caller `Game.reset()` has ever had.** Before the title
   screen there was no way to start a second game in a process: the opening's
@@ -1769,28 +1773,31 @@ The title screen (`res://scenes/ui/title/title_screen.tscn`, the project's
   so a new game costs a player with three full slots nothing until they pick one.
 - **`continue_game` is a coroutine and its bool arrives at the far end of the
   fade.** `await` it. It calls `Saves.load_slot` (which per "Settings and saves"
-  restores `Game` and deliberately does *not* change scenes) and hands the result
-  to `resume`.
+  restores `Game` and the optional v10 `Run`, but deliberately does *not* change
+  scenes) and hands the result to `resume`.
 - **`resume(dest)` is the half that travels**, and it is public because a load
-  has two doors. It `_go`s to `dest.scene` and puts the hero back at the recorded
-  `pos`/`yaw`. **That yaw is a NODE rotation, not a heading** — `Saves.save`
-  writes `global_rotation.y` verbatim, so restoring it is an assignment and the
-  `+ PI` in §2.5 does not apply here. The placement happens *inside* `_go`, after
-  the new scene's `_ready` and **before** the autosave at the foot of it — the
-  autosave reads the hero out of the live tree, so placing him afterwards would
-  write the room's default spawn back over the slot just loaded.
+  has two doors. A restored active dungeon run is preserved when `dest` points
+  to that dungeon; only a non-dungeon destination abandons and resets `Run`.
+  The generated dungeon rebuilds from the restored seed and level before the
+  hero is put back at the recorded `pos`/`yaw`. **That yaw is a NODE rotation,
+  not a heading** — `Saves.save` writes `global_rotation.y` verbatim, so restoring
+  it is an assignment and the `+ PI` in §2.5 does not apply here. Placement
+  happens *inside* `_go`, after the new scene's `_ready` and **before** the
+  autosave at the foot of it, so the loaded transform is not overwritten by the
+  room's default spawn.
 - **The pause menu's Load Game is the second door**, and it uses `resume`
   directly. `MenuSavesPanel` calls `Saves.load_slot` itself and emits
   `PauseMenu.load_requested(slot, dest)`; `Flow._ready` connects to it. Calling
   `continue_game` from there would read the slot twice. Nothing was connected at
   all until 2026-08-10, so a load from the pause menu restored `Game` and left
   the player in the room they were already standing in.
-- **Loading abandons the run in flight.** `resume` calls `Run.reset()` first (and
-  re-emits `bag_changed` / `level_changed`, which `reset` does not). A slot holds
-  `Game` and nothing of `Run` — METAGAME §5 — so there is no run to restore onto,
-  and without this a load from floor 3 arrived in the garrison still holding a
-  sellable bag. It is `reset()` and not `Run.die()`: the run was discarded, not
-  ended, so there is no receipt and no death counted against mercy.
+- **Loading resets a run only when the destination is not one.** A v10 dungeon
+  destination arrives with its versioned `run` snapshot already restored and
+  `resume` preserves it. A legacy slot, or any slot without a valid active
+  dungeon snapshot, returns to the garrison and calls the abandon path so no
+  stale bag or floor leaks into town. Abandoning uses
+  `reset()`, not `Run.die()`: there is no receipt and no death counted against
+  mercy.
 
 ### Sleeping — `Flow.blink` fades without changing scene
 
@@ -2844,22 +2851,31 @@ count up. Pass `fill := true` on a purchase (the player should feel the new
 heart at once) and leave it false on a Recut, where clamping down is the point.
 
 ```gdscript
-Saves.peek(slot)        # header for the slot list; {empty:true} if unused
-Saves.save(slot)        # captures Game + destination + a scene-owned transform
-Saves.load_slot(slot)   # restores Game; returns {scene, room[, pos, yaw]}
-Saves.erase(slot)       # 3 slots, 0..2
-Saves.autosave()        # Flow calls this on EVERY transition; false = declined
-Saves.autosaved         # signal(slot) -- slot is -1 when it declined
+Saves.peek(slot: int) -> Dictionary       # readable list header; empty=true if unused
+Saves.save(slot: int) -> bool             # Game + destination/transform + v10 Run snapshot
+Saves.load_slot(slot: int) -> Dictionary  # restores data and returns the travel destination
+Saves.erase(slot: int) -> void            # 3 slots, 0..2
+Saves.autosave() -> bool                  # active slot, else first empty, else decline
+Saves.autosaved                           # signal(slot) -- -1 when autosave declined
 ```
 
-The save file is at **`VERSION = 9`**, and `READABLE` — not `VERSION` — is what
-`load_slot` checks. **v3 is refused rather than migrated** because its `plate`
-key means something the v4 accessors would read as a different piece of armour;
-`READABLE` holds `[4, 5, 6, 7, 8, 9]`. v9 adds `position_scene`, proof that a
-saved hero transform belongs to the destination scene. A transform is written
-and returned only when those scenes match. v4-v8 remain readable but have no
-ownership proof, so their returned destination omits `pos` / `yaw` and keeps the
-scene's authored spawn and rotation on that first load. `save_game.gd`'s header
+`peek` exposes `last_played_unix`, `gold`, `in_dungeon`, `floor`/`level`, `depth`
+and `room` for the readable three-slot list; the title sorts those headers newest
+first rather than choosing the newest slot itself. `load_slot` returns `scene`,
+`room`, optional scene-owned `pos`/`yaw`, `run_restored`, `in_dungeon`, `level` and
+`depth`, so `Flow.resume` can distinguish a restored run from a legacy or
+garrison load. v4-v8 transforms are deliberately omitted because their owner is
+unknown; v9 introduced `position_scene`, and a transform is returned only when
+that owner matches the destination.
+
+The save file is at **`VERSION = 10`**, and `READABLE` — not `VERSION` — is what
+`load_slot` checks. v4 split the old `plate` rung into eight gear tracks and is
+why **v3 is refused rather than migrated**: its `plate` key has no honest mapping
+to the new pieces. The later bumps are additive: v5 added `deaths`, v6
+`gold_earned`, v7 the kit `wheel`, v8 `rations`, v9 transform ownership, and
+v10 `last_played_unix` plus the single versioned `run` snapshot. `READABLE` is
+therefore `[4, 5, 6, 7, 8, 9, 10]`; absent fields take their version-appropriate
+defaults instead of making those slots unreadable. `save_game.gd`'s header
 comment carries the full version history.
 
 Every one of those dictionaries is rebuilt on load with `StringName` keys — JSON
@@ -2867,30 +2883,29 @@ hands back `String` keys, and a `String` key makes `forge_level(&"edge")` and
 `stash_count(&"void_pearl")` miss silently, so every forged rung and everything
 on the shelf vanishes.
 
-`Saves.load_slot()` deliberately does **not** change scenes — it hands back
-where the hero belongs and lets the caller transition however it wants.
+`Saves.load_slot()` deliberately does **not** change scenes — it restores the
+save data, hands back where the hero belongs and lets `Flow` perform the
+transition. A v10 `run` is one versioned data snapshot, not a scene tree:
+`in_dungeon`, `seed_used`, `level`, `depth`, `bag`, `cased`, the `premium` and
+`kills` counters, current magic/stamina trip budgets, `visited_rooms`, and the
+generator's `rng_state`. The dungeon regenerates from seed plus level before
+`Flow` restores the hero transform.
+Legacy v4–v9 slots have no snapshot, return to the garrison, and reset `Run`.
 Whoever owns room transitions should set `Saves.current_room` as rooms change.
 
-**Autosaving is `Flow`'s, and it is unconditional.** The last thing `_go` does,
-after the fade lifts, is call `Saves.autosave()` — there is no per-caller flag,
-because all four ways through that function (in, down, home paid, home in a box)
-are moments a player would be furious to replay, and a rule with no exceptions
-cannot be forgotten by the fifth caller. It runs at the *end* on purpose:
+**Every automatic path converges on `Saves.autosave()`.** The last thing `_go`
+does after every transition is call it; the bed calls it during the manual rest;
+and the active-play clock calls it after five minutes in which the tree is
+unpaused and a player exists. Transition timing remains at the end on purpose:
 `Saves.save` reads the hero out of the live tree, and the notice it raises is
 drawn by the HUD, so announcing it behind a black screen announces it to nobody.
 
-Two rules the format enforces, both proved by `tools/directors/autosave.gd`:
-
-- **A recorded scene is never a dungeon.** `_save_scene()` returns `Flow.GARRISON`
-  whenever `Run.in_dungeon`. A slot holds `Game` and nothing of `Run`
-  (METAGAME §5), so a save pointing underground reloaded into a generated floor
-  with no bag, no fee and no run behind it. That predates the autosave and was
-  reachable by saving manually in the dungeon.
-- **An autosave never overwrites a save made by hand.** It takes the active slot
-  if there is one, else the first empty slot (which it then keeps), else it
-  declines and emits `autosaved(-1)`. Picking a slot to sacrifice for a player
-  who manages three by hand is the autosave deciding which of their saves
-  mattered least.
+The common no-overwrite rule is unchanged: an autosave takes the active slot if
+there is one, else the first empty slot (which it then keeps), else it declines
+and emits `autosaved(-1)`. Picking a slot to sacrifice for a player who manages
+three by hand would be the autosave deciding which of their saves mattered
+least. A manual save does overwrite the chosen slot, which is why mid-dungeon
+load is recovery of that slot's current state rather than a checkpoint stack.
 
 `Hud` listens on `autosaved` and draws **AUTOSAVING…** bottom-right for 2.2 s on
 the toast's baseline, in `MOTH` — the HUD talking about itself, not about the

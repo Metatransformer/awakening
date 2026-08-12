@@ -1,5 +1,5 @@
 extends RefCounted
-## A dungeon save comes home without bringing dungeon coordinates with it.
+## A legacy dungeon save comes home without bringing dungeon coordinates with it.
 ##
 ##   timeout 400 tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
@@ -7,7 +7,7 @@ extends RefCounted
 ##     --out=/tmp/save_load_position/frame.png --warmup=1 --meet
 ##
 ## The v8 failure paired two individually honest facts that did not belong
-## together: `scene` was the garrison because a save carries no `Run`, while
+## together: `scene` was the garrison because those saves carried no `Run`, while
 ## `pos` / `yaw` came from the live dungeon hero. Loading that pair could put
 ## Kael outside the authored hub. This director gives the floor transform a
 ## conspicuous fingerprint, saves, loads, resumes through Flow, and proves the
@@ -93,22 +93,22 @@ func run(rig) -> void:
 		await _finish(rig)
 		return
 	var written := _slot_json(SLOT)
-	_ck("C1 it is save format v9", int(written.get("version", 0)) == Saves.VERSION)
-	_ck("C2 its destination is still the garrison",
-		String(written.get("scene", "")) == Flow.GARRISON)
+	_ck("C1 it is the current save format", int(written.get("version", 0)) == Saves.VERSION)
+	_ck("C2 a current run's destination is the dungeon",
+		String(written.get("scene", "")) == Flow.DUNGEON)
 	_ck("C3 its transform owner is the dungeon",
 		String(written.get("position_scene", "")) == Flow.DUNGEON)
-	_ck("C4 no dungeon position is persisted for a garrison destination",
-		not written.has("pos"))
-	_ck("C5 no dungeon yaw is persisted for a garrison destination",
-		not written.has("yaw"))
+	_ck("C4 the owned dungeon position is persisted", written.has("pos"))
+	_ck("C5 the owned dungeon yaw is persisted", written.has("yaw"))
 
 	# Recreate the exact shape an existing v8 slot can carry: a garrison
 	# destination paired with an unowned dungeon transform. The migration must
 	# read the permanent Game state without trusting those legacy coordinates.
 	var legacy := written.duplicate(true)
 	legacy["version"] = 8
+	legacy["scene"] = Flow.GARRISON
 	legacy.erase("position_scene")
+	legacy.erase("run")
 	legacy["pos"] = [FAR_POSITION.x, FAR_POSITION.y, FAR_POSITION.z]
 	legacy["yaw"] = FAR_YAW
 	_ck("C6 the legacy v8 regression slot writes", _write_slot_json(SLOT, legacy))

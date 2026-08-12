@@ -755,10 +755,11 @@ was already on his own catalogue file — and he does not stand in the yard unti
 boss is dead, so a hero who had just taken Burst off the Slag Ogre had no counter
 to buy ammunition at. What survives unchanged is the *relationship*: a charge is
 a stock you paid for in the garrison before you left, exactly like a bottle.
-**They do not refill underground.** There is no rest, there cannot be one (the
-run is not savable, `docs/METAGAME.md` §5), and a resource that comes back
-mid-run softens the walk home. Spending your last charge on floor 2 is a
-statement about how deep you were planning to go.
+**They do not refill underground.** The trip budget and extraction pressure
+require that: a resource that comes back mid-run softens the walk home. Saving
+or loading in the dungeon restores the current trip; it does not refill it.
+Spending your last charge on floor 2 is still a statement about how deep you
+were planning to go.
 
 **Charges live in the HUD column with arrows and stamina, never in the bag.** The
 bag is the pressure valve and it does not get taxed twice.

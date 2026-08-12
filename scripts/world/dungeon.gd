@@ -3256,22 +3256,28 @@ func _add_room_trigger(root: Node3D, cell: Vector2i) -> void:
 	area.add_child(cs)
 	root.add_child(area)
 
-	var visited := [cell == entrance]
+	var room_id := StringName(root.name)
+	var visited := [cell == entrance or Run.has_visited_room(room_id)]
 	# The arrival cell is on the map before the player has taken a step. It is
 	# the room they are standing in -- fogging it would mean the first thing the
 	# minimap ever shows is a blank frame -- and it is already counted as visited
 	# for the depth tally, so this is the same fact said to the same rule.
 	if cell == entrance:
+		Run.remember_room(room_id)
+		Saves.current_room = room_id
 		Atlas.see(cell)
 	area.body_entered.connect(func(body: Node3D) -> void:
 		if not body.is_in_group(&"player"):
 			return
+		# Current room is positional metadata, not first-entry progression. A
+		# revisit still becomes the room the next save should name.
+		Saves.current_room = room_id
 		# OUTSIDE the `visited` gate. Fog is per-room and the depth tally is
 		# per-FIRST-entry, and folding them together would mean a room re-entered
 		# after a `close_floor` (a load into a live run) stayed dark forever.
 		Atlas.see(cell)
 		if visited[0]:
 			return
-		visited[0] = true
-		Run.descend()
-		Bus.room_entered.emit(StringName(root.name)))
+		visited[0] = Run.enter_room(room_id)
+		if visited[0]:
+			Bus.room_entered.emit(room_id))
