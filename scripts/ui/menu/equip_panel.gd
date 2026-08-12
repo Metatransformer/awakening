@@ -19,12 +19,6 @@ signal notice(text: String, is_error: bool)
 ## A slot settled on a new armament — the menu answers with a click.
 signal value_settled
 
-## No "swap set" shortcut in the hint on purpose: the button that swaps the set
-## in play is D-pad ↑, and inside a menu ↑ is how focus moves. Rather than teach
-## a second, contradictory binding, the swap is a focusable button and the detail
-## pane names the in-play one.
-const HINT := "↑↓←→ Select    E / A Change    Esc / B Back"
-
 ## Sized so the whole screen -- header, cards, footer -- fits inside 720p without
 ## the frame running off the bottom. It did, the first time: the cards are
 ## minimums and a VBox grows past its parent without complaining.
@@ -188,11 +182,6 @@ func _build() -> void:
 	col.add_child(footer)
 	var frow := HBoxContainer.new()
 	footer.add_child(frow)
-	var hint := Label.new()
-	UITheme.apply_text_style(hint, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
-	hint.text = HINT
-	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	frow.add_child(hint)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	frow.add_child(spacer)
@@ -301,9 +290,9 @@ func _build_swap(parent: Node) -> void:
 ## captioned by the direction it lives on. A grid is not a wheel either — no
 ## rectangular arrangement of eight cells maps onto eight compass points — so
 ## rather than imply a layout that is a lie, the direction is written on the
-## cell. `↑→` and not `↗`: the arrows in `HINT` are known to render in this face
-## and the diagonals are not, and a card whose labels come out as boxes is worse
-## than a card with two-character labels.
+## cell. `↑→` and not `↗`: the cardinal arrows in these captions are known to
+## render in this face and the diagonals are not, and a card whose labels come
+## out as boxes is worse than a card with two-character labels.
 const WHEEL_DIRS: Array[String] = ["↑", "↑→", "→", "↓→", "↓", "↓←", "←", "↑←"]
 const WHEEL_CELL := Vector2(50, 50)
 
