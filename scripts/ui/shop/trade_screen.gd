@@ -24,7 +24,7 @@ extends Control
 ## The two sides arrange that cell differently, because they are two different
 ## shapes of thing:
 ##
-##  * **TRADE** is two `ItemGrid`s -- stock and bag -- sharing one detail pane.
+##  * **TRADE** is two `ItemGrid`s -- stock and bag -- sharing one description card.
 ##  * **PROGRESSION** is an `UpgradeLadder` -- a row per thing the service offers, with
 ##    that thing's rungs along it and arrows between them. Progression services
 ##    sell ladders and the flat board could not say so: it showed the rung you
@@ -33,6 +33,15 @@ extends Control
 ##
 ## The cursor, prices, recipe column, affordability colouring, refusal footer and
 ## hold all run over `_rows`; the two layouts only arrange those shared rows.
+##
+## **The description is a TOOLTIP on the cell, not a column beside the board.**
+## Until 2026-08-12 the right third of the frame was a detail card: kicker, name,
+## price, recipe and blurb, standing full height whatever it had to say. The
+## longest blurb in the game is six lines (`lore_panes`), so on nearly every row
+## that column was a hand's width of empty panel holding two lines of text — and
+## it was taking that width off the one thing the player came to look at. The
+## board has it now, and what the column said follows the cursor instead
+## (`_build_tip`, `_place_tip`).
 ##
 ## The frame, the header and the footer are the game's ONE menu look -- since the
 ## Gallery Vellum port that is `UITheme` and `UiKit`, and a shop that did not use
@@ -46,7 +55,7 @@ extends Control
 ## in kit tokens now (`UITheme._style_shared_cells`) so the bag cell looks the same
 ## in the pouch and at the counter, which is the promise `ItemCell`'s header makes.
 ##
-## One cursor and one shared detail pane across every board. The player is
+## One cursor and one shared description card across every board. The player is
 ## answering "what is this worth" over and over, so the price is the only thing
 ## that is ever GOLD and the purse is the only thing that animates.
 
@@ -55,8 +64,16 @@ enum Mode { TRADE, PROGRESSION }
 const ROLL_TIME := 0.25
 ## Two columns per side keep full-size cells readable in the 1280x720 trade frame.
 const TRADE_COLS := 2
-## The detail column, in the same pixels the pouch's is.
-const DETAIL_W := 340
+## The tooltip's width, which is the width the detail COLUMN was. Kept to the
+## pixel on purpose: it is what every blurb in the game has been wrapped and
+## measured at (`tools/directors/lore_panes.gd` counts the lines), so moving the
+## card out of the frame does not silently re-wrap forty paragraphs.
+const TIP_W := 340
+## Between the tooltip and the cell it describes. The card must never sit ON the
+## cell -- that is the one thing a description of a thing must not hide.
+const TIP_GAP := 12
+## And never against the edge of the screen either.
+const TIP_MARGIN := 12
 
 var mode: Mode = Mode.PROGRESSION
 var title: String = "THE FORGE"
@@ -103,8 +120,14 @@ var _bag_empty: Label
 var _d_kind: Label
 var _d_name: Label
 var _d_price: Label
+var _d_afford: Label
 var _d_blurb: Label
 var _recipe: VBoxContainer
+## The tooltip card, and the cell it is currently describing. The cell is the one
+## `_point_at` put the cursor on -- NOT a second `focus_entered` hook. See
+## `_place_tip`.
+var _tip: PanelContainer
+var _tip_anchor: Control
 var _hint: Label
 var _hold_bar: HoldBar
 ## The refusal message, when there is one. A `FooterToast`, built on the failed
@@ -246,6 +269,14 @@ func _build() -> void:
 	_build_header(stack)
 	_build_body(stack)
 	_build_footer(stack)
+	# LAST, and a sibling of the frame rather than a child of it. Two reasons and
+	# both have already cost a card here: a child of the frame is clipped by the
+	# board's well the moment the cursor is on an edge cell, and DRAW ORDER is
+	# what put the shop modal under the world's control legend once (#48). This
+	# screen's own CanvasLayer is 60 -- above the HUD's 50 -- and the tooltip is
+	# the last child of the last thing on it, so it is over the frame it floats
+	# on and over the HUD both.
+	_build_tip()
 
 
 ## Who this is and what they do, then the four numbers you decide with.
@@ -354,7 +385,6 @@ func _build_body(parent: Node) -> void:
 		_build_trade_side(split, "YOUR INVENTORY", false)
 	else:
 		_build_progression_board(split)
-	_build_detail(split)
 
 
 ## One side of the conventional trade window. Both sides use the shared grid/cell
@@ -441,16 +471,34 @@ func _build_board_well(parent: Node) -> VBoxContainer:
 
 ## The one place a blurb, a price or a recipe is ever spelled out. A grid cell has
 ## room for a name and one number; everything else the player needs to decide with
-## lives here, beside it, and never on the cell.
-func _build_detail(parent: Node) -> void:
+## lives here — on a card that follows the cursor, beside the cell and never over
+## it.
+##
+## **It hangs off `_describe`, which hangs off `_point_at`, and off nothing
+## else.** That is the whole of card #119's second warning and it is not a style
+## note: this screen POLLS the four arrows and ALSO lets its cells take focus, so
+## `focus_entered` fires on a cursor that may be a frame behind the one the board
+## is drawing (see `_input`, and `_point_at`'s note about `grab_focus` being
+## deferred). A tooltip wired to a second signal would be a third mover on one
+## press. The cursor is the only thing that says where the player is looking; the
+## card reads it and never asks anybody else.
+##
+## `MOUSE_FILTER_IGNORE` on every node in here, and it is load-bearing rather
+## than tidy: the card floats over the board, so a card that took the pointer
+## would steal `mouse_entered` from the cells underneath it and the mouse path
+## would die the moment the tooltip landed near the row below.
+func _build_tip() -> void:
 	var card := PanelContainer.new()
-	card.name = "Detail"
-	UITheme.style_panel(card, UITheme.BG_INSET)
-	card.custom_minimum_size = Vector2(DETAIL_W, 0)
-	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	parent.add_child(card)
+	card.name = "Tip"
+	card.add_theme_stylebox_override("panel", UITheme.tooltip_card())
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.custom_minimum_size = Vector2(TIP_W, 0)
+	card.size = Vector2(TIP_W, 0)
+	add_child(card)
+	_tip = card
 
 	var col := VBoxContainer.new()
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_theme_constant_override("separation", 6)
 	card.add_child(col)
 
@@ -459,31 +507,120 @@ func _build_detail(parent: Node) -> void:
 	# that rebuilds its own nodes would throw away the layout sixty times a second
 	# while a stick is held.
 	_d_kind = Label.new()
+	_d_kind.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	UITheme.apply_text_style(_d_kind, UITheme.TYPE_CAPTION, UITheme.ACCENT)
 	col.add_child(_d_kind)
 
 	_d_name = Label.new()
+	_d_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_d_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	UITheme.apply_text_style(_d_name, UITheme.TYPE_H1, UITheme.TEXT)
 	col.add_child(_d_name)
 
 	_d_price = Label.new()
+	_d_price.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	UITheme.apply_text_style(_d_price, UITheme.TYPE_LABEL_XL, UITheme.ACCENT)
 	col.add_child(_d_price)
+
+	# Whether you can have it, said in a word, because the card is now the only
+	# thing on screen that is ABOUT the selected line and "can I pay for this"
+	# is the question being asked at every counter in the game.
+	#
+	# A line of its own and NOT the price recoloured. The price is the only
+	# GOLD thing on this screen (see the file header) and a number that turns
+	# green and red is a number that has stopped being the price.
+	_d_afford = Label.new()
+	_d_afford.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_d_afford.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	UITheme.apply_text_style(_d_afford, UITheme.TYPE_CAPTION, UITheme.SUCCESS)
+	col.add_child(_d_afford)
 
 	# The bill, one component per row: what it wants and what the bench has.
 	# **Per row, never per line.** A recipe you are one core short of and a recipe
 	# you have none of look identical if the whole thing just greys out, and the
 	# difference between them is a whole run's worth of where to go looking.
 	_recipe = VBoxContainer.new()
+	_recipe.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_recipe.add_theme_constant_override("separation", 2)
 	col.add_child(_recipe)
 
+	# No `SIZE_EXPAND_FILL` any more, which the column had: the card is exactly
+	# as tall as what it is saying, and a blurb that asked for the leftovers of a
+	# height nothing is setting would have nothing to expand into.
 	_d_blurb = Label.new()
+	_d_blurb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_d_blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_d_blurb.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	UITheme.apply_text_style(_d_blurb, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
 	col.add_child(_d_blurb)
+
+
+## Put the card beside the cell the cursor is on: never over it, never off the
+## screen, and never anywhere the player has to look for it.
+##
+## Four places are tried in order — right of the cell, left of it, under it,
+## over it — and the first one that fits the whole card inside the viewport wins.
+## Right first because the board reads left to right and the eye is already
+## travelling that way; under-and-over are the fallbacks for the rightmost and
+## leftmost columns, which is exactly the case card #119 asks to be tested at.
+## Each candidate is clamped only on the axis it does NOT depend on, so clamping
+## can never slide the card back over the cell it was placed off.
+##
+## Driven per frame from `_paint_chrome` and NOT from `_describe`, for the reason
+## `_point_at` defers its scroll: on the frame the cursor moves the containers
+## have not laid out, the new cell is still at (0,0) with zero size, and a card
+## placed against that rect is a card in the top-left corner. Reading the rect
+## once a frame also means the card follows the board when it SCROLLS under a
+## held direction, which nothing else would tell it about.
+func _place_tip() -> void:
+	if _tip == null or not _tip.visible:
+		return
+	if _tip_anchor == null or not is_instance_valid(_tip_anchor) \
+			or not _tip_anchor.is_visible_in_tree():
+		return
+	# The card is exactly its content, every frame. A Control outside a Container
+	# grows to its minimum size on its own and never shrinks back, so a six-line
+	# relic blurb would leave the card six lines tall over the two-line one after
+	# it -- assigned rather than left alone.
+	var want := Vector2(TIP_W, _tip.get_combined_minimum_size().y)
+	if not _tip.size.is_equal_approx(want):
+		_tip.size = want
+	# Solved every frame and ASSIGNED only when it moves. The solve is twenty
+	# float operations; `set_position` is a layout notification, and a card that
+	# re-laid itself out sixty times a second while a stick was held would be the
+	# expensive half. Recomputing rather than caching the answer is also what
+	# makes the placement self-correcting — `shop_tip.gd`'s Z2 shoves the card by
+	# hand and requires it back, which a cache keyed on the cell would fail.
+	var spot := _tip_spot(_tip_anchor.get_global_rect(), _tip.size)
+	if not _tip.position.is_equal_approx(spot):
+		_tip.position = spot
+
+
+## Where the card goes, given the cell it is about. See `_place_tip`.
+func _tip_spot(cell: Rect2, tip: Vector2) -> Vector2:
+	var view := get_viewport_rect().size
+	var lo := Vector2(TIP_MARGIN, TIP_MARGIN)
+	var hi := Vector2(maxf(TIP_MARGIN, view.x - tip.x - TIP_MARGIN),
+		maxf(TIP_MARGIN, view.y - tip.y - TIP_MARGIN))
+	# Centred on the cell along the free axis, then pulled back inside the frame.
+	var mid_y := clampf(cell.get_center().y - tip.y * 0.5, lo.y, hi.y)
+	var mid_x := clampf(cell.get_center().x - tip.x * 0.5, lo.x, hi.x)
+	var tries: Array[Vector2] = [
+		Vector2(cell.end.x + TIP_GAP, mid_y),               # right of the cell
+		Vector2(cell.position.x - TIP_GAP - tip.x, mid_y),  # left of it
+		Vector2(mid_x, cell.end.y + TIP_GAP),               # under it
+		Vector2(mid_x, cell.position.y - TIP_GAP - tip.y),  # over it
+	]
+	for spot: Vector2 in tries:
+		if spot.x >= lo.x and spot.x <= hi.x and spot.y >= lo.y and spot.y <= hi.y:
+			return spot
+	# Nothing fits cleanly -- a cell taller than the gaps around it, or a card
+	# taller than the screen. Take the corner furthest from the cell and clamp:
+	# overlapping is still the worst outcome, so the LAST resort is the one that
+	# keeps the two apart rather than the one that keeps the card square.
+	var away := Vector2(
+		lo.x if cell.get_center().x > view.x * 0.5 else hi.x,
+		lo.y if cell.get_center().y > view.y * 0.5 else hi.y)
+	return away
 
 
 ## The line that says which button does what, and -- on a cell that wants one --
@@ -775,6 +912,10 @@ func _point_at(i: int) -> void:
 	else:
 		cell = _ladder.cell_at(_ladder.slot_of_line(_cursor))
 		cell_scroll = _scroll
+	# The cell the tooltip is about. Set HERE, on the one function that moves the
+	# cursor, so the card and the highlight can never be describing two different
+	# rows -- see `_build_tip`.
+	_tip_anchor = cell
 	if cell != null and cell.get_viewport() != null:
 		cell.grab_focus()
 		# The board is taller than the frame. Following the cursor is what makes
@@ -814,13 +955,22 @@ func _describe() -> void:
 		_d_kind.text = ""
 		_d_name.text = ""
 		_d_price.text = ""
+		_d_afford.text = ""
 		_d_blurb.text = ""
+		# A card describing nothing is not an empty card, it is no card. The
+		# board says "Sold out." on its own and a bordered rectangle of nothing
+		# beside it would be the screen saying it twice.
+		if _tip != null:
+			_tip.visible = false
 		UiKit.band_value(_band, &"cost", "—")
 		return
+	if _tip != null:
+		_tip.visible = true
 
 	var row := _rows[_cursor]
 	_d_name.text = String(row["label"])
 	_d_blurb.text = String(row["blurb"])
+	_d_afford.text = ""
 
 	match row["kind"]:
 		&"item":
@@ -836,6 +986,21 @@ func _describe() -> void:
 			var left: int = int(row["count"])
 			_d_kind.text = "%d LEFT" % left if left >= 0 else ""
 			_d_price.text = "%d ◇" % int(row["price"])
+			# Off `ok` and out of the CATALOGUE's own mouth, for the reason
+			# `_show_refusal` gives: once a line can be refused for four
+			# different reasons, "Not enough gold" sends the player back down
+			# for the wrong thing. On the card it arrives BEFORE the press
+			# rather than after a refused one -- the footer toast still answers
+			# the press, and the two agree because they ask the same function.
+			if bool(row["ok"]):
+				_d_afford.text = "Affordable"
+				UITheme.apply_text_style(_d_afford, UITheme.TYPE_CAPTION,
+					UITheme.SUCCESS)
+			else:
+				var said: String = _db().refusal(row["line"])
+				_d_afford.text = said if said != "" else "Not enough gold"
+				UITheme.apply_text_style(_d_afford, UITheme.TYPE_CAPTION,
+					UITheme.DANGER)
 			_fill_recipe(row["line"])
 			# SUCCESS/DANGER off `ok`, which is the catalogue's own answer and
 			# accounts for MATERIALS as well as coin. Colouring it by comparing the
@@ -1200,6 +1365,7 @@ func _process(delta: float) -> void:
 
 func _paint_chrome() -> void:
 	UiKit.band_value(_band, &"purse", "%d ◇" % int(round(_shown_gold)))
+	_place_tip()
 
 	var need := _hold_time(_cursor)
 	_hold_bar.visible = need > 0.0
