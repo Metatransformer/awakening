@@ -1247,6 +1247,25 @@ a second blow replaces it and restarts the 300 ms. Three arcs at 302 px is three
 RUST strokes around the frame at the moment the player is being hit twice, which is
 decision 13's own objection a third time.
 
+**Decision 39 — the arc carries WEIGHT as well as bearing (card #130).** 40° over
+300 ms was the whole cue, so a goblin's jab and a slag ogre's backhand drew the
+identical stroke. It now runs **40°→96° over 300→550 ms**, lerped on `Hit.force`.
+
+The two things that did *not* change are the point. **Width stays 3 px**: a 6 px
+stroke on a boss slam is decision 13's "cue fighting the fight" arriving again,
+and §7.10's restraint is a 3 px HUD. **And there is still no vignette** — the
+obvious answer to "screen-space damage feedback scaled by the blow" is a red wash,
+which decision 37 already deleted, and which STYLEGUIDE §4.5's 480×270 RGB555
+buffer would render as either invisible or a banded slab: its colour step is
+8/255, so a subtle wash has nowhere to be subtle. An arc is a hard stroke against
+a VOID underline and survives the quantizer intact.
+
+The force arrives on `Bus.hero_hurt`, which `Hero.take_hit` emits **before**
+`Bus.hero_struck`. Two signals rather than one because they answer different
+questions — weight and bearing — and `hero_struck` is also what tells the HUD to
+draw at all; folding the force into it would make every other listener carry an
+argument it does not want.
+
 ## 14.7 Four factual errors in the plan, and one that the branch overtook
 
 1. **`hud.gd:1336` already reads `ArmamentDb.hand_count(id)`.** Element 12 and

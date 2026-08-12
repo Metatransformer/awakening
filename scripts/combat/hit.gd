@@ -229,3 +229,25 @@ func force() -> float:
 	var m := sqrt(clampf(mass, 0.25, 4.0))
 	return clampf(severity() * 0.62 + (m - 0.86) * 0.42
 		+ clampf(commitment, 0.0, 1.0) * 0.20, 0.0, 1.0)
+
+
+## How much of the authored knockback each reaction actually spends.
+##
+## The number in `BossDb` is the beat's shove and it stays the beat's shove; this
+## is the victim's half of it. A knockdown has to TRAVEL -- `ex_knocked_down` is
+## authored being hurled backwards, and a man who lies down exactly where he was
+## standing reads as a man who fainted. A light flinch spends less than the full
+## shove for the opposite reason: it does not take control away, so a full shove
+## would slide the player out of position for a hit he is meant to shrug off.
+##
+## Lives here rather than in `K` because the table is keyed on `Tier`, and `Tier`
+## is declared in this file -- putting it in `K` would make the constants file
+## depend on this one, which already depends on it.
+static func knock_scale(t: Tier) -> float:
+	match t:
+		Tier.KNOCKDOWN:
+			return 1.8
+		Tier.HEAVY:
+			return 1.0
+		_:
+			return 0.7
