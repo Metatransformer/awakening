@@ -211,14 +211,12 @@ floor 1's VAULT door names in its refusal (`FloorDb.vault_key`)"*
 `docs/PUZZLES.md` gives it the only atom that can open a route the room planner
 did not draw. Its charges are arrows with a different noun: a count in the HUD
 column (`ArmamentDb.hand_count()`, `armament_db.gd:~141-145`), bought upstairs
-(§5) and **never refilled underground, with one exception that is a gate and not
-a supply** (`Game.charges`, `game_state.gd:~100-103`). Spending your last charge
-on floor 2 is a statement about how deep you were planning to go — and it used to
-be a way to be stuck, which was §8, D13. The exception is the `ChargeCache` in
-the urn braced against floor 2's shortcut: the one door in the game whose only
-answer is a Burst brings its own, the way the bow's eye brings its own arrows
-(`docs/PUZZLES.md` §0 rule 2). Nothing else on any floor hands out a charge, and
-the sentence above stays true everywhere else.
+(§5), with rare single charges among ambient-pot rewards. Spending your last
+charge on floor 2 is still a statement about how deep you planned to go: an
+ambient roll is never a promise. The exception that *is* promised is the
+`ChargeCache` in the urn braced against floor 2's shortcut: the one door whose
+only answer is a Burst brings its own, the way the bow's eye brings its own
+arrows (`docs/PUZZLES.md` §0 rule 2).
 
 ### 1.5 Sustain — *hold the Heat chain through one break*
 
@@ -519,8 +517,8 @@ can never grind one into another.
 
 | Stock | Lives on | Enters | The decision it creates |
 |---|---|---|---|
-| **Arrows** | `Game.arrows` | Three sources, no fourth — including Brannoc's forge recipe (`ShopDb.FLETCH`; `docs/METAGAME.md` §4.6) | Fletching gives Flint and Bone a town use and runs the right way round: it **frees** slots (`Fletching.RECIPE` and `Fletching.batch()`, `scripts/items/fletching.gd:~38`, `:~64`) |
-| **Charges** | `Game.charges` | Bought from the **quartermaster's stores** once the Burst is owned (`SupplyDb._board()`, `scripts/items/supply_db.gd`), never refilled below except the one `ChargeCache` on floor 2 (D13) | How deep you were planning to go |
+| **Arrows** | `Game.arrows` | Three source categories, no fourth — bought, found (floor/chest/pot bundles), or fletched through Brannoc's forge recipe (`ShopDb.FLETCH`; `docs/METAGAME.md` §4.6) | Fletching gives Flint and Bone a town use and runs the right way round: it **frees** slots (`Fletching.RECIPE` and `Fletching.batch()`, `scripts/items/fletching.gd:~38`, `:~64`) |
+| **Charges** | `Game.charges` | Bought from the **quartermaster's stores** once Burst is owned; one authored `ChargeCache` guarantees floor 2's gate supply, while ambient pots only rarely yield one (`SupplyDb._board()`, D13) | How deep you were planning to go |
 | **Rations** | `Game.rations` | Bought from the quartermaster's stores, five at a time, twenty to a stack (`RationDb`, `scripts/items/ration_db.gd`) | Whether the room is quiet enough to sit down for twelve seconds |
 | **Bottles** | `Game.bottle_contents` | Blown at the alchemist, capped by a relic (`RelicDb.bottle_cap()`, `relic_db.gd:~889`, read by `AlchemyDb.remaining()`) | The fourth bottle is an event, not a purchase |
 | **Draughts** | in a bottle | Brewed — three, and only three (`PotionDb.IDS`, `scripts/items/potion_db.gd:~23`) | Which of the smith's three numbers you want for 45 seconds |
@@ -567,6 +565,11 @@ is exactly one of the trip's four spins.
   the pouch prints one bench name per material, and a coil the jewelcrafter also
   ate would send the player to the smith holding her price (`ItemDef.bench`,
   `item_def.gd:~51-59`).
+- **Pot gems.** Moss Agate, Tide Sapphire and Blood Ruby come only from ambient
+  dungeon pots. They are ordinary saleable `ItemDef.make` merchandise in the
+  at-risk bag, **not** `JewelDb` crafting components and not a second currency.
+  No pot drops magic or grants/refills a draught; the prepared trip budgets in
+  §5 and `docs/METAGAME.md` §1 remain the whole contract.
 - **The rope.** §1.1.
 - **Armour and jewelry art.** Every piece is a number. `docs/SCOPE.md` §1 holds
   armour/jewelry art at 0 and GDD §6.6 gives the reason: four meshes × two paths
@@ -925,10 +928,11 @@ why this is a row rather than a footnote on D4.
 > the charge pickup, on `ArrowBundle`'s pattern and through
 > `Game.add_charges()`; `Urn.holds` gained a `&"charges"` row so the contents
 > stay the placer's decision; and `Dungeon._shortcut_pillar_brace` stands one urn
-> wide of floor 2's doorway and outside `K.BOMB_RADIUS`. **Nothing rolls it** —
-> there is no `charge_chance` and there must not be, for the reason the last
-> paragraph below gives. `tools/directors/charge_supply.gd` walks a hero from an
-> empty pouch to an open shortcut without granting itself a charge anywhere.
+> wide of floor 2's doorway and outside `K.BOMB_RADIUS`. Issue #107 later added
+> a rare single charge to the ambient-pot table, but no `charge_chance` and no
+> ambient roll satisfies this guarantee: `tools/directors/charge_supply.gd`
+> still walks a hero from an empty pouch to an open shortcut using the authored
+> cache without granting itself a charge anywhere.
 > No number in `docs/SCOPE.md` §1 moved: no item row, no new atom (the urn is
 > the atom), no screen, no mechanic.
 

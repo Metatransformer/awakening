@@ -85,6 +85,13 @@ differently on death, which is the entire tension.
 | **The document case** | yes | `Run.cased` — three of the bag's slots (GDD §3.1) |
 | **Permanent upgrades** | yes | `Game.bag_slots`, `sword_bonus`, `armour_level`, hearts |
 
+Coins spilled from dungeon pots go straight to `Game.gold`, never occupy a bag
+line, and therefore survive death. Pot gems take the other lane: they are
+ordinary saleable merchandise in `Run.bag`, so they remain at risk until
+extraction. Ambient pots may also hold small heart, arrow or charge supplies;
+none restores magic or grants a free draught, so the trip budgets in §1 are
+unchanged.
+
 Ingredients are never spent directly. They are sold, and gold buys upgrades.
 That indirection is deliberate: it means a great run is not *automatically*
 progress — you still have to get it home and choose what to spend it on.
@@ -276,12 +283,14 @@ They arrive three ways, and each answers a different kind of empty:
 | Source | Where | What it costs | Answers |
 |---|---|---|---|
 | **The quartermaster** — `ARROWS X10` | Garrison, THE STORES (`supply_db.gd`) | 40 gold (4.0/arrow) | a purse, no bag |
-| **Found** — `ArrowBundle` | Dungeon floors and chests | a short detour | early, poor, and dry |
+| **Found** — `ArrowBundle` | Dungeon floors, chests and pots | a short detour | early, poor, and dry |
 | **Fletched** — `Fletching` | Garrison, Brannoc's forge board | 2 Cracked Flint + 2 Bone Shard → 5 arrows (4.8/arrow) | common saleable drops, no purse |
 
 **Found**: `arrow_chance` on `Dungeon` puts a 6-arrow bundle on the floor of a
 quarter of rooms; `arrow_chance` on `Chest` gives 40% of chests a 10-arrow one
-on top of its picks. The chest roll is deliberately **not** an entry on
+on top of its picks; ambient pots may spill a smaller 3-arrow bundle. All three
+are the same found-supply lane, not new inventory or a fourth economy source.
+The chest roll is deliberately **not** an entry on
 `ItemDb.CHEST_DROPS` — `_lift()` reweights that table with depth, and arrows
 must not get rarer or commoner as you descend. The bow has to keep working at
 the same rate on floor eight as on floor one.
@@ -1055,15 +1064,13 @@ holding on the carrying screen precisely because it cannot be used to change it.
 > stock-you-bought-in-garrison, a HUD counter beside the arrows, never a bag slot.
 > Only the face behind the counter moved.
 >
-> **"Refilled only in the garrison" is now "refilled there, and once on floor 2"**
-> (card #29, 2026-08-11). It is not a softening of the rule above and it is not an arrow
-> supply: **nothing rolls charges into a room or a chest**, and the walk home is
-> still spent with what you bought. There is exactly one `ChargeCache`
-> underground and it is inside the urn braced against floor 2's shortcut, because
-> that door is a cracked pillar and a cracked pillar has no other answer — a
-> player who descended with an empty pouch met a gate he could not open and could
-> not earn (`docs/PUZZLES.md` §0 rule 2, `docs/ITEMS.md` §8 D13). The room
-> supplies the verb it demands. It supplies nothing else.
+> **"Refilled only in the garrison" now has two narrow underground lanes.** The
+> authored `ChargeCache` inside floor 2's shortcut urn is the guarantee: that
+> door is a cracked pillar and a player who descended empty otherwise could not
+> open it (`docs/PUZZLES.md` §0 rule 2, `docs/ITEMS.md` §8 D13). Ambient pots may
+> rarely yield one charge, but that probability never substitutes for the cache
+> and never refills magic or grants a draught. The walk home is still chiefly
+> spent with what the player bought.
 
 The forge sells **permanence**: you buy a rung and it is yours. The alchemist
 sells a **stock** — four glass bottles, and what is in them at the moment you

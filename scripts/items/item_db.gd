@@ -76,6 +76,16 @@ static func _build() -> void:
 	_add(ItemDef.make(&"kings_signet", "King's Signet", 90, R, 2,
 		Color(0.95, 0.86, 0.42), "The Lower Worlds had a king. This is all that is left."))
 
+	# --- Pot gems: merchandise, not jewelcrafting material -------------------
+	# Ambient urn placers are their only source. `make` is load-bearing: these
+	# occupy the Run bag and sell for gold instead of banking at the jewel bench.
+	_add(ItemDef.make(&"moss_agate", "Moss Agate", 8, C, 12,
+		Color(0.36, 0.70, 0.45), "Clouded green stone. Common, but easy to trade."))
+	_add(ItemDef.make(&"tide_sapphire", "Tide Sapphire", 24, U, 8,
+		Color(0.30, 0.56, 0.86), "Blue as deep water under a torch."))
+	_add(ItemDef.make(&"blood_ruby", "Blood Ruby", 46, R, 4,
+		Color(0.84, 0.24, 0.34), "A small red cut with no tool marks on it."))
+
 	# --- Components: what the forge eats -------------------------------------
 	# Four, not five, and deliberately NOT one per upgrade track. A component
 	# only one track wanted would make every drop either a jackpot or litter;
