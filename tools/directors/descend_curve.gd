@@ -109,19 +109,15 @@ func _read_floor(rig) -> void:
 	# The stair is the only thing that makes the next floor reachable, so its
 	# absence is fatal rather than a note.
 	#
-	# Counted OUTSIDE the shortcut landing. Since M4 an authored floor builds two
-	# `Stairs`: the way down, now behind the boss door on `BossLanding` instead of
-	# loose in the deepest room (GDD §5.3), and the shortcut's, on
-	# `ShortcutLanding`, which skips a floor and is a different promise entirely.
-	# "Exactly one stair" was true when there was one kind of stair; the invariant
-	# that survived is "exactly one way DOWN".
-	var stairs := 0
-	for n in dungeon.find_children("*", "Stairs", true, false):
-		if _under(n, "ShortcutLanding"):
-			continue
-		stairs += 1
+	# Count only the canonical DOWN stair. Every entrance now also has an UP stair,
+	# and an authored floor may have a second DOWN stair on `ShortcutLanding` that
+	# deliberately opts out of ordinary ascent with `receives_ascent = false`.
+	var stairs := _canonical_down_stairs(dungeon).size()
 	if stairs != 1:
 		_fail("floor %d has %d ways down, wanted exactly 1" % [Run.level, stairs])
+	var up_stairs := _up_stairs(dungeon).size()
+	if up_stairs != 1:
+		_fail("floor %d has %d ways up, wanted exactly 1" % [Run.level, up_stairs])
 
 	var row := {
 		"level": Run.level,
@@ -139,9 +135,8 @@ func _read_floor(rig) -> void:
 			row["elites"], row["kinds"]])
 
 
-## Is `n` anywhere below a node of this name? Both users of this ask a question
-## about WHERE a thing stands -- which is the only honest way to tell a boss from
-## a monster, or the way down from the shortcut, without a second table saying so.
+## Is `n` anywhere below a node of this name? Boss membership is a question about
+## WHERE a thing stands, not which monster kind it happens to use.
 func _under(n: Node, ancestor: String) -> bool:
 	var at := n.get_parent()
 	while at != null:
@@ -179,9 +174,10 @@ func _take_the_stair(rig) -> bool:
 	if dungeon == null:
 		_fail("no Dungeon on floor %d to take a stair out of" % Run.level)
 		return false
-	var found := dungeon.find_children("*", "Stairs", true, false)
+	var found := _canonical_down_stairs(dungeon)
 	if found.is_empty():
-		_fail("no stair on floor %d -- the run dead-ends here" % Run.level)
+		_fail("no canonical DOWN stair on floor %d -- the run dead-ends here"
+			% Run.level)
 		return false
 
 	var before := Run.level
@@ -189,7 +185,7 @@ func _take_the_stair(rig) -> bool:
 	# deepest room is `mvp_loop`'s question; this director is about what happens
 	# to a run when it goes down, and a pathing failure here would report itself
 	# as a broken curve.
-	(found[0] as Stairs).activate(null)
+	found[0].activate(null)
 
 	# The descent is a scene load behind a fade, so wait for the world rather
 	# than for a frame count -- see the note in mvp_loop._descend about fixed
@@ -202,6 +198,27 @@ func _take_the_stair(rig) -> bool:
 
 	_fail("the stair on floor %d never took: level is still %d" % [before, Run.level])
 	return false
+
+
+## DOWN and `receives_ascent` are the authored contract. The latter excludes the
+## optional shortcut landing without relying on an ancestor name.
+func _canonical_down_stairs(dungeon: Dungeon) -> Array[Stairs]:
+	var found: Array[Stairs] = []
+	for n in dungeon.find_children("*", "Stairs", true, false):
+		var stair := n as Stairs
+		if stair != null and stair.direction == Stairs.Direction.DOWN \
+				and stair.receives_ascent:
+			found.append(stair)
+	return found
+
+
+func _up_stairs(dungeon: Dungeon) -> Array[Stairs]:
+	var found: Array[Stairs] = []
+	for n in dungeon.find_children("*", "Stairs", true, false):
+		var stair := n as Stairs
+		if stair != null and stair.direction == Stairs.Direction.UP:
+			found.append(stair)
+	return found
 
 
 ## The curve itself. Floor 1 versus the deepest floor reached, because a
@@ -311,7 +328,7 @@ func _look_at_the_stair(rig, out: String) -> void:
 	var dungeon := _dungeon(rig)
 	if dungeon == null:
 		return
-	var found := dungeon.find_children("*", "Stairs", true, false)
+	var found := _canonical_down_stairs(dungeon)
 	if found.is_empty():
 		return
 	var down := found[0] as Node3D
