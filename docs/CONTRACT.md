@@ -2656,15 +2656,22 @@ Bus.request_sfx.emit(&"chest_open", global_position)   # id = a file in audio/sf
 `player_died`, `target_acquired`, `run_started`, `run_ended`, `bag_full` — so
 those need no emit at all. Add a row to `Sfx.CUES` rather than a player to a prop.
 
-`reward_revealed` is the one that is **not** in `CUES`, and it cannot be:
-`CUES` is keyed on the signal and this signal carries a TIER as an argument, so
-it has its own table, `Sfx.REWARD_CUES`, keyed `1` and `2` (see
-`RewardVfx.MINOR` / `MAJOR`). It also plays at the reward rather than at the
-hero, because a reward is a place in the room. Both tiers name
-`treasure_spawn` today and that is deliberate rather than a gap — there is one
-take of a chest falling out of nothing, the tiers already differ in the eye and
-in how long they hold the screen, and when a bigger take exists tier 2 is one
-line in that table and nothing else moves.
+`room_cleared` and `reward_revealed` are the two that are **not** in `CUES`, and
+they cannot be: `CUES` is keyed on the signal and each of these carries a grade
+as an argument, so each gets its own table keyed `1` and `2` (see
+`RewardVfx.MINOR` / `MAJOR`) — `Sfx.CLEAR_CUES` for the room being beaten,
+`Sfx.REWARD_CUES` for the prize arriving. `reward_revealed` also plays at the
+reward rather than at the hero, because a reward is a place in the room.
+
+The two tables are four different takes on purpose, because up to four of them
+can land inside two seconds: a miniboss dies, its chamber announces itself
+beaten, and its chest arrives. `CLEAR_CUES` MINOR is short (1.9 s) because it
+fires several times a floor with a MINOR reward landing behind it; MAJOR is
+allowed to be a 3 s fanfare because a chamber falls once or twice a floor.
+**Re-voicing any of them is one line in one table and nothing else moves** —
+which is the point of the tables, and also how `CLEAR_CUES` was missed when the
+rest of the reward vocabulary was re-cut and went on playing a horn out of the
+foundation asset dump long after everything around it had been replaced.
 
 `shield_blocked` is the one that had it the other way round and was corrected:
 `HeroCombat.on_blocked` built a fresh `AudioStreamPlayer3D` per block and freed
@@ -3186,8 +3193,10 @@ Two ways to hold one, and which you use depends on whether there is a room:
 
 - **`RoomWatch`** (`scripts/world/room_watch.gd`) for a room with a pack in it.
   `RoomWatch.attach(room_root, id)` before you spawn, `watch.add(foe)` per body,
-  `watch.cleared` when the last one is gone — and `Bus.room_cleared(id)` on the
-  same frame, which is the emitter that signal never had. It counts rather than
+  `watch.cleared` when the last one is gone — and `Bus.room_cleared(id,
+  RewardVfx.MINOR)` on the same frame, which is the emitter that signal never
+  had. `BossArena` emits the same signal `MAJOR` when its chamber falls. It
+  counts rather than
   scans, because an enemy that chases the hero into the corridor has not been
   beaten and a corpse's node survives its death by about three seconds.
 - **The body's own signal** where the room IS the encounter. The boss arena and
