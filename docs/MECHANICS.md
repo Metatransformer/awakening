@@ -69,14 +69,15 @@ duplicate each item, Echo, relic, recipe, or numerical cap.
 | Change floors | Is another floor worth carrying current exposure deeper, or should I retrace the same live trip toward the entrance? | [METAGAME.md](METAGAME.md) |
 | Ordinary Escape Rope | Can I create enough safety to commit to the hold, channel, and known fee? | [METAGAME.md](METAGAME.md) |
 | Entrance extraction | Is walking back to floor 1's up stair preferable to paying the same settlement through the portable rope? | [METAGAME.md](METAGAME.md) |
-| Extraction outcome | Is banking the full haul and healing worth the gold charge now? | [METAGAME.md](METAGAME.md) |
+| Extraction outcome | Is banking the full haul while carrying current health home worth the gold charge now? | [METAGAME.md](METAGAME.md) |
 | Death outcome | What exposed value was lost, what did the case protect, and what recovery goal follows? | [METAGAME.md](METAGAME.md) |
 | Receipt | Can I attribute the result to the stacks, route, and risks I chose? | [METAGAME.md](METAGAME.md) |
 | Save continuity | Can I stop and resume the current state without turning saving into a rewind? | [METAGAME.md](METAGAME.md) |
 
 Gold, bag contents, case contents, components, and relics remain distinct. The
 ordinary rope always resolves; a poor purse can make extraction expensive but
-cannot trap the player underground.
+cannot trap the player underground. Ordinary extraction preserves current
+health; rest and sleep are the normal garrison recovery seam.
 
 ## Dungeon and puzzles
 

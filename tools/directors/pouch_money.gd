@@ -83,7 +83,16 @@ func run(rig) -> void:
 		blob.contains(str(Game.gold)))
 	_check("the fee to leave is named too",
 		blob.contains("TO LEAVE") and blob.contains(str(Run.extract_charge())))
-	_check("the way out is on this screen", pouch.find_child("Rope", true, false) != null)
+	var rope := pouch.find_child("Rope", true, false) as Button
+	_check("the way out is on this screen", rope != null)
+	if rope != null:
+		rope.grab_focus()
+		await rig.wait_frames(2)
+		said = _all_text(pouch)
+		blob = " ".join(said)
+		await rig.capture("f_01a_rope.png")
+	_check("the rope says wounds come home and sleep recovers them",
+		blob.contains("wounds and all") and blob.contains("Sleep is where you recover"))
 	_check("...and it is gone from the items screen",
 		menu.get_node("Root/Screens/EquipScreen").find_child("Rope", true, false) == null)
 

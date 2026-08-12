@@ -7,7 +7,7 @@ extends Node
 ## The loop:
 ##   enter()    you go down with an empty bag
 ##   collect()  drops and chests fill it
-##   extract()  you pay a fee, get your health back, and keep the bag
+##   extract()  you pay a fee, carry your health home, and keep the bag
 ##   die()      you keep what is in the document case, and nothing else
 ##
 ## Why the fee scales with the bag rather than being flat: a flat fee is free
@@ -194,11 +194,21 @@ func enter(run_seed: int = 0) -> void:
 	if run_seed == 0:
 		run_seed = seed_next
 	seed_next = 0
-	seed_used = run_seed if run_seed != 0 else int(Time.get_unix_time_from_system())
+	seed_used = run_seed if run_seed != 0 else _fresh_seed()
 	rng.seed = seed_used
 	Bus.bag_changed.emit(bag, bag_value())
 	Bus.run_started.emit(seed_used)
 	Bus.level_changed.emit(level)
+
+
+## A wall-clock seed with enough resolution for two runs started in one second.
+## The fallback makes the freshness contract exact even when the clock repeats.
+func _fresh_seed() -> int:
+	var candidate: int = int(Time.get_unix_time_from_system() * 1000000.0) % 0x7fffffff
+	candidate = maxi(candidate, 1)
+	if candidate == seed_used:
+		candidate = 1 if candidate == 0x7ffffffe else candidate + 1
+	return candidate
 
 
 ## Take the stair down. The bag comes with you and so does everything in it --
@@ -389,10 +399,6 @@ func extract() -> bool:
 	# standing on.
 	level = 1
 	Bus.level_changed.emit(level)
-	# Getting your health back is what makes extracting feel like relief rather
-	# than retreat. It is also the only heal in the game, which is what stops a
-	# player from grinding one room forever.
-	Game.heal(Game.max_quarters)
 	Bus.run_ended.emit(true, carried, carried_value)
 	if not banked.is_empty():
 		Bus.components_banked.emit(banked)

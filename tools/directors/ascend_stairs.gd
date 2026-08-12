@@ -135,6 +135,7 @@ func run(rig) -> void:
 	var gold_before := Game.gold
 	var expected_charge := Run.extract_charge()
 	var expected_contents: Dictionary = Run.bag.duplicate(true)
+	var expected_health := Game.quarters
 	up.activate(hero)
 	var receipt_ready: bool = await rig.until(func() -> bool:
 		return not Run.in_dungeon and Flow.ending and _run_end(rig) != null, 8.0)
@@ -154,8 +155,9 @@ func run(rig) -> void:
 	var receipt_contents: Dictionary = summary.get("contents", {})
 	rig.check(_same_counts(receipt_contents, expected_contents),
 		"ASCEND receipt contents differ from the carried bag")
-	rig.check(Game.quarters == Game.max_quarters,
-		"ASCEND shared extraction did not restore health")
+	rig.check(Game.quarters == expected_health,
+		"ASCEND shared extraction changed health: %d -> %d"
+		% [expected_health, Game.quarters])
 	rig.check(Game.magic == Game.max_magic,
 		"ASCEND shared extraction did not restore magic")
 	await rig.capture(out.path_join("ascend_03_receipt.png"))

@@ -228,7 +228,9 @@ charge = min(toll, current_gold)
 
 The rope always works. If the calculated toll exceeds the purse, extraction
 takes all current gold and still brings the haul home. Extraction banks the
-whole bag by item kind and restores full health.
+whole bag by item kind and preserves current health. Rest and sleep are the
+normal garrison recovery seam; purchased bed ranks restore one heart each when
+sleeping.
 
 Death loses the exposed bag, banks the document case, preserves gold and
 permanent progression, and returns the player to the garrison at full health.

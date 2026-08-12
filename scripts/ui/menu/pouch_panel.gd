@@ -741,9 +741,9 @@ func _describe_rope() -> void:
 	# cost", so it has to name the gold that actually goes. When the two differ
 	# the blurb below spells out why, so the smaller number is never a mystery.
 	_detail_value.text = "%d gold" % Run.extract_charge()
-	_detail_blurb.text = "It pulls you home and heals what the dark took. " \
-		+ "The fee is a quarter of what you are carrying, and the fee is why " \
-		+ "the greedy run is a decision."
+	_detail_blurb.text = "It pulls you home, wounds and all. Sleep is where " \
+		+ "you recover. The fee is a quarter of what you are carrying, and the " \
+		+ "fee is why the greedy run is a decision."
 	var warn := _rope_warning()
 	if not warn.is_empty():
 		# The whole purse is a real price and it earns a whole sentence. It is not
