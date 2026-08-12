@@ -61,9 +61,10 @@ Three things are budgeted per TRIP rather than per second, and the arrow back to
 the garrison is the only thing that refills them: the **bottles** you bought
 before you left (§6.6), the **arrows** in the pouch (§4.6), and the **magic** the
 charged spin is priced in (`K.MAX_MAGIC` 48, `K.MAGIC_SPIN` 12 — four spins).
-`RunState.enter/extract/die` fill the blue bar; **descending a floor does not**,
-because taking the stair is the same trip getting longer, and that is the trade
-the stair is there to offer.
+`RunState.enter/extract/die` fill the blue bar; **changing floors in either
+direction does not**, because descending and ascending are the same trip getting
+longer or retracing itself. Neither refills health, magic, bottles, arrows or any
+other trip budget.
 
 Stamina is the counter-example and the reason the distinction is worth naming: it
 comes back on its own, in seconds, so it prices the next *dodge*. A per-trip
@@ -385,10 +386,17 @@ Proof: `tools/directors/heat_flow.gd`.
 
 ## 5. Extraction — the priced decision
 
-The way out is the **Escape Rope** (`scripts/items/escape_rope.gd`): a
-permanent key item, used from the pause menu's **INVENTORY** screen, under THE WAY
-OUT — beside the bag's worth and the purse, because those three numbers are the
-decision and they belong on one screen.
+There are two ways to reach the same priced extraction settlement. The
+**Escape Rope** (`scripts/items/escape_rope.gd`) is the permanent, portable way
+out from anywhere: it is used from the pause menu's **INVENTORY** screen, under
+THE WAY OUT — beside the bag's worth and the purse, because those three numbers
+are the decision and they belong on one screen. The **floor-1 UP stair** is the
+physical entrance exit for a player who walks back to where the trip began.
+Both call `Run.extract`, pay the same charge and produce the same receipt.
+
+An UP stair on a deeper floor is not extraction. It returns to the preceding
+seeded floor with the run, bag, health and trip budgets still live, just as a
+DOWN stair carries those values deeper.
 
 **Superseded 2026-08-08, on the owner's instruction: this was a rune pad you
 stood on and held (`scripts/world/extract_node.gd`, deleted).** The pad made
@@ -400,7 +408,7 @@ it was "is what I am carrying worth the fee".
 The rope is **not consumable**. A stock you can run out of would strand a
 player underground, and being stranded is the one thing this section rules out
 below: you are never trapped. The fee is the price of leaving; the rope is just
-where the button lives.
+the portable place where the button lives.
 
 The pad's two real properties survive the move, because everything below is
 built on them:

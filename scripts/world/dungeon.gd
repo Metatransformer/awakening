@@ -38,11 +38,12 @@ extends Node3D
 ## here either: `FloorDb.vault_key(4)` is empty because there is no floor 5, and
 ## an anchor with no key is not placed.
 ##
-## **Unauthored floors are unchanged.** The Long Descent's row authors no anchors
-## (`FloorDb.ANCHORS_ENDLESS` is empty), so the deepest room gets its `Stairs` and
-## its wraith exactly as it did before the Descent existed. `Stairs` keeps its job
-## on every floor: behind a boss door and behind a shortcut door there is one, in
-## a short landing, and pressing it is still the commitment.
+## **Unauthored floors keep their existing way down.** The Long Descent's row
+## authors no anchors (`FloorDb.ANCHORS_ENDLESS` is empty), so the deepest room gets its `Stairs` and
+## its wraith exactly as it did before the Descent existed. DOWN `Stairs` keeps
+## its job on every floor: behind a boss door and behind a shortcut door there is
+## one, in a short landing, and pressing it is still the commitment. The entrance
+## UP stair is the separate backtracking seam present on every generated floor.
 ##
 ## **The tint field is deliberately NOT read.** The zone/colour work is parked
 ## behind SCOPE §4.1's gate; a floor is its shape and its roster this round.
@@ -76,6 +77,12 @@ const DIRS := {
 	&"w": Vector2i(-1, 0),
 	&"e": Vector2i(1, 0),
 }
+
+## Entrance +Z is always the upward flight. One different cardinal side is
+## chosen for the shortcut before the tree grows, leaving the other two as the
+## only sides from which generated rooms may bud.
+const ENTRANCE_UP_SIDE: StringName = &"s"
+const ENTRANCE_UP_WALL_INSET := 1.55
 
 ## The order anchors are resolved in, and it is load-bearing rather than
 ## alphabetical: the boss door claims the deepest room's far wall first, so the
@@ -248,6 +255,7 @@ var _maze_rolled: bool = false
 
 var _rng: RandomNumberGenerator
 var _seed_salt: int = 0
+var _entrance_shortcut_side: StringName = &"n"
 ## Grid cells spoken for by something built OUTSIDE the room tree -- a landing, a
 ## vault. Nothing may bud into one and no later anchor may point through one.
 var _reserved: Dictionary = {}
@@ -328,14 +336,14 @@ func _plan() -> void:
 	}
 	var placed: Array[Vector2i] = [entrance]
 
-	# **One cell beside the entrance is held empty, and it is a fix rather than a
-	# nicety.** The shortcut is anchored at the entrance by every row of
+	# **Two distinct sides beside the entrance are held empty.** South/+Z belongs
+	# to the UP stair; one of the other three belongs to the shortcut, which is
+	# anchored at the entrance by every authored row of
 	# `FloorDb.ANCHORS` -- *"a shortcut you have to cross the floor to reach is not a
 	# shortcut"* -- and its landing is `LAND_STUB + LAND_SIZE` = 13 m of stone driven
-	# out through a blank wall. `_pick_side` asks `_clear_run` whether that room is
-	# there and then takes the best wall it can find WHETHER OR NOT the clearance
-	# exists, so a tree that spent all four of the entrance's walls left the shortcut
-	# nowhere to go and the landing was laid inside the neighbour.
+	# out through a blank wall. The fixed south reservation keeps that landing and
+	# every generated corridor away from the upward flight; choosing the shortcut
+	# side here keeps its own landing out of the room tree too.
 	#
 	# Measured, on floor 2 of seed-as-shipped: room (0,0) had doors s, n and w, the
 	# only free wall was e, and room (1,0) is a 27 m chamber whose west face is 4.5 m
@@ -345,11 +353,13 @@ func _plan() -> void:
 	# frame; the hero was simply jammed in a corner of somebody else's masonry.
 	#
 	# Held here rather than patched in `_pick_side`, because by the time that runs
-	# the rooms exist and there is nothing left to choose. One cell is enough:
+	# the rooms exist and there is nothing left to choose. One cell per side is enough:
 	# `_reach_for` answers 1 for a 16 m room and a 13 m landing at `spacing` 26.
-	var keep_dirs: Array = DIRS.keys()
-	var keep: StringName = keep_dirs[_rng.randi_range(0, keep_dirs.size() - 1)]
-	var kept: Vector2i = entrance + DIRS[keep]
+	var shortcut_dirs: Array[StringName] = [&"n", &"w", &"e"]
+	_entrance_shortcut_side = shortcut_dirs[
+		_rng.randi_range(0, shortcut_dirs.size() - 1)]
+	var kept_up: Vector2i = entrance + DIRS[ENTRANCE_UP_SIDE]
+	var kept_shortcut: Vector2i = entrance + DIRS[_entrance_shortcut_side]
 
 	var guard := 0
 	while placed.size() < room_count and guard < 400:
@@ -360,7 +370,8 @@ func _plan() -> void:
 
 		var options: Array[StringName] = []
 		for d: StringName in DIRS:
-			if rooms.has(from + DIRS[d]) or from + DIRS[d] == kept:
+			if rooms.has(from + DIRS[d]) or from + DIRS[d] == kept_up \
+					or from + DIRS[d] == kept_shortcut:
 				continue
 			options.append(d)
 		if options.is_empty():
@@ -564,6 +575,9 @@ func path_to(cell: Vector2i) -> Array[Vector2i]:
 func _plan_anchors() -> void:
 	placements.clear()
 	_reserved.clear()
+	# Anchor planning must see the same south reservation as tree planning. In
+	# particular, the shortcut's blank-wall search may never claim the UP wall.
+	_reserve(entrance, ENTRANCE_UP_SIDE, 1)
 	var table := FloorDb.anchors(Run.level)
 	if table.is_empty():
 		return
@@ -584,7 +598,9 @@ func _plan_anchors() -> void:
 				"node": null}
 			continue
 		var reach := _reach_for(id, cell)
-		var side := _pick_side(cell, StringName(rule.get("side", &"blank")), reach)
+		var side := _entrance_shortcut_side if id == &"shortcut_door" \
+			and cell == entrance else _pick_side(cell,
+				StringName(rule.get("side", &"blank")), reach)
 		if side == &"":
 			push_warning("dungeon: no wall for anchor %s in room %s" % [id, cell])
 			continue
@@ -998,6 +1014,17 @@ func _build_room(cell: Vector2i) -> void:
 
 	_build_room_torches(root, cell, doors, anchors, size * 0.5)
 
+	# Exactly one UP stair, against the entrance's reserved south wall. Its local
+	# +Z runs toward the wall and its open -Z end faces the room. At this inset the
+	# first tread begins north of z=5, leaving more than a metre between collision
+	# and the authored hero spawn at z=3.6 while keeping the prompt in reach.
+	if cell == entrance:
+		var up := Stairs.new()
+		up.name = "Up"
+		up.direction = Stairs.Direction.UP
+		up.position = Vector3(0.0, 0.0, size * 0.5 - ENTRANCE_UP_WALL_INSET)
+		root.add_child(up)
+
 
 ## One side of a room: a solid run, or two runs flanking a doorway.
 func _build_side(root: Node3D, cell: Vector2i, d: StringName, yaw: float,
@@ -1344,7 +1371,7 @@ func _place_boss(id: StringName) -> void:
 	arena.set(&"boss_offset", -facing * 5.0)
 	root.add_child(arena)
 
-	_build_landing(spot, cell, p["side"], "BossLanding")
+	_build_landing(spot, cell, p["side"], "BossLanding", true)
 
 
 ## Beside the boss door, carrying the floor's `deep_chest` relic.
@@ -1472,7 +1499,7 @@ func _place_shortcut(id: StringName) -> void:
 				pool[0]):
 			return
 
-	var landing := _build_landing(spot, cell, p["side"], "ShortcutLanding")
+	var landing := _build_landing(spot, cell, p["side"], "ShortcutLanding", false)
 	_land_shortcut_rewards(landing, door)
 
 
@@ -2691,7 +2718,7 @@ func _place_locked(p: Dictionary, node_name: String, key: StringName,
 ## shortcut's landing and want to be authored in the same door-space everything
 ## else in here is (`_land_shortcut_rewards`). `_place_boss` ignores it.
 func _build_landing(spot: Dictionary, cell: Vector2i, side: StringName,
-		node_name: String) -> Node3D:
+		node_name: String, receives_ascent: bool) -> Node3D:
 	var root := Node3D.new()
 	root.name = node_name
 	root.position = centre_of(cell) + spot["pos"]
@@ -2743,6 +2770,8 @@ func _build_landing(spot: Dictionary, cell: Vector2i, side: StringName,
 	# door, which is this node's -Z. So it needs no turn of its own.
 	var down := Stairs.new()
 	down.name = "Down"
+	down.receives_ascent = receives_ascent
+	down.arrival_room = StringName("Room_%d_%d" % [cell.x, cell.y])
 	down.position = Vector3(0.0, 0.0, mid + 0.6)
 	root.add_child(down)
 
@@ -2831,8 +2860,8 @@ func _plan_maze() -> void:
 ## spoken for and this only has to read it.
 ##
 ## The entrance and the deepest room are excluded for reasons of their own: the
-## entrance is deliberately empty, and `deepest` is where the good chest and the
-## boss live.
+## entrance is reserved for its UP stair and shortcut, and `deepest` is where the
+## good chest and the boss live.
 ##
 ## `forced` skips the roll. It is what a director calls, and after `_plan_maze`
 ## has run it answers the room that was actually widened -- asking a second time
@@ -3105,9 +3134,9 @@ func _populate() -> void:
 			continue
 		_add_room_trigger(root, cell)
 
-		# The entrance room stays empty. It used to hold the extraction pad; the
-		# way out is the Escape Rope now (scripts/items/escape_rope.gd),
-		# so there is no room you have to walk back to.
+		# The entrance gets no population. Its UP stair is physical backtracking
+		# (and EXIT on floor 1); the Escape Rope remains the portable extraction
+		# option that works anywhere on the floor.
 		if cell == entrance:
 			continue
 		# The boss's chamber holds the boss, its chest and nothing else. A
@@ -3205,6 +3234,8 @@ func _populate() -> void:
 		# stair is in the landing behind that door (GDD §5.1).
 		if cell == deepest and not placements.has(&"boss_door"):
 			var down := Stairs.new()
+			down.name = "Down"
+			down.arrival_room = StringName(root.name)
 			down.position = Vector3(0.0, 0.0, size * 0.26)
 			root.add_child(down)
 			Atlas.mark(cell, Atlas.M_STAIRS)

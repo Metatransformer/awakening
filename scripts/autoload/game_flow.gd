@@ -35,6 +35,11 @@ const HOLD := 0.45
 ## takes eight times a run turns into a wait. [tune]
 const LOAD_HOLD := 1.30
 
+enum ArrivalIntent {
+	DEFAULT,
+	DOWN_STAIRS,
+}
+
 ## True while a transition is in flight. Everything that could start another one
 ## checks this -- a second extract press during the fade would re-enter
 ## garrison.
@@ -375,6 +380,24 @@ func _place_hero(dest: Dictionary) -> void:
 		hero.global_rotation.y = float(dest["yaw"])
 
 
+## Place an ascending hero on the room-facing side of the canonical DOWN stair.
+## Dungeon publishes exactly one ordinary-descent stair through this group and
+## opts the optional shortcut landing out before either enters the tree.
+func _place_hero_at_down_stairs() -> void:
+	var stairs := get_tree().get_first_node_in_group(Stairs.ARRIVAL_GROUP) as Stairs
+	var hero := get_tree().get_first_node_in_group(&"player") as Hero
+	if stairs == null or hero == null:
+		push_warning("Flow: ascent arrival could not find the DOWN stair or hero")
+		return
+	hero.global_position = stairs.arrival_position()
+	var heading := stairs.arrival_heading()
+	hero.facing_yaw = atan2(heading.x, heading.z)
+	hero.global_rotation.y = hero.facing_yaw + PI
+	var room := stairs.arrival_room_id()
+	if room != &"":
+		Saves.current_room = room
+
+
 # --- Entry points -----------------------------------------------------------
 
 func enter_dungeon(run_seed: int = 0) -> void:
@@ -420,6 +443,19 @@ func descend() -> void:
 		return
 	Run.descend_floor()
 	_go(DUNGEON, 0.0)
+
+
+## Go back one generated floor without settling the run. Floor 1 is the surface
+## seam instead: it uses `Run.extract()` itself, preserving the fee, healing,
+## banking and receipt path shared with the portable Escape Rope.
+func ascend() -> void:
+	if busy or ending or not Run.in_dungeon:
+		return
+	if Run.level <= 1:
+		Run.extract()
+		return
+	Run.ascend_floor()
+	_go(DUNGEON, 0.0, {}, ArrivalIntent.DOWN_STAIRS)
 
 
 ## Fade to black, run `during`, fade back — without changing scenes.
@@ -567,9 +603,10 @@ func _show_ending() -> void:
 # --- Transition -------------------------------------------------------------
 
 ## `dest` is a load's `{scene, room}` plus a proven optional `pos` / `yaw`, and
-## empty for every other transition — see the placement below for why it is a
-## parameter here rather than something the caller does after the `await`.
-func _go(path: String, hold: float, dest: Dictionary = {}) -> void:
+## empty for every other transition. `arrival` is Flow's internal generated-floor
+## seam and never changes ordinary save placement.
+func _go(path: String, hold: float, dest: Dictionary = {},
+		arrival: ArrivalIntent = ArrivalIntent.DEFAULT) -> void:
 	busy = true
 	Prompt.blocked = true
 	if hold > 0.0:
@@ -583,9 +620,9 @@ func _go(path: String, hold: float, dest: Dictionary = {}) -> void:
 	# garrison is the place you already know; the floor is the one that needs
 	# saying.
 	#
-	# `Run.level` is correct HERE because both callers move the run before they
-	# call this -- `Run.enter()` resets to 1 and `Run.descend_floor()` increments
-	# -- which is also why the card can be built once and never updated.
+	# `Run.level` is correct HERE because every floor-changing caller moves the run
+	# before it calls this -- entering resets to 1, descent increments, and ascent
+	# decrements -- which is also why the card can be built once and never updated.
 	var card := path == DUNGEON
 	if card:
 		_raise_card()
@@ -627,6 +664,8 @@ func _go(path: String, hold: float, dest: Dictionary = {}) -> void:
 	# awaiting `_go`, which is one frame into the fade-in.
 	if not dest.is_empty():
 		_place_hero(dest)
+	elif arrival == ArrivalIntent.DOWN_STAIRS:
+		_place_hero_at_down_stairs()
 
 	# The read. Deliberately AFTER the scene is built rather than in parallel with
 	# building it: the hold is for the player, and a hold that overlapped the work
@@ -662,10 +701,9 @@ func _go(path: String, hold: float, dest: Dictionary = {}) -> void:
 		tin.tween_property(_veil, "color:a", 0.0, FADE_IN)
 
 	# The autosave, and it is EVERY transition rather than a flag per caller.
-	# There are exactly four ways through this function -- into the dungeon, down
-	# a floor, home with the fee paid, home in a box -- and all four are moments
-	# the player would be furious to replay. A rule with no exceptions also
-	# cannot be forgotten by the fifth caller.
+	# Entering, changing floors, loading, extracting and dying are all moments the
+	# player would be furious to replay. A rule with no exceptions also cannot be
+	# forgotten by the next caller.
 	#
 	# Here at the END, not before the fade, for two reasons. `Saves.save` reads
 	# the hero's position out of the live tree, and during the fade that hero is

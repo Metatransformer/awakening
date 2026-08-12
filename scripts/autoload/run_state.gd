@@ -220,6 +220,18 @@ func descend_floor() -> void:
 	Bus.level_changed.emit(level)
 
 
+## Take the stair up without ending the run. This is the exact inverse of a
+## descent above floor 1: all per-trip state stays live, while the destination
+## floor starts with fresh depth and visited-room state.
+func ascend_floor() -> void:
+	if not in_dungeon or level <= 1:
+		return
+	level -= 1
+	depth = 0
+	visited_rooms.clear()
+	Bus.level_changed.emit(level)
+
+
 ## The seed for the floor you are standing on. Same run seed plus same level
 ## always builds the same floor, so a bug two floors down is reproducible from
 ## the one number the run reports.
@@ -322,10 +334,10 @@ func _restore_counts(raw: Variant) -> Dictionary[StringName, int]:
 	return restored
 
 
-## Teleport out. Returns false only when there is no run to leave.
+## Settle an extraction. Returns false only when there is no run to leave.
 ##
 ## **It cannot fail on money.** The fee is capped at the purse (`extract_charge`),
-## so a toll bigger than your gold takes all of it and the rope still works. The
+## so a toll bigger than your gold takes all of it and extraction still works. The
 ## old version refused, and refusing was the one outcome the design never wanted:
 ## the fee scales with the bag, so the player it stopped was the player holding
 ## the best run of the night, and it stopped them with no way to comply --
