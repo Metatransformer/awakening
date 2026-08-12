@@ -342,22 +342,23 @@ func _descend(rig) -> bool:
 		Prompt.focus.prompt if Prompt.focus != null else "<none>"])
 	await rig.capture(out.path_join("m_07_gate.png"))
 
-	# The garrison threshold is a deliberate hold. It now opens onto the authored
-	# Outskirts approach; older builds went directly to the dungeon, so keep that
-	# route valid for snapshots while proving the current second threshold too.
+	# The compound gate now opens onto the authored outskirts rather than
+	# teleporting through the surface journey.
 	await rig.hold_seconds(["interact"], 1.3)
-	var left_garrison: bool = await rig.until(func() -> bool:
-		return Run.in_dungeon or rig.scene() is GarrisonOutskirts, 10.0)
-	if not left_garrison:
-		print("MVP FAIL holding DEPART did not leave the garrison")
+	var reached_outskirts: bool = await rig.until(func() -> bool:
+		return rig.scene() is GarrisonOutskirts, 10.0)
+	if not reached_outskirts:
+		print("MVP FAIL holding DEPART did not open the outskirts")
 		return false
-	if rig.scene() is GarrisonOutskirts:
-		var outskirts := rig.scene() as GarrisonOutskirts
-		if not await _approach(rig, outskirts.sunken_cut,
-				outskirts.sunken_cut.global_position + Vector3(0.0, 0.0, 1.8),
-				outskirts.sunken_cut.global_position):
-			return false
-		await rig.hold_seconds(["interact"], 1.3)
+	var outskirts: GarrisonOutskirts = rig.scene() as GarrisonOutskirts
+	await rig.wait_frames(30)
+	await rig.capture(out.path_join("m_08_outskirts.png"))
+	if not await _approach(rig, outskirts.sunken_cut,
+			outskirts.sunken_cut.global_position + Vector3(0.0, 0.0, 1.8)):
+		return false
+	print("MVP cut focus=%s" % [
+		Prompt.focus.prompt if Prompt.focus != null else "<none>"])
+	await rig.hold_seconds(["interact"], 1.3)
 	var arrived: bool = await rig.until(
 		func() -> bool: return Run.in_dungeon and _dungeon(rig) != null, 10.0)
 	await rig.wait_frames(60)
@@ -365,7 +366,7 @@ func _descend(rig) -> bool:
 		Run.in_dungeon, rig.scene().name])
 	await rig.capture(out.path_join("m_08_arrived.png"))
 	if not arrived:
-		print("MVP FAIL holding DESCEND for 1.3 s did not enter the dungeon")
+		print("MVP FAIL holding DESCEND at the Sunken Cut did not open the dungeon")
 	return arrived
 
 

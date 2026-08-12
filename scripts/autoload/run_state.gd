@@ -1035,6 +1035,50 @@ func _case_trim() -> void:
 			cased[id] = have
 
 
+## Remove up to `requested_count` from the one displayed case or hold cell the
+## player selected. The region is authoritative: dropping a loose stack cannot
+## reach the packed count of the same id, while dropping a packed stack removes
+## that same count from both `cased` and the containing bag total.
+##
+## The returned multiplier carries this slice's proportional Heat premium back
+## onto the ordinary world pickup. Recollecting it therefore rounds through the
+## same `collect` arithmetic instead of minting a second premium.
+func drop_stack(id: StringName, requested_count: int,
+		from_case: bool) -> Dictionary[StringName, Variant]:
+	var dropped: Dictionary[StringName, Variant] = {}
+	if id == &"" or requested_count <= 0:
+		return dropped
+	var def := ItemDb.get_def(id)
+	if def == null:
+		return dropped
+	var available: int = in_case(id) if from_case else in_hold(id)
+	if available <= 0:
+		return dropped
+
+	var n: int = mini(requested_count, available)
+	var base := 0 if RelicDb.is_relic(id) or def.value <= 0 else def.value * n
+	var share := _premium_share(base)
+	var heat_mult := 1.0 + float(share) / float(base) if base > 0 else 1.0
+	var have: int = bag.get(id, 0)
+	if n >= have:
+		bag.erase(id)
+	else:
+		bag[id] = have - n
+	if from_case:
+		var packed: int = cased.get(id, 0)
+		if n >= packed:
+			cased.erase(id)
+		else:
+			cased[id] = packed - n
+	_case_trim()
+	premium = maxi(0, premium - share)
+	Bus.bag_changed.emit(bag, bag_value())
+	dropped[&"id"] = id
+	dropped[&"count"] = n
+	dropped[&"heat_mult"] = heat_mult
+	return dropped
+
+
 ## Burn `count` of `id` out of the bag without selling it. Returns how many were
 ## actually taken, which is 0 when the bag is short -- the caller decides whether
 ## that is a beep or a sentence.

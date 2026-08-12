@@ -19,6 +19,9 @@ extends Node3D
 ## 1.52 m — a greatsword — which is exactly the kind of error that looks like an
 ## art problem and is really a transform problem.
 
+const MAT_WOOD := preload("res://assets/materials/mat_wood.tres")
+const MAT_IRON := preload("res://assets/materials/mat_iron.tres")
+
 ## What the player asked for. Deliberately coarser than Hero.Swing: WHICH light
 ## swing a LIGHT becomes — step 1, 2 or 3 — is this script's decision, made from
 ## the chain state. Buffering an Intent rather than a Swing is what lets a press
@@ -453,8 +456,8 @@ var _hero: Hero
 var _skel: Skeleton3D
 ## The mounted models. Public so a director can sweep their placement.
 var sword: Node3D
-## The ordinary light-combo ribbon. Public so its proof director can distinguish
-## a real LIGHT1/2/3 stroke from every other move that happens to use a sword.
+## The water-sheet sword ribbon. Public so its proof director can distinguish
+## each accepted stroke from moves that happen to use the same sword or clip.
 var slash_trail: SwordSlashTrail
 ## The same blade, on his hip. Exactly one of this and `sword` is visible, and
 ## the pair is what makes "the bow is out" read as a place the sword WENT rather
@@ -471,12 +474,16 @@ var sword_stow: Node3D
 var shield: Node3D
 var bow: Node3D
 var hookshot: Node3D
+## Utility-only right-hand mount. It has no item id and is never read by the
+## weapon cycling code below.
+var woodsman_axe: Node3D
 ## id -> {"hand": Node3D, "stow": Node3D}. Exactly one of the pair is visible.
 var _items: Dictionary = {}
 ## Exact mounted-model visibility while a presentation temporarily clears the
 ## hero's silhouette. Kept here because the sockets are children of `_skel`, not
 ## of this component, so hiding `HeroCombat` itself does not hide the gear.
 var _presentation_visibility: Dictionary = {}
+var _woodsman_visibility: Dictionary = {}
 var _hitbox: Area3D
 var _swing_t: float = -1.0
 ## The numbers of the swing currently in flight, captured when it starts. A
@@ -741,6 +748,7 @@ func _mount_loadout() -> void:
 		&"mixamorig_Spine2", Vector3(0.0, 0.06, -0.09), Vector3(0.0, 0.0, 28.0))
 	hookshot = _items[&"hookshot"]["hand"]
 	bow = _items[&"bow"]["hand"]
+	woodsman_axe = _mount_woodsman_axe()
 	_show_equipped()
 
 
@@ -785,6 +793,33 @@ func set_presentation_hidden(hidden: bool) -> void:
 		if is_instance_valid(model):
 			model.visible = bool(_presentation_visibility[model])
 	_presentation_visibility.clear()
+
+
+## Temporarily replace every ordinary mounted loadout model with the utility
+## axe, restoring the exact visibility snapshot when the chop commitment ends.
+func set_woodsman_axe_visible(visible: bool) -> void:
+	if woodsman_axe == null:
+		return
+	if visible:
+		if woodsman_axe.visible:
+			return
+		_woodsman_visibility.clear()
+		for model: Node3D in _presentation_models():
+			_woodsman_visibility[model] = model.visible
+			model.visible = false
+		woodsman_axe.visible = true
+		if blocking:
+			blocking = false
+			_hero.set_blocking(false)
+			Bus.guard_changed.emit(false)
+		return
+	if not woodsman_axe.visible:
+		return
+	woodsman_axe.visible = false
+	for model: Node3D in _woodsman_visibility:
+		if is_instance_valid(model):
+			model.visible = bool(_woodsman_visibility[model])
+	_woodsman_visibility.clear()
 
 
 func _presentation_models() -> Array[Node3D]:
@@ -852,6 +887,7 @@ func _show_equipped() -> void:
 		sword.visible = drawn
 	if sword_stow != null:
 		sword_stow.visible = not drawn
+	_hide_loadout_for_woodsman()
 
 
 ## The left hand. Only the shield has a model, so anything else empties the arm
@@ -865,6 +901,60 @@ func _show_left(left: StringName) -> void:
 		# bowstring. You cannot draw a bow with a shield strapped to the hand that
 		# holds it, so the shield comes off for as long as the bow is out.
 		shield.visible = left == &"shield" and equipped != &"bow"
+	_hide_loadout_for_woodsman()
+
+
+func _hide_loadout_for_woodsman() -> void:
+	if woodsman_axe == null or not woodsman_axe.visible:
+		return
+	for model: Node3D in _presentation_models():
+		model.visible = false
+
+
+## Primitive geometry gives the utility axe a known pommel/grip convention:
+## origin in the fist, handle and head along +Y like WeaponModels' swords.
+func _mount_woodsman_axe() -> Node3D:
+	var idx := _skel.find_bone(&"mixamorig_RightHand")
+	if idx < 0:
+		push_error("HeroCombat: no bone 'mixamorig_RightHand' on the rig")
+		return null
+
+	var socket := BoneAttachment3D.new()
+	socket.name = &"Socket_WoodsmanAxe"
+	socket.bone_name = "mixamorig_RightHand"
+	socket.bone_idx = idx
+	_skel.add_child(socket)
+
+	var holder := Node3D.new()
+	holder.name = &"WoodsmanAxe"
+	holder.position = Vector3(0.0, 0.04, 0.02)
+	holder.rotation_degrees = Vector3(-6.0, 6.0, -90.0)
+	var world_scale := socket.global_transform.basis.get_scale()
+	var scale_mean := (world_scale.x + world_scale.y + world_scale.z) / 3.0
+	if scale_mean > 0.0001:
+		holder.scale = Vector3.ONE / scale_mean
+
+	_axe_box(holder, &"Handle", MAT_WOOD, Vector3(0.055, 0.84, 0.055),
+		Vector3(0.0, 0.16, 0.0))
+	_axe_box(holder, &"Poll", MAT_IRON, Vector3(0.34, 0.17, 0.10),
+		Vector3(0.07, 0.53, 0.0))
+	_axe_box(holder, &"Blade", MAT_IRON, Vector3(0.18, 0.14, 0.045),
+		Vector3(0.30, 0.52, 0.0))
+	holder.visible = false
+	socket.add_child(holder)
+	return holder
+
+
+func _axe_box(parent: Node3D, node_name: StringName, material: Material,
+		size: Vector3, position: Vector3) -> void:
+	var instance := MeshInstance3D.new()
+	instance.name = node_name
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	instance.mesh = mesh
+	instance.material_override = material
+	instance.position = position
+	parent.add_child(instance)
 
 
 ## Attach a weapon model to `bone`, undoing the rig's scale so the model keeps
@@ -1011,7 +1101,8 @@ func _physics_process(delta: float) -> void:
 	# out of the dungeon is not a thing that should typecheck. The SHIELD is the
 	# exception and is handled below -- guarding through the channel is the one
 	# defence he has left while rooted.
-	var locked := Prompt != null and Prompt.blocked
+	var locked := (Prompt != null and Prompt.blocked) \
+		or (woodsman_axe != null and woodsman_axe.visible)
 	var leaving := _hero.rope != null and _hero.rope.active()
 
 	# The shield is held, not toggled, and it drops the moment you commit to
@@ -1627,6 +1718,12 @@ func _begin(intent: int) -> void:
 			# before `request_slam` so a refused slam is not also a refund problem,
 			# and the spend is after it so a slam refused for height costs nothing.
 			if _can_swing() and _hero.request_slam():
+				# The dive clip is scaled to this measured commit-to-contact interval.
+				# Sample all of it: unlike ordinary swings, the airborne strike has no
+				# narrower damage slice, and held-heavy retries are refused by SLAM.
+				if slash_trail != null:
+					slash_trail.begin_stroke(
+						_hero.slam_strike_time, Vector2(0.0, 1.0), true)
 				Game.spend_stamina(K.STAMINA_SLAM, true)
 		Intent.SPIN:
 			_spin_swing()

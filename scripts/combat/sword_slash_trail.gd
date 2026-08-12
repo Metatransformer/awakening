@@ -37,8 +37,8 @@ const SAMPLE_MEMORY := 0.20
 ## glance, then every remaining section is gone.
 const FOLLOW_THROUGH := 0.083
 
-## Public proof seam. A serial advances only when HeroCombat accepts an ordinary
-## light swing. `section_count` is the bounded sampled history, while
+## Public proof seam. A serial advances only when HeroCombat accepts a named
+## sword stroke. `section_count` is the bounded sampled history, while
 ## `render_section_count` exposes the denser curve used to draw it.
 var stroke_serial: int = 0
 var section_count: int = 0
@@ -76,8 +76,9 @@ func bind(blade_holder: Node3D) -> void:
 	_blade = blade_holder
 
 
-## Begin one accepted LIGHT1/2/3 stroke. `active_window` is the same fractional
-## slice that owns sword damage, so the picture never leads the live blade.
+## Begin one accepted sword stroke. `active_window` is the fractional slice the
+## caller owns: ordinary attacks pass their damage window, while the air slam
+## passes its full measured commit-to-contact interval.
 func begin_stroke(duration: float, active_window: Vector2,
 		finisher: bool = false) -> void:
 	if _blade == null or not is_instance_valid(_blade):

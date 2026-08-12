@@ -1,6 +1,6 @@
 class_name GarrisonOutskirts
 extends Node3D
-## A short authored descent between the garrison shelf and the Sunken Cut.
+## An open authored clearing between the garrison shelf and the Sunken Cut.
 ## Geometry is primitive and programmatic on purpose: this scene owns the route,
 ## collision, silhouettes, and ports while the shared surface layer owns sky,
 ## light, and atmosphere.
@@ -11,40 +11,55 @@ const MAT_CLIFF := preload("res://assets/materials/mat_wall_sunlit.tres")
 const MAT_DARK_STONE := preload("res://assets/materials/mat_wall.tres")
 const MAT_WOOD := preload("res://assets/materials/mat_wood.tres")
 const MAT_IRON := preload("res://assets/materials/mat_iron.tres")
-const TREE_LARGE: PackedScene = preload("res://assets/valenfeld/forest/tree-large.glb")
-const TREE_SHRUB: PackedScene = preload("res://assets/valenfeld/forest/tree-shrub.glb")
+const PINE_GIANT: PackedScene = preload("res://assets/valenfeld/forest/pine_giant.glb")
+const MAPLE_GIANT: PackedScene = preload("res://assets/valenfeld/forest/maple_giant.glb")
 
-const PATH_WIDTH := 4.6
-const CORRIDOR_WIDTH := 10.5
+const PATH_WIDTH := 7.2
 const GROUND_DEPTH := 0.9
-const CLIFF_THICKNESS := 6.0
-const CLIFF_HEIGHT := 9.6
 
-## 79.4 m of authored switchback. Explicit points keep ports, collision, and
-## visual wayfinding reproducible without coupling them to an RNG call order.
+## The critical route is a direct 72.5 m descent. Explicit points keep the
+## gate, clearing landmark, and dungeon mouth legible to tools and directors.
 const PATH_POINTS: Array[Vector3] = [
 	Vector3(0.0, 8.0, 32.0),
-	Vector3(-4.5, 7.0, 23.0),
-	Vector3(-8.0, 5.8, 13.0),
-	Vector3(-5.5, 4.6, 4.0),
-	Vector3(2.5, 3.4, -5.0),
-	Vector3(8.0, 2.3, -15.0),
-	Vector3(5.0, 1.3, -27.0),
+	Vector3(0.0, 6.3, 12.0),
+	Vector3(1.0, 3.5, -12.0),
 	Vector3(3.0, 0.6, -40.0),
 ]
 
-## x/y/z are authored ground positions; w is a small silhouette scale change.
-const TREE_SPECS: Array[Vector4] = [
-	Vector4(-2.0, 5.65, 14.0, 0.84),
-	Vector4(-10.0, 4.65, 5.0, 1.02),
-	Vector4(2.2, 1.85, -20.0, 1.05),
-	Vector4(8.8, 1.05, -30.0, 0.82),
+## Each sloped slab is broad enough to be a clearing rather than a corridor.
+const GROUND_WIDTHS: Array[float] = [40.0, 44.0, 38.0]
+const CLEARING_LANDMARK_POSITION := Vector3(-2.5, 6.3, 11.5)
+const BLOCKED_SPUR_START := Vector3(2.4, 5.0, 1.5)
+const BLOCKED_SPUR_END := Vector3(19.0, 4.45, 1.5)
+const BLOCKED_BARRICADE_POSITION := Vector3(15.4, 4.55, 1.5)
+
+## Two clustered stands make ten independently cuttable trees. The two source
+## models use radically different authored units, so their visual scales are
+## explicit per instance rather than hidden in HarvestTree.
+const TREE_POSITIONS: Array[Vector3] = [
+	Vector3(-12.0, 7.35, 24.0),
+	Vector3(-17.5, 7.25, 23.0),
+	Vector3(-14.2, 6.85, 18.0),
+	Vector3(-19.0, 6.55, 15.0),
+	Vector3(-15.2, 5.95, 9.0),
+	Vector3(-17.2, 5.65, 6.5),
+	Vector3(-19.0, 5.2, 2.5),
+	Vector3(-13.8, 5.05, 1.0),
+	Vector3(-17.6, 4.65, -2.0),
+	Vector3(-15.4, 4.35, -5.0),
 ]
+const TREE_YAWS: Array[float] = [
+	0.12, 1.04, 2.18, 0.62, 2.82, 1.57, 0.35, 2.44, 1.91, 0.88,
+]
+const TREE_VISUAL_SCALES: Array[float] = [
+	0.0054, 0.0050, 6.8, 0.0057, 0.0049, 0.0055, 0.0052, 7.2, 0.0058, 0.0051,
+]
+const PINE_TREE_INDICES: Array[int] = [2, 7]
 
 var garrison_gate: SurfaceTransition
 var sunken_cut: SurfaceTransition
 var blocked_path: SurfaceTransition
-var timber_yard: TimberYard
+var harvest_trees: Array[HarvestTree] = []
 
 var _built: bool = false
 
@@ -68,12 +83,14 @@ func port(id: StringName) -> Transform3D:
 			return Transform3D(Basis.IDENTITY, Vector3(3.0, 0.65, -39.0))
 		&"blocked_path":
 			return Transform3D(Basis(Vector3.UP, -PI * 0.5),
-				Vector3(9.6, 2.8, -3.25))
-		&"timber_yard":
-			return Transform3D(Basis(Vector3.UP, PI), Vector3(0.65, 7.48, 25.4))
+				BLOCKED_BARRICADE_POSITION)
+		# The old port id remains an alias for save-less director compatibility.
+		&"grove", &"timber_yard":
+			return Transform3D(Basis(Vector3.UP, PI * 0.5),
+				Vector3(-9.0, 6.7, 17.5))
 		&"vista_camera":
-			var eye := Vector3(-2.8, 8.8, 2.0)
-			var target := Vector3(4.8, 1.8, -25.0)
+			var eye := Vector3(-1.5, 10.2, 24.0)
+			var target := Vector3(3.0, 2.1, -31.0)
 			return Transform3D(Basis.IDENTITY, eye).looking_at(target, Vector3.UP)
 	push_error("GarrisonOutskirts: unknown port '%s'" % id)
 	return Transform3D.IDENTITY
@@ -92,8 +109,8 @@ func _build() -> void:
 
 	_build_path(terrain)
 	_build_cliffs(cliffs)
+	_build_clearing_landmark(landmarks)
 	_build_garrison(landmarks)
-	_build_timber_yard(landmarks)
 	_build_sunken_cut(landmarks)
 	_build_trees(trees)
 	_build_transitions(transitions)
@@ -102,30 +119,29 @@ func _build() -> void:
 func _build_path(parent: Node3D) -> void:
 	for i in PATH_POINTS.size() - 1:
 		_build_walk_segment(parent, PATH_POINTS[i], PATH_POINTS[i + 1],
-			CORRIDOR_WIDTH, StringName("Main%02d" % i))
+			GROUND_WIDTHS[i], StringName("ClearingTerrace%02d" % i))
 
-	# Round path insets bury the rectangular visual overlaps at each turn. They
+	# Round path insets bury the rectangular visual overlaps at each terrace. They
 	# are deliberately non-colliding: a horizontal collider laid over two sloped
 	# runs creates a lip at its downhill edge even though all three top faces meet
 	# exactly at the authored point.
 	for i in range(1, PATH_POINTS.size() - 1):
 		var point: Vector3 = PATH_POINTS[i]
-		_cylinder(parent, StringName("LandingPath%02d" % i), MAT_PATH,
+		_cylinder(parent, StringName("ClearingLandmark%02d" % i), MAT_PATH,
 			PATH_WIDTH * 0.54, 0.07, _at(point + Vector3.UP * 0.035), false, 12)
 
-	# The spur is obvious from the vista but terminates against the east cliff.
-	# Its independent slab gives it a real downhill grade rather than painted dirt.
-	_build_walk_segment(parent, Vector3(2.5, 3.4, -5.0),
-		Vector3(14.2, 2.25, -2.4), 4.8, &"BlockedSpur")
-	# Put the readable collapse on the near half of the spur. The cliff itself is
-	# the hard stop farther on; these crossed timbers make "a route that was
-	# deliberately closed" legible from the main switchback.
+	# The east spur leaves the clearing through the gap between two shoulders and
+	# terminates against the outer cliff. Its own broad slab keeps the dead end
+	# spatially distinct without pretending to be a second route.
+	_build_walk_segment(parent, BLOCKED_SPUR_START, BLOCKED_SPUR_END,
+		7.0, &"BlockedSpur", 5.2)
 	var barricade := _group(parent, &"BlockedSpurBarricade")
-	barricade.position = Vector3(7.2, 3.05, -3.95)
+	barricade.position = BLOCKED_BARRICADE_POSITION
+	barricade.rotation.y = PI * 0.5
 	_box(barricade, &"RubbleA", MAT_DARK_STONE, Vector3(2.0, 1.0, 1.3),
-		_at(Vector3(-0.8, 0.45, 0.0), -0.2), true)
+		_at(Vector3(-0.8, 0.45, 0.0), -0.2), false)
 	_box(barricade, &"RubbleB", MAT_DARK_STONE, Vector3(1.8, 1.25, 1.2),
-		_at(Vector3(0.8, 0.58, 0.0), 0.25), true)
+		_at(Vector3(0.8, 0.58, 0.0), 0.25), false)
 	_box(barricade, &"CrossTimberA", MAT_WOOD, Vector3(4.5, 0.28, 0.30),
 		Transform3D(Basis(Vector3.FORWARD, deg_to_rad(24.0)), Vector3(0.0, 1.35, 0.0)), false)
 	_box(barricade, &"CrossTimberB", MAT_WOOD, Vector3(4.5, 0.28, 0.30),
@@ -133,7 +149,8 @@ func _build_path(parent: Node3D) -> void:
 
 
 func _build_walk_segment(parent: Node3D, from: Vector3, to: Vector3,
-		ground_width: float, segment_name: StringName) -> void:
+		ground_width: float, segment_name: StringName,
+		path_width: float = PATH_WIDTH) -> void:
 	var delta := to - from
 	var basis := Basis.looking_at(delta.normalized(), Vector3.UP)
 	var midpoint := (from + to) * 0.5
@@ -142,49 +159,55 @@ func _build_walk_segment(parent: Node3D, from: Vector3, to: Vector3,
 		Vector3(ground_width, GROUND_DEPTH, length),
 		Transform3D(basis, midpoint - basis.y * GROUND_DEPTH * 0.5), true)
 	_box(parent, StringName("%sPath" % segment_name), MAT_PATH,
-		Vector3(PATH_WIDTH, 0.07, length),
+		Vector3(path_width, 0.07, length),
 		Transform3D(basis, midpoint + basis.y * 0.035), false)
 
 
 func _build_cliffs(parent: Node3D) -> void:
-	for i in PATH_POINTS.size() - 1:
-		var from: Vector3 = PATH_POINTS[i]
-		var to: Vector3 = PATH_POINTS[i + 1]
-		var flat := Vector3(to.x - from.x, 0.0, to.z - from.z)
-		var forward := flat.normalized()
-		var right := forward.cross(Vector3.UP).normalized()
-		var midpoint := (from + to) * 0.5
-		var yaw := atan2(forward.x, forward.z) + PI
-		var basis := Basis(Vector3.UP, yaw)
-		for side: float in [-1.0, 1.0]:
-			var height := CLIFF_HEIGHT + float((i + int(side > 0.0)) % 3) * 0.65
-			var centre := midpoint + right * side \
-				* (CORRIDOR_WIDTH * 0.5 + CLIFF_THICKNESS * 0.5 - 0.15)
-			centre.y = minf(from.y, to.y) - 1.2 + height * 0.5
-			var side_name := "R" if side > 0.0 else "L"
-			_box(parent, StringName("Cliff%s%02d" % [side_name, i]), MAT_CLIFF,
-				Vector3(CLIFF_THICKNESS, height, flat.length() + 4.0),
-				Transform3D(basis, centre), true)
+	# The six outer faces contain the broad slabs without squeezing their centre.
+	_build_cliff_wall(parent, &"OuterWestUpper", Vector3(-23.0, 0.0, 35.0),
+		Vector3(-23.0, 0.0, 10.0), 6.0, 11.0, 4.5)
+	_build_cliff_wall(parent, &"OuterEastUpper", Vector3(23.0, 0.0, 35.0),
+		Vector3(23.0, 0.0, 10.0), 6.0, 11.5, 4.2)
+	_build_cliff_wall(parent, &"OuterWestMiddle", Vector3(-25.0, 0.0, 12.0),
+		Vector3(-25.0, 0.0, -12.0), 6.0, 11.0, 1.8)
+	_build_cliff_wall(parent, &"OuterEastMiddle", Vector3(25.0, 0.0, 12.0),
+		Vector3(25.0, 0.0, -12.0), 6.0, 10.5, 1.8)
+	_build_cliff_wall(parent, &"OuterWestLower", Vector3(-21.0, 0.0, -10.0),
+		Vector3(-15.0, 0.0, -42.0), 6.0, 10.5, -1.1)
+	_build_cliff_wall(parent, &"OuterEastLower", Vector3(23.0, 0.0, -10.0),
+		Vector3(21.0, 0.0, -42.0), 6.0, 11.0, -1.1)
+	_cylinder(parent, &"OuterWestLowerJoint", MAT_CLIFF, 4.0, 10.5,
+		_at(Vector3(-22.5, 4.15, -11.0), 0.14), true, 7)
+	_cylinder(parent, &"OuterEastLowerJoint", MAT_CLIFF, 4.0, 10.8,
+		_at(Vector3(23.5, 4.3, -11.0), -0.11), true, 7)
+	_cylinder(parent, &"SunkenCutButtressWest", MAT_CLIFF, 4.0, 10.0,
+		_at(Vector3(-11.0, 3.9, -41.0), 0.21), true, 7)
+	_cylinder(parent, &"SunkenCutButtressEast", MAT_CLIFF, 4.0, 10.6,
+		_at(Vector3(17.0, 4.2, -41.0), -0.17), true, 7)
 
-	# Faceted outcrops seal the outside corners of the switchbacks. Without them,
-	# two correct segment colliders still leave a diagonal body-width crack.
-	for i in PATH_POINTS.size():
-		var before: Vector3 = PATH_POINTS[maxi(i - 1, 0)]
-		var after: Vector3 = PATH_POINTS[mini(i + 1, PATH_POINTS.size() - 1)]
-		var tangent := Vector3(after.x - before.x, 0.0, after.z - before.z).normalized()
-		var right := tangent.cross(Vector3.UP).normalized()
-		for side: float in [-1.0, 1.0]:
-			var height := CLIFF_HEIGHT + float((i + 1) % 2) * 0.8
-			var at := PATH_POINTS[i] + right * side * 7.35
-			at.y = PATH_POINTS[i].y - 1.1 + height * 0.5
-			_cylinder(parent, StringName("Outcrop%02d%s" % [i,
-				"R" if side > 0.0 else "L"]), MAT_CLIFF, 2.9, height,
-				_at(at, float(i) * 0.19), true, 7)
+	# Three interior shoulders partition side spaces while their gaps preserve a
+	# generous direct route and a near-continuous view of the dungeon mouth.
+	_build_cliff_wall(parent, &"GroveShoulderUpper", Vector3(-12.0, 0.0, 15.0),
+		Vector3(-11.0, 0.0, 6.0), 4.5, 4.8, 4.4)
+	_build_cliff_wall(parent, &"GroveShoulderLower", Vector3(-11.0, 0.0, 2.0),
+		Vector3(-10.0, 0.0, -9.0), 4.5, 5.0, 2.3)
+	_build_cliff_wall(parent, &"EastSpurShoulderNorth", Vector3(12.0, 0.0, 15.0),
+		Vector3(13.0, 0.0, 8.0), 5.5, 5.0, 4.2)
+	_build_cliff_wall(parent, &"EastSpurShoulderSouth", Vector3(13.0, 0.0, -4.0),
+		Vector3(14.0, 0.0, -13.0), 5.5, 5.0, 1.5)
 
-	# This shoulder hides the lower run from the gate. The path slips left around
-	# it; only at the fourth point does the mouth of the Cut enter the frame.
-	_box(parent, &"VistaBlind", MAT_CLIFF, Vector3(7.8, 11.0, 11.5),
-		_at(Vector3(3.0, 8.0, 8.4), deg_to_rad(-8.0)), true)
+
+func _build_cliff_wall(parent: Node3D, wall_name: StringName, from: Vector3,
+		to: Vector3, width: float, height: float, base_y: float) -> void:
+	var flat := Vector3(to.x - from.x, 0.0, to.z - from.z)
+	var forward := flat.normalized()
+	var yaw := atan2(forward.x, forward.z) + PI
+	var centre := (from + to) * 0.5
+	centre.y = base_y + height * 0.5
+	_box(parent, wall_name, MAT_CLIFF,
+		Vector3(width, height, flat.length() + 1.5),
+		_at(centre, yaw), true)
 
 
 func _build_garrison(parent: Node3D) -> void:
@@ -212,11 +235,15 @@ func _build_garrison(parent: Node3D) -> void:
 				38.9)), false)
 
 
-func _build_timber_yard(parent: Node3D) -> void:
-	timber_yard = TimberYard.new()
-	timber_yard.name = &"TimberYard"
-	timber_yard.transform = port(&"timber_yard")
-	parent.add_child(timber_yard)
+func _build_clearing_landmark(parent: Node3D) -> void:
+	var waystone := _group(parent, &"ClearingWaystone")
+	waystone.position = CLEARING_LANDMARK_POSITION
+	_cylinder(waystone, &"Footing", MAT_DARK_STONE, 1.2, 0.35,
+		_at(Vector3.UP * 0.175, 0.12), true, 8)
+	_box(waystone, &"Marker", MAT_CLIFF, Vector3(1.15, 3.2, 0.75),
+		_at(Vector3(0.0, 1.85, 0.0), 0.08), true)
+	_box(waystone, &"IronFace", MAT_IRON, Vector3(0.48, 0.62, 0.08),
+		_at(Vector3(-0.03, 2.35, 0.4), 0.08), false)
 
 
 func _build_sunken_cut(parent: Node3D) -> void:
@@ -241,21 +268,16 @@ func _build_sunken_cut(parent: Node3D) -> void:
 
 
 func _build_trees(parent: Node3D) -> void:
-	for i in TREE_SPECS.size():
-		var spec: Vector4 = TREE_SPECS[i]
-		var tree := _group(parent, StringName("Tree%02d" % i))
-		tree.position = Vector3(spec.x, spec.y, spec.z)
-		tree.rotation.y = float(i) * 0.73
-		var scale_factor := spec.w
-		_cylinder(tree, &"Trunk", MAT_WOOD, 0.24 * scale_factor,
-			3.5 * scale_factor, _at(Vector3.UP * 1.75 * scale_factor), true, 7)
-		# The path geometry stays deliberately primitive, but the foliage uses the
-		# same CC0 Kenney silhouettes Valenfeld's forest biome already proved.
-		var packed: PackedScene = TREE_SHRUB if i % 3 == 2 else TREE_LARGE
-		var model := packed.instantiate() as Node3D
-		model.name = &"ValenfeldTree"
-		model.scale = Vector3.ONE * (3.2 * scale_factor)
-		tree.add_child(model)
+	harvest_trees.clear()
+	for i in TREE_POSITIONS.size():
+		var tree := HarvestTree.new()
+		tree.name = StringName("HarvestTree%02d" % i)
+		tree.position = TREE_POSITIONS[i]
+		tree.rotation.y = TREE_YAWS[i]
+		var packed: PackedScene = PINE_GIANT if PINE_TREE_INDICES.has(i) else MAPLE_GIANT
+		tree.configure(i, TREE_POSITIONS.size(), packed, TREE_VISUAL_SCALES[i])
+		parent.add_child(tree)
+		harvest_trees.append(tree)
 
 
 func _build_transitions(parent: Node3D) -> void:
@@ -279,21 +301,12 @@ func _build_transitions(parent: Node3D) -> void:
 	blocked_path.radius = 3.0
 	blocked_path.transform = port(&"blocked_path")
 
-	# The big rubble slab is the fixed collision. The crossed timber and loose
-	# stones in front are visual-only, so EXAMINE can rattle them safely.
+	# The slab is the fixed collision. The separately authored terrain barricade
+	# remains visual feedback, so EXAMINE can rattle it without moving collision.
 	_box(blocked_path, &"CollapseBackstop", MAT_DARK_STONE,
 		Vector3(5.0, 3.3, 1.0), _at(Vector3(0.0, 1.55, -2.25)), true)
-	var obstruction := _group(blocked_path, &"ObstructionVisual")
-	_box(obstruction, &"RubbleLeft", MAT_DARK_STONE, Vector3(2.2, 1.45, 1.25),
-		_at(Vector3(-1.25, 0.7, -1.65), -0.18), false)
-	_box(obstruction, &"RubbleRight", MAT_DARK_STONE, Vector3(2.4, 1.8, 1.15),
-		_at(Vector3(1.1, 0.85, -1.7), 0.23), false)
-	_box(obstruction, &"CrossTimberA", MAT_WOOD, Vector3(5.2, 0.3, 0.34),
-		Transform3D(Basis(Vector3.FORWARD, deg_to_rad(18.0)),
-			Vector3(0.0, 1.75, -1.35)), false)
-	_box(obstruction, &"CrossTimberB", MAT_WOOD, Vector3(4.7, 0.28, 0.31),
-		Transform3D(Basis(Vector3.FORWARD, deg_to_rad(-22.0)),
-			Vector3(0.15, 1.55, -1.18)), false)
+	var obstruction := get_node(
+		NodePath("Generated/Terrain/BlockedSpurBarricade")) as Node3D
 	blocked_path.bind_obstruction(obstruction)
 	parent.add_child(blocked_path)
 

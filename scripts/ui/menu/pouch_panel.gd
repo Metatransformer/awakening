@@ -42,6 +42,7 @@ extends Control
 
 signal back_requested
 signal notice(text: String, is_error: bool)
+signal drop_requested(item_id: StringName, count: int, from_case: bool)
 ## The player asked to leave. The channel happens in the WORLD, so the menu has
 ## to close whole rather than back out one screen.
 signal use_requested
@@ -152,6 +153,7 @@ var _band: Control
 var _band_slot: VBoxContainer
 var _stock: GridContainer
 var _stock_empty: Label
+var _drop: Button
 var _back: Button
 ## The hover card. It replaced five labels in a column on the right — see
 ## `RIGHT_W` — and it is fed from `_describe` and from nowhere else.
@@ -165,6 +167,16 @@ var _rope_hold: float = 0.0
 ## player who opens the pouch with Y already down (it is `jump` in the world)
 ## arrives on this screen part-way through leaving the dungeon.
 var _rope_armed: bool = false
+## The cell last described by focus, hover or click. The index and side are the
+## identity; id/count are refreshed from the live arrays before Drop can emit.
+var _selected_index: int = -1
+var _selected_from_case: bool = false
+var _selected_id: StringName = &""
+var _selected_count: int = 0
+## `ItemGrid` deliberately treats every press as activation. Inventory needs one
+## extra distinction: a mouse click selects for the adjacent Drop verb, while A
+## keeps its existing pack/unpack action.
+var _mouse_cell_press: bool = false
 
 
 func _ready() -> void:
@@ -338,6 +350,14 @@ func _build() -> void:
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	frow.add_child(spacer)
+	_drop = Button.new()
+	_drop.name = "Drop"
+	_drop.text = "Drop"
+	_drop.custom_minimum_size.x = 160
+	_drop.disabled = true
+	_drop.pressed.connect(_on_drop_pressed)
+	_drop.focus_entered.connect(_describe_selected)
+	frow.add_child(_drop)
 	_back = Button.new()
 	_back.text = "Back"
 	_back.custom_minimum_size.x = 160
@@ -464,10 +484,34 @@ func _fill_cells() -> void:
 	_case_grid.set_cells(_cells_of(_case_ids, _case_counts), Run.CASE_SLOTS)
 	_grid.spill_down = _rope
 	_grid.set_cells(_cells_of(_cell_ids, _cell_counts), want)
+	_wire_cell_selection(_case_grid, true)
+	_wire_cell_selection(_grid, false)
 	_case_grid.spill_down = _grid.cell_at(0)
 	# Out of the bottom of the grid comes the way out, then Back: the bag spills
 	# directly into the only verb this screen owns.
 	_wire_focus()
+
+
+## `ItemGrid` reports padding cells as -1 because most collections do not care
+## which empty position was crossed. Inventory does: an empty selected cell must
+## disable Drop, so this panel adds the exact cell position without changing the
+## shared grid contract. Focus, hover and click all describe the same cell.
+func _wire_cell_selection(grid_of: ItemGrid, case_side: bool) -> void:
+	for i in grid_of.count():
+		var cell := grid_of.cell_at(i)
+		if cell == null or cell.has_meta(&"pouch_selection"):
+			continue
+		cell.set_meta(&"pouch_selection", true)
+		var index := i
+		cell.focus_entered.connect(func() -> void: _describe(index, case_side))
+		cell.mouse_entered.connect(func() -> void: _describe(index, case_side))
+		cell.gui_input.connect(func(event: InputEvent) -> void:
+			if event is InputEventMouseButton \
+					and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+				_mouse_cell_press = true)
+		cell.pressed.connect(func() -> void:
+			_describe(index, case_side)
+			_mouse_cell_press = false)
 
 
 ## One region's cells, in grid order: the item id and how many are in that cell.
@@ -842,9 +886,13 @@ func _wire_focus() -> void:
 	MenuUtil.link_down(_rope, _back)
 	_rope.focus_neighbor_left = ^"."
 	_rope.focus_neighbor_right = ^"."
+	# Keep the case -> bag -> Rope -> Back vertical loop intact. Drop is the
+	# footer's adjacent branch, reached horizontally when the selected cell is live.
+	MenuUtil.link_right(_drop, _back)
+	_drop.focus_neighbor_top = _drop.get_path_to(_rope)
+	_drop.focus_neighbor_bottom = _drop.get_path_to(first)
 	_back.focus_neighbor_bottom = _back.get_path_to(first)
 	_back.focus_next = _back.get_path_to(first)
-	_back.focus_neighbor_left = ^"."
 	_back.focus_neighbor_right = ^"."
 
 
@@ -906,6 +954,7 @@ func grid() -> ItemGrid:
 
 func refresh() -> void:
 	_fill_cells()
+	_sync_selected_cell()
 	_paint_doll()
 	_paint_header()
 	_paint_rope()
@@ -913,11 +962,11 @@ func refresh() -> void:
 	var focused := get_viewport().gui_get_focus_owner()
 	if focused == _rope:
 		_describe_rope()
-	else:
+	elif not _describe_focus(focused) and _selected_index < 0:
 		# The cursor is on a cell, or on nothing at all because the screen has
 		# only just been built. Either way the detail pane describes a cell, and
 		# the grid is the one that knows which button is which index.
-		_describe_focus(focused)
+		_describe(0, true)
 
 
 ## Which cell the focus is on, and which side of the line, after a refresh that
@@ -926,25 +975,60 @@ func refresh() -> void:
 ## parallel array was what `_cells` used to be, and it was one more thing that
 ## could disagree with what is drawn. A focus on neither grid describes the
 ## case's first cell, because that is where `focus_first` puts the cursor.
-func _describe_focus(focused: Control) -> void:
+func _describe_focus(focused: Control) -> bool:
 	for i in _case_grid.count():
 		if _case_grid.cell_at(i) == focused:
 			_describe(i, true)
-			return
+			return true
 	for i in _grid.count():
 		if _grid.cell_at(i) == focused:
 			_describe(i, false)
-			return
-	_describe(0, true)
+			return true
+	return false
 
 
 ## The grid says a cell was looked at; the detail pane says what it is.
 func _on_cell_focused(index: int) -> void:
-	_describe(maxi(index, 0), false)
+	if index >= 0:
+		_describe(index, false)
 
 
 func _on_case_focused(index: int) -> void:
-	_describe(maxi(index, 0), true)
+	if index >= 0:
+		_describe(index, true)
+
+
+func _select_cell(index: int, case_side: bool) -> void:
+	_selected_index = index
+	_selected_from_case = case_side
+	_selected_id = &""
+	_selected_count = 0
+	var ids: Array[StringName] = _case_ids if case_side else _cell_ids
+	var counts: Array[int] = _case_counts if case_side else _cell_counts
+	if index >= 0 and index < ids.size():
+		var id: StringName = ids[index]
+		var count: int = counts[index]
+		if id != &"" and count > 0 and ItemDb.get_def(id) != null:
+			_selected_id = id
+			_selected_count = count
+	if _drop != null:
+		_drop.disabled = _selected_id == &"" or _selected_count <= 0
+
+
+func _sync_selected_cell() -> void:
+	_select_cell(_selected_index, _selected_from_case)
+
+
+func _describe_selected() -> void:
+	if _selected_index >= 0:
+		_describe(_selected_index, _selected_from_case)
+
+
+func _on_drop_pressed() -> void:
+	_sync_selected_cell()
+	if _selected_id == &"" or _selected_count <= 0:
+		return
+	drop_requested.emit(_selected_id, _selected_count, _selected_from_case)
 
 
 ## A on a carried cell packs that stack into the case.
@@ -954,6 +1038,8 @@ func _on_case_focused(index: int) -> void:
 ## §3.1 wants you making is *which things*, not how many of a thing — and a
 ## part-stack moved on its own costs a slot on each side of the line for nothing.
 func _on_hold_activated(index: int) -> void:
+	if _mouse_cell_press:
+		return
 	if index < 0 or index >= _cell_ids.size():
 		return
 	var id: StringName = _cell_ids[index]
@@ -970,6 +1056,8 @@ func _on_hold_activated(index: int) -> void:
 ## A on a cased cell takes it back out. It stays in the bag — it just stops being
 ## the half that survives you, which is the trade every third slot is about.
 func _on_case_activated(index: int) -> void:
+	if _mouse_cell_press:
+		return
 	if index < 0 or index >= _case_ids.size():
 		return
 	var id: StringName = _case_ids[index]
@@ -1064,6 +1152,7 @@ func _describe(index: int, case_side: bool) -> void:
 	var ids: Array[StringName] = _case_ids if case_side else _cell_ids
 	var counts: Array[int] = _case_counts if case_side else _cell_counts
 	var grid_of: ItemGrid = _case_grid if case_side else _grid
+	_select_cell(index, case_side)
 	if _tip == null or index < 0 or index >= ids.size():
 		return
 	var id: StringName = ids[index]
@@ -1107,4 +1196,5 @@ func _describe(index: int, case_side: bool) -> void:
 	# The verb, on the end, and phrased as the consequence rather than the key —
 	# what A does here is decide whether this survives you.
 	_tip.say_note(fate + ("   A takes it out of the case." if case_side
-		else "   A packs it into the case."), UITheme.TEXT_DIM)
+		else "   A packs it into the case.")
+		+ "   Drop throws this displayed stack onto the floor.", UITheme.TEXT_DIM)

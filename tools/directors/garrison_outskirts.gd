@@ -1,7 +1,6 @@
 extends RefCounted
-## Visual and structural proof for the bounded descent between the compound and
-## the Sunken Cut. Cameras cover every authored decision point rather than one
-## flattering overview.
+## Visual and structural proof for the open, cliff-partitioned clearing between
+## the compound and the Sunken Cut.
 
 func run(rig) -> void:
 	var outskirts := rig.scene() as GarrisonOutskirts
@@ -19,6 +18,21 @@ func run(rig) -> void:
 			GarrisonOutskirts.PATH_POINTS[i + 1])
 	if distance < 70.0:
 		rig.fail("main path is only %.1f m" % distance)
+	rig.check(absf(GarrisonOutskirts.PATH_POINTS[0].x
+		- GarrisonOutskirts.PATH_POINTS[-1].x) < 5.0,
+		"the critical path is a direct descent rather than a switchback")
+	rig.check(outskirts.harvest_trees.size() == 10,
+		"the west grove contains ten harvestable trees")
+	for tree: HarvestTree in outskirts.harvest_trees:
+		rig.check(tree.prompt == "CHOP TREE" and tree.hold_time > 0.0,
+			"every grove tree exposes a held chop interaction")
+		rig.check(tree.get_node_or_null(^"SolidTrunk/TrunkCollision") != null,
+			"every grove tree has solid trunk collision")
+	for shoulder: String in ["GroveShoulderUpper", "GroveShoulderLower",
+			"EastSpurShoulderNorth", "EastSpurShoulderSouth"]:
+		rig.check(outskirts.get_node_or_null(
+			NodePath("Generated/Cliffs/%s" % shoulder)) != null,
+			"the clearing includes cliff partition %s" % shoulder)
 
 	var cam := Camera3D.new()
 	cam.fov = 58.0
@@ -26,27 +40,33 @@ func run(rig) -> void:
 	cam.make_current()
 	var out: String = rig.out_base().get_base_dir()
 
-	cam.global_position = Vector3(0.0, 10.2, 27.0)
-	cam.look_at(Vector3(-4.0, 5.1, 5.0), Vector3.UP)
+	cam.global_position = Vector3(0.0, 17.5, 34.0)
+	cam.look_at(Vector3(0.0, 4.0, -3.0), Vector3.UP)
 	await rig.wait_frames(4)
-	await rig.capture(out.path_join("outskirts_00_gate_descent.png"))
+	await rig.capture(out.path_join("outskirts_00_open_clearing.png"))
 
 	cam.global_transform = outskirts.port(&"vista_camera")
 	await rig.wait_frames(4)
-	await rig.capture(out.path_join("outskirts_01_switchback.png"))
+	await rig.capture(out.path_join("outskirts_01_direct_route.png"))
+
+	var grove_target: Vector3 = outskirts.port(&"grove").origin
+	cam.global_position = grove_target + Vector3(10.0, 5.8, 9.0)
+	cam.look_at(grove_target + Vector3(0.0, 2.8, 0.0), Vector3.UP)
+	await rig.wait_frames(4)
+	await rig.capture(out.path_join("outskirts_02_tree_grove.png"))
 
 	var obstruction := outskirts.get_node(
 		NodePath("Generated/Terrain/BlockedSpurBarricade/CrossTimberA")) as Node3D
-	var spur_direction := (Vector3(14.2, 2.25, -2.4) \
-		- Vector3(2.5, 3.4, -5.0)).normalized()
+	var spur_direction: Vector3 = (GarrisonOutskirts.BLOCKED_SPUR_END \
+		- GarrisonOutskirts.BLOCKED_SPUR_START).normalized()
 	cam.global_position = obstruction.global_position - spur_direction * 7.0 \
 		+ Vector3.UP * 1.5
 	cam.look_at(obstruction.global_position, Vector3.UP)
 	await rig.wait_frames(4)
-	await rig.capture(out.path_join("outskirts_02_blocked_spur.png"))
+	await rig.capture(out.path_join("outskirts_03_blocked_spur.png"))
 
 	cam.global_position = Vector3(3.0, 2.2, -31.0)
 	cam.look_at(outskirts.port(&"sunken_cut").origin + Vector3(0.0, 1.8, -2.0), Vector3.UP)
 	await rig.wait_frames(4)
-	await rig.capture(out.path_join("outskirts_03_sunken_cut.png"))
+	await rig.capture(out.path_join("outskirts_04_sunken_cut.png"))
 	print("OUTSKIRTS OK %.1f m" % distance)

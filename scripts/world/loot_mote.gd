@@ -163,6 +163,10 @@ var count: int = 1
 ## you do, so backing off to be safe is paid for in the only currency the game
 ## has. See Heat.
 var heat_mult: float = 1.0
+## Inventory drops are putting already-banked Heat back on the floor, not
+## creating fresh hot loot. Their explicit stamp must round-trip unchanged no
+## matter how long the player leaves it there; ordinary kill drops still cool.
+var _fixed_heat: bool = false
 
 var _def: ItemDef
 var _mesh: MeshInstance3D
@@ -184,13 +188,16 @@ var _hero: Node3D = null
 
 ## Drop one at `at`, with a short arc so it reads as having come off the corpse.
 static func drop(parent: Node, id: StringName, at: Vector3,
-		fling: Vector3 = Vector3.ZERO, n: int = 1) -> LootMote:
+		fling: Vector3 = Vector3.ZERO, n: int = 1,
+		stamped_heat_mult: float = -1.0) -> LootMote:
 	var m := LootMote.new()
 	m.item_id = id
 	m.count = maxi(n, 1)
 	# Stamped at the drop, not read at the pickup. The chain that earned this is
-	# the chain that was live when the thing died.
-	m.heat_mult = Heat.multiplier()
+	# the chain that was live when the thing died. Inventory drops already carry
+	# a measured premium, so their explicit stamp wins over the live chain.
+	m._fixed_heat = stamped_heat_mult >= 0.0
+	m.heat_mult = Heat.multiplier() if stamped_heat_mult < 0.0 else stamped_heat_mult
 	parent.add_child(m)
 	m.global_position = at
 	if fling != Vector3.ZERO:
@@ -369,6 +376,8 @@ func _process(delta: float) -> void:
 func heat() -> float:
 	if heat_mult <= 1.0:
 		return 1.0
+	if _fixed_heat:
+		return heat_mult
 	# The Slow Fade (`EchoDb.SLOW_FADE`): motes never cool, so a stamped
 	# multiplier holds until you sweep it and a chain can be spent on fighting
 	# instead of on tidying (`docs/PUZZLES.md` §6.1, row 3). The mote still has to

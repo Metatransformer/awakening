@@ -77,6 +77,11 @@ When a pickup cannot fit, it remains on the floor and pulses. Nothing is
 silently deleted. The player may leave it, spend something, or return after
 making room where the item permits that choice.
 
+Selecting an occupied Inventory cell and choosing **Drop** throws that one
+displayed stack onto the floor in front of the hero as an ordinary pickup. A
+stack dropped from the document case loses its protection. Dropping and
+recollecting preserves its value and Heat premium rather than minting more.
+
 The HUD groups carried value into three thresholds:
 
 | Tier | Bag value | Meaning |

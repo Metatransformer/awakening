@@ -47,7 +47,7 @@ signal slammed(at: Vector3, fall_speed: float)
 ## matched on. HURT behaves like nothing else in the enum: it is the only state
 ## that can interrupt any other, the only one that takes no input at all, and the
 ## only one whose exit is a recovery the player is meant to feel.
-enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER, ATTACK, HOOK, SLAM, HURT }
+enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER, ATTACK, HOOK, SLAM, HURT, WOODSMAN }
 
 ## Which way a dodge goes, measured against the facing it KEEPS through it.
 ##
@@ -441,6 +441,9 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 @export var clip_slam: StringName = &"ax_melee_run_jump_attack"
 @export var slam_start_offset: float = 1.50
 @export var slam_land_offset: float = 1.70
+## The utility axe's one committed cut. It is deliberately not one of `Swing`:
+## no hitbox, stamina cost, weapon slot or combo may grow out of cutting a tree.
+@export var clip_woodsman_chop: StringName = &"ax_melee_attack_downward"
 ## The three steps of the light chain. Three DIFFERENT clips, not one replayed:
 ## a combo whose every hit is the same swing reads as a stutter, and the whole
 ## point of a chain is that the player can see how far into it they are.
@@ -571,13 +574,45 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## the body and the camera arrive at the shoulder together.
 @export var aim_fade: float = K.CAM_AIM_BLEND
 @export var clip_block: StringName = &"ss_block_idle_01"
-## `ss_run_01` was rejected as the free run above because its upright torso and
-## pinned arms read as a shuffle. Behind a raised shield those are the authored
-## guard, so it is the right slower stride instead of a compromise free run.
-@export var clip_guard_walk: StringName = &"ss_run_01"
-## The tighter shield-forward cycle from the same pack, used at the run cap so
-## guarding never turns a translating body back into the standing block pose.
-@export var clip_guard_run: StringName = &"ss_run_02"
+## The guarded eight-way. Z-Parallel pins the facing and turns the stick into a
+## strafe (`_tick_camera_facing`), which makes the guard the one stance in this
+## file where travel and facing come apart every single frame — so a
+## forward-authored clip is only correct for one of the directions the player
+## can actually move, and wrong for the other seven.
+##
+## **These directions are MEASURED, not guessed** (CLAUDE.md §4). The pack ships
+## them under names that say nothing about direction, and `strafe_lookdev.gd`
+## went looking, concluded "there is no number in the rig to measure" and reached
+## for a contact sheet instead. It was reading the BAKED library, where
+## `build_anim_lib._strip_root_translation` has already zeroed hips XZ so every
+## clip plays in place. **The raw FBX still carries the travel** — the same hole
+## `tools/_clip_travel.gd` documents, and `tools/_clip_dir.gd` is its directional
+## half. Net hip displacement per clip, in model space:
+##
+##     run_01    +Z 1.62      run_02    -Z 1.31
+##     walk_01   +Z 0.92      walk_02   -Z 0.79
+##     strafe_01 -X 0.78      strafe_02 +X 0.76
+##     strafe_04 -X 1.33      strafe_03 +X 1.29
+##
+## The rig is authored facing +Z — §4's "imported art usually faces +Z", which is
+## what `model_yaw_offset` exists to turn round. A body facing +Z with Y up has
+## its own right at -X, and that was checked against the skeleton rather than
+## derived from it: `mixamorig_LeftHand` sits at x=+0.37, `mixamorig_RightHand`
+## at x=-0.37. So -X is a sidestep to HIS right, +X to his left, and the eight
+## clips above are a complete directional set at two speeds.
+##
+## `ss_run_02` is the whole of the bug this replaced. It was the run end of a
+## one-axis SPEED blend, which has no way to express direction — so holding the
+## shield and pushing the stick forward played the backpedal, and the hero
+## moon-walked wherever he went except backwards.
+@export var clip_guard_fwd_walk: StringName = &"ss_walk_01"
+@export var clip_guard_fwd_run: StringName = &"ss_run_01"
+@export var clip_guard_back_walk: StringName = &"ss_walk_02"
+@export var clip_guard_back_run: StringName = &"ss_run_02"
+@export var clip_guard_right_walk: StringName = &"ss_strafe_01"
+@export var clip_guard_right_run: StringName = &"ss_strafe_04"
+@export var clip_guard_left_walk: StringName = &"ss_strafe_02"
+@export var clip_guard_left_run: StringName = &"ss_strafe_03"
 ## Seconds the shield takes to come up and go down. Fast enough to be a
 ## reaction, slow enough that you can see it happen.
 @export var block_fade: float = 0.12
@@ -691,6 +726,9 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 var targeting: Node = null
 
 var state: MoveState = MoveState.GROUND
+## Measured seconds from an accepted slam's commit through airborne contact.
+## Public so combat VFX can use the exact interval that scales the dive clip.
+var slam_strike_time: float = 0.0
 ## Which of the three reactions the blow in progress rolled. Only meaningful
 ## while `state == MoveState.HURT`; LIGHT never gets there (see `_enter_hurt`).
 var _hurt_tier: Hit.Tier = Hit.Tier.HEAVY
@@ -992,6 +1030,8 @@ const _P_RANGED := "parameters/Ranged/request"
 const _P_RANGED_SCALE := "parameters/RangedScale/scale"
 const _P_HOOK_SHOT := "parameters/HookShot/request"
 const _P_HOOK_SCALE := "parameters/HookScale/scale"
+const _P_WOODSMAN_CHOP := "parameters/WoodsmanChop/request"
+const _P_WOODSMAN_CHOP_SCALE := "parameters/WoodsmanChopScale/scale"
 const _P_AIM := "parameters/Aim/blend_amount"
 const _P_AIM_HOOK := "parameters/HookAim/blend_amount"
 const _P_AIM_BLEND := "parameters/AimLoco/blend_position"
@@ -1265,20 +1305,43 @@ func _build_anim_tree() -> void:
 				Vector2(880 + 90 * i, 0), _DODGE_FADE_IN[i], _DODGE_FADE_OUT[i])
 
 	# The shield is HELD, so it blends rather than fires: a one-shot would end on
-	# its own while the button is still down. Its old second input was one
-	# full-body block-idle pose; at weight 1 that pose replaced the moving legs and
-	# slid across the floor with the CharacterBody3D. The two `ss_run` clips that
-	# are wrong for free running are exactly guarded strides here: upright torso,
-	# shield pinned forward, and feet cycling behind the raised guard.
-	var guard_loco := AnimationNodeBlendSpace1D.new()
-	guard_loco.min_space = 0.0
-	guard_loco.max_space = run_blend_speed
-	guard_loco.sync_mode = AnimationNodeBlendSpace1D.SYNC_MODE_CYCLIC_MUTABLE
-	guard_loco.add_blend_point(_anim_node(clip_block), 0.0, -1, &"guard_idle")
-	guard_loco.add_blend_point(_anim_node(clip_guard_walk), walk_blend_speed,
-		-1, &"guard_walk")
-	guard_loco.add_blend_point(_anim_node(clip_guard_run), run_blend_speed,
-		-1, &"guard_run")
+	# its own while the button is still down. Its first input was one full-body
+	# block-idle pose; at weight 1 that pose replaced the moving legs and slid
+	# across the floor with the CharacterBody3D.
+	#
+	# TWO axes and not one. The speed blend that replaced that frozen pose fixed
+	# the sliding and could not fix the direction, because a scalar has nowhere to
+	# put it: whichever clip sat at the run end played for every heading, and the
+	# clip that sat there was the backpedal. Guarded, the body does NOT turn to
+	# travel (`_tick_camera_facing`) — that is the entire point of the stance —
+	# so the direction of travel is a real second dimension here in a way it
+	# never is for free locomotion, where the hero always faces where he goes.
+	#
+	# x is the hero's right, y is his forward, both in m/s, so the blend position
+	# is just his velocity written in his own frame. `_drive_animation` does that
+	# projection; the eight clips are mapped on `clip_guard_fwd_walk`.
+	var guard_loco := AnimationNodeBlendSpace2D.new()
+	guard_loco.min_space = Vector2(-run_blend_speed, -run_blend_speed)
+	guard_loco.max_space = Vector2(run_blend_speed, run_blend_speed)
+	guard_loco.sync_mode = AnimationNodeBlendSpace2D.SYNC_MODE_CYCLIC_MUTABLE
+	guard_loco.add_blend_point(_anim_node(clip_block), Vector2.ZERO,
+		-1, &"guard_idle")
+	guard_loco.add_blend_point(_anim_node(clip_guard_fwd_walk),
+		Vector2(0.0, walk_blend_speed), -1, &"guard_fwd_walk")
+	guard_loco.add_blend_point(_anim_node(clip_guard_fwd_run),
+		Vector2(0.0, run_blend_speed), -1, &"guard_fwd_run")
+	guard_loco.add_blend_point(_anim_node(clip_guard_back_walk),
+		Vector2(0.0, -walk_blend_speed), -1, &"guard_back_walk")
+	guard_loco.add_blend_point(_anim_node(clip_guard_back_run),
+		Vector2(0.0, -run_blend_speed), -1, &"guard_back_run")
+	guard_loco.add_blend_point(_anim_node(clip_guard_right_walk),
+		Vector2(walk_blend_speed, 0.0), -1, &"guard_right_walk")
+	guard_loco.add_blend_point(_anim_node(clip_guard_right_run),
+		Vector2(run_blend_speed, 0.0), -1, &"guard_right_run")
+	guard_loco.add_blend_point(_anim_node(clip_guard_left_walk),
+		Vector2(-walk_blend_speed, 0.0), -1, &"guard_left_walk")
+	guard_loco.add_blend_point(_anim_node(clip_guard_left_run),
+		Vector2(-run_blend_speed, 0.0), -1, &"guard_left_run")
 	tree_root.add_node(&"GuardLoco", guard_loco, Vector2(1000, 200))
 
 	var guard_scale := AnimationNodeTimeScale.new()
@@ -1373,6 +1436,12 @@ func _build_anim_tree() -> void:
 	tree_root.connect_node(&"HookShot", 1, &"HookScale")
 	prev = &"HookShot"
 
+	# A utility presentation, not a combat swing. Its dedicated node keeps the
+	# downward clip out of Swing and lets the authored reel fit the tree's one
+	# commitment without changing the shared animation library.
+	prev = _add_scaled_shot(tree_root, &"WoodsmanChop", prev, clip_woodsman_chop,
+		Vector2(2080, 0), 0.05, 0.18)
+
 	prev = _add_oneshot(tree_root, &"Land", prev, _anim_node(clip_land), Vector2(2160, 0), 0.06, 0.20)
 
 	# **Taking a hit goes ON TOP of everything he could have been doing**, which
@@ -1450,7 +1519,7 @@ func _build_anim_tree() -> void:
 		_tree.set(_dodge_scale_param(i), 1.0)
 	_tree.set(_P_BLEND, 0.0)
 	_tree.set(_P_STRIDE, 1.0)
-	_tree.set(_P_GUARD_BLEND, 0.0)
+	_tree.set(_P_GUARD_BLEND, Vector2.ZERO)
 	_tree.set(_P_GUARD_SCALE, 1.0)
 	_tree.set(_P_BLOCK, 0.0)
 	_tree.set(_P_REST, 0.0)
@@ -1469,6 +1538,7 @@ func _build_anim_tree() -> void:
 	_tree.set(_P_BOW_DRAW_SCALE, 1.0)
 	_tree.set(_P_RANGED_SCALE, 1.0)
 	_tree.set(_P_HOOK_SCALE, 1.0)
+	_tree.set(_P_WOODSMAN_CHOP_SCALE, 1.0)
 
 
 ## The clip each Swing plays. A match rather than an array of exports so the
@@ -1714,6 +1784,8 @@ func _physics_process(delta: float) -> void:
 			_tick_slam(delta)
 		MoveState.HURT:
 			_tick_hurt(delta)
+		MoveState.WOODSMAN:
+			_tick_woodsman_chop(delta)
 
 	# The hookshot flies perfectly straight and so does what it drags
 	# (docs/CONTRACT.md §2.5 #8). Gravity applied during the pull would sag the
@@ -1886,10 +1958,13 @@ func _tick_ground(wish: Vector3, mag: float, delta: float) -> void:
 ##     backing off — and firing a 180 clip there would spin the hero away from
 ##     the thing he is supposed to be watching.
 ##   * Speed is NOT reduced for backing up or side-stepping. Elden Ring does
-##     slow a backward walk, and doing that here needs strafe clips the library
-##     ships but nobody has identified (tools/directors/strafe_lookdev.gd), so
-##     it is deliberately left alone rather than tuned against the wrong
-##     animation.
+##     slow a backward walk. This used to say the reason was that nobody had
+##     identified the pack's strafe clips; they are identified now (see
+##     `clip_guard_fwd_walk`, and `GuardLoco` blends all eight), so the only
+##     thing left holding it is that nobody has decided the numbers. It is a
+##     TUNING question now and not a missing-animation one — and it is a
+##     gameplay change, so it belongs to a design test under `docs/design-tests/`
+##     rather than to whoever next touches this function.
 func _tick_locked(wish: Vector3, target_speed: float, moving: bool,
 		target: Node3D, delta: float) -> void:
 	# Faster than the free turn rate: the lock is a promise that he keeps facing
@@ -2484,6 +2559,21 @@ func _tick_attack(delta: float) -> void:
 		state = MoveState.GROUND
 
 
+## Serve the tree-cutting commitment without borrowing combat movement. The
+## target-facing was fixed at the request, and the body stays planted while the
+## authored downward reel supplies all visible motion.
+func _tick_woodsman_chop(delta: float) -> void:
+	_state_timer -= delta
+	_speed = 0.0
+	_set_planar_velocity(Vector3.ZERO)
+	if _state_timer > 0.0:
+		return
+	state = MoveState.GROUND
+	_state_timer = 0.0
+	if combat != null:
+		combat.set_woodsman_axe_visible(false)
+
+
 ## Keep the body on the target through a move that owns the hero. Without this a
 ## swing or a dodge freezes the facing, and an enemy that side-steps mid-attack
 ## ends up behind a hero who is still supposedly locked onto him.
@@ -2531,6 +2621,7 @@ func request_slam() -> bool:
 	if drop < slam_min_height:
 		return false
 
+	slam_strike_time = slam_hang + drop / maxf(slam_speed, 0.1)
 	state = MoveState.SLAM
 	_state_timer = 0.0
 	_slam_hang_left = slam_hang
@@ -2552,9 +2643,8 @@ func request_slam() -> bool:
 		facing_yaw = _yaw_to(target)
 
 	if _tree != null:
-		var air := slam_hang + drop / maxf(slam_speed, 0.1)
 		_tree.set(_P_SLAM_SCALE,
-			(slam_land_offset - slam_start_offset) / maxf(air, 0.05))
+			(slam_land_offset - slam_start_offset) / maxf(slam_strike_time, 0.05))
 		_tree.set(_P_SLAM_LAND_SCALE,
 			(_clip_length(clip_slam) - slam_land_offset) / maxf(slam_recover, 0.05))
 	_fire(_P_SLAM)
@@ -2626,6 +2716,8 @@ func _enter_hurt(tier: Hit.Tier, stun: float) -> void:
 	# for us next frame anyway -- doing it here means the shield is already down in
 	# the frame the flinch starts, rather than one frame into it.
 	blocking = false
+	if state == MoveState.WOODSMAN and combat != null:
+		combat.set_woodsman_axe_visible(false)
 
 	state = MoveState.HURT
 	_hurt_tier = tier
@@ -2788,6 +2880,39 @@ func request_attack(duration: float, variant: int = Swing.LIGHT1) -> bool:
 			_swing_clip(variant), duration, _SWING_START_OFFSET[variant]))
 	_fire(_swing_param(variant))
 	return true
+
+
+## Commit to one non-combat Woodsman's Axe cut facing `target`. The axe is a
+## temporary rig presentation owned by HeroCombat; it never becomes an armament
+## id and therefore cannot enter either the weapon ring or the radial wheel.
+func request_woodsman_chop(duration: float, target: Vector3) -> bool:
+	if not can_act() or combat == null:
+		return false
+	_cancel_dodge()
+	state = MoveState.WOODSMAN
+	_state_timer = maxf(duration, 0.05)
+	_speed = 0.0
+	_lunge_left = 0.0
+	_set_planar_velocity(Vector3.ZERO)
+
+	var delta := target - global_position
+	var flat := Vector3(delta.x, 0.0, delta.z)
+	if flat.length_squared() > 0.0001:
+		flat = flat.normalized()
+		facing_yaw = atan2(flat.x, flat.z)
+
+	combat.set_woodsman_axe_visible(true)
+	if _tree != null:
+		_tree.set(_P_WOODSMAN_CHOP_SCALE,
+			_clip_scale(clip_woodsman_chop, _state_timer))
+	_fire(_P_WOODSMAN_CHOP)
+	return true
+
+
+## HarvestTree checks this at the authored impact beat so an interrupted cut
+## cannot award a bundle after the axe has already been knocked from the hand.
+func woodsman_chopping() -> bool:
+	return state == MoveState.WOODSMAN
 
 
 ## The lock-on lunge: the same swing, plus a burst of drive at the locked target
@@ -3772,10 +3897,27 @@ func _drive_animation(delta: float) -> void:
 	# The aim stance rides the same speed axis, so a strafe at the shoulder blends
 	# through the aim-walk at the pace the sword stance would have walked at.
 	_tree.set(_P_AIM_BLEND, clampf(planar, 0.0, run_blend_speed))
-	# Guard locomotion is directional only through the controller: the supplied
-	# clips face forward, but every nonzero planar move must keep their legs
-	# cycling instead of falling back to the frozen full-body block idle.
-	_tree.set(_P_GUARD_BLEND, clampf(planar, 0.0, run_blend_speed))
+	# The guard is the one stance whose blend is NOT this speed scalar. Z-Parallel
+	# holds the facing while the stick drives velocity, so `planar` cannot say
+	# whether those legs are walking forward, backing off or side-stepping — and
+	# a scalar guard blend is exactly how the backpedal came to play for every
+	# direction. Project the velocity into the hero's own frame instead.
+	#
+	# `Vector3(-f.z, 0, f.x)` is his RIGHT. Same derivation `_dodge_dir` sets out
+	# and the same reason for reading it off `facing_yaw` rather than `basis`:
+	# the obvious-looking `(f.z, 0, -f.x)` is his LEFT and it once shipped, and a
+	# basis is a frame stale on exactly the frames facing changes fastest.
+	#
+	# `K.plane` and NOT `K.flat`: flat normalises, and its own doc block says so
+	# after three bugs. A normalised velocity here reads (0, 1) at every speed —
+	# both the walk and the run endpoint clamp to the same corner of the blend —
+	# so the guard would cycle at run cadence while creeping. This is the fourth
+	# time that helper has been reached for when a LENGTH was wanted.
+	var f := _forward()
+	var travel := K.plane(velocity)
+	_tree.set(_P_GUARD_BLEND,
+		Vector2(travel.dot(Vector3(-f.z, 0.0, f.x)), travel.dot(f))
+			.limit_length(run_blend_speed))
 	var speed01 := clampf(planar / K.RUN_SPEED, 0.0, 1.0)
 	var stride_scale := lerpf(stride_scale_idle, stride_scale_run, speed01)
 	_tree.set(_P_STRIDE, stride_scale)
