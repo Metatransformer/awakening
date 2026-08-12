@@ -368,6 +368,13 @@ swing at the thing they were guarding against without dropping the shield on an
 earlier frame. A raised shield takes A away from the world for as long as it is
 up — behind a guard there is nothing to talk to.
 
+The ordinary block is paid from stamina. A held guard stops a frontal blow only
+while the bar is above zero. Its cost is
+`Hit.amount * K.STAMINA_BLOCK_PER_QUARTER`, and `Hit.amount` is already the
+blow's weight in quarter-hearts. Spending is partial: any positive remainder
+catches the current blow and clamps to zero, and the next blow lands if the bar
+is still empty.
+
 **The perfect dodge** — the roll, *into* the blow instead of away from it. Time
 slows for half a second and the sword button becomes a leaping overhead that
 sends the body flying (§4 pillar 1's roll, earning its keep). It asks for no
