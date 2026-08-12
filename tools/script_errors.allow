@@ -18,9 +18,8 @@
 # that turns the gate off wholesale; a run you cannot make clean is a card, and
 # adding the row here is how you file it.
 #
-# Taken 2026-08-11 from a sweep of all 136 directors on `main` at 661582b. Three
-# were dirty. See CLAUDE.md §2.
+# Taken 2026-08-11 from a sweep of all 136 directors on `main` at 661582b. See
+# CLAUDE.md §2. Obsolete critic probes formerly occupied two rows; #70 removed
+# both probes and their exemptions.
 
-critic_menu_hold.gd	Invalid access to property or key 'name' on a base object of type 'null instance'.	#70
-critic_menu_hold2.gd	Invalid access to property or key 'name' on a base object of type 'null instance'.	#70
 voices.gd	Invalid access to property or key of type 'String' on a base object of type 'Dictionary'.	#71
