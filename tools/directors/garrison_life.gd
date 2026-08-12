@@ -278,7 +278,7 @@ func _menu(rig) -> void:
 		"opening GARRISON places focus on Back")
 
 	var strip := _first_tabs(panel)
-	rig.check(strip != null and strip.get_child_count() >= 5,
+	rig.check(strip != null and strip.get_child_count() == 4,
 		"the focusable four-page tab strip is present")
 	if strip != null:
 		strip.focus_home()
