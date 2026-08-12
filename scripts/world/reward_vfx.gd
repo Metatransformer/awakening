@@ -592,6 +592,326 @@ static func _motes(tier: int) -> GPUParticles3D:
 	return p
 
 
+# --- Light that STAYS -----------------------------------------------------------
+#
+# Everything above this line is an EVENT: it fires on one frame, decays on a
+# clock of its own and frees itself. The two below are STATES -- a thing is being
+# held up for you to look at; a box is standing open with something alight inside
+# it -- and they last exactly as long as whatever owns them says.
+#
+# Card #127. The playtest note was that the ceremony read as *an object parked in
+# the air*, and the two halves of the fix are here rather than in `ItemGet` and
+# `BossItemChest` because a second glow vocabulary is the thing this file exists
+# to prevent. Same palette, same MIX blending, same rule: **these breathe by
+# changing SHAPE and never by changing a material's alpha** (CLAUDE.md §3 --
+# alpha does not attenuate over a near-black dungeon floor, and additive over it
+# is an opaque slab at every opacity).
+
+## Peak alpha of a standing glow, and it is a THIRD of what looks right in the
+## editor viewport. The disc is a radial falloff, so this is the alpha at its
+## very centre; at 1.0 -- which is what `_billboard` hands out by default for a
+## mote -- the middle of the halo is flat gold over a black room and the item
+## being presented is a silhouette cut out of a coin.
+const AURA_ALPHA := 0.34
+## The mouth of an opened chest, seen nearly edge-on from the ceremony camera. It
+## carries more than the halo because it is the thing that has to read as *inside
+## the box*: too faint and it is a smudge on the lid line.
+const MOUTH_ALPHA := 0.46
+## The spill standing above the mouth. `_shaft_mesh`'s hard-won number, and for
+## its reason -- a cylinder is two walls deep from most angles, so a MIX alpha of
+## `a` composites toward `1 - (1 - a)^2`. This one is CULL_FRONT like the shaft,
+## which is what keeps the near wall from being drawn as a veil over the chest.
+const SPILL_ALPHA := 0.26
+
+
+## The light an item being presented carries with it: a soft disc standing behind
+## it, a lamp so the model is lit rather than merely outlined, and a slow drift of
+## motes so the air around it is doing something.
+##
+## It BREATHES by scale. A halo whose alpha pulsed would be invisible at the
+## bottom of the cycle and a gold plate at the top; a halo whose radius moves
+## reads as light at every point in between.
+class Aura extends Node3D:
+	## How far the disc's radius travels, either side of 1.0, and how fast. Small:
+	## this is meant to be felt rather than watched, and a halo that visibly
+	## throbs turns the item into a warning light.
+	const BREATH := 0.085
+	const BREATH_SPEED := 1.9
+
+	var _t := 0.0
+	var _rest := 1.0
+	var _disc: MeshInstance3D = null
+
+	func _process(delta: float) -> void:
+		_t += delta
+		if _disc == null or not is_instance_valid(_disc):
+			return
+		var k := _rest * (1.0 + sin(_t * BREATH_SPEED) * BREATH)
+		_disc.scale = Vector3(k, k, k)
+
+
+## The inside of an opened chest, alight. A pool of light lying in the mouth, a
+## short column standing out of it, and a lamp down in the box so the lid's
+## underside and the inner walls are actually lit by it.
+##
+## `close()` NARROWS it out rather than fading it, for `_step_shaft`'s reason
+## turned around: the chest is being emptied, and a column that shrank downward
+## would read as the light being pulled back into a box the player has just been
+## shown is empty.
+class BoxLight extends Node3D:
+	const BREATH := 0.055
+	const BREATH_SPEED := 1.35
+
+	var _t := 0.0
+	var _shut := -1.0
+	var _shut_time := 0.5
+	var _breath: Node3D = null
+	var _lamp: OmniLight3D = null
+	var _lamp_energy := 1.0
+
+	func _process(delta: float) -> void:
+		_t += delta
+		var k := 1.0 + sin(_t * BREATH_SPEED) * BREATH
+		if _shut >= 0.0:
+			_shut += delta
+			var u := clampf(_shut / _shut_time, 0.0, 1.0)
+			k *= maxf(1.0 - u * u, 0.0)
+			if _lamp != null:
+				# A LIGHT, not a material, so this one is allowed to fade -- see
+				# `_step_light`, which does exactly this. §3's trap is about
+				# surfaces composited over black, and a lamp is neither.
+				_lamp.light_energy = _lamp_energy * maxf(1.0 - u, 0.0)
+			if u >= 1.0:
+				queue_free()
+				return
+		if _breath != null:
+			# X and Z only. The column keeps its height while it thins, which is
+			# `_step_shaft`'s shape and the reason given there.
+			_breath.scale = Vector3(k, 1.0, k)
+
+	## Put it out over `seconds`. Idempotent -- a chest whose ceremony is
+	## dismissed twice must not restart the close and live twice as long.
+	func close(seconds: float = 0.5) -> void:
+		if _shut < 0.0:
+			_shut = 0.0
+			_shut_time = maxf(seconds, 0.05)
+
+
+## Hang an `Aura` on `anchor`. `radius` is the halo's radius in metres; pass a
+## little more than the item's own extent, so the light is around it rather than
+## behind it like a plate.
+static func aura(anchor: Node3D, radius: float,
+		tint: Color = Pal.GOLD) -> Aura:
+	if anchor == null or not is_instance_valid(anchor):
+		return null
+	var node := Aura.new()
+	node.name = &"Aura"
+	node._rest = maxf(radius, 0.05)
+	anchor.add_child(node)
+
+	var warm := tint.lerp(Pal.BONE, 0.2)
+	node._disc = MeshInstance3D.new()
+	node._disc.name = &"Halo"
+	# Unit-sized, scaled by `_process`. A quad whose SIZE was animated would
+	# rebuild the mesh every frame; a quad whose node scale is animated is one
+	# transform, and `billboard_keep_scale` is what makes that legal on a
+	# billboard at all.
+	node._disc.mesh = _billboard(
+		Color(warm.r, warm.g, warm.b, AURA_ALPHA), 2.0)
+	node._disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# BEHIND the item, always. The halo is depth-tested (this whole file is --
+	# see `_flat_mat`), so without this it z-fights the model it is lighting from
+	# whichever angle the display's own rotation brings round.
+	node._disc.sorting_offset = -0.35
+	node._disc.scale = Vector3.ONE * node._rest
+	node.add_child(node._disc)
+
+	var lamp := OmniLight3D.new()
+	lamp.name = &"AuraLamp"
+	lamp.light_color = warm
+	lamp.light_energy = 2.2
+	lamp.omni_range = 3.0
+	lamp.omni_attenuation = 1.6
+	lamp.shadow_enabled = false
+	# ABOVE the item and not inside it, and this is a SHAPE fix for exactly the
+	# failure CLAUDE.md §3 names. An omni at the item's own centre is zero metres
+	# from every surface of it, and 1/d^2 does what 1/d^2 does: the bow, which is
+	# a thin silhouette with almost no face turned to the lamp, read beautifully,
+	# and the Verse plaque -- a flat 0.78 m plate whose face normal points
+	# straight at the camera -- went to a WHITE RECTANGLE with its letter gone.
+	# Four of the six items that get this ceremony use that plaque.
+	#
+	# Lowering the energy would not have fixed it (at d ~ 0 nothing does) and
+	# raising the plaque's roughness would have been solving it on the wrong
+	# object. Moved up by most of a radius instead, the plate is lit at a grazing
+	# angle -- N.L near zero, so the face stays the near-black it was authored as
+	# -- while the halo and the motes, which are what the eye reads as the glow,
+	# are untouched. Verified by looking: `item_get_frame --out=/tmp/ig10`,
+	# `i_20_copy_burst.png`.
+	lamp.position.y = node._rest * 0.9
+	node.add_child(lamp)
+
+	node.add_child(_drift(warm, radius))
+	return node
+
+
+## Light the inside of `chest`. `mouth` is the opening's size, `at` is where that
+## opening sits and `height` is how far the spill stands out of it -- all three in
+## the CHEST'S OWN space, and all three from the caller. A great chest is scaled
+## up at the root and an ordinary one is not, so a glow measured off a bounding
+## box here would put the pool through somebody's lid.
+static func box_light(chest: Node3D, mouth: Vector2, at: Vector3,
+		height: float, tint: Color = Pal.GOLD) -> BoxLight:
+	if chest == null or not is_instance_valid(chest):
+		return null
+	var node := BoxLight.new()
+	node.name = &"BoxLight"
+	chest.add_child(node)
+	node.position = at
+
+	node._breath = Node3D.new()
+	node._breath.name = &"Breath"
+	node.add_child(node._breath)
+
+	var pool := _pool_mesh(mouth, tint)
+	node._breath.add_child(pool)
+
+	# The spill takes the MOUTH'S footprint and not a circle inscribed in it. A
+	# chest is half as deep as it is wide, so a round column narrow enough to fit
+	# the depth is narrower than the hero standing in front of it -- and the
+	# ceremony camera looks at the hero's back with the chest directly behind him,
+	# so all of it went behind his shoulders and the frame showed no light leaving
+	# the box at all. Matching the ellipse puts it either side of him.
+	node._breath.add_child(
+		_spill_mesh(mouth * 0.44, maxf(height, 0.02), tint))
+
+	node._lamp = OmniLight3D.new()
+	node._lamp.name = &"BoxLamp"
+	node._lamp.light_color = tint
+	node._lamp_energy = 1.7
+	node._lamp.light_energy = node._lamp_energy
+	node._lamp.omni_range = 2.3
+	node._lamp.omni_attenuation = 1.4
+	node._lamp.shadow_enabled = false
+	# DOWN in the box, not at the mouth. The read is the inner walls and the
+	# underside of the open lid catching it; a lamp level with the opening lights
+	# the room and leaves the inside of the chest exactly as dark as it was.
+	# A QUARTER of the mouth's depth and not a third: at a third the open lid --
+	# which has swung past vertical, stands above the box and is by far the
+	# largest interior-facing surface either camera can actually SEE -- sat
+	# outside the falloff and stayed dark.
+	#
+	# **1.7 and 2.3 m, and both were measured off a frame that was wrong.** At
+	# 3.0 over 2.8 m the lid clipped to white and read as a pale slab standing
+	# behind the chest: STYLEGUIDE §7.2's "nothing near #FFFFFF", arrived at from
+	# the light rather than from the material. It is the one surface in this
+	# effect that is lit rather than emitted, so it is also the one that can blow.
+	node._lamp.position.y = -mouth.y * 0.25
+	node.add_child(node._lamp)
+	return node
+
+
+## The pool of light lying in a chest's mouth: a flat radial disc in the XZ
+## plane, hot in the middle and transparent at the rim.
+##
+## Depth-TESTED and therefore occluded by the chest's own walls, which is the
+## point -- from the ceremony camera you are looking down into the box at a
+## shallow angle and the near wall has to cut the pool off. `_flat_mat`'s note
+## about `no_depth_test` is the same lesson from the other end.
+static func _pool_mesh(mouth: Vector2, tint: Color) -> MeshInstance3D:
+	var verts := PackedVector3Array()
+	var colors := PackedColorArray()
+	var hot := Color(tint.r, tint.g, tint.b, MOUTH_ALPHA)
+	var cold := Color(Pal.BONE.r, Pal.BONE.g, Pal.BONE.b, 0.0)
+	var sides := 24
+	# Elliptical rather than round, because a chest's mouth is. Built as a fan
+	# from a hot centre so the falloff is in the VERTEX COLOURS and not in a
+	# texture -- one more 64x64 gradient per chest is the allocation `_tex`'s note
+	# refuses on the frame this lands.
+	for i in sides:
+		var a0 := TAU * float(i) / float(sides)
+		var a1 := TAU * float(i + 1) / float(sides)
+		verts.append_array([
+			Vector3.ZERO,
+			Vector3(sin(a0) * mouth.x * 0.5, 0.0, cos(a0) * mouth.y * 0.5),
+			Vector3(sin(a1) * mouth.x * 0.5, 0.0, cos(a1) * mouth.y * 0.5),
+		])
+		colors.append_array([hot, cold, cold])
+	var mi := _mesh_of(verts, colors, &"Pool", false)
+	# A hair above the seam so it does not z-fight the chest's own floor when the
+	# caller's `at` lands exactly on it.
+	mi.position.y = 0.01
+	return mi
+
+
+## The short column of light standing out of the mouth. `_shaft_mesh`'s trick at
+## a twentieth of the size: an open cylinder, hot at the BOTTOM and transparent
+## at the top, with only its far wall drawn.
+##
+## The MAJOR shaft is a seven-metre announcement visible across a room. This is
+## the opposite piece of language -- it exists to say *the light is coming out of
+## here*, so it is shorter than the chest is wide and it never leaves the box's
+## own silhouette.
+static func _spill_mesh(radii: Vector2, height: float,
+		tint: Color) -> MeshInstance3D:
+	var verts := PackedVector3Array()
+	var colors := PackedColorArray()
+	var hot := Color(tint.r, tint.g, tint.b, SPILL_ALPHA)
+	var cold := Color(Pal.BONE.r, Pal.BONE.g, Pal.BONE.b, 0.0)
+	var sides := 16
+	for i in sides:
+		var a0 := TAU * float(i) / float(sides)
+		var a1 := TAU * float(i + 1) / float(sides)
+		var b0 := Vector3(sin(a0) * radii.x, 0.0, cos(a0) * radii.y)
+		var b1 := Vector3(sin(a1) * radii.x, 0.0, cos(a1) * radii.y)
+		var t0 := Vector3(b0.x, height, b0.z)
+		var t1 := Vector3(b1.x, height, b1.z)
+		verts.append_array([b0, t0, t1, b0, t1, b1])
+		colors.append_array([hot, cold, cold, hot, cold, hot])
+	var mi := _mesh_of(verts, colors, &"Spill", false)
+	# CULL_FRONT, for `_shaft_mesh`'s reason spelled out there: with both walls
+	# drawn the near one is a veil across the thing the light exists to show.
+	(mi.material_override as StandardMaterial3D).cull_mode = \
+		BaseMaterial3D.CULL_FRONT
+	return mi
+
+
+## What drifts around a held item. Continuous and slow, not a burst: `_motes` is
+## the moment of arrival and this is the minute afterwards, so they must not read
+## as the same event.
+static func _drift(tint: Color, radius: float) -> GPUParticles3D:
+	var p := GPUParticles3D.new()
+	p.name = &"Drift"
+	p.amount = 10
+	p.lifetime = 2.4
+	p.local_coords = true
+	p.fixed_fps = 30
+	p.visibility_aabb = AABB(Vector3(-2.0, -1.0, -2.0), Vector3(4.0, 5.0, 4.0))
+
+	var m := ParticleProcessMaterial.new()
+	m.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	m.emission_sphere_radius = radius * 0.8
+	m.direction = Vector3.UP
+	m.spread = 22.0
+	m.initial_velocity_min = 0.10
+	m.initial_velocity_max = 0.34
+	# NO gravity at all, where `_motes` runs a tenth. These are meant to hang in
+	# the air beside a thing being held still; anything that falls turns the
+	# presentation into an object shedding sparks.
+	m.gravity = Vector3.ZERO
+	m.damping_min = 0.2
+	m.damping_max = 0.7
+	m.scale_min = 0.5
+	m.scale_max = 1.2
+	m.scale_curve = _curve([Vector2(0.0, 0.0), Vector2(0.25, 1.0),
+		Vector2(1.0, 0.0)])
+	m.color_ramp = _fade(tint, 0.12, 0.6, 0.85)
+	p.process_material = m
+	p.draw_pass_1 = _billboard(tint, 0.055)
+	p.emitting = true
+	return p
+
+
 # --- Shared building blocks -----------------------------------------------------
 # Local copies, this folder's pattern: `SlamVfx`, `SpinVfx`, `ImpactVfx` and
 # `FlourishVfx` each carry their own, tuned to the effect around them.

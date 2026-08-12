@@ -4,12 +4,33 @@ extends Node
 
 const SCREEN_ID := &"item_get"
 const MIN_DISMISS_TIME := 2.2
-const DISPLAY_HEIGHT := 2.28
+## HOW HIGH HE HOLDS IT, in metres above his own origin. The hero is 1.65 m
+## (CLAUDE.md §6), so this is 40 cm of clearance over the top of his head and the
+## item's own lower edge lands about 14 cm clear of it.
+##
+## **It was 2.28 and the playtest note was "floating way too high up on the
+## screen"** (card #127): 63 cm over his head, which at this distance is most of
+## a body length of empty air between the man and the thing he supposedly just
+## lifted out of a box. Picked by photographing five candidates against the same
+## chest in the same room -- `tools/directors/item_get_frame.gd --sweep=1`, which
+## carries the old value as its first row so the comparison is a pair of frames
+## and not a memory. 1.95 was tried and is too low: the halo washes over his head
+## and the bow crosses the chest's top rim.
+const DISPLAY_HEIGHT := 2.05
 const DISPLAY_EXTENT := 0.78
 const CAMERA_DISTANCE := 4.2
-const CAMERA_HEIGHT := 1.95
-const CAMERA_TARGET_HEIGHT := 1.38
-const CAMERA_FOV := 38.0
+## THE SHOT, and these three move WITH `DISPLAY_HEIGHT` and never on their own.
+## Lowering the item without re-aiming drops it toward the middle of the frame,
+## where it is competing with the hero's face; these were swept alongside it and
+## put the item back in the upper third (measured at y=0.23 of the frame height
+## by `item_get_frame` A4) with the hero's feet still clear of the lower letterbox
+## bar at 0.68.
+const CAMERA_HEIGHT := 1.85
+const CAMERA_TARGET_HEIGHT := 1.28
+## Two degrees wider than #108's 38. The camera came DOWN with the item, and at
+## 38 the hero's boots went behind the lower bar; the widening is what buys them
+## back without moving the camera further off.
+const CAMERA_FOV := 40.0
 const ROTATION_SPEED := 0.42
 const BOB_HEIGHT := 0.055
 const BOB_SPEED := 2.4
@@ -25,6 +46,7 @@ var _display_anchor: Node3D
 var _display: Node3D
 var _display_base: Vector3
 var _display_scale := Vector3.ONE
+var _aura: RewardVfx.Aura
 var _overlay_root: Control
 var _age := 0.0
 var _started := false
@@ -133,11 +155,20 @@ func _build_camera() -> void:
 	# begins; putting a cinematic camera there means putting it through the reward
 	# geometry. The gameplay camera has already solved that occlusion problem.
 	var camera_side := Vector3.ZERO
+	var camera_distance := CAMERA_DISTANCE
 	if _previous_camera != null and is_instance_valid(_previous_camera):
 		camera_side = _previous_camera.global_position - _hero.global_position
 	camera_side.y = 0.0
 	if camera_side.length_squared() <= 0.0001:
 		camera_side = _hero.global_basis.z
+	else:
+		# Keep the live camera's collision-safe boom when a wall has already
+		# shortened it. Taking only its SIDE and then restoring the full 4.2 m
+		# put the ceremony camera through the entrance-room wall: the overlay
+		# rendered over a completely black world while every node-level framing
+		# assertion still passed. CAMERA_DISTANCE is therefore a ceiling, not a
+		# command to throw away the gameplay camera's solved position.
+		camera_distance = minf(CAMERA_DISTANCE, camera_side.length())
 	camera_side = camera_side.normalized()
 
 	_camera = Camera3D.new()
@@ -147,7 +178,7 @@ func _build_camera() -> void:
 	_camera.far = 80.0
 	add_child(_camera)
 	_camera.top_level = true
-	_camera.global_position = _hero.global_position + camera_side * CAMERA_DISTANCE \
+	_camera.global_position = _hero.global_position + camera_side * camera_distance \
 		+ Vector3.UP * CAMERA_HEIGHT
 	_camera.look_at(_hero.global_position + Vector3.UP * CAMERA_TARGET_HEIGHT, Vector3.UP)
 
@@ -181,13 +212,18 @@ func _build_display() -> void:
 		var scale_factor := clampf(DISPLAY_EXTENT / maxf(longest, 0.01), 0.25, 2.6)
 		_display_scale = Vector3.ONE * scale_factor
 
-	var light := OmniLight3D.new()
-	light.name = "ItemGetLight"
-	light.light_color = Color(1.0, 0.82, 0.58)
-	light.light_energy = 2.0
-	light.omni_range = 5.0
-	light.position = Vector3(0.6, 0.8, 1.4)
-	_display_anchor.add_child(light)
+	# THE ITEM'S OWN LIGHT (card #127). This was a bare OmniLight3D hung a metre
+	# off to one side, which lit the model and did nothing at all for the frame:
+	# from the ceremony camera the bow was a well-lit object with no reason to be
+	# in the air. `RewardVfx.aura` is the same light plus the two things that make
+	# it read as glowing -- a soft disc standing behind it and a slow drift of
+	# motes around it -- and it lives there so the reward vocabulary stays in one
+	# file (#127 says so explicitly).
+	#
+	# Sized off the item and not off a constant: `DISPLAY_EXTENT` is the longest
+	# edge every model is fitted to, so a halo a little wider than half of it sits
+	# around the silhouette rather than behind it like a plate.
+	_aura = RewardVfx.aura(_display_anchor, DISPLAY_EXTENT * 0.62)
 
 
 func _make_item_visual() -> Node3D:
@@ -283,6 +319,17 @@ func _reveal_display() -> void:
 	reveal.tween_property(_display, "scale", _display_scale, 0.68)
 	reveal.tween_property(_display, "position", Vector3.ZERO, 0.58) \
 		.set_trans(Tween.TRANS_CUBIC)
+	# The halo opens WITH the item. Left at full size it is a gold disc hanging in
+	# the frame for two thirds of a second before the thing it belongs to arrives,
+	# which reads as the light being the reward.
+	#
+	# The Aura's own `_process` writes its DISC's scale; this scales the Aura
+	# node, and the two multiply. Tweening the disc from here instead would have
+	# the breathing overwrite the reveal on the next frame.
+	if _aura != null:
+		_aura.scale = Vector3.ONE * 0.15
+		reveal.tween_property(_aura, "scale", Vector3.ONE, 0.62) \
+			.set_trans(Tween.TRANS_CUBIC)
 
 
 func _build_overlay() -> void:

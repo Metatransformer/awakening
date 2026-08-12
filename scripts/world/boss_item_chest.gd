@@ -10,6 +10,43 @@ extends Chest
 const ROOT_SCALE := 1.55
 const REVEAL_TIME := 0.34
 
+## THE LIT INTERIOR (card #127). The mouth's size and where it sits, in this
+## node's OWN space -- so `ROOT_SCALE` carries them out to the world along with
+## everything else hung on the chest, and the numbers below stay comparable with
+## `Chest.SEAM_Y` and the trim bands next to them rather than being 1.55x copies
+## of nothing.
+##
+## `SEAM_Y` is the lid LINE at 0.505; the pool sits a little under it, because a
+## pool exactly on the seam is a bright edge along the rim and what this has to
+## read as is the inside of a box.
+const MOUTH_SIZE := Vector2(0.98, 0.55)
+const MOUTH_Y := 0.46
+## How far the spill stands out of the mouth, and it is the one number here that
+## was chosen against the CAMERA rather than against the chest.
+##
+## **Almost none of a chest's mouth is visible from the ceremony camera, and that
+## is geometry rather than tuning.** The camera stands 4.2 m off at 1.85 m and
+## aims at 1.28, so the sightline that clears the chest's front rim is still
+## above the mouth plane when it reaches the back wall -- you are looking at the
+## box very nearly edge-on. Swinging the camera 25 and 40 degrees off the
+## gameplay bearing was photographed and rejected
+## (`item_get_frame --sweep=1`, rows c-f): it exposes a sliver of the interior
+## and costs the whole composition, putting the hero off-centre and the item in a
+## corner of the frame.
+##
+## So the thing that carries this shot is not the pool and not the column: it is
+## the OPEN LID, which has swung past vertical, stands above the box and is the
+## one interior-facing surface either camera can see. `RewardVfx.box_light`'s lamp
+## is aimed at it. The column is the supporting half, and 0.62 is as tall as it
+## may be -- 0.85 was tried and its hard silhouette cleared the chest's rim as a
+## translucent block, which is CLAUDE.md §3 arriving through the geometry instead
+## of through the material. It never leaves the chest's own footprint:
+## `RewardVfx.MAJOR`'s seven-metre shaft is the across-the-room announcement, and
+## this is the opposite sentence.
+const SPILL_H := 0.62
+
+var _inside: RewardVfx.BoxLight = null
+
 
 func _ready() -> void:
 	scale = Vector3.ONE * ROOT_SCALE
@@ -21,6 +58,7 @@ func _ready() -> void:
 func activate(by: Node3D) -> void:
 	if not _begin_open():
 		return
+	_light_the_inside()
 
 	var awarded_item := item_id
 	var hero := by as Hero
@@ -54,6 +92,39 @@ func _pay_item(awarded_item: StringName, hero: Hero, host: Node) -> void:
 			% awarded_item)
 		return
 	ItemGet.present(host, awarded_item, hero)
+
+
+## Put a light INSIDE the box on the frame the lid starts to move, and take it
+## out again when the ceremony that lifted the item out of it ends.
+##
+## **`Chest._begin_open` is doing the opposite thing three lines up**, and that is
+## the whole of #127 part 2: it tweens the seam glow to zero over half a second,
+## because for an ordinary chest the light was the *there is something in here*
+## promise and opening it is the promise being kept. A great chest is not done at
+## that point -- the item is about to be held over the hero's head for two and a
+## half seconds, and #127's note is that the frame has to read as light coming out
+## of a box rather than an object parked in the air. So the seam still goes out
+## and the INSIDE comes up behind it.
+##
+## The close is hung on `Bus.item_get_finished` rather than on a timer, because
+## the ceremony's length is the ceremony's business (`ItemGet.MIN_DISMISS_TIME`
+## is a floor and the player dismisses it) and a chest that went dark early would
+## be doing it behind the presentation camera.
+func _light_the_inside() -> void:
+	if _inside != null and is_instance_valid(_inside):
+		return
+	_inside = RewardVfx.box_light(self, MOUTH_SIZE,
+		Vector3(0.0, MOUTH_Y, 0.0), SPILL_H)
+	if _inside == null:
+		return
+	Bus.item_get_finished.connect(_on_item_get_finished)
+
+
+func _on_item_get_finished(_id: StringName) -> void:
+	if _inside != null and is_instance_valid(_inside):
+		_inside.close(0.6)
+	if Bus.item_get_finished.is_connected(_on_item_get_finished):
+		Bus.item_get_finished.disconnect(_on_item_get_finished)
 
 
 func _build_great_trim() -> void:
