@@ -444,6 +444,11 @@ sameness and it costs one dictionary per floor.
 floor's deepest room is still where the best chest and the commitment are, and
 `scripts/world/stairs.gd` keeps its job.
 
+**Every entrance also has an UP stair.** Above floor 1 it returns to the
+preceding seeded floor and places the hero beside that floor's canonical DOWN
+stair, facing back into its arrival room. Floor 1's UP stair is the physical
+entrance exit and ends the run through the normal priced extraction settlement.
+
 **A boss you have killed stays dead.** Its door hangs open and the arena never
 rebuilds the fight. An unclaimed boss-item great chest may still be waiting in
 the spent arena; once its item is owned, the arena is empty forever after. The

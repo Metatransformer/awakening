@@ -91,7 +91,7 @@ trace; tiny rules do not each need a separate three-heading essay.
 | RUN-10 | Death banks only the case, loses exposed carry, preserves metagame progress and restores health | Playable | Test | Risk, Homecoming | Suffer legible setback without erasing prior growth → tension/resilience | [`METAGAME.md` §5](METAGAME.md) |
 | RUN-11 | One run-end receipt reports extracted/lost/cased stacks, values, floor, kills and killer | Playable | Test | Risk, Homecoming | Attribute the outcome to specific choices → ownership/closure | [`METAGAME.md` §5](METAGAME.md) |
 | RUN-12 | Run state is never saved; persistent state autosaves at scene transitions | Playable | Maintain | Risk, Homecoming | Prevent reload from undoing risk while protecting permanence → trust | [`METAGAME.md` §5](METAGAME.md) |
-| RUN-13 | Descending preserves health, bag and rising fee; it banks/heals nothing | Playable | Test | Risk, Curiosity | Choose deeper possibility at peak exposure → tense greed/curiosity | [`METAGAME.md` §7.1](METAGAME.md) |
+| RUN-13 | Bidirectional floor changes preserve health, magic, bag and run seed without banking/healing; floor-1 UP uses normal priced extraction | Playable | Test | Risk, Curiosity | Choose deeper possibility or retrace the same exposed trip → tense greed/curiosity | [`METAGAME.md` §5, §7.1](METAGAME.md); `ascend_stairs` director |
 | RUN-14 | Depth raises rooms, packs, elites, rewards, health/damage and tempo pressure through one curve | Playable | Maintain | Risk, Mastery, Curiosity | Self-select risk while rewards remain competitive → anticipation | [`METAGAME.md` §7.1](METAGAME.md) |
 
 ### Echo rule bends

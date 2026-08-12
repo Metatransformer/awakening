@@ -1,6 +1,9 @@
 class_name EscapeRope
 extends Node3D
-## The way out, carried. You open the menu, use the rope, and it pulls you home.
+## The portable way out. You open the menu anywhere on a dungeon floor, use the
+## rope, and it pulls you home. Floor 1's UP stair reaches the same
+## `Run.extract()` settlement; the rope is what makes extraction available away
+## from that physical exit.
 ##
 ## This replaces the rune pad (`ExtractNode`, deleted). The pad made leaving a
 ## PLACE — you had to find your way back to it, which turned the game's central

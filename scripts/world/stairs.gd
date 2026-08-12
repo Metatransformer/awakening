@@ -1,6 +1,7 @@
 class_name Stairs
 extends Interactable
-## The way down. Stands in the deepest room of every floor, next to the chest.
+## The seam between dungeon floors. DOWN remains the compatibility default and
+## stands beyond the floor's boss or shortcut; UP stands in every entrance room.
 ##
 ## This is the decision the whole loop is built around, and it is deliberately a
 ## thing you have to walk to and press a button on rather than a hole you fall
@@ -9,9 +10,9 @@ extends Interactable
 ## go home with what you have. A stair that triggered on touch would make that
 ## decision for you (docs/GDD.md §5, docs/METAGAME.md §3).
 ##
-## It does NOT bank anything, heal anything, or end the run. Going down keeps the
-## bag, keeps the damage, and keeps the extraction fee climbing -- the descent is
-## a commitment, not a checkpoint. The only way to bank is to go home.
+## Going between floors does NOT bank anything, heal anything, or end the run.
+## The exception is the floor-1 UP stair: it is an EXIT and calls the same
+## `Run.extract()` settlement as the portable Escape Rope, fee included.
 ##
 ## Built in code like the rest of the kit: the scene stores parameters, never a
 ## few hundred generated triangles.
@@ -45,16 +46,50 @@ const RIM_T := 0.36
 const STEPS := 4
 const RUN := 0.36
 
+## The upward flight is a separate silhouette: rising blocks ending at a dark
+## doorway, never the rimmed pit used by DOWN.
+const UP_W := 2.6
+const UP_D := 3.0
+const UP_RISE := 1.35
+const UP_STEPS := 5
+const UP_PORTAL_H := 2.2
+
+const ARRIVAL_GROUP: StringName = &"down_stairs_arrival"
+
+enum Direction {
+	DOWN,
+	UP,
+}
+
+@export var direction: Direction = Direction.DOWN
+## Exactly one DOWN stair per floor receives ordinary ascents. Compatibility is
+## true; Dungeon opts the optional shortcut landing out before it enters the tree.
+@export var receives_ascent: bool = true
+## Logical generated room containing this DOWN stair. Dungeon fills this so an
+## ascent autosave names the room where it actually placed the hero.
+var arrival_room: StringName = &""
+
 
 func _ready() -> void:
-	prompt = "DESCEND"
-	# Measured off the build below, not picked: the pit is 3.2 deep and its kerb is
-	# solid, so the closest the hero can physically stand to the node's origin is
-	# about 2.1 m head-on and more than that at a corner. A 2.2 radius left him
-	# able to touch the stair from directly in front and nowhere else.
-	radius = 3.2
+	if direction == Direction.UP:
+		prompt = "EXIT" if Run.level == 1 else "ASCEND"
+		# The entrance spawn is deliberately outside the first tread but still in
+		# reach of the prompt; see Dungeon's south-wall placement.
+		radius = 3.4
+	else:
+		prompt = "DESCEND"
+		# Measured off the build below, not picked: the pit is 3.2 deep and its kerb is
+		# solid, so the closest the hero can physically stand to the node's origin is
+		# about 2.1 m head-on and more than that at a corner. A 2.2 radius left him
+		# able to touch the stair from directly in front and nowhere else.
+		radius = 3.2
+		if receives_ascent:
+			add_to_group(ARRIVAL_GROUP)
 	super()
-	_build()
+	if direction == Direction.UP:
+		_build_up()
+	else:
+		_build_down()
 
 
 func activate(_by: Node3D) -> void:
@@ -63,12 +98,33 @@ func activate(_by: Node3D) -> void:
 	# `Flow` owns the transition, and it is the only thing in the project that
 	# calls change_scene_to_file. A stair that loaded the next floor itself would
 	# be the second one, and the fade would stop being a guarantee.
-	Flow.descend()
+	if direction == Direction.UP:
+		Flow.ascend()
+	else:
+		Flow.descend()
+
+
+## The safe side of a DOWN stair, clear of the front rim and one hero radius
+## beyond it. Local -Z is the room-facing side for every placement in Dungeon.
+func arrival_position() -> Vector3:
+	return to_global(Vector3(0.0, 0.05, -(PIT_D * 0.5 + RIM_T + 0.7)))
+
+
+## Heading, not node yaw. Flow applies the hero contract (`yaw + PI`) and also
+## updates `Hero.facing_yaw`, so the next physics tick keeps this facing.
+func arrival_heading() -> Vector3:
+	var heading := -global_basis.z
+	heading.y = 0.0
+	return heading.normalized()
+
+
+func arrival_room_id() -> StringName:
+	return arrival_room
 
 
 # --- Construction -----------------------------------------------------------
 
-func _build() -> void:
+func _build_down() -> void:
 	var stone := StandardMaterial3D.new()
 	stone.albedo_color = Color(0.20, 0.19, 0.22)
 	stone.roughness = 0.98
@@ -161,9 +217,69 @@ func _build() -> void:
 	add_child(lamp)
 
 
-## One box, optionally solid. `blocking` shapes are the housing itself -- the
-## treads are left non-colliding so the hero can stand at the head of the flight
-## instead of being held two metres off it by a staircase he cannot climb.
+## A climb toward a dark upper threshold. The tread blocks are solid, beginning
+## low enough to stop rather than catch the hero, while the open room-facing end
+## has no kerb or side return that could make a collision pocket.
+func _build_up() -> void:
+	var stone := StandardMaterial3D.new()
+	stone.albedo_color = Color(0.20, 0.19, 0.22)
+	stone.roughness = 0.98
+	stone.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+
+	var body := StaticBody3D.new()
+	body.collision_layer = K.L_WORLD
+	body.collision_mask = 0
+	add_child(body)
+
+	var step_run := UP_D / float(UP_STEPS)
+	for i in UP_STEPS:
+		var top := UP_RISE * float(i + 1) / float(UP_STEPS)
+		var z := -UP_D * 0.5 + step_run * (float(i) + 0.5)
+		_slab(body, stone, Vector3(UP_W, top, step_run),
+			Vector3(0.0, top * 0.5, z), true)
+
+	# The doorway begins at the top tread. An unshaded void stays black under the
+	# entrance sconces, so it reads as somewhere above rather than painted stone.
+	var dark := StandardMaterial3D.new()
+	dark.albedo_color = Pal.VOID
+	dark.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var portal := MeshInstance3D.new()
+	var portal_mesh := BoxMesh.new()
+	portal_mesh.size = Vector3(UP_W - 0.34, UP_PORTAL_H, 0.08)
+	portal.mesh = portal_mesh
+	portal.material_override = dark
+	# Forward of the generated wall's inner face. At the wall centre this plane
+	# z-fights with the room masonry and the "door" reads as a lit stone patch.
+	var portal_z := UP_D * 0.5 - 0.38
+	portal.position = Vector3(0.0, UP_RISE + UP_PORTAL_H * 0.5, portal_z)
+	body.add_child(portal)
+
+	# A solid stone surround, but no collision across the mouth. The two jambs
+	# are outside the flight and the lintel is above the hero, so none can trap a
+	# body approaching from the room.
+	var jamb_h := UP_PORTAL_H + 0.3
+	for sx in [-1.0, 1.0]:
+		_slab(body, stone, Vector3(0.28, jamb_h, 0.34),
+			Vector3(sx * (UP_W * 0.5 + 0.14), UP_RISE + jamb_h * 0.5,
+				portal_z), true)
+	_slab(body, stone, Vector3(UP_W + 0.56, 0.28, 0.34),
+		Vector3(0.0, UP_RISE + jamb_h, portal_z), true)
+
+	# Bone-white raking light distinguishes the upper doorway from DOWN's two
+	# cyan pit lamps without spending Pal.GOLD, which belongs to currency.
+	var lamp := OmniLight3D.new()
+	lamp.light_color = Pal.BONE
+	lamp.light_energy = 2.2
+	lamp.omni_range = 4.2
+	lamp.omni_attenuation = 1.5
+	lamp.shadow_enabled = false
+	lamp.position = Vector3(0.0, UP_RISE + 1.1, UP_D * 0.5 - 0.25)
+	add_child(lamp)
+
+
+## One box, optionally solid. DOWN passes false for its decorative treads so the
+## hero can stand at the head of the flight; UP's rising blocks pass true and
+## stop the hero cleanly at their low room-facing edge.
 func _slab(body: StaticBody3D, mat: Material, size: Vector3, at: Vector3,
 		blocking: bool) -> void:
 	var mi := MeshInstance3D.new()
