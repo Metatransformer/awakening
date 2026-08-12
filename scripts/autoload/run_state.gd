@@ -1207,7 +1207,12 @@ func line_value(id: StringName) -> int:
 	if def == null or not bag.has(id) or RelicDb.is_relic(id):
 		return 0
 	var base := def.value * int(bag[id])
-	return int(round((base + _premium_share(base)) * RelicDb.vendor_price_mult()))
+	return _merchandise_sale_price(base, _premium_share(base))
+
+
+func _merchandise_sale_price(base: int, premium_share: int) -> int:
+	return int(round(float(base + premium_share)
+		* RelicDb.vendor_price_mult() * Game.warmth_sell_mult()))
 
 
 ## The premium riding on `base` gold of flat value. Rounded down at the last
@@ -1255,7 +1260,7 @@ func sale_value(ids: Array[StringName]) -> int:
 	if sold.is_empty():
 		return 0
 	var base := _base_of(sold)
-	return int(round((base + _premium_share(base)) * RelicDb.vendor_price_mult()))
+	return _merchandise_sale_price(base, _premium_share(base))
 
 
 ## Atomically sell the explicit id set. Run owns the bag bookkeeping; callers
@@ -1266,7 +1271,7 @@ func sell_ids(ids: Array[StringName]) -> int:
 		return 0
 	var base := _base_of(sold)
 	var share := _premium_share(base)
-	var paid := int(round((base + share) * RelicDb.vendor_price_mult()))
+	var paid := _merchandise_sale_price(base, share)
 	if paid <= 0:
 		return 0
 	for id: StringName in sold:
@@ -1313,7 +1318,7 @@ func sell(id: StringName, count: int = -1) -> int:
 	var share := _premium_share(base)
 	# A lit square pays more for the same stack. Unconditional -- `vendor_price_mult`
 	# is 1.0 until the Pillar-Shard is recorded.
-	var paid := int(round((base + share) * RelicDb.vendor_price_mult()))
+	var paid := _merchandise_sale_price(base, share)
 	premium -= share
 
 	if n >= have:

@@ -65,7 +65,12 @@ func port(id: StringName) -> Transform3D:
 	return _ports[id]
 
 
+func has_port(id: StringName) -> bool:
+	return _ports.has(id)
+
+
 func _define_ports() -> void:
+	var hearth_at := Vector3(-1.0, 0.05, -1.0)
 	_ports = {
 		&"arrival": _port_at(Vector3(0.0, 0.05, 10.2), 0.0),
 		&"gate": _port_at(Vector3(0.0, 0.05, 15.4), 0.0),
@@ -74,6 +79,17 @@ func _define_ports() -> void:
 		&"alchemist_day": _port_at(Vector3(15.3, 0.05, 1.0), -PI * 0.5),
 		&"elder_day": _port_at(Vector3(15.3, 0.05, 6.0), -PI * 0.5),
 		&"jewelcrafter_day": _port_at(Vector3(15.3, 0.05, 11.0), -PI * 0.5),
+		&"hearth": _port_at(hearth_at, 0.0),
+		&"quartermaster_bonfire": _facing_port(
+			hearth_at + Vector3(-3.0, 0.0, 0.8), hearth_at),
+		&"smith_bonfire": _facing_port(
+			hearth_at + Vector3(-1.8, 0.0, -2.5), hearth_at),
+		&"alchemist_bonfire": _facing_port(
+			hearth_at + Vector3(1.8, 0.0, -2.5), hearth_at),
+		&"elder_bonfire": _facing_port(
+			hearth_at + Vector3(3.0, 0.0, 0.8), hearth_at),
+		&"jewelcrafter_bonfire": _facing_port(
+			hearth_at + Vector3(0.0, 0.0, 3.1), hearth_at),
 		&"quartermaster_sleep": _sleep_port(Vector3(BUNK_X, 0.58, -6.6), PI * 0.5),
 		&"smith_sleep": _sleep_port(Vector3(BUNK_X, 0.58, -2.3), PI * 0.5),
 		&"alchemist_sleep": _sleep_port(Vector3(BUNK_X, 0.58, 2.0), PI * 0.5),
@@ -496,6 +512,10 @@ func _warm_light(parent: Node3D, at: Vector3, reach: float) -> void:
 
 func _port_at(at: Vector3, yaw: float) -> Transform3D:
 	return Transform3D(Basis(Vector3.UP, yaw), at)
+
+
+func _facing_port(at: Vector3, target: Vector3) -> Transform3D:
+	return Transform3D(Basis.IDENTITY, at).looking_at(target, Vector3.UP)
 
 
 func _sleep_port(at: Vector3, yaw: float) -> Transform3D:

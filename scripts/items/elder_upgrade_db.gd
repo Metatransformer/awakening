@@ -50,6 +50,19 @@ static func lines() -> Array[Dictionary]:
 	]
 
 
+static func summary(id: StringName) -> Dictionary:
+	if not UPGRADE_IDS.has(id):
+		return {}
+	var line: Dictionary = _line(id)
+	var owned: int = clampi(int(Game.upgrades.get(id, 0)), 0, int(LIMITS[id]))
+	return {
+		"label": String(line["label"]),
+		"owned": owned,
+		"limit": int(LIMITS[id]),
+		"effect": _effect_text(id, owned),
+	}
+
+
 static func groups() -> Array[Dictionary]:
 	var rows: Array[Dictionary] = lines()
 	var at := {}
@@ -113,6 +126,23 @@ static func _line(id: StringName) -> Dictionary:
 					else "Service opening time: 07:00 -> 06:00.",
 			}
 	return {}
+
+
+static func _effect_text(id: StringName, owned: int) -> String:
+	match id:
+		BED_ID:
+			if owned <= 0:
+				return "No bonus sleep healing."
+			return "Sleep restores %d %s from this improvement." % [
+				owned, "heart" if owned == 1 else "hearts"]
+		LOCKER_ID:
+			if owned <= 0:
+				return "No bonus footlocker slots."
+			return "+%d footlocker slots." % (owned * LOCKER_SLOTS_PER_RANK)
+		REVEILLE_ID:
+			return "Garrison services open at %s." % (
+				"06:00" if owned > 0 else "07:00")
+	return ""
 
 
 static func remaining(id: StringName) -> int:

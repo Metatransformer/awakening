@@ -44,6 +44,7 @@ const TREE_SPECS: Array[Vector4] = [
 var garrison_gate: SurfaceTransition
 var sunken_cut: SurfaceTransition
 var blocked_path: SurfaceTransition
+var timber_yard: TimberYard
 
 var _built: bool = false
 
@@ -68,6 +69,8 @@ func port(id: StringName) -> Transform3D:
 		&"blocked_path":
 			return Transform3D(Basis(Vector3.UP, -PI * 0.5),
 				Vector3(9.6, 2.8, -3.25))
+		&"timber_yard":
+			return Transform3D(Basis(Vector3.UP, PI), Vector3(0.65, 7.48, 25.4))
 		&"vista_camera":
 			var eye := Vector3(-2.8, 8.8, 2.0)
 			var target := Vector3(4.8, 1.8, -25.0)
@@ -90,6 +93,7 @@ func _build() -> void:
 	_build_path(terrain)
 	_build_cliffs(cliffs)
 	_build_garrison(landmarks)
+	_build_timber_yard(landmarks)
 	_build_sunken_cut(landmarks)
 	_build_trees(trees)
 	_build_transitions(transitions)
@@ -206,6 +210,13 @@ func _build_garrison(parent: Node3D) -> void:
 		_box(fort, StringName("Merlon%s" % str(x)), MAT_CLIFF,
 			Vector3(1.4, 1.5, 1.6), _at(Vector3(x, 20.0 if absf(x) < 3.1 else 19.1,
 				38.9)), false)
+
+
+func _build_timber_yard(parent: Node3D) -> void:
+	timber_yard = TimberYard.new()
+	timber_yard.name = &"TimberYard"
+	timber_yard.transform = port(&"timber_yard")
+	parent.add_child(timber_yard)
 
 
 func _build_sunken_cut(parent: Node3D) -> void:

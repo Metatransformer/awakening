@@ -44,6 +44,8 @@ extends Catalogue
 ## Gear is permanent and lives on `Game`. Fletching is the deliberate exception:
 ## its input is the live saleable bag and its output is the persistent quiver.
 
+const WOODSMAN_AXE_ID := &"woodsman_axe"
+
 ## Lines that DO NOT EXIST until the player owns the thing they are about.
 ##
 ## The bow and the hookshot are boss drops now rather than the [test] starter kit
@@ -83,6 +85,7 @@ const GATED_BY := {
 ## `bag_slot` and `heart` were here and are `SupplyDb.LIMITS` now. Every ceiling
 ## lives beside the counter that sells the thing.
 const LIMITS := {
+	WOODSMAN_AXE_ID: 1,
 	&"edge": K.FORGE_MAX,
 	&"guard": K.FORGE_MAX,
 	&"string": K.FORGE_MAX,
@@ -230,10 +233,10 @@ static func groups() -> Array[Dictionary]:
 		_armour_row(out, at, piece)
 	_forge_row(out, at, &"string", "THE BOW")
 	_forge_row(out, at, &"chain", "THE CHAIN")
+	_axe_row(out, at)
 	_fletch_row(out, at)
 	_reforge_row(out, at)
 	return out
-
 
 ## One row, one ladder. Absent from the board entirely when the smith is not
 ## offering it -- a bow ladder for a bow you have not found is a spoiler and a
@@ -244,6 +247,20 @@ static func _forge_row(out: Array[Dictionary], at: Dictionary,
 	if not stocked(id):
 		return
 	out.append({"title": title, "tracks": [_track(at, id, "", K.FORGE_MAX)]})
+
+
+## The axe is permanent ownership rather than an upgrade track. Its completed
+## one-rung row stays on the board, but no line remains focusable after crafting.
+static func _axe_row(out: Array[Dictionary], at: Dictionary) -> void:
+	if not stocked(WOODSMAN_AXE_ID):
+		return
+	var owned: int = 1 if Game.has(WOODSMAN_AXE_ID) else 0
+	out.append({"title": "TOOLS", "tracks": [{
+		"name": "WOODSMAN'S AXE",
+		"line": -1 if owned > 0 else int(at.get(WOODSMAN_AXE_ID, -1)),
+		"owned": owned,
+		"rungs": 1,
+	}]})
 
 
 ## The ordinary one-cell named row used for repeatables. Its line owns an
@@ -389,6 +406,8 @@ static func _track(at: Dictionary, id: StringName, branch: String,
 ## row at all. A finished ladder and an unearned one look nothing alike, and
 ## collapsing them would put "NOTHING LEFT TO DO THERE" on a bow you never found.
 static func stocked(id: StringName) -> bool:
+	if id == WOODSMAN_AXE_ID:
+		return Game.flag(StoryDb.told_flag(&"elder", &"timber_duty"))
 	# A committed piece's losing path. Hidden rather than greyed, which is the
 	# OPPOSITE of the call made for the bow above, and on purpose: a greyed bow
 	# ladder is a spoiler for something you might still find, while a greyed
@@ -429,8 +448,22 @@ static func _board() -> Array[Dictionary]:
 		_forge(&"chain", "LENGTHEN THE CHAIN", 150, 2.1,
 			"More chain on the drum. The far side gets closer.",
 			K.CHAIN_REACH, "%.1f", "m reach"),
+		_woodsman_axe(),
 		_fletch(),
 	]
+
+
+static func _woodsman_axe() -> Dictionary:
+	var owned: bool = Game.has(WOODSMAN_AXE_ID)
+	return {
+		"id": WOODSMAN_AXE_ID,
+		"label": "WOODSMAN'S AXE",
+		"cost": 0 if owned else 60,
+		"parts": {} if owned else {&"iron_scrap": 3},
+		"blurb": "Camp work, balanced for splitting rounds rather than armour.",
+		"detail": "Owned. Cuts one daily bundle at the exterior Timber Yard."
+			if owned else "Cuts one daily bundle at the exterior Timber Yard.",
+	}
 
 
 ## The forge-board face of `Fletching`. The transaction and every tuning value
@@ -549,15 +582,20 @@ static func _scaled(base: int, id: StringName, factor: float) -> int:
 
 ## How many more of `id` the player may buy. -1 means unlimited.
 static func remaining(id: StringName) -> int:
+	if id == WOODSMAN_AXE_ID:
+		return 0 if Game.has(id) else 1
 	if not LIMITS.has(id):
 		return -1
 	return maxi(0, cap_of(id) - int(Game.upgrades.get(id, 0)))
 
 
-## The fletching recipe is paid from the saleable run bag. Every other smith
-## recipe keeps the catalogue default and reads the persistent workbench.
+## Fletching and the one-time axe recipe are paid from the saleable run bag.
+## Every upgrade ladder keeps the catalogue default and reads the persistent
+## workbench. Making the axe consume ordinary Iron Scrap is deliberate: it is
+## the first reason not to flatten a returned bag with Sell All.
 static func part_count(line: Dictionary, id: StringName) -> int:
-	if StringName(line.get("id", &"")) == FLETCH:
+	var line_id := StringName(line.get("id", &""))
+	if line_id == FLETCH or line_id == WOODSMAN_AXE_ID:
 		return int(Run.bag.get(id, 0))
 	return Game.component_count(id)
 
@@ -574,6 +612,8 @@ static func part_count(line: Dictionary, id: StringName) -> int:
 ## Public so `refusal()` can tell the two ceilings apart, and so a director can
 ## ask without re-deriving it.
 static func cap_of(id: StringName) -> int:
+	if id == WOODSMAN_AXE_ID:
+		return 1
 	# A committed piece's other path. Zero, not "hidden": `lines()` already drops
 	# the row, and this is the answer for everything that does not go through
 	# `lines()` -- a director, a save that arrived with both siblings set, a
@@ -591,8 +631,15 @@ static func can_buy(line: Dictionary) -> bool:
 	var id: StringName = line["id"]
 	if id == FLETCH:
 		return Fletching.can_fletch()
+	if id == WOODSMAN_AXE_ID and not stocked(id):
+		return false
 	if remaining(id) == 0:
 		return false
+	if id == WOODSMAN_AXE_ID:
+		for pid: StringName in line.get("parts", {}):
+			if int(Run.bag.get(pid, 0)) < int((line["parts"] as Dictionary)[pid]):
+				return false
+		return Game.gold >= int(line["cost"])
 	if not Game.can_afford_parts(line.get("parts", {})):
 		return false
 	return Game.gold >= int(line["cost"])
@@ -606,6 +653,8 @@ static func refusal(line: Dictionary) -> String:
 	var id: StringName = line["id"]
 	if id == FLETCH:
 		return Fletching.refusal()
+	if id == WOODSMAN_AXE_ID and not stocked(id):
+		return "SPEAK TO ALDRIC FIRST"
 	if remaining(id) == 0:
 		# THREE different ceilings now, and telling the player the wrong one sends
 		# them to the wrong place. A path whose sibling has a rung in it is closed
@@ -619,7 +668,9 @@ static func refusal(line: Dictionary) -> String:
 		return "NOTHING LEFT TO DO THERE"
 	var parts: Dictionary = line.get("parts", {})
 	for pid: StringName in parts:
-		if Game.component_count(pid) < int(parts[pid]):
+		var have: int = int(Run.bag.get(pid, 0)) if id == WOODSMAN_AXE_ID \
+			else Game.component_count(pid)
+		if have < int(parts[pid]):
 			var def := ItemDb.get_def(pid)
 			var what: String = def.display_name if def != null else String(pid)
 			return "NOT ENOUGH %s" % what.to_upper()
@@ -648,6 +699,11 @@ static func buy(line: Dictionary) -> bool:
 	var parts: Dictionary = line.get("parts", {})
 	if not Game.spend_gold(int(line["cost"])):
 		return false
+	if id == WOODSMAN_AXE_ID:
+		for pid: StringName in parts:
+			Run.consume(pid, int(parts[pid]))
+		Game.grant(WOODSMAN_AXE_ID)
+		return true
 	for pid: StringName in parts:
 		Game.spend_component(pid, int(parts[pid]))
 

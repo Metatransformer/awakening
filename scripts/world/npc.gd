@@ -32,6 +32,10 @@ extends Interactable
 ## builds all six by hand -- but the rule stands for the next person.
 enum Role { VENDOR, SMITH, GATE, ALCHEMIST, KEEPER, JEWELLER }
 
+const ACTIVITY_WORKING: StringName = &"working"
+const ACTIVITY_BONFIRE: StringName = &"bonfire"
+const ACTIVITY_SLEEP: StringName = &"sleeping"
+
 ## Everything that differs between the people in this garrison, on one row each.
 ##
 ## It started as a name table beside a `match` in `_ready` and a second `match`
@@ -311,7 +315,8 @@ var _head: float = 1.75
 ## counter too; every non-body child is hidden/disabled while off duty.
 var _day_transform := Transform3D.IDENTITY
 var _day_transform_known := false
-var _off_duty := false
+var _current_activity: StringName = ACTIVITY_WORKING
+var _services_open: bool = true
 
 
 ## Crown height, for anything that has to aim at this person's FACE rather than
@@ -331,6 +336,14 @@ func head_y() -> float:
 ## an id is exactly the kind of duplicate this file's header refuses.
 func voice_id() -> StringName:
 	return StringName(_row().get("voice", &""))
+
+
+func current_activity() -> StringName:
+	return _current_activity
+
+
+func current_services_open() -> bool:
+	return _services_open
 
 
 ## The row for this NPC. Never null -- a role added to the enum and forgotten
@@ -437,14 +450,15 @@ func _counters(row: Dictionary) -> Array:
 func _options(who: StringName, row: Dictionary) -> Array:
 	var out: Array = []
 	var counters := _counters(row)
-	for i in counters.size():
-		var counter: Dictionary = counters[i]
-		out.append({
-			"label": String(counter.get("label", "")),
-			"icon": UiKit.action_icon(String(counter.get("icon", ""))),
-			"submenu": true,
-			"act": _choose_trade.bind(who, counters, i),
-		})
+	if _services_open:
+		for i in counters.size():
+			var counter: Dictionary = counters[i]
+			out.append({
+				"label": String(counter.get("label", "")),
+				"icon": UiKit.action_icon(String(counter.get("icon", ""))),
+				"submenu": true,
+				"act": _choose_trade.bind(who, counters, i),
+			})
 	for topic: Dictionary in StoryDb.topics(who):
 		out.append({
 			"label": String(topic.get("label", "")),
@@ -494,27 +508,38 @@ func on_hold(t01: float) -> void:
 	_lamp_mat.emission_energy_multiplier = 0.55 + t01 * 5.0
 
 
-## Move a staffed keeper between their work nook and authored sleeping port.
-## The service closes by making the person physically absent, not by leaving a
-## shop screen behind that says "closed". The gate is architecture and ignores
-## the roster schedule.
-func set_working(working: bool, sleep_transform: Transform3D) -> void:
-	if role == Role.GATE or working == not _off_duty:
+## Apply one authored roster activity. At the bonfire the person and TALK move,
+## while their counter stays behind and every service row is suppressed.
+func set_activity(activity: StringName, activity_transform: Transform3D) -> void:
+	if role == Role.GATE:
 		return
-	if not _day_transform_known:
-		_day_transform = global_transform
+	if activity != ACTIVITY_WORKING and activity != ACTIVITY_BONFIRE \
+			and activity != ACTIVITY_SLEEP:
+		push_error("Npc.set_activity: unknown activity '%s'." % activity)
+		return
+	if activity == ACTIVITY_WORKING:
+		_day_transform = activity_transform
 		_day_transform_known = true
-	_off_duty = not working
-	if working:
-		global_transform = _day_transform
-	else:
-		global_transform = sleep_transform
-	enabled = working
-	_set_station_active(working)
+	_current_activity = activity
+	_services_open = activity == ACTIVITY_WORKING
+	global_transform = activity_transform
+	enabled = activity != ACTIVITY_SLEEP
+	_set_station_active(_services_open)
 	if _body != null:
 		_body.visible = true
 	if _sign != null:
 		_sign.visible = false
+
+
+## Compatibility for callers that still express the old two-state schedule.
+func set_working(working: bool, sleep_transform: Transform3D) -> void:
+	if role == Role.GATE:
+		return
+	if not _day_transform_known:
+		_day_transform = global_transform
+		_day_transform_known = true
+	set_activity(ACTIVITY_WORKING if working else ACTIVITY_SLEEP,
+		_day_transform if working else sleep_transform)
 
 
 func _set_station_active(active: bool) -> void:
@@ -523,7 +548,7 @@ func _set_station_active(active: bool) -> void:
 			continue
 		if child is Node3D:
 			(child as Node3D).visible = active
-	_set_collision_active(self, active)
+		_set_collision_active(child, active)
 
 
 func _set_collision_active(node: Node, active: bool) -> void:
@@ -538,7 +563,7 @@ func _set_collision_active(node: Node, active: bool) -> void:
 
 
 func _process(delta: float) -> void:
-	if _off_duty:
+	if _current_activity == ACTIVITY_SLEEP:
 		return
 	_age += delta
 	var want := 1.0 if Prompt.focus == self else 0.0

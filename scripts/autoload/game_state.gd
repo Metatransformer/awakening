@@ -5,6 +5,8 @@ extends Node
 ## Health is counted in QUARTER hearts (K.QUARTER), like the source material —
 ## a heart is K.HEART == 4 quarters, and the HUD draws quarter-heart states.
 
+signal garrison_changed
+
 var max_quarters: int = K.START_HEARTS * K.HEART
 var quarters: int = K.START_HEARTS * K.HEART
 
@@ -318,6 +320,18 @@ var wheel: Array[StringName] = _blank_wheel()
 ## One-way world flags: chests opened, doors unlocked, puzzles solved.
 var flags: Dictionary[StringName, bool] = {}
 
+# --- Garrison life ----------------------------------------------------------
+
+const FIREWOOD_CAP: int = 3
+
+var firewood_stock: int = 0:
+	set(value):
+		firewood_stock = clampi(value, 0, FIREWOOD_CAP)
+var carrying_firewood: bool = false
+var timber_completed_day: int = 0
+var warmth_active: bool = false
+var last_bonfire_day: int = 0
+
 
 # --- The starter kit --------------------------------------------------------
 ## What a new hero owns at boot, and it is **empty on purpose**.
@@ -418,6 +432,7 @@ func reset() -> void:
 	wheel = _blank_wheel()
 	_seed_wheel()
 	flags.clear()
+	restore_garrison({})
 	# Say that the hands and the selection emptied. Without this, resetting
 	# cleared `items` and `loadout` in silence and every listener kept drawing
 	# the gear it last heard about — a hero still wearing a stowed bow he no
@@ -439,6 +454,86 @@ func reset() -> void:
 	stamina = max_stamina
 	_stamina_hold = 0.0
 	Bus.stamina_changed.emit(stamina, max_stamina)
+
+
+func garrison_snapshot() -> Dictionary:
+	return {
+		"firewood_stock": firewood_stock,
+		"carrying_firewood": carrying_firewood,
+		"timber_completed_day": timber_completed_day,
+		"warmth_active": warmth_active,
+		"last_bonfire_day": last_bonfire_day,
+	}
+
+
+func restore_garrison(data: Dictionary) -> void:
+	var restored_stock: int = clampi(int(data.get("firewood_stock", 0)),
+		0, FIREWOOD_CAP)
+	var restored_carrying: bool = bool(data.get("carrying_firewood", false))
+	var restored_timber_day: int = maxi(0, int(data.get("timber_completed_day", 0)))
+	var restored_warmth: bool = bool(data.get("warmth_active", false))
+	var restored_bonfire_day: int = maxi(0, int(data.get("last_bonfire_day", 0)))
+	var changed: bool = restored_stock != firewood_stock \
+		or restored_carrying != carrying_firewood \
+		or restored_timber_day != timber_completed_day \
+		or restored_warmth != warmth_active \
+		or restored_bonfire_day != last_bonfire_day
+	firewood_stock = restored_stock
+	carrying_firewood = restored_carrying
+	timber_completed_day = restored_timber_day
+	warmth_active = restored_warmth
+	last_bonfire_day = restored_bonfire_day
+	if changed:
+		garrison_changed.emit()
+
+
+func can_chop_firewood(at_day: int, phase: StringName) -> bool:
+	return at_day > 0 \
+		and phase == WorldClock.GARRISON_DAYTIME \
+		and firewood_stock < FIREWOOD_CAP \
+		and not carrying_firewood \
+		and timber_completed_day != at_day
+
+
+func chop_firewood(at_day: int, phase: StringName) -> bool:
+	if not can_chop_firewood(at_day, phase):
+		return false
+	carrying_firewood = true
+	timber_completed_day = at_day
+	garrison_changed.emit()
+	return true
+
+
+func deposit_firewood() -> bool:
+	if not carrying_firewood or firewood_stock >= FIREWOOD_CAP:
+		return false
+	carrying_firewood = false
+	firewood_stock += 1
+	garrison_changed.emit()
+	return true
+
+
+func resolve_bonfire(at_day: int) -> bool:
+	if at_day <= last_bonfire_day:
+		return false
+	var fueled: bool = firewood_stock > 0
+	if fueled:
+		firewood_stock -= 1
+	warmth_active = fueled
+	last_bonfire_day = at_day
+	garrison_changed.emit()
+	return true
+
+
+func warmth_sell_mult() -> float:
+	return 1.10 if warmth_active else 1.0
+
+
+func trade_purchase_price(base: int) -> int:
+	if base <= 0:
+		return 0
+	var multiplier: float = 0.90 if warmth_active else 1.0
+	return maxi(1, int(round(float(base) * multiplier)))
 
 
 func is_wishlist_line_pinned(key: StringName) -> bool:

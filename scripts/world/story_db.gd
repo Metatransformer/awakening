@@ -120,6 +120,14 @@ static var BEATS := {
 			"Kessa keeps the stall behind you. Sell her what you do not need; she is fair, which is not the same as generous. And there is a chest at the foot of your bed — your pack is emptied before every descent, so whatever you mean to keep, keep it in the chest.",
 			"That is everything. I have high expectations of you. Try to be worth them.",
 		]},
+		{"id": &"timber_duty", "needs": {
+			"item": SMITH_TOKEN, "told": &"briefing",
+		}, "pages": [
+			"Our timber stores are running low. Keeping them filled is your duty now.",
+			"Brannoc can make you a woodsman's axe. Take him sixty gold and three pieces of iron scrap.",
+			"The Timber Yard is outside the gate. During daylight, cut one bundle there.",
+			"Carry it back and stack it at the central hearth before Bonfire Time.",
+		]},
 		# The first time the loop has actually paid out. Gold and not a boss,
 		# because the thing being acknowledged is that you came back UP, and coming
 		# back up is the half of the game that has no monster attached to it.

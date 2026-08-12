@@ -109,6 +109,7 @@ var atmosphere: SurfaceAtmosphere
 ## so a director can frame the plaza without re-deriving where it is.
 var plaza: Plaza
 var statue: Statue
+var hearth: GarrisonHearth
 ## The twelve dark props, in `RelicDb` catalogue order. Public so a director can
 ## photograph one corner before and after, which is the only way anybody can
 ## check the claim this system exists to make.
@@ -137,10 +138,12 @@ func _ready() -> void:
 	add_child(compound)
 	house = compound.player_bunk
 	_build_plaza()
+	_build_hearth()
 	_build_compound_people()
 	_build_relic_props()
 	Clock.service_availability_changed.connect(_apply_staffing)
-	_apply_staffing(Clock.services_available())
+	Clock.garrison_phase_changed.connect(_apply_staffing)
+	_apply_staffing()
 	_place_dawn_wake()
 	_open_the_game()
 
@@ -683,6 +686,13 @@ func _build_compound_people() -> void:
 	gate.global_transform = compound.global_transform * compound.port(&"gate")
 
 
+func _build_hearth() -> void:
+	hearth = GarrisonHearth.new()
+	hearth.name = &"GarrisonHearth"
+	add_child(hearth)
+	hearth.global_transform = compound.global_transform * compound.port(&"hearth")
+
+
 func _compound_counter(role: Npc.Role, who: StringName, day_port: StringName,
 		lamp: Color, gated: bool = true) -> Npc:
 	if gated and not StoryDb.unlocked(who):
@@ -695,21 +705,32 @@ func _compound_counter(role: Npc.Role, who: StringName, day_port: StringName,
 	return npc
 
 
-func _apply_staffing(available: bool) -> void:
-	var sleepers: Array = [
-		[vendor, &"quartermaster_sleep"],
-		[smith, &"smith_sleep"],
-		[alchemist, &"alchemist_sleep"],
-		[keeper, &"elder_sleep"],
-		[jeweller, &"jewelcrafter_sleep"],
+func _apply_staffing(_changed: Variant = null) -> void:
+	var roster: Array = [
+		[vendor, &"quartermaster_day", &"quartermaster_bonfire", &"quartermaster_sleep"],
+		[smith, &"smith_day", &"smith_bonfire", &"smith_sleep"],
+		[alchemist, &"alchemist_day", &"alchemist_bonfire", &"alchemist_sleep"],
+		[keeper, &"elder_day", &"elder_bonfire", &"elder_sleep"],
+		[jeweller, &"jewelcrafter_day", &"jewelcrafter_bonfire", &"jewelcrafter_sleep"],
 	]
-	for row: Array in sleepers:
+	var phase: StringName = Clock.garrison_phase()
+	for row: Array in roster:
 		var npc := row[0] as Npc
 		if npc == null:
 			continue
-		var sleep_port := StringName(row[1])
-		npc.set_working(available,
-			compound.global_transform * compound.port(sleep_port))
+		var activity: StringName
+		var target_port: StringName
+		if phase == WorldClock.GARRISON_BONFIRE:
+			activity = Npc.ACTIVITY_BONFIRE
+			target_port = StringName(row[2])
+		elif phase == WorldClock.GARRISON_DAYTIME and Clock.services_available():
+			activity = Npc.ACTIVITY_WORKING
+			target_port = StringName(row[1])
+		else:
+			activity = Npc.ACTIVITY_SLEEP
+			target_port = StringName(row[3])
+		npc.set_activity(activity,
+			compound.global_transform * compound.port(target_port))
 
 
 func _place_dawn_wake() -> void:

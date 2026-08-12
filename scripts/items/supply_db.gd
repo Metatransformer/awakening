@@ -146,7 +146,7 @@ static func _board() -> Array[Dictionary]:
 		{
 			"id": &"arrows",
 			"label": "ARROWS X10",
-			"cost": _scaled(40, &"", 1.0),
+			"cost": Game.trade_purchase_price(_scaled(40, &"", 1.0)),
 			"parts": {},
 			"blurb": "Fletched from something that used to fly.",
 			"detail": "%d / %d arrows" % [Game.arrows, Game.max_arrows],
@@ -167,7 +167,7 @@ static func _board() -> Array[Dictionary]:
 		{
 			"id": &"charges",
 			"label": "CHARGES X%d" % CHARGE_BATCH,
-			"cost": CHARGE_GOLD,
+			"cost": Game.trade_purchase_price(CHARGE_GOLD),
 			"parts": {},
 			"blurb": "Stoppered, and heavier than it looks. It does not come back once it is spent.",
 			# The number the decision is actually about. They do NOT refill
@@ -209,7 +209,7 @@ static func _ration_line(id: StringName) -> Dictionary:
 	return {
 		"id": id,
 		"label": "%s X%d" % [RationDb.name_of(id).to_upper(), K.RATION_BATCH],
-		"cost": int(RATION_GOLD.get(id, 0)),
+		"cost": Game.trade_purchase_price(int(RATION_GOLD.get(id, 0))),
 		"parts": {},
 		"blurb": "%s %s" % [RationDb.blurb_of(id), RationDb.effect_of(id)],
 		"detail": "%d / %d carried" % [Game.ration_count(id), K.RATION_STACK],

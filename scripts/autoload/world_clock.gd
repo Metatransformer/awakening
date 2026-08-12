@@ -7,6 +7,8 @@ signal minute_changed(day: int, hour: int, minute: int)
 signal phase_changed(phase: StringName)
 signal dawn_started(day: int)
 signal service_availability_changed(available: bool)
+signal garrison_phase_changed(phase: StringName)
+signal bonfire_started(day: int)
 
 const HOURS_PER_REAL_SECOND: float = 1.0 / 80.0
 const HOURS_PER_DAY: float = 24.0
@@ -15,6 +17,12 @@ const DAWN_HOUR: float = 5.0
 const SERVICE_OPEN_HOUR: float = 7.0
 const REVEILLE_OPEN_HOUR: float = 6.0
 const SERVICE_CLOSE_HOUR: float = 20.0
+const BONFIRE_HOUR: float = 20.0
+const BEDTIME_HOUR: float = 23.0
+
+const GARRISON_DAYTIME: StringName = &"daytime"
+const GARRISON_BONFIRE: StringName = &"bonfire"
+const GARRISON_BEDTIME: StringName = &"bedtime"
 
 var day: int = 1
 var hour: float = 8.0
@@ -22,11 +30,13 @@ var running: bool = true
 
 var _last_absolute_minute: int = -1
 var _last_phase: StringName = &""
+var _last_garrison_phase: StringName = &""
 var _last_service_available: bool = false
 var _last_day: int = -1
 
 
 func _ready() -> void:
+	bonfire_started.connect(Game.resolve_bonfire)
 	_prime_observed_state()
 
 
@@ -40,13 +50,18 @@ func _process(delta: float) -> void:
 
 
 func set_time(new_day: int, new_hour: float, emit_dawn: bool = false) -> void:
+	_set_time(new_day, new_hour, emit_dawn, true)
+
+
+func _set_time(new_day: int, new_hour: float, emit_dawn: bool,
+		replay_crossings: bool) -> void:
 	var old_absolute_hour: float = _absolute_hour()
 	var requested: float = float(new_day - 1) * HOURS_PER_DAY + new_hour
 	var normalized: float = maxf(0.0, requested)
 	day = int(floor(normalized / HOURS_PER_DAY)) + 1
 	hour = fposmod(normalized, HOURS_PER_DAY)
-	if emit_dawn and normalized > old_absolute_hour:
-		_emit_crossed_dawns(old_absolute_hour, normalized)
+	if replay_crossings and normalized > old_absolute_hour:
+		_emit_crossed_boundaries(old_absolute_hour, normalized, emit_dawn)
 	_emit_state_changes()
 
 
@@ -76,6 +91,29 @@ func services_available() -> bool:
 	return hour >= opening_hour and hour < SERVICE_CLOSE_HOUR
 
 
+func garrison_phase() -> StringName:
+	return garrison_phase_of(hour)
+
+
+static func garrison_phase_of(at_hour: float) -> StringName:
+	var normalized_hour: float = fposmod(at_hour, HOURS_PER_DAY)
+	if normalized_hour >= DAWN_HOUR and normalized_hour < BONFIRE_HOUR:
+		return GARRISON_DAYTIME
+	if normalized_hour >= BONFIRE_HOUR and normalized_hour < BEDTIME_HOUR:
+		return GARRISON_BONFIRE
+	return GARRISON_BEDTIME
+
+
+func next_garrison_transition() -> Dictionary:
+	if hour < DAWN_HOUR:
+		return {"phase": GARRISON_DAYTIME, "day": day, "hour": DAWN_HOUR}
+	if hour < BONFIRE_HOUR:
+		return {"phase": GARRISON_BONFIRE, "day": day, "hour": BONFIRE_HOUR}
+	if hour < BEDTIME_HOUR:
+		return {"phase": GARRISON_BEDTIME, "day": day, "hour": BEDTIME_HOUR}
+	return {"phase": GARRISON_DAYTIME, "day": day + 1, "hour": DAWN_HOUR}
+
+
 func snapshot() -> Dictionary:
 	return {
 		"day": day,
@@ -87,7 +125,7 @@ func snapshot() -> Dictionary:
 func restore(data: Dictionary) -> void:
 	var restored_day: int = maxi(1, int(data.get("day", 1)))
 	var restored_hour: float = float(data.get("hour", 8.0))
-	set_time(restored_day, restored_hour, false)
+	_set_time(restored_day, restored_hour, false, false)
 	running = bool(data.get("running", true))
 
 
@@ -99,18 +137,32 @@ func _minute_of_day() -> int:
 	return int(floor(hour * 60.0 + 0.0001)) % MINUTES_PER_DAY
 
 
-func _emit_crossed_dawns(from_absolute_hour: float, to_absolute_hour: float) -> void:
+func _emit_crossed_boundaries(from_absolute_hour: float, to_absolute_hour: float,
+		emit_dawn: bool) -> void:
 	var dawn_index: int = int(floor((from_absolute_hour - DAWN_HOUR) / HOURS_PER_DAY)) + 1
 	var dawn_absolute_hour: float = float(dawn_index) * HOURS_PER_DAY + DAWN_HOUR
-	while dawn_absolute_hour <= to_absolute_hour + 0.000001:
-		dawn_started.emit(dawn_index + 1)
-		dawn_index += 1
-		dawn_absolute_hour += HOURS_PER_DAY
+	var bonfire_index: int = int(floor(
+		(from_absolute_hour - BONFIRE_HOUR) / HOURS_PER_DAY)) + 1
+	var bonfire_absolute_hour: float = float(bonfire_index) * HOURS_PER_DAY + BONFIRE_HOUR
+	while true:
+		var next_dawn: float = dawn_absolute_hour if emit_dawn else INF
+		var next_boundary: float = minf(next_dawn, bonfire_absolute_hour)
+		if next_boundary > to_absolute_hour:
+			return
+		if next_dawn < bonfire_absolute_hour:
+			dawn_started.emit(dawn_index + 1)
+			dawn_index += 1
+			dawn_absolute_hour += HOURS_PER_DAY
+		else:
+			bonfire_started.emit(bonfire_index + 1)
+			bonfire_index += 1
+			bonfire_absolute_hour += HOURS_PER_DAY
 
 
 func _prime_observed_state() -> void:
 	_last_absolute_minute = (day - 1) * MINUTES_PER_DAY + _minute_of_day()
 	_last_phase = SkyCycle.phase_of(hour)
+	_last_garrison_phase = garrison_phase()
 	_last_service_available = services_available()
 	_last_day = day
 
@@ -119,6 +171,7 @@ func _emit_state_changes() -> void:
 	var minute_of_day: int = _minute_of_day()
 	var absolute_minute: int = (day - 1) * MINUTES_PER_DAY + minute_of_day
 	var phase: StringName = SkyCycle.phase_of(hour)
+	var schedule_phase: StringName = garrison_phase()
 	var available: bool = services_available()
 	var day_changed: bool = day != _last_day
 
@@ -127,10 +180,13 @@ func _emit_state_changes() -> void:
 		minute_changed.emit(day, whole_hour, minute_of_day % 60)
 	if phase != _last_phase:
 		phase_changed.emit(phase)
+	if schedule_phase != _last_garrison_phase:
+		garrison_phase_changed.emit(schedule_phase)
 	if available != _last_service_available:
 		service_availability_changed.emit(available)
 
 	_last_absolute_minute = absolute_minute
 	_last_phase = phase
+	_last_garrison_phase = schedule_phase
 	_last_service_available = available
 	_last_day = day

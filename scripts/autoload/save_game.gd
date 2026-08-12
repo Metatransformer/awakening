@@ -80,13 +80,15 @@ const SLOTS := 3
 ## records the actual dungeon as both destination and transform owner.
 ## Bumped to 11 for manual wishlist tracks. It is additive: v4-v10 have no pins
 ## and reconstruct honestly as an empty list, while current recipes stay derived.
-const VERSION := 11
+## Bumped to 12 for garrison firewood and Warmth. It is additive: v11 has no
+## payload and reconstructs as an empty, cold hearth.
+const VERSION := 12
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11]
+const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12]
 const AUTOSAVE_INTERVAL := 300.0
 
 signal saved(slot: int)
@@ -187,6 +189,7 @@ func save(slot: int) -> bool:
 		# `upgrades` (see Game.FORGE_TRACKS), so one key carries all twelve, and
 		# the jewelcrafter's eight after it.
 		"upgrades": Game.upgrades,
+		"garrison": Game.garrison_snapshot(),
 		# One authoritative surface/dungeon clock. Weather derives from day, so no
 		# second weather payload can drift from it.
 		"clock": Clock.snapshot(),
@@ -353,6 +356,8 @@ func load_slot(slot: int) -> Dictionary:
 	Game.upgrades.clear()
 	for k in (d.get("upgrades", {}) as Dictionary):
 		Game.upgrades[StringName(k)] = int((d["upgrades"] as Dictionary)[k])
+	var raw_garrison: Variant = d.get("garrison", {})
+	Game.restore_garrison(raw_garrison as Dictionary if raw_garrison is Dictionary else {})
 	Clock.restore(d.get("clock", {}) as Dictionary)
 	Game.restore_wishlist_lines(d.get("wishlist_lines", []) as Array)
 	Game.components.clear()
