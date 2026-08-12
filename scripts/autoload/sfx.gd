@@ -129,6 +129,8 @@ func _ready() -> void:
 		_pool.append(p)
 
 	Bus.request_sfx.connect(play_at)
+	Bus.perfect_dodge.connect(func(pos: Vector3) -> void:
+		play_at(&"perfect_dodge", pos))
 
 	# --- the table, bound to the signals it names ----------------------------
 	Bus.chest_opened.connect(func(_id: StringName, _c: StringName) -> void:
@@ -225,7 +227,9 @@ func _load(id: StringName) -> AudioStream:
 
 	var path := "res://audio/sfx/%s.ogg" % name
 	if not ResourceLoader.exists(path):
-		push_warning("Sfx: no such sound %s" % path)
+		path = "res://audio/sfx/%s.wav" % name
+	if not ResourceLoader.exists(path):
+		push_warning("Sfx: no such sound res://audio/sfx/%s.[ogg|wav]" % name)
 		_cache[name] = null
 		return null
 	var s := load(path) as AudioStream

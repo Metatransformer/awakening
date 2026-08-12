@@ -49,6 +49,12 @@ var _fails: int = 0
 func run(rig) -> void:
 	var out: String = rig.arg("out", "/tmp/parry/x.png").get_base_dir()
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	# `shoot.gd` strips pad bindings, but Settings still sees raw events from a
+	# physically connected controller. Pin this keyboard-driven director to the
+	# device whose bindings it retained so every captured cap is meaningful.
+	Settings.using_pad = false
+	Settings.set_process_input(false)
+	Bus.input_device_changed.emit(false)
 
 	await _parry_lands(rig, out)
 	await _parry_whiffs(rig)
@@ -195,7 +201,10 @@ func _perfect_dodge(rig, out: String) -> void:
 	await _swing_at(rig, foe, hero)
 	await rig.wait_physics_frames(2)
 	var scale := Engine.time_scale
+	_assert_flurry_prompt("perfect dodge")
+	_assert_perfect_dodge_sound()
 	await rig.capture(out.path_join("parry_10_dodge.png"))
+	await rig.capture(out.path_join("parry_11_flurry_prompt.png"))
 
 	print("PARRY dodge  time_scale=%.2f flurry=%.2f hp=%d"
 		% [scale, combat.get(&"_flurry_t"), Game.quarters])
@@ -289,12 +298,22 @@ func _flurry(rig, out: String) -> void:
 	# depend on beat three passing, and a director whose beats fail in cascades
 	# tells you about one bug five times.
 	combat.set(&"_flurry_t", K.FLURRY_WINDOW)
+	Bus.perfect_dodge.emit(hero.global_position)
+	await rig.wait_frames(1)
+	_assert_flurry_prompt("handed-over flurry")
 	# `rig.tap` and not a bare `Input.action_press`: the press has to be stamped
 	# at the TOP of a frame or `is_action_just_pressed` compares it against a
 	# frame that has already gone by and every polled button ignores it
 	# (`shoot.gd:hold`). This is the trap in CLAUDE.md §3, one layer along.
 	await rig.tap([&"attack"])
+	# Give the combat poll its physics slice before sampling the resulting state;
+	# `tap()` stamps the input, but render/physics ordering varies by display rate.
+	await rig.wait_frames(2)
 	var swung: float = combat.get(&"_swing_t")
+	if Hud._flurry_prompt:
+		_fail("the HUD prompt survived the flurry consuming its window")
+	if Hud.layout_rects().has(&"flurry_prompt"):
+		_fail("the flurry prompt layout survived after its window was consumed")
 
 	var airborne := false
 	var top := hero.global_position.y
@@ -609,6 +628,32 @@ func _swing_at(rig, foe: Node3D, hero: Node3D) -> void:
 	await rig.wait_physics_frames(2)
 	box.deactivate()
 	box.queue_free()
+
+
+func _assert_flurry_prompt(where: String) -> void:
+	if Glyph.cap(&"attack").is_empty():
+		_fail("%s has no live attack cap" % where)
+	if not Hud._flurry_prompt:
+		_fail("%s did not activate the HUD flurry prompt" % where)
+	var layout: Dictionary = Hud.layout_rects()
+	if not layout.has(&"flurry_prompt"):
+		_fail("%s authored no flurry_prompt layout rectangle" % where)
+		return
+	var entry: Dictionary = layout[&"flurry_prompt"]
+	var rect: Rect2 = entry[&"rect"]
+	if rect.size.x <= 0.0 or rect.size.y <= 0.0:
+		_fail("%s authored an empty flurry_prompt rectangle" % where)
+
+
+func _assert_perfect_dodge_sound() -> void:
+	var want: AudioStream = Sfx._load(&"perfect_dodge")
+	if want == null:
+		_fail("perfect_dodge did not resolve to an AudioStream")
+		return
+	for voice in Sfx._pool:
+		if voice.playing and voice.stream == want:
+			return
+	_fail("perfect_dodge was not claimed and playing in the Sfx pool")
 
 
 func _fail(msg: String) -> void:

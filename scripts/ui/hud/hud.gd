@@ -186,6 +186,11 @@ const ARC_W := 3.0
 const SAVE_HOLD := 2.20
 const SAVE_FADE := 0.35
 
+# --- Flurry prompt -----------------------------------------------------------
+## Real-time pop duration. Perfect dodge also slows the tree, so this tween must
+## ignore that scale or the acknowledgement arrives after its own reward window.
+const FLURRY_POP_TIME := 0.18
+
 # --- The floor card ----------------------------------------------------------
 ## How long the top-left card stays at announcement brightness after you arrive
 ## on a floor, and how long it takes to settle back to the resting dim. It does
@@ -307,6 +312,10 @@ var _heat_kills: int = 0
 var _heat_break_t: float = -1.0
 ## "(E) OPEN", or "" when there is nothing in reach. Owned by the Prompt autoload.
 var _prompt: String = ""
+## True exactly while combat's perfect-dodge reward window is available.
+var _flurry_prompt: bool = false
+var _flurry_scale: float = 1.0
+var _flurry_tween: Tween = null
 ## The focused Interactable's hold, mirrored off `Bus.hold_changed`. `_required`
 ## is true whenever the thing in reach wants a hold AT ALL, held separately from
 ## the number so the empty track can be drawn before the player presses anything.
@@ -407,6 +416,7 @@ func _ready() -> void:
 	Saves.autosaved.connect(_on_autosaved)
 	Bus.shield_blocked.connect(_on_blocked)
 	Bus.parried.connect(_on_parried)
+	Bus.perfect_dodge.connect(_on_perfect_dodge)
 	Bus.target_acquired.connect(_on_target)
 	Bus.target_lost.connect(_on_target_lost)
 	Bus.aim_changed.connect(_on_aim)
@@ -549,6 +559,26 @@ func _on_heat_tier(_tier: int, rising: bool) -> void:
 func _on_prompt(text: String) -> void:
 	_prompt = text
 	_repaint()
+
+
+func _on_perfect_dodge(_position: Vector3) -> void:
+	_flurry_prompt = true
+	_flurry_scale = 0.72
+	if _flurry_tween != null and _flurry_tween.is_valid():
+		_flurry_tween.kill()
+	_flurry_tween = create_tween()
+	_flurry_tween.set_ignore_time_scale(true)
+	_flurry_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_flurry_tween.tween_property(self, "_flurry_scale", 1.0, FLURRY_POP_TIME)
+	_wake()
+
+
+func _clear_flurry_prompt() -> void:
+	_flurry_prompt = false
+	_flurry_scale = 1.0
+	if _flurry_tween != null and _flurry_tween.is_valid():
+		_flurry_tween.kill()
+	_flurry_tween = null
 
 
 ## `Prompt` re-emits this every frame of a hold, so a repaint is all this needs
@@ -802,6 +832,13 @@ func _refresh_visibility() -> void:
 
 func _process(delta: float) -> void:
 	var busy := false
+
+	if _flurry_prompt:
+		var combat := _hero_combat()
+		if combat == null or float(combat.get(&"_flurry_t")) <= 0.0:
+			_clear_flurry_prompt()
+		else:
+			busy = true
 
 	if _ghost_t >= 0.0:
 		_ghost_t += delta
@@ -1141,7 +1178,10 @@ func _draw_hud() -> void:
 	_draw_extraction(s)
 	_draw_toast(s)
 	_draw_save(s)
-	_draw_prompt(s)
+	if _flurry_prompt:
+		_draw_flurry_prompt(s)
+	else:
+		_draw_prompt(s)
 	_draw_crosshair(s)
 	_draw_lock_on(s)
 	_draw_enemy_bars(s)
@@ -3200,9 +3240,8 @@ func _draw_save(s: Vector2) -> void:
 
 
 ## The interact line. Centred and low -- under the action, above the kit strip,
-## on the axis the player is already looking down. It is the only thing the HUD
-## ever draws in the middle of the screen, which is what makes it impossible to
-## miss without needing to be large.
+## on the axis the player is already looking down. It shares this centre slot
+## with the flurry prompt, which takes precedence while its reward is available.
 func _draw_prompt(s: Vector2) -> void:
 	if _prompt.is_empty():
 		return
@@ -3224,6 +3263,45 @@ func _draw_prompt(s: Vector2) -> void:
 		var bar_h := Pal.px(HoldGauge.BAR_H, s.y)
 		HoldGauge.bar(_canvas, Rect2(box.position.x, box.end.y - bar_h,
 			box.size.x, bar_h), _hold01, Pal.BONE)
+
+
+## The perfect-dodge reward, in the interact prompt's centre slot. The cap is
+## resolved on every draw so device changes and rebinding remain live.
+func _draw_flurry_prompt(s: Vector2) -> void:
+	var cap := _hotkey(&"attack")
+	var cap_scale := _text(14.0)
+	var label_scale := _text(16.0)
+	var cap_pad := Pal.px(5.0, s.y)
+	var outline := maxf(Pal.px(1.0, s.y), 1.0)
+	var cap_radius := maxf(Pal.px(14.0, s.y),
+		CanvasText.width(cap, cap_scale) * 0.5 + cap_pad)
+	var cap_outer := cap_radius + outline
+	var label := "FLURRY RUSH"
+	var label_w := CanvasText.width(label, label_scale)
+	var label_h := CanvasText.height(label_scale)
+	var gap := Pal.px(8.0, s.y)
+	var row_h := maxf(cap_outer * 2.0, label_h)
+	var row_w := cap_outer * 2.0 + gap + label_w
+	var origin := Vector2(s.x * 0.5, s.y * 0.735 + row_h * 0.5)
+	var row := Rect2(-row_w * 0.5, -row_h * 0.5, row_w, row_h)
+	var plate := row.grow(Pal.px(PLATE_WORLD_PAD, s.y))
+
+	_canvas.draw_set_transform(origin, 0.0, Vector2.ONE * _flurry_scale)
+	_canvas.draw_rect(plate, PLATE_WORLD)
+	CanvasText.draw_text(_canvas, label,
+		Vector2(row.position.x, -label_h * 0.5), label_scale, Pal.BONE)
+	var cap_centre := Vector2(row.position.x + label_w + gap + cap_outer, 0.0)
+	_canvas.draw_circle(cap_centre, cap_outer, Pal.MIDNIGHT)
+	_canvas.draw_circle(cap_centre, cap_radius, Pal.BONE)
+	CanvasText.draw_centred(_canvas, cap,
+		Vector2(cap_centre.x, -CanvasText.height(cap_scale) * 0.5),
+		cap_scale, Pal.MIDNIGHT)
+	_canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+	# The transformed World plate is the outermost painted area during the pop.
+	_note(&"flurry_prompt", &"prompt", Rect2(
+		origin + plate.position * _flurry_scale,
+		plate.size * _flurry_scale))
 
 
 ## The sight, drawn only while a ranged item is out.

@@ -1911,7 +1911,6 @@ func on_perfect_dodge(_hit: Hit) -> void:
 	Bus.request_shake.emit(K.SHAKE_TAP * 0.7, 0.18)
 	_flurry_t = K.FLURRY_WINDOW
 	Bus.perfect_dodge.emit(_hero.global_position)
-	Bus.request_sfx.emit(&"dodge_roll", _hero.global_position)
 
 
 ## The leaping overhead the dodge opens. The lunge's shape without the lock, and
