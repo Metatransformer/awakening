@@ -53,6 +53,15 @@ extends LockedDoor
 
 var _atoms: Array[PuzzleAtom] = []
 var _key_spent: bool = false
+## Has `Bus.puzzle_solved` gone out for this gate yet?
+##
+## **A puzzle is not solved twice.** Sfx maps that signal to `puzzle_complete`,
+## which is a fanfare, and a reversible gate reaches the last line of
+## `_on_atom_changed` every time the player steps back onto the plate -- so
+## without this the announcement is a machine gun and the fanfare stops meaning
+## "you did it". The plate's own `craft_clang` is what says "it took your
+## weight"; that one is per press, and should be.
+var _announced: bool = false
 ## Inside `_break_the_sequence`. The re-entrancy guard, and it is not optional:
 ## `PuzzleAtom.reset()` emits `unsolved`, which is wired to `_on_atom_changed`,
 ## which is what called the reset -- three atoms would otherwise each re-enter the
@@ -122,6 +131,40 @@ func watch(atom: PuzzleAtom) -> void:
 func flag_id() -> StringName:
 	var tag := String(puzzle_id) if puzzle_id != &"" else String(name)
 	return StringName("atom_door_%s" % tag)
+
+
+## **Can this gate's answer be taken back?** True the moment ONE atom in the set
+## is non-latching (`PuzzleAtoms.latching()` is the column, and the plate and the
+## lantern are the two rows that read false).
+##
+## Asked of the set rather than declared by the placer, because the placer does
+## not choose it: `Dungeon._place_puzzle_room` picks its atom out of
+## `PuzzleAtoms.pool()` at generation time, and a floor that drew a plate is a
+## reversible gate while the same code drawing an eye is not. An export would be
+## a second answer to a question the table already answers.
+##
+## ONE is the threshold, not all: a mixed set with an eye and a plate is open
+## only while the plate is held, so the door can still come back -- and a door
+## that stamped a permanent flag because *most* of it latched would be open over
+## a risen plate, which is the bug either way.
+func reversible() -> bool:
+	for a in _atoms:
+		if not a.latching():
+			return true
+	return false
+
+
+## Overrides `LockedDoor.persists_open()`. **A gate that can shut must not write
+## a one-way flag**, and that is the whole of the rule `docs/PUZZLES.md` §2 now
+## carries: the atoms ARE the state, they are read every frame by
+## `unsolved_count()`, and a saved bool beside them is a second answer that can
+## only ever go stale in one direction.
+##
+## `pressure_plate.gd`'s header wrote this rule down about the plate ("a one-way
+## flag on a two-way prop is a plate that comes back pressed with nothing
+## standing on it") and the gate above it did it anyway.
+func persists_open() -> bool:
+	return not reversible()
 
 
 ## The atoms this gate is waiting on. Public because a director has to be able to
@@ -273,7 +316,21 @@ func activate(by: Node3D) -> void:
 # --- Atoms moving -------------------------------------------------------------
 
 func _on_atom_changed(atom: PuzzleAtom) -> void:
-	if is_open() or _breaking:
+	if _breaking:
+		return
+	# **The open state has an exit now, and card #116 is that it did not.** This
+	# line used to read `if is_open() or _breaking: return`, so a gate that had
+	# swung stopped hearing its own atoms for ever: the owner stood on the plate,
+	# the door opened, he stepped off, `unsolved` fired, and this returned.
+	#
+	# Only a REVERSIBLE gate comes back. An eye row that re-locked itself behind
+	# the player would be the cycle-home reward taken back (`PuzzleAtom`'s own
+	# class note), and no latching atom can reach here with the count non-zero
+	# anyway -- `unsolve()` refuses them and `reset()` is the sequence's, which
+	# `_breaking` has already returned above.
+	if is_open():
+		if reversible() and unsolved_count() > 0:
+			_shut()
 		return
 	# **Sequence, and it is the whole of combinator 2.** Checked before anything
 	# else looks at the count, because an out-of-turn solve must never be a solve
@@ -293,7 +350,9 @@ func _on_atom_changed(atom: PuzzleAtom) -> void:
 	# The world's announcement, and the one `Sfx` already maps to `puzzle_complete`.
 	# It fires on the SOLVE, not on the door -- a key hunt whose gate is still
 	# waiting to be spent at has still been solved.
-	Bus.puzzle_solved.emit(puzzle_id)
+	if not _announced:
+		_announced = true
+		Bus.puzzle_solved.emit(puzzle_id)
 	if auto_open:
 		# The reward for the last switch is the door moving, now, wherever the
 		# player is standing. `_swing()` is `LockedDoor`'s own opening and does

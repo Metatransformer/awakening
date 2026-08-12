@@ -48,6 +48,25 @@ func flag_id() -> StringName:
 	return StringName(PERMANENT % tag)
 
 
+## **A shortcut never goes back**, whatever its atoms are made of.
+##
+## `PuzzleGate.reversible()` reads the set: one non-latching atom and the door
+## shuts again and stops persisting (card #116, and it is right for a plate).
+## §5.1's promise is the exact opposite -- *"on your fifth run you are at the
+## Choir in ninety seconds"* -- so this is the third respect in which this class
+## differs from its parent, and it belongs beside the other two.
+##
+## It cannot fire today: `Dungeon._shortcut_pool` takes only atoms of tier
+## **exactly N** for N >= 1, and both non-latching rows in the table (the plate
+## and the lantern) are T0. That is a coincidence of two files agreeing, not a
+## rule -- one T1 toggle added to `PuzzleAtoms.ATOMS` and the shortcut on floor 1
+## starts closing behind the player, with the flag it wrote going with it. Stated
+## here so the rule is in the file that owns the promise rather than in the pool
+## that currently happens to keep it.
+func reversible() -> bool:
+	return false
+
+
 ## The mark warms, the sentence does not.
 ##
 ## Overrides `LockedDoor._on_item_acquired`, which announces `TO OPEN` on the
