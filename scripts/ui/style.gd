@@ -101,13 +101,6 @@ const HEALTH_METER_DIAGONAL := 6.0
 const METER_FRAME_LIGHT_ALPHA := 0.28
 const METER_FILL_LIGHT_ALPHA := 0.22
 const METER_FILL_SHADOW_ALPHA := 0.32
-## The 4 px Tier 2 tracks can afford only sparse one-pixel stone marks; denser
-## grain would spend the semantic colour's readability budget on decoration.
-## Its ordered screen-space cadence is deterministic so a draining fill reveals
-## a stationary surface instead of reseeding noise at its moving edge.
-const METER_GRAIN_STEP := 8.0
-const METER_GRAIN_DARK_ALPHA := 0.14
-const METER_GRAIN_LIGHT_ALPHA := 0.08
 ## Directly below health, sharing its left edge. Deliberately shorter, so the
 ## two never read as one two-line meter in peripheral vision.
 const STAMINA_RATIO := 0.62
@@ -168,16 +161,10 @@ const DRAUGHT_SLOT_GAP := 4.0
 # a total at 0.900 and a fee at 0.940 -- two readouts deleted in 2026-08-09. The
 # heat premium is drawn beside the heat bar in the VITALS pole now, which is
 # where a state of the body belongs. HUD_PLAN decision 14's dead-constant sweep.
-## --- The button cluster, bottom-left ----------------------------------------
-## The three item buttons in the physical shape of the D-pad they sit on
-## (docs/CONTRACT.md §2.5 #6), and — since they are the same KIND of thing — the
-## two hands beside them. They are not readouts, they are a control surface: the
-## arrangement is what tells you which button draws which item, and that is only
-## true if the arrangement matches your thumb.
-##
-## Every cell here answers "what do I press", so they stay ONE cluster with one
-## key cap each; splitting that question across two corners means answering it
-## with two glances, which is why the hands are not a separate instrument.
+## --- The equipment strip, bottom-left --------------------------------------
+## One compact cave-rock housing for [left hand][right hand][selected item].
+## The paintings identify the equipment; the live bindings are small overlays
+## inside the slots rather than a second row of controls outside the housing.
 ##
 ## **It sits over health now, not in the top-right corner.** Two reasons, and
 ## the first is the stronger: the cluster and the vitals stack are the same
@@ -188,25 +175,27 @@ const DRAUGHT_SLOT_GAP := 4.0
 ## game's central decision (hud.gd's header). Something had to move and the
 ## corner that was a control surface is the one that had somewhere else to be.
 ##
-## Cells are ~2x the old 32/34, and both sizes collapsed to ONE: at this scale a
-## 2 px difference between the hand cell and the button cell stops reading as
-## deliberate and starts reading as a bug.
+## `CELL` remains the kit wheel's square cell. The equipment strip has its own
+## narrow, taller geometry copied from Valenfeld's stance bar.
 const CELL := 64.0
-const CELL_GAP := 12.0
-## Gap between the hands pair and the item cell — wider than CELL_GAP so the
-## cluster reads as two groups (what he is holding, what he has selected) and not
-## as three cells in a row.
-const CLUSTER_GAP := 22.0
+const EQUIPMENT_SLOT_W := 60.0
+const EQUIPMENT_SLOT_H := 84.0
+const EQUIPMENT_HAND_GAP := 10.0
+## Wider than the hand gap so held equipment and the selected consumable remain
+## two semantic groups inside one housing.
+const EQUIPMENT_ITEM_GAP := 18.0
+const EQUIPMENT_HOUSING_PAD := 8.0
+const EQUIPMENT_CHAMFER := 5.0
+## Ordered chips on the housing only. The cadence is deterministic so the rock
+## face never crawls between HUD repaints.
+const EQUIPMENT_GRAIN_STEP := 13.0
+const EQUIPMENT_GRAIN_DARK_ALPHA := 0.42
+const EQUIPMENT_GRAIN_LIGHT_ALPHA := 0.16
 ## Shares HEALTH_ORIGIN's x, so the whole bottom-left pole hangs off ONE left
-## edge. Laid out from that edge rightwards and from CLUSTER_BOTTOM upwards, so
-## a taller cell or an extra text row grows into the empty middle of the screen
-## rather than off an edge — which is what the old right-anchored version was
-## protecting against and is still the rule, just about a different corner.
+## edge. Laid out from that edge rightwards and upward from CLUSTER_BOTTOM.
 const CLUSTER_LEFT := 0.031
-## The baseline the cluster's LAST row (the loadout line) sits on. Clear of
-## HEALTH_ORIGIN.y (0.882) by enough that the key caps under the cells never
-## touch the health bar's VOID hairline. Moves with it, by the same row height --
-## see the note on HEALTH_ORIGIN.
+## Bottom edge of the entire rock housing. It clears HEALTH_ORIGIN.y (0.882),
+## and every slot plus its in-slot action hint stays inside this bound.
 const CLUSTER_BOTTOM := 0.855
 ## --- The minimap, top-right --------------------------------------------------
 ## The floor plan, in the corner the button cluster used to have. It is the only
@@ -226,12 +215,6 @@ const MINIMAP_SIZE := 148.0    ## reference px, square
 ## wall right on this margin — without it the outline and the frame touch and
 ## read as one thick line.
 const MINIMAP_PAD := 8.0
-## Room under a cell for its key cap.
-const KEYCAP_GAP := 4.0
-# KEYCAP_SCALE was here, and it was `2.0` — a multiplier on `CanvasText.H`, i.e.
-# 14 px said in units nobody reads sizes in. It is `Hud._text(14.0)` now
-# (HUD_PLAN decision 3): the ladder is only enforceable if every size is spelled
-# the one way, and a constant whose value is "2" cannot be grepped for "14".
 const BAG_RIGHT := 0.969
 # BAG_NUM_BASELINE (0.900) and SLIPS_TOP (0.795) were here. The first anchored a
 # 32 px gold total that was deleted in 2026-08-09 and then went on positioning
@@ -274,8 +257,8 @@ const RIM_BR := Vector2(BAG_RIGHT, 0.914)
 # top-left floor card, which anchors off its own constants; §5.6 recorded the
 # deletion and this did not.
 ## The floor card -- the dungeon's name and the level you are on. Top-left, which
-## was the one corner of this HUD with nothing in it: health and stamina are
-## bottom-left, the bag and the fee bottom-right, the button cluster top-right.
+## was the one corner of this HUD with nothing in it: the equipment and vitals
+## are bottom-left, the bag bottom-right, and the minimap top-right.
 ##
 ## It shares HEALTH_ORIGIN's x so the left margin is ONE edge and not two. The y
 ## clears the safe area (0.031) by enough that the two-line card does not touch

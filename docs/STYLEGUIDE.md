@@ -128,7 +128,7 @@ and **Pixel Operator Bold** (its `keycap_font()` had no callers at all).
 
 The HUD is on the same two faces. `scripts/ui/canvas_text.gd` paints
 `UITheme.display_font()` onto a CanvasItem for everything drawn rather than
-typeset — the vitals, the floor card, the key caps, the world prompts. Until 2026-08-10 that file was a 5×7 bitmap of its own, which made the
+typeset — the vitals, the floor card, the action hints, the world prompts. Until 2026-08-10 that file was a 5×7 bitmap of its own, which made the
 HUD the one surface in the build that ignored the shipped pair.
 
 Two reasons this is an amendment and not a betrayal:
@@ -175,8 +175,8 @@ worth keeping, and it is about a *count*, not about a particular set of integers
 
 | px @720 | Used for |
 |---|---|
-| **10** | ammo / charge numeral, bottle count `n/m`, slips `+N`, heat multiplier, floor name |
-| **14** | key caps, loadout line, interact prompt, autosave notice, cell lettering |
+| **10** | equipment action hints, ammo / charge numeral, bottle count `n/m`, slips `+N`, heat multiplier, floor name |
+| **14** | interact prompt, autosave notice, cell lettering |
 | **16** | floor level, item toast |
 
 ~~Type scale is **8 / 12 / 16 / 20 / 24 / 32 only**.~~ That list was authored for
@@ -483,7 +483,7 @@ halves are two different moments.
 - **The edges become a decision.** There is nothing left to antialias: an edge is
   a 2.67 px step and reads as intent rather than as a defect. This is the answer
   §4.8 said the edge question was waiting for.
-- **The HUD is untouched and it is the whole point.** Cinzel key caps, the 10 px
+- **The HUD is untouched and it is the whole point.** Cinzel action hints, the 10 px
   legend, the vitals ticks, the minimap's 1 px linework — all pixel-identical to
   the native frame, because they never enter the buffer. `E TO TALK` is crisp
   over a courtyard made of blocks.
@@ -542,7 +542,7 @@ are all 3D geometry wearing a glyph atlas, so they go through the buffer and com
 out as noise at anything past a couple of metres. `tools/directors/world_labels.gd`
 still passes — it counts pixels, and the pixels are all there — which is exactly
 how this would have shipped unnoticed. Carded separately (#61). Nothing the
-player must *act* on is affected: the interact prompt, the key caps and every
+player must *act* on is affected: the interact prompt, the equipment hints and every
 number in §5 are HUD and stay sharp.
 
 > **FIXED 2026-08-11 (card #61) — §4.3's caption rule below is the answer, and
@@ -848,7 +848,7 @@ inherited twice over. It is now measured.
 
 **The instrument** is `tools/directors/aa_compare.gd` — one garrison pose
 (`garrison_look.tl_01_arrive`: curtain-wall merlons against flat sky, the
-`LANTERNKEEPER` Label3D, the HUD's Cinzel caps, the vitals pips) photographed
+`LANTERNKEEPER` Label3D, the HUD's Cinzel action hints, the vitals pips) photographed
 under eight configurations inside a single process, so machine noise is
 common-mode. Run at 1280×720 and again at 1920×1080. (That plate is a
 `WorldCaption` on the canvas since #61, so the pose no longer holds a sample of
@@ -1002,9 +1002,9 @@ way out, one instrument. Opposite corners on purpose: in a panic your eye has to
 travel from "how alive am I" to "how much am I about to lose", and that eye
 movement *is* the game's central decision.
 
-**Bottom-left, directly above health, is WHAT YOU PRESS** (§5.2, §5.2b): the two
-hands and the item cell, one cluster, every cell captioned with the key that
-fires it.
+**Bottom-left, directly above health, is WHAT YOU HOLD AND USE** (§5.2, §5.2b):
+the two hands and selected item share one compact rock housing, each with a small
+in-slot hint for the live action that fires it.
 
 **Top-right is WHERE AND WHEN YOU ARE** (§5.5b): the minimap plus the civil
 instrument. Underground, the compass and sun/moon clock sit directly below the
@@ -1046,16 +1046,15 @@ One horizontal bar, fixed width. The width does **not** grow with max health —
 a bar that lengthens as you buy containers walks across the screen and stops
 being a shape you recognise peripherally. More containers means denser ticks.
 
-Health, stamina, magic and heat now use one dark meter recipe: a VOID outer
+Health, stamina, magic and heat use one clean dark meter recipe: a VOID outer
 shell around an ASH bevel face and a recessed MIDNIGHT / ASH@60% track. Both
 ends are straight parallel diagonals, never curves or clipped round corners:
 6 px on health and 3 px on the subordinate meters. A 1 px BONE-alpha upper
 frame edge and MIDNIGHT lower edge deepen the face. The semantic fill colour has
-its own restrained 1 px BONE-alpha top band and VOID-alpha lower band. Sparse,
-ordered BONE/VOID chips inside that colour give it Valenfeld's carved dark-stone
-grain without spending the fill's readability on texture noise. The pattern is
-anchored to screen pixels, so draining a bar reveals stationary stone rather
-than making the grain swim; ticks still cut through last. Health carries a 2 px
+its own restrained 1 px BONE-alpha top band and VOID-alpha lower band, with no
+grain or surface texture inside the semantic fill. Valenfeld's cave-rock material
+belongs to the equipment housing (§5.2), not to body resources. Ticks still cut
+through last. Health carries a 2 px
 outer bezel and 2 px inner face;
 the three subordinate meters carry 1 px of each, preserving a readable live
 track inside the 15 / 8 / 6 / 6 weight hierarchy. Partial fills end diagonally.
@@ -1221,29 +1220,29 @@ tile of four.
 | Mark | 6 × 6 chip, VOID @85%, shape inset 1 px: ■ Ironhide (a plate), ▲ Emberblood (a point), ▄ Ballast (a weight, sitting on the floor of the chip, in ARCANE), ✚ the fallback for the next one |
 | Tiles | 4 per slot, 2 px apart (8 px wide at three slots); lit in the effect's tint, spent as a VOID @30% notch |
 
-### 5.2 The hands — left and right, beside the item
+### 5.2 The compact equipment plate
 
-**Superseded 2026-08-08: this was a fixed four-cell kit strip (sword, shield,
-hookshot, bow) and is now two cells, the hands.** The strip was a lie by the time
-the loadout landed — it drew four items you always had, in a game where you find
-the hookshot and the bow, and where the right hand can hold any of them. Two
-cells that say *what he is holding right now* is the same pixel budget spent on
-a fact that changes.
+The bottom-left control surface is one compact Valenfeld-style strip:
+**[left hand] [right hand] [selected item]**. Left and right are body order, not
+inventory order. All three slots are 60×84 reference px and share their top and
+bottom edges. The two hands have 10 px between them; the 18 px gap before the
+item preserves the distinction between held equipment and the selected
+consumable without splitting them into separate instruments.
 
-Two cells in the bottom-left cluster, immediately left of the item cell and
-sharing its top edge. No radial, no wheel. **Left cell is the left hand,
-right cell the right hand** — the reading order is the body, not an inventory
-order. Either can be empty: bow-and-arrows empties the shield arm, and an empty
-cell is correct there rather than a gap to fill.
+An 8 px margin wraps the row in one hard-edged cave-rock plate. Its corners are
+5 px chamfers, never curves. The face uses only `Pal` colours, with sparse,
+deterministic chips along the exposed lips and small fixed cracks in the two
+gaps. It has no random calls, imported texture, smoothing or rounded corners.
+This is where Valenfeld's stone material belongs; the vital meters remain clean
+semantic fills (§5.1).
 
-**Every cell carries the key that fires what is in it**, read from the live
-`InputMap` at repaint (`Hud._hotkey`) and never from a table. This is not
-politeness about rebinding — `user://settings.cfg` is replayed over the InputMap
-at boot and wins (`docs/CONTRACT.md`, "the two ways this table has lied" #2), so
-a printed "LMB" is a claim about the shipped layout, not about the one under the
-player's hand. The caption is keyed by the ITEM, not by the hand or the cell:
-two-handing the sword moves it to the other hand and the button that swings it
-does not change.
+**The paintings do the identification.** No slot is labelled WEAPON, OFF-HAND,
+PRIMARY or ALTERNATE, and no tutorial prose is attached to the strip. Every slot
+instead carries a small 10 px live action hint inside its upper-left corner,
+drawn after the art so it stays legible. The hint comes from the live `InputMap`
+at repaint (`Hud._hotkey`), never from a binding table. `user://settings.cfg` is
+replayed over the InputMap at boot and wins (`docs/CONTRACT.md`, "the two ways
+this table has lied" #2), so this is a requirement rather than polish.
 
 **Sword, shield and bow use Valenfeld's locally owned item paintings**, kept in
 protected `assets/ui/icons/valenfeld/`. Their worn steel, leather and wood are
@@ -1254,90 +1253,43 @@ Hookshot and arrow remain renders of the real models, baked by
 onto the Pal ramp. The split is deliberate: never put the imported paintings in
 the generated folder, because the baker overwrites it wholesale. Lettering
 ("SW", "SH") survives only as the fallback for a missing texture — an empty
-cell would read as "you have no sword", which is a lie.
+slot would read as "you have no sword", which is a lie.
 
 `ArmamentDb.ICONS` is the one owner of both sources, so the HUD and equipment
 screen cannot choose different faces for the same hand. The rule the bakes
 taught still holds: **thin items must use the diagonal aggressively.** The
 Valenfeld sword and bow do that in their paintings; the baked arrow does it in
-the model camera.
+the model camera. Textures aspect-fit inside a square art region within the tall
+slot and are never stretched vertically.
 
-| | |
-|---|---|
-| Row origin | x `0.031` (40), top y `0.826` (595) |
-| Cell | 32×32 px, 6 px gutter → 70 px total |
-| Fill | MIDNIGHT SLATE @80%, 1 px ASH border |
-| Ammo numeral | 16 px MOTH, right-aligned at +29, +30 |
+Beyond naming the armament, the hand slots carry **state nothing else surfaces**:
 
-Beyond naming the armament, these cells carry **state nothing else surfaces**:
+- **A shield in the left slot** fills BONE while blocking and flashes RUST for
+  2 frames on a blocked hit. This is the only place block timing is visible.
+- Arrow and charge numerals remain 10 px BONE at bottom-right. The associated
+  art dims to 30% when spent, and a bow borrows the quiver count when arrows are
+  not occupying the other hand.
 
-- **A shield in the left cell** fills BONE while blocking and flashes RUST for
-  2 frames on a blocked hit. This is the only place block timing is visible, and
-  it is the one thing the old strip did that nothing else does — it survived the
-  strip on that ground alone.
-- **Arrows in the left cell** carry the count and dim to 30% at zero.
+### 5.2b The selected item slot
 
-Not built, still wanted: a 2 px combo-window tick draining along the sword cell's
-bottom edge, and the hookshot cell brightening to BONE when a hookable target is
-in range and in the reticle. Both were written here before the loadout existed
-and neither has ever been drawn — they are intent, not description.
+The selected item is the third 60×84 slot, across the wider 18 px gap. Bottle
+and ration glyphs use the same square art region as equipment paintings, so their
+procedural proportions remain readable. A loaded bottle or ration keeps the 2 px
+BONE border; an empty bottle keeps the 1 px ASH border. The ring count stays at
+bottom-right, and a meal in progress keeps its gauge inside the slot's foot.
 
-### 5.2b The item cell, and the carets that say what cycles
+There are **no directional carets and no loadout line**. D-pad directions still
+step the underlying rings and swap the loadout (`docs/CONTRACT.md` §4.1), but
+printing arrows beside the paintings did not identify the equipment and the
+`↑ PRIMARY` / `↑ ALTERNATE` row only repeated state already visible in the two
+hand paintings. The item slot's small in-slot hint names the live `use_item`
+binding; nothing is drawn outside the housing.
 
-**Superseded 2026-08-09: this was four bindable cells in the physical shape of
-the D-pad — ▲ above, ◄ ► below, a ▼ caret under the cross — and it is now one
-cell.** The cross was a picture of a control that no longer exists: the D-pad
-binds nothing, it *steps rings* (`docs/CONTRACT.md` §4.1), so four cells drawing
-"what you put on each direction" were four cells drawing a lie. What replaced it
-is the third cell in a row of three: **[left hand] [right hand] [selected item]**,
-all `Pal.CELL` = 64 reference px, all sharing one top and one bottom.
-
-**THE CARET RULE, and it is the whole cluster's grammar:** a caret ABOVE a cell
-is the D-pad direction that cycles that cell. **← →** sit over the right hand,
-**↓** sits over the item, and nothing else in the cluster draws a triangle — so a
-triangle always means "a direction changes this". The band above the cells is
-`CARET * 2 + CARET_GAP` tall and every cell is pushed down by it whether or not it
-has a caret, which is what keeps the tops in a line.
-
-The right hand's carets are drawn **always**, even when the player owns nothing
-but the sword. A ring of one is still the ring, and a caret that only appears the
-moment you pick up a bow is a control the player has to notice arriving — the
-question the old bindable cross answered loudly ("which direction is my bow on?")
-would come back as a quieter one.
-
-**↑ is a line of text, not a cell.** Under the cluster, right-aligned on a
-MIDNIGHT @80% plate: `↑ PRIMARY` or `↑ ALTERNATE`. A set is not a thing with an
-icon — it is which pair of hands you are looking at — and the two cells above it
-already show it. It is plated because it sits over the world with nothing else
-behind it, and it uses a thin `↑` rather than ▲: neither is in Cinzel, both
-arrive from the system fallback, and the solid triangle looms over the word
-beside it at cap height.
-
-**Only the item cell carries a key cap that fires it** — `X`, read from the live
-`InputMap` like every other cap (§5.2). The hands are not fired from the cluster;
-the shoulders do that, and a cap on the sword cell would be claiming a button the
-sword shares with whatever you draw.
-
-The cluster is laid out **from its left edge and up from its baseline**
-(`Pal.CLUSTER_LEFT`, sharing `HEALTH_ORIGIN.x` so the HUD has one left edge and
-not two; `Pal.CLUSTER_BOTTOM` is the baseline of its last row, clear of health at
-`0.899`). Both anchors point at the corner it is in — the six-cell version of
-this cluster once overflowed the screen because it was laid out from the edge it
-was *not* anchored to. Anchor the thing that must not overflow.
-
-Growing **upward** from a bottom baseline is also why `Hud._cluster_top` makes no
-allowance for the caret band above the cells. Top-anchored, a caret drawn above a
-cell would have gone off the frame and the origin had to reserve it; from the
-bottom the band extends into empty screen.
-
-| | |
-|---|---|
-| Cross origin | x `0.031` + two cells + gutter, baseline y `0.872` |
-| Cell | 34×34 px, 6 px gutter |
-| Fill | MIDNIGHT @80%, 1 px ASH border |
-| Drawn now | 2 px BONE border on the cell holding the item currently in hand |
-| Ammo numeral | 16 px MOTH on a bound bow, right-aligned inside the cell |
-| Swap caret | 10×5 px ASH triangle, centred under the ▲ column |
+The strip is anchored from `Pal.CLUSTER_LEFT`, exactly the same x as
+`HEALTH_ORIGIN`. `Pal.CLUSTER_BOTTOM` is the bottom of the entire rock housing,
+not a text baseline. `Hud.layout_rects()` publishes `equipment_bar` under the
+`cluster` root; `hand_0`, `hand_1` and `item_cell` are its children, and action
+hints plus ammo/meal rectangles are nested under their own slot.
 
 ### 5.3 The bag — the most important object on screen
 
@@ -1576,9 +1528,9 @@ map most needed.
 
 ### 5.6 Always visible vs. transient
 
-**ALWAYS — seven things, nothing else:** the health bar, the stamina bar, the
-hands, the item buttons, the bag (rim and slips — no total), ammo numerals, and
-— underground only — the minimap. Each is a number or a binding the player must
+**ALWAYS — these instruments, nothing else:** the health bar, the stamina bar,
+the compact equipment strip, the bag (rim and slips — no total), and —
+underground only — the minimap. Each is a state or binding the player must
 be able to consult unprompted, because each feeds the single recurring decision
 — push on, or leave. The minimap earns the seventh slot on that same test: how
 far from the stair you are is the other half of "can I afford one more room".
@@ -1671,18 +1623,16 @@ the existing gaps accommodate those outer bounds without changing a row top.
 the stack sum anywhere else; a second one put the draught row through the magic
 bar in the garrison and four pixels into the heat bar underground.
 
-#### The control cluster — same left edge, laid out upward from `CLUSTER_BOTTOM`
+#### The equipment strip — same left edge, housing bottom at `CLUSTER_BOTTOM`
 
 | Element | x | y | Size |
 |---|---|---|---|
-| Cluster baseline | — | 0.855 (616) | — |
-| Caret band | above every cell | 490 → 511 | 21 tall (8·2 + 5); `CARET` is a HALF extent, so 16×16 triangles |
-| Left hand cell | 0.031 (40) | 511 | 64 × 64 |
-| Right hand cell | + cell + 12 (116) | 511 | 64 × 64; ← → carets over this one always |
-| Item cell | + cell + 22 (202) | 511 | 64 × 64; ↓ caret over it |
-| Ammo / charge numeral | cell right − 3 | cell bottom − 3 − its own height | **10 px** BONE |
-| Key caps | centred under each cell | cell bottom + 4 (579) | 14 px on the cell plate |
-| Loadout line | right-aligned to the item cell (266) | caps bottom + 9 (602) | 14 px on the cell plate |
+| Rock housing | 0.031 (40) | 516 → 616 | 224 × 100; 8 px pad, 5 px chamfer |
+| Left hand slot | housing left + 8 (48) | 524 | 60 × 84 |
+| Right hand slot | left slot + 60 + 10 (118) | 524 | 60 × 84 |
+| Item slot | right slot + 60 + 18 (196) | 524 | 60 × 84 |
+| Ammo / charge numeral | slot right − 3 | slot bottom − 3 − its own height | **10 px** BONE |
+| Live action hint | slot left + 3, slot top + 3 | inside each slot | **10 px**, drawn over art |
 
 #### The money pole — one right edge at x 0.969 (1240)
 
@@ -1776,20 +1726,20 @@ shrinking is supposed to mean.
 | Heat premium baseline (0.735) | The premium is drawn beside the heat bar in the vitals pole, where a state of the body belongs. `Pal.PREMIUM_BASELINE` gone. |
 | Damage arc | **Built, at r = 0.42h.** `0.28h` passes through x 438–842 and y 158–562 — straight across the middle third §2 rule 1 keeps empty for the fight, on a HUD that has since gained a prompt and a crosshair there. `Feel.damage_vignette` is deleted and `Feel` is no longer a `CanvasLayer`; the bearing rides `Bus.hero_struck(from)`. |
 
-#### The two plate recipes
+#### The two plate roles
 
-Two, not three, and which one you get is decided by a single question.
+The equipment housing is material; the world plate is text protection. There is
+no separate cell-text plate because action hints stay inside their slots.
 
 | Recipe | Fill | Pad | For |
 |---|---|---|---|
-| **Cell** | MIDNIGHT@80% | 3 px | anything attached to a cell — the key caps, the loadout line |
+| **Equipment** | hard-edged Pal cave rock | 8 px | the three 60×84 equipment slots |
 | **World** | VOID@72% | 6 px | anything floating over the world — the interact prompt, the floor card |
 
-A plate is how text survives something it does not control. The cell recipe is
-the cells’ own fill, so a cap reads as part of the cluster rather than as a label
-that landed near it; the world recipe is darker and wider because a lit wall at
-this end of the palette is brighter than MOTH, and 6 px is what keeps a descender
-off the brick outside the plate at 720p.
+The equipment plate binds three icon-first slots into one object. The world
+recipe is darker and wider because a lit wall at this end of the palette is
+brighter than MOTH, and 6 px is what keeps a descender off the brick outside the
+plate at 720p.
 
 ---
 
