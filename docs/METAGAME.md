@@ -656,8 +656,9 @@ straight to the gate still gets it.
 - **The quartermaster.** **Two counters, and she is the only person in the yard
   with two** (`Npc.COUNTERS`). *Trade* buys: the trade screen
   (`scripts/ui/shop/trade_screen.gd`) lists the bag sorted by value with a
-  "sell everything" line, because the common case is dumping the lot and the UI
-  should not make that tedious. *The Stores* sells everything you carry more of
+  **SELL UNMARKED** line. It still makes dumping trash one decision, but keeps
+  components, relics, and anything required by a wished current recipe. *The
+  Stores* sells everything you carry more of
   (`scripts/items/supply_db.gd`):
 
   | Line | Base cost | Growth | Limit | Gated on |
@@ -970,6 +971,17 @@ chain. **Every third rung wants a Cold Iron Core.** That is the pacing gate: the
 core never drops off a body, so no amount of grinding room one finishes a
 ladder, and which ladder gets the core you found is the only genuinely hard
 spending decision the smith ever poses.
+
+### Current-use stars and recipe wishlists
+
+`Wishlist` derives every use from the live `ShopDb.lines()`, `AlchemyDb.lines()`
+and `JewelDb.lines()` recipes. It never copies a future rung table. POUCH and the
+vendor append either the current recipe names or an explicit safe-to-sell line;
+their cells show ★ when the item is needed. Auto-wishlist is on by default and
+follows the current recipes dynamically. Y / Triangle on a recipe row pins that
+stable catalogue-and-line key to the save, so the pin follows the next rung
+without saving a stale ingredient list. SELL UNMARKED protects those stars as
+well as every component and relic; selling one starred stack remains allowed.
 
 ### How they get home
 

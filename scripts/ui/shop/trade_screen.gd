@@ -168,6 +168,11 @@ func _ready() -> void:
 
 	_shown_gold = float(Game.gold)
 	_refresh()
+	Bus.wishlist_changed.connect(_refresh)
+	Settings.changed.connect(func(section: StringName, key: StringName,
+			_value: Variant) -> void:
+		if section == &"game" and key == &"auto_wishlist":
+			_refresh())
 	# The camera captures the pointer for look. Hand it back or not one cell on
 	# this screen can be clicked.
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -554,6 +559,7 @@ func _refresh() -> void:
 			"tint": row["color"],
 			"sub_tint": row.get("sub_tint", Color.WHITE),
 			"mark": bool(row.get("mark", false)),
+			"star": bool(row.get("star", false)),
 			"dim": not bool(row["ok"]),
 		})
 	if mode == Mode.SELL:
@@ -593,10 +599,15 @@ func _at() -> int:
 
 
 func _build_sell_rows() -> void:
+	var wished := Wishlist.wishlisted_ids()
+	var unmarked: Array[StringName] = []
 	for id: StringName in Run.bag:
 		var def := ItemDb.get_def(id)
 		if def == null:
 			continue
+		var keep := def.is_component() or RelicDb.is_relic(id) or wished.has(id)
+		if not keep and Run.line_value(id) > 0:
+			unmarked.append(id)
 		_rows.append({
 			"kind": &"item",
 			"id": id,
@@ -609,19 +620,22 @@ func _build_sell_rows() -> void:
 			"sub": "%d ◇" % Run.line_value(id),
 			"color": Pal.rarity_color(int(def.rarity)),
 			"mark": def.is_component(),
+			"star": wished.has(id),
 			"blurb": def.blurb,
 			"ok": true,
 		})
 	_rows.sort_custom(func(a, b) -> bool: return a["price"] > b["price"])
-	if not _rows.is_empty():
+	var bulk_price := Run.sale_value(unmarked)
+	if bulk_price > 0:
 		_rows.append({
 			"kind": &"all",
-			"label": "SELL EVERYTHING",
+			"label": "SELL UNMARKED",
 			"count": 0,
-			"price": Run.bag_value(),
-			"sub": "%d ◇" % Run.bag_value(),
+			"price": bulk_price,
+			"sub": "%d ◇" % bulk_price,
 			"color": Pal.BONE,
-			"blurb": "Empty the bag. The smith is two doors down.",
+			"blurb": "Sell every unmarked stack. Components, relics and wished-for loot stay put.",
+			"ids": unmarked,
 			"ok": true,
 		})
 
@@ -630,6 +644,10 @@ func _build_buy_rows() -> void:
 	for line in _db().lines():
 		var left: int = _db().remaining(line["id"])
 		var cost := int(line["cost"])
+		var pinned := Wishlist.is_line_pinned(_db(), line)
+		var sub := ("%d ◇" % cost) if cost > 0 else String(line.get("tally", ""))
+		if pinned:
+			sub = "★ " + sub
 		_rows.append({
 			"kind": &"buy",
 			"line": line,
@@ -644,7 +662,7 @@ func _build_buy_rows() -> void:
 			# relic that is in. Read off the line rather than derived from
 			# `remaining() == 0`, which is also true of a maxed jewel slot whose
 			# Recut row is free and is the opposite of done.
-			"sub": ("%d ◇" % cost) if cost > 0 else String(line.get("tally", "")),
+			"sub": sub,
 			"sub_tint": Color.WHITE if cost > 0 else Pal.MOSS,
 			"color": Pal.BONE,
 			# The blurb says what the thing IS; the detail says what the number
@@ -721,6 +739,7 @@ func _describe() -> void:
 			_d_kind.text = "%s  ·  %s" % [def.rarity_name().to_upper(),
 				def.bench_name() if def.is_component() else "INGREDIENT"]
 			_d_price.text = "%d ◇  for ×%d" % [int(row["price"]), int(row["count"])]
+			_d_blurb.text += "  " + Wishlist.usage_sentence(row["id"])
 		&"all":
 			_d_kind.text = "EVERY STACK"
 			_d_price.text = "%d ◇" % int(row["price"])
@@ -816,6 +835,7 @@ const REFUSE_TIME := 1.8
 
 var _armed_accept: bool = false
 var _armed_cancel: bool = false
+var _armed_jump: bool = false
 var _repeat: float = 0.0
 ## 0..1 on the selected cell's commit. See `_hold_time`.
 var _hold: float = 0.0
@@ -827,8 +847,8 @@ var _hold: float = 0.0
 ## a set stone all eat components -- a Cold Iron Core is a thing you FOUND, and
 ## spending one on the wrong ladder because the cursor was a cell off is the only
 ## shop mistake this game cannot give back (docs/METAGAME.md §6.5). SELL
-## EVERYTHING is here for the same reason from the other side: it is one press
-## that empties the bag.
+## UNMARKED is here for the same reason from the other side: it is one press that
+## can empty most of the bag.
 ##
 ## **Tapped: everything else.** Arrows, a bag slot, a jewel blank, selling one
 ## stack. Gold is grindable and a single line is re-buyable, and a hold on every
@@ -894,6 +914,12 @@ func _tick_input(delta: float) -> void:
 	var accept := Input.is_action_pressed(&"ui_accept") or Input.is_action_pressed(&"interact")
 	if not accept:
 		_armed_accept = true
+	var jump := Input.is_action_pressed(&"jump")
+	if not jump:
+		_armed_jump = true
+	elif _armed_jump and not _wishlist_key().is_empty():
+		_armed_jump = false
+		Game.toggle_wishlist_line(_wishlist_key())
 	if _rows.is_empty():
 		return
 
@@ -1009,7 +1035,7 @@ func _commit() -> void:
 		&"item":
 			done = Run.sell(row["id"]) > 0
 		&"all":
-			done = Run.sell_all() > 0
+			done = Run.sell_ids(row["ids"]) > 0
 		&"buy":
 			done = _db().buy(row["line"])
 
@@ -1104,6 +1130,26 @@ func _paint_chrome() -> void:
 		_hint.text = "Hold %s to %s    %s Leave" % [accept_cap, _verb(), leave_cap]
 	else:
 		_hint.text = "%s %s    %s Leave" % [accept_cap, _verb(), leave_cap]
+	var wishlist_key := _wishlist_key()
+	if not wishlist_key.is_empty():
+		var jump_cap := Glyph.cap(&"jump")
+		if jump_cap.is_empty():
+			jump_cap = "F"
+		_hint.text += "    %s %s" % [jump_cap,
+			"Unwishlist" if Game.is_wishlist_line_pinned(wishlist_key) else "Wishlist"]
+
+
+func _wishlist_key() -> StringName:
+	if mode != Mode.BUY or _cursor < 0 or _cursor >= _rows.size():
+		return &""
+	var row := _rows[_cursor]
+	if row.get("kind") != &"buy":
+		return &""
+	var line: Dictionary = row["line"]
+	var parts: Dictionary = line.get("parts", {})
+	if parts.is_empty():
+		return &""
+	return Wishlist.line_key(_db(), line)
 
 
 ## The label of the cell the cursor is on, or "" when the board is empty.

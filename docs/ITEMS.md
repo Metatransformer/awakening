@@ -148,6 +148,11 @@ with three sources and no fourth (`docs/METAGAME.md` §4.6), one of which is the
 bag recipe on Brannoc's forge board (`ShopDb.FLETCH`, `Fletching.RECIPE`,
 `scripts/items/shop_db.gd`, `scripts/items/fletching.gd:~38`).
 
+That recipe is also the ordinary-ingredient proof for loot wishlists: Bone Shard
+and Cracked Flint receive ★ from the live `FLETCH ARROWS` row, appear as used in
+that recipe in POUCH/vendor detail, and survive SELL UNMARKED. Recipe use is
+queried through `Wishlist`; it is not another ingredient table.
+
 **The count is on the bow's own cell whenever the arrows are not on a cell of
 their own** (`ArmamentDb.hand_count_beside`, #53). `arrow` is a stop in
 `Game.LEFT_POOL` and it is not the default one — the shield is — so the loadout
@@ -567,6 +572,9 @@ is exactly one of the trip's four spins.
   the pouch prints one bench name per material, and a coil the jewelcrafter also
   ate would send the player to the smith holding her price (`ItemDef.bench`,
   `item_def.gd:~51-59`).
+- **A wishlist mark is not another item kind.** ★ is derived from current
+  catalogue `parts` plus saved recipe-line pins. It adds informed friction to a
+  sale but never makes an individual stack unsellable.
 - **The rope.** §1.1.
 - **Armour and jewelry art.** Every piece is a number. `docs/SCOPE.md` §1 holds
   armour/jewelry art at 0 and GDD §6.6 gives the reason: four meshes × two paths
