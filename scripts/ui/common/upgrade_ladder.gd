@@ -56,10 +56,10 @@ extends HFlowContainer
 ##      fresh one differed by a tick and a dim and by nothing you could see at
 ##      arm's length.
 
-## The cursor landed on a cell. `line` indexes the catalogue's `lines()`, and is
-## -1 for a rung that is not buyable — an owned one, or one further up the ladder.
-signal cell_focused(line: int)
-## A real press on a BUYABLE rung. Never emitted for -1.
+## The cursor landed on a cell. Non-negative selections index the catalogue's
+## `lines()`; owned rungs use stable negative keys from -2 down. -1 is no cell.
+signal cell_focused(selection: int)
+## A real press on a BUYABLE rung. Never emitted for an owned selection.
 signal cell_activated(line: int)
 
 ## A group is one row:
@@ -111,14 +111,18 @@ const _ROW_DIM := 0.34
 const SOCKET := Vector2(26, 62)
 
 var _cells: Array[Button] = []
-## Parallel to `_cells`: the catalogue line each reports, or -1.
+## Parallel to `_cells`: the buyable catalogue line, or -1.
 var _line_of: Array[int] = []
+## Parallel to `_cells`: its selection key, or -1 for a future/non-offer cell.
+var _selection_of: Array[int] = []
 ## Parallel to `_cells`: which row each is on.
 var _row_of: Array[int] = []
-## The buyable lines in BOARD order, which is not `lines()` order — the smith's
-## groups put the shield between the blade and the armour while `_board` puts it
-## after. The cursor has to walk what the player can see, so this is the order it
-## walks and `lines()` is only ever an index into the prices.
+## Read-only descriptions for owned selections, keyed by their negative key.
+var _owned_details: Dictionary[int, Dictionary] = {}
+## Every selectable cell in BOARD order, which is not `lines()` order — the
+## smith's groups put the shield between the blade and the armour while `_board`
+## puts it after. The cursor walks what the player can see: owned rungs and the
+## next buyable rung, never future sockets.
 var _order: Array[int] = []
 var _rows_built: int = 0
 
@@ -141,16 +145,18 @@ func set_board(groups: Array, cells: Array) -> void:
 		c.queue_free()
 	_cells.clear()
 	_line_of.clear()
+	_selection_of.clear()
 	_row_of.clear()
+	_owned_details.clear()
 	_order.clear()
 	_rows_built = 0
 
 	for g: Dictionary in groups:
 		_add_row(g, cells)
 		_rows_built += 1
-	for i in _cells.size():
-		if _line_of[i] >= 0:
-			_order.append(_line_of[i])
+	for selection: int in _selection_of:
+		if selection != -1:
+			_order.append(selection)
 	_wire_focus()
 
 
@@ -159,19 +165,31 @@ func cell_at(i: int) -> Button:
 	return _cells[i] if i >= 0 and i < _cells.size() else null
 
 
-## Where in the flat cell order the buyable rung for `line` sits, or -1. The
-## screen's cursor counts CATALOGUE LINES, and the board has cells that are not
-## lines — this is the translation between the two, and it is the reason the
-## cursor never lands on a rung the player already owns.
+## Where in the flat cell order the buyable rung for `line` sits, or -1. Owned
+## selections have their own negative keys and deliberately never satisfy this
+## compatibility lookup.
 func slot_of_line(line: int) -> int:
 	return _line_of.find(line)
+
+
+## The cell for a buyable or owned selection key, or null for -1/not found.
+func cell_of_selection(selection: int) -> Button:
+	var i := _selection_of.find(selection)
+	return cell_at(i)
+
+
+## The read-only description for an owned selection, or an empty row.
+func owned_detail(selection: int) -> Dictionary:
+	if not _owned_details.has(selection):
+		return {}
+	return _owned_details[selection]
 
 
 func count() -> int:
 	return _cells.size()
 
 
-## The buyable lines in the order they appear on the board, left to right and top
+## Selectable cells in the order they appear on the board, left to right and top
 ## to bottom. The screen's cursor steps through THIS, never through `lines()`.
 func order() -> Array[int]:
 	return _order
@@ -186,12 +204,26 @@ func row_of_line(line: int) -> int:
 	return _row_of[i] if i >= 0 else -1
 
 
-## The first buyable line on `row`, or -1 when that row has none — a fully
-## climbed ladder, which the cursor skips over rather than stopping on.
+## Which board row a buyable or owned selection sits on, or -1.
+func row_of_selection(selection: int) -> int:
+	var i := _selection_of.find(selection)
+	return _row_of[i] if i >= 0 else -1
+
+
+## Legacy buyable-line lookup. Selection movement uses `first_selection_of_row`
+## so a fully climbed row remains a controller stop.
 func first_line_of_row(row: int) -> int:
 	for i in _cells.size():
 		if _row_of[i] == row and _line_of[i] >= 0:
 			return _line_of[i]
+	return -1
+
+
+## The first owned or buyable selection on `row`, or -1 when it has only sockets.
+func first_selection_of_row(row: int) -> int:
+	for i in _cells.size():
+		if _row_of[i] == row and _selection_of[i] != -1:
+			return _selection_of[i]
 	return -1
 
 
@@ -251,7 +283,7 @@ func _add_row(g: Dictionary, cells: Array) -> void:
 	row.add_child(flow)
 
 	for t: Dictionary in tracks:
-		_add_track(flow, t, cells)
+		_add_track(flow, t, cells, String(g.get("title", "")))
 
 
 ## The row's face, and how brightly it is lit.
@@ -281,7 +313,8 @@ func _add_face(row: Node, g: Dictionary, tracks: Array) -> void:
 	row.add_child(face)
 
 
-func _add_track(parent: Node, t: Dictionary, cells: Array) -> void:
+func _add_track(parent: Node, t: Dictionary, cells: Array,
+		group_title: String) -> void:
 	var chain := HBoxContainer.new()
 	chain.add_theme_constant_override("separation", 2)
 	parent.add_child(chain)
@@ -317,7 +350,7 @@ func _add_track(parent: Node, t: Dictionary, cells: Array) -> void:
 		if i > owned or (i == owned and line < 0 and not solo):
 			chain.add_child(_socket())
 			continue
-		chain.add_child(_rung(t, i, owned, rungs, line, entry))
+		chain.add_child(_rung(t, i, owned, rungs, line, entry, group_title))
 
 
 ## A rung the player has not reached: the HOLE where a cell will go.
@@ -349,7 +382,7 @@ func _socket() -> Control:
 ## One rung. Three states and they are three different questions: *done*, *this
 ## is what it costs*, *not yet*.
 func _rung(t: Dictionary, i: int, owned: int, rungs: int, line: int,
-		entry: Dictionary) -> Button:
+		entry: Dictionary, group_title: String) -> Button:
 	# A one-rung track is a repeatable, not a ladder: arrows, a draught, a bottle.
 	# It keeps the full-size named cell it had on the old board, because its name
 	# IS the information and there is no numeral that would mean anything.
@@ -358,7 +391,13 @@ func _rung(t: Dictionary, i: int, owned: int, rungs: int, line: int,
 	var is_next := i == owned and line >= 0
 
 	var e: Dictionary = {}
-	if solo:
+	if solo and i < owned:
+		var solo_label := String(t.get("name", "")).strip_edges()
+		if solo_label.is_empty():
+			solo_label = group_title
+		e = {"label": solo_label,
+			"sub": TICK, "tint": Pal.MOSS}
+	elif solo:
 		e = entry.duplicate()
 		if e.is_empty():
 			e = {"label": String(t.get("name", "")), "sub": "", "dim": true}
@@ -383,27 +422,60 @@ func _rung(t: Dictionary, i: int, owned: int, rungs: int, line: int,
 			"sub": "", "tint": Color(Pal.ASH, 0.5), "dim": true}
 
 	ItemCell.paint(b, e)
-	# Only a buyable rung answers. An owned one has nothing left to sell and a
-	# future one is not on offer, and a cursor that stopped on either would be a
-	# cursor the player has to press through to reach the thing they came for.
-	var reports: int = line if (solo or is_next) and line >= 0 else -1
-	b.focus_mode = Control.FOCUS_ALL if reports >= 0 else Control.FOCUS_NONE
-	b.set_meta(&"at", _cells.size())
+	# A buyable rung keeps its catalogue line. An owned rung gets a negative key
+	# derived from its flat cell slot; -1 stays reserved for no selection. Future
+	# cells/sockets are not offers and stay outside the focus chain.
+	var slot := _cells.size()
+	var is_owned := i < owned
+	var reports: int = -2 - slot if is_owned else (line if is_next else -1)
+	b.focus_mode = Control.FOCUS_ALL if reports != -1 else Control.FOCUS_NONE
+	b.set_meta(&"at", slot)
 	_cells.append(b)
-	_line_of.append(reports)
+	_line_of.append(line if is_next else -1)
+	_selection_of.append(reports)
 	_row_of.append(_rows_built)
-	if reports >= 0:
-		b.pressed.connect(func() -> void: _press(b))
+	if is_owned:
+		_owned_details[reports] = _make_owned_detail(
+			group_title, t, entry, i, owned, rungs)
+	if reports != -1:
 		b.focus_entered.connect(func() -> void: _look(b))
 		b.mouse_entered.connect(func() -> void: _look(b))
+		if reports >= 0:
+			b.pressed.connect(func() -> void: _press(b))
 	else:
 		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return b
 
 
+func _make_owned_detail(group_title: String, t: Dictionary, entry: Dictionary,
+		rank: int, owned: int, rungs: int) -> Dictionary:
+	var branch := String(t.get("name", "")).strip_edges()
+	var label := branch if rungs == 1 and not branch.is_empty() else group_title
+	if rungs > 1:
+		var numeral: String = (NUMERALS[rank] if rank < NUMERALS.size()
+			else str(rank + 1))
+		label = "%s — %s%s" % [group_title,
+			(branch + " ") if not branch.is_empty() else "", numeral]
+	var detail: Dictionary = {
+		"kind": &"owned",
+		"label": label,
+		# The catalogue line describes the live aggregate effect. It is more useful
+		# on every climbed rung than a generic acknowledgement, especially on a
+		# finished board where there is no buyable cell left to carry these words.
+		"blurb": String(entry.get("blurb", "Already purchased.")),
+		"group": group_title,
+		"branch": branch,
+		"owned": owned,
+		"rank": rank + 1,
+		"rungs": rungs,
+	}
+	detail.make_read_only()
+	return detail
+
+
 # --- Focus -------------------------------------------------------------------
 
-## The focusable cells, chained in reading order and wrapped end to end.
+## The selectable cells, chained in reading order and wrapped end to end.
 ##
 ## Reading order and not spatial, which is the opposite of what a grid wants and
 ## right for the same reason: the cells here are not on a lattice. A row can hold
@@ -414,7 +486,7 @@ func _rung(t: Dictionary, i: int, owned: int, rungs: int, line: int,
 func _wire_focus() -> void:
 	var live: Array[Button] = []
 	for i in _cells.size():
-		if _line_of[i] >= 0:
+		if _selection_of[i] != -1:
 			live.append(_cells[i])
 	if live.is_empty():
 		return
@@ -426,7 +498,7 @@ func _wire_focus() -> void:
 
 
 func _look(b: Button) -> void:
-	cell_focused.emit(_line_of[int(b.get_meta(&"at"))])
+	cell_focused.emit(_selection_of[int(b.get_meta(&"at"))])
 
 
 func _press(b: Button) -> void:
