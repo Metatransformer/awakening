@@ -71,8 +71,12 @@ func _sleep() -> void:
 	# `sleep_to_dawn` emits synchronously. Mark this as deliberate so Flow's dawn
 	# curfew handler does not try to start a second fade inside this one.
 	Flow.deliberate_rest = true
-	Clock.sleep_to_dawn()
+	var reached_dawn: bool = Clock.sleep_to_dawn()
+	if reached_dawn:
+		Clock.settle_wake_after_dawn()
 	Flow.deliberate_rest = false
+	if not reached_dawn:
+		return
 	var bed_rank := int(Game.upgrades.get(ElderUpgradeDb.BED_ID, 0))
 	Game.heal(bed_rank * ElderUpgradeDb.BED_HEAL_PER_RANK)
 	Game.refund_stamina(Game.max_stamina)

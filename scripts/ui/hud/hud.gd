@@ -30,6 +30,7 @@ extends CanvasLayer
 ## font -- see the anti-slop list.
 
 const DRAW_LAYER := 50  ## under the pause menu, which sits at 100
+const CivilInstrumentsScript := preload("res://scripts/ui/hud/civil_instruments.gd")
 
 # --- Health -----------------------------------------------------------------
 ## OVERRIDES STYLEGUIDE §5.1, which specifies a row of discrete quarter cells.
@@ -236,16 +237,15 @@ var _canvas: Control
 ## end. The loop that fills this walks the db's keys, so adding an armament is
 ## still one row in one table and the HUD needs no edit at all.
 ##
-## Those textures are baked from the REAL item models by
-## `tools/scenes/_iconbake.gd`, then posterised into the Pal ramp so they read
-## as authored in-palette rather than as photographs dropped into a 5-bit HUD:
+## Sword, shield and bow use the locally owned Valenfeld item paintings; their
+## material and wear are the part of that HUD language this treatment ports.
+## Hookshot and arrow still come from the REAL item models through
+## `tools/scenes/_iconbake.gd`, posterised into the Pal ramp:
 ##   godot --path . res://tools/scenes/_iconbake.tscn -- --out=<abs>/assets/ui/icons/hud
 ##
-## `icons/hud/` is GENERATED and the baker overwrites all of it. Hand-authored
-## or imported art belongs in `icons/` proper -- do not put anything there you
-## cannot afford to lose, and do not point the baker at `icons/` or the next
-## bake eats the imported source art (it already did once, to
-## hookshot_pistol.png).
+## `icons/hud/` is GENERATED and the baker overwrites all of it. The Valenfeld
+## sources live in protected `icons/valenfeld/`; never point the baker there.
+## It already ate an imported hookshot once when these paths were not separated.
 var _icons: Dictionary[StringName, Texture2D] = {}
 ## Stamina, mirrored from Game so the bar can be redrawn without polling.
 var _stamina: float = K.MAX_STAMINA
@@ -339,6 +339,7 @@ var _hold01: float = 0.0
 var _hold_required: bool = false
 ## The kit wheel's input half; this file draws it. See `_draw_wheel`.
 var _wheel: KitWheel = null
+var _civil_instruments: CivilInstruments = null
 var _clock_text := ""
 
 
@@ -369,6 +370,12 @@ func _ready() -> void:
 	_canvas.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_canvas.draw.connect(_draw_hud)
 	add_child(_canvas)
+
+	# One reusable top-right stack. It sits below the canvas in draw order so the
+	# kit wheel's full-screen scrim still dims every HUD instrument together.
+	_civil_instruments = CivilInstrumentsScript.new()
+	_civil_instruments.z_index = -1
+	add_child(_civil_instruments)
 
 	# The kit wheel's input half. A child of this layer rather than an autoload of
 	# its own, because everything that hides the HUD has to hide the wheel too and
@@ -402,6 +409,7 @@ func _ready() -> void:
 	Clock.minute_changed.connect(_on_clock_minute)
 	Clock.phase_changed.connect(_repaint)
 	Clock.service_availability_changed.connect(_repaint)
+	Game.garrison_changed.connect(_repaint)
 	_on_clock_minute(Clock.day, int(Clock.hour), int(fmod(Clock.hour, 1.0) * 60.0))
 	# A binding moved — on a pickup, or on the equipment screen's card. The wheel
 	# is usually shut when this fires and the repaint is then a no-op; it is
@@ -1168,9 +1176,11 @@ func _draw_hud() -> void:
 	_draw_hands(s)
 	_draw_item_cell(s)
 	_draw_minimap(s)
+	if _civil_instruments != null:
+		_note(&"civil_instruments", &"", _civil_instruments.instrument_rect())
 	_draw_bag(s)
 	_draw_extraction(s)
-	_draw_clock(s)
+	_draw_garrison_integrity(s)
 	_draw_toast(s)
 	_draw_save(s)
 	if _flurry_prompt:
@@ -1198,22 +1208,61 @@ func _draw_hud() -> void:
 	_seal_layout()
 
 
-func _draw_clock(s: Vector2) -> void:
-	if _clock_text.is_empty():
+func _draw_garrison_integrity(s: Vector2) -> void:
+	var phase := Game.raid_phase()
+	if phase == GarrisonRaidState.PHASE_DORMANT \
+			or phase == GarrisonRaidState.PHASE_ARMED:
 		return
-	var scale := CanvasText.scale_for(14.0, s.y)
-	var phase := SkyCycle.phase_of(Clock.hour)
-	var tint := Pal.MOTH
-	if phase == &"dawn" or phase == &"dusk":
-		tint = Pal.GOLD
-	elif phase == &"night":
-		tint = Pal.CYAN
-	CanvasText.draw_centred(_canvas, _clock_text,
-		Vector2(s.x * 0.5, Pal.px(12.0, s.y)), scale, tint)
-	if not Run.in_dungeon and not Clock.services_available():
-		var small := CanvasText.scale_for(11.0, s.y)
-		CanvasText.draw_centred(_canvas, "SERVICES CLOSED",
-			Vector2(s.x * 0.5, Pal.px(30.0, s.y)), small, Pal.RUST)
+
+	var scale := CanvasText.scale_for(11.0, s.y)
+	var label_y := Pal.px(46.0, s.y)
+	if phase == GarrisonRaidState.PHASE_WARNED:
+		var warning := "GARRISON RAID  DAY %d 23:00" % Game.raid_scheduled_day()
+		var warning_w := CanvasText.width(warning, scale)
+		var warning_rect := Rect2(
+			Vector2(s.x * 0.5 - warning_w * 0.5, label_y),
+			Vector2(warning_w, CanvasText.height(scale)))
+		CanvasText.draw_centred(_canvas, warning,
+			Vector2(s.x * 0.5, label_y), scale, Pal.GOLD)
+		_note(&"garrison_integrity", &"", warning_rect)
+		return
+
+	var bar_w := Pal.px(220.0, s.y)
+	var bar_h := Pal.px(8.0, s.y)
+	var x := s.x * 0.5 - bar_w * 0.5
+	var bar_y := label_y + CanvasText.height(scale) + Pal.px(3.0, s.y)
+	var track := Rect2(x, bar_y, bar_w, bar_h)
+	var integrity := Game.raid_integrity()
+	var fraction := clampf(Game.raid_integrity_fraction(), 0.0, 1.0)
+	var label := "GARRISON"
+	var label_color := Pal.BONE
+	var fill_color := Pal.BONE
+
+	if phase == GarrisonRaidState.PHASE_WON:
+		label = "GARRISON SECURE"
+		label_color = Pal.GOLD
+		fill_color = Pal.GOLD
+	elif phase == GarrisonRaidState.PHASE_LOST:
+		label = "GARRISON LOST"
+		label_color = Pal.RUST
+	else:
+		if integrity <= 25:
+			fill_color = Pal.RUST
+		elif integrity <= 50:
+			fill_color = Pal.GOLD
+
+	CanvasText.draw_text(_canvas, label, Vector2(x, label_y), scale, label_color)
+	if phase == GarrisonRaidState.PHASE_ACTIVE:
+		CanvasText.draw_right(_canvas, "%d%%" % integrity,
+			Vector2(x + bar_w, label_y), scale, fill_color)
+	_canvas.draw_rect(track, Pal.VOID)
+	if phase == GarrisonRaidState.PHASE_LOST:
+		_canvas.draw_rect(track, Pal.RUST, false, Pal.px(1.0, s.y))
+	elif fraction > 0.0:
+		_canvas.draw_rect(Rect2(track.position,
+			Vector2(track.size.x * fraction, track.size.y)), fill_color)
+	_note(&"garrison_integrity", &"", Rect2(
+		Vector2(x, label_y), Vector2(bar_w, track.end.y - label_y)))
 
 
 # --- The kit wheel -----------------------------------------------------------
@@ -1494,6 +1543,46 @@ func _draw_player_meter(s: Vector2, key: StringName, rect: Rect2,
 	return track
 
 
+## Sparse ordered chips and hairline cracks inside a fill segment. Columns are
+## anchored to the screen rather than the segment width, so losing resource
+## reveals the same stone instead of making the grain swim. Each complete mark
+## must clear both sloped edges by a pixel; narrow boundary cells are skipped.
+func _draw_meter_grain(s: Vector2, segment: Rect2, diagonal: float,
+		left_diagonal: bool) -> void:
+	var pixel := maxf(Pal.px(1.0, s.y), 1.0)
+	var step := Pal.px(Pal.METER_GRAIN_STEP, s.y)
+	var inner_top := segment.position.y + pixel
+	var inner_bottom := segment.end.y - pixel
+	if inner_bottom - inner_top < pixel:
+		return
+
+	var first_column := int(ceil((segment.position.x + pixel) / step))
+	var last_column := int(floor((segment.end.x - pixel) / step))
+	var row_count := maxi(int(floor((inner_bottom - inner_top) / pixel)), 1)
+	var meter_row := int(round(segment.position.y / pixel))
+	var cut := minf(diagonal, segment.size.x)
+	for column in range(first_column, last_column + 1):
+		var order := (column * 11 + meter_row * 7) % 9
+		if order > 2:
+			continue
+		var mark_x := float(column) * step
+		var mark_y := inner_top + float((column * 3 + meter_row) % row_count) * pixel
+		var mark_w := pixel * (2.0 if order == 0 else 1.0)
+		var t0 := (mark_y - segment.position.y) / segment.size.y
+		var t1 := (mark_y + pixel - segment.position.y) / segment.size.y
+		var left0 := segment.position.x + (cut * (1.0 - t0) if left_diagonal else 0.0)
+		var left1 := segment.position.x + (cut * (1.0 - t1) if left_diagonal else 0.0)
+		var right0 := segment.end.x - cut * t0
+		var right1 := segment.end.x - cut * t1
+		var safe_left := maxf(left0, left1) + pixel
+		var safe_right := minf(right0, right1) - pixel
+		if mark_x < safe_left or mark_x + mark_w > safe_right:
+			continue
+		var mark_color := Color(Pal.BONE, Pal.METER_GRAIN_LIGHT_ALPHA) \
+			if order == 1 else Color(Pal.VOID, Pal.METER_GRAIN_DARK_ALPHA)
+		_canvas.draw_rect(Rect2(mark_x, mark_y, mark_w, pixel), mark_color)
+
+
 ## Fill a fraction of the recessed track. Only a segment that reaches the
 ## left edge starts on the track's diagonal; every visible end is diagonal too.
 ## A later segment underlaps that end by one diagonal, leaving its left edge flat
@@ -1514,6 +1603,7 @@ func _draw_meter_segment(s: Vector2, track: Rect2, from: float, to: float,
 		track.position.x + track.size.x * last - first_x, track.size.y)
 	_canvas.draw_colored_polygon(
 		_meter_shape(segment, diagonal, left_diagonal), color)
+	_draw_meter_grain(s, segment, diagonal, left_diagonal)
 	_canvas.draw_colored_polygon(
 		_meter_band_shape(segment, diagonal, Pal.px(1.0, s.y), true, left_diagonal),
 		Color(Pal.BONE, Pal.METER_FILL_LIGHT_ALPHA))

@@ -269,9 +269,11 @@ rest affordance.
 
 The main expedition is finite: **four authored floors and four bosses** over
 the shared generated-dungeon grammar. Each floor has fixed authored anchors,
-and its deepest route ends at its boss door. Up and down stairs preserve the
-trip and revisit the same seeded floors; defeating the floor boss permanently
-opens progression.
+and its critical-path puzzle awards one floor-scoped Boss Key in a different
+room from its oversized Boss Door. That door opens into a separate boss chamber;
+defeating the boss reveals the chamber's deep chest and down stair. Up and down
+stairs preserve the trip and revisit the same seeded floors, while boss death
+permanently preserves the cleared chamber and its available descent.
 
 After the credits, the existing endless mode remains as the **Long Descent**.
 It continues the same carry, risk, extraction, and progression rules rather

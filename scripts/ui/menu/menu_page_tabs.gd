@@ -155,7 +155,8 @@ func set_active(screen: int) -> void:
 
 ## THE tab voice: no fill, ever. An idle tab is bare text, the live one is the
 ## same text lit and underlined. `UITheme.tab_box` owns the rule; this only says
-## which of its three states a tab is in.
+## which of its three states a tab is in. Its label stays in the body face: a
+## tab is an interactive control, not a heading.
 ##
 ## The underline is HIGHLIGHT (off-white) rather than gold, and so is the live
 ## tab's label. Gold in this UI is TEXT that carries a VALUE — a price, a count,
@@ -176,7 +177,7 @@ func _paint(b: Button, active: bool) -> void:
 	# move inside the page" and "the arrows change the page" showed the player
 	# nothing at all.
 	b.add_theme_stylebox_override("focus", UITheme.tab_box("focused"))
-	b.add_theme_font_override("font", UITheme.display_font())
+	b.add_theme_font_override("font", UITheme.body_font())
 	b.add_theme_font_size_override("font_size", int(UITheme.TYPE_LABEL_MD["size"]))
 	var idle: Color = UITheme.HIGHLIGHT if active else UITheme.TEXT_DIM
 	b.add_theme_color_override("font_color", idle)

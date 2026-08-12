@@ -74,7 +74,7 @@ func reveal() -> void:
 	armed = true
 	_reveal_offset = -REVEAL_RISE
 	if _body != null:
-		_body.scale = Vector3.ONE * REVEAL_SCALE
+		_body.scale = Vector3.ONE * REVEAL_SCALE * rest_scale()
 		_body.position.y = HOVER + sin(_age * BOB_SPEED) * BOB_HEIGHT + _reveal_offset
 	if _lamp != null:
 		_lamp.light_energy = REVEAL_LAMP_ENERGY
@@ -87,7 +87,8 @@ func reveal() -> void:
 	_reveal_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	_reveal_tween.tween_property(self, ^"_reveal_offset", 0.0, REVEAL_TIME)
 	if _body != null:
-		_reveal_tween.tween_property(_body, ^"scale", Vector3.ONE, REVEAL_TIME)
+		_reveal_tween.tween_property(_body, ^"scale",
+			Vector3.ONE * rest_scale(), REVEAL_TIME)
 	if _lamp != null:
 		_reveal_tween.tween_property(_lamp, ^"light_energy", LAMP_ENERGY, REVEAL_TIME)
 	_reveal_tween.chain().tween_callback(_finish_reveal)
@@ -124,9 +125,27 @@ func _on_body_entered(body: Node3D) -> void:
 	# lights, and an invisible node's Area3D still collides.
 	if is_solved() or not armed:
 		return
-	Game.add_key(1)
+	grant_pickup()
 	Bus.request_sfx.emit(&"pickup", global_position)
 	solve()
+
+
+## Variant seams. A boss key is the same pickup body and animation at a larger
+## scale with a different finish and grant; ordinary keys keep these defaults.
+func rest_scale() -> float:
+	return 1.0
+
+
+func key_hue() -> Color:
+	return Pal.BONE
+
+
+func key_material() -> StandardMaterial3D:
+	return _glow_mat(key_hue(), 1.6)
+
+
+func grant_pickup() -> void:
+	Game.add_key(1)
 
 
 # --- The authored solve -------------------------------------------------------
@@ -190,12 +209,14 @@ func _build() -> void:
 	_body = Node3D.new()
 	_body.name = "Key"
 	_body.position.y = HOVER
+	_body.scale = Vector3.ONE * rest_scale()
 	add_child(_body)
 
-	# GOLD is currency and only currency (`docs/STYLEGUIDE.md` §2), so a small
-	# key is BONE-white brass, lit. It has to be the pale thing in a green room,
+	# GOLD is reserved for currency and the one Boss Key/Boss Door progression
+	# pair (`docs/STYLEGUIDE.md` §2), so an ordinary small key is BONE-white brass,
+	# lit. It has to be the pale thing in a green room,
 	# which the Cistern's drowned-bronze tint gives it for nothing.
-	var brass := _glow_mat(Pal.BONE, 1.6)
+	var brass := key_material()
 	# A bow, a shaft and two wards -- the silhouette of a key at 6 m, which is
 	# the range it has to be identifiable at. Three boxes and a ring; anything
 	# more is detail nobody sees at this size.
@@ -209,7 +230,7 @@ func _build() -> void:
 
 	_lamp = OmniLight3D.new()
 	_lamp.name = "Lamp"
-	_lamp.light_color = Pal.BONE
+	_lamp.light_color = key_hue()
 	_lamp.light_energy = LAMP_ENERGY
 	_lamp.omni_range = LAMP_RANGE
 	_lamp.omni_attenuation = 1.7

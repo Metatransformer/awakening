@@ -30,6 +30,13 @@ const VOICES := 12
 ## the existing 3D round-robin, attenuation and stealing behavior do not move.
 const GLOBAL_VOICES := 4
 
+## Per-cue trim on the global pool. The civil card's ticking is texture beneath
+## the owl/birds and the title, not the event itself; -9 dB keeps the transient
+## audible without making every one of its close-miked ticks compete with them.
+const GLOBAL_VOLUME_DB := {
+	&"clock_ticking": -9.0,
+}
+
 ## Sounds that ship as numbered variants -- `coin_trade` is on disk as
 ## `coin_trade_1..3`, never as `coin_trade.ogg`. Picking at random keeps a
 ## repeated event from turning into a machine gun.
@@ -52,6 +59,11 @@ const VARIANTS := {
 	&"doom_stinger": 1,
 	&"ui_move_selection": 1,
 	&"attack_prepare": 1,
+	## The heavy beat's tell (`Enemy._tick_chase`). Ships as `monster_attack_1.ogg`
+	## with no sibling, same as `attack_prepare` directly above and for the same
+	## reason -- without this row the picker would look for `monster_attack.ogg`
+	## and find nothing.
+	&"monster_attack": 1,
 }
 
 ## The whole signal→sound table. Every entry is an event that already carries
@@ -326,6 +338,7 @@ func play_global(id: StringName) -> void:
 	last_global_cue = id
 	var voice := _claim_global()
 	voice.stream = stream
+	voice.volume_db = float(GLOBAL_VOLUME_DB.get(id, 0.0))
 	voice.play()
 
 

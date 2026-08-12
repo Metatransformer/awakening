@@ -142,6 +142,7 @@ func _ready() -> void:
 
 
 func reset() -> void:
+	Game.clear_boss_key()
 	bag.clear()
 	cased.clear()
 	visited_rooms.clear()
@@ -166,6 +167,7 @@ func _on_enemy_died(_enemy: Node3D, _position: Vector3) -> void:
 
 ## Start a run. Pass a seed to replay one; 0 picks a fresh one and records it.
 func enter(run_seed: int = 0) -> void:
+	Game.clear_boss_key()
 	bag.clear()
 	cased.clear()
 	visited_rooms.clear()
@@ -358,6 +360,7 @@ func extract() -> bool:
 		return false
 	var fee := extract_charge()
 
+	Game.clear_boss_key()
 	Game.spend_gold(fee)
 	in_dungeon = false
 	# **The refill the whole bar is built around**: you leave, and the blue comes
@@ -519,6 +522,7 @@ func relic_toll() -> int:
 func die() -> void:
 	if not in_dungeon:
 		return
+	Game.clear_boss_key()
 	# The dial mercy turns (GDD §7.1). Counted here rather than off
 	# `Bus.player_died` because that fires for a death in the garrison too, and
 	# this is the only place that knows a RUN ended.

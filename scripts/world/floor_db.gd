@@ -63,13 +63,14 @@ const PACK_FROM_PROG := Vector2i.ZERO
 ##   geometry reads as dread; fog slightly lighter than it reads as depth
 ##   (STYLEGUIDE §4.6). The Chord Gate has the brightest air in the game because
 ##   it is a threshold to open sky and the player has to feel that before the
-##   boss door opens.
+##   Boss Key and Boss Door lead toward that open-sky threshold.
 ## - `fire` is warm and `fill` is cool, always, and they get FURTHER apart as the
 ##   floors go on. Warmth only reads as warmth against something cooler; that hue
 ##   gap is what sells "magical" and it is what lets shadows stay coloured
 ##   instead of crushing to black.
-## - No `fire` is `Pal.GOLD`. STYLEGUIDE §2 reserves that one hue for currency,
-##   and a torch painted in it steals the only saturated colour the player owns.
+## - No `fire` is `Pal.GOLD`. STYLEGUIDE §2 reserves that hue for currency and
+##   the scarce Boss Key/Boss Door progression pair; a torch painted in it would
+##   steal their signal.
 ##
 ## Keys:
 ##   `label`            String  — the palette's name, for lookdev captions
@@ -187,16 +188,15 @@ static var TINTS := {
 ## is answered by `vault_key(level)` being empty, which is GDD §5.3's own
 ## sentence and must stay the only answer — see the fork accessors below.
 static var ANCHORS_STANDARD := {
-	## The boss door REPLACES the stair (GDD §5.1), so it inherits the stair's
-	## spot: the far wall of the deepest room, at the end of the longest walk. The
-	## way down is behind the boss.
+	## The oversized Boss Door inherits the old stair wall: the far side of the
+	## deepest generated room, at the end of the longest walk. It opens into a
+	## separate BossChamber; the earned way down stands beyond that arena.
 	&"boss_door": {
 		"room": &"deepest", "at": &"wall", "side": &"far",
 		"offset": Vector2(0.0, 0.0),
 	},
-	## Beside the boss door, not opposite it. The moment you can see the way down
-	## is the moment you have the most to lose, and the floor's relic sitting in
-	## the same glance is what makes that a decision instead of a corridor.
+	## The offset is reused at the far wall of the BossChamber, opposite its Down
+	## stair. Both stay outside the arena seal and reveal only when the boss dies.
 	&"deep_chest": {
 		"room": &"deepest", "at": &"floor", "side": &"",
 		"offset": Vector2(-0.22, 0.24),
@@ -404,7 +404,8 @@ static var FLOORS := {
 		"boss_item": &"far_lantern",
 		"anchors": ANCHORS_STANDARD,
 		## No `&"vault"` slot, and the absence IS the fact: floor 4 has no vault
-		## because the boss room is the vault (GDD §5.3). Nothing here says so in
+		## because its final BossChamber is the terminal treasure space. Nothing
+		## here says so in
 		## a branch — `vault_key(4)` comes out empty on its own, because there is
 		## no floor 5 to lend it a key.
 		"relics": {
