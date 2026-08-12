@@ -164,7 +164,7 @@ func _build() -> void:
 	# The right column is where the screen talks back: the detail pane for
 	# whatever has focus on the left.
 	#
-	# The way out USED to sit under it. It moved to the POUCH, which is the screen
+	# The way out USED to sit under it. It moved to INVENTORY, which is the screen
 	# that now carries every number the decision is made out of -- the bag's
 	# worth, the purse, and the fee. This screen is about what is in your HANDS;
 	# leaving is about what is in your BAG, and the two questions had no business
@@ -713,7 +713,7 @@ func _wire_focus() -> void:
 	# Swap Set drops into the wheel row, and the wheel row closes the loop back to
 	# the top-left hand -- everything here is reachable by pressing one direction
 	# repeatedly and nothing is an orphan. The way out used to be this last stop;
-	# it lives on the POUCH now, with the numbers it is decided from.
+	# it lives on INVENTORY now, with the numbers it is decided from.
 	_swap.focus_neighbor_left = ^"."
 	_swap.focus_neighbor_right = ^"."
 	if _wheel_cells.is_empty():
@@ -745,6 +745,20 @@ func focus_first() -> void:
 ## Where the shared tab strip is inserted. See `_hrow`.
 func tab_host() -> HBoxContainer:
 	return _hrow
+
+
+## The top row of focusables, landing target first — see `MenuPageTabs` and
+## `PauseMenu._tab_row`. The PRIMARY set's two hands, right hand first, because
+## the right hand is where `focus_first` opens and so the control a player is
+## standing on when they press ↑.
+func tab_row() -> Array:
+	if _slots.size() < HANDS.size():
+		return []
+	var out: Array = []
+	var right := HANDS.find(Game.HAND_RIGHT)
+	for i in HANDS.size():
+		out.append(_slots[right if i == 0 else (right + i) % HANDS.size()])
+	return out
 
 
 func refresh() -> void:

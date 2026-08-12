@@ -70,16 +70,15 @@ const MODIFIER_KEYS := [KEY_SHIFT, KEY_CTRL, KEY_ALT, KEY_META, KEY_CAPSLOCK]
 ## **B is cancel and is never a confirm** — a button that both confirms and backs
 ## out can do neither reliably. A and X confirm, so a player reaching for the
 ## neighbouring face button gets an action instead of silence.
+## **The shoulders are not here any more.** `ui_tab_prev` / `ui_tab_next` paged
+## the three inspection screens on LB / RB and Q / R; the owner asked for the
+## selector to go (playtest 2026-08-12) and card #120 removed it. Paging is the
+## TAB STRIP's job now, on the same stick that moves inside a page — see
+## `MenuPageTabs`, which had to become focusable in the same change because a
+## strip nothing can reach is a strip a controller cannot use.
 const PAD_UI_BUTTONS := {
 	&"ui_accept": [JOY_BUTTON_A, JOY_BUTTON_X],
 	&"ui_cancel": [JOY_BUTTON_B],
-	# The shoulders page between the three inspection screens — see PAGES. They
-	# are `ui_` actions for the same reason accept and cancel are: they belong to
-	# the MENU and not to the game, so `Settings` must neither offer them for
-	# rebinding nor be able to wipe them with Reset to Defaults (it skips every
-	# action whose name starts with `ui_`).
-	&"ui_tab_prev": [JOY_BUTTON_LEFT_SHOULDER],
-	&"ui_tab_next": [JOY_BUTTON_RIGHT_SHOULDER],
 }
 ## The keyboard half of the same set.
 ##
@@ -90,29 +89,33 @@ const PAD_UI_BUTTONS := {
 ## `interact` and `ui_accept` for exactly that reason; this is the keyboard half
 ## of a symmetry that was only half built. Enter and Space still confirm.
 ##
-## Which cost E its old job. Paging was Q/E because those sit under the fingers
-## already on WASD, and that argument survives intact for Q — R is the next key
-## under the same hand, `use_item`'s key in the world and free in a menu (the
-## hero does not read his buttons while the tree is paused). Tab is not
-## available: it is bound to `map`.
+## It cost E its old job as the paging key, and then paging itself went (card
+## #120): Q and R are free again and are deliberately left free rather than
+## re-pointed at something else. The arrows walk the tab strip now.
 const KEY_UI_BUTTONS := {
 	&"ui_accept": [KEY_E],
-	&"ui_tab_prev": [KEY_Q],
-	&"ui_tab_next": [KEY_R],
 }
 
-## The screens the shoulders cycle, in ring order, with the tab strip's labels.
+## The screens the tab strip cycles, in ring order, with its labels.
 ##
-## Three, and not five. ITEMS / POUCH / MAP are the screens that ANSWER a
+## Three, and not five. EQUIP / INVENTORY / MAP are the screens that ANSWER a
 ## question about the run in progress — what am I holding, what am I carrying,
 ## where am I — and paging between them is how a player checks all three without
 ## going back to a list each time. Options and Save/Load are things you DO, they
-## change the game or the disk, and putting them one shoulder-press away from a
-## map read mid-corridor is how a player lands on the save screen by accident.
-## They stay commands on the root menu.
+## change the game or the disk, and putting them one arrow away from a map read
+## mid-corridor is how a player lands on the save screen by accident. They stay
+## commands on the root menu.
+##
+## **The labels were ITEMS and POUCH** until card #120 (owner, 2026-08-12).
+## POUCH became INVENTORY because that is what a player calls the bag. ITEMS
+## became EQUIP because the label was the only name for this screen that was not
+## already EQUIP: the enum entry is `Screen.EQUIP`, the panel is
+## `equip_panel.gd`, the class is `MenuEquipPanel` and the root menu's own row
+## says "Equipment". One word, in five places, is worth more than the shade of
+## meaning "ITEMS" carried.
 const PAGES := [
-	[Screen.EQUIP, "ITEMS"],
-	[Screen.POUCH, "POUCH"],
+	[Screen.EQUIP, "EQUIP"],
+	[Screen.POUCH, "INVENTORY"],
 	[Screen.MAP, "MAP"],
 ]
 ## Stick travel required before a joypad axis counts as "the player moved it".
@@ -157,6 +160,8 @@ var _root_band_slot: VBoxContainer
 ## a strip that only updated when its own screen was showing would be wrong the
 ## moment you paged away and back.
 var _page_tabs: Array[MenuPageTabs] = []
+## True for the duration of a page change made ON the strip. See `_go_page`.
+var _paged_from_tabs := false
 var _last_root_button: Button = null
 var _listen_layer: Control
 var _listen_action_label: Label
@@ -303,8 +308,8 @@ func open_map() -> void:
 ## that opens a screen owns the way back out of it, and the way out of a screen
 ## you reached in one press is the world.
 ##
-## Paging (`_page`) REPLACES the top of the stack, so this holds across the whole
-## ITEMS/POUCH/MAP ring: however you shoulder around it, Escape leaves.
+## Paging (`_go_page`) REPLACES the top of the stack, so this holds across the
+## whole EQUIP/INVENTORY/MAP ring: however you walk it, Escape leaves.
 ##
 ## Reaching the same screen from the root menu still stacks normally — there the
 ## root IS where you came from, and backing onto it is what the player means.
@@ -333,12 +338,11 @@ func _build_page_tabs() -> void:
 		strip.setup(PAGES, screen)
 		strip.picked.connect(_go_page)
 		_page_tabs.append(strip)
-	# Every cap on every strip is named for the device in the player's hands, so
-	# picking up a pad relabels all three at once — the same rule the HUD's key
-	# caps follow (`Bus.input_device_changed` in hud.gd).
-	Bus.input_device_changed.connect(func(_pad: bool) -> void:
-		for s in _page_tabs:
-			s.refresh_caps())
+		strip.link_body(_tab_row(screen))
+	# No `input_device_changed` hook any more. The strip used to carry a live key
+	# cap at either end naming the shoulder that paged, and those had to be
+	# relabelled when a pad was picked up; there is no button on it now, only the
+	# arrows, which are the same arrows on both devices.
 
 
 func _panel_for(screen: int) -> Control:
@@ -349,42 +353,49 @@ func _panel_for(screen: int) -> Control:
 	return null
 
 
-## Step `delta` tabs around the ring. Does nothing anywhere but on the ring.
+func _strip_for(screen: int) -> MenuPageTabs:
+	for i in PAGES.size():
+		if int(PAGES[i][0]) == screen and i < _page_tabs.size():
+			return _page_tabs[i]
+	return null
+
+
+## The panel's top row of focusables, landing target first. This is the half of
+## the focus graph the PANEL owns and the strip cannot know — which control ↓ out
+## of a tab should land on, and which controls ↑ should leave through.
+func _tab_row(screen: int) -> Array:
+	var panel := _panel_for(screen)
+	if panel == null or not panel.has_method(&"tab_row"):
+		return []
+	return panel.call(&"tab_row")
+
+
+## A tab was reached — by stick, by keyboard or by mouse. The one and only way
+## the page changes now; `_page(delta)`, which the shoulders called, is gone with
+## them (card #120).
 ##
 ## It REPLACES the top of the stack rather than pushing onto it. That is the
-## whole difference between a tab and a screen: paging ITEMS → POUCH → MAP and
-## then pressing B should put you back where you were before you opened any of
-## them, not walk you back out through two screens you were only passing
+## whole difference between a tab and a screen: paging EQUIP → INVENTORY → MAP
+## and then pressing B should put you back where you were before you opened any
+## of them, not walk you back out through two screens you were only passing
 ## through. The stack still records the one entry, so B behaves the same
 ## whichever tab you happen to be standing on when you press it.
-func _page(delta: int) -> void:
-	if _stack.is_empty():
-		return
-	var here: int = _stack[_stack.size() - 1].get("screen", Screen.ROOT)
-	var at := -1
-	for i in PAGES.size():
-		if int(PAGES[i][0]) == here:
-			at = i
-			break
-	if at < 0:
-		return
-	var to: int = int(PAGES[posmod(at + delta, PAGES.size())][0])
-	if to == here:
-		return
-	_stack[_stack.size() - 1] = {"screen": to}
-	_apply_top()
-	_play(SND_MOVE)
-
-
-## A tab was clicked with the mouse. Same move as `_page`, said by a different
-## input — routed through one place so a click and a shoulder press cannot end
-## up doing two different things to the stack.
+##
+## `_paged_from_tabs` is what keeps the cursor on the strip afterwards. Without
+## it `_apply_top` calls the new panel's `focus_first()` and drops the player
+## into the body on every page change — which would make ← ← ← walk EQUIP,
+## INVENTORY, and then whatever the INVENTORY body does with ←. The flag is
+## cleared here rather than in `_apply_top` because `focus_home()` re-enters this
+## function (the `focus_entered` it causes), and that arrival must find the same
+## answer the first one did.
 func _go_page(screen: int) -> void:
 	if _stack.is_empty() or int(_stack[_stack.size() - 1].get("screen",
 			Screen.ROOT)) == screen:
 		return
 	_stack[_stack.size() - 1] = {"screen": screen}
+	_paged_from_tabs = true
 	_apply_top()
+	_paged_from_tabs = false
 	_play(SND_MOVE)
 
 
@@ -432,21 +443,39 @@ func _apply_top() -> void:
 				target = _cmd_buttons[0]
 			if target:
 				target.grab_focus()
-		Screen.EQUIP:
-			_equip.refresh()
-			_equip.focus_first()
-		Screen.POUCH:
-			_pouch.refresh()
-			_pouch.focus_first()
-		Screen.MAP:
-			_map.refresh()
-			_map.focus_first()
+		Screen.EQUIP, Screen.POUCH, Screen.MAP:
+			_enter_page(screen)
 		Screen.OPTIONS:
 			_options.open_tab(top.get("tab", MenuOptionsPanel.Tab.AUDIO))
 			_options.focus_first()
 		Screen.SAVES:
 			_saves.open_mode(top.get("mode", MenuSavesPanel.Mode.SAVE))
 			_saves.focus_first()
+
+
+## Show one of the three paged screens and put the cursor somewhere sensible.
+##
+## The re-link is not optional and it is not a refresh of the paint. Two of the
+## three panels rebuild their top row of focusables inside `refresh()` — the
+## bag's cells are `ItemGrid` buttons that come and go with `bag_slots` — so the
+## strip's ↓ and the row's ↑ have to be re-pointed at the controls that exist
+## NOW. Linked once at build time, the first bag slot bought at the smith would
+## have left ↑ walking into a freed Button.
+func _enter_page(screen: int) -> void:
+	var panel := _panel_for(screen)
+	if panel == null:
+		return
+	panel.call(&"refresh")
+	var strip := _strip_for(screen)
+	if strip != null:
+		strip.link_body(_tab_row(screen))
+	# Arrived by paging: stay on the strip, so ← / → keep paging. Arrived from
+	# the root menu or from `open_pouch` / `open_map`: the player asked for the
+	# PAGE, so the cursor belongs in it.
+	if _paged_from_tabs and strip != null:
+		strip.focus_home()
+	else:
+		panel.call(&"focus_first")
 
 
 # --- Input ------------------------------------------------------------------
@@ -456,12 +485,12 @@ func _apply_top() -> void:
 ## that already carries the button is left alone, so events never pile up.
 func _ensure_pad_ui_actions() -> void:
 	for action: StringName in PAD_UI_BUTTONS:
-		# `ui_tab_prev` / `ui_tab_next` are ours and the engine ships neither, so
-		# they are CREATED here rather than skipped. `ui_accept` / `ui_cancel`
-		# exist already and this leaves them alone. Registering at runtime rather
-		# than in project.godot keeps them out of `--import`'s reach — that tool
-		# re-serialises the file and has silently eaten hand-written lines from it
-		# before (see CLAUDE.md §3).
+		# `ui_accept` / `ui_cancel` exist already and this leaves them alone; the
+		# `has_action` guard is what let this function also CREATE the two paging
+		# actions the engine does not ship, and it is kept because registering at
+		# runtime rather than in project.godot keeps these out of `--import`'s
+		# reach — that tool re-serialises the file and has silently eaten
+		# hand-written lines from it before (see CLAUDE.md §3).
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
 		for button: int in PAD_UI_BUTTONS[action]:
@@ -579,18 +608,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			open()
 			get_viewport().set_input_as_handled()
 		return
-	# The shoulders page, and ONLY while the screen you are on is one of the
-	# three in the ring. Pressing LB on the options screen does nothing, which is
-	# the right nothing: a shoulder button that teleported you out of a rebind
-	# you were halfway through would be worse than one that is inert.
-	if event.is_action_pressed(&"ui_tab_next"):
-		_page(1)
-		get_viewport().set_input_as_handled()
-		return
-	if event.is_action_pressed(&"ui_tab_prev"):
-		_page(-1)
-		get_viewport().set_input_as_handled()
-		return
 	# Escape is bound to both `pause` and `ui_cancel`; one branch, one response.
 	if event.is_action_pressed(&"pause") or event.is_action_pressed(&"ui_cancel"):
 		back()
@@ -609,8 +626,8 @@ func _unhandled_input(event: InputEvent) -> void:
 ##
 ## Rebuilt as a plate header (WHAT this is), a stat band (WHAT STATE the run is
 ## in), and verb rows with a META COLUMN — the cost, the count, the consequence.
-## `Resume` is the one `primary`. `Pouch` says how full the bag is without your
-## opening it. `Quit to Title` says what it will cost you, in the row, before
+## `Resume` is the one `primary`. `Inventory` says how full the bag is without
+## your opening it. `Quit to Title` says what it will cost you, in the row, before
 ## the confirm dialog rather than only inside it.
 ##
 ## The band is REPAINTED on every open (`refresh_root`), not built once: the menu
@@ -716,7 +733,9 @@ func refresh_root() -> void:
 	# Second, directly under Equipment, because the two answer adjacent
 	# questions -- what am I HOLDING, what am I CARRYING -- and a player who has
 	# just checked one usually wants the other.
-	_command("Pouch", "bag", "%d / %d slots" % [used, Game.bag_slots],
+	# "Inventory" and not "Pouch" — the tab it opens says INVENTORY (card #120)
+	# and a command that names a screen has to name the screen it opens.
+	_command("Inventory", "bag", "%d / %d slots" % [used, Game.bag_slots],
 		func() -> void: _push({"screen": Screen.POUCH}), {"submenu": true})
 	_command("Save Game", "save", "", func() -> void:
 		_push({"screen": Screen.SAVES, "mode": MenuSavesPanel.Mode.SAVE}),

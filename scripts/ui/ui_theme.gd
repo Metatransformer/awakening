@@ -534,8 +534,18 @@ static func slot_sb(state: String) -> StyleBox:
 			return hud_box(GRAY_1, PAD, PAD, PAD, PAD)
 
 
-## THE tab voice: no fill, ever. An idle tab is bare text, a hovered tab previews
-## a thin HIGHLIGHT underline, the selected tab draws it heavier.
+## THE tab voice: an idle tab is bare text, a hovered tab previews a thin
+## HIGHLIGHT underline, the selected tab draws it heavier.
+##
+## `"focused"` is the one state with a fill, and it is new with card #120, which
+## made the tab strip the ONLY way to change page and therefore the first place
+## in this menu a keyboard or a pad cursor can stand on a tab. Selected and
+## focused coincide by construction there — arriving on a tab is what makes it
+## the page — so a focus ring drawn like the strip's own selection would have
+## been invisible: shot before and after ↑ out of the bag, the two tab strips
+## came back BYTE-IDENTICAL, and the only thing on screen that changed was the
+## grid cell losing its outline. The fill is what says the cursor is up HERE and
+## the arrows now page instead of moving inside the page.
 static func tab_box(state := "unselected") -> StyleBox:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0, 0, 0, 0)
@@ -544,7 +554,15 @@ static func tab_box(state := "unselected") -> StyleBox:
 	sb.content_margin_right = 18
 	sb.content_margin_top = 9
 	sb.content_margin_bottom = 9
-	if state == "selected":
+	if state == "focused":
+		# The selected tab's underline, plus a fill and the two top corners: it
+		# reads as the tab lifting off the strip toward the page it opens.
+		sb.bg_color = SELECTED_FILL
+		sb.corner_radius_top_left = RADIUS
+		sb.corner_radius_top_right = RADIUS
+		sb.border_width_bottom = 3
+		sb.border_color = HIGHLIGHT
+	elif state == "selected":
 		sb.border_width_bottom = 3
 		sb.border_color = HIGHLIGHT
 	elif state == "hovered":

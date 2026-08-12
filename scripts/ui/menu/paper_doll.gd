@@ -2,7 +2,7 @@ class_name MenuPaperDoll
 extends VBoxContainer
 ## The hero, and what he is wearing, on one card.
 ##
-##     compact (POUCH)              full (ITEMS)
+##   compact (INVENTORY)            full (EQUIP)
 ##     ┌──────────────┐             ┌────────────────────────┐
 ##     │   ▟█▙        │             │        ▟█▙             │
 ##     │  ▟███▙  doll │             │       ▟███▙   doll     │
@@ -13,7 +13,7 @@ extends VBoxContainer
 ##     └──────────────┘             │▌ BOOTS    │  BRACELET ▐│
 ##                                  └───────────┴────────────┘
 ##
-## **It is read-only, deliberately.** Changing a hand is the ITEMS screen's job
+## **It is read-only, deliberately.** Changing a hand is the EQUIP screen's job
 ## and the D-pad's, and there is exactly one of each in this game -- a second
 ## place to equip would be a second `cycle_armament` caller to keep honest, which
 ## is the drift `ArmamentDb`'s header is about. Nothing here takes focus, so the
@@ -106,8 +106,8 @@ func _ready() -> void:
 
 	# The three things that can change what is drawn here, and the only three.
 	# The world is paused behind this screen, so there is nothing to poll for --
-	# but the ITEMS tab is one shoulder press away and a hand changed there has to
-	# be on the card when the player pages back.
+	# but the EQUIP tab is two presses away (↑ onto the strip, then ←/→) and a
+	# hand changed there has to be on the card when the player pages back.
 	Bus.loadout_changed.connect(
 		func(_s: int, _r: StringName, _l: StringName) -> void: _paint())
 	Bus.bottles_changed.connect(func(_c: Array) -> void: _paint())

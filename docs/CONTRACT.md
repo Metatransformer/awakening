@@ -392,15 +392,14 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `interact` | E | **A / Cross** (pad0) | talk/open, and nothing else. **E and A are also `ui_accept`** — the confirm is the same press in the world and in a menu, see below |
 | `ui_accept` | Enter, Space, **E** | **A** (pad0), **X** (pad2) | confirm — in menus only. E is registered at runtime, the same way the pad buttons are |
 | `ui_cancel` | Esc | **B / Circle** (pad1) | close/back — in menus only |
-| `ui_hold` | **Y** | **Y / Triangle** (pad3) | the menu's HOLD — in menus only. A goes forward, B goes back, and this is the press that must not be a press. Today: the escape rope on the POUCH screen (METAGAME §5). Shares Y with `jump`, which is safe because the tree is paused whenever it is read. **Not rebindable** — the `ui_` prefix is what enforces that (`Settings._capture_defaults` skips it). |
+| `ui_hold` | **Y** | **Y / Triangle** (pad3) | the menu's HOLD — in menus only. A goes forward, B goes back, and this is the press that must not be a press. Today: the escape rope on the INVENTORY screen (METAGAME §5). Shares Y with `jump`, which is safe because the tree is paused whenever it is read. **Not rebindable** — the `ui_` prefix is what enforces that (`Settings._capture_defaults` skips it). |
 | `weapon_prev` / `weapon_next` | 1 / 3 | dpad ← / → | step the right hand through the weapons you own — §4.1 |
 | `item_next` | 4 | dpad ↓ | step the selected item — §4.1 |
 | `loadout_swap` | 2 | dpad ↑ | primary ↔ alternate — §4.1 |
-| `kit_wheel` | **Ctrl** | **LB** (pad9) | **hold** to open the kit wheel, aim with the right stick or the mouse, **release to commit** — §4.2. The one hold in the game whose release is the press. It still pages menu tabs while a menu is up, see below |
+| `kit_wheel` | **Ctrl** | **LB** (pad9) | **hold** to open the kit wheel, aim with the right stick or the mouse, **release to commit** — §4.2. The one hold in the game whose release is the press. It did double duty as a menu pager until card #120 deleted that ring; LB is a world-only button now |
 | `first_person` | **V** | **R3** (pad8) | look out of his own eyes — he roots. No Elden Ring equivalent; V because `use_item` took R |
 | — | **X** | — | **deliberately unbound**, held for a crouch. Elden Ring's crouch key, and the one row of its layout this game has no ability for. CONTRACT §4: it stays unbound until the verb exists |
 | `pause` / `inventory` / `map` | Esc / **I** / **M**, Tab | Start (pad6) / **Select** (pad4) / L3 (pad7) | menu / pouch / map |
-| `ui_tab_prev` / `ui_tab_next` | **Q** / **R** | **LB** / **RB** | page ITEMS ↔ POUCH ↔ MAP — **in menus only**, see below. Next was E until E became the confirm |
 | `dbg_reload` | F5 | — | — |
 
 **A MODIFIED BINDING DOES NOT EXCLUDE THE UNMODIFIED ONE.** `attack` is plain
@@ -457,17 +456,28 @@ built: casting is a left-hand verb in every game this one borrows from, and an
 unbound button is cheaper than a bound one that then has to move. Do not fill
 it because it looks empty.
 
-**The shoulders page the menu's tabs, and that does not contradict the line
-above.** `ui_tab_prev` / `ui_tab_next` (LB/RB, Q/E) exist only while the pause
-menu is open, where the world is paused and the hero receives no input at all —
-so RB being the light attack, Q being lock-on and R being `use_item` cost
-nothing. They are the
-shoulders because that is where "previous page / next page" lives in every menu
-on every console, and because the thumbs are already spending ↑↓←→ on focus.
+**Nothing pages the menu's tabs any more, and that is the point.**
+`ui_tab_prev` / `ui_tab_next` — LB/RB and Q/R, registered at runtime and live
+only while the menu was open — were **deleted** by card #120 at the owner's
+request. There is no menu-only binding left anywhere in this game.
 
-Both are **registered at runtime** by `PauseMenu._ensure_pad_ui_actions()` and
-appear in neither `project.godot` nor any `.tscn`. That is deliberate on two
-counts: `--import` re-serialises `project.godot` and has eaten additions before
+Paging is a place on the screen instead of a button off it. The tab strip
+(`MenuPageTabs`) takes focus: **↑** out of the top row of any page lands on the
+lit tab, **← / →** walk EQUIP → INVENTORY → MAP and wrap, arriving on a tab IS
+the page change, and **↓** drops back into the page body. The same four arrows
+that move focus inside a page move it between pages when the cursor is on the
+strip, so a pad needs no button it did not already have, and a player who has
+never read this table can find it by pressing up.
+
+That the strip is now the ONLY route is what makes ↑ load-bearing on the MAP,
+whose one other focusable control is its Back button:
+`tools/directors/map_screen.gd` and `tools/directors/menu_pages.gd` both walk
+the ring off the map, on the keyboard and on a real D-pad, for that reason.
+
+`ui_accept` and `ui_cancel` still get their pad buttons **registered at runtime**
+by `PauseMenu._ensure_pad_ui_actions()`, appearing in neither `project.godot` nor
+any `.tscn`. That is deliberate on two counts: `--import` re-serialises
+`project.godot` and has eaten additions before
 (§10), and `Settings` skips every `ui_`-prefixed action, so these cannot be
 rebound onto a world verb and cannot be wiped by Reset to Defaults.
 
@@ -549,8 +559,9 @@ Enter for menus, so a player who had spent a whole run pressing E to say yes to
 a vendor pressed it at a menu row and paged the tabs instead. E is on
 `ui_accept` (registered at runtime by `PauseMenu._ensure_pad_ui_actions`, with
 the pad buttons and for the same reasons), Enter and Space still confirm, and
-paging moved to Q / **R**. The disarm above is what makes it safe in both
-directions.
+paging moved off the letter keys entirely — first to Q / R, then, with card #120,
+onto the tab strip and the arrows (§ above). The disarm above is what makes it
+safe in both directions.
 
 **The jump attack came off A with the dodge.** It was "guard up, stick still, A"
 — OOT's Z + A read literally, with a four-way stick table deciding between the
@@ -1669,7 +1680,8 @@ Rules:
 - New on `Bus`: `components_changed(stock)`, `components_banked(moved)`,
   `gear_forged(track, level)`.
 - New on the pause menu: `PauseMenu.Screen.POUCH`, `Root/Screens/PouchScreen`
-  (`scripts/ui/menu/pouch_panel.gd`). Its one verb is A on a cell, which moves
+  (`scripts/ui/menu/pouch_panel.gd`) — the tab reads **INVENTORY** since card
+  #120; the enum and the node keep their names. Its one verb is A on a cell, which moves
   that stack across the document-case line and changes nothing about the item.
 
 ### The document case — `Run.cased`, three of the bag's slots
@@ -1934,7 +1946,7 @@ Rules:
 
 ```gdscript
 # scripts/items/escape_rope.gd, built by hero.gd as `hero.rope`
-Bus.escape_rope_used.emit()      # the POUCH screen, after closing the menu
+Bus.escape_rope_used.emit()      # the INVENTORY screen, after closing the menu
 hero.rope.begin() -> bool        # or drive it directly, as directors do
 hero.rope.active() -> bool       # rooted, mid-channel
 hero.rope.cancel()               # a blow landed; emits Bus.escape_rope_broken

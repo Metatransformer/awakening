@@ -64,6 +64,18 @@ func tab_host() -> HBoxContainer:
 	return _hrow
 
 
+## The top row of focusables — see `MenuPageTabs` and `PauseMenu._tab_row`.
+##
+## Back is the ONLY focusable on this screen, so it is both the landing target
+## and the way out upwards. That is why the strip had to become focusable at all
+## (card #120): with the shoulder ring gone and nothing here but Back, a pad
+## player who paged onto the map could never page off it. `MenuUtil.chain` wires
+## Back's ↑ back to itself; `link_body` overwrites that, and the order matters —
+## `PauseMenu._enter_page` re-links after every refresh.
+func tab_row() -> Array:
+	return [_back] if _back != null else []
+
+
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
