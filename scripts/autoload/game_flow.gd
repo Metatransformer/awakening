@@ -138,9 +138,12 @@ func _ready() -> void:
 ##     so `current_scene` stays null. Every director that photographs a floor
 ##     directly is untouched, which is what keeps this from costing the one way
 ##     anybody actually looks at the dungeon.
-##   * **Flow's own `_go`** — also a `change_scene_to_file`, and it does set
-##     `current_scene`. It never reaches here: both callers move the run first,
-##     so `Run.in_dungeon` is true and the question is not asked.
+##   * **Flow's own transitions** — `new_game` and `_go` set `busy` before
+##     `change_scene_to_file`, and the destination's `_ready` runs before they
+##     clear it. That is the positive proof that the title, a save load, or an
+##     authored gate chose this scene; let it build. `Run.in_dungeon` cannot be
+##     the discriminator because a legitimate garrison/outskirts load is not a
+##     dungeon run.
 ##
 ## An ANCESTOR test and not `==`, because the script asking is usually not the
 ## scene root: `dungeon.tscn` is a `DungeonRun` holding the env, the hero, the
@@ -154,6 +157,8 @@ func _ready() -> void:
 func refuse_boot(scene: Node) -> bool:
 	var booted := get_tree().current_scene
 	if booted == null or not (booted == scene or booted.is_ancestor_of(scene)):
+		return false
+	if busy:
 		return false
 	if OS.get_cmdline_args().has("--boot-here") \
 			or OS.get_cmdline_user_args().has("--boot-here"):

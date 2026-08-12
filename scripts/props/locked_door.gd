@@ -28,6 +28,17 @@ extends Interactable
 ## flag while the door is still opening, and half a second of silence after a
 ## door opens reads as a hitch. `where` is `destination`, verbatim.
 signal opened(where: StringName)
+## Fired the instant the leaves start to swing BACK. The exit half of `opened`,
+## and it exists for the same reason the enter half does: a placer that lit a
+## corridor or unlocked a far side on `opened` has to be able to undo it.
+##
+## **Nothing on a plain `LockedDoor` ever emits this.** An item door is one-way
+## by design -- you do not un-own the bow -- and the only thing in the game that
+## shuts is a `PuzzleGate` standing over an atom that can go backwards. A door
+## with an exit hook nothing calls is still worth having: the alternative, which
+## is what shipped, was an OPEN state with no exit at all, and `PuzzleGate`
+## silently stopped listening to its own atoms the moment it swung (card #116).
+signal shut(where: StringName)
 
 ## The item id that opens this. `&"bow"`, `&"hookshot"`, and whatever M6 adds.
 @export var key_item: StringName = &"bow"
@@ -207,6 +218,25 @@ func flag_id() -> StringName:
 	return StringName("door_open_%s" % tag)
 
 
+## **May this door stamp its one-way flag when it opens?**
+##
+## True here and for every item door, because an item door is one-way: you do not
+## un-own the bow, so "opened" is a fact that can only ever have got MORE true.
+##
+## It is a hook because that stopped being universal. `PuzzleGate` watches bodies
+## that can go backwards -- a pressure plate rises when you step off it -- and a
+## flag is one-way STORAGE: a door that wrote one and then shut would come back
+## open on the next floor build standing over an empty plate, which is the shape
+## `pressure_plate.gd`'s own header warns about ("a one-way flag on a two-way
+## prop"). The flag has to be as reversible as the thing that opens the door, and
+## for a plate the honest answer is "do not write one at all" -- the plate itself
+## is the state, and it is read every frame.
+##
+## Overriders: see `PuzzleGate.persists_open`.
+func persists_open() -> bool:
+	return true
+
+
 ## "NEEDS THE BOW". Static so the placer, a HUD toast or a director can ask what
 ## a door will say without instancing one.
 static func refusal_for(key: StringName) -> String:
@@ -320,7 +350,10 @@ func _swing() -> void:
 	if _open:
 		return
 	_open = true
-	Game.set_flag(flag_id())
+	# Only if the open is a one-way fact. See `persists_open()`: a gate over a
+	# pressure plate must leave no trace, because the plate is the state.
+	if persists_open():
+		Game.set_flag(flag_id())
 	# `Bus.request_sfx` rather than `Bus.door_opened`: Sfx maps that signal to
 	# this same `door_open` cue at the HERO's position, so emitting both would
 	# play the door twice, once of them in the wrong place.
@@ -357,6 +390,74 @@ func _swing() -> void:
 			OPEN_TIME).set_delay(0.22)
 	if _plate != null:
 		_tween.tween_property(_plate, "modulate", Pal.BONE, 0.5)
+
+
+## **The authored SHUT -- `_swing()` run backwards.**
+##
+## The exit half of the open state, and the whole of card #116. `_swing()` was
+## written as a one-way trapdoor: it freed the blocker, dropped `enabled`, and
+## nothing anywhere could put either back -- so `PuzzleGate._on_atom_changed`
+## opened with `if is_open(): return` and a gate that had swung stopped listening
+## to its own atoms for ever. The owner stood on a pressure plate, watched the
+## door open, walked off, and the door was still open. **It was not the flag; it
+## was that there was no way back at all.**
+##
+## Every line here undoes exactly one line of `_swing()`, in the same order, and
+## they are meant to be read side by side. The three that are not tween sugar:
+##
+##  * **The flag is ERASED, not merely left unwritten.** `persists_open()` stops
+##    a reversible gate writing one, so on a healthy build there is nothing here
+##    to erase -- but a save taken before this change carries `atom_door_*` keys
+##    that say a plate door is open, and this is the line that reconciles them
+##    the first time such a door shuts. (They are `atom_`-prefixed, so
+##    `PuzzleAtom.clear_run_flags()` also wipes them on the next `Run.enter()`.)
+##  * **The blocker is REBUILT, deferred.** `_shut()` is reached from
+##    `PressurePlate._on_exited`, which is an `Area3D.body_exited` inside the
+##    physics flush, and adding a body there is "Can't change this state while
+##    flushing queries" (CLAUDE.md §3's `add_child` row, one layer down).
+##    Rebuilt rather than un-disabled because `_swing()` frees it, and a door
+##    that kept a disabled shape around is the invisible wall `_build_blocker`'s
+##    own note refuses.
+##  * **`door_close.ogg` has been on disk the whole time and nothing played it.**
+##    It is the cue for exactly this and there is only one of it.
+func _shut() -> void:
+	if not _open:
+		return
+	_open = false
+	Game.flags.erase(flag_id())
+	Bus.request_sfx.emit(&"door_close", global_position)
+	shut.emit(destination)
+
+	if _blocker == null:
+		_blocker = _new_blocker(opening_w * 0.5)
+		add_child.call_deferred(_blocker)
+	# There is something to address again: a shut door is a door with a refusal
+	# on it, and `enabled`'s setter is the only thing `Prompt` reads.
+	enabled = true
+	_refresh_prompt()
+
+	if _tween != null and _tween.is_valid():
+		_tween.kill()
+	_tween = create_tween().set_parallel(true)
+	_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	# The reverse order of the open: the leaves come to first and the bars drop
+	# across them last, because a bar sliding home over a door still swinging
+	# reads as a door being sealed rather than as a door being un-drawn.
+	for p in _pivots:
+		_tween.tween_property(p, "rotation:y", 0.0, OPEN_TIME)
+	_tween.tween_property(_bar_hi, "position:y", BAR_HI_Y, 0.30) \
+		.set_delay(OPEN_TIME * 0.7)
+	_tween.tween_property(_bar_lo, "position:y", BAR_LO_Y, 0.30) \
+		.set_delay(OPEN_TIME * 0.7)
+	_tween.tween_property(_sigil_mat, "emission_energy_multiplier",
+		SIGIL_ENERGY_LOCKED, 0.35)
+	_tween.tween_property(_sigil_mat, "emission", _chilled(), 0.35)
+	_tween.tween_property(_sigil_mat, "albedo_color", _chilled().darkened(0.82), 0.35)
+	_tween.tween_property(_sigil_lamp, "light_color", _chilled(), 0.35)
+	_tween.tween_property(_sigil_lamp, "light_energy", SIGIL_LAMP_LOCKED, 0.35)
+	_tween.tween_property(_pass_lamp, "light_energy", 0.0, 0.5)
+	if _plate != null:
+		_tween.tween_property(_plate, "modulate", Pal.MOTH, 0.5)
 
 
 ## The finished pose, with no motion and no sound. Called from `_ready` when the
@@ -450,17 +551,25 @@ func _build() -> void:
 ## opens -- rather than a disabled shape, because a shape that is only disabled
 ## is one bug away from an invisible wall in a door you can see through.
 func _build_blocker(hw: float) -> void:
-	_blocker = StaticBody3D.new()
-	_blocker.name = "Blocker"
-	_blocker.collision_layer = K.L_WORLD
-	_blocker.collision_mask = 0
+	_blocker = _new_blocker(hw)
+	add_child(_blocker)
+
+
+## The blocker on its own, unparented. Split out because `_shut()` has to build a
+## SECOND one after the first was freed, and it cannot parent it on the spot --
+## see the deferred `add_child` there.
+func _new_blocker(hw: float) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	body.name = "Blocker"
+	body.collision_layer = K.L_WORLD
+	body.collision_mask = 0
 	var cs := CollisionShape3D.new()
 	var box := BoxShape3D.new()
 	box.size = Vector3(hw * 2.0, opening_h, LEAF_T + 0.2)
 	cs.shape = box
 	cs.position = Vector3(0.0, opening_h * 0.5, 0.0)
-	_blocker.add_child(cs)
-	add_child(_blocker)
+	body.add_child(cs)
+	return body
 
 
 ## Two leaves. Each is a pivot at its own jamb holding a body node that undoes
