@@ -101,6 +101,13 @@ const HEALTH_METER_DIAGONAL := 6.0
 const METER_FRAME_LIGHT_ALPHA := 0.28
 const METER_FILL_LIGHT_ALPHA := 0.22
 const METER_FILL_SHADOW_ALPHA := 0.32
+## The 4 px Tier 2 tracks can afford only sparse one-pixel stone marks; denser
+## grain would spend the semantic colour's readability budget on decoration.
+## Its ordered screen-space cadence is deterministic so a draining fill reveals
+## a stationary surface instead of reseeding noise at its moving edge.
+const METER_GRAIN_STEP := 8.0
+const METER_GRAIN_DARK_ALPHA := 0.14
+const METER_GRAIN_LIGHT_ALPHA := 0.08
 ## Directly below health, sharing its left edge. Deliberately shorter, so the
 ## two never read as one two-line meter in peripheral vision.
 const STAMINA_RATIO := 0.62
