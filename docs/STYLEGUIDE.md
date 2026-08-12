@@ -778,7 +778,7 @@ is by the time it is committed.
 | Family | Where | What it is |
 |---|---|---|
 | HUD glyphs | drawn in `scripts/ui/kit/` | polygons, in code, no file at all |
-| Armaments | `assets/ui/icons/hud/`, 5 | **renders of the real models**, baked by `tools/scenes/_iconbake.gd` (§5.2) |
+| Armaments | `assets/ui/icons/valenfeld/` + `assets/ui/icons/hud/`, 5 | Valenfeld item paintings for sword/shield/bow; model bakes for hookshot/arrow (§5.2) |
 | Upgrade tracks | `assets/icons/tracks/`, 22 | one per TRACK — the face on a board row |
 | Items | `assets/icons/items/`, 28 | one per catalogue id — the face on an `ItemCell` |
 
@@ -1048,8 +1048,12 @@ shell around an ASH bevel face and a recessed MIDNIGHT / ASH@60% track. Both
 ends are straight parallel diagonals, never curves or clipped round corners:
 6 px on health and 3 px on the subordinate meters. A 1 px BONE-alpha upper
 frame edge and MIDNIGHT lower edge deepen the face. The semantic fill colour has
-its own restrained 1 px BONE-alpha top band and VOID-alpha lower band; ticks
-still cut through last. Health carries a 2 px outer bezel and 2 px inner face;
+its own restrained 1 px BONE-alpha top band and VOID-alpha lower band. Sparse,
+ordered BONE/VOID chips inside that colour give it Valenfeld's carved dark-stone
+grain without spending the fill's readability on texture noise. The pattern is
+anchored to screen pixels, so draining a bar reveals stationary stone rather
+than making the grain swim; ticks still cut through last. Health carries a 2 px
+outer bezel and 2 px inner face;
 the three subordinate meters carry 1 px of each, preserving a readable live
 track inside the 15 / 8 / 6 / 6 weight hierarchy. Partial fills end diagonally.
 The health ghost begins flat beneath the current fill and ends diagonally, so
@@ -1238,23 +1242,22 @@ player's hand. The caption is keyed by the ITEM, not by the hand or the cell:
 two-handing the sword moves it to the other hand and the button that swings it
 does not change.
 
-**Glyphs are renders of the real models**, baked by `tools/scenes/_iconbake.gd`
-and posterised into the Pal ramp, so the cell always shows the thing you are
-actually holding and cannot drift from it. This is not a hole in §7.10: that
-rule bans bought vector icon sets and demands glyphs authored *in the palette*,
-and quantising a render to four Pal values with a 1 px VOID dilation is how a
-render earns that. Lettering ("SW", "SH") survives only as the fallback for a
-missing bake — an empty cell would read as "you have no sword", which is a lie.
+**Sword, shield and bow use Valenfeld's locally owned item paintings**, kept in
+protected `assets/ui/icons/valenfeld/`. Their worn steel, leather and wood are
+the material read the old four-value silhouettes could not carry, and their
+distinct profiles still do the identification work when colour drops away.
+Hookshot and arrow remain renders of the real models, baked by
+`tools/scenes/_iconbake.gd` into generated `assets/ui/icons/hud/` and posterised
+onto the Pal ramp. The split is deliberate: never put the imported paintings in
+the generated folder, because the baker overwrites it wholesale. Lettering
+("SW", "SH") survives only as the fallback for a missing texture — an empty
+cell would read as "you have no sword", which is a lie.
 
-These five are the only glyphs baked from the models, and `UiKit.item_icon`
-resolves them **before** `assets/icons/items/` so the bag cannot draw a different
-sword from the one in the hand. The other icon families, and the crunch all four
-of them share, are §4.7b.
-
-The rule the bake taught: **thin items do not survive 32 px.** A whole sword is a
-three-pixel scratch, so its icon crops to the guard and pommel rather than
-dutifully showing the entire blade. `bow_knightly` is the one that still reads
-poorly, because a bow is edge-on from every axis.
+`ArmamentDb.ICONS` is the one owner of both sources, so the HUD and equipment
+screen cannot choose different faces for the same hand. The rule the bakes
+taught still holds: **thin items must use the diagonal aggressively.** The
+Valenfeld sword and bow do that in their paintings; the baked arrow does it in
+the model camera.
 
 | | |
 |---|---|
