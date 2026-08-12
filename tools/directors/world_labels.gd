@@ -135,7 +135,7 @@ const PLAZA_AT := Vector3(0.0, 0.0, -2.0)
 
 ## Where the training post is stood, as a bearing off the plaza and a radius.
 ##
-## South-east, and off every occupied bearing in `Garrison._build_people` (the
+## South-east, and off every occupied bearing in `GarrisonCompound` (the
 ## ring is 55 / -55 / 118 / -118) so the post is not inside somebody's forge. 8.5
 ## m from the plaza's middle puts it two and a half metres clear of the south
 ## curtain, which is the wall this half of the run photographs it through.

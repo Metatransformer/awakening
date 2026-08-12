@@ -24,8 +24,9 @@ extends SceneTree
 ##   --fresh                                      do NOT stamp the keepers into
 ##                                                the yard (see
 ##                                                `_open_the_garrison`)
-##   --meet                                       let the elder introduce the
-##                                                new keepers (off by default --
+##   --meet                                       leave ONE introduction owed --
+##                                                the first rung -- and mark the
+##                                                rest met (off by default --
 ##                                                see `_skip_the_introductions`)
 
 ## The scratch config every harness run writes instead of `user://settings.cfg`.
@@ -384,10 +385,13 @@ const ARRIVED_FLAGS: Array[StringName] = [
 ## out for the third time for the reason above.
 ##
 ## These are NOT the same thing as `ARRIVED_FLAGS` and the pair has to be settable
-## separately: arrived is "she is standing at her counter", met is "the elder has
-## already introduced her". A director that stamps the first and not the second
-## gets a full yard that opens a four-page conversation over whatever it was about
-## to photograph, one and a bit seconds in.
+## separately: arrived is "she has been earned", met is "the elder has already
+## introduced her". A director that stamps the first and not the second gets a
+## yard that opens a four-page conversation over whatever it was about to
+## photograph, one and a bit seconds in.
+##
+## **In ladder order** (`StoryDb.INTRO_ORDER`), because `--meet` slices this list
+## and the slice has to leave the FIRST rung owed -- see `_skip_the_introductions`.
 const MET_FLAGS: Array[StringName] = [
 	&"met_quartermaster",
 	&"met_smith",
@@ -446,21 +450,32 @@ func _open_the_garrison() -> void:
 ## The yard plays a four-page scene with a camera move in it the first time you
 ## come home after somebody new arrives (`Garrison._do_the_rounds`), and
 ## `_open_the_garrison` above has just made every keeper new. Without this, EVERY
-## garrison director would sit through four introductions -- sixteen pages, four
-## camera takeovers -- starting one and a bit seconds after the scene loads, which
-## is exactly when most of them take their first frame.
+## garrison director would sit through an introduction starting one and a bit
+## seconds after the scene loads, which is exactly when most of them take their
+## first frame.
 ##
-## `--meet` opts back in, and `tools/directors/npc_intro.gd` is the one that does.
-## Same shape as `--intro` and for the same reason: the harness is quiet by
-## default whether or not the author of the next director knew this existed.
+## **`--meet` leaves exactly ONE owed -- the first rung -- and marks the rest**,
+## which is a stronger promise than the "stamp nothing" it used to make, and card
+## #115 is why it had to become one. A keeper is now built only once they have
+## been INTRODUCED (`StoryDb.present`), so stamping no `met_` at all no longer
+## means "five people in the yard, four scenes queued": it means **two people in
+## the yard**, and `npc_intro.gd`'s long-pan beat would have been photographing a
+## smith who was never constructed. Both directors that pass `--meet` already
+## stamped the other three by hand as their first act (`npc_intro`,
+## `save_load_position`) precisely because four back-to-back scenes were
+## unwatchable -- so this is their own setup, moved to where it happens before
+## `_ready` instead of after it.
+##
+## The slice is `MET_FLAGS[1..]` and that list is in ladder order on purpose. Same
+## shape as `--intro` and for the same reason: the harness is quiet by default
+## whether or not the author of the next director knew this existed.
 func _skip_the_introductions() -> void:
-	if _args.has("meet"):
-		return
 	var game: Node = root.get_node_or_null(^"Game")
 	if game == null:
 		push_warning("shoot.gd: no /root/Game -- cannot skip the introductions")
 		return
-	for flag: StringName in MET_FLAGS:
+	var flags := MET_FLAGS.slice(1) if _args.has("meet") else MET_FLAGS
+	for flag: StringName in flags:
 		game.call(&"set_flag", flag)
 
 

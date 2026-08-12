@@ -13,7 +13,8 @@ extends Node3D
 ## banked fire that breathes: no interaction, no state, nothing saved. The
 ## counter is still `Npc` + `TradeScreen` and a row in `Npc.COUNTERS`
 ## (docs/METAGAME.md §6.6), exactly as before. Adding a booth to a fourth
-## shopkeeper is a row in `PARTS` here and a line in `Garrison._build_people`.
+## shopkeeper is a row in `PARTS` here and a line in
+## `Garrison._build_compound_people`.
 ##
 ## Counts are unchanged against docs/SCOPE.md §1: one garrison scene, three
 ## counters, no new screens. These are props in the courtyard that already
@@ -134,7 +135,8 @@ static var PARTS := {
 ## of them running the whole west half of the yard went green -- including the
 ## flagstones in front of the gate, three metres from the one cyan thing in the
 ## game that is supposed to own that end of the spectrum. She keeps the green;
-## her lamp went warm (`Garrison._build_people`), and the pot stopped shouting.
+## her lamp went warm (`Garrison._build_compound_people`), and the pot stopped
+## shouting.
 static var FIRES := {
 	Kind.FORGE: {
 		# 0.55, not the 0.72 that filled the basin lip to lip. A disc the exact

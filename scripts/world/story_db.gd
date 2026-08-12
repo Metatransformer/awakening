@@ -23,8 +23,9 @@ extends RefCounted
 ##     consumed, because a question you can only ask once is a question the player
 ##     is punished for asking early.
 ##
-## And **UNLOCKS** — who is in the yard at all. `Garrison._build_people` reads it
-## and simply does not construct the ones who have not arrived.
+## And **UNLOCKS** — who has arrived at all. `Garrison._build_compound_people`
+## reads it through `present()`, and simply does not construct the ones who are
+## not standing in the yard on this visit.
 ##
 ## ## The three metrics, and why there are exactly three
 ##
@@ -387,6 +388,39 @@ static func unlocked(who: StringName) -> bool:
 		return false
 	Game.set_flag(flag)
 	return true
+
+
+## Is this person standing in the yard on THIS visit?
+##
+## **Arriving and being there are two different facts, and card #115 is the bill
+## for having conflated them.** `unlocked` latches the moment the metric is met,
+## and `Garrison` built anybody it answered yes for -- on `_ready`, before a word
+## had been said. A run that took the floor 1 miniboss and the floor 1 boss
+## therefore came home to TWO new bodies in the yard, and the elder could only
+## introduce one of them: the alchemist was a stranger at a new counter, which is
+## the exact failure `Introduction` exists to prevent (owner, 2026-08-12).
+##
+## So presence is gated on the CONVERSATION and not on the unlock:
+##
+##   * somebody the elder has already introduced (`met_<who>`) is simply here,
+##     forever, as they always were;
+##   * plus `arriving` -- the ONE keeper whose scene is about to play this visit,
+##     who has to be standing in the yard for `ConvoCamera` to turn to them;
+##   * and nobody else. A second unlocked-but-unmet keeper is not built at all.
+##     They walk up the road next time you come home.
+##
+## That last clause IS the throttle: a good descent pays out one arrival now and
+## holds one in reserve, rather than handing a player who wanted to sell a bag
+## eight pages of introductions. `arriving` is `pending_introduction()` read ONCE
+## by the caller, before it builds anything, so the body and the scene can never
+## disagree about who this visit is for.
+##
+## The arrival flag is untouched by any of this. It is the earned fact and it
+## stays latched -- `roster.gd` D is the proof, and it is still true.
+static func present(who: StringName, arriving: StringName) -> bool:
+	if not unlocked(who):
+		return false
+	return Game.flag(intro_flag(who)) or who == arriving
 
 
 # --- What they say -------------------------------------------------------------

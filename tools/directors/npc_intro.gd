@@ -48,12 +48,14 @@ var _fails := 0
 func run(rig) -> void:
 	out = rig.arg("out", "/tmp/intro/x.png").get_base_dir()
 
-	# **First thing, before a single await.** `--meet` leaves all four keepers
-	# unmet, and `Garrison._do_the_rounds` would then play all four scenes back to
-	# back -- sixteen pages, with D and F photographing whichever one happened to
-	# be up. This leaves exactly one owed. `run` is called during warmup and the
-	# yard's own wait is 1.2 s, so these land first; F re-runs the smith's by hand
-	# afterwards, which does not consult the flag.
+	# Belt and braces, and it is the braces now: `--meet` itself leaves exactly one
+	# introduction owed and marks the other three (`shoot.gd
+	# ._skip_the_introductions`), because since card #115 an unmet keeper is not
+	# BUILT -- a yard with four scenes queued would have had one counter in it and
+	# F below needs Brannoc standing twelve metres away. This used to be the line
+	# that trimmed four scenes to one, and it ran after `_ready` had already
+	# decided the roster, which is exactly why the harness took the job over.
+	# Left in place so a hand-stamped save reaches D in the same state.
 	for who: StringName in [&"smith", &"alchemist", &"jewelcrafter"]:
 		Game.set_flag(StoryDb.intro_flag(who))
 
