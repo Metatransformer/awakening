@@ -177,7 +177,11 @@ func _on_taken(id: StringName) -> void:
 		return
 	_spent = true
 	Game.set_flag(flag_id())
-	Bus.request_sfx.emit(&"level_chime", global_position)
+	# `power_up`, the roguelike-reward voice. An Echo is the one thing in the game
+	# that changes how the run is played (`docs/METAGAME.md` §6), so it does not
+	# share a sound with a solved puzzle -- which is what `level_chime` made it do,
+	# and what made picking one read like tripping a switch.
+	Bus.request_sfx.emit(&"power_up", global_position)
 	# The NAME is already on screen -- `Bus.loot_gained` fired inside
 	# `Run.collect` and the HUD toasts every pickup by its display name. What is
 	# missing is what the tone DOES, so that is what this says. Same channel

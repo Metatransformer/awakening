@@ -167,8 +167,15 @@ func lift() -> void:
 	# which is exactly the frame `puzzle_loop`'s `p_07` caught.
 	Bus.prompt_changed.emit("")
 	Game.set_flag(flag_id())
+	# **One sound, and it is this one.** `Bus.door_opened` used to be emitted on
+	# the next line as well, and `Sfx` maps that signal to `door_open` played AT
+	# THE HERO -- so lifting a grille played two different noises from two
+	# different places on the same frame, one of them a wooden door swinging in a
+	# passage that has no door in it. `LockedDoor._swing` carries the note this
+	# repeats: pick the sound and the place, and do not also emit the signal that
+	# picks another. Nothing but `Sfx` ever listened to `door_opened`, so the
+	# grille's own `lifted` signal is the whole progression fact.
 	Bus.request_sfx.emit(&"craft_grind", global_position)
-	Bus.door_opened.emit(flag_id())
 	# The blocker is FREED, not disabled. A shape that is only disabled is one bug
 	# away from an invisible wall in a passage you can see straight through --
 	# `LockedDoor._build_blocker` records the same call.
