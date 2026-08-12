@@ -2836,24 +2836,22 @@ heart at once) and leave it false on a Recut, where clamping down is the point.
 
 ```gdscript
 Saves.peek(slot)        # header for the slot list; {empty:true} if unused
-Saves.save(slot)        # captures Game + hero position + current room
-Saves.load_slot(slot)   # restores Game, RETURNS {scene, room, pos, yaw}
+Saves.save(slot)        # captures Game + destination + a scene-owned transform
+Saves.load_slot(slot)   # restores Game; returns {scene, room[, pos, yaw]}
 Saves.erase(slot)       # 3 slots, 0..2
 Saves.autosave()        # Flow calls this on EVERY transition; false = declined
 Saves.autosaved         # signal(slot) -- slot is -1 when it declined
 ```
 
-The save file is at **`VERSION = 5`**, and `READABLE` — not `VERSION` — is what
-`load_slot` checks. v2 added `bag_slots`, `upgrades` and `components` on top of
-v1; v3 added `stash` and `max_stamina`; v4 is the gear split, where `plate`
-stopped being one rung and became eight tracks; v5 added `deaths`, the dial GDD
-§7.1 turns. **v3 is refused rather than migrated** and `READABLE` holds
-`[4, 5]`, because a v3 `plate` key means something the v4 accessors would read
-as a different piece of armour. An *additive* version bump can be readable
-alongside its predecessor — v5 is exactly that, and a v4 slot loads with
-`deaths` defaulting to 0, which is the truthful answer for a save written before
-anything counted. v4 was not additive. `save_game.gd`'s header comment carries
-the full argument.
+The save file is at **`VERSION = 9`**, and `READABLE` — not `VERSION` — is what
+`load_slot` checks. **v3 is refused rather than migrated** because its `plate`
+key means something the v4 accessors would read as a different piece of armour;
+`READABLE` holds `[4, 5, 6, 7, 8, 9]`. v9 adds `position_scene`, proof that a
+saved hero transform belongs to the destination scene. A transform is written
+and returned only when those scenes match. v4-v8 remain readable but have no
+ownership proof, so their returned destination omits `pos` / `yaw` and keeps the
+scene's authored spawn and rotation on that first load. `save_game.gd`'s header
+comment carries the full version history.
 
 Every one of those dictionaries is rebuilt on load with `StringName` keys — JSON
 hands back `String` keys, and a `String` key makes `forge_level(&"edge")` and

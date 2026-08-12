@@ -67,13 +67,20 @@ const SLOTS := 3
 ## back with an empty pack, which is the TRUTH about a hero who played before the
 ## counter stocked any — nothing is lost and nothing has to be guessed at. So v7
 ## stays readable, and so does everything v7 read.
-const VERSION := 8
+##
+## Bumped to 9 for transform ownership. A dungeon save deliberately points HOME
+## because a slot holds no `Run`, but v8 paired that garrison destination with the
+## live dungeon hero's position. `position_scene` now says which scene owns a
+## transform, and `pos` / `yaw` are written and restored only when that owner is
+## also the destination. v4-v8 remain readable, but their owner cannot be proved,
+## so their transform is omitted on load and the authored spawn wins once.
+const VERSION := 9
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4, 5, 6, 7, 8]
+const READABLE: Array[int] = [4, 5, 6, 7, 8, 9]
 
 signal saved(slot: int)
 signal loaded(slot: int)
@@ -129,11 +136,8 @@ func peek(slot: int) -> Dictionary:
 
 func save(slot: int) -> bool:
 	var hero := get_tree().get_first_node_in_group(&"player")
-	var pos := Vector3.ZERO
-	var yaw := 0.0
-	if hero and hero is Node3D:
-		pos = (hero as Node3D).global_position
-		yaw = (hero as Node3D).global_rotation.y
+	var destination_scene := _save_scene()
+	var position_scene := _scene_path()
 
 	var d := {
 		"version": VERSION,
@@ -192,10 +196,19 @@ func save(slot: int) -> bool:
 		"loadout_set": Game.loadout_set,
 		"flags": Game.flags,
 		"room": String(current_room),
-		"scene": _save_scene(),
-		"pos": [pos.x, pos.y, pos.z],
-		"yaw": yaw,
+		"scene": destination_scene,
+		# Proof of which scene owns the live hero transform. It is recorded even
+		# when the transform itself is withheld, so a dungeon save explains why it
+		# returns to the garrison's authored spawn rather than looking incomplete.
+		"position_scene": position_scene,
 	}
+	# A dungeon save points at the garrison but the live hero belongs to the
+	# dungeon. Pairing those two coordinate spaces is how Kael landed outside the
+	# hub, so no transform crosses that scene boundary.
+	if hero is Node3D and position_scene == destination_scene:
+		var pos := (hero as Node3D).global_position
+		d["pos"] = [pos.x, pos.y, pos.z]
+		d["yaw"] = (hero as Node3D).global_rotation.y
 	var f := FileAccess.open(slot_path(slot), FileAccess.WRITE)
 	if f == null:
 		push_error("Saves: cannot write slot %d" % slot)
@@ -415,13 +428,21 @@ func load_slot(slot: int) -> Dictionary:
 		Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_LEFT))
 	loaded.emit(slot)
 
-	var p: Array = d.get("pos", [0, 0, 0])
-	return {
+	var dest := {
 		"scene": current_scene_path,
 		"room": current_room,
-		"pos": Vector3(p[0], p[1], p[2]),
-		"yaw": d.get("yaw", 0.0),
 	}
+	# v4-v8 have a transform but no proof of which scene owns it. They remain
+	# readable, but loading them once conservatively keeps the destination scene's
+	# authored spawn and rotation. A v9 transform is valid only inside its owner.
+	if int(d.get("version", 0)) >= 9 \
+			and String(d.get("position_scene", "")) == current_scene_path:
+		var p: Array = d.get("pos", [])
+		if p.size() >= 3:
+			dest["pos"] = Vector3(p[0], p[1], p[2])
+		if d.has("yaw"):
+			dest["yaw"] = float(d["yaw"])
+	return dest
 
 
 func erase(slot: int) -> void:

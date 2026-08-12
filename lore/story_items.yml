@@ -1,0 +1,53 @@
+schema_version: 1
+id: story_set.awakening_prologue
+scope: The small story-bearing set already present in the prologue reveal.
+items:
+  - id: story_item.makers_mark
+    name: maker's mark
+    kind: object
+    status: fixed_prologue_object
+    story_function: Its acquisition brings Brannoc to the garrison and turns recovered salvage into a visible change at home.
+    fixed_facts:
+      - Its gameplay id is makers_mark.
+      - The floor-one miniboss drops it.
+      - Aldric sends it to Valenfeld, and Brannoc returns to inspect the unfamiliar metal and mend recovered work.
+    collision_refs:
+      - collision.vyr_vallen_authorship
+    sources:
+      - docs/GDD.md
+      - scripts/world/story_db.gd
+      - docs/CANON_BRIDGE.md
+  - id: story_item.prior_cadet_lantern_piece
+    name: prior cadet's cracked lantern-piece
+    kind: object_in_dialogue
+    status: fixed_reveal
+    story_function: It makes the missing prior cadet concrete and reveals Kessa's response to the value left behind.
+    fixed_facts:
+      - The prior cadet sold the cracked lantern-piece to Kessa the day before he went missing.
+      - Kessa paid nine gold for it and says it was worth ninety.
+      - Kessa keeps the money under her counter for whoever comes asking after him.
+    collision_refs: []
+    sources:
+      - scripts/world/story_db.gd
+  - id: story_place.sunken_cut
+    name: the Sunken Cut
+    kind: story_place_and_concept
+    status: fixed_prologue_name_parent_identity_unresolved
+    story_function: It names the repeated descent and anchors the prologue's leave-or-go-deeper choice to a place.
+    fixed_facts:
+      - Awakening calls the way down the Sunken Cut.
+      - The prologue presents four authored floors reached through its garrison.
+      - Its identity, geography, sponsorship, and underlying authorship remain open where the parent canon collides.
+    collision_refs:
+      - collision.sunken_cut_identity
+      - collision.highbridge_outpost
+      - collision.vyr_vallen_authorship
+      - collision.valenfeld_garrison_relationship
+    sources:
+      - docs/GDD.md
+      - scripts/world/story_db.gd
+      - docs/CANON_BRIDGE.md
+sources:
+  - docs/GDD.md
+  - scripts/world/story_db.gd
+  - docs/CANON_BRIDGE.md

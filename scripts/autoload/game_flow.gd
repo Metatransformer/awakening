@@ -332,23 +332,26 @@ func _on_menu_load_requested(_slot: int, dest: Dictionary) -> void:
 	resume(dest)
 
 
-## Put the hero back where the save left him.
+## Put the hero back where the save left him, when the destination carries a
+## scene-owned transform.
 ##
 ## Called from inside `_go` once the new scene's `_ready` has run and placed him
-## at the room's default spawn -- this overrides that. Silent when there is no
-## hero in the tree, which is the honest answer for a save written in a scene that
-## no longer has one.
+## at the room's default spawn. A destination without `pos` or `yaw` deliberately
+## keeps those authored values. Silent when there is no hero in the tree, which
+## is the honest answer for a save written in a scene that no longer has one.
 func _place_hero(dest: Dictionary) -> void:
 	var hero := get_tree().get_first_node_in_group(&"player") as Node3D
 	if hero == null:
 		return
-	hero.global_position = dest.get("pos", hero.global_position)
+	if dest.has("pos"):
+		hero.global_position = dest["pos"]
 	# **No `+ PI` here, and that is not an oversight.** `Saves.save` writes the
 	# hero's `global_rotation.y` verbatim, so what comes back is a NODE rotation
 	# and not a heading -- round-tripping it is an assignment. The conversion
 	# CLAUDE.md §4 is about (`rotation.y = heading + PI`) belongs where a heading
 	# is being turned into a facing, and there is no heading in this dictionary.
-	hero.global_rotation.y = float(dest.get("yaw", 0.0))
+	if dest.has("yaw"):
+		hero.global_rotation.y = float(dest["yaw"])
 
 
 # --- Entry points -----------------------------------------------------------
@@ -500,9 +503,9 @@ func _show_ending() -> void:
 
 # --- Transition -------------------------------------------------------------
 
-## `dest` is a load's `{scene, room, pos, yaw}`, and empty for every other
-## transition — see the placement below for why it is a parameter here rather
-## than something the caller does after the `await`.
+## `dest` is a load's `{scene, room}` plus a proven optional `pos` / `yaw`, and
+## empty for every other transition — see the placement below for why it is a
+## parameter here rather than something the caller does after the `await`.
 func _go(path: String, hold: float, dest: Dictionary = {}) -> void:
 	busy = true
 	Prompt.blocked = true

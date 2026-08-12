@@ -276,7 +276,7 @@ static var INTRODUCTIONS := {
 		{"who": &"elder", "text": "Kessa. Leave the ledger a moment and come and look at what the Guild has sent me."},
 		{"who": &"quartermaster", "text": "That's a cadet, Aldric. They sent you a cadet."},
 		{"who": &"quartermaster", "text": "Anything you drag up out of that hole, I'll put a number on it. The number's fair. You'll hate it anyway."},
-		{"who": &"elder", "text": "She is the reason a sack of Vyr scrap is worth carrying up four flights. Sell to her before you spend anything on yourself."},
+		{"who": &"elder", "text": "Kessa is the reason a sack of Vyr scrap is worth carrying up four flights. Sell to her before you spend anything on yourself."},
 	],
 	# The payoff for the floor 1 miniboss. The mark itself is the hinge: the player
 	# picked an object up off a body, and here is what the object DID.

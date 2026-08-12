@@ -1,0 +1,11 @@
+schema_version: 1
+id: cosmology.awakening_prologue_deities
+scope: Awakening prologue reveal only
+prologue_status: none_named_or_revealed
+named_or_revealed: []
+fixed_fact: No gods or deities are currently named or revealed by Awakening's prologue canon.
+use_rule: Names, identities, attributes, relationships, factions, regions, and mechanics for any god or deity must come from the parent Valenfeld canon graph before use.
+sources:
+  - docs/CANON_BRIDGE.md
+  - docs/LORE_AND_STORY.md
+  - docs/GDD.md
