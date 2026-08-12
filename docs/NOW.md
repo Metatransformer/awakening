@@ -11,13 +11,13 @@
 The earlier Core Loop Proof was superseded by the base-defense pivot before any
 human sessions were run. It has no pass or fail result.
 
-Raid gameplay is not implemented yet. The active test and its precommitted
-criteria are in
+Implementation is complete and awaiting the precommitted five cold sessions.
+The active test and its criteria are in
 [design-tests/RAID_LOOP_PROOF.md](design-tests/RAID_LOOP_PROOF.md).
 
-## Authorised now
+## Built slice awaiting test
 
-Build and test exactly one vertical slice:
+Test exactly one implemented vertical slice:
 
 - Trigger it after donation of the Tally-Ledger.
 - Add one unvoiced Vyr Builder using the existing generic Vyr body and shared
@@ -29,6 +29,9 @@ Build and test exactly one vertical slice:
 - Let underground players continue or use the ordinary Escape Rope. The raid
   provides no summon, teleport, or free extraction.
 - Run one attack through the main gate: three kobolds and one orc.
+- Show authoritative GARRISON integrity in the normal HUD. Only completed
+  attacks on the courtyard command standard reduce it; all raiders dead above
+  zero wins, while zero with any raider alive is irreversible loss.
 - Let the built bolt-thrower hold if the player is absent. Without it, absence
   fails the raid. A present player fights manually.
 - On failure, suppress and return the donated Tally-Ledger to its original

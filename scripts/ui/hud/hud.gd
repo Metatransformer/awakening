@@ -402,6 +402,7 @@ func _ready() -> void:
 	Clock.minute_changed.connect(_on_clock_minute)
 	Clock.phase_changed.connect(_repaint)
 	Clock.service_availability_changed.connect(_repaint)
+	Game.garrison_changed.connect(_repaint)
 	_on_clock_minute(Clock.day, int(Clock.hour), int(fmod(Clock.hour, 1.0) * 60.0))
 	# A binding moved — on a pickup, or on the equipment screen's card. The wheel
 	# is usually shut when this fires and the repaint is then a no-op; it is
@@ -1171,6 +1172,7 @@ func _draw_hud() -> void:
 	_draw_bag(s)
 	_draw_extraction(s)
 	_draw_clock(s)
+	_draw_garrison_integrity(s)
 	_draw_toast(s)
 	_draw_save(s)
 	if _flurry_prompt:
@@ -1214,6 +1216,63 @@ func _draw_clock(s: Vector2) -> void:
 		var small := CanvasText.scale_for(11.0, s.y)
 		CanvasText.draw_centred(_canvas, "SERVICES CLOSED",
 			Vector2(s.x * 0.5, Pal.px(30.0, s.y)), small, Pal.RUST)
+
+
+func _draw_garrison_integrity(s: Vector2) -> void:
+	var phase := Game.raid_phase()
+	if phase == GarrisonRaidState.PHASE_DORMANT \
+			or phase == GarrisonRaidState.PHASE_ARMED:
+		return
+
+	var scale := CanvasText.scale_for(11.0, s.y)
+	var label_y := Pal.px(46.0, s.y)
+	if phase == GarrisonRaidState.PHASE_WARNED:
+		var warning := "GARRISON RAID  DAY %d 23:00" % Game.raid_scheduled_day()
+		var warning_w := CanvasText.width(warning, scale)
+		var warning_rect := Rect2(
+			Vector2(s.x * 0.5 - warning_w * 0.5, label_y),
+			Vector2(warning_w, CanvasText.height(scale)))
+		CanvasText.draw_centred(_canvas, warning,
+			Vector2(s.x * 0.5, label_y), scale, Pal.GOLD)
+		_note(&"garrison_integrity", &"", warning_rect)
+		return
+
+	var bar_w := Pal.px(220.0, s.y)
+	var bar_h := Pal.px(8.0, s.y)
+	var x := s.x * 0.5 - bar_w * 0.5
+	var bar_y := label_y + CanvasText.height(scale) + Pal.px(3.0, s.y)
+	var track := Rect2(x, bar_y, bar_w, bar_h)
+	var integrity := Game.raid_integrity()
+	var fraction := clampf(Game.raid_integrity_fraction(), 0.0, 1.0)
+	var label := "GARRISON"
+	var label_color := Pal.BONE
+	var fill_color := Pal.BONE
+
+	if phase == GarrisonRaidState.PHASE_WON:
+		label = "GARRISON SECURE"
+		label_color = Pal.GOLD
+		fill_color = Pal.GOLD
+	elif phase == GarrisonRaidState.PHASE_LOST:
+		label = "GARRISON LOST"
+		label_color = Pal.RUST
+	else:
+		if integrity <= 25:
+			fill_color = Pal.RUST
+		elif integrity <= 50:
+			fill_color = Pal.GOLD
+
+	CanvasText.draw_text(_canvas, label, Vector2(x, label_y), scale, label_color)
+	if phase == GarrisonRaidState.PHASE_ACTIVE:
+		CanvasText.draw_right(_canvas, "%d%%" % integrity,
+			Vector2(x + bar_w, label_y), scale, fill_color)
+	_canvas.draw_rect(track, Pal.VOID)
+	if phase == GarrisonRaidState.PHASE_LOST:
+		_canvas.draw_rect(track, Pal.RUST, false, Pal.px(1.0, s.y))
+	elif fraction > 0.0:
+		_canvas.draw_rect(Rect2(track.position,
+			Vector2(track.size.x * fraction, track.size.y)), fill_color)
+	_note(&"garrison_integrity", &"", Rect2(
+		Vector2(x, label_y), Vector2(bar_w, track.end.y - label_y)))
 
 
 # --- The kit wheel -----------------------------------------------------------

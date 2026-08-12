@@ -88,20 +88,25 @@ systems named under Aldric.
 
 ## One-raid prototype
 
-Raid gameplay is not implemented. The active prototype is one authored
-occurrence armed by donation of the Tally-Ledger.
+The implemented prototype is one authored occurrence armed by donation of the
+Tally-Ledger and scheduled for the next day. It warns at 15:00, sounds the raid
+horn at 23:00, and interrupts sleep when the attack boundary is crossed.
+Underground players choose between continuing and the ordinary Escape Rope;
+the raid never summons, teleports, or grants free extraction.
 
-It provides an afternoon warning and an urgent 23:00 horn alarm that can
-interrupt sleep. Underground players choose between continuing and the
-ordinary Escape Rope; the raid never summons, teleports, or grants free
-extraction.
+One wave of three kobolds and one orc follows the main-gate route to the
+courtyard command standard. Only a completed attack on that objective reduces
+GARRISON integrity. A present player fights manually; away resolution uses the
+same authoritative wave. Killing every raider above zero wins. Reaching zero
+while any raider lives is an irreversible loss, even if the remaining raiders
+later die. Saving, leaving, and returning preserve the surviving wave,
+integrity, and result.
 
 The player may build one optional West Gate Bolt-Thrower with existing
-resources. A present player fights the single attack manually. If absent, the
-Bolt-Thrower holds; without it, the garrison loses. Failure removes the
-Tally-Ledger's benefit, leaves its mount visibly empty, and returns it to its
-original dungeon location. Recovering it restores the existing donation without
-a second repair cost.
+resources. It holds when the player is absent; without it, absence loses the
+raid. Loss steals the Tally-Ledger, suppresses its benefit, leaves its mount
+empty, and returns it to its original dungeon location. Recovery restores the
+donation without another repair cost. The occurrence never repeats.
 
 The complete authored slice and evidence rules live in
 [design-tests/RAID_LOOP_PROOF.md](design-tests/RAID_LOOP_PROOF.md).

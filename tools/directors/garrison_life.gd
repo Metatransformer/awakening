@@ -154,6 +154,7 @@ func _daily_state(rig) -> void:
 		"timber_completed_day": 0,
 		"warmth_active": false,
 		"last_bonfire_day": 0,
+		"raid": _default_raid(),
 	}, "an older save's absent garrison payload defaults empty and cold")
 	var saved := {
 		"firewood_stock": 2,
@@ -161,6 +162,7 @@ func _daily_state(rig) -> void:
 		"timber_completed_day": 4,
 		"warmth_active": true,
 		"last_bonfire_day": 3,
+		"raid": _default_raid(),
 	}
 	Game.restore_garrison(saved)
 	rig.check(Game.garrison_snapshot() == saved, "all garrison state round-trips")
@@ -304,6 +306,22 @@ func _catalogue_line(lines: Array[Dictionary], id: StringName) -> Dictionary:
 		if StringName(line.get("id", &"")) == id:
 			return line
 	return {}
+
+
+func _default_raid() -> Dictionary:
+	return {
+		"phase": GarrisonRaidState.PHASE_DORMANT,
+		"scheduled_raid_day": 0,
+		"integrity": GarrisonRaidState.INTEGRITY_MAX,
+		"defense_built": false,
+		"ledger_stolen": false,
+		"attackers": [],
+		"bolt_cooldown": GarrisonRaidState.BOLT_DEFENSE_INTERVAL,
+		"advance_notice_pending": false,
+		"advance_notice_delivered": false,
+		"urgent_notice_pending": false,
+		"urgent_notice_delivered": false,
+	}
 
 
 func _all_text(root: Node) -> PackedStringArray:
