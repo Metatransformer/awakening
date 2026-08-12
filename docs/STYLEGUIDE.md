@@ -988,13 +988,23 @@ One horizontal bar, fixed width. The width does **not** grow with max health —
 a bar that lengthens as you buy containers walks across the screen and stops
 being a shape you recognise peripherally. More containers means denser ticks.
 
+Health, stamina, magic and heat now use one dark meter recipe: a VOID outer
+bezel around a MIDNIGHT frame, an inset ASH@60% track, a 2 px chamfer at the
+right termination and one restrained 1 px ASH top-light. These are hard pixel
+edges, not antialiased ornament. Health alone carries a 2 px outer bezel; the
+three subordinate meters carry 1 px, preserving the 15 / 8 / 6 / 6 weight
+hierarchy. The authored bar rectangles, left edge and row positions below do
+not move; `_note` publishes the outer bezel bounds used by layout checks.
+Enemy health bars are excluded: at 2 px tall they are minimal world markers,
+not player instruments, and this bezel would consume them.
+
 | | |
 |---|---|
 | Origin | x `0.031` (40), top y `0.882` (635) |
 | Bar | `0.268` w (343 px) × 15 px, fixed at every max-health value |
 | Ticks | 2 px VOID full height at heart boundaries; 1 px VOID at 45% height at quarters |
 | Filled | VITAL | Empty | ASH @60% |
-| Container | 1 px VOID hairline, 1 px outside the bar |
+| Frame / track | 2 px outer VOID bezel; MIDNIGHT frame; 1 px inset track; 2 px right chamfer; 1 px ASH top-light |
 
 ### 5.1b Stamina — directly below health
 
@@ -1015,6 +1025,7 @@ unit it is ever spent in.
 | Bar | `0.62 ×` health width × 8 px |
 | Filled | BONE, or RUST below `K.STAMINA_ROLL` | Empty | ASH @60% |
 | Ticks | 1 px VOID at each affordable roll boundary |
+| Frame / track | Shared recipe, with the subordinate 1 px outer bezel |
 
 - **Damage ghost:** cells just lost stay lit in RUST for 400 ms, then drain
   right-to-left over 250 ms in 4 discrete steps. *How much you just lost* is the
@@ -1064,6 +1075,7 @@ like drift.
 | Bar | `0.52 ×` health width (178 px) × **6 px** |
 | Filled | COBALT, or MOTH below `K.MAGIC_SPIN` | Empty | ASH @60% |
 | Ticks | 1 px VOID at each `K.MAGIC_SPIN` boundary |
+| Frame / track | Shared recipe, with the subordinate 1 px outer bezel |
 
 ### 5.1d Heat — dungeon only, and deliberately not ticked
 
@@ -1091,6 +1103,7 @@ time in the middle of a fight.
 | Bar | `0.44 ×` health width (151 px) × 6 px |
 | Fill | dim cold, MOTH at Warm, GOLD from Hot, breathing toward BONE at Blazing; RUST for 350 ms on a break |
 | Multiplier | 10 px, bar right + 22 px, centred on the row, in the fill's colour |
+| Frame / track | Shared recipe, with the subordinate 1 px outer bezel; no ticks |
 
 ### 5.1e The draught row — slots, not a meter
 
@@ -1567,6 +1580,10 @@ The 15 / 8 then 6 / 6 / 6 break is decision 24 and it is the whole reason the
 pole reads as two instruments: Tier 1 is read mid-fight without moving your eyes,
 Tier 2 is glanced between beats, and before this the only thing separating them
 was hue — the one channel a colour-blind player does not have.
+
+Those dimensions remain the authored bar rectangles. The dark meter recipe
+publishes and paints 2 px beyond health and 1 px beyond stamina, magic and heat;
+the existing gaps accommodate those outer bounds without changing a row top.
 
 **`Hud._pole_top(s, row)` is the sole expression for this column.** Do not write
 the stack sum anywhere else; a second one put the draught row through the magic
