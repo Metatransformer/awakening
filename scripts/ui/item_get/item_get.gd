@@ -155,11 +155,20 @@ func _build_camera() -> void:
 	# begins; putting a cinematic camera there means putting it through the reward
 	# geometry. The gameplay camera has already solved that occlusion problem.
 	var camera_side := Vector3.ZERO
+	var camera_distance := CAMERA_DISTANCE
 	if _previous_camera != null and is_instance_valid(_previous_camera):
 		camera_side = _previous_camera.global_position - _hero.global_position
 	camera_side.y = 0.0
 	if camera_side.length_squared() <= 0.0001:
 		camera_side = _hero.global_basis.z
+	else:
+		# Keep the live camera's collision-safe boom when a wall has already
+		# shortened it. Taking only its SIDE and then restoring the full 4.2 m
+		# put the ceremony camera through the entrance-room wall: the overlay
+		# rendered over a completely black world while every node-level framing
+		# assertion still passed. CAMERA_DISTANCE is therefore a ceiling, not a
+		# command to throw away the gameplay camera's solved position.
+		camera_distance = minf(CAMERA_DISTANCE, camera_side.length())
 	camera_side = camera_side.normalized()
 
 	_camera = Camera3D.new()
@@ -169,7 +178,7 @@ func _build_camera() -> void:
 	_camera.far = 80.0
 	add_child(_camera)
 	_camera.top_level = true
-	_camera.global_position = _hero.global_position + camera_side * CAMERA_DISTANCE \
+	_camera.global_position = _hero.global_position + camera_side * camera_distance \
 		+ Vector3.UP * CAMERA_HEIGHT
 	_camera.look_at(_hero.global_position + Vector3.UP * CAMERA_TARGET_HEIGHT, Vector3.UP)
 
