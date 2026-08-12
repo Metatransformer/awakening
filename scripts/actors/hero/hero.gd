@@ -1941,10 +1941,13 @@ func _tick_ground(wish: Vector3, mag: float, delta: float) -> void:
 ##     backing off — and firing a 180 clip there would spin the hero away from
 ##     the thing he is supposed to be watching.
 ##   * Speed is NOT reduced for backing up or side-stepping. Elden Ring does
-##     slow a backward walk, and doing that here needs strafe clips the library
-##     ships but nobody has identified (tools/directors/strafe_lookdev.gd), so
-##     it is deliberately left alone rather than tuned against the wrong
-##     animation.
+##     slow a backward walk. This used to say the reason was that nobody had
+##     identified the pack's strafe clips; they are identified now (see
+##     `clip_guard_fwd_walk`, and `GuardLoco` blends all eight), so the only
+##     thing left holding it is that nobody has decided the numbers. It is a
+##     TUNING question now and not a missing-animation one — and it is a
+##     gameplay change, so it belongs to a design test under `docs/design-tests/`
+##     rather than to whoever next touches this function.
 func _tick_locked(wish: Vector3, target_speed: float, moving: bool,
 		target: Node3D, delta: float) -> void:
 	# Faster than the free turn rate: the lock is a promise that he keeps facing
