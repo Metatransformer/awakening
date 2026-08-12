@@ -56,7 +56,6 @@ extends Control
 
 signal back_requested
 
-const HINT := "Drag / R-Stick Pan    Wheel / L-Stick Zoom    M / Tab Close    Esc / B Back"
 ## The inset between the drawing surface and the plan inside it, in px. Named
 ## because the clamp has to measure the same box the draw call is given, and two
 ## copies of `-18.0` is two answers to how big the map is.
@@ -124,10 +123,10 @@ func tab_host() -> HBoxContainer:
 
 ## The top row of focusables — see `MenuPageTabs` and `PauseMenu._tab_row`.
 ##
-## Back is the ONLY focusable on this screen, so it is both the landing target
-## and the way out upwards. That is why the strip had to become focusable at all
-## (card #120): with the shoulder ring gone and nothing here but Back, a pad
-## player who paged onto the map could never page off it. `MenuUtil.chain` wires
+## Back is the ONLY focusable in this screen's body, so it is both the landing
+## target and the way out upwards. The strip remains focusable so paging is
+## discoverable without a persistent control legend; hidden shoulders / Q / R
+## are an additional route. `MenuUtil.chain` wires
 ## Back's ↑ back to itself; `link_body` overwrites that, and the order matters —
 ## `PauseMenu._enter_page` re-links after every refresh.
 func tab_row() -> Array:
@@ -254,11 +253,6 @@ func _build() -> void:
 	col.add_child(footer)
 	var frow := HBoxContainer.new()
 	footer.add_child(frow)
-	var hint := Label.new()
-	UITheme.apply_text_style(hint, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
-	hint.text = HINT
-	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	frow.add_child(hint)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	frow.add_child(spacer)

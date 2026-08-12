@@ -396,7 +396,7 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `weapon_prev` / `weapon_next` | 1 / 3 | dpad ← / → | step the right hand through the weapons you own — §4.1 |
 | `item_next` | 4 | dpad ↓ | step the selected item — §4.1 |
 | `loadout_swap` | 2 | dpad ↑ | primary ↔ alternate — §4.1 |
-| `kit_wheel` | **Ctrl** | **LB** (pad9) | **hold** to open the kit wheel, aim with the right stick or the mouse, **release to commit** — §4.2. The one hold in the game whose release is the press. It did double duty as a menu pager until card #120 deleted that ring; LB is a world-only button now |
+| `kit_wheel` | **Ctrl** | **LB** (pad9) | **hold** to open the kit wheel, aim with the right stick or the mouse, **release to commit** — §4.2. The one hold in the game whose release is the press. While the world is paused, LB instead pages the four inventory tabs |
 | `first_person` | **V** | **R3** (pad8) | look out of his own eyes — he roots. No Elden Ring equivalent; V because `use_item` took R |
 | — | **X** | — | **deliberately unbound**, held for a crouch. Elden Ring's crouch key, and the one row of its layout this game has no ability for. CONTRACT §4: it stays unbound until the verb exists |
 | `pause` / `inventory` / `map` | Esc / **I** / **M**, Tab | Start (pad6) / **Select** (pad4) / L3 (pad7) | menu / pouch / map |
@@ -451,33 +451,37 @@ is the light chain, RT is the heavy; A talks, B dodges, X drinks what you have
 selected, Y jumps. One verb per button and no arbitration anywhere on the pad —
 nothing here needs a rule to say which of two things a press meant.
 
-**LB is bound to nothing, on purpose.** It is where spells go if they are ever
-built: casting is a left-hand verb in every game this one borrows from, and an
-unbound button is cheaper than a bound one that then has to move. Do not fill
-it because it looks empty.
+**LB is bound to no additional world action, on purpose.** It is where spells
+go if they are ever built: casting is a left-hand verb in every game this one
+borrows from, and an unbound world button is cheaper than a bound one that then
+has to move. Its pause-menu use does not compete with world input because the
+tree is paused whenever the menu reads it.
 
-**Nothing pages the menu's tabs any more, and that is the point.**
-`ui_tab_prev` / `ui_tab_next` — LB/RB and Q/R, registered at runtime and live
-only while the menu was open — were **deleted** by card #120 at the owner's
-request. There is no menu-only binding left anywhere in this game.
+**The menu pages through hidden bindings, never a permanent control legend.**
+`ui_tab_prev` / `ui_tab_next` are LB/RB and Q/R, registered at runtime and acted
+on only while one of the four page screens is open. Card #120 mistakenly deleted
+those bindings while removing their on-screen caps; issue #152 restored the
+input without restoring the artwork. Root, Options and Saves leave them inert.
 
-Paging is a place on the screen instead of a button off it. The tab strip
+Paging is also a place on the screen. The tab strip
 (`MenuPageTabs`) takes focus: **↑** out of the top row of any page lands on the
 lit tab, **← / →** walk EQUIP → INVENTORY → MAP → GARRISON and wrap, arriving
 on a tab IS the page change, and **↓** drops back into the page body. The same four arrows
 that move focus inside a page move it between pages when the cursor is on the
 strip, so a pad needs no button it did not already have, and a player who has
-never read this table can find it by pressing up.
+never read this table can find it by pressing up. Every route uses the same
+short, pause-safe page-turn transition.
 
-That the strip is now the ONLY route is what makes ↑ load-bearing on the MAP,
-whose one other focusable control is its Back button:
+The strip still has to be a complete route on its own, especially on the MAP,
+whose one other body control is its Back button:
 `tools/directors/map_screen.gd`, `tools/directors/menu_pages.gd`, and
 `tools/directors/garrison_life.gd` walk the ring, on the keyboard and on a real
 D-pad where applicable, for that reason.
 
-`ui_accept` and `ui_cancel` still get their pad buttons **registered at runtime**
-by `PauseMenu._ensure_pad_ui_actions()`, appearing in neither `project.godot` nor
-any `.tscn`. That is deliberate on two counts: `--import` re-serialises
+`ui_accept`, `ui_cancel`, `ui_tab_prev` and `ui_tab_next` get their menu inputs
+**registered at runtime** by `PauseMenu._ensure_pad_ui_actions()`, appearing in
+neither `project.godot` nor any `.tscn`. That is deliberate on two counts:
+`--import` re-serialises
 `project.godot` and has eaten additions before
 (§10), and `Settings` skips every `ui_`-prefixed action, so these cannot be
 rebound onto a world verb and cannot be wiped by Reset to Defaults.
