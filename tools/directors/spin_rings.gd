@@ -1,6 +1,7 @@
 extends RefCounted
-## Lookdev for the charged spin's ring — is it flat, and does it read as a disc
-## lying on the floor rather than a curtain standing on it?
+## Lookdev for the charged spin's water sheet, rounded contact head, and aligned
+## directional sparks. It preserves the top/edge and full-turn coverage while
+## proving the moving seam under normal frame deltas.
 ##
 ## **Why this exists when spin_attack.gd already photographs the spin.** That
 ## director shoots a CONTACT SHEET: six captures a few frames apart, all inside
@@ -9,12 +10,12 @@ extends RefCounted
 ## more — and a GPU particle emitter handed a fat delta emits that whole slice of
 ## its rate at ONE emitter position. The ribbon comes out as five clumps of blue
 ## with gaps between them, which is an artefact of the camera, not of the effect.
-## Every judgement about ring density made off those frames is wrong.
+## Every judgement about a moving seam made off those frames is wrong.
 ##
 ## So: ONE capture per spin, and the shot is the last thing in each cycle. The
-## frames leading up to it all ran at a normal delta, so the arc in the picture
-## is the arc the player sees. Eight spins, each photographed a little later than
-## the last, is the sweep.
+## frames leading up to it all ran at a normal delta, so the arc, contact head,
+## and sparks in the picture are what the player sees. Eight spins, each
+## photographed a little later than the last, is the sweep.
 ##
 ##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
@@ -31,9 +32,10 @@ extends RefCounted
 const HOLD := "heavy"
 
 ## When each shot is taken, seconds after the button comes up. SWEEP_TIME is
-## 0.48 and the motes live 0.55 past that, so 0.75 is the arc at its fullest and
-## the last two are the burn-down.
+## 0.48 and sparks live 0.42 s, so the first five show the moving head and the
+## last three show the tail burning down.
 const SHOTS: Array[float] = [0.06, 0.14, 0.24, 0.34, 0.46, 0.60, 0.75, 1.00]
+const CONTACT_EPS := 0.0001
 
 ## Long enough for the swing, the mote lifetimes and the glow fade to all be over
 ## before the next hold starts, so no shot has the previous spin in it.
@@ -46,14 +48,31 @@ func run(rig) -> void:
 
 	var hero: Node3D = scene.get_node_or_null(^"Hero") as Node3D
 	if hero == null:
-		print("RINGS FAIL no Hero in the scene")
+		rig.fail("RINGS no Hero in the scene")
 		return
 	var combat: Node = hero.get(&"combat")
 	if combat == null:
-		print("RINGS FAIL no HeroCombat on the Hero")
+		rig.fail("RINGS no HeroCombat on the Hero")
 		return
 
 	await rig.wait_frames(24)
+
+	# Stable construction names are part of the proof: the shot must fail rather
+	# than silently photographing an old ring with no requested seam.
+	var contact_head := combat.get_node_or_null(
+		^"SpinVfx/SpinSweep/ContactHead") as MeshInstance3D
+	if contact_head == null:
+		rig.fail("RINGS missing SpinVfx/SpinSweep/ContactHead")
+		return
+	var sparks := combat.get_node_or_null(
+		^"SpinVfx/SpinSweep/SpinSparks") as GPUParticles3D
+	if sparks == null:
+		rig.fail("RINGS missing SpinVfx/SpinSweep/SpinSparks")
+		return
+	var fails := 0
+	if contact_head.position.distance_to(sparks.position) > CONTACT_EPS:
+		rig.fail("RINGS contact head and sparks do not share one local position")
+		fails += 1
 
 	var centre := Vector3(0.0, 0.05, 0.0)
 	hero.global_position = centre
@@ -71,24 +90,32 @@ func run(rig) -> void:
 
 	var cam := hero.get_viewport().get_camera_3d()
 	if cam == null:
-		print("RINGS FAIL no camera")
+		rig.fail("RINGS no camera")
 		return
 	# GameCamera re-derives its transform every physics frame, so it has to be
 	# switched off before it is placed or it walks straight back to the shoulder.
 	cam.set_physics_process(false)
 
 	var charge_time: float = float(combat.get(&"charge_time"))
-	var fails := 0
+	var seam_checked := false
 
 	# --- 1. from above: is it a CIRCLE, and how much of one is lit at once? -----
 	for i in SHOTS.size():
 		_look(cam, centre, Vector3(0.0, 4.4, 3.4))
 		await rig.wait_seconds(SETTLE)
+		_refill()
 		await rig.hold_seconds([HOLD], charge_time + 0.35)
-		if i == 0 and not bool(combat.get(&"charged")):
-			print("RINGS FAIL the hold never armed — every frame below is of a light swing")
-			fails += 1
 		await rig.wait_seconds(SHOTS[i])
+		# 140 ms leaves enough normal-delta frames for sparse sparks to separate
+		# while the first-turn contact head is still plainly visible.
+		if i == 1:
+			seam_checked = true
+			if contact_head.position.distance_to(sparks.position) > CONTACT_EPS:
+				rig.fail("RINGS release moved head and spark emitter off their shared point")
+				fails += 1
+			if not contact_head.visible or not sparks.emitting:
+				rig.fail("RINGS contact head and spark emitter were not active together")
+				fails += 1
 		await rig.capture(out.path_join("r_top_%d_%03dms.png" % [i, int(SHOTS[i] * 1000.0)]))
 
 	# --- 2. from the floor: is it FLAT? ----------------------------------------
@@ -100,9 +127,13 @@ func run(rig) -> void:
 		var t: float = SHOTS[i + 3]
 		_look(cam, centre + Vector3(0.0, 0.7, 0.0), Vector3(0.0, 0.35, 4.2))
 		await rig.wait_seconds(SETTLE)
+		_refill()
 		await rig.hold_seconds([HOLD], charge_time + 0.35)
 		await rig.wait_seconds(t)
 		await rig.capture(out.path_join("r_edge_%d_%03dms.png" % [i, int(t * 1000.0)]))
+	if not seam_checked:
+		rig.fail("RINGS never checked the moving contact seam")
+		fails += 1
 
 	print("RINGS %s (fails=%d)" % ["OK" if fails == 0 else "FAIL", fails])
 
@@ -113,3 +144,11 @@ func run(rig) -> void:
 func _look(cam: Camera3D, centre: Vector3, offset: Vector3) -> void:
 	cam.global_position = centre + offset
 	cam.look_at(centre, Vector3.UP)
+
+
+## Every lookdev beat spends a real spin. Refill the finite trip budget so later
+## labelled frames cannot silently degrade into tap-heavy swings.
+func _refill() -> void:
+	Game.fill_magic()
+	Game.stamina = Game.max_stamina
+	Bus.stamina_changed.emit(Game.stamina, Game.max_stamina)

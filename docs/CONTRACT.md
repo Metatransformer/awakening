@@ -697,33 +697,34 @@ wind-up instead of returning to idle and striking a pose afterwards.
 is applied when a node starts and a node behind a zero time scale never starts.
 
 The tell is `SpinVfx` (`scripts/combat/spin_vfx.gd`), driven every frame off the
-hold clock: motes drawn **into** the blade, the blade taking on a fire emission
-through `HitFlash`, an `OmniLight3D` riding the steel, and on release a ring of
-fire swept **clockwise** around him at 1.7 m — Ocarina's spin, which is what the
-effect is copying.
+hold clock: motes drawn **into** the blade, the blade taking on a cobalt emission
+through `HitFlash`, an `OmniLight3D` riding the steel, and on release a layered
+blue-white water-energy sheet swept **clockwise** around him at 1.7 m.
 
 That ring is a **mesh**, not particles: an annulus built once (1.18 m to 2.20 m,
 so its outer edge lands on `spin_reach`) with a shader that lights only the part
 of it the blade has already passed. `head` is the sweep in turns, `tail` is how
-much of the circle burns at once. It was a particle trail before — one emitter on
-a turning pivot leaving world-space motes behind it — and that cannot be made
-continuous, because an emitter emits once per *frame*: at 30 fps the pivot steps
-0.74 m round a 10.7 m circumference and the ring photographs as a string of
-beads. Particles are still there, but only as the **embers** thrown off the head,
-which are meant to be discrete.
+much of the circle remains visible at once. Alpha-MIX transparency, subtle
+screen-texture refraction, and smooth HDR current lines give its four clean bands
+a thicker watery body than an ordinary slash trail. It was a particle trail
+before — one emitter on a turning pivot leaving world-space motes behind it —
+and that cannot be made continuous, because an emitter emits once per *frame*:
+at 30 fps the pivot steps 0.74 m round a 10.7 m circumference and the ring
+photographs as a string of beads.
 
-Its colours are chosen for how they **stack**: the particles are additive, so a
-warm mote clips the moment three of them overlap on an already-lit floor, and the
-numbers in that file keep blue far below red so the clip lands on amber instead
-of on white. They are not to be brightened without re-rendering
-(`tools/directors/spin_rings.gd`). A hold with no tell is a hold nobody can
-learn.
+The moving front converges into `ContactHead`, a compact blue-white HDR point at
+the crest of the broader sheet. `SpinSparks` occupies the exact same local
+contact point and leaves sparse blue-white velocity-aligned shards behind in
+world space. `_set_head` is the one release clock for the shader parameter,
+clockwise pivot rotation, head visibility, and spark emission; the head and
+emitter stop after the first turn while the mesh tail continues. Proved by
+`tools/directors/spin_rings.gd`. A hold with no tell is a hold nobody can learn.
 
-**The effect outlives the lockout on purpose.** `spin_swing_time` is 0.68 s, the
+**The effect outlives the lockout on purpose.** `spin_swing_time` is 0.523 s, the
 head closes the circle at 0.48 s and then keeps going for another tail's worth,
-eating the fire out from under itself until nothing is left at ~0.78 s — and the
-embers fall for longer still. The hero has his feet back while the circle behind
-him is still burning. The magic lags the sword.
+eating the blue-white sheet out from under itself — and released sparks lag
+behind the moving contact point. The hero has his feet back while the circle
+behind him is still fading. The magic lags the sword.
 
 Sound: `sword_charging` rises from the **press**, and both the release swipe and
 the hero's yell fire on the **release**. The yell was on the arm-up at first,
@@ -1148,24 +1149,47 @@ and commitment. Everything the SCREEN does scales off it — the hit-stop
 how long the HUD's damage arc draws. Two players eating the same boss slam always
 see the same camera.
 
-`Hit.roll_tier()` is the DISCRETE half: LIGHT, HEAVY or KNOCKDOWN, drawn from two
-logistic curves over `mass * commitment²` (`K.KNOCKDOWN_*` / `K.STAGGER_*`). It
-decides what his BODY does, and it is a roll — the same slam may stagger you or
-floor you. **Roll it exactly once per landed blow.** Ask twice and the animation
-plays one reaction while the controller times another.
+`Hit.roll_tier()` is the DISCRETE half: LIGHT, HEAVY or KNOCKDOWN. It decides
+what his BODY does, and it is a roll — the same slam may stagger you or floor
+you. **Roll it exactly once per landed blow.** Ask twice and the animation plays
+one reaction while the controller times another.
 
-The curves are solved against two authored rows rather than tuned: a goblin is
-90/9/1 and an orc is 50/30/20. `tools/directors/hurt_table.gd` prints every blow
-in the game through them and FAILS if either anchor moves.
+**Knockdown is the product of two gates and neither alone opens it**
+(`K.KNOCKDOWN_*`):
+
+- **heft**, how far the attacker outweighs the hero. Zero at
+  `K.KNOCKDOWN_MASS_FLOOR`, which is the hero's own mass — *a body no heavier
+  than you cannot put you on the ground*, so goblin, kobold and skeleton are
+  exactly 0 and that is a design statement rather than a small number. Full at
+  twice the hero, where the floor-1 boss sits.
+- **commitment**, whether the move was a committed telegraphed heavy at all.
+  Squared, so an ordinary swing spends almost none of the heft its body has.
+  A 2.6 m troll *should* floor you — but only on the swing it wound up for.
+
+The not-LIGHT odds (stagger *or* knockdown) are a separate logistic on
+`mass * (0.6 + 0.4 × commitment)`, mass-dominant, because "how hard was I rocked"
+is mostly about what hit you. That is the channel that makes a big body's
+ordinary swing read as a shove rather than a tap.
+
+Fitted to three authored rows rather than tuned — goblin 90/10/0, orc 64/33/3,
+troll 30/39/31. `tools/directors/hurt_table.gd` prints every blow in the game
+through them, FAILS if an anchor moves, and separately FAILS if anything the
+hero's size or smaller ever floors him, if an ordinary roster body floors him
+more often than not, or if a boss's heaviest beat stops usually flooring him.
 `tools/directors/hero_struck.gd` photographs the receiving end and calibrates the
 lurch against four known-answer bearings.
 
 **Numbers are authored per MOVE, not per monster.** A `DamageArea` exports `mass`
-and `commitment`; a roster monster gets `commitment = 1.0` because its one attack
-is its heaviest, and a boss beat gets its damage-and-knockback severity relative
-to that boss's own top beat (`Boss._commitment`). Where the curve is wrong for a
-particular attacker, `odds_knockdown` and `odds_stagger` override it outright —
-that pair is the schema's escape hatch and it is also how a director pins a tier.
+and `commitment`. Commitment runs 0.6 (an ordinary swing) to 1.0 (a fully
+telegraphed heavy) and two things derive it, meaning the same thing: a boss beat
+takes its damage-and-knockback severity relative to that boss's own top beat
+(`Boss._commitment`), and a roster monster — which has exactly one attack and so
+nothing to be a fraction of — takes it off **the length of its wind-up**
+(`Hit.commitment_of_tell`). A move that announces itself is a move that is
+committing, which is the same claim the roster's own rows already make. Where the
+curve is wrong for a particular attacker, `odds_knockdown` and `odds_stagger`
+override it outright — that pair is the schema's escape hatch and it is also how
+a director pins a tier.
 
 LIGHT is cosmetic: a flinch clip over whatever he was doing, and he keeps
 control. A floor of goblins that each root you for a quarter-second is a floor
@@ -2123,15 +2147,19 @@ past before you could see it was an overhead. `chain_time_scale` (0.92, 1.65)
 multiplies it, so steps 2 and 3 move with it, and the damage windows are
 fractions of it, so the blade's live slice sits in the same place in the swing.
 
-**The three ordinary lights alone own a blade trail.** `HeroCombat` creates and
-publishes `SwordSlashTrail` (`scripts/combat/sword_slash_trail.gd`), binds it to
-the mounted sword holder, and starts a stroke only from `_light_swing` after
-`Hero.request_attack` accepts `LIGHT1`, `LIGHT2` or `LIGHT3`. The ribbon samples
-the real weapon convention — an inner point at 0.12 m and an outer point at
-0.88 m along the holder's local `+Y` — into world space, so the down, up and
-overhead clips leave their own swept surfaces. A tapped heavy happens to reuse
-the `LIGHT3` clip but does **not** enter this path; held charge/wind-up, spin,
-lunge, dash, slam, parry and flurry produce no ordinary trail.
+**The three ordinary lights, tap-heavy, and parry counter own a blade trail.**
+`HeroCombat` creates and publishes `SwordSlashTrail`
+(`scripts/combat/sword_slash_trail.gd`), binds it to the mounted sword holder,
+and starts a stroke only from the accepted move path: `_light_swing` after
+`Hero.request_attack` accepts `LIGHT1`, `LIGHT2` or `LIGHT3`, `_heavy_swing`
+after the tap-heavy is accepted, and `_dash_swing` after the parry riposte is
+accepted. Each passes its own damage window. The ribbon samples the real weapon
+convention — an inner point at 0.12 m and an outer point at 0.88 m along the
+holder's local `+Y` — into world space, so the down, up, overhead and thrust
+clips leave their own swept surfaces. The tap-heavy happens to reuse the
+`LIGHT3` clip, while the counter uses the riposte dash; both enter only through
+their named accepted paths. Held charge/wind-up, spin, lunge, slam, parry and
+flurry produce no ordinary trail.
 
 Sampling is confined to the light's existing `damage_window` (0.22–0.62 of the
 move). Redundant points under 0.025 m are discarded, expired points are pruned,
@@ -2149,10 +2177,10 @@ strongly. Three parallel highlight currents break up the interior; travelling
 brightness runs along them without displacing their clean arc silhouettes. A
 sub-pixel screen-texture offset refracts the room through the darker gaps,
 producing a layered water-sheet read without changing the global environment.
-The
-finisher uses the same timing with only a modest opacity lift, keeping the whole
-ordinary chain visibly below `SpinVfx`'s charged spectacle. Proved at gameplay
-camera distance, including the charged-spin null control, by
+The finisher uses the same timing with only a modest opacity lift, keeping the
+whole ordinary and earned sword attacks visibly below `SpinVfx`'s charged spectacle.
+Proved at gameplay camera distance for all three lights, the tap-heavy, the
+parry counter, and the charged-spin null control by
 `tools/directors/sword_slash_trail.gd`.
 
 **The chain is buffered.** A press in the back half of a swing
