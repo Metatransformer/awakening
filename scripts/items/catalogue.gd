@@ -82,6 +82,27 @@ static func remaining(_id: StringName) -> int:
 	return -1
 
 
+## The counter currency. Gold is the default so every existing catalogue and
+## Trade's two-sided exchange keep the same purse, glyph and formatting. A
+## catalogue that spends something else overrides these four hooks; the screen
+## reaches them through its live script handle so static dispatch still lands on
+## the subclass.
+static func currency_label() -> String:
+	return "Purse"
+
+
+static func currency_balance() -> int:
+	return Game.gold
+
+
+static func format_currency(amount: int) -> String:
+	return "%d ◇" % amount
+
+
+static func currency_icon() -> StringName:
+	return &"coin"
+
+
 ## How many of one recipe part the player has available for this line.
 ## Persistent workbench components are the default. A catalogue whose recipe
 ## spends another stock overrides this and `TradeScreen` reaches it through the

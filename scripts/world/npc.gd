@@ -135,6 +135,8 @@ static var COUNTERS := {
 			{"title": "GARRISON IMPROVEMENTS", "label": "QoL Upgrades", "icon": "upgrade",
 				"mode": TradeScreen.Mode.PROGRESSION, "db": ElderUpgradeDb,
 				"ids": ElderUpgradeDb.UPGRADE_IDS},
+			{"title": "THE FAR LANTERN", "label": "Field Notes", "icon": "read",
+				"mode": TradeScreen.Mode.PROGRESSION, "db": FieldNotesDb},
 		],
 	},
 	# The fifth counter before the raid-loop prototype authorised the Builder

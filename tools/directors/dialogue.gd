@@ -270,10 +270,22 @@ func _tree(rig) -> void:
 			and labels[labels.size() - 1] == "Leave")
 	await rig.capture(out.path_join("d_12_topics.png"))
 
-	# Walk to the first topic -- index 1, straight under Artifacts -- and ask it.
-	await rig.tap(["ui_down"])
-	await rig.wait_frames(2)
-	var asked := labels[1] if labels.size() > 1 else ""
+	# Walk to the first dialogue topic after however many services Aldric keeps.
+	# Pinning this to index 1 made adding a second service turn the proof's
+	# question into a shop press, which closed the box and poisoned every later
+	# check with Prompt.blocked still held by that screen.
+	var live_options: Array = garrison.keeper._options(
+		&"elder", garrison.keeper._row())
+	var topic_index: int = -1
+	for i: int in live_options.size():
+		if String((live_options[i] as Dictionary).get("meta", "")) == "Dialogue":
+			topic_index = i
+			break
+	for _i: int in topic_index:
+		await rig.tap(["ui_down"])
+		await rig.wait_frames(2)
+	var asked := labels[topic_index] if topic_index >= 0 \
+		and topic_index < labels.size() else ""
 	await rig.tap(["interact"])
 	await rig.wait_frames(4)
 	box = rig.dialogue()

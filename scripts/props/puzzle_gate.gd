@@ -352,6 +352,10 @@ func _on_atom_changed(atom: PuzzleAtom) -> void:
 	# waiting to be spent at has still been solved.
 	if not _announced:
 		_announced = true
+		var observation_id: StringName = \
+			FieldNotesDb.observation_for_puzzle(puzzle_id)
+		if observation_id != &"":
+			Bus.field_observation_recorded.emit(observation_id)
 		Bus.puzzle_solved.emit(puzzle_id)
 	if auto_open:
 		# The reward for the last switch is the door moving, now, wherever the

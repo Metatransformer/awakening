@@ -85,6 +85,10 @@ var last_attacker: StringName = &""
 ## Keys: extracted, contents, banked, kept, kept_value, value, premium, fee,
 ## kills, level, depth, killer. Empty before the first run ends.
 var summary: Dictionary = {}
+## Valid observations made during this descent but not permanent until the run
+## settles. A set makes repeated producers idempotent before `Game` performs the
+## second, permanent idempotency check at extraction or death.
+var pending_field_observations: Dictionary[StringName, bool] = {}
 ## Seeded per run so a dungeon can be replayed exactly.
 var rng := RandomNumberGenerator.new()
 var seed_used: int = 0
@@ -95,7 +99,7 @@ var visited_rooms: Dictionary[StringName, bool] = {}
 ## Version of the nested run payload inside a `Saves` slot. Kept separate from
 ## the outer save version so a future dungeon-state migration has an explicit
 ## seam instead of having to infer its shape from whichever app version wrote it.
-const SNAPSHOT_VERSION := 1
+const SNAPSHOT_VERSION: int = 2
 
 ## The seed the NEXT run will use, if non-zero. Consumed and cleared by `enter()`.
 ##
@@ -139,6 +143,8 @@ func _ready() -> void:
 	# Echo is a property of the RUN, and a floor generator that knew which boons
 	# the player was carrying would be the first of a dozen such places.
 	Bus.room_entered.connect(_on_room_entered)
+	if not Bus.field_observation_recorded.is_connected(_on_field_observation_recorded):
+		Bus.field_observation_recorded.connect(_on_field_observation_recorded)
 
 
 func reset() -> void:
@@ -153,6 +159,7 @@ func reset() -> void:
 	kills = 0
 	last_attacker = &""
 	summary = {}
+	pending_field_observations.clear()
 	seed_used = 0
 	seed_next = 0
 	rng.seed = 0
@@ -161,6 +168,13 @@ func reset() -> void:
 func _on_enemy_died(_enemy: Node3D, _position: Vector3) -> void:
 	if in_dungeon:
 		kills += 1
+
+
+func _on_field_observation_recorded(observation_id: StringName) -> void:
+	if not in_dungeon or not FieldNotesDb.is_observation(observation_id) \
+			or Game.has_field_observation(observation_id):
+		return
+	pending_field_observations[observation_id] = true
 
 
 # --- Entering and leaving ---------------------------------------------------
@@ -180,7 +194,11 @@ func enter(run_seed: int = 0) -> void:
 	kills = 0
 	last_attacker = &""
 	summary = {}
+	pending_field_observations.clear()
 	in_dungeon = true
+	# Synchronous through the bus: the first descent fact is pending before any
+	# room can be built, saved, or settled.
+	Bus.field_observation_recorded.emit(FieldNotesDb.FIRST_DESCENT_DEBRIEF_ID)
 	# Fresh puzzles. Atom flags live in `Game.flags` alongside the door flags, and
 	# those are permanent on purpose -- a shortcut you opened stays open across
 	# saves. A PLATE must not: `docs/PUZZLES.md` §5.2 is that you solve the gate
@@ -268,6 +286,7 @@ func snapshot() -> Dictionary:
 		"magic": Game.magic,
 		"stamina": Game.stamina,
 		"visited_rooms": visited_rooms.keys(),
+		"pending_field_observations": pending_field_observations.keys(),
 		"rng_state": rng.state,
 	}
 
@@ -277,7 +296,9 @@ func snapshot() -> Dictionary:
 ## Empty input means there is no resumable run and deliberately clears any live
 ## one the caller may have been standing in.
 func restore(saved: Dictionary) -> bool:
-	if saved.is_empty() or int(saved.get("version", 0)) != SNAPSHOT_VERSION:
+	var snapshot_version: int = int(saved.get("version", 0))
+	if saved.is_empty() or (snapshot_version != 1 \
+			and snapshot_version != SNAPSHOT_VERSION):
 		reset()
 		return false
 
@@ -300,6 +321,17 @@ func restore(saved: Dictionary) -> bool:
 		0.0, Game.max_stamina)
 	last_attacker = &""
 	summary = {}
+	pending_field_observations.clear()
+	if snapshot_version >= 2 and in_dungeon:
+		var raw_pending: Variant = saved.get("pending_field_observations", [])
+		if raw_pending is Array:
+			for raw_id: Variant in raw_pending:
+				if raw_id is not String and raw_id is not StringName:
+					continue
+				var observation_id: StringName = StringName(raw_id)
+				if FieldNotesDb.is_observation(observation_id) \
+						and not Game.has_field_observation(observation_id):
+					pending_field_observations[observation_id] = true
 	seed_next = 0
 	visited_rooms.clear()
 	var raw_visited: Variant = saved.get("visited_rooms", [])
@@ -362,7 +394,6 @@ func extract() -> bool:
 
 	Game.clear_boss_key()
 	Game.spend_gold(fee)
-	in_dungeon = false
 	# **The refill the whole bar is built around**: you leave, and the blue comes
 	# back. It lands here rather than only in the next `enter()` so a player
 	# standing in the garrison sees a full meter -- a bar that stayed empty
@@ -396,6 +427,10 @@ func extract() -> bool:
 	# the right SENTENCE -- that column means "this line is not money", and a relic
 	# priced in gold on the receipt is the exact lie GDD §6.3 forbids.
 	banked.merge(recovered)
+	if recovered.has(RelicDb.TALLY_LEDGER_ID):
+		Bus.field_observation_recorded.emit(
+			FieldNotesDb.FAIR_WEIGHTS_LEDGER_HOME_ID)
+	in_dungeon = false
 	_end_summary(true, carried, carried_value, banked, fee)
 	# Same reason as in `die()`: the next run starts at the top, and until the
 	# number says so the HUD in the garrison is reporting a floor nobody is
@@ -591,6 +626,11 @@ func die() -> void:
 func _end_summary(extracted: bool, contents: Dictionary, value: int,
 		banked: Dictionary, fee: int, kept: Dictionary = {},
 		hot: int = -1) -> void:
+	var pending_ids: Array[StringName] = []
+	for id: StringName in pending_field_observations:
+		pending_ids.append(id)
+	var awarded_field_notes: Array[StringName] = \
+		Game.award_field_observations(pending_ids)
 	summary = {
 		"extracted": extracted,
 		"contents": contents.duplicate(),
@@ -616,7 +656,9 @@ func _end_summary(extracted: bool, contents: Dictionary, value: int,
 		"level": level,
 		"depth": depth,
 		"killer": last_attacker,
+		"field_notes": awarded_field_notes,
 	}
+	pending_field_observations.clear()
 
 
 ## What leaving costs right now.

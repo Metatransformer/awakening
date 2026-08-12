@@ -311,3 +311,8 @@ signal item_get_finished(item_id: StringName)
 ## A non-positional one-shot that must read at the same level everywhere. Sfx
 ## owns the pooled AudioStreamPlayer implementation; callers name only the cue.
 signal request_global_sfx(id: StringName)
+
+# --- Field Notes ------------------------------------------------------------
+signal field_observation_recorded(observation_id: StringName)
+signal field_notes_awarded(observation_ids: Array[StringName], balance: int)
+signal doctrine_purchased(doctrine_id: StringName, balance: int)

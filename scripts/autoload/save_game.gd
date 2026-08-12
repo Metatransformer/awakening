@@ -82,13 +82,15 @@ const SLOTS := 3
 ## and reconstruct honestly as an empty list, while current recipes stay derived.
 ## Bumped to 12 for garrison firewood and Warmth. It is additive: v11 has no
 ## payload and reconstructs as an empty, cold hearth.
-const VERSION := 12
+## Bumped to 13 for Field Notes. It is additive: v4-v12 have no awarded
+## observations or balance and reconstruct as zero/empty.
+const VERSION := 13
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12]
+const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 const AUTOSAVE_INTERVAL := 300.0
 
 signal saved(slot: int)
@@ -183,6 +185,8 @@ func save(slot: int) -> bool:
 		# on (`StoryDb`). It is not derivable from anything else in this block —
 		# `gold` is what survived the spending — so it has to be its own key.
 		"gold_earned": Game.gold_earned,
+		"field_notes": Game.field_notes,
+		"awarded_field_observations": Game.awarded_field_observations.keys(),
 		"deaths": Game.deaths,
 		"bag_slots": Game.bag_slots,
 		# Every permanent purchase, forge rungs included -- the ladders live in
@@ -357,6 +361,37 @@ func load_slot(slot: int) -> Dictionary:
 	Game.upgrades.clear()
 	for k in (d.get("upgrades", {}) as Dictionary):
 		Game.upgrades[StringName(k)] = int((d["upgrades"] as Dictionary)[k])
+	# Doctrines share the upgrade store, but unlike forge tracks each has exactly
+	# one rung. Clamp loaded state at the definition boundary so no save can turn
+	# an effect into a multiplier by carrying rank 2 or higher.
+	var owned_doctrines: int = 0
+	for doctrine_id: StringName in FieldNotesDb.DOCTRINE_IDS:
+		var rank: int = clampi(int(Game.upgrades.get(doctrine_id, 0)),
+			0, FieldNotesDb.DOCTRINE_RANKS)
+		if rank <= 0:
+			Game.upgrades.erase(doctrine_id)
+		else:
+			Game.upgrades[doctrine_id] = rank
+			owned_doctrines += rank
+	# JSON rebuild and catalogue validation are both required: a plain String key
+	# would never match a StringName observation, and an unknown id must not mint a
+	# note merely because it appeared in a hand-edited slot.
+	Game.awarded_field_observations.clear()
+	var raw_observations: Variant = d.get("awarded_field_observations", [])
+	if raw_observations is Array:
+		for raw_id: Variant in raw_observations:
+			if raw_id is not String and raw_id is not StringName:
+				continue
+			var observation_id: StringName = StringName(raw_id)
+			if FieldNotesDb.is_observation(observation_id):
+				Game.awarded_field_observations[observation_id] = true
+	var raw_field_notes: Variant = d.get("field_notes", 0)
+	var saved_field_notes: int = int(raw_field_notes) \
+		if raw_field_notes is int or raw_field_notes is float else 0
+	var maximum_balance: int = maxi(0,
+		Game.awarded_field_observations.size() \
+		- owned_doctrines * FieldNotesDb.DOCTRINE_COST)
+	Game.field_notes = clampi(saved_field_notes, 0, maximum_balance)
 	var raw_garrison: Variant = d.get("garrison", {})
 	Game.restore_garrison(raw_garrison as Dictionary if raw_garrison is Dictionary else {})
 	Clock.restore(d.get("clock", {}) as Dictionary)

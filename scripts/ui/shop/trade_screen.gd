@@ -197,7 +197,7 @@ func _ready() -> void:
 	_fit()
 	get_viewport().size_changed.connect(_fit)
 
-	_shown_gold = float(Game.gold)
+	_shown_gold = float(_db().currency_balance())
 	_refresh()
 	Bus.wishlist_changed.connect(_refresh)
 	Settings.changed.connect(func(section: StringName, key: StringName,
@@ -332,8 +332,9 @@ func _emblem() -> String:
 ## lines there are and how many of them you can actually pay for -- the one thing
 ## the old header made you walk eleven cells to learn.
 func _band_cells() -> Array:
-	var purse := {"key": &"purse", "label": "Purse",
-		"value": "%d ◇" % int(round(_shown_gold)), "icon": UiKit.action_icon("coin")}
+	var purse := {"key": &"purse", "label": _db().currency_label(),
+		"value": _db().format_currency(int(round(_shown_gold))),
+		"icon": UiKit.action_icon(String(_db().currency_icon()))}
 	if mode == Mode.TRADE:
 		var used := Run.slots_used()
 		return [
@@ -729,7 +730,8 @@ func _build_buy_rows() -> void:
 		var left: int = _db().remaining(line["id"])
 		var cost := int(line["cost"])
 		var pinned := Wishlist.is_line_pinned(_db(), line)
-		var sub := ("%d ◇" % cost) if cost > 0 else String(line.get("tally", ""))
+		var sub: String = _db().format_currency(cost) if cost > 0 \
+			else String(line.get("tally", ""))
 		if pinned:
 			sub = "★ " + sub
 		_rows.append({
@@ -842,15 +844,16 @@ func _describe() -> void:
 			var def := ItemDb.get_def(row["id"])
 			_tip.kicker.text = "%s  ·  %s" % [def.rarity_name().to_upper(),
 				def.bench_name() if def.is_component() else "INGREDIENT"]
-			_tip.price.text = "%d ◇  for ×%d" % [int(row["price"]), int(row["count"])]
+			_tip.price.text = "%s  for ×%d" % [
+				_db().format_currency(int(row["price"])), int(row["count"])]
 			_tip.blurb.text += "  " + Wishlist.usage_sentence(row["id"])
 		&"all":
 			_tip.kicker.text = "EVERY STACK"
-			_tip.price.text = "%d ◇" % int(row["price"])
+			_tip.price.text = _db().format_currency(int(row["price"]))
 		&"buy":
 			var left: int = int(row["count"])
 			_tip.kicker.text = "%d LEFT" % left if left >= 0 else ""
-			_tip.price.text = "%d ◇" % int(row["price"])
+			_tip.price.text = _db().format_currency(int(row["price"]))
 			# Off `ok` and out of the CATALOGUE's own mouth, for the reason
 			# `_show_refusal` gives: once a line can be refused for four
 			# different reasons, "Not enough gold" sends the player back down
@@ -867,7 +870,8 @@ func _describe() -> void:
 			# SUCCESS/DANGER off `ok`, which is the catalogue's own answer and
 			# accounts for MATERIALS as well as coin. Colouring it by comparing the
 			# price to the purse would call a recipe you cannot fill affordable.
-			UiKit.band_value(_band, &"cost", "%d ◇" % int(row["price"]),
+			UiKit.band_value(_band, &"cost",
+				_db().format_currency(int(row["price"])),
 				UITheme.SUCCESS if bool(row["ok"]) else UITheme.DANGER)
 
 
@@ -1222,9 +1226,10 @@ func _process(delta: float) -> void:
 	_tick_input(delta)
 	if _closing:
 		return
-	if not is_equal_approx(_shown_gold, float(Game.gold)):
-		var step: float = maxf(1.0, absf(Game.gold - _shown_gold)) * (delta / ROLL_TIME)
-		_shown_gold = move_toward(_shown_gold, float(Game.gold), step)
+	var balance: int = _db().currency_balance()
+	if not is_equal_approx(_shown_gold, float(balance)):
+		var step: float = maxf(1.0, absf(balance - _shown_gold)) * (delta / ROLL_TIME)
+		_shown_gold = move_toward(_shown_gold, float(balance), step)
 	if _refuse >= 0.0:
 		_refuse += delta
 		if _refuse > REFUSE_TIME:
@@ -1233,7 +1238,8 @@ func _process(delta: float) -> void:
 
 
 func _paint_chrome() -> void:
-	UiKit.band_value(_band, &"purse", "%d ◇" % int(round(_shown_gold)))
+	UiKit.band_value(_band, &"purse",
+		_db().format_currency(int(round(_shown_gold))))
 
 	var need := _hold_time(_cursor)
 	_hold_bar.visible = need > 0.0

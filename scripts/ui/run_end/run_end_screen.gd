@@ -78,6 +78,11 @@ var _rows: Array[Dictionary] = []
 ## an extraction brings the whole bag home and splitting it in two would be the
 ## screen inventing a distinction the ending did not make.
 var _kept: Array[Dictionary] = []
+## Only the newly awarded, known observations named on this receipt. This is
+## deliberately not derived from the database or the saved awarded set: either
+## would turn the debrief into a checklist of observations the player has not
+## seen.
+var _field_notes: Array[StringName] = []
 var _age: float = 0.0
 var _armed: bool = false
 var _leaving: bool = false
@@ -162,6 +167,22 @@ func _build_rows() -> void:
 	# simply absent from an extraction's summary, so an empty second column and a
 	# missing one are the same thing and neither needs a branch.
 	_kept = _stacks_of(result.get("kept", {}), banked)
+	_field_notes = _valid_field_notes()
+
+
+func _valid_field_notes() -> Array[StringName]:
+	var out: Array[StringName] = []
+	var raw: Variant = result.get("field_notes", [])
+	if not raw is Array:
+		return out
+	for value: Variant in raw:
+		if not value is StringName and not value is String:
+			continue
+		var id: StringName = StringName(value)
+		if Game.has_field_observation(id) and not out.has(id) \
+				and not FieldNotesDb.display_text(id).is_empty():
+			out.append(id)
+	return out
 
 
 func _stacks_of(contents: Dictionary, banked: Dictionary) -> Array[Dictionary]:
@@ -341,7 +362,61 @@ func _build_body(parent: Node, dead: bool, accent: Color) -> void:
 	pad.add_child(col)
 
 	_build_loot(col, dead, accent)
+	_build_field_notes(col)
 	_build_total(col, dead)
+
+
+## The observations awarded by this debrief, and no others. Two compact columns
+## keep the worst case (all five observations) to three short rows at 720p.
+func _build_field_notes(parent: Node) -> void:
+	if _field_notes.is_empty():
+		return
+
+	var card := PanelContainer.new()
+	card.add_theme_stylebox_override("panel",
+		UITheme.hud_box(UITheme.GRAY_1, 12, 6, 12, 6))
+	parent.add_child(card)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 4)
+	card.add_child(col)
+
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 12)
+	col.add_child(header)
+
+	var title_label := Label.new()
+	title_label.text = "FIELD NOTES"
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UITheme.apply_text_style(title_label, UITheme.TYPE_H3)
+	header.add_child(title_label)
+
+	var total := Label.new()
+	total.text = "New total: %s" % FieldNotesDb.format_currency(Game.field_notes)
+	UITheme.apply_text_style(total, UITheme.TYPE_PARAGRAPH_2, UITheme.SUCCESS)
+	header.add_child(total)
+
+	var awards := GridContainer.new()
+	awards.columns = 2
+	awards.add_theme_constant_override("h_separation", 18)
+	awards.add_theme_constant_override("v_separation", 2)
+	col.add_child(awards)
+	for id: StringName in _field_notes:
+		var line := HBoxContainer.new()
+		line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		line.add_theme_constant_override("separation", 8)
+		awards.add_child(line)
+
+		var observed := Label.new()
+		observed.text = FieldNotesDb.display_text(id)
+		observed.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		UITheme.apply_text_style(observed, UITheme.TYPE_CAPTION, UITheme.TEXT)
+		line.add_child(observed)
+
+		var award := Label.new()
+		award.text = "+1 Field Note"
+		UITheme.apply_text_style(award, UITheme.TYPE_CAPTION, UITheme.SUCCESS)
+		line.add_child(award)
 
 
 ## The bag, and the cross through it.

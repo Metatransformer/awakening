@@ -1248,6 +1248,9 @@ func _on_died() -> void:
 	# through: anything that has to be true the moment the boss dies -- the music
 	# changing, the arena unsealing, the door opening -- cannot be on the far side
 	# of that await.
+	var observation_id: StringName = FieldNotesDb.observation_for_boss(boss_id)
+	if observation_id != &"":
+		Bus.field_observation_recorded.emit(observation_id)
 	Bus.boss_defeated.emit()
 	super()
 

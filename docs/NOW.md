@@ -1,21 +1,21 @@
 # Now
 
-**Stage: Pre-production — Raid Loop Proof**
+**Stage: Pre-production — Raid Loop and Field Notes Proof**
 
-## Only active question
+## Pending Raid Loop human question
 
 > When warned that the garrison will be raided, does the player make a deliberate
 > stay-versus-extract decision, and does one built defense change that decision
 > in a way they can explain?
 
-The earlier Core Loop Proof was superseded by the base-defense pivot before any
-human sessions were run. It has no pass or fail result.
+The Fair-Weights Forge / smith quest was superseded by the raid pivot before any
+human sessions were run. That supersession does not apply to Field Notes.
 
 Implementation is complete and awaiting the precommitted five cold sessions.
-The active test and its criteria are in
+The raid test and its criteria are in
 [design-tests/RAID_LOOP_PROOF.md](design-tests/RAID_LOOP_PROOF.md).
 
-## Built slice awaiting test
+## Implemented raid slice awaiting test
 
 Test exactly one implemented vertical slice:
 
@@ -41,6 +41,26 @@ Test exactly one implemented vertical slice:
 This slice may reuse existing enemies, currencies, UI, dialogue presentation,
 services, and garrison spaces. It may add only what the slice requires.
 
+## Authorized Field Notes implementation
+
+> Do players connect awarded notes to observed Cistern events, compare finite
+> doctrines, notice the chosen effect, and name another observation or doctrine
+> as a reason to descend again?
+
+Field Notes are authorised dungeon progression work under
+[issue #112](https://github.com/Metatransformer/awakening/issues/112).
+Implementation and deterministic proof are complete; its five cold human
+sessions remain pending.
+The canonical bounded system is [FIELD_NOTES.md](FIELD_NOTES.md); the
+precommitted human gate is
+[design-tests/FIELD_NOTES_PROOF.md](design-tests/FIELD_NOTES_PROOF.md).
+
+Implement exactly five fixed first-time Cistern observations, debrief awards on
+extraction or death, five total permanent notes and three one-rank doctrines at
+Aldric costing two notes each. Reuse the existing receipt, service and save
+surfaces. This authorises no production floors, additional observations,
+additional doctrines, repeatable faucet, checklist, item or new screen.
+
 ## Frozen
 
 - Recurring raids or a recurrence scheduler.
@@ -49,8 +69,10 @@ services, and garrison spaces. It may add only what the slice requires.
 - Freeform construction or placement.
 - Destructible buildings.
 - The explosive-barrel and hanging-lantern interaction system.
-- New currency, UI screen, voiced line, or enemy model.
+- Any currency beyond gold and Field Notes, UI screen, voiced line, or enemy
+  model.
 - Floors, bosses, production content, broad lore, or unrelated polish.
 
-Implementation proves only that the slice works. Expansion remains frozen until
-five human sessions resolve the active test and [SCOPE.md](SCOPE.md) is amended.
+Implementation proves only that each bounded system works. It does not prove
+either human hypothesis. Expansion remains frozen until the pending human tests
+are resolved and [SCOPE.md](SCOPE.md) is amended.

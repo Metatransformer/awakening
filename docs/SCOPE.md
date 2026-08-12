@@ -34,14 +34,14 @@ unauthorised.
 | Authored defensive structures | **1**: West Gate Bolt-Thrower |
 | Authored raid occurrences | **1**, with no scheduler |
 | Player stats | **5** |
-| Upgrade tracks | **23** |
+| Upgrade tracks | **26**: the existing 23 plus 3 one-rank Field Notes doctrines |
 | Armour pieces | **4** |
 | Jewelry slots | **4** |
 | Armour or jewelry art | **0** |
 | Garrison surface scenes | **2** |
 | New UI screens | **3** |
 | Endings | **2** |
-| Currencies | **1**: gold |
+| Currencies | **2**: gold and Field Notes |
 | Ingredients / components | **10 / 8**, with no new rarity band |
 | Forge ladders | **12** |
 | Draughts | **3** |
@@ -54,26 +54,41 @@ enemy-model cap. The Builder is unvoiced, uses the existing generic Vyr body,
 and uses shared service patterns. The raid reuses kobolds, an orc, the main
 gate, and existing resources.
 
+The Field Notes amendment adds one finite, non-convertible permanent currency
+and three one-rank doctrine tracks. It adds no item, pickup, UI screen, NPC,
+stat category, dialogue tree or repeatable system. The exact five-observation,
+five-note boundary is owned by [FIELD_NOTES.md](FIELD_NOTES.md).
+
 Counts rise only through an explicit scope amendment. By default, an addition
 must delete something of comparable cost in the same decision. Implementing a
 feature does not authorise another instance, variant, or supporting system.
 
 ## Now
 
-Only the bounded slice in
-[design-tests/RAID_LOOP_PROOF.md](design-tests/RAID_LOOP_PROOF.md) is
-authorised:
+Two bounded proofs are authorised:
 
-- one Builder;
-- one optional Bolt-Thrower project;
-- one warning sequence;
-- one wave through one route;
-- one manual-defense case and one absence-resolution rule;
-- one recoverable Tally-Ledger theft;
-- one occurrence.
+- The raid slice in
+  [design-tests/RAID_LOOP_PROOF.md](design-tests/RAID_LOOP_PROOF.md) is
+  implementation-complete and awaits five cold human sessions:
 
-Raid gameplay is not implemented. Floors 2–4, bosses 2–4, production content,
-and every expansion below remain frozen while this slice is built and tested.
+  - one Builder;
+  - one optional Bolt-Thrower project;
+  - one warning sequence;
+  - one wave through one route;
+  - one manual-defense case and one absence-resolution rule;
+  - one recoverable Tally-Ledger theft;
+  - one occurrence.
+
+- Field Notes implementation under
+  [issue #112](https://github.com/Metatransformer/awakening/issues/112) is
+  authorised within [FIELD_NOTES.md](FIELD_NOTES.md): five fixed first-time
+  Cistern observations, five total debrief-awarded notes and three one-rank
+  doctrines costing two notes each. Its dedicated human test is
+  [design-tests/FIELD_NOTES_PROOF.md](design-tests/FIELD_NOTES_PROOF.md).
+
+Raid and Field Notes implementations are complete; both human tests remain
+pending. Floors 2–4, bosses 2–4, production content and every expansion below
+remain frozen.
 
 ## Later, only if proven
 
@@ -113,7 +128,9 @@ list.
 The current build contains more implemented work than has been validated by
 human evidence. That is sequencing debt, not permission to continue.
 
-Do not expand production until the active five-session test is resolved.
+Do not expand production until the pending five-session human tests are
+resolved.
 Directors and automated checks can prove implementation; only observed human
-play can answer the design question. After a result, update the owning design
-test first, then amend current canon only where the decision requires it.
+play can answer either design question. A result from one cannot prove the
+other. After a result, update the owning design test first, then amend current
+canon only where the decision requires it.
