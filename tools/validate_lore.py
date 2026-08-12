@@ -4,11 +4,16 @@
 from __future__ import annotations
 
 import re
+import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
-import yaml
+try:
+    import yaml
+except ModuleNotFoundError:
+    yaml = None
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -93,11 +98,40 @@ def missing_fields(data: Any, required: set[str]) -> list[str]:
 
 def load_yaml(path: Path, errors: list[str]) -> Any:
     try:
-        with path.open("r", encoding="utf-8") as handle:
-            data = yaml.safe_load(handle)
-    except (OSError, yaml.YAMLError) as exc:
+        if yaml is not None:
+            with path.open("r", encoding="utf-8") as handle:
+                data = yaml.safe_load(handle)
+        else:
+            # The game targets macOS, whose system Ruby ships Psych/YAML. Keep
+            # lore validation runnable in project environments that do not have
+            # the optional PyYAML module rather than making canon checks depend
+            # on an undeclared Python package.
+            result = subprocess.run(
+                [
+                    "ruby",
+                    "-ryaml",
+                    "-rjson",
+                    "-e",
+                    (
+                        "value = YAML.safe_load(File.read(ARGV.fetch(0)), "
+                        "permitted_classes: [], permitted_symbols: [], aliases: false); "
+                        "STDOUT.write(JSON.generate(value))"
+                    ),
+                    str(path),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            data = json.loads(result.stdout)
+    except (OSError, json.JSONDecodeError, subprocess.CalledProcessError) as exc:
         errors.append(f"{relative(path)}: malformed or unreadable YAML: {exc}")
         return None
+    except Exception as exc:
+        if yaml is not None and isinstance(exc, yaml.YAMLError):
+            errors.append(f"{relative(path)}: malformed or unreadable YAML: {exc}")
+            return None
+        raise
     if not isinstance(data, dict):
         errors.append(f"{relative(path)}: top level must be a mapping")
         return None
