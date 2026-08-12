@@ -13,7 +13,7 @@ extends RefCounted
 ## how the HUD came to print `LMB` at a player holding a controller.
 
 ## The house frame. Every screen in the pause menu is exactly this size, and it
-## has to live in ONE place: the player pages EQUIP → INVENTORY → MAP along the
+## has to live in ONE place: the player pages EQUIP → INVENTORY → MAP → GARRISON along the
 ## tab strip, and a frame that changes size between two of them reads as the
 ## window jumping rather than as the content changing.
 ##

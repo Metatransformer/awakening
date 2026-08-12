@@ -463,16 +463,17 @@ request. There is no menu-only binding left anywhere in this game.
 
 Paging is a place on the screen instead of a button off it. The tab strip
 (`MenuPageTabs`) takes focus: **↑** out of the top row of any page lands on the
-lit tab, **← / →** walk EQUIP → INVENTORY → MAP and wrap, arriving on a tab IS
-the page change, and **↓** drops back into the page body. The same four arrows
+lit tab, **← / →** walk EQUIP → INVENTORY → MAP → GARRISON and wrap, arriving
+on a tab IS the page change, and **↓** drops back into the page body. The same four arrows
 that move focus inside a page move it between pages when the cursor is on the
 strip, so a pad needs no button it did not already have, and a player who has
 never read this table can find it by pressing up.
 
 That the strip is now the ONLY route is what makes ↑ load-bearing on the MAP,
 whose one other focusable control is its Back button:
-`tools/directors/map_screen.gd` and `tools/directors/menu_pages.gd` both walk
-the ring off the map, on the keyboard and on a real D-pad, for that reason.
+`tools/directors/map_screen.gd`, `tools/directors/menu_pages.gd`, and
+`tools/directors/garrison_life.gd` walk the ring, on the keyboard and on a real
+D-pad where applicable, for that reason.
 
 `ui_accept` and `ui_cancel` still get their pad buttons **registered at runtime**
 by `PauseMenu._ensure_pad_ui_actions()`, appearing in neither `project.godot` nor
@@ -1683,6 +1684,12 @@ Rules:
   (`scripts/ui/menu/pouch_panel.gd`) — the tab reads **INVENTORY** since card
   #120; the enum and the node keep their names. Its one verb is A on a cell, which moves
   that stack across the document-case line and changes nothing about the item.
+- Also on the pause menu: `PauseMenu.Screen.GARRISON`,
+  `Root/Screens/GarrisonScreen` (`scripts/ui/menu/garrison_panel.gd`) — a
+  read-only projection of `Clock`, the garrison payload, roster unlocks, relic
+  effects and Elder improvements. Back is its only body action. The authoritative
+  design and scope gate are `docs/GARRISON_LIFE.md`; the panel never chops,
+  deposits, buys, donates or advances time.
 
 ### The document case — `Run.cased`, three of the bag's slots
 
@@ -2905,7 +2912,7 @@ heart at once) and leave it false on a Recut, where clamping down is the point.
 
 ```gdscript
 Saves.peek(slot: int) -> Dictionary       # readable list header; empty=true if unused
-Saves.save(slot: int) -> bool             # Game + destination/transform + v11 Run snapshot/pins
+Saves.save(slot: int) -> bool             # Game + destination/transform + v12 Run/garrison state
 Saves.load_slot(slot: int) -> Dictionary  # restores data and returns the travel destination
 Saves.erase(slot: int) -> void            # 3 slots, 0..2
 Saves.autosave() -> bool                  # active slot, else first empty, else decline
@@ -2921,15 +2928,17 @@ garrison load. v4-v8 transforms are deliberately omitted because their owner is
 unknown; v9 introduced `position_scene`, and a transform is returned only when
 that owner matches the destination.
 
-The save file is at **`VERSION = 10`**, and `READABLE` — not `VERSION` — is what
+The save file is at **`VERSION = 12`**, and `READABLE` — not `VERSION` — is what
 `load_slot` checks. v4 split the old `plate` rung into eight gear tracks and is
 why **v3 is refused rather than migrated**: its `plate` key has no honest mapping
 to the new pieces. The later bumps are additive: v5 added `deaths`, v6
 `gold_earned`, v7 the kit `wheel`, v8 `rations`, v9 transform ownership, and
-v10 `last_played_unix` plus the single versioned `run` snapshot. `READABLE` is
-therefore `[4, 5, 6, 7, 8, 9, 10]`; absent fields take their version-appropriate
-defaults instead of making those slots unreadable. `save_game.gd`'s header
-comment carries the full version history.
+v10 `last_played_unix` plus the single versioned `run` snapshot, v11 manual
+wishlist tracks, and v12 the additive `garrison` payload. `READABLE` is therefore
+`[4, 5, 6, 7, 8, 9, 10, 11, 12]`; absent fields take their version-appropriate
+defaults instead of making those slots unreadable. In particular, v11 and older
+slots restore an empty, cold hearth. `save_game.gd`'s header carries the full
+version history.
 
 Every one of those dictionaries is rebuilt on load with `StringName` keys — JSON
 hands back `String` keys, and a `String` key makes `forge_level(&"edge")` and

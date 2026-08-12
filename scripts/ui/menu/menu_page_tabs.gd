@@ -1,13 +1,13 @@
 class_name MenuPageTabs
 extends HBoxContainer
-## The tab strip across the top of the three inspection screens — EQUIP,
-## INVENTORY, MAP — and **the only thing that changes page**.
+## The tab strip across the top of the four inspection screens — EQUIP,
+## INVENTORY, MAP, GARRISON — and **the only thing that changes page**.
 ##
-## **Why the three panels share one strip class rather than three headers.** A
+## **Why the four panels share one strip class rather than four headers.** A
 ## tab strip whose active tab is drawn one way on INVENTORY and another way on
-## MAP is a strip the player stops trusting, and three copies of "which one is
-## lit" is three chances to leave one behind when a fourth screen arrives. One
-## class, one `set_active`, three instances.
+## MAP is a strip the player stops trusting, and four copies of "which one is
+## lit" is four chances to leave one behind when a fifth screen arrives. One
+## class, one `set_active`, four instances.
 ##
 ## **The tabs take focus, and landing on one CHANGES THE PAGE.** Both halves of
 ## that are new (card #120) and both are forced by the same removal. This strip

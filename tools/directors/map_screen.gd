@@ -9,7 +9,7 @@ extends RefCounted
 ##      walked rooms outlined, chests and stairs marked;
 ##   3. fog lifts by walking: a room the player has not stood in is not drawn;
 ##   4. `map` (M) opens the MAP tab, and the tab strip pages
-##      EQUIP <-> INVENTORY <-> MAP on the arrows and on the D-pad;
+##      EQUIP <-> INVENTORY <-> MAP <-> GARRISON on the arrows and on the D-pad;
 ##   5. what is behind an anchored door is ON the map -- both landings, the
 ##      treasure chamber and the vault's three rooms (`_annexes`);
 ##   6. the corner minimap FOLLOWS the hero: he does not move on it, the floor
@@ -115,6 +115,7 @@ func run(rig) -> void:
 	# player is stuck on it.
 	var pouch: Control = menu.get_node("Root/Screens/PouchScreen")
 	var items: Control = menu.get_node("Root/Screens/EquipScreen")
+	var garrison: Control = menu.get_node("Root/Screens/GarrisonScreen")
 	_key(KEY_UP)
 	await rig.wait_seconds(0.3)
 	var focus: Control = rig.root.gui_get_focus_owner()
@@ -125,7 +126,11 @@ func run(rig) -> void:
 
 	_key(KEY_RIGHT)
 	await rig.wait_seconds(0.3)
-	_check("→ paged off the map onto EQUIP", items.visible and not map.visible)
+	_check("→ paged off the map onto GARRISON", garrison.visible and not map.visible)
+
+	_key(KEY_RIGHT)
+	await rig.wait_seconds(0.3)
+	_check("→ again wrapped to EQUIP", items.visible and not garrison.visible)
 	await rig.capture("m_04_tab_equip.png")
 
 	_key(KEY_RIGHT)
@@ -138,7 +143,11 @@ func run(rig) -> void:
 
 	_key(KEY_LEFT)
 	await rig.wait_seconds(0.3)
-	_check("← again -> back on the MAP (the ring wraps)", map.visible)
+	_check("← again -> GARRISON", garrison.visible)
+
+	_key(KEY_LEFT)
+	await rig.wait_seconds(0.3)
+	_check("← again -> back on the MAP", map.visible)
 
 	# And the D-PAD, with real joypad buttons rather than an `InputEventAction`.
 	# `shoot.gd` strips every joypad binding in the InputMap so a controller on
@@ -150,7 +159,7 @@ func run(rig) -> void:
 	_pad(JOY_BUTTON_DPAD_RIGHT)
 	await rig.wait_seconds(0.3)
 	_check("the D-pad pages the strip like the arrows do",
-		items.visible and not map.visible)
+		garrison.visible and not map.visible)
 	_pad(JOY_BUTTON_DPAD_LEFT)
 	await rig.wait_seconds(0.3)
 	_check("...and back, so a pad is never stuck on the map", map.visible)

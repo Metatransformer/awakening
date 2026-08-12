@@ -12,13 +12,15 @@ Read it with three other authorities:
 - The system documents named in **`docs/README.md`** own their detailed designs
   and as-built truth.
 
-**Current status — 2026-08-11.** The M4 first-floor core-loop prototype is built
+**Current status — 2026-08-12.** The M4 first-floor core-loop prototype is built
 and playable. Its human fun gate has not passed. M5 was implemented beyond that
 gate and is accepted sequencing debt, not evidence that the loop works. The
 project is therefore in **Pre-production — Core Loop Proof**: no floors 2–4,
 bosses 2–4, production content, or broad lore expansion are authorised until
 `docs/design-tests/CORE_LOOP_PROOF.md` is resolved. See `docs/NOW.md` for
-the active question and permitted work.
+the active question and permitted work. The bounded **Garrison Life** prototype
+in §6.7 is part of that proof: it tests whether coming home can be a second mode
+of play before any broader town simulation is authorised.
 
 The gear loop is the reason the player descends; the Descent is what gives that
 loop meaning. A design that treats §5 as the game and §6.6 as shopping has the
@@ -614,9 +616,10 @@ not have has stopped being a puzzle and started being a mechanic
 
 The Highbridge garrison is one walled yard over the mine mouth: curtain walls
 you cannot see out of, open sky above them, a paved circle in the middle with the
-five counters round it and the Lanternkeeper on it, and a gatehouse cut through
-the north wall with the shaft under its arch. It gains
-**one** counter and no new screens.
+five counters round it and the Lanternkeeper on it, and a gatehouse opening onto
+the bounded descent to the shaft. It gains **one** staffed counter. The one
+addition to the pause book is the read-only Garrison status page in §6.7; it is
+an account of the yard, not a remote-management screen.
 
 The walls are not scenery. Everything past them is placeholder ground that runs
 flat to the horizon, and a visible empty world is worse than none — so the
@@ -981,6 +984,74 @@ question, and it is the same shape as §2's — *what are you willing to carry?*
 - **No armour visuals.** Every piece is a number. Modular armour art is four
   meshes times two paths times four rungs, against a hero rig this project has
   already had to fix three times (`CLAUDE.md` §4).
+
+---
+
+### 6.7 Garrison life — home is a second mode, not a faster shop
+
+The dungeon loop cannot be the only game. If returning home means pressing
+**Sell All**, buying the next rung and immediately descending, then the garrison
+is a loading screen with counters in it. Story beats do not solve that: a quest
+which only asks for another descent is the first loop wearing dialogue.
+
+The intended contrast is smaller than a town simulation and more physical than
+a menu. **The garrison is an expedition people have to keep running.** Kael is
+not its blacksmith, apothecary or ruler; he is the cadet who moves between all of
+them and takes responsibility for the work nobody at a counter can do. Home play
+must therefore satisfy four rules:
+
+1. it is performed in the garrison or its bounded exterior, not inside a service
+   catalogue;
+2. it visibly changes how the outpost behaves, even when the mechanical reward
+   is modest;
+3. it offers a choice of what to do with a day rather than another mandatory
+   step on every dungeon run; and
+4. each activity earns its existence as a complete prototype before another
+   chore, relationship ladder, economy or building system is approved.
+
+**The first proof is Keep the Hearth.** Once the maker's mark brings Brannoc to
+the yard, Aldric assigns Kael to maintain the fire. Brannoc will forge a
+permanent Woodsman's Axe for **60 gold and 3 Iron Scrap from the returned bag**.
+That last cost is deliberate: the first domestic tool gives ordinary dungeon
+loot a use other than instant sale, so **Sell All** finally has an opportunity
+cost the player can understand before clicking it.
+
+The axe is a tool, not a weapon. It is stored permanently in Equipment, cannot
+be dropped, sold, lost with a run, or placed in either hand, and exists only to
+authorize the physical chore. During Daytime Kael can hold the ordinary interact
+action at the Timber Yard outside the gate to cut one bundle per campaign day,
+then carry it to the central hearth. The hearth holds three bundles.
+
+The reward is causally delayed. The garrison day has three social phases:
+
+| Phase | Hours | What the garrison does |
+|---|---:|---|
+| **Daytime** | 05:00–20:00 | Work, services and the Timber Yard operate |
+| **Bonfire Time** | 20:00–23:00 | One stored bundle is consumed; everyone gathers and remains talkable; services close |
+| **Bedtime** | 23:00–05:00 | The yard closes and each keeper retires to an authored bunk or room |
+
+Only the 20:00 bonfire can grant **Garrison Warmth**. Chopping wood or depositing
+it never changes a price immediately, and the counters are already closed when
+the fire resolves, so the player cannot chop beside a vendor for an instant
+discount. A fueled fire gives the next service window a general Trade benefit:
+ordinary loot sells for **10% more** and ordinary quartermaster stock costs
+**10% less**. Warmth lasts until the following bonfire replaces it with that
+night's fueled or unfueled result. It never discounts forge, jewel, alchemy,
+artifact, extraction or permanent-upgrade costs.
+
+The pause book adds **GARRISON** beside **EQUIP**, **INVENTORY** and **MAP**. It
+is read-only and answers what a resident should be able to know: the time and
+next phase, hearth stock and current Warmth, today's duty state, who has arrived
+and what they are doing, and which relic effects and Elder improvements are
+active. It cannot chop, deposit, buy, turn anything in or advance time.
+
+This is a prototype gate, not the first branch of a farming game. No gifts,
+relationships, romance, mining, additional chores, caravans, market simulation,
+freeform crafting profession, Valenfeld construction or base building follows
+from it automatically. `docs/GARRISON_LIFE.md` owns the detailed state, save,
+pricing, UI and deterministic proof contract. Further home-game work is
+authorised only if a human playtest finds that this one responsibility makes the
+yard feel worth inhabiting between descents.
 
 ---
 

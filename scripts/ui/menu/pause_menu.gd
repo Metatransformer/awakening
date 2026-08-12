@@ -46,7 +46,7 @@ signal quit_to_title_requested
 signal load_requested(slot: int, dest: Dictionary)
 signal saved_to(slot: int)
 
-enum Screen { ROOT, EQUIP, POUCH, MAP, OPTIONS, SAVES }
+enum Screen { ROOT, EQUIP, POUCH, MAP, GARRISON, OPTIONS, SAVES }
 
 const NOTICE_TIME := 3.5
 
@@ -71,7 +71,7 @@ const MODIFIER_KEYS := [KEY_SHIFT, KEY_CTRL, KEY_ALT, KEY_META, KEY_CAPSLOCK]
 ## out can do neither reliably. A and X confirm, so a player reaching for the
 ## neighbouring face button gets an action instead of silence.
 ## **The shoulders are not here any more.** `ui_tab_prev` / `ui_tab_next` paged
-## the three inspection screens on LB / RB and Q / R; the owner asked for the
+## the inspection screens on LB / RB and Q / R; the owner asked for the
 ## selector to go (playtest 2026-08-12) and card #120 removed it. Paging is the
 ## TAB STRIP's job now, on the same stick that moves inside a page — see
 ## `MenuPageTabs`, which had to become focusable in the same change because a
@@ -98,10 +98,10 @@ const KEY_UI_BUTTONS := {
 
 ## The screens the tab strip cycles, in ring order, with its labels.
 ##
-## Three, and not five. EQUIP / INVENTORY / MAP are the screens that ANSWER a
-## question about the run in progress — what am I holding, what am I carrying,
-## where am I — and paging between them is how a player checks all three without
-## going back to a list each time. Options and Save/Load are things you DO, they
+## Four, and not six. EQUIP / INVENTORY / MAP / GARRISON are the screens that
+## ANSWER a question about the run in progress — what am I holding, what am I
+## carrying, where am I, how is home — and paging between them is how a player
+## checks all four without going back to a list each time. Options and Save/Load are things you DO, they
 ## change the game or the disk, and putting them one arrow away from a map read
 ## mid-corridor is how a player lands on the save screen by accident. They stay
 ## commands on the root menu.
@@ -112,11 +112,12 @@ const KEY_UI_BUTTONS := {
 ## already EQUIP: the enum entry is `Screen.EQUIP`, the panel is
 ## `equip_panel.gd`, the class is `MenuEquipPanel` and the root menu's own row
 ## says "Equipment". One word, in five places, is worth more than the shade of
-## meaning "ITEMS" carried.
+## meaning "ITEMS" carried. Adding GARRISON does not roll that decision back.
 const PAGES := [
 	[Screen.EQUIP, "EQUIP"],
 	[Screen.POUCH, "INVENTORY"],
 	[Screen.MAP, "MAP"],
+	[Screen.GARRISON, "GARRISON"],
 ]
 ## Stick travel required before a joypad axis counts as "the player moved it".
 ## Below this it is resting drift, which must not cancel a rebind.
@@ -139,6 +140,7 @@ const SND_CONFIRM := preload("res://audio/sfx/ui_confirm.ogg")
 @onready var _equip: MenuEquipPanel = $Root/Screens/EquipScreen
 @onready var _pouch: MenuPouchPanel = $Root/Screens/PouchScreen
 @onready var _map: MenuMapPanel = $Root/Screens/MapScreen
+@onready var _garrison: MenuGarrisonPanel = $Root/Screens/GarrisonScreen
 @onready var _options: MenuOptionsPanel = $Root/Screens/OptionsScreen
 @onready var _saves: MenuSavesPanel = $Root/Screens/SavesScreen
 @onready var _confirm: MenuConfirm = $Root/Confirm
@@ -197,6 +199,7 @@ func _ready() -> void:
 	_pouch.use_requested.connect(close)
 	_pouch.notice.connect(_notice)
 	_map.back_requested.connect(back)
+	_garrison.back_requested.connect(back)
 	_build_page_tabs()
 	_options.back_requested.connect(back)
 	_options.rebind_requested.connect(_begin_listening)
@@ -309,7 +312,7 @@ func open_map() -> void:
 ## you reached in one press is the world.
 ##
 ## Paging (`_go_page`) REPLACES the top of the stack, so this holds across the
-## whole EQUIP/INVENTORY/MAP ring: however you walk it, Escape leaves.
+## whole EQUIP/INVENTORY/MAP/GARRISON ring: however you walk it, Escape leaves.
 ##
 ## Reaching the same screen from the root menu still stacks normally — there the
 ## root IS where you came from, and backing onto it is what the player means.
@@ -350,6 +353,7 @@ func _panel_for(screen: int) -> Control:
 		Screen.EQUIP: return _equip
 		Screen.POUCH: return _pouch
 		Screen.MAP: return _map
+		Screen.GARRISON: return _garrison
 	return null
 
 
@@ -376,8 +380,8 @@ func _tab_row(screen: int) -> Array:
 ##
 ## It REPLACES the top of the stack rather than pushing onto it. That is the
 ## whole difference between a tab and a screen: paging EQUIP → INVENTORY → MAP
-## and then pressing B should put you back where you were before you opened any
-## of them, not walk you back out through two screens you were only passing
+## → GARRISON and then pressing B should put you back where you were before you
+## opened any of them, not walk you back out through screens you were only passing
 ## through. The stack still records the one entry, so B behaves the same
 ## whichever tab you happen to be standing on when you press it.
 ##
@@ -431,6 +435,7 @@ func _apply_top() -> void:
 	_equip.visible = screen == Screen.EQUIP
 	_pouch.visible = screen == Screen.POUCH
 	_map.visible = screen == Screen.MAP
+	_garrison.visible = screen == Screen.GARRISON
 	_options.visible = screen == Screen.OPTIONS
 	_saves.visible = screen == Screen.SAVES
 	for strip in _page_tabs:
@@ -443,7 +448,7 @@ func _apply_top() -> void:
 				target = _cmd_buttons[0]
 			if target:
 				target.grab_focus()
-		Screen.EQUIP, Screen.POUCH, Screen.MAP:
+		Screen.EQUIP, Screen.POUCH, Screen.MAP, Screen.GARRISON:
 			_enter_page(screen)
 		Screen.OPTIONS:
 			_options.open_tab(top.get("tab", MenuOptionsPanel.Tab.AUDIO))
@@ -453,7 +458,7 @@ func _apply_top() -> void:
 			_saves.focus_first()
 
 
-## Show one of the three paged screens and put the cursor somewhere sensible.
+## Show one of the four paged screens and put the cursor somewhere sensible.
 ##
 ## The re-link is not optional and it is not a refresh of the paint. Two of the
 ## three panels rebuild their top row of focusables inside `refresh()` — the
@@ -737,6 +742,9 @@ func refresh_root() -> void:
 	# and a command that names a screen has to name the screen it opens.
 	_command("Inventory", "bag", "%d / %d slots" % [used, Game.bag_slots],
 		func() -> void: _push({"screen": Screen.POUCH}), {"submenu": true})
+	_command("Garrison", "relic", "%d / %d hearth" % [
+		Game.firewood_stock, Game.FIREWOOD_CAP],
+		func() -> void: _push({"screen": Screen.GARRISON}), {"submenu": true})
 	_command("Save Game", "save", "", func() -> void:
 		_push({"screen": Screen.SAVES, "mode": MenuSavesPanel.Mode.SAVE}),
 		{"submenu": true})

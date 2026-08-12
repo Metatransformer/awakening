@@ -1,5 +1,5 @@
 extends RefCounted
-## The three paged screens — EQUIP, INVENTORY, MAP — reached the way a player
+## The four paged screens — EQUIP, INVENTORY, MAP, GARRISON — reached the way a player
 ## reaches them, on a keyboard AND on a pad, and measured while they are up.
 ##
 ##   timeout 400 tools/quiet.sh --path . -s tools/shoot.gd -- \
@@ -11,7 +11,7 @@ extends RefCounted
 ## input that could change page.** LB / RB (and Q / R) paged the ring; the owner
 ## asked for that selector to go, which left a `FOCUS_NONE` tab strip and a MAP
 ## screen whose only other focusable is its Back button. So what has to be shown
-## is not "the pages draw" but "**a controller can still reach all three, and
+## is not "the pages draw" but "**a controller can still reach all four, and
 ## get back off the one with nothing on it**".
 ##
 ## What each beat is for:
@@ -62,6 +62,7 @@ func run(rig) -> void:
 	var equip: MenuEquipPanel = menu.get_node("Root/Screens/EquipScreen")
 	var pouch: MenuPouchPanel = menu.get_node("Root/Screens/PouchScreen")
 	var map_panel = menu.get_node("Root/Screens/MapScreen")
+	var garrison_panel = menu.get_node("Root/Screens/GarrisonScreen")
 
 	# A full bag, because an empty grid is five columns of nothing and proves
 	# neither the wrap nor the width. Granted straight into `Run` rather than
@@ -80,8 +81,8 @@ func run(rig) -> void:
 	await _open_pouch(rig, menu)
 	_check("the INVENTORY screen is up", pouch.visible)
 	var labels := _tab_labels(pouch)
-	_check("the tabs read EQUIP / INVENTORY / MAP (got %s)" % [labels],
-		labels == PackedStringArray(["EQUIP", "INVENTORY", "MAP"]))
+	_check("the tabs read EQUIP / INVENTORY / MAP / GARRISON (got %s)" % [labels],
+		labels == PackedStringArray(["EQUIP", "INVENTORY", "MAP", "GARRISON"]))
 	await _shot(rig, "inventory")
 
 	# --- 1 + 2. Five per row, and it fits ------------------------------------
@@ -103,37 +104,40 @@ func run(rig) -> void:
 	await _shot(rig, "map")
 
 	await _key(rig, KEY_RIGHT, 10)
+	_check("→ again paged to GARRISON (%s)" % _where(menu), garrison_panel.visible)
+	await _shot(rig, "garrison")
+
+	await _key(rig, KEY_RIGHT, 10)
 	_check("→ again wrapped to EQUIP (%s)" % _where(menu), equip.visible)
 	await _shot(rig, "equip")
 
 	await _key(rig, KEY_LEFT, 10)
-	_check("← is the same ring the other way (back to MAP: %s)" % _where(menu),
-		map_panel.visible)
+	_check("← is the same ring the other way (back to GARRISON: %s)" % _where(menu),
+		garrison_panel.visible)
 
-	# ...and off the strip, back into the page. On MAP that is the Back button,
-	# the only focusable the screen has.
+	# ...and off the strip, back into the page. On GARRISON that is the Back
+	# button, its only focusable body control.
 	await _key(rig, KEY_DOWN, 8)
 	_check("↓ off a tab dropped into the page body (%s)" % _focus_name(rig),
 		not _on_tabs(rig) and _focus_name(rig) != "<nothing>")
 
 	# --- 5. The pad walks the same ring --------------------------------------
-	# The device that lost its buttons. It starts on MAP, which is the screen a
+	# The device that lost its buttons. It starts on GARRISON, which is a screen a
 	# pad player could get stuck on: one focusable, no shoulders, nothing else.
 	_arm_pad_dpad()
 	await _pad(rig, JOY_BUTTON_DPAD_UP, 8)
-	_check("PAD: ↑ off the MAP's Back button reached the tab strip (%s)"
+	_check("PAD: ↑ off the GARRISON Back button reached the tab strip (%s)"
 		% _focus_name(rig), _on_tabs(rig))
 	await _pad(rig, JOY_BUTTON_DPAD_LEFT, 10)
-	_check("PAD: ← paged off the MAP (%s)" % _where(menu), not map_panel.visible)
+	_check("PAD: ← paged off GARRISON onto MAP (%s)" % _where(menu), map_panel.visible)
 	await _pad(rig, JOY_BUTTON_DPAD_LEFT, 10)
-	_check("PAD: ← again reached the third screen (%s)" % _where(menu),
-		equip.visible or pouch.visible)
+	_check("PAD: ← again reached INVENTORY (%s)" % _where(menu), pouch.visible)
 	var seen := {}
-	for i in 3:
+	for i in 4:
 		seen[_where(menu)] = true
 		await _pad(rig, JOY_BUTTON_DPAD_RIGHT, 10)
-	_check("PAD: all three screens are reachable on the pad alone (%s)"
-		% [seen.keys()], seen.size() == 3)
+	_check("PAD: all four screens are reachable on the pad alone (%s)"
+		% [seen.keys()], seen.size() == 4)
 	await _shot(rig, "pad_ring")
 
 	# The pad has to get INTO a page too, or the strip is a place it can only

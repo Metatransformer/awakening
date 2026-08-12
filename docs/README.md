@@ -9,6 +9,7 @@ that truth.
 | Game identity, player experience and pillars | [`GDD.md`](GDD.md) |
 | Prototype boundary, release ceiling and milestone record | [`SCOPE.md`](SCOPE.md) |
 | Economy and the descent/garrison loop | [`METAGAME.md`](METAGAME.md) |
+| The bounded home-game prototype and its expansion gate | [`GARRISON_LIFE.md`](GARRISON_LIFE.md) |
 | Puzzle design | [`PUZZLES.md`](PUZZLES.md) |
 | Encounters and boss fight shapes | [`BESTIARY.md`](BESTIARY.md) and [`BOSSES.md`](BOSSES.md) |
 | Items and where they enter the loop | [`ITEMS.md`](ITEMS.md) |

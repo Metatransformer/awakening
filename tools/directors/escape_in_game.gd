@@ -100,13 +100,13 @@ func _one_press_screens(rig) -> void:
 	await _key(rig, KEY_M, 16)
 	_ck("F0 M opened straight onto the map",
 		Menu.is_open and Menu.get_node("Root/Screens/MapScreen").visible)
-	# The ring is EQUIP / INVENTORY / MAP and it is walked on the TAB STRIP now
+	# The ring is EQUIP / INVENTORY / MAP / GARRISON and it is walked on the TAB STRIP now
 	# (card #120): ↑ out of the page lands on the lit tab, → is the next page.
-	# From the MAP that wraps forward to EQUIP and ← comes back.
+	# From the MAP that moves forward to GARRISON and ← comes back.
 	await _key(rig, KEY_UP, 16)
 	await _key(rig, KEY_RIGHT, 16)
 	_ck("F1 the strip pages forward off the map",
-		Menu.get_node("Root/Screens/EquipScreen").visible)
+		Menu.get_node("Root/Screens/GarrisonScreen").visible)
 	await _key(rig, KEY_LEFT, 16)
 	_ck("F2 ← pages back to it",
 		Menu.get_node("Root/Screens/MapScreen").visible)

@@ -48,7 +48,7 @@ const HAND_NAMES := {&"left": "LEFT HAND", &"right": "RIGHT HAND"}
 ## `set_index * 2 + hand_index` -> the button. Flat because the focus wiring
 ## walks it as a grid and a nested array only makes that harder to read.
 ## The header's row, so `PauseMenu` can drop the shared tab strip into it. The
-## three paged screens all expose this and none of them builds a strip of its
+## four paged screens all expose this and none of them builds a strip of its
 ## own — the ring, the strip and the stack all live in one place.
 var _hrow: HBoxContainer
 
@@ -67,6 +67,9 @@ var _detail_legend: Label
 var _detail_ammo: Label
 ## Stat id -> the right-hand Label on its row. See `_build_stats`.
 var _stat_values: Dictionary[StringName, Label] = {}
+## Permanent utility tools are inspection-only Labels under the worn column.
+var _tools: VBoxContainer
+var _tools_empty: Label
 
 
 func _ready() -> void:
@@ -245,6 +248,16 @@ func _build_doll(parent: Node) -> void:
 	legend.text = "Plate at the smith, stones at her bench.  %d rungs of plate, %d of a stone." % [
 		K.FORGE_MAX, K.JEWEL_MAX]
 	col.add_child(legend)
+
+	UITheme.section_rule(col, "TOOLS")
+	_tools = VBoxContainer.new()
+	_tools.name = "Tools"
+	_tools.add_theme_constant_override(&"separation", 5)
+	col.add_child(_tools)
+	_tools_empty = Label.new()
+	_tools_empty.text = "None yet."
+	UITheme.apply_text_style(_tools_empty, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
+	col.add_child(_tools_empty)
 
 
 ## The button that swaps the live set.
@@ -762,6 +775,7 @@ func tab_row() -> Array:
 
 
 func refresh() -> void:
+	_refresh_tools()
 	if _slots.is_empty():
 		return
 	for i in _set_frames.size():
@@ -785,6 +799,33 @@ func refresh() -> void:
 		_describe(focused as Button)
 	else:
 		_describe(_slots[HANDS.find(Game.HAND_RIGHT)])
+
+
+## Rebuild the authored permanent-tool manifest without adding anything to the
+## hand, wheel, drag, sale, or focus graphs above.
+func _refresh_tools() -> void:
+	if _tools == null or _tools_empty == null:
+		return
+	UITheme.clear_children(_tools)
+	var any := false
+	for definition: Dictionary in ToolDb.all():
+		if not bool(definition.get("owned", false)):
+			continue
+		var row := VBoxContainer.new()
+		row.add_theme_constant_override(&"separation", 1)
+		_tools.add_child(row)
+		var title := Label.new()
+		title.text = String(definition.get("display_name", ""))
+		UITheme.apply_text_style(title, UITheme.TYPE_LABEL_MD, UITheme.TEXT)
+		row.add_child(title)
+		var blurb := Label.new()
+		blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		blurb.text = String(definition.get("blurb", ""))
+		UITheme.apply_text_style(blurb, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
+		row.add_child(blurb)
+		any = true
+	_tools.visible = any
+	_tools_empty.visible = not any
 
 
 func _paint(b: Button) -> void:

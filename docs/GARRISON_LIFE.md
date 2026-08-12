@@ -1,8 +1,9 @@
 # Garrison Life Prototype: Timber, Bonfire, and Status
 
-**Status:** Approved prototype to build  
+**Status:** Built and deterministically verified; awaiting the human fun gate
+
 **Owner decision:** 2026-08-12  
-**Related:** issue #114 (landed day/night foundation)
+**Related:** issue #114 (landed day/night foundation), issue #136 (this prototype)
 
 ## Why this exists
 
@@ -57,14 +58,16 @@ player is trusted with when the garrison gains the person who can make the tool:
    the central hearth before Bonfire Time. Completing the last page uses the
    existing `told_elder_timber_duty` flag as the assignment state.
 4. Brannoc then stocks one progression line: **WOODSMAN'S AXE**, 60 gold and 3
-   Iron Scrap, one craft, held because it consumes components. It is hidden
+   Iron Scrap from the returned run bag, one craft, held because it consumes
+   materials. This is deliberately the first reason not to flatten every return
+   with **Sell All**. The line is hidden
    before the assignment and remains as a completed one-rung line afterward.
 5. Crafting calls `Game.grant(ShopDb.WOODSMAN_AXE_ID)`. The axe lives in the
    existing permanent `Game.items` equipment store and existing save payload. It
    never enters `Game.upgrades` or the run bag, so it cannot be dropped, sold,
    lost on death, cleared on descent, or charged an extraction fee.
 6. Add the axe to an ordered `ToolDb` manifest and to a compact read-only **TOOLS**
-   section on the existing ITEMS/Equipment page. It is not a hand-ring stop,
+   section on the existing EQUIP page. It is not a hand-ring stop,
    wheel binding, combat armament, or loadout slot; the Equipment page is where
    permanent tools are stored and inspected, not where this one is wielded.
 7. The Timber Yard is always visible, but chopping refuses with **YOU NEED AN
@@ -140,10 +143,10 @@ components, relics, and wishlisted lines keep their existing sell protections.
 
 ## Garrison status menu
 
-Add **GARRISON** as the fourth read-only inspection page in the existing shoulder
-ring:
+Add **GARRISON** as the fourth read-only inspection page in the existing
+focusable tab strip:
 
-`ITEMS | POUCH | MAP | GARRISON`
+`EQUIP | INVENTORY | MAP | GARRISON`
 
 The page rebuilds from authoritative state whenever opened and provides:
 
@@ -168,21 +171,25 @@ The authoritative joins are fixed:
 | `alchemist` | `DialogueDb.PEOPLE` | Alchemist | `alchemist_day` / `alchemist_bonfire` / `alchemist_sleep` |
 | `jewelcrafter` | `DialogueDb.PEOPLE` | Jewelcrafter | `jewelcrafter_day` / `jewelcrafter_bonfire` / `jewelcrafter_sleep` |
 
-Arrival is read from `StoryDb.arrival_flag(who)` plus its existing unlock
-predicate. Artifact effects iterate `RelicDb.all()` in catalogue order and include
-rows where `RelicDb.donated(id)` is true, using the row's `name` and `detail`.
+Roster presence follows card #115 rather than merely earned arrival: an NPC is
+shown after their introduction flag, plus the one unlocked-but-unintroduced body
+actually present for the current homecoming. The page never calls the latching
+`StoryDb.unlocked()` predicate. Artifact effects iterate `RelicDb.all()` in
+catalogue order and include rows where `RelicDb.donated(id)` is true, using the
+row's `name` and `detail`.
 Elder improvements iterate `ElderUpgradeDb.UPGRADE_IDS` in authored order and show
 only ranks above zero, using `_line`'s player-facing meaning through a new public
 read-only summary helper rather than duplicating its labels in UI code.
 
 The page has no remote actions. It cannot chop, deposit, buy, turn in artifacts,
-or move time. Its only focusable control is Back, matching the Map page's gamepad
-contract. Content scrolls inside the existing 1280×720 frame.
+or move time. Back is its only focusable body control, matching the Map page's
+gamepad contract. Content scrolls inside the existing 1280×720 frame.
 
-Paging keeps the existing bindings: Q/R on keyboard, LB/RB on controller, and
-mouse-clickable non-focusable tab buttons. The vertical status body scrolls by
-wheel and normal focused-container input; opening the page always focuses Back,
-and Back remains outside the scroll viewport.
+Card #120 removed Q/R and LB/RB paging before this page landed. The tab strip is
+the keyboard, controller and mouse selector: Up from Back reaches the active tab,
+Left/Right walks and wraps the four pages, and Down returns to the page body.
+Opening the page always focuses Back, and Back remains outside the scroll
+viewport.
 
 ## World presentation
 
@@ -233,8 +240,9 @@ event.
    stock prices 10% cheaper, while all named exclusions remain unchanged.
 8. From 20:00–23:00, all arrived NPCs are positioned around the hearth, services
    are closed, and TALK remains usable. At 23:00 they move to their existing beds.
-9. The pause menu pages in both directions through ITEMS, POUCH, MAP, and GARRISON
-   by keyboard, controller shoulders, and mouse tab clicks.
+9. The focusable pause tab strip pages in both directions through EQUIP,
+   INVENTORY, MAP, and GARRISON by keyboard arrows, controller D-pad/stick, and
+   mouse tab clicks.
 10. The Garrison page accurately shows current work step, schedule, hearth, Timber
     Yard, arrived and undiscovered roster entries, active artifact effects, and
     owned Elder upgrades.
@@ -244,7 +252,7 @@ event.
     round-trips through a v12 save.
 13. Headless import reports no script/resource errors. A deterministic director
     proves daily gating, deposit, bonfire idempotency, price boundaries, roster
-    schedule, menu paging, and save restoration.
+    schedule, focusable-tab paging, and save restoration.
 
 The director starts from a reset day-1 08:00 fixture, stamps all five arrival
 flags, and captures `life_00_timber.png`, `life_01_hearth_day.png`,
@@ -254,8 +262,15 @@ axe line and Equipment tool row; no-axe refusal; second chop refusal; separate
 deposit; stock cap; one and multi-night
 crossings; no double consumption after restore at 20:30; exact warmed/unwarmed
 buy and sell values; all five bonfire transforms and talkability with closed
-services; Bedtime transforms; four-page forward/back paging; Back focus; and v11
-defaults plus v12 round-trip helpers.
+services; Bedtime transforms; four-page wraparound tab paging; Back focus; and
+v11 defaults plus v12 round-trip helpers.
+
+## Verification result
+
+`tools/directors/garrison_life.gd` passes at 1280×720 and produces the four named
+captures. `pnpm run import` boots clean. This is implementation evidence only:
+the prototype is not permission for another chore until a human playtest answers
+the question at the top of this document.
 
 ## Files expected to change
 

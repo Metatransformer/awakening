@@ -23,6 +23,13 @@ does not authorise the next milestone.
   day/night/weather loop, NPC curfew and the Elder's three fixed QoL tracks are
   authorised as a homecoming/return-walk test. This does not authorise M6,
   production environment art or additional overworld content.
+- **Owner amendment 2026-08-12, issue #136:** the bounded Garrison Life proof is
+  authorised: one permanent axe, one once-daily Timber Yard interaction, one
+  three-bundle hearth, the Daytime → Bonfire Time → Bedtime social schedule,
+  delayed Warmth pricing, and one read-only Garrison status page. It is built;
+  the authorised work remaining is the human test of whether it makes home feel
+  worth inhabiting. No second chore, relationship system, town economy or base
+  builder is authorised by its implementation.
 
 ## Not authorised
 

@@ -15,7 +15,7 @@ is an argument; "is this number in the manifest" is not.
 The manifest is a ceiling, not a backlog. A row below can be valid for the
 eventual prologue and still be the wrong thing to build in pre-production.
 
-**Current freeze — 2026-08-11.** M4's first-floor prototype is built, but its
+**Current freeze — 2026-08-12.** M4's first-floor prototype is built, but its
 human fun gate is unpassed. M5 exists beyond that gate as accepted sequencing
 debt. **M6 and all production-content expansion are frozen** while
 `docs/design-tests/CORE_LOOP_PROOF.md` tests whether one descent creates a
@@ -43,7 +43,7 @@ definition**, and §4.2 applies.
 | Usable items | **6** | Bow, Hookshot, **Burst**, **Sustain**, **Ballast** — all built, the last two on 2026-08-11 (`docs/ITEMS.md` §8, D5) — and the Far Lantern, which has no verb |
 | **Ring stops** | **6** | Sword, bow, hookshot, Burst, Sustain, Ballast. **Hard ceiling** — `docs/CONTRACT.md` §4.1. `Game.RIGHT_POOL` holds all six now, so this row is no longer a plan: a seventh entry in that array is an amendment |
 | **Kit wheel slots** | **8** | New row, 2026-08-11, owner's call. Hold LB, point, release — `docs/CONTRACT.md` §4.2. **Eight is short of the ten a player can own on purpose** (6 ring stops + 4 bottles), because a wheel with room for everything is a hotbar nobody curates. It adds no screen (a card on the existing Items panel), no new id vocabulary (armament ids and `bottle_N` tokens) and no new field the D-pad did not already write. A ninth slot is an amendment to the sentence above, not a constant. |
-| **New mechanics** | **3** | The working, **the puzzle**, and the **daily-life loop**: one clock jointly drives surface light, bounded weather, curfew and sleep. Weather is a presentation axis inside that loop, not a second simulation or forecast economy. |
+| **New mechanics** | **3** | The working, **the puzzle**, and the **daily-life loop**: one clock jointly drives surface light, bounded weather, curfew, sleep and the Timber → Hearth → Bonfire responsibility. Weather and Warmth are outputs inside that loop, not separate simulations. |
 | Locked doors | **8** | 4 shortcuts, 3 vaults, 1 to the Long Descent. **They are puzzles now, not checks** — `docs/PUZZLES.md`, GDD §5.3 |
 | Vault prefabs | **3** | Three rooms each |
 | **Puzzle atoms** | **9** | Phase 1: key door, urn, plate, push block, eye switch, cracked pillar, hookshot target, sun switch, **lantern**. The lantern was pulled forward out of phase 2 (2026-08-10), leaving three there, uncommitted |
@@ -61,7 +61,7 @@ definition**, and §4.2 applies.
 | Jewelry slots | **4** | Amulet, 2 rings, bracelet. ×2 paths, ×5 rungs (base + 4 bought) |
 | **Armour / jewelry art** | **0** | Every piece is a number. No modular meshes, no icons beyond the existing catalogue rows. |
 | Garrison surface scenes | **2** | One generated fort compound and one bounded cliff-path approach to the Sunken Cut. The approach is not a settlement or overworld: one entrance, one return gate and one blocked branch. |
-| **New UI screens** | **2** | `StashScreen`, plus the owner's 2026-08-11 Votive Court modal. The latter replaces three world pickups with one diegetic six-god choice and keeps the rendered shrine visible behind its lower panel. |
+| **New UI screens** | **3** | `StashScreen`, the owner's 2026-08-11 Votive Court modal, and the owner's 2026-08-12 read-only Garrison status page. The last is inspection, never remote management; GDD §6.7 and `docs/GARRISON_LIFE.md` define its hard boundary. |
 | Endings | **2** | Lantern, Chord |
 | Currencies | **1** | Gold. Components and relics are items, not money. |
 | Ingredients / components | **10 / 8** | As built. No new rarity band. |
@@ -91,8 +91,11 @@ silhouettes the player sees for four minutes each.
 reason this row survived the 2026-08-10 amendment without moving: a miniboss is
 two authored beats and a telegraph, and none of that is art.
 
-**Two authored UI screens.** `StashScreen` is the first exception; the Votive
-Court modal is the second, added by explicit owner direction on 2026-08-11. The
+**Three authored UI screens.** `StashScreen` is the first exception; the Votive
+Court modal is the second, added by explicit owner direction on 2026-08-11; the
+read-only Garrison status page is the third, added by explicit owner direction
+on 2026-08-12. It reports time, hearth, duty, roster and existing outpost
+effects, and cannot perform any of their actions. The
 shared NPC service screen class (still named `TradeScreen` internally for
 compatibility) already owns two layouts: a two-sided **Trade** shop with NPC
 stock, player inventory and shared item details; and a linear progression layout
@@ -112,15 +115,16 @@ and would have left every service carrying a transfer branch it never sees.
 The Votive Court does not fit the shared NPC service screen either: it is a
 one-of-three choice
 among six fixed gods, three of whom must remain visibly silent, over live world
-figures. The second screen is recorded in §4.2 rather than hidden as a panel.
+figures. The second and third screens are recorded in §4.2 rather than hidden as
+panels.
 
-**Two new mechanics** *(was one, amended 2026-08-10 — §4.2's fourth line)*. The
-working — a thrown arc, a fuse, a sphere query, a cracked wall. And the puzzle —
+**Three new mechanics** *(was one, amended 2026-08-10 and 2026-08-12 — §4.2)*.
+The working — a thrown arc, a fuse, a sphere query, a cracked wall. The puzzle —
 nine props that emit `solved`, nine combinators, and one extra edge in the room
-planner. Everything else in the plan is still a *gate on*, a *number in*, or an
-*arrangement of* something that already runs, and that includes the two things
-that arrived alongside the puzzle and are **not** mechanics: a Blessing is a bag row
-worth zero, and the shield reflect is a raycast off a shield that exists.
+planner. And the bounded daily-life loop — civil time, one daily Timber Yard
+action, one carried bundle, a capped hearth and a delayed bonfire result. It is
+one mechanic because every part exists to answer one responsibility; a second
+chore is an amendment, not another row in the same table.
 
 ### Why "usable items" went 4 → 6 and nothing else moved
 
@@ -381,7 +385,7 @@ not worth adding.
 | **The voices and the elder.** Voiced lines 0 → 15, garrison NPCs 5 → 6, and an opening that is not a cutscene | **Nothing to delete: the lines were already recorded when they arrived.** The owner made them and asked for them to be wired; the manifest's job here is to write down the ceiling, not to relitigate a finished asset | §1, `scripts/autoload/voice.gd` |
 | **The Ocarina pass.** Puzzle combinators 6 → 9, enemy behaviours 0 → 8 (4 committed) | **Phase 2's three uncommitted atoms are on the table** — chain and convert make the torch and the timed bars redundant. Everything else on both rows is a key on a table that exists. **Zero new atoms, models, screens, items or beats** | `docs/PUZZLES.md` §3.1/§8.1, `docs/BESTIARY.md`, `docs/OOT_CATALOGUE.md` |
 | **The Votive Court.** Echo pedestal → six-god shrine; new UI screens 1 → 2 | **Nothing deleted: explicit owner-directed replacement, 2026-08-11.** The screen is the requested readable choice; the old three-mote presentation and world-caption proof were deleted in the same change | `docs/PUZZLES.md` §6, issue #101 |
-| **Garrison daily life.** New mechanics 2 → 3, upgrade tracks 20 → 23, garrison surface scenes 1 → 2 | **Nothing deleted: explicit owner-directed amendment, 2026-08-12.** The spend is bounded by one clock, one generated compound, one linear approach and three fixed QoL rows; the former tiny-yard/no-schedule/no-weather freeze is removed rather than left contradictory | issue #114; `docs/METAGAME.md` §6/§6.8 |
+| **Garrison daily life.** New mechanics 2 → 3, upgrade tracks 20 → 23, garrison surface scenes 1 → 2, new UI screens 2 → 3 | **Nothing deleted: explicit owner-directed amendment, 2026-08-12.** The spend is bounded by one clock, one generated compound, one linear approach, one Timber/Hearth prototype, one read-only status page and three fixed QoL rows; further home systems remain gated | issues #114 and #136; GDD §6.7; `docs/GARRISON_LIFE.md` |
 
 The first line is the rule working as intended: the two deleted relics were the
 only entries on GDD §6.2's table that were numbers on a subsystem rather than
@@ -436,11 +440,13 @@ What it costs, stated rather than pretended away:
   is a pattern forming, and the rule §4.2 exists to enforce has now been set
   aside twice by the only person allowed to set it aside. A third should be
   hard, and the counts in §1 are what make it hard.
-- **`New mechanics` is now 2 and that row is the one to defend.** The puzzle is
+- **`New mechanics` is now 3 and that row is the one to defend.** The puzzle is
   a whole mechanic; the Blessing is not, because it is a bag row and a shrine, and
   the shield reflect is not, because it is a raycast off a shield that exists.
-  Anything that claims to be free the way those two are should have to prove it
-  the way those two did.
+  The third is the later, explicitly bounded Garrison Life amendment recorded in
+  the ledger; a second chore is not free inside it. Anything that claims to be
+  free the way the Blessing and reflect are should have to prove it the way those
+  two did.
 
 The fifth line is the smallest of the four amendments and the one most likely to
 be misread as a precedent, so: **what moved is not what the ceiling was
