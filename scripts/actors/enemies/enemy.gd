@@ -487,7 +487,7 @@ func _has_heavy() -> bool:
 ## tell apply `Prog.windup_scale` themselves, exactly as the single-beat code
 ## did -- and `_commitment` below deliberately does NOT, because a floor-4 troll
 ## whose tell has been compressed 12% has not become less committed to the blow.
-func _beat(key: String) -> float:
+func _melee_beat(key: String) -> float:
 	var h := _heavy_row()
 	if _heavy and h.has(key):
 		return float(h[key])
@@ -497,8 +497,8 @@ func _beat(key: String) -> float:
 ## How committed the beat being thrown is, 0.6 to 1.0 -- what `Hit.tier_odds`
 ## turns into the odds of the player being staggered or floored. Off the tell,
 ## which is the whole argument in `Hit.commitment_of_tell`.
-func _commitment() -> float:
-	return Hit.commitment_of_tell(_beat("windup"))
+func _melee_commitment() -> float:
+	return Hit.commitment_of_tell(_melee_beat("windup"))
 
 
 ## The shove the beat spends. Ordinary swings across the whole roster are
@@ -1041,7 +1041,7 @@ func _tick_chase(delta: float) -> void:
 	if dist <= float(_def["reach"]) and _cooldown <= 0.0:
 		state = State.WINDUP
 		# **Which beat, decided HERE and nowhere else.** Before the timer, because
-		# everything below reads `_beat(...)` off it, and rolled once for the same
+		# everything below reads `_melee_beat(...)` off it, and rolled once for the same
 		# reason `Hit.roll_tier` is rolled once: a body that telegraphs its heavy
 		# for a second and then throws the jab has lied to the player, and that is
 		# worse than either blow.
@@ -1050,7 +1050,7 @@ func _tick_chase(delta: float) -> void:
 		# Compressed with depth, but never past Prog.WINDUP_FLOOR. The telegraph
 		# is what makes a fight fair, so it is the one number with a hard floor --
 		# a wind-up you cannot react to is a coin flip, not difficulty.
-		_timer = _beat("windup") * Prog.windup_scale(level)
+		_timer = _melee_beat("windup") * Prog.windup_scale(level)
 		_struck = false
 		_stop()
 		_play(&"attack_1")
@@ -1154,7 +1154,7 @@ func _tick_windup(delta: float) -> void:
 	_face_player(delta, 130.0)
 
 	if _model != null:
-		var windup: float = maxf(_beat("windup") * Prog.windup_scale(level), 0.001)
+		var windup: float = maxf(_melee_beat("windup") * Prog.windup_scale(level), 0.001)
 		# 0 at the start of the commit, 1 at the moment it lands.
 		var t := clampf(1.0 - _timer / windup, 0.0, 1.0)
 		# Eased so the last third of the wind-up is where most of the movement
@@ -1187,7 +1187,7 @@ func _tick_windup(delta: float) -> void:
 		# only visible symptom would be that the telegraph never paid off.
 		_hitbox.amount = _heavy_damage if _heavy else _damage
 		_hitbox.knockback = _beat_knockback()
-		_hitbox.commitment = _commitment()
+		_hitbox.commitment = _melee_commitment()
 		_hitbox.activate()
 		# The commit itself: the glow snaps off as the body whips forward, so
 		# "it is coming" and "it is here" are two different pictures.
@@ -1221,7 +1221,7 @@ func _tick_strike(delta: float) -> void:
 			_hitbox.deactivate()
 			_struck = false
 		state = State.RECOVER
-		_timer = _beat("recover")
+		_timer = _melee_beat("recover")
 
 
 func _tick_recover(delta: float) -> void:
@@ -1229,7 +1229,7 @@ func _tick_recover(delta: float) -> void:
 	_timer -= delta
 	if _timer <= 0.0:
 		_cooldown = maxf(_cooldown,
-			THROW_COOLDOWN if _throw_recovering else _beat("cooldown"))
+			THROW_COOLDOWN if _throw_recovering else _melee_beat("cooldown"))
 		_throw_recovering = false
 		# The beat is spent. Cleared HERE, after the cooldown it owns has been
 		# stamped, so the next wind-up rolls fresh -- and so an interrupted heavy
@@ -1849,7 +1849,7 @@ func _close_grab() -> void:
 		# the pause before it tries again is the reward for having stepped back.
 		_clear_sack()
 		state = State.RECOVER
-		_timer = _beat("recover")
+		_timer = _melee_beat("recover")
 		_cooldown = K.THIEF_REGRAB
 		Bus.request_sfx.emit(&"craft_fail", global_position)
 		return
