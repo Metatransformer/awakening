@@ -415,6 +415,15 @@ been asked to use offensively. That is where the shield stops being a wall — i
 is just a teaching claim rather than a mechanical one, and saying so is cheaper
 than being caught at it.
 
+**Boss lore is not catalogue data.** Eight 40–60 word paragraphs used to live on
+the four boss and four miniboss rows in `BossDb`, but no surface read them. They
+were deleted on 2026-08-11 rather than wired to the wrong beat. A boss-door
+refusal is one line and exists to direct the player; the run-end screen is about
+the haul; the Lanternkeeper's prose surface owns relics. The current scope also
+forbids adding a bestiary or journal screen. If a future approved surface needs
+encounter prose, author copy to that surface's actual length and moment instead
+of restoring an unconsumed `lore` field to the combat catalogue.
+
 **Four of Ocarina's five shapes, one per floor.** The fifth is *disarm* in its
 full form — Ganon knocking the Master Sword out of the ring — and it belongs to
 the Riven Knight at the Chord Gate or to nothing at all. A boss that takes the

@@ -281,10 +281,6 @@ static var BOSSES := {
 		},
 		"drop": {"item": &"bow", "relic": &"anvil_plate"},
 		"music": "res://audio/music/boss_1.ogg",
-		"lore": "The Vyr built it to keep the intake clear and never told it "
-			+ "the water had stopped moving. It has been turning the same eight "
-			+ "paces for four hundred years, and it counts anything that walks "
-			+ "past as silt.",
 		"beats": [
 			{
 				"id": &"sluice_sweep", "name": "Sluice Sweep",
@@ -398,10 +394,6 @@ static var BOSSES := {
 		# `kiln_core`. Checked against `RelicDb`, not against the GDD's prose.
 		"drop": {"item": &"burst", "relic": &"kiln_core"},
 		"music": "res://audio/music/boss_2.ogg",
-		"lore": "The Imperium's foundry crews fed it scrap because it would eat "
-			+ "scrap, and then they fed it the crucible tongs, and then they "
-			+ "left. What stands up out of the slag now is not the thing they "
-			+ "hired — it is the part of the furnace that learned to walk.",
 		"beats": [
 			{
 				"id": &"bellows_charge", "name": "Bellows Charge",
@@ -524,11 +516,6 @@ static var BOSSES := {
 		},
 		"drop": {"item": &"hookshot", "relic": &"sounding_rod"},
 		"music": "res://audio/music/boss_3.ogg",
-		"lore": "The Hushing Choir was built so a single voice held inside it "
-			+ "would keep sounding long after the singer stopped, which the "
-			+ "College recorded as a triumph of masonry. Something has been "
-			+ "holding a note in there since the Sundering, and this is what is "
-			+ "left of whoever was holding it.",
 		"beats": [
 			{
 				"id": &"first_toll", "name": "The First Toll",
@@ -655,10 +642,6 @@ static var BOSSES := {
 		# same question from the relic side as well.
 		"drop": {"item": &"far_lantern", "relic": &"pillar_shard"},
 		"music": "res://audio/music/boss_4.ogg",
-		"lore": "It held the Chord Gate for the Imperium and it is still "
-			+ "holding it, split from gorget to hip by whatever came through. "
-			+ "The Society's file lists it under doors rather than under men, "
-			+ "and the file is right.",
 		"beats": [
 			{
 				"id": &"gate_lunge", "name": "Gate Lunge",
@@ -881,9 +864,6 @@ static var MINIBOSSES := {
 		# cannot put floor 1's BOSS relic on the floor of this room.
 		"drop": {"item": &"makers_mark", "relic": &""},
 		"music": "",
-		"lore": "It worked the intake gates on a rota nobody has kept since the "
-			+ "Sundering, and it is still on shift. The wheel it turns has not "
-			+ "been attached to anything for four hundred years.",
 		"beats": [
 			{
 				# THE WALL, and floor 1's verb is T0 -- sword, shield, body, key
@@ -993,10 +973,6 @@ static var MINIBOSSES := {
 		# Nothing. Rule 2 above -- the empty row is load-bearing, not a gap.
 		"drop": {"item": &"", "relic": &""},
 		"music": "",
-		"lore": "The crews called it the bellows-hand because it worked the great "
-			+ "pair on the west wall, and because after a while that was all there "
-			+ "was of it. It still carries the shield plate they gave it for standing "
-			+ "in front of the tap. The tap has been cold for four hundred years.",
 		"beats": [
 			{
 				# THE WALL, and floor 2's verb is T1 -- the BOW (`docs/PUZZLES.md`
@@ -1135,10 +1111,6 @@ static var MINIBOSSES := {
 		},
 		"drop": {"item": &"", "relic": &""},
 		"music": "",
-		"lore": "The College's record of the Hushing Choir names one singer and one "
-			+ "date. Whatever is standing in the treasure vault has been holding the "
-			+ "harmony under that note ever since, and it has never once had to take "
-			+ "a breath.",
 		"beats": [
 			{
 				# THE WALL, and floor 3's verb is T2 -- the BURST
@@ -1255,10 +1227,6 @@ static var MINIBOSSES := {
 		},
 		"drop": {"item": &"", "relic": &""},
 		"music": "",
-		"lore": "The Imperium kept dogs at the Chord Gate for the same reason "
-			+ "anyone keeps dogs at a gate, and then the Gate went through them as "
-			+ "well. This one has not left the threshold and it does not come to the "
-			+ "door. It waits at the far end of the room and throws the door at you.",
 		"beats": [
 			{
 				# THE WALL, and floor 4's verb is T3 -- the HOOKSHOT
