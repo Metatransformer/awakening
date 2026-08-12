@@ -265,6 +265,10 @@ var _tumble: float = 0.0
 var _bounced: bool = false
 ## Seconds a landed body stays down before it gets up. Living bodies only.
 var _down: float = 0.0
+## Physical bones own the silhouette while the CharacterBody keeps the launch
+## arc, collision and state machine players already know. Null is the safe path
+## for a model whose imported skeleton no longer matches the shared humanoid rig.
+var _ragdoll: EnemyRagdoll = null
 
 # --- The Thief (docs/BESTIARY.md §3, behaviour 4) ---------------------------
 ## What it took out of the bag: `{"id": StringName, "count": int}`, empty while
@@ -491,6 +495,13 @@ func _build_model() -> void:
 		_anim.add_animation_library(&"", lib)
 	_play(&"idle", true)
 
+	# Build once, simulate only while launched. Bosses deliberately opt out of
+	# launch through `_can_launch`, so they do not pay for an unused physical rig.
+	if _can_launch():
+		var candidate := EnemyRagdoll.new()
+		if candidate.setup(_model, self, _model.scale.x, K.L_WORLD):
+			_ragdoll = candidate
+
 
 func _build_combat() -> void:
 	health = HealthComponent.new()
@@ -633,6 +644,8 @@ func _physics_process(delta: float) -> void:
 		else:
 			velocity = Vector3(0, velocity.y - K.GRAVITY * delta, 0)
 		move_and_slide()
+		if _ragdoll != null:
+			_ragdoll.drive(global_position, delta)
 		# NOT `rotation.y = _facing`: a corpse mid-flight is being tumbled by
 		# `_tick_flight` and re-stamping the yaw here is harmless, but the DEAD
 		# branch has always returned before that line and the sink tween below
@@ -711,6 +724,8 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y = -0.5
 	move_and_slide()
+	if _ragdoll != null:
+		_ragdoll.drive(global_position, delta)
 	rotation.y = _facing
 
 
@@ -1188,6 +1203,11 @@ func _launch(away: Vector3, weight: float) -> void:
 	if side == 0.0:
 		side = 1.0
 	_tumble = deg_to_rad(K.LAUNCH_SPIN) * mass * side
+	if _ragdoll != null and _ragdoll.start(global_position, velocity,
+			global_basis.x, _tumble):
+		# Physical bones now own rotation. `_tumble` remains the exact fallback for
+		# a model that failed rig validation, never a second writer on the pose.
+		_tumble = 0.0
 
 	# The wind-up is off the table: a monster thrown mid-commit must not land
 	# still holding the swing. Same argument as `freeze`, and the same fix.
@@ -1211,6 +1231,15 @@ func _tick_launched(delta: float) -> void:
 	_down -= delta
 	_stop()
 	if _down <= 0.0:
+		if _ragdoll != null and _ragdoll.is_active():
+			if not _ragdoll.is_recovering():
+				# The idle/get-up pose advances under the simulator while its influence
+				# fades, so recovery is a blend instead of a one-frame skeleton snap.
+				if _anim != null:
+					_anim.stop()
+				_play(&"idle", true, 1.0, 0.0)
+				_ragdoll.recover(self)
+			return
 		state = _wake()
 
 
@@ -1224,7 +1253,7 @@ func _tick_launched(delta: float) -> void:
 func _tick_flight(delta: float) -> void:
 	_air += delta
 	velocity.y -= K.GRAVITY * delta
-	if _model != null:
+	if _model != null and (_ragdoll == null or not _ragdoll.is_active()):
 		_model.rotation.x += _tumble * delta
 
 	# `_air` guards the launch frame, where the body has upward velocity but has
@@ -1258,7 +1287,7 @@ func _touch_down() -> void:
 	_down = K.LAUNCH_DOWN
 	# Back to rest, always. A body left at whatever pitch the tumble stopped on
 	# is a monster that gets up and walks around lying on its side.
-	if _model != null:
+	if _model != null and (_ragdoll == null or not _ragdoll.is_active()):
 		_kill_recoil()
 		_recoil = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 		_recoil.tween_property(_model, ^"rotation:x", _model_rest.x, 0.3)
@@ -1320,6 +1349,8 @@ func freeze(seconds: float = K.HOOK_FREEZE) -> void:
 	_airborne = false
 	_air = 0.0
 	_tumble = 0.0
+	if _ragdoll != null:
+		_ragdoll.stop()
 	_kill_recoil()
 	if _model != null:
 		# Back to rest before the ice, not left mid-lean: the pose a body holds
@@ -1380,6 +1411,15 @@ func _thaw_body() -> void:
 ## assert on it.
 func is_frozen() -> bool:
 	return state == State.FROZEN
+
+
+## Director-facing proof without exposing the helper's mutable physics nodes.
+func is_ragdoll_active() -> bool:
+	return _ragdoll != null and _ragdoll.is_active()
+
+
+func ragdoll_bone_count() -> int:
+	return _ragdoll.physical_bone_count() if _ragdoll != null else 0
 
 
 ## Hold still and thaw. The tint is written EVERY frame rather than tweened, for
@@ -2011,6 +2051,8 @@ func _on_died() -> void:
 	await tree.create_timer(2.2).timeout
 	if not is_instance_valid(self):
 		return
+	if _ragdoll != null:
+		_ragdoll.settle_for_cleanup()
 	var tw := create_tween()
 	tw.tween_property(self, ^"position:y", position.y - 1.6, 0.9)
 	await tw.finished
