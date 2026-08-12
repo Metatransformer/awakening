@@ -213,13 +213,14 @@ below.
 | | |
 |---|---|
 | Clean | **132.** Including `boss_cistern.gd`: #47's cast failure is gone, #59 fixed it, and the `Lambda capture at index 0 was freed` shape its comment warns about did not fire once in 136 runs. |
-| `voices.gd` | `Invalid access to property or key of type 'String' on a base object of type 'Dictionary'` — `DialogueDb.SAID[&"elder"][first]` on a take id that is not a key. It is a symptom: the same run fails seven of its own checks. **Card #71.** |
+| `critic_menu_hold.gd`, `critic_menu_hold2.gd` | Both raw-pad probes could no longer reach the settings rows and dereferenced null focus. **Resolved by #70:** the obsolete probes and their exemptions were deleted. |
+| `voices.gd` | The elder take lookup threw while seven conversation checks failed. **Resolved by #71:** the NPC service split restored the flow, guarded lookups now report a named failed check, and the exemption was deleted. |
 | `_error_selftest.gd` | Wrong on purpose. It frees a node and casts the dangling reference from a *helper*, so the error aborts only the helper and `run` carries on to print `SELFTEST OK -- every check passed`. That is #47 exactly, and it is how you watch the gate fire. |
 
-That `voices.gd` row is the whole of `tools/script_errors.allow` — per director
-**and** per message, carrying the card that deletes it. There is deliberately no
-switch that turns the gate off wholesale. An exempt error is still printed and
-still counted; the row only withholds the exit code.
+`tools/script_errors.allow` is now empty of exemptions. It remains a per-director,
+per-message debt ledger; there is deliberately no switch that turns the gate off
+wholesale. An exempt error would still be printed and counted, with its row only
+withholding the exit code.
 
 **Two things the survey found that are worse than the cast error it went looking
 for.**

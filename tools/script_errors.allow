@@ -19,7 +19,5 @@
 # adding the row here is how you file it.
 #
 # Taken 2026-08-11 from a sweep of all 136 directors on `main` at 661582b. See
-# CLAUDE.md §2. Obsolete critic probes formerly occupied two rows; #70 removed
-# both probes and their exemptions.
-
-voices.gd	Invalid access to property or key of type 'String' on a base object of type 'Dictionary'.	#71
+# CLAUDE.md §2. Cards #70 and #71 removed the three discovered exemptions; the
+# ledger is currently empty.

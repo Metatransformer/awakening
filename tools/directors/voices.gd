@@ -221,8 +221,10 @@ func _elder(rig) -> void:
 	var said: Node = rig.dialogue()
 	_ck("C5b in a box, with his name on it", said != null)
 	if said != null:
-		_ck("C5c showing the take that is playing (%s / %s)" % [first, said.text()],
-			said.text() == DialogueDb.SAID[&"elder"][first])
+		var first_words := _take_words(&"elder", first)
+		_ck("C5c showing the take that is playing (%s / %s; expected %s)"
+			% [first, said.text(), first_words if not first_words.is_empty() else "<missing take>"],
+			not first_words.is_empty() and said.text() == first_words)
 	await rig.capture(out.path_join("v_03_elder.png"))
 
 	# **Both at once**, which no row did before the merge: the greeting plays AND
@@ -247,8 +249,11 @@ func _elder(rig) -> void:
 	_ck("C7 and a different something the second time", second != first
 		and second != "")
 	var twice: Node = rig.dialogue()
-	_ck("C7b and the box moved with him (%s)" % (twice.text() if twice != null else ""),
-		twice != null and twice.text() == DialogueDb.SAID[&"elder"][second])
+	var second_words := _take_words(&"elder", second)
+	_ck("C7b and the box moved with him (%s; expected %s)"
+		% [twice.text() if twice != null else "",
+			second_words if not second_words.is_empty() else "<missing take>"],
+		twice != null and not second_words.is_empty() and twice.text() == second_words)
 	# Out through the door he offers rather than by walking off, which is the beat
 	# the Leave option exists for. His farewell has no recording yet, so this is
 	# also the check that a written line with no take behind it still reaches the
@@ -375,6 +380,11 @@ func _silence() -> void:
 
 
 # --- helpers -----------------------------------------------------------------
+
+func _take_words(who: StringName, take: String) -> String:
+	var said: Dictionary = DialogueDb.SAID.get(who, {})
+	return String(said.get(take, ""))
+
 
 func _row(screen, id: StringName) -> Dictionary:
 	for r in screen._rows:
