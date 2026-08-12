@@ -9,3 +9,13 @@ near = 0.05
 far = 140.0
 current = true
 script = ExtResource("cam_script")
+
+[node name="EnemyReadFill" type="DirectionalLight3D" parent="."]
+sky_mode = 1
+light_color = Color(0.66, 0.74, 0.95, 1)
+light_energy = 1.5
+light_indirect_energy = 0.0
+light_volumetric_fog_energy = 0.0
+light_specular = 1.0
+shadow_enabled = false
+light_cull_mask = 4
