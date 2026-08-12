@@ -384,8 +384,8 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `cam_up/down/left/right` | mouse motion (read in code) | right stick | camera |
 | `attack` | **LMB** | **RB / R1** (pad10) | light attack — the chain, or fire what is in the right hand |
 | `heavy` | **Shift+LMB** | **RT / R2** (axis5+) | heavy — one pull, one blow, on the **release**: **tap** = overhead, **hold** = spin, **airborne** = jump attack, **locked** = leap, or fire what is in the right hand. **The modifier only works because `attack` is read exactly** — see below |
-| `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held**, and it targets, and it recentres. In first person the guard drops out and only the target/recentre halves remain |
-| `context` | **Space** | **B / Circle** (pad1) | **tap** = dodge — **hold** = run, and then it is not a dodge |
+| `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held** and grounded only, and it targets, and it recentres. It drops on takeoff, cannot be raised in air, and may return on landing while held. In first person the guard drops out and only the target/recentre halves remain |
+| `context` | **Space** | **B / Circle** (pad1) | **tap** = dodge, including in air with a committed direction — **hold** = run, and then it is not a dodge |
 | `use_item` | **R** | **X / Square** (pad2) | drink the selected bottle — §4.1 |
 | `jump` | **F** | **Y / Triangle** (pad3) | jump |
 | `z_target` | **Q**, MMB | **R3** (pad8) | lock-on toggle / camera recentre |
@@ -599,13 +599,14 @@ the bar the run is about to need and throws the hero 3.2 m in whatever direction
 he was pointing. You could not start running without dodging first.
 
 The latency argument survives where it applies. `Hero._context_resolves_now`
-pays the press out **instantly** in every stance the run is withheld from —
-locked, guarding, aiming, airborne (below) — so the dodge you make with a sword
-coming at you costs nothing, and the leap under a raised guard is unchanged.
-Only the free-roam dodge, the one you make out of a run against nothing in
-particular, waits to be classified. The window is one number and not two on
-purpose: the frame the sprint begins is the frame the dodge stops being
-possible, so there is no band in which a press means neither.
+pays the press out **instantly** whenever the run is withheld — locked,
+guarding, aiming, or airborne — so the dodge you make with a sword coming at
+you costs nothing. An airborne press with a committed movement direction enters
+the same `MoveState.ROLL` before landing; it is spent in the air, never held and
+cashed in on touchdown. Only the grounded free-roam dodge, the one you make out
+of a run against nothing in particular, waits to be classified. The window is
+one number and not two on purpose: the frame the sprint begins is the frame the
+dodge stops being possible, so there is no band in which a press means neither.
 
 The run is deliberately **slower than a roll** (6.55). The roll is the fastest
 the hero ever travels and it costs a third of the bar for half a second; a
@@ -616,10 +617,11 @@ sprint meter, so a player who runs everywhere arrives with nothing to dodge on.
 It is withheld in three stances, each for its own reason: **locked** (the stick
 is a circle-strafe there, and "run" has no direction to mean), **guarding** and
 **aiming** (a run would have to drop a stance the player is holding a button
-for). Those are exactly the three `_context_resolves_now` names, and they have to
-be the same list: a stance with no run in it is a stance where the press is a
-dodge the instant it is made, held or not. **Holding the button in all three is
-just a dodge**, on the press frame, as it always was.
+for). It is also withheld **airborne**, where a grounded sprint has no meaning.
+Those are exactly the conditions `_context_resolves_now` names, and they have to
+match: when no run is possible, the press resolves as a dodge immediately.
+Holding the button in any of the three stances is just a dodge on the press
+frame; in air the ordinary committed-direction gate still applies.
 
 **Jump is real, and it is not OOT's contextual ledge-hop.** `K.JUMP_SPEED`
 against `K.GRAVITY` gives 0.96 m of apex and 0.59 s in the air, with full air
@@ -627,6 +629,11 @@ control throughout. It is **buffered** (`jump_buffer_time`, so a press during a
 fall lands and jumps) and **coyote-timed** off the same `coyote_time` the fall
 animation already used, so walking off a ledge and pressing a frame late still
 jumps.
+
+**The guard is grounded.** Starting a jump while the shield is held drops the
+active guard on the takeoff frame, and shield input cannot raise `blocking`
+anywhere in the arc. The input remains held rather than being consumed, so the
+ordinary guard may return once the hero lands and is otherwise eligible.
 
 Two things about it are worth knowing before touching it. First, the impulse is
 applied inside `Hero._apply_gravity`, not by the code that decides to jump:
