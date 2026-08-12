@@ -19,16 +19,67 @@ extends Control
 ##    not otherwise say. "The Foundry, 6 of 8 rooms" is a sentence about how far
 ##    through you are, and how far through you are is the whole reason to open
 ##    a map in this game.
+##  * **A view you can move.** The right stick pans it, the mouse drags it, and
+##    the wheel or the left stick zooms it. Only worth having because the plan
+##    is no longer fitted whole — see below.
 ##
-## It is deliberately not interactive. There is nothing to pan (the plan is
-## fitted whole), nothing to zoom (it is a schematic, not terrain), and no
-## marker to place. The single focusable control is Back, so the pad has
-## somewhere to be — a screen with no focusable Control at all strands a stick
-## user on nothing, which is the failure `MenuUtil.chain` exists to prevent.
+## **Why it pans, when this paragraph used to say it never would.** It said there
+## was nothing to pan, and while a floor fit its frame that was true. Two things
+## grew under it: the maze room is about three times the floor area it was, and
+## `Atlas.annexes` hangs the vault, the treasure chamber and the boss landing off
+## the grid at fractional cells, which `Atlas.bounds()` folds in. A fit of THAT
+## box is mostly empty margin with the rooms small in the middle of it, so the
+## screen you open to read the floor properly had quietly stopped being readable.
+##
+## **Zoom ships with the pan, and the screen opens ZOOMED IN.** Those are one
+## decision, not two. A pan on a fitted plan shows you nothing you were not
+## already looking at -- the whole floor is on screen, so there is nothing
+## off-frame to bring in -- and a pan-only screen therefore has to abandon the
+## fit permanently. But the fit is the picture that answers "how much of this
+## place is left" in one glance, and giving that up to gain a pan is a trade
+## nobody asked for. So: `zoom == 1.0` IS the old fitted plan, to the pixel, and
+## it is the bottom of the range; the screen opens at `OPEN_ZOOM`, where the plan
+## is half again bigger than its frame and there is somewhere for the pan to go
+## from the first frame the player sees. Nothing was taken away -- the
+## whole-floor picture is one pull of the stick down, and it is now a place you
+## can get back TO rather than the only place you can be.
+##
+## The view resets on every open (`refresh`). A map that remembered where you had
+## dragged it would open on a corner of the floor with no landmark in it, and the
+## first thing a player does with a map screen is look for where they are.
+##
+## Back is still the only focusable control, so the pad has somewhere to be — a
+## screen with no focusable Control at all strands a stick user on nothing, which
+## is the failure `MenuUtil.chain` exists to prevent. Panning deliberately does
+## NOT go through focus: it is polled off `cam_*` in `_process`, so it cannot
+## become the two-movers-on-one-press bug in CLAUDE.md §3's table.
 
 signal back_requested
 
-const HINT := "M / Tab Close    Esc / B Back"
+const HINT := "Drag / R-Stick Pan    Wheel / L-Stick Zoom    M / Tab Close    Esc / B Back"
+## The inset between the drawing surface and the plan inside it, in px. Named
+## because the clamp has to measure the same box the draw call is given, and two
+## copies of `-18.0` is two answers to how big the map is.
+const PLAN_PAD := 18.0
+## Where the view opens, as a multiple of the fitted pitch. Above 1.0 on purpose
+## -- see the class note. 1.75 crops about a quarter off each side, which is
+## enough that the stick has somewhere to go and little enough that the shape of
+## the floor is still the first thing on the screen.
+const OPEN_ZOOM := 1.75
+## The bottom of the range IS the old fitted-whole plan, to the pixel: the whole
+## floor inside the frame, which is the picture the zoom exists to give back.
+const ZOOM_MIN := 1.0
+## Four times the fit. Past this a room fills the frame and the map has stopped
+## being a map -- the same argument `MapDraw.FOLLOW_SPAN` makes about 3.
+const ZOOM_MAX := 4.0
+## Pan speed at full stick deflection, in px/sec. The canvas is ~600 px across,
+## so a shove crosses it in a little over a second.
+const PAN_SPEED := 520.0
+## Zoom units per second at full stick deflection: the whole range in ~1.7 s.
+const ZOOM_SPEED := 1.8
+## Per notch of the wheel. Multiplicative, so a notch feels the same size at
+## every zoom.
+const ZOOM_WHEEL := 1.14
 ## The drawing surface, inside the frame's padding. Square-ish and tall enough
 ## that a 4x4 floor still gets a big room; the legend sits beside it rather than
 ## under it so the map keeps the height.
@@ -57,6 +108,13 @@ var _back: Button
 var _hrow: HBoxContainer
 var _legend_rows: Array[Control] = []
 var _key_rule: Control
+## The view. `_zoom` multiplies `MapDraw.fit_pitch`; `_pan` is a pixel offset on
+## the centred plan, clamped by `MapDraw.pan_limit` so the plan can never be
+## pushed off its own frame.
+var _zoom := OPEN_ZOOM
+var _pan := Vector2.ZERO
+## True between the press and the release of a left-drag on the plan.
+var _dragging := false
 
 
 ## Where the shared tab strip is inserted. See `_hrow`.
@@ -136,8 +194,12 @@ func _build() -> void:
 	_canvas.custom_minimum_size = CANVAS_MIN
 	_canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# STOP, not IGNORE: this is the one surface on these screens the player
+	# grabs. The panel's own root stays IGNORE -- a filter on a parent does not
+	# gate its children, so nothing else on the screen becomes clickable.
+	_canvas.mouse_filter = Control.MOUSE_FILTER_STOP
 	_canvas.draw.connect(_draw_plan)
+	_canvas.gui_input.connect(_plan_input)
 	split.add_child(_canvas)
 
 	var side := VBoxContainer.new()
@@ -198,6 +260,10 @@ func _build() -> void:
 
 
 func refresh() -> void:
+	# The view resets on every open. See the class note.
+	_zoom = OPEN_ZOOM
+	_pan = Vector2.ZERO
+	_dragging = false
 	_rebuild_band()
 	if Atlas.has_floor():
 		# The floor's NAME, which the band cannot carry -- a band cell is a
@@ -271,6 +337,125 @@ func focus_first() -> void:
 		_back.grab_focus()
 
 
+# --- The view -----------------------------------------------------------------
+# Pan and zoom, and the two devices that drive them. The stick is POLLED and the
+# mouse is EVENT-DRIVEN, which is the split the input skill prescribes and not an
+# inconsistency: an analog axis held at 40% for two seconds is a continuous
+# quantity that has no events in the middle of it, and a drag is a stream of
+# events that carries its own distance in `relative`.
+
+
+## The right stick, and the left one for zoom, while this screen is up.
+##
+## `cam_*` and not a pair of actions of its own: the right stick MOVES THE VIEW
+## everywhere else in this game, and a player who rebinds that expects the map to
+## follow. The action's own 0.2 deadzone is what keeps a resting stick from
+## drifting the plan -- `Input.get_vector` applies it, which is also why the null
+## case in `tools/directors/map_pan.gd` reads exactly zero.
+##
+## Sign: pushing the stick right moves the VIEW right, so the plan slides LEFT
+## under it. That is the camera convention this stick already has in the world.
+## The mouse runs the other way (`_plan_input`) because a drag grabs the paper,
+## and every map in every application does both.
+func _process(delta: float) -> void:
+	# `is_visible_in_tree`, not `visible`. The panel's own flag stays true after
+	# the menu closes on the MAP tab -- `PauseMenu` hides `Root`, not the screen
+	# inside it -- so a bare `visible` check would have the right stick panning a
+	# map nobody is looking at while the player is steering the camera with it.
+	if not is_visible_in_tree() or not Atlas.has_floor():
+		return
+	var stick := Input.get_vector(&"cam_left", &"cam_right",
+		&"cam_up", &"cam_down")
+	# The left stick has nothing else to do on this screen -- Back is the only
+	# focusable control and `ui_up`/`ui_down` land back on it -- so it is where
+	# the zoom goes. Up is in, which is the way a map has zoomed since paper.
+	var wheel := Input.get_axis(&"move_down", &"move_up")
+	if stick == Vector2.ZERO and is_zero_approx(wheel):
+		return
+	if not is_zero_approx(wheel):
+		_set_zoom(_zoom + wheel * ZOOM_SPEED * delta)
+	if stick != Vector2.ZERO:
+		_move_pan(-stick * PAN_SPEED * delta)
+	_canvas.queue_redraw()
+
+
+## The mouse: left-drag pans, wheel zooms. `accept_event()` on everything this
+## takes, so a drag that wanders off the plan does not turn into a click on
+## whatever is under it.
+func _plan_input(event: InputEvent) -> void:
+	if not Atlas.has_floor():
+		return
+	var btn := event as InputEventMouseButton
+	if btn != null:
+		if btn.button_index == MOUSE_BUTTON_LEFT:
+			_dragging = btn.pressed
+			accept_event()
+		elif btn.pressed and btn.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_set_zoom(_zoom * ZOOM_WHEEL)
+			_canvas.queue_redraw()
+			accept_event()
+		elif btn.pressed and btn.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_set_zoom(_zoom / ZOOM_WHEEL)
+			_canvas.queue_redraw()
+			accept_event()
+		return
+	var motion := event as InputEventMouseMotion
+	if motion != null and _dragging:
+		# `relative`, not a start-point subtraction: the viewport hands the drag
+		# to whichever Control took the press, and `relative` is already the
+		# distance since the last motion event on it.
+		_move_pan(motion.relative)
+		_canvas.queue_redraw()
+		accept_event()
+
+
+## Zoom about the middle of the frame, so the thing the player is looking at
+## stays where it is.
+##
+## `_pan` scales with the pitch, and that one line is the whole of "about the
+## centre": `draw_map` centres the plan and then adds `_pan`, so the grid point
+## under the box's centre is fixed exactly when `_pan` grows in step with the
+## zoom. Derived rather than iterated -- an eyeballed factor here is a map that
+## creeps sideways every time you scroll.
+func _set_zoom(to: float) -> void:
+	var was := _zoom
+	_zoom = clampf(to, ZOOM_MIN, ZOOM_MAX)
+	if is_zero_approx(was):
+		return
+	_pan *= _zoom / was
+	_clamp_pan()
+
+
+func _move_pan(by: Vector2) -> void:
+	_pan += by
+	_clamp_pan()
+
+
+## Hold the plan against its own frame. `MapDraw.pan_limit` owns the rule and
+## the reason it is not the obvious one.
+func _clamp_pan() -> void:
+	if not Atlas.has_floor():
+		_pan = Vector2.ZERO
+		return
+	var lim := MapDraw.pan_limit(_plan_box(), Atlas.bounds(), _zoom)
+	_pan = Vector2(clampf(_pan.x, -lim.x, lim.x), clampf(_pan.y, -lim.y, lim.y))
+
+
+## The rect the plan is drawn into. `_draw_plan` and `_clamp_pan` must be given
+## the same box or the clamp is measuring a different map from the one on screen.
+func _plan_box() -> Rect2:
+	return Rect2(Vector2.ZERO, _canvas.size).grow(-PLAN_PAD)
+
+
+## The view, for a director to read back. There is no other way to ask "did the
+## stick move the plan" that does not either re-derive `MapDraw`'s arithmetic or
+## count pixels, and a director wants both -- see `tools/directors/map_pan.gd`.
+func view() -> Dictionary:
+	return {&"zoom": _zoom, &"pan": _pan,
+		&"limit": MapDraw.pan_limit(_plan_box(), Atlas.bounds(), _zoom)
+			if Atlas.has_floor() else Vector2.ZERO}
+
+
 func _draw_plan() -> void:
 	var box := Rect2(Vector2.ZERO, _canvas.size)
 	if box.size.x < 8.0 or box.size.y < 8.0:
@@ -286,7 +471,12 @@ func _draw_plan() -> void:
 	# line weights here come out the same thickness as everything else the theme
 	# draws at this resolution rather than scaling with the panel.
 	var s_y: float = float(get_viewport().get_visible_rect().size.y)
-	MapDraw.draw_map(_canvas, box.grow(-18.0), s_y, _hero())
+	# The canvas can be resized by the container between the last clamp and this
+	# draw, and a `_pan` clamped against the old box would let the plan sit off
+	# its frame for a frame. Cheap, and it is the only place that knows the real
+	# size. `false` is the fit; `_zoom`/`_pan` are the player's view on top of it.
+	_clamp_pan()
+	MapDraw.draw_map(_canvas, _plan_box(), s_y, _hero(), false, _zoom, _pan)
 
 
 ## The hero, or null in a scene that has none. The world is paused behind this

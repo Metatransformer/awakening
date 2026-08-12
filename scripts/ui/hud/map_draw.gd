@@ -79,8 +79,18 @@ const FOLLOW_SPAN := 3.4
 ## `hero` may be null -- the menu screen draws the same map with the world
 ## paused and the hero perfectly findable, but a lookdev scene has neither. A
 ## following map with no hero has nothing to follow and falls back to the fit.
+##
+## `zoom` and `pan` belong to the FITTED map and to nothing else -- the MAP
+## screen's view, which the player drives with the right stick and the mouse
+## (`MenuMapPanel`). `zoom` multiplies the fitted pitch, so `1.0` is the whole
+## floor in the box exactly as it has always been drawn, and `pan` is a pixel
+## offset on top of that. The following branch never reads either: a minimap that
+## the player can push around is a minimap that has stopped answering "where am
+## I", which is the only question it is up there to answer. The defaults are what
+## `Hud._draw_minimap` passes by not passing them.
 static func draw_map(ci: CanvasItem, box: Rect2, s_y: float,
-		hero: Node3D, follow: bool = false) -> void:
+		hero: Node3D, follow: bool = false, zoom: float = 1.0,
+		pan: Vector2 = Vector2.ZERO) -> void:
 	if not Atlas.has_floor():
 		return
 	var b := Atlas.bounds()
@@ -95,11 +105,13 @@ static func draw_map(ci: CanvasItem, box: Rect2, s_y: float,
 		origin = box.get_center() - (Atlas.cellf_of(hero.global_position)
 			- Vector2(b.position) + Vector2(0.5, 0.5)) * pitch
 	else:
-		pitch = minf(box.size.x / float(b.size.x), box.size.y / float(b.size.y))
+		pitch = fit_pitch(box, b) * maxf(zoom, 0.01)
 		# Centre the fitted grid in the box rather than pinning it to a corner: the
 		# floor's aspect changes run to run and a map jammed against one edge reads
-		# as a layout bug on every floor that is not square.
-		origin = box.position + (box.size - Vector2(b.size) * pitch) * 0.5
+		# as a layout bug on every floor that is not square. `pan` then slides that
+		# centred plan under the box; at `zoom == 1.0` there is nothing outside the
+		# box to slide to and `MenuMapPanel` clamps it to zero.
+		origin = box.position + (box.size - Vector2(b.size) * pitch) * 0.5 + pan
 	if pitch < 4.0:
 		return
 
@@ -151,6 +163,42 @@ static func draw_map(ci: CanvasItem, box: Rect2, s_y: float,
 
 	if hero != null:
 		_draw_hero(ci, origin, pitch, b, hero, room, box)
+
+
+## Pixels per cell that puts the whole of `b` inside `box`. This is `zoom == 1.0`
+## and it is the number `draw_map`'s fitted branch has always used; it is public
+## so the MAP screen's view can be expressed as a multiple of it rather than
+## re-deriving the fit and drifting from the map it is scaling.
+static func fit_pitch(box: Rect2, b: Rect2i) -> float:
+	return minf(box.size.x / float(b.size.x), box.size.y / float(b.size.y))
+
+
+## How far the fitted plan may be panned, per axis, in pixels. One rule: **the
+## pan slides the plan until an edge of it meets the same edge of the box**, and
+## `draw_map` centres the plan before adding `pan`, so that distance is half the
+## difference between the two rectangles.
+##
+## `absf`, and that is the whole of the subtlety. The obvious clamp is half the
+## OVERFLOW -- `maxf(grid - box, 0)` -- and it reads as the right answer until
+## you notice which axis it kills. `fit_pitch` takes the SMALLER ratio, so a
+## fitted plan is letterboxed on the other axis, and zooming in grows it past the
+## box on one axis long before the other: a 6x7 floor in the MAP screen's 820x394
+## well overflows vertically at 1.2x and does not overflow horizontally until
+## 2.4x. Under the overflow clamp the player pushes the stick left at the zoom
+## the screen opens on and gets NOTHING, which is the exact complaint card #122
+## was filed about, arrived at from the other direction.
+##
+## So on an axis with a letterbox band the pan slides the plan inside that band
+## instead. It reveals nothing new there -- there is nothing off-frame to reveal
+## -- but it puts the part of the floor you are reading under the middle of your
+## eye instead of against an edge, and a control that answers in two directions
+## out of four is a broken control however defensible each half is.
+##
+## Either way the plan cannot be pushed off its frame: at the stop, one edge of
+## the plan is exactly on one edge of the box.
+static func pan_limit(box: Rect2, b: Rect2i, zoom: float) -> Vector2:
+	var grid := Vector2(b.size) * fit_pitch(box, b) * maxf(zoom, 0.01)
+	return (grid - box.size).abs() * 0.5
 
 
 static func _centre(origin: Vector2, pitch: float, b: Rect2i,
