@@ -80,7 +80,7 @@ func _auto_and_pouch(rig) -> void:
 	_ck("A4 POUCH leaves unrelated loot unstarred", not _pouch_star(pouch, TRASH))
 	_focus_pouch_item(pouch, &"bone_shard")
 	_ck("A5 POUCH detail carries the live usage sentence",
-		String(pouch._detail_blurb.text).contains("FLETCH ARROWS"))
+		String(pouch._tip.blurb.text).contains("FLETCH ARROWS"))
 	await rig.capture(_out.path_join("pouch_item_usage.png"))
 	await rig.wait_frames(6)
 	Menu.call(&"close")
