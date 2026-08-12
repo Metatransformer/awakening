@@ -5,7 +5,11 @@ extends Node
 ## Health is counted in QUARTER hearts (K.QUARTER), like the source material —
 ## a heart is K.HEART == 4 quarters, and the HUD draws quarter-heart states.
 
+const GarrisonRaidStateScript := preload(
+	"res://scripts/systems/garrison_raid_state.gd")
+
 signal garrison_changed
+signal garrison_raid_restoring
 
 var max_quarters: int = K.START_HEARTS * K.HEART
 var quarters: int = K.START_HEARTS * K.HEART
@@ -334,6 +338,7 @@ var carrying_firewood: bool = false
 var timber_completed_day: int = 0
 var warmth_active: bool = false
 var last_bonfire_day: int = 0
+var _garrison_raid := GarrisonRaidStateScript.new()
 
 
 # --- The starter kit --------------------------------------------------------
@@ -363,6 +368,7 @@ const STARTER_KIT: Array[StringName] = []
 
 
 func _ready() -> void:
+	_garrison_raid.changed.connect(_on_garrison_raid_changed)
 	_grant_starter_kit()
 
 
@@ -467,10 +473,16 @@ func garrison_snapshot() -> Dictionary:
 		"timber_completed_day": timber_completed_day,
 		"warmth_active": warmth_active,
 		"last_bonfire_day": last_bonfire_day,
+		"raid": _garrison_raid.snapshot(),
 	}
 
 
 func restore_garrison(data: Dictionary) -> void:
+	# A pause-menu load may happen while the old courtyard and its live enemy
+	# mirrors still exist. Tell that scene to discard them before replacing the
+	# campaign authority so teardown cannot write stale combat state into the save.
+	garrison_raid_restoring.emit()
+	var previous_raid: Dictionary = _garrison_raid.snapshot()
 	var restored_stock: int = clampi(int(data.get("firewood_stock", 0)),
 		0, FIREWOOD_CAP)
 	var restored_carrying: bool = bool(data.get("carrying_firewood", false))
@@ -482,6 +494,9 @@ func restore_garrison(data: Dictionary) -> void:
 		or restored_timber_day != timber_completed_day \
 		or restored_warmth != warmth_active \
 		or restored_bonfire_day != last_bonfire_day
+	var raw_raid: Variant = data.get("raid", {})
+	_garrison_raid.restore(raw_raid as Dictionary if raw_raid is Dictionary else {})
+	changed = changed or previous_raid != _garrison_raid.snapshot()
 	firewood_stock = restored_stock
 	carrying_firewood = restored_carrying
 	timber_completed_day = restored_timber_day
@@ -489,6 +504,117 @@ func restore_garrison(data: Dictionary) -> void:
 	last_bonfire_day = restored_bonfire_day
 	if changed:
 		garrison_changed.emit()
+
+
+func raid_arm(at_day: int, at_hour: float) -> bool:
+	return _garrison_raid.arm(at_day, at_hour)
+
+
+func raid_observe_hour(at_day: int, at_hour: int) -> void:
+	_garrison_raid.observe_time(at_day, float(at_hour))
+
+
+func raid_phase() -> StringName:
+	return _garrison_raid.phase()
+
+
+func raid_status() -> Dictionary:
+	return _garrison_raid.status()
+
+
+func raid_scheduled_day() -> int:
+	return _garrison_raid.scheduled_raid_day()
+
+
+func raid_attack_hour() -> int:
+	return GarrisonRaidStateScript.ATTACK_HOUR
+
+
+func raid_integrity() -> int:
+	return _garrison_raid.integrity()
+
+
+func raid_integrity_fraction() -> float:
+	return _garrison_raid.integrity_fraction()
+
+
+func raid_active() -> bool:
+	return _garrison_raid.is_active()
+
+
+func raid_terminal() -> bool:
+	return _garrison_raid.is_terminal()
+
+
+func raid_defense_built() -> bool:
+	return _garrison_raid.defense_built()
+
+
+func raid_ledger_stolen() -> bool:
+	return _garrison_raid.ledger_stolen()
+
+
+func raid_build_defense() -> bool:
+	return _garrison_raid.build_defense()
+
+
+func raid_restore_ledger() -> bool:
+	return _garrison_raid.restore_ledger()
+
+
+func raid_set_live_scene_ownership(owns_simulation: bool) -> void:
+	_garrison_raid.set_live_scene_ownership(owns_simulation)
+
+
+func raid_live_defense_target(delta: float) -> StringName:
+	return _garrison_raid.live_defense_target(delta)
+
+
+func raid_attacker_records() -> Array[Dictionary]:
+	return _garrison_raid.attacker_records()
+
+
+func raid_sync_attacker(raider_id: StringName, hp: int, route_progress: float,
+		objective_cooldown: float) -> bool:
+	return _garrison_raid.sync_attacker(
+		raider_id, hp, route_progress, objective_cooldown)
+
+
+func raid_report_damage(raider_id: StringName, amount: int) -> bool:
+	return _garrison_raid.damage_attacker(raider_id, amount)
+
+
+func raid_report_kill(raider_id: StringName) -> bool:
+	return _garrison_raid.kill_attacker(raider_id)
+
+
+func raid_objective_attack(raider_id: StringName) -> bool:
+	return _garrison_raid.objective_attack(raider_id)
+
+
+func raid_sleep_crosses_attack(target_day: int, target_hour: float) -> bool:
+	return _garrison_raid.crosses_attack_boundary(
+		Clock.day, Clock.hour, target_day, target_hour)
+
+
+func _on_garrison_raid_changed() -> void:
+	garrison_changed.emit()
+
+
+func _deliver_raid_notices() -> void:
+	if get_tree().paused or Flow.busy or Prompt.blocked:
+		return
+	if _garrison_raid.consume_advance_notice():
+		Bus.request_message.emit("ALDRIC: RAIDERS WILL STRIKE AT 23:00.")
+		return
+	if not _garrison_raid.consume_urgent_notice():
+		return
+	Bus.request_global_sfx.emit(&"raid_horn")
+	if Run.in_dungeon:
+		Bus.request_message.emit(
+			"THE GARRISON IS UNDER ATTACK. EXTRACT WITH THE ESCAPE ROPE OR PRESS ON.")
+	else:
+		Bus.request_message.emit("THE GARRISON IS UNDER ATTACK. TO THE COURTYARD.")
 
 
 func can_chop_firewood(at_day: int, phase: StringName) -> bool:
@@ -747,6 +873,9 @@ func restore_magic(amount: int) -> void:
 ## bar refills so smoothly that it reads as no system at all.
 
 func _process(delta: float) -> void:
+	_garrison_raid.observe_time(Clock.day, Clock.hour)
+	_deliver_raid_notices()
+	_garrison_raid.tick(delta)
 	_tick_draughts(delta)
 	_tick_meal(delta)
 	if _stamina_hold > 0.0:

@@ -287,6 +287,7 @@ const RELICS: Array[Dictionary] = [
 ## catalogue is data and the ladder is a Control, and a table of twelve objects
 ## reaching up into the UI layer for a tick would be the wrong arrow.
 const RECORDED := "✓"
+const TALLY_LEDGER_ID: StringName = &"tally_ledger"
 
 const SOURCE_DEEP_CHEST := &"deep_chest"
 const SOURCE_VAULT := &"vault"
@@ -544,6 +545,8 @@ static func flag_donated(id: StringName) -> StringName:
 static func recover(id: StringName) -> bool:
 	if by_id(id).is_empty():
 		return false
+	if id == TALLY_LEDGER_ID and Game.raid_ledger_stolen():
+		return Game.raid_restore_ledger()
 	Game.set_flag(flag_held(id))
 	return true
 
@@ -555,10 +558,14 @@ static func recover(id: StringName) -> bool:
 ## `held()` has to subtract. Reading only `relic_held_*` would leave every
 ## donated relic sitting in the player's hand forever.
 static func held(id: StringName) -> bool:
+	if id == TALLY_LEDGER_ID and Game.raid_ledger_stolen():
+		return false
 	return Game.flag(flag_held(id)) and not donated(id)
 
 
 static func donated(id: StringName) -> bool:
+	if id == TALLY_LEDGER_ID and Game.raid_ledger_stolen():
+		return false
 	return Game.flag(flag_donated(id))
 
 
@@ -675,7 +682,8 @@ static func lines() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for row in RELICS:
 		var id: StringName = row["id"]
-		var known := held(id) or donated(id)
+		var stolen: bool = id == TALLY_LEDGER_ID and Game.raid_ledger_stolen()
+		var known := held(id) or donated(id) or stolen
 		out.append({
 			"id": id,
 			"label": String(row["name"]).to_upper(),
@@ -691,14 +699,14 @@ static func lines() -> Array[Dictionary]:
 			# price would print "80 ◇" forever over the tick that is the whole
 			# point of the board. It is also just true -- there is nothing left
 			# to pay on a relic that is already working.
-			"cost": 0 if donated(id) else int(row["repair"]),
+			"cost": 0 if donated(id) or stolen else int(row["repair"]),
 			# Where a priced counter puts the price, hers puts the tally. Twelve
 			# cells reading "0 ◇" said nothing twelve times; a tick on the ones
 			# that are in makes the board the checklist this list has always
 			# claimed to be. Authored here rather than inferred by the screen
 			# from `remaining() == 0`, which is equally true of a maxed jewel
 			# slot whose free Recut row means the opposite of done.
-			"tally": RECORDED if donated(id) else "",
+			"tally": "STOLEN" if stolen else (RECORDED if donated(id) else ""),
 			# **No `parts`.** The first cut carried `{id: 1}` here, on the reasoning
 			# that the price IS the object and the concrete `Catalogue.crafts()`
 			# would then make the row a hold with nothing overridden. It read wrong
@@ -780,6 +788,8 @@ static func remaining(id: StringName) -> int:
 ## the refusal below reads out.
 static func can_buy(line: Dictionary) -> bool:
 	var id: StringName = line["id"]
+	if id == TALLY_LEDGER_ID and Game.raid_ledger_stolen():
+		return false
 	return held(id) and Game.gold >= repair_cost(id)
 
 
@@ -791,6 +801,8 @@ static func can_buy(line: Dictionary) -> bool:
 ## is on the counter does the price become the reason.
 static func refusal(line: Dictionary) -> String:
 	var id: StringName = line["id"]
+	if id == TALLY_LEDGER_ID and Game.raid_ledger_stolen():
+		return "NOT RECOVERED. %s" % where_text(id)
 	if donated(id):
 		return "ALREADY RECORDED"
 	if not held(id):
@@ -817,6 +829,8 @@ static func buy(line: Dictionary) -> bool:
 	var id: StringName = line["id"]
 	Game.spend_gold(repair_cost(id))
 	Game.set_flag(flag_donated(id))
+	if id == TALLY_LEDGER_ID:
+		Game.raid_arm(Clock.day, Clock.hour)
 	# The counter's chime, and the cue every existing listener already handles
 	# by ignoring the id (`Sfx`, `HeroCombat`). What was acquired is the unlock
 	# and the lamp, not the relic -- the player just gave that away -- but the

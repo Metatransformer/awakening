@@ -1,6 +1,6 @@
 # Design test — Raid Loop Proof
 
-- **Status:** Draft — MVP specified; raid gameplay is not implemented
+- **Status:** Implementation complete — human test pending
 - **Owner:** Project owner
 - **Canon owners in scope:** [../GDD.md](../GDD.md),
   [../GARRISON_LIFE.md](../GARRISON_LIFE.md), and [../SCOPE.md](../SCOPE.md)
@@ -39,9 +39,12 @@ defenses would multiply interruption rather than deepen responsibility.
 
 ## Current evidence
 
-- The garrison, ordinary extraction, Tally-Ledger donation, enemies, civil clock,
-  sleeping, and Firewood/Hearth rhythm exist.
-- Raid gameplay, the Builder, and the Bolt-Thrower do not exist yet.
+- The implemented slice includes the Vyr Builder and optional West Gate
+  Bolt-Thrower, the 15:00 warning and 23:00 horn, sleep interruption, and the
+  four-raider main-gate route and wave.
+- Its normal HUD reports authoritative GARRISON integrity; the raid wave and
+  integrity persist across leaving and saving, and loss steals the recoverable
+  Tally-Ledger and suppresses its benefit.
 - The earlier Core Loop Proof was superseded before human testing. It has no
   pass or fail result.
 - No human session answers this question.
@@ -63,14 +66,18 @@ Build one authored occurrence:
 7. An underground player may continue or use the normal Escape Rope. The raid
    grants no summon, teleport, or free extraction; the descent ends normally.
 8. Send one wave of **three kobolds and one orc** through the main gate.
-9. If the player is present, resolve the defense through manual combat.
-10. If the player is absent and the Bolt-Thrower exists, it holds. If the player
+9. Only a completed raider attack on the courtyard command standard reduces
+   GARRISON integrity. Killing every raider while integrity remains above zero
+   wins. Reaching zero while any raider lives is an irreversible loss, even if
+   the remaining raiders later die.
+10. If the player is present, resolve the defense through manual combat.
+11. If the player is absent and the Bolt-Thrower exists, it holds. If the player
     is absent and it does not exist, the raid fails.
-11. On failure, steal the donated Tally-Ledger. Suppress its benefit and show
+12. On failure, steal the donated Tally-Ledger. Suppress its benefit and show
     its mount empty. Return it to its original dungeon location.
-12. Recovering the Ledger restores the prior donation and benefit without a
+13. Recovering the Ledger restores the prior donation and benefit without a
     second repair cost.
-13. The sequence occurs once. Add no recurrence scheduler.
+14. The sequence occurs once. Add no recurrence scheduler.
 
 The slice adds no currency, UI screen, voiced line, or enemy model. It does not
 include scouts, guards, watchtowers, multiple waves or routes, another defense,
@@ -166,7 +173,7 @@ decision.
 
 ## Result
 
-Not tested. Raid gameplay is not implemented.
+Not tested.
 
 ## Decision
 

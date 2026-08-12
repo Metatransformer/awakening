@@ -161,6 +161,13 @@ Only the authored one-raid vertical slice in
 sequence, one optional defense, one attack, one recoverable theft, and one
 occurrence.
 
+The implemented slice uses a normal HUD **GARRISON** integrity bar. Only
+completed attacks on the courtyard command standard reduce it. Killing every
+raider while integrity remains above zero wins; reaching zero while any raider
+lives is an irreversible loss, even if stragglers die afterward. Leaving and
+returning preserves the same surviving wave and integrity. Five cold human
+sessions remain the active proof.
+
 ### Later only if proven
 
 - Production expansion within the hard caps in [SCOPE.md](SCOPE.md).

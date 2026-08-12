@@ -1,7 +1,7 @@
 class_name Garrison
 extends Node3D
 ## The hub. **A garrison, not a town** -- the Highbridge people's walled camp
-## over the mouth of the mine. Four people, a yard, and a hole in the ground.
+## over the mouth of the mine. Six people, a yard, and a hole in the ground.
 ##
 ## Two mistakes are recorded here because the fix for each broke the other, and
 ## the current build is the shape that satisfies both:
@@ -91,6 +91,7 @@ var smith: Npc
 var alchemist: Npc
 var keeper: Npc
 var jeweller: Npc
+var builder: Npc
 var gate: SurfaceTransition
 ## The hero's billet, in the south-west corner. Public so a director can walk to
 ## it without knowing where the corner is.
@@ -102,6 +103,9 @@ var atmosphere: SurfaceAtmosphere
 var plaza: Plaza
 var statue: Statue
 var hearth: GarrisonHearth
+var raid_objective: GarrisonRaidObjective
+var bolt_thrower: BoltThrower
+var raid_raiders: Array[RaidRaider] = []
 ## The twelve dark props, in `RelicDb` catalogue order. Public so a director can
 ## photograph one corner before and after, which is the only way anybody can
 ## check the claim this system exists to make.
@@ -117,6 +121,7 @@ var lights: Array[GarrisonLight] = []
 ## plays sets `met_`, so a second call made afterwards would name the NEXT keeper
 ## and the yard would be introducing somebody who is not standing in it.
 var _arriving: StringName = &""
+var _owns_raid_simulation := false
 
 
 ## Deliberately says nothing about the run you just finished.
@@ -142,6 +147,7 @@ func _ready() -> void:
 	house = compound.player_bunk
 	_build_plaza()
 	_build_hearth()
+	_build_raid_objective()
 	# Before a single body is placed: who this homecoming is FOR. See `_arriving`.
 	# It must be read BEFORE `_build_compound_people`, not after -- the scene and
 	# the bodies have to name the same person or the elder introduces somebody who
@@ -151,6 +157,12 @@ func _ready() -> void:
 	_build_relic_props()
 	Clock.service_availability_changed.connect(_apply_staffing)
 	Clock.garrison_phase_changed.connect(_apply_staffing)
+	Game.garrison_changed.connect(_sync_raid)
+	Game.garrison_raid_restoring.connect(_discard_raid_mirrors)
+	Bus.item_acquired.connect(_on_item_acquired)
+	Game.raid_set_live_scene_ownership(true)
+	_owns_raid_simulation = true
+	_sync_raid()
 	_apply_staffing()
 	_place_dawn_wake()
 	_open_the_game()
@@ -705,6 +717,13 @@ func _build_hearth() -> void:
 	hearth.global_transform = compound.global_transform * compound.port(&"hearth")
 
 
+func _build_raid_objective() -> void:
+	raid_objective = GarrisonRaidObjective.new()
+	raid_objective.name = &"RaidObjective"
+	raid_objective.position = Vector3(0.0, 0.05, -6.3)
+	add_child(raid_objective)
+
+
 ## One keeper, at their named port -- if they are in the yard on this visit.
 ##
 ## **`present` and not `unlocked`** (card #115). Unlocking latches the arrival
@@ -736,6 +755,7 @@ func _apply_staffing(_changed: Variant = null) -> void:
 		[alchemist, &"alchemist_day", &"alchemist_bonfire", &"alchemist_sleep"],
 		[keeper, &"elder_day", &"elder_bonfire", &"elder_sleep"],
 		[jeweller, &"jewelcrafter_day", &"jewelcrafter_bonfire", &"jewelcrafter_sleep"],
+		[builder, &"builder_day", &"builder_bonfire", &"builder_sleep"],
 	]
 	var phase: StringName = Clock.garrison_phase()
 	for row: Array in roster:
@@ -755,6 +775,117 @@ func _apply_staffing(_changed: Variant = null) -> void:
 			target_port = StringName(row[3])
 		npc.set_activity(activity,
 			compound.global_transform * compound.port(target_port))
+
+
+func _on_item_acquired(id: StringName) -> void:
+	if id == RelicDb.TALLY_LEDGER_ID:
+		_sync_raid()
+
+
+func _ensure_builder() -> void:
+	if builder != null and is_instance_valid(builder):
+		return
+	if not Game.flag(RelicDb.flag_donated(RelicDb.TALLY_LEDGER_ID)):
+		return
+	builder = Npc.new()
+	builder.name = &"Builder"
+	builder.role = Npc.Role.BUILDER
+	builder.lamp_color = Pal.RUST
+	add_child(builder)
+	builder.global_transform = compound.global_transform * compound.port(&"builder_day")
+	_apply_staffing()
+
+
+## Reconcile the courtyard with Game's saved raid records. This is safe to call
+## for every garrison change: stable ids prevent duplicate live bodies.
+func _sync_raid() -> void:
+	_ensure_builder()
+	if Game.raid_defense_built() and not is_instance_valid(bolt_thrower):
+		bolt_thrower = BoltThrower.new()
+		bolt_thrower.name = &"BoltThrower"
+		bolt_thrower.position = Vector3(-8.6, 0.05, 13.4)
+		add_child(bolt_thrower)
+	for light: GarrisonLight in lights:
+		light.sync()
+
+	for i in range(raid_raiders.size() - 1, -1, -1):
+		if not is_instance_valid(raid_raiders[i]):
+			raid_raiders.remove_at(i)
+	var phase := Game.raid_phase()
+	if phase != GarrisonRaidState.PHASE_ACTIVE \
+			and phase != GarrisonRaidState.PHASE_LOST:
+		return
+	var records := Game.raid_attacker_records()
+	for record: Dictionary in records:
+		if not bool(record.get("alive", false)) or int(record.get("hp", 0)) <= 0:
+			continue
+		var id := StringName(record.get("id", &""))
+		if id == &"" or _raid_raider(id) != null:
+			continue
+		var raider := RaidRaider.new()
+		raider.name = StringName("RaidRaider_%s" % String(id))
+		raider.configure(record, _raid_route(_raid_lane(id)), raid_objective)
+		add_child(raider)
+		raid_raiders.append(raider)
+
+
+func _discard_raid_mirrors() -> void:
+	for raider: RaidRaider in raid_raiders:
+		if is_instance_valid(raider):
+			raider.discard_mirror()
+			raider.queue_free()
+	raid_raiders.clear()
+
+
+func _raid_raider(id: StringName) -> RaidRaider:
+	for raider: RaidRaider in raid_raiders:
+		if is_instance_valid(raider) and raider.raid_id == id:
+			return raider
+	for node: Node in get_tree().get_nodes_in_group(&"raid_raider"):
+		var raider := node as RaidRaider
+		if raider != null and raider.raid_id == id:
+			if not raid_raiders.has(raider):
+				raid_raiders.append(raider)
+			return raider
+	return null
+
+
+func _raid_lane(id: StringName) -> int:
+	match id:
+		&"kobold_1":
+			return 0
+		&"kobold_2":
+			return 1
+		&"kobold_3":
+			return 2
+		_:
+			return 3
+
+
+func _raid_route(lane_index: int) -> Array[Vector3]:
+	var lanes: Array[float] = [-2.1, -0.7, 0.7, 2.1]
+	var x := lanes[clampi(lane_index, 0, lanes.size() - 1)]
+	var local_points: Array[Vector3] = [
+		Vector3(x, 0.05, 24.0),
+		Vector3(x * 0.90, 0.05, 20.2),
+		Vector3(x * 0.55, 0.05, 18.0),
+		Vector3(x * 0.20, 0.05, 15.4),
+		Vector3(x * 0.14, 0.05, 9.0),
+		Vector3(0.0, 0.05, -6.3),
+	]
+	var world_points: Array[Vector3] = []
+	for point: Vector3 in local_points:
+		world_points.append(to_global(point))
+	return world_points
+
+
+func _exit_tree() -> void:
+	for raider: RaidRaider in raid_raiders:
+		if is_instance_valid(raider):
+			raider.sync_now()
+	if _owns_raid_simulation:
+		Game.raid_set_live_scene_ownership(false)
+		_owns_raid_simulation = false
 
 
 func _place_dawn_wake() -> void:

@@ -79,6 +79,7 @@ func _define_ports() -> void:
 		&"alchemist_day": _port_at(Vector3(15.3, 0.05, 1.0), -PI * 0.5),
 		&"elder_day": _port_at(Vector3(15.3, 0.05, 6.0), -PI * 0.5),
 		&"jewelcrafter_day": _port_at(Vector3(15.3, 0.05, 11.0), -PI * 0.5),
+		&"builder_day": _port_at(Vector3(8.0, 0.05, -12.8), 0.0),
 		&"hearth": _port_at(hearth_at, 0.0),
 		&"quartermaster_bonfire": _facing_port(
 			hearth_at + Vector3(-3.0, 0.0, 0.8), hearth_at),
@@ -90,12 +91,15 @@ func _define_ports() -> void:
 			hearth_at + Vector3(3.0, 0.0, 0.8), hearth_at),
 		&"jewelcrafter_bonfire": _facing_port(
 			hearth_at + Vector3(0.0, 0.0, 3.1), hearth_at),
+		&"builder_bonfire": _facing_port(
+			hearth_at + Vector3(0.0, 0.0, -3.2), hearth_at),
 		&"quartermaster_sleep": _sleep_port(Vector3(BUNK_X, 0.58, -6.6), PI * 0.5),
 		&"smith_sleep": _sleep_port(Vector3(BUNK_X, 0.58, -2.3), PI * 0.5),
 		&"alchemist_sleep": _sleep_port(Vector3(BUNK_X, 0.58, 2.0), PI * 0.5),
 		&"jewelcrafter_sleep": _sleep_port(Vector3(BUNK_X, 0.58, 6.3), PI * 0.5),
 		&"player_bunk": _port_at(Vector3(-16.0, 0.05, 10.6), PI * 0.5),
 		&"elder_sleep": _sleep_port(Vector3(-19.4, 0.58, -14.8), 0.0),
+		&"builder_sleep": _sleep_port(Vector3(-12.6, 0.58, -16.3), 0.0),
 		&"elder_room_camera": _camera_port(
 			Vector3(-14.7, 2.25, -10.2), Vector3(-18.6, 1.0, -14.4)
 		),
