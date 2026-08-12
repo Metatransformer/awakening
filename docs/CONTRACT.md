@@ -2953,7 +2953,7 @@ one `if`.
 FloorDb.floor_count() -> int              # 4, and SCOPE §1 freezes it there
 FloorDb.is_authored(level) -> bool
 FloorDb.get_floor(level) -> Dictionary    # never empty; past 4 it is ENDLESS
-FloorDb.name_of(level) / .subtitle_of(level) -> String
+FloorDb.name_of(level) -> String
 FloorDb.rooms(level) -> int               # authored, or defers to Prog
 FloorDb.pack(level) -> Vector2i           # authored, or defers to Prog
 FloorDb.bands(level) -> Dictionary        # room distance -> pool of kinds

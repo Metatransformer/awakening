@@ -175,11 +175,13 @@ The depth readout does not move. Both surfaces still put `Prog.label(level)` und
 the name — THE FOUNDRY over LEVEL 2 — because a number is what you glance at and a
 name is what you arrive in.
 
-The per-floor **subtitles** in `FloorDb` are still drawn by nothing. That is not
-the same omission: the loading card leaves its bottom two thirds to the backdrop's
-fire on purpose, and the four authored subtitles are two and three sentences long,
-so there is a real design question about where a paragraph of flavour goes and it
-is not answered by dropping it under the rule.
+Per-floor **subtitles were cut on 2026-08-11**. The loading card's lower two
+thirds belong to the backdrop's fire; expanding the temporary HUD floor card
+would tax the play view; and the map is a consulted reference rather than an
+arrival. None is the right surface for two or three sentences, and a wrapping
+engine built only to expose otherwise dead catalogue copy is not part of the
+prototype. Floor flavour lives in this document and in the authored names,
+rosters, tints, anchors and encounters that the player can actually experience.
 
 ---
 

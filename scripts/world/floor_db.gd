@@ -262,9 +262,6 @@ static var ANCHORS_ENDLESS := {}
 ##                              replace `Prog.label()`: the HUD's depth readout
 ##                              stays "FLOOR 2", because a number is what you
 ##                              glance at and a name is what you arrive in.
-##   `subtitle`    String     — one line, under the name, about what the place
-##                              was. This is the whole flavour budget for the
-##                              floor; spend it here and nowhere else.
 ##   `rooms`       int        — authored length, or `ROOMS_FROM_PROG` to defer.
 ##   `pack`        Vector2i   — authored (min, max) bodies per room, or
 ##                              `PACK_FROM_PROG` to defer.
@@ -288,7 +285,6 @@ static var ANCHORS_ENDLESS := {}
 static var FLOORS := {
 	1: {
 		"name": "The Cistern",
-		"subtitle": "Vyr intake works, still flooded. The city it watered has been gone four hundred years; the water has not noticed.",
 		"rooms": 6,
 		## Deferred. `Prog.pack(1)` is (2, 4) and the Cistern's mouth has to stay
 		## easy forever (GDD §7) — that is what makes a short cautious run a real
@@ -313,7 +309,6 @@ static var FLOORS := {
 	},
 	2: {
 		"name": "The Foundry",
-		"subtitle": "Where the Imperium melted Vyr bronze down and poured it into shapes of its own. It is the only thing they ever did well down here.",
 		"rooms": 8,
 		"pack": PACK_FROM_PROG,
 		## The goblin at distance 0 is not a leftover. `Prog.band` was built so the
@@ -352,7 +347,6 @@ static var FLOORS := {
 	},
 	3: {
 		"name": "The Hushing Choir",
-		"subtitle": "A hall the Vyr built to hold one note. It is still holding it.",
 		"rooms": 9,
 		"pack": PACK_FROM_PROG,
 		## GDD §7 gives this floor to the wraiths, but a floor of nothing but
@@ -381,7 +375,6 @@ static var FLOORS := {
 	},
 	4: {
 		"name": "The Chord Gate",
-		"subtitle": "The threshold the Vyr cut over Caer Vallen before they went up. The Society has spent two hundred years asking what is on the other side of it.",
 		"rooms": 10,
 		## The one authored pack override in the table, and the reason is the
 		## roster rather than the depth. `Prog.pack(4)` is (3, 7), which is correct
@@ -430,7 +423,6 @@ static var FLOORS := {
 ## reuse is also the right read: you came through the Chord Gate to get here.
 static var ENDLESS := {
 	"name": "The Long Descent",
-	"subtitle": "Past the Gate the works stop being anybody's. How far you got is the whole of what you bring back.",
 	"rooms": ROOMS_FROM_PROG,
 	"pack": PACK_FROM_PROG,
 	"bands": {
@@ -482,10 +474,6 @@ static func get_floor(level: int) -> Dictionary:
 
 static func name_of(level: int) -> String:
 	return get_floor(level).get("name", "")
-
-
-static func subtitle_of(level: int) -> String:
-	return get_floor(level).get("subtitle", "")
 
 
 ## The name a floor is ANNOUNCED by — the loading card and the HUD's top-left
