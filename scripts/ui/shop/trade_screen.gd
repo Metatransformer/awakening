@@ -5,8 +5,8 @@ extends Control
 ##
 ## SELL reads the bag. BUY reads a CATALOGUE, handed in at `open()` -- `ShopDb`
 ## for the smith, `AlchemyDb` for the alchemist, `JewelDb` for the jewelcrafter --
-## and they are interchangeable because they expose the same five statics
-## (`lines`, `remaining`, `can_buy`, `refusal`, `buy`). Nothing below this line
+## and they are interchangeable because they expose the same catalogue contract.
+## Nothing below this line
 ## asks which counter it is standing at, and that is the whole reason there is one
 ## screen: the recipe column, the per-token affordability colouring and the
 ## refusal footer are subtle, they took three passes to get right, and a second
@@ -728,7 +728,7 @@ func _describe() -> void:
 			var left: int = int(row["count"])
 			_d_kind.text = "%d LEFT" % left if left >= 0 else ""
 			_d_price.text = "%d ◇" % int(row["price"])
-			_fill_recipe(row.get("parts", {}))
+			_fill_recipe(row["line"])
 			# SUCCESS/DANGER off `ok`, which is the catalogue's own answer and
 			# accounts for MATERIALS as well as coin. Colouring it by comparing the
 			# price to the purse would call a recipe you cannot fill affordable.
@@ -736,7 +736,8 @@ func _describe() -> void:
 				UITheme.SUCCESS if bool(row["ok"]) else UITheme.DANGER)
 
 
-func _fill_recipe(parts: Dictionary) -> void:
+func _fill_recipe(catalogue_line: Dictionary) -> void:
+	var parts: Dictionary = catalogue_line.get("parts", {})
 	if parts.is_empty():
 		return
 	for id: StringName in parts:
@@ -744,7 +745,10 @@ func _fill_recipe(parts: Dictionary) -> void:
 		if def == null:
 			continue
 		var need := int(parts[id])
-		var have := Game.component_count(id)
+		# Through the live catalogue handle: bare static calls do not dispatch to
+		# overrides. Most recipes read the persistent workbench; the smith's
+		# fletching line spends the run bag and overrides this one seam.
+		var have: int = _db().part_count(catalogue_line, id)
 
 		var line := HBoxContainer.new()
 		_recipe.add_child(line)

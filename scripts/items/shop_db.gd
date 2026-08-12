@@ -1,7 +1,7 @@
 class_name ShopDb
 extends Catalogue
-## What the smith sells. Up to thirteen lines, and every one of them changes a
-## number the player can feel inside one run.
+## What the smith makes: permanent gear ladders, their undo, and one repeatable
+## fletching row that changes the next run's quiver.
 ##
 ## "Up to" because the counter both GROWS and SHRINKS. Three lines are gated on
 ## ownership (see GATED_BY) -- a fresh save is offered eight, and the bow's one
@@ -14,7 +14,7 @@ extends Catalogue
 ## that file for the contract and for why a third counter is a subclass rather
 ## than a second screen.
 ##
-## Two shapes of line, on one list on purpose:
+## Three shapes of line, on one list on purpose:
 ##
 ##  * **Forge** -- the twelve gear ladders (docs/METAGAME.md §6.5). Gold AND
 ##    components, because the smith cannot make a longer chain out of coin. The
@@ -24,6 +24,8 @@ extends Catalogue
 ##    line on any counter that costs nothing and gives something back (GDD §6.6,
 ##    added 2026-08-10). It is a held press, not a tap, and `Catalogue.crafts`
 ##    explains why a free line is the most irreversible one on the board.
+##  * **Fletch** -- one repeatable named row, zero gold, ordinary bag ingredients.
+##    It is explicitly a tap and delegates every rule to `Fletching`.
 ##
 ## **There used to be a third shape -- STOCK: arrows, a bag slot, a heart
 ## container, gold only.** They went to `SupplyDb` and the quartermaster's counter
@@ -39,8 +41,8 @@ extends Catalogue
 ## component costs are the second dial, and they are the slower one: gold you can
 ## grind, but a Cold Iron Core has to be found.
 ##
-## Everything here is PERMANENT and lives on `Game`, because the only things
-## worth buying with money that survives death are things that also survive it.
+## Gear is permanent and lives on `Game`. Fletching is the deliberate exception:
+## its input is the live saleable bag and its output is the persistent quiver.
 
 ## Lines that DO NOT EXIST until the player owns the thing they are about.
 ##
@@ -64,6 +66,7 @@ extends Catalogue
 const GATED_BY := {
 	&"string": &"bow",
 	&"chain": &"hookshot",
+	&"fletch_arrows": &"bow",
 }
 
 ## Purchases you can only make so many times, and how many. Every forge track is
@@ -164,6 +167,9 @@ const PARTS := {
 ## appears in `Game.upgrades` -- it is a verb wearing an id, because `TradeScreen`
 ## addresses everything on a counter by one.
 const REFORGE := "reforge_"
+## Stable id for the repeatable bag recipe on Brannoc's board. It is a verb, not
+## an upgrade track, and never enters `Game.upgrades`.
+const FLETCH := &"fletch_arrows"
 
 
 ## One catalogue line. `cost` grows with `Game.upgrades[id]` for the repeatables,
@@ -224,6 +230,7 @@ static func groups() -> Array[Dictionary]:
 		_armour_row(out, at, piece)
 	_forge_row(out, at, &"string", "THE BOW")
 	_forge_row(out, at, &"chain", "THE CHAIN")
+	_fletch_row(out, at)
 	_reforge_row(out, at)
 	return out
 
@@ -237,6 +244,18 @@ static func _forge_row(out: Array[Dictionary], at: Dictionary,
 	if not stocked(id):
 		return
 	out.append({"title": title, "tracks": [_track(at, id, "", K.FORGE_MAX)]})
+
+
+## The ordinary one-cell named row used for repeatables. Its line owns an
+## explicit `holds: false`, so having a recipe does not turn this tap into a
+## forge hold through `Catalogue.crafts`.
+static func _fletch_row(out: Array[Dictionary], at: Dictionary) -> void:
+	var i: int = at.get(FLETCH, -1)
+	if i < 0:
+		return
+	out.append({"title": "FLETCHING", "tracks": [{
+		"name": "FLETCH ARROWS", "line": i, "owned": 0, "rungs": 1,
+	}]})
 
 
 ## A piece of armour: one row, and its two paths are two branches on it until one
@@ -410,7 +429,24 @@ static func _board() -> Array[Dictionary]:
 		_forge(&"chain", "LENGTHEN THE CHAIN", 150, 2.1,
 			"More chain on the drum. The far side gets closer.",
 			K.CHAIN_REACH, "%.1f", "m reach"),
+		_fletch(),
 	]
+
+
+## The forge-board face of `Fletching`. The transaction and every tuning value
+## remain in that class; this dictionary only gives the shared counter UI words.
+static func _fletch() -> Dictionary:
+	return {
+		"id": FLETCH,
+		"label": "FLETCH ARROWS",
+		"cost": 0,
+		"parts": Fletching.RECIPE,
+		"holds": false,
+		"verb": "FLETCH",
+		"blurb": "Flint for the heads, bone for the shafts. Town work for the bottom of the bag.",
+		"detail": "Makes %d arrows per batch. Quiver %d / %d."
+			% [Fletching.batch(), Game.arrows, Game.max_arrows],
+	}
 
 
 ## Build a forge line. `ladder` is the K array the track reads and `unit` is a
@@ -518,6 +554,14 @@ static func remaining(id: StringName) -> int:
 	return maxi(0, cap_of(id) - int(Game.upgrades.get(id, 0)))
 
 
+## The fletching recipe is paid from the saleable run bag. Every other smith
+## recipe keeps the catalogue default and reads the persistent workbench.
+static func part_count(line: Dictionary, id: StringName) -> int:
+	if StringName(line.get("id", &"")) == FLETCH:
+		return int(Run.bag.get(id, 0))
+	return Game.component_count(id)
+
+
 ## The ceiling on `id`: how many of it the smith will ever sell.
 ##
 ## For the three stock lines that is `LIMITS` and nothing else. For a forge
@@ -545,6 +589,8 @@ static func cap_of(id: StringName) -> int:
 
 static func can_buy(line: Dictionary) -> bool:
 	var id: StringName = line["id"]
+	if id == FLETCH:
+		return Fletching.can_fletch()
 	if remaining(id) == 0:
 		return false
 	if not Game.can_afford_parts(line.get("parts", {})):
@@ -558,6 +604,8 @@ static func can_buy(line: Dictionary) -> bool:
 ## the player back down for the wrong thing.
 static func refusal(line: Dictionary) -> String:
 	var id: StringName = line["id"]
+	if id == FLETCH:
+		return Fletching.refusal()
 	if remaining(id) == 0:
 		# THREE different ceilings now, and telling the player the wrong one sends
 		# them to the wrong place. A path whose sibling has a rung in it is closed
@@ -587,9 +635,11 @@ static func refusal(line: Dictionary) -> String:
 ## the whole bill is payable, so nothing below can leave a player half-charged
 ## for a rung they did not get.
 static func buy(line: Dictionary) -> bool:
+	var id: StringName = line["id"]
+	if id == FLETCH:
+		return Fletching.fletch() > 0
 	if not can_buy(line):
 		return false
-	var id: StringName = line["id"]
 	# Before a coin moves, because a reforge is not a purchase: nothing is spent
 	# and the rung goes DOWN. Reaching the increment below with a `reforge_chest`
 	# id would put a made-up track in `Game.upgrades` and leave it in the save.

@@ -56,19 +56,14 @@ signal use_requested
 ## off — that the doll is where you equip — is formed by looking at the doll and
 ## then looking for the verb, and the verbs are all on this line.
 ##
-## A does two things on this screen and the hint names both in the order the
-## focus meets them: on a bag cell it moves the stack across the document-case
-## line, on the card below it fletches. One key, two objects, and the line has
-## no room to say that twice.
-const HINT := "↑↓←→ Look   E / A Pack / Fletch   Hold Y Escape   Esc / B Back   Hands change on ITEMS"
+const HINT := "↑↓←→ Look   E / A Pack   Hold Y Escape   Esc / B Back   Hands change on ITEMS"
 
 ## The action the way out is held on: Y on the pad, Y on the keyboard.
 ##
-## Not `ui_accept`. A is the universal forward press in every menu in this game
-## and it is one row below on this very screen, where it fletches arrows — a
-## thing you press repeatedly and on purpose. The run-ending control cannot be
-## the same button as the repeatable one, and a HOLD on a DIFFERENT button is
-## two independent reasons the fumble cannot happen.
+## Not `ui_accept`. A is the universal forward press in every menu in this game,
+## including packing a stack on this screen. The run-ending control cannot be
+## the same button as an ordinary menu action; a HOLD on a DIFFERENT button is
+## what keeps the fumble from ending a run.
 const HOLD_ACTION := &"ui_hold"
 
 ## Seconds on Y. Longer than the shop's 0.5 s craft hold and the same length as
@@ -147,8 +142,6 @@ var _rope_hold: float = 0.0
 ## player who opens the pouch with Y already down (it is `jump` in the world)
 ## arrives on this screen part-way through leaving the dungeon.
 var _rope_armed: bool = false
-var _fletch: Button
-var _fletch_cost: Label
 
 
 func _ready() -> void:
@@ -274,14 +267,13 @@ func _build() -> void:
 	var right := VBoxContainer.new()
 	right.name = "Right"
 	right.custom_minimum_size.x = 340
-	# 8 and not the 12 the other columns use. This column stacks four cards and
+	# 8 and not the 12 the other columns use. This is the tallest column on the
 	# is the tallest thing on the screen -- it, not the frame's 604, is what sets
 	# the pouch's height, and at 12 the footer's Back button ran off the bottom
 	# of a 720p viewport. Four px a gap is the whole difference.
 	right.add_theme_constant_override("separation", 8)
 	split.add_child(right)
 	_build_detail(right)
-	_build_fletch(right)
 	_build_rope(right)
 
 	var footer := PanelContainer.new()
@@ -395,7 +387,7 @@ func _build_grid(parent: Node) -> void:
 ## bought at the smith has to show up as a new empty cell the next time the
 ## screen opens — the grid IS the capacity, so it cannot be built once and
 ## trusted. `ItemGrid.set_cells` reuses the buttons when the count has not moved,
-## so the common case (a refresh after fletching) does not drop focus.
+## so the common case does not drop focus.
 ##
 ## The layout is `Run.slots_used()`'s: full stacks first, then the remainder.
 ## Anything that will not fit is dropped from the PICTURE only — it cannot happen
@@ -414,13 +406,11 @@ func _fill_cells() -> void:
 	# `capacity` is the point of this screen: the empty cells are the message.
 	# Out of the case comes the bag; the case is never the last row.
 	_case_grid.set_cells(_cells_of(_case_ids, _case_counts), Run.CASE_SLOTS)
-	_grid.spill_down = _fletch
+	_grid.spill_down = _rope
 	_grid.set_cells(_cells_of(_cell_ids, _cell_counts), want)
 	_case_grid.spill_down = _grid.cell_at(0)
-	# Out of the bottom of the grid comes the bench, then the way out, and only
-	# then Back. That order is the screen's argument in one column: here is what
-	# you are carrying, here is what it can become, here is what it costs to keep
-	# it, here is the door.
+	# Out of the bottom of the grid comes the way out, then Back: the bag spills
+	# directly into the only verb this screen owns.
 	_wire_focus()
 
 
@@ -499,117 +489,6 @@ func _build_detail(parent: Node) -> void:
 	col.add_child(_detail_legend)
 
 
-## The fletching bench. The one thing on this screen that turns the bag into
-## something other than money.
-##
-## It is a card and not a cell verb, and that distinction is the whole reason it
-## fits here. `_make_cell` says a cell does nothing when pressed and that is
-## still true: you cannot drop, sort or use an item, because the vendor buys
-## them and the forge eats them, both in the garrison. What this adds is a verb
-## belonging to the BAG, not to any item in it — the same shape the escape rope
-## already has, sitting directly below it for the same reason. Both spend the
-## bag; one spends it on getting out and one spends it on staying in.
-##
-## Why it lives on the pouch at all: the recipe eats the cheapest two things in
-## the grid to the left, so the price and the stock are the same picture. Putting
-## it on the ITEMS screen would mean reading a cost on one screen against a
-## quantity on another, and the whole argument of this screen is that the
-## extraction decision is made by stopping and LOOKING at what you have.
-func _build_fletch(parent: Node) -> void:
-	var inner := VBoxContainer.new()
-	inner.name = "Fletch"
-	inner.add_theme_constant_override("separation", 6)
-	parent.add_child(inner)
-
-	UITheme.section_rule(inner, "FLETCHING")
-
-	# A `VerbRow`, with the batch size in its META column — which is what the
-	# hand-anchored "+7" Label over the right end of the button was reinventing.
-	# The glyph moved out of the text for the same reason: "➶  Fletch Arrows" put
-	# an icon inside a string, where it cannot be sized or dimmed with the row.
-	#
-	# NOT built `refused` when the bench cannot fletch. That is deliberate and it
-	# is the same call the rope makes below: a refused row is inert AND
-	# unfocusable, and this screen answers "what am I short of" in the detail pane
-	# beside it, which needs the focus to land. The reason goes in the meta column
-	# in DANGER instead — see `_paint_fletch`.
-	_fletch = UiKit.verb_row(inner, {
-		"label": "Fletch Arrows",
-		"icon": UiKit.action_icon("fletch"),
-		"meta": "",
-	})
-	_fletch.name = "Fletch"
-
-	# The recipe, under the row rather than only in the detail pane, for the same
-	# reason the rope's fee is: "fletch arrows" and "fletch arrows for two flint
-	# and two bone shard, and you have one flint" are different sentences, and the
-	# second one is the only one you can act on.
-	_fletch_cost = Label.new()
-	_fletch_cost.name = "Cost"
-	UITheme.apply_text_style(_fletch_cost, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
-	_fletch_cost.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	inner.add_child(_fletch_cost)
-
-	_fletch.pressed.connect(_do_fletch)
-	_fletch.focus_entered.connect(_describe_fletch)
-	_fletch.mouse_entered.connect(_describe_fletch)
-
-
-## Make a batch, or say why not. Repeatable: the row keeps focus and the screen
-## repaints, so a player with a bag full of shards can sit here and fill the
-## quiver a batch at a time and watch both numbers move. That is deliberate —
-## the cost is visible on every press, so there is nothing to protect them from.
-func _do_fletch() -> void:
-	var why := Fletching.refusal()
-	if not why.is_empty():
-		notice.emit(why, true)
-		Bus.request_sfx.emit(&"craft_fail", Vector3.ZERO)
-		return
-	var made := Fletching.fletch()
-	if made <= 0:
-		notice.emit("The fletching failed.", true)
-		return
-	Bus.request_sfx.emit(&"craft_success", Vector3.ZERO)
-	notice.emit("Fletched %d arrows. %d in the quiver." % [made, Game.arrows], false)
-	refresh()
-	_describe_fletch()
-
-
-func _describe_fletch() -> void:
-	_detail_kind.text = "THE BENCH"
-	_detail_name.text = "Fletch Arrows"
-	# `batch()`, never `BATCH`. The constant is the un-donated yield; the
-	# Fletcher's Jig raises it, and a panel reading the const says 5 over a bench
-	# that cuts 7.
-	_detail_value.text = "%d arrows  ·  %d / %d in the quiver" \
-		% [Fletching.batch(), Game.arrows, Game.max_arrows]
-	_detail_blurb.text = "Flint for the heads, bone for the shafts. It is what " \
-		+ "the bottom of the bag is for, and it is the only reason to be glad " \
-		+ "of a shard."
-	var why := Fletching.refusal()
-	_detail_legend.text = why if not why.is_empty() else \
-		"Costs slots, not gold. The smith is cheaper; the smith is also upstairs."
-
-
-## What the bench can do right now, live on the row. Enabled even when it will
-## refuse, exactly like the rope — a greyed row says you cannot and never says
-## what you are short of, and here you are always short of something nameable.
-func _paint_fletch() -> void:
-	if _fletch == null:
-		return
-	_fletch_cost.text = Fletching.cost_line()
-	var ready := Fletching.can_fletch()
-	if ready:
-		UiKit.verb_meta(_fletch, "+%d"
-			% mini(Fletching.batch(), Fletching.quiver_room()), UITheme.SUCCESS)
-	else:
-		# The REASON, not a dash. The row said "—" and left the player to find
-		# what they were short of in the pane beside it; the meta column is where
-		# the kit puts a refusal, and `Fletching.refusal()` already names it.
-		UiKit.verb_meta(_fletch, Fletching.refusal(), UITheme.DANGER)
-	_fletch_cost.modulate = Color.WHITE if ready else Color(1, 1, 1, 0.55)
-
-
 ## The way out. The only control on this screen that ENDS something — everything
 ## above it is a picture of what you are carrying, and this spends it.
 ##
@@ -633,8 +512,7 @@ func _paint_fletch() -> void:
 ## at you can break it, which is what makes leaving a decision made in a room
 ## rather than in a menu. This is the FUMBLE guard: the menu is paused, so no
 ## amount of holding in here can be interrupted by anything, and a hold whose
-## only job is to be deliberate is exactly the right shape for a press made one
-## row below the button you spam to fletch arrows.
+## only job is to be deliberate is exactly the right shape for a run-ending press.
 func _build_rope(parent: Node) -> void:
 	var inner := VBoxContainer.new()
 	inner.name = "Use"
@@ -927,10 +805,7 @@ func _wire_focus() -> void:
 		first = _grid.cell_at(0)
 	if first == null:
 		return
-	MenuUtil.link_down(_fletch, _rope)
 	MenuUtil.link_down(_rope, _back)
-	_fletch.focus_neighbor_left = ^"."
-	_fletch.focus_neighbor_right = ^"."
 	_rope.focus_neighbor_left = ^"."
 	_rope.focus_neighbor_right = ^"."
 	_back.focus_neighbor_bottom = _back.get_path_to(first)
@@ -974,13 +849,10 @@ func refresh() -> void:
 	_fill_cells()
 	_paint_doll()
 	_paint_header()
-	_paint_fletch()
 	_paint_rope()
 	_paint_stock()
 	var focused := get_viewport().gui_get_focus_owner()
-	if focused == _fletch:
-		_describe_fletch()
-	elif focused == _rope:
+	if focused == _rope:
 		_describe_rope()
 	else:
 		# The cursor is on a cell, or on nothing at all because the screen has

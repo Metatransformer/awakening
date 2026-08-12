@@ -277,7 +277,7 @@ They arrive three ways, and each answers a different kind of empty:
 |---|---|---|---|
 | **The quartermaster** — `ARROWS X10` | Garrison, THE STORES (`supply_db.gd`) | 40 gold (4.0/arrow) | a purse, no bag |
 | **Found** — `ArrowBundle` | Dungeon floors and chests | a short detour | early, poor, and dry |
-| **Fletched** — `Fletching` | The POUCH screen, anywhere | 2 Cracked Flint + 2 Bone Shard → 5 arrows (4.8/arrow) | a full bag, no purse |
+| **Fletched** — `Fletching` | Garrison, Brannoc's forge board | 2 Cracked Flint + 2 Bone Shard → 5 arrows (4.8/arrow) | common saleable drops, no purse |
 
 **Found**: `arrow_chance` on `Dungeon` puts a 6-arrow bundle on the floor of a
 quarter of rooms; `arrow_chance` on `Chest` gives 40% of chests a 10-arrow one
@@ -291,18 +291,15 @@ same as a refused mote — but it means something different. A refused mote is a
 decision you made about slots; a refused bundle is just a thing to come back for
 after the next fight.
 
-**Fletched**: this is what makes the bow sustainable underground. Running dry on
-floor six used to mean the bow was a decoration until you extracted, and "go home
-to reload" is not a decision, it is a walk. The recipe eats the two commonest
-ingredients on the enemy table — the two you have most of and were least glad to
-see — so the trade is *the floor of my bag, for shots*, which is §5's question
-(slots against worth) aimed at a second resource. It also runs the right way
-round: fletching **frees slots**, so a nearly-full bag and an empty quiver solve
-each other.
+**Fletched**: Brannoc turns the two commonest ingredients on the enemy table —
+the two you have most of and were least glad to see — into shots. That gives
+Cracked Flint and Bone Shard a town use besides selling them: the forge asks
+whether the bottom of the bag becomes 24 gold or five arrows. It also runs the
+right way round: fletching **frees slots** while filling the quiver.
 
-Priced above the stores on purpose. Convenience underground is the thing being
-sold, and a recipe that undercut the shop would kill the shop line — which is
-what a player with gold and no bag is supposed to reach for.
+Priced above the stores on purpose. Five arrows consume 24 gold of sale value;
+the quartermaster's ten cost 40 gold. A recipe that undercut the store would kill
+its arrow line, which is what a player with a purse and no bag is meant to use.
 
 ---
 
@@ -411,9 +408,9 @@ built on them:
   - **The hold, in the menu.** The POUCH row does not fire on A. It is **held on
     Y (`ui_hold`) for 0.9 s**, anywhere on that screen, with the same gauge every
     other hold in the game draws (`HoldGauge`). That is the fumble guard, and it
-    is on a different button from the A that fletches arrows one row above it —
-    the accident being prevented is the press you make while reading something
-    else. A on the row says "Hold Y" rather than doing nothing, because a control
+    is on a different button from the A that packs a bag stack — the accident
+    being prevented is the press you make while reading something else. A on the
+    row says "Hold Y" rather than doing nothing, because a control
     that ignores the universal confirm is a control that gets filed as broken.
 - **The fee comes out of the number you are protecting**, and the HUD says so.
 
@@ -483,11 +480,9 @@ decision the player can act on.
   line in the corner — a standing figure gets read constantly, and a player
   watching the fee tick is doing bookkeeping in a dungeon instead of playing
   one. What fires instead is the screen-wide CYAN sweep, at the moment the toll
-  eats the purse (`Hud.set_extract_dear`). That moment is *usually* once per run
-  and stays — nothing sells underground, so the purse cannot grow — but fletching
-  (§4.6) burns real value out of the bag, so the toll can fall back under the
-  purse and the sweep fire again when the bag climbs back. That is intended: the
-  fact it announces really did change back.
+  eats the purse (`Hud.set_extract_dear`). That moment happens at most once per
+  run and stays — nothing sells or fletches below, so the purse cannot grow and
+  the bag's value cannot fall back under it.
 - The POUCH row says it in words: *"The rope wants 36 and you have 26. It will
   take all of it."* The hold gauge stays drawn under it, because the hold works.
 - `Bus.extract_refused` is **deleted**, along with the HUD's `NEED n` flash and
@@ -1015,16 +1010,11 @@ than tinting the top row of one grid is the whole point: the line between what
 comes home and what does not is the screen's subject, and a border is a weaker
 claim than a heading.
 
-The right column also carries the screen's two **verbs**, in the order they
-argue: the **fletching bench** (§4.6) and then the **escape rope** (§5).
-Both spend the bag; one spends it on staying in and the other on getting out.
-Neither is a verb on an item — a cell's only verb is **A, which moves that stack
-across the case line** and is a statement about where the stack sits rather than
-anything done to the item. These act on the bag as a whole, which is why they
-are cards beside the grid and not entries in
-it, and why the bench is here rather than at the smith: the recipe eats the
-cheapest two things in the grid to its left, so the price and the stock are the
-same picture.
+The right column carries the screen's one **verb**, the **escape rope** (§5).
+A cell's only verb is **A, which moves that stack across the case line** and is a
+statement about where the stack sits rather than anything done to the item. The
+bag grid spills directly to the rope row, then Back. Fletching is a town recipe
+on Brannoc's forge board (§4.6), not a POUCH control.
 
 Left of the grid is **WORN** — a drawn silhouette of the hero with the left
 hand, the right hand and the bottle cell filled in from `Game.armament()` and
@@ -1488,27 +1478,29 @@ Arrows have two, because the supply chain has two halves — the objects, and th
 floor that has to contain them (§4.6):
 
 ```bash
-godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/arrow_supply.gd --out=/tmp/arrows/x.png --warmup=60
-godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/dungeon.tscn --director=res://tools/directors/dungeon_supply.gd --out=/tmp/dun/d.png --warmup=60
-godot --path . -s tools/shoot.gd -- --scene=res://scenes/ui/menu/_menu_test.tscn --director=res://tools/directors/fletch_screen.gd --out=/tmp/fletch/f.png --warmup=50
+tools/quiet.sh --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/arrow_supply.gd --out=/tmp/arrows/x.png --warmup=60
+tools/quiet.sh --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/dungeon.tscn --director=res://tools/directors/dungeon_supply.gd --out=/tmp/dun/d.png --warmup=60
+tools/quiet.sh --path . -s tools/shoot.gd -- --scene=res://scenes/ui/menu/_menu_test.tscn --director=res://tools/directors/fletch_screen.gd --out=/tmp/fletch/f.png --size=1280x720 --warmup=50
 ```
 
 `arrow_supply.gd` opens a chest and photographs the lid, measures the chest and
 the arrow against the sizes §2 of `docs/CONTRACT.md` promises, walks a body onto
 a bundle, and checks that a full quiver refuses **without** eating the bag.
 `dungeon_supply.gd` generates eight floors and counts what landed in the rooms,
-because a 25% roll cannot be judged from one floor. `fletch_screen.gd` drives
-the POUCH card and walks the D-pad down it, because a new card between the grid
-and the rope is exactly the change that orphans the way out. Last runs:
+because a 25% roll cannot be judged from one floor. `fletch_screen.gd`
+photographs the POUCH without a fletch stop, then drives Brannoc's live forge row
+through empty, ready, refusal, success, full-quiver and near-full states. Last
+runs:
 
 ```
 SIZE chest extent=1.15m        SIZE arrow extent=0.68m
 CHEST bundle count=10          CHEST pickup +10 arrows (quiver 10)
 FULL quiver refused the bundle and it stayed on the floor
-BENCH full quiver refused and the bag was untouched
 TOTAL rooms=48 chests=25 bundles=11 loose_arrows=66
 RATE bundles/room=0.23 (arrow_chance=0.25)
-FOCUS walk reached [Cell_0, Cell_4, Cell_8, Fletch, Rope]
+POUCH focus walk reached [Cell_0, Cell_4, Cell_8, Rope, @Button@…]
+FLETCH transaction arrows=30/30 bag={cracked_flint: 0, bone_shard: 0}
+FLETCH OK
 ```
 
 The economy of tempo has its own director (§4.5):

@@ -1,20 +1,20 @@
 class_name Fletching
 extends RefCounted
-## Arrows, made underground out of what the floor already gave you.
+## Arrows, made at Brannoc's forge out of what the last run gave you.
 ##
-## The smith still sells arrows for gold and that line is not going anywhere.
-## This is the other half of the same problem and it is the half that mattered:
-## running dry on floor six with a full bag used to mean the bow was a decoration
-## until you extracted, and "go home to reload" is not a decision, it is a walk.
+## The quartermaster still sells arrows for gold and that line is not going
+## anywhere. This is the other half of the same problem and it is the half that
+## mattered:
+## Flint and bone used to be sale-only filler. The forge turns the bottom of the
+## bag into a second answer to an empty quiver once the player is back in town.
 ##
 ## ## Why it costs ingredients and not gold
 ##
 ## The recipe eats the two commonest things on the enemy table -- the two you
 ## have the most of and the two you were least glad to see land. So the trade the
-## player is actually offered is *the floor of my bag, for shots*, which is the
-## extraction fee's question (slots against worth) pointed at a second resource,
-## and it finally gives the bottom of the drop table a job. A Bone Shard that can
-## become an arrow is no longer only 4 gold of dead weight.
+## player is actually offered is *the floor of my bag, for shots*, and it finally
+## gives the bottom of the drop table a town use. A Bone Shard that can become an
+## arrow is no longer only 4 gold of sale value.
 ##
 ## It also runs the right way round: fletching FREES slots. A bag that is one
 ## stack from full and a quiver that is empty are the same problem now, and they
@@ -22,13 +22,14 @@ extends RefCounted
 ##
 ## ## Priced above the shop, on purpose
 ##
-## 24 gold of ingredients for 5 arrows is 4.8 gold a shot; the smith's ARROWS X10
-## is 4.0. Convenience underground is the thing being sold, so it costs more. A
-## recipe that undercut the shop would kill the shop line, and the shop line is
-## what a player with a purse and an empty bag is supposed to reach for.
+## 24 gold of ingredients for 5 arrows is 4.8 gold a shot; the quartermaster's
+## ARROWS X10 is 4.0. Turning unsold stock directly into shots costs more than
+## buying the bundle. A recipe that undercut the store would kill its line, and
+## the store line is what a player with a purse and an empty bag is supposed to
+## reach for.
 ##
-## Lives on the POUCH screen next to the escape rope, because both are verbs
-## the bag can perform on itself and neither is something you hold.
+## Lives as a repeatable named row on Brannoc's existing forge board. The row is
+## presentation only; every number and transaction stays in this class.
 
 ## What one batch costs, out of the bag. Both are COMMON on `ItemDb.ENEMY_DROPS`
 ## (weights 18 and 34) and neither is a component, so fletching never competes
@@ -58,7 +59,7 @@ const BATCH := 5
 ## §8, D1). The accessor went with the row rather than being left pointing at an
 ## id nothing can donate.
 ##
-## Public because the pouch prints the yield next to the button: what the recipe
+## Public because the forge prints the yield beside the row: what the recipe
 ## PAYS OUT is part of the price, and a screen that says 5 over a bench that cuts
 ## 7 is the shop lying about its own numbers.
 static func batch() -> int:

@@ -1311,6 +1311,7 @@ reason, having once silently bought a heart container instead of a bag slot.
 static func lines() -> Array[Dictionary]
 static func groups() -> Array[Dictionary]         # [] = one flat row
 static func remaining(id: StringName) -> int      # -1 = unlimited
+static func part_count(line: Dictionary, id: StringName) -> int
 static func can_buy(line: Dictionary) -> bool
 static func refusal(line: Dictionary) -> String   # "" = affordable
 static func buy(line: Dictionary) -> bool
@@ -1350,7 +1351,7 @@ hold-to-craft gauge are written once; the last time this project grew a second
 copy of a system it cost more than either copy (CLAUDE.md §0).
 
 Call the overridable statics **through the catalogue you were handed**
-(`_db().craft_verb()`). A bare static call inside `Catalogue` binds to
+(`_db().craft_verb()`, `_db().part_count(line, id)`). A bare static call inside `Catalogue` binds to
 `Catalogue` at parse time — there is no virtual dispatch back down to `ShopDb`,
 and the smith spent a build saying `HOLD ENT TO CRAFT` because of it.
 
@@ -2406,7 +2407,7 @@ only answer is a Burst — `docs/PUZZLES.md` §0 rule 2. It carries no `Atlas`
 marker: it is never placed by `_populate`, so it has none to clear.
 
 ```gdscript
-# scripts/items/fletching.gd — arrows out of the bag, anywhere.
+# scripts/items/fletching.gd — Brannoc's forge transaction, paid from the bag.
 Fletching.can_fletch() -> bool      # short() is empty AND quiver_room() > 0
 Fletching.fletch() -> int           # arrows made; 0 means it refused
 Fletching.refusal() -> String       # why, in a sentence; "" when it will
@@ -2415,8 +2416,11 @@ Fletching.cost_line() -> String     # "2/2 Cracked Flint  +  0/2 Bone Shard"
 
 It spends through `Run.consume(id, n)`, which is the **only** writer of the bag
 besides `collect`/`sell` — the premium share leaves with what it takes, exactly
-as a sale does. The card that draws it is on the POUCH screen (§ pouch, and
-docs/METAGAME.md §4.6).
+as a sale does. `ShopDb.FLETCH` presents it as one repeatable named row on
+Brannoc's existing `UpgradeLadder` board. The line carries `holds: false`, so it
+is a TAP despite having `parts`; its recipe column reads the live bag through
+`ShopDb.part_count()` while normal recipes keep `Catalogue`'s
+`Game.component_count()` default (`docs/METAGAME.md` §4.6).
 
 ```gdscript
 # scripts/items/hookshot_tether.gd — presentation only; the firer owns the

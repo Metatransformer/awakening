@@ -145,7 +145,8 @@ vaults belong to the three items below, and each of them names its own.
 
 Owning the bow also switches on a **resource** the player has to manage: arrows,
 with three sources and no fourth (`docs/METAGAME.md` §4.6), one of which is the
-bag itself (`Fletching.RECIPE`, `scripts/items/fletching.gd:~38`).
+bag recipe on Brannoc's forge board (`ShopDb.FLETCH`, `Fletching.RECIPE`,
+`scripts/items/shop_db.gd`, `scripts/items/fletching.gd:~38`).
 
 **The count is on the bow's own cell whenever the arrows are not on a cell of
 their own** (`ArmamentDb.hand_count_beside`, #53). `arrow` is a stop in
@@ -518,7 +519,7 @@ can never grind one into another.
 
 | Stock | Lives on | Enters | The decision it creates |
 |---|---|---|---|
-| **Arrows** | `Game.arrows` | Three sources, no fourth — `docs/METAGAME.md` §4.6 | Fletching runs the right way round: it **frees** slots (`Fletching.RECIPE` and `Fletching.batch()`, `scripts/items/fletching.gd:~38`, `:~64`) |
+| **Arrows** | `Game.arrows` | Three sources, no fourth — including Brannoc's forge recipe (`ShopDb.FLETCH`; `docs/METAGAME.md` §4.6) | Fletching gives Flint and Bone a town use and runs the right way round: it **frees** slots (`Fletching.RECIPE` and `Fletching.batch()`, `scripts/items/fletching.gd:~38`, `:~64`) |
 | **Charges** | `Game.charges` | Bought from the **quartermaster's stores** once the Burst is owned (`SupplyDb._board()`, `scripts/items/supply_db.gd`), never refilled below except the one `ChargeCache` on floor 2 (D13) | How deep you were planning to go |
 | **Rations** | `Game.rations` | Bought from the quartermaster's stores, five at a time, twenty to a stack (`RationDb`, `scripts/items/ration_db.gd`) | Whether the room is quiet enough to sit down for twelve seconds |
 | **Bottles** | `Game.bottle_contents` | Blown at the alchemist, capped by a relic (`RelicDb.bottle_cap()`, `relic_db.gd:~889`, read by `AlchemyDb.remaining()`) | The fourth bottle is an event, not a purchase |

@@ -77,6 +77,14 @@ static func remaining(_id: StringName) -> int:
 	return -1
 
 
+## How many of one recipe part the player has available for this line.
+## Persistent workbench components are the default. A catalogue whose recipe
+## spends another stock overrides this and `TradeScreen` reaches it through the
+## live catalogue handle, for the same static-dispatch reason as `craft_verb`.
+static func part_count(_line: Dictionary, id: StringName) -> int:
+	return Game.component_count(id)
+
+
 ## Can the player afford this line right now -- gold AND materials.
 static func can_buy(_line: Dictionary) -> bool:
 	return false

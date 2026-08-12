@@ -237,7 +237,7 @@ func _pouch(rig) -> void:
 # --- C and D. The smith -----------------------------------------------------
 
 func _smith(rig) -> void:
-	# THE COUNTER IS TWELVE LINES ONLY IF YOU OWN THE BOW AND THE HOOKSHOT AND
+	# THE COUNTER IS THIRTEEN LINES ONLY IF YOU OWN THE BOW AND THE HOOKSHOT AND
 	# HAVE COMMITTED NO ARMOUR PIECE.
 	# `ShopDb.GATED_BY` hides the `string` and `chain` ladders until the weapon
 	# they sharpen is owned (docs/SCOPE.md M1), and `Game.STARTER_KIT` is empty
@@ -274,9 +274,9 @@ func _smith(rig) -> void:
 	if screen == null:
 		print("FORGE FAIL the smith did not open")
 		return
-	_ck("C0 the smith lists twelve lines (4 + the armour's 4x2), got %d"
-		% screen._rows.size(), screen._rows.size() == 12)
-	# Twelve rows against a panel that fits about thirteen. The window is the
+	_ck("C0 the smith lists thirteen lines (4 + armour's 4x2 + fletching), got %d"
+		% screen._rows.size(), screen._rows.size() == 13)
+	# Thirteen rows against a panel that fits about thirteen. The window is the
 	# only reason the boots are reachable at all, and a list that silently ran
 	# off the bottom would look exactly like a list that was complete.
 	_ck("C0b the panel windows rather than overflowing",
