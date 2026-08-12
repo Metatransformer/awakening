@@ -690,33 +690,34 @@ wind-up instead of returning to idle and striking a pose afterwards.
 is applied when a node starts and a node behind a zero time scale never starts.
 
 The tell is `SpinVfx` (`scripts/combat/spin_vfx.gd`), driven every frame off the
-hold clock: motes drawn **into** the blade, the blade taking on a fire emission
-through `HitFlash`, an `OmniLight3D` riding the steel, and on release a ring of
-fire swept **clockwise** around him at 1.7 m — Ocarina's spin, which is what the
-effect is copying.
+hold clock: motes drawn **into** the blade, the blade taking on a cobalt emission
+through `HitFlash`, an `OmniLight3D` riding the steel, and on release a layered
+blue-white water-energy sheet swept **clockwise** around him at 1.7 m.
 
 That ring is a **mesh**, not particles: an annulus built once (1.18 m to 2.20 m,
 so its outer edge lands on `spin_reach`) with a shader that lights only the part
 of it the blade has already passed. `head` is the sweep in turns, `tail` is how
-much of the circle burns at once. It was a particle trail before — one emitter on
-a turning pivot leaving world-space motes behind it — and that cannot be made
-continuous, because an emitter emits once per *frame*: at 30 fps the pivot steps
-0.74 m round a 10.7 m circumference and the ring photographs as a string of
-beads. Particles are still there, but only as the **embers** thrown off the head,
-which are meant to be discrete.
+much of the circle remains visible at once. Alpha-MIX transparency, subtle
+screen-texture refraction, and smooth HDR current lines give its four clean bands
+a thicker watery body than an ordinary slash trail. It was a particle trail
+before — one emitter on a turning pivot leaving world-space motes behind it —
+and that cannot be made continuous, because an emitter emits once per *frame*:
+at 30 fps the pivot steps 0.74 m round a 10.7 m circumference and the ring
+photographs as a string of beads.
 
-Its colours are chosen for how they **stack**: the particles are additive, so a
-warm mote clips the moment three of them overlap on an already-lit floor, and the
-numbers in that file keep blue far below red so the clip lands on amber instead
-of on white. They are not to be brightened without re-rendering
-(`tools/directors/spin_rings.gd`). A hold with no tell is a hold nobody can
-learn.
+The moving front converges into `ContactHead`, a compact blue-white HDR point at
+the crest of the broader sheet. `SpinSparks` occupies the exact same local
+contact point and leaves sparse blue-white velocity-aligned shards behind in
+world space. `_set_head` is the one release clock for the shader parameter,
+clockwise pivot rotation, head visibility, and spark emission; the head and
+emitter stop after the first turn while the mesh tail continues. Proved by
+`tools/directors/spin_rings.gd`. A hold with no tell is a hold nobody can learn.
 
-**The effect outlives the lockout on purpose.** `spin_swing_time` is 0.68 s, the
+**The effect outlives the lockout on purpose.** `spin_swing_time` is 0.523 s, the
 head closes the circle at 0.48 s and then keeps going for another tail's worth,
-eating the fire out from under itself until nothing is left at ~0.78 s — and the
-embers fall for longer still. The hero has his feet back while the circle behind
-him is still burning. The magic lags the sword.
+eating the blue-white sheet out from under itself — and released sparks lag
+behind the moving contact point. The hero has his feet back while the circle
+behind him is still fading. The magic lags the sword.
 
 Sound: `sword_charging` rises from the **press**, and both the release swipe and
 the hero's yell fire on the **release**. The yell was on the arm-up at first,
@@ -2139,15 +2140,19 @@ past before you could see it was an overhead. `chain_time_scale` (0.92, 1.65)
 multiplies it, so steps 2 and 3 move with it, and the damage windows are
 fractions of it, so the blade's live slice sits in the same place in the swing.
 
-**The three ordinary lights alone own a blade trail.** `HeroCombat` creates and
-publishes `SwordSlashTrail` (`scripts/combat/sword_slash_trail.gd`), binds it to
-the mounted sword holder, and starts a stroke only from `_light_swing` after
-`Hero.request_attack` accepts `LIGHT1`, `LIGHT2` or `LIGHT3`. The ribbon samples
-the real weapon convention — an inner point at 0.12 m and an outer point at
-0.88 m along the holder's local `+Y` — into world space, so the down, up and
-overhead clips leave their own swept surfaces. A tapped heavy happens to reuse
-the `LIGHT3` clip but does **not** enter this path; held charge/wind-up, spin,
-lunge, dash, slam, parry and flurry produce no ordinary trail.
+**The three ordinary lights, tap-heavy, and parry counter own a blade trail.**
+`HeroCombat` creates and publishes `SwordSlashTrail`
+(`scripts/combat/sword_slash_trail.gd`), binds it to the mounted sword holder,
+and starts a stroke only from the accepted move path: `_light_swing` after
+`Hero.request_attack` accepts `LIGHT1`, `LIGHT2` or `LIGHT3`, `_heavy_swing`
+after the tap-heavy is accepted, and `_dash_swing` after the parry riposte is
+accepted. Each passes its own damage window. The ribbon samples the real weapon
+convention — an inner point at 0.12 m and an outer point at 0.88 m along the
+holder's local `+Y` — into world space, so the down, up, overhead and thrust
+clips leave their own swept surfaces. The tap-heavy happens to reuse the
+`LIGHT3` clip, while the counter uses the riposte dash; both enter only through
+their named accepted paths. Held charge/wind-up, spin, lunge, slam, parry and
+flurry produce no ordinary trail.
 
 Sampling is confined to the light's existing `damage_window` (0.22–0.62 of the
 move). Redundant points under 0.025 m are discarded, expired points are pruned,
@@ -2165,10 +2170,10 @@ strongly. Three parallel highlight currents break up the interior; travelling
 brightness runs along them without displacing their clean arc silhouettes. A
 sub-pixel screen-texture offset refracts the room through the darker gaps,
 producing a layered water-sheet read without changing the global environment.
-The
-finisher uses the same timing with only a modest opacity lift, keeping the whole
-ordinary chain visibly below `SpinVfx`'s charged spectacle. Proved at gameplay
-camera distance, including the charged-spin null control, by
+The finisher uses the same timing with only a modest opacity lift, keeping the
+whole ordinary and earned sword attacks visibly below `SpinVfx`'s charged spectacle.
+Proved at gameplay camera distance for all three lights, the tap-heavy, the
+parry counter, and the charged-spin null control by
 `tools/directors/sword_slash_trail.gd`.
 
 **The chain is buffered.** A press in the back half of a swing
