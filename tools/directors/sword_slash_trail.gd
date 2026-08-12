@@ -74,6 +74,9 @@ func _prove_light(rig, hero: Hero, combat: HeroCombat, trail: SwordSlashTrail,
 		rig.fail("SLASH TRAIL LIGHT%d never built %d live sections (got %d)"
 			% [step + 1, MIN_LIVE_SECTIONS, trail.section_count])
 	else:
+		if trail.render_section_count < trail.section_count * 4:
+			rig.fail("SLASH TRAIL LIGHT%d rendered only %d sections from %d samples"
+				% [step + 1, trail.render_section_count, trail.section_count])
 		# One more pose gives the tapered tail time to read while remaining well
 		# inside even LIGHT2's active slice.
 		await rig.wait_physics_frames(1)
