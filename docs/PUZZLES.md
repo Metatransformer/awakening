@@ -86,6 +86,11 @@ is solvable from a cold start with an empty pouch**, because the urns beside it
 hold exactly what it needs. This is how Ocarina does it and it is not a
 coincidence.
 
+**Ambient reward pots are not those supply urns.** They reuse the same `Urn`
+atom and break verb, but their contents are seeded room rewards. Only the
+authored `ShortcutUrn`, `GateUrn` and `ShortcutCache` placements satisfy rule 2's
+cold-start ammunition guarantee; an ambient pot never substitutes for one.
+
 ---
 
 ## 1. The verb ladder
@@ -507,10 +512,10 @@ beside it; `tools/directors/shortcut_puzzle.gd` is the proof, 54 checks.
 | 4 | Far Lantern | — | none; a plain lock (§1) |
 
 **Rule 2 is not decoration on the eye row, and floor 2 shipped a week without
-it** (card #29, `docs/ITEMS.md` §8 D13). Burst charges are sold in the garrison
-and nowhere else, so `pillar_brace` was a gate whose only answer could not be
-obtained underground — the exact dead end §0 forbids. It now carries a
-`ShortcutCache`: an `Urn` with `holds = &"charges"`, spilling a `ChargeCache`
+it** (card #29, `docs/ITEMS.md` §8 D13). Charges are bought in the garrison and
+may rarely appear in an ambient pot, but probability cannot satisfy a cold-start
+guarantee. `pillar_brace` therefore carries its own `ShortcutCache`: an `Urn`
+with `holds = &"charges"`, spilling a `ChargeCache`
 (`scripts/world/charge_cache.gd`, `ArrowBundle`'s shape for the working).
 
 Three things about it are load-bearing and none is obvious:
@@ -595,7 +600,7 @@ it** (card #43). A shortcut is optional by construction — a player who cannot
 open it walks the long way — but the gate stands *in the doorway the floor
 continues through*, so a bow puzzle with no arrows in the room is a floor that
 ends. Arrows do reach a generated floor by other routes (`Dungeon.arrow_chance`
-per room, chests, `Fletching.RECIPE`) and every one of them is a **probability**,
+per room, chests, ambient pots, `Fletching.RECIPE`) and every one is a **probability**,
 which is exactly what §0 rule 2 exists to refuse; card #29 made the same argument
 about scattering Burst charges.
 

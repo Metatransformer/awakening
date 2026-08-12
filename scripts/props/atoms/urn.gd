@@ -11,25 +11,27 @@ extends PuzzleAtom
 ## accident, from a stray swing -- and worse, a room that had to be smashed
 ## before it could be solved would make the ammunition a lock.
 ##
-## What it holds is decided by the PLACER, not rolled here. A bow puzzle's urns
-## hold arrows; a puzzle after a hard fight holds hearts. Rolling it would make
-## rule 2 a probability, and a probability is exactly what rule 2 forbids: "the
-## urns beside it hold exactly what it needs".
+## What it holds is decided by the PLACER, not rolled here. Puzzle urns remain
+## authored supply: arrows, charges or hearts selected to solve the room. An
+## ambient caller may instead choose coins or any merchandise id before the
+## break. Rolling inside the urn would make rule 2 a probability, and a
+## probability is exactly what rule 2 forbids: "the urns beside it hold exactly
+## what it needs".
 ##
 ## It takes damage through `apply_hit`, the same duck-typed entry point
 ## `TrainingPost` answers on and the same one `Arrow._damageable` and the sword's
 ## scan both look for (`docs/CONTRACT.md` §8). Any blow breaks it -- there is no
 ## health, because an urn with hit points is a fight.
 
-## What comes out. `&"arrows"` for a bundle, `&"charges"` for a Burst cache,
-## `&"hearts"` for health, `&""` for nothing. Set by whoever placed it (see the
-## class note).
+## What comes out. `&"arrows"`, `&"charges"` and `&"hearts"` are authored puzzle
+## supply; `&"coins"` is direct gold; any other non-empty ItemDb id is a bag
+## mote; `&""` and unknown ids are nothing. The placer chooses before break.
 @export var holds: StringName = &"arrows"
-## How many arrows, how many charges, or how many quarter-hearts.
-## `ArrowBundle.FLOOR_COUNT`, `ChargeCache.HOLDS` and one half-heart are the
-## defaults, which is what a single urn is worth.
+## How many arrows, charges, quarter-hearts, coins, or copies of the item.
+## Each lane supplies its own small default when this is zero.
 @export var amount: int = 0
 
+const CoinPickup := preload("res://scripts/world/coin_pickup.gd")
 const HEIGHT := 0.92
 const BELLY_R := 0.34
 const NECK_R := 0.17
@@ -131,8 +133,16 @@ func _spill() -> void:
 			# HUD already draws it.
 			Game.heal(amount if amount > 0 else 2 * K.QUARTER)
 			Bus.request_sfx.emit(&"buff_apply", global_position)
+		&"coins":
+			var value := amount if amount > 0 else CoinPickup.DEFAULT_AMOUNT
+			CoinPickup.drop(scene, at, value, Vector3(0.42, -0.39, 0.0))
 		_:
-			pass
+			# Item ids are authored merchandise. Unknown ids and the explicit empty
+			# lane remain no-op, preserving the old empty-pot behavior.
+			if holds != &"" and ItemDb.get_def(holds) != null:
+				var count := amount if amount > 0 else 1
+				LootMote.drop(scene, holds, at,
+					Vector3(-0.42, -0.39, 0.0), count)
 
 
 func _throw_shards() -> void:
