@@ -331,6 +331,29 @@ Proven by `tools/directors/parry_dodge.gd`.
 
 ---
 
+## 3.7 The third answer — none, and what that costs
+
+§3.6 is what the player does when he reads the telegraph. This is what happens
+when he does not, and it is the mirror of §3.5: **one price, several channels,
+derived from the blow rather than authored per monster.**
+
+`Hit.force()` — damage, knockback, attacker mass and how committed the swing was
+— scales the hit-stop, the shake, a directional camera lurch and the HUD's damage
+arc. A second, discrete draw off `mass × commitment²` picks a **flinch**, a
+**stagger** or being **knocked flat**: a goblin floors you 1 time in 100, an orc
+1 in 5, the Warden's telegraphed drop 17 in 20.
+
+**A monster's mass is therefore its defence *and* its threat**, off the same
+`height / K.LAUNCH_MASS_REF` figure §3.5 already uses: the troll that barely
+launches is the troll that puts you on your back. Nothing new is authored to make
+that true.
+
+`docs/CONTRACT.md` “Taking a hit” owns the rule and the override pair for the
+exceptions. `tools/directors/hurt_table.gd` prints every blow in the game through
+it; `tools/directors/hero_struck.gd` photographs the receiving end.
+
+---
+
 ## 4. Minibosses — the wall, and the second way over it
 
 `docs/PUZZLES.md` §7 owns the four and their beats. Three rules from the

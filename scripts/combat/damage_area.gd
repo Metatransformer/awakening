@@ -22,6 +22,18 @@ signal connected(victim: Node3D, hit: Hit)
 ## so the run-ending screen can say what killed you. `Enemy` sets it; the hero's
 ## own blade leaves it empty because nothing reads the killer of a monster.
 @export var source: StringName = &""
+## Body mass of whatever swings this, in `K.LAUNCH_MASS_REF` units, and how big
+## a swing it is for that body (0..1). Together they decide whether the blow
+## flinches, staggers or FLOORS its victim -- see `Hit.tier_odds`, which owns the
+## curves. `Enemy` sets both off its own height; the hero's blade leaves them at
+## the neutral defaults because nothing on a monster reads them yet.
+@export var mass: float = 1.0
+@export var commitment: float = 0.5
+## Per-attacker overrides for those odds. Negative means "derive from mass",
+## which is the default and what almost everything should stay on. See
+## `Hit.odds_knockdown`.
+@export var odds_knockdown: float = -1.0
+@export var odds_stagger: float = -1.0
 
 var active: bool = false
 
@@ -75,7 +87,10 @@ func _try_hit(body: Node3D) -> void:
 	# that hits you for standing still.
 	_already_hit.append(id)
 
-	var hit := Hit.make(amount, global_position, kind, knockback, stun, source)
+	var hit := Hit.make(amount, global_position, kind, knockback, stun, source,
+		mass, commitment)
+	hit.odds_knockdown = odds_knockdown
+	hit.odds_stagger = odds_stagger
 	# Only a blow that actually landed is announced. Blocked and i-framed blows
 	# must not spark and clang as though they connected.
 	if _deliver(body, hit):

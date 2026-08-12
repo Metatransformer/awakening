@@ -111,7 +111,28 @@ const LOOPING := [
 ## is back on its feet by 2.10. After that: a man standing there holding a
 ## sword. Unlike the other entries here this one is trimmed for the LANDING and
 ## not for the strike -- the kneel is what the clip is worth having.
+## `ex_knocked_down` is 2.80 s of which the FALL is 0.00-1.20: the hips hold at
+## 0.543 through a third of a second of reel, drop through a half-beat bounce at
+## 0.63-0.80, and are on the floor at 0.080 by 1.17. Everything after that is a
+## man lying still -- 1.6 s of it, more than the fall itself. Read off
+## tools/_clip_hips.gd. Left uncut, `Hero._fire_knockdown` scales 2.80 s onto
+## `K.KNOCKDOWN_DOWN_TIME` and the hero hits the floor a fifth of the way through
+## a move the controller has already ended.
+## `ex_getting_up` is 2.70 s: flat on the ground until 0.30, rising from 0.40,
+## fully upright at 0.537 by 1.80, and then 0.85 s of standing there. Cut at 1.90
+## to keep the last of the settle. The dead HEAD is cut at the other end, by
+## `Hero.getup_start_offset` -- it is a start offset and not a trim because the
+## hero is already lying on the floor when this fires and does not need to be
+## told to keep doing it for another third of a second.
+## `ss_impact_02` (the light hit reaction) is 0.97 s of which the reel is
+## 0.00-0.40; `ss_impact_03` (the heavy) is 0.70 s with its reel at 0.10-0.45.
+## Both then stand and settle. Cut just past the reel so the clip's length keeps
+## meaning "the move" -- the invariant every entry in this table exists for.
 const TRIM := {
+	"ex_knocked_down": 1.25,
+	"ex_getting_up": 1.90,
+	"ss_impact_02": 0.45,
+	"ss_impact_03": 0.55,
 	"ex_parry": 0.50,
 	"ex_jump_attack": 2.10,
 	"ex_backflip": 1.45,

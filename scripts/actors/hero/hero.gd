@@ -36,7 +36,18 @@ signal slammed(at: Vector3, fall_speed: float)
 ## once it arrives. It is its OWN state rather than an ATTACK variant because
 ## request_attack's first line refuses anything not standing on the floor, and
 ## relaxing that would let every swing in the kit be thrown mid-jump.
-enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER, ATTACK, HOOK, SLAM }
+## HURT is the one state nothing here asks for: it is entered from OUTSIDE, in
+## `take_hit`, on top of whatever the hero was doing. See `_enter_hurt`.
+##
+## It exists where `Swing.PARRY` deliberately does not have a MoveState of its
+## own, and the difference is worth spelling out because the argument against
+## that one reads like an argument against this one. A parry behaves EXACTLY like
+## an ATTACK -- committed, timed, steered the same way -- so a state for it would
+## be a state that exists to be forgotten in one of the six places `state` is
+## matched on. HURT behaves like nothing else in the enum: it is the only state
+## that can interrupt any other, the only one that takes no input at all, and the
+## only one whose exit is a recovery the player is meant to feel.
+enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER, ATTACK, HOOK, SLAM, HURT }
 
 ## Which way a dodge goes, measured against the facing it KEEPS through it.
 ##
@@ -573,6 +584,31 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## fighting and he is not going anywhere*, from the game camera, in the corner of
 ## the player's eye, and a low crouched idle says it. A proper sit is one word
 ## change here and a re-import; nothing downstream reads the clip's name.
+@export_group("Taking a hit")
+## The two flinches and the knockdown pair. Card #130: the hero's outgoing blows
+## have had four juice passes and the incoming direction had none, so none of
+## these four clips had a reader -- `ss_impact_01/02/03` have been sitting in
+## `hero_anims.res` unused since the library was first baked.
+##
+## LIGHT and HEAVY are the owner's own labelling of the sword-and-shield pack's
+## two reactions; `ss_impact_01` is the third and is deliberately not wired,
+## because two flinches that read as one flinch is worse than one.
+@export var clip_flinch_light: StringName = &"ss_impact_02"
+@export var clip_flinch_heavy: StringName = &"ss_impact_03"
+@export var clip_knocked_down: StringName = &"ex_knocked_down"
+@export var clip_getting_up: StringName = &"ex_getting_up"
+## Seconds of `clip_getting_up` that are never played -- the same trick
+## `jump_start_offset` and `_SWING_START_OFFSET` use, for a related reason.
+##
+## The clip opens with 0.30 s of the actor lying still before he starts to move
+## (hips flat at 0.063, read off tools/_clip_hips.gd). The hero has ALREADY been
+## lying still for `K.KNOCKDOWN_DOWN_TIME` by the time this fires, and playing
+## that opening again is the rise visibly failing to start on the frame the game
+## says it has. Trimmed at the far end instead, in build_anim_lib's TRIM table,
+## because a tail is a tail wherever you cut it and a head is a delay.
+@export var getup_start_offset: float = 0.28
+
+@export_group("Stances")
 @export var clip_rest: StringName = &"ss_crouch_idle_01"
 ## The full-body lift used by the item-get ceremony. It sits above Rest as a
 ## one-shot so the presentation pose wins over every locomotion or held stance.
@@ -648,6 +684,20 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 var targeting: Node = null
 
 var state: MoveState = MoveState.GROUND
+## Which of the three reactions the blow in progress rolled. Only meaningful
+## while `state == MoveState.HURT`; LIGHT never gets there (see `_enter_hurt`).
+var _hurt_tier: Hit.Tier = Hit.Tier.HEAVY
+## Has the knockdown handed over to the rise yet? The knockdown is two clips and
+## one state -- the slam's arrangement, and for the slam's reason: they are two
+## halves of one move, and a second MoveState for the second half would be a
+## state that can only ever be reached from one place.
+var _hurt_rising: bool = false
+## Which way the blow threw him, world space and flat. `_tick_hurt` bleeds the
+## residual speed along THIS and not along `_bleed_dir()`, which returns the
+## hero's FACING when he is neither locked on nor guarding -- and his facing
+## points at whatever just hit him, so bleeding along it would walk a staggered
+## man back into the boss that staggered him.
+var _hurt_dir: Vector3 = Vector3.ZERO
 var facing_yaw: float = 0.0
 ## Set by HeroCombat while the shield button is held. Read-only elsewhere.
 var blocking: bool = false
@@ -815,6 +865,15 @@ const _P_JUMP_RUN := "parameters/JumpRun/request"
 const _P_SLAM := "parameters/Slam/request"
 const _P_SLAM_SCALE := "parameters/SlamScale/scale"
 const _P_SLAM_LAND := "parameters/SlamLand/request"
+## The four incoming-hit one-shots. Card #130.
+const _P_FLINCH_L := "parameters/FlinchLight/request"
+const _P_FLINCH_L_SCALE := "parameters/FlinchLightScale/scale"
+const _P_FLINCH_H := "parameters/FlinchHeavy/request"
+const _P_FLINCH_H_SCALE := "parameters/FlinchHeavyScale/scale"
+const _P_KNOCKDOWN := "parameters/KnockDown/request"
+const _P_KNOCKDOWN_SCALE := "parameters/KnockDownScale/scale"
+const _P_GETUP := "parameters/GetUp/request"
+const _P_GETUP_SCALE := "parameters/GetUpScale/scale"
 const _P_SLAM_LAND_SCALE := "parameters/SlamLandScale/scale"
 ## One animation-tree node per Dodge value, in enum order — same arrangement as
 ## _SWING_NODES below, and for the same reason (see _add_scaled_shot).
@@ -1289,6 +1348,38 @@ func _build_anim_tree() -> void:
 
 	prev = _add_oneshot(tree_root, &"Land", prev, _anim_node(clip_land), Vector2(2160, 0), 0.06, 0.20)
 
+	# **Taking a hit goes ON TOP of everything he could have been doing**, which
+	# is the whole of why these four sit here rather than down beside the swings.
+	# A blow arrives while he is mid-slash, mid-draw, mid-landing; the flinch has
+	# to win that frame or the player watches his sword finish its arc through the
+	# thing that just hit him. Only the seated pose is above them, and being hit
+	# ends the meal before it ends anything else (`take_hit` calls
+	# `Game.cancel_meal` first), so that blend is already on its way to zero.
+	#
+	# Four nodes and not one with the clip reassigned, for `_add_swing`'s reason:
+	# writing `animation` on a live AnimationNodeAnimation the frame it is asked
+	# to play restarts the mixer's cache and drops the opening frames -- which for
+	# a flinch is the flinch.
+	#
+	# The fades widen with the blow. A light flinch that eased in would not read
+	# at all inside its 0.28 s; the knockdown can afford 0.10 because the clip
+	# opens with a third of a second of reel before the hips start to drop, so the
+	# ease lands on the part nobody is looking at yet.
+	prev = _add_scaled_shot(tree_root, &"FlinchLight", prev, clip_flinch_light,
+		Vector2(2240, 0), 0.03, 0.14)
+	prev = _add_scaled_shot(tree_root, &"FlinchHeavy", prev, clip_flinch_heavy,
+		Vector2(2320, 0), 0.05, 0.18)
+	# The knockdown pair are stacked in the order they play, exactly as the slam's
+	# two halves are (`Slam` then `SlamLand`): the rise has to be able to interrupt
+	# a fall that is still fading out, and a node cannot cross-fade with itself.
+	#
+	# `GetUp` carries `getup_start_offset` so the rise begins on the frame the
+	# controller says it does -- see the export.
+	prev = _add_scaled_shot(tree_root, &"KnockDown", prev, clip_knocked_down,
+		Vector2(2400, 0), 0.10, 0.12)
+	prev = _add_scaled_shot(tree_root, &"GetUp", prev, clip_getting_up,
+		Vector2(2480, 0), 0.06, 0.22, getup_start_offset)
+
 	# The seated pose, and it is the LAST thing in the tree — above the landing,
 	# above the swings, above the stances. Every other held pose in here occupies
 	# part of him (the shield is one arm, the aim is the upper body); sitting down
@@ -1340,6 +1431,9 @@ func _build_anim_tree() -> void:
 	_tree.set(_P_CHARGE_FREEZE, 0.0)
 	for i in Swing.size():
 		_tree.set(_swing_scale_param(i), 1.0)
+	for p in [_P_FLINCH_L_SCALE, _P_FLINCH_H_SCALE, _P_KNOCKDOWN_SCALE,
+			_P_GETUP_SCALE]:
+		_tree.set(p, 1.0)
 	_tree.set(_P_AIM, 0.0)
 	_tree.set(_P_AIM_HOOK, 0.0)
 	_tree.set(_P_AIM_BLEND, 0.0)
@@ -1589,6 +1683,8 @@ func _physics_process(delta: float) -> void:
 			_tick_hook(delta)
 		MoveState.SLAM:
 			_tick_slam(delta)
+		MoveState.HURT:
+			_tick_hurt(delta)
 
 	# The hookshot flies perfectly straight and so does what it drags
 	# (docs/CONTRACT.md §2.5 #8). Gravity applied during the pull would sag the
@@ -2474,6 +2570,133 @@ func _tick_slam(delta: float) -> void:
 	_set_planar_velocity(Vector3.ZERO)
 
 
+# --- Taking a hit ------------------------------------------------------------
+
+## Put the hero into the reaction `tier` earned, on top of whatever he was doing.
+##
+## **The one state that is entered from outside the state machine**, and it has to
+## be: a blow does not wait for a swing to finish. So this is also the only place
+## in the file that has to tidy up after every other state at once, which is why
+## the cleanup is written as an unconditional list rather than as a match -- a
+## match here is a table with one row per state and the row that ships broken is
+## whichever one was added last and forgotten.
+##
+## LIGHT never arrives here. It plays its clip and leaves the hero in charge --
+## see `take_hit`.
+func _enter_hurt(tier: Hit.Tier, stun: float) -> void:
+	# The chain in flight, the drive, the grip, the dodge's cancel window. Each of
+	# these is a thing some other state is holding, and every one of them outlives
+	# the state if it is not put down here: a hookshot cut short by a blow that
+	# did not clear `_hook_travelling` leaves `HeroRanged` polling `hooking()` for
+	# a pull that will never arrive.
+	_hook_travelling = false
+	_hook_timeout = 0.0
+	_lunge_left = 0.0
+	_perfect_spent = false
+	_drop_grip()
+	# The block goes down. It is not a decision he gets to keep having made while
+	# he is being knocked off his feet, and `_physics_process` would drop the grip
+	# for us next frame anyway -- doing it here means the shield is already down in
+	# the frame the flinch starts, rather than one frame into it.
+	blocking = false
+
+	state = MoveState.HURT
+	_hurt_tier = tier
+	_hurt_rising = false
+
+	if tier == Hit.Tier.KNOCKDOWN:
+		_state_timer = K.KNOCKDOWN_DOWN_TIME
+		# **I-frames for the WHOLE of it, rise included.** A knockdown is the most
+		# expensive thing the game does to the player -- about two seconds during
+		# which he cannot answer -- and a second blow landing inside it is not
+		# difficulty, it is the controller being taken away twice for one mistake.
+		# This is the standard answer and it is the reason the roll can be as
+		# generous as it is: being on the floor has to be survivable or the tell
+		# stops being a read and starts being a death.
+		#
+		# `grant_iframes` and not `_invuln =`, so it can never SHORTEN the second
+		# a landed blow already bought.
+		grant_iframes(K.KNOCKDOWN_DOWN_TIME + K.KNOCKDOWN_RISE_TIME)
+		_fire_knockdown()
+	else:
+		# The authored `Hit.stun` is the floor's own statement of how long this
+		# beat should hold you, and until card #130 **nothing on the hero read it**
+		# -- `Enemy._on_damaged` honoured it and `take_hit` never looked, so twelve
+		# hand-tuned numbers in `BossDb` were decorating a field with no reader.
+		# K.HURT_HEAVY_TIME is a floor under it, exactly as the enemy's own
+		# `maxf(hit.stun, 0.22)` is.
+		_state_timer = maxf(stun, K.HURT_HEAVY_TIME)
+		_fire_flinch(true, _state_timer)
+	# Whatever he was carrying, he is not carrying it in the direction he chose any
+	# more. The knockback shove is written by `take_hit` AFTER this runs.
+	_speed = 0.0
+
+
+## Fire one of the two flinch clips, sized onto `seconds`.
+##
+## The scale is `clip_len / seconds` like every other one-shot here, and the clips
+## are TRIMMED to their reel in build_anim_lib -- 0.45 s and 0.55 s of 0.97 and
+## 0.70 -- so this is compressing a reaction and not a reaction plus a settle.
+func _fire_flinch(heavy: bool, seconds: float) -> void:
+	if _tree == null:
+		return
+	var clip := clip_flinch_heavy if heavy else clip_flinch_light
+	var scale := _clip_length(clip) / maxf(seconds, 0.05)
+	_tree.set(_P_FLINCH_H_SCALE if heavy else _P_FLINCH_L_SCALE, scale)
+	_fire(_P_FLINCH_H if heavy else _P_FLINCH_L)
+
+
+## The fall, sized onto `K.KNOCKDOWN_DOWN_TIME`.
+func _fire_knockdown() -> void:
+	if _tree == null:
+		return
+	_tree.set(_P_KNOCKDOWN_SCALE,
+		_clip_length(clip_knocked_down) / maxf(K.KNOCKDOWN_DOWN_TIME, 0.05))
+	_fire(_P_KNOCKDOWN)
+
+
+## The rise, sized onto `K.KNOCKDOWN_RISE_TIME`.
+##
+## The clip's own dead head is skipped by `getup_start_offset`, so the length this
+## has to fit is what is LEFT of it -- get that wrong and the rise runs at a scale
+## computed for a third of a second the hero never sees, finishing early and
+## leaving him standing in the settle pose while the controller still says HURT.
+func _fire_getup() -> void:
+	if _tree == null:
+		return
+	var playable := maxf(_clip_length(clip_getting_up) - getup_start_offset, 0.05)
+	_tree.set(_P_GETUP_SCALE, playable / maxf(K.KNOCKDOWN_RISE_TIME, 0.05))
+	_fire(_P_GETUP)
+
+
+## Serving the reaction. Rooted, unsteered, and -- for the knockdown -- in two
+## halves on one timer.
+##
+## He is ROOTED rather than frozen: a blow that shoved him keeps sliding, and the
+## slide is most of what says the blow had weight. The decel is gentler than the
+## swing's (`_tick_attack` uses 2.2) because a man knocked off his feet should not
+## stop like a man who chose to.
+func _tick_hurt(delta: float) -> void:
+	_state_timer -= delta
+	_speed = move_toward(_speed, 0.0, decel * 1.4 * delta)
+	_set_planar_velocity(_hurt_dir * _speed)
+	if _state_timer > 0.0:
+		return
+
+	if _hurt_tier == Hit.Tier.KNOCKDOWN and not _hurt_rising:
+		# The fall is over and he is on the floor. Hand over to the rise on the
+		# SAME frame the fall's clip ends -- the one-shot would otherwise begin
+		# fading back to a standing idle, which is the hero getting up by
+		# teleporting into his own locomotion pose.
+		_hurt_rising = true
+		_state_timer = K.KNOCKDOWN_RISE_TIME
+		_fire_getup()
+		return
+
+	state = MoveState.GROUND
+	_state_timer = 0.0
+
+
 ## Touchdown. Called from `_after_move` — the only place that knows the floor was
 ## reached on THIS move rather than a frame ago.
 func _land_slam(fall_speed: float) -> void:
@@ -3212,19 +3435,77 @@ func take_hit(hit: Hit) -> bool:
 	# Armour never zeroes a blow. A build that cannot be hurt turns the whole
 	# extraction decision into a formality.
 	Game.damage(maxi(K.QUARTER, hit.amount - Game.armour_soak()))
-	if hit.knockback > 0.0:
-		var away := K.flat(global_position - hit.from)
-		if away == Vector3.ZERO:
-			away = -_forward()
-		_set_planar_velocity(away * hit.knockback)
+
+	# --- Card #130: what the blow is worth, decided once ---------------------
+	#
+	# `force` is the CONTINUOUS half and drives everything the screen does; `tier`
+	# is the DISCRETE half and drives what his body does. They are separate
+	# because they answer different questions -- two players eating the same boss
+	# slam always see the same camera, and may or may not end up on the floor.
+	#
+	# **Rolled exactly once, here.** `Hit.roll_tier` says so in capitals and this
+	# is the reason: ask twice and the animation plays one reaction while the
+	# controller times another.
+	var force := hit.force()
+	var tier := hit.roll_tier()
+
+	# The shove, away from whatever threw it. Scaled by the reaction rather than
+	# taken flat: a knockdown that did not also send him backwards would be a man
+	# lying down where he was standing, and the clip is authored travelling.
+	var away := K.flat(global_position - hit.from)
+	if away == Vector3.ZERO:
+		# A blow with no direction -- a pool centred on his own feet, a floor
+		# spike. Thrown forward off his own facing rather than nowhere, so the
+		# knockdown still has somewhere to travel.
+		away = -_forward()
+
+	# The three screen channels, all off `force`. The flat pair this replaced --
+	# `HITSTOP_LIGHT` and a trauma of 0.80 -- were the whole of the complaint: a
+	# goblin's jab froze the game for the same four frames as a boss's slam and
+	# asked for MORE camera shake than the hero's own crit (`K.SHAKE_CRIT`, 0.72).
+	Bus.request_hitstop.emit(int(roundf(lerpf(
+		float(K.HURT_STOP_MIN), float(K.HURT_STOP_MAX), force))))
+	Bus.request_shake.emit(lerpf(K.HURT_SHAKE_MIN, K.HURT_SHAKE_MAX, force), 0.18)
+	# And the one that says WHERE, which no other cue in the game does. `away`
+	# points from the impact towards the hero, which is the way his head goes.
+	Bus.request_punch.emit(away, lerpf(K.HURT_PUNCH_MIN, K.HURT_PUNCH_MAX, force),
+		K.HURT_PUNCH_TIME)
+	Bus.hero_hurt.emit(force, tier, global_position)
+
+	# What his BODY does. LIGHT deliberately does not enter `MoveState.HURT`: it
+	# plays its reel over whatever he was doing and leaves him in charge, because
+	# a floor of goblins that each root you for a quarter-second is a floor you
+	# cannot move through. HEAVY and KNOCKDOWN take the controller away, which is
+	# what makes them mean something.
+	var shove := maxf(hit.knockback, 0.0) * Hit.knock_scale(tier)
+	if tier == Hit.Tier.LIGHT:
+		_fire_flinch(false, K.HURT_LIGHT_TIME)
+		# A nudge and not a slide. He still has the stick, so a shove that
+		# persisted would be the game and the player steering the same body in
+		# two directions -- and `_tick_ground` bleeds residual speed along his
+		# FACING, which points at whatever just hit him. One frame of velocity is
+		# what a jab is worth.
+		_set_planar_velocity(away * shove)
 		_speed = 0.0
-	Bus.request_hitstop.emit(K.HITSTOP_LIGHT)
-	Bus.request_shake.emit(0.80, 0.18)
+	else:
+		# **The shove is applied AFTER `_enter_hurt`, which ends by zeroing
+		# `_speed`.** Written before it, the whole knockback was silently deleted
+		# one line later and the hero was knocked flat exactly where he had been
+		# standing -- which reads as fainting rather than as being hit.
+		_enter_hurt(tier, hit.stun)
+		_hurt_dir = away
+		_speed = shove
+		_set_planar_velocity(away * shove)
 	# WHERE it came from, which nothing else on the bus carries. The HUD draws one
 	# arc at that bearing (HUD_PLAN decision 36) in place of the full-screen red
 	# wash this used to get. Emitted here and not earlier on purpose: every branch
 	# above is a blow the player ANSWERED, and an arc for a parried hit would be
 	# the game arguing with them about what just happened.
+	#
+	# **After `hero_hurt`, and the HUD depends on that.** `Hud._on_hero_hurt`
+	# banks the force and `Hud._on_hero_struck` is what actually starts the arc,
+	# so swapping these two lines would draw every arc at the PREVIOUS blow's
+	# weight. See `Hud.ARC_SPAN`.
 	Bus.hero_struck.emit(hit.from)
 	return true
 

@@ -32,8 +32,10 @@ interfaces belong to [CONTRACT.md](CONTRACT.md).
 
 Combat uses quarter-heart damage through one health path. Attacks have readable
 commitment and recovery; defence depends on position, facing, and timing rather
-than passive equipment alone. Packs spread and leash so disengagement and
-ordinary extraction remain possible choices.
+than passive equipment alone. A blow taken is readable the same way: its weight
+and the direction it came from are legible in the reaction, without reading the
+health bar. Packs spread and leash so disengagement and ordinary extraction
+remain possible choices.
 
 Enemy variants and boss beats are content inside these families, not separate
 mechanics in this map.

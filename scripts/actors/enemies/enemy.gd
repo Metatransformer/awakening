@@ -554,6 +554,22 @@ func _build_combat() -> void:
 	# would flatten the one distinction the roster is built on.
 	_hitbox.source = StringName(("ELITE " if elite else "") + String(kind).to_upper())
 	_hitbox.knockback = K.KNOCKBACK_LIGHT
+	# **Mass, which is the one thing that separates a goblin's swing from a
+	# troll's on the receiving end** (card #130). The same body height the launch
+	# already scales off, so there is one measure of mass in the project and not
+	# two. `commitment` is 1.0 because a roster monster has exactly one attack --
+	# every swing it throws IS its heaviest, and a boss is the only thing here
+	# with a moveset to be a fraction of (`Boss._land`).
+	#
+	# Elites are bigger by `_height()` alone, so they price themselves: an ELITE
+	# ORC floors the player more often than an orc without a row saying so.
+	_hitbox.mass = _height() / K.LAUNCH_MASS_REF
+	_hitbox.commitment = 1.0
+	# The authored escape hatch, and almost nothing should use it -- the curves
+	# exist so a new monster is priced by having a height. Both keys or neither;
+	# `Hit.tier_odds` falls back to the derivation if only one is present.
+	_hitbox.odds_knockdown = float(_def.get("knockdown", -1.0))
+	_hitbox.odds_stagger = float(_def.get("stagger", -1.0))
 	_hitbox.position = Vector3(0.0, _height() * 0.55, -float(_def["reach"]) * 0.7)
 	var col := CollisionShape3D.new()
 	var sphere := SphereShape3D.new()

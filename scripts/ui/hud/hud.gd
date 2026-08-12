@@ -174,9 +174,28 @@ const DAMAGE_FLICKER_FRAMES := 2
 ## the one radius that also threads between the vitals pole and the bag rim when
 ## the blow came from directly behind.
 const ARC_R := 0.42               ## fraction of screen HEIGHT
-const ARC_SPAN := deg_to_rad(40.0)
-const ARC_TIME := 0.30
 const ARC_W := 3.0
+
+## The arc at its two ends, LIGHT to KNOCKDOWN. Card #130: the screen-space half
+## of "take a hit from each boss move and tell them apart with the health bar
+## covered", and the only screen-space half there is going to be.
+##
+## **What this is instead of.** The obvious answer is a red vignette scaled by
+## the blow, and it is wrong twice over. Decision 13/37 DELETED the full-screen
+## wash and spent its budget on this arc (see `_draw_arc`), so re-adding one
+## would be re-litigating a settled call; and §4.5's 480x270 RGB555 buffer
+## quantizes colour in steps of 8/255, so a subtle wash is either invisible or a
+## visible band across the frame with nothing in between. An arc is a 3 px stroke
+## against VOID and survives the quantizer intact.
+##
+## So the arc says WEIGHT the only two ways a stroke can without getting louder:
+## how much of the circle it covers, and how long it stays. Width is deliberately
+## NOT one of them -- §7.10's restraint is a 3 px HUD, and a 6 px stroke on a boss
+## slam is exactly the "cue fighting the fight" decision 13 threw out.
+const ARC_SPAN := deg_to_rad(40.0)       ## a goblin's jab
+const ARC_SPAN_MAX := deg_to_rad(96.0)   ## a slag ogre's backhand
+const ARC_TIME := 0.30
+const ARC_TIME_MAX := 0.55
 
 ## The autosave notice. Longer than a toast on purpose: it goes up as the world
 ## fades back in (game_flow.gd `_go`), so the first third of it is spent behind
@@ -275,6 +294,9 @@ var _damage_flicker: int = 0
 var _arc_t: float = -1.0
 ## Camera-relative yaw of the last blow. 0 is the TOP of the circle, clockwise.
 var _arc_bearing: float = 0.0
+## `Hit.force` of the blow that drew it, 0..1. Set by `Bus.hero_hurt` and read by
+## `_draw_arc`; see `_on_hero_hurt` for why the two signals are not one.
+var _arc_force: float = 0.0
 
 var _rim_flash_color: Color = Pal.MOTH
 var _sweep_t: float = -1.0
@@ -368,6 +390,7 @@ func _ready() -> void:
 
 	Bus.player_health_changed.connect(_on_health)
 	Bus.hero_struck.connect(_on_hero_struck)
+	Bus.hero_hurt.connect(_on_hero_hurt)
 	Bus.stamina_changed.connect(_on_stamina)
 	Bus.magic_changed.connect(_on_magic)
 	Bus.bag_changed.connect(_on_bag)
@@ -856,7 +879,7 @@ func _process(delta: float) -> void:
 		_rim_flash_t = -1.0
 	if _sweep_t > SWEEP_TIME:
 		_sweep_t = -1.0
-	if _arc_t > ARC_TIME:
+	if _arc_t > _arc_life():
 		_arc_t = -1.0
 	# A parry holds four times as long as a block. 0.06 s is right for "that one
 	# bounced off" — it is a tick, and it is meant to be. A parry is the rarest
@@ -2758,6 +2781,26 @@ func _draw_extraction(s: Vector2) -> void:
 		Pal.px(3.0, s.y), Pal.CYAN)
 
 
+## How long the current arc lives. See `ARC_SPAN`.
+func _arc_life() -> float:
+	return lerpf(ARC_TIME, ARC_TIME_MAX, _arc_force)
+
+
+## How hard the blow was, banked for the arc that `_on_hero_struck` is about to
+## start.
+##
+## **Two signals and not one, and this one lands first on purpose.** They answer
+## different questions -- `hero_hurt` is the blow's WEIGHT and `hero_struck` is
+## its BEARING -- and `Hero.take_hit` emits them in that order for exactly this
+## reason, with a comment saying so. Nothing else in the tree emits either.
+##
+## Merging them was considered and is worse: `hero_struck` is also what tells the
+## HUD to draw at all, and folding two arguments into it would make every other
+## listener carry a force it does not want.
+func _on_hero_hurt(force: float, _tier: int, _at: Vector3) -> void:
+	_arc_force = clampf(force, 0.0, 1.0)
+
+
 ## Where the blow came from, in camera space, as a bearing with 0 at the top of
 ## the circle and increasing clockwise.
 ##
@@ -2790,7 +2833,8 @@ func _on_hero_struck(from: Vector3) -> void:
 	_wake()
 
 
-## The arc itself. 3 px RUST, 40 degrees, 300 ms, at `ARC_R` about screen centre.
+## The arc itself. 3 px RUST at `ARC_R` about screen centre, 40-96 degrees over
+## 300-550 ms depending on what hit him (`ARC_SPAN`).
 ##
 ## Godot's `draw_arc` measures from +X and runs clockwise on a screen whose y
 ## grows downward, so the bearing is turned a quarter-turn to put 0 at the top.
@@ -2802,11 +2846,12 @@ func _draw_arc(s: Vector2) -> void:
 	# Fades out over its whole life rather than holding then dropping. It is a
 	# 300 ms stroke; a hold would need a fade shorter than three frames to fit,
 	# and a cue that vanishes is a cue the player is not sure they saw.
-	var a := 1.0 - clampf(_arc_t / ARC_TIME, 0.0, 1.0)
+	var a := 1.0 - clampf(_arc_t / _arc_life(), 0.0, 1.0)
 	var mid := _arc_bearing - PI * 0.5
 	var r := ARC_R * s.y
-	var from := mid - ARC_SPAN * 0.5
-	var to := mid + ARC_SPAN * 0.5
+	var span := lerpf(ARC_SPAN, ARC_SPAN_MAX, _arc_force)
+	var from := mid - span * 0.5
+	var to := mid + span * 0.5
 	# **A VOID underline first.** RUST on a sunlit wall is unmissable and RUST on
 	# dark grass is nearly nothing, and the frames say so: the four-bearing beat
 	# reads clean at front, left and right and almost vanishes at BEHIND — which
