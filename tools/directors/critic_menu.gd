@@ -31,6 +31,7 @@ var _shot_n := 0
 
 func run(rig) -> void:
 	var menu = Menu
+	var root_screen = Menu.get_node("Root/Screens/RootScreen")
 	var opts = Menu.get_node("Root/Screens/OptionsScreen")
 	var saves = Menu.get_node("Root/Screens/SavesScreen")
 	var confirm = Menu.get_node("Root/Confirm")
@@ -47,6 +48,15 @@ func run(rig) -> void:
 	_ck("A4 focus grabbed on open -> %s" % _nm(_foc(rig)), _foc(rig) != null)
 	_ck("A5 mouse released on open (mode=%d)" % Input.mouse_mode,
 		Input.mouse_mode == Input.MOUSE_MODE_VISIBLE)
+	var resume := _button_named(root_screen, "Resume")
+	var resume_label: Label = null
+	if resume != null:
+		resume_label = resume.get_meta(&"verb_name") as Label
+	_ck("A6 live root verb label remains 'Resume'",
+		resume_label != null and resume_label.text == "Resume")
+	_ck("A7 live Resume verb resolves to the body face",
+		resume_label != null
+			and resume_label.get_theme_font(&"font") == UITheme.body_font())
 	await _shot(rig, "root")
 
 	# =============================================== B. LEFT STICK + A -> Options
@@ -63,6 +73,17 @@ func run(rig) -> void:
 	_ck("B2 pad A opened Options", opts.visible)
 	if not opts.visible:
 		await _key(rig, KEY_ENTER, 14)   # fall back so the audit can continue
+	var option_tabs := _tab_buttons(opts)
+	var option_labels := PackedStringArray()
+	var option_tabs_use_body := option_tabs.size() == 4
+	for tab in option_tabs:
+		option_labels.append(tab.text)
+		if tab.get_theme_font(&"font") != UITheme.body_font():
+			option_tabs_use_body = false
+	_ck("B3 option tabs read Audio / Graphics / Controls / Game (got %s)"
+		% [option_labels],
+		option_labels == PackedStringArray(["Audio", "Graphics", "Controls", "Game"]))
+	_ck("B4 live option tabs resolve to the body face", option_tabs_use_body)
 	await _shot(rig, "pad_options")
 
 	# ==================================================== C. tab bar on the pad
@@ -102,10 +123,10 @@ func run(rig) -> void:
 	# ============================================ E. slider -> the real AudioServer
 	await _pad_up_to_tabs(rig)
 	for i in LIMIT:
-		if _is_btn(_foc(rig), "AUDIO"):
+		if _is_btn(_foc(rig), "Audio"):
 			break
 		await _pad(rig, PAD_DLEFT, 5)
-	_ck("E1 D-pad left returned to the AUDIO tab", _is_btn(_foc(rig), "AUDIO"))
+	_ck("E1 D-pad left returned to the Audio tab", _is_btn(_foc(rig), "Audio"))
 	await _pad(rig, PAD_A, 12)
 	var on_music := false
 	for i in LIMIT:
@@ -138,7 +159,7 @@ func run(rig) -> void:
 	# ================================================= F. conflicting rebind (kbd)
 	await _pad_up_to_tabs(rig)
 	for i in LIMIT:
-		if _is_btn(_foc(rig), "CONTROLS"):
+		if _is_btn(_foc(rig), "Controls"):
 			break
 		await _pad(rig, PAD_DRIGHT, 5)
 	await _pad(rig, PAD_A, 10)
@@ -358,6 +379,28 @@ func _first_label(n: Node) -> Label:
 		if found != null:
 			return found
 	return null
+
+
+func _button_named(n: Node, label: String) -> Button:
+	if n is Button and UiKit.label_of(n as Button) == label:
+		return n as Button
+	for child in n.get_children():
+		var found := _button_named(child, label)
+		if found != null:
+			return found
+	return null
+
+
+func _tab_buttons(n: Node) -> Array[Button]:
+	var out: Array[Button] = []
+	var tabs := n.find_child("Tabs", true, false)
+	if tabs == null:
+		return out
+	for child in tabs.get_children():
+		var button := child as Button
+		if button != null:
+			out.append(button)
+	return out
 
 
 func _slots(n: Node) -> Array:
