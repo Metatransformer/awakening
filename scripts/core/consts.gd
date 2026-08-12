@@ -385,6 +385,69 @@ const SHAKE_HIT := 0.20    # [tune]
 ## a body leaves the ground, and the screen should agree with the body. [tune]
 const SHAKE_CRIT := 0.72
 
+# --- Taking a hit ------------------------------------------------------------
+## Card #130. The hero's outgoing blows have had four juice passes; the incoming
+## direction had none, and a boss's heavy read exactly like a goblin's jab. These
+## are the numbers that separate the three reactions. `Hit.force` is the input to
+## all of them -- one number, decided once, so a beat retuned in `BossDb` moves
+## the flinch, the stagger, the camera and the grunt together.
+
+## **The two curves that decide which of the three reactions a blow earns**, and
+## the only numbers anyone has to agree with to price a new monster. Fitted to
+## two rows the designer named, and `Hit.tier_odds` is where they are read:
+##
+##   goblin (1.25 m, its only move)   light 90 / heavy  9 / knockdown  1
+##   orc    (1.95 m, its only move)   light 50 / heavy 30 / knockdown 20
+##
+## The input is `mass * commitment^2` -- see `Hit.tier_odds`, which owns the
+## reasoning. `_MID` is where the curve passes its half-way point and `_K` is how
+## steep it is there; both were solved for rather than tuned, so moving one means
+## re-solving both against the two rows above and not nudging until it feels
+## right. `tools/_hurt_table.gd` prints the whole roster through them.
+##
+## The knockdown ceiling is short of 1.0 deliberately: even a boss's telegraphed
+## heaviest only *usually* floors you, which keeps the tell a read rather than a
+## known outcome.
+const KNOCKDOWN_CEIL := 0.85
+const KNOCKDOWN_K := 7.894
+const KNOCKDOWN_MID := 1.2963
+## The not-LIGHT curve. Its ceiling is a hair under 1 because a logistic never
+## reaches its asymptote and a 1.0 here would make the fit unsolvable.
+const STAGGER_CEIL := 0.995
+const STAGGER_K := 5.344
+const STAGGER_MID := 1.1451
+
+## Floor on how long each reaction holds the hero, in seconds. `Hit.stun` is
+## authored per beat (0.20-0.40 across `BossDb`) and had NO READER on the hero at
+## all -- `Enemy._on_damaged` honoured it and `Hero.take_hit` never looked -- so
+## these are floors under the authored number, exactly as the enemy's own
+## `maxf(hit.stun, 0.22)` is.
+const HURT_LIGHT_TIME := 0.22
+const HURT_HEAVY_TIME := 0.42
+## The knockdown, in two halves: how long he is DOWN, and how long getting up
+## takes. Split because they are two clips and because only the first half is a
+## punish -- the rise is a recovery the player can see coming to an end.
+const KNOCKDOWN_DOWN_TIME := 0.70
+const KNOCKDOWN_RISE_TIME := 1.00
+
+## Hit-stop, in frames, at zero force and at full. The flat `HITSTOP_LIGHT` every
+## incoming blow used to get is the low end; the top is `HITSTOP_HEAVY`, which is
+## what landing a crit is worth and is the right price for a boss connecting.
+const HURT_STOP_MIN := 3
+const HURT_STOP_MAX := 9
+
+## Camera trauma an incoming blow asks for, at zero force and at full. The old
+## flat 0.80 is between them -- a goblin's jab was asking for more shake than the
+## hero's own crit (`SHAKE_CRIT`, 0.72), which is why every hit in the game felt
+## the same size.
+const HURT_SHAKE_MIN := 0.30
+const HURT_SHAKE_MAX := 0.90
+## The DIRECTIONAL lurch away from the impact, in `Feel.punch` strength, and how
+## long it takes to come home. Scaled by force like everything else here.
+const HURT_PUNCH_MIN := 0.28
+const HURT_PUNCH_MAX := 1.00
+const HURT_PUNCH_TIME := 0.30
+
 # --- The launch --------------------------------------------------------------
 ## Nothing in this game could leave the ground before this: `Enemy._tick_hurt`
 ## wrote velocity.x and velocity.z and never y, so the heaviest blow in the kit

@@ -275,6 +275,11 @@ signal input_device_changed(using_pad: bool)
 ## Requests for the feel layer. Emitters do not care who answers.
 signal request_hitstop(frames: int)
 signal request_shake(strength: float, duration: float)
+## A DIRECTIONAL shove of the view, away from `dir` (a world-space unit vector
+## pointing from the impact towards the victim). `request_shake` says how hard;
+## this says which way, which is the half an over-the-shoulder camera cannot
+## give you for free -- see `Feel.punch`.
+signal request_punch(dir: Vector3, strength: float, duration: float)
 signal request_sfx(id: StringName, position: Vector3)
 signal request_message(text: String)
 signal item_get_started(item_id: StringName, world_pos: Vector3)

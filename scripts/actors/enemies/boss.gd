@@ -106,6 +106,8 @@ const MARK_SEGMENTS := 28
 
 var _row: Dictionary = {}
 var _beat: Dictionary = {}
+## Cache for `_commitment`. Zero means "not asked yet".
+var _top_sev: float = 0.0
 var _last_id: StringName = &""
 var _forced: StringName = &""
 ## The tell's own length, kept so `_tick_windup` can measure how far through it
@@ -798,9 +800,45 @@ func _victims() -> Array[Node3D]:
 ## hitbox.
 func _land(body: Node3D, b: Dictionary, from: Vector3 = Vector3.INF) -> void:
 	var origin := global_position if from == Vector3.INF else from
+	# **Mass and commitment, the two numbers that decide what the player's BODY
+	# does about this** (card #130, `Hit.tier_odds`). Mass is the authored body
+	# height in the same units the roster uses. Commitment is this beat's damage
+	# over the biggest damage in this boss's own moveset -- so the heaviest
+	# telegraphed beat is 1.0 and usually floors you, and the jab, at three
+	# quarters of it, mostly does not. That fraction is the boss's OWN scale on
+	# purpose: it is what lets a small boss's committed beat read as committed
+	# without having to pretend to be the size of a large one.
 	var hit := Hit.make(int(b["damage"]), origin, &"contact",
-		float(b["knockback"]), float(b["stun"]), StringName(title()))
+		float(b["knockback"]), float(b["stun"]), StringName(title()),
+		_height() / K.LAUNCH_MASS_REF, _commitment(b))
 	DamageArea._deliver(body, hit)
+
+
+## How big `b` is on this boss's OWN scale, 0..1, which is the second half of
+## what decides whether a beat floors the player (`Hit.tier_odds`).
+##
+## **Measured on `Hit.severity` and not on damage alone**, which is what it was
+## first and what `tools/directors/hurt_table.gd` caught: `riven_knight` deals 6
+## on both of its beats and `bellwake` deals 5 on both, so a damage-only ratio
+## made every beat of those two bosses its own heaviest and both of them floored
+## the player 85% of the time with everything they had -- including a light-shove
+## pool. Knockback is the designer's own statement of how hard a beat hauls you
+## about, and it is authored across the twelve beats where damage is not.
+##
+## **The range is 0.6 to 1.0, not 0 to 1.** A boss's lightest beat is still a
+## boss hitting you, and `tier_odds` squares this before it is used -- a raw 0.3
+## would come out at 0.09 and price a boss's jab under a goblin's.
+##
+## Cached: `_land` runs per victim per beat and the moveset cannot change inside
+## a fight.
+func _commitment(b: Dictionary) -> float:
+	if _top_sev <= 0.0:
+		for beat in BossDb.beats(boss_id):
+			_top_sev = maxf(_top_sev, Hit.severity_of(
+				int(beat["damage"]), float(beat["knockback"])))
+		_top_sev = maxf(_top_sev, 0.01)
+	var rel := Hit.severity_of(int(b["damage"]), float(b["knockback"])) / _top_sev
+	return 0.6 + 0.4 * clampf(rel, 0.0, 1.0)
 
 
 # --- Poses --------------------------------------------------------------------
