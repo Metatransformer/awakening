@@ -24,9 +24,9 @@ extends RefCounted
 ##      drawn from that floor's own roster at that room's distance. `Dungeon` no
 ##      longer HAS a band table -- the constant is gone, which is checked rather
 ##      than asserted in prose.
-##   B  All four anchors, in the rooms GDD §5.1 names, and the stair is where the
-##      GDD moved it: OUT of the deepest room and into the landing behind the
-##      boss door.
+##   B  All four anchors, in the rooms GDD §5.1 names, with the oversized Boss
+##      Door on the deepest room and the arena, chest and stair in its separate
+##      BossChamber annex.
 ##   C  Every anchor is REACHABLE -- walked to from the entrance, room by room
 ##      along the tree, with the hero's own capsule swept through every doorway.
 ##      A node that exists in a sealed pocket of geometry passes an assertion and
@@ -50,8 +50,9 @@ extends RefCounted
 ##      vault -- `vault_key(4)` is empty on its own, with no branch anywhere.
 ##   F  The deep chest carries the relic `FloorDb` names for this floor's
 ##      `deep_chest` slot, as a mote you walk over.
-##   G  The boss is awake, the door names it, and killing it opens the door but
-##      does NOT grant the floor item. Its great chest appears; opening that
+##   G  The Boss Key opens and is consumed by the door; killing the boss leaves
+##      that door open and reveals the descent but does NOT grant the floor item.
+##      Its great chest appears; opening that
 ##      chest grants the item and runs the shared ceremony. And on `--level=4`
 ##      only, the Long Descent is
 ##      untouched: level 5 generates with no anchors, no locked doors, and its
@@ -376,7 +377,8 @@ func _anchors(d: Node) -> void:
 			% [vault.global_position.x, vault.global_position.z,
 				vault.global_transform.basis.z.x, vault.global_transform.basis.z.z])
 	# `vault_door` is only in this list on a floor that HAS a vault. Floor 4 does
-	# not (GDD §5.3, the boss room is the vault), and `Dungeon` rightly places no
+	# not (GDD §5.3, the final chamber is the treasure space), and `Dungeon`
+	# rightly places no
 	# door -- so demanding one is demanding the generator break the design.
 	var wanted: Array[StringName] = [&"boss_door", &"deep_chest", &"shortcut_door"]
 	if FloorDb.has_vault(_level):
@@ -391,7 +393,7 @@ func _anchors(d: Node) -> void:
 
 	_ck("B1 the boss door is in the deepest room",
 		d.anchor_cell(&"boss_door") == d.deepest)
-	_ck("B2 the deep chest is beside it, in the same room",
+	_ck("B2 the deep chest shares the deepest anchor cell",
 		d.anchor_cell(&"deep_chest") == d.deepest)
 	_ck("B3 the shortcut is at the entrance",
 		d.anchor_cell(&"shortcut_door") == d.entrance)
@@ -414,24 +416,22 @@ func _anchors(d: Node) -> void:
 		_ck("B6 the vault takes the floor below's (%s)" % vd.key_item,
 			vd != null and vd.key_item == FloorDb.boss_item(_level + 1))
 
-	# GDD §5.1: the boss door REPLACES the stair. Both halves of that.
+	# The generated room is only the approach; the chamber owns the fight and exit.
 	var deep_root: Node = d.rooms[d.deepest]["node"]
 	var in_room := _every(deep_root, func(n: Node) -> bool: return n is Stairs)
 	_ck("B7 there is no stair left in the deepest room (%d)" % in_room.size(),
 		in_room.is_empty())
-	var landing: Node = d.get_node_or_null(^"BossLanding")
-	var behind := _every(landing, func(n: Node) -> bool: return n is Stairs) \
-		if landing != null else []
-	_ck("B8 the way down is in the landing behind the boss door",
+	var chamber: Node = d.get_node_or_null(^"BossChamber")
+	var behind := _every(chamber, func(n: Node) -> bool: return n is Stairs) \
+		if chamber != null else []
+	_ck("B8 the way down is in the BossChamber",
 		behind.size() == 1)
 
-	# The arena is the deepest room, so the room had to be built to hold the ring
-	# the table authored. A 16 m room and an 11 m radius is a fight through a wall.
-	var arena: Node = deep_root.get_node_or_null(^"Arena")
-	_ck("B9 the deepest room has the arena in it", arena != null)
+	var arena: Node = chamber.get_node_or_null(^"Arena") if chamber != null else null
+	_ck("B9 the separate BossChamber has the arena in it", arena != null)
 	if arena != null:
 		var r: float = arena.radius()
-		var half: float = d.size_of(d.deepest) * 0.5
+		var half: float = d._boss_chamber_size() * 0.5
 		print("FLOOR arena radius %.1f m in a %.1f m chamber" % [r, half * 2.0])
 		_ck("B10 the seal ring fits inside the masonry (%.1f < %.1f)" % [r, half],
 			r < half)
@@ -440,8 +440,8 @@ func _anchors(d: Node) -> void:
 ## Free every ordinary body on the floor. See the call site.
 func _clear_the_floor(d: Node) -> void:
 	var boss: Node = null
-	var deep_root: Node = d.rooms[d.deepest]["node"]
-	var arena: Node = deep_root.get_node_or_null(^"Arena")
+	var chamber: Node = d.get_node_or_null(^"BossChamber")
+	var arena: Node = chamber.get_node_or_null(^"Arena") if chamber != null else null
 	if arena != null:
 		boss = arena.boss()
 	var freed := 0
@@ -561,6 +561,8 @@ func _solve_gate(node: Node) -> bool:
 		# said it had opened one, and left the reachability sweep rubbing along a
 		# shut door for four hundred steps.
 		atom.set(&"armed", true)
+		if atom is BossKey and not atom.call(&"is_solved"):
+			atom.call(&"grant_pickup")
 		atom.call(&"solve")
 	# `needs_key` gates spend one at the door. The hunt that produces it is
 	# `puzzle_loop`'s beat; here the key is simply given.
@@ -1188,29 +1190,35 @@ func _the_vault(rig, d: Node, hero: Node3D) -> void:
 # --- The boss, and the way down ------------------------------------------------------
 
 func _the_boss(rig, d: Node, hero: Node3D) -> void:
-	var deep_root: Node = d.rooms[d.deepest]["node"]
-	var arena: Node = deep_root.get_node_or_null(^"Arena")
+	var chamber: Node = d.get_node_or_null(^"BossChamber")
+	var arena: Node = chamber.get_node_or_null(^"Arena") if chamber != null else null
 	var door: Node3D = d.anchor_node(&"boss_door")
 	if arena == null or door == null:
-		_ck("G0 the deepest room holds an arena and a boss door", false)
+		_ck("G0 the deepest approach has a boss door and separate arena", false)
 		return
 
-	# Into the room, not up to the door -- the door is outside the seal, which is
-	# the whole point of it.
 	var walked := await _walk_rooms(rig, d, hero, d.deepest)
 	Bus.camera_recenter.emit()
 	await rig.wait_frames(30)
-	_ck("G0 the deepest room is reachable on foot from the entrance", walked)
-	_ck("G1 walking in sealed it", arena.is_sealed())
-	var boss: Node = arena.boss()
-	_ck("G2 %s is awake" % _boss_title(), boss != null and boss.is_awake())
-	await rig.capture(out.path_join("f_03_sealed.png"))
+	_ck("G0 the deepest approach is reachable on foot from the entrance", walked)
+	_ck("G1 the gate-room solve retained the Boss Key", Game.has_boss_key)
+	_ck("G2 the Boss Door is still shut", not door.is_open())
+	door.activate(hero)
+	await rig.wait_frames(55)
+	_ck("G3 the Boss Key opened the door", door.is_open())
+	_ck("G4 and the door consumed it", not Game.has_boss_key)
 
-	# The door refuses by naming what is holding it, not by saying LOCKED.
-	_ck("G3 the boss door is still shut", not door.is_open())
-	print("FLOOR boss door refusal=\"%s\"" % door._seal_line())
-	_ck("G4 and it names %s (\"%s\")" % [_boss_title(), door._seal_line()],
-		door._seal_line().contains(_boss_title()))
+	var entered := await _sweep(rig, hero, [
+		door.global_position - door.global_transform.basis.z * 4.0
+			+ Vector3(0.0, 0.15, 0.0),
+		(arena as Node3D).global_position + Vector3(0.0, 0.15, 0.0)])
+	Bus.camera_recenter.emit()
+	await rig.wait_frames(30)
+	_ck("G5 the separate BossChamber is reachable through it", entered)
+	_ck("G6 walking into the arena sealed it", arena.is_sealed())
+	var boss: Node = arena.boss()
+	_ck("G7 %s is awake" % _boss_title(), boss != null and boss.is_awake())
+	await rig.capture(out.path_join("f_03_sealed.png"))
 
 	if boss == null:
 		return
@@ -1225,31 +1233,34 @@ func _the_boss(rig, d: Node, hero: Node3D) -> void:
 		Game.heal(999)
 		await rig.wait_seconds(K.IFRAME_TIME + 0.06)
 	await rig.wait_frames(60)
-	_ck("G5 %s died (%d landed blows)" % [_boss_title(), swings],
+	_ck("G8 %s died (%d landed blows)" % [_boss_title(), swings],
 		boss == null or not is_instance_valid(boss)
 		or boss.health.quarters == 0)
-	_ck("G6 the seal came down", not arena.is_sealed())
-	_ck("G7 the arena is spent", arena.is_spent())
-	_ck("G8 the boss door opened", door.is_open())
+	_ck("G9 the seal came down", not arena.is_sealed())
+	_ck("G10 the arena is spent", arena.is_spent())
+	_ck("G11 the Boss Door stayed open", door.is_open())
+	var stairs := _every(chamber, func(n: Node) -> bool: return n is Stairs)
+	_ck("G12 boss death revealed the chamber descent",
+		stairs.size() == 1 and stairs[0].visible and bool(stairs[0].get(&"enabled")))
 	var item := FloorDb.boss_item(_level)
-	_ck("G9 and the kill did not silently grant %s" % item, not Game.has(item))
+	_ck("G13 and the kill did not silently grant %s" % item, not Game.has(item))
 	var great_chest: Node3D = arena.boss_item_chest()
-	_ck("G10 the spent arena holds its great chest", great_chest != null)
+	_ck("G14 the spent arena holds its great chest", great_chest != null)
 	if great_chest != null:
-		_ck("G11 the great chest deterministically carries %s" % item,
+		_ck("G15 the great chest deterministically carries %s" % item,
 			StringName(great_chest.get(&"item_id")) == item)
-		_ck("G12 and is visibly oversized (x%.2f)" % great_chest.scale.x,
+		_ck("G16 and is visibly oversized (x%.2f)" % great_chest.scale.x,
 			great_chest.scale.x > 1.4)
 		await _sweep(rig, hero, [great_chest.global_position
 			+ great_chest.global_transform.basis.z * 1.15 + Vector3.UP * 0.05], 1.1)
 		var focused := await _focus(rig, great_chest)
-		_ck("G13 the great chest owns the OPEN prompt", focused)
+		_ck("G17 the great chest owns the OPEN prompt", focused)
 		if focused:
 			await rig.tap(["interact"])
 			await rig.wait_seconds(0.65)
 		var ceremony: Node = rig.scene().get_tree().get_first_node_in_group(&"item_get")
-		_ck("G14 opening the chest grants %s" % item, Game.has(item))
-		_ck("G15 and starts the item-get ceremony", ceremony != null)
+		_ck("G18 opening the chest grants %s" % item, Game.has(item))
+		_ck("G19 and starts the item-get ceremony", ceremony != null)
 		if ceremony != null:
 			await rig.wait_seconds(2.3)
 			ceremony.call(&"dismiss")
@@ -1278,7 +1289,7 @@ func _deep_chest(rig, d: Node, hero: Node3D) -> void:
 		hero.rotation.y = hero.facing_yaw + PI
 	Bus.camera_recenter.emit()
 	await rig.wait_frames(24)
-	_ck("F2 the deep chest is reachable, beside the boss door", walked)
+	_ck("F2 the deep chest is reachable beyond the boss arena", walked)
 	_ck("F3 and it offers itself (\"%s\")" % Hud._prompt,
 		await _focus(rig, chest))
 	await rig.capture(out.path_join("f_05_deep_chest.png"))
@@ -1339,26 +1350,22 @@ func _deep_chest(rig, d: Node, hero: Node3D) -> void:
 
 func _way_down(rig, d: Node, hero: Node3D) -> void:
 	var door: Node3D = d.anchor_node(&"boss_door")
-	var landing: Node = d.get_node_or_null(^"BossLanding")
-	if door == null or landing == null:
-		_ck("G10 there is a landing behind the boss door", false)
+	var chamber: Node = d.get_node_or_null(^"BossChamber")
+	if door == null or chamber == null:
+		_ck("G20 there is a chamber behind the boss door", false)
 		return
-	var stairs := _every(landing, func(n: Node) -> bool: return n is Stairs)
+	var stairs := _every(chamber, func(n: Node) -> bool: return n is Stairs)
 	if stairs.is_empty():
-		_ck("G10 there is a way down behind the boss door", false)
+		_ck("G20 there is a way down in the boss chamber", false)
 		return
 	var down: Node3D = stairs[0]
 	var walked := await _sweep(rig, hero, [
-		door.global_position + door.global_transform.basis.z * 2.4
-			+ Vector3(0.0, 0.15, 0.0),
-		door.global_position - door.global_transform.basis.z * 3.0
-			+ Vector3(0.0, 0.15, 0.0),
 		down.global_position - down.global_transform.basis.z * 2.6
 			+ Vector3(0.0, 0.15, 0.0)])
 	Bus.camera_recenter.emit()
 	await rig.wait_frames(24)
-	_ck("G10 the way down is reachable through the opened boss door", walked)
-	_ck("G11 the stair offers itself (\"%s\")" % Hud._prompt,
+	_ck("G20 the way down is reachable inside the cleared chamber", walked)
+	_ck("G21 the stair offers itself (\"%s\")" % Hud._prompt,
 		await _focus(rig, down))
 	await rig.capture(out.path_join("f_07_way_down.png"))
 

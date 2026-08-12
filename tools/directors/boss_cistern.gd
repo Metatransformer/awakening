@@ -284,9 +284,20 @@ func _before(rig, arena: Node, door: Node) -> void:
 		door.global_position)
 	var said: String = Hud._prompt
 	print("BOSS the door says: \"%s\"" % said)
-	_ck("B7 the refusal names what is holding it", said.contains("CISTERN WARDEN"))
+	_ck("B7 the refusal names what is holding it", said.contains("BOSS KEY"))
 	_ck("B8 and does not just say LOCKED", not said.contains("LOCKED"))
 	await rig.capture(out.path_join("b_01_sealed_door.png"))
+
+	# This fight fixture predates the generated Boss Chamber, so it proves the
+	# threshold contract in place before walking into the arena: a floor-bound
+	# Boss Key opens the door once, writes the door flag, and is consumed.
+	Game.add_boss_key()
+	_ck("B9 the floor-bound Boss Key unlocks the door", door.unlocked())
+	door.activate(_hero(rig))
+	await _until(rig, func() -> bool: return door.is_open(), 180)
+	_ck("B10 the Boss Key opened the threshold", door.is_open())
+	_ck("B11 opening consumed the Boss Key", not Game.has_boss_key)
+	_ck("B12 opening wrote the door flag", Game.flag(door.flag_id()))
 
 
 # --- C. The seal --------------------------------------------------------------
@@ -633,14 +644,14 @@ func _kill(rig, arena: Node, boss: Node, door: Node) -> void:
 		_ck("H17b and never into the item list", not Game.has(relic))
 	await rig.wait_seconds(1.0)
 
-	await _until(rig, func() -> bool: return door.is_open(), 400)
-	_ck("H18 the door opened", door.is_open())
+	_ck("H18 the keyed door stayed open through the fight", door.is_open())
 	_ck("H19 the arena is spent", arena.is_spent() and not arena.is_sealed())
 	var seal: Node3D = arena.get_node_or_null(^"Seal")
 	_ck("H20 and the ring went back down (y=%.2f)" % seal.position.y,
 		seal.position.y < -1.0)
-	_ck("H21 the kill wrote its one-way flag (%s)" % door.flag_id(),
-		Game.flag(door.flag_id()))
+	var dead_flag := BossDoor.dead_flag(StringName(door.get(&"boss_id")))
+	_ck("H21 the kill wrote its separate one-way flag (%s)" % dead_flag,
+		Game.flag(dead_flag))
 	await _stand_at(rig, door.global_position + Vector3(0.0, 0.05, 3.4),
 		door.global_position)
 	await rig.capture(out.path_join("b_08_open.png"))
@@ -652,9 +663,9 @@ func _kill(rig, arena: Node, boss: Node, door: Node) -> void:
 ## forever after -- the game never asks you to re-fight something you have beaten.
 ##
 ## Built as FRESH props rather than by reloading the scene, because the claim is
-## about CONSTRUCTION: a new arena and a new door, reading the same world flag and
-## told nothing else, must come up empty and open. That is exactly what `Dungeon`
-## will do at M4 when it rebuilds floor 1.
+## about CONSTRUCTION: a new arena and a new door, reading their separate kill
+## and open flags and told nothing else, must come up empty and open. That is
+## exactly what `Dungeon` does when it rebuilds floor 1.
 func _reentry(rig, arena: Node, door: Node) -> void:
 	var root: Node = rig.scene()
 	var arena_at: Transform3D = (arena as Node3D).global_transform
@@ -667,8 +678,8 @@ func _reentry(rig, arena: Node, door: Node) -> void:
 	door2.name = "BossDoor2"
 	door2.set(&"boss_id", &"cistern_warden")
 	door2.set(&"label", "The Long Descent")
-	door2.set(&"opening_w", 5.0)
-	door2.set(&"opening_h", 5.0)
+	door2.set(&"opening_w", BossDoor.BOSS_OPENING_W)
+	door2.set(&"opening_h", BossDoor.BOSS_OPENING_H)
 	var arena2 := (load("res://scripts/world/boss_arena.gd") as GDScript).new() as Area3D
 	arena2.name = "Arena2"
 	arena2.set(&"boss_id", &"cistern_warden")
