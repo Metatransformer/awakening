@@ -296,7 +296,11 @@ the same reason and to the same end.
 **1. The feel is not negotiable.** OOT is the bar for camera, locomotion, and
 combat, and `refs/` is authoritative over intuition (`docs/CONTRACT.md` §2.5).
 There is no walk/run toggle — speed is a curve. The roll is faster than the run
-and it commits. A reversal past ~135° is its own move, not steering.
+and it commits: you cannot cancel it into a run, which is what makes it a move
+rather than a repositioning tool. The last moments of its recovery *can* be spent
+on another commitment — a swing, the shield, a second dodge — and that asymmetry
+is deliberate, because a dodge you cannot decide out of is a dodge that eats
+presses. A reversal past ~135° is its own move, not steering.
 
 **2. Greed is the difficulty slider.** The game does not ask you to pick easy or
 hard. It asks how deep you want to go, and pricing your own exit is how you
