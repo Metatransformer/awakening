@@ -49,13 +49,14 @@ extends Control
 ## and `Flow` is still the only thing in the project that changes scenes.
 
 ## Cells across, the pouch's number for the pouch's reason.
-const COLS := 4
+const COLS := ItemGrid.COLS
 ## Cells across on a death, where the haul is drawn as TWO columns: what the
 ## floor kept, and what the document case brought home (docs/GDD.md §3.1). The
-## frame is 878 px of usable width, so 3 + 2 cells at 140 plus separations comes
-## to 736 and fits with room to spare — 4 + 3 does not.
-const LOST_COLS := 3
-const KEPT_COLS := 2
+## frame is 878 px of usable width; at the old 140 px card that bought 3 + 2, and
+## at the square 84 px tile (card #156) it buys 4 + 3 — 4x84 + 3x84 plus their
+## separations is 636.
+const LOST_COLS := 4
+const KEPT_COLS := 3
 ## Cells of loot, before the haul starts running off the panel. Twelve bag slots
 ## is the ceiling the forge sells up to, so this is "all of it" today and a clamp
 ## rather than a scroller on purpose: a run summary you have to page through is a
@@ -81,6 +82,11 @@ var _age: float = 0.0
 var _armed: bool = false
 var _leaving: bool = false
 
+## The hover card, the same one the bag, the locker, the counters and the EQUIP
+## page use. The receipt is the one screen where the player cannot ACT on a
+## stack -- which is exactly why it is worth being able to read one: this is
+## where they find out what a thing they have never seen before was worth.
+var _tip: ItemTip
 var _button: Button
 var _strike: Strike
 
@@ -167,10 +173,14 @@ func _stacks_of(contents: Dictionary, banked: Dictionary) -> Array[Dictionary]:
 			continue
 		var n := int(contents[key])
 		out.append({
+			# The id, for the hover card: everything else in here is already
+			# painted on the tile, and the card wants the def's own sentences.
+			"id": id,
 			"label": def.display_name,
 			"count": n,
 			"value": def.value * n,
 			"color": def.tint,
+			"icon": UiKit.item_icon(id),
 			"mark": def.is_component(),
 			# Components banked to the workbench are not money and must not be
 			# priced like money -- the forge never pays gold for one. They get the
@@ -216,6 +226,45 @@ func _build() -> void:
 	_build_verdict(stack, dead, accent)
 	_build_body(stack, dead, accent)
 	_build_footer(stack)
+
+	# Last, so it draws over the frame and over the cross.
+	_tip = ItemTip.make(self)
+
+
+## What one stack of the haul was, on the card beside it.
+##
+## `index` is into `rows` — the array the column was built from — because the
+## grid packs its cells in order and the receipt has no holes. A padding cell
+## reports -1 and the card goes away rather than keeping the last stack's
+## sentences beside an empty square.
+func _describe(rows: Array[Dictionary], grid: ItemGrid, index: int) -> void:
+	if _tip == null:
+		return
+	if index < 0 or index >= rows.size():
+		_tip.hide_tip()
+		return
+	var row := rows[index]
+	var def := ItemDb.get_def(StringName(row.get("id", &"")))
+	if def == null:
+		_tip.hide_tip()
+		return
+	_tip.clear()
+	_tip.point_at(grid.cell_for(index))
+	_tip.kicker.text = "%s  ·  %s" % [def.rarity_name().to_upper(),
+		def.bench_name() if def.is_component() else "INGREDIENT"]
+	_tip.title.text = def.display_name
+	_tip.price.text = "%d ◇  ·  %d in the pile" % [int(row["value"]), int(row["count"])]
+	_tip.blurb.text = def.blurb
+	# The one thing the receipt is FOR, said per stack: where this went. The tile
+	# says BENCH or a number; the card says what that means.
+	if bool(row["banked"]):
+		_tip.say_note("To the workbench. The forge never pays gold for one.",
+			UITheme.TEXT_DIM)
+	elif died():
+		_tip.say_note("The floor kept it." if grid.name == "Haul"
+			else "It came home in the case.", UITheme.TEXT_DIM)
+	else:
+		_tip.say_note("The vendor buys this.", UITheme.TEXT_DIM)
 
 
 ## The headline, what killed you, and the run's four numbers.
@@ -377,21 +426,35 @@ func _build_column(parent: Node, caption_text: String, rows: Array[Dictionary],
 		var r := rows[i]
 		cells.append({
 			"index": i,
-			"label": "%s ×%d" % [String(r["label"]), int(r["count"])],
+			"label": String(r["label"]),
+			# Two numbers about one tile, which is the receipt and nothing else:
+			# how many came back (top-left) and what the pile was worth (top
+			# right). They used to be the name plus one line -- "Grave Wax ×2"
+			# over "40 ◇" -- and on a square tile the ×2 is the first thing an
+			# ellipsis eats.
+			"tag": "×%d" % int(r["count"]),
 			"sub": "BENCH" if bool(r["banked"]) else "%d ◇" % int(r["value"]),
 			"tint": r["color"],
+			"icon": r.get("icon", ""),
 			"mark": bool(r["mark"]),
 		})
 	grid.set_cells(cells)
 
 	# Nothing on this screen is choosable -- there is one button and it is in the
-	# footer. Cells that could take focus would put a highlight on a stack the
+	# footer. Cells that could take FOCUS would put a highlight on a stack the
 	# player cannot do anything with, and on the death screen that highlight would
 	# sit on top of the cross.
+	#
+	# The POINTER is a different question and the answer changed with the card:
+	# the cells stay unfocusable and stay unpressable, and they pass
+	# `mouse_entered` so hovering one says what it was. A dismiss is read in
+	# `_input`, which runs before the GUI phase, so a click on a cell still
+	# closes the screen.
 	for i in grid.count():
 		var cell := grid.cell_at(i)
 		cell.focus_mode = Control.FOCUS_NONE
-		cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cell.mouse_filter = Control.MOUSE_FILTER_STOP
+	grid.cell_focused.connect(func(index: int) -> void: _describe(rows, grid, index))
 
 	if struck:
 		_strike = Strike.new()

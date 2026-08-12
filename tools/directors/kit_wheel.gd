@@ -472,7 +472,7 @@ func _bind_card(rig) -> void:
 	_ck("J4 and it did NOT take it off the slot it was already on",
 		Game.wheel_at(0) == &"sword")
 	_ck("J5 the detail pane says which direction it is (%s)"
-		% equip._detail_hand.text, equip._detail_hand.text.contains("KIT WHEEL"))
+		% equip._tip.kicker.text, equip._tip.kicker.text.contains("KIT WHEEL"))
 
 	await rig.capture("w_3_bind.png")
 	Menu.close()

@@ -89,7 +89,7 @@ func _tip_rect(screen) -> Rect2:
 
 
 func _cell_rect(screen) -> Rect2:
-	var r: Rect2 = screen._tip_anchor.get_global_rect()
+	var r: Rect2 = screen._tip.anchor.get_global_rect()
 	return r
 
 
@@ -100,7 +100,7 @@ func _view(screen) -> Vector2:
 
 ## Does the card sit on the cell it is describing?
 func _overlaps(screen) -> bool:
-	if screen._tip_anchor == null:
+	if screen._tip.anchor == null:
 		return false
 	return _hits(_tip_rect(screen), _cell_rect(screen))
 
@@ -241,16 +241,16 @@ func _walk(screen, tag: String) -> void:
 			bad_cover += 1
 			print("  TIP cover: %s at %s (tip %s over cell %s)" % [tag,
 				screen.cursor_label(), screen._tip.get_global_rect(),
-				screen._tip_anchor.get_global_rect()])
+				screen._tip.anchor.get_global_rect()])
 		if not _inside(screen):
 			bad_edge += 1
 			print("  TIP edge: %s at %s (tip %s in %s)" % [tag,
 				screen.cursor_label(), screen._tip.get_global_rect(),
 				screen.get_viewport_rect().size])
-		if screen._d_name.text != screen.cursor_label():
+		if screen._tip.title.text != screen.cursor_label():
 			bad_text += 1
 			print("  TIP text: %s card says '%s', cursor is on '%s'" % [tag,
-				screen._d_name.text, screen.cursor_label()])
+				screen._tip.title.text, screen.cursor_label()])
 		await _key(KEY_RIGHT)
 	_ck(bad_cover == 0,
 		"%s the card never covered the cell it describes (%d of %d)"
@@ -291,8 +291,8 @@ func _mouse_path(screen, tag: String) -> void:
 	await _hover(cell.get_global_rect().get_center())
 	_ck(screen._cursor == target,
 		"%s the mouse moved the cursor (%d -> %d)" % [tag, was, screen._cursor])
-	_ck(screen._d_name.text == screen.cursor_label(),
-		"%s the card followed the mouse ('%s')" % [tag, screen._d_name.text])
+	_ck(screen._tip.title.text == screen.cursor_label(),
+		"%s the card followed the mouse ('%s')" % [tag, screen._tip.title.text])
 	_ck(not _overlaps(screen),
 		"%s the hovered card is not on its own cell" % tag)
 	_ck(_inside(screen), "%s the hovered card is on screen" % tag)
@@ -301,9 +301,9 @@ func _mouse_path(screen, tag: String) -> void:
 	# And back to the pad on the same screen, because the two paths share one
 	# cursor and the failure worth catching is one of them poisoning the other.
 	await _key(KEY_RIGHT)
-	_ck(screen._d_name.text == screen.cursor_label(),
+	_ck(screen._tip.title.text == screen.cursor_label(),
 		"%s the pad still moves it after the mouse has ('%s')"
-			% [tag, screen._d_name.text])
+			% [tag, screen._tip.title.text])
 
 
 # --- plumbing ----------------------------------------------------------------

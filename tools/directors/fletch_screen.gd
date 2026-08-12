@@ -257,7 +257,9 @@ func _recipe_have(screen, id: StringName) -> int:
 	var def := ItemDb.get_def(id)
 	if def == null:
 		return -1
-	for child in screen._recipe.get_children():
+	# The recipe rows moved onto the hover card with the rest of the detail
+	# column (card #156). Same rows, same two labels, one owner further out.
+	for child in screen._tip.rows.get_children():
 		if child.get_child_count() < 2:
 			continue
 		var what := child.get_child(0) as Label
@@ -298,6 +300,6 @@ func _focused_on_fletch(screen) -> bool:
 
 
 func _detail_is_current(screen) -> bool:
-	var text := String(screen._d_blurb.text)
+	var text := String(screen._tip.blurb.text)
 	return text.contains("Makes %d arrows per batch" % Fletching.batch()) \
 		and text.contains("Quiver %d / %d" % [Game.arrows, Game.max_arrows])

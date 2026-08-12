@@ -10,10 +10,10 @@ extends GridContainer
 ## reading two different UIs about the same objects.
 ##
 ## So there is one control and every one of those screens builds cells with it.
-## The cell is the pouch's cell, because the pouch's is the one that was already
-## right: the item's tint as a chip across the top, the name (with ◆ when a
-## counter in the garrison wants it and the vendor does not), and a line under
-## it that says the thing this particular screen is about — a stack count in the
+## The cell is a SQUARE ICON TILE now (`ItemCell`): the art in the middle, the
+## item's tint as the frame, the name (with ◆ when a counter in the garrison
+## wants it and the vendor does not) on a strip along the bottom, and a corner
+## badge saying the thing this particular screen is about — a stack count in the
 ## bag, a price at a counter, `2/4` at a bench.
 ##
 ## **It is a GridContainer and not a screen.** SCOPE §1 freezes new UI screens at
@@ -40,9 +40,12 @@ signal cell_activated(index: int)
 
 ## What a cell can say. Keys, all optional except `label`:
 ##
-##   label   String      the name, drawn big and wrapped
-##   sub     String      the line under it — "×6", "120 ◇", "2/4"
-##   tint    Color       the chip across the top; the item's own colour
+##   label   String      the name, on the strip along the bottom
+##   sub     String      the corner badge — "×6", "120 ◇", "2/4"
+##   tint    Color       the frame around the tile; the item's own colour
+##   icon    String      a `res://` path — `UiKit.item_icon(id)`. A tile with no
+##                       art is its name and its frame, which is what lets an
+##                       item ship before its picture does.
 ##   mark    bool        prefix the label with ◆
 ##   star    bool        prefix the label with ★ without replacing ◆
 ##   dim     bool        draw the whole cell at 55% — an empty slot, a sold-out
@@ -80,12 +83,21 @@ var _index_of: Array[int] = []
 ## vendor's stock, the locker and the receipt are one picture of a collection,
 ## and a bag five wide beside a receipt four wide is two.
 ##
-## It is not free. The cell has a measured 140 px minimum (`ItemCell.SIZE`, set
-## by how the names wrap), so a fifth column costs 148 px on a screen that had
-## none spare — `MenuPouchPanel._build_grid` is the caller that had to be
-## re-laid-out to find it.
+## It stopped being expensive when the cell went square. Five of the old 140 px
+## card was 732 px and the pouch had to take a hundred of it off the paper doll
+## and the detail column to fit; five 84 px tiles is **452**, which is why the
+## vendor's two-across board (`TradeScreen.TRADE_COLS`) could become five too.
+## One number, one picture of a collection, on every screen that draws one.
+##
+## A `const` as well as the default, because two of the screens set `columns`
+## themselves after building the grid (the locker, both sides of a counter) and
+## a literal 5 in those places is a fifth column that only moves four times when
+## somebody changes this one.
+const COLS := 5
+
+
 func _init() -> void:
-	columns = 5
+	columns = COLS
 	add_theme_constant_override("h_separation", 8)
 	add_theme_constant_override("v_separation", 8)
 
@@ -116,6 +128,23 @@ func set_cells(entries: Array, capacity: int = 0) -> void:
 ## button. Null when the position does not exist.
 func cell_at(i: int) -> Button:
 	return _cells[i] if i >= 0 and i < _cells.size() else null
+
+
+## The cell REPORTING `index`, which is not the same question as `cell_at`.
+##
+## `set_cells` packs entries into cells in order and each entry carries its own
+## `index`; a collection with holes in it (a bag laid out over slots, a shop
+## whose sold-out lines are gone) therefore has a cell position and an index that
+## do not match. A screen anchoring a hover card to "the cell the cursor is on"
+## has to ask this one — `cell_at` would hang the card off whatever happens to
+## sit at that position.
+func cell_for(index: int) -> Button:
+	if index < 0:
+		return null
+	for i in _cells.size():
+		if _index_of[i] == index:
+			return _cells[i]
+	return null
 
 
 func count() -> int:
