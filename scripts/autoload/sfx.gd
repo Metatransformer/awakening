@@ -26,6 +26,10 @@ extends Node
 ## a swarm dying at once should thin out, not blow the mixer up.
 const VOICES := 12
 
+## Non-positional voices for ceremonies and alarms. Kept apart from `_pool` so
+## the existing 3D round-robin, attenuation and stealing behavior do not move.
+const GLOBAL_VOICES := 4
+
 ## Sounds that ship as numbered variants -- `coin_trade` is on disk as
 ## `coin_trade_1..3`, never as `coin_trade.ogg`. Picking at random keeps a
 ## repeated event from turning into a machine gun.
@@ -186,9 +190,14 @@ const MIN_GAP := {
 
 var _pool: Array[AudioStreamPlayer3D] = []
 var _next := 0
+var _global_pool: Array[AudioStreamPlayer] = []
+var _global_next: int = 0
 var _cache: Dictionary = {}
 ## sound id -> the msec clock reading it last started at. See `MIN_GAP`.
 var _last_played: Dictionary = {}
+## Observable for directors and future alarm orchestration. Playback still goes
+## through `Bus.request_global_sfx`; this is not a second request interface.
+var last_global_cue: StringName = &""
 
 
 func _ready() -> void:
@@ -202,8 +211,16 @@ func _ready() -> void:
 		p.max_distance = 40.0
 		add_child(p)
 		_pool.append(p)
+	for i in GLOBAL_VOICES:
+		var p := AudioStreamPlayer.new()
+		p.name = "GlobalVoice%d" % i
+		p.bus = &"SFX"
+		p.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(p)
+		_global_pool.append(p)
 
 	Bus.request_sfx.connect(play_at)
+	Bus.request_global_sfx.connect(play_global)
 	Bus.perfect_dodge.connect(func(pos: Vector3) -> void:
 		play_at(&"perfect_dodge", pos))
 	# The one cue whose loudness is the POINT, so it does not go through `_cue`.
@@ -278,6 +295,20 @@ func play(id: StringName) -> void:
 	play_at(id, _hero_pos())
 
 
+## Play a non-positional cue through the SFX bus. These voices survive a paused
+## tree, which is required for title cards and will also serve the raid alarm.
+func play_global(id: StringName) -> void:
+	if _too_soon(id):
+		return
+	var stream := _load(id)
+	if stream == null:
+		return
+	last_global_cue = id
+	var voice := _claim_global()
+	voice.stream = stream
+	voice.play()
+
+
 ## Has `id` played too recently to play again? See `MIN_GAP`.
 ##
 ## `Time.get_ticks_msec()` and not a game clock: this is about what the SPEAKERS
@@ -306,6 +337,12 @@ func _claim() -> AudioStreamPlayer3D:
 	var v := _pool[_next]
 	_next = (_next + 1) % _pool.size()
 	return v
+
+
+func _claim_global() -> AudioStreamPlayer:
+	var voice := _global_pool[_global_next]
+	_global_next = (_global_next + 1) % _global_pool.size()
+	return voice
 
 
 ## Resolve `id` to a stream, expanding `foo` to a random `foo_N` when that sound
