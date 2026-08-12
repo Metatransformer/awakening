@@ -339,14 +339,31 @@ derived from the blow rather than authored per monster.**
 
 `Hit.force()` — damage, knockback, attacker mass and how committed the swing was
 — scales the hit-stop, the shake, a directional camera lurch and the HUD's damage
-arc. A second, discrete draw off `mass × commitment²` picks a **flinch**, a
-**stagger** or being **knocked flat**: a goblin floors you 1 time in 100, an orc
-1 in 5, the Warden's telegraphed drop 17 in 20.
+arc. A second, discrete draw picks a **flinch**, a **stagger** or being **knocked
+flat**, and being knocked flat needs *both* a body heavy enough and a swing
+committed enough:
+
+| | flinch | stagger | flat |
+|---|---|---|---|
+| goblin | 90 | 10 | **0** |
+| skeleton | 78 | 22 | **0** |
+| orc | 64 | 33 | 3 |
+| troll | 30 | 39 | 31 |
+| Warden's sweep | 16 | 76 | 8 |
+| Warden's telegraphed drop | 9 | 6 | 85 |
+
+**Nothing the hero's own size or smaller can put him on the ground at all** — not
+rarely, *never*. Being floored is what a body twice your weight does when it
+winds up to do it, and the roster below the hero's mass has no access to it at
+any commitment. That is the whole reason the tier is worth reading.
 
 **A monster's mass is therefore its defence *and* its threat**, off the same
 `height / K.LAUNCH_MASS_REF` figure §3.5 already uses: the troll that barely
-launches is the troll that puts you on your back. Nothing new is authored to make
-that true.
+launches is the troll that puts you on your back. And what separates a troll's
+swing from a goblin's is not only its mass but **the 0.72 s it spends announcing
+itself** — the roster's `windup`, the same number that makes the blow readable,
+is what tells the pricing this swing was committed. Nothing new is authored to
+make either true.
 
 `docs/CONTRACT.md` “Taking a hit” owns the rule and the override pair for the
 exceptions. `tools/directors/hurt_table.gd` prints every blow in the game through

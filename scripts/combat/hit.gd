@@ -157,32 +157,40 @@ static func severity_of(amount_q: int, knock: float) -> float:
 
 
 
+## Commitment from the length of the tell, 0.6 to 1.0.
+##
+## **A roster monster has exactly one attack, so it has no moveset to be a
+## fraction of** -- which is why this used to hand back a flat 1.0 and price
+## every troll swing as the troll's heaviest. It is not: it is the troll's only
+## swing, and the roster already records how committed each body's swing is, in
+## the one number that also decides whether the player can read it coming.
+##
+## `windup` is `Enemy.DEFS[kind]["windup"]`. See `K.COMMIT_TELL_MIN`.
+static func commitment_of_tell(windup: float) -> float:
+	var t := clampf((windup - K.COMMIT_TELL_MIN)
+		/ (K.COMMIT_TELL_MAX - K.COMMIT_TELL_MIN), 0.0, 1.0)
+	return K.COMMIT_LIGHT + (1.0 - K.COMMIT_LIGHT) * t
+
+
 ## The odds of each of the three reactions, as (knockdown, not-light).
 ##
-## **The whole model, and it is two logistic curves through numbers the designer
-## named.** A goblin's swing is 90 / 9 / 1 light / heavy / knockdown; an orc's is
-## 50 / 30 / 20. Everything else on the roster is those two rows extrapolated,
-## which is what makes this a schema rather than a table nobody can extend: add a
-## monster with a height and it is priced, and the two curves are the only thing
-## anyone has to agree with.
+## **Knockdown is the product of two gates and neither alone opens it** -- see
+## `K.KNOCKDOWN_CEIL` for the design rows this serves. Heft says whether this
+## body could floor the hero at all; commitment says whether this MOVE was the
+## one that meant to. A goblin has no heft, so its heavy is still only a shove; a
+## troll has heft and spends it only on the swing it wound up for.
 ##
-## The input is `mass * commitment^2`:
+## Measured across the roster as it stands -- `tools/directors/hurt_table.gd`
+## prints it, light / heavy / knockdown:
 ##
-##   * **mass** separates the creatures. A 1.25 m goblin is 0.74 and a 1.95 m orc
-##     is 1.15, and that 1.56x is worth 20x in knockdown odds -- which is steep,
-##     and is exactly the spread that was asked for.
-##   * **commitment SQUARED** separates one creature's moves from each other. A
-##     boss's heaviest telegraphed beat is 1.0 and stays where its mass puts it;
-##     its jab at 0.75 comes down to 0.56, which is what stops a body large enough
-##     to floor you doing it with every twitch. Squared and not linear because a
-##     moveset only spans 3/4 to 1 (`commitment` is damage over the monster's own
-##     best damage), and a linear read of that is barely a difference at all.
+##   goblin       90 / 10 /  0      orc            64 / 33 /  3
+##   kobold       88 / 12 /  0      knight_iron    62 / 36 /  2
+##   skeleton     78 / 22 /  0      troll          30 / 40 / 30
+##   boss f1 sweep 16 / 75 /  9     boss f1 slam    9 /  6 / 85
 ##
-## Measured across the roster as it stands -- `tools/_hurt_table.gd` prints it:
-##
-##   goblin        90 /  9 /  1        orc            50 / 30 / 20
-##   skeleton      69 / 24 /  7        wraith         54 / 29 / 17
-##   boss f1 arc   53 / 30 / 17        boss f1 slam    2 / 14 / 85
+## Nothing the hero's own size or smaller can put him on the ground, at all, at
+## any commitment. That is the floor doing its job and not a rounding: `heft` is
+## clamped at zero below `K.KNOCKDOWN_MASS_FLOOR`.
 ##
 ## Not-light rather than heavy as the second number, so the two can never sum past
 ## one and a badly-authored override cannot produce negative odds.
@@ -191,10 +199,14 @@ func tier_odds() -> Vector2:
 		var k := clampf(odds_knockdown, 0.0, 1.0)
 		return Vector2(k, clampf(k + odds_stagger, 0.0, 1.0))
 	var c := clampf(commitment, 0.0, 1.0)
-	var x := clampf(mass, 0.1, 4.0) * c * c
-	var kd := K.KNOCKDOWN_CEIL / (1.0
-		+ exp(-K.KNOCKDOWN_K * (x - K.KNOCKDOWN_MID)))
-	var nl := K.STAGGER_CEIL / (1.0 + exp(-K.STAGGER_K * (x - K.STAGGER_MID)))
+	var heft := pow(clampf((clampf(mass, 0.1, 4.0) - K.KNOCKDOWN_MASS_FLOOR)
+		/ (K.KNOCKDOWN_MASS_FULL - K.KNOCKDOWN_MASS_FLOOR), 0.0, 1.0),
+		K.KNOCKDOWN_HEFT_P)
+	var gate := pow(clampf((c - K.COMMIT_LIGHT) / (1.0 - K.COMMIT_LIGHT),
+		0.0, 1.0), K.KNOCKDOWN_COMMIT_P)
+	var kd := K.KNOCKDOWN_CEIL * heft * gate
+	var y := clampf(mass, 0.1, 4.0) * (0.6 + 0.4 * c)
+	var nl := K.STAGGER_CEIL / (1.0 + exp(-K.STAGGER_K * (y - K.STAGGER_MID)))
 	return Vector2(kd, maxf(nl, kd))
 
 

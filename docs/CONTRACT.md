@@ -1141,24 +1141,47 @@ and commitment. Everything the SCREEN does scales off it — the hit-stop
 how long the HUD's damage arc draws. Two players eating the same boss slam always
 see the same camera.
 
-`Hit.roll_tier()` is the DISCRETE half: LIGHT, HEAVY or KNOCKDOWN, drawn from two
-logistic curves over `mass * commitment²` (`K.KNOCKDOWN_*` / `K.STAGGER_*`). It
-decides what his BODY does, and it is a roll — the same slam may stagger you or
-floor you. **Roll it exactly once per landed blow.** Ask twice and the animation
-plays one reaction while the controller times another.
+`Hit.roll_tier()` is the DISCRETE half: LIGHT, HEAVY or KNOCKDOWN. It decides
+what his BODY does, and it is a roll — the same slam may stagger you or floor
+you. **Roll it exactly once per landed blow.** Ask twice and the animation plays
+one reaction while the controller times another.
 
-The curves are solved against two authored rows rather than tuned: a goblin is
-90/9/1 and an orc is 50/30/20. `tools/directors/hurt_table.gd` prints every blow
-in the game through them and FAILS if either anchor moves.
+**Knockdown is the product of two gates and neither alone opens it**
+(`K.KNOCKDOWN_*`):
+
+- **heft**, how far the attacker outweighs the hero. Zero at
+  `K.KNOCKDOWN_MASS_FLOOR`, which is the hero's own mass — *a body no heavier
+  than you cannot put you on the ground*, so goblin, kobold and skeleton are
+  exactly 0 and that is a design statement rather than a small number. Full at
+  twice the hero, where the floor-1 boss sits.
+- **commitment**, whether the move was a committed telegraphed heavy at all.
+  Squared, so an ordinary swing spends almost none of the heft its body has.
+  A 2.6 m troll *should* floor you — but only on the swing it wound up for.
+
+The not-LIGHT odds (stagger *or* knockdown) are a separate logistic on
+`mass * (0.6 + 0.4 × commitment)`, mass-dominant, because "how hard was I rocked"
+is mostly about what hit you. That is the channel that makes a big body's
+ordinary swing read as a shove rather than a tap.
+
+Fitted to three authored rows rather than tuned — goblin 90/10/0, orc 64/33/3,
+troll 30/39/31. `tools/directors/hurt_table.gd` prints every blow in the game
+through them, FAILS if an anchor moves, and separately FAILS if anything the
+hero's size or smaller ever floors him, if an ordinary roster body floors him
+more often than not, or if a boss's heaviest beat stops usually flooring him.
 `tools/directors/hero_struck.gd` photographs the receiving end and calibrates the
 lurch against four known-answer bearings.
 
 **Numbers are authored per MOVE, not per monster.** A `DamageArea` exports `mass`
-and `commitment`; a roster monster gets `commitment = 1.0` because its one attack
-is its heaviest, and a boss beat gets its damage-and-knockback severity relative
-to that boss's own top beat (`Boss._commitment`). Where the curve is wrong for a
-particular attacker, `odds_knockdown` and `odds_stagger` override it outright —
-that pair is the schema's escape hatch and it is also how a director pins a tier.
+and `commitment`. Commitment runs 0.6 (an ordinary swing) to 1.0 (a fully
+telegraphed heavy) and two things derive it, meaning the same thing: a boss beat
+takes its damage-and-knockback severity relative to that boss's own top beat
+(`Boss._commitment`), and a roster monster — which has exactly one attack and so
+nothing to be a fraction of — takes it off **the length of its wind-up**
+(`Hit.commitment_of_tell`). A move that announces itself is a move that is
+committing, which is the same claim the roster's own rows already make. Where the
+curve is wrong for a particular attacker, `odds_knockdown` and `odds_stagger`
+override it outright — that pair is the schema's escape hatch and it is also how
+a director pins a tier.
 
 LIGHT is cosmetic: a flinch clip over whatever he was doing, and he keeps
 control. A floor of goblins that each root you for a quarter-second is a floor

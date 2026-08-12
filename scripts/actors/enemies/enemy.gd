@@ -557,14 +557,22 @@ func _build_combat() -> void:
 	# **Mass, which is the one thing that separates a goblin's swing from a
 	# troll's on the receiving end** (card #130). The same body height the launch
 	# already scales off, so there is one measure of mass in the project and not
-	# two. `commitment` is 1.0 because a roster monster has exactly one attack --
-	# every swing it throws IS its heaviest, and a boss is the only thing here
-	# with a moveset to be a fraction of (`Boss._land`).
+	# two.
+	#
+	# **`commitment` comes off the WIND-UP** and not off a moveset, because a
+	# roster monster has exactly one attack and so has nothing to be a fraction
+	# of. It read a flat 1.0 until the owner looked at the table it produced and
+	# said what it deserved: every troll swing was priced as the troll's heaviest
+	# telegraphed beat and floored the player three times in four. It is not the
+	# troll's heaviest, it is the troll's ONLY, and what makes it a committed blow
+	# rather than a twitch is the 0.72 s it spends announcing itself -- the same
+	# number this row already uses to make the hit readable. See
+	# `Hit.commitment_of_tell` and `K.COMMIT_LIGHT`.
 	#
 	# Elites are bigger by `_height()` alone, so they price themselves: an ELITE
 	# ORC floors the player more often than an orc without a row saying so.
 	_hitbox.mass = _height() / K.LAUNCH_MASS_REF
-	_hitbox.commitment = 1.0
+	_hitbox.commitment = Hit.commitment_of_tell(float(_def["windup"]))
 	# The authored escape hatch, and almost nothing should use it -- the curves
 	# exist so a new monster is priced by having a height. Both keys or neither;
 	# `Hit.tier_odds` falls back to the derivation if only one is present.
