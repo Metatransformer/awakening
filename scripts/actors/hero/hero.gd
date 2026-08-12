@@ -571,6 +571,13 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## the body and the camera arrive at the shoulder together.
 @export var aim_fade: float = K.CAM_AIM_BLEND
 @export var clip_block: StringName = &"ss_block_idle_01"
+## `ss_run_01` was rejected as the free run above because its upright torso and
+## pinned arms read as a shuffle. Behind a raised shield those are the authored
+## guard, so it is the right slower stride instead of a compromise free run.
+@export var clip_guard_walk: StringName = &"ss_run_01"
+## The tighter shield-forward cycle from the same pack, used at the run cap so
+## guarding never turns a translating body back into the standing block pose.
+@export var clip_guard_run: StringName = &"ss_run_02"
 ## Seconds the shield takes to come up and go down. Fast enough to be a
 ## reaction, slow enough that you can see it happen.
 @export var block_fade: float = 0.12
@@ -988,6 +995,8 @@ const _P_HOOK_SCALE := "parameters/HookScale/scale"
 const _P_AIM := "parameters/Aim/blend_amount"
 const _P_AIM_HOOK := "parameters/HookAim/blend_amount"
 const _P_AIM_BLEND := "parameters/AimLoco/blend_position"
+const _P_GUARD_BLEND: String = "parameters/GuardLoco/blend_position"
+const _P_GUARD_SCALE: String = "parameters/GuardScale/scale"
 const _P_BLOCK := "parameters/Block/blend_amount"
 const _P_REST := "parameters/Rest/blend_amount"
 const _P_ITEM_GET := "parameters/ItemGet/request"
@@ -1255,13 +1264,31 @@ func _build_anim_tree() -> void:
 			prev = _add_scaled_shot(tree_root, _DODGE_NODES[i], prev, _dodge_clip(i),
 				Vector2(880 + 90 * i, 0), _DODGE_FADE_IN[i], _DODGE_FADE_OUT[i])
 
-	# The shield is a HELD pose, so it blends rather than fires: a one-shot would
-	# end on its own while the button is still down.
+	# The shield is HELD, so it blends rather than fires: a one-shot would end on
+	# its own while the button is still down. Its old second input was one
+	# full-body block-idle pose; at weight 1 that pose replaced the moving legs and
+	# slid across the floor with the CharacterBody3D. The two `ss_run` clips that
+	# are wrong for free running are exactly guarded strides here: upright torso,
+	# shield pinned forward, and feet cycling behind the raised guard.
+	var guard_loco := AnimationNodeBlendSpace1D.new()
+	guard_loco.min_space = 0.0
+	guard_loco.max_space = run_blend_speed
+	guard_loco.sync_mode = AnimationNodeBlendSpace1D.SYNC_MODE_CYCLIC_MUTABLE
+	guard_loco.add_blend_point(_anim_node(clip_block), 0.0, -1, &"guard_idle")
+	guard_loco.add_blend_point(_anim_node(clip_guard_walk), walk_blend_speed,
+		-1, &"guard_walk")
+	guard_loco.add_blend_point(_anim_node(clip_guard_run), run_blend_speed,
+		-1, &"guard_run")
+	tree_root.add_node(&"GuardLoco", guard_loco, Vector2(1000, 200))
+
+	var guard_scale := AnimationNodeTimeScale.new()
+	tree_root.add_node(&"GuardScale", guard_scale, Vector2(1120, 200))
+	tree_root.connect_node(&"GuardScale", 0, &"GuardLoco")
+
 	var block_blend := AnimationNodeBlend2.new()
-	tree_root.add_node(&"BlockAnim", _anim_node(clip_block), Vector2(1000, 200))
-	tree_root.add_node(&"Block", block_blend, Vector2(1100, 0))
+	tree_root.add_node(&"Block", block_blend, Vector2(1220, 0))
 	tree_root.connect_node(&"Block", 0, prev)
-	tree_root.connect_node(&"Block", 1, &"BlockAnim")
+	tree_root.connect_node(&"Block", 1, &"GuardScale")
 	prev = &"Block"
 
 	# The charged wind-up is a HELD POSE, and it is one frame of the light slash
@@ -1423,6 +1450,8 @@ func _build_anim_tree() -> void:
 		_tree.set(_dodge_scale_param(i), 1.0)
 	_tree.set(_P_BLEND, 0.0)
 	_tree.set(_P_STRIDE, 1.0)
+	_tree.set(_P_GUARD_BLEND, 0.0)
+	_tree.set(_P_GUARD_SCALE, 1.0)
 	_tree.set(_P_BLOCK, 0.0)
 	_tree.set(_P_REST, 0.0)
 	_tree.set(_P_CHARGE, 0.0)
@@ -3743,8 +3772,14 @@ func _drive_animation(delta: float) -> void:
 	# The aim stance rides the same speed axis, so a strafe at the shoulder blends
 	# through the aim-walk at the pace the sword stance would have walked at.
 	_tree.set(_P_AIM_BLEND, clampf(planar, 0.0, run_blend_speed))
+	# Guard locomotion is directional only through the controller: the supplied
+	# clips face forward, but every nonzero planar move must keep their legs
+	# cycling instead of falling back to the frozen full-body block idle.
+	_tree.set(_P_GUARD_BLEND, clampf(planar, 0.0, run_blend_speed))
 	var speed01 := clampf(planar / K.RUN_SPEED, 0.0, 1.0)
-	_tree.set(_P_STRIDE, lerpf(stride_scale_idle, stride_scale_run, speed01))
+	var stride_scale := lerpf(stride_scale_idle, stride_scale_run, speed01)
+	_tree.set(_P_STRIDE, stride_scale)
+	_tree.set(_P_GUARD_SCALE, stride_scale)
 
 	# The stances ease in and out with the camera, not instantly: drawing the bow
 	# is a move he makes, and the rig sliding to the shoulder over a body that
