@@ -1496,58 +1496,89 @@ func _draw_floor(s: Vector2) -> void:
 ## cannot drift. Enemy bars are world markers only 2 px tall; putting this bezel
 ## on them would erase the distinction between a screen-space instrument and a
 ## minimal world-space warning.
-func _meter_shape(r: Rect2, chamfer: float) -> PackedVector2Array:
-	var cut := minf(chamfer, r.size.y * 0.5)
+func _meter_shape(r: Rect2, diagonal: float, left_diagonal: bool = true,
+		right_diagonal: bool = true) -> PackedVector2Array:
+	var cut := minf(diagonal, r.size.x)
 	return PackedVector2Array([
-		r.position,
-		Vector2(r.end.x - cut, r.position.y),
-		Vector2(r.end.x, r.position.y + cut),
-		Vector2(r.end.x, r.end.y - cut),
-		Vector2(r.end.x - cut, r.end.y),
+		Vector2(r.position.x + (cut if left_diagonal else 0.0), r.position.y),
+		Vector2(r.end.x, r.position.y),
+		Vector2(r.end.x - (cut if right_diagonal else 0.0), r.end.y),
 		Vector2(r.position.x, r.end.y),
 	])
 
 
-## Draw the dark bezel and return the recessed rectangle that owns fill and
-## ticks. The angular cap is deliberately tiny and un-antialiased: it survives
-## the RGB555 pass as silhouette rather than as a borrowed ornament.
+## A hard one-pixel slice of a meter polygon. Keeping the band on the same
+## straight side equations as the body avoids square highlights poking through
+## the diagonal ends.
+func _meter_band_shape(r: Rect2, diagonal: float, band_size: float, top: bool,
+		left_diagonal: bool = true) -> PackedVector2Array:
+	var cut := minf(diagonal, r.size.x)
+	var band := minf(band_size, r.size.y)
+	var y0 := 0.0 if top else r.size.y - band
+	var y1 := band if top else r.size.y
+	var t0 := y0 / r.size.y
+	var t1 := y1 / r.size.y
+	var left0 := r.position.x + (cut * (1.0 - t0) if left_diagonal else 0.0)
+	var left1 := r.position.x + (cut * (1.0 - t1) if left_diagonal else 0.0)
+	return PackedVector2Array([
+		Vector2(left0, r.position.y + y0),
+		Vector2(r.end.x - cut * t0, r.position.y + y0),
+		Vector2(r.end.x - cut * t1, r.position.y + y1),
+		Vector2(left1, r.position.y + y1),
+	])
+
+
+## Draw the built bezel and return the recessed rectangle that owns fill and
+## ticks. Every layer shares one straight diagonal at each end; none of these
+## polygons requests antialiasing, so the silhouette stays a hard pixel stair.
 func _draw_player_meter(s: Vector2, key: StringName, rect: Rect2,
 		track_color: Color, heavy: bool = false) -> Rect2:
 	var bezel := Pal.px(Pal.HEALTH_METER_BEZEL if heavy else Pal.METER_BEZEL, s.y)
-	var inset := Pal.px(Pal.METER_INSET, s.y)
-	var chamfer := Pal.px(Pal.METER_CHAMFER, s.y)
+	var inset := Pal.px(Pal.HEALTH_METER_INSET if heavy else Pal.METER_INSET, s.y)
+	var diagonal := Pal.px(
+		Pal.HEALTH_METER_DIAGONAL if heavy else Pal.METER_DIAGONAL, s.y)
 	var outer := rect.grow(bezel)
 	var track := rect.grow(-inset)
 
 	_note(key, &"pole", outer)
-	_canvas.draw_colored_polygon(_meter_shape(outer, chamfer + bezel), Pal.VOID)
-	_canvas.draw_colored_polygon(_meter_shape(rect, chamfer), Pal.MIDNIGHT)
-	_canvas.draw_colored_polygon(_meter_shape(track, chamfer), track_color)
-
-	# A single ASH row catches the upper edge; another bright bevel would make
-	# the subordinate meters as loud as health at their native 6 px height.
-	var light_w := maxf(0.0, rect.size.x - inset - chamfer)
-	_canvas.draw_rect(Rect2(rect.position + Vector2(inset, 0.0),
-		Vector2(light_w, Pal.px(1.0, s.y))), Pal.ASH)
+	_canvas.draw_colored_polygon(_meter_shape(outer, diagonal), Pal.VOID)
+	_canvas.draw_colored_polygon(_meter_shape(rect, diagonal), Pal.ASH)
+	_canvas.draw_colored_polygon(
+		_meter_band_shape(rect, diagonal, Pal.px(1.0, s.y), true),
+		Color(Pal.BONE, Pal.METER_FRAME_LIGHT_ALPHA))
+	_canvas.draw_colored_polygon(
+		_meter_band_shape(rect, diagonal, Pal.px(1.0, s.y), false), Pal.MIDNIGHT)
+	_canvas.draw_colored_polygon(_meter_shape(track, diagonal), Pal.MIDNIGHT)
+	_canvas.draw_colored_polygon(_meter_shape(track, diagonal), track_color)
 	return track
 
 
 ## Fill a fraction of the recessed track. Only a segment that reaches the
-## authored end inherits the chamfer; partial values retain a crisp vertical
-## reading edge, so no antialiasing or eased motion is needed to read the amount.
+## left edge starts on the track's diagonal; every visible end is diagonal too.
+## A later segment underlaps that end by one diagonal, leaving its left edge flat
+## beneath the current fill so a damage ghost can show through as a small wedge.
 func _draw_meter_segment(s: Vector2, track: Rect2, from: float, to: float,
-		color: Color) -> void:
+		color: Color, heavy: bool = false) -> void:
 	var first := clampf(from, 0.0, 1.0)
 	var last := clampf(to, first, 1.0)
 	if last <= first:
 		return
-	var segment := Rect2(track.position.x + track.size.x * first, track.position.y,
-		track.size.x * (last - first), track.size.y)
-	if last >= 1.0:
-		_canvas.draw_colored_polygon(
-			_meter_shape(segment, Pal.px(Pal.METER_CHAMFER, s.y)), color)
-	else:
-		_canvas.draw_rect(segment, color)
+	var diagonal := Pal.px(
+		Pal.HEALTH_METER_DIAGONAL if heavy else Pal.METER_DIAGONAL, s.y)
+	var left_diagonal := is_zero_approx(first)
+	var first_x := track.position.x + track.size.x * first
+	if not left_diagonal:
+		first_x = maxf(track.position.x, first_x - diagonal)
+	var segment := Rect2(first_x, track.position.y,
+		track.position.x + track.size.x * last - first_x, track.size.y)
+	_canvas.draw_colored_polygon(
+		_meter_shape(segment, diagonal, left_diagonal), color)
+	_canvas.draw_colored_polygon(
+		_meter_band_shape(segment, diagonal, Pal.px(1.0, s.y), true, left_diagonal),
+		Color(Pal.BONE, Pal.METER_FILL_LIGHT_ALPHA))
+	_canvas.draw_colored_polygon(
+		_meter_band_shape(segment, diagonal, Pal.px(1.0, s.y), false, left_diagonal),
+		Color(Pal.VOID, Pal.METER_FILL_SHADOW_ALPHA))
 
 
 # --- Health -----------------------------------------------------------------
@@ -1576,7 +1607,7 @@ func _draw_health(s: Vector2) -> void:
 	var ghost := _ghost_visible()
 	if ghost > 0:
 		_draw_meter_segment(s, track, float(Game.quarters) / float(total),
-			float(Game.quarters + ghost) / float(total), Pal.RUST)
+			float(Game.quarters + ghost) / float(total), Pal.RUST, true)
 
 	# VITAL <-> VOID, and it used to be VITAL <-> BONE. Two things were wrong with
 	# BONE and both are only visible in a frame: it is EXACTLY the stamina fill's
@@ -1589,7 +1620,7 @@ func _draw_health(s: Vector2) -> void:
 	# RUST was the other candidate and it is stamina's EXHAUSTED colour, which
 	# trades this collision for the same one a row down.
 	var fill: Color = Pal.VITAL.lerp(Pal.VOID, pulse) if low else Pal.VITAL
-	_draw_meter_segment(s, track, 0.0, float(Game.quarters) / float(total), fill)
+	_draw_meter_segment(s, track, 0.0, float(Game.quarters) / float(total), fill, true)
 
 	# Ticks last, cutting through fill and track alike -- that is what keeps the
 	# bar countable. Heart boundaries are heavier than quarters.

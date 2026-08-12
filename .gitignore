@@ -13,3 +13,4 @@
 # a file. Refcounted in .godot-quiet/ and removed by the last run out.
 /override.cfg
 /.godot-quiet/
+__pycache__/

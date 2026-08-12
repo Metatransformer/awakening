@@ -24,10 +24,9 @@ extends Node3D
 ## On top of the generated tree the manifest names four guaranteed placements,
 ## as RULES rather than coordinates (`FloorDb.ANCHORS_STANDARD`):
 ##
-##   `boss_door`      the deepest room's far wall, **where the stair used to be**.
-##                    The deepest room becomes the boss's arena, so it is built
-##                    wider than the rest of the floor -- see `_room_size_for`.
-##   `deep_chest`     beside it, carrying the floor's `deep_chest` relic.
+##   `boss_door`      the deepest room's far wall, opening onto an authored
+##                    BossChamber annex sized around the floor boss's arena.
+##   `deep_chest`     beyond that arena's seal, carrying the floor's relic.
 ##   `shortcut_door`  a blank wall of the entrance room. Floor N's OWN boss item
 ##                    opens it and it skips floor N (GDD §5.3, sentence one).
 ##   `vault_door`     a blank wall of the middle ring. Floor N+1's boss item opens
@@ -62,6 +61,7 @@ const ROOM_SCENE_PILLAR := preload("res://scenes/kit/pillar.tscn")
 const VAULT_SCRIPT := "res://scripts/world/vault.gd"
 const ARENA_SCRIPT := "res://scripts/world/boss_arena.gd"
 const BOSS_DOOR_SCRIPT := "res://scripts/world/boss_door.gd"
+const BOSS_KEY_SCRIPT := "res://scripts/props/atoms/boss_key.gd"
 ## Loaded by PATH and never named: a newly added `class_name` is not in the
 ## global class cache until the project is re-imported. The shrine is a scene,
 ## because its Interactable and replaceable effigies are authored composition.
@@ -159,9 +159,8 @@ const LAND_SIZE := 9.0
 ## Behind the `puzzle_room` door: a stub, then a chamber with the floor's
 ## miniboss, a rich chest and a sounding stone in it (`docs/PUZZLES.md` §5.3).
 ##
-## Wide enough to hold the arena the miniboss table authored, measured the way
-## `_room_size_for` measures the boss's: `BossDb`'s radius, doubled, plus a
-## skirt of stone. The skirt is TEN metres and not the boss chamber's four,
+## Wide enough to hold the arena the miniboss table authored: `BossDb`'s radius,
+## doubled, plus a skirt of stone. The skirt is TEN metres
 ## because this room has to hold something the boss chamber does not -- the
 ## chest and the sounding stone stand OUTSIDE the seal ring, which is the whole
 ## reason they are unreachable until the miniboss is down. A four-metre skirt
@@ -173,6 +172,10 @@ const LAND_SIZE := 9.0
 const CHAMBER_STUB := 4.0
 const CHAMBER_MIN := 13.0
 const CHAMBER_SKIRT := 10.0
+## The floor boss uses the same reward-width skirt as the treasure chamber: the
+## deep chest and descent both stand outside the arena's seal at the far wall.
+const BOSS_CHAMBER_MIN := 20.0
+const BOSS_CHAMBER_SKIRT := 10.0
 
 ## How far apart in tree distance the two ends of the chord edge have to be
 ## (`docs/PUZZLES.md` §4: *"pick two rooms whose `dist` differs by >= 3"*). Below
@@ -324,6 +327,7 @@ func _ready() -> void:
 	_build()
 	_build_chord()
 	_build_anchors()
+	_validate_authored_topology()
 	_populate()
 
 
@@ -401,14 +405,8 @@ func _plan() -> void:
 		if int(rooms[cell]["dist"]) > int(rooms[deepest]["dist"]):
 			deepest = cell
 
-	# The deepest room is the boss's arena on an authored floor, and an arena is
-	# a circle the table sized (11 m for the Warden, 13 for the Bellwake). A 16 m
-	# room cannot hold one: the seal ring would come up outside the masonry and
-	# the fight would happen through a wall. So the chamber is built to fit the
-	# ring with two metres of stone to spare -- and it still clears its
-	# neighbours, because a 26 m grid puts the next room's near face 18 m out and
-	# the widest chamber in the game reaches 15.
-	rooms[deepest]["size"] = _room_size_for(deepest)
+	# The deepest generated room is now the approach. Its boss arena is sized in
+	# an annex after anchor planning, so this room keeps the ordinary footprint.
 
 
 ## The chord edge -- **`docs/PUZZLES.md` §4, and the reason cycles belong in this
@@ -526,28 +524,10 @@ func _publish() -> void:
 	Atlas.mark(entrance, Atlas.M_ENTRANCE)
 
 
-## Two rooms are built wider than the rest — the deepest when a boss lives in it,
-## and the maze's (`MAZE_ROOM`) — so a caller that needs a room's real footprint
-## has to ask rather than read `room_size`. NOTE: `_publish` above still hands
-## `Atlas` the DEFAULT size, so the minimap draws both of them at ordinary width.
-## Cosmetic, and left alone here rather than fixed inside a merge.
+## The maze room may be wider than the rest, so callers that need a room's real
+## footprint ask rather than reading `room_size`.
 func size_of(cell: Vector2i) -> float:
 	return float(rooms.get(cell, {}).get("size", room_size))
-
-
-## How wide the deepest room has to be. `BossDb`'s authored arena radius plus a
-## two-metre skirt, or the ordinary room on a floor with no boss.
-func _room_size_for(cell: Vector2i) -> float:
-	if cell == entrance:
-		return room_size
-	var id := FloorDb.boss(Run.level)
-	if id == &"" or FloorDb.anchor(Run.level, &"boss_door").is_empty():
-		return room_size
-	var row := BossDb.get_boss(id)
-	if row.is_empty():
-		return room_size
-	var arena: Dictionary = row.get("arena", {})
-	return maxf(room_size, float(arena.get("radius", 11.0)) * 2.0 + 4.0)
 
 
 ## The tree path from the entrance to `cell`, inclusive at both ends. Public
@@ -696,7 +676,8 @@ func _room_for(kind: StringName, id: StringName = &""):
 			# can stroll past is not a critical-path puzzle.
 			var route := path_to(deepest)
 			# Neither end of the route: the entrance carries the shortcut and the
-			# deepest room is the arena. A floor whose path is two rooms long has
+			# deepest room carries the Boss Door. A floor whose path is two rooms
+			# long has
 			# no middle and therefore no gate room -- the same "not placed" the
 			# mid-ring answers on a short floor, and for the same reason.
 			if route.size() < 3:
@@ -838,7 +819,9 @@ func _key_before(a: Array[float], b: Array[float]) -> bool:
 ## therefore wants two cells; a landing is 13 m and wants one.
 func _reach_for(id: StringName, cell: Vector2i) -> int:
 	var depth := LAND_STUB + LAND_SIZE
-	if id == &"vault_door":
+	if id == &"boss_door":
+		depth = CHAMBER_STUB + _boss_chamber_size()
+	elif id == &"vault_door":
 		depth = _vault_depth()
 	elif id == &"puzzle_room":
 		depth = CHAMBER_STUB + _chamber_size()
@@ -847,9 +830,9 @@ func _reach_for(id: StringName, cell: Vector2i) -> int:
 
 
 ## How wide the treasure chamber is, off the miniboss the floor actually has.
-## The same shape as `_room_size_for` and for the same reason: the number that
-## decides how much stone to lay is the number the fight was authored with, asked
-## once, so a bigger miniboss cannot come with a chamber that does not fit it.
+## The number that decides how much stone to lay is the number the fight was
+## authored with, asked once, so a bigger miniboss cannot come with a chamber
+## that does not fit it.
 func _chamber_size() -> float:
 	var id := BossDb.miniboss_for(Run.level)
 	if id == &"":
@@ -858,6 +841,16 @@ func _chamber_size() -> float:
 	var arena: Dictionary = row.get("arena", {})
 	return maxf(CHAMBER_MIN,
 		float(arena.get("radius", 7.5)) * 2.0 + CHAMBER_SKIRT)
+
+
+func _boss_chamber_size() -> float:
+	var id := FloorDb.boss(Run.level)
+	if id == &"":
+		return BOSS_CHAMBER_MIN
+	var row := BossDb.get_boss(id)
+	var arena: Dictionary = row.get("arena", {})
+	return maxf(BOSS_CHAMBER_MIN,
+		float(arena.get("radius", 11.0)) * 2.0 + BOSS_CHAMBER_SKIRT)
 
 
 ## `Vault`'s total depth, asked of the prefab rather than restated here. Read off
@@ -1295,6 +1288,32 @@ func _build_anchors() -> void:
 			&"puzzle_room": _place_puzzle_room(id)
 
 
+## Authored floors have one critical-path key room and one later chamber door.
+## Checking both the plan and built tree catches a duplicated builder as well as
+## a dropped anchor, while the cell assertion guards the topology between them.
+func _validate_authored_topology() -> void:
+	var authored := FloorDb.anchors(Run.level)
+	var wants_boss := authored.has(&"boss_door") and _anchor_keyed(&"boss_door")
+	var wants_gate := authored.has(&"gate_room") and _anchor_keyed(&"gate_room")
+	if wants_boss:
+		var boss_placement: Dictionary = placements.get(&"boss_door", {})
+		assert(not boss_placement.is_empty() and boss_placement.get("node") != null,
+			"Dungeon: authored floor must build exactly one boss door")
+		assert(find_children("BossDoor", "", true, false).size() == 1,
+			"Dungeon: authored floor must contain exactly one BossDoor node")
+	if wants_gate:
+		var gate_placement: Dictionary = placements.get(&"gate_room", {})
+		assert(not gate_placement.is_empty() and gate_placement.get("node") != null,
+			"Dungeon: authored floor must build exactly one gate room")
+		assert(find_children("GateDoor", "", true, false).size() == 1,
+			"Dungeon: authored floor must contain exactly one GateDoor node")
+		assert(find_children("GateKey", "BossKey", true, false).size() == 1,
+			"Dungeon: authored floor must contain exactly one BossKey node")
+	if wants_boss and wants_gate:
+		assert(anchor_cell(&"boss_door") != anchor_cell(&"gate_room"),
+			"Dungeon: gate room and boss door must occupy distinct cells")
+
+
 ## Where an anchored WALL prop stands, in its room's local space. `offset` is
 ## (along the wall from its midpoint, proud of the face) in fractions of the
 ## room's size, exactly as `FloorDb`'s anchor spec words it.
@@ -1314,39 +1333,15 @@ func _wall_spot(p: Dictionary) -> Dictionary:
 	return {"yaw": yaw, "pos": pos, "facing": facing_of(yaw)}
 
 
-## The direction "further in" for the room holding the boss door: out through
-## that door. Floor anchors are authored in this frame, which is the only frame
-## in which "beside the boss door" means anything on a generated floor.
-func _far_dir(cell: Vector2i) -> Vector3:
-	for id: StringName in placements:
-		var p: Dictionary = placements[id]
-		if p["cell"] != cell or p["side"] == &"":
-			continue
-		if id == &"boss_door":
-			return -facing_of(float(_sides_of(cell)[p["side"]]["yaw"]))
-	# No boss door on this floor: point away from the room's own doorways, which
-	# is the same rule `&"far"` uses.
-	var away := Vector3.ZERO
-	for d: StringName in rooms[cell]["doors"]:
-		var step: Vector2i = DIRS[d]
-		away += Vector3(float(step.x), 0.0, float(step.y))
-	return -away.normalized() if away.length_squared() > 0.01 else Vector3.FORWARD
+# --- Boss door + chamber ------------------------------------------------------
 
-
-# --- Boss door + arena --------------------------------------------------------
-
-## GDD §5.1: the boss door replaces the stair, and behind it is floor N+1. So the
-## deepest room becomes the arena, the door goes on its far wall, and the way
-## down is a `Stairs` in the landing on the other side of the door.
-##
-## The door is added BEFORE the arena and both are children of the room root, so
-## the arena's `door_path` can be a plain `../BossDoor` -- `BossArena._ready`
-## resolves it on the frame it enters the tree, which is before anything this
-## function does afterwards could set it.
+## The deepest generated room is the approach. Its far blank wall carries the
+## Boss Door; beyond it `_build_chamber` lays a separate arena-sized annex with
+## the fight in the middle and both earned destinations beyond the seal.
 func _place_boss(id: StringName) -> void:
 	var p: Dictionary = placements[id]
 	var cell: Vector2i = p["cell"]
-	var root: Node3D = rooms[cell]["node"]
+	var approach: Node3D = rooms[cell]["node"]
 	var spot := _wall_spot(p)
 	var boss_id := FloorDb.boss(Run.level)
 
@@ -1357,29 +1352,78 @@ func _place_boss(id: StringName) -> void:
 		return
 
 	var pos: Vector3 = spot["pos"]
-	var facing: Vector3 = spot["facing"]
 	var door: Node3D = door_script.new()
 	door.name = "BossDoor"
 	door.set(&"boss_id", boss_id)
 	door.position = pos
 	door.rotation.y = float(spot["yaw"])
-	root.add_child(door)
+	approach.add_child(door)
+	_fit_boss_opening(approach, spot, door)
 	p["node"] = door
+
+	var chamber_size := _boss_chamber_size()
+	var chamber := _build_chamber(spot, cell, p["side"], "BossChamber", chamber_size)
+	p["chamber"] = chamber
+	var mid := CHAMBER_STUB + chamber_size * 0.5
+	var back := CHAMBER_STUB + chamber_size
 
 	var arena: Node3D = arena_script.new()
 	arena.name = "Arena"
 	arena.set(&"boss_id", boss_id)
-	arena.set(&"door_path", NodePath("../BossDoor"))
-	# Across the room from the way in, between the player and the door -- so the
-	# thing holding the way down is a silhouette in the far half of the frame the
-	# moment the room seals.
-	arena.set(&"boss_offset", -facing * 5.0)
-	root.add_child(arena)
+	# The player approaches along local +Z. The boss starts in the far half of the
+	# ring, so entering the trigger still frames it beyond the room's centre.
+	arena.set(&"boss_offset", Vector3(0.0, 0.0, 5.0))
+	arena.position = Vector3(0.0, 0.0, mid)
+	chamber.add_child(arena)
+	p["arena"] = arena
 
-	_build_landing(spot, cell, p["side"], "BossLanding", true)
+	var down := Stairs.new()
+	down.name = "Down"
+	down.receives_ascent = true
+	down.arrival_room = StringName(approach.name)
+	down.position = Vector3(chamber_size * 0.22, 0.0, back - 2.5)
+	down.visible = false
+	down.enabled = false
+	chamber.add_child(down)
+	var arena_radius := float(arena.call(&"radius"))
+	assert(Vector2(down.position.x, down.position.z - mid).length() > arena_radius,
+		"Dungeon: boss descent must stand outside the arena seal")
+
+	var boss := arena.call(&"boss") as Node3D
+	if boss != null:
+		boss.connect(&"died_at", func(_where: Vector3) -> void:
+			_reveal_boss_stairs(down))
+	elif bool(arena.call(&"is_spent")):
+		_reveal_boss_stairs(down)
+	else:
+		push_warning("dungeon: boss chamber has no boss and its descent stays sealed")
 
 
-## Beside the boss door, carrying the floor's `deep_chest` relic.
+## Match the generated stone portal to the BossDoor instance. Widening only the
+## inherited leaves would put most of the 5.4 m door behind the ordinary jambs.
+func _fit_boss_opening(approach: Node3D, spot: Dictionary, door: Node3D) -> void:
+	var portal: KitDoorway = null
+	var expected: Vector3 = spot["pos"] + spot["facing"] * 0.05
+	for child in approach.get_children():
+		var candidate := child as KitDoorway
+		if candidate != null and candidate.position.distance_to(expected) < 0.1:
+			portal = candidate
+			break
+	assert(portal != null, "Dungeon: BossDoor has no generated doorway to fill")
+	if portal == null:
+		return
+	portal.opening_w = float(door.get(&"opening_w"))
+	portal.opening_h = float(door.get(&"opening_h"))
+
+
+func _reveal_boss_stairs(stairs: Stairs) -> void:
+	if stairs == null or not is_instance_valid(stairs):
+		return
+	stairs.visible = true
+	stairs.enabled = true
+
+
+## Beyond the boss arena's seal, carrying the floor's `deep_chest` relic.
 ##
 ## The relic is hooked to the chest's `activated` signal rather than put inside
 ## `Chest`: `RelicPickup.place` already refuses to mint a second copy of a unique
@@ -1389,55 +1433,39 @@ func _place_boss(id: StringName) -> void:
 func _place_deep_chest(id: StringName) -> void:
 	var p: Dictionary = placements[id]
 	var cell: Vector2i = p["cell"]
-	var root: Node3D = rooms[cell]["node"]
-	var far := _far_dir(cell)
-	var right := Vector3.UP.cross(far).normalized()
+	var boss_placement: Dictionary = placements.get(&"boss_door", {})
+	var chamber := boss_placement.get("chamber") as Node3D
+	var arena := boss_placement.get("arena") as Node3D
+	if chamber == null or arena == null or boss_placement.get("cell") != cell:
+		push_warning("dungeon: deep chest has no boss chamber on floor %d" % Run.level)
+		return
 	var offset: Vector2 = p["offset"]
-	var size := size_of(cell)
+	var size := _boss_chamber_size()
+	var mid := CHAMBER_STUB + size * 0.5
+	var back := CHAMBER_STUB + size
 
 	var chest := Chest.new()
 	chest.name = "DeepChest"
 	chest.picks = Prog.chest_picks(Run.level, true)
-	chest.position = right * (offset.x * size) + far * (offset.y * size)
-	# Facing back down the room, so the fan of motes it throws lands in the floor
-	# the player is standing on rather than in the far wall.
-	chest.rotation.y = atan2(-far.x, -far.z)
-	root.add_child(chest)
+	chest.position = Vector3(offset.x * size, 0.0, back - 2.5)
+	chest.rotation.y = PI
+	chamber.add_child(chest)
 	p["node"] = chest
-	# Tier 2, whichever way it is gated below: it rolls the rich table, and on an
-	# authored floor it carries that floor's `deep_chest` relic. If anything in the
-	# dungeon earns the big flash it is this.
-	#
-	# **Two gates, because this anchor lands in two different kinds of room.**
-	#
-	# On an authored floor `deep_chest` and `boss_door` routinely pick the SAME
-	# cell -- the deepest one -- and `_place_boss` puts the arena in it, so
-	# `_populate` skips the room entirely (no pack, on purpose: the boss is the
-	# room). There is therefore no `RoomWatch` there and never will be, and a chest
-	# left to `_hold_reward` would fall through to `_release_unclaimed_rewards` and
-	# be standing open the moment the player walks in -- the richest chest on the
-	# floor, free, two metres from the boss door. That is exactly what the probe on
-	# seed 20260811 found. The boss IS the thing in that room, so the boss is what
-	# it waits for.
-	#
-	# On a floor where the anchor lands somewhere else it is an ordinary room with
-	# an ordinary pack, and it waits for the pack like every other chest. Note that
-	# `_populate` has not run yet -- the anchors go down first -- so this cannot
-	# wire itself to those monsters and does not try. See `_hold_reward`.
-	var arena := root.get_node_or_null(^"Arena")
+	var arena_radius := float(arena.call(&"radius"))
+	assert(Vector2(chest.position.x, chest.position.z - mid).length() > arena_radius,
+		"Dungeon: deep chest must stand outside the arena seal")
+
 	var boss := (arena.call(&"boss") as Node3D) if arena != null else null
 	if boss != null:
 		chest.visible = false
 		chest.enabled = false
 		boss.connect(&"died_at", func(_where: Vector3) -> void:
 			RewardVfx.land(chest, RewardVfx.MAJOR))
-	elif arena != null:
+	else:
 		# The arena is there but built no body -- the boss is already dead this run
 		# and the floor was re-entered. The chest was earned; hand it over with no
 		# ceremony, the same way the treasure chamber's does.
 		RewardVfx.show_now(chest)
-	else:
-		_hold_reward(cell, chest, RewardVfx.MAJOR)
 
 	var relic := FloorDb.relic_in(Run.level, &"deep_chest")
 	if relic == &"":
@@ -1445,7 +1473,7 @@ func _place_deep_chest(id: StringName) -> void:
 	chest.activated.connect(func(_by: Node3D) -> void:
 		RelicPickup.place(get_tree().current_scene, relic,
 			chest.global_position + Vector3.UP * 0.7,
-			-far * 1.3))
+			-chamber.global_basis.z.normalized() * 1.3))
 
 
 # --- The two forks ------------------------------------------------------------
@@ -1887,14 +1915,16 @@ func _place_vault(id: StringName) -> void:
 ##
 ## - a **sun socket** on the far wall, the one T0 atom that asks the player to
 ##   aim, standing where its beam falls across the middle of the room;
-## - the **small key**, dark and unarmed until the socket lights, off to one side
+## - the oversized **Boss Key**, dark and unarmed until the prefab completes,
+##   off to one side
 ##   so finding it is a second beat and not a consolation prize;
-## - a **`PuzzleGate` with `needs_key`** in the doorway the floor continues
-##   through, so the door is on the critical path by construction rather than by
-##   a placement that happens to be in the way.
+## - a **`PuzzleGate`** in the doorway the floor continues through. It watches
+##   the pickup as its final latching atom and swings automatically when taken;
+##   it spends no inventory key.
 ##
-## The gate watches the KEY and not the socket. Both would be true and one is
-## redundant -- the key cannot be reached without the socket -- and a gate whose
+## The gate watches the Boss Key and not the nested prefab. Both would be true
+## and one is redundant -- the key cannot be reached without the socket -- and a
+## gate whose
 ## refusal said "THE SOCKET IS DARK" while a key floated in plain sight would be
 ## telling the player about the wrong half of their own puzzle.
 ##
@@ -1921,7 +1951,7 @@ func _place_gate_room(id: StringName) -> void:
 	var gate := PuzzleGate.new()
 	gate.name = "GateDoor"
 	gate.puzzle_id = tag
-	gate.needs_key = true
+	gate.needs_key = false
 	gate.mark_tier = PuzzleAtoms.T0
 	gate.destination = tag
 	gate.position = spot["pos"]
@@ -1929,21 +1959,33 @@ func _place_gate_room(id: StringName) -> void:
 	root.add_child(gate)
 	p["node"] = gate
 
-	var key := PuzzleAtoms.make(PuzzleAtoms.SMALL_KEY, tag)
+	var boss_key_script := load(BOSS_KEY_SCRIPT) as GDScript
+	if boss_key_script == null:
+		push_error("dungeon: %s failed to load" % BOSS_KEY_SCRIPT)
+		return
+	var key := boss_key_script.new() as SmallKey
 	if key == null:
+		push_error("dungeon: %s is not a SmallKey" % BOSS_KEY_SCRIPT)
 		return
 	key.name = "GateKey"
+	key.atom_id = PuzzleAtoms.SMALL_KEY
+	key.puzzle_id = tag
 	key.position = along * (half - 2.2) + facing * 1.0
-	key.set(&"armed", false)
+	key.armed = false
 	root.add_child(key)
 	key.visible = false
+	# Hand-wired now, before deferred adoption, so the gate has exactly the final
+	# latching pickup in its set even if node offer order changes.
+	gate.watch(key)
 
 	# **The prefab.** `docs/PUZZLES.md` §8 promised twelve of these and the room
 	# had exactly one for a while; this is the table that makes the promise real.
 	#
-	# Every prefab ends the same way -- it WAKES THE KEY -- and that is the whole
+	# Every prefab ends the same way -- it WAKES THE BOSS KEY -- and that is the
+	# whole
 	# reason the table is safe to add. The door's contract does not move: it
-	# watches one key, `needs_key` stays true, its refusal keeps naming the key
+	# watches one latching pickup, `needs_key` stays false, its refusal names the
+	# key
 	# rather than whichever half of the puzzle happens to be in the room this run,
 	# and §5.2's spine (and the director that proves it) is unchanged. What varies
 	# is the puzzle in front of the key, which is the thing a player replaying
@@ -2132,9 +2174,9 @@ func _gate_lights_out(root: Node3D, cell: Vector2i, _tag: StringName,
 ## and the door starts naming that instead (`PuzzleGate._the_sequence` skips a
 ## kind with one member, which is what makes that handover automatic).
 ##
-## `needs_key` and the key hunt are untouched: the door still refuses without the
-## key and still spends it. The row is a second thing it counts, not a second
-## contract.
+## The Boss Key hunt is untouched: the door still counts the pickup as its final
+## atom, then swings without spending either kind of key. The row is a second
+## thing it counts, not a second contract.
 ##
 ## Three, spread along the wall OPPOSITE the door and looking back down the room
 ## at it -- the same arrangement `_gate_sun_nest` uses and for its reason: the
@@ -3125,8 +3167,6 @@ func _ambient_pot_reward(rng: RandomNumberGenerator) -> Dictionary:
 
 
 func _populate() -> void:
-	var has_boss := placements.has(&"boss_door")
-	var boss_cell := anchor_cell(&"boss_door")
 	# Untyped on purpose: `pick_maze_cell` answers `null` when the floor has no
 	# room to spare, and `:=` cannot infer a type from a Variant (CLAUDE.md §3).
 	# The choice itself was made back in `_plan_maze`, before the masonry went up;
@@ -3143,12 +3183,6 @@ func _populate() -> void:
 		# (and EXIT on floor 1); the Escape Rope remains the portable extraction
 		# option that works anywhere on the floor.
 		if cell == entrance:
-			continue
-		# The boss's chamber holds the boss, its chest and nothing else. A
-		# three-beat fight plus four bodies is not a harder fight, it is an
-		# unreadable one -- SCOPE §6 names the boss ballooning as risk one and a
-		# pack in the arena is the same mistake by another route.
-		if has_boss and cell == boss_cell:
 			continue
 		# The maze fills its room wall to wall, so it gets no scatter and no
 		# chest of its own -- both would land inside masonry. Its reward hangs on

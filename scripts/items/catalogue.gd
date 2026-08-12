@@ -44,6 +44,11 @@ static func lines() -> Array[Dictionary]:
 ##   group = {"title": String, "tracks": Array}
 ##   track = {"name": String, "line": int, "owned": int, "rungs": int}
 ##
+## A group MAY carry `"icon": String` — a token in `assets/icons/tracks/`, which
+## `UpgradeLadder` draws as the row's face. The token is not the title: a title
+## is display text and is free to change (FIRST RING and SECOND RING are one
+## drawing), and an icon is a file. A group without one draws its title alone.
+##
 ## `line` indexes `lines()` — the NEXT buyable rung, or -1 when the ladder is
 ## finished. `owned` is how many rungs are bought and `rungs` how long the ladder
 ## is; a `rungs` of 1 is a repeatable and draws as a plain named cell.

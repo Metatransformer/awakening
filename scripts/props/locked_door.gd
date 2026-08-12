@@ -116,6 +116,7 @@ const OPEN_TIME := 0.85
 static var SIGILS := {
 	&"bow": {"noun": "THE BOW", "hue": Pal.MOSS, "shape": &"bow"},
 	&"hookshot": {"noun": "THE HOOKSHOT", "hue": Pal.CYAN, "shape": &"hook"},
+	&"boss_key": {"noun": "THE BOSS KEY", "hue": Pal.GOLD, "shape": &"keyhole"},
 	# The other two keys in the manifest. Floor 1's VAULT is keyed to floor 2's
 	# boss item (`FloorDb.vault_key`), so without these rows the first locked
 	# door a player meets on the first floor says "NEEDS A KEY" -- a generic

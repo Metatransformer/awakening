@@ -149,12 +149,31 @@ const DEFS := {
 	# say arriving at the Chord Gate with an unforged blade should be a wall, and
 	# a wall is what twenty swings a body is.
 	&"troll": {
-		# The slow one. Longest reach and the longest wind-up in the roster --
-		# it hits hardest of anything that is not a boss, and it tells you for
-		# three quarters of a second first. That pairing is the whole design:
-		# damage is only unfair when you could not read it coming.
-		"health": 22, "damage": 6, "speed": 2.0, "height": 2.60,
-		"detect": 12.0, "reach": 2.4, "windup": 0.72, "recover": 0.85, "cooldown": 1.15,
+		# The slow one. Longest reach in the roster, and **the only body outside
+		# the bosses with two beats.**
+		#
+		# It used to have one, at `damage 6 / windup 0.72`, and that one swing was
+		# doing two jobs: it was the troll's ordinary attack AND the only blow it
+		# had, so `Hit.commitment_of_tell` read its three-quarter-second tell as a
+		# fully committed heavy and it put the player on his back 31% of the time.
+		# A regular monster flooring you one swing in three is not a heavy, it is
+		# a tax. Split in two, and the pairing the old comment described --
+		# "damage is only unfair when you could not read it coming" -- is now
+		# literally the mechanic rather than a note about one:
+		#
+		#   the ordinary swing  0.50 s of tell,  4 q, light shove.  Staggers.
+		#   the heavy           1.05 s of tell,  7 q, heavy shove.  Floors you.
+		#
+		# Average damage per swing is 5.05 against the old flat 6, so it is not a
+		# buff; it is the same threat with a readable worst case. See
+		# `_heavy_row` for the schema and `K.KNOCKDOWN_CEIL` for what commitment
+		# buys.
+		"health": 22, "damage": 4, "speed": 2.0, "height": 2.60,
+		"detect": 12.0, "reach": 2.4, "windup": 0.50, "recover": 0.70, "cooldown": 1.0,
+		"heavy": {
+			"windup": 1.05, "damage": 7, "knockback": K.KNOCKBACK_HEAVY,
+			"recover": 1.05, "cooldown": 1.9, "share": 0.35,
+		},
 	},
 	&"knight_iron": {
 		# The fast one, and deliberately the SHORTER of the two: floor 4's threat
@@ -214,6 +233,16 @@ var _knockback: Vector3 = Vector3.ZERO
 var _facing: float = 0.0
 var _rng := RandomNumberGenerator.new()
 var _struck: bool = false
+## Which of the kind's beats the CURRENT wind-up is throwing. Rolled once, on the
+## frame WINDUP is entered, and read by everything downstream -- the tell's
+## length and depth, the damage, the shove, and the commitment `Hit.tier_odds`
+## prices the reaction from. Rolled once for the same reason `Hit.roll_tier` is:
+## ask twice and the body telegraphs one blow and throws another.
+var _heavy: bool = false
+## The heavy beat's damage after `Prog`, alongside `_damage`. Precomputed in the
+## same place for the same reason -- the level curve is latched at `_ready` and a
+## beat that read it live would scale mid-fight.
+var _heavy_damage: int = 0
 ## The behaviour this body actually wears, resolved once in `_ready` from the
 ## `behaviour` export falling back to the `DEFS` row. Resolved rather than read
 ## live so a director can set it before the body enters the tree and nothing
@@ -433,6 +462,53 @@ func _resolve_def() -> Dictionary:
 ## An INSTANCE method rather than a static for the reason `_resolve_def` is one
 ## (CLAUDE.md §3): a bare static call written inside this class binds to `Enemy`'s
 ## copy at parse time and a `Boss` override would never run.
+## **The second beat, as a schema and not as a troll.** An optional `"heavy"`
+## block on any `DEFS` row, holding any of `windup` / `damage` / `knockback` /
+## `recover` / `cooldown` / `share`; every key falls back to the ordinary swing's
+## and an absent block means the kind has one beat, exactly as before.
+##
+## Only the troll carries one today. The point of putting it on the row rather
+## than in `Enemy` is that giving the knight_iron a shield-bash, or an elite orc
+## an overhead, is then five numbers and no code -- which is the same bargain
+## `behaviour` struck for the Thief (`docs/SCOPE.md` §1's two zeroes).
+func _heavy_row() -> Dictionary:
+	return _def.get("heavy", {})
+
+
+## Does this kind have a second beat at all?
+func _has_heavy() -> bool:
+	return not _heavy_row().is_empty()
+
+
+## The number the beat CURRENTLY being thrown uses. `_heavy` is the switch and it
+## is rolled once, on entry to WINDUP.
+##
+## **Authored values, before `Prog`.** Callers that want the depth-compressed
+## tell apply `Prog.windup_scale` themselves, exactly as the single-beat code
+## did -- and `_commitment` below deliberately does NOT, because a floor-4 troll
+## whose tell has been compressed 12% has not become less committed to the blow.
+func _melee_beat(key: String) -> float:
+	var h := _heavy_row()
+	if _heavy and h.has(key):
+		return float(h[key])
+	return float(_def[key])
+
+
+## How committed the beat being thrown is, 0.6 to 1.0 -- what `Hit.tier_odds`
+## turns into the odds of the player being staggered or floored. Off the tell,
+## which is the whole argument in `Hit.commitment_of_tell`.
+func _melee_commitment() -> float:
+	return Hit.commitment_of_tell(_melee_beat("windup"))
+
+
+## The shove the beat spends. Ordinary swings across the whole roster are
+## `K.KNOCKBACK_LIGHT`; a heavy says so on its row.
+func _beat_knockback() -> float:
+	if _heavy:
+		return float(_heavy_row().get("knockback", K.KNOCKBACK_LIGHT))
+	return K.KNOCKBACK_LIGHT
+
+
 func _resolve_behaviour() -> StringName:
 	if behaviour != &"":
 		return behaviour
@@ -557,14 +633,25 @@ func _build_combat() -> void:
 	# **Mass, which is the one thing that separates a goblin's swing from a
 	# troll's on the receiving end** (card #130). The same body height the launch
 	# already scales off, so there is one measure of mass in the project and not
-	# two. `commitment` is 1.0 because a roster monster has exactly one attack --
-	# every swing it throws IS its heaviest, and a boss is the only thing here
-	# with a moveset to be a fraction of (`Boss._land`).
+	# two.
+	#
+	# **`commitment` comes off the WIND-UP** and not off a moveset, because a
+	# roster monster has exactly one attack and so has nothing to be a fraction
+	# of. It read a flat 1.0 until the owner looked at the table it produced and
+	# said what it deserved: every troll swing was priced as the troll's heaviest
+	# telegraphed beat and floored the player three times in four. It is not the
+	# troll's heaviest, it is the troll's ONLY, and what makes it a committed blow
+	# rather than a twitch is the 0.72 s it spends announcing itself -- the same
+	# number this row already uses to make the hit readable. See
+	# `Hit.commitment_of_tell` and `K.COMMIT_LIGHT`.
 	#
 	# Elites are bigger by `_height()` alone, so they price themselves: an ELITE
 	# ORC floors the player more often than an orc without a row saying so.
 	_hitbox.mass = _height() / K.LAUNCH_MASS_REF
-	_hitbox.commitment = 1.0
+	# The ordinary swing's, as the resting default. `_tick_windup` restamps all
+	# three of amount / knockback / commitment at the commit, because a kind with
+	# a `"heavy"` row throws two different blows through this one hitbox.
+	_hitbox.commitment = Hit.commitment_of_tell(float(_def["windup"]))
 	# The authored escape hatch, and almost nothing should use it -- the curves
 	# exist so a new monster is priced by having a height. Both keys or neither;
 	# `Hit.tier_odds` falls back to the derivation if only one is present.
@@ -618,8 +705,11 @@ func _apply_level_curve() -> void:
 	health.max_quarters = maxi(int(roundf(float(_def["health"]) * mult)), 1)
 	health.quarters = health.max_quarters if was_full \
 		else mini(health.quarters, health.max_quarters)
-	_damage = int(_def["damage"]) + Prog.damage_bonus(level) \
-		+ (Prog.ELITE_DAMAGE if elite else 0)
+	var bonus := Prog.damage_bonus(level) + (Prog.ELITE_DAMAGE if elite else 0)
+	_damage = int(_def["damage"]) + bonus
+	# Falls back to the ordinary swing's damage, so a kind with no heavy row can
+	# still be asked for one and gets the only blow it has.
+	_heavy_damage = int(_heavy_row().get("damage", _def["damage"])) + bonus
 	if _hitbox != null:
 		_hitbox.amount = _damage
 
@@ -950,10 +1040,17 @@ func _tick_chase(delta: float) -> void:
 		return
 	if dist <= float(_def["reach"]) and _cooldown <= 0.0:
 		state = State.WINDUP
+		# **Which beat, decided HERE and nowhere else.** Before the timer, because
+		# everything below reads `_melee_beat(...)` off it, and rolled once for the same
+		# reason `Hit.roll_tier` is rolled once: a body that telegraphs its heavy
+		# for a second and then throws the jab has lied to the player, and that is
+		# worse than either blow.
+		_heavy = _has_heavy() \
+			and _rng.randf() < float(_heavy_row().get("share", 1.0))
 		# Compressed with depth, but never past Prog.WINDUP_FLOOR. The telegraph
 		# is what makes a fight fair, so it is the one number with a hard floor --
 		# a wind-up you cannot react to is a coin flip, not difficulty.
-		_timer = float(_def["windup"]) * Prog.windup_scale(level)
+		_timer = _melee_beat("windup") * Prog.windup_scale(level)
 		_struck = false
 		_stop()
 		_play(&"attack_1")
@@ -970,7 +1067,16 @@ func _tick_chase(delta: float) -> void:
 		# you; this one's job is to be LEARNED, and a cue the player has to learn
 		# nine times is not a cue. The thief's grab has done this since it landed
 		# -- see the branch above, and its comment.
-		Bus.request_sfx.emit(&"attack_prepare", global_position)
+		#
+		# **The heavy gets its own, and it has to.** The whole point of a second
+		# beat is that the player answers it differently, and the two tells run
+		# 0.50 s and 1.05 s on the same body with the same lean -- distinguishable
+		# by eye if you are already looking at the troll, which in a pack is one
+		# monster at a time. `monster_attack` is a throat, not a swing: it says a
+		# body is committing to something, before the shape of the lean has told
+		# you how far.
+		Bus.request_sfx.emit(
+			&"monster_attack" if _heavy else &"attack_prepare", global_position)
 		return
 
 	# Stop short of the hero's own capsule so a crowd does not shove him around.
@@ -1048,26 +1154,40 @@ func _tick_windup(delta: float) -> void:
 	_face_player(delta, 130.0)
 
 	if _model != null:
-		var windup: float = maxf(float(_def["windup"]), 0.001)
+		var windup: float = maxf(_melee_beat("windup") * Prog.windup_scale(level), 0.001)
 		# 0 at the start of the commit, 1 at the moment it lands.
 		var t := clampf(1.0 - _timer / windup, 0.0, 1.0)
 		# Eased so the last third of the wind-up is where most of the movement
 		# is: a linear rear-back reads as a slow lean, and the player needs the
 		# spike, not the drift.
 		var e := t * t
-		_model.rotation.x = _model_rest.x - deg_to_rad(WINDUP_LEAN_DEG) * e
+		# The heavy rears FURTHER back and burns hotter, and both are on purpose:
+		# the tell has twice the time to be read, so it can afford to say more,
+		# and a blow that takes the player off his feet has to look different
+		# from one that does not before it lands rather than after.
+		var lean := WINDUP_LEAN_DEG * (1.55 if _heavy else 1.0)
+		_model.rotation.x = _model_rest.x - deg_to_rad(lean) * e
 		# 0.22, not the 0.55 this started at. At 0.55 the telegraph works too
 		# well: the body goes to a flat, featureless orange silhouette, and a
 		# monster you cannot read the pose of is not a monster you can react to.
-		# A tell should tint the thing, not replace it.
-		_flash.glow(Pal.RUST, e * 0.22)
+		# A tell should tint the thing, not replace it. The heavy takes 0.34 --
+		# still well short of a silhouette, and visibly hotter beside it.
+		_flash.glow(Pal.RUST, e * (0.34 if _heavy else 0.22))
 		_glowing = true
 
 	if _timer <= 0.0:
 		state = State.STRIKE
 		_timer = 0.18
 		_struck = true
-		_hitbox.amount = _damage
+		# **The three numbers that make it the beat it is, written at the commit
+		# and not at build time.** `_build_hitbox` set these once, which is right
+		# for a body with one blow and silently wrong for a body with two: the
+		# hitbox is shared, so a heavy that did not stamp its own would land with
+		# the jab's damage, the jab's shove and the jab's commitment, and the
+		# only visible symptom would be that the telegraph never paid off.
+		_hitbox.amount = _heavy_damage if _heavy else _damage
+		_hitbox.knockback = _beat_knockback()
+		_hitbox.commitment = _melee_commitment()
 		_hitbox.activate()
 		# The commit itself: the glow snaps off as the body whips forward, so
 		# "it is coming" and "it is here" are two different pictures.
@@ -1101,7 +1221,7 @@ func _tick_strike(delta: float) -> void:
 			_hitbox.deactivate()
 			_struck = false
 		state = State.RECOVER
-		_timer = float(_def["recover"])
+		_timer = _melee_beat("recover")
 
 
 func _tick_recover(delta: float) -> void:
@@ -1109,8 +1229,12 @@ func _tick_recover(delta: float) -> void:
 	_timer -= delta
 	if _timer <= 0.0:
 		_cooldown = maxf(_cooldown,
-			THROW_COOLDOWN if _throw_recovering else float(_def["cooldown"]))
+			THROW_COOLDOWN if _throw_recovering else _melee_beat("cooldown"))
 		_throw_recovering = false
+		# The beat is spent. Cleared HERE, after the cooldown it owns has been
+		# stamped, so the next wind-up rolls fresh -- and so an interrupted heavy
+		# does not leave a body permanently in heavy mode.
+		_heavy = false
 		# Most of the time, back off and circle rather than walking straight
 		# back into reach. Not always: an orc that never once pressed forward
 		# would be trivially kited, and the roster needs kinds that come at you.
@@ -1725,7 +1849,7 @@ func _close_grab() -> void:
 		# the pause before it tries again is the reward for having stepped back.
 		_clear_sack()
 		state = State.RECOVER
-		_timer = float(_def["recover"])
+		_timer = _melee_beat("recover")
 		_cooldown = K.THIEF_REGRAB
 		Bus.request_sfx.emit(&"craft_fail", global_position)
 		return

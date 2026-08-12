@@ -2,16 +2,28 @@ extends RefCounted
 ## Every blow the player can take, priced through `Hit.tier_odds`.
 ##
 ## Card #130 chooses one of three reactions -- flinch, stagger, knocked flat --
-## from two logistic curves over `mass * commitment^2`, and a curve fitted on a
+## from the attacker's heft and the move's commitment, and a curve fitted on a
 ## whiteboard is a curve nobody has checked against the roster. This prints the
-## whole table so the fit can be read against the two rows it was solved for:
+## whole table so the fit can be read against the rows it was solved for:
 ##
-##   goblin   light 90 / heavy  9 / knockdown  1
-##   orc      light 50 / heavy 30 / knockdown 20
+##   goblin        light 90 / heavy 10 / knockdown  0
+##   orc           light 64 / heavy 33 / knockdown  3
+##   troll         light 39 / heavy 54 / knockdown  8
+##   troll/heavy   light 29 / heavy 36 / knockdown 35
 ##
-## **Those two rows ARE the known answer** (CLAUDE.md §2). If they come out at
-## anything other than 90/9/1 and 50/30/20, the curves in `K` have been moved
-## without being re-solved and every other row on the table is a guess.
+## **Those rows ARE the known answer** (CLAUDE.md §2). If they come out at
+## anything else, the numbers in `K` have been moved without being re-fitted and
+## every other row on the table is a guess.
+##
+## Three structural checks ride alongside them, and they matter more than the
+## percentages because they are the owner's design in a form arithmetic cannot
+## drift out of:
+##
+##   * nothing the hero's own size or smaller may EVER floor him -- goblin,
+##     kobold and skeleton must read exactly 0, not "nearly 0";
+##   * no ordinary roster body may floor him more often than not;
+##   * every boss's heaviest beat MUST usually floor him, or the telegraph the
+##     whole fight is built around is not worth reading.
 ##
 ## A DIRECTOR and not a `-s` SceneTree script, which is what it was first, and
 ## the reason is worth keeping: `BossDb` depends on `relic_db` and `story_db`,
@@ -33,10 +45,14 @@ extends RefCounted
 ## against them. Two points of a percent -- the constants carry four figures, so
 ## anything looser would let a real re-fit through.
 const ANCHORS := {
-	&"goblin": Vector3(90.0, 9.0, 1.0),
-	&"orc": Vector3(50.0, 30.0, 20.0),
+	&"goblin": Vector3(90.0, 10.0, 0.0),
+	&"orc": Vector3(64.0, 33.0, 3.0),
+	&"troll": Vector3(39.0, 54.0, 8.0),
+	&"troll/heavy": Vector3(29.0, 36.0, 35.0),
 }
 const TOL := 2.0
+## A boss's heaviest beat has to be the thing that puts you down.
+const BOSS_HEAVIEST_MIN_KD := 50.0
 
 var _fails: int = 0
 
@@ -49,14 +65,51 @@ func run(rig) -> void:
 
 	for kind in Enemy.DEFS:
 		var d: Dictionary = Enemy.DEFS[kind]
+		var mass := float(d["height"]) / K.LAUNCH_MASS_REF
+		# Spelled again rather than calling `Hit.commitment_of_tell`, for the
+		# same reason the boss half below respells `Boss._commitment`: a director
+		# that asks the game for the answer prints whatever the game believes.
+		var commit: float = K.COMMIT_LIGHT + (1.0 - K.COMMIT_LIGHT) * clampf(
+			(float(d["windup"]) - K.COMMIT_TELL_MIN)
+			/ (K.COMMIT_TELL_MAX - K.COMMIT_TELL_MIN), 0.0, 1.0)
 		var hit := Hit.make(int(d["damage"]), Vector3.ZERO, &"contact",
-			K.KNOCKBACK_LIGHT, 0.0, kind,
-			float(d["height"]) / K.LAUNCH_MASS_REF, 1.0)
+			K.KNOCKBACK_LIGHT, 0.0, kind, mass, commit)
 		hit.odds_knockdown = float(d.get("knockdown", -1.0))
 		hit.odds_stagger = float(d.get("stagger", -1.0))
 		var got := _row(String(kind), hit)
 		if ANCHORS.has(kind):
 			_check(rig, String(kind), got, ANCHORS[kind])
+		# The second beat, for the kinds that have one. Same row, same body, the
+		# heavy's own numbers -- and NOT subject to the two design rules below,
+		# which are about a monster's ORDINARY swing. A telegraphed heavy is
+		# allowed to floor you; that is what it is for.
+		var hv: Dictionary = d.get("heavy", {})
+		if not hv.is_empty():
+			var hcommit: float = K.COMMIT_LIGHT + (1.0 - K.COMMIT_LIGHT) * clampf(
+				(float(hv.get("windup", d["windup"])) - K.COMMIT_TELL_MIN)
+				/ (K.COMMIT_TELL_MAX - K.COMMIT_TELL_MIN), 0.0, 1.0)
+			var hhit := Hit.make(int(hv.get("damage", d["damage"])), Vector3.ZERO,
+				&"contact", float(hv.get("knockback", K.KNOCKBACK_LIGHT)), 0.0,
+				kind, mass, hcommit)
+			var hgot := _row("%s/heavy" % kind, hhit)
+			var hkey := StringName("%s/heavy" % kind)
+			if ANCHORS.has(hkey):
+				_check(rig, String(hkey), hgot, ANCHORS[hkey])
+			if hgot.z <= got.z:
+				rig.fail("%s's heavy floors the hero %.1f%% against its ordinary swing's %.1f%% -- a second beat the player answers the same way is not a second beat"
+					% [kind, hgot.z, got.z])
+				_fails += 1
+		# The design, not the fit. A body no heavier than the hero cannot put him
+		# on the ground -- if this ever reads 0.4% instead of 0, the floor in
+		# `K.KNOCKDOWN_MASS_FLOOR` has stopped being a statement.
+		if mass <= K.KNOCKDOWN_MASS_FLOOR and got.z != 0.0:
+			rig.fail("%s is no heavier than the hero and still floors him %.1f%% of the time"
+				% [kind, got.z])
+			_fails += 1
+		if got.z > 50.0:
+			rig.fail("%s floors the hero %.1f%% of the time -- a roster body's ordinary swing may not be a knockdown more often than not"
+				% [kind, got.z])
+			_fails += 1
 
 	# The boss half, which is the half that was silently empty. Fail if it is
 	# empty again rather than printing a shorter table that still looks fine.
@@ -71,6 +124,7 @@ func run(rig) -> void:
 		var top := 0.01
 		for b in BossDb.beats(id):
 			top = maxf(top, Hit.severity_of(int(b["damage"]), float(b["knockback"])))
+		var heaviest_kd := 0.0
 		for b in BossDb.beats(id):
 			if int(b["damage"]) <= 0:
 				continue
@@ -78,14 +132,20 @@ func run(rig) -> void:
 			var hit := Hit.make(int(b["damage"]), Vector3.ZERO, &"contact",
 				float(b["knockback"]), float(b["stun"]), id, mass,
 				0.6 + 0.4 * clampf(rel, 0.0, 1.0))
-			_row("%s/%s" % [id, b["id"]], hit)
+			var got := _row("%s/%s" % [id, b["id"]], hit)
+			heaviest_kd = maxf(heaviest_kd, got.z)
 			beats += 1
+		if heaviest_kd < BOSS_HEAVIEST_MIN_KD:
+			rig.fail("%s's heaviest beat only floors the hero %.1f%% of the time -- a telegraph nobody has to respect"
+				% [id, heaviest_kd])
+			_fails += 1
 	if beats == 0:
 		rig.fail("no boss beats priced -- BossDb did not load")
 		_fails += 1
 
 	if _fails == 0:
-		print("HURT TABLE OK -- both anchors within %.0f pt" % TOL)
+		print("HURT TABLE OK -- %d anchors within %.0f pt, and the design holds"
+			% [ANCHORS.size(), TOL])
 
 
 func _row(label: String, hit: Hit) -> Vector3:

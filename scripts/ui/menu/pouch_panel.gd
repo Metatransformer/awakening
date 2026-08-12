@@ -50,13 +50,6 @@ signal use_requested
 ## paper doll needed the frame wider, so it lives in `MenuUtil.FRAME_SIZE` where
 ## all five screens read the same number — see the comment on it for why they
 ## have to.
-##
-## The hint carries four things and it is at its limit. "Hands change on EQUIP"
-## is on it rather than under the WORN card because the misconception it heads
-## off — that the doll is where you equip — is formed by looking at the doll and
-## then looking for the verb, and the verbs are all on this line.
-##
-const HINT := "↑↓←→ Look   E / A Pack   Hold Y Escape   Esc / B Back   Hands change on EQUIP"
 
 ## The action the way out is held on: Y on the pad, Y on the keyboard.
 ##
@@ -303,8 +296,8 @@ func _build() -> void:
 	# nothing. It works and it is wrong: the compact doll's own floor is 300 px
 	# tall (`MenuPaperDoll.MIN_SIZE`), so under the bag it stacks instead of
 	# sitting beside it -- measured `Frame` **1220x900 in a 720 px viewport**, with
-	# the bound bottle, the hint line and the Back button all rendered below the
-	# bottom edge and nothing complaining. Beside the bag the doll is free: the
+	# the bound bottle and the Back button both rendered below the bottom edge and
+	# nothing complaining. Beside the bag the doll is free: the
 	# card is 342 px tall and so is the doll, so the row costs the taller of two
 	# things that are the same height.
 	#
@@ -337,11 +330,6 @@ func _build() -> void:
 	col.add_child(footer)
 	var frow := HBoxContainer.new()
 	footer.add_child(frow)
-	var hint := Label.new()
-	UITheme.apply_text_style(hint, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
-	hint.text = HINT
-	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	frow.add_child(hint)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	frow.add_child(spacer)

@@ -5,7 +5,6 @@ extends Control
 
 signal back_requested
 
-const HINT := "← → Change Page    Esc / B Back"
 const ROSTER: Array[Dictionary] = [
 	{"id": &"elder", "role": "Lanternkeeper / commander"},
 	{"id": &"quartermaster", "role": "Quartermaster"},
@@ -119,11 +118,6 @@ func _build() -> void:
 	col.add_child(footer)
 	var frow := HBoxContainer.new()
 	footer.add_child(frow)
-	var hint := Label.new()
-	UITheme.apply_text_style(hint, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
-	hint.text = HINT
-	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	frow.add_child(hint)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	frow.add_child(spacer)

@@ -69,11 +69,11 @@ static func groups() -> Array[Dictionary]:
 	for i in rows.size():
 		at[rows[i]["id"]] = i
 	return [
-		{"title": "QUARTERS", "tracks": [
+		{"title": "QUARTERS", "icon": "quarters", "tracks": [
 			_track(at, BED_ID, "BED"),
 			_track(at, LOCKER_ID, "LOCKER"),
 		]},
-		{"title": "REVEILLE", "tracks": [
+		{"title": "REVEILLE", "icon": "reveille", "tracks": [
 			_track(at, REVEILLE_ID, ""),
 		]},
 	]

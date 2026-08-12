@@ -227,12 +227,12 @@ static func groups() -> Array[Dictionary]:
 		at[rows[i]["id"]] = i
 
 	var out: Array[Dictionary] = []
-	_forge_row(out, at, &"edge", "THE BLADE")
-	_forge_row(out, at, &"guard", "THE SHIELD")
+	_forge_row(out, at, &"edge", "THE BLADE", "blade")
+	_forge_row(out, at, &"guard", "THE SHIELD", "shield")
 	for piece: StringName in Game.PLATE_PIECES:
 		_armour_row(out, at, piece)
-	_forge_row(out, at, &"string", "THE BOW")
-	_forge_row(out, at, &"chain", "THE CHAIN")
+	_forge_row(out, at, &"string", "THE BOW", "bow")
+	_forge_row(out, at, &"chain", "THE CHAIN", "chain")
 	_axe_row(out, at)
 	_fletch_row(out, at)
 	_reforge_row(out, at)
@@ -243,10 +243,11 @@ static func groups() -> Array[Dictionary]:
 ## dead row (see `stocked`), and that has to stay true of the row as well as of
 ## the line.
 static func _forge_row(out: Array[Dictionary], at: Dictionary,
-		id: StringName, title: String) -> void:
+		id: StringName, title: String, icon: String) -> void:
 	if not stocked(id):
 		return
-	out.append({"title": title, "tracks": [_track(at, id, "", K.FORGE_MAX)]})
+	out.append({"title": title, "icon": icon,
+		"tracks": [_track(at, id, "", K.FORGE_MAX)]})
 
 
 ## The axe is permanent ownership rather than an upgrade track. Its completed
@@ -255,7 +256,7 @@ static func _axe_row(out: Array[Dictionary], at: Dictionary) -> void:
 	if not stocked(WOODSMAN_AXE_ID):
 		return
 	var owned: int = 1 if Game.has(WOODSMAN_AXE_ID) else 0
-	out.append({"title": "TOOLS", "tracks": [{
+	out.append({"title": "TOOLS", "icon": "tools", "tracks": [{
 		"name": "WOODSMAN'S AXE",
 		"line": -1 if owned > 0 else int(at.get(WOODSMAN_AXE_ID, -1)),
 		"owned": owned,
@@ -270,7 +271,7 @@ static func _fletch_row(out: Array[Dictionary], at: Dictionary) -> void:
 	var i: int = at.get(FLETCH, -1)
 	if i < 0:
 		return
-	out.append({"title": "FLETCHING", "tracks": [{
+	out.append({"title": "FLETCHING", "icon": "fletching", "tracks": [{
 		"name": "FLETCH ARROWS", "line": i, "owned": 0, "rungs": 1,
 	}]})
 
@@ -287,7 +288,8 @@ static func _armour_row(out: Array[Dictionary], at: Dictionary,
 		tracks.append(_track(at, id, String(path).to_upper(), K.FORGE_MAX))
 	if tracks.is_empty():
 		return
-	out.append({"title": String(piece).to_upper(), "tracks": tracks})
+	out.append({"title": String(piece).to_upper(), "icon": String(piece),
+		"tracks": tracks})
 
 
 ## **The undo, one row, one cell per piece that has something to undo.**
@@ -312,7 +314,7 @@ static func _reforge_row(out: Array[Dictionary], at: Dictionary) -> void:
 			"owned": 0, "rungs": 1})
 	if tracks.is_empty():
 		return
-	out.append({"title": "REFORGE", "tracks": tracks})
+	out.append({"title": "REFORGE", "icon": "reforge", "tracks": tracks})
 
 
 ## Which path `piece` has committed to, and how far up it. `[&"", 0]` when it has

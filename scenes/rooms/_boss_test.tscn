@@ -3,9 +3,9 @@
 ; The Cistern Warden's fixture. Owned by tools/directors/boss_cistern.gd.
 ;
 ; Underscore-prefixed like _gate_test.tscn and _lookdev.tscn -- it is a harness,
-; not a room the game ships. `Dungeon` will place a BossArena and a BossDoor in
-; the deepest generated room at M4; this is the same two props in a hand-built
-; chamber so the FIGHT can be proved before the floor exists to hold it.
+; not a room the game ships. `Dungeon` places a BossDoor at the deepest generated
+; approach and a BossArena in its separate annex; this keeps the same two props
+; together in a hand-built chamber so the FIGHT can be proved in isolation.
 ;
 ; The shape is the one docs/GDD.md §5.1 describes and nothing more:
 ;
@@ -17,9 +17,8 @@
 ;   Corridor    the way IN, south. The hero starts out here on purpose: the
 ;               arena seals behind him and the director has to photograph the
 ;               before as well as the after.
-;   BossDoor    the far wall, north, where the stair would otherwise be. GDD
-;               §5.1 -- the way down is behind the boss, and the longest walk on
-;               the floor ends at the thing holding it.
+;   BossDoor    the far wall, north, where the director can prove the keyed
+;               threshold and the fight's independent persistence flags.
 ;
 ; No pillars, and that is data rather than laziness: `BossDb` sets the Warden's
 ; `arena.cover` to false because a pillar here would teach the player to solve
@@ -101,14 +100,14 @@ rng_seed = 76
 ; the leaves are correct, and were, and are two metres BELOW the black.
 ;
 ; The opening is spelled out too. It defaulted to K.DOOR_W x K.DOOR_H (2.4 x 3.2)
-; while the BossDoor standing in it is 5 x 5, so the shut leaves were wider than
-; the hole they filled.
+; while the BossDoor standing in it is 5.4 x 4.6, so the shut leaves were wider
+; than the hole they filled.
 [node name="DoorwayNorth" parent="Chamber" instance=ExtResource("doorway")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -13)
 span = 7.0
 height = 10.0
-opening_w = 5.0
-opening_h = 5.0
+opening_w = 5.4
+opening_h = 4.6
 frame_w = 0.6
 frame_depth = 0.46
 rng_seed = 77
@@ -117,8 +116,8 @@ rng_seed = 77
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 13)
 span = 7.0
 height = 10.0
-opening_w = 5.0
-opening_h = 5.0
+opening_w = 5.4
+opening_h = 4.6
 frame_w = 0.6
 frame_depth = 0.46
 rng_seed = 78

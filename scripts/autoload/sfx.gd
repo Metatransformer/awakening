@@ -52,6 +52,11 @@ const VARIANTS := {
 	&"doom_stinger": 1,
 	&"ui_move_selection": 1,
 	&"attack_prepare": 1,
+	## The heavy beat's tell (`Enemy._tick_chase`). Ships as `monster_attack_1.ogg`
+	## with no sibling, same as `attack_prepare` directly above and for the same
+	## reason -- without this row the picker would look for `monster_attack.ogg`
+	## and find nothing.
+	&"monster_attack": 1,
 }
 
 ## The whole signal→sound table. Every entry is an event that already carries
@@ -63,11 +68,6 @@ const CUES := {
 	&"loot_gained": &"pickup",
 	&"items_sold": &"coin_trade",
 	&"puzzle_solved": &"puzzle_reward",
-	# The room is beaten. This is the beat a reward arrives ON, so it is
-	# deliberately a short bright one rather than a fanfare -- a major reward's
-	# arrival owns the fanfare later (`reward_revealed` below), and two ceremonies
-	# stacked on one frame read as a bug in the mix.
-	&"room_cleared": &"arena_round_win",
 	# The sound a landed blow makes. It was missing, so the only combat noise in
 	# the game was a monster DYING -- you could hit a wraith five times in
 	# silence and then hear the sixth. Emitted with a real world position by
@@ -107,6 +107,32 @@ const CUES := {
 const REWARD_CUES := {
 	1: &"puzzle_reward",       ## MINOR -- a room's chest
 	2: &"great_chest_fanfare", ## MAJOR -- boss-grade
+}
+
+
+## The room-beaten sounds, indexed by the grade `Bus.room_cleared` carries. Not a
+## `CUES` row for the same reason `REWARD_CUES` is not: one signal, two meanings,
+## and `CUES` is keyed on the signal.
+##
+## **This is the row the whole batch of new sounds missed.** Card #124 re-voiced
+## the chests, the doors, the key and the upgrade board and left this one on
+## `arena_round_win.ogg` -- a horn out of the foundation asset dump -- so the
+## event that reads as "you won" was the only reward in the game still speaking
+## in the old library's voice. Beating the floor 1 miniboss played it.
+##
+##   MINOR   An ordinary room. 1.9 s, and short on purpose: it happens several
+##           times a floor, the player is still holding a sword, and this is the
+##           beat a MINOR reward arrives on -- `reward_revealed` plays
+##           `puzzle_reward` a moment later and two fanfares on one frame read as
+##           a bug in the mix. The same reasoning `RewardVfx` gives for its own
+##           tiers, for the same event.
+##   MAJOR   A boss or miniboss chamber. 3.0 s, and it is allowed to be a
+##           fanfare, because it happens once or twice a floor and nothing else
+##           lands on that frame -- `_place_boss_item_chest` returns early for a
+##           miniboss, and a floor boss's chest arrives on a tween afterwards.
+const CLEAR_CUES := {
+	1: &"room_victory", ## MINOR -- an ordinary room
+	2: &"boss_victory", ## MAJOR -- a boss or miniboss chamber
 }
 
 ## The blow LANDING ON THE PLAYER, indexed by `Hit.Tier`. Card #130.
@@ -237,8 +263,8 @@ func _ready() -> void:
 		_cue(&"items_sold"))
 	Bus.puzzle_solved.connect(func(_id: StringName) -> void:
 		_cue(&"puzzle_solved"))
-	Bus.room_cleared.connect(func(_id: StringName) -> void:
-		_cue(&"room_cleared"))
+	Bus.room_cleared.connect(func(_id: StringName, grade: int) -> void:
+		play_at(CLEAR_CUES.get(grade, CLEAR_CUES[1]), _hero_pos()))
 	# At the chest and not at the hero, unlike everything above: a reward is a
 	# place in the room. `Bus.reward_revealed` carries the position for this.
 	Bus.reward_revealed.connect(func(tier: int, pos: Vector3) -> void:

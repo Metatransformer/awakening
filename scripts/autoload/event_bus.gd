@@ -108,11 +108,22 @@ signal enemy_died(enemy: Node3D, position: Vector3)
 signal room_entered(room_id: StringName)
 ## The last body in a room is gone. Emitted by `RoomWatch`, which counts the
 ## bodies the generator put there rather than scanning the room -- see that
-## class for why the two are not the same question.
+## class for why the two are not the same question, and by `BossArena`, whose
+## chamber is not a `rooms[]` cell and so never got a watcher.
 ##
 ## `room_id` is the room root's node name, the same string `room_entered`
 ## carries. They must keep naming a room the same way or nothing can pair them.
-signal room_cleared(room_id: StringName)
+##
+## `grade` is `RewardVfx.MINOR` (1) for an ordinary room and `RewardVfx.MAJOR`
+## (2) for a boss or miniboss chamber -- the same two-tier vocabulary the reward
+## flash uses, deliberately, because it is the same distinction being drawn and a
+## player should not have to learn two of them.
+##
+## **Why an argument and not a second signal.** A boss chamber is still a room
+## that was beaten, so `BossArena` has to emit this one; if the big cue lived on
+## `boss_defeated` instead, a boss kill would fire both and stack two ceremonies
+## on one frame, which is the exact thing `Sfx.CUES` is written to prevent.
+signal room_cleared(room_id: StringName, grade: int)
 ## A reward ARRIVED: a chest that was standing hidden until its room was beaten,
 ## its puzzle solved or its miniboss killed just landed. `tier` is
 ## `RewardVfx.MINOR` (1) or `RewardVfx.MAJOR` (2) -- boss-grade loot announces

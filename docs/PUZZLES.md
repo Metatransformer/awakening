@@ -573,8 +573,9 @@ the door comes up already open and `opened` never fires — §6 pays the Blessin
 
 - **Anchor:** new, `gate_room` — on the path to `deepest`, around 0.7 of the way.
 - **Verb:** tier ≤ N−1. **Never anything you do not own** (§0 rule 1).
-- **Reward:** the approach to the boss door, **+1 Blessing** (three answering
-  gods at the Votive Court), **a chest**, and **the cycle back toward the entrance** (§4).
+- **Reward:** the oversized golden **Boss Key**, the approach to the separate
+  boss door, **+1 Blessing** (three answering gods at the Votive Court), **a
+  chest**, and **the cycle back toward the entrance** (§4).
 - **Shape:** cycle. Always.
 
 **Every puzzle pays in loot, not only in passage.** The chest is the owner's
@@ -588,16 +589,19 @@ paying in a currency the player cannot weigh against the walk home. So:
 | Shape | Passage | Blessing | Loot |
 |---|---|---|---|
 | **5.1** shortcut | the way down | +1 | the shortcut chest |
-| **5.2** gate room | the boss approach + the cycle | +1 | **a chest**, floor table |
+| **5.2** gate room | the Boss Key, boss approach + cycle | +1 | **a chest**, floor table |
 | **5.3** treasure | the miniboss chamber | +1 | the **rich** chest, + the miniboss's own drop |
 
 It costs nothing new: `Chest` and `Prog.chest_picks` already exist and already
 know what a floor's table is worth. What it buys is that the sentence *"I solved
 that"* and the sentence *"I am carrying more than I was"* are the same sentence.
 
-Floor 1's is a key hunt, because T0 is all it may ask for and a key hunt is the
-honest T0 puzzle. That is correct, not a placeholder: Ocarina's first dungeon is
-also mostly a key and a ladder.
+Every authored floor's gate-room prefab ends by revealing its one Boss Key. The
+key is deliberately in a different generated room from the Boss Door, is not a
+Small Key, and is never spent by the ordinary PuzzleGate: taking it completes
+that gate and preserves it for the 5.4 × 4.6 m door into the boss chamber. Floor
+1's prefab may still be a pure key hunt because T0 is all it may ask for; deeper
+floors can put the same final reward behind their higher-tier verbs.
 
 ### 5.3 Treasure puzzle — *optional, richer, harder*
 

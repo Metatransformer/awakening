@@ -339,14 +339,49 @@ derived from the blow rather than authored per monster.**
 
 `Hit.force()` — damage, knockback, attacker mass and how committed the swing was
 — scales the hit-stop, the shake, a directional camera lurch and the HUD's damage
-arc. A second, discrete draw off `mass × commitment²` picks a **flinch**, a
-**stagger** or being **knocked flat**: a goblin floors you 1 time in 100, an orc
-1 in 5, the Warden's telegraphed drop 17 in 20.
+arc. A second, discrete draw picks a **flinch**, a **stagger** or being **knocked
+flat**, and being knocked flat needs *both* a body heavy enough and a swing
+committed enough:
+
+| | flinch | stagger | flat |
+|---|---|---|---|
+| goblin | 90 | 10 | **0** |
+| skeleton | 78 | 22 | **0** |
+| orc | 64 | 33 | 3 |
+| troll, ordinary swing | 39 | 54 | 8 |
+| troll, telegraphed heavy | 29 | 36 | 35 |
+| Warden's sweep | 16 | 76 | 8 |
+| Warden's telegraphed drop | 9 | 6 | 85 |
+
+**Nothing the hero's own size or smaller can put him on the ground at all** — not
+rarely, *never*. Being floored is what a body twice your weight does when it
+winds up to do it, and the roster below the hero's mass has no access to it at
+any commitment. That is the whole reason the tier is worth reading.
 
 **A monster's mass is therefore its defence *and* its threat**, off the same
 `height / K.LAUNCH_MASS_REF` figure §3.5 already uses: the troll that barely
-launches is the troll that puts you on your back. Nothing new is authored to make
-that true.
+launches is the troll that puts you on your back. And what separates one swing
+from another is **the length of the tell** — the roster's `windup`, the same
+number that makes a blow readable, is what tells the pricing it was committed.
+Nothing new is authored to make either true.
+
+**The troll is the only roster body with two beats**, and it has them because it
+needed them. With one swing at `damage 6 / windup 0.72` its every attack read as
+a fully committed heavy and floored the player 31% of the time — a tax, not a
+telegraph. Split, the pairing is the mechanic rather than a note about it:
+
+| | tell | damage | shove | floors you |
+|---|---|---|---|---|
+| ordinary swing | 0.50 s | 4 q | light | 8% |
+| heavy | 1.05 s | 7 q | heavy | 35% |
+
+The heavy rears 1.55× as far, glows hotter, and **roars** (`monster_attack`,
+where the ordinary swing gets `attack_prepare`) — four channels, because in a
+pack the player is looking at one monster at a time. `Enemy._heavy_row` owns the
+schema: an optional `"heavy"` block on any `DEFS` row, every key falling back to
+the ordinary swing's, so giving the iron knight a shield-bash is five numbers and
+no code. `tools/directors/troll_heavy.gd` proves both beats are thrown and that
+the heavy stamps its own damage, shove and commitment through the shared hitbox.
 
 `docs/CONTRACT.md` “Taking a hit” owns the rule and the override pair for the
 exceptions. `tools/directors/hurt_table.gd` prints every blow in the game through

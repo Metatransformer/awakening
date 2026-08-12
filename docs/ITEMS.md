@@ -29,6 +29,17 @@ Ingredients and components are rewards, not usable items. Upgrade rungs are
 progression, not objects. These categories share neither state nor conversion
 rules merely because the UI can list them together.
 
+### Boss Key
+
+Each authored floor contains exactly one oversized golden Boss Key. It is a
+floor-scoped progression token earned at the end of that floor's critical-path
+puzzle, in a different room from the Boss Door. The 5.4 × 4.6 m Boss Door
+consumes it once to admit the separate boss chamber. It is neither a Small Key
+nor stock, never occupies the item ring or bag, persists in an active-run save,
+and remains tagged to its owning floor while the player uses bidirectional
+stairs. It clears when spent, extracted, killed, or starting a new run, and can
+never open another floor's Boss Door.
+
 ## Starting tools
 
 ### Sword
