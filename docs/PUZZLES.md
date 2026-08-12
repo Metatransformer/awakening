@@ -204,6 +204,35 @@ last one lands, unless `needs_key` says the key has to be spent at the door.
 Atom flags are cleared by `Run.enter()`, so a floor re-entered inside one run
 stays solved and run two gets its puzzle back (§5.2).
 
+**A gate is open only while its set says so, and a gate that can go backwards
+writes no flag.** Two halves of one rule, and the door owes both:
+
+- **`PuzzleGate.reversible()`** is true the moment one adopted atom is
+  non-latching — the plate and the lantern, the two `latching = false` rows in
+  the table. Such a gate **shuts again** when its count goes back above zero:
+  `LockedDoor._shut()` is `_swing()` run backwards, the blocker is rebuilt, and
+  the door is addressable and refusing by name a second time.
+- **`PuzzleGate.persists_open()`** is therefore `not reversible()`, and it is
+  what `LockedDoor._swing()` asks before it stamps `flag_id()`. **A world flag is
+  one-way storage and a plate is a two-way prop**; a gate that saved "open" and
+  then shut would come back open on the next floor build standing over a risen
+  plate. The atoms *are* the state — `unsolved_count()` reads them every frame —
+  and a saved bool beside them can only ever go stale in one direction.
+
+A gate on latching atoms is unchanged: it stamps its flag, it never shuts, and
+the walk home stays the reward for solving it.
+
+This is card #116, and it was the owner's playtest: he stood on a plate, the door
+opened, he walked off, and the door was still open. The cause was not the flag —
+it was that `LockedDoor` had an open state with **no exit at all**, so
+`PuzzleGate._on_atom_changed` opened with `if is_open(): return` and a gate that
+had swung stopped hearing its own atoms for ever. `pressure_plate.gd`'s header
+had written the flag half of the rule down all along ("a one-way flag on a
+two-way prop is a plate that comes back pressed with nothing standing on it") and
+the gate above it did it anyway. Proved by `tools/directors/plate_gate.gd`, which
+photographs the pair — held open, released shut — from one fixed camera, and
+carries a latching gate as its control.
+
 **The shield reflect is in phase 1 on purpose.** Floor 1's critical path is
 T0-only (§1), and without it every Cistern puzzle is a key, a plate or a block —
 haulage. A Vyr light-beam bounced off the shield into a socket is the only T0
@@ -1141,6 +1170,10 @@ Sluice-Keeper dies and the second stone lights).
 stays open across saves — and a **puzzle** gate wearing it would leave the gate
 room open from run two onward over a puzzle that `PuzzleAtom.clear_run_flags()`
 had just reset. §5.2's promise is that the gate room is a puzzle every run.
+
+And a **reversible** gate writes no flag at all — see §2. Per-run was not far
+enough for a plate: the flag outlived the weight *within* one run, which is a
+door open over an empty plate for the rest of the floor (#116).
 
 ---
 
