@@ -132,10 +132,12 @@ extends RefCounted
 ##   this field is the authored answer sitting where the answer goes, not a
 ##   feature that half-exists.
 ##
-## **9. On death:** grant `drop.item`, place `drop.relic` (it goes in the BAG,
-## GDD §3 — it is not a grant), emit `Bus.boss_defeated`, and leave the arena
-## empty forever after (GDD §5.1). This file owns none of that; it only says
-## which ids.
+## **9. On death:** a floor boss reveals a great chest holding `drop.item`, while
+## a miniboss grants its progress-token item immediately. Place `drop.relic` on
+## the floor (it goes in the BAG, GDD §3 — it is not a grant), emit
+## `Bus.boss_defeated`, and never rebuild the fight (GDD §5.1). An unclaimed
+## great chest may remain in the spent arena. This file owns none of that; it
+## only says which ids.
 
 const MODEL_DIR := "res://assets/monsters/"
 
@@ -394,7 +396,7 @@ static var BOSSES := {
 		# "Glass-Kiln Core" and the obvious id is the wrong one: `RelicDb` is the
 		# catalogue that owns relic ids (GDD §6.1) and it spells this one
 		# `kiln_core`. Checked against `RelicDb`, not against the GDD's prose.
-		"drop": {"item": &"bomb_bag", "relic": &"kiln_core"},
+		"drop": {"item": &"burst", "relic": &"kiln_core"},
 		"music": "res://audio/music/boss_2.ogg",
 		"lore": "The Imperium's foundry crews fed it scrap because it would eat "
 			+ "scrap, and then they fed it the crucible tongs, and then they "

@@ -2,7 +2,7 @@ class_name BossArena
 extends Area3D
 ## The deepest room, and what happens when you walk into it.
 ##
-## Four things, in order, and nothing else:
+## Five things, in order, and nothing else:
 ##
 ##   1. On `_ready`, build the boss -- unless its door says it is already dead,
 ##      in which case build nothing at all. GDD §5.1: *a boss you have killed
@@ -11,7 +11,8 @@ extends Area3D
 ##      boss wakes, and `Bus.boss_engaged` fires (from the boss -- see below).
 ##   3. At half health, **turn**: the ROOM escalates, once. See "The turn" below.
 ##   4. On the boss dying, **release**: the ring drops and the door opens.
-##   5. Nothing.
+##   5. Place the deterministic boss-item great chest. On a spent arena it is
+##      rebuilt until its item has actually been claimed.
 ##
 ## **It never calls `Flow`.** `CLAUDE.md` §6: `Flow` is the only thing in the
 ## project that changes scenes, and an arena that moved the player to the next
@@ -125,6 +126,7 @@ const KEYSTONE_SIZE := Vector3(3.0, 2.4, 3.0)
 
 var _row: Dictionary = {}
 var _boss: CharacterBody3D = null
+var _boss_item_chest: BossItemChest = null
 var _door: Node = null
 var _seal: Node3D = null
 var _sealed: bool = false
@@ -171,6 +173,7 @@ func _ready() -> void:
 	if _already_dead():
 		_spent = true
 		_replace_lost_relic()
+		_place_boss_item_chest(false)
 		return
 	_build_boss()
 	body_entered.connect(_on_body_entered)
@@ -216,6 +219,10 @@ func radius() -> float:
 
 func boss() -> CharacterBody3D:
 	return _boss
+
+
+func boss_item_chest() -> BossItemChest:
+	return _boss_item_chest if is_instance_valid(_boss_item_chest) else null
 
 
 func is_sealed() -> bool:
@@ -430,6 +437,30 @@ func _on_boss_died(_where: Vector3) -> void:
 	Bus.room_cleared.emit(StringName(name))
 	if _door != null and is_instance_valid(_door) and _door.has_method(&"unseal"):
 		_door.call(&"unseal")
+	_place_boss_item_chest(true)
+
+
+## A floor boss earns this chest; its permanent item waits for the player to
+## open it. The separate relic remains loose on the floor and at bag/death risk.
+func _place_boss_item_chest(arrive: bool) -> void:
+	if BossDb.is_miniboss(boss_id) or is_instance_valid(_boss_item_chest):
+		return
+	var drop: Dictionary = _row.get("drop", {})
+	var item: StringName = drop.get("item", &"")
+	if item == &"" or Game.has(item):
+		return
+
+	_boss_item_chest = BossItemChest.new()
+	_boss_item_chest.name = "BossItemChest"
+	_boss_item_chest.item_id = item
+	_boss_item_chest.position = Vector3.ZERO
+	_boss_item_chest.visible = false
+	_boss_item_chest.enabled = false
+	add_child(_boss_item_chest)
+	if arrive:
+		RewardVfx.land(_boss_item_chest, RewardVfx.MAJOR)
+	else:
+		RewardVfx.show_now(_boss_item_chest)
 
 
 func _move_seal(ring: Node3D, to_y: float) -> void:

@@ -1376,18 +1376,6 @@ func spend_key() -> bool:
 ## bow you just found is one press of D-pad → away, which is what the auto-bind
 ## was for.
 func grant(item_id: StringName) -> void:
-	# `BossDb` still spells the Slag Ogre's drop &"bomb_bag" -- the satchel's
-	# noun, from before GDD §5.2 made Burst a WORKING you cast rather than a bag
-	# you throw. Translated on the way IN rather than aliased in `has()`, so
-	# there is still exactly one ownership id and exactly one gate: an alias in
-	# `has()` would have to be repeated by every caller that walks a tier table
-	# (`PuzzleAtoms.owned_tier`) and the first one to forget it would be a floor
-	# that silently generates no cracked pillars.
-	# [debt] Delete this pair of lines and the `&"bomb_bag"` in
-	# `scripts/actors/enemies/boss_db.gd` together; it is a one-word change there
-	# and that file was owned by another agent on the day this landed.
-	if item_id == &"bomb_bag":
-		item_id = &"burst"
 	if items.get(item_id, false):
 		return
 	items[item_id] = true

@@ -50,8 +50,10 @@ extends RefCounted
 ##      vault -- `vault_key(4)` is empty on its own, with no branch anywhere.
 ##   F  The deep chest carries the relic `FloorDb` names for this floor's
 ##      `deep_chest` slot, as a mote you walk over.
-##   G  The boss is awake, the door names it, killing it opens the door and hands
-##      over the floor's item. And on `--level=4` only, the Long Descent is
+##   G  The boss is awake, the door names it, and killing it opens the door but
+##      does NOT grant the floor item. Its great chest appears; opening that
+##      chest grants the item and runs the shared ceremony. And on `--level=4`
+##      only, the Long Descent is
 ##      untouched: level 5 generates with no anchors, no locked doors, and its
 ##      stair back in the deepest room.
 ##
@@ -957,7 +959,7 @@ func _shortcut_opens(rig, d: Node, hero: Node3D) -> void:
 	var door: Node3D = d.anchor_node(&"shortcut_door")
 	if door == null:
 		return
-	_ck("D4 the boss's death handed over %s" % FloorDb.boss_item(_level),
+	_ck("D4 the boss's great chest handed over %s" % FloorDb.boss_item(_level),
 		Game.has(FloorDb.boss_item(_level)))
 	await _walk_to(rig, d, hero, d.anchor_cell(&"shortcut_door"), door)
 	if not await _focus(rig, door):
@@ -1229,8 +1231,29 @@ func _the_boss(rig, d: Node, hero: Node3D) -> void:
 	_ck("G6 the seal came down", not arena.is_sealed())
 	_ck("G7 the arena is spent", arena.is_spent())
 	_ck("G8 the boss door opened", door.is_open())
-	_ck("G9 and %s is the hero's (GDD §5.2)" % FloorDb.boss_item(_level),
-		Game.has(FloorDb.boss_item(_level)))
+	var item := FloorDb.boss_item(_level)
+	_ck("G9 and the kill did not silently grant %s" % item, not Game.has(item))
+	var great_chest: Node3D = arena.boss_item_chest()
+	_ck("G10 the spent arena holds its great chest", great_chest != null)
+	if great_chest != null:
+		_ck("G11 the great chest deterministically carries %s" % item,
+			StringName(great_chest.get(&"item_id")) == item)
+		_ck("G12 and is visibly oversized (x%.2f)" % great_chest.scale.x,
+			great_chest.scale.x > 1.4)
+		await _sweep(rig, hero, [great_chest.global_position
+			+ great_chest.global_transform.basis.z * 1.15 + Vector3.UP * 0.05], 1.1)
+		var focused := await _focus(rig, great_chest)
+		_ck("G13 the great chest owns the OPEN prompt", focused)
+		if focused:
+			await rig.tap(["interact"])
+			await rig.wait_seconds(0.65)
+		var ceremony: Node = rig.scene().get_tree().get_first_node_in_group(&"item_get")
+		_ck("G14 opening the chest grants %s" % item, Game.has(item))
+		_ck("G15 and starts the item-get ceremony", ceremony != null)
+		if ceremony != null:
+			await rig.wait_seconds(2.3)
+			ceremony.call(&"dismiss")
+			await rig.wait_frames(5)
 	await rig.capture(out.path_join("f_04_boss_dead.png"))
 
 

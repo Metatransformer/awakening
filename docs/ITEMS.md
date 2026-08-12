@@ -11,7 +11,7 @@ do before.
 
 That is `docs/BESTIARY.md` §0 read from the other end, and it is GDD §5.2's rule
 ("verbs, not numbers") applied to everything on the list rather than only to the
-four boss drops.
+four boss-item great chests.
 
 **Status: design of record, and it runs.** All five verbs — the Bow, the
 Hookshot, Burst, Sustain and Ballast — are rows in `ArmamentDb.NAMES` and stops
@@ -64,12 +64,19 @@ rule and drop rule apply to them for free — `ItemDb._relic()` and
 "why a Blessing is an `ItemDef` and not a second inventory"
 (`scripts/items/echo_db.gd:~14-23`).
 
+**A floor boss earns a great chest; opening it grants the usable item.** The
+chest is deterministic, larger than ordinary loot chests and followed by the
+shared item-get ceremony. It never rolls `ItemDb`, consumes `Run.rng`, adds
+arrows or routes the item through the bag. The boss relic is a separate pickup:
+it remains exposed to slot pressure, extraction loss and repair exactly because
+the permanent verb is not.
+
 ---
 
 ## 1. The six usable items
 
 `docs/SCOPE.md` §1 freezes **usable items at 6**: Bow, Hookshot, Burst, Sustain,
-Ballast, Far Lantern. Four are boss drops, two are relics the alchemist reads,
+Ballast, Far Lantern. Four are boss-item great-chest rewards, two are relics the alchemist reads,
 and one of the six has no button at all.
 
 **The six are not the ring's six.** The ring's stops are sword, bow, hookshot,
@@ -122,7 +129,8 @@ ring off it. Burst is the answer to the plate; the arrow is the answer to the on
 moment there is no plate in the way. An arrow into a plated front does nothing,
 and a reading of this section that says otherwise has the mechanic backwards.
 
-**Enters** at the Cistern Warden, floor 1 (`FloorDb.FLOORS[1]["boss_item"]`,
+**Enters** from the great chest earned by defeating the Cistern Warden, floor 1
+(`FloorDb.FLOORS[1]["boss_item"]`,
 `scripts/world/floor_db.gd:~306`; `BossDb.BOSSES[&"cistern_warden"]["drop"]`,
 `scripts/actors/enemies/boss_db.gd:~214`). Nothing before that: the bow left the
 starting kit in M1 and its forge ladder left the smith's board with it —
@@ -166,7 +174,8 @@ enemy (close the gap, then melee), and it holds a body still for `K.HOOK_FREEZE`
 (`scripts/core/consts.gd:~587`; applied in `HeroRanged`,
 `scripts/combat/hero_ranged.gd:~613`).
 
-**Enters** at the Bellwake, floor 3 (`floor_db.gd:~371`; `boss_db.gd:~426`). Its
+**Enters** from the great chest earned by defeating the Bellwake, floor 3
+(`floor_db.gd:~371`; `boss_db.gd:~426`). Its
 `chain` ladder appears at the smith the same moment (`ShopDb.GATED_BY`,
 `shop_db.gd:~61-65`).
 
@@ -190,7 +199,8 @@ agree about what it is for.
 rather than opening a door. On a body it is the **guard-breaker** and the only
 blow a **Riser** does not get up from (`docs/BESTIARY.md` §3, behaviours 2 and 7).
 
-**Enters** at the Slag Ogre, floor 2 (`floor_db.gd:~336`). It is **cast, not
+**Enters** from the great chest earned by defeating the Slag Ogre, floor 2
+(`floor_db.gd:~336`). It is **cast, not
 thrown**: what you take off the Ogre is a written working, and the change from
 the old satchel is a noun rather than a mechanic — `CrackedPillar.burst()` was
 named for the verb rather than the weapon, and its note says the naming was
@@ -280,7 +290,8 @@ gets a verb (`docs/PUZZLES.md` §1), and the door that names it already exists
 (`LockedDoor.SIGILS[&"far_lantern"]` — `THE FAR LANTERN`, `Pal.ARCANE`,
 `scripts/props/locked_door.gd:~122`).
 
-**Enters** at the Riven Knight, floor 4 (`floor_db.gd:~407`; `boss_db.gd:~546`).
+**Enters** from the great chest earned by defeating the Riven Knight, floor 4
+(`floor_db.gd:~407`; `boss_db.gd:~546`).
 
 **Opens floor 3's vault**, which holds the Warp-Stone Fragment — the last of the
 three, and the manifest's count of vaults is three (`docs/SCOPE.md` §1: *4
@@ -810,17 +821,12 @@ manifests, and Burst casts (`scripts/combat/burst_cast.gd`; `armament_db.gd:~26`
 **Believe the code.** One of the three workings and most of the relic plumbing
 have landed since that paragraph was written.
 
-### D7 — the Slag Ogre's drop is still spelled `bomb_bag`
+### ~~D7 — the Slag Ogre's drop is still spelled `bomb_bag`~~ *(closed 2026-08-11)*
 
-`BossDb.BOSSES[&"slag_ogre"]["drop"]` (`boss_db.gd:~323`) drops `&"bomb_bag"`;
-floor 2's `boss_item` is `&"burst"` (`floor_db.gd:~336`), and every gate compares
-against the latter. The two are reconciled by a translation on the way in
-(`Game.grant()`, `game_state.gd:~1058`), which the author flagged `[debt]` at
-`:~1055` with the reason — the file was owned by another agent that day.
-
-**Believe `&"burst"`.** Harmless today because `grant()` translates, and worth
-closing anyway: it is a one-word change, and the second id is the kind of thing
-that survives into a table nobody thought to translate.
+`BossDb.BOSSES[&"slag_ogre"]["drop"]` now names `&"burst"`, matching floor 2's
+`boss_item`, and the temporary `Game.grant()` translation has been removed. The
+great chest therefore carries one canonical id from floor manifest to ownership
+and presentation.
 
 ### D8 — a code comment claims the docs say `Game.has_item()`
 

@@ -448,6 +448,10 @@ var bow: Node3D
 var hookshot: Node3D
 ## id -> {"hand": Node3D, "stow": Node3D}. Exactly one of the pair is visible.
 var _items: Dictionary = {}
+## Exact mounted-model visibility while a presentation temporarily clears the
+## hero's silhouette. Kept here because the sockets are children of `_skel`, not
+## of this component, so hiding `HeroCombat` itself does not hide the gear.
+var _presentation_visibility: Dictionary = {}
 var _hitbox: Area3D
 var _swing_t: float = -1.0
 ## The numbers of the swing currently in flight, captured when it starts. A
@@ -729,6 +733,39 @@ func _mount_item(id: StringName, model_id: String,
 func equip(id: StringName) -> void:
 	equipped = id
 	_show_equipped()
+
+
+## Clear every mounted weapon for a full-body presentation, then restore the
+## exact pre-presentation state. The item-get model is a separate display; a
+## second bow on the hero's back and a sword through the raised-hand pose turn
+## the acquisition silhouette into ordinary combat clutter.
+func set_presentation_hidden(hidden: bool) -> void:
+	if hidden:
+		if not _presentation_visibility.is_empty():
+			return
+		for model: Node3D in _presentation_models():
+			_presentation_visibility[model] = model.visible
+			model.visible = false
+		return
+	if _presentation_visibility.is_empty():
+		return
+	for model: Node3D in _presentation_visibility:
+		if is_instance_valid(model):
+			model.visible = bool(_presentation_visibility[model])
+	_presentation_visibility.clear()
+
+
+func _presentation_models() -> Array[Node3D]:
+	var models: Array[Node3D] = []
+	for model: Node3D in [sword, sword_stow, shield]:
+		if model != null and not models.has(model):
+			models.append(model)
+	for value: Dictionary in _items.values():
+		for key: StringName in [&"hand", &"stow"]:
+			var model := value.get(key) as Node3D
+			if model != null and not models.has(model):
+				models.append(model)
+	return models
 
 
 ## Mirror Game's live loadout onto the rig.
