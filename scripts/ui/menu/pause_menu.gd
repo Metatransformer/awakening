@@ -114,10 +114,10 @@ const KEY_UI_BUTTONS := {
 ## says "Equipment". One word, in five places, is worth more than the shade of
 ## meaning "ITEMS" carried. Adding GARRISON does not roll that decision back.
 const PAGES := [
-	[Screen.EQUIP, "EQUIP"],
-	[Screen.POUCH, "INVENTORY"],
-	[Screen.MAP, "MAP"],
-	[Screen.GARRISON, "GARRISON"],
+	[Screen.EQUIP, "Equip"],
+	[Screen.POUCH, "Inventory"],
+	[Screen.MAP, "Map"],
+	[Screen.GARRISON, "Garrison"],
 ]
 ## Stick travel required before a joypad axis counts as "the player moved it".
 ## Below this it is resting drift, which must not cancel a rebind.

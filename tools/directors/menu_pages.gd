@@ -79,10 +79,11 @@ func run(rig) -> void:
 
 	# --- The labels ----------------------------------------------------------
 	await _open_pouch(rig, menu)
-	_check("the INVENTORY screen is up", pouch.visible)
+	_check("the Inventory screen is up", pouch.visible)
 	var labels := _tab_labels(pouch)
-	_check("the tabs read EQUIP / INVENTORY / MAP / GARRISON (got %s)" % [labels],
-		labels == PackedStringArray(["EQUIP", "INVENTORY", "MAP", "GARRISON"]))
+	_check("the tabs read Equip / Inventory / Map / Garrison (got %s)" % [labels],
+		labels == PackedStringArray(["Equip", "Inventory", "Map", "Garrison"]))
+	_check("the live page tabs resolve to the body face", _tabs_use_body_font(pouch))
 	await _shot(rig, "inventory")
 
 	# --- 1 + 2. Five per row, and it fits ------------------------------------
@@ -93,26 +94,26 @@ func run(rig) -> void:
 	# menu leaves a page upwards, so if this misses, the whole mechanism is
 	# unreachable and every beat under it would pass for the wrong reason.
 	await _key(rig, KEY_UP, 8)
-	_check("↑ out of the INVENTORY grid landed on the tab strip (%s)"
+	_check("↑ out of the Inventory grid landed on the tab strip (%s)"
 		% _focus_name(rig), _on_tabs(rig))
 	await _shot(rig, "tabs_focused")
 
 	await _key(rig, KEY_RIGHT, 10)
-	_check("→ on the strip paged to MAP (%s)" % _where(menu), map_panel.visible)
+	_check("→ on the strip paged to Map (%s)" % _where(menu), map_panel.visible)
 	_check("...and the cursor stayed on the strip, so → pages again (%s)"
 		% _focus_name(rig), _on_tabs(rig))
 	await _shot(rig, "map")
 
 	await _key(rig, KEY_RIGHT, 10)
-	_check("→ again paged to GARRISON (%s)" % _where(menu), garrison_panel.visible)
+	_check("→ again paged to Garrison (%s)" % _where(menu), garrison_panel.visible)
 	await _shot(rig, "garrison")
 
 	await _key(rig, KEY_RIGHT, 10)
-	_check("→ again wrapped to EQUIP (%s)" % _where(menu), equip.visible)
+	_check("→ again wrapped to Equip (%s)" % _where(menu), equip.visible)
 	await _shot(rig, "equip")
 
 	await _key(rig, KEY_LEFT, 10)
-	_check("← is the same ring the other way (back to GARRISON: %s)" % _where(menu),
+	_check("← is the same ring the other way (back to Garrison: %s)" % _where(menu),
 		garrison_panel.visible)
 
 	# ...and off the strip, back into the page. On GARRISON that is the Back
@@ -126,12 +127,12 @@ func run(rig) -> void:
 	# pad player could get stuck on: one focusable, no shoulders, nothing else.
 	_arm_pad_dpad()
 	await _pad(rig, JOY_BUTTON_DPAD_UP, 8)
-	_check("PAD: ↑ off the GARRISON Back button reached the tab strip (%s)"
+	_check("PAD: ↑ off the Garrison Back button reached the tab strip (%s)"
 		% _focus_name(rig), _on_tabs(rig))
 	await _pad(rig, JOY_BUTTON_DPAD_LEFT, 10)
-	_check("PAD: ← paged off GARRISON onto MAP (%s)" % _where(menu), map_panel.visible)
+	_check("PAD: ← paged off Garrison onto Map (%s)" % _where(menu), map_panel.visible)
 	await _pad(rig, JOY_BUTTON_DPAD_LEFT, 10)
-	_check("PAD: ← again reached INVENTORY (%s)" % _where(menu), pouch.visible)
+	_check("PAD: ← again reached Inventory (%s)" % _where(menu), pouch.visible)
 	var seen := {}
 	for i in 4:
 		seen[_where(menu)] = true
@@ -155,11 +156,11 @@ func run(rig) -> void:
 	# motion event: what is being checked is that a press still pages now that
 	# arriving-by-focus does too, and not that the pointer can find a rectangle.
 	await _open_pouch(rig, menu)
-	var map_tab := _tab_named(pouch, "MAP")
+	var map_tab := _tab_named(pouch, "Map")
 	if map_tab != null:
 		map_tab.emit_signal(&"pressed")
 		await rig.wait_frames(10)
-	_check("MOUSE: pressing the MAP tab paged to it (%s)" % _where(menu),
+	_check("MOUSE: pressing the Map tab paged to it (%s)" % _where(menu),
 		map_panel.visible)
 
 	# --- EQUIP's own row still works -----------------------------------------
@@ -172,7 +173,7 @@ func run(rig) -> void:
 	await rig.wait_frames(10)
 	await _nav_to_button(rig, "Equipment")
 	await _key(rig, KEY_ENTER, 12)
-	_check("EQUIP opened focused in the page, not on the strip (%s)"
+	_check("Equip opened focused in the page, not on the strip (%s)"
 		% _focus_name(rig), equip.visible and not _on_tabs(rig))
 	await _shot(rig, "equip_from_root")
 
@@ -368,6 +369,21 @@ func _tab_labels(panel: Control) -> PackedStringArray:
 		if b != null:
 			out.append(b.text)
 	return out
+
+
+func _tabs_use_body_font(panel: Control) -> bool:
+	var strip := _strip_of(panel)
+	if strip == null:
+		return false
+	var buttons := 0
+	for child in strip.get_children():
+		var button := child as Button
+		if button == null:
+			continue
+		buttons += 1
+		if button.get_theme_font(&"font") != UITheme.body_font():
+			return false
+	return buttons == PauseMenu.PAGES.size()
 
 
 func _tab_named(panel: Control, label: String) -> Button:
