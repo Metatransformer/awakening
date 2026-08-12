@@ -1060,6 +1060,15 @@ day the roster landed until this was fixed. A blow that lands
 returns true; a blow the shield or an i-frame ate returns false, and only the
 first is announced on `connected`.
 
+The hero resolves defences in one order inside `Hero.take_hit`: parry, roll and
+perfect-dodge handling, existing i-frames, then the frontal shield, then damage.
+A shield block is eligible only while `Game.stamina > 0.0`; when it catches a
+blow it spends `hit.amount * K.STAMINA_BLOCK_PER_QUARTER` through
+`Game.spend_stamina(cost, true)` before block feedback. Partial spending is the
+rule: any positive stamina catches that blow and clamps to zero, while the next
+blow lands if stamina remains empty. `Hit.amount`, in quarter-hearts, is the one
+measure of attack weight; do not add a second weight field.
+
 `HealthComponent` (`scripts/combat/health_component.gd`, owned by P4):
 
 ```gdscript

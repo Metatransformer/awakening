@@ -288,6 +288,8 @@ const STAMINA_SPIN := 34.0          # [tune] the charged release -- one roll
 const STAMINA_DASH := 18.0          # [tune] the stab out of the guard
 const STAMINA_LUNGE := 20.0         # [tune] the jump attack, under a lock
 const STAMINA_SLAM := 22.0          # [tune] the air slam
+## Blocking spends `hit.amount *` this value, so heavier blows cost more.
+const STAMINA_BLOCK_PER_QUARTER := 4.0  # [tune]
 
 ## [oot] 8 ticks of invulnerability when a shield block is released.
 const SHIELD_IFRAMES := 8.0 * TICK  # 0.4 s
