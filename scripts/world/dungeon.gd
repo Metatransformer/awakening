@@ -135,6 +135,10 @@ const OPTIONAL_ANCHORS: Array[StringName] = [&"puzzle_room"]
 ## of shots — would otherwise be holding a stick. A quarter of rooms means a
 ## short walk usually turns one up and never guarantees it. [tune]
 @export var arrow_chance: float = 0.25
+## Occasional room furniture that can become an enemy attack. Rolled from the
+## floor stream with the rest of population, so the same run seed restores both
+## the cluster and the one body assigned to use it.
+@export var barrel_cluster_chance: float = 0.22
 
 # --- The anchored landing ----------------------------------------------------
 ## Behind a boss door and behind a shortcut door there is a short passage and a
@@ -3139,6 +3143,9 @@ func _populate() -> void:
 		# what lets a floor be re-cast without being re-tuned.
 		var elite_chance := Prog.elite_chance(Run.level)
 		var count := _rng.randi_range(enemies_min, enemies_max)
+		var has_barrel_cluster := _rng.randf() < barrel_cluster_chance
+		if has_barrel_cluster:
+			_place_barrel_cluster(root, size, chest_dir)
 		# The watcher is built BEFORE the bodies and told about each one as it is
 		# made, rather than handed a list afterwards. `Enemy._ready` runs the frame
 		# it is added -- a body that woke up, was hit and died inside the same
@@ -3147,6 +3154,7 @@ func _populate() -> void:
 		var watch: RoomWatch = null
 		if count > 0:
 			watch = RoomWatch.attach(root, StringName(root.name))
+		var thrower_assigned := false
 		for i in count:
 			var spot := _scatter(i, count, size * 0.30)
 			var kind := _roll_kind(dist)
@@ -3154,7 +3162,11 @@ func _populate() -> void:
 			# THE thing in the room; two of them is just a harder room, and the
 			# separation rule has to keep them both legible besides.
 			var elite := i == 0 and _rng.randf() < elite_chance
-			watch.add(_spawn_foe(root, kind, spot, elite))
+			var make_thrower := has_barrel_cluster and not elite and not thrower_assigned
+			if make_thrower:
+				thrower_assigned = true
+			watch.add(_spawn_foe(root, kind, spot, elite,
+				&"thrower" if make_thrower else &""))
 
 		# The deep-chest anchor already put one in its room. On a floor with no
 		# anchors at all the deepest room still gets the good chest, which is what
@@ -3226,6 +3238,24 @@ func _populate() -> void:
 	_release_unclaimed_rewards()
 
 
+## Two or three props against a quiet side of the room. `_chest_dir` prefers a
+## blank wall, so its lane is already away from every doorway; the side offset
+## keeps this cluster away from both the centre path and the chest standing on
+## the wall axis. All rolls use `_rng`, including which side of that axis wins.
+func _place_barrel_cluster(root: Node3D, size: float, quiet_dir: Vector3) -> void:
+	var count := _rng.randi_range(2, 3)
+	var side := Vector3(-quiet_dir.z, 0.0, quiet_dir.x)
+	if _rng.randf() < 0.5:
+		side = -side
+	var centre := quiet_dir * (size * 0.31) + side * (size * 0.19)
+	for i in count:
+		var barrel := ExplosiveBarrel.new()
+		barrel.name = "RoomBarrel%d" % i
+		var offset := (float(i) - float(count - 1) * 0.5) * 1.05
+		barrel.position = centre + side * offset
+		root.add_child(barrel)
+
+
 ## What this floor is allowed to spawn at this distance from the entrance.
 ##
 ## One line, because the table moved. `Dungeon.BANDS` and `Dungeon.BAND_DEEP`
@@ -3249,7 +3279,7 @@ func _roll_kind(dist: int) -> StringName:
 ## used to return nothing, which was fine while nothing in the game knew a room
 ## could be finished.
 func _spawn_foe(root: Node3D, kind: StringName, at: Vector3,
-		elite: bool = false) -> Enemy:
+		elite: bool = false, foe_behaviour: StringName = &"") -> Enemy:
 	# `position`, not `global_position`: the room root is already placed at its
 	# cell centre, and `at` is the scatter offset inside it. Assigning a global
 	# here would stack every room's spawns on top of the entrance.
@@ -3258,6 +3288,8 @@ func _spawn_foe(root: Node3D, kind: StringName, at: Vector3,
 	e.drop_seed = _rng.randi()
 	e.level = Run.level
 	e.elite = elite
+	# Before `add_child`, because `_ready` resolves and latches the behaviour.
+	e.behaviour = foe_behaviour
 	e.position = at
 	root.add_child(e)
 	return e
