@@ -1,0 +1,186 @@
+[
+  {
+    "prompt": "a handful of pale splintered bone fragments; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/bone_shard.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  },
+  {
+    "prompt": "a clump of damp dark green moss torn off a stone; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/rot_moss.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.5
+  },
+  {
+    "prompt": "a single split grey flint nodule, one sharp fresh fractured face catching the light; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/cracked_flint.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  },
+  {
+    "prompt": "a lump of soft yellowed tallow wax with a wick in it; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/grave_wax.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  },
+  {
+    "prompt": "a torn twisted piece of rusted iron armour plate; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/iron_scrap.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.3
+  },
+  {
+    "prompt": "a weightless drifting hank of pale translucent spider silk; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/ghost_silk.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  },
+  {
+    "prompt": "a fist-sized organic sac glowing dull red from within; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/ember_gland.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  },
+  {
+    "prompt": "a large rounded polished amber nugget, one small dark insect suspended inside it; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/deep_amber.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  },
+  {
+    "prompt": "one perfectly round black pearl that swallows the light on it; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/void_pearl.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.9
+  },
+  {
+    "prompt": "a heavy signet RING, a thick metal band seen at an angle with a flat oval seal face carrying a worn crest; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/kings_signet.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  },
+  {
+    "prompt": "one smooth tumbled oval agate pebble, unfaceted, banded; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/moss_agate.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  },
+  {
+    "prompt": "one rectangular emerald-cut sapphire, step-cut, sharp straight facet edges and square corners; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/tide_sapphire.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.4
+  },
+  {
+    "prompt": "one round brilliant-cut ruby seen from above, a circle of triangular facets radiating from the table; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/blood_ruby.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.4
+  },
+  {
+    "prompt": "a small heap of coarse grey sharpening grit and stone dust; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/whetstone_grit.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  },
+  {
+    "prompt": "a cut rectangle of steel breastplate with three rivets in it; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/riveted_plate.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  },
+  {
+    "prompt": "a tightly wound bright steel spring coil; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/tension_coil.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  },
+  {
+    "prompt": "a heavy pale blue-white iron ingot core, frost on its surface; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/cold_iron_core.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  },
+  {
+    "prompt": "a small heap of sharp broken glass shards with clean straight edges; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/fired_cullet.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  },
+  {
+    "prompt": "a single forked taproot vegetable pulled from the ground, long tapering root with fine hairs and a cut leafy crown; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/bitter_root.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.6
+  },
+  {
+    "prompt": "a bead of amber-brown tree resin weeping down burnt bark; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/ash_resin.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  },
+  {
+    "prompt": "a stoppered glass phial of clear pale blue water; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/mourning_dew.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  },
+  {
+    "prompt": "a loose coil of fine drawn silver wire; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/silver_wire.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  },
+  {
+    "prompt": "one large marquise-cut gemstone, a long pointed almond shape with faceted sides, standing upright; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
+    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/items/cut_gemstone.png",
+    "style": "digital_illustration",
+    "px": 256,
+    "internal": 64,
+    "gain": 1.0
+  }
+]
