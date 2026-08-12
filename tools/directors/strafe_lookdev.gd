@@ -4,17 +4,35 @@ extends RefCounted
 ## Locked-on locomotion wants a 4-way strafe blend, and the library ships four
 ## strafe clips under names that say nothing about direction.
 ##
-## **Finding, and the reason this tool is a camera and not a ruler:** the clips
-## carry NO root translation. An earlier version of this sampled the hips' pose
-## across each clip expecting to read the travel off it, and got a flat zero for
-## all six clips including mg_walk_forward -- `tools/build_anim_lib.gd` bakes the
-## library in place, so every clip animates the legs and moves the character
-## nowhere. There is no number in the rig to measure. That also means the strafe
-## blend, when it is built, is driven entirely by code velocity; the clip only
-## has to *look* like the direction the hero is already sliding.
+## **ANSWERED, and this header was wrong about why it could not be.** It used to
+## conclude: the clips carry no root translation, `build_anim_lib` bakes the
+## library in place, every clip animates the legs and moves the character
+## nowhere, so "there is no number in the rig to measure". The first half is
+## true and the conclusion does not follow -- the number was never *in the rig*,
+## it was UPSTREAM of the bake. `build_anim_lib._strip_root_translation` zeroes
+## hips XZ when it bakes, and the raw FBX still carries the travel.
+## `tools/_clip_dir.gd` reads it straight off the source file:
 ##
-## So: a burst per clip, and eyes on the contact sheet. CLAUDE.md §2 is right
-## that a single frame cannot show direction of motion -- BURST is the point.
+##     ss_strafe_01  -X 0.78 -> steps to his RIGHT, slower
+##     ss_strafe_02  +X 0.76 -> steps to his LEFT,  slower
+##     ss_strafe_03  +X 1.29 -> steps to his LEFT,  faster
+##     ss_strafe_04  -X 1.33 -> steps to his RIGHT, faster
+##
+## (-X is the character's right: the rig is authored facing +Z, and its
+## `mixamorig_LeftHand` sits at x=+0.37. `Hero.clip_guard_fwd_walk` carries the
+## full derivation and the forward/back clips alongside these.)
+##
+## The cost of the wrong conclusion was real: the four-way strafe blend this
+## tool was written to enable did not get built, and guarded locomotion shipped
+## a one-axis SPEED blend whose run end was the BACKPEDAL -- so the hero
+## moon-walked in every direction but backwards. `guard_locomotion.gd` is the
+## director that now holds that ground.
+##
+## The tool is still useful and still a camera: a measured direction says which
+## way the hips travel, not whether the clip READS as that step at the game
+## camera. A burst per clip, and eyes on the contact sheet -- CLAUDE.md §2 is
+## right that a single frame cannot show direction of motion, and BURST is the
+## point. Take the numbers above as the label and this as the check on it.
 ##
 ##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
