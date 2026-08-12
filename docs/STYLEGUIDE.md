@@ -331,6 +331,17 @@ Harvest the legible half of the same look instead:
   to go soft with distance — `statue.gd` was already asking for that in a
   comment before this card existed.
 
+  A fifth was **born** here rather than moved: the name on a dropped
+  `LootMote` (card #123). It never existed as a `Label3D`, and it is written
+  down next to the four because it is the first caption authored after the rule
+  and it is what says the rule is usable rather than merely true — everything
+  it needed was already a property on `WorldCaption`. What it adds is a
+  **budget**, which the four did not need: a keeper is one of a handful in a
+  yard, and a cleared floor holds a dozen motes. `LootMote.NAME_RANGE` (4.5 m
+  from the hero) and `LootMote.NAME_MAX` (three, nearest first) are that
+  budget, and §7.10 is why there is one. `tools/directors/loot_names.gd` proves
+  all three claims at the game camera.
+
   What it costs, said out loud: a canvas caption **does not shrink with
   distance** (the range gate in `WorldCaption.opacity_at` is a clutter limit
   now, not perspective), and occlusion is one LOS ray for the whole caption
