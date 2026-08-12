@@ -105,11 +105,25 @@ const LINES := {
 ## black screen rather than a permanent one.
 signal line_finished
 
+## How many takes have actually STARTED since the game booted.
+##
+## For the directors, and read-only -- the shipped game never looks at it. There
+## is no other way to tell "the keeper said one line" from "the keeper said eight
+## lines, each cutting off the last": `speaking()` is true throughout either, and
+## `line()` reports the same file both times. Card #125 is a claim about a COUNT,
+## so the count is what is exposed. `tools/directors/vendor_voice.gd` is the
+## caller.
+var takes_started: int = 0
+
 var _player: AudioStreamPlayer
 var _cache: Dictionary = {}
 ## speaker+cue -> the index of the take used last, so a two-take cue alternates
 ## instead of rolling a coin and saying "hail" three times running.
 var _last: Dictionary = {}
+## The speaker+cue currently coming out of `_player`, for the self-interrupt
+## refusal in `say`. Not cleared when the line ends -- `_player.playing` is the
+## other half of the test and is the half that expires.
+var _saying: String = ""
 
 
 func _ready() -> void:
@@ -133,13 +147,39 @@ func _ready() -> void:
 ##
 ## The return value is the contract for anything that has to wait: it is known
 ## the moment the line starts, so a caller never has to await a signal that a
-## missing file would never emit.
+## missing file would never emit. A cue that is REFUSED because it is already
+## being said hands back what is LEFT of it, which is still the honest answer to
+## "how long until this speaker is finished".
+##
+## **A speaker will not interrupt themselves saying the same thing.** Card #125,
+## from the owner's playtest: *"when you sell multiple things it should not spam
+## the voice."* Selling eight stacks is eight taps and eight landed commits, and
+## `TradeScreen._commit` says `deal` on each of them -- so the quartermaster said
+## "good pri-good pri-good pri-good price", one syllable per press, because the
+## rule in this file's header is that starting a line STOPS whatever was
+## mid-sentence.
+##
+## That rule is still right and is not weakened here. The interrupt is what makes
+## walking away mid-greeting sound like walking away, and every cross-cue and
+## cross-speaker interrupt behaves exactly as it did. What is refused is the one
+## case that is never wanted: the SAME speaker restarting the SAME line while it
+## is still coming out of their mouth. A person repeating themselves eight times
+## is the bug; a person being cut off by somebody else is the fiction.
+##
+## The rule is here and not in `TradeScreen` deliberately. A per-transaction latch
+## at the counter would fix the counter and leave the next burst -- a mashed
+## greeting, an elder addressed twice in a second -- to be found the same way, by
+## somebody playing it.
 func say(speaker: StringName, cue: StringName) -> float:
 	var takes: Array = _takes(speaker, cue)
 	if takes.is_empty():
 		return 0.0
 
 	var key := "%s/%s" % [speaker, cue]
+	if _saying == key and _player.playing:
+		return maxf(_player.stream.get_length() - _player.get_playback_position(),
+			0.0)
+
 	var i := 0
 	if takes.size() > 1:
 		i = (int(_last.get(key, -1)) + 1) % takes.size()
@@ -152,6 +192,8 @@ func say(speaker: StringName, cue: StringName) -> float:
 	_player.stop()
 	_player.stream = stream
 	_player.play()
+	_saying = key
+	takes_started += 1
 	return stream.get_length()
 
 

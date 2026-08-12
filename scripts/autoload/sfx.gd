@@ -111,9 +111,41 @@ const REWARD_CUES := {
 	2: &"treasure_spawn",   ## MAJOR -- boss-grade
 }
 
+## The shortest gap, in seconds, between two plays of the same sound. Absent
+## means no limit, which is the default and is right for almost everything here.
+##
+## **This is card #125's other half, and it is a different fix from the voice's
+## because a chime is not a person.** The keeper repeating a sentence is the bug
+## `Voice.say` refuses; coins may keep stacking, because the chime is texture.
+## What is NOT texture is the same WAV started several times on one frame: these
+## three ship as a single file each -- no `VARIANTS` row -- so N copies start
+## phase-aligned and sum into one loud click rather than into N sounds. Every one
+## of the three can arrive that way from a single player action:
+##
+##   pickup      `Run.collect` emits `loot_gained` per call, and a killed pack
+##               drops a handful of motes that are swept in a stride.
+##   craft_fail  `bag_full` is emitted by the same loop, once per mote that would
+##               not fit -- so walking a full bag over a pile is the game saying
+##               "no" five times for one refusal.
+##   equip       `item_acquired`, per item, on a reward that hands over several.
+##
+## Small enough that a genuine sequence still reads as several sounds -- a stride
+## across three motes is ~0.4 s a step -- and long enough to collapse a same-frame
+## burst. A cap on how many may OVERLAP would not do this job: three simultaneous
+## copies of one file are within any cap and are still one click.
+##
+## `coin_trade` is deliberately absent. See above: the coins are meant to stack.
+const MIN_GAP := {
+	&"pickup": 0.12,
+	&"craft_fail": 0.12,
+	&"equip": 0.12,
+}
+
 var _pool: Array[AudioStreamPlayer3D] = []
 var _next := 0
 var _cache: Dictionary = {}
+## sound id -> the msec clock reading it last started at. See `MIN_GAP`.
+var _last_played: Dictionary = {}
 
 
 func _ready() -> void:
@@ -184,6 +216,8 @@ func _ready() -> void:
 ## emit that rather than calling this directly, so nothing has to hold a
 ## reference to this autoload.
 func play_at(id: StringName, position: Vector3) -> void:
+	if _too_soon(id):
+		return
 	var stream := _load(id)
 	if stream == null:
 		return
@@ -197,6 +231,22 @@ func play_at(id: StringName, position: Vector3) -> void:
 ## than about a place.
 func play(id: StringName) -> void:
 	play_at(id, _hero_pos())
+
+
+## Has `id` played too recently to play again? See `MIN_GAP`.
+##
+## `Time.get_ticks_msec()` and not a game clock: this is about what the SPEAKERS
+## can distinguish, which is wall time, and it has to keep working while the tree
+## is paused -- the pause menu's own five sounds go through here.
+func _too_soon(id: StringName) -> bool:
+	var gap: float = float(MIN_GAP.get(id, 0.0))
+	if gap <= 0.0:
+		return false
+	var now := Time.get_ticks_msec()
+	if now - int(_last_played.get(id, -1000000)) < int(gap * 1000.0):
+		return true
+	_last_played[id] = now
+	return false
 
 
 func _cue(signal_name: StringName) -> void:
