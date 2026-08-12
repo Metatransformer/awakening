@@ -33,6 +33,7 @@ const NAMES := {
 	# usable item and started being a casting layer.
 	&"sustain": "The Sustain-Verse",
 	&"ballast": "The Ballast-Verse",
+	&"far_lantern": "Far Lantern",
 }
 
 const ICONS := {
@@ -75,6 +76,7 @@ const LETTERS := {
 	# them side by side.
 	&"sustain": "SU",
 	&"ballast": "BA",
+	&"far_lantern": "FL",
 }
 
 ## One line, present tense, about what carrying it costs or buys. Shown on the
@@ -92,6 +94,7 @@ const BLURBS := {
 	# describing a buff.
 	&"sustain": "The chain keeps one break. The fee keeps the difference.",
 	&"ballast": "Burn the cheapest thing you came for. Wear it instead.",
+	&"far_lantern": "A light kept for the last lock, where the descent opens beyond it.",
 }
 
 

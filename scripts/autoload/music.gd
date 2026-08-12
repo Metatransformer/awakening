@@ -122,6 +122,9 @@ func _ready() -> void:
 
 	Bus.boss_engaged.connect(func(_boss_node: Node3D) -> void: _set_boss(true))
 	Bus.boss_defeated.connect(func() -> void: _set_boss(false))
+	Bus.item_get_started.connect(func(_item_id: StringName, _world_pos: Vector3) -> void:
+		force(Mood.SILENT))
+	Bus.item_get_finished.connect(func(_item_id: StringName) -> void: release())
 	# Dying ends the run and the fight with it; without this the combat cue
 	# rides through the death fade.
 	Bus.player_died.connect(func() -> void:

@@ -3008,6 +3008,88 @@ func place_maze(cell: Vector2i) -> void:
 	Atlas.mark(cell, Atlas.M_CHEST)
 
 
+# Ambient urns are room texture with a small guaranteed payout, not puzzle
+# supply. Their placement and contents live on a private stream so adding one
+# here can never reshuffle a pack, chest, pillar or floor layout. [tune]
+const AMBIENT_POT_SECOND_CHANCE := 0.35
+const AMBIENT_POT_WALL_INSET := 0.75
+const AMBIENT_POT_REWARDS := [
+	{"id": &"coins", "weight": 44, "amount": 5},
+	{"id": &"moss_agate", "weight": 20, "amount": 1},
+	{"id": &"hearts", "weight": 12, "amount": 2},
+	{"id": &"arrows", "weight": 10, "amount": 3},
+	{"id": &"tide_sapphire", "weight": 7, "amount": 1},
+	{"id": &"charges", "weight": 5, "amount": 1},
+	{"id": &"blood_ruby", "weight": 2, "amount": 1},
+]
+
+
+## Put one urn against a blank wall, and sometimes a second against another.
+## A blank side has neither doorway nor anchor, so its centre is outside both
+## traffic lanes by construction; one pot per side keeps the centre readable.
+func _place_ambient_pots(root: Node3D, cell: Vector2i) -> void:
+	var sides := _ambient_pot_sides(cell)
+	if sides.is_empty():
+		return
+
+	var first_rng := RandomNumberGenerator.new()
+	first_rng.seed = _salt(cell, &"ambient_pot", 0)
+	var first: StringName = sides[first_rng.randi_range(0, sides.size() - 1)]
+	sides.erase(first)
+	_place_ambient_pot(root, cell, first, 0, first_rng)
+
+	if sides.is_empty():
+		return
+	var second_rng := RandomNumberGenerator.new()
+	second_rng.seed = _salt(cell, &"ambient_pot", 1)
+	if second_rng.randf() >= AMBIENT_POT_SECOND_CHANCE:
+		return
+	var second: StringName = sides[second_rng.randi_range(0, sides.size() - 1)]
+	_place_ambient_pot(root, cell, second, 1, second_rng)
+
+
+func _ambient_pot_sides(cell: Vector2i) -> Array[StringName]:
+	var out: Array[StringName] = []
+	var doors: Array = rooms[cell]["doors"]
+	var anchors: Dictionary = rooms[cell]["anchors"]
+	for side: StringName in DIRS:
+		if not doors.has(side) and not anchors.has(side):
+			out.append(side)
+	return out
+
+
+func _place_ambient_pot(root: Node3D, cell: Vector2i, side: StringName,
+		slot: int, rng: RandomNumberGenerator) -> void:
+	# Floor + cell + slot is the atom's stable persistence identity. The node name
+	# stays short for instruments and is never used as the solved flag.
+	var tag := StringName("ambient_pot_f%d_%d_%d_%d"
+		% [Run.level, cell.x, cell.y, slot])
+	var pot := PuzzleAtoms.make(PuzzleAtoms.URN, tag)
+	if pot == null:
+		return
+	pot.name = "AmbientUrn%d" % slot
+	pot.set(&"index", slot)
+	var reward := _ambient_pot_reward(rng)
+	pot.set(&"holds", reward["id"])
+	pot.set(&"amount", reward["amount"])
+	var wall: Dictionary = _sides_of(cell)[side]
+	pot.position = wall["at"] + facing_of(float(wall["yaw"])) \
+		* AMBIENT_POT_WALL_INSET
+	root.add_child(pot)
+
+
+## Weights total 100 and every interval has a reward: ambient pots never roll
+## empty. The placer writes the result onto Urn; Urn itself remains non-random.
+func _ambient_pot_reward(rng: RandomNumberGenerator) -> Dictionary:
+	var roll := rng.randi_range(1, 100)
+	var ceiling := 0
+	for row: Dictionary in AMBIENT_POT_REWARDS:
+		ceiling += int(row["weight"])
+		if roll <= ceiling:
+			return row
+	return AMBIENT_POT_REWARDS.back() as Dictionary
+
+
 func _populate() -> void:
 	var has_boss := placements.has(&"boss_door")
 	var boss_cell := anchor_cell(&"boss_door")
@@ -3043,6 +3125,7 @@ func _populate() -> void:
 			continue
 
 		var size := size_of(cell)
+		_place_ambient_pots(root, cell)
 		var dist := int(rooms[cell]["dist"])
 		# Rolled once for the room and shared by the chest and the arrows, because
 		# the arrows are placed OPPOSITE the chest and `_chest_dir` draws from the

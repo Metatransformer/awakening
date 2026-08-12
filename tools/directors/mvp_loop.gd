@@ -197,7 +197,7 @@ func _sell(rig) -> bool:
 	# focused one emits `cell_focused` -> `_on_cell_looked` -> `_point_at(0)`.
 	# `rig.tap` dispatches a real event now (#40), so the next press snapped the
 	# cursor back to the top row and sold Iron Scrap instead of holding SELL
-	# EVERYTHING -- reported as "holding SELL EVERYTHING did not empty the bag".
+	# UNMARKED -- reported as "holding SELL UNMARKED did not sell the bulk slice".
 	# The screen was right and the shortcut was wrong.
 	var sell_all := -1
 	for i: int in screen._bag_rows:
@@ -205,26 +205,26 @@ func _sell(rig) -> bool:
 			sell_all = i
 			break
 	if sell_all < 0:
-		print("MVP FAIL Trade has no SELL EVERYTHING bag row")
+		print("MVP FAIL Trade has no SELL UNMARKED bag row")
 		return false
+	var bulk_ids: Array[StringName] = screen._rows[sell_all]["ids"].duplicate()
 	screen._point_at(sell_all)
 	screen.queue_redraw()
 
-	# SELL EVERYTHING is a HOLD (`TradeScreen._hold_time`): one press should not
-	# be able to empty the bag, and the row draws a gauge saying so. A tap first,
+	# SELL UNMARKED is a HOLD (`TradeScreen._hold_time`): one press should not
+	# be able to sell the slice, and the row draws a gauge saying so. A tap first,
 	# because a beat that only holds would pass with the hold deleted.
 	await rig.tap(["ui_accept"])
 	await rig.wait_frames(12)
-	if Run.bag_value() == 0:
-		print("MVP FAIL a tap emptied the bag -- SELL EVERYTHING is meant to be held")
+	if bulk_ids.any(func(id: StringName) -> bool: return not Run.bag.has(id)):
+		print("MVP FAIL a tap sold the bulk slice -- SELL UNMARKED is meant to be held")
 	# Held in game seconds. A frame count is a duration of unknown length and the
 	# gauge advances by `delta` (see `rig.hold_seconds`).
 	await rig.hold_seconds(["ui_accept"], 0.9)
 	await rig.wait_frames(24)
-	var emptied := Run.bag_value() == 0
-	if not emptied:
-		print("MVP FAIL holding SELL EVERYTHING did not empty the bag (%d left)"
-			% Run.bag_value())
+	var sold_bulk := bulk_ids.all(func(id: StringName) -> bool: return not Run.bag.has(id))
+	if not sold_bulk:
+		print("MVP FAIL holding SELL UNMARKED left bulk ids behind (%s)" % [bulk_ids])
 	print("MVP after_sell gold=%d bag=%d" % [Game.gold, Run.bag_value()])
 	await rig.capture(out.path_join("m_04_sold_all.png"))
 
@@ -232,7 +232,7 @@ func _sell(rig) -> bool:
 	# The close is a state too, and it is the one that bit the gate beat: a hold
 	# that lands while the screen is still shutting goes into the screen.
 	await rig.until(func() -> bool: return _screen(rig) == null)
-	return emptied
+	return sold_bulk
 
 
 ## **The bag slot is bought at the QUARTERMASTER, not at the smith.**

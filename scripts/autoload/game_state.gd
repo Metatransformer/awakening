@@ -74,6 +74,9 @@ var bag_slots: int = K.START_BAG_SLOTS
 ## is a PURCHASE, and the smith already knows how to count purchases. The gear
 ## reads them through the accessors below and never indexes this directly.
 var upgrades: Dictionary[StringName, int] = {}
+## Manually pinned recipe tracks. Keys are Wishlist's stable catalogue namespace
+## plus authored line id; current ingredients remain derived from catalogue data.
+var wishlist_lines: Dictionary[StringName, bool] = {}
 ## Component id -> how many are on the workbench. Persistent: components that
 ## reached the garrison survive death, because they were already paid for by the
 ## run that carried them home (`Run.extract` banks them). Components still in
@@ -384,6 +387,7 @@ func reset() -> void:
 	gold_earned = 0
 	bag_slots = K.START_BAG_SLOTS
 	upgrades.clear()
+	wishlist_lines.clear()
 	components.clear()
 	stash.clear()
 	arrows = 0
@@ -431,9 +435,46 @@ func reset() -> void:
 	Bus.key_count_changed.emit(small_keys)
 	Bus.player_health_changed.emit(quarters, max_quarters)
 	Bus.magic_changed.emit(magic, max_magic)
+	Bus.wishlist_changed.emit()
 	stamina = max_stamina
 	_stamina_hold = 0.0
 	Bus.stamina_changed.emit(stamina, max_stamina)
+
+
+func is_wishlist_line_pinned(key: StringName) -> bool:
+	return wishlist_lines.get(key, false)
+
+
+## Toggle one stable recipe track. True means it is pinned after the change.
+func toggle_wishlist_line(key: StringName) -> bool:
+	if key == &"":
+		return false
+	if wishlist_lines.has(key):
+		wishlist_lines.erase(key)
+	else:
+		wishlist_lines[key] = true
+	Bus.wishlist_changed.emit()
+	return wishlist_lines.has(key)
+
+
+## JSON-facing list. No labels, indices, Resources or derived item ids persist.
+func wishlist_save_data() -> Array[String]:
+	var out: Array[String] = []
+	for key: StringName in wishlist_lines:
+		out.append(String(key))
+	out.sort()
+	return out
+
+
+## Rebuild StringName keys from JSON strings and announce the completed load
+## once. Kept public so a disk-free director can prove the reconstruction seam.
+func restore_wishlist_lines(raw: Array) -> void:
+	wishlist_lines.clear()
+	for value: Variant in raw:
+		var key := StringName(value)
+		if key != &"":
+			wishlist_lines[key] = true
+	Bus.wishlist_changed.emit()
 
 
 # --- Health -----------------------------------------------------------------
@@ -1376,18 +1417,6 @@ func spend_key() -> bool:
 ## bow you just found is one press of D-pad → away, which is what the auto-bind
 ## was for.
 func grant(item_id: StringName) -> void:
-	# `BossDb` still spells the Slag Ogre's drop &"bomb_bag" -- the satchel's
-	# noun, from before GDD §5.2 made Burst a WORKING you cast rather than a bag
-	# you throw. Translated on the way IN rather than aliased in `has()`, so
-	# there is still exactly one ownership id and exactly one gate: an alias in
-	# `has()` would have to be repeated by every caller that walks a tier table
-	# (`PuzzleAtoms.owned_tier`) and the first one to forget it would be a floor
-	# that silently generates no cracked pillars.
-	# [debt] Delete this pair of lines and the `&"bomb_bag"` in
-	# `scripts/actors/enemies/boss_db.gd` together; it is a one-word change there
-	# and that file was owned by another agent on the day this landed.
-	if item_id == &"bomb_bag":
-		item_id = &"burst"
 	if items.get(item_id, false):
 		return
 	items[item_id] = true

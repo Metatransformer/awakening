@@ -465,6 +465,11 @@ func _build_game() -> void:
 			Settings.rumble = i == 1
 			Settings.save_settings())
 
+	_heading("Loot")
+	_choice("Auto-wishlist Next Recipes", ONOFF, 1 if Settings.auto_wishlist else 0,
+		func(i: int) -> void: Settings.set_auto_wishlist(i == 1))
+	_caption("Marks loot used by the recipes and upgrades currently on offer.")
+
 	# The slider that goes the other way (docs/GDD.md §7.1). In OPTIONS and named
 	# plainly, which is the whole design decision: Hades can make this a boon
 	# because Hades has gods who talk to you, and inventing an NPC to hand a mercy

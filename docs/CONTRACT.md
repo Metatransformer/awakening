@@ -1733,6 +1733,18 @@ a bench, and `Game.stash` is **24 slots** (`K.STASH_SLOTS`) that survive death
 and are unreachable from underground. `docs/METAGAME.md` §6.8 has the table and
 the reason the cap exists.
 
+Bulk vendor policy stays outside `Run`, but the transaction does not:
+
+```gdscript
+Run.sale_value(ids: Array[StringName]) -> int  # exact heat-prorated quote
+Run.sell_ids(ids: Array[StringName]) -> int    # atomic slice sale + both signals
+```
+
+`TradeScreen` builds the id set from `Wishlist.wishlisted_ids()` and separately
+protects components and relics. `Run` never imports wishlist policy; it only
+prices and removes the explicit slice, so the displayed SELL UNMARKED figure and
+the gold that lands share one arithmetic.
+
 Rules:
 
 - **`stash_add` and `stash_take` return a count, not a bool.** Both are partial
@@ -2824,8 +2836,15 @@ Settings.apply_video()                  # fullscreen, vsync, msaa, shadows, scal
 Settings.changed                        # signal(section, key, value)
 # fields: master/music/sfx/ui_volume, fullscreen, vsync, resolution_scale, msaa,
 #   shadow_quality, fov_offset, invert_camera_y, camera_sensitivity, rumble,
-#   camera_shake, letterbox_on_target, mercy
+#   camera_shake, letterbox_on_target, auto_wishlist, mercy
 ```
+
+`Settings.auto_wishlist` is a user preference (default on). Manual pins are
+save state in `Game.wishlist_lines`, keyed only by `forge:<line>`,
+`alchemy:<line>`, or `jewel:<line>`. `Wishlist` rebuilds the marked ingredient
+set from current catalogue `parts` on every query; derived item ids never enter
+either persistence file. `Bus.wishlist_changed` has no payload for the same
+reason: listeners recompute from the authoritative catalogues.
 
 **`Settings.mercy` is a preference; `Game.deaths` is save state** (GDD §7.1).
 The switch rides in `settings.cfg` under `game/mercy` because it belongs to the
@@ -2856,7 +2875,7 @@ heart at once) and leave it false on a Recut, where clamping down is the point.
 
 ```gdscript
 Saves.peek(slot: int) -> Dictionary       # readable list header; empty=true if unused
-Saves.save(slot: int) -> bool             # Game + destination/transform + v10 Run snapshot
+Saves.save(slot: int) -> bool             # Game + destination/transform + v11 Run snapshot/pins
 Saves.load_slot(slot: int) -> Dictionary  # restores data and returns the travel destination
 Saves.erase(slot: int) -> void            # 3 slots, 0..2
 Saves.autosave() -> bool                  # active slot, else first empty, else decline

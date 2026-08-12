@@ -201,6 +201,9 @@ var camera_sensitivity: float = 1.0
 var rumble: bool = true
 var camera_shake: float = 1.0      ## 0 disables shake entirely
 var letterbox_on_target: bool = true
+## Mark ingredients used by the catalogues' currently offered recipes. Derived
+## at draw time; only this preference is persisted, never the resulting ids.
+var auto_wishlist: bool = true
 ## The slider that goes the other way (docs/GDD.md §7.1). A damage resistance
 ## that grows with `Game.deaths`, off until the player asks for it.
 ##
@@ -322,6 +325,7 @@ func load_settings() -> void:
 	rumble = cfg.get_value("game", "rumble", rumble)
 	camera_shake = cfg.get_value("game", "camera_shake", camera_shake)
 	letterbox_on_target = cfg.get_value("game", "letterbox", letterbox_on_target)
+	auto_wishlist = cfg.get_value("game", "auto_wishlist", auto_wishlist)
 	mercy = cfg.get_value("game", "mercy", mercy)
 
 	# Binds from an older layout are discarded, not replayed. See BIND_SCHEMA.
@@ -356,6 +360,7 @@ func save_settings() -> void:
 	cfg.set_value("game", "rumble", rumble)
 	cfg.set_value("game", "camera_shake", camera_shake)
 	cfg.set_value("game", "letterbox", letterbox_on_target)
+	cfg.set_value("game", "auto_wishlist", auto_wishlist)
 	cfg.set_value("game", "mercy", mercy)
 
 	cfg.set_value("controls", "schema", BIND_SCHEMA)
@@ -390,6 +395,14 @@ func get_volume(bus_name: StringName) -> float:
 		&"SFX": return sfx_volume
 		&"UI": return ui_volume
 	return 1.0
+
+
+func set_auto_wishlist(on: bool) -> void:
+	if auto_wishlist == on:
+		return
+	auto_wishlist = on
+	changed.emit(&"game", &"auto_wishlist", on)
+	save_settings()
 
 
 func apply_audio() -> void:

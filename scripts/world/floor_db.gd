@@ -272,9 +272,9 @@ static var ANCHORS_ENDLESS := {}
 ##   `bands_deep`  Array      — the pool for any distance past the last key.
 ##   `tint`        StringName — a key into `TINTS`.
 ##   `boss`        StringName — a `BossDb` id.
-##   `boss_item`   StringName — what killing it hands you (GDD §5.2). Also the
-##                              key to this floor's shortcut and to floor N-1's
-##                              vault; see the fork accessors.
+##   `boss_item`   StringName — what its earned great chest grants when opened
+##                              (GDD §5.2). Also the key to this floor's shortcut
+##                              and to floor N-1's vault; see the fork accessors.
 ##   `anchors`     Dictionary — an anchor set, above.
 ##   `relics`      Dictionary — slot -> relic id. `RelicDb` owns what they DO;
 ##                              this only says where they lie. Slots are
@@ -571,9 +571,9 @@ static func boss(level: int) -> StringName:
 	return get_floor(level).get("boss", &"")
 
 
-## What killing this floor's boss hands you (GDD §5.2). Empty in the Long
-## Descent, which has no boss — and that emptiness is load-bearing, because it is
-## what makes `vault_key(4)` come out right without a branch.
+## What opening this floor boss's earned great chest grants (GDD §5.2). Empty in
+## the Long Descent, which has no boss — and that emptiness is load-bearing,
+## because it is what makes `vault_key(4)` come out right without a branch.
 static func boss_item(level: int) -> StringName:
 	return get_floor(level).get("boss_item", &"")
 

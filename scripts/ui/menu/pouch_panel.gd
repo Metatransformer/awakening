@@ -158,6 +158,11 @@ func _ready() -> void:
 	# signals rather than trusting `refresh()` on open to be the only way in.
 	Bus.bag_changed.connect(func(_b: Dictionary, _v: int) -> void: refresh())
 	Bus.components_changed.connect(func(_s: Dictionary) -> void: refresh())
+	Bus.wishlist_changed.connect(refresh)
+	Settings.changed.connect(func(section: StringName, key: StringName,
+			_value: Variant) -> void:
+		if section == &"game" and key == &"auto_wishlist":
+			refresh())
 	# The bench prints the quiver, and the quiver fills from the world — walk over
 	# a bundle with this screen open and the row has to stop offering a batch it
 	# no longer has room for.
@@ -450,6 +455,7 @@ func _cells_of(ids: Array[StringName], counts: Array[int]) -> Array:
 			"sub": "×%d" % counts[i],
 			"tint": def.tint,
 			"mark": def.is_component(),
+			"star": Wishlist.is_wishlisted(ids[i]),
 		})
 	return entries
 
@@ -1029,7 +1035,7 @@ func _describe(index: int, case_side: bool) -> void:
 		def.bench_name() if part else "INGREDIENT"]
 	_detail_name.text = def.display_name
 	_detail_value.text = "%d ◇  ·  %d per slot" % [def.value * n, def.stack]
-	_detail_blurb.text = def.blurb
+	_detail_blurb.text = "%s  %s" % [def.blurb, Wishlist.usage_sentence(id)]
 	# WHICH bench, by name. Two counters eat components now and they are at
 	# opposite ends of the yard; a caption that said "the forge" over a Fired
 	# Cullet would send the player to the wrong one.

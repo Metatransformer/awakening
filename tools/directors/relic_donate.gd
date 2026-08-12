@@ -308,7 +308,7 @@ func _pickup(rig) -> void:
 	_ck("B8 he refuses to buy it", Run.sell(FIRST) == 0)
 	var before_all: int = Run.bag.get(FIRST, 0)
 	Run.sell_all()
-	_ck("B9 SELL EVERYTHING leaves it in the bag",
+	_ck("B9 SELL UNMARKED leaves it in the bag",
 		Run.bag.get(FIRST, 0) == before_all and before_all == 1)
 	await rig.wait_frames(8)
 	await rig.capture(out.path_join("r_01_inbag.png"))

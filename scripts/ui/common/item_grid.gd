@@ -44,6 +44,7 @@ signal cell_activated(index: int)
 ##   sub     String      the line under it — "×6", "120 ◇", "2/4"
 ##   tint    Color       the chip across the top; the item's own colour
 ##   mark    bool        prefix the label with ◆
+##   star    bool        prefix the label with ★ without replacing ◆
 ##   dim     bool        draw the whole cell at 55% — an empty slot, a sold-out
 ##                       line, a rung you cannot pay for
 ##   index   int         what `cell_focused` reports; defaults to the position

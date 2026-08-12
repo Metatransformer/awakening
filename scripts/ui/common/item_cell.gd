@@ -22,6 +22,7 @@ extends RefCounted
 ##   sub     String      the line under it — "×6", "120 ◇", "2/4", "✓"
 ##   tint    Color       the chip across the top
 ##   mark    bool        prefix the label with ◆
+##   star    bool        prefix the label with ★ without replacing ◆
 ##   dim     bool        draw the whole cell at 55% — an empty slot, a sold-out
 ##                       line, a rung you cannot pay for
 ##
@@ -140,7 +141,12 @@ static func paint(b: Button, e: Dictionary) -> void:
 	# not". At cell size it is one bit of information and that is the bit that
 	# matters: do not sell it. WHICH counter is the detail pane's job.
 	var text := String(e.get("label", ""))
-	name_label.text = ("◆ " + text) if bool(e.get("mark", false)) else text
+	var prefix := ""
+	if bool(e.get("mark", false)):
+		prefix += "◆ "
+	if bool(e.get("star", false)):
+		prefix += "★ "
+	name_label.text = prefix + text
 	sub.text = String(e.get("sub", ""))
 	sub.modulate = e.get("sub_tint", Color.WHITE)
 	b.modulate = Color(1, 1, 1, 0.55) if bool(e.get("dim", false)) else Color.WHITE

@@ -296,7 +296,11 @@ the same reason and to the same end.
 **1. The feel is not negotiable.** OOT is the bar for camera, locomotion, and
 combat, and `refs/` is authoritative over intuition (`docs/CONTRACT.md` §2.5).
 There is no walk/run toggle — speed is a curve. The roll is faster than the run
-and it commits. A reversal past ~135° is its own move, not steering.
+and it commits: you cannot cancel it into a run, which is what makes it a move
+rather than a repositioning tool. The last moments of its recovery *can* be spent
+on another commitment — a swing, the shield, a second dodge — and that asymmetry
+is deliberate, because a dodge you cannot decide out of is a dodge that eats
+presses. A reversal past ~135° is its own move, not steering.
 
 **2. Greed is the difficulty slider.** The game does not ask you to pick easy or
 hard. It asks how deep you want to go, and pricing your own exit is how you
@@ -407,10 +411,10 @@ needs authored space to live in.
 
 | # | Floor | What it was | Boss | Model | Drops |
 |---|---|---|---|---|---|
-| 1 | **The Cistern** | Flooded Vyr intake works | The Cistern Warden | `golem` | **The Bow** + relic |
-| 2 | **The Foundry** | Where the Imperium re-cut Vyr bronze | The Slag Ogre | `ogre` | **The Burst-Verse** + relic |
-| 3 | **The Hushing Choir** | A resonance hall that still rings | The Bellwake | `wraith` | **The Hookshot** + relic |
-| 4 | **The Chord Gate** | The threshold over Caer Vallen | The Riven Knight | `knight_iron` | **The Far Lantern** + relic |
+| 1 | **The Cistern** | Flooded Vyr intake works | The Cistern Warden | `golem` | Great chest: **The Bow**; separate relic |
+| 2 | **The Foundry** | Where the Imperium re-cut Vyr bronze | The Slag Ogre | `ogre` | Great chest: **The Burst-Verse**; separate relic |
+| 3 | **The Hushing Choir** | A resonance hall that still rings | The Bellwake | `wraith` | Great chest: **The Hookshot**; separate relic |
+| 4 | **The Chord Gate** | The threshold over Caer Vallen | The Riven Knight | `knight_iron` | Great chest: **The Far Lantern**; separate relic |
 
 **Every boss model already exists in `assets/monsters/`.** A boss is a scaled,
 re-tinted existing monster with an authored three-beat move set and an arena —
@@ -436,9 +440,11 @@ sameness and it costs one dictionary per floor.
 floor's deepest room is still where the best chest and the commitment are, and
 `scripts/world/stairs.gd` keeps its job.
 
-**A boss you have killed stays dead.** Its door hangs open and the arena is
-empty forever after. The game never asks you to re-fight something you have
-already beaten — this loop is about loot, not about repetition.
+**A boss you have killed stays dead.** Its door hangs open and the arena never
+rebuilds the fight. An unclaimed boss-item great chest may still be waiting in
+the spent arena; once its item is owned, the arena is empty forever after. The
+game never asks you to re-fight something you have already beaten — this loop is
+about loot, not about repetition.
 
 **A reward does not exist until you have beaten what guards it.** No chest is
 standing in a room when you walk into it. Beat the pack, or solve the puzzle, or
@@ -449,13 +455,21 @@ to run past the monsters and take it, and the pack becomes scenery. It went out
 that way once and the vault — three rooms of harder-than-the-floor bodies around
 one rich chest — could be looted by walking through it.
 
-**Two levels of arrival and no more.** A room's chest is one thing; the deep
+**Two levels of random-loot arrival and no more.** A room's chest is one thing; the deep
 chest, the miniboss's, the vault's and the deepest room's are another, and the
 second gets a shaft of light, a second shockwave and nearly twice the hold. Not a
 continuum: the player only ever sees one of these at a time and cannot compare it
 to the last room's, so a flash that scales smoothly with value teaches nothing.
 Two is the smallest number that can be *recognised* — this is a chest, and THAT
 is the chest. The difference is size and shape, never colour.
+
+**The boss-item great chest is not a third loot roll.** It is an authored,
+deterministic victory object: larger than an ordinary chest, gold-bound, absent
+during the fight, and placed only after a floor boss dies. It contains exactly
+the `boss_item` in that floor's manifest — no random picks, arrows or bag loot —
+and it persists on a later visit until opened. The boss's relic remains a
+separate floor pickup because it belongs to the bag, extraction risk and repair
+loop; the permanent verb does not.
 
 **You can leave before the boss.** The boss is a wall to *depth*, never a wall to
 the loop. Walking into the Cistern, filling twelve slots, and roping out without
@@ -465,12 +479,20 @@ ever seeing the Warden is a complete, correct, profitable run.
 
 **`docs/ITEMS.md` is the design of record for items** — for every one of them,
 which body or which lock it answers, where it enters the run, and what owning it
-changes about the player's options. This section is the four boss drops and the
+changes about the player's options. This section is the four boss-item rewards and the
 rule that generates them.
 
-Boss items are the one thing the dungeon hands you directly, and the rule that
-keeps pillar 4 intact is that **each one is a verb you did not have**. None of
-them raises a stat. The stats are still the smith's.
+Boss items are the one permanent thing the dungeon lets you find, and the rule
+that keeps pillar 4 intact is that **each one is a verb you did not have**. None
+of them raises a stat. The stats are still the smith's. A boss's death earns the
+great chest; ownership changes only when the player opens it. Artifact turn-in,
+relic repair and the random chest table never grant a boss item.
+
+**Finding one stops the game for an item-get ceremony.** The hero raises the
+actual item above his head, the camera frames him, the HUD yields to its name and
+short use text, the item turns slowly under a dedicated light, and a triumphant
+fanfare replaces the room music until the player dismisses it. This is one
+reusable presentation shared by all four boss items, not four authored scenes.
 
 - **The Bow** — for the thing that has not noticed you yet. Arrows, fletching and
   the `string` forge ladder already exist and simply become unreachable until the
@@ -497,7 +519,7 @@ ladders do not appear at the smith until the item is owned. This converts system
 that are already built into progression, at the cost of one `Game.has()`
 check, and it is what makes §5.3 mean anything.
 
-**Each floor is about the item the previous floor's boss handed you.** Ocarina
+**Each floor is about the item the previous floor's great chest gave you.** Ocarina
 puts the dungeon item in the *middle* of the dungeon so the back half can be
 about it. This design puts it at the *end* — you kill the Warden, take the Bow
 and leave — so the toy you just earned had nowhere to be used. Displacing it by

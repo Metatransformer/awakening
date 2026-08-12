@@ -166,6 +166,49 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 @export var backflip_time: float = 0.50
 ## The hard recovery. Input is locked and speed bleeds off through it.
 @export var roll_recover_time: float = 0.20
+## Seconds at the END of `roll_recover_time` in which a COMMITTED action may cut
+## the recovery short: a swing, a parry, the shield, a bow, another dodge, a jump.
+##
+## THE THING IT DOES NOT LET YOU CANCEL INTO IS RUNNING, and that asymmetry is
+## the whole design. `_tick_roll_recover` used to open "OOT's roll commits — you
+## cannot cancel it into a run, and that is exactly why it reads as a move and
+## not as a dodge-cancel", and that is still true and still what the recovery is
+## for: a dodge you can sprint out of is a free repositioning tool, and one you
+## can chain a decision out of is a dodge. So the window is checked by the
+## `request_*` entry points and by `_try_start_roll` / `_try_start_jump`, and
+## NOT by `_tick_ground` — hold the stick through the tail and you still stand
+## there for the full 0.20, exactly as before.
+##
+## The other half is that the press is now OWED rather than eaten. A swing
+## pressed at any point in the dodge was silently dropped (`HeroCombat._press`
+## only buffered while a swing was already running), so the player pressed
+## attack coming out of a roll, got nothing, and pressed again — which read as
+## the recovery being a third of a second longer than it is. `HeroCombat`
+## buffers it now and pays it out on the frame this window opens.
+##
+## 0.14 of 0.20 leaves 0.06 s of hard tail. That is deliberately not zero:
+## `dodge_unwind_deg` walks a sideways roll's model yaw back onto the body over
+## the whole 0.20, so a window that opened on the first frame of the recovery
+## would let him swing while still visibly crabwise. [tune]
+@export var dodge_cancel_time: float = 0.14
+## Seconds a jump's LANDING RECOVERY is allowed to hold the body after touchdown
+## before it is faded back into locomotion — and only once the player is asking
+## for something (see `_tick_jump_cut`).
+##
+## The jump clips are the one commitment in this file that is NOT time-scaled
+## onto its move: `ex_jump` is 1.67 s played from `jump_start_offset` (0.50) at
+## 1x, and the airborne stretch it was cut to is ~0.60 s (K.JUMP_SPEED). That
+## leaves ~0.57 s of absorb-and-stand playing OVER the locomotion the player has
+## already got back, plus the one-shot's own 0.22 s fade — so a hero who lands
+## running spends four fifths of a second finishing a landing he is no longer
+## doing. Gameplay was never locked here; the BODY was, which is worse, because
+## it looks like input is being ignored when it is being obeyed.
+##
+## Scaling the clip onto the landing instead was the other option and it is the
+## wrong one: it would speed up the airborne stretch too, and that stretch is
+## the arc `K.JUMP_SPEED` was chosen to match. Cutting the tail leaves the leap
+## exactly as authored.
+@export var jump_land_time: float = 0.12
 ## Degrees per second the model turns back onto the body after a sideways roll
 ## (see `_dodge_model_yaw`). 420 walks the 90-degree case back in 0.21 s, which
 ## is `roll_recover_time` — so the unwind IS the recovery, and he is square again
@@ -531,6 +574,9 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## the player's eye, and a low crouched idle says it. A proper sit is one word
 ## change here and a re-import; nothing downstream reads the clip's name.
 @export var clip_rest: StringName = &"ss_crouch_idle_01"
+## The full-body lift used by the item-get ceremony. It sits above Rest as a
+## one-shot so the presentation pose wins over every locomotion or held stance.
+@export var clip_item_get: StringName = &"ss_power_up_01"
 ## Seconds the seated pose takes to fold down into and to come up out of.
 ##
 ## Slower than the shield's 0.12 on purpose, and it is the only fade in this file
@@ -699,6 +745,14 @@ var _air_fired: bool = false
 ## LANDING: the jump clips carry their own touchdown, so `Land` must not fire on
 ## top of one. A fall the hero did not choose has no such clip and still does.
 var _jumping: bool = false
+## Which of the two jump one-shots is the one in flight, so the landing cut
+## (`jump_land_time`) fades out the node that is actually playing. Read rather
+## than re-derived from speed: `_fire_jump` chooses off the speed at LAUNCH, and
+## by touchdown that speed is whatever the player did in the air.
+var _jump_param: String = ""
+## Seconds left of the post-touchdown hold before the jump clip's landing tail is
+## faded out. Negative means there is nothing to cut. See `jump_land_time`.
+var _jump_cut: float = -1.0
 ## Seconds of HANG left before the slam's drive starts. Above zero the hero is
 ## held at exactly his commit height; at zero he starts falling at `slam_speed`.
 var _slam_hang_left: float = 0.0
@@ -877,6 +931,7 @@ const _P_AIM_HOOK := "parameters/HookAim/blend_amount"
 const _P_AIM_BLEND := "parameters/AimLoco/blend_position"
 const _P_BLOCK := "parameters/Block/blend_amount"
 const _P_REST := "parameters/Rest/blend_amount"
+const _P_ITEM_GET := "parameters/ItemGet/request"
 
 ## Every button that means "I am not sitting down any more". Spelled out here
 ## rather than inline in `_tick_meal_cancel` so the list is readable as a list:
@@ -1253,6 +1308,8 @@ func _build_anim_tree() -> void:
 	tree_root.connect_node(&"Rest", 0, prev)
 	tree_root.connect_node(&"Rest", 1, &"RestAnim")
 	prev = &"Rest"
+	prev = _add_oneshot(tree_root, &"ItemGet", prev, _anim_node(clip_item_get),
+		Vector2(2400, 0), 0.08, 0.24)
 
 	tree_root.connect_node(&"output", 0, prev)
 
@@ -1525,7 +1582,7 @@ func _physics_process(delta: float) -> void:
 		MoveState.ROLL:
 			_tick_roll(delta)
 		MoveState.ROLL_RECOVER:
-			_tick_roll_recover(delta)
+			_tick_roll_recover(wish, mag, delta)
 		MoveState.ATTACK:
 			_tick_attack(delta)
 		MoveState.HOOK:
@@ -1954,9 +2011,10 @@ func _tick_jump_buffer(delta: float, input_locked: bool) -> void:
 		_jump_buffer = maxf(0.0, _jump_buffer - delta)
 
 
-## Leave the ground. Returns whether it did, though only _tick_ground calls it
-## and only for the side effect — a jump does not interrupt anything, so there
-## is nothing for a caller to skip.
+## Leave the ground. Returns whether it did — `_tick_roll_recover` reads the
+## answer now, because out of a dodge's cancel window a jump DOES interrupt
+## something and the recovery tick must not go on bleeding him to a stop
+## underneath it.
 func _try_start_jump() -> bool:
 	if _jump_buffer <= 0.0:
 		return false
@@ -1966,6 +2024,10 @@ func _try_start_jump() -> bool:
 	# most common complaint about a jump that is technically correct.
 	if not is_on_floor() and _airborne_time > coyote_time:
 		return false
+	# LAST, after both refusals, so a press that was never going to leave the
+	# ground does not also end a dodge recovery for nothing. It is a no-op unless
+	# the hero is standing in `dodge_cancel_time`.
+	_cancel_dodge()
 	_jump_buffer = 0.0
 	_jump_impulse = jump_speed
 	_jumping = true
@@ -1981,10 +2043,12 @@ func _try_start_jump() -> bool:
 ## dead stop who slams the stick forward on the launch frame is still going
 ## straight up, and the flat running arc under him would read as a glitch.
 func _fire_jump() -> void:
-	if _speed >= jump_run_speed_gate:
-		_fire(_P_JUMP_RUN)
-	else:
-		_fire(_P_JUMP)
+	_jump_param = _P_JUMP_RUN if _speed >= jump_run_speed_gate else _P_JUMP
+	_fire(_jump_param)
+	# A second jump re-arms the clip from the top, so any cut still owed for the
+	# LAST landing has to go — left running it would fade this leap out 0.12 s
+	# after it started, which on a chained hop is at the apex.
+	_jump_cut = -1.0
 	Bus.request_sfx.emit(VOICE_EFFORT, global_position)
 
 
@@ -2047,6 +2111,13 @@ func _try_start_roll(wish: Vector3, mag: float) -> bool:
 	# run, so we never charge stamina for a roll that was not going to happen.
 	if not Game.spend_stamina(roll_stamina):
 		return false
+	# AFTER the stamina and BEFORE `_dodge` is reassigned below, and both halves
+	# of that matter. After, so a dodge refused for stamina does not end the
+	# recovery of the one before it; before, because `_cancel_dodge` fades out
+	# whichever one-shot `_dodge` currently names, and two frames from now that
+	# will be the NEW dodge. Chaining backflip into roll without this left the
+	# flip playing under the dive for the rest of its clip.
+	_cancel_dodge()
 	state = MoveState.ROLL
 	_roll_age = 0.0
 	_perfect_spent = false
@@ -2134,6 +2205,83 @@ func _dodge_time(dodge: int) -> float:
 	match dodge:
 		Dodge.BACK: return backflip_time
 		_: return roll_time
+
+
+## Is the hero standing in the tail of a dodge that a committed action may cut
+## short? See `dodge_cancel_time` for what "committed" buys and what it does not.
+##
+## Deliberately NOT true during `MoveState.ROLL`. The travel is the i-frame
+## window — `take_hit` refuses everything for as long as `state == ROLL` — so a
+## dodge you could swing out of early would be a dodge whose defensive value the
+## player pays for and then throws away by pressing the button they came here to
+## press. The recovery is the part that buys nothing, and it is the part that
+## moves.
+func dodge_cancellable() -> bool:
+	return state == MoveState.ROLL_RECOVER and _state_timer <= dodge_cancel_time
+
+
+## Is a committed action legal from where he is standing? The bar every
+## `request_*` in this file used to spell as `state != MoveState.GROUND or not
+## is_on_floor()`, plus the dodge's cancel window.
+##
+## One function rather than six copies because the window has to arrive in all
+## six at once: a hero who can swing out of a roll tail but cannot raise a bow
+## out of it has a rule the player cannot learn.
+func can_act() -> bool:
+	return is_on_floor() and (state == MoveState.GROUND or dodge_cancellable())
+
+
+## Is the hero inside a dodge that has not yet reached its cancel window? What
+## reads it is `HeroCombat`, to tell "refuse this press" from "owe it" — a press
+## made here pays out on the frame `dodge_cancellable` turns true, instead of
+## being dropped on the floor as it was.
+func mid_dodge() -> bool:
+	return (state == MoveState.ROLL or state == MoveState.ROLL_RECOVER) \
+		and not dodge_cancellable()
+
+
+## Seconds from now until `dodge_cancellable` turns true — 0.0 if it already is,
+## and -1.0 if he is not in a dodge at all.
+##
+## `HeroCombat` sizes an owed press off this rather than off a constant of its
+## own, and the constant is what it replaced: a flat 0.25 s lifetime expired
+## while the hero was still mid-dive, so a swing pressed 0.30 s into a 0.82 s
+## dodge was buffered, timed out 0.08 s before the window opened, and was dropped
+## exactly as it had been before the buffer existed. The wait is not a fixed
+## length; it is however much dodge is left, and only this file knows that.
+func dodge_cancel_in() -> float:
+	match state:
+		MoveState.ROLL:
+			# The dive still has `_state_timer` to run, and then all of the
+			# recovery except the window at its end.
+			return _state_timer + maxf(roll_recover_time - dodge_cancel_time, 0.0)
+		MoveState.ROLL_RECOVER:
+			return maxf(_state_timer - dodge_cancel_time, 0.0)
+	return -1.0
+
+
+## End a dodge recovery NOW, because something committed is taking over.
+##
+## A no-op outside the window, which is what lets every caller call it
+## unconditionally rather than each re-deriving the same test.
+##
+## The one-shot is FADED OUT rather than left running. Everything in this file
+## has only ever fired one-shots (`_fire`), and the tree's stacking order made
+## that survivable — a swing sits above the dodges and simply covers whichever
+## one is still playing. It is not survivable for the two cancels that do NOT
+## fire a node above the dodge: a jump out of a roll tail, and the shield coming
+## back up. Both left the roll's remaining ~0.5 s of clip playing at full weight
+## under a hero who was already doing something else.
+func _cancel_dodge() -> void:
+	if not dodge_cancellable():
+		return
+	state = MoveState.GROUND
+	_state_timer = 0.0
+	_fade_out(_dodge_param(_dodge))
+	# The signal is what the recovery's END means, and callers of it (VFX, the
+	# stamina regen delay) must not be able to tell a cancelled dodge from one
+	# that ran out — a dodge ended early is still a dodge that ended.
+	roll_finished.emit()
 
 
 ## Play the dodge, compressed onto `duration`. The clips run 0.97–2.17 s and the
@@ -2345,8 +2493,13 @@ func _land_slam(fall_speed: float) -> void:
 ## the commitment all live in HeroCombat, because they are combat numbers. This
 ## owns the pose and the facing, exactly as it does for the light swing.
 func request_attack(duration: float, variant: int = Swing.LIGHT1) -> bool:
-	if state != MoveState.GROUND or not is_on_floor():
+	if not can_act():
 		return false
+	# A no-op unless he is standing in a dodge's cancel window, in which case it
+	# ends the recovery and fades the dive out from under the swing. It has to run
+	# BEFORE `state` is assigned below: `_cancel_dodge` tests `state` to decide
+	# whether there is anything to cancel, and by the next line there is not.
+	_cancel_dodge()
 	state = MoveState.ATTACK
 	_state_timer = duration
 	# Any ordinary swing cancels a leftover drive. request_lunge re-arms it after
@@ -2746,8 +2899,9 @@ func gripping() -> bool:
 ## cannot drift apart. Firing both here on a timer of the hero's own is exactly
 ## the drift the one-clip version had.
 func request_bow_draw(draw_time: float) -> bool:
-	if state != MoveState.GROUND or not is_on_floor():
+	if not can_act():
 		return false
+	_cancel_dodge()
 	if _tree != null:
 		_tree.set(_P_BOW_DRAW_SCALE, _clip_scale(clip_bow_draw, draw_time))
 	_fire(_P_BOW_DRAW)
@@ -2797,6 +2951,12 @@ func request_cast(duration: float, aim: Vector3) -> bool:
 	return request_hookshot(duration, aim)
 
 
+## Raise the acquired item. The ceremony owns rooting and timing; Hero only owns
+## the pose layered over its existing animation output.
+func request_item_get() -> void:
+	_fire(_P_ITEM_GET)
+
+
 ## The half of a shot that is the same for every ranged item: take the hero for
 ## `duration` seconds and point him down the aim. False if he is busy, exactly as
 ## `request_attack` is.
@@ -2809,8 +2969,9 @@ func request_cast(duration: float, aim: Vector3) -> bool:
 ## `aim` is a full 3D direction because it comes from the camera, which has a
 ## pitch; only its yaw reaches the body, because the hero does not lean.
 func _commit_ranged(duration: float, aim: Vector3) -> bool:
-	if state != MoveState.GROUND or not is_on_floor():
+	if not can_act():
 		return false
+	_cancel_dodge()
 	state = MoveState.ATTACK
 	_state_timer = duration
 
@@ -2952,7 +3113,16 @@ func _tick_hook(delta: float) -> void:
 
 
 ## Raise or drop the shield. HeroCombat owns the decision; this owns the pose.
+##
+## Raising it is the one cancel that does not go through a `request_*`: the guard
+## is a held blend, not a one-shot, so there is nothing above the dodge in the
+## tree to cover it. Without the cancel the shield came up at full weight over a
+## roll that was still playing underneath — which is the exact "he slid backwards
+## across the floor in a standing block pose" that `HeroCombat`'s `rolling` flag
+## was written to prevent, arriving through the cancel window instead.
 func set_blocking(on: bool) -> void:
+	if on and not blocking:
+		_cancel_dodge()
 	blocking = on
 
 
@@ -3095,9 +3265,24 @@ func skeleton() -> Skeleton3D:
 	return _rig.find_child("Skeleton3D", true, false) as Skeleton3D
 
 
-## The hard recovery. OOT's roll commits — you cannot cancel it into a run, and
-## that is exactly why it reads as a move and not as a dodge-cancel.
-func _tick_roll_recover(delta: float) -> void:
+## The recovery. OOT's roll commits — you cannot cancel it into a RUN, and that
+## is exactly why it reads as a move and not as a dodge-cancel. What you can do,
+## in the last `dodge_cancel_time` of it, is commit to something else: swing,
+## parry, guard, draw, dodge again, jump. See `dodge_cancel_time` for why those
+## two halves are not the same permission.
+##
+## The two cancels handled HERE are the ones that are not `request_*` calls —
+## another dodge and a jump. They are tried in `_tick_ground`'s order, and for
+## `_tick_ground`'s reason: the dodge is the discrete move and gets first
+## refusal, and both bail out of the bleed below rather than falling through it,
+## because `_set_planar_velocity` at the end of this function would otherwise
+## overwrite the velocity the new move just set.
+func _tick_roll_recover(wish: Vector3, mag: float, delta: float) -> void:
+	if dodge_cancellable():
+		if _try_start_roll(wish, mag):
+			return
+		if _try_start_jump():
+			return
 	_state_timer -= delta
 	_track_lock(delta)
 	_speed = move_toward(_speed, 0.0, decel * 1.6 * delta)
@@ -3180,6 +3365,10 @@ func _after_move(pre_fall: float, delta: float) -> void:
 			# so firing Land over it lands the hero twice.
 			if fall > 2.5 and not _jumping:
 				_fire(_P_LAND)
+		# Arm the tail cut on the touchdown frame, while `_jumping` still says this
+		# was a leap he chose. An ordinary fall has no jump one-shot to cut.
+		if _jumping:
+			_jump_cut = jump_land_time
 		_airborne_time = 0.0
 		_air_fired = false
 		_jumping = false
@@ -3191,7 +3380,39 @@ func _after_move(pre_fall: float, delta: float) -> void:
 			_fire(_P_AIR)
 
 	rotation.y = facing_yaw + PI
+	_tick_jump_cut(delta)
 	_emit_footsteps(delta)
+
+
+## Cut a jump clip's landing recovery short once the player wants the body back.
+## See `jump_land_time` for why the tail is ~0.57 s long in the first place.
+##
+## THE INPUT TEST IS THE WHOLE DESIGN, and it is why this is not simply a shorter
+## clip. A hero who lands and stands there should finish the landing — it is a
+## good pose and nothing is waiting on it. A hero who lands running, swinging or
+## rolling has already been given control and should look like it. So the cut
+## fires on the first frame after the hold in which he is doing something, and
+## a player who never asks gets the clip as authored.
+##
+## `_jump_cut` is not cleared when the test fails, only when it fires: the ask
+## can arrive at any point in the tail, and a cut that expired at
+## `jump_land_time` would only ever catch a player who was already moving on the
+## landing frame. Once the clip ends on its own the request is a no-op, which is
+## what retires it in the standing case.
+func _tick_jump_cut(delta: float) -> void:
+	if _jump_cut < 0.0:
+		return
+	# Clamped at zero rather than left to run negative, because negative is the
+	# "nothing owed" sentinel this function opens on: decremented past it, an
+	# armed cut would disarm itself one frame after the hold expired and only
+	# ever catch a player who was already moving on the landing frame.
+	_jump_cut = maxf(_jump_cut - delta, 0.0)
+	if _jump_cut > 0.0:
+		return
+	if state == MoveState.GROUND and stick_neutral():
+		return
+	_fade_out(_jump_param)
+	_jump_cut = -1.0
 
 
 ## Distance-driven rather than animation-driven: the shared 72-clip library is
@@ -3217,6 +3438,19 @@ func _emit_footsteps(delta: float) -> void:
 func _fire(param: String) -> void:
 	if _tree != null:
 		_tree.set(param, AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
+
+
+## Blend a one-shot back out over its own `fadeout_time`, as if its clip had just
+## ended. The counterpart to `_fire`, and until the dodge cancel there was no
+## caller for it — every commitment in this file ran its clip to the end.
+##
+## FADE_OUT and not ABORT, and they are not interchangeable: ABORT drops the node
+## to zero weight on the frame it is set, which on a dodge is the hero snapping
+## from a crouched roll-out to a standing idle in one frame. Aborting is right
+## for a pose nobody should see the end of; there is nothing like that here.
+func _fade_out(param: String) -> void:
+	if _tree != null:
+		_tree.set(param, AnimationNodeOneShot.ONE_SHOT_REQUEST_FADE_OUT)
 
 
 func _drive_animation(delta: float) -> void:

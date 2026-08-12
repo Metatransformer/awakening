@@ -153,6 +153,9 @@ signal loot_gained(item_id: StringName, count: int)
 signal bag_full
 signal gold_changed(gold: int)
 signal items_sold(sold: Dictionary, paid: int)
+## Manual recipe pins changed, or a reset/load replaced the saved set. No
+## payload: listeners recompute current ingredients from the live catalogues.
+signal wishlist_changed
 ## Deleted 2026-08-09: `extract_refused`. It meant "you tried to leave and could
 ## not afford the fee", and no code can reach that state any more -- the fee is
 ## capped at the purse (`Run.extract_charge`), so the rope always works. It is
@@ -274,3 +277,5 @@ signal request_hitstop(frames: int)
 signal request_shake(strength: float, duration: float)
 signal request_sfx(id: StringName, position: Vector3)
 signal request_message(text: String)
+signal item_get_started(item_id: StringName, world_pos: Vector3)
+signal item_get_finished(item_id: StringName)

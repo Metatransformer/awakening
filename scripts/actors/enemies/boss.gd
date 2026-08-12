@@ -1218,11 +1218,10 @@ func _on_died() -> void:
 ##
 ## `Enemy._drop_loot` rolls `ItemDb.ENEMY_DROPS` for ingredients, which is right
 ## for a body and wrong for the thing at the bottom of the floor. Contract §9:
-## grant `drop.item`, PLACE `drop.relic`.
+## grant a miniboss progress token, PLACE `drop.relic`.
 ##
-## The item is a `Game.grant` because it is ownership -- the Bow is a verb the
-## player did not have (GDD §5.2), and it is what unlocks this floor's shortcut
-## door and the smith's string ladder the moment it lands.
+## A floor boss's permanent item waits in the arena's great chest. Only an
+## authored miniboss token -- the Makers' Mark today -- is granted on death.
 ##
 ## The relic is a MOTE on the floor and emphatically not a grant. GDD §3 puts a
 ## relic in the BAG, which means it costs a slot, is charged the extraction fee,
@@ -1231,7 +1230,7 @@ func _on_died() -> void:
 func _drop_loot() -> void:
 	var drop: Dictionary = _row.get("drop", {})
 	var item: StringName = drop.get("item", &"")
-	if item != &"":
+	if item != &"" and BossDb.is_miniboss(boss_id):
 		Game.grant(item)
 	var relic: StringName = drop.get("relic", &"")
 	if relic != &"":

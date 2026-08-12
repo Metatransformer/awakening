@@ -204,6 +204,28 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## the swing and are asking for the next one. This buffer is the whole difference
 ## between a chain that obeys you and one that eats inputs made a frame early.
 @export var chain_buffer_from: float = 0.35
+## Seconds a press made DURING A DODGE stays owed ON TOP of the dodge it is
+## waiting out. **Zero switches the dodge buffer off entirely** — which is what
+## `tools/directors/dodge_cancel.gd` sets for its null case, because the buffer
+## off is the game exactly as it was before this existed.
+##
+## A dodge is 0.82 s of hero (`K.ROLL_TIME` + `Hero.roll_recover_time`) and until
+## now a press made anywhere inside it was EATEN, not owed: `_press` only buffered
+## while a swing was already running, so `Hero.request_attack` refused and the
+## input went nowhere. That is the larger half of "the roll takes too long" —
+## the player presses attack coming out of a dodge, gets silence, and presses
+## again, so the recovery reads as roughly twice its real length.
+##
+## GRACE, and not the whole lifetime, and the difference is the bug it fixes.
+## This was a flat 0.25 s "how long a press stays owed", which sounds right and
+## is not: the wait a press has to survive is however much dodge is left, and a
+## swing pressed 0.30 s into a 0.82 s dodge needs 0.38 s of patience. It timed
+## out 0.08 s short and was dropped — the buffer was there and the press still
+## vanished. So the lifetime is `Hero.dodge_cancel_in()` (the hero is the only
+## thing that knows it) and this is the slack on the far end: enough that a
+## window arriving into a hitstun, a prompt or a landing does not throw the press
+## away, short enough that it cannot come out at a fight that has moved on. [tune]
+@export var dodge_buffer_grace: float = 0.20
 ## Multipliers on swing_time for steps 2 and 3. Two is faster than one — a chain
 ## should accelerate — and three is much slower, because it is the one that
 ## hurts AND because its clip is a 2.4 s leaping overhead: at step two's pace the
@@ -448,6 +470,10 @@ var bow: Node3D
 var hookshot: Node3D
 ## id -> {"hand": Node3D, "stow": Node3D}. Exactly one of the pair is visible.
 var _items: Dictionary = {}
+## Exact mounted-model visibility while a presentation temporarily clears the
+## hero's silhouette. Kept here because the sockets are children of `_skel`, not
+## of this component, so hiding `HeroCombat` itself does not hide the gear.
+var _presentation_visibility: Dictionary = {}
 var _hitbox: Area3D
 var _swing_t: float = -1.0
 ## The numbers of the swing currently in flight, captured when it starts. A
@@ -471,8 +497,15 @@ var _swing_arc: float = 130.0
 ## Which light comes next: 0, 1, 2. Reset when `_chain_timer` runs out.
 var _chain_step: int = 0
 var _chain_timer: float = 0.0
-## An Intent pressed mid-swing and owed to the player, or -1.
+## An Intent pressed mid-swing or mid-dodge and owed to the player, or -1.
 var _buffer: int = -1
+## Seconds the owed Intent has left before it lapses. It used to be implicit —
+## the buffer could only be set during a swing and was paid out on the first
+## frame after it, so it could not outlive the swing that set it. A press
+## buffered during a DODGE has no such ceiling: it waits for a state the hero may
+## never reach (`Prompt` opens, he is hit, he falls off something), so it needs
+## an expiry of its own or it comes out minutes later at the wrong enemy.
+var _buffer_t: float = 0.0
 ## Seconds into the parry, or -1.0 when there is no parry running. Its own clock
 ## and not `_swing_t`, because the parry has no hitbox, no damage window and
 ## nothing for `_advance_swing` to do — the two share only the fact that both
@@ -731,6 +764,39 @@ func equip(id: StringName) -> void:
 	_show_equipped()
 
 
+## Clear every mounted weapon for a full-body presentation, then restore the
+## exact pre-presentation state. The item-get model is a separate display; a
+## second bow on the hero's back and a sword through the raised-hand pose turn
+## the acquisition silhouette into ordinary combat clutter.
+func set_presentation_hidden(hidden: bool) -> void:
+	if hidden:
+		if not _presentation_visibility.is_empty():
+			return
+		for model: Node3D in _presentation_models():
+			_presentation_visibility[model] = model.visible
+			model.visible = false
+		return
+	if _presentation_visibility.is_empty():
+		return
+	for model: Node3D in _presentation_visibility:
+		if is_instance_valid(model):
+			model.visible = bool(_presentation_visibility[model])
+	_presentation_visibility.clear()
+
+
+func _presentation_models() -> Array[Node3D]:
+	var models: Array[Node3D] = []
+	for model: Node3D in [sword, sword_stow, shield]:
+		if model != null and not models.has(model):
+			models.append(model)
+	for value: Dictionary in _items.values():
+		for key: StringName in [&"hand", &"stow"]:
+			var model := value.get(key) as Node3D
+			if model != null and not models.has(model):
+				models.append(model)
+	return models
+
+
 ## Mirror Game's live loadout onto the rig.
 func _on_loadout_changed(_set_index: int, right: StringName, left: StringName) -> void:
 	# A set may name gear the player has not found: the alternate set defaults
@@ -951,8 +1017,16 @@ func _physics_process(delta: float) -> void:
 	# slid backwards across the floor in a standing block pose. It also makes the
 	# roll's recovery honestly vulnerable, which is what the recovery is for.
 	# The button is still down, so the guard comes straight back up on landing.
-	var rolling := _hero.state == Hero.MoveState.ROLL \
-		or _hero.state == Hero.MoveState.ROLL_RECOVER
+	#
+	# `mid_dodge` and not the two states written out, which is the difference the
+	# cancel window makes: the shield comes back up in the last
+	# `Hero.dodge_cancel_time` of the recovery rather than waiting for the state
+	# to end. Everything the comment above says still holds for the part that
+	# matters — the guard is still down for the whole DIVE, so the dodge is never
+	# played underneath a block pose and the recovery is still honestly vulnerable
+	# for the part of it that is a recovery. `Hero.set_blocking` ends the dodge on
+	# the way up, so the roll is not left playing under the raised shield.
+	var rolling := _hero.mid_dodge()
 	#
 	# AND NOT IN FIRST PERSON, which is the one place this button means something
 	# else. The left trigger (and RMB, its keyboard twin) is OOT's Z and does four
@@ -1030,9 +1104,19 @@ func _physics_process(delta: float) -> void:
 	#
 	# Consumed before _begin runs, so a swing that gets refused for a real reason
 	# does not leave the press owed forever.
-	if _swing_t < 0.0 and _buffer >= 0:
+	#
+	# AND NOT WHILE HE IS STILL IN THE DODGE. A press buffered mid-roll pays out
+	# on the frame `Hero.dodge_cancel_time` opens, not before — paid out earlier it
+	# would reach `request_attack`, be refused, and be consumed by the refusal,
+	# which is the exact eaten press the dodge buffer exists to stop.
+	if _buffer >= 0:
+		_buffer_t = maxf(_buffer_t - delta, 0.0)
+		if _buffer_t == 0.0:
+			_buffer = -1
+	if _swing_t < 0.0 and _buffer >= 0 and not _hero.mid_dodge():
 		var queued := _buffer
 		_buffer = -1
+		_buffer_t = 0.0
 		_begin(queued)
 
 	if _swing_t >= 0.0:
@@ -1469,11 +1553,37 @@ func _press(intent: int) -> void:
 		# The FLURRY is not buffered for a third reason: its window is running on
 		# a clock the buffer cannot see, so a press owed across a long swing could
 		# pay out a leap after the window that authorised it had closed.
-		if intent != Intent.SLAM and intent != Intent.PARRY and intent != Intent.FLURRY \
-				and _swing_t / maxf(_swing_dur, 0.01) >= chain_buffer_from:
+		if _bufferable(intent) and _swing_t / maxf(_swing_dur, 0.01) >= chain_buffer_from:
 			_buffer = intent
+			# The swing that owes it, plus a frame or two. Exact rather than a
+			# constant, because it must never be SHORTER than the wait it covers:
+			# the longest swing in the kit is `flurry_swing_time` (1.02 s) and
+			# `chain_buffer_from` allows a press with 0.65 of it left to run, so any
+			# flat number small enough to be a sensible dodge buffer would silently
+			# break the chain on the slow swings.
+			_buffer_t = _swing_dur - _swing_t + 0.10
+		return
+
+	# MID-DODGE, the press is OWED rather than dropped. `Hero.request_attack`
+	# refuses for the whole 0.82 s of a dodge, and `_begin` has no way to tell a
+	# refusal from a swing that happened — so before this, every press made in a
+	# roll simply vanished. It is the same argument the chain buffer above already
+	# won, applied to the other commitment in the game that eats presses.
+	#
+	# Same three exclusions, and they hold here for the same reasons: a SLAM needs
+	# air the hero has not got, a PARRY is a claim about a moment, and a FLURRY's
+	# authorising window runs on a clock this buffer cannot see.
+	if _hero.mid_dodge() and _bufferable(intent) and dodge_buffer_grace > 0.0:
+		_buffer = intent
+		_buffer_t = _hero.dodge_cancel_in() + dodge_buffer_grace
 		return
 	_begin(intent)
+
+
+## Is this Intent one that survives being paid out late? See the two buffer sites
+## above for what each exclusion costs if it is dropped.
+func _bufferable(intent: int) -> bool:
+	return intent != Intent.SLAM and intent != Intent.PARRY and intent != Intent.FLURRY
 
 
 ## Turn an Intent into an actual swing. Everything that decides WHICH swing —

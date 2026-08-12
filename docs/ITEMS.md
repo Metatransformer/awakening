@@ -11,7 +11,7 @@ do before.
 
 That is `docs/BESTIARY.md` §0 read from the other end, and it is GDD §5.2's rule
 ("verbs, not numbers") applied to everything on the list rather than only to the
-four boss drops.
+four boss-item great chests.
 
 **Status: design of record, and it runs.** All five verbs — the Bow, the
 Hookshot, Burst, Sustain and Ballast — are rows in `ArmamentDb.NAMES` and stops
@@ -64,12 +64,19 @@ rule and drop rule apply to them for free — `ItemDb._relic()` and
 "why a Blessing is an `ItemDef` and not a second inventory"
 (`scripts/items/echo_db.gd:~14-23`).
 
+**A floor boss earns a great chest; opening it grants the usable item.** The
+chest is deterministic, larger than ordinary loot chests and followed by the
+shared item-get ceremony. It never rolls `ItemDb`, consumes `Run.rng`, adds
+arrows or routes the item through the bag. The boss relic is a separate pickup:
+it remains exposed to slot pressure, extraction loss and repair exactly because
+the permanent verb is not.
+
 ---
 
 ## 1. The six usable items
 
 `docs/SCOPE.md` §1 freezes **usable items at 6**: Bow, Hookshot, Burst, Sustain,
-Ballast, Far Lantern. Four are boss drops, two are relics the alchemist reads,
+Ballast, Far Lantern. Four are boss-item great-chest rewards, two are relics the alchemist reads,
 and one of the six has no button at all.
 
 **The six are not the ring's six.** The ring's stops are sword, bow, hookshot,
@@ -122,7 +129,8 @@ ring off it. Burst is the answer to the plate; the arrow is the answer to the on
 moment there is no plate in the way. An arrow into a plated front does nothing,
 and a reading of this section that says otherwise has the mechanic backwards.
 
-**Enters** at the Cistern Warden, floor 1 (`FloorDb.FLOORS[1]["boss_item"]`,
+**Enters** from the great chest earned by defeating the Cistern Warden, floor 1
+(`FloorDb.FLOORS[1]["boss_item"]`,
 `scripts/world/floor_db.gd:~306`; `BossDb.BOSSES[&"cistern_warden"]["drop"]`,
 `scripts/actors/enemies/boss_db.gd:~214`). Nothing before that: the bow left the
 starting kit in M1 and its forge ladder left the smith's board with it —
@@ -149,6 +157,11 @@ with three sources and no fourth (`docs/METAGAME.md` §4.6), one of which is the
 bag recipe on Brannoc's forge board (`ShopDb.FLETCH`, `Fletching.RECIPE`,
 `scripts/items/shop_db.gd`, `scripts/items/fletching.gd:~38`).
 
+That recipe is also the ordinary-ingredient proof for loot wishlists: Bone Shard
+and Cracked Flint receive ★ from the live `FLETCH ARROWS` row, appear as used in
+that recipe in POUCH/vendor detail, and survive SELL UNMARKED. Recipe use is
+queried through `Wishlist`; it is not another ingredient table.
+
 **The count is on the bow's own cell whenever the arrows are not on a cell of
 their own** (`ArmamentDb.hand_count_beside`, #53). `arrow` is a stop in
 `Game.LEFT_POOL` and it is not the default one — the shield is — so the loadout
@@ -167,7 +180,8 @@ enemy (close the gap, then melee), and it holds a body still for `K.HOOK_FREEZE`
 (`scripts/core/consts.gd:~587`; applied in `HeroRanged`,
 `scripts/combat/hero_ranged.gd:~613`).
 
-**Enters** at the Bellwake, floor 3 (`floor_db.gd:~371`; `boss_db.gd:~426`). Its
+**Enters** from the great chest earned by defeating the Bellwake, floor 3
+(`floor_db.gd:~371`; `boss_db.gd:~426`). Its
 `chain` ladder appears at the smith the same moment (`ShopDb.GATED_BY`,
 `shop_db.gd:~61-65`).
 
@@ -191,7 +205,8 @@ agree about what it is for.
 rather than opening a door. On a body it is the **guard-breaker** and the only
 blow a **Riser** does not get up from (`docs/BESTIARY.md` §3, behaviours 2 and 7).
 
-**Enters** at the Slag Ogre, floor 2 (`floor_db.gd:~336`). It is **cast, not
+**Enters** from the great chest earned by defeating the Slag Ogre, floor 2
+(`floor_db.gd:~336`). It is **cast, not
 thrown**: what you take off the Ogre is a written working, and the change from
 the old satchel is a noun rather than a mechanic — `CrackedPillar.burst()` was
 named for the verb rather than the weapon, and its note says the naming was
@@ -212,14 +227,12 @@ floor 1's VAULT door names in its refusal (`FloorDb.vault_key`)"*
 `docs/PUZZLES.md` gives it the only atom that can open a route the room planner
 did not draw. Its charges are arrows with a different noun: a count in the HUD
 column (`ArmamentDb.hand_count()`, `armament_db.gd:~141-145`), bought upstairs
-(§5) and **never refilled underground, with one exception that is a gate and not
-a supply** (`Game.charges`, `game_state.gd:~100-103`). Spending your last charge
-on floor 2 is a statement about how deep you were planning to go — and it used to
-be a way to be stuck, which was §8, D13. The exception is the `ChargeCache` in
-the urn braced against floor 2's shortcut: the one door in the game whose only
-answer is a Burst brings its own, the way the bow's eye brings its own arrows
-(`docs/PUZZLES.md` §0 rule 2). Nothing else on any floor hands out a charge, and
-the sentence above stays true everywhere else.
+(§5), with rare single charges among ambient-pot rewards. Spending your last
+charge on floor 2 is still a statement about how deep you planned to go: an
+ambient roll is never a promise. The exception that *is* promised is the
+`ChargeCache` in the urn braced against floor 2's shortcut: the one door whose
+only answer is a Burst brings its own, the way the bow's eye brings its own
+arrows (`docs/PUZZLES.md` §0 rule 2).
 
 ### 1.5 Sustain — *hold the Heat chain through one break*
 
@@ -282,7 +295,8 @@ gets a verb (`docs/PUZZLES.md` §1), and the door that names it already exists
 (`LockedDoor.SIGILS[&"far_lantern"]` — `THE FAR LANTERN`, `Pal.ARCANE`,
 `scripts/props/locked_door.gd:~122`).
 
-**Enters** at the Riven Knight, floor 4 (`floor_db.gd:~407`; `boss_db.gd:~546`).
+**Enters** from the great chest earned by defeating the Riven Knight, floor 4
+(`floor_db.gd:~407`; `boss_db.gd:~546`).
 
 **Opens floor 3's vault**, which holds the Warp-Stone Fragment — the last of the
 three, and the manifest's count of vaults is three (`docs/SCOPE.md` §1: *4
@@ -521,8 +535,8 @@ can never grind one into another.
 
 | Stock | Lives on | Enters | The decision it creates |
 |---|---|---|---|
-| **Arrows** | `Game.arrows` | Three sources, no fourth — including Brannoc's forge recipe (`ShopDb.FLETCH`; `docs/METAGAME.md` §4.6) | Fletching gives Flint and Bone a town use and runs the right way round: it **frees** slots (`Fletching.RECIPE` and `Fletching.batch()`, `scripts/items/fletching.gd:~38`, `:~64`) |
-| **Charges** | `Game.charges` | Bought from the quartermaster's **Trade** stock once the Burst is owned (`SupplyDb._board()`, `scripts/items/supply_db.gd`), never refilled below except the one `ChargeCache` on floor 2 (D13) | How deep you were planning to go |
+| **Arrows** | `Game.arrows` | Three source categories, no fourth — bought through the quartermaster's **Trade** stock, found (floor/chest/pot bundles), or fletched through Brannoc's **Smithing** recipe (`ShopDb.FLETCH`; `docs/METAGAME.md` §4.6) | Fletching gives Flint and Bone a town use and runs the right way round: it **frees** slots (`Fletching.RECIPE` and `Fletching.batch()`, `scripts/items/fletching.gd:~38`, `:~64`) |
+| **Charges** | `Game.charges` | Bought from the quartermaster's **Trade** stock once Burst is owned; one authored `ChargeCache` guarantees floor 2's gate supply, while ambient pots only rarely yield one (`SupplyDb._board()`, D13) | How deep you were planning to go |
 | **Rations** | `Game.rations` | Bought from the quartermaster's **Trade** stock, five at a time, twenty to a stack (`RationDb`, `scripts/items/ration_db.gd`) | Whether the room is quiet enough to sit down for twelve seconds |
 | **Bottles** | `Game.bottle_contents` | Blown at the alchemist, capped by a relic (`RelicDb.bottle_cap()`, `relic_db.gd:~889`, read by `AlchemyDb.remaining()`) | The fourth bottle is an event, not a purchase |
 | **Draughts** | in a bottle | Brewed — three, and only three (`PotionDb.IDS`, `scripts/items/potion_db.gd:~23`) | Which of the smith's three numbers you want for 45 seconds |
@@ -569,6 +583,14 @@ is exactly one of the trip's four spins.
   the pouch prints one bench name per material, and a coil the jewelcrafter also
   ate would send the player to the smith holding her price (`ItemDef.bench`,
   `item_def.gd:~51-59`).
+- **A wishlist mark is not another item kind.** ★ is derived from current
+  catalogue `parts` plus saved recipe-line pins. It adds informed friction to a
+  sale but never makes an individual stack unsellable.
+- **Pot gems.** Moss Agate, Tide Sapphire and Blood Ruby come only from ambient
+  dungeon pots. They are ordinary saleable `ItemDef.make` merchandise in the
+  at-risk bag, **not** `JewelDb` crafting components and not a second currency.
+  No pot drops magic or grants/refills a draught; the prepared trip budgets in
+  §5 and `docs/METAGAME.md` §1 remain the whole contract.
 - **The rope.** §1.1.
 - **Armour and jewelry art.** Every piece is a number. `docs/SCOPE.md` §1 holds
   armour/jewelry art at 0 and GDD §6.6 gives the reason: four meshes × two paths
@@ -812,17 +834,12 @@ manifests, and Burst casts (`scripts/combat/burst_cast.gd`; `armament_db.gd:~26`
 **Believe the code.** One of the three workings and most of the relic plumbing
 have landed since that paragraph was written.
 
-### D7 — the Slag Ogre's drop is still spelled `bomb_bag`
+### ~~D7 — the Slag Ogre's drop is still spelled `bomb_bag`~~ *(closed 2026-08-11)*
 
-`BossDb.BOSSES[&"slag_ogre"]["drop"]` (`boss_db.gd:~323`) drops `&"bomb_bag"`;
-floor 2's `boss_item` is `&"burst"` (`floor_db.gd:~336`), and every gate compares
-against the latter. The two are reconciled by a translation on the way in
-(`Game.grant()`, `game_state.gd:~1058`), which the author flagged `[debt]` at
-`:~1055` with the reason — the file was owned by another agent that day.
-
-**Believe `&"burst"`.** Harmless today because `grant()` translates, and worth
-closing anyway: it is a one-word change, and the second id is the kind of thing
-that survives into a table nobody thought to translate.
+`BossDb.BOSSES[&"slag_ogre"]["drop"]` now names `&"burst"`, matching floor 2's
+`boss_item`, and the temporary `Game.grant()` translation has been removed. The
+great chest therefore carries one canonical id from floor manifest to ownership
+and presentation.
 
 ### D8 — a code comment claims the docs say `Game.has_item()`
 
@@ -927,10 +944,11 @@ why this is a row rather than a footnote on D4.
 > the charge pickup, on `ArrowBundle`'s pattern and through
 > `Game.add_charges()`; `Urn.holds` gained a `&"charges"` row so the contents
 > stay the placer's decision; and `Dungeon._shortcut_pillar_brace` stands one urn
-> wide of floor 2's doorway and outside `K.BOMB_RADIUS`. **Nothing rolls it** —
-> there is no `charge_chance` and there must not be, for the reason the last
-> paragraph below gives. `tools/directors/charge_supply.gd` walks a hero from an
-> empty pouch to an open shortcut without granting itself a charge anywhere.
+> wide of floor 2's doorway and outside `K.BOMB_RADIUS`. Issue #107 later added
+> a rare single charge to the ambient-pot table, but no `charge_chance` and no
+> ambient roll satisfies this guarantee: `tools/directors/charge_supply.gd`
+> still walks a hero from an empty pouch to an open shortcut using the authored
+> cache without granting itself a charge anywhere.
 > No number in `docs/SCOPE.md` §1 moved: no item row, no new atom (the urn is
 > the atom), no screen, no mechanic.
 

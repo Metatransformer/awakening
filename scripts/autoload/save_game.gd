@@ -78,13 +78,15 @@ const SLOTS := 3
 ## Bumped to 10 for resumable dungeon runs and a wall-clock last-played header.
 ## A v9 slot has no run snapshot and remains a conservative garrison load; v10
 ## records the actual dungeon as both destination and transform owner.
-const VERSION := 10
+## Bumped to 11 for manual wishlist tracks. It is additive: v4-v10 have no pins
+## and reconstruct honestly as an empty list, while current recipes stay derived.
+const VERSION := 11
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10]
+const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11]
 const AUTOSAVE_INTERVAL := 300.0
 
 signal saved(slot: int)
@@ -185,6 +187,9 @@ func save(slot: int) -> bool:
 		# `upgrades` (see Game.FORGE_TRACKS), so one key carries all twelve, and
 		# the jewelcrafter's eight after it.
 		"upgrades": Game.upgrades,
+		# Stable catalogue namespace + line ids only. Ingredient ids are rebuilt
+		# from each catalogue's current recipe after load.
+		"wishlist_lines": Game.wishlist_save_data(),
 		"components": Game.components,
 		# The footlocker. Merchandise the player carried home and chose not to
 		# sell -- it already survived a run, so it has to survive a quit.
@@ -345,6 +350,7 @@ func load_slot(slot: int) -> Dictionary:
 	Game.upgrades.clear()
 	for k in (d.get("upgrades", {}) as Dictionary):
 		Game.upgrades[StringName(k)] = int((d["upgrades"] as Dictionary)[k])
+	Game.restore_wishlist_lines(d.get("wishlist_lines", []) as Array)
 	Game.components.clear()
 	for k in (d.get("components", {}) as Dictionary):
 		Game.components[StringName(k)] = int((d["components"] as Dictionary)[k])

@@ -57,6 +57,7 @@ trace; tiny rules do not each need a separate three-heading essay.
 | ENEMY-04 | Thief steals the richest eligible exposed stack and flees; killing it returns the stack | Playable | Maintain | Risk, Mastery | Chase to recover value or accept loss → tense greed | [`BESTIARY.md` §3](BESTIARY.md); thief director |
 | BOSS-01 | Bosses use authored multi-beat fight shapes; parry can cut a committed beat into recovery | Partial | Frozen | Mastery, Curiosity | Learn a fight-level rule and earn a verb → mastery/anticipation | [`BOSSES.md`](BOSSES.md); boss test arena |
 | BOSS-02 | Defeated bosses remain dead and permanently open depth progression | Partial | Frozen | Homecoming, Curiosity | Turn mastery into lasting access → achievement/anticipation | [`GDD.md` §5.1](GDD.md) |
+| BOSS-03 | A floor boss earns a persistent great chest; opening it grants the deterministic boss verb through one shared item-get ceremony while the relic remains separate bag loot | Playable | Test | Growth, Curiosity, Homecoming | See victory become a memorable new capability without confusing it with artifact turn-in → achievement/discovery | [`GDD.md` §5.1–5.2](GDD.md); [`ITEMS.md` §0–1](ITEMS.md); boss director |
 
 ## Tools, loadout and supplies
 
@@ -136,6 +137,7 @@ placements or content remains outside the active proof.
 | WORLD-16 | Optional treasure branch combines a harder puzzle/miniboss with a richer chest | Partial | Frozen | Risk, Mastery, Curiosity | Self-select extra danger for a memorable reward → greed/curiosity | [`PUZZLES.md` §5.3, §7](PUZZLES.md) |
 | WORLD-17 | Chests open once and draw richer bounded loot; authored deep chests hold unique relics | Playable | Maintain | Risk, Curiosity | Seek visible reward containers and weigh their contents against capacity → anticipation/greed | [`METAGAME.md` §7](METAGAME.md); chest/dungeon directors |
 | WORLD-18 | One map is drawn as minimap and pause map; rooms/annexes reveal only when entered and markers update when used | Playable | Maintain | Risk, Curiosity | Build place-memory and plan routes without revealing unvisited answers → orientation/discovery | [`CONTRACT.md` “The map”](CONTRACT.md); map directors |
+| WORLD-19 | Seeded ambient pots occupy blank walls; coins bank directly while gems enter the at-risk bag and supplies use their existing lanes | Playable | Test | Risk, Growth, Curiosity | Break a readable side-room container and distinguish safe money from exposed merchandise → discovery/greed | [`METAGAME.md` §2](METAGAME.md); [`PUZZLES.md` §0](PUZZLES.md); ambient-pots director |
 
 ## Economy, growth, home and story
 

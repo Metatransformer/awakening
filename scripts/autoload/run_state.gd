@@ -1241,23 +1241,54 @@ func bag_count() -> int:
 ## `line_value` answers 0: the toll and the sale price are different numbers and
 ## only one of them is his (GDD §6.3).
 func sell_all() -> int:
-	var paid := int(round((bag_value() - relic_toll()) * RelicDb.vendor_price_mult()))
+	var ids: Array[StringName] = []
+	for id: StringName in bag:
+		if not RelicDb.is_relic(id):
+			ids.append(id)
+	return sell_ids(ids)
+
+
+## What selling every stack named by `ids` will pay, including the exact share
+## of the current heat premium and the live vendor multiplier.
+func sale_value(ids: Array[StringName]) -> int:
+	var sold := _sale_slice(ids)
+	if sold.is_empty():
+		return 0
+	var base := _base_of(sold)
+	return int(round((base + _premium_share(base)) * RelicDb.vendor_price_mult()))
+
+
+## Atomically sell the explicit id set. Run owns the bag bookkeeping; callers
+## decide policy (for example, which marked items a bulk action protects).
+func sell_ids(ids: Array[StringName]) -> int:
+	var sold := _sale_slice(ids)
+	if sold.is_empty():
+		return 0
+	var base := _base_of(sold)
+	var share := _premium_share(base)
+	var paid := int(round((base + share) * RelicDb.vendor_price_mult()))
 	if paid <= 0:
 		return 0
-	var sold: Dictionary[StringName, int] = {}
-	for id: StringName in bag.keys():
-		if RelicDb.is_relic(id):
-			continue
-		sold[id] = int(bag[id])
+	for id: StringName in sold:
 		bag.erase(id)
+	premium = maxi(0, premium - share)
 	_case_trim()
-	# `paid` was the whole merchandise value, premium included -- emptying the
-	# sellable half empties the pot with it, and neither is counted twice.
-	premium = 0
 	Game.add_gold(paid)
 	Bus.bag_changed.emit(bag, bag_value())
 	Bus.items_sold.emit(sold, paid)
 	return paid
+
+
+func _sale_slice(ids: Array[StringName]) -> Dictionary[StringName, int]:
+	var sold: Dictionary[StringName, int] = {}
+	for id: StringName in ids:
+		if sold.has(id) or RelicDb.is_relic(id):
+			continue
+		var def := ItemDb.get_def(id)
+		var count: int = bag.get(id, 0)
+		if def != null and count > 0:
+			sold[id] = count
+	return sold
 
 
 ## Sell one stack. Used by the vendor screen when the player picks a line.

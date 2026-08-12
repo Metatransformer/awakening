@@ -85,6 +85,13 @@ differently on death, which is the entire tension.
 | **The document case** | yes | `Run.cased` — three of the bag's slots (GDD §3.1) |
 | **Permanent upgrades** | yes | `Game.bag_slots`, `sword_bonus`, `armour_level`, hearts |
 
+Coins spilled from dungeon pots go straight to `Game.gold`, never occupy a bag
+line, and therefore survive death. Pot gems take the other lane: they are
+ordinary saleable merchandise in `Run.bag`, so they remain at risk until
+extraction. Ambient pots may also hold small heart, arrow or charge supplies;
+none restores magic or grants a free draught, so the trip budgets in §1 are
+unchanged.
+
 Ingredients are never spent directly. They are sold, and gold buys upgrades.
 That indirection is deliberate: it means a great run is not *automatically*
 progress — you still have to get it home and choose what to spend it on.
@@ -276,12 +283,14 @@ They arrive three ways, and each answers a different kind of empty:
 | Source | Where | What it costs | Answers |
 |---|---|---|---|
 | **The quartermaster** — `ARROWS X10` | Garrison, Trade (`supply_db.gd`) | 40 gold (4.0/arrow) | a purse, no bag |
-| **Found** — `ArrowBundle` | Dungeon floors and chests | a short detour | early, poor, and dry |
+| **Found** — `ArrowBundle` | Dungeon floors, chests and pots | a short detour | early, poor, and dry |
 | **Fletched** — `Fletching` | Garrison, Brannoc's Smithing service | 2 Cracked Flint + 2 Bone Shard → 5 arrows (4.8/arrow) | common saleable drops, no purse |
 
 **Found**: `arrow_chance` on `Dungeon` puts a 6-arrow bundle on the floor of a
 quarter of rooms; `arrow_chance` on `Chest` gives 40% of chests a 10-arrow one
-on top of its picks. The chest roll is deliberately **not** an entry on
+on top of its picks; ambient pots may spill a smaller 3-arrow bundle. All three
+are the same found-supply lane, not new inventory or a fourth economy source.
+The chest roll is deliberately **not** an entry on
 `ItemDb.CHEST_DROPS` — `_lift()` reweights that table with depth, and arrows
 must not get rarer or commoner as you descend. The bow has to keep working at
 the same rate on floor eight as on floor one.
@@ -657,10 +666,10 @@ straight to the gate still gets it.
   with two.** **Trade** is one two-sided shop window: her repeatable stock on
   one side, the player's bag on the other, and one item-detail treatment shared
   by whichever side is focused, hovered or selected. It buys the four
-  expendables below and sells bag contents, including a "sell everything" line,
-  because the common case is dumping the lot and the UI should not make that
-  tedious. **Upgrades** presents the bag-slot and heart-container ladders as
-  linear rung progressions.
+  expendables below and sells bag contents. Its **SELL UNMARKED** line keeps
+  components, relics, and anything required by a wished current recipe while
+  still making a trash dump one decision. **Upgrades** presents the bag-slot and
+  heart-container ladders as linear rung progressions.
 
   | Service | Line | Base cost | Growth | Limit | Gated on |
   |---|---|---|---|---|---|
@@ -781,7 +790,7 @@ from being an infinite gold sink that makes the dungeon irrelevant.
 ### What is held, and what is tapped
 
 **A commit that eats materials is held for half a second; everything else is one
-press.** Forging a rung, blowing a bottle, brewing a draught and SELL EVERYTHING
+press.** Forging a rung, blowing a bottle, brewing a draught and SELL UNMARKED
 are the four, and they share one reason: gold is grindable and a single row is
 re-buyable, but a Cold Iron Core is a thing you *found* (§6.5) and a bag is one
 press from empty. Spending either because the cursor sat a row from where you
@@ -950,7 +959,7 @@ worse than one with no comment.
 
 They live in `scripts/items/item_db.gd` alongside the ingredients and share the
 bag with them, but they are `ItemDef.Kind.COMPONENT`, and everything downstream
-branches on that one bit: the pouch marks them ◆, the vendor's "sell everything"
+branches on that one bit: the pouch marks them ◆, the vendor's "sell unmarked"
 leaves them alone, and extraction moves them to the workbench instead of the
 purse.
 
@@ -978,6 +987,17 @@ chain. **Every third rung wants a Cold Iron Core.** That is the pacing gate: the
 core never drops off a body, so no amount of grinding room one finishes a
 ladder, and which ladder gets the core you found is the only genuinely hard
 spending decision the smith ever poses.
+
+### Current-use stars and recipe wishlists
+
+`Wishlist` derives every use from the live `ShopDb.lines()`, `AlchemyDb.lines()`
+and `JewelDb.lines()` recipes. It never copies a future rung table. POUCH and the
+vendor append either the current recipe names or an explicit safe-to-sell line;
+their cells show ★ when the item is needed. Auto-wishlist is on by default and
+follows the current recipes dynamically. Y / Triangle on a recipe row pins that
+stable catalogue-and-line key to the save, so the pin follows the next rung
+without saving a stale ingredient list. SELL UNMARKED protects those stars as
+well as every component and relic; selling one starred stack remains allowed.
 
 ### How they get home
 
@@ -1065,15 +1085,13 @@ holding on the carrying screen precisely because it cannot be used to change it.
 > stock-you-bought-in-garrison, a HUD counter beside the arrows, never a bag slot.
 > Only the face behind the counter moved.
 >
-> **"Refilled only in the garrison" is now "refilled there, and once on floor 2"**
-> (card #29, 2026-08-11). It is not a softening of the rule above and it is not an arrow
-> supply: **nothing rolls charges into a room or a chest**, and the walk home is
-> still spent with what you bought. There is exactly one `ChargeCache`
-> underground and it is inside the urn braced against floor 2's shortcut, because
-> that door is a cracked pillar and a cracked pillar has no other answer — a
-> player who descended with an empty pouch met a gate he could not open and could
-> not earn (`docs/PUZZLES.md` §0 rule 2, `docs/ITEMS.md` §8 D13). The room
-> supplies the verb it demands. It supplies nothing else.
+> **"Refilled only in the garrison" now has two narrow underground lanes.** The
+> authored `ChargeCache` inside floor 2's shortcut urn is the guarantee: that
+> door is a cracked pillar and a player who descended empty otherwise could not
+> open it (`docs/PUZZLES.md` §0 rule 2, `docs/ITEMS.md` §8 D13). Ambient pots may
+> rarely yield one charge, but that probability never substitutes for the cache
+> and never refills magic or grants a draught. The walk home is still chiefly
+> spent with what the player bought.
 
 The forge sells **permanence**: you buy a rung and it is yours. The alchemist
 sells a **stock** — four glass bottles, and what is in them at the moment you
