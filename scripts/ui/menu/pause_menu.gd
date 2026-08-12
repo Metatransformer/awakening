@@ -200,6 +200,7 @@ func _ready() -> void:
 	# channel happens in the world and the player has to be able to watch it, so
 	# the whole menu goes away rather than popping to root.
 	_pouch.use_requested.connect(close)
+	_pouch.drop_requested.connect(_on_drop_requested)
 	_pouch.notice.connect(_notice)
 	_map.back_requested.connect(back)
 	_garrison.back_requested.connect(back)
@@ -263,6 +264,38 @@ func close() -> void:
 	get_tree().paused = false
 	_play(SND_CLOSE)
 	closed.emit()
+
+
+## The panel only names a selected cell; this layer owns the transition back to
+## the live world and refuses before Run mutates if there is nowhere safe to put
+## the ordinary pickup.
+func _on_drop_requested(item_id: StringName, count: int, from_case: bool) -> void:
+	var hero := get_tree().get_first_node_in_group(&"player") as Hero
+	if hero == null or not hero.is_inside_tree():
+		_notice("There is no player here to drop that stack.", true)
+		return
+	var world := get_tree().current_scene
+	if world == null or not world.is_inside_tree() or not world.is_ancestor_of(hero):
+		_notice("There is no safe floor here for that stack.", true)
+		return
+	# `-basis.z` is the measured facing contract. Flatten before both offsets so
+	# the pickup starts at the hero's floor and the existing arc supplies height.
+	var forward := K.plane(-hero.global_transform.basis.z).normalized()
+	if forward.length_squared() <= 0.0001:
+		_notice("There is no safe direction to drop that stack.", true)
+		return
+	var dropped: Dictionary[StringName, Variant] = \
+		Run.drop_stack(item_id, count, from_case)
+	if dropped.is_empty():
+		_notice("That stack is no longer available.", true)
+		return
+	var dropped_id: StringName = dropped.get(&"id", &"")
+	var dropped_count: int = int(dropped.get(&"count", 0))
+	var heat_mult: float = float(dropped.get(&"heat_mult", 1.0))
+	var at := hero.global_position + forward * 0.72
+	var fling := forward * 1.65
+	close()
+	LootMote.drop(world, dropped_id, at, fling, dropped_count, heat_mult)
 
 
 func toggle() -> void:
