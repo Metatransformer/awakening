@@ -1,72 +1,43 @@
 class_name SoundingStone
 extends Node3D
-## The Echo pedestal. **One prefab, used at all three sites** -- the gate room,
-## the treasure chamber and the shortcut door (`docs/PUZZLES.md` §6).
-##
-## > *Every Echo pickup is a choice of three.*
-##
-## A drum of Vyr stone with three tones standing over it. Walk into one and it is
-## yours; the other two go quiet. It is the Slay the Spire beat and it costs
-## nothing beyond the prefab, which is why `docs/PUZZLES.md` §8's manifest can
-## say **new UI screens: 0** and mean it.
-##
-## ## Why the offer is three real `LootMote`s
-##
-## Because §6's last bullet is *"it arrives as a mote on a pedestal and behaves
-## like every other mote when the bag is full: it stays and pulses"*, and
-## `LootMote` is already that sentence -- the bob, the magnet, the refusal pulse,
-## the `Run.collect` call and the pop. A bespoke pickup here would be a second
-## implementation of the one thing in the game the player has done a thousand
-## times, and it would be the one that got the full-bag case wrong.
-##
-## So this file builds a plinth, asks `EchoDb.offer()` for three ids, drops three
-## motes on it and listens. Everything else is `LootMote`'s.
-##
-## ## What it says
-##
-## Each mote wears the Echo's NAME on a billboard and the stone shows the focused
-## one's line. Without that the choice is three identical blue lights, which is a
-## coin flip wearing a decision's clothes -- and the names are the whole reason
-## §6.1 bothered to be twelve distinct rules rather than a pool of buffs.
+## The Votive Court shrine used at all three dungeon reward sites. The authored
+## scene owns its `Interactable` and seven effigies; this root owns only the
+## offer, menu hand-off, run flag, and the stonework they stand on.
 
-## Which pedestal this is, for the world flag. Three sites on one floor need
-## three flags or the first one taken silences the others.
+const BLESSING_MENU_SCENE := "res://scenes/ui/blessing_menu.tscn"
+const PatronDbScript := preload("res://scripts/items/patron_db.gd")
+const DAIS_SIZE := Vector3(5.4, 0.22, 2.75)
+const STEP_SIZE := Vector3(4.2, 0.12, 0.58)
+const MAKER_PLINTH_R := 0.72
+const MAKER_PLINTH_H := 0.34
+
+## Which shrine this is, for the run-scoped world flag. Three sites on one floor
+## need three flags or the first blessing silences the other two.
 @export var stone_id: StringName = &"gate"
-## Offered on the frame it is ready. A director (or a placer that wants the stone
-## dark until a gate opens) turns this off and calls `offer()` itself.
+## Offered on the frame it is ready. Generated sites turn this off and call
+## `offer()` only when their gate, shortcut, or miniboss reward resolves.
 @export var auto_offer: bool = true
 
-## Radius the three motes stand on, and the plinth's own. Wide enough that a
-## walking hero passes through exactly one of them: the motes' pickup spheres are
-## 0.75 m, so 1.30 m apart on this ring leaves a clear lane between neighbours
-## and the choice is a step rather than a shrug.
-##
-## It was 1.05, which cleared the *spheres* and not the *names* -- the three
-## plates ran into each other and the offer read as one long smear of cyan text.
-## The name is the entire reason §6.1 wrote twelve distinct rules instead of a
-## pool of buffs, so the ring is sized by the caption, not by the collider.
-const RING_R := 1.30
-const DRUM_R := 1.72
-const DRUM_H := 0.62
-const MOTE_Y := 1.16
-## How far the plate sits under its mote. Below, not above: the mote is the thing
-## you walk into and a caption over it would be the thing you read instead.
-const PLATE_DROP := 0.34
-
-var _motes: Array[LootMote] = []
-var _plates: Array[WorldCaption] = []
-var _offered: Array[StringName] = []
+var _offers: Dictionary = {}
+var _rolled: bool = false
 var _spent: bool = false
-var _lamp: OmniLight3D = null
-var _age: float = 0.0
+var _interactable: Interactable = null
+var _menu: Node = null
 
 
 func _ready() -> void:
 	add_to_group(&"sounding_stone")
-	_build()
-	# A floor re-entered inside one run does not offer a second tone. The flag is
-	# `Game.flags`, which `LockedDoor` and `PuzzleAtom` both write, and it is
-	# cleared per RUN rather than per floor for the atom half -- see below.
+	add_to_group(&"votive_shrine")
+	_build_dais()
+	_interactable = get_node_or_null(^"Interactable") as Interactable
+	if _interactable != null:
+		_interactable.activated.connect(_on_activated)
+	_set_interaction(false)
+	_set_answering({})
+
+	# A floor re-entered inside one run does not offer a second blessing. The
+	# `atom_` prefix is what lets `PuzzleAtom.clear_run_flags()` reset this with
+	# the run rather than preserving it across descents.
 	if Game.flag(flag_id()):
 		_spent = true
 		return
@@ -74,13 +45,7 @@ func _ready() -> void:
 		offer()
 
 
-## The one-way world flag this stone writes.
-##
-## Prefixed `atom_` **on purpose**, so `PuzzleAtom.clear_run_flags()` wipes it
-## with the puzzle it belongs to. An Echo is run-scoped (§6) and the stone that
-## offered it has to be too: a permanent flag would mean run two walked past a
-## dead pedestal in a gate room it had just re-solved, and §5.2's promise that
-## the gate room pays an Echo would be true exactly once per save.
+## The one-way, run-scoped world flag this shrine writes.
 func flag_id() -> StringName:
 	return StringName("atom_echo_stone_%d_%s" % [Run.level, stone_id])
 
@@ -89,237 +54,209 @@ func is_spent() -> bool:
 	return _spent
 
 
-## What is standing on it right now. Public so a director can name the three it
-## photographed rather than asserting that "a choice" happened.
+## The blessing ids currently offered. Patron ownership stays internal to the
+## shrine except through `responding_patrons()`.
 func offered() -> Array[StringName]:
-	return _offered
+	var ids: Array[StringName] = []
+	for value: Variant in _offers.values():
+		ids.append(StringName(value))
+	return ids
 
 
-# --- The offer ----------------------------------------------------------------
+func responding_patrons() -> Array[StringName]:
+	var patrons: Array[StringName] = []
+	for key: Variant in _offers.keys():
+		patrons.append(StringName(key))
+	return patrons
 
-## Put three tones up. Idempotent, and refuses once one has been taken.
-##
-## Rolled off `Run.rng` rather than a generator of its own, so a replayed seed
-## offers the same three stones -- and filtered against what the player is
-## already carrying, so a second copy of an on/off rule is never one of them.
+
+func menu_open() -> bool:
+	return is_instance_valid(_menu) and not _menu.is_queued_for_deletion()
+
+
+# --- Offer and choice ---------------------------------------------------------
+
+## Roll once from the run RNG. An empty result is still a completed roll: a
+## shrine with no legal blessing stays dark instead of advancing RNG until it
+## eventually finds a different answer.
 func offer() -> void:
-	if _spent or not _motes.is_empty():
+	if _spent or _rolled:
 		return
-	_offered = EchoDb.offer(Run.rng, Run.level, Run.echoes_held())
-	if _offered.is_empty():
-		# Every Echo in the pool is already in the bag. Nothing to offer and
-		# nothing has gone wrong -- the stone simply stays dark, which is the
-		# honest picture of a player who has taken all twelve.
+	_rolled = true
+	_offers = PatronDbScript.offer(Run.rng, Run.level, Run.echoes_held())
+	_set_answering(_offers)
+	_set_interaction(not _offers.is_empty())
+	if not _offers.is_empty():
+		Bus.request_sfx.emit(&"glint_bell", global_position)
+
+
+func _on_activated(_by: Node3D) -> void:
+	if _spent or _offers.is_empty() or menu_open():
 		return
-	for i in _offered.size():
-		_raise(_offered[i], i, _offered.size())
-	Bus.request_sfx.emit(&"glint_bell", global_position)
-
-
-func _raise(id: StringName, i: int, total: int) -> void:
-	# Spread across the FRONT half only (-60 to +60 of local -Z), not the whole
-	# circle: a mote behind the drum is a mote the player has to walk round the
-	# prop to read, and the placer already aimed this thing at the way in.
-	var span := deg_to_rad(120.0)
-	var a := -span * 0.5 + span * (float(i) / float(maxi(total - 1, 1)))
-	var at := Vector3(sin(a) * RING_R, MOTE_Y, -cos(a) * RING_R)
-
-	# Parented to the stone rather than to `current_scene`, unlike a dropped
-	# mote: this one has a plinth under it and has to travel with it if a
-	# placer ever moves one. `LootMote.drop` writes `global_position`, so the
-	# node has to be in the tree before the position takes.
-	var m := LootMote.new()
-	m.item_id = id
-	add_child(m)
-	m.position = at
-	m.taken.connect(_on_taken)
-	_motes.append(m)
-
-	# **A `WorldCaption`, and it was a billboarded `Label3D` until card #61.**
-	# `docs/STYLEGUIDE.md` §4.5 put the world in a fixed 480 x 270 buffer, and a
-	# `Label3D` goes into that buffer with the masonry -- so an Echo's name came
-	# out of it as a cyan smear. The names are drawn on the HUD canvas now, by
-	# `Hud._draw_world_captions`, at §3.1b's 14 px.
-	#
-	# **Card #26's rule survives the move and was the first thing checked.** The
-	# defect there was `no_depth_test = true`, which does not mean "draw over the
-	# plinth" -- it means DRAW OVER THE WORLD, and the three names on a landing
-	# behind a shut shortcut door came out painted on the door in cyan, readable
-	# from a room the player had not opened, leaking `docs/PUZZLES.md` §5.1's
-	# reward through the wall that is the entire point of a shortcut. A canvas
-	# caption would leak it the same way if it were drawn unconditionally, so
-	# `WorldCaption.occlude` casts a line-of-sight ray from the camera and the
-	# shut door takes the name away exactly as it did. `PLATE_DROP` is still
-	# what keeps the caption off the drum -- it hangs at 0.82 m against a cap
-	# topping out at 0.75 m -- but note that its job is now placement rather
-	# than clearance, because the ray excludes the prop a caption hangs off.
-	# `tools/directors/echo_plates.gd` measures both halves.
-	#
-	# The old `pixel_size = 0.0019` and the ring spacing it was tuned against are
-	# gone: a canvas caption does not scale with distance, so "0.8 m wide against
-	# 1.30 m of spacing" is not the measurement any more. What replaces it is
-	# that the three names are read from a couple of metres, where 14 px on a
-	# 1.30 m ring is a clear gap. Look at `echo_plates.gd`'s frames, not at this.
-	var plate := WorldCaption.new()
-	plate.text = EchoDb.name_of(id)
-	plate.tint = Pal.CYAN
-	plate.position = at - Vector3(0.0, PLATE_DROP, 0.0)
-	add_child(plate)
-	_plates.append(plate)
-
-
-## One was taken. The other two go quiet -- **not** "are also collectable and the
-## player is trusted not to". §6's whole arithmetic is one Echo per site,
-## minimum one and maximum two per floor, against a bag of twelve; a stone you
-## could sweep would make that four and delete the decision.
-func _on_taken(id: StringName) -> void:
-	if _spent:
+	var packed := load(BLESSING_MENU_SCENE) as PackedScene
+	if packed == null:
+		push_error("sounding_stone: %s failed to load" % BLESSING_MENU_SCENE)
 		return
+	var menu := packed.instantiate()
+	if menu == null:
+		push_error("sounding_stone: %s failed to instantiate" % BLESSING_MENU_SCENE)
+		return
+	var host := get_tree().current_scene
+	if host == null:
+		menu.queue_free()
+		return
+
+	# `setup` happens outside the tree by contract, so the first UI frame already
+	# knows which three presences answer. The world is neither hidden nor paused.
+	menu.call(&"setup", _offers.duplicate())
+	menu.connect(&"blessing_chosen", _on_blessing_chosen)
+	menu.connect(&"dismissed", _on_menu_dismissed)
+	menu.tree_exited.connect(_on_menu_tree_exited)
+	_menu = menu
+	host.add_child(menu)
+
+
+func _on_blessing_chosen(patron_id: StringName, blessing_id: StringName) -> void:
+	if _spent or not _offers.has(patron_id):
+		return
+	if StringName(_offers[patron_id]) != blessing_id:
+		return
+	if Run.collect(blessing_id, 1) == 0:
+		if menu_open():
+			_menu.call(&"show_refusal", "BAG FULL — MAKE ROOM FOR A BLESSING")
+		return
+
 	_spent = true
 	Game.set_flag(flag_id())
+	_set_interaction(false)
+	_set_chosen_effigy(patron_id)
 	Bus.request_sfx.emit(&"level_chime", global_position)
-	# The NAME is already on screen -- `Bus.loot_gained` fired inside
-	# `Run.collect` and the HUD toasts every pickup by its display name. What is
-	# missing is what the tone DOES, so that is what this says. Same channel
-	# `LockedDoor` uses for a refusal, and for the same reason: the HUD's one line
-	# is where the world talks, and a second toast lane would be a second thing
-	# to arbitrate.
-	Bus.prompt_changed.emit(EchoDb.line_of(id).to_upper())
-	for m in _motes:
-		if is_instance_valid(m) and m.item_id != id:
-			_quiet(m)
-	_motes.clear()
-	for p in _plates:
-		if is_instance_valid(p):
-			var tw := create_tween()
-			# `alpha`, not `modulate:a`: a `WorldCaption` is a bare Node3D
-			# (card #61). The property fades the plate with the ink.
-			tw.tween_property(p, ^"alpha", 0.0, 0.35)
-			tw.tween_callback(p.queue_free)
-	_plates.clear()
-	if _lamp != null:
-		var tw2 := create_tween()
-		tw2.tween_property(_lamp, ^"light_energy", 0.55, 0.6)
+	Bus.prompt_changed.emit(EchoDb.line_of(blessing_id).to_upper())
+	_close_menu()
 
 
-## A tone that was not chosen. It sinks into the drum rather than popping, which
-## is `LootMote._pop`'s opposite on purpose: a pop reads as "you got that", and
-## the one thing the player must not think is that they took all three.
-func _quiet(m: LootMote) -> void:
-	m.monitoring = false
-	# And STOP it. `LootMote._process` calls `get_overlapping_bodies()` every
-	# frame, which Godot refuses on an Area3D with `monitoring` off -- one error
-	# line per mote per frame for the whole 0.45 s sink, which is thirty pages of
-	# log for a tone the player declined. Turning the pickup off is two facts, not
-	# one: it must not be takeable and it must not be looking.
-	m.set_process(false)
-	var tw := m.create_tween().set_parallel(true)
-	tw.tween_property(m, ^"position:y", m.position.y - 0.7, 0.45) \
-		.set_ease(Tween.EASE_IN)
-	tw.tween_property(m, ^"scale", Vector3.ONE * 0.05, 0.45)
-	tw.chain().tween_callback(m.queue_free)
+func _on_menu_dismissed() -> void:
+	_menu = null
 
 
-# --- The drum -----------------------------------------------------------------
+func _on_menu_tree_exited() -> void:
+	_menu = null
 
-func _process(delta: float) -> void:
-	_age += delta
-	if _lamp == null or _spent:
+
+func _close_menu() -> void:
+	if not menu_open():
+		_menu = null
 		return
-	# A slow swell rather than a flicker. The stone is holding a note; a torch
-	# gutters and this must not read as one.
-	_lamp.light_energy = 2.4 + sin(_age * 1.15) * 0.55
+	var menu := _menu
+	_menu = null
+	menu.call(&"close")
 
 
-func _build() -> void:
-	var stone := _mat(Pal.ASH.lerp(Pal.MIDNIGHT, 0.25), 0.95)
-	var vein := _glow_mat(Pal.CYAN, 0.9)
+func _set_interaction(active: bool) -> void:
+	if _interactable != null:
+		_interactable.enabled = active
 
-	# The drum, as a squat faceted cylinder. Eight sides, like everything else in
-	# the kit -- a smooth-shaded plinth reads as an asset from a different game
-	# (`LootMote` and `PuzzleAtom._cyl` both say so).
+
+func _set_answering(offers: Dictionary) -> void:
+	for effigy: Node in _effigies():
+		var patron_id := StringName(effigy.get(&"patron_id"))
+		effigy.call(&"set_answering", offers.has(patron_id))
+
+
+func _set_chosen_effigy(chosen: StringName) -> void:
+	for effigy: Node in _effigies():
+		var patron_id := StringName(effigy.get(&"patron_id"))
+		effigy.call(&"set_answering", patron_id == chosen)
+
+
+func _effigies() -> Array[Node]:
+	var found: Array[Node] = []
+	var root := get_node_or_null(^"Effigies")
+	if root == null:
+		return found
+	for node: Node in root.get_children():
+		if node.has_method(&"set_answering"):
+			found.append(node)
+	return found
+
+
+# --- Shrine stonework ---------------------------------------------------------
+
+func _build_dais() -> void:
+	var stone := _mat(Pal.ASH.lerp(Pal.MIDNIGHT, 0.18))
+	var edge := _mat(Pal.ASH.darkened(0.28))
 	var body := StaticBody3D.new()
-	body.name = "Drum"
+	body.name = "ShrineDais"
 	body.collision_layer = K.L_WORLD
 	body.collision_mask = 0
 	add_child(body)
 
-	var col := CollisionShape3D.new()
-	var cyl := CylinderShape3D.new()
-	cyl.radius = DRUM_R
-	cyl.height = DRUM_H
-	col.shape = cyl
-	col.position.y = DRUM_H * 0.5
-	body.add_child(col)
+	# The top sits at y=0 so authored effigies can remain grounded. The front
+	# tread projects toward local -Z, which is the side every placer aims home.
+	_box(body, stone, DAIS_SIZE, Vector3(0.0, -DAIS_SIZE.y * 0.5, 0.15))
+	_box(body, edge, STEP_SIZE, Vector3(0.0, -STEP_SIZE.y * 0.5, -1.47))
+	_collision_box(body, DAIS_SIZE, Vector3(0.0, -DAIS_SIZE.y * 0.5, 0.15))
 
-	_cyl(body, stone, DRUM_R, DRUM_H, Vector3(0.0, DRUM_H * 0.5, 0.0))
-	_cyl(body, stone, DRUM_R * 0.78, 0.14, Vector3(0.0, DRUM_H + 0.06, 0.0))
-
-	# Three veins in the top face, one under each tone, so the arrangement reads
-	# as authored even before the motes are up -- and so a SPENT stone still
-	# looks like the thing that gave you something.
-	for i in 3:
-		var a := deg_to_rad(-60.0 + 60.0 * float(i))
-		var at := Vector3(sin(a) * RING_R * 0.72, DRUM_H + 0.135,
-			-cos(a) * RING_R * 0.72)
-		_box(body, vein, Vector3(0.20, 0.02, 0.62), at, Vector3(0.0, -a, 0.0))
-
-	_lamp = OmniLight3D.new()
-	_lamp.light_color = Pal.CYAN
-	_lamp.light_energy = 2.4
-	_lamp.omni_range = 5.2
-	_lamp.omni_attenuation = 1.6
-	_lamp.shadow_enabled = false
-	_lamp.position.y = MOTE_Y
-	add_child(_lamp)
+	# Vallen's broken figure is authored by `PatronEffigy`; this is only the
+	# central maker-stone beneath it, kept dark like the monument itself.
+	_cyl(body, edge, MAKER_PLINTH_R, MAKER_PLINTH_H,
+		Vector3(0.0, MAKER_PLINTH_H * 0.5, 0.72))
+	_collision_cyl(body, MAKER_PLINTH_R, MAKER_PLINTH_H,
+		Vector3(0.0, MAKER_PLINTH_H * 0.5, 0.72))
 
 
-# --- Small builders -----------------------------------------------------------
-# The same three `PuzzleAtom` grew, and copied here rather than inherited: this
-# is a `Node3D` in `scripts/world/`, not an atom, and making it one to borrow
-# three helpers would put a pedestal in the kit's `puzzle_atom` group and hand it
-# to every gate that went looking.
-
-func _mat(albedo: Color, rough: float = 0.95) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = albedo
-	m.roughness = rough
-	m.metallic = 0.0
-	m.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
-	return m
+func _mat(albedo: Color) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = albedo
+	material.roughness = 0.96
+	material.metallic = 0.0
+	material.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
+	material.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+	return material
 
 
-func _glow_mat(hue: Color, energy: float) -> StandardMaterial3D:
-	var m := _mat(hue.darkened(0.80), 0.85)
-	m.emission_enabled = true
-	m.emission = hue
-	m.emission_energy_multiplier = energy
-	return m
-
-
-func _box(parent: Node, mat: Material, size: Vector3, at: Vector3,
-		rot: Vector3 = Vector3.ZERO) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = size
-	mi.mesh = bm
-	mi.material_override = mat
-	mi.position = at
-	mi.rotation = rot
-	parent.add_child(mi)
-	return mi
-
-
-func _cyl(parent: Node, mat: Material, radius: float, height: float,
+func _box(parent: Node, material: Material, size: Vector3,
 		at: Vector3) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	var cm := CylinderMesh.new()
-	cm.top_radius = radius
-	cm.bottom_radius = radius
-	cm.height = height
-	cm.radial_segments = 8
-	mi.mesh = cm
-	mi.material_override = mat
-	mi.position = at
-	parent.add_child(mi)
-	return mi
+	var mesh_instance := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	mesh_instance.mesh = mesh
+	mesh_instance.material_override = material
+	mesh_instance.position = at
+	parent.add_child(mesh_instance)
+	return mesh_instance
+
+
+func _cyl(parent: Node, material: Material, radius: float, height: float,
+		at: Vector3) -> MeshInstance3D:
+	var mesh_instance := MeshInstance3D.new()
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = radius * 0.86
+	mesh.bottom_radius = radius
+	mesh.height = height
+	mesh.radial_segments = 8
+	mesh_instance.mesh = mesh
+	mesh_instance.material_override = material
+	mesh_instance.position = at
+	parent.add_child(mesh_instance)
+	return mesh_instance
+
+
+func _collision_box(parent: Node, size: Vector3, at: Vector3) -> void:
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = size
+	collision.shape = shape
+	collision.position = at
+	parent.add_child(collision)
+
+
+func _collision_cyl(parent: Node, radius: float, height: float,
+		at: Vector3) -> void:
+	var collision := CollisionShape3D.new()
+	var shape := CylinderShape3D.new()
+	shape.radius = radius
+	shape.height = height
+	collision.shape = shape
+	collision.position = at
+	parent.add_child(collision)

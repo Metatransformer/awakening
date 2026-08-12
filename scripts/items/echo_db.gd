@@ -1,5 +1,8 @@
 class_name EchoDb
 extends RefCounted
+## Legacy internal name: the shipped player-facing system is **Blessings**.
+## These ids and this class stay stable for save/runtime callers while the
+## Votive Court owns how the twelve rules are presented and chosen.
 ## The twelve Echoes (`docs/PUZZLES.md` §6), as data and as the one place their
 ## tuning numbers live.
 ##
@@ -95,35 +98,35 @@ const LONG_CHORD := &"echo_long_chord"
 static var ECHOES := {
 	# --- How fast: the Heat axis (GDD §2) ------------------------------------
 	HELD_NOTE: {
-		"name": "The Held Note", "axis": &"heat", "floor": 1,
-		"line": "The chain's leash stops shortening.",
+		"name": "The Banked Hearth", "axis": &"heat", "floor": 1,
+		"line": "Your Heat chain keeps its longest timing window.",
 		"bends": "K.HEAT_TIER_WINDOW -- `Heat._on_enemy_died` reads tier 1's "
 			+ "window at every tier instead of its own",
 		"value": 1.0,
 	},
 	ANSWERING_STRIKE: {
-		"name": "The Answering Strike", "axis": &"heat", "floor": 1,
-		"line": "A blow you turn feeds the chain, as a kill does.",
+		"name": "Stone Answers Iron", "axis": &"heat", "floor": 1,
+		"line": "A blocked blow advances Heat as a kill does.",
 		"bends": "Bus.shield_blocked -- `Heat._on_blocked` advances the chain, "
 			+ "the same wiring that already lets a blocked blow keep it alive",
 		"value": 0.0,
 	},
 	SLOW_FADE: {
-		"name": "The Slow Fade", "axis": &"heat", "floor": 1,
-		"line": "What you drop stays hot until you sweep it.",
+		"name": "What the Water Keeps", "axis": &"heat", "floor": 1,
+		"line": "Dropped loot keeps its Heat until you gather it.",
 		"bends": "K.HEAT_COOL_TIME -- `LootMote.heat()` stops decaying toward 1.0",
 		"value": 0.0,
 	},
 	SECOND_WIND: {
-		"name": "The Second Wind", "axis": &"heat", "floor": 1,
-		"line": "A kill gives the whole breath back, not a share of it.",
+		"name": "The Parting Breath", "axis": &"heat", "floor": 1,
+		"line": "A kill restores all stamina.",
 		"bends": "K.STAMINA_KILL -- `Heat._on_enemy_died` refunds "
 			+ "`Game.max_stamina`. A rule about kills; the BAR is untouched",
 		"value": 0.0,
 	},
 	BLAZING_TITHE: {
-		"name": "The Blazing Tithe", "axis": &"heat", "floor": 1,
-		"line": "At a blaze, what dies leaves one more.",
+		"name": "The Final Due", "axis": &"heat", "floor": 1,
+		"line": "At full Heat, every kill leaves one extra drop.",
 		"bends": "`Enemy._drop_loot` rolls one extra mote while `Heat.tier` is "
 			+ "at the top. The top tier finally pays in quantity, not only rate",
 		"value": 1.0,
@@ -131,36 +134,36 @@ static var ECHOES := {
 
 	# --- How deep: the space axis (GDD §2) -----------------------------------
 	UNBROKEN_ROPE: {
-		"name": "The Unbroken Rope", "axis": &"depth", "floor": 1,
-		"line": "Nothing that lands can break the way out.",
+		"name": "The Road Holds", "axis": &"depth", "floor": 1,
+		"line": "Taking damage cannot break an extraction.",
 		"bends": "`Hero._on_damaged` stops calling `EscapeRope.cancel()` "
 			+ "(docs/METAGAME.md §5)",
 		"value": 0.0,
 	},
 	COLD_LEDGER: {
-		"name": "The Cold Ledger", "axis": &"depth", "floor": 1,
-		"line": "The toll is read off the flat price. Heat is not taxed.",
+		"name": "The Neighbor's Measure", "axis": &"depth", "floor": 1,
+		"line": "Extraction ignores value added by Heat.",
 		"bends": "`Run.extract_cost()` charges on `base_value()` rather than "
 			+ "`bag_value()`. The one Echo that cuts GDD §2's central coupling",
 		"value": 0.0,
 	},
 	DEEP_POCKET: {
-		"name": "The Deep Pocket", "axis": &"depth", "floor": 1,
-		"line": "Common things stack twice as high.",
+		"name": "The Double Furrow", "axis": &"depth", "floor": 1,
+		"line": "Common supplies stack twice as high.",
 		"bends": "`Run.collect` / `Run.slots_used` double `ItemDef.stack` for "
 			+ "COMMON rows. It does not add a SLOT",
 		"value": 2.0,
 	},
 	QUIET_ROOM: {
-		"name": "The Quiet Room", "axis": &"depth", "floor": 1,
-		"line": "The first thing in a room waits a beat for you.",
+		"name": "The Mountain Waits", "axis": &"depth", "floor": 1,
+		"line": "The first enemy in each room is held for a moment.",
 		"bends": "Bus.room_entered -- `Run._hush_room` calls `Enemy.freeze` on "
 			+ "the nearest body. Seconds",
 		"value": 1.1,
 	},
 	RETURNING_SHAFT: {
-		"name": "The Returning Shaft", "axis": &"depth", "floor": 1,
-		"line": "An arrow comes back out of what it killed.",
+		"name": "The Drowned Return", "axis": &"depth", "floor": 1,
+		"line": "An arrow that kills returns to your quiver.",
 		"bends": "`Enemy._die` gives one arrow back when the killing blow was "
 			+ "`&\"arrow\"` (docs/METAGAME.md §4.6)",
 		"value": 1.0,
@@ -168,15 +171,15 @@ static var ECHOES := {
 
 	# --- Both axes: the two that are about the Echoes themselves -------------
 	FULL_CUP: {
-		"name": "The Full Cup", "axis": &"both", "floor": 1,
-		"line": "Drunk at a blaze, the bottle stays full.",
+		"name": "The Last Harvest", "axis": &"both", "floor": 1,
+		"line": "At full Heat, drinking does not empty the bottle.",
 		"bends": "`Game.drink_bottle` keeps the contents while `Heat.tier` is "
 			+ "at the top",
 		"value": 0.0,
 	},
 	LONG_CHORD: {
-		"name": "The Long Chord", "axis": &"both", "floor": LONG_CHORD_FLOOR,
-		"line": "Every other tone you carry stops weighing anything.",
+		"name": "The Road Remembers", "axis": &"both", "floor": LONG_CHORD_FLOOR,
+		"line": "Every other blessing stops costing a bag slot.",
 		"bends": "`Run.slots_used` stops counting the OTHER Echoes. The only "
 			+ "one whose value is a function of the others (§6.2)",
 		"value": 0.0,
@@ -207,7 +210,7 @@ static func is_echo(id: StringName) -> bool:
 
 
 static func name_of(id: StringName) -> String:
-	return String(row(id).get("name", "An Echo"))
+	return String(row(id).get("name", "A Blessing"))
 
 
 static func line_of(id: StringName) -> String:

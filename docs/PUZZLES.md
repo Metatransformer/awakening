@@ -1,4 +1,4 @@
-# Puzzles and Echoes
+# Puzzles and Blessings
 
 **Status: §2 is built (M1). §4, §5.2, §5.3, §6 and §7 are built (M4).** The nine
 atoms and the door that listens are in the code —
@@ -6,7 +6,7 @@ atoms and the door that listens are in the code —
 `scripts/props/puzzle_atom.gd` (the base body), the nine files under
 `scripts/props/atoms/`, and `scripts/props/puzzle_gate.gd`, proved by
 `tools/directors/puzzle_atoms.gd`. The spine on top of them — the chord edge, the
-gate room, the treasure puzzle, the Sluice-Keeper and the Echo pedestal — is
+gate room, the treasure puzzle, the Sluice-Keeper and the Votive Court — is
 proved end to end by `tools/directors/puzzle_loop.gd`. See **§9, as built**.
 
 **§5.1 is built** — the shortcut door has stopped being a check. It is a
@@ -62,7 +62,7 @@ without containing a word floor 1 did not have. Enemies and bosses came out of t
 same pass and live in `docs/BESTIARY.md`.
 
 This file owns the puzzle vocabulary, the grammar, the three shapes, and where
-Echoes come from, and it owns nothing else.
+Blessings come from, and it owns nothing else.
 
 It exists because `docs/GDD.md` §5.3 shipped a **lock** and called it a puzzle. A
 door that opens because you own item X is a *check*. Zelda's verb is that the
@@ -472,7 +472,7 @@ puzzle that pays in the game's own currency instead of in power.
 
 - **Anchor:** the existing `shortcut_door`, near the entrance.
 - **Verb:** exactly tier N (§1).
-- **Reward:** the way to floor N+1, skipping this floor. **+1 Echo, always.**
+- **Reward:** the way to floor N+1, skipping this floor. **+1 Blessing, always.**
 - **Shape:** a straight solve, not a cycle. You already own the item; the puzzle
   is the receipt, not the challenge.
 
@@ -530,17 +530,17 @@ Three things about it are load-bearing and none is obvious:
 off the floor.
 
 **It pays §5.2's amendment**, which is a rule for all three shapes: the landing
-behind the door holds the way down, **a chest**, and a sounding stone offering
-three Echoes. Both land on `opened`, and both are restored on a later run where
-the door comes up already open and `opened` never fires — §6 pays the Echo for
+behind the door holds the way down, **a chest**, and a Votive Court shrine with
+three answering gods. Both land on `opened`, and both are restored on a later run where
+the door comes up already open and `opened` never fires — §6 pays the Blessing for
 *taking* the shortcut, not for having once solved it.
 
 ### 5.2 Critical-path puzzle — *the gate room*
 
 - **Anchor:** new, `gate_room` — on the path to `deepest`, around 0.7 of the way.
 - **Verb:** tier ≤ N−1. **Never anything you do not own** (§0 rule 1).
-- **Reward:** the approach to the boss door, **+1 Echo** (choice of three at a
-  sounding stone), **a chest**, and **the cycle back toward the entrance** (§4).
+- **Reward:** the approach to the boss door, **+1 Blessing** (three answering
+  gods at the Votive Court), **a chest**, and **the cycle back toward the entrance** (§4).
 - **Shape:** cycle. Always.
 
 **Every puzzle pays in loot, not only in passage.** The chest is the owner's
@@ -548,10 +548,10 @@ amendment of 2026-08-10 and it is a rule for all three shapes, not a prop for
 this one: *a solved puzzle drops something you can carry out.* A door that opens
 onto more corridor is a toll booth — the player paid attention and got permission
 back. This game already answers "was it worth the walk" in one currency (GDD §2,
-`docs/METAGAME.md`), and a puzzle that pays in Echoes and shortcuts alone is
+`docs/METAGAME.md`), and a puzzle that pays in Blessings and shortcuts alone is
 paying in a currency the player cannot weigh against the walk home. So:
 
-| Shape | Passage | Echo | Loot |
+| Shape | Passage | Blessing | Loot |
 |---|---|---|---|
 | **5.1** shortcut | the way down | +1 | the shortcut chest |
 | **5.2** gate room | the boss approach + the cycle | +1 | **a chest**, floor table |
@@ -570,7 +570,7 @@ also mostly a key and a ladder.
 - **Anchor:** new, `puzzle_room`, off the mid-ring; and the existing `vault_door`
   keeps its GDD §5.3 rule (tier N+1, holds a relic).
 - **Verb:** tier ≤ N.
-- **Reward:** **the floor's miniboss** (§7) and a rich chest, **and +1 Echo**.
+- **Reward:** **the floor's miniboss** (§7) and a rich chest, **and +1 Blessing**.
 - **Shape:** nest or sequence. This is where two atoms get combined.
 
 **Nothing here is on the critical path**, so a floor is always completable
@@ -727,51 +727,70 @@ sized to swing a sword in for when they arrive.
 
 ---
 
-## 6. Echoes
+## 6. Blessings of the Votive Court
 
-An **Echo** is a run-scoped boon. The Cut still rings — the Hushing Choir is a
-resonance hall that has not stopped (GDD §5) — and an Echo is a tone you carry
-out of a room.
+A **Blessing** is a run-scoped boon granted at a votive shrine. It is found
+power, not permanent progression: one god answers, bends one rule for the
+remainder of the descent, and the favor ends when the run does.
 
-> **An Echo costs a bag slot, and that is the only thing it costs.**
+> **A Blessing costs a bag slot, and that is the only thing it costs.**
 
 - **It is worth 0 gold.** It cannot be sold, so it does not raise the extraction
   fee. The price is capacity, not coin.
-- **It does not survive the run.** Home, garrison or death — it goes quiet. GDD
-  pillar 4 is about *permanence*, and an Echo is not permanent, so it does not
+- **It does not survive the run.** Home, garrison or death — it ends. GDD
+  pillar 4 is about *permanence*, and a Blessing is not permanent, so it does not
   touch it.
 - **It never moves one of the five stats.** Those are the smith's and the
-  jeweller's, and that boundary is what protects GDD §6.6. An Echo changes a
+  jeweller's, and that boundary is what protects GDD §6.6. A Blessing changes a
   *rule* — Heat's window stops shrinking, the first blow in a room is blocked,
   motes magnetise from twice as far, a roll leaves a burst behind it.
 - **It does not fit in the document case**, for the same reason a relic does not.
   Moot in practice, since it dies anyway, but write it down before someone asks.
-- **You may refuse it and you may drop it.** It arrives as a mote on a pedestal
-  and behaves like every other mote when the bag is full: it stays and pulses.
+- **You may refuse it.** A full bag leaves the shrine unspent and the court open,
+  so making room remains the player's decision rather than an automatic discard.
 
 ### Where they come from
 
-| Route | Echoes |
+| Route | Blessings |
 |---|---|
 | Take the shortcut, skip the floor | **1** |
 | Play the floor — the gate room | **1** |
 | Play the floor — the treasure puzzle | **+1** |
 
 **Minimum one per floor, maximum two.** Four to eight across Act I, each one a
-slot, against a bag of twelve. A player who takes every Echo on offer walks into
-the Chord Gate carrying almost nothing worth selling, and that is the decision.
+slot, against a bag of twelve. A player who accepts every blessing walks deeper
+with more power and less room for anything worth selling. That is the decision.
 
-**Every Echo pickup is a choice of three.** One prefab — a sounding stone with
-three motes over it — used at all three sites. It is the Slay the Spire beat and
-it costs nothing beyond the prefab that already had to exist.
+**Every shrine is a choice of three from a court of six.** The same six votive
+figures stand at every site. Three light from the run RNG and each offers one of
+its two blessings; the three that do not answer remain visible and dark. A/E on
+the shrine opens a lower-screen menu over the live rendered court. All six gods
+stay on the board: answering gods show their offer, silent gods are disabled.
+Choosing one spends the shrine and darkens the others.
+
+The court is intentionally not six matching statues in a tidy domain chart.
+These cults accumulated across different peoples and centuries, so their rites
+do not share one visual grammar:
+
+| Presence | Votive form | Blessings |
+|---|---|---|
+| **Lady of Long Water** | water basin | What the Water Keeps; The Drowned Return |
+| **Last Guest** | closed door and extinguished lamp | The Parting Breath; The Final Due |
+| **Old Harrow** | crooked spade/scarecrow and growth | The Double Furrow; The Last Harvest |
+| **Old Man Under the Mountain** | sealed cairn | Stone Answers Iron; The Mountain Waits |
+| **Good Neighbor** | empty chair drawn to a hearth | The Banked Hearth; The Neighbor's Measure |
+| **Grey Walker** | roadside cairn and staff | The Road Holds; The Road Remembers |
+
+**Vallen is the seventh physical presence and never part of the roll.** His
+central maker-monument is broken and permanently dark. Athra is not part of the
+ordinary court; a future appearance would be a dangerous exception, not a
+seventh normal option.
 
 ### 6.1 The twelve
 
-**Relics are objects and Echoes are sounds.** That is the whole naming rule and
-it is worth keeping: a relic is a thing you carry to a counter — Tally-Ledger,
-Anvil-Plate, Cracked Still-Head — and an Echo is a tone you carried out of a
-room. If a proposed Echo wants to be a noun you could put on a shelf, it is a
-relic and it is in the wrong table.
+The blessing names belong to their gods and rites rather than to one acoustic
+metaphor. The runtime still preserves the original `echo_*` ids and `EchoDb`
+class name as an internal compatibility seam; neither is player-facing.
 
 Each one **bends a rule the game already runs**, and the rule it bends is named
 so the next person can find it. None of them moves damage, speed, max health,
@@ -781,45 +800,45 @@ replacing a bought one.
 
 **How fast — the Heat axis (GDD §2)**
 
-| | Echo | What it bends |
+| | Blessing | What it bends |
 |---|---|---|
-| 1 | **The Held Note** | Heat's window stops shrinking; every tier keeps Warm's leash. The reward for speed stops coming with a shorter one — `K.HEAT_TIER_WINDOW` |
-| 2 | **The Answering Strike** | A blow you **block** advances the chain by one, as a kill does. The shield becomes a tempo tool rather than a wall, and it is the same wiring that already lets a blocked blow keep the chain alive (`docs/METAGAME.md` §4.5) |
-| 3 | **The Slow Fade** | Motes never cool. A stamped multiplier holds until you sweep it, so a chain can be spent on fighting instead of on tidying — `K.HEAT_COOL_TIME` |
-| 4 | **The Second Wind** | A kill refunds the **whole** stamina bar, not `K.STAMINA_KILL`. A rule about kills, not the size of the bar — the stat is untouched |
-| 5 | **The Blazing Tithe** | At Blazing, a killed enemy drops a **second** mote. The top tier finally pays in quantity and not only in rate |
+| 1 | **The Banked Hearth** — Good Neighbor | Heat's window stops shrinking; every tier keeps Warm's leash — `K.HEAT_TIER_WINDOW` |
+| 2 | **Stone Answers Iron** — Old Man | A blow you **block** advances the chain by one, as a kill does (`docs/METAGAME.md` §4.5) |
+| 3 | **What the Water Keeps** — Lady | Motes never cool. A stamped multiplier holds until you sweep it — `K.HEAT_COOL_TIME` |
+| 4 | **The Parting Breath** — Last Guest | A kill refunds the **whole** stamina bar, not `K.STAMINA_KILL` |
+| 5 | **The Final Due** — Last Guest | At Blazing, a killed enemy drops a **second** mote |
 
 **How deep — the space axis (GDD §2)**
 
-| | Echo | What it bends |
+| | Blessing | What it bends |
 |---|---|---|
-| 6 | **The Unbroken Rope** | The 1.2 s extraction channel cannot be broken by a blow that lands. You can always leave, so you can always go one room further — `docs/METAGAME.md` §5 |
-| 7 | **The Cold Ledger** | The fee is charged on the bag's **base** value; Heat's stamp is not taxed. This is the one Echo that cuts §2's central coupling, and it does it for exactly one run |
-| 8 | **The Deep Pocket** | Common-band ingredients stack twice as high. It does not add a slot — it changes what is worth bending down for, which is the more interesting half of the bag |
-| 9 | **The Quiet Room** | The first enemy in each room you enter is held for a beat. Every room opens on your terms, and a floor gets about one room deeper |
-| 10 | **The Returning Shaft** | Arrows are recovered from what they kill. The bow stops being rationed, so range becomes an option at depth rather than a budget — `docs/METAGAME.md` §4.6 |
+| 6 | **The Road Holds** — Grey Walker | The 1.2 s extraction channel cannot be broken by a blow that lands — `docs/METAGAME.md` §5 |
+| 7 | **The Neighbor's Measure** — Good Neighbor | The fee is charged on the bag's **base** value; Heat's stamp is not taxed |
+| 8 | **The Double Furrow** — Old Harrow | Common-band ingredients stack twice as high. It changes the stack, not the slot count |
+| 9 | **The Mountain Waits** — Old Man | The first enemy in each room is held for a beat |
+| 10 | **The Drowned Return** — Lady | Arrows are recovered from what they kill — `docs/METAGAME.md` §4.6 |
 
-**Both axes — the two that are about the Echoes themselves**
+**Both axes — the two that are about carrying blessings**
 
-| | Echo | What it bends |
+| | Blessing | What it bends |
 |---|---|---|
-| 11 | **The Full Cup** | A bottle drunk while **Blazing** is not spent. Speed buys back the one thing you had to purchase in the garrison, and only while the leash is shortest |
-| 12 | **The Long Chord** | Offered on floor 3 or deeper only. **Every other Echo in the bag stops taking a slot.** It costs one and refunds the rest, so it is worth nothing unless you already committed — the only Echo whose value is a function of the others |
+| 11 | **The Last Harvest** — Old Harrow | A bottle drunk while **Blazing** is not spent |
+| 12 | **The Road Remembers** — Grey Walker | Floor 3+. **Every other blessing in the bag stops taking a slot.** It costs one and refunds the rest, so it matters only after commitment |
 
 ### 6.2 Why these twelve and not others
 
 **Five push on tempo, five on depth, two on the carrying itself.** That split is
 the design, not an accident of listing: GDD §2 says the one question has two
-axes, and an Echo pool that leaned one way would quietly make one of those axes
+axes, and a blessing pool that leaned one way would quietly make one of those axes
 the real game.
 
-**Number 12 is the one to protect.** The Long Chord is the only Echo that makes
+**Number 12 is the one to protect.** The Road Remembers is the only blessing that makes
 the *slot cost* the subject, and it is what stops a pool of twelve small rule
 bends from being twelve flavours of the same shrug. A player who has taken three
-Echoes and is offered the Long Chord on floor 3 has a genuinely hard read on
+blessings and is offered The Road Remembers on floor 3 has a genuinely hard read on
 whether a fourth floor is coming.
 
-**Number 7 is the one to watch in tuning.** The Cold Ledger unpicks the coupling
+**Number 7 is the one to watch in tuning.** The Neighbor's Measure unpicks the coupling
 GDD §2 calls *the one question asked a second way* — Heat rides in the bag, so
 going fast raises the fee. Cutting that is powerful and it is *meant* to be, but
 it dies with the run and costs a slot, which is the whole reason found power is
@@ -831,7 +850,7 @@ chest — that is relic #8, the Sounding-Rod (GDD §6.2), and one drop must not 
 another's job. Nothing that holds a Heat chain through a break — that is the
 Sustain working (GDD §6.5). Nothing that burns a stack for soak — that is
 Ballast. Nothing that changes a price at a counter — that is relic #11. **Four
-near-misses, all of them rejected for the same reason: an Echo may not be a
+near-misses, all of them rejected for the same reason: a blessing may not be a
 weaker copy of something permanent.**
 
 **The tuning values are not in this document.** "Twice as high", "a beat", "the
@@ -911,7 +930,7 @@ stopped being a design and started being a wall. Measured across the built rows
 (`tools/directors/minibosses.gd`, section C): arc 73.9%, zone 76.2%, slam 121%.
 
 **No miniboss drops a VERB or a RELIC**, and that is the whole of the rule — GDD
-pillar 4 holds here exactly as it does everywhere else, and the Echo on that
+pillar 4 holds here exactly as it does everywhere else, and the Blessing on that
 branch comes from the puzzle rather than from the kill.
 
 It read "**they drop nothing but the chest behind them**" until 2026-08-11, and
@@ -940,9 +959,9 @@ argue about**, and every one of them is a ceiling.
 | Puzzle prefabs | **12** | 4 tiers × 3 shapes. The generator picks by (floor, shape, owned verb). **6 built**: `Dungeon.GATE_PREFABS` — sun nest (T0), lights out (T0), eye row (T1); `Dungeon.SHORTCUT_PREFABS` — eye high (T1), pillar brace (T2), ring span (T3). The shortcut shape is **three, not four**, and stays three: floor 4's key is the Far Lantern, which §1 gives no verb (§5.1) |
 | New anchor kinds | **2** | `gate_room`, `puzzle_room` |
 | Chord edges per floor | **1** | The cycle |
-| **Echoes** | **12** | Named. No thirteenth, same discipline as the relics |
+| **Blessings** | **12** | Six patrons × two. No thirteenth, same discipline as the relics |
 | **Minibosses** | **4** | One per floor, two beats each, behind the treasure puzzle |
-| New UI screens | **0** | The sounding stone is a world prop, not a screen |
+| New UI screens | **1** | The Votive Court's lower modal; the rendered shrine stays visible behind it |
 | New monster models | **0** | A miniboss is a scaled roster enemy, exactly as GDD §5 does bosses |
 
 **This is a new mechanic against a manifest that said one, and it was added
@@ -953,7 +972,7 @@ table to pay for it and the owner declined: the gear loop is the reason to
 delve (GDD §6.6), not a service beside it.
 
 **What the ledger asks in return is that the ceilings above do the braking.**
-Nine atoms, nine combinators, twelve prefabs, twelve Echoes, four minibosses.
+Nine atoms, nine combinators, twelve prefabs, twelve Blessings, four minibosses.
 A proposal that moves one of those numbers is back to needing a deletion.
 
 ### 8.1 The 6 → 9 combinator amendment, priced
@@ -1047,7 +1066,7 @@ Sluice-Keeper dies and the second stone lights).
 | 5.3 | `puzzle_room` anchor | `Dungeon._room_for(&"mid_ring")`, off the critical path, always |
 | 5.3 | Floor 1's treasure puzzle | `Dungeon._place_puzzle_room` — plate + block, §3's *nest* again, different atoms |
 | 5.3 | The chamber behind it | `Dungeon._place_chamber` / `_build_chamber`; arena, rich chest, stone |
-| 6 | The Echo pedestal | `scripts/world/sounding_stone.gd`; three `LootMote`s and three name plates |
+| 6 | The Votive Court | `scenes/world/votive_shrine.tscn`, `scripts/world/sounding_stone.gd`, `scripts/items/patron_db.gd`, `scenes/ui/blessing_menu.tscn` |
 | 6 | The twelve | `scripts/items/echo_db.gd`, `ItemDb` rows, `Run.echoes_held()` |
 | 7 | The Sluice-Keeper | `BossDb.MINIBOSSES`; two beats, a scaled troll, `relic_slot = &""` |
 | 3.1 | **Chain** — one solve carries to the next | `PuzzleAtom.propagate()` / `chain_links()` / `_can_see()`; `chain_radius`, `chain_id`, `chain_delay` |

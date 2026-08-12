@@ -61,12 +61,10 @@ const ROOM_SCENE_PILLAR := preload("res://scenes/kit/pillar.tscn")
 const VAULT_SCRIPT := "res://scripts/world/vault.gd"
 const ARENA_SCRIPT := "res://scripts/world/boss_arena.gd"
 const BOSS_DOOR_SCRIPT := "res://scripts/world/boss_door.gd"
-## Both added in the same change as this file's use of them, so both are loaded
-## by PATH and never named: a `class_name` is not in the global class cache until
-## the project is re-imported, and naming one here is a parse error that takes the
-## whole floor down before its first frame (`CLAUDE.md` §3, and
-## `boss_arena.gd`'s own note on `BOSS_SCRIPT`).
-const STONE_SCRIPT := "res://scripts/world/sounding_stone.gd"
+## Loaded by PATH and never named: a newly added `class_name` is not in the
+## global class cache until the project is re-imported. The shrine is a scene,
+## because its Interactable and replaceable effigies are authored composition.
+const STONE_SCENE := "res://scenes/world/votive_shrine.tscn"
 const BARS_SCRIPT := "res://scripts/props/barred_passage.gd"
 ## And the third, for the same reason: `docs/PUZZLES.md` §5.1's door.
 const SHORTCUT_GATE_SCRIPT := "res://scripts/props/shortcut_gate.gd"
@@ -1737,7 +1735,7 @@ func _land_shortcut_rewards(landing: Node3D, door: Node3D) -> void:
 	if stone != null:
 		stone.position = Vector3(3.0, 0.0, back - 2.5)
 		# Turned back at the stair, which is where the player is standing when they
-		# decide. `SoundingStone` spreads its three tones across its own -Z.
+		# decide. The Votive Court opens its shallow effigy arc toward local -Z.
 		stone.rotation.y = atan2(stone.position.x, stone.position.z - LAND_STUB)
 		landing.add_child(stone)
 		door.connect(&"opened", func(_where: StringName) -> void: stone.call(&"offer"))
@@ -1897,10 +1895,9 @@ func _place_gate_room(id: StringName) -> void:
 	var stone: Node3D = _make_stone(&"gate")
 	if stone != null:
 		stone.position = -along * (half - 2.4) - facing * (half - 4.2)
-		# Aimed at the middle of the room. `SoundingStone` spreads its three tones
-		# across the front half of its own -Z and puts the name plates with them, so
-		# an unaimed pedestal in a corner offers the player its back and makes them
-		# walk round it to read a choice. Forward points along `v` at
+		# Aimed at the middle of the room. The Votive Court's effigy arc opens along
+		# its own -Z, so an unaimed shrine in a corner offers the player its back.
+		# Forward points along `v` at
 		# `atan2(-v.x, -v.z)` (docs/CONTRACT.md §2.5), and `v` here is the way home.
 		stone.rotation.y = atan2(stone.position.x, stone.position.z)
 		root.add_child(stone)
@@ -2248,16 +2245,18 @@ func _step_toward(cell: Vector2i, target: Vector2i) -> StringName:
 	return &""
 
 
-## One sounding stone, dark. `auto_offer` is off at every generated site: the
-## Echo is a REWARD (§6's table -- shortcut, gate room, treasure puzzle) and a
-## pedestal that offered on the frame the floor was built would be three free
-## Echoes standing in three rooms the player has not solved.
+## One votive shrine, dark. `auto_offer` is off at every generated site: the
+## blessing is a REWARD (§6's table -- shortcut, gate room, treasure puzzle),
+## and a court that answered on floor-build would reveal three unsolved rewards.
 func _make_stone(stone_id: StringName) -> Node3D:
-	var script := load(STONE_SCRIPT) as GDScript
-	if script == null:
-		push_error("dungeon: %s failed to load" % STONE_SCRIPT)
+	var packed := load(STONE_SCENE) as PackedScene
+	if packed == null:
+		push_error("dungeon: %s failed to load" % STONE_SCENE)
 		return null
-	var stone: Node3D = script.new()
+	var stone := packed.instantiate() as Node3D
+	if stone == null:
+		push_error("dungeon: %s root is not Node3D" % STONE_SCENE)
+		return null
 	stone.name = "SoundingStone_%s" % stone_id
 	stone.set(&"stone_id", stone_id)
 	stone.set(&"auto_offer", false)
@@ -2398,7 +2397,7 @@ func _place_chamber(cell: Vector2i, side: StringName,
 	if stone != null:
 		stone.position = Vector3(3.6, 0.0, back - 2.6)
 		# Turned back toward the arena, for the same reason the gate room's is: the
-		# player arrives from the mouth and the tones have to be facing them when
+		# player arrives from the mouth and the court has to face them when
 		# the fight ends. The chest opposite gets `rotation.y = PI` for this.
 		stone.rotation.y = atan2(stone.position.x, stone.position.z - mid)
 		root.add_child(stone)

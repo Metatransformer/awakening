@@ -16,7 +16,7 @@ four boss drops.
 **Status: design of record, and it runs.** All five verbs — the Bow, the
 Hookshot, Burst, Sustain and Ballast — are rows in `ArmamentDb.NAMES` and stops
 on `Game.RIGHT_POOL`; the Far Lantern's door exists; the twelve relics, the
-twelve Echoes, the twenty ladders and all five stocks are code, and **a relic now
+twelve Blessings, the twenty ladders and all five stocks are code, and **a relic now
 arrives broken** — `home` and `repair` columns on every row of `RelicDb.RELICS`,
 the price on the Lanternkeeper's line, `Broken Tally-Ledger of Fair Weights` in
 the bag (§8, D3, closed). Sustain and Ballast were the last two that were only
@@ -25,7 +25,7 @@ describe something that runs.
 
 **Numbers are not here.** They live in the DB scripts beside the rows they price
 — `docs/SCOPE.md` §1 says so explicitly of `relic_db.gd`, `echo_db.gd` says it
-of the Echo tuning values, and `docs/METAGAME.md` opens with the reason: a doc
+of the Blessing tuning values, and `docs/METAGAME.md` opens with the reason: a doc
 that restates a number is a doc that will disagree with the code. What this file
 carries instead is the **citation**: every claim below names the symbol that
 decides it, so a reader who doubts one can go and look. §9 says why it is the
@@ -52,16 +52,16 @@ reconciling it quietly. That list is a deliverable, not an appendix.
    flag in `Game.items`, never in the bag.
 2. **Relics** — twelve named objects, carried home in the bag, handed across a
    counter, then gone from the bag forever.
-3. **Echoes** — twelve run-scoped boons, carried in the bag, dead by morning.
+3. **Blessings** — twelve run-scoped boons, carried in the bag, ended by morning.
 4. **The ladders** — nothing you pick up. Bought, permanent, on `Game.upgrades`.
 5. **Stock** — arrows, charges, bottles, draughts, keys. Counted, not held.
 
 The shelf decides the plumbing, and the plumbing is the design. A usable item is
 `Game.has()` (`scripts/autoload/game_state.gd:~1082`) and nothing else; a relic
-and an Echo are `ItemDef` rows so that the bag's slot rule, full-bag rule, fee
+and a Blessing are `ItemDef` rows so that the bag's slot rule, full-bag rule, fee
 rule and drop rule apply to them for free — `ItemDb._relic()` and
 `ItemDb._echo()` (`scripts/items/item_db.gd:~194`, `:~221`), and `EchoDb`'s own
-"why an Echo is an `ItemDef` and not a second inventory"
+"why a Blessing is an `ItemDef` and not a second inventory"
 (`scripts/items/echo_db.gd:~14-23`).
 
 ---
@@ -420,15 +420,15 @@ also why the Thief refuses to steal one (`docs/BESTIARY.md` §3).
 
 ---
 
-## 3. The twelve Echoes
+## 3. The twelve Blessings
 
-`docs/SCOPE.md` §1 freezes **Echoes at 12**. `docs/PUZZLES.md` §6 is the design
-of record for which twelve and why; this section is what an Echo is *for* beside
+`docs/SCOPE.md` §1 freezes **Blessings at 12**. `docs/PUZZLES.md` §6 is the design
+of record for which twelve and why; this section is what a Blessing is *for* beside
 the other shelves.
 
-> **An Echo costs a bag slot, and that is the only thing it costs.**
+> **A Blessing costs a bag slot, and that is the only thing it costs.**
 
-**Answers** neither a body nor a lock. An Echo bends a rule the game already
+**Answers** neither a body nor a lock. A Blessing bends a rule the game already
 runs — and the half of that sentence that does any work is the rest of it:
 *"it never moves damage, speed, max health, max stamina or soak, **which is the
 boundary** that keeps a found thing from quietly replacing a bought one"*
@@ -442,24 +442,25 @@ than trusting a listing: twelve rows, five on tempo, five on depth, two on the
 carrying itself, no duplicate names, a catalogue row for every id, value 0 and
 stack 1 on every one of them.
 
-**Enters** from a sounding stone on a pedestal, as **a choice of three**
-(`EchoDb.OFFER`, `echo_db.gd:~49`), at three sites: the shortcut, the gate room
-and the treasure puzzle. Minimum one per floor, maximum two. One Echo — the Long
-Chord — is withheld until floor 3 (`EchoDb.LONG_CHORD_FLOOR`, `echo_db.gd:~54`),
-because it is worth nothing to a player who has not already committed slots.
+**Enters** from the Votive Court as **three answering gods from six**, each with
+one offered rule bend (`PatronDb.offer`), at three sites: the shortcut, the gate
+room and the treasure puzzle. Minimum one per floor, maximum two. One Blessing —
+The Road Remembers — is withheld until floor 3
+(`EchoDb.LONG_CHORD_FLOOR`, `echo_db.gd:~54`), because it is worth nothing to a
+player who has not already committed slots.
 
 **Changes** how a *single run* is played, and then stops existing. Home, garrison
-or death — it goes quiet (`Run.bank_echoes`, mirrored on `bank_relics`). GDD
-pillar 4 is about permanence and an Echo is not permanent, so it does not touch
-it. What it does touch is the bag: a player who takes every Echo on offer walks
+or death — it ends (`Run.bank_echoes`, mirrored on `bank_relics`). GDD
+pillar 4 is about permanence and a Blessing is not permanent, so it does not touch
+it. What it does touch is the bag: a player who takes every Blessing on offer walks
 into the Chord Gate carrying almost nothing worth selling, **and that is the
 decision**.
 
 **The four near-misses are the useful part of the list.** `docs/PUZZLES.md` §6.2
-rejects, by name, an Echo that reveals a chest (relic 8's job), one that holds a
+rejects, by name, a Blessing that reveals a chest (relic 8's job), one that holds a
 Heat chain through a break (Sustain's), one that burns a stack for soak
 (Ballast's) and one that changes a price at a counter (relic 11's). All four for
-the same reason: **an Echo may not be a weaker copy of something permanent.**
+the same reason: **a Blessing may not be a weaker copy of something permanent.**
 
 **That test is a filter, not a generator.** It tells you whether a proposed
 thirteenth is *allowed*, and it will happily pass a dozen of them. The reason
@@ -570,7 +571,7 @@ is exactly one of the trip's four spins.
   armour/jewelry art at 0 and GDD §6.6 gives the reason: four meshes × two paths
   × four rungs, against a hero rig this project has already had to fix three
   times.
-- **A fourth working, a thirteenth relic, a thirteenth Echo, a ninth jewel path,
+- **A fourth working, a thirteenth relic, a thirteenth Blessing, a ninth jewel path,
   a sixth stat.** Each is refused by a count in `docs/SCOPE.md` §1 and by a rule
   in this file. The ceiling on the workings is a **thumb**, not a budget: six ring
   stops is where a ring you can count stops being countable.
@@ -587,7 +588,7 @@ It arrived on 2026-08-10 marking three rows — **⚠ Sustain**, **⚠ Ballast**
 the relic row's *arriving broken is unbuilt* — and D3 and D5 took all three marks
 off it without taking the legend with them. Both Verses are rows in `ArmamentDb`
 and `RelicDb.RELICS` now, like the other four, and every remaining row here —
-relic, Echo, rung, Far Lantern — has code under it. A legend for a glyph the table does not use is itself something a
+relic, Blessing, rung, Far Lantern — has code under it. A legend for a glyph the table does not use is itself something a
 reader lands on and believes, which is the failure the legend existed to
 prevent. **If a row ever loses its code, bring the mark back with it.**
 
@@ -600,7 +601,7 @@ prevent. **If a row ever loses its code, bring the mark back with it.**
 | Ballast | — (not a puzzle verb) | Ballast-Verse, Choir deep chest — **read** | The bag becomes armour. The cheapest stack burns |
 | Far Lantern | the last door | The Riven Knight, floor 4 | The act ends; floor 3's vault, and there is no fourth |
 | A relic | a question about the garrison | 4 anchors, and it arrives **broken** (§2.1) | One catalogue row, one repair price, one lit prop |
-| An Echo | never the five stats | a pedestal, choice of three | One run, then silence |
+| A Blessing | never the five stats | the Votive Court, three gods answer from six | One run, then it ends |
 | A rung | the same questions, in the same units | a counter, after you got home | What you are willing to carry |
 
 ---

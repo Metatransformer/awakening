@@ -51,7 +51,7 @@ definition**, and §4.2 applies.
 | **Puzzle combinators** | **9** | Was 6. Nest, sequence, time, displace, cycle, **couple** (lights out), **chain**, **convert**, **reconfigure**. This is where the variety lives, which is why the prefab count is 12 and not 40 — and why the 6 → 9 amendment bought no new atoms. `docs/PUZZLES.md` §3.1, §8.1 |
 | **Enemy behaviours** | **8**, 4 committed | New row, 2026-08-10. A behaviour is a key on an existing `Enemy.DEFS` row that names **which item answers this body** — thrower/shield, guard/burst, perched/bow-or-hookshot, thief/chase. Not a tenth enemy kind and not a model. `docs/BESTIARY.md` §3 |
 | **Chord edges** | **1 / floor** | The cycle. `dungeon.gd` builds a tree today; one extra edge per floor is the whole change |
-| **Echoes** | **12** | Run-scoped, 1 bag slot, worth 0 gold, dies with the run. Named — no thirteenth, same discipline as the relics |
+| **Blessings** | **12** | Six patrons × two. Run-scoped, 1 bag slot, worth 0 gold, ends with the run — no thirteenth |
 | **Minibosses** | **4** | One per floor, behind the treasure puzzle, **two** beats each (a boss gets three). None drops a verb or a relic; floor 1's drops the **maker's mark**, a progress token and nothing you can use (`BossDb.PROGRESS_TOKENS`, `docs/PUZZLES.md` §4) |
 | Relics | **12** | Named, hand-placed, non-rolling. **Two are Verses; all twelve arrive broken** — GDD §6.4 |
 | Garrison NPCs | **5** | Five counters — vendor, smith, alchemist, Lanternkeeper, Jewelcrafter — and that is everybody. Was 6 for one day: **the village elder went in as a sixth, non-counter person and came back out the same day, folded into the Lanternkeeper** (GDD §1, §6), who now carries his three recorded lines. The count returns to 5 without a counter being added or removed. **There is no sixth counter**, and that is the half of this number that was ever the brake — see §4.2's fifth ledger line. Since 2026-08-10 they **arrive** rather than all standing there on frame one (`StoryDb.UNLOCKS`, `docs/METAGAME.md` §6): two at the start, the smith on the **maker's mark** the floor 1 miniboss drops (card #91, so he is reachable on the first descent), the alchemist and the jewelcrafter at one and two bosses. That is a gate on the same five, not a sixth. Each one is **introduced** on arrival — a two-hander with Aldric and a camera pan, `StoryDb.INTRODUCTIONS`; that is a table and ~20 lines (`scripts/world/introduction.gd`), not a cutscene system. **Six counters at five people since card #91**: the quartermaster grew a second board, THE STORES, when the smith moved behind the miniboss and took arrows, bag slots and heart containers with him. The brake was never the number of boards — it is the number of PEOPLE, and a board is still a `Catalogue` subclass and a row in `Npc.COUNTERS`. |
@@ -61,7 +61,7 @@ definition**, and §4.2 applies.
 | Jewelry slots | **4** | Amulet, 2 rings, bracelet. ×2 paths, ×5 rungs (base + 4 bought) |
 | **Armour / jewelry art** | **0** | Every piece is a number. No modular meshes, no icons beyond the existing catalogue rows. |
 | Garrison scenes | **1** | The courtyard. There is no second settlement. |
-| **New UI screens** | **1** | Was 0, and the zero is still the rule — see §2's housing entry. `StashScreen` is the one exception, because a footlocker is a two-column transfer and `TradeScreen` prices things. The Lanternkeeper and the Jewelcrafter are `Catalogue`s on the existing `TradeScreen`. The stat block is a panel on the equipment screen, not a screen. |
+| **New UI screens** | **2** | `StashScreen`, plus the owner's 2026-08-11 Votive Court modal. The latter replaces three world pickups with one diegetic six-god choice and keeps the rendered shrine visible behind its lower panel. |
 | Endings | **2** | Lantern, Chord |
 | Currencies | **1** | Gold. Components and relics are items, not money. |
 | Ingredients / components | **10 / 8** | As built. No new rarity band. |
@@ -91,7 +91,8 @@ silhouettes the player sees for four minutes each.
 reason this row survived the 2026-08-10 amendment without moving: a miniboss is
 two authored beats and a telegraph, and none of that is art.
 
-**Zero new UI screens** *(one, since the footlocker; the rule is unchanged).*
+**Two authored UI screens.** `StashScreen` is the first exception; the Votive
+Court modal is the second, added by explicit owner direction on 2026-08-11.
 `TradeScreen` already drives two catalogues that behave differently (gold-only
 rows, gold-and-materials rows, held confirms, affordability colouring, refusal
 footers). A donation is a row whose price is one relic. The Lanternkeeper is a
@@ -106,14 +107,16 @@ affordability, and it needs a column the trade screen has nowhere to put — wha
 is on the shelf, beside what is in the bag, moving both ways. Bending
 `TradeScreen` into that would have cost more than the 200 lines it saved and
 would have left the smith's counter carrying a branch for a case it never sees.
-**One exception, argued. Not a precedent.**
+The Votive Court does not fit `TradeScreen` either: it is a one-of-three choice
+among six fixed gods, three of whom must remain visibly silent, over live world
+figures. The second screen is recorded in §4.2 rather than hidden as a panel.
 
 **Two new mechanics** *(was one, amended 2026-08-10 — §4.2's fourth line)*. The
 working — a thrown arc, a fuse, a sphere query, a cracked wall. And the puzzle —
 nine props that emit `solved`, nine combinators, and one extra edge in the room
 planner. Everything else in the plan is still a *gate on*, a *number in*, or an
 *arrangement of* something that already runs, and that includes the two things
-that arrived alongside the puzzle and are **not** mechanics: an Echo is a bag row
+that arrived alongside the puzzle and are **not** mechanics: a Blessing is a bag row
 worth zero, and the shield reflect is a raycast off a shield that exists.
 
 ### Why "usable items" went 4 → 6 and nothing else moved
@@ -136,7 +139,7 @@ place. **This row is why there is no fourth working.**
 
 GDD §6.4 — every relic arrives broken and is repaired (or, for a Verse, read) at
 a home counter for gold — moves **no number here**. Relics stay 12, garrison
-NPCs stay 4, new UI screens stay 0. It is a price and a home on rows in
+NPCs stay 4, and this change adds no UI screen. It is a price and a home on rows in
 `relic_db.gd` that the plan already required, plus a description string. It
 *removes* a special case: the Lanternkeeper stops being the one counter whose
 transaction costs no gold.
@@ -292,7 +295,7 @@ opinion.
 | **M1** | **Gates and gear.** `Game.has()`. Sword + shield + rope at start; bow and hookshot removed from the starting kit; their forge ladders hidden at the smith until owned. **The atom kit** — the eight phase-1 puzzle props (`docs/PUZZLES.md` §2), each a body that emits `solved` and a door that listens, with a refusal that names the verb. This replaces the locked-door prop that used to be this row: a door keyed to an item id is the check §5.3 stopped being. | `gate_locks.gd`, `puzzle_atoms.gd` |
 | **M2** | **One boss.** The Cistern Warden. Boss door replaces the deepest room's stair; arena; a three-beat telegraphed move set; the drop (Bow + relic); the door stays open and the arena stays empty forever after. | `boss_cistern.gd` |
 | **M3** | **The relic and the hall.** `RelicDb` as a `Catalogue`; the Lanternkeeper NPC; donation on the existing `TradeScreen`; relics ride in the bag, are charged the fee, die with the bag and return to their room; **they arrive broken, name their home counter in the description, and cost gold to repair (GDD §6.4) — the first is free**; the first three unlocks live; one garrison prop lights per donation. | `relic_donate.gd` |
-| **M4** | **Floor 1, whole.** The Cistern's manifest: room count, band table, tint, boss door, shortcut door, vault door, deep chest. The vault prefab. **Plus the whole puzzle spine, proven once**: the chord edge in `dungeon.gd`'s planner, the `gate_room` and `puzzle_room` anchors, the Cistern's T0 gate room (a key hunt) with its cycle back to the entrance, its treasure puzzle, **the Sluice-Keeper**, and the Echo pedestal. **This is the demo.** | `cistern_floor.gd`, `puzzle_loop.gd` |
+| **M4** | **Floor 1, whole.** The Cistern's manifest: room count, band table, tint, boss door, shortcut door, vault door, deep chest. The vault prefab. **Plus the whole puzzle spine, proven once**: the chord edge in `dungeon.gd`'s planner, the `gate_room` and `puzzle_room` anchors, the Cistern's T0 gate room (a key hunt) with its cycle back to the entrance, its treasure puzzle, **the Sluice-Keeper**, and the Votive Court. **This is the demo.** | `cistern_floor.gd`, `puzzle_loop.gd` |
 | — | **🛑 THE GATE. Play M4 for an hour. See §4.1.** — **still unpassed as of 2026-08-11, and M5 below it is ✅.** Say that out loud rather than let a reader infer it from the marks: M4's *build* is complete and proven (`cistern_floor.gd` and `puzzle_loop.gd` pass end to end; #67 was its last blocker), but the gate is not a build check and no ✅ on this table can close it. Agents cannot pass it — §4.1's four questions are about whether an hour of it is *fun*, and an agent reporting that its own floor is fun is worth nothing. It needs a person at the keyboard. Everything landed past this line is therefore built **on an untested premise**, which is a known and accepted debt, not an oversight. | A human, playing |
 | **M5** ✅ | **The workings.** Burst: throw arc, fuse, blast, damage, cracked walls. Then Sustain and Ballast as rows on it, and charges on the alchemist's board. **This is also what switches the T2 atoms on** — the cracked pillar is built in M1 and inert until here, which is the correct order: a prop with no verb is a prop, and a verb with no prop is a dead end. **Landed whole, 2026-08-11.** The arc, the fuse, the blast, the damage and the cracked pillar are `scripts/combat/burst_cast.gd`, proven by `tools/directors/burst_cast.gd`. **Sustain and Ballast are cast, not pending** — `HeroRanged._cast_sustain` / `_cast_ballast`, refusals owned by `Heat.sustain()`, four `ArmamentDb` rows each, and the ring full at six stops; proven by `relic_donate.gd`, which grew 319 lines for exactly that. This row read "still rows to write" until 2026-08-11, eleven days after they shipped. | `burst_cast.gd` ✅, `relic_donate.gd` ✅ |
 | **M6** | **Floors 2–4, bosses 2–4, minibosses 2–4.** Repetition of M2 and M4 with the pattern proven. Three manifests, three boss move sets, three miniboss move sets, two vault prefabs, six doors, three gate rooms, three treasure puzzles. **Invent nothing here.** | `foundry_floor.gd`, `choir_floor.gd`, `chord_floor.gd` |
@@ -364,9 +367,10 @@ not worth adding.
 | The Sustain-Verse, the Ballast-Verse (2 relics) | **Fletcher's Jig** and **Waterwheel Gear**, deleted | GDD §6.2 |
 | Usable items 4 → 6 | Nothing — a working is a row in `armament_db.gd`, and the **ring stops** ceiling was added in the same commit to cap it | §1 |
 | **The gear loop.** Garrison NPCs 4 → 5, forge ladders 5 → 12, 8 jewel tracks, 5 named stats | **Nothing. This is an owner's amendment to the manifest, made deliberately and with the cost known.** | GDD §6.6 |
-| **Puzzles, Echoes and minibosses.** New mechanics 1 → 2, 9 atoms, 12 prefabs, 12 Echoes, 4 minibosses, 2 anchor kinds, 1 chord edge per floor | **Nothing. The second owner's amendment, 2026-08-10.** The jewelcrafter's 8 tracks were offered as the deletion and the owner declined | `docs/PUZZLES.md` |
+| **Puzzles, Blessings and minibosses.** New mechanics 1 → 2, 9 atoms, 12 prefabs, 12 Blessings, 4 minibosses, 2 anchor kinds, 1 chord edge per floor | **Nothing. The second owner's amendment, 2026-08-10.** The jewelcrafter's 8 tracks were offered as the deletion and the owner declined | `docs/PUZZLES.md` |
 | **The voices and the elder.** Voiced lines 0 → 15, garrison NPCs 5 → 6, and an opening that is not a cutscene | **Nothing to delete: the lines were already recorded when they arrived.** The owner made them and asked for them to be wired; the manifest's job here is to write down the ceiling, not to relitigate a finished asset | §1, `scripts/autoload/voice.gd` |
 | **The Ocarina pass.** Puzzle combinators 6 → 9, enemy behaviours 0 → 8 (4 committed) | **Phase 2's three uncommitted atoms are on the table** — chain and convert make the torch and the timed bars redundant. Everything else on both rows is a key on a table that exists. **Zero new atoms, models, screens, items or beats** | `docs/PUZZLES.md` §3.1/§8.1, `docs/BESTIARY.md`, `docs/OOT_CATALOGUE.md` |
+| **The Votive Court.** Echo pedestal → six-god shrine; new UI screens 1 → 2 | **Nothing deleted: explicit owner-directed replacement, 2026-08-11.** The screen is the requested readable choice; the old three-mote presentation and world-caption proof were deleted in the same change | `docs/PUZZLES.md` §6, issue #101 |
 
 The first line is the rule working as intended: the two deleted relics were the
 only entries on GDD §6.2's table that were numbers on a subsystem rather than
@@ -416,13 +420,13 @@ What it costs, stated rather than pretended away:
 - **The bill is art and tuning, not engineering.** Eight props, four miniboss
   move sets and twelve prefabs. The mechanism is genuinely small — the atoms are
   bodies that emit `solved` and doors that listen, the cycle is one extra edge in
-  `dungeon.gd`'s planner, and an Echo is a bag row worth zero.
+  `dungeon.gd`'s planner, and a Blessing is a bag row worth zero.
 - **This is the second amendment in two days.** That is the number to watch. Two
   is a pattern forming, and the rule §4.2 exists to enforce has now been set
   aside twice by the only person allowed to set it aside. A third should be
   hard, and the counts in §1 are what make it hard.
 - **`New mechanics` is now 2 and that row is the one to defend.** The puzzle is
-  a whole mechanic; the Echo is not, because it is a bag row and a pedestal, and
+  a whole mechanic; the Blessing is not, because it is a bag row and a shrine, and
   the shield reflect is not, because it is a raycast off a shield that exists.
   Anything that claims to be free the way those two are should have to prove it
   the way those two did.
@@ -435,7 +439,8 @@ guarding.**
   5, there is no sixth" was written to stop a *sixth catalogue* — another screen,
   another price table, another draw on the same drop tables (the third ledger
   line's second bullet is the whole argument). The elder had no `counter` key, no
-  `ShopBooth`, no `Catalogue`, and touched gold nowhere. New UI screens stay 1,
+  `ShopBooth`, no `Catalogue`, and touched gold nowhere. At that point new UI
+  screens stayed 1; the later Votive Court amendment moves the current ceiling to 2,
   currencies stay 1, components stay 10 / 8.
 
   **And then he stopped being a separate person at all** (2026-08-10, later the

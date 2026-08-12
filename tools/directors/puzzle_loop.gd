@@ -10,24 +10,24 @@ extends RefCounted
 ##
 ## What it claims, in the order it proves them:
 ##
-##   A  The tables are sound. `PuzzleAtoms.validate()`, `EchoDb.validate()` and
-##      `BossDb.validate()` -- the last one because M4 added a whole second table
-##      to it and a miniboss row is exactly as able to be wrong as a boss row.
+##   A  The tables are sound. `PuzzleAtoms.validate()`, `EchoDb.validate()`,
+##      `PatronDb.validate()` and `BossDb.validate()` -- the last one because M4
+##      added a second table and a miniboss row can be wrong like a boss row.
 ##   B  The spine is PLACED. Both new anchors exist, the gate room is on the path
 ##      to `deepest` and its door is in the doorway that continues that path, and
 ##      the treasure puzzle is somewhere the critical path does not go.
 ##   C  The gate room is a **key hunt** (§5.2), and it is a nest (§3): the door
 ##      refuses by name, the key is dark and inert until the sun socket lights,
 ##      and the socket is not one of the door's atoms.
-##   D  Solving it pays an **Echo** -- three real, distinct, unheld tones on a
-##      sounding stone, one taken, two silenced, worth 0 gold and costing a slot.
+##   D  Solving it opens the **Votive Court** -- three patrons answer with real,
+##      distinct blessings; choosing one costs a slot and moves no bag value.
 ##   E  The **cycle** exists (§4): one chord edge, ends at least three apart, its
 ##      far end no shallower than the gate room, barred from the near side only,
 ##      and the near end nearer the entrance than the far one. That last is the
 ##      whole point -- the loop is the walk home.
 ##   F  The **treasure puzzle** (§5.3) is optional, off the critical path, and is
 ##      the plate/block nest; behind it stand the **Sluice-Keeper**, a rich chest
-##      and the floor's second Echo.
+##      and the floor's second blessing shrine.
 ##   G  The Sluice-Keeper obeys §7: two beats, drops nothing, and its arena hands
 ##      out no relic when the chamber is revisited spent.
 ##
@@ -44,6 +44,7 @@ extends RefCounted
 ## Forced so the spine is the same spine every run, and the same seed
 ## `cistern_floor` uses so the two directors describe one floor.
 const SEED := 20260809
+const PatronDbScript := preload("res://scripts/items/patron_db.gd")
 
 var out := ""
 var _fails := 0
@@ -114,6 +115,7 @@ func _ck(label: String, ok: bool) -> void:
 func _tables() -> void:
 	for pair in [["the atom kit", PuzzleAtoms.validate()],
 			["the twelve Echoes", EchoDb.validate()],
+			["the six patrons", PatronDbScript.validate()],
 			["the boss and miniboss tables", BossDb.validate()]]:
 		var lines: PackedStringArray = pair[1]
 		for line in lines:
@@ -282,65 +284,89 @@ func _the_gate_room(rig, d: Node, hero: Node3D) -> void:
 	await rig.capture(out.path_join("p_03_gate_open.png"))
 
 
-# --- D. The Echo ----------------------------------------------------------------
+# --- D. The blessing ------------------------------------------------------------
 
 func _the_echo(rig, d: Node, hero: Node3D) -> void:
 	var cell: Vector2i = d.anchor_cell(&"gate_room")
-	var stone := _stone_in(d.rooms[cell]["node"])
-	_ck("D0 the gate room has a sounding stone", stone != null)
+	var stone: Node3D = _stone_in(d.rooms[cell]["node"])
+	_ck("D0 the gate room has a votive shrine", stone != null)
 	if stone == null:
 		return
 	var offered: Array = stone.call(&"offered")
-	print("PUZZLE stone offers %s" % [offered])
-	_ck("D1 opening the gate lit it -- three tones (§6)", offered.size() == 3)
+	var responders: Array = stone.call(&"responding_patrons")
+	print("PUZZLE shrine offers %s from %s" % [offered, responders])
+	_ck("D1 opening the gate drew three blessings (§6)", offered.size() == 3)
 	if offered.size() != 3:
 		return
 
-	var distinct := {}
-	var real := true
+	var distinct: Dictionary = {}
+	var real: bool = true
 	for id: StringName in offered:
 		distinct[id] = true
 		if EchoDb.row(id).is_empty() or ItemDb.get_def(id) == null:
 			real = false
 	_ck("D2 all three are distinct", distinct.size() == 3)
 	_ck("D3 and all three are real rows in both tables", real)
+	var responding_set: Dictionary = {}
+	for patron_id: StringName in responders:
+		responding_set[patron_id] = true
+	_ck("D4 exactly three distinct patrons answer",
+		responders.size() == 3 and responding_set.size() == 3)
 
-	# Off to one side. Dead ahead the hero's own shoulders sit exactly where the
-	# middle tone is, and the frame that is supposed to show a choice of three
-	# shows two.
-	# A small step off the axis, not a big one: the three tones stand on a ring,
-	# and a sharp angle on a ring foreshortens two of them into each other. Far
-	# enough across to clear the hero's own shoulders, near enough to keep the
-	# offer readable as three.
-	await _stand_in_front(rig, hero, stone, 5.2, 1.9)
-	await rig.capture(out.path_join("p_04_echo_offer.png"))
-
-	var motes := _motes_under(stone)
-	_ck("D4 three motes are standing on it", motes.size() == 3)
-	if motes.is_empty():
+	var interactable := stone.get_node_or_null(^"Interactable") as Interactable
+	_ck("D5 the shrine has its authored Interactable", interactable != null)
+	if interactable == null:
 		return
-	var take: StringName = motes[0].item_id
+	# Close enough for the trigger to arbitrate the real Prompt, but offset enough
+	# that the hero's shoulders do not cover the central broken maker monument.
+	await _stand_in_front(rig, hero, stone, 2.35, 0.65)
+	await _until(rig, func() -> bool: return Prompt.focus == interactable, 90)
+	_ck("D6 the shrine owns the interact prompt", Prompt.focus == interactable)
+	if Prompt.focus != interactable:
+		return
+
+	await rig.tap([&"interact"])
+	await _until(rig, func() -> bool: return bool(stone.call(&"menu_open")), 90)
+	var menu: Node = _blessing_menu(rig.scene())
+	_ck("D7 pressing interact opens a BlessingMenu",
+		bool(stone.call(&"menu_open")) and menu != null)
+	if menu == null:
+		return
+	_ck("D8 it shows all six patron cards", int(menu.call(&"card_count")) == 6)
+	_ck("D9 and exactly three answering cards",
+		int(menu.call(&"answering_count")) == 3)
+	await _until(rig, func() -> bool:
+		var owner := menu.get_viewport().gui_get_focus_owner()
+		return owner != null and menu.is_ancestor_of(owner), 90)
+	var focus := menu.get_viewport().gui_get_focus_owner() as Button
+	_ck("D10 an answering card owns UI focus",
+		focus != null and menu.is_ancestor_of(focus) and not focus.disabled)
+	await rig.capture(out.path_join("p_04_blessing_offer.png"))
+
 	var slots_before: int = Run.slots_used()
 	var value_before: int = Run.bag_value()
-	hero.global_position = motes[0].global_position
-	await rig.wait_frames(40)
+	await rig.tap([&"ui_accept"])
+	await _until(rig, func() -> bool:
+		return bool(stone.call(&"is_spent")) \
+			and not bool(stone.call(&"menu_open")) \
+			and _blessing_menu(rig.scene()) == null, 120)
 
-	_ck("D5 walking into one takes it (%s)" % EchoDb.name_of(take),
-		Run.has_echo(take))
-	_ck("D6 it costs a bag slot (%d -> %d)" % [slots_before, Run.slots_used()],
+	var taken: Array[StringName] = []
+	for id: StringName in offered:
+		if Run.has_echo(id):
+			taken.append(id)
+	_ck("D11 one offered blessing entered the run (%s)" % [taken],
+		taken.size() == 1)
+	_ck("D12 it costs a bag slot (%d -> %d)" % [slots_before, Run.slots_used()],
 		Run.slots_used() == slots_before + 1)
 	# §6: worth 0 gold, so it cannot be sold and does not raise the fee. Both
 	# fall out of the catalogue row rather than out of a rule anybody wrote.
-	_ck("D7 and is worth 0 gold, so the fee does not move (%d)" % Run.bag_value(),
+	_ck("D13 it is worth 0 gold, so the fee does not move (%d)" % Run.bag_value(),
 		Run.bag_value() == value_before)
-
-	var left := 0
-	for m in _motes_under(stone):
-		if is_instance_valid(m):
-			left += 1
-	_ck("D8 the other two went quiet (%d motes left)" % left, left == 0)
-	_ck("D9 and the stone is spent", bool(stone.call(&"is_spent")))
-	await rig.capture(out.path_join("p_05_echo_taken.png"))
+	_ck("D14 the menu closed", not bool(stone.call(&"menu_open"))
+		and _blessing_menu(rig.scene()) == null)
+	_ck("D15 and the shrine is spent", bool(stone.call(&"is_spent")))
+	await rig.capture(out.path_join("p_05_blessing_taken.png"))
 
 
 # --- E. The cycle ---------------------------------------------------------------
@@ -453,7 +479,7 @@ func _the_treasure(rig, d: Node, hero: Node3D) -> void:
 	var stone := _stone_in(chamber)
 	_ck("G1 with the floor's miniboss in it", arena != null)
 	_ck("G2 a rich chest", chest != null)
-	_ck("G3 and the floor's second Echo", stone != null)
+	_ck("G3 and the floor's second blessing shrine", stone != null)
 	if arena == null:
 		return
 
@@ -512,7 +538,7 @@ func _the_treasure(rig, d: Node, hero: Node3D) -> void:
 		print("PUZZLE treasure stone offers %s" % [offered])
 		# On the KILL, not on the gate: §5.3's reward is miniboss + chest + Echo,
 		# and a stone lit by the door would pay before the fight it gated.
-		_ck("G13 and the kill lit the second sounding stone", offered.size() == 3)
+		_ck("G13 and the kill awakened the second blessing shrine", offered.size() == 3)
 	# Off the chest's axis, toward the stone: §5.3 pays THREE things and this is
 	# the frame that has to show all of them. Dead ahead of the chest the hero
 	# stands in front of it and the shot is a lit pedestal and a shadow.
@@ -578,7 +604,7 @@ func _stand(rig, hero: Node3D, at: Node3D, back: float,
 ## camera inside masonry twice (`p_01`, `p_08`), which is a framing bug that no
 ## check could have caught, because every check passed.
 ##
-## `side` exists for the sounding stone: a hero centred on a three-mote offer
+## `side` exists for the blessing shrine: a hero centred on a three-patron offer
 ## stands in front of the middle one.
 func _stand_in_front(rig, hero: Node3D, at: Node3D, back: float,
 		side: float = 0.0) -> void:
@@ -612,7 +638,7 @@ func _look_at(rig, hero: Node3D, at: Node3D) -> void:
 	await rig.wait_frames(24)
 
 
-## The sounding stone under `root`, by group rather than by name -- the placer
+## The blessing shrine under `root`, by group rather than by name -- the placer
 ## names them after the site and a director that matched on the name would be a
 ## second copy of that naming rule.
 func _stone_in(root: Node) -> Node3D:
@@ -622,11 +648,13 @@ func _stone_in(root: Node) -> Node3D:
 	return null
 
 
-func _motes_under(stone: Node) -> Array:
-	var found: Array = []
-	for n in _every(stone, func(x: Node) -> bool: return x is LootMote):
-		found.append(n)
-	return found
+func _blessing_menu(root: Node) -> Node:
+	for n in _every(root, func(x: Node) -> bool:
+		return x.has_method(&"card_count") \
+			and x.has_method(&"answering_count") \
+			and x.has_signal(&"blessing_chosen")):
+		return n
+	return null
 
 
 func _hero(rig) -> Node3D:

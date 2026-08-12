@@ -31,7 +31,7 @@ extends RefCounted
 ##      goes on refusing after the Warden hands the bow over. The check is dead.
 ##   D  One real arrow into the eye and the door swings **by itself**.
 ##   E  §5.2's amendment, applied to this shape: behind it are the way down, a
-##      chest, and a sounding stone offering three Echoes.
+##      chest, and a Votive Court offering three blessings.
 ##   F  The flag survives `PuzzleAtom.clear_run_flags()`. Rebuild the floor and
 ##      the door is open with its eye dark again — which is the ninety seconds.
 ##   G  Floors 2 and 3 draw the other two prefabs — the cracked pillar bracing
@@ -322,7 +322,7 @@ func _d_the_arrow(rig, d: Node, hero: Node3D, door: Node3D) -> void:
 
 ## §5.2's amendment is a rule for all three shapes: *a solved puzzle drops
 ## something you can carry out.* §5.1's row of that table is **the way down, +1
-## Echo, and the shortcut chest**, and all three stand in the landing.
+## blessing shrine, and the shortcut chest**, and all three stand in the landing.
 func _e_the_rewards(rig, d: Node, hero: Node3D, door: Node3D) -> void:
 	var landing: Node = d.get_node_or_null(^"ShortcutLanding")
 	if landing == null:
@@ -340,13 +340,13 @@ func _e_the_rewards(rig, d: Node, hero: Node3D, door: Node3D) -> void:
 		and bool(chest.get(&"enabled")))
 
 	var stone: Node3D = landing.get_node_or_null(^"SoundingStone_shortcut")
-	_ck("E3 a sounding stone is there", stone != null)
+	_ck("E3 a Votive Court is there", stone != null)
 	if stone != null:
 		var three: Array = stone.call(&"offered")
 		print("SHORTCUT the stone offers %s" % [three])
-		# §6: *every Echo pickup is a choice of three*, and the shortcut's row of
+		# §6: *every blessing is a choice of three*, and the shortcut's row of
 		# that table pays exactly one.
-		_ck("E4 and it is offering three Echoes (%d)" % three.size(),
+		_ck("E4 and it is offering three blessings (%d)" % three.size(),
 			three.size() == 3)
 
 	# Through the door, on the hero's own capsule, so the reward is a place the
@@ -365,7 +365,7 @@ func _e_the_rewards(rig, d: Node, hero: Node3D, door: Node3D) -> void:
 		Bus.camera_recenter.emit()
 		await rig.wait_frames(30)
 		_ck("E5 and all three are reachable through the opened door", walked)
-		await rig.capture(out.path_join("s_06_landing_chest_and_echoes.png"))
+		await rig.capture(out.path_join("s_06_landing_chest_and_blessings.png"))
 
 
 # --- F. The flag outlives the run ---------------------------------------------

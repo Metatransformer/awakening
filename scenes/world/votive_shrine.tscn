@@ -1,0 +1,44 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/sounding_stone.gd" id="1_shrine"]
+[ext_resource type="Script" path="res://scripts/world/interactable.gd" id="2_interactable"]
+[ext_resource type="PackedScene" path="res://scenes/world/patron_effigy.tscn" id="3_effigy"]
+
+[node name="VotiveShrine" type="Node3D"]
+script = ExtResource("1_shrine")
+
+[node name="Interactable" type="Area3D" parent="."]
+script = ExtResource("2_interactable")
+prompt = "SEEK A BLESSING"
+radius = 3.2
+
+[node name="Effigies" type="Node3D" parent="."]
+
+[node name="LadyLongWater" parent="Effigies" instance=ExtResource("3_effigy")]
+position = Vector3(-2.25, 0, 0.18)
+patron_id = &"lady_long_water"
+
+[node name="LastGuest" parent="Effigies" instance=ExtResource("3_effigy")]
+position = Vector3(-1.35, 0, 0)
+patron_id = &"last_guest"
+
+[node name="OldHarrow" parent="Effigies" instance=ExtResource("3_effigy")]
+position = Vector3(-0.45, 0, -0.12)
+patron_id = &"old_harrow"
+
+[node name="OldManMountain" parent="Effigies" instance=ExtResource("3_effigy")]
+position = Vector3(0.45, 0, -0.12)
+patron_id = &"old_man_mountain"
+
+[node name="GoodNeighbor" parent="Effigies" instance=ExtResource("3_effigy")]
+position = Vector3(1.35, 0, 0)
+patron_id = &"good_neighbor"
+
+[node name="GreyWalker" parent="Effigies" instance=ExtResource("3_effigy")]
+position = Vector3(2.25, 0, 0.18)
+patron_id = &"grey_walker"
+
+[node name="Vallen" parent="Effigies" instance=ExtResource("3_effigy")]
+position = Vector3(0, 0, 0.78)
+patron_id = &"vallen"
+broken = true
