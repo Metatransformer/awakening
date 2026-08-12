@@ -74,7 +74,7 @@ const INTRO_FLAG := &"reported_for_duty"
 ## Where the curtain stands. Unchanged through both rebuilds, because every NPC
 ## position in `_build_people` and the whole prop ring in `_build_relic_props`
 ## are tuned against these numbers and against the arrival camera.
-@export var yard: Vector2 = Vector2(26.0, 22.0)
+@export var yard: Vector2 = GarrisonCompound.COMPOUND_SIZE
 ## The grass runs well past the walls, so the garrison sits IN a landscape
 ## rather than on a slab with a void around it. Placeholder ground, on purpose
 ## -- SCOPE §3's gate is a played hour, not a look. Nothing inside the yard can
@@ -99,10 +99,12 @@ var smith: Npc
 var alchemist: Npc
 var keeper: Npc
 var jeweller: Npc
-var gate: Npc
+var gate: SurfaceTransition
 ## The hero's billet, in the south-west corner. Public so a director can walk to
 ## it without knowing where the corner is.
-var house: House
+var house: BunkBed
+var compound: GarrisonCompound
+var atmosphere: SurfaceAtmosphere
 ## The paved circle, and the carved figure standing on the middle of it. Public
 ## so a director can frame the plaza without re-deriving where it is.
 var plaza: Plaza
@@ -125,12 +127,21 @@ var lights: Array[GarrisonLight] = []
 ## `RunEndScreen` (scripts/ui/run_end/) that says so now, over the floor it ended
 ## on, before the ride home. Do not re-add a second one here.
 func _ready() -> void:
-	_build_env()
-	_build_yard()
+	if Flow.refuse_boot(self):
+		return
+	atmosphere = SurfaceAtmosphere.new()
+	atmosphere.name = &"SurfaceAtmosphere"
+	add_child(atmosphere)
+	compound = GarrisonCompound.new()
+	compound.name = &"Compound"
+	add_child(compound)
+	house = compound.player_bunk
 	_build_plaza()
-	_build_house()
-	_build_people()
+	_build_compound_people()
 	_build_relic_props()
+	Clock.service_availability_changed.connect(_apply_staffing)
+	_apply_staffing(Clock.services_available())
+	_place_dawn_wake()
 	_open_the_game()
 
 
@@ -534,7 +545,8 @@ func _build_plaza() -> void:
 ## one at a time and means something; a thirteenth warm light that was on from
 ## the first frame would be the one prop in the yard whose state says nothing.
 func _build_house() -> void:
-	house = House.new()
+	house = BunkBed.new()
+	house.player_bunk = true
 	# Its own two walls go on -X and +Z, so the corner it wants is the corner of
 	# the yard, inset by half the room plus enough to clear the curtain's block
 	# relief (KitStyle.RELIEF, 0.17 proud of the placement plane).
@@ -648,6 +660,67 @@ const STATUE_YAW := -45.0
 ## The three fields stay `null` until then, so anything that reaches for
 ## `garrison.smith` must check. Directors get all five: `tools/shoot.gd` stamps
 ## the arrival flags, for the same reason it skips the opening.
+## Build the existing roster into the generated compound's named ports. The
+## generator knows where a role belongs; this scene remains the owner of who has
+## arrived and of every gameplay node.
+func _build_compound_people() -> void:
+	vendor = _compound_counter(Npc.Role.VENDOR, &"quartermaster",
+		&"quartermaster_day", Pal.GOLD)
+	smith = _compound_counter(Npc.Role.SMITH, &"smith",
+		&"smith_day", Color(0.98, 0.56, 0.24))
+	alchemist = _compound_counter(Npc.Role.ALCHEMIST, &"alchemist",
+		&"alchemist_day", Color(0.96, 0.80, 0.52))
+	keeper = _compound_counter(Npc.Role.KEEPER, &"elder",
+		&"elder_day", Pal.GOLD, false)
+	jeweller = _compound_counter(Npc.Role.JEWELLER, &"jewelcrafter",
+		&"jewelcrafter_day", Color(0.80, 0.62, 0.94))
+
+	gate = SurfaceTransition.new()
+	gate.name = &"OuterGate"
+	gate.destination = SurfaceTransition.Destination.OUTSKIRTS
+	gate.radius = 3.0
+	add_child(gate)
+	gate.global_transform = compound.global_transform * compound.port(&"gate")
+
+
+func _compound_counter(role: Npc.Role, who: StringName, day_port: StringName,
+		lamp: Color, gated: bool = true) -> Npc:
+	if gated and not StoryDb.unlocked(who):
+		return null
+	var npc := Npc.new()
+	npc.role = role
+	npc.lamp_color = lamp
+	add_child(npc)
+	npc.global_transform = compound.global_transform * compound.port(day_port)
+	return npc
+
+
+func _apply_staffing(available: bool) -> void:
+	var sleepers: Array = [
+		[vendor, &"quartermaster_sleep"],
+		[smith, &"smith_sleep"],
+		[alchemist, &"alchemist_sleep"],
+		[keeper, &"elder_sleep"],
+		[jeweller, &"jewelcrafter_sleep"],
+	]
+	for row: Array in sleepers:
+		var npc := row[0] as Npc
+		if npc == null:
+			continue
+		var sleep_port := StringName(row[1])
+		npc.set_working(available,
+			compound.global_transform * compound.port(sleep_port))
+
+
+func _place_dawn_wake() -> void:
+	if not Flow.consume_bunk_wake():
+		return
+	var hero := get_tree().get_first_node_in_group(&"player") as Node3D
+	if hero != null:
+		hero.global_transform = compound.global_transform * compound.port(&"player_bunk")
+	Bus.request_message.emit("DAWN. YOU WAKE IN THE BARRACKS.")
+
+
 func _build_people() -> void:
 	# North-east and north-west of the plaza, flanking the approach to the gate.
 	smith = _ring(Npc.Role.SMITH, &"smith", 55.0, Color(0.98, 0.56, 0.24))
@@ -714,10 +787,10 @@ func _build_people() -> void:
 	# of the arch's own threshold. You have to walk INTO the gatehouse to be
 	# offered the way down, which is the read wanted and which every director that
 	# approaches this node gets for free (they aim at `gate.global_position`).
-	gate = Npc.new()
-	gate.role = Npc.Role.GATE
-	gate.position = Vector3(0.0, 0.0, -yard.y * 0.5)
-	add_child(gate)
+	var legacy_gate := Npc.new()
+	legacy_gate.role = Npc.Role.GATE
+	legacy_gate.position = Vector3(0.0, 0.0, -yard.y * 0.5)
+	add_child(legacy_gate)
 
 
 ## The twelve dark things, and the reason the garrison is worth coming home to.
@@ -748,8 +821,12 @@ func _build_relic_props() -> void:
 	# Inset from the walls by enough that a lamp is a thing standing IN the yard
 	# rather than a light smeared on masonry, and the torches (which live flat
 	# against the two long walls) stay a clear metre behind them.
-	var rx := yard.x * 0.5 - 2.0
-	var rz := yard.y * 0.5 - 2.0
+	# The old tiny yard used the curtain itself as the ring. The generated fort's
+	# wings now occupy that perimeter, so the same twelve consequences line the
+	# open parade loop where every trip between barracks, gate and services sees
+	# at least one.
+	var rx := 8.8
+	var rz := 7.8
 	for i in props.size():
 		# Starting a quarter-step past due north, not on it and not on the
 		# half-step: due north is the gate's arch, and the half-step puts two of
@@ -812,5 +889,3 @@ func _counter(role: Npc.Role, at: Vector3, yaw_deg: float, lamp: Color) -> Npc:
 	n.position = at - n.transform.basis * Vector3(0.0, 0.0, ShopBooth.KEEPER_BACK)
 	add_child(n)
 	return n
-
-

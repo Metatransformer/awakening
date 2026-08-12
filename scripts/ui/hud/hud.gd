@@ -314,6 +314,7 @@ var _hold01: float = 0.0
 var _hold_required: bool = false
 ## The kit wheel's input half; this file draws it. See `_draw_wheel`.
 var _wheel: KitWheel = null
+var _clock_text := ""
 
 
 func _ready() -> void:
@@ -372,6 +373,10 @@ func _ready() -> void:
 	Bus.ammo_changed.connect(_repaint)
 	Bus.loadout_changed.connect(_repaint)
 	Bus.item_selected_changed.connect(_repaint)
+	Clock.minute_changed.connect(_on_clock_minute)
+	Clock.phase_changed.connect(_repaint)
+	Clock.service_availability_changed.connect(_repaint)
+	_on_clock_minute(Clock.day, int(Clock.hour), int(fmod(Clock.hour, 1.0) * 60.0))
 	# A binding moved — on a pickup, or on the equipment screen's card. The wheel
 	# is usually shut when this fires and the repaint is then a no-op; it is
 	# connected anyway because the auto-bind CAN land while the wheel is open
@@ -454,6 +459,12 @@ func _ready() -> void:
 
 func _repaint(_a = null, _b = null, _c = null) -> void:
 	_canvas.queue_redraw()
+
+
+func _on_clock_minute(day: int, hour: int, minute: int) -> void:
+	_clock_text = "DAY %d  •  %s" % [day,
+		SkyCycle.hour_string(float(hour) + float(minute) / 60.0)]
+	_repaint()
 
 
 func _on_health(quarters: int, _max_q: int) -> void:
@@ -1139,6 +1150,7 @@ func _draw_hud() -> void:
 	_draw_minimap(s)
 	_draw_bag(s)
 	_draw_extraction(s)
+	_draw_clock(s)
 	_draw_toast(s)
 	_draw_save(s)
 	_draw_prompt(s)
@@ -1162,6 +1174,24 @@ func _draw_hud() -> void:
 	# everything above and expects to be read instead of them, not alongside.
 	_draw_wheel(s)
 	_seal_layout()
+
+
+func _draw_clock(s: Vector2) -> void:
+	if _clock_text.is_empty():
+		return
+	var scale := CanvasText.scale_for(14.0, s.y)
+	var phase := SkyCycle.phase_of(Clock.hour)
+	var tint := Pal.MOTH
+	if phase == &"dawn" or phase == &"dusk":
+		tint = Pal.GOLD
+	elif phase == &"night":
+		tint = Pal.CYAN
+	CanvasText.draw_centred(_canvas, _clock_text,
+		Vector2(s.x * 0.5, Pal.px(12.0, s.y)), scale, tint)
+	if not Run.in_dungeon and not Clock.services_available():
+		var small := CanvasText.scale_for(11.0, s.y)
+		CanvasText.draw_centred(_canvas, "SERVICES CLOSED",
+			Vector2(s.x * 0.5, Pal.px(30.0, s.y)), small, Pal.RUST)
 
 
 # --- Controls -----------------------------------------------------------------

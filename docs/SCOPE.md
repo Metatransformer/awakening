@@ -43,7 +43,7 @@ definition**, and §4.2 applies.
 | Usable items | **6** | Bow, Hookshot, **Burst**, **Sustain**, **Ballast** — all built, the last two on 2026-08-11 (`docs/ITEMS.md` §8, D5) — and the Far Lantern, which has no verb |
 | **Ring stops** | **6** | Sword, bow, hookshot, Burst, Sustain, Ballast. **Hard ceiling** — `docs/CONTRACT.md` §4.1. `Game.RIGHT_POOL` holds all six now, so this row is no longer a plan: a seventh entry in that array is an amendment |
 | **Kit wheel slots** | **8** | New row, 2026-08-11, owner's call. Hold LB, point, release — `docs/CONTRACT.md` §4.2. **Eight is short of the ten a player can own on purpose** (6 ring stops + 4 bottles), because a wheel with room for everything is a hotbar nobody curates. It adds no screen (a card on the existing Items panel), no new id vocabulary (armament ids and `bottle_N` tokens) and no new field the D-pad did not already write. A ninth slot is an amendment to the sentence above, not a constant. |
-| **New mechanics** | **2** | The working, and **the puzzle**. Was 1. See §4.2's fourth ledger line — this is an owner's amendment, not an absorption. **The kit wheel is not a third**: it is a faster door onto `Game.loadout` and `Game.item_selected`, both of which the D-pad already wrote. |
+| **New mechanics** | **3** | The working, **the puzzle**, and the **daily-life loop**: one clock jointly drives surface light, bounded weather, curfew and sleep. Weather is a presentation axis inside that loop, not a second simulation or forecast economy. |
 | Locked doors | **8** | 4 shortcuts, 3 vaults, 1 to the Long Descent. **They are puzzles now, not checks** — `docs/PUZZLES.md`, GDD §5.3 |
 | Vault prefabs | **3** | Three rooms each |
 | **Puzzle atoms** | **9** | Phase 1: key door, urn, plate, push block, eye switch, cracked pillar, hookshot target, sun switch, **lantern**. The lantern was pulled forward out of phase 2 (2026-08-10), leaving three there, uncommitted |
@@ -54,13 +54,13 @@ definition**, and §4.2 applies.
 | **Blessings** | **12** | Six patrons × two. Run-scoped, 1 bag slot, worth 0 gold, ends with the run — no thirteenth |
 | **Minibosses** | **4** | One per floor, behind the treasure puzzle, **two** beats each (a boss gets three). None drops a verb or a relic; floor 1's drops the **maker's mark**, a progress token and nothing you can use (`BossDb.PROGRESS_TOKENS`, `docs/PUZZLES.md` §4) |
 | Relics | **12** | Named, hand-placed, non-rolling. **Two are Verses; all twelve arrive broken** — GDD §6.4 |
-| Garrison NPCs | **5** | Five staffed counters — quartermaster, smith, alchemist, Lanternkeeper, Jewelcrafter — and that is everybody. Was 6 for one day: **the village elder went in as a sixth, non-counter person and came back out the same day, folded into the Lanternkeeper** (GDD §1, §6), who now carries his three recorded lines. The count returns to 5 without a counter being added or removed. **There is no sixth counter**, and that is the half of this number that was ever the brake — see §4.2's fifth ledger line. Since 2026-08-10 they **arrive** rather than all standing there on frame one (`StoryDb.UNLOCKS`, `docs/METAGAME.md` §6): two at the start, the smith on the **maker's mark** the floor 1 miniboss drops (card #91, so he is reachable on the first descent), the alchemist and the jewelcrafter at one and two bosses. That is a gate on the same five, not a sixth. Each one is **introduced** on arrival — a two-hander with Aldric and a camera pan, `StoryDb.INTRODUCTIONS`; that is a table and ~20 lines (`scripts/world/introduction.gd`), not a cutscene system. **Six services at five people since card #91**: the quartermaster offers **Trade** for arrows, charges, hardtack, Small Beer and selling the player's bag, plus **Upgrades** for bag-slot and heart-container ladders. The smith offers **Smithing**, the alchemist **Alchemy**, the Lanternkeeper **Artifacts**, and the Jewelcrafter **Upgrades**. This is one shared NPC service screen class with two layouts, not another NPC, screen system, item, or content track. The brake remains the number of PEOPLE. |
+| Garrison NPCs | **5** | Quartermaster, smith, alchemist, Lanternkeeper/Elder and Jewelcrafter; there is no sixth person. They still arrive through `StoryDb.UNLOCKS`. **Seven services at five people**: quartermaster Trade + Upgrades; smith Smithing; alchemist Alchemy; Lanternkeeper Artifacts + QoL Upgrades; jewelcrafter Upgrades. Every service uses the shared NPC service screen. At night the same five leave their work nooks for authored sleeping ports and every service closes because its owner is physically absent. |
 | **Stats** | **5** | Damage, speed, max health, stamina, soak. GDD §6.6. No sixth. |
-| **Upgrade tracks** | **20** | 4 gear (edge, guard, string, chain) + 8 armour (4 pieces × 2 paths) + 8 jewel (4 slots × 2 paths) |
+| **Upgrade tracks** | **23** | 20 combat/gear tracks + 3 Elder QoL tracks: bed recovery, finite locker expansion and early reveille. |
 | Armour pieces | **4** | Chest, legs, arms, boots. ×2 paths, ×4 rungs (rung 0 free, 3 bought — `K.FORGE_MAX`) |
 | Jewelry slots | **4** | Amulet, 2 rings, bracelet. ×2 paths, ×5 rungs (base + 4 bought) |
 | **Armour / jewelry art** | **0** | Every piece is a number. No modular meshes, no icons beyond the existing catalogue rows. |
-| Garrison scenes | **1** | The courtyard. There is no second settlement. |
+| Garrison surface scenes | **2** | One generated fort compound and one bounded cliff-path approach to the Sunken Cut. The approach is not a settlement or overworld: one entrance, one return gate and one blocked branch. |
 | **New UI screens** | **2** | `StashScreen`, plus the owner's 2026-08-11 Votive Court modal. The latter replaces three world pickups with one diegetic six-god choice and keeps the rendered shrine visible behind its lower panel. |
 | Endings | **2** | Lantern, Chord |
 | Currencies | **1** | Gold. Components and relics are items, not money. |
@@ -164,7 +164,8 @@ every time someone has the idea again.
 **Refused because they are a different game:**
 
 - Multiplayer or co-op of any kind.
-- A second garrison, an overworld, a hub outside Valenfeld.
+- A second garrison or an overworld. The bounded gate-to-Cut approach is part of
+  this garrison's threshold, not a navigable region or second hub.
 - Player-joinable factions. The Vale has fourteen of them in the lore. That is a
   reason to keep the lore, not a reason to build the game the lore implies.
 - Character creation, races, classes, skill trees.
@@ -217,14 +218,14 @@ every time someone has the idea again.
   ingredient it has become cooking and this line applies to it again.
 
   **Housing shipped anyway, in one room, and the refusal still stands.** The
-  hero's quarters (`scripts/world/house.gd`) is a lean-to in the courtyard's
-  south-west corner with a bed and a footlocker in it. What this line refuses is
+  hero's quarters are one assigned bunk in the shared barracks, with a bed and
+  footlocker; the Elder alone has a private room. What this line refuses is
   *housing as a system* — a plot you buy, rooms you place, furniture you
   purchase and arrange, a decoration economy, a second interior to author and
   light. None of that exists and none of it is planned. What shipped is two
-  props in an alcove, at the same budget as the smith's anvil: it takes no gold,
-  it has no upgrade ladder, and it has nothing you can put in it that is not an
-  item you already own.
+  fixed authored quarters, at the same budget as the smith's anvil. The Elder's
+  three QoL tracks improve existing rules; they do not place furniture, change
+  the floor plan or create a decoration economy.
 
   It was allowed through because both props close holes the garrison already had.
   The bed **writes the save on demand** — transitions and five minutes of active,
@@ -246,19 +247,22 @@ every time someone has the idea again.
   three-room prefab. When it wants a tint and a roster it has become a floor.
 - **Procedurally generated bosses.** Four authored move sets are the point.
 - **A second dungeon kit / biome.** The four tints are the variety budget.
-- **NPC schedules, day/night, weather.**
+- **A second schedule/weather simulation.** Owner amendment 2026-08-12 authorises
+  one civil clock, one work/sleep state per NPC, and one deterministic daily
+  surface-weather state. No calendars, seasons, forecasts, individual errands
+  or weather gameplay are admitted by that exception.
 
 **Refused because they delete a tension the game is built on:**
 
 - A relic that can be sold, or that rolls from a table (GDD §6.3).
 - A bag upgrade past the four already priced (GDD §10).
-- **Storage the dungeon can reach.** The footlocker holds `K.STASH_SLOTS` = 24
+- **Storage the dungeon can reach.** The footlocker holds 24–36 slots
   slots and it is nailed to the floor of a room in the garrison. GDD §2 refuses
   "infinite storage" because the question the whole game turns on is *is what I
   am carrying worth more than the walk back* — and a shelf you can reach from
   floor three answers it for you, forever. So: no portable chest, no
   send-to-stash, no "bank it from the vault", and no second locker underground.
-  The 24 is finite for the same reason the bag is; when it fills you sell
+  The 36 maximum is finite for the same reason the bag is; when it fills you sell
   something, which is the decision the cap exists to force.
 - Healing items found underground (GDD §10).
 - Fast travel that is not a shortcut door you unlocked.
@@ -377,6 +381,7 @@ not worth adding.
 | **The voices and the elder.** Voiced lines 0 → 15, garrison NPCs 5 → 6, and an opening that is not a cutscene | **Nothing to delete: the lines were already recorded when they arrived.** The owner made them and asked for them to be wired; the manifest's job here is to write down the ceiling, not to relitigate a finished asset | §1, `scripts/autoload/voice.gd` |
 | **The Ocarina pass.** Puzzle combinators 6 → 9, enemy behaviours 0 → 8 (4 committed) | **Phase 2's three uncommitted atoms are on the table** — chain and convert make the torch and the timed bars redundant. Everything else on both rows is a key on a table that exists. **Zero new atoms, models, screens, items or beats** | `docs/PUZZLES.md` §3.1/§8.1, `docs/BESTIARY.md`, `docs/OOT_CATALOGUE.md` |
 | **The Votive Court.** Echo pedestal → six-god shrine; new UI screens 1 → 2 | **Nothing deleted: explicit owner-directed replacement, 2026-08-11.** The screen is the requested readable choice; the old three-mote presentation and world-caption proof were deleted in the same change | `docs/PUZZLES.md` §6, issue #101 |
+| **Garrison daily life.** New mechanics 2 → 3, upgrade tracks 20 → 23, garrison surface scenes 1 → 2 | **Nothing deleted: explicit owner-directed amendment, 2026-08-12.** The spend is bounded by one clock, one generated compound, one linear approach and three fixed QoL rows; the former tiny-yard/no-schedule/no-weather freeze is removed rather than left contradictory | issue #114; `docs/METAGAME.md` §6/§6.8 |
 
 The first line is the rule working as intended: the two deleted relics were the
 only entries on GDD §6.2's table that were numbers on a subsystem rather than
@@ -594,8 +599,8 @@ Four floors, four bosses built from monsters already on disk, one new mechanic �
 the working, a thrown arc and a fuse, carrying three spells on a six-stop weapon
 ring — twelve hand-placed relics that come up broken, are repaired or read at
 the counter whose thing they change, and each alter one line in the garrison, a
-gear loop of twenty upgrade tracks across five counters moving five stats and no
-sixth, eight locked doors following two rules, two endings, and the endless
+gear loop of twenty upgrade tracks moving five stats and no sixth, three
+gold-only Elder QoL ladders, eight locked doors following two rules, two endings, and the endless
 dungeon that already works as the post-credits mode. The demo is floor 1 and it
 exists at the halfway point. Everything not on that list is a sequel, and the
 way we know we are still building this game and not another one is that the

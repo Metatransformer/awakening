@@ -187,6 +187,9 @@ func save(slot: int) -> bool:
 		# `upgrades` (see Game.FORGE_TRACKS), so one key carries all twelve, and
 		# the jewelcrafter's eight after it.
 		"upgrades": Game.upgrades,
+		# One authoritative surface/dungeon clock. Weather derives from day, so no
+		# second weather payload can drift from it.
+		"clock": Clock.snapshot(),
 		# Stable catalogue namespace + line ids only. Ingredient ids are rebuilt
 		# from each catalogue's current recipe after load.
 		"wishlist_lines": Game.wishlist_save_data(),
@@ -350,6 +353,7 @@ func load_slot(slot: int) -> Dictionary:
 	Game.upgrades.clear()
 	for k in (d.get("upgrades", {}) as Dictionary):
 		Game.upgrades[StringName(k)] = int((d["upgrades"] as Dictionary)[k])
+	Clock.restore(d.get("clock", {}) as Dictionary)
 	Game.restore_wishlist_lines(d.get("wishlist_lines", []) as Array)
 	Game.components.clear()
 	for k in (d.get("components", {}) as Dictionary):

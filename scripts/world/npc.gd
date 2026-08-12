@@ -129,6 +129,9 @@ static var COUNTERS := {
 		"counters": [
 			{"title": "THE FAR LANTERN", "label": "Artifacts", "icon": "relic",
 				"mode": TradeScreen.Mode.PROGRESSION, "db": RelicDb},
+			{"title": "GARRISON IMPROVEMENTS", "label": "QoL Upgrades", "icon": "upgrade",
+				"mode": TradeScreen.Mode.PROGRESSION, "db": ElderUpgradeDb,
+				"ids": ElderUpgradeDb.UPGRADE_IDS},
 		],
 	},
 	# The fifth counter, and the last one there will be (docs/SCOPE.md §1:
@@ -303,6 +306,12 @@ var _age: float = 0.0
 ## belongs to. The three races differ by 40 cm; a fixed 2.25 put the Stoneborn's
 ## sign most of a metre above him.
 var _head: float = 1.75
+## Work furniture stays at the authored day port while only the person retires.
+## The node itself moves because its Interactable and collision must leave the
+## counter too; every non-body child is hidden/disabled while off duty.
+var _day_transform := Transform3D.IDENTITY
+var _day_transform_known := false
+var _off_duty := false
 
 
 ## Crown height, for anything that has to aim at this person's FACE rather than
@@ -359,7 +368,7 @@ func _ready() -> void:
 ## say; a hole in the ground does not greet you.
 func activate(_by: Node3D) -> void:
 	if role == Role.GATE:
-		Flow.enter_dungeon()
+		Flow.to_outskirts()
 		return
 
 	var row := _row()
@@ -485,7 +494,52 @@ func on_hold(t01: float) -> void:
 	_lamp_mat.emission_energy_multiplier = 0.55 + t01 * 5.0
 
 
+## Move a staffed keeper between their work nook and authored sleeping port.
+## The service closes by making the person physically absent, not by leaving a
+## shop screen behind that says "closed". The gate is architecture and ignores
+## the roster schedule.
+func set_working(working: bool, sleep_transform: Transform3D) -> void:
+	if role == Role.GATE or working == not _off_duty:
+		return
+	if not _day_transform_known:
+		_day_transform = global_transform
+		_day_transform_known = true
+	_off_duty = not working
+	if working:
+		global_transform = _day_transform
+	else:
+		global_transform = sleep_transform
+	enabled = working
+	_set_station_active(working)
+	if _body != null:
+		_body.visible = true
+	if _sign != null:
+		_sign.visible = false
+
+
+func _set_station_active(active: bool) -> void:
+	for child: Node in get_children():
+		if child == _body:
+			continue
+		if child is Node3D:
+			(child as Node3D).visible = active
+	_set_collision_active(self, active)
+
+
+func _set_collision_active(node: Node, active: bool) -> void:
+	if node is CollisionObject3D:
+		var collider := node as CollisionObject3D
+		if active:
+			collider.collision_layer = K.L_INTERACT if collider == self else K.L_WORLD
+		else:
+			collider.collision_layer = 0
+	for child: Node in node.get_children():
+		_set_collision_active(child, active)
+
+
 func _process(delta: float) -> void:
+	if _off_duty:
+		return
 	_age += delta
 	var want := 1.0 if Prompt.focus == self else 0.0
 	_lit = move_toward(_lit, want, delta * 5.0)

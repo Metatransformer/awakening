@@ -602,8 +602,19 @@ transitions.
 
 ## 6. The garrison
 
-One walled courtyard (`scripts/world/garrison.gd`) with five counters and a gate
-in it.
+One generated walled compound (`scripts/world/garrison.gd`) with a parade yard,
+covered circulation loops, five role-specific work nooks, shared barracks and
+the Elder's private quarters. Its outer gate leads to one bounded cliff-path
+scene before the Sunken Cut; the dungeon entrance is no longer inside the yard.
+
+The compound lives on a 32-real-minute civil day. Sunrise is 05:00, services
+open at 07:00 (06:00 after Early Reveille), and sunset/service close is 20:00.
+At close, staffed NPCs leave their work nooks for their assigned bunks; Aldric
+retires to his own room. Their interaction areas and work furniture close with
+them, so service unavailability is a spatial fact rather than a refusal screen.
+Missing dawn outside returns the player to their bunk. Missing dawn underground
+settles through the existing death-loss path before the return, so waiting out
+the clock can never become a free extraction.
 
 ### Who is in it, and when
 
@@ -738,37 +749,33 @@ straight to the gate still gets it.
   does, but it is not Trade and has no two-sided shop. She is §6.6.
 - **The Lanternkeeper.** **Artifacts** lists the twelve relics as linear states:
   empty, broken or lit. This is where relics are committed for repair or reading
-  and donated; it is not Trade.
+  and donated; it is not Trade. His separate **QoL Upgrades** service sells three
+  fixed ladders: bed recovery (3 ranks), footlocker shelves (2), and Early
+  Reveille (1). They spend gold only and add no item or currency.
 - **The jewelcrafter.** **Upgrades** only: four blanks and eight paths
   (`scripts/items/jewel_db.gd`), presented as linear rung progressions on the
   west of the plaza. She is §6.7.
-- **The hero's quarters.** Not a counter — nobody stands in it, and nothing in it
-  takes gold. A lean-to in the south-west corner with a cot you sleep in and a
-  footlocker you stash in. It is §6.8, and `docs/SCOPE.md` §2 records why the
-  no-list's housing entry let it through.
-- **The gate.** Into the dungeon, and back out again on the arrival pad. It is a
-  **gatehouse** (`scripts/props/gatehouse.gd`) cut through the north curtain —
-  two crenellated towers, a voussoir arch, a raised portcullis, and a roofed
-  passage with a wellhead and a timber headframe at the back of it. The cold
-  light comes up out of that shaft, not off a panel hung in the arch, which is
-  what it used to be and why it photographed as a poster.
+- **The hero's quarters.** Not a counter: one identified lower bunk in the
+  shared barracks, with the existing sleep interaction and footlocker at hand.
+  It is §6.8. Aldric's room is separate and remains the eventual player-room
+  handoff; that future ownership change is not implemented here.
+- **The gate.** Out of the compound into the bounded approach. The player walks
+  a descending switchback between cliff faces and sparse trees, passes one
+  visibly collapsed side path, and reaches the cold Sunken Cut threshold at the
+  far end. Only that second threshold begins a run.
 
-**The five counters ring a paved circle** (`scripts/props/plaza.gd`) in the
-middle of the yard, and the loop is what sets each bearing. The smith and the
-quartermaster take the two north quarters, flanking the approach to the gate,
-because they are the counters you visit with a full bag. The alchemist and the
-jewelcrafter take east and west, on the walk from the plaza back down to the
-arch — what they sell is spent on the way back *down*, and the frame you see when
-you extract has to contain them or they do not exist, which is the exact mistake
-the jewelcrafter's first placement made. Both are swung a little north of true
-east/west for that reason and no other: at a true beam they fall outside the
-arrival camera's 40°.
+**The five daytime counters occupy a roofed service arcade** on the east side of
+the compound. Each trade has a distinct recessed nook, while one continuous
+covered corridor lets the player read and visit the whole row without crossing
+the parade ground repeatedly. The west range holds the shared barracks and the
+hero's identified bunk; the north range and gatehouse complete a navigable loop
+around the First Lantern plaza (`scripts/props/plaza.gd`). Aldric's private room
+sits beyond the barracks rather than masquerading as a sixth shop.
 
-**The Lanternkeeper stands on the middle of the circle**, with the First Lantern
-carved in stone at her back (`scripts/props/statue.gd`). Hers is the only reward
-that is not on the screen you just closed — it is a lamp fifteen metres away — so
-turning away from her has to face the yard, and from the centre it faces the yard
-in every direction.
+**The First Lantern remains the middle landmark**, carved in stone at the centre
+of the parade loop (`scripts/props/statue.gd`). It is visible from the arrival
+gate, the service corridor and the barracks threshold, so an artifact reward is
+always tied back to a physical change in the home space.
 
 Each of them is a person of one of the Vale's peoples (`scripts/world/race_body.gd`)
 standing behind a booth full of their own trade (`scripts/props/shop_booth.gd`):
@@ -1260,12 +1267,11 @@ only honest way to say "you have bought 1.2 and the game floors it".
 *Numbered 6.8 for the reason §6.5 gives: these numbers are cited from code
 comments and directors. Do not renumber them.*
 
-A lean-to in the courtyard's south-west corner (`scripts/world/house.gd`), built
-by `Garrison._build_house`. Three walls, a sloped roof, a lantern, and two
-props: a cot and a chest. It costs nothing, it upgrades into nothing, and it is
-not a counter — nobody stands in it. `docs/SCOPE.md` §2 refuses housing and this
-is the argued exception; the reason is that **both props close a hole the
-metagame already had**, not that the hero wanted somewhere to live.
+One marked bunk in the generated compound's shared barracks
+(`scripts/props/bunk_bed.gd`): the existing interactive bed on the lower frame
+and a footlocker at its end. It is not a private house or a placement system.
+`docs/SCOPE.md` §2 still refuses housing; the exception is fixed quarters plus
+three bounded QoL ladders sold by the Elder.
 
 ### The bed writes the save
 
@@ -1275,26 +1281,20 @@ sell the bag, forge two rungs, blow a bottle, set a gem, then rest. It keeps the
 manual gesture every game of this shape has used while periodic autosave closes
 the data-loss hole that once made the bed the only protection in the garrison.
 
-Holding **E** on the cot fades to black for 0.9 s, heals to full, refills
-stamina, and calls `Saves.autosave()`. The HUD's own **AUTOSAVING…** notice is
+Holding **E** on the cot fades to black for 0.9 s, advances the persistent clock
+to 05:00 dawn, refills stamina, applies purchased bed recovery, and calls
+`Saves.autosave()`. Each `elder_bed` rank restores one heart, to a maximum of
+three hearts; rank zero restores no health. The HUD's own **AUTOSAVING…** notice is
 what confirms it; when three slots are full of hand-made saves the autosave
 declines, and the bed says `RESTED. NO SLOT FREE TO SAVE.` rather than fading to
 black and silently doing nothing.
 
-**The heal costs the design nothing**, which is the only reason it is allowed to
-exist next to GDD §2's refusal of "a heal you can carry without paying for it".
-Both doors into the garrison already heal to full — `Run.extract` and `Run.die`
-each call
-`Game.heal(Game.max_quarters)` — so there is no state in which a hero reaches
-this cot hurt. It heals so the object does what the object says, not because it
-moves a number anyone can reach. **And the prop is refused outright while
+Recovery is a paid home convenience, not a heal the player carries into a room.
+It costs time (sleep always moves to the next dawn) and cannot be used away from
+the authored bunk. **The prop is refused outright while
 `Run.in_dungeon`** (`bed.gd activate`): the cot is a garrison rest interaction,
 not a portable dungeon checkpoint. Mid-dungeon persistence is handled by the
 ordinary save/load contract in §5.
-
-**No clock advances.** `Garrison._build_env` pins the sky to one afternoon on
-purpose (SCOPE §1 freezes the mechanic count), and a bed that skipped to morning
-would be a day/night system arriving through a prop.
 
 ### The footlocker stops the garrison destroying goods
 
@@ -1304,19 +1304,20 @@ carried home and *not sold before the next descent* was deleted without a word:
 the four Deep Amber you were saving for a heavy-chest rung went into the dark the
 moment you touched the gate. Silent destruction is not a decision, it is a bug.
 
-The locker is `K.STASH_SLOTS` = **24 slots**, counted by exactly the bag's rule —
+The locker begins at **24 slots** and the Elder's two shelf ranks add 6 each,
+for a hard maximum of **36**. Capacity is counted by exactly the bag's rule —
 `ceil(count / stack)` per item kind, so a stack of ten Bone Shards is one slot,
 not ten. It is stored in `Game.stash` (survives death; banked with components and
 relics, §6.5 "How they get home") and written to the save under `stash`.
 
 | | Bag (`Run.bag`) | Locker (`Game.stash`) | Pouch (`Game.components`) |
 |---|---|---|---|
-| Slots | 8 → 12, priced | 24, fixed | uncapped |
+| Slots | 8 → 12, priced | 24 → 36, priced | uncapped |
 | Survives death | no | yes | yes |
 | Reachable underground | it *is* the run | **no** | read-only, for forging |
 | Cleared by `Run.enter` | yes | no | no |
 
-**24 is finite for the same reason the bag is.** SCOPE §2: a shelf that never
+**36 is finite for the same reason the bag is.** SCOPE §2: a shelf that never
 fills is a shelf that answers *is what I am carrying worth more than the walk
 back* on the player's behalf, forever. When the locker is full you sell
 something, and the screen says `THE LOCKER IS FULL` in the refusal colour rather
