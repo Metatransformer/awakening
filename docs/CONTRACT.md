@@ -1183,8 +1183,13 @@ more often than not, or if a boss's heaviest beat stops usually flooring him.
 `tools/directors/hero_struck.gd` photographs the receiving end and calibrates the
 lurch against four known-answer bearings.
 
-**Numbers are authored per MOVE, not per monster.** A `DamageArea` exports `mass`
-and `commitment`. Commitment runs 0.6 (an ordinary swing) to 1.0 (a fully
+**Numbers are authored per MOVE, not per monster** — including for the roster.
+A `DEFS` row may carry an optional `"heavy"` block (`windup` / `damage` /
+`knockback` / `recover` / `cooldown` / `share`, each falling back to the ordinary
+swing's), and `Enemy` rolls which beat it is throwing on the frame it enters
+WINDUP, then stamps that beat's damage, shove and commitment onto the shared
+hitbox at the commit. The troll is the only kind with one today
+(`docs/BESTIARY.md` §3.7). A `DamageArea` exports `mass` and `commitment`. Commitment runs 0.6 (an ordinary swing) to 1.0 (a fully
 telegraphed heavy) and two things derive it, meaning the same thing: a boss beat
 takes its damage-and-knockback severity relative to that boss's own top beat
 (`Boss._commitment`), and a roster monster — which has exactly one attack and so
