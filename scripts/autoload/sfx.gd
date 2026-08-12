@@ -52,6 +52,11 @@ const VARIANTS := {
 	&"doom_stinger": 1,
 	&"ui_move_selection": 1,
 	&"attack_prepare": 1,
+	## The heavy beat's tell (`Enemy._tick_chase`). Ships as `monster_attack_1.ogg`
+	## with no sibling, same as `attack_prepare` directly above and for the same
+	## reason -- without this row the picker would look for `monster_attack.ogg`
+	## and find nothing.
+	&"monster_attack": 1,
 }
 
 ## The whole signal→sound table. Every entry is an event that already carries

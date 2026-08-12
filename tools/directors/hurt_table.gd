@@ -6,9 +6,10 @@ extends RefCounted
 ## whiteboard is a curve nobody has checked against the roster. This prints the
 ## whole table so the fit can be read against the rows it was solved for:
 ##
-##   goblin   light 90 / heavy 10 / knockdown  0
-##   orc      light 64 / heavy 33 / knockdown  3
-##   troll    light 30 / heavy 39 / knockdown 31
+##   goblin        light 90 / heavy 10 / knockdown  0
+##   orc           light 64 / heavy 33 / knockdown  3
+##   troll         light 39 / heavy 54 / knockdown  8
+##   troll/heavy   light 29 / heavy 36 / knockdown 35
 ##
 ## **Those rows ARE the known answer** (CLAUDE.md §2). If they come out at
 ## anything else, the numbers in `K` have been moved without being re-fitted and
@@ -46,7 +47,8 @@ extends RefCounted
 const ANCHORS := {
 	&"goblin": Vector3(90.0, 10.0, 0.0),
 	&"orc": Vector3(64.0, 33.0, 3.0),
-	&"troll": Vector3(30.0, 39.0, 31.0),
+	&"troll": Vector3(39.0, 54.0, 8.0),
+	&"troll/heavy": Vector3(29.0, 36.0, 35.0),
 }
 const TOL := 2.0
 ## A boss's heaviest beat has to be the thing that puts you down.
@@ -77,6 +79,26 @@ func run(rig) -> void:
 		var got := _row(String(kind), hit)
 		if ANCHORS.has(kind):
 			_check(rig, String(kind), got, ANCHORS[kind])
+		# The second beat, for the kinds that have one. Same row, same body, the
+		# heavy's own numbers -- and NOT subject to the two design rules below,
+		# which are about a monster's ORDINARY swing. A telegraphed heavy is
+		# allowed to floor you; that is what it is for.
+		var hv: Dictionary = d.get("heavy", {})
+		if not hv.is_empty():
+			var hcommit: float = K.COMMIT_LIGHT + (1.0 - K.COMMIT_LIGHT) * clampf(
+				(float(hv.get("windup", d["windup"])) - K.COMMIT_TELL_MIN)
+				/ (K.COMMIT_TELL_MAX - K.COMMIT_TELL_MIN), 0.0, 1.0)
+			var hhit := Hit.make(int(hv.get("damage", d["damage"])), Vector3.ZERO,
+				&"contact", float(hv.get("knockback", K.KNOCKBACK_LIGHT)), 0.0,
+				kind, mass, hcommit)
+			var hgot := _row("%s/heavy" % kind, hhit)
+			var hkey := StringName("%s/heavy" % kind)
+			if ANCHORS.has(hkey):
+				_check(rig, String(hkey), hgot, ANCHORS[hkey])
+			if hgot.z <= got.z:
+				rig.fail("%s's heavy floors the hero %.1f%% against its ordinary swing's %.1f%% -- a second beat the player answers the same way is not a second beat"
+					% [kind, hgot.z, got.z])
+				_fails += 1
 		# The design, not the fit. A body no heavier than the hero cannot put him
 		# on the ground -- if this ever reads 0.4% instead of 0, the floor in
 		# `K.KNOCKDOWN_MASS_FLOOR` has stopped being a statement.
@@ -122,7 +144,8 @@ func run(rig) -> void:
 		_fails += 1
 
 	if _fails == 0:
-		print("HURT TABLE OK -- three anchors within %.0f pt, and the design holds" % TOL)
+		print("HURT TABLE OK -- %d anchors within %.0f pt, and the design holds"
+			% [ANCHORS.size(), TOL])
 
 
 func _row(label: String, hit: Hit) -> Vector3:
