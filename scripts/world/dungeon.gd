@@ -2324,14 +2324,19 @@ func _release_unclaimed_rewards() -> void:
 	_held_rewards.clear()
 
 
-## The key rises. Separate from the connection above because the restored case
-## has to reach the same state with no tween and no noise, exactly as
-## `PuzzleAtom.restore_solved` splits from `on_solved`.
+## Wake the key through its own reveal when it is the shipped pickup. The
+## fallback keeps prefab wiring generic for any other Node3D reward.
 func _wake_key(key: Node3D) -> void:
 	if key == null or not is_instance_valid(key):
 		return
-	key.visible = true
-	key.set(&"armed", true)
+	if key is SmallKey:
+		var small_key := key as SmallKey
+		if small_key.is_solved() or small_key.is_revealed():
+			return
+		small_key.reveal()
+	else:
+		key.visible = true
+		key.set(&"armed", true)
 	Bus.request_sfx.emit(&"glint_bell", key.global_position)
 
 
