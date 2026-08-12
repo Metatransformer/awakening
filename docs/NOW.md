@@ -18,6 +18,11 @@ does not authorise the next milestone.
 - Combat readability and feel.
 - Onboarding needed to let a cold player reach and understand the loop.
 - Evidence capture for the active test.
+- **Owner amendment 2026-08-12, issue #114:** the low-fidelity generated
+  garrison compound, bounded gate-to-Cut approach, one shared civil
+  day/night/weather loop, NPC curfew and the Elder's three fixed QoL tracks are
+  authorised as a homecoming/return-walk test. This does not authorise M6,
+  production environment art or additional overworld content.
 
 ## Not authorised
 

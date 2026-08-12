@@ -15,6 +15,7 @@ extends Node
 ## fade stops being a guarantee and starts being a suggestion.
 
 const GARRISON := "res://scenes/rooms/garrison.tscn"
+const OUTSKIRTS := "res://scenes/rooms/garrison_outskirts.tscn"
 const DUNGEON := "res://scenes/rooms/dungeon.tscn"
 const TITLE := "res://scenes/ui/title/title_screen.tscn"
 
@@ -46,6 +47,11 @@ var busy: bool = false
 ## calls. Folding them together would leave the button unable to fire the
 ## transition it exists to fire.
 var ending: bool = false
+## Set only while Bed advances the clock behind Flow's own veil. Dawn listeners
+## still update the world, but the curfew handler must not start another trip.
+var deliberate_rest: bool = false
+var _dawn_collapse := false
+var _wake_at_bunk := false
 
 var _layer: CanvasLayer
 var _veil: ColorRect
@@ -74,6 +80,7 @@ func _ready() -> void:
 
 	Bus.player_died.connect(_on_player_died)
 	Bus.run_ended.connect(_on_run_ended)
+	Clock.dawn_started.connect(_on_dawn_started)
 	# **The other half of the pause menu's Load Game.** `MenuSavesPanel` restores
 	# the slot itself and emits `load_requested(slot, dest)` for somebody else to
 	# travel on -- and until now nobody did, so loading a save from the pause menu
@@ -198,6 +205,7 @@ func new_game() -> void:
 		return
 	ending = false
 	Game.reset()
+	Clock.set_time(1, 8.0)
 	busy = true
 	Prompt.blocked = true
 
@@ -301,9 +309,10 @@ func resume(dest: Dictionary) -> bool:
 		path = DUNGEON
 	else:
 		_abandon_run()
-		# A dungeon path without a valid run snapshot is not a playable destination.
-		# This also preserves the v4-v8 contract: those saves always returned home.
-		path = GARRISON
+		# A dungeon path without a valid run snapshot is not playable. The bounded
+		# surface path is, and keeps its authored/saved transform.
+		if path != GARRISON and path != OUTSKIRTS:
+			path = GARRISON
 	# `dest` goes THROUGH `_go` rather than being applied after it -- see the
 	# placement inside `_go` for why that ordering is the difference between a
 	# save that survives being loaded and one that does not.
@@ -370,6 +379,12 @@ func enter_dungeon(run_seed: int = 0) -> void:
 	_go(DUNGEON, 0.0)
 
 
+func to_outskirts() -> void:
+	if busy or ending:
+		return
+	_go(OUTSKIRTS, 0.0)
+
+
 ## The ride home. Called by the ending screen's BACK TO THE GARRISON button,
 ## and by anything else that just wants the hub.
 func to_garrison() -> void:
@@ -377,6 +392,14 @@ func to_garrison() -> void:
 		return
 	ending = false
 	_go(GARRISON, 0.0)
+
+
+## The garrison consumes this after its generated compound exists, so every
+## automatic dawn arrival uses the player's actual authored bunk port.
+func consume_bunk_wake() -> bool:
+	var wake := _wake_at_bunk
+	_wake_at_bunk = false
+	return wake
 
 
 ## Take the stair down. The run CONTINUES: same bag, same health, same fee
@@ -483,10 +506,38 @@ func _on_player_died() -> void:
 ## camera's frustum and was never once seen (see run_end_screen.gd). The screen
 ## belongs over the floor the run ended on, and leaving is the player's press.
 func _on_run_ended(_extracted: bool, _contents: Dictionary, _value: int) -> void:
+	if _dawn_collapse:
+		_dawn_collapse = false
+		_return_at_dawn.call_deferred()
+		return
 	if busy or ending:
 		return
 	ending = true
 	_show_ending()
+
+
+## Dawn is a hard end to the overnight outing. On the surface it is a simple
+## ride back to the bunk; underground it uses the existing death settlement so
+## the clock can never become a free extraction button.
+func _on_dawn_started(_day: int) -> void:
+	if deliberate_rest or busy or ending:
+		return
+	var scene := get_tree().current_scene
+	if scene == null or scene.scene_file_path == TITLE:
+		return
+	if Run.in_dungeon:
+		_dawn_collapse = true
+		Run.die()
+		return
+	_return_at_dawn.call_deferred()
+
+
+func _return_at_dawn() -> void:
+	if busy:
+		return
+	ending = false
+	_wake_at_bunk = true
+	_go(GARRISON, 0.0)
 
 
 ## Hold on the killing blow, then raise the screen.

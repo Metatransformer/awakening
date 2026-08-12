@@ -195,9 +195,9 @@ func _band_cells() -> Array:
 	var bag := Run.slots_used()
 	return [
 		{"key": &"shelf", "label": "Shelf",
-			"value": "%d/%d" % [shelf, K.STASH_SLOTS],
+			"value": "%d/%d" % [shelf, Game.stash_capacity()],
 			"icon": UiKit.action_icon("locker"),
-			"tone": UITheme.WARNING if shelf >= K.STASH_SLOTS else null},
+			"tone": UITheme.WARNING if shelf >= Game.stash_capacity() else null},
 		{"key": &"bag", "label": "Bag",
 			"value": "%d/%d" % [bag, Game.bag_slots],
 			"icon": UiKit.action_icon("bag"),

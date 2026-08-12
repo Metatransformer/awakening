@@ -1060,8 +1060,13 @@ func stash_slots_used() -> int:
 	return used
 
 
+func stash_capacity() -> int:
+	var ranks := int(upgrades.get(ElderUpgradeDb.LOCKER_ID, 0))
+	return K.STASH_SLOTS + ranks * ElderUpgradeDb.LOCKER_SLOTS_PER_RANK
+
+
 func stash_full() -> bool:
-	return stash_slots_used() >= K.STASH_SLOTS
+	return stash_slots_used() >= stash_capacity()
 
 
 ## How many more of `id` the locker will take. Asked rather than assumed, so the
@@ -1075,7 +1080,7 @@ func stash_room_for(id: StringName) -> int:
 	# The part-filled stack this id already owns is free space nobody else can
 	# use, so it is room whether or not a slot is left.
 	var slack := (per - have % per) % per
-	var free_slots := maxi(K.STASH_SLOTS - stash_slots_used(), 0)
+	var free_slots := maxi(stash_capacity() - stash_slots_used(), 0)
 	return slack + free_slots * per
 
 

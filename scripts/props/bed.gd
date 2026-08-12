@@ -13,18 +13,10 @@ extends Interactable
 ## player says "keep this", in the place and the gesture every game of this
 ## shape has used to say it.
 ##
-## **It heals, and that costs the design nothing**, which is the only reason it
-## is allowed to. `docs/GDD.md` §2 refuses "a heal you can carry without paying
-## for it" — and both doors into the garrison already heal to full on the way
-## through (`Run.extract` and `Run.die` each call `Game.heal`). There is no state
-## in which a hero reaches this cot hurt. The heal is here so that the bed does
-## what the object says it does if one ever appears, not because it changes a
-## number anybody can reach.
-##
-## **It does not advance a clock.** There isn't one. `Garrison._build_env` pins
-## the sky to a single afternoon and says why: `docs/SCOPE.md` §1 freezes the
-## mechanic count at one and a day/night cycle is not it. A bed that skipped to
-## morning would be that system arriving through a prop.
+## **Recovery is an Elder upgrade.** Each `elder_bed` rung restores one heart;
+## an unupgraded bunk still advances to dawn, refills stamina, and saves. The
+## clock jump happens behind Flow's existing black veil so every clock listener
+## finds morning already true when the world comes back.
 ##
 ## The hold is `Prompt`'s, not this file's — see `hold_time` below.
 
@@ -76,7 +68,13 @@ func activate(_by: Node3D) -> void:
 ## one he is standing in now — beside his own bed — rather than wherever a fade
 ## found him.
 func _sleep() -> void:
-	Game.heal(Game.max_quarters)
+	# `sleep_to_dawn` emits synchronously. Mark this as deliberate so Flow's dawn
+	# curfew handler does not try to start a second fade inside this one.
+	Flow.deliberate_rest = true
+	Clock.sleep_to_dawn()
+	Flow.deliberate_rest = false
+	var bed_rank := int(Game.upgrades.get(ElderUpgradeDb.BED_ID, 0))
+	Game.heal(bed_rank * ElderUpgradeDb.BED_HEAL_PER_RANK)
 	Game.refund_stamina(Game.max_stamina)
 	var slot := -1
 	if Saves.autosave():

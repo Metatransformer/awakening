@@ -45,6 +45,9 @@ config/icon="res://icon.svg"
 
 Bus="*res://scripts/autoload/event_bus.gd"
 Game="*res://scripts/autoload/game_state.gd"
+; The one persistent civil clock. After Game because early reveille reads a
+; permanent upgrade; before Saves and Flow, which persist and route dawn.
+Clock="*res://scripts/autoload/world_clock.gd"
 ; Run must load after Game: it spends and grants gold on the way in and out.
 Run="*res://scripts/autoload/run_state.gd"
 ; Heat is the momentum meter: kills chain, the chain decays, and what it is

@@ -1,0 +1,17 @@
+[gd_scene load_steps=4 format=3]
+
+; The bounded surface approach. All visible geometry and transition props are
+; built deterministically by the root script; this shell only holds the cast.
+
+[ext_resource type="Script" path="res://scripts/world/garrison_outskirts.gd" id="1_outskirts"]
+[ext_resource type="PackedScene" path="res://scenes/actors/hero/hero.tscn" id="2_hero"]
+[ext_resource type="PackedScene" path="res://scenes/camera/game_camera.tscn" id="3_camera"]
+
+[node name="GarrisonOutskirts" type="Node3D"]
+script = ExtResource("1_outskirts")
+
+[node name="Hero" parent="." instance=ExtResource("2_hero")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.05, 30.2)
+
+[node name="GameCamera" parent="." instance=ExtResource("3_camera")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 9.75, 34.3)

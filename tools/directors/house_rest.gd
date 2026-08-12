@@ -284,6 +284,9 @@ func _survives_a_run(rig, _garrison: Garrison) -> void:
 
 func _sleep(rig, garrison: Garrison) -> void:
 	var h := garrison.house
+	# Bed recovery is an Elder QoL purchase now: rank two should restore exactly
+	# two quarters, while an unupgraded bunk only advances the day.
+	Game.upgrades[&"elder_bed"] = 2
 	Game.damage(4)
 	await rig.wait_frames(4)
 	var hurt := Game.quarters
@@ -306,8 +309,9 @@ func _sleep(rig, garrison: Garrison) -> void:
 	_check("...and came back", back)
 	await rig.wait_frames(30)
 
-	_check("he woke up whole (%d -> %d/%d)" % [hurt, Game.quarters, Game.max_quarters],
-		Game.quarters == Game.max_quarters)
+	var expected := mini(Game.max_quarters, hurt + 2 * K.HEART)
+	_check("the rank-two bunk restored two hearts (%d -> %d/%d)"
+		% [hurt, Game.quarters, Game.max_quarters], Game.quarters == expected)
 	_check("the rest wrote a slot (%d)" % Saves.active_slot, Saves.has_save(0))
 	_check("the world is running again", not rig.paused)
 	await _shot(rig, "woke")
