@@ -895,8 +895,11 @@ func _build_buy_rows() -> void:
 ## Move the cursor and make the screen agree with it: the cell takes focus (which
 ## is what draws the highlight, out of the theme, exactly as it does in the pause
 ## menu) and the detail pane describes it.
-func _point_at(i: int) -> void:
+func _point_at(i: int, play_selection_sfx: bool = false) -> void:
+	var previous: int = _cursor
 	_cursor = clampi(i, 0, maxi(_rows.size() - 1, 0))
+	if play_selection_sfx and mode == Mode.PROGRESSION and _cursor != previous:
+		Bus.request_sfx.emit(&"upgrade_stat_selected", _hero_position())
 	var cell: Button = null
 	var cell_scroll: ScrollContainer = null
 	if mode == Mode.TRADE:
@@ -945,7 +948,7 @@ func _keep_cursor_in_view() -> void:
 ## The mouse landed on a cell. Follow it — a click is also a look.
 func _on_cell_looked(index: int) -> void:
 	if index >= 0 and index != _cursor:
-		_point_at(index)
+		_point_at(index, true)
 
 
 func _describe() -> void:
@@ -1256,13 +1259,13 @@ func _move(d: Vector2i) -> void:
 		return
 	if d.x != 0:
 		var i := (_at() + d.x + _order.size()) % _order.size()
-		_point_at(_order[i])
+		_point_at(_order[i], true)
 		return
 	if d.y == 0:
 		return
 	if mode == Mode.TRADE:
 		var i := (_at() + d.y * TRADE_COLS + _order.size()) % _order.size()
-		_point_at(_order[i])
+		_point_at(_order[i], true)
 		return
 
 	# The next row that has anything buyable on it. Rows CAN be dead -- a fully
@@ -1277,7 +1280,7 @@ func _move(d: Vector2i) -> void:
 		at = (at + d.y + rows) % rows
 		var line := _ladder.first_line_of_row(at)
 		if line >= 0:
-			_point_at(line)
+			_point_at(line, true)
 			return
 
 
@@ -1300,9 +1303,16 @@ func _commit() -> void:
 		# On the press that WORKED, never on the press. A keeper who says "good
 		# price" over a refusal is worse than one who says nothing.
 		Voice.say(speaker, &"deal")
+		if mode == Mode.PROGRESSION and row["kind"] == &"buy":
+			Bus.request_sfx.emit(&"upgrade_stat_unlocked", _hero_position())
 	else:
 		_show_refusal()
 	_refresh()
+
+
+func _hero_position() -> Vector3:
+	var hero: Node3D = get_tree().get_first_node_in_group(&"player") as Node3D
+	return hero.global_position if hero != null else Vector3.ZERO
 
 
 ## Say why the press did nothing, in the counter's words.

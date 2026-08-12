@@ -140,7 +140,7 @@ func _say_side() -> void:
 
 
 func _refuse() -> void:
-	Bus.request_sfx.emit(&"craft_fail", global_position)
+	Bus.request_sfx.emit(&"door_refused", global_position)
 	_say_side()
 	if _tween != null and _tween.is_valid() or _grille == null:
 		return

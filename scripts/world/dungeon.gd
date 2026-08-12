@@ -2366,7 +2366,7 @@ func _wake_key(key: Node3D) -> void:
 	else:
 		key.visible = true
 		key.set(&"armed", true)
-	Bus.request_sfx.emit(&"glint_bell", key.global_position)
+	Bus.request_sfx.emit(&"key_found", key.global_position)
 
 
 ## Which door out of `cell` leads on toward `target`, along the TREE. Empty when
