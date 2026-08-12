@@ -2518,9 +2518,19 @@ Bus.request_sfx.emit(&"chest_open", global_position)   # id = a file in audio/sf
 
 `Sfx` also maps the events that already say what happened — `chest_opened`,
 `door_opened`, `item_acquired`, `loot_gained`, `items_sold`, `puzzle_solved`,
-`hit_landed`, `shield_blocked`, `enemy_died`, `player_died`, `target_acquired`,
-`run_started`, `run_ended`, `bag_full` — so those need no emit
-at all. Add a row to `Sfx.CUES` rather than a player to a prop.
+`room_cleared`, `reward_revealed`, `hit_landed`, `shield_blocked`, `enemy_died`,
+`player_died`, `target_acquired`, `run_started`, `run_ended`, `bag_full` — so
+those need no emit at all. Add a row to `Sfx.CUES` rather than a player to a prop.
+
+`reward_revealed` is the one that is **not** in `CUES`, and it cannot be:
+`CUES` is keyed on the signal and this signal carries a TIER as an argument, so
+it has its own table, `Sfx.REWARD_CUES`, keyed `1` and `2` (see
+`RewardVfx.MINOR` / `MAJOR`). It also plays at the reward rather than at the
+hero, because a reward is a place in the room. Both tiers name
+`treasure_spawn` today and that is deliberate rather than a gap — there is one
+take of a chest falling out of nothing, the tiers already differ in the eye and
+in how long they hold the screen, and when a bigger take exists tier 2 is one
+line in that table and nothing else moves.
 
 `shield_blocked` is the one that had it the other way round and was corrected:
 `HeroCombat.on_blocked` built a fresh `AudioStreamPlayer3D` per block and freed
@@ -2997,6 +3007,45 @@ Markers are drawn shapes in `Pal` colours, not textures. At 6 px on the minimap
 a photograph of a chest is four brown pixels; a gold box with a dark band is a
 chest. `Atlas`'s marker ids and `MapDraw.MARK_ORDER` are two halves of one list —
 an id with no glyph draws nothing, silently. Add to both.
+
+### Rewards — a prize does not exist until you have beaten what guards it
+
+**No chest, mote or relic is lootable on arrival.** A reward is placed at
+generation time, then held `visible = false` and `enabled = false` until the
+thing standing between the player and it is gone; then `RewardVfx.land(prize,
+tier)` makes it real. `docs/GDD.md` §5.1 owns the rule; this is how it is wired.
+
+Two ways to hold one, and which you use depends on whether there is a room:
+
+- **`RoomWatch`** (`scripts/world/room_watch.gd`) for a room with a pack in it.
+  `RoomWatch.attach(room_root, id)` before you spawn, `watch.add(foe)` per body,
+  `watch.cleared` when the last one is gone — and `Bus.room_cleared(id)` on the
+  same frame, which is the emitter that signal never had. It counts rather than
+  scans, because an enemy that chases the hero into the corridor has not been
+  beaten and a corpse's node survives its death by about three seconds.
+- **The body's own signal** where the room IS the encounter. The boss arena and
+  the miniboss chamber already answer "is it dead"; a watcher there would be a
+  second answer to one question. Connect `boss.died_at` and land the chest.
+
+Whichever you use, **there must be a fail-safe.** A generator can produce a room
+with nothing to beat, and a chest that waits for a pack that was never spawned is
+worse than one standing open — it is a reward the player can never have, and it
+looks identical to one that is working. `RewardVfx.show_now(prize)` is the silent
+version for exactly that case: real, lootable, no ceremony, because four chests
+going off behind the loading card is the beat firing where nobody is standing.
+
+`RewardVfx` owns the whole arrival — the drop, the ring, the star, the bloom, the
+shake and `Bus.reward_revealed(tier, position)` — and picks no sound; `Sfx` does,
+from `REWARD_CUES`. Two tiers and no more: the player only ever sees one flash at
+a time, so two is the smallest number that can be *recognised*. They differ in
+magnitude and silhouette (MAJOR adds a shaft of light and a second ring, and
+holds nearly twice as long), never in hue.
+
+`tools/directors/room_reward.gd` is the proof and it sweeps **every** chest on a
+freshly generated floor, not one room's. That is deliberate: the two holes this
+rule shipped with were both generator holes — the deep chest stands in the boss's
+room, which `_populate` gives no pack and therefore no watcher, and the vault's
+rich chest had no gate at all behind three rooms of level+1 bodies.
 
 ---
 

@@ -253,6 +253,15 @@ var _seed_salt: int = 0
 ## Grid cells spoken for by something built OUTSIDE the room tree -- a landing, a
 ## vault. Nothing may bud into one and no later anchor may point through one.
 var _reserved: Dictionary = {}
+## Rewards standing hidden in a room, waiting for that room's monsters to be
+## beaten. `Vector2i -> Array[Dictionary{node, tier}]`, drained by
+## `_arm_room_rewards`.
+##
+## A registry and not a direct wiring, because the two halves happen in the wrong
+## order: `_place_deep_chest` puts a chest down while the anchors are being laid,
+## and the bodies that guard it are not spawned until `_populate` walks the same
+## cell hundreds of lines later. See `_hold_reward`.
+var _held_rewards: Dictionary = {}
 
 
 func _ready() -> void:
@@ -1365,6 +1374,40 @@ func _place_deep_chest(id: StringName) -> void:
 	chest.rotation.y = atan2(-far.x, -far.z)
 	root.add_child(chest)
 	p["node"] = chest
+	# Tier 2, whichever way it is gated below: it rolls the rich table, and on an
+	# authored floor it carries that floor's `deep_chest` relic. If anything in the
+	# dungeon earns the big flash it is this.
+	#
+	# **Two gates, because this anchor lands in two different kinds of room.**
+	#
+	# On an authored floor `deep_chest` and `boss_door` routinely pick the SAME
+	# cell -- the deepest one -- and `_place_boss` puts the arena in it, so
+	# `_populate` skips the room entirely (no pack, on purpose: the boss is the
+	# room). There is therefore no `RoomWatch` there and never will be, and a chest
+	# left to `_hold_reward` would fall through to `_release_unclaimed_rewards` and
+	# be standing open the moment the player walks in -- the richest chest on the
+	# floor, free, two metres from the boss door. That is exactly what the probe on
+	# seed 20260811 found. The boss IS the thing in that room, so the boss is what
+	# it waits for.
+	#
+	# On a floor where the anchor lands somewhere else it is an ordinary room with
+	# an ordinary pack, and it waits for the pack like every other chest. Note that
+	# `_populate` has not run yet -- the anchors go down first -- so this cannot
+	# wire itself to those monsters and does not try. See `_hold_reward`.
+	var arena := root.get_node_or_null(^"Arena")
+	var boss := (arena.call(&"boss") as Node3D) if arena != null else null
+	if boss != null:
+		chest.visible = false
+		chest.enabled = false
+		boss.connect(&"died_at", func(_where: Vector3) -> void:
+			RewardVfx.land(chest, RewardVfx.MAJOR))
+	elif arena != null:
+		# The arena is there but built no body -- the boss is already dead this run
+		# and the floor was re-entered. The chest was earned; hand it over with no
+		# ceremony, the same way the treasure chamber's does.
+		RewardVfx.show_now(chest)
+	else:
+		_hold_reward(cell, chest, RewardVfx.MAJOR)
 
 	var relic := FloorDb.relic_in(Run.level, &"deep_chest")
 	if relic == &"":
@@ -2200,23 +2243,85 @@ func _gate_eye_row(root: Node3D, cell: Vector2i, tag: StringName,
 	return true
 
 
-## The gate room's chest lands. §5.2's third reward — see `_place_gate_room`.
+## A puzzle's chest lands. §5.2's third reward — see `_place_gate_room`,
+## `_land_shortcut_rewards` and `place_maze`, which are the three callers.
 ##
-## Dropped rather than faded in: the eye goes to motion, and a chest that eased
-## up from zero alpha in a corner is a chest the player walks past. It falls the
-## last metre and settles, which is the same read as `LootMote`'s pop.
+## The drop, the flash, the shake and the sound all live in `RewardVfx` now, so
+## a chest that arrives because you solved a puzzle and a chest that arrives
+## because you beat the room are the same event to the player -- which is the
+## point. All three of these are tier 1: they pay `Prog.chest_picks(level,
+## false)`, the ordinary table, and a tier-2 flash over an ordinary chest is the
+## announcement lying about the contents.
 func _land_prize(prize: Node3D) -> void:
-	if prize == null or not is_instance_valid(prize) or prize.visible:
+	RewardVfx.land(prize, RewardVfx.MINOR)
+
+
+# --- Held rewards ---------------------------------------------------------------
+#
+# **A chest does not stand next to the thing guarding it.** Until this, the
+# generator put a room's chest down at build time and it was lootable from the
+# moment the player walked in -- so the reward for a fight was collectable
+# without having the fight, and the three puzzle chests above (which have always
+# waited) read as the exception rather than the rule.
+#
+# Two halves, because they happen at opposite ends of generation: `_hold_reward`
+# hides the prize whenever it is placed, and `_arm_room_rewards` hangs it on that
+# room's `RoomWatch` once `_populate` knows what is standing in there.
+
+
+## Put `prize` away until its room is beaten. Call this at placement time, from
+## wherever the prize is built.
+##
+## `tier` is a `RewardVfx` tier and it is decided HERE, by the placer, because
+## the placer is the only thing that knows what it just put in the chest --
+## `Prog.chest_picks(level, true)` and a boss door next to it is tier 2, an
+## ordinary room's roll is tier 1.
+func _hold_reward(cell: Vector2i, prize: Node3D, tier: int) -> void:
+	if prize == null:
 		return
-	prize.visible = true
-	prize.set(&"enabled", true)
-	Bus.request_sfx.emit(&"glint_bell", prize.global_position)
-	var from := prize.position + Vector3(0.0, 1.1, 0.0)
-	var to := prize.position
-	prize.position = from
-	var tw := prize.create_tween()
-	tw.set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
-	tw.tween_property(prize, ^"position", to, 0.5)
+	prize.visible = false
+	# `Interactable`'s own switch. Without it the chest keeps its trigger sphere
+	# and can take the interact prompt through its own invisibility -- the player
+	# gets `E TO OPEN` standing in an empty corner.
+	prize.set(&"enabled", false)
+	if not _held_rewards.has(cell):
+		_held_rewards[cell] = []
+	var held: Array = _held_rewards[cell]
+	held.append({"node": prize, "tier": tier})
+
+
+## Hang everything held for `cell` on that room's watcher, and forget it.
+##
+## `watch` null means there is nothing in the room to defeat, so there is nothing
+## to wait for: the prize simply exists, with no flash. A ceremony for a room the
+## player has not done anything to is the cue teaching them the wrong lesson.
+func _arm_room_rewards(cell: Vector2i, watch: RoomWatch) -> void:
+	if not _held_rewards.has(cell):
+		return
+	var held: Array = _held_rewards[cell]
+	_held_rewards.erase(cell)
+	for entry: Dictionary in held:
+		var prize: Node3D = entry["node"]
+		var tier: int = entry["tier"]
+		if watch == null:
+			RewardVfx.show_now(prize)
+			continue
+		watch.cleared.connect(func() -> void: RewardVfx.land(prize, tier))
+
+
+## Nobody claimed these. Make them real anyway, silently.
+##
+## `_populate` `continue`s past the entrance, the boss cell and the maze cell
+## before it ever spawns a body, so an anchor that lands in one of those would
+## leave its chest hidden for the whole run with nothing able to reveal it -- a
+## reward the player can walk through. There is no honest ceremony to give them
+## either: this runs while the floor is still behind the loading card, where a
+## flash would fire at nobody. `RewardVfx.show_now` is exactly that case.
+func _release_unclaimed_rewards() -> void:
+	for cell: Vector2i in _held_rewards:
+		for entry: Dictionary in _held_rewards[cell]:
+			RewardVfx.show_now(entry["node"] as Node3D)
+	_held_rewards.clear()
 
 
 ## The key rises. Separate from the connection above because the restored case
@@ -2384,6 +2489,18 @@ func _place_chamber(cell: Vector2i, side: StringName,
 	arena.position = Vector3(0.0, 0.0, mid)
 	root.add_child(arena)
 
+	# **Both rewards hang on the KILL, not on the gate.** §5.3's list is miniboss +
+	# chest + Echo, and either of them arriving when the door opened would pay the
+	# puzzle for the fight it was gating. Read once and shared, because the chest
+	# and the stone now ask the arena the same two questions.
+	#
+	# NOT a `RoomWatch`: the chamber is not a `rooms[]` cell -- it hangs off the
+	# treasure gate and its one body belongs to the arena, which already publishes
+	# `died_at` and `is_spent`. A watcher here would be a second answer to a
+	# question that has one.
+	var boss := arena.call(&"boss") as Node3D
+	var spent := bool(arena.call(&"is_spent"))
+
 	var chest := Chest.new()
 	chest.name = "TreasureChest"
 	# The rich table -- the same one the deep chest draws from. §5.3's promise is
@@ -2392,7 +2509,22 @@ func _place_chamber(cell: Vector2i, side: StringName,
 	chest.picks = Prog.chest_picks(Run.level, true)
 	chest.position = Vector3(-3.6, 0.0, back - 2.4)
 	chest.rotation.y = PI
+	chest.visible = false
+	chest.enabled = false
 	root.add_child(chest)
+	if boss != null:
+		# Tier 2. It is the rich table, behind a puzzle, behind a miniboss.
+		boss.connect(&"died_at", func(_where: Vector3) -> void:
+			RewardVfx.land(chest, RewardVfx.MAJOR))
+	else:
+		# Either the miniboss is already dead this run and the floor was re-entered
+		# (`spent`), or the arena declined to build one at all. Both end the same
+		# way and both must: a chest nothing can ever reveal is a reward the player
+		# can see through and never open. No flash -- see `RewardVfx.show_now`.
+		if not spent:
+			push_warning(("dungeon: treasure chamber on floor %d has no miniboss; "
+				+ "its chest is revealed with no fight to earn it") % Run.level)
+		RewardVfx.show_now(chest)
 
 	var stone: Node3D = _make_stone(&"treasure")
 	if stone != null:
@@ -2402,14 +2534,10 @@ func _place_chamber(cell: Vector2i, side: StringName,
 		# the fight ends. The chest opposite gets `rotation.y = PI` for this.
 		stone.rotation.y = atan2(stone.position.x, stone.position.z - mid)
 		root.add_child(stone)
-		# On the kill, not on the gate. §5.3's reward list is miniboss + chest +
-		# Echo, and a stone that lit when the door opened would pay the puzzle
-		# before the fight it was gating.
-		var boss := arena.call(&"boss") as Node3D
 		if boss != null:
 			boss.connect(&"died_at",
 				func(_where: Vector3) -> void: stone.call(&"offer"))
-		elif bool(arena.call(&"is_spent")):
+		elif spent:
 			# Already killed this run and the floor was re-entered. The stone's own
 			# flag is what stops a second offer; this only re-opens the one that was
 			# never taken.
@@ -2924,6 +3052,14 @@ func _populate() -> void:
 		# what lets a floor be re-cast without being re-tuned.
 		var elite_chance := Prog.elite_chance(Run.level)
 		var count := _rng.randi_range(enemies_min, enemies_max)
+		# The watcher is built BEFORE the bodies and told about each one as it is
+		# made, rather than handed a list afterwards. `Enemy._ready` runs the frame
+		# it is added -- a body that woke up, was hit and died inside the same
+		# generation pass would be a body the watcher never heard of, and a room
+		# that could then never clear.
+		var watch: RoomWatch = null
+		if count > 0:
+			watch = RoomWatch.attach(root, StringName(root.name))
 		for i in count:
 			var spot := _scatter(i, count, size * 0.30)
 			var kind := _roll_kind(dist)
@@ -2931,7 +3067,7 @@ func _populate() -> void:
 			# THE thing in the room; two of them is just a harder room, and the
 			# separation rule has to keep them both legible besides.
 			var elite := i == 0 and _rng.randf() < elite_chance
-			_spawn_foe(root, kind, spot, elite)
+			watch.add(_spawn_foe(root, kind, spot, elite))
 
 		# The deep-chest anchor already put one in its room. On a floor with no
 		# anchors at all the deepest room still gets the good chest, which is what
@@ -2947,7 +3083,17 @@ func _populate() -> void:
 			chest.picks = Prog.chest_picks(Run.level, cell == deepest)
 			chest.position = chest_dir * (size * 0.32)
 			root.add_child(chest)
+			# **The map still says there is a chest here from the moment the room
+			# comes out of the fog**, even though the chest itself does not exist
+			# until the room is beaten. That is deliberate and it is `place_maze`'s
+			# precedent: the mark is what makes a room worth walking into, and a
+			# minimap that only admitted to a chest once you had already earned it
+			# would be telling you things you can see.
 			Atlas.mark(cell, Atlas.M_CHEST)
+			# The deepest room's chest rolls the rich table (`chest_picks(.., true)`
+			# on the line above), so it announces itself as one.
+			_hold_reward(cell, chest,
+				RewardVfx.MAJOR if cell == deepest else RewardVfx.MINOR)
 
 		# Arrows on the floor, opposite the chest and away from the door line, so
 		# picking them up is a step off the path you were already walking rather
@@ -2984,6 +3130,14 @@ func _populate() -> void:
 					0.0, size * 0.30)
 				root.add_child(p)
 
+		# LAST in the room's pass, so it catches both this room's own chest and
+		# anything an anchor stood here hundreds of lines ago (`_place_deep_chest`).
+		_arm_room_rewards(cell, watch)
+
+	# Anything still held belongs to a cell the loop above never reached the
+	# population of -- the entrance, the boss chamber, the maze. See the function.
+	_release_unclaimed_rewards()
+
 
 ## What this floor is allowed to spawn at this distance from the entrance.
 ##
@@ -3004,8 +3158,11 @@ func _roll_kind(dist: int) -> StringName:
 	return pool[_rng.randi_range(0, pool.size() - 1)]
 
 
+## Hands the body back so the caller can put it on the room's `RoomWatch`. It
+## used to return nothing, which was fine while nothing in the game knew a room
+## could be finished.
 func _spawn_foe(root: Node3D, kind: StringName, at: Vector3,
-		elite: bool = false) -> void:
+		elite: bool = false) -> Enemy:
 	# `position`, not `global_position`: the room root is already placed at its
 	# cell centre, and `at` is the scatter offset inside it. Assigning a global
 	# here would stack every room's spawns on top of the entrance.
@@ -3016,6 +3173,7 @@ func _spawn_foe(root: Node3D, kind: StringName, at: Vector3,
 	e.elite = elite
 	e.position = at
 	root.add_child(e)
+	return e
 
 
 ## Ring-scatter with a jitter, rather than uniform random: a uniform scatter puts

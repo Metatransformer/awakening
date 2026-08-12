@@ -261,6 +261,13 @@ func _populate() -> void:
 	var pack := FloorDb.pack(level) + Vector2i(PACK_BONUS, PACK_BONUS)
 	var elite := Prog.elite_chance(level + 1)
 
+	# **One watcher for all three rooms**, and that is the right grain here rather
+	# than three. The vault is one strongbox with one payoff at the end of one
+	# walk (see the chest below); a chest that landed when the last room's pack
+	# died would pay for a third of the vault, and the player would still have two
+	# rooms of bodies between them and the way out.
+	var watch := RoomWatch.attach(self, StringName(name))
+
 	for i in ROOMS:
 		var c := room_centre(i)
 		var count := _rng.randi_range(pack.x, pack.y)
@@ -277,6 +284,7 @@ func _populate() -> void:
 			e.elite = n == 0 and _rng.randf() < elite
 			e.position = c + _scatter(n, count, ROOM * 0.28)
 			add_child(e)
+			watch.add(e)
 
 	# The rich chest and the relic, together in the last room. Together on
 	# purpose: the vault is one payoff at the end of one walk, and splitting it
@@ -290,7 +298,20 @@ func _populate() -> void:
 	_chest.position = c_last + Vector3(-ROOM * 0.20, 0.0, ROOM * 0.22)
 	# Facing back down the room, so its fan of motes lands on floor you can walk.
 	_chest.rotation.y = PI
+	# **Waits for the pack, like every other chest in the game** (card #99). It
+	# stood open to anyone who got through the door, so a player could run past
+	# three rooms of level+1 bodies, take the richest chest on the floor and leave
+	# -- the pack was scenery. Tier 2: `chest_picks(level + 1, true)` on the line
+	# above is the richest roll the game makes.
+	_chest.visible = false
+	_chest.enabled = false
 	add_child(_chest)
+	watch.cleared.connect(func() -> void:
+		RewardVfx.land(_chest, RewardVfx.MAJOR))
+	# A vault with no pack in it -- `FloorDb.pack` could in principle answer zero
+	# -- must not strand its chest. Nothing to beat, so no ceremony either.
+	if watch.live_count() == 0:
+		RewardVfx.show_now(_chest)
 
 	# The relic is NOT placed here. See `reveal()`.
 

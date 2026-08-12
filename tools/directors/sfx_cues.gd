@@ -33,7 +33,15 @@ func run(rig) -> void:
 	# Every id the table can ever ask for must resolve to a real file. This is
 	# the cheap half of the check and it covers all of them at once.
 	var ids: Array = Sfx.CUES.values()
-	ids.append(&"dungeon_complete")  # emitted directly by the run_ended handler
+	ids.append(&"escape_rope")  # emitted directly by the run_ended handler
+	# The reward tiers live in their own table because `reward_revealed` carries
+	# the tier as an argument and `CUES` is keyed on the signal. They are cues all
+	# the same, and a tier pointing at a missing file fails exactly as silently.
+	ids.append_array(Sfx.REWARD_CUES.values())
+	# Reached only through a bare `Bus.request_sfx` from one prop each, so they are
+	# in no table and nothing else here would notice them going missing.
+	ids.append(&"power_up")   # SoundingStone._on_taken -- the Echo, docs/METAGAME.md §6
+	ids.append(&"glint_bell")  # the gate key waking, Dungeon._wake_key
 	for id in ids:
 		var s: AudioStream = Sfx._load(id)
 		_ck("file exists for cue %s" % id, s != null)
@@ -53,6 +61,14 @@ func run(rig) -> void:
 		func() -> void: Bus.items_sold.emit({}, 40))
 	await _fires(rig, "puzzle_solved",
 		func() -> void: Bus.puzzle_solved.emit(&"p1"))
+	await _fires(rig, "room_cleared",
+		func() -> void: Bus.room_cleared.emit(&"Room_0_0"))
+	# Both tiers, because they are two rows in `REWARD_CUES` and a lookup that
+	# fell through to the tier-1 default would still pass a one-tier test.
+	await _fires(rig, "reward_revealed (MINOR)",
+		func() -> void: Bus.reward_revealed.emit(RewardVfx.MINOR, Vector3(1, 0, 1)))
+	await _fires(rig, "reward_revealed (MAJOR)",
+		func() -> void: Bus.reward_revealed.emit(RewardVfx.MAJOR, Vector3(1, 0, 1)))
 	await _fires(rig, "target_acquired",
 		func() -> void: Bus.target_acquired.emit(null))
 	await _fires(rig, "player_died", func() -> void: Bus.player_died.emit())
