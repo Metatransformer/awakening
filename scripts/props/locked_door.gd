@@ -315,15 +315,13 @@ func _on_item_acquired(id: StringName) -> void:
 # --- Refusal -----------------------------------------------------------------
 
 ## The door says no with its body, not only with a line of text. A jolt against
-## the bars and the game's one refusal noise -- `craft_fail` is what `bag_full`
-## already uses, and Sfx's own note says the player should learn ONE refusal
-## sound rather than three.
+## the bars and the blocked-door refusal cue make the message physical.
 ##
 ## It is one of only two refusals left. The rope was the third until 2026-08-09,
 ## when the fee was capped at the purse: a locked door is a refusal you can act
 ## on, and an exit you could not afford was not.
 func _refuse() -> void:
-	Bus.request_sfx.emit(&"craft_fail", global_position)
+	Bus.request_sfx.emit(&"door_refused", global_position)
 	_say_refusal()
 	if _tween != null and _tween.is_valid():
 		return
@@ -355,9 +353,9 @@ func _swing() -> void:
 	if persists_open():
 		Game.set_flag(flag_id())
 	# `Bus.request_sfx` rather than `Bus.door_opened`: Sfx maps that signal to
-	# this same `door_open` cue at the HERO's position, so emitting both would
-	# play the door twice, once of them in the wrong place.
-	Bus.request_sfx.emit(&"door_open", global_position)
+	# this same `dungeon_door_open` cue at the HERO's position, so emitting both
+	# would play the door twice, once of them in the wrong place.
+	Bus.request_sfx.emit(&"dungeon_door_open", global_position)
 	opened.emit(destination)
 
 	if _blocker != null:

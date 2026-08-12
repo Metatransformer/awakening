@@ -38,10 +38,13 @@ func run(rig) -> void:
 	# the tier as an argument and `CUES` is keyed on the signal. They are cues all
 	# the same, and a tier pointing at a missing file fails exactly as silently.
 	ids.append_array(Sfx.REWARD_CUES.values())
-	# Reached only through a bare `Bus.request_sfx` from one prop each, so they are
-	# in no table and nothing else here would notice them going missing.
-	ids.append(&"power_up")   # SoundingStone._on_taken -- the Echo, docs/METAGAME.md §6
-	ids.append(&"glint_bell")  # the gate key waking, Dungeon._wake_key
+	# Reached only through bare `Bus.request_sfx` emitters, so they are in no table
+	# and nothing else here would notice them going missing.
+	ids.append(&"power_up")               # SoundingStone._on_taken -- the Echo
+	ids.append(&"key_found")               # Dungeon._wake_key
+	ids.append(&"door_refused")            # locked and barred door refusal UI
+	ids.append(&"upgrade_stat_selected")   # progression catalogue selection
+	ids.append(&"upgrade_stat_unlocked")   # successful progression purchase
 	for id in ids:
 		var s: AudioStream = Sfx._load(id)
 		_ck("file exists for cue %s" % id, s != null)
@@ -65,6 +68,10 @@ func run(rig) -> void:
 		func() -> void: Bus.room_cleared.emit(&"Room_0_0"))
 	# Both tiers, because they are two rows in `REWARD_CUES` and a lookup that
 	# fell through to the tier-1 default would still pass a one-tier test.
+	# The puzzle beat above uses the same take as MINOR on purpose. Wait past its
+	# anti-stack gap so this beat tests the reveal independently instead of proving
+	# that two copies correctly collapse into one.
+	await rig.wait_seconds(float(Sfx.MIN_GAP[&"puzzle_reward"]) + 0.1)
 	await _fires(rig, "reward_revealed (MINOR)",
 		func() -> void: Bus.reward_revealed.emit(RewardVfx.MINOR, Vector3(1, 0, 1)))
 	await _fires(rig, "reward_revealed (MAJOR)",

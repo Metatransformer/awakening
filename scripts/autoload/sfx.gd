@@ -54,14 +54,14 @@ const VARIANTS := {
 ## its own meaning; nothing here is a guess about what the designer wanted.
 const CUES := {
 	&"chest_opened": &"chest_open",
-	&"door_opened": &"door_open",
+	&"door_opened": &"dungeon_door_open",
 	&"item_acquired": &"equip",
 	&"loot_gained": &"pickup",
 	&"items_sold": &"coin_trade",
-	&"puzzle_solved": &"puzzle_complete",
+	&"puzzle_solved": &"puzzle_reward",
 	# The room is beaten. This is the beat a reward arrives ON, so it is
-	# deliberately a short bright one rather than a fanfare -- the fanfare is the
-	# chest landing a moment later (`reward_revealed` below), and two ceremonies
+	# deliberately a short bright one rather than a fanfare -- a major reward's
+	# arrival owns the fanfare later (`reward_revealed` below), and two ceremonies
 	# stacked on one frame read as a bug in the mix.
 	&"room_cleared": &"arena_round_win",
 	# The sound a landed blow makes. It was missing, so the only combat noise in
@@ -79,10 +79,10 @@ const CUES := {
 	&"target_acquired": &"target_cycle",
 	&"run_started": &"dungeon_enter",
 	&"item_get_started": &"dungeon_complete",
-	# The game saying "no". One refusal noise, shared by everything that refuses
-	# -- `locked_door.gd` reaches for the same `craft_fail` by hand. There used to
-	# be an `extract_refused` row beside this one; the rope cannot refuse any more
-	# (the fee is capped at the purse), so the row went with the signal.
+	# The full bag saying "no". Doors use their own `door_refused` cue because the
+	# blocked-door message and body jolt are a different event. There used to be an
+	# `extract_refused` row beside this one; the rope cannot refuse any more (the
+	# fee is capped at the purse), so the row went with the signal.
 	&"bag_full": &"craft_fail",
 }
 
@@ -94,21 +94,13 @@ const CUES := {
 ## these is chosen.** `RewardVfx` builds the flash and names no sound, so the two
 ## tiers can be re-voiced from here without touching a line of the effect.
 ##
-## Both are placeholders picked from the 156 on disk and they are meant to be
-## swapped. What they have to preserve is the CONTRAST -- tier 1 is a bright tick
-## that says "there is something here", tier 2 is a held chord that says "that
-## was the thing". `glint_bell` is what the puzzle chests have always used, so
-## tier 1 is not a change to anything already shipped.
-## Both tiers are the same take today, and that is on purpose rather than a gap
-## waiting to be filled: `treasure_spawn` was authored for exactly this event --
-## a chest falling out of nothing, landing, bouncing and glittering -- and there
-## is one of it. The tiers already differ in the eye (a shaft of light, a second
-## ring, twice the shake) and in how long they hold the screen, which is what
-## "the level of the loot sets the level of the flash" asked for. When a bigger
-## take exists, tier 2 is this line and nothing else moves.
+## The contrast is in the sound as well as the effect: tier 1 is the same bright
+## reward ping as a solved puzzle, while tier 2 is the boss-grade fanfare. The
+## arrival owns these cues; opening an ordinary chest keeps its mechanical sound
+## and never replays the major fanfare.
 const REWARD_CUES := {
-	1: &"treasure_spawn",   ## MINOR -- a room's chest
-	2: &"treasure_spawn",   ## MAJOR -- boss-grade
+	1: &"puzzle_reward",       ## MINOR -- a room's chest
+	2: &"great_chest_fanfare", ## MAJOR -- boss-grade
 }
 
 ## The shortest gap, in seconds, between two plays of the same sound. Absent
@@ -118,9 +110,9 @@ const REWARD_CUES := {
 ## because a chime is not a person.** The keeper repeating a sentence is the bug
 ## `Voice.say` refuses; coins may keep stacking, because the chime is texture.
 ## What is NOT texture is the same WAV started several times on one frame: these
-## three ship as a single file each -- no `VARIANTS` row -- so N copies start
-## phase-aligned and sum into one loud click rather than into N sounds. Every one
-## of the three can arrive that way from a single player action:
+## these ship as a single file each -- no `VARIANTS` row -- so N copies start
+## phase-aligned and sum into one loud click rather than into N sounds. The first
+## three can arrive that way from a single player action:
 ##
 ##   pickup      `Run.collect` emits `loot_gained` per call, and a killed pack
 ##               drops a handful of motes that are swept in a stride.
@@ -129,16 +121,21 @@ const REWARD_CUES := {
 ##               "no" five times for one refusal.
 ##   equip       `item_acquired`, per item, on a reward that hands over several.
 ##
-## Small enough that a genuine sequence still reads as several sounds -- a stride
-## across three motes is ~0.4 s a step -- and long enough to collapse a same-frame
-## burst. A cap on how many may OVERLAP would not do this job: three simultaneous
-## copies of one file are within any cap and are still one click.
+## Their 0.12 s gaps are small enough that a genuine sequence still reads as
+## several sounds -- a stride across three motes is ~0.4 s a step -- and long
+## enough to collapse a same-frame burst. `puzzle_reward` needs a longer gap so
+## the solve and immediate minor reveal do not phase-stack the same take;
+## `upgrade_stat_selected` needs the short gap because held repeat ticks at 0.09 s.
+## A cap on how many may OVERLAP would not do this job: simultaneous copies of one
+## file are within any cap and are still one click.
 ##
 ## `coin_trade` is deliberately absent. See above: the coins are meant to stack.
 const MIN_GAP := {
 	&"pickup": 0.12,
 	&"craft_fail": 0.12,
 	&"equip": 0.12,
+	&"puzzle_reward": 0.75,
+	&"upgrade_stat_selected": 0.12,
 }
 
 var _pool: Array[AudioStreamPlayer3D] = []
