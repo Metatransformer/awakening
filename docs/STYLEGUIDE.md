@@ -1485,8 +1485,8 @@ promotion and sweep; the room name card (Jacquard 24 @24 px, BONE 30%, centre
 x `0.5`, baseline y `0.139`, 1.4 s on room entry); damage-direction arc (3 px
 RUST, 40°, radius **`0.42h`** about centre, 300 ms, camera-relative bearing with
 0° at the top and clockwise — one arc, a second blow replaces it); interaction prompts; gold
-floaters; the perfect-dodge flurry prompt — the live attack cap in a BONE
-circular button beside `FLURRY RUSH`, on the World plate in the centre prompt
+floaters; the perfect-dodge counter-attack prompt — the live attack cap in a BONE
+circular button beside `COUNTER ATTACK`, on the World plate in the centre prompt
 slot, existing exactly while the combat flurry window is available; **and the
 garrison control legend** — 0.6 s in, 10 s, 0.6 s out, on
 three moments only: the overlay coming up in a garrison, a device change, and a
@@ -1595,7 +1595,7 @@ point, and a fourth right edge is what made the column read as ragged.
 |---|---|---|---|
 | Crosshair | screen centre, quantized to 480×270 | " | gap 7 (5 locked), arm 5, 1 px |
 | Interact prompt | centre 0.500 | 0.735 (529) | 14 px on the world plate, pad **6** |
-| Flurry prompt (**transient**, overrides interact) | centre 0.500 | 0.735 (529) | live attack cap at 14 px in a BONE circular button beside `FLURRY RUSH` at 16 px, on the World plate; exactly while the flurry window is available |
+| Counter-attack prompt (**transient**, overrides interact) | centre 0.500 | 0.735 (529) | live attack cap at 14 px in a BONE circular button beside `COUNTER ATTACK` at 16 px, on the World plate; exactly while the flurry window is available |
 | Prompt hold gauge | inside the plate | the plate's bottom edge | `HoldGauge.BAR_H` |
 | Extraction sweep | 0.0 → 1.0 | 0.500 | 1 px CYAN, 200 ms |
 | Legend (garrison, **transient**) | left edge derived from the vitals pole's right + `KEYS_GUTTER` | up from 0.942 (678) | **4 balanced rows**, step 15, 10 px BONE on a `PLATE_WORLD` plate |

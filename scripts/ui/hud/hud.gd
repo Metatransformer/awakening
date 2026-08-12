@@ -186,7 +186,7 @@ const ARC_W := 3.0
 const SAVE_HOLD := 2.20
 const SAVE_FADE := 0.35
 
-# --- Flurry prompt -----------------------------------------------------------
+# --- Counter-attack prompt ---------------------------------------------------
 ## Real-time pop duration. Perfect dodge also slows the tree, so this tween must
 ## ignore that scale or the acknowledgement arrives after its own reward window.
 const FLURRY_POP_TIME := 0.18
@@ -3241,7 +3241,7 @@ func _draw_save(s: Vector2) -> void:
 
 ## The interact line. Centred and low -- under the action, above the kit strip,
 ## on the axis the player is already looking down. It shares this centre slot
-## with the flurry prompt, which takes precedence while its reward is available.
+## with the counter-attack prompt, which takes precedence while its reward is available.
 func _draw_prompt(s: Vector2) -> void:
 	if _prompt.is_empty():
 		return
@@ -3265,7 +3265,7 @@ func _draw_prompt(s: Vector2) -> void:
 			box.size.x, bar_h), _hold01, Pal.BONE)
 
 
-## The perfect-dodge reward, in the interact prompt's centre slot. The cap is
+## The perfect-dodge counter, in the interact prompt's centre slot. The cap is
 ## resolved on every draw so device changes and rebinding remain live.
 func _draw_flurry_prompt(s: Vector2) -> void:
 	var cap := _hotkey(&"attack")
@@ -3276,7 +3276,7 @@ func _draw_flurry_prompt(s: Vector2) -> void:
 	var cap_radius := maxf(Pal.px(14.0, s.y),
 		CanvasText.width(cap, cap_scale) * 0.5 + cap_pad)
 	var cap_outer := cap_radius + outline
-	var label := "FLURRY RUSH"
+	var label := "COUNTER ATTACK"
 	var label_w := CanvasText.width(label, label_scale)
 	var label_h := CanvasText.height(label_scale)
 	var gap := Pal.px(8.0, s.y)

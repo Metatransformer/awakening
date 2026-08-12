@@ -311,9 +311,9 @@ func _flurry(rig, out: String) -> void:
 	await rig.wait_frames(2)
 	var swung: float = combat.get(&"_swing_t")
 	if Hud._flurry_prompt:
-		_fail("the HUD prompt survived the flurry consuming its window")
+		_fail("the counter-attack prompt survived the flurry consuming its window")
 	if Hud.layout_rects().has(&"flurry_prompt"):
-		_fail("the flurry prompt layout survived after its window was consumed")
+		_fail("the counter-attack prompt layout survived after its window was consumed")
 
 	var airborne := false
 	var top := hero.global_position.y
@@ -634,7 +634,7 @@ func _assert_flurry_prompt(where: String) -> void:
 	if Glyph.cap(&"attack").is_empty():
 		_fail("%s has no live attack cap" % where)
 	if not Hud._flurry_prompt:
-		_fail("%s did not activate the HUD flurry prompt" % where)
+		_fail("%s did not activate the HUD counter-attack prompt" % where)
 	var layout: Dictionary = Hud.layout_rects()
 	if not layout.has(&"flurry_prompt"):
 		_fail("%s authored no flurry_prompt layout rectangle" % where)
