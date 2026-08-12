@@ -103,6 +103,49 @@ const REWARD_CUES := {
 	2: &"great_chest_fanfare", ## MAJOR -- boss-grade
 }
 
+## The blow LANDING ON THE PLAYER, indexed by `Hit.Tier`. Card #130.
+##
+## Not a `CUES` row, and deliberately not `hit_flesh`. `hit_landed` is emitted by
+## whatever the hero HIT (`enemy.gd:1940`, `boss.gd:1147`, the training post) and
+## the hero emits it for no one -- so up to now being hit was the one event in
+## combat with no sound at all. Making it `hit_flesh` would have been worse than
+## silence: the sound you hear when you connect and the sound you hear when you
+## are opened up would then be the same file, and the mix would be telling you
+## the fight is going well while your hearts drain.
+##
+## Two layers per blow, because a body being hurt is two things and one file
+## cannot be both:
+##
+##   the VOICE   `player_hurt`, on every tier. The man. 0.16 s, peaks at -0.8 dB,
+##               and it is the only real recording of the player being hurt in
+##               the 156 on disk -- `human_male_hurt.ogg` and
+##               `human_male_death.ogg` are both digital silence (-91.0 dB, i.e.
+##               an empty file, measured; the female pair are near enough the
+##               same). If a male hurt SET ever arrives, it lands on this row and
+##               nothing else in the file moves.
+##   the WEIGHT  what the blow did to him, and the whole reason this is a table
+##               and not a line. LIGHT gets none -- a jab is a grunt and adding
+##               a thud to it is what made every hit read alike in the first
+##               place. HEAVY and KNOCKDOWN get one, and they are the audible
+##               half of "tell them apart with the health bar covered".
+const HURT_VOICE := &"player_hurt"
+const HURT_WEIGHT := {
+	0: &"",                              ## LIGHT -- the voice alone
+	1: &"weapon_impact_blunt_2h_heavy",  ## HEAVY -- something got through
+	2: &"weapon_impact_blunt_2h_heavy",  ## KNOCKDOWN -- plus the floor, below
+}
+
+## The floor arriving, on a knockdown only, delayed by how long `ex_knocked_down`
+## takes to actually put him on his back. Two sounds and not one because the blow
+## and the landing are two events with a gap between them you can SEE -- firing
+## them together would read as a single louder hit and throw away the one thing
+## a knockdown has that a stagger does not.
+##
+## The delay is `K.KNOCKDOWN_DOWN_TIME * 0.45`, i.e. a little under halfway
+## through the fall. Not the end of the clip: the clip carries him through the
+## bounce and the settle, and the sound belongs on the impact.
+const KNOCKDOWN_FLOOR := &"land_hard"
+
 ## The shortest gap, in seconds, between two plays of the same sound. Absent
 ## means no limit, which is the default and is right for almost everything here.
 ##
@@ -160,6 +203,8 @@ func _ready() -> void:
 	Bus.request_sfx.connect(play_at)
 	Bus.perfect_dodge.connect(func(pos: Vector3) -> void:
 		play_at(&"perfect_dodge", pos))
+	# The one cue whose loudness is the POINT, so it does not go through `_cue`.
+	Bus.hero_hurt.connect(_on_hero_hurt)
 
 	# --- the table, bound to the signals it names ----------------------------
 	Bus.chest_opened.connect(func(_id: StringName, _c: StringName) -> void:
@@ -282,6 +327,28 @@ func _load(id: StringName) -> AudioStream:
 	var s := load(path) as AudioStream
 	_cache[name] = s
 	return s
+
+
+## Voice the blow the player just took. See `HURT_VOICE` / `HURT_WEIGHT`.
+##
+## `at` rather than `_hero_pos()`: by the time this runs the shove in `take_hit`
+## has already been applied, and on a knockdown he travels far enough during the
+## clip that playing the grunt at his CURRENT feet would walk the sound away from
+## where he was standing when it happened.
+func _on_hero_hurt(_force: float, tier: int, at: Vector3) -> void:
+	play_at(HURT_VOICE, at)
+	var weight: StringName = HURT_WEIGHT.get(tier, &"")
+	if weight != &"":
+		play_at(weight, at)
+	if tier != 2:
+		return
+	# The floor. `create_timer` and not a `Tween` so it survives the hero being
+	# freed mid-fall -- a knockdown that killed him should still land.
+	var tree := get_tree()
+	if tree == null:
+		return
+	var t := tree.create_timer(K.KNOCKDOWN_DOWN_TIME * 0.45)
+	t.timeout.connect(func() -> void: play_at(KNOCKDOWN_FLOOR, at))
 
 
 func _hero_pos() -> Vector3:

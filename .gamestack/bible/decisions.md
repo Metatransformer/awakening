@@ -1,11 +1,21 @@
 # Decisions
 
+### 2026-08-12 — Reduce active canon and test the Raid Loop Proof
+
+Required design reading is limited to `docs/GDD.md`, `docs/NOW.md`, and
+`docs/SCOPE.md`; focused references own detail and git history retains replaced
+prose. The base-defense pivot superseded the untested Core Loop Proof. The only
+active design question is the bounded one-occurrence Raid Loop Proof in
+`docs/design-tests/RAID_LOOP_PROOF.md`.
+
+supersedes: 2026-08-11 — Freeze pre-production at Core Loop Proof
+
 ### 2026-08-11 — Freeze pre-production at Core Loop Proof
 
 Pre-production remains frozen at **Core Loop Proof** until
-`docs/design-tests/CORE_LOOP_PROOF.md` is resolved. M4's implementation
-and M5's accepted sequencing debt do not prove player desire; expanding the
-unproven loop would multiply content cost before resolving its premise.
+the then-active proof is resolved. M4's implementation and M5's accepted
+sequencing debt do not prove player desire; expanding the unproven loop would
+multiply content cost before resolving its premise.
 
 supersedes: docs/SCOPE.md §3 milestone momentum where it implies later completed work authorizes M6
 

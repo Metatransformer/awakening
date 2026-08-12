@@ -1091,6 +1091,10 @@ var knockback: float     # metres/sec applied away from `from`
 var stun: float          # seconds the victim is stunned
 var kind: StringName     # &"sword" &"arrow" &"bomb" &"contact" &"fire"
 var source: StringName   # who threw it, ready to print: &"SKELETON", &"ELITE WRAITH"
+var mass: float          # attacker body height in K.LAUNCH_MASS_REF units; 1.0 = a man
+var commitment: float    # how big this swing is on the ATTACKER'S own scale, 0..1
+var odds_knockdown: float  # authored override, -1 = use the curve
+var odds_stagger: float    # authored override, -1 = use the curve
 
 # on HealthComponent:
 func apply_hit(hit: Hit) -> void
@@ -1126,15 +1130,62 @@ that never stamps itself is not an error: the screen says `KILLED BY THE DARK`
 rather than inventing one. Anything new that can kill the hero should set it,
 including traps and falls when they arrive.
 
+### Taking a hit — what a blow is worth is decided once, in `Hero.take_hit`
+
+**Every blow that lands on the player is priced, and the price has two halves
+that answer different questions.**
+
+`Hit.force()` is the CONTINUOUS half, 0..1 over damage, knockback, attacker mass
+and commitment. Everything the SCREEN does scales off it — the hit-stop
+(`K.HURT_STOP_MIN`..`MAX`), the shake, the directional lurch, and how wide and
+how long the HUD's damage arc draws. Two players eating the same boss slam always
+see the same camera.
+
+`Hit.roll_tier()` is the DISCRETE half: LIGHT, HEAVY or KNOCKDOWN, drawn from two
+logistic curves over `mass * commitment²` (`K.KNOCKDOWN_*` / `K.STAGGER_*`). It
+decides what his BODY does, and it is a roll — the same slam may stagger you or
+floor you. **Roll it exactly once per landed blow.** Ask twice and the animation
+plays one reaction while the controller times another.
+
+The curves are solved against two authored rows rather than tuned: a goblin is
+90/9/1 and an orc is 50/30/20. `tools/directors/hurt_table.gd` prints every blow
+in the game through them and FAILS if either anchor moves.
+`tools/directors/hero_struck.gd` photographs the receiving end and calibrates the
+lurch against four known-answer bearings.
+
+**Numbers are authored per MOVE, not per monster.** A `DamageArea` exports `mass`
+and `commitment`; a roster monster gets `commitment = 1.0` because its one attack
+is its heaviest, and a boss beat gets its damage-and-knockback severity relative
+to that boss's own top beat (`Boss._commitment`). Where the curve is wrong for a
+particular attacker, `odds_knockdown` and `odds_stagger` override it outright —
+that pair is the schema's escape hatch and it is also how a director pins a tier.
+
+LIGHT is cosmetic: a flinch clip over whatever he was doing, and he keeps
+control. A floor of goblins that each root you for a quarter-second is a floor
+you cannot move through. HEAVY and KNOCKDOWN enter `Hero.MoveState.HURT` and take
+the controller away, and a knockdown carries i-frames for its whole length so it
+is a punish rather than a stunlock.
+
 ### Feel — ask for it, never own it
 
 ```gdscript
 Bus.request_hitstop.emit(K.HITSTOP_LIGHT)   # frames at 60 Hz
 Bus.request_shake.emit(0.45, 0.18)          # trauma 0..1, seconds to bleed off
+Bus.request_punch.emit(away, 0.6, 0.30)     # world dir AWAY from the blow, 0..1, seconds
 Bus.request_sfx.emit(&"hit_flesh", position)
 ```
 
-`Feel` (`scripts/autoload/feel.gd`) implements the first two, `Sfx` the third.
+`Feel` (`scripts/autoload/feel.gd`) implements the first three, `Sfx` the last.
+
+**The punch is the only cue in the game that says WHERE.** Shake is deliberately
+decorrelated on all three axes, so it can say a blow was heavy and can never say
+which side it came from. `Feel.punch` shoves the frustum away from the impact:
+lateral goes to `h_offset`, and the component pointing at the lens is spent on
+`v_offset` by convention — a blow from ahead DIPS the view, one from behind LIFTS
+it, matching the HUD arc's top-is-ahead. It is deliberately **not** gated by
+`Settings.camera_shake`: that setting exists because random high-frequency wobble
+makes people ill, and a single smooth lurch is not that. Turning the shake off
+must not take the direction of every blow away with it.
 Nothing else may stop time or move the camera — a second owner is how you get
 two hit-stops stacking into a freeze. `Feel`'s hit-stop is **global** on purpose:
 one hero, one room, so the honest impact frame is the cheap one. Shake obeys
@@ -2064,6 +2115,29 @@ each were crushed into about a second and the finisher's leaping overhead went
 past before you could see it was an overhead. `chain_time_scale` (0.92, 1.65)
 multiplies it, so steps 2 and 3 move with it, and the damage windows are
 fractions of it, so the blade's live slice sits in the same place in the swing.
+
+**The three ordinary lights alone own a blade trail.** `HeroCombat` creates and
+publishes `SwordSlashTrail` (`scripts/combat/sword_slash_trail.gd`), binds it to
+the mounted sword holder, and starts a stroke only from `_light_swing` after
+`Hero.request_attack` accepts `LIGHT1`, `LIGHT2` or `LIGHT3`. The ribbon samples
+the real weapon convention — an inner point at 0.24 m and an outer point at
+0.88 m along the holder's local `+Y` — into world space, so the down, up and
+overhead clips leave their own swept surfaces. A tapped heavy happens to reuse
+the `LIGHT3` clip but does **not** enter this path; held charge/wind-up, spin,
+lunge, dash, slam, parry and flurry produce no ordinary trail.
+
+Sampling is confined to the light's existing `damage_window` (0.22–0.62 of the
+move). Redundant points under 0.025 m are discarded, expired points are pruned,
+and the ribbon is capped at 22 live sections; its last samples die 0.083 s
+(about five 60 Hz physics frames) after the active slice and processing sleeps
+when the stroke is empty. Four tapered blade rails give it a muted translucent
+body and a narrow cobalt-under-bone cutting rim. It is a double-sided, unshaded
+alpha-MIX mesh in `Pal.MOTH` / `Pal.COBALT` / `Pal.BONE`, never additive and
+never extraction `Pal.CYAN`. The
+finisher uses the same timing with only a modest opacity lift, keeping the whole
+ordinary chain visibly below `SpinVfx`'s charged spectacle. Proved at gameplay
+camera distance, including the charged-spin null control, by
+`tools/directors/sword_slash_trail.gd`.
 
 **The chain is buffered.** A press in the back half of a swing
 (`chain_buffer_from`) is remembered and paid out one frame AFTER the swing ends

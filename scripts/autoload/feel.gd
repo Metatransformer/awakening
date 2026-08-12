@@ -50,6 +50,25 @@ const SHAKE_HZ := 22.0
 ## Ceiling on a single stop. Nothing in the game asks for more than HITSTOP_HEAVY
 ## (9 frames), and a bug that asked for a thousand would freeze the game solid.
 const MAX_STOP_SECONDS := 0.25
+## Frustum shift a full-severity PUNCH is worth, in the same units as
+## MAX_OFFSET, so `monster_feel`'s measured 37.5 px per unit applies to it too:
+## a boss's heaviest beat lurches the image ~41 px in ONE named direction.
+##
+## Deliberately close to MAX_OFFSET rather than a fraction of it. The shake and
+## the punch are not a big effect and a small one -- they are two different
+## statements, and the punch is the one carrying the information. Shake says
+## "that was hard"; the punch says "that came from BEHIND YOU ON THE LEFT",
+## which against a boss you cannot see all of is the thing worth knowing. A
+## timid punch is a shake with extra steps.
+const MAX_PUNCH := 1.1
+## Ceiling on the accumulated punch, so a flurry cannot walk the frustum off
+## into the scenery. One and a half of the hardest single blow in the game.
+const MAX_PUNCH_MAG := 1.65
+## How much of a head-on shove is spent on the vertical. Below 1.0 because the
+## frame is 16:9 and a v_offset is a bigger fraction of the picture than the
+## same h_offset is -- matched by eye off `hero_struck.gd`'s contact sheet so a
+## blow from ahead and a blow from the side read as the same size of event.
+const PUNCH_DEPTH_TILT := 0.7
 
 var _trauma: float = 0.0
 var _decay: float = 1.0
@@ -64,6 +83,18 @@ var _slow_scale: float = 1.0
 ## The roll `_tick_shake` computed this frame, restamped just before the draw.
 ## See `_on_pre_draw`.
 var _roll: float = 0.0
+## The directional shove, as a WORLD-space vector whose length is the frustum
+## offset it is currently worth. See `punch`.
+##
+## A vector and not a (direction, scalar) pair, because that is what makes two
+## blows compose honestly: hit from the left and then from the right inside the
+## same window and the two shoves partly CANCEL, which is what being hit from
+## both sides actually feels like. Stored in world space and projected onto the
+## camera's axes every frame, so the lurch keeps pointing at the thing that
+## threw it even while the camera orbits.
+var _punch: Vector3 = Vector3.ZERO
+## Offset units bled off per second. Set by the last `punch` that landed.
+var _punch_decay: float = 1.0
 
 # `_last_quarters` was here, mirroring health so that a signal carrying no delta
 # could be read as "he was hurt". Nothing in this file needs to know that any
@@ -103,6 +134,7 @@ func _ready() -> void:
 
 	Bus.request_hitstop.connect(hitstop)
 	Bus.request_shake.connect(shake)
+	Bus.request_punch.connect(punch)
 
 
 # --- The public verbs -------------------------------------------------------
@@ -181,6 +213,41 @@ func shake(strength: float, duration: float) -> void:
 	# and, at 60 Hz, one the capture rig could not catch either. Scaling by the
 	# trauma present makes `duration` mean what the caller plainly meant by it.
 	_decay = _trauma / maxf(duration, 0.05)
+
+
+## Shove the view AWAY from a blow. `dir` is a world-space direction pointing
+## from the impact towards the victim -- i.e. the way the body was thrown --
+## `strength` is 0..1 in the same currency as `Hit.severity`, and `duration` is
+## how long the lurch takes to come home.
+##
+## **This is the cue that says WHERE, and nothing else in the game says it.**
+## Shake is noise: it is deliberately decorrelated on all three axes (see
+## `_tick_shake`), so it can tell you a blow was heavy and can never tell you a
+## thing about which side it came from. Against the floor 1 boss -- a body larger
+## than the frame, standing behind you as often as in front -- that is the
+## question the player actually has, and until this existed the only answer was
+## the HUD's 3 px arc.
+##
+## Accumulates as a VECTOR rather than taking the larger of two requests. Two
+## blows from opposite sides inside one window partly cancel, which is right;
+## two from the same side stack into a bigger lurch, which is also right. The
+## magnitude is capped so a flurry cannot walk the frustum into the scenery.
+##
+## Not gated by `Settings.camera_shake`. That setting exists because random
+## high-frequency wobble makes people ill -- a single smooth lurch is not that,
+## and it is load-bearing information rather than garnish, so turning the shake
+## off must not take the direction of every blow away with it.
+func punch(dir: Vector3, strength: float, duration: float) -> void:
+	var d := K.flat(dir)
+	if d == Vector3.ZERO or strength <= 0.0:
+		return
+	_punch += d.normalized() * (MAX_PUNCH * clampf(strength, 0.0, 1.0))
+	if _punch.length() > MAX_PUNCH_MAG:
+		_punch = _punch.normalized() * MAX_PUNCH_MAG
+	# Bleed off what is THERE over `duration`, not a notional full lurch over it.
+	# The same correction `shake` carries and for the same reason: the rate form
+	# makes `duration` mean something different for every strength passed to it.
+	_punch_decay = _punch.length() / maxf(duration, 0.05)
 
 
 # `damage_vignette()` was here. It is deleted, not moved -- HUD_PLAN decision 37.
@@ -264,7 +331,18 @@ func _tick_shake(delta: float) -> void:
 	var walk := delta if Engine.time_scale > 0.0 else 1.0 / 60.0
 	_noise_t += walk * SHAKE_HZ
 
-	if _trauma <= 0.0:
+	# Wall-clock delta: while a hit-stop is up, `delta` is zero, and a shake that
+	# froze mid-wobble for the length of the stop would read as a stutter rather
+	# than as impact. The two effects fire together on almost every blow.
+	var dt := delta if Engine.time_scale > 0.0 else 1.0 / 60.0
+
+	# The lurch is spent DURING the freeze, on the same clock and for the same
+	# reason. A punch that waited for the hit-stop to lift would arrive after the
+	# impact frame the player was looking at.
+	if _punch != Vector3.ZERO:
+		_punch = _punch.move_toward(Vector3.ZERO, _punch_decay * dt)
+
+	if _trauma <= 0.0 and _punch == Vector3.ZERO:
 		# Only write when there is something to clear, so a game with no shake in
 		# it is not fighting anything else that might want these.
 		if cam.h_offset != 0.0 or cam.v_offset != 0.0 or cam.rotation.z != 0.0:
@@ -274,23 +352,50 @@ func _tick_shake(delta: float) -> void:
 		_roll = 0.0
 		return
 
-	# Wall-clock delta: while a hit-stop is up, `delta` is zero, and a shake that
-	# froze mid-wobble for the length of the stop would read as a stutter rather
-	# than as impact. The two effects fire together on almost every blow.
-	var dt := delta if Engine.time_scale > 0.0 else 1.0 / 60.0
-	_trauma = maxf(0.0, _trauma - _decay * dt)
+	var h := 0.0
+	var v := 0.0
+	if _trauma > 0.0:
+		_trauma = maxf(0.0, _trauma - _decay * dt)
+		# Squared: a small trauma should be a twitch, not a small earthquake.
+		var s := _trauma * _trauma
+		# Three parallel lines through the field, none of them through the origin.
+		# Simplex noise is exactly zero at (0,0) and `_noise_t` starts at zero, so
+		# sampling (t, 0) would make the first shake of a session begin from a dead
+		# frame -- which reads as the shake having missed rather than started. The
+		# lines are far apart so the two offsets and the roll are decorrelated; three
+		# samples of one line would be a lean, not a wobble.
+		h = MAX_OFFSET * s * _noise.get_noise_2d(_noise_t, 11.7)
+		v = MAX_OFFSET * s * _noise.get_noise_2d(_noise_t, 53.1)
+		_roll = MAX_ROLL * s * _noise.get_noise_2d(_noise_t, 97.3)
+	else:
+		_roll = 0.0
 
-	# Squared: a small trauma should be a twitch, not a small earthquake.
-	var s := _trauma * _trauma
-	# Three parallel lines through the field, none of them through the origin.
-	# Simplex noise is exactly zero at (0,0) and `_noise_t` starts at zero, so
-	# sampling (t, 0) would make the first shake of a session begin from a dead
-	# frame -- which reads as the shake having missed rather than started. The
-	# lines are far apart so the two offsets and the roll are decorrelated; three
-	# samples of one line would be a lean, not a wobble.
-	cam.h_offset = MAX_OFFSET * s * _noise.get_noise_2d(_noise_t, 11.7)
-	cam.v_offset = MAX_OFFSET * s * _noise.get_noise_2d(_noise_t, 53.1)
-	_roll = MAX_ROLL * s * _noise.get_noise_2d(_noise_t, 97.3)
+	# The lurch, resolved onto the axes of the screen it has to be legible on.
+	#
+	# The punch is stored in WORLD space precisely so this can happen every frame
+	# against the camera's current basis: the shove keeps pointing at the thing
+	# that threw it while the player orbits, rather than being frozen into screen
+	# space at the instant of the blow.
+	#
+	# **The depth component drives the VERTICAL, and that is a convention rather
+	# than a projection.** There are three world directions and two screen axes,
+	# so the one pointing at the lens has to be spent on something or a blow taken
+	# head-on -- the single most common way to be hit in this game -- moves the
+	# frame not at all. It is spent DOWN: a blow from in front drops the view, a
+	# blow from behind lifts it, which agrees with the HUD arc's own top-is-ahead
+	# convention (`Hud._on_hero_struck`) so the two cues cannot contradict.
+	#
+	# `local.y` is dropped rather than added to `local.z`. The punch is flat and
+	# the camera is pitched down, so a frontal shove already lands most of its
+	# length in BOTH -- summing them double-counts one blow and makes a head-on
+	# hit lurch further than a heavier one from the side.
+	if _punch != Vector3.ZERO:
+		var b := cam.global_transform.basis
+		h += b.x.dot(_punch)
+		v -= b.z.dot(_punch) * PUNCH_DEPTH_TILT
+
+	cam.h_offset = h
+	cam.v_offset = v
 	cam.rotation.z = _roll
 
 

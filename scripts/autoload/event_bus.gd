@@ -24,6 +24,17 @@ signal player_health_changed(quarters: int, max_quarters: int)
 ## i-frame all return before this, and an arc for a blow you just answered
 ## correctly would be the game arguing with the player about what happened.
 signal hero_struck(from: Vector3)
+## The hero took a blow, with everything the receiving end needs to voice it:
+## `force` is `Hit.force` (0..1, continuous), `tier` is a `Hit.Tier` (0 LIGHT,
+## 1 HEAVY, 2 KNOCKDOWN), and `at` is where he was standing.
+##
+## Separate from `hero_struck`, which carries the direction and nothing else and
+## is the HUD arc's. Merging them was the obvious move and is wrong: the arc is
+## drawn for the blow's BEARING and this is emitted for its WEIGHT, and a
+## listener that wanted one would have had to ignore three arguments to get it.
+## `tier` is an int rather than a `Hit.Tier` because a signal argument typed on a
+## class enum makes every file that connects to the bus load `Hit`.
+signal hero_hurt(force: float, tier: int, at: Vector3)
 signal magic_changed(magic: int, max_magic: int)
 ## Fires on every spend and on every regen step, so the HUD never polls for it.
 signal stamina_changed(stamina: float, max_stamina: float)
@@ -275,6 +286,11 @@ signal input_device_changed(using_pad: bool)
 ## Requests for the feel layer. Emitters do not care who answers.
 signal request_hitstop(frames: int)
 signal request_shake(strength: float, duration: float)
+## A DIRECTIONAL shove of the view, away from `dir` (a world-space unit vector
+## pointing from the impact towards the victim). `request_shake` says how hard;
+## this says which way, which is the half an over-the-shoulder camera cannot
+## give you for free -- see `Feel.punch`.
+signal request_punch(dir: Vector3, strength: float, duration: float)
 signal request_sfx(id: StringName, position: Vector3)
 signal request_message(text: String)
 signal item_get_started(item_id: StringName, world_pos: Vector3)
