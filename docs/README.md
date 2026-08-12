@@ -16,6 +16,7 @@ that truth.
 | Visual style and HUD authority | [`STYLEGUIDE.md`](STYLEGUIDE.md) |
 | Evidence and reference material | [`OOT_CATALOGUE.md`](OOT_CATALOGUE.md) and [`../refs/REFERENCE.md`](../refs/REFERENCE.md) |
 | How mechanics should produce the intended experience | [`MDA.md`](MDA.md) |
+| The full mechanics ledger, status and MDA traceability | [`MECHANICS.md`](MECHANICS.md) |
 | How design work proceeds | [`DESIGN_PROCESS.md`](DESIGN_PROCESS.md) |
 | How playtests are run | [`PLAYTESTING.md`](PLAYTESTING.md) and [`playtests/`](playtests/) |
 | Design hypotheses, tests and decisions | [`design-tests/`](design-tests/) |
@@ -31,6 +32,8 @@ that truth.
   diaries. Edit the owner of a changed fact in place.
 - `MDA.md` maps intended aesthetics to hypothesised dynamics and the mechanics
   expected to produce them. It is a model to test, not evidence that they occur.
+- `MECHANICS.md` inventories every committed player-facing mechanic and links
+  it to an MDA target, canonical owner and evidence state.
 - Files under `design-tests/` hold uncertain hypotheses, rationale,
   precommitted criteria, results and decisions.
 - Files under `playtests/` hold observations, timecodes and player quotes. They

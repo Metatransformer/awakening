@@ -21,8 +21,6 @@ does not authorise the next milestone.
 
 ## Not authorised
 
-- Floors 2–4 or bosses 2–4.
-- New systems.
 - Broad lore expansion.
 - More content volume.
 - Polish unrelated to the active proof question.

@@ -389,7 +389,8 @@ resolved.**
 
 For uncertain design work:
 
-1. Read `docs/MDA.md` and open one design test under `docs/design-tests/`.
+1. Read `docs/MDA.md` and `docs/MECHANICS.md`, then open one design test under
+   `docs/design-tests/`.
 2. Name the target aesthetic, observable dynamics and minimum mechanics, then
    state the player-facing hypothesis and pass/revise/stop criteria before
    changing the build.
@@ -399,8 +400,8 @@ For uncertain design work:
 
 Canonical docs describe **current truth, not the history of arriving at it**.
 Edit the governing rule in place. Do not append dated debates, implementation
-diaries, or duplicate summaries to the GDD and system docs; those belong in an
-a design test, the archive, or git history. A fact has one document owner and
+diaries, or duplicate summaries to the GDD and system docs; those belong in a
+design test, the archive, or git history. A fact has one document owner and
 every other document links to it.
 
 Update the owning doc in the same commit as code that changes its truth. A

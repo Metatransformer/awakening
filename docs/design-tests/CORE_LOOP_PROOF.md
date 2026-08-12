@@ -24,9 +24,11 @@ The full current hypothesis is mapped in [`../MDA.md`](../MDA.md).
   prompting or abstract completionism; return without understanding what
   changed; or avoid expedition decisions because controls and feedback obscure
   them.
-- **Mechanics under test:** the finite bag and document case, death loss,
-  extraction and return, Heat and readable first-floor encounters, distinct
-  reward categories, and persistent garrison changes.
+- **Mechanics under test:** `RUN-01`–`RUN-04`, `RUN-07`–`RUN-11`, `RUN-13`,
+  `COMBAT-08`–`COMBAT-09`, `COMBAT-11`–`COMBAT-12`, `WORLD-02`, `HOME-01`–
+  `HOME-03` and `HOME-09` in [`../MECHANICS.md`](../MECHANICS.md): the finite
+  bag and case, loss/extraction/return, Heat and readable encounters, distinct
+  reward categories, the cycle, conversion at home and persistent arrivals.
 
 ## Player-facing hypothesis
 

@@ -13,9 +13,10 @@ content volume stand in for proof.
    anticipation for another descent.
 3. **Name the dynamics.** Describe the observable player behaviour that would
    support the aesthetic, plus the failure dynamics that would contradict it.
-4. **Inventory the mechanics.** Identify only the rules, resources, constraints
-   and content that might cause those dynamics. Ask what interesting decision
-   each creates.
+4. **Inventory the mechanics.** Use `MECHANICS.md` to identify only the rules,
+   resources, constraints and content that might cause those dynamics. Ask what
+   interesting decision each creates; update the ledger when a mechanic or its
+   status changes.
 5. **Ask.** Ask at most three high-leverage questions whose answers could change
    the test or decision.
 6. **Make a paper pass.** Resolve the first version in markdown, a sketch or a

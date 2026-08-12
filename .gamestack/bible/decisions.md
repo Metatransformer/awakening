@@ -23,4 +23,4 @@ Mechanics are chosen to produce observable dynamics in service of intended
 aesthetics; hypothesis and evidence artifacts remain plain design tests, not a
 new framework.
 
-supersedes: the Measurable Design Record terminology introduced on 2026-08-11
+supersedes: the mistaken design-record terminology introduced earlier on 2026-08-11

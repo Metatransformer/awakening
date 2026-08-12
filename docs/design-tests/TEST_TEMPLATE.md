@@ -15,8 +15,9 @@ What uncertain player-experience claim are we resolving?
 - **Desired dynamics:** What observable behaviour would produce or demonstrate
   that experience?
 - **Failure dynamics:** What behaviour would indicate a different experience?
-- **Mechanics under test:** Which existing or proposed rules, resources,
-  constraints or content are expected to cause those dynamics?
+- **Mechanics under test:** Which IDs from [`../MECHANICS.md`](../MECHANICS.md)
+  are expected to cause those dynamics? Add a proposed row there before testing
+  a mechanic that is not yet listed.
 
 ## Player-facing hypothesis
 
