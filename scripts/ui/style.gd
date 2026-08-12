@@ -89,13 +89,18 @@ const HEALTH_ORIGIN := Vector2(0.031, 0.882)
 ## walks across the screen and stops being a shape you recognise peripherally.
 const HEALTH_W := 0.268            ## 343 px @1280
 const HEALTH_H := 15.0             ## reference px
-## One shared frame language for the four player meters. Health carries one
-## extra pixel of outer weight; the authored bar rectangles and row positions do
-## not move. The inset leaves even the 6 px Tier 2 meters with a 4 px live track.
+## One shared frame language for the four player meters. Health carries the
+## deeper face and stronger diagonal; the authored bar rectangles and row
+## positions do not move. Even the 6 px Tier 2 meters retain a 4 px live track.
 const METER_BEZEL := 1.0
 const HEALTH_METER_BEZEL := 2.0
 const METER_INSET := 1.0
-const METER_CHAMFER := 2.0
+const HEALTH_METER_INSET := 2.0
+const METER_DIAGONAL := 3.0
+const HEALTH_METER_DIAGONAL := 6.0
+const METER_FRAME_LIGHT_ALPHA := 0.28
+const METER_FILL_LIGHT_ALPHA := 0.22
+const METER_FILL_SHADOW_ALPHA := 0.32
 ## Directly below health, sharing its left edge. Deliberately shorter, so the
 ## two never read as one two-line meter in peripheral vision.
 const STAMINA_RATIO := 0.62
