@@ -67,13 +67,17 @@ const SLOTS := 3
 ## back with an empty pack, which is the TRUTH about a hero who played before the
 ## counter stocked any — nothing is lost and nothing has to be guessed at. So v7
 ## stays readable, and so does everything v7 read.
-const VERSION := 8
+## Bumped to 9 for resumable dungeon runs and a wall-clock last-played header.
+## The run snapshot is additive: v4-v8 still restore their recorded destination
+## with no live run behind it.
+const VERSION := 9
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4, 5, 6, 7, 8]
+const READABLE: Array[int] = [4, 5, 6, 7, 8, 9]
+const AUTOSAVE_INTERVAL := 300.0
 
 signal saved(slot: int)
 signal loaded(slot: int)
@@ -91,10 +95,15 @@ var current_room: StringName = &""
 var current_scene_path: String = ""
 
 var active_slot: int = -1
+var _autosave_elapsed := 0.0
 
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(DIR)
+
+
+func _process(delta: float) -> void:
+	_advance_autosave(delta)
 
 
 func slot_path(slot: int) -> String:
@@ -113,6 +122,11 @@ func peek(slot: int) -> Dictionary:
 	var d := _read(slot)
 	if d.is_empty():
 		return {"empty": true, "slot": slot, "corrupt": true}
+	var raw_run: Variant = d.get("run", {})
+	var run_data: Dictionary = raw_run as Dictionary if raw_run is Dictionary else {}
+	var has_run := not run_data.is_empty()
+	var underground := has_run and bool(run_data.get("in_dungeon", false))
+	var saved_level := maxi(int(run_data.get("level", 1)), 1) if underground else 1
 	return {
 		"empty": false,
 		"slot": slot,
@@ -120,7 +134,13 @@ func peek(slot: int) -> Dictionary:
 		"max_hearts": float(d.get("max_quarters", 0)) / float(K.HEART),
 		"gold": d.get("gold", 0),
 		"keys": d.get("small_keys", 0),
-		"room": d.get("room", ""),
+		"last_played_unix": d.get("last_played_unix", 0),
+		"in_dungeon": underground,
+		"floor": saved_level,
+		"level": saved_level,
+		"depth": maxi(int(run_data.get("depth", 0)), 0) if underground else 0,
+		"room": d.get("room", "") if underground else "",
+		"scene": d.get("scene", Flow.GARRISON) if has_run else Flow.GARRISON,
 		"items": (d.get("items", {}) as Dictionary).keys(),
 		"played": d.get("played", 0.0),
 		"stamp": d.get("stamp", ""),
@@ -139,6 +159,7 @@ func save(slot: int) -> bool:
 		"version": VERSION,
 		"stamp": Time.get_datetime_string_from_system(false, true),
 		"played": Time.get_ticks_msec() / 1000.0,
+		"last_played_unix": Time.get_unix_time_from_system(),
 		"quarters": Game.quarters,
 		"max_quarters": Game.max_quarters,
 		# A Focus amulet raises this permanently, so it is a purchase and it saves.
@@ -191,6 +212,7 @@ func save(slot: int) -> bool:
 		"loadout": Game.loadout,
 		"loadout_set": Game.loadout_set,
 		"flags": Game.flags,
+		"run": Run.snapshot(),
 		"room": String(current_room),
 		"scene": _save_scene(),
 		"pos": [pos.x, pos.y, pos.z],
@@ -203,30 +225,17 @@ func save(slot: int) -> bool:
 	f.store_string(JSON.stringify(d, "  "))
 	f.close()
 	active_slot = slot
+	_autosave_elapsed = 0.0
 	saved.emit(slot)
 	return true
 
 
-## Where a load should put you back — and it is NEVER a dungeon.
-##
-## A slot captures `Game` and nothing of `Run`: no bag, no floor, no run seed,
-## no `in_dungeon`. That is deliberate and it is METAGAME §5. The run's contents
-## are the thing you are gambling; a save you could reload from the third floor
-## would let a player undo the extraction decision the whole game is built on,
-## and the fee would stop being a decision. So the run is not savable, and the
-## honest thing for the recorded scene to say is where the surviving state
-## actually belongs.
-##
-## Without this a save written underground reloaded into the dungeon scene with
-## `Run.in_dungeon` false: a generated floor with no run behind it, no bag, no
-## fee and no way out that would answer. It looked like a corrupted save and it
-## was really a save that had told the truth about the wrong half of the game.
+## The actual live scene. `current_scene_path` remains only as the harness
+## fallback for trees attached without `SceneTree.current_scene`; a real v9 save
+## never rewrites a dungeon destination to the garrison.
 func _save_scene() -> String:
-	if Run != null and Run.in_dungeon:
-		return Flow.GARRISON
-	if current_scene_path != "":
-		return current_scene_path
-	return _scene_path()
+	var actual := _scene_path()
+	return actual if actual != "" else current_scene_path
 
 
 ## Commit the metagame without anyone asking. Called by `Flow` on every scene
@@ -259,6 +268,27 @@ func autosave() -> bool:
 	return ok
 
 
+## Small director seam: exercise the cadence without waiting five real minutes.
+## It goes through the same eligibility checks and the same `autosave()` policy
+## as `_process`; callers cannot nominate a slot or bypass a full-slot refusal.
+func _debug_advance_autosave(seconds: float) -> bool:
+	return _advance_autosave(seconds)
+
+
+func _advance_autosave(seconds: float) -> bool:
+	if seconds <= 0.0 or get_tree().paused or Flow.busy:
+		return false
+	if get_tree().get_first_node_in_group(&"player") == null:
+		return false
+	_autosave_elapsed += seconds
+	if _autosave_elapsed < AUTOSAVE_INTERVAL:
+		return false
+	# A declined autosave gets another try in five minutes, not on every frame.
+	# Successful writes reset this to zero inside `save()`.
+	_autosave_elapsed -= AUTOSAVE_INTERVAL
+	return autosave()
+
+
 ## Restore `Game` from a slot and return where the hero should be placed.
 ## Returns an empty dictionary if the slot is missing or unreadable — changing
 ## scenes is the caller's job, since only it knows how it wants to transition.
@@ -273,6 +303,8 @@ func load_slot(slot: int) -> Dictionary:
 	# purchase already respects, and a hand-edited slot must not out-buy the shop.
 	Game.max_stamina = minf(K.STAMINA_MAX,
 		float(d.get("max_stamina", K.MAX_STAMINA)))
+	# Garrison/legacy default. A valid v9 dungeon snapshot overwrites this after
+	# all permanent fields have been rebuilt.
 	Game.stamina = Game.max_stamina
 	# A slot written before the blue bar was switched on holds `max_magic: 0`, and
 	# restoring that verbatim gives a returning player a HUD row that is a black
@@ -280,12 +312,8 @@ func load_slot(slot: int) -> Dictionary:
 	# then FILLED, for the reason stamina above is filled: a load puts you in the
 	# garrison, and the garrison is where the bar is full (`Run.extract`).
 	Game.max_magic = maxi(int(d.get("max_magic", K.MAX_MAGIC)), K.MAX_MAGIC)
-	# **How much is IN the bar is not restored**, exactly as `stamina` above is not:
-	# a load puts the player in the garrison, and the garrison is where the bar is
-	# full by rule (`Run.extract` fills it). Reading the saved level back would
-	# restore a number that is about to be `max_magic` anyway -- and on a slot
-	# saved mid-run it would hand back a half-spent bar to a player standing in
-	# town, which is the one state the design says cannot happen.
+	# This is likewise the garrison/legacy default. A valid dungeon snapshot
+	# restores the half-spent trip budget instead of turning load into a refill.
 	Game.fill_magic()
 	Game.gold = d.get("gold", 0)
 	# A v5 slot has no lifetime tally and falls back to the purse — see the note on
@@ -396,6 +424,18 @@ func load_slot(slot: int) -> Dictionary:
 	Game.loadout_set = clampi(int(d.get("loadout_set", Game.PRIMARY)),
 		0, Game.loadout.size() - 1)
 
+	# Only a v9 snapshot explicitly marked underground is a resumable run. Older
+	# versions return to the garrison with a clean Run, exactly as they did before
+	# snapshots existed.
+	var raw_run: Variant = d.get("run", {})
+	var run_data: Dictionary = raw_run as Dictionary if raw_run is Dictionary else {}
+	var save_version := int(d.get("version", 0))
+	var restored_dungeon := false
+	if save_version >= 9 and bool(run_data.get("in_dungeon", false)):
+		restored_dungeon = Run.restore(run_data) and Run.in_dungeon
+	else:
+		Run.reset()
+
 	active_slot = slot
 	current_room = StringName(d.get("room", ""))
 	current_scene_path = d.get("scene", "")
@@ -403,6 +443,7 @@ func load_slot(slot: int) -> Dictionary:
 	# Push the restored state at everyone who draws it.
 	Bus.player_health_changed.emit(Game.quarters, Game.max_quarters)
 	Bus.magic_changed.emit(Game.magic, Game.max_magic)
+	Bus.stamina_changed.emit(Game.stamina, Game.max_stamina)
 	Bus.key_count_changed.emit(Game.small_keys)
 	Bus.gold_changed.emit(Game.gold)
 	Bus.item_selected_changed.emit(Game.item_selected)
@@ -415,13 +456,22 @@ func load_slot(slot: int) -> Dictionary:
 		Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_LEFT))
 	loaded.emit(slot)
 
-	var p: Array = d.get("pos", [0, 0, 0])
-	return {
+	var destination := {
 		"scene": current_scene_path,
 		"room": current_room,
-		"pos": Vector3(p[0], p[1], p[2]),
-		"yaw": d.get("yaw", 0.0),
+		"run_restored": restored_dungeon,
+		"in_dungeon": restored_dungeon,
+		"level": Run.level if restored_dungeon else 1,
+		"depth": Run.depth if restored_dungeon else 0,
 	}
+	# v4-v8 always resume in the garrison, but some were written while the hero
+	# stood underground. Applying their coordinates would put that hero outside
+	# the authored courtyard. v9 owns its actual scene and transform as one unit.
+	if save_version >= 9:
+		var p: Array = d.get("pos", [0, 0, 0])
+		destination["pos"] = Vector3(p[0], p[1], p[2])
+		destination["yaw"] = d.get("yaw", 0.0)
+	return destination
 
 
 func erase(slot: int) -> void:

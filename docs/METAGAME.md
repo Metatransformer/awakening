@@ -554,32 +554,45 @@ visible (it sat about sixty degrees above the arrival camera's view centre), and
 a ride home on a timer that ended the run in a room the player never got to look
 at. A run that ends underground says so underground.
 
-### The run is not savable, and that is what the autosave protects
+### The run is savable, but a save is not a rewind system
 
 `Flow` autosaves on **every** scene transition — entering the dungeon, taking
 the stair down, and coming home whether you walked out or were carried — and the
-HUD says **AUTOSAVING…** bottom-right as the world fades back in.
+HUD says **AUTOSAVING…** bottom-right as the world fades back in. The same
+autosave also runs after five minutes of active, unpaused gameplay while a
+player exists, so standing in one room no longer leaves the current state
+unprotected indefinitely.
 
-What it writes is `Game`: gold, hearts, upgrades, forge rungs, key items. What
-it never writes is `Run`: no bag, no floor, no run seed, no `in_dungeon`. A save
-you could reload from the third floor would let a player undo the extraction
-decision this whole section is built on, and the fee would stop being a decision
-— so `save()` records **garrison** as the scene whenever `Run.in_dungeon`.
+Version 9 writes `Game` plus one versioned `run` snapshot. It is data, never a
+serialized scene tree: whether a dungeon run is active, its seed and current
+level/depth, the bag and document case, and the run counters and visited rooms.
+It also carries current magic and stamina, so loading cannot refill the trip.
+On load the generated dungeon is rebuilt from the seed and level, then the
+hero's recorded transform is restored. A readable v4–v8 slot has no `run`; it
+returns to the garrison and resets `Run` rather than inventing one.
 
-So the autosave is not a safety net under the run. It is a safety net under the
-*metagame*: everything the run was being gambled **for** is committed to disk at
-the exact four moments it changes hands, and the gamble itself still resolves
-the way you played it.
+A mid-dungeon save/load is explicitly allowed. It is recovery and continuation,
+not a second checkpoint or rewind layer: each slot holds one current state, and
+saving to that slot overwrites that state. Extraction, death and their
+transition autosaves still resolve the run into the same slot; loading does not
+refill the trip budget or create a parallel history to retreat through.
 
-An autosave will never overwrite a save you made by hand — it takes the slot you
-are already playing, or the first empty one, or it declines and says nothing
-(`save_game.gd autosave()`).
+Every automatic path calls the same `Saves.autosave()`. It takes the slot you
+are already playing, or the first empty one, or it declines and says nothing; it
+never chooses one of three occupied slots to sacrifice for you.
 
-**There is a fifth moment, and it is the bed.** Everything the player does *in
-garrison* — the selling, the forging, the brewing, the gem-setting, the stashing
-— happens between transitions and is therefore on nobody's disk until the next
-one. Sleeping in the hero's quarters calls the same `Saves.autosave()` by hand.
-It is §6.8, and it is the only autosave a player asks for rather than receives.
+On the title, **CONTINUE** opens the three-slot readable save list rather than
+choosing one. Its saves are ordered by `last_played_unix`, newest first, and
+each row shows
+when it was last played, whether progress is in the garrison or at a dungeon
+floor/depth, and how much gold that state holds.
+
+**The bed is the manual moment.** Sleeping in the hero's quarters calls that
+same `Saves.autosave()` on demand after the selling, forging, brewing,
+gem-setting or stashing the player wants committed immediately. The five-minute
+autosave now closes the long-session data-loss hole; the bed remains §6.8's
+deliberate rest-and-save affordance rather than the only protection between
+transitions.
 
 ---
 
@@ -1238,12 +1251,11 @@ metagame already had**, not that the hero wanted somewhere to live.
 
 ### The bed writes the save
 
-`Flow._go` autosaves on scene transitions and only on scene transitions (§5,
-above). That covers the four moments a *run* passes through and none of the time
-between them — which is where the entire garrison lives. Sell the bag, forge two
-rungs, blow a bottle, set a gem, quit: as of the last autosave, none of it
-happened. The cot is where a player says *keep this*, in the gesture every game
-of this shape has used to say it.
+Transitions and the five-minute active-play clock both autosave (§5, above).
+The cot is still where a player says *keep this now*, without waiting for either:
+sell the bag, forge two rungs, blow a bottle, set a gem, then rest. It keeps the
+manual gesture every game of this shape has used while periodic autosave closes
+the data-loss hole that once made the bed the only protection in the garrison.
 
 Holding **E** on the cot fades to black for 0.9 s, heals to full, refills
 stamina, and calls `Saves.autosave()`. The HUD's own **AUTOSAVING…** notice is
@@ -1257,9 +1269,10 @@ Both doors into the garrison already heal to full — `Run.extract` and `Run.die
 each call
 `Game.heal(Game.max_quarters)` — so there is no state in which a hero reaches
 this cot hurt. It heals so the object does what the object says, not because it
-moves a number anyone can reach. **And it is refused outright while
-`Run.in_dungeon`** (`bed.gd activate`), because the rule it enforces is not "the
-cot is in the garrison", it is §5's *you cannot save your way out of a run*.
+moves a number anyone can reach. **And the prop is refused outright while
+`Run.in_dungeon`** (`bed.gd activate`): the cot is a garrison rest interaction,
+not a portable dungeon checkpoint. Mid-dungeon persistence is handled by the
+ordinary save/load contract in §5.
 
 **No clock advances.** `Garrison._build_env` pins the sky to one afternoon on
 purpose (SCOPE §1 freezes the mechanic count), and a bed that skipped to morning
@@ -1522,12 +1535,12 @@ The autosave has one too (§5):
 godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/autosave.gd --out=/tmp/save/x.png --warmup=60
 ```
 
-It drives all three transitions and asserts a slot was written each time, that
-every one of those saves points at **garrison** rather than at the floor it was
-taken on, and that with all three slots full of hand-made saves the autosave
-declines and the HUD stays quiet. It photographs the notice as the world comes
-back. It backs up the three real slots and puts them back, so running it cannot
-cost you a save.
+It saves on the transitions into the dungeon and down a floor, then writes a
+populated floor-2 run and proves its seed, level/depth, bag, case, counters,
+visited room and hero transform survive regeneration and load. It advances the
+five-minute cadence through its director seam and proves that, with all three
+slots occupied and no active one, the shared autosave policy declines. It backs
+up the three real slots and puts them back, so running it cannot cost you a save.
 
 The quarters have one (§6.8):
 

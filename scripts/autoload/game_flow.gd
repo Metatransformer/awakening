@@ -292,25 +292,27 @@ func resume(dest: Dictionary) -> bool:
 	if busy or ending or dest.is_empty():
 		return false
 	ending = false
-	_abandon_run()
+	var restored_dungeon := bool(dest.get("run_restored", false)) \
+		and bool(dest.get("in_dungeon", false)) and Run.in_dungeon
+	var path := String(dest.get("scene", GARRISON))
+	if restored_dungeon:
+		# The snapshot's seed and level are live before the scene is built, so the
+		# ordinary Dungeon._ready path regenerates the same floor.
+		path = DUNGEON
+	else:
+		_abandon_run()
+		# A dungeon path without a valid run snapshot is not a playable destination.
+		# This also preserves the v4-v8 contract: those saves always returned home.
+		path = GARRISON
 	# `dest` goes THROUGH `_go` rather than being applied after it -- see the
 	# placement inside `_go` for why that ordering is the difference between a
 	# save that survives being loaded and one that does not.
-	await _go(String(dest.get("scene", GARRISON)), 0.0, dest)
+	await _go(path, 0.0, dest)
 	return true
 
 
-## Loading ends whatever run was in flight, and it says so out loud.
-##
-## **A slot holds `Game` and nothing of `Run`** (docs/METAGAME.md §5): the bag is
-## the thing you are gambling and it is not savable. `Saves._save_scene` already
-## acts on that -- a save written underground records the GARRISON, never the
-## floor -- but only half the rule was implemented, because until the pause menu
-## could load at all there was no way to reach a load with a live run behind it.
-## Now there is: pause on floor three, Load Game. Without this the player arrives
-## home with `Run.in_dungeon` still true, a HUD reporting FLOOR 3 over the
-## courtyard, and a bag from a run that no longer exists -- which the vendor will
-## happily buy. Free loot, once per load.
+## Loading a non-dungeon or legacy slot ends whatever run was in flight, and it
+## says so out loud. A valid v9 dungeon snapshot bypasses this function entirely.
 ##
 ## `reset()` and not `die()`. Dying is a run ENDING: it writes a receipt, counts
 ## against the mercy that `Game.deaths` buys (GDD §7.1), and brings the document
@@ -318,7 +320,7 @@ func resume(dest: Dictionary) -> bool:
 ## reach the ledger. `Bus.run_ended` is likewise not emitted -- `_on_run_ended` is
 ## two lines below and would raise the receipt screen over the load.
 ##
-## The two emits are here because `reset()` is deliberately silent (it is also
+## The three emits are here because `reset()` is deliberately silent (it is also
 ## `Run._ready`'s initialiser, where there is nobody listening yet), and the HUD
 ## would otherwise go on drawing the abandoned bag's value and the floor number
 ## until something else happened to move them.
@@ -326,6 +328,7 @@ func _abandon_run() -> void:
 	Run.reset()
 	Bus.bag_changed.emit(Run.bag, Run.bag_value())
 	Bus.level_changed.emit(Run.level)
+	Bus.depth_changed.emit(Run.depth)
 
 
 func _on_menu_load_requested(_slot: int, dest: Dictionary) -> void:
@@ -342,13 +345,19 @@ func _place_hero(dest: Dictionary) -> void:
 	var hero := get_tree().get_first_node_in_group(&"player") as Node3D
 	if hero == null:
 		return
-	hero.global_position = dest.get("pos", hero.global_position)
+	if dest.has("pos"):
+		hero.global_position = dest["pos"]
+	# The dungeon's default-spawn trigger can fire during the two build frames
+	# above. Put the saved room metadata back in the same ordering as the transform
+	# so `_go`'s tail autosave cannot replace it with the entrance.
+	Saves.current_room = StringName(dest.get("room", Saves.current_room))
 	# **No `+ PI` here, and that is not an oversight.** `Saves.save` writes the
 	# hero's `global_rotation.y` verbatim, so what comes back is a NODE rotation
 	# and not a heading -- round-tripping it is an assignment. The conversion
 	# CLAUDE.md §4 is about (`rotation.y = heading + PI`) belongs where a heading
 	# is being turned into a facing, and there is no heading in this dictionary.
-	hero.global_rotation.y = float(dest.get("yaw", 0.0))
+	if dest.has("yaw"):
+		hero.global_rotation.y = float(dest["yaw"])
 
 
 # --- Entry points -----------------------------------------------------------

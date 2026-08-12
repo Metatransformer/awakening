@@ -221,9 +221,9 @@ every time someone has the idea again.
   item you already own.
 
   It was allowed through because both props close holes the garrison already had.
-  The bed **writes the save** — `Flow._go` autosaves on scene changes only, so
-  until this existed, an hour of selling, forging and brewing in the garrison was on
-  nobody's disk (`scripts/props/bed.gd` says this at the top). The footlocker
+  The bed **writes the save on demand** — transitions and five minutes of active,
+  unpaused play both autosave now, but resting remains the immediate manual
+  affordance after selling, forging or brewing (`scripts/props/bed.gd`). The footlocker
   **stops the garrison silently destroying goods** — `Run.enter` clears the bag, so
   ingredients carried home and not sold before the next descent were deleted
   without a word. Neither is a feature anyone asked for as housing; both are
@@ -256,7 +256,10 @@ every time someone has the idea again.
   something, which is the decision the cap exists to force.
 - Healing items found underground (GDD §10).
 - Fast travel that is not a shortcut door you unlocked.
-- A save you can reload from mid-run (`docs/METAGAME.md` §5).
+- **A separate checkpoint/rewind system.** Mid-run save/load is allowed
+  (`docs/METAGAME.md` §5), but each slot owns only its current state and a save
+  overwrites it; there is no checkpoint stack or parallel history to retreat
+  through.
 - Level-scaled enemies (GDD §7).
 
 **Refused because they are how software projects die:**

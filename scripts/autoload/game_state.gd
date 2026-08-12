@@ -98,8 +98,9 @@ var max_arrows: int = 30
 ## before the rename keeps its stock.
 ##
 ## Bought from the alchemist and **never refilled underground**: there is no
-## rest, the run is not savable, and a resource that came back mid-run would
-## soften the walk home that `docs/METAGAME.md` §2 is built on.
+## rest, and saving/loading restores the same trip budget rather than refreshing
+## it. A resource that came back mid-run would soften the walk home that
+## `docs/METAGAME.md` §2 is built on.
 var charges: int = 0
 var max_charges: int = K.BURST_CHARGES_MAX
 
