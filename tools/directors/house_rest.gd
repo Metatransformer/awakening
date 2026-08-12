@@ -305,7 +305,9 @@ func _sleep(rig, garrison: Garrison) -> void:
 	await rig.hold_seconds(["interact"], 0.9)
 	var went: bool = await rig.until(func() -> bool: return Flow.busy, 2.0)
 	_check("the screen went dark", went)
-	var back: bool = await rig.until(func() -> bool: return not Flow.busy, 8.0)
+	# A daytime sleep crosses nightfall and dawn. Flow now presents both civil
+	# boundaries in order (five seconds each) before returning control.
+	var back: bool = await rig.until(func() -> bool: return not Flow.busy, 14.0)
 	_check("...and came back", back)
 	await rig.wait_frames(30)
 

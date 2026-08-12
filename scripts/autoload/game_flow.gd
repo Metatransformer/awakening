@@ -35,10 +35,29 @@ const HOLD := 0.45
 ## takes eight times a run turns into a wait. [tune]
 const LOAD_HOLD := 1.30
 
+const NIGHT_TITLE: String = "Night falls"
+const DAWN_TITLE: String = "The sun rises"
+const NIGHT_CUE: StringName = &"nightfall_owl"
+const DAWN_CUE: StringName = &"dawn_birds"
+
 enum ArrivalIntent {
 	DEFAULT,
 	DOWN_STAIRS,
 }
+
+
+class DayTitleRequest extends RefCounted:
+	var title: String
+	var day: int
+	var cue: StringName
+	var natural_dawn: bool
+
+	func _init(title_text: String, campaign_day: int, cue_id: StringName,
+			resolve_natural_dawn: bool) -> void:
+		title = title_text
+		day = campaign_day
+		cue = cue_id
+		natural_dawn = resolve_natural_dawn
 
 ## True while a transition is in flight. Everything that could start another one
 ## checks this -- a second extract press during the fade would re-enter
@@ -66,6 +85,9 @@ var _veil: ColorRect
 ## the card is opaque, and an opaque orphan on layer 200 is an unrecoverable
 ## black screen.
 var _card: LoadingCard = null
+var _day_title_queue: Array[DayTitleRequest] = []
+var _day_title_card: DayTitleCard = null
+var _presenting_day_title: bool = false
 
 
 func _ready() -> void:
@@ -86,6 +108,7 @@ func _ready() -> void:
 	Bus.player_died.connect(_on_player_died)
 	Bus.run_ended.connect(_on_run_ended)
 	Clock.dawn_started.connect(_on_dawn_started)
+	Clock.bonfire_started.connect(_on_bonfire_started)
 	# **The other half of the pause menu's Load Game.** `MenuSavesPanel` restores
 	# the slot itself and emits `load_requested(slot, dest)` for somebody else to
 	# travel on -- and until now nobody did, so loading a save from the pause menu
@@ -103,6 +126,10 @@ func _ready() -> void:
 	# here because Flow is the LAST autoload -- the note above it in
 	# `project.godot` is the record of why -- so the menu is already in the tree.
 	Menu.load_requested.connect(_on_menu_load_requested)
+
+
+func _process(_delta: float) -> void:
+	_try_present_day_title()
 
 
 # --- The boot is the title screen, and that is not a setting -----------------
@@ -492,6 +519,10 @@ func blink(during: Callable, dark: float = 0.9) -> void:
 
 	Prompt.blocked = false
 	busy = false
+	# A sleep can cross dawn while this blink owns Flow. Hand the blocker directly
+	# to the queued title card so there is no one-frame input window between the
+	# black rest screen and the five-second announcement.
+	_try_present_day_title()
 	var tin := create_tween().set_ignore_time_scale(true)
 	tin.tween_property(_veil, "color:a", 0.0, FADE_IN)
 
@@ -557,11 +588,89 @@ func _on_run_ended(_extracted: bool, _contents: Dictionary, _value: int) -> void
 	_show_ending()
 
 
-## Dawn is a hard end to the overnight outing. On the surface it is a simple
-## ride back to the bunk; underground it uses the existing death settlement so
-## the clock can never become a free extraction button.
-func _on_dawn_started(_day: int) -> void:
-	if deliberate_rest or busy or ending:
+func _on_bonfire_started(day: int) -> void:
+	if _civil_titles_allowed():
+		_queue_day_title(NIGHT_TITLE, day, NIGHT_CUE, false)
+
+
+## Dawn is announced first. Only after its complete five-second card does a
+## natural overnight outing resolve; deliberate bed rest receives the same card
+## without becoming curfew travel.
+func _on_dawn_started(day: int) -> void:
+	var natural_dawn := not deliberate_rest
+	if _civil_titles_allowed():
+		_queue_day_title(DAWN_TITLE, day, DAWN_CUE, natural_dawn)
+		return
+	if natural_dawn:
+		_resolve_natural_dawn()
+
+
+## A stopped Clock is a test/save setup surface, not a live presentation source.
+## The title scene is the other hard exclusion: civil time never draws over the
+## front door. Directors that exercise this feature explicitly enable Clock.
+func _civil_titles_allowed() -> bool:
+	if not Clock.running:
+		return false
+	var scene := get_tree().current_scene
+	return scene == null or scene.scene_file_path != TITLE
+
+
+func _queue_day_title(title_text: String, day: int, cue: StringName,
+		resolve_natural_dawn: bool) -> void:
+	_day_title_queue.append(DayTitleRequest.new(
+		title_text, day, cue, resolve_natural_dawn))
+	_try_present_day_title()
+
+
+## Start at most one card. `_process` retries queued cards after a Flow fade,
+## dialogue, menu, or ending gives the world back; no boundary is discarded for
+## arriving while another owner has input blocked.
+func _try_present_day_title() -> void:
+	if _presenting_day_title or _day_title_queue.is_empty():
+		return
+	if busy or ending or get_tree().paused or Prompt.blocked:
+		return
+	_present_next_day_title()
+
+
+func _present_next_day_title() -> void:
+	var was_paused := get_tree().paused
+	var was_blocked := Prompt.blocked
+	var resolve_natural_dawn := false
+	_presenting_day_title = true
+	busy = true
+	Prompt.blocked = true
+	get_tree().paused = true
+
+	# A single forward jump (and a full night's sleep) can cross more than one
+	# civil boundary synchronously. Drain the FIFO under one uninterrupted pause
+	# so neither player input nor another Flow transition can slip between cards.
+	while not _day_title_queue.is_empty():
+		var request: DayTitleRequest = _day_title_queue.pop_front()
+		resolve_natural_dawn = resolve_natural_dawn or request.natural_dawn
+		_day_title_card = DayTitleCard.open(
+			_layer, request.title, request.day, request.cue)
+		Bus.request_global_sfx.emit(request.cue)
+		await _day_title_card.finished
+		if _day_title_card != null:
+			_day_title_card.get_parent().remove_child(_day_title_card)
+			_day_title_card.queue_free()
+			_day_title_card = null
+
+	get_tree().paused = was_paused
+	Prompt.blocked = was_blocked
+	busy = false
+	_presenting_day_title = false
+
+	if resolve_natural_dawn:
+		_resolve_natural_dawn()
+
+
+## On the surface dawn is a ride to the bunk. Underground it keeps the existing
+## death settlement, so waiting for the title card never turns dawn into an
+## extraction or preserves the carried bag.
+func _resolve_natural_dawn() -> void:
+	if busy or ending:
 		return
 	var scene := get_tree().current_scene
 	if scene == null or scene.scene_file_path == TITLE:

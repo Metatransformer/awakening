@@ -295,3 +295,8 @@ signal request_sfx(id: StringName, position: Vector3)
 signal request_message(text: String)
 signal item_get_started(item_id: StringName, world_pos: Vector3)
 signal item_get_finished(item_id: StringName)
+
+# --- Global audio -----------------------------------------------------------
+## A non-positional one-shot that must read at the same level everywhere. Sfx
+## owns the pooled AudioStreamPlayer implementation; callers name only the cue.
+signal request_global_sfx(id: StringName)

@@ -38,9 +38,9 @@ of hidden simulation.
   does not replay a boundary already resolved.
 
 The raid horn is not a nightfall cue. It belongs only to the urgent raid alarm,
-so ordinary evenings remain warm rather than falsely threatening. This
-presentation is specified here but belongs to its own implementation card, not
-the raid proof.
+so ordinary evenings remain warm rather than falsely threatening. The reusable
+ceremony is implemented and verified in the real garrison; it remains separate
+from the raid proof.
 
 The existing read-only Garrison page reports time, the next phase, current
 Firewood/Hearth state, residents and their activities, and active garrison
