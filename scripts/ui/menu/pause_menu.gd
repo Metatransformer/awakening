@@ -70,15 +70,11 @@ const MODIFIER_KEYS := [KEY_SHIFT, KEY_CTRL, KEY_ALT, KEY_META, KEY_CAPSLOCK]
 ## **B is cancel and is never a confirm** — a button that both confirms and backs
 ## out can do neither reliably. A and X confirm, so a player reaching for the
 ## neighbouring face button gets an action instead of silence.
-## **The shoulders are not here any more.** `ui_tab_prev` / `ui_tab_next` paged
-## the inspection screens on LB / RB and Q / R; the owner asked for the
-## selector to go (playtest 2026-08-12) and card #120 removed it. Paging is the
-## TAB STRIP's job now, on the same stick that moves inside a page — see
-## `MenuPageTabs`, which had to become focusable in the same change because a
-## strip nothing can reach is a strip a controller cannot use.
 const PAD_UI_BUTTONS := {
 	&"ui_accept": [JOY_BUTTON_A, JOY_BUTTON_X],
 	&"ui_cancel": [JOY_BUTTON_B],
+	&"ui_tab_prev": [JOY_BUTTON_LEFT_SHOULDER],
+	&"ui_tab_next": [JOY_BUTTON_RIGHT_SHOULDER],
 }
 ## The keyboard half of the same set.
 ##
@@ -89,11 +85,12 @@ const PAD_UI_BUTTONS := {
 ## `interact` and `ui_accept` for exactly that reason; this is the keyboard half
 ## of a symmetry that was only half built. Enter and Space still confirm.
 ##
-## It cost E its old job as the paging key, and then paging itself went (card
-## #120): Q and R are free again and are deliberately left free rather than
-## re-pointed at something else. The arrows walk the tab strip now.
+## It cost E its old job as the paging key. Q and R keep paging under the same
+## hand while the focusable tab labels remain the discoverable route.
 const KEY_UI_BUTTONS := {
 	&"ui_accept": [KEY_E],
+	&"ui_tab_prev": [KEY_Q],
+	&"ui_tab_next": [KEY_R],
 }
 
 ## The screens the tab strip cycles, in ring order, with its labels.
@@ -114,11 +111,16 @@ const KEY_UI_BUTTONS := {
 ## says "Equipment". One word, in five places, is worth more than the shade of
 ## meaning "ITEMS" carried. Adding GARRISON does not roll that decision back.
 const PAGES := [
-	[Screen.EQUIP, "EQUIP"],
-	[Screen.POUCH, "INVENTORY"],
-	[Screen.MAP, "MAP"],
-	[Screen.GARRISON, "GARRISON"],
+	[Screen.EQUIP, "Equip"],
+	[Screen.POUCH, "Inventory"],
+	[Screen.MAP, "Map"],
+	[Screen.GARRISON, "Garrison"],
 ]
+const PAGE_TURN_DURATION: float = 0.32
+const PAGE_TURN_TRAVEL_RATIO: float = 0.22
+const PAGE_TURN_DEPTH_X: float = 0.72
+const PAGE_TURN_TILT: float = 0.025
+const PAGE_TURN_SHADE := Color(0.72, 0.72, 0.76, 0.62)
 ## Stick travel required before a joypad axis counts as "the player moved it".
 ## Below this it is resting drift, which must not cancel a rebind.
 const PAD_MOTION_DEADZONE := 0.5
@@ -164,6 +166,7 @@ var _root_band_slot: VBoxContainer
 var _page_tabs: Array[MenuPageTabs] = []
 ## True for the duration of a page change made ON the strip. See `_go_page`.
 var _paged_from_tabs := false
+var _page_tween: Tween
 var _last_root_button: Button = null
 var _listen_layer: Control
 var _listen_action_label: Label
@@ -250,6 +253,8 @@ func open() -> void:
 func close() -> void:
 	if not _is_open:
 		return
+	_stop_page_turn()
+	_normalize_page_panels(_current_screen())
 	_is_open = false
 	_cancel_listening()
 	_confirm.visible = false
@@ -344,8 +349,8 @@ func _build_page_tabs() -> void:
 		strip.link_body(_tab_row(screen))
 	# No `input_device_changed` hook any more. The strip used to carry a live key
 	# cap at either end naming the shoulder that paged, and those had to be
-	# relabelled when a pad was picked up; there is no button on it now, only the
-	# arrows, which are the same arrows on both devices.
+	# relabelled when a pad was picked up. Paging still accepts hidden bindings,
+	# but the strip now contains only the focusable tab labels.
 
 
 func _panel_for(screen: int) -> Control:
@@ -374,9 +379,9 @@ func _tab_row(screen: int) -> Array:
 	return panel.call(&"tab_row")
 
 
-## A tab was reached — by stick, by keyboard or by mouse. The one and only way
-## the page changes now; `_page(delta)`, which the shoulders called, is gone with
-## them (card #120).
+## A tab was reached — by stick, by keyboard or by mouse. It joins the hidden
+## shoulder/Q/R route at `_change_page`, so every way around the ring has the
+## same stack, focus and transition semantics.
 ##
 ## It REPLACES the top of the stack rather than pushing onto it. That is the
 ## whole difference between a tab and a screen: paging EQUIP → INVENTORY → MAP
@@ -393,14 +398,137 @@ func _tab_row(screen: int) -> Array:
 ## function (the `focus_entered` it causes), and that arrival must find the same
 ## answer the first one did.
 func _go_page(screen: int) -> void:
-	if _stack.is_empty() or int(_stack[_stack.size() - 1].get("screen",
-			Screen.ROOT)) == screen:
+	_change_page(screen, true)
+
+
+## Step `delta` around the ring. Outside an open page it deliberately declines
+## the event, leaving Q/R and the shoulders available to whichever screen owns
+## them rather than turning a hidden page behind that screen.
+func _page(delta: int) -> bool:
+	if not _is_open or _stack.is_empty():
+		return false
+	var here: int = _current_screen()
+	var at: int = _page_index(here)
+	if at < 0:
+		return false
+	var to: int = int(PAGES[posmod(at + delta, PAGES.size())][0])
+	_change_page(to, _focus_is_on_page_tabs())
+	return true
+
+
+func _change_page(screen: int, from_tabs: bool) -> void:
+	if _stack.is_empty():
 		return
+	var here: int = _current_screen()
+	var from_index: int = _page_index(here)
+	var to_index: int = _page_index(screen)
+	if here == screen or from_index < 0 or to_index < 0:
+		return
+	_stop_page_turn()
+	_normalize_page_panels(here)
 	_stack[_stack.size() - 1] = {"screen": screen}
-	_paged_from_tabs = true
-	_apply_top()
+	_paged_from_tabs = from_tabs
+	_start_page_turn(here, screen, _ring_direction(from_index, to_index))
 	_paged_from_tabs = false
 	_play(SND_MOVE)
+
+
+func _start_page_turn(from_screen: int, to_screen: int, direction: int) -> void:
+	var outgoing: Control = _panel_for(from_screen)
+	var incoming: Control = _panel_for(to_screen)
+	if outgoing == null or incoming == null:
+		_apply_top()
+		return
+
+	_root_screen.visible = false
+	_options.visible = false
+	_saves.visible = false
+	outgoing.visible = true
+	incoming.visible = true
+	for strip: MenuPageTabs in _page_tabs:
+		strip.set_active(to_screen)
+	_enter_page(to_screen)
+
+	var travel: float = _screens.size.x * PAGE_TURN_TRAVEL_RATIO
+	var turn: float = float(direction)
+	outgoing.pivot_offset = Vector2(
+		outgoing.size.x if direction > 0 else 0.0, outgoing.size.y * 0.5)
+	incoming.pivot_offset = Vector2(
+		0.0 if direction > 0 else incoming.size.x, incoming.size.y * 0.5)
+	incoming.position = Vector2(turn * travel, 0.0)
+	incoming.scale = Vector2(PAGE_TURN_DEPTH_X, 1.0)
+	incoming.rotation = -turn * PAGE_TURN_TILT
+	incoming.modulate = PAGE_TURN_SHADE
+
+	_page_tween = create_tween()
+	_page_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	_page_tween.set_parallel(true)
+	_page_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	_page_tween.tween_property(outgoing, "position",
+		Vector2(-turn * travel, 0.0), PAGE_TURN_DURATION)
+	_page_tween.tween_property(outgoing, "scale",
+		Vector2(PAGE_TURN_DEPTH_X, 1.0), PAGE_TURN_DURATION)
+	_page_tween.tween_property(outgoing, "rotation",
+		turn * PAGE_TURN_TILT, PAGE_TURN_DURATION)
+	_page_tween.tween_property(outgoing, "modulate",
+		PAGE_TURN_SHADE, PAGE_TURN_DURATION)
+	_page_tween.tween_property(incoming, "position", Vector2.ZERO,
+		PAGE_TURN_DURATION)
+	_page_tween.tween_property(incoming, "scale", Vector2.ONE,
+		PAGE_TURN_DURATION)
+	_page_tween.tween_property(incoming, "rotation", 0.0, PAGE_TURN_DURATION)
+	_page_tween.tween_property(incoming, "modulate", Color.WHITE,
+		PAGE_TURN_DURATION)
+	_page_tween.finished.connect(_on_page_turn_finished)
+
+
+func _on_page_turn_finished() -> void:
+	_page_tween = null
+	_normalize_page_panels(_current_screen())
+
+
+func _stop_page_turn() -> void:
+	if _page_tween != null and _page_tween.is_valid():
+		_page_tween.kill()
+	_page_tween = null
+
+
+func _normalize_page_panels(visible_screen: int) -> void:
+	for page: Array in PAGES:
+		var screen: int = int(page[0])
+		var panel: Control = _panel_for(screen)
+		if panel == null:
+			continue
+		panel.position = Vector2.ZERO
+		panel.scale = Vector2.ONE
+		panel.rotation = 0.0
+		panel.modulate = Color.WHITE
+		panel.pivot_offset = Vector2.ZERO
+		panel.visible = screen == visible_screen
+
+
+func _current_screen() -> int:
+	if _stack.is_empty():
+		return Screen.ROOT
+	return int(_stack[_stack.size() - 1].get("screen", Screen.ROOT))
+
+
+func _page_index(screen: int) -> int:
+	for i: int in PAGES.size():
+		if int(PAGES[i][0]) == screen:
+			return i
+	return -1
+
+
+func _ring_direction(from_index: int, to_index: int) -> int:
+	var forward: int = posmod(to_index - from_index, PAGES.size())
+	var backward: int = posmod(from_index - to_index, PAGES.size())
+	return 1 if forward <= backward else -1
+
+
+func _focus_is_on_page_tabs() -> bool:
+	var focused: Control = get_viewport().gui_get_focus_owner()
+	return focused != null and focused.get_parent() is MenuPageTabs
 
 
 ## Back out one level. At the root level that means closing the menu.
@@ -431,6 +559,8 @@ func _apply_top() -> void:
 		return
 	var top: Dictionary = _stack[_stack.size() - 1]
 	var screen: int = top.get("screen", Screen.ROOT)
+	_stop_page_turn()
+	_normalize_page_panels(screen)
 	_root_screen.visible = screen == Screen.ROOT
 	_equip.visible = screen == Screen.EQUIP
 	_pouch.visible = screen == Screen.POUCH
@@ -485,9 +615,9 @@ func _enter_page(screen: int) -> void:
 
 # --- Input ------------------------------------------------------------------
 
-## Give the engine's confirm/cancel actions a gamepad, once, idempotently. Safe
-## to call from every PauseMenu instance and across scene reloads — an action
-## that already carries the button is left alone, so events never pile up.
+## Give the engine's menu actions their hidden keyboard/pad routes, once,
+## idempotently. Safe to call from every PauseMenu instance and across scene
+## reloads — an action that already carries the input is left alone.
 func _ensure_pad_ui_actions() -> void:
 	for action: StringName in PAD_UI_BUTTONS:
 		# `ui_accept` / `ui_cancel` exist already and this leaves them alone; the
@@ -613,6 +743,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			open()
 			get_viewport().set_input_as_handled()
 		return
+	if event.is_action_pressed(&"ui_tab_next"):
+		if _page(1):
+			get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed(&"ui_tab_prev"):
+		if _page(-1):
+			get_viewport().set_input_as_handled()
+		return
 	# Escape is bound to both `pause` and `ui_cancel`; one branch, one response.
 	if event.is_action_pressed(&"pause") or event.is_action_pressed(&"ui_cancel"):
 		back()
@@ -681,21 +819,6 @@ func _build_root_screen() -> void:
 	_root_list = VBoxContainer.new()
 	_root_list.add_theme_constant_override("separation", 0)
 	pad.add_child(_root_list)
-
-	var footer := MarginContainer.new()
-	footer.add_theme_constant_override("margin_left", 18)
-	footer.add_theme_constant_override("margin_right", 18)
-	footer.add_theme_constant_override("margin_bottom", 12)
-	col.add_child(footer)
-	var hint := Label.new()
-	# B, not Start, because B is the universal back in every other screen in this
-	# menu and the root is the one place it was not written down. At the root
-	# there is nothing left to back out of, so backing out closes — which is what
-	# "Resume" was already describing.
-	hint.text = "↑↓ / D-pad Select    E / A Confirm    Esc / B Resume"
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	UITheme.apply_text_style(hint, UITheme.TYPE_CAPTION)
-	footer.add_child(hint)
 
 	refresh_root()
 

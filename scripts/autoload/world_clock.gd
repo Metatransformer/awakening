@@ -9,6 +9,7 @@ signal dawn_started(day: int)
 signal service_availability_changed(available: bool)
 signal garrison_phase_changed(phase: StringName)
 signal bonfire_started(day: int)
+signal hour_crossed(day: int, hour: int)
 
 const HOURS_PER_REAL_SECOND: float = 1.0 / 80.0
 const HOURS_PER_DAY: float = 24.0
@@ -37,6 +38,7 @@ var _last_day: int = -1
 
 func _ready() -> void:
 	bonfire_started.connect(Game.resolve_bonfire)
+	hour_crossed.connect(Game.raid_observe_hour)
 	_prime_observed_state()
 
 
@@ -72,14 +74,18 @@ func advance_hours(hours: float) -> void:
 	set_time(day, hour + hours, hours > 0.0)
 
 
-func sleep_to_dawn() -> void:
+func sleep_to_dawn() -> bool:
 	var target_day: int = day if hour < DAWN_HOUR else day + 1
+	if Game.raid_sleep_crosses_attack(target_day, DAWN_HOUR):
+		set_time(Game.raid_scheduled_day(), float(Game.raid_attack_hour()), true)
+		return false
 	# The target contains exactly one dawn crossing, including when sleep begins
 	# before dawn on the same calendar day.
 	set_time(target_day, DAWN_HOUR, true)
+	return true
 
 
-func services_available() -> bool:
+func effective_service_open_hour() -> float:
 	var opening_hour: float = SERVICE_OPEN_HOUR
 	var game: Node = get_node_or_null("/root/Game")
 	if game != null:
@@ -88,6 +94,19 @@ func services_available() -> bool:
 			var upgrades: Dictionary = upgrades_value
 			if int(upgrades.get(&"elder_reveille", 0)) > 0:
 				opening_hour = REVEILLE_OPEN_HOUR
+	return opening_hour
+
+
+## Dawn remains the 05:00 civil boundary. Waking is the later settlement that
+## hands control back when the garrison can actually serve the player.
+func settle_wake_after_dawn() -> void:
+	var opening_hour: float = effective_service_open_hour()
+	if hour < opening_hour:
+		set_time(day, opening_hour)
+
+
+func services_available() -> bool:
+	var opening_hour: float = effective_service_open_hour()
 	return hour >= opening_hour and hour < SERVICE_CLOSE_HOUR
 
 
@@ -139,24 +158,16 @@ func _minute_of_day() -> int:
 
 func _emit_crossed_boundaries(from_absolute_hour: float, to_absolute_hour: float,
 		emit_dawn: bool) -> void:
-	var dawn_index: int = int(floor((from_absolute_hour - DAWN_HOUR) / HOURS_PER_DAY)) + 1
-	var dawn_absolute_hour: float = float(dawn_index) * HOURS_PER_DAY + DAWN_HOUR
-	var bonfire_index: int = int(floor(
-		(from_absolute_hour - BONFIRE_HOUR) / HOURS_PER_DAY)) + 1
-	var bonfire_absolute_hour: float = float(bonfire_index) * HOURS_PER_DAY + BONFIRE_HOUR
-	while true:
-		var next_dawn: float = dawn_absolute_hour if emit_dawn else INF
-		var next_boundary: float = minf(next_dawn, bonfire_absolute_hour)
-		if next_boundary > to_absolute_hour:
-			return
-		if next_dawn < bonfire_absolute_hour:
-			dawn_started.emit(dawn_index + 1)
-			dawn_index += 1
-			dawn_absolute_hour += HOURS_PER_DAY
-		else:
-			bonfire_started.emit(bonfire_index + 1)
-			bonfire_index += 1
-			bonfire_absolute_hour += HOURS_PER_DAY
+	var crossed_absolute_hour: int = int(floor(from_absolute_hour)) + 1
+	while float(crossed_absolute_hour) <= to_absolute_hour:
+		var crossed_day: int = int(crossed_absolute_hour / int(HOURS_PER_DAY)) + 1
+		var crossed_hour: int = crossed_absolute_hour % int(HOURS_PER_DAY)
+		hour_crossed.emit(crossed_day, crossed_hour)
+		if crossed_hour == int(DAWN_HOUR) and emit_dawn:
+			dawn_started.emit(crossed_day)
+		if crossed_hour == int(BONFIRE_HOUR):
+			bonfire_started.emit(crossed_day)
+		crossed_absolute_hour += 1
 
 
 func _prime_observed_state() -> void:

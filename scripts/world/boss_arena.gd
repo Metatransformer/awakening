@@ -1,32 +1,31 @@
 class_name BossArena
 extends Area3D
-## The deepest room, and what happens when you walk into it.
+## The separate boss chamber, and what happens when you walk into it.
 ##
 ## Five things, in order, and nothing else:
 ##
-##   1. On `_ready`, build the boss -- unless its door says it is already dead,
-##      in which case build nothing at all. GDD §5.1: *a boss you have killed
-##      stays dead; its door hangs open and the arena is empty forever after.*
+##   1. On `_ready`, build the boss -- unless its kill flag says it is already dead,
+##      in which case build nothing at all. A boss you have killed stays dead;
+##      the arena is empty forever after and its descent remains available.
 ##   2. On the player entering, **seal**: the ring comes up out of the floor, the
 ##      boss wakes, and `Bus.boss_engaged` fires (from the boss -- see below).
 ##   3. At half health, **turn**: the ROOM escalates, once. See "The turn" below.
-##   4. On the boss dying, **release**: the ring drops and the door opens.
+##   4. On the boss dying, **release**: the kill flag is set and the ring drops.
 ##   5. Place the deterministic boss-item great chest. On a spent arena it is
 ##      rebuilt until its item has actually been claimed.
 ##
 ## **It never calls `Flow`.** `CLAUDE.md` §6: `Flow` is the only thing in the
 ## project that changes scenes, and an arena that moved the player to the next
-## floor would be the second. What is on the other side of the door is the
-## door's placer's business; this node only decides when the door may be used.
+## floor would be the second. The chamber placer owns the descent; this node
+## only records the kill and releases the arena seal.
 ##
 ## **It never emits `Bus.boss_engaged` itself either.** `BossDb`'s executor
 ## contract §8 puts that emit on the boss, on the first frame of the fight, and
 ## `Music` is already listening. Two emitters would be two crossfades.
 ##
-## **The one flag lives on the door**, not here. `BossDoor.dead_flag()` names it
-## and `BossDoor.unlocked()` reads it, and this node asks the door rather than
-## keeping a second copy of the same fact -- a flag that two nodes both write is
-## a floor that comes back half-cleared.
+## `BossDoor.dead_flag()` is the one public name for kill state. The chamber door
+## was necessarily opened before this trigger could be crossed and is never
+## opened by the fight.
 ##
 ## ## The seal is a fence, and that is a greybox decision
 ##
@@ -60,8 +59,8 @@ extends Area3D
 
 ## Which fight this is. A key into `BossDb.BOSSES`.
 @export var boss_id: StringName = &"cistern_warden"
-## The `BossDoor` this arena opens. Optional -- an arena with no door is a valid
-## test fixture, it simply has nothing to unlock.
+## Retained for scene-fixture compatibility. Boss state no longer routes through
+## a door node; `BossDoor.dead_flag()` is read directly.
 @export var door_path: NodePath
 ## Where the boss stands, relative to this node. Across the room from the way in,
 ## so it is a silhouette in the far half of the frame when the door shuts.
@@ -127,7 +126,6 @@ const KEYSTONE_SIZE := Vector3(3.0, 2.4, 3.0)
 var _row: Dictionary = {}
 var _boss: CharacterBody3D = null
 var _boss_item_chest: BossItemChest = null
-var _door: Node = null
 var _seal: Node3D = null
 var _sealed: bool = false
 var _spent: bool = false
@@ -167,9 +165,6 @@ func _ready() -> void:
 	add_child(_seal)
 	_build_cover()
 
-	_door = get_node_or_null(door_path)
-	# Asked of the door, which owns the flag. An arena with no door falls back to
-	# the flag's own name so a fixture without one still remembers a kill.
 	if _already_dead():
 		_spent = true
 		_replace_lost_relic()
@@ -180,9 +175,7 @@ func _ready() -> void:
 
 
 func _already_dead() -> bool:
-	if _door != null and _door.has_method(&"unlocked"):
-		return bool(_door.call(&"unlocked"))
-	return Game.flag(StringName("boss_dead_%s" % boss_id))
+	return Game.flag(BossDoor.dead_flag(boss_id))
 
 
 ## Put the boss's relic back on a floor whose boss is already dead.
@@ -417,11 +410,13 @@ func seal() -> void:
 
 
 func _on_boss_died(_where: Vector3) -> void:
+	# First, before any reward or release listener can rebuild this chamber.
+	Game.set_flag(BossDoor.dead_flag(boss_id))
 	_spent = true
 	_sealed = false
 	# BOTH rings. A `shrink`ed arena that dropped only the outer fence would leave
-	# an 8.5 m wall standing in a room whose boss is dead and whose door has just
-	# opened -- the player sealed into the middle of a floor he has cleared.
+	# an 8.5 m wall standing in a room whose boss is dead -- the player sealed
+	# into the middle of a floor he has cleared.
 	_move_seal(_seal, -SEAL_HEIGHT - 0.4)
 	_move_seal(_seal_in, -SEAL_HEIGHT - 0.4)
 	# The rings went up on `door_close` and came down on nothing. A wall the height
@@ -434,9 +429,11 @@ func _on_boss_died(_where: Vector3) -> void:
 	# only thing that can say it here -- the chamber is not a `rooms[]` cell, so
 	# the generator never built it a watcher. Named for the arena's own node so a
 	# listener can tell which chamber, the same way a room is named for its root.
-	Bus.room_cleared.emit(StringName(name))
-	if _door != null and is_instance_valid(_door) and _door.has_method(&"unseal"):
-		_door.call(&"unseal")
+	#
+	# MAJOR, and that grade is the whole point of the argument: a chamber boss and
+	# a room of three goblins used to make the identical noise, so the biggest
+	# moment on the floor sounded like the smallest one.
+	Bus.room_cleared.emit(StringName(name), RewardVfx.MAJOR)
 	_place_boss_item_chest(true)
 
 

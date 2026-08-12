@@ -7,12 +7,9 @@ extends RefCounted
 ##     --director=res://tools/directors/menu_pages.gd \
 ##     --out=/tmp/pages/x.png --size=1280x720 --warmup=60
 ##
-## **This is card #120's proof and it exists because the card removed the only
-## input that could change page.** LB / RB (and Q / R) paged the ring; the owner
-## asked for that selector to go, which left a `FOCUS_NONE` tab strip and a MAP
-## screen whose only other focusable is its Back button. So what has to be shown
-## is not "the pages draw" but "**a controller can still reach all four, and
-## get back off the one with nothing on it**".
+## Card #120 made the tab strip focusable but also removed LB / RB and Q / R.
+## The visible strip and those restored hidden shortcuts now share one animated
+## page seam, so this proves both routes without weakening the strip coverage.
 ##
 ## What each beat is for:
 ##
@@ -31,9 +28,8 @@ extends RefCounted
 ##   4. **The keyboard walks the ring** — ↑ onto the strip, → → → back to where
 ##      it started, one page per press.
 ##   5. **The pad walks the ring**, including onto MAP and OFF it again.
-##   6. **The shoulders do nothing**, which is the removal itself. The two
-##      actions must not exist at all: a `ui_tab_next` still in the InputMap
-##      would be a paging route nothing on screen names.
+##   6. **The shoulders and Q / R page too**, including both shoulder wrap
+##      directions and the cube turn's intermediate and settled contracts.
 ##
 ## **Real `InputEventKey` / `InputEventJoypadButton`, never `Input.action_press`
 ## and never `screen._cursor`.** CLAUDE.md §3: `action_press` dispatches no
@@ -48,9 +44,10 @@ extends RefCounted
 ## in memory, for the length of the run — see `_arm_pad_dpad`. That is not the
 ## harness inventing a capability: those bindings ship with the engine and are
 ## what a real pad player has. `ui_accept` / `ui_cancel` need no help; PauseMenu
-## registers their pad buttons itself (`_ensure_pad_ui_actions`).
+## registers its pad buttons itself (`_ensure_pad_ui_actions`).
 
 const NAV_LIMIT := 12
+const PAGE_SETTLE_SECONDS: float = 0.38
 
 var _pass := 0
 var _fail := 0
@@ -61,8 +58,9 @@ func run(rig) -> void:
 	var menu: PauseMenu = Menu
 	var equip: MenuEquipPanel = menu.get_node("Root/Screens/EquipScreen")
 	var pouch: MenuPouchPanel = menu.get_node("Root/Screens/PouchScreen")
-	var map_panel = menu.get_node("Root/Screens/MapScreen")
-	var garrison_panel = menu.get_node("Root/Screens/GarrisonScreen")
+	var map_panel: Control = menu.get_node("Root/Screens/MapScreen")
+	var garrison_panel: Control = menu.get_node("Root/Screens/GarrisonScreen")
+	var root_screen: Control = menu.get_node("Root/Screens/RootScreen")
 
 	# A full bag, because an empty grid is five columns of nothing and proves
 	# neither the wrap nor the width. Granted straight into `Run` rather than
@@ -70,49 +68,100 @@ func run(rig) -> void:
 	_fill_the_bag()
 	await rig.wait_frames(6)
 
-	# --- 6. The shoulders are gone -------------------------------------------
-	# First, because it is the removal and it needs no navigation.
-	_check("ui_tab_next no longer exists in the InputMap",
-		not InputMap.has_action(&"ui_tab_next"))
-	_check("ui_tab_prev no longer exists in the InputMap",
-		not InputMap.has_action(&"ui_tab_prev"))
+	# --- 6. The hidden paging routes -----------------------------------------
+	_check("ui_tab_next exists with RB",
+		InputMap.has_action(&"ui_tab_next") and
+		_action_has_pad_button(&"ui_tab_next", JOY_BUTTON_RIGHT_SHOULDER))
+	_check("ui_tab_prev exists with LB",
+		InputMap.has_action(&"ui_tab_prev") and
+		_action_has_pad_button(&"ui_tab_prev", JOY_BUTTON_LEFT_SHOULDER))
+	_check("ui_tab_next keeps R",
+		_action_has_key(&"ui_tab_next", KEY_R))
+	_check("ui_tab_prev keeps Q",
+		_action_has_key(&"ui_tab_prev", KEY_Q))
+	await _pad_page(rig, JOY_BUTTON_RIGHT_SHOULDER)
+	_check("RB is inert on the root screen",
+		root_screen.visible and _visible_page_count(menu) == 0)
 
 	# --- The labels ----------------------------------------------------------
 	await _open_pouch(rig, menu)
-	_check("the INVENTORY screen is up", pouch.visible)
+	_check("the Inventory screen is up", pouch.visible)
 	var labels := _tab_labels(pouch)
-	_check("the tabs read EQUIP / INVENTORY / MAP / GARRISON (got %s)" % [labels],
-		labels == PackedStringArray(["EQUIP", "INVENTORY", "MAP", "GARRISON"]))
+	_check("the tabs read Equip / Inventory / Map / Garrison (got %s)" % [labels],
+		labels == PackedStringArray(["Equip", "Inventory", "Map", "Garrison"]))
+	_check("the live page tabs resolve to the body face", _tabs_use_body_font(pouch))
 	await _shot(rig, "inventory")
 
 	# --- 1 + 2. Five per row, and it fits ------------------------------------
 	_measure(pouch)
+
+	# Q / R use real key events and retain body focus rather than forcing the
+	# cursor onto the hidden shortcut's corresponding tab.
+	await _key_page(rig, KEY_R)
+	_check("R paged INVENTORY to MAP (%s)" % _where(menu), map_panel.visible)
+	_check("R retained body focus (%s)" % _focus_name(rig), not _on_tabs(rig))
+	await _key_page(rig, KEY_Q)
+	_check("Q paged MAP back to INVENTORY (%s)" % _where(menu), pouch.visible)
+
+	# Walk to GARRISON, then prove both wrap directions on the shoulders. The
+	# first wrap is sampled before settling so the director witnesses both faces
+	# and their directional transforms rather than only the final page.
+	await _pad(rig, JOY_BUTTON_RIGHT_SHOULDER, 0)
+	await _pad(rig, JOY_BUTTON_RIGHT_SHOULDER, 0)
+	await rig.wait_seconds(PAGE_SETTLE_SECONDS)
+	_check("RB reached GARRISON before wrapping (%s)" % _where(menu),
+		garrison_panel.visible)
+	_check("rapid RB replacement left one normalized logical page",
+		_visible_page_count(menu) == 1 and _all_page_transforms_normalized(menu))
+	await _pad(rig, JOY_BUTTON_RIGHT_SHOULDER, 0)
+	_check("RB wrap shows outgoing GARRISON and incoming EQUIP",
+		garrison_panel.visible and equip.visible)
+	_check("both cube faces have non-identity transforms mid-turn",
+		not _page_transform_is_identity(garrison_panel) and
+		not _page_transform_is_identity(equip))
+	_check("RB wrap turns forward (GARRISON left, EQUIP from right)",
+		garrison_panel.position.x < 0.0 and equip.position.x > 0.0)
+	await _shot(rig, "turn_mid")
+	await rig.wait_seconds(PAGE_SETTLE_SECONDS)
+	_check("RB wraps GARRISON to EQUIP", equip.visible)
+	_check("settled turn has exactly one visible normalized page",
+		_visible_page_count(menu) == 1 and _all_page_transforms_normalized(menu))
+	await _shot(rig, "turn_settled")
+
+	await _pad_page(rig, JOY_BUTTON_LEFT_SHOULDER)
+	_check("LB wraps EQUIP back to GARRISON (%s)" % _where(menu),
+		garrison_panel.visible)
+	_check("LB wrap also settles cleanly",
+		_visible_page_count(menu) == 1 and _all_page_transforms_normalized(menu))
+
+	# Return to the bag body before exercising the visible keyboard strip.
+	await _open_pouch(rig, menu)
 
 	# --- 4. The keyboard walks the ring --------------------------------------
 	# ↑ out of the top of the bag has to land ON the strip. Nothing else in this
 	# menu leaves a page upwards, so if this misses, the whole mechanism is
 	# unreachable and every beat under it would pass for the wrong reason.
 	await _key(rig, KEY_UP, 8)
-	_check("↑ out of the INVENTORY grid landed on the tab strip (%s)"
+	_check("↑ out of the Inventory grid landed on the tab strip (%s)"
 		% _focus_name(rig), _on_tabs(rig))
 	await _shot(rig, "tabs_focused")
 
-	await _key(rig, KEY_RIGHT, 10)
-	_check("→ on the strip paged to MAP (%s)" % _where(menu), map_panel.visible)
+	await _key_page(rig, KEY_RIGHT)
+	_check("→ on the strip paged to Map (%s)" % _where(menu), map_panel.visible)
 	_check("...and the cursor stayed on the strip, so → pages again (%s)"
 		% _focus_name(rig), _on_tabs(rig))
 	await _shot(rig, "map")
 
-	await _key(rig, KEY_RIGHT, 10)
-	_check("→ again paged to GARRISON (%s)" % _where(menu), garrison_panel.visible)
+	await _key_page(rig, KEY_RIGHT)
+	_check("→ again paged to Garrison (%s)" % _where(menu), garrison_panel.visible)
 	await _shot(rig, "garrison")
 
-	await _key(rig, KEY_RIGHT, 10)
-	_check("→ again wrapped to EQUIP (%s)" % _where(menu), equip.visible)
+	await _key_page(rig, KEY_RIGHT)
+	_check("→ again wrapped to Equip (%s)" % _where(menu), equip.visible)
 	await _shot(rig, "equip")
 
-	await _key(rig, KEY_LEFT, 10)
-	_check("← is the same ring the other way (back to GARRISON: %s)" % _where(menu),
+	await _key_page(rig, KEY_LEFT)
+	_check("← is the same ring the other way (back to Garrison: %s)" % _where(menu),
 		garrison_panel.visible)
 
 	# ...and off the strip, back into the page. On GARRISON that is the Back
@@ -126,16 +175,16 @@ func run(rig) -> void:
 	# pad player could get stuck on: one focusable, no shoulders, nothing else.
 	_arm_pad_dpad()
 	await _pad(rig, JOY_BUTTON_DPAD_UP, 8)
-	_check("PAD: ↑ off the GARRISON Back button reached the tab strip (%s)"
+	_check("PAD: ↑ off the Garrison Back button reached the tab strip (%s)"
 		% _focus_name(rig), _on_tabs(rig))
-	await _pad(rig, JOY_BUTTON_DPAD_LEFT, 10)
-	_check("PAD: ← paged off GARRISON onto MAP (%s)" % _where(menu), map_panel.visible)
-	await _pad(rig, JOY_BUTTON_DPAD_LEFT, 10)
-	_check("PAD: ← again reached INVENTORY (%s)" % _where(menu), pouch.visible)
+	await _pad_page(rig, JOY_BUTTON_DPAD_LEFT)
+	_check("PAD: ← paged off Garrison onto Map (%s)" % _where(menu), map_panel.visible)
+	await _pad_page(rig, JOY_BUTTON_DPAD_LEFT)
+	_check("PAD: ← again reached Inventory (%s)" % _where(menu), pouch.visible)
 	var seen := {}
 	for i in 4:
 		seen[_where(menu)] = true
-		await _pad(rig, JOY_BUTTON_DPAD_RIGHT, 10)
+		await _pad_page(rig, JOY_BUTTON_DPAD_RIGHT)
 	_check("PAD: all four screens are reachable on the pad alone (%s)"
 		% [seen.keys()], seen.size() == 4)
 	await _shot(rig, "pad_ring")
@@ -155,11 +204,11 @@ func run(rig) -> void:
 	# motion event: what is being checked is that a press still pages now that
 	# arriving-by-focus does too, and not that the pointer can find a rectangle.
 	await _open_pouch(rig, menu)
-	var map_tab := _tab_named(pouch, "MAP")
+	var map_tab := _tab_named(pouch, "Map")
 	if map_tab != null:
 		map_tab.emit_signal(&"pressed")
-		await rig.wait_frames(10)
-	_check("MOUSE: pressing the MAP tab paged to it (%s)" % _where(menu),
+		await rig.wait_seconds(PAGE_SETTLE_SECONDS)
+	_check("MOUSE: pressing the Map tab paged to it (%s)" % _where(menu),
 		map_panel.visible)
 
 	# --- EQUIP's own row still works -----------------------------------------
@@ -172,7 +221,7 @@ func run(rig) -> void:
 	await rig.wait_frames(10)
 	await _nav_to_button(rig, "Equipment")
 	await _key(rig, KEY_ENTER, 12)
-	_check("EQUIP opened focused in the page, not on the strip (%s)"
+	_check("Equip opened focused in the page, not on the strip (%s)"
 		% _focus_name(rig), equip.visible and not _on_tabs(rig))
 	await _shot(rig, "equip_from_root")
 
@@ -232,9 +281,9 @@ func _measure(pouch: MenuPouchPanel) -> void:
 		_check("the frame is inside the viewport (%.0f..%.0f of %.0f)"
 			% [l, r, vp.x], l >= -0.5 and r <= vp.x + 0.5)
 		# The other axis, and the one six across did NOT break: the footer's Back
-		# button and the hint line are the bottom of this frame, and a frame
-		# taller than 720 puts them under the edge of the screen where nothing
-		# complains. `_build_stock`'s note records that happening once already.
+		# button is the bottom of this frame, and a frame taller than 720 puts it
+		# under the edge of the screen with no complaint. `_build_stock`'s note
+		# records that happening once already.
 		var t := frame.global_position.y
 		var b := t + frame.size.y
 		_check("the frame is inside the viewport vertically (%.0f..%.0f of %.0f)"
@@ -296,6 +345,16 @@ func _pad(rig, btn: int, settle: int = 8) -> void:
 	await rig.wait_frames(settle)
 
 
+func _key_page(rig, code: int) -> void:
+	await _key(rig, code, 0)
+	await rig.wait_seconds(PAGE_SETTLE_SECONDS)
+
+
+func _pad_page(rig, button: int) -> void:
+	await _pad(rig, button, 0)
+	await rig.wait_seconds(PAGE_SETTLE_SECONDS)
+
+
 ## Give the four engine navigation actions their D-pad back, in memory, for this
 ## run. See the header: `shoot.gd` strips every joypad binding on purpose, and
 ## these four are Godot's own defaults rather than anything this game authored.
@@ -323,6 +382,26 @@ func _arm_pad_dpad() -> void:
 		InputMap.action_add_event(action, ev)
 		added += 1
 	print("PAGES armed %d D-pad binding(s) that shoot.gd had stripped" % added)
+
+
+func _action_has_pad_button(action: StringName, button: int) -> bool:
+	if not InputMap.has_action(action):
+		return false
+	for event: InputEvent in InputMap.action_get_events(action):
+		var pad_event := event as InputEventJoypadButton
+		if pad_event != null and pad_event.button_index == button:
+			return true
+	return false
+
+
+func _action_has_key(action: StringName, code: int) -> bool:
+	if not InputMap.has_action(action):
+		return false
+	for event: InputEvent in InputMap.action_get_events(action):
+		var key_event := event as InputEventKey
+		if key_event != null and key_event.physical_keycode == code:
+			return true
+	return false
 
 
 ## `open_pouch` is a TOGGLE — it is the I key, and pressing I with the menu up
@@ -358,6 +437,31 @@ func _where(menu: PauseMenu) -> String:
 	return "<none>"
 
 
+func _visible_page_count(menu: PauseMenu) -> int:
+	var count := 0
+	for page: Array in PauseMenu.PAGES:
+		var panel: Control = menu.call(&"_panel_for", int(page[0]))
+		if panel != null and panel.visible:
+			count += 1
+	return count
+
+
+func _all_page_transforms_normalized(menu: PauseMenu) -> bool:
+	for page: Array in PauseMenu.PAGES:
+		var panel: Control = menu.call(&"_panel_for", int(page[0]))
+		if panel == null or not _page_transform_is_identity(panel):
+			return false
+	return true
+
+
+func _page_transform_is_identity(panel: Control) -> bool:
+	return panel.position.is_equal_approx(Vector2.ZERO) \
+		and panel.scale.is_equal_approx(Vector2.ONE) \
+		and is_zero_approx(panel.rotation) \
+		and panel.modulate.is_equal_approx(Color.WHITE) \
+		and panel.pivot_offset.is_equal_approx(Vector2.ZERO)
+
+
 func _tab_labels(panel: Control) -> PackedStringArray:
 	var out: PackedStringArray = []
 	var strip := _strip_of(panel)
@@ -368,6 +472,21 @@ func _tab_labels(panel: Control) -> PackedStringArray:
 		if b != null:
 			out.append(b.text)
 	return out
+
+
+func _tabs_use_body_font(panel: Control) -> bool:
+	var strip := _strip_of(panel)
+	if strip == null:
+		return false
+	var buttons := 0
+	for child in strip.get_children():
+		var button := child as Button
+		if button == null:
+			continue
+		buttons += 1
+		if button.get_theme_font(&"font") != UITheme.body_font():
+			return false
+	return buttons == PauseMenu.PAGES.size()
 
 
 func _tab_named(panel: Control, label: String) -> Button:

@@ -8,9 +8,10 @@ extends RefCounted
 ## equipment screen and the HUD cannot drift apart -- they did, once, when the
 ## HUD carried its own KIT_ICON table and the menu did not exist yet.
 ##
-## Icons are the SAME textures the HUD strip uses: baked from the real models by
-## tools/scenes/_iconbake.gd. See hud.gd for the regeneration command and the
-## warning about what that baker overwrites.
+## Icons are the SAME textures the HUD strip uses, with a deliberate mixed
+## source: sword, shield and bow are locally owned Valenfeld item paintings in
+## the protected, non-generated `assets/ui/icons/valenfeld/` folder; hookshot
+## and arrow remain model bakes under `assets/ui/icons/hud/`.
 
 const NAMES := {
 	&"": "Empty Hand",
@@ -37,10 +38,10 @@ const NAMES := {
 }
 
 const ICONS := {
-	&"sword": "res://assets/ui/icons/hud/sword_knightly.png",
-	&"shield": "res://assets/ui/icons/hud/kite_shield.png",
+	&"sword": "res://assets/ui/icons/valenfeld/sword_knightly.png",
+	&"shield": "res://assets/ui/icons/valenfeld/kite_shield.png",
 	&"hookshot": "res://assets/ui/icons/hud/hookshot_pistol.png",
-	&"bow": "res://assets/ui/icons/hud/bow_knightly.png",
+	&"bow": "res://assets/ui/icons/valenfeld/bow_knightly.png",
 	# Card #54. The arrow wore `LETTERS` for months on the argument that it is "a
 	# count rather than a thing you hold up" -- but it is BOTH, and every other
 	# cell that can be baked is: `assets/weapons/arrow.glb` is the same mesh the

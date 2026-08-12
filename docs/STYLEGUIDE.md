@@ -64,7 +64,7 @@ move it anyway.
 | MOTH | `#807868` | Muted text, disabled state, button glyphs, **and common-tier loot** — common items render in the "not worth reading" colour. |
 | VITAL | `#E04038` | Health fill. Dirty arterial, not fire-engine. |
 | RUST | `#B83818` | Danger: incoming damage, damage ghost, hostile lock-on, unaffordable cost. |
-| GOLD | `#F8C038` | Currency, and **only** currency. The most saturated colour in the build. Not a torch, not a title, not a UI highlight. |
+| GOLD | `#F8C038` | Currency and the authored Boss Key/Boss Door progression mark. The most saturated colour in the build. Not a torch, title, or general UI highlight. |
 | EXTRACT CYAN | `#38D0C8` | The only cool saturated hue. Reserved for the way out: extraction nodes and the hookshot line — the two things that pull you somewhere. |
 | MOSS | `#68A050` | Rarity: uncommon. |
 | COBALT | `#5878C8` | Rarity: rare. |
@@ -83,8 +83,10 @@ Rules that keep it dirty rather than clean:
   RGB555, not to twelve colours — palette-locking the framebuffer gives you a
   Game Boy, not a PlayStation.
 - World surfaces sit between VOID and ASH with a texture saturation cap of
-  ~0.25. GOLD and the rarity tiers are the only things above 0.6. **That gap is
-  the art direction.**
+  ~0.25. GOLD and the rarity tiers are the only things above 0.6. The Boss Key
+  and its door sigil are the one non-currency GOLD exception: a deliberately
+  scarce progression pair, once per authored floor. **That gap is the art
+  direction.**
 
 ---
 
@@ -778,7 +780,7 @@ is by the time it is committed.
 | Family | Where | What it is |
 |---|---|---|
 | HUD glyphs | drawn in `scripts/ui/kit/` | polygons, in code, no file at all |
-| Armaments | `assets/ui/icons/hud/`, 5 | **renders of the real models**, baked by `tools/scenes/_iconbake.gd` (§5.2) |
+| Armaments | `assets/ui/icons/valenfeld/` + `assets/ui/icons/hud/`, 5 | Valenfeld item paintings for sword/shield/bow; model bakes for hookshot/arrow (§5.2) |
 | Upgrade tracks | `assets/icons/tracks/`, 22 | one per TRACK — the face on a board row |
 | Items | `assets/icons/items/`, 28 | one per catalogue id — the face on an `ItemCell` |
 
@@ -1004,9 +1006,10 @@ movement *is* the game's central decision.
 hands and the item cell, one cluster, every cell captioned with the key that
 fires it.
 
-**Top-right is WHERE YOU ARE** (§5.5b): the minimap. It is the only readout on
-the screen that is about the ROOM rather than about the hero, and it is the one
-thing that wants the corner the over-the-shoulder camera leaves emptiest.
+**Top-right is WHERE AND WHEN YOU ARE** (§5.5b): the minimap plus the civil
+instrument. Underground, the compass and sun/moon clock sit directly below the
+map; on the surface they move into the map's otherwise-empty slot. They are one
+navigation column: room, heading, and civil time, in that order.
 
 The cluster has been in both corners and the reasoning each way is worth keeping,
 because the second move is not the first one undone. It sat bottom-left until
@@ -1048,8 +1051,12 @@ shell around an ASH bevel face and a recessed MIDNIGHT / ASH@60% track. Both
 ends are straight parallel diagonals, never curves or clipped round corners:
 6 px on health and 3 px on the subordinate meters. A 1 px BONE-alpha upper
 frame edge and MIDNIGHT lower edge deepen the face. The semantic fill colour has
-its own restrained 1 px BONE-alpha top band and VOID-alpha lower band; ticks
-still cut through last. Health carries a 2 px outer bezel and 2 px inner face;
+its own restrained 1 px BONE-alpha top band and VOID-alpha lower band. Sparse,
+ordered BONE/VOID chips inside that colour give it Valenfeld's carved dark-stone
+grain without spending the fill's readability on texture noise. The pattern is
+anchored to screen pixels, so draining a bar reveals stationary stone rather
+than making the grain swim; ticks still cut through last. Health carries a 2 px
+outer bezel and 2 px inner face;
 the three subordinate meters carry 1 px of each, preserving a readable live
 track inside the 15 / 8 / 6 / 6 weight hierarchy. Partial fills end diagonally.
 The health ghost begins flat beneath the current fill and ends diagonally, so
@@ -1238,23 +1245,22 @@ player's hand. The caption is keyed by the ITEM, not by the hand or the cell:
 two-handing the sword moves it to the other hand and the button that swings it
 does not change.
 
-**Glyphs are renders of the real models**, baked by `tools/scenes/_iconbake.gd`
-and posterised into the Pal ramp, so the cell always shows the thing you are
-actually holding and cannot drift from it. This is not a hole in §7.10: that
-rule bans bought vector icon sets and demands glyphs authored *in the palette*,
-and quantising a render to four Pal values with a 1 px VOID dilation is how a
-render earns that. Lettering ("SW", "SH") survives only as the fallback for a
-missing bake — an empty cell would read as "you have no sword", which is a lie.
+**Sword, shield and bow use Valenfeld's locally owned item paintings**, kept in
+protected `assets/ui/icons/valenfeld/`. Their worn steel, leather and wood are
+the material read the old four-value silhouettes could not carry, and their
+distinct profiles still do the identification work when colour drops away.
+Hookshot and arrow remain renders of the real models, baked by
+`tools/scenes/_iconbake.gd` into generated `assets/ui/icons/hud/` and posterised
+onto the Pal ramp. The split is deliberate: never put the imported paintings in
+the generated folder, because the baker overwrites it wholesale. Lettering
+("SW", "SH") survives only as the fallback for a missing texture — an empty
+cell would read as "you have no sword", which is a lie.
 
-These five are the only glyphs baked from the models, and `UiKit.item_icon`
-resolves them **before** `assets/icons/items/` so the bag cannot draw a different
-sword from the one in the hand. The other icon families, and the crunch all four
-of them share, are §4.7b.
-
-The rule the bake taught: **thin items do not survive 32 px.** A whole sword is a
-three-pixel scratch, so its icon crops to the guard and pommel rather than
-dutifully showing the entire blade. `bow_knightly` is the one that still reads
-poorly, because a bow is edge-on from every axis.
+`ArmamentDb.ICONS` is the one owner of both sources, so the HUD and equipment
+screen cannot choose different faces for the same hand. The rule the bakes
+taught still holds: **thin items must use the diagonal aggressively.** The
+Valenfeld sword and bow do that in their paintings; the baked arrow does it in
+the model camera.
 
 | | |
 |---|---|
@@ -1531,6 +1537,7 @@ and it is not line art.
   glyphs are dropped whole rather than sliced.
 - **Fogged rooms are not drawn at all.** Not greyed, not outlined: absent. Which
   means the blank space IS the information.
+
 - **A corridor to a room you have seen is drawn whole; one to a room you have not
   is a stub** that stops short of it. A promise that there is more that way, and
   no claim about what. A locked door gets the same treatment — a gap in the wall
@@ -1552,6 +1559,15 @@ and it is not line art.
   is four brown pixels; a gold box with a lid is a chest.
 - Lines are `draw_rect`, not `draw_line`. At 1–2 px `draw_line` lands on half
   pixels and comes out soft, which is the treatment collapsing (§1).
+
+The map's right edge is also the civil instrument's right edge. A 15-degree
+heading strip scrolls N/NE/E/SE/S/SW/W/NW beneath a fixed centre pointer and
+spells out the nearest point plus bearing. Below it, a 24-hour line marks dawn
+and dusk, carries the current **DAY X · time**, and moves a gently pulsing sun or
+crescent across the day. The clock eases between minute targets and through
+forward time jumps in absolute campaign minutes, so midnight wraps forward
+rather than making the marker run backward. On the surface this 224×96 stack
+occupies the minimap slot; underground it begins 8 px below the 148 px map.
 
 The one glyph set this project did NOT use: `~/valenfeld`'s map icons. They are
 256 px painterly round world-map POI tokens in a warmer palette, they are

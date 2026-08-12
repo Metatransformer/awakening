@@ -19,7 +19,7 @@ signal value_settled
 
 enum Tab { AUDIO, GRAPHICS, CONTROLS, GAME }
 
-const TAB_NAMES: Array[String] = ["AUDIO", "GRAPHICS", "CONTROLS", "GAME"]
+const TAB_NAMES: Array[String] = ["Audio", "Graphics", "Controls", "Game"]
 
 ## Indexed by `Settings.msaa`. **The row is built from a SLICE of this, not from
 ## all of it** — see `_build_graphics`. Card #57: on Apple silicon the driver
@@ -29,8 +29,6 @@ const TAB_NAMES: Array[String] = ["AUDIO", "GRAPHICS", "CONTROLS", "GAME"]
 const MSAA_NAMES: Array[String] = ["Off", "2x", "4x", "8x"]
 const SHADOW_NAMES: Array[String] = ["Off", "Low", "Medium", "High"]
 const ONOFF: Array[String] = ["Off", "On"]
-
-const HINT := "↑↓ / D-pad Select    ←→ Adjust    E / A Confirm    Esc / B Back"
 
 var _tab := Tab.AUDIO
 var _tab_buttons: Array[Button] = []
@@ -136,11 +134,6 @@ func _build_chrome() -> void:
 	col.add_child(footer)
 	var frow := HBoxContainer.new()
 	footer.add_child(frow)
-	var hint := Label.new()
-	UITheme.apply_text_style(hint, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
-	hint.text = HINT
-	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	frow.add_child(hint)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	frow.add_child(spacer)

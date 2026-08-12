@@ -38,6 +38,9 @@ func run(rig) -> void:
 	# the tier as an argument and `CUES` is keyed on the signal. They are cues all
 	# the same, and a tier pointing at a missing file fails exactly as silently.
 	ids.append_array(Sfx.REWARD_CUES.values())
+	# Same shape, same reason: `room_cleared` carries a grade and `CUES` cannot
+	# hold two rows for one signal.
+	ids.append_array(Sfx.CLEAR_CUES.values())
 	# Reached only through bare `Bus.request_sfx` emitters, so they are in no table
 	# and nothing else here would notice them going missing.
 	ids.append(&"power_up")               # SoundingStone._on_taken -- the Echo
@@ -64,8 +67,16 @@ func run(rig) -> void:
 		func() -> void: Bus.items_sold.emit({}, 40))
 	await _fires(rig, "puzzle_solved",
 		func() -> void: Bus.puzzle_solved.emit(&"p1"))
-	await _fires(rig, "room_cleared",
-		func() -> void: Bus.room_cleared.emit(&"Room_0_0"))
+	# Both grades, and they must not be the same take. Beating the floor 1
+	# miniboss played the ordinary room-clear sound until 2026-08-12 -- the
+	# chamber and a room of three goblins were one row in the table -- so "a voice
+	# started" is not enough here; the distinctness is the thing that regressed.
+	_ck("a beaten chamber does not sound like a beaten room",
+		Sfx.CLEAR_CUES[RewardVfx.MINOR] != Sfx.CLEAR_CUES[RewardVfx.MAJOR])
+	await _fires(rig, "room_cleared (MINOR)",
+		func() -> void: Bus.room_cleared.emit(&"Room_0_0", RewardVfx.MINOR))
+	await _fires(rig, "room_cleared (MAJOR)",
+		func() -> void: Bus.room_cleared.emit(&"BossArena", RewardVfx.MAJOR))
 	# Both tiers, because they are two rows in `REWARD_CUES` and a lookup that
 	# fell through to the tier-1 default would still pass a one-tier test.
 	# The puzzle beat above uses the same take as MINOR on purpose. Wait past its

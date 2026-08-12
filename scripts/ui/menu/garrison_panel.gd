@@ -5,13 +5,13 @@ extends Control
 
 signal back_requested
 
-const HINT := "← → Change Page    Esc / B Back"
 const ROSTER: Array[Dictionary] = [
 	{"id": &"elder", "role": "Lanternkeeper / commander"},
 	{"id": &"quartermaster", "role": "Quartermaster"},
 	{"id": &"smith", "role": "Smith"},
 	{"id": &"alchemist", "role": "Alchemist"},
 	{"id": &"jewelcrafter", "role": "Jewelcrafter"},
+	{"id": &"builder", "role": "Builder / mechanisms"},
 ]
 
 var _hrow: HBoxContainer
@@ -50,6 +50,7 @@ func refresh() -> void:
 	UITheme.clear_children(_body)
 	_build_hearth_status()
 	_build_duty_status()
+	_build_garrison_defence()
 	_build_roster()
 	_build_relic_effects()
 	_build_improvements()
@@ -117,11 +118,6 @@ func _build() -> void:
 	col.add_child(footer)
 	var frow := HBoxContainer.new()
 	footer.add_child(frow)
-	var hint := Label.new()
-	UITheme.apply_text_style(hint, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
-	hint.text = HINT
-	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	frow.add_child(hint)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	frow.add_child(spacer)
@@ -213,6 +209,32 @@ func _duty_step(assigned: bool, owns_axe: bool, completed: bool) -> String:
 	return "Chop today's bundle at the exterior Timber Yard."
 
 
+func _build_garrison_defence() -> void:
+	UITheme.section_rule(_body, "GARRISON DEFENCE")
+	var phase := Game.raid_phase()
+	if phase == GarrisonRaidState.PHASE_DORMANT:
+		_fact("Raid", "No raid is scheduled.")
+	else:
+		match phase:
+			GarrisonRaidState.PHASE_ARMED:
+				_fact("Raid", "Scheduled · Day %d at 23:00" % Game.raid_scheduled_day())
+			GarrisonRaidState.PHASE_WARNED:
+				_fact("Raid", "Warning issued · Day %d at 23:00" % Game.raid_scheduled_day())
+			GarrisonRaidState.PHASE_ACTIVE:
+				_fact("Raid", "Under attack")
+			GarrisonRaidState.PHASE_WON:
+				_fact("Resolution", "Garrison secure", UITheme.SUCCESS)
+			GarrisonRaidState.PHASE_LOST:
+				_fact("Resolution", "Garrison lost", UITheme.DANGER)
+		var status := Game.raid_status()
+		_fact("Garrison integrity", "%d / %d" % [
+			Game.raid_integrity(), GarrisonRaidState.INTEGRITY_MAX])
+		_fact("Living raiders", str(int(status.get("living_raiders", 0))))
+	_fact("West Gate Bolt-Thrower", "Built" if Game.raid_defense_built() else "Not built")
+	_fact("Tally-Ledger", "Stolen" if Game.raid_ledger_stolen() else "Secure",
+		UITheme.DANGER if Game.raid_ledger_stolen() else null)
+
+
 func _build_roster() -> void:
 	UITheme.section_rule(_body, "GARRISON ROSTER")
 	var working: bool = Clock.garrison_phase() == WorldClock.GARRISON_DAYTIME \
@@ -243,6 +265,9 @@ func _build_roster() -> void:
 func _arrived(who: StringName) -> bool:
 	if who == &"elder" or who == &"quartermaster":
 		return true
+	if who == &"builder" and Game.flag(
+			RelicDb.flag_donated(RelicDb.TALLY_LEDGER_ID)):
+		return true
 	if Game.flag(StoryDb.intro_flag(who)):
 		return true
 	# Card #115 separates an earned arrival from a person physically in the yard:
@@ -256,6 +281,7 @@ func _arrived(who: StringName) -> bool:
 		&"smith": return garrison.smith != null
 		&"alchemist": return garrison.alchemist != null
 		&"jewelcrafter": return garrison.jeweller != null
+		&"builder": return garrison.builder != null
 	return false
 
 

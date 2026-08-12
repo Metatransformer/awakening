@@ -1,7 +1,7 @@
 class_name MenuPageTabs
 extends HBoxContainer
-## The tab strip across the top of the four inspection screens — EQUIP,
-## INVENTORY, MAP, GARRISON — and **the only thing that changes page**.
+## The visible tab strip across the four inspection screens — EQUIP, INVENTORY,
+## MAP, GARRISON. Hidden shoulders / Q / R share its page-change seam.
 ##
 ## **Why the four panels share one strip class rather than four headers.** A
 ## tab strip whose active tab is drawn one way on INVENTORY and another way on
@@ -9,15 +9,11 @@ extends HBoxContainer
 ## lit" is four chances to leave one behind when a fifth screen arrives. One
 ## class, one `set_active`, four instances.
 ##
-## **The tabs take focus, and landing on one CHANGES THE PAGE.** Both halves of
-## that are new (card #120) and both are forced by the same removal. This strip
-## used to be `FOCUS_NONE` with an `LB ‹ … › RB` cap at either end, because the
-## SHOULDERS paged and the stick moved inside the page — two jobs on two inputs,
-## and a strip a pad could not reach was the correct shape for that arrangement.
-## The owner asked for the shoulder ring to go (playtest 2026-08-12), and a
-## `FOCUS_NONE` strip with no shoulders behind it is a strip a controller cannot
-## use at all: the MAP panel's only other focusable control is its Back button,
-## so a pad player who paged to MAP could never page off it.
+## **The tabs take focus, and landing on one CHANGES THE PAGE.** Card #120 made
+## them focusable when it misunderstood a request to remove the LB/RB artwork as
+## a request to remove shoulder paging itself. Issue #152 restored the hidden
+## shortcuts without rolling this improvement back: the strip remains the
+## discoverable, clickable route and a controller never gets trapped on MAP.
 ##
 ## So the strip is where paging lives, and the mechanism is the one that costs
 ## the fewest presses once you are on it:
@@ -57,12 +53,6 @@ extends HBoxContainer
 signal picked(screen: int)
 
 const SEP := 6
-## The one line on screen that says the strip is navigable. It replaced the
-## `Q ‹` / `› R` caps that named the shoulder buttons, and it is a caption rather
-## than a glyph pair because what has to be taught is now a ROUTE (get onto the
-## strip, then walk it) and not a button. Dim, at the far end, so it reads as
-## instructions about the row rather than as a fourth tab.
-const NAV_HINT := "↑  ← →  PAGE"
 
 
 var _buttons: Array[Button] = []
@@ -71,7 +61,6 @@ var _screens: Array[int] = []
 ## CURRENT page, but only the current page's panel is visible — so on screen the
 ## lit tab is always this one, and it is where ↑ out of the body has to land.
 var _home: int = -1
-var _hint: Label
 ## True while `focus_home` is putting the cursor back after a page change. The
 ## `focus_entered` that lands is not a new request to page and must not be
 ## re-emitted as one — `PauseMenu._go_page` would ignore it anyway (same screen),
@@ -97,20 +86,13 @@ func setup(pages: Array, active: int) -> void:
 		add_child(b)
 		_buttons.append(b)
 		_screens.append(screen)
-	# ← / → wrap around the three, so the ring the shoulders used to walk is
-	# still a ring — it is just walked with the stick now.
+	# ← / → and the hidden shoulders both wrap around the same ring.
 	MenuUtil.chain_row(_buttons)
 	# ↑ on the strip does nothing. There is nothing above it but the frame's
 	# header, and an unset neighbour hands the move to Godot's spatial search,
 	# which would find whatever the theme happens to put up there next.
 	for b in _buttons:
 		b.focus_neighbor_top = ^"."
-	_hint = Label.new()
-	_hint.name = "NavHint"
-	_hint.text = NAV_HINT
-	UITheme.apply_text_style(_hint, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
-	_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	add_child(_hint)
 	set_active(active)
 
 
@@ -173,7 +155,8 @@ func set_active(screen: int) -> void:
 
 ## THE tab voice: no fill, ever. An idle tab is bare text, the live one is the
 ## same text lit and underlined. `UITheme.tab_box` owns the rule; this only says
-## which of its three states a tab is in.
+## which of its three states a tab is in. Its label stays in the body face: a
+## tab is an interactive control, not a heading.
 ##
 ## The underline is HIGHLIGHT (off-white) rather than gold, and so is the live
 ## tab's label. Gold in this UI is TEXT that carries a VALUE — a price, a count,
@@ -194,7 +177,7 @@ func _paint(b: Button, active: bool) -> void:
 	# move inside the page" and "the arrows change the page" showed the player
 	# nothing at all.
 	b.add_theme_stylebox_override("focus", UITheme.tab_box("focused"))
-	b.add_theme_font_override("font", UITheme.display_font())
+	b.add_theme_font_override("font", UITheme.body_font())
 	b.add_theme_font_size_override("font_size", int(UITheme.TYPE_LABEL_MD["size"]))
 	var idle: Color = UITheme.HIGHLIGHT if active else UITheme.TEXT_DIM
 	b.add_theme_color_override("font_color", idle)

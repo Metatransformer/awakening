@@ -150,9 +150,9 @@ func run(rig) -> void:
 	await _nav_to_button(rig, "Options")
 	await _key(rig, KEY_ENTER, 12)
 	# Options reopens on the tab you left it on, so walk the tab bar back to
-	# AUDIO with the arrow keys before looking for the Music row.
+	# Audio with the arrow keys before looking for the Music row.
 	await _nav_up_to_tabs(rig)
-	await _nav_to_tab(rig, "AUDIO")
+	await _nav_to_tab(rig, "Audio")
 	await _nav_down_to(rig, "row_music")
 	_check("music value survived close + reopen (%.2f)" % Settings.music_volume,
 		Settings.music_volume < 0.6)

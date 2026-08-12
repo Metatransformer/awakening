@@ -102,6 +102,7 @@ const TYPE_SUBTITLE := {"size": 19, "color": ACCENT_DIM, "display": false}
 const TYPE_H1 := {"size": 24, "color": ACCENT, "display": true}
 const TYPE_H2 := {"size": 19, "color": ACCENT, "display": true}
 const TYPE_H3 := {"size": 16, "color": ACCENT_DIM, "display": true}
+const TYPE_CONTROL_PROMINENT := {"size": 19, "color": TEXT, "display": false}
 const TYPE_PARAGRAPH_1 := {"size": 16, "color": TEXT, "display": false}
 const TYPE_PARAGRAPH_2 := {"size": 14, "color": TEXT_DIM, "display": false}
 const TYPE_CAPTION := {"size": 12, "color": TEXT_DIM, "display": false}

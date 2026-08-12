@@ -1,6 +1,6 @@
 class_name Npc
 extends Interactable
-## The five people in the garrison, and the gate they stand around.
+## The six people in the garrison, and the gate they stand around.
 ##
 ## They were boxes with a lantern, on purpose, for as long as the loop was the
 ## thing being built: a stand-in character model that is nearly good is worse
@@ -8,14 +8,13 @@ extends Interactable
 ## of the game. The loop works, so they are people now -- standing behind a
 ## `ShopBooth` full of their own trade, and built two different ways:
 ##
-##   * **All five are authored bodies** (`NpcBody`) -- a dwarf smith, a warrior at
+##   * **Five use authored bodies** (`NpcBody`) -- a dwarf smith, a warrior at
 ##     the quartermaster's stall, the hooded Lanternkeeper who is also the village
 ##     elder, the jewelcrafter and the spectacled alchemist, each modelled as a
 ##     whole dressed figure. They do not go near the suit system.
-##   * **None are built** (`RaceBody`) any more -- the elder was the last, and he
-##     is now the Lanternkeeper. `_build_person` keeps that branch on purpose: it
-##     is the machine that can put somebody new in the yard without commissioning
-##     a model, and it is what the whole monster roster still runs on.
+##   * **The Builder is built** (`RaceBody`) from the imported Vyr and an existing
+##     leather suit. That branch is the machine that can put somebody new in the
+##     yard without commissioning a model, and it is what the monster roster uses.
 ##
 ## **What they DO did not change, either time, and that is the point.** Turn to
 ## face you, light up when addressed, open the right screen: all of it still lives
@@ -29,8 +28,8 @@ extends Interactable
 ## ELDER was appended after those and has now been REMOVED, which is safe for the
 ## same reason and only because it was last: it took the highest value, so every
 ## other role kept its number. Nothing in `scenes/` exports a role -- `Garrison`
-## builds all six by hand -- but the rule stands for the next person.
-enum Role { VENDOR, SMITH, GATE, ALCHEMIST, KEEPER, JEWELLER }
+## builds its roster by hand -- but the rule stands for the next person.
+enum Role { VENDOR, SMITH, GATE, ALCHEMIST, KEEPER, JEWELLER, BUILDER }
 
 const ACTIVITY_WORKING: StringName = &"working"
 const ACTIVITY_BONFIRE: StringName = &"bonfire"
@@ -138,11 +137,10 @@ static var COUNTERS := {
 				"ids": ElderUpgradeDb.UPGRADE_IDS},
 		],
 	},
-	# The fifth counter, and the last one there will be (docs/SCOPE.md §1:
-	# garrison NPCs **5**, "There is no sixth"). Same bill as the
-	# Lanternkeeper's, paid again: one row, one `Catalogue`.
+	# The fifth counter before the raid-loop prototype authorised the Builder
+	# below. Same bill as the Lanternkeeper's: one row, one `Catalogue`.
 	#
-	# `hold` is 0 like the other four. `JewelDb.crafts()` answers true for every
+	# `hold` is 0 like the other counters. `JewelDb.crafts()` answers true for every
 	# rung and false for the four blanks, so the gauge lands on the commits that
 	# eat stones and the blanks stay a tap -- which is the rule `Catalogue.crafts`
 	# exists to state once.
@@ -151,6 +149,13 @@ static var COUNTERS := {
 		"counters": [
 			{"title": "THE SETTING BENCH", "label": "Upgrades", "icon": "upgrade",
 				"mode": TradeScreen.Mode.PROGRESSION, "db": JewelDb},
+		],
+	},
+	Role.BUILDER: {
+		"sign": "BUILDER", "prompt": "TALK", "hold": 0.0,
+		"counters": [
+			{"title": "THE WORKS BOARD", "label": "Defences", "icon": "upgrade",
+				"mode": TradeScreen.Mode.PROGRESSION, "db": BuilderDb},
 		],
 	},
 	# 0.9 s, and the only hold in the world. It is the door OUT of the hub and
@@ -187,12 +192,9 @@ static var COUNTERS := {
 ##    added.** Putting the clothing system anywhere near them seats a garment onto
 ##    a rig it was never fitted to and produces a person wearing another person.
 ##  * **`race`** -- a base from the Valenfeld pack, dressed by the suit system
-##    (`RaceBody.wear`). **No row uses it today**, and it is not dead: it is what
-##    you reach for when a person has to be BUILT out of a race, a suit and a
-##    colour, which is how the Vale's three peoples are cast and how every monster
-##    in the dungeon is made. It is also the only one of the two that can put
-##    somebody new in the yard without commissioning a model, so the next person
-##    to arrive here probably arrives on it.
+##    (`RaceBody.wear`). The Builder uses it: a person BUILT out of a race, a suit
+##    and a colour. It is also how the Vale's three peoples are cast and how the
+##    monster roster is made.
 ##
 ## The casting is not at random on either side. Each body keeps the counter it
 ## would keep, which is why the garrison reads as a place with history in it
@@ -203,7 +205,7 @@ static var COUNTERS := {
 ## elder in relic-jewelled mail who is both the person you report to and the man
 ## who keeps the records.
 ##
-## Heights are load-bearing and come off `NpcBody.PEOPLE`. The hero is 1.65 m,
+## Authored-body heights are load-bearing and come off `NpcBody.PEOPLE`. The hero is 1.65 m,
 ## and the row steps -- smith 1.44, jewelcrafter 1.63, quartermaster 1.72, keeper
 ## 1.74, alchemist 1.82 -- so the smith reads a clear head short of you and the
 ## alchemist a clear head tall, before either says a word.
@@ -219,9 +221,8 @@ static var COUNTERS := {
 ##   * `idle`   -- their resting loop, so the garrison is not six people breathing
 ##     in time. All from the standing family; see `RaceBody.CLIPS`, which is the
 ##     same four clips either kind of body plays.
-##   * `booth`  -- the shop they stand in. **Absent means none.** Every row here
-##     has one now; the elder was the one that left it out, and he is the
-##     Lanternkeeper.
+##   * `booth`  -- the shop they stand in. **Absent means none.** The
+##     Lanternkeeper and Builder both work without one.
 static var LOOKS := {
 	# The dwarf: leather apron, one pauldron, a hammer on the belt and a bare
 	# forearm, at 1.44 m and half again as wide as anyone else in the yard. He is
@@ -284,14 +285,18 @@ static var LOOKS := {
 	# needs no tint: the violet the old Stoneborn row used was standing in for
 	# exactly this and cost a `cut_gemstone` cross-reference to explain.
 	#
-	# `idle4` is hers alone now. There are four clips and five people, so exactly
-	# one pair repeats, and the rule this row set is *repeat the one nobody who
+	# `idle4` is hers alone now. There are four clips and six people, so two pairs
+	# repeat, and the rule this row set is *repeat the one nobody who
 	# LOOKS like you is using* -- the smith and the alchemist are the pair, a
 	# 1.44 m dwarf at the forge and a 1.82 m hooded man at the far side of the
 	# yard. (This clip was shared with the elder until he and the Lanternkeeper
 	# became one person.)
 	Role.JEWELLER: {
 		"model": "jewelcrafter", "idle": &"idle4", "booth": ShopBooth.Kind.STALL,
+	},
+	Role.BUILDER: {
+		"race": "vyr", "suit": "leather", "idle": &"idle9",
+		"tint": Color(1.0, 0.84, 0.68),
 	},
 }
 

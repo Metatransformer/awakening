@@ -28,7 +28,6 @@ var mode: Mode = Mode.SAVE
 var confirm: MenuConfirm = null
 
 var _header_slot: VBoxContainer
-var _hint: Label
 var _list: VBoxContainer
 var _back: Button
 var _slots: Array[MenuSlotRow] = []
@@ -121,10 +120,6 @@ func _build() -> void:
 	col.add_child(footer)
 	var frow := HBoxContainer.new()
 	footer.add_child(frow)
-	_hint = Label.new()
-	UITheme.apply_text_style(_hint, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
-	_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	frow.add_child(_hint)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	frow.add_child(spacer)
@@ -146,9 +141,6 @@ func open_mode(m: Mode) -> void:
 ## a save made a moment ago shows up without the menu being rebuilt.
 func refresh_all() -> void:
 	_rebuild_header()
-	_hint.text = ("↑↓ / D-pad Select    → Erase    E / A Save    Esc / B Back"
-		if mode == Mode.SAVE
-		else "↑↓ / D-pad Select    → Erase    E / A Load    Esc / B Back")
 	for i in _slots.size():
 		var card := _slots[i]
 		card.refresh()
