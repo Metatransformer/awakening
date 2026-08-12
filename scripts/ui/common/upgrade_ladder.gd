@@ -1,5 +1,5 @@
 class_name UpgradeLadder
-extends VBoxContainer
+extends HFlowContainer
 ## The counters' board, drawn as what it actually is: a row per THING, and along
 ## each row the rungs of that thing's ladder with arrows between them.
 ##
@@ -29,6 +29,32 @@ extends VBoxContainer
 ## size. That is deliberate to the point of being the reason this file exists
 ## rather than a `_draw()`: a rung on the smith's board and a stack in your bag
 ## are drawn by one function, so they cannot drift.
+##
+## ## Card #118, and the three things it changed
+##
+## The structure above survived the card and the RENDERING did not. What the
+## owner saw was "a horizontal list with ugly icons, ugly text", and each of the
+## three complaints has an answer here:
+##
+## 1. **Every row has a face.** `UiKit.TRACK` art, 44px, at the head of the row,
+##    from the `icon` token the catalogue's `groups()` puts on it. Not from the
+##    title -- a title is display text and two of the jeweller's rows are the same
+##    object in two places on the body.
+## 2. **The board is not a stack.** This is an `HFlowContainer` of fixed-width
+##    PLATES, so the counter reads as a wall of cards, two abreast at 1280 and one
+##    on a narrow pane, instead of twelve full-width lines. It was a
+##    `VBoxContainer`; that is the whole diff for the layout, because every row
+##    was already its own subtree.
+## 3. **A bought ladder looks bought, from across the room.** Two things carry it,
+##    and they are deliberately both SHAPE rather than both colour:
+##    - the row's face brightens with the row's progress (`_ROW_DIM` -> full),
+##      so a save's column of icons is lit or dark before a word is read;
+##    - **an unclimbed rung is ABSENT, not greyed.** It draws as an empty socket
+##      a third the width of a cell, so a fresh track is a face and two dots and a
+##      finished one is a face and four filled cells. The old board drew every
+##      rung at full size whatever its state, which is why a maxed track and a
+##      fresh one differed by a tick and a dim and by nothing you could see at
+##      arm's length.
 
 ## The cursor landed on a cell. `line` indexes the catalogue's `lines()`, and is
 ## -1 for a rung that is not buyable — an owned one, or one further up the ladder.
@@ -66,6 +92,23 @@ const TICK := "✓"
 ## The row's name column. Fixed, so every chain on the board starts at the same x
 ## and the ladders read as columns of rungs rather than as ragged text.
 const TITLE_W := 132
+## One plate. Fixed and not expanding, which is what makes the flow a GRID: two
+## of these plus the flow separation is 1144 px, and the upgrade board's pane at
+## 1280 is about 1180 -- so a counter lays out two abreast and drops to one when
+## the pane is narrower, with no breakpoint written down anywhere.
+const PLATE_W := 566
+## The row's face. 44 and not the 19 a `VerbRow` gives a glyph: this art is
+## painted objects on the Pal ramp (`UiKit.TRACK`), and at 19px a painted object
+## is the dark smudge that made the first port of the kit look broken.
+const FACE_PX := 44
+## The face of a row with nothing bought on it. Not zero -- an unstarted track is
+## still an offer, and a row with no picture at all would read as broken rather
+## than as untouched.
+const _ROW_DIM := 0.34
+## An unclimbed rung, drawn as the hole where a cell will go. A third of
+## `ItemCell.COMPACT_SIZE` wide, so the row's LENGTH is a picture of how far up
+## the ladder the player is.
+const SOCKET := Vector2(26, 62)
 
 var _cells: Array[Button] = []
 ## Parallel to `_cells`: the catalogue line each reports, or -1.
@@ -85,7 +128,8 @@ var spill_down: Control = null
 
 
 func _init() -> void:
-	add_theme_constant_override("separation", 6)
+	add_theme_constant_override("h_separation", 12)
+	add_theme_constant_override("v_separation", 10)
 
 
 ## Draw the board. `cells` is parallel to the catalogue's `lines()` and supplies
@@ -158,14 +202,40 @@ func row_count() -> int:
 # --- Building ----------------------------------------------------------------
 
 func _add_row(g: Dictionary, cells: Array) -> void:
+	var tracks: Array = g.get("tracks", [])
+
+	# A PLATE, not a line. The tile styleboxes are the same ones the paper doll's
+	# sockets wear, so a row on a board and a slot beside the hero are the same
+	# object at two sizes — see `UITheme.tile_plate`.
+	var plate := PanelContainer.new()
+	plate.add_theme_stylebox_override("panel", UITheme.tile_plate())
+	plate.custom_minimum_size = Vector2(PLATE_W, 0)
+	plate.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(plate)
+
+	var pad := MarginContainer.new()
+	for side in ["left", "right"]:
+		pad.add_theme_constant_override("margin_" + side, 10)
+	for side in ["top", "bottom"]:
+		pad.add_theme_constant_override("margin_" + side, 8)
+	pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plate.add_child(pad)
+
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
-	add_child(row)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pad.add_child(row)
+
+	_add_face(row, g, tracks)
 
 	var title := Label.new()
 	title.theme_type_variation = &"MenuHeading"
 	title.text = String(g.get("title", ""))
-	title.custom_minimum_size = Vector2(TITLE_W, 0)
+	# The face is ADDED to the title column rather than taken out of it: at
+	# 132-44-8 = 80 px "THE BLADE" wrapped to two lines and the row grew a line
+	# taller than its neighbours, which is the ragged edge TITLE_W exists to stop.
+	title.custom_minimum_size = Vector2(TITLE_W - 28, 0)
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	row.add_child(title)
@@ -180,9 +250,35 @@ func _add_row(g: Dictionary, cells: Array) -> void:
 	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(flow)
 
-	var tracks: Array = g.get("tracks", [])
 	for t: Dictionary in tracks:
 		_add_track(flow, t, cells)
+
+
+## The row's face, and how brightly it is lit.
+##
+## Alpha runs `_ROW_DIM` -> 1.0 with the FRACTION of the row's rungs that are
+## bought, counted across all its branches. That fraction and not "has the player
+## bought anything": a chest one rung up and a chest finished are different
+## amounts of owning it, and the card's acceptance test is two saves told apart at
+## a glance without reading a word. A column of faces at four different
+## brightnesses is that picture.
+##
+## A group with no `icon` gets no face and no gap where one would have been — the
+## title simply starts at the plate's edge. That is what keeps a counter playable
+## before its art is baked (`UiKit.track_icon` returns "" for a missing token).
+func _add_face(row: Node, g: Dictionary, tracks: Array) -> void:
+	var path := UiKit.track_icon(String(g.get("icon", "")))
+	if path.is_empty():
+		return
+	var owned := 0
+	var total := 0
+	for t: Dictionary in tracks:
+		owned += mini(int(t.get("owned", 0)), maxi(int(t.get("rungs", 1)), 1))
+		total += maxi(int(t.get("rungs", 1)), 1)
+	var lit: float = float(owned) / float(maxi(total, 1))
+	var face := KitIcon.rect(UiKit.resolve_icon(path), FACE_PX,
+		lerpf(_ROW_DIM, 1.0, lit))
+	row.add_child(face)
 
 
 func _add_track(parent: Node, t: Dictionary, cells: Array) -> void:
@@ -203,6 +299,7 @@ func _add_track(parent: Node, t: Dictionary, cells: Array) -> void:
 	var line: int = int(t.get("line", -1))
 	var owned: int = int(t.get("owned", 0))
 	var rungs: int = maxi(int(t.get("rungs", 1)), 1)
+	var solo := rungs == 1
 	var entry: Dictionary = cells[line] if line >= 0 and line < cells.size() else {}
 
 	for i in rungs:
@@ -216,7 +313,37 @@ func _add_track(parent: Node, t: Dictionary, cells: Array) -> void:
 			# connectors alone, from across the screen, before any cell is read.
 			arrow.modulate = Pal.MOSS if i <= owned else Color(Pal.ASH, 0.7)
 			chain.add_child(arrow)
+		# A rung above the next buyable one is not a cell. See `_socket`.
+		if i > owned or (i == owned and line < 0 and not solo):
+			chain.add_child(_socket())
+			continue
 		chain.add_child(_rung(t, i, owned, rungs, line, entry))
+
+
+## A rung the player has not reached: the HOLE where a cell will go.
+##
+## The old board drew this as a full-size `ItemCell` carrying a numeral, a dim and
+## no price, and that is the single thing card #118 is most about. A four-rung
+## ladder with nothing bought and a four-rung ladder finished were the same
+## SHAPE — four cells wide, four numerals — differing only in a tick and 45% of
+## alpha, so two saves at different progressions photographed identically at arm's
+## length. Absent instead of greyed, the row's own length is the progress bar: a
+## fresh track is a face and three dots, a finished one is a face and four cells.
+##
+## It carries no numeral. The numeral distinguishes rungs of a track you are
+## climbing; on a rung you cannot see yet it is a label for nothing.
+func _socket() -> Control:
+	var hole := Panel.new()
+	hole.custom_minimum_size = SOCKET
+	# BG_DARKER and not a cell fill: a socket is a RECESS, the same darker glass
+	# behind a fainter hairline that `UITheme.well()` sinks the whole board into.
+	hole.add_theme_stylebox_override("panel",
+		UITheme.hud_box(UITheme.BG_DARKER, 2, 2, 2, 2))
+	hole.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hole.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hole.focus_mode = Control.FOCUS_NONE
+	hole.modulate = Color(1, 1, 1, 0.45)
+	return hole
 
 
 ## One rung. Three states and they are three different questions: *done*, *this
@@ -236,6 +363,8 @@ func _rung(t: Dictionary, i: int, owned: int, rungs: int, line: int,
 		if e.is_empty():
 			e = {"label": String(t.get("name", "")), "sub": "", "dim": true}
 	elif i < owned:
+		# Full strength and never dimmed: this is the half of the row that says
+		# what the player HAS, and it is the half two saves are told apart by.
 		e = {"label": NUMERALS[i] if i < NUMERALS.size() else str(i + 1),
 			"sub": TICK, "tint": Pal.MOSS}
 	elif is_next:
@@ -244,10 +373,12 @@ func _rung(t: Dictionary, i: int, owned: int, rungs: int, line: int,
 			"tint": entry.get("tint", Pal.GOLD),
 			"dim": bool(entry.get("dim", false))}
 	else:
-		# Not yet reachable. Dimmed and priced at nothing, because the price of a
-		# rung two above the one you are on is a number that will have changed by
-		# the time you can pay it, and printing it now is a promise the counter
-		# does not keep.
+		# The last rung of a ladder the counter has finished offering — bought out
+		# to the top, or a branch that closed. `_add_track` sends everything ABOVE
+		# the next buyable rung to `_socket` instead, so this arm no longer draws
+		# the "not yet" cells it was written for; what reaches it is a rung that
+		# exists and has no line, and it stays a cell because the row is still
+		# showing you a ladder you own the whole of.
 		e = {"label": NUMERALS[i] if i < NUMERALS.size() else str(i + 1),
 			"sub": "", "tint": Color(Pal.ASH, 0.5), "dim": true}
 

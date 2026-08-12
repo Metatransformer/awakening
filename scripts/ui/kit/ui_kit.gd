@@ -59,6 +59,25 @@ const SLOT := "res://assets/icons/slots/"
 ## Gamepad face/d-pad/trigger glyphs, for a control hint that shows the button
 ## instead of naming it.
 const BUTTON := "res://assets/icons/buttons/"
+## One glyph per UPGRADE TRACK -- the FACE of a row on a counter's board. 256px
+## painted objects snapped to the Pal ramp, baked by
+## `tools/gen_icons/build_track_icons.py`.
+##
+## Painted and not line art, and that is the one thing to get right about this
+## family: an `ACTION` glyph is a letterform beside a word at 19px, and a track
+## icon is the row's identity at 44px with nothing else in the column. Twenty
+## rows drawn at one stroke weight is exactly the "twelve unrelated lines" the
+## ladder was built to stop being.
+const TRACK := "res://assets/icons/tracks/"
+## One glyph per `ItemDb` id, from `tools/gen_icons/build_item_icons.py`, in the
+## same lighting and on the same ramp as TRACK.
+const ITEM := "res://assets/icons/items/"
+## The five armaments are RENDERS OF THE REAL MODELS (`tools/scenes/_iconbake.gd`)
+## and `item_icon` resolves them out of here rather than out of ITEM. A second,
+## prettier sword generated beside them would be two swords that do not match
+## each other, and the HUD would be free to drift from the thing in your hand --
+## which is the whole argument that bake exists to win (STYLEGUIDE §5.2).
+const HUD_ICON := "res://assets/ui/icons/hud/"
 
 
 ## A panel that is ABOUT a thing opens with that thing's face.
@@ -212,6 +231,38 @@ static func _line_icon(family: String, name: String) -> String:
 	push_warning("[UiKit] glyph='%s%s' reason=not in the family; add it to tools/gen_icons/build_ui_icons.py"
 		% [family, name])
 	return ""
+
+
+## The path to an upgrade track's glyph, or "" when that token has no art.
+##
+## The token is the `icon` key a `Catalogue.groups()` row carries, NOT its
+## `title`: a title is display text ("THE BLADE", and the jeweller's two rings
+## title themselves FIRST RING and SECOND RING) and an icon is a file. Keying off
+## the title would make renaming a row a silent art regression.
+##
+## "" and not a placeholder, for the same reason `_line_icon` returns it: a row
+## with no glyph draws its title alone and the counter stays playable, which is
+## what lets a new track land before anyone spends on the art for it.
+static func track_icon(token: String) -> String:
+	if token.is_empty():
+		return ""
+	var path := TRACK + token + ".png"
+	return path if ResourceLoader.exists(path) else ""
+
+
+## The path to an item's glyph, or "" when we have none.
+##
+## The five armaments resolve to the HUD bake and everything else to ITEM. That
+## order is the rule and not an optimisation: see `HUD_ICON`.
+static func item_icon(id: StringName) -> String:
+	var name := String(id)
+	if name.is_empty():
+		return ""
+	var hud := HUD_ICON + name + ".png"
+	if ResourceLoader.exists(hud):
+		return hud
+	var path := ITEM + name + ".png"
+	return path if ResourceLoader.exists(path) else ""
 
 
 ## The path to an equipment-slot's painted art, or "" when we have none.

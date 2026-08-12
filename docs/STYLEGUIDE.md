@@ -689,7 +689,8 @@ tier 3. See Departure 2.
 | World surfaces | 128 × 128 |
 | Props | 64 × 64 |
 | Characters | 256 × 256, one atlas each |
-| UI icons | 16 × 16, hand-authored |
+| HUD glyphs, drawn in code | 16 × 16, hand-authored |
+| Menu and board icons | 256 × 256 on a 64 px grid — §4.7b |
 
 - **Texel density fixed at 32 texels/metre, everywhere.** Mixed density is the
   number one asset-flip signature.
@@ -765,6 +766,60 @@ tier 3. See Departure 2.
 - **No real-time shadows in the dungeon.** Actors get a blob shadow: a 1-bit
   alpha unshaded quad decal, 0.7 m across, scaled by ground proximity.
 - Tri budgets: hero ≤900, standard enemy ≤500, boss ≤2000, chest ≤120, wall ≤32.
+
+### 4.7b Icon families — where they come from, and what makes them one family
+
+The table above used to say "UI icons | 16 × 16, hand-authored" and that was one
+family. There are four now, and the only thing that keeps a board, a bag and a
+paper doll from looking like three games is that **every glyph ends on the same
+four values.** Nothing here is about how a glyph was *made*; it is about what it
+is by the time it is committed.
+
+| Family | Where | What it is |
+|---|---|---|
+| HUD glyphs | drawn in `scripts/ui/kit/` | polygons, in code, no file at all |
+| Armaments | `assets/ui/icons/hud/`, 5 | **renders of the real models**, baked by `tools/scenes/_iconbake.gd` (§5.2) |
+| Upgrade tracks | `assets/icons/tracks/`, 22 | one per TRACK — the face on a board row |
+| Items | `assets/icons/items/`, 28 | one per catalogue id — the face on an `ItemCell` |
+
+**The last two are generated, and that is not a hole in §7.10.** Rule 10 bans
+bought vector icon sets and demands glyphs authored *in the palette*; §5.2
+already argued that quantising a render to four Pal values earns it, and a
+painted source earns it exactly the same way and for the same reason. The
+argument is the ramp, not the brush.
+
+- `tools/gen_icons/falgen.py` — fal.ai `recraft-v3`, then `rembg`, then a trim
+  and a 6% pad. This end is disposable; every one of these could be repainted by
+  hand tomorrow and nothing downstream would notice.
+- `tools/gen_icons/icon_crunch.py` — **the part that matters, and it is not
+  optional.** Down to a 64 px internal grid, alpha thresholded at 0.5 (never
+  blended — a soft edge is a fifth value), luminance cut at `0.16 / 0.38 / 0.66`
+  onto `[VOID, ASH, MOTH, BONE]`, 1 px of VOID dilated around the silhouette,
+  then back up to 256 px nearest so each source pixel is a hard 4 × 4 block.
+  Four colours and clear, checkable: `icon_crunch.py --check <dir>`.
+  It reads the four hexes out of `scripts/ui/style.gd` rather than carrying its
+  own copy, so `Pal` has one owner and a palette edit cannot leave the art
+  behind.
+
+Two things the ramp taught, both of which cost a re-bake to learn:
+
+- **Hue does not survive it.** The ramp keeps luminance and throws colour away,
+  so four gemstones came back as the same grey lump. They are prompted by their
+  **cut** now — oval, emerald-step, round-brilliant, marquise — because a cut is
+  a silhouette and a silhouette is the only thing four values can carry. The
+  matching UI half is that `ItemCell` **kept its tint chip**: the glyph says what
+  KIND of thing this is, the chip says WHICH one.
+- **A thin object is still a scratch** (§5.2's rule, from the other side). Long
+  items are prompted diagonally, corner to corner, which is 1.41× the frame for
+  free; a sword drawn upright loses its blade at 64 px whatever the prompt says.
+
+`assets/icons/slots/` is **not** of this family and never was — 13 smooth RGB
+paper-doll plates in thousands of colours. Do not point `--check` at it, and do
+not "fix" them onto the ramp without deciding that the doll should change too.
+
+The fal key is read from `$FAL_KEY` or `~/.config/awakening/fal_key`. **It is
+never committed**, and no bake is a build step: the PNGs are the asset and the
+generator is how they were got.
 
 ### 4.8 Anti-aliasing — the decision, and why it had never been made
 
@@ -1184,6 +1239,11 @@ rule bans bought vector icon sets and demands glyphs authored *in the palette*,
 and quantising a render to four Pal values with a 1 px VOID dilation is how a
 render earns that. Lettering ("SW", "SH") survives only as the fallback for a
 missing bake — an empty cell would read as "you have no sword", which is a lie.
+
+These five are the only glyphs baked from the models, and `UiKit.item_icon`
+resolves them **before** `assets/icons/items/` so the bag cannot draw a different
+sword from the one in the hand. The other icon families, and the crunch all four
+of them share, are §4.7b.
 
 The rule the bake taught: **thin items do not survive 32 px.** A whole sword is a
 three-pixel scratch, so its icon crops to the guard and pommel rather than
@@ -1795,7 +1855,11 @@ for 2D art anywhere else.
    genre's costume.
 10. **No vector icon sets, emoji, or Font Awesome/Material glyphs.** Every HUD
     glyph is drawn procedurally as polygons or hand-authored at 16×16 in the
-    palette. Also banned here: white-flash-on-hit as the only impact cue, a red
+    palette. The menu and board families (§4.7b) are the sanctioned third way
+    and not an exception to this: a render or a painting becomes a glyph of this
+    game by being cut onto the four Pal values, and `icon_crunch.py --check` is
+    what says whether it has been. An icon that arrives already on the ramp is
+    fine however it was drawn; one that does not is banned however it was drawn. Also banned here: white-flash-on-hit as the only impact cue, a red
     screen vignette at low health, and a two-row heart layout.
 11. **No post-process anti-aliasing. No FXAA, no TAA, ever** (§4.8, measured
     2026-08-11). Both buy a smoother silhouette by blurring the 128 px nearest
@@ -1859,7 +1923,15 @@ for 2D art anywhere else.
   compatibility name) with two layouts: **Trade** is a dual-inventory shop with
   NPC stock on one side, the player's bag on the other and shared item details;
   quartermaster and jewelcrafter **Upgrades**, **Smithing**, **Alchemy** and
-  **Artifacts** use the linear slot/rung progression layout. This is one shared
+  **Artifacts** use the progression layout, which is a wrapping field of PLATES
+  and not a list (card #118). A plate is one track: its face (§4.7b) at the
+  left, lit `0.34 -> 1.0` with the fraction of its rungs bought, then the chain
+  of rungs, with an unreached rung drawn as a narrow empty SOCKET rather than a
+  dimmed copy of a cell. The socket is the load-bearing half — a greyed row says
+  "you cannot afford this", an absence says "there is more ladder here", and
+  only the second one makes a maxed board and a fresh one different SHAPES.
+  Measured by `tools/directors/upgrade_board.gd`: **50.5% of the board's own
+  pixels differ** between a save at rung 0 and one with every ladder climbed. This is one shared
   implementation, not a claim that every service is Trade; and the footlocker
   (`StashScreen`), whose
   refusal moved off the hint line and into a `FooterToast`, so "← STOW
