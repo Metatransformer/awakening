@@ -172,9 +172,9 @@ func _sell(rig) -> bool:
 			% [screen.visible_catalogue_ids])
 		return false
 	if not screen._stock_rows.has(screen._cursor) \
-			or screen._d_name.text != screen.cursor_label():
+			or screen._tip.title.text != screen.cursor_label():
 		print("MVP FAIL Trade did not start on stock detail (cursor=%d stock=%s detail=%s)"
-			% [screen._cursor, stock_ids, screen._d_name.text])
+			% [screen._cursor, stock_ids, screen._tip.title.text])
 		return false
 	await rig.wait_frames(14)
 	await rig.capture(out.path_join("m_02_sell_screen.png"))

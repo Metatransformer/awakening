@@ -49,13 +49,14 @@ extends Control
 ## and `Flow` is still the only thing in the project that changes scenes.
 
 ## Cells across, the pouch's number for the pouch's reason.
-const COLS := 4
+const COLS := ItemGrid.COLS
 ## Cells across on a death, where the haul is drawn as TWO columns: what the
 ## floor kept, and what the document case brought home (docs/GDD.md §3.1). The
-## frame is 878 px of usable width, so 3 + 2 cells at 140 plus separations comes
-## to 736 and fits with room to spare — 4 + 3 does not.
-const LOST_COLS := 3
-const KEPT_COLS := 2
+## frame is 878 px of usable width; at the old 140 px card that bought 3 + 2, and
+## at the square 84 px tile (card #156) it buys 4 + 3 — 4x84 + 3x84 plus their
+## separations is 636.
+const LOST_COLS := 4
+const KEPT_COLS := 3
 ## Cells of loot, before the haul starts running off the panel. Twelve bag slots
 ## is the ceiling the forge sells up to, so this is "all of it" today and a clamp
 ## rather than a scroller on purpose: a run summary you have to page through is a
@@ -171,6 +172,7 @@ func _stacks_of(contents: Dictionary, banked: Dictionary) -> Array[Dictionary]:
 			"count": n,
 			"value": def.value * n,
 			"color": def.tint,
+			"icon": UiKit.item_icon(id),
 			"mark": def.is_component(),
 			# Components banked to the workbench are not money and must not be
 			# priced like money -- the forge never pays gold for one. They get the
@@ -377,9 +379,16 @@ func _build_column(parent: Node, caption_text: String, rows: Array[Dictionary],
 		var r := rows[i]
 		cells.append({
 			"index": i,
-			"label": "%s ×%d" % [String(r["label"]), int(r["count"])],
+			"label": String(r["label"]),
+			# Two numbers about one tile, which is the receipt and nothing else:
+			# how many came back (top-left) and what the pile was worth (top
+			# right). They used to be the name plus one line -- "Grave Wax ×2"
+			# over "40 ◇" -- and on a square tile the ×2 is the first thing an
+			# ellipsis eats.
+			"tag": "×%d" % int(r["count"]),
 			"sub": "BENCH" if bool(r["banked"]) else "%d ◇" % int(r["value"]),
 			"tint": r["color"],
+			"icon": r.get("icon", ""),
 			"mark": bool(r["mark"]),
 		})
 	grid.set_cells(cells)

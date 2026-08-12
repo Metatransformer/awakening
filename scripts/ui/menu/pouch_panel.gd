@@ -83,20 +83,24 @@ const ROPE_HOLD := 0.9
 ## rows then three, where four across was three rows then four. One row shorter
 ## is the point — the whole bag is one glance instead of a scan.
 ##
-## **Five did not fit, and the fifth column was not paid for by shrinking
-## anything.** Measured with the doll still beside the grid: `Grid` 732 px
-## (5 × 140 + 4 × 8), `Bag` 748, plus `Worn` 152 and 16 between made `Left` 916,
-## and the frame came out **1320 px inside a 1280 px viewport** — past the
-## screen, and 100 px past the 1220 `MenuUtil.FRAME_SIZE` the other four screens
-## draw at. A CenterContainer does not save you from a child whose minimum size
-## is bigger than the screen; it clips it, silently, which is how six across got
-## as far as being drawn the first time. The hundred came out of `DOLL_W` and
-## `DETAIL_W`, and `_build` records the re-layout that was tried first and
-## measured worse.
+## **Five used to be a fight and is not one any more.** With the old 140 px card
+## the grid was 732 px, `Bag` 748, plus `Worn` 152 and 16 between made `Left` 916
+## and the frame came out **1320 px inside a 1280 px viewport** — past the screen,
+## silently, because a CenterContainer does not save you from a child whose
+## minimum size is bigger than the screen, it clips it. The hundred px had to be
+## taken off the paper doll and the detail column to make five fit at all.
 ##
-## The cell's 140 px is not a lever. It is what a two-word item name needs
-## without wrapping, and `ItemGrid` owns it for every screen at once.
-const COLS := 5
+## Card #156 made the cell a square 84 px tile, so the same five cells are
+## **452 px**, and it took the detail column off this screen entirely (the hover
+## card says what the cursor is on). Both loans are repaid: `DOLL_W` is back at
+## its comfortable width and there is slack in the row for the first time.
+##
+## The case draws at this width too. It was `Run.CASE_SLOTS` — three cells
+## STRETCHED across the bag's width — which put two cell sizes on one screen and
+## is exactly what the owner was looking at: *"we need the inventory to be 5 per
+## row all rows."* Three tiles in a five-wide grid is three tiles the size of
+## every other tile, with the fourth and fifth positions simply not there.
+const COLS := ItemGrid.COLS
 ## The cell's own numbers moved to `ItemGrid` when every other screen started
 ## drawing the same cell. Aliased here rather than deleted because the WORN
 ## column beside the grid matches the cell's text size on purpose — see the note
@@ -114,27 +118,20 @@ const CELL_NAME_PT := ItemGrid.NAME_PT
 ## because it is a guard against a corrupt number and not a layout constant.
 const MAX_CELLS := 16
 
-## The paper doll's column, and `MenuPaperDoll.MIN_SIZE.x` exactly. The frame grew
-## from 1060 to `MenuUtil.FRAME_SIZE`'s 1220 to make room for this column, and it
-## was 152 -- twenty px of comfort over the doll's own floor -- until card #120
-## needed a fifth cell in the bag. Twenty of the hundred came from here.
-##
-## It is AT the floor now, so the next thing this screen has to find room for
-## cannot come out of the doll: below 132 the compact card's two hand tiles start
-## eliding the item name, which is the only thing on them worth reading.
-const DOLL_W := 132
+## The paper doll's column, and twenty px of comfort over `MenuPaperDoll.MIN_SIZE.x`.
+## The frame grew from 1060 to `MenuUtil.FRAME_SIZE`'s 1220 to make room for this
+## column; card #120 borrowed twenty of it for the fifth bag cell and left the
+## doll AT its floor, where the compact card's two hand tiles start eliding the
+## item name. Card #156's square tiles handed it back.
+const DOLL_W := 152
 
-## The detail column: what the focused cell is, what it is worth, and the way out
-## under it. 340 until card #120, when the other eighty px of the fifth cell came
-## from here.
+## The RIGHT column, which is now the way out and nothing else.
 ##
-## Eighty was affordable because this column is TEXT and the text wraps: every
-## label in `_build_detail` and `_build_rope` is `AUTOWRAP_WORD_SMART`, and the
-## column had ~250 px of unused HEIGHT under the blurb to wrap into (`Right` is
-## the tallest thing on the screen only because it is `EXPAND_FILL`, not because
-## it is full). A blurb one line longer and a breadcrumb that wraps is what the
-## fifth bag cell cost, and the fifth bag cell is the picture the screen is FOR.
-const DETAIL_W := 260
+## It was `DETAIL_W` — a card naming the focused cell, its worth and its blurb,
+## standing full height whatever it had to say. That is the hover card's job now
+## (`ItemTip`), so what is left on this side is the one control on the screen
+## that ENDS something. 260 is what the rope's warning sentence wraps at.
+const RIGHT_W := 260
 
 ## The header's row, so `PauseMenu` can drop the shared tab strip into it. See
 ## the same field on `MenuEquipPanel`.
@@ -163,11 +160,9 @@ var _band_slot: VBoxContainer
 var _stock: GridContainer
 var _stock_empty: Label
 var _back: Button
-var _detail_kind: Label
-var _detail_name: Label
-var _detail_value: Label
-var _detail_blurb: Label
-var _detail_legend: Label
+## The hover card. It replaced five labels in a column on the right — see
+## `RIGHT_W` — and it is fed from `_describe` and from nowhere else.
+var _tip: ItemTip
 var _rope: Button
 var _rope_bar: HoldBar
 var _rope_say: Label
@@ -313,23 +308,33 @@ func _build() -> void:
 	var carried := HBoxContainer.new()
 	carried.name = "Carried"
 	carried.add_theme_constant_override("separation", 16)
+	# The row takes the column's whole height now that the bench is not under it,
+	# so the bag is ONE open well from the case down to the footer -- the field a
+	# bag bought up to sixteen slots grows into, instead of a 342 px box with a
+	# band of nothing beneath it.
+	carried.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left.add_child(carried)
 	_build_doll(carried)
 	_build_grid(carried)
 
-	_build_stock(left)
 
 	var right := VBoxContainer.new()
 	right.name = "Right"
-	right.custom_minimum_size.x = DETAIL_W
+	right.custom_minimum_size.x = RIGHT_W
 	# 8 and not the 12 the other columns use. This is the tallest column on the
 	# is the tallest thing on the screen -- it, not the frame's 604, is what sets
 	# the pouch's height, and at 12 the footer's Back button ran off the bottom
 	# of a 720p viewport. Four px a gap is the whole difference.
 	right.add_theme_constant_override("separation", 8)
 	split.add_child(right)
-	_build_detail(right)
 	_build_rope(right)
+	# **The bench came back up the screen with card #156.** It was moved UNDER the
+	# bag because three cards in this row wanted 948 px of a 776 px budget (see
+	# the note on `Left` above) -- and then the detail column left this side
+	# entirely for the hover card, so the way out is 100 px of a 400 px column and
+	# the bench is a list that fits in what is left. The row that held it is gone,
+	# which is 51 px of height back for the bag.
+	_build_stock(right)
 
 	var footer := PanelContainer.new()
 	footer.add_theme_stylebox_override("panel",
@@ -350,6 +355,11 @@ func _build() -> void:
 	_back.custom_minimum_size.x = 160
 	_back.pressed.connect(func() -> void: back_requested.emit())
 	frow.add_child(_back)
+
+	# LAST, and a child of the panel rather than of the frame: it has to draw over
+	# the bag, the doll and the footer alike, and a card inside the frame would be
+	# clipped by it at the two edges where the placement most often lands.
+	_tip = ItemTip.make(self)
 
 
 ## The figure, and the three things hanging off it. Read-only: see
@@ -417,7 +427,10 @@ func _build_grid(parent: Node) -> void:
 
 	_case_grid = ItemGrid.new()
 	_case_grid.name = "Case"
-	_case_grid.columns = Run.CASE_SLOTS
+	# `COLS`, not `Run.CASE_SLOTS`. The case holds three, and three cells in a
+	# three-wide grid were three cells STRETCHED to the bag's width — a row of
+	# tiles half again the size of the row below it. See `COLS`.
+	_case_grid.columns = COLS
 	_case_grid.cell_focused.connect(_on_case_focused)
 	_case_grid.cell_activated.connect(_on_case_activated)
 	inner.add_child(_case_grid)
@@ -504,45 +517,11 @@ func _cells_of(ids: Array[StringName], counts: Array[int]) -> Array:
 			"label": def.display_name,
 			"sub": "×%d" % counts[i],
 			"tint": def.tint,
+			"icon": UiKit.item_icon(ids[i]),
 			"mark": def.is_component(),
 			"star": Wishlist.is_wishlisted(ids[i]),
 		})
 	return entries
-
-
-func _build_detail(parent: Node) -> void:
-	# The kicker / title / value stack of a `PlateHeader`, by hand: this pane is
-	# rewritten on every cursor move, and a `PlateHeader` is a panel's IDENTITY,
-	# built once. Same call as `MenuEquipPanel._build_detail`.
-	var col := VBoxContainer.new()
-	col.name = "Detail"
-	col.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	col.add_theme_constant_override("separation", 6)
-	parent.add_child(col)
-
-	_detail_kind = Label.new()
-	UITheme.apply_text_style(_detail_kind, UITheme.TYPE_CAPTION, UITheme.ACCENT)
-	col.add_child(_detail_kind)
-
-	_detail_name = Label.new()
-	UITheme.apply_text_style(_detail_name, UITheme.TYPE_H1, UITheme.TEXT)
-	_detail_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	col.add_child(_detail_name)
-
-	_detail_value = Label.new()
-	UITheme.apply_text_style(_detail_value, UITheme.TYPE_LABEL_MD, UITheme.ACCENT)
-	col.add_child(_detail_value)
-
-	_detail_blurb = Label.new()
-	UITheme.apply_text_style(_detail_blurb, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
-	_detail_blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_detail_blurb.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	col.add_child(_detail_blurb)
-
-	_detail_legend = Label.new()
-	UITheme.apply_text_style(_detail_legend, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
-	_detail_legend.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	col.add_child(_detail_legend)
 
 
 ## The way out. The only control on this screen that ENDS something — everything
@@ -742,18 +721,24 @@ func _describe_rope() -> void:
 	# obvious from the button: it costs no slot, and it is deliberately not
 	# bindable (escape_rope.gd — one D-pad press that ends the run is the fumble
 	# the channel exists to prevent).
-	_detail_kind.text = "ALWAYS CARRIED  ·  NOT BINDABLE"
-	_detail_name.text = "Escape Rope"
+	if _tip == null:
+		return
+	_tip.clear()
+	# Anchored to the ROW, not to a cell: the rope is the one thing on this screen
+	# the card describes that is not in a grid, and the placement solver does not
+	# care what kind of Control it is handed.
+	_tip.point_at(_rope)
+	_tip.kicker.text = "ALWAYS CARRIED  ·  NOT BINDABLE"
+	_tip.title.text = "Escape Rope"
 	if not Run.in_dungeon:
-		_detail_value.text = ""
-		_detail_blurb.text = "Cold, and quiet. It only wakes underground."
-		_detail_legend.text = "Nothing to leave."
+		_tip.blurb.text = "Cold, and quiet. It only wakes underground."
+		_tip.say_note("Nothing to leave.", UITheme.TEXT_DIM)
 		return
 	# The CHARGE, not the toll — this is the line that answers "what does leaving
 	# cost", so it has to name the gold that actually goes. When the two differ
 	# the blurb below spells out why, so the smaller number is never a mystery.
-	_detail_value.text = "%d gold" % Run.extract_charge()
-	_detail_blurb.text = "It pulls you home and heals what the dark took. " \
+	_tip.price.text = "%d gold" % Run.extract_charge()
+	_tip.blurb.text = "It pulls you home and heals what the dark took. " \
 		+ "The fee is a quarter of what you are carrying, and the fee is why " \
 		+ "the greedy run is a decision."
 	var warn := _rope_warning()
@@ -761,13 +746,13 @@ func _describe_rope() -> void:
 		# The whole purse is a real price and it earns a whole sentence. It is not
 		# a refusal and never stops the hold, so it reads as a cost being named —
 		# which is what it is.
-		_detail_blurb.text += "  " + warn \
+		_tip.blurb.text += "  " + warn \
 			+ " You will reach the garrison broke, with a bag to sell."
 	# Both halves of the way out, in the order the player meets them: the hold in
 	# here, then the channel out there. They are separate on purpose — one cannot
 	# be fumbled, the other can be interrupted (see `_build_rope`).
-	_detail_legend.text = "Hold %s. Then it takes a moment, and a blow that lands breaks it." \
-		% _hold_glyph()
+	_tip.say_note("Hold %s. Then it takes a moment, and a blow that lands breaks it."
+		% _hold_glyph(), UITheme.TEXT_DIM)
 
 
 ## The fee, live. It is on the row rather than only in the detail pane because
@@ -834,7 +819,10 @@ func _build_stock(parent: Node) -> void:
 	# the bench moved at all. A ninth material still costs a quarter of a row.
 	_stock = GridContainer.new()
 	_stock.name = "BenchGrid"
-	_stock.columns = 4
+	# Two, not the four it had while the bench spanned the whole width under the
+	# bag. `RIGHT_W` is 260 and a component's "Whetstone Grit  ×12" wants half of
+	# that; four columns here would push the column wider than the frame allows.
+	_stock.columns = 2
 	_stock.add_theme_constant_override("h_separation", 14)
 	_stock.add_theme_constant_override("v_separation", 2)
 	col.add_child(_stock)
@@ -1077,40 +1065,49 @@ func _paint_stock() -> void:
 	_stock_empty.visible = not any
 
 
+## What the cursor is on, said on the hover card beside it.
+##
+## The card is anchored to the CELL, which is why this takes the grid as well as
+## the index: `ItemGrid.cell_for` is the only thing that knows which button is
+## reporting a given slot, and a bag laid out over slots has holes in it.
 func _describe(index: int, case_side: bool) -> void:
 	var ids: Array[StringName] = _case_ids if case_side else _cell_ids
 	var counts: Array[int] = _case_counts if case_side else _cell_counts
-	if _detail_name == null or index < 0 or index >= ids.size():
+	var grid_of: ItemGrid = _case_grid if case_side else _grid
+	if _tip == null or index < 0 or index >= ids.size():
 		return
 	var id: StringName = ids[index]
 	# The case's three slots are the bag's first three, so the number the player
 	# reads is continuous across the line even though the cells are two grids.
 	var slot := index + 1 if case_side else index + 1 + Run.CASE_SLOTS
 
+	_tip.clear()
+	_tip.point_at(grid_of.cell_for(index))
+
 	if id == &"":
-		_detail_kind.text = "CASE %d" % slot if case_side else "SLOT %d" % slot
-		_detail_name.text = "Empty"
-		_detail_value.text = ""
+		_tip.kicker.text = "CASE %d" % slot if case_side else "SLOT %d" % slot
+		_tip.title.text = "Empty"
 		if case_side:
-			_detail_blurb.text = "Room in the case. Whatever is in here when you " \
+			_tip.blurb.text = "Room in the case. Whatever is in here when you " \
 				+ "die is what comes home with your body."
-			_detail_legend.text = "Press A on anything below to pack it. " \
-				+ "Relics will not fit."
+			_tip.say_note("Press A on anything below to pack it. " \
+				+ "Relics will not fit.", UITheme.TEXT_DIM)
 		else:
-			_detail_blurb.text = "Room for one more stack. Nothing is refused while " \
+			_tip.blurb.text = "Room for one more stack. Nothing is refused while " \
 				+ "there is a cell like this one."
-			_detail_legend.text = "Walk over a drop to fill it. There is no pick-up button."
+			_tip.say_note("Walk over a drop to fill it. There is no pick-up button.",
+				UITheme.TEXT_DIM)
 		return
 
 	var def := ItemDb.get_def(id)
 	var n: int = counts[index]
 	var part := def.is_component()
-	_detail_kind.text = "%s %d  ·  %s  ·  %s" % [
+	_tip.kicker.text = "%s %d  ·  %s  ·  %s" % [
 		"CASE" if case_side else "SLOT", slot, def.rarity_name().to_upper(),
 		def.bench_name() if part else "INGREDIENT"]
-	_detail_name.text = def.display_name
-	_detail_value.text = "%d ◇  ·  %d per slot" % [def.value * n, def.stack]
-	_detail_blurb.text = "%s  %s" % [def.blurb, Wishlist.usage_sentence(id)]
+	_tip.title.text = def.display_name
+	_tip.price.text = "%d ◇  ·  %d per slot" % [def.value * n, def.stack]
+	_tip.blurb.text = "%s  %s" % [def.blurb, Wishlist.usage_sentence(id)]
 	# WHICH bench, by name. Two counters eat components now and they are at
 	# opposite ends of the yard; a caption that said "the forge" over a Fired
 	# Cullet would send the player to the wrong one.
@@ -1119,5 +1116,5 @@ func _describe(index: int, case_side: bool) -> void:
 		("The vendor buys this. What it is worth is a quarter of what leaving costs.")
 	# The verb, on the end, and phrased as the consequence rather than the key —
 	# what A does here is decide whether this survives you.
-	_detail_legend.text = fate + ("   A takes it out of the case." if case_side
-		else "   A packs it into the case.")
+	_tip.say_note(fate + ("   A takes it out of the case." if case_side
+		else "   A packs it into the case."), UITheme.TEXT_DIM)

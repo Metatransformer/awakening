@@ -37,10 +37,10 @@ extends Control
 ## kind of event — a smaller number came back — and neither can duplicate a
 ## stack or drop one on the floor between two dictionaries.
 
-## Cells across, and the shop's number for the shop's reason: four was measured
-## against this same frame width.
-const COLS := 4
-const DETAIL_W := 340
+## Cells across, and `ItemGrid`'s five for `ItemGrid`'s reason: the locker, the
+## bag and the vendor's board are one picture of a collection, and a locker four
+## wide beside a bag five wide is two. Four was what the old 140 px card allowed
+## against this frame width; the square tile (card #156) allows five with room.
 
 ## Between the two counts on a cell. The stored figure is on the LEFT of the
 ## arrow and the carried figure on the right, which is the same spatial mapping
@@ -64,10 +64,9 @@ var _grid: ItemGrid
 var _band: Control
 var _band_slot: VBoxContainer
 var _empty: Label
-var _d_kind: Label
-var _d_name: Label
-var _d_split: Label
-var _d_blurb: Label
+## The hover card, beside the cell the cursor is on. It replaced a 340 px detail
+## COLUMN standing full height whatever it had to say -- see `ItemTip`.
+var _tip: ItemTip
 var _hint: Label
 var _hold_bar: HoldBar
 ## The refusal, as a `FooterToast`. `_refuse` and `_refuse_why` survive alongside
@@ -167,6 +166,10 @@ func _build() -> void:
 	_build_header(stack)
 	_build_body(stack)
 	_build_footer(stack)
+	# LAST, and a sibling of the frame rather than a child of it: a card inside
+	# the frame is clipped by the board's well the moment the cursor is on an
+	# edge cell. Same call, same reason, as the counters'.
+	_tip = ItemTip.make(self)
 
 
 func _build_header(parent: Node) -> void:
@@ -256,7 +259,7 @@ func _build_body(parent: Node) -> void:
 
 	_grid = ItemGrid.new()
 	_grid.name = "Kinds"
-	_grid.columns = COLS
+	_grid.columns = ItemGrid.COLS
 	_grid.cell_focused.connect(_on_cell_looked)
 	inner.add_child(_grid)
 
@@ -266,46 +269,10 @@ func _build_body(parent: Node) -> void:
 	UITheme.apply_text_style(_empty, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
 	inner.add_child(_empty)
 
-	_build_detail(split)
-
-
-func _build_detail(parent: Node) -> void:
-	var card := PanelContainer.new()
-	card.name = "Detail"
-	UITheme.style_panel(card, UITheme.BG_INSET)
-	card.custom_minimum_size = Vector2(DETAIL_W, 0)
-	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	parent.add_child(card)
-
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 6)
-	card.add_child(col)
-
-	# The kicker/title/number stack of a `PlateHeader`, written by hand because
-	# this one is REWRITTEN on every cursor move — see the same note on
-	# `TradeScreen._build_detail`.
-	_d_kind = Label.new()
-	UITheme.apply_text_style(_d_kind, UITheme.TYPE_CAPTION, UITheme.ACCENT)
-	col.add_child(_d_kind)
-
-	_d_name = Label.new()
-	_d_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	UITheme.apply_text_style(_d_name, UITheme.TYPE_H1, UITheme.TEXT)
-	col.add_child(_d_name)
-
-	# The cell's second line, spelled out in words. The cell has room for "2 ⇄ 3"
-	# and the arrow is learnable, but there is no reason to make the player learn
-	# it when the pane beside the cursor can just say it.
-	_d_split = Label.new()
-	_d_split.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	UITheme.apply_text_style(_d_split, UITheme.TYPE_PARAGRAPH_1, UITheme.ACCENT)
-	col.add_child(_d_split)
-
-	_d_blurb = Label.new()
-	_d_blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_d_blurb.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	UITheme.apply_text_style(_d_blurb, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
-	col.add_child(_d_blurb)
+	# No detail column beside the grid: what the cursor is on is said on a card
+	# that follows it (`ItemTip`), built last in `_build` so it draws over the
+	# frame. The 340 px that column held is the board's now.
+	pass
 
 
 ## The refusal is a `FooterToast` and NOT the hint line recoloured, which is what
@@ -417,6 +384,7 @@ func _refresh() -> void:
 			"sub": "%s%s%s" % [_fig(int(row["stored"])), SWAP,
 				_fig(int(row["carried"]))],
 			"tint": row["color"],
+			"icon": UiKit.item_icon(row["id"]),
 			"mark": bool(row["mark"]),
 		})
 	_grid.set_cells(cells)
@@ -451,23 +419,27 @@ func _on_cell_looked(index: int) -> void:
 
 
 func _describe() -> void:
+	if _tip == null:
+		return
+	_tip.clear()
 	if _rows.is_empty():
-		_d_kind.text = ""
-		_d_name.text = ""
-		_d_split.text = ""
-		_d_blurb.text = ""
+		_tip.hide_tip()
 		UiKit.band_value(_band, &"split", "—")
 		return
 	var row := _rows[_cursor]
+	_tip.point_at(_grid.cell_for(_cursor))
 	UiKit.band_value(_band, &"split", "%s%s%s" % [
 		_fig(int(row["stored"])), SWAP, _fig(int(row["carried"]))])
 	var def := ItemDb.get_def(row["id"])
-	_d_kind.text = "%s  ·  %s" % [def.rarity_name().to_upper(),
+	_tip.kicker.text = "%s  ·  %s" % [def.rarity_name().to_upper(),
 		def.bench_name() if def.is_component() else "INGREDIENT"]
-	_d_name.text = String(row["label"])
-	_d_split.text = "%d on the shelf  ·  %d in the bag" % [
+	_tip.title.text = String(row["label"])
+	# The cell's second line, spelled out in words. The cell has room for "2 ⇄ 3"
+	# and the arrow is learnable, but there is no reason to make the player learn
+	# it when the card beside the cursor can just say it.
+	_tip.price.text = "%d on the shelf  ·  %d in the bag" % [
 		int(row["stored"]), int(row["carried"])]
-	_d_blurb.text = String(row["blurb"])
+	_tip.blurb.text = String(row["blurb"])
 
 
 # --- Input ------------------------------------------------------------------

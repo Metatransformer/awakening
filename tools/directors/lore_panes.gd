@@ -74,7 +74,7 @@ func _keeper_ids() -> Array:
 ## line still counted as drawn. Legible means all the lines exist AND the rect
 ## they are in is on screen.
 func _fits(screen, who: String, expect_clip: bool = false) -> bool:
-	var lb: Label = screen._d_blurb
+	var lb: Label = screen._tip.blurb
 	var total: int = lb.get_line_count()
 	var shown: int = lb.get_visible_line_count()
 	var rect := lb.get_global_rect()
@@ -133,19 +133,19 @@ func _walk(rig, screen, out: String, prefix: String) -> void:
 ## The other direction. Force a paragraph no pane of this size could hold and
 ## require the check to say so — see the header.
 func _calibrate(rig, screen, out: String) -> void:
-	var keep: String = screen._d_blurb.text
+	var keep: String = screen._tip.blurb.text
 	# Forty repeats, not eight. Eight was the first attempt and it FIT — the pane
 	# swallowed all eighteen lines of it — which is a fact worth keeping in the
 	# file: the card this director answers claims a two-line cap, and the widget
 	# holds eighteen lines of nonsense without complaint. The known-bad case has to
 	# be far past that to be known-bad at all.
-	screen._d_blurb.text = ("The Society does not write up an object it has not "
+	screen._tip.blurb.text = ("The Society does not write up an object it has not "
 		+ "seen, and this sentence exists only to be too long for the card it is "
 		+ "in. ").repeat(40)
 	await rig.wait_frames(3)
 	await rig.capture(out.path_join("z_00_calibration.png"))
 	_fits(screen, "calibration", true)
-	screen._d_blurb.text = keep
+	screen._tip.blurb.text = keep
 	await rig.wait_frames(2)
 
 

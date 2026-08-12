@@ -298,6 +298,6 @@ func _focused_on_fletch(screen) -> bool:
 
 
 func _detail_is_current(screen) -> bool:
-	var text := String(screen._d_blurb.text)
+	var text := String(screen._tip.blurb.text)
 	return text.contains("Makes %d arrows per batch" % Fletching.batch()) \
 		and text.contains("Quiver %d / %d" % [Game.arrows, Game.max_arrows])
