@@ -126,7 +126,7 @@ static var BEATS := {
 		}, "pages": [
 			"Our timber stores are running low. Keeping them filled is your duty now.",
 			"Brannoc can make you a woodsman's axe. Take him sixty gold and three pieces of iron scrap.",
-			"The Timber Yard is outside the gate. During daylight, cut one bundle there.",
+			"There is a grove beyond the gate. During daylight, fell one tree there for a bundle.",
 			"Carry it back and stack it at the central hearth before Bonfire Time.",
 		]},
 		# The first time the loop has actually paid out. Gold and not a boss,

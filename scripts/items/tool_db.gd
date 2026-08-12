@@ -9,7 +9,7 @@ const DEFS := {
 	ShopDb.WOODSMAN_AXE_ID: {
 		"display_name": "WOODSMAN'S AXE",
 		"category": "TOOL",
-		"blurb": "Cuts one daily bundle at the exterior Timber Yard.",
+		"blurb": "Fells one tree each day in the outskirts grove.",
 	},
 }
 
