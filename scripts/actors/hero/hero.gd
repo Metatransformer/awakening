@@ -574,6 +574,9 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## the player's eye, and a low crouched idle says it. A proper sit is one word
 ## change here and a re-import; nothing downstream reads the clip's name.
 @export var clip_rest: StringName = &"ss_crouch_idle_01"
+## The full-body lift used by the item-get ceremony. It sits above Rest as a
+## one-shot so the presentation pose wins over every locomotion or held stance.
+@export var clip_item_get: StringName = &"ss_power_up_01"
 ## Seconds the seated pose takes to fold down into and to come up out of.
 ##
 ## Slower than the shield's 0.12 on purpose, and it is the only fade in this file
@@ -928,6 +931,7 @@ const _P_AIM_HOOK := "parameters/HookAim/blend_amount"
 const _P_AIM_BLEND := "parameters/AimLoco/blend_position"
 const _P_BLOCK := "parameters/Block/blend_amount"
 const _P_REST := "parameters/Rest/blend_amount"
+const _P_ITEM_GET := "parameters/ItemGet/request"
 
 ## Every button that means "I am not sitting down any more". Spelled out here
 ## rather than inline in `_tick_meal_cancel` so the list is readable as a list:
@@ -1304,6 +1308,8 @@ func _build_anim_tree() -> void:
 	tree_root.connect_node(&"Rest", 0, prev)
 	tree_root.connect_node(&"Rest", 1, &"RestAnim")
 	prev = &"Rest"
+	prev = _add_oneshot(tree_root, &"ItemGet", prev, _anim_node(clip_item_get),
+		Vector2(2400, 0), 0.08, 0.24)
 
 	tree_root.connect_node(&"output", 0, prev)
 
@@ -2943,6 +2949,12 @@ func request_hookshot(duration: float, aim: Vector3) -> bool:
 ## tell apart. If the two ever need different arms, this one line is the split.
 func request_cast(duration: float, aim: Vector3) -> bool:
 	return request_hookshot(duration, aim)
+
+
+## Raise the acquired item. The ceremony owns rooting and timing; Hero only owns
+## the pose layered over its existing animation output.
+func request_item_get() -> void:
+	_fire(_P_ITEM_GET)
 
 
 ## The half of a shot that is the same for every ranged item: take the hero for

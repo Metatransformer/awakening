@@ -48,17 +48,8 @@ func _ready() -> void:
 
 
 func activate(by: Node3D) -> void:
-	if opened:
+	if not _begin_open():
 		return
-	opened = true
-	enabled = false
-	_rim.visible = false
-
-	var tw := create_tween()
-	if _lid != null:
-		tw.tween_property(_lid, "rotation:x", LID_OPEN, 0.34) \
-			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.parallel().tween_property(_glow, "light_energy", 0.0, 0.5)
 
 	# The arrow roll happens FIRST and always, whether or not it lands, so that
 	# adding or removing it cannot shift the loot rolls below it on a given seed.
@@ -103,15 +94,37 @@ func activate(by: Node3D) -> void:
 			global_position + Vector3.UP * 0.7, ArrowBundle.CHEST_COUNT,
 			_fan(slot, fan) * 1.15)
 
-	# The map keeps the chest and greys it out rather than erasing it. An emptied
-	# chest is still the answer to "have I done this room" -- a room that went
-	# back to blank on the plan is a room the player walks to a second time.
+	_finish_open(by, &"chest", true)
+
+
+## Start the shared one-shot lid reveal. Subclasses supply only their contents.
+func _begin_open() -> bool:
+	if opened:
+		return false
+	opened = true
+	enabled = false
+	_rim.visible = false
+
+	var tw := create_tween()
+	if _lid != null:
+		tw.tween_property(_lid, "rotation:x", LID_OPEN, 0.34) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(_glow, "light_energy", 0.0, 0.5)
+	return true
+
+
+## Complete the common map/bus/interaction contract after contents are paid.
+func _finish_open(by: Node3D, kind: StringName, update_atlas: bool) -> void:
+	# The map keeps an ordinary chest and greys it out rather than erasing it. An
+	# emptied chest is still the answer to "have I done this room" -- a room that
+	# went back to blank on the plan is a room the player walks to a second time.
 	#
 	# By POSITION rather than by cell, because a chest knows where it is standing
 	# and does not know, or need to know, which cell that is. `Bus.chest_opened`
-	# carries only a node name, which is "Chest" in every room on the floor.
-	Atlas.replace_at(global_position, Atlas.M_CHEST, Atlas.M_CHEST_OPEN)
-	Bus.chest_opened.emit(name, &"chest")
+	# carries only a node name, which is "Chest" in every ordinary room.
+	if update_atlas:
+		Atlas.replace_at(global_position, Atlas.M_CHEST, Atlas.M_CHEST_OPEN)
+	Bus.chest_opened.emit(name, kind)
 	activated.emit(by)
 
 

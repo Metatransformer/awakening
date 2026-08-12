@@ -78,6 +78,7 @@ const CUES := {
 	&"player_died": &"game_over",
 	&"target_acquired": &"target_cycle",
 	&"run_started": &"dungeon_enter",
+	&"item_get_started": &"dungeon_complete",
 	# The game saying "no". One refusal noise, shared by everything that refuses
 	# -- `locked_door.gd` reaches for the same `craft_fail` by hand. There used to
 	# be an `extract_refused` row beside this one; the rope cannot refuse any more
@@ -152,6 +153,8 @@ func _ready() -> void:
 	Bus.target_acquired.connect(func(_t: Node3D) -> void:
 		_cue(&"target_acquired"))
 	Bus.run_started.connect(func(_s: int) -> void: _cue(&"run_started"))
+	Bus.item_get_started.connect(func(_item_id: StringName, pos: Vector3) -> void:
+		play_at(CUES[&"item_get_started"], pos))
 	Bus.bag_full.connect(func() -> void: _cue(&"bag_full"))
 	# These two carry a real world position, so they play where they happened
 	# rather than on top of the player.

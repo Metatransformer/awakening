@@ -6,6 +6,8 @@ extends RefCounted
 ##     --director=res://tools/directors/boss_cistern.gd \
 ##     --out=/tmp/boss/x.png --warmup=60
 ##
+## Add `--item-get-only=1` to stop after H when iterating the reward framing.
+##
 ## What it claims, in the order it proves them:
 ##
 ##   A  The table is sound. `BossDb.validate()` returns nothing, and `troll` and
@@ -30,9 +32,11 @@ extends RefCounted
 ##      a frame count here would be a measurement of the machine. And a real
 ##      sword swing inside one of those windows takes health off the boss.
 ##   H  The kill takes exactly the number of swings the row's comment says it
-##      does, and on death: the Bow is GRANTED, the relic `FloorDb` names for
-##      floor 1's boss is PLACED (a mote, into the bag -- not a grant), the seal
-##      drops and the door opens. Photographed.
+##      does, and on death: the Bow is NOT granted, its deterministic oversized
+##      great chest arrives, and the relic `FloorDb` names is separately PLACED
+##      as a mote. Opening the chest through the real prompt grants the Bow and
+##      raises the shared item-get camera, model, text and input block. Both
+##      reward states are photographed before the seal/door result is checked.
 ##   I  Re-entry with the flag set: an open door and an EMPTY arena. GDD §5.1 --
 ##      the game never asks you to re-fight something you have already beaten.
 ##   K  **Floor 2's receptacle** (`docs/BOSSES.md` §6.2, board card 34), which is
@@ -168,6 +172,12 @@ func run(rig) -> void:
 	await _commits(rig, arena, boss)
 	await _windows(rig, arena, boss)
 	await _kill(rig, arena, boss, door)
+	if rig.arg("item-get-only", "") == "1":
+		if _fails == 0:
+			print("BOSS OK -- item-get checks passed")
+		else:
+			print("BOSS FAIL -- %d item-get check(s) failed" % _fails)
+		return
 	await _reentry(rig, arena, door)
 	await _receptacle(rig)
 	# BEFORE `_turns`, and for the reason `_turns` puts the Bellwake last: `douse`
@@ -542,7 +552,64 @@ func _kill(rig, arena: Node, boss: Node, door: Node) -> void:
 		% [start_q, ceili(start_q / 5.0), swings], swings == ceili(start_q / 5.0))
 	_ck("H2 the boss is dead", boss.health.dead)
 	_ck("H3 Bus.boss_defeated fired once (%d)" % _defeated, _defeated == 1)
-	_ck("H4 the %s is granted" % item, Game.has(item))
+	_ck("H4 the %s is not silently granted by the kill" % item, not Game.has(item))
+
+	var great_chest: Node3D = arena.boss_item_chest()
+	_ck("H5 the kill placed one deterministic great chest", great_chest != null)
+	if great_chest != null:
+		_ck("H6 it carries %s, not a loot roll" % item,
+			StringName(great_chest.get(&"item_id")) == item)
+		_ck("H7 it is physically larger than an ordinary chest (x%.2f)"
+			% great_chest.scale.x, great_chest.scale.x > 1.4)
+		# Rebuild the spent arena while the item is still unclaimed. This is the
+		# persistence case the live room cannot prove by itself: the boss flag is
+		# already written, but ownership is still false, so a fresh arena must bring
+		# back the chest without bringing back the fight.
+		var retry := (load("res://scripts/world/boss_arena.gd") as GDScript).new() \
+			as Area3D
+		retry.name = "UnclaimedRewardReentry"
+		retry.set(&"boss_id", &"cistern_warden")
+		retry.set(&"relic_slot", &"")
+		retry.position = Vector3(50.0, 0.0, 0.0)
+		rig.scene().add_child(retry)
+		await rig.wait_frames(3)
+		_ck("H7b an unclaimed great chest returns on re-entry",
+			retry.boss_item_chest() != null)
+		_ck("H7c and the defeated boss does not return with it", retry.boss() == null)
+		retry.queue_free()
+		await rig.wait_frames(3)
+		await rig.wait_seconds(0.9)
+		await _stand_at(rig,
+			great_chest.global_position + great_chest.global_transform.basis.z * 1.2
+				+ Vector3.UP * 0.05,
+			great_chest.global_position)
+		await rig.capture(out.path_join("b_08a_great_chest.png"))
+		var focused := await _until(rig,
+			func() -> bool: return Prompt.focus == great_chest, 120)
+		_ck("H8 the great chest owns the ordinary OPEN prompt", focused)
+		if focused:
+			await rig.tap(["interact"])
+			await rig.wait_seconds(0.65)
+
+		var ceremony: Node = rig.scene().get_tree().get_first_node_in_group(&"item_get")
+		_ck("H9 opening, not killing, grants the %s" % item, Game.has(item))
+		_ck("H10 one item-get ceremony is active", ceremony != null)
+		if ceremony != null:
+			var title := ceremony.find_child("Title", true, false) as Label
+			var display := ceremony.call(&"display_node") as Node3D
+			var ceremony_camera := ceremony.call(&"camera_node") as Camera3D
+			_ck("H11 its title names the Knightly Bow",
+				title != null and title.text.contains("You got the Knightly Bow"))
+			_ck("H12 the Bow is held above the hero",
+				display != null and display.global_position.y > hero.global_position.y + 1.5)
+			_ck("H13 its dedicated camera is current",
+				ceremony_camera != null and ceremony_camera.is_current())
+			_ck("H14 gameplay input is blocked during the ceremony", Prompt.blocked)
+			await rig.capture(out.path_join("b_08b_item_get.png"))
+			await rig.wait_seconds(2.3)
+			ceremony.call(&"dismiss")
+			await rig.wait_frames(5)
+			_ck("H15 dismissal restores gameplay input", not Prompt.blocked)
 
 	# Looked for on the SAME frame as the kill, with no wait in between. The drop
 	# is synchronous inside `_on_died`, and the mote magnetises toward the hero
@@ -554,25 +621,25 @@ func _kill(rig, arena: Node, boss: Node, door: Node) -> void:
 	# where it costs a slot, is charged the extraction fee and dies with the bag.
 	# Granting it would have deleted the decision it exists to create.
 	var mote := _find_mote(rig, relic)
-	_ck("H5 the relic %s is a mote on the floor, not an owned item" % relic,
+	_ck("H16 the relic %s is a separate mote on the floor, not an owned item" % relic,
 		mote != null and not Game.has(relic))
 	if mote != null:
 		# Walked over, the way a player takes it.
 		await _stand_at(rig, mote.global_position + Vector3(0.0, 0.05, 0.0),
 			mote.global_position, false)
 		await rig.wait_seconds(1.6)
-		_ck("H6 and it goes into the BAG (%s)" % [Run.bag],
+		_ck("H17 and it goes into the BAG (%s)" % [Run.bag],
 			int(Run.bag.get(relic, 0)) >= 1)
-		_ck("H6b and never into the item list", not Game.has(relic))
+		_ck("H17b and never into the item list", not Game.has(relic))
 	await rig.wait_seconds(1.0)
 
 	await _until(rig, func() -> bool: return door.is_open(), 400)
-	_ck("H7 the door opened", door.is_open())
-	_ck("H8 the arena is spent", arena.is_spent() and not arena.is_sealed())
+	_ck("H18 the door opened", door.is_open())
+	_ck("H19 the arena is spent", arena.is_spent() and not arena.is_sealed())
 	var seal: Node3D = arena.get_node_or_null(^"Seal")
-	_ck("H9 and the ring went back down (y=%.2f)" % seal.position.y,
+	_ck("H20 and the ring went back down (y=%.2f)" % seal.position.y,
 		seal.position.y < -1.0)
-	_ck("H10 the kill wrote its one-way flag (%s)" % door.flag_id(),
+	_ck("H21 the kill wrote its one-way flag (%s)" % door.flag_id(),
 		Game.flag(door.flag_id()))
 	await _stand_at(rig, door.global_position + Vector3(0.0, 0.05, 3.4),
 		door.global_position)
@@ -625,6 +692,8 @@ func _reentry(rig, arena: Node, door: Node) -> void:
 	_ck("I4 the room does not seal itself again", not arena2.is_sealed())
 	_ck("I5 there is nothing standing in it",
 		arena2.get_node_or_null(^"Boss") == null)
+	_ck("I6 and the claimed boss-item chest does not respawn",
+		arena2.boss_item_chest() == null)
 	await rig.capture(out.path_join("b_09_reentry.png"))
 
 	# --- J. The relic you died carrying ---------------------------------------
