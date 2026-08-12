@@ -34,6 +34,7 @@ extends RefCounted
 ## what ships, so the rest are judged against it rather than against each other.
 const CLIPS: Array[StringName] = [
 	&"ss_run_01",      # WAS the run blend point; kept here as the reference
+	&"ss_run_02",      # second authored sword-and-shield run, supplied with 01
 	&"ex_running",     # in use: the run blend point, decided on this sheet
 	&"ex_fast_run",    # in use: the sprint blend point, here for the cadence
 ]
