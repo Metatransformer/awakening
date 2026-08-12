@@ -626,7 +626,8 @@ func _shoot_counter(rig, who: Node3D, stand: Vector3, name: String) -> void:
 		await rig.wait_frames(2)
 	await rig.tap(["interact"])
 	# Through the conversation the press now opens (`Npc.activate`, 2026-08-10).
-	await rig.talk("Trade")
+	var service := "Smithing" if name == "fg_04_reforge.png" else "Upgrades"
+	await rig.talk(service)
 	await rig.wait_frames(18)
 	var screen := _screen(rig)
 	if screen == null:

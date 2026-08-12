@@ -18,12 +18,12 @@ extends RefCounted
 ##      in it, the hero's is opposite, and the line arrives a character at a time.
 ##   C  The button that opened it is the button that drives it: fill the line,
 ##      then ask the question.
-##   D  Trade opens the same `TradeScreen` it always did.
+##   D  Smithing opens the smith's `TradeScreen` in the progression layout.
 ##   E  Leave says goodbye -- out loud where there is a recording, in text where
 ##      there is not -- and hands the world back.
 ##   F  The world is HELD while a box is up: no walking off mid-sentence, and
 ##      nothing else can take the interact button.
-##   G  **One typeface across the option list.** `Trade` used to render in Cinzel
+##   G  **One typeface across the option list.** `Smithing` used to render in Cinzel
 ##      at 19 and `Leave` in the sans at 16, which is the kit's primary promotion
 ##      doing exactly what it is for on a screen it is wrong for.
 ##   H  **The tree.** A topic is asked, answered, and the same list comes back;
@@ -47,7 +47,7 @@ func run(rig) -> void:
 	await _open(rig)
 	await _options(rig)
 	await _faces(rig)
-	await _trade(rig)
+	await _smithing(rig)
 	await _leave(rig)
 	await _gallery(rig)
 
@@ -266,11 +266,11 @@ func _tree(rig) -> void:
 	var labels: PackedStringArray = box.choice_labels()
 	print("DIALOGUE elder options %s" % [labels])
 	_ck("J1 the briefing unlocked topics to ask about (%s)" % [labels],
-		labels.size() > 2 and labels[0] == "Trade"
+		labels.size() > 2 and labels[0] == "Artifacts"
 			and labels[labels.size() - 1] == "Leave")
 	await rig.capture(out.path_join("d_12_topics.png"))
 
-	# Walk to the first topic -- index 1, straight under Trade -- and ask it.
+	# Walk to the first topic -- index 1, straight under Artifacts -- and ask it.
 	await rig.tap(["ui_down"])
 	await rig.wait_frames(2)
 	var asked := labels[1] if labels.size() > 1 else ""
@@ -361,17 +361,37 @@ func _options(rig) -> void:
 	_ck("C1 the second press asks the question", box.is_choosing())
 	var labels: PackedStringArray = box.choice_labels()
 	print("DIALOGUE options %s" % [labels])
-	# Trade first and Leave last, with whatever he will answer questions about in
+	# Smithing first and Leave last, with whatever he will answer questions about in
 	# between. Asserted by the ENDS rather than by the whole list: the middle grows
 	# as `StoryDb.TOPICS` does, and a check that pinned the exact list would fail
 	# every time somebody wrote him a new question.
-	_ck("C2 Trade first, Leave last (%s)" % [labels],
-		labels.size() >= 2 and labels[0] == "Trade"
+	_ck("C2 Smithing first, Leave last (%s)" % [labels],
+		labels.size() >= 2 and labels[0] == "Smithing"
 			and labels[labels.size() - 1] == "Leave")
+
+	# Read the live option data, not the rendered row. The service/topic/exit
+	# distinction is icon, chevron and meta while every label keeps one typeface.
+	var garrison := rig.scene() as Garrison
+	var options: Array = garrison.smith._options(&"smith", garrison.smith._row())
+	var service_ok := false
+	var topic_ok := false
+	var leave_ok := false
+	for option: Dictionary in options:
+		if String(option.get("label", "")) == "Smithing":
+			service_ok = option.get("icon", null) != null \
+				and bool(option.get("submenu", false))
+		elif String(option.get("meta", "")) == "Dialogue":
+			topic_ok = option.get("icon", null) != null \
+				and not bool(option.get("submenu", false))
+		elif String(option.get("label", "")) == "Leave":
+			leave_ok = not bool(option.get("submenu", false))
+	_ck("C2a Smithing has an action icon and opens a submenu", service_ok)
+	_ck("C2b a topic is marked Dialogue without a submenu", topic_ok)
+	_ck("C2c Leave is not a submenu", leave_ok)
 	await rig.capture(out.path_join("d_04_options.png"))
 
 	# The stick walks the list and wraps, so a player never dead-ends on it. It
-	# also has to come back to 0, because `_trade` below takes whatever the cursor
+	# also has to come back to 0, because `_smithing` below takes whatever the cursor
 	# is on -- one press per row, whatever the row count is today.
 	await rig.tap(["ui_down"])
 	await rig.wait_frames(2)
@@ -383,7 +403,7 @@ func _options(rig) -> void:
 
 
 # --- G. One typeface -----------------------------------------------------------
-## `Trade` rendered in Cinzel at 19 and `Leave` in Alegreya Sans at 16, because
+## `Smithing` rendered in Cinzel at 19 and `Leave` in Alegreya Sans at 16, because
 ## `VerbRow` promotes the first row of a panel to the display face. That is the
 ## kit's rule and it is right on a shop menu; on a list of things one person can
 ## say it reads as two different kinds of object. `DialogueBox._ask` turns it off,
@@ -407,18 +427,20 @@ func _faces(rig) -> void:
 		faces.size() > 0 and not faces[0].begins_with("Cinzel"))
 
 
-# --- D. Trade ------------------------------------------------------------------
+# --- D. Smithing ---------------------------------------------------------------
 
-func _trade(rig) -> void:
+func _smithing(rig) -> void:
 	var box: Node = rig.dialogue()
 	if box == null or not box.is_choosing():
 		_ck("D0 the options are up", false)
 		return
 	await rig.tap(["interact"])
 	var opened: bool = await rig.until(func() -> bool: return _screen(rig) != null, 3.0)
-	_ck("D0 Trade opens the counter", opened)
-	_ck("D1 and it is the smith's, unchanged",
-		_screen(rig) != null and _screen(rig).catalogue == ShopDb)
+	_ck("D0 Smithing opens the counter", opened)
+	_ck("D1 and it is the smith's progression service",
+		_screen(rig) != null and _screen(rig).mode == TradeScreen.Mode.PROGRESSION
+			and _screen(rig).catalogue == ShopDb
+			and _screen(rig).service_label == "Smithing")
 	# The box goes with the press. Two windows describing the same person, one
 	# behind the other, is the failure this checks for.
 	_ck("D2 and the conversation gets out of its way", rig.dialogue() == null)

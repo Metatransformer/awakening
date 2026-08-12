@@ -497,8 +497,8 @@ func _counter(rig) -> void:
 		func() -> bool: return Prompt.focus == garrison.keeper, 120)
 	_ck("G0 she owns the interact button", focused)
 	await rig.tap(["interact"])
-	# The Far Lantern is behind the Trade option now (`Npc.activate`, 2026-08-10).
-	_ck("G0b the Lanternkeeper offers to trade", await rig.talk("Trade"))
+	# The Far Lantern is behind the Artifacts option now (`Npc.activate`, 2026-08-10).
+	_ck("G0b the Lanternkeeper offers Artifacts", await rig.talk("Artifacts"))
 	await rig.wait_frames(16)
 
 	var screen := _screen(rig)

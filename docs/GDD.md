@@ -608,12 +608,16 @@ dozen coloured stones, which is the Society's whole pitch worn on a body. He doe
 not buy and he does not sell: you
 hand him a relic and something in the garrison changes. Mechanically he is a
 `Catalogue` subclass and a row in `Npc.COUNTERS`, exactly like the smith and the
-alchemist, driven by the same `TradeScreen` — a donation is a transaction whose
-price is **one relic and the cost of making it work again** (§6.4). There is no
-fourth screen.
+alchemist. His **Artifacts** service uses the shared NPC service screen's linear
+progression layout: a donation costs **one relic and the cost of making it work
+again** (§6.4). This is the same implementation class, not Trade and not another
+screen.
 
-The vendor buys, the smith forges, the alchemist brews, the Lanternkeeper
-records. Four counters, and that is the garrison.
+The quartermaster offers **Trade** for repeatable stock and bag selling, plus
+**Upgrades** for bag slots and heart containers. The smith offers **Smithing**,
+the alchemist **Alchemy**, the Lanternkeeper **Artifacts**, and the jewelcrafter
+**Upgrades**. Five staffed counters, six named services, and one shared service
+screen class with two layouts: the two-sided Trade shop and linear progression.
 
 ### 6.1 The rule that keeps this small
 
@@ -693,20 +697,21 @@ changes, and the rule that generates it needs no table of its own:
 
 **The home is the sign-post; the Lanternkeeper is the till.** The description
 sends you to the smith because the smith is what changes, but the money and the
-hold are hers, on the board that already lists all twelve — the same screen, the
-same RECORD, one more column filled in. This is deliberate and it is §6.1: a
-repair that had to be paid for at three different counters would put a fourth
-kind of line on the vendor's, the smith's and the alchemist's catalogues, each
+hold belong to **Artifacts**, in the linear presentation that already lists all
+twelve — the same RECORD, one more state filled in. This is deliberate. Under
+§6.1, a repair that had to be paid for at three different counters would put a
+fourth kind of line on the vendor's, the smith's and the alchemist's catalogues, each
 with its own refusal, which is three systems bought to avoid one walk across the
-yard. §6 already promised there is no fourth screen; three fourth *lines* is the
-same promise broken in instalments.
+yard. §6 already promises one shared service-screen class; three special repair
+branches would break that promise in instalments.
 
 This is not an extra system bolted onto the donation; it is the donation losing
 its special case. Pillar 4 says permanence is *bought or given, in the garrison,
 over a counter, after you got home*, and a relic that worked the moment you
 touched it was the one thing in the design quietly breaking that. Now the
-Lanternkeeper prices a repair the way the smith prices a rung, and all four
-counters are the same transaction.
+Lanternkeeper prices a repair in Artifacts the way the smith prices a rung in
+Smithing. They share the linear progression presentation, not a Trade
+transaction.
 
 It also sharpens §2 one more turn. A broken relic is worth **nothing** until you
 pay for it, and it still costs a bag slot and still pays the fee on the way out.
@@ -733,7 +738,8 @@ answered, it is why `docs/SCOPE.md` can keep Quests at 0, and it is a
 
 Three workings, and the number three is load-bearing. What each one *answers* is
 `docs/ITEMS.md` §1. **All three are built** — Burst off the Slag Ogre, Sustain
-and Ballast off the two Verses read at the alchemist's counter — and they are
+and Ballast off the two Verses read by the alchemist when committed through the
+Lanternkeeper's **Artifacts** service — and they are
 three rows in `ArmamentDb` and three of the six entries in `Game.RIGHT_POOL`,
 which is the whole of what "a working is a usable item" was ever allowed to cost
 (`docs/ITEMS.md` §8, D5, closed 2026-08-11).
@@ -748,7 +754,7 @@ which is the whole of what "a working is a usable item" was ever allowed to cost
 RT like the bow, selected with D-pad ← →. Nothing about the input layer changes.
 
 **Charges are arrows**, and as of card #98 (2026-08-11) they are sold beside
-them: **the quartermaster's stores** (`docs/METAGAME.md` §6.4's table). This
+them in the quartermaster's **Trade** stock (`docs/METAGAME.md` §6.4's table). This
 paragraph said "the alchemist" and it was wrong twice over. A charge is not
 brewed out of anything the floor drops — the sentence that made the case for it
 was already on his own catalogue file — and he does not stand in the yard until a
@@ -906,9 +912,9 @@ fourth piece.
 #### The jewelcrafter — four slots, eight specializations
 
 A fifth counter, and the only new NPC this game gets. She is a `Catalogue`
-subclass and a row in `Npc.COUNTERS`, on the same `TradeScreen` as the other
-four (`docs/SCOPE.md` §1 keeps **new UI screens at 0**, and this does not break
-it).
+subclass and a row in `Npc.COUNTERS`. Her **Upgrades** service uses the shared
+NPC service screen's linear progression layout (`docs/SCOPE.md` §1 keeps **new
+UI screens at 0**, and this does not break it).
 
 Four slots: **an amulet, two rings, and a bracelet.** Each is bought as a plain
 base, then specialized once, then climbed **four rungs** — one deeper than a

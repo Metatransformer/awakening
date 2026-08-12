@@ -227,10 +227,10 @@ func _elder(rig) -> void:
 
 	# **Both at once**, which no row did before the merge: the greeting plays AND
 	# the counter is offered, off one press. Since 2026-08-10 the counter is behind
-	# the Trade option rather than the press itself (`Npc.activate`) -- the greeting
+	# the Artifacts option rather than the press itself (`Npc.activate`) -- the greeting
 	# is unchanged, and this is still the check that the one press reaches both.
-	_ck("C6 and the Far Lantern is on the other side of it", await rig.talk("Trade"))
-	_ck("C6b which is the same trade screen", _screen(rig) != null)
+	_ck("C6 and Artifacts is on the other side of it", await rig.talk("Artifacts"))
+	_ck("C6b which opens the shared service screen", _screen(rig) != null)
 
 	var screen := _screen(rig)
 	if screen != null:
@@ -294,7 +294,7 @@ func _counter(rig) -> void:
 	# reason: it is the press that has to have made her speak.
 	_ck("D2 she greets you as you address her (%s)" % Voice.line(),
 		Voice.line() == "i_have_just_the_right_amulet_for_you")
-	_ck("D0b and offers the bench", await rig.talk("Trade"))
+	_ck("D0b and offers Upgrades", await rig.talk("Upgrades"))
 	await rig.wait_frames(12)
 	var screen := _screen(rig)
 	if screen == null:

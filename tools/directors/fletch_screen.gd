@@ -77,8 +77,8 @@ func _pouch(rig) -> void:
 
 
 func _smith(rig) -> void:
-	var screen := TradeScreen.open(rig.scene(), TradeScreen.Mode.BUY,
-		"THE FORGE", ShopDb)
+	var screen := TradeScreen.open(rig.scene(), TradeScreen.Mode.PROGRESSION,
+		"THE FORGE", ShopDb, &"smith", "Smithing")
 	await rig.wait_frames(16)
 
 	var line := _catalogue_line(ShopDb.FLETCH)

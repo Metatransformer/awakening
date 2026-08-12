@@ -158,6 +158,8 @@ var _caret: Label
 ## `choices` is an Array of Dictionaries:
 ##   label : String    what the option says. Directors find an option by this.
 ##   meta  : String    the right-hand column -- the counter's name, a cost.
+##   icon  : Variant   action glyph forwarded to `UiKit.verb_row`.
+##   submenu: bool     chevron for choices that open a non-dialogue screen.
 ##   act   : Callable  run when it is picked. **Returns the pages to say next**
 ##                     (a `PackedStringArray`), or nothing to end the conversation.
 ##   keep  : bool      put the SAME options back up once those pages are read,
@@ -413,6 +415,8 @@ func _ask() -> void:
 		var row := UiKit.verb_row(_choice_box, {
 			"label": String(c.get("label", "")),
 			"meta": String(c.get("meta", "")),
+			"icon": c.get("icon", null),
+			"submenu": bool(c.get("submenu", false)),
 			# **No primary, deliberately, and this is the one place in the game
 			# that turns the kit's promotion off.** `VerbRow` puts a primary row in
 			# the display face at 19 and everything else in the sans at 16, which

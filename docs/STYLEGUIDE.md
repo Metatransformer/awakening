@@ -111,14 +111,13 @@ Cinzel is an inscriptional capitals face; its lowercase is a small-cap. Do not
 set it below ~14px, where the flared serifs close up — that is the floor the
 `TYPE_*` table already respects.
 
-**One exception, and it is the dialogue option list.** `VerbRow` promotes the
-first row of a panel to the display face (`primary`), which is right on a shop
-menu where one row is the verb and the rest are exits. It is wrong in a
-`DialogueBox`: those rows are all things ONE PERSON can say, and `TRADE` in
-Cinzel over `Leave` in the body face reads as two different kinds of object
-rather than as two answers (owner's call, 2026-08-10). `DialogueBox._ask` passes
-`primary: false` for every row and the lit edge stays the only cursor. If you add
-a new list of things a character says, it goes in one face too.
+**One exception, and it is the dialogue option list.** `DialogueBox` contains
+two genuinely different kinds of choice and must show the difference. A
+service or menu entry is navigation: give it the service icon and a chevron. A
+dialogue topic remains a dialogue/read choice, without service chrome. Do not
+flatten both kinds into identical Trade/Leave rows, and do not promote a topic
+merely because it is first. If you add a new list of things a character says,
+its topics stay in one face.
 
 Retired in the same change, and not to be re-added without a reason written at
 `UITheme.BODY_TTF`: **Alegreya** (the variable serif that was the display face —
@@ -1806,9 +1805,14 @@ for 2D art anywhere else.
 
   On the kit: the paper doll and its slot tiles; the pause menu's ROOT
   screen (plate header, a live stat band, and `VerbRow`s with a meta column,
-  replacing eight identical full-width buttons); and all five counters, which
-  are one screen — the quartermaster, the smith, the alchemist, the setting bench
-  and the Far Lantern (`TradeScreen`); and the footlocker (`StashScreen`), whose
+  replacing eight identical full-width buttons); and all five staffed counters,
+  which share one NPC service screen class (`TradeScreen` remains the internal
+  compatibility name) with two layouts: **Trade** is a dual-inventory shop with
+  NPC stock on one side, the player's bag on the other and shared item details;
+  quartermaster and jewelcrafter **Upgrades**, **Smithing**, **Alchemy** and
+  **Artifacts** use the linear slot/rung progression layout. This is one shared
+  implementation, not a claim that every service is Trade; and the footlocker
+  (`StashScreen`), whose
   refusal moved off the hint line and into a `FooterToast`, so "← STOW
   RETRIEVE →" no longer vanishes at the moment a refused transfer has the player
   hunting for it; the Items screen (`EquipPanel`), whose three columns are

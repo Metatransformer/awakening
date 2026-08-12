@@ -1,8 +1,9 @@
 class_name SupplyDb
 extends Catalogue
-## What the quartermaster STOCKS: everything you carry more of.
+## What the quartermaster offers across her two services: repeatable stock in
+## Trade, and permanent bag/heart progression under Upgrades.
 ##
-## **Six rows now, and four of them are the stores** (card #98, 2026-08-11).
+## **Six rows now, and four of them are Trade stock** (card #98, 2026-08-11).
 ## Arrows, Burst charges, food and drink are the expendables -- the things you buy
 ## in the yard, take down, and come back without. Two of the four arrived from
 ## other counters and two are new, and the sentence that admits all four is the
@@ -29,15 +30,13 @@ extends Catalogue
 ## intact and finds the ladders exactly where it left them, behind a different
 ## face.
 ##
-## A `Catalogue`, so this cost one file and one row in `Npc.COUNTERS` -- see
-## `Catalogue` for why a counter is never a second screen. It is the FIFTH
-## catalogue and the first that shares a keeper with another counter: Kessa has
-## two, a SELL screen for the bag and this, and `Npc._options` offers both.
+## A `Catalogue`, so both services share the same rows and purchase authority.
+## `STOCK_IDS` and `UPGRADE_IDS` below are the single partition: the TradeScreen
+## decides how to arrange them, but never decides which offering belongs where.
 ##
-## Everything here is PERMANENT and lives on `Game`. Nothing here eats components,
-## so `Catalogue.crafts` is false for every row and the whole board is a tap --
-## which is right, and is the difference between this counter and the forge: a
-## bag slot is bought with money you can go and earn again.
+## Every transaction is gold-only and lives on `Game`: stock fills a carried
+## vessel, while the two upgrade rows permanently raise a limit. Nothing eats
+## components, so `Catalogue.crafts` is false and every purchase is a tap.
 
 ## Purchases you can only make so many times, and how many. The bag's ceiling is
 ## read by `MenuPouchPanel` (it sizes the grid to the biggest bag that can exist),
@@ -46,6 +45,14 @@ const LIMITS := {
 	&"bag_slot": 4,
 	&"heart": 3,
 }
+
+## The repeatable expendables shown on the quartermaster's two-sided Trade board.
+const STOCK_IDS: Array[StringName] = [
+	&"arrows", &"charges", &"hardtack", &"small_beer",
+]
+
+## The permanent linear ladders shown by her separate Upgrades service.
+const UPGRADE_IDS: Array[StringName] = [&"bag_slot", &"heart"]
 
 ## Lines that DO NOT EXIST until the player owns the thing they are about.
 ##
@@ -99,16 +106,8 @@ static func lines() -> Array[Dictionary]:
 	return shown
 
 
-## Three GROUPS, and two of them are ladders. BAG SLOT is four purchases at rising
-## prices and HEART CONTAINER is three; drawn flat, a player two from the end of
-## either had no way to see it. The expendables have no ceiling, so they share one
-## row of the plain named cells a repeatable gets.
-##
-## **STORES is the row that grew** (card #98). It holds everything you take down
-## and come back without: arrows, Burst charges, and the two rations. Grouping
-## them under one title rather than giving each a row of its own is the whole
-## claim the move makes -- a quartermaster issues expendables, and which bar or
-## which hand a given one feeds is the cell's business, not the counter's.
+## The Upgrades service is two linear ladders. Trade consumes the same catalogue
+## lines through `STOCK_IDS` and draws them as ordinary stock cells instead.
 static func groups() -> Array[Dictionary]:
 	var rows: Array[Dictionary] = lines()
 	var at := {}
@@ -116,17 +115,6 @@ static func groups() -> Array[Dictionary]:
 		at[rows[i]["id"]] = i
 
 	var out: Array[Dictionary] = []
-	var stores: Array = []
-	# In `_board()` order rather than in `at` order: a Dictionary's iteration
-	# order is its insertion order and that is a coincidence to lean on, whereas
-	# the board is a written list. Arrows, charges, food, drink.
-	for id in [&"arrows", &"charges", &"hardtack", &"small_beer"]:
-		var i: int = at.get(id, -1)
-		if i >= 0:
-			stores.append({"name": String(rows[i]["label"]), "line": i,
-				"owned": 0, "rungs": 1})
-	if not stores.is_empty():
-		out.append({"title": "STORES", "tracks": stores})
 	out.append({"title": "THE BAG", "tracks": [
 		_track(at, &"bag_slot", "", int(LIMITS[&"bag_slot"]))]})
 	out.append({"title": "HEARTS", "tracks": [

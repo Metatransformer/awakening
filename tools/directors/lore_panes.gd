@@ -154,8 +154,8 @@ func _calibrate(rig, screen, out: String) -> void:
 ## and each is given its own `voice` so the refusal footer is the one that counter
 ## would really print rather than the Lanternkeeper's borrowed for all three.
 func _counter(rig, mode: int, title: String, db: GDScript,
-		voice: StringName) -> TradeScreen:
-	var screen := TradeScreen.open(rig.scene(), mode, title, db, voice)
+		voice: StringName, service: String) -> TradeScreen:
+	var screen := TradeScreen.open(rig.scene(), mode, title, db, voice, service)
 	await rig.wait_frames(12)
 	return screen
 
@@ -167,8 +167,8 @@ func run(rig) -> void:
 	# 1. Her board cold: nothing recovered, so every row prints `_unwritten`
 	#    rather than lore. It is the state the counter spends most of a first run
 	#    in and it goes through the same Label, so it is checked the same way.
-	var keeper: TradeScreen = await _counter(rig, TradeScreen.Mode.BUY,
-		"THE FAR LANTERN", RelicDb, &"keeper")
+	var keeper: TradeScreen = await _counter(rig, TradeScreen.Mode.PROGRESSION,
+		"THE FAR LANTERN", RelicDb, &"keeper", "Artifacts")
 	await _walk(rig, keeper, out, "a_cold")
 	await _calibrate(rig, keeper, out)
 	keeper.close()
@@ -180,16 +180,16 @@ func run(rig) -> void:
 	#    longest paragraph in the game underneath them.
 	for id in _keeper_ids():
 		Game.set_flag(RelicDb.flag_held(id))
-	keeper = await _counter(rig, TradeScreen.Mode.BUY, "THE FAR LANTERN", RelicDb,
-		&"keeper")
+	keeper = await _counter(rig, TradeScreen.Mode.PROGRESSION, "THE FAR LANTERN",
+		RelicDb, &"keeper", "Artifacts")
 	await _walk(rig, keeper, out, "b_lore")
 	keeper.close()
 	await rig.wait_frames(6)
 
 	# 3. The smith. His blurbs are `blurb + "   " + detail` (`_build_buy_rows`),
 	#    so they are the same shape as hers and the pane cannot tell them apart.
-	var smith: TradeScreen = await _counter(rig, TradeScreen.Mode.BUY,
-		"THE FORGE", ShopDb, &"smith")
+	var smith: TradeScreen = await _counter(rig, TradeScreen.Mode.PROGRESSION,
+		"THE FORGE", ShopDb, &"smith", "Smithing")
 	await _walk(rig, smith, out, "c_forge")
 	smith.close()
 	await rig.wait_frames(6)
@@ -201,8 +201,8 @@ func run(rig) -> void:
 	#    card, taking room off exactly the widget this card is about.
 	for id in _keeper_ids():
 		Game.set_flag(RelicDb.flag_donated(id))
-	var alch: TradeScreen = await _counter(rig, TradeScreen.Mode.BUY,
-		"THE ALCHEMIST", AlchemyDb, &"alchemist")
+	var alch: TradeScreen = await _counter(rig, TradeScreen.Mode.PROGRESSION,
+		"THE ALCHEMIST", AlchemyDb, &"alchemist", "Alchemy")
 	await _walk(rig, alch, out, "d_alchemist")
 	alch.close()
 	await rig.wait_frames(4)

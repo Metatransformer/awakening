@@ -46,17 +46,16 @@ enum Role { VENDOR, SMITH, GATE, ALCHEMIST, KEEPER, JEWELLER }
 ##   * `prompt` -- the verb. TALK, not SELL/FORGE: the verb on a person should be
 ##     the thing you do to a person, and the sign already says which one this is.
 ##   * `hold`   -- seconds on the button, 0 to fire on press. See `Prompt`.
-##   * `counters`-- what this person will open, IN ORDER, one row per screen.
-##     Absent or empty for somebody who stands behind nothing. `db` null means
-##     SELL (the screen reads the bag, not a catalogue).
+##   * `counters`-- what this person will open, IN ORDER, one row per service.
+##     Each carries its exact player-facing `label` and action-icon `icon` name;
+##     these distinguish a service screen from the dialogue topics beside it.
 ##   * `voice`  -- their key in `Voice.LINES`, or absent for the ones nobody has
 ##     recorded. `activate` says their `hello` and the screen says the other two;
-##     a speaker with no take for a cue is silent and that is not an error, so
-##     the Lanternkeeper simply has no row here and no branch anywhere.
+##     a speaker with no take for a cue is silent and that is not an error.
 ##
 ## **`counters` is a LIST and was a single `counter` until 2026-08-11.** The
-## quartermaster is the reason: she buys what you bring up AND issues the stores
-## (`SupplyDb`, card #91), which is two screens behind one person. A list costs
+## quartermaster is the reason: Trade combines what she stocks and what you bring
+## up, while Upgrades carries her permanent ladders. A list costs
 ## one loop in `_options` and nothing anywhere else -- the alternative, a second
 ## `Npc` standing inside the first one, is the thing this file exists to avoid.
 ##
@@ -67,32 +66,34 @@ enum Role { VENDOR, SMITH, GATE, ALCHEMIST, KEEPER, JEWELLER }
 ## another class, and neither is a constant expression to the parser. Static, so
 ## the table is still built once for the whole game rather than per shopkeeper.
 static var COUNTERS := {
-	# **The only person in the yard with two counters.** She buys -- that is what
-	# she says about herself, "Kessa. I buy." -- and she also issues the stores: a
-	# bag slot, a heart container, ten arrows (`SupplyDb`). Those three were the
+	# **The only person in the yard with two services.** Trade is the conventional
+	# two-sided stock/bag window; Upgrades holds the bag and heart ladders. Those
+	# offerings were the
 	# SMITH's until card #91 held him back behind the floor 1 miniboss, at which
 	# point the first hour of the game had no counter that sold them.
 	#
-	# Two rows and not one screen with a mode switch: selling reads the bag and
-	# buying reads a catalogue, and `TradeScreen` is deliberately built not to know
-	# which counter it is standing at.
 	Role.VENDOR: {
 		"sign": "QUARTERMASTER", "prompt": "TALK", "hold": 0.0, "voice": &"quartermaster",
 		"counters": [
-			{"title": "QUARTERMASTER", "mode": TradeScreen.Mode.SELL, "db": null},
-			{"title": "THE STORES", "mode": TradeScreen.Mode.BUY, "db": SupplyDb},
+			{"title": "QUARTERMASTER", "label": "Trade", "icon": "trade",
+				"mode": TradeScreen.Mode.TRADE, "db": SupplyDb, "ids": SupplyDb.STOCK_IDS},
+			{"title": "QUARTERMASTER", "label": "Upgrades", "icon": "upgrade",
+				"mode": TradeScreen.Mode.PROGRESSION, "db": SupplyDb,
+				"ids": SupplyDb.UPGRADE_IDS},
 		],
 	},
 	Role.SMITH: {
 		"sign": "SMITH", "prompt": "TALK", "hold": 0.0, "voice": &"smith",
 		"counters": [
-			{"title": "THE FORGE", "mode": TradeScreen.Mode.BUY, "db": ShopDb},
+			{"title": "THE FORGE", "label": "Smithing", "icon": "forge",
+				"mode": TradeScreen.Mode.PROGRESSION, "db": ShopDb},
 		],
 	},
 	Role.ALCHEMIST: {
 		"sign": "ALCHEMIST", "prompt": "TALK", "hold": 0.0, "voice": &"alchemist",
 		"counters": [
-			{"title": "THE ALCHEMIST", "mode": TradeScreen.Mode.BUY, "db": AlchemyDb},
+			{"title": "THE ALCHEMIST", "label": "Alchemy", "icon": "crafting",
+				"mode": TradeScreen.Mode.PROGRESSION, "db": AlchemyDb},
 		],
 	},
 	# The fourth counter. She cost exactly this row and a `Catalogue` subclass --
@@ -126,7 +127,8 @@ static var COUNTERS := {
 	Role.KEEPER: {
 		"sign": "LANTERNKEEPER", "prompt": "TALK", "hold": 0.0, "voice": &"elder",
 		"counters": [
-			{"title": "THE FAR LANTERN", "mode": TradeScreen.Mode.BUY, "db": RelicDb},
+			{"title": "THE FAR LANTERN", "label": "Artifacts", "icon": "relic",
+				"mode": TradeScreen.Mode.PROGRESSION, "db": RelicDb},
 		],
 	},
 	# The fifth counter, and the last one there will be (docs/SCOPE.md §1:
@@ -140,7 +142,8 @@ static var COUNTERS := {
 	Role.JEWELLER: {
 		"sign": "JEWELCRAFTER", "prompt": "TALK", "hold": 0.0, "voice": &"jewelcrafter",
 		"counters": [
-			{"title": "THE SETTING BENCH", "mode": TradeScreen.Mode.BUY, "db": JewelDb},
+			{"title": "THE SETTING BENCH", "label": "Upgrades", "icon": "upgrade",
+				"mode": TradeScreen.Mode.PROGRESSION, "db": JewelDb},
 		],
 	},
 	# 0.9 s, and the only hold in the world. It is the door OUT of the hub and
@@ -405,7 +408,7 @@ func _counters(row: Dictionary) -> Array:
 ##
 ## Three kinds of row and they are in the order a player wants them:
 ##
-##   1. **Trade**, one row per counter this person keeps -- the thing you walked
+##   1. **Services**, one row per counter this person keeps -- the thing you walked
 ##      over here for. Absent for anybody with none (there is nobody today; the
 ##      elder was the last, `COUNTERS`), which still leaves a box you can say
 ##      goodbye to rather than only walk away from.
@@ -416,11 +419,9 @@ func _counters(row: Dictionary) -> Array:
 ##      told you Deryn's name.
 ##   3. **Leave**, always last.
 ##
-## **A person with two counters gets two rows, and the SECOND one is named after
-## the counter rather than called Trade.** Two rows both saying Trade would put
-## the whole of the distinction in the meta column, which is the dim right-hand
-## half of the row; the quartermaster's list reads `Trade / The Stores / Leave`
-## and the player can see what the second press does without reading twice.
+## Service rows carry a distinct action glyph and a chevron because they leave
+## dialogue for a full-screen service. Topics carry READ plus a Dialogue meta;
+## Leave carries its own exit glyph. The labels stay in one body typeface.
 ##
 ## They are all one typeface -- `DialogueBox._ask` turns the kit's primary
 ## promotion off, and says why.
@@ -429,21 +430,22 @@ func _options(who: StringName, row: Dictionary) -> Array:
 	var counters := _counters(row)
 	for i in counters.size():
 		var counter: Dictionary = counters[i]
-		var name := _titled(str(counter.get("title", "")))
 		out.append({
-			"label": "Trade" if i == 0 else name,
-			# The counter's own name in the meta column, so picking Trade at the
-			# Lanternkeeper is visibly not the same act as picking it at the smith.
-			"meta": name,
+			"label": String(counter.get("label", "")),
+			"icon": UiKit.action_icon(String(counter.get("icon", ""))),
+			"submenu": true,
 			"act": _choose_trade.bind(who, counters, i),
 		})
 	for topic: Dictionary in StoryDb.topics(who):
 		out.append({
 			"label": String(topic.get("label", "")),
+			"icon": UiKit.action_icon("read"),
+			"meta": "Dialogue",
 			"keep": true,
 			"act": func() -> PackedStringArray: return StoryDb.pages_of(topic),
 		})
-	out.append({"label": "Leave", "act": _choose_leave.bind(who)})
+	out.append({"label": "Leave", "icon": UiKit.action_icon("leave"),
+		"act": _choose_leave.bind(who)})
 	return out
 
 
@@ -456,8 +458,11 @@ func _choose_trade(who: StringName, counters: Array, i: int) -> PackedStringArra
 	if i < 0 or i >= counters.size():
 		return PackedStringArray()
 	var counter: Dictionary = counters[i]
+	var ids: Array[StringName] = []
+	for id: StringName in counter.get("ids", []):
+		ids.append(id)
 	TradeScreen.open(self, int(counter["mode"]), str(counter["title"]),
-		counter["db"] as GDScript, who)
+		counter["db"] as GDScript, who, str(counter.get("label", "")), ids)
 	return PackedStringArray()
 
 
@@ -466,18 +471,6 @@ func _choose_trade(who: StringName, counters: Array, i: int) -> PackedStringArra
 ## two doors out of the same conversation.
 func _choose_leave(who: StringName) -> PackedStringArray:
 	return DialogueDb.speak(who, &"farewell")
-
-
-## "THE FORGE" -> "The Forge". `COUNTERS` writes these in caps, which is right
-## over a shop front and shouting in a meta column. Godot's own `capitalize()`
-## cannot do it -- it inserts a space before every interior capital, so "THE
-## FORGE" comes back as "T H E   F O R G E". Same four lines as
-## `TradeScreen._counter_name`, and for the same reason.
-func _titled(caps: String) -> String:
-	var words: Array[String] = []
-	for word in caps.strip_edges().to_lower().split(" ", false):
-		words.append(word.substr(0, 1).to_upper() + word.substr(1))
-	return " ".join(words)
 
 
 func on_focus(on: bool) -> void:

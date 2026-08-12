@@ -62,8 +62,8 @@ func _counter_stands_the_hud_down(rig, out: String) -> int:
 	# Her own catalogue, so the board that appears is the one the carded frame
 	# was of. Opened directly rather than walked to: `relic_donate.gd` owns
 	# whether she can be reached, and this is a question about layering.
-	var screen := TradeScreen.open(rig.scene(), TradeScreen.Mode.BUY,
-		"THE FAR LANTERN", RelicDb, &"keeper")
+	var screen := TradeScreen.open(rig.scene(), TradeScreen.Mode.PROGRESSION,
+		"THE FAR LANTERN", RelicDb, &"keeper", "Artifacts")
 	await rig.wait_frames(12)
 	await rig.capture(out.path_join("g_11_counter.png"))
 

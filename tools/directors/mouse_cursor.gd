@@ -72,10 +72,10 @@ func run(rig) -> void:
 	await rig.wait_frames(10)
 	_ck("B2 the box gave the pointer back", _captured())
 
-	# --- C. The shop, reached through the conversation. THE STACK ------------
+	# --- C. Smithing, reached through the conversation. THE STACK -------------
 	await rig.tap(["interact"])
-	if not await rig.talk("Trade"):
-		print("CURSOR FAIL the smith would not offer to trade")
+	if not await rig.talk("Smithing"):
+		print("CURSOR FAIL the smith would not offer Smithing")
 		return
 	await rig.wait_frames(16)
 	var screen := _screen(rig)

@@ -129,9 +129,10 @@ starting kit in M1 and its forge ladder left the smith's board with it —
 `ShopDb.GATED_BY` puts `string` behind owning it and `SupplyDb.GATED_BY` does the
 same for the `arrows` stock line, because a ladder for a weapon you have not found
 is a spoiler and a dead row (the note above that table, `shop_db.gd`). **Two
-tables and not one since card #91**: arrows, bag slots and hearts moved from the
-forge to the quartermaster's stores when the smith went behind the floor 1
-miniboss. The sieve is the same sieve — it just runs on two boards now.
+tables and not one since card #91**: arrows moved from Smithing into the
+quartermaster's **Trade** stock, while bag slots and hearts moved into her
+**Upgrades**, when the smith went behind the floor 1 miniboss. The sieve is the
+same sieve — it just runs across the two services now.
 
 **Changes.** It converts the whole of floor 2 into a temple about itself
 (`docs/PUZZLES.md` §1's diagonal), and it opens floor 1's shortcut —
@@ -235,8 +236,9 @@ because you can feel the window running out.
 Ballast are **not puzzle verbs**, because neither manipulates a room.
 
 **Enters** as **the Sustain-Verse**, a relic found in the Foundry vault and
-**read** at the alchemist's counter rather than repaired (GDD §6.2, relic 6;
-§6.4). The relic exists: `RelicDb.RELICS` places it at floor 2's vault
+**read** by the alchemist when committed through the Lanternkeeper's
+**Artifacts** service rather than repaired (GDD §6.2, relic 6; §6.4). The relic
+exists: `RelicDb.RELICS` places it at floor 2's vault
 (`scripts/items/relic_db.gd:~192`) and `RelicDb.WORKING_RELICS` maps it to the
 working (`relic_db.gd:~351`). It is the only class of item in the game that
 arrives as one shelf and leaves as another.
@@ -259,9 +261,9 @@ for the same reason the thief cannot reach it (GDD §3.1).
 
 **Answers** no body and no lock, for the same reason as Sustain.
 
-**Enters** as **the Ballast-Verse**, the Choir's deep chest, read at the same
-counter (GDD §6.2, relic 7). Placed at `relic_db.gd:~207` and mapped by
-`RelicDb.WORKING_RELICS`.
+**Enters** as **the Ballast-Verse**, the Choir's deep chest, read through the
+same Artifacts route (GDD §6.2, relic 7). Placed at `relic_db.gd:~207` and
+mapped by `RelicDb.WORKING_RELICS`.
 
 **Changes** what the bag is. It is the sharpest form of §2 in the game: the
 thing you came down for is the thing that keeps you alive, and casting it is
@@ -383,8 +385,8 @@ twelve times would be a second copy of that with a way to disagree. Likewise
 `is_verse()` is derived from `WORKING_RELICS` rather than authored — the table
 naming which relic teaches which working already **is** the list of Verses.
 
-**The home is the sign-post, not the till.** The transaction is the
-Lanternkeeper's, and GDD §6.4 now says so outright. Paying at the home counter
+**The home is the sign-post, not the till.** The **Artifacts** interaction is the
+Lanternkeeper's, and GDD §6.4 says so outright. Paying at the home counter
 would mean a fourth kind of line — with its own refusal — on the vendor's, the
 smith's and the alchemist's catalogues, which is three systems bought to save one
 walk across the yard.
@@ -520,8 +522,8 @@ can never grind one into another.
 | Stock | Lives on | Enters | The decision it creates |
 |---|---|---|---|
 | **Arrows** | `Game.arrows` | Three sources, no fourth — including Brannoc's forge recipe (`ShopDb.FLETCH`; `docs/METAGAME.md` §4.6) | Fletching gives Flint and Bone a town use and runs the right way round: it **frees** slots (`Fletching.RECIPE` and `Fletching.batch()`, `scripts/items/fletching.gd:~38`, `:~64`) |
-| **Charges** | `Game.charges` | Bought from the **quartermaster's stores** once the Burst is owned (`SupplyDb._board()`, `scripts/items/supply_db.gd`), never refilled below except the one `ChargeCache` on floor 2 (D13) | How deep you were planning to go |
-| **Rations** | `Game.rations` | Bought from the quartermaster's stores, five at a time, twenty to a stack (`RationDb`, `scripts/items/ration_db.gd`) | Whether the room is quiet enough to sit down for twelve seconds |
+| **Charges** | `Game.charges` | Bought from the quartermaster's **Trade** stock once the Burst is owned (`SupplyDb._board()`, `scripts/items/supply_db.gd`), never refilled below except the one `ChargeCache` on floor 2 (D13) | How deep you were planning to go |
+| **Rations** | `Game.rations` | Bought from the quartermaster's **Trade** stock, five at a time, twenty to a stack (`RationDb`, `scripts/items/ration_db.gd`) | Whether the room is quiet enough to sit down for twelve seconds |
 | **Bottles** | `Game.bottle_contents` | Blown at the alchemist, capped by a relic (`RelicDb.bottle_cap()`, `relic_db.gd:~889`, read by `AlchemyDb.remaining()`) | The fourth bottle is an event, not a purchase |
 | **Draughts** | in a bottle | Brewed — three, and only three (`PotionDb.IDS`, `scripts/items/potion_db.gd:~23`) | Which of the smith's three numbers you want for 45 seconds |
 | **Small keys** | `Game.small_keys` | The T0 atom (`PuzzleAtoms.ATOMS[SMALL_KEY]`, `scripts/props/puzzle_atoms.gd:~111`) | Which door, when there is more than one |

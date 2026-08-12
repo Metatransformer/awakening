@@ -18,7 +18,7 @@ extends RefCounted
 ##   A  **The null case**, first and deliberately first. Nothing is eating, so
 ##      `meal_progress()` is 0 and there is NO `meal_gauge` in the HUD's layout.
 ##      See below for why this beat is the one that makes the rest mean anything.
-##   B  The counter. Both rations are in the quartermaster's STORES, they cost
+##   B  The counter. Both rations are in the quartermaster's Trade stock, they cost
 ##      gold and no materials, a purchase puts `K.RATION_BATCH` in the pack, and
 ##      a full pack refuses by naming the pack.
 ##   C  The wheel. A ration binds to a kit slot, the ring steps onto it, and
@@ -127,8 +127,7 @@ func _counter(rig) -> void:
 		func() -> bool: return Prompt.focus == garrison.vendor, 120)
 	_ck("B1 she owns the interact button", focused)
 	await rig.tap(["interact"])
-	# Her SECOND counter. "Trade" is the SELL screen -- see `mvp_loop._buy`.
-	_ck("B2 she offers the stores", await rig.talk("The Stores"))
+	_ck("B2 she offers Trade", await rig.talk("Trade"))
 	await rig.wait_frames(16)
 
 	var screen := _screen(rig)
@@ -136,15 +135,13 @@ func _counter(rig) -> void:
 		_ck("B3 her counter opened", false)
 		return
 	_ck("B3 her counter opened", true)
+	_ck("B4 it is the two-sided Trade service",
+		screen.mode == TradeScreen.Mode.TRADE and screen.catalogue == SupplyDb
+			and screen._stock_grid != null and screen._bag_grid != null)
 
-	# Both of them, in one row with the arrows and the charges. The row is the
-	# claim (`SupplyDb.groups`): a quartermaster issues expendables, and which bar
-	# a given one feeds is the cell's business.
-	var titles: Array = []
-	for g in SupplyDb.groups():
-		titles.append(String(g["title"]))
-	_ck("B4 there is a STORES row to draw them in (%s)" % [titles],
-		titles.has("STORES"))
+	for id: StringName in RationDb.IDS:
+		_ck("B4a %s belongs to the Trade stock subset" % id,
+			SupplyDb.STOCK_IDS.has(id))
 
 	for id: StringName in RationDb.IDS:
 		var row := _row(screen, id)

@@ -3,9 +3,10 @@ extends Control
 ## The vendor, the smith, the alchemist, the jewelcrafter and the Lanternkeeper,
 ## which are the same screen pointed in five directions.
 ##
-## SELL reads the bag. BUY reads a CATALOGUE, handed in at `open()` -- `ShopDb`
-## for the smith, `AlchemyDb` for the alchemist, `JewelDb` for the jewelcrafter --
-## and they are interchangeable because they expose the same catalogue contract.
+## TRADE is the quartermaster's conventional two-sided window: her repeatable
+## stock beside the player's bag. PROGRESSION reads a catalogue handed in at
+## `open()` -- `ShopDb` for Smithing, `AlchemyDb` for Alchemy, `JewelDb` for
+## Upgrades -- and they are interchangeable because they expose the same contract.
 ## Nothing below this line
 ## asks which counter it is standing at, and that is the whole reason there is one
 ## screen: the recipe column, the per-token affordability colouring and the
@@ -23,18 +24,15 @@ extends Control
 ## The two sides arrange that cell differently, because they are two different
 ## shapes of thing:
 ##
-##  * **SELL** is an `ItemGrid` -- four across, one cell per stack. A stack you
-##    own has no rungs; it is just a thing with a price on it.
-##  * **BUY** is an `UpgradeLadder` -- a row per thing the counter sells, with
-##    that thing's rungs along it and arrows between them. Every counter here
-##    sells ladders and the flat board could not say so: it showed the rung you
+##  * **TRADE** is two `ItemGrid`s -- stock and bag -- sharing one detail pane.
+##  * **PROGRESSION** is an `UpgradeLadder` -- a row per thing the service offers, with
+##    that thing's rungs along it and arrows between them. Progression services
+##    sell ladders and the flat board could not say so: it showed the rung you
 ##    could buy next and nothing else, so the smith's eight armour lines read as
 ##    eight unrelated purchases instead of four pieces with two answers each.
 ##
-## Not two screens and not a branch anywhere below `_build_body` and `_move`:
-## the cursor, the prices, the recipe column, the affordability colouring, the
-## refusal footer and the hold all run over `_rows` and neither arrangement can
-## see them.
+## The cursor, prices, recipe column, affordability colouring, refusal footer and
+## hold all run over `_rows`; the two layouts only arrange those shared rows.
 ##
 ## The frame, the header and the footer are the game's ONE menu look -- since the
 ## Gallery Vellum port that is `UITheme` and `UiKit`, and a shop that did not use
@@ -48,30 +46,30 @@ extends Control
 ## in kit tokens now (`UITheme._style_shared_cells`) so the bag cell looks the same
 ## in the pouch and at the counter, which is the promise `ItemCell`'s header makes.
 ##
-## One board, one cursor, one number that moves. The player is answering "what is
-## this worth" over and over, so the price is the only thing that is ever GOLD and
-## the purse is the only thing that animates.
+## One cursor and one shared detail pane across every board. The player is
+## answering "what is this worth" over and over, so the price is the only thing
+## that is ever GOLD and the purse is the only thing that animates.
 
-enum Mode { SELL, BUY }
+enum Mode { TRADE, PROGRESSION }
 
 const ROLL_TIME := 0.25
-## Cells across. Four is the pouch's, and the pouch's was measured against this
-## same frame width -- see the note on `MenuPouchPanel.COLS`.
-const COLS := 4
+## Two columns per side keep full-size cells readable in the 1280x720 trade frame.
+const TRADE_COLS := 2
 ## The detail column, in the same pixels the pouch's is.
 const DETAIL_W := 340
 
-var mode: Mode = Mode.SELL
-var title: String = "VENDOR"
-## The catalogue behind a BUY screen: the ShopDb, AlchemyDb, JewelDb or RelicDb
-## script itself, so its statics can be called through it. **Through the handle,
-## never bare** -- a static call written inside `Catalogue` binds to `Catalogue`
-## at parse time and the subclass's override never runs (CLAUDE.md §3). Unused by
-## SELL, which reads `Run.bag`.
+var mode: Mode = Mode.PROGRESSION
+var title: String = "THE FORGE"
+var service_label: String = "Smithing"
+## The catalogue behind either service. Trade uses its visible stock rows for
+## purchases and the live bag for sales; progression uses its ladder groups.
 var catalogue: GDScript = null
+## Empty means every catalogue row. Service definitions use this to give one
+## catalogue more than one player-facing surface without duplicating its rows.
+var visible_catalogue_ids: Array[StringName] = []
 
-## One entry per cell, in grid order. Kinds: &"item" and &"all" on the SELL side,
-## &"buy" on the other. Rebuilt whole after every transaction rather than mutated:
+## One entry per selectable cell. Trade interleaves &"buy" stock with &"item" and
+## &"all" bag rows; progression contains &"buy" rows. Rebuilt after each transaction:
 ## a sold-out stack has to leave the board, and a cursor pointing at a row that no
 ## longer exists is the classic shop-screen crash.
 var _rows: Array[Dictionary] = []
@@ -80,14 +78,19 @@ var _shown_gold: float = 0.0
 var _refuse: float = -1.0
 var _closing: bool = false
 
-var _grid: ItemGrid
+var _stock_grid: ItemGrid
+var _bag_grid: ItemGrid
 var _ladder: UpgradeLadder
 var _scroll: ScrollContainer
-## The buyable lines in BOARD order. On the SELL side that is just 0..n-1; on a
-## BUY counter the ladder's rows are not in `lines()` order (the smith's groups
+var _stock_scroll: ScrollContainer
+var _bag_scroll: ScrollContainer
+## The selectable lines in visual order. A progression ladder's rows are not in
+## `lines()` order (the smith's groups
 ## put the shield between the blade and the armour), and the cursor has to walk
 ## what the player can see.
 var _order: Array[int] = []
+var _stock_rows: Array[int] = []
+var _bag_rows: Array[int] = []
 ## The `StatBand` and the slot it is rebuilt into. The purse inside it rolls, so
 ## it is written per frame through `UiKit.band_value` rather than rebuilt — see
 ## `StatBand.set_value`.
@@ -95,6 +98,8 @@ var _header: Control
 var _band: Control
 var _band_slot: VBoxContainer
 var _empty: Label
+var _stock_empty: Label
+var _bag_empty: Label
 var _d_kind: Label
 var _d_name: Label
 var _d_price: Label
@@ -108,7 +113,7 @@ var _hold_bar: HoldBar
 var _toast: Control
 var _toast_slot: VBoxContainer
 ## The catalogue line the toast is about, so `_refresh` can re-ask whether it is
-## still true. Empty on the SELL side, which has nothing to re-ask.
+## still true. Empty while the selected row is a bag sale.
 var _refuse_line: Dictionary = {}
 
 
@@ -126,10 +131,12 @@ var speaker: StringName = &""
 
 ## The screen makes its own CanvasLayer. A Control parented to a Node3D never
 ## draws, and every caller here is a prop standing in a 3D garrison.
-## `db` is the catalogue for a BUY screen and defaults to the smith's, which is
-## what every existing caller meant.
-static func open(host: Node, screen_mode: Mode, screen_title: String,
-		db: GDScript = null, voice: StringName = &"") -> TradeScreen:
+## Defaults describe a direct Smithing progression screen, which keeps a caller
+## that omits optional service metadata on a complete, non-null path.
+static func open(host: Node, screen_mode: Mode = Mode.PROGRESSION,
+		screen_title: String = "THE FORGE", db: GDScript = null,
+		voice: StringName = &"", screen_service_label: String = "Smithing",
+		visible_ids: Array[StringName] = []) -> TradeScreen:
 	var layer := CanvasLayer.new()
 	layer.name = "TradeLayer"
 	# Above the HUD (50), below the pause menu (100). The pause menu no longer
@@ -142,6 +149,8 @@ static func open(host: Node, screen_mode: Mode, screen_title: String,
 	s.title = screen_title
 	s.catalogue = db if db != null else ShopDb
 	s.speaker = voice
+	s.service_label = screen_service_label if not screen_service_label.is_empty() else "Smithing"
+	s.visible_catalogue_ids = visible_ids.duplicate()
 	layer.add_child(s)
 	host.get_tree().current_scene.add_child(layer)
 	return s
@@ -270,39 +279,27 @@ func _counter_name() -> String:
 	return " ".join(words)
 
 
-## The act, in the counter's own word, for the kicker: SELL here, FORGE at the
-## smith, BREW at the alchemist, SET at the bench, RECORD at the lantern.
-##
-## Asked of the CATALOGUE and of the board as it stands -- never of which db this
-## is. A counter with nothing on it that eats materials says BUY, and it says so
-## because none of its rows carry a recipe, not because this screen recognised it.
-## Read off `_rows` rather than `lines()` so it answers for the board the player is
-## actually looking at, which is why `_refresh` is what writes it.
+## The player-facing service name. The selected line still supplies the footer's
+## transaction verb, but the header names the service that opened this screen.
 func _act() -> String:
-	if mode == Mode.SELL:
-		return "Sell"
-	for row in _rows:
-		if _db().crafts(row["line"]):
-			return _db().craft_verb()
-	return "Buy"
+	return "Trade" if mode == Mode.TRADE else service_label
 
 
-## The header glyph. `Catalogue.emblem()` for a counter, and the trade glyph for
-## the quartermaster, who has no catalogue at all.
+## The header glyph. Trade is the two-sided exchange; progression keeps the
+## catalogue's own emblem.
 func _emblem() -> String:
-	return "trade" if mode == Mode.SELL else String(_db().emblem())
+	return "trade" if mode == Mode.TRADE else String(_db().emblem())
 
 
 ## The four numbers, per side.
 ##
-## SELL is about the bag: what it is worth, how full it is, and how much of that
-## worth is heat the vendor will not pay twice. BUY is about the board: how many
+## Trade is about the bag and purse across both sides. Progression is about how many
 ## lines there are and how many of them you can actually pay for -- the one thing
 ## the old header made you walk eleven cells to learn.
 func _band_cells() -> Array:
 	var purse := {"key": &"purse", "label": "Purse",
 		"value": "%d ◇" % int(round(_shown_gold)), "icon": UiKit.action_icon("coin")}
-	if mode == Mode.SELL:
+	if mode == Mode.TRADE:
 		var used := Run.slots_used()
 		return [
 			purse,
@@ -344,13 +341,84 @@ func _build_body(parent: Node) -> void:
 	parent.add_child(pad)
 
 	var split := HBoxContainer.new()
-	split.add_theme_constant_override("separation", 24)
+	split.add_theme_constant_override("separation", 18 if mode == Mode.TRADE else 24)
 	pad.add_child(split)
 
+	if mode == Mode.TRADE:
+		_build_trade_side(split, "QUARTERMASTER STOCK", true)
+		_build_trade_side(split, "YOUR INVENTORY", false)
+	else:
+		_build_progression_board(split)
+	_build_detail(split)
+
+
+## One side of the conventional trade window. Both sides use the shared grid/cell
+## controls; scrolling preserves readable cell text when the bag grows.
+func _build_trade_side(parent: Node, label: String, stock: bool) -> void:
+	var inner := _build_board_well(parent)
+	UITheme.section_rule(inner, label)
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	inner.add_child(scroll)
+	UITheme.style_scrollbar(scroll)
+
+	var grid := ItemGrid.new()
+	grid.name = "Stock" if stock else "Inventory"
+	grid.columns = TRADE_COLS
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.cell_focused.connect(_on_cell_looked)
+	scroll.add_child(grid)
+
+	var empty := Label.new()
+	empty.text = "Sold out." if stock else "Nothing to sell."
+	empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UITheme.apply_text_style(empty, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
+	inner.add_child(empty)
+
+	if stock:
+		_stock_grid = grid
+		_stock_scroll = scroll
+		_stock_empty = empty
+	else:
+		_bag_grid = grid
+		_bag_scroll = scroll
+		_bag_empty = empty
+
+
+func _build_progression_board(parent: Node) -> void:
+	var inner := _build_board_well(parent)
+	UITheme.section_rule(inner, "ON THE BOARD")
+
+	# The smith's board is taller than the frame. It scrolls instead of shrinking
+	# its cells, and `_point_at` keeps the selected rung in view.
+	_scroll = ScrollContainer.new()
+	_scroll.name = "BoardScroll"
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	inner.add_child(_scroll)
+	UITheme.style_scrollbar(_scroll)
+	_scroll.resized.connect(_keep_cursor_in_view)
+
+	_ladder = UpgradeLadder.new()
+	_ladder.name = "Board"
+	_ladder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_ladder.cell_focused.connect(_on_cell_looked)
+	_scroll.add_child(_ladder)
+
+	_empty = Label.new()
+	_empty.text = "Sold out."
+	_empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UITheme.apply_text_style(_empty, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
+	inner.add_child(_empty)
+
+
+func _build_board_well(parent: Node) -> VBoxContainer:
 	var left := VBoxContainer.new()
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	left.add_theme_constant_override("separation", 6)
-	split.add_child(left)
+	parent.add_child(left)
 
 	# A WELL, not a panel. The board is a recess in the frame -- darker glass
 	# behind a fainter hairline -- which is what makes a grid of cells read as
@@ -363,57 +431,7 @@ func _build_body(parent: Node) -> void:
 	var inner := VBoxContainer.new()
 	inner.add_theme_constant_override("separation", 8)
 	card.add_child(inner)
-
-	UITheme.section_rule(inner,
-		"IN THE BAG" if mode == Mode.SELL else "ON THE BOARD")
-
-	# SELL is a grid of what is in the bag; BUY is a ladder per thing on offer.
-	# Two arrangements of the SAME cell (`ItemCell`) rather than two screens,
-	# because the two sides differ in exactly one way: a stack you own has no
-	# rungs and a thing the counter makes longer has nothing else.
-	if mode == Mode.SELL:
-		_grid = ItemGrid.new()
-		_grid.name = "Board"
-		_grid.columns = COLS
-		# The cursor is this screen's, not the grid's -- see `_tick_input`. It
-		# still reports a look, because the mouse can land on a cell the stick
-		# never crossed and the detail pane has to follow it.
-		_grid.cell_focused.connect(_on_cell_looked)
-		inner.add_child(_grid)
-	else:
-		# The smith's board is eight rows on a fresh save and eleven once the bow
-		# and the hookshot are found, which is taller than the frame. It scrolls
-		# rather than shrinking the cells: a rung you cannot read is worse than a
-		# rung you have to scroll to, and `_point_at` keeps the cursor in view so
-		# a pad player never touches the scrollbar.
-		_scroll = ScrollContainer.new()
-		_scroll.name = "BoardScroll"
-		_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		inner.add_child(_scroll)
-		UITheme.style_scrollbar(_scroll)
-		# The board is not the only thing that decides how tall the board is: a
-		# refusal builds a toast into the footer, the footer grows, and this
-		# viewport loses a line off its bottom. The scroll offset does not move
-		# with it, so the cell the cursor is ON gets clipped in half at exactly
-		# the moment the counter is explaining why it said no. Re-ask on every
-		# resize rather than at the toast's call site -- the toast is one of
-		# several things down there that can change height.
-		_scroll.resized.connect(_keep_cursor_in_view)
-
-		_ladder = UpgradeLadder.new()
-		_ladder.name = "Board"
-		_ladder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		_ladder.cell_focused.connect(_on_cell_looked)
-		_scroll.add_child(_ladder)
-
-	_empty = Label.new()
-	_empty.text = "Nothing to sell." if mode == Mode.SELL else "Sold out."
-	_empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	UITheme.apply_text_style(_empty, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
-	inner.add_child(_empty)
-
-	_build_detail(split)
+	return inner
 
 
 ## The one place a blurb, a price or a recipe is ever spelled out. A grid cell has
@@ -530,15 +548,62 @@ func _db() -> GDScript:
 func _board() -> Array:
 	var db := _db()
 	var groups: Array = db.groups()
-	if not groups.is_empty():
+	if groups.is_empty():
+		return [Catalogue.flat_group("", _catalogue_lines())]
+	if visible_catalogue_ids.is_empty():
 		return groups
-	return [Catalogue.flat_group("", db.lines())]
+
+	# Group line numbers index the catalogue's full `lines()` array. Remap the
+	# selected service subset so the ladder and `_rows` still share one index space.
+	var all_lines: Array[Dictionary] = db.lines()
+	var shown_lines: Array[Dictionary] = _catalogue_lines()
+	var remap := {}
+	for i in shown_lines.size():
+		remap[shown_lines[i]["id"]] = i
+	var visible_groups: Array[Dictionary] = []
+	for group: Dictionary in groups:
+		var tracks: Array = []
+		for track: Dictionary in group.get("tracks", []):
+			var old_line := int(track.get("line", -1))
+			if old_line < 0 or old_line >= all_lines.size():
+				continue
+			var id: StringName = all_lines[old_line]["id"]
+			if not remap.has(id):
+				continue
+			var visible_track := track.duplicate()
+			visible_track["line"] = int(remap[id])
+			tracks.append(visible_track)
+		if not tracks.is_empty():
+			var visible_group := group.duplicate()
+			visible_group["tracks"] = tracks
+			visible_groups.append(visible_group)
+	return visible_groups
+
+
+func _catalogue_lines() -> Array[Dictionary]:
+	var lines: Array[Dictionary] = _db().lines()
+	if visible_catalogue_ids.is_empty():
+		return lines
+	var shown: Array[Dictionary] = []
+	for line: Dictionary in lines:
+		var id: StringName = line["id"]
+		if visible_catalogue_ids.has(id):
+			shown.append(line)
+	return shown
 
 
 func _refresh() -> void:
 	_rows.clear()
-	if mode == Mode.SELL:
+	_stock_rows.clear()
+	_bag_rows.clear()
+	if mode == Mode.TRADE:
+		_build_buy_rows()
+		for i in _rows.size():
+			_stock_rows.append(i)
+		var bag_start := _rows.size()
 		_build_sell_rows()
+		for i in range(bag_start, _rows.size()):
+			_bag_rows.append(i)
 	else:
 		_build_buy_rows()
 
@@ -556,12 +621,24 @@ func _refresh() -> void:
 			"mark": bool(row.get("mark", false)),
 			"dim": not bool(row["ok"]),
 		})
-	if mode == Mode.SELL:
-		_grid.set_cells(cells)
-		_grid.visible = not _rows.is_empty()
+	if mode == Mode.TRADE:
+		var stock_cells: Array = []
+		for i in _stock_rows:
+			stock_cells.append(cells[i])
+		var bag_cells: Array = []
+		for i in _bag_rows:
+			bag_cells.append(cells[i])
+		_stock_grid.set_cells(stock_cells)
+		_bag_grid.set_cells(bag_cells)
+		_stock_grid.visible = not stock_cells.is_empty()
+		_bag_grid.visible = not bag_cells.is_empty()
 		_order.clear()
-		for i in _rows.size():
+		for i in _stock_rows:
 			_order.append(i)
+		for i in _bag_rows:
+			_order.append(i)
+		_stock_empty.visible = stock_cells.is_empty()
+		_bag_empty.visible = bag_cells.is_empty()
 	else:
 		_ladder.set_board(_board(), cells)
 		# The BOARD decides, not `_rows`. A catalogue can hand back twelve lines
@@ -571,15 +648,15 @@ func _refresh() -> void:
 		# not empty. A counter with nothing ON it says so.
 		_scroll.visible = _ladder.count() > 0
 		_order = _ladder.order().duplicate()
-	_empty.visible = _rows.is_empty() if mode == Mode.SELL else not _scroll.visible
+		_empty.visible = not _scroll.visible
 
 	# A refresh can retire the line the cursor was on -- a finished ladder loses
 	# its buyable rung, a committed piece loses its whole losing branch. Landing
 	# on the row that is still there beats snapping back to the top of the board.
 	if not _order.is_empty() and not _order.has(_cursor):
 		_cursor = _order[mini(_at(), _order.size() - 1)]
-	# After the board, because both of these are read off it: the BUY band counts
-	# what is affordable, and the kicker asks whether anything here is crafted.
+	# After the board, because the progression band counts what is affordable and
+	# the kicker names the service that owns these rows.
 	_drop_stale_refusal()
 	UiKit.plate_kicker(_header, _act())
 	_rebuild_band()
@@ -593,11 +670,12 @@ func _at() -> int:
 
 
 func _build_sell_rows() -> void:
+	var sales: Array[Dictionary] = []
 	for id: StringName in Run.bag:
 		var def := ItemDb.get_def(id)
 		if def == null:
 			continue
-		_rows.append({
+		sales.append({
 			"kind": &"item",
 			"id": id,
 			"label": def.display_name,
@@ -612,22 +690,23 @@ func _build_sell_rows() -> void:
 			"blurb": def.blurb,
 			"ok": true,
 		})
-	_rows.sort_custom(func(a, b) -> bool: return a["price"] > b["price"])
-	if not _rows.is_empty():
-		_rows.append({
+	sales.sort_custom(func(a, b) -> bool: return a["price"] > b["price"])
+	if not sales.is_empty():
+		sales.append({
 			"kind": &"all",
 			"label": "SELL EVERYTHING",
 			"count": 0,
 			"price": Run.bag_value(),
 			"sub": "%d ◇" % Run.bag_value(),
 			"color": Pal.BONE,
-			"blurb": "Empty the bag. The smith is two doors down.",
+			"blurb": "Empty the bag in one transaction.",
 			"ok": true,
 		})
+	_rows.append_array(sales)
 
 
 func _build_buy_rows() -> void:
-	for line in _db().lines():
+	for line in _catalogue_lines():
 		var left: int = _db().remaining(line["id"])
 		var cost := int(line["cost"])
 		_rows.append({
@@ -664,10 +743,20 @@ func _build_buy_rows() -> void:
 func _point_at(i: int) -> void:
 	_cursor = clampi(i, 0, maxi(_rows.size() - 1, 0))
 	var cell: Button = null
-	if mode == Mode.SELL:
-		cell = _grid.cell_at(_cursor)
+	var cell_scroll: ScrollContainer = null
+	if mode == Mode.TRADE:
+		var stock_at := _stock_rows.find(_cursor)
+		if stock_at >= 0:
+			cell = _stock_grid.cell_at(stock_at)
+			cell_scroll = _stock_scroll
+		else:
+			var bag_at := _bag_rows.find(_cursor)
+			if bag_at >= 0:
+				cell = _bag_grid.cell_at(bag_at)
+				cell_scroll = _bag_scroll
 	else:
 		cell = _ladder.cell_at(_ladder.slot_of_line(_cursor))
+		cell_scroll = _scroll
 	if cell != null and cell.get_viewport() != null:
 		cell.grab_focus()
 		# The board is taller than the frame. Following the cursor is what makes
@@ -677,8 +766,8 @@ func _point_at(i: int) -> void:
 		# the board down and rebuilt it: the new cell is in the tree but the
 		# containers have not laid out yet, so it is still at (0,0) with zero
 		# size and scrolling to it scrolls to the top every time.
-		if _scroll != null:
-			_scroll.ensure_control_visible.call_deferred(cell)
+		if cell_scroll != null:
+			cell_scroll.ensure_control_visible.call_deferred(cell)
 	_describe()
 
 
@@ -687,7 +776,7 @@ func _point_at(i: int) -> void:
 ## frame the containers have not finished laying out, and scrolling to a rect
 ## that has not moved yet scrolls to where the cell used to be.
 func _keep_cursor_in_view() -> void:
-	if mode == Mode.SELL or _scroll == null or _ladder == null:
+	if mode == Mode.TRADE or _scroll == null or _ladder == null:
 		return
 	var cell := _ladder.cell_at(_ladder.slot_of_line(_cursor))
 	if cell != null and cell.get_viewport() != null:
@@ -964,8 +1053,8 @@ func _step(delta: float) -> Vector2i:
 ## Move the cursor one step.
 ##
 ## Left and right always mean ONE cell, on both sides. Up and down mean "the next
-## thing", which is a row of four in the bag's grid and the next ladder on a
-## counter -- a player at the smith wanting the next piece of armour should not
+## thing", which is a row of two in either Trade grid and the next ladder on a
+## progression board -- a player at the smith wanting the next piece of armour should not
 ## have to press through three rungs of the one they are on to reach it.
 ##
 ## Both axes wrap. Holding one direction visits everything and never dead-ends,
@@ -980,8 +1069,9 @@ func _move(d: Vector2i) -> void:
 		return
 	if d.y == 0:
 		return
-	if mode == Mode.SELL:
-		_point_at((_cursor + d.y * COLS + _rows.size()) % _rows.size())
+	if mode == Mode.TRADE:
+		var i := (_at() + d.y * TRADE_COLS + _order.size()) % _order.size()
+		_point_at(_order[i])
 		return
 
 	# The next row that has anything buyable on it. Rows CAN be dead -- a fully
@@ -1032,7 +1122,7 @@ func _commit() -> void:
 func _show_refusal() -> void:
 	_end_refusal()
 	var why := "Nothing there"
-	if mode == Mode.BUY and _cursor >= 0 and _cursor < _rows.size():
+	if _cursor >= 0 and _cursor < _rows.size() and _rows[_cursor]["kind"] == &"buy":
 		_refuse_line = _rows[_cursor]["line"]
 		var said: String = _db().refusal(_refuse_line)
 		why = said if said != "" else "Not enough gold"
@@ -1132,7 +1222,7 @@ func line_count() -> int:
 ## file learning about it.
 func _verb() -> String:
 	if _cursor < 0 or _cursor >= _rows.size():
-		return "Sell" if mode == Mode.SELL else "Buy"
+		return "Trade" if mode == Mode.TRADE else "Buy"
 	var row := _rows[_cursor]
 	match row["kind"]:
 		&"all":

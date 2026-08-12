@@ -8,7 +8,7 @@ extends RefCounted
 ## ring, and there was nothing in the shipped game that would sell you a charge.
 ##
 ## **The counter moved on 2026-08-11 and this director moved with it** (card #98).
-## Charges were the alchemist's fifth line and they are the QUARTERMASTER's stores
+## Charges were the alchemist's fifth line and they are the QUARTERMASTER's stock
 ## now, for the reason the alchemist's own file had written down while they sat
 ## there: a charge is not brewed out of anything, it is issued out of a store. The
 ## move also closed a hole this director could not have seen from where it was
@@ -32,10 +32,10 @@ extends RefCounted
 ##   A  Before the Slag Ogre, she does not sell them. The line is ABSENT, not
 ##      greyed -- ammunition for a verb you have never seen is a spoiler and a
 ##      slot that lies (`SupplyDb.GATED_BY` makes the same argument for arrows).
-##   B  Owning the working, the line appears in her STORES row -- beside the
+##   B  Owning the working, the line appears in her Trade stock -- beside the
 ##      arrows, which is the whole argument for the move: both are things you buy
 ##      in the yard, take down, and come back without.
-##   C  It is bought the way a player buys it: walk up, ask for The Stores, walk
+##   C  It is bought the way a player buys it: walk up, ask for Trade, walk
 ##      the cursor onto the row, press. The gold goes down and the pouch goes UP,
 ##      and the frames either side of the press are the same row with a different
 ##      number in it.
@@ -68,7 +68,7 @@ func run(rig) -> void:
 	await _underground(rig)
 
 	if _fails == 0:
-		print("CHARGE OK the stores sell them, the pouch carries them, the trigger spends one")
+		print("CHARGE OK Trade sells them, the pouch carries them, the trigger spends one")
 	else:
 		print("CHARGE FAIL -- %d check(s) failed" % _fails)
 
@@ -110,18 +110,8 @@ func _owned(rig) -> void:
 	var ids := _ids()
 	print("CHARGE warm board=%s" % [ids])
 	_ck("B1 her board grew the charge line", ids.has(&"charges"))
-	# The row, not just the line. A line with no group is a line the board never
-	# draws, which is exactly how the Lanternkeeper's counter shipped blank once
-	# (`RelicDb.groups`'s note).
-	var titles: Array = []
-	for g in SupplyDb.groups():
-		titles.append(String(g["title"]))
-	# STORES and not a CHARGES row of its own, which is what this asserted while
-	# the line was the alchemist's. Four expendables sharing one title IS the move
-	# (`SupplyDb.groups`): what the row says is "these are the things you take down
-	# and come back without", and which bar or which hand each one feeds is the
-	# cell's business rather than the counter's.
-	_ck("B2 and a row to draw it in (%s)" % [titles], titles.has("STORES"))
+	_ck("B2 charges belong to the Trade stock subset",
+		SupplyDb.STOCK_IDS.has(&"charges"))
 	await rig.wait_frames(4)
 
 
@@ -142,11 +132,8 @@ func _buy(rig) -> void:
 		func() -> bool: return Prompt.focus == garrison.vendor, 120)
 	_ck("C1 she owns the interact button", focused)
 	await rig.tap(["interact"])
-	# **"The Stores" and not "Trade".** Kessa keeps two counters and her list reads
-	# `Trade / The Stores / Leave` (`Npc._options`); "Trade" opens the SELL screen
-	# and this beat would then hunt for a CHARGES row on a board made of the hero's
-	# own loot. `mvp_loop._buy` carries the same note for the same reason.
-	_ck("C1b she offers the stores", await rig.talk("The Stores"))
+	# Trade combines the quartermaster's stock with the live player bag.
+	_ck("C1b she offers Trade", await rig.talk("Trade"))
 	await rig.wait_frames(16)
 
 	var screen := _screen(rig)
@@ -154,6 +141,9 @@ func _buy(rig) -> void:
 		_ck("C2 her counter opened", false)
 		return
 	_ck("C2 her counter opened", true)
+	_ck("C2a it is the two-sided Trade service",
+		screen.mode == TradeScreen.Mode.TRADE and screen.catalogue == SupplyDb
+			and screen._stock_grid != null and screen._bag_grid != null)
 	var row := _row(screen, &"charges")
 	if row.is_empty():
 		_ck("C3 CHARGES is on the board", false)
@@ -187,12 +177,12 @@ func _buy(rig) -> void:
 	# this counter is crafted, which is the sentence `SupplyDb`'s header opens with.
 	# So the claim is now the whole board's and it is the stronger one: every row a
 	# quartermaster issues is a tap, and the day one of them grows a `parts` entry
-	# this fails rather than silently turning the stores into a bench.
+	# this fails rather than silently turning Trade into a bench.
 	var held: Array = []
 	for r in screen._rows:
 		if r.get("kind") == &"buy" and SupplyDb.crafts(r["line"]):
 			held.append(String(r["line"]["id"]))
-	_ck("C6 nothing on the stores is a hold -- she issues, she does not make (%s)"
+	_ck("C6 nothing in Trade stock is a hold -- she issues, she does not make (%s)"
 		% [held], held.is_empty())
 	await rig.tap(["ui_accept"])
 	await rig.wait_frames(12)

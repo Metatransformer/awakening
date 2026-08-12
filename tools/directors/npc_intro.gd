@@ -1,5 +1,5 @@
 extends RefCounted
-## The arrivals: who unlocks whom, who sells the stores, and the two-hander the
+## The arrivals: who unlocks whom, who keeps each service, and the two-hander the
 ## elder plays when somebody new is standing in the yard.
 ##
 ##   timeout 400 tools/quiet.sh --path . -s tools/shoot.gd -- \
@@ -22,10 +22,9 @@ extends RefCounted
 ##   B  The sluice keeper drops the mark, drops no relic, and `BossDb.validate`
 ##      is happy about it -- which is the rule that had to be amended for any of
 ##      this to exist.
-##   C  The stores moved. Arrows, bag slots and hearts are the quartermaster's
-##      (`SupplyDb`) and are gone from the forge, at the same ids and the same
-##      prices -- because a save that already bought two bag slots must not get
-##      them back.
+##   C  The services moved. Trade is the quartermaster's two-sided stock/bag
+##      service; her permanent ladders are Upgrades; every other staffed counter
+##      is one named progression service. The moved ids and prices stay intact.
 ##   D  The scene. The elder opens on himself, the words type, the speaker
 ##      changes to Kessa, **and the camera is looking at whoever is talking.**
 ##      Two frames, one per end of the pan.
@@ -60,7 +59,8 @@ func run(rig) -> void:
 
 	_ladder()
 	_boss_table()
-	_stores()
+	_moved_lines()
+	_services()
 
 	if not _met_is_clear():
 		_ck("D0 --meet was passed (nothing below can run without it)", false)
@@ -159,12 +159,12 @@ func _boss_table() -> void:
 	_ck("B3 the table validates (%s)" % [problems], problems.is_empty())
 
 
-# --- C. The stores -------------------------------------------------------------
+# --- C. The service catalogue --------------------------------------------------
 
 ## The three lines that had to move when the smith went behind the miniboss.
-const STOCK: Array[StringName] = [&"arrows", &"bag_slot", &"heart"]
+const MOVED_IDS: Array[StringName] = [&"arrows", &"bag_slot", &"heart"]
 
-func _stores() -> void:
+func _moved_lines() -> void:
 	# With a bow in the pack, because `lines()` is the SHOP and arrows are gated on
 	# owning something to fire them (`SupplyDb.GATED_BY`) exactly as they were at
 	# the forge. Asking an empty save for the arrow row and failing when it is
@@ -177,13 +177,13 @@ func _stores() -> void:
 		supply[StringName(line.get("id", &""))] = line
 	if not had_bow:
 		Game.items.erase(&"bow")
-	for id: StringName in STOCK:
+	for id: StringName in MOVED_IDS:
 		_ck("C0 the quartermaster stocks %s" % id, supply.has(id))
 
 	var forge := {}
 	for line: Dictionary in ShopDb.lines():
 		forge[StringName(line.get("id", &""))] = line
-	for id: StringName in STOCK:
+	for id: StringName in MOVED_IDS:
 		_ck("C1 the forge no longer sells %s" % id, not forge.has(id))
 
 	# **Same ids, same prices, same limits.** This is the check that stands
@@ -197,16 +197,55 @@ func _stores() -> void:
 	_ck("C4 arrows are still gated on owning a bow",
 		StringName(SupplyDb.GATED_BY.get(&"arrows", &"")) == &"bow")
 
-	# And the counter itself: two on one person, which is the whole reason there
-	# is no second `Npc` standing inside Kessa.
-	var row: Dictionary = Npc.COUNTERS.get(Npc.Role.VENDOR, {})
-	var counters: Array = row.get("counters", [])
-	_ck("C5 the quartermaster has two counters (%d)" % counters.size(),
-		counters.size() == 2)
-	if counters.size() == 2:
-		_ck("C6 she buys on the first and sells the stores on the second",
-			int((counters[0] as Dictionary).get("mode", -1)) == TradeScreen.Mode.SELL
-			and (counters[1] as Dictionary).get("db") == SupplyDb)
+
+
+## The whole staffed service table, asserted as data rather than five walks
+## across the yard. Order is player-facing order within each person's options.
+func _services() -> void:
+	var expected: Array[Dictionary] = [
+		{"role": Npc.Role.VENDOR, "name": "quartermaster/Trade", "label": "Trade",
+			"mode": TradeScreen.Mode.TRADE, "db": SupplyDb, "ids": SupplyDb.STOCK_IDS},
+		{"role": Npc.Role.VENDOR, "name": "quartermaster/Upgrades", "label": "Upgrades",
+			"mode": TradeScreen.Mode.PROGRESSION, "db": SupplyDb,
+			"ids": SupplyDb.UPGRADE_IDS},
+		{"role": Npc.Role.SMITH, "name": "smith", "label": "Smithing",
+			"mode": TradeScreen.Mode.PROGRESSION, "db": ShopDb, "ids": []},
+		{"role": Npc.Role.ALCHEMIST, "name": "alchemist", "label": "Alchemy",
+			"mode": TradeScreen.Mode.PROGRESSION, "db": AlchemyDb, "ids": []},
+		{"role": Npc.Role.KEEPER, "name": "Lanternkeeper", "label": "Artifacts",
+			"mode": TradeScreen.Mode.PROGRESSION, "db": RelicDb, "ids": []},
+		{"role": Npc.Role.JEWELLER, "name": "jeweler", "label": "Upgrades",
+			"mode": TradeScreen.Mode.PROGRESSION, "db": JewelDb, "ids": []},
+	]
+	var actual: Array[Dictionary] = []
+	var trade_roles: Array[int] = []
+	for role: int in [Npc.Role.VENDOR, Npc.Role.SMITH, Npc.Role.ALCHEMIST,
+			Npc.Role.KEEPER, Npc.Role.JEWELLER]:
+		var row: Dictionary = Npc.COUNTERS.get(role, {})
+		for counter: Dictionary in row.get("counters", []):
+			var ids: Array[StringName] = []
+			for id: StringName in counter.get("ids", []):
+				ids.append(id)
+			actual.append({"role": role, "label": String(counter.get("label", "")),
+				"mode": int(counter.get("mode", -1)), "db": counter.get("db"),
+				"ids": ids})
+			if int(counter.get("mode", -1)) == TradeScreen.Mode.TRADE:
+				trade_roles.append(role)
+
+	_ck("C5 the staffed service matrix has exactly six rows (%d)" % actual.size(),
+		actual.size() == expected.size())
+	for i in mini(actual.size(), expected.size()):
+		var got: Dictionary = actual[i]
+		var want: Dictionary = expected[i]
+		_ck("C6 %s has the exact label, layout, catalogue and ids"
+			% String(want["name"]),
+			int(got["role"]) == int(want["role"])
+				and String(got["label"]) == String(want["label"])
+				and int(got["mode"]) == int(want["mode"])
+				and got["db"] == want["db"]
+				and got["ids"] == want["ids"])
+	_ck("C7 only the quartermaster has a Trade service (%s)" % [trade_roles],
+		trade_roles == [Npc.Role.VENDOR])
 
 
 # --- D. The scene --------------------------------------------------------------

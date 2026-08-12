@@ -176,7 +176,8 @@ func _mouse(rig) -> void:
 ## `pause`, and Escape is bound to both — so the press that closed the vendor
 ## used to open the pause menu behind it in the same frame.
 func _over_a_screen(rig) -> void:
-	var shop = TradeScreen.open(rig.scene(), TradeScreen.Mode.SELL, "TEST STALL")
+	var shop = TradeScreen.open(rig.scene(), TradeScreen.Mode.TRADE, "TEST STALL",
+		SupplyDb, &"", "Trade", SupplyDb.STOCK_IDS)
 	await rig.wait_frames(12)
 	_ck("I0 the shop is up", is_instance_valid(shop) and shop.is_inside_tree())
 	_ck("I1 it took the pointer (mode=%d)" % Input.mouse_mode,

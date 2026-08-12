@@ -275,9 +275,9 @@ They arrive three ways, and each answers a different kind of empty:
 
 | Source | Where | What it costs | Answers |
 |---|---|---|---|
-| **The quartermaster** — `ARROWS X10` | Garrison, THE STORES (`supply_db.gd`) | 40 gold (4.0/arrow) | a purse, no bag |
+| **The quartermaster** — `ARROWS X10` | Garrison, Trade (`supply_db.gd`) | 40 gold (4.0/arrow) | a purse, no bag |
 | **Found** — `ArrowBundle` | Dungeon floors and chests | a short detour | early, poor, and dry |
-| **Fletched** — `Fletching` | Garrison, Brannoc's forge board | 2 Cracked Flint + 2 Bone Shard → 5 arrows (4.8/arrow) | common saleable drops, no purse |
+| **Fletched** — `Fletching` | Garrison, Brannoc's Smithing service | 2 Cracked Flint + 2 Bone Shard → 5 arrows (4.8/arrow) | common saleable drops, no purse |
 
 **Found**: `arrow_chance` on `Dungeon` puts a 6-arrow bundle on the floor of a
 quarter of rooms; `arrow_chance` on `Chest` gives 40% of chests a 10-arrow one
@@ -297,8 +297,8 @@ Cracked Flint and Bone Shard a town use besides selling them: the forge asks
 whether the bottom of the bag becomes 24 gold or five arrows. It also runs the
 right way round: fletching **frees slots** while filling the quiver.
 
-Priced above the stores on purpose. Five arrows consume 24 gold of sale value;
-the quartermaster's ten cost 40 gold. A recipe that undercut the store would kill
+Priced above Trade stock on purpose. Five arrows consume 24 gold of sale value;
+the quartermaster's ten cost 40 gold. A recipe that undercut Trade would kill
 its arrow line, which is what a player with a purse and no bag is meant to use.
 
 ---
@@ -357,7 +357,7 @@ The extra is **not** a different item. It accumulates in `Run.premium`, a single
 gold pot, and `Run.bag_value()` is `base_value() + premium`. That choice matters:
 keying the bag by `(item, tier)` would double the row count and destroy the
 value-per-slot comparison §3's pressure is built on. Selling a line pays its base
-plus its proportional share of the pot (`Run.line_value()`), so the trade screen
+plus its proportional share of the pot (`Run.line_value()`), so the Trade window
 names the gold that will actually land.
 
 Because the premium sits inside `bag_value()`, **the extraction fee rises with
@@ -653,28 +653,29 @@ the only thing your pack does not eat (§6.8), and what happened to the cadet
 before you. It is stapled to his "I've been expecting you" so a player who walks
 straight to the gate still gets it.
 
-- **The quartermaster.** **Two counters, and she is the only person in the yard
-  with two** (`Npc.COUNTERS`). *Trade* buys: the trade screen
-  (`scripts/ui/shop/trade_screen.gd`) lists the bag sorted by value with a
-  "sell everything" line, because the common case is dumping the lot and the UI
-  should not make that tedious. *The Stores* sells everything you carry more of
-  (`scripts/items/supply_db.gd`):
+- **The quartermaster.** **Two services, and she is the only person in the yard
+  with two.** **Trade** is one two-sided shop window: her repeatable stock on
+  one side, the player's bag on the other, and one item-detail treatment shared
+  by whichever side is focused, hovered or selected. It buys the four
+  expendables below and sells bag contents, including a "sell everything" line,
+  because the common case is dumping the lot and the UI should not make that
+  tedious. **Upgrades** presents the bag-slot and heart-container ladders as
+  linear rung progressions.
 
-  | Line | Base cost | Growth | Limit | Gated on |
-  |---|---|---|---|---|
-  | Arrows ×10 | 40 | — | quiver | owning the bow |
-  | Charges ×3 | 90 | — | pouch | owning Burst |
-  | Hardtack ×5 | 25 | — | 20 in the pack | — |
-  | Small Beer ×5 | 45 | — | 20 in the pack | — |
-  | Bag slot | 140 | ×1.6 | 4 | — |
-  | Heart container | 320 | ×1.5 | 3 | — |
+  | Service | Line | Base cost | Growth | Limit | Gated on |
+  |---|---|---|---|---|---|
+  | Trade | Arrows ×10 | 40 | — | quiver | owning the bow |
+  | Trade | Charges ×3 | 90 | — | pouch | owning Burst |
+  | Trade | Hardtack ×5 | 25 | — | 20 in the pack | — |
+  | Trade | Small Beer ×5 | 45 | — | 20 in the pack | — |
+  | Upgrades | Bag slot | 140 | ×1.6 | 4 | — |
+  | Upgrades | Heart container | 320 | ×1.5 | 3 | — |
 
-  The top four are one row on the board, titled **STORES**, and that grouping is
-  the argument rather than a layout choice: a quartermaster issues expendables,
-  and which bar or which hand a given one feeds is the cell's business, not the
-  counter's. Everything in it is a thing you buy in the yard, take down, and come
-  back without. The two ladders below it are drawn as ladders because they have
-  ends.
+  The first four belong together as Trade stock because a quartermaster issues
+  expendables, and which bar or which hand a given one feeds is the item's
+  business, not the service's. Everything in that stock is a thing you buy in
+  the yard, take down, and come back without. The two Upgrades ladders are drawn
+  as ladders because they have ends.
 
   **Charges arrived from the alchemist on 2026-08-11** (card #98). His own file
   had the reason written on it while they sat there — a charge is not brewed out
@@ -687,19 +688,21 @@ straight to the gate still gets it.
   **Hardtack and Small Beer are new in the same card.** §6.4 is the whole of them.
 
   **The bag slot, the heart and the arrows were the smith's until card #91** and
-  moved with him. Same ids,
+  moved to the quartermaster. Same ids,
   same prices, same limits — `Game.upgrades` is keyed by the id, so a save that
   had bought two bag slots keeps them and buys the third at the third price. They
   had to move: with Brannoc behind the floor 1 miniboss, a new save could not
   reach a bag slot, a heart or an arrow for its whole first hour, and those are
   exactly the purchases the first hour is for. They also belong here — a
-  quartermaster issuing stores is what a quartermaster is, and the forge is left
+  quartermaster issuing stock is what a quartermaster is, and the forge is left
   as one thing: gold **and** materials, on every line.
 
-  Two rows on one person rather than a second `Npc` standing inside the first:
-  `TradeScreen` is pointed at a catalogue and never learns which counter it is
-  at, so the whole cost was one row in `COUNTERS` and one `Catalogue` subclass.
-- **The smith.** Twelve permanent lines (`scripts/items/shop_db.gd`), priced
+  Two service choices on one person, not a second `Npc` or a parallel UI system:
+  the shared NPC service screen (`scripts/ui/shop/trade_screen.gd`, whose name is
+  retained for compatibility) supplies the two-sided Trade layout and the linear
+  progression layout.
+- **The smith.** **Smithing** only; there is no Trade shop at his counter:
+  twelve permanent lines (`scripts/items/shop_db.gd`), priced
   against the drop tables — a good run extracts with roughly 250–450 gold of
   ingredients, so cheap lines land after one run and dear ones after two or
   three.
@@ -720,12 +723,16 @@ straight to the gate still gets it.
 
   Every line changes a number the player can feel inside one run. Nothing here
   is a stat-stick you have to take on faith.
-- **The alchemist.** Four lines (`scripts/items/alchemy_db.gd`): one bottle and
-  three things to put in it. Same transaction as the forge — gold **and**
-  materials — over the same kind of counter, driven by the same screen. She is
-  §6.6.
-- **The jewelcrafter.** Four blanks and eight paths (`scripts/items/jewel_db.gd`),
-  on the west of the plaza. She is §6.7.
+- **The alchemist.** **Alchemy** only: four lines
+  (`scripts/items/alchemy_db.gd`), one bottle and three things to put in it,
+  presented as linear progressions. It costs gold **and** materials, as Smithing
+  does, but it is not Trade and has no two-sided shop. She is §6.6.
+- **The Lanternkeeper.** **Artifacts** lists the twelve relics as linear states:
+  empty, broken or lit. This is where relics are committed for repair or reading
+  and donated; it is not Trade.
+- **The jewelcrafter.** **Upgrades** only: four blanks and eight paths
+  (`scripts/items/jewel_db.gd`), presented as linear rung progressions on the
+  west of the plaza. She is §6.7.
 - **The hero's quarters.** Not a counter — nobody stands in it, and nothing in it
   takes gold. A lean-to in the south-west corner with a cot you sleep in and a
   footlocker you stash in. It is §6.8, and `docs/SCOPE.md` §2 records why the
@@ -760,8 +767,9 @@ a **Stoneborn** at the forge, hearth and anvil and quench barrel behind him; a
 **Reshi** under a canopied market stall, coin pile and pouch on the counter; a
 **Vyr** at an apothecary's bench with a cauldron and a wall of bottles. They
 were three tapered boxes until the loop worked, and the swap changed nothing
-below the mesh — the counters, the catalogues and the one trade screen are
-exactly as described above. **This is dressing, and it has no rules.** A booth
+below the mesh — the counters, the catalogues and the shared NPC service screen
+with its two layouts are exactly as described above. **This is dressing, and it
+has no rules.** A booth
 has no state and no interaction of its own; a fourth counter is still a
 `Catalogue` subclass and a row in `Npc.COUNTERS`, plus a row in `Npc.LOOKS` for
 who stands at it.
@@ -804,7 +812,7 @@ walk home. Rations are the second answer, and they are deliberately a bad one.
 
 | | Hardtack | Small Beer |
 |---|---|---|
-| Bought at | The Stores, 25 gold for five | The Stores, 45 gold for five |
+| Bought at | Trade, 25 gold for five | Trade, 45 gold for five |
 | Gives back | 1 heart (`K.MEAL_HEAL` = 4 quarters) | 12 magic (`K.MEAL_MAGIC`) — **exactly one spin** |
 | Over | 12 s (`K.MEAL_TIME`), in 4 ticks of 3 s | the same |
 | Carried | 20 in the pack (`K.RATION_STACK`) | 20, counted separately |
@@ -1042,12 +1050,14 @@ holding on the carrying screen precisely because it cannot be used to change it.
 
 *Numbered 6.6 for the same reason §6.5 is 6.5. Do not renumber.*
 
-> **⏳ Extended, not superseded — `docs/GDD.md` §6.5, not built.** This counter
-> gains one more job at M5: she **reads** the two Verse relics (GDD §6.2).
-> Everything in this section is true today and stays true.
+> **The two Verses do not add another Alchemy service.** The alchemist is their
+> home and reads them for their effects (GDD §6.2), but the player commits them
+> through the Lanternkeeper's **Artifacts** service under GDD §6.4's donation
+> rule. **Alchemy** remains bottles and draughts only.
 >
 > **Charges are NOT hers, as of card #98 (2026-08-11).** This block used to say
-> she sold them, and for a while she did. They are the quartermaster's stores now
+> she sold them, and for a while she did. They are the quartermaster's Trade
+> stock now
 > (§6.4's table) for two reasons, one of which was already written on her own
 > file: a charge is not brewed out of anything the floor drops, and this counter
 > does not exist until a boss is dead while hers does. The relationship the
@@ -1069,14 +1079,14 @@ The forge sells **permanence**: you buy a rung and it is yours. The alchemist
 sells a **stock** — four glass bottles, and what is in them at the moment you
 step through the gate. Everything below follows from that one difference.
 
-The transaction is the same as the smith's, deliberately: **gold and materials,
-over a counter**. `scripts/items/alchemy_db.gd` and `scripts/items/shop_db.gd`
-are both `Catalogue` subclasses — the contract is a base class now rather than a
-promise in a comment (docs/CONTRACT.md §8) — and `TradeScreen` holds whichever
-one it was opened with. There is one shop screen in this game and there will go
-on being one; a second would be a second place for the recipe column, the
-affordability colours and the refusal footer to drift apart. **A third counter
-is a `Catalogue` subclass and a row in `Npc.COUNTERS`, nothing else.**
+Alchemy and Smithing share the same economic grammar deliberately: **gold and
+materials, over a counter**. `scripts/items/alchemy_db.gd` and
+`scripts/items/shop_db.gd` are both `Catalogue` subclasses — the contract is a
+base class now rather than a promise in a comment (docs/CONTRACT.md §8) — and
+the shared NPC service screen presents both through its linear progression
+layout. They remain distinct named services; neither is Trade. One shared class
+keeps the recipe column, affordability colours and refusal footer from drifting
+without adding a parallel UI system.
 
 ### The bottle
 
@@ -1159,9 +1169,9 @@ bank, and the point of the timer is that it is spent in the room you drank it in
 ## 6.7 The jewelcrafter — the ceiling belongs to the number
 
 The fifth counter, in the west gap of the garrison yard, forward of where you
-arrive. `JewelDb extends Catalogue`, one row in `Npc.COUNTERS`, and the **same
-`TradeScreen`** every other counter uses — SCOPE §1 freezes new UI screens at
-zero and this did not need one.
+arrive. `JewelDb extends Catalogue`, one row in `Npc.COUNTERS`, and her
+**Upgrades** service uses the shared NPC service screen's linear progression
+layout — SCOPE §1 freezes new UI screens at zero and this did not need one.
 
 Four slots, each of which you must first **buy blank** for gold alone:
 
@@ -1393,7 +1403,7 @@ second one is a decision.
 | Ingredients, components and drop tables | `scripts/items/item_db.gd` |
 | The bag's value tiers (§3.1), and the curve they are read off | `scripts/ui/style.gd` (`Pal.T1/T2/T3`), `tools/bag_curve.gd` |
 | The smith's catalogue, and the forge recipes | `scripts/items/shop_db.gd` |
-| The quartermaster's stores — arrows, charges, rations, bag slots, hearts | `scripts/items/supply_db.gd` |
+| The quartermaster's Trade stock and Upgrades — arrows, charges, rations, bag slots, hearts | `scripts/items/supply_db.gd` |
 | What a ration is called and what it does (§6.4) | `scripts/items/ration_db.gd` |
 | The pack's stacks and the meal's clock | `scripts/autoload/game_state.gd` (`rations`, `meal_id`) |
 | The alchemist's catalogue, and the brew recipes | `scripts/items/alchemy_db.gd` |
@@ -1405,7 +1415,7 @@ second one is a decision.
 | The difficulty curve, every floor of it | `scripts/core/progression.gd` |
 | The way down | `scripts/world/stairs.gd` |
 | The pouch — the bag, drawn as slots | `scripts/ui/menu/pouch_panel.gd` |
-| Vendor / smith screen | `scripts/ui/shop/trade_screen.gd` |
+| Shared NPC service screen — two-sided Trade and linear progression layouts | `scripts/ui/shop/trade_screen.gd` |
 | HUD | `scripts/ui/hud/hud.gd` |
 | Garrison | `scripts/world/garrison.gd`, `scenes/rooms/garrison.tscn` |
 | The shopkeepers themselves — who stands where | `scripts/world/npc.gd` (`COUNTERS`, `LOOKS`) |

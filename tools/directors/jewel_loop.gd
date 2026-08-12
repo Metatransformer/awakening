@@ -127,8 +127,8 @@ func _counter(rig) -> void:
 		await rig.wait_frames(2)
 	_ck("B2 TALK is on her, not on the wall", Prompt.focus == garrison.jeweller)
 	await rig.tap(["interact"])
-	# The bench is behind the Trade option now (`Npc.activate`, 2026-08-10).
-	_ck("B2b she offers to trade", await rig.talk("Trade"))
+	# The bench is behind the Upgrades option now (`Npc.activate`, 2026-08-10).
+	_ck("B2b she offers Upgrades", await rig.talk("Upgrades"))
 	await rig.wait_frames(16)
 
 	var screen := _screen(rig)

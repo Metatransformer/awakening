@@ -248,7 +248,7 @@ func _smith(rig) -> void:
 	# panel has to be able to draw.
 	#
 	# **It was fifteen until card #91.** Arrows, bag slots and hearts left the
-	# forge for the quartermaster's stores (`SupplyDb`) when the smith went behind
+	# forge for the quartermaster's Trade and Upgrades services (`SupplyDb`) when the smith went behind
 	# the floor 1 miniboss -- with him gone for the whole first hour, those three
 	# were the lines a new save could not otherwise reach.
 	#
@@ -264,9 +264,9 @@ func _smith(rig) -> void:
 	_stand_at(rig, garrison.smith.global_position + Vector3(0.0, 0.0, 1.6))
 	await rig.wait_frames(20)
 	await rig.tap(["interact"])
-	# The counter is behind the Trade option now (`Npc.activate`, 2026-08-10).
-	if not await rig.talk("Trade"):
-		print("FORGE FAIL the smith would not offer to trade")
+	# The counter is behind the Smithing option now (`Npc.activate`, 2026-08-10).
+	if not await rig.talk("Smithing"):
+		print("FORGE FAIL the smith would not offer Smithing")
 		return
 	await rig.wait_frames(16)
 
@@ -451,17 +451,16 @@ func _forge_is_a_hold(rig, screen) -> void:
 	#
 	# **`SupplyDb.crafts` and not a row on this screen, since card #91.** The
 	# arrow line is the quartermaster's now, so the contrast is between two
-	# catalogues rather than between two rows of one board -- which is where it
-	# always belonged, because `crafts()` is what `_hold_time` asks and the mode
-	# is the same BUY on both counters. The screen half of it is proven where the
-	# line actually lives: `tools/directors/mvp_loop.gd` buys a bag slot at the
-	# stores with a tap.
+	# catalogues and layouts rather than between two rows of one board -- which is
+	# where it always belonged, because `crafts()` is what `_hold_time` asks. The
+	# screen half of it is proven where the lines actually live:
+	# `tools/directors/mvp_loop.gd` buys a bag slot under Upgrades with a tap.
 	# The REAL row off her board and not `{"id": &"arrows"}` -- `crafts` answers
 	# off `holds`/`parts`, so a hand-made stub with neither key returns false for
 	# free and the check would pass against a catalogue that had changed its mind.
 	var arrow_line := SupplyDb.lines().filter(
 		func(l: Dictionary) -> bool: return StringName(l["id"]) == &"arrows")
-	_ck("CH1 a gold-only line at the stores is still a tap",
+	_ck("CH1 a gold-only line in Trade stock is still a tap",
 		not arrow_line.is_empty() and not SupplyDb.crafts(arrow_line[0]))
 	# The footer says the SMITH's word, not the UI's. It shipped as "CRAFT" for
 	# one build because a static in `Catalogue` calling another static in

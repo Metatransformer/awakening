@@ -14,14 +14,14 @@ extends RefCounted
 ##      arrows -- and `armament_owned(&"arrow")` says no too, because arrows
 ##      follow the bow.
 ##   B  The smith's counter has no `string` row and no `chain` row, and the
-##      quartermaster's stores have no arrow row. Photographed, because "the row
+##      quartermaster's Trade stock has no arrow row. Photographed, because "the row
 ##      is absent" is a claim about a screen. **Two counters and not one since
 ##      card #91** -- the stock lines moved to the quartermaster when the smith
 ##      went behind the floor 1 miniboss; the gate did not move with them.
 ##   C  A door keyed to the bow refuses, and the refusal NAMES THE BOW on the
 ##      HUD. Not "LOCKED". Photographed from the game camera, at the distance a
 ##      player stands at, with the hero in frame.
-##   D  `Game.grant(&"bow")` grows the forge by the string ladder and the stores
+##   D  `Game.grant(&"bow")` grows Smithing by the string ladder and Trade
 ##      by the arrow line, and the same door now opens -- captured mid-swing and
 ##      open.
 ##   E  The second door, keyed to the hookshot, is still shut and wearing a
@@ -114,7 +114,8 @@ func _fresh_kit() -> void:
 ## would pass every assertion made against the array.
 func _counter(rig, owns_bow: bool) -> void:
 	var tag := "after" if owns_bow else "before"
-	var screen := TradeScreen.open(rig.scene(), TradeScreen.Mode.BUY, "SMITH", ShopDb)
+	var screen := TradeScreen.open(rig.scene(), TradeScreen.Mode.PROGRESSION,
+		"SMITH", ShopDb, &"smith", "Smithing")
 	await rig.wait_frames(16)
 
 	var ids: Array[StringName] = []
@@ -140,8 +141,8 @@ func _counter(rig, owns_bow: bool) -> void:
 	await rig.wait_frames(8)
 
 	# **The arrow row is not at the forge any more and that is not a regression.**
-	# Card #91 put the smith behind the floor 1 miniboss, so the three stock lines
-	# -- arrows, bag slots, hearts -- moved to the quartermaster (`SupplyDb`), or
+	# Card #91 put the smith behind the floor 1 miniboss, so repeatable stock and
+	# permanent upgrades moved to the quartermaster (`SupplyDb`), or
 	# the first hour of the game would have had no counter that sold them. The GATE
 	# is unchanged and is still what this director claims: owning the bow is what
 	# grows the arrow row. It grows on a different board now, so the sieve gets
@@ -150,27 +151,29 @@ func _counter(rig, owns_bow: bool) -> void:
 	# Opened AFTER the smith's has gone, never alongside it: two `TradeScreen`s at
 	# once is two `Prompt.block` holders, and the second one to close hands the
 	# pointer back over the first one's grave.
-	var stores := TradeScreen.open(rig.scene(), TradeScreen.Mode.BUY,
-		"THE STORES", SupplyDb)
+	var trade := TradeScreen.open(rig.scene(), TradeScreen.Mode.TRADE,
+		"QUARTERMASTER", SupplyDb, &"quartermaster", "Trade", SupplyDb.STOCK_IDS)
 	await rig.wait_frames(16)
 	var stock: Array[StringName] = []
-	for r in stores._rows:
-		if r.get("kind") == &"buy":
-			stock.append(r["line"]["id"])
-	print("GATE stores(%s) rows=%s" % [tag, stock])
+	for r in trade._stock_rows:
+		var row: Dictionary = trade._rows[r]
+		if row.get("kind") == &"buy":
+			stock.append(row["line"]["id"])
+	print("GATE trade(%s) rows=%s" % [tag, stock])
 
 	if owns_bow:
 		_ck("D0 the bow grew the string ladder", ids.has(&"string"))
-		_ck("D1 and the arrow line at the stores", stock.has(&"arrows"))
+		_ck("D1 and the arrow line in Trade", stock.has(&"arrows"))
 		_ck("D2 the chain is STILL hidden -- one grant, one item",
 			not ids.has(&"chain"))
-		# **Exactly one more row than before, whatever that number is.** It used
-		# to be spelled `== 7` and had been wrong for a while: the plate ladder
-		# split into eight heavy/light rows and nobody re-counted, so this beat
-		# was failing on arithmetic and not on a gate. A gate is a DIFFERENCE, so
-		# the honest assertion is the difference.
-		_ck("D3 the forge grew by exactly one row (%d -> %d)"
-			% [_forge_rows, ids.size()], ids.size() == _forge_rows + 1)
+		# **Exactly two more rows than before, whatever that number is.** The bow
+		# unlocks both its permanent string ladder and the smith's repeatable
+		# fletching row; the arrow stock itself is asserted on Trade above. This
+		# used to be spelled as a fixed total, which made the gate test depend on
+		# unrelated armour rows instead of the authored ownership difference.
+		_ck("D3 Smithing grew by string and fletching (%d -> %d)"
+			% [_forge_rows, ids.size()], ids.size() == _forge_rows + 2
+			and ids.has(ShopDb.FLETCH))
 	else:
 		_ck("B0 no string ladder for a bow he has not found",
 			not ids.has(&"string"))
@@ -182,17 +185,17 @@ func _counter(rig, owns_bow: bool) -> void:
 		_ck("B3 the ungated forge lines are all there (%d)" % ids.size(),
 			ids.has(&"edge") and ids.has(&"guard")
 			and ids.has(&"plate_chest_heavy") and ids.size() >= 10)
-		_ck("B3b and the stores still sell the bag and the hearts (%d)"
+		_ck("B3b Trade still offers its ungated stock (%d)"
 			% stock.size(),
-			stock.has(&"bag_slot") and stock.has(&"heart"))
+			stock.has(&"hardtack") and stock.has(&"small_beer"))
 		_ck("B4 the catalogues agree the bow's lines are not stocked",
 			not ShopDb.stocked(&"string") and not SupplyDb.stocked(&"arrows"))
 
 	await rig.capture(out.path_join("g_%s_stores_%s.png" % [
 		"05" if owns_bow else "02", tag]))
-	stores.close()
+	trade.close()
 	for _i in 60:
-		if not is_instance_valid(stores):
+		if not is_instance_valid(trade):
 			break
 		await rig.wait_frames(2)
 	await rig.wait_frames(8)

@@ -149,10 +149,43 @@ func _sell(rig) -> bool:
 	if not opened:
 		print("MVP FAIL the vendor took the press and no shop screen came up")
 		return false
+	var screen := _screen(rig)
+	if screen.mode != TradeScreen.Mode.TRADE or screen.catalogue != SupplyDb:
+		print("MVP FAIL Trade opened the wrong layout or catalogue")
+		return false
+	if screen._stock_grid == null or screen._bag_grid == null:
+		print("MVP FAIL Trade did not build both inventory grids")
+		return false
+	var stock_ids: Array[StringName] = []
+	for i: int in screen._stock_rows:
+		if i < 0 or i >= screen._rows.size() \
+				or screen._rows[i].get("kind") != &"buy":
+			print("MVP FAIL Trade's stock index does not point at a buy row")
+			return false
+		var id: StringName = screen._rows[i]["line"]["id"]
+		stock_ids.append(id)
+		if not SupplyDb.STOCK_IDS.has(id):
+			print("MVP FAIL Trade exposed non-stock id %s" % id)
+			return false
+	if screen.visible_catalogue_ids != SupplyDb.STOCK_IDS:
+		print("MVP FAIL Trade was not filtered to STOCK_IDS (%s)"
+			% [screen.visible_catalogue_ids])
+		return false
+	if not screen._stock_rows.has(screen._cursor) \
+			or screen._d_name.text != screen.cursor_label():
+		print("MVP FAIL Trade did not start on stock detail (cursor=%d stock=%s detail=%s)"
+			% [screen._cursor, stock_ids, screen._d_name.text])
+		return false
 	await rig.wait_frames(14)
 	await rig.capture(out.path_join("m_02_sell_screen.png"))
 
-	# Take the top line, then everything else.
+	# Sell the first BAG stack, not the first row: Trade starts on quartermaster
+	# stock and the live bag occupies the second inventory grid.
+	if screen._bag_rows.is_empty():
+		print("MVP FAIL Trade has no bag rows to sell")
+		return false
+	screen._point_at(screen._bag_rows[0])
+	await rig.wait_frames(2)
 	await rig.tap(["ui_accept"])
 	await rig.wait_frames(20)
 	await rig.capture(out.path_join("m_03_sold_one.png"))
@@ -166,10 +199,16 @@ func _sell(rig) -> bool:
 	# cursor back to the top row and sold Iron Scrap instead of holding SELL
 	# EVERYTHING -- reported as "holding SELL EVERYTHING did not empty the bag".
 	# The screen was right and the shortcut was wrong.
-	var screen := _screen(rig)
-	if screen != null:
-		screen._point_at(screen._rows.size() - 1)
-		screen.queue_redraw()
+	var sell_all := -1
+	for i: int in screen._bag_rows:
+		if screen._rows[i].get("kind") == &"all":
+			sell_all = i
+			break
+	if sell_all < 0:
+		print("MVP FAIL Trade has no SELL EVERYTHING bag row")
+		return false
+	screen._point_at(sell_all)
+	screen.queue_redraw()
 
 	# SELL EVERYTHING is a HOLD (`TradeScreen._hold_time`): one press should not
 	# be able to empty the bag, and the row draws a gauge saying so. A tap first,
@@ -200,8 +239,9 @@ func _sell(rig) -> bool:
 ##
 ## It was the forge's until card #91, which put Brannoc behind the floor 1
 ## miniboss -- and a new save that cannot reach the smith for its whole first hour
-## cannot buy a bag slot, a heart or an arrow either. So the three stock lines
-## moved to Kessa's second counter (`SupplyDb`, `Npc.COUNTERS`), and the MVP loop
+## cannot buy a bag slot, a heart or an arrow either. So the repeatable stock and
+## permanent upgrades moved to Kessa's two services (`SupplyDb`, `Npc.COUNTERS`),
+## and the MVP loop
 ## follows them: the loop this director exists to prove is *sell the bag, spend
 ## the gold, go back down*, and every step of it is now reachable on the first
 ## descent, which it was not while this beat walked to a man who is not there.
@@ -214,28 +254,40 @@ func _buy(rig) -> bool:
 			garrison.vendor.global_position + Vector3(0.0, 0.0, 1.6)):
 		return false
 	await rig.tap(["interact"])
-	# Her SECOND option, and the reason it is named rather than a second "Trade":
-	# one person, two counters, and the list reads `Trade / The Stores / Leave`
-	# (`Npc._options`). "Trade" here would open the SELL screen and this beat would
-	# hunt for a BAG SLOT row on a board made of the hero's own loot.
-	if not await rig.talk("The Stores"):
-		print("MVP FAIL the quartermaster would not open the stores")
+	# Her SECOND option: Trade is the two-sided stock/bag service, while Upgrades
+	# is the permanent bag and heart progression board.
+	if not await rig.talk("Upgrades"):
+		print("MVP FAIL the quartermaster would not open Upgrades")
 		return false
 	var opened: bool = await rig.until(func() -> bool: return _screen(rig) != null)
 	if not opened:
-		print("MVP FAIL the stores took the press and no shop screen came up")
+		print("MVP FAIL Upgrades took the press and no shop screen came up")
+		return false
+	var screen := _screen(rig)
+	if screen.mode != TradeScreen.Mode.PROGRESSION or screen.catalogue != SupplyDb:
+		print("MVP FAIL Upgrades opened the wrong layout or catalogue")
+		return false
+	var buy_ids: Array[StringName] = []
+	for row: Dictionary in screen._rows:
+		if row.get("kind") == &"buy":
+			buy_ids.append(row["line"]["id"])
+	var available_upgrade_ids: Array[StringName] = []
+	for line: Dictionary in SupplyDb.lines():
+		var id: StringName = line["id"]
+		if SupplyDb.UPGRADE_IDS.has(id):
+			available_upgrade_ids.append(id)
+	if screen.visible_catalogue_ids != SupplyDb.UPGRADE_IDS \
+			or buy_ids != available_upgrade_ids:
+		print("MVP FAIL Upgrades ids are %s, expected available %s"
+			% [buy_ids, available_upgrade_ids])
 		return false
 	await rig.wait_frames(14)
 	await rig.capture(out.path_join("m_05_shop.png"))
 
 	# Walk to the BAG SLOT line -- cheap enough that one run pays for it.
 	#
-	# By NAME, not by counting presses. This beat used to tap down once, on the
-	# strength of a comment saying the bag slot was the second line. It is not:
-	# the stores hide ARROWS until you own a bow, so on this save the bag slot is
-	# the FIRST line and one press walked past it onto the heart container. The
-	# board's length is a function of what you own, so no fixed count is safe.
-	var screen := _screen(rig)
+	# By NAME, not by counting presses. Availability and future ladder additions
+	# can change a progression board's order, so no fixed count is safe.
 	var walked := 0
 	while screen.cursor_label() != "BAG SLOT" and walked < screen.line_count():
 		# RIGHT is one cell. Down is a whole ROW now that the counter is a grid.
@@ -243,7 +295,7 @@ func _buy(rig) -> bool:
 		await rig.wait_frames(4)
 		walked += 1
 	if screen.cursor_label() != "BAG SLOT":
-		print("MVP FAIL the stores have no BAG SLOT line to buy")
+		print("MVP FAIL Upgrades has no BAG SLOT line to buy")
 		return false
 	var was_gold := Game.gold
 	var was_slots := Game.bag_slots
