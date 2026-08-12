@@ -18,10 +18,10 @@ extends CharacterBody3D
 ##
 ## **Behaviours** (`docs/BESTIARY.md` §3). A behaviour is a key on a `DEFS` row
 ## naming which item answers this body; it is never a tenth `kind` and never a
-## model (`docs/SCOPE.md` §1). One is built — `thief`, which takes a bag slot and
-## runs for the door. It lives in this file rather than in a subclass because it
-## is two states on the machine below and reuses every other part of it: the same
-## steering, the same telegraph grammar, the same reactions.
+## model (`docs/SCOPE.md` §1). `thief` takes a bag slot and runs for the door;
+## `thrower` carries a room barrel through a visible arcing throw. They live in
+## this file rather than subclasses because both reuse the machine below: the
+## same steering, telegraph grammar and reactions.
 
 signal died_at(position: Vector3)
 
@@ -40,7 +40,7 @@ signal escaped_with(loot: Dictionary, position: Vector3)
 ## DEAD and nothing else — which is the right answer: a thief winding up a grab
 ## or running off with your pearls is very much in the fight.
 enum State { IDLE, CHASE, CIRCLE, WINDUP, STRIKE, RECOVER, HURT, LAUNCHED, FROZEN, DEAD,
-	GRAB, FLEE }
+	GRAB, FLEE, FETCH_BARREL, THROW_WINDUP }
 
 const LIBRARY := "res://assets/animations/monster_library.res"
 const MODEL_DIR := "res://assets/monsters/"
@@ -64,6 +64,18 @@ const HEAD_CLEARANCE := 0.26
 ## rooms are 16 m across, so this is "anywhere in my room and a little past the
 ## doorway" and not "across the floor".
 const LEASH := 17.0
+
+# --- The Thrower (docs/BESTIARY.md §3) -------------------------------------
+## Room-scale distances, deliberately. A thrower answers a barrel in its own
+## encounter; it does not cross the floor to steal one from another room.
+const THROW_SEARCH := 9.0
+const THROW_PICKUP := 0.92
+const THROW_WINDUP_TIME := 0.82
+const THROW_RECOVER_TIME := 0.72
+const THROW_COOLDOWN := 2.4
+const THROW_FLIGHT_MIN := 0.62
+const THROW_FLIGHT_MAX := 1.02
+const THROW_FLAT_SPEED := 8.5
 
 ## kind -> stats. Damage is in quarter-hearts, matching every other number in
 ## the project. Health is tuned against the blade ladder in docs/METAGAME.md §8:
@@ -299,6 +311,16 @@ var _exit: Vector3 = Vector3.ZERO
 ## of a dark room. Parented to the scene, not to this body, because it marks a
 ## place and not a thing.
 var _ribbon: Node3D = null
+
+# --- The Thrower (docs/BESTIARY.md §3) -------------------------------------
+## The candidate stays unclaimed while this body walks to it. `begin_carry` is
+## the arbiter at pickup range, so two throwers can notice one barrel but only
+## one can ever take it.
+var _throw_barrel: ExplosiveBarrel = null
+## RECOVER is shared with melee. This flag tells its one exit which cooldown the
+## action earned, then clears itself; a thrown barrel cannot turn immediately
+## into a claim on the next one in the cluster.
+var _throw_recovering: bool = false
 
 
 ## Build one, level it, and put it in the world -- in that order, which is the
@@ -661,6 +683,10 @@ func _physics_process(delta: float) -> void:
 
 	_cooldown = maxf(_cooldown - delta, 0.0)
 	_player = _find_player()
+	# An interrupted RECOVER still keeps the cooldown stamped at release, but the
+	# next unrelated recovery must not inherit the thrower's bookkeeping flag.
+	if _throw_recovering and state != State.RECOVER:
+		_throw_recovering = false
 
 	# The wind-up glow is written every frame by `_tick_windup` and owns no timer,
 	# so leaving the wind-up is the only thing that can take it back down. Doing
@@ -673,7 +699,8 @@ func _physics_process(delta: float) -> void:
 	# frame and owns no timer, so leaving it is the only thing that can take the
 	# colour back down, and a thief interrupted mid-reach would otherwise walk
 	# away lit for the rest of the run.
-	if _glowing and state != State.WINDUP and state != State.GRAB:
+	if _glowing and state != State.WINDUP and state != State.GRAB \
+			and state != State.THROW_WINDUP:
 		_glowing = false
 		_flash.restore()
 	# The same guard, for the same reason, over the ice. There are three ways out
@@ -717,6 +744,10 @@ func _physics_process(delta: float) -> void:
 			_tick_grab(delta)
 		State.FLEE:
 			_tick_flee(delta)
+		State.FETCH_BARREL:
+			_tick_fetch_barrel(delta)
+		State.THROW_WINDUP:
+			_tick_throw_windup(delta)
 
 	# ONE owner for the vertical, chosen by whether this body is in the air.
 	#
@@ -853,6 +884,24 @@ func _tick_chase(delta: float) -> void:
 		return
 
 	_face_player(delta)
+	# A carried barrel outranks every ordinary attack. This path is also how an
+	# interrupted throw resumes: HURT/FROZEN wake into CHASE, keep the claimed
+	# prop, and wait out the interruption cooldown before winding up again.
+	if is_thrower() and _held_barrel_is_valid():
+		_stop()
+		if _cooldown <= 0.0:
+			_begin_throw_windup()
+		else:
+			_play(&"idle", true)
+		return
+	# Search before melee, but only when the throw cooldown has expired. No
+	# available nearby prop means this branch does nothing and the same body falls
+	# through to the ordinary swing below.
+	if is_thrower() and _cooldown <= 0.0:
+		_throw_barrel = _nearest_barrel()
+		if _throw_barrel != null:
+			state = State.FETCH_BARREL
+			return
 	# The Thief goes for the bag instead of the throat -- **when there is a bag
 	# worth going for.** It only ever grabs with empty hands (one slot per body,
 	# and a thief already carrying is running, not shopping) and only when the
@@ -1043,7 +1092,9 @@ func _tick_recover(delta: float) -> void:
 	_stop()
 	_timer -= delta
 	if _timer <= 0.0:
-		_cooldown = float(_def["cooldown"])
+		_cooldown = maxf(_cooldown,
+			THROW_COOLDOWN if _throw_recovering else float(_def["cooldown"]))
+		_throw_recovering = false
 		# Most of the time, back off and circle rather than walking straight
 		# back into reach. Not always: an orc that never once pressed forward
 		# would be trivially kited, and the roster needs kinds that come at you.
@@ -1446,6 +1497,142 @@ func _tick_frozen(delta: float) -> void:
 	_flash.ice(Pal.FROST, clampf(_freeze_left / thaw, 0.0, 1.0))
 
 
+# --- The Thrower ------------------------------------------------------------
+## Does this body turn a room prop into its ranged attack? Like `is_thief`, this
+## answers the resolved behaviour rather than exposing how the key was chosen.
+func is_thrower() -> bool:
+	return _behave == &"thrower"
+
+
+## Nearest available barrel in this encounter. The anchor check is what makes
+## "nearby" a room rule rather than a moving search bubble that can pull a prop
+## through a doorway after this body has already been lured out of position.
+func _nearest_barrel() -> ExplosiveBarrel:
+	var best: ExplosiveBarrel = null
+	var best_distance := THROW_SEARCH
+	for node in get_tree().get_nodes_in_group(&"explosive_barrel"):
+		if not node is ExplosiveBarrel:
+			continue
+		var barrel := node as ExplosiveBarrel
+		if barrel == null or not is_instance_valid(barrel) or not barrel.is_available():
+			continue
+		if K.plane(barrel.global_position - _anchor).length() > LEASH:
+			continue
+		var distance := K.plane(barrel.global_position - global_position).length()
+		if distance > best_distance:
+			continue
+		best_distance = distance
+		best = barrel
+	return best
+
+
+func _held_barrel_is_valid() -> bool:
+	return _throw_barrel != null and is_instance_valid(_throw_barrel) \
+		and not _throw_barrel.is_available() and not _throw_barrel.is_fusing() \
+		and not _throw_barrel.has_exploded()
+
+
+## Walk all the way to the prop before claiming it. A barrel disappearing or
+## being claimed while this body approaches is ordinary contention, so the safe
+## result is CHASE and therefore ordinary melee, not a stuck special state.
+func _tick_fetch_barrel(delta: float) -> void:
+	if _player == null:
+		_throw_barrel = null
+		state = State.IDLE
+		return
+	if _throw_barrel == null or not is_instance_valid(_throw_barrel) \
+			or not _throw_barrel.is_available():
+		_throw_barrel = null
+		state = State.CHASE
+		return
+
+	var toward := K.plane(_throw_barrel.global_position - global_position)
+	if toward.length() <= THROW_PICKUP:
+		_stop()
+		if _throw_barrel.begin_carry(self):
+			_begin_throw_windup()
+		else:
+			_throw_barrel = null
+			state = State.CHASE
+		return
+
+	_face_heading(toward, delta, 300.0)
+	var speed: float = float(_def["speed"]) * 0.82
+	_steer(toward.normalized(), speed)
+	_play(&"walk_fwd", true, clampf(speed / 2.2, 0.7, 1.5))
+
+
+func _begin_throw_windup() -> void:
+	state = State.THROW_WINDUP
+	_timer = THROW_WINDUP_TIME * Prog.windup_scale(level)
+	_stop()
+	_play(&"attack_1")
+	Bus.request_sfx.emit(&"attack_prepare", global_position)
+
+
+## The same held-still, slow-tracking, late-escalating vocabulary as WINDUP.
+## The prop in front of the body distinguishes what is coming; the pose and glow
+## deliberately remain the already learned warning rather than adding a colour.
+func _tick_throw_windup(delta: float) -> void:
+	_stop()
+	if _player == null:
+		state = State.IDLE
+		return
+	if not _held_barrel_is_valid():
+		_throw_barrel = null
+		_glowing = false
+		_flash.restore()
+		if _model != null:
+			_model.rotation = _model_rest
+		state = State.CHASE
+		return
+
+	_timer -= delta
+	_face_player(delta, 130.0)
+	var windup := maxf(THROW_WINDUP_TIME * Prog.windup_scale(level), 0.001)
+	var t := clampf(1.0 - _timer / windup, 0.0, 1.0)
+	var e := t * t
+	if _model != null:
+		_model.rotation.x = _model_rest.x - deg_to_rad(WINDUP_LEAN_DEG * 1.18) * e
+		_flash.glow(Pal.RUST, e * 0.22)
+		_glowing = true
+
+	if _timer <= 0.0:
+		_release_barrel()
+
+
+## Solve one ballistic arc at the release frame. The target is the hero's
+## current position, not the position where the wind-up began, so the warning is
+## a real chance to lead the throw somewhere else.
+func _release_barrel() -> void:
+	var barrel := _throw_barrel
+	_throw_barrel = null
+	_glowing = false
+	_flash.restore()
+	if barrel == null or not is_instance_valid(barrel) or _player == null:
+		state = State.CHASE
+		return
+
+	var origin := barrel.global_position
+	var target := _player.global_position + Vector3.UP * 0.35
+	var offset := target - origin
+	var flat := K.plane(offset)
+	var flight := clampf(flat.length() / THROW_FLAT_SPEED,
+		THROW_FLIGHT_MIN, THROW_FLIGHT_MAX)
+	var launch := flat / flight
+	launch.y = (offset.y + 0.5 * K.GRAVITY * flight * flight) / flight
+	if not barrel.throw_from(origin, launch):
+		state = State.CHASE
+		return
+
+	_lunge_pose()
+	Bus.request_sfx.emit(&"swing", global_position)
+	state = State.RECOVER
+	_timer = maxf(THROW_RECOVER_TIME, float(_def["recover"]))
+	_cooldown = maxf(_cooldown, _timer + THROW_COOLDOWN)
+	_throw_recovering = true
+
+
 # --- The Thief --------------------------------------------------------------
 ## `docs/BESTIARY.md` §3, behaviour 4, and §0's argument for building it first:
 ## every other body in the roster asks *can you swing back*, and this one asks
@@ -1843,7 +2030,7 @@ func _on_damaged(hit: Hit) -> void:
 	# commit immediately, so hitting it first bought nothing and the telegraph
 	# was decoration. The push NEVER shortens an existing cooldown -- `maxf` --
 	# or a flurry of light hits would be a way to make an orc attack faster.
-	var interrupted := state == State.WINDUP
+	var interrupted := state == State.WINDUP or state == State.THROW_WINDUP
 	_last_hit_dir = dir
 
 	# **How hard this one hit, as one number** (`K.SHAKE_TAP`). Everything below
