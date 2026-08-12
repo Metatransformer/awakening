@@ -1761,6 +1761,11 @@ func _dash_swing() -> void:
 	_chain_step = 0
 	_chain_timer = 0.0
 	_aim_sword()
+	# The riposte is a real blade thrust, so it owns the same short world-space
+	# ribbon family as the light chain. Start it only after request_dash accepts;
+	# wiring from the DASH intent or shared clip would also trail refused swings.
+	if slash_trail != null:
+		slash_trail.begin_stroke(dash_swing_time, dash_damage_window, true)
 	_commit(dash_swing_time, dash_damage_window, dash_damage, dash_knockback,
 		K.HITSTOP_HEAVY, randf_range(0.86, 0.94), K.STUN_HEAVY)
 
@@ -2057,6 +2062,11 @@ func _heavy_swing() -> void:
 	_chain_step = 0
 	_chain_timer = 0.0
 	_aim_sword()
+	# LIGHT3 is shared with the chain finisher, but this accepted tap-heavy path
+	# has its own timing window. Trigger here so the held spin and every other
+	# LIGHT3 user remain outside the ordinary blade ribbon.
+	if slash_trail != null:
+		slash_trail.begin_stroke(heavy_swing_time, heavy_damage_window, true)
 	# The lowest pitch in the kit outside the spin. Three swings that sound
 	# identical are three swings the player cannot tell apart with their eyes on
 	# the enemy.
