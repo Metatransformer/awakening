@@ -453,6 +453,9 @@ var _hero: Hero
 var _skel: Skeleton3D
 ## The mounted models. Public so a director can sweep their placement.
 var sword: Node3D
+## The ordinary light-combo ribbon. Public so its proof director can distinguish
+## a real LIGHT1/2/3 stroke from every other move that happens to use a sword.
+var slash_trail: SwordSlashTrail
 ## The same blade, on his hip. Exactly one of this and `sword` is visible, and
 ## the pair is what makes "the bow is out" read as a place the sword WENT rather
 ## than as the sword ceasing to exist — which is what drawing the bow used to
@@ -985,6 +988,10 @@ func _build_audio() -> void:
 func _build_vfx() -> void:
 	if sword == null:
 		return
+	slash_trail = SwordSlashTrail.new()
+	slash_trail.name = "SwordSlashTrail"
+	add_child(slash_trail)
+	slash_trail.bind(sword)
 	_vfx = SpinVfx.new()
 	_vfx.name = "SpinVfx"
 	add_child(_vfx)
@@ -2016,6 +2023,11 @@ func _light_swing(step: int) -> void:
 	# refusal would pay out on whatever landed next.
 	if not _hero.request_attack(dur, variant):
 		return
+	# Only this accepted-light path starts the ribbon. LIGHT3 is also the heavy's
+	# clip, so triggering from `_commit` or from the animation variant would put
+	# the same ordinary trail on the tap heavy, spin, lunge, dash and flurry.
+	if slash_trail != null:
+		slash_trail.begin_stroke(dur, damage_window, step == 2)
 	Game.spend_stamina(K.STAMINA_SWING, true)
 	# Wraps back to 0 after the finisher: the chain is a loop, not a staircase
 	# you fall off the end of.

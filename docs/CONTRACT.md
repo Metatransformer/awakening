@@ -2065,6 +2065,29 @@ past before you could see it was an overhead. `chain_time_scale` (0.92, 1.65)
 multiplies it, so steps 2 and 3 move with it, and the damage windows are
 fractions of it, so the blade's live slice sits in the same place in the swing.
 
+**The three ordinary lights alone own a blade trail.** `HeroCombat` creates and
+publishes `SwordSlashTrail` (`scripts/combat/sword_slash_trail.gd`), binds it to
+the mounted sword holder, and starts a stroke only from `_light_swing` after
+`Hero.request_attack` accepts `LIGHT1`, `LIGHT2` or `LIGHT3`. The ribbon samples
+the real weapon convention — an inner point at 0.24 m and an outer point at
+0.88 m along the holder's local `+Y` — into world space, so the down, up and
+overhead clips leave their own swept surfaces. A tapped heavy happens to reuse
+the `LIGHT3` clip but does **not** enter this path; held charge/wind-up, spin,
+lunge, dash, slam, parry and flurry produce no ordinary trail.
+
+Sampling is confined to the light's existing `damage_window` (0.22–0.62 of the
+move). Redundant points under 0.025 m are discarded, expired points are pruned,
+and the ribbon is capped at 22 live sections; its last samples die 0.083 s
+(about five 60 Hz physics frames) after the active slice and processing sleeps
+when the stroke is empty. Four tapered blade rails give it a muted translucent
+body and a narrow cobalt-under-bone cutting rim. It is a double-sided, unshaded
+alpha-MIX mesh in `Pal.MOTH` / `Pal.COBALT` / `Pal.BONE`, never additive and
+never extraction `Pal.CYAN`. The
+finisher uses the same timing with only a modest opacity lift, keeping the whole
+ordinary chain visibly below `SpinVfx`'s charged spectacle. Proved at gameplay
+camera distance, including the charged-spin null control, by
+`tools/directors/sword_slash_trail.gd`.
+
 **The chain is buffered.** A press in the back half of a swing
 (`chain_buffer_from`) is remembered and paid out one frame AFTER the swing ends
 — never on the boundary frame, because `HeroCombat` is the hero's CHILD and its
