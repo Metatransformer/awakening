@@ -207,6 +207,9 @@ const LASTING_IDS: Array[StringName] = [
 
 var small_keys: int = 0
 var has_boss_key: bool = false
+## The authored floor whose Boss Key is currently held. A run can backtrack, so
+## the boolean alone is not enough to stop floor 2's key opening floor 1's door.
+var boss_key_level: int = 0
 var has_map: bool = false
 var has_compass: bool = false
 
@@ -408,6 +411,7 @@ func reset() -> void:
 	charges = 0
 	small_keys = 0
 	has_boss_key = false
+	boss_key_level = 0
 	has_map = false
 	has_compass = false
 	items.clear()
@@ -1508,6 +1512,30 @@ func spend_key() -> bool:
 	small_keys -= 1
 	Bus.key_count_changed.emit(small_keys)
 	return true
+
+
+func add_boss_key() -> void:
+	if has_boss_key and boss_key_level == Run.level:
+		return
+	has_boss_key = true
+	boss_key_level = Run.level
+	Bus.item_acquired.emit(&"boss_key")
+
+
+func has_boss_key_for(level: int) -> bool:
+	return has_boss_key and boss_key_level == level
+
+
+func spend_boss_key() -> bool:
+	if not has_boss_key_for(Run.level):
+		return false
+	clear_boss_key()
+	return true
+
+
+func clear_boss_key() -> void:
+	has_boss_key = false
+	boss_key_level = 0
 
 
 # --- Items and flags --------------------------------------------------------

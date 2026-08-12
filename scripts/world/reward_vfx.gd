@@ -18,8 +18,8 @@ extends Node3D
 ##   MINOR   A room's chest. A ring on the floor, a small star, a brief bloom.
 ##           Fast -- under a second -- because it happens several times a floor
 ##           and the player is still holding a sword.
-##   MAJOR   Boss-grade: the deep chest beside the boss door, the miniboss
-##           chamber's chest, the deepest room on the floor. It adds a SHAFT of
+##   MAJOR   Boss-grade: the deep chest beyond the boss arena, the miniboss
+##           chamber's chest, the deepest reward on the floor. It adds a SHAFT of
 ##           light standing in the room and a second, wider ring behind the
 ##           first, and it runs nearly twice as long. The difference is
 ##           magnitude and silhouette, not hue: two golds a player has to tell

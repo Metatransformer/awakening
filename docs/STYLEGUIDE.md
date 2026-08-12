@@ -64,7 +64,7 @@ move it anyway.
 | MOTH | `#807868` | Muted text, disabled state, button glyphs, **and common-tier loot** — common items render in the "not worth reading" colour. |
 | VITAL | `#E04038` | Health fill. Dirty arterial, not fire-engine. |
 | RUST | `#B83818` | Danger: incoming damage, damage ghost, hostile lock-on, unaffordable cost. |
-| GOLD | `#F8C038` | Currency, and **only** currency. The most saturated colour in the build. Not a torch, not a title, not a UI highlight. |
+| GOLD | `#F8C038` | Currency and the authored Boss Key/Boss Door progression mark. The most saturated colour in the build. Not a torch, title, or general UI highlight. |
 | EXTRACT CYAN | `#38D0C8` | The only cool saturated hue. Reserved for the way out: extraction nodes and the hookshot line — the two things that pull you somewhere. |
 | MOSS | `#68A050` | Rarity: uncommon. |
 | COBALT | `#5878C8` | Rarity: rare. |
@@ -83,8 +83,10 @@ Rules that keep it dirty rather than clean:
   RGB555, not to twelve colours — palette-locking the framebuffer gives you a
   Game Boy, not a PlayStation.
 - World surfaces sit between VOID and ASH with a texture saturation cap of
-  ~0.25. GOLD and the rarity tiers are the only things above 0.6. **That gap is
-  the art direction.**
+  ~0.25. GOLD and the rarity tiers are the only things above 0.6. The Boss Key
+  and its door sigil are the one non-currency GOLD exception: a deliberately
+  scarce progression pair, once per authored floor. **That gap is the art
+  direction.**
 
 ---
 

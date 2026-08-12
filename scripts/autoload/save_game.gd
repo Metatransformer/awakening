@@ -216,6 +216,7 @@ func save(slot: int) -> bool:
 		"rations": Game.rations,
 		"small_keys": Game.small_keys,
 		"has_boss_key": Game.has_boss_key,
+		"boss_key_level": Game.boss_key_level,
 		"has_map": Game.has_map,
 		"has_compass": Game.has_compass,
 		"items": Game.items,
@@ -400,6 +401,7 @@ func load_slot(slot: int) -> Dictionary:
 	Game.charges = d.get("charges", d.get("bombs", 0))
 	Game.small_keys = d.get("small_keys", 0)
 	Game.has_boss_key = d.get("has_boss_key", false)
+	Game.boss_key_level = maxi(int(d.get("boss_key_level", 0)), 0)
 	Game.has_map = d.get("has_map", false)
 	Game.has_compass = d.get("has_compass", false)
 
@@ -463,6 +465,11 @@ func load_slot(slot: int) -> Dictionary:
 		restored_dungeon = Run.restore(run_data) and Run.in_dungeon
 	else:
 		Run.reset()
+	# v12 slots written before Boss Keys carried a floor tag have only the bool.
+	# Bind that legacy held key to the restored floor; outside a live run it is
+	# invalid inventory and `Run.reset()` has already cleared it.
+	if restored_dungeon and Game.has_boss_key and Game.boss_key_level <= 0:
+		Game.boss_key_level = Run.level
 
 	active_slot = slot
 	current_room = StringName(d.get("room", ""))
