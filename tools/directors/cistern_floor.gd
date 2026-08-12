@@ -1294,13 +1294,14 @@ func _deep_chest(rig, d: Node, hero: Node3D) -> void:
 	chest.activate(hero)
 	await rig.wait_frames(30)
 	var again := _every(rig.scene(), func(n: Node) -> bool:
-		return n is LootMote and (n as LootMote).item_id == want)
+		return n is LootMote and (n as LootMote).item_id == want \
+			and (n as LootMote).monitoring)
 	# **Say WHERE the extra copy is, because `Chest.activate` cannot have minted
-	# it.** chest.gd:44 is `if opened: return`, so the press above is a no-op and a
-	# second `cinder_verse` on the floor came from somewhere else entirely. This
-	# check has been intermittently red for three runs on the strength of a count,
-	# and a count cannot tell a double-pick at the chest from a relic replaced by a
-	# spent arena thirty metres away.
+	# it.** chest.gd's `if opened: return` makes the call above a no-op. Count only
+	# live pickups: `LootMote._pop` disables monitoring as soon as the item enters
+	# the bag, but keeps that same node in the tree for its 0.26-second exit tween.
+	# Counting every matching node made uncapped render-frame timing look like a
+	# second copy on floors 2-4 even though the reported mote was already taken.
 	for m in again:
 		var mote: Node3D = m
 		print("FLOOR   loose %s at %.1f,%.2f,%.1f -- %.1f m from the chest, %s" % [
