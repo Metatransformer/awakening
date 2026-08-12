@@ -386,7 +386,7 @@ Proof: `tools/directors/heat_flow.gd`.
 ## 5. Extraction — the priced decision
 
 The way out is the **Escape Rope** (`scripts/items/escape_rope.gd`): a
-permanent key item, used from the pause menu's **POUCH** screen, under THE WAY
+permanent key item, used from the pause menu's **INVENTORY** screen, under THE WAY
 OUT — beside the bag's worth and the purse, because those three numbers are the
 decision and they belong on one screen.
 
@@ -414,7 +414,7 @@ built on them:
     **a blow that lands breaks it**. A blow he *blocks* does not — standing your
     ground behind the shield while the rope works is a legitimate way to leave,
     and a better one than mashing a button was.
-  - **The hold, in the menu.** The POUCH row does not fire on A. It is **held on
+  - **The hold, in the menu.** The INVENTORY row does not fire on A. It is **held on
     Y (`ui_hold`) for 0.9 s**, anywhere on that screen, with the same gauge every
     other hold in the game draws (`HoldGauge`). That is the fumble guard, and it
     is on a different button from the A that packs a bag stack — the accident
@@ -492,7 +492,7 @@ decision the player can act on.
   eats the purse (`Hud.set_extract_dear`). That moment happens at most once per
   run and stays — nothing sells or fletches below, so the purse cannot grow and
   the bag's value cannot fall back under it.
-- The POUCH row says it in words: *"The rope wants 36 and you have 26. It will
+- The INVENTORY row says it in words: *"The rope wants 36 and you have 26. It will
   take all of it."* The hold gauge stays drawn under it, because the hold works.
 - `Bus.extract_refused` is **deleted**, along with the HUD's `NEED n` flash and
   its `craft_fail` cue. No code can reach that state, and a signal that cannot
@@ -998,7 +998,7 @@ spending decision the smith ever poses.
 ### Current-use stars and recipe wishlists
 
 `Wishlist` derives every use from the live `ShopDb.lines()`, `AlchemyDb.lines()`
-and `JewelDb.lines()` recipes. It never copies a future rung table. POUCH and the
+and `JewelDb.lines()` recipes. It never copies a future rung table. INVENTORY and the
 vendor append either the current recipe names or an explicit safe-to-sell line;
 their cells show ★ when the item is needed. Auto-wishlist is on by default and
 follows the current recipes dynamically. Y / Triangle on a recipe row pins that
@@ -1049,13 +1049,13 @@ The right column carries the screen's one **verb**, the **escape rope** (§5).
 A cell's only verb is **A, which moves that stack across the case line** and is a
 statement about where the stack sits rather than anything done to the item. The
 bag grid spills directly to the rope row, then Back. Fletching is a town recipe
-on Brannoc's forge board (§4.6), not a POUCH control.
+on Brannoc's forge board (§4.6), not an INVENTORY control.
 
-Left of the grid is **WORN** — a drawn silhouette of the hero with the left
+Left of the grid is **WORN** — a rendered figure of the hero with the left
 hand, the right hand and the bottle cell filled in from `Game.armament()` and
-`Game.selected_potion()`, in the viewer's order, matching ITEMS and the HUD
+`Game.selected_potion()`, in the viewer's order, matching EQUIP and the HUD
 cluster. It is a **paper doll, not an equipment screen**: nothing on it is
-pressable, and the hint line says so (`Hands change on ITEMS`). The figure is
+pressable, and the hint line says so (`Hands change on EQUIP`). The figure is
 drawn in `scripts/ui/menu/paper_doll.gd` with `draw_circle`/`draw_line` rather
 than being a portrait sprite, for the reason in STYLEGUIDE §5 — the menu owns no
 art, and a silhouette that is obviously a diagram never has to survive a
@@ -1063,10 +1063,10 @@ comparison with the model on screen behind it.
 
 It earns the column because the pouch is where you go to ask *what am I carrying
 into the next room*, and until it was here that question needed two screens: the
-bag on this one and the hands on ITEMS. The doll answers it without making the
+bag on this one and the hands on EQUIP. The doll answers it without making the
 answer editable, which is the distinction the next paragraph is about.
 
-It is a separate screen from **Items**, which is what you are *holding* and what
+It is a separate screen from **Equip**, which is what you are *holding* and what
 the D-pad cycles. Carrying and holding are different questions and a player who
 conflates them is a player who thinks the bag can be equipped. The doll shows
 holding on the carrying screen precisely because it cannot be used to change it.
@@ -1517,7 +1517,7 @@ the arrow against the sizes §2 of `docs/CONTRACT.md` promises, walks a body ont
 a bundle, and checks that a full quiver refuses **without** eating the bag.
 `dungeon_supply.gd` generates eight floors and counts what landed in the rooms,
 because a 25% roll cannot be judged from one floor. `fletch_screen.gd`
-photographs the POUCH without a fletch stop, then drives Brannoc's live forge row
+photographs INVENTORY without a fletch stop, then drives Brannoc's live forge row
 through empty, ready, refusal, success, full-quiver and near-full states. Last
 runs:
 
@@ -1527,7 +1527,7 @@ CHEST bundle count=10          CHEST pickup +10 arrows (quiver 10)
 FULL quiver refused the bundle and it stayed on the floor
 TOTAL rooms=48 chests=25 bundles=11 loose_arrows=66
 RATE bundles/room=0.23 (arrow_chance=0.25)
-POUCH focus walk reached [Cell_0, Cell_4, Cell_8, Rope, @Button@…]
+INVENTORY focus walk reached [Cell_0, Cell_4, Cell_8, Rope, @Button@…]
 FLETCH transaction arrows=30/30 bag={cracked_flint: 0, bone_shard: 0}
 FLETCH OK
 ```

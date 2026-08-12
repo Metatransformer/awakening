@@ -99,7 +99,7 @@ screen. ADD = new pixels, argued.
 | 30 | Lock-on converge / break animation | — | **DELETE (doc)** | Doc. Never built. Decision 16. |
 | 31 | Off-screen lock chevron | — | **DELETE (doc)** | Doc. Never built. Decision 16. |
 | 32 | Enemy health bars (20×2, ×2.2 locked, LOS + 22 m) | on monsters | **KEEP** | Neither — §5.5 was amended alongside the code, correctly. |
-| 33 | Garrison control legend (2 lines, ~150 chars) | 0.962 | **CHANGE** | Both. It fails §5.6's test outright, it crosses the bottom safe margin, and it is the only thing squeezing the vitals pole. Decision 8. |
+| 33 | Garrison control legend (2 lines, ~150 chars) | 0.962 | **DELETED** | Decision 8 made it transient; **card #121 deleted it outright on 2026-08-12**, on the owner's instruction. `Hud` publishes no `legend` rect and `hud_pole.gd` asserts that nothing does. Decisions 8, 28 and 38 are superseded. |
 | 34 | Floor card (name + level, fading plate) | top-left | **CHANGE** | Doc undocumented; and the code's level line never dims. Decision 18. |
 | 35 | Room-name card (Jacquard 24, y 0.139) | — | **DELETE (doc)** | Doc. `Pal.ROOM_NAME_BASELINE` has zero callers, Jacquard was never wired (§3.1 admits it), and the floor card does this job better. |
 | 36 | Damage-direction arc | — | **ADD** | Code. It replaces `Feel`'s undirected vignette. Decision 13. |
@@ -141,7 +141,7 @@ ammo/charge numeral; magic; heat and its multiplier; the draught pips; the bag r
 and slips.
 
 **Tier 3 — read when stopped.** Floor card, minimap, key caps, loadout line,
-prompts, toasts, the autosave notice, the legend.
+prompts, toasts, the autosave notice.
 
 The four separations, written as construction rules rather than as intentions:
 
@@ -194,7 +194,7 @@ error (decision 19). So:
 
 | px @720 | Used for |
 |---|---|
-| **10** | ammo / charge numeral, bottle count `n/m`, slips `+N`, heat multiplier, floor name, legend |
+| **10** | ammo / charge numeral, bottle count `n/m`, slips `+N`, heat multiplier, floor name |
 | **14** | key caps, loadout line, interact prompt, autosave notice |
 | **16** | floor level, item toast |
 
@@ -272,7 +272,15 @@ three tinted pips need no labels, because `PotionDb.tint_of` is the same colour 
 bottle glyph in the item cell has already taught. **Rejected:** keep the stack,
 shrink the pips. That trades a collision for illegibility and still has no bound.
 
-**Decision 8 — the garrison control legend becomes transient.**
+**Decision 8 — the garrison control legend becomes transient. SUPERSEDED
+2026-08-12 by card #121, which deletes the legend entirely** on the owner's
+instruction: *"we need to remove the controls from the bottom of the screen,
+they're not important."* Everything below is why it stopped being permanent, kept
+because decisions 28, 35 and 38 are all written against it; the element itself no
+longer exists, and neither do `Hud.show_controls` / `hide_controls` / `LEGEND` /
+`Pal.KEYS_BASELINE` / `Pal.KEYS_GUTTER`. The permanent reference named in the
+last paragraph — Options → Controls — is now the ONLY one.
+
 It is the largest block of text on the HUD — two lines, ~150 characters — it is
 permanently on screen in the garrison, and by §5.6's test it fails outright: it
 feeds nothing about push-on-or-leave. It descends past the bottom safe margin (cap
@@ -646,8 +654,9 @@ second table, which would be §0 again in a new place. Then three assertions:
 And the bar that is not a director, from CLAUDE.md §2: a clean
 `godot --path . --import`, a clean boot, and **your own eyes on the output**. For
 this card specifically, on the garrison frame with three draughts running and a pad
-plugged in — the single frame that exercises the pole, the transient legend, the
-device-change re-show and the key caps at once.
+plugged in — the single frame that exercises the pole, the device-change repaint
+and the key caps at once. (It exercised the transient legend too, until card #121
+deleted it.)
 
 ---
 
@@ -663,7 +672,7 @@ Each of these leaves the tree consistent and is one commit.
 3. **The type ladder** (1–3, 19) + assertion 3.
 4. **The plates and the edges** (4, 14, 15): two plate recipes, rim to the safe
    edge, hold onto the rim, and the five dead constants deleted. + assertion 2.
-5. **The legend** (8).
+5. ~~**The legend** (8).~~ Landed, then deleted whole by card #121.
 6. **The vignette → the arc** (13), including `Bus.hero_struck`.
 7. **Lock-on colour** (16) + the `enemy_bars.gd` beat.
 8. **The bag and the floor card** (17, 18).
@@ -1052,7 +1061,7 @@ root cause of §0; only its two assertions needed repair, not its thesis.
 5. **The plates and the edges** (4, 14, 15) + assertion 2 + the five dead constants.
 6. **The bag** (17, 26): the slot marks, the T3 breath onto the rim, §5.3 rewritten.
    Promoted above the legend — it is the corner a stranger looks at first.
-7. **The legend** (8).
+7. ~~**The legend** (8).~~ Landed, then deleted whole by card #121.
 8. **The vignette → the arc** (13, 29), including `Bus.hero_struck`.
 9. **Lock-on colour and shape** (16, 22) + the `enemy_bars.gd` beat, which now asserts
    three shapes as well as three colours.
@@ -1284,12 +1293,14 @@ decision 13's own objection a third time.
   not refill, spent in two different tempos, correctly get two different instruments.
   **What was wrong is that neither document said so** — written into §5.1c.
   Recorded, not resolved: `Game.charges` is still one `int` for three workings.
-- **Decision 8's missing signal is adopted.** There is no `garrison_entered` on
-  `Bus`, and booting straight into the garrison is the one time the legend matters
-  most. **Decision 38: show on `_refresh_visibility` going visible while
-  `not Run.in_dungeon`, plus `Bus.input_device_changed`, plus `Bus.run_ended`** —
-  boot, return-from-run and pad pickup, with no new signal. The 10 s hold pauses with
-  the game; a legend that burns its window inside the Options screen is one nobody saw.
+- **Decision 8's missing signal is adopted. SUPERSEDED by card #121** — the
+  legend is deleted, so all three re-show hooks are gone with it. There is no
+  `garrison_entered` on `Bus`, and booting straight into the garrison was the one
+  time the legend mattered most. **Decision 38: show on `_refresh_visibility`
+  going visible while `not Run.in_dungeon`, plus `Bus.input_device_changed`, plus
+  `Bus.run_ended`** — boot, return-from-run and pad pickup, with no new signal.
+  The 10 s hold paused with the game; a legend that burns its window inside the
+  Options screen is one nobody saw.
 
 ## 14.9 The order of work, amended
 

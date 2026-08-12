@@ -24,9 +24,11 @@ extends RefCounted
 ##
 ##   * ~~`rim` crosses the safe area by 5.8 px on the right~~ — closed by item 5
 ##     (`7d6659e`). Its right edge was 0.978; decision 4.5 puts it at 0.969.
-##   * `legend` crosses the safe area on three sides AND overlaps `pole`, in the
-##     garrison only. Decision 28's wrap and §14.1's x separation — item 7. This
-##     one is still red.
+##   * ~~`legend` crosses the safe area on three sides AND overlaps `pole`, in
+##     the garrison only~~ — repaired by decision 28's wrap and §14.1's x
+##     separation (item 7), and then closed for good by card #121, which deleted
+##     the control legend outright. No element publishes `legend` any more;
+##     `hud_pole.gd` asserts that nothing does.
 ##   * ~~`slips` is not inside `rim`, and ONLY at eight stacks~~ — closed by item
 ##     6. The stack grew upward from `Pal.SLIPS_BOTTOM` and cleared the rim's top
 ##     frame at 560.4 vs 563.92. HUD_PLAN §14.5 stated this case "resolves
@@ -66,6 +68,10 @@ extends RefCounted
 ## and decision 8 then makes the legend transient. Exempting transients would
 ## exempt the evidence. A transient that overlaps a permanent element for ten
 ## seconds is a bug for ten seconds.
+##
+## The legend itself is gone (card #121), so the transients left are the floor
+## card and the item toast. The rule outlives its example: the next transient
+## anyone adds is checked the same way.
 
 ## `Rect2.intersects` excludes borders, so a shared edge passes and a 0.4 px
 ## overlap fails — and fractional layout guarantees 0.4 px cases. Half a pixel of

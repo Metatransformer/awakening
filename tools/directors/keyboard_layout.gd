@@ -156,12 +156,16 @@ func run(rig) -> void:
 	await rig.until(func() -> bool: return bool(hero.call(&"is_on_floor")), 3.0)
 
 	# --- 6. The frame a human has to look at ---------------------------------
-	# The HUD legend prints every cap in the layout, and `heavy` now caps as
-	# "SHFT+LMB" — eight characters on a centred line that has already gone off
-	# both edges of the screen once (hud.gd, LEGEND_BREAK). A state enum cannot
-	# tell anyone whether it still fits. CLAUDE.md §2: look at it.
+	# The HUD's key caps print the live bindings under the hands and the item
+	# cross, and `heavy` now caps as "SHFT+LMB" — eight characters in a cell sized
+	# for three. A state enum cannot tell anyone whether it still fits.
+	# CLAUDE.md §2: look at it.
+	#
+	# This used to photograph the control LEGEND, which printed every cap in the
+	# layout on one line across the bottom. Card #121 deleted it, so the caps in
+	# the corner are the only surface left that renders a binding.
 	await rig.wait_seconds(0.4)
-	await rig.capture(out.path_join("legend.png"))
+	await rig.capture(out.path_join("caps.png"))
 
 	print("KBD %d passed, %d failed" % [_pass, _fail])
 
@@ -211,7 +215,7 @@ func _burst(rig, hero: Node3D, out: String, tag: String) -> void:
 		await rig.capture(out.path_join("%s_%02d.png" % [tag, i]))
 		await rig.wait_frames(2)
 	# Handed back, unlike rb_swing's — this director keeps running afterwards and
-	# needs the camera behind the hero again for the legend shot.
+	# needs the camera behind the hero again for the key-cap shot.
 	cam.set_physics_process(was)
 
 

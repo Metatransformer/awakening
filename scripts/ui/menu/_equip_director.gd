@@ -190,7 +190,7 @@ func run(rig) -> void:
 		Game.loadout_set != live_before)
 	await rig.capture("eq_05_swapped.png")
 
-	# --- The way out, which is on the POUCH now ------------------------------
+	# --- The way out, which is on INVENTORY now ------------------------------
 	# It used to be on this screen and it is not any more: the bag's worth, the
 	# purse and the fee are one decision, so they are on one screen (pouch_panel
 	# owns all three, hud.gd draws none of them). The assertions did not move
@@ -198,7 +198,7 @@ func run(rig) -> void:
 	# button that is no longer there.
 	await _key(rig, KEY_ESCAPE, 12)
 	_check("Escape backed out of Equipment to the root", not equip.visible)
-	await _nav_to_button(rig, "Pouch")
+	await _nav_to_button(rig, "Inventory")
 	await _key(rig, KEY_ENTER, 12)
 	_check("the pouch screen is showing", pouch.visible)
 
@@ -376,7 +376,7 @@ func run(rig) -> void:
 	# rule the assertion above cannot see.
 	menu.open()
 	await rig.wait_frames(8)
-	await _nav_to_button(rig, "Pouch")
+	await _nav_to_button(rig, "Inventory")
 	await _key(rig, KEY_ENTER, 12)
 	_check("...but from the root it is still a level to back out of", pouch.visible)
 	await _key(rig, KEY_ESCAPE, 12)

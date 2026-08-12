@@ -19,9 +19,13 @@ const KEY_ESC := 4194305  ## physical_keycode for Escape, as bound to `pause`.
 const KEY_I := 73         ## `inventory` — opens straight onto the pouch.
 const KEY_M := 77         ## `map` — opens straight onto the map.
 const KEY_E := 69         ## `interact` in the world, CONFIRM in every menu.
-const KEY_Q := 81         ## `ui_tab_prev`.
-const KEY_R := 82         ## `ui_tab_next` (it was E until E became confirm).
 const KEY_DOWN := 4194322
+## The tab strip's arrows. Q and R used to be here as `ui_tab_prev` /
+## `ui_tab_next`; card #120 removed the shoulder ring and both keys with it, and
+## paging is now ↑ onto the strip then ← / →.
+const KEY_UP := 4194320
+const KEY_LEFT := 4194319
+const KEY_RIGHT := 4194321
 
 ## How many rows down the root list to hunt for one by name before giving up.
 const ROW_LIMIT := 10
@@ -79,7 +83,7 @@ func run(rig) -> void:
 ## nothing under it, so the press you use to LEAVE must leave.
 ##
 ## It used to pop onto the pause root instead: `open_pouch` called `open()` —
-## which seeds the stack with ROOT — and then pushed POUCH on top, so Escape
+## which seeds the stack with ROOT — and then pushed INVENTORY on top, so Escape
 ## found two entries and walked you back onto a menu you never asked for.
 func _one_press_screens(rig) -> void:
 	await _key(rig, KEY_I, 16)
@@ -96,13 +100,15 @@ func _one_press_screens(rig) -> void:
 	await _key(rig, KEY_M, 16)
 	_ck("F0 M opened straight onto the map",
 		Menu.is_open and Menu.get_node("Root/Screens/MapScreen").visible)
-	# Paging moved off E when E became the universal confirm. The ring is
-	# ITEMS/POUCH/MAP, so next from MAP wraps to ITEMS and prev comes back.
-	await _key(rig, KEY_R, 16)
-	_ck("F1 R pages forward off the map",
+	# The ring is EQUIP / INVENTORY / MAP and it is walked on the TAB STRIP now
+	# (card #120): ↑ out of the page lands on the lit tab, → is the next page.
+	# From the MAP that wraps forward to EQUIP and ← comes back.
+	await _key(rig, KEY_UP, 16)
+	await _key(rig, KEY_RIGHT, 16)
+	_ck("F1 the strip pages forward off the map",
 		Menu.get_node("Root/Screens/EquipScreen").visible)
-	await _key(rig, KEY_Q, 16)
-	_ck("F2 Q pages back to it",
+	await _key(rig, KEY_LEFT, 16)
+	_ck("F2 ← pages back to it",
 		Menu.get_node("Root/Screens/MapScreen").visible)
 	await rig.capture("esc_05_map.png")
 	# Paging REPLACES the top of the stack, so the one-press contract has to
@@ -115,11 +121,11 @@ func _one_press_screens(rig) -> void:
 ## when you got there the long way, through the root menu.
 func _e_confirms(rig) -> void:
 	await _key(rig, KEY_ESC, 16)
-	if not await _focus_row(rig, "Pouch"):
-		_ck("G0 could reach the 'Pouch' row on the root menu", false)
+	if not await _focus_row(rig, "Inventory"):
+		_ck("G0 could reach the 'Inventory' row on the root menu", false)
 		await _key(rig, KEY_ESC, 16)
 		return
-	_ck("G0 could reach the 'Pouch' row on the root menu", true)
+	_ck("G0 could reach the 'Inventory' row on the root menu", true)
 	await _key(rig, KEY_E, 16)
 	_ck("G1 E confirmed the row (E is the world's interact key)",
 		Menu.get_node("Root/Screens/PouchScreen").visible)

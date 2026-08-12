@@ -1,6 +1,6 @@
 class_name MenuPouchPanel
 extends Control
-## The POUCH screen: what you are carrying, drawn as the fixed number of slots
+## The INVENTORY screen: what you are carrying, drawn as the fixed number of slots
 ## you are actually carrying it in.
 ##
 ## This is deliberately NOT a list. A list of six rows and a list of twelve rows
@@ -29,13 +29,13 @@ extends Control
 ##  * **The workbench**, which is what survived. Read-only: this screen shows
 ##    the stock, the smith spends it.
 ##  * **The way out**, its fee, and the HOLD it now takes — Y, down for
-##    `ROPE_HOLD` seconds, with the gauge. It moved here off the ITEMS screen, and the
+##    `ROPE_HOLD` seconds, with the gauge. It moved here off the EQUIP screen, and the
 ##    HUD's gold total moved here too (hud.gd took it off the screen on purpose).
 ##    That is not three unrelated things sharing a frame: the bag's worth, the
 ##    purse and the fee ARE the extraction decision, and it is a decision made by
 ##    stopping and looking, not by glancing at a corner while running.
 ##
-## It owns no state and changes none. Equipping is the ITEMS screen's job (the
+## It owns no state and changes none. Equipping is the EQUIP screen's job (the
 ## D-pad and the two hands), and the two are separate screens on purpose — one
 ## is what you are CARRYING and the other is what you are HOLDING, and a player
 ## who conflates them is a player who thinks the bag can be equipped.
@@ -51,12 +51,12 @@ signal use_requested
 ## all five screens read the same number — see the comment on it for why they
 ## have to.
 ##
-## The hint carries four things and it is at its limit. "Hands change on ITEMS"
+## The hint carries four things and it is at its limit. "Hands change on EQUIP"
 ## is on it rather than under the WORN card because the misconception it heads
 ## off — that the doll is where you equip — is formed by looking at the doll and
 ## then looking for the verb, and the verbs are all on this line.
 ##
-const HINT := "↑↓←→ Look   E / A Pack   Hold Y Escape   Esc / B Back   Hands change on ITEMS"
+const HINT := "↑↓←→ Look   E / A Pack   Hold Y Escape   Esc / B Back   Hands change on EQUIP"
 
 ## The action the way out is held on: Y on the pad, Y on the keyboard.
 ##
@@ -73,17 +73,30 @@ const HOLD_ACTION := &"ui_hold"
 ## you make while reading something else on this screen.
 const ROPE_HOLD := 0.9
 
-## Cells per row. Twelve slots is the start, sixteen the bought maximum
-## (K.START_BAG_SLOTS + SupplyDb.LIMITS.bag_slot): four across is three clean rows
-## at the low end and four at the high end, and four is as many as fit.
+## Cells per row, and the same five every other collection screen in the game
+## draws (`ItemGrid.columns`). It was four on both sides until card #120; the
+## number now lives in `ItemGrid` for everyone, and this const survives only
+## because this panel is the one that has to fight for the width.
 ##
-## Six across was the first try and it pushed the frame to ~1400 px inside a
-## 1280 px viewport — the detail column and the Back button rendered off the
-## right edge of the screen. A CenterContainer does not save you from a child
-## whose minimum size is bigger than the screen; it just clips it. The width
-## budget is: 1060 frame − 36 frame pad − 44 body pad − 24 split − 340 detail
-## − 28 card pad = 588 for the grid, which is 4 × 140 with 8 between.
-const COLS := 4
+## The bag holds `Game.bag_slots` (12 at the start, 16 bought out) less the
+## case's 3, so the grid is 9 cells at the low end and 13 at the high end: two
+## rows then three, where four across was three rows then four. One row shorter
+## is the point — the whole bag is one glance instead of a scan.
+##
+## **Five did not fit, and the fifth column was not paid for by shrinking
+## anything.** Measured with the doll still beside the grid: `Grid` 732 px
+## (5 × 140 + 4 × 8), `Bag` 748, plus `Worn` 152 and 16 between made `Left` 916,
+## and the frame came out **1320 px inside a 1280 px viewport** — past the
+## screen, and 100 px past the 1220 `MenuUtil.FRAME_SIZE` the other four screens
+## draw at. A CenterContainer does not save you from a child whose minimum size
+## is bigger than the screen; it clips it, silently, which is how six across got
+## as far as being drawn the first time. The hundred came out of `DOLL_W` and
+## `DETAIL_W`, and `_build` records the re-layout that was tried first and
+## measured worse.
+##
+## The cell's 140 px is not a lever. It is what a two-word item name needs
+## without wrapping, and `ItemGrid` owns it for every screen at once.
+const COLS := 5
 ## The cell's own numbers moved to `ItemGrid` when every other screen started
 ## drawing the same cell. Aliased here rather than deleted because the WORN
 ## column beside the grid matches the cell's text size on purpose — see the note
@@ -91,15 +104,37 @@ const COLS := 4
 const CELL_NAME_PT := ItemGrid.NAME_PT
 ## Hard ceiling on cells drawn, so a corrupt `bag_slots` cannot build a grid
 ## taller than the frame and push the footer off the screen — which is exactly
-## how the ITEMS screen broke the first time it was built.
-## Four rows of four. That is the bought maximum, so it is also the tallest grid
-## the frame was measured against.
+## how the EQUIP screen broke the first time it was built.
+##
+## Sixteen is `Game.bag_slots` at its bought maximum, which is the most the game
+## can legitimately ask for; at `COLS` = 5 that is four rows rather than the four
+## rows of four it used to be, and the real grid is smaller again because the
+## case takes three of those slots off the top (`Run.hold_slots`). Kept at the
+## bag's ceiling rather than lowered to the 13 the grid can actually be handed,
+## because it is a guard against a corrupt number and not a layout constant.
 const MAX_CELLS := 16
 
-## The paper doll's column. The frame grew from 1060 to `MenuUtil.FRAME_SIZE`'s
-## 1220 to make room for exactly this, so the number is the width that was added
-## less the separation beside it -- the grid's budget above is unchanged.
-const DOLL_W := 152
+## The paper doll's column, and `MenuPaperDoll.MIN_SIZE.x` exactly. The frame grew
+## from 1060 to `MenuUtil.FRAME_SIZE`'s 1220 to make room for this column, and it
+## was 152 -- twenty px of comfort over the doll's own floor -- until card #120
+## needed a fifth cell in the bag. Twenty of the hundred came from here.
+##
+## It is AT the floor now, so the next thing this screen has to find room for
+## cannot come out of the doll: below 132 the compact card's two hand tiles start
+## eliding the item name, which is the only thing on them worth reading.
+const DOLL_W := 132
+
+## The detail column: what the focused cell is, what it is worth, and the way out
+## under it. 340 until card #120, when the other eighty px of the fifth cell came
+## from here.
+##
+## Eighty was affordable because this column is TEXT and the text wraps: every
+## label in `_build_detail` and `_build_rope` is `AUTOWRAP_WORD_SMART`, and the
+## column had ~250 px of unused HEIGHT under the blurb to wrap into (`Right` is
+## the tallest thing on the screen only because it is `EXPAND_FILL`, not because
+## it is full). A blurb one line longer and a breadcrumb that wraps is what the
+## fifth bag cell cost, and the fifth bag cell is the picture the screen is FOR.
+const DETAIL_W := 260
 
 ## The header's row, so `PauseMenu` can drop the shared tab strip into it. See
 ## the same field on `MenuEquipPanel`.
@@ -238,7 +273,7 @@ func _build() -> void:
 	# right the column wanted 627 px and the frame 801, inside a 720 px viewport.
 	# Forty pixels of the header and forty of the bench rendered off the top and
 	# bottom edges of the screen, and nothing complained -- the same failure the
-	# ITEMS screen hit and the same one `_build_stock`'s own comment describes
+	# EQUIP screen hit and the same one `_build_stock`'s own comment describes
 	# surviving once already. The bench is the only card here that is not
 	# focusable and not part of the extraction arithmetic, so it is the one that
 	# moves.
@@ -260,6 +295,21 @@ func _build() -> void:
 	# Doll, then grid: the figure on the far left, what it is carrying beside it,
 	# and what any of that is worth on the right. Left to right, the screen is a
 	# sentence about you.
+	#
+	# **The fifth column (card #120) was paid for out of THIS row's two
+	# neighbours, and the reason is that the row itself has no height to trade.**
+	# The obvious move was to drop the doll below the bag, where `Bench` was
+	# measured at 128 px inside an 816 px column with ~690 px of width doing
+	# nothing. It works and it is wrong: the compact doll's own floor is 300 px
+	# tall (`MenuPaperDoll.MIN_SIZE`), so under the bag it stacks instead of
+	# sitting beside it -- measured `Frame` **1220x900 in a 720 px viewport**, with
+	# the bound bottle, the hint line and the Back button all rendered below the
+	# bottom edge and nothing complaining. Beside the bag the doll is free: the
+	# card is 342 px tall and so is the doll, so the row costs the taller of two
+	# things that are the same height.
+	#
+	# So the 100 px came out of `DOLL_W` and `DETAIL_W` instead, both of which had
+	# slack the picture could show you. See those two consts.
 	var carried := HBoxContainer.new()
 	carried.name = "Carried"
 	carried.add_theme_constant_override("separation", 16)
@@ -271,7 +321,7 @@ func _build() -> void:
 
 	var right := VBoxContainer.new()
 	right.name = "Right"
-	right.custom_minimum_size.x = 340
+	right.custom_minimum_size.x = DETAIL_W
 	# 8 and not the 12 the other columns use. This is the tallest column on the
 	# is the tallest thing on the screen -- it, not the frame's 604, is what sets
 	# the pouch's height, and at 12 the footer's Back button ran off the bottom
@@ -303,11 +353,11 @@ func _build() -> void:
 
 
 ## The figure, and the three things hanging off it. Read-only: see
-## `MenuPaperDoll`'s header for why equipping stays on the ITEMS screen.
+## `MenuPaperDoll`'s header for why equipping stays on the EQUIP screen.
 ##
-## A fixed width rather than a share of the row. The bag grid beside it is four
+## A fixed width rather than a share of the row. The bag grid beside it is five
 ## cells of a measured 140 px and it cannot give any of that back (see `COLS`);
-## the doll gets the width the frame grew by and not a pixel of the grid's.
+## the doll gets `DOLL_W` and not a pixel of the grid's.
 func _build_doll(parent: Node) -> void:
 	# A column, not a card. See the same note on `MenuEquipPanel._build_doll`:
 	# nested boxes inside a boxed frame are the read the kit undoes, and their
@@ -499,7 +549,7 @@ func _build_detail(parent: Node) -> void:
 ## above it is a picture of what you are carrying, and this spends it.
 ##
 ## It sits directly under the grid it is priced from, which is why it moved here
-## from the ITEMS screen: the fee is a quarter of the bag, and the bag is what
+## from the EQUIP screen: the fee is a quarter of the bag, and the bag is what
 ## the left column draws. On the other screen the number had nothing beside it.
 ##
 ## It is not one of the three bindable buttons and it never will be. Extraction
@@ -802,7 +852,7 @@ func _build_stock(parent: Node) -> void:
 ## row, down leaves the bottom row through `spill_down`); this wires what it
 ## leaves into, and closes the loop from Back back to the top left. Every cell
 ## and every button is reachable by holding one direction — the same guarantee
-## the ITEMS screen makes, and for the same reason.
+## the EQUIP screen makes, and for the same reason.
 func _wire_focus() -> void:
 	# The loop closes on the CASE's first cell, not the bag's, because the case is
 	# now the top of the screen and Back's job is to return you to the top.
@@ -842,6 +892,31 @@ func focus_first() -> void:
 ## Where the shared tab strip is inserted. See `_hrow`.
 func tab_host() -> HBoxContainer:
 	return _hrow
+
+
+## The top row of focusables, landing target first — `PauseMenu` joins these to
+## the tab strip so ↑ leaves the page through them and ↓ off a tab comes back
+## down onto the first (card #120, `MenuPageTabs`).
+##
+## The CASE's three cells and not the bag's. The case is the top of the picture
+## and the row `focus_first` already opens on, so it is the row a player leaves
+## upwards through; the bag's own top row exits upwards INTO the case, which is
+## the move it has always made.
+##
+## Re-read on every page entry rather than cached: `ItemGrid` frees and rebuilds
+## its buttons when the slot count changes, so a held reference is a link into a
+## freed node one bag slot from now.
+func tab_row() -> Array:
+	var out: Array = []
+	for i in Run.CASE_SLOTS:
+		var c := _case_grid.cell_at(i)
+		if c != null:
+			out.append(c)
+	if out.is_empty():
+		var first := _grid.cell_at(0)
+		if first != null:
+			out.append(first)
+	return out
 
 
 ## The bag's cells, for a director that wants to count what is drawn rather than

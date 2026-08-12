@@ -73,8 +73,19 @@ var _cells: Array[Button] = []
 var _index_of: Array[int] = []
 
 
+## Five across. It was four until card #120, when the owner asked for five ("we
+## were supposed to change the inventory to five per row — right now there's only
+## three things on the items page"). Every screen that draws a collection reads
+## this, so the number lives here rather than at each caller: the bag, the
+## vendor's stock, the locker and the receipt are one picture of a collection,
+## and a bag five wide beside a receipt four wide is two.
+##
+## It is not free. The cell has a measured 140 px minimum (`ItemCell.SIZE`, set
+## by how the names wrap), so a fifth column costs 148 px on a screen that had
+## none spare — `MenuPouchPanel._build_grid` is the caller that had to be
+## re-laid-out to find it.
 func _init() -> void:
-	columns = 4
+	columns = 5
 	add_theme_constant_override("h_separation", 8)
 	add_theme_constant_override("v_separation", 8)
 
@@ -157,8 +168,8 @@ func _paint(b: Button, e: Dictionary) -> void:
 ## This is the pouch's wiring, moved here whole, and both halves of it are
 ## load-bearing. Godot's spatial focus detection gets the middle of a grid right
 ## on its own and gets the ENDS wrong: at the right-hand edge it finds nothing to
-## the right and the cursor stops, which in a four-wide bag means the stick dies
-## every fourth cell. And the last row has to hand focus to whatever the screen
+## the right and the cursor stops, which in a five-wide bag means the stick dies
+## every fifth cell. And the last row has to hand focus to whatever the screen
 ## put underneath it, or the grid is a trap you can only leave with B.
 ##
 ## The wrap is per row and reads `n` rather than `columns` at the end, so a short

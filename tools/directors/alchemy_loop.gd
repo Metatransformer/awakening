@@ -497,9 +497,9 @@ func _underground(rig) -> void:
 	if not Run.in_dungeon:
 		return
 
-	# The column with EVERY bar in it. Underground the heat meter exists and the
-	# control legend does not, so the draughts sit one slot lower than they did
-	# in the garrison -- and this is the frame that has to be looked at, because
+	# The column with EVERY bar in it. Underground the heat meter exists and in
+	# the garrison it does not, so the draughts sit one slot lower than they did
+	# upstairs -- and this is the frame that has to be looked at, because
 	# drinking happens down here and a stack that only fits upstairs fits
 	# nowhere. There is no assertion for it. A rectangle in the wrong place is
 	# not a thing a check can see; that is the whole reason the first version of

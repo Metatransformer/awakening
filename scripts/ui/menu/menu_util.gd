@@ -13,9 +13,15 @@ extends RefCounted
 ## how the HUD came to print `LMB` at a player holding a controller.
 
 ## The house frame. Every screen in the pause menu is exactly this size, and it
-## has to live in ONE place: the player pages ITEMS → POUCH → MAP with the
-## shoulder buttons, and a frame that changes size between two of them reads as
-## the window jumping rather than as the content changing.
+## has to live in ONE place: the player pages EQUIP → INVENTORY → MAP along the
+## tab strip, and a frame that changes size between two of them reads as the
+## window jumping rather than as the content changing.
+##
+## It is a MINIMUM, not a size, which is the trap card #120 walked into: the
+## pouch's fifth bag column pushed its own content past 1220 and the frame went
+## with it -- 1320x900 in a 1280x720 viewport, silently, because a
+## CenterContainer clips a child bigger than the screen rather than complaining.
+## `tools/directors/menu_pages.gd` measures both axes against the viewport now.
 ##
 ## Width was 1060 in five separate consts until the paper doll needed a column
 ## of its own on the pouch. 1220 inside a 1280-wide base viewport leaves 30 px of
@@ -59,7 +65,7 @@ const ACTION_NAMES := {
 	&"loadout_swap": "Swap Loadout",
 	&"first_person": "First Person",
 	&"pause": "Pause",
-	&"inventory": "Pouch",
+	&"inventory": "Inventory",
 	&"map": "Map",
 }
 

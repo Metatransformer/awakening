@@ -41,7 +41,9 @@ func _shot(rig, path: String, tag: String) -> void:
 ## Card #48. **A counter takes the screen, so the HUD stands down for it** — and
 ## the frame that carded this had the two-row control legend reading out below the
 ## Lanternkeeper's panel, naming RMB GUARD and D-PAD WEAPON while the counter had
-## the input and none of them did anything.
+## the input and none of them did anything. That legend is gone (card #121); the
+## rule it carded is not, and the bars, the money rim and the extraction fee still
+## sit in the strip a counter's scrim does not reach.
 ##
 ## Read off `Hud.layout_rects()` and not `Hud.visible`, which is the property the
 ## fix sets and would therefore agree with itself. The layout dictionary is filled
@@ -52,9 +54,14 @@ func _shot(rig, path: String, tag: String) -> void:
 ##
 ## **Both answers are known and both are demanded, in this order.** With the
 ## counter up the honest answer is nothing at all; four frames after it closes the
-## honest answer is the full pole again, legend included, passing assertion 2.
-## Only the second half can catch an instrument that has quietly stopped
-## reporting, which is exactly how a check like this rots into a no-op.
+## honest answer is the full pole again, passing assertion 2. Only the second half
+## can catch an instrument that has quietly stopped reporting, which is exactly
+## how a check like this rots into a no-op.
+##
+## The POLE is what the second half asks for now. It used to ask for the LEGEND,
+## which was the one element a director could force up on demand; with that
+## deleted (card #121) `pole` is the element present in every garrison frame and
+## absent from every stood-down one, so it is the honest witness.
 func _counter_stands_the_hud_down(rig, out: String) -> int:
 	var fails := 0
 	var before: int = Hud.layout_rects().size()
@@ -80,14 +87,12 @@ func _counter_stands_the_hud_down(rig, out: String) -> int:
 	# The layer is `queue_free`d, so the HUD's own `node_removed` deferral needs a
 	# frame to land before the second half of the calibration is asked.
 	await rig.wait_frames(8)
-	Hud.show_controls()
-	await rig.wait_frames(2)
 	await _shot(rig, out.path_join("g_12_counter_gone.png"), "g_12_counter_gone")
-	if Hud.layout_rects().has(&"legend"):
-		print("  ok   POLESHOP counter closed: the pole and the legend are back "
-			+ "(%d rects)" % Hud.layout_rects().size())
+	if Hud.layout_rects().has(&"pole"):
+		print("  ok   POLESHOP counter closed: the pole is back (%d rects)"
+			% Hud.layout_rects().size())
 	else:
-		print("POLE FAIL the counter closed and the legend never came back — "
+		print("POLE FAIL the counter closed and the pole never came back — "
 			+ "the frame above proves nothing about the counter")
 		fails += 1
 	return fails
@@ -173,30 +178,22 @@ func run(rig) -> void:
 				"%s_heat_t%d" % [tag, Heat.tier])
 
 	if not underground:
-		# **The legend, up.** It is transient now (decision 8), so it is absent
-		# from every frame above — and decision 35 is explicit that the check has
-		# to keep seeing it, because the legend running off both edges is one of
-		# the three defects assertion 1 was sold on. An element that is only
-		# checked while it happens to be off screen is not checked.
-		#
-		# Three beats, because a transient goes wrong in its fades: coming in,
-		# fully up, and gone. A rect drawn at 20% alpha is still a rect in the
-		# same place, so the check has to see the faint one too.
-		Hud.show_controls()
-		await rig.wait_frames(1)
-		await _shot(rig, out.path_join("g_08_keys_in.png"), "g_08_keys_in")
+		# **The bottom strip is EMPTY, and that is the assertion.** The control
+		# legend used to fade in and hold across it (decision 8); card #121
+		# deleted it, and the three beats that photographed its fades went with
+		# it. What replaced them is the null case — a settled garrison frame,
+		# well past the ten seconds the window used to run for, on which no
+		# `legend` rect may be published by anything. A removal nothing checks
+		# is a removal that comes back.
 		await rig.wait_frames(45)
-		await _shot(rig, out.path_join("g_09_keys.png"), "g_09_keys")
-
-		# And gone. The whole point of decision 8 is that the frame comes back,
-		# so a director that never photographs the empty bottom strip has not
-		# checked the feature — only its first ten seconds.
-		Hud.hide_controls()
-		await rig.wait_frames(4)
-		await _shot(rig, out.path_join("g_10_keys_gone.png"), "g_10_keys_gone")
+		await _shot(rig, out.path_join("g_09_no_legend.png"), "g_09_no_legend")
 		if Hud.layout_rects().has(&"legend"):
-			print("POLE FAIL the legend is still drawing after hide_controls()")
+			print("POLE FAIL a `legend` rect is being published — card #121 "
+				+ "removed the control legend and something has put it back")
 			_fails += 1
+		else:
+			print("  ok   POLE no legend in the garrison strip (%d rects: %s)"
+				% [Hud.layout_rects().size(), Hud.layout_rects().keys()])
 
 		_fails += await _counter_stands_the_hud_down(rig, out)
 

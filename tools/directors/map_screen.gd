@@ -8,7 +8,8 @@ extends RefCounted
 ##   2. the minimap and the MAP screen draw the SAME plan -- fogged rooms hidden,
 ##      walked rooms outlined, chests and stairs marked;
 ##   3. fog lifts by walking: a room the player has not stood in is not drawn;
-##   4. `map` (M) opens the MAP tab, and RB/LB page ITEMS <-> POUCH <-> MAP;
+##   4. `map` (M) opens the MAP tab, and the tab strip pages
+##      EQUIP <-> INVENTORY <-> MAP on the arrows and on the D-pad;
 ##   5. what is behind an anchored door is ON the map -- both landings, the
 ##      treasure chamber and the vault's three rooms (`_annexes`);
 ##   6. the corner minimap FOLLOWS the hero: he does not move on it, the floor
@@ -100,44 +101,59 @@ func run(rig) -> void:
 	_check("the map counts what has been walked",
 		" ".join(said).contains("%d / %d" % [Atlas.explored_count(), Atlas.rooms.size()]))
 
-	# --- RB / LB page the tabs ----------------------------------------------
+	# --- The tab strip pages, and the MAP is the screen that proves it --------
+	#
+	# **This used to be RB / LB and Q / R** and card #120 removed all four: the
+	# owner asked for the shoulder ring to go. What replaced it is the strip
+	# itself, which now takes focus — ↑ out of the top of the page lands on the
+	# lit tab, ← / → walk the ring one page per press, ↓ drops back into the body.
+	#
+	# The MAP is where that has to be tested rather than a nicer-looking screen,
+	# because the MAP is the trap: its ONLY focusable control is the Back button,
+	# so before the strip was focusable a pad player who paged here had no input
+	# left that could page away again. If ↑ misses the strip on this screen, the
+	# player is stuck on it.
 	var pouch: Control = menu.get_node("Root/Screens/PouchScreen")
 	var items: Control = menu.get_node("Root/Screens/EquipScreen")
-	_tap(&"ui_tab_next")
+	_key(KEY_UP)
 	await rig.wait_seconds(0.3)
-	_check("RB paged off the map onto ITEMS", items.visible and not map.visible)
-	await rig.capture("m_03_tab_items.png")
+	var focus: Control = rig.root.gui_get_focus_owner()
+	_check("↑ off the map's Back button reached the tab strip (%s)"
+		% ["<nothing>" if focus == null else focus.name],
+		focus != null and focus.get_parent() is MenuPageTabs)
+	await rig.capture("m_03_tab_focus.png")
 
-	_tap(&"ui_tab_next")
+	_key(KEY_RIGHT)
 	await rig.wait_seconds(0.3)
-	_check("RB again -> POUCH", pouch.visible and not items.visible)
-	await rig.capture("m_04_tab_pouch.png")
+	_check("→ paged off the map onto EQUIP", items.visible and not map.visible)
+	await rig.capture("m_04_tab_equip.png")
 
-	_tap(&"ui_tab_prev")
+	_key(KEY_RIGHT)
 	await rig.wait_seconds(0.3)
-	_check("LB came back to ITEMS", items.visible and not pouch.visible)
+	_check("→ again -> INVENTORY", pouch.visible and not items.visible)
 
-	_tap(&"ui_tab_prev")
+	_key(KEY_LEFT)
 	await rig.wait_seconds(0.3)
-	_check("LB again -> back on the MAP (the ring wraps)", map.visible)
+	_check("← came back to EQUIP", items.visible and not pouch.visible)
 
-	# The same ring on the KEYBOARD, and with real key events rather than
-	# InputEventAction. `ui_tab_prev`/`ui_tab_next` are registered at runtime by
-	# `PauseMenu._ensure_pad_ui_actions` -- they are in no .tscn and not in
-	# project.godot -- so this is the beat that proves the registration actually
-	# happened rather than that the action name exists.
-	# R, not E. E CONFIRMS now (`PauseMenu.KEY_UI_BUTTONS`, commit bb3fe8d) — it
-	# is the world's `interact` and a player who has pressed it at every chest all
-	# game does not stop meaning yes inside a menu. Paging kept Q and moved to the
-	# next key under the same hand. This beat still said E, so it was pressing
-	# `ui_accept` on the focused Back button and reading "the menu closed" as
-	# "the tabs did not page".
-	_key(KEY_R)
+	_key(KEY_LEFT)
 	await rig.wait_seconds(0.3)
-	_check("R paged the tabs like RB does", items.visible and not map.visible)
-	_key(KEY_Q)
+	_check("← again -> back on the MAP (the ring wraps)", map.visible)
+
+	# And the D-PAD, with real joypad buttons rather than an `InputEventAction`.
+	# `shoot.gd` strips every joypad binding in the InputMap so a controller on
+	# somebody's desk cannot drive a run, which takes Godot's own D-pad events off
+	# `ui_left` / `ui_right` with it; the four are put back here for the length of
+	# the run. Without this beat the whole removal is only proven on a keyboard,
+	# and it is the PAD that lost its buttons.
+	_arm_pad_dpad()
+	_pad(JOY_BUTTON_DPAD_RIGHT)
 	await rig.wait_seconds(0.3)
-	_check("Q paged back like LB does", map.visible and not items.visible)
+	_check("the D-pad pages the strip like the arrows do",
+		items.visible and not map.visible)
+	_pad(JOY_BUTTON_DPAD_LEFT)
+	await rig.wait_seconds(0.3)
+	_check("...and back, so a pad is never stuck on the map", map.visible)
 
 	# --- and M closes it ----------------------------------------------------
 	_tap(&"map")
@@ -373,11 +389,61 @@ func _tap(action: StringName) -> void:
 		Input.parse_input_event(ev)
 
 
-## A real key, pressed and released. `physical_keycode` because that is what
-## Settings writes and what the InputMap is matched on.
+## A real joypad button, pressed and released.
+func _pad(btn: int) -> void:
+	for pressed: bool in [true, false]:
+		var ev := InputEventJoypadButton.new()
+		ev.device = 0
+		ev.button_index = btn
+		ev.pressed = pressed
+		ev.pressure = 1.0 if pressed else 0.0
+		Input.parse_input_event(ev)
+
+
+## Give `ui_up/down/left/right` their D-pad back for this run — see the beat
+## above. These are Godot's own defaults, not anything this game authored, so
+## putting them back is restoring what a real pad player has rather than the
+## harness inventing a capability.
+func _arm_pad_dpad() -> void:
+	var want := {
+		&"ui_up": JOY_BUTTON_DPAD_UP, &"ui_down": JOY_BUTTON_DPAD_DOWN,
+		&"ui_left": JOY_BUTTON_DPAD_LEFT, &"ui_right": JOY_BUTTON_DPAD_RIGHT,
+	}
+	for action: StringName in want:
+		if not InputMap.has_action(action):
+			InputMap.add_action(action)
+		var have := false
+		for e in InputMap.action_get_events(action):
+			var j := e as InputEventJoypadButton
+			if j != null and j.button_index == want[action]:
+				have = true
+		if have:
+			continue
+		var ev := InputEventJoypadButton.new()
+		ev.device = -1
+		ev.button_index = want[action]
+		InputMap.action_add_event(action, ev)
+
+
+## A real key, pressed and released.
+##
+## **Both `keycode` and `physical_keycode`, and that is not belt-and-braces.**
+## This used to set the physical one alone, on the reasoning that physical is
+## what `Settings` writes and what the InputMap is matched on — true of every
+## action this GAME authors, and false of the four the ENGINE ships. Godot's
+## built-in `ui_up` / `ui_down` / `ui_left` / `ui_right` carry `keycode` and
+## leave `physical_keycode` at 0, so a physical-only event misses them entirely
+## and the press lands nowhere.
+##
+## It cost a whole director's worth of green. When paging moved onto the arrows
+## (card #120) the strip beats were pressing ↑ and ← at a menu that never heard
+## them: three beats went red and TWO WENT GREEN, because "the map is still
+## showing" is what both a working ← and a dropped ← look like from a screen you
+## never left.
 func _key(code: int) -> void:
 	for pressed: bool in [true, false]:
 		var ev := InputEventKey.new()
+		ev.keycode = code
 		ev.physical_keycode = code
 		ev.pressed = pressed
 		Input.parse_input_event(ev)

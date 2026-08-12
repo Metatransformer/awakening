@@ -1,17 +1,19 @@
 extends RefCounted
 ## Every button the HUD names, said twice: once for a keyboard, once for a pad.
 ##
-## Run it in GARRISON, because the garrison is the only room that draws the
-## controls legend. It parks the hero at the QUARTERMASTER itself rather than
-## asking whoever runs it to stand somewhere first: the prompt bar is the
-## surface most likely to be wrong -- it is the only one that composes a
-## sentence around the glyph -- and a surface that is only under test when the
-## operator remembers to walk over is not under test. Three surfaces, and they
-## are the three that name inputs:
+## Run it in GARRISON, because the garrison is where the quartermaster is. It
+## parks the hero at the QUARTERMASTER itself rather than asking whoever runs it
+## to stand somewhere first: the prompt bar is the surface most likely to be
+## wrong -- it is the only one that composes a sentence around the glyph -- and a
+## surface that is only under test when the operator remembers to walk over is
+## not under test. Two surfaces, and they are the two left that name inputs:
 ##
 ##   1. the key caps under the hands and the item cross;
-##   2. the legend along the bottom;
-##   3. the interact prompt above it.
+##   2. the interact prompt above them.
+##
+## It was three. The control legend along the bottom was deleted by card #121,
+## and with it the only surface on this HUD that named a button the player was
+## not already looking at.
 ##
 ## The device is flipped by pushing REAL events through `Input.parse_input_event`
 ## rather than by poking `Settings.using_pad`, because the thing most likely to
@@ -41,10 +43,11 @@ const WATCH := [&"attack", &"heavy", &"shield", &"context", &"interact",
 ## lock", and gave it to `first_person`. Q and the middle mouse button remain,
 ## because a keyboard has no trigger to hold.
 ##
-## Nothing renders blank as a result -- `Hud._legend_lines` drops a row whose cap
-## is empty rather than drawing a verb with no glyph, and the `shield` row's own
-## text is "GUARD/LOCK", so the pad player is told. `InputGlyphs.event_for` says
-## the same thing in its docstring: no binding on a device is a real answer.
+## `InputGlyphs.event_for` says so in its docstring: no binding on a device is a
+## real answer, and the surfaces here draw nothing rather than a verb with no
+## glyph. Note that the pad player is no longer TOLD the lock exists anywhere --
+## the legend's "GUARD/LOCK" row was the one place that said it, and card #121
+## deleted the legend. Options -> Controls is now the only reference.
 ##
 ## THIS IS THE CHECK THAT WOULD HAVE CAUGHT THE DRIFT. Asserting the absence pins
 ## the decision: give `z_target` a pad button and this goes red, which is the
@@ -99,9 +102,9 @@ func run(rig) -> void:
 		var p := _caps_of(action, true)
 		if p != "":
 			_fail += 1
-			print("PAD FAIL %s grew a pad cap ('%s') -- %s. Hud.LEGEND draws a "
+			print("PAD FAIL %s grew a pad cap ('%s') -- %s. Check what the pad "
 				% [action, p, KEYBOARD_ONLY[action]]
-				+ "row for it now, so check what it says before deleting this line.")
+				+ "route is meant to be before deleting this line.")
 		if k == "":
 			_fail += 1
 			print("PAD FAIL %s has no KEYBOARD cap either, so it is unreachable "
