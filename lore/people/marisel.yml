@@ -1,0 +1,21 @@
+schema_version: 1
+id: person.marisel
+canonical_name: Marisel
+display_name: Marisel
+name_status: placeholder
+role: Jewelcrafter who sets stones recovered from below.
+gender: female
+pronouns:
+  subject: she
+  object: her
+  possessive: her
+  reflexive: herself
+dialogue_id: jewelcrafter
+voice_status: partially_voiced
+fixed_facts:
+  - Marisel followed shipments of cut gems from Valenfeld to the garrison.
+  - She sets recovered stones for Kael.
+sources:
+  - docs/GDD.md
+  - scripts/world/dialogue_db.gd
+  - scripts/world/story_db.gd

@@ -417,6 +417,17 @@ func _on_boss_died(_where: Vector3) -> void:
 	# opened -- the player sealed into the middle of a floor he has cleared.
 	_move_seal(_seal, -SEAL_HEIGHT - 0.4)
 	_move_seal(_seal_in, -SEAL_HEIGHT - 0.4)
+	# The rings went up on `door_close` and came down on nothing. A wall the height
+	# of the room sinking into the floor in silence is the single biggest thing
+	# that happens in a boss chamber and it made no noise at all -- the mirror of
+	# the sound in `seal()`, at the same place, for the same event running backward.
+	Bus.request_sfx.emit(&"door_open", global_position)
+	# This chamber is a room and it has just been beaten. `Bus.room_cleared` is
+	# how every other room in the game says so (`RoomWatch`), and the arena is the
+	# only thing that can say it here -- the chamber is not a `rooms[]` cell, so
+	# the generator never built it a watcher. Named for the arena's own node so a
+	# listener can tell which chamber, the same way a room is named for its root.
+	Bus.room_cleared.emit(StringName(name))
 	if _door != null and is_instance_valid(_door) and _door.has_method(&"unseal"):
 		_door.call(&"unseal")
 

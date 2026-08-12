@@ -563,12 +563,12 @@ autosave also runs after five minutes of active, unpaused gameplay while a
 player exists, so standing in one room no longer leaves the current state
 unprotected indefinitely.
 
-Version 9 writes `Game` plus one versioned `run` snapshot. It is data, never a
+Version 10 writes `Game` plus one versioned `run` snapshot. It is data, never a
 serialized scene tree: whether a dungeon run is active, its seed and current
 level/depth, the bag and document case, and the run counters and visited rooms.
 It also carries current magic and stamina, so loading cannot refill the trip.
 On load the generated dungeon is rebuilt from the seed and level, then the
-hero's recorded transform is restored. A readable v4–v8 slot has no `run`; it
+hero's recorded transform is restored. A readable v4–v9 slot has no `run`; it
 returns to the garrison and resets `Run` rather than inventing one.
 
 A mid-dungeon save/load is explicitly allowed. It is recovery and continuation,

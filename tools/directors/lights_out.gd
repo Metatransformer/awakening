@@ -23,7 +23,8 @@ extends RefCounted
 ##      where it was. This is the property the whole generator rests on.
 ##   E  **The board is always solvable, and this run proves it by solving it** —
 ##      not by arguing that a scramble made of presses must be pressable.
-##      `solution()` is applied one press at a time and the grid ends lit out.
+##      `solution()` is applied one press at a time, the grid ends lit out, and
+##      another real blow cannot move it or announce the solve again.
 ##   F  And the gate opened itself on the last lantern, through the ordinary
 ##      `PuzzleGate` count.
 ##   G  **Every board this floor can deal is solvable.** Two hundred deals off
@@ -254,7 +255,9 @@ func _e_solve(rig) -> void:
 		return
 
 	var opened := [false]
+	var lit_outs := [0]
 	_gate.connect(&"opened", func(_w: StringName) -> void: opened[0] = true)
+	_grid.connect(&"lit_out", func() -> void: lit_outs[0] += 1)
 
 	for at: int in plan:
 		var lamp: Node = _grid.call(&"cell", at)
@@ -278,6 +281,14 @@ func _e_solve(rig) -> void:
 	print("LIGHTS final %s" % [_show(_grid.call(&"board"))])
 	_ck("E1 walking the solution lights every lantern",
 		bool(_grid.call(&"is_lit_out")))
+	var solved_board: Array = (_grid.call(&"board") as Array).duplicate()
+	var solved_lamp: Node = _grid.call(&"cell", 0)
+	solved_lamp.call(&"apply_hit", null)
+	await rig.wait_frames(8)
+	_ck("E2 the solved board ignores another real press",
+		_same(solved_board, _grid.call(&"board")))
+	_ck("E3 and announces lit-out exactly once (%d signals)" % lit_outs[0],
+		lit_outs[0] == 1)
 	# The point of building it out of ordinary atoms: nothing taught the door
 	# about grids, and it opened anyway.
 	_ck("F0 and the gate opened itself, through the ordinary atom count",

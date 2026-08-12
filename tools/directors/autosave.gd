@@ -1,7 +1,7 @@
 extends RefCounted
 ## Resumable dungeon autosaves and the five-minute cadence.
 ##
-## This director proves the v9 contract through the real transition/save/load
+## This director proves the v10 contract through the real transition/save/load
 ## paths, then restores every byte that was present in the user's three slots.
 ##
 ##   tools/quiet.sh --path . -s tools/shoot.gd -- \
@@ -32,7 +32,7 @@ func run(rig) -> void:
 	var head := Saves.peek(0)
 	var entered_data := _data(0)
 	var entered_run: Dictionary = entered_data.get("run", {}) as Dictionary
-	_check(rig, "A4 the v9 header exposes wall-clock and progress metadata",
+	_check(rig, "A4 the v10 header exposes wall-clock and progress metadata",
 		(head.get("last_played_unix", null) is int
 			or head.get("last_played_unix", null) is float)
 		and bool(head.get("in_dungeon", false))

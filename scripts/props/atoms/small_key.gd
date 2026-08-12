@@ -22,6 +22,11 @@ const HOVER := 0.85
 const BOB_SPEED := 2.0
 const BOB_HEIGHT := 0.07
 const SPIN_SPEED := 1.1
+const REVEAL_RISE := 0.30
+const REVEAL_SCALE := 0.70
+const REVEAL_TIME := 0.62
+const LAMP_ENERGY := 2.2
+const REVEAL_LAMP_ENERGY := 0.32
 ## How far the "look here" lamp carries. Short: a key in an unlit corner has to
 ## be findable, and a key that lit the room would be a waypoint.
 const LAMP_RANGE := 3.4
@@ -30,6 +35,12 @@ var _body: Node3D
 var _lamp: OmniLight3D
 var _trigger: Area3D
 var _age: float = 0.0
+## `_process` is the only writer of the hover position; the reveal moves this
+## offset instead so its rise composes with the ordinary bob.
+var _reveal_offset: float = 0.0
+var _revealed: bool = false
+var _revealing: bool = false
+var _reveal_tween: Tween
 
 
 func _ready() -> void:
@@ -47,10 +58,55 @@ func _process(delta: float) -> void:
 		return
 	_age += delta
 	var bob := sin(_age * BOB_SPEED) * BOB_HEIGHT
-	_body.position.y = HOVER + bob
+	_body.position.y = HOVER + bob + _reveal_offset
 	_body.rotation.y += SPIN_SPEED * delta
 	if _lamp != null:
-		_lamp.position.y = HOVER + bob
+		_lamp.position.y = HOVER + bob + _reveal_offset
+
+
+## Wake a staged key. Idempotent: a second wake cannot restart the motion, and a
+## key already taken stays in its restored solved pose.
+func reveal() -> void:
+	if _revealed or is_solved():
+		return
+	_revealed = true
+	_revealing = true
+	armed = true
+	_reveal_offset = -REVEAL_RISE
+	if _body != null:
+		_body.scale = Vector3.ONE * REVEAL_SCALE
+		_body.position.y = HOVER + sin(_age * BOB_SPEED) * BOB_HEIGHT + _reveal_offset
+	if _lamp != null:
+		_lamp.light_energy = REVEAL_LAMP_ENERGY
+		_lamp.position.y = HOVER + sin(_age * BOB_SPEED) * BOB_HEIGHT + _reveal_offset
+	visible = true
+
+	if _reveal_tween != null:
+		_reveal_tween.kill()
+	_reveal_tween = create_tween().set_parallel(true)
+	_reveal_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_reveal_tween.tween_property(self, ^"_reveal_offset", 0.0, REVEAL_TIME)
+	if _body != null:
+		_reveal_tween.tween_property(_body, ^"scale", Vector3.ONE, REVEAL_TIME)
+	if _lamp != null:
+		_reveal_tween.tween_property(_lamp, ^"light_energy", LAMP_ENERGY, REVEAL_TIME)
+	_reveal_tween.chain().tween_callback(_finish_reveal)
+
+
+## Public director-facing state: the reveal was accepted, and its motion is
+## currently in flight. Neither exposes timing-sensitive transform values.
+func is_revealed() -> bool:
+	return _revealed
+
+
+func is_revealing() -> bool:
+	return _revealing
+
+
+func _finish_reveal() -> void:
+	_reveal_offset = 0.0
+	_revealing = false
+	_reveal_tween = null
 
 
 func _on_body_entered(body: Node3D) -> void:
@@ -76,6 +132,7 @@ func _on_body_entered(body: Node3D) -> void:
 # --- The authored solve -------------------------------------------------------
 
 func on_solved() -> void:
+	_stop_reveal()
 	if _trigger != null:
 		# Deferred, always. This runs out of `body_entered`, and Godot refuses a
 		# direct `monitoring` write while it is dispatching an area's own signal --
@@ -92,6 +149,7 @@ func on_solved() -> void:
 
 ## Already taken. No rise, no fade, no noise -- it simply is not here.
 func restore_solved() -> void:
+	_stop_reveal()
 	if _trigger != null:
 		# Deferred, always. This runs out of `body_entered`, and Godot refuses a
 		# direct `monitoring` write while it is dispatching an area's own signal --
@@ -101,6 +159,13 @@ func restore_solved() -> void:
 		_body.visible = false
 	if _lamp != null:
 		_lamp.light_energy = 0.0
+
+
+func _stop_reveal() -> void:
+	if _reveal_tween != null:
+		_reveal_tween.kill()
+		_reveal_tween = null
+	_revealing = false
 
 
 # --- Construction -------------------------------------------------------------
@@ -145,7 +210,7 @@ func _build() -> void:
 	_lamp = OmniLight3D.new()
 	_lamp.name = "Lamp"
 	_lamp.light_color = Pal.BONE
-	_lamp.light_energy = 2.2
+	_lamp.light_energy = LAMP_ENERGY
 	_lamp.omni_range = LAMP_RANGE
 	_lamp.omni_attenuation = 1.7
 	_lamp.shadow_enabled = false

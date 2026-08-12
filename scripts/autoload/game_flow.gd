@@ -312,7 +312,7 @@ func resume(dest: Dictionary) -> bool:
 
 
 ## Loading a non-dungeon or legacy slot ends whatever run was in flight, and it
-## says so out loud. A valid v9 dungeon snapshot bypasses this function entirely.
+## says so out loud. A valid v10 dungeon snapshot bypasses this function entirely.
 ##
 ## `reset()` and not `die()`. Dying is a run ENDING: it writes a receipt, counts
 ## against the mercy that `Game.deaths` buys (GDD §7.1), and brings the document
@@ -335,12 +335,13 @@ func _on_menu_load_requested(_slot: int, dest: Dictionary) -> void:
 	resume(dest)
 
 
-## Put the hero back where the save left him.
+## Put the hero back where the save left him, when the destination carries a
+## scene-owned transform.
 ##
 ## Called from inside `_go` once the new scene's `_ready` has run and placed him
-## at the room's default spawn -- this overrides that. Silent when there is no
-## hero in the tree, which is the honest answer for a save written in a scene that
-## no longer has one.
+## at the room's default spawn. A destination without `pos` or `yaw` deliberately
+## keeps those authored values. Silent when there is no hero in the tree, which
+## is the honest answer for a save written in a scene that no longer has one.
 func _place_hero(dest: Dictionary) -> void:
 	var hero := get_tree().get_first_node_in_group(&"player") as Node3D
 	if hero == null:
@@ -509,9 +510,9 @@ func _show_ending() -> void:
 
 # --- Transition -------------------------------------------------------------
 
-## `dest` is a load's `{scene, room, pos, yaw}`, and empty for every other
-## transition — see the placement below for why it is a parameter here rather
-## than something the caller does after the `await`.
+## `dest` is a load's `{scene, room}` plus a proven optional `pos` / `yaw`, and
+## empty for every other transition — see the placement below for why it is a
+## parameter here rather than something the caller does after the `await`.
 func _go(path: String, hold: float, dest: Dictionary = {}) -> void:
 	busy = true
 	Prompt.blocked = true

@@ -1,0 +1,21 @@
+schema_version: 1
+id: person.aldric_vane
+canonical_name: Aldric Vane
+display_name: Aldric
+name_status: placeholder
+role: Outpost commander, Lanternkeeper, village elder, and Kael's superior.
+gender: male
+pronouns:
+  subject: he
+  object: him
+  possessive: his
+  reflexive: himself
+dialogue_id: elder
+voice_status: partially_voiced
+fixed_facts:
+  - Aldric Vane commands the outpost and is also the Lanternkeeper.
+  - He briefs Kael and introduces arriving traders.
+sources:
+  - docs/GDD.md
+  - scripts/world/dialogue_db.gd
+  - scripts/world/story_db.gd

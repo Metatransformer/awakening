@@ -1,0 +1,22 @@
+schema_version: 1
+id: person.ysolt
+canonical_name: Ysolt
+display_name: Ysolt
+name_status: placeholder
+role: Garrison alchemist studying the lightless moss below.
+gender: male
+pronouns:
+  subject: he
+  object: him
+  possessive: his
+  reflexive: himself
+dialogue_id: alchemist
+voice_status: partially_voiced_recast_pending
+fixed_facts:
+  - Ysolt is a male settler and is not Vyr.
+  - He comes to study moss that grows without light and trades potions for bottles and gathered material.
+  - His two existing recordings use the voice cast for the earlier female portrayal and await a recasting decision.
+sources:
+  - docs/GDD.md
+  - scripts/world/dialogue_db.gd
+  - scripts/world/story_db.gd

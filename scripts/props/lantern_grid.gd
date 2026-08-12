@@ -118,6 +118,9 @@ signal lit_out
 
 var _cells: Array[Lantern] = []
 var _dealt: Array[bool] = []
+## Set on the first all-lit transition. The visible board remains the source of
+## truth for `is_lit_out`; this only makes that completed board inert.
+var _finished: bool = false
 ## Presses that moved the board and did not finish it. Feeds `HINT_AFTER`.
 var _tries: int = 0
 ## The frame the last press was taken on. See `_on_pressed` -- one swing is one
@@ -244,6 +247,8 @@ func _build() -> void:
 
 ## Somebody hit one. This is the coupling, and it is the only place state moves.
 func _on_pressed(lamp: Lantern) -> void:
+	if _finished:
+		return
 	var at := _cells.find(lamp)
 	if at < 0:
 		return
@@ -267,9 +272,21 @@ func _on_pressed(lamp: Lantern) -> void:
 		if is_instance_valid(cell):
 			cell.set_lit(not cell.is_solved())
 	if not was and is_lit_out():
-		lit_out.emit()
+		_finish()
+		return
 	_tries += 1
 	_point()
+
+
+## Latch the solved pose before announcing it. Listeners may wake rewards during
+## the signal, and from that instant no lantern may take another blow.
+func _finish() -> void:
+	_finished = true
+	for cell in _cells:
+		if is_instance_valid(cell):
+			cell.armed = false
+			cell.set_hint(false)
+	lit_out.emit()
 
 
 ## Show the player one press, once they have spent `HINT_AFTER` blows without

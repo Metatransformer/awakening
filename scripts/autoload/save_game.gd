@@ -67,16 +67,24 @@ const SLOTS := 3
 ## back with an empty pack, which is the TRUTH about a hero who played before the
 ## counter stocked any — nothing is lost and nothing has to be guessed at. So v7
 ## stays readable, and so does everything v7 read.
-## Bumped to 9 for resumable dungeon runs and a wall-clock last-played header.
-## The run snapshot is additive: v4-v8 still restore their recorded destination
-## with no live run behind it.
-const VERSION := 9
+##
+## Bumped to 9 for transform ownership. A dungeon save deliberately points HOME
+## because a slot holds no `Run`, but v8 paired that garrison destination with the
+## live dungeon hero's position. `position_scene` now says which scene owns a
+## transform, and `pos` / `yaw` are written and restored only when that owner is
+## also the destination. v4-v8 remain readable, but their owner cannot be proved,
+## so their transform is omitted on load and the authored spawn wins once.
+##
+## Bumped to 10 for resumable dungeon runs and a wall-clock last-played header.
+## A v9 slot has no run snapshot and remains a conservative garrison load; v10
+## records the actual dungeon as both destination and transform owner.
+const VERSION := 10
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4, 5, 6, 7, 8, 9]
+const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10]
 const AUTOSAVE_INTERVAL := 300.0
 
 signal saved(slot: int)
@@ -149,11 +157,8 @@ func peek(slot: int) -> Dictionary:
 
 func save(slot: int) -> bool:
 	var hero := get_tree().get_first_node_in_group(&"player")
-	var pos := Vector3.ZERO
-	var yaw := 0.0
-	if hero and hero is Node3D:
-		pos = (hero as Node3D).global_position
-		yaw = (hero as Node3D).global_rotation.y
+	var destination_scene := _save_scene()
+	var position_scene := _scene_path()
 
 	var d := {
 		"version": VERSION,
@@ -214,10 +219,18 @@ func save(slot: int) -> bool:
 		"flags": Game.flags,
 		"run": Run.snapshot(),
 		"room": String(current_room),
-		"scene": _save_scene(),
-		"pos": [pos.x, pos.y, pos.z],
-		"yaw": yaw,
+		"scene": destination_scene,
+		# Proof of which scene owns the live hero transform. v9 used this to keep
+		# dungeon coordinates out of a garrison destination; v10 records the actual
+		# dungeon as both owner and destination because its Run now travels too.
+		"position_scene": position_scene,
 	}
+	# Never pair coordinates from one scene with another. This remains the v9
+	# compatibility guard and protects any future non-player save context too.
+	if hero is Node3D and position_scene == destination_scene:
+		var pos := (hero as Node3D).global_position
+		d["pos"] = [pos.x, pos.y, pos.z]
+		d["yaw"] = (hero as Node3D).global_rotation.y
 	var f := FileAccess.open(slot_path(slot), FileAccess.WRITE)
 	if f == null:
 		push_error("Saves: cannot write slot %d" % slot)
@@ -231,7 +244,7 @@ func save(slot: int) -> bool:
 
 
 ## The actual live scene. `current_scene_path` remains only as the harness
-## fallback for trees attached without `SceneTree.current_scene`; a real v9 save
+## fallback for trees attached without `SceneTree.current_scene`; a real v10 save
 ## never rewrites a dungeon destination to the garrison.
 func _save_scene() -> String:
 	var actual := _scene_path()
@@ -303,7 +316,7 @@ func load_slot(slot: int) -> Dictionary:
 	# purchase already respects, and a hand-edited slot must not out-buy the shop.
 	Game.max_stamina = minf(K.STAMINA_MAX,
 		float(d.get("max_stamina", K.MAX_STAMINA)))
-	# Garrison/legacy default. A valid v9 dungeon snapshot overwrites this after
+	# Garrison/legacy default. A valid v10 dungeon snapshot overwrites this after
 	# all permanent fields have been rebuilt.
 	Game.stamina = Game.max_stamina
 	# A slot written before the blue bar was switched on holds `max_magic: 0`, and
@@ -424,14 +437,14 @@ func load_slot(slot: int) -> Dictionary:
 	Game.loadout_set = clampi(int(d.get("loadout_set", Game.PRIMARY)),
 		0, Game.loadout.size() - 1)
 
-	# Only a v9 snapshot explicitly marked underground is a resumable run. Older
+	# Only a v10 snapshot explicitly marked underground is a resumable run. Older
 	# versions return to the garrison with a clean Run, exactly as they did before
 	# snapshots existed.
 	var raw_run: Variant = d.get("run", {})
 	var run_data: Dictionary = raw_run as Dictionary if raw_run is Dictionary else {}
 	var save_version := int(d.get("version", 0))
 	var restored_dungeon := false
-	if save_version >= 9 and bool(run_data.get("in_dungeon", false)):
+	if save_version >= 10 and bool(run_data.get("in_dungeon", false)):
 		restored_dungeon = Run.restore(run_data) and Run.in_dungeon
 	else:
 		Run.reset()
@@ -464,13 +477,16 @@ func load_slot(slot: int) -> Dictionary:
 		"level": Run.level if restored_dungeon else 1,
 		"depth": Run.depth if restored_dungeon else 0,
 	}
-	# v4-v8 always resume in the garrison, but some were written while the hero
-	# stood underground. Applying their coordinates would put that hero outside
-	# the authored courtyard. v9 owns its actual scene and transform as one unit.
-	if save_version >= 9:
-		var p: Array = d.get("pos", [0, 0, 0])
-		destination["pos"] = Vector3(p[0], p[1], p[2])
-		destination["yaw"] = d.get("yaw", 0.0)
+	# v4-v8 have a transform but no proof of which scene owns it. They remain
+	# readable, but loading them once conservatively keeps the destination scene's
+	# authored spawn and rotation. A v9+ transform is valid only inside its owner.
+	if save_version >= 9 \
+			and String(d.get("position_scene", "")) == current_scene_path:
+		var p: Array = d.get("pos", [])
+		if p.size() >= 3:
+			destination["pos"] = Vector3(p[0], p[1], p[2])
+		if d.has("yaw"):
+			destination["yaw"] = float(d["yaw"])
 	return destination
 
 

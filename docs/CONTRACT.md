@@ -1060,6 +1060,15 @@ day the roster landed until this was fixed. A blow that lands
 returns true; a blow the shield or an i-frame ate returns false, and only the
 first is announced on `connected`.
 
+The hero resolves defences in one order inside `Hero.take_hit`: parry, roll and
+perfect-dodge handling, existing i-frames, then the frontal shield, then damage.
+A shield block is eligible only while `Game.stamina > 0.0`; when it catches a
+blow it spends `hit.amount * K.STAMINA_BLOCK_PER_QUARTER` through
+`Game.spend_stamina(cost, true)` before block feedback. Partial spending is the
+rule: any positive stamina catches that blow and clamps to zero, while the next
+blow lands if stamina remains empty. `Hit.amount`, in quarter-hearts, is the one
+measure of attack weight; do not add a second weight field.
+
 `HealthComponent` (`scripts/combat/health_component.gd`, owned by P4):
 
 ```gdscript
@@ -1764,7 +1773,7 @@ is what calls `continue_game(slot)`.
   so a new game costs a player with three full slots nothing until they pick one.
 - **`continue_game` is a coroutine and its bool arrives at the far end of the
   fade.** `await` it. It calls `Saves.load_slot` (which per "Settings and saves"
-  restores `Game` and the optional v9 `Run`, but deliberately does *not* change
+  restores `Game` and the optional v10 `Run`, but deliberately does *not* change
   scenes) and hands the result to `resume`.
 - **`resume(dest)` is the half that travels**, and it is public because a load
   has two doors. A restored active dungeon run is preserved when `dest` points
@@ -1782,7 +1791,7 @@ is what calls `continue_game(slot)`.
   `continue_game` from there would read the slot twice. Nothing was connected at
   all until 2026-08-10, so a load from the pause menu restored `Game` and left
   the player in the room they were already standing in.
-- **Loading resets a run only when the destination is not one.** A v9 dungeon
+- **Loading resets a run only when the destination is not one.** A v10 dungeon
   destination arrives with its versioned `run` snapshot already restored and
   `resume` preserves it. A legacy slot, or any slot without a valid active
   dungeon snapshot, returns to the garrison and calls the abandon path so no
@@ -2525,9 +2534,19 @@ Bus.request_sfx.emit(&"chest_open", global_position)   # id = a file in audio/sf
 
 `Sfx` also maps the events that already say what happened — `chest_opened`,
 `door_opened`, `item_acquired`, `loot_gained`, `items_sold`, `puzzle_solved`,
-`hit_landed`, `shield_blocked`, `enemy_died`, `player_died`, `target_acquired`,
-`run_started`, `run_ended`, `bag_full` — so those need no emit
-at all. Add a row to `Sfx.CUES` rather than a player to a prop.
+`room_cleared`, `reward_revealed`, `hit_landed`, `shield_blocked`, `enemy_died`,
+`player_died`, `target_acquired`, `run_started`, `run_ended`, `bag_full` — so
+those need no emit at all. Add a row to `Sfx.CUES` rather than a player to a prop.
+
+`reward_revealed` is the one that is **not** in `CUES`, and it cannot be:
+`CUES` is keyed on the signal and this signal carries a TIER as an argument, so
+it has its own table, `Sfx.REWARD_CUES`, keyed `1` and `2` (see
+`RewardVfx.MINOR` / `MAJOR`). It also plays at the reward rather than at the
+hero, because a reward is a place in the room. Both tiers name
+`treasure_spawn` today and that is deliberate rather than a gap — there is one
+take of a chest falling out of nothing, the tiers already differ in the eye and
+in how long they hold the screen, and when a bigger take exists tier 2 is one
+line in that table and nothing else moves.
 
 `shield_blocked` is the one that had it the other way round and was corrected:
 `HeroCombat.on_blocked` built a fresh `AudioStreamPlayer3D` per block and freed
@@ -2833,7 +2852,7 @@ heart at once) and leave it false on a Recut, where clamping down is the point.
 
 ```gdscript
 Saves.peek(slot: int) -> Dictionary       # readable list header; empty=true if unused
-Saves.save(slot: int) -> bool             # Game + destination/transform + v9 Run snapshot
+Saves.save(slot: int) -> bool             # Game + destination/transform + v10 Run snapshot
 Saves.load_slot(slot: int) -> Dictionary  # restores data and returns the travel destination
 Saves.erase(slot: int) -> void            # 3 slots, 0..2
 Saves.autosave() -> bool                  # active slot, else first empty, else decline
@@ -2843,20 +2862,21 @@ Saves.autosaved                           # signal(slot) -- -1 when autosave dec
 `peek` exposes `last_played_unix`, `gold`, `in_dungeon`, `floor`/`level`, `depth`
 and `room` for the readable three-slot list; the title sorts those headers newest
 first rather than choosing the newest slot itself. `load_slot` returns `scene`,
-`room`, optional v9 `pos`/`yaw`, `run_restored`, `in_dungeon`, `level` and
+`room`, optional scene-owned `pos`/`yaw`, `run_restored`, `in_dungeon`, `level` and
 `depth`, so `Flow.resume` can distinguish a restored run from a legacy or
-garrison load. Legacy transforms are deliberately omitted: old underground
-saves pointed at the garrison, so its authored spawn owns their placement.
+garrison load. v4-v8 transforms are deliberately omitted because their owner is
+unknown; v9 introduced `position_scene`, and a transform is returned only when
+that owner matches the destination.
 
-The save file is at **`VERSION = 9`**, and `READABLE` — not `VERSION` — is what
+The save file is at **`VERSION = 10`**, and `READABLE` — not `VERSION` — is what
 `load_slot` checks. v4 split the old `plate` rung into eight gear tracks and is
 why **v3 is refused rather than migrated**: its `plate` key has no honest mapping
 to the new pieces. The later bumps are additive: v5 added `deaths`, v6
-`gold_earned`, v7 the kit `wheel`, v8 `rations`, and v9
-`last_played_unix` plus the single versioned `run` snapshot. `READABLE` is
-therefore `[4, 5, 6, 7, 8, 9]`; absent fields take their version-appropriate
+`gold_earned`, v7 the kit `wheel`, v8 `rations`, v9 transform ownership, and
+v10 `last_played_unix` plus the single versioned `run` snapshot. `READABLE` is
+therefore `[4, 5, 6, 7, 8, 9, 10]`; absent fields take their version-appropriate
 defaults instead of making those slots unreadable. `save_game.gd`'s header
-comment carries the full migration argument.
+comment carries the full version history.
 
 Every one of those dictionaries is rebuilt on load with `StringName` keys — JSON
 hands back `String` keys, and a `String` key makes `forge_level(&"edge")` and
@@ -2865,12 +2885,12 @@ on the shelf vanishes.
 
 `Saves.load_slot()` deliberately does **not** change scenes — it restores the
 save data, hands back where the hero belongs and lets `Flow` perform the
-transition. A v9 `run` is one versioned data snapshot, not a scene tree:
+transition. A v10 `run` is one versioned data snapshot, not a scene tree:
 `in_dungeon`, `seed_used`, `level`, `depth`, `bag`, `cased`, the `premium` and
 `kills` counters, current magic/stamina trip budgets, `visited_rooms`, and the
 generator's `rng_state`. The dungeon regenerates from seed plus level before
 `Flow` restores the hero transform.
-Legacy v4–v8 slots have no snapshot, return to the garrison, and reset `Run`.
+Legacy v4–v9 slots have no snapshot, return to the garrison, and reset `Run`.
 Whoever owns room transitions should set `Saves.current_room` as rooms change.
 
 **Every automatic path converges on `Saves.autosave()`.** The last thing `_go`
@@ -3009,6 +3029,45 @@ Markers are drawn shapes in `Pal` colours, not textures. At 6 px on the minimap
 a photograph of a chest is four brown pixels; a gold box with a dark band is a
 chest. `Atlas`'s marker ids and `MapDraw.MARK_ORDER` are two halves of one list —
 an id with no glyph draws nothing, silently. Add to both.
+
+### Rewards — a prize does not exist until you have beaten what guards it
+
+**No chest, mote or relic is lootable on arrival.** A reward is placed at
+generation time, then held `visible = false` and `enabled = false` until the
+thing standing between the player and it is gone; then `RewardVfx.land(prize,
+tier)` makes it real. `docs/GDD.md` §5.1 owns the rule; this is how it is wired.
+
+Two ways to hold one, and which you use depends on whether there is a room:
+
+- **`RoomWatch`** (`scripts/world/room_watch.gd`) for a room with a pack in it.
+  `RoomWatch.attach(room_root, id)` before you spawn, `watch.add(foe)` per body,
+  `watch.cleared` when the last one is gone — and `Bus.room_cleared(id)` on the
+  same frame, which is the emitter that signal never had. It counts rather than
+  scans, because an enemy that chases the hero into the corridor has not been
+  beaten and a corpse's node survives its death by about three seconds.
+- **The body's own signal** where the room IS the encounter. The boss arena and
+  the miniboss chamber already answer "is it dead"; a watcher there would be a
+  second answer to one question. Connect `boss.died_at` and land the chest.
+
+Whichever you use, **there must be a fail-safe.** A generator can produce a room
+with nothing to beat, and a chest that waits for a pack that was never spawned is
+worse than one standing open — it is a reward the player can never have, and it
+looks identical to one that is working. `RewardVfx.show_now(prize)` is the silent
+version for exactly that case: real, lootable, no ceremony, because four chests
+going off behind the loading card is the beat firing where nobody is standing.
+
+`RewardVfx` owns the whole arrival — the drop, the ring, the star, the bloom, the
+shake and `Bus.reward_revealed(tier, position)` — and picks no sound; `Sfx` does,
+from `REWARD_CUES`. Two tiers and no more: the player only ever sees one flash at
+a time, so two is the smallest number that can be *recognised*. They differ in
+magnitude and silhouette (MAJOR adds a shaft of light and a second ring, and
+holds nearly twice as long), never in hue.
+
+`tools/directors/room_reward.gd` is the proof and it sweeps **every** chest on a
+freshly generated floor, not one room's. That is deliberate: the two holes this
+rule shipped with were both generator holes — the deep chest stands in the boss's
+room, which `_populate` gives no pack and therefore no watcher, and the vault's
+rich chest had no gate at all behind three rooms of level+1 bodies.
 
 ---
 
