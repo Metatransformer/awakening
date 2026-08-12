@@ -111,10 +111,10 @@ const KEY_UI_BUTTONS := {
 ## says "Equipment". One word, in five places, is worth more than the shade of
 ## meaning "ITEMS" carried. Adding GARRISON does not roll that decision back.
 const PAGES := [
-	[Screen.EQUIP, "EQUIP"],
-	[Screen.POUCH, "INVENTORY"],
-	[Screen.MAP, "MAP"],
-	[Screen.GARRISON, "GARRISON"],
+	[Screen.EQUIP, "Equip"],
+	[Screen.POUCH, "Inventory"],
+	[Screen.MAP, "Map"],
+	[Screen.GARRISON, "Garrison"],
 ]
 const PAGE_TURN_DURATION: float = 0.32
 const PAGE_TURN_TRAVEL_RATIO: float = 0.22

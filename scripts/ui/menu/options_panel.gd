@@ -19,7 +19,7 @@ signal value_settled
 
 enum Tab { AUDIO, GRAPHICS, CONTROLS, GAME }
 
-const TAB_NAMES: Array[String] = ["AUDIO", "GRAPHICS", "CONTROLS", "GAME"]
+const TAB_NAMES: Array[String] = ["Audio", "Graphics", "Controls", "Game"]
 
 ## Indexed by `Settings.msaa`. **The row is built from a SLICE of this, not from
 ## all of it** — see `_build_graphics`. Card #57: on Apple silicon the driver

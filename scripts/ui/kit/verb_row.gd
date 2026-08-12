@@ -81,9 +81,11 @@ static func build(parent: Node, config: Dictionary) -> Button:
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# Exactly one row per panel earns the display face. Two primaries is no primary.
+	# A primary stays an action in the body face; scale carries its hierarchy.
+	# Exactly one row per panel earns that emphasis. Two primaries is no primary.
 	UITheme.apply_text_style(name_label,
-		UITheme.TYPE_H2 if is_primary else UITheme.TYPE_PARAGRAPH_1, UITheme.TEXT)
+		UITheme.TYPE_CONTROL_PROMINENT if is_primary else UITheme.TYPE_PARAGRAPH_1,
+		UITheme.TEXT)
 	line.add_child(name_label)
 	# Kept as a handle for the same reason `verb_meta` is: the row's own
 	# `Button.text` is empty, so the only way anything outside this file can ask
