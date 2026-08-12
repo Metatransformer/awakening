@@ -989,12 +989,18 @@ a bar that lengthens as you buy containers walks across the screen and stops
 being a shape you recognise peripherally. More containers means denser ticks.
 
 Health, stamina, magic and heat now use one dark meter recipe: a VOID outer
-bezel around a MIDNIGHT frame, an inset ASH@60% track, a 2 px chamfer at the
-right termination and one restrained 1 px ASH top-light. These are hard pixel
-edges, not antialiased ornament. Health alone carries a 2 px outer bezel; the
-three subordinate meters carry 1 px, preserving the 15 / 8 / 6 / 6 weight
-hierarchy. The authored bar rectangles, left edge and row positions below do
-not move; `_note` publishes the outer bezel bounds used by layout checks.
+shell around an ASH bevel face and a recessed MIDNIGHT / ASH@60% track. Both
+ends are straight parallel diagonals, never curves or clipped round corners:
+6 px on health and 3 px on the subordinate meters. A 1 px BONE-alpha upper
+frame edge and MIDNIGHT lower edge deepen the face. The semantic fill colour has
+its own restrained 1 px BONE-alpha top band and VOID-alpha lower band; ticks
+still cut through last. Health carries a 2 px outer bezel and 2 px inner face;
+the three subordinate meters carry 1 px of each, preserving a readable live
+track inside the 15 / 8 / 6 / 6 weight hierarchy. Partial fills end diagonally.
+The health ghost begins flat beneath the current fill and ends diagonally, so
+their overlap exposes a small RUST wedge. These are hard, un-antialiased pixel
+polygons. The authored bar rectangles, left edge and row positions below do not
+move; `_note` publishes the unchanged outer bezel bounds used by layout checks.
 Enemy health bars are excluded: at 2 px tall they are minimal world markers,
 not player instruments, and this bezel would consume them.
 
@@ -1004,7 +1010,7 @@ not player instruments, and this bezel would consume them.
 | Bar | `0.268` w (343 px) × 15 px, fixed at every max-health value |
 | Ticks | 2 px VOID full height at heart boundaries; 1 px VOID at 45% height at quarters |
 | Filled | VITAL | Empty | ASH @60% |
-| Frame / track | 2 px outer VOID bezel; MIDNIGHT frame; 1 px inset track; 2 px right chamfer; 1 px ASH top-light |
+| Frame / track | 2 px outer VOID shell; 2 px ASH/MIDNIGHT bevel face; recessed track; straight 6 px diagonal at both ends; 1 px lit/dark frame and fill bands |
 
 ### 5.1b Stamina — directly below health
 
@@ -1025,7 +1031,7 @@ unit it is ever spent in.
 | Bar | `0.62 ×` health width × 8 px |
 | Filled | BONE, or RUST below `K.STAMINA_ROLL` | Empty | ASH @60% |
 | Ticks | 1 px VOID at each affordable roll boundary |
-| Frame / track | Shared recipe, with the subordinate 1 px outer bezel |
+| Frame / track | Shared recipe: 1 px outer shell and inset face; straight 3 px diagonals at both ends |
 
 - **Damage ghost:** cells just lost stay lit in RUST for 400 ms, then drain
   right-to-left over 250 ms in 4 discrete steps. *How much you just lost* is the
@@ -1075,7 +1081,7 @@ like drift.
 | Bar | `0.52 ×` health width (178 px) × **6 px** |
 | Filled | COBALT, or MOTH below `K.MAGIC_SPIN` | Empty | ASH @60% |
 | Ticks | 1 px VOID at each `K.MAGIC_SPIN` boundary |
-| Frame / track | Shared recipe, with the subordinate 1 px outer bezel |
+| Frame / track | Shared recipe: 1 px outer shell and inset face; straight 3 px diagonals at both ends |
 
 ### 5.1d Heat — dungeon only, and deliberately not ticked
 
@@ -1103,7 +1109,7 @@ time in the middle of a fight.
 | Bar | `0.44 ×` health width (151 px) × 6 px |
 | Fill | dim cold, MOTH at Warm, GOLD from Hot, breathing toward BONE at Blazing; RUST for 350 ms on a break |
 | Multiplier | 10 px, bar right + 22 px, centred on the row, in the fill's colour |
-| Frame / track | Shared recipe, with the subordinate 1 px outer bezel; no ticks |
+| Frame / track | Shared recipe: 1 px outer shell and inset face; straight 3 px diagonals at both ends; no ticks |
 
 ### 5.1e The draught row — slots, not a meter
 
