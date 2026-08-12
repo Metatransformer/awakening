@@ -85,16 +85,17 @@ const ENTRANCE_UP_SIDE: StringName = &"s"
 const ENTRANCE_UP_WALL_INSET := 1.55
 
 ## The order anchors are resolved in, and it is load-bearing rather than
-## alphabetical: the boss door claims the deepest room's far wall first, so the
-## chest beside it can be measured off a side that is already decided, and the
-## vault -- which needs the most clear ground behind it -- picks before nothing.
+## alphabetical: the shortcut claims its pre-reserved entrance run before any
+## other structure can cross it. The boss door then claims the deepest room's
+## far wall before the chest beside it is measured, and the vault -- which needs
+## the most clear ground behind it -- picks before the puzzle anchors.
 ## and the two puzzle anchors come last: `gate_room` needs no wall at all (it
 ## claims a ROOM, and its gate goes on a doorway the layout already chose), and
 ## `puzzle_room` shares the middle room with the vault, so the vault -- which
 ## wants two clear cells against its one -- has to pick first or it is the one
 ## left without a wall.
 const ANCHOR_ORDER: Array[StringName] = [
-	&"boss_door", &"deep_chest", &"shortcut_door", &"vault_door",
+	&"shortcut_door", &"boss_door", &"deep_chest", &"vault_door",
 	&"gate_room", &"puzzle_room",
 ]
 
