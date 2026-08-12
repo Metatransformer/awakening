@@ -2093,9 +2093,9 @@ func _tick_context(delta: float, input_locked: bool) -> void:
 ## reverse — a lock breaking mid-hold — cannot resurrect a wait that has already
 ## been paid, since `_context_armed` is false by then.
 ##
-## Airborne is in the list for a duller reason than the other three: a dodge is
-## refused off the floor anyway, so waiting would hold a press that has nowhere
-## to go and then cash it in on landing, a third of a second after it was made.
+## Airborne is in the list because a run has no meaning off the floor, while a
+## committed dodge still does. Resolve it now rather than holding the press and
+## cashing it in on landing, a third of a second after it was made.
 func _context_resolves_now() -> bool:
 	return lock_target() != null or blocking or aiming() or not is_on_floor()
 
@@ -2174,8 +2174,6 @@ func _try_start_roll(wish: Vector3, mag: float) -> bool:
 	# the release of a long hold it is false, and the hero keeps running instead
 	# of coming out of the sprint in a roll he stopped asking for.
 	if not context_tapped:
-		return false
-	if not is_on_floor():
 		return false
 
 	var target := lock_target()

@@ -1432,6 +1432,96 @@ func _draw_floor(s: Vector2) -> void:
 		Pal.BONE.lerp(Pal.MOTH, settle))
 
 
+# --- Player meters -----------------------------------------------------------
+## Health, stamina, magic and heat share this shell so their frame language
+## cannot drift. Enemy bars are world markers only 2 px tall; putting this bezel
+## on them would erase the distinction between a screen-space instrument and a
+## minimal world-space warning.
+func _meter_shape(r: Rect2, diagonal: float, left_diagonal: bool = true,
+		right_diagonal: bool = true) -> PackedVector2Array:
+	var cut := minf(diagonal, r.size.x)
+	return PackedVector2Array([
+		Vector2(r.position.x + (cut if left_diagonal else 0.0), r.position.y),
+		Vector2(r.end.x, r.position.y),
+		Vector2(r.end.x - (cut if right_diagonal else 0.0), r.end.y),
+		Vector2(r.position.x, r.end.y),
+	])
+
+
+## A hard one-pixel slice of a meter polygon. Keeping the band on the same
+## straight side equations as the body avoids square highlights poking through
+## the diagonal ends.
+func _meter_band_shape(r: Rect2, diagonal: float, band_size: float, top: bool,
+		left_diagonal: bool = true) -> PackedVector2Array:
+	var cut := minf(diagonal, r.size.x)
+	var band := minf(band_size, r.size.y)
+	var y0 := 0.0 if top else r.size.y - band
+	var y1 := band if top else r.size.y
+	var t0 := y0 / r.size.y
+	var t1 := y1 / r.size.y
+	var left0 := r.position.x + (cut * (1.0 - t0) if left_diagonal else 0.0)
+	var left1 := r.position.x + (cut * (1.0 - t1) if left_diagonal else 0.0)
+	return PackedVector2Array([
+		Vector2(left0, r.position.y + y0),
+		Vector2(r.end.x - cut * t0, r.position.y + y0),
+		Vector2(r.end.x - cut * t1, r.position.y + y1),
+		Vector2(left1, r.position.y + y1),
+	])
+
+
+## Draw the built bezel and return the recessed rectangle that owns fill and
+## ticks. Every layer shares one straight diagonal at each end; none of these
+## polygons requests antialiasing, so the silhouette stays a hard pixel stair.
+func _draw_player_meter(s: Vector2, key: StringName, rect: Rect2,
+		track_color: Color, heavy: bool = false) -> Rect2:
+	var bezel := Pal.px(Pal.HEALTH_METER_BEZEL if heavy else Pal.METER_BEZEL, s.y)
+	var inset := Pal.px(Pal.HEALTH_METER_INSET if heavy else Pal.METER_INSET, s.y)
+	var diagonal := Pal.px(
+		Pal.HEALTH_METER_DIAGONAL if heavy else Pal.METER_DIAGONAL, s.y)
+	var outer := rect.grow(bezel)
+	var track := rect.grow(-inset)
+
+	_note(key, &"pole", outer)
+	_canvas.draw_colored_polygon(_meter_shape(outer, diagonal), Pal.VOID)
+	_canvas.draw_colored_polygon(_meter_shape(rect, diagonal), Pal.ASH)
+	_canvas.draw_colored_polygon(
+		_meter_band_shape(rect, diagonal, Pal.px(1.0, s.y), true),
+		Color(Pal.BONE, Pal.METER_FRAME_LIGHT_ALPHA))
+	_canvas.draw_colored_polygon(
+		_meter_band_shape(rect, diagonal, Pal.px(1.0, s.y), false), Pal.MIDNIGHT)
+	_canvas.draw_colored_polygon(_meter_shape(track, diagonal), Pal.MIDNIGHT)
+	_canvas.draw_colored_polygon(_meter_shape(track, diagonal), track_color)
+	return track
+
+
+## Fill a fraction of the recessed track. Only a segment that reaches the
+## left edge starts on the track's diagonal; every visible end is diagonal too.
+## A later segment underlaps that end by one diagonal, leaving its left edge flat
+## beneath the current fill so a damage ghost can show through as a small wedge.
+func _draw_meter_segment(s: Vector2, track: Rect2, from: float, to: float,
+		color: Color, heavy: bool = false) -> void:
+	var first := clampf(from, 0.0, 1.0)
+	var last := clampf(to, first, 1.0)
+	if last <= first:
+		return
+	var diagonal := Pal.px(
+		Pal.HEALTH_METER_DIAGONAL if heavy else Pal.METER_DIAGONAL, s.y)
+	var left_diagonal := is_zero_approx(first)
+	var first_x := track.position.x + track.size.x * first
+	if not left_diagonal:
+		first_x = maxf(track.position.x, first_x - diagonal)
+	var segment := Rect2(first_x, track.position.y,
+		track.position.x + track.size.x * last - first_x, track.size.y)
+	_canvas.draw_colored_polygon(
+		_meter_shape(segment, diagonal, left_diagonal), color)
+	_canvas.draw_colored_polygon(
+		_meter_band_shape(segment, diagonal, Pal.px(1.0, s.y), true, left_diagonal),
+		Color(Pal.BONE, Pal.METER_FILL_LIGHT_ALPHA))
+	_canvas.draw_colored_polygon(
+		_meter_band_shape(segment, diagonal, Pal.px(1.0, s.y), false, left_diagonal),
+		Color(Pal.VOID, Pal.METER_FILL_SHADOW_ALPHA))
+
+
 # --- Health -----------------------------------------------------------------
 ## A continuous bar, ticked at every quarter and more heavily at every heart, so
 ## "three left" is still countable without the fill being chopped into cells.
@@ -1449,18 +1539,16 @@ func _draw_health(s: Vector2) -> void:
 	if low:
 		pulse = 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.001 * TAU * 2.0)
 
-	# 1px VOID hairline OUTSIDE the bar, same containment rule the cells had.
-	_note(&"health", &"pole", rect.grow(Pal.px(1.0, s.y)))
-	_canvas.draw_rect(rect.grow(Pal.px(1.0, s.y)), Pal.VOID)
-	_canvas.draw_rect(rect, Pal.VOID if low else Color(Pal.ASH, 0.6))
+	var track := _draw_player_meter(s, &"health", rect,
+		Pal.VOID if low else Color(Pal.ASH, 0.6), true)
 
-	var per := w / float(total)
+	var per := track.size.x / float(total)
 
 	# The ghost sits UNDER the fill and extends past it: what you just lost.
 	var ghost := _ghost_visible()
 	if ghost > 0:
-		_canvas.draw_rect(Rect2(origin.x + Game.quarters * per, origin.y,
-			ghost * per, h), Pal.RUST)
+		_draw_meter_segment(s, track, float(Game.quarters) / float(total),
+			float(Game.quarters + ghost) / float(total), Pal.RUST, true)
 
 	# VITAL <-> VOID, and it used to be VITAL <-> BONE. Two things were wrong with
 	# BONE and both are only visible in a frame: it is EXACTLY the stamina fill's
@@ -1473,16 +1561,16 @@ func _draw_health(s: Vector2) -> void:
 	# RUST was the other candidate and it is stamina's EXHAUSTED colour, which
 	# trades this collision for the same one a row down.
 	var fill: Color = Pal.VITAL.lerp(Pal.VOID, pulse) if low else Pal.VITAL
-	_canvas.draw_rect(Rect2(origin.x, origin.y, Game.quarters * per, h), fill)
+	_draw_meter_segment(s, track, 0.0, float(Game.quarters) / float(total), fill, true)
 
 	# Ticks last, cutting through fill and track alike -- that is what keeps the
 	# bar countable. Heart boundaries are heavier than quarters.
 	for i in range(1, total):
 		var heart := i % K.HEART == 0
 		var tw := Pal.px(HEART_TICK_W if heart else TICK_W, s.y)
-		var th := h if heart else h * 0.45
-		_canvas.draw_rect(Rect2(origin.x + i * per - tw * 0.5,
-			origin.y + h - th, tw, th), Pal.VOID)
+		var th := track.size.y if heart else track.size.y * 0.45
+		_canvas.draw_rect(Rect2(track.position.x + i * per - tw * 0.5,
+			track.end.y - th, tw, th), Pal.VOID)
 
 
 ## Quarters still shown as lost. Holds, then drains right-to-left in 4 steps --
@@ -1508,15 +1596,12 @@ func _draw_stamina(s: Vector2) -> void:
 	var h := Pal.px(Pal.STAMINA_H, s.y)
 	var rect := Rect2(origin.x, top, w, h)
 
-	_note(&"stamina", &"pole", rect.grow(Pal.px(1.0, s.y)))
-	_canvas.draw_rect(rect.grow(Pal.px(1.0, s.y)), Pal.VOID)
-	_canvas.draw_rect(rect, Color(Pal.ASH, 0.6))
+	var track := _draw_player_meter(s, &"stamina", rect, Color(Pal.ASH, 0.6))
 
 	var frac: float = clampf(_stamina / maxf(Game.max_stamina, 1.0), 0.0, 1.0)
 	# The whole point of the bar: RUST means the dodge button does nothing.
 	var spent: bool = _stamina < K.STAMINA_ROLL
-	_canvas.draw_rect(Rect2(origin.x, top, w * frac, h),
-		Pal.RUST if spent else Pal.BONE)
+	_draw_meter_segment(s, track, 0.0, frac, Pal.RUST if spent else Pal.BONE)
 
 	# Boundaries at each roll you can still afford, so the bar reads in DODGES
 	# rather than in percent -- the only unit the player spends it in.
@@ -1524,8 +1609,9 @@ func _draw_stamina(s: Vector2) -> void:
 		var at := K.STAMINA_ROLL * i / maxf(Game.max_stamina, 1.0)
 		if at >= 1.0:
 			break
-		_canvas.draw_rect(Rect2(origin.x + w * at - Pal.px(1.0, s.y) * 0.5, top,
-			Pal.px(1.0, s.y), h), Pal.VOID)
+		_canvas.draw_rect(Rect2(track.position.x + track.size.x * at
+			- Pal.px(1.0, s.y) * 0.5, track.position.y,
+			Pal.px(1.0, s.y), track.size.y), Pal.VOID)
 
 
 ## The y each bar in the "you" pole starts at, so the four of them cannot drift.
@@ -1591,9 +1677,7 @@ func _draw_magic(s: Vector2) -> void:
 	var h := Pal.px(Pal.MAGIC_H, s.y)
 	var rect := Rect2(origin.x, top, w, h)
 
-	_note(&"magic", &"pole", rect.grow(Pal.px(1.0, s.y)))
-	_canvas.draw_rect(rect.grow(Pal.px(1.0, s.y)), Pal.VOID)
-	_canvas.draw_rect(rect, Color(Pal.ASH, 0.6))
+	var track := _draw_player_meter(s, &"magic", rect, Color(Pal.ASH, 0.6))
 
 	var frac: float = clampf(float(_magic) / float(maxi(_max_magic, 1)), 0.0, 1.0)
 	# The whole point of the bar, and the same sentence the stamina bar's RUST
@@ -1602,8 +1686,7 @@ func _draw_magic(s: Vector2) -> void:
 	# you have simply spent your spins, and the fight is still perfectly winnable
 	# with the sword. RUST here would read as "you are about to die".
 	var spent: bool = _magic < K.MAGIC_SPIN
-	_canvas.draw_rect(Rect2(origin.x, top, w * frac, h),
-		Pal.MOTH if spent else Pal.COBALT)
+	_draw_meter_segment(s, track, 0.0, frac, Pal.MOTH if spent else Pal.COBALT)
 
 	# Boundaries at each spin still in the bar, so it reads in SPINS rather than
 	# in percent -- the only unit it is ever spent in. Exactly the argument the
@@ -1612,8 +1695,9 @@ func _draw_magic(s: Vector2) -> void:
 	var per := float(K.MAGIC_SPIN) / float(maxi(_max_magic, 1))
 	var i := 1
 	while per > 0.0 and per * float(i) < 1.0:
-		_canvas.draw_rect(Rect2(origin.x + w * per * float(i) - Pal.px(1.0, s.y) * 0.5,
-			top, Pal.px(1.0, s.y), h), Pal.VOID)
+		_canvas.draw_rect(Rect2(track.position.x + track.size.x * per * float(i)
+			- Pal.px(1.0, s.y) * 0.5, track.position.y,
+			Pal.px(1.0, s.y), track.size.y), Pal.VOID)
 		i += 1
 
 
@@ -1645,13 +1729,11 @@ func _draw_heat(s: Vector2) -> void:
 	# The track is drawn even at zero, so the bar is a thing the player has seen
 	# before the first time it matters. An instrument that only appears once you
 	# are already doing well teaches nobody.
-	_note(&"heat", &"pole", rect.grow(Pal.px(1.0, s.y)))
-	_canvas.draw_rect(rect.grow(Pal.px(1.0, s.y)), Pal.VOID)
-	_canvas.draw_rect(rect, Color(Pal.ASH, 0.6))
+	var track := _draw_player_meter(s, &"heat", rect, Color(Pal.ASH, 0.6))
 
 	var col := _heat_color()
 	if Heat.kills > 0:
-		_canvas.draw_rect(Rect2(origin.x, top, w * Heat.window01(), h), col)
+		_draw_meter_segment(s, track, 0.0, Heat.window01(), col)
 
 	# NO TIER TICKS, deliberately, and this was tried the other way first. The
 	# health and stamina bars are both ticked, so ticking this one looked like

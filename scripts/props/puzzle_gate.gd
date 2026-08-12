@@ -55,7 +55,7 @@ var _atoms: Array[PuzzleAtom] = []
 var _key_spent: bool = false
 ## Has `Bus.puzzle_solved` gone out for this gate yet?
 ##
-## **A puzzle is not solved twice.** Sfx maps that signal to `puzzle_complete`,
+## **A puzzle is not solved twice.** Sfx maps that signal to `puzzle_reward`,
 ## which is a fanfare, and a reversible gate reaches the last line of
 ## `_on_atom_changed` every time the player steps back onto the plate -- so
 ## without this the announcement is a machine gun and the fanfare stops meaning
@@ -347,7 +347,7 @@ func _on_atom_changed(atom: PuzzleAtom) -> void:
 		_tint_sigil(0.0)
 		return
 	_tint_sigil(1.0)
-	# The world's announcement, and the one `Sfx` already maps to `puzzle_complete`.
+	# The world's announcement, and the one `Sfx` already maps to `puzzle_reward`.
 	# It fires on the SOLVE, not on the door -- a key hunt whose gate is still
 	# waiting to be spent at has still been solved.
 	if not _announced:

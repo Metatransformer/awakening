@@ -1023,7 +1023,8 @@ func _physics_process(delta: float) -> void:
 	# held at amount 1.0 does not layer over the dive, it REPLACES it — the hero
 	# slid backwards across the floor in a standing block pose. It also makes the
 	# roll's recovery honestly vulnerable, which is what the recovery is for.
-	# The button is still down, so the guard comes straight back up on landing.
+	# The button is still down, so the guard comes straight back up once the hero
+	# is grounded and otherwise eligible.
 	#
 	# `mid_dodge` and not the two states written out, which is the difference the
 	# cancel window makes: the shield comes back up in the last
@@ -1034,6 +1035,12 @@ func _physics_process(delta: float) -> void:
 	# for the part of it that is a recovery. `Hero.set_blocking` ends the dodge on
 	# the way up, so the roll is not left playing under the raised shield.
 	var rolling := _hero.mid_dodge()
+	#
+	# AND ONLY ON THE FLOOR. A jump lowers the active guard on its takeoff frame,
+	# and shield input cannot raise it again anywhere in the arc. The parent Hero
+	# moves before this dynamically-added child, so `is_on_floor()` already holds
+	# the current result of the launch frame's `move_and_slide()` here. Keeping the
+	# trigger held lets the ordinary guard eligibility restore it after landing.
 	#
 	# AND NOT IN FIRST PERSON, which is the one place this button means something
 	# else. The left trigger (and RMB, its keyboard twin) is OOT's Z and does four
@@ -1054,7 +1061,8 @@ func _physics_process(delta: float) -> void:
 	# you are vulnerable" is, expressed as the one line that makes it true. It
 	# also makes a landed parry honest in the other direction: you cannot catch a
 	# blow and be back behind the guard for the next one on the same press.
-	var want_block := not locked and not rolling and not _hero.first_person() \
+	var want_block := _hero.is_on_floor() and not locked and not rolling \
+		and not _hero.first_person() \
 		and Input.is_action_pressed(&"shield") and _swing_t < 0.0 and _parry_t < 0.0
 	if want_block != blocking:
 		blocking = want_block
@@ -1761,6 +1769,11 @@ func _dash_swing() -> void:
 	_chain_step = 0
 	_chain_timer = 0.0
 	_aim_sword()
+	# The riposte is a real blade thrust, so it owns the same short world-space
+	# ribbon family as the light chain. Start it only after request_dash accepts;
+	# wiring from the DASH intent or shared clip would also trail refused swings.
+	if slash_trail != null:
+		slash_trail.begin_stroke(dash_swing_time, dash_damage_window, true)
 	_commit(dash_swing_time, dash_damage_window, dash_damage, dash_knockback,
 		K.HITSTOP_HEAVY, randf_range(0.86, 0.94), K.STUN_HEAVY)
 
@@ -2057,6 +2070,11 @@ func _heavy_swing() -> void:
 	_chain_step = 0
 	_chain_timer = 0.0
 	_aim_sword()
+	# LIGHT3 is shared with the chain finisher, but this accepted tap-heavy path
+	# has its own timing window. Trigger here so the held spin and every other
+	# LIGHT3 user remain outside the ordinary blade ribbon.
+	if slash_trail != null:
+		slash_trail.begin_stroke(heavy_swing_time, heavy_damage_window, true)
 	# The lowest pitch in the kit outside the spin. Three swings that sound
 	# identical are three swings the player cannot tell apart with their eyes on
 	# the enemy.

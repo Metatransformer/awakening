@@ -38,6 +38,49 @@ func _shot(rig, path: String, tag: String) -> void:
 	_fails += Layout.check(tag)
 
 
+## The layout checker proves the published rectangles do not collide; this
+## focused check proves those rectangles include the new bezel rather than only
+## the unchanged authored bar geometry. It intentionally checks bounds, not
+## colours sampled from a rendered room.
+func _check_meter_bezel_bounds(underground: bool) -> int:
+	var fails := 0
+	var s := Hud.get_viewport().get_visible_rect().size
+	var specs: Array[Dictionary] = [
+		{&"key": &"health", &"ratio": 1.0, &"height": Pal.HEALTH_H,
+			&"bezel": Pal.HEALTH_METER_BEZEL},
+		{&"key": &"stamina", &"ratio": Pal.STAMINA_RATIO,
+			&"height": Pal.STAMINA_H, &"bezel": Pal.METER_BEZEL},
+		{&"key": &"magic", &"ratio": Pal.MAGIC_RATIO,
+			&"height": Pal.MAGIC_H, &"bezel": Pal.METER_BEZEL},
+	]
+	if underground:
+		specs.append({&"key": &"heat", &"ratio": Pal.HEAT_RATIO,
+			&"height": Pal.HEAT_H, &"bezel": Pal.METER_BEZEL})
+
+	var layout: Dictionary = Hud.layout_rects()
+	var authored_left := (Pal.HEALTH_ORIGIN * s).x
+	for spec: Dictionary in specs:
+		var key: StringName = spec[&"key"]
+		if not layout.has(key):
+			print("POLE FAIL %s has no published bezel bounds" % key)
+			fails += 1
+			continue
+		var entry: Dictionary = layout[key]
+		var actual: Rect2 = entry[&"rect"]
+		var bezel := Pal.px(float(spec[&"bezel"]), s.y)
+		var expected := Vector2(
+			Pal.HEALTH_W * s.x * float(spec[&"ratio"]) + bezel * 2.0,
+			Pal.px(float(spec[&"height"]), s.y) + bezel * 2.0)
+		if not actual.size.is_equal_approx(expected) \
+				or not is_equal_approx(actual.position.x + bezel, authored_left):
+			print("POLE FAIL %s bezel bounds %s, expected size %s and authored left %.2f"
+				% [key, actual, expected, authored_left])
+			fails += 1
+		else:
+			print("  ok   POLEBEZEL %s %s" % [key, actual])
+	return fails
+
+
 ## Card #48. **A counter takes the screen, so the HUD stands down for it** — and
 ## the frame that carded this had the two-row control legend reading out below the
 ## Lanternkeeper's panel, naming RMB GUARD and D-PAD WEAPON while the counter had
@@ -109,6 +152,7 @@ func run(rig) -> void:
 	# Before decision 21 this frame drew NO draught row at all.
 	await rig.wait_frames(6)
 	await _shot(rig, out.path_join("%s_00_dry.png" % tag), "%s_00_dry" % tag)
+	_fails += _check_meter_bezel_bounds(underground)
 
 	# 1 draught: one slot lit, one slot empty. The frame that proves the slots are
 	# fixed by kind — the lit one must be the SECOND slot, because Emberblood is

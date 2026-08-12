@@ -176,11 +176,16 @@ static func groups() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for slot: StringName in Game.JEWEL_SLOTS:
 		var title := String(BLANKS[slot]["name"]).to_upper()
+		# Both rings draw the ring. FIRST and SECOND are two places on the body,
+		# not two objects, and two near-identical drawings would be a distinction
+		# the player has to squint at instead of read. `UiKit.worn_icon` already
+		# folds the pair the same way.
+		var glyph := "ring" if String(slot).begins_with("ring") else String(slot)
 		if not owns_blank(slot):
 			var i: int = at.get(blank_id(slot), -1)
 			if i < 0:
 				continue
-			out.append({"title": title, "tracks": [{
+			out.append({"title": title, "icon": glyph, "tracks": [{
 				"name": "BLANK", "line": i, "owned": 0, "rungs": 1}]})
 			continue
 		var tracks: Array = []
@@ -195,7 +200,7 @@ static func groups() -> Array[Dictionary]:
 				"rungs": K.JEWEL_MAX,
 			})
 		if not tracks.is_empty():
-			out.append({"title": title, "tracks": tracks})
+			out.append({"title": title, "icon": glyph, "tracks": tracks})
 
 	var undo: Array = []
 	for slot: StringName in Game.JEWEL_SLOTS:
@@ -205,7 +210,7 @@ static func groups() -> Array[Dictionary]:
 		undo.append({"name": String(BLANKS[slot]["name"]), "line": i,
 			"owned": 0, "rungs": 1})
 	if not undo.is_empty():
-		out.append({"title": "RECUT", "tracks": undo})
+		out.append({"title": "RECUT", "icon": "recut", "tracks": undo})
 	return out
 
 

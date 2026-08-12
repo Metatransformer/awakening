@@ -429,7 +429,11 @@ func _on_boss_died(_where: Vector3) -> void:
 	# only thing that can say it here -- the chamber is not a `rooms[]` cell, so
 	# the generator never built it a watcher. Named for the arena's own node so a
 	# listener can tell which chamber, the same way a room is named for its root.
-	Bus.room_cleared.emit(StringName(name))
+	#
+	# MAJOR, and that grade is the whole point of the argument: a chamber boss and
+	# a room of three goblins used to make the identical noise, so the biggest
+	# moment on the floor sounded like the smallest one.
+	Bus.room_cleared.emit(StringName(name), RewardVfx.MAJOR)
 	_place_boss_item_chest(true)
 
 

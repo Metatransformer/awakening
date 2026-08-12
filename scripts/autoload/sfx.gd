@@ -26,6 +26,10 @@ extends Node
 ## a swarm dying at once should thin out, not blow the mixer up.
 const VOICES := 12
 
+## Non-positional voices for ceremonies and alarms. Kept apart from `_pool` so
+## the existing 3D round-robin, attenuation and stealing behavior do not move.
+const GLOBAL_VOICES := 4
+
 ## Sounds that ship as numbered variants -- `coin_trade` is on disk as
 ## `coin_trade_1..3`, never as `coin_trade.ogg`. Picking at random keeps a
 ## repeated event from turning into a machine gun.
@@ -59,11 +63,6 @@ const CUES := {
 	&"loot_gained": &"pickup",
 	&"items_sold": &"coin_trade",
 	&"puzzle_solved": &"puzzle_reward",
-	# The room is beaten. This is the beat a reward arrives ON, so it is
-	# deliberately a short bright one rather than a fanfare -- a major reward's
-	# arrival owns the fanfare later (`reward_revealed` below), and two ceremonies
-	# stacked on one frame read as a bug in the mix.
-	&"room_cleared": &"arena_round_win",
 	# The sound a landed blow makes. It was missing, so the only combat noise in
 	# the game was a monster DYING -- you could hit a wraith five times in
 	# silence and then hear the sixth. Emitted with a real world position by
@@ -78,7 +77,9 @@ const CUES := {
 	&"player_died": &"game_over",
 	&"target_acquired": &"target_cycle",
 	&"run_started": &"dungeon_enter",
-	&"item_get_started": &"dungeon_complete",
+	# The great chest already hands control to ItemGet. This voices that existing
+	# ceremony; it is not another presentation layered on top of it.
+	&"item_get_started": &"great_chest_fanfare",
 	# The full bag saying "no". Doors use their own `door_refused` cue because the
 	# blocked-door message and body jolt are a different event. There used to be an
 	# `extract_refused` row beside this one; the rope cannot refuse any more (the
@@ -101,6 +102,32 @@ const CUES := {
 const REWARD_CUES := {
 	1: &"puzzle_reward",       ## MINOR -- a room's chest
 	2: &"great_chest_fanfare", ## MAJOR -- boss-grade
+}
+
+
+## The room-beaten sounds, indexed by the grade `Bus.room_cleared` carries. Not a
+## `CUES` row for the same reason `REWARD_CUES` is not: one signal, two meanings,
+## and `CUES` is keyed on the signal.
+##
+## **This is the row the whole batch of new sounds missed.** Card #124 re-voiced
+## the chests, the doors, the key and the upgrade board and left this one on
+## `arena_round_win.ogg` -- a horn out of the foundation asset dump -- so the
+## event that reads as "you won" was the only reward in the game still speaking
+## in the old library's voice. Beating the floor 1 miniboss played it.
+##
+##   MINOR   An ordinary room. 1.9 s, and short on purpose: it happens several
+##           times a floor, the player is still holding a sword, and this is the
+##           beat a MINOR reward arrives on -- `reward_revealed` plays
+##           `puzzle_reward` a moment later and two fanfares on one frame read as
+##           a bug in the mix. The same reasoning `RewardVfx` gives for its own
+##           tiers, for the same event.
+##   MAJOR   A boss or miniboss chamber. 3.0 s, and it is allowed to be a
+##           fanfare, because it happens once or twice a floor and nothing else
+##           lands on that frame -- `_place_boss_item_chest` returns early for a
+##           miniboss, and a floor boss's chest arrives on a tween afterwards.
+const CLEAR_CUES := {
+	1: &"room_victory", ## MINOR -- an ordinary room
+	2: &"boss_victory", ## MAJOR -- a boss or miniboss chamber
 }
 
 ## The blow LANDING ON THE PLAYER, indexed by `Hit.Tier`. Card #130.
@@ -183,9 +210,14 @@ const MIN_GAP := {
 
 var _pool: Array[AudioStreamPlayer3D] = []
 var _next := 0
+var _global_pool: Array[AudioStreamPlayer] = []
+var _global_next: int = 0
 var _cache: Dictionary = {}
 ## sound id -> the msec clock reading it last started at. See `MIN_GAP`.
 var _last_played: Dictionary = {}
+## Observable for directors and future alarm orchestration. Playback still goes
+## through `Bus.request_global_sfx`; this is not a second request interface.
+var last_global_cue: StringName = &""
 
 
 func _ready() -> void:
@@ -199,8 +231,16 @@ func _ready() -> void:
 		p.max_distance = 40.0
 		add_child(p)
 		_pool.append(p)
+	for i in GLOBAL_VOICES:
+		var p := AudioStreamPlayer.new()
+		p.name = "GlobalVoice%d" % i
+		p.bus = &"SFX"
+		p.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(p)
+		_global_pool.append(p)
 
 	Bus.request_sfx.connect(play_at)
+	Bus.request_global_sfx.connect(play_global)
 	Bus.perfect_dodge.connect(func(pos: Vector3) -> void:
 		play_at(&"perfect_dodge", pos))
 	# The one cue whose loudness is the POINT, so it does not go through `_cue`.
@@ -218,8 +258,8 @@ func _ready() -> void:
 		_cue(&"items_sold"))
 	Bus.puzzle_solved.connect(func(_id: StringName) -> void:
 		_cue(&"puzzle_solved"))
-	Bus.room_cleared.connect(func(_id: StringName) -> void:
-		_cue(&"room_cleared"))
+	Bus.room_cleared.connect(func(_id: StringName, grade: int) -> void:
+		play_at(CLEAR_CUES.get(grade, CLEAR_CUES[1]), _hero_pos()))
 	# At the chest and not at the hero, unlike everything above: a reward is a
 	# place in the room. `Bus.reward_revealed` carries the position for this.
 	Bus.reward_revealed.connect(func(tier: int, pos: Vector3) -> void:
@@ -275,6 +315,20 @@ func play(id: StringName) -> void:
 	play_at(id, _hero_pos())
 
 
+## Play a non-positional cue through the SFX bus. These voices survive a paused
+## tree, which is required for title cards and will also serve the raid alarm.
+func play_global(id: StringName) -> void:
+	if _too_soon(id):
+		return
+	var stream := _load(id)
+	if stream == null:
+		return
+	last_global_cue = id
+	var voice := _claim_global()
+	voice.stream = stream
+	voice.play()
+
+
 ## Has `id` played too recently to play again? See `MIN_GAP`.
 ##
 ## `Time.get_ticks_msec()` and not a game clock: this is about what the SPEAKERS
@@ -303,6 +357,12 @@ func _claim() -> AudioStreamPlayer3D:
 	var v := _pool[_next]
 	_next = (_next + 1) % _pool.size()
 	return v
+
+
+func _claim_global() -> AudioStreamPlayer:
+	var voice := _global_pool[_global_next]
+	_global_next = (_global_next + 1) % _global_pool.size()
+	return voice
 
 
 ## Resolve `id` to a stream, expanding `foo` to a random `foo_N` when that sound

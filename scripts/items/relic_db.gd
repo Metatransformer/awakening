@@ -742,13 +742,15 @@ static func groups() -> Array[Dictionary]:
 		# floors: if a relic moves down a level, the board follows the table
 		# instead of quietly regrouping behind it.
 		if lv != level and not tracks.is_empty():
-			out.append({"title": _floor_title(level), "tracks": tracks})
+			out.append({"title": _floor_title(level), "icon": "relic",
+				"tracks": tracks})
 			tracks = []
 		level = lv
 		tracks.append({"name": String(rows[i]["label"]), "line": i,
 			"owned": 0, "rungs": 1})
 	if not tracks.is_empty():
-		out.append({"title": _floor_title(level), "tracks": tracks})
+		out.append({"title": _floor_title(level), "icon": "relic",
+				"tracks": tracks})
 	return out
 
 

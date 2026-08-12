@@ -392,30 +392,74 @@ const SHAKE_CRIT := 0.72
 ## all of them -- one number, decided once, so a beat retuned in `BossDb` moves
 ## the flinch, the stagger, the camera and the grunt together.
 
-## **The two curves that decide which of the three reactions a blow earns**, and
-## the only numbers anyone has to agree with to price a new monster. Fitted to
-## two rows the designer named, and `Hit.tier_odds` is where they are read:
+## **What decides which of the three reactions a blow earns**, and the only
+## numbers anyone has to agree with to price a new monster. `Hit.tier_odds` is
+## where they are read and `tools/directors/hurt_table.gd` prints the whole
+## roster through them.
 ##
-##   goblin (1.25 m, its only move)   light 90 / heavy  9 / knockdown  1
-##   orc    (1.95 m, its only move)   light 50 / heavy 30 / knockdown 20
+## The design rows, and they are the owner's words (card #130):
 ##
-## The input is `mass * commitment^2` -- see `Hit.tier_odds`, which owns the
-## reasoning. `_MID` is where the curve passes its half-way point and `_K` is how
-## steep it is there; both were solved for rather than tuned, so moving one means
-## re-solving both against the two rows above and not nudging until it feels
-## right. `tools/_hurt_table.gd` prints the whole roster through them.
+##   goblin  light swing   light knockback,  NEVER floors you
+##   goblin  heavy swing   medium knockback, NEVER floors you
+##   troll   light swing   medium knockback
+##   troll / boss  heavy   medium knockback up to knocked flat
 ##
-## The knockdown ceiling is short of 1.0 deliberately: even a boss's telegraphed
-## heaviest only *usually* floors you, which keeps the tell a read rather than a
-## known outcome.
+## So knockdown is the product of two gates and neither alone opens it:
+##
+##   * **heft** -- how far the attacker outweighs the hero. Zero at `MASS_FLOOR`,
+##     which is the hero's OWN mass, so *a body no heavier than you cannot put
+##     you on the ground* -- goblin, kobold and skeleton are exactly 0 and it is
+##     a statement rather than a small number. Full at `MASS_FULL`, twice the
+##     hero, which is where the floor-1 boss sits.
+##   * **commitment** -- whether the move was a committed, telegraphed heavy at
+##     all. Squared, so an ordinary swing spends almost none of the heft its body
+##     has. This is what stops the troll flooring you with every twitch: it is a
+##     2.6 m body, and a 2.6 m body SHOULD floor you, but only when it wound up
+##     to do it.
+##
+## The not-LIGHT curve (stagger *or* knockdown) is a plain logistic on
+## `mass * (0.6 + 0.4 * commitment)` -- mass-dominant, because "how hard was I
+## rocked" is mostly about what hit you, and it is the channel that has to say
+## *medium knockback* for a big thing's ordinary swing. Fitted through the goblin
+## row (10% not-light) and the troll row (70%).
 const KNOCKDOWN_CEIL := 0.85
-const KNOCKDOWN_K := 7.894
-const KNOCKDOWN_MID := 1.2963
+## Mass at which knockdown becomes possible at all -- the hero's own. Mass is
+## `height / LAUNCH_MASS_REF` and `LAUNCH_MASS_REF` is 1.70, so this is a 1.70 m
+## creature against a 1.65 m hero.
+const KNOCKDOWN_MASS_FLOOR := 1.0
+## Mass at which heft is spent in full: twice the hero, the floor-1 boss.
+const KNOCKDOWN_MASS_FULL := 2.0
+## Heft's exponent. Above 1 so the middle of the roster stays well clear of the
+## floor: it is the difference between an orc's swing at 3% and at 10%.
+const KNOCKDOWN_HEFT_P := 1.4
+## Commitment's exponent. Squared for the reason `Hit.tier_odds` gives -- a
+## moveset only spans 0.6 to 1.0 and a linear read of that is barely a
+## difference at all.
+const KNOCKDOWN_COMMIT_P := 2.0
 ## The not-LIGHT curve. Its ceiling is a hair under 1 because a logistic never
 ## reaches its asymptote and a 1.0 here would make the fit unsolvable.
-const STAGGER_CEIL := 0.995
-const STAGGER_K := 5.344
-const STAGGER_MID := 1.1451
+const STAGGER_CEIL := 0.97
+const STAGGER_K := 3.512
+const STAGGER_MID := 1.2429
+
+## **Commitment, 0.6 to 1.0, and 0.6 is an ordinary swing.** Not 0 to 1: a boss's
+## lightest beat is still a boss hitting you, and `tier_odds` squares this before
+## it is used, so a raw 0.3 would come out at 0.09 and price a boss's jab under a
+## goblin's.
+##
+## Two things derive it and they mean the same thing. A boss reads it off the
+## beat's damage and shove against its own heaviest (`Boss._commitment`) because
+## it HAS a moveset to be a fraction of. A roster monster has exactly one attack,
+## so there is nothing to compare it to -- it reads it off **the wind-up**
+## (`Hit.commitment_of_tell`), which is the same claim the roster's own rows
+## already make: the troll "tells you for three quarters of a second first", the
+## kobold does not tell you at all. A move that telegraphs is a move that is
+## committing, and that is exactly the move allowed to floor you.
+const COMMIT_LIGHT := 0.6
+## The wind-up that reads as no tell at all, and the one that reads as a fully
+## telegraphed heavy. Bracketing the roster: kobold 0.30, troll 0.72.
+const COMMIT_TELL_MIN := 0.28
+const COMMIT_TELL_MAX := 0.75
 
 ## Floor on how long each reaction holds the hero, in seconds. `Hit.stun` is
 ## authored per beat (0.20-0.40 across `BossDb`) and had NO READER on the hero at

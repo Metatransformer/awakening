@@ -118,7 +118,7 @@ static func groups() -> Array[Dictionary]:
 	# `_bottle_line` is always `lines()[0]`; asserting that here rather than
 	# searching for the id, because if it ever stops being true the glass row is
 	# the wrong length and that is worth failing loudly over.
-	out.append({"title": "GLASS", "tracks": [{
+	out.append({"title": "GLASS", "icon": "glass", "tracks": [{
 		"name": "",
 		"line": 0 if Game.bottle_count() < K.BOTTLE_MAX else -1,
 		"owned": Game.bottle_count() - K.BOTTLE_START,
@@ -136,7 +136,7 @@ static func groups() -> Array[Dictionary]:
 		draughts.append({"name": String(rows[i].get("label", "")), "line": i,
 			"owned": 0, "rungs": 1})
 	if not draughts.is_empty():
-		out.append({"title": "DRAUGHTS", "tracks": draughts})
+		out.append({"title": "DRAUGHTS", "icon": "draughts", "tracks": draughts})
 	return out
 
 

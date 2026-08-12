@@ -115,9 +115,9 @@ static func groups() -> Array[Dictionary]:
 		at[rows[i]["id"]] = i
 
 	var out: Array[Dictionary] = []
-	out.append({"title": "THE BAG", "tracks": [
+	out.append({"title": "THE BAG", "icon": "bag", "tracks": [
 		_track(at, &"bag_slot", "", int(LIMITS[&"bag_slot"]))]})
-	out.append({"title": "HEARTS", "tracks": [
+	out.append({"title": "HEARTS", "icon": "hearts", "tracks": [
 		_track(at, &"heart", "", int(LIMITS[&"heart"]))]})
 	return out
 

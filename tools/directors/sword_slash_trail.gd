@@ -1,5 +1,6 @@
 extends RefCounted
-## The ordinary sword trail follows the real LIGHT1/2/3 blade and nothing else.
+## The ordinary sword trail follows the real LIGHT1/2/3, tap-heavy, and parry
+## counter blades. The held charged spin remains the null control.
 ##
 ##   timeout 400 tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/training.tscn \
@@ -11,7 +12,8 @@ extends RefCounted
 ## so attempting to photograph a live three-press chain would make the camera
 ## break the combo it claims to prove. The null case uses the real held trigger:
 ## the hold must arm and release a spin without advancing the light serial or
-## producing even one neutral ribbon section.
+## producing even one neutral ribbon section. Heavy and counter use their real
+## input paths so a direct helper call cannot hide a missing gameplay wire.
 
 const MIN_LIVE_SECTIONS := 8
 
@@ -49,6 +51,11 @@ func run(rig) -> void:
 		await _prove_light(rig, hero, combat, trail, step, out)
 	if trail.stroke_serial != first_serial + 3:
 		rig.fail("SLASH TRAIL three accepted lights advanced serial %d times, not 3"
+			% (trail.stroke_serial - first_serial))
+	await _prove_heavy(rig, hero, combat, trail, out)
+	await _prove_counter(rig, hero, combat, trail, out)
+	if trail.stroke_serial != first_serial + 5:
+		rig.fail("SLASH TRAIL lights + heavy + counter advanced serial %d times, not 5"
 			% (trail.stroke_serial - first_serial))
 
 	await _prove_spin_control(rig, hero, combat, trail)
@@ -91,6 +98,63 @@ func _prove_light(rig, hero: Hero, combat: HeroCombat, trail: SwordSlashTrail,
 	if not cleared:
 		rig.fail("SLASH TRAIL LIGHT%d left %d sections past follow-through"
 			% [step + 1, trail.section_count])
+
+
+func _prove_heavy(rig, hero: Hero, combat: HeroCombat, trail: SwordSlashTrail,
+		out: String) -> void:
+	Game.stamina = Game.max_stamina
+	Bus.stamina_changed.emit(Game.stamina, Game.max_stamina)
+	var before := trail.stroke_serial
+	# A short real trigger pull releases the tap-heavy without arming the spin.
+	await rig.tap([&"heavy"])
+	# The heavy commits on the RELEASE edge, which the gameplay poller sees on
+	# the frame after the rig sends it. Wait for the accepted move, not the send.
+	var started: bool = await rig.until(func() -> bool:
+		return trail.stroke_serial == before + 1, 0.5)
+	if not started:
+		rig.fail("SLASH TRAIL accepted tap-heavy did not start a stroke")
+		return
+	await _capture_special(rig, hero, trail, "heavy", out.path_join("heavy_arc.png"))
+
+
+func _prove_counter(rig, hero: Hero, combat: HeroCombat, trail: SwordSlashTrail,
+		out: String) -> void:
+	Game.stamina = Game.max_stamina
+	Bus.stamina_changed.emit(Game.stamina, Game.max_stamina)
+	var before := trail.stroke_serial
+	# Hand over the earned window, then use the real attack mapping. This is the
+	# stable director seam parry_dodge uses to isolate the riposte from parry AI.
+	combat.set(&"_riposte_t", K.RIPOSTE_WINDOW)
+	await rig.tap([&"attack"])
+	var started: bool = await rig.until(func() -> bool:
+		return trail.stroke_serial == before + 1, 0.5)
+	if not started:
+		rig.fail("SLASH TRAIL accepted parry counter did not start a stroke")
+		return
+	if float(combat.get(&"_riposte_t")) > 0.0:
+		rig.fail("SLASH TRAIL parry counter did not spend its riposte window")
+	await _capture_special(rig, hero, trail, "counter", out.path_join("counter_arc.png"))
+
+
+func _capture_special(rig, hero: Hero, trail: SwordSlashTrail,
+		label: String, path: String) -> void:
+	var built: bool = await rig.until(func() -> bool:
+		return trail.section_count >= MIN_LIVE_SECTIONS, 1.2)
+	if not built:
+		rig.fail("SLASH TRAIL %s never built %d live sections (got %d)"
+			% [label, MIN_LIVE_SECTIONS, trail.section_count])
+	else:
+		await rig.wait_physics_frames(1)
+		await rig.capture(path)
+	var finished: bool = await rig.until(func() -> bool:
+		return hero.state != Hero.MoveState.ATTACK, 2.0)
+	if not finished:
+		rig.fail("SLASH TRAIL %s never left the real attack state" % label)
+	var cleared: bool = await rig.until(func() -> bool:
+		return trail.section_count == 0, 0.5)
+	if not cleared:
+		rig.fail("SLASH TRAIL %s left %d sections past follow-through"
+			% [label, trail.section_count])
 
 
 func _prove_spin_control(rig, hero: Hero, combat: HeroCombat,
