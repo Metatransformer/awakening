@@ -21,5 +21,7 @@ or cosmology. Unknown is not permission to improvise. In particular,
 graph supplies them.
 
 Run `npm run lore:check` (or `python3 tools/validate_lore.py`) after changing the
-subset. The validator checks its file manifest and sources, entity ids, person
-records, pronouns, and the live `DialogueDb.PEOPLE` contract.
+subset. The validator uses PyYAML when present and macOS Ruby's standard YAML
+parser otherwise; no project package install is required. It checks the file
+manifest and sources, entity ids, person records, pronouns, and the live
+`DialogueDb.PEOPLE` contract.
