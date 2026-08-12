@@ -19,10 +19,13 @@ class TrailSample:
 		expires_at = expiry
 
 
-## At most 22 quads / 23 blade samples. The finisher's longer live slice can hit
-## this ceiling; it must shed the oldest section rather than grow without bound.
+const TRAIL_SHADER := preload("res://assets/shaders/sword_slash_trail.gdshader")
+## At most 22 sampled spans / 23 blade poses. Render-only curve subdivision adds
+## smoothness between them without lengthening the trail's history or lifetime.
 const MAX_SECTIONS := 22
-const INNER_Y := 0.24
+const CURVE_SUBDIVISIONS := 4
+const RAILS_PER_ROW := 5
+const INNER_Y := 0.12
 const OUTER_Y := 0.88
 ## Reject near-identical physics samples. Without this, hit-stop can stack a
 ## bright knot of zero-area quads at one point on the blade.
@@ -35,9 +38,11 @@ const SAMPLE_MEMORY := 0.20
 const FOLLOW_THROUGH := 0.083
 
 ## Public proof seam. A serial advances only when HeroCombat accepts an ordinary
-## light swing, and section_count says how many live ribbon quads exist now.
+## light swing. `section_count` is the bounded sampled history, while
+## `render_section_count` exposes the denser curve used to draw it.
 var stroke_serial: int = 0
 var section_count: int = 0
+var render_section_count: int = 0
 
 var _blade: Node3D = null
 var _mesh_instance: MeshInstance3D = null
@@ -132,44 +137,75 @@ func _prune_expired() -> void:
 func _rebuild_mesh() -> void:
 	_mesh.clear_surfaces()
 	section_count = maxi(_samples.size() - 1, 0)
+	render_section_count = 0
 	_mesh_instance.visible = section_count > 0
 	if section_count == 0:
 		return
 
+	# Physics sampling owns the history and its strict cap. Four Catmull-Rom
+	# subdivisions are render-only: they round the silhouette without changing
+	# combat timing, lifetime, or the amount of state retained between frames.
+	var smooth_inners := PackedVector3Array()
+	var smooth_outers := PackedVector3Array()
+	var smooth_expiries := PackedFloat32Array()
+	var last_sample := _samples.size() - 1
+	for sample_index in last_sample:
+		var p0: TrailSample = _samples[maxi(sample_index - 1, 0)]
+		var p1: TrailSample = _samples[sample_index]
+		var p2: TrailSample = _samples[sample_index + 1]
+		var p3: TrailSample = _samples[mini(sample_index + 2, last_sample)]
+		for subdivision in CURVE_SUBDIVISIONS:
+			var t := float(subdivision) / float(CURVE_SUBDIVISIONS)
+			smooth_inners.append(p1.inner.cubic_interpolate(p2.inner, p0.inner, p3.inner, t))
+			smooth_outers.append(p1.outer.cubic_interpolate(p2.outer, p0.outer, p3.outer, t))
+			smooth_expiries.append(lerpf(p1.expires_at, p2.expires_at, t))
+	var final_sample: TrailSample = _samples[last_sample]
+	smooth_inners.append(final_sample.inner)
+	smooth_outers.append(final_sample.outer)
+	smooth_expiries.append(final_sample.expires_at)
+	render_section_count = smooth_inners.size() - 1
+
 	var vertices := PackedVector3Array()
 	var colors := PackedColorArray()
+	var uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
-	for sample_index in _samples.size():
-		var sample: TrailSample = _samples[sample_index]
-		var life := clampf((sample.expires_at - _stroke_t) / SAMPLE_MEMORY, 0.0, 1.0)
-		var along := float(sample_index) / float(_samples.size() - 1)
+	for row_index in smooth_inners.size():
+		var life := clampf((smooth_expiries[row_index] - _stroke_t) / SAMPLE_MEMORY,
+			0.0, 1.0)
+		var along := float(row_index) / float(render_section_count)
 		# Collapse the oldest blade span into the tip path. That pointed tail is
 		# what turns a rectangular motion smear into a crescent.
 		var width := smoothstep(0.0, 0.30, along)
-		var inner := sample.outer.lerp(sample.inner, width)
-		var shoulder := inner.lerp(sample.outer, 0.72)
-		var edge := inner.lerp(sample.outer, 0.89)
+		var outer := smooth_outers[row_index]
+		var inner := outer.lerp(smooth_inners[row_index], width)
 		var tail_fade := smoothstep(0.0, 0.28, along)
 		var alpha := life * tail_fade * _intensity
 
-		# Four rails create a subdued translucent body and a narrow, readable
-		# cutting edge. Keeping the body far below the rim avoids the white slab
-		# that a single broad alpha gradient produced in torch light.
+		# Five rails extend the interior fade roughly twice as far beneath the
+		# cutting edge. The extra blade width lives almost entirely in this soft
+		# falloff, so the slash feels thicker without becoming a white slab.
 		vertices.append(inner)
-		vertices.append(shoulder)
-		vertices.append(edge)
-		vertices.append(sample.outer)
-		colors.append(Color(Pal.MOTH.r, Pal.MOTH.g, Pal.MOTH.b, 0.02 * alpha))
-		colors.append(Color(Pal.MOTH.r, Pal.MOTH.g, Pal.MOTH.b, 0.11 * alpha))
+		vertices.append(inner.lerp(outer, 0.24))
+		vertices.append(inner.lerp(outer, 0.52))
+		vertices.append(inner.lerp(outer, 0.78))
+		vertices.append(outer)
+		uvs.append(Vector2(along, 0.0))
+		uvs.append(Vector2(along, 0.24))
+		uvs.append(Vector2(along, 0.52))
+		uvs.append(Vector2(along, 0.78))
+		uvs.append(Vector2(along, 1.0))
+		colors.append(Color(Pal.MOTH.r, Pal.MOTH.g, Pal.MOTH.b, 0.0))
+		colors.append(Color(Pal.MOTH.r, Pal.MOTH.g, Pal.MOTH.b, 0.04 * alpha))
+		colors.append(Color(Pal.COBALT.r, Pal.COBALT.g, Pal.COBALT.b, 0.18 * alpha))
 		# Cobalt under the bone-white rim gives the cut a cool flash without using
 		# extraction cyan or turning every light attack into charged-spin VFX.
-		colors.append(Color(Pal.COBALT.r, Pal.COBALT.g, Pal.COBALT.b, 0.52 * alpha))
+		colors.append(Color(Pal.COBALT.r, Pal.COBALT.g, Pal.COBALT.b, 0.48 * alpha))
 		colors.append(Color(Pal.BONE.r, Pal.BONE.g, Pal.BONE.b, 0.72 * alpha))
 
-	for i in section_count:
-		var a := i * 4
-		var b := a + 4
-		for band in 3:
+	for i in render_section_count:
+		var a := i * RAILS_PER_ROW
+		var b := a + RAILS_PER_ROW
+		for band in RAILS_PER_ROW - 1:
 			indices.append_array(PackedInt32Array([
 				a + band, a + band + 1, b + band + 1,
 				a + band, b + band + 1, b + band,
@@ -179,18 +215,12 @@ func _rebuild_mesh() -> void:
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_INDEX] = indices
 	_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 
 
-func _material() -> StandardMaterial3D:
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	# MIX is load-bearing here. ADD over the dungeon's near-black floors ignores
-	# alpha and turns a fading ribbon into the opaque slab in CLAUDE.md's trap.
-	material.blend_mode = BaseMaterial3D.BLEND_MODE_MIX
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	material.vertex_color_use_as_albedo = true
-	material.disable_receive_shadows = true
+func _material() -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = TRAIL_SHADER
 	return material
