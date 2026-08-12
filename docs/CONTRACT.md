@@ -1060,6 +1060,15 @@ day the roster landed until this was fixed. A blow that lands
 returns true; a blow the shield or an i-frame ate returns false, and only the
 first is announced on `connected`.
 
+The hero resolves defences in one order inside `Hero.take_hit`: parry, roll and
+perfect-dodge handling, existing i-frames, then the frontal shield, then damage.
+A shield block is eligible only while `Game.stamina > 0.0`; when it catches a
+blow it spends `hit.amount * K.STAMINA_BLOCK_PER_QUARTER` through
+`Game.spend_stamina(cost, true)` before block feedback. Partial spending is the
+rule: any positive stamina catches that blow and clamps to zero, while the next
+blow lands if stamina remains empty. `Hit.amount`, in quarter-hearts, is the one
+measure of attack weight; do not add a second weight field.
+
 `HealthComponent` (`scripts/combat/health_component.gd`, owned by P4):
 
 ```gdscript
@@ -1739,7 +1748,7 @@ Rules:
 - New on the save: a `stash` key. It arrived at `VERSION = 3` and rides in v4;
   see "Settings and saves" below for why v3 itself is no longer readable.
 
-### Starting a game — the two doors, and both of them are `Flow`'s
+### Starting a game — the save list and `Flow`'s two doors
 
 ```gdscript
 Flow.new_game() -> void                         # reset, play the opening, land in the garrison
@@ -1749,7 +1758,11 @@ Flow.resume(dest: Dictionary) -> bool           # the second half alone: travel 
 
 The title screen (`res://scenes/ui/title/title_screen.tscn`, the project's
 `run/main_scene`) is the only caller of the first two, and it calls nothing else
-— per §10 `Flow` is still the one thing that may change a scene.
+— per §10 `Flow` is still the one thing that may change a scene. **CONTINUE does
+not choose a slot for the player.** It opens the readable three-slot list,
+ordered by `last_played_unix` descending. Each row shows last played, current
+progress (GARRISON or the active dungeon floor/depth), and gold; choosing a row
+is what calls `continue_game(slot)`.
 
 - **`new_game` is the only caller `Game.reset()` has ever had.** Before the title
   screen there was no way to start a second game in a process: the opening's
@@ -1760,28 +1773,31 @@ The title screen (`res://scenes/ui/title/title_screen.tscn`, the project's
   so a new game costs a player with three full slots nothing until they pick one.
 - **`continue_game` is a coroutine and its bool arrives at the far end of the
   fade.** `await` it. It calls `Saves.load_slot` (which per "Settings and saves"
-  restores `Game` and deliberately does *not* change scenes) and hands the result
-  to `resume`.
+  restores `Game` and the optional v10 `Run`, but deliberately does *not* change
+  scenes) and hands the result to `resume`.
 - **`resume(dest)` is the half that travels**, and it is public because a load
-  has two doors. It `_go`s to `dest.scene` and puts the hero back at the recorded
-  `pos`/`yaw`. **That yaw is a NODE rotation, not a heading** — `Saves.save`
-  writes `global_rotation.y` verbatim, so restoring it is an assignment and the
-  `+ PI` in §2.5 does not apply here. The placement happens *inside* `_go`, after
-  the new scene's `_ready` and **before** the autosave at the foot of it — the
-  autosave reads the hero out of the live tree, so placing him afterwards would
-  write the room's default spawn back over the slot just loaded.
+  has two doors. A restored active dungeon run is preserved when `dest` points
+  to that dungeon; only a non-dungeon destination abandons and resets `Run`.
+  The generated dungeon rebuilds from the restored seed and level before the
+  hero is put back at the recorded `pos`/`yaw`. **That yaw is a NODE rotation,
+  not a heading** — `Saves.save` writes `global_rotation.y` verbatim, so restoring
+  it is an assignment and the `+ PI` in §2.5 does not apply here. Placement
+  happens *inside* `_go`, after the new scene's `_ready` and **before** the
+  autosave at the foot of it, so the loaded transform is not overwritten by the
+  room's default spawn.
 - **The pause menu's Load Game is the second door**, and it uses `resume`
   directly. `MenuSavesPanel` calls `Saves.load_slot` itself and emits
   `PauseMenu.load_requested(slot, dest)`; `Flow._ready` connects to it. Calling
   `continue_game` from there would read the slot twice. Nothing was connected at
   all until 2026-08-10, so a load from the pause menu restored `Game` and left
   the player in the room they were already standing in.
-- **Loading abandons the run in flight.** `resume` calls `Run.reset()` first (and
-  re-emits `bag_changed` / `level_changed`, which `reset` does not). A slot holds
-  `Game` and nothing of `Run` — METAGAME §5 — so there is no run to restore onto,
-  and without this a load from floor 3 arrived in the garrison still holding a
-  sellable bag. It is `reset()` and not `Run.die()`: the run was discarded, not
-  ended, so there is no receipt and no death counted against mercy.
+- **Loading resets a run only when the destination is not one.** A v10 dungeon
+  destination arrives with its versioned `run` snapshot already restored and
+  `resume` preserves it. A legacy slot, or any slot without a valid active
+  dungeon snapshot, returns to the garrison and calls the abandon path so no
+  stale bag or floor leaks into town. Abandoning uses
+  `reset()`, not `Run.die()`: there is no receipt and no death counted against
+  mercy.
 
 ### Sleeping — `Flow.blink` fades without changing scene
 
@@ -2518,9 +2534,19 @@ Bus.request_sfx.emit(&"chest_open", global_position)   # id = a file in audio/sf
 
 `Sfx` also maps the events that already say what happened — `chest_opened`,
 `door_opened`, `item_acquired`, `loot_gained`, `items_sold`, `puzzle_solved`,
-`hit_landed`, `shield_blocked`, `enemy_died`, `player_died`, `target_acquired`,
-`run_started`, `run_ended`, `bag_full` — so those need no emit
-at all. Add a row to `Sfx.CUES` rather than a player to a prop.
+`room_cleared`, `reward_revealed`, `hit_landed`, `shield_blocked`, `enemy_died`,
+`player_died`, `target_acquired`, `run_started`, `run_ended`, `bag_full` — so
+those need no emit at all. Add a row to `Sfx.CUES` rather than a player to a prop.
+
+`reward_revealed` is the one that is **not** in `CUES`, and it cannot be:
+`CUES` is keyed on the signal and this signal carries a TIER as an argument, so
+it has its own table, `Sfx.REWARD_CUES`, keyed `1` and `2` (see
+`RewardVfx.MINOR` / `MAJOR`). It also plays at the reward rather than at the
+hero, because a reward is a place in the room. Both tiers name
+`treasure_spawn` today and that is deliberate rather than a gap — there is one
+take of a chest falling out of nothing, the tiers already differ in the eye and
+in how long they hold the screen, and when a bigger take exists tier 2 is one
+line in that table and nothing else moves.
 
 `shield_blocked` is the one that had it the other way round and was corrected:
 `HeroCombat.on_blocked` built a fresh `AudioStreamPlayer3D` per block and freed
@@ -2825,55 +2851,61 @@ count up. Pass `fill := true` on a purchase (the player should feel the new
 heart at once) and leave it false on a Recut, where clamping down is the point.
 
 ```gdscript
-Saves.peek(slot)        # header for the slot list; {empty:true} if unused
-Saves.save(slot)        # captures Game + hero position + current room
-Saves.load_slot(slot)   # restores Game, RETURNS {scene, room, pos, yaw}
-Saves.erase(slot)       # 3 slots, 0..2
-Saves.autosave()        # Flow calls this on EVERY transition; false = declined
-Saves.autosaved         # signal(slot) -- slot is -1 when it declined
+Saves.peek(slot: int) -> Dictionary       # readable list header; empty=true if unused
+Saves.save(slot: int) -> bool             # Game + destination/transform + v10 Run snapshot
+Saves.load_slot(slot: int) -> Dictionary  # restores data and returns the travel destination
+Saves.erase(slot: int) -> void            # 3 slots, 0..2
+Saves.autosave() -> bool                  # active slot, else first empty, else decline
+Saves.autosaved                           # signal(slot) -- -1 when autosave declined
 ```
 
-The save file is at **`VERSION = 5`**, and `READABLE` — not `VERSION` — is what
-`load_slot` checks. v2 added `bag_slots`, `upgrades` and `components` on top of
-v1; v3 added `stash` and `max_stamina`; v4 is the gear split, where `plate`
-stopped being one rung and became eight tracks; v5 added `deaths`, the dial GDD
-§7.1 turns. **v3 is refused rather than migrated** and `READABLE` holds
-`[4, 5]`, because a v3 `plate` key means something the v4 accessors would read
-as a different piece of armour. An *additive* version bump can be readable
-alongside its predecessor — v5 is exactly that, and a v4 slot loads with
-`deaths` defaulting to 0, which is the truthful answer for a save written before
-anything counted. v4 was not additive. `save_game.gd`'s header comment carries
-the full argument.
+`peek` exposes `last_played_unix`, `gold`, `in_dungeon`, `floor`/`level`, `depth`
+and `room` for the readable three-slot list; the title sorts those headers newest
+first rather than choosing the newest slot itself. `load_slot` returns `scene`,
+`room`, optional scene-owned `pos`/`yaw`, `run_restored`, `in_dungeon`, `level` and
+`depth`, so `Flow.resume` can distinguish a restored run from a legacy or
+garrison load. v4-v8 transforms are deliberately omitted because their owner is
+unknown; v9 introduced `position_scene`, and a transform is returned only when
+that owner matches the destination.
+
+The save file is at **`VERSION = 10`**, and `READABLE` — not `VERSION` — is what
+`load_slot` checks. v4 split the old `plate` rung into eight gear tracks and is
+why **v3 is refused rather than migrated**: its `plate` key has no honest mapping
+to the new pieces. The later bumps are additive: v5 added `deaths`, v6
+`gold_earned`, v7 the kit `wheel`, v8 `rations`, v9 transform ownership, and
+v10 `last_played_unix` plus the single versioned `run` snapshot. `READABLE` is
+therefore `[4, 5, 6, 7, 8, 9, 10]`; absent fields take their version-appropriate
+defaults instead of making those slots unreadable. `save_game.gd`'s header
+comment carries the full version history.
 
 Every one of those dictionaries is rebuilt on load with `StringName` keys — JSON
 hands back `String` keys, and a `String` key makes `forge_level(&"edge")` and
 `stash_count(&"void_pearl")` miss silently, so every forged rung and everything
 on the shelf vanishes.
 
-`Saves.load_slot()` deliberately does **not** change scenes — it hands back
-where the hero belongs and lets the caller transition however it wants.
+`Saves.load_slot()` deliberately does **not** change scenes — it restores the
+save data, hands back where the hero belongs and lets `Flow` perform the
+transition. A v10 `run` is one versioned data snapshot, not a scene tree:
+`in_dungeon`, `seed_used`, `level`, `depth`, `bag`, `cased`, the `premium` and
+`kills` counters, current magic/stamina trip budgets, `visited_rooms`, and the
+generator's `rng_state`. The dungeon regenerates from seed plus level before
+`Flow` restores the hero transform.
+Legacy v4–v9 slots have no snapshot, return to the garrison, and reset `Run`.
 Whoever owns room transitions should set `Saves.current_room` as rooms change.
 
-**Autosaving is `Flow`'s, and it is unconditional.** The last thing `_go` does,
-after the fade lifts, is call `Saves.autosave()` — there is no per-caller flag,
-because all four ways through that function (in, down, home paid, home in a box)
-are moments a player would be furious to replay, and a rule with no exceptions
-cannot be forgotten by the fifth caller. It runs at the *end* on purpose:
+**Every automatic path converges on `Saves.autosave()`.** The last thing `_go`
+does after every transition is call it; the bed calls it during the manual rest;
+and the active-play clock calls it after five minutes in which the tree is
+unpaused and a player exists. Transition timing remains at the end on purpose:
 `Saves.save` reads the hero out of the live tree, and the notice it raises is
 drawn by the HUD, so announcing it behind a black screen announces it to nobody.
 
-Two rules the format enforces, both proved by `tools/directors/autosave.gd`:
-
-- **A recorded scene is never a dungeon.** `_save_scene()` returns `Flow.GARRISON`
-  whenever `Run.in_dungeon`. A slot holds `Game` and nothing of `Run`
-  (METAGAME §5), so a save pointing underground reloaded into a generated floor
-  with no bag, no fee and no run behind it. That predates the autosave and was
-  reachable by saving manually in the dungeon.
-- **An autosave never overwrites a save made by hand.** It takes the active slot
-  if there is one, else the first empty slot (which it then keeps), else it
-  declines and emits `autosaved(-1)`. Picking a slot to sacrifice for a player
-  who manages three by hand is the autosave deciding which of their saves
-  mattered least.
+The common no-overwrite rule is unchanged: an autosave takes the active slot if
+there is one, else the first empty slot (which it then keeps), else it declines
+and emits `autosaved(-1)`. Picking a slot to sacrifice for a player who manages
+three by hand would be the autosave deciding which of their saves mattered
+least. A manual save does overwrite the chosen slot, which is why mid-dungeon
+load is recovery of that slot's current state rather than a checkpoint stack.
 
 `Hud` listens on `autosaved` and draws **AUTOSAVING…** bottom-right for 2.2 s on
 the toast's baseline, in `MOTH` — the HUD talking about itself, not about the
@@ -2997,6 +3029,45 @@ Markers are drawn shapes in `Pal` colours, not textures. At 6 px on the minimap
 a photograph of a chest is four brown pixels; a gold box with a dark band is a
 chest. `Atlas`'s marker ids and `MapDraw.MARK_ORDER` are two halves of one list —
 an id with no glyph draws nothing, silently. Add to both.
+
+### Rewards — a prize does not exist until you have beaten what guards it
+
+**No chest, mote or relic is lootable on arrival.** A reward is placed at
+generation time, then held `visible = false` and `enabled = false` until the
+thing standing between the player and it is gone; then `RewardVfx.land(prize,
+tier)` makes it real. `docs/GDD.md` §5.1 owns the rule; this is how it is wired.
+
+Two ways to hold one, and which you use depends on whether there is a room:
+
+- **`RoomWatch`** (`scripts/world/room_watch.gd`) for a room with a pack in it.
+  `RoomWatch.attach(room_root, id)` before you spawn, `watch.add(foe)` per body,
+  `watch.cleared` when the last one is gone — and `Bus.room_cleared(id)` on the
+  same frame, which is the emitter that signal never had. It counts rather than
+  scans, because an enemy that chases the hero into the corridor has not been
+  beaten and a corpse's node survives its death by about three seconds.
+- **The body's own signal** where the room IS the encounter. The boss arena and
+  the miniboss chamber already answer "is it dead"; a watcher there would be a
+  second answer to one question. Connect `boss.died_at` and land the chest.
+
+Whichever you use, **there must be a fail-safe.** A generator can produce a room
+with nothing to beat, and a chest that waits for a pack that was never spawned is
+worse than one standing open — it is a reward the player can never have, and it
+looks identical to one that is working. `RewardVfx.show_now(prize)` is the silent
+version for exactly that case: real, lootable, no ceremony, because four chests
+going off behind the loading card is the beat firing where nobody is standing.
+
+`RewardVfx` owns the whole arrival — the drop, the ring, the star, the bloom, the
+shake and `Bus.reward_revealed(tier, position)` — and picks no sound; `Sfx` does,
+from `REWARD_CUES`. Two tiers and no more: the player only ever sees one flash at
+a time, so two is the smallest number that can be *recognised*. They differ in
+magnitude and silhouette (MAJOR adds a shaft of light and a second ring, and
+holds nearly twice as long), never in hue.
+
+`tools/directors/room_reward.gd` is the proof and it sweeps **every** chest on a
+freshly generated floor, not one room's. That is deliberate: the two holes this
+rule shipped with were both generator holes — the deep chest stands in the boss's
+room, which `_populate` gives no pack and therefore no watcher, and the vault's
+rich chest had no gate at all behind three rooms of level+1 bodies.
 
 ---
 

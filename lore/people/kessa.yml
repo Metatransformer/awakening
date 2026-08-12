@@ -1,0 +1,21 @@
+schema_version: 1
+id: person.kessa
+canonical_name: Kessa
+display_name: Kessa
+name_status: placeholder
+role: Garrison quartermaster who buys what explorers recover.
+gender: female
+pronouns:
+  subject: she
+  object: her
+  possessive: her
+  reflexive: herself
+dialogue_id: quartermaster
+voice_status: partially_voiced
+fixed_facts:
+  - Kessa is the quartermaster and is present from the opening.
+  - She buys what Kael brings back from the descent.
+sources:
+  - docs/GDD.md
+  - scripts/world/dialogue_db.gd
+  - scripts/world/story_db.gd

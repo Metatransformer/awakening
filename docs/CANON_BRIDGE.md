@@ -41,6 +41,27 @@ temporal and geographic relationship to the canonical Sunken Cut; that answer
 will resolve most of the table. Do not open a second active design test while
 core-loop proof is running.
 
+## Matched pantheon subset — the Votive Court
+
+The Votive Court is a **prologue-only arrangement** of existing parent-canon
+figures, not a new unified pantheon or a tidy domain chart. The identities and
+the small rites that shape their prototype effigies are matched roots:
+
+| Parent entity | Awakening reveals | Status |
+|---|---|---|
+| `character.the-lady-of-the-long-water` | **The Lady of the Long Water**; a basin for the god who keeps what is lost beneath deep water | **Matched** |
+| `character.the-unnamed-third` | **The Last Guest**; a closed door and extinguished lamp for the god of properly finished endings | **Matched** |
+| `concept.old-harrow` | **Old Harrow**; a spade and leaning field figure for the turned year, growth and useful rot | **Matched** |
+| `concept.the-old-man-under-the-mountain` | **The Old Man Under the Mountain**; a cairn for stone, patience and the deep that should remain shut | **Matched** |
+| `concept.the-good-neighbor` | **The Good Neighbor**; an empty chair at the hearth for hospitality and the kept threshold | **Matched** |
+| `concept.the-grey-walker` | **The Grey Walker**; a staff and roadside cairn for true roads, fords and waymarks | **Matched** |
+| `character.vallen` | **Vallen, the Wright**; the broken central maker. He is dead, cannot answer, and is never selected | **Matched** |
+
+The court offering one temporary run blessing from three randomly answering
+patrons is **Prologue-only gameplay framing**. It does not assert that these six
+normally share a church, priesthood, hierarchy or doctrine. Athra and every
+other parent deity remain outside Awakening's current reveal budget.
+
 ## Surface-artifact contract
 
 Before approving dialogue, item text, an environmental clue or a story beat:

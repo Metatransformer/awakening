@@ -368,6 +368,13 @@ swing at the thing they were guarding against without dropping the shield on an
 earlier frame. A raised shield takes A away from the world for as long as it is
 up — behind a guard there is nothing to talk to.
 
+The ordinary block is paid from stamina. A held guard stops a frontal blow only
+while the bar is above zero. Its cost is
+`Hit.amount * K.STAMINA_BLOCK_PER_QUARTER`, and `Hit.amount` is already the
+blow's weight in quarter-hearts. Spending is partial: any positive remainder
+catches the current blow and clamps to zero, and the next blow lands if the bar
+is still empty.
+
 **The perfect dodge** — the roll, *into* the blow instead of away from it. Time
 slows for half a second and the sword button becomes a leaping overhead that
 sends the body flying (§4 pillar 1's roll, earning its keep). It asks for no
@@ -432,6 +439,23 @@ floor's deepest room is still where the best chest and the commitment are, and
 **A boss you have killed stays dead.** Its door hangs open and the arena is
 empty forever after. The game never asks you to re-fight something you have
 already beaten — this loop is about loot, not about repetition.
+
+**A reward does not exist until you have beaten what guards it.** No chest is
+standing in a room when you walk into it. Beat the pack, or solve the puzzle, or
+kill the boss, and the prize *arrives* — it falls in, it lands, the room flashes
+and the camera kicks. This is the loop's payment, and a chest already sitting
+there while you fight is the same payment made before the work: the player learns
+to run past the monsters and take it, and the pack becomes scenery. It went out
+that way once and the vault — three rooms of harder-than-the-floor bodies around
+one rich chest — could be looted by walking through it.
+
+**Two levels of arrival and no more.** A room's chest is one thing; the deep
+chest, the miniboss's, the vault's and the deepest room's are another, and the
+second gets a shaft of light, a second shockwave and nearly twice the hold. Not a
+continuum: the player only ever sees one of these at a time and cannot compare it
+to the last room's, so a flash that scales smoothly with value teaches nothing.
+Two is the smallest number that can be *recognised* — this is a chest, and THAT
+is the chest. The difference is size and shape, never colour.
 
 **You can leave before the boss.** The boss is a wall to *depth*, never a wall to
 the loop. Walking into the Cistern, filling twelve slots, and roping out without
@@ -731,10 +755,11 @@ was already on his own catalogue file — and he does not stand in the yard unti
 boss is dead, so a hero who had just taken Burst off the Slag Ogre had no counter
 to buy ammunition at. What survives unchanged is the *relationship*: a charge is
 a stock you paid for in the garrison before you left, exactly like a bottle.
-**They do not refill underground.** There is no rest, there cannot be one (the
-run is not savable, `docs/METAGAME.md` §5), and a resource that comes back
-mid-run softens the walk home. Spending your last charge on floor 2 is a
-statement about how deep you were planning to go.
+**They do not refill underground.** The trip budget and extraction pressure
+require that: a resource that comes back mid-run softens the walk home. Saving
+or loading in the dungeon restores the current trip; it does not refill it.
+Spending your last charge on floor 2 is still a statement about how deep you
+were planning to go.
 
 **Charges live in the HUD column with arrows and stamina, never in the bag.** The
 bag is the pressure valve and it does not get taxed twice.

@@ -18,7 +18,7 @@ const OFFER_SIZE := 3
 ## which are not constant expressions in GDScript.
 static var PATRONS := {
 	LADY_LONG_WATER: {
-		"name": "Lady of Long Water",
+		"name": "The Lady of the Long Water",
 		"epithet": "She remembers every shore.",
 		"rite": "A basin filled from running water.",
 		"color": Color("68a9bd"),
@@ -26,7 +26,7 @@ static var PATRONS := {
 		"blessings": [EchoDb.SLOW_FADE, EchoDb.RETURNING_SHAFT],
 	},
 	LAST_GUEST: {
-		"name": "Last Guest",
+		"name": "The Last Guest",
 		"epithet": "The final light at a barred door.",
 		"rite": "An unlit lamp set before a closed door.",
 		"color": Color("c48a62"),
@@ -50,7 +50,7 @@ static var PATRONS := {
 		"blessings": [EchoDb.ANSWERING_STRIKE, EchoDb.QUIET_ROOM],
 	},
 	GOOD_NEIGHBOR: {
-		"name": "Good Neighbor",
+		"name": "The Good Neighbor",
 		"epithet": "The warmth beyond the wall.",
 		"rite": "An empty chair drawn close to the hearth.",
 		"color": Color("c8796f"),
@@ -58,7 +58,7 @@ static var PATRONS := {
 		"blessings": [EchoDb.HELD_NOTE, EchoDb.COLD_LEDGER],
 	},
 	GREY_WALKER: {
-		"name": "Grey Walker",
+		"name": "The Grey Walker",
 		"epithet": "The road that does not end.",
 		"rite": "A staff rested against a roadside cairn.",
 		"color": Color("908aae"),
@@ -68,7 +68,7 @@ static var PATRONS := {
 }
 
 static var VALLEN_ROW := {
-	"name": "Vallen",
+	"name": "Vallen, the Wright",
 	"epithet": "The broken maker.",
 	"rite": "A split hammer laid beneath the ruined monument.",
 	"color": Color("805d58"),

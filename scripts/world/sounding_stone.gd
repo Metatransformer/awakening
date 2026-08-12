@@ -130,7 +130,9 @@ func _on_blessing_chosen(patron_id: StringName, blessing_id: StringName) -> void
 	Game.set_flag(flag_id())
 	_set_interaction(false)
 	_set_chosen_effigy(patron_id)
-	Bus.request_sfx.emit(&"level_chime", global_position)
+	# A blessing changes the run, so keep main's dedicated reward voice rather
+	# than making the choice sound like another solved switch.
+	Bus.request_sfx.emit(&"power_up", global_position)
 	Bus.prompt_changed.emit(EchoDb.line_of(blessing_id).to_upper())
 	_close_menu()
 

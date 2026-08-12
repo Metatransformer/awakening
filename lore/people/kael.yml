@@ -1,0 +1,22 @@
+schema_version: 1
+id: person.kael
+canonical_name: Kael
+display_name: Kael
+name_status: tentative
+role: Player explorer, Far Lantern Society member, and Aldric Vane's cadet.
+gender: male
+pronouns:
+  subject: he
+  object: him
+  possessive: his
+  reflexive: himself
+dialogue_id: hero
+voice_status: silent
+fixed_facts:
+  - Kael is the player character.
+  - Kael is male and is called Kael.
+  - Kael does not speak; other people talk at him.
+  - No backstory, family, or character arc is fixed for him.
+sources:
+  - docs/GDD.md
+  - scripts/world/dialogue_db.gd

@@ -1,0 +1,38 @@
+schema_version: 1
+id: cosmology.awakening_prologue_deities
+scope: Awakening prologue reveal only
+prologue_status: votive_court_revealed
+named_or_revealed:
+  - parent_entity_id: character.the-lady-of-the-long-water
+    display_name: The Lady of the Long Water
+    court_role: selectable_patron
+    frozen_fact: She keeps what is lost beneath the deep water; her prototype rite is a basin.
+  - parent_entity_id: character.the-unnamed-third
+    display_name: The Last Guest
+    court_role: selectable_patron
+    frozen_fact: The god of properly finished endings; its prototype rite is a closed door and extinguished lamp.
+  - parent_entity_id: concept.old-harrow
+    display_name: Old Harrow
+    court_role: selectable_patron
+    frozen_fact: The turned year, growth and useful rot; his prototype rite is a spade and leaning field figure.
+  - parent_entity_id: concept.the-old-man-under-the-mountain
+    display_name: The Old Man Under the Mountain
+    court_role: selectable_patron
+    frozen_fact: Stone, patience and the deep meant to stay shut; his prototype rite is a cairn.
+  - parent_entity_id: concept.the-good-neighbor
+    display_name: The Good Neighbor
+    court_role: selectable_patron
+    frozen_fact: Hearth, threshold and hospitality; the prototype leaves an empty chair by the hearth.
+  - parent_entity_id: concept.the-grey-walker
+    display_name: The Grey Walker
+    court_role: selectable_patron
+    frozen_fact: Roads, fords and true waymarks; his prototype is a staff beside a roadside cairn.
+  - parent_entity_id: character.vallen
+    display_name: Vallen, the Wright
+    court_role: broken_centerpiece
+    frozen_fact: The human maker-god is dead and cannot answer; his broken monument is never selectable.
+fixed_fact: The Votive Court reveals six possible patrons and the broken Vallen monument. Exactly three patrons may answer a visit; Vallen never does.
+use_rule: The identities and frozen facts above come from the parent Valenfeld graph. The shared court and temporary blessings are prologue-only gameplay framing, not a claim that the six form one church or doctrine. No other deity is in the current reveal budget.
+sources:
+  - docs/CANON_BRIDGE.md
+  - docs/PUZZLES.md

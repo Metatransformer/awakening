@@ -88,6 +88,14 @@ var summary: Dictionary = {}
 ## Seeded per run so a dungeon can be replayed exactly.
 var rng := RandomNumberGenerator.new()
 var seed_used: int = 0
+## Stable generated-room ids visited on this floor. The dungeon rebuilds from
+## `seed_used` + `level`, so names such as `Room_2_-1` survive a save/load even
+## though the Node instances do not.
+var visited_rooms: Dictionary[StringName, bool] = {}
+## Version of the nested run payload inside a `Saves` slot. Kept separate from
+## the outer save version so a future dungeon-state migration has an explicit
+## seam instead of having to infer its shape from whichever app version wrote it.
+const SNAPSHOT_VERSION := 1
 
 ## The seed the NEXT run will use, if non-zero. Consumed and cleared by `enter()`.
 ##
@@ -136,12 +144,17 @@ func _ready() -> void:
 func reset() -> void:
 	bag.clear()
 	cased.clear()
+	visited_rooms.clear()
 	premium = 0
 	in_dungeon = false
 	depth = 0
 	level = 1
 	kills = 0
 	last_attacker = &""
+	summary = {}
+	seed_used = 0
+	seed_next = 0
+	rng.seed = 0
 
 
 func _on_enemy_died(_enemy: Node3D, _position: Vector3) -> void:
@@ -155,11 +168,12 @@ func _on_enemy_died(_enemy: Node3D, _position: Vector3) -> void:
 func enter(run_seed: int = 0) -> void:
 	bag.clear()
 	cased.clear()
+	visited_rooms.clear()
 	premium = 0
 	depth = 0
-	# Every run starts at the top. The Lower Worlds are not a save file you
-	# resume -- what you keep between runs is gold and what gold bought, and if
-	# a run could start on floor 7 the forge would be optional (docs/GDD.md §4).
+	# Every NEW run starts at the top. A restored snapshot bypasses `enter()`;
+	# allowing this path to start on floor 7 would make the forge optional
+	# (docs/GDD.md §4).
 	level = 1
 	kills = 0
 	last_attacker = &""
@@ -202,6 +216,7 @@ func descend_floor() -> void:
 	# rides on the bag, which is untouched, so arriving on a new floor does not
 	# make leaving cheaper.
 	depth = 0
+	visited_rooms.clear()
 	Bus.level_changed.emit(level)
 
 
@@ -210,6 +225,101 @@ func descend_floor() -> void:
 ## the one number the run reports.
 func floor_seed() -> int:
 	return absi(seed_used + level * 2654435761) % 0x7fffffff
+
+
+## Plain-data representation of the live run. The generated tree is rebuilt
+## from the seed and floor; only the decisions and counters that cannot be
+## derived from that tree belong here.
+func snapshot() -> Dictionary:
+	return {
+		"version": SNAPSHOT_VERSION,
+		"in_dungeon": in_dungeon,
+		"seed_used": seed_used,
+		"level": level,
+		"depth": depth,
+		"bag": bag.duplicate(),
+		"cased": cased.duplicate(),
+		"premium": premium,
+		"kills": kills,
+		"magic": Game.magic,
+		"stamina": Game.stamina,
+		"visited_rooms": visited_rooms.keys(),
+		"rng_state": rng.state,
+	}
+
+
+## Restore a run snapshot written by `snapshot`. JSON erases StringName keys
+## and typed dictionaries, so every collection is rebuilt rather than assigned.
+## Empty input means there is no resumable run and deliberately clears any live
+## one the caller may have been standing in.
+func restore(saved: Dictionary) -> bool:
+	if saved.is_empty() or int(saved.get("version", 0)) != SNAPSHOT_VERSION:
+		reset()
+		return false
+
+	bag = _restore_counts(saved.get("bag", {}))
+	var restored_case := _restore_counts(saved.get("cased", {}))
+	cased.clear()
+	for id: StringName in restored_case:
+		var n := mini(int(restored_case[id]), int(bag.get(id, 0)))
+		if n > 0:
+			cased[id] = n
+
+	in_dungeon = bool(saved.get("in_dungeon", false))
+	seed_used = int(saved.get("seed_used", 0))
+	level = maxi(int(saved.get("level", 1)), 1)
+	depth = maxi(int(saved.get("depth", 0)), 0)
+	premium = maxi(int(saved.get("premium", 0)), 0)
+	kills = maxi(int(saved.get("kills", 0)), 0)
+	Game.magic = clampi(int(saved.get("magic", Game.max_magic)), 0, Game.max_magic)
+	Game.stamina = clampf(float(saved.get("stamina", Game.max_stamina)),
+		0.0, Game.max_stamina)
+	last_attacker = &""
+	summary = {}
+	seed_next = 0
+	visited_rooms.clear()
+	var raw_visited: Variant = saved.get("visited_rooms", [])
+	if raw_visited is Array:
+		for raw_id: Variant in raw_visited:
+			if raw_id is not String and raw_id is not StringName:
+				continue
+			var room_id := StringName(raw_id)
+			if String(room_id).begins_with("Room_"):
+				visited_rooms[room_id] = true
+
+	rng.seed = seed_used
+	var raw_state: Variant = saved.get("rng_state", null)
+	if raw_state is int or raw_state is float:
+		rng.state = int(raw_state)
+
+	# A load replaces every value at once; listeners should redraw once from the
+	# completed state rather than observe the half-restored intermediate values.
+	Bus.bag_changed.emit(bag, bag_value())
+	Bus.level_changed.emit(level)
+	Bus.depth_changed.emit(depth)
+	Bus.magic_changed.emit(Game.magic, Game.max_magic)
+	Bus.stamina_changed.emit(Game.stamina, Game.max_stamina)
+	return true
+
+
+func _restore_counts(raw: Variant) -> Dictionary[StringName, int]:
+	var restored: Dictionary[StringName, int] = {}
+	if raw is not Dictionary:
+		return restored
+	var source := raw as Dictionary
+	for raw_id: Variant in source:
+		if raw_id is not String and raw_id is not StringName:
+			continue
+		var id := StringName(raw_id)
+		if id == &"" or ItemDb.get_def(id) == null:
+			continue
+		var raw_count: Variant = source[raw_id]
+		if raw_count is not int and raw_count is not float:
+			continue
+		var count := int(raw_count)
+		if count > 0:
+			restored[id] = count
+	return restored
 
 
 ## Teleport out. Returns false only when there is no run to leave.
@@ -1186,7 +1296,24 @@ func sell(id: StringName, count: int = -1) -> int:
 	return paid
 
 
-## Called by the dungeon when the player walks into a new room.
-func descend() -> void:
+## Whether this generated room was already entered on the current floor.
+func has_visited_room(room_id: StringName) -> bool:
+	return visited_rooms.has(room_id)
+
+
+## Record the entrance without charging depth. The entrance is visible from the
+## first frame, but depth still means rooms walked into beyond that starting cell.
+func remember_room(room_id: StringName) -> void:
+	if room_id != &"":
+		visited_rooms[room_id] = true
+
+
+## Called by the dungeon on first entry. Returns false for a room restored from
+## a save (or revisited normally), which is what keeps depth from climbing twice.
+func enter_room(room_id: StringName) -> bool:
+	if room_id == &"" or visited_rooms.has(room_id):
+		return false
+	visited_rooms[room_id] = true
 	depth += 1
 	Bus.depth_changed.emit(depth)
+	return true

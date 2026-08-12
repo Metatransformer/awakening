@@ -3011,6 +3011,7 @@ func take_hit(hit: Hit) -> bool:
 	# The shield is a direction, not a toggle: blocking with your back turned is
 	# just standing still. HeroCombat owns the arc because it owns the shield.
 	if combat != null and combat.blocks(hit.from):
+		Game.spend_stamina(hit.amount * K.STAMINA_BLOCK_PER_QUARTER, true)
 		combat.on_blocked(hit.from, K.flat(hit.from - global_position))
 		_invuln = K.SHIELD_IFRAMES
 		var shove := K.flat(global_position - hit.from) * 2.4

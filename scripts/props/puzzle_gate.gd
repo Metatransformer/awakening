@@ -290,7 +290,7 @@ func _on_atom_changed(atom: PuzzleAtom) -> void:
 		_tint_sigil(0.0)
 		return
 	_tint_sigil(1.0)
-	# The world's announcement, and the one `Sfx` already maps to `level_chime`.
+	# The world's announcement, and the one `Sfx` already maps to `puzzle_complete`.
 	# It fires on the SOLVE, not on the door -- a key hunt whose gate is still
 	# waiting to be spent at has still been solved.
 	Bus.puzzle_solved.emit(puzzle_id)

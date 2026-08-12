@@ -774,12 +774,12 @@ do not share one visual grammar:
 
 | Presence | Votive form | Blessings |
 |---|---|---|
-| **Lady of Long Water** | water basin | What the Water Keeps; The Drowned Return |
-| **Last Guest** | closed door and extinguished lamp | The Parting Breath; The Final Due |
+| **The Lady of the Long Water** | water basin | What the Water Keeps; The Drowned Return |
+| **The Last Guest** | closed door and extinguished lamp | The Parting Breath; The Final Due |
 | **Old Harrow** | crooked spade/scarecrow and growth | The Double Furrow; The Last Harvest |
 | **Old Man Under the Mountain** | sealed cairn | Stone Answers Iron; The Mountain Waits |
-| **Good Neighbor** | empty chair drawn to a hearth | The Banked Hearth; The Neighbor's Measure |
-| **Grey Walker** | roadside cairn and staff | The Road Holds; The Road Remembers |
+| **The Good Neighbor** | empty chair drawn to a hearth | The Banked Hearth; The Neighbor's Measure |
+| **The Grey Walker** | roadside cairn and staff | The Road Holds; The Road Remembers |
 
 **Vallen is the seventh physical presence and never part of the roll.** His
 central maker-monument is broken and permanently dark. Athra is not part of the

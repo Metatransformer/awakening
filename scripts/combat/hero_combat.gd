@@ -2189,7 +2189,7 @@ func _damageable(node: Node) -> Node:
 ## The cone is generous but strictly frontal — OOT does not let you block your
 ## own back, and being punished for turning away is the point of the shield.
 func blocks(from_pos: Vector3) -> bool:
-	if not blocking or _hero == null:
+	if not blocking or _hero == null or Game.stamina <= 0.0:
 		return false
 	var to := K.flat(from_pos - _hero.global_position)
 	if to == Vector3.ZERO:

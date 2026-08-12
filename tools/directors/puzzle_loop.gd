@@ -246,9 +246,12 @@ func _the_gate_room(rig, d: Node, hero: Node3D) -> void:
 	await rig.capture(out.path_join("p_01_gate_room.png"))
 
 	await _solve_nest(rig, nest)
-	await rig.wait_frames(30)
+	await rig.wait_frames(2)
 	_ck("C8 solving it wakes the key", key.visible
-		and bool(key.get(&"armed")))
+		and bool(key.get(&"armed")) and bool(key.call(&"is_revealed")))
+	_ck("C8a and its restrained reveal is visibly in flight",
+		bool(key.call(&"is_revealing")))
+	await rig.wait_frames(28)
 	await rig.capture(out.path_join("p_02_key_woken.png"))
 
 	# Stand on it until it is taken, not for a fixed ten frames. An `Area3D`
