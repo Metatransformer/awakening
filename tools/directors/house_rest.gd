@@ -287,6 +287,7 @@ func _sleep(rig, garrison: Garrison) -> void:
 	# Bed recovery is an Elder QoL purchase now: rank two should restore exactly
 	# two quarters, while an unupgraded bunk only advances the day.
 	Game.upgrades[&"elder_bed"] = 2
+	Game.upgrades.erase(&"elder_reveille")
 	Game.damage(4)
 	await rig.wait_frames(4)
 	var hurt := Game.quarters
@@ -306,7 +307,7 @@ func _sleep(rig, garrison: Garrison) -> void:
 	var went: bool = await rig.until(func() -> bool: return Flow.busy, 2.0)
 	_check("the screen went dark", went)
 	# A daytime sleep crosses nightfall and dawn. Flow now presents both civil
-	# boundaries in order (five seconds each) before returning control.
+	# boundaries in order (three seconds each) before returning control.
 	var back: bool = await rig.until(func() -> bool: return not Flow.busy, 14.0)
 	_check("...and came back", back)
 	await rig.wait_frames(30)
@@ -315,6 +316,10 @@ func _sleep(rig, garrison: Garrison) -> void:
 	_check("the rank-two bunk restored two hearts (%d -> %d/%d)"
 		% [hurt, Game.quarters, Game.max_quarters], Game.quarters == expected)
 	_check("the rest wrote a slot (%d)" % Saves.active_slot, Saves.has_save(0))
+	var minutes_after_open := (Clock.hour - Clock.effective_service_open_hour()) * 60.0
+	_check("the rest gives control back as services open (%.2f)" % Clock.hour,
+		minutes_after_open >= 0.0 and minutes_after_open < 2.0
+		and Clock.services_available())
 	_check("the world is running again", not rig.paused)
 	await _shot(rig, "woke")
 

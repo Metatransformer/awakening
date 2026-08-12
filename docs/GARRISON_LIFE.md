@@ -24,16 +24,26 @@ Sleeping and forward time jumps resolve every crossed boundary once. Save/load
 restores the current result without replaying it. Weather and lighting share
 this civil day; they do not create a second calendar or simulation.
 
+The dawn boundary remains 05:00, but waking is a later settlement: deliberate
+rest and the automatic dawn return both hand control back at the effective
+service opening (07:00, or 06:00 with Early Reveille). Residents are already at
+their counters when the player gets out of bed.
+
 ### Day and night ceremony
 
-Dawn and nightfall each use the same five-second, full-screen transition. The
-world pauses for the whole presentation; it is a title card, not five seconds
-of hidden simulation.
+Dawn and nightfall each use the same three-second, full-screen transition. The
+world pauses for the whole presentation; it is a staged civil-time card, not
+three seconds of hidden simulation. One reusable component draws both variants:
+an expanding field and horizon, then a rising sun or crescent, title, rule and
+day, followed by the same eased exit. A quiet mechanical ticking bed follows
+that animation beneath the louder owl or morning birds.
 
 - At **20:00**, show **“Night falls”** and **“Day X”**, with a tawny-owl call.
 - At **05:00**, show **“The sun rises”** and **“Day X”**, with a morning-bird
   song.
-- The compact clock widget always shows both **Day X** and the current time.
+- The top-right civil instrument always shows **Day X**, the current time and a
+  moving sun/moon day track. Its companion heading strip scrolls 15-degree ticks
+  and eight compass points beneath a fixed player-bearing pointer.
 - A sleep or time jump that crosses a boundary presents it once. Loading a save
   does not replay a boundary already resolved.
 
