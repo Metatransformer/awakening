@@ -267,7 +267,8 @@ static var LOOKS := {
 	# game into a fifth shopkeeper you happened to be parked in front of.
 	#
 	# The twelve lamps outside are what says this counter is different, and they
-	# say it better with nothing in front of him. `Garrison._build_people` is the
+	# say it better with nothing in front of him. `Garrison._build_compound_people`
+	# is the
 	# other half: with no counter to step back behind, he is placed where he
 	# STANDS -- on the centre line, facing the arrival.
 	Role.KEEPER: {

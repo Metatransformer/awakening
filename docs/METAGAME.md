@@ -656,6 +656,37 @@ Arrival **latches** to a flag the first time the metric is met, so nobody can
 un-arrive. `tools/directors/roster.gd` is the proof, and it is the one director
 run with `--fresh` — every other one gets all five counters from `shoot.gd`.
 
+#### One arrival per homecoming, and the body waits for the words
+
+**Arriving and being in the yard are two different facts** (owner's call,
+2026-08-12, card #115). Unlocking latches `garrison_<who>_arrived` — that is the
+earned fact and it is never recomputed — but the BODY is built only once the
+elder has actually introduced them (`met_<who>`), plus the ONE keeper whose
+introduction is about to play this visit, who has to be standing there for the
+camera to turn to. `StoryDb.present()` is the whole rule and
+`Garrison._build_compound_people` is its only caller.
+
+Everyone else who is unlocked and un-introduced **is simply not built this
+visit.** They walk up the road next time you come home.
+
+That last clause is the throttle, and the playtest that bought it is the reason
+it exists: one descent took the floor 1 miniboss *and* the floor 1 boss, so the
+smith and the alchemist unlocked in the same run, and both were standing in the
+yard on the way home with only one of them introduced. The alchemist was a
+stranger at a new counter with nobody having said who she was — the exact failure
+the introduction was built to stop. The fix is not four scenes back to back at
+somebody who came home to sell a bag; it is **one arrival now and one held in
+reserve**, so a good run pays out an arrival on this homecoming and another on
+the next.
+
+The scene that never played had a second cause underneath the design one, and it
+is written up on `Introduction.HANDOVER`: `DialogueBox.finished` is emitted from
+`_exit_tree`, which the scene tree reaches from `remove_child` with the current
+scene `blocked`, so a caller that answered it by staging a second conversation
+had both its `add_child` calls refused and then waited forever on a box that was
+never in the tree. `Introduction.play` now returns on a clean frame.
+`tools/directors/keeper_arrival.gd` beat A is the regression test.
+
 ### What the counters say
 
 Talking is not the same as trading. TALK opens a dialogue box; the counter is one
@@ -1478,8 +1509,8 @@ The garrison's people have two, and the second is the only run in the repo that
 declines `shoot.gd`'s unlock-everybody default:
 
 ```bash
-godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/dialogue.gd --out=/tmp/dlg/x.png --warmup=40
-godot --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/roster.gd --fresh --out=/tmp/roster/x.png --warmup=40
+tools/quiet.sh --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/dialogue.gd --out=/tmp/dlg/x.png --warmup=40
+tools/quiet.sh --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/roster.gd --fresh --out=/tmp/roster/x.png --warmup=40
 ```
 
 `dialogue.gd` walks the box itself — the tables, the typing, one typeface across
@@ -1489,13 +1520,22 @@ with three counters missing, grants the maker's mark, rebuilds it, photographs
 the smith standing in the corner that was grass, and then does the same again
 with one boss flag for the alchemist.
 
-The **introductions** have their own, and it is the one run that asks for them —
-`shoot.gd` stamps `met_*` for everybody by default, or every garrison director
-would have a four-page conversation open itself over the frame it was taking:
+The **introductions** have two. `shoot.gd` stamps `met_*` for everybody by
+default, or every garrison director would have a four-page conversation open
+itself over the frame it was taking — and since the body now waits for the words
+(above), that default is also what keeps five counters in the yard for the other
+directors. `--meet` leaves exactly ONE owed, the first rung, and marks the rest:
 
 ```bash
 tools/quiet.sh --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/npc_intro.gd --out=/tmp/intro/x.png --warmup=20 --meet
+tools/quiet.sh --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/keeper_arrival.gd --fresh --out=/tmp/arrival/x.png --warmup=40
 ```
+
+`keeper_arrival.gd` is the throttle: it stages the playtest save (two keepers
+arrived, neither met), proves two `Introduction.play` calls back to back open two
+boxes, then walks two homecomings — the smith introduced with the apothecary's
+bay empty behind him, and Ysolt behind that same bay one visit later, on one
+fixed camera both times.
 
 It shoots both ends of the pan and measures two things about each frame: the
 angle from the camera's axis to the speaker's head, and how much of the frame

@@ -2769,9 +2769,13 @@ StoryDb.SMITH_TOKEN                   # &"makers_mark" — the object the gate r
   also how `tools/shoot.gd` hands every director the full yard: it sets the
   strings rather than simulating the runs. `--fresh` declines that, and
   `tools/directors/roster.gd` is the one run that uses it.
-- **A locked keeper is NOT BUILT.** `Garrison._build_people` skips them entirely —
-  no `Npc`, no booth, no lamp — and `garrison.smith` / `.alchemist` / `.jeweller`
-  are null until they arrive. Anything reaching for one must check.
+- **An UN-INTRODUCED keeper is NOT BUILT.** `Garrison._build_compound_people`
+  skips them entirely — no `Npc`, no booth, no lamp — and `garrison.smith` /
+  `.alchemist` / `.jeweller` are null until the elder has named them. Anything
+  reaching for one must check. The predicate is `StoryDb.present(who, arriving)`
+  and NOT `unlocked()`: arrival is latched and permanent, presence waits for the
+  conversation, and the visit's one `arriving` keeper is the bridge between them
+  (card #115, and see `docs/METAGAME.md`).
 
 ### Introductions — the arrival two-hander, and the only camera that leaves the hero
 
@@ -2795,6 +2799,17 @@ cam.release()                         # hand the previous camera back, free itse
   whoever is talking, and stamps `met_<who>` when the box says `finished`. There
   is no cutscene player, no timeline, no second dialogue path. **A new arrival is
   a row in `INTRODUCTIONS` and nothing else.**
+- **`play()` returns on a CLEAN FRAME and not inside the box's `_exit_tree`.**
+  `finished` is emitted from `_exit_tree`, which the tree reaches from
+  `remove_child` with the current scene `blocked`, so every `add_child` against
+  it is refused for the length of that call — a caller that answered `finished`
+  by staging a second scene got a box that never entered the tree and then
+  awaited a `finished` that could never come. `Introduction.HANDOVER` is the beat
+  that steps off that frame; do not remove it thinking it is pacing (card #115).
+- **ONE introduction per visit to the yard.** `Garrison` reads
+  `pending_introduction()` once in `_ready`, builds that person, plays their
+  scene, and holds anybody else owed until the next homecoming. There is no loop
+  here any more.
 - **`DialogueBox` gained exactly two things for this**: `speaker_changed(who)`,
   emitted whenever the page turns to a different mouth, and `finished()`. It
   still never chooses a line and never plays a sound — the presenter contract
@@ -2817,9 +2832,12 @@ cam.release()                         # hand the previous camera back, free itse
   camera that was current, becomes current, and restores. There is no branch
   inside the 1035-line `GameCamera` for this and there must not be one.
 - **Directors do not want this by default.** `tools/shoot.gd` stamps every
-  `met_*` flag for the same reason it stamps the arrival flags; pass **`--meet`**
-  to the one run that is about the scene (`tools/directors/npc_intro.gd`), the
-  same bargain `--intro` already strikes for the opening.
+  `met_*` flag for the same reason it stamps the arrival flags — and since the
+  body now waits for the words, that stamp is also what puts five counters in a
+  director's yard. **`--meet`** leaves exactly one owed, the first rung, and
+  marks the rest; `tools/directors/npc_intro.gd` and `save_load_position.gd` are
+  the runs that ask for it. `tools/directors/keeper_arrival.gd` is the one that
+  is about the throttle, and it stages its own flags after `--fresh`.
 
 ### Settings and saves — built, tested, and read-only for everyone but P14
 

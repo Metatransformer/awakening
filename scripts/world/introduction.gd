@@ -31,8 +31,37 @@ extends RefCounted
 ## place a director is trying to read the text.
 
 
-## Play the introduction for `who`, and mark it seen. Awaits the whole scene, so
-## a caller with several pending can simply loop.
+## How long `play` holds on after the box has gone before it hands control back.
+##
+## **It is not pacing, it is the fix for card #115**, and the pacing is a bonus:
+## a caller resumed by `finished` is standing inside `DialogueBox._exit_tree`,
+## and `_exit_tree` is reached from `Node.remove_child` on the current scene --
+## which sets `blocked` on that node for the whole of the call. Every `add_child`
+## against the scene is refused while it is up, so a caller that answered
+## `finished` by staging a SECOND scene got
+##
+##     ERROR: Parent node is busy setting up children, `add_child()` failed.
+##
+## out of both `DialogueBox._stage` and `ConvoCamera.stage`, a box that was never
+## in the tree, and therefore an `await box.finished` on a box that can never
+## leave one -- a coroutine suspended forever. That is precisely what the owner
+## saw on 2026-08-12: the smith was introduced, the loop in
+## `Garrison._do_the_rounds` went round once, and the alchemist's scene was
+## staged into nowhere and never seen. A `SceneTreeTimer` is emitted from the
+## tree's own processing, with nothing blocked, so anything the caller does after
+## this line is on a clean frame.
+##
+## Short enough to read as one breath between two people walking up, long enough
+## that a second box does not appear to be the same box redrawing.
+const HANDOVER := 0.7
+
+
+## Play the introduction for `who`, and mark it seen.
+##
+## **Returns on a clean frame, never inside the departing box's `_exit_tree`** --
+## see `HANDOVER`. A caller may therefore touch the tree the moment this returns,
+## which is the contract `Garrison._do_the_rounds` and `npc_intro.gd` both rely
+## on and the one that was silently missing.
 static func play(host: Node, who: StringName) -> void:
 	var lines := StoryDb.introduction(who)
 	if lines.is_empty():
@@ -65,6 +94,13 @@ static func play(host: Node, who: StringName) -> void:
 		cam.release()
 	StoryDb.mark_introduced(who)
 
+	# ...and then get off this frame before anybody else touches the tree. The
+	# flag is set FIRST so a caller that awaits this and immediately reads
+	# `met_<who>` still gets the truth. `HANDOVER` is where the reasoning is.
+	var tree := host.get_tree()
+	if tree != null:
+		await tree.create_timer(HANDOVER, false).timeout
+
 
 ## Point the camera at whoever is talking. Silently does nothing for a speaker
 ## with no body in this scene -- the narrator has lines and no legs, and a
@@ -81,8 +117,8 @@ static func _aim(cam: ConvoCamera, host: Node, who: StringName) -> void:
 ##
 ## Walks the tree rather than asking `Garrison` for its `smith` field, and that is
 ## deliberate in both directions: the yard's five fields are null until each
-## keeper arrives (`Garrison._build_people`), which is precisely the case this
-## system exists to handle, and a harness scene that stands two `Npc`s on a plane
+## keeper arrives (`Garrison._build_compound_people`), which is precisely the
+## case this system exists to handle, and a harness scene that stands two `Npc`s on a plane
 ## gets the same lookup for free.
 static func person_of(host: Node, who: StringName) -> Npc:
 	if who == &"":

@@ -46,33 +46,25 @@ const MAT_GRASS := preload("res://assets/materials/mat_grass.tres")
 const MAT_WALL_SUNLIT := preload("res://assets/materials/mat_wall_sunlit.tres")
 const SKY_SHADER := preload("res://assets/shaders/sky.gdshader")
 
-## Where the paved circle sits, and how far out the counters ring it.
-##
-## **Every shop in the yard is placed off these two numbers**, so the layout is
-## one polar coordinate per keeper (`_ring`) instead of five hand-tuned Vector3s
-## that only agree with each other by accident. The circle is what the yard was
-## missing: five counters against four different walls is a field with furniture
-## round the edge, and no amount of tuning any single position fixes that,
-## because the problem was never any one of them.
+## Where the paved circle sits, and how big it is.
 ##
 ## Two metres south of the yard's own centre. The plaza has to sit between the
 ## arrival and the gate WITHOUT swallowing either -- the hero lands at (0, 0, +4)
 ## and the paving now stops at +3.8, so he steps onto it rather than onto it.
+##
+## **The keepers are no longer placed off these.** They used to be, one polar
+## coordinate each around this circle; `GarrisonCompound` owns where a role
+## belongs now and `_compound_counter` reads its named ports. The circle is still
+## the middle of the yard and the statue still stands on it, which is all these
+## two numbers are for.
 const PLAZA_AT := Vector3(0.0, 0.0, -2.0)
 const PLAZA_R := 5.8
-## Counters stand just outside the kerb: 7.0 puts the counter face about a metre
-## clear of the paving, which leaves the ring of stone unobstructed all the way
-## round. A keeper's own body steps a further `ShopBooth.KEEPER_BACK` out (see
-## `_counter`), and the deepest booth -- the forge, whose hearth is 3.05 m behind
-## its bench -- then reaches 11 m from the centre. That is the number that fixes
-## this at 7.0 and not 8: at 8 the smith's hearth is inside the north wall.
-const KIOSK_R := 7.0
 
 ## Set the first time a save sees the courtyard. See `_open_the_game`.
 const INTRO_FLAG := &"reported_for_duty"
 
 ## Where the curtain stands. Unchanged through both rebuilds, because every NPC
-## position in `_build_people` and the whole prop ring in `_build_relic_props`
+## position in `GarrisonCompound` and the whole prop ring in `_build_relic_props`
 ## are tuned against these numbers and against the arrival camera.
 @export var yard: Vector2 = GarrisonCompound.COMPOUND_SIZE
 ## The grass runs well past the walls, so the garrison sits IN a landscape
@@ -89,11 +81,11 @@ const INTRO_FLAG := &"reported_for_duty"
 ## back into frame over the parapet.
 @export var wall_height: float = 6.0
 
-## The people. **`smith`, `alchemist` and `jeweller` are null until they arrive**
-## (`StoryDb.UNLOCKS`, and see `_build_people`) — a fresh save's yard has Aldric,
-## Kessa and the way down in it and nothing else. Anything that reaches for one of
-## these has to check; the directors get all five because `tools/shoot.gd` stamps
-## the arrival flags.
+## The people. **`smith`, `alchemist` and `jeweller` are null until they have been
+## INTRODUCED** (`StoryDb.present`, and see `_build_compound_people`) — a fresh
+## save's yard has Aldric, Kessa and the way down in it and nothing else. Anything
+## that reaches for one of these has to check; the directors get all five because
+## `tools/shoot.gd` stamps the arrival flags AND the `met_` flags.
 var vendor: Npc
 var smith: Npc
 var alchemist: Npc
@@ -113,6 +105,17 @@ var statue: Statue
 ## photograph one corner before and after, which is the only way anybody can
 ## check the claim this system exists to make.
 var lights: Array[GarrisonLight] = []
+
+## The one keeper whose introduction this visit owes, or `&""`.
+##
+## **Read ONCE, in `_ready`, before anybody is built**, and then used by both
+## halves of an arrival: `_build_compound_people` puts this person in the yard
+## (`StoryDb.present`) and `_do_the_rounds` plays their scene. One field rather
+## than two calls to `pending_introduction()` because the two answers must not be
+## allowed to differ -- the first call latches nothing, but the introduction that
+## plays sets `met_`, so a second call made afterwards would name the NEXT keeper
+## and the yard would be introducing somebody who is not standing in it.
+var _arriving: StringName = &""
 
 
 ## Deliberately says nothing about the run you just finished.
@@ -137,6 +140,8 @@ func _ready() -> void:
 	add_child(compound)
 	house = compound.player_bunk
 	_build_plaza()
+	# Before a single body is placed: who this homecoming is FOR. See `_arriving`.
+	_arriving = StoryDb.pending_introduction()
 	_build_compound_people()
 	_build_relic_props()
 	Clock.service_availability_changed.connect(_apply_staffing)
@@ -243,7 +248,7 @@ func _open_the_game() -> void:
 	_do_the_rounds()
 
 
-## Play whatever introductions are owed, in ladder order.
+## Introduce the one person this homecoming is for.
 ##
 ## **This is the "cutscene" half of an unlock.** Beating the sluice keeper puts a
 ## maker's mark in your pack and the smith in the yard (`StoryDb.UNLOCKS`), but a
@@ -253,23 +258,27 @@ func _open_the_game() -> void:
 ## So the elder introduces them, once, the first time you are back in the yard
 ## after they arrive.
 ##
-## A loop and not a single call: a good run can take the miniboss and the boss
-## together, and two people arriving at once should be two scenes back to back
-## rather than one scene and one silent stranger.
+## **ONE, and this used to be a loop** (card #115, owner's call). A good descent
+## takes the floor 1 miniboss and the floor 1 boss together, so two keepers unlock
+## in the same run -- and the answer to that is not eight pages of introductions
+## at somebody who came home to sell a bag. It is one arrival now and one held
+## back: `_arriving` is the whole of this visit's roster, `_build_compound_people`
+## has already put exactly that person in the yard, and the other one walks up the
+## road next time. Nothing here recomputes who that is; see `_arriving` for why
+## asking twice is a bug and not a refresh.
 ##
 ## Fire-and-forget from `_open_the_game` -- nothing awaits this, and the yard is
 ## fully built and playable underneath it. `DialogueBox` blocks the hero for the
-## length of each box on its own (`Prompt.block`), which is the whole of the
+## length of the box on its own (`Prompt.block`), which is the whole of the
 ## "cutscene" this needs to be.
 func _do_the_rounds() -> void:
+	if _arriving == &"" or Game.flag(StoryDb.intro_flag(_arriving)):
+		return
 	# A beat of quiet first, for the same reason the opening has one: `_ready` runs
 	# during `change_scene_to_file`, so with no wait the first line of the scene is
 	# typed behind `Flow`'s fade and the pan happens where nobody can see it.
 	await get_tree().create_timer(1.2, false).timeout
-	var who := StoryDb.pending_introduction()
-	while who != &"":
-		await Introduction.play(self, who)
-		who = StoryDb.pending_introduction()
+	await Introduction.play(self, _arriving)
 
 
 # --- Look -------------------------------------------------------------------
@@ -528,8 +537,8 @@ func _build_plaza() -> void:
 ## **The corner is the whole of the placement argument, and it is arithmetic
 ## rather than taste.** Everything else in the yard is spoken for: the gate and
 ## the shaft head are due north, the vendor and the smith flank them, the
-## alchemist stands on the west side inside the arrival frame that `_build_people`
-## says must not be broken, and the Lanternkeeper has the centre line and the
+## alchemist stands on the west side inside the arrival frame that
+## `GarrisonCompound` says must not be broken, and the Lanternkeeper has the centre line and the
 ## paving in front of the arrival. The south-west is the one quadrant no existing
 ## tuning reads.
 ##
@@ -683,9 +692,21 @@ func _build_compound_people() -> void:
 	gate.global_transform = compound.global_transform * compound.port(&"gate")
 
 
+## One keeper, at their named port -- if they are in the yard on this visit.
+##
+## **`present` and not `unlocked`** (card #115). Unlocking latches the arrival
+## flag the frame the metric is met, so gating the BODY on it put a keeper behind
+## a counter before the elder had said who they were: a descent that took the
+## floor 1 miniboss and the floor 1 boss brought two of them home at once and only
+## one could be introduced. Now a keeper is built once they have been MET, plus
+## the one whose scene is about to play (`_arriving`) -- the whole reasoning is on
+## `StoryDb.present`, which owns the rule.
+##
+## `gated` is false for exactly one person: the Lanternkeeper, who sent for you
+## and has no arrival to wait for.
 func _compound_counter(role: Npc.Role, who: StringName, day_port: StringName,
 		lamp: Color, gated: bool = true) -> Npc:
-	if gated and not StoryDb.unlocked(who):
+	if gated and not StoryDb.present(who, _arriving):
 		return null
 	var npc := Npc.new()
 	npc.role = role
@@ -719,78 +740,6 @@ func _place_dawn_wake() -> void:
 	if hero != null:
 		hero.global_transform = compound.global_transform * compound.port(&"player_bunk")
 	Bus.request_message.emit("DAWN. YOU WAKE IN THE BARRACKS.")
-
-
-func _build_people() -> void:
-	# North-east and north-west of the plaza, flanking the approach to the gate.
-	smith = _ring(Npc.Role.SMITH, &"smith", 55.0, Color(0.98, 0.56, 0.24))
-	vendor = _ring(Npc.Role.VENDOR, &"quartermaster", -55.0, Pal.GOLD)
-
-	# East and west, level with the plaza's middle: the two counters you visit on
-	# the way back OUT, so the walk from the plaza to the gate crosses them.
-	#
-	# The alchemist's lamp is WARM, though every other green thing about her stayed
-	# green. It used to match her cauldron, and two green sources put a wash across
-	# the west half of the yard that reached the flagstones in front of the gate --
-	# the one place in the game that belongs to cyan (STYLEGUIDE §2). The pot, the
-	# shelf and the potions say "apothecary" perfectly well on their own; the
-	# lamp's job is to be a warm light on a face.
-	#
-	# 118 rather than 90, on both sides. **The constraint is the ARRIVAL FRAME and
-	# it is arithmetic**: the returning camera sits at (0, 1.7, +8) on a 50°
-	# vertical fov, which is a little under 40° of half-width at 16:9. At a true
-	# east/west bearing these two land 43° off the centre line -- just outside it,
-	# which is the same failure the old west-wall placement had and which nothing
-	# in the build notices except `m_19_home` from `mvp_loop`. Swinging them 28°
-	# north brings both to 35°, comfortably inside. A shop you have to turn around
-	# to discover is a shop that does not exist.
-	alchemist = _ring(Npc.Role.ALCHEMIST, &"alchemist", -118.0, Color(0.96, 0.80, 0.52))
-	jeweller = _ring(Npc.Role.JEWELLER, &"jewelcrafter", 118.0, Color(0.80, 0.62, 0.94))
-
-	# The Lanternkeeper, on the centre line, facing the arrival. See `KEEPER_AT`.
-	#
-	# **Not `_ring` and not `_counter`**, and that is the whole shape of him: those
-	# two exist to put a keeper behind a stall (`at` is where the COUNTER goes and
-	# the keeper steps back from it), and he no longer has one -- `Npc.LOOKS` is
-	# where that comes off. With no counter there is nothing to step back from, so
-	# he is placed where he stands.
-	keeper = Npc.new()
-	keeper.role = Npc.Role.KEEPER
-	keeper.lamp_color = Pal.GOLD
-	keeper.position = KEEPER_AT
-	keeper.rotation.y = deg_to_rad(KEEPER_YAW)
-	add_child(keeper)
-
-	# **He is also the village elder** -- one person, not two, since 2026-08-10
-	# (`4fccd0a`), and the merge is what took him off the ring. He carries the
-	# opening's third beat: the veil lifts, and "I've been expecting you" has to
-	# come from somebody you can see (`_open_the_game`). He stood on the middle of
-	# the plaza for that, six metres out with a stall between the two of you, which
-	# `tools/directors/voices.gd` C1 already passed -- 0 degrees off the arrival
-	# camera's axis, against a 24 degree bound his older spot fifteen metres east
-	# missed by three times over. Angle was never the part that was wrong. He is on
-	# the same 0 degrees now, at 2.4 m with nothing in front of him, which is the
-	# difference between being in the frame and being the subject of it.
-	#
-	# The old worry about x = 0 -- that a figure on the centre line is silhouetted
-	# against the gate's cold mouth -- died with the flat arch. The mouth now lies
-	# flat over a wellhead four metres inside a roofed passage (`Gatehouse`), so
-	# there is nothing bright at head height on this axis to be a silhouette
-	# against.
-
-	# The gatehouse sits ON the wall line, in the gap `_build_yard` leaves for it,
-	# rather than 2.2 m inside the yard where the old flat arch stood. It has 3.4 m
-	# of passage behind its face and it has to be able to put that passage
-	# somewhere the player is never standing -- which is outside the curtain.
-	#
-	# `Npc`'s trigger is 2.3 m, so it reaches from here to z = -8.7: a metre short
-	# of the arch's own threshold. You have to walk INTO the gatehouse to be
-	# offered the way down, which is the read wanted and which every director that
-	# approaches this node gets for free (they aim at `gate.global_position`).
-	var legacy_gate := Npc.new()
-	legacy_gate.role = Npc.Role.GATE
-	legacy_gate.position = Vector3(0.0, 0.0, -yard.y * 0.5)
-	add_child(legacy_gate)
 
 
 ## The twelve dark things, and the reason the garrison is worth coming home to.
@@ -846,46 +795,3 @@ func light_of(prop: StringName) -> GarrisonLight:
 		if l.prop == prop:
 			return l
 	return null
-
-
-## One shopkeeper, on the plaza's ring, facing in.
-##
-## `bearing` is degrees clockwise from north -- 0 is the gate, 180 the arrival,
-## +90 due east. One number per shop, and the facing falls out of it rather than
-## being a second number that can disagree with the first: a kiosk on a circle
-## faces the middle of the circle or it is not on the circle.
-##
-## The yaw is `bearing + 180` because a booth's +Z is the CUSTOMER's side
-## (`ShopBooth`), and the customer is the one standing in the plaza.
-## `who` is their `StoryDb`/`Voice` id, and it is here rather than derived from
-## `role` because the two tables are keyed differently on purpose (`Npc.COUNTERS`
-## carries the id as `voice`) and a second mapping between them is a second place
-## to get the Lanternkeeper-is-the-elder collapse wrong.
-##
-## Returns null for somebody who has not arrived yet -- see `_build_people`.
-func _ring(role: Npc.Role, who: StringName, bearing: float, lamp: Color) -> Npc:
-	if not StoryDb.unlocked(who):
-		return null
-	var b := deg_to_rad(bearing)
-	var at := PLAZA_AT + Vector3(sin(b), 0.0, -cos(b)) * KIOSK_R
-	return _counter(role, at, bearing + 180.0, lamp)
-
-
-## One shopkeeper, standing behind their own booth.
-##
-## **`at` is where the COUNTER goes, not the keeper.** Every one of these
-## positions was tuned when an NPC was a single box -- the alchemist's in
-## particular is pinned to what the arrival camera can see, and the comment
-## above it is there because nothing else in the build would catch her drifting
-## out of frame. Now that each of them has a stall in front of them, placing the
-## keeper at the old coordinate would push all three counters a metre further
-## into the yard and quietly invalidate that tuning. So the counter inherits the
-## old spot and the keeper steps back behind it, along their own facing.
-func _counter(role: Npc.Role, at: Vector3, yaw_deg: float, lamp: Color) -> Npc:
-	var n := Npc.new()
-	n.role = role
-	n.lamp_color = lamp
-	n.rotation.y = deg_to_rad(yaw_deg)
-	n.position = at - n.transform.basis * Vector3(0.0, 0.0, ShopBooth.KEEPER_BACK)
-	add_child(n)
-	return n
