@@ -1,1261 +1,225 @@
 # The Lower Worlds: Awakening — Game Design Document
 
-This is the north star: the player experience and the promises the finished
-game must keep. It is not a work queue, a status log, or a place to preserve the
-history of every design argument.
-
-Read it with three other authorities:
-
-- **`docs/NOW.md`** says what pre-production is trying to prove *now*.
-- **`docs/SCOPE.md`** sets the prototype boundary and release ceiling. A feature
-  may fit this GDD and still be unauthorised by the current stage.
-- The system documents named in **`docs/README.md`** own their detailed designs
-  and as-built truth.
-
-**Current status — 2026-08-12.** The M4 first-floor core-loop prototype is built
-and playable. Its human fun gate has not passed. M5 was implemented beyond that
-gate and is accepted sequencing debt, not evidence that the loop works. The
-project is therefore in **Pre-production — Core Loop Proof**: no floors 2–4,
-bosses 2–4, production content, or broad lore expansion are authorised until
-`docs/design-tests/CORE_LOOP_PROOF.md` is resolved. See `docs/NOW.md` for
-the active question and permitted work. The bounded **Garrison Life** prototype
-in §6.7 is part of that proof: it tests whether coming home can be a second mode
-of play before any broader town simulation is authorised.
-
-The gear loop is the reason the player descends; the Descent is what gives that
-loop meaning. A design that treats §5 as the game and §6.6 as shopping has the
-weights backwards. The current playtest must prove that the two halves actually
-re-prime one another.
-
----
-
-## 1. The pitch
-
-A third-person action game with **Ocarina of Time's feel** and **Roguelite
-structure**, played as an explorer in the Vale.
-
-You play **Kael** *(tentative, 2026-08-10)* — a member of the **Far Lantern
-Society**, whose whole creed is three clauses long: *Dive deep, Unearth treasures and Return safely*
-
-**The name and the pronoun are the only things about Kael this document fixes:
-he is male, and he is called Kael.** No backstory, no family, no arc — the
-Society's creed is the characterisation, and the trees the garrison grew on
-2026-08-10 (§1) are all *other people talking about themselves*, which is where
-the characterisation of a silent protagonist belongs. **Kael himself does not
-speak**: fifteen voiced lines arrived on 2026-08-10 and every one of them is
-somebody talking *at* him — a narrator over the opening black, and four of the
-five counters. He is the one person in the garrison with no recording, and that is
-the characterisation holding, not a gap. What
-the name buys is that the receipt, the plaque and the Lanternkeeper's board can
-say something other than "the player."
-
-The pronoun is written down because it was **not** consistent before: this
-document had the hero's own equipment screen reading *"her four stones"* two
-paragraphs from *"things he used to beat"* (§6.6), while `docs/CONTRACT.md` §0
-had said *him* since the beginning. Both now say the same thing. **In code he
-stays `the hero`** — `Hero`, `hero.gd`, unchanged; the name lives in the
-fiction, not in the identifiers.
-
-**The counters are the other people in this game, and none of them is him.** The
-vendor, the smith and the alchemist are men (§6.3, §6.5); the jewelcrafter is a
-woman (§6.6); the Lanternkeeper, who is also the village elder, is an old man
-(§6). Worth stating, because §6.6
-used to lean on a bare *she* to mean the jewelcrafter in a sentence whose other
-subject was the smith, which only parses if you already knew.
-
-**Five of the six were settled by the art, not by this document, and that is the
-right way round.** The smith's was written here as *genuinely open* until
-2026-08-10, when five authored bodies landed for the smith, the vendor, the
-Lanternkeeper, the jewelcrafter and the alchemist (`NpcBody.PEOPLE`): a bearded
-dwarf at the forge, a road-scarred warrior at the stall, a white-bearded hooded
-man in relic-jewelled mail at the Far Lantern, a woman wearing her own stock at
-the setting bench, and a hooded, spectacled man with a belt of stoppered flasks
-at the apothecary. **The Lanternkeeper and the alchemist both changed sex in that
-pass** — the Lanternkeeper had been a Reshi woman built out of a suit and a cool
-tint, and the tint was the only thing carrying "this counter is the strange one",
-which the hood and the stones now do on their own; the alchemist had been a Vyr
-woman, and **is no longer Vyr either** — the body that arrived is a settler, and
-the flasks hung on him say *apothecary* far more plainly than her height ever
-said *Vyr*. Nothing mechanical moved with either. **Nobody in the garrison is
-built from a race and a suit any more** — the elder was the last, and later the
-same day he and the Lanternkeeper became one man (above). `RaceBody` is not
-retired: it is what every monster in the Cut is made of.
-
-**One loose end, and it is audible.** The alchemist's two recorded lines (§6.5,
-`Voice.LINES`) were cast for the woman she was. They still play, they are still
-the right words, and they are now in a voice that does not match the face. That
-is a recasting decision and not a code one, so the lines stand until it is made.
-
-Under the frontier town
-of **Valenfeld** there is a shaft into the works the **Vyr** built before they
-withdrew to their sky-seat and left the world to fail without them. You make runs
-into it. You take what the dead empire left. You decide, every time, when to
-leave.
-
-**You never see Valenfeld.** The hub you play in is the **Highbridge garrison**
-— the walled camp the Highbridge people hold at the shaft head, a day's road
-from the town proper. That is deliberate, and it is the reason the hub gets to
-be four counters and a hole in the ground: a garrison is *supposed* to be small,
-purposeful and short of comforts, so nobody has to explain why there is no inn
-and no square. A town would have owed you those. See §6.
-
-**The garrison is a dig, not a posting.** Highbridge holds the walls; the
-**Explorer's Guild of Valenfeld** pays for what comes up out of the shaft, and
-owns it (2026-08-10, owner's call). That is why a walled camp has four traders
-and one soldier in it, and it is the sentence the hub had been missing: a
-*garrison* explains the lack of an inn, and only an *expedition* explains the
-quartermaster.
-
-The person you report to is **Aldric Vane**, who commands the outpost and is also
-the Lanternkeeper. You are his cadet. **He talks, and so does everybody else** —
-that is a reversal of what this section said until 2026-08-10 ("three recorded
-lines and no quest and no dialogue tree"), and the reversal is the owner's. What
-replaced it is deliberately not a quest system:
-
-- Each of the five has an ordered run of **beats** — story pages said once, in
-  order, unlocked by how far the save has got — and a list of repeatable
-  **topics** you can ask them about. `StoryDb` (`scripts/world/story_db.gd`) is
-  the whole of it; there is no quest log, no objective, no flag a beat can set
-  except *you have heard this*.
-- **The gate is progression**: bosses felled, gold earned over the life of the
-  save, and — since card #91 — **one object**, the maker's mark the floor 1
-  miniboss drops, which is what brings the smith to the yard. Nothing said in a
-  conversation is bought, found or given; the mark is a gate on who is STANDING
-  there, not on what anybody will tell you. See `docs/METAGAME.md` §6.
-- **An arrival is introduced, not discovered.** The first time you walk back into
-  the yard after somebody new has moved in, Aldric turns and presents them, and
-  the camera turns with him — a two-hander in the ordinary dialogue box with the
-  frame pivoting on the hero's own head (`StoryDb.INTRODUCTIONS`,
-  `scripts/world/introduction.gd`, `scripts/camera/convo_camera.gd`). It runs
-  once per save per person, it plays for Kessa at the very start too, and it is
-  the only camera in the game that looks at something other than the hero.
-- Aldric's first beat is the game's only briefing — what the Cut is, what the
-  Guild wants out of it, that the cadet before you never came back, and where to
-  put the things you want to keep. A garrison owes you somebody to report to; it
-  turns out it also owes you the reason you are climbing down a hole.
-
-**He is also the Lanternkeeper** (2026-08-10, owner's call). They were written
-as two men for a day — an elder alone on the grass with the three lines, and a
-silent keeper behind the relic hall — and the art is what collapsed them: the
-body that arrived for the Far Lantern is a hooded, white-bearded old man in
-jewelled mail, which is the elder's description with the Society's pitch already
-on it. One person, one counter, five people in the yard. The relic hall is
-unchanged and so are his lines; what went is a sixth body, a lamp post, and the
-idea that the man who keeps the records and the man who is expecting you were
-different people. His counter moved to the middle-south of the yard to keep the
-opening's third beat honest — the veil lifts on somebody you can see.
-
-The moment-to-moment is OOT: a boom camera, weighty camera-relative locomotion,
-a committed roll, a shield, a telegraphed enemy you can read. The shape around
-it is Moonlighter: a garrison, a counter, and a hole in the ground that gets
-worse the further in you go.
-
-**The one thing this game does that Moonlighter did not: the garrison changes.**
-
-The shaft under Valenfeld is called **the Sunken Cut**. That is the name of the
-*way down* — the one dungeon there is a way into — and the four authored floors
-in §5 are the places it passes through: the Cistern, the Foundry, the Hushing
-Choir, the Chord Gate. It is signed over the gate in the garrison, said on the
-card the game shows you on the way in, and said again in the corner of the
-screen every time you take a stair. A place you are going back to a hundred
-times needs a name for the same reason the run report is a receipt and not a
-score — "floor 7" is a depth reading, and "the Sunken Cut, level 7" is somewhere
-you have been.
-
-The shaft's name lives in one constant, `Prog.NAME`, because there is one shaft
-(§5), and that is the one signed over the garrison gate.
-
-**The per-floor names in §5 are wired up now.** The two callers that ANNOUNCE a
-floor draw it — the loading card and the HUD's floor card — and nothing else says
-it, by design. The name comes from `FloorDb.announced_name(level)` and not from
-`Prog`, which is where this paragraph said to put it: the four names were already
-authored in `FloorDb.FLOORS` by the time the wiring happened, `MapPanel` was
-already reading them from there, and `FloorDb` calls `Prog.rooms`/`Prog.pack`, so
-a name on `Prog` would have made the two classes call each other.
-
-The depth readout does not move. Both surfaces still put `Prog.label(level)` under
-the name — THE FOUNDRY over LEVEL 2 — because a number is what you glance at and a
-name is what you arrive in.
-
-Per-floor **subtitles were cut on 2026-08-11**. The loading card's lower two
-thirds belong to the backdrop's fire; expanding the temporary HUD floor card
-would tax the play view; and the map is a consulted reference rather than an
-arrival. None is the right surface for two or three sentences, and a wrapping
-engine built only to expose otherwise dead catalogue copy is not part of the
-prototype. Floor flavour lives in this document and in the authored names,
-rosters, tints, anchors and encounters that the player can actually experience.
-
----
-
-## 2. The one question
-
-> **Is what I am carrying worth more than the walk back?**
-
-Every system exists to sharpen that question or to price it. When evaluating a
-proposed feature, the test is not "is this fun in isolation" but **"does this
-make that question harder to answer?"**
-
-A feature that makes the answer obvious — infinite storage, a free teleport, a
-heal you can carry without paying for it — is a feature that deletes the game.
-Say no to it.
-
-The question has **two axes**. *How deep* is the axis of space: the floors, the
-fee, the walk back. *How fast* is the axis of time — Heat, the kill chain that
-stamps a premium on loot swept while it is lit, pays in money and never in power,
-and rides inside the bag so it raises the fee too. Going fast makes the walk home
-more expensive. That is the one question asked a second way.
-
-§3 adds the third and hardest form of it.
-
----
-
-## 3. Why the player goes back down — three reasons, never the same reason
-
-This is the design's spine, and it is the answer to "what actually makes the
-dungeon addictive." Three things come out of the Descent, they satisfy three
-different appetites, and **no one of them may ever be convertible into another**.
-
-| | What it is | Renewable? | Appetite it feeds |
-|---|---|---|---|
-| **Gold** | Sold ingredients | Infinitely | *a number should go up* |
-| **Components** | Forge and brew materials, chest-gated | Slowly | *the ladder should move* |
-| **Relics** | Vyr salvage. **Twelve. Hand-placed. Unique.** | **Never** | *the world should change* |
-
-Gold is the grind, and a grind is solvable by patience — which is why it can
-never be the only reason. Components are the pacing gate: a Cold Iron Core never
-falls off a body, so no amount of farming room one finishes a ladder.
-
-**Relics are the hook.** Gold and components change your character sheet. A relic
-changes *the place you come home to*. A player will grind a number for an hour
-and a world for a hundred, and the specific failure this design is built to avoid
-is Moonlighter's: a town that looked exactly the same on hour forty as on hour
-one, so that late-game runs were payroll.
-
-Every relic is a **named object with a named consequence**, and it is handed to a
-person rather than sold (§6). Twelve of them. There is no thirteenth, there is no
-generic relic, and there is no relic drop table. If it is not on the list in §6.2
-it does not exist.
-
-### The relic is also the sharpest form of §2
-
-A relic sits **in the bag**. It costs a slot, it is charged the extraction fee,
-and **it dies with the bag.** You are carrying the only one of these there is,
-five rooms from the rope, with eleven slots of Deep Amber you would also like to
-keep.
-
-And it is **broken** (§6.4). It does nothing yet, it will cost gold at a counter
-before it ever does, and it is still taking the slot and still paying the fee.
-The hardest version of §2 is a decision about an object that is currently worth
-less than the ore beside it.
-
-That is the hardest version of the one question the game can ask, and it is why
-relics live in the bag rather than being granted on pickup.
-
-**A relic lost on death goes back where it came from.** It is never destroyed —
-it returns to the room it was placed in, and you can go down and get it again.
-The sting is the walk, not the loss. A permanently missable unique in a game with
-a death-loses-everything rule is not tension, it is a corrupt save.
-
-### 3.1 Every run pays — the document case
-
-**Added and built 2026-08-10** — `Run.cased` and `Run.CASE_SLOTS`, drawn as its
-own grid above CARRIED in the pouch. Death took the whole bag. That is harsher
-than Souls, which lets you walk back and pick your runes up, and much harsher
-than the modern roguelite rule that every run pays something. A death five rooms
-down with twelve full slots returned **nothing**, and a loop that can hand a
-player forty minutes of zero is a loop that gets closed.
-
-> **The top row of the bag — three of twelve slots — is the Society's document
-> case. What is in the case comes home. What is not, does not.**
-
-Three of twelve is 25%, and the case is the reason it is *not* a dice roll.
-Pillar 3 says loss is legible and *you always knew the risk*; a roll made at the
-moment of death is the opposite of knowing, and it is anti-dramatic besides — you
-die carrying two Void Pearls and ten Bone Shards and the game hands back three
-Bone Shards. A consolation prize that consoles nobody.
-
-The case is legible for the whole run instead. You know at every moment exactly
-what you would keep, which means **packing is a decision** — the one this game's
-flat twelve slots did not previously have. It is Escape from Tarkov's secure
-container, which is the most-praised item in that game, and it removes the
-catastrophe without removing the cost: nine slots still die.
-
-**A mote fills the case first, and A repacks.** Pickup puts what it can in the
-case without being asked, because the player who never opens a menu is exactly
-the player §3.1 was written for; A on a cell moves that stack across the line in
-either direction, which is where the decision actually gets made. The case is
-three of the twelve — `hold_slots()` is `bag_slots - CASE_SLOTS`, so a bag
-upgrade widens the part that dies and never the part that comes home.
-
-**A relic does not fit in the case.** It is a broken lump of Vyr machinery, not a
-document. This is the one line that has to be written down, because without it a
-relic in the case never dies and the hardest question in the design — the one two
-paragraphs up — quietly stops being asked. **An Echo does not fit either**, for
-the same reason and to the same end.
-
----
-
-## 4. Pillars
-
-**1. The feel is not negotiable.** OOT is the bar for camera, locomotion, and
-combat, and `refs/` is authoritative over intuition (`docs/CONTRACT.md` §2.5).
-There is no walk/run toggle — speed is a curve. The roll is faster than the run
-and it commits: you cannot cancel it into a run, which is what makes it a move
-rather than a repositioning tool. The last moments of its recovery *can* be spent
-on another commitment — a swing, the shield, a second dodge — and that asymmetry
-is deliberate, because a dodge you cannot decide out of is a dodge that eats
-presses. A reversal past ~135° is its own move, not steering.
-
-**2. Greed is the difficulty slider.** The game does not ask you to pick easy or
-hard. It asks how deep you want to go, and pricing your own exit is how you
-answer. A cautious player is never blocked; a greedy one is never safe.
-
-**3. Loss is legible.** You always knew the risk. Enemies telegraph before they
-commit. A full bag refuses visibly, with the mote left pulsing on the floor
-rather than vanishing. The extract fee is on screen before you pay it. The
-end-of-run receipt names every stack you lost, line by line.
-
-**4. Permanence is bought or given, never found.** No dungeon drop makes you
-stronger *by being picked up*. Ingredients are sold, gold buys upgrades,
-components buy rungs, relics are donated — and every one of those transactions
-happens **in the garrison, over a counter, after you got home**. That
-indirection is what makes a great run a *decision* rather than an automatic one,
-and it is the reason death costs something without costing progress.
-
-**This pillar is the game's power curve, and §6.6 is how much of it there is.**
-The counters are not a service on the side of the dungeon; climbing them is why
-you go down. You delve to get rich and to find components, you spend both on
-gear, and the gear is what lets you delve deeper. The dungeon supplies the
-materials and the ladders supply the reason — neither half is the game on its
-own.
-
-The boss items in §5 are the one deliberate exception, and they are an exception
-about *verbs*, not about power: a bow you own is a thing you can now do, not a
-number that went up. See §5.2.
-
-**Echoes are not an exception to this pillar, and the word doing the work is
-*permanence*.** An Echo (`docs/PUZZLES.md` §6) is found power that **dies with
-the run** — home, garrison or death, it goes quiet — so it never becomes
-permanence and never competes with the counters. What it costs is a **bag slot**,
-which is the only price this game has that sharpens §2 instead of softening it:
-getting stronger costs you the capacity you came down for. It is worth 0 gold, so
-it can never be sold and never raises the fee. And it never moves one of the five
-stats in §6.6 — those are the smith's and the jeweller's, and that boundary is
-what keeps a found thing from quietly replacing a bought one.
-
-**5. Light is a material.** Torches make warm pools, and the stone between them
-is *dimmer*, not black — a lit place with shape, not a string of spotlights in a
-void. The actors always carry enough light to be read: a silhouette you cannot
-read is not atmosphere, it is a bug (and it was one, twice). Contrast is carried
-by *range* and by *hue* — warm fire against cool air — never by an absence of
-light. `docs/STYLEGUIDE.md` §1.
-
-**6. One of each system.** One shop screen, one transition owner, one bag, one
-receipt. A second is a second place for the arithmetic to drift. This repo has
-paid for the alternative (`CLAUDE.md` §0) and will not pay again.
-
-### 4.1 The telegraph is a contract, and this is the other half of it
-
-Pillar 3 promises that enemies wind up before they commit. A telegraph the
-player can only *retreat* from is half a promise: it makes the fight fair, but
-it never makes reading it the interesting choice. So there are exactly two
-answers, and both are the same buttons meaning something better for a moment
-because you read the fight right. Neither adds an input. `docs/BESTIARY.md` §3.6
-is the design of record.
-
-**The parry** — guard held, **A** pressed, in the quarter-second before the blow
-arrives. It drops the shield to do it, so a miss is a hole you take the blow
-through; a hit costs nothing, throws the thing that swung, and opens a window in
-which the sword button is the dash into the gap it just made. It is the only
-thing in the game that moves a boss, and that is safe precisely because it can
-only be thrown after the boss has already committed.
-
-It is on A rather than on the sword because the sword had to stay reachable out
-of a guard: with the parry riding the attack button, a guarded player could not
-swing at the thing they were guarding against without dropping the shield on an
-earlier frame. A raised shield takes A away from the world for as long as it is
-up — behind a guard there is nothing to talk to.
-
-The ordinary block is paid from stamina. A held guard stops a frontal blow only
-while the bar is above zero. Its cost is
-`Hit.amount * K.STAMINA_BLOCK_PER_QUARTER`, and `Hit.amount` is already the
-blow's weight in quarter-hearts. Spending is partial: any positive remainder
-catches the current blow and clamps to zero, and the next blow lands if the bar
-is still empty.
-
-**The perfect dodge** — the roll, *into* the blow instead of away from it. Time
-slows for half a second and the sword button becomes a leaping overhead that
-sends the body flying (§4 pillar 1's roll, earning its keep). It asks for no
-prediction at all: the reward fires only if a blow genuinely reached you while
-you were rolling through it, so rolling early just misses and rolling late just
-hurts.
-
-They are deliberate opposites, and that is the whole design rather than a
-symmetry for its own sake. **The parry is aggressive and punished; the dodge is
-safe and passive.** The parry costs no stamina because the guardless recovery
-after a miss is already the price, and it pays in *initiative* — a body on its
-back. The dodge costs only what the roll already cost and pays in *time* — the
-one currency a player who is losing actually wants. A game with only the first
-punishes panic; a game with only the second never rewards nerve.
-
-Both announce themselves loudly and differently, because a reaction the player
-cannot see did not happen: a gold burst at the shield for the parry, the same
-gold as a critical launch, and a cold ring on the floor for the dodge. One reads
-as a hit. The other reads as the world bending.
-
----
-
-## 5. The Descent — four floors, four bosses, and an ending
-
-**Superseding the endless-only structure.** The Descent is now **finite**: four
-authored floors, each ending in a boss, and then the game *ends*. The endless
-descent is not deleted — it becomes the post-credits mode (§8). A game with no
-ending cannot be published, and the relic/garrison/fork design in §3 and §6
-needs authored space to live in.
-
-| # | Floor | What it was | Boss | Model | Drops |
-|---|---|---|---|---|---|
-| 1 | **The Cistern** | Flooded Vyr intake works | The Cistern Warden | `golem` | Great chest: **The Bow**; separate relic |
-| 2 | **The Foundry** | Where the Imperium re-cut Vyr bronze | The Slag Ogre | `ogre` | Great chest: **The Burst-Verse**; separate relic |
-| 3 | **The Hushing Choir** | A resonance hall that still rings | The Bellwake | `wraith` | Great chest: **The Hookshot**; separate relic |
-| 4 | **The Chord Gate** | The threshold over Caer Vallen | The Riven Knight | `knight_iron` | Great chest: **The Far Lantern**; separate relic |
-
-**Every boss model already exists in `assets/monsters/`.** A boss is a scaled,
-re-tinted existing monster with an authored three-beat move set and an arena —
-not new art. This is the single largest scope saving available to the project and
-it is free. See `docs/SCOPE.md` §1.
-
-### 5.1 Authored anchors, procedural fill
-
-Floors stay **seeded and generated** (`scripts/world/dungeon.gd`). Hand-authoring
-four floors is weeks of work that also deletes the run-to-run variety the loop
-depends on. Instead each floor gets a small **manifest** — room count, band
-table, tint, and four guaranteed placements:
-
-- the **boss door**, in the deepest room, where the stair is today;
-- the **shortcut door**, near the entrance;
-- the **vault door**, in the middle ring;
-- the **deep chest**, beside the boss door, carrying that floor's relic.
-
-Generated rooms, authored anchors. This is the standard fix for procedural
-sameness and it costs one dictionary per floor.
-
-**The boss door replaces the stair.** Behind the boss is the way down. So the
-floor's deepest room is still where the best chest and the commitment are, and
-`scripts/world/stairs.gd` keeps its job.
-
-**A boss you have killed stays dead.** Its door hangs open and the arena never
-rebuilds the fight. An unclaimed boss-item great chest may still be waiting in
-the spent arena; once its item is owned, the arena is empty forever after. The
-game never asks you to re-fight something you have already beaten — this loop is
-about loot, not about repetition.
-
-**A reward does not exist until you have beaten what guards it.** No chest is
-standing in a room when you walk into it. Beat the pack, or solve the puzzle, or
-kill the boss, and the prize *arrives* — it falls in, it lands, the room flashes
-and the camera kicks. This is the loop's payment, and a chest already sitting
-there while you fight is the same payment made before the work: the player learns
-to run past the monsters and take it, and the pack becomes scenery. It went out
-that way once and the vault — three rooms of harder-than-the-floor bodies around
-one rich chest — could be looted by walking through it.
-
-**Two levels of random-loot arrival and no more.** A room's chest is one thing; the deep
-chest, the miniboss's, the vault's and the deepest room's are another, and the
-second gets a shaft of light, a second shockwave and nearly twice the hold. Not a
-continuum: the player only ever sees one of these at a time and cannot compare it
-to the last room's, so a flash that scales smoothly with value teaches nothing.
-Two is the smallest number that can be *recognised* — this is a chest, and THAT
-is the chest. The difference is size and shape, never colour.
-
-**The boss-item great chest is not a third loot roll.** It is an authored,
-deterministic victory object: larger than an ordinary chest, gold-bound, absent
-during the fight, and placed only after a floor boss dies. It contains exactly
-the `boss_item` in that floor's manifest — no random picks, arrows or bag loot —
-and it persists on a later visit until opened. The boss's relic remains a
-separate floor pickup because it belongs to the bag, extraction risk and repair
-loop; the permanent verb does not.
-
-**You can leave before the boss.** The boss is a wall to *depth*, never a wall to
-the loop. Walking into the Cistern, filling twelve slots, and roping out without
-ever seeing the Warden is a complete, correct, profitable run.
-
-### 5.2 The four items — verbs, not numbers
-
-**`docs/ITEMS.md` is the design of record for items** — for every one of them,
-which body or which lock it answers, where it enters the run, and what owning it
-changes about the player's options. This section is the four boss-item rewards and the
-rule that generates them.
-
-Boss items are the one permanent thing the dungeon lets you find, and the rule
-that keeps pillar 4 intact is that **each one is a verb you did not have**. None
-of them raises a stat. The stats are still the smith's. A boss's death earns the
-great chest; ownership changes only when the player opens it. Artifact turn-in,
-relic repair and the random chest table never grant a boss item.
-
-**Finding one stops the game for an item-get ceremony.** The hero raises the
-actual item above his head, the camera frames him, the HUD yields to its name and
-short use text, the item turns slowly under a dedicated light, and a triumphant
-fanfare replaces the room music until the player dismisses it. This is one
-reusable presentation shared by all four boss items, not four authored scenes.
-
-- **The Bow** — for the thing that has not noticed you yet. Arrows, fletching and
-  the `string` forge ladder already exist and simply become unreachable until the
-  Warden is dead.
-- **The Burst-Verse** — the only genuinely new mechanic in the plan. A thrown arc,
-  a fused blast, and cracked walls. It is the game's one *destructive* answer and
-  therefore the one that opens doors the others cannot. **It is cast, not
-  thrown**: the Foundry is where the Imperium re-cut Vyr bronze, and what you take
-  off the Slag Ogre is a written working rather than a satchel of powder. That is
-  a change of noun and of particle colour — the arc, the fuse, the sphere query
-  and the cracked walls are identical, and so is `docs/SCOPE.md`'s warning that
-  none of it may become a physics feature.
-- **The Hookshot** — crosses a gap, or brings the gap to you. Fired at a monster
-  it does no damage; it freezes the thing for a second. An item that pulls you
-  across a chasm and an item that buys you a beat are the same item, because both
-  answer "I am not where I need to be yet."
-- **The Far Lantern** — the Society's own. It is not a weapon and it has no
-  button. It is the thing you were sent for, it ends Act I, and it opens the Long
-  Descent (§8).
-
-**The hero starts with the sword, the shield and the rope. Nothing else.** The
-bow and the hookshot come out of the starting kit and become earned. Their forge
-ladders do not appear at the smith until the item is owned. This converts systems
-that are already built into progression, at the cost of one `Game.has()`
-check, and it is what makes §5.3 mean anything.
-
-**Each floor is about the item the previous floor's great chest gave you.** Ocarina
-puts the dungeon item in the *middle* of the dungeon so the back half can be
-about it. This design puts it at the *end* — you kill the Warden, take the Bow
-and leave — so the toy you just earned had nowhere to be used. Displacing it by
-one floor gets that shape back without moving a single boss: the Foundry is the
-temple that is **about the bow**, the Choir is about Burst, the Chord Gate is
-about the hookshot. `docs/PUZZLES.md` §1 is that diagonal written out, and it is
-also why a floor's gate room can never ask for something the player lacks — the
-same table generates both facts.
-
-**A working is a usable item and nothing more.** The Burst-Verse is a row in
-`scripts/items/armament_db.gd`, it draws to the right hand, D-pad ← → reaches it,
-RB and RT cast it, and the HUD cluster and the pouch's paper doll show it
-because they already read `Game.armament()`. Its charges are the bow's arrows
-with a different noun — a count in the HUD column, spent on cast, refilled only
-in the garrison. There is no mana, no school, and no casting system:
-`docs/CONTRACT.md` §4 already says *fire what is in the right hand*, and a
-working is a thing that is in the right hand. The other two workings and the
-rules that keep them from multiplying are §6.5.
-
-### 5.3 The forks — three shapes, and they are puzzles
-
-**Superseded 2026-08-10. `docs/PUZZLES.md` is the design of record for
-everything in this section**; what follows is the shape and the reasons, and that
-file carries the verb ladder, the atoms, the combinators and the prefabs.
-
-The fantasy is: *the dungeon reshapes itself around what you have proved you can
-do.* The version of this section that shipped implemented that as **a locked
-door**, and a locked door is the wrong noun. **A door that opens because you own
-item X is a check, not a challenge.** Zelda's actual verb is that the item lets
-you see and change the room, and a game that calls itself a Zelda-like has to
-pay that.
-
-So the forks are **puzzles**, and there are three shapes of them.
-
-> **Shortcut.** Near the entrance. Needs **floor N's own boss item**, and skips
-> floor N.
->
-> **Gate room.** On the way to the boss. Needs an item **you already own** —
-> never anything else — and opens a **cycle** back toward the entrance.
->
-> **Treasure.** Off the mid-ring, optional. Holds a **miniboss** and a rich
-> chest. The **vault** is the rich case of this shape and keeps its own rule:
-> needs **floor N+1's boss item**, and holds a relic.
-
-**The gate room is the new one, and it is the one that makes this a Zelda-like.**
-A puzzle is required to walk the critical path. That is a real change to what the
-game asks of a player and it was the owner's call: it is the differentiator, and
-it is true to the core the pitch claims.
-
-**The rule that keeps it from ever blocking anyone** is that a gate room may only
-ask for a verb the player already has. Floor 1's is a key hunt, because T0 is all
-it may ask for and a key hunt is the honest T0 puzzle — Ocarina's first dungeon
-is also mostly a key and a ladder. Pillar 2 survives: *a cautious player is never
-blocked.*
-
-**And the cycle is the walk home.** The loop a gate room opens comes out near the
-entrance, so solving the puzzle physically shortens the extraction walk. §2 asks
-*is what I am carrying worth more than the walk back*, and a puzzle that answers
-it with **less walk** pays in this game's own currency instead of in power. That
-is why cycles belong here rather than in a generic Zelda-like, and it is the
-reason `dungeon.gd`'s room **tree** grows exactly one extra edge per floor.
-
-**The shortcut says: prove you have done this, and never do it again.** Once the
-Warden is dead you own the Bow, and a bow *puzzle* twenty metres from the
-Cistern's entrance drops you at the Foundry's mouth. On your fifth run you are at
-the Choir in ninety seconds.
-
-That promise is why **a shortcut is drawn from exactly tier N** and never from
-"N or above" (`docs/PUZZLES.md` §1). If a seed can put a hookshot puzzle on floor
-1's shortcut, floor 1's shortcut does not open until floor 3 is dead and the
-ninety seconds quietly become two floors away.
-
-**The vault says: come back with the thing from downstairs.** It is the classic
-Zelda backtrack and it is what makes floor 1 worth re-entering on hour ten. Three
-rooms, a harder pack than the floor around it, one relic, one rich chest.
-
-Floor 4 has no vault — the boss room is the vault. Floor 4's shortcut is opened
-by the Far Lantern and leads to the Long Descent.
-
-**A fork is a puzzle and a three-room prefab. It is not an alternate level.** The
-moment a fork wants its own tint, its own roster or its own boss, it has stopped
-being a fork and started being floor 5, and floor 5 is out of scope. The same
-ceiling applies one level down: a *puzzle* that wants a prop the atom list does
-not have has stopped being a puzzle and started being a mechanic
-(`docs/PUZZLES.md` §8).
-
----
-
-## 6. The garrison — twelve relics, twelve consequences
-
-The Highbridge garrison is one walled yard over the mine mouth: curtain walls
-you cannot see out of, open sky above them, a paved circle in the middle with the
-five counters round it and the Lanternkeeper on it, and a gatehouse opening onto
-the bounded descent to the shaft. It gains **one** staffed counter. The one
-addition to the pause book is the read-only Garrison status page in §6.7; it is
-an account of the yard, not a remote-management screen.
-
-The walls are not scenery. Everything past them is placeholder ground that runs
-flat to the horizon, and a visible empty world is worse than none — so the
-boundary is load-bearing until there is something outside worth seeing. The sky
-above it is equally load-bearing in the other direction: take that away and the
-yard is a dungeon room whose ceiling failed to load, which is exactly what the
-hub used to be.
-
-**The Lanternkeeper — the village elder, §1** keeps the Far Lantern Society's
-stall on the middle of the plaza, under a statue of the Society's founder and
-squarely inside the arrival frame — an old man, hooded, in a mail coat set with a
-dozen coloured stones, which is the Society's whole pitch worn on a body. He does
-not buy and he does not sell: you
-hand him a relic and something in the garrison changes. Mechanically he is a
-`Catalogue` subclass and a row in `Npc.COUNTERS`, exactly like the smith and the
-alchemist. His **Artifacts** service uses the shared NPC service screen's linear
-progression layout: a donation costs **one relic and the cost of making it work
-again** (§6.4). This is the same implementation class, not Trade and not another
-screen.
-
-The quartermaster offers **Trade** for repeatable stock and bag selling, plus
-**Upgrades** for bag slots and heart containers. The smith offers **Smithing**,
-the alchemist **Alchemy**, the Lanternkeeper **Artifacts**, and the jewelcrafter
-**Upgrades**. Five staffed counters, six named services, and one shared service
-screen class with two layouts: the two-sided Trade shop and linear progression.
-
-### 6.1 The rule that keeps this small
-
-> **A relic unlocks a row in an existing catalogue, a rung on an existing ladder,
-> or a number in `K`. It never adds a screen, a system, or a fifth NPC.**
-
-Every entry below is a one-line change to something that already works. That is
-not a coincidence, it is the acceptance criterion.
-
-### 6.2 The twelve
-
-| # | Relic | Where it is | Home | What it does |
-|---|---|---|---|---|
-| 1 | Tally-Ledger of Fair Weights | Cistern deep chest | Smith | The smith **learns rung 2** on every forge ladder |
-| 2 | Imperium Anvil-Plate | Warden (boss 1) | Smith | The smith **learns rung 3** on every forge ladder |
-| 3 | Cracked Still-Head | Cistern vault | Alchemist | The alchemist **learns the Ironhide Draught** |
-| 4 | Cinder-Retort | Foundry deep chest | Alchemist | The alchemist **learns the Emberblood Draught** |
-| 5 | Glass-Kiln Core | Slag Ogre (boss 2) | Alchemist | The alchemist can **blow bottles 3 and 4** |
-| 6 | **The Sustain-Verse** | Foundry vault | Alchemist | He **reads** it: you learn the working **Sustain** (§6.5) |
-| 7 | **The Ballast-Verse** | Choir deep chest | Alchemist | He **reads** it: you learn the working **Ballast** (§6.5) |
-| 8 | Sounding-Rod | Bellwake (boss 3) | Lanternkeeper | The deep chest **hums** on arrival — the floor's only wayfinding |
-| 9 | Warp-Stone Fragment | Choir vault | Lanternkeeper | **Shortcuts work from the garrison.** Start a run on any floor whose shortcut you have opened |
-| 10 | Rope-Drum | Chord Gate deep chest | Lanternkeeper | Extraction fee **25% → 20%** |
-| 11 | Pillar-Shard | Riven Knight (boss 4) | Lanternkeeper | **The square lights.** A lit market pays: vendor prices **+10%** |
-| 12 | The Riven Chord | **Long Descent, floor 10** | Lanternkeeper | The last one. See §8 |
-
-Four from bosses, four from deep chests, three from vaults, one from the endless
-mode. Eleven are reachable in Act I; the twelfth is the reason to keep going
-after it.
-
-**Two entries were deleted to pay for the two Verses** (`docs/SCOPE.md` §4.2):
-*Fletcher's Jig* (fletching yields 7 arrows instead of 5) and *Waterwheel Gear*
-(the smith's stock lines cost −15%). Both were numbers on a subsystem rather than
-changes to the place you come home to, which is the §3 test a relic has to pass;
-they were the only two on the table that failed it. **Pillar-Shard moved** from
-the Choir's deep chest to the Riven Knight to fill the freed boss slot, and it is
-better there — the square coming on is the largest visible change in the game and
-it now lands on the last boss of Act I.
-
-**The vendor is nobody's home counter.** He buys everything already, so he has
-nothing a relic could unlock, and inventing one for the sake of symmetry is how
-§6.1 gets broken.
-
-**Each donation also lights one thing in the courtyard** — a lamp, the well, the
-mill wheel, the College's window. Twelve dark props, twelve of them come on. The
-garrison "thrives" at the cost of a prop swap and a light, and by relic twelve
-the first frame of the game and the last frame of the game are visibly different
-places. That contrast *is* the reward; do not spend more than a prop on it.
-
-### 6.3 What the relics deliberately do not do
-
-- **No relic sells.** The vendor refuses them, the way he already refuses
-  components. A relic the player can turn into gold is a relic the player will
-  convert into the grind, and §3's whole point is that the three currencies do
-  not touch. **The repair price in §6.4 is not a violation of this** — it runs
-  the other way. Gold buys a relic's *effect*, the way it already buys a forge
-  rung; it can never buy the relic, and the relic can never become gold.
-- **No relic is a stat.** Look at the table: catalogues, recipes, prices, two
-  workings, one wayfinding hum. The closest thing to power is the fee cut, and
-  that is a discount on leaving, not a bigger sword. The two Verses are the §5.2
-  rule applied to relics — **a verb you did not have, never a number that went
-  up.** Sustain and Ballast do not raise anything; they are two more things you
-  can decide to do, and both of them cost you something you were carrying.
-- **No relic gates the ending.** You can kill the Riven Knight having donated
-  none of them. The relics are the reason to keep playing, not a toll on the
-  plot.
-
-### 6.4 Broken on arrival — the home counter
-
-**A relic you find does not work.** It comes up out of the Cut as
-`BROKEN TALLY-LEDGER`, its description reads *Take it to the smith*, and it does
-nothing at all until you have carried it home and paid to have it repaired — or,
-for a Verse, **read**. The Home column above names the counter whose thing it
-changes, and the rule that generates it needs no table of its own:
-
-> **A relic's home is the counter whose thing it changes.**
-
-**The home is the sign-post; the Lanternkeeper is the till.** The description
-sends you to the smith because the smith is what changes, but the money and the
-hold belong to **Artifacts**, in the linear presentation that already lists all
-twelve — the same RECORD, one more state filled in. This is deliberate. Under
-§6.1, a repair that had to be paid for at three different counters would put a
-fourth kind of line on the vendor's, the smith's and the alchemist's catalogues, each
-with its own refusal, which is three systems bought to avoid one walk across the
-yard. §6 already promises one shared service-screen class; three special repair
-branches would break that promise in instalments.
-
-This is not an extra system bolted onto the donation; it is the donation losing
-its special case. Pillar 4 says permanence is *bought or given, in the garrison,
-over a counter, after you got home*, and a relic that worked the moment you
-touched it was the one thing in the design quietly breaking that. Now the
-Lanternkeeper prices a repair in Artifacts the way the smith prices a rung in
-Smithing. They share the linear progression presentation, not a Trade
-transaction.
-
-It also sharpens §2 one more turn. A broken relic is worth **nothing** until you
-pay for it, and it still costs a bag slot and still pays the fee on the way out.
-You are carrying twelve slots of Deep Amber and one object that is currently
-worth less than the Amber, five rooms from the rope.
-
-**The prices are small and they are not a gate.**
-
-- **The first repair is free.** The Tally-Ledger is the game teaching you what
-  the counter does, and a tutorial you cannot afford is not a tutorial.
-- The rest scale with the floor the relic came from, and **none of them is more
-  than one good run's takings.** A repair is a ritual and a delay, never a grind.
-  §6.3 still holds: no relic gates the ending.
-- The numbers live in `scripts/items/relic_db.gd` beside the rows they price, not
-  in this document, for the reason `docs/METAGAME.md` opens with — a doc that
-  restates a number is a doc that will disagree with the code.
-
-**The wall in the hall is the quest log.** The Lanternkeeper's board shows all
-twelve slots: empty, broken, or lit. That is where "what is still out there" is
-answered, it is why `docs/SCOPE.md` can keep Quests at 0, and it is a
-`Catalogue`'s existing row list rather than a screen.
-
-### 6.5 The workings — charges, not mana
-
-Three workings, and the number three is load-bearing. What each one *answers* is
-`docs/ITEMS.md` §1. **All three are built** — Burst off the Slag Ogre, Sustain
-and Ballast off the two Verses read by the alchemist when committed through the
-Lanternkeeper's **Artifacts** service — and they are
-three rows in `ArmamentDb` and three of the six entries in `Game.RIGHT_POOL`,
-which is the whole of what "a working is a usable item" was ever allowed to cost
-(`docs/ITEMS.md` §8, D5, closed 2026-08-11).
-
-| Working | From | Charges | What it does |
-|---|---|---|---|
-| **Burst** | The Slag Ogre (§5.2) | Bought | The thrown arc, the fuse, the cracked wall |
-| **Sustain** | The Sustain-Verse, read | Bought | The Heat chain holds through **one** break (§2) |
-| **Ballast** | The Ballast-Verse, read | Bought | Burn the cheapest stack in the bag for a soak window |
-
-**They are usable items.** Each is a stop on the right-hand ring, cast with RB or
-RT like the bow, selected with D-pad ← →. Nothing about the input layer changes.
-
-**Charges are arrows**, and as of card #98 (2026-08-11) they are sold beside
-them in the quartermaster's **Trade** stock (`docs/METAGAME.md` §6.4's table). This
-paragraph said "the alchemist" and it was wrong twice over. A charge is not
-brewed out of anything the floor drops — the sentence that made the case for it
-was already on his own catalogue file — and he does not stand in the yard until a
-boss is dead, so a hero who had just taken Burst off the Slag Ogre had no counter
-to buy ammunition at. What survives unchanged is the *relationship*: a charge is
-a stock you paid for in the garrison before you left, exactly like a bottle.
-**They do not refill underground.** The trip budget and extraction pressure
-require that: a resource that comes back mid-run softens the walk home. Saving
-or loading in the dungeon restores the current trip; it does not refill it.
-Spending your last charge on floor 2 is still a statement about how deep you
-were planning to go.
-
-**Charges live in the HUD column with arrows and stamina, never in the bag.** The
-bag is the pressure valve and it does not get taxed twice.
-
-**And the numeral is on the hand that spends it, whichever hand that is.** A
-working is its own count, so its cell carries the number outright. The bow only
-spends one, so its cell **borrows** the quiver's count — unless the arrows are
-in the other hand, which is the one loadout where the number is already on the
-row (`ArmamentDb.hand_count_beside`, #53). One numeral per row, and never a row
-without one: *"how many arrows do I have"* is asked mid-fight, and the loadout it
-is asked in most is bow-right with the guard still up.
-
-**Sustain and Ballast both sharpen §2 rather than softening it.** Sustain makes
-speed cheaper *and* raises the fee, because Heat rides in the bag — the one
-question asked twice in one button. Ballast is the sharpest form of it in the
-game: the thing you came down for is the thing that keeps you alive, and casting
-it is eating your own profit.
-
-**The ceiling is the ring, not the manifest.** Sword, bow, hookshot, Burst,
-Sustain, Ballast is **six stops**, and `docs/CONTRACT.md` §4.1 chose rings over
-bindable slots on the grounds that a ring you can *count* beats a binding you
-have to remember. Six is where counting stops being free. **There is no fourth
-working**, and the reason is a thumb rather than a budget.
-
----
-
-### 6.6 The gear loop — what the gold and the components are for
-
-Pillar 4 says permanence is bought. This is the shop.
-
-**Five stats, and there is no sixth.** Damage, speed, max health, stamina, soak.
-Every one of them is a number the player can feel inside one run, which is the
-rule `scripts/core/consts.gd` already states over the forge ladders: *no
-percentages, no stat sticks, nothing you have to take on faith*. A stat that
-needs a tooltip explaining why it matters is a stat that does not matter.
-
-They are listed on the equipment screen, beside the paper doll that already
-draws what you are holding — a THE HERO card of exactly five rows, every one of
-them read back through a `Game` accessor and **never recomputed in the panel**.
-A panel that does its own arithmetic is a second source of truth, and it drifts
-the first time a ladder changes.
-
-**And the doll is the whole build, not just the hands.** The WORN column on that
-screen is the figure with all eight slots hung off it — the four plate pieces
-down the left, the four stones down the right, each plate saying which path it
-committed to and how many of its rungs are bought, each wired by a leader line
-to the part of the body it is worn on. It is the only place in the game the
-eight appear together: the smith knows about plate and the jewelcrafter knows
-about stones, and neither counter can answer *what am I wearing, all of it, at
-once.*
-Read-only, because there is nothing to set — a piece of plate is a ladder you
-climbed and it does not come off.
-
-> **Built, 2026-08-09.** Everything in §6.6 is in the code and asserted by
-> `tools/directors/forge_loop.gd` and `tools/directors/jewel_loop.gd`. The
-> numbers below are the shipped ones, not targets. `docs/METAGAME.md` §6.5 and
-> §6.7 carry the tables and the recipes.
-
-#### The armour — four pieces, two paths
-
-`plate` was one ladder. It is now **four**: chest, legs, arms, boots. There is
-no modular armour art and there is not going to be — the hero's model is the
-hero's model, and every one of these is a number (`Game.armour_soak()` is
-already exactly that today).
-
-Every rung is a **choice of two**:
-
-> **Heavy** buys more soak and costs a little speed. **Light** buys less soak,
-> costs no speed, and is cheaper in components.
-
-That is the whole fork, and it is a real decision because speed in this game is
-not a convenience — the roll is the defence (`docs/CONTRACT.md` §4), and a hero
-who rolls slower dies to things he used to beat. Four pieces means you are not
-picking *one* answer, you are picking a mix: heavy chest and light boots is a
-build, and so is the opposite.
-
-**A piece commits.** Once a piece has taken a rung on one path, the other path is
-closed for that piece — you cannot buy three heavy rungs and then walk into light.
-Implementation: the two paths are two track ids and the sibling's ceiling drops
-to zero, so `Game.upgrades` stays `{track: int}` and nothing new is stored.
-
-**But it can be undone at the counter, and the price is the point.** *Added and
-built 2026-08-10* — a REFORGE row at the bottom of the smith's board and a RECUT
-row at the bottom of the jeweller's, one per piece and per slot, priced at **0
-gold** on the face of the card. "No re-spec" was written against a re-spec that
-costs **gold**, and that objection is right — a build you can undo for gold is a
-menu. §3 supplies a better price:
-
-> **Reforge (smith).** The plate goes back in the fire. **The components come
-> back. The gold does not.** The piece returns to rung 0 and the fork opens
-> again — one press, whatever rung it had reached.
->
-> **Recut (jewelcrafter).** You cannot melt a stone. **It comes back one rung
-> lower and the material is lost to the wheel.** Emptying a slot is four presses
-> and four stones.
-
-**Components are the pacing gate and gold is the grind** (§3), so changing your
-mind should cost you *time in the grind* and never *progress through the gate*.
-A player who reforges a full-heavy chest at hour twelve is out a couple of runs'
-takings and keeps every Cold Iron Core — they can rebuild at once, and what they
-actually paid was the walk. It stops being a menu because the purse feels it, and
-it stops being a wall because the scarce thing is conserved.
-
-The asymmetry between the two counters is physical rather than balance-driven:
-**metal is conserved, stone is not.** The jeweller stays the harder commitment,
-which is correct, because she already ships a hedge the smith does not — two ring
-slots drawing on the same pair, so *one Edge and one Swift* is a legitimate build
-rather than a mistake you have to buy your way out of.
-
-**Eight decisions, not twenty.** The four gear ladders (edge, guard, string,
-chain) have no fork and nothing to undo. The commitment only ever bites on four
-armour pieces and four jewel slots, which is what makes this cheap to offer: two
-rows on catalogues that already exist.
-
-**The speed cost never touches `K.RUN_SPEED`.** That constant is `[oot]`,
-measured, and pillar 1 says the feel is not negotiable. The penalty is a
-multiplier applied on top of the curve, and **all four pieces at full heavy caps
-at −8%** — enough to feel in a corridor, not enough to stop being Ocarina.
-
-**Rung 0 is the piece you start in, and there are three to buy** — `K.FORGE_MAX`,
-same as every other ladder, so the split changes the table's width and not its
-height.
-
-**The constraint that matters more than any starting value: the four pieces
-*together* must land about where the one `plate` ladder landed.** `K.PLATE_SOAK`
-is `[0, 1, 2, 3]` today — a maximum of three quarter-hearts off a blow — and
-every enemy in the game is tuned against that ceiling. Four pieces each running
-0→3 would be **twelve**, which is not four times better armour, it is the floor
-in `Hero.hurt` (never lighter than one quarter) absorbing the whole difficulty
-curve. Every hit in the game would land for one quarter and §7's *difficulty
-comes from depth* would be dead.
-
-So: **full heavy across all four pieces totals exactly 4, and full light exactly
-2.** The per-piece tables are fractional for that reason — heavy runs
-`0 / 0.4 / 0.7 / 1.0` quarters and light `0 / 0.2 / 0.35 / 0.5` — and nothing
-carried over from `PLATE_SOAK`, which was written for one piece. `forge_loop`
-beats P1 and P3 print the sums every run.
-
-The speed multiplier is the safer half: per-piece heavy rungs multiply, and four
-pieces at heavy rung 3 come to **exactly 0.92** because `PLATE_HEAVY_SPEED` is
-`0.92^(k/12)`. Multiplication rather than a special case that watches for the
-fourth piece.
-
-#### The jewelcrafter — four slots, eight specializations
-
-A fifth counter, and the only new NPC this game gets. She is a `Catalogue`
-subclass and a row in `Npc.COUNTERS`. Her **Upgrades** service uses the shared
-NPC service screen's linear progression layout (`docs/SCOPE.md` §1 keeps **new
-UI screens at 0**, and this does not break it).
-
-Four slots: **an amulet, two rings, and a bracelet.** Each is bought as a plain
-base, then specialized once, then climbed **four rungs** — one deeper than a
-forge ladder, because a jewel has no rung 0 you already own.
-
-The same soak warning applies to **Ward** and the same speed warning to
-**Swift**: a jewel path and an armour path that both move the same stat are two
-faucets on one number, and the ceiling is the number's, not each faucet's. In
-code that is `K.SOAK_MAX`, `K.EDGE_MAX`, `K.STAMINA_MAX`, and the 1.0 clamp
-inside `Game.speed_mult()` — never a cap per ladder. `jewel_loop` beats F0–F4
-open both faucets on each and assert the cap holds.
-
-Her rungs are **not** rationed by `RelicDb.forge_rungs_known()`. Relics ration
-the smith; one relic drop must not control two counters.
-
-| Slot | Path A | Path B |
-|---|---|---|
-| Amulet | **Vigor** — max health | **Focus** — max stamina |
-| Ring (×2, same pair) | **Edge** — damage | **Swift** — speed |
-| Bracelet | **Ward** — soak | **Wind** — stamina regen |
-
-The two rings draw on the same pair on purpose: two Edge rings and one of each
-are different builds, and that is where the variety comes from without a ninth
-path existing.
-
-**Jewelry is where speed is bought back.** Armour trades speed for soak; a Swift
-ring trades a damage slot for it. That is the loop's one genuinely hard standing
-question, and it is the same shape as §2's — *what are you willing to carry?*
-
-#### What this loop deliberately does not become
-
-- **No relic is a stat** (§6.3). Relics change the garrison; the ladders change you.
-  The moment a relic grants soak, the twelve stop being the reason to keep
-  playing and become twelve more rungs.
-- **No re-spec *for gold*.** A build you can undo for gold is not a build, it is
-  a menu. Reforge and Recut are above, and they are priced in the currency that
-  makes them cost something without costing progress.
-- **No sixth stat, no ninth path, no second jewelcrafter.** `docs/SCOPE.md` §1
-  carries all three as counts.
-- **No armour visuals.** Every piece is a number. Modular armour art is four
-  meshes times two paths times four rungs, against a hero rig this project has
-  already had to fix three times (`CLAUDE.md` §4).
-
----
-
-### 6.7 Garrison life — home is a second mode, not a faster shop
-
-The dungeon loop cannot be the only game. If returning home means pressing
-**Sell All**, buying the next rung and immediately descending, then the garrison
-is a loading screen with counters in it. Story beats do not solve that: a quest
-which only asks for another descent is the first loop wearing dialogue.
-
-The intended contrast is smaller than a town simulation and more physical than
-a menu. **The garrison is an expedition people have to keep running.** Kael is
-not its blacksmith, apothecary or ruler; he is the cadet who moves between all of
-them and takes responsibility for the work nobody at a counter can do. Home play
-must therefore satisfy four rules:
-
-1. it is performed in the garrison or its bounded exterior, not inside a service
-   catalogue;
-2. it visibly changes how the outpost behaves, even when the mechanical reward
-   is modest;
-3. it offers a choice of what to do with a day rather than another mandatory
-   step on every dungeon run; and
-4. each activity earns its existence as a complete prototype before another
-   chore, relationship ladder, economy or building system is approved.
-
-**The first proof is Keep the Hearth.** Once the maker's mark brings Brannoc to
-the yard, Aldric assigns Kael to maintain the fire. Brannoc will forge a
-permanent Woodsman's Axe for **60 gold and 3 Iron Scrap from the returned bag**.
-That last cost is deliberate: the first domestic tool gives ordinary dungeon
-loot a use other than instant sale, so **Sell All** finally has an opportunity
-cost the player can understand before clicking it.
-
-The axe is a tool, not a weapon. It is stored permanently in Equipment, cannot
-be dropped, sold, lost with a run, or placed in either hand, and exists only to
-authorize the physical chore. During Daytime Kael can hold the ordinary interact
-action at the Timber Yard outside the gate to cut one bundle per campaign day,
-then carry it to the central hearth. The hearth holds three bundles.
-
-The reward is causally delayed. The garrison day has three social phases:
-
-| Phase | Hours | What the garrison does |
-|---|---:|---|
-| **Daytime** | 05:00–20:00 | Work, services and the Timber Yard operate |
-| **Bonfire Time** | 20:00–23:00 | One stored bundle is consumed; everyone gathers and remains talkable; services close |
-| **Bedtime** | 23:00–05:00 | The yard closes and each keeper retires to an authored bunk or room |
-
-Only the 20:00 bonfire can grant **Garrison Warmth**. Chopping wood or depositing
-it never changes a price immediately, and the counters are already closed when
-the fire resolves, so the player cannot chop beside a vendor for an instant
-discount. A fueled fire gives the next service window a general Trade benefit:
-ordinary loot sells for **10% more** and ordinary quartermaster stock costs
-**10% less**. Warmth lasts until the following bonfire replaces it with that
-night's fueled or unfueled result. It never discounts forge, jewel, alchemy,
-artifact, extraction or permanent-upgrade costs.
-
-The pause book adds **GARRISON** beside **EQUIP**, **INVENTORY** and **MAP**. It
-is read-only and answers what a resident should be able to know: the time and
-next phase, hearth stock and current Warmth, today's duty state, who has arrived
-and what they are doing, and which relic effects and Elder improvements are
-active. It cannot chop, deposit, buy, turn anything in or advance time.
-
-This is a prototype gate, not the first branch of a farming game. No gifts,
-relationships, romance, mining, additional chores, caravans, market simulation,
-freeform crafting profession, Valenfeld construction or base building follows
-from it automatically. `docs/GARRISON_LIFE.md` owns the detailed state, save,
-pricing, UI and deterministic proof contract. Further home-game work is
-authorised only if a human playtest finds that this one responsibility makes the
-yard feel worth inhabiting between descents.
-
----
-
-## 7. Difficulty comes from depth, not from you
-
-**Bands, never level-scaling.** Rooms carry a distance from the entrance, and
-that distance and the floor's own manifest choose what spawns. Skeletons and
-goblins in the Cistern; kobolds and orcs in the Foundry; wraiths in the Choir;
-trolls and iron knights at the Chord Gate.
-
-Monsters get harder because *you walked further*, not because you got stronger.
-Scaling the world to the player flattens the map into wallpaper, makes a tenth
-run's entrance exactly as dangerous as a first run's, and quietly deletes the
-reward for every upgrade you bought. Oblivion's own designer called it a mistake.
-We are not repeating it.
-
-The corollary: **the Cistern's mouth stays easy forever.** That is what makes a
-short cautious run a real option instead of a wasted one.
-
-The per-floor curve lives in one file, `scripts/core/progression.gd`, and nothing
-else gets a curve of its own. It stops in exactly the places where continuing
-would make the game unreadable: the telegraph never compresses past 60%, and a
-room never holds more than seven.
-
-### 7.1 The slider that goes the other way
-
-**Added and built 2026-08-10** — `Settings.mercy` on the GAME tab, and
-`Game.deaths` in the save file. Pillar 2 says *greed is the difficulty slider* —
-and it is a good line, but it is a **one-directional** slider. It lets a player
-make the game harder and offers nothing at all to a player who is stuck. Every
-game this one is measured against ships both halves: Hades has the Pact of
-Punishment going up and God Mode coming down, Celeste has assists, Returnal
-relented.
-
-So: **an options toggle, driven by deaths rather than by a menu.** It starts at a
-small damage resistance, climbs a couple of points every time you die, and caps
-well short of invulnerable. It can be switched on or off at any moment and it
-disables nothing — no ending, no plaque, no relic.
-
-The numbers, from `K`: **5%** at zero deaths, **+2.5%** per death, capped at
-**30%**. A one-quarter blow is never softened at all — a hit that can be reduced
-to nothing stops being a reason to move — and the fraction is carried between
-blows in `Game._mercy_carry` rather than rounded per hit, because rounding 30%
-of a two-quarter blow gives nought every single time and a dial that advertises
-a percentage has to actually charge it.
-
-Three properties, and each one is the reason it is this design and not a
-difficulty menu:
-
-- **It is driven by deaths**, so it only ever reaches the player who is actually
-  stuck. Nobody is asked to declare themselves bad at the game before they have
-  played it, which is the thing an EASY / NORMAL / HARD screen asks on the title
-  card.
-- **It does not touch the world.** The bands, the spawns and the telegraphs are
-  untouched, so §7 is intact — this is not level-scaling by another name. The Cut
-  stays exactly as dangerous; the hero stops dying to it.
-- **It lives in options and not in the fiction.** Hades can make it a boon
-  because Hades has gods who talk to you. This game has five counters, one of
-  whom is an elder with three lines, and no dialogue (`docs/SCOPE.md`: dialogue
-  trees, 0) — and the elder is the closest thing to a temptation here, which is
-  exactly why he says the same two things forever. A voice is not a conversation, and inventing
-  an NPC to hand over a mercy is how §6.1 gets broken. Name it plainly and put it
-  in the menu.
-
----
-
-## 8. The endgame
-
-Two endings, both cheap, and neither one is a grind wall.
-
-**The Lantern Ending** — kill the Riven Knight and take the Far Lantern. You come
-home and tell true. Credits. This is the end of the game as advertised, it is
-reachable in a single evening's play by a good player, and **it is the ending the
-store page promises.**
-
-It also unlocks **the Long Descent**: the endless generated dungeon that already
-exists, entered from floor 4's shortcut door. Bands mix, the `Prog` curve runs
-without a ceiling, and how deep you got is the score — carved on a plaque in the
-square that names your record. The twelfth relic, **the Riven Chord**, is in a
-chest on floor 10, which gives the mode a finish line for players who want one
-and a scoreboard for players who don't.
-
-**The Chord Ending** — donate all twelve relics and buy every ladder to rung 3.
-The College fires the resonance-pillar, every lamp in Valenfeld comes on at once,
-and the game ends a second time, properly. This is the completionist ending and
-it is the only thing in the design that asks for all of anything.
-
-That is the whole endgame. **There is no third ending, no New Game+, no
-ascension, no prestige, no daily.** The honest answer to "what happens when you
-have everything" is: the credits roll, the plaque has your name on it, and the
-game is over. A game that refuses to end is a game that cannot be finished, and
-this one ships.
-
----
-
-## 9. What the player does with their hands
-
-Camera-relative movement on the left stick. Both right shoulders are the sword —
-RB the light chain, RT the heavy — and whatever you draw takes them over. LT is
-the guard and the lock. The face buttons are one verb each: A talks, B dodges and
-holds to run, X drinks the selected bottle, Y jumps. The D-pad steps rings rather
-than holding bindings: ← → walk the right hand through the weapons you own, ↓
-steps the bottle, ↑ swaps the whole loadout. Extraction is a **hold** — a
-decision you can make by fumbling a button is not a decision.
-
-**LB is the kit wheel**, and it is the one hold whose *release* is the press.
-Hold it and eight slots come up around the hero with everything on them showing;
-point the right stick or the mouse at one and let go, and it goes where it
-belongs — a weapon to the right hand, a bottle to the slot X drinks from. It
-binds a new item to a free slot the moment you pick it up, so it is never a menu
-you have to visit first, and it never asks you to remember which direction
-anything is on, because it is showing you for as long as you are holding it.
-That is the whole reason it can exist beside rings that were chosen to avoid
-exactly those two costs (`docs/CONTRACT.md` §4.1, §4.2).
-
-The **air slam** is the one verb with no button of its own: either sword button,
-pressed while airborne and unarmed, hangs the hero for a beat and drives him into
-the floor. Jump is already the commitment — you are in the air with no way to
-change your mind — and the slam only charges for what that commitment was already
-costing.
-
-Three more verbs have no button of their own either, and all three are the same
-button meaning something better for a moment because you read the fight right:
-
-- **The parry** — LT held, **A** pressed, in the quarter-second before a blow. It
-  drops the guard to do it, so a miss is a hole; a hit throws the attacker and
-  opens a window in which RB is the **dash**. It is the only thing in the kit
-  that moves a boss. A is the interact button everywhere else, and a raised
-  shield is what tells the two apart — you cannot be talking to something and
-  guarding against it at the same time, so the stance arbitrates and no press is
-  ever ambiguous. It sat on RB until it was moved, and moving it is what made
-  **RB and RT reachable straight out of a block**: the sword no longer waits for
-  the shield to come down.
-- **The perfect dodge** — B, into a blow rather than away from it. Time slows,
-  and RB becomes a **leaping overhead** for a second and a half.
-
-They are deliberate opposites: the parry is aggressive and punished, the dodge is
-safe and passive, and neither adds an input. Why, at length: §4.1. The numbers:
-`docs/BESTIARY.md` §3.6.
-
-Full input map and pad bindings: `docs/CONTRACT.md` §4.
-
----
-
-## 10. Deliberately rejected
-
-Each of these has a reason, and the reason is the point. `docs/SCOPE.md` §2 holds
-the longer list and the rule for adding to it.
-
-- **Level-scaled enemies** (§7).
-- **A bag upgrade path that removes bag pressure entirely.** The cap is the game.
-- **Consumable healing found underground.** Bottles are a stock you *bought* in
-  garrison before you left. When the stock is gone, leaving is still the only answer.
-- **A second scene-change path.** `Flow` owns transitions.
-- **Hover boots.** They tax the authoring of every room in the game — a traversal
-  item needs gaps to traverse, everywhere, forever — and they open no door the
-  Burst-Verse cannot. The fantasy is real and it is a sequel's.
-- **A spell school, a mana bar, or a fourth working.** Magic in this game is
-  three usable items with charges (§6.5). The moment it has a resource of its
-  own it wants ranks, then schools, then a class — and `docs/SCOPE.md` §2 has
-  already refused classes. The cap is the ring: six stops, `docs/CONTRACT.md`
-  §4.1.
-
-  **A blue bar shipped anyway, and the refusal still stands** — because what
-  shipped is not what this line refuses. It is a **price on one sword move**: the
-  charged spin costs `K.MAGIC_SPIN` out of `K.MAX_MAGIC`, four spins a trip, and
-  it refills only when you leave the dungeon (`RunState.enter/extract/die`). No
-  spell is attached to it, nothing casts from it, and no item spends it — the
-  three workings still run on their own charges. It exists because the spin was
-  free and free swept every room; see `docs/SCOPE.md` §2 for the line it must not
-  cross.
-- **A relic that works when you pick it up.** §6.4. It was the one thing in the
-  design breaking pillar 4.
-- **A map screen.** The floors are ten rooms and the Sounding-Rod is the answer
-  to "where is the good chest." A map is a system that makes a small place feel
-  like it needs one.
-- **Relics as a drop table.** Twelve named objects in twelve named places. The
-  moment a relic can *roll*, it stops being a thing you remember finding.
-- **A thirteenth relic.**
-- **A sixth stat, a ninth upgrade path, a re-spec priced in gold, and armour you
-  can see.** All four are §6.6, which holds the reasons. The short forms: a stat
-  that needs a tooltip does not matter; a build you can undo *for gold* is a
-  menu — which is why Reforge is priced in the grind and refunds the gate; and
-  modular armour art is four meshes × two paths × four rungs against a rig this
-  project has already had to fix three times.
-- **A difficulty menu on the title card.** §7.1 is the answer instead, and the
-  difference is that it never asks anyone to rank themselves before they have
-  played.
-- **A locked door standing in for a puzzle.** §5.3. It was the thing in this
-  design most obviously borrowing Zelda's noun without paying for the verb.
-
----
-
-## 11. How we know it works
-
-Not by a test suite. By running it and looking:
-
-```bash
-tools/quiet.sh --path . -s tools/shoot.gd -- --scene=res://scenes/rooms/garrison.tscn --director=res://tools/directors/mvp_loop.gd --out=/tmp/mvp/x.png --warmup=60
-```
-
-`mvp_loop.gd` walks sell → buy → descend → fight → loot → chest → hold the pad →
-home, prints what it observed at each seam, and says `MVP FAIL` when a beat did
-not happen. `monster_lookdev.gd` does the same job for the roster. Every
-milestone in `docs/SCOPE.md` §3 names the director that closes it.
-
-See `CLAUDE.md` §2. The frames are the proof.
+This document owns the north-star game design. Read [NOW.md](NOW.md) for the
+active proof, [SCOPE.md](SCOPE.md) for the ceiling, and [README.md](README.md) for
+focused system owners.
+
+## 1. Elevator pitch
+
+> An Ocarina of Time-style roguelite where you find artifacts, solve ancient
+> puzzles, improve a living garrison, and defend what you built when monsters
+> raid after dark.
+
+The experience balances four strong flavors:
+
+> base building <> warm campfire/home moments <> Indiana-Jones dungeon diving
+> <> defending something built with real stakes
+
+The Sunken Cut supplies danger, discovery, and salvage. The Highbridge garrison
+turns it into capability, belonging, and something worth protecting. Neither
+half is a lobby for the other.
+
+## 2. Player fantasy
+
+You are Kael, a silent cadet of the Far Lantern Society: explorer, puzzle-solver,
+fighter, and increasingly trusted resident of a frontier expedition.
+
+You descend into a dead civilization with a small kit and imperfect knowledge,
+read rooms, improvise with physical systems, decide what risk is worth taking,
+and bring singular discoveries home. At the garrison, they become tools,
+services, routines, visible improvements, and defenses.
+
+The fantasy is knowing the people, walking the yard, seeing what changed,
+sleeping while others keep watch, and choosing whether to trust what everyone
+built together—not command from a distant menu.
+
+## 3. Design pillars
+
+### Ocarina feel is non-negotiable
+
+Movement, camera, targeting, combat, readable enemies, and item-driven puzzles
+must feel deliberate and physical. New features do not excuse a weaker
+moment-to-moment game. [CONTRACT.md](CONTRACT.md) owns measured implementation
+rules.
+
+### Adventure rewards curiosity
+
+The player should want to look behind the wall, revisit an old route with a new
+verb, test an interaction, and learn what a named object changes. Authored
+anchors give discoveries identity; generated connective spaces keep routes from
+becoming rote.
+
+### Greed authors danger
+
+Difficulty is partly a decision: go deeper, move faster, carry more, or leave.
+The ordinary Escape Rope ends a descent, but using it has a known cost. The game
+must preserve choices where caution and ambition are both defensible.
+
+### Home is built, lived in, and defended
+
+The garrison changes because of the player's expeditions, but it also has a
+civil rhythm and responsibilities of its own. Its people work, gather, sleep,
+build, and face consequences. A defense matters because it belongs to a home the
+player has inhabited.
+
+### Consequences are legible and recoverable
+
+Warnings arrive before commitments. Losses are visible and attributable. A
+setback should create a recovery story, not invalidate a save. The player should
+be able to explain what happened, why, and how to put it right.
+
+## 4. Game loop
+
+1. **Prepare, build, and live.** Use the garrison's services, tend current
+   responsibilities, choose equipment, and see what the outpost needs.
+2. **Delve, explore, and loot.** Fight readable encounters, solve ancient
+   mechanisms, find artifacts, and decide what deserves scarce carrying space.
+3. **Receive warning.** A raid warning may arrive while the player is safe,
+   committed, or painfully close to a discovery.
+4. **Choose.** Continue the descent, retrace the stairs, or use the normal
+   Escape Rope and end the run normally. Floor 1's up stair reaches the same
+   priced extraction settlement. A raid call never teleports the player and
+   never provides a special free extraction.
+5. **Defend or trust preparations.** Return and fight, or remain away and rely
+   on the defenses and people already in place.
+6. **Repair and recover.** Read the outcome in the garrison, restore what was
+   lost, and adjust future preparations.
+7. **Descend again.** A new curiosity, need, recovery goal, or ambition
+   re-primes the loop.
+
+The central decision is not simply “stay or go home.” It is “what matters most
+right now, and what have I done to make either answer survivable?”
+
+## 5. Magic moments
+
+- A thrown explosive barrel starts a chain reaction through a room.
+- A hanging lantern drops onto a barrel and turns observation into a plan.
+- The world pauses as night falls or the sun rises: a brief full-screen title,
+  the new day number, and one unmistakable natural sound mark the change.
+- The raid warning arrives at the worst possible moment: deep, loaded, and near something the player badly wants.
+- A distant horn tears the player out of sleep and into a garrison already moving.
+- The first defense the player built fires when it matters.
+- A stolen artifact leaves a visibly empty mount in the relic hall.
+- After a successful defense, the player returns to the campfire and finds home bruised but alive.
+
+These moments are promises, not permission to build every supporting system
+now. [NOW.md](NOW.md) names the smallest active proof.
+
+## 6. Game progression
+
+Progression is a change in relationship to the same place, not an act-by-act
+inventory.
+
+### Arrival
+
+The garrison is sparse and functional. Kael is briefed, learns its people and
+services, and makes the first descent as a newcomer with little to lose.
+
+### Belonging
+
+Repeated returns create familiarity. New residents and routines make the yard
+feel inhabited; artifacts and upgrades create visible, useful change. Warmth at
+the hearth matters because the player knows the work behind it.
+
+### Responsibility
+
+The player is trusted with needs larger than personal equipment. Building a
+defense is optional, but the garrison's safety becomes a consequence the player
+can influence.
+
+### Preparedness
+
+Knowledge, tools, shortcuts, supplies, and authored defenses let the player plan
+for deeper risks. Preparation expands viable choices without erasing danger.
+
+### Mastery
+
+The player reads combat and puzzles fluently, makes confident risk decisions,
+recovers from setbacks, and completes the expedition knowing the garrison
+became capable through their actions.
+
+## 7. Feature set
+
+### Core
+
+- Weighty third-person movement, targeting, sword-and-shield combat, committed dodges, and readable enemy telegraphs.
+- One finite descent built from generated rooms and authored floors, puzzles, encounters, shortcuts, bosses, and unique artifacts.
+- Bidirectional floor stairs that preserve the live trip; only floor 1's up
+  stair extracts, using the ordinary priced settlement.
+- A constrained bag, ordinary extraction, recoverable loss, and distinct uses for gold, components, and artifacts.
+- Item verbs that open combat and puzzle possibilities rather than merely raising numbers.
+- One living garrison where services, upgrades, artifacts, civil time, Firewood/Hearth, and visible change make returning a mode of play.
+- A finite expedition with an ending; the existing endless descent remains
+  post-credits play.
+
+Focused owners in [README.md](README.md) specify these systems.
+
+### Prove next
+
+Only the authored one-raid vertical slice in
+[design-tests/RAID_LOOP_PROOF.md](design-tests/RAID_LOOP_PROOF.md): one warning
+sequence, one optional defense, one attack, one recoverable theft, and one
+occurrence.
+
+### Later only if proven
+
+- Production expansion within the hard caps in [SCOPE.md](SCOPE.md).
+- More raid cadence, defenses, routes, attackers, or garrison roles only after
+  the active choice proves interesting and a separate scope decision authorises
+  each addition.
+- The barrel-and-lantern interaction family only as its own bounded proof; it is
+  not part of the raid slice.
+- Further home-life responsibilities only when Firewood/Hearth or a successor
+  test shows that they deepen belonging without becoming chores.
+
+### Not planned
+
+- Freeform construction or a settlement-placement game.
+- A second garrison, open overworld, housing economy, farming, romance, factions,
+  classes, skill trees, or multiplayer.
+- Level-scaled enemies, portable or dungeon-accessible storage, free fast
+  travel, permanent loss of unique artifacts, or a special raid extraction.
+- A spell school, a fourth working, procedural bosses, or production content
+  without an approved proof.
+
+## 8. Lore premise
+
+Valenfeld stands over the buried works of the Vyr, an ancient people who
+withdrew to their sky-seat and left dangerous machinery, unanswered puzzles,
+and stolen history below.
+
+The playable home is not Valenfeld itself. It is Highbridge garrison, a small
+walled expedition at the head of the Sunken Cut. Highbridge holds the ground;
+the Explorer's Guild funds the dig; the Far Lantern Society sends people like
+Kael to descend, recover the truth, and return safely.
+
+Aldric Vane commands the outpost and keeps the Society's relic record. The
+garrison's limited cast, services, and comforts are a feature of the premise:
+this is a working frontier home beside a dangerous shaft, not a compressed
+city.
+
+The Vyr ruins should invite discovery more often than explanation. Lore appears
+through places, mechanisms, artifacts, and short human reactions. Shared world
+canon belongs to [CANON_BRIDGE.md](CANON_BRIDGE.md); local story discipline
+belongs to [LORE_AND_STORY.md](LORE_AND_STORY.md).
+
+## Legacy citation index
+
+Code comments may still cite the former GDD numbering. Use this map until those
+citations are naturally touched.
+
+| Old citation | Current owner |
+|---|---|
+| §1 Pitch | GDD §§1–2 and §8 |
+| §§2–3 Risk, rewards, document case | [METAGAME.md](METAGAME.md) |
+| §4 Pillars and combat answers | GDD §3; [BESTIARY.md](BESTIARY.md) |
+| §5.1 Descent structure | [SCOPE.md](SCOPE.md); [PUZZLES.md](PUZZLES.md) |
+| §5.2 Items | [ITEMS.md](ITEMS.md) |
+| §5.3 Forks and puzzles | [PUZZLES.md](PUZZLES.md) |
+| §§6.1–6.6 Relics, workings, gear, economy | [METAGAME.md](METAGAME.md); [ITEMS.md](ITEMS.md) |
+| §6.7 Garrison life | [GARRISON_LIFE.md](GARRISON_LIFE.md) |
+| §§7–7.1 Difficulty and mercy | [BESTIARY.md](BESTIARY.md); [MECHANICS.md](MECHANICS.md) |
+| §8 Endgame | GDD §§6–7; [SCOPE.md](SCOPE.md) |
+| §9 Input | [CONTRACT.md](CONTRACT.md) |
+| §10 Rejections | [SCOPE.md](SCOPE.md) |
+| §11 Proof | [NOW.md](NOW.md); [MDA.md](MDA.md); [design-tests/](design-tests/) |

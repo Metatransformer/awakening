@@ -1,58 +1,62 @@
 # Design documentation
 
-Start here. This page says where each kind of truth lives; it does not repeat
-that truth.
+Read these three files in order. A cold reader should understand the game, its
+current proof, and its boundary in under ten minutes.
 
-| If you need… | Read… |
+1. [GDD.md](GDD.md) — the north-star game design.
+2. [NOW.md](NOW.md) — the one question authorised now.
+3. [SCOPE.md](SCOPE.md) — the cap table and production boundary.
+
+This page is the authority map. It points to truth instead of repeating it.
+
+## Required design reading
+
+| Owner | Owns |
 |---|---|
-| The work authorised now | [`NOW.md`](NOW.md) |
-| Game identity, player experience and pillars | [`GDD.md`](GDD.md) |
-| Prototype boundary, release ceiling and milestone record | [`SCOPE.md`](SCOPE.md) |
-| Economy and the descent/garrison loop | [`METAGAME.md`](METAGAME.md) |
-| The bounded home-game prototype and its expansion gate | [`GARRISON_LIFE.md`](GARRISON_LIFE.md) |
-| Puzzle design | [`PUZZLES.md`](PUZZLES.md) |
-| Encounters and boss fight shapes | [`BESTIARY.md`](BESTIARY.md) and [`BOSSES.md`](BOSSES.md) |
-| Items and where they enter the loop | [`ITEMS.md`](ITEMS.md) |
-| Implementation contract, units and interfaces | [`CONTRACT.md`](CONTRACT.md), then [`../CLAUDE.md`](../CLAUDE.md) |
-| Visual style and HUD authority | [`STYLEGUIDE.md`](STYLEGUIDE.md) |
-| Evidence and reference material | [`OOT_CATALOGUE.md`](OOT_CATALOGUE.md) and [`../refs/REFERENCE.md`](../refs/REFERENCE.md) |
-| How mechanics should produce the intended experience | [`MDA.md`](MDA.md) |
-| The full mechanics ledger, status and MDA traceability | [`MECHANICS.md`](MECHANICS.md) |
-| How design work proceeds | [`DESIGN_PROCESS.md`](DESIGN_PROCESS.md) |
-| How playtests are run | [`PLAYTESTING.md`](PLAYTESTING.md) and [`playtests/`](playtests/) |
-| Design hypotheses, tests and decisions | [`design-tests/`](design-tests/) |
-| Story and lore discipline | [`LORE_AND_STORY.md`](LORE_AND_STORY.md) |
-| Shared canon between Awakening and Valenfeld | [`CANON_BRIDGE.md`](CANON_BRIDGE.md) |
-| Historical or superseded material | [`archive/`](archive/) |
+| [GDD.md](GDD.md) | Pitch, fantasy, pillars, loop, progression, feature intent, and lore premise |
+| [NOW.md](NOW.md) | The only active question and the work currently authorised |
+| [SCOPE.md](SCOPE.md) | Hard caps, the production freeze, and what is later or not planned |
 
-## Authority rules
+## Focused references
 
-- `NOW.md` says what is authorised now. It never describes everything the game
-  may someday contain.
-- The GDD, SCOPE and system documents are current canon, not chronological
-  diaries. Edit the owner of a changed fact in place.
-- `MDA.md` maps intended aesthetics to hypothesised dynamics and the mechanics
-  expected to produce them. It is a model to test, not evidence that they occur.
-- `MECHANICS.md` inventories every committed player-facing mechanic and links
-  it to an MDA target, canonical owner and evidence state.
-- Files under `design-tests/` hold uncertain hypotheses, rationale,
-  precommitted criteria, results and decisions.
-- Files under `playtests/` hold observations, timecodes and player quotes. They
-  do not hold design conclusions.
-- A fact has one owner. Other documents link to that owner instead of copying
-  it.
-- Do not bulk-move the named documents above. Code comments and tools cite their
-  stable paths.
+A reference may be long only when its subject is narrow.
 
-## Historical paths
+| Subject | Named owner |
+|---|---|
+| Descent, rewards, economy, and services | [METAGAME.md](METAGAME.md) |
+| Garrison rhythm, Firewood/Hearth, and the bounded raid | [GARRISON_LIFE.md](GARRISON_LIFE.md) |
+| Player-facing mechanics inventory | [MECHANICS.md](MECHANICS.md) |
+| Items and their place in the loop | [ITEMS.md](ITEMS.md) |
+| Puzzle grammar | [PUZZLES.md](PUZZLES.md) |
+| Ordinary enemies | [BESTIARY.md](BESTIARY.md) |
+| Boss encounters | [BOSSES.md](BOSSES.md) |
+| Story and local lore | [LORE_AND_STORY.md](LORE_AND_STORY.md) |
+| Shared Valenfeld canon | [CANON_BRIDGE.md](CANON_BRIDGE.md) |
+| Visual style and HUD presentation | [STYLEGUIDE.md](STYLEGUIDE.md) |
+| Units, interfaces, input, and implementation contracts | [CONTRACT.md](CONTRACT.md) |
+| Design method | [DESIGN_PROCESS.md](DESIGN_PROCESS.md) |
+| Playtest method | [PLAYTESTING.md](PLAYTESTING.md) |
 
-These files remain where existing references expect them, but they are not
-current authority:
+## Evidence and history
 
-- [`../DESIGN.md`](../DESIGN.md) is the superseded HUD design. Current visual
-  and HUD authority is `docs/STYLEGUIDE.md`; implementation truth remains in the
-  code and `docs/CONTRACT.md`.
-- [`HUD_PLAN.md`](HUD_PLAN.md) is a historical HUD planning and decision record.
-  Current authority is `docs/STYLEGUIDE.md` plus the as-built code.
-- [`CONTRACT.topdown.old.md`](CONTRACT.topdown.old.md) is the superseded
-  top-down build contract. Current authority is `docs/CONTRACT.md`.
+- [MDA.md](MDA.md) states the current causal hypothesis; it is not evidence.
+- [design-tests/](design-tests/) holds precommitted questions, criteria, results,
+  and decisions.
+- [playtests/](playtests/) holds observations, timecodes, and player words.
+- [archive/](archive/) holds intentionally retained superseded material.
+- Git history is the archive for replaced text. Do not create snapshot copies.
+- [OOT_CATALOGUE.md](OOT_CATALOGUE.md) and
+  [../refs/REFERENCE.md](../refs/REFERENCE.md) hold reference evidence.
+
+## Hard rules
+
+- One fact has one owner. Every other document links to that owner.
+- Active documents state current truth only.
+- Discussion, rationale, raw observation, and superseded material belong in
+  design tests, playtests, the archive, issues, or git history.
+- Links beat copied summaries.
+- Keep the stable paths named here; code comments and tools cite them.
+
+Historical compatibility paths such as [../DESIGN.md](../DESIGN.md),
+[HUD_PLAN.md](HUD_PLAN.md), and
+[CONTRACT.topdown.old.md](CONTRACT.topdown.old.md) are not active authority.
