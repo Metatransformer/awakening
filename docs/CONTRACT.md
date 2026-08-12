@@ -2087,7 +2087,10 @@ is a double-sided, unshaded alpha-MIX mesh in `Pal.MOTH` / `Pal.COBALT` /
 `Pal.BONE`, never additive and never extraction `Pal.CYAN`. Longitudinal UVs
 drive two subtle travelling waves through its HDR shader: the cobalt interior
 only just crosses the dungeon's bloom threshold while the bone rim blooms more
-strongly, producing a wet moving sheen without changing the global environment.
+strongly. Three parallel highlight currents break up the interior; travelling
+brightness runs along them without displacing their clean arc silhouettes. A
+sub-pixel screen-texture offset refracts the room through the darker gaps,
+producing a layered water-sheet read without changing the global environment.
 The
 finisher uses the same timing with only a modest opacity lift, keeping the whole
 ordinary chain visibly below `SpinVfx`'s charged spectacle. Proved at gameplay
