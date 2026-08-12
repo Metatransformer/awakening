@@ -276,12 +276,6 @@ var _arc_t: float = -1.0
 ## Camera-relative yaw of the last blow. 0 is the TOP of the circle, clockwise.
 var _arc_bearing: float = 0.0
 
-## Where the control legend is in its fade-in / hold / fade-out. -1 is "not up",
-## which is its resting state — see `KEYS_FADE`.
-var _keys_t: float = -1.0
-## True once this garrison visit has had its legend. Cleared on the way
-## underground, so coming back up shows it again. See `_refresh_visibility`.
-var _keys_armed: bool = false
 var _rim_flash_color: Color = Pal.MOTH
 var _sweep_t: float = -1.0
 ## 0..1 while the player holds the extract button at a node.
@@ -428,22 +422,12 @@ func _ready() -> void:
 	Bus.prompt_changed.connect(_on_prompt)
 	Bus.hold_changed.connect(_on_hold)
 	# Every button this overlay names is named for the device in the player's
-	# hands, so picking up a pad repaints all of it: the caps, the legend, and
-	# the prompt (which Prompt re-emits on the same signal).
-	# ...and it re-shows the legend, which is the half of decision 8 that matters.
-	# Picking up a pad is precisely the moment every cap in the player's head goes
-	# wrong, and it is the one re-show that cannot be inferred from anything else.
-	Bus.input_device_changed.connect(func(_pad: bool) -> void:
-		show_controls()
-		_repaint())
+	# hands, so picking up a pad repaints all of it: the caps and the prompt
+	# (which Prompt re-emits on the same signal).
+	Bus.input_device_changed.connect(func(_pad: bool) -> void: _repaint())
 	Bus.level_changed.connect(func(_l: int) -> void: _repaint())
 	Bus.floor_arrived.connect(_on_floor_arrived)
 	Bus.run_started.connect(_on_headline_changed)
-	# Coming back up. A player who has been underground for twenty minutes is
-	# back in the one room the legend is about, and `_refresh_visibility` will not
-	# fire for it — the hero never left the tree. Decision 38.
-	Bus.run_ended.connect(func(_e: bool, _c: Dictionary, _v: int) -> void:
-		show_controls())
 	Bus.run_ended.connect(_on_headline_changed)
 	# The toll meets the purse when the purse moves or the bag moves, and on
 	# nothing else -- those are exactly Run.extract_takes_all()'s two inputs.
@@ -785,6 +769,12 @@ func _on_screen(id: StringName, up: bool) -> void:
 ## definition, and the HUD stands down for all of them: `trade`, `stash`,
 ## `run_end`, `dialogue`.
 ##
+## **The legend itself is gone** (card #121) and the rule it was the evidence for
+## is not. The bars, the money rim, the extraction fee and the interact prompt all
+## still draw in the strip a counter's scrim does not reach, and every one of them
+## names state the counter has taken. Do not read the removal as making this
+## check historical.
+##
 ## The set is the reason this is here and not a `Hud.visible = false` in each
 ## screen: this function runs deferred off `node_added`/`node_removed` and forces
 ## `visible` back to `has_player` -- and a screen's own construction is a tree
@@ -807,24 +797,6 @@ func _refresh_visibility() -> void:
 		if not showing:
 			_layout.clear()
 			_glyphs.clear()
-
-	# Booting straight into the garrison is the one time the legend matters most,
-	# and there is no `garrison_entered` on `Bus` to hang it on — so "this overlay
-	# is up and there is no dungeon around it" IS the signal (decision 38).
-	#
-	# **Latched, not edge-triggered on `visible`.** The obvious version fires
-	# inside the `visible != showing` branch above and never runs in the garrison
-	# at all: the courtyard has a hero in it before this autoload's `_ready`, so
-	# `visible` is already true and there is no edge to catch. That is precisely
-	# the case decision 38 exists for. The latch also stops the ten seconds
-	# restarting every time a torch is added to the tree, which is what this
-	# function is deferred off.
-	var in_garrison := showing and Run != null and not Run.in_dungeon
-	if in_garrison and not _keys_armed:
-		_keys_armed = true
-		show_controls()
-	elif not in_garrison:
-		_keys_armed = false
 
 	# Deferred off node_added/node_removed, which is exactly when this answer can
 	# change, so the enemy bars get their frame ticker the moment a dungeon builds
@@ -864,18 +836,6 @@ func _process(delta: float) -> void:
 	# set to FRAMES + 1 because this runs BEFORE the draw it is meant to colour.
 	if _damage_flicker > 0:
 		_damage_flicker -= 1
-		busy = true
-
-	# The legend's window is deliberately NOT in the list below, because it is the
-	# one clock here that must stop when the game does. Decision 38: "a legend
-	# that burns its window inside the Options screen is one nobody saw" — and the
-	# Options screen is exactly where a player goes when they cannot find a
-	# control. `visible` covers the dialogue box, which hides this overlay whole.
-	if _keys_t >= 0.0:
-		if visible and not get_tree().paused:
-			_keys_t += delta
-			if _keys_t > KEYS_FADE + KEYS_HOLD + KEYS_FADE:
-				_keys_t = -1.0
 		busy = true
 
 	for t in [&"_toast_t", &"_save_t", &"_floor_t", &"_rim_flash_t", &"_sweep_t",
@@ -983,9 +943,9 @@ var _ebars: Dictionary = {}
 
 ## The roots, and the order is only for readable failures. A group exists here iff
 ## something claimed it as a parent this frame — the garrison has no minimap and
-## the dungeon has no legend, and neither absence is a special case.
+## the dungeon has no floor card, and neither absence is a special case.
 const LAYOUT_ROOTS: Array[StringName] = [
-	&"pole", &"cluster", &"money", &"floor_card", &"minimap", &"legend", &"prompt",
+	&"pole", &"cluster", &"money", &"floor_card", &"minimap", &"prompt",
 ]
 
 
@@ -1064,7 +1024,7 @@ func enemy_bar_rects() -> Dictionary:
 ## the same breath — not a number added here because one label was awkward.
 ##
 ##   10  ammo / charge numeral, bottle count, slips +N, heat multiplier,
-##       floor name, legend
+##       floor name
 ##   14  key caps, loadout line, interact prompt, autosave notice, cell lettering
 ##   16  floor level, item toast
 const TYPE_LADDER: Array[float] = [10.0, 14.0, 16.0]
@@ -1203,12 +1163,11 @@ func _draw_hud() -> void:
 	# on a circle around the whole frame, like `_draw_sweep`'s line — an event
 	# painted over everything, not an element with a place in the layout tree.
 	# Decision 35 rightly says transients are checked, and it says so about the
-	# legend and the prompt, which HAVE places. A 302 px arc has no parent it
+	# prompt, which HAS a place. A 302 px arc has no parent it
 	# could be a child of and no sibling it could be asked not to touch; entering
 	# it would turn assertion 1 into a table of exemptions, which is exactly what
 	# decision 27's tree exists to avoid. HUD_PLAN §15.13.
 	_draw_arc(s)
-	_draw_controls(s)
 	_draw_floor(s)
 	# Last, because it is the only thing on this canvas that is MODAL — it dims
 	# everything above and expects to be read instead of them, not alongside.
@@ -1232,362 +1191,6 @@ func _draw_clock(s: Vector2) -> void:
 		var small := CanvasText.scale_for(11.0, s.y)
 		CanvasText.draw_centred(_canvas, "SERVICES CLOSED",
 			Vector2(s.x * 0.5, Pal.px(30.0, s.y)), small, Pal.RUST)
-
-
-# --- Controls -----------------------------------------------------------------
-## A one-line legend, in the garrison only.
-##
-## Not a tutorial and not a settings screen: the two combat verbs live on the
-## mouse and there is nothing on screen that says so, which is exactly how a
-## working sword reads as a broken one. Garrison is where you are safe and idle,
-## so it is where the legend belongs; underground the line would be noise, and
-## by then you have already used every verb on it.
-##
-## It has this baseline to itself now. The floor readout used to share it and is
-## a top-left card instead (see `_draw_floor`), so nothing has to be exclusive
-## with anything down here.
-
-## The verbs, in the order a player meets them, each paired with the action that
-## fires it. Built from the LIVE bindings rather than written out, because the
-## line has to be true on a pad as well as on a keyboard and there is no way to
-## keep two hand-written strings honest — the keyboard one had already outlived
-## two rebinds of the sword.
-##
-## `&""` means the label carries its own button (the sticks, which are not
-## actions the player rebinds), and LEGEND_LITERAL means the text IS the whole
-## entry -- for the D-pad, whose four directions are one idea and would otherwise
-## need four rows naming four caps the player never presses individually.
-const LEGEND_LITERAL := &"__literal"
-## Everything after this entry goes on a SECOND line.
-##
-## It is here because the legend outgrew 1280 px. Jump, the item button and the
-## three D-pad cycles all landed in one pass, and the single centred line went
-## off BOTH edges of the screen -- MOVE was cut in half on the left and LOADOUT
-## on the right, which is the one failure a legend cannot have. Two rows, split
-## where the verbs change subject: what you do with the sword, then what you do
-## with your gear.
-const LEGEND_BREAK := &"__break"
-## Between two entries on a row. Four spaces and not one: at 10 px in a face with
-## this much serif, a single space between "R3 LOCK-ON" and "LMB SWORD" makes the
-## row read as one sentence, and the whole value of the legend is that the eye
-## can find the verb it came looking for.
-const LEGEND_SEP := "    "
-## What decision 28 budgets: two authored rows, plus one for the combat row to
-## overflow into. `_pack_legend` complains rather than truncating if the entry
-## list ever needs a fourth.
-## Four, not decision 28's three. The re-anchor (§15.12) put the legend in the
-## 641 px column between the vitals pole and the bag rim instead of across the
-## whole frame, and §15.6 said in advance that fixing the collision "costs a
-## row". `_pack_legend` still complains rather than truncating past this.
-const LEGEND_MAX_LINES := 4
-
-## **The legend is transient** (decision 8). It fades in, holds, fades out, and
-## comes back on the three moments a player needs it (decision 38, `_show_keys`).
-##
-## It is the largest block of text on this HUD — three rows, ~150 characters —
-## and by §5.6's test it fails outright: nothing on it feeds push-on-or-leave.
-## Permanent, it is a manual stapled to the floor of every garrison visit. Ten
-## seconds is long enough to read the row you came for and short enough that the
-## courtyard is not competing with it for the rest of the visit.
-##
-## The permanent reference is Options → Controls, which already ships.
-const KEYS_FADE := 0.6
-const KEYS_HOLD := 10.0
-
-const LEGEND := [
-	[&"", "MOVE"],
-	[&"", "LOOK"],
-	[&"z_target", "LOCK-ON"],
-	[&"attack", "SWORD"],
-	# One row for the trigger, and it has to carry three meanings without becoming
-	# a paragraph: the heavy, the charge that a hold turns it into, and the fact
-	# that a drawn item takes the button over entirely. Naming the HOLD is the
-	# same argument the dodge row below makes — there is no tell for a button you
-	# are not holding down, so a player who only taps will never find the spin.
-	[&"heavy", "HEAVY (HOLD=SPIN) / ITEM"],
-	# Two things are named here that a button-masher would never find: the dash,
-	# which is a button you already know pressed in a stance you already know, and
-	# the fact that the guard LOCKS. On the pad `shield` is the left trigger and it
-	# is the whole of OOT's Z, so a line that called this button GUARD would be
-	# hiding its main use.
-	#
-	# This used to add "— the R3 above is only the standing toggle", and that is no
-	# longer true: `settings.gd` round 9 took R3 off `z_target` and gave it to
-	# `first_person`, so `z_target` has NO pad binding and the LOCK-ON row above
-	# does not render on a pad at all (`_legend_lines` drops a capless row rather
-	# than drawing a verb with no glyph). This row is therefore the ONLY place a
-	# pad player is told the lock exists, which is why it says LOCK and not GUARD.
-	# `tools/directors/pad_prompts.gd`'s `KEYBOARD_ONLY` pins that arrangement.
-	[&"shield", "GUARD/LOCK"],
-	# The hold is named because nothing else can name it. A tap rolls and a hold
-	# runs off the same button, and a player who only ever taps it will never
-	# discover the run — there is no prompt, no stance and no tell for a button
-	# you are not holding down. Same argument as the GUARD/LOCK line above.
-	#
-	# TAP= is on the row for a related reason and it is not decoration: the two
-	# halves are now EXCLUSIVE (Hero.sprint_hold_time), so a player who holds the
-	# button expecting the roll that used to come out underneath the run gets
-	# nothing, and "HOLD=RUN" alone reads as an addition rather than a choice.
-	#
-	# The LEAP came off this row when it came off this button. It is the trigger's
-	# now, under a lock, and it is not named separately up there either — a legend
-	# that lists every branch of a contextual button is a manual, not a legend.
-	[&"context", "TAP=DODGE HOLD=RUN"],
-	[&"jump", "JUMP"],
-	[LEGEND_BREAK, ""],
-	[&"interact", "INTERACT"],
-	# The item button, named for the thing it does rather than for the ring it
-	# reads from: a player looking for "how do I drink this" is not looking for
-	# the word SELECT. Which bottle it drinks is on the HUD cell itself.
-	[&"use_item", "USE ITEM"],
-	# The three cycles, on one line, because they are one idea: the D-pad changes
-	# your gear and never uses it. Three rows would make them look unrelated and
-	# would be the longest thing in the legend, for the input that needs the
-	# least explaining once you have seen the carets in the corner.
-	# ← → ↓ ↑ and not ◄ ► ▼ ▲. Neither set is in Cinzel; both arrive from the
-	# system fallback, and the thin arrows are the pair that sit on a cap-height
-	# line without looming over the words either side of them.
-	[LEGEND_LITERAL, "D-PAD  \u2190\u2192 WEAPON  \u2193 ITEM  \u2191 SET"],
-	[&"inventory", "POUCH"],
-]
-## What drives movement and the camera on each device. The sticks are bound as
-## four actions apiece and naming any one of them ("STICK L MOVE") would be
-## nonsense, so this pair is the one thing on the line that is written out.
-const LEGEND_STICKS := {
-	false: ["WASD", "MOUSE"],
-	true: ["L-STICK", "R-STICK"],
-}
-
-
-## Start the legend's ten seconds, or restart them. Idempotent and cheap — the
-## three callers (boot/garrison-visible, device change, run end) can all fire in
-## the same frame on a return from a dungeon and the player should see one window.
-##
-## Public because "show me the controls" is a real request and not only a test
-## seam: an Options → Controls screen closing is the obvious fourth caller, and
-## `hud_pole` needs it to photograph the legend at all now that it is transient
-## (decision 35 — the check must still see the rectangle it was sold on).
-func show_controls() -> void:
-	if Run != null and Run.in_dungeon:
-		return
-	_keys_t = 0.0
-	_wake()
-
-
-## Put it away early. There is no in-game caller today — the window expires on
-## its own — but a director that cannot photograph the ABSENCE has only checked
-## the legend's first ten seconds, and "it goes away" is the whole of decision 8.
-func hide_controls() -> void:
-	_keys_t = -1.0
-	_repaint()
-
-
-func _draw_controls(s: Vector2) -> void:
-	if Run == null or Run.in_dungeon or _keys_t < 0.0:
-		return
-	# Fade in, hold, fade out. The fades are what stop it reading as a popup: a
-	# block of text that appears instantly at the bottom of the frame is a system
-	# message, and this is meant to be part of the room.
-	var a := 1.0
-	if _keys_t < KEYS_FADE:
-		a = _keys_t / KEYS_FADE
-	elif _keys_t > KEYS_FADE + KEYS_HOLD:
-		a = 1.0 - (_keys_t - KEYS_FADE - KEYS_HOLD) / KEYS_FADE
-	a = clampf(a, 0.0, 1.0)
-	# FIT TO THE FRAME, do not trust the authored width. This is the one thing on
-	# the HUD whose width is set by its TEXT and not by the layout -- it is every
-	# bound control, so a rebind, a device swap or a longer verb makes it longer,
-	# and the row is already ~150 characters on a keyboard. Under the old 5x7
-	# table every glyph was 6 px and it happened to fit at 720p; under a
-	# proportional face it ran off both edges of the screen on the first capture.
-	#
-	# **It WRAPS. It used to shrink, and shrinking could not work** (decision 28,
-	# and HUD_PLAN §15.3 for the measurement). The old line here was
-	# `if widest > avail: scale *= avail / widest`, which looks like it must fit
-	# by construction and does not: `CanvasText.size_of` clamps the em size at
-	# `MIN_SIZE`, so below about 9 px the scale keeps falling, the rendered glyphs
-	# stop shrinking with it, and the line comes out WIDER than the width it was
-	# asked to fit. That is why the strip was illegible AND still ran off both
-	# edges -- it was being punished for being long twice and fixed by neither.
-	#
-	# 10 px is the bottom of the ladder and there is nothing under it, so a legend
-	# that does not fit at 10 px has too many entries on a row, not type that is
-	# too big. Decision 8 draws it upward into empty floor, so a third row is free.
-	var scale := _text(10.0)
-	# **Left-anchored to the right of the vitals pole, not centred on 0.500.**
-	# Centred and three rows deep it spanned x 283-997 while the pole reaches
-	# 383.7, so two of its three rows crossed the magic and stamina bars — the
-	# collision §14.1 says only x separation can fix, measured in §15.6. Starting
-	# at `KEYS_LEFT` fixes the one edge that has to hold; the width may then do
-	# whatever the live bindings make it do, because it grows into empty frame.
-	var gutter := Pal.px(Pal.KEYS_GUTTER, s.y)
-	# The TEXT's left edge. The plate reaches `PLATE_WORLD_PAD` further left than
-	# this, and the plate is the thing that must clear the pole, so its padding is
-	# in the sum on both sides.
-	var left := ((Pal.HEALTH_ORIGIN.x + Pal.HEALTH_W) * s.x + gutter
-		+ Pal.px(PLATE_WORLD_PAD, s.y))
-	# And the right edge is the money pole's, not the safe margin's. The bag rim
-	# hangs to y 660 and the legend's top row is at 654, so "inside the safe area"
-	# is not the constraint that binds — the rim is. Derived from `RIM_TL` rather
-	# than written down again, for the reason `Pal.KEYS_GUTTER` gives.
-	# Less the plate's padding at both ends: the plate is what the assertions see
-	# and what the player sees, so it is what has to fit between the two poles.
-	var avail := Pal.RIM_TL.x * s.x - gutter - Pal.px(PLATE_WORLD_PAD, s.y) - left
-	var lines := _pack_legend(_legend_groups(), scale, avail)
-	# Drawn UPWARDS from the baseline, so adding a row pushes the legend into the
-	# empty floor above it rather than off the bottom of the screen.
-	var step := CanvasText.height(scale) + Pal.px(5.0, s.y)
-	var top := Pal.KEYS_BASELINE * s.y - step * (lines.size() - 1)
-	var widest_drawn := 0.0
-	for line in lines:
-		widest_drawn = maxf(widest_drawn, CanvasText.width(line, scale))
-	var block := Rect2(left, top,
-		widest_drawn, step * (lines.size() - 1) + CanvasText.height(scale))
-
-	# **A plate, and BONE on it — not bare ASH over the courtyard.** This is the
-	# second half of the legibility defect and the geometry above is only the
-	# first: re-anchored, correctly sized, on the ladder and passing every
-	# assertion, the strip was still four rows of `484050` over sunlit grass, and
-	# a rectangle check cannot see that. ASH is the colour of an EMPTY TRACK in
-	# this palette. It was never a text colour, and over the world it is not one.
-	#
-	# The recipe is `_draw_prompt`'s, unchanged, because this is the same problem:
-	# HUD text standing on live world rather than on the frame's dark edges. The
-	# prompt is the one thing in the garrison frame that has always read cleanly,
-	# and it reads cleanly because of this plate.
-	var pad := Pal.px(PLATE_WORLD_PAD, s.y)
-	_canvas.draw_rect(block.grow(pad), Color(Pal.VOID, PLATE_WORLD.a * a))
-
-	# Transient, and reported anyway (decision 35). A transient element that
-	# overlaps a permanent one for ten seconds is a bug for ten seconds — and the
-	# legend running off both edges is one of the three defects decision 20 sells
-	# assertion 1 on, so exempting it would exempt the evidence. The PLATE is what
-	# gets reported, not the ink: §14.5's rule, and the plate is 6 px larger on
-	# every side than the text that decided the number.
-	_note(&"legend", &"", block.grow(pad))
-	# BONE, at 10 px, on the plate. Reference material wants to be readable and
-	# then to be gone — that is what the ten seconds are for. Dimming the type as
-	# well would be saying the same thing twice and would put it back where it
-	# started.
-	var col := Color(Pal.BONE, a)
-	for i in lines.size():
-		CanvasText.draw_text(_canvas, lines[i],
-			Vector2(left, top + step * i), scale, col)
-
-
-## Pack the authored groups into rows no wider than `avail`.
-##
-## **Between ENTRIES, never inside one** — which is why `_legend_groups` hands
-## back a list of entries rather than a joined string, and why this does not use
-## `CanvasText.wrap`. That function breaks on spaces, and every entry on this
-## line has a space in it ("LMB SWORD"); word wrapping would split a cap from its
-## verb and collapse the four-space separators that are the only thing making the
-## row read as a list rather than as a sentence.
-##
-## The authored break (`LEGEND_BREAK`) is still honoured — a group always starts
-## a new row. Rows are RESERVED for the groups still to come, so a long combat
-## group cannot push POUCH off the legend; the gear group is guaranteed its row.
-func _pack_legend(groups: Array, scale: float, avail: float) -> PackedStringArray:
-	var out: PackedStringArray = []
-	for gi in groups.size():
-		var entries: PackedStringArray = groups[gi]
-		var rows := _greedy_rows(entries, scale, avail).size()
-		# BALANCED, not merely legal. Greedy packing at the full width fills row
-		# one to the brim and leaves the remainder alone underneath, and the first
-		# render of this did exactly that: the combat group came out as a full
-		# 1179 px row followed by "E JUMP" by itself in the middle of the screen,
-		# which reads as a mistake rather than as a second row. Once the row count
-		# is known, the narrowest width that still fits in that many rows spreads
-		# the entries evenly — same rows, same order, no orphan.
-		var lo := 0.0
-		for e in entries:
-			lo = maxf(lo, CanvasText.width(e, scale))
-		var hi := avail
-		for _i in 12:
-			var mid := (lo + hi) * 0.5
-			if _greedy_rows(entries, scale, mid).size() <= rows:
-				hi = mid
-			else:
-				lo = mid
-		out.append_array(_greedy_rows(entries, scale, hi))
-	# Not truncated when it overflows, said out loud instead. Dropping a row would
-	# hide a binding the player has no other way to learn, which is worse than a
-	# legend one row taller than the plan budgeted for — and a silent drop is how
-	# you find out months later that POUCH stopped being on screen.
-	if OS.is_debug_build() and out.size() > LEGEND_MAX_LINES:
-		push_error(("Hud: the legend packed to %d rows and decision 28 budgets "
-			+ "%d — the entry list has outgrown the screen, so cut an entry "
-			+ "rather than the type") % [out.size(), LEGEND_MAX_LINES])
-	return out
-
-
-## Entries packed left to right into rows no wider than `w`. The first entry
-## always goes on the row it is offered, so an entry wider than `w` overhangs
-## rather than vanishing — a binding the player cannot see is worse than a
-## binding that is slightly too long.
-func _greedy_rows(entries: PackedStringArray, scale: float,
-		w: float) -> PackedStringArray:
-	var rows: PackedStringArray = []
-	var line := ""
-	for e in entries:
-		var candidate: String = e if line.is_empty() else line + LEGEND_SEP + e
-		if line.is_empty() or CanvasText.width(candidate, scale) <= w:
-			line = candidate
-			continue
-		rows.append(line)
-		line = e
-	if not line.is_empty():
-		rows.append(line)
-	return rows
-
-
-## The legend's entries, grouped by authored row. Joined and re-broken to fit by
-## `_pack_legend`, which is the only thing that knows how wide the screen is.
-func _legend_groups() -> Array[PackedStringArray]:
-	var sticks: Array = LEGEND_STICKS[Settings != null and Settings.using_pad]
-	var lines: Array[PackedStringArray] = []
-	var parts: PackedStringArray = []
-	var stick := 0
-	for entry: Array in LEGEND:
-		var action: StringName = entry[0]
-		var verb: String = entry[1]
-		if action == LEGEND_BREAK:
-			lines.append(parts)
-			parts = PackedStringArray()
-			continue
-		if action == LEGEND_LITERAL:
-			parts.append(verb)
-			continue
-		if action == &"":
-			parts.append("%s %s" % [sticks[stick], verb])
-			stick += 1
-			continue
-		var cap := _hotkey(action)
-		if cap.is_empty():
-			continue  # nothing bound on this device — say nothing rather than lie
-		if action == &"shield":
-			# THE MODIFIED PRESS IS THE PARRY, and it is on `interact` rather than
-			# on the sword. This line said "+LMB DASH" for a long time after that
-			# stopped being true twice over -- the dash moved to the riposte
-			# window (`K.RIPOSTE_WINDOW`), the parry took shield+attack, and then
-			# the parry moved off the sword so that RB and RT would mean the same
-			# thing from every stance. A legend is the only place most players
-			# will ever read a modifier, so it is the one string in the HUD that
-			# cannot be allowed to lag the binding.
-			verb = "GUARD/LOCK (+%s PARRY)" % _hotkey(&"interact")
-		# The dodge and the interact were ONE button on a pad for a while, and this
-		# merge is what kept the legend from printing "A DODGE   A INTERACT" and
-		# asking the player to work out which one they got. They are B and A now
-		# and neither branch fires — kept because the layout has moved before, and
-		# a legend that silently prints a button twice is how you find out it moved
-		# back.
-		elif action == &"context" and _hotkey(&"interact") == cap:
-			verb = "TAP=DODGE/TALK HOLD=RUN"
-		elif action == &"interact" and _hotkey(&"context") == cap:
-			continue  # already said, on the merged row above
-		parts.append("%s %s" % [cap, verb])
-	lines.append(parts)
-	return lines
 
 
 # --- The kit wheel -----------------------------------------------------------
@@ -2004,7 +1607,7 @@ func _draw_magic(s: Vector2) -> void:
 ## number, emptying fast" and draw the right conclusion.
 ##
 ## Dungeon only. In the garrison there is nothing to chain and the bar would be
-## a third empty meter under a control legend.
+## a third empty meter in a corner that has nothing to say.
 
 func _draw_heat(s: Vector2) -> void:
 	if Run == null or not Run.in_dungeon:
@@ -3245,10 +2848,10 @@ func _draw_toast(s: Vector2) -> void:
 ## AUTOSAVING…, bottom right, on the toast's baseline.
 ##
 ## The same line, and not a line of its own, because the corner below it is
-## already spoken for: the rim frames the bag from 0.786 to 0.914, the
-## extraction fee sits at 0.940, and the control legend runs across 0.962 in
-## garrison. There is no free row down there, and a notice that overlapped the
-## fee would obscure the one number the player is standing still to read.
+## already spoken for: the rim frames the bag from 0.786 to 0.914 and the
+## extraction fee sits at 0.940. There is no free row down there, and a notice
+## that overlapped the fee would obscure the one number the player is standing
+## still to read.
 ##
 ## Sharing is safe by construction rather than by luck: an autosave only fires
 ## inside a `Flow` transition, and nothing drops loot or snaps a rope during a

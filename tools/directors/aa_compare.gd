@@ -31,8 +31,8 @@ extends RefCounted
 ##     conclusion turns on it: the plate aliased like geometry and MSAA smoothed
 ##     it like geometry, which was one more instance of the merlons above, not a
 ##     separate finding.
-##   - the HUD's Cinzel key caps and legend — 2D canvas, which **no** viewport AA
-##     mode reaches, MSAA or FXAA or TAA;
+##   - the HUD's Cinzel key caps — 2D canvas, which **no** viewport AA mode
+##     reaches, MSAA or FXAA or TAA;
 ##   - the vitals pip row — `draw_rect` on the same canvas, whose steps are meant
 ##     to be steps (STYLEGUIDE §5.1).
 ##

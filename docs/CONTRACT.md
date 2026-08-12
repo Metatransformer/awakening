@@ -431,8 +431,8 @@ Two consequences worth writing down because neither is obvious:
 it did, a player rebinding the heavy's *gamepad* half wrote the surviving mouse
 event back as a bare LMB, and their next boot collapsed the heavy onto the light
 attack — silently, out of the config file. `Glyph.long` / `Glyph.cap_for` print
-the modifier for the same reason: without it the options screen and the HUD
-legend both show "Mouse L" for two different verbs.
+the modifier for the same reason: without it the options screen and the HUD's key
+caps both show "Mouse L" for two different verbs.
 
 `tools/directors/keyboard_layout.gd` is the proof, and it is the only director
 that presses **keys and mouse buttons** and lets the InputMap do the lookup —

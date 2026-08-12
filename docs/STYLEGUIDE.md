@@ -126,8 +126,7 @@ and **Pixel Operator Bold** (its `keycap_font()` had no callers at all).
 
 The HUD is on the same two faces. `scripts/ui/canvas_text.gd` paints
 `UITheme.display_font()` onto a CanvasItem for everything drawn rather than
-typeset — the vitals, the legend, the floor card, the key caps, the world
-prompts. Until 2026-08-10 that file was a 5×7 bitmap of its own, which made the
+typeset — the vitals, the floor card, the key caps, the world prompts. Until 2026-08-10 that file was a 5×7 bitmap of its own, which made the
 HUD the one surface in the build that ignored the shipped pair.
 
 Two reasons this is an amendment and not a betrayal:
@@ -174,7 +173,7 @@ worth keeping, and it is about a *count*, not about a particular set of integers
 
 | px @720 | Used for |
 |---|---|
-| **10** | ammo / charge numeral, bottle count `n/m`, slips `+N`, heat multiplier, floor name, legend |
+| **10** | ammo / charge numeral, bottle count `n/m`, slips `+N`, heat multiplier, floor name |
 | **14** | key caps, loadout line, interact prompt, autosave notice, cell lettering |
 | **16** | floor level, item toast |
 
@@ -204,12 +203,17 @@ grid and pays for it in the legibility of the smallest labels (it costs a 10 px
 label 30% of its height at 720p). What still binds from that paragraph is the
 antialiasing and subpixel-positioning note above it.
 
-**A legend that does not fit is not shrunk.** There is nothing under 10 px, so a
-line too wide for the safe area has too many entries on it, not type that is too
-big — and shrinking could not work anyway: `CanvasText.size_of` clamps the em at
-`MIN_SIZE`, so past a point the scale keeps falling while the glyphs do not, and
-the line renders *wider* than the width it was asked to fit. Break between
+**A HUD line that does not fit is not shrunk.** There is nothing under 10 px, so
+a line too wide for the safe area has too many entries on it, not type that is
+too big — and shrinking could not work anyway: `CanvasText.size_of` clamps the em
+at `MIN_SIZE`, so past a point the scale keeps falling while the glyphs do not,
+and the line renders *wider* than the width it was asked to fit. Break between
 entries and balance the rows.
+
+The rule was written about the garrison control legend, which is deleted (card
+#121, 2026-08-12). It outlives it: every one of the 10 px labels above is a line
+whose width is set by its content, and the answer to any of them overflowing is
+fewer entries.
 
 **The 10 px floor became load-bearing on 2026-08-11** (card #55) and it is worth
 knowing why. Every HUD frame judged before that date was rendered at 6880 × 2756
@@ -217,7 +221,7 @@ and downscaled into the PNG, so a label authored a size too small still came bac
 crisp — a ~20× supersample was quietly rescuing it, and it will not be there in
 the shipped build. Captures are 1:1 now. Type was re-checked at 3× nearest zoom
 at 720p under the new harness and is fine as it stands: Cinzel's serifs survive
-at 10 px and the garrison legend is fully legible. But there is no longer any
+at 10 px and the floor card's name line is fully legible. But there is no longer any
 margin under the floor, and no viewport AA setting can add one — §4.8 measured
 this: the HUD canvas is *pixel-identical* under MSAA, FXAA, TAA and `msaa_2d`
 alike. Font rasterisation is the only antialiasing 2D type will ever get, so the
@@ -1487,13 +1491,16 @@ RUST, 40°, radius **`0.42h`** about centre, 300 ms, camera-relative bearing wit
 0° at the top and clockwise — one arc, a second blow replaces it); interaction prompts; gold
 floaters; the perfect-dodge counter-attack prompt — the live attack cap in a BONE
 circular button beside `COUNTER ATTACK`, on the World plate in the centre prompt
-slot, existing exactly while the combat flurry window is available; **and the
-garrison control legend** — 0.6 s in, 10 s, 0.6 s out, on
-three moments only: the overlay coming up in a garrison, a device change, and a
-run ending. It is the largest block of text on the HUD and it feeds nothing about
-push-on-or-leave, so it has no claim on permanent pixels; the permanent reference
-is Options → Controls. Picking up a pad is the re-show that matters, because that
-is the instant every cap in the player's head goes wrong.
+slot, existing exactly while the combat flurry window is available.
+
+**There is no control legend.** A transient one lived at the bottom of the
+garrison frame — 0.6 s in, 10 s, 0.6 s out, on boot, device change and run end —
+and it was **deleted on 2026-08-12 (card #121)** on the owner's instruction:
+*"we need to remove the controls from the bottom of the screen, they're not
+important."* Nothing on the HUD names a button the player is not already looking
+at. The only reference is **Options → Controls**, which lists every live binding
+for the device in hand. Do not reinstate a bottom-of-frame legend without
+re-opening that card.
 
 **NEVER:** quest text, objective markers, floating damage numbers, an XP bar.
 

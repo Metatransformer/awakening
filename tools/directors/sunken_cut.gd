@@ -117,7 +117,7 @@ func _descend(rig, out: String, i: int) -> void:
 ## The way home is a DEATH and then the ending screen's button, not a bare
 ## `Flow.to_garrison()`. That shortcut looks equivalent and is not: it leaves
 ## `Run.in_dungeon` true, so the HUD draws the floor card over the garrison
-## square and the controls legend never comes back. Nothing in the game reaches
+## square and the minimap with it. Nothing in the game reaches
 ## the garrison that way -- `to_garrison()` has exactly one caller and it fires
 ## after `die()` or `extract()` has already ended the run -- so a director that
 ## used it would be photographing a state the game cannot be in and reporting
