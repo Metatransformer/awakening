@@ -47,7 +47,7 @@ signal slammed(at: Vector3, fall_speed: float)
 ## matched on. HURT behaves like nothing else in the enum: it is the only state
 ## that can interrupt any other, the only one that takes no input at all, and the
 ## only one whose exit is a recovery the player is meant to feel.
-enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER, ATTACK, HOOK, SLAM, HURT }
+enum MoveState { GROUND, TURN180, ROLL, ROLL_RECOVER, ATTACK, HOOK, SLAM, HURT, WOODSMAN }
 
 ## Which way a dodge goes, measured against the facing it KEEPS through it.
 ##
@@ -441,6 +441,9 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 @export var clip_slam: StringName = &"ax_melee_run_jump_attack"
 @export var slam_start_offset: float = 1.50
 @export var slam_land_offset: float = 1.70
+## The utility axe's one committed cut. It is deliberately not one of `Swing`:
+## no hitbox, stamina cost, weapon slot or combo may grow out of cutting a tree.
+@export var clip_woodsman_chop: StringName = &"ax_melee_attack_downward"
 ## The three steps of the light chain. Three DIFFERENT clips, not one replayed:
 ## a combo whose every hit is the same swing reads as a stutter, and the whole
 ## point of a chain is that the player can see how far into it they are.
@@ -992,6 +995,8 @@ const _P_RANGED := "parameters/Ranged/request"
 const _P_RANGED_SCALE := "parameters/RangedScale/scale"
 const _P_HOOK_SHOT := "parameters/HookShot/request"
 const _P_HOOK_SCALE := "parameters/HookScale/scale"
+const _P_WOODSMAN_CHOP := "parameters/WoodsmanChop/request"
+const _P_WOODSMAN_CHOP_SCALE := "parameters/WoodsmanChopScale/scale"
 const _P_AIM := "parameters/Aim/blend_amount"
 const _P_AIM_HOOK := "parameters/HookAim/blend_amount"
 const _P_AIM_BLEND := "parameters/AimLoco/blend_position"
@@ -1373,6 +1378,12 @@ func _build_anim_tree() -> void:
 	tree_root.connect_node(&"HookShot", 1, &"HookScale")
 	prev = &"HookShot"
 
+	# A utility presentation, not a combat swing. Its dedicated node keeps the
+	# downward clip out of Swing and lets the authored reel fit the tree's one
+	# commitment without changing the shared animation library.
+	prev = _add_scaled_shot(tree_root, &"WoodsmanChop", prev, clip_woodsman_chop,
+		Vector2(2080, 0), 0.05, 0.18)
+
 	prev = _add_oneshot(tree_root, &"Land", prev, _anim_node(clip_land), Vector2(2160, 0), 0.06, 0.20)
 
 	# **Taking a hit goes ON TOP of everything he could have been doing**, which
@@ -1469,6 +1480,7 @@ func _build_anim_tree() -> void:
 	_tree.set(_P_BOW_DRAW_SCALE, 1.0)
 	_tree.set(_P_RANGED_SCALE, 1.0)
 	_tree.set(_P_HOOK_SCALE, 1.0)
+	_tree.set(_P_WOODSMAN_CHOP_SCALE, 1.0)
 
 
 ## The clip each Swing plays. A match rather than an array of exports so the
@@ -1714,6 +1726,8 @@ func _physics_process(delta: float) -> void:
 			_tick_slam(delta)
 		MoveState.HURT:
 			_tick_hurt(delta)
+		MoveState.WOODSMAN:
+			_tick_woodsman_chop(delta)
 
 	# The hookshot flies perfectly straight and so does what it drags
 	# (docs/CONTRACT.md §2.5 #8). Gravity applied during the pull would sag the
@@ -2484,6 +2498,21 @@ func _tick_attack(delta: float) -> void:
 		state = MoveState.GROUND
 
 
+## Serve the tree-cutting commitment without borrowing combat movement. The
+## target-facing was fixed at the request, and the body stays planted while the
+## authored downward reel supplies all visible motion.
+func _tick_woodsman_chop(delta: float) -> void:
+	_state_timer -= delta
+	_speed = 0.0
+	_set_planar_velocity(Vector3.ZERO)
+	if _state_timer > 0.0:
+		return
+	state = MoveState.GROUND
+	_state_timer = 0.0
+	if combat != null:
+		combat.set_woodsman_axe_visible(false)
+
+
 ## Keep the body on the target through a move that owns the hero. Without this a
 ## swing or a dodge freezes the facing, and an enemy that side-steps mid-attack
 ## ends up behind a hero who is still supposedly locked onto him.
@@ -2626,6 +2655,8 @@ func _enter_hurt(tier: Hit.Tier, stun: float) -> void:
 	# for us next frame anyway -- doing it here means the shield is already down in
 	# the frame the flinch starts, rather than one frame into it.
 	blocking = false
+	if state == MoveState.WOODSMAN and combat != null:
+		combat.set_woodsman_axe_visible(false)
 
 	state = MoveState.HURT
 	_hurt_tier = tier
@@ -2788,6 +2819,39 @@ func request_attack(duration: float, variant: int = Swing.LIGHT1) -> bool:
 			_swing_clip(variant), duration, _SWING_START_OFFSET[variant]))
 	_fire(_swing_param(variant))
 	return true
+
+
+## Commit to one non-combat Woodsman's Axe cut facing `target`. The axe is a
+## temporary rig presentation owned by HeroCombat; it never becomes an armament
+## id and therefore cannot enter either the weapon ring or the radial wheel.
+func request_woodsman_chop(duration: float, target: Vector3) -> bool:
+	if not can_act() or combat == null:
+		return false
+	_cancel_dodge()
+	state = MoveState.WOODSMAN
+	_state_timer = maxf(duration, 0.05)
+	_speed = 0.0
+	_lunge_left = 0.0
+	_set_planar_velocity(Vector3.ZERO)
+
+	var delta := target - global_position
+	var flat := Vector3(delta.x, 0.0, delta.z)
+	if flat.length_squared() > 0.0001:
+		flat = flat.normalized()
+		facing_yaw = atan2(flat.x, flat.z)
+
+	combat.set_woodsman_axe_visible(true)
+	if _tree != null:
+		_tree.set(_P_WOODSMAN_CHOP_SCALE,
+			_clip_scale(clip_woodsman_chop, _state_timer))
+	_fire(_P_WOODSMAN_CHOP)
+	return true
+
+
+## HarvestTree checks this at the authored impact beat so an interrupted cut
+## cannot award a bundle after the axe has already been knocked from the hand.
+func woodsman_chopping() -> bool:
+	return state == MoveState.WOODSMAN
 
 
 ## The lock-on lunge: the same swing, plus a burst of drive at the locked target

@@ -14,7 +14,7 @@ experiences home as a contrasting mode between descents.
 The civil clock is the only owner of day and time:
 
 - **Daytime, 05:00–20:00:** residents work, services follow their established
-  opening hours, and the Timber Yard can operate.
+  opening hours, and the outskirts grove can be worked.
 - **Bonfire Time, 20:00–23:00:** services close; arrived residents gather at the
   central hearth and remain available for conversation.
 - **Bedtime, 23:00–05:00:** residents retire to their authored sleeping places
@@ -62,9 +62,13 @@ Firewood is built and valid. It is a supporting warm-home vignette, not the
 active proof and not a prerequisite for the raid.
 
 - After Brannoc arrives, Aldric assigns **Keep the Hearth**.
-- Brannoc's permanent Woodsman's Axe is a tool, not a weapon or hand slot.
-- The Timber Yard yields at most one carried bundle per campaign day during
-  Daytime. The player must carry it to the separate hearth.
+- Brannoc forges the permanent Woodsman's Axe for 60 gold and three Iron Scrap.
+  It is a utility tool, not a weapon or hand slot.
+- The cliff-partitioned outskirts between the garrison and the Sunken Cut holds
+  a visible side grove of individually harvestable trees. Holding at one with
+  the axe plays the work, fells that trunk to a stump, and yields at most one
+  carried bundle per campaign day during Daytime. The player must carry it to
+  the separate hearth.
 - The hearth stores at most three bundles and consumes at most one at Bonfire
   Time.
 - A fueled bonfire grants Warmth for the next service window; an unfueled
@@ -75,8 +79,9 @@ active proof and not a prerequisite for the raid.
   moment is not conditional on earning the economic benefit.
 
 A carried bundle persists until deposited. Depositing after a bonfire does not
-retroactively fuel it. The yard refuses work when the axe, time, daily
-availability, carrying capacity, or hearth capacity rule is not satisfied.
+retroactively fuel it. Every harvestable tree refuses work when the axe, time,
+daily availability, carrying capacity, or hearth capacity rule is not
+satisfied; the grove is world interaction, never a remote menu action.
 
 The exact item, service, and economy contracts remain with
 [ITEMS.md](ITEMS.md), [METAGAME.md](METAGAME.md), and

@@ -173,8 +173,11 @@ Proven working. Do not rebuild this.
     `tools/directors/run_lookdev.gd`. It also has the longer authored stride of
     the two (`tools/_clip_travel.gd`: 2.34 m/s of leg against 2.13), and it puts
     the run in the same family as the sprint that follows it.
-  - `ax_*` — axe (1): `melee_attack_360_low`, the charged spin. One clip
-    borrowed out of a whole moveset (`build_anim_lib.gd` §ONLY).
+  - `ax_*` — axe (3): `melee_attack_360_low`, the charged spin;
+    `melee_attack_downward`, the visible Woodsman's Axe chop; and
+    `melee_run_jump_attack`, the air slam. Three clips borrowed out of a whole
+    moveset (`build_anim_lib.gd` §ONLY), each for a move the sword-and-shield
+    set does not contain.
   - `mg_*` — magic (14): casts, hit reactions, `react_death_backward`
   - `bow_*` — longbow (39): `equip`/`disarm`, `draw_arrow`, `aim_overdraw`,
     `aim_recoil`, `aim_walk_*`, `aim_turn_*`, `shoot_*`, `reload_*`, `dodge_*`,
@@ -2137,14 +2140,15 @@ no information at all. The three lights are a SEQUENCE (down, up, overhead), and
 `ss_attack_01` is the only clip in which the hero's feet leave the ground, which
 is why it is the lunge and was a terrible heavy.
 
-The spin is the **only** clip in the kit borrowed from another character's
-moveset: the sword-and-shield set has no 360 in it, so `build_anim_lib.gd`'s
-`ONLY` allowlist takes exactly one clip from the axe set and leaves the rest.
-It beat `ax_melee_attack_360_high` and `gs_high_spin_attack_1` in that same
-sheet — the high one carries the blade behind the body and the greatsword one is
-posed around a two-handed hilt. Its Mixamo tail is trimmed to 1.35 s (measured
-with `tools/_clip_motion.gd`, not eyeballed) so `clip.length` still means "how
-long this move takes".
+The spin is the only grounded **combat** swing borrowed from another
+character's moveset: the sword-and-shield set has no 360 in it. The axe
+allowlist also carries the downward work strike for tree cutting and the
+run-jump strike for the air slam; neither becomes an equippable axe attack.
+`melee_attack_360_low` beat `ax_melee_attack_360_high` and
+`gs_high_spin_attack_1` in the swing sheet — the high one carries the blade
+behind the body and the greatsword one is posed around a two-handed hilt. Its
+Mixamo tail is trimmed to 1.35 s (measured with `tools/_clip_motion.gd`, not
+eyeballed) so `clip.length` still means "how long this move takes".
 
 **The chain's pace is `swing_time` (0.60 s) and it is also its animation
 speed.** `Hero.request_attack` scales each clip by `clip_len / duration`, so the
