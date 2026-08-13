@@ -46,17 +46,17 @@ const BOTTLE_PARTS := [
 ## found resin is a run that gets to choose between offence and defence rather
 ## than being handed both.
 const BREW_PARTS := {
-	&"heart_draught": {&"bitter_root": 3},
+	&"health_draught": {&"bitter_root": 3},
 	&"ironhide_draught": {&"ash_resin": 2, &"bitter_root": 2},
 	&"emberblood_draught": {&"ash_resin": 3},
 }
 
 ## Gold, per brew. Flat, and cheap against the smith's lines on purpose: the
 ## draught's real price is the slot it sits in and the materials it ate. A ramp
-## here would make the tenth Heart Draught cost more than the first, which is
+## here would make the tenth Health Draught cost more than the first, which is
 ## nonsense for a thing you drink.
 const BREW_GOLD := {
-	&"heart_draught": 55,
+	&"health_draught": 55,
 	&"ironhide_draught": 85,
 	&"emberblood_draught": 95,
 }
@@ -91,7 +91,7 @@ static func emblem() -> StringName:
 ## are what put Ironhide and Emberblood here (GDD §6.2, relics 3 and 4).
 ##
 ## Adopted with no `if`: `knows_draught()` answers true for anything not in
-## `RelicDb.DRAUGHT_RELICS`, so the Heart Draught -- and any recipe added later
+## `RelicDb.DRAUGHT_RELICS`, so the Health Draught -- and any recipe added later
 ## that forgets to ask -- is hers from the start.
 static func lines() -> Array[Dictionary]:
 	var out: Array[Dictionary] = [_bottle_line()]
@@ -106,8 +106,8 @@ static func lines() -> Array[Dictionary]:
 ## made them look like one.
 ##
 ## Glass is a LADDER: four bottles at rising prices, and how many you have is the
-## only cap on everything under it. Draughts are repeatables -- a Heart Draught
-## is a Heart Draught however many you have brewed -- so they share one wrapping
+## only cap on everything under it. Draughts are repeatables -- a Health Draught
+## is a Health Draught however many you have brewed -- so they share one wrapping
 ## row of plain named cells, which is what they already looked like.
 static func groups() -> Array[Dictionary]:
 	var rows: Array[Dictionary] = lines()

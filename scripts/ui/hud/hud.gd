@@ -16,7 +16,7 @@ extends CanvasLayer
 ## except for transient state, because the over-the-shoulder camera puts the
 ## action in the upper-middle third.
 ##
-## This replaced an Ocarina-replica HUD (hearts, magic meter, N64 C-pad at
+## This replaced an Ocarina-replica HUD (discrete health, magic meter, N64 C-pad at
 ## top-right). What survived is the architecture, which was sound:
 ##   - autoload + a single Control that draws in `_draw`, so the overlay exists
 ##     whatever scene the launcher picks;
@@ -34,20 +34,19 @@ const CivilInstrumentsScript := preload("res://scripts/ui/hud/civil_instruments.
 const SurfaceMapDrawScript := preload("res://scripts/ui/hud/surface_map_draw.gd")
 
 # --- Health -----------------------------------------------------------------
-## OVERRIDES STYLEGUIDE §5.1, which specifies a row of discrete quarter cells.
+## OVERRIDES STYLEGUIDE §5.1, which specifies a row of discrete health cells.
 ## Changed to a bar on the owner's instruction. The styleguide's argument for
 ## cells was countability -- "the player needs 'three left', not 'about a fifth'"
 ## -- and that argument is real, so the countability is kept by other means: a
-## 2px VOID tick at every heart boundary and a 1px tick at every quarter, cut
-## THROUGH the fill. You can still count what is left; the fill is now
-## continuous between the ticks.
+## uniform 1px VOID tick at every HP boundary, cut THROUGH the fill, plus the
+## numeric readout inside the bar. You can still count what is left; the fill is
+## now continuous between ticks.
 ##
 ## What is NOT taken from the bar idiom is easing. Anti-slop §7.4 bans smoothly
 ## lerped meters, and that ban survives intact: this bar moves instantly on
 ## damage and drains its ghost in the same 4 discrete steps the cells did.
 ## "Bar" here means the shape, not the animation.
-const TICK_W := 1.0                ## quarter tick
-const HEART_TICK_W := 2.0          ## heart boundary tick
+const TICK_W := 1.0                ## HP tick
 ## Seconds the health you just lost stays lit in RUST before draining.
 const GHOST_HOLD := 0.40
 const GHOST_DRAIN := 0.25
@@ -246,7 +245,7 @@ var _max_magic: int = K.MAX_MAGIC
 # Animation state. The HUD only runs `_process` while one of these is live --
 # a HUD that repaints every frame to draw nothing is a HUD that costs a
 # millisecond forever.
-var _ghost_quarters: int = 0       ## cells lost, still lit in RUST
+var _ghost_health_points: int = 0  ## HP lost, still lit in RUST
 var _ghost_t: float = -1.0
 ## What the bag is worth. NOT drawn as a number any more (see `_draw_bag`); it
 ## survives because the rim's tier, the T3 breathing and the repaint budget are
@@ -306,7 +305,7 @@ var _enemies_present: bool = false
 var _ebar_ray := PhysicsRayQueryParameters3D.new()
 ## A bow or a hookshot is out, so the middle of the screen is a sight.
 var _aiming: bool = false
-var _last_quarters: int = -1
+var _last_health_points: int = -1
 ## Heat, mirrored from the signal. The WINDOW is not mirrored -- it drains every
 ## frame and is read straight off Heat when the bar draws, the same way health
 ## is read off Game. See the note on Heat._process.
@@ -377,7 +376,7 @@ func _ready() -> void:
 	add_child(_wheel)
 
 	_target_value = _headline()
-	_last_quarters = Game.quarters
+	_last_health_points = Game.health_points
 
 	for id: StringName in ArmamentDb.ICONS:
 		var tex := ArmamentDb.icon(id)
@@ -484,12 +483,12 @@ func _on_clock_minute(day: int, hour: int, minute: int) -> void:
 	_repaint()
 
 
-func _on_health(quarters: int, _max_q: int) -> void:
-	var lost := _last_quarters - quarters
+func _on_health(health_points: int, _max_health_points: int) -> void:
+	var lost := _last_health_points - health_points
 	if lost > 0:
 		# The ghost accumulates: two hits inside the hold window should show as
-		# one four-cell loss, not restart at two.
-		_ghost_quarters += lost
+		# one combined HP loss, not restart at the second hit.
+		_ghost_health_points += lost
 		_ghost_t = 0.0
 		# The bag flickers with it, underground only: "here is what you stand to
 		# lose" lands at the instant losing it becomes possible, and in the
@@ -497,10 +496,10 @@ func _on_health(quarters: int, _max_q: int) -> void:
 		if Run != null and Run.in_dungeon:
 			_damage_flicker = DAMAGE_FLICKER_FRAMES + 1
 		_wake()
-	elif quarters > _last_quarters:
-		_ghost_quarters = 0
+	elif health_points > _last_health_points:
+		_ghost_health_points = 0
 		_ghost_t = -1.0
-	_last_quarters = quarters
+	_last_health_points = health_points
 	_repaint()
 
 
@@ -853,7 +852,7 @@ func _process(delta: float) -> void:
 		_ghost_t += delta
 		if _ghost_t > GHOST_HOLD + GHOST_DRAIN:
 			_ghost_t = -1.0
-			_ghost_quarters = 0
+			_ghost_health_points = 0
 		else:
 			busy = true
 
@@ -1562,18 +1561,18 @@ func _draw_meter_segment(s: Vector2, track: Rect2, from: float, to: float,
 
 
 # --- Health -----------------------------------------------------------------
-## A continuous bar, ticked at every quarter and more heavily at every heart, so
-## "three left" is still countable without the fill being chopped into cells.
-## See the note on TICK_W for why this departs from styleguide §5.1.
+## A continuous fixed-width bar with one uniform tick at every HP boundary and a
+## direct numeric readout. See the note on TICK_W for why this departs from
+## styleguide §5.1.
 
 func _draw_health(s: Vector2) -> void:
-	var total: int = maxi(Game.max_quarters, 1)
+	var total: int = maxi(Game.max_health_points, 1)
 	var origin := Pal.HEALTH_ORIGIN * s
 	var w := Pal.HEALTH_W * s.x
 	var h := Pal.px(Pal.HEALTH_H, s.y)
 	var rect := Rect2(origin.x, origin.y, w, h)
 
-	var low := Game.quarters <= 3
+	var low := Game.health_points < K.HEALTH_UPGRADE_POINTS
 	var pulse := 0.0
 	if low:
 		pulse = 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.001 * TAU * 2.0)
@@ -1586,8 +1585,8 @@ func _draw_health(s: Vector2) -> void:
 	# The ghost sits UNDER the fill and extends past it: what you just lost.
 	var ghost := _ghost_visible()
 	if ghost > 0:
-		_draw_meter_segment(s, track, float(Game.quarters) / float(total),
-			float(Game.quarters + ghost) / float(total), Pal.RUST, true)
+		_draw_meter_segment(s, track, float(Game.health_points) / float(total),
+			float(Game.health_points + ghost) / float(total), Pal.RUST, true)
 
 	# VITAL <-> VOID, and it used to be VITAL <-> BONE. Two things were wrong with
 	# BONE and both are only visible in a frame: it is EXACTLY the stamina fill's
@@ -1600,11 +1599,12 @@ func _draw_health(s: Vector2) -> void:
 	# RUST was the other candidate and it is stamina's EXHAUSTED colour, which
 	# trades this collision for the same one a row down.
 	var fill: Color = Pal.VITAL.lerp(Pal.VOID, pulse) if low else Pal.VITAL
-	_draw_meter_segment(s, track, 0.0, float(Game.quarters) / float(total), fill, true)
+	_draw_meter_segment(s, track, 0.0,
+		float(Game.health_points) / float(total), fill, true)
 
 	# Temporary overhealth is a shield laid over the authored health instrument,
-	# not more health-bar capacity. Four reference pixels per quarter make its
-	# 1-3 quarter states discrete without moving the real-health fraction, ticks,
+	# not more health-bar capacity. Four reference pixels per HP make its small
+	# states discrete without moving the real-health fraction, ticks,
 	# or published bezel bounds. It is drawn as the same hard meter segment, but
 	# without the ordinary segment underlap so the GOLD width stays exact.
 	var overhealth_width := minf(track.size.x,
@@ -1613,26 +1613,36 @@ func _draw_health(s: Vector2) -> void:
 		var overhealth_from := 1.0 - overhealth_width / track.size.x
 		_draw_meter_segment(s, track, overhealth_from, 1.0, Pal.GOLD, true, false)
 
-	# Ticks last, cutting through fill and track alike -- that is what keeps the
-	# bar countable. Heart boundaries are heavier than quarters.
+	# Uniform HP ticks cut through fill and track alike. There are no grouped
+	# container boundaries: each point has the same visual weight.
+	var tick_width := Pal.px(TICK_W, s.y)
+	var tick_height := track.size.y * 0.45
 	for i in range(1, total):
-		var heart := i % K.HEART == 0
-		var tw := Pal.px(HEART_TICK_W if heart else TICK_W, s.y)
-		var th := track.size.y if heart else track.size.y * 0.45
-		_canvas.draw_rect(Rect2(track.position.x + i * per - tw * 0.5,
-			track.end.y - th, tw, th), Pal.VOID)
+		_canvas.draw_rect(Rect2(track.position.x + i * per - tick_width * 0.5,
+			track.end.y - tick_height, tick_width, tick_height), Pal.VOID)
+
+	# The number is the last layer so neither the ghost nor the ticks can break its
+	# letterforms. A one-pixel VOID shadow holds BONE against VITAL, RUST and GOLD.
+	var readout := "%d / %d HP" % [Game.health_points, Game.max_health_points]
+	var readout_scale := _text(10.0)
+	var readout_at := Vector2(track.get_center().x,
+		track.position.y + (track.size.y - CanvasText.height(readout_scale)) * 0.5)
+	var shadow := Vector2(Pal.px(1.0, s.y), Pal.px(1.0, s.y))
+	CanvasText.draw_centred(_canvas, readout, readout_at + shadow,
+		readout_scale, Color(Pal.VOID, 0.9))
+	CanvasText.draw_centred(_canvas, readout, readout_at, readout_scale, Pal.BONE)
 
 
-## Quarters still shown as lost. Holds, then drains right-to-left in 4 steps --
+## HP still shown as lost. Holds, then drains right-to-left in 4 steps --
 ## how much you just lost is the information; the new total is secondary.
 func _ghost_visible() -> int:
-	if _ghost_t < 0.0 or _ghost_quarters <= 0:
+	if _ghost_t < 0.0 or _ghost_health_points <= 0:
 		return 0
 	if _ghost_t <= GHOST_HOLD:
-		return _ghost_quarters
+		return _ghost_health_points
 	var f := (_ghost_t - GHOST_HOLD) / GHOST_DRAIN
 	var steps: float = 1.0 - floor(f * 4.0) / 4.0
-	return int(ceil(_ghost_quarters * steps))
+	return int(ceil(_ghost_health_points * steps))
 
 
 # --- Stamina ----------------------------------------------------------------
@@ -2387,7 +2397,7 @@ func _draught_slots() -> Array[StringName]:
 ## information — the first slot meant Ironhide or Emberblood depending on what
 ## else happened to be running at the time. Fixing them makes position the
 ## identity channel and colour the redundant one, which is the right way round,
-## because the colours cannot carry it alone: `heart_draught`'s tint is
+## because the colours cannot carry it alone: `health_draught`'s tint is
 ## `(0.88, 0.25, 0.22)` and `Pal.VITAL` is `(0.878, 0.251, 0.220)`;
 ## `ironhide_draught`'s is `(0.35, 0.47, 0.78)` and `Pal.COBALT` is
 ## `(0.345, 0.471, 0.784)`. To the precision the palette is written in, a tinted
@@ -2404,15 +2414,15 @@ func _draught_slots() -> Array[StringName]:
 ##
 ## ## There are three slots, and none of them is the one the plan asked for
 ##
-## HUD_PLAN decision 21 specifies *"slot 0 heart, slot 1 ironhide, slot 2
-## emberblood, in `PotionDb.IDS` order"*. **Heart Draught has no clock.**
+## HUD_PLAN decision 21 specifies *"slot 0 health, slot 1 ironhide, slot 2
+## emberblood, in `PotionDb.IDS` order"*. **Health Draught has no clock.**
 ## `PotionDb.apply` sends it to `Game.heal()` and never to `Game.start_draught`,
-## so `Game.draught_left(&"heart_draught")` is 0.0 for the entire life of the
+## so `Game.draught_left(&"health_draught")` is 0.0 for the entire life of the
 ## game and slot 0 would be a container that can never fill — a worse lie than the
 ## empty row it was drawn to replace.
 ##
 ## So the row is every effect that HAS a clock, and the third one is not a
-## draught at all: **the Ballast-Verse** (#39), which soaks three quarters for
+## draught at all: **the Ballast-Verse** (#39), which soaks three HP for
 ## eight seconds and is paid for with a bag stack. Before this it was invisible —
 ## the player inferred a live ward from the health bar not moving, which says a
 ## ward is up only after something has already hit you and never says how much is
@@ -2534,9 +2544,9 @@ func _draught_tint(id: StringName) -> Color:
 ##
 ## Shapes rather than hues, because the hues are already spoken for by the bars
 ## directly above this row — see the note on `_draw_draughts`. They are chosen for
-## separation at SIX PIXELS and not for iconography: a heart outline at 6 px is a
+## separation at SIX PIXELS and not for iconography: a health outline at 6 px is a
 ## blob, and the honest reduction of "soak" and "edge" is a solid plate against a
-## point. HUD_PLAN decision 30 asks for "a heart outline, a hide chevron, a
+## point. HUD_PLAN decision 30 asks for "a health outline, a hide chevron, a
 ## flame"; this is that decision at the size it actually renders, recorded in §15.
 func _draw_draught_mark(s: Vector2, box: Rect2, id: StringName, col: Color) -> void:
 	# Inset so the mark never touches the slot's own VOID hairline, which would
@@ -2565,7 +2575,7 @@ func _draw_draught_mark(s: Vector2, box: Rect2, id: StringName, col: Color) -> v
 			_canvas.draw_rect(Rect2(r.position.x, r.get_center().y,
 				r.size.x, r.size.y * 0.5), col)
 		_:
-			# The cross, for a Heart Draught that has been given a clock. Two
+			# The cross, for a Health Draught that has been given a clock. Two
 			# rects, and the only mark in the row with a hole in its silhouette.
 			var t := maxf(Pal.px(2.0, s.y), 1.0)
 			_canvas.draw_rect(Rect2(r.get_center().x - t * 0.5, r.position.y,
@@ -3279,7 +3289,7 @@ func _draw_enemy_bars(s: Vector2) -> void:
 		# Asleep and unhurt earns nothing. `is_engaged` is the monster's own answer
 		# about its own states (scripts/actors/enemies/enemy.gd).
 		var engaged: bool = e.has_method(&"is_engaged") and e.is_engaged()
-		if not engaged and hp.quarters >= hp.max_quarters:
+		if not engaged and hp.health_points >= hp.max_health_points:
 			continue
 		if hero.global_position.distance_to(e.global_position) > EBAR_RANGE:
 			continue

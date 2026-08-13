@@ -340,7 +340,7 @@ func _kill_live_wave(garrison: Garrison) -> void:
 	for raider: RaidRaider in garrison.raid_raiders:
 		if is_instance_valid(raider) and raider.health != null and not raider.health.dead:
 			raider.health.apply_hit(Hit.make(
-				raider.health.max_quarters, raider.global_position + Vector3.BACK,
+				raider.health.max_health_points, raider.global_position + Vector3.BACK,
 				&"sword", 0.0, 0.0, &"DIRECTOR"))
 
 

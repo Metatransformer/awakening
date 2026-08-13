@@ -168,7 +168,7 @@ func _owned_board() -> void:
 	var saved_upgrades: Dictionary[StringName, int] = Game.upgrades.duplicate()
 	var saved_gold := Game.gold
 	Game.upgrades[&"bag_slot"] = int(SupplyDb.LIMITS[&"bag_slot"])
-	Game.upgrades[&"heart"] = int(SupplyDb.LIMITS[&"heart"])
+	Game.upgrades[&"health"] = int(SupplyDb.LIMITS[&"health"])
 
 	var screen := _open(TradeScreen.Mode.PROGRESSION, "THE QUARTERMASTER",
 		SupplyDb, &"quartermaster", "Upgrades")
@@ -177,7 +177,7 @@ func _owned_board() -> void:
 	var first := screen._cursor
 	var first_label := screen.cursor_label()
 	_ck(screen.line_count() == int(SupplyDb.LIMITS[&"bag_slot"])
-			+ int(SupplyDb.LIMITS[&"heart"]),
+			+ int(SupplyDb.LIMITS[&"health"]),
 		"D0 the fully purchased board exposes every owned rung (%d)"
 			% screen.line_count())
 	_ck(first <= -2, "D1 the first purchased rung has an owned key (%d)" % first)

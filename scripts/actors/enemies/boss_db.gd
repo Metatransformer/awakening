@@ -56,7 +56,7 @@ extends RefCounted
 ##     lit; see `Enemy._tick_windup`). Emit `tell.sfx` once, on the first frame.
 ##     Nothing is damaging during a tell.
 ##   * **COMMIT** — the instant the tell expires: drop the glow, emit `sfx`,
-##     deliver `shape` (§5 below) for `damage` quarter-hearts with `knockback`
+##     deliver `shape` (§5 below) for `damage` HP with `knockback`
 ##     and `stun`, and `Bus.request_hitstop.emit(K.HITSTOP_HEAVY)`.
 ##   * **RECOVER** — rooted, hitboxes closed, no new tell. This is the beat's
 ##     animation tail.
@@ -235,11 +235,11 @@ static var BOSSES := {
 			"albedo": Pal.COBALT, "albedo_mix": 0.34,
 			"emission": Pal.MOSS, "energy": 0.22,
 		},
-		# 48 quarters = 12 hearts. THE ARITHMETIC, because a boss health number
+		# 48 HP. THE ARITHMETIC, because a boss health number
 		# with no working shown is a number nobody can ever safely change:
 		#
 		#   A light swing is `2 + K.EDGE_DAMAGE[rung]` (hero_combat.gd `damage`,
-		#   + `Game.sword_bonus()`), so 2 q at rung 0 and 5 q at rung 3.
+		#   + `Game.sword_bonus()`), so 2 HP at rung 0 and 5 HP at rung 3.
 		#     rung 0 -> 48/2 = 24 swings.   rung 3 -> 48/5 = 10 swings.
 		#   A punish window here averages 1.35 s, which is two light swings
 		#   (swing_time 0.60, chain step two 0.55). So 24 swings is 12 windows,
@@ -365,9 +365,9 @@ static var BOSSES := {
 			"albedo": Pal.RUST, "albedo_mix": 0.30,
 			"emission": Pal.VITAL, "energy": 0.34,
 		},
-		# 72 q = 18 hearts. rung 0 -> 36 swings; rung 3 -> 15.
+		# 72 HP. rung 0 -> 36 swings; rung 3 -> 15.
 		# Floor 2 is met at rung 1-2 in practice (the Warden's relic teaches the
-		# smith rung 2), so: 3 q -> 24 swings, 4 q -> 18. Punish averages 1.30 s
+		# smith rung 2), so: 3 HP -> 24 swings, 4 HP -> 18. Punish averages 1.30 s
 		# = two swings, so 9-12 windows at ~3.2 s a cycle: a 40-50 s fight for
 		# the player who forged, and twice that for the player who did not.
 		# That gap IS the forge, stated in one number (GDD §5.2, pillar 4).
@@ -484,8 +484,8 @@ static var BOSSES := {
 			"albedo": Pal.MIDNIGHT, "albedo_mix": 0.42,
 			"emission": Pal.ARCANE, "energy": 0.46,
 		},
-		# 96 q = 24 hearts. rung 0 -> 48 swings; rung 3 -> 20.
-		# Met at rung 2-3: 4 q -> 24 swings, 5 q -> 20, which is 10-12 punish
+		# 96 HP. rung 0 -> 48 swings; rung 3 -> 20.
+		# Met at rung 2-3: 4 HP -> 24 swings, 5 HP -> 20, which is 10-12 punish
 		# windows — the same fight LENGTH as the Warden. That is the ladder's
 		# whole job. The floors get harder; the fight stays a fight.
 		"health": 96,
@@ -554,7 +554,7 @@ static var BOSSES := {
 				# `skeleton`, because it is a key of `Enemy.DEFS`. `troll` and
 				# `knight_iron` have GLBs but no stat rows, and Enemy silently
 				# falls back to skeleton's numbers under the wrong model — a
-				# boss that summons a 14-quarter troll-looking 6-quarter
+				# boss that summons a 14 HP troll-looking 6 HP
 				# skeleton is a fight nobody can tune. See `validate()`.
 				"shape": SHAPE_SUMMON, "kind": &"skeleton", "count": 2,
 				"cap": 4, "radius": 8.0,
@@ -605,7 +605,7 @@ static var BOSSES := {
 			"albedo": Pal.VOID, "albedo_mix": 0.38,
 			"emission": Pal.VITAL, "energy": 0.30,
 		},
-		# 128 q = 32 hearts. rung 0 -> 64 swings; rung 3 -> 26.
+		# 128 HP. rung 0 -> 64 swings; rung 3 -> 26.
 		# Floor 4 assumes rung 3 (the Warden's relic gives rung 2, the smith
 		# sells rung 3): 26 swings at ~2 a window is 13 windows, ~2.9 s a cycle,
 		# so a 40-second core fight that the summoned wraiths stretch to 60-90.
@@ -696,7 +696,7 @@ static var BOSSES := {
 						+ "while its hands are still empty.",
 				},
 				# `wraith` is the hardest kind `Enemy.DEFS` actually defines
-				# (20 q, 5 damage). Two of them, capped at two, on an 8 s clock:
+				# (20 HP, 5 damage). Two of them, capped at two, on an 8 s clock:
 				# the adds are a complication the player clears, never a tide.
 				"shape": SHAPE_SUMMON, "kind": &"wraith", "count": 2,
 				"cap": 2, "radius": 9.0,
@@ -828,9 +828,9 @@ static var MINIBOSSES := {
 			"albedo": Pal.COBALT, "albedo_mix": 0.28,
 			"emission": Pal.COBALT, "energy": 0.20,
 		},
-		# 24 q = 6 hearts, HALF the Warden. The arithmetic, as the bosses show it:
+		# 24 HP, HALF the Warden. The arithmetic, as the bosses show it:
 		#
-		#   A light swing is 2 q at forge rung 0 and 5 q at rung 3.
+		#   A light swing is 2 HP at forge rung 0 and 5 HP at rung 3.
 		#     rung 0 -> 24/2 = 12 swings.   rung 3 -> 24/5 = 5 swings.
 		#   A punish window here averages 1.25 s, which is two light swings, so
 		#   12 swings is 6 windows and the average cycle is 3.3 s: about a
@@ -948,12 +948,12 @@ static var MINIBOSSES := {
 			"albedo": Pal.ASH, "albedo_mix": 0.36,
 			"emission": Pal.RUST, "energy": 0.24,
 		},
-		# 36 q = 9 hearts, HALF the Slag Ogre. That halving is the rule all four
+		# 36 HP, HALF the Slag Ogre. That halving is the rule all four
 		# minibosses are authored on -- the Sluice-Keeper is 24 against the Warden's
 		# 48 -- and it is what keeps an optional side branch a fight rather than a
 		# second boss. THE ARITHMETIC, as the bosses show it:
 		#
-		#   A light swing is 2 q at blade rung 0 and 5 q at rung 3.
+		#   A light swing is 2 HP at blade rung 0 and 5 HP at rung 3.
 		#     rung 0 -> 36/2 = 18 swings.   rung 2 -> 9.   rung 3 -> 8.
 		#   A punish window here averages 1.38 s, which is two light swings, and the
 		#   average beat cycle is 4.2 s -- the advance is a slow beat, 1.00 s of tell
@@ -1090,7 +1090,7 @@ static var MINIBOSSES := {
 			"albedo": Pal.BONE, "albedo_mix": 0.55,
 			"emission": Pal.COBALT, "energy": 0.16,
 		},
-		# 48 q = 12 hearts, half the Bellwake's 96 -- and exactly the Cistern
+		# 48 HP, half the Bellwake's 96 -- and exactly the Cistern
 		# Warden's number, which is the ladder working rather than a coincidence:
 		# floor 3's optional branch is worth the whole of floor 1's boss, and the
 		# player meets it holding two more verbs.
@@ -1206,7 +1206,7 @@ static var MINIBOSSES := {
 			"albedo": Pal.VOID, "albedo_mix": 0.40,
 			"emission": Pal.ARCANE, "energy": 0.22,
 		},
-		# 64 q = 16 hearts, half the Riven Knight's 128.
+		# 64 HP, half the Riven Knight's 128.
 		#
 		#   rung 0 -> 32 swings.   rung 3 -> 13.
 		#   Floor 4 assumes rung 3, so 13 swings is 7 windows at ~3.2 s a cycle: a
@@ -1284,7 +1284,7 @@ static var MINIBOSSES := {
 				# one.
 				#
 				# `KNOCKBACK_HEAVY` is not flavour here, it is the fight's engine. Six
-				# quarters and a heavy shove put the hero back outside beat one's 5.0 m
+				# HP and a heavy shove put the hero back outside beat one's 5.0 m
 				# gate, where the lob is the only thing left, and closing again is the
 				# hookshot's job. That loop is what "it backs across a gap" comes out as
 				# when nothing in the executor retreats.
@@ -1304,7 +1304,7 @@ static var MINIBOSSES := {
 				"sfx": &"jump_slam",
 				# 1.40 s clears the 1.37 s finisher line (`docs/BOSSES.md` §2) and it is
 				# the only window in this fight that does. The Chord Gate's dog gives
-				# the third swing away exactly once a cycle, and takes six quarters for
+				# the third swing away exactly once a cycle, and takes 6 HP for
 				# it.
 				"recover": 0.85, "punish": 1.40, "cooldown": 1.40,
 				"weight": 4.0, "min_range": 0.0, "max_range": 6.0,
@@ -1347,7 +1347,7 @@ static func is_miniboss(id: StringName) -> bool:
 ##
 ## **The minibosses have none, and the empty row is the answer rather than a
 ## gap.** `docs/SCOPE.md` §6's cap is one phase per FIGHT and `docs/BESTIARY.md`
-## §4 prices a miniboss at a third of a boss; a 24-quarter Sluice-Keeper that
+## §4 prices a miniboss at a third of a boss; a 24 HP Sluice-Keeper that
 ## rebuilt its room halfway through would be the boss's whole structure handed
 ## out behind an optional puzzle. `BossArena` connects nothing at all when this
 ## comes back empty, so a miniboss chamber keeps exactly the code path it had.
@@ -1550,7 +1550,7 @@ static func validate() -> PackedStringArray:
 		# SCOPE §6's OTHER cap: one phase. `docs/BOSSES.md` §8 item 3 asks for
 		# exactly these two and no more -- the kind is in the vocabulary, and the
 		# threshold is a fraction of a health bar rather than a number of
-		# quarters. A `turn.at` of 0 never fires and one of 1 fires on the first
+		# HP. A `turn.at` of 0 never fires and one of 1 fires on the first
 		# blow, and both are the kind of typo that reads as "the turn is broken"
 		# from a director rather than as a bad row.
 		#

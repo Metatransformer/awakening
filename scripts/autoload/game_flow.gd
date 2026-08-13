@@ -644,12 +644,12 @@ func _on_player_died() -> void:
 		# dropped entirely: the run had already ended and healed him to full,
 		# monsters kept swinging for the ~1 s the fade takes, and a second
 		# lethal hit hit this early return. He arrived in the garrison on zero
-		# hearts -- and then could not die again, because Hero.take_hit refuses
+		# HP -- and then could not die again, because Hero.take_hit refuses
 		# at zero, so nothing would ever emit `player_died` to heal him. The
 		# ending screen stops the world dead, which closes that window at the
 		# source; this makes sure the recovery still works if anything ever
 		# opens another one.
-		Game.heal(Game.max_quarters)
+		Game.heal(Game.max_health_points)
 
 
 ## A run ended, either way it can end. Stop the world and show the receipt.

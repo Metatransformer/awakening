@@ -91,7 +91,7 @@ func run(rig) -> void:
 ## with `MVP after_pickup bag=0 value=0` under a log line saying `hero 12/12`.
 ##
 ## **The healths in this director's log are not evidence and this is why.**
-## `Game.heal(Game.max_quarters)` runs twice inside `_fight`, deliberately (see
+## `Game.heal(Game.max_health_points)` runs twice inside `_fight`, deliberately (see
 ## the note there), so a hero who died a frame earlier is reported at full health
 ## a frame later. The death has to be read off the counter, never off the bar.
 func _ended(rig, where: String) -> bool:
@@ -112,8 +112,8 @@ func _ended(rig, where: String) -> bool:
 # --- Garrison ---------------------------------------------------------------
 
 func _garrison_arrival(rig) -> void:
-	print("MVP garrison gold=%d hearts=%d/%d" % [
-		Game.gold, Game.quarters, Game.max_quarters])
+	print("MVP garrison gold=%d HP=%d/%d" % [
+		Game.gold, Game.health_points, Game.max_health_points])
 	await rig.capture(out.path_join("m_00_garrison.png"))
 
 
@@ -239,7 +239,7 @@ func _sell(rig) -> bool:
 ##
 ## It was the forge's until card #91, which put Brannoc behind the floor 1
 ## miniboss -- and a new save that cannot reach the smith for its whole first hour
-## cannot buy a bag slot, a heart or an arrow either. So the repeatable stock and
+## cannot buy a bag slot, a health upgrade or an arrow either. So the repeatable stock and
 ## permanent upgrades moved to Kessa's two services (`SupplyDb`, `Npc.COUNTERS`),
 ## and the MVP loop
 ## follows them: the loop this director exists to prove is *sell the bag, spend
@@ -255,7 +255,7 @@ func _buy(rig) -> bool:
 		return false
 	await rig.tap(["interact"])
 	# Her SECOND option: Trade is the two-sided stock/bag service, while Upgrades
-	# is the permanent bag and heart progression board.
+	# is the permanent bag and max-health progression board.
 	if not await rig.talk("Upgrades"):
 		rig.fail("MVP FAIL the quartermaster would not open Upgrades")
 		return false
@@ -454,7 +454,7 @@ func _fight(rig) -> bool:
 	await rig.capture(out.path_join("m_09_enemy.png"))
 
 	var hero: Hero = rig.scene().get_tree().get_first_node_in_group(&"player")
-	var before: int = foe.health.quarters
+	var before: int = foe.health.health_points
 	# Close, then swing until it dies or we run out of patience.
 	#
 	# **EVERY WAIT IN THIS LOOP IS A GAME-CLOCK WAIT, AND THAT IS ISSUE #14.** It
@@ -500,8 +500,8 @@ func _fight(rig) -> bool:
 	print("MVP swings=%d taken=%d refused=%d stamina=%.0f" % [
 		taken + refused, taken, refused, Game.stamina])
 	print("MVP foe hp %d -> %s (hero %d/%d)" % [before,
-		foe.health.quarters if is_instance_valid(foe) else "dead",
-		Game.quarters, Game.max_quarters])
+		foe.health.health_points if is_instance_valid(foe) else "dead",
+		Game.health_points, Game.max_health_points])
 	await rig.capture(out.path_join("m_10_swung.png"))
 	# Said in the beat's own words, which is what #14's "done looks like" asked
 	# for. Three different things end this loop and they used to look identical.
@@ -512,13 +512,13 @@ func _fight(rig) -> bool:
 			% [refused, taken + refused] + " never entered ATTACK for those presses"
 			+ " (stamina=%.0f)" % Game.stamina)
 	if is_instance_valid(foe) and not foe.health.dead:
-		rig.fail("MVP FAIL %d swings did not kill a %d-quarter %s: it is on %d"
-			% [taken, before, str(foe.get("kind")), foe.health.quarters])
+		rig.fail("MVP FAIL %d swings did not kill a %d HP %s: it is on %d"
+			% [taken, before, str(foe.get("kind")), foe.health.health_points])
 
 	# Patched up HERE, the frame the fight ends, rather than four beats later
 	# where it used to be. The reason is unchanged -- see the note below -- but
 	# the timing was tuned against monsters that stood where they spawned. Now
-	# that they close in, the hero came out of the swing loop on two quarters
+	# that they close in, the hero came out of the swing loop on two HP
 	# and died during the WALK to the drop, which emptied the bag, sent Flow to
 	# the garrison, and reported "no chest" and "the rope refused to start" for
 	# a run that had no chest and no dungeon left. The line above is where the
@@ -526,15 +526,15 @@ func _fight(rig) -> bool:
 	#
 	# Not cheating the test -- the opposite. The tour teleports between beats
 	# with no regard for what is standing nearby, so the hero routinely arrives
-	# at the chest on his last heart and dies. That is `Run.die()` working
+	# at the chest at 1 HP and dies. That is `Run.die()` working
 	# correctly, but every remaining beat then reports a failure it did not
 	# cause. Death has its own proof; this one is about the seams between the
 	# screens.
-	Game.heal(Game.max_quarters)
+	Game.heal(Game.max_health_points)
 
 	await rig.wait_frames(40)
 	var motes := _motes(rig)
-	print("MVP motes=%d hero_hp=%d" % [motes.size(), Game.quarters])
+	print("MVP motes=%d hero_hp=%d" % [motes.size(), Game.health_points])
 	await rig.capture(out.path_join("m_11_drop.png"))
 
 	# Walk onto the drop -- LootMote answers overlap, not a button.
@@ -556,7 +556,7 @@ func _fight(rig) -> bool:
 		return false
 
 	# Topped up again on the way to the chest, for the same reason.
-	Game.heal(Game.max_quarters)
+	Game.heal(Game.max_health_points)
 
 	# The chest, which is where the run-defining drops live.
 	var chest := _chest(rig)
@@ -708,9 +708,9 @@ func _return(rig) -> void:
 	await rig.hold_seconds([&"ui_accept"], 0.2)
 	await rig.wait_frames(240)
 
-	print("MVP home scene=%s in_dungeon=%s gold=%d bag=%d hearts=%d/%d" % [
+	print("MVP home scene=%s in_dungeon=%s gold=%d bag=%d HP=%d/%d" % [
 		rig.scene().name, Run.in_dungeon, Game.gold, Run.bag_value(),
-		Game.quarters, Game.max_quarters])
+		Game.health_points, Game.max_health_points])
 	if rig.scene() is not Garrison:
 		rig.fail("MVP FAIL BACK TO THE GARRISON did not reach the garrison (scene=%s)" % rig.scene().name)
 	if rig.paused:

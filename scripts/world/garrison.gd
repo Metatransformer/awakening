@@ -318,7 +318,7 @@ func _open_the_game() -> void:
 ## maker's mark in your pack and the smith in the yard (`StoryDb.UNLOCKS`), but a
 ## new shopkeeper who simply APPEARS between one run and the next is a change the
 ## player has to notice on their own -- and the person most likely to miss it is
-## the one who came home with three hearts left and walked straight to their bed.
+## the one who came home with 3 HP left and walked straight to their bed.
 ## So the elder introduces them, once, the first time you are back in the yard
 ## after they arrive.
 ##

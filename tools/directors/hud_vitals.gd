@@ -15,7 +15,7 @@ extends RefCounted
 ##               bar must not move. If he rolls here the bar is a decoration.
 ##   06/07_regen K.STAMINA_DELAY has passed and the bar is climbing again
 ##
-## Health is captured alongside so the ghost drain and the heart ticks are in
+## Health is captured alongside so the ghost drain and the HP ticks are in
 ## the same sheet — Game.damage() is called directly, because taking a real hit
 ## needs an enemy and this is a UI shot, not a combat shot.
 
@@ -77,7 +77,7 @@ func run(rig) -> void:
 	await _shot(rig, "regen2")
 
 	# Health, so the ghost and the ticks land in the same sheet. Two separate
-	# hits inside GHOST_HOLD, which must read as one five-quarter loss.
+	# hits inside GHOST_HOLD, which must read as one 5 HP loss.
 	Game.damage(3)
 	await rig.wait_seconds(0.10)
 	Game.damage(2)
@@ -86,7 +86,7 @@ func run(rig) -> void:
 	await rig.wait_seconds(0.70)
 	await _shot(rig, "hurt_settled")
 
-	# Down to the low-health state: <= 3 quarters pulses VITAL<->BONE and the
+	# Down to the low-health state: <= 3 HP pulses VITAL<->BONE and the
 	# empty track goes VOID.
 	Game.damage(4)
 	await rig.wait_seconds(0.80)

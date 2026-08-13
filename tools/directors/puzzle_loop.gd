@@ -525,7 +525,7 @@ func _the_treasure(rig, d: Node, hero: Node3D) -> void:
 	# The same real damage path `cistern_floor` kills the Warden through, paced
 	# past the i-frames with the hero healed between blows.
 	var swings := 0
-	while boss.health.quarters > 0 and swings < 40:
+	while boss.health.health_points > 0 and swings < 40:
 		if boss.health.apply_hit(Hit.make(12, hero.global_position, &"sword",
 				0.0, 0.0, &"director")):
 			swings += 1
@@ -533,7 +533,7 @@ func _the_treasure(rig, d: Node, hero: Node3D) -> void:
 		await rig.wait_seconds(K.IFRAME_TIME + 0.06)
 	await rig.wait_frames(70)
 	_ck("G11 the Sluice-Keeper died (%d landed blows)" % swings,
-		not is_instance_valid(boss) or boss.health.quarters == 0)
+		not is_instance_valid(boss) or boss.health.health_points == 0)
 	_ck("G12 the seal came down", not bool(arena.call(&"is_sealed")))
 
 	if stone != null:

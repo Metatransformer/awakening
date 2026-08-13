@@ -164,7 +164,7 @@ func _boss_table() -> void:
 # --- C. The service catalogue --------------------------------------------------
 
 ## The three lines that had to move when the smith went behind the miniboss.
-const MOVED_IDS: Array[StringName] = [&"arrows", &"bag_slot", &"heart"]
+const MOVED_IDS: Array[StringName] = [&"arrows", &"bag_slot", &"health"]
 
 func _moved_lines() -> void:
 	# With a bow in the pack, because `lines()` is the SHOP and arrows are gated on
@@ -194,8 +194,8 @@ func _moved_lines() -> void:
 	# at the third price.
 	_ck("C2 the bag still stops at four slots",
 		int(SupplyDb.LIMITS.get(&"bag_slot", 0)) == 4)
-	_ck("C3 and the heart track at three",
-		int(SupplyDb.LIMITS.get(&"heart", 0)) == 3)
+	_ck("C3 and the health track at three",
+		int(SupplyDb.LIMITS.get(&"health", 0)) == 3)
 	_ck("C4 arrows are still gated on owning a bow",
 		StringName(SupplyDb.GATED_BY.get(&"arrows", &"")) == &"bow")
 

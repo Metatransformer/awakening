@@ -172,7 +172,7 @@ func _watch(rig, out: String, kind: StringName, behave: StringName,
 			break
 		elapsed += step
 		ticks += 1
-		Game.quarters = Game.max_quarters
+		Game.health_points = Game.max_health_points
 		var s: int = foe.state
 		seen[s] = int(seen.get(s, 0)) + 1
 		if s != last:
@@ -305,12 +305,12 @@ func _bearing(rig) -> void:
 		var flew := false
 		var got := Vector3.ZERO
 		for _attempt in 60:
-			# Topped up FIRST and hit for 2 quarters against a goblin's 5, so it
+			# Topped up FIRST and hit for 2 HP against a goblin's 5, so it
 			# cannot die inside the loop -- a corpse answers `_can_launch`
 			# differently and the beat would be measuring another question.
 			# `_invuln` is zeroed by hand because `set_physics_process(false)`
 			# above has stopped the clock that would otherwise bleed it off.
-			foe.health.quarters = foe.health.max_quarters
+			foe.health.health_points = foe.health.max_health_points
 			foe.health._invuln = 0.0
 			foe.state = Enemy.State.CHASE
 			foe._airborne = false
@@ -340,7 +340,7 @@ func _bearing(rig) -> void:
 ## **And the corpse, which is a different code path and the one the player
 ## actually watches.** A living body flies on a ROLL out of `_on_damaged`; a dead
 ## one flies unconditionally out of `_on_died`, off the `_last_hit_dir` the blow
-## before it stamped. Every kill throws the body, a goblin has five quarters, and
+## before it stamped. Every kill throws the body, a goblin has five HP, and
 ## most swings kill one — so a beat that only measured the living launch left the
 ## common case unmeasured, and the common case was broken.
 ##
@@ -365,7 +365,7 @@ func _corpses(rig) -> void:
 		await rig.wait_physics_frames(4)
 		corpse.set_physics_process(false)
 		corpse.global_position = at
-		corpse.health.apply_hit(Hit.make(corpse.health.max_quarters,
+		corpse.health.apply_hit(Hit.make(corpse.health.max_health_points,
 			hero.global_position, &"sword", K.KNOCKBACK_HEAVY, 0.3))
 		if corpse.state != Enemy.State.DEAD:
 			_fail("corpse %d: a blow for its whole health did not kill it" % i)

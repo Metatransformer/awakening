@@ -44,11 +44,11 @@ func run(rig) -> void:
 	if not rig.check(Game.has(&"bow"), "/grant bow grants the bow"):
 		return
 
-	var heart_before: int = int(Game.upgrades.get(&"heart", 0))
-	if not await _submit_console_command("/upgrade heart"):
+	var health_before: int = int(Game.upgrades.get(&"health", 0))
+	if not await _submit_console_command("/upgrade health"):
 		return
-	if not rig.check(int(Game.upgrades.get(&"heart", 0)) == heart_before + 1,
-			"/upgrade heart advances exactly one rung"):
+	if not rig.check(int(Game.upgrades.get(&"health", 0)) == health_before + 1,
+			"/upgrade health advances exactly one rung"):
 		return
 	if not _prove_god_mode():
 		return
@@ -251,19 +251,19 @@ func _send_key(code: int) -> void:
 
 
 func _prove_god_mode() -> bool:
-	var health_before: int = Game.quarters
+	var health_before: int = Game.health_points
 	var stamina_before: float = Game.stamina
 	var magic_before: int = Game.magic
 	var arrows_before: int = Game.arrows
 	var charges_before: int = Game.charges
 
-	Game.damage(K.QUARTER)
+	Game.damage(K.HEALTH_POINT)
 	var stamina_paid: bool = Game.spend_stamina(1.0)
 	var magic_paid: bool = Game.spend_magic(1)
 	var arrow_paid: bool = Game.spend_ammo(&"arrows")
 	var charge_paid: bool = Game.spend_ammo(&"charges")
 
-	if not _rig.check(Game.quarters == health_before,
+	if not _rig.check(Game.health_points == health_before,
 			"god mode prevents health loss through Game.damage"):
 		return false
 	if not _rig.check(stamina_paid and Game.stamina == stamina_before,

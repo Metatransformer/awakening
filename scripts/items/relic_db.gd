@@ -332,7 +332,7 @@ const BOTTLES_WITHOUT_CORE := 2
 const RUNG_RELICS: Array[StringName] = [&"tally_ledger", &"anvil_plate"]
 
 ## Draught id -> the relic that teaches it. A draught NOT in this table is known
-## from the start (the Heart Draught is, and so is anything added later that
+## from the start (the Health Draught is, and so is anything added later that
 ## forgets to ask) -- the table lists what is LOCKED, because the default for a
 ## recipe should be "the alchemist can make it".
 const DRAUGHT_RELICS := {
@@ -886,7 +886,7 @@ static func forge_rungs_known() -> int:
 
 
 ## Can the alchemist make this draught yet? True for anything not in
-## `DRAUGHT_RELICS` -- the Heart Draught is hers from the start, and a recipe
+## `DRAUGHT_RELICS` -- the Health Draught is hers from the start, and a recipe
 ## added later defaults to knowable rather than to silently locked.
 static func knows_draught(potion: StringName) -> bool:
 	if not DRAUGHT_RELICS.has(potion):

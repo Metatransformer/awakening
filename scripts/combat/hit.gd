@@ -3,8 +3,7 @@ extends RefCounted
 ## One blow. docs/CONTRACT.md §8 — there is exactly one damage path and this is
 ## the thing that travels down it.
 ##
-## Amounts are in QUARTER hearts, like the source material: K.HEART == 4 is one
-## heart, and a basic slash is deliberately not a whole one.
+## Amounts are integer HP; a basic slash deals 2 HP.
 
 ## The two kinds a bow can deliver, spelled once.
 ##
@@ -21,8 +20,8 @@ extends RefCounted
 const ARROW := &"arrow"
 const ARROW_FIRE := &"arrow_fire"
 
-## Quarter-hearts of damage. K.QUARTER == 1.
-var amount: int = K.QUARTER
+## HP of damage.
+var amount: int = K.HEALTH_POINT
 ## World position the blow came FROM, which is what knockback is measured against.
 var from: Vector3 = Vector3.ZERO
 ## Metres/sec pushed away from `from`.
@@ -86,12 +85,12 @@ var odds_stagger: float = -1.0
 enum Tier { LIGHT, HEAVY, KNOCKDOWN }
 
 
-static func make(amount_q: int, from_pos: Vector3, kind_id: StringName = &"sword",
+static func make(amount_health_points: int, from_pos: Vector3, kind_id: StringName = &"sword",
 		knock: float = 0.0, stun_time: float = 0.0,
 		source_name: StringName = &"", body_mass: float = 1.0,
 		commit: float = 0.5) -> Hit:
 	var h := Hit.new()
-	h.amount = amount_q
+	h.amount = amount_health_points
 	h.from = from_pos
 	h.kind = kind_id
 	h.knockback = knock
@@ -120,13 +119,13 @@ static func make(amount_q: int, from_pos: Vector3, kind_id: StringName = &"sword
 ## same event, which is exactly the complaint card #130 was opened for.
 ##
 ## So this leads on DAMAGE, which is the thing the incoming blows actually differ
-## by (1 quarter for a goblin, 3-6 across the twelve boss beats), and keeps
+## by (1 HP for a goblin, 3-6 across the twelve boss beats), and keeps
 ## knockback as the second term because a shove is a real part of how hard
 ## something hit you. The floor 1 boss comes out:
 ##
-##   goblin jab       1q, light  ->  0.00     boss arc     3q, light  ->  0.24
-##   boss pool        3q, light  ->  0.24     boss slam    4q, heavy  ->  0.76
-##   final charge     6q, heavy  ->  1.00
+##   goblin jab       1 HP, light  ->  0.00     boss arc     3 HP, light  ->  0.24
+##   boss pool        3 HP, light  ->  0.24     boss slam    4 HP, heavy  ->  0.76
+##   final charge     6 HP, heavy  ->  1.00
 ##
 ## The arc and the pool land on the same number and that is correct rather than a
 ## failure to discriminate: they ARE the same weight of blow, and what separates
@@ -148,8 +147,8 @@ func severity() -> float:
 ## Static rather than "make a throwaway Hit and ask it": the answer is wanted
 ## once per boss for a dozen beats, and a constructor per row to read a pure
 ## function of two numbers is a function pretending to be an object.
-static func severity_of(amount_q: int, knock: float) -> float:
-	var dmg := clampf(float(amount_q - K.QUARTER) / float(K.HEART + K.QUARTER),
+static func severity_of(amount_health_points: int, knock: float) -> float:
+	var dmg := clampf(float(amount_health_points - K.HEALTH_POINT) / 5.0,
 		0.0, 1.0)
 	var shove := clampf((knock - K.KNOCKBACK_LIGHT)
 		/ (K.KNOCKBACK_HEAVY - K.KNOCKBACK_LIGHT), 0.0, 1.0)

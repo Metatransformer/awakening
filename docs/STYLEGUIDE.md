@@ -537,7 +537,7 @@ can actually use.
 #### What it breaks, and it is one thing
 
 **World-space `Label3D` text is illegible.** `LANTERNKEEPER` over the keeper's
-booth, the training post's readout (`1 hit 3 q (0.75 ♥)`) and its damage number
+booth, the training post's readout (`1 hit 3 HP`) and its damage number
 are all 3D geometry wearing a glyph atlas, so they go through the buffer and come
 out as noise at anything past a couple of metres. `tools/directors/world_labels.gd`
 still passes — it counts pixels, and the pixels are all there — which is exactly
@@ -1030,21 +1030,21 @@ top-left. Safe area: nothing within `0.025w` / `0.031h` of an edge.
 
 ### 5.1 Health — a ticked bar, not hearts and not cells
 
-**Superseded 2026-08-08, on the owner's instruction: this was a row of discrete
-quarter cells and is now a continuous bar.** The cells' argument was
-countability — under pressure the player needs "three left", not "about a fifth"
-— and that argument was right, so the countability is carried over by other
-means rather than dropped: a **2 px VOID tick at every heart boundary and a 1 px
-tick at every quarter**, cut *through* the fill. You can still count what is
-left; the fill is continuous between the ticks.
+Health is a fixed-width continuous bar with a **uniform 1 px VOID tick at every
+individual HP boundary**, cut through the fill. There are no grouped heart
+boundaries. Countability also comes directly from the numeric
+**`current / maximum HP`** readout drawn inside the bar after the fill, ghost,
+and ticks, with the same restrained scale and contrast/shadow treatment as the
+nearby HUD text.
 
 What did **not** come across from the bar idiom is easing. §7.4 still stands:
 the bar moves instantly on damage and drains its ghost in the same 4 discrete
 steps the cells did. "Bar" here is the shape, not the animation.
 
-One horizontal bar, fixed width. The width does **not** grow with max health —
-a bar that lengthens as you buy containers walks across the screen and stops
-being a shape you recognise peripherally. More containers means denser ticks.
+One horizontal bar, fixed width. The width does **not** grow with maximum health
+— a bar that lengthens as you buy health upgrades walks across the screen and
+stops being a shape you recognise peripherally. More maximum HP means denser,
+still-uniform per-HP ticks.
 
 Health, stamina, magic and heat use one clean dark meter recipe: a VOID outer
 shell around an ASH bevel face and a recessed MIDNIGHT / ASH@60% track. Both
@@ -1053,9 +1053,9 @@ ends are straight parallel diagonals, never curves or clipped round corners:
 frame edge and MIDNIGHT lower edge deepen the face. The semantic fill colour has
 its own restrained 1 px BONE-alpha top band and VOID-alpha lower band, with no
 grain or surface texture inside the semantic fill. Valenfeld's cave-rock material
-belongs to the equipment housing (§5.2), not to body resources. Ticks still cut
-through last. Health carries a 2 px
-outer bezel and 2 px inner face;
+belongs to the equipment housing (§5.2), not to body resources. Ticks cut
+through the fill and ghost; the numeric HP readout is drawn after them. Health
+carries a 2 px outer bezel and 2 px inner face;
 the three subordinate meters carry 1 px of each, preserving a readable live
 track inside the 15 / 8 / 6 / 6 weight hierarchy. Partial fills end diagonally.
 The health ghost begins flat beneath the current fill and ends diagonally, so
@@ -1064,11 +1064,11 @@ polygons. The authored bar rectangles, left edge and row positions below do not
 move; `_note` publishes the unchanged outer bezel bounds used by layout checks.
 Temporary overhealth is a GOLD end-cap **inside the recessed health track**, at
 its right edge. It overlays the ordinary VITAL fill or empty track after those
-are drawn and before the unchanged health ticks cut through it. Each temporary
-quarter contributes exactly 4 reference pixels of cap width (scaled with
+are drawn and before the uniform health ticks cut through it. Each temporary HP
+contributes exactly 4 reference pixels of cap width (scaled with
 `Pal.px`, clamped to the track width); the cap uses the same hard diagonal and
-lit/dark bands as every meter segment. It does not enter `max_quarters` or the
-real-health fraction, and it never changes tick spacing/count, the authored
+lit/dark bands as every meter segment. It does not enter `max_health_points` or
+the real-health fraction, and it never changes tick spacing/count, the authored
 343×15 bar rectangle, or the published bezel bounds.
 Enemy health bars are excluded: at 2 px tall they are minimal world markers,
 not player instruments, and this bezel would consume them.
@@ -1077,7 +1077,7 @@ not player instruments, and this bezel would consume them.
 |---|---|
 | Origin | x `0.031` (40), top y `0.882` (635) |
 | Bar | `0.268` w (343 px) × 15 px, fixed at every max-health value |
-| Ticks | 2 px VOID full height at heart boundaries; 1 px VOID at 45% height at quarters |
+| Ticks / readout | Uniform 1 px VOID ticks at every individual HP boundary; `current / maximum HP` inside the bar, drawn last with a restrained scale and contrast/shadow |
 | Filled | VITAL | Empty | ASH @60% |
 | Frame / track | 2 px outer VOID shell; 2 px ASH/MIDNIGHT bevel face; recessed track; straight 6 px diagonal at both ends; 1 px lit/dark frame and fill bands |
 
@@ -1102,10 +1102,10 @@ unit it is ever spent in.
 | Ticks | 1 px VOID at each affordable roll boundary |
 | Frame / track | Shared recipe: 1 px outer shell and inset face; straight 3 px diagonals at both ends |
 
-- **Damage ghost:** cells just lost stay lit in RUST for 400 ms, then drain
+- **Damage ghost:** HP just lost stays lit in RUST for 400 ms, then drains
   right-to-left over 250 ms in 4 discrete steps. *How much you just lost* is the
   information; the new total is secondary.
-- **Low health (≤3 quarters):** the track goes VOID and the fill pulses
+- **Low health (≤3 HP):** the track goes VOID and the fill pulses
   **VITAL↔VOID** at 2 Hz. No red screen vignette.
 
   It was VITAL↔BONE until 2026-08-10 and that was wrong in two ways a rendered
@@ -1116,8 +1116,9 @@ unit it is ever spent in.
   alarm running backwards. Blinking to the track colour reads as the bar failing,
   which is the sentence. RUST was the other candidate and is stamina's
   *exhausted* colour, which trades one collision for the same one a row down.
-- **Extraction restore:** cells refill left-to-right at 40 ms/cell with a 1-frame
-  BONE flash each — a full bar takes 0.8 s. The heal is the reward for leaving
+- **Extraction restore:** HP refills left-to-right at 40 ms/point with a 1-frame
+  BONE flash each — 12 HP takes 0.48 s and the 32 HP cap takes 1.28 s. The heal
+  is the reward for leaving
   and it should be watched and counted, not granted in a frame.
 
 ### 5.1c Magic — the only bar that does not come back
@@ -1197,7 +1198,7 @@ Three rules, each of which replaced something that had shipped:
    leftmost-first, so a slot's position carried no information — the first slot
    meant Ironhide or Emberblood depending on what else happened to be running.
    Fixed slots make position the identity channel and colour the redundant one.
-3. **It is not a meter, and that is why it is tiles.** `heart_draught`'s tint is
+3. **It is not a meter, and that is why it is tiles.** `health_draught`'s tint is
    `(0.88, 0.25, 0.22)` and `Pal.VITAL` is `(0.878, 0.251, 0.220)`;
    `ironhide_draught`'s is `(0.35, 0.47, 0.78)` and `Pal.COBALT` is
    `(0.345, 0.471, 0.784)`. To the precision this palette is written in, a
@@ -1206,7 +1207,7 @@ Three rules, each of which replaced something that had shipped:
    risk. Four discrete steps is what §7.4 permits where it bans a lerp, and a row
    that empties in steps is visibly not one of the bars above it.
 
-**Heart Draught has no slot**, because `PotionDb.apply` sends it to `Game.heal()`
+**Health Draught has no slot**, because `PotionDb.apply` sends it to `Game.heal()`
 and never to `Game.start_draught` — a slot for it would be a container that can
 never fill.
 

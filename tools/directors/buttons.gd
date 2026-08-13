@@ -255,14 +255,14 @@ func run(rig) -> void:
 	# the weapon ring is that using one must never cost you the sword.
 	while Game.bottle_count() < 1:
 		Game.add_bottle()
-	Game.fill_bottle(&"heart_draught")
-	Game.damage(K.HEART)
+	Game.fill_bottle(&"health_draught")
+	Game.damage(4)
 	await rig.wait_frames(10)
-	var hurt := Game.quarters
+	var hurt := Game.health_points
 	await rig.tap(["use_item"])
 	await rig.wait_frames(20)
-	_check("X drank the selected bottle (%d -> %d quarters)" % [hurt, Game.quarters],
-		Game.quarters > hurt)
+	_check("X drank the selected bottle (%d -> %d HP)" % [hurt, Game.health_points],
+		Game.health_points > hurt)
 	_check("drinking left the sword in his hand (%s)"
 		% Game.armament(Game.HAND_RIGHT), String(combat.get(&"equipped")) == "")
 	await rig.capture(out.path_join("b_07_drank.png"))

@@ -85,7 +85,6 @@ ACTIONS = {
     # first pass into a single blob.
     "forge": '<path d="M2.5 11h11l4 3.5H9.5z"/><path d="M11 14.5v3.5M7 21h9l-1.5-3h-6z"/>'
              '<path d="M14 3.5h6.5M17.5 3.5v5"/>',
-    "heart": '<path d="M12 20S3.5 14.5 3.5 8.8A4.3 4.3 0 0 1 12 6.6a4.3 4.3 0 0 1 8.5 2.2C20.5 14.5 12 20 12 20z"/>',
     # Launcher, taut line, HOOK. The hook is an asymmetric J -- one long arm,
     # one stub -- because anything symmetric on the end of a line reads as a
     # barbell, which is what two passes of this glyph looked like. The chain

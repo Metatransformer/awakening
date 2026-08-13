@@ -16,7 +16,7 @@ extends RefCounted
 ##   A  **The three floor-1 beats**, each at the tier it most often rolls, three
 ##      consecutive frames apiece plus a settle. This is the card's own bar --
 ##      "take a hit from each floor-1 boss move and tell them apart with the
-##      health bar covered" -- so look at these with the hearts IGNORED. The
+##      health bar covered" -- so look at these with the health bar IGNORED. The
 ##      differences that have to carry it are the arc's width, how far the frame
 ##      lurches, and what his body does.
 ##   B  **The three tiers off one beat**, forced, so flinch / stagger / knocked
@@ -218,7 +218,7 @@ func _directions(rig, hero: Node3D, out: String) -> void:
 		# LIGHT so his body stays upright: a knockdown moves the hero, the camera
 		# chases him, and the offset would then be measuring the follow.
 		_force(hit, Hit.Tier.LIGHT)
-		Game.quarters = Game.max_quarters
+		Game.health_points = Game.max_health_points
 		hero.take_hit(hit)
 		# **TWO frames, and the second one is not slack.** `SceneTree.process_frame`
 		# is emitted at the TOP of an idle frame, before any node's `_process` --
@@ -311,7 +311,7 @@ func _force(hit: Hit, tier: Hit.Tier) -> void:
 ## Returns how far the blow actually MOVED him, on the flat, by the settle frame.
 func _throw(rig, hero: Node3D, hit: Hit, tier: Hit.Tier, out: String,
 		stem: String) -> float:
-	Game.quarters = Game.max_quarters
+	Game.health_points = Game.max_health_points
 	var stood_at := hero.global_position
 	hero.take_hit(hit)
 	for i in 3:

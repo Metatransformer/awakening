@@ -358,10 +358,10 @@ func _framed(hero: Node3D, e: Enemy) -> bool:
 	return r.has_point(cam.unproject_position(head))
 
 
-func _hurt(e: Enemy, quarters: int) -> void:
+func _hurt(e: Enemy, health_points: int) -> void:
 	# Straight at the component. `DamageArea` looks for `take_hit` first and falls
 	# back to this, and `Enemy` has no `take_hit` -- docs/CONTRACT.md §8.
-	e.health.apply_hit(Hit.make(quarters, e.global_position + Vector3.FORWARD,
+	e.health.apply_hit(Hit.make(health_points, e.global_position + Vector3.FORWARD,
 		&"test", 0.0, 0.0))
 
 

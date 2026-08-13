@@ -28,10 +28,10 @@ extends RefCounted
 const FIRST := 1
 
 ## Health multiplier per floor after the first. +25% a floor: a skeleton is 6
-## quarters on floor 1 and 16 on floor 8, which at a fully forged blade (2 base
+## HP on floor 1 and 16 HP on floor 8, which at a fully forged blade (2 base
 ## +3 edge) is a 4-hit kill instead of a 2-hit one. [tune]
 const HEALTH_PER_FLOOR := 0.25
-## One extra quarter-heart of damage every this many floors. Slower than health
+## One extra HP of damage every this many floors. Slower than health
 ## on purpose: monsters that kill you faster stop being readable long before
 ## monsters that take longer to kill do. [tune]
 const FLOORS_PER_DAMAGE := 3

@@ -100,8 +100,8 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 @export var hookshot_id: String = "hookshot_pistol"
 
 @export_group("Sword")
-## Quarter-hearts per slash. K.HEART == 4, so this is half a heart.
-@export var damage: int = 2 * K.QUARTER
+## HP per slash.
+@export var damage: int = 2
 ## Seconds the whole swing owns the hero. The clips are 1.4-2.4 s, far too slow
 ## for OOT, so they are time-scaled onto this — `Hero.request_attack` divides the
 ## clip length by this number, so raising it slows the ANIMATION, not just the
@@ -127,11 +127,11 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## overhead) from a standing start, which is why it is slow: at the light chain's
 ## pace a 2.4 s clip goes past as a twitch.
 ##
-## Priced at a full heart, level with the lunge and under the spin. What it costs
+## Priced at 4 HP, level with the lunge and under the spin. What it costs
 ## is the second of commitment and K.STAMINA_HEAVY, which is more than twice a
 ## light swing — the whole point of an Elden Ring stamina bar is that the big
 ## button is the one you cannot lean on.
-@export var heavy_damage: int = 4 * K.QUARTER
+@export var heavy_damage: int = 4
 @export var heavy_swing_time: float = 0.99
 ## Later and narrower than the light window: the clip leaps before it lands, so a
 ## window opened at the light's 0.22 puts the blade live while he is still in the
@@ -151,12 +151,12 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## a threshold short enough that committing to the spin does not feel like
 ## waiting, and long enough that a hurried press cannot fall into it by accident.
 @export var charge_time: float = 0.42
-## Over a full heart, against the light swing's half. The spin is worth the
+## 5 HP, against the light swing's 2 HP. The spin is worth the
 ## commitment or nobody presses it twice.
 ##
 ## Note that this is what EVERYONE in the circle takes. The spin is not priced as
 ## a bigger single blow — it is priced as this blow, delivered to a room.
-@export var spin_damage: int = 5 * K.QUARTER
+@export var spin_damage: int = 5
 ## Longer than any other swing in the kit. This number IS the cost — the whole
 ## trade is that you are unsteerable and unable to guard for this long.
 ##
@@ -234,16 +234,16 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## hurts AND because its clip is a 2.4 s leaping overhead: at step two's pace the
 ## whole slam would go past in a third of a second and read as a twitch.
 @export var chain_time_scale := Vector2(0.92, 1.65)
-## Extra quarter-hearts on the finisher, and the shove it delivers. The payoff
+## Extra HP on the finisher, and the shove it delivers. The payoff
 ## for landing three in a row instead of backing off after one.
-@export var chain_finisher_bonus: int = 2 * K.QUARTER
+@export var chain_finisher_bonus: int = 2
 @export var chain_finisher_knockback: float = K.KNOCKBACK_HEAVY
 
 @export_group("Lunge")
 ## Between the light swing and the spin. It is not the biggest blow in the kit;
 ## what it buys is the distance, and paying twice for that would make Z-targeting
 ## strictly better than standing your ground.
-@export var lunge_damage: int = 4 * K.QUARTER
+@export var lunge_damage: int = 4
 @export var lunge_swing_time: float = 0.78
 ## Opens after the drive ends (see lunge_drive_time), so the blade lands at the
 ## end of the leap rather than sweeping everything along the way.
@@ -295,7 +295,7 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## The stab out from behind the shield — OOT's R+B. It is not a better light
 ## swing and it is not a spin: what it buys is that it CLOSES, and it is the
 ## only attack in the kit that closes without a lock. Priced between the two.
-@export var dash_damage: int = 3 * K.QUARTER
+@export var dash_damage: int = 3
 ## Shorter than a spin (0.90). The commitment is most of the cost, because the
 ## drive has already thrown the hero somewhere he did not have to be.
 ##
@@ -321,12 +321,12 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 @export var dash_speed: float = 8.0
 
 @export_group("Slam")
-## The air slam's blow. It is the heaviest single hit in the kit — a quarter
+## The air slam's blow. It is the heaviest single hit in the kit — 1 HP
 ## more than the charged spin — and it is priced that way on purpose: it costs a
 ## jump to reach, it cannot be aimed once committed, and `slam_recover` roots the
 ## hero on the floor afterwards with no roll out of it. Everything else in here
 ## can be thrown from where you already are. [tune]
-@export var slam_damage: int = 6 * K.QUARTER
+@export var slam_damage: int = 6
 ## Metres of the circle it damages, measured from the hero's feet. Deliberately
 ## wider than the spin's 2.1: the spin is a blade at arm's length and this is the
 ## FLOOR moving, so the thing that hits you is not the weapon.
@@ -369,7 +369,7 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## sword blow in the kit outside the slam, and it should be: the price is the
 ## hardest defensive read in the game, and a reward smaller than the charged spin
 ## would make the correct play "dodge, then do the thing you could always do".
-@export var flurry_damage: int = 5 * K.QUARTER
+@export var flurry_damage: int = 5
 ## Longer than the lunge's 0.78, because this leap carries its own anticipation
 ## crouch (`Hero.clip_flurry`) where the lunge's clip does not. It is also thrown
 ## in slow motion more often than not, so the wall-clock cost is smaller than the
@@ -1966,7 +1966,7 @@ func on_parried(hit: Hit) -> void:
 	# THE OPENING, which is the thing that was actually asked for. The attacker
 	# is thrown and staggered rather than damaged — a parry that also hurt would
 	# be a free attack, and what makes it worth the risk is the second you get
-	# afterwards, not the quarter-heart.
+	# afterwards, not the HP.
 	var body := _parried_body(hit.from)
 	if body != null:
 		body.call(&"stagger", _hero.global_position, K.PARRY_STAGGER, K.PARRY_SHOVE)

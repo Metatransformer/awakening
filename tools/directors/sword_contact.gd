@@ -125,13 +125,13 @@ func _b_chain(rig, scene: Node, hero: Node3D, out: String) -> void:
 	scene.add_child(foe)
 	foe.global_position = hero.global_position + Vector3(0.0, 0.05, -1.2)
 	await rig.wait_frames(24)
-	# A skeleton has six quarters and the chain deals ten, so a fixed roster body
+	# A skeleton has six HP and the chain deals ten, so a fixed roster body
 	# dies on the finisher and the beat measures a corpse. Topped up AFTER
 	# `_build_combat` has run -- this is the one place a director is allowed to
 	# overwrite a roster stat, because what is under test is the chain, not the
 	# tuning.
-	foe.health.max_quarters = 40
-	foe.health.quarters = 40
+	foe.health.max_health_points = 40
+	foe.health.health_points = 40
 	# Held still so the chain is measured and not the chase. Physics off leaves
 	# the HealthComponent ticking (it is `_process`), which is exactly what has
 	# to keep running -- i-frames are the thing under test.
@@ -151,7 +151,7 @@ func _b_chain(rig, scene: Node, hero: Node3D, out: String) -> void:
 	Bus.hit_landed.disconnect(_on_hit_landed)
 
 	print("CONTACT chain blows %s (health %d/%d)"
-		% [_blows, foe.health.quarters, foe.health.max_quarters])
+		% [_blows, foe.health.health_points, foe.health.max_health_points])
 	if _blows.size() < 3:
 		_fail("three presses landed %d blows on a real enemy --"
 			% _blows.size()

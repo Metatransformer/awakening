@@ -225,7 +225,7 @@ func _numbers() -> void:
 		"edge": Game.sword_bonus(),
 		"soak": Game.armour_soak_exact(),
 		"speed": Game.speed_mult(),
-		"hearts": Game.heart_containers(),
+		"health_points": Game.max_health_points,
 		"stamina": Game.max_stamina,
 		"regen": Game.stamina_regen(),
 	}
@@ -246,18 +246,19 @@ func _numbers() -> void:
 			if line.is_empty():
 				break
 			JewelDb.buy(line)
-	print("JEWEL full-A edge=+%d soak=%.2f hearts=%d stamina=%.0f" % [
+	print("JEWEL full-A edge=+%d soak=%.2f health_points=%d stamina=%.0f" % [
 		Game.sword_bonus(), Game.armour_soak_exact(),
-		Game.heart_containers(), Game.max_stamina])
+		Game.max_health_points, Game.max_stamina])
 
-	_ck("E0 four Vigor rungs are two whole heart containers",
-		Game.heart_containers() == int(before["hearts"]) + 2)
-	# BOTH rings on Edge -- eight rungs at a quarter of a quarter each. This is
+	_ck("E0 four Vigor rungs add 8 HP immediately",
+		Game.max_health_points == int(before["health_points"])
+			+ K.JEWEL_MAX * K.JEWEL_VIGOR_HEALTH_POINTS)
+	# BOTH rings on Edge -- eight rungs at 0.25 HP each. This is
 	# the build the ring pair exists to allow, and it is worth as much as two
 	# thirds of the sword's own ladder, which is why the gold ramp is steeper.
-	_ck("E1 two full Edge rings are +2 quarters a swing",
+	_ck("E1 two full Edge rings are +2 HP a swing",
 		Game.sword_bonus() == int(before["edge"]) + 2)
-	_ck("E2 a Ward bracelet soaks half a quarter a rung",
+	_ck("E2 a Ward bracelet soaks 0.5 HP a rung",
 		is_equal_approx(Game.armour_soak_exact(), float(before["soak"]) + 2.0))
 
 	# The B paths, on a clean slate.
@@ -301,12 +302,12 @@ func _ceilings() -> void:
 		Game.armour_soak_exact(), K.SOAK_MAX])
 	_ck("F0 soak stops at the NUMBER's cap, not at each faucet's",
 		is_equal_approx(Game.armour_soak_exact(), K.SOAK_MAX))
-	# A whole heart off every blow is the ceiling, and it is survivable ONLY
-	# because `Hero.hurt` floors the result at one quarter. Asserted against that
+	# Four HP off every blow is the ceiling, and it is survivable ONLY because
+	# `Hero.hurt` floors the result at one HP. Asserted against that
 	# arithmetic rather than against the cap, because the cap moving is a tuning
 	# decision and the floor going missing is a bug.
 	_ck("F1 and a hit still lands for something",
-		maxi(K.QUARTER, K.HEART - Game.armour_soak()) >= K.QUARTER)
+		maxi(K.HEALTH_POINT, 4 - Game.armour_soak()) >= K.HEALTH_POINT)
 
 	# Speed from the other side: heavy plate takes 8%, two Swift rings give more
 	# than that back, and the hero still runs at exactly the measured [oot] pace
@@ -386,8 +387,8 @@ func _stat_block(rig) -> void:
 		String(shown[&"damage"]).contains("+%d" % Game.sword_bonus()))
 	_ck("H3 speed matches Game.speed_mult()",
 		String(shown[&"speed"]).begins_with("%.1f" % (Game.speed_mult() * 100.0)))
-	_ck("H4 health matches Game.heart_containers()",
-		String(shown[&"health"]).begins_with("%d" % Game.heart_containers()))
+	_ck("H4 health matches Game.max_health_points",
+		String(shown[&"health"]).begins_with("%d" % Game.max_health_points))
 	_ck("H5 stamina matches Game.max_stamina",
 		String(shown[&"stamina"]).begins_with("%d" % int(round(Game.max_stamina))))
 	_ck("H6 soak matches Game.armour_soak() AND shows the fraction (%s)"

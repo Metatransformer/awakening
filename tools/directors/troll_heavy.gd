@@ -180,12 +180,12 @@ func _fight(rig) -> void:
 	var winding := false
 	var heavy_now := false
 	var tell := 0.0
-	var hp := Game.quarters
+	var hp := Game.health_points
 
 	for i in FRAMES:
 		await rig.wait_frames(1)
-		Game.quarters = Game.max_quarters
-		hp = Game.quarters
+		Game.health_points = Game.max_health_points
+		hp = Game.health_points
 		hero.global_position = HERO_AT
 
 		if foe.state == Enemy.State.WINDUP:
@@ -232,7 +232,7 @@ func _fight(rig) -> void:
 	# checked, because stamping two of them and forgetting the third is the shape
 	# the bug actually takes.
 	if int(hr[2]) <= int(lr[2]):
-		rig.fail("B the heavy landed %d q against the ordinary swing's %d -- the telegraph did not pay"
+		rig.fail("B the heavy landed %d HP against the ordinary swing's %d -- the telegraph did not pay"
 			% [hr[2], lr[2]])
 		_fails += 1
 	if float(hr[3]) <= float(lr[3]):

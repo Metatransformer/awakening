@@ -150,7 +150,7 @@ const CLEAR_CUES := {
 ## combat with no sound at all. Making it `hit_flesh` would have been worse than
 ## silence: the sound you hear when you connect and the sound you hear when you
 ## are opened up would then be the same file, and the mix would be telling you
-## the fight is going well while your hearts drain.
+## the fight is going well while your HP drains.
 ##
 ## Two layers per blow, because a body being hurt is two things and one file
 ## cannot be both:

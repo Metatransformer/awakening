@@ -80,11 +80,11 @@ func _parry_lands(rig, out: String) -> void:
 	Bus.camera_recenter.emit()
 	# Immortal, because this beat wants to see it thrown and a corpse launches on
 	# a different impulse (`Enemy._on_died`).
-	foe.health.max_quarters = 100000
-	foe.health.quarters = 100000
+	foe.health.max_health_points = 100000
+	foe.health.health_points = 100000
 	foe.set_physics_process(false)
 
-	var hp_before: int = Game.quarters
+	var hp_before: int = Game.health_points
 	# The press. Called rather than driven through Input for the reason the class
 	# docstring gives: this beat is about the gap between the press and the blow,
 	# and `Input.action_press` is delivered on a frame boundary the director does
@@ -102,16 +102,16 @@ func _parry_lands(rig, out: String) -> void:
 	await rig.wait_physics_frames(2)
 	await rig.capture(out.path_join("parry_01_caught.png"))
 
-	if Game.quarters != hp_before:
-		_fail("a parried blow still cost %d quarters"
-			% (hp_before - Game.quarters))
+	if Game.health_points != hp_before:
+		_fail("a parried blow still cost %d HP"
+			% (hp_before - Game.health_points))
 	if combat.get(&"_riposte_t") <= 0.0:
 		_fail("the parry landed and opened no riposte window")
 	# THE OPENING. A staggered body is one that is not swinging, so the assertion
 	# is on the state and not on a flinch that might merely be playing.
 	var thrown := foe.state == Enemy.State.HURT or foe.state == Enemy.State.LAUNCHED
 	print("PARRY landed  foe_state=%d riposte=%.2f hp=%d/%d"
-		% [foe.state, combat.get(&"_riposte_t"), Game.quarters, Game.max_quarters])
+		% [foe.state, combat.get(&"_riposte_t"), Game.health_points, Game.max_health_points])
 	if not thrown:
 		_fail("a parried goblin is in state %d -- it was not staggered" % foe.state)
 	# And the hero is free, not serving out a punish he did not earn.
@@ -164,12 +164,12 @@ func _parry_whiffs(rig) -> void:
 	if combat.call(&"blocks", foe.global_position):
 		_fail("the guard is back up during the parry's recovery -- there is no punish")
 
-	var hp_before: int = Game.quarters
+	var hp_before: int = Game.health_points
 	await _swing_at(rig, foe, hero)
 	await rig.wait_physics_frames(3)
-	var lost := hp_before - Game.quarters
-	print("PARRY whiffed  lost=%d quarters (hp %d -> %d)"
-		% [lost, hp_before, Game.quarters])
+	var lost := hp_before - Game.health_points
+	print("PARRY whiffed  lost=%d HP (hp %d -> %d)"
+		% [lost, hp_before, Game.health_points])
 	if lost <= 0:
 		_fail("a blow during the parry's recovery cost nothing -- a missed parry"
 			+ " has to be a hole")
@@ -197,7 +197,7 @@ func _perfect_dodge(rig, out: String) -> void:
 		return
 	await rig.wait_physics_frames(2)
 
-	var hp_before: int = Game.quarters
+	var hp_before: int = Game.health_points
 	await _swing_at(rig, foe, hero)
 	await rig.wait_physics_frames(2)
 	var scale := Engine.time_scale
@@ -207,9 +207,9 @@ func _perfect_dodge(rig, out: String) -> void:
 	await rig.capture(out.path_join("parry_11_flurry_prompt.png"))
 
 	print("PARRY dodge  time_scale=%.2f flurry=%.2f hp=%d"
-		% [scale, combat.get(&"_flurry_t"), Game.quarters])
-	if Game.quarters != hp_before:
-		_fail("a dodged blow still cost %d quarters" % (hp_before - Game.quarters))
+		% [scale, combat.get(&"_flurry_t"), Game.health_points])
+	if Game.health_points != hp_before:
+		_fail("a dodged blow still cost %d HP" % (hp_before - Game.health_points))
 	if scale >= 0.99:
 		_fail("a perfect dodge did not slow time down (scale %.2f)" % scale)
 	if combat.get(&"_flurry_t") <= 0.0:
@@ -281,8 +281,8 @@ func _flurry(rig, out: String) -> void:
 	var foe := _foe(rig, 7005)
 	await rig.wait_frames(20)
 	Bus.camera_recenter.emit()
-	foe.health.max_quarters = 100000
-	foe.health.quarters = 100000
+	foe.health.max_health_points = 100000
+	foe.health.health_points = 100000
 	# Held still. This beat is about the hero leaving the floor and arriving, and
 	# a goblin free to walk out of the landing zone turns a movement assertion
 	# into a coin toss on where its AI happened to be.
@@ -331,7 +331,7 @@ func _flurry(rig, out: String) -> void:
 
 	var rise := top - HERO_AT.y
 	print("PARRY flurry  swing_t=%.2f airborne=%s rise=%.2f m foe_state=%d hp=%d"
-		% [swung, airborne, rise, foe.state, foe.health.quarters])
+		% [swung, airborne, rise, foe.state, foe.health.health_points])
 	if swung < 0.0:
 		_fail("the attack button in the flurry window started no swing at all")
 	if not airborne:
@@ -374,13 +374,13 @@ func _riposte_iframes(rig, out: String) -> void:
 	var foe := _foe(rig, 7006)
 	await rig.wait_frames(16)
 	Bus.camera_recenter.emit()
-	foe.health.max_quarters = 100000
-	foe.health.quarters = 100000
+	foe.health.max_health_points = 100000
+	foe.health.health_points = 100000
 	foe.set_physics_process(false)
 	foe.state = Enemy.State.IDLE
 	hero.set(&"_invuln", 0.0)
 	Game.stamina = K.MAX_STAMINA
-	Game.heal(Game.max_quarters)
+	Game.heal(Game.max_health_points)
 	# Handed over directly, exactly as the flurry beat hands over its own and for
 	# the same reason: earning it again here would make this beat fail whenever
 	# beat one fails, and a director whose beats cascade reports one bug five
@@ -404,10 +404,10 @@ func _riposte_iframes(rig, out: String) -> void:
 	# either edge of the window -- a beat that passed only because it grazed the
 	# first frame would be measuring the frame and not the rule.
 	await rig.wait_seconds(dur * 0.5)
-	var hp_before: int = Game.quarters
+	var hp_before: int = Game.health_points
 	await _swing_at(rig, foe, hero)
 	await rig.wait_physics_frames(2)
-	var during := hp_before - Game.quarters
+	var during := hp_before - Game.health_points
 	await rig.capture(out.path_join("parry_40_riposte_hit.png"))
 
 	# 3. AFTER it. Wait the swing out, and check with the state rather than the
@@ -416,10 +416,10 @@ func _riposte_iframes(rig, out: String) -> void:
 	await rig.until(func() -> bool: return hero.get(&"state") != 4, 2.0)
 	await rig.wait_physics_frames(2)
 	var after_free: bool = not hero.call(&"is_invulnerable")
-	var hp_mid: int = Game.quarters
+	var hp_mid: int = Game.health_points
 	await _swing_at(rig, foe, hero)
 	await rig.wait_physics_frames(2)
-	var after := hp_mid - Game.quarters
+	var after := hp_mid - Game.health_points
 
 	# 2. THE NULL CASE. An ordinary light swing, hit at the same point in it.
 	# `_invuln` is cleared by hand first: the blow above just landed and bought
@@ -428,7 +428,7 @@ func _riposte_iframes(rig, out: String) -> void:
 	await rig.until(func() -> bool: return hero.get(&"state") != 4, 2.0)
 	hero.set(&"_invuln", 0.0)
 	Game.stamina = K.MAX_STAMINA
-	Game.heal(Game.max_quarters)
+	Game.heal(Game.max_health_points)
 	combat.set(&"_riposte_t", 0.0)
 	await rig.tap([&"attack"])
 	var light: float = combat.get(&"_swing_t")
@@ -436,15 +436,15 @@ func _riposte_iframes(rig, out: String) -> void:
 	if light < 0.0:
 		_fail("the control swing never started, so the null case proved nothing")
 	await rig.wait_seconds(light_dur * 0.5)
-	var hp_ctrl: int = Game.quarters
+	var hp_ctrl: int = Game.health_points
 	await _swing_at(rig, foe, hero)
 	await rig.wait_physics_frames(2)
-	var control := hp_ctrl - Game.quarters
+	var control := hp_ctrl - Game.health_points
 
 	print("PARRY riposte during=%d after=%d control=%d  dash=%.2f s free_after=%s"
 		% [during, after, control, dur, after_free])
 	if during != 0:
-		_fail("a blow during the riposte cost %d quarters -- it has no i-frames"
+		_fail("a blow during the riposte cost %d HP -- it has no i-frames"
 			% during)
 	if control <= 0:
 		_fail("the NULL CASE cost nothing: a blow into an ordinary swing landed"

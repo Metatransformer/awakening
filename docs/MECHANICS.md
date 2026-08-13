@@ -30,7 +30,7 @@ interfaces belong to [CONTRACT.md](CONTRACT.md).
 | Heat tempo | Do I chase the next kill and cooling loot, or protect health and let the chain fall? | [METAGAME.md](METAGAME.md) |
 | Mercy | Do I enable bounded resistance after repeated deaths without changing encounters or rewards? | [GDD.md](GDD.md), [CONTRACT.md](CONTRACT.md) |
 
-Combat uses quarter-heart damage through one health path. Attacks have readable
+Combat uses integer HP damage through one health path. Attacks have readable
 commitment and recovery; defence depends on position, facing, and timing rather
 than passive equipment alone. A blow taken is readable the same way: its weight
 and the direction it came from are legible in the reaction, without reading the

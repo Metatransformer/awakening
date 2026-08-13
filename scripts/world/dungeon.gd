@@ -3092,7 +3092,7 @@ const AMBIENT_POT_WALL_INSET := 0.75
 const AMBIENT_POT_REWARDS := [
 	{"id": &"coins", "weight": 44, "amount": 5},
 	{"id": &"moss_agate", "weight": 20, "amount": 1},
-	{"id": &"hearts", "weight": 12, "amount": 2},
+	{"id": &"health", "weight": 12, "amount": 2},
 	{"id": &"arrows", "weight": 10, "amount": 3},
 	{"id": &"tide_sapphire", "weight": 7, "amount": 1},
 	{"id": &"charges", "weight": 5, "amount": 1},

@@ -196,7 +196,7 @@ func run(rig) -> void:
 	var health: HealthComponent = boss.get(&"health") as HealthComponent \
 		if boss != null else null
 	if not _check(rig, boss != null and is_instance_valid(boss)
-			and health != null and not health.dead and health.quarters > 0,
+			and health != null and not health.dead and health.health_points > 0,
 			"no living boss is present behind the opened BossDoor"):
 		_finish()
 		return
@@ -209,7 +209,7 @@ func run(rig) -> void:
 
 	var boss_id := StringName(arena.get(&"boss_id"))
 	var dead_flag := BossDoor.dead_flag(boss_id)
-	var landed := health.apply_hit(Hit.make(health.quarters,
+	var landed := health.apply_hit(Hit.make(health.health_points,
 		boss.global_position + Vector3(0.0, 0.0, 3.0), &"director",
 		0.0, 0.0, &"director"))
 	_check(rig, landed and health.dead,

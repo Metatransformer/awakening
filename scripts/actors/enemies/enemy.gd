@@ -77,7 +77,7 @@ const THROW_FLIGHT_MIN := 0.62
 const THROW_FLIGHT_MAX := 1.02
 const THROW_FLAT_SPEED := 8.5
 
-## kind -> stats. Damage is in quarter-hearts, matching every other number in
+## kind -> stats. Damage is in HP, matching every other number in
 ## the project. Health is tuned against the blade ladder in docs/METAGAME.md §8:
 ## a tier-0 blade does 2, so a skeleton is a 3-hit kill on run one.
 const DEFS := {
@@ -93,7 +93,7 @@ const DEFS := {
 		# second script (`docs/SCOPE.md` §1's two zeroes).
 		#
 		# The goblin wears it because the goblin is the roster's cheapest and
-		# fastest body — 5 quarters, 3.0 m/s — and both halves of that are the
+		# fastest body — 5 HP, 3.0 m/s — and both halves of that are the
 		# design. Fast enough that letting it go is a real option, and soft enough
 		# that chasing it is a real option too. On a troll the answer would always
 		# be "let it go"; on a wraith it would always be "kill it", and an enemy
@@ -129,22 +129,22 @@ const DEFS := {
 	# `FloorDb.FLOORS[4]` has named these since it was written and neither had a
 	# row, which is not a gap you can see: `DEFS.get(kind, DEFS[&"skeleton"])`
 	# below hands back SKELETON'S NUMBERS under the requested MODEL, so floor 4
-	# was spawning 6-quarter, 2-damage, 1.70 m skeletons wearing troll and iron
+	# was spawning 6 HP, 2-damage, 1.70 m skeletons wearing troll and iron
 	# knight meshes. Nothing logs that. `BossDb.validate()` refuses a summon of a
 	# kind with no row for exactly this reason.
 	#
 	# THE ARITHMETIC, because a health number with no working shown is a number
 	# nobody can safely change. A light swing is `2 + K.EDGE_DAMAGE[rung]`
-	# (hero_combat.gd), so 2 q at blade rung 0 and 5 q at rung 3. These are
+	# (hero_combat.gd), so 2 HP at blade rung 0 and 5 HP at rung 3. These are
 	# FLOOR-1 base numbers like every row above; floor 4 puts `Prog.health_mult(4)`
 	# = 1.75 on the health and `Prog.damage_bonus(4)` = +1 on the damage:
 	#
-	#   troll        22 -> 39 q on floor 4.  rung 0 -> 20 swings.  rung 3 -> 8.
-	#   knight_iron  19 -> 33 q on floor 4.  rung 0 -> 17 swings.  rung 3 -> 7.
+	#   troll        22 -> 39 HP on floor 4.  rung 0 -> 20 swings.  rung 3 -> 8.
+	#   knight_iron  19 -> 33 HP on floor 4.  rung 0 -> 17 swings.  rung 3 -> 7.
 	#
 	# Seven or eight swings for the heaviest ordinary body, against six for a
-	# floor-3 wraith (30 q at rung 3) and twenty-six for the Riven Knight itself
-	# (`BossDb`, 128 q): the roster steps, the boss is still four times a monster.
+	# floor-3 wraith (30 HP at rung 3) and twenty-six for the Riven Knight itself
+	# (`BossDb`, 128 HP): the roster steps, the boss is still four times a monster.
 	# The rung-0 column is meant to look awful. `docs/SCOPE.md` and BossDb both
 	# say arriving at the Chord Gate with an unforged blade should be a wall, and
 	# a wall is what twenty swings a body is.
@@ -161,8 +161,8 @@ const DEFS := {
 		# "damage is only unfair when you could not read it coming" -- is now
 		# literally the mechanic rather than a note about one:
 		#
-		#   the ordinary swing  0.50 s of tell,  4 q, light shove.  Staggers.
-		#   the heavy           1.05 s of tell,  7 q, heavy shove.  Floors you.
+		#   the ordinary swing  0.50 s of tell,  4 HP, light shove.  Staggers.
+		#   the heavy           1.05 s of tell,  7 HP, heavy shove.  Floors you.
 		#
 		# Average damage per swing is 5.05 against the old flat 6, so it is not a
 		# buff; it is the same threat with a readable worst case. See
@@ -200,8 +200,8 @@ const DEFS := {
 ## right; `Boss._shape_summon` wrote it on the line after `Enemy.spawn`, and the
 ## Bellwake and the Riven Knight summoned floor-1 adds on floors 3 and 4 for as
 ## long as that function's own comment claimed the opposite (card #22 -- measured
-## at `level=3` on a 6-quarter skeleton that should have had 9, and `level=4` on
-## a 20-quarter wraith that should have had 35).
+## at `level=3` on a 6 HP skeleton that should have had 9, and `level=4` on
+## a 20 HP wraith that should have had 35).
 ##
 ## The ORDER is what was wrong, so the fix is to stop the order mattering rather
 ## than to move one line and leave the next caller the same trap. `Enemy.spawn`
@@ -697,14 +697,15 @@ func _apply_level_curve() -> void:
 	if health == null:
 		return
 	# A body that has already been hit keeps the damage it has taken; one that has
-	# not stays full. `HealthComponent._ready` fills `quarters` from `max_quarters`
+	# not stays full. `HealthComponent._ready` fills `health_points` from
+	# `max_health_points`
 	# and has not run yet on the `_build_combat` path, where this reads 0 >= 16 and
 	# leaves the fill to it.
-	var was_full := health.quarters >= health.max_quarters
+	var was_full := health.health_points >= health.max_health_points
 	var mult := Prog.health_mult(level) * (Prog.ELITE_HEALTH if elite else 1.0)
-	health.max_quarters = maxi(int(roundf(float(_def["health"]) * mult)), 1)
-	health.quarters = health.max_quarters if was_full \
-		else mini(health.quarters, health.max_quarters)
+	health.max_health_points = maxi(int(roundf(float(_def["health"]) * mult)), 1)
+	health.health_points = health.max_health_points if was_full \
+		else mini(health.health_points, health.max_health_points)
 	var bonus := Prog.damage_bonus(level) + (Prog.ELITE_DAMAGE if elite else 0)
 	_damage = int(_def["damage"]) + bonus
 	# Falls back to the ordinary swing's damage, so a kind with no heavy row can
@@ -1515,7 +1516,7 @@ func _impact_point(from: Vector3) -> Vector3:
 
 # --- The freeze -------------------------------------------------------------
 ## What the hookshot does to a body. Not damage — `HealthComponent.apply_hit`
-## refuses a zero-quarter blow outright, and it should: a chain with a barb on
+## refuses a zero-HP blow outright, and it should: a chain with a barb on
 ## the end that chips a monster's health would make the hookshot a bad bow, when
 ## what it actually is is the thing that buys you the swing.
 ##
@@ -1835,7 +1836,7 @@ func _tick_grab(delta: float) -> void:
 ##
 ## The check is a DISTANCE and not a hitbox, and that is a design choice rather
 ## than a shortcut: the contact `_hitbox` deals damage, and a grab that also took
-## a quarter-heart would let the player read it as an attack that happens to
+## 1 HP would let the player read it as an attack that happens to
 ## steal. It costs you loot and nothing else, so stepping out of reach during the
 ## tell is the whole defence — which is what makes the tell worth reading.
 func _close_grab() -> void:
@@ -2191,8 +2192,8 @@ func _on_damaged(hit: Hit) -> void:
 	# Two reels, and which one is the size of the blow rather than the name of the
 	# attack. `hurt_heavy` is 0.87 s against `hurt`'s 0.60 -- a bigger movement, so
 	# a finisher, a spin or an overhead reads as a different event from a jab
-	# without the roster needing a per-attack table. A whole heart is the line
-	# because that is what separates the light chain's steps (2 quarters) from
+	# without the roster needing a per-attack table. Four HP is the line because
+	# that is what separates the light chain's steps (2 HP) from
 	# everything the player pays commitment for (4 and up).
 	#
 	# Sped up to fit the reel it is given, never left to run at its own pace: both
@@ -2204,7 +2205,7 @@ func _on_damaged(hit: Hit) -> void:
 	# is right until somebody retrims the shared library, and the failure it would
 	# ship is a reel that plays at the wrong speed in a file that never mentions
 	# animation lengths.
-	var heavy := hit.amount >= K.HEART
+	var heavy := hit.amount >= 4
 	var clip: StringName = &"hurt_heavy" if heavy else &"hurt"
 	_play(clip, false, _clip_speed(clip, maxf(_timer, 0.22)), 0.04)
 
@@ -2311,7 +2312,7 @@ func _on_died() -> void:
 	if not _airborne:
 		_stop()
 	# Guarded, because a body is allowed not to have one. `Boss` builds no contact
-	# hitbox at all -- every quarter-heart it deals comes from an authored beat's
+	# hitbox at all -- every HP it deals comes from an authored beat's
 	# shape -- and an unguarded `queue_free()` here killed it on the frame it died,
 	# taking the drop and `Bus.boss_defeated` down with it.
 	if _hitbox != null:

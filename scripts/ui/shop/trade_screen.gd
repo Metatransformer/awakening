@@ -686,7 +686,7 @@ func _selected_row() -> Dictionary:
 ## `AlchemyDb`'s is the three draughts). Every other line id is an UPGRADE token —
 ## `edge`, `bag_slot`, `chest_heavy` — and naming one of those is the whole
 ## hazard here: `UiKit.item_icon` answers by file existence alone, so the day
-## somebody bakes `assets/icons/items/heart.png` the quartermaster's HEARTS ladder
+## somebody bakes `assets/icons/items/health.png` the quartermaster's HEALTH ladder
 ## would silently start wearing it. So the id is asked of the REGISTRIES first,
 ## and a token no registry claims gets no glyph however many files match it.
 func _row_icon(row: Dictionary) -> String:
@@ -1326,7 +1326,7 @@ func _wishlist_key() -> StringName:
 ## For the directors. A beat that wants a particular line used to reach it by
 ## counting presses from the top, and that count is a lie the moment the board
 ## changes length — the smith hides ARROWS until you own a bow, so `mvp_loop`'s
-## "second line is the bag slot" quietly became "the heart container" and the run
+## "second line is the bag slot" quietly became "the health upgrade" and the run
 ## still went green. A beat can now walk the board and stop when it recognises
 ## where it is. Read-only, and the shipped screen never calls it.
 func cursor_label() -> String:
