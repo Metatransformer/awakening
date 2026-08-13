@@ -1,5 +1,18 @@
 # Decisions
 
+### 2026-08-13 — Queue Glint Trials as the post-freeze puzzle direction
+
+The backlog direction moves full authored puzzles off the mandatory dungeon
+path and into finite, one-time Glint Trials offered from a post-miniboss side
+fork. Deterministic floor-local key cycles, arena bars, and the Boss Key own
+boss access; solving an optional trial awards one permanent Glimmer for a
+health, stamina, or magic choice at a Glint statue. Issue #134 owns the scope
+amendment, economy consolidation, dungeon lifecycle changes, and implementation
+plan. This records a candidate architecture only: the current production freeze
+remains authoritative until its human proofs resolve.
+
+supersedes: docs/PUZZLES.md critical-path gate-room puzzle intent, only after the production freeze is lifted and the owning canon is amended
+
 ### 2026-08-12 — Reduce active canon and test the Raid Loop Proof
 
 Required design reading is limited to `docs/GDD.md`, `docs/NOW.md`, and
