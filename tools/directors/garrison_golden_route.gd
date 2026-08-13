@@ -73,8 +73,24 @@ func run(rig) -> void:
 	]):
 		return
 	await _shot(rig, "route_02_barracks.png")
+	if not await _walk_many(rig, "player bunk and storage", [
+		Vector3(-16.45, 0.0, -10.2), Vector3(-16.45, 0.0, -8.35),
+		Vector3(-17.35, 0.0, -9.0),
+	]):
+		return
+	if not await _expect_prompt(rig, _compound.player_bunk.bed, "player sleep bunk"):
+		return
+	await _shot(rig, "route_02b_player_bunk.png")
+	if not await _walk_many(rig, "barracks storage chest", [
+		Vector3(-16.45, 0.0, -8.35), Vector3(-15.1, 0.0, -9.0),
+	]):
+		return
+	if not await _expect_prompt(rig, _compound.barracks_storage_chest,
+			"barracks storage chest"):
+		return
+	await _shot(rig, "route_02c_storage_chest.png")
 	if not await _walk_many(rig, "barracks exit", [
-		Vector3(-15.15, 0.0, -10.2), Vector3(-12.35, 0.0, -10.2),
+		Vector3(-15.15, 0.0, -9.4), Vector3(-12.35, 0.0, -10.2),
 	]):
 		return
 
@@ -259,10 +275,10 @@ func _walk_to(rig, local_target: Vector3, tag: String,
 	return false
 
 
-func _expect_prompt(rig, npc: Npc, tag: String) -> bool:
-	if not rig.check(npc != null and is_instance_valid(npc), "%s exists" % tag):
+func _expect_prompt(rig, interactable: Interactable, tag: String) -> bool:
+	if not rig.check(interactable != null and is_instance_valid(interactable), "%s exists" % tag):
 		return false
-	var seen: bool = await rig.until(func() -> bool: return Prompt.focus == npc)
+	var seen: bool = await rig.until(func() -> bool: return Prompt.focus == interactable)
 	if not seen:
 		rig.fail("GARRISON ROUTE %s was traversable but its service prompt never took focus" % tag)
 		return false
