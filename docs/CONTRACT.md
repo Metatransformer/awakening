@@ -1795,8 +1795,13 @@ Rules:
   `gear_forged(track, level)`.
 - New on the pause menu: `PauseMenu.Screen.POUCH`, `Root/Screens/PouchScreen`
   (`scripts/ui/menu/pouch_panel.gd`) — the tab reads **INVENTORY** since card
-  #120; the enum and the node keep their names. Its one verb is A on a cell, which moves
-  that stack across the document-case line and changes nothing about the item.
+  #120; the enum and the node keep their names. Activating an occupied cell
+  opens a local action card with context-sensitive **Pack/Unpack**, **Drop**, and
+  safe-default **Back**. Drop is never a footer action. It hands the selected
+  displayed stack to `PauseMenu`, which closes the menu and creates the ordinary
+  world pickup. Empty cells do not open the card, local Cancel returns focus to
+  the originating cell, and the focused grid cell uses the shared high-contrast
+  `MenuSlot` rim.
 - Also on the pause menu: `PauseMenu.Screen.GARRISON`,
   `Root/Screens/GarrisonScreen` (`scripts/ui/menu/garrison_panel.gd`) — a
   read-only projection of `Clock`, the garrison payload, roster unlocks, relic
@@ -2012,12 +2017,27 @@ Bulk vendor policy stays outside `Run`, but the transaction does not:
 ```gdscript
 Run.sale_value(ids: Array[StringName]) -> int  # exact heat-prorated quote
 Run.sell_ids(ids: Array[StringName]) -> int    # atomic slice sale + both signals
+Run.sell_with_receipt(id: StringName, count := -1) -> Dictionary
+Run.sell_ids_with_receipt(ids: Array[StringName]) -> Dictionary
+Run.buyback_refusal(receipt: Dictionary) -> String
+Run.buy_back(receipt: Dictionary) -> bool
 ```
 
 `TradeScreen` builds the id set from `Wishlist.wishlisted_ids()` and separately
 protects components and relics. `Run` never imports wishlist policy; it only
 prices and removes the explicit slice, so the displayed SELL UNMARKED figure and
-the gold that lands share one arithmetic.
+the gold that lands share one arithmetic. An individual row that is currently
+wishlisted must pass the screen's **Sell wishlisted item?** confirmation; its
+destructive **Sell** action is paired with safe-default **Back**.
+
+The receipt variants preserve the exact sold item counts, gold payout, removed
+Heat premium, and case counts. `TradeScreen` retains those mutable receipts only
+for the lifetime of the open Trade counter and projects each as one stock-side
+**BACK** tile. `buy_back` spends the original payout, restores the exact
+case/hold split and Heat, invalidates the receipt, and emits one aggregate bag
+change; it is not a pickup and does not add lifetime earnings. A bulk sale is
+one receipt and therefore one atomic buyback. A receipt that no longer fits or
+cannot be afforded refuses before either inventory region or the purse changes.
 
 Rules:
 

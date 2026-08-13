@@ -77,10 +77,12 @@ When a pickup cannot fit, it remains on the floor and pulses. Nothing is
 silently deleted. The player may leave it, spend something, or return after
 making room where the item permits that choice.
 
-Selecting an occupied Inventory cell and choosing **Drop** throws that one
-displayed stack onto the floor in front of the hero as an ordinary pickup. A
-stack dropped from the document case loses its protection. Dropping and
-recollecting preserves its value and Heat premium rather than minting more.
+Activating an occupied Inventory cell opens that cell's local action card:
+**Pack/Unpack**, **Drop**, or **Back**. Drop is not a persistent footer action.
+It throws that one displayed stack onto the floor in front of the hero as an
+ordinary pickup. A stack dropped from the document case loses its protection.
+Dropping and recollecting preserves its value and Heat premium rather than
+minting more.
 
 The HUD groups carried value into three thresholds:
 
@@ -413,7 +415,14 @@ ordinary purchases and single-stack sales are taps.
 
 Trade also carries arrows, charges, Hardtack, and Small Beer at the prices in
 §6. **Sell Unmarked** protects components, relics, and stacks needed by current
-or pinned recipes.
+or pinned recipes. Selling an individually wishlisted stack first raises a
+destructive confirmation with **Back** selected by default.
+
+Every successful sale appears on the stock side as one **BACK** transaction for
+the rest of that open counter visit. Buying it back costs exactly the gold that
+sale paid and restores the whole transaction's original case/hold split and
+Heat premium. A bulk sale is one atomic buyback; leaving the counter ends the
+buyback window.
 
 ### Forge ladders
 

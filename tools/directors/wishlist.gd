@@ -8,6 +8,7 @@ extends RefCounted
 ##     --out=/tmp/wishlist/w.png --size=1280x720 --warmup=50
 
 const TRASH := &"deep_amber"
+const TRASH_TWO := &"iron_scrap"
 const COMPONENT := &"whetstone_grit"
 const RELIC := &"tally_ledger"
 
@@ -47,12 +48,19 @@ func run(rig) -> void:
 
 func _seed_bag() -> void:
 	Run.bag.clear()
+	Run.cased.clear()
 	Run.premium = 37
 	Run.bag[&"bone_shard"] = 4
 	Run.bag[&"cracked_flint"] = 4
 	Run.bag[TRASH] = 2
+	Run.bag[TRASH_TWO] = 3
 	Run.bag[COMPONENT] = 1
 	Run.bag[RELIC] = 1
+	# Both guarded paths cross the case/hold boundary. A round trip that only
+	# restored totals could pass every old sale check while silently unpacking it.
+	Run.cased[&"bone_shard"] = 2
+	Run.cased[TRASH] = 1
+	Run.cased[TRASH_TWO] = 1
 	Bus.bag_changed.emit(Run.bag, Run.bag_value())
 
 
@@ -107,6 +115,13 @@ func _manual_pin(rig) -> void:
 	_ck("M0 fletching is a current recipe row", i >= 0)
 	if i < 0:
 		return
+	# The Forge is tabbed. Walk the live strip until Fletching is on the active
+	# board; `_point_at` correctly refuses catalogue rows hidden by another tab.
+	for _tab in 8:
+		if screen._ladder.slot_of_line(i) >= 0:
+			break
+		screen._ladder.cycle_tab(1)
+		await rig.wait_frames(3)
 	screen._point_at(i)
 
 	# The exact polled/release-armed seam the live screen uses. There is no raw Y
@@ -156,44 +171,154 @@ func _safe_sale(rig) -> void:
 	var screen := TradeScreen.open(rig.scene(), TradeScreen.Mode.TRADE,
 		"THE STALL", SupplyDb, &"quartermaster", "Trade", SupplyDb.STOCK_IDS)
 	await rig.wait_frames(14)
+
+	var bone_i := _sell_index(screen, &"bone_shard")
+	_ck("B0 wished item is an individually sellable starred row",
+		bone_i >= 0 and bool(screen._rows[bone_i]["star"]))
+	if bone_i < 0:
+		return
+	var before_bag: Dictionary = Run.bag.duplicate()
+	var before_case: Dictionary = Run.cased.duplicate()
+	var gold_before := Game.gold
+	var premium_before := Run.premium
+	var quoted_bone := Run.line_value(&"bone_shard")
+	screen._point_at(bone_i)
+	# Real input, including its deferred GUI event. This proves the press that
+	# raises the warning cannot also land on the safe Back button beneath it.
+	await rig.tap(["ui_accept"])
+	await rig.wait_frames(3)
+	var asking := is_instance_valid(screen) and is_instance_valid(screen._confirm) \
+		and screen._confirm.is_asking
+	if not asking:
+		_ck("B1 wished sale raises the destructive warning with safe Back focused", false)
+		if is_instance_valid(screen):
+			screen.close()
+		await rig.wait_frames(4)
+		return
+	var safe_button := screen._confirm.get("_no") as Button
+	var confirm_title := screen._confirm.get("_title") as Label
+	var confirm_body := screen._confirm.get("_body") as Label
+	_ck("B1 wished sale raises the destructive warning with safe Back focused",
+		confirm_title.text == "Sell wishlisted item?"
+			and confirm_body.text \
+				== "This item is on your wishlist. Are you sure you want to sell it?"
+			and screen.get_viewport().gui_get_focus_owner() == safe_button)
+	await rig.capture(_out.path_join("wishlisted_sale_warning.png"))
+
+	# Event only: this is the real GUI route, deliberately without the director's
+	# usual immediate action-state half. Trade owns Cancel before its board loop.
+	var cancel_event := InputEventAction.new()
+	cancel_event.action = &"ui_cancel"
+	cancel_event.pressed = true
+	Input.parse_input_event(cancel_event)
+	await rig.wait_frames(2)
+	cancel_event = InputEventAction.new()
+	cancel_event.action = &"ui_cancel"
+	cancel_event.pressed = false
+	Input.parse_input_event(cancel_event)
+	await rig.wait_frames(2)
+	_ck("B2 Back cancels without changing item, split, premium or gold",
+		not screen._confirm.is_asking and Run.bag == before_bag
+			and Run.cased == before_case and Run.premium == premium_before
+			and Game.gold == gold_before)
+
+	# Ask again, move from safe Back to Sell through polled direction state, then
+	# confirm through the same eventless seam. The resolving press must sell once,
+	# not fall through and activate the newly refreshed board a second time.
+	screen._commit()
+	Input.action_release(&"ui_left")
+	screen._tick_input(0.0)
+	Input.action_press(&"ui_left")
+	screen._tick_input(0.0)
+	Input.action_release(&"ui_left")
+	screen._tick_input(0.0)
+	Input.action_release(&"ui_accept")
+	screen._tick_input(0.0)
+	Input.action_press(&"ui_accept")
+	screen._tick_input(0.0)
+	Input.action_release(&"ui_accept")
+	screen._tick_input(0.0)
+	await rig.wait_frames(4)
+	_ck("B3 confirm sells the pending wished stack exactly once",
+		not Run.bag.has(&"bone_shard")
+			and Game.gold - gold_before == quoted_bone
+			and screen._buybacks.size() == 1)
+	var wished_receipt: Dictionary = screen._buybacks[0] if not screen._buybacks.is_empty() else {}
+	_ck("B3a receipt records exact sold, paid, Heat and case counts",
+		(wished_receipt.get(&"items", {}) as Dictionary) == {&"bone_shard": 4}
+			and int(wished_receipt.get(&"paid_gold", 0)) == quoted_bone
+			and int(wished_receipt.get(&"premium", -1)) \
+				== premium_before - Run.premium
+			and (wished_receipt.get(&"case_counts", {}) as Dictionary) \
+				== {&"bone_shard": 2})
+
+	var back_i := _kind_index(screen, &"buyback")
+	var back_cell: Button = screen._stock_grid.cell_for(back_i)
+	if back_i >= 0:
+		screen._point_at(back_i)
+	_ck("B4 sale becomes a visible stock-side BACK transaction",
+		back_i >= 0 and screen._stock_rows.has(back_i) and back_cell != null
+			and String(back_cell.get_node("Tag").text) == "BACK"
+			and screen._verb() == "Buy back")
+	await rig.capture(_out.path_join("buyback_treatment.png"))
+
+	var earned_after_sale := Game.gold_earned
+	if back_i >= 0:
+		screen._commit()
+	await rig.wait_frames(4)
+	_ck("B5 buyback restores the exact bag, case, Heat and purse",
+		Run.bag == before_bag and Run.cased == before_case
+			and Run.premium == premium_before and Game.gold == gold_before)
+	_ck("B6 buyback is spending, not loot or new lifetime earnings",
+		Game.gold_earned == earned_after_sale and screen._buybacks.is_empty())
+
 	var bulk_i := _kind_index(screen, &"all")
-	_ck("B0 the vendor offers one bulk action", bulk_i >= 0)
+	_ck("B7 the vendor offers one bulk action", bulk_i >= 0)
 	if bulk_i < 0:
 		return
 	var bulk: Dictionary = screen._rows[bulk_i]
 	var ids: Array[StringName] = bulk["ids"]
 	var quoted := Run.sale_value(ids)
-	_ck("B1 bulk intent is SELL UNMARKED", bulk["label"] == "SELL UNMARKED")
-	_ck("B2 quote is the exact premium-prorated payout",
+	_ck("B8 bulk intent is SELL UNMARKED", bulk["label"] == "SELL UNMARKED")
+	_ck("B9 quote is the exact premium-prorated payout",
 		int(bulk["price"]) == quoted and String(bulk["sub"]).contains(str(quoted)))
-	_ck("B3 only ordinary trash is in the sale slice", ids == [TRASH])
+	_ck("B10 only ordinary trash is in the sale slice",
+		ids.size() == 2 and ids.has(TRASH) and ids.has(TRASH_TWO))
 	screen._point_at(bulk_i)
 	await rig.capture(_out.path_join("sell_unmarked.png"))
 
-	var gold_before := Game.gold
-	var premium_before := Run.premium
+	before_bag = Run.bag.duplicate()
+	before_case = Run.cased.duplicate()
+	gold_before = Game.gold
+	premium_before = Run.premium
 	screen._commit()
 	await rig.wait_frames(6)
-	_ck("B4 displayed payout is what lands", Game.gold - gold_before == quoted)
-	_ck("B5 trash sold while wished inputs, component and relic remain",
-		not Run.bag.has(TRASH)
+	_ck("B11 displayed payout is what lands", Game.gold - gold_before == quoted)
+	_ck("B12 trash sold while wished inputs, component and relic remain",
+		not Run.bag.has(TRASH) and not Run.bag.has(TRASH_TWO)
 			and Run.bag.get(&"bone_shard", 0) == 4
 			and Run.bag.get(&"cracked_flint", 0) == 4
 			and Run.bag.get(COMPONENT, 0) == 1
 			and Run.bag.get(RELIC, 0) == 1)
-	_ck("B6 only the sold slice's heat premium left",
+	_ck("B13 only the sold slice's heat premium left",
 		Run.premium >= 0 and Run.premium < premium_before)
+	_ck("B14 bulk sale creates one atomic two-stack buyback batch",
+		screen._buybacks.size() == 1
+			and (screen._buybacks[0].get(&"items", {}) as Dictionary) \
+				== {TRASH: 2, TRASH_TWO: 3}
+			and (screen._buybacks[0].get(&"case_counts", {}) as Dictionary) \
+				== {TRASH: 1, TRASH_TWO: 1})
 
-	var bone_i := _sell_index(screen, &"bone_shard")
-	_ck("B7 wished item is still an individually sellable starred row",
-		bone_i >= 0 and bool(screen._rows[bone_i]["star"]))
-	if bone_i >= 0:
-		screen._point_at(bone_i)
-		gold_before = Game.gold
+	var earned_after_bulk := Game.gold_earned
+	back_i = _kind_index(screen, &"buyback")
+	if back_i >= 0:
+		screen._point_at(back_i)
 		screen._commit()
-		await rig.wait_frames(5)
-		_ck("B8 individual starred sale succeeds",
-			not Run.bag.has(&"bone_shard") and Game.gold > gold_before)
+	await rig.wait_frames(5)
+	_ck("B15 one buyback restores the whole batch and its exact split",
+		Run.bag == before_bag and Run.cased == before_case
+			and Run.premium == premium_before and Game.gold == gold_before
+			and Game.gold_earned == earned_after_bulk and screen._buybacks.is_empty())
 	screen.close()
 	await rig.wait_frames(8)
 

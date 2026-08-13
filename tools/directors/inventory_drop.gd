@@ -1,5 +1,5 @@
 extends RefCounted
-## The Inventory's Drop verb, end to end through the real menu and world pickup.
+## Item-local Inventory actions, end to end through the real menu and world pickup.
 ##
 ##   timeout 400 tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/dungeon.tscn \
@@ -49,44 +49,78 @@ func run(rig: Variant) -> void:
 	if not _check(rig, menu.is_open and pouch.visible,
 			"B0 the real Inventory action opened the real screen"):
 		return
-	var drop := pouch.find_child("Drop", true, false) as Button
-	if not _check(rig, drop != null, "B1 the Inventory footer has its Drop button"):
+	var actions := pouch.get_node("ItemActions") as Control
+	var context := pouch.get_node("ItemActions/Frame/Pad/Buttons/Context") as Button
+	var drop := pouch.get_node("ItemActions/Frame/Pad/Buttons/Drop") as Button
+	var action_back := pouch.get_node("ItemActions/Frame/Pad/Buttons/Back") as Button
+	if not _check(rig, actions != null and context != null and drop != null
+			and action_back != null, "B1 Inventory built its local item-action card"):
 		return
-	_check(rig, drop.find_valid_focus_neighbor(SIDE_RIGHT) == pouch._back
-		and pouch._back.find_valid_focus_neighbor(SIDE_LEFT) == drop,
-		"B1a the controller can branch between Back and Drop without breaking the loop")
+	_check(rig, _footer_buttons(pouch) == 1 and pouch._back.text == "Back",
+		"B2 the persistent footer contains Back and no Drop action")
 
 	var occupied := pouch._grid.cell_at(0) as Button
 	var empty := pouch._grid.cell_at(1) as Button
 	if not _check(rig, occupied != null and empty != null,
-			"B2 the hold drew one occupied and one empty cell"):
+			"B3 the hold drew one occupied and one empty tile"):
 		return
-	var before_click_case := Run.in_case(ITEM)
-	var before_click_hold := Run.in_hold(ITEM)
-	var mouse_down := InputEventMouseButton.new()
-	mouse_down.button_index = MOUSE_BUTTON_LEFT
-	mouse_down.pressed = true
-	occupied.gui_input.emit(mouse_down)
-	occupied.pressed.emit()
-	await rig.wait_frames(3)
-	_check(rig, not drop.disabled and pouch._selected_id == ITEM
-		and pouch._selected_count == HOLD_COUNT and not pouch._selected_from_case,
-		"B3 clicking the occupied hold cell selects its displayed stack for Drop")
-	_check(rig, Run.in_case(ITEM) == before_click_case
-		and Run.in_hold(ITEM) == before_click_hold,
-		"B3a a mouse click selects without invoking A's pack action")
-	empty.grab_focus()
-	await rig.wait_frames(3)
-	_check(rig, drop.disabled and pouch._selected_id == &"",
-		"B4 selecting an empty hold cell disables Drop")
 	occupied.grab_focus()
 	await rig.wait_frames(3)
-	drop.grab_focus()
+	_check(rig, occupied.has_focus() and pouch._selected_id == ITEM
+		and pouch._selected_count == HOLD_COUNT and not pouch._selected_from_case,
+		"B4 the stronger tile cursor selects the exact displayed hold stack")
+	var focus_style := occupied.get_theme_stylebox("focus") as StyleBoxFlat
+	_check(rig, focus_style != null and focus_style.border_width_left >= 3
+		and focus_style.bg_color.a >= 0.75
+		and focus_style.border_color.is_equal_approx(UITheme.HIGHLIGHT),
+		"B4a focused MenuSlot uses a neutral selected fill and thick off-white rim")
+	await _capture(rig, "inventory_selected_tile.png")
+
+	var before_back_case := Run.in_case(ITEM)
+	var before_back_hold := Run.in_hold(ITEM)
+	var before_back_premium := Run.premium
+	await rig.tap([&"ui_accept"])
 	await rig.wait_frames(3)
-	_check(rig, not drop.disabled and pouch._selected_id == ITEM
-		and pouch._selected_count == HOLD_COUNT,
-		"B5 moving to Drop keeps it pointed at the selected cell")
-	await _capture(rig, "inventory_selected_hold.png")
+	_check(rig, actions.visible and context.text == "Pack"
+		and _viewport_focus(pouch) == action_back,
+		"B5 controller confirm opens Pack / Drop / Back with safe Back focused")
+	_check(rig, _card_is_beside(actions, occupied),
+		"B6 the action card is anchored beside its exact source tile")
+	await _capture(rig, "inventory_actions_hold.png")
+	await rig.tap([&"ui_accept"])
+	await rig.wait_frames(3)
+	_check(rig, not actions.visible and occupied.has_focus(),
+		"B7 the default Back action closes the card and restores source-tile focus")
+	_check(rig, Run.in_case(ITEM) == before_back_case
+		and Run.in_hold(ITEM) == before_back_hold and Run.premium == before_back_premium,
+		"B8 Back preserves the exact stack and premium")
+
+	empty.grab_focus()
+	await rig.wait_frames(2)
+	await rig.tap([&"ui_accept"])
+	await rig.wait_frames(3)
+	_check(rig, not actions.visible and empty.has_focus(),
+		"B9 activating an empty tile offers no item actions")
+	_check(rig, Run.in_case(ITEM) == before_back_case
+		and Run.in_hold(ITEM) == before_back_hold,
+		"B10 empty activation leaves both inventory regions untouched")
+
+	# Drive the Button's mouse-facing signal after focus is deliberately elsewhere.
+	# ItemGrid owns the press and emits the same `cell_activated` signal as A; the
+	# pouch no longer has a mouse flag or a mouse-only selection branch.
+	_mouse_activate(occupied)
+	await rig.wait_frames(3)
+	_check(rig, actions.visible and context.text == "Pack"
+		and pouch._selected_id == ITEM and pouch._selected_count == HOLD_COUNT
+		and not pouch._selected_from_case and _viewport_focus(pouch) == action_back,
+		"B11 mouse activation converges on the same hold card and safe focus")
+	_check(rig, Run.in_case(ITEM) == before_back_case
+		and Run.in_hold(ITEM) == before_back_hold,
+		"B12 opening actions by mouse does not silently Pack")
+	await rig.tap([&"ui_cancel"])
+	await rig.wait_frames(3)
+	_check(rig, not actions.visible and occupied.has_focus() and menu.is_open,
+		"B13 ui_cancel is local Back and restores the mouse source without leaving Inventory")
 
 	var total_before := Run.bag_count()
 	var base_before := Run.base_value()
@@ -95,8 +129,11 @@ func run(rig: Variant) -> void:
 	var hero_at := hero.global_position
 	var forward := K.plane(-hero.global_transform.basis.z).normalized()
 	await rig.tap([&"ui_accept"])
+	await rig.wait_frames(2)
+	drop.grab_focus()
+	await rig.tap([&"ui_accept"])
 	await rig.wait_frames(8)
-	_check(rig, not menu.is_open, "C0 pressing the real Drop button closes the menu")
+	_check(rig, not menu.is_open, "C0 local Drop hands control back to the world")
 	_check(rig, Run.bag_count() == total_before - HOLD_COUNT
 		and Run.in_hold(ITEM) == 0,
 		"C1 the hold drop removed exactly the displayed six-piece stack")
@@ -105,14 +142,14 @@ func run(rig: Variant) -> void:
 
 	var motes := _motes(scene)
 	if not _check(rig, motes.size() == 1,
-			"C3 the handoff spawned exactly one ordinary LootMote"):
+			"C3 the world handoff spawned exactly one ordinary LootMote"):
 		return
 	var mote: LootMote = motes[0]
 	var removed_premium: int = premium_before - Run.premium
 	var removed_base: int = def.value * HOLD_COUNT
 	var expected_mult := 1.0 + float(removed_premium) / float(removed_base)
 	_check(rig, mote.item_id == ITEM and mote.count == HOLD_COUNT,
-		"C4 the mote carries the selected id and displayed count")
+		"C4 the mote carries the selected hold id and displayed count")
 	_check(rig, is_equal_approx(mote.heat_mult, expected_mult),
 		"C5 the mote carries the removed stack's exact Heat multiplier")
 
@@ -143,30 +180,36 @@ func run(rig: Variant) -> void:
 	_check(rig, _motes(scene).is_empty(),
 		"D3 the collected ordinary pickup left no duplicate mote")
 
-	# A separate case-side press proves the selected-region rule in the other
-	# direction. The hold stack remains present; only the protected subset falls.
+	# The protected side gets the same local card and the same PauseMenu handoff;
+	# only the region flag changes, so the existing drop transaction trims cased.
 	await rig.tap([&"inventory"])
 	await rig.wait_frames(12)
 	var case_cell := pouch._case_grid.cell_at(0) as Button
 	if not _check(rig, menu.is_open and case_cell != null,
-			"E0 Inventory reopened with an occupied case cell"):
+			"E0 Inventory reopened with an occupied case tile"):
 		return
 	case_cell.grab_focus()
-	await rig.wait_frames(3)
+	await rig.wait_frames(2)
 	var case_stack: int = pouch._selected_count
 	var case_before: int = Run.in_case(ITEM)
 	var bag_before: int = Run.bag_count()
-	_check(rig, case_stack > 0 and pouch._selected_from_case and not drop.disabled,
-		"E1 selecting an occupied case cell enables Drop for that case stack")
+	await rig.tap([&"ui_accept"])
+	await rig.wait_frames(3)
+	_check(rig, actions.visible and context.text == "Unpack"
+		and pouch._selected_from_case and case_stack > 0,
+		"E1 a case activation offers Unpack / Drop / Back for that case stack")
 	drop.grab_focus()
-	await rig.wait_frames(2)
 	await rig.tap([&"ui_accept"])
 	await rig.wait_frames(8)
-	_check(rig, not menu.is_open, "E2 the case-side Drop also closes the menu")
+	_check(rig, not menu.is_open, "E2 the case-side local Drop returns to the world")
 	_check(rig, Run.in_case(ITEM) == case_before - case_stack,
-		"E3 dropping from the case reduced the protected count by the displayed stack")
+		"E3 case Drop reduced the protected count by the displayed stack")
 	_check(rig, Run.bag_count() == bag_before - case_stack,
-		"E4 the case-side drop removed the same stack from the bag total")
+		"E4 case Drop removed the same stack from the bag total")
+	var case_motes := _motes(scene)
+	_check(rig, case_motes.size() == 1 and case_motes[0].item_id == ITEM
+		and case_motes[0].count == case_stack,
+		"E5 the existing world handoff spawned the exact selected case stack")
 	print("INVENTORY DROP director completed")
 
 
@@ -189,6 +232,38 @@ func _prepare(rig: Variant, scene: Node, menu: PauseMenu) -> void:
 	Bus.bag_changed.emit(Run.bag, Run.bag_value())
 	_check(rig, taken == TOTAL_COUNT, "setup put the full deterministic stack in the bag")
 	await rig.wait_frames(4)
+
+
+func _footer_buttons(pouch: MenuPouchPanel) -> int:
+	var count := 0
+	for child: Node in pouch._back.get_parent().get_children():
+		if child is Button:
+			count += 1
+	return count
+
+
+func _viewport_focus(control: Control) -> Control:
+	return control.get_viewport().gui_get_focus_owner()
+
+
+func _card_is_beside(actions: Control, source: Control) -> bool:
+	var frame := actions.get_node("Frame") as PanelContainer
+	if frame == null:
+		return false
+	var card_rect := frame.get_global_rect()
+	var source_rect := source.get_global_rect()
+	return not card_rect.intersects(source_rect) \
+		and card_rect.position.x >= 0.0 and card_rect.position.y >= 0.0 \
+		and card_rect.end.x <= actions.get_viewport_rect().size.x \
+		and card_rect.end.y <= actions.get_viewport_rect().size.y
+
+
+func _mouse_activate(button: Button) -> void:
+	var mouse_down := InputEventMouseButton.new()
+	mouse_down.button_index = MOUSE_BUTTON_LEFT
+	mouse_down.pressed = true
+	button.gui_input.emit(mouse_down)
+	button.pressed.emit()
 
 
 func _walk_to_mote(rig: Variant, scene: Node, hero: Hero, mote: LootMote,

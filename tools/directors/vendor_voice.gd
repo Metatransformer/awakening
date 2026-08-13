@@ -54,6 +54,10 @@ var _sales := 0
 func run(rig) -> void:
 	_rig = rig
 	_out = rig.arg("out", "/tmp/vendor/x.png").get_base_dir()
+	# This director measures transaction voice cadence, not wishlist policy. Own a
+	# deterministic bag whose individual rows remain immediate sales.
+	Game.restore_wishlist_lines([])
+	Settings.set_auto_wishlist(false)
 	Bus.items_sold.connect(func(_sold: Dictionary, _paid: int) -> void:
 		_sales += 1)
 	await rig.wait_frames(20)
