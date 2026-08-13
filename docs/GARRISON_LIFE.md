@@ -1,9 +1,10 @@
 # Garrison life
 
-This document owns the garrison's civil rhythm, the built Firewood/Hearth
-vignette, and the bounded raid proof. Detailed descent economy belongs to
-[METAGAME.md](METAGAME.md); playtest criteria belong to
-[design-tests/RAID_LOOP_PROOF.md](design-tests/RAID_LOOP_PROOF.md).
+This document owns the garrison's civil rhythm, the built Firewood/Hearth and
+fishing/provisions rules, derived morale, and the bounded raid proof. Detailed
+descent economy belongs to [METAGAME.md](METAGAME.md); playtest criteria belong
+to [design-tests/RAID_LOOP_PROOF.md](design-tests/RAID_LOOP_PROOF.md) and
+[design-tests/FISHING_PROVISIONS_PROOF.md](design-tests/FISHING_PROVISIONS_PROOF.md).
 
 ## Home rhythm
 
@@ -53,8 +54,9 @@ ceremony is implemented and verified in the real garrison; it remains separate
 from the raid proof.
 
 The existing read-only Garrison page reports time, the next phase, current
-Firewood/Hearth state, residents and their activities, and active garrison
-effects. It performs no remote action.
+Firewood/Hearth and Fish/supper state, Well Fed readiness, overall and
+per-resident morale with its causes, residents and their activities, and active
+garrison effects. It performs no remote action.
 
 ## Firewood and Hearth
 
@@ -81,6 +83,53 @@ availability, carrying capacity, or hearth capacity rule is not satisfied.
 The exact item, service, and economy contracts remain with
 [ITEMS.md](ITEMS.md), [METAGAME.md](METAGAME.md), and
 [CONTRACT.md](CONTRACT.md).
+
+## Fishing and provisions
+
+Exactly one spring-fed fishing pond occupies the blocked eastern spur of the
+garrison outskirts. Its dock, rod rack, creel, near-water target, and deep-water
+target make the opportunity readable while the route beyond remains physically
+closed. The rod belongs to this location; it is not a weapon, tool-manifest
+entry, bag item, wheel item, or shop good.
+
+Interacting enters one bounded fishing mode: choose near or deep water, cast,
+react to the bite, and reel while steering against the fish's run and managing
+tension. The rules that bound its resource economy are exact:
+
+- Fish reserve capacity is **three units**, representing three suppers.
+- At most **three Fish units per campaign day** may be banked.
+- A near-water catch banks **one** unit; a deep-water catch banks **two**.
+  A target is unavailable unless both its full yield and reserve space remain;
+  catches are never partially banked.
+- A successful or failed attempt advances the civil clock by **ten minutes**.
+  Cancelling exits lawfully and advances no time.
+- At **20:00**, supper consumes at most one stored Fish. A served supper makes
+  the current Fed cause active and prepares Well Fed. An empty supper clears
+  the current Fed cause but does not erase a previously prepared, unused Well
+  Fed meal.
+
+Well Fed applies to the next new descent only. Beginning that descent consumes
+the prepared state and grants **+15 temporary maximum stamina** for the trip.
+The active trip state survives a resumable dungeon save, then clears on
+extraction or death. The bonus sits outside permanent Focus progression and
+never becomes a purchase, upgrade rank, or permanent saved maximum.
+
+## Morale and care
+
+Resident morale is derived from three visible causes rather than stored as a
+separate economy:
+
+- **Warm** is active when the last resolved bonfire was fueled.
+- **Fed** is active when the last resolved supper served Fish.
+- **Connected** is active after a substantive authored conversation through
+  that campaign day and the following day. Repeated greetings and opening a
+  service do not refresh it.
+
+For each arrived resident, zero, one, two, or three active causes read as
+**Low**, **Uneasy**, **Steady**, or **High** morale. The Garrison page also
+reports an aggregate qualitative label across arrived residents. These labels
+communicate care; they do not lock services, modify prices, kill or remove
+residents, create relationship levels, or start a failure spiral.
 
 ## Builder and Elder
 
@@ -123,11 +172,12 @@ The complete authored slice and evidence rules live in
 
 ## Expansion gates
 
-- Firewood does not authorise another chore, relationship ladder, profession,
-  town economy, or freeform base builder.
+- The bounded Firewood and fishing/provisions loop does not authorise another
+  chore, fishing location, gathering profession, relationship ladder, town
+  economy, or freeform base builder.
 - Implementing one raid does not authorise recurrence.
-- No scouts, watchtowers, guards, staffing, morale, multiple routes, multiple
-  waves, additional defenses, destructible buildings, or barrel interactions
-  belong to this slice.
+- No scouts, watchtowers, guards, staffing, morale-based service locks or
+  relationship progression, multiple raid routes or waves, additional
+  defenses, destructible buildings, or barrel interactions are authorised.
 - A human result may authorise the next design decision. It never authorises
   expansion automatically; [SCOPE.md](SCOPE.md) must change explicitly.

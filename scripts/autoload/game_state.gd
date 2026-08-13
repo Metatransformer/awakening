@@ -330,6 +330,9 @@ var flags: Dictionary[StringName, bool] = {}
 # --- Garrison life ----------------------------------------------------------
 
 const FIREWOOD_CAP: int = 3
+const FISH_CAP: int = 3
+const FISH_DAILY_CAP: int = 3
+const WELL_FED_STAMINA: float = 15.0
 
 var firewood_stock: int = 0:
 	set(value):
@@ -338,6 +341,14 @@ var carrying_firewood: bool = false
 var timber_completed_day: int = 0
 var warmth_active: bool = false
 var last_bonfire_day: int = 0
+var fish_stock: int = 0
+var fish_caught_day: int = 0
+var fish_units_today: int = 0
+var fed_active: bool = false
+var last_supper_day: int = 0
+var well_fed_ready: bool = false
+var well_fed_trip: bool = false
+var connected_days: Dictionary[StringName, int] = {}
 var _garrison_raid := GarrisonRaidStateScript.new()
 
 
@@ -473,6 +484,14 @@ func garrison_snapshot() -> Dictionary:
 		"timber_completed_day": timber_completed_day,
 		"warmth_active": warmth_active,
 		"last_bonfire_day": last_bonfire_day,
+		"fish_stock": fish_stock,
+		"fish_caught_day": fish_caught_day,
+		"fish_units_today": fish_units_today,
+		"fed_active": fed_active,
+		"last_supper_day": last_supper_day,
+		"well_fed_ready": well_fed_ready,
+		"well_fed_trip": well_fed_trip,
+		"connected_days": connected_days.duplicate(),
 		"raid": _garrison_raid.snapshot(),
 	}
 
@@ -489,11 +508,37 @@ func restore_garrison(data: Dictionary) -> void:
 	var restored_timber_day: int = maxi(0, int(data.get("timber_completed_day", 0)))
 	var restored_warmth: bool = bool(data.get("warmth_active", false))
 	var restored_bonfire_day: int = maxi(0, int(data.get("last_bonfire_day", 0)))
+	var restored_fish: int = clampi(int(data.get("fish_stock", 0)), 0, FISH_CAP)
+	var restored_fish_day: int = maxi(0, int(data.get("fish_caught_day", 0)))
+	var restored_fish_today: int = clampi(int(data.get("fish_units_today", 0)),
+		0, FISH_DAILY_CAP)
+	var restored_fed: bool = bool(data.get("fed_active", false))
+	var restored_supper_day: int = maxi(0, int(data.get("last_supper_day", 0)))
+	var restored_ready: bool = bool(data.get("well_fed_ready", false))
+	var restored_trip: bool = bool(data.get("well_fed_trip", false))
+	var restored_connected: Dictionary[StringName, int] = {}
+	var raw_connected: Variant = data.get("connected_days", {})
+	if raw_connected is Dictionary:
+		for raw_who: Variant in raw_connected:
+			if raw_who is not String and raw_who is not StringName:
+				continue
+			var restored_who := StringName(raw_who)
+			var restored_day := maxi(0, int((raw_connected as Dictionary)[raw_who]))
+			if restored_who != &"" and restored_day > 0:
+				restored_connected[restored_who] = restored_day
 	var changed: bool = restored_stock != firewood_stock \
 		or restored_carrying != carrying_firewood \
 		or restored_timber_day != timber_completed_day \
 		or restored_warmth != warmth_active \
-		or restored_bonfire_day != last_bonfire_day
+		or restored_bonfire_day != last_bonfire_day \
+		or restored_fish != fish_stock \
+		or restored_fish_day != fish_caught_day \
+		or restored_fish_today != fish_units_today \
+		or restored_fed != fed_active \
+		or restored_supper_day != last_supper_day \
+		or restored_ready != well_fed_ready \
+		or restored_trip != well_fed_trip \
+		or restored_connected != connected_days
 	var raw_raid: Variant = data.get("raid", {})
 	_garrison_raid.restore(raw_raid as Dictionary if raw_raid is Dictionary else {})
 	changed = changed or previous_raid != _garrison_raid.snapshot()
@@ -502,6 +547,14 @@ func restore_garrison(data: Dictionary) -> void:
 	timber_completed_day = restored_timber_day
 	warmth_active = restored_warmth
 	last_bonfire_day = restored_bonfire_day
+	fish_stock = restored_fish
+	fish_caught_day = restored_fish_day
+	fish_units_today = restored_fish_today
+	fed_active = restored_fed
+	last_supper_day = restored_supper_day
+	well_fed_ready = restored_ready
+	well_fed_trip = restored_trip
+	connected_days = restored_connected
 	if changed:
 		garrison_changed.emit()
 
@@ -643,16 +696,112 @@ func deposit_firewood() -> bool:
 	return true
 
 
+func fish_space() -> int:
+	return FISH_CAP - fish_stock
+
+
+func fishing_remaining_today(at_day: int) -> int:
+	if at_day <= 0:
+		return 0
+	# Read-only callers include the always-live pause-menu panel. Looking at a
+	# different civil day must not rewrite the campaign state behind a save or a
+	# fishing attempt; the next successful banking operation owns that rollover.
+	if at_day != fish_caught_day:
+		return FISH_DAILY_CAP
+	return FISH_DAILY_CAP - fish_units_today
+
+
+func can_bank_fish(units: int, at_day: int) -> bool:
+	if units <= 0 or at_day <= 0:
+		return false
+	_sync_fishing_day(at_day)
+	return units <= fish_space() and units <= FISH_DAILY_CAP - fish_units_today
+
+
+func bank_fish(units: int, at_day: int) -> int:
+	if not can_bank_fish(units, at_day):
+		return 0
+	fish_stock += units
+	fish_units_today += units
+	garrison_changed.emit()
+	return units
+
+
+func _sync_fishing_day(at_day: int) -> void:
+	if at_day > 0 and at_day != fish_caught_day:
+		fish_caught_day = at_day
+		fish_units_today = 0
+
+
 func resolve_bonfire(at_day: int) -> bool:
-	if at_day <= last_bonfire_day:
+	if at_day <= maxi(last_bonfire_day, last_supper_day):
 		return false
 	var fueled: bool = firewood_stock > 0
 	if fueled:
 		firewood_stock -= 1
+	var served: bool = fish_stock > 0
+	if served:
+		fish_stock -= 1
 	warmth_active = fueled
+	fed_active = served
 	last_bonfire_day = at_day
+	last_supper_day = at_day
+	if served:
+		well_fed_ready = true
 	garrison_changed.emit()
 	return true
+
+
+func record_substantive_conversation(who: StringName, at_day: int) -> bool:
+	if who == &"" or at_day <= 0 or at_day <= int(connected_days.get(who, 0)):
+		return false
+	connected_days[who] = at_day
+	garrison_changed.emit()
+	return true
+
+
+func morale_causes(who: StringName, at_day: int) -> PackedStringArray:
+	var causes := PackedStringArray()
+	if warmth_active:
+		causes.append("Warm")
+	if fed_active:
+		causes.append("Fed")
+	var connected_day := int(connected_days.get(who, 0))
+	if connected_day > 0 and at_day >= connected_day and at_day <= connected_day + 1:
+		causes.append("Connected")
+	return causes
+
+
+func morale_label(who: StringName, at_day: int) -> String:
+	match morale_causes(who, at_day).size():
+		1:
+			return "Uneasy"
+		2:
+			return "Steady"
+		3:
+			return "High"
+	return "Low"
+
+
+func begin_well_fed_trip() -> void:
+	var changed: bool = well_fed_ready or well_fed_trip
+	well_fed_trip = well_fed_ready
+	well_fed_ready = false
+	resync_maxima(true)
+	if changed:
+		garrison_changed.emit()
+
+
+func end_well_fed_trip() -> void:
+	var changed := well_fed_trip
+	well_fed_trip = false
+	resync_maxima(false)
+	if changed:
+		garrison_changed.emit()
+
+
+func well_fed_bonus() -> float:
+	return WELL_FED_STAMINA if well_fed_trip else 0.0
 
 
 func warmth_sell_mult() -> float:
@@ -789,8 +938,10 @@ func resync_maxima(fill: bool = false) -> void:
 	# why ceilings belong to the number).
 	max_quarters = mini(hearts, K.HEART_MAX) * K.HEART
 	quarters = max_quarters if fill else clampi(quarters, 0, max_quarters)
-	max_stamina = minf(K.STAMINA_MAX, K.MAX_STAMINA + K.JEWEL_FOCUS_STAMINA
+	var permanent_stamina := minf(K.STAMINA_MAX, K.MAX_STAMINA
+		+ K.JEWEL_FOCUS_STAMINA
 		* float(jewel_level(jewel_track(&"amulet", &"focus"))))
+	max_stamina = permanent_stamina + well_fed_bonus()
 	stamina = max_stamina if fill else minf(stamina, max_stamina)
 	Bus.player_health_changed.emit(quarters, max_quarters)
 	Bus.stamina_changed.emit(stamina, max_stamina)

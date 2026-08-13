@@ -1,7 +1,7 @@
 class_name MenuGarrisonPanel
 extends Control
-## Read-only view of the garrison's authoritative clock, hearth, duty, roster,
-## relic, and improvement state. Nothing on this page mutates the campaign.
+## Read-only view of the garrison's authoritative clock, hearth, provisions,
+## morale, duty, roster, relic, and improvement state. Nothing here mutates it.
 
 signal back_requested
 
@@ -25,6 +25,7 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_build()
+	Game.garrison_changed.connect(refresh)
 	refresh()
 
 
@@ -48,6 +49,7 @@ func refresh() -> void:
 	if _body == null:
 		return
 	UITheme.clear_children(_body)
+	_build_provisions_and_morale()
 	_build_hearth_status()
 	_build_duty_status()
 	_build_garrison_defence()
@@ -167,6 +169,55 @@ func _build_hearth_status() -> void:
 	_fact("Ordinary Trade buy", "×0.90  (10% less)" if Game.warmth_active else "×1.00")
 	_fact("Ordinary Trade sell", "×%.2f%s" % [Game.warmth_sell_mult(),
 		"  (10% more)" if Game.warmth_active else ""])
+
+
+func _build_provisions_and_morale() -> void:
+	UITheme.section_rule(_body, "PROVISIONS & MORALE")
+	_fact("Fish reserve", "%d / %d meals" % [Game.fish_stock, Game.FISH_CAP])
+	_fact("Today's remaining yield",
+		"%d Fish" % Game.fishing_remaining_today(Clock.day))
+	_fact("Next supper", _next_supper_status())
+	_fact("Fed", "Active" if Game.fed_active else "Inactive",
+		UITheme.SUCCESS if Game.fed_active else null)
+	var well_fed_status := "Not prepared"
+	var well_fed_tone: Variant = null
+	if Game.well_fed_trip:
+		well_fed_status = "Active this descent · +15 temporary maximum stamina"
+		well_fed_tone = UITheme.SUCCESS
+	elif Game.well_fed_ready:
+		well_fed_status = "Ready for next descent · +15 temporary maximum stamina"
+		well_fed_tone = UITheme.SUCCESS
+	_fact("Well Fed", well_fed_status, well_fed_tone)
+
+	var arrived: Array[StringName] = []
+	var total_causes := 0
+	for slot: Dictionary in ROSTER:
+		var who: StringName = slot["id"]
+		if not _arrived(who):
+			continue
+		arrived.append(who)
+		total_causes += Game.morale_causes(who, Clock.day).size()
+	var overall := "No residents arrived"
+	if not arrived.is_empty():
+		var average_causes := float(total_causes) / float(arrived.size())
+		var labels: Array[String] = ["Low", "Uneasy", "Steady", "High"]
+		overall = labels[clampi(roundi(average_causes), 0, labels.size() - 1)]
+	_fact("Overall morale", overall)
+
+	for who: StringName in arrived:
+		var person: Dictionary = DialogueDb.PEOPLE.get(who, {})
+		var display_name: String = String(
+			person.get("name", String(who).capitalize()))
+		var causes: PackedStringArray = Game.morale_causes(who, Clock.day)
+		var cause_text: String = ", ".join(causes) \
+			if not causes.is_empty() else "No active causes"
+		_fact(display_name, "%s · %s" % [Game.morale_label(who, Clock.day), cause_text])
+
+
+func _next_supper_status() -> String:
+	var next_day: int = Clock.day + 1 if Game.last_supper_day >= Clock.day else Clock.day
+	var reserve_status := "Fish reserved" if Game.fish_stock > 0 else "No Fish reserved"
+	return "Day %d at 20:00 · %s" % [next_day, reserve_status]
 
 
 func _build_duty_status() -> void:

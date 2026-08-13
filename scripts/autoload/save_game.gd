@@ -82,13 +82,15 @@ const SLOTS := 3
 ## and reconstruct honestly as an empty list, while current recipes stay derived.
 ## Bumped to 12 for garrison firewood and Warmth. It is additive: v11 has no
 ## payload and reconstructs as an empty, cold hearth.
-const VERSION := 12
+## Bumped to 13 for the additive fishing, supper, Well Fed and Connected fields
+## inside the existing garrison payload. A v12 slot reconstructs them empty.
+const VERSION := 13
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12]
+const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 const AUTOSAVE_INTERVAL := 300.0
 
 signal saved(slot: int)
@@ -172,7 +174,8 @@ func save(slot: int) -> bool:
 		"quarters": Game.quarters,
 		"max_quarters": Game.max_quarters,
 		# A Focus amulet raises this permanently, so it is a purchase and it saves.
-		"max_stamina": Game.max_stamina,
+		# Well Fed is carried in `garrison`; it must never become a saved purchase.
+		"max_stamina": Game.max_stamina - Game.well_fed_bonus(),
 		# The SIZE of the blue bar saves; how much is in it does not, for the reason
 		# `stamina` is absent from this block -- see the loader. A `"magic"` key was
 		# written here and it is gone rather than left unread: a save field nothing
@@ -359,6 +362,11 @@ func load_slot(slot: int) -> Dictionary:
 		Game.upgrades[StringName(k)] = int((d["upgrades"] as Dictionary)[k])
 	var raw_garrison: Variant = d.get("garrison", {})
 	Game.restore_garrison(raw_garrison as Dictionary if raw_garrison is Dictionary else {})
+	# Upgrades own the permanent ceiling; the garrison payload owns the temporary
+	# trip bit. Derive their combined maximum without healing saved health, then
+	# fill only stamina before Run.restore optionally replaces the trip amount.
+	Game.resync_maxima(false)
+	Game.stamina = Game.max_stamina
 	Clock.restore(d.get("clock", {}) as Dictionary)
 	Game.restore_wishlist_lines(d.get("wishlist_lines", []) as Array)
 	Game.components.clear()

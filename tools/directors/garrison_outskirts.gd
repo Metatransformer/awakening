@@ -9,7 +9,8 @@ func run(rig) -> void:
 		rig.fail("scene is not GarrisonOutskirts")
 		return
 	await rig.wait_frames(30)
-	for id: StringName in [&"arrival", &"garrison_gate", &"sunken_cut", &"blocked_path"]:
+	for id: StringName in [&"arrival", &"garrison_gate", &"sunken_cut", &"blocked_path",
+			&"fishing_hole"]:
 		var port := outskirts.port(id)
 		if port.origin == Vector3.ZERO:
 			rig.fail("missing authored port %s" % id)
@@ -35,15 +36,19 @@ func run(rig) -> void:
 	await rig.wait_frames(4)
 	await rig.capture(out.path_join("outskirts_01_switchback.png"))
 
-	var obstruction := outskirts.get_node(
+	var fishing := outskirts.fishing_hole as FishingHole
+	if fishing == null:
+		rig.fail("the authored fishing hole was not built")
+		return
+	var obstruction := outskirts.get_node_or_null(
 		NodePath("Generated/Terrain/BlockedSpurBarricade/CrossTimberA")) as Node3D
-	var spur_direction := (Vector3(14.2, 2.25, -2.4) \
-		- Vector3(2.5, 3.4, -5.0)).normalized()
-	cam.global_position = obstruction.global_position - spur_direction * 7.0 \
-		+ Vector3.UP * 1.5
-	cam.look_at(obstruction.global_position, Vector3.UP)
+	if not rig.check(obstruction != null,
+			"the far blocked-spur structure remains behind the fishing landmark"):
+		return
+	cam.global_position = fishing.to_global(Vector3(0.0, 5.4, 5.0))
+	cam.look_at(fishing.to_global(Vector3(0.0, 0.45, -2.25)), Vector3.UP)
 	await rig.wait_frames(4)
-	await rig.capture(out.path_join("outskirts_02_blocked_spur.png"))
+	await rig.capture(out.path_join("outskirts_02_pond_and_blocked_spur.png"))
 
 	cam.global_position = Vector3(3.0, 2.2, -31.0)
 	cam.look_at(outskirts.port(&"sunken_cut").origin + Vector3(0.0, 1.8, -2.0), Vector3.UP)

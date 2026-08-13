@@ -3,6 +3,7 @@ extends RefCounted
 ##
 ## Run from the garrison:
 ##   tools/quiet.sh --path . -s tools/shoot.gd -- \
+##     --boot-here \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/garrison_life.gd \
 ##     --out=/tmp/garrison-life/life.png --warmup=60
@@ -24,6 +25,8 @@ func run(rig) -> void:
 	await _timber_view(rig, garrison)
 	await _daily_state(rig)
 	await _hearth_and_schedule(rig, garrison)
+	await _morale_state(rig)
+	await _well_fed_run(rig)
 	await _menu(rig)
 
 	Menu.close()
@@ -154,19 +157,69 @@ func _daily_state(rig) -> void:
 		"timber_completed_day": 0,
 		"warmth_active": false,
 		"last_bonfire_day": 0,
+		"fish_stock": 0,
+		"fish_caught_day": 0,
+		"fish_units_today": 0,
+		"fed_active": false,
+		"last_supper_day": 0,
+		"well_fed_ready": false,
+		"well_fed_trip": false,
+		"connected_days": {},
 		"raid": _default_raid(),
 	}, "an older save's absent garrison payload defaults empty and cold")
-	var saved := {
+	var saved: Dictionary = {
 		"firewood_stock": 2,
 		"carrying_firewood": true,
 		"timber_completed_day": 4,
 		"warmth_active": true,
 		"last_bonfire_day": 3,
+		"fish_stock": 2,
+		"fish_caught_day": 4,
+		"fish_units_today": 2,
+		"fed_active": true,
+		"last_supper_day": 3,
+		"well_fed_ready": true,
+		"well_fed_trip": true,
+		"connected_days": {"elder": 4},
 		"raid": _default_raid(),
 	}
 	Game.restore_garrison(saved)
-	rig.check(Game.garrison_snapshot() == saved, "all garrison state round-trips")
-	rig.check(Saves.VERSION == 12, "the additive save contract is version 12")
+	var expected_saved: Dictionary = saved.duplicate(true)
+	expected_saved["connected_days"] = {&"elder": 4}
+	var restored_saved: Dictionary = Game.garrison_snapshot()
+	rig.check(restored_saved == expected_saved,
+		"Firewood, Fish, Fed, Well Fed, Connected, and raid state all round-trip")
+	var restored_connected := restored_saved.get("connected_days", {}) as Dictionary
+	var restored_keys: Array = restored_connected.keys()
+	var restored_key: Variant = restored_keys[0] if not restored_keys.is_empty() else null
+	rig.check(restored_key is StringName and restored_key == &"elder",
+		"JSON-style Connected String keys restore as typed StringName keys")
+	rig.check(Saves.VERSION == 13, "the additive save contract is version 13")
+
+	Game.restore_garrison({
+		"fish_stock": 2,
+		"fish_caught_day": 4,
+		"fish_units_today": 0,
+	})
+	rig.check(Game.bank_fish(2, 4) == 0 and Game.fish_stock == 2,
+		"fish banking refuses a partial reserve overflow")
+	rig.check(Game.bank_fish(1, 4) == 1 and Game.fish_stock == Game.FISH_CAP,
+		"fish banking fills the final reserve space exactly")
+	rig.check(Game.bank_fish(1, 4) == 0,
+		"a full fish reserve refuses every further yield")
+	Game.restore_garrison({
+		"fish_caught_day": 4,
+		"fish_units_today": Game.FISH_DAILY_CAP,
+	})
+	rig.check(not Game.can_bank_fish(1, 4),
+		"a fully spent daily yield refuses another bank on that day")
+	rig.check(Game.fishing_remaining_today(5) == Game.FISH_DAILY_CAP
+		and Game.fish_caught_day == 4 and Game.fish_units_today == Game.FISH_DAILY_CAP,
+		"reading the next day's yield is full and does not mutate campaign state")
+	rig.check(Game.bank_fish(Game.FISH_DAILY_CAP, 5) == Game.FISH_DAILY_CAP
+		and Game.fish_caught_day == 5 and Game.fish_units_today == Game.FISH_DAILY_CAP
+		and not Game.can_bank_fish(1, 5),
+		"the first bank on a new day owns the rollover, fills its yield, then refuses more")
 
 	Game.restore_garrison({})
 	Game.grant(&"bow")
@@ -196,7 +249,7 @@ func _hearth_and_schedule(rig, garrison: Garrison) -> void:
 		rig.check(garrison.compound.has_port(id), "compound has authored port %s" % id)
 
 	Clock.restore({"day": 2, "hour": 12.0, "running": false})
-	Game.restore_garrison({"firewood_stock": 2})
+	Game.restore_garrison({"firewood_stock": 2, "fish_stock": 2})
 	await rig.wait_frames(5)
 	var cam := Camera3D.new()
 	cam.fov = 55.0
@@ -213,12 +266,14 @@ func _hearth_and_schedule(rig, garrison: Garrison) -> void:
 		"stocking wood before 20:00 does not grant an immediate price bonus")
 	Clock.set_time(2, 20.0)
 	await rig.wait_frames(6)
-	rig.check(Game.warmth_active and Game.firewood_stock == 1
-		and Game.last_bonfire_day == 2,
-		"20:00 consumes one bundle and activates Warmth")
+	rig.check(Game.warmth_active and Game.fed_active
+		and Game.firewood_stock == 1 and Game.fish_stock == 1
+		and Game.last_bonfire_day == 2 and Game.last_supper_day == 2
+		and Game.well_fed_ready,
+		"20:00 consumes one wood and one Fish, activates Warm and Fed, and readies Well Fed")
 	Game.resolve_bonfire(2)
-	rig.check(Game.firewood_stock == 1,
-		"the same campaign day's bonfire cannot consume twice")
+	rig.check(Game.firewood_stock == 1 and Game.fish_stock == 1,
+		"the same campaign day's supper consumes neither wood nor Fish twice")
 
 	var roster: Array[Npc] = [garrison.vendor, garrison.smith, garrison.alchemist,
 		garrison.keeper, garrison.jeweller]
@@ -239,6 +294,17 @@ func _hearth_and_schedule(rig, garrison: Garrison) -> void:
 	rig.check(Game.garrison_snapshot() == before_restore,
 		"restoring a 20:30 save does not replay the bonfire")
 
+	Game.restore_garrison({
+		"fed_active": true,
+		"last_bonfire_day": 2,
+		"last_supper_day": 2,
+		"well_fed_ready": true,
+	})
+	rig.check(Game.resolve_bonfire(3), "the next empty supper resolves once")
+	rig.check(not Game.fed_active and Game.well_fed_ready
+		and Game.last_supper_day == 3,
+		"an empty later supper clears Fed but preserves an unused ready meal")
+
 	Clock.set_time(2, 23.0)
 	await rig.wait_frames(4)
 	for npc: Npc in roster:
@@ -254,12 +320,113 @@ func _hearth_and_schedule(rig, garrison: Garrison) -> void:
 		"multi-night jumps resolve each bonfire chronologically and end cold")
 
 
+func _morale_state(rig) -> void:
+	Game.restore_garrison({})
+	rig.check(Game.morale_causes(&"elder", 5) == PackedStringArray()
+		and Game.morale_label(&"elder", 5) == "Low",
+		"zero morale causes report Low")
+	Game.restore_garrison({"warmth_active": true})
+	rig.check(Game.morale_causes(&"elder", 5) == PackedStringArray(["Warm"])
+		and Game.morale_label(&"elder", 5) == "Uneasy",
+		"Warm is first in cause order and one cause reports Uneasy")
+	Game.restore_garrison({"warmth_active": true, "fed_active": true})
+	rig.check(Game.morale_causes(&"elder", 5) == PackedStringArray(["Warm", "Fed"])
+		and Game.morale_label(&"elder", 5) == "Steady",
+		"Warm then Fed is stable cause order and two causes report Steady")
+	rig.check(Game.record_substantive_conversation(&"elder", 5),
+		"a substantive conversation records Connected on its civil day")
+	rig.check(Game.morale_causes(&"elder", 5)
+		== PackedStringArray(["Warm", "Fed", "Connected"])
+		and Game.morale_label(&"elder", 5) == "High",
+		"Connected follows Warm and Fed and three causes report High")
+	rig.check(Game.morale_causes(&"elder", 6)
+		== PackedStringArray(["Warm", "Fed", "Connected"]),
+		"Connected remains active on the next civil day")
+	rig.check(Game.morale_causes(&"elder", 7) == PackedStringArray(["Warm", "Fed"])
+		and Game.morale_label(&"elder", 7) == "Steady",
+		"Connected expires after the next day without disturbing other causes")
+
+
+func _well_fed_run(rig) -> void:
+	var focus_track: StringName = Game.jewel_track(&"amulet", &"focus")
+	var had_focus: bool = Game.upgrades.has(focus_track)
+	var focus_before: int = int(Game.upgrades.get(focus_track, 0))
+	var gold_before: int = Game.gold
+	var deaths_before: int = Game.deaths
+	var quarters_before: int = Game.quarters
+	var stamina_before: float = Game.stamina
+	var flow_busy_before: bool = Flow.busy
+
+	Run.reset()
+	Game.end_well_fed_trip()
+	Game.upgrades[focus_track] = maxi(2, focus_before)
+	Game.resync_maxima(false)
+	var permanent_max: float = Game.max_stamina
+	Game.restore_garrison({"well_fed_ready": true})
+	Game.stamina = 1.0
+	Run.enter(168001)
+	var effective_max: float = Game.max_stamina
+	rig.check(not Game.well_fed_ready and Game.well_fed_trip,
+		"Run.enter consumes the ready meal into this trip")
+	rig.check(is_equal_approx(effective_max,
+		permanent_max + Game.WELL_FED_STAMINA),
+		"Well Fed adds exactly 15 outside the permanent Focus maximum")
+	rig.check(is_equal_approx(Game.stamina, effective_max),
+		"Run.enter fills stamina to the effective Well Fed maximum")
+
+	var resumable: Dictionary = Run.snapshot()
+	resumable["stamina"] = effective_max + 50.0
+	Game.stamina = 0.0
+	rig.check(Run.restore(resumable), "the live run snapshot restores without a real slot")
+	rig.check(is_equal_approx(Game.stamina, effective_max),
+		"a resumable run clamps restored stamina to the effective maximum")
+
+	Game.gold = maxi(Game.gold, 100)
+	Flow.busy = true
+	rig.check(Run.extract(), "the Well Fed run extracts through the public contract")
+	rig.check(not Run.in_dungeon and not Game.well_fed_trip
+		and is_equal_approx(Game.max_stamina, permanent_max)
+		and Game.stamina <= permanent_max,
+		"extraction clears the trip and restores and clamps the permanent maximum")
+
+	Game.restore_garrison({"well_fed_ready": true})
+	Run.enter(168002)
+	Game.stamina = Game.max_stamina
+	Run.die()
+	rig.check(not Run.in_dungeon and not Game.well_fed_trip
+		and is_equal_approx(Game.max_stamina, permanent_max)
+		and Game.stamina <= permanent_max,
+		"death clears the trip and restores and clamps the permanent maximum")
+
+	Run.reset()
+	Flow.busy = flow_busy_before
+	Game.gold = gold_before
+	Game.deaths = deaths_before
+	Game.quarters = quarters_before
+	if had_focus:
+		Game.upgrades[focus_track] = focus_before
+	else:
+		Game.upgrades.erase(focus_track)
+	Game.restore_garrison({})
+	Game.resync_maxima(false)
+	Game.stamina = minf(stamina_before, Game.max_stamina)
+	rig.check(not Run.in_dungeon and not Game.well_fed_trip,
+		"the run proof leaves lawful non-dungeon state for later beats")
+
+
 func _menu(rig) -> void:
 	Game.restore_garrison({
 		"firewood_stock": 2,
 		"timber_completed_day": 6,
 		"warmth_active": true,
 		"last_bonfire_day": 5,
+		"fish_stock": 2,
+		"fish_caught_day": 6,
+		"fish_units_today": 1,
+		"fed_active": true,
+		"last_supper_day": 5,
+		"well_fed_ready": true,
+		"connected_days": {"elder": 6},
 	})
 	Clock.restore({"day": 6, "hour": 12.5, "running": false})
 	Menu.open()
@@ -270,12 +437,21 @@ func _menu(rig) -> void:
 	if panel == null:
 		return
 	var page_text := " ".join(_all_text(panel))
-	for phrase: String in ["Day", "Bonfire", "Garrison Warmth", "KEEP THE HEARTH",
+	for phrase: String in ["Day", "Bonfire", "Garrison Warmth", "PROVISIONS & MORALE",
+			"Fish reserve", "Fed", "Well Fed", "Overall morale", "KEEP THE HEARTH",
 			"ROSTER", "DONATED RELIC EFFECTS", "ELDER IMPROVEMENTS"]:
 		rig.check(page_text.contains(phrase), "the Garrison page reports %s" % phrase)
 	var focus: Control = rig.root.gui_get_focus_owner()
 	rig.check(focus != null and focus.name == &"Back",
 		"opening GARRISON places focus on Back")
+	var scroll := panel.get_node("Center/Frame/Col/StatusScroll") as ScrollContainer
+	var provisions := _label_with_text(panel, "PROVISIONS & MORALE")
+	rig.check(scroll != null and scroll.scroll_vertical == 0,
+		"opening the expanded Garrison page begins at the top without scrolling")
+	rig.check(scroll != null and provisions != null
+		and provisions.get_global_rect().intersects(scroll.get_global_rect()),
+		"the Provisions & Morale section is visibly present in the opening viewport")
+	await rig.capture("life_03_garrison_menu.png")
 
 	var strip := _first_tabs(panel)
 	rig.check(strip != null and strip.get_child_count() == 4,
@@ -297,8 +473,9 @@ func _menu(rig) -> void:
 		_key(KEY_LEFT)
 		await rig.wait_frames(3)
 		rig.check(panel.visible, "left from EQUIP wraps back to GARRISON")
-
-	await rig.capture("life_03_garrison_menu.png")
+		focus = rig.root.gui_get_focus_owner()
+		rig.check(focus != null and scroll != null and scroll.scroll_vertical == 0,
+			"tab wrapping preserves valid focus and the top scroll position")
 
 
 func _catalogue_line(lines: Array[Dictionary], id: StringName) -> Dictionary:
@@ -332,6 +509,17 @@ func _all_text(root: Node) -> PackedStringArray:
 	for child: Node in root.get_children():
 		out.append_array(_all_text(child))
 	return out
+
+
+func _label_with_text(root: Node, wanted: String) -> Label:
+	var label := root as Label
+	if label != null and label.text.contains(wanted):
+		return label
+	for child: Node in root.get_children():
+		var found := _label_with_text(child, wanted)
+		if found != null:
+			return found
+	return null
 
 
 func _first_tabs(root: Node) -> MenuPageTabs:

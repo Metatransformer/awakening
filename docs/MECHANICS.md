@@ -109,6 +109,9 @@ inside this grammar. Their counts and production status belong to
 | Artifacts | Which recovered relic do I repair or read, donate, and see change the garrison? | [ITEMS.md](ITEMS.md), [METAGAME.md](METAGAME.md) |
 | Civil day | Which service can I reach before work, Bonfire Time, sleep, or dawn changes the yard? | [GARRISON_LIFE.md](GARRISON_LIFE.md) |
 | Firewood and Hearth | Is the bounded home responsibility worth completing for the next service window? | [GARRISON_LIFE.md](GARRISON_LIFE.md) |
+| Fishing and Fish reserve | Is a near or deep catch worth its difficulty, civil time, daily yield, and limited reserve space? | [GARRISON_LIFE.md](GARRISON_LIFE.md) |
+| Supper and Well Fed | Do I stock the next shared supper now for a temporary advantage on the following descent? | [GARRISON_LIFE.md](GARRISON_LIFE.md) |
+| Morale causes | Which visible acts of warmth, provision, and connection are currently supporting each resident? | [GARRISON_LIFE.md](GARRISON_LIFE.md) |
 | Residents and story | Who has arrived, what do they now know, and what has visibly changed because of progress? | [GARRISON_LIFE.md](GARRISON_LIFE.md), [LORE_AND_STORY.md](LORE_AND_STORY.md) |
 | Rest and recovery | Do I close the day, accept its time cost, recover purchased benefits, and save? | [METAGAME.md](METAGAME.md), [GARRISON_LIFE.md](GARRISON_LIFE.md) |
 
@@ -129,7 +132,10 @@ not teleport, summon, or grant special extraction; an underground player keeps
 the ordinary continue-or-Escape-Rope decision owned by
 [METAGAME.md](METAGAME.md).
 
-Raid gameplay is not yet implemented. Existing mechanics may be reused for the
-slice, but their presence does not authorize new variants or surrounding
-systems. Human observation, criteria, and the eventual decision stay in the
-design test rather than becoming status prose here.
+Raid gameplay is implemented and awaiting human observation. Its presence does
+not authorize new variants or surrounding systems. The separately
+owner-authorised fishing/provisions implementation is sequencing debt, not raid
+evidence; its post-raid hypothesis is recorded in
+[design-tests/FISHING_PROVISIONS_PROOF.md](design-tests/FISHING_PROVISIONS_PROOF.md).
+Human observations, criteria, and eventual decisions stay in their design tests
+rather than becoming status prose here.

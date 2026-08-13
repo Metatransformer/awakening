@@ -415,7 +415,9 @@ func activate(_by: Node3D) -> void:
 	else:
 		pages = StoryDb.pages_of(beat)
 		var beat_id := StringName(beat.get("id", &""))
-		on_read = func() -> void: StoryDb.mark_told(who, beat_id)
+		on_read = func() -> void:
+			StoryDb.mark_told(who, beat_id)
+			Game.record_substantive_conversation(who, Clock.day)
 
 	if pages.is_empty():
 		# Nobody has written them a line. Straight to their first counter, exactly

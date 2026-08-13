@@ -60,7 +60,9 @@ must preserve choices where caution and ambition are both defensible.
 The garrison changes because of the player's expeditions, but it also has a
 civil rhythm and responsibilities of its own. Its people work, gather, sleep,
 build, and face consequences. A defense matters because it belongs to a home the
-player has inhabited.
+player has inhabited. Small acts such as tending the hearth, stocking supper,
+and staying connected make care legible without turning residents into meters
+to manage or services to unlock.
 
 ### Consequences are legible and recoverable
 
@@ -71,7 +73,8 @@ be able to explain what happened, why, and how to put it right.
 ## 4. Game loop
 
 1. **Prepare, build, and live.** Use the garrison's services, tend current
-   responsibilities, choose equipment, and see what the outpost needs.
+   responsibilities and provisions, choose equipment, and see what the outpost
+   needs.
 2. **Delve, explore, and loot.** Fight readable encounters, solve ancient
    mechanisms, find artifacts, and decide what deserves scarce carrying space.
 3. **Receive warning.** A raid warning may arrive while the player is safe,
@@ -119,7 +122,8 @@ services, and makes the first descent as a newcomer with little to lose.
 
 Repeated returns create familiarity. New residents and routines make the yard
 feel inhabited; artifacts and upgrades create visible, useful change. Warmth at
-the hearth matters because the player knows the work behind it.
+the hearth and a shared supper matter because the player knows the small,
+voluntary work behind them.
 
 ### Responsibility
 
@@ -148,7 +152,9 @@ became capable through their actions.
   stair extracts, using the ordinary priced settlement.
 - A constrained bag, ordinary extraction, recoverable loss, and distinct uses for gold, components, and artifacts.
 - Item verbs that open combat and puzzle possibilities rather than merely raising numbers.
-- One living garrison where services, upgrades, artifacts, civil time, Firewood/Hearth, and visible change make returning a mode of play.
+- One living garrison where services, upgrades, artifacts, civil time, bounded
+  Firewood/Hearth and fishing/provisions routines, and visible change make
+  returning a mode of play without becoming a settlement simulation.
 - A finite expedition with an ending; the existing endless descent remains
   post-credits play.
 

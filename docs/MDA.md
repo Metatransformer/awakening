@@ -29,6 +29,24 @@ The active test is
 The mechanics are deliberately bounded. More content cannot rescue a dominated
 choice or turn a compulsory interruption into responsibility.
 
+## Post-raid fishing/provisions hypothesis
+
+The owner-directed fishing/provisions slice is implementation sequencing debt,
+not evidence for the raid map above. Its precommitted human test is
+[design-tests/FISHING_PROVISIONS_PROOF.md](design-tests/FISHING_PROVISIONS_PROOF.md),
+and it does not become the active test until the Raid Loop Proof resolves or the
+owner changes [NOW.md](NOW.md) again.
+
+| Intended aesthetic | Observable dynamics | Minimum mechanics under test |
+|---|---|---|
+| **Belonging and care:** providing for a shared home feels like a voluntary act that connects a garrison visit to the next adventure. | The player chooses a pond detour, plans a small Fish reserve around supper, notices how supper affects residents and the next descent, and later returns without prompting. | One pond and bounded near/deep fishing interaction; three-unit reserve and daily yield; 20:00 supper; visible Warm/Fed/Connected morale; one-descent Well Fed benefit; read-only status on the existing Garrison page. |
+
+The failure dynamic is **chore compulsion**: players treat fishing as mandatory
+buff upkeep, optimize every day around it, or resent the return trip despite
+understanding the action-to-supper-to-bonus chain. Adding catches, gear,
+professions, or stronger rewards would intensify that failure rather than repair
+it.
+
 ## Design check
 
 For any proposed mechanic or story beat, ask:

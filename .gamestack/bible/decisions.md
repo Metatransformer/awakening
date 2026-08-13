@@ -34,3 +34,13 @@ aesthetics; hypothesis and evidence artifacts remain plain design tests, not a
 new framework.
 
 supersedes: the mistaken design-record terminology introduced earlier on 2026-08-11
+
+### 2026-08-12 — Authorise one bounded fishing/provisions slice
+
+The owner explicitly authorises one pond and fishing minigame, a three-meal
+Fish reserve, 20:00 supper, derived Warm/Fed/Connected morale, and a temporary
+Well Fed benefit as the already-counted daily-life loop. This implementation is
+accepted sequencing debt alongside the freeze: it does not supply raid evidence,
+supersede the Raid Loop Proof, or alter that test's precommitted criteria.
+
+supersedes: docs/SCOPE.md exclusion of fishing and blanket exclusion of morale

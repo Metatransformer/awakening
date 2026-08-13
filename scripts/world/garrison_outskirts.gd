@@ -45,6 +45,7 @@ var garrison_gate: SurfaceTransition
 var sunken_cut: SurfaceTransition
 var blocked_path: SurfaceTransition
 var timber_yard: TimberYard
+var fishing_hole: FishingHole
 
 var _built: bool = false
 
@@ -68,9 +69,14 @@ func port(id: StringName) -> Transform3D:
 			return Transform3D(Basis.IDENTITY, Vector3(3.0, 0.65, -39.0))
 		&"blocked_path":
 			return Transform3D(Basis(Vector3.UP, -PI * 0.5),
-				Vector3(9.6, 2.8, -3.25))
+				Vector3(15.0, 2.2, -2.55))
 		&"timber_yard":
 			return Transform3D(Basis(Vector3.UP, PI), Vector3(0.65, 7.48, 25.4))
+		&"fishing_hole":
+			var spur_direction := (Vector3(18.2, 1.9, -1.85)
+				- Vector3(2.5, 3.4, -5.0)).normalized()
+			return Transform3D(Basis.looking_at(spur_direction, Vector3.UP),
+				Vector3(2.5, 3.4, -5.0) + spur_direction * 2.0)
 		&"vista_camera":
 			var eye := Vector3(-2.8, 8.8, 2.0)
 			var target := Vector3(4.8, 1.8, -25.0)
@@ -94,6 +100,7 @@ func _build() -> void:
 	_build_cliffs(cliffs)
 	_build_garrison(landmarks)
 	_build_timber_yard(landmarks)
+	_build_fishing_hole(landmarks)
 	_build_sunken_cut(landmarks)
 	_build_trees(trees)
 	_build_transitions(transitions)
@@ -113,23 +120,22 @@ func _build_path(parent: Node3D) -> void:
 		_cylinder(parent, StringName("LandingPath%02d" % i), MAT_PATH,
 			PATH_WIDTH * 0.54, 0.07, _at(point + Vector3.UP * 0.035), false, 12)
 
-	# The spur is obvious from the vista but terminates against the east cliff.
-	# Its independent slab gives it a real downhill grade rather than painted dirt.
+	# The spur is obvious from the vista and now reaches the spring-fed pool before
+	# the original blocked continuation. Its independent slab gives it a real
+	# downhill grade rather than painted dirt.
 	_build_walk_segment(parent, Vector3(2.5, 3.4, -5.0),
-		Vector3(14.2, 2.25, -2.4), 4.8, &"BlockedSpur")
-	# Put the readable collapse on the near half of the spur. The cliff itself is
-	# the hard stop farther on; these crossed timbers make "a route that was
-	# deliberately closed" legible from the main switchback.
+		Vector3(18.2, 1.9, -1.85), 4.8, &"BlockedSpur")
+	# Keep the named visual seam the outskirts proof already photographs, but put
+	# it on the far bank where it now reads behind the pool. `blocked_path` below
+	# remains the physical stop and transition authority a little farther on.
 	var barricade := _group(parent, &"BlockedSpurBarricade")
-	barricade.position = Vector3(7.2, 3.05, -3.95)
-	_box(barricade, &"RubbleA", MAT_DARK_STONE, Vector3(2.0, 1.0, 1.3),
-		_at(Vector3(-0.8, 0.45, 0.0), -0.2), true)
-	_box(barricade, &"RubbleB", MAT_DARK_STONE, Vector3(1.8, 1.25, 1.2),
-		_at(Vector3(0.8, 0.58, 0.0), 0.25), true)
+	barricade.position = Vector3(15.25, 2.2, -2.50)
 	_box(barricade, &"CrossTimberA", MAT_WOOD, Vector3(4.5, 0.28, 0.30),
-		Transform3D(Basis(Vector3.FORWARD, deg_to_rad(24.0)), Vector3(0.0, 1.35, 0.0)), false)
+		Transform3D(Basis(Vector3.FORWARD, deg_to_rad(24.0)),
+			Vector3(0.0, 1.35, 0.0)), false)
 	_box(barricade, &"CrossTimberB", MAT_WOOD, Vector3(4.5, 0.28, 0.30),
-		Transform3D(Basis(Vector3.FORWARD, deg_to_rad(-24.0)), Vector3(0.0, 1.25, 0.08)), false)
+		Transform3D(Basis(Vector3.FORWARD, deg_to_rad(-24.0)),
+			Vector3(0.0, 1.25, 0.08)), false)
 
 
 func _build_walk_segment(parent: Node3D, from: Vector3, to: Vector3,
@@ -219,6 +225,13 @@ func _build_timber_yard(parent: Node3D) -> void:
 	parent.add_child(timber_yard)
 
 
+func _build_fishing_hole(parent: Node3D) -> void:
+	fishing_hole = FishingHole.new()
+	fishing_hole.name = &"FishingHole"
+	fishing_hole.transform = port(&"fishing_hole")
+	parent.add_child(fishing_hole)
+
+
 func _build_sunken_cut(parent: Node3D) -> void:
 	var cut := _group(parent, &"SunkenCut")
 	# A dark face closes the route physically. Pale outer teeth and a near-black
@@ -279,8 +292,9 @@ func _build_transitions(parent: Node3D) -> void:
 	blocked_path.radius = 3.0
 	blocked_path.transform = port(&"blocked_path")
 
-	# The big rubble slab is the fixed collision. The crossed timber and loose
-	# stones in front are visual-only, so EXAMINE can rattle them safely.
+	# The port and refusal remain the contract for the dead route, now authored on
+	# the far bank beyond the pool. The big rubble slab is the fixed collision;
+	# crossed timber and loose stones in front remain visual-only.
 	_box(blocked_path, &"CollapseBackstop", MAT_DARK_STONE,
 		Vector3(5.0, 3.3, 1.0), _at(Vector3(0.0, 1.55, -2.25)), true)
 	var obstruction := _group(blocked_path, &"ObstructionVisual")

@@ -193,6 +193,9 @@ func enter(run_seed: int = 0) -> void:
 	# that handed back four more spins would make the stair a refill station and
 	# the budget meaningless on exactly the floors it is supposed to bite.
 	Game.fill_magic()
+	# Supper pays into one trip only. Consume it before announcing the run so every
+	# listener sees the effective maximum and a full bar from its first frame.
+	Game.begin_well_fed_trip()
 	if run_seed == 0:
 		run_seed = seed_next
 	seed_next = 0
@@ -397,6 +400,7 @@ func extract() -> bool:
 	# priced in gold on the receipt is the exact lie GDD §6.3 forbids.
 	banked.merge(recovered)
 	_end_summary(true, carried, carried_value, banked, fee)
+	Game.end_well_fed_trip()
 	# Same reason as in `die()`: the next run starts at the top, and until the
 	# number says so the HUD in the garrison is reporting a floor nobody is
 	# standing on.
@@ -555,6 +559,7 @@ func die() -> void:
 	var banked := bank_components()
 	_end_summary(false, lost, lost_value, banked, 0, kept, lost_hot)
 	in_dungeon = false
+	Game.end_well_fed_trip()
 	# Dying is a way of leaving the dungeon, so the bar comes back the same way it
 	# does on an extraction. Withholding it would be a second punishment stacked
 	# on losing the bag, and it would land on the run AFTER the bad one.

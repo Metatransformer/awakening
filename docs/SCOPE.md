@@ -54,15 +54,21 @@ enemy-model cap. The Builder is unvoiced, uses the existing generic Vyr body,
 and uses shared service patterns. The raid reuses kobolds, an orc, the main
 gate, and existing resources.
 
+The daily-life loop already counted in the four-mechanic cap contains the built
+Firewood/Hearth vignette and exactly one owner-authorised fishing/provisions
+slice: one pond and minigame, persistent Fish, derived Morale, and the temporary
+Well Fed state. This consumes the existing daily-life-loop count; it is not a
+fifth gameplay mechanic and does not raise any other cap.
+
 Counts rise only through an explicit scope amendment. By default, an addition
 must delete something of comparable cost in the same decision. Implementing a
 feature does not authorise another instance, variant, or supporting system.
 
 ## Now
 
-Only the bounded slice in
-[design-tests/RAID_LOOP_PROOF.md](design-tests/RAID_LOOP_PROOF.md) is
-authorised:
+The bounded slice in
+[design-tests/RAID_LOOP_PROOF.md](design-tests/RAID_LOOP_PROOF.md) remains the
+only active human proof:
 
 - one Builder;
 - one optional Bolt-Thrower project;
@@ -72,8 +78,17 @@ authorised:
 - one recoverable Tally-Ledger theft;
 - one occurrence.
 
-Raid gameplay is not implemented. Floors 2–4, bosses 2–4, production content,
-and every expansion below remain frozen while this slice is built and tested.
+The raid is implemented and awaits its five precommitted human sessions. Issue
+#168 is separately owner-authorised implementation sequencing debt: exactly one
+pond/minigame in the existing outskirts, the three-meal Fish reserve and daily
+yield, supper-derived Fed state, Warm/Fed/Connected morale, one-descent Well
+Fed state, and their read-only presentation on the existing Garrison page. Its
+future test is [design-tests/FISHING_PROVISIONS_PROOF.md](design-tests/FISHING_PROVISIONS_PROOF.md),
+but it does not supersede the active raid proof.
+
+Floors 2–4, bosses 2–4, production content, another fishing location or
+minigame, and every expansion below remain frozen while the raid slice is
+tested.
 
 ## Later, only if proven
 
@@ -81,10 +96,10 @@ These are candidates, not promises:
 
 - production work that stays inside the caps above;
 - recurring raids;
-- scouts, watchtowers, guards, staffing, or morale;
+- scouts, watchtowers, guards, staffing, or broader morale consequences;
 - more waves, routes, attackers, or defensive structures;
 - the explosive-barrel and hanging-lantern interaction family;
-- another home-life responsibility.
+- another home-life responsibility, resource-gathering loop, or profession.
 
 Each needs its own design question, smallest proof, and explicit scope decision.
 A passed raid test authorises planning; it does not automatically authorise this
@@ -97,7 +112,8 @@ list.
 - A second garrison, open overworld, alternate dungeon, or fifth floor.
 - Multiplayer or co-op.
 - Joinable factions, character creation, races, classes, or skill trees.
-- Farming, fishing, mounts, romance, cooking, or a housing economy.
+- Farming, hunting, mining, cooking systems, mounts, romance, fishing gear or
+  collections, profession expansion, or a housing economy.
 - A spell school, spell levels, a fourth working, or a seventh ring stop.
 - Procedural bosses, a second dungeon kit, or new monster models.
 - Relics as random drops, sellable relics, or permanent loss of a unique relic.

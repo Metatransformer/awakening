@@ -41,10 +41,25 @@ Test exactly one implemented vertical slice:
 This slice may reuse existing enemies, currencies, UI, dialogue presentation,
 services, and garrison spaces. It may add only what the slice requires.
 
+## Owner-authorised implementation alongside the freeze
+
+Issue #168 is an explicitly owner-authorised, bounded daily-life implementation
+slice: one fishing pond and minigame, a three-meal Fish reserve, supper-derived
+Fed state, visible derived morale, and a one-descent Well Fed benefit. Its exact
+rules are owned by [GARRISON_LIFE.md](GARRISON_LIFE.md), and its future human
+question is precommitted in
+[design-tests/FISHING_PROVISIONS_PROOF.md](design-tests/FISHING_PROVISIONS_PROOF.md).
+
+This work is accepted sequencing debt alongside the test freeze. It is not raid
+evidence, does not change or satisfy the Raid Loop Proof criteria, and does not
+become the active human test unless that test resolves or the owner changes this
+document again.
+
 ## Frozen
 
 - Recurring raids or a recurrence scheduler.
-- Scouts, watchtowers, guards, staffing, or morale systems.
+- Scouts, watchtowers, guards, staffing, or expansion beyond the bounded
+  Warm/Fed/Connected morale state.
 - Multiple waves, routes, raid types, or defensive structures.
 - Freeform construction or placement.
 - Destructible buildings.
@@ -52,5 +67,6 @@ services, and garrison spaces. It may add only what the slice requires.
 - New currency, UI screen, voiced line, or enemy model.
 - Floors, bosses, production content, broad lore, or unrelated polish.
 
-Implementation proves only that the slice works. Expansion remains frozen until
-five human sessions resolve the active test and [SCOPE.md](SCOPE.md) is amended.
+Implementation of either bounded slice proves only that its rules work. It does
+not answer the active raid question. Expansion remains frozen until five human
+sessions resolve that test and [SCOPE.md](SCOPE.md) is amended.
