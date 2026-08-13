@@ -129,6 +129,12 @@ static func _deliver(body: Node, hit: Hit) -> bool:
 	# of them ate the blow, which is exactly what the caller needs to know.
 	if body.has_method(&"take_hit"):
 		return bool(body.call(&"take_hit", hit))
+	# A non-hero body may own behaviour-aware damage while still delegating the
+	# actual HP transaction to its HealthComponent. Ask it before walking to the
+	# child so sword arcs and direct shape hits take the same signature path as
+	# arrows and Burst.
+	if body.has_method(&"apply_hit"):
+		return bool(body.call(&"apply_hit", hit))
 	var hp := _health_of(body)
 	if hp == null or hp.dead:
 		return false

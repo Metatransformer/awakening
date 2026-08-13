@@ -125,6 +125,19 @@ static func _draw_dungeon_map(ci: CanvasItem, box: Rect2, s_y: float,
 	facts[&"room_count"] = Atlas.rooms.size()
 	facts[&"explored_count"] = Atlas.explored_count()
 	facts[&"player_centered"] = follow and hero != null
+	var ordinary_locks := 0
+	var boss_locks := 0
+	for tag: StringName in Atlas.locks:
+		if Atlas.locks[tag]["kind"] == Atlas.LOCK_BOSS:
+			boss_locks += 1
+		else:
+			ordinary_locks += 1
+	facts[&"lock_count"] = Atlas.locks.size()
+	facts[&"ordinary_lock_count"] = ordinary_locks
+	facts[&"boss_lock_count"] = boss_locks
+	facts[&"visible_lock_count"] = 0
+	facts[&"ordinary_lock_glyph"] = &"bone_padlock"
+	facts[&"boss_lock_glyph"] = &"gold_padlock"
 	var b := Atlas.bounds()
 	var pitch := 0.0
 	var origin := Vector2.ZERO
@@ -186,6 +199,18 @@ static func _draw_dungeon_map(ci: CanvasItem, box: Rect2, s_y: float,
 			continue
 		_draw_annex_walls(ci, origin, pitch, b, Atlas.annexes[a], line,
 			line_here, in_annex.y if in_annex.x == a else -1, box)
+
+	# Doorway locks sit over their wall after the wall pass and before room-centre
+	# markers. Their host room's fog is authoritative: no seen room, no lock hint.
+	var visible_locks := 0
+	for cell: Vector2i in Atlas.rooms:
+		if not Atlas.is_seen(cell):
+			continue
+		for record: Dictionary in Atlas.locks_of(cell):
+			if _draw_lock_record(ci, _centre(origin, pitch, b, cell), room, s_y,
+					record, box):
+				visible_locks += 1
+	facts[&"visible_lock_count"] = visible_locks
 
 	for cell: Vector2i in Atlas.rooms:
 		if not Atlas.is_seen(cell):
@@ -559,6 +584,37 @@ static func _glyph(ci: CanvasItem, c: Vector2, g: float, id: StringName) -> void
 		&"stairs": _stairs(ci, c, g)
 		&"arrows": _arrows(ci, c, g)
 		&"entrance": _entrance(ci, c, g)
+		&"lock": _lock(ci, c, g, Pal.BONE)
+		&"boss_lock": _lock(ci, c, g, Pal.GOLD)
+
+
+static func _draw_lock_record(ci: CanvasItem, room_centre: Vector2, room: float,
+		s_y: float, record: Dictionary, clip: Rect2) -> bool:
+	var axis := Vector2(_step(StringName(record["wall"])))
+	var g := maxf(room * 0.24, Pal.px(5.0, s_y))
+	var at := room_centre + axis * (room * 0.5 - g * 0.10)
+	if not clip.encloses(Rect2(at - Vector2.ONE * g * 0.65,
+			Vector2.ONE * g * 1.3)):
+		return false
+	var col: Color = Pal.GOLD if record["kind"] == Atlas.LOCK_BOSS else Pal.BONE
+	_lock(ci, at, g, col)
+	return true
+
+
+## One padlock silhouette shared by the floor, both legends, and the HUD key
+## strip. The open centre of the shackle is what keeps it a lock at six pixels;
+## a filled arch would read as another room marker.
+static func _lock(ci: CanvasItem, c: Vector2, g: float, col: Color) -> void:
+	var stroke := maxf(g * 0.14, 1.0)
+	var body := Rect2(c + Vector2(-g * 0.38, -g * 0.02),
+		Vector2(g * 0.76, g * 0.55))
+	ci.draw_rect(body.grow(maxf(g * 0.08, 1.0)), Color(Pal.VOID, 0.92))
+	ci.draw_arc(c + Vector2(0.0, -g * 0.04), g * 0.29, PI, TAU, 10,
+		Color(Pal.VOID, 0.92), stroke * 2.2)
+	ci.draw_arc(c + Vector2(0.0, -g * 0.04), g * 0.29, PI, TAU, 10,
+		col, stroke)
+	ci.draw_rect(body, col)
+	ci.draw_circle(c + Vector2(0.0, g * 0.19), maxf(g * 0.07, 1.0), Pal.VOID)
 
 
 ## A gold box with a dark band across it. The band is doing all the work: a
@@ -814,6 +870,7 @@ static func _draw_surface_area(ci: CanvasItem, box: Rect2,
 		projected.append(_surface_project(point, world_center, screen_center,
 			pixels_per_metre))
 	var clipped := _clip_polygon(projected, box)
+	clipped = _safe_surface_polygon(clipped)
 	if clipped.size() < 3:
 		return
 	var kind := StringName(entry.get(&"kind", &"ground"))
@@ -829,6 +886,33 @@ static func _draw_surface_area(ci: CanvasItem, box: Rect2,
 	for i in clipped.size():
 		ci.draw_line(clipped[i], clipped[(i + 1) % clipped.size()],
 			Color(Pal.ASH, 0.62), width)
+
+
+## Rotated surface areas can meet the minimap clip rect exactly. Sutherland-
+## Hodgman then legitimately emits the same corner from two adjacent edges, but
+## RenderingServer rejects that degenerate polygon. Keep the authored order and
+## remove only coincident consecutive vertices before triangulation.
+static func _safe_surface_polygon(points: Array[Vector2]) -> Array[Vector2]:
+	var clean: Array[Vector2] = []
+	for point: Vector2 in points:
+		if clean.is_empty() or not clean[-1].is_equal_approx(point):
+			clean.append(point)
+	if clean.size() > 1 and clean[0].is_equal_approx(clean[-1]):
+		clean.pop_back()
+	if clean.size() < 3:
+		return []
+	# Every current surface area is an authored rectangle or bounding footprint,
+	# hence convex. Clipping should preserve that property, but exact edge/corner
+	# contacts can return vertices in a crossing order. Rebuilding the hull is the
+	# canonical representation and prevents RenderingServer triangulation errors.
+	var hull := Geometry2D.convex_hull(PackedVector2Array(clean))
+	clean.assign(Array(hull))
+	if clean.size() > 1 and clean[0].is_equal_approx(clean[-1]):
+		clean.pop_back()
+	if clean.size() < 3 \
+			or Geometry2D.triangulate_polygon(PackedVector2Array(clean)).is_empty():
+		return []
+	return clean
 
 
 static func _draw_surface_landmark(ci: CanvasItem, box: Rect2,

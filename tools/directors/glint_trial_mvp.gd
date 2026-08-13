@@ -14,7 +14,7 @@ extends RefCounted
 ##     --director=res://tools/directors/glint_trial_mvp.gd \
 ##     --out=/tmp/glint-mvp/garrison/x.png --size=1280x720 --warmup=60
 
-const SEED := 20260813
+const DEFAULT_SEED := 20260813
 const SAVE_SLOT := 4
 const DUNGEON_SCRIPT := "res://scripts/world/dungeon.gd"
 const BOSS_DOOR_SCRIPT := "res://scripts/world/boss_door.gd"
@@ -23,10 +23,12 @@ const BOSS_KEY_SCRIPT := "res://scripts/props/atoms/boss_key.gd"
 var _checks := 0
 var _failed := false
 var _out := ""
+var _seed := DEFAULT_SEED
 
 
 func run(rig) -> void:
 	_out = rig.arg("out", "/tmp/glint-mvp/x.png").get_base_dir()
+	_seed = int(rig.arg("seed", str(DEFAULT_SEED)))
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	if rig.scene().name == &"DungeonRun":
 		await _dungeon(rig)
@@ -41,12 +43,12 @@ func _dungeon(rig) -> void:
 	Saves.erase(SAVE_SLOT)
 	Saves.active_slot = SAVE_SLOT
 	Game.reset()
-	Run.enter(SEED)
+	Run.enter(_seed)
 	Run.level = 1
 	_ck(rig, OS.get_cmdline_user_args().has("--glint-mvp"),
 		"dungeon invocation omitted --glint-mvp")
 
-	var dungeon := await _rebuild_dungeon(rig, SEED)
+	var dungeon := await _rebuild_dungeon(rig, _seed)
 	if not _ck(rig, dungeon != null, "the real Dungeon did not rebuild"):
 		_cleanup_save()
 		return
@@ -60,6 +62,10 @@ func _dungeon(rig) -> void:
 	_ck(rig, dungeon.call(&"anchor_node", &"gate_room") == null
 		and dungeon.call(&"anchor_node", &"puzzle_room") == null,
 		"the MVP layered over a standard gate or treasure puzzle")
+	_ck(rig, not (dungeon.get(&"key_loop") as Dictionary).is_empty()
+		and _named(dungeon, &"SmallKeyGate").size() == 1
+		and _named(dungeon, &"SmallKeyDetour").size() == 1,
+		"the MVP lost #199's guaranteed floor-scoped Small Key cycle")
 
 	var doors := _script_nodes(dungeon, BOSS_DOOR_SCRIPT)
 	var keys := _named(dungeon, &"GuardianBossKey")
@@ -166,9 +172,9 @@ func _dungeon(rig) -> void:
 	await _frame_reward(rig, reward)
 	await rig.capture(_out.path_join("02-reward.png"))
 
-	Run.enter(SEED + 1)
+	Run.enter(_seed + 1)
 	Run.level = 1
-	var rebuilt := await _rebuild_dungeon(rig, SEED + 1)
+	var rebuilt := await _rebuild_dungeon(rig, _seed + 1)
 	if _ck(rig, rebuilt != null, "the post-solve Floor 1 did not rebuild"):
 		_ck(rig, rebuilt.call(&"anchor_node", &"glint_trial") == null
 			and _named(rebuilt, &"GlintTrialBars").is_empty()

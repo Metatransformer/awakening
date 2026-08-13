@@ -9,6 +9,9 @@ const MAT_RUSTIC_STONE: Material = preload("res://assets/materials/mat_garrison_
 const MAT_PLASTER: Material = preload("res://assets/materials/mat_garrison_plaster.tres")
 const MAT_MOSSY_ROCK: Material = preload("res://assets/materials/mat_garrison_mossy_rock.tres")
 const MAT_CEILING: Material = preload("res://assets/materials/mat_garrison_ceiling.tres")
+const MAT_IRON: Material = preload("res://assets/materials/mat_iron.tres")
+
+const KIT_TORCH: PackedScene = preload("res://scenes/kit/torch.tscn")
 
 const COLUMN_WOOD: PackedScene = preload("res://assets/props/garrison_architecture/column-wood.glb")
 const WALL_WOOD: PackedScene = preload("res://assets/props/garrison_architecture/wall-pane-wood.glb")
@@ -79,7 +82,11 @@ static func build(compound: GarrisonCompound) -> void:
 	_build_interiors(compound, art_pass)
 	_build_garden(art_pass)
 	_build_practicals(art_pass)
-	_build_gate_vista(art_pass)
+	_build_perimeter_torches(art_pass)
+	_build_night_fills(art_pass)
+	_build_gate_mechanism(art_pass)
+	if not compound.open_surface_gate:
+		_build_gate_vista(art_pass)
 
 
 static func _build_terrain(compound: GarrisonCompound, art_pass: Node3D) -> void:
@@ -162,8 +169,11 @@ static func _build_architecture(compound: GarrisonCompound, art_pass: Node3D) ->
 	])
 
 	var frames := _group(architecture, &"DoorFrames")
-	_door_frame(frames, &"Barracks", Vector3(-13.62, 0.04, -13.75),
-		Vector3(-13.62, 0.04, -11.05), 3.25)
+	# Keep the entire imported jamb profile backed by the real wall returns. The
+	# chase camera only collides with that authored shell, so proud decor may not
+	# protrude into the mathematical opening.
+	_door_frame(frames, &"Barracks", Vector3(-13.86, 0.04, -12.0),
+		Vector3(-13.86, 0.04, -8.4), 3.25)
 	_door_frame(frames, &"Mess", Vector3(-8.55, 0.04, -11.04),
 		Vector3(-5.25, 0.04, -11.04), 3.25)
 	_door_frame(frames, &"Leader", Vector3(11.15, 0.04, -9.55),
@@ -185,7 +195,7 @@ static func _build_architecture(compound: GarrisonCompound, art_pass: Node3D) ->
 	_facade_panel(facades, WALL_WINDOW, &"BarracksWindowNorth",
 		Vector3(-13.56, 0.08, -15.65), -PI * 0.5, Vector3(1.65, 3.0, 0.8))
 	_facade_panel(facades, WALL_WOOD, &"BarracksPanelSouth",
-		Vector3(-13.56, 0.08, -9.15), -PI * 0.5, Vector3(1.55, 3.0, 0.8))
+		Vector3(-13.80, 0.08, -7.95), -PI * 0.5, Vector3(1.45, 3.0, 0.8))
 	_facade_panel(facades, WALL_WOOD, &"MessPanelWest", Vector3(-10.0, 0.08, -10.98),
 		PI, Vector3(1.7, 3.0, 0.8))
 	_facade_panel(facades, WALL_WINDOW, &"MessWindowEast", Vector3(-3.9, 0.08, -10.98),
@@ -276,10 +286,6 @@ static func _build_barracks_interior(room: Node3D) -> void:
 		-PI * 0.5, Vector3(0.8, 0.8, 0.8))
 	_asset(room, SHIELD_WOODEN, &"BarracksShieldSouth", Vector3(-14.05, 1.2, -9.25),
 		-PI * 0.5, Vector3(0.72, 0.72, 0.72))
-	_asset(room, BED_TWIN_2, &"BuilderImportedBed", Vector3(-16.0, 0.04, -16.2),
-		PI * 0.5, Vector3(1.0, 1.0, 1.0))
-	_asset(room, CHEST_WOOD, &"BarracksFootChest", Vector3(-15.1, 0.04, -8.25),
-		PI, Vector3(0.85, 0.85, 0.85))
 	_asset(room, BAG, &"BarracksKitBagA", Vector3(-14.65, 0.04, -9.0),
 		deg_to_rad(18.0), Vector3(0.8, 0.8, 0.8))
 	_asset(room, BAG, &"BarracksKitBagB", Vector3(-15.25, 0.04, -9.1),
@@ -534,16 +540,20 @@ static func _build_practicals(art_pass: Node3D) -> void:
 	var practicals := _group(art_pass, &"WarmThresholds")
 	# Every occupied building announces itself with a small visible source and a
 	# restrained pool at the threshold. Interiors remain the brightest warm zones.
-	_practical(practicals, &"Barracks", Vector3(-13.28, 1.78, -12.4), -PI * 0.5)
-	_practical(practicals, &"Mess", Vector3(-6.9, 1.78, -10.72), PI)
-	_practical(practicals, &"Leader", Vector3(12.7, 1.82, -9.16), PI, 1.45, 3.25)
+	_practical(practicals, &"Barracks", Vector3(-13.28, 1.78, -12.4), -PI * 0.5, 8101)
+	_practical(practicals, &"Mess", Vector3(-6.9, 1.78, -10.72), PI, 8102)
+	_practical(practicals, &"Leader", Vector3(12.7, 1.82, -9.16), PI, 8103,
+		1.45, 3.25)
 	_practical(practicals, &"Smith", Vector3(-14.12, 1.78, -4.6), -PI * 0.5,
-		1.55, 3.3, Color(1.0, 0.54, 0.27))
-	_practical(practicals, &"Jewel", Vector3(-14.12, 1.76, 3.2), -PI * 0.5)
-	_practical(practicals, &"Builder", Vector3(-12.62, 1.78, 11.1), -PI * 0.5)
-	_practical(practicals, &"Quartermaster", Vector3(12.5, 1.78, 4.3), PI * 0.5)
-	_practical(practicals, &"WestSupply", Vector3(-9.2, 1.72, 11.48), 0.0, 1.1, 2.8)
-	_practical(practicals, &"EastSupply", Vector3(9.2, 1.72, 11.48), 0.0, 1.1, 2.8)
+		8104, 1.55, 3.3, Color(1.0, 0.54, 0.27))
+	_practical(practicals, &"Jewel", Vector3(-14.12, 1.76, 3.2), -PI * 0.5, 8105)
+	_practical(practicals, &"Builder", Vector3(-12.62, 1.78, 11.1), -PI * 0.5, 8106)
+	_practical(practicals, &"Quartermaster", Vector3(12.5, 1.78, 4.3), PI * 0.5,
+		8107)
+	_practical(practicals, &"WestSupply", Vector3(-9.2, 1.72, 11.48), 0.0,
+		8108, 1.1, 2.8)
+	_practical(practicals, &"EastSupply", Vector3(9.2, 1.72, 11.48), 0.0,
+		8109, 1.1, 2.8)
 
 
 static func _practical(
@@ -551,21 +561,139 @@ static func _practical(
 		practical_name: StringName,
 		at: Vector3,
 		yaw: float,
+		seed: int,
 		energy: float = 1.25,
 		reach: float = 3.0,
 		color: Color = Color(1.0, 0.72, 0.46)
 	) -> void:
-	_asset(parent, LANTERN_WALL, StringName("%sLantern" % practical_name),
-		at, yaw, Vector3(0.64, 0.64, 0.64))
+	_wall_torch(parent, StringName("%sThresholdTorch" % practical_name), at, yaw,
+		seed, energy, reach, color)
+
+
+static func _build_perimeter_torches(art_pass: Node3D) -> void:
+	var torches := _group(art_pass, &"PerimeterTorches")
+	var warm := Color(1.0, 0.68, 0.38)
+	# The shoulder pair reads from both directions through the open six-metre
+	# passage. The approach pair picks the arch out from the inner courtyard.
+	_wall_torch(torches, &"GateShoulderWestTorch", Vector3(-2.55, 2.35, 15.55),
+		PI * 0.5, 8201, 2.0, 5.2, warm, true, true)
+	_wall_torch(torches, &"GateShoulderEastTorch", Vector3(2.55, 2.35, 15.55),
+		-PI * 0.5, 8202, 2.0, 5.2, warm, true, true)
+	_wall_torch(torches, &"GateApproachWestTorch", Vector3(-5.35, 2.35, 13.08),
+		PI, 8203, 1.75, 4.8, warm, true)
+	_wall_torch(torches, &"GateApproachEastTorch", Vector3(5.35, 2.35, 13.08),
+		PI, 8204, 1.75, 4.8, warm, true)
+
+	# Junction towers carry the rhythm around every turn in the irregular wall.
+	_wall_torch(torches, &"NorthJunctionTorch", Vector3(3.1, 2.35, -17.22),
+		0.0, 8210, 1.65, 4.8, warm)
+	_wall_torch(torches, &"LeaderDoglegTorch", Vector3(19.28, 2.35, -9.35),
+		-PI * 0.5, 8211, 1.65, 4.7, warm)
+	_wall_torch(torches, &"EastStepTorch", Vector3(21.83, 2.35, -4.65),
+		-PI * 0.5, 8212, 1.65, 4.7, warm)
+	_wall_torch(torches, &"QuartermasterTurnTorch", Vector3(21.72, 2.35, 8.15),
+		-PI * 0.5, 8213, 1.7, 4.9, warm)
+	_wall_torch(torches, &"WestCraftTurnTorch", Vector3(-22.28, 2.35, 7.0),
+		PI * 0.5, 8214, 1.65, 4.7, warm)
+	_wall_torch(torches, &"WestMidTurnTorch", Vector3(-22.58, 2.35, -0.55),
+		PI * 0.5, 8215, 1.65, 4.7, warm)
+
+	# Courtyard-facing pockets bridge the longer dark gaps between destinations.
+	_wall_torch(torches, &"NorthBarracksPocketTorch", Vector3(-13.62, 2.35, -17.0),
+		PI * 0.5, 8220, 1.45, 4.5, warm)
+	_wall_torch(torches, &"NorthLeaderPocketTorch", Vector3(9.75, 2.35, -9.48),
+		0.0, 8221, 1.45, 4.5, warm)
+	_wall_torch(torches, &"WestSupplyShoulderTorch", Vector3(-11.35, 2.3, 11.72),
+		PI, 8222, 1.5, 4.6, warm)
+	_wall_torch(torches, &"EastSupplyShoulderTorch", Vector3(11.55, 2.3, 11.72),
+		PI, 8223, 1.5, 4.6, warm)
+
+
+static func _wall_torch(
+		parent: Node3D,
+		torch_name: StringName,
+		at: Vector3,
+		yaw: float,
+		seed: int,
+		energy: float,
+		reach: float,
+		color: Color,
+		gate: bool = false,
+		embers: bool = false
+	) -> KitTorch:
+	var torch := KIT_TORCH.instantiate() as KitTorch
+	if torch == null:
+		push_error("GarrisonArtPass: KitTorch scene did not instantiate as KitTorch.")
+		return null
+	torch.name = torch_name
+	torch.mode = KitTorch.Mode.SCONCE
+	torch.position = at
+	torch.rotation.y = yaw
+	torch.rng_seed = seed
+	torch.light_color = color
+	torch.light_energy = energy
+	torch.light_range = reach
+	torch.light_attenuation = 1.75
+	torch.flicker = 0.07
+	torch.flicker_speed = 6.2
+	torch.cast_shadow = false
+	torch.embers = embers
+	parent.add_child(torch)
+	torch.add_to_group(&"garrison_wall_torch")
+	if gate:
+		torch.add_to_group(&"garrison_gate_torch")
+	return torch
+
+
+static func _build_night_fills(art_pass: Node3D) -> void:
+	var fills := _group(art_pass, &"NightFills")
+	var cool := Color(0.38, 0.52, 0.78)
+	_night_fill(fills, &"GatePlazaFill", Vector3(0.0, 4.0, 10.0), 1.75, 14.0, cool)
+	_night_fill(fills, &"WestCraftGardenFill", Vector3(-10.5, 3.0, 0.5),
+		1.45, 14.5, cool)
+	_night_fill(fills, &"NorthWingFill", Vector3(0.0, 4.0, -11.5),
+		1.55, 16.0, cool)
+	_night_fill(fills, &"EastQuartermasterFill", Vector3(12.5, 3.0, 3.5),
+		1.45, 14.5, cool)
+	_night_fill(fills, &"SupplyPocketFill", Vector3(0.0, 3.5, 13.5),
+		1.25, 12.5, cool)
+
+
+static func _night_fill(parent: Node3D, fill_name: StringName, at: Vector3,
+		energy: float, reach: float, color: Color) -> void:
 	var light := OmniLight3D.new()
-	light.name = StringName("%sThresholdLight" % practical_name)
-	light.position = at + Vector3(0.0, -0.12, 0.0)
+	light.name = fill_name
+	light.position = at
 	light.light_color = color
 	light.light_energy = energy
 	light.omni_range = reach
-	light.omni_attenuation = 1.85
+	light.omni_attenuation = 1.05
+	light.light_specular = 0.1
 	light.shadow_enabled = false
 	parent.add_child(light)
+	light.add_to_group(&"garrison_night_fill")
+
+
+static func _build_gate_mechanism(art_pass: Node3D) -> void:
+	var mechanism := _group(art_pass, &"RaisedGateMechanism")
+	_asset(mechanism, PULLEY, &"GateWinchPulleyWest", Vector3(-2.15, 4.65, 15.15),
+		PI * 0.5, Vector3(0.78, 0.78, 0.78), MAT_IRON)
+	_asset(mechanism, PULLEY, &"GateWinchPulleyEast", Vector3(2.15, 4.65, 15.15),
+		-PI * 0.5, Vector3(0.78, 0.78, 0.78), MAT_IRON)
+	_visual_box(mechanism, &"RaisedGateUpperCrossbar", Vector3(5.45, 0.16, 0.18),
+		Vector3(0.0, 4.5, 15.28), MAT_IRON)
+	_visual_box(mechanism, &"RaisedGateLowerCrossbar", Vector3(5.45, 0.13, 0.16),
+		Vector3(0.0, 4.12, 15.28), MAT_IRON)
+	_visual_box(mechanism, &"GateWinchRopeWest", Vector3(0.055, 0.72, 0.055),
+		Vector3(-2.15, 4.38, 15.24), MAT_CEILING)
+	_visual_box(mechanism, &"GateWinchRopeEast", Vector3(0.055, 0.72, 0.055),
+		Vector3(2.15, 4.38, 15.24), MAT_CEILING)
+	# The teeth remain visibly raised above head height and carry no collision;
+	# raid actors still traverse the open arch instead of ghosting through a gate.
+	for index: int in 9:
+		_visual_box(mechanism, "RaisedGateTooth%02d" % (index + 1),
+			Vector3(0.13, 0.82, 0.15),
+			Vector3(-2.4 + float(index) * 0.6, 3.75, 15.28), MAT_IRON)
 
 
 static func _build_gate_vista(art_pass: Node3D) -> void:
@@ -661,14 +789,25 @@ static func _asset(
 	instance.position = at
 	instance.rotation.y = yaw
 	instance.scale = asset_scale
-	_make_decorative(instance, material_override)
+	_make_decorative(instance, material_override, _asset_casts_sun_shadow(scene))
 	parent.add_child(instance)
 	return instance
 
 
-static func _make_decorative(node: Node, material_override: Material) -> void:
-	if node is MeshInstance3D and material_override != null:
-		(node as MeshInstance3D).material_override = material_override
+static func _asset_casts_sun_shadow(scene: PackedScene) -> bool:
+	return (scene == BOULDER_1 or scene == BOULDER_5 or scene == BOULDER_8
+		or scene == ROCK_1 or scene == ROCK_3 or scene == ROCK_6
+		or scene == TREE_SHRUB or scene == FENCE_WOOD or scene == STRUCTURE_WALL)
+
+
+static func _make_decorative(node: Node, material_override: Material,
+		casts_sun_shadow: bool) -> void:
+	if node is MeshInstance3D:
+		var mesh_instance := node as MeshInstance3D
+		mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
+			if casts_sun_shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if material_override != null:
+			mesh_instance.material_override = material_override
 	if node is CollisionObject3D:
 		var collision_object := node as CollisionObject3D
 		collision_object.collision_layer = 0
@@ -678,7 +817,7 @@ static func _make_decorative(node: Node, material_override: Material) -> void:
 	if node is CollisionPolygon3D:
 		(node as CollisionPolygon3D).disabled = true
 	for child: Node in node.get_children():
-		_make_decorative(child, material_override)
+		_make_decorative(child, material_override, casts_sun_shadow)
 
 
 static func _visual_box(

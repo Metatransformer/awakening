@@ -38,6 +38,10 @@ extends RefCounted
 ## as a value someone forgot to fill in.
 const ROOMS_FROM_PROG := 0
 const PACK_FROM_PROG := Vector2i.ZERO
+## One authored expansion rule for every floor shape. The manifest and `Prog`
+## remain the authorities for the baseline; this is the only place that turns a
+## baseline into the combat-room extension the dungeon actually builds.
+const ROOM_EXPANSION := 0.30
 
 
 # --- Tints --------------------------------------------------------------------
@@ -294,6 +298,9 @@ static var ANCHORS_ENDLESS := {}
 ##                              `PACK_FROM_PROG` to defer.
 ##   `bands`       Dictionary — room distance from the entrance -> roster pool.
 ##   `bands_deep`  Array      — the pool for any distance past the last key.
+##   `signature`   Dictionary — one floor-specific body and behaviour that can
+##                              replace an ordinary room spawn. It belongs here
+##                              because it is place identity, not difficulty.
 ##   `tint`        StringName — a key into `TINTS`.
 ##   `boss`        StringName — a `BossDb` id.
 ##   `boss_item`   StringName — what its earned great chest grants when opened
@@ -324,6 +331,7 @@ static var FLOORS := {
 			2: [&"goblin", &"goblin", &"skeleton"],
 		},
 		"bands_deep": [&"goblin", &"skeleton", &"goblin"],
+		"signature": {"kind": &"goblin", "behaviour": &"knotback", "share": 0.35},
 		"tint": &"drowned_bronze",
 		"boss": &"cistern_warden",
 		"boss_item": &"bow",
@@ -349,6 +357,7 @@ static var FLOORS := {
 			2: [&"kobold", &"orc", &"orc"],
 		},
 		"bands_deep": [&"orc", &"orc", &"kobold"],
+		"signature": {"kind": &"kobold", "behaviour": &"lantern_seer", "share": 0.35},
 		"tint": &"slag_light",
 		"boss": &"slag_ogre",
 		# The Burst-Verse, not a satchel (`docs/GDD.md` §5.2). This id is what
@@ -387,6 +396,7 @@ static var FLOORS := {
 			2: [&"wraith", &"wraith", &"orc"],
 		},
 		"bands_deep": [&"wraith", &"wraith", &"wraith"],
+		"signature": {"kind": &"knight_iron", "behaviour": &"cinder_automaton", "share": 0.30},
 		"tint": &"pale_ring",
 		"boss": &"bellwake",
 		"boss_item": &"hookshot",
@@ -426,6 +436,7 @@ static var FLOORS := {
 			2: [&"troll", &"knight_iron", &"knight_iron"],
 		},
 		"bands_deep": [&"knight_iron", &"knight_iron", &"troll"],
+		"signature": {"kind": &"troll", "behaviour": &"mirebell", "share": 0.35},
 		"tint": &"riven_dawn",
 		"boss": &"riven_knight",
 		"boss_item": &"far_lantern",
@@ -459,6 +470,7 @@ static var ENDLESS := {
 		2: [&"wraith", &"troll", &"knight_iron"],
 	},
 	"bands_deep": [&"troll", &"knight_iron", &"wraith"],
+	"signature": {},
 	"tint": &"riven_dawn",
 	"boss": &"",
 	"boss_item": &"",
@@ -534,10 +546,30 @@ static func announced_name(level: int) -> String:
 	return n if n != "" else Prog.NAME
 
 
-## Rooms on this floor. Authored, or the curve's answer where the row defers.
-static func rooms(level: int) -> int:
+## The floor length before the combat extension. These are the manifest's
+## explicit 6/8/9/10 answers on authored floors and `Prog.rooms(level)` in the
+## Long Descent; callers validating authored pacing can therefore inspect the
+## baseline without undoing the expansion arithmetic themselves.
+static func base_rooms(level: int) -> int:
 	var n: int = get_floor(level).get("rooms", ROOMS_FROM_PROG)
 	return Prog.rooms(level) if n == ROOMS_FROM_PROG else n
+
+
+static func room_expansion() -> float:
+	return ROOM_EXPANSION
+
+
+## Every added room is an ordinary combat room. `ceil` is deliberate: a short
+## six-room floor still earns two full detours rather than rounding the promise
+## down to one.
+static func combat_bonus(level: int) -> int:
+	return int(ceil(float(base_rooms(level)) * ROOM_EXPANSION))
+
+
+## Total generated rooms: the unchanged authored/endless baseline plus its one
+## central combat extension.
+static func rooms(level: int) -> int:
+	return base_rooms(level) + combat_bonus(level)
 
 
 ## Bodies per room as (min, max). Authored, or the curve's answer where the row
@@ -569,6 +601,10 @@ static func roster(level: int, room_dist: int) -> Array:
 	var deep: Array = row.get("bands_deep", [])
 	var table: Dictionary = row.get("bands", {})
 	return table.get(maxi(room_dist, 0), deep)
+
+
+static func signature(level: int) -> Dictionary:
+	return get_floor(level).get("signature", {})
 
 
 ## The floor's colour identity. Returns the TINT, not its key, because every

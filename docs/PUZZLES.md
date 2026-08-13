@@ -585,6 +585,29 @@ the door comes up already open and `opened` never fires — §6 pays the Blessin
   chest**, and **the cycle back toward the entrance** (§4).
 - **Shape:** cycle. Always.
 
+Every generated floor also carries one mandatory ordinary **Small Key mission
+loop**, separate from the authored Boss Key gate room. The generator expands
+the baseline room count by **30%, rounded up**, and every added room is combat
+only. One added leaf is placed as a reachable detour before a locked
+critical-path doorway. Clearing that detour reveals the floor's Small Key; the
+player cycles back, spends exactly that floor-scoped key at the doorway, and
+continues along the original critical path. The key cannot migrate to or open a
+gate on another floor.
+
+| Floor | Baseline | Combat-only addition | Implemented total |
+|---|---:|---:|---:|
+| **1** | 6 | 2 | **8** |
+| **2** | 8 | 3 | **11** |
+| **3** | 9 | 3 | **12** |
+| **4** | 10 | 3 | **13** |
+
+Closed ordinary and Boss-Key doors publish live wall-scoped lock records to the
+one Atlas map authority. The minimap and full MAP screen both use the shared
+MapDraw padlock glyph: bone for ordinary locks and gold for Boss locks. The
+minimap carries a key strip beneath it, and MAP's stat band reports the current
+floor's Small Key and Boss Key counts. Opening a real door removes its live lock
+record from both surfaces.
+
 **Every puzzle pays in loot, not only in passage.** The chest is the owner's
 amendment of 2026-08-10 and it is a rule for all three shapes, not a prop for
 this one: *a solved puzzle drops something you can carry out.* A door that opens
@@ -1106,6 +1129,9 @@ Sluice-Keeper dies and the second stone lights).
 | 5.1 | The landing's chest and stone | `Dungeon._land_shortcut_rewards`, on `opened`, with the already-open restore |
 | 5.2 | `gate_room` anchor | `Dungeon._room_for(&"gate_path")` — 0.7 along the route to `deepest`, never either end |
 | 5.2 | The gate itself | A `PuzzleGate` **in the doorway the floor continues through**, not on a blank wall |
+| 5.2 | The mandatory Small Key loop | `Dungeon._plan_key_detour` / `_build_key_loop` — added combat leaf → floor key → locked critical-path edge, one per generated floor |
+| 5.2 | The combat-only expansion | `FloorDb.combat_bonus` — +30% rounded up, totals **8 / 11 / 12 / 13** on floors 1–4 |
+| 5.2 | Live lock and key telemetry | `Atlas.locks` → shared `MapDraw`; bone/gold locks on minimap and MAP, key strip below the minimap, key counts on MAP |
 | 5.2 | Floor 1's key hunt | `Dungeon._place_gate_room` — sun socket → key → door, §3's *nest* |
 | 5.2 | Arrows for the eye row | `_gate_eye_row`'s `GateUrn` — `Dungeon.EYE_ROW_ARROWS`, two per eye; proved by `tools/directors/gate_eye_row.gd` beats E–I |
 | 5.2 | The chest | `Dungeon._land_prize`, on `opened` |

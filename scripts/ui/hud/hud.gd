@@ -425,6 +425,10 @@ func _ready() -> void:
 	# plan itself only changes on these, so the minimap is not asking `Atlas`
 	# anything it has not been told.
 	Bus.map_changed.connect(_repaint)
+	# Floor-scoped ordinary keys and the current floor's Boss Key are both shown
+	# directly under the dungeon minimap. This edge is their repaint authority;
+	# the draw path never polls in `_process` for a count change.
+	Bus.key_count_changed.connect(func(_count: int) -> void: _repaint())
 	# A full-screen UI took input, and the overlay stands down for it. See
 	# `_refresh_visibility` -- these are a set and not a direct `visible` because
 	# that function has the last word on this property.
@@ -2152,12 +2156,48 @@ func _draw_minimap(s: Vector2) -> void:
 	var size := Pal.px(Pal.MINIMAP_SIZE, s.y)
 	var frame := Rect2(
 		Pal.MINIMAP_RIGHT * s.x - size, Pal.MINIMAP_TOP * s.y, size, size)
-	_note(&"minimap", &"", frame)
+	_note(&"minimap_plan", &"minimap", frame)
 	_canvas.draw_rect(frame, Color(Pal.VOID, 0.88))
 	_canvas.draw_rect(frame, Pal.ASH, false, Pal.px(1.0, s.y))
 	var pad := Pal.px(Pal.MINIMAP_PAD, s.y)
 	_map_debug = MapDraw.draw_map(
 		_canvas, frame.grow(-pad), s.y, player, true)
+	if Atlas.map_kind() == Atlas.KIND_DUNGEON:
+		var key_strip := _draw_map_keys(s, frame)
+		_map_debug[&"key_strip"] = true
+		_map_debug[&"key_strip_rect"] = key_strip
+		_map_debug[&"small_keys"] = Game.small_keys
+		_map_debug[&"boss_key"] = 1 if Game.has_boss_key_for(Run.level) else 0
+
+
+## Opaque, compact, and immediately below the minimap: ordinary lock stock on
+## the left and the floor's gold Boss Key on the right. Both glyphs come from
+## `MapDraw`, so the corner and the MAP legend cannot drift into two symbols.
+func _draw_map_keys(s: Vector2, map_frame: Rect2) -> Rect2:
+	var gap := Pal.px(4.0, s.y)
+	var h := Pal.px(22.0, s.y)
+	var strip := Rect2(map_frame.position.x, map_frame.end.y + gap,
+		map_frame.size.x, h)
+	_note(&"minimap_keys", &"minimap", strip)
+	_canvas.draw_rect(strip, Color(Pal.VOID, 0.96))
+	_canvas.draw_rect(strip, Pal.ASH, false, Pal.px(1.0, s.y))
+	var half := strip.size.x * 0.5
+	var glyph := Pal.px(10.0, s.y)
+	var scale := _text(10.0)
+	var text_y := strip.position.y + (strip.size.y - CanvasText.height(scale)) * 0.5
+	var left_c := Vector2(strip.position.x + glyph * 0.85, strip.get_center().y)
+	var right_c := Vector2(strip.position.x + half + glyph * 0.85,
+		strip.get_center().y)
+	MapDraw.draw_legend_glyph(_canvas, left_c, glyph, &"lock",
+		Atlas.KIND_DUNGEON)
+	MapDraw.draw_legend_glyph(_canvas, right_c, glyph, &"boss_lock",
+		Atlas.KIND_DUNGEON)
+	CanvasText.draw_text(_canvas, str(Game.small_keys),
+		Vector2(left_c.x + glyph * 0.72, text_y), scale, Pal.BONE)
+	CanvasText.draw_text(_canvas,
+		"1" if Game.has_boss_key_for(Run.level) else "0",
+		Vector2(right_c.x + glyph * 0.72, text_y), scale, Pal.GOLD)
+	return strip
 
 
 ## Debug seam produced by the live Atlas -> MapDraw -> HUD path.
@@ -2841,11 +2881,10 @@ func _best_rarity() -> int:
 ## the middle of a dungeon instead of playing one. Two numbers in the corner made
 ## that worse than one, because a pair invites arithmetic.
 ##
-## The fee did not become hidden. The pouch says it in words -- "The rope wants
-## 36 and you have 26. It will take all of it." -- the rope's own verb meta
-## carries the charge, the pause menu's "Way out" row names it, and the receipt
-## says what was actually paid. Every one of those is somewhere the player has
-## STOPPED, which is where a money decision belongs.
+## The portable Rope no longer has a gold figure to show: Equipment names its
+## counted stock and the receipt reports zero paid. The physical floor-1 stair
+## retains the priced settlement, visible on its receipt after the player has
+## stopped and committed to leaving.
 ##
 ## What is left here is the part that is not a figure at all: the screen-wide
 ## sweep at the moment leaving starts costing everything (`set_extract_dear` ->
@@ -2854,9 +2893,9 @@ func _best_rarity() -> int:
 func _draw_extraction(s: Vector2) -> void:
 	if not Run.in_dungeon or _extract_hold <= 0.0:
 		return
-	# **On the rim itself**, not floating over it (decision 15). Holding draws a
-	# ring around your own money while the world stays live: the cost is paid out
-	# of the thing you are protecting, and the UI says so.
+	# **On the rim itself**, not floating over it (decision 15). Holding still
+	# draws around the carried run state while the world stays live; the counted
+	# Rope has already been spent at channel start.
 	#
 	# This was a 54 px arc centred on `Pal.BAG_NUM_BASELINE` — the anchor of a
 	# 32 px gold total deleted in 2026-08-09 — so it was a ring drawn around

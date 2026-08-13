@@ -3,9 +3,8 @@ extends RefCounted
 ##
 ## The HUD used to print a rolling gold total in the bottom-right corner — the
 ## bag's worth underground, the purse in the garrison. It is gone (hud.gd
-## `_draw_bag`), and everything it said now lives on the POUCH: the bag's worth,
-## the purse, and the fee to leave, together, on a screen you have stopped to
-## look at.
+## `_draw_bag`), and the inventory facts now live on the POUCH while carried
+## provisions and Rope use live on EQUIPMENT.
 ##
 ## Three claims, and a screenshot cannot check the first one on its own — a
 ## corner that is empty because the HUD failed to draw looks exactly like a
@@ -14,7 +13,7 @@ extends RefCounted
 ##   1. with a full bag and a fat purse, NO figure appears on the HUD;
 ##   2. the pouch button (`inventory` — I / Select) opens the menu already on
 ##      the pouch, in one press, from the world;
-##   3. that screen names both numbers and the fee.
+##   3. that screen names bag, purse and case but owns no Rope; Equipment does.
 ##
 ## So (1) is asserted against the HUD's own state rather than against pixels,
 ## and the frames are there to be looked at.
@@ -41,6 +40,10 @@ func run(rig) -> void:
 	var menu: PauseMenu = Menu
 
 	Game.add_gold(PURSE - Game.gold)
+	Game.add_escape_ropes(3)
+	Game.add_charges(2)
+	Game.add_rations(&"hardtack", 4)
+	Game.add_rations(&"small_beer", 5)
 	for entry: Array in HAUL:
 		Run.collect(entry[0], entry[1])
 	await rig.wait_seconds(0.5)
@@ -69,7 +72,7 @@ func run(rig) -> void:
 	_check("...already ON the pouch, not at the root", pouch.visible)
 	await rig.capture("f_01_pouch.png")
 
-	# The three figures live in the header's StatBand, one cell each — a caption
+	# The inventory facts live in the header's StatBand, one cell each — a caption
 	# and a number in separate Labels — so the check is against everything the
 	# screen says, not against one line. It used to be a single header string;
 	# what matters was never that they shared a Label, only that a player who
@@ -79,22 +82,32 @@ func run(rig) -> void:
 	var blob := " ".join(said)
 	_check("the header names the bag's worth", blob.contains("BAG"))
 	_check("the header names the purse", blob.contains("PURSE"))
+	_check("the pouch names the document case and its Safe occupancy",
+		blob.contains("DOCUMENT CASE") and blob.contains("SAFE"))
 	_check("the purse is the real number (%d)" % Game.gold,
 		blob.contains(str(Game.gold)))
-	_check("the fee to leave is named too",
-		blob.contains("TO LEAVE") and blob.contains(str(Run.extract_charge())))
-	var rope := pouch.find_child("Rope", true, false) as Button
-	_check("the way out is on this screen", rope != null)
-	if rope != null:
-		rope.grab_focus()
-		await rig.wait_frames(2)
-		said = _all_text(pouch)
-		blob = " ".join(said)
-		await rig.capture("f_01a_rope.png")
-	_check("the rope says wounds come home and sleep recovers them",
-		blob.contains("wounds and all") and blob.contains("Sleep is where you recover"))
-	_check("...and it is gone from the items screen",
-		menu.get_node("Root/Screens/EquipScreen").find_child("Rope", true, false) == null)
+	_check("Inventory contains no Rope and no old TO LEAVE fee",
+		pouch.find_child("Rope", true, false) == null
+		and not blob.to_upper().contains("ESCAPE ROPE")
+		and not blob.to_upper().contains("TO LEAVE"))
+
+	# Shoulder-page to Equipment through the same action a player uses.
+	await _key(rig, KEY_Q)
+	await rig.wait_seconds(0.5)
+	var equip: MenuEquipPanel = menu.get_node("Root/Screens/EquipScreen")
+	_check("the page action reached Equipment", equip.visible)
+	var equip_blob := " ".join(_all_text(equip)).to_upper()
+	_check("Equipment renders the Rope row and complete provision list",
+		equip.find_child("Rope", true, false) is Button
+		and equip_blob.contains("PROVISIONS")
+		and equip_blob.contains("ESCAPE ROPE")
+		and equip_blob.contains("ARROWS")
+		and equip_blob.contains("BURST CHARGES")
+		and equip_blob.contains("HARDTACK")
+		and equip_blob.contains("SMALL BEER"))
+	_check("Equipment renders the live Rope stock (3 / %d)" % K.ESCAPE_ROPE_STACK,
+		equip_blob.contains("3 / %d" % K.ESCAPE_ROPE_STACK))
+	await rig.capture("f_01a_equipment_provisions.png")
 
 	# Pressing it again closes: a button that opens must close.
 	_tap(&"inventory")
@@ -127,6 +140,16 @@ func _tap(action: StringName) -> void:
 		ev.action = action
 		ev.pressed = pressed
 		Input.parse_input_event(ev)
+
+
+func _key(rig, code: int) -> void:
+	for pressed: bool in [true, false]:
+		var event := InputEventKey.new()
+		event.keycode = code
+		event.physical_keycode = code
+		event.pressed = pressed
+		Input.parse_input_event(event)
+		await rig.wait_frames(2)
 
 
 func _check(what: String, ok: bool) -> void:

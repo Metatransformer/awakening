@@ -235,8 +235,11 @@ func _prove_builder_and_defense(rig, garrison: Garrison) -> void:
 	Clock.restore({"day": 3, "hour": 12.0, "running": false})
 	await rig.wait_frames(5)
 	rig.check(garrison.builder != null and garrison.builder._person is RaceBody,
-		"the unvoiced Builder is present on the existing Vyr body")
-	rig.check(garrison.builder.voice_id() == &"", "the prototype Builder has no voice dependency")
+		"the Builder is present on the existing Vyr body")
+	# The quest-journal slice promoted the former prototype to Tamsin, a voiced
+	# resident. Keep the raid proof aligned with that production identity.
+	rig.check(garrison.builder.voice_id() == &"builder",
+		"the raid Builder retains Tamsin's production dialogue identity")
 
 	Game.gold = BuilderDb.COST
 	Game.components.clear()

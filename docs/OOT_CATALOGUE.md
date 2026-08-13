@@ -260,48 +260,226 @@ exam in that temple's verb. Clear them and the bridge to the tower forms.
 
 ---
 
-## 3. Enemies and bosses, keyed to the item that answers them
+## 3. Boss and miniboss combat catalogue
 
-The important column is the third one. Ocarina's roster is not "monsters with
-health" — **most of its memorable enemies exist to ask for a specific item**, and
-the ones that do not are the ones nobody remembers.
+The five-shape summary that used to sit here was useful as an abstraction and
+false as a catalogue. It erased locomotion, arena pressure, attack grammar, the
+actual opening loop, and phase structure. It also made the incorrect claim that
+Ocarina’s bosses effectively have one phase. Several have explicit multi-stage
+structure: Barinade has four functional stages; Phantom Ganon and Twinrova have
+two major sections; Volvagia alternates grounded exposure and aerial hazard
+cycles. A single health bar does not mean a single behaviour phase.
 
-| Enemy | What it does | What answers it |
-|---|---|---|
-| Deku Scrub | spits a nut | **shield** — send it back |
-| Skulltula | armoured face, soft back | **position** — get behind it |
-| Lizalfos | fast, aggressive, hard to pin | **stun**, then strike |
-| Stalfos | shielded, parries, **immune to stun and to fire** | **steel only** — the refusal is the design |
-| Iron Knuckle | armoured biped, huge axe, armour sheds as it takes hits | patience; it speeds up as it lightens |
-| ReDead | **paralysing gaze**, then a lethal grab | range, or break line of sight |
-| Gerudo guard | patrols, alerts, cannot be staggered in melee | **arrow only** |
-| Like Like / Dead Hand | **grabs you and takes your equipment** | kill it and it gives the gear back |
-| Wolfos | circles, guards its front | wait for the swipe, hit the flank |
-| Poe | invisible or fake; hops between hosts | ranged, at the *right* host |
-| Dark Link | **mirrors your moveset**, blocks the sword | everything that is not the sword |
-| Beamos | rotating eye, fires on sight | bomb the base; it cannot be melee'd |
-| Armos | statue that wakes and charges — **and can be led** | **bait it onto a plate** |
-| Flare Dancer | core exposed only in a window | **two answers**, both fine |
+These entries paraphrase observed mechanics and strategy documentation; they do
+not reproduce guide prose. Useful cross-checks are the
+[complete Ocarina of Time boss list](https://www.zeldadungeon.net/wiki/index.php?mobileaction=toggle_view_desktop&title=Ocarina_of_Time_Bosses),
+[Phantom Ganon strategy](https://www.zeldadungeon.net/wiki/index.php?mobileaction=toggle_view_desktop&title=Phantom_Ganon_%28Ocarina_of_Time%29),
+and [Iron Knuckle entry](https://www.zeldadungeon.net/wiki/Iron_Knuckle).
 
-### The five boss shapes, all of them
+### 3.1 Main bosses
 
-Every boss in the game is one of these, and three of the five are things we can
-build out of props that already exist.
+#### Queen Gohma
 
-1. **Receptacle.** The boss opens and you put an atom in it. *King Dodongo.*
-2. **Exposed weak point on a timer.** A beat strips its cover; hit the thing under
-   it before the cover comes back. *Barinade, Gohma, Morpha.*
-3. **Reflect.** It throws something and the shield sends it back. *Phantom Ganon,
-   Ganondorf, Twinrova.*
-4. **Positional.** The boss is unreachable where it stands; an item moves it or
-   moves you. *Morpha (hookshot the nucleus out), Volvagia (the holes).*
-5. **Disarm.** It takes your primary weapon away and the fight is fought with the
-   rest of the kit. *Ganon.*
+- **Locomotion / arena:** Gohma crosses the circular floor, climbs the walls and
+  ceiling, and relocates the threat above the player rather than remaining at a
+  fixed combat radius.
+- **Attack grammar:** on the ground she lunges and drops onto Link; from the
+  ceiling she lays eggs that hatch into Gohma Larvae if not cleared.
+- **Weak-point exposure:** the eye turns red before an attack or while she
+  prepares the ceiling cycle.
+- **Stun / damage loop:** a Slingshot seed, Deku Nut, or other valid eye hit
+  stuns or drops her; sword damage is dealt while she is down, then she recovers
+  and relocates.
+- **Phases / escalation:** there is no hard half-health transformation, but the
+  loop alternates ground pressure with a ceiling/add cycle. Fast recognition can
+  prevent the adds; slow recognition makes the next cycle busier.
+- **Transferable lesson:** the first boss teaches the whole sentence—read a
+  body cue, hit a specific target with the dungeon verb, then spend a bounded
+  melee window—while missed execution changes encounter pressure.
 
-**None of the five is a damage race, and none of them has a second health bar.**
-Ocarina's escalation is *the arena changing*, not the numbers going up. That is
-worth writing on the wall: `docs/SCOPE.md` §1 caps us at one phase and three
-beats, and Ocarina never needed more than that either.
+#### King Dodongo
+
+- **Locomotion / arena:** he walks the lava-ring arena and, after a damage
+  window, curls up and rolls about half the perimeter before stopping.
+- **Attack grammar:** a long inhale precedes fire breath; the roll turns the
+  circular arena itself into a timed lane. Corner Bomb Flowers renew the answer.
+- **Weak-point exposure:** the open mouth during the inhale is a receptacle, not
+  a general damage zone.
+- **Stun / damage loop:** throw a bomb into the mouth, let the internal blast
+  topple him, strike with sword or stick, then survive the roll and repeat.
+- **Phases / escalation:** the same authored cycle repeats; this is one of the
+  genuinely single-section fights.
+- **Transferable lesson:** a boss can test an item’s spatial verb rather than
+  its damage, and an arena can supply a renewable answer without executing it
+  for the player.
+
+#### Barinade
+
+- **Locomotion / arena:** it begins tethered to the ceiling, then settles into
+  the floor and finally moves rapidly around the circular chamber behind rotating
+  Bari screens.
+- **Attack grammar:** electrical beams and contact punish approach; successive
+  Bari rings orbit as moving armour; the bare body later rams and spins through
+  the room.
+- **Weak-point exposure:** first the three ceiling tendrils, then the main body
+  through gaps in the orbiting Bari.
+- **Stun / damage loop:** sever tendrils with the Boomerang; thereafter stun the
+  body with the Boomerang, kill Bari or strike the body during paralysis, and
+  widen the next opening by thinning the rotating screen.
+- **Phases / escalation:** four functional stages: detach the three ceiling
+  tethers; dismantle the first Bari ring; fight the faster mobile body and second
+  Bari ring by creating gaps; then finish the exposed, enraged body as it
+  rams and fires electricity.
+- **Transferable lesson:** damage to supporting actors can change the geometry
+  and difficulty of the next opening. A phase can escalate by reconfiguring a
+  shield rather than adding a new health bar.
+
+#### Phantom Ganon
+
+- **Locomotion / arena:** six paintings surround the room. He first gallops down
+  painted roads, then abandons the horse and floats over the arena.
+- **Attack grammar:** the painting section presents a real rider and a false
+  rider, with the real exit followed by room lightning. The floating section
+  uses energy orbs volleyed back and forth, plus a rare direct charge.
+- **Weak-point exposure:** the real rider at the painting threshold in section
+  one; the floating body only after its own orb wins the volley in section two.
+- **Stun / damage loop:** shoot the real rider with Bow or Hookshot for the first
+  three successful hits. Then return an orb with the sword until it strikes him,
+  rush the fallen body, and spend the melee window.
+- **Phases / escalation:** two explicit major sections with different
+  locomotion, target-reading, attack grammar, and vulnerability rules.
+- **Transferable lesson:** a phase change can retest the same broad principle—
+  identify and create an opening—through a completely different player verb.
+
+#### Volvagia
+
+- **Locomotion / arena:** nine holes puncture a small lava-surrounded platform.
+  Volvagia emerges from them, flies around the arena, or climbs to the ceiling.
+- **Attack grammar:** grounded emergence threatens a close fire breath or head
+  strike; aerial cycles either chase Link with fire or dislodge falling rocks.
+  Later emergence sequences include false holes before the real appearance.
+- **Weak-point exposure:** the head is reachable only during a real grounded
+  emergence.
+- **Stun / damage loop:** hammer the exposed head, then slash during the stun;
+  survive an aerial hazard cycle before another hole becomes live.
+- **Phases / escalation:** it alternates grounded damage cycles and aerial
+  survival cycles throughout, with more deceptive hole timing as health falls.
+  That is not one inert phase even though the core damage rule persists.
+- **Transferable lesson:** off-screen relocation and survival interludes can
+  pace a vulnerability loop, but false starts must remain readable rather than
+  becoming memorization traps.
+
+#### Morpha
+
+- **Locomotion / arena:** the nucleus moves through a central pool and forms
+  water tentacles among small platforms and a spiked perimeter. Corners provide
+  safer long sight lines than the central islands.
+- **Attack grammar:** tentacles rise, reach, grab, carry, and throw Link into
+  damaging geometry; additional arms appear as the fight progresses.
+- **Weak-point exposure:** the nucleus is visible in the water but becomes
+  safely punishable only when pulled onto dry ground.
+- **Stun / damage loop:** target the nucleus with the Longshot, pull it out of
+  the water column, strike it before it returns, then reset distance.
+- **Phases / escalation:** no explicit section break; escalation comes from more
+  simultaneous tentacle pressure and less comfortable targeting space.
+- **Transferable lesson:** the dungeon item can solve enemy position rather
+  than armour. The arena must prevent a safe corner from trivializing the loop.
+
+#### Bongo Bongo
+
+- **Locomotion / arena:** Link stands on a giant drum whose impacts bounce the
+  player and disrupt aim. Two detached hands act independently while the main
+  body remains invisible without the Lens of Truth.
+- **Attack grammar:** hands drum, sweep, punch, crush, grab, and throw; once both
+  are disabled, the hidden body charges down the centre line.
+- **Weak-point exposure:** stunning both hands exposes the eye during the
+  body’s charge; the Lens makes that target legible.
+- **Stun / damage loop:** shoot each hand, reveal and shoot the charging eye,
+  then strike the fallen eye with the sword before the hands recover.
+- **Phases / escalation:** the multi-step cycle repeats without a major
+  transformation, but every attempt shifts from two-target control to a narrow
+  reaction shot and then melee.
+- **Transferable lesson:** a readable boss can require a sequence of distinct
+  state gates, while arena motion taxes execution without changing the answer.
+
+#### Twinrova
+
+- **Locomotion / arena:** Koume and Kotake circle and hover around separated
+  platforms; after fusing, Twinrova controls the air above the same arena.
+- **Attack grammar:** the sisters fire opposed fire and ice beams. The fused
+  form fires alternating elemental attacks and punishes mixing charges.
+- **Weak-point exposure:** in the first section each sister is vulnerable to
+  the other’s reflected element; in the second, the fused body is vulnerable
+  only after the shield releases a stored same-element charge.
+- **Stun / damage loop:** aim one sister’s beam at the other with the Mirror
+  Shield. After fusion, absorb three consecutive attacks of one element; taking
+  the other element resets the charge. Discharge to stun, then melee.
+- **Phases / escalation:** two explicit major sections: paired cross-reflection,
+  then one fused target with accumulation and reset pressure.
+- **Transferable lesson:** a second section can deepen an already learned verb
+  by adding resource accumulation and error reset instead of replacing it.
+
+#### Ganondorf
+
+- **Locomotion / arena:** he floats across a high platform while ground pounds
+  damage and remove parts of the floor, degrading safe movement around Link.
+- **Attack grammar:** single energy orbs create a return volley; a charged
+  multi-orb burst floods lanes; the ground strike creates a radial shock and
+  breaks arena tiles.
+- **Weak-point exposure:** winning the volley disrupts his electrical guard;
+  a Light Arrow then brings him down.
+- **Stun / damage loop:** return an orb with sword, hammer, or bottle until it
+  hits; shoot the stunned target with a Light Arrow; cross the damaged arena and
+  strike with the sword before he rises.
+- **Phases / escalation:** one major combat grammar with pressure escalation
+  through arena loss and higher-volume attacks rather than a formal second
+  section.
+- **Transferable lesson:** a late boss can compose a familiar reflect test,
+  secondary item confirmation, traversal under time, and melee spend without
+  inventing a new verb.
+
+#### Ganon
+
+- **Locomotion / arena:** a ring of fire encloses a close arena. Ganon turns and
+  advances with huge reach while Link must get behind him; the Master Sword is
+  initially knocked outside the ring.
+- **Attack grammar:** paired sword sweeps and slams dominate the front. Light
+  Arrows or repeated Longshot impacts can stun the head, while rolling between
+  the legs is a positional route to the rear.
+- **Weak-point exposure:** the tail, reached by stunning or outmanoeuvring him.
+- **Stun / damage loop:** reach the tail and damage it with available weapons;
+  after the mid-fight collapse, recover the Master Sword and repeat. Other
+  weapons can advance the fight, but the Master Sword must deliver the finish.
+- **Phases / escalation:** two sections divided by Ganon falling and the fire
+  ring dropping long enough to reclaim the Master Sword. The second section
+  restores the same positional loop with the required finishing tool available.
+- **Transferable lesson:** temporary disarm can force kit breadth, but the
+  recovery beat must be staged and the final-tool requirement made unmistakable.
+
+### 3.2 Lower-level miniboss catalogue
+
+Minibosses generally get fewer beats than main bosses, but their best designs
+still change targeting, spacing, or turn-taking rather than merely adding HP.
+
+| Miniboss | Locomotion / arena | Attack and opening loop | Escalation / transferable lesson |
+|---|---|---|---|
+| Lizalfos / Dinolfos | Leap between platforms, retreat after short exchanges, and alternate aggression when fought in pairs rather than attacking together. | Sword lunges and evasive jumps pressure lock-on. Block a committed strike to make one lose footing, or use a Deku Nut, then counter before it disengages. Dinolfos is the later, tougher/faster expression. | Turn-taking makes a pair readable; a brief commitment error is a better opening than passive low defence. |
+| Big Octo | Runs around a circular room and rotating spiked platform, occasionally reversing direction. | Contact and the moving hazard punish pursuit. Boomerang-stun it, use another stun to control which way it faces, then hit the rear knob before it turns back. | The arena communicates direction and makes “get behind it” an active control problem. |
+| Stalfos | Advances, retreats, circles, and guards in compact arenas; paired encounters transfer initiative instead of swarming. | Shield defence answers frontal sword pressure; committed slashes and jump attacks create counter windows. Paired Stalfos can rebuild if the survivor is left too long. | Defensive enemies need visible commitment and bounded pair pressure, not inflated health or simultaneous attacks. |
+| Poe Sisters | Three hide in paintings or behind a reconstructed portrait; Meg occupies the centre and creates four images. | Shoot hosted paintings to force manifestation; solve Amy’s block portrait; identify Meg’s real body among copies, then shoot or strike during visibility. | A miniboss set can vary the information gate while keeping one ghost combat vocabulary. |
+| Flare Dancer | Spins around the room inside a mobile flame body; the exposed core runs away and reverses as it loses health. | Flame contact and radial fire deny approach. Bomb, Hookshot, or hammer interaction strips the shell; chase and strike the core before it re-forms and explodes outward. | Provide multiple valid tools for one exposure, then make locomotion—not a longer stun timer—the execution test. |
+| White Wolfos | Circles at the edge of a small icy arena, guards its front, then leaps or swipes through an approach. | Frontal attacks meet guard. Evade or block the committed attack and punish the back/flank during recovery. | Orbiting matters when it creates a facing question and a short positional opening. |
+| Dark Link | Mirrors Link across a featureless shallow-water arena and becomes more opaque and aggressive as the duel proceeds. | It copies or blocks ordinary sword approaches and counters repeated habits. Non-mirrored items or attacks timed after its commitment break the symmetry. | A mirror duel tests player habits; it needs enough asymmetry to avoid becoming an obscure knowledge check. |
+| Dead Hand | Numerous floor hands hold fixed positions while the main body stays buried until a grab is triggered, then rises and approaches. | Hands grab and restrain; the body lowers its head to bite. Escape, strike the lowered head during its approach/recovery, then repeat after it burrows. | The dangerous grab can also be the authored trigger for an opening, but failure attribution must stay clear. |
+| Gerudo fighter | Strafes, guards, backflips, and closes quickly in a small prison chamber. | Fast sword strings and a spinning jump punish passive guard; block or sidestep the commitment and counter its recovery. A clean special hit can end the exchange by capturing Link. | High stakes come from a clearly telegraphed outcome and reset, not unreadable speed. |
+| Iron Knuckle | Slow armoured pursuit controls a chamber with a huge axe; swings can destroy nearby props. At roughly half health the outer armour falls away and movement accelerates. | Wide horizontal and overhead axe blows deal extreme damage but leave the guard open. Bait a swing, leave its arc, and punish recovery; bombs offer a ranged option early. | This is an explicit two-state miniboss: shedding armour trades defence for speed. The silhouette and locomotion change make escalation readable without a new moveset. |
+
+The old five labels—receptacle, timed weak point, reflect, positional, disarm—
+remain useful tags. They are not exhaustive fight descriptions and should not be
+used to infer phase count. The transferable pattern is broader: locomotion and
+arena establish pressure; an attack exposes a specific answer; the answer earns
+a bounded damage window; later stages change the conditions under which that
+same learned contract is executed.
 
 ---
 

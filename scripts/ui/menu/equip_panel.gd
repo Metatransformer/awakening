@@ -16,6 +16,9 @@ extends Control
 
 signal back_requested
 signal notice(text: String, is_error: bool)
+## The deliberate menu hold completed. PauseMenu closes before the world-owned
+## EscapeRope receives its start signal.
+signal use_requested
 ## A slot settled on a new armament — the menu answers with a click.
 signal value_settled
 
@@ -32,6 +35,11 @@ const DOLL_W := 284
 ## The hundred pixels go to the doll and the wheel, which are the things on this
 ## screen a player actually looks AT.
 const RIGHT_W := 260
+
+## Escape is deliberately separate from ordinary confirm: the menu hold guards
+## against a fumble, then the interruptible channel happens in the world.
+const HOLD_ACTION := &"ui_hold"
+const ROPE_HOLD := 0.9
 
 ## Row order on screen. Index into `Game.loadout`.
 ##
@@ -66,6 +74,14 @@ var _back: Button
 var _tip: ItemTip
 ## Stat id -> the right-hand Label on its row. See `_build_stats`.
 var _stat_values: Dictionary[StringName, Label] = {}
+## Provision id -> live value label. Rope uses the VerbRow's meta value instead.
+var _provision_values: Dictionary[StringName, Label] = {}
+var _rope: Button
+var _rope_bar: HoldBar
+var _rope_say: Label
+var _rope_hold: float = 0.0
+## False while the menu was opened with ui_hold already down.
+var _rope_armed: bool = false
 ## Permanent utility tools are inspection-only Labels under the worn column.
 var _tools: VBoxContainer
 var _tools_empty: Label
@@ -91,6 +107,9 @@ func _ready() -> void:
 	# And the wheel can change without this screen touching it: picking something
 	# up auto-binds it, and a save loaded from the Saves screen replaces all eight.
 	Bus.wheel_changed.connect(func(_s: Array) -> void: refresh())
+	Bus.provisions_changed.connect(refresh)
+	Bus.ammo_changed.connect(func(_id: StringName, _n: int) -> void: refresh())
+	Bus.rations_changed.connect(func(_stock: Dictionary) -> void: refresh())
 	Game.garrison_changed.connect(refresh)
 	refresh()
 
@@ -168,14 +187,9 @@ func _build() -> void:
 	# itself on every focus change, and the stat block. The pane is gone -- what
 	# has focus is described by the hover card built at the bottom of this
 	# function, beside the thing it is about, the same card the bag, the locker
-	# and the five counters use. What is left here is the stat block, which is
-	# NOT about the focused slot: it is the hero, and it has to stay readable
-	# while the cursor moves.
-	#
-	# The way out used to sit under the pane. It moved to INVENTORY, which is the
-	# screen that carries every number the decision is made out of -- the bag's
-	# worth, the purse, and the fee. This screen is about what is in your HANDS;
-	# leaving is about what is in your BAG.
+	# and the five counters use. What is left here is the character readout: hero
+	# stats and carried provisions. Neither changes with the focused hand slot,
+	# so both remain readable while the cursor moves.
 	var right := VBoxContainer.new()
 	right.name = "Right"
 	right.custom_minimum_size.x = RIGHT_W
@@ -183,7 +197,7 @@ func _build() -> void:
 	split.add_child(right)
 
 	_build_stats(right)
-	_wire_focus()
+	_build_provisions(right)
 
 	var footer := PanelContainer.new()
 	footer.add_theme_stylebox_override("panel",
@@ -199,6 +213,7 @@ func _build() -> void:
 	_back.custom_minimum_size.x = 160
 	_back.pressed.connect(func() -> void: back_requested.emit())
 	frow.add_child(_back)
+	_wire_focus()
 
 	# LAST, so it draws over the doll, the sets and the wheel rather than under
 	# any of them.
@@ -671,9 +686,73 @@ func _refresh_stats() -> void:
 		else "-%d HP  (%.1f HP)" % [applied, exact]
 
 
-## Grid wiring, done by hand because MenuUtil.chain does closed loops and this is
-## a 2x2 with a button under it. Left/right wraps within a row; up/down walks the
-## whole thing and lands on Swap Set at the bottom, so there is no orphan.
+## Carried consumable stock belongs beside the character sheet, not in the bag:
+## none of these occupies a bag cell, and Rope is the sole verb in the section.
+func _build_provisions(parent: Node) -> void:
+	var col := VBoxContainer.new()
+	col.name = "Provisions"
+	col.add_theme_constant_override("separation", 5)
+	parent.add_child(col)
+
+	UITheme.section_rule(col, "PROVISIONS")
+
+	_rope = UiKit.verb_row(col, {
+		"label": "Escape Rope",
+		"icon": UiKit.action_icon("rope"),
+		"meta": "",
+		"primary": true,
+	})
+	_rope.name = "Rope"
+	_rope_bar = HoldBar.new()
+	_rope_bar.name = "Hold"
+	_rope_bar.col = Pal.CYAN
+	_rope_bar.pin_to_bottom_of(_rope)
+	_rope_say = Label.new()
+	_rope_say.name = "Say"
+	UITheme.apply_text_style(_rope_say, UITheme.TYPE_CAPTION, UITheme.TEXT_DIM)
+	_rope_say.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(_rope_say)
+	_rope.pressed.connect(_on_rope_pressed)
+	_rope.focus_entered.connect(_describe_rope)
+	_rope.mouse_entered.connect(_describe_rope)
+
+	_build_provision_fact(col, &"arrows", "Arrows")
+	_build_provision_fact(col, &"charges", "Burst charges")
+	_build_provision_fact(col, &"hardtack", "Hardtack")
+	_build_provision_fact(col, &"small_beer", "Small Beer")
+
+
+func _build_provision_fact(parent: Node, id: StringName, label_text: String) -> void:
+	var row := HBoxContainer.new()
+	row.name = String(id).capitalize()
+	parent.add_child(row)
+	var label := Label.new()
+	UITheme.apply_text_style(label, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
+	label.text = label_text
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+	var value := Label.new()
+	UITheme.apply_text_style(value, UITheme.TYPE_LABEL_MD, UITheme.ACCENT)
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(value)
+	_provision_values[id] = value
+
+
+func _refresh_provisions() -> void:
+	if _rope == null or _provision_values.is_empty():
+		return
+	UiKit.verb_meta(_rope, "%d / %d" % [Game.escape_ropes, K.ESCAPE_ROPE_STACK],
+		UITheme.DANGER if Game.escape_ropes <= 0 else UITheme.ACCENT)
+	_provision_values[&"arrows"].text = "%d / %d" % [Game.arrows, Game.max_arrows]
+	_provision_values[&"charges"].text = "%d / %d" % [Game.charges, Game.max_charges]
+	_provision_values[&"hardtack"].text = "%d" % Game.ration_count(&"hardtack")
+	_provision_values[&"small_beer"].text = "%d" % Game.ration_count(&"small_beer")
+	_paint_rope()
+
+
+## Grid wiring, done by hand because this is a 2x2, Swap, a flattened wheel,
+## Rope and Back. Every branch rejoins the same vertical loop; provisions are
+## never inserted into the wheel or hand-slot data.
 func _wire_focus() -> void:
 	var cols := HANDS.size()
 	for i in _slots.size():
@@ -685,27 +764,28 @@ func _wire_focus() -> void:
 		var bottom := _slots[cols + col]
 		MenuUtil.link_down(top, bottom)
 		MenuUtil.link_down(bottom, _swap)
-	# Swap Set drops into the wheel row, and the wheel row closes the loop back to
-	# the top-left hand -- everything here is reachable by pressing one direction
-	# repeatedly and nothing is an orphan. The way out used to be this last stop;
-	# it lives on INVENTORY now, with the numbers it is decided from.
+	# Swap Set drops into the wheel, then Rope and Back close onto the first hand.
 	_swap.focus_neighbor_left = ^"."
 	_swap.focus_neighbor_right = ^"."
 	if _wheel_cells.is_empty():
-		_swap.focus_neighbor_bottom = _swap.get_path_to(_slots[0])
-		_swap.focus_next = _swap.get_path_to(_slots[0])
-		return
-	# ← / → walk the eight cells and wrap, which is the ONE place on this screen
-	# where wrapping is more than a convenience: the row is a ring flattened out,
-	# and ↑← sitting next to ↑ is the only thing on screen that says so.
-	MenuUtil.chain_row(_wheel_cells)
-	for i in _wheel_cells.size():
-		var cell := _wheel_cells[i]
-		cell.focus_neighbor_top = cell.get_path_to(_swap)
-		cell.focus_previous = cell.get_path_to(_swap)
-		cell.focus_neighbor_bottom = cell.get_path_to(_slots[0])
-		cell.focus_next = cell.get_path_to(_slots[0])
-	MenuUtil.link_down(_swap, _wheel_cells[0])
+		MenuUtil.link_down(_swap, _rope)
+	else:
+		# ← / → walk the eight cells and wrap: the row is a ring flattened out.
+		MenuUtil.chain_row(_wheel_cells)
+		for cell in _wheel_cells:
+			cell.focus_neighbor_top = cell.get_path_to(_swap)
+			cell.focus_previous = cell.get_path_to(_swap)
+			cell.focus_neighbor_bottom = cell.get_path_to(_rope)
+			cell.focus_next = cell.get_path_to(_rope)
+		MenuUtil.link_down(_swap, _wheel_cells[0])
+		_rope.focus_neighbor_top = _rope.get_path_to(_wheel_cells[0])
+		_rope.focus_previous = _rope.get_path_to(_wheel_cells[0])
+	_rope.focus_neighbor_left = ^"."
+	_rope.focus_neighbor_right = ^"."
+	MenuUtil.link_down(_rope, _back)
+	_back.focus_neighbor_left = ^"."
+	_back.focus_neighbor_right = ^"."
+	MenuUtil.link_down(_back, _slots[0])
 
 
 # --- State ------------------------------------------------------------------
@@ -713,6 +793,8 @@ func _wire_focus() -> void:
 ## Focus entry point when the screen opens: the primary right hand, because that
 ## is the one the D-pad cycles in play and so the one a player comes here to set.
 func focus_first() -> void:
+	_rope_armed = not Input.is_action_pressed(HOLD_ACTION)
+	_reset_rope_hold()
 	if not _slots.is_empty():
 		_slots[HANDS.find(Game.HAND_RIGHT)].grab_focus()
 
@@ -738,6 +820,7 @@ func tab_row() -> Array:
 
 func refresh() -> void:
 	_refresh_tools()
+	_refresh_provisions()
 	if _slots.is_empty():
 		return
 	for i in _set_frames.size():
@@ -759,12 +842,107 @@ func refresh() -> void:
 	# this hidden panel. Typed Array.has validates its argument before comparing,
 	# so feeding it the console's TextEdit raises an engine error rather than
 	# simply answering false.
-	if focused is Button and _wheel_cells.has(focused as Button):
+	if focused == _rope:
+		_describe_rope()
+	elif focused is Button and _wheel_cells.has(focused as Button):
 		_describe_wheel(focused as Button)
 	elif focused is Button and _slots.has(focused as Button):
 		_describe(focused as Button)
 	else:
 		_describe(_slots[HANDS.find(Game.HAND_RIGHT)])
+
+
+## The duration-based fumble guard. It polls action state while the paused menu
+## is visible; the real EscapeRope owns all world-channel behavior.
+func _process(delta: float) -> void:
+	if not is_visible_in_tree():
+		_reset_rope_hold()
+		return
+	if not Input.is_action_pressed(HOLD_ACTION):
+		_rope_armed = true
+		_reset_rope_hold()
+		return
+	if not _rope_armed:
+		return
+	var why := _rope_refusal()
+	if not why.is_empty():
+		_rope_armed = false
+		_reset_rope_hold()
+		notice.emit(why, true)
+		Bus.request_sfx.emit(&"craft_fail", Vector3.ZERO)
+		return
+	_rope_hold += delta
+	if _rope_hold >= ROPE_HOLD:
+		_rope_armed = false
+		_reset_rope_hold()
+		_use_rope()
+		return
+	_rope_bar.progress = _rope_hold / ROPE_HOLD
+
+
+func _reset_rope_hold() -> void:
+	_rope_hold = 0.0
+	if _rope_bar != null:
+		_rope_bar.progress = 0.0
+
+
+## Refusal order is player-facing: location first, then stock.
+func _rope_refusal() -> String:
+	if not Run.in_dungeon:
+		return "You are already home."
+	if Game.escape_ropes <= 0:
+		return "You have no Escape Ropes."
+	return ""
+
+
+func _on_rope_pressed() -> void:
+	var why := _rope_refusal()
+	if not why.is_empty():
+		notice.emit(why, true)
+		return
+	notice.emit("Hold %s to use the Rope." % _hold_glyph(), false)
+
+
+func _hold_glyph() -> String:
+	var event := Glyph.event_for(HOLD_ACTION, Settings != null and Settings.using_pad)
+	if event == null:
+		event = Glyph.event_for(HOLD_ACTION, false)
+	return Glyph.long(event) if event != null else "Y"
+
+
+func _use_rope() -> void:
+	var why := _rope_refusal()
+	if not why.is_empty():
+		notice.emit(why, true)
+		return
+	use_requested.emit()
+	Bus.escape_rope_used.emit()
+
+
+func _describe_rope() -> void:
+	if _tip == null or _rope == null:
+		return
+	_tip.clear()
+	_tip.point_at(_rope)
+	_tip.kicker.text = "PROVISION  ·  NOT WHEEL-BINDABLE"
+	_tip.title.text = "Escape Rope"
+	_tip.price.text = "%d / %d carried" % [Game.escape_ropes, K.ESCAPE_ROPE_STACK]
+	_tip.blurb.text = "One Rope is consumed when the world channel begins. " \
+		+ "It costs no gold to use. The channel can be interrupted; " \
+		+ "a broken Rope is not returned."
+	var why := _rope_refusal()
+	_tip.say_note(why if not why.is_empty() else "Hold %s to begin." % _hold_glyph(),
+		UITheme.DANGER if not why.is_empty() else UITheme.TEXT_DIM)
+
+
+func _paint_rope() -> void:
+	if _rope == null:
+		return
+	var why := _rope_refusal()
+	var ready := why.is_empty()
+	_rope_bar.visible = ready
+	_rope_say.text = "Hold %s. No gold." % _hold_glyph() if ready else why
+	_rope_say.modulate = Color.WHITE if ready else Pal.RUST
 
 
 ## Rebuild the authored permanent-tool manifest without adding anything to the

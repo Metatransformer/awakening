@@ -15,16 +15,17 @@ enter progression. It is a catalogue, not a development diary.
 > Every permanent item is an answer. If its whole effect is that a number rises,
 > it belongs on an upgrade ladder instead.
 
-The catalogue uses six distinct shelves:
+The catalogue uses seven distinct shelves:
 
 | Shelf | Meaning |
 |---|---|
-| Starting tools | Sword, shield, and Escape Rope; always available |
+| Starting tools | Sword and shield; always available |
 | Durable utility tools | Axe, Pickaxe, and Fishing Rod; permanent work access with finite uses |
 | Usable items | Permanent verbs or locks earned through progression |
 | Relics | Named, exposed artifacts carried home for one permanent consequence |
 | Blessings | Run-only rule bends that cost bag space |
-| Stock | Counted supplies such as arrows, charges, rations, bottles, and keys |
+| Stock | Counted supplies such as Escape Ropes, arrows, charges, rations, bottles, and draughts |
+| Run tokens | Floor-scoped Small Keys and the distinct authored Boss Key |
 
 Ingredients and components are rewards, not usable items. Upgrade rungs are
 progression, not objects. These categories share neither state nor conversion
@@ -54,12 +55,6 @@ armour, geometry, or timing more elegantly.
 The shield actively blocks inside a facing arc, parries on timing, redirects
 specific attacks, and manipulates authored light puzzles. It is a verb, not a
 passive armour number.
-
-### Escape Rope
-
-The rope is the permanent way out. It is used from Inventory, not an equipment
-ring, and has no combat or puzzle verb. Its hold, channel, fee, and outcomes are
-owned by [METAGAME.md](METAGAME.md).
 
 ## Three durable utility tools
 
@@ -204,9 +199,20 @@ Stock is counted outside the bag and never carries sale value or Heat premium.
 |---|---|
 | **Arrows** | Persistent bow ammunition bought, found, or fletched |
 | **Burst charges** | Scarce destructive uses bought at home or supplied at required routes |
+| **Escape Ropes** | Counted carried provision stock, bought or found, maximum 9 |
 | **Rations** | Slow, interruptible recovery purchased at Trade |
 | **Bottles and draughts** | Finite prepared healing or timed effects |
-| **Small keys** | Authored local door resources |
+
+The Escape Rope is used from the Equipment/character page and consumed when
+its world channel begins. It is not permanent, a starting tool, an Inventory or
+run-bag line, a ration, an item-ring stop, or saleable merchandise. Its purchase,
+channel, interruption and extraction rules are owned by
+[METAGAME.md](METAGAME.md).
+
+Small Keys are floor-scoped run tokens. Each one belongs only to the floor where
+it was found and is spent at that floor's locked critical-path gate; it is not
+carried stock and cannot open another floor's lock. The separate golden Boss Key
+keeps the authored rule above.
 
 Supply amounts, costs, caps, and recovery behavior belong to
 [METAGAME.md](METAGAME.md).

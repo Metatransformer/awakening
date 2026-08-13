@@ -73,6 +73,10 @@ const SHORTCUT_GATE_SCRIPT := "res://scripts/props/shortcut_gate.gd"
 ## Loaded by path because MiningVein is a new global class and the importer is
 ## not required before a generated floor can parse and build it.
 const MINING_VEIN_SCRIPT := "res://scripts/world/mining_vein.gd"
+## WP1's counted dungeon pickup. Path-loaded for the same cold-import reason as
+## the mining vein: this generator must still parse before the new global class
+## cache has been rebuilt.
+const PROVISION_PICKUP_SCRIPT := "res://scripts/world/provision_pickup.gd"
 ## Path-loaded because this visual layer is added beside the generator and must
 ## parse before the global script-class cache has seen the new file.
 const DUNGEON_LOOK := preload("res://scripts/world/dungeon_look.gd")
@@ -84,6 +88,7 @@ const DIRS := {
 	&"w": Vector2i(-1, 0),
 	&"e": Vector2i(1, 0),
 }
+const DIR_ORDER: Array[StringName] = [&"n", &"s", &"w", &"e"]
 
 ## Entrance +Z is always the upward flight. One different cardinal side is
 ## chosen for the shortcut before the tree grows, leaving the other two as the
@@ -193,6 +198,15 @@ const GLINT_GUARDIAN_FLAG: StringName = &"atom_glint_guardian_1"
 ## three the shortcut saves nothing and the loop is a doorway between neighbours.
 const CHORD_SPAN := 3
 
+## Ordinary combat-room clear rewards. One roll on the dungeon's seeded stream;
+## Rope is deliberately the rarest member of the authored pool.
+const PROVISION_CHANCE := 0.17
+const PROVISION_POOL := [
+	{"id": &"escape_rope", "weight": 2},
+	{"id": &"hardtack", "weight": 5},
+	{"id": &"small_beer", "weight": 5},
+]
+
 ## **The maze gets a room of its own size, and this is that size.**
 ##
 ## 27 m square: 729 m² against the ordinary room's 256, so a shade under three
@@ -234,7 +248,8 @@ const MAZE_COLS := 5
 const MAZE_MIN_CELLS := 9
 
 ## cell -> {"doors": Array[StringName], "index": int, "dist": int,
-##          "parent": Vector2i, "size": float, "anchors": Dictionary, "node": Node3D}
+##          "parent": Vector2i, "size": float, "anchors": Dictionary,
+##          "combat_only": bool, "node": Node3D}
 var rooms: Dictionary = {}
 ## The cell the player arrives in.
 var entrance: Vector2i = Vector2i.ZERO
@@ -248,6 +263,11 @@ var placements: Dictionary = {}
 ## `dir` runs near -> far and `near` is the shallow end the bars are on. Empty on
 ## a floor with no gate room, because the cycle IS the gate room's reward.
 var chord: Dictionary = {}
+## The guaranteed ordinary-key mission beat, planned before geometry:
+## `{tag, shallow, deep, lock_side, key_host, key_cell, baseline_path,
+## gate, key, watch}`. Public because directors validate the mission graph and
+## then drive these exact live nodes; no scene scan is a substitute for the plan.
+var key_loop: Dictionary = {}
 ## **The room widened for the maze, chosen in `_plan_maze`.**
 ##
 ## Untyped, because "this floor had nowhere to put one" has to be expressible and
@@ -342,9 +362,11 @@ func _ready() -> void:
 	_publish()
 	_build()
 	_build_chord()
+	_build_key_loop()
 	_build_anchors()
 	_validate_authored_topology()
 	_populate()
+	_validate_bonus_combat()
 	DUNGEON_LOOK.apply(self, Run.level, rooms)
 
 
@@ -355,10 +377,11 @@ func _ready() -> void:
 ## rather than a blob around the entrance.
 func _plan() -> void:
 	rooms.clear()
+	key_loop.clear()
 	entrance = Vector2i.ZERO
 	rooms[entrance] = {
 		"doors": [] as Array, "index": 0, "dist": 0, "parent": entrance,
-		"size": room_size, "anchors": {},
+		"size": room_size, "anchors": {}, "combat_only": false,
 	}
 	var placed: Array[Vector2i] = [entrance]
 
@@ -388,7 +411,8 @@ func _plan() -> void:
 	var kept_shortcut: Vector2i = entrance + DIRS[_entrance_shortcut_side]
 
 	var guard := 0
-	while placed.size() < room_count and guard < 400:
+	var base_target := FloorDb.base_rooms(Run.level)
+	while placed.size() < base_target and guard < 4000:
 		guard += 1
 		# 70% of the time extend the frontier; otherwise branch off anywhere.
 		var from: Vector2i = placed.back() if _rng.randf() < 0.7 \
@@ -412,10 +436,13 @@ func _plan() -> void:
 			"parent": from,
 			"size": room_size,
 			"anchors": {},
+			"combat_only": false,
 		}
 		rooms[from]["doors"].append(dir)
 		rooms[cell]["doors"].append(_opposite(dir))
 		placed.append(cell)
+	assert(placed.size() == base_target,
+		"Dungeon: baseline layout guard exhausted before its authored room count")
 
 	deepest = entrance
 	for cell: Vector2i in rooms:
@@ -424,6 +451,174 @@ func _plan() -> void:
 
 	# The deepest generated room is now the approach. Its boss arena is sized in
 	# an annex after anchor planning, so this room keeps the ordinary footprint.
+	# A live Glint fork needs TWO annex cells beside that approach: one for the
+	# existing BossChamber and one for the optional trial. Pick and protect them
+	# before #199's combat/key bonus rooms are allowed to fill adjacent grid.
+	var kept_glint_annexes := _glint_annex_reservations(
+		kept_up, kept_shortcut)
+	var bonus_target := FloorDb.combat_bonus(Run.level)
+	if bonus_target > 0:
+		_plan_key_detour(placed, kept_up, kept_shortcut, kept_glint_annexes)
+		_add_bonus_rooms(placed, bonus_target - 1, kept_up, kept_shortcut,
+			kept_glint_annexes)
+	assert(rooms.size() == FloorDb.rooms(Run.level),
+		"Dungeon: combat expansion must place every promised room")
+
+
+## Two empty neighbours of the future guardian antechamber, held out of the
+## combat expansion. This is plan state, not authored geometry: anchors still
+## choose which wall is Boss and which is Glint after every room is known.
+func _glint_annex_reservations(kept_up: Vector2i,
+		kept_shortcut: Vector2i) -> Array[Vector2i]:
+	var kept: Array[Vector2i] = []
+	if not _glint_mvp_enabled or bool(Game.solved_glint_trials.get(
+			GlintDb.CISTERN_SUN_GLINT_ID, false)):
+		return kept
+	for d: StringName in DIR_ORDER:
+		var at: Vector2i = deepest + DIRS[d]
+		if rooms.has(at) or at == kept_up or at == kept_shortcut:
+			continue
+		kept.append(at)
+		if kept.size() == 2:
+			break
+	assert(kept.size() == 2,
+		"Dungeon: the Glint guardian approach needs two clear annex walls")
+	return kept
+
+
+## Reserve the first bonus room as a one-edge combat leaf on the entrance side
+## of a mid-critical-path lock. Mission graph first: no geometry or anchor can
+## later reinterpret either room.
+func _plan_key_detour(placed: Array[Vector2i], kept_up: Vector2i,
+		kept_shortcut: Vector2i, kept_glint_annexes: Array[Vector2i]) -> void:
+	var route := path_to(deepest)
+	assert(route.size() >= 3,
+		"Dungeon: a guaranteed key lock needs a non-entrance critical-path edge")
+	if route.size() < 3:
+		return
+	var shallow_i := clampi(int(round(float(route.size() - 1) * 0.5)),
+		1, route.size() - 2)
+	var shallow: Vector2i = route[shallow_i]
+	var deep: Vector2i = route[shallow_i + 1]
+
+	var candidates: Array[Vector2i] = []
+	for cell: Vector2i in placed:
+		if _behind_key_lock(cell, deep):
+			continue
+		candidates.append(cell)
+	candidates.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		if a == shallow:
+			return b != shallow
+		if b == shallow:
+			return false
+		var da := int(rooms[a]["dist"])
+		var db := int(rooms[b]["dist"])
+		if da != db:
+			return da > db
+		return int(rooms[a]["index"]) < int(rooms[b]["index"]))
+
+	var host := Vector2i.ZERO
+	var side: StringName = &""
+	for candidate: Vector2i in candidates:
+		for d: StringName in DIR_ORDER:
+			var at: Vector2i = candidate + DIRS[d]
+			if rooms.has(at) or at == kept_up or at == kept_shortcut \
+					or kept_glint_annexes.has(at):
+				continue
+			host = candidate
+			side = d
+			break
+		if side != &"":
+			break
+	assert(side != &"", "Dungeon: no pre-lock cell can host the key detour")
+	if side == &"":
+		return
+
+	var key_cell: Vector2i = host + DIRS[side]
+	rooms[key_cell] = {
+		"doors": [_opposite(side)] as Array,
+		"index": placed.size(),
+		"dist": int(rooms[host]["dist"]) + 1,
+		"parent": host,
+		"size": room_size,
+		"anchors": {},
+		"combat_only": true,
+		"bonus_index": 0,
+	}
+	rooms[host]["doors"].append(side)
+	placed.append(key_cell)
+	key_loop = {
+		"tag": StringName("small_key_loop_f%d" % Run.level),
+		"shallow": shallow,
+		"deep": deep,
+		"lock_side": _dir_between(shallow, deep),
+		"key_host": host,
+		"key_cell": key_cell,
+		"baseline_path": route.duplicate(),
+		"gate": null,
+		"key": null,
+		"watch": null,
+	}
+
+
+## Add the rest of the combat extension without ever budding from the key leaf.
+## The high guard is an alarm, not a fallback: fewer rooms is never accepted.
+func _add_bonus_rooms(placed: Array[Vector2i], amount: int,
+		kept_up: Vector2i, kept_shortcut: Vector2i,
+		kept_glint_annexes: Array[Vector2i]) -> void:
+	var added := 0
+	var guard := 0
+	var key_cell: Vector2i = key_loop.get("key_cell", Vector2i(2147483647, 0))
+	while added < amount and guard < 8000:
+		guard += 1
+		var hosts: Array[Vector2i] = []
+		for cell: Vector2i in placed:
+			if cell != key_cell:
+				hosts.append(cell)
+		if hosts.is_empty():
+			break
+		var from: Vector2i = hosts.back() if _rng.randf() < 0.7 \
+			else hosts[_rng.randi_range(0, hosts.size() - 1)]
+		var options: Array[StringName] = []
+		for d: StringName in DIR_ORDER:
+			var at: Vector2i = from + DIRS[d]
+			if rooms.has(at) or at == kept_up or at == kept_shortcut \
+					or kept_glint_annexes.has(at):
+				continue
+			options.append(d)
+		if options.is_empty():
+			continue
+		var dir: StringName = options[_rng.randi_range(0, options.size() - 1)]
+		var next: Vector2i = from + DIRS[dir]
+		rooms[next] = {
+			"doors": [_opposite(dir)] as Array,
+			"index": placed.size(),
+			"dist": int(rooms[from]["dist"]) + 1,
+			"parent": from,
+			"size": room_size,
+			"anchors": {},
+			"combat_only": true,
+			"bonus_index": added + 1,
+		}
+		rooms[from]["doors"].append(dir)
+		placed.append(next)
+		added += 1
+	assert(added == amount,
+		"Dungeon: combat expansion guard exhausted before its promised count")
+
+
+func _behind_key_lock(cell: Vector2i, deep: Vector2i = Vector2i(2147483647, 0)) -> bool:
+	if deep.x == 2147483647:
+		deep = key_loop.get("deep", deep)
+	return deep.x != 2147483647 and path_to(cell).has(deep)
+
+
+func _dir_between(from: Vector2i, to: Vector2i) -> StringName:
+	var step := to - from
+	for d: StringName in DIR_ORDER:
+		if DIRS[d] == step:
+			return d
+	return &""
 
 
 ## The chord edge -- **`docs/PUZZLES.md` §4, and the reason cycles belong in this
@@ -469,9 +664,16 @@ func _plan_chord() -> void:
 	var best_key := Vector3(1e9, 1e9, 1e9)
 
 	for cell: Vector2i in rooms:
+		# Bonus rooms are combat leaves/branches, never shortcut endpoints. In
+		# particular the first one is the key hunt, and a chord through it would
+		# turn a guaranteed detour into a free bypass.
+		if bool(rooms[cell].get("combat_only", false)):
+			continue
 		for d: StringName in DIRS:
 			var other: Vector2i = cell + DIRS[d]
 			if not rooms.has(other) or rooms[cell]["doors"].has(d):
+				continue
+			if bool(rooms[other].get("combat_only", false)):
 				continue
 			var a := int(rooms[cell]["dist"])
 			var b := int(rooms[other]["dist"])
@@ -482,6 +684,11 @@ func _plan_chord() -> void:
 			# lets the loop not care which end it arrived from.
 			var near := cell if a < b else other
 			var far := other if a < b else cell
+			# The ordinary-key gate cuts the baseline tree into entrance and deep
+			# components. A chord crossing that cut is a second unlocked route around
+			# the door, regardless of how good a shortcut candidate it otherwise is.
+			if _behind_key_lock(near) != _behind_key_lock(far):
+				continue
 			if int(rooms[far]["dist"]) < gate_dist:
 				continue
 			var key := Vector3(float(mini(a, b)), -absf(float(a - b)),
@@ -736,6 +943,8 @@ func _room_for(kind: StringName, id: StringName = &""):
 			var best_key: Array[float] = [1e9, 1e9, 1e9, 1e9, 1e9]
 			for cell: Vector2i in rooms:
 				if cell == entrance or cell == deepest:
+					continue
+				if bool(rooms[cell].get("combat_only", false)):
 					continue
 				# **A room with no wall the structure fits behind is not a placement,
 				# so it outranks even "already has an anchor in it".** Sharing a room
@@ -1394,6 +1603,8 @@ func _place_boss(id: StringName) -> void:
 	approach.add_child(door)
 	_fit_boss_opening(approach, spot, door)
 	p["node"] = door
+	_register_lock(door, StringName("boss_door_f%d" % Run.level), cell,
+		p["side"], Atlas.LOCK_BOSS)
 
 	var chamber_size := _boss_chamber_size()
 	var chamber := _build_chamber(spot, cell, p["side"], "BossChamber", chamber_size)
@@ -1676,6 +1887,7 @@ func _place_shortcut(id: StringName) -> void:
 		if door == null or not _shortcut_prefab(rooms[cell]["node"], spot, tag,
 				pool[0]):
 			return
+		_register_lock(door, tag, cell, p["side"], Atlas.LOCK_SMALL)
 
 	var landing := _build_landing(spot, cell, p["side"], "ShortcutLanding", false)
 	_land_shortcut_rewards(landing, door)
@@ -2103,6 +2315,7 @@ func _place_gate_room(id: StringName) -> void:
 	gate.rotation.y = float(spot["yaw"])
 	root.add_child(gate)
 	p["node"] = gate
+	_register_lock(gate, tag, cell, onward, Atlas.LOCK_SMALL)
 
 	var boss_key_script := load(BOSS_KEY_SCRIPT) as GDScript
 	if boss_key_script == null:
@@ -2639,6 +2852,7 @@ func _place_puzzle_room(id: StringName) -> void:
 	gate.rotation.y = float(spot["yaw"])
 	root.add_child(gate)
 	p["node"] = gate
+	_register_lock(gate, tag, cell, p["side"], Atlas.LOCK_SMALL)
 
 	# Across the room from the door, on purpose: "the plate you cannot stand on
 	# and reach the door from" is the whole nest, and a plate within arm's reach
@@ -2875,6 +3089,70 @@ func _build_chord() -> void:
 	chord["node"] = bars
 
 
+## Build the ordinary-key loop exactly where its mission graph says. The gate
+## fills the already-punched shallow doorway; the key waits dark in the first
+## bonus combat leaf and is armed only by that room's watcher in `_populate`.
+func _build_key_loop() -> void:
+	if key_loop.is_empty():
+		return
+	var shallow: Vector2i = key_loop["shallow"]
+	var key_cell: Vector2i = key_loop["key_cell"]
+	var side: StringName = key_loop["lock_side"]
+	var tag: StringName = key_loop["tag"]
+	assert(side != &"" and rooms[shallow]["doors"].has(side),
+		"Dungeon: key gate must occupy its baseline critical-path doorway")
+	if side == &"":
+		return
+
+	var gate_root: Node3D = rooms[shallow]["node"]
+	var spot := _wall_spot({"cell": shallow, "side": side,
+		"offset": Vector2.ZERO})
+	var gate := PuzzleGate.new()
+	gate.name = "SmallKeyGate"
+	gate.puzzle_id = tag
+	gate.destination = tag
+	gate.needs_key = true
+	gate.mark_tier = PuzzleAtoms.T0
+	gate.position = spot["pos"]
+	gate.rotation.y = float(spot["yaw"])
+	gate_root.add_child(gate)
+
+	var key_root: Node3D = rooms[key_cell]["node"]
+	var key := SmallKey.new()
+	key.name = "SmallKeyDetour"
+	key.atom_id = PuzzleAtoms.SMALL_KEY
+	key.puzzle_id = tag
+	key.armed = false
+	# Off-centre so the reveal is visible past a corpse without putting the
+	# pickup in a doorway or in the room's enemy scatter ring.
+	key.position = Vector3(size_of(key_cell) * 0.23, 0.0, 0.0)
+	key_root.add_child(key)
+	key.visible = false
+	gate.watch(key)
+
+	key_loop["gate"] = gate
+	key_loop["key"] = key
+	_register_lock(gate, tag, shallow, side, Atlas.LOCK_SMALL)
+
+
+## Publish one real closed door and retire its record from its own signals. A
+## reversible puzzle gate can shut again, so its `shut` edge restores the same
+## stable record without any UI polling or scene-tree scan.
+func _register_lock(door: Node, tag: StringName, cell: Vector2i,
+		wall: StringName, kind: StringName) -> void:
+	if door == null or not is_instance_valid(door) or wall == &"":
+		return
+	if door.has_method(&"is_open") and bool(door.call(&"is_open")):
+		return
+	Atlas.add_lock(tag, cell, wall, kind)
+	if door.has_signal(&"opened"):
+		door.connect(&"opened", func(_where: StringName) -> void:
+			Atlas.remove_lock(tag))
+	if door.has_signal(&"shut"):
+		door.connect(&"shut", func(_where: StringName) -> void:
+			Atlas.add_lock(tag, cell, wall, kind))
+
+
 ## A `LockedDoor` in an anchored hole. Deliberately dumb, as the class says: it
 ## emits `opened(destination)` and the placer decides what the tag means. Here
 ## the tag means nothing at all -- what is behind the door is already standing
@@ -2896,6 +3174,7 @@ func _place_locked(p: Dictionary, node_name: String, key: StringName,
 	door.rotation.y = float(spot["yaw"])
 	root.add_child(door)
 	p["node"] = door
+	_register_lock(door, tag, cell, p["side"], Atlas.LOCK_SMALL)
 	return door
 
 
@@ -3070,6 +3349,8 @@ func pick_maze_cell(forced: bool = false):
 	var free: Array[Vector2i] = []
 	for cell: Vector2i in rooms:
 		if cell == entrance or cell == deepest or taken.has(cell):
+			continue
+		if bool(rooms[cell].get("combat_only", false)):
 			continue
 		# **ONE doorway, because the maze only has one hole.**
 		#
@@ -3376,6 +3657,7 @@ func _populate() -> void:
 	# The choice itself was made back in `_plan_maze`, before the masonry went up;
 	# this only reads it.
 	var maze_cell = pick_maze_cell()
+	var floor_signature: Dictionary = FloorDb.signature(Run.level)
 
 	for cell: Vector2i in rooms:
 		var root: Node3D = rooms[cell].get("node")
@@ -3416,9 +3698,17 @@ func _populate() -> void:
 		# the entrance) and `Prog` chooses how hard it is (`elite_chance`, and the
 		# health/damage/wind-up curve inside `Enemy`). Keeping those two apart is
 		# what lets a floor be re-cast without being re-tuned.
-		var elite_chance := Prog.elite_chance(Run.level)
-		var count := _rng.randi_range(enemies_min, enemies_max)
-		var has_barrel_cluster := _rng.randf() < barrel_cluster_chance
+		var elite_chance: float = Prog.elite_chance(Run.level)
+		var count: int = _rng.randi_range(enemies_min, enemies_max)
+		var has_barrel_cluster: bool = _rng.randf() < barrel_cluster_chance
+		var has_signature: bool = not floor_signature.is_empty() \
+			and _rng.randf() < float(floor_signature.get("share", 0.0))
+		# A signature replaces an ordinary body instead of enlarging the pack, so
+		# authored identity does not quietly become a second difficulty curve.
+		# The last slot is deterministic. If a one-body room makes that index 0,
+		# the elite roll is still consumed below but explicitly suppressed;
+		# reserving the slot also lets a separate eligible body take `thrower`.
+		var signature_index: int = count - 1 if has_signature else -1
 		if has_barrel_cluster:
 			_place_barrel_cluster(root, size, chest_dir)
 		# The watcher is built BEFORE the bodies and told about each one as it is
@@ -3429,19 +3719,33 @@ func _populate() -> void:
 		var watch: RoomWatch = null
 		if count > 0:
 			watch = RoomWatch.attach(root, StringName(root.name))
-		var thrower_assigned := false
+		var thrower_assigned: bool = false
 		for i in count:
-			var spot := _scatter(i, count, size * 0.30)
-			var kind := _roll_kind(dist)
+			var spot: Vector3 = _scatter(i, count, size * 0.30)
+			var make_signature: bool = i == signature_index
+			var kind: StringName = _roll_kind(dist)
 			# At most one elite in a room. The point of an elite is that it is
 			# THE thing in the room; two of them is just a harder room, and the
 			# separation rule has to keep them both legible besides.
-			var elite := i == 0 and _rng.randf() < elite_chance
-			var make_thrower := has_barrel_cluster and not elite and not thrower_assigned
+			var elite: bool = i == 0 and _rng.randf() < elite_chance
+			if make_signature:
+				elite = false
+			var make_thrower: bool = has_barrel_cluster and not elite \
+				and not make_signature and not thrower_assigned
 			if make_thrower:
 				thrower_assigned = true
+			var foe_behaviour: StringName = &""
+			if make_signature:
+				kind = floor_signature.get("kind", &"")
+				foe_behaviour = floor_signature.get("behaviour", &"")
+			elif make_thrower:
+				foe_behaviour = &"thrower"
 			watch.add(_spawn_foe(root, kind, spot, elite,
-				&"thrower" if make_thrower else &""))
+				foe_behaviour))
+		rooms[cell]["watch"] = watch
+		rooms[cell]["enemy_count"] = count
+		_arm_key_detour(cell, watch)
+		_place_provision_reward(root, cell, watch, size, chest_dir)
 
 		# The deep-chest anchor already put one in its room. On a floor with no
 		# anchors at all the deepest room still gets the good chest, which is what
@@ -3513,6 +3817,102 @@ func _populate() -> void:
 	# Anything still held belongs to a cell the loop above never reached the
 	# population of -- the entrance, the boss chamber, the maze. See the function.
 	_release_unclaimed_rewards()
+
+
+## The first bonus room's watcher is the only reveal edge for its key. A room
+## with no watcher cannot strand progression: reveal immediately and let the
+## runtime validator report why the promised combat room had none.
+func _arm_key_detour(cell: Vector2i, watch: RoomWatch) -> void:
+	if key_loop.is_empty() or cell != key_loop.get("key_cell"):
+		return
+	var key := key_loop.get("key") as SmallKey
+	key_loop["watch"] = watch
+	if key == null:
+		return
+	if watch == null:
+		_wake_key(key)
+		return
+	watch.cleared.connect(func() -> void: _wake_key(key))
+
+
+func _place_provision_reward(root: Node3D, cell: Vector2i, watch: RoomWatch,
+		size: float, quiet_dir: Vector3) -> void:
+	var id := _roll_provision()
+	rooms[cell]["provision"] = id
+	if id == &"":
+		return
+	var script := load(PROVISION_PICKUP_SCRIPT) as GDScript
+	if script == null:
+		push_error("dungeon: %s failed to load" % PROVISION_PICKUP_SCRIPT)
+		return
+	var pickup := script.new() as Node3D
+	if pickup == null:
+		push_error("dungeon: provision script did not build a Node3D")
+		return
+	pickup.name = "RoomProvision"
+	pickup.set(&"provision_id", id)
+	pickup.set(&"count", 1)
+	pickup.set(&"staged", true)
+	var side := Vector3(-quiet_dir.z, 0.0, quiet_dir.x)
+	pickup.position = -quiet_dir * (size * 0.18) - side * (size * 0.17)
+	root.add_child(pickup)
+	rooms[cell]["provision_node"] = pickup
+	if watch == null:
+		pickup.call(&"reveal")
+	else:
+		watch.cleared.connect(func() -> void:
+			if is_instance_valid(pickup):
+				pickup.call(&"reveal"))
+
+
+## Empty means this room did not win the sparse clear-reward roll. Both the
+## chance and the weighted pick consume the dungeon's one seeded stream.
+func _roll_provision() -> StringName:
+	if _rng.randf() >= PROVISION_CHANCE:
+		return &""
+	var total := 0
+	for row: Dictionary in PROVISION_POOL:
+		total += int(row["weight"])
+	var roll := _rng.randi_range(1, total)
+	var ceiling := 0
+	for row: Dictionary in PROVISION_POOL:
+		ceiling += int(row["weight"])
+		if roll <= ceiling:
+			return row["id"]
+	return PROVISION_POOL.back()["id"]
+
+
+## Bonus rooms are never allowed to degrade into layout padding. Validate the
+## live result after population, when both the plan tags and RoomWatch counts are
+## available.
+func _validate_bonus_combat() -> void:
+	var bonus := 0
+	var anchored := {}
+	for id: StringName in placements:
+		anchored[placements[id]["cell"]] = true
+	for cell: Vector2i in rooms:
+		if not bool(rooms[cell].get("combat_only", false)):
+			continue
+		bonus += 1
+		assert(cell != entrance and cell != deepest,
+			"Dungeon: bonus combat room became an entrance/deepest anchor")
+		assert(not anchored.has(cell),
+			"Dungeon: bonus combat room received an authored anchor")
+		assert(maze_reserved == null or cell != maze_reserved,
+			"Dungeon: bonus combat room became the maze")
+		var watch := rooms[cell].get("watch") as RoomWatch
+		assert(watch != null and is_instance_valid(watch),
+			"Dungeon: bonus combat room has no live RoomWatch")
+		assert(int(rooms[cell].get("enemy_count", 0)) >= enemies_min,
+			"Dungeon: bonus combat room spawned below the configured minimum")
+		assert(watch == null or watch.live_count() >= enemies_min,
+			"Dungeon: bonus combat RoomWatch started below the configured minimum")
+	assert(bonus == FloorDb.combat_bonus(Run.level),
+		"Dungeon: live bonus-room count differs from FloorDb")
+	if not key_loop.is_empty():
+		var key_cell: Vector2i = key_loop["key_cell"]
+		assert((rooms[key_cell]["doors"] as Array).size() == 1,
+			"Dungeon: guaranteed key detour must remain a leaf")
 
 
 ## Two or three props against a quiet side of the room. `_chest_dir` prefers a

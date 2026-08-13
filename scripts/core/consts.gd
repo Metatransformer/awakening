@@ -1024,6 +1024,10 @@ const DRAUGHT_PLATE := 2
 ## Rations are limited by the clock instead -- twenty of them is over four minutes
 ## of sitting down, which nothing underground will give you. [tune]
 const RATION_STACK := 20
+## Escape Ropes are carried provision stock, separate from rations and the run
+## bag. Nine is enough to provision several descents without making the counter
+## irrelevant for long.
+const ESCAPE_ROPE_STACK := 9
 ## How many come in one purchase at the counter. Five, so filling a stack is four
 ## presses rather than twenty, and so the price the player reads is a trip's worth
 ## rather than a mouthful's.

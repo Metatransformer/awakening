@@ -9,8 +9,11 @@ to [design-tests/RAID_LOOP_PROOF.md](design-tests/RAID_LOOP_PROOF.md) and
 ## Home rhythm
 
 The Highbridge garrison is a working expedition, not a menu ring or town
-simulation. The player walks to services, sees residents follow routines, and
-experiences home as a contrasting mode between descents.
+simulation. Its compact walled service compound and the wooded homestead between
+the south gate and the Sunken Cut are one continuous surface: the player walks
+through the raised portcullis and over the timber bridge without a loading seam.
+The player walks to services, sees residents follow routines, and experiences
+home as a contrasting mode between descents.
 
 The civil clock is the only owner of day and time:
 
@@ -114,8 +117,9 @@ Exactly one spring-fed fishing pond on the east side of the garrison outskirts
 owns the fishing interaction. Its dock, rod rack, creel, and water make the
 opportunity readable. A river dock and south pond are scenic landmarks only:
 they do not add interactions, catches, reserves, or another fishing mode. The
-garrison bridge ends at a visible, solid boundary, so the player cannot leave
-the authored screen beyond it. Brannoc forges or fully reforges the east pond's
+garrison bridge is the physical route between the compound and homestead;
+cliffs, watercourses, and the enclosing mountain terrain bound the authored
+surface. Brannoc forges or fully reforges the east pond's
 durable Fishing Rod for 45 gold, one Iron Scrap, and one deposited Firewood
 Bundle. It has ten uses, remains known and **BROKEN** at zero, and is not a
 weapon, hand slot, bag item, wheel item, sale good, or combat verb.

@@ -1,8 +1,9 @@
 extends RefCounted
 ## The alchemist, end to end: glass off a body becomes a draught you drink.
 ##
-## Point it at GARRISON. It descends on its own, because half the claims here are
-## about what reaches the bench and you cannot test that from one side of it.
+## Point it at GARRISON. It enters the Sunken Cut on its own, because half the
+## claims here are about what reaches the bench and you cannot test that from
+## one side of it.
 ##
 ##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
@@ -472,35 +473,41 @@ func _drink(rig) -> void:
 
 func _underground(rig) -> void:
 	var garrison := rig.scene() as Garrison
-	_stand_at(rig, garrison.gate.global_position + Vector3(0.0, 0.0, 1.8))
+	var descent := garrison.sunken_cut
+	_ck("H0a the Sunken Cut exists in the surface world", descent != null)
+	if descent == null:
+		return
+	_stand_at(rig, descent.global_position + Vector3(0.0, 0.0, 1.8),
+		descent.global_position)
 	for _i in 90:
-		if Prompt.focus == garrison.gate:
+		if Prompt.focus == descent:
 			break
 		await rig.wait_frames(2)
-	# Printed, not assumed. The gate is a hold, and a hold against a prompt
+	_ck("H0b the Sunken Cut owns the interact button", Prompt.focus == descent)
+	# Printed, not assumed. The mine entrance is a hold, and a hold against a prompt
 	# nobody owns is 96 frames of nothing followed by a failure that names the
 	# wrong thing ("he went down" = false, when the truth is "he was never
-	# standing at the gate"). The garrison has been rebuilt twice under this
+	# standing at the Sunken Cut"). The garrison has been rebuilt twice under this
 	# director.
-	print("ALCHEMY gate focus=%s hero=%.1f,%.1f gate=%.1f,%.1f" % [
+	print("ALCHEMY mine focus=%s hero=%.1f,%.1f cut=%.1f,%.1f" % [
 		Prompt.focus.name if Prompt.focus != null else "<none>",
 		(rig.get_nodes_in_group(&"player")[0] as Node3D).global_position.x,
 		(rig.get_nodes_in_group(&"player")[0] as Node3D).global_position.z,
-		garrison.gate.global_position.x, garrison.gate.global_position.z])
+		descent.global_position.x, descent.global_position.z])
 	# Re-planted mid-hold: losing focus zeroes Prompt's bar with nothing printed,
 	# and the beat then lies about why it failed. See forge_loop.gd's long note.
 	# `rig.hold_seconds`, not a hand-rolled press/release around a frame count.
 	# The hand-rolled version held for `12 * 8` FRAMES, which is 1.6 s at 60 Hz
 	# and 4.4 s at 22 -- and this rig's frame rate depends on whether the shader
 	# cache is warm. It failed about one run in three, always at H0, always with
-	# the gate correctly focused: the descent takes ~0.9 s of hold plus a scene
+	# the Sunken Cut correctly focused: the descent takes ~0.9 s of hold plus a scene
 	# change, and a frame budget that happens to land short releases the button
 	# mid-transition. `hold_seconds` waits on a real `SceneTreeTimer`, so the hold
 	# is 1.6 SECONDS whatever the renderer is doing. mvp_loop's descent has done
 	# it this way since the same bug was found there.
 	await rig.hold_seconds(["interact"], 1.6)
 	await rig.wait_frames(140)
-	_ck("H0 he went down", Run.in_dungeon)
+	_ck("H0 the Sunken Cut descent reached the dungeon", Run.in_dungeon)
 	if not Run.in_dungeon:
 		return
 

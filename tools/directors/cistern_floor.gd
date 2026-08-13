@@ -177,6 +177,12 @@ func run(rig) -> void:
 	await rig.wait_frames(20)
 
 	_manifest(d)
+	# Fast, deterministic generation contract for changes that touch only the
+	# manifest/population seam. The ordinary director still continues through all
+	# physical walks and boss beats; this flag stops after A0..A7.
+	if rig.arg("manifest-only", "0") == "1":
+		print("FLOOR manifest-only %s" % ("OK" if _fails == 0 else "%d red" % _fails))
+		return
 	_anchors(d)
 	# Off the floor before the walks: a pack that follows the hero into the next
 	# beat turns a reachability measurement into a fight. The BOSS stays -- it is
@@ -333,17 +339,24 @@ func _manifest(d: Node) -> void:
 	_ck("A3 Dungeon.BANDS is gone", not consts.has("BANDS"))
 	_ck("A4 Dungeon.BAND_DEEP is gone", not consts.has("BAND_DEEP"))
 
-	# Every body, against the roster for ITS room's distance. A generator that
-	# read the table but keyed it on the wrong number would pass every check
+	# Every ordinary body, against the roster for ITS room's distance. A generator
+	# that read the table but keyed it on the wrong number would pass every check
 	# above and spawn the entrance room's monsters at the bottom of the floor.
+	# Issue #200's one signature replacement is the authored exception: it must
+	# match this floor's exact body/behaviour, never be elite, and appear at most
+	# once in any room.
 	var wrong := 0
 	var seen := 0
+	var signature_seen := 0
+	var signature_rule_broken := 0
+	var signature: Dictionary = FloorDb.signature(_level)
 	for cell: Vector2i in d.rooms:
 		var root: Node = d.rooms[cell].get("node")
 		if root == null:
 			continue
 		var dist := int(d.rooms[cell]["dist"])
 		var pool: Array = FloorDb.roster(_level, dist)
+		var signatures_here := 0
 		for e in _every(root, func(n: Node) -> bool: return n is Enemy):
 			# The Warden is an `Enemy` too, and it is a golem no band of the
 			# Cistern has ever heard of -- rightly, because `BossDb` chose it and
@@ -352,13 +365,34 @@ func _manifest(d: Node) -> void:
 			if _under(e, "Arena"):
 				continue
 			seen += 1
-			if not pool.has((e as Enemy).kind):
+			var foe := e as Enemy
+			if foe.is_signature_enemy():
+				signatures_here += 1
+				signature_seen += 1
+				if foe.kind != StringName(signature.get("kind", &"")) \
+						or foe._behave != StringName(signature.get("behaviour", &"")) \
+						or foe.elite:
+					signature_rule_broken += 1
+					print("FLOOR   bad signature %s/%s elite=%s in room %s"
+						% [foe.kind, foe._behave, foe.elite, cell])
+			elif not pool.has(foe.kind):
 				wrong += 1
 				print("FLOOR   %s at dist %d is not in %s"
-					% [(e as Enemy).kind, dist, pool])
+					% [foe.kind, dist, pool])
+		if signatures_here > 1:
+			signature_rule_broken += 1
+			print("FLOOR   room %s contains %d signatures" % [cell, signatures_here])
 	_ck("A5 all %d bodies came out of %s's own roster"
 		% [seen, FloorDb.name_of(_level)],
 		seen > 0 and wrong == 0)
+	_ck("A6 %d signature bodies matched the floor row, stayed non-elite, and capped at one per room"
+		% signature_seen, signature_rule_broken == 0)
+	var boss_signatures := 0
+	for e in _every(d, func(n: Node) -> bool: return n is Enemy):
+		var foe := e as Enemy
+		if foe.is_signature_enemy() and _under(foe, "Arena"):
+			boss_signatures += 1
+	_ck("A7 boss summons contain no signature variants", boss_signatures == 0)
 
 
 # --- B. The four anchors ---------------------------------------------------------
@@ -1388,10 +1422,12 @@ func _endless(rig, hero: Node3D) -> void:
 	_ck("H0 level 5 is the Long Descent",
 		FloorDb.name_of(5) == "The Long Descent")
 	_ck("H1 its length is the curve's, not a manifest's (%d)" % d.rooms.size(),
-		d.rooms.size() == Prog.rooms(5))
+		d.rooms.size() == FloorDb.rooms(5))
 	_ck("H2 it authors no anchors", d.placements.is_empty())
-	_ck("H3 so there are no locked doors on it",
-		_every(d, func(n: Node) -> bool: return n is LockedDoor).is_empty())
+	var endless_locks := _every(d, func(n: Node) -> bool: return n is LockedDoor)
+	_ck("H3 its only lock is the guaranteed Small-Key cycle",
+		endless_locks.size() == 1 and not d.key_loop.is_empty()
+		and endless_locks[0] == d.key_loop.get("gate"))
 	var deep_root: Node = d.rooms[d.deepest]["node"]
 	_ck("H4 and the stair is back in the deepest room",
 		_every(deep_root, func(n: Node) -> bool: return n is Stairs).size() == 1)

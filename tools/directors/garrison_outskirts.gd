@@ -8,6 +8,8 @@ func run(rig) -> void:
 	if outskirts == null:
 		rig.fail("scene is not GarrisonOutskirts")
 		return
+	Clock.running = false
+	Clock.set_time(1, 12.0)
 	await rig.wait_frames(30)
 
 	for id: StringName in [
@@ -74,9 +76,11 @@ func run(rig) -> void:
 	outskirts.add_child(cam)
 	cam.make_current()
 	var out: String = rig.out_base().get_base_dir()
-	var hud_was := Hud.visible
-	Hud.visible = false
 	Prompt.drop_focus()
+	# Use the production full-screen ownership path. Direct writes to Hud.visible
+	# are deliberately repaired by Hud and produced contaminated proof frames.
+	Bus.screen_opened.emit(&"outskirts_lookdev")
+	await rig.wait_frames(3)
 
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
 	cam.size = 87.0
@@ -120,7 +124,7 @@ func run(rig) -> void:
 	cam.look_at(fishing + Vector3(0.0, 0.2, -2.0), Vector3.UP)
 	await rig.wait_frames(4)
 	await rig.capture(out.path_join("outskirts_06_east_fishing_pond.png"))
-	Hud.visible = hud_was
+	Bus.screen_closed.emit(&"outskirts_lookdev")
 	print("OUTSKIRTS HOMESTEAD OK %.1f m" % distance)
 
 

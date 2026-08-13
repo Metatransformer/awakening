@@ -164,6 +164,9 @@ func _build_player_props() -> void:
 	bed = Bed.new()
 	bed.name = "Bed"
 	bed.position.y = 0.02
+	# The frame keeps the controller almost two metres from its centre. Extend
+	# only this lower berth's reach so it remains usable from the barracks aisle.
+	bed.interaction_radius = 2.4
 	add_child(bed)
 
 	locker = Footlocker.new()

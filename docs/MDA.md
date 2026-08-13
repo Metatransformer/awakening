@@ -22,7 +22,7 @@ The raid test is
 | Intended aesthetic | Observable dynamics | Minimum mechanics under test |
 |---|---|---|
 | **Responsibility:** the garrison feels like a home whose safety matters. | The player notices the warning, considers the garrison's state, and treats the outcome as a consequence of prior choices. | A living garrison, one authored warning sequence, one attack, and a visible recoverable theft. |
-| **Tense agency:** staying and extracting both feel defensible. | The player weighs the current descent against ordinary extraction and makes an unprompted choice they can explain. | Afternoon and urgent warnings; current carried goals; the normal Escape Rope; no teleport or free exit. |
+| **Tense agency:** staying and extracting both feel defensible. | The player weighs the current descent against a counted Rope acquired before descending or the physical stair's ordinary toll, then makes an unprompted choice they can explain. | Afternoon and urgent warnings; current carried goals; counted Rope stock consumed on gold-free activation; the priced floor-1 stair; no raid teleport, free Rope, or special exit. |
 | **Prepared trust:** building changes what the player is willing to risk. | The player predicts what one defense can do, relies on it or returns despite it, and explains how it changed the decision. | One optional Bolt-Thrower; manual defense when present; deterministic absence outcomes with and without it. |
 | **Recoverable consequence:** failure hurts without corrupting the campaign. | The player understands the empty relic mount, forms a recovery goal, and expects restoration rather than permanent loss. | Temporary suppression and theft of the Tally-Ledger; return to its original location; restoration without a second repair cost. |
 

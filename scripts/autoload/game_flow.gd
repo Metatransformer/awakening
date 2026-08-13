@@ -6,15 +6,16 @@ extends Node
 ## buttons on it are `new_game` and `continue_game` below; everything after that
 ## is the loop.
 ##
-## Garrison and dungeon are separate scenes rather than one streamed world
-## because the transition IS the mechanic: extracting has to feel like arriving
-## somewhere, and dying has to feel like waking up somewhere. A seamless walk
-## between them would make both of those into a corridor.
+## The garrison scene includes its whole playable surface, while the dungeon
+## remains separate because extraction has to feel like arriving somewhere and
+## dying has to feel like waking up somewhere.
 ##
 ## Nothing else calls `change_scene_to_file`. If a second caller appears, the
 ## fade stops being a guarantee and starts being a suggestion.
 
 const GARRISON := "res://scenes/rooms/garrison.tscn"
+## Serialized compatibility only. The standalone scene remains a focused
+## lookdev shell, but production travel and old saves resolve into `GARRISON`.
 const OUTSKIRTS := "res://scenes/rooms/garrison_outskirts.tscn"
 const DUNGEON := "res://scenes/rooms/dungeon.tscn"
 const DEV_PUZZLE := "res://scenes/rooms/dev_puzzle.tscn"
@@ -351,15 +352,39 @@ func resume(dest: Dictionary) -> bool:
 		path = DUNGEON
 	else:
 		_abandon_run()
+		if path == OUTSKIRTS:
+			dest = _migrate_legacy_outskirts_destination(dest)
+			path = GARRISON
 		# A dungeon path without a valid run snapshot is not playable. The bounded
 		# surface path is, and keeps its authored/saved transform.
-		if path != GARRISON and path != OUTSKIRTS:
+		if path != GARRISON:
 			path = GARRISON
 	# `dest` goes THROUGH `_go` rather than being applied after it -- see the
 	# placement inside `_go` for why that ordering is the difference between a
 	# save that survives being loaded and one that does not.
 	await _go(path, 0.0, dest)
 	return true
+
+
+## The standalone outskirts path was a real save destination before the yard
+## became part of the garrison scene. Canonicalize both the scene owner and its
+## local transform before `_go` places the hero and writes the next autosave.
+##
+## v4-v8 slots intentionally arrive without `pos` / `yaw` because those formats
+## could not prove transform ownership. They still name OUTSKIRTS, so the old
+## scene's authored Hero transform is the only honest fallback.
+func _migrate_legacy_outskirts_destination(legacy: Dictionary) -> Dictionary:
+	var migrated := legacy.duplicate()
+	migrated["scene"] = GARRISON
+	var legacy_position: Vector3 = legacy.get(
+		"pos", GarrisonSurfaceLayout.LEGACY_ARRIVAL_POSITION)
+	var legacy_yaw := float(legacy.get(
+		"yaw", GarrisonSurfaceLayout.LEGACY_ARRIVAL_YAW))
+	migrated["pos"] = GarrisonSurfaceLayout.transform_legacy_position(
+		legacy_position)
+	migrated["yaw"] = GarrisonSurfaceLayout.transform_legacy_yaw(legacy_yaw)
+	Saves.current_scene_path = GARRISON
+	return migrated
 
 
 ## Loading a non-dungeon or legacy slot ends whatever run was in flight, and it
@@ -442,7 +467,13 @@ func enter_dungeon(run_seed: int = 0) -> void:
 func to_outskirts() -> void:
 	if busy or ending:
 		return
-	_go(OUTSKIRTS, 0.0)
+	_go(GARRISON, 0.0, {
+		"scene": GARRISON,
+		"pos": GarrisonSurfaceLayout.transform_legacy_position(
+			GarrisonSurfaceLayout.LEGACY_ARRIVAL_POSITION),
+		"yaw": GarrisonSurfaceLayout.transform_legacy_yaw(
+			GarrisonSurfaceLayout.LEGACY_ARRIVAL_YAW),
+	})
 
 
 ## Local developer travel. These paths deliberately bypass autosave so testing
@@ -510,8 +541,8 @@ func descend() -> void:
 
 
 ## Go back one generated floor without settling the run. Floor 1 is the surface
-## seam instead: it uses `Run.extract()` itself, preserving the fee, current
-## health, banking and receipt path shared with the portable Escape Rope.
+## seam instead: it uses priced `Run.extract()` itself. The portable Rope shares
+## its health, banking and receipt path but disables this stair's gold charge.
 func ascend() -> void:
 	if busy or ending or not Run.in_dungeon:
 		return

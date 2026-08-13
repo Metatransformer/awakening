@@ -40,10 +40,11 @@ signal escaped_with(loot: Dictionary, position: Vector3)
 ## DEAD and nothing else — which is the right answer: a thief winding up a grab
 ## or running off with your pearls is very much in the fight.
 enum State { IDLE, CHASE, CIRCLE, WINDUP, STRIKE, RECOVER, HURT, LAUNCHED, FROZEN, DEAD,
-	GRAB, FLEE, FETCH_BARREL, THROW_WINDUP }
+	GRAB, FLEE, FETCH_BARREL, THROW_WINDUP, SEER_WINDUP, SEER_FIRE, SEER_RECOVER }
 
 const LIBRARY := "res://assets/animations/monster_library.res"
 const MODEL_DIR := "res://assets/monsters/"
+const SignatureEnemyLook := preload("res://scripts/actors/enemies/signature_enemy_look.gd")
 ## Visual layer 3. World lights still reach the model through its authored
 ## layer(s); the camera's EnemyReadFill reaches only this additional bit.
 const READABILITY_LAYER := 1 << 2
@@ -76,6 +77,24 @@ const THROW_COOLDOWN := 2.4
 const THROW_FLIGHT_MIN := 0.62
 const THROW_FLIGHT_MAX := 1.02
 const THROW_FLAT_SPEED := 8.5
+
+# --- Signature enemies (issue #200) ----------------------------------------
+const SIGNATURES: Array[StringName] = [
+	&"knotback", &"lantern_seer", &"cinder_automaton", &"mirebell",
+]
+const SEER_MIN_RANGE := 3.0
+const SEER_MAX_RANGE := 9.0
+const SEER_WINDUP_TIME := 0.95
+const SEER_FIRE_TIME := 0.10
+const SEER_RECOVER_TIME := 1.0
+const SEER_COOLDOWN := 1.15
+const SEER_DAMAGE := 3
+const SEER_PUNISH_TIME := 0.75
+const KNOTBACK_OPEN_TIME := 1.0
+const CINDER_RECOVER_OPEN_TIME := 0.65
+const CINDER_BOMB_OPEN_TIME := 3.5
+const MIRE_RECOVER_OPEN_TIME := 0.5
+const MIRE_HOOK_OPEN_BONUS := 1.2
 
 ## kind -> stats. Damage is in HP, matching every other number in
 ## the project. Health is tuned against the blade ladder in docs/METAGAME.md §8:
@@ -351,6 +370,19 @@ var _throw_barrel: ExplosiveBarrel = null
 ## into a claim on the next one in the cluster.
 var _throw_recovering: bool = false
 
+# --- Signature enemies ------------------------------------------------------
+## One presentation child over the imported biped. It is absent on ordinary,
+## thief, and thrower bodies, so their construction and render cost are unchanged.
+var _signature_look: SignatureEnemyLook = null
+## Seconds the alternate shape stays open. This is deliberately independent of
+## the FSM timer: a short body's recovery may finish before its readable punish
+## window, and the opening must not disappear merely because it resumed moving.
+var _signature_exposure_left: float = 0.0
+var _signature_cold_opening: bool = false
+## The seer's line owns a world-space endpoint. It is updated while tracking and
+## then left untouched for the locked final slice of the tell.
+var _seer_aim: Vector3 = Vector3.ZERO
+
 
 ## Build one, level it, and put it in the world -- in that order, which is the
 ## whole point of the helper.
@@ -390,6 +422,7 @@ func _ready() -> void:
 
 	_build_body()
 	_build_model()
+	_build_signature_look()
 	_build_combat()
 	_facing = rotation.y
 	_anchor = global_position
@@ -418,6 +451,44 @@ func head_point() -> Vector3:
 ## as not fighting and only the linger timer kept the combat music up.
 func is_engaged() -> bool:
 	return state != State.IDLE and state != State.DEAD
+
+
+## Read-only signature identity for encounter directors and HUD inspection.
+func is_signature_enemy() -> bool:
+	return SIGNATURES.has(_behave)
+
+
+func signature_name() -> StringName:
+	match _behave:
+		&"knotback":
+			return &"KNOTBACK"
+		&"lantern_seer":
+			return &"LANTERN SEER"
+		&"cinder_automaton":
+			return &"CINDER AUTOMATON"
+		&"mirebell":
+			return &"MIREBELL"
+	return &""
+
+
+func signature_tool() -> StringName:
+	match _behave:
+		&"knotback":
+			return &"sword"
+		&"lantern_seer":
+			return &"bow"
+		&"cinder_automaton":
+			return &"burst"
+		&"mirebell":
+			return &"hookshot"
+	return &""
+
+
+## Seconds left in the current opening. A duration is more useful to a director
+## than a mutable flag: it can prove both that the window opened and that it
+## lasts for the authored interval without reaching into the FSM timer.
+func signature_exposure() -> float:
+	return maxf(_signature_exposure_left, 0.0)
 
 
 ## How tall this one stands. An elite is the same monster made BIGGER, which is
@@ -608,6 +679,15 @@ func _build_model() -> void:
 			_ragdoll = candidate
 
 
+func _build_signature_look() -> void:
+	if not is_signature_enemy() or _model == null:
+		return
+	_signature_look = SignatureEnemyLook.new()
+	_signature_look.name = "SignatureLook"
+	add_child(_signature_look)
+	_signature_look.build(_behave, _height())
+
+
 func _build_combat() -> void:
 	health = HealthComponent.new()
 	health.name = "Health"
@@ -628,7 +708,8 @@ func _build_combat() -> void:
 	# that death -- an ordinary orc and the bigger one you could see coming are
 	# different rooms (see `elite`), and a screen that called both of them ORC
 	# would flatten the one distinction the roster is built on.
-	_hitbox.source = StringName(("ELITE " if elite else "") + String(kind).to_upper())
+	_hitbox.source = signature_name() if is_signature_enemy() else StringName(
+		("ELITE " if elite else "") + String(kind).to_upper())
 	_hitbox.knockback = K.KNOCKBACK_LIGHT
 	# **Mass, which is the one thing that separates a goblin's swing from a
 	# troll's on the receiving end** (card #130). The same body height the launch
@@ -789,6 +870,7 @@ func _physics_process(delta: float) -> void:
 		return
 
 	_cooldown = maxf(_cooldown - delta, 0.0)
+	_tick_signature_exposure(delta)
 	_player = _find_player()
 	# An interrupted RECOVER still keeps the cooldown stamped at release, but the
 	# next unrelated recovery must not inherit the thrower's bookkeeping flag.
@@ -827,6 +909,10 @@ func _physics_process(delta: float) -> void:
 	# loot in it is exempt: that one is owned by `_loot` and outlives every state.
 	if _sack != null and _loot.is_empty() and state != State.GRAB:
 		_clear_sack()
+	# The rust trace belongs only to the two seer states that own it. This guard
+	# catches every exit, including reactions added later, rather than trusting
+	# each interrupt to remember a presentation node it did not create.
+	_guard_seer_line()
 
 	match state:
 		State.IDLE:
@@ -855,6 +941,15 @@ func _physics_process(delta: float) -> void:
 			_tick_fetch_barrel(delta)
 		State.THROW_WINDUP:
 			_tick_throw_windup(delta)
+		State.SEER_WINDUP:
+			_tick_seer_windup(delta)
+		State.SEER_FIRE:
+			_tick_seer_fire(delta)
+		State.SEER_RECOVER:
+			_tick_seer_recover(delta)
+	# State methods may transition during the match. Re-run the single guard so a
+	# missing player or a completed fire cannot leave one stale rendered frame.
+	_guard_seer_line()
 
 	# ONE owner for the vertical, chosen by whether this body is in the air.
 	#
@@ -910,6 +1005,53 @@ func _face_heading(d: Vector3, delta: float, rate_deg: float = 420.0) -> void:
 func _stop() -> void:
 	velocity.x = 0.0
 	velocity.z = 0.0
+
+
+func _open_signature(duration: float, cold_opening: bool = false) -> void:
+	if not is_signature_enemy() or state == State.DEAD or duration <= 0.0:
+		return
+	if duration > _signature_exposure_left:
+		_signature_exposure_left = duration
+	if cold_opening:
+		_signature_cold_opening = true
+	if _signature_look != null:
+		_signature_look.set_exposure(true, _signature_cold_opening)
+
+
+func _close_signature() -> void:
+	_signature_exposure_left = 0.0
+	_signature_cold_opening = false
+	if _signature_look != null:
+		_signature_look.set_exposure(false)
+
+
+func _tick_signature_exposure(delta: float) -> void:
+	if _signature_exposure_left <= 0.0:
+		return
+	_signature_exposure_left = maxf(_signature_exposure_left - delta, 0.0)
+	if _signature_exposure_left <= 0.0:
+		_close_signature()
+
+
+func _guard_seer_line() -> void:
+	if _signature_look != null and state != State.SEER_WINDUP \
+			and state != State.SEER_FIRE:
+		_signature_look.hide_seer_charge_line()
+
+
+## Every ordinary recovery enters here. Signature openings therefore follow the
+## same transition whether the spent action was a claw, a heavy, a throw, or a
+## failed grab, instead of being copied into each action's exit.
+func _enter_recover(seconds: float) -> void:
+	state = State.RECOVER
+	_timer = seconds
+	match _behave:
+		&"knotback":
+			_open_signature(KNOTBACK_OPEN_TIME)
+		&"cinder_automaton":
+			_open_signature(CINDER_RECOVER_OPEN_TIME)
+		&"mirebell":
+			_open_signature(MIRE_RECOVER_OPEN_TIME)
 
 
 # --- States -----------------------------------------------------------------
@@ -991,6 +1133,13 @@ func _tick_chase(delta: float) -> void:
 		return
 
 	_face_player(delta)
+	# At room range the seer spends its cooldown on one readable line. Inside
+	# three metres it remains an ordinary melee body, so closing distance is a
+	# valid answer even when the player has no arrows.
+	if _behave == &"lantern_seer" and dist >= SEER_MIN_RANGE \
+			and dist <= SEER_MAX_RANGE and _cooldown <= 0.0:
+		_begin_seer_windup()
+		return
 	# A carried barrel outranks every ordinary attack. This path is also how an
 	# interrupted throw resumes: HURT/FROZEN wake into CHASE, keep the claimed
 	# prop, and wait out the interruption cooldown before winding up again.
@@ -1133,6 +1282,89 @@ func _tick_circle(delta: float) -> void:
 	_play(&"walk_fwd", true, 0.95)
 
 
+# --- The Lantern Seer -------------------------------------------------------
+
+func _seer_eye_point() -> Vector3:
+	return global_position + Vector3.UP * (_height() * 0.76)
+
+
+func _begin_seer_windup() -> void:
+	state = State.SEER_WINDUP
+	_timer = SEER_WINDUP_TIME * Prog.windup_scale(level)
+	_seer_aim = _player.global_position + Vector3.UP * (_height() * 0.48)
+	_stop()
+	_play(&"attack_1")
+	_open_signature(_timer + SEER_FIRE_TIME)
+	if _signature_look != null:
+		_signature_look.set_seer_charge_line(_seer_aim, 0.0)
+	Bus.request_sfx.emit(&"attack_prepare", global_position)
+
+
+func _tick_seer_windup(delta: float) -> void:
+	_stop()
+	if _player == null:
+		state = State.IDLE
+		return
+	_timer -= delta
+	var windup := maxf(SEER_WINDUP_TIME * Prog.windup_scale(level), 0.001)
+	var progress := clampf(1.0 - _timer / windup, 0.0, 1.0)
+	# Tracking bleeds away through the tell and locks for the final fifth. The
+	# rust line is therefore an honest path the player can leave, not a laser that
+	# snaps onto a completed roll on the release frame.
+	if progress < 0.80:
+		var target := _player.global_position + Vector3.UP * (_height() * 0.48)
+		var follow := lerpf(8.0, 1.4, progress)
+		_seer_aim = _seer_aim.lerp(target, clampf(follow * delta, 0.0, 1.0))
+		_face_player(delta, lerpf(120.0, 28.0, progress))
+	if _signature_look != null:
+		_signature_look.set_seer_charge_line(_seer_aim, progress)
+	if _timer <= 0.0:
+		_fire_seer_line()
+
+
+func _fire_seer_line() -> void:
+	state = State.SEER_FIRE
+	_timer = SEER_FIRE_TIME
+	_stop()
+	if _signature_look != null:
+		_signature_look.set_seer_charge_line(_seer_aim, 1.0)
+
+	var query := PhysicsRayQueryParameters3D.create(_seer_eye_point(), _seer_aim,
+		K.L_WORLD | K.L_PLAYER, [get_rid()])
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	var found: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
+	var victim := found.get("collider") as Node
+	if victim != null:
+		var hit := Hit.make(SEER_DAMAGE, _seer_eye_point(), &"fire",
+			K.KNOCKBACK_LIGHT, 0.15, signature_name(),
+			_height() / K.LAUNCH_MASS_REF,
+			Hit.commitment_of_tell(SEER_WINDUP_TIME))
+		DamageArea._deliver(victim, hit)
+	Bus.request_sfx.emit(&"spell_cast_fire", global_position)
+
+
+func _tick_seer_fire(delta: float) -> void:
+	_stop()
+	_timer -= delta
+	if _signature_look != null:
+		_signature_look.set_seer_charge_line(_seer_aim, 1.0)
+	if _timer <= 0.0:
+		state = State.SEER_RECOVER
+		_timer = SEER_RECOVER_TIME
+		_open_signature(SEER_RECOVER_TIME)
+		if _signature_look != null:
+			_signature_look.hide_seer_charge_line()
+
+
+func _tick_seer_recover(delta: float) -> void:
+	_stop()
+	_timer -= delta
+	if _timer <= 0.0:
+		_cooldown = maxf(_cooldown, SEER_COOLDOWN)
+		state = State.CHASE
+
+
 ## The tell. A wind-up the player can read is the difference between a fight and
 ## a coin flip — the enemy stands still and telegraphs before it commits.
 ##
@@ -1221,8 +1453,7 @@ func _tick_strike(delta: float) -> void:
 		if _struck:
 			_hitbox.deactivate()
 			_struck = false
-		state = State.RECOVER
-		_timer = _melee_beat("recover")
+		_enter_recover(_melee_beat("recover"))
 
 
 func _tick_recover(delta: float) -> void:
@@ -1413,6 +1644,8 @@ func _launch(away: Vector3, weight: float) -> void:
 	if _struck and _hitbox != null:
 		_hitbox.deactivate()
 		_struck = false
+	if _signature_look != null:
+		_signature_look.hide_seer_charge_line()
 	_kill_recoil()
 	if state != State.DEAD:
 		state = State.LAUNCHED
@@ -1557,6 +1790,10 @@ func freeze(seconds: float = K.HOOK_FREEZE) -> void:
 		# solid reads as "still winding up".
 		_model.rotation = _model_rest
 	state = State.FROZEN
+	if _signature_look != null:
+		_signature_look.hide_seer_charge_line()
+	if _behave == &"mirebell":
+		_open_signature(seconds + MIRE_HOOK_OPEN_BONUS, true)
 	_freeze_total = seconds
 	_freeze_left = seconds
 	# The white flash and the wind-up glow both lose to this, so drop their flags
@@ -1768,8 +2005,7 @@ func _release_barrel() -> void:
 
 	_lunge_pose()
 	Bus.request_sfx.emit(&"swing", global_position)
-	state = State.RECOVER
-	_timer = maxf(THROW_RECOVER_TIME, float(_def["recover"]))
+	_enter_recover(maxf(THROW_RECOVER_TIME, float(_def["recover"])))
 	_cooldown = maxf(_cooldown, _timer + THROW_COOLDOWN)
 	_throw_recovering = true
 
@@ -1849,8 +2085,7 @@ func _close_grab() -> void:
 		# Closed on empty air, or on an empty hold. Either way it got nothing, and
 		# the pause before it tries again is the reward for having stepped back.
 		_clear_sack()
-		state = State.RECOVER
-		_timer = _melee_beat("recover")
+		_enter_recover(_melee_beat("recover"))
 		_cooldown = K.THIEF_REGRAB
 		Bus.request_sfx.emit(&"craft_fail", global_position)
 		return
@@ -2152,6 +2387,60 @@ func _wake() -> State:
 
 # --- Damage and death -------------------------------------------------------
 
+## Public damage seam for every body-level weapon query. Ordinary enemies pass
+## the exact Hit through unchanged; signatures only rewrite the per-target copy
+## before the same HealthComponent handles i-frames, signals, and death.
+func apply_hit(hit: Hit) -> bool:
+	if not is_signature_enemy():
+		return health.apply_hit(hit)
+	if hit == null or hit.amount <= 0:
+		return health.apply_hit(hit)
+
+	var exposed := _signature_exposure_left > 0.0
+	var base_amount := hit.amount
+	var open_after_hit := 0.0
+	var cold_after_hit := false
+	match _behave:
+		&"knotback":
+			# The rear knot is the sword answer. Everything else, including a sword
+			# swung into the closed shell, still removes one real HP.
+			if exposed and hit.kind == &"sword":
+				hit.amount = _scaled_damage(base_amount, 2.0)
+				hit.stun = maxf(hit.stun, 0.6)
+			else:
+				hit.amount = K.HEALTH_POINT
+		&"lantern_seer":
+			var arrow := hit.kind == Hit.ARROW or hit.kind == Hit.ARROW_FIRE
+			if exposed and arrow:
+				hit.amount = _scaled_damage(base_amount, 3.0)
+				hit.stun = maxf(hit.stun, 0.6)
+				open_after_hit = SEER_PUNISH_TIME
+			else:
+				hit.amount = K.HEALTH_POINT
+		&"cinder_automaton":
+			if hit.kind == &"bomb":
+				hit.amount = _scaled_damage(base_amount, 2.0)
+				open_after_hit = CINDER_BOMB_OPEN_TIME
+			elif exposed:
+				hit.amount = _scaled_damage(base_amount, 1.5)
+			else:
+				hit.amount = K.HEALTH_POINT
+		&"mirebell":
+			if exposed:
+				hit.amount = _scaled_damage(base_amount, 1.5)
+			else:
+				hit.amount = K.HEALTH_POINT
+			cold_after_hit = _signature_cold_opening
+
+	var landed := health.apply_hit(hit)
+	if landed and open_after_hit > 0.0:
+		_open_signature(open_after_hit, cold_after_hit)
+	return landed
+
+
+static func _scaled_damage(amount: int, multiplier: float) -> int:
+	return maxi(K.HEALTH_POINT, int(roundf(float(amount) * multiplier)))
+
 func _on_damaged(hit: Hit) -> void:
 	if state == State.DEAD:
 		return
@@ -2162,6 +2451,8 @@ func _on_damaged(hit: Hit) -> void:
 	if _struck:
 		_hitbox.deactivate()
 		_struck = false
+	if _signature_look != null:
+		_signature_look.hide_seer_charge_line()
 	var dir := K.flat(global_position - hit.from)
 	if dir == Vector3.ZERO:
 		dir = Vector3(0, 0, 1).rotated(Vector3.UP, _facing)
@@ -2291,6 +2582,9 @@ func _kill_recoil() -> void:
 
 func _on_died() -> void:
 	state = State.DEAD
+	_close_signature()
+	if _signature_look != null:
+		_signature_look.hide_seer_charge_line()
 	# **Not an unconditional `_stop()`, and the guard is the whole of card #87.**
 	#
 	# A corpse must not keep walking, which is what the stop is for. But the
