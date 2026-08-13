@@ -381,6 +381,26 @@ func _restore_counts(raw: Variant) -> Dictionary[StringName, int]:
 	return restored
 
 
+## Additive save migration seam for cargo that old formats stored outside the
+## bag. It normally obeys slot pressure, but an old full bag still receives the
+## item it already owned; the temporary over-capacity stack can then be emptied
+## through its ordinary destination without discarding another item on load.
+func ensure_legacy_cargo(id: StringName, minimum_count: int = 1) -> bool:
+	var def := ItemDb.get_def(id)
+	if def == null or not def.is_supply() or minimum_count <= 0:
+		return false
+	var have: int = bag.get(id, 0)
+	if have >= minimum_count:
+		return true
+	var missing := minimum_count - have
+	while missing > 0 and _place(id, def):
+		missing -= 1
+	if missing > 0:
+		bag[id] = int(bag.get(id, 0)) + missing
+	Bus.bag_changed.emit(bag, bag_value())
+	return true
+
+
 ## Settle an extraction. Returns false only when there is no run to leave.
 ##
 ## **It cannot fail on money.** The fee is capped at the purse (`extract_charge`),
@@ -1317,7 +1337,7 @@ func _relic_toll_of(slice: Dictionary) -> int:
 ## leaving cheaper is the Rope-Drum and it is a different relic.
 func line_value(id: StringName) -> int:
 	var def := ItemDb.get_def(id)
-	if def == null or not bag.has(id) or RelicDb.is_relic(id):
+	if def == null or not bag.has(id) or RelicDb.is_relic(id) or def.is_supply():
 		return 0
 	var base := def.value * int(bag[id])
 	return _merchandise_sale_price(base, _premium_share(base))
@@ -1361,7 +1381,7 @@ func bag_count() -> int:
 func sell_all() -> int:
 	var ids: Array[StringName] = []
 	for id: StringName in bag:
-		if not RelicDb.is_relic(id):
+		if not RelicDb.is_relic(id) and not ItemDb.is_supply(id):
 			ids.append(id)
 	return sell_ids(ids)
 
@@ -1400,7 +1420,7 @@ func sell_ids(ids: Array[StringName]) -> int:
 func _sale_slice(ids: Array[StringName]) -> Dictionary[StringName, int]:
 	var sold: Dictionary[StringName, int] = {}
 	for id: StringName in ids:
-		if sold.has(id) or RelicDb.is_relic(id):
+		if sold.has(id) or RelicDb.is_relic(id) or ItemDb.is_supply(id):
 			continue
 		var def := ItemDb.get_def(id)
 		var count: int = bag.get(id, 0)
@@ -1419,7 +1439,7 @@ func _sale_slice(ids: Array[StringName]) -> Dictionary[StringName, int]:
 ## be a rule the next caller of `sell()` did not know about.
 func sell(id: StringName, count: int = -1) -> int:
 	var have: int = bag.get(id, 0)
-	if have <= 0 or RelicDb.is_relic(id):
+	if have <= 0 or RelicDb.is_relic(id) or ItemDb.is_supply(id):
 		return 0
 	var def := ItemDb.get_def(id)
 	if def == null:

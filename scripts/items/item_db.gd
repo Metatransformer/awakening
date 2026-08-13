@@ -29,6 +29,13 @@ static func is_component(id: StringName) -> bool:
 	return d != null and d.is_component()
 
 
+## Is `id` carried garrison cargo rather than vendor merchandise or a bench
+## component? The supply catalogue owns the IDs; ItemDef owns the bag policy.
+static func is_supply(id: StringName) -> bool:
+	var d := get_def(id)
+	return d != null and d.is_supply()
+
+
 ## Every component id, in catalogue order. The forge screen and the pouch both
 ## want a stable list, and neither should hardcode one.
 ##
@@ -143,6 +150,23 @@ static func _build() -> void:
 	# because two of them finish a jewel and one finishes a ladder.
 	_add(ItemDef.gem(&"cut_gemstone", "Cut Gemstone", 95, R, 3,
 		Color(0.72, 0.46, 0.86), "Faceted before the Sundering. Nobody has cut one since."))
+
+	# --- Garrison supplies: carried to the central gate crate ----------------
+	_add(ItemDef.supply(SupplyCargoDb.FIREWOOD_ID,
+		SupplyCargoDb.name_of(SupplyCargoDb.FIREWOOD_ID), 5,
+		Color(0.67, 0.40, 0.20),
+		"A dry cord for the hearth. It belongs in the gate supply box."))
+	var fish_tints: Array[Color] = [
+		Color(0.62, 0.82, 0.72),
+		Color(0.38, 0.68, 0.78),
+		Color(0.72, 0.82, 0.92),
+		Color(0.42, 0.56, 0.70),
+	]
+	for i in SupplyCargoDb.FISH_IDS.size():
+		var fish_id: StringName = SupplyCargoDb.FISH_IDS[i]
+		_add(ItemDef.supply(fish_id, SupplyCargoDb.name_of(fish_id), 6,
+			fish_tints[i],
+			"Fresh provisions for supper. It belongs in the gate supply box."))
 
 	# --- The twelve relics ---------------------------------------------------
 	# Built from `RelicDb.RELICS`, never typed out again. `Run.collect` refuses an

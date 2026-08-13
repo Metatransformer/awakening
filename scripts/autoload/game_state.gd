@@ -345,7 +345,11 @@ const WELL_FED_STAMINA: float = 15.0
 var firewood_stock: int = 0:
 	set(value):
 		firewood_stock = clampi(value, 0, FIREWOOD_CAP)
-var carrying_firewood: bool = false
+## Compatibility view for scenes migrating to the supply crate. The Run bag is
+## authoritative; this property is never saved or restored as separate state.
+var carrying_firewood: bool:
+	get:
+		return int(Run.bag.get(SupplyCargoDb.FIREWOOD_ID, 0)) > 0
 var timber_completed_day: int = 0
 var warmth_active: bool = false
 var last_bonfire_day: int = 0
@@ -515,7 +519,6 @@ func award_field_observations(ids: Array[StringName]) -> Array[StringName]:
 func garrison_snapshot() -> Dictionary:
 	return {
 		"firewood_stock": firewood_stock,
-		"carrying_firewood": carrying_firewood,
 		"timber_completed_day": timber_completed_day,
 		"warmth_active": warmth_active,
 		"last_bonfire_day": last_bonfire_day,
@@ -539,7 +542,6 @@ func restore_garrison(data: Dictionary) -> void:
 	var previous_raid: Dictionary = _garrison_raid.snapshot()
 	var restored_stock: int = clampi(int(data.get("firewood_stock", 0)),
 		0, FIREWOOD_CAP)
-	var restored_carrying: bool = bool(data.get("carrying_firewood", false))
 	var restored_timber_day: int = maxi(0, int(data.get("timber_completed_day", 0)))
 	var restored_warmth: bool = bool(data.get("warmth_active", false))
 	var restored_bonfire_day: int = maxi(0, int(data.get("last_bonfire_day", 0)))
@@ -562,7 +564,6 @@ func restore_garrison(data: Dictionary) -> void:
 			if restored_who != &"" and restored_day > 0:
 				restored_connected[restored_who] = restored_day
 	var changed: bool = restored_stock != firewood_stock \
-		or restored_carrying != carrying_firewood \
 		or restored_timber_day != timber_completed_day \
 		or restored_warmth != warmth_active \
 		or restored_bonfire_day != last_bonfire_day \
@@ -578,7 +579,6 @@ func restore_garrison(data: Dictionary) -> void:
 	_garrison_raid.restore(raw_raid as Dictionary if raw_raid is Dictionary else {})
 	changed = changed or previous_raid != _garrison_raid.snapshot()
 	firewood_stock = restored_stock
-	carrying_firewood = restored_carrying
 	timber_completed_day = restored_timber_day
 	warmth_active = restored_warmth
 	last_bonfire_day = restored_bonfire_day
@@ -708,27 +708,83 @@ func _deliver_raid_notices() -> void:
 func can_chop_firewood(at_day: int, phase: StringName) -> bool:
 	return at_day > 0 \
 		and phase == WorldClock.GARRISON_DAYTIME \
-		and firewood_stock < FIREWOOD_CAP \
-		and not carrying_firewood \
 		and timber_completed_day != at_day
 
 
 func chop_firewood(at_day: int, phase: StringName) -> bool:
 	if not can_chop_firewood(at_day, phase):
 		return false
-	carrying_firewood = true
+	if Run.collect(SupplyCargoDb.FIREWOOD_ID, 1) != 1:
+		return false
 	timber_completed_day = at_day
 	garrison_changed.emit()
 	return true
 
 
+## Deprecated compatibility door for the old hearth prompt. Depositing is now
+## one central-crate transaction, so this may move fish in the same call.
 func deposit_firewood() -> bool:
-	if not carrying_firewood or firewood_stock >= FIREWOOD_CAP:
-		return false
-	carrying_firewood = false
-	firewood_stock += 1
-	garrison_changed.emit()
-	return true
+	var receipt := deposit_supplies()
+	return int(receipt.get(&"firewood_units", 0)) > 0
+
+
+## Read-only prompt seam. It answers whether at least one carried provision can
+## enter its reserve without rolling a day or consuming anything from the bag.
+func supply_deposit_available() -> bool:
+	for id: StringName in SupplyCargoDb.SUPPLY_IDS:
+		if int(Run.bag.get(id, 0)) <= 0:
+			continue
+		match SupplyCargoDb.category_of(id):
+			SupplyCargoDb.CATEGORY_FIREWOOD:
+				if firewood_stock < FIREWOOD_CAP:
+					return true
+			SupplyCargoDb.CATEGORY_FOOD:
+				var units := SupplyCargoDb.food_units(id)
+				if units > 0 and fish_stock + units <= FISH_CAP:
+					return true
+	return false
+
+
+## Move every carried provision that fits, in catalogue order. Reserve state is
+## announced once after all Run.consume calls so observers never draw a
+## half-deposited crate.
+func deposit_supplies() -> Dictionary:
+	var moved: Dictionary[StringName, int] = {}
+	var firewood_units := 0
+	var food_units := 0
+	for id: StringName in SupplyCargoDb.SUPPLY_IDS:
+		var carried: int = Run.bag.get(id, 0)
+		if carried <= 0:
+			continue
+		match SupplyCargoDb.category_of(id):
+			SupplyCargoDb.CATEGORY_FIREWOOD:
+				var firewood_room := FIREWOOD_CAP - firewood_stock
+				var firewood_to_move := mini(carried, firewood_room)
+				var firewood_moved := Run.consume(id, firewood_to_move)
+				if firewood_moved > 0:
+					moved[id] = firewood_moved
+					firewood_stock += firewood_moved
+					firewood_units += firewood_moved
+			SupplyCargoDb.CATEGORY_FOOD:
+				var units_per_item := SupplyCargoDb.food_units(id)
+				if units_per_item <= 0:
+					continue
+				var items_to_move := mini(carried,
+					floori(float(FISH_CAP - fish_stock) / float(units_per_item)))
+				var items_moved := Run.consume(id, items_to_move)
+				if items_moved > 0:
+					var added_units := items_moved * units_per_item
+					moved[id] = items_moved
+					fish_stock += added_units
+					food_units += added_units
+	var receipt := {
+		&"moved": moved,
+		&"firewood_units": firewood_units,
+		&"food_units": food_units,
+	}
+	if not moved.is_empty():
+		garrison_changed.emit()
+	return receipt
 
 
 func fish_space() -> int:
@@ -746,20 +802,34 @@ func fishing_remaining_today(at_day: int) -> int:
 	return FISH_DAILY_CAP - fish_units_today
 
 
-func can_bank_fish(units: int, at_day: int) -> bool:
-	if units <= 0 or at_day <= 0:
+func can_catch_fish(at_day: int, fish_id: StringName = &"") -> bool:
+	if at_day <= 0 or (fish_id != &"" and not SupplyCargoDb.is_fish(fish_id)):
+		return false
+	var units := SupplyCargoDb.food_units(fish_id) if fish_id != &"" else 1
+	return units > 0 and units <= fishing_remaining_today(at_day)
+
+
+func record_fish_catch(fish_id: StringName, at_day: int) -> bool:
+	if not can_catch_fish(at_day, fish_id):
+		return false
+	if Run.collect(fish_id, 1) != 1:
 		return false
 	_sync_fishing_day(at_day)
-	return units <= fish_space() and units <= FISH_DAILY_CAP - fish_units_today
-
-
-func bank_fish(units: int, at_day: int) -> int:
-	if not can_bank_fish(units, at_day):
-		return 0
-	fish_stock += units
-	fish_units_today += units
+	fish_units_today += SupplyCargoDb.food_units(fish_id)
 	garrison_changed.emit()
-	return units
+	return true
+
+
+## Deprecated query shape retained only while callers move from anonymous Fish
+## units to exact catalogue IDs. It never considers the garrison reserve.
+func can_bank_fish(units: int, at_day: int) -> bool:
+	return units == 1 and can_catch_fish(at_day)
+
+
+## Deprecated refusal: an anonymous unit cannot become an exact carried fish.
+## New catches must call record_fish_catch with the rolled catalogue ID.
+func bank_fish(_units: int, _at_day: int) -> int:
+	return 0
 
 
 func _sync_fishing_day(at_day: int) -> void:
