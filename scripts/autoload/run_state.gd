@@ -571,7 +571,7 @@ func relic_toll() -> int:
 	return _relic_toll_of(bag)
 
 
-## Die. **The case comes home; the other seven slots are gone.** Gold and anything
+## Die. **The case comes home; the exposed hold is gone.** Gold and anything
 ## bought with it survives, as it always did.
 ##
 ## Added 2026-08-10 (docs/GDD.md §3.1). Death used to take the whole bag, which is
@@ -611,7 +611,7 @@ func die() -> void:
 			lost[id] = n
 	var lost_value := _value_of(lost)
 	# Measured before the pot is split, because `_premium_share` divides by the
-	# bag as it stands and the bag is about to be seven slots smaller.
+	# bag as it stands and the bag is about to lose its exposed side.
 	var lost_hot := _premium_share(_base_of(lost) - _relic_toll_of(lost))
 
 	# The heat premium follows the merchandise. What the floor kept takes its
@@ -1435,22 +1435,15 @@ func sale_value(ids: Array[StringName]) -> int:
 ## Atomically sell the explicit id set. Run owns the bag bookkeeping; callers
 ## decide policy (for example, which marked items a bulk action protects).
 func sell_ids(ids: Array[StringName]) -> int:
-	var sold := _sale_slice(ids)
-	if sold.is_empty():
-		return 0
-	var base := _base_of(sold)
-	var share := _premium_share(base)
-	var paid := _merchandise_sale_price(base, share)
-	if paid <= 0:
-		return 0
-	for id: StringName in sold:
-		bag.erase(id)
-	premium = maxi(0, premium - share)
-	_case_trim()
-	Game.add_gold(paid)
-	Bus.bag_changed.emit(bag, bag_value())
-	Bus.items_sold.emit(sold, paid)
-	return paid
+	var receipt := sell_ids_with_receipt(ids)
+	return int(receipt.get(&"paid_gold", 0))
+
+
+## Sell an explicit set and return the exact reversible transaction. The old
+## integer seam above remains the public shorthand for callers that do not need
+## to put the sale back.
+func sell_ids_with_receipt(ids: Array[StringName]) -> Dictionary[StringName, Variant]:
+	return _commit_sale(_sale_slice(ids))
 
 
 func _sale_slice(ids: Array[StringName]) -> Dictionary[StringName, int]:
@@ -1474,31 +1467,165 @@ func _sale_slice(ids: Array[StringName]) -> Dictionary[StringName, int]:
 ## else's -- a rule about what may leave the bag that lived in `TradeScreen` would
 ## be a rule the next caller of `sell()` did not know about.
 func sell(id: StringName, count: int = -1) -> int:
+	var receipt := sell_with_receipt(id, count)
+	return int(receipt.get(&"paid_gold", 0))
+
+
+## Sell one stack and return the exact reversible transaction. A receipt names
+## the part removed from the case separately; the rest of `items` came from the
+## hold, preserving the split without storing a second copy of the same fact.
+func sell_with_receipt(id: StringName, count: int = -1) \
+		-> Dictionary[StringName, Variant]:
 	var have: int = bag.get(id, 0)
 	if have <= 0 or RelicDb.is_relic(id) or ItemDb.is_supply(id):
-		return 0
+		return {}
 	var def := ItemDb.get_def(id)
 	if def == null:
-		return 0
+		return {}
 	var n: int = have if count < 0 else mini(count, have)
-	var base := def.value * n
-	# Prorated, and taken out of the pot in the same breath: sell half the bag
-	# and half the heat you earned goes with it.
-	var share := _premium_share(base)
-	# A lit square pays more for the same stack. Unconditional -- `vendor_price_mult`
-	# is 1.0 until the Pillar-Shard is recorded.
-	var paid := _merchandise_sale_price(base, share)
-	premium -= share
+	var sold: Dictionary[StringName, int] = {id: n}
+	return _commit_sale(sold)
 
-	if n >= have:
-		bag.erase(id)
-	else:
-		bag[id] = have - n
+
+## The single sale writer. Capture the case before mutating because `_case_trim`
+## deliberately spends the hold first; only the delta after that trim says how
+## many packed documents actually crossed the counter.
+func _commit_sale(sold: Dictionary[StringName, int]) \
+		-> Dictionary[StringName, Variant]:
+	if sold.is_empty():
+		return {}
+	var base := _base_of(sold)
+	var share := _premium_share(base)
+	var paid := _merchandise_sale_price(base, share)
+	if paid <= 0:
+		return {}
+	var case_before: Dictionary[StringName, int] = {}
+	for id: StringName in sold:
+		case_before[id] = in_case(id)
+		var have: int = bag.get(id, 0)
+		var n: int = int(sold[id])
+		if n >= have:
+			bag.erase(id)
+		else:
+			bag[id] = have - n
+	premium = maxi(0, premium - share)
 	_case_trim()
+
+	var removed_case: Dictionary[StringName, int] = {}
+	for id: StringName in sold:
+		var removed: int = int(case_before[id]) - in_case(id)
+		if removed > 0:
+			removed_case[id] = removed
 	Game.add_gold(paid)
 	Bus.bag_changed.emit(bag, bag_value())
-	Bus.items_sold.emit({id: n}, paid)
-	return paid
+	Bus.items_sold.emit(sold, paid)
+	return {
+		&"items": sold.duplicate(),
+		&"paid_gold": paid,
+		&"premium": share,
+		&"case_counts": removed_case,
+		&"valid": true,
+	}
+
+
+## Why this exact receipt cannot come back, or an empty string when the whole
+## transaction is currently possible. Asking this before charging keeps the
+## purse and both bag regions atomic even when another buyback filled one side.
+func buyback_refusal(receipt: Dictionary) -> String:
+	if not _valid_sale_receipt(receipt):
+		return "That buyback is no longer available."
+	var paid := int(receipt.get(&"paid_gold", 0))
+	if Game.gold < paid:
+		return "Not enough gold to buy that back."
+	if not _buyback_fits(receipt):
+		return "Not enough room in your case and hold."
+	return ""
+
+
+## Restore one sale exactly. This is not a pickup: it emits only the aggregate
+## bag change, spends (rather than earns) gold, and consumes the receipt so the
+## same transaction cannot be replayed.
+func buy_back(receipt: Dictionary) -> bool:
+	if not buyback_refusal(receipt).is_empty():
+		return false
+	var paid := int(receipt.get(&"paid_gold", 0))
+	if not Game.spend_gold(paid):
+		return false
+	var items := receipt.get(&"items", {}) as Dictionary
+	var case_counts := receipt.get(&"case_counts", {}) as Dictionary
+	for id: StringName in items:
+		bag[id] = int(bag.get(id, 0)) + int(items[id])
+	for id: StringName in case_counts:
+		cased[id] = int(cased.get(id, 0)) + int(case_counts[id])
+	premium += int(receipt.get(&"premium", 0))
+	receipt[&"valid"] = false
+	Bus.bag_changed.emit(bag, bag_value())
+	return true
+
+
+func _valid_sale_receipt(receipt: Dictionary) -> bool:
+	if not bool(receipt.get(&"valid", false)) \
+			or int(receipt.get(&"paid_gold", 0)) <= 0 \
+			or int(receipt.get(&"premium", -1)) < 0:
+		return false
+	var items_value: Variant = receipt.get(&"items")
+	var case_value: Variant = receipt.get(&"case_counts")
+	if not items_value is Dictionary or not case_value is Dictionary:
+		return false
+	var items := items_value as Dictionary
+	var case_counts := case_value as Dictionary
+	if items.is_empty():
+		return false
+	for id: StringName in items:
+		var n := int(items[id])
+		if n <= 0 or ItemDb.get_def(id) == null or RelicDb.is_relic(id) \
+				or ItemDb.is_supply(id):
+			return false
+		var packed := int(case_counts.get(id, 0))
+		if packed < 0 or packed > n:
+			return false
+	for id: StringName in case_counts:
+		if not items.has(id) or int(case_counts[id]) <= 0 or not case_fits(id):
+			return false
+	return true
+
+
+## Project both regions before touching either. Exact buyback means a packed
+## count cannot spill into the hold just because that side happens to have room.
+func _buyback_fits(receipt: Dictionary) -> bool:
+	var items := receipt.get(&"items", {}) as Dictionary
+	var case_counts := receipt.get(&"case_counts", {}) as Dictionary
+	var projected_bag: Dictionary = bag.duplicate()
+	var projected_case: Dictionary = cased.duplicate()
+	for id: StringName in items:
+		projected_bag[id] = int(projected_bag.get(id, 0)) + int(items[id])
+	for id: StringName in case_counts:
+		projected_case[id] = int(projected_case.get(id, 0)) + int(case_counts[id])
+
+	var projected_hold: Dictionary[StringName, int] = {}
+	for id: StringName in projected_bag:
+		var packed := int(projected_case.get(id, 0))
+		var whole := int(projected_bag[id])
+		if packed < 0 or packed > whole:
+			return false
+		if packed > 0 and not case_fits(id):
+			return false
+		if whole - packed > 0:
+			projected_hold[id] = whole - packed
+	return _projected_slots(projected_case, projected_bag) <= CASE_SLOTS \
+		and _projected_slots(projected_hold, projected_bag) <= hold_slots()
+
+
+## `_slots_of` reads the live bag for the Long Chord. A buyback projection may
+## itself restore that chord, so capacity must read the projected whole instead.
+func _projected_slots(counts: Dictionary, whole_bag: Dictionary) -> int:
+	var chord := int(whole_bag.get(EchoDb.LONG_CHORD, 0)) > 0
+	var used := 0
+	for id: StringName in counts:
+		if chord and EchoDb.is_echo(id) and id != EchoDb.LONG_CHORD:
+			continue
+		used += int(ceil(float(counts[id]) / float(stack_of(id))))
+	return used
 
 
 ## Query and commit share the same validation seam so only canonical generated

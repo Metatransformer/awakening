@@ -12,10 +12,10 @@ parry-and-roll map, the arena's turn and the rows to paste.
 Everything here is read off `docs/OOT_CATALOGUE.md` §3, which is the 1998 Player's
 Guide gone through dungeon by dungeon and written down as mechanics.
 
-**Status: design, except §3's number 4.** The **Thief is built** — see §3's
-"Built" note. The other seven behaviours in §3 are still design. §5's boss shapes
-are a re-reading of beats that already exist in `BossDb` — no new beats, no
-second phase, no new models.
+**Status: six behaviours built, two deferred.** Thrower, Thief, Knotback,
+Lantern Seer, Cinder Automaton and Mirebell are built. Guard and Perched remain
+deferred inside §3's cap of eight. §5's boss shapes are a re-reading of beats
+that already exist in `BossDb` — no new beats, no second phase, no new models.
 
 ---
 
@@ -24,16 +24,17 @@ second phase, no new models.
 > **Every enemy is a question. Every item is an answer.**
 > **An enemy that only the sword answers has not been designed.**
 
-Here is the state of the roster, honestly. `Enemy.DEFS` has seven rows —
+`Enemy.DEFS` still has seven rows —
 `skeleton`, `goblin`, `kobold`, `orc`, `wraith`, `troll`, `knight_iron` — and
-they differ in **health, damage, speed, height, detect, reach, windup, recover
-and cooldown.** Nine numbers. Not one behaviour.
+the six built behaviours are variants worn by those existing kinds, not new
+rows. Knotback, Lantern Seer, Cinder Automaton and Mirebell likewise use
+temporary primitive kitbash attachments over the existing animated bipeds
+rather than permanent external model assets.
 
-So every enemy in the game asks the same question — *can you swing back?* — and
-the only answer is the sword. The bow, the Burst-Verse and the hookshot are
-**puzzle-only items**: `docs/PUZZLES.md` gives all three a room to open and none
-of them a body to beat. GDD §5.2 promises the hookshot "freezes the thing for a
-second"; that is implemented, and nothing in the roster ever needs it.
+The original roster asked only *can you swing back?* The built behaviour layer
+now gives the shield, sword, bow, Burst and hookshot distinct combat questions
+without hard-locking a fight to one answer. Ordinary damage remains the slower
+answer whenever a tool is the fast one.
 
 That is the gap this document closes, and the good news in
 `docs/OOT_CATALOGUE.md` §3 is how cheaply it closes: Ocarina's memorable enemies
@@ -77,18 +78,18 @@ at you. That is the scariest thing in the game.
 
 ---
 
-## 2. What each item should answer
+## 2. What each item answers
 
-The left column is built. **The right column is almost entirely empty**, and that
-is the whole finding.
+The puzzle verbs and the six built enemy behaviours now give every combat tool
+a body it answers. The tool answer is faster; ordinary damage remains available.
 
-| Item | Puzzle verb — built | Combat verb it should own |
+| Item | Puzzle verb — built | Combat question — built |
 |---|---|---|
-| **Sword** | urn, lantern | everything, and that is the problem |
-| **Shield** | sun socket beam | **send a thrown thing back.** Nothing in the roster throws anything |
-| **Bow** (T1) | eye switch | **the body that has not noticed you**, and the only stagger that lands on a guard |
-| **Burst** (T2) | cracked pillar | **the guard-breaker**, and the only blow a riser does not get up from |
-| **Hookshot** (T3) | hook ring | **close a gap you did not choose** — pull yourself to a perched body, or freeze one mid-beat |
+| **Sword** | urn, lantern | **Knotback's presented back knot** |
+| **Shield** | sun socket beam | **send the Thrower's thrown thing back** |
+| **Bow** (T1) | eye switch | **Lantern Seer's presented lantern** |
+| **Burst** (T2) | cracked pillar | **Cinder Automaton's presented core** |
+| **Hookshot** (T3) | hook ring | **Mirebell's presented bell** |
 | **Rope** | — | none, and it should stay none. It is the extraction verb and GDD §2 needs it uncomplicated |
 
 **The shield row is the cheapest and the most valuable.** It is owned from minute
@@ -108,23 +109,24 @@ suggests the behaviour.
 the reason `docs/PUZZLES.md` §10.6 gives: a single-answer enemy at depth is a
 knowledge check, and GDD pillar 3 rules those out.
 
-| | Behaviour | What the body does | Fast answer | Expensive answer | Wears | From |
+| | Behaviour | Status | What the body asks | Fast answer | Slower answer | Wears |
 |---|---|---|---|---|---|---|
-| **1** | **Thrower** | Lobs something on a slow arc. The throw is **blockable and it returns** | **Shield**, on the beat | close the distance and eat one | `goblin` | Deku Scrub |
-| **2** | **Guard** | Plated front; melee rings off it and does nothing | **Burst** — or an **arrow** in the beat it turns | circle to the back, slowly | `knight_iron` | Stalfos, Iron Knuckle |
-| **3** | **Perched** | Stands across a gap or on a ledge and throws down | **Bow** | **Hookshot** to close, then melee | `kobold` | Gerudo archer |
-| **4** | **Thief** | Grabs, and **takes one bag slot**, then runs for the nearest door | kill it — it drops what it took | let it go and eat the loss | `goblin` | Like Like, Dead Hand |
-| **5** | **Caller** | Does not fight. Winds up a shout that wakes the room | **Bow**, before the shout lands | run it down and accept the room | `skeleton` | Gerudo alert |
-| **6** | **Gaze** | Stands still. Looking at it **roots you for a beat**; then it closes | kill it at range | break line of sight and go around | `wraith` | ReDead |
-| **7** | **Riser** | Gets back up once, after a few seconds, unless the killing blow was **Burst** | **Burst** the finish | kill it twice | `skeleton` | Stalfos |
-| **8** | **Ledworthy** | Heavy, slow, trivially baited — and it counts as `plate_weight` | lead it onto the plate | push a block instead | `troll` | Armos |
+| **1** | **Thrower** | Built | Lobs something on a slow arc. The throw is **blockable and it returns** | **Shield**, on the beat | close the distance and eat one | `goblin` |
+| **2** | **Guard** | Deferred | Plated front; melee rings off it and does nothing | **Burst** — or an **arrow** in the beat it turns | circle to the back, slowly | `knight_iron` |
+| **3** | **Perched** | Deferred | Stands across a gap or on a ledge and throws down | **Bow** | **Hookshot** to close, then melee | `kobold` |
+| **4** | **Thief** | Built | Grabs, and **takes one bag slot**, then runs for the nearest door | kill it — it drops what it took | let it go and eat the loss | `goblin` |
+| **5** | **Knotback** | Built | Presents the knot on its back as a readable opening | **Sword** into the opening | ordinary damage | primitive knot attachment on an existing biped |
+| **6** | **Lantern Seer** | Built | Presents its lantern as a room-range opening | **Bow** into the opening | ordinary damage | primitive lantern attachment on an existing biped |
+| **7** | **Cinder Automaton** | Built | Presents its cinder core as a readable opening | **Burst** into the opening | ordinary damage | primitive cinder attachment on an existing biped |
+| **8** | **Mirebell** | Built | Presents its bell as a hookable opening | **Hookshot** into the opening | ordinary damage | primitive bell attachment on an existing biped |
 
-### Build four, not eight
+### Six built, two deferred
 
-**Committed: 1 Thrower, 2 Guard, 3 Perched, 4 Thief.** One per item, which is the
-point — the four together are the sentence *"the bow, the shield, the Burst and
-the hookshot each beat something."* The other four are flavour and are not
-committed, exactly the way `docs/PUZZLES.md` §2's phase 2 is not committed.
+Thrower and Thief remain built. Issue
+[#200](https://github.com/Metatransformer/awakening/issues/200) authorises the
+four signature variants as a bounded prototype alongside the production
+freeze. Guard and Perched are the only deferred behaviours inside the cap;
+the former four speculative entries are superseded, not an alternate roster.
 
 ### Number 4 is the one this game should build first
 
@@ -201,6 +203,45 @@ wants, so all of them passed while the behaviour was eating the whole kind.
 swing* (with a skeleton in the same room as its control) and *how many of them
 are thieves* — and the second one is the beat that fails the day the share goes
 back to 1.0.
+
+### The signature tool ladder — built and automatically proven
+
+These four behaviour-bearing variants arrive in tool-acquisition order. Their
+temporary visuals are primitive kitbash attachments. They are Ocarina-style
+questions: recognising the opening and applying the named tool shortens the
+fight, while ordinary damage remains a slower complete answer. There is no hard
+tool lock.
+
+#### Floor 1 — Knotback / Sword
+
+Knotback wears a primitive knot attachment over an existing animated biped.
+Its loop presents that back silhouette as the opening; a sword hit is the fast
+answer, while ordinary damage still finishes the fight more slowly.
+
+#### Floor 2 — Lantern Seer / Bow
+
+Lantern Seer wears a primitive lantern attachment over an existing animated
+biped. Its loop presents the lantern at room range; an arrow is the fast answer,
+while ordinary damage still finishes the fight more slowly.
+
+#### Floor 3 — Cinder Automaton / Burst
+
+Cinder Automaton wears a primitive cinder attachment over an existing animated
+biped. Its loop presents the cinder core as the opening; Burst is the fast
+answer, while ordinary damage still finishes the fight more slowly.
+
+#### Floor 4 — Mirebell / Hookshot
+
+Mirebell wears a primitive bell attachment over an existing animated biped.
+Its loop presents the bell as the hookable opening; the hookshot is the fast
+answer, while ordinary damage still finishes the fight more slowly.
+
+At most one signature variant may appear in an ordinary room. Signature
+variants cannot be elites or boss summons. They add no `Enemy.DEFS` kind,
+permanent model, item, ammo, currency, screen, boss beat, autoload or broader
+content authorisation. Automated proof establishes only damage progress, tool
+advantage, room-count enforcement and rendered states; it cannot establish that
+players read the question or enjoy answering it.
 
 ### The rule that keeps this at eight
 
@@ -549,21 +590,19 @@ the table above is for.
 | | Count | Moved? |
 |---|---|---|
 | **New monster models** | **0** | **No.** §1's biped rule is why, and it is the row this document exists to protect |
-| Enemy kinds in rotation | **9** | **No.** A behaviour is a key on a row, not a tenth row |
+| Enemy kinds in rotation | **7** within the ceiling of **9** | **No.** A behaviour is a variant, not a new row |
 | Boss beats | **12** | **No.** §5 re-reads four beats that already exist |
 | Boss phases | **1** | **No** |
 | Minibosses | **4** | **No** |
 | New UI screens | **0** | **No** |
-| **Enemy behaviours** | **8**, of which **4 committed** | **New row.** This is the one to argue about |
+| **Enemy behaviours** | **8**, of which **6 built and 2 deferred** | **No.** Issue #200 fills four slots without raising the cap |
 
-**The bill, stated rather than absorbed.** Four behaviours is four small
-additions to `Enemy` — a blockable projectile, a front-facing damage gate, a
-ledge-preferring spawn rule, and a grab that moves one bag row and flees. None of
-them is a new system, none needs a save field, and all four are provable by one
-director that walks a hero past four bodies with four items. That is
-`docs/SCOPE.md` §4.3's three questions answered: it makes GDD §2's question
-*harder* (the Thief asks it mid-fight), it is a key on an existing table, and one
-director proves it.
+**The bill, stated rather than absorbed.** Six built behaviours occupy six of
+the eight slots. The four issue #200 variants are primitive kitbash silhouette
+attachments and behaviour keys over the existing animated bipeds; they do not
+change the seven-kind rotation or the zero-permanent-model budget. Automation
+can prove their implementation contract, but the player-facing question
+remains open in `docs/design-tests/ENEMY_TOOL_LADDER_PROOF.md`.
 
 **What it must not become.** A behaviour that needs its own model, its own screen,
 or its own arena is a miniboss, and there are four of those and no fifth.

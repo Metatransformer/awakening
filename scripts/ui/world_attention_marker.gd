@@ -8,10 +8,16 @@ const BREATH_BASE: float = 0.88
 const BREATH_DEPTH: float = 0.10
 
 var _breath_age: float = 0.0
+var _symbol: String = "!"
+
+
+func set_symbol(symbol: String) -> void:
+	_symbol = symbol if symbol == "!" or symbol == "?" else "!"
+	text = _symbol
 
 
 func _ready() -> void:
-	text = "!"
+	set_symbol(_symbol)
 	tint = Pal.GOLD
 	ref_px = 16.0
 	plate = true

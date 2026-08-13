@@ -69,14 +69,18 @@ The existing read-only Garrison page reports time, the next phase, carried
 Firewood and aggregate Food cargo, stored Firewood/Hearth and Food/supper state,
 Well Fed readiness, overall and per-resident morale with its causes, residents
 and their activities, and active garrison effects. It points carried provisions
-to the south-gate supply box and performs no remote action.
+to the south-gate supply box and performs no remote action. Ordered duty state
+is no longer duplicated there: the adjacent read-only Quests page owns that
+question.
 
 ## Firewood and Hearth
 
 Firewood is built and valid. It is a supporting warm-home vignette, not the
 active proof and not a prerequisite for the raid.
 
-- After Brannoc arrives, Aldric assigns **Keep the Hearth**.
+- After Brannoc arrives, Aldric offers **Keep the Hearth**. `!` moves from
+  Aldric to Brannoc, the current grove tree, and the supply box as each objective
+  becomes current; READY returns `?` to Aldric until the player turns it in.
 - Brannoc forges the permanent Woodsman's Axe for 60 gold and three Iron Scrap.
   It is a utility tool, not a weapon or hand slot.
 - The wooded homestead clearing between the garrison bridge and the visible
@@ -234,7 +238,9 @@ residents, create relationship levels, or start a failure spiral.
 ## Builder and Elder
 
 The one authorised sixth resident is an unvoiced Vyr Builder using the existing
-generic Vyr body and shared service patterns.
+generic Vyr body and shared service patterns. She has written greeting/leave
+text and a painted dialogue portrait so her quest rows use the ordinary
+conversation composition without adding recorded lines.
 
 - **Builder:** mechanisms, buildings, and the one West Gate Bolt-Thrower
   project.
@@ -267,6 +273,10 @@ resources. It holds when the player is absent; without it, absence loses the
 raid. Loss steals the Tally-Ledger, suppresses its benefit, leaves its mount
 empty, and returns it to its original dungeon location. Recovery restores the
 donation without another repair cost. The occurrence never repeats.
+
+Arming the occurrence offers **West Gate Defence** at the Builder. Her `!`
+remains while the bolt-thrower is the current target, becomes `?` after the real
+works-board purchase, and clears only when the player chooses the turn-in row.
 
 The complete authored slice and evidence rules live in
 [design-tests/RAID_LOOP_PROOF.md](design-tests/RAID_LOOP_PROOF.md).

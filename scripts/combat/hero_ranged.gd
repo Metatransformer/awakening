@@ -134,9 +134,11 @@ const AIMED: Array[StringName] = [&"bow", &"hookshot", &"burst"]
 ## still `ArmamentDb.action_of` — the input layer did not change (GDD §6.5), only
 ## which half of the press the working answers.
 const SELF_CAST: Array[StringName] = [&"sustain", &"ballast"]
+const LobTargeterType = preload("res://scripts/combat/lob_targeter.gd")
 
 var _hero: Hero
 var _tether: HookshotTether
+var lob_targeter: LobTargeterType
 
 ## True while a ranged item is RAISED — the trigger is down, or the shot it fired
 ## is still playing out. Mirrored onto the Bus; kept here so a late listener (a
@@ -176,6 +178,11 @@ var _hook_ready: bool = false
 ## behind it.
 var _burst_ready: bool = false
 
+## A world prop temporarily occupying both hands. It is deliberately outside
+## Game's armament ring: pickup owns this reference, and throw/loss gives it up.
+var _carried_barrel: ExplosiveBarrel = null
+var _barrel_ready: bool = false
+
 ## The chain is out. `_hook_bit` distinguishes a shot that found an anchor from
 ## one that played out to maximum range and found nothing — both draw the chain,
 ## only one moves the hero.
@@ -198,6 +205,8 @@ func _ready() -> void:
 	_tether = HookshotTether.new()
 	_tether.name = "Tether"
 	_hero.add_child(_tether)
+	lob_targeter = LobTargeterType.new()
+	add_child(lob_targeter)
 
 	Bus.loadout_changed.connect(_on_loadout_changed)
 	# Deferred: the hero is still being built, and the camera and the HUD that
@@ -205,6 +214,12 @@ func _ready() -> void:
 	# announced into an empty room leaves the camera framed for running while the
 	# bow is already in his hand, which is exactly the bug this signal exists for.
 	_refresh_aiming.call_deferred()
+
+
+func _exit_tree() -> void:
+	if _carried_barrel != null and is_instance_valid(_carried_barrel):
+		_carried_barrel.cancel_carry(_hero)
+	_lose_carried_barrel()
 
 
 func _on_loadout_changed(_set_index: int, _right: StringName, _left: StringName) -> void:
@@ -222,6 +237,8 @@ func _on_loadout_changed(_set_index: int, _right: StringName, _left: StringName)
 ## for the camera and the HUD (`_refresh_aiming`). The pose, the framing and the
 ## crosshair therefore all begin and end on the trigger, together.
 func aim_item() -> StringName:
+	if _barrel_ready and has_carried_barrel():
+		return &"barrel"
 	var held := Game.armament(Game.HAND_RIGHT)
 	if not AIMED.has(held):
 		return &""
@@ -230,6 +247,57 @@ func aim_item() -> StringName:
 	if held == &"burst":
 		return &"burst" if _burst_ready else &""
 	return &"hookshot" if _hook_ready or _hook_active else &""
+
+
+func has_carried_barrel() -> bool:
+	return _carried_barrel != null and is_instance_valid(_carried_barrel) \
+		and _carried_barrel.is_carried_by(_hero)
+
+
+## Called only by an ExplosiveBarrel's ordinary Prompt activation. One carried
+## prop sits above the armament ring without entering or mutating it.
+func take_barrel(barrel: ExplosiveBarrel) -> bool:
+	if barrel == null or not is_instance_valid(barrel):
+		return false
+	if _carried_barrel != null:
+		if has_carried_barrel():
+			return false
+		_lose_carried_barrel()
+	cancel_use()
+	if not barrel.begin_carry(_hero):
+		return false
+	_carried_barrel = barrel
+	barrel.fuse_started.connect(_on_carried_barrel_fused.bind(barrel),
+		CONNECT_ONE_SHOT)
+	barrel.tree_exiting.connect(_on_carried_barrel_exiting.bind(barrel),
+		CONNECT_ONE_SHOT)
+	if _hero.combat != null:
+		_hero.combat.set_presentation_hidden(true)
+	return true
+
+
+func _on_carried_barrel_fused(_duration: float,
+		barrel: ExplosiveBarrel) -> void:
+	if barrel == _carried_barrel:
+		_lose_carried_barrel()
+
+
+func _on_carried_barrel_exiting(barrel: ExplosiveBarrel) -> void:
+	if barrel == _carried_barrel:
+		_lose_carried_barrel()
+
+
+func _lose_carried_barrel() -> void:
+	if _carried_barrel == null:
+		return
+	_carried_barrel = null
+	_barrel_ready = false
+	_using = false
+	if lob_targeter != null:
+		lob_targeter.hide_target()
+	if _hero != null and _hero.combat != null:
+		_hero.combat.set_presentation_hidden(false)
+	_refresh_aiming()
 
 
 ## Recompute the stance from what is actually RAISED, and announce a change.
@@ -264,6 +332,8 @@ func _refresh_aiming() -> void:
 ## Nothing LEAVES here. That is `use_release`.
 func use_press(id: StringName) -> bool:
 	_using = true
+	if has_carried_barrel():
+		return _ready_barrel()
 	if _bow_t >= 0.0 or _hook_active or not (AIMED.has(id) or SELF_CAST.has(id)):
 		return false
 	# Rolling, swinging, in the air. Refused for the reasons a swing is refused,
@@ -290,6 +360,10 @@ func use_press(id: StringName) -> bool:
 ## `_using` going false above is the whole of it.
 func use_release() -> void:
 	_using = false
+	if _barrel_ready:
+		_barrel_ready = false
+		_throw_barrel()
+		return
 	if _hook_ready:
 		_hook_ready = false
 		_fire_hookshot()
@@ -307,12 +381,41 @@ func cancel_use() -> void:
 	# A working put away unread costs nothing, exactly like an abandoned pull:
 	# the charge is spent at the CAST and nowhere else.
 	_burst_ready = false
+	_barrel_ready = false
 	if _bow_t >= 0.0 and not _bow_fired:
 		_bow_t = -1.0
+	if lob_targeter != null:
+		lob_targeter.hide_target()
 
 
 func busy() -> bool:
 	return _bow_t >= 0.0 or _hook_active
+
+
+func _ready_barrel() -> bool:
+	if _barrel_ready or _hero.state != Hero.MoveState.GROUND \
+		or not _hero.is_on_floor():
+		return false
+	_barrel_ready = true
+	Bus.request_sfx.emit(&"hookshot_load", _hero.global_position)
+	return true
+
+
+func _throw_barrel() -> bool:
+	if not has_carried_barrel():
+		_lose_carried_barrel()
+		return false
+	var barrel := _carried_barrel
+	var dir := _aim_at_target_or_camera(&"barrel")
+	if not _hero.request_cast(K.BURST_CAST_TIME, dir):
+		return false
+	# `throw_from` starts the fuse synchronously; that signal clears the carried
+	# reference and restores the exact presentation this pickup hid.
+	var origin := barrel.global_position
+	if not barrel.throw_from(origin, dir * K.BURST_THROW_SPEED):
+		return false
+	Bus.request_sfx.emit(&"crossbow_shoot", _hero.global_position)
+	return true
 
 
 # --- The bow ----------------------------------------------------------------
@@ -607,6 +710,8 @@ func _cast_ballast() -> bool:
 func _physics_process(delta: float) -> void:
 	if _hero == null:
 		return
+	if _carried_barrel != null and not has_carried_barrel():
+		_lose_carried_barrel()
 	_tick_bow(delta)
 	_tick_hook(delta)
 	# Knocked out of the read, or the working left his hand mid-hold. Put it away
@@ -614,6 +719,9 @@ func _physics_process(delta: float) -> void:
 	# the player did not aim, and this one hurts him too.
 	if _burst_ready and not _can_hold(&"burst"):
 		_burst_ready = false
+	if _barrel_ready and not _can_hold(&"barrel"):
+		_barrel_ready = false
+	_update_lob_targeter()
 	# POLLED, at the end, after both items have had their say. The raised state
 	# ends in half a dozen places — the seam, the follow-through running out, a
 	# roll or a hit taking the pose away, `cancel_use` from the shop — and a
@@ -633,8 +741,28 @@ func _physics_process(delta: float) -> void:
 ## automatic either: it costs a new press, so a trigger still held down when he
 ## gets back up does not fire a shot the player has stopped asking for.
 func _can_hold(id: StringName) -> bool:
+	if id == &"barrel":
+		return has_carried_barrel() and _hero.state == Hero.MoveState.GROUND
 	return Game.armament(Game.HAND_RIGHT) == id \
 		and _hero.state == Hero.MoveState.GROUND
+
+
+func _update_lob_targeter() -> void:
+	if lob_targeter == null:
+		return
+	var space := get_world_3d().direct_space_state
+	if _barrel_ready and has_carried_barrel():
+		var barrel_dir := _aim_at_target_or_camera(&"barrel")
+		lob_targeter.predict_barrel(space, _carried_barrel.flight_centre(),
+			barrel_dir * K.BURST_THROW_SPEED, _carried_barrel.flight_exclusions())
+		return
+	if _burst_ready:
+		var exclusions: Array[RID] = [_hero.get_rid()]
+		var burst_dir := _aim_at_target_or_camera(&"burst")
+		lob_targeter.predict_burst(space, _muzzle(&"burst"),
+			burst_dir * K.BURST_THROW_SPEED, exclusions)
+		return
+	lob_targeter.hide_target()
 
 
 func _tick_bow(delta: float) -> void:
@@ -732,6 +860,8 @@ func _tick_hook(delta: float) -> void:
 ## eye line otherwise, which is what a director rendering a bare hero gets.
 func _muzzle(id: StringName) -> Vector3:
 	var model: Node3D = null
+	if id == &"barrel" and has_carried_barrel():
+		return _carried_barrel.flight_centre()
 	# The working has NO model — he casts it out of an empty hand — so it takes
 	# the fallback below deliberately rather than by accident. Written as an
 	# early return because the line beneath it is an either/or between two real

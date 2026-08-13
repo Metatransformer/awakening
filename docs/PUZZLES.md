@@ -612,8 +612,8 @@ floors can put the same final reward behind their higher-tier verbs.
 - **Shape:** nest or sequence. This is where two atoms get combined.
 
 **Nothing here is on the critical path**, so a floor is always completable
-without it, and GDD §5.1's *"walking into the Cistern, filling twelve slots and
-roping out is a complete, correct, profitable run"* survives intact.
+without it, and GDD §5.1's *"walking into the Cistern, filling the starting bag
+and roping out is a complete, correct, profitable run"* survives intact.
 
 
 ### 5.2a The gate room's prefabs
@@ -796,8 +796,9 @@ remainder of the descent, and the favor ends when the run does.
 | Play the floor — the treasure puzzle | **+1** |
 
 **Minimum one per floor, maximum two.** Four to eight across Act I, each one a
-slot, against a bag of twelve. A player who accepts every blessing walks deeper
-with more power and less room for anything worth selling. That is the decision.
+slot, against a finite starting bag. A player who accepts every blessing walks
+deeper with more power and less room for anything worth selling. That is the
+decision.
 
 **Every shrine is a choice of three from a court of six.** The same six votive
 figures stand at every site. Three light from the run RNG and each offers one of

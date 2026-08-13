@@ -37,9 +37,9 @@ extends Control
 ##
 ## **This file does not choose a line and does not play a sound.** `DialogueDb`
 ## owns the words, `Voice` owns the mouth, and the caller hands over the pages
-## already resolved (`DialogueDb.speak`). The box is a presenter -- which is what
-## lets the same box carry the arrival beat, a counter's greeting and a farewell
-## with no branch in it.
+## already resolved (`DialogueDb.speak`). The box is a presenter: it invokes the
+## caller's lifecycle behavior, then presents whatever pages that returns. That
+## is what lets the same box carry an arrival beat, a greeting and a farewell.
 ##
 ## Input is POLLED, not event-driven, for `TradeScreen._tick_input`'s reason: the
 ## capture harness drives the game with `Input.action_press`, which sets action
@@ -130,6 +130,8 @@ var _picked: bool = false
 var _age: float = 0.0
 ## Fired once, when the opening pages have all been turned. See `open`.
 var _on_read: Callable = Callable()
+## Invoked once by Cancel so the caller can resolve its closing pages. See `open`.
+var _on_cancel: Callable = Callable()
 var _read_acked: bool = false
 
 var _panel: PanelContainer
@@ -179,12 +181,17 @@ var _caret: Label
 ## half way through Aldric's briefing has not been briefed, and should get it
 ## again next time they say hello.
 ##
+## `on_cancel` is caller-provided lifecycle behavior. The first Cancel invokes it
+## once and presents any pages it returns; a second Cancel closes that result.
+## Without it, Cancel closes immediately.
+##
 ## Returns null for an empty `pages`, and that is not an error -- it is a speaker
 ## with nothing written for this cue, and an empty box is a UI that appeared in
 ## order to say nothing. Callers should treat null as "they had nothing to say".
 static func open(host: Node, who: StringName, pages: PackedStringArray,
-		choices: Array = [], on_read: Callable = Callable()) -> DialogueBox:
-	return _stage(host, who, pages, [], choices, on_read)
+		choices: Array = [], on_read: Callable = Callable(),
+		on_cancel: Callable = Callable()) -> DialogueBox:
+	return _stage(host, who, pages, [], choices, on_read, on_cancel)
 
 
 ## A conversation with more than one person in it.
@@ -218,7 +225,7 @@ static func open_scene(host: Node, lines: Array) -> DialogueBox:
 		voices.append(who)
 	if pages.is_empty():
 		return null
-	return _stage(host, voices[0], pages, voices, [], Callable())
+	return _stage(host, voices[0], pages, voices, [], Callable(), Callable())
 
 
 ## Build it, fill it, put it on screen. One place, because everything below
@@ -229,7 +236,7 @@ static func open_scene(host: Node, lines: Array) -> DialogueBox:
 ## `box.speaker` and only listens for the CHANGES.
 static func _stage(host: Node, who: StringName, pages: PackedStringArray,
 		voices: Array[StringName], choices: Array,
-		on_read: Callable) -> DialogueBox:
+		on_read: Callable, on_cancel: Callable) -> DialogueBox:
 	var layer := CanvasLayer.new()
 	layer.name = "DialogueLayer"
 	layer.layer = LAYER
@@ -239,6 +246,7 @@ static func _stage(host: Node, who: StringName, pages: PackedStringArray,
 	box._voices = voices
 	box._choices = choices
 	box._on_read = on_read
+	box._on_cancel = on_cancel
 	layer.add_child(box)
 	host.get_tree().current_scene.add_child(layer)
 	return box
@@ -483,6 +491,7 @@ func _take(i: int) -> void:
 	# walk through.
 	if not bool((_choices[i] as Dictionary).get("keep", false)):
 		_choices = []
+		_on_cancel = Callable()
 	_say(next)
 
 
@@ -519,14 +528,27 @@ func _tick_input(delta: float) -> void:
 	if _closing:
 		return
 
-	# Cancel ENDS IT, wherever you are. Not "pick Leave" -- the farewell is what
-	# you get for choosing to say goodbye, and this is the button for a player who
-	# has decided the conversation is over.
+	# Cancel invokes caller-provided closing behavior once. Generic boxes provide
+	# none and still close immediately; a result stays up until the next Cancel.
 	var cancel := Input.is_action_pressed(&"ui_cancel") or Input.is_action_pressed(&"pause")
 	if not cancel:
 		_armed_cancel = true
 	elif _armed_cancel:
 		_armed_cancel = false
+		if _on_cancel.is_valid():
+			var callback: Callable = _on_cancel
+			_on_cancel = Callable()
+			_on_read = Callable()
+			_choices = []
+			var said: Variant = callback.call()
+			var next := PackedStringArray()
+			if said is PackedStringArray:
+				next = said
+			elif said is Array:
+				next = PackedStringArray(said)
+			if not next.is_empty():
+				_say(next)
+				return
 		close()
 		return
 

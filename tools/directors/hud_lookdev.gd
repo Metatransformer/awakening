@@ -242,16 +242,15 @@ func run(rig) -> void:
 	# GOLD halo one ring outboard of the rim, in `Hud._draw_rim`.)
 	#
 	# **The setup used to be `Game.bag_slots = 20` and 42 Deep Amber**, because a
-	# T3 of 3000 could not be reached any other way — and 20 slots is not a save a
-	# player can have (`SupplyDb.LIMITS[&"bag_slot"]` is 4 over a start of 12, so 16
-	# is the ceiling). Card #49 moved `Pal.T3` to 2000 against the measured curve
+	# T3 of 3000 could not be reached any other way — and 20 slots exceeded the
+	# old 12 + 4 ceiling. The current 17 + 4 ceiling is 21. Card #49 moved `Pal.T3`
+	# to 2000 against the measured curve
 	# in `docs/METAGAME.md` §3.1, and this is what the beat costs now: **the
-	# default twelve slots, and a bag a real run reaches.**
+	# default seventeen slots, and a bag a real run reaches.**
 	#
-	# 2264 is deliberately not a round number. It is the MEDIAN bag a careful
-	# 12-slot run is holding at the foot of floor 4 (§3.1's table says 2239), so
-	# the frame photographs the state at the moment it is typically true rather
-	# than at some ceiling — which is the whole complaint #49 was filed about.
+	# 2264 is deliberately not a round number. It is card #49's measured 12-slot
+	# reference bag, retained as a fixed T3 input; the assertion below now proves
+	# that same state fits inside the larger starting bag without an upgrade.
 	Game.add_gold(5000)
 	Run.collect(&"ghost_silk", 6)
 	Run.collect(&"ember_gland", 5)
@@ -281,14 +280,13 @@ func run(rig) -> void:
 	await rig.wait_frames(60)
 	await _shot(rig, out.path_join("h_09_t3_phase.png"), "h_09_t3_phase")
 
-	# 7b². The slot-mark row at the BIGGEST BAG THAT CAN EXIST — 12 start plus the
-	#      smith's four (`ShopDb.LIMITS`). This is decision 26's claim that the row
-	#      is read from `Run` rather than hard-coded at twelve, and until #49 it
-	#      rode along on the T3 setup's `bag_slots = 20`: a number no save can
-	#      hold, checking a rule at a value the rule never has to serve. It gets
-	#      its own frame and the real ceiling now. Sixteen marks, ten lit — the
+	# 7b². The slot-mark row at the BIGGEST BAG THAT CAN EXIST — 17 start plus the
+	#      quartermaster's four (`SupplyDb.LIMITS`). This is decision 26's claim
+	#      that the row is read from `Run` rather than hard-coded at the old twelve-
+	#      cell baseline. Its old `bag_slots = 20` setup no longer reaches the real
+	#      ceiling, so it gets its own frame at twenty-one marks, ten lit — the
 	#      same bag as the frame above, in a bag that has been paid for.
-	Game.bag_slots = 16
+	Game.bag_slots = K.START_BAG_SLOTS + int(SupplyDb.LIMITS[&"bag_slot"])
 	Bus.bag_changed.emit(Run.bag, Run.bag_value())
 	await rig.wait_frames(6)
 	await _shot(rig, out.path_join("h_09c_slots.png"), "h_09c_slots")

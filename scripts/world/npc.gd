@@ -154,7 +154,7 @@ static var COUNTERS := {
 		],
 	},
 	Role.BUILDER: {
-		"sign": "BUILDER", "prompt": "TALK", "hold": 0.0,
+		"sign": "BUILDER", "prompt": "TALK", "hold": 0.0, "voice": &"builder",
 		"counters": [
 			{"title": "THE WORKS BOARD", "label": "Defences", "icon": "upgrade",
 				"mode": TradeScreen.Mode.PROGRESSION, "db": BuilderDb},
@@ -382,6 +382,15 @@ func has_affordable_progression() -> bool:
 
 func refresh_attention_marker() -> void:
 	if attention_marker != null:
+		if not enabled:
+			attention_marker.visible = false
+			return
+		var quest_symbol: String = QuestDb.marker_for_npc(voice_id())
+		if not quest_symbol.is_empty():
+			attention_marker.set_symbol(quest_symbol)
+			attention_marker.visible = true
+			return
+		attention_marker.set_symbol("!")
 		attention_marker.visible = has_affordable_progression()
 
 
@@ -428,27 +437,20 @@ func activate(_by: Node3D) -> void:
 	var row := _row()
 	var who := StringName(row.get("voice", &""))
 
-	# **The story first, and only then the greeting.** `StoryDb` holds an ordered
-	# list per person -- the briefing, a trader's arrival, the thing an old man
-	# will only tell you once you have earned it -- and `pending` hands back the
-	# first one that is due. It is WRITTEN, so nothing is played: these are lines
-	# nobody has been in a booth for, and `Voice`'s "a speaker with no take is
-	# silent" rule is what lets that be normal rather than a gap.
+	# **The greeting first, and then the story.** The mouth picks the take and
+	# `DialogueDb` reads the words off the take that is playing, so the elder's two
+	# greetings alternate in the ear and on the screen together. `StoryDb` then
+	# hands back the first beat that is due; its WRITTEN pages follow that hello.
 	#
-	# `on_read` and not a `mark_told` here: the flag belongs on the last page
-	# actually being turned. Escaping out of Aldric's nine-page briefing has to
-	# leave it owed, or the one conversation that explains the game is one stray
-	# press from being gone for the save.
+	# `on_read` and not a `mark_told` here: the flag belongs on the last STORY page
+	# actually being turned. Because the opening is hello plus story, escaping
+	# during either part leaves Aldric's briefing owed instead of making the one
+	# conversation that explains the game one stray press from gone for the save.
 	var beat := StoryDb.pending(who)
-	var pages: PackedStringArray
+	var pages := DialogueDb.speak(who, &"hello")
 	var on_read := Callable()
-	if beat.is_empty():
-		# The mouth picks the take and `DialogueDb` reads the words off the take
-		# that is playing, so the elder's two greetings alternate in the ear and on
-		# the screen together. See `DialogueDb.speak`.
-		pages = DialogueDb.speak(who, &"hello")
-	else:
-		pages = StoryDb.pages_of(beat)
+	if not beat.is_empty():
+		pages.append_array(StoryDb.pages_of(beat))
 		var beat_id := StringName(beat.get("id", &""))
 		on_read = func() -> void:
 			StoryDb.mark_told(who, beat_id)
@@ -461,7 +463,8 @@ func activate(_by: Node3D) -> void:
 		# worse than no box.
 		_choose_trade(who, _counters(row), 0)
 		return
-	DialogueBox.open(self, who, pages, _options(who, row), on_read)
+	DialogueBox.open(self, who, pages, _options(who, row), on_read,
+		_choose_leave.bind(who))
 
 
 ## The screens this person will open, in order. Never null.
@@ -471,18 +474,20 @@ func _counters(row: Dictionary) -> Array:
 
 ## What the conversation offers when the line is finished.
 ##
-## Three kinds of row and they are in the order a player wants them:
+## Five kinds of row and they are in the order a player wants them:
 ##
-##   1. **Services**, one row per counter this person keeps -- the thing you walked
+##   1. **Ready quests**, with the authored turn-in waiting behind the choice.
+##   2. **Available quests**, accepted explicitly by choosing their title.
+##   3. **Services**, one row per counter this person keeps -- the thing you walked
 ##      over here for. Absent for anybody with none (there is nobody today; the
 ##      elder was the last, `COUNTERS`), which still leaves a box you can say
 ##      goodbye to rather than only walk away from.
-##   2. **Topics** (`StoryDb.topics`) -- the questions this person will answer
+##   4. **Topics** (`StoryDb.topics`) -- the questions this person will answer
 ##      today. They are `keep` rows, so asking one puts the list straight back up;
 ##      see `DialogueBox.open`. What is in the list grows as the save does, which
 ##      is the whole tree: the same man has more to say about Deryn after he has
 ##      told you Deryn's name.
-##   3. **Leave**, always last.
+##   5. **Leave**, always last.
 ##
 ## Service rows carry a distinct action glyph and a chevron because they leave
 ## dialogue for a full-screen service. Topics carry READ plus a Dialogue meta;
@@ -492,6 +497,22 @@ func _counters(row: Dictionary) -> Array:
 ## promotion off, and says why.
 func _options(who: StringName, row: Dictionary) -> Array:
 	var out: Array = []
+	for quest_id: StringName in QuestDb.ready_for_npc(who):
+		var ready_quest: QuestDef = QuestDb.get_def(quest_id)
+		if ready_quest != null:
+			out.append({
+				"label": ready_quest.title,
+				"meta": "Turn in",
+				"act": _choose_quest_turn_in.bind(quest_id),
+			})
+	for quest_id: StringName in QuestDb.offered_for_npc(who):
+		var offered_quest: QuestDef = QuestDb.get_def(quest_id)
+		if offered_quest != null:
+			out.append({
+				"label": offered_quest.title,
+				"meta": "New quest",
+				"act": _choose_quest_offer.bind(quest_id),
+			})
 	var counters := _counters(row)
 	if _services_open:
 		for i in counters.size():
@@ -515,6 +536,20 @@ func _options(who: StringName, row: Dictionary) -> Array:
 	return out
 
 
+func _choose_quest_turn_in(quest_id: StringName) -> PackedStringArray:
+	var quest: QuestDef = QuestDb.get_def(quest_id)
+	if quest == null or not Game.quest_turn_in(quest_id):
+		return PackedStringArray()
+	return quest.turn_in_pages
+
+
+func _choose_quest_offer(quest_id: StringName) -> PackedStringArray:
+	var quest: QuestDef = QuestDb.get_def(quest_id)
+	if quest == null or not Game.quest_accept(quest_id):
+		return PackedStringArray()
+	return quest.offer_pages
+
+
 ## One screen, pointed. See `Catalogue` for why there is not a second one.
 ##
 ## Returns nothing to say, which `DialogueBox` reads as "the conversation is
@@ -533,9 +568,11 @@ func _choose_trade(who: StringName, counters: Array, i: int) -> PackedStringArra
 
 
 ## Goodbye, said out loud and written down, and then the box closes on the next
-## press. The same `farewell` cue the trade screen says on its way out -- one cue,
-## two doors out of the same conversation.
+## press. Stop first because the elder's farewell is written-only: otherwise a
+## still-playing hello makes `DialogueDb.pages` resolve that take instead of
+## falling through to `WRITTEN`. The trade screen uses the same `farewell` cue.
 func _choose_leave(who: StringName) -> PackedStringArray:
+	Voice.stop()
 	return DialogueDb.speak(who, &"farewell")
 
 
@@ -695,6 +732,8 @@ func _connect_attention_signals() -> void:
 	Bus.doctrine_purchased.connect(
 		func(_id: StringName, _balance: int) -> void: refresh_attention_marker())
 	Game.garrison_changed.connect(refresh_attention_marker)
+	Game.quests_changed.connect(
+		func(_quest_id: StringName) -> void: refresh_attention_marker())
 
 
 ## A person, their shop, and the lamp they work by.

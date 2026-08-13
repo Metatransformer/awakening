@@ -5,6 +5,8 @@ extends RefCounted
 ## stable room facts and never touches the generator's RNG, collision, or layout.
 
 const WALL_TEXTURE: Texture2D = preload(
+	"res://assets/valenfeld/cistern/Textures/cistern_wall_soft.png")
+const STRUCTURE_TEXTURE: Texture2D = preload(
 	"res://assets/valenfeld/cistern/Textures/cistern_wall.png")
 const FLOOR_TEXTURE: Texture2D = preload(
 	"res://assets/valenfeld/cistern/Textures/cistern_floor.png")
@@ -83,7 +85,7 @@ static func _retint_atmosphere(dungeon: Node3D, tint: Dictionary) -> void:
 		# local keys instead of becoming a full-screen colour grade.
 		environment.volumetric_fog_albedo = Color(
 			air.r * 2.8, air.g * 2.8, air.b * 2.8, 1.0)
-		environment.adjustment_brightness = 1.04
+		environment.adjustment_brightness = 1.06
 		environment.adjustment_contrast = 1.08
 		environment.adjustment_saturation = 1.0
 		environment.ssao_enabled = false
@@ -106,9 +108,11 @@ static func _retint_kit(dungeon: Node3D, tint: Dictionary,
 		materials: Dictionary) -> void:
 	var stone: Color = tint.get("stone", Color.WHITE)
 	var wall_material: StandardMaterial3D = materials[&"wall"]
+	var structure_material: StandardMaterial3D = materials[&"structure"]
 	var floor_material: StandardMaterial3D = materials[&"floor"]
 	var ceiling_material: StandardMaterial3D = materials[&"ceiling"]
 	wall_material.albedo_color *= stone
+	structure_material.albedo_color *= stone
 	floor_material.albedo_color *= stone
 	ceiling_material.albedo_color *= stone
 
@@ -116,9 +120,9 @@ static func _retint_kit(dungeon: Node3D, tint: Dictionary,
 		if node is KitWall:
 			(node as KitWall).material = materials[&"wall"]
 		elif node is KitDoorway:
-			(node as KitDoorway).material = materials[&"wall"]
+			(node as KitDoorway).material = materials[&"structure"]
 		elif node is KitPillar:
-			(node as KitPillar).material = materials[&"wall"]
+			(node as KitPillar).material = materials[&"structure"]
 		elif node is KitSlab:
 			var slab := node as KitSlab
 			slab.edge_material = materials[&"wall"]
@@ -149,6 +153,8 @@ static func _make_materials() -> Dictionary:
 	var materials: Dictionary = {}
 	materials[&"wall"] = _material(WALL_TEXTURE,
 		Color(0.95, 1.08, 1.20), true, WALL_UV_SCALE)
+	materials[&"structure"] = _material(STRUCTURE_TEXTURE,
+		Color(0.95, 1.08, 1.20), true, WALL_UV_SCALE)
 	materials[&"floor"] = _material(FLOOR_TEXTURE,
 		Color(0.52, 0.62, 0.64), true, FLOOR_UV_SCALE)
 	materials[&"ceiling"] = _material(WALL_TEXTURE,
@@ -156,11 +162,17 @@ static func _make_materials() -> Dictionary:
 	materials[&"moss"] = _material(MOSS_TEXTURE,
 		Color(0.30, 0.38, 0.36), true, WALL_UV_SCALE)
 	materials[&"water"] = _material(WATER_TEXTURE,
-		Color(0.18, 0.26, 0.29), false, PROP_UV_SCALE)
+		Color(0.34, 0.48, 0.52), false, PROP_UV_SCALE)
 	materials[&"bronze"] = _material(null,
-		Color(0.32, 0.22, 0.13), false, PROP_UV_SCALE)
+		Color(0.15, 0.12, 0.095), false, PROP_UV_SCALE)
+	materials[&"bronze_wear"] = _material(null,
+		Color(0.29, 0.23, 0.15), false, PROP_UV_SCALE)
 	materials[&"verdigris"] = _material(null,
 		Color(0.13, 0.20, 0.18), false, PROP_UV_SCALE)
+	materials[&"mineral"] = _material(null,
+		Color(0.44, 0.50, 0.47), false, PROP_UV_SCALE)
+	materials[&"drain_metal"] = _material(null,
+		Color(0.38, 0.36, 0.30), false, PROP_UV_SCALE)
 	materials[&"recess"] = _material(null,
 		Color(0.035, 0.050, 0.060), false, PROP_UV_SCALE)
 	materials[&"source_cache"] = {}
@@ -221,6 +233,8 @@ static func _dress_rooms(dungeon: Node3D, look: Node3D, rooms: Dictionary,
 		var index := int(room["index"])
 		var side: StringName = _quiet_side(cell, room)
 		var lateral := _bay_offset(cell, room, side)
+		var full_frame: bool = index == 0 or cell == deepest_cell \
+			or (gate_cell != null and cell == gate_cell)
 		if gate_cell != null and cell == gate_cell:
 			# Gate prefabs own the room centre. Wrap the hydraulic frame onto the
 			# adjoining wall and tuck it into the quiet corner so both silhouettes
@@ -228,8 +242,8 @@ static func _dress_rooms(dungeon: Node3D, look: Node3D, rooms: Dictionary,
 			var gate_corner := _gate_corner(room, side)
 			side = gate_corner[&"side"]
 			lateral = gate_corner[&"lateral"]
-		var full_frame: bool = index == 0 or cell == deepest_cell \
-			or (gate_cell != null and cell == gate_cell)
+		elif not full_frame and float(room.get("size", 16.0)) >= 24.0:
+			lateral = _ordinary_route_corner(room, side)
 		_build_bay(look, cell, room, side, lateral, full_frame, materials)
 
 
@@ -255,7 +269,7 @@ static func _gate_corner(room: Dictionary, quiet_side: StringName) -> Dictionary
 		&"n":
 			return {&"side": &"e", &"lateral": -edge}
 		&"s":
-			return {&"side": &"e", &"lateral": edge}
+			return {&"side": &"e", &"lateral": -edge}
 		&"e":
 			return {&"side": &"n", &"lateral": edge}
 		_:
@@ -274,6 +288,25 @@ static func _bay_offset(cell: Vector2i, room: Dictionary,
 	var sign_value := -1.0 if posmod(cell.x + cell.y + int(room["index"]), 2) == 0 \
 		else 1.0
 	return sign_value * maxf(size * 0.5 - 3.1, 2.8)
+
+
+static func _ordinary_route_corner(room: Dictionary, side: StringName) -> float:
+	var size := float(room.get("size", 16.0))
+	var edge := maxf(size * 0.5 - 3.1, 2.8)
+	var yaw := float(_wall(size, side)["yaw"])
+	var along := Vector3(cos(yaw), 0.0, -sin(yaw))
+	var strongest := 0.0
+	for door: StringName in room.get("doors", []):
+		var toward := Vector3.ZERO
+		match door:
+			&"n": toward = Vector3(0.0, 0.0, -1.0)
+			&"s": toward = Vector3(0.0, 0.0, 1.0)
+			&"w": toward = Vector3(-1.0, 0.0, 0.0)
+			_: toward = Vector3(1.0, 0.0, 0.0)
+		var alignment := along.dot(toward)
+		if absf(alignment) > absf(strongest):
+			strongest = alignment
+	return signf(strongest) * edge if not is_zero_approx(strongest) else 0.0
 
 
 static func _build_bay(look: Node3D, cell: Vector2i, room: Dictionary,
@@ -310,9 +343,9 @@ static func _build_bay(look: Node3D, cell: Vector2i, room: Dictionary,
 	_box(bay, &"MineralStain", Vector3(5.6, 0.82, 0.06),
 		Vector3(0.0, 0.52, -0.39), materials[&"moss"])
 	_chipped_lip(bay, "WallLip", -0.12, int(room["index"]), 0,
-		materials[&"wall"])
+		materials[&"structure"])
 	_chipped_lip(bay, "WalkLip", 1.03, int(room["index"]), 1,
-		materials[&"wall"])
+		materials[&"structure"])
 
 	var water := WATER_SCENE.instantiate() as Node3D
 	if water != null:
@@ -334,7 +367,7 @@ static func _damp_course(room_look: Node3D, room_position: Vector3,
 	course.name = &"DampCourse"
 	room_look.add_child(course)
 	var doorway_gap := 3.4
-	var segment_length := (room_size - doorway_gap) * 0.5 - 0.15
+	var half_length := (room_size - doorway_gap) * 0.5 - 0.15
 	for side_index: int in CARDINALS.size():
 		var side: StringName = CARDINALS[side_index]
 		var wall: Dictionary = _wall(room_size, side)
@@ -345,16 +378,37 @@ static func _damp_course(room_look: Node3D, room_position: Vector3,
 		side_course.position = room_position + (wall["at"] as Vector3) + inward * 0.08
 		side_course.rotation.y = yaw
 		course.add_child(side_course)
-		for segment: int in 2:
-			var height_step := posmod(room_index * 3 + side_index * 2 + segment, 4)
-			var base_step := posmod(room_index + side_index * 2 + segment, 3)
-			var height := 0.70 + float(height_step) * 0.10
-			var base := 0.02 + float(base_step) * 0.035
-			var direction := -1.0 if segment == 0 else 1.0
-			var x := direction * (doorway_gap * 0.5 + segment_length * 0.5)
-			_box(side_course, StringName("DampSegment_%d" % segment),
-				Vector3(segment_length, height, 0.08), Vector3(x, base + height * 0.5, 0.0),
-				material)
+		for half_index: int in 2:
+			var direction := -1.0 if half_index == 0 else 1.0
+			var gap_a := 0.10 + float(posmod(room_index + side_index + half_index, 3)) * 0.025
+			var gap_b := 0.10 + float(posmod(room_index * 2 + side_index + half_index, 3)) * 0.025
+			var usable_length := half_length - gap_a - gap_b
+			var base_length := usable_length / 3.0
+			var length_bias := float(posmod(room_index + side_index * 2 + half_index, 3) - 1) * 0.16
+			var cursor := doorway_gap * 0.5
+			for segment: int in 3:
+				var length := base_length
+				if segment == 0:
+					length += length_bias
+				elif segment == 1:
+					length -= length_bias * 0.35
+				else:
+					length -= length_bias * 0.65
+				var seed := room_index * 17 + side_index * 7 + half_index * 3 + segment * 5
+				var height := 0.54 + float(posmod(seed, 6)) * 0.095
+				var base := 0.015 + float(posmod(seed + 2, 4)) * 0.028
+				var depth := 0.07 + float(posmod(seed + 1, 3)) * 0.012
+				var x := direction * (cursor + length * 0.5)
+				var z := float(posmod(seed, 3) - 1) * 0.012
+				_box(side_course,
+					StringName("DampSegment_%d_%d" % [half_index, segment]),
+					Vector3(length, height, depth),
+					Vector3(x, base + height * 0.5, z), material)
+				cursor += length
+				if segment == 0:
+					cursor += gap_a
+				elif segment == 1:
+					cursor += gap_b
 
 
 static func _chipped_lip(bay: Node3D, prefix: String, z: float,
@@ -392,25 +446,34 @@ static func _overflow_frame(bay: Node3D, room_index: int,
 		column.name = &"OverflowPier"
 		column.position = Vector3(x, 0.0, 0.40)
 		column.scale = Vector3.ONE * 3.4
-		_sanitize_import(column, materials[&"wall"], materials)
+		_sanitize_import(column, materials[&"structure"], materials)
 		frame.add_child(column)
 		var suffix := "L" if x < 0.0 else "R"
 		_box(frame, StringName("OverflowFoot_%s" % suffix),
 			Vector3(0.98, 0.34, 0.86), Vector3(x, 0.17, 0.40),
-			materials[&"wall"])
+			materials[&"structure"])
 		_box(frame, StringName("OverflowCap_%s" % suffix),
 			Vector3(0.92, 0.28, 0.80), Vector3(x, 2.88, 0.40),
-			materials[&"wall"])
+			materials[&"structure"])
 	var lintel := _box(frame, &"BronzeLintel", Vector3(5.05, 0.52, 0.62),
 		Vector3(0.0, 3.18, 0.14), materials[&"bronze"])
+	# The beam is assembled around the stone caps, not painted across them. Dark
+	# bronze carries the mass; small collars and a worn lower edge expose the load.
+	for joint_x: float in [-1.42, 1.42]:
+		_box(frame, &"LintelJoint", Vector3(0.16, 0.60, 0.68),
+			Vector3(joint_x, 3.18, 0.14), materials[&"bronze_wear"])
+	_box(frame, &"LintelWearEdge", Vector3(4.35, 0.055, 0.66),
+		Vector3(0.0, 2.91, 0.14), materials[&"bronze_wear"])
 	if room_index != 0:
-		lintel.rotation.z = (-0.045 if room_index % 2 == 0 else 0.045)
-		_box(frame, &"StrippedLintelPatch", Vector3(0.82, 0.08, 0.64),
-			Vector3(-1.58 if room_index % 2 == 0 else 1.58, 3.45, 0.14),
+		var condition_sign := -1.0 if room_index % 2 == 0 else 1.0
+		lintel.rotation.z = condition_sign * 0.065
+		_box(frame, &"StrippedLintelPatch", Vector3(0.46, 0.07, 0.34),
+			Vector3(condition_sign * 1.62, 3.45, 0.14),
 			materials[&"verdigris"])
+		var brace := _box(frame, &"BentHoistBrace", Vector3(0.10, 0.62, 0.12),
+			Vector3(condition_sign * 0.32, 2.87, 0.43), materials[&"bronze"])
+		brace.rotation.z = condition_sign * 0.22
 
-	var chain := _box(frame, &"HoistChain", Vector3(0.07, 1.50, 0.07),
-		Vector3(0.0, 2.30, 0.43), materials[&"bronze"])
 	var hoist := HOIST_SCENE.instantiate() as Node3D
 	if hoist != null:
 		hoist.name = &"OverflowHoist"
@@ -418,23 +481,48 @@ static func _overflow_frame(bay: Node3D, room_index: int,
 		hoist.scale = Vector3.ONE * 2.20
 		_sanitize_import(hoist, null, materials)
 		frame.add_child(hoist)
-	_overflow_bucket(chain, room_index, materials)
+	var pulley := MeshInstance3D.new()
+	pulley.name = &"OverflowPulley"
+	var pulley_mesh := TorusMesh.new()
+	pulley_mesh.inner_radius = 0.14
+	pulley_mesh.outer_radius = 0.25
+	pulley_mesh.rings = 8
+	pulley_mesh.ring_segments = 6
+	pulley.mesh = pulley_mesh
+	pulley.position = Vector3(0.0, 3.03, 0.47)
+	pulley.rotation.x = PI * 0.5
+	pulley.material_override = materials[&"bronze_wear"]
+	pulley.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	frame.add_child(pulley)
+	_box(frame, &"HoistRopeLead", Vector3(1.16, 0.055, 0.055),
+		Vector3(-0.58, 3.03, 0.47), materials[&"bronze"])
+	var grip_position := _overflow_bucket(frame, room_index, materials)
+	var chain_top := Vector3(0.0, 3.04, 0.43)
+	var chain_delta := chain_top - grip_position
+	var chain := _box(frame, &"HoistChain",
+		Vector3(0.07, chain_delta.length(), 0.07),
+		(grip_position + chain_top) * 0.5, materials[&"bronze"])
+	chain.rotation.z = -atan2(chain_delta.x, chain_delta.y)
 
 
-static func _overflow_bucket(chain: Node3D, room_index: int,
-		materials: Dictionary) -> void:
+static func _overflow_bucket(frame: Node3D, room_index: int,
+		materials: Dictionary) -> Vector3:
 	var bucket := Node3D.new()
 	bucket.name = &"OverflowBucket"
-	var bucket_drop := -0.82 if room_index == 0 else -1.34
-	bucket.position = Vector3(0.0, bucket_drop, 0.05)
-	chain.add_child(bucket)
+	var bucket_height := 1.45 if room_index == 0 \
+		else 0.54 + float(posmod(room_index, 2)) * 0.10
+	var bucket_tilt := 0.0 if room_index == 0 \
+		else (-0.075 if room_index % 2 == 0 else 0.075)
+	bucket.position = Vector3(0.0, bucket_height, 0.43)
+	bucket.rotation.z = bucket_tilt
+	frame.add_child(bucket)
 
 	var basin := MeshInstance3D.new()
 	basin.name = &"BucketBasin"
 	var basin_mesh := CylinderMesh.new()
-	basin_mesh.top_radius = 0.42
-	basin_mesh.bottom_radius = 0.29
-	basin_mesh.height = 0.68
+	basin_mesh.top_radius = 0.38
+	basin_mesh.bottom_radius = 0.27
+	basin_mesh.height = 0.58
 	basin_mesh.radial_segments = 6
 	basin_mesh.cap_top = false
 	basin.mesh = basin_mesh
@@ -445,34 +533,43 @@ static func _overflow_bucket(chain: Node3D, room_index: int,
 	var interior := MeshInstance3D.new()
 	interior.name = &"BucketInterior"
 	var interior_mesh := CylinderMesh.new()
-	interior_mesh.top_radius = 0.34
-	interior_mesh.bottom_radius = 0.34
+	interior_mesh.top_radius = 0.31
+	interior_mesh.bottom_radius = 0.31
 	interior_mesh.height = 0.035
 	interior_mesh.radial_segments = 6
 	interior.mesh = interior_mesh
-	interior.position.y = 0.285
+	interior.position.y = 0.245
 	interior.material_override = materials[&"recess"]
 	interior.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	bucket.add_child(interior)
 
 	for side: float in [-1.0, 1.0]:
-		_box(bucket, StringName("BucketBail_%s" % ("L" if side < 0.0 else "R")),
-			Vector3(0.055, 0.42, 0.055), Vector3(side * 0.33, 0.48, 0.0),
+		var bail := _box(bucket,
+			StringName("BucketBail_%s" % ("L" if side < 0.0 else "R")),
+			Vector3(0.052, 0.34, 0.052), Vector3(side * 0.285, 0.42, 0.0),
 			materials[&"bronze"])
-	_box(bucket, &"BucketBailGrip", Vector3(0.72, 0.06, 0.06),
-		Vector3(0.0, 0.69, 0.0), materials[&"bronze"])
+		bail.rotation.z = side * 0.13
+	_box(bucket, &"BucketBailGrip", Vector3(0.60, 0.055, 0.055),
+		Vector3(0.0, 0.59, 0.0), materials[&"bronze"])
 	var rim := MeshInstance3D.new()
-	rim.name = &"VerdigrisRim"
+	rim.name = &"BucketRim"
 	var rim_mesh := TorusMesh.new()
-	rim_mesh.inner_radius = 0.35
-	rim_mesh.outer_radius = 0.43
+	rim_mesh.inner_radius = 0.32
+	rim_mesh.outer_radius = 0.39
 	rim_mesh.rings = 6
 	rim_mesh.ring_segments = 4
 	rim.mesh = rim_mesh
-	rim.position.y = 0.30
-	rim.material_override = materials[&"verdigris"]
+	rim.position.y = 0.255
+	rim.material_override = materials[&"bronze"]
 	rim.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	bucket.add_child(rim)
+	for patch_index: int in 2:
+		_box(bucket, StringName("VerdigrisPatch_%d" % patch_index),
+			Vector3(0.11, 0.026, 0.045),
+			Vector3(-0.20 + float(patch_index) * 0.37, 0.273, 0.35),
+			materials[&"verdigris"])
+	return bucket.position + Vector3(
+		-sin(bucket_tilt) * 0.59, cos(bucket_tilt) * 0.59, 0.0)
 
 
 static func _ordinary_structure(bay: Node3D, index: int,
@@ -482,23 +579,32 @@ static func _ordinary_structure(bay: Node3D, index: int,
 	var drain_x := 0.72 if index % 2 == 0 else -0.72
 	drain.position.x = drain_x
 	bay.add_child(drain)
-	_box(drain, &"DrainRunoff", Vector3(1.18, 1.55, 0.055),
-		Vector3(0.0, 2.25, -0.385), materials[&"moss"])
-	_box(drain, &"DrainMouth", Vector3(2.62, 1.64, 0.08),
-		Vector3(0.0, 0.96, -0.34), materials[&"recess"])
-	_box(drain, &"DrainSpill", Vector3(0.82, 1.43, 0.06),
-		Vector3(0.0, 0.72, -0.27), materials[&"water"])
-	_box(drain, &"DrainLintel", Vector3(2.94, 0.22, 0.24),
-		Vector3(0.0, 1.86, -0.16), materials[&"bronze"])
-	for slat: int in 4:
-		_box(drain, StringName("DrainBar_%d" % slat), Vector3(0.085, 1.40, 0.10),
-			Vector3((float(slat) - 1.5) * 0.42, 0.96, -0.20), materials[&"bronze"])
+	_box(drain, &"DrainRunoff", Vector3(0.84, 1.62, 0.055),
+		Vector3(0.0, 2.49, -0.385), materials[&"moss"])
+	_box(drain, &"DrainWetTrail", Vector3(1.20, 1.94, 0.058),
+		Vector3(0.0, 2.55, -0.39), materials[&"mineral"])
+	_box(drain, &"DrainMouth", Vector3(2.22, 1.82, 0.08),
+		Vector3(0.0, 0.98, -0.34), materials[&"recess"])
+	_box(drain, &"DrainSpill", Vector3(0.82, 1.55, 0.06),
+		Vector3(0.0, 0.76, -0.27), materials[&"water"])
+	_box(drain, &"DrainApron", Vector3(0.86, 0.05, 0.92),
+		Vector3(0.0, 0.055, 0.08), materials[&"water"])
+	_box(drain, &"DrainLintel", Vector3(2.38, 0.24, 0.24),
+		Vector3(0.0, 1.94, -0.16), materials[&"drain_metal"])
+	for side: float in [-1.0, 1.0]:
+		_box(drain, StringName("DrainCheek_%s" % ("L" if side < 0.0 else "R")),
+			Vector3(0.26, 1.72, 0.24), Vector3(side * 1.06, 0.98, -0.16),
+			materials[&"structure"])
+	for slat: int in 3:
+		_box(drain, StringName("DrainBar_%d" % slat), Vector3(0.085, 1.44, 0.10),
+			Vector3((float(slat) - 1.0) * 0.36, 0.98, -0.20),
+			materials[&"drain_metal"])
 	if index % 2 == 0:
 		_box(bay, &"StructuralPier", Vector3(0.72, 2.15, 0.62),
-			Vector3(-2.05, 1.075, 0.10), materials[&"wall"])
+			Vector3(-2.05, 1.075, 0.10), materials[&"structure"])
 	else:
 		_box(bay, &"LintelFragment", Vector3(2.35, 0.42, 0.58),
-			Vector3(1.30, 2.25, 0.10), materials[&"wall"])
+			Vector3(1.30, 2.25, 0.10), materials[&"structure"])
 
 
 static func _dress_corridors(dungeon: Node3D, look: Node3D,

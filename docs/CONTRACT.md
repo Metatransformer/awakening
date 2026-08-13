@@ -261,7 +261,7 @@ These nine facts are the ones clones get wrong. Build to them:
 | Autoload | Script | Purpose |
 |---|---|---|
 | `Bus` | `scripts/autoload/event_bus.gd` | sideways peer→peer signals |
-| `Game` | `scripts/autoload/game_state.gd` | health points, magic, keys, items, flags |
+| `Game` | `scripts/autoload/game_state.gd` | campaign health, items, flags, garrison, and quest progress |
 | `Run` | `scripts/autoload/run_state.gd` | the current delve; **after `Game`** — it spends and grants gold |
 | `Heat` | `scripts/autoload/heat.gd` | the kill chain and what it is worth; **after `Game`** (it refunds stamina) and **after `Run`** (no chain outside the dungeon) |
 | `Settings` | `scripts/autoload/settings.gd` | volumes, video, binds, and their persistence |
@@ -1795,14 +1795,68 @@ Rules:
   `gear_forged(track, level)`.
 - New on the pause menu: `PauseMenu.Screen.POUCH`, `Root/Screens/PouchScreen`
   (`scripts/ui/menu/pouch_panel.gd`) — the tab reads **INVENTORY** since card
-  #120; the enum and the node keep their names. Its one verb is A on a cell, which moves
-  that stack across the document-case line and changes nothing about the item.
+  #120; the enum and the node keep their names. Activating an occupied cell
+  opens a local action card with context-sensitive **Pack/Unpack**, **Drop**, and
+  safe-default **Back**. Drop is never a footer action. It hands the selected
+  displayed stack to `PauseMenu`, which closes the menu and creates the ordinary
+  world pickup. Empty cells do not open the card, local Cancel returns focus to
+  the originating cell, and the focused grid cell uses the shared high-contrast
+  `MenuSlot` rim.
 - Also on the pause menu: `PauseMenu.Screen.GARRISON`,
   `Root/Screens/GarrisonScreen` (`scripts/ui/menu/garrison_panel.gd`) — a
   read-only projection of `Clock`, the garrison payload, roster unlocks, relic
   effects and Elder improvements. Back is its only body action. The authoritative
   design and scope gate are `docs/GARRISON_LIFE.md`; the panel never chops,
   deposits, buys, donates or advances time.
+- Between MAP and GARRISON in the same inspection ring:
+  `PauseMenu.Screen.QUESTS`, `Root/Screens/QuestScreen`
+  (`scripts/ui/menu/quest_panel.gd`). It is a two-pane journal: the left row
+  list selects an accepted/terminal quest and the right pane shows its status,
+  summary, ordered objectives, completed checks, and one current-objective
+  diamond. It is read-only; accepting and turning in remain NPC dialogue acts.
+
+### Quest authority — authored definitions, one mutable campaign owner
+
+`QuestDef` and `QuestDb` (`scripts/quests/`) own immutable ids, words, NPC ids,
+and ordered objectives. `QuestState` (`scripts/systems/quest_state.gd`) owns the
+mutable entries, but it is not an autoload: `Game` owns one instance and exposes
+the campaign API.
+
+```gdscript
+Game.quest_offer(quest_id) -> bool
+Game.quest_accept(quest_id) -> bool
+Game.quest_advance(quest_id, objective_id, amount := 1) -> bool
+Game.quest_complete_objective(quest_id, objective_id) -> bool
+Game.quest_turn_in(quest_id) -> bool
+Game.quest_status(quest_id) -> QuestState.Status
+Game.quest_active_objective(quest_id) -> Dictionary
+Game.quest_snapshot() -> Dictionary
+Game.restore_quests(raw) -> void
+Game.quests_changed(quest_id)
+```
+
+The lifecycle is `LOCKED → AVAILABLE → ACTIVE → READY → COMPLETED`; `FAILED`
+is the other terminal state. Acceptance requires a real AVAILABLE offer. The
+last objective stops at READY, and only the turn-in row on the authored NPC may
+make it COMPLETED. Progress is keyed only by stable quest/objective ids and is
+JSON-safe.
+
+Exactly two definitions exist: **Keep the Hearth** (forge the axe, fell one
+tree, store the Firewood; Aldric gives and receives it) and **West Gate
+Defence** (build the one bolt-thrower; the Builder gives and receives it). The
+real craft, chop, deposit, raid-arm, and works-board purchase functions advance
+them; the journal never does.
+
+`QuestDb.marker_for_npc` / `marker_for_target` project that state into the
+world. `!` means an available giver or the current active target. `?` exists
+only on the NPC who can receive a READY quest, and wins over `!`. Quest
+punctuation wins over an NPC's affordable-progression `!`; all three still use
+the one `WorldAttentionMarker` caption path.
+
+NPC option order is ready turn-ins, available offers, services, topics, Leave.
+Choosing a quest row performs the mutation and returns its authored text pages.
+The Builder is a written, unvoiced speaker with a painted portrait so both offer
+and turn-in use the ordinary two-sided `DialogueBox` composition.
 
 ### Durable utility tools — three ids outside every carried-item path
 
@@ -1963,12 +2017,27 @@ Bulk vendor policy stays outside `Run`, but the transaction does not:
 ```gdscript
 Run.sale_value(ids: Array[StringName]) -> int  # exact heat-prorated quote
 Run.sell_ids(ids: Array[StringName]) -> int    # atomic slice sale + both signals
+Run.sell_with_receipt(id: StringName, count := -1) -> Dictionary
+Run.sell_ids_with_receipt(ids: Array[StringName]) -> Dictionary
+Run.buyback_refusal(receipt: Dictionary) -> String
+Run.buy_back(receipt: Dictionary) -> bool
 ```
 
 `TradeScreen` builds the id set from `Wishlist.wishlisted_ids()` and separately
 protects components and relics. `Run` never imports wishlist policy; it only
 prices and removes the explicit slice, so the displayed SELL UNMARKED figure and
-the gold that lands share one arithmetic.
+the gold that lands share one arithmetic. An individual row that is currently
+wishlisted must pass the screen's **Sell wishlisted item?** confirmation; its
+destructive **Sell** action is paired with safe-default **Back**.
+
+The receipt variants preserve the exact sold item counts, gold payout, removed
+Heat premium, and case counts. `TradeScreen` retains those mutable receipts only
+for the lifetime of the open Trade counter and projects each as one stock-side
+**BACK** tile. `buy_back` spends the original payout, restores the exact
+case/hold split and Heat, invalidates the receipt, and emits one aggregate bag
+change; it is not a pickup and does not add lifetime earnings. A bulk sale is
+one receipt and therefore one atomic buyback. A receipt that no longer fits or
+cannot be afforded refuses before either inventory region or the purse changes.
 
 Rules:
 
@@ -2347,14 +2416,38 @@ almost nothing — `capture()` stalls the game clock for longer than the chain
 window, so a director that screenshots mid-chain breaks the thing it is
 measuring. The poses are `swing_lookdev`'s job.
 
-### Ranged — `HeroRanged` owns the bow and the hookshot
+### Ranged — `HeroRanged` owns the bow, hookshot, and temporary lobs
 
 `scripts/combat/hero_ranged.gd`, a child of the hero and a **sibling of
 `HeroCombat`**, not more of it. HeroCombat is the sword arm: the swing, the
 block cone, the sockets every model hangs off. What an arrow does after it
 leaves has nothing to do with any of that. HeroCombat still owns the combat
 BUTTONS (one reader, §4) and hands the shoulders' two edges straight to it when
-the right hand is not holding the sword (`HeroCombat._tick_item_trigger`).
+the right hand is not holding the sword, or when a carried barrel temporarily
+occupies both hands (`HeroCombat._tick_item_trigger`).
+
+**Issue #198's barrel is a world claim, not equipment.** An idle
+`ExplosiveBarrel` participates in the ordinary `Prompt`/`Interactable` path as
+`PICK UP BARREL`; a real Hero delegates that activation to its public
+`HeroRanged` child. Exactly one barrel may be carried. It is absent from `Game`,
+the inventory, persistence, loadouts, and the armament ring. While held it hides
+the ordinary mounted-weapon presentation and owns both `attack` and `heavy`
+instead of sword, Heavy, guard, or the selected armament. Press/hold raises the
+existing aim camera and crosshair; release commits the existing cast/throw pose
+and launches from the barrel's actual carried position at
+`K.BURST_THROW_SPEED` under full `K.GRAVITY`.
+
+Burst and the carried barrel use the same typed world-space `LobTargeter` and no
+new HUD or signal family. `HeroRanged._physics_process` updates it with safe
+direct-space queries at the live physics increment. Burst prediction reproduces
+`BurstCast` gravity, `MOTE_R` stand-off, `BOUNCE`, and `SETTLE_SPEED` until its
+final rest; barrel prediction starts at the body centre and marks its first
+collision. Queries use the launched object's masks/area policy and exclude the
+Hero and carried barrel colliders. No bounded hit means no marker. Release,
+cancel, loss, or a carried barrel starting its fuse lowers aim, hides the marker,
+and restores the prior mounted presentation. `ExplosiveBarrel.throw_from()`
+remains the fuse handoff, and its existing first-impact, fuse, chain, blast,
+damage, and exactly-once rules remain authoritative.
 
 **A drawn item is fired by a HELD shoulder, not a press.** Down raises and aims,
 up fires. Either shoulder works — `attack` and `heavy` are ORed on both the edge
@@ -2373,6 +2466,8 @@ hero.ranged.cancel_use()                             # put it down, fire nothing
 hero.ranged.busy() -> bool                           # a shot is mid-flight
 hero.ranged.aiming -> bool                           # a sighted item is OUT
 hero.ranged.aim_item() -> StringName                 # ...and RAISED, or &""
+hero.ranged.take_barrel(barrel) -> bool              # Prompt-only world claim
+hero.ranged.has_carried_barrel() -> bool             # temporary hand owner
 ```
 
 `use_release()` is called **unconditionally** whenever neither shoulder is down,
@@ -2921,7 +3016,7 @@ shows it. Both are keyed by the same speaker id `Voice.LINES` and
 DialogueDb.name_of(&"smith")          # "Brannoc" -- the plate says who, not what
 DialogueDb.model_of(&"smith")         # an `NpcBody.PEOPLE` key, for the bust
 DialogueDb.speak(&"smith", &"hello")  # says it AND returns the pages to type
-DialogueBox.open(host, &"smith", pages, choices, on_read)  # null if `pages` empty
+DialogueBox.open(host, &"smith", pages, choices, on_read, on_cancel)  # null if empty
 ```
 
 - **The text is looked up by the take that is playing, never by the cue.**
@@ -2947,12 +3042,16 @@ DialogueBox.open(host, &"smith", pages, choices, on_read)  # null if `pages` emp
   `tools/directors/dialogue.gd` beat G reads the RESOLVED theme font off each row
   (`DialogueBox.choice_faces`) so a theme change cannot bring the split back
   quietly.
-- **`on_read` fires when the last opening page is TURNED, not when the box
-  opens.** `StoryDb` hangs its "you have heard this" flag off it, so escaping out
-  of a nine-page briefing leaves the briefing owed.
+- **`Npc.activate` prepends the person's default hello to a pending StoryDb
+  beat.** `on_read` fires when the last opening page is TURNED, not when the box
+  opens, so the beat is acknowledged only after its story portion has been read.
+  Escaping during either the greeting or the story leaves the beat owed.
 - **One button drives all of it** — `interact`, the same press that opened it:
   fill the line, turn the page, ask the question, take the answer, in that order.
-  `ui_cancel` ends a conversation outright. Input is POLLED, for
+  In an ordinary Npc conversation, `ui_cancel` invokes the caller-provided
+  `on_cancel` to resolve that person's default farewell; a second Cancel skips
+  or closes it, and abandoning an unread story leaves it owed. Generic boxes
+  without `on_cancel` still close immediately. Input is POLLED, for
   `TradeScreen._tick_input`'s reason (`Input.action_press` synthesises no event).
 - **The counter is behind the Trade option, not behind the press.** Since
   2026-08-10 `Npc.activate` opens a box; `TradeScreen` opens from a choice inside
@@ -3008,8 +3107,9 @@ StoryDb.SMITH_TOKEN                   # &"makers_mark" — the object the gate r
 
 - **Two shapes.** A **beat** is an ordered, once-only story page-run: the first
   one whose `needs` are met and which has not been heard is what `Npc.activate`
-  opens instead of the recorded greeting. A **topic** is a repeatable question,
-  offered as a `keep` row in the option list. Beats are spent; topics are not.
+  appends after the person's recorded greeting. A **topic** is a repeatable
+  question, offered as a `keep` row in the option list. Beats are spent; topics
+  are not.
 - **Three metrics.** `bosses` counts `boss_dead_*` over `BossDb.BOSSES` — **not**
   every flag of that shape, because minibosses set the same one and there are
   several per floor. `gold` is `Game.gold_earned`, the LIFETIME total, which is a
@@ -3024,11 +3124,11 @@ StoryDb.SMITH_TOKEN                   # &"makers_mark" — the object the gate r
   arrival flag the first time the metric is met, so spending, dropping or losing
   the mark cannot un-arrive Brannoc. `tools/directors/roster.gd` beat D erases
   both the mark and the boss flag and asserts both keepers stay.
-- **The words here are WRITTEN and nothing plays.** Every recorded take is
-  already spoken for by `DialogueDb.SAID`; inventing cue names for lines nobody
-  has been in a booth for would fail `tools/directors/dialogue.gd` beat A0 on
-  purpose. A director that checks the RECORDINGS has to talk a person's story out
-  of them first — `voices.gd`'s `_clear_story`, `dialogue.gd`'s `_exhaust`.
+- **The story words here are WRITTEN and nothing plays for them.** Every recorded
+  take is already spoken for by `DialogueDb.SAID`; inventing cue names for lines
+  nobody has been in a booth for would fail `tools/directors/dialogue.gd` beat A0
+  on purpose. `Npc.activate` plays the person's default hello first, then appends
+  these pages without inventing a recording for them.
 - **`unlocked()` writes.** It stamps `garrison_<who>_arrived` the first time the
   gate is met and answers off the flag ever after (the latch above), which is
   also how `tools/shoot.gd` hands every director the full yard: it sets the
@@ -3160,7 +3260,7 @@ false on a Recut, where clamping down is the point.
 
 ```gdscript
 Saves.peek(slot: int) -> Dictionary       # readable list header; empty=true if unused
-Saves.save(slot: int) -> bool             # Game + destination/transform + v18 Run/garrison/tool state
+Saves.save(slot: int) -> bool             # Game + destination/transform + v21 Run/garrison/tool/quest state
 Saves.load_slot(slot: int) -> Dictionary  # restores data and returns the travel destination
 Saves.erase(slot: int) -> void            # 3 slots, 0..2
 Saves.autosave() -> bool                  # active slot, else first empty, else decline
@@ -3176,7 +3276,7 @@ garrison load. v4-v8 transforms are deliberately omitted because their owner is
 unknown; v9 introduced `position_scene`, and a transform is returned only when
 that owner matches the destination.
 
-The save file is at **`VERSION = 18`**, and `READABLE` — not `VERSION` — is what
+The save file is at **`VERSION = 21`**, and `READABLE` — not `VERSION` — is what
 `load_slot` checks. v4 split the old `plate` rung into eight gear tracks and is
 why **v3 is refused rather than migrated**: its `plate` key has no honest mapping
 to the new pieces. The later bumps are additive: v5 added `deaths`, v6
@@ -3184,13 +3284,19 @@ to the new pieces. The later bumps are additive: v5 added `deaths`, v6
 v10 `last_played_unix` plus the single versioned `run` snapshot, v11 manual
 wishlist tracks, v12 the additive `garrison` payload, v13 Field Notes, v14
 temporary overhealth, v15 fishing/supper/Well Fed/Connected state, v16 the
-health-points vocabulary, v17 completed Field Notes, and v18 durable utility-
-tool state. `READABLE` is therefore every version from **4 through 18**; absent
+health-points vocabulary, v17 completed Field Notes, v18 durable utility-tool
+state, v19 restoration of non-dungeon Run snapshots, v20 the additive garden
+payload, and v21 the
+additive quest payload. `READABLE` is therefore every version from **4 through
+21**; absent
 fields take their version-appropriate defaults instead of making those slots
 unreadable. A pre-v18 slot that owns the Woodsman's Axe migrates it at full
 eight-use durability. v18 writes all three durability
 entries, including a known broken zero, and rebuilds `Game.items` only for
-positive values. `save_game.gd`'s header carries the full version history.
+positive values. v21 writes `quests`; older slots conservatively reconstruct
+only quest facts already proved by their story flags, tools, carried/stored
+Firewood, and raid record. Migration never turns a READY quest in for the
+player. `save_game.gd`'s header carries the full version history.
 
 Every one of those dictionaries is rebuilt on load with `StringName` keys — JSON
 hands back `String` keys, and a `String` key makes `forge_level(&"edge")` and

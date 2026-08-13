@@ -14,8 +14,8 @@ extends RefCounted
 ##
 ## What it claims, in the order it proves them:
 ##
-##   A  **The document case** (GDD §3.1). Five of the twelve slots come home.
-##      Seven still die, a relic will not fit in it, and the heat premium is
+##   A  **The document case** (GDD §3.1). Five of the seventeen slots come home.
+##      Twelve still die, a relic will not fit in it, and the heat premium is
 ##      split between the two halves rather than following the body.
 ##   B  The pouch DRAWS the case as the top of the bag, and A moves a stack
 ##      across the line in either direction.
@@ -70,9 +70,9 @@ func _case(rig) -> void:
 	Run.enter(9001)
 
 	_ck("A0 the case is five slots", Run.CASE_SLOTS == 5)
-	_ck("A1 the hold is seven slots and the two regions sum (%d + %d = %d)" % [
+	_ck("A1 the hold is twelve slots and the two regions sum (%d + %d = %d)" % [
 		Run.CASE_SLOTS, Run.hold_slots(), Game.bag_slots],
-		Run.hold_slots() == 7
+		Run.hold_slots() == 12
 			and Run.CASE_SLOTS + Run.hold_slots() == Game.bag_slots)
 
 	# Pickup packs the case FIRST. The forgiving default for the player who never
@@ -186,8 +186,8 @@ func _pouch(rig) -> void:
 	_ck("B1 the case draws its own five cells",
 		pouch._case_grid.count() == 5
 			and pouch._case_grid.count() == Run.CASE_SLOTS)
-	_ck("B2 the hold draws the other seven cells (%d)" % pouch.grid().count(),
-		pouch.grid().count() == 7
+	_ck("B2 the hold draws the other twelve cells (%d)" % pouch.grid().count(),
+		pouch.grid().count() == 12
 			and pouch.grid().count() == Run.hold_slots())
 	_ck("B3 and together they are the bag",
 		pouch._case_grid.count() + pouch.grid().count() == Game.bag_slots)

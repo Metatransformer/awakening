@@ -33,6 +33,10 @@ const SLEEP_HOLD := 0.55
 const IDLE_MOTE_RATIO: float = 0.38
 const FOCUSED_MOTE_RATIO: float = 0.92
 
+## Standalone beds use the compact default. Enclosed furniture such as the
+## player bunk can widen the trigger before `_ready()` builds its shape.
+@export var interaction_radius: float = 1.5
+
 var _glow: OmniLight3D = null
 var _quilt_material: ShaderMaterial = null
 var _motes: GPUParticles3D = null
@@ -43,7 +47,7 @@ var _sleep_pending: bool = false
 
 func _ready() -> void:
 	prompt = "SLEEP IN YOUR BED"
-	radius = 1.5
+	radius = interaction_radius
 	hold_time = SLEEP_HOLD
 	super()
 	_build()

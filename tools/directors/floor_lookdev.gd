@@ -54,6 +54,7 @@ func run(rig) -> void:
 	var hero := _hero(rig)
 	if hero != null:
 		hero.visible = false
+	Bus.screen_opened.emit(&"floor_lookdev")
 	var camera := Camera3D.new()
 	camera.name = &"FloorLookdevCamera"
 	camera.fov = 58.0
@@ -76,6 +77,7 @@ func run(rig) -> void:
 		out.path_join("floor_look_04_deepest.png"))
 	await _capture_corridor(rig, camera, dungeon,
 		out.path_join("floor_look_05_corridor.png"))
+	Bus.screen_closed.emit(&"floor_lookdev")
 
 	if rig.fails == failures_before:
 		print("FLOOR LOOKDEV OK -- %d rooms, %d bays, %d overflow frames, 5 frames"
@@ -162,55 +164,181 @@ func _prove_landmark_rooms(rig, look: Node3D, entrance: Vector2i,
 
 
 func _capture_room(rig, camera: Camera3D, look: Node3D, cell: Vector2i,
-		_room: Dictionary, path: String, side_view: bool = false) -> void:
+		room: Dictionary, path: String, gate_view: bool = false) -> void:
 	var bay := _bay_for(look, cell)
 	if not rig.check(bay != null, "room %s has a bay to frame" % cell):
 		return
-	# The camera uses normal third-person eye height and a gameplay-distance view.
-	# A lateral offset keeps the perimeter silhouette and an adjacent route together.
+	var composition: Dictionary
+	if gate_view:
+		composition = _gate_route_composition(rig, camera, bay, room)
+	elif not _named(bay, &"ServiceDrain").is_empty():
+		composition = _plain_room_composition(rig, bay, room)
+	else:
+		composition = _landmark_composition(bay)
+	if composition.is_empty():
+		return
+	camera.fov = float(composition[&"fov"])
+	camera.global_position = composition[&"origin"] as Vector3
+	camera.look_at(composition[&"aim"] as Vector3, Vector3.UP)
+	await rig.wait_frames(8)
+	_hide_proof_only_clutter(rig)
+	if Hud != null:
+		Hud.visible = false
+	await rig.capture(path)
+
+
+func _landmark_composition(bay: Node3D) -> Dictionary:
+	# Modestly tighter than the old room-wide view, but still lateral enough to
+	# retain playable floor beside the complete paired-pier silhouette.
 	var inward := bay.global_transform.basis.z.normalized()
 	var along := bay.global_transform.basis.x.normalized()
 	var lateral := float(bay.get_meta(&"lateral", 0.0))
 	var side := -signf(lateral) if not is_zero_approx(lateral) else 1.0
-	var aim := bay.global_position + Vector3.UP * 1.45
-	var chosen := bay.global_position + inward * 6.75 \
-		+ along * side * 3.05 + Vector3.UP * EYE_HEIGHT
-	camera.fov = 54.0
-	if side_view:
-		var candidates: Array[Vector3] = [
-			bay.global_position + inward * 4.20 + Vector3.UP * EYE_HEIGHT,
-			bay.global_position + inward * 6.35 + along * side * 2.65
-				+ Vector3.UP * EYE_HEIGHT,
-			bay.global_position + inward * 6.35 - along * side * 2.65
-				+ Vector3.UP * EYE_HEIGHT,
-			bay.global_position + inward * 6.85 + along * side * 3.85
-				+ Vector3.UP * EYE_HEIGHT,
-			bay.global_position + inward * 6.85 - along * side * 3.85
-				+ Vector3.UP * EYE_HEIGHT,
-			bay.global_position + inward * 7.15 + along * side * 1.25
-				+ Vector3.UP * EYE_HEIGHT,
-			bay.global_position + inward * 7.15 - along * side * 1.25
-				+ Vector3.UP * EYE_HEIGHT,
-			bay.global_position + inward * 7.25 + Vector3.UP * EYE_HEIGHT,
-		]
-		var targets: Array[Vector3] = _landmark_targets(bay)
-		var best_score := -1
-		for candidate: Vector3 in candidates:
-			var score := _clear_landmark_rays(camera, candidate, targets)
-			if score > best_score:
-				chosen = candidate
-				best_score = score
-		var required_score := maxi(targets.size() - 1, 1)
-		if not rig.check(best_score >= required_score,
-				"gate landmark clears %d/%d silhouette rays" % [best_score, targets.size()]):
-			return
-		camera.fov = 56.0
-	camera.global_position = chosen
-	camera.look_at(aim, Vector3.UP)
-	await rig.wait_frames(8)
-	if Hud != null:
-		Hud.visible = false
-	await rig.capture(path)
+	return {
+		&"origin": bay.global_position + inward * 6.50 + along * side * 2.65
+			+ Vector3.UP * EYE_HEIGHT,
+		&"aim": bay.global_position + Vector3.UP * 1.72,
+		&"fov": 50.0,
+	}
+
+
+func _plain_room_composition(rig, bay: Node3D, room: Dictionary) -> Dictionary:
+	var drains: Array[Node] = _named(bay, &"ServiceDrain")
+	if not rig.check(drains.size() == 1,
+			"plain room owns one ServiceDrain to compose (%d)" % drains.size()):
+		return {}
+	var drain := drains[0] as Node3D
+	var closest_edge := Vector3.ZERO
+	var closest_distance := INF
+	var found_doorway := false
+	var doors: Array = room.get("doors", [])
+	for side: StringName in doors:
+		var doorway: Dictionary = _doorway_pose(room, side)
+		if doorway.is_empty():
+			continue
+		var centre: Vector3 = doorway[&"centre"]
+		var along: Vector3 = doorway[&"along"]
+		var half_span := float(doorway[&"opening_w"]) * 0.5
+		for edge_sign: float in [-1.0, 1.0]:
+			var edge := centre + along * edge_sign * half_span
+			var distance := edge.distance_squared_to(drain.global_position)
+			if distance < closest_distance:
+				closest_distance = distance
+				closest_edge = edge
+				found_doorway = true
+	if not rig.check(found_doorway,
+			"plain room exposes a generated route doorway to frame with its drain"):
+		return {}
+
+	var room_node := room.get("node") as Node3D
+	if room_node == null:
+		return {}
+	var drain_focus := drain.global_position + Vector3.UP * 1.55
+	var edge_focus := closest_edge + Vector3.UP * 1.65
+	var room_eye := room_node.global_position + Vector3.UP * EYE_HEIGHT
+	var room_size := float(room.get("size", 16.0))
+	var to_drain := (drain_focus - room_eye).normalized()
+	var to_edge := (edge_focus - room_eye).normalized()
+	var aim_direction := (to_drain + to_edge).normalized()
+	# The angular bisector, rather than a world-space midpoint, keeps both the
+	# drain and jamb at equal visual weight on their opposite room walls. The
+	# centre point keeps the hydraulic work close enough to read as architecture.
+	return {
+		&"origin": room_eye,
+		&"aim": room_eye + aim_direction * room_size,
+		&"fov": 58.0,
+	}
+
+
+func _gate_route_composition(rig, camera: Camera3D, bay: Node3D,
+		room: Dictionary) -> Dictionary:
+	var targets: Array[Vector3] = _landmark_targets(bay)
+	if not rig.check(not targets.is_empty(),
+			"gate room exposes OverflowFrame silhouette targets"):
+		return {}
+	var doors: Array = room.get("doors", [])
+	if not rig.check(not doors.is_empty(),
+			"gate room exposes at least one generated gameplay route"):
+		return {}
+	var room_node := room.get("node") as Node3D
+	if room_node == null:
+		return {}
+	var aim := Vector3.ZERO
+	for target: Vector3 in targets:
+		aim += target
+	aim /= float(targets.size())
+
+	var best: Dictionary = {}
+	var best_clear := -1
+	var best_axis_distance := INF
+	var route_depth := K.CORRIDOR_W * 0.65
+	for side: StringName in doors:
+		var doorway: Dictionary = _doorway_pose(room, side)
+		if doorway.is_empty():
+			continue
+		var centre: Vector3 = doorway[&"centre"]
+		var outward: Vector3 = doorway[&"outward"]
+		var along: Vector3 = doorway[&"along"]
+		var route_offset := minf(K.CORRIDOR_W * 0.32,
+			float(doorway[&"opening_w"]) * 0.34)
+		for offset: float in [0.0, -route_offset, route_offset]:
+			var origin := centre + outward * route_depth + along * offset \
+				+ Vector3.UP * EYE_HEIGHT
+			var clear := _clear_landmark_rays(camera, origin, targets)
+			var view_axis := (aim - origin).normalized()
+			var centre_at_eye := room_node.global_position + Vector3.UP * EYE_HEIGHT
+			var centre_delta := centre_at_eye - origin
+			var axis_distance := (centre_delta
+				- view_axis * centre_delta.dot(view_axis)).length()
+			if clear > best_clear or (clear == best_clear
+					and axis_distance < best_axis_distance):
+				best = {&"origin": origin, &"aim": aim, &"fov": 52.0}
+				best_clear = clear
+				best_axis_distance = axis_distance
+	if best.is_empty():
+		rig.check(false, "gate route camera resolves to a generated doorway")
+		return {}
+	var required_score := maxi(targets.size() - 1, 1)
+	if not rig.check(best_clear >= required_score,
+			"gate route clears %d/%d landmark silhouette rays"
+			% [best_clear, targets.size()]):
+		return {}
+	return best
+
+
+func _doorway_pose(room: Dictionary, side: StringName) -> Dictionary:
+	var room_node := room.get("node") as Node3D
+	if room_node == null:
+		return {}
+	var local_outward := _door_outward(side)
+	var expected := room_node.to_global(
+		local_outward * float(room.get("size", 16.0)) * 0.5)
+	var doorway: KitDoorway = null
+	var closest := INF
+	for child: Node in room_node.get_children():
+		if not child is KitDoorway:
+			continue
+		var candidate := child as KitDoorway
+		var distance := candidate.global_position.distance_squared_to(expected)
+		if distance < closest:
+			closest = distance
+			doorway = candidate
+	if doorway == null:
+		return {}
+	return {
+		&"centre": doorway.global_position,
+		&"outward": (room_node.global_transform.basis * local_outward).normalized(),
+		&"along": doorway.global_transform.basis.x.normalized(),
+		&"opening_w": doorway.opening_w,
+	}
+
+
+func _door_outward(side: StringName) -> Vector3:
+	match side:
+		&"n": return Vector3(0.0, 0.0, -1.0)
+		&"s": return Vector3(0.0, 0.0, 1.0)
+		&"w": return Vector3(-1.0, 0.0, 0.0)
+		_: return Vector3(1.0, 0.0, 0.0)
 
 
 func _landmark_targets(bay: Node3D) -> Array[Vector3]:
@@ -258,10 +386,10 @@ func _capture_corridor(rig, camera: Camera3D, dungeon: Node3D,
 		return
 	var running_z := floor_slab.size.y >= floor_slab.size.x
 	var axis := Vector3(0.0, 0.0, 1.0) if running_z else Vector3(1.0, 0.0, 0.0)
-	camera.global_position = corridor.global_position + axis * 4.2 \
-		+ Vector3.UP * 1.58
-	camera.fov = 61.0
-	camera.look_at(corridor.global_position - axis * 4.2 + Vector3.UP * 0.95,
+	camera.global_position = corridor.global_position + axis * 5.0 \
+		+ Vector3.UP * 1.50
+	camera.fov = 66.0
+	camera.look_at(corridor.global_position - axis * 4.2 + Vector3.UP * 1.30,
 		Vector3.UP)
 	await rig.wait_frames(8)
 	if Hud != null:
@@ -302,7 +430,7 @@ func _hide_proof_only_clutter(rig) -> void:
 	for node: Node in _all(rig.scene()):
 		var proof_clutter := node is ExplosiveBarrel or node.name == &"RoomChest" \
 			or node.name.begins_with("AmbientUrn")
-		if proof_clutter and node is Node3D:
+		if proof_clutter and node is Node3D and (node as Node3D).visible:
 			(node as Node3D).visible = false
 			hidden += 1
 	print("FLOOR LOOKDEV proof-only clutter hidden: %d" % hidden)

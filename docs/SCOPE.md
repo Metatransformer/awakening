@@ -26,12 +26,13 @@ unauthorised.
 | Puzzle atoms | **9** |
 | Puzzle prefabs | **12** |
 | Puzzle combinators | **9** |
-| Enemy behaviours | **8**, with four currently committed |
+| Enemy behaviours | **8**, with six built and two deferred |
 | Added dungeon graph edges | **1 per floor** |
 | Blessings | **12** |
 | Relics | **12** |
 | Garrison NPCs | **6**: the existing five plus one Vyr Builder |
 | Authored build quests | **1**: West Gate Bolt-Thrower |
+| Authored quest-journal entries | **2**: Keep the Hearth, West Gate Defence |
 | Authored defensive structures | **1**: West Gate Bolt-Thrower |
 | Authored raid occurrences | **1**, with no scheduler |
 | Player stats | **5** |
@@ -40,7 +41,7 @@ unauthorised.
 | Jewelry slots | **4** |
 | Armour or jewelry art | **0** |
 | Garrison surface scenes | **2** |
-| New UI screens | **3** |
+| New UI screens | **4**: including the one Quests inspection page |
 | Endings | **2** |
 | Currencies | **2**: gold and Field Notes |
 | Ingredients / components | **10 / 8**, with no new rarity band |
@@ -71,10 +72,23 @@ profession system. Its bounded resource-working extension remains inside the
 already-counted daily-life-loop mechanic and does not raise the four-mechanic
 cap.
 
+Issue #198 is the one bounded player extension to the existing explosive-prop
+family: one idle barrel may be picked up through the world prompt and thrown,
+and Burst and the carried barrel share one world-space lob landing marker. The
+barrel adds no usable item, inventory entry, persistence, equipment stop, UI
+screen, lantern variant, or broader interaction family, and raises no cap.
+
 The Field Notes amendment adds one finite, non-convertible permanent currency
 and three one-rank doctrine tracks. It adds no item, pickup, UI screen, NPC,
 stat category, dialogue tree or repeatable system. The exact five-observation,
 five-note boundary is owned by [FIELD_NOTES.md](FIELD_NOTES.md).
+
+Issue #197 is the explicit owner amendment for one reusable quest-state seam,
+one Quests inspection page, and `!` / `?` world-attention punctuation. Its two
+entries wrap existing authorised work: Keep the Hearth and West Gate Defence.
+The amendment raises only the UI-screen cap by one and creates no permission for
+a third quest, new reward, new chore, new objective family, new location, or
+new NPC.
 
 Counts rise only through an explicit scope amendment. By default, an addition
 must delete something of comparable cost in the same decision. Implementing a
@@ -119,8 +133,32 @@ slice. It does not supersede the authorised human proofs above or satisfy the
 near/deep evidence bar in
 [design-tests/FISHING_PROVISIONS_PROOF.md](design-tests/FISHING_PROVISIONS_PROOF.md).
 
-Raid, Field Notes, fishing/provisions, and #184's bounded tool/mining
-implementations are complete; their precommitted human tests remain pending.
+Issue #198 is separately owner-authorised implementation sequencing debt: only
+player pickup/throw of the existing explosive barrel and the shared
+Burst/barrel lob marker. It does not authorise another explosive prop, lantern
+interaction, inventory path, equipment path, or production expansion.
+
+Issue #197 is separately owner-authorised implementation sequencing debt: the
+bounded two-entry quest journal and its `!` / `?` NPC-and-target feedback. It
+does not supersede either authorised human proof.
+
+Issue [#200](https://github.com/Metatransformer/awakening/issues/200) is a
+narrow owner override for four behavior-bearing prototype variants in tool
+order: floor 1 Knotback/Sword, floor 2 Lantern Seer/Bow, floor 3 Cinder
+Automaton/Burst and floor 4 Mirebell/Hookshot. Each keeps ordinary damage as a
+slower answer. They use temporary primitive kitbash attachments over existing
+animated bipeds, add no `Enemy.DEFS` kind or permanent model, and permit at
+most one signature variant per ordinary room with none as elites or boss
+summons. The implementation and its deterministic automated proof are complete;
+the human question is owned by
+[design-tests/ENEMY_TOOL_LADDER_PROOF.md](design-tests/ENEMY_TOOL_LADDER_PROOF.md).
+This override adds no item, ammo, currency, screen, boss beat, autoload,
+permanent art asset or broader production authority.
+
+Raid, Field Notes, fishing/provisions, #184's bounded tool/mining, #197's
+bounded quest journal, and #198's bounded player-barrel extension are complete;
+their precommitted human tests remain pending.
+#200's implementation proof is complete and its human result is pending.
 Floors 2–4, bosses 2–4, production content, another fishing location or
 minigame, and every expansion below remain frozen.
 
@@ -132,7 +170,8 @@ These are candidates, not promises:
 - recurring raids;
 - scouts, watchtowers, guards, staffing, or broader morale consequences;
 - more waves, routes, attackers, or defensive structures;
-- the explosive-barrel and hanging-lantern interaction family;
+- any explosive-barrel or hanging-lantern expansion beyond #198's single
+  player-throw extension and shared Burst/barrel marker;
 - another home-life responsibility, resource-gathering loop, or profession.
 
 Each needs its own design question, smallest proof, and explicit scope decision.
@@ -166,7 +205,9 @@ human evidence. That is sequencing debt, not permission to continue.
 
 Do not expand production until the pending five-session human tests are
 resolved.
+Issue #200 does not lift the floor, boss, content-production or permanent-art
+freezes; it authorises only the four bounded prototype variants and their proof.
 Directors and automated checks can prove implementation; only observed human
-play can answer either design question. A result from one cannot prove the
-other. After a result, update the owning design test first, then amend current
+play can answer a design question. An automated result cannot prove a human
+result. After a result, update the owning design test first, then amend current
 canon only where the decision requires it.

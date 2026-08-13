@@ -137,6 +137,16 @@ var _toast_slot: VBoxContainer
 ## The catalogue line the toast is about, so `_refresh` can re-ask whether it is
 ## still true. Empty while the selected row is a bag sale.
 var _refuse_line: Dictionary = {}
+## Reversible sales belong to this one open counter visit. Nothing in `Run` or a
+## save points at them; closing this screen is what ends the buyback window.
+var _buybacks: Array[Dictionary] = []
+var _confirm: MenuConfirm
+var _pending_sale_id: StringName = &""
+var _pending_sale_count: int = 0
+## A modal resolution can happen in the GUI phase, before this screen's next
+## process tick. Hold the board until that same physical press is released.
+var _modal_input_blocked: bool = false
+var _modal_direction_event: bool = false
 
 
 ## Whose voice this counter speaks in -- a key in `Voice.LINES`, or `&""` for a
@@ -278,6 +288,10 @@ func _build() -> void:
 	# on and over the HUD both.
 	if mode == Mode.TRADE:
 		_tip = ItemTip.make(self)
+		_confirm = MenuConfirm.new()
+		_confirm.name = "SaleConfirm"
+		_confirm.resolved.connect(_on_sale_confirmation)
+		add_child(_confirm)
 
 
 ## Who this is and what they do, then the four numbers you decide with.
@@ -598,6 +612,7 @@ func _refresh() -> void:
 	_bag_rows.clear()
 	if mode == Mode.TRADE:
 		_build_buy_rows()
+		_build_buyback_rows()
 		for i in _rows.size():
 			_stock_rows.append(i)
 		var bag_start := _rows.size()
@@ -619,6 +634,7 @@ func _refresh() -> void:
 			"tint": row["color"],
 			"icon": _row_icon(row),
 			"sub_tint": row.get("sub_tint", Color.WHITE),
+			"tag": String(row.get("tag", "")),
 			"mark": bool(row.get("mark", false)),
 			"star": bool(row.get("star", false)),
 			"dim": not bool(row["ok"]),
@@ -800,6 +816,53 @@ func _build_buy_rows() -> void:
 		})
 
 
+## Put each transaction back on the stock side as one tile. A bulk receipt stays
+## one row even though its hover card names every stack; splitting it here would
+## turn an atomic sale into several independently affordable promises.
+func _build_buyback_rows() -> void:
+	for at in _buybacks.size():
+		var receipt: Dictionary = _buybacks[at]
+		var items := receipt.get(&"items", {}) as Dictionary
+		if items.is_empty() or not bool(receipt.get(&"valid", false)):
+			continue
+		var ids: Array[StringName] = []
+		var total := 0
+		for id: StringName in items:
+			ids.append(id)
+			total += int(items[id])
+		var single := ids.size() == 1
+		var only_id: StringName = ids[0] if single else &""
+		var def: ItemDef = ItemDb.get_def(only_id) if single else null
+		_rows.append({
+			"kind": &"buyback",
+			"receipt": receipt,
+			"buyback_index": at,
+			"id": only_id,
+			"label": def.display_name if def != null else "Sold batch",
+			"count": total,
+			"price": int(receipt.get(&"paid_gold", 0)),
+			"sub": "%d ◇" % int(receipt.get(&"paid_gold", 0)),
+			"tag": "BACK",
+			"color": Pal.rarity_color(int(def.rarity)) if def != null else Pal.BONE,
+			"blurb": _buyback_blurb(receipt),
+			"ok": Run.buyback_refusal(receipt).is_empty(),
+		})
+
+
+func _buyback_blurb(receipt: Dictionary) -> String:
+	var items := receipt.get(&"items", {}) as Dictionary
+	var case_counts := receipt.get(&"case_counts", {}) as Dictionary
+	var parts: Array[String] = []
+	for id: StringName in items:
+		var def := ItemDb.get_def(id)
+		var name := def.display_name if def != null else String(id)
+		var count := int(items[id])
+		var packed := int(case_counts.get(id, 0))
+		parts.append("%s ×%d (%d case, %d hold)" % [
+			name, count, packed, count - packed])
+	return "Restore exactly %s, including its Heat premium." % ", ".join(parts)
+
+
 # --- The cursor --------------------------------------------------------------
 
 ## Move the cursor and make the screen agree with it: the cell takes focus (which
@@ -933,6 +996,17 @@ func _describe() -> void:
 		&"all":
 			_tip.kicker.text = "EVERY STACK"
 			_tip.price.text = _db().format_currency(int(row["price"]))
+		&"buyback":
+			var receipt := row["receipt"] as Dictionary
+			var items := receipt.get(&"items", {}) as Dictionary
+			_tip.kicker.text = "BACK  ·  %d %s" % [items.size(),
+				"STACK" if items.size() == 1 else "STACKS"]
+			_tip.price.text = "Pay %s" % _db().format_currency(int(row["price"]))
+			var refusal := Run.buyback_refusal(receipt)
+			if refusal.is_empty():
+				_tip.say_note("Returns to its exact case and hold split", UITheme.SUCCESS)
+			else:
+				_tip.say_note(refusal, UITheme.DANGER)
 		&"buy":
 			var left: int = int(row["count"])
 			_tip.kicker.text = "%d LEFT" % left if left >= 0 else ""
@@ -1109,6 +1183,25 @@ func _hold_time(i: int) -> float:
 func _input(event: InputEvent) -> void:
 	if _closing:
 		return
+	if _confirm != null and _confirm.is_asking:
+		# The event that opened the modal can arrive after the polling phase made
+		# it visible. Eat that same physical accept before the newly focused Back
+		# button sees it; the modal arms only after the opening press is released.
+		if _modal_input_blocked and (event.is_action(&"ui_accept") \
+				or event.is_action(&"interact")):
+			get_viewport().set_input_as_handled()
+			return
+		# Let the modal's buttons receive arrows and Accept in the GUI phase. Cancel
+		# is the one action MenuConfirm exposes to its owner rather than to a button.
+		if event.is_action_pressed(&"ui_cancel") or event.is_action_pressed(&"pause"):
+			_confirm.cancel()
+			get_viewport().set_input_as_handled()
+		elif event.is_action_pressed(&"ui_left") or event.is_action_pressed(&"ui_right") \
+				or event.is_action_pressed(&"ui_up") or event.is_action_pressed(&"ui_down"):
+			# The GUI focus chain will consume this event. Mark it so the parallel
+			# action-state path below does not move the same modal a second time.
+			_modal_direction_event = true
+		return
 	if (event.is_action(&"ui_left") or event.is_action(&"ui_right")
 			or event.is_action(&"ui_up") or event.is_action(&"ui_down")):
 		get_viewport().set_input_as_handled()
@@ -1116,6 +1209,25 @@ func _input(event: InputEvent) -> void:
 
 func _tick_input(delta: float) -> void:
 	if _closing:
+		return
+	if _confirm != null and _confirm.is_asking:
+		if _modal_input_blocked:
+			if _modal_action_down():
+				return
+			_modal_input_blocked = false
+			_armed_accept = true
+			_armed_cancel = true
+			_repeat = 0.0
+			return
+		_tick_modal_input()
+		return
+	if _modal_input_blocked:
+		if _modal_action_down():
+			return
+		_modal_input_blocked = false
+		_armed_accept = true
+		_armed_cancel = true
+		_repeat = 0.0
 		return
 
 	var cancel := Input.is_action_pressed(&"ui_cancel") or Input.is_action_pressed(&"pause")
@@ -1169,6 +1281,56 @@ func _tick_input(delta: float) -> void:
 		# Snapped to zero, not decayed, for the reason `Prompt` gives: a bar that
 		# drains says "keep going", and letting go was the opposite of that.
 		_hold = 0.0
+
+
+## MenuConfirm handles real events through its Buttons. This parallel edge path
+## is for directors (and any synthetic caller) using `Input.action_press()`,
+## which changes action state without dispatching an event to those buttons.
+func _tick_modal_input() -> void:
+	var cancel := Input.is_action_pressed(&"ui_cancel") or Input.is_action_pressed(&"pause")
+	if not cancel:
+		_armed_cancel = true
+	elif _armed_cancel:
+		_armed_cancel = false
+		_confirm.cancel()
+		return
+
+	var yes := _confirm.get("_yes") as Button
+	var no := _confirm.get("_no") as Button
+	var accept := Input.is_action_pressed(&"ui_accept") or Input.is_action_pressed(&"interact")
+	if not accept:
+		_armed_accept = true
+	elif _armed_accept:
+		_armed_accept = false
+		var focused := get_viewport().gui_get_focus_owner()
+		if focused == yes:
+			yes.pressed.emit()
+		else:
+			no.pressed.emit()
+		return
+
+	if _modal_direction_event:
+		_modal_direction_event = false
+		return
+	if Input.is_action_just_pressed(&"ui_left"):
+			yes.grab_focus()
+	elif Input.is_action_just_pressed(&"ui_right"):
+		no.grab_focus()
+	elif Input.is_action_just_pressed(&"ui_up") \
+			or Input.is_action_just_pressed(&"ui_down"):
+		var next: Button = no if get_viewport().gui_get_focus_owner() == yes else yes
+		next.grab_focus()
+
+
+func _modal_action_down() -> bool:
+	return Input.is_action_pressed(&"ui_accept") \
+		or Input.is_action_pressed(&"interact") \
+		or Input.is_action_pressed(&"ui_cancel") \
+		or Input.is_action_pressed(&"pause") \
+		or Input.is_action_pressed(&"ui_left") \
+		or Input.is_action_pressed(&"ui_right") \
+		or Input.is_action_pressed(&"ui_up") \
+		or Input.is_action_pressed(&"ui_down")
 
 
 ## Which way the stick went this frame, one press or one repeat tick. Both axes
@@ -1275,14 +1437,44 @@ func _commit() -> void:
 	if row.is_empty() or row["kind"] == &"owned":
 		return
 	var done := false
+	var refusal := ""
 	match row["kind"]:
 		&"item":
-			done = Run.sell(row["id"]) > 0
+			var id: StringName = row["id"]
+			if Wishlist.is_wishlisted(id):
+				_ask_wishlisted_sale(id, int(row["count"]))
+				return
+			done = _sell_one(id, int(row["count"]))
 		&"all":
-			done = Run.sell_ids(row["ids"]) > 0
+			var receipt := Run.sell_ids_with_receipt(row["ids"])
+			done = _remember_buyback(receipt)
+		&"buyback":
+			var receipt := row["receipt"] as Dictionary
+			refusal = Run.buyback_refusal(receipt)
+			if refusal.is_empty():
+				done = Run.buy_back(receipt)
+				if done:
+					var at := int(row["buyback_index"])
+					if at >= 0 and at < _buybacks.size():
+						_buybacks.remove_at(at)
 		&"buy":
 			done = _db().buy(row["line"])
 
+	_finish_commit(done, row, refusal)
+
+
+func _sell_one(id: StringName, count: int) -> bool:
+	return _remember_buyback(Run.sell_with_receipt(id, count))
+
+
+func _remember_buyback(receipt: Dictionary) -> bool:
+	if receipt.is_empty():
+		return false
+	_buybacks.append(receipt)
+	return true
+
+
+func _finish_commit(done: bool, row: Dictionary, refusal: String = "") -> void:
 	if done:
 		# The purchase that just landed answers whatever the last refusal said.
 		_end_refusal()
@@ -1292,8 +1484,37 @@ func _commit() -> void:
 		if mode == Mode.PROGRESSION and row["kind"] == &"buy":
 			Bus.request_sfx.emit(&"upgrade_stat_unlocked", _hero_position())
 	else:
-		_show_refusal()
+		_show_refusal(refusal)
 	_refresh()
+
+
+func _ask_wishlisted_sale(id: StringName, count: int) -> void:
+	if _confirm == null or _confirm.is_asking or id == &"" or count <= 0:
+		return
+	_pending_sale_id = id
+	_pending_sale_count = count
+	_modal_input_blocked = true
+	_armed_accept = false
+	_armed_cancel = false
+	_hold = 0.0
+	var return_focus := get_viewport().gui_get_focus_owner()
+	_confirm.ask("Sell wishlisted item?",
+		"This item is on your wishlist. Are you sure you want to sell it?",
+		"Sell", "Back", true, return_focus)
+
+
+func _on_sale_confirmation(accepted: bool) -> void:
+	var id := _pending_sale_id
+	var count := _pending_sale_count
+	_pending_sale_id = &""
+	_pending_sale_count = 0
+	_modal_input_blocked = true
+	_armed_accept = false
+	_armed_cancel = false
+	if not accepted:
+		return
+	var row := {"kind": &"item"}
+	_finish_commit(_sell_one(id, count), row)
 
 
 func _hero_position() -> Vector3:
@@ -1306,11 +1527,11 @@ func _hero_position() -> Vector3:
 ## Ask the CATALOGUE rather than assuming money. Once a line can be refused for
 ## four different reasons, a hardcoded "NOT ENOUGH GOLD" sends the player back
 ## down for the wrong thing.
-func _show_refusal() -> void:
+func _show_refusal(specific: String = "") -> void:
 	_end_refusal()
-	var why := "Nothing there"
+	var why := specific if not specific.is_empty() else "Nothing there"
 	var row := _selected_row()
-	if not row.is_empty() and row["kind"] == &"buy":
+	if specific.is_empty() and not row.is_empty() and row["kind"] == &"buy":
 		_refuse_line = row["line"]
 		var said: String = _db().refusal(_refuse_line)
 		why = said if said != "" else "Not enough gold"
@@ -1443,6 +1664,8 @@ func _verb() -> String:
 			return "Owned"
 		&"all":
 			return "Sell all"
+		&"buyback":
+			return "Buy back"
 		&"buy":
 			# Both questions asked of the catalogue HERE rather than folded into
 			# one helper on it: a static calling a static inside `Catalogue` binds

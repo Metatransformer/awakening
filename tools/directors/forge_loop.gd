@@ -679,8 +679,8 @@ func _death(rig) -> void:
 	Run.collect(&"cold_iron_core", 1)
 	Run.collect(&"tension_coil", 3)
 	# Everything OUT of the document case, because the rule under test here is the
-	# old one and it is still the rule for seven of the twelve slots: a component
-	# in the hold when you die is gone. Pickup fills the case first (GDD §3.1), so
+	# old one and it is still the rule for the exposed hold: a component there
+	# when you die is gone. Pickup fills the case first (GDD §3.1), so
 	# without this the core would come home and G2 would be checking the case
 	# rather than the floor. What the case does with a core is `forgive_loop`'s.
 	for id: StringName in Run.case_contents():

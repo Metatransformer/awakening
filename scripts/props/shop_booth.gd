@@ -117,9 +117,11 @@ static var PARTS := {
 		{"f": "CandleStick.gltf", "at": Vector3(0.95, 0.89, -0.16), "yaw": 0.0},
 		# The still, working away behind her.
 		{"f": "Cauldron.gltf", "at": Vector3(-1.15, 0.0, -1.55), "yaw": 0.0},
-		{"f": "Crate_Wooden.gltf", "at": Vector3(0.90, 0.0, -1.90), "yaw": 8.0},
-		# Standing ON the crate -- 0.90 is the crate's measured lid, not a guess.
-		{"f": "Shelf_Small_Bottles.gltf", "at": Vector3(0.85, 0.90, -1.85), "yaw": 0.0},
+		# The stock shelf stays low and lateral. The previous full-height bottle wall
+		# stood directly in the production camera on the garden's north exit.
+		{"f": "Crate_Wooden.gltf", "at": Vector3(1.35, 0.0, -1.55), "yaw": 8.0},
+		{"f": "SmallBottles_1.gltf", "at": Vector3(1.35, 0.90, -1.55), "yaw": 0.0,
+			"tint": Color(0.55, 0.82, 0.68)},
 	],
 }
 
