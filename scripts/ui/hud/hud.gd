@@ -382,6 +382,7 @@ func _ready() -> void:
 			_icons[id] = tex
 
 	Bus.player_health_changed.connect(_on_health)
+	Bus.temporary_overhealth_changed.connect(_repaint)
 	Bus.hero_struck.connect(_on_hero_struck)
 	Bus.hero_hurt.connect(_on_hero_hurt)
 	Bus.stamina_changed.connect(_on_stamina)
@@ -1525,7 +1526,7 @@ func _draw_player_meter(s: Vector2, key: StringName, rect: Rect2,
 ## A later segment underlaps that end by one diagonal, leaving its left edge flat
 ## beneath the current fill so a damage ghost can show through as a small wedge.
 func _draw_meter_segment(s: Vector2, track: Rect2, from: float, to: float,
-		color: Color, heavy: bool = false) -> void:
+		color: Color, heavy: bool = false, underlap_left: bool = true) -> void:
 	var first := clampf(from, 0.0, 1.0)
 	var last := clampf(to, first, 1.0)
 	if last <= first:
@@ -1534,7 +1535,7 @@ func _draw_meter_segment(s: Vector2, track: Rect2, from: float, to: float,
 		Pal.HEALTH_METER_DIAGONAL if heavy else Pal.METER_DIAGONAL, s.y)
 	var left_diagonal := is_zero_approx(first)
 	var first_x := track.position.x + track.size.x * first
-	if not left_diagonal:
+	if not left_diagonal and underlap_left:
 		first_x = maxf(track.position.x, first_x - diagonal)
 	var segment := Rect2(first_x, track.position.y,
 		track.position.x + track.size.x * last - first_x, track.size.y)
@@ -1588,6 +1589,17 @@ func _draw_health(s: Vector2) -> void:
 	# trades this collision for the same one a row down.
 	var fill: Color = Pal.VITAL.lerp(Pal.VOID, pulse) if low else Pal.VITAL
 	_draw_meter_segment(s, track, 0.0, float(Game.quarters) / float(total), fill, true)
+
+	# Temporary overhealth is a shield laid over the authored health instrument,
+	# not more health-bar capacity. Four reference pixels per quarter make its
+	# 1-3 quarter states discrete without moving the real-health fraction, ticks,
+	# or published bezel bounds. It is drawn as the same hard meter segment, but
+	# without the ordinary segment underlap so the GOLD width stays exact.
+	var overhealth_width := minf(track.size.x,
+		Pal.px(4.0 * float(Game.temporary_overhealth), s.y))
+	if overhealth_width > 0.0:
+		var overhealth_from := 1.0 - overhealth_width / track.size.x
+		_draw_meter_segment(s, track, overhealth_from, 1.0, Pal.GOLD, true, false)
 
 	# Ticks last, cutting through fill and track alike -- that is what keeps the
 	# bar countable. Heart boundaries are heavier than quarters.

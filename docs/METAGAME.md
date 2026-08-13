@@ -260,8 +260,8 @@ charge = min(toll, current_gold)
 The rope always works. If the calculated toll exceeds the purse, extraction
 takes all current gold and still brings the haul home. Extraction banks the
 whole bag by item kind and preserves current health. Rest and sleep are the
-normal garrison recovery seam; purchased bed ranks restore one heart each when
-sleeping.
+normal garrison recovery seam: every completed sleep restores real health to
+maximum, and purchased bed ranks grant one temporary quarter-heart each on top.
 
 Death loses the exposed bag, banks the document case, preserves gold and
 permanent progression, and returns the player to the garrison at full health.
@@ -411,7 +411,9 @@ equipment screen reports only damage, speed, maximum health, stamina, and soak.
 
 ### Home convenience ladders
 
-- **Bed recovery:** three ranks, one heart restored per rank when sleeping.
+- **Better Bed:** three ranks, one temporary quarter-heart granted per rank when
+  sleeping; this overhealth absorbs damage before real health and does not raise
+  maximum health.
 - **Locker shelves:** starts at **24 cells**; two ranks add six each, for a hard
   maximum of **36**.
 - **Early Reveille:** one rank; services open at **06:00** instead of 07:00.
@@ -421,8 +423,9 @@ It uses the same stack-to-cell arithmetic as the bag. A full locker refuses a
 transfer visibly. Starting a new trip clears the run bag, so anything the player
 wants to keep unsold must first be sold, crafted, or moved into the locker.
 
-The bed requires a hold, advances to dawn, restores stamina, applies purchased
-bed recovery, and requests an autosave. It is unavailable during a descent.
+The bed requires a hold, advances to dawn, fully restores real health and
+stamina, grants purchased Better Bed overhealth, and requests an autosave. It is
+unavailable during a descent.
 
 ## 11. Boundaries
 

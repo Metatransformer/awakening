@@ -19,7 +19,8 @@ const BONE := Color("d8d0b8")
 const MOTH := Color("807868")
 const VITAL := Color("e04038")
 const RUST := Color("b83818")
-## Currency, and ONLY currency. Not a torch, not a title, not a highlight.
+## Currency; the only exceptions are the authored Boss Key/Door progression mark
+## and temporary overhealth's fixed health-bar end-cap. Not a general highlight.
 const GOLD := Color("f8c038")
 ## The only cool saturated hue. Reserved for the way out.
 const CYAN := Color("38d0c8")
