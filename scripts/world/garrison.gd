@@ -48,9 +48,8 @@ const SKY_SHADER := preload("res://assets/shaders/sky.gdshader")
 
 ## Where the paved circle sits, and how big it is.
 ##
-## Two metres south of the yard's own centre. The plaza has to sit between the
-## arrival and the gate WITHOUT swallowing either -- the hero lands at (0, 0, +4)
-## and the paving now stops at +3.8, so he steps onto it rather than onto it.
+## Two metres north of the yard's own centre. The plaza leaves a clear arrival
+## threshold inside the south gate, then anchors the route to the north wing.
 ##
 ## **The keepers are no longer placed off these.** They used to be, one polar
 ## coordinate each around this circle; `GarrisonCompound` owns where a role
@@ -564,9 +563,8 @@ func _build_yard() -> void:
 
 ## The paving, and the thing standing on the middle of it.
 ##
-## Built BEFORE the people, because the people are placed off `PLAZA_AT` and the
-## statue has to be in the tree first for the Lanternkeeper's spot to have
-## anything behind it.
+## Built before the people so the courtyard landmark is already present when the
+## roster arrives around it.
 ##
 ## The statue is set 3.9 m off the plaza's middle, north-east. **Not due north**,
 ## which was the first cut and which put a 4 m column of stone directly between
@@ -575,7 +573,7 @@ func _build_yard() -> void:
 ## figure with a bigger figure over its shoulder, rather than at two things
 ## stacked.
 ##
-## `STATUE_BEARING` is its OWN number now. It used to be read off `KEEPER_YAW` --
+## `STATUE_BEARING` is its own number now. It used to follow the keeper's yaw --
 ## the monument stood at the Lanternkeeper's back, which was true and tidy right
 ## up until he left the middle of the plaza to stand in front of the hero. A
 ## statue that follows a person around is a statue nobody can place; this is a
@@ -589,9 +587,7 @@ func _build_plaza() -> void:
 	statue = Statue.new()
 	var out := Vector3(sin(deg_to_rad(STATUE_BEARING)), 0.0, -cos(deg_to_rad(STATUE_BEARING)))
 	statue.position = PLAZA_AT + out * 3.9
-	# Looking back across the plaza at the people arriving, which is what it was
-	# doing before and where the value comes from -- it is the yaw `KEEPER_YAW`
-	# used to hand it, written down now that the keeper no longer stands here.
+	# Looking back across the plaza at the people arriving.
 	statue.rotation.y = deg_to_rad(STATUE_YAW)
 	add_child(statue)
 
@@ -630,112 +626,19 @@ func _build_house() -> void:
 	add_child(house)
 
 
-## Where the Lanternkeeper stands, and which way he looks.
-##
-## **Conversation distance in front of where the hero lands, half a pace off his
-## shoulder.** The hero arrives at (0, 0, +4) and the arrival camera sits behind
-## him at (0, 1.7, +8) looking up -Z, so this is the frame the player opens their
-## eyes into and every number here is measured in it.
-##
-## The DISTANCE was walked in twice. 6 m -- the plaza's middle, where he used to
-## stand behind a stall -- reads as a man who happens to be over there. 2.4 m
-## still reads as across-the-room. 1.8 m is close enough that his face is legible
-## before the player has touched the stick, and `Npc`'s trigger is 2.3 m, so TALK
-## is up on the very first frame. Closer and the hero spawns inside his capsule.
-##
-## The 0.7 m OFF THE AXIS is the part that is not obvious and is not optional.
-## Dead centre is the strongest place in the frame and it is also directly behind
-## the player's own character: at x = 0 the hero's shoulders cover the elder's
-## chest from the arrival camera, so the first thing you ever see of the person
-## speaking to you is a head floating over your own. Stepped to the hero's left he
-## clears the silhouette completely and is still 6.9 degrees off the camera's
-## axis, which `tools/directors/voices.gd` C1 measures against a 24 degree bound.
-## LEFT rather than right because the statue and its plinth fill the right half of
-## this shot; put him that side and he is a figure in front of a bigger figure.
-##
-## He is the person who says "I've been expecting you" over that frame
-## (`_open_the_game`), and a man saying it from six metres off to one side, behind
-## a stall, is a man the player has to be *told* is talking to them.
-##
-## The yaw aims his +Z at the spawn point rather than straight down -Z: 21
-## degrees is `atan2(0.7, 1.8)`, the angle from where he stands to where the hero
-## lands, so the offset above buys its framing without costing the thing it was
-## for. `Npc`'s +Z is the side the customer stands on -- every director that
-## photographs a keeper derives its camera from it (`garrison_look.gd`) -- and
-## the model's own art-space flip is handled inside `Npc`, not here. CLAUDE.md
-## §4: measured off a render, not reasoned out of a rest pose.
-##
-## He is ON the walk to the gate, and that is the price of the centre line, paid
-## deliberately. Sidestepping a man who greets you by name is a fair cost; the
-## alternative is the thing that was there before, where the first person in the
-## game could be walked straight past without ever being looked at.
-const KEEPER_AT := Vector3(-0.7, 0.0, 2.2)
-const KEEPER_YAW := 21.0
-
 ## Where the monument stands on the plaza, and which way it looks. Both used to
-## be `KEEPER_YAW`'s job; see `_build_plaza` for why they are their own numbers
-## now, and for why the bearing is not due north. The two values are what that
-## arrangement produced, kept exactly: x = +2.8, looking back at the arrival.
+## follow the Lanternkeeper; see `_build_plaza` for why they are their own
+## numbers now, and for why the bearing is not due north.
 const STATUE_BEARING := 45.0
 const STATUE_YAW := -45.0
 
 
-## Five counters on one circle, and one carved figure in the middle of it.
-##
-## **The whole of this function used to be five independent placements**, each
-## with a good argument and a comment defending it: the quartermaster and the smith
-## against the north wall either side of the arch, the alchemist on the west
-## inside the arrival frame, the jewelcrafter hard against the west wall after
-## the smith, the Lanternkeeper loose on the east. Every one of those arguments
-## was about the LOOP -- who you visit with a full bag, who you visit on the way
-## out -- and every one of them was right. What none of them could say was where
-## the middle of the garrison was, because there wasn't one.
-##
-## So the loop arguments are kept and re-expressed as bearings round a plaza,
-## which is a thing the old layout could not do and the new one gets for free:
-##
-##   * **North-east and north-west, flanking the gate: the smith and the
-##     quartermaster.** The two counters you go to with a full bag, still nearest
-##     the way in, still the first pair a returning player walks between.
-##   * **East and west, level with the middle: the jewelcrafter and the
-##     alchemist.** The two you visit on the way back OUT, so they sit on the
-##     half of the ring you cross walking from the plaza to the arch. The
-##     jewelcrafter still comes after the smith along that walk (GDD §6.6 -- her
-##     offer only means anything once the plate has cost you something), which
-##     was the entire argument for her old spot against the west wall and
-##     survives the move intact.
-##   * **Off the ring entirely: the Lanternkeeper**, who has no kiosk and stands
-##     on the hero's own axis two and a half metres in front of where he lands
-##     (`KEEPER_AT`). He was on the plaza's middle with a stall in front of him,
-##     which answered the reward question -- his lamp is fifteen metres away, so
-##     where you stand when you stop talking to him matters, and from the paving
-##     turning away faces the yard in every direction -- and that is still true
-##     one plaza-radius nearer. What it could not answer is that he is also the
-##     village elder and speaks the opening's third line to a player who has just
-##     opened their eyes. A greeting has to come from somebody visibly greeting
-##     you, and four counters is already the number of counters this yard has.
-##
-## ## Three of them are not here yet
-##
-## **The ring is the layout, not the roster.** `StoryDb.UNLOCKS` says who has
-## arrived, and a keeper who has not is simply not built -- no booth, no lamp, no
-## sign, no `Npc`. A new save's yard is Aldric, Kessa and the gate; the smith
-## comes up the road after the first boss, the alchemist after the second and the
-## jewelcrafter after the third (owner's call, 2026-08-10).
-##
-## The alternative -- five people standing there with three of their counters
-## refusing to open -- was rejected because it says the wrong thing twice: it
-## makes an outpost that is visibly finished on the first frame, and it turns the
-## reward for killing a boss into a shop that stops saying no. A trader walking
-## into the yard is a thing the player can SEE happen, and it is the only pacing
-## the garrison has.
-##
-## The three fields stay `null` until then, so anything that reaches for
-## `garrison.smith` must check. Directors get all five: `tools/shoot.gd` stamps
-## the arrival flags, for the same reason it skips the opening.
-## Build the existing roster into the generated compound's named ports. The
-## generator knows where a role belongs; this scene remains the owner of who has
-## arrived and of every gameplay node.
+## Build the existing roster into the generated compound's named destinations.
+## The four traders occupy separate service nooks instead of one counter line;
+## the Lanternkeeper has no stall and waits on the arrival axis to greet Kael.
+## The generator owns those spatial decisions while this scene owns who has
+## arrived and every gameplay node. `StoryDb.UNLOCKS` still controls the roster,
+## so unrecruited traders leave genuinely empty nooks rather than closed shops.
 func _build_compound_people() -> void:
 	vendor = _compound_counter(Npc.Role.VENDOR, &"quartermaster",
 		&"quartermaster_day", Pal.GOLD)

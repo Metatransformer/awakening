@@ -40,9 +40,11 @@ func run(rig) -> void:
 	await rig.capture(out.path_join("tl_00_yard.png"))
 
 	# And the walk in, at eye height -- what you see stepping out of the gate.
+	# The eye stays behind the arrival point so the elder waiting there is framed
+	# at conversation distance instead of sharing the camera's position.
 	cam.fov = 50.0
-	cam.global_position = Vector3(0.0, 1.7, 8.0)
-	cam.look_at(Vector3(0.0, 1.2, -4.0), Vector3.UP)
+	cam.global_position = Vector3(0.0, 1.7, 12.8)
+	cam.look_at(Vector3(-0.9, 1.2, 7.9), Vector3.UP)
 	await rig.wait_frames(4)
 	await rig.capture(out.path_join("tl_01_arrive.png"))
 
@@ -60,8 +62,8 @@ func run(rig) -> void:
 	await rig.wait_frames(4)
 	await rig.capture(out.path_join("tl_02_gatehouse.png"))
 
-	# And the plaza from over the south opening, which is the frame that answers
-	# "is this a circle with shops round it" -- the one claim the layout makes.
+	# And the plaza from over the south opening, which shows the yard's landmark
+	# and the distinct rooms and service nooks around it.
 	cam.fov = 62.0
 	cam.global_position = garrison.plaza.global_position + Vector3(0.0, 7.0, 13.0)
 	cam.look_at(garrison.plaza.global_position + Vector3(0.0, 1.6, 0.0), Vector3.UP)
