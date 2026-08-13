@@ -48,7 +48,7 @@ const THIEF_AT := Vector3(0.5, 0.05, 2.5)
 const DOOR_NEAR := Vector3(6.0, 0.0, -3.0)
 const DOOR_FAR := Vector3(-20.0, 0.0, 10.0)
 
-## What goes in the bag before anything is stolen, in order. The first three fill
+## What goes in the bag before anything is stolen, in order. The first five fill
 ## the document case (`Run.CASE_SLOTS`), which is exactly what this beat needs:
 ## the thief must never be able to reach them.
 const PACK: Array = [
@@ -439,7 +439,7 @@ func _doors(scene: Node) -> void:
 		d.rotation.y = PI * 0.5 if at == DOOR_NEAR else 0.0
 
 
-## Start a run and pack the bag. The first three lines land in the document case
+## Start a run and pack the bag. The first five lines land in the document case
 ## (`Run._place` fills it first), which is exactly the arrangement the theft has
 ## to be tested against.
 func _fill_bag() -> void:

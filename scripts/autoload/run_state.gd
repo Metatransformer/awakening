@@ -34,7 +34,7 @@ var bag: Dictionary[StringName, int] = {}
 ## and `slots_used()` are all arithmetic over "what you are carrying", and every
 ## one of them would have needed a second term the day the case became a bag of
 ## its own -- which is the drift CLAUDE.md §0 is about. What the case actually is
-## is a MARK on three of the slots, so it is stored as one.
+## is a MARK on five of the slots, so it is stored as one.
 ##
 ## Cleared with the bag. `_case_trim()` is what keeps the subset true: anything
 ## that takes items out of `bag` by any door calls it rather than remembering to
@@ -121,7 +121,7 @@ var seed_next: int = 0
 
 ## Slots of the bag that are the Society's document case, counted off the top.
 ##
-## **Three of twelve, and it is not a dice roll** (docs/GDD.md §3.1). The case is
+## **Five of twelve, and it is not a dice roll** (docs/GDD.md §3.1). The case is
 ## legible for the whole run, so the player knows at every moment exactly what
 ## they would keep -- which is what makes packing a decision rather than a
 ## consolation prize handed out at the moment of death.
@@ -129,7 +129,7 @@ var seed_next: int = 0
 ## It is not a `Game` field and it is not bought: the four bag slots the smith
 ## sells all land in the HOLD (`hold_slots()`), because a case that grew with the
 ## bag would hand the player back the catastrophe the cap exists to pose.
-const CASE_SLOTS := 3
+const CASE_SLOTS := 5
 
 ## Fraction of the bag's sale value the teleport costs. [tune]
 const EXTRACT_RATE := 0.25
@@ -571,14 +571,14 @@ func relic_toll() -> int:
 	return _relic_toll_of(bag)
 
 
-## Die. **The case comes home; the other nine slots are gone.** Gold and anything
+## Die. **The case comes home; the other seven slots are gone.** Gold and anything
 ## bought with it survives, as it always did.
 ##
 ## Added 2026-08-10 (docs/GDD.md §3.1). Death used to take the whole bag, which is
 ## harsher than Souls -- you cannot walk back for it -- and harsher than any
 ## roguelite this game is measured against, all of which pay something for every
-## run. Forty minutes for nothing is how a loop gets closed, and three slots is
-## the smallest answer that is not a dice roll.
+## run. Forty minutes for nothing is how a loop gets closed; a fixed five-slot
+## case makes the answer legible rather than a dice roll.
 ##
 ## The case's contents are handled EXACTLY as an extraction handles the bag, one
 ## call short: components in it go to the bench, ingredients stay in the bag to be
@@ -611,7 +611,7 @@ func die() -> void:
 			lost[id] = n
 	var lost_value := _value_of(lost)
 	# Measured before the pot is split, because `_premium_share` divides by the
-	# bag as it stands and the bag is about to be nine slots smaller.
+	# bag as it stands and the bag is about to be seven slots smaller.
 	var lost_hot := _premium_share(_base_of(lost) - _relic_toll_of(lost))
 
 	# The heat premium follows the merchandise. What the floor kept takes its
@@ -903,8 +903,8 @@ func _place(id: StringName, def: ItemDef) -> bool:
 
 
 # --- The document case (docs/GDD.md §3.1) -----------------------------------
-# Three slots off the top of the bag. What is in them comes home; what is not,
-# does not. Nine slots still die, which is what keeps §2's question -- is this
+# Five slots off the top of the bag. What is in them comes home; what is not,
+# does not. Seven slots still die, which is what keeps §2's question -- is this
 # worth the walk back -- a question.
 
 ## How many of `id` are in the case right now.
@@ -1162,7 +1162,7 @@ func consume(id: StringName, count: int = 1) -> int:
 ##  * **The HOLD only. The document case is never reachable.** The case is the
 ##    game's one promise -- what is in it comes home (GDD §3.1) -- and a monster
 ##    that could reach into it would make packing meaningless in exactly the
-##    moment packing is supposed to pay. Nine slots is plenty to steal from, and
+##    moment packing is supposed to pay. Seven slots is plenty to steal from, and
 ##    a player who has packed the good things is a player who prepared.
 ##  * **The richest slot it can reach**, not a random one. That is what makes
 ##    chasing it a real question: a thief that took the cheapest line would

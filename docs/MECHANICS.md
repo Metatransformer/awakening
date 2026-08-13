@@ -64,7 +64,7 @@ duplicate each item, Echo, relic, recipe, or numerical cap.
 | Decision family | Player-facing question | Detail owner |
 |---|---|---|
 | Finite bag | Which stack earns scarce space, and what do I visibly leave behind? | [METAGAME.md](METAGAME.md) |
-| Document case | Which eligible stacks deserve the three protected cells? | [METAGAME.md](METAGAME.md) |
+| Document case | Which eligible stacks deserve the five protected cells? | [METAGAME.md](METAGAME.md) |
 | Reward lanes | Do I want safe gold, saleable ingredients, bench components, or a unique artifact consequence? | [METAGAME.md](METAGAME.md), [ITEMS.md](ITEMS.md) |
 | Heat premium | Do I maintain tempo long enough to collect boosted value before it cools? | [METAGAME.md](METAGAME.md) |
 | Change floors | Is another floor worth carrying current exposure deeper, or should I retrace the same live trip toward the entrance? | [METAGAME.md](METAGAME.md) |

@@ -41,7 +41,7 @@ extends Control
 ## crossed one: what the case brought home. It is a column and not a footnote
 ## because the case is only forgiveness if the player can see it *against* what
 ## it did not save — the amber they went one room too far for, crossed out, next
-## to the three slots they had the sense to pack. An extraction still shows one
+## to the five slots they had the sense to pack. An extraction still shows one
 ## column, because the whole bag came back and a split there would be the screen
 ## inventing a distinction the ending did not make.
 ##
@@ -421,8 +421,8 @@ func _build_field_notes(parent: Node) -> void:
 
 ## The bag, and the cross through it.
 ##
-## **On a death this is two columns, side by side** (docs/GDD.md §3.1): the nine
-## slots the floor kept, crossed out, and next to them the three the document
+## **On a death this is two columns, side by side** (docs/GDD.md §3.1): the seven
+## slots the floor kept, crossed out, and next to them the five the document
 ## case brought home, not crossed. They are drawn at the same moment, in the same
 ## card, at the same cell size, because the case is only forgiveness if you can
 ## SEE it against what it did not save — a second screen, or a line of text

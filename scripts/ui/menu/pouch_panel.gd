@@ -15,13 +15,13 @@ extends Control
 ##  * **The bag**, slot by slot. Stacks occupy one cell until they overflow,
 ##    exactly as `Run.slots_used()` counts them, so the picture and the
 ##    arithmetic cannot disagree.
-##  * **The document case** — the top three of those slots, drawn as their own
+##  * **The document case** — the top five of those slots, drawn as their own
 ##    row above the rest with what it means written on it (docs/GDD.md §3.1).
 ##    The case is the one thing on this screen that is worth reading BEFORE you
 ##    are in trouble, because it is the answer to "what happens if I do not make
 ##    it back", and §3.1's whole argument is that the answer has to be legible
 ##    for the entire run rather than rolled at the moment of death. So it is not
-##    a mark on three cells: it is a card, with a caption, and A moves a stack
+##    a mark on five cells: it is a card, with a caption, and A moves a stack
 ##    across the line in either direction.
 ##  * **A component mark.** A component and an ingredient compete for the same
 ##    cell, and which one you are looking at decides whether it is going to the
@@ -73,7 +73,7 @@ const ROPE_HOLD := 0.9
 ## because this panel is the one that has to fight for the width.
 ##
 ## The bag holds `Game.bag_slots` (12 at the start, 16 bought out) less the
-## case's 3, so the grid is 9 cells at the low end and 13 at the high end: two
+## case's 5, so the grid is 7 cells at the low end and 11 at the high end: two
 ## rows then three, where four across was three rows then four. One row shorter
 ## is the point — the whole bag is one glance instead of a scan.
 ##
@@ -88,11 +88,9 @@ const ROPE_HOLD := 0.9
 ## the hover card carries the long name and detail the tighter strip elides.
 ## `DOLL_W` stays at its comfortable width and the bag keeps generous slack.
 ##
-## The case draws at this width too. It was `Run.CASE_SLOTS` — three cells
-## STRETCHED across the bag's width — which put two cell sizes on one screen and
-## is exactly what the owner was looking at: *"we need the inventory to be 5 per
-## row all rows."* Three tiles in a five-wide grid is three tiles the size of
-## every other tile, with the fourth and fifth positions simply not there.
+## The case draws at this width too. It is `Run.CASE_SLOTS` — five tiles in the
+## same five-wide grid as every other row, which is exactly what the owner was
+## looking at: *"we need the inventory to be 5 per row all rows."*
 const COLS := ItemGrid.COLS
 ## The cell's own numbers moved to `ItemGrid` when every other screen started
 ## drawing the same cell. Aliased here rather than deleted because the WORN
@@ -106,8 +104,8 @@ const CELL_NAME_PT := ItemGrid.NAME_PT
 ## Sixteen is `Game.bag_slots` at its bought maximum, which is the most the game
 ## can legitimately ask for; at `COLS` = 5 that is four rows rather than the four
 ## rows of four it used to be, and the real grid is smaller again because the
-## case takes three of those slots off the top (`Run.hold_slots`). Kept at the
-## bag's ceiling rather than lowered to the 13 the grid can actually be handed,
+## case takes five of those slots off the top (`Run.hold_slots`). Kept at the
+## bag's ceiling rather than lowered to the 11 the grid can actually be handed,
 ## because it is a guard against a corrupt number and not a layout constant.
 const MAX_CELLS := 16
 
@@ -139,7 +137,7 @@ var _doll: MenuPaperDoll
 var _cell_ids: Array[StringName] = []
 var _cell_counts: Array[int] = []
 var _grid: ItemGrid
-## The same two arrays for the case's three cells, and its own grid. Parallel
+## The same two arrays for the case's five cells, and its own grid. Parallel
 ## rather than one array with an offset: the two grids are two containers, each
 ## reports its own indices, and folding them into one range would mean every
 ## reader doing the arithmetic to find out which side of the line it is on.
@@ -434,9 +432,8 @@ func _build_grid(parent: Node) -> void:
 
 	_case_grid = ItemGrid.new()
 	_case_grid.name = "Case"
-	# `COLS`, not `Run.CASE_SLOTS`. The case holds three, and three cells in a
-	# three-wide grid were three cells STRETCHED to the bag's width — a row of
-	# tiles half again the size of the row below it. See `COLS`.
+	# `COLS`, not a second layout width. The case holds five, and its cells share
+	# the same five-wide grid and tile size as the row below it. See `COLS`.
 	_case_grid.columns = COLS
 	_case_grid.cell_focused.connect(_on_case_focused)
 	_case_grid.cell_activated.connect(_on_case_activated)
@@ -470,8 +467,8 @@ func _build_grid(parent: Node) -> void:
 ## is still right, which is the number the fee is taken from.
 ##
 ## Two grids now, laid out from the same rule and from the two halves `Run` keeps
-## — `Run.in_case(id)` and `Run.in_hold(id)`. The case's three cells are the
-## bag's top three slots, so the HOLD is `bag_slots - CASE_SLOTS` and every slot
+## — `Run.in_case(id)` and `Run.in_hold(id)`. The case's five cells are the
+## bag's top five slots, so the HOLD is `bag_slots - CASE_SLOTS` and every slot
 ## the smith sells lands in it (`Run.hold_slots`).
 func _fill_cells() -> void:
 	var want := clampi(Run.hold_slots(), 1, MAX_CELLS)
@@ -923,7 +920,7 @@ func tab_host() -> HBoxContainer:
 ## the tab strip so ↑ leaves the page through them and ↓ off a tab comes back
 ## down onto the first (card #120, `MenuPageTabs`).
 ##
-## The CASE's three cells and not the bag's. The case is the top of the picture
+## The CASE's five cells and not the bag's. The case is the top of the picture
 ## and the row `focus_first` already opens on, so it is the row a player leaves
 ## upwards through; the bag's own top row exits upwards INTO the case, which is
 ## the move it has always made.
@@ -1033,7 +1030,7 @@ func _on_drop_pressed() -> void:
 ## A on a carried cell packs that stack into the case.
 ##
 ## A whole cell at a time, in both directions. Per-item packing would be the more
-## flexible verb and it is the wrong one: the case is three slots and the choice
+## flexible verb and it is the wrong one: the case is five slots and the choice
 ## §3.1 wants you making is *which things*, not how many of a thing — and a
 ## part-stack moved on its own costs a slot on each side of the line for nothing.
 func _on_hold_activated(index: int) -> void:
@@ -1155,7 +1152,7 @@ func _describe(index: int, case_side: bool) -> void:
 	if _tip == null or index < 0 or index >= ids.size():
 		return
 	var id: StringName = ids[index]
-	# The case's three slots are the bag's first three, so the number the player
+	# The case's five slots are the bag's first five, so the number the player
 	# reads is continuous across the line even though the cells are two grids.
 	var slot := index + 1 if case_side else index + 1 + Run.CASE_SLOTS
 

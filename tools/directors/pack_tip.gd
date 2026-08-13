@@ -190,8 +190,8 @@ func _shape(pouch) -> void:
 ##
 ## RIGHT **wraps inside a row** (`ItemGrid._wire_focus`, and it is deliberate —
 ## a stick that dead-ends every fifth cell is the failure that wiring exists to
-## prevent), so a walk that only pressed RIGHT would circle the case's three
-## cells forever and report every check green off three of the twelve. So: RIGHT
+## prevent), so a walk that only pressed RIGHT would circle the case's five
+## cells forever and report every check green off five of the twelve. So: RIGHT
 ## while the row still has an unvisited cell in it, DOWN the moment it comes back
 ## round to one already seen.
 ##

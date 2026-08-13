@@ -56,14 +56,14 @@ const FACE_MINUS_Z := PI
 
 ## What goes in the hold when a beat wants a bag worth stealing from.
 ##
-## **Four rows and not one, and the count is the point.** `Run._place` fills the
-## three-slot document CASE first and the case is the one region a thief may
+## **Six rows and not one, and the count is the point.** `Run._place` fills the
+## five-slot document CASE first and the case is the one region a thief may
 ## never reach into, so a single stack lands entirely out of reach and the beat
 ## silently becomes a second copy of the empty one. The first cut of this file
 ## did exactly that: identical tick counts, to the digit, and nothing said why.
 const PACK: Array = [
 	[&"bone_shard", 20], [&"rot_moss", 20], [&"cracked_flint", 20],
-	[&"iron_scrap", 12],
+	[&"grave_wax", 15], [&"iron_scrap", 12], [&"void_pearl", 4],
 ]
 
 ## Goblins rolled in the share beat. Enough that the sampling error on a 0.25
