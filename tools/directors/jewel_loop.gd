@@ -317,7 +317,7 @@ func _ceilings() -> void:
 		Game.upgrades[Game.jewel_track(slot, &"swift")] = K.JEWEL_MAX
 	print("JEWEL swift-only raw=%.4f clamped=%.4f" % [
 		Game.speed_mult_raw(), Game.speed_mult()])
-	_ck("F2 jewellery never outruns [oot]", is_equal_approx(Game.speed_mult(), 1.0))
+	_ck("F2 jewelery never outruns [oot]", is_equal_approx(Game.speed_mult(), 1.0))
 	_ck("F3 but the raw product knows it had headroom",
 		Game.speed_mult_raw() > 1.0)
 
