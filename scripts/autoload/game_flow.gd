@@ -17,7 +17,9 @@ extends Node
 const GARRISON := "res://scenes/rooms/garrison.tscn"
 const OUTSKIRTS := "res://scenes/rooms/garrison_outskirts.tscn"
 const DUNGEON := "res://scenes/rooms/dungeon.tscn"
+const DEV_PUZZLE := "res://scenes/rooms/dev_puzzle.tscn"
 const TITLE := "res://scenes/ui/title/title_screen.tscn"
+const DEV_RUN_SEED := 0x0D3C0DE
 
 const FADE_OUT := 0.35
 const FADE_IN := 0.45
@@ -75,6 +77,7 @@ var ending: bool = false
 ## Set only while Bed advances the clock behind Flow's own veil. Dawn listeners
 ## still update the world, but the curfew handler must not start another trip.
 var deliberate_rest: bool = false
+var dev_puzzle_id: StringName = &""
 var _dawn_collapse := false
 var _wake_at_bunk := false
 
@@ -124,8 +127,8 @@ func _ready() -> void:
 	# the reason pause_menu.gd states about its own `quit_to_title_requested`: P14
 	# does not own scene transitions. Flow does, and it is the only thing that
 	# calls `change_scene_to_file` (see the header). `Menu` is safe to reach for
-	# here because Flow is the LAST autoload -- the note above it in
-	# `project.godot` is the record of why -- so the menu is already in the tree.
+	# here because Flow loads after Menu -- the ordering note in `project.godot`
+	# is the record of why -- so the menu is already in the tree.
 	Menu.load_requested.connect(_on_menu_load_requested)
 
 
@@ -441,6 +444,38 @@ func to_outskirts() -> void:
 	_go(OUTSKIRTS, 0.0)
 
 
+## Local developer travel. These paths deliberately bypass autosave so testing
+## can never replace the player's resumable run.
+func dev_to_town() -> void:
+	if busy:
+		return
+	ending = false
+	dev_puzzle_id = &""
+	_abandon_run()
+	_go(GARRISON, 0.0, {}, ArrivalIntent.DEFAULT, false)
+
+
+func dev_to_dungeon(floor_level: int = 1) -> void:
+	if busy or floor_level < 1 or floor_level > 3:
+		return
+	ending = false
+	dev_puzzle_id = &""
+	Run.enter(DEV_RUN_SEED)
+	for _floor: int in range(1, floor_level):
+		Run.descend_floor()
+	_go(DUNGEON, 0.0, {}, ArrivalIntent.DEFAULT, false)
+
+
+func dev_open_puzzle(id: StringName) -> void:
+	if busy or id == &"":
+		return
+	ending = false
+	dev_puzzle_id = id
+	Run.enter(DEV_RUN_SEED)
+	PuzzleAtom.clear_run_flags()
+	_go(DEV_PUZZLE, 0.0, {}, ArrivalIntent.DEFAULT, false)
+
+
 ## The ride home. Called by the ending screen's BACK TO THE GARRISON button,
 ## and by anything else that just wants the hub.
 func to_garrison() -> void:
@@ -720,7 +755,8 @@ func _show_ending() -> void:
 ## empty for every other transition. `arrival` is Flow's internal generated-floor
 ## seam and never changes ordinary save placement.
 func _go(path: String, hold: float, dest: Dictionary = {},
-		arrival: ArrivalIntent = ArrivalIntent.DEFAULT) -> void:
+		arrival: ArrivalIntent = ArrivalIntent.DEFAULT,
+		autosave: bool = true) -> void:
 	busy = true
 	Prompt.blocked = true
 	if hold > 0.0:
@@ -814,17 +850,16 @@ func _go(path: String, hold: float, dest: Dictionary = {},
 	else:
 		tin.tween_property(_veil, "color:a", 0.0, FADE_IN)
 
-	# The autosave, and it is EVERY transition rather than a flag per caller.
-	# Entering, changing floors, loading, extracting and dying are all moments the
-	# player would be furious to replay. A rule with no exceptions also cannot be
-	# forgotten by the next caller.
+	# Every player transition autosaves by default. Local developer travel is the
+	# explicit exception: it must never replace a real resume slot.
 	#
 	# Here at the END, not before the fade, for two reasons. `Saves.save` reads
 	# the hero's position out of the live tree, and during the fade that hero is
 	# the one in the scene being left. And the notice this raises is drawn by the
 	# HUD -- announcing it to a screen that is still black is announcing it to
 	# nobody, so it goes up on the same frame the world comes back.
-	Saves.autosave()
+	if autosave:
+		Saves.autosave()
 
 
 # --- The loading card -------------------------------------------------------

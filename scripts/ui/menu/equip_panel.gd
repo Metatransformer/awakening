@@ -762,9 +762,13 @@ func refresh() -> void:
 	# that always re-described a HAND would throw away the wheel's blurb every time
 	# a binding changed, which is precisely when the player is reading it.
 	var focused := get_viewport().gui_get_focus_owner()
-	if _wheel_cells.has(focused):
+	# A different always-on overlay can own focus while a loadout signal refreshes
+	# this hidden panel. Typed Array.has validates its argument before comparing,
+	# so feeding it the console's TextEdit raises an engine error rather than
+	# simply answering false.
+	if focused is Button and _wheel_cells.has(focused as Button):
 		_describe_wheel(focused as Button)
-	elif _slots.has(focused):
+	elif focused is Button and _slots.has(focused as Button):
 		_describe(focused as Button)
 	else:
 		_describe(_slots[HANDS.find(Game.HAND_RIGHT)])
