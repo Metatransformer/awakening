@@ -25,6 +25,12 @@ const _COSTS := {
 	REVEILLE_ID: [350],
 }
 
+const RUNG_NAMES := {
+	BED_ID: ["Wool Mattress", "Featherbed", "Restorative Bed"],
+	LOCKER_ID: ["Pine Shelves", "Iron Shelves"],
+	REVEILLE_ID: ["Dawn Bell"],
+}
+
 
 static func emblem() -> StringName:
 	return &"locker"
@@ -69,11 +75,11 @@ static func groups() -> Array[Dictionary]:
 	for i in rows.size():
 		at[rows[i]["id"]] = i
 	return [
-		{"title": "QUARTERS", "icon": "quarters", "tracks": [
+		{"title": "QUARTERS", "tab": "QUARTERS", "icon": "quarters", "tracks": [
 			_track(at, BED_ID, "BED"),
 			_track(at, LOCKER_ID, "LOCKER"),
 		]},
-		{"title": "REVEILLE", "icon": "reveille", "tracks": [
+		{"title": "REVEILLE", "tab": "REVEILLE", "icon": "reveille", "tracks": [
 			_track(at, REVEILLE_ID, ""),
 		]},
 	]
@@ -85,7 +91,17 @@ static func _track(at: Dictionary, id: StringName, name: String) -> Dictionary:
 		"line": int(at.get(id, -1)),
 		"owned": int(Game.upgrades.get(id, 0)),
 		"rungs": int(LIMITS[id]),
+		"rung_names": _rung_names(id, int(LIMITS[id])),
 	}
+
+
+static func _rung_names(id: StringName, rungs: int) -> Array[String]:
+	var authored: Array = RUNG_NAMES.get(id, [])
+	var names: Array[String] = []
+	for i in rungs:
+		names.append(String(authored[i]) if i < authored.size()
+			else "%s %d" % [String(id).replace("elder_", "").capitalize(), i + 1])
+	return names
 
 
 static func _line(id: StringName) -> Dictionary:

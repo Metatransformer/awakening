@@ -1,217 +1,126 @@
 class_name UpgradeLadder
-extends HFlowContainer
-## The counters' board, drawn as what it actually is: a row per THING, and along
-## each row the rungs of that thing's ladder with arrows between them.
-##
-## ## Why the flat list was wrong
-##
-## Every counter in this game sells ladders. `CHEST - HEAVY` is not a purchase,
-## it is the second of three rungs on one of eight tracks, and the flat board
-## showed only the rung you could buy next — so a player looking at the smith saw
-## twelve unrelated lines and no way to tell that four of them were pairs, that
-## each had two more rungs behind it, or how far along any of them they already
-## were. The shape of the decision was the one thing the screen did not draw.
-##
-## Here the shape IS the drawing: `CHEST` is one row, `HEAVY` and `LIGHT` are its
-## two branches, and the three rungs of each are three cells with arrows between
-## them. Bought rungs are lit and ticked, the next one carries its price, the ones
-## after it are dim. What the player is choosing — which ladder to spend the next
-## core on — is legible without reading a word.
-##
-## ## What it is not
-##
-## Not a screen (SCOPE §1 freezes those at zero) and not a shop. It knows nothing
-## about gold, components or `Game`; it is handed rows and cells and it arranges
-## them. The cursor, the prices, the affordability and the commit all stay in
-## `TradeScreen`, exactly as they did when the board was a grid.
-##
-## The cells are `ItemCell`, the same button the bag is made of, in its compact
-## size. That is deliberate to the point of being the reason this file exists
-## rather than a `_draw()`: a rung on the smith's board and a stack in your bag
-## are drawn by one function, so they cannot drift.
-##
-## ## Card #118, and the three things it changed
-##
-## The structure above survived the card and the RENDERING did not. What the
-## owner saw was "a horizontal list with ugly icons, ugly text", and each of the
-## three complaints has an answer here:
-##
-## 1. **Every row has a face.** `UiKit.TRACK` art, 44px, at the head of the row,
-##    from the `icon` token the catalogue's `groups()` puts on it. Not from the
-##    title -- a title is display text and two of the jeweller's rows are the same
-##    object in two places on the body.
-## 2. **The board is not a stack.** This is an `HFlowContainer` of fixed-width
-##    PLATES, so the counter reads as a wall of cards, two abreast at 1280 and one
-##    on a narrow pane, instead of twelve full-width lines. It was a
-##    `VBoxContainer`; that is the whole diff for the layout, because every row
-##    was already its own subtree.
-## 3. **A bought ladder looks bought, from across the room.** Two things carry it,
-##    and they are deliberately both SHAPE rather than both colour:
-##    - the row's face brightens with the row's progress (`_ROW_DIM` -> full),
-##      so a save's column of icons is lit or dark before a word is read;
-##    - **an unclimbed rung is ABSENT, not greyed.** It draws as an empty socket
-##      a third the width of a cell, so a fresh track is a face and two dots and a
-##      finished one is a face and four filled cells. The old board drew every
-##      rung at full size whatever its state, which is why a maxed track and a
-##      fresh one differed by a tick and a dim and by nothing you could see at
-##      arm's length.
+extends VBoxContainer
+## A vertical, tabbed progression board. It arranges catalogue groups and tracks
+## but never interprets payment or performs a purchase; `TradeScreen` remains the
+## sole cursor mover and transaction owner.
 
-## The cursor landed on a cell. Non-negative selections index the catalogue's
-## `lines()`; owned rungs use stable negative keys from -2 down. -1 is no cell.
+## Non-negative selections index catalogue lines. Owned rungs use stable
+## negative keys from -2 down; -1 remains "no selection".
 signal cell_focused(selection: int)
-## A real press on a BUYABLE rung. Never emitted for an owned selection.
 signal cell_activated(line: int)
-
-## A group is one row:
-##
-##   {"title": String, "tracks": Array}
-##
-## and a track is one chain of rungs inside it:
-##
-##   {"name": String, "line": int, "owned": int, "rungs": int}
-##
-##   name   the branch's own label ("HEAVY"), or "" when the row has one track
-##   line   index into `lines()` of the NEXT buyable rung, or -1 when there is
-##          none — a finished ladder, or one the counter is not offering
-##   owned  how many rungs are already bought
-##   rungs  how long the ladder is
-##
-## A track with `rungs == 1` is not a ladder at all — a draught, a bag slot, a
-## bundle of arrows — and draws as a plain named cell rather than a numeral, so
-## the repeatables on a counter still look like the things they are.
-
-## Rungs are numbered, not named: the row already says what the ladder is, so
-## spending the cell's one line of text on "CHEST - HEAVY" again would leave
-## nowhere to put the number that distinguishes it from the cell beside it.
-## Four is every ladder in the game (`K.JEWEL_MAX`); the fallback is arithmetic
-## rather than a longer table so a fifth rung is a number, not a crash.
-const NUMERALS := ["I", "II", "III", "IV", "V", "VI"]
+## Emitted after a tab switch with the first selectable node on the new tab.
+## The screen updates its cursor/detail from this without stealing focus back
+## from the tab strip.
+signal tab_changed(first_selection: int)
 
 const ARROW := "→"
 const TICK := "✓"
-## The row's name column. Fixed, so every chain on the board starts at the same x
-## and the ladders read as columns of rungs rather than as ragged text.
-const TITLE_W := 132
-## One plate. Fixed and not expanding, which is what makes the flow a GRID: two
-## of these plus the flow separation is 1144 px, and the upgrade board's pane at
-## 1280 is about 1180 -- so a counter lays out two abreast and drops to one when
-## the pane is narrower, with no breakpoint written down anywhere.
-const PLATE_W := 566
-## The row's face. 44 and not the 19 a `VerbRow` gives a glyph: this art is
-## painted objects on the Pal ramp (`UiKit.TRACK`), and at 19px a painted object
-## is the dark smudge that made the first port of the kit look broken.
-const FACE_PX := 44
-## The face of a row with nothing bought on it. Not zero -- an unstarted track is
-## still an offer, and a row with no picture at all would read as broken rather
-## than as untouched.
-const _ROW_DIM := 0.34
-## An unclimbed rung, drawn as the hole where a cell will go. A third of
-## `ItemCell.COMPACT_SIZE` wide, so the row's LENGTH is a picture of how far up
-## the ladder the player is.
-const SOCKET := Vector2(26, 62)
+const RUNG_SIZE := Vector2(112, 58)
+const ROW_HEIGHT := 74
+const ROW_ICON_PX := 42
+const RUNG_ICON_PX := 46
+const TITLE_WIDTH := 148
+
+var _groups: Array[Dictionary] = []
+var _cell_entries: Array[Dictionary] = []
+var _tab_keys: Array[String] = []
+var _tab_buttons: Array[Button] = []
+var _active_tab := ""
+var _tab_strip: HBoxContainer
+var _body: VBoxContainer
 
 var _cells: Array[Button] = []
-## Parallel to `_cells`: the buyable catalogue line, or -1.
 var _line_of: Array[int] = []
-## Parallel to `_cells`: its selection key, or -1 for a future/non-offer cell.
 var _selection_of: Array[int] = []
-## Parallel to `_cells`: which row each is on.
 var _row_of: Array[int] = []
-## Read-only descriptions for owned selections, keyed by their negative key.
 var _owned_details: Dictionary[int, Dictionary] = {}
-## Every selectable cell in BOARD order, which is not `lines()` order — the
-## smith's groups put the shield between the blade and the armour while `_board`
-## puts it after. The cursor walks what the player can see: owned rungs and the
-## next buyable rung, never future sockets.
+var _labels_by_selection: Dictionary[int, String] = {}
 var _order: Array[int] = []
-var _rows_built: int = 0
+var _rows_built := 0
 
-## Where the cursor goes out of the last row. The screen's, because only the
-## screen knows what comes after its board.
+## Where focus may spill below the board. Navigation arrows are still consumed
+## and interpreted by `TradeScreen`; this seam is for compatibility with other
+## focus chains and mouse-driven focus.
 var spill_down: Control = null
 
 
 func _init() -> void:
-	add_theme_constant_override("h_separation", 12)
-	add_theme_constant_override("v_separation", 10)
+	add_theme_constant_override("separation", 8)
+	size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	size_flags_vertical = Control.SIZE_EXPAND_FILL
 
 
-## Draw the board. `cells` is parallel to the catalogue's `lines()` and supplies
-## what a BUYABLE rung says — its `sub` (the price), its `tint` and its `dim`
-## (cannot pay for it). Owned and future rungs are the ladder's own to draw,
-## because nothing in `lines()` describes a rung you are not being offered.
+## Rebuild from catalogue groups while keeping the active tab by string key.
+## Missing `tab` values fall back to the existing group title contract.
 func set_board(groups: Array, cells: Array) -> void:
-	for c in get_children():
-		c.queue_free()
-	_cells.clear()
-	_line_of.clear()
-	_selection_of.clear()
-	_row_of.clear()
-	_owned_details.clear()
-	_order.clear()
-	_rows_built = 0
+	_groups.clear()
+	for group: Dictionary in groups:
+		_groups.append(group.duplicate(true))
+	_cell_entries.clear()
+	for entry: Dictionary in cells:
+		_cell_entries.append(entry.duplicate(true))
 
-	for g: Dictionary in groups:
-		_add_row(g, cells)
-		_rows_built += 1
-	for selection: int in _selection_of:
-		if selection != -1:
-			_order.append(selection)
-	_wire_focus()
+	_tab_keys.clear()
+	for group: Dictionary in _groups:
+		var key := _tab_key(group)
+		if not _tab_keys.has(key):
+			_tab_keys.append(key)
+	if not _tab_keys.has(_active_tab):
+		_active_tab = _tab_keys[0] if not _tab_keys.is_empty() else ""
+
+	_clear_children(self)
+	_build_tabs()
+	_body = VBoxContainer.new()
+	_body.name = "Tracks"
+	_body.add_theme_constant_override("separation", 9)
+	_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_body.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	add_child(_body)
+	_rebuild_active_body()
 
 
-## The cell at a flat position, for a screen joining this into its focus chain.
 func cell_at(i: int) -> Button:
 	return _cells[i] if i >= 0 and i < _cells.size() else null
 
 
-## Where in the flat cell order the buyable rung for `line` sits, or -1. Owned
-## selections have their own negative keys and deliberately never satisfy this
-## compatibility lookup.
 func slot_of_line(line: int) -> int:
 	return _line_of.find(line)
 
 
-## The cell for a buyable or owned selection key, or null for -1/not found.
 func cell_of_selection(selection: int) -> Button:
-	var i := _selection_of.find(selection)
-	return cell_at(i)
+	if selection == -1:
+		return null
+	return cell_at(_selection_of.find(selection))
 
 
-## The read-only description for an owned selection, or an empty row.
 func owned_detail(selection: int) -> Dictionary:
 	if not _owned_details.has(selection):
 		return {}
 	return _owned_details[selection]
 
 
+func label_of_selection(selection: int) -> String:
+	return _labels_by_selection.get(selection, "")
+
+
 func count() -> int:
 	return _cells.size()
 
 
-## Selectable cells in the order they appear on the board, left to right and top
-## to bottom. The screen's cursor steps through THIS, never through `lines()`.
 func order() -> Array[int]:
 	return _order
 
 
-## Which row `line` sits on, or -1. Up and down move by a row, because a row is
-## one thing the counter sells and stepping a cell at a time through a four-rung
-## ladder to reach the next piece of armour is four presses to answer one
-## question.
 func row_of_line(line: int) -> int:
 	var i := _line_of.find(line)
 	return _row_of[i] if i >= 0 else -1
 
 
-## Which board row a buyable or owned selection sits on, or -1.
 func row_of_selection(selection: int) -> int:
 	var i := _selection_of.find(selection)
 	return _row_of[i] if i >= 0 else -1
 
 
-## Legacy buyable-line lookup. Selection movement uses `first_selection_of_row`
-## so a fully climbed row remains a controller stop.
 func first_line_of_row(row: int) -> int:
 	for i in _cells.size():
 		if _row_of[i] == row and _line_of[i] >= 0:
@@ -219,7 +128,6 @@ func first_line_of_row(row: int) -> int:
 	return -1
 
 
-## The first owned or buyable selection on `row`, or -1 when it has only sockets.
 func first_selection_of_row(row: int) -> int:
 	for i in _cells.size():
 		if _row_of[i] == row and _selection_of[i] != -1:
@@ -231,278 +139,399 @@ func row_count() -> int:
 	return _rows_built
 
 
-# --- Building ----------------------------------------------------------------
+func first_selection() -> int:
+	return _order[0] if not _order.is_empty() else -1
 
-func _add_row(g: Dictionary, cells: Array) -> void:
-	var tracks: Array = g.get("tracks", [])
 
-	# A PLATE, not a line. The tile styleboxes are the same ones the paper doll's
-	# sockets wear, so a row on a board and a slot beside the hero are the same
-	# object at two sizes — see `UITheme.tile_plate`.
-	var plate := PanelContainer.new()
-	plate.add_theme_stylebox_override("panel", UITheme.tile_plate())
-	plate.custom_minimum_size = Vector2(PLATE_W, 0)
-	plate.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(plate)
+## One horizontal node on the current track, wrapping within that track only.
+func horizontal_selection(selection: int, direction: int) -> int:
+	var row := row_of_selection(selection)
+	if row < 0 or direction == 0:
+		return selection
+	var in_row: Array[int] = []
+	for i in _selection_of.size():
+		if _row_of[i] == row and _selection_of[i] != -1:
+			in_row.append(_selection_of[i])
+	var at := in_row.find(selection)
+	if at < 0 or in_row.is_empty():
+		return selection
+	return in_row[(at + signi(direction) + in_row.size()) % in_row.size()]
 
-	var pad := MarginContainer.new()
-	for side in ["left", "right"]:
-		pad.add_theme_constant_override("margin_" + side, 10)
-	for side in ["top", "bottom"]:
-		pad.add_theme_constant_override("margin_" + side, 8)
-	pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	plate.add_child(pad)
+
+# --- Tabs --------------------------------------------------------------------
+
+func focus_current_tab() -> bool:
+	var button := current_tab_button()
+	if button == null or button.get_viewport() == null:
+		return false
+	button.grab_focus()
+	return true
+
+
+func focus_is_tab() -> bool:
+	var owner := get_viewport().gui_get_focus_owner() if get_viewport() != null else null
+	return owner != null and _tab_buttons.has(owner)
+
+
+func current_tab_button() -> Button:
+	var at := _tab_keys.find(_active_tab)
+	return _tab_buttons[at] if at >= 0 and at < _tab_buttons.size() else null
+
+
+## Cycle and wrap the tab strip. Returns the new tab's first selection.
+func cycle_tab(direction: int) -> int:
+	if _tab_keys.is_empty() or direction == 0:
+		return first_selection()
+	var at := maxi(_tab_keys.find(_active_tab), 0)
+	var next := (at + signi(direction) + _tab_keys.size()) % _tab_keys.size()
+	_activate_tab(_tab_keys[next])
+	var button := current_tab_button()
+	if button != null:
+		button.grab_focus()
+	return first_selection()
+
+
+func _build_tabs() -> void:
+	_tab_strip = HBoxContainer.new()
+	_tab_strip.name = "Tabs"
+	_tab_strip.add_theme_constant_override("separation", 2)
+	_tab_strip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	add_child(_tab_strip)
+	_tab_buttons.clear()
+	for key: String in _tab_keys:
+		var button := Button.new()
+		button.name = "Tab_%s" % key.to_snake_case()
+		button.text = key
+		button.focus_mode = Control.FOCUS_ALL
+		button.custom_minimum_size = Vector2(0, 44)
+		button.focus_entered.connect(_on_tab_focused.bind(key))
+		button.pressed.connect(_on_tab_pressed.bind(key))
+		_tab_strip.add_child(button)
+		_tab_buttons.append(button)
+	_paint_tabs()
+	MenuUtil.chain_row(_tab_buttons)
+
+
+func _paint_tabs() -> void:
+	for i in _tab_buttons.size():
+		var button := _tab_buttons[i]
+		var active := _tab_keys[i] == _active_tab
+		UITheme.style_tab_button(button, active)
+		# Selected and focused need distinct shapes or entering tab mode is invisible.
+		button.add_theme_stylebox_override("focus", UITheme.tab_box("focused"))
+
+
+func _on_tab_focused(key: String) -> void:
+	_activate_tab(key)
+
+
+func _on_tab_pressed(key: String) -> void:
+	_activate_tab(key)
+
+
+func _activate_tab(key: String) -> void:
+	if key == _active_tab or not _tab_keys.has(key):
+		return
+	_active_tab = key
+	_paint_tabs()
+	_rebuild_active_body()
+	tab_changed.emit(first_selection())
+
+
+func _tab_key(group: Dictionary) -> String:
+	var title := String(group.get("title", "")).strip_edges()
+	var key := String(group.get("tab", title)).strip_edges()
+	return key if not key.is_empty() else (title if not title.is_empty() else "UPGRADES")
+
+
+# --- Rows and rungs -----------------------------------------------------------
+
+func _rebuild_active_body() -> void:
+	if _body == null:
+		return
+	_clear_children(_body)
+	_cells.clear()
+	_line_of.clear()
+	_selection_of.clear()
+	_row_of.clear()
+	_owned_details.clear()
+	_labels_by_selection.clear()
+	_order.clear()
+	_rows_built = 0
+	for group: Dictionary in _groups:
+		if _tab_key(group) != _active_tab:
+			continue
+		var tracks: Array = group.get("tracks", [])
+		for track: Dictionary in tracks:
+			_add_track_row(group, track, tracks.size() > 1)
+			_rows_built += 1
+	for selection: int in _selection_of:
+		if selection != -1:
+			_order.append(selection)
+	_wire_focus()
+
+
+func _add_track_row(group: Dictionary, track: Dictionary, multi_branch: bool) -> void:
+	var panel := PanelContainer.new()
+	panel.name = "Track_%d" % _rows_built
+	panel.add_theme_stylebox_override("panel", UITheme.stone_track())
+	panel.custom_minimum_size = Vector2(0, ROW_HEIGHT)
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_body.add_child(panel)
 
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
+	row.add_theme_constant_override("separation", 10)
+	row.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	pad.add_child(row)
+	panel.add_child(row)
 
-	_add_face(row, g, tracks)
+	var identity := HBoxContainer.new()
+	identity.add_theme_constant_override("separation", 9)
+	identity.custom_minimum_size.x = TITLE_WIDTH
+	identity.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	identity.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(identity)
+
+	var icon_path := UiKit.track_icon(String(group.get("icon", "")))
+	if not icon_path.is_empty():
+		identity.add_child(KitIcon.rect(UiKit.resolve_icon(icon_path), ROW_ICON_PX, 0.92))
 
 	var title := Label.new()
-	title.theme_type_variation = &"MenuHeading"
-	title.text = String(g.get("title", ""))
-	# The face is ADDED to the title column rather than taken out of it: at
-	# 132-44-8 = 80 px "THE BLADE" wrapped to two lines and the row grew a line
-	# taller than its neighbours, which is the ragged edge TITLE_W exists to stop.
-	title.custom_minimum_size = Vector2(TITLE_W - 28, 0)
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	row.add_child(title)
+	title.custom_minimum_size.x = TITLE_WIDTH - ROW_ICON_PX - 9
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.text = _row_title(group, track, multi_branch)
+	UITheme.apply_text_style(title, UITheme.TYPE_H3, UITheme.ACCENT_DIM)
+	identity.add_child(title)
 
-	# A row with more branches than fit does not clip and does not squash the
-	# cells — it wraps. That matters for the default board a catalogue gets
-	# without authoring any groups at all: one row holding every line, which
-	# wraps into the grid the counters had before this file existed.
-	var flow := HFlowContainer.new()
-	flow.add_theme_constant_override("h_separation", 10)
-	flow.add_theme_constant_override("v_separation", 6)
-	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(flow)
-
-	for t: Dictionary in tracks:
-		_add_track(flow, t, cells, String(g.get("title", "")))
-
-
-## The row's face, and how brightly it is lit.
-##
-## Alpha runs `_ROW_DIM` -> 1.0 with the FRACTION of the row's rungs that are
-## bought, counted across all its branches. That fraction and not "has the player
-## bought anything": a chest one rung up and a chest finished are different
-## amounts of owning it, and the card's acceptance test is two saves told apart at
-## a glance without reading a word. A column of faces at four different
-## brightnesses is that picture.
-##
-## A group with no `icon` gets no face and no gap where one would have been — the
-## title simply starts at the plate's edge. That is what keeps a counter playable
-## before its art is baked (`UiKit.track_icon` returns "" for a missing token).
-func _add_face(row: Node, g: Dictionary, tracks: Array) -> void:
-	var path := UiKit.track_icon(String(g.get("icon", "")))
-	if path.is_empty():
-		return
-	var owned := 0
-	var total := 0
-	for t: Dictionary in tracks:
-		owned += mini(int(t.get("owned", 0)), maxi(int(t.get("rungs", 1)), 1))
-		total += maxi(int(t.get("rungs", 1)), 1)
-	var lit: float = float(owned) / float(maxi(total, 1))
-	var face := KitIcon.rect(UiKit.resolve_icon(path), FACE_PX,
-		lerpf(_ROW_DIM, 1.0, lit))
-	row.add_child(face)
-
-
-func _add_track(parent: Node, t: Dictionary, cells: Array,
-		group_title: String) -> void:
 	var chain := HBoxContainer.new()
-	chain.add_theme_constant_override("separation", 2)
-	parent.add_child(chain)
-
-	# A one-rung track carries its own name ON the cell, so a tag beside it would
-	# print the same words twice -- which is exactly what the arrows row did.
-	var branch := String(t.get("name", "")) if int(t.get("rungs", 1)) > 1 else ""
-	if not branch.is_empty():
-		var tag := Label.new()
-		tag.theme_type_variation = &"MenuMuted"
-		tag.text = branch
-		tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		chain.add_child(tag)
-
-	var line: int = int(t.get("line", -1))
-	var owned: int = int(t.get("owned", 0))
-	var rungs: int = maxi(int(t.get("rungs", 1)), 1)
-	var solo := rungs == 1
-	var entry: Dictionary = cells[line] if line >= 0 and line < cells.size() else {}
-
-	for i in rungs:
-		if i > 0:
-			var arrow := Label.new()
-			arrow.theme_type_variation = &"MenuMuted"
-			arrow.text = ARROW
-			arrow.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			# The arrow between two rungs you have already climbed is lit; the
-			# rest of the chain is not. The row's progress is readable off the
-			# connectors alone, from across the screen, before any cell is read.
-			arrow.modulate = Pal.MOSS if i <= owned else Color(Pal.ASH, 0.7)
-			chain.add_child(arrow)
-		# A rung above the next buyable one is not a cell. See `_socket`.
-		if i > owned or (i == owned and line < 0 and not solo):
-			chain.add_child(_socket())
-			continue
-		chain.add_child(_rung(t, i, owned, rungs, line, entry, group_title))
+	chain.add_theme_constant_override("separation", 5)
+	chain.size_flags_horizontal = Control.SIZE_SHRINK_END
+	chain.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(chain)
+	_add_rungs(chain, group, track, icon_path)
 
 
-## A rung the player has not reached: the HOLE where a cell will go.
-##
-## The old board drew this as a full-size `ItemCell` carrying a numeral, a dim and
-## no price, and that is the single thing card #118 is most about. A four-rung
-## ladder with nothing bought and a four-rung ladder finished were the same
-## SHAPE — four cells wide, four numerals — differing only in a tick and 45% of
-## alpha, so two saves at different progressions photographed identically at arm's
-## length. Absent instead of greyed, the row's own length is the progress bar: a
-## fresh track is a face and three dots, a finished one is a face and four cells.
-##
-## It carries no numeral. The numeral distinguishes rungs of a track you are
-## climbing; on a rung you cannot see yet it is a label for nothing.
-func _socket() -> Control:
-	var hole := Panel.new()
-	hole.custom_minimum_size = SOCKET
-	# BG_DARKER and not a cell fill: a socket is a RECESS, the same darker glass
-	# behind a fainter hairline that `UITheme.well()` sinks the whole board into.
-	hole.add_theme_stylebox_override("panel",
-		UITheme.hud_box(UITheme.BG_DARKER, 2, 2, 2, 2))
-	hole.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	hole.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hole.focus_mode = Control.FOCUS_NONE
-	hole.modulate = Color(1, 1, 1, 0.45)
-	return hole
+func _row_title(group: Dictionary, track: Dictionary, multi_branch: bool) -> String:
+	var group_title := String(group.get("title", "")).strip_edges()
+	var branch := String(track.get("name", "")).strip_edges()
+	if multi_branch and not branch.is_empty():
+		return "%s — %s" % [group_title, branch]
+	return group_title if not group_title.is_empty() else branch
 
 
-## One rung. Three states and they are three different questions: *done*, *this
-## is what it costs*, *not yet*.
-func _rung(t: Dictionary, i: int, owned: int, rungs: int, line: int,
-		entry: Dictionary, group_title: String) -> Button:
-	# A one-rung track is a repeatable, not a ladder: arrows, a draught, a bottle.
-	# It keeps the full-size named cell it had on the old board, because its name
-	# IS the information and there is no numeral that would mean anything.
-	var solo := rungs == 1
-	var b := ItemCell.make(ItemCell.Size.NAMED if solo else ItemCell.Size.RUNG)
-	var is_next := i == owned and line >= 0
+func _add_rungs(chain: HBoxContainer, group: Dictionary, track: Dictionary,
+		icon_path: String) -> void:
+	var line := int(track.get("line", -1))
+	var owned := maxi(int(track.get("owned", 0)), 0)
+	var rungs := maxi(int(track.get("rungs", 1)), 1)
+	var entry: Dictionary = (_cell_entries[line] if line >= 0
+		and line < _cell_entries.size() else {})
+	for rank in rungs:
+		if rank > 0:
+			_add_connector(chain, rank <= owned)
+		var state := &"owned" if rank < owned else (
+			&"available" if rank == owned and line >= 0 else &"locked")
+		chain.add_child(_make_rung(group, track, rank, line, entry, state, icon_path))
 
-	var e: Dictionary = {}
-	if solo and i < owned:
-		var solo_label := String(t.get("name", "")).strip_edges()
-		if solo_label.is_empty():
-			solo_label = group_title
-		e = {"label": solo_label,
-			"sub": TICK, "tint": Pal.MOSS}
-	elif solo:
-		e = entry.duplicate()
-		if e.is_empty():
-			e = {"label": String(t.get("name", "")), "sub": "", "dim": true}
-	elif i < owned:
-		# Full strength and never dimmed: this is the half of the row that says
-		# what the player HAS, and it is the half two saves are told apart by.
-		e = {"label": NUMERALS[i] if i < NUMERALS.size() else str(i + 1),
-			"sub": TICK, "tint": Pal.MOSS}
-	elif is_next:
-		e = {"label": NUMERALS[i] if i < NUMERALS.size() else str(i + 1),
-			"sub": String(entry.get("sub", "")),
-			"tint": entry.get("tint", Pal.GOLD),
-			"dim": bool(entry.get("dim", false))}
-	else:
-		# The last rung of a ladder the counter has finished offering — bought out
-		# to the top, or a branch that closed. `_add_track` sends everything ABOVE
-		# the next buyable rung to `_socket` instead, so this arm no longer draws
-		# the "not yet" cells it was written for; what reaches it is a rung that
-		# exists and has no line, and it stays a cell because the row is still
-		# showing you a ladder you own the whole of.
-		e = {"label": NUMERALS[i] if i < NUMERALS.size() else str(i + 1),
-			"sub": "", "tint": Color(Pal.ASH, 0.5), "dim": true}
 
-	ItemCell.paint(b, e)
-	# A buyable rung keeps its catalogue line. An owned rung gets a negative key
-	# derived from its flat cell slot; -1 stays reserved for no selection. Future
-	# cells/sockets are not offers and stay outside the focus chain.
+func _add_connector(chain: HBoxContainer, reached: bool) -> void:
+	var arrow := Label.new()
+	arrow.text = ARROW
+	arrow.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	arrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	arrow.custom_minimum_size.x = 18
+	arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UITheme.apply_text_style(arrow, UITheme.TYPE_PARAGRAPH_1,
+		UITheme.SUCCESS if reached else Color(UITheme.TEXT_DIM, 0.46))
+	chain.add_child(arrow)
+
+
+func _make_rung(group: Dictionary, track: Dictionary, rank: int, line: int,
+		entry: Dictionary, state: StringName, icon_path: String) -> Button:
+	var button := Button.new()
+	button.name = "Rung_%d_%d" % [_rows_built, rank]
+	button.custom_minimum_size = RUNG_SIZE
+	button.size_flags_horizontal = Control.SIZE_SHRINK_END
+	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	button.clip_contents = true
+	_style_rung(button)
+
+	if not icon_path.is_empty():
+		var art := TextureRect.new()
+		art.texture = UiKit.resolve_icon(icon_path)
+		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		art.modulate = Color(1, 1, 1, 0.11)
+		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		button.add_child(art)
+		art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		art.offset_left = (RUNG_SIZE.x - RUNG_ICON_PX) * 0.5
+		art.offset_right = -(RUNG_SIZE.x - RUNG_ICON_PX) * 0.5
+		art.offset_top = 4
+		art.offset_bottom = -8
+
+	var col := VBoxContainer.new()
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_theme_constant_override("separation", 2)
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.add_child(col)
+	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	col.offset_left = 8
+	col.offset_right = -8
+	col.offset_top = 5
+	col.offset_bottom = -5
+
+	var name_label := Label.new()
+	name_label.text = _rung_name(group, track, rank)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UITheme.apply_text_style(name_label, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT)
+	col.add_child(name_label)
+
+	var status := HBoxContainer.new()
+	status.alignment = BoxContainer.ALIGNMENT_CENTER
+	status.add_theme_constant_override("separation", 4)
+	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(status)
+	_add_rung_status(status, state, entry)
+
 	var slot := _cells.size()
-	var is_owned := i < owned
-	var reports: int = -2 - slot if is_owned else (line if is_next else -1)
-	b.focus_mode = Control.FOCUS_ALL if reports != -1 else Control.FOCUS_NONE
-	b.set_meta(&"at", slot)
-	_cells.append(b)
-	_line_of.append(line if is_next else -1)
-	_selection_of.append(reports)
+	var selection := -1
+	if state == &"owned":
+		selection = -2 - slot
+	elif state == &"available":
+		selection = line
+	button.focus_mode = Control.FOCUS_ALL if selection != -1 else Control.FOCUS_NONE
+	button.mouse_filter = (Control.MOUSE_FILTER_STOP if selection != -1
+		else Control.MOUSE_FILTER_IGNORE)
+	button.modulate = Color.WHITE if state != &"locked" else Color(1, 1, 1, 0.48)
+	button.set_meta(&"at", slot)
+	_cells.append(button)
+	_line_of.append(line if state == &"available" else -1)
+	_selection_of.append(selection)
 	_row_of.append(_rows_built)
-	if is_owned:
-		_owned_details[reports] = _make_owned_detail(
-			group_title, t, entry, i, owned, rungs)
-	if reports != -1:
-		b.focus_entered.connect(func() -> void: _look(b))
-		b.mouse_entered.connect(func() -> void: _look(b))
-		if reports >= 0:
-			b.pressed.connect(func() -> void: _press(b))
-	else:
-		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return b
+	if state == &"owned":
+		_owned_details[selection] = _make_owned_detail(
+			_rung_name(group, track, rank), group, track, rank, entry)
+	if selection != -1:
+		_labels_by_selection[selection] = _rung_name(group, track, rank)
+		button.focus_entered.connect(_look.bind(button))
+		button.mouse_entered.connect(_look.bind(button))
+		if state == &"available":
+			button.pressed.connect(_press.bind(button))
+	return button
 
 
-func _make_owned_detail(group_title: String, t: Dictionary, entry: Dictionary,
-		rank: int, owned: int, rungs: int) -> Dictionary:
-	var branch := String(t.get("name", "")).strip_edges()
-	var label := branch if rungs == 1 and not branch.is_empty() else group_title
-	if rungs > 1:
-		var numeral: String = (NUMERALS[rank] if rank < NUMERALS.size()
-			else str(rank + 1))
-		label = "%s — %s%s" % [group_title,
-			(branch + " ") if not branch.is_empty() else "", numeral]
+func _style_rung(button: Button) -> void:
+	button.add_theme_stylebox_override("normal",
+		UITheme.hud_box(Color(0.035, 0.034, 0.033, 0.78), 6, 5, 6, 5))
+	button.add_theme_stylebox_override("hover",
+		UITheme.hud_box(Color(0.11, 0.108, 0.104, 0.88), 6, 5, 6, 5))
+	button.add_theme_stylebox_override("pressed",
+		UITheme.hud_box(Color(0.16, 0.157, 0.151, 0.92), 6, 6, 6, 4))
+	button.add_theme_stylebox_override("focus", UITheme.focus_rim(true))
+
+
+func _add_rung_status(parent: HBoxContainer, state: StringName, entry: Dictionary) -> void:
+	if state == &"locked":
+		var lock_path := UiKit.action_icon("lock")
+		if not lock_path.is_empty():
+			var lock := TextureRect.new()
+			lock.texture = UiKit.resolve_icon(lock_path)
+			lock.custom_minimum_size = Vector2(17, 17)
+			lock.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			lock.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			parent.add_child(lock)
+			return
+	_add_status_label(parent,
+		(TICK + " OWNED") if state == &"owned" else (
+			String(entry.get("sub", "AVAILABLE")) if state == &"available" else "LOCKED"),
+		UITheme.SUCCESS if state == &"owned" else (
+			UITheme.DANGER if state == &"available" and bool(entry.get("dim", false))
+			else UITheme.WARNING if state == &"available" else UITheme.TEXT_DIM))
+
+
+func _add_status_label(parent: Node, text: String, tone: Color) -> void:
+	var label := Label.new()
+	label.text = text
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UITheme.apply_text_style(label, UITheme.TYPE_CAPTION, tone)
+	parent.add_child(label)
+
+
+func _rung_name(group: Dictionary, track: Dictionary, rank: int) -> String:
+	var names: Array = track.get("rung_names", [])
+	if rank >= 0 and rank < names.size():
+		var authored := String(names[rank]).strip_edges()
+		if not authored.is_empty():
+			return authored
+	var branch := String(track.get("name", "")).strip_edges()
+	var group_title := String(group.get("title", "")).strip_edges()
+	var base := branch if not branch.is_empty() else group_title
+	return "%s %d" % [base if not base.is_empty() else "Upgrade", rank + 1]
+
+
+func _make_owned_detail(label: String, group: Dictionary, track: Dictionary,
+		rank: int, entry: Dictionary) -> Dictionary:
 	var detail: Dictionary = {
 		"kind": &"owned",
 		"label": label,
-		# The catalogue line describes the live aggregate effect. It is more useful
-		# on every climbed rung than a generic acknowledgement, especially on a
-		# finished board where there is no buyable cell left to carry these words.
+		"state": &"owned",
 		"blurb": String(entry.get("blurb", "Already purchased.")),
-		"group": group_title,
-		"branch": branch,
-		"owned": owned,
+		# The catalogue entry describes the LIVE next/aggregate result, not this
+		# historical rung. Repeating it here made rung one of a finished sword say
+		# "+3 quarters (finished)". Be explicit rather than showing false stats.
+		"detail": "Rung %d of %d completed." % [rank + 1,
+			maxi(int(track.get("rungs", 1)), 1)],
+		"group": String(group.get("title", "")),
+		"branch": String(track.get("name", "")),
 		"rank": rank + 1,
-		"rungs": rungs,
+		"rungs": maxi(int(track.get("rungs", 1)), 1),
+		"price": 0,
+		"parts": {},
 	}
 	detail.make_read_only()
 	return detail
 
 
-# --- Focus -------------------------------------------------------------------
+# --- Focus reports -----------------------------------------------------------
 
-## The selectable cells, chained in reading order and wrapped end to end.
-##
-## Reading order and not spatial, which is the opposite of what a grid wants and
-## right for the same reason: the cells here are not on a lattice. A row can hold
-## one cell or eight, the focusable ones are scattered along each chain wherever
-## that ladder happens to have got to, and Godot's spatial search across that
-## finds plausible-looking neighbours that skip whole tracks. A flat chain of the
-## cells that can actually be reached is the only wiring that visits all of them.
 func _wire_focus() -> void:
-	var live: Array[Button] = []
-	for i in _cells.size():
-		if _selection_of[i] != -1:
-			live.append(_cells[i])
-	if live.is_empty():
-		return
-	for i in live.size():
-		var nxt := live[(i + 1) % live.size()]
-		MenuUtil.link_right(live[i], nxt)
-	if spill_down != null:
-		MenuUtil.link_down(live[live.size() - 1], spill_down)
+	for row in _rows_built:
+		var live: Array = []
+		for i in _cells.size():
+			if _row_of[i] == row and _selection_of[i] != -1:
+				live.append(_cells[i])
+		MenuUtil.chain_row(live)
+	if not _order.is_empty() and current_tab_button() != null:
+		MenuUtil.link_down(current_tab_button(), cell_of_selection(_order[0]))
+	if spill_down != null and not _order.is_empty():
+		MenuUtil.link_down(cell_of_selection(_order[_order.size() - 1]), spill_down)
 
 
-func _look(b: Button) -> void:
-	cell_focused.emit(_selection_of[int(b.get_meta(&"at"))])
+func _look(button: Button) -> void:
+	cell_focused.emit(_selection_of[int(button.get_meta(&"at"))])
 
 
-func _press(b: Button) -> void:
-	var line := _line_of[int(b.get_meta(&"at"))]
+func _press(button: Button) -> void:
+	var line := _line_of[int(button.get_meta(&"at"))]
 	cell_focused.emit(line)
 	if line >= 0:
 		cell_activated.emit(line)
+
+
+func _clear_children(parent: Node) -> void:
+	for child in parent.get_children():
+		parent.remove_child(child)
+		child.queue_free()
