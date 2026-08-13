@@ -19,8 +19,8 @@ func run(rig) -> void:
 	var wheel_before: Array[StringName] = Game.wheel.duplicate()
 
 	await rig.wait_physics_frames(4)
-	if not rig.check(outskirts.harvest_trees.size() == 10,
-			"the authored grove has ten working trees"):
+	if not rig.check(outskirts.harvest_trees.size() == 18,
+			"the authored grove has eighteen working trees"):
 		return
 	var hero := rig.root.get_tree().get_first_node_in_group(&"player") as Hero
 	var tree: HarvestTree = outskirts.harvest_trees[0]

@@ -76,11 +76,11 @@ active proof and not a prerequisite for the raid.
 - After Brannoc arrives, Aldric assigns **Keep the Hearth**.
 - Brannoc forges the permanent Woodsman's Axe for 60 gold and three Iron Scrap.
   It is a utility tool, not a weapon or hand slot.
-- The cliff-partitioned outskirts between the garrison and the Sunken Cut holds
-  a visible side grove of individually harvestable trees. Holding at one with
-  the axe plays the work, fells that trunk to a stump, and yields at most one
-  carried bundle per campaign day during Daytime. The player must carry it to
-  the separate hearth.
+- The wooded homestead clearing between the garrison bridge and the visible
+  Sunken Cut mine holds a dense west-side grove of individually harvestable
+  trees. Holding at one with the axe plays the work, fells that trunk to a
+  stump, and yields at most one carried bundle per campaign day during Daytime.
+  The player must carry it to the separate hearth.
 - The hearth stores at most three bundles and consumes at most one at Bonfire
   Time.
 - A fueled bonfire grants Warmth for the next service window; an unfueled
@@ -101,11 +101,14 @@ The exact item, service, and economy contracts remain with
 
 ## Fishing and provisions
 
-Exactly one spring-fed fishing pond occupies the blocked eastern spur of the
-garrison outskirts. Its dock, rod rack, creel, near-water target, and deep-water
-target make the opportunity readable while the route beyond remains physically
-closed. The rod belongs to this location; it is not a weapon, tool-manifest
-entry, bag item, wheel item, or shop good.
+Exactly one spring-fed fishing pond on the east side of the garrison outskirts
+owns the fishing interaction. Its dock, rod rack, creel, near-water target, and
+deep-water target make the opportunity readable. A river dock and south pond
+are scenic landmarks only: they do not add interactions, catches, reserves, or
+another fishing mode. The garrison bridge ends at a visible, solid boundary, so
+the player cannot leave the authored screen beyond it. The rod belongs to the
+east pond; it is not a weapon, tool-manifest entry, bag item, wheel item, or
+shop good.
 
 Interacting enters one bounded fishing mode: choose near or deep water, cast,
 react to the bite, and reel while steering against the fish's run and managing

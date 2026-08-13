@@ -19,6 +19,8 @@ var _index: int = 0
 var _grove_count: int = 1
 var _packed_visual: PackedScene
 var _scale_factor: float = 1.0
+var _normalize_visual: bool = false
+var _target_height: float = 7.5
 var _display_day: int = 0
 var _visual_pivot: Node3D
 var _visual_model: Node3D
@@ -31,11 +33,14 @@ var _fall_tween: Tween
 ## Route-builder API. Configure before adding the node to the tree; calls made
 ## after `_ready` are also accepted and rebuild only this tree's presentation.
 func configure(index: int, grove_count: int, packed: PackedScene,
-		scale_factor: float = 1.0) -> void:
+		scale_factor: float = 1.0, normalize_visual: bool = false,
+		target_height: float = 7.5) -> void:
 	_index = maxi(index, 0)
 	_grove_count = maxi(grove_count, 1)
 	_packed_visual = packed
 	_scale_factor = maxf(scale_factor, 0.0001)
+	_normalize_visual = normalize_visual
+	_target_height = maxf(target_height, 2.0)
 	if is_node_ready():
 		call_deferred(&"_rebuild")
 
@@ -133,9 +138,12 @@ func _rebuild() -> void:
 	if _packed_visual != null:
 		_visual_model = _packed_visual.instantiate() as Node3D
 		_visual_model.name = &"TreeVisual"
-		_visual_model.position.y = -_visual_pivot.position.y
-		_visual_model.scale = Vector3.ONE * _scale_factor
 		_visual_pivot.add_child(_visual_model)
+		if _normalize_visual:
+			_normalize_model(_visual_model, _target_height)
+		else:
+			_visual_model.position.y = -_visual_pivot.position.y
+			_visual_model.scale = Vector3.ONE * _scale_factor
 	else:
 		_visual_model = _primitive_visual(trunk_radius, trunk_height)
 
@@ -213,3 +221,39 @@ func _clear_built_nodes() -> void:
 	_trunk_body = null
 	_trunk_collision = null
 	_stump = null
+
+
+func _normalize_model(model: Node3D, target_height: float) -> void:
+	var points := PackedVector3Array()
+	_collect_mesh_points(model, model, points)
+	if points.is_empty():
+		return
+	var minimum := points[0]
+	var maximum := points[0]
+	for point: Vector3 in points:
+		minimum = minimum.min(point)
+		maximum = maximum.max(point)
+	var height := maximum.y - minimum.y
+	if height <= 0.001:
+		return
+	var factor := target_height / height
+	var base_center := Vector3(
+		(minimum.x + maximum.x) * 0.5, minimum.y,
+		(minimum.z + maximum.z) * 0.5)
+	model.scale = Vector3.ONE * factor
+	model.position = -base_center * factor - Vector3.UP * _visual_pivot.position.y
+
+
+func _collect_mesh_points(root_node: Node3D, node: Node,
+		points: PackedVector3Array) -> void:
+	var mesh_instance := node as MeshInstance3D
+	if mesh_instance != null and mesh_instance.mesh != null:
+		var box := mesh_instance.mesh.get_aabb()
+		var to_root := root_node.global_transform.affine_inverse() \
+			* mesh_instance.global_transform
+		for x: float in [box.position.x, box.end.x]:
+			for y: float in [box.position.y, box.end.y]:
+				for z: float in [box.position.z, box.end.z]:
+					points.append(to_root * Vector3(x, y, z))
+	for child: Node in node.get_children():
+		_collect_mesh_points(root_node, child, points)
