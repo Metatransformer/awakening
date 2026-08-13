@@ -1,6 +1,6 @@
 extends RefCounted
 ## The whole shield moveset, shot and checked: four dodges out of a raised guard,
-## and the dash counter that comes off it.
+## and the shared Heavy combo opener thrown while it is held.
 ##
 ## Two claims are being tested, and neither can be taken on trust:
 ##
@@ -9,9 +9,9 @@ extends RefCounted
 ##      backstep was a hero rolling forwards while sliding backwards. The check
 ##      is `Hero._dodge` against what was asked for, plus the direction of the
 ##      actual displacement measured against the facing he holds through it.
-##   2. **Shield + heavy is the dash, not the ordinary heavy.** `SwingDash` has to be
-##      the one-shot in flight, and the hero has to END UP CLOSER to what he was
-##      pointing at — a stab that does not close is just a slow slash.
+##   2. **Heavy still opens with the dash while the shield is held.** `SwingDash`
+##      has to be the one-shot in flight, and the hero has to END UP CLOSER to
+##      what he was pointing at — an opener that does not close is just a slash.
 ##
 ## Prints `GUARD FAIL …` on any beat that did not happen, in the house style
 ## mvp_loop set. The frames are the other half: a passing displacement check
@@ -132,13 +132,14 @@ func _measure_dodge(rig, hero: Node3D, spec: Dictionary) -> void:
 	await _drop(rig, action)
 
 
-## Shield up, heavy pressed: the stab.
+## Shield up, Heavy tapped: the shared opener, on the release like neutral.
 func _measure_dash(rig, hero: Node3D) -> void:
 	await _stance(rig, hero, &"")
 
 	Input.action_press(&"heavy")
-	var started := await _await_state(rig, hero, ST_ATTACK)
+	await rig.wait_frames(2)
 	Input.action_release(&"heavy")
+	var started := await _await_state(rig, hero, ST_ATTACK)
 	if not started:
 		_fail("dash did not start a swing")
 		await _drop(rig, &"")

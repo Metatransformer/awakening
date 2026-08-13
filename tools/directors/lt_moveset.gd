@@ -58,7 +58,8 @@ const TARGET := ^"PostC"
 
 ## Frames given to the camera after the hero is moved. The stick is read
 ## camera-relative and the guard pins the facing to the lens, so this is not
-## padding — it is what makes "right" mean right. p4_lunge pays the same 60.
+## padding — it is what makes "right" mean right. Other movement directors pay
+## the same 60.
 const SETTLE := 60
 
 var _fails := 0
@@ -87,8 +88,8 @@ func run(rig) -> void:
 	if post == null:
 		print("LT FAIL no %s to lock onto" % TARGET)
 		return
-	# One lockable thing in the room, for the reason p4_lunge documents: the
-	# scorer picks by screen angle and the wrong post kept winning.
+	# One lockable thing in the room: the scorer picks by screen angle and the
+	# wrong post otherwise wins.
 	for other in ["PostA", "PostB"]:
 		var n: Node = scene.get_node_or_null(NodePath(other))
 		if n != null:

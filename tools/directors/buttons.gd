@@ -31,8 +31,8 @@ extends RefCounted
 ##   4. D-pad → gets the sword back — the ring wraps, so a player who can find
 ##      the hookshot can find his way off it with the same finger.
 ##   5. Sword out, nothing locked: `attack` lands the light swing and `heavy`
-##      lands the heavy. `heavy` used to be deliberately silent here, which was
-##      a trigger the player stopped pulling; the light/heavy split fixed it.
+##      lands the Heavy combo opener. `heavy` used to be deliberately silent
+##      here, which was a trigger the player stopped pulling.
 ##   6. X drinks the selected bottle, and it does not touch the hand.
 ##
 ## Every beat is photographed. "The hookshot is out" is a claim about his hands.
@@ -240,14 +240,14 @@ func run(rig) -> void:
 	var where: Vector3 = hero.global_position
 	await rig.tap(["heavy"])
 	var heavy := await _wait_for_hit(rig, mark)
-	_check("heavy landed the heavy swing (%d damage)" % heavy, heavy > 0)
+	_check("heavy landed the Heavy combo opener (%d damage)" % heavy, heavy > 0)
 	_check("the heavy hits harder than the light (%d vs %d)" % [heavy, light],
 		heavy >= light)
-	# It is a swing, not a lunge: the leap belongs to a LOCK, and p4_lunge.gd
-	# measures that in metres. Unlocked, his feet stay where they were.
-	_check("...and unlocked it did not carry him (%.2f m)"
+	# Step one is the short travelling spin in every stance. The exact clip and
+	# its lock/guard invariance belong to heavy_combo.gd.
+	_check("...and its opener carried him forward (%.2f m)"
 		% where.distance_to(hero.global_position),
-		where.distance_to(hero.global_position) < 0.6)
+		where.distance_to(hero.global_position) > 0.3)
 	await rig.capture(out.path_join("b_06_heavy.png"))
 
 	# --- 6. X drinks, and leaves the hand alone ------------------------------

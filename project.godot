@@ -258,8 +258,8 @@ z_target={
 ; THE SWORD IS ON THE RIGHT HAND SIDE OF THE PAD NOW, both halves of it: the
 ; fast swing under the index finger on RB, the heavy under the same finger on RT
 ; (see `heavy` below). That is the Souls arrangement rather than OOT's, and it is
-; the one this game's moveset has actually grown into -- a light chain, a heavy,
-; a charged release, a guard on the opposite trigger and four dodges. OOT put the
+; the one this game's moveset has actually grown into -- a light chain, a two-hit
+; Heavy combo, a charged release, a guard on the opposite trigger and four dodges. OOT put the
 ; sword on a face button because OOT's sword had one move.
 ;
 ; The face buttons are verbs now and nothing else: A talks -- and parries, from
@@ -294,16 +294,16 @@ attack={
 ; InputEventJoypadMotion like the sticks, so the 0.2 deadzone is how far it
 ; travels before it counts.
 ;
-; ONE FINGER, ONE PULL, ONE BLOW, AND WHICH BLOW IS WHATEVER IS IN THE RIGHT
-; HAND AND HOW LONG YOU HELD IT:
+; THE SWORD'S HEAVY BUTTON. STANCE DOES NOT REWRITE IT; HOW LONG YOU HOLD IT
+; CHOOSES BETWEEN THE ORDINARY COMBO AND ITS MAGIC ALTERNATIVE:
 ;
-;   sword, tapped          -> the heavy swing. The overhead, slower and harder
-;                             than the chain on RB above. It comes out on the
-;                             RELEASE, not the press.
+;   sword, tapped          -> advances a two-hit Heavy combo, on RELEASE: first
+;                             the short travelling spin (SwingDash), then the
+;                             rising overhead (Swing3). A later tap restarts at
+;                             step one after step two or after the combo window.
 ;   sword, HELD            -> the wind-up, and the release is the spin INSTEAD
-;                             of the overhead. Elden Ring's R2 exactly: tap it
-;                             for the heavy, hold it for the charged one, and
-;                             the two are alternatives.
+;                             of an ordinary combo step. Tap it for the combo,
+;                             hold it for the charged one; they are alternatives.
 ;
 ;                             THEY USED TO BE A SEQUENCE, and that was the bug:
 ;                             the overhead fired on the press and kept charging
@@ -312,11 +312,9 @@ attack={
 ;                             asked for, and a charge that was not a choice --
 ;                             it was what happened if you did not let go fast
 ;                             enough. The blow is on the release now.
-;   sword, locked on       -> the JUMP ATTACK, which is OOT's Z+A and used to be
-;                             on A. The tapped release's other form, not a third
-;                             blow. It only exists under a lock, and out of the
-;                             lock's range it falls through to the heavy rather
-;                             than going silent -- see hero_combat.gd.
+;   sword, LT / lock held  -> exactly the same tap combo and held magic spin.
+;                             Guard and lock guide facing; neither selects a
+;                             different Heavy attack.
 ;   bow / hookshot drawn   -> that item's trigger. Held: down aims, up looses.
 ;
 ; THE ITEM REPLACES THE SWORD ON THIS BUTTON and that is the design, not a
@@ -416,10 +414,9 @@ shield={
 ; two things a press meant.
 ;
 ; THE JUMP ATTACK IS NOT HERE ANY MORE either. It was "guard up, stick still,
-; A", which was OOT's Z+A read literally; it is `heavy` under a lock now, which
-; is one finger asking for one swing. What that leaves behind is better: a
-; neutral stick under a lock or a guard is the BACKSTEP, on this button, with no
-; stick rule to learn and nothing to fall between.
+; A", which was OOT's Z+A read literally. Heavy now owns a stance-independent
+; two-hit combo; what that leaves here is better: a neutral stick under a lock
+; or a guard is the BACKSTEP, with no stick rule to learn.
 ;
 ; THE DODGE IS A TAP AND A HOLD, and both live on this one action. Tap it and
 ; the hero rolls, on the PRESS, with no latency added. Hold it past
@@ -525,7 +522,7 @@ jump={
 ; SELECT AND TALK -- A/Cross, button 0 -- AND, BEHIND A RAISED SHIELD, THE PARRY.
 ;
 ; This button has carried three other things at various points: the jump attack
-; (gone to `heavy`, under the lock where OOT's Z+A lived), the dodge (gone to B,
+; (gone; Heavy now has its own stance-independent combo), the dodge (gone to B,
 ; see `context`), and stowing a drawn item (gone to the D-pad weapon ring, which
 ; hands the sword back without a button that only means "undo"). What is left is
 ; the one thing a player at a chest, a vendor or an NPC is pressing it for --

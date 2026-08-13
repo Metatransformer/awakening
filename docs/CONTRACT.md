@@ -386,7 +386,7 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `move_up/down/left/right` | WASD, arrows | left stick | move |
 | `cam_up/down/left/right` | mouse motion (read in code) | right stick | camera |
 | `attack` | **LMB** | **RB / R1** (pad10) | light attack — the chain, or fire what is in the right hand |
-| `heavy` | **Shift+LMB** | **RT / R2** (axis5+) | active grounded **guard** = dash counter on the **press**; otherwise heavy — one pull, one blow, on the **release**: **tap** = overhead, **hold** = spin, **airborne** = jump attack, **locked** = leap, or fire what is in the right hand. **The modifier only works because `attack` is read exactly** — see below |
+| `heavy` | **Shift+LMB** | **RT / R2** (axis5+) | heavy combo on the **release**: first **tap** = dash-spin opener, second **tap** = leaping overhead; **hold** = magic spin instead; **airborne** = jump attack; or fire what is in the right hand. Guard and lock-on do not change the grounded combo. **The modifier only works because `attack` is read exactly** — see below |
 | `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held** and grounded only, and it targets, and it recentres. It drops on takeoff, cannot be raised in air, and may return on landing while held. In first person the guard drops out and only the target/recentre halves remain |
 | `context` | **Space** | **B / Circle** (pad1) | **tap** = dodge, including in air with a committed direction — **hold** = run, and then it is not a dodge |
 | `use_item` | **R** | **X / Square** (pad2) | drink the selected bottle — §4.1 |
@@ -442,19 +442,14 @@ the same argument `rb_swing.gd` makes for the pad. Its discriminator is timing:
 the light swing lands on the PRESS and the heavy on the RELEASE, so a Shift+LMB
 that is still not swinging two physics frames in is proof the light did not fire.
 
-**The triggers are a pair and that is the layout's spine.** This is BOTW's
-arrangement, and it is right: the left index finger holds a STANCE and the right
-index finger fires what that stance is aimed at. LT raises the guard and takes
-the lock; RT is the dash counter from that active stance and the heavy from
-neutral, and whatever the right hand is holding takes it over. Aiming a bow with
-a shoulder and loosing it with a thumb makes you let go
-of the stick that was aiming.
+**The triggers are a pair and that is the layout's spine.** LT raises the guard
+and takes the lock; RT owns one Heavy combo whether LT is down or not, and
+whatever the right hand is holding takes it over. Aiming a bow with a shoulder
+and loosing it with a thumb makes you let go of the stick that was aiming.
 
 **The sword is on the two right shoulders and the face buttons are verbs.** RB
-is the light chain; RT is the heavy from neutral and the dash counter behind an
-active guard. A talks, B dodges, X drinks what you have selected, Y jumps. The
-stance changes the sword move, not the physical verb: the right index still
-attacks with the weapon in hand.
+is the light chain; RT is the two-hit Heavy combo or its held magic spin. A
+talks, B dodges, X drinks what you have selected, Y jumps.
 
 **LB is bound to no additional world action, on purpose.** It is where spells
 go if they are ever built: casting is a left-hand verb in every game this one
@@ -573,17 +568,12 @@ paging moved off the letter keys entirely — first to Q / R, then, with card #1
 onto the tab strip and the arrows (§ above). The disarm above is what makes it
 safe in both directions.
 
-**The jump attack came off A with the dodge.** It was "guard up, stick still, A"
-— OOT's Z + A read literally, with a four-way stick table deciding between the
-leap, the backflip and two dodges. It is `heavy` now: **airborne** it is the
-slam, **locked on** it is the leap, and neither reads the stick at all. What the
-stick table leaves behind is better — a neutral-stick dodge under a lock or a
-guard is the **backstep**, on `context`, with nothing to fall between.
+**The jump attack is the air slam.** Both sword shoulders throw the same move
+while airborne: `attack` on its press and a held `heavy`. Grounded Heavy always
+belongs to its two-hit combo; lock-on does not replace it with a leap.
 
-`Hero.stick_neutral()` still picks the backstep out of the dodges, and
-`lunge_max_range` is still `K.LOCK_BREAK_RANGE` and not `K.LOCK_RANGE`: inside
-the lock's hysteresis band the dodge has already stood down, so a leap that
-refuses on range there would be a dead press.
+`Hero.stick_neutral()` still picks the backstep out of the dodges. Targeting and
+guarding change movement and defence, not which grounded Heavy step comes next.
 
 **The dodge button is a tap OR a hold, and the two are exclusive.** `context` is
 *measured*: released inside `Hero.sprint_hold_time` (0.18 s) the press was a
@@ -654,19 +644,18 @@ for, so they are started at their launch frame via `jump_start_offset`. Set that
 to zero and the hero visibly squats while already 0.4 m in the air; it was A/B'd
 in `tools/directors/_jump_trace.gd` and the two frames are not subtle.
 
-**There IS a heavy-attack button now, and it is RT.** For most of this project's
-life there was not: the heavy was the charge, held off the same light button, and
-"the game's biggest ordinary blow" was locked behind two presses of a smaller
-one. RB taps the light chain; RT throws the overhead, and *holding* RT winds up
-the **spin**.
+**The heavy-attack button is RT, and it owns a two-hit combo.** RB taps the
+three-hit light chain. A short RT release throws the dash-spin opener; another
+short release inside `chain_window` throws the leaping overhead and completes
+the Heavy combo. The next short release starts again at the opener. LT/guard and
+lock-on do not change either step.
 
-Outside an active guard, **one pull of RT is exactly one blow**, and both heavy
-forms come out on the **release**. A short pull is the overhead; a pull past
-`charge_time` (0.42 s) is the spin *instead of* it. That is Elden Ring's R2, and
-`combat.charged` — public, up at `charge_time` — is which of the two the release
-will pay out. With an accepted grounded guard already active, the press instead
-throws the dash counter immediately; the ordinary charge never arms, so this
-same pull's release owes no overhead or spin.
+**One pull of RT is exactly one blow**, and every grounded result comes out on
+the **release**. A pull past `charge_time` (0.42 s) releases the magic spin
+*instead of* advancing the ordinary Heavy combo. `combat.charged` — public, up
+at `charge_time` — says which path the release will pay out. This remains true
+with LT held: the press winds up, a short release advances the same combo, and a
+long release throws the same magic spin.
 
 They used to be a **sequence** and it was wrong: the overhead fired on the press
 and the charge kept running underneath it, so holding the trigger threw the
@@ -742,26 +731,21 @@ Sound: `sword_charging` rises from the **press**, and both the release swipe and
 the hero's yell fire on the **release**. The yell was on the arm-up at first,
 which announced a commitment the player had not made yet.
 
-**The dash counter is `heavy` pressed with an active grounded guard**
-(`HeroCombat._tick_heavy_button`, gated by `blocking`, not the raw shield input).
-A successful parry's riposte window also maps `attack` to this same counter.
-The routes use `Intent.GUARD_DASH` and `Intent.DASH` respectively, then enter the
-same accepted `_dash_swing` path: a committed forward lunge in which
-`Hero.request_dash` drives him along
+**The dash-spin is Heavy step one and the successful-parry riposte.** Heavy
+reaches it through `Intent.HEAVY`; a successful parry's riposte window maps
+`attack` to `Intent.DASH`. Both enter `_dash_swing`: a committed forward move in
+which `Hero.request_dash` drives him along
 `_forward()` at 8.0 m/s for `dash_drive_time` (0.20 s) under the `SwingDash`
-one-shot, does 3 quarter-hearts, and resets the light chain so it can never be
-step 2 of a combo. It reads as a *decision*: the guard drops, he closes the gap,
-and the recovery is long enough to punish. The guarded press returns before the
-ordinary heavy charge is armed, so holding or releasing that pull cannot add an
-overhead or spin later.
+one-shot and does 3 quarter-hearts. The Heavy route advances its dedicated
+two-step chain; the riposte route does not. Only the earned riposte carries
+i-frames. LT changes neither the move nor its ordinary vulnerability.
 
 **The air slam is on BOTH shoulders off the floor**, and it is the same move
 either way: `HeroCombat._tick_light_button` throws it on the `attack` press, and
 `_tick_heavy_button` throws it off a **held** `heavy`. Held rather than an edge,
 deliberately — a player who wants to come down on something pulls RT on the way
 up, not at the top of the arc, and an edge would have been spent on the ground as
-an overhead before he ever left it. From neutral, the same pull therefore throws
-the overhead on the floor and the slam once he is off it. It is never buffered:
+a Heavy step before he ever left it. It is never buffered:
 a slam that fires because you pressed attack a moment before you left the ground
 is a slam you did not ask for.
 
@@ -2115,7 +2099,7 @@ Grip convention, **verified by render**, not by reading the GLB:
 Do not compute a bone-socket offset analytically. The rest-pose numbers are in a
 rotated FBX space and will mislead you. Render it, look, adjust, render again.
 
-### The sword — three lights, a heavy, and a lunge
+### The sword — three lights and a two-hit Heavy
 
 `HeroCombat` owns what a blow COSTS and DOES; `Hero` owns the pose and the
 facing. The split is why `Hero.Swing` exists at all: the animation tree needs one
@@ -2134,16 +2118,16 @@ hero.wish_dir() -> Vector3          # the stick, camera-relative, in world space
 | light 1 | `ss_slash_01` | attack | 2 |
 | light 2 | `ss_slash_03` | attack, again inside `chain_window` | 2 |
 | light 3 (finisher) | `ss_slash_04` | attack, again | 4 |
-| heavy | `ss_slash_04` | heavy, **tapped** — on the release | 4 |
-| spin | `ax_melee_attack_360_low` | heavy **held** past `charge_time`, on release, *instead of* the heavy | 5, all round |
-| lunge | `ss_attack_01` | heavy, tapped, **locked on** and in range | 4 |
-| dash | `ss_attack_03` | heavy on the press with an **active guard**, or attack in the riposte window | 3 |
+| Heavy 1 | `ss_attack_03` | heavy, first **tap** — on the release | 3 |
+| Heavy 2 | `ss_slash_04` | heavy, second **tap** inside `chain_window` | 4 |
+| magic spin | `ax_melee_attack_360_low` | heavy **held** past `charge_time`, on release, *instead of* advancing Heavy | 5, all round |
+| riposte | `ss_attack_03` | attack in the earned riposte window | 3 |
 
 The clips were picked off `tools/directors/swing_lookdev.gd`, which renders
 every frame of every swing in the library — not off their filenames, which carry
-no information at all. The three lights are a SEQUENCE (down, up, overhead), and
-`ss_attack_01` is the only clip in which the hero's feet leave the ground, which
-is why it is the lunge and was a terrible heavy.
+no information at all. The three lights are a SEQUENCE (down, up, overhead).
+Heavy is its own sequence (short turning dash, leaping overhead), sharing the
+overhead payoff without sharing combo state.
 
 The spin is the only grounded **combat** swing borrowed from another
 character's moveset: the sword-and-shield set has no 360 in it. The axe
@@ -2165,14 +2149,14 @@ past before you could see it was an overhead. `chain_time_scale` (0.92, 1.65)
 multiplies it, so steps 2 and 3 move with it, and the damage windows are
 fractions of it, so the blade's live slice sits in the same place in the swing.
 
-**The three ordinary lights, tap-heavy, dash counter, and air slam own a blade
+**The three ordinary lights, both Heavy steps, riposte, and air slam own a blade
 trail.**
 `HeroCombat` creates and publishes `SwordSlashTrail`
 (`scripts/combat/sword_slash_trail.gd`), binds it to the mounted sword holder,
 and starts a stroke only from the accepted move path: `_light_swing` after
 `Hero.request_attack` accepts `LIGHT1`, `LIGHT2` or `LIGHT3`, `_heavy_swing`
-after the tap-heavy is accepted, and `_dash_swing` after either dash-counter
-route is accepted, and the `Intent.SLAM` branch after `Hero.request_slam()`
+after the Heavy finisher is accepted, `_dash_swing` after either Heavy step one
+or the riposte is accepted, and the `Intent.SLAM` branch after `Hero.request_slam()`
 accepts the airborne strike. Each ordinary swing passes its own damage window.
 The slam passes its full measured airborne interval, `Hero.slam_strike_time`,
 with an active window of 0.0–1.0; this is the same exact value `Hero` uses to
@@ -2180,11 +2164,10 @@ scale the dive clip, so the water sheet runs from commit through contact on ever
 measured drop. The ribbon samples the real
 weapon convention — an inner point at 0.12 m and an outer point at 0.88 m along
 the holder's local `+Y` — into world space, so the down, up, overhead, thrust,
-and jump-slam clips leave their own swept surfaces. The tap-heavy happens to
-reuse the `LIGHT3` clip, while the counter uses the riposte dash; all enter only
-through their named accepted paths. Only a counter backed by the earned riposte
-window carries i-frames; ordinary guard + heavy is a committed stance attack.
-Held charge/wind-up, spin, lunge, parry and flurry produce no ordinary trail.
+and jump-slam clips leave their own swept surfaces. Heavy step two reuses the
+`LIGHT3` clip, while step one and the riposte share the dash; all enter only
+through their named accepted paths. Only the earned riposte carries i-frames.
+Held charge/wind-up, magic spin, parry and flurry produce no ordinary trail.
 
 Sampling is confined to each ordinary sword attack's existing damage window
 (0.22–0.62 of the move for the light chain), while the slam samples its full
@@ -2204,14 +2187,14 @@ strongly. Three parallel highlight currents break up the interior; travelling
 brightness runs along them without displacing their clean arc silhouettes. A
 sub-pixel screen-texture offset refracts the room through the darker gaps,
 producing a layered water-sheet read without changing the global environment.
-The finisher intensity gives the chain finisher, tap-heavy, dash counter, and
+The finisher intensity gives the chain finisher, Heavy combo, riposte, and
 slam the same modest opacity lift, keeping ordinary and earned sword attacks
 visibly below `SpinVfx`'s charged spectacle. Proved at gameplay camera distance
-for all three lights, the tap-heavy, the riposte counter, the real jump +
+for all three lights, the Heavy opener, the riposte counter, the real jump +
 held-heavy slam (including one stroke, a visible captured arc, follow-through
 cleanup, and exit from `SLAM`), and the charged-spin null control by
-`tools/directors/sword_slash_trail.gd`. The active-guard + heavy route proves
-the same one-stroke ribbon lifecycle through `tools/directors/guard_buttons.gd`.
+`tools/directors/sword_slash_trail.gd`. Guarded Heavy's shared opener proves the
+same one-stroke ribbon lifecycle through `tools/directors/guard_buttons.gd`.
 
 **The chain is buffered.** A press in the back half of a swing
 (`chain_buffer_from`) is remembered and paid out one frame AFTER the swing ends
@@ -2219,42 +2202,22 @@ the same one-stroke ribbon lifecycle through `tools/directors/guard_buttons.gd`.
 swing clock runs a frame ahead of his `MoveState.ATTACK`. Ask him on the
 boundary frame and he refuses, and the press vanishes.
 
-**The heavy and the spin are one pull** (§4). The press starts the wind-up and
-throws nothing; the release throws whichever of the two `combat.charged` says,
-buffered like any other intent if a swing is still running. Both END the chain
-rather than counting as a step in it.
+**Heavy and the magic spin share one pull** (§4). The press starts the wind-up
+and throws nothing. A short release advances `_heavy_step`; an armed release
+throws the magic spin instead and resets the ordinary Heavy combo. The Heavy
+Intent is buffered in the back half of step one, so an early second tap pays out
+the overhead one frame after the opener ends.
 
 A wind-up **taken** from the player mid-pull — a shop opening, an item drawn, the
 ground leaving his feet — pays out nothing at all, and the release edge that
 arrives afterwards is swallowed (`_charge_t < 0`). Otherwise a cancelled hold
-comes back as an overhead a second later, which is the same double-blow bug
+comes back as a Heavy step a second later, which is the same double-blow bug
 wearing a different hat.
-
-**The lunge is what Z-targeting buys.** It refuses without a lock, on purpose;
-a version that also fired unlocked would just be a better standing attack. It
-has no stick gate and no chain gate — both existed to tell a leap apart from an
-ordinary swing pressed with the same thumb, and on a dedicated button a hidden
-rule is just a button that intermittently does nothing.
-
-**And no near range gate.** There was one — `lunge_min_range`, 1.9 m — whose
-argument was that point blank there is no gap to close, so the leap reads as
-hopping on the spot. 1.9 m is *inside sword range*: it is where you stand when
-you are fighting something, so the button did nothing at the only distance
-anyone presses it from, and that is precisely how it got reported as broken.
-Point blank the leap now comes out with no travel (`request_lunge` clamps the
-gap at zero), the clip's own jump carries the read, and the blow lands. The far
-gate is the **lock's** reach — `K.LOCK_BREAK_RANGE`, the number the lock itself
-breaks at rather than the one it acquires at — for the same reason the near one
-went: if you can lock it you can leap at it, and anything shorter is a second
-invisible range to learn. Inside the hysteresis band between the two the dodge
-has already stood down for the leap (§4), so a leap refusing there would be a
-dead press rather than a fallback. `lunge_max_speed` is what stops a long lock becoming a
-teleport. Swept at 1.4 / 2.6 / 4.2 / 6.5 m by `tools/directors/lt_moveset.gd`.
 
 Proved by `tools/directors/p4_combo.gd` (the chain, in damage),
 `tools/directors/p4_charge.gd` (the hold: a tap is a tap, a short hold is a tap,
-a long hold arms and pays) and `tools/directors/p4_lunge.gd` (the leap, in
-metres closed against an unlocked control). The chain directors photograph
+a long hold arms and pays), and `tools/directors/heavy_combo.gd` (Heavy→Heavy,
+buffering, guard/lock invariance, and hold-to-spin). The chain directors photograph
 almost nothing — `capture()` stalls the game clock for longer than the chain
 window, so a director that screenshots mid-chain breaks the thing it is
 measuring. The poses are `swing_lookdev`'s job.
@@ -2501,11 +2464,11 @@ left turns him 111°, of which 101° is his own. Guarded, the same input turns h
 across the whole guarded strafe, which is what says the autoswing suppression is
 doing the work rather than the threshold.
 
-The four guarded dodges and the counter's forward travel are verified by
+The four guarded dodges and Heavy step one's forward travel are verified by
 `tools/directors/guard_moveset.gd`, which asserts the `Dodge` that fired, the
-dominant travel axis, and the counter's `SwingDash` path. The exact guarded-heavy
+dominant travel axis, and the opener's `SwingDash` path. The exact guarded-heavy
 input contract is verified by `tools/directors/guard_buttons.gd`, including the
-disarmed charge, one live and cleaned ribbon stroke, and exit from the attack
+shared release-based wind-up, one live and cleaned ribbon stroke, and exit from the attack
 state. The moveset director runs each dodge
 **twice**: once measured with no captures, once photographed. That is not
 redundancy. `rig.capture()` consumes game time, so a window that samples travel
