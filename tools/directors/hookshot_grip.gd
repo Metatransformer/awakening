@@ -55,17 +55,17 @@ func run(rig) -> void:
 	await rig.draw_weapon(&"hookshot")
 	await rig.wait_frames(24)
 	if hero.combat == null or hero.combat.hookshot == null:
-		print("GRIP FAIL no hookshot model mounted")
+		rig.fail("GRIP FAIL no hookshot model mounted")
 		return
 	var model: Node3D = hero.combat.hookshot
 	if not model.is_visible_in_tree():
-		print("GRIP FAIL the hookshot is not in his hand (right hand holds %s)"
+		rig.fail("GRIP FAIL the hookshot is not in his hand (right hand holds %s)"
 			% Game.armament(Game.HAND_RIGHT))
 		return
 
 	var cam = hero.get_viewport().get_camera_3d()
 	if cam == null:
-		print("GRIP FAIL no camera")
+		rig.fail("GRIP FAIL no camera")
 		return
 
 	# A lookdev lamp on the model. The dungeon is authored dark on purpose and a

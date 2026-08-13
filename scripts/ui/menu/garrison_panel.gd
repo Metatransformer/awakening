@@ -240,7 +240,7 @@ func _build_duty_status() -> void:
 		availability = "Unavailable · hearth stock is full"
 	else:
 		availability = "Available now"
-	_fact("Timber Yard", availability)
+	_fact("Outskirts grove", availability)
 	_fact("Today's chop", "Complete" if completed else "Not complete")
 	_fact("Current step", _duty_step(assigned, owns_axe, completed))
 
@@ -257,7 +257,7 @@ func _duty_step(assigned: bool, owns_axe: bool, completed: bool) -> String:
 				and Game.firewood_stock > 0:
 			return "Hearth stocked for tonight's bonfire."
 		return "Return tomorrow for the next bundle."
-	return "Chop today's bundle at the exterior Timber Yard."
+	return "Fell today's tree in the outskirts grove."
 
 
 func _build_garrison_defence() -> void:

@@ -225,28 +225,27 @@ withholding the exit code.
 **Two things the survey found that are worse than the cast error it went looking
 for.**
 
-1. **A director's own `FAIL` reaches the exit code now — for two thirds of
-   them.** Card #72 is CLOSED: `shoot.gd._run` ends `quit(EXIT_DIRECTOR_FAIL)`
-   (66) when `fails > 0`, and prints one canonical `DIRECTOR FAIL n` line so the
-   eight spellings in the tree do not have to be grepped for.
+1. **A director's own `FAIL` reaches the exit code now.** Cards #72 and #141 are
+   CLOSED: `shoot.gd._run` ends `quit(EXIT_DIRECTOR_FAIL)` (66) when `fails > 0`,
+   and prints one canonical `DIRECTOR FAIL n` line so the eight spellings in the
+   tree do not have to be grepped for.
 
-   **But a director only reaches that counter if it reports through it** —
-   `rig.fail()`, an int `return` from `run()`, or a declared `_fails` / `_fail` /
-   `fails` the harness harvests. Measured on `main`, 2026-08-12: **111 of 167
-   directors are wired to it. 25 print `FAIL` or `ABORT` and tally nothing, so
-   they still exit 0 while failing** — and one of those 25 is **`mvp_loop`**, the
-   whole-loop director this section names first. It prints `MVP ABORT never got
-   underground` and returns success. The remaining 31 assert nothing to fail.
+   A director reaches that counter through `rig.fail()` / `rig.check()`, an int
+   `return` from `run()`, or a declared `_fails` / `_fail` / `fails` the harness
+   harvests. `tools/director_selftally.sh` audits those routes and exits non-zero
+   if any assertion-bearing director only prints `FAIL` / `ABORT`. Measured on
+   2026-08-12: **138 of 185 runnable directors are self-tallied, 47 are explicitly
+   observation-only, and zero print a failure they cannot deliver to the gate.**
+   The observation bucket is named on purpose: those sheets produce frames or
+   tables for a human judgement and have no binary claim to weaken into green.
 
-   So: **a non-zero status is now trustworthy, and a zero one still is not.**
-   Exit 66 means it really failed. Exit 0 means either it passed or it is one of
-   the 25 — and you cannot tell which from the status. **Read the output.**
+   So exit 66 means the director reported a failed check, and exit 0 means every
+   check it makes passed. **Read the output anyway, and look at the frames** — an
+   observation-only sheet can still show the wrong thing, and a bad instrument
+   can still assert the wrong answer.
 
-   Migrating one is a few lines: replace the `print("X FAIL …")` with
-   `rig.fail("…")` and DELETE the director's own counter, because the two add.
-   (`shoot.gd` points at `tools/director_selftally.sh` for the list of
-   unmigrated ones. That script does not exist — the loop above is what counts
-   them until somebody writes it.)
+   When migrating an old director, replace `print("X FAIL …")` with
+   `rig.fail("…")` and DELETE its own counter, because the two routes add.
 2. **Five directors were dirty only because another agent was mid-edit.**
    `hookshot_grip`, `monster_feel`, `p4_combo`, `p4_lunge` and `p4_probe` caught
    `hud.gd` and `enemy.gd` in states that would not parse; all five are clean on

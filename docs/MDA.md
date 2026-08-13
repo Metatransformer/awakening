@@ -16,7 +16,7 @@ the dynamics occur.
 
 ## Raid proof map
 
-The active test is
+The raid test is
 [design-tests/RAID_LOOP_PROOF.md](design-tests/RAID_LOOP_PROOF.md).
 
 | Intended aesthetic | Observable dynamics | Minimum mechanics under test |
@@ -46,6 +46,20 @@ buff upkeep, optimize every day around it, or resent the return trip despite
 understanding the action-to-supper-to-bonus chain. Adding catches, gear,
 professions, or stronger rewards would intensify that failure rather than repair
 it.
+
+## Field Notes proof map
+
+The dedicated test is
+[design-tests/FIELD_NOTES_PROOF.md](design-tests/FIELD_NOTES_PROOF.md), and the
+bounded mechanics are owned by [FIELD_NOTES.md](FIELD_NOTES.md).
+
+| Intended aesthetic | Observable dynamics | Minimum mechanics under test |
+|---|---|---|
+| **Earned learning and specific anticipation:** homecoming turns what happened underground into a concrete reason to return. | The player connects an awarded note to an observed event, compares finite doctrines, notices the chosen effect and later names a specific unearned observation or doctrine target. | Five fixed first-time Cistern observations; award only at extraction/death debrief; five total notes; three one-rank doctrines costing two notes each. |
+
+This map states a hypothesis, not evidence. Implementation can prove the
+mechanics function; only the precommitted human sessions can establish the
+dynamic.
 
 ## Design check
 

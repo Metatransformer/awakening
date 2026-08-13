@@ -13,6 +13,7 @@ signal garrison_raid_restoring
 
 var max_quarters: int = K.START_HEARTS * K.HEART
 var quarters: int = K.START_HEARTS * K.HEART
+var temporary_overhealth: int = 0
 
 ## The blue bar. **Full from the first frame of a new save**, which is a change
 ## from the meter this started as: it was OOT's, granted by a Great Fairy, and
@@ -70,6 +71,10 @@ var gold: int = K.START_GOLD
 ##
 ## Not seeded with `K.START_GOLD`: the purse you arrive with was not earned.
 var gold_earned: int = 0
+## Society Field Notes already settled from completed descents. Observations are
+## a permanent set so replayed run settlement cannot award one twice.
+var field_notes: int = 0
+var awarded_field_observations: Dictionary[StringName, bool] = {}
 ## Bag capacity, in slots. Bought from the shop, so it lives here with the rest
 ## of the metagame rather than in `Run`, which is wiped every time you die.
 var bag_slots: int = K.START_BAG_SLOTS
@@ -404,6 +409,7 @@ func _grant_starter_kit() -> void:
 func reset() -> void:
 	max_quarters = K.START_HEARTS * K.HEART
 	quarters = max_quarters
+	temporary_overhealth = 0
 	# Focus raises this, so a reset has to put it back. It did not need clearing
 	# while nothing could buy it.
 	max_stamina = K.MAX_STAMINA
@@ -419,6 +425,8 @@ func reset() -> void:
 	_mercy_carry = 0.0
 	gold = K.START_GOLD
 	gold_earned = 0
+	field_notes = 0
+	awarded_field_observations.clear()
 	bag_slots = K.START_BAG_SLOTS
 	upgrades.clear()
 	wishlist_lines.clear()
@@ -470,11 +478,34 @@ func reset() -> void:
 	Bus.gold_changed.emit(gold)
 	Bus.key_count_changed.emit(small_keys)
 	Bus.player_health_changed.emit(quarters, max_quarters)
+	Bus.temporary_overhealth_changed.emit(temporary_overhealth)
 	Bus.magic_changed.emit(magic, max_magic)
 	Bus.wishlist_changed.emit()
 	stamina = max_stamina
 	_stamina_hold = 0.0
 	Bus.stamina_changed.emit(stamina, max_stamina)
+
+
+func has_field_observation(id: StringName) -> bool:
+	return FieldNotesDb.is_observation(id) \
+		and bool(awarded_field_observations.get(id, false))
+
+
+## Settle observations carried home by a run. Input order is receipt order;
+## invalid, repeated and previously awarded ids are ignored. One batch emits one
+## signal so the Field Notes UI never observes a half-settled balance.
+func award_field_observations(ids: Array[StringName]) -> Array[StringName]:
+	var newly_awarded: Array[StringName] = []
+	for id: StringName in ids:
+		if not FieldNotesDb.is_observation(id) or has_field_observation(id) \
+				or newly_awarded.has(id):
+			continue
+		awarded_field_observations[id] = true
+		field_notes += FieldNotesDb.observation_note_value(id)
+		newly_awarded.append(id)
+	if not newly_awarded.is_empty():
+		Bus.field_notes_awarded.emit(newly_awarded, field_notes)
+	return newly_awarded
 
 
 func garrison_snapshot() -> Dictionary:
@@ -856,7 +887,14 @@ func restore_wishlist_lines(raw: Array) -> void:
 func damage(amount_quarters: int) -> void:
 	if amount_quarters <= 0:
 		return
-	quarters = maxi(0, quarters - _softened(amount_quarters))
+	var remaining: int = _softened(amount_quarters)
+	if temporary_overhealth > 0:
+		var absorbed := mini(temporary_overhealth, remaining)
+		set_temporary_overhealth(temporary_overhealth - absorbed)
+		remaining -= absorbed
+	if remaining <= 0:
+		return
+	quarters = maxi(0, quarters - remaining)
 	Bus.player_health_changed.emit(quarters, max_quarters)
 	if quarters == 0:
 		Bus.player_died.emit()
@@ -906,6 +944,11 @@ func _softened(amount: int) -> int:
 func heal(amount_quarters: int) -> void:
 	quarters = mini(max_quarters, quarters + amount_quarters)
 	Bus.player_health_changed.emit(quarters, max_quarters)
+
+
+func set_temporary_overhealth(amount_quarters: int) -> void:
+	temporary_overhealth = maxi(0, amount_quarters)
+	Bus.temporary_overhealth_changed.emit(temporary_overhealth)
 
 
 ## The maxima are STORED rather than returned from an accessor, unlike soak and
@@ -1342,8 +1385,10 @@ func speed_mult_raw() -> float:
 ## Stamina points a second, with the Wind bracelet on it. Read by `tick_stamina`;
 ## nothing else may read `K.STAMINA_REGEN` directly any more.
 func stamina_regen() -> float:
-	var rungs := jewel_level(jewel_track(&"bracelet", &"wind"))
-	return K.STAMINA_REGEN * (1.0 + K.JEWEL_WIND_REGEN * float(rungs))
+	var rungs: int = jewel_level(jewel_track(&"bracelet", &"wind"))
+	var regen: float = K.STAMINA_REGEN \
+		* (1.0 + K.JEWEL_WIND_REGEN * float(rungs))
+	return FieldNotesDb.stamina_regen(regen)
 
 
 ## How many rungs of a JEWEL path are bought. Separate from `forge_level` only

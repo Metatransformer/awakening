@@ -14,7 +14,7 @@ This page is the authority map. It points to truth instead of repeating it.
 | Owner | Owns |
 |---|---|
 | [GDD.md](GDD.md) | Pitch, fantasy, pillars, loop, progression, feature intent, and lore premise |
-| [NOW.md](NOW.md) | The only active question and the work currently authorised |
+| [NOW.md](NOW.md) | The active human questions and the work currently authorised |
 | [SCOPE.md](SCOPE.md) | Hard caps, the production freeze, and what is later or not planned |
 
 ## Focused references
@@ -24,6 +24,7 @@ A reference may be long only when its subject is narrow.
 | Subject | Named owner |
 |---|---|
 | Descent, rewards, economy, and services | [METAGAME.md](METAGAME.md) |
+| Bounded first-time observations, Field Notes, and doctrines | [FIELD_NOTES.md](FIELD_NOTES.md) |
 | Garrison rhythm, Firewood/Hearth, and the bounded raid | [GARRISON_LIFE.md](GARRISON_LIFE.md) |
 | Player-facing mechanics inventory | [MECHANICS.md](MECHANICS.md) |
 | Items and their place in the loop | [ITEMS.md](ITEMS.md) |
@@ -41,7 +42,9 @@ A reference may be long only when its subject is narrow.
 
 - [MDA.md](MDA.md) states the current causal hypothesis; it is not evidence.
 - [design-tests/](design-tests/) holds precommitted questions, criteria, results,
-  and decisions.
+  and decisions. The current dedicated human gates are
+  [RAID_LOOP_PROOF.md](design-tests/RAID_LOOP_PROOF.md) and
+  [FIELD_NOTES_PROOF.md](design-tests/FIELD_NOTES_PROOF.md).
 - [playtests/](playtests/) holds observations, timecodes, and player words.
 - [archive/](archive/) holds intentionally retained superseded material.
 - Git history is the archive for replaced text. Do not create snapshot copies.

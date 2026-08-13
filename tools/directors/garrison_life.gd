@@ -65,7 +65,7 @@ func _assignment_and_axe(rig) -> void:
 	rig.check(int(parts.get(&"iron_scrap", 0)) == 3,
 		"the Woodsman's Axe asks for three Iron Scrap")
 
-	var yard := TimberYard.new()
+	var yard := HarvestTree.new()
 	Game.restore_garrison({})
 	yard.activate(null)
 	rig.check(not Game.carrying_firewood and Game.timber_completed_day == 0,
@@ -108,18 +108,19 @@ func _timber_view(rig, garrison: Garrison) -> void:
 	Prompt.drop_focus()
 	Clock.set_time(1, 12.0)
 	await rig.wait_frames(12)
-	rig.check(outskirts.timber_yard != null, "the exterior route contains the Timber Yard")
-	rig.check(outskirts.port(&"timber_yard").origin != Vector3.ZERO,
-		"the Timber Yard has an authored exterior port")
+	rig.check(outskirts.harvest_trees.size() == 10,
+		"the exterior route contains a ten-tree working grove")
+	rig.check(outskirts.port(&"grove").origin != Vector3.ZERO,
+		"the grove entrance has an authored exterior port")
 
 	var cam := Camera3D.new()
 	cam.fov = 52.0
 	outskirts.add_child(cam)
 	cam.global_position = Vector3(-3.8, 9.4, 22.5)
-	cam.look_at(outskirts.timber_yard.global_position + Vector3(0.0, 0.85, 0.0), Vector3.UP)
+	cam.look_at(outskirts.port(&"grove").origin + Vector3(0.0, 2.8, 0.0), Vector3.UP)
 	cam.make_current()
 	await rig.wait_frames(6)
-	await rig.capture("life_00_timber.png")
+	await rig.capture("life_00_grove.png")
 
 	outskirts.queue_free()
 	garrison.visible = true
@@ -194,7 +195,7 @@ func _daily_state(rig) -> void:
 	var restored_key: Variant = restored_keys[0] if not restored_keys.is_empty() else null
 	rig.check(restored_key is StringName and restored_key == &"elder",
 		"JSON-style Connected String keys restore as typed StringName keys")
-	rig.check(Saves.VERSION == 13, "the additive save contract is version 13")
+	rig.check(Saves.VERSION == 15, "the additive save contract is version 15")
 
 	Game.restore_garrison({
 		"fish_stock": 2,

@@ -55,6 +55,10 @@ func active() -> bool:
 	return _t >= 0.0
 
 
+func channel_time() -> float:
+	return FieldNotesDb.extraction_channel_time(CHANNEL_TIME)
+
+
 # --- The channel ------------------------------------------------------------
 
 ## Start leaving. Returns false (and says why on the bus) if this is not a
@@ -93,7 +97,7 @@ func cancel() -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
-	var t01 := clampf(_t / CHANNEL_TIME, 0.0, 1.0)
+	var t01: float = clampf(_t / channel_time(), 0.0, 1.0)
 	Hud.set_extract_hold(t01)
 	# The slats climb the hero rather than standing on the floor. The rope is
 	# the thing working, so the effect belongs on the body carrying it.

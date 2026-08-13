@@ -50,18 +50,17 @@ func run(rig) -> void:
 	var out: String = rig.arg("out", "/tmp/p4l/x.png").get_base_dir()
 	var scene: Node = rig.scene()
 	var hero: Node3D = scene.get_node_or_null(^"Hero") as Node3D
-	var fails := 0
 
 	if hero == null:
-		print("LUNGE FAIL no Hero in the scene")
+		rig.fail("LUNGE FAIL no Hero in the scene")
 		return
 	var combat: Node = hero.get(&"combat")
 	if combat == null:
-		print("LUNGE FAIL no HeroCombat on the Hero")
+		rig.fail("LUNGE FAIL no HeroCombat on the Hero")
 		return
 	var post: Node = scene.get_node_or_null(^"PostA")
 	if post == null:
-		print("LUNGE FAIL no PostA to lock onto")
+		rig.fail("LUNGE FAIL no PostA to lock onto")
 		return
 	post.connect(&"struck", _on_struck)
 	var post_pos: Vector3 = (post as Node3D).global_position
@@ -88,7 +87,7 @@ func run(rig) -> void:
 	var light := await _press_and_land(rig, "attack")
 	print("LUNGE light dmg=%d" % light)
 	if light <= 0:
-		print("LUNGE FAIL the light baseline swing landed nothing"); fails += 1
+		rig.fail("LUNGE FAIL the light baseline swing landed nothing")
 
 	# --- locked, stick forward: the leap ------------------------------------
 	_place(hero, post_pos)
@@ -105,13 +104,13 @@ func run(rig) -> void:
 	var locked: bool = hero.call(&"lock_target") != null
 	print("LUNGE locked=%s after %d press(es)" % [locked, presses])
 	if not locked:
-		print("LUNGE FAIL z_target did not acquire the post"); fails += 1
+		rig.fail("LUNGE FAIL z_target did not acquire the post")
 	await rig.capture(out.path_join("l_00_locked.png"))
 
 	var before := _gap(hero, post_pos)
 	if before < START_RANGE - 0.4:
-		print("LUNGE FAIL could not place the hero: %.2fm out, wanted %.2fm — he is stuck on something"
-			% [before, START_RANGE]); fails += 1
+		rig.fail("LUNGE FAIL could not place the hero: %.2fm out, wanted %.2fm — he is stuck on something"
+			% [before, START_RANGE])
 	var dmg := await _lunge(rig, hero)
 	await rig.wait_frames(40)
 	var after := _gap(hero, post_pos)
@@ -125,7 +124,7 @@ func run(rig) -> void:
 	# Drop the lock. z_target toggles (targeting.gd), so a second press releases.
 	await _lock_off(rig, hero)
 	if hero.call(&"lock_target") != null:
-		print("LUNGE FAIL still locked after releasing z_target"); fails += 1
+		rig.fail("LUNGE FAIL still locked after releasing z_target")
 	_place(hero, post_pos)
 	await rig.wait_frames(SETTLE)
 	var free_before := _gap(hero, post_pos)
@@ -138,28 +137,28 @@ func run(rig) -> void:
 	await rig.capture(out.path_join("l_02_unlocked.png"))
 
 	if dmg <= 0:
-		print("LUNGE FAIL the leap landed nothing"); fails += 1
+		rig.fail("LUNGE FAIL the leap landed nothing")
 	if dmg <= light:
-		print("LUNGE FAIL lunge (%d) does not out-damage a light swing (%d)"
-			% [dmg, light]); fails += 1
+		rig.fail("LUNGE FAIL lunge (%d) does not out-damage a light swing (%d)"
+			% [dmg, light])
 	# The drive is `lunge_drive_time` long and the hero also walks a little on the
 	# stick lead, so this is a floor, not an equality. Half the gap is well past
 	# anything walking could account for in a fifth of a second.
 	if closed < (START_RANGE - 1.0) * 0.5:
-		print("LUNGE FAIL closed only %.2fm of a %.2fm gap — that is a walk, not a leap"
-			% [closed, START_RANGE]); fails += 1
+		rig.fail("LUNGE FAIL closed only %.2fm of a %.2fm gap — that is a walk, not a leap"
+			% [closed, START_RANGE])
 	if after < 0.6:
-		print("LUNGE FAIL ended %.2fm from the post — the leap overshoots into it"
-			% after); fails += 1
+		rig.fail("LUNGE FAIL ended %.2fm from the post — the leap overshoots into it"
+			% after)
 	# Unlocked he is allowed to WALK — the stick is held, and holding forward is
 	# supposed to move you. What he must not do is TRAVEL: the comparison is
 	# against the same inputs with the lock off, for the same number of frames,
 	# so anything the walk can explain is subtracted out by construction.
 	if closed < free_closed + 1.5:
-		print("LUNGE FAIL locked closed %.2fm, unlocked closed %.2fm — the lock buys nothing"
-			% [closed, free_closed]); fails += 1
+		rig.fail("LUNGE FAIL locked closed %.2fm, unlocked closed %.2fm — the lock buys nothing"
+			% [closed, free_closed])
 
-	print("LUNGE %s (fails=%d)" % ["OK" if fails == 0 else "FAIL", fails])
+	print("LUNGE checks complete")
 
 
 ## Ground distance to the post. Flattened, because the lunge hops and a 3D

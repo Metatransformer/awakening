@@ -1,6 +1,6 @@
 extends RefCounted
 ## The whole shield moveset, shot and checked: four dodges out of a raised guard,
-## and the dash attack that comes off it.
+## and the dash counter that comes off it.
 ##
 ## Two claims are being tested, and neither can be taken on trust:
 ##
@@ -9,7 +9,7 @@ extends RefCounted
 ##      backstep was a hero rolling forwards while sliding backwards. The check
 ##      is `Hero._dodge` against what was asked for, plus the direction of the
 ##      actual displacement measured against the facing he holds through it.
-##   2. **Shield + attack is the dash, not a light swing.** `SwingDash` has to be
+##   2. **Shield + heavy is the dash, not the ordinary heavy.** `SwingDash` has to be
 ##      the one-shot in flight, and the hero has to END UP CLOSER to what he was
 ##      pointing at — a stab that does not close is just a slow slash.
 ##
@@ -76,7 +76,7 @@ func run(rig) -> void:
 		await _measure_dodge(rig, hero, spec)
 		await _shoot_move(rig, hero, spec["action"], &"context", spec["tag"], 5, 0.09)
 	await _measure_dash(rig, hero)
-	await _shoot_move(rig, hero, &"", &"attack", "dash", 6, 0.07)
+	await _shoot_move(rig, hero, &"", &"heavy", "dash", 6, 0.07)
 
 	Input.action_release(&"shield")
 	print("GUARD done: %d failures" % _fails)
@@ -132,13 +132,13 @@ func _measure_dodge(rig, hero: Node3D, spec: Dictionary) -> void:
 	await _drop(rig, action)
 
 
-## Shield up, attack pressed: the stab.
+## Shield up, heavy pressed: the stab.
 func _measure_dash(rig, hero: Node3D) -> void:
 	await _stance(rig, hero, &"")
 
-	Input.action_press(&"attack")
+	Input.action_press(&"heavy")
 	var started := await _await_state(rig, hero, ST_ATTACK)
-	Input.action_release(&"attack")
+	Input.action_release(&"heavy")
 	if not started:
 		_fail("dash did not start a swing")
 		await _drop(rig, &"")

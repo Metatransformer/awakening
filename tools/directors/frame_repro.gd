@@ -162,7 +162,7 @@ func _pair(rig, internal: bool, mode: String, gaps: Array[int],
 	var a_path := "%s/%s_a.png" % [_out, stem]
 	var a: Image = await _shoot(rig, a_path)
 	if a == null:
-		print("REPRO FAIL %s: could not re-read %s" % [tag, a_path])
+		rig.fail("REPRO FAIL %s: could not re-read %s" % [tag, a_path])
 		Engine.time_scale = prev
 		return mask
 
@@ -186,7 +186,7 @@ func _pair(rig, internal: bool, mode: String, gaps: Array[int],
 		var b_path := "%s/%s_b%d.png" % [_out, stem, g]
 		var b: Image = await _shoot(rig, b_path)
 		if b == null or b.get_size() != a.get_size():
-			print("REPRO FAIL %s gap %d: sizes differ" % [tag, g])
+			rig.fail("REPRO FAIL %s gap %d: sizes differ" % [tag, g])
 			continue
 		var d := _diff(a, b, mask["bits"])
 		_rows.append("REPRO %-28s %8d %8d %8d %8d %5d"

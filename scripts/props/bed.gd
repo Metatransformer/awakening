@@ -13,8 +13,8 @@ extends Interactable
 ## player says "keep this", in the place and the gesture every game of this
 ## shape has used to say it.
 ##
-## **Recovery is an Elder upgrade.** Each `elder_bed` rung restores one heart;
-## an unupgraded bunk still advances to dawn, refills stamina, and saves. The
+## **Recovery is complete.** Every successful sleep fills real health, while
+## each `elder_bed` rung grants one quarter-heart of temporary overhealth. The
 ## clock jump happens behind Flow's existing black veil so every clock listener
 ## finds morning already true when the world comes back.
 ##
@@ -78,7 +78,9 @@ func _sleep() -> void:
 	if not reached_dawn:
 		return
 	var bed_rank := int(Game.upgrades.get(ElderUpgradeDb.BED_ID, 0))
-	Game.heal(bed_rank * ElderUpgradeDb.BED_HEAL_PER_RANK)
+	Game.heal(Game.max_quarters)
+	Game.set_temporary_overhealth(
+		bed_rank * ElderUpgradeDb.BED_OVERHEALTH_PER_RANK)
 	Game.refund_stamina(Game.max_stamina)
 	var slot := -1
 	if Saves.autosave():

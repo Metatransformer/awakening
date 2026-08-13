@@ -42,7 +42,7 @@ func run(rig) -> void:
 
 	var players: Array = rig.get_nodes_in_group(&"player")
 	if players.is_empty():
-		print("POSE FAIL no node in group `player`")
+		rig.fail("POSE FAIL no node in group `player`")
 		return
 	var hero: Node3D = players[0]
 	hero.global_position = Vector3(0.0, 0.05, 0.0)
@@ -61,15 +61,15 @@ func run(rig) -> void:
 	var tree: AnimationTree = hero.find_child("AnimTree", false, false)
 	var skel: Skeleton3D = hero.skeleton()
 	if skel == null:
-		print("POSE FAIL no skeleton")
+		rig.fail("POSE FAIL no skeleton")
 		return
 	var player: AnimationPlayer = skel.get_parent().find_child("AnimationPlayer", true, false)
 	if player == null or not player.has_animation(clip):
-		print("POSE FAIL no AnimationPlayer with %s on it" % clip)
+		rig.fail("POSE FAIL no AnimationPlayer with %s on it" % clip)
 		return
 	var cam := hero.get_viewport().get_camera_3d()
 	if cam == null:
-		print("POSE FAIL no camera")
+		rig.fail("POSE FAIL no camera")
 		return
 
 	if tree != null:
@@ -100,7 +100,7 @@ func run(rig) -> void:
 
 	var combat: Node = hero.get(&"combat")
 	if combat == null:
-		print("POSE FAIL no HeroCombat on the Hero")
+		rig.fail("POSE FAIL no HeroCombat on the Hero")
 		return
 
 	# `heavy`, not `attack`: the wind-up lives on the trigger. RB charges nothing.
@@ -122,6 +122,6 @@ func run(rig) -> void:
 	Input.action_release(&"heavy")
 
 	if not lit:
-		print("POSE FAIL the hold never armed — the b sheet is of a tap")
+		rig.fail("POSE FAIL the hold never armed — the b sheet is of a tap")
 		return
 	print("POSE OK — read charge_pose_time off the a_ sheet, judge it on the b_ sheet")

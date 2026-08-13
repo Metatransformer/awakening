@@ -19,6 +19,9 @@ extends Node3D
 ## 1.52 m — a greatsword — which is exactly the kind of error that looks like an
 ## art problem and is really a transform problem.
 
+const MAT_WOOD := preload("res://assets/materials/mat_wood.tres")
+const MAT_IRON := preload("res://assets/materials/mat_iron.tres")
+
 ## What the player asked for. Deliberately coarser than Hero.Swing: WHICH light
 ## swing a LIGHT becomes — step 1, 2 or 3 — is this script's decision, made from
 ## the chain state. Buffering an Intent rather than a Swing is what lets a press
@@ -30,12 +33,13 @@ extends Node3D
 ## else as the overhead (`_begin`). A press buffered during a swing that BREAKS
 ## the lock must not still pay out a leap at nothing.
 ##
-## SPIN is not a button either. It is what the trigger's HOLD releases into, and
-## DASH is what the attack button means inside the riposte window (see below —
-## it USED to be the light button from behind a raised shield, and the line
-## saying so outlived the move by several commits). They stay Intents because
-## the buffer is the thing that makes them feel honest: a charge released during
-## the swing that started it has to come out when that swing ends, not vanish.
+## SPIN is not a button either. It is what the trigger's HOLD releases into.
+## DASH is the earned riposte counter; GUARD_DASH is the same blade move from an
+## active guard, kept distinct so the stance claim is never buffered after the
+## guard has dropped. A live riposte window still upgrades either input route.
+## They stay Intents because the buffer is the thing that makes them feel honest:
+## a charge released during the swing that started it has to come out when that
+## swing ends, not vanish.
 ## SLAM is the light button pressed in the AIR, and it is the one Intent that is
 ## never buffered: it is only legal while the hero is off the floor, and a press
 ## honoured two swings later would fire it at a hero standing still. See `_press`.
@@ -46,18 +50,17 @@ extends Node3D
 ## when that is honoured a third of a second late is not a late parry, it is a
 ## different one. See `_press`.
 ##
-## The dash did not lose its home, it got a better one: `_riposte_t`. It is now
-## what an attack press means in the window a successful parry opens, which is
-## the exact situation the move was designed for — a body knocked away from you
-## and a gap to close before it gets up. It is also the one swing in the kit
-## that cannot be interrupted: the riposte carries i-frames for its whole
-## duration, because the window is a reward for reading one monster and it is
-## spent in a room that holds three. See `_dash_swing`.
+## The dash has two homes: an immediate heavy press from an active guard, and an
+## attack press inside `_riposte_t`, the window a successful parry opens. Both
+## close the guarded gap through `_dash_swing`; only a counter backed by the
+## earned riposte window carries i-frames for its whole duration. The ordinary
+## stance version is a committed sword attack, not a free dodge. See
+## `_dash_swing`.
 ##
 ## FLURRY is the leaping overhead, and it is what an attack press means in the
 ## window a PERFECT DODGE opens (`_flurry_t`). Not buffered either: the window it
 ## belongs to is short and running on a clock the buffer knows nothing about.
-enum Intent { LIGHT, HEAVY, SPIN, DASH, SLAM, PARRY, FLURRY }
+enum Intent { LIGHT, HEAVY, SPIN, DASH, GUARD_DASH, SLAM, PARRY, FLURRY }
 
 ## Read `attack` with exact modifier matching. THIS IS WHAT MAKES THE HEAVY A
 ## SEPARATE BUTTON ON THE KEYBOARD, and without it the strong attack is unusable.
@@ -453,8 +456,8 @@ var _hero: Hero
 var _skel: Skeleton3D
 ## The mounted models. Public so a director can sweep their placement.
 var sword: Node3D
-## The ordinary light-combo ribbon. Public so its proof director can distinguish
-## a real LIGHT1/2/3 stroke from every other move that happens to use a sword.
+## The water-sheet sword ribbon. Public so its proof director can distinguish
+## each accepted stroke from moves that happen to use the same sword or clip.
 var slash_trail: SwordSlashTrail
 ## The same blade, on his hip. Exactly one of this and `sword` is visible, and
 ## the pair is what makes "the bow is out" read as a place the sword WENT rather
@@ -471,12 +474,16 @@ var sword_stow: Node3D
 var shield: Node3D
 var bow: Node3D
 var hookshot: Node3D
+## Utility-only right-hand mount. It has no item id and is never read by the
+## weapon cycling code below.
+var woodsman_axe: Node3D
 ## id -> {"hand": Node3D, "stow": Node3D}. Exactly one of the pair is visible.
 var _items: Dictionary = {}
 ## Exact mounted-model visibility while a presentation temporarily clears the
 ## hero's silhouette. Kept here because the sockets are children of `_skel`, not
 ## of this component, so hiding `HeroCombat` itself does not hide the gear.
 var _presentation_visibility: Dictionary = {}
+var _woodsman_visibility: Dictionary = {}
 var _hitbox: Area3D
 var _swing_t: float = -1.0
 ## The numbers of the swing currently in flight, captured when it starts. A
@@ -741,6 +748,7 @@ func _mount_loadout() -> void:
 		&"mixamorig_Spine2", Vector3(0.0, 0.06, -0.09), Vector3(0.0, 0.0, 28.0))
 	hookshot = _items[&"hookshot"]["hand"]
 	bow = _items[&"bow"]["hand"]
+	woodsman_axe = _mount_woodsman_axe()
 	_show_equipped()
 
 
@@ -785,6 +793,33 @@ func set_presentation_hidden(hidden: bool) -> void:
 		if is_instance_valid(model):
 			model.visible = bool(_presentation_visibility[model])
 	_presentation_visibility.clear()
+
+
+## Temporarily replace every ordinary mounted loadout model with the utility
+## axe, restoring the exact visibility snapshot when the chop commitment ends.
+func set_woodsman_axe_visible(visible: bool) -> void:
+	if woodsman_axe == null:
+		return
+	if visible:
+		if woodsman_axe.visible:
+			return
+		_woodsman_visibility.clear()
+		for model: Node3D in _presentation_models():
+			_woodsman_visibility[model] = model.visible
+			model.visible = false
+		woodsman_axe.visible = true
+		if blocking:
+			blocking = false
+			_hero.set_blocking(false)
+			Bus.guard_changed.emit(false)
+		return
+	if not woodsman_axe.visible:
+		return
+	woodsman_axe.visible = false
+	for model: Node3D in _woodsman_visibility:
+		if is_instance_valid(model):
+			model.visible = bool(_woodsman_visibility[model])
+	_woodsman_visibility.clear()
 
 
 func _presentation_models() -> Array[Node3D]:
@@ -852,6 +887,7 @@ func _show_equipped() -> void:
 		sword.visible = drawn
 	if sword_stow != null:
 		sword_stow.visible = not drawn
+	_hide_loadout_for_woodsman()
 
 
 ## The left hand. Only the shield has a model, so anything else empties the arm
@@ -865,6 +901,60 @@ func _show_left(left: StringName) -> void:
 		# bowstring. You cannot draw a bow with a shield strapped to the hand that
 		# holds it, so the shield comes off for as long as the bow is out.
 		shield.visible = left == &"shield" and equipped != &"bow"
+	_hide_loadout_for_woodsman()
+
+
+func _hide_loadout_for_woodsman() -> void:
+	if woodsman_axe == null or not woodsman_axe.visible:
+		return
+	for model: Node3D in _presentation_models():
+		model.visible = false
+
+
+## Primitive geometry gives the utility axe a known pommel/grip convention:
+## origin in the fist, handle and head along +Y like WeaponModels' swords.
+func _mount_woodsman_axe() -> Node3D:
+	var idx := _skel.find_bone(&"mixamorig_RightHand")
+	if idx < 0:
+		push_error("HeroCombat: no bone 'mixamorig_RightHand' on the rig")
+		return null
+
+	var socket := BoneAttachment3D.new()
+	socket.name = &"Socket_WoodsmanAxe"
+	socket.bone_name = "mixamorig_RightHand"
+	socket.bone_idx = idx
+	_skel.add_child(socket)
+
+	var holder := Node3D.new()
+	holder.name = &"WoodsmanAxe"
+	holder.position = Vector3(0.0, 0.04, 0.02)
+	holder.rotation_degrees = Vector3(-6.0, 6.0, -90.0)
+	var world_scale := socket.global_transform.basis.get_scale()
+	var scale_mean := (world_scale.x + world_scale.y + world_scale.z) / 3.0
+	if scale_mean > 0.0001:
+		holder.scale = Vector3.ONE / scale_mean
+
+	_axe_box(holder, &"Handle", MAT_WOOD, Vector3(0.055, 0.84, 0.055),
+		Vector3(0.0, 0.16, 0.0))
+	_axe_box(holder, &"Poll", MAT_IRON, Vector3(0.34, 0.17, 0.10),
+		Vector3(0.07, 0.53, 0.0))
+	_axe_box(holder, &"Blade", MAT_IRON, Vector3(0.18, 0.14, 0.045),
+		Vector3(0.30, 0.52, 0.0))
+	holder.visible = false
+	socket.add_child(holder)
+	return holder
+
+
+func _axe_box(parent: Node3D, node_name: StringName, material: Material,
+		size: Vector3, position: Vector3) -> void:
+	var instance := MeshInstance3D.new()
+	instance.name = node_name
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	instance.mesh = mesh
+	instance.material_override = material
+	instance.position = position
+	parent.add_child(instance)
 
 
 ## Attach a weapon model to `bone`, undoing the rig's scale so the model keeps
@@ -1011,12 +1101,13 @@ func _physics_process(delta: float) -> void:
 	# out of the dungeon is not a thing that should typecheck. The SHIELD is the
 	# exception and is handled below -- guarding through the channel is the one
 	# defence he has left while rooted.
-	var locked := Prompt != null and Prompt.blocked
+	var locked := (Prompt != null and Prompt.blocked) \
+		or (woodsman_axe != null and woodsman_axe.visible)
 	var leaving := _hero.rope != null and _hero.rope.active()
 
 	# The shield is held, not toggled, and it drops the moment you commit to
-	# anything else — you cannot hide behind it and attack out of it, and you
-	# cannot hold a shield up through a dive roll.
+	# anything else — even the counter thrown from the stance cannot keep it up
+	# through the attack, and neither can a dive roll.
 	#
 	# The roll clause is not cosmetic even though it looks it. `Block` is a
 	# BLEND sitting above the roll one-shot in the animation tree, so a guard
@@ -1311,9 +1402,9 @@ func _tick_light_button() -> void:
 		_press(Intent.DASH)
 		return
 	# THE GUARD NO LONGER CHANGES WHAT THIS BUTTON MEANS. RB out of a raised
-	# shield is the light swing, exactly as it is from neutral, and RT is the
-	# heavy — you go straight from blocking to attacking with the button you
-	# already know, and the guard drops on the commit like it always did.
+	# shield is the light swing, exactly as it is from neutral. RT owns the dash
+	# counter from that stance (`_tick_heavy_button`), so both shoulders still
+	# reach the sword without spending a frame lowering the guard first.
 	#
 	# It used to be the PARRY, and before that the dash, all three fighting over
 	# one attack button because a raised shield was the only modifier anyone had.
@@ -1366,6 +1457,7 @@ func _tick_parry_button() -> void:
 
 ## RT — the heavy, and everything the heavy becomes:
 ##
+##   active guard   -> the dash counter, immediately on the press. No charge.
 ##   on the ground  -> the wind-up, on the press. NOTHING swings yet.
 ##   released short -> the overhead.
 ##   released armed -> the spin. One pull, one blow, and WHICH blow is the
@@ -1420,6 +1512,14 @@ func _tick_heavy_button(delta: float) -> void:
 		return
 
 	if Input.is_action_just_pressed(&"heavy"):
+		# THE GUARDED COUNTER outranks the ordinary wind-up. `blocking`, not the raw
+		# shield button, is the stance: a held trigger in air, during recovery, or
+		# anywhere else the guard was refused must keep the ordinary heavy meaning.
+		# Return before `_charge_t` is armed so releasing this same pull can never
+		# pay out an overhead or spin after the dash.
+		if blocking:
+			_press(Intent.GUARD_DASH)
+			return
 		_charge_t = 0.0
 		# The hum starts on the PRESS, not when the charge arms. It is a rise, and
 		# a rise that begins at the top is a beep.
@@ -1598,7 +1698,8 @@ func _press(intent: int) -> void:
 ## Is this Intent one that survives being paid out late? See the two buffer sites
 ## above for what each exclusion costs if it is dropped.
 func _bufferable(intent: int) -> bool:
-	return intent != Intent.SLAM and intent != Intent.PARRY and intent != Intent.FLURRY
+	return intent != Intent.SLAM and intent != Intent.PARRY \
+		and intent != Intent.FLURRY and intent != Intent.GUARD_DASH
 
 
 ## Turn an Intent into an actual swing. Everything that decides WHICH swing —
@@ -1627,11 +1728,19 @@ func _begin(intent: int) -> void:
 			# before `request_slam` so a refused slam is not also a refund problem,
 			# and the spend is after it so a slam refused for height costs nothing.
 			if _can_swing() and _hero.request_slam():
+				# The dive clip is scaled to this measured commit-to-contact interval.
+				# Sample all of it: unlike ordinary swings, the airborne strike has no
+				# narrower damage slice, and held-heavy retries are refused by SLAM.
+				if slash_trail != null:
+					slash_trail.begin_stroke(
+						_hero.slam_strike_time, Vector2(0.0, 1.0), true)
 				Game.spend_stamina(K.STAMINA_SLAM, true)
 		Intent.SPIN:
 			_spin_swing()
 		Intent.DASH:
-			_dash_swing()
+			_dash_swing(true)
+		Intent.GUARD_DASH:
+			_dash_swing(_riposte_t > 0.0)
 		Intent.PARRY:
 			_parry()
 		Intent.FLURRY:
@@ -1712,31 +1821,26 @@ func _spin_swing() -> void:
 		K.HITSTOP_HEAVY, randf_range(0.68, 0.78), K.STUN_HEAVY)
 
 
-## THE RIPOSTE: the stab a landed parry buys. Unlike the lunge it asks for no
-## target — see Hero.request_dash for why the facing is already a direction the
-## player chose.
+## THE DASH COUNTER: the stab thrown from an active guard or bought by a landed
+## parry. Unlike the lunge it asks for no target — see Hero.request_dash for why
+## the facing is already a direction the player chose.
 ##
-## The docstring here used to describe a stab thrown "out of the guard", which
-## is where this move lived before the parry took shield+attack and `_riposte_t`
-## took the dash. It matters for the two things below: both are correct because
-## the ONLY way into this function is the riposte window, and if the dash is ever
-## re-homed onto a stance again, both have to move to the riposte path with it.
-##
-## Note that it can still arrive from the BUFFER, a swing after the press. That
-## is correct and it is how the spin behaves: the answer to a press made half a
-## swing early is the move they asked for, late — not a different move, and not
-## silence. It is also why neither of the two below may be conditioned on
-## `_riposte_t` being live at this instant; by the time a buffered riposte pays
-## out, the window that authorised it can have run out.
-func _dash_swing() -> void:
+## A riposte-window press can still arrive from the BUFFER, a swing after the
+## press. That is correct and it is how the spin behaves: the answer to a press
+## made half a swing early is the move they asked for, late — not a different
+## move, and not silence. The active-guard route is immediate because `blocking`
+## cannot remain up through another attack. Neither route is re-checked here;
+## this is the shared accepted path, and a buffered riposte may arrive after its
+## authorising window has run out.
+func _dash_swing(earned_riposte: bool) -> void:
 	if not _can_swing():
 		return
 	if not _hero.request_dash(dash_swing_time, dash_drive_time, dash_speed):
 		return
-	# THE WINDOW IS SPENT, exactly as `_flurry_swing` spends its own — and spent
-	# HERE rather than at the press, so a riposte the hero refused (mid-swing,
-	# off the floor, no stamina) does not eat the reward. Both returns above are
-	# that refusal.
+	# Any earned window is spent, exactly as `_flurry_swing` spends its own. Zero
+	# is also the right no-op for the active-guard route. Spend it HERE rather than
+	# at the press so a riposte the hero refused (mid-swing, off the floor, no
+	# stamina) does not eat the reward. Both returns above are that refusal.
 	#
 	# It went unspent for as long as the dash has lived in this window, and that
 	# was survivable while the dash was only damage: 1.20 s of window against a
@@ -1745,12 +1849,11 @@ func _dash_swing() -> void:
 	# uninterruptible immunity off one read, which is a stronger thing than the
 	# parry was ever priced to grant.
 	_riposte_t = 0.0
-	# THE I-FRAMES, and the actual answer to the problem the riposte has: the
-	# window is a reward for reading ONE monster, and it is spent standing in a
-	# room that usually holds three. A 0.62 s commitment thrown into a crowd was
-	# a swing the player paid a parry for and then got punished for taking, so
-	# the correct read on a gang was to walk away from the opening — which makes
-	# the whole reaction a move you use in duels and nowhere else.
+	# THE I-FRAMES belong only to the earned riposte. That window rewards reading
+	# ONE monster and is spent in a room that usually holds three; without them the
+	# correct read on a gang is to walk away from the opening. Guard + heavy is an
+	# always-available stance attack, so giving it the same immunity would turn a
+	# repeatable sword move into a free dodge.
 	#
 	# For EXACTLY as long as the swing commits him, and that rule is the one the
 	# dodges already live by: "i-frames run for exactly as long as the dodge
@@ -1761,7 +1864,8 @@ func _dash_swing() -> void:
 	#
 	# This does NOT stack into a second riposte: `_riposte_t` is spent above.
 	# It is the flurry that has no i-frames — see `_flurry_swing`.
-	_hero.grant_iframes(dash_swing_time)
+	if earned_riposte:
+		_hero.grant_iframes(dash_swing_time)
 	Game.spend_stamina(K.STAMINA_DASH, true)
 	# Ends the chain rather than stepping it, exactly as the spin does. The dash
 	# is how you OPEN on something, so letting it count as step one would make
@@ -1769,7 +1873,7 @@ func _dash_swing() -> void:
 	_chain_step = 0
 	_chain_timer = 0.0
 	_aim_sword()
-	# The riposte is a real blade thrust, so it owns the same short world-space
+	# The counter is a real blade thrust, so it owns the same short world-space
 	# ribbon family as the light chain. Start it only after request_dash accepts;
 	# wiring from the DASH intent or shared clip would also trail refused swings.
 	if slash_trail != null:

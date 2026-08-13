@@ -51,17 +51,16 @@ var _hits: Dictionary = {}
 func run(rig) -> void:
 	var out: String = rig.arg("out", "/tmp/spin/x.png").get_base_dir()
 	var scene: Node = rig.scene()
-	var fails := 0
 
 	var hero: Node3D = scene.get_node_or_null(^"Hero") as Node3D
 	if hero == null:
-		print("SPIN FAIL no Hero in the scene")
+		rig.fail("SPIN FAIL no Hero in the scene")
 		return
 	# The hero owns its combat node and publishes it; do not go fishing in the
 	# scene tree for it (docs/CONTRACT.md §8).
 	var combat: Node = hero.get(&"combat")
 	if combat == null:
-		print("SPIN FAIL no HeroCombat on the Hero")
+		rig.fail("SPIN FAIL no HeroCombat on the Hero")
 		return
 
 	await rig.wait_frames(24)
@@ -80,8 +79,7 @@ func run(rig) -> void:
 	for name in BEARINGS:
 		var post: Node3D = scene.get_node_or_null(NodePath(name)) as Node3D
 		if post == null:
-			print("SPIN FAIL no %s to hit" % name)
-			fails += 1
+			rig.fail("SPIN FAIL no %s to hit" % name)
 			continue
 		# Bearing 0 is the hero's facing, which is -Z. Rotating that vector about
 		# UP by the bearing puts each post on the ring at a known angle off his
@@ -92,7 +90,7 @@ func run(rig) -> void:
 		posts[name] = post
 		_hits[name] = []
 	if posts.size() < 3:
-		print("SPIN FAIL only %d posts placed" % posts.size())
+		rig.fail("SPIN FAIL only %d posts placed" % posts.size())
 		return
 
 	await rig.wait_frames(20)
@@ -161,24 +159,24 @@ func run(rig) -> void:
 	# The tap. Front and nothing else -- this is the beat that catches the spin's
 	# 360 leaking into the light chain.
 	if not tap_front:
-		print("SPIN FAIL the tap never reached the post in front of him"); fails += 1
+		rig.fail("SPIN FAIL the tap never reached the post in front of him")
 	if tap_side or tap_back:
-		print("SPIN FAIL a LIGHT swing hit side=%s back=%s — the light chain has the spin's arc"
-			% [tap_side, tap_back]); fails += 1
+		rig.fail("SPIN FAIL a LIGHT swing hit side=%s back=%s — the light chain has the spin's arc"
+			% [tap_side, tap_back])
 
 	if not lit:
-		print("SPIN FAIL the photographed hold never armed — the sheet shows nothing"); fails += 1
+		rig.fail("SPIN FAIL the photographed hold never armed — the sheet shows nothing")
 
 	# The spin. All three, and the one BEHIND him is the whole feature.
 	if not spin_front:
-		print("SPIN FAIL the spin missed the post in front"); fails += 1
+		rig.fail("SPIN FAIL the spin missed the post in front")
 	if not spin_side:
-		print("SPIN FAIL the spin missed the post on the flank"); fails += 1
+		rig.fail("SPIN FAIL the spin missed the post on the flank")
 	if not spin_back:
-		print("SPIN FAIL the spin missed the post BEHIND him — it is not a 360"); fails += 1
+		rig.fail("SPIN FAIL the spin missed the post BEHIND him — it is not a 360")
 	if spin_dmg > 0 and spin_dmg <= 2 * K.QUARTER:
-		print("SPIN FAIL the post behind took %d, no more than a light swing's %d"
-			% [spin_dmg, 2 * K.QUARTER]); fails += 1
+		rig.fail("SPIN FAIL the post behind took %d, no more than a light swing's %d"
+			% [spin_dmg, 2 * K.QUARTER])
 
 	# --- 4. the arc, from where you can actually see it ------------------------
 	# The game camera rides just over his shoulder, which is the right place to
@@ -200,7 +198,7 @@ func run(rig) -> void:
 		await rig.wait_frames(3)
 		await rig.capture(out.path_join("s_05_arc_%d.png" % i))
 
-	print("SPIN %s (fails=%d)" % ["OK" if fails == 0 else "FAIL", fails])
+	print("SPIN checks complete")
 
 
 func _on_struck(amount: int, _from: Vector3, name: String) -> void:

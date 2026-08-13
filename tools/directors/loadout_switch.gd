@@ -32,9 +32,9 @@ func run(rig) -> void:
 	# first boot, because both mounts are built at _ready and the stow mount was
 	# shown whenever the item was not in hand, owned or not.
 	if _visible(_stow(combat, &"bow")):
-		print("LOADOUT FAIL a bow is on his back before he has found one")
+		rig.fail("LOADOUT FAIL a bow is on his back before he has found one")
 	if _visible(_stow(combat, &"hookshot")):
-		print("LOADOUT FAIL a hookshot is on his hip before he has found one")
+		rig.fail("LOADOUT FAIL a hookshot is on his hip before he has found one")
 
 	# The bow has to be OWNED before it can be cycled to -- that is the point of
 	# the ownership gate, and a test that skips it tests nothing.
@@ -42,17 +42,17 @@ func run(rig) -> void:
 	Game.add_arrows(12)
 	await rig.wait_frames(4)
 	if not _visible(_stow(combat, &"bow")):
-		print("LOADOUT FAIL the granted bow did not appear stowed on his back")
+		rig.fail("LOADOUT FAIL the granted bow did not appear stowed on his back")
 
 	# --- default: the primary set --------------------------------------------
 	print("LOADOUT set=%d right=%s left=%s" % [Game.loadout_set,
 		Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_LEFT)])
 	if Game.armament(Game.HAND_RIGHT) != &"sword":
-		print("LOADOUT FAIL primary right hand is not the sword")
+		rig.fail("LOADOUT FAIL primary right hand is not the sword")
 	if not _visible(combat.sword):
-		print("LOADOUT FAIL sword model is not shown in the primary set")
+		rig.fail("LOADOUT FAIL sword model is not shown in the primary set")
 	if not _visible(combat.shield):
-		print("LOADOUT FAIL shield model is not shown in the primary set")
+		rig.fail("LOADOUT FAIL shield model is not shown in the primary set")
 	Bus.camera_recenter.emit()
 	await rig.wait_frames(34)
 	await rig.capture(out.path_join("loadout_00_primary.png"))
@@ -63,17 +63,17 @@ func run(rig) -> void:
 	print("LOADOUT set=%d right=%s left=%s" % [Game.loadout_set,
 		Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_LEFT)])
 	if Game.loadout_set != Game.ALTERNATE:
-		print("LOADOUT FAIL dpad up did not reach the alternate set")
+		rig.fail("LOADOUT FAIL dpad up did not reach the alternate set")
 	if Game.armament(Game.HAND_RIGHT) != &"bow":
-		print("LOADOUT FAIL alternate right hand is not the bow")
+		rig.fail("LOADOUT FAIL alternate right hand is not the bow")
 	if Game.armament(Game.HAND_LEFT) != &"arrow":
-		print("LOADOUT FAIL alternate left hand is not arrows")
+		rig.fail("LOADOUT FAIL alternate left hand is not arrows")
 	if _visible(combat.sword):
-		print("LOADOUT FAIL sword is still in hand while the bow is equipped")
+		rig.fail("LOADOUT FAIL sword is still in hand while the bow is equipped")
 	if not _visible(combat.bow):
-		print("LOADOUT FAIL bow model is not in hand on the alternate set")
+		rig.fail("LOADOUT FAIL bow model is not in hand on the alternate set")
 	if _visible(combat.shield):
-		print("LOADOUT FAIL shield is still strapped on with arrows in the off hand")
+		rig.fail("LOADOUT FAIL shield is still strapped on with arrows in the off hand")
 	await rig.wait_frames(30)
 	await rig.capture(out.path_join("loadout_01_alternate.png"))
 
@@ -84,7 +84,7 @@ func run(rig) -> void:
 	await rig.wait_frames(6)
 	var after := Game.armament(Game.HAND_RIGHT)
 	if after == before:
-		print("LOADOUT FAIL cycling the right hand changed nothing (still %s)" % before)
+		rig.fail("LOADOUT FAIL cycling the right hand changed nothing (still %s)" % before)
 	else:
 		print("LOADOUT ok  right hand cycled %s -> %s" % [before, after])
 	await rig.wait_frames(24)
@@ -98,7 +98,7 @@ func run(rig) -> void:
 	var gated := Game.armament(Game.HAND_RIGHT)
 	Game.cycle_armament(Game.HAND_RIGHT)
 	if Game.armament(Game.HAND_RIGHT) != gated:
-		print("LOADOUT FAIL cycled to an armament the player does not own (%s)"
+		rig.fail("LOADOUT FAIL cycled to an armament the player does not own (%s)"
 			% Game.armament(Game.HAND_RIGHT))
 	else:
 		print("LOADOUT ok  cycling refused an unowned armament")
@@ -106,7 +106,7 @@ func run(rig) -> void:
 	# --- swap back, and check it survives a round trip -----------------------
 	Game.swap_loadout()
 	if Game.loadout_set != Game.PRIMARY:
-		print("LOADOUT FAIL did not swap back to primary")
+		rig.fail("LOADOUT FAIL did not swap back to primary")
 	else:
 		print("LOADOUT ok  swapped back to primary, right=%s left=%s"
 			% [Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_LEFT)])

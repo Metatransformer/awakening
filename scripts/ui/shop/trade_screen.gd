@@ -31,8 +31,9 @@ extends Control
 ##    could buy next and nothing else, so the smith's eight armour lines read as
 ##    eight unrelated purchases instead of four pieces with two answers each.
 ##
-## The cursor, prices, recipe column, affordability colouring, refusal footer and
-## hold all run over `_rows`; the two layouts only arrange those shared rows.
+## Prices, recipes and purchases still run over `_rows`. In progression the
+## cursor runs over the ladder's selection keys as well, so owned rungs can share
+## the description card without pretending to be catalogue lines.
 ##
 ## **The description is a TOOLTIP on the cell, not a column beside the board.**
 ## Until 2026-08-12 the right third of the frame was a detail card: kicker, name,
@@ -83,11 +84,13 @@ var catalogue: GDScript = null
 ## catalogue more than one player-facing surface without duplicating its rows.
 var visible_catalogue_ids: Array[StringName] = []
 
-## One entry per selectable cell. Trade interleaves &"buy" stock with &"item" and
-## &"all" bag rows; progression contains &"buy" rows. Rebuilt after each transaction:
-## a sold-out stack has to leave the board, and a cursor pointing at a row that no
-## longer exists is the classic shop-screen crash.
+## One entry per catalogue/bag line. Trade interleaves &"buy" stock with &"item"
+## and &"all" bag rows; progression contains the buyable catalogue descriptions.
+## Owned progression selections live on `UpgradeLadder`, because they have no
+## catalogue line of their own.
 var _rows: Array[Dictionary] = []
+## A `_rows` index in trade mode. In progression this is a ladder selection key:
+## a non-negative catalogue line or a negative owned-rung key from -2 down.
 var _cursor: int = 0
 var _shown_gold: float = 0.0
 var _refuse: float = -1.0
@@ -197,7 +200,7 @@ func _ready() -> void:
 	_fit()
 	get_viewport().size_changed.connect(_fit)
 
-	_shown_gold = float(Game.gold)
+	_shown_gold = float(_db().currency_balance())
 	_refresh()
 	Bus.wishlist_changed.connect(_refresh)
 	Settings.changed.connect(func(section: StringName, key: StringName,
@@ -332,8 +335,9 @@ func _emblem() -> String:
 ## lines there are and how many of them you can actually pay for -- the one thing
 ## the old header made you walk eleven cells to learn.
 func _band_cells() -> Array:
-	var purse := {"key": &"purse", "label": "Purse",
-		"value": "%d ◇" % int(round(_shown_gold)), "icon": UiKit.action_icon("coin")}
+	var purse := {"key": &"purse", "label": _db().currency_label(),
+		"value": _db().format_currency(int(round(_shown_gold))),
+		"icon": UiKit.action_icon(String(_db().currency_icon()))}
 	if mode == Mode.TRADE:
 		var used := Run.slots_used()
 		return [
@@ -580,6 +584,9 @@ func _catalogue_lines() -> Array[Dictionary]:
 
 
 func _refresh() -> void:
+	# Selection keys can change when a rung is bought and the ladder is rebuilt.
+	# Its visual position is the stable thing the player was looking at.
+	var old_order_at := maxi(_order.find(_cursor), 0)
 	_rows.clear()
 	_stock_rows.clear()
 	_bag_rows.clear()
@@ -594,14 +601,13 @@ func _refresh() -> void:
 	else:
 		_build_buy_rows()
 
-	_cursor = clampi(_cursor, 0, maxi(_rows.size() - 1, 0))
-
 	var cells: Array = []
 	for i in _rows.size():
 		var row := _rows[i]
 		cells.append({
 			"index": i,
 			"label": String(row["label"]),
+			"blurb": String(row.get("owned_blurb", row["blurb"])),
 			"sub": String(row["sub"]),
 			"tint": row["color"],
 			"icon": _row_icon(row),
@@ -639,11 +645,13 @@ func _refresh() -> void:
 		_order = _ladder.order().duplicate()
 		_empty.visible = not _scroll.visible
 
-	# A refresh can retire the line the cursor was on -- a finished ladder loses
-	# its buyable rung, a committed piece loses its whole losing branch. Landing
-	# on the row that is still there beats snapping back to the top of the board.
-	if not _order.is_empty() and not _order.has(_cursor):
-		_cursor = _order[mini(_at(), _order.size() - 1)]
+	# A refresh can replace a buyable line with an owned selection, retire a sold
+	# stack, or remove a losing branch. Stay at the nearest same visual position.
+	if mode == Mode.TRADE:
+		_cursor = clampi(_cursor, 0, maxi(_rows.size() - 1, 0))
+	else:
+		_cursor = (_order[mini(old_order_at, _order.size() - 1)]
+			if not _order.is_empty() else -1)
 	# After the board, because the progression band counts what is affordable and
 	# the kicker names the service that owns these rows.
 	_drop_stale_refusal()
@@ -656,6 +664,18 @@ func _refresh() -> void:
 func _at() -> int:
 	var i := _order.find(_cursor)
 	return maxi(i, 0)
+
+
+## The row currently under the cursor. Negative progression selections are
+## read-only descriptions owned by the ladder; every other selection is a live
+## `_rows` entry.
+func _selected_row() -> Dictionary:
+	if mode == Mode.PROGRESSION:
+		if _cursor <= -2:
+			return _ladder.owned_detail(_cursor)
+		if not _order.has(_cursor):
+			return {}
+	return _rows[_cursor] if _cursor >= 0 and _cursor < _rows.size() else {}
 
 
 ## The glyph for a row, or "" — which is most rows.
@@ -729,7 +749,8 @@ func _build_buy_rows() -> void:
 		var left: int = _db().remaining(line["id"])
 		var cost := int(line["cost"])
 		var pinned := Wishlist.is_line_pinned(_db(), line)
-		var sub := ("%d ◇" % cost) if cost > 0 else String(line.get("tally", ""))
+		var sub: String = _db().format_currency(cost) if cost > 0 \
+			else String(line.get("tally", ""))
 		if pinned:
 			sub = "★ " + sub
 		_rows.append({
@@ -753,6 +774,9 @@ func _build_buy_rows() -> void:
 			# DOES, in the unit the player feels. A forge line without the second
 			# sentence is asking them to buy on faith.
 			"blurb": "%s   %s" % [line["blurb"], line.get("detail", "")],
+			# Owned rungs name their rank themselves. Keep their card on the
+			# permanent effect, not the live next-purchase arithmetic in `detail`.
+			"owned_blurb": String(line["blurb"]),
 			"parts": line.get("parts", {}),
 			"ok": _db().can_buy(line),
 		})
@@ -765,7 +789,10 @@ func _build_buy_rows() -> void:
 ## menu) and the detail pane describes it.
 func _point_at(i: int, play_selection_sfx: bool = false) -> void:
 	var previous: int = _cursor
-	_cursor = clampi(i, 0, maxi(_rows.size() - 1, 0))
+	if mode == Mode.TRADE:
+		_cursor = clampi(i, 0, maxi(_rows.size() - 1, 0))
+	else:
+		_cursor = i if _order.has(i) else (-1 if _order.is_empty() else _order[0])
 	if play_selection_sfx and mode == Mode.PROGRESSION and _cursor != previous:
 		Bus.request_sfx.emit(&"upgrade_stat_selected", _hero_position())
 	var cell: Button = null
@@ -781,7 +808,7 @@ func _point_at(i: int, play_selection_sfx: bool = false) -> void:
 				cell = _bag_grid.cell_at(bag_at)
 				cell_scroll = _bag_scroll
 	else:
-		cell = _ladder.cell_at(_ladder.slot_of_line(_cursor))
+		cell = _ladder.cell_of_selection(_cursor)
 		cell_scroll = _scroll
 	# The cell the tooltip is about. Set HERE, on the one function that moves the
 	# cursor, so the card and the highlight can never be describing two different
@@ -809,14 +836,14 @@ func _point_at(i: int, play_selection_sfx: bool = false) -> void:
 func _keep_cursor_in_view() -> void:
 	if mode == Mode.TRADE or _scroll == null or _ladder == null:
 		return
-	var cell := _ladder.cell_at(_ladder.slot_of_line(_cursor))
+	var cell := _ladder.cell_of_selection(_cursor)
 	if cell != null and cell.get_viewport() != null:
 		_scroll.ensure_control_visible.call_deferred(cell)
 
 
 ## The mouse landed on a cell. Follow it — a click is also a look.
 func _on_cell_looked(index: int) -> void:
-	if index >= 0 and index != _cursor:
+	if index != -1 and index != _cursor:
 		_point_at(index, true)
 
 
@@ -824,7 +851,8 @@ func _describe() -> void:
 	if _tip == null:
 		return
 	_tip.clear()
-	if _rows.is_empty():
+	var row := _selected_row()
+	if row.is_empty():
 		# A card describing nothing is not an empty card, it is no card. The
 		# board says "Sold out." on its own and a bordered rectangle of nothing
 		# beside it would be the screen saying it twice.
@@ -833,7 +861,6 @@ func _describe() -> void:
 		return
 	_tip.visible = true
 
-	var row := _rows[_cursor]
 	_tip.title.text = String(row["label"])
 	_tip.blurb.text = String(row["blurb"])
 
@@ -842,15 +869,16 @@ func _describe() -> void:
 			var def := ItemDb.get_def(row["id"])
 			_tip.kicker.text = "%s  ·  %s" % [def.rarity_name().to_upper(),
 				def.bench_name() if def.is_component() else "INGREDIENT"]
-			_tip.price.text = "%d ◇  for ×%d" % [int(row["price"]), int(row["count"])]
+			_tip.price.text = "%s  for ×%d" % [
+				_db().format_currency(int(row["price"])), int(row["count"])]
 			_tip.blurb.text += "  " + Wishlist.usage_sentence(row["id"])
 		&"all":
 			_tip.kicker.text = "EVERY STACK"
-			_tip.price.text = "%d ◇" % int(row["price"])
+			_tip.price.text = _db().format_currency(int(row["price"]))
 		&"buy":
 			var left: int = int(row["count"])
 			_tip.kicker.text = "%d LEFT" % left if left >= 0 else ""
-			_tip.price.text = "%d ◇" % int(row["price"])
+			_tip.price.text = _db().format_currency(int(row["price"]))
 			# Off `ok` and out of the CATALOGUE's own mouth, for the reason
 			# `_show_refusal` gives: once a line can be refused for four
 			# different reasons, "Not enough gold" sends the player back down
@@ -867,8 +895,14 @@ func _describe() -> void:
 			# SUCCESS/DANGER off `ok`, which is the catalogue's own answer and
 			# accounts for MATERIALS as well as coin. Colouring it by comparing the
 			# price to the purse would call a recipe you cannot fill affordable.
-			UiKit.band_value(_band, &"cost", "%d ◇" % int(row["price"]),
+			UiKit.band_value(_band, &"cost",
+				_db().format_currency(int(row["price"])),
 				UITheme.SUCCESS if bool(row["ok"]) else UITheme.DANGER)
+		&"owned":
+			_tip.kicker.text = "PURCHASED"
+			_tip.price.text = ""
+			_tip.say_note("Owned", UITheme.SUCCESS)
+			UiKit.band_value(_band, &"cost", "Owned", UITheme.SUCCESS)
 
 
 func _fill_recipe(catalogue_line: Dictionary) -> void:
@@ -971,9 +1005,11 @@ var _hold: float = 0.0
 ## cell would be ceremony -- which is worse than no hold at all, because a player
 ## who holds through twelve harmless confirms stops reading the one that mattered.
 func _hold_time(i: int) -> float:
-	if i < 0 or i >= _rows.size():
+	if i != _cursor:
 		return 0.0
-	var row := _rows[i]
+	var row := _selected_row()
+	if row.is_empty() or row["kind"] == &"owned":
+		return 0.0
 	if row["kind"] == &"all":
 		return CRAFT_HOLD
 	if row["kind"] == &"buy" and _db().crafts(row["line"]):
@@ -1036,7 +1072,7 @@ func _tick_input(delta: float) -> void:
 	elif _armed_jump and not _wishlist_key().is_empty():
 		_armed_jump = false
 		Game.toggle_wishlist_line(_wishlist_key())
-	if _rows.is_empty():
+	if _order.is_empty():
 		return
 
 	var step := _step(delta)
@@ -1127,26 +1163,27 @@ func _move(d: Vector2i) -> void:
 		_point_at(_order[i], true)
 		return
 
-	# The next row that has anything buyable on it. Rows CAN be dead -- a fully
-	# climbed ladder still draws, because a row that vanished when you finished it
-	# would take the record of finishing it with it -- so this walks past them
-	# rather than parking the cursor on a rung with no price.
+	# The next row that has an owned or buyable selection. A row made only of
+	# future sockets is not a stop; a fully climbed row is, because its purchased
+	# rungs are part of the board the player can inspect.
 	var rows := _ladder.row_count()
 	if rows <= 0:
 		return
-	var at := _ladder.row_of_line(_cursor)
+	var at := _ladder.row_of_selection(_cursor)
 	for n in rows:
 		at = (at + d.y + rows) % rows
-		var line := _ladder.first_line_of_row(at)
-		if line >= 0:
-			_point_at(line, true)
+		var selection := _ladder.first_selection_of_row(at)
+		if selection != -1:
+			_point_at(selection, true)
 			return
 
 
 func _commit() -> void:
-	if _cursor < 0 or _cursor >= _rows.size():
+	var row := _selected_row()
+	# Owned cells are inspection targets only. Returning before the transaction
+	# path also guarantees no refusal, voice, unlock sound or refresh on ACCEPT.
+	if row.is_empty() or row["kind"] == &"owned":
 		return
-	var row := _rows[_cursor]
 	var done := false
 	match row["kind"]:
 		&"item":
@@ -1182,8 +1219,9 @@ func _hero_position() -> Vector3:
 func _show_refusal() -> void:
 	_end_refusal()
 	var why := "Nothing there"
-	if _cursor >= 0 and _cursor < _rows.size() and _rows[_cursor]["kind"] == &"buy":
-		_refuse_line = _rows[_cursor]["line"]
+	var row := _selected_row()
+	if not row.is_empty() and row["kind"] == &"buy":
+		_refuse_line = row["line"]
 		var said: String = _db().refusal(_refuse_line)
 		why = said if said != "" else "Not enough gold"
 	_refuse = 0.0
@@ -1222,9 +1260,10 @@ func _process(delta: float) -> void:
 	_tick_input(delta)
 	if _closing:
 		return
-	if not is_equal_approx(_shown_gold, float(Game.gold)):
-		var step: float = maxf(1.0, absf(Game.gold - _shown_gold)) * (delta / ROLL_TIME)
-		_shown_gold = move_toward(_shown_gold, float(Game.gold), step)
+	var balance: int = _db().currency_balance()
+	if not is_equal_approx(_shown_gold, float(balance)):
+		var step: float = maxf(1.0, absf(balance - _shown_gold)) * (delta / ROLL_TIME)
+		_shown_gold = move_toward(_shown_gold, float(balance), step)
 	if _refuse >= 0.0:
 		_refuse += delta
 		if _refuse > REFUSE_TIME:
@@ -1233,7 +1272,8 @@ func _process(delta: float) -> void:
 
 
 func _paint_chrome() -> void:
-	UiKit.band_value(_band, &"purse", "%d ◇" % int(round(_shown_gold)))
+	UiKit.band_value(_band, &"purse",
+		_db().format_currency(int(round(_shown_gold))))
 
 	var need := _hold_time(_cursor)
 	_hold_bar.visible = need > 0.0
@@ -1250,7 +1290,10 @@ func _paint_chrome() -> void:
 		leave_cap = "ESC"
 	# The hint says what the BUTTONS do and nothing else. Why a press was refused
 	# is the footer toast's line (`_show_refusal`) — see `_build_footer`.
-	if need > 0.0:
+	var row := _selected_row()
+	if not row.is_empty() and row["kind"] == &"owned":
+		_hint.text = "Owned    %s Leave" % leave_cap
+	elif need > 0.0:
 		_hint.text = "Hold %s to %s    %s Leave" % [accept_cap, _verb(), leave_cap]
 	else:
 		_hint.text = "%s %s    %s Leave" % [accept_cap, _verb(), leave_cap]
@@ -1264,9 +1307,11 @@ func _paint_chrome() -> void:
 
 
 func _wishlist_key() -> StringName:
-	if mode != Mode.PROGRESSION or _cursor < 0 or _cursor >= _rows.size():
+	if mode != Mode.PROGRESSION:
 		return &""
-	var row := _rows[_cursor]
+	var row := _selected_row()
+	if row.is_empty():
+		return &""
 	if row.get("kind") != &"buy":
 		return &""
 	var line: Dictionary = row["line"]
@@ -1285,14 +1330,13 @@ func _wishlist_key() -> StringName:
 ## still went green. A beat can now walk the board and stop when it recognises
 ## where it is. Read-only, and the shipped screen never calls it.
 func cursor_label() -> String:
-	if _cursor < 0 or _cursor >= _rows.size():
-		return ""
-	return String(_rows[_cursor]["label"])
+	var row := _selected_row()
+	return String(row.get("label", ""))
 
 
 ## How many cells the board has, so a walk over it terminates.
 func line_count() -> int:
-	return _rows.size()
+	return _order.size()
 
 
 ## What the selected cell does, in the counter's own word: FORGE at the smith,
@@ -1301,10 +1345,12 @@ func line_count() -> int:
 ## rather than decided here, so a sixth counter names its own act without this
 ## file learning about it.
 func _verb() -> String:
-	if _cursor < 0 or _cursor >= _rows.size():
+	var row := _selected_row()
+	if row.is_empty():
 		return "Trade" if mode == Mode.TRADE else "Buy"
-	var row := _rows[_cursor]
 	match row["kind"]:
+		&"owned":
+			return "Owned"
 		&"all":
 			return "Sell all"
 		&"buy":

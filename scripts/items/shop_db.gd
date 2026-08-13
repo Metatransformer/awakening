@@ -463,8 +463,8 @@ static func _woodsman_axe() -> Dictionary:
 		"cost": 0 if owned else 60,
 		"parts": {} if owned else {&"iron_scrap": 3},
 		"blurb": "Camp work, balanced for splitting rounds rather than armour.",
-		"detail": "Owned. Cuts one daily bundle at the exterior Timber Yard."
-			if owned else "Cuts one daily bundle at the exterior Timber Yard.",
+		"detail": "Owned. Fells one tree each day in the outskirts grove."
+			if owned else "Fells one tree each day in the outskirts grove.",
 	}
 
 

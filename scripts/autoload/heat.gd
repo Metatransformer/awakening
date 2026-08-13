@@ -245,7 +245,8 @@ func blazing() -> bool:
 
 ## Metres a mote will be dragged from at the current tier. 0 means no magnetism.
 func magnet_range() -> float:
-	return K.HEAT_MAGNET[clampi(tier, 0, K.HEAT_TIERS - 1)]
+	var base_range: float = K.HEAT_MAGNET[clampi(tier, 0, K.HEAT_TIERS - 1)]
+	return FieldNotesDb.heat_magnet_range(base_range, tier)
 
 
 ## How much of the current tier's window is left, 0..1.

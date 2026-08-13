@@ -68,36 +68,35 @@ func run(rig) -> void:
 	var out: String = rig.arg("out", "/tmp/lat/x.png").get_base_dir()
 	var players: Array = rig.get_nodes_in_group(&"player")
 	if players.is_empty():
-		print("LATENCY FAIL no node in group `player`")
+		rig.fail("LATENCY FAIL no node in group `player`")
 		return
 	var hero: Node3D = players[0]
 	var combat: Node = hero.get(&"combat")
 	if combat == null or combat.get(&"sword") == null:
-		print("LATENCY FAIL hero has no sword")
+		rig.fail("LATENCY FAIL hero has no sword")
 		return
 	await rig.wait_frames(30)
 
 	# Every swing is measured from a standing start with nothing in reach, so
 	# what is being timed is the animation and not a walk or a hit-stop.
-	var fails := 0
-	fails += await _time(rig, hero, combat, "LIGHT1", [], "attack", 0,
+	await _time(rig, hero, combat, "LIGHT1", [], "attack", 0,
 		combat.get(&"swing_time"), (combat.get(&"damage_window") as Vector2).x)
-	fails += await _time(rig, hero, combat, "DASH", ["shield"], "attack", 0,
+	await _time(rig, hero, combat, "DASH", ["shield"], "attack", 0,
 		combat.get(&"dash_swing_time"), (combat.get(&"dash_damage_window") as Vector2).x)
 	# The spin is the one swing that is not a press: the button has to be HELD
 	# past charge_time and the RELEASE is the swing, so the clock starts there.
-	fails += await _time(rig, hero, combat, "SPIN", [], "attack",
+	await _time(rig, hero, combat, "SPIN", [], "attack",
 		int(ceil((float(combat.get(&"charge_time")) + 0.12) * 60.0)),
 		combat.get(&"spin_swing_time"), (combat.get(&"spin_damage_window") as Vector2).x)
 
 	await _burst(rig, hero, out)
-	print("LATENCY %s" % ("done" if fails == 0 else "FAIL %d swing(s)" % fails))
+	print("LATENCY checks complete")
 
 
 ## Press `action` (after `mods` are already down), hold it `hold_frames`, and
-## watch the sword hand for half a second. Returns 1 if the swing never came out.
+## watch the sword hand for half a second.
 func _time(rig, hero: Node3D, combat: Node, label: String, mods: Array,
-		action: String, hold_frames: int, duration: float, live01: float) -> int:
+		action: String, hold_frames: int, duration: float, live01: float) -> void:
 	for m in mods:
 		Input.action_press(m)
 	# Guarding pins the facing and takes a moment to raise; the dash measured
@@ -143,8 +142,8 @@ func _time(rig, hero: Node3D, combat: Node, label: String, mods: Array,
 	await rig.wait_frames(40)
 
 	if not swung:
-		print("LATENCY %-7s FAIL never swung" % label)
-		return 1
+		rig.fail("LATENCY %-7s FAIL never swung" % label)
+		return
 
 	var peak := 0.0
 	var peak_at := 0
@@ -166,7 +165,6 @@ func _time(rig, hero: Node3D, combat: Node, label: String, mods: Array,
 	for i in speeds.size():
 		print("    %-7s %4dms %5.1f %s" % [label, _ms(i), speeds[i],
 			"#".repeat(int(speeds[i] / maxf(peak, 0.001) * 40.0))])
-	return 0
 
 
 func _ms(frame: int) -> int:
@@ -185,7 +183,7 @@ func _local(hero: Node3D, sword: Node3D) -> Vector3:
 func _burst(rig, hero: Node3D, out: String) -> void:
 	var cam := hero.get_viewport().get_camera_3d()
 	if cam == null:
-		print("LATENCY no camera; skipping the burst")
+		rig.fail("LATENCY no camera; cannot photograph the burst")
 		return
 	# GameCamera re-derives its own transform every physics frame, so it has to
 	# be stopped before it can be parked (swing_lookdev.gd learned this first).

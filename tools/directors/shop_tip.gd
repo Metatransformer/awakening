@@ -18,6 +18,8 @@ extends RefCounted
 ##      nothing else on purpose (the board POLLS the arrows and ALSO lets cells
 ##      take focus -- CLAUDE.md §3, cards #74/#76), and a mouse that moves the
 ##      cursor through `cell_focused` is the path most likely to come apart.
+##   D  A finished board still has a controller path: its purchased rungs remain
+##      inspectable, and ACCEPT on one is read-only rather than a refusal.
 ##
 ## So the card is checked at EVERY cell of three boards, on both input paths, and
 ## the geometry is asserted as numbers rather than eyeballed: the tip rect against
@@ -49,6 +51,7 @@ func run(rig) -> void:
 	await rig.wait_frames(20)
 
 	await _calibrate()
+	await _owned_board()
 	await _smith()
 	await _keeper()
 	await _quartermaster()
@@ -157,6 +160,58 @@ func _calibrate() -> void:
 
 
 # --- the boards --------------------------------------------------------------
+
+## A fully purchased progression board has no buyable catalogue cells. Its
+## owned rungs are still the visible board, so real pad movement must walk them
+## and real ACCEPT must leave both the save and the refusal footer untouched.
+func _owned_board() -> void:
+	var saved_upgrades: Dictionary[StringName, int] = Game.upgrades.duplicate()
+	var saved_gold := Game.gold
+	Game.upgrades[&"bag_slot"] = int(SupplyDb.LIMITS[&"bag_slot"])
+	Game.upgrades[&"heart"] = int(SupplyDb.LIMITS[&"heart"])
+
+	var screen := _open(TradeScreen.Mode.PROGRESSION, "THE QUARTERMASTER",
+		SupplyDb, &"quartermaster", "Upgrades")
+	await _rig.wait_frames(14)
+
+	var first := screen._cursor
+	var first_label := screen.cursor_label()
+	_ck(screen.line_count() == int(SupplyDb.LIMITS[&"bag_slot"])
+			+ int(SupplyDb.LIMITS[&"heart"]),
+		"D0 the fully purchased board exposes every owned rung (%d)"
+			% screen.line_count())
+	_ck(first <= -2, "D1 the first purchased rung has an owned key (%d)" % first)
+	await _key(KEY_RIGHT)
+	_ck(screen._cursor <= -2 and screen._cursor != first,
+		"D2 RIGHT moves between owned cells (%d -> %d)" % [first, screen._cursor])
+	_ck(screen.cursor_label() != first_label and not screen.cursor_label().is_empty(),
+		"D3 the owned selection is identified (%s)" % screen.cursor_label())
+	_ck(screen._tip.title.text == screen.cursor_label()
+			and screen._tip.kicker.text == "PURCHASED"
+			and screen._tip.note.text == "Owned"
+			and screen._tip.price.text.is_empty()
+			and not screen._tip.blurb.text.is_empty()
+			and screen._tip.blurb.text != "Already purchased.",
+		"D4 the tip identifies it as PURCHASED / Owned and explains the effect")
+	var band_values: Dictionary = screen._band.get_meta(&"band_values")
+	var cost := band_values.get(&"cost") as Label
+	_ck(cost != null and cost.text == "Owned",
+		"D5 the selected band cost reads Owned")
+
+	var before_accept: Dictionary[StringName, int] = Game.upgrades.duplicate()
+	var gold_before := Game.gold
+	await _key(KEY_ENTER)
+	_ck(Game.upgrades == before_accept and Game.gold == gold_before,
+		"D6 ACCEPT changes neither upgrades nor gold")
+	_ck(screen._refuse < 0.0 and screen._toast == null,
+		"D7 ACCEPT on an owned rung shows no refusal")
+	await _rig.capture(_out.path_join("d_owned_read_only.png"))
+
+	screen.close()
+	await _rig.wait_frames(8)
+	Game.upgrades = saved_upgrades
+	Game.gold = saved_gold
+
 
 ## The smith: five rows of ladders, and the board card #119 is written about.
 func _smith() -> void:
@@ -275,16 +330,16 @@ func _walk(screen, tag: String) -> void:
 ## the beat that notices.
 func _mouse_path(screen, tag: String) -> void:
 	var target := -1
-	for line: int in screen._order:
-		if line != screen._cursor:
-			target = line
+	for selection: int in screen._order:
+		if selection != screen._cursor:
+			target = selection
 			break
-	if target < 0:
+	if target == -1:
 		_rig.fail("%s: the board has only one cell, nothing to hover" % tag)
 		return
 	var cell := _cell_for(screen, target)
 	if cell == null:
-		_rig.fail("%s: no cell for line %d" % [tag, target])
+		_rig.fail("%s: no cell for selection %d" % [tag, target])
 		return
 
 	var was: int = screen._cursor
@@ -308,14 +363,14 @@ func _mouse_path(screen, tag: String) -> void:
 
 # --- plumbing ----------------------------------------------------------------
 
-func _cell_for(screen, line: int) -> Button:
+func _cell_for(screen, selection: int) -> Button:
 	if screen.mode == TradeScreen.Mode.TRADE:
-		var at: int = screen._stock_rows.find(line)
+		var at: int = screen._stock_rows.find(selection)
 		if at >= 0:
 			return screen._stock_grid.cell_at(at)
-		at = screen._bag_rows.find(line)
+		at = screen._bag_rows.find(selection)
 		return screen._bag_grid.cell_at(at) if at >= 0 else null
-	return screen._ladder.cell_at(screen._ladder.slot_of_line(line))
+	return screen._ladder.cell_of_selection(selection)
 
 
 ## A real key, down the InputMap, both keycodes set so the keycode-bound `ui_*`

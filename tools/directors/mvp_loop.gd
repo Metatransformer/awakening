@@ -56,15 +56,15 @@ func run(rig) -> void:
 	# had no way to tell that from a real regression in four systems at once.
 	# One cause, one message, and nothing downstream pretending to have been tested.
 	if not await _sell(rig):
-		print("MVP ABORT the sell beat did not happen -- stopping rather than"
+		rig.fail("MVP ABORT the sell beat did not happen -- stopping rather than"
 			+ " reporting four failures it would have caused")
 		return
 	if not await _buy(rig):
-		print("MVP ABORT the buy beat did not happen -- stopping rather than"
+		rig.fail("MVP ABORT the buy beat did not happen -- stopping rather than"
 			+ " reporting four failures it would have caused")
 		return
 	if not await _descend(rig):
-		print("MVP ABORT never got underground -- stopping rather than reporting"
+		rig.fail("MVP ABORT never got underground -- stopping rather than reporting"
 			+ " the dungeon, the fight and the rope as broken from up here")
 		return
 
@@ -74,7 +74,7 @@ func run(rig) -> void:
 	# a chest that is not there and a rope that "refused to start" for a hero who
 	# is standing in the garrison. One cause, one message.
 	if not await _fight(rig):
-		print("MVP ABORT the fight beat ended the run -- stopping rather than"
+		rig.fail("MVP ABORT the fight beat ended the run -- stopping rather than"
 			+ " reporting the chest and the rope as broken from the garrison")
 		return
 	await _extract(rig)
@@ -94,15 +94,15 @@ func run(rig) -> void:
 ## `Game.heal(Game.max_quarters)` runs twice inside `_fight`, deliberately (see
 ## the note there), so a hero who died a frame earlier is reported at full health
 ## a frame later. The death has to be read off the counter, never off the bar.
-func _ended(where: String) -> bool:
+func _ended(rig, where: String) -> bool:
 	if Game.deaths > _deaths:
-		print(("MVP FAIL the hero died %s -- deaths %d -> %d, the floor killed him"
+		rig.fail(("MVP FAIL the hero died %s -- deaths %d -> %d, the floor killed him"
 			+ " while this beat was waiting. Nothing after this line was tested,"
 			+ " and the health in the lines above it is the heal, not the truth.")
 			% [where, _deaths, Game.deaths])
 		return true
 	if not Run.in_dungeon:
-		print(("MVP FAIL the run ended %s without a death (in_dungeon=false,"
+		rig.fail(("MVP FAIL the run ended %s without a death (in_dungeon=false,"
 			+ " deaths=%d) -- something took the hero out of the dungeon that was"
 			+ " not the rope and was not dying") % [where, Game.deaths])
 		return true
@@ -140,40 +140,40 @@ func _sell(rig) -> bool:
 	# end of it (`Npc.activate`, 2026-08-10). `rig.talk` is the whole of that beat
 	# and it presses real buttons to do it.
 	if not await rig.talk("Trade"):
-		print("MVP FAIL the vendor would not offer to trade")
+		rig.fail("MVP FAIL the vendor would not offer to trade")
 		return false
 	# The screen is a state, not a frame count: `TradeScreen` is built inside
 	# `Npc._choose_trade` and is up on the next frame, but a beat that assumed so
 	# would be making the same mistake one layer along.
 	var opened: bool = await rig.until(func() -> bool: return _screen(rig) != null)
 	if not opened:
-		print("MVP FAIL the vendor took the press and no shop screen came up")
+		rig.fail("MVP FAIL the vendor took the press and no shop screen came up")
 		return false
 	var screen := _screen(rig)
 	if screen.mode != TradeScreen.Mode.TRADE or screen.catalogue != SupplyDb:
-		print("MVP FAIL Trade opened the wrong layout or catalogue")
+		rig.fail("MVP FAIL Trade opened the wrong layout or catalogue")
 		return false
 	if screen._stock_grid == null or screen._bag_grid == null:
-		print("MVP FAIL Trade did not build both inventory grids")
+		rig.fail("MVP FAIL Trade did not build both inventory grids")
 		return false
 	var stock_ids: Array[StringName] = []
 	for i: int in screen._stock_rows:
 		if i < 0 or i >= screen._rows.size() \
 				or screen._rows[i].get("kind") != &"buy":
-			print("MVP FAIL Trade's stock index does not point at a buy row")
+			rig.fail("MVP FAIL Trade's stock index does not point at a buy row")
 			return false
 		var id: StringName = screen._rows[i]["line"]["id"]
 		stock_ids.append(id)
 		if not SupplyDb.STOCK_IDS.has(id):
-			print("MVP FAIL Trade exposed non-stock id %s" % id)
+			rig.fail("MVP FAIL Trade exposed non-stock id %s" % id)
 			return false
 	if screen.visible_catalogue_ids != SupplyDb.STOCK_IDS:
-		print("MVP FAIL Trade was not filtered to STOCK_IDS (%s)"
+		rig.fail("MVP FAIL Trade was not filtered to STOCK_IDS (%s)"
 			% [screen.visible_catalogue_ids])
 		return false
 	if not screen._stock_rows.has(screen._cursor) \
 			or screen._tip.title.text != screen.cursor_label():
-		print("MVP FAIL Trade did not start on stock detail (cursor=%d stock=%s detail=%s)"
+		rig.fail("MVP FAIL Trade did not start on stock detail (cursor=%d stock=%s detail=%s)"
 			% [screen._cursor, stock_ids, screen._tip.title.text])
 		return false
 	await rig.wait_frames(14)
@@ -182,7 +182,7 @@ func _sell(rig) -> bool:
 	# Sell the first BAG stack, not the first row: Trade starts on quartermaster
 	# stock and the live bag occupies the second inventory grid.
 	if screen._bag_rows.is_empty():
-		print("MVP FAIL Trade has no bag rows to sell")
+		rig.fail("MVP FAIL Trade has no bag rows to sell")
 		return false
 	screen._point_at(screen._bag_rows[0])
 	await rig.wait_frames(2)
@@ -205,7 +205,7 @@ func _sell(rig) -> bool:
 			sell_all = i
 			break
 	if sell_all < 0:
-		print("MVP FAIL Trade has no SELL UNMARKED bag row")
+		rig.fail("MVP FAIL Trade has no SELL UNMARKED bag row")
 		return false
 	var bulk_ids: Array[StringName] = screen._rows[sell_all]["ids"].duplicate()
 	screen._point_at(sell_all)
@@ -217,14 +217,14 @@ func _sell(rig) -> bool:
 	await rig.tap(["ui_accept"])
 	await rig.wait_frames(12)
 	if bulk_ids.any(func(id: StringName) -> bool: return not Run.bag.has(id)):
-		print("MVP FAIL a tap sold the bulk slice -- SELL UNMARKED is meant to be held")
+		rig.fail("MVP FAIL a tap sold the bulk slice -- SELL UNMARKED is meant to be held")
 	# Held in game seconds. A frame count is a duration of unknown length and the
 	# gauge advances by `delta` (see `rig.hold_seconds`).
 	await rig.hold_seconds(["ui_accept"], 0.9)
 	await rig.wait_frames(24)
 	var sold_bulk := bulk_ids.all(func(id: StringName) -> bool: return not Run.bag.has(id))
 	if not sold_bulk:
-		print("MVP FAIL holding SELL UNMARKED left bulk ids behind (%s)" % [bulk_ids])
+		rig.fail("MVP FAIL holding SELL UNMARKED left bulk ids behind (%s)" % [bulk_ids])
 	print("MVP after_sell gold=%d bag=%d" % [Game.gold, Run.bag_value()])
 	await rig.capture(out.path_join("m_04_sold_all.png"))
 
@@ -257,15 +257,15 @@ func _buy(rig) -> bool:
 	# Her SECOND option: Trade is the two-sided stock/bag service, while Upgrades
 	# is the permanent bag and heart progression board.
 	if not await rig.talk("Upgrades"):
-		print("MVP FAIL the quartermaster would not open Upgrades")
+		rig.fail("MVP FAIL the quartermaster would not open Upgrades")
 		return false
 	var opened: bool = await rig.until(func() -> bool: return _screen(rig) != null)
 	if not opened:
-		print("MVP FAIL Upgrades took the press and no shop screen came up")
+		rig.fail("MVP FAIL Upgrades took the press and no shop screen came up")
 		return false
 	var screen := _screen(rig)
 	if screen.mode != TradeScreen.Mode.PROGRESSION or screen.catalogue != SupplyDb:
-		print("MVP FAIL Upgrades opened the wrong layout or catalogue")
+		rig.fail("MVP FAIL Upgrades opened the wrong layout or catalogue")
 		return false
 	var buy_ids: Array[StringName] = []
 	for row: Dictionary in screen._rows:
@@ -278,7 +278,7 @@ func _buy(rig) -> bool:
 			available_upgrade_ids.append(id)
 	if screen.visible_catalogue_ids != SupplyDb.UPGRADE_IDS \
 			or buy_ids != available_upgrade_ids:
-		print("MVP FAIL Upgrades ids are %s, expected available %s"
+		rig.fail("MVP FAIL Upgrades ids are %s, expected available %s"
 			% [buy_ids, available_upgrade_ids])
 		return false
 	await rig.wait_frames(14)
@@ -295,7 +295,7 @@ func _buy(rig) -> bool:
 		await rig.wait_frames(4)
 		walked += 1
 	if screen.cursor_label() != "BAG SLOT":
-		print("MVP FAIL Upgrades has no BAG SLOT line to buy")
+		rig.fail("MVP FAIL Upgrades has no BAG SLOT line to buy")
 		return false
 	var was_gold := Game.gold
 	var was_slots := Game.bag_slots
@@ -309,7 +309,7 @@ func _buy(rig) -> bool:
 	# that names the thing it bought is the difference between a director and a
 	# transcript.
 	if Game.bag_slots != was_slots + 1 or Game.gold >= was_gold:
-		print("MVP FAIL BAG SLOT did not buy (gold %d -> %d, slots %d -> %d)"
+		rig.fail("MVP FAIL BAG SLOT did not buy (gold %d -> %d, slots %d -> %d)"
 			% [was_gold, Game.gold, was_slots, Game.bag_slots])
 		return false
 	await rig.capture(out.path_join("m_06_bought.png"))
@@ -342,7 +342,22 @@ func _descend(rig) -> bool:
 		Prompt.focus.prompt if Prompt.focus != null else "<none>"])
 	await rig.capture(out.path_join("m_07_gate.png"))
 
-	# The gate is a 0.9 s hold, so tapping must NOT open it. Holding must.
+	# The compound gate now opens onto the authored outskirts rather than
+	# teleporting through the surface journey.
+	await rig.hold_seconds(["interact"], 1.3)
+	var reached_outskirts: bool = await rig.until(func() -> bool:
+		return rig.scene() is GarrisonOutskirts, 10.0)
+	if not reached_outskirts:
+		rig.fail("MVP FAIL holding DEPART did not open the outskirts")
+		return false
+	var outskirts: GarrisonOutskirts = rig.scene() as GarrisonOutskirts
+	await rig.wait_frames(30)
+	await rig.capture(out.path_join("m_08_outskirts.png"))
+	if not await _approach(rig, outskirts.sunken_cut,
+			outskirts.sunken_cut.global_position + Vector3(0.0, 0.0, 1.8)):
+		return false
+	print("MVP cut focus=%s" % [
+		Prompt.focus.prompt if Prompt.focus != null else "<none>"])
 	await rig.hold_seconds(["interact"], 1.3)
 	var arrived: bool = await rig.until(
 		func() -> bool: return Run.in_dungeon and _dungeon(rig) != null, 10.0)
@@ -351,7 +366,7 @@ func _descend(rig) -> bool:
 		Run.in_dungeon, rig.scene().name])
 	await rig.capture(out.path_join("m_08_arrived.png"))
 	if not arrived:
-		print("MVP FAIL holding DESCEND for 1.3 s did not open the gate")
+		rig.fail("MVP FAIL holding DESCEND at the Sunken Cut did not open the dungeon")
 	return arrived
 
 
@@ -360,7 +375,7 @@ func _descend(rig) -> bool:
 func _fight(rig) -> bool:
 	var dun := _dungeon(rig)
 	if dun == null:
-		print("MVP FAIL no dungeon in %s" % rig.scene().name)
+		rig.fail("MVP FAIL no dungeon in %s" % rig.scene().name)
 		return false
 	print("MVP layout rooms=%d deepest=%s seed=%d" % [
 		dun.rooms.size(), dun.deepest, Run.seed_used])
@@ -381,7 +396,7 @@ func _fight(rig) -> bool:
 	print("MVP enemies=%d (%d in rooms, %d behind a door)" % [
 		foes.size(), open.size(), sealed.size()])
 	if foes.is_empty():
-		print("MVP FAIL no enemies spawned")
+		rig.fail("MVP FAIL no enemies spawned")
 		return false
 	# **THE PICK IS FROM THE ROOMS, AND `foes[0]` WAS NOT (#60).**
 	#
@@ -412,7 +427,7 @@ func _fight(rig) -> bool:
 	# could have had. The diagnosis is printed EVERY run below, so the day the
 	# order does change, the log says so instead of going quiet.
 	if open.is_empty():
-		print(("MVP FAIL every one of this floor's %d bodies is behind a door"
+		rig.fail(("MVP FAIL every one of this floor's %d bodies is behind a door"
 			+ " (vault / arena / miniboss) -- there is no fight a player could"
 			+ " reach here, and fighting a sealed one would measure a run that"
 			+ " cannot happen. Refusing to pick.") % foes.size())
@@ -490,14 +505,14 @@ func _fight(rig) -> bool:
 	await rig.capture(out.path_join("m_10_swung.png"))
 	# Said in the beat's own words, which is what #14's "done looks like" asked
 	# for. Three different things end this loop and they used to look identical.
-	if _ended("during the fight"):
+	if _ended(rig, "during the fight"):
 		return false
 	if refused > 0:
-		print("MVP FAIL the attack button was refused %d times of %d -- the hero"
+		rig.fail("MVP FAIL the attack button was refused %d times of %d -- the hero"
 			% [refused, taken + refused] + " never entered ATTACK for those presses"
 			+ " (stamina=%.0f)" % Game.stamina)
 	if is_instance_valid(foe) and not foe.health.dead:
-		print("MVP FAIL %d swings did not kill a %d-quarter %s: it is on %d"
+		rig.fail("MVP FAIL %d swings did not kill a %d-quarter %s: it is on %d"
 			% [taken, before, str(foe.get("kind")), foe.health.quarters])
 
 	# Patched up HERE, the frame the fight ends, rather than four beats later
@@ -537,7 +552,7 @@ func _fight(rig) -> bool:
 	# the only thing that empties a bag mid-floor, so an empty bag here is a run
 	# that has already ended -- and the heal two lines up is what made the log say
 	# the hero was on 12/12 throughout.
-	if _ended("standing on the drop"):
+	if _ended(rig, "standing on the drop"):
 		return false
 
 	# Topped up again on the way to the chest, for the same reason.
@@ -561,7 +576,7 @@ func _fight(rig) -> bool:
 		await rig.capture(out.path_join("m_13_chest_prompt.png"))
 		await rig.tap(["interact"])
 		if not await rig.until(func() -> bool: return chest.opened):
-			print("MVP FAIL the chest took the interact button and never opened")
+			rig.fail("MVP FAIL the chest took the interact button and never opened")
 			return false
 		await rig.wait_frames(40)
 		# **Re-checked every turn, and this is not belt-and-braces.** A `LootMote`
@@ -582,7 +597,7 @@ func _fight(rig) -> bool:
 		print("MVP after_chest bag=%d value=%d fee=%d" % [
 			Run.bag_count(), Run.bag_value(), Run.extract_cost()])
 		await rig.capture(out.path_join("m_14_chest_loot.png"))
-	return not _ended("on the way out of the fight beat")
+	return not _ended(rig, "on the way out of the fight beat")
 
 
 ## Leaving. There is no pad to walk to any more -- the way out is the Escape
@@ -593,7 +608,7 @@ func _extract(rig) -> void:
 	var hero = rig.get_nodes_in_group(&"player")[0]
 	var rope: EscapeRope = hero.rope
 	if rope == null:
-		print("MVP FAIL the hero is carrying no way out")
+		rig.fail("MVP FAIL the hero is carrying no way out")
 		return
 
 	# Break off the fight first. An unblocked hit cancels the channel on purpose
@@ -622,7 +637,7 @@ func _extract(rig) -> void:
 	print("MVP pre_extract gold=%d toll=%d charge=%d value=%d" % [
 		purse, toll, Run.extract_charge(), Run.bag_value()])
 	if Run.extract_charge() != purse:
-		print("MVP FAIL the fee was not capped at the purse (toll=%d gold=%d charge=%d)"
+		rig.fail("MVP FAIL the fee was not capped at the purse (toll=%d gold=%d charge=%d)"
 			% [toll, purse, Run.extract_charge()])
 
 	# Shot AFTER the purse is spent down, which is the whole point of the frame:
@@ -640,7 +655,7 @@ func _extract(rig) -> void:
 		# channelling, or not underground. "Too poor" was the third and is gone --
 		# printing only gold and the fee named the one cause that was almost never
 		# the real one, and sent a session hunting the economy for a state bug.
-		print("MVP FAIL the rope refused to start (gold=%d toll=%d in_dungeon=%s active=%s)"
+		rig.fail("MVP FAIL the rope refused to start (gold=%d toll=%d in_dungeon=%s active=%s)"
 			% [Game.gold, toll, Run.in_dungeon, rope.active()])
 		return
 
@@ -648,13 +663,13 @@ func _extract(rig) -> void:
 	# halfway up him rather than absent or finished.
 	await rig.wait_seconds(EscapeRope.CHANNEL_TIME * 0.5)
 	if not rope.active():
-		print("MVP FAIL the rope stopped channelling on its own")
+		rig.fail("MVP FAIL the rope stopped channelling on its own")
 	await rig.capture(out.path_join("m_16_channelling.png"))
 
 	await rig.wait_seconds(EscapeRope.CHANNEL_TIME)
 	await rig.wait_frames(30)
 	if Run.in_dungeon:
-		print("MVP FAIL the rope finished and he is still underground")
+		rig.fail("MVP FAIL the rope finished and he is still underground")
 	# The purse is the proof the cap actually charged rather than merely allowed.
 	# He went in one gold short of the toll, so he comes out at nothing -- and the
 	# receipt has to say the same number, because the receipt is what the player
@@ -662,10 +677,10 @@ func _extract(rig) -> void:
 	print("MVP post_extract gold=%d fee_on_receipt=%d" % [
 		Game.gold, int(Run.summary.get("fee", -1))])
 	if Game.gold != 0:
-		print("MVP FAIL the whole purse should have gone to the toll (gold=%d, was %d)"
+		rig.fail("MVP FAIL the whole purse should have gone to the toll (gold=%d, was %d)"
 			% [Game.gold, purse])
 	if int(Run.summary.get("fee", -1)) != purse:
-		print("MVP FAIL the receipt names a fee the purse did not pay (fee=%d purse=%d)"
+		rig.fail("MVP FAIL the receipt names a fee the purse did not pay (fee=%d purse=%d)"
 			% [int(Run.summary.get("fee", -1)), purse])
 	await rig.capture(out.path_join("m_17_extracting.png"))
 
@@ -685,7 +700,7 @@ func _return(rig) -> void:
 	print("MVP receipt screen=%s paused=%s kills=%d" % [
 		screen != null, rig.paused, int(Run.summary.get("kills", -1))])
 	if screen == null:
-		print("MVP FAIL no ending screen after the rope")
+		rig.fail("MVP FAIL no ending screen after the rope")
 		return
 	await rig.capture(out.path_join("m_18_receipt.png"))
 
@@ -697,9 +712,9 @@ func _return(rig) -> void:
 		rig.scene().name, Run.in_dungeon, Game.gold, Run.bag_value(),
 		Game.quarters, Game.max_quarters])
 	if rig.scene() is not Garrison:
-		print("MVP FAIL BACK TO THE GARRISON did not reach the garrison (scene=%s)" % rig.scene().name)
+		rig.fail("MVP FAIL BACK TO THE GARRISON did not reach the garrison (scene=%s)" % rig.scene().name)
 	if rig.paused:
-		print("MVP FAIL the tree is still paused in the garrison")
+		rig.fail("MVP FAIL the tree is still paused in the garrison")
 	await rig.capture(out.path_join("m_19_home.png"))
 
 
@@ -789,7 +804,7 @@ func _break_off(rig, hero: Hero) -> void:
 	var gap := _nearest_foe(rig, hero.global_position)
 	print("MVP broke off, nearest monster %.1f m" % gap)
 	if gap < 6.0:
-		print("MVP FAIL could not disengage: a monster is still %.1f m away with"
+		rig.fail("MVP FAIL could not disengage: a monster is still %.1f m away with"
 			% gap + " the hero in the far corner of the floor -- the leash is not"
 			+ " letting go, and nothing in the dungeon can be walked away from")
 
@@ -865,11 +880,11 @@ func _approach(rig, it: Interactable, at: Vector3, look_at = null) -> bool:
 		# happened and sent the card's first reader to the health bar. `Game.deaths`
 		# is the only one of the three that actually means somebody died.
 		if Game.deaths > _deaths:
-			print(("MVP FAIL the hero died before he reached %s -- deaths %d -> %d,"
+			rig.fail(("MVP FAIL the hero died before he reached %s -- deaths %d -> %d,"
 				+ " and the run ended with him") % [it.prompt, _deaths, Game.deaths])
 			return false
 		if rig.scene().get_tree().get_first_node_in_group(&"player") == null:
-			print(("MVP FAIL there is no hero in the scene at all while waiting on"
+			rig.fail(("MVP FAIL there is no hero in the scene at all while waiting on"
 				+ " %s -- nobody died (deaths=%d), the player node is simply gone")
 				% [it.prompt, Game.deaths])
 			return false
@@ -880,7 +895,7 @@ func _approach(rig, it: Interactable, at: Vector3, look_at = null) -> bool:
 		# prompt never came" and sent two readers into `Prompt`. `enabled` is the
 		# fourth term of the same `if`, and it was the false one. Print every term
 		# of the condition you are complaining about.
-		print(("MVP FAIL %s never took the interact button after three seconds of"
+		rig.fail(("MVP FAIL %s never took the interact button after three seconds of"
 			+ " GAME TIME standing in front of it (focus=%s, inside=%s, enabled=%s,"
 			+ " blocked=%s, in_dungeon=%s)") % [
 			it.prompt, Prompt.focus.prompt if Prompt.focus != null else "<none>",

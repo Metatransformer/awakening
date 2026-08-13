@@ -36,14 +36,14 @@ func run(rig) -> void:
 
 	var t = hero.targeting
 	if t == null:
-		print("LOCK FAIL hero has no targeting node")
+		rig.fail("LOCK FAIL hero has no targeting node")
 		return
 
 	# --- 1. empty press ------------------------------------------------------
 	await rig.tap(["z_target"])
 	await rig.wait_frames(4)
 	if t.is_locked:
-		print("LOCK FAIL locked onto something with nothing in range")
+		rig.fail("LOCK FAIL locked onto something with nothing in range")
 	else:
 		print("LOCK ok  empty press locked nothing")
 
@@ -70,7 +70,7 @@ func run(rig) -> void:
 	await rig.tap(["z_target"])
 	await rig.wait_frames(6)
 	if not t.is_locked:
-		print("LOCK FAIL press with two enemies in the cone acquired nothing")
+		rig.fail("LOCK FAIL press with two enemies in the cone acquired nothing")
 		return
 	var first = t.current_target
 	print("LOCK ok  acquired %s" % _name_of(first))
@@ -79,7 +79,7 @@ func run(rig) -> void:
 	await rig.wait_frames(50)
 	var err := _facing_error(hero, first)
 	if err > FACE_TOL:
-		print("LOCK FAIL hero is %.1f deg off the target (tol %.1f)" % [err, FACE_TOL])
+		rig.fail("LOCK FAIL hero is %.1f deg off the target (tol %.1f)" % [err, FACE_TOL])
 	else:
 		print("LOCK ok  hero faces the target, %.1f deg off" % err)
 	await rig.capture(out.path_join("lock_00_acquired.png"))
@@ -93,16 +93,16 @@ func run(rig) -> void:
 	Input.action_release(&"move_left")
 
 	if travel.length() < 0.5:
-		print("LOCK FAIL strafe input produced no movement (%.2f m/s)" % travel.length())
+		rig.fail("LOCK FAIL strafe input produced no movement (%.2f m/s)" % travel.length())
 	elif face_err > FACE_TOL:
-		print("LOCK FAIL hero turned away while strafing, %.1f deg off" % face_err)
+		rig.fail("LOCK FAIL hero turned away while strafing, %.1f deg off" % face_err)
 	else:
 		var between := rad_to_deg(travel.normalized().angle_to(
 			-hero.global_transform.basis.z))
 		print("LOCK ok  strafing at %.2f m/s, %.0f deg off his own facing, still %.1f deg on target"
 			% [travel.length(), between, face_err])
 		if between < 30.0:
-			print("LOCK FAIL travel and facing are the same vector -- not strafing, just running")
+			rig.fail("LOCK FAIL travel and facing are the same vector -- not strafing, just running")
 	await rig.capture(out.path_join("lock_01_strafe.png"))
 
 	# --- 5. switch -----------------------------------------------------------
@@ -134,7 +134,7 @@ func run(rig) -> void:
 	t._switch(1 if _screen_x(t, other) > _screen_x(t, before) else -1)
 	await rig.wait_frames(8)
 	if t.current_target == before:
-		print("LOCK FAIL flick did not move the lock off %s" % _name_of(before))
+		rig.fail("LOCK FAIL flick did not move the lock off %s" % _name_of(before))
 	else:
 		print("LOCK ok  flick moved the lock %s -> %s"
 			% [_name_of(before), _name_of(t.current_target)])
@@ -144,7 +144,7 @@ func run(rig) -> void:
 	await rig.tap(["z_target"])
 	await rig.wait_frames(4)
 	if t.is_locked:
-		print("LOCK FAIL second press did not release")
+		rig.fail("LOCK FAIL second press did not release")
 	else:
 		print("LOCK ok  second press released")
 
@@ -152,7 +152,7 @@ func run(rig) -> void:
 	await rig.tap(["z_target"])
 	await rig.wait_frames(6)
 	if not t.is_locked:
-		print("LOCK FAIL could not re-acquire for the death test")
+		rig.fail("LOCK FAIL could not re-acquire for the death test")
 	else:
 		var victim = t.current_target
 		var hp := _health(victim)
@@ -162,7 +162,7 @@ func run(rig) -> void:
 			hp.apply_hit(Hit.make(9999, hero.global_position, &"sword", 0.0))
 			await rig.wait_frames(30)
 			if t.is_locked and t.current_target == victim:
-				print("LOCK FAIL still locked onto a dead target")
+				rig.fail("LOCK FAIL still locked onto a dead target")
 			else:
 				print("LOCK ok  the lock dropped when the target died")
 	await rig.capture(out.path_join("lock_03_after_death.png"))
@@ -200,14 +200,14 @@ func run(rig) -> void:
 		# is the whole window.
 		var after = hero.lock_target()
 		if after != null:
-			print("LOCK FAIL lock_target() still returns something after %s was freed"
+			rig.fail("LOCK FAIL lock_target() still returns something after %s was freed"
 				% doomed)
 		else:
 			print("LOCK ok  lock_target() is null the instant %s is freed" % doomed)
 		if t.current_target != null:
-			print("LOCK FAIL Targeting still holds %s after it left the tree" % doomed)
+			rig.fail("LOCK FAIL Targeting still holds %s after it left the tree" % doomed)
 		elif t.is_locked:
-			print("LOCK FAIL Targeting is still locked with no target")
+			rig.fail("LOCK FAIL Targeting is still locked with no target")
 		else:
 			print("LOCK ok  the lock dropped on the frame the body left the tree")
 	await rig.wait_frames(6)

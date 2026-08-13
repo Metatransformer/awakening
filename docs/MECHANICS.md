@@ -104,6 +104,7 @@ inside this grammar. Their counts and production status belong to
 | Walk-up services | Which resident or physical place turns this haul into the next capability? | [METAGAME.md](METAGAME.md) |
 | Trade and storage | What do I sell, protect for a recipe, or place in finite home storage before the next trip? | [METAGAME.md](METAGAME.md) |
 | Supplies versus permanence | Do I spend gold on the next trip, bag/health capacity, or a lasting ladder rung? | [METAGAME.md](METAGAME.md) |
+| Field Notes and doctrines | Which observed Cistern lesson earned this note, which finite doctrine do I choose, and what specific lesson would bring me back? | [FIELD_NOTES.md](FIELD_NOTES.md) |
 | Forge and jewellery paths | Which mutually exclusive equipment direction fits how I play, and when is reversal worth its loss? | [METAGAME.md](METAGAME.md) |
 | Alchemy | Which bottle capacity and draught recipe supports the next descent? | [METAGAME.md](METAGAME.md) |
 | Artifacts | Which recovered relic do I repair or read, donate, and see change the garrison? | [ITEMS.md](ITEMS.md), [METAGAME.md](METAGAME.md) |
@@ -119,9 +120,9 @@ The garrison is a lived place with bounded services, not a settlement-placement
 or remote-management game. Upgrade tracks, residents, currencies, interfaces,
 and home systems cannot expand beyond [SCOPE.md](SCOPE.md).
 
-## Active proof
+## Active proofs
 
-The only active design question is the stay-versus-extract decision in
+The raid stay-versus-extract question remains pending in
 [design-tests/RAID_LOOP_PROOF.md](design-tests/RAID_LOOP_PROOF.md). Its current
 authorization is stated in [NOW.md](NOW.md), and its home-side rules are owned
 by [GARRISON_LIFE.md](GARRISON_LIFE.md).
@@ -139,3 +140,15 @@ evidence; its post-raid hypothesis is recorded in
 [design-tests/FISHING_PROVISIONS_PROOF.md](design-tests/FISHING_PROVISIONS_PROOF.md).
 Human observations, criteria, and eventual decisions stay in their design tests
 rather than becoming status prose here.
+
+Raid implementation is complete, but its five cold human sessions are pending.
+Existing mechanics may be reused for the slice, but their presence does not
+authorize new variants or surrounding systems.
+
+The separate Field Notes question is pending in
+[design-tests/FIELD_NOTES_PROOF.md](design-tests/FIELD_NOTES_PROOF.md), with the
+bounded system owned by [FIELD_NOTES.md](FIELD_NOTES.md). Its implementation is
+authorised under issue #112: five first-time observations, five total debrief
+awards and three one-rank doctrines, with no repeatable faucet or new screen.
+Neither implementation proves its human hypothesis. Observation, criteria and
+eventual decisions stay in the dedicated design tests.

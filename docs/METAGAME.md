@@ -6,6 +6,8 @@ history of how the contract was reached.
 
 - [ITEMS.md](ITEMS.md) owns item identities, catalogues, and item-specific
   exceptions.
+- [FIELD_NOTES.md](FIELD_NOTES.md) owns the five first-time observations, note
+  economy and three doctrine definitions.
 - [GARRISON_LIFE.md](GARRISON_LIFE.md) owns the civil rhythm, Firewood/Hearth,
   residents, and the bounded raid.
 - [SCOPE.md](SCOPE.md) owns content ceilings and the production freeze.
@@ -38,12 +40,13 @@ ordinary extraction always remains available at a known price.
 
 ## 2. Value and loss lanes
 
-There is one currency: **gold**. Reward types do not convert into one another
-automatically.
+There are two non-convertible currencies: **gold** and **Field Notes**. Reward
+types do not convert into one another automatically.
 
 | Lane | During a trip | On extraction | On death |
 |---|---|---|---|
 | Gold | Coins bank directly and use no bag slot | Kept, minus the extraction charge | Kept |
+| Field Notes | First-time observation ids are pending run knowledge, not carried loot | New ids award permanent notes at debrief | New ids award permanent notes at debrief |
 | Bag | Holds sale goods, components, relics, and temporary finds | Banked by item kind | Exposed contents are lost |
 | Document case | Three secure cells within the bag limit | Banked with the rest | Banked; no extraction fee is charged |
 | Components | Occupy bag cells until brought home | Move to their named workbench | Lost unless packed in the case |
@@ -73,6 +76,11 @@ The exact catalogue and stack sizes are in [ITEMS.md](ITEMS.md).
 When a pickup cannot fit, it remains on the floor and pulses. Nothing is
 silently deleted. The player may leave it, spend something, or return after
 making room where the item permits that choice.
+
+Selecting an occupied Inventory cell and choosing **Drop** throws that one
+displayed stack onto the floor in front of the hero as an ordinary pickup. A
+stack dropped from the document case loses its protection. Dropping and
+recollecting preserves its value and Heat premium rather than minting more.
 
 The HUD groups carried value into three thresholds:
 
@@ -117,6 +125,28 @@ A relic changes an existing catalogue, ladder, number, verb, or wayfinding
 rule. It does not create an independent economy. The twelve-item catalogue and
 each consequence are owned by [ITEMS.md](ITEMS.md); the total is capped by
 [SCOPE.md](SCOPE.md).
+
+### Field Notes and doctrines
+
+Field Notes are a permanent, finite learning currency awarded only when an
+extraction or death debrief resolves a newly observed Cistern event. The
+receipt pairs every new note with the event that produced it. The note balance,
+awarded observation ids and bought doctrine ranks persist through save/load and
+death. Unobserved entries stay hidden, and repetition awards nothing.
+
+Aldric's **Field Notes** service reuses the existing catalogue and trade
+presentation. Exactly three one-rank doctrines cost two notes each:
+
+- **Rope Drill:** shortens the extraction world channel from **1.2 seconds to
+  1.0 second**.
+- **Measured Breath:** increases stamina regeneration by **5%**.
+- **Sweep Pattern:** adds **0.5 m** to the Heat pickup magnet at Warm or above.
+
+Five fixed observations yield five total notes, so at most two doctrines can be
+bought and one permanently remains unchosen. There is no repeatable faucet,
+conversion, checklist, item, refund, respec or separate UI screen. Exact
+observation and doctrine tables, stable ids and transaction rules belong only
+to [FIELD_NOTES.md](FIELD_NOTES.md).
 
 ## 5. Heat
 
@@ -213,7 +243,8 @@ canonical down stair. It does not extract, bank, heal, or reset the trip.
 Leaving has two deliberate commitments:
 
 1. Hold **Y / `ui_hold` for 0.9 seconds** on the Inventory screen.
-2. After the menu closes, remain rooted through a **1.2-second** world channel.
+2. After the menu closes, remain rooted through a **1.2-second** world channel,
+   reduced to **1.0 second** by Rope Drill.
 
 A landed blow breaks the world channel. A blocked blow does not. The channel
 makes safety matter; the menu hold prevents an accidental run-ending press.
@@ -229,8 +260,8 @@ charge = min(toll, current_gold)
 The rope always works. If the calculated toll exceeds the purse, extraction
 takes all current gold and still brings the haul home. Extraction banks the
 whole bag by item kind and preserves current health. Rest and sleep are the
-normal garrison recovery seam; purchased bed ranks restore one heart each when
-sleeping.
+normal garrison recovery seam: every completed sleep restores real health to
+maximum, and purchased bed ranks grant one temporary quarter-heart each on top.
 
 Death loses the exposed bag, banks the document case, preserves gold and
 permanent progression, and returns the player to the garrison at full health.
@@ -313,6 +344,7 @@ outcome and never becomes free extraction.
 | Smithing | Brannoc | Gold-plus-component forge ladders and fletching |
 | Alchemy | Ysolt | Bottle capacity and three draught recipes |
 | Artifacts | Lanternkeeper | Repair/read and donate the twelve relics |
+| Field Notes | Aldric | Review awarded observations and spend the finite note balance on one-rank doctrines |
 | QoL Upgrades | Lanternkeeper | Bed recovery, locker shelves, and Early Reveille |
 | Upgrades | Marisel | Jewellery blanks and mutually exclusive paths |
 | Bed and locker | Hero's quarters | Rest/save and finite persistent storage |
@@ -379,7 +411,9 @@ equipment screen reports only damage, speed, maximum health, stamina, and soak.
 
 ### Home convenience ladders
 
-- **Bed recovery:** three ranks, one heart restored per rank when sleeping.
+- **Better Bed:** three ranks, one temporary quarter-heart granted per rank when
+  sleeping; this overhealth absorbs damage before real health and does not raise
+  maximum health.
 - **Locker shelves:** starts at **24 cells**; two ranks add six each, for a hard
   maximum of **36**.
 - **Early Reveille:** one rank; services open at **06:00** instead of 07:00.
@@ -389,8 +423,9 @@ It uses the same stack-to-cell arithmetic as the bag. A full locker refuses a
 transfer visibly. Starting a new trip clears the run bag, so anything the player
 wants to keep unsold must first be sold, crafted, or moved into the locker.
 
-The bed requires a hold, advances to dawn, restores stamina, applies purchased
-bed recovery, and requests an autosave. It is unavailable during a descent.
+The bed requires a hold, advances to dawn, fully restores real health and
+stamina, grants purchased Better Bed overhealth, and requests an autosave. It is
+unavailable during a descent.
 
 ## 11. Boundaries
 

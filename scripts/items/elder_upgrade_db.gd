@@ -16,7 +16,7 @@ const LIMITS := {
 	REVEILLE_ID: 1,
 }
 
-const BED_HEAL_PER_RANK := K.HEART
+const BED_OVERHEALTH_PER_RANK := K.QUARTER
 const LOCKER_SLOTS_PER_RANK := 6
 
 const _COSTS := {
@@ -99,9 +99,9 @@ static func _line(id: StringName) -> Dictionary:
 				"label": "A BETTER BED",
 				"cost": cost,
 				"parts": {},
-				"blurb": "Each sleep restores 1 heart per rank owned, up to maximum health.",
-				"detail": "Complete: sleep restores 3 hearts from this upgrade." if done \
-					else "Sleep healing: %d hearts -> %d hearts." % [owned, owned + 1],
+				"blurb": "Sleep fully heals. Each rank grants 1/4 heart of temporary overhealth.",
+				"detail": "Complete: sleep grants 3/4 heart of temporary overhealth." if done \
+					else "Temporary overhealth: %d/4 heart -> %d/4 heart." % [owned, owned + 1],
 			}
 		LOCKER_ID:
 			var slots := owned * LOCKER_SLOTS_PER_RANK
@@ -132,9 +132,8 @@ static func _effect_text(id: StringName, owned: int) -> String:
 	match id:
 		BED_ID:
 			if owned <= 0:
-				return "No bonus sleep healing."
-			return "Sleep restores %d %s from this improvement." % [
-				owned, "heart" if owned == 1 else "hearts"]
+				return "Sleep fully heals; no temporary overhealth."
+			return "Sleep fully heals and grants %d/4 heart of temporary overhealth." % owned
 		LOCKER_ID:
 			if owned <= 0:
 				return "No bonus footlocker slots."

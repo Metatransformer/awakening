@@ -60,18 +60,17 @@ func run(rig) -> void:
 	var out: String = rig.arg("out", "/tmp/p4c/x.png").get_base_dir()
 	var scene: Node = rig.scene()
 	var hero: Node3D = scene.get_node_or_null(^"Hero") as Node3D
-	var fails := 0
 
 	if hero == null:
-		print("COMBO FAIL no Hero in the scene")
+		rig.fail("COMBO FAIL no Hero in the scene")
 		return
 	var combat: Node = hero.get(&"combat")
 	if combat == null:
-		print("COMBO FAIL no HeroCombat on the Hero")
+		rig.fail("COMBO FAIL no HeroCombat on the Hero")
 		return
 	var post: Node = scene.get_node_or_null(^"PostA")
 	if post == null:
-		print("COMBO FAIL no PostA to hit")
+		rig.fail("COMBO FAIL no PostA to hit")
 		return
 	post.connect(&"struck", _on_struck)
 
@@ -99,8 +98,8 @@ func run(rig) -> void:
 	print("COMBO pace swing_time=%.2fs, measured %.2fs (chain scale %s)"
 		% [want, got, combat.get(&"chain_time_scale")])
 	if absf(got - want) > 0.10:
-		print("COMBO FAIL the swing owned the hero for %.2fs, not swing_time's %.2fs"
-			% [got, want]); fails += 1
+		rig.fail("COMBO FAIL the swing owned the hero for %.2fs, not swing_time's %.2fs"
+			% [got, want])
 	await rig.wait_seconds(LAPSE)
 
 	# --- the chain, three presses -------------------------------------------
@@ -137,25 +136,25 @@ func run(rig) -> void:
 
 	for i in 3:
 		if step[i] <= 0:
-			print("COMBO FAIL chain step %d never landed" % (i + 1)); fails += 1
+			rig.fail("COMBO FAIL chain step %d never landed" % (i + 1))
 	if step[2] <= step[0]:
-		print("COMBO FAIL finisher (%d) does not out-damage step one (%d)"
-			% [step[2], step[0]]); fails += 1
+		rig.fail("COMBO FAIL finisher (%d) does not out-damage step one (%d)"
+			% [step[2], step[0]])
 	if after_lapse != step[0]:
-		print("COMBO FAIL after the window lapsed the swing dealt %d, not step one's %d"
-			% [after_lapse, step[0]]); fails += 1
+		rig.fail("COMBO FAIL after the window lapsed the swing dealt %d, not step one's %d"
+			% [after_lapse, step[0]])
 	if not _charge_seen:
-		print("COMBO FAIL the trigger was held well past charge_time and never charged"
+		rig.fail("COMBO FAIL the trigger was held well past charge_time and never charged"
 			+ " (magic %d/%d — an empty bar refuses to arm, by design)"
-			% [Game.magic, Game.max_magic]); fails += 1
+			% [Game.magic, Game.max_magic])
 	if charge_blow <= step[0]:
-		print("COMBO FAIL the charge release (%d) does not out-damage step one (%d)"
-			% [charge_blow, step[0]]); fails += 1
+		rig.fail("COMBO FAIL the charge release (%d) does not out-damage step one (%d)"
+			% [charge_blow, step[0]])
 	if after_heavy != step[0]:
-		print("COMBO FAIL a light after a heavy dealt %d, not step one's %d — the heavy feeds the chain"
-			% [after_heavy, step[0]]); fails += 1
+		rig.fail("COMBO FAIL a light after a heavy dealt %d, not step one's %d — the heavy feeds the chain"
+			% [after_heavy, step[0]])
 
-	print("COMBO %s (fails=%d)" % ["OK" if fails == 0 else "FAIL", fails])
+	print("COMBO checks complete")
 
 
 func _on_struck(amount: int, _from: Vector3) -> void:
