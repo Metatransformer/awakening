@@ -40,6 +40,9 @@ const M_STAIRS := &"stairs"
 const M_ARROWS := &"arrows"
 const M_ENTRANCE := &"entrance"
 
+const LOCK_SMALL := &"small"
+const LOCK_BOSS := &"boss"
+
 const KIND_NONE := &""
 const KIND_DUNGEON := &"dungeon"
 const KIND_SURFACE := &"surface"
@@ -68,6 +71,10 @@ var rooms: Dictionary[Vector2i, Array] = {}
 var annexes: Array[Dictionary] = []
 ## cell -> Array[StringName] of marker ids standing in it.
 var marks: Dictionary[Vector2i, Array] = {}
+## Stable tag -> `{tag, cell, wall, kind}` for live closed doors. Kept apart
+## from room-centre markers because a doorway belongs to a wall and can disappear
+## while every marker in its room remains.
+var locks: Dictionary[StringName, Dictionary] = {}
 ## cell -> true once the player has stood in it. Absent means fogged.
 var seen: Dictionary[Vector2i, bool] = {}
 ## The cell the player arrived on.
@@ -106,6 +113,7 @@ func open_floor(floor_level: int, cell_spacing: float, room_size: float,
 		door_span: float, arrival: Vector2i) -> void:
 	rooms.clear()
 	marks.clear()
+	locks.clear()
 	seen.clear()
 	annexes.clear()
 	level = floor_level
@@ -186,6 +194,37 @@ func mark(cell: Vector2i, id: StringName) -> void:
 	_changed()
 
 
+## Publish one actual closed door. Repeating the identical record is a no-op;
+## changing a tag's placement is a real map change and replaces it atomically.
+func add_lock(tag: StringName, cell: Vector2i, wall: StringName,
+		kind: StringName = LOCK_SMALL) -> void:
+	if tag == &"" or not [LOCK_SMALL, LOCK_BOSS].has(kind):
+		return
+	var record := {"tag": tag, "cell": cell, "wall": wall, "kind": kind}
+	if locks.has(tag) and locks[tag] == record:
+		return
+	locks[tag] = record
+	_changed()
+
+
+func remove_lock(tag: StringName) -> void:
+	if not locks.has(tag):
+		return
+	locks.erase(tag)
+	_changed()
+
+
+func locks_of(cell: Vector2i) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for tag: StringName in locks:
+		var record: Dictionary = locks[tag]
+		if record["cell"] == cell:
+			out.append(record.duplicate())
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return String(a["tag"]) < String(b["tag"]))
+	return out
+
+
 ## Swap one marker for another in whatever room `at` falls in. This is how a
 ## chest goes from "there is treasure here" to "you already had it" without the
 ## chest node needing to know its own cell -- it knows where it is standing, and
@@ -220,6 +259,7 @@ func see(cell: Vector2i) -> void:
 func close_floor() -> void:
 	rooms.clear()
 	marks.clear()
+	locks.clear()
 	seen.clear()
 	annexes.clear()
 	level = 0

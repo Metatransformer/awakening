@@ -52,8 +52,10 @@ becoming rote.
 ### Greed authors danger
 
 Difficulty is partly a decision: go deeper, move faster, carry more, or leave.
-The ordinary Escape Rope ends a descent, but using it has a known cost. The game
-must preserve choices where caution and ambition are both defensible.
+The counted Escape Rope ends a descent without a gold fee, but preparation had
+to acquire one and starting the channel consumes it. The physical floor-1 stair
+retains its known ordinary toll. The game must preserve choices where caution
+and ambition are both defensible.
 
 ### Home is built, lived in, and defended
 
@@ -72,18 +74,19 @@ be able to explain what happened, why, and how to put it right.
 
 ## 4. Game loop
 
-1. **Prepare, build, and live.** Use the garrison's services, tend current
-   responsibilities and provisions, choose equipment, and see what the outpost
-   needs.
+1. **Prepare, build, and live.** Use the garrison's services, acquire counted
+   Escape Ropes and other provisions before a descent, choose equipment, tend
+   current responsibilities, and see what the outpost needs.
 2. **Delve, explore, and loot.** Fight readable encounters, solve ancient
    mechanisms, find artifacts, decide whether a vein deserves Pickaxe
    durability, and choose what deserves scarce carrying space.
 3. **Receive warning.** A raid warning may arrive while the player is safe,
    committed, or painfully close to a discovery.
-4. **Choose.** Continue the descent, retrace the stairs, or use the normal
-   Escape Rope and end the run normally. Floor 1's up stair reaches the same
-   priced extraction settlement. A raid call never teleports the player and
-   never provides a special free extraction.
+4. **Choose.** Continue the descent, retrace the stairs, or consume one prepared
+   Escape Rope and end the run normally without a gold fee. Floor 1's up stair
+   reaches the same banking and receipt settlement while retaining its ordinary
+   toll. A raid call never teleports the player and never provides a Rope or a
+   special free extraction.
 5. **Defend or trust preparations.** Return and fight, or remain away and rely
    on the defenses and people already in place.
 6. **Repair and recover.** Read the outcome in the garrison, restore what was
