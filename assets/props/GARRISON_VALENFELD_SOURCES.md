@@ -10,6 +10,7 @@ transferred; this project generates its own import metadata.
 | `assets/props/garrison_farm/` | `assets/models/polyhaven_farm/` | Poly Haven farm models | The Valenfeld asset catalog records this family as PolyHaven CC0, but its per-file receipts are inconsistent. The transferred GLBs have embedded textures; redundant extracted JPGs were not transferred. | Farm tools and containers for the garrison yard and agricultural dressing. |
 | `assets/props/garrison_architecture/` | `assets/models/retrokit/` | Kenney Retro Fantasy Kit 2.0 | The transferred local `License.txt` identifies the kit as Creative Commons Zero (CC0) and names Kenney as its creator/distributor. | Roof, wall, column, fence, pulley, crate, and shrub pieces for garrison architecture and dressing. |
 | `assets/props/garrison_rocks/` | `assets/models/rockpack/` | Kyle Fuji rock pack | The transferred local `KyleFuji_license.txt` states that all assets are CC0 1.0 and names Kyle Fuji as the creator. | Rocks, boulders, and their mossy atlas textures for garrison terrain dressing. |
+| `assets/props/garrison_camp/` | `assets/textures/environment/pine_bark.jpg` and `assets/textures/environment/pine_bark_n.jpg` | Poly Haven `pine_bark` 1k family | Valenfeld's local `docs/ASSETS.md` §4j is the source/licensing evidence for the diffuse and normal pair and documents the shared Poly Haven bonfire/stump material family. | Pine-bark bonfire logs and six matching cut-log stump seats around the Garrison hearth. |
 
 ## Deliberate exclusions
 
