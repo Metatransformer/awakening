@@ -43,6 +43,29 @@ services, and garrison spaces. It may add only what the slice requires.
 
 ## Owner-authorised implementation alongside the freeze
 
+### PS2 visual-cohesion initiative
+
+The owner authorises an autonomous, system-by-system visual-quality pass across
+the shared renderer, Highbridge garrison, the currently implemented dungeon,
+and the existing outdoor area. [STYLEGUIDE.md](STYLEGUIDE.md) is the target.
+Each area must stay on its own claimed card, use native-resolution before/after
+frames, preserve combat/navigation space, and pass independent adversarial
+review before landing.
+
+The production visual scene roots are `scenes/rooms/garrison.tscn`—which embeds
+the outskirts—and `scenes/rooms/dungeon.tscn`.
+`scenes/rooms/garrison_outskirts.tscn` remains only the focused compatibility
+and lookdev shell; production proof must also use the combined garrison surface.
+Visual cards may change visible meshes, materials, lights, sky, fog, and
+collision-free dressing. Room topology, ports, item and NPC placement,
+collision shapes, navigation, interactions, schedules, quest state, camera
+behavior, and UI are read-only unless a separate gameplay card authorises them.
+
+This authorises lighting, environment, material, dressing, and presentation
+changes needed to replace the legacy PSX look with coherent PS2-era stylized
+realism. It authorises no new floor, boss, enemy kind, quest, reward, gameplay
+system, UI screen, or production-content expansion.
+
 Issue #203 is an active owner override to the frozen boss language. It
 authorises refinement and proof of the existing fixed roster—four floor bosses
 and four optional floor minibosses—without adding a model, item, attack shape,

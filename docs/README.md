@@ -33,8 +33,8 @@ A reference may be long only when its subject is narrow.
 | Boss encounters | [BOSSES.md](BOSSES.md) |
 | Story and local lore | [LORE_AND_STORY.md](LORE_AND_STORY.md) |
 | Shared Valenfeld canon | [CANON_BRIDGE.md](CANON_BRIDGE.md) |
-| Visual style and HUD presentation | [STYLEGUIDE.md](STYLEGUIDE.md) |
-| Units, interfaces, input, and implementation contracts | [CONTRACT.md](CONTRACT.md) |
+| World art and HUD presentation principles | [STYLEGUIDE.md](STYLEGUIDE.md) |
+| Renderer, UI, units, interfaces, input, and implementation contracts | [CONTRACT.md](CONTRACT.md) |
 | Design method | [DESIGN_PROCESS.md](DESIGN_PROCESS.md) |
 | Playtest method | [PLAYTESTING.md](PLAYTESTING.md) |
 
@@ -50,6 +50,8 @@ A reference may be long only when its subject is narrow.
 - Git history is the archive for replaced text. Do not create snapshot copies.
 - [OOT_CATALOGUE.md](OOT_CATALOGUE.md) and
   [../refs/REFERENCE.md](../refs/REFERENCE.md) hold reference evidence.
+- [../refs/style/README.md](../refs/style/README.md) catalogues the owner-supplied
+  visual frames and the one job each is allowed to do.
 
 ## Hard rules
 
