@@ -51,6 +51,11 @@ func _capture_layout(rig, instrument: CivilInstruments, out: String,
 	if rig.check(layout.has(&"minimap"), "%s layout includes the minimap" % mode):
 		var map_entry: Dictionary = layout[&"minimap"]
 		var map_rect: Rect2 = map_entry[&"rect"]
+		rig.check(is_equal_approx(Pal.MINIMAP_SIZE, 126.0),
+			"shared minimap contract stays at the compact 126 px size")
+		rig.check(absf(map_rect.size.x - Pal.px(Pal.MINIMAP_SIZE,
+			viewport_size.y)) <= 1.0,
+			"minimap frame uses the compact shared size")
 		var gap := rect.position.y - map_rect.end.y
 		var expected_gap := Pal.px(CivilInstruments.MAP_GAP, viewport_size.y)
 		rig.check(absf(gap - expected_gap) <= 1.0,

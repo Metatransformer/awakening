@@ -434,7 +434,7 @@ Safe area: x ∈ [0.025, 0.975] (32 … 1248), y ∈ [0.031, 0.969] (22 … 698)
 | Element | x | y | Size | Moved? |
 |---|---|---|---|---|
 | Floor card | 0.031 (40) | 0.052 (37) | name 10 px over level 16 px, VOID@72%→34% plate, pad 6 | Plate recipe unified (decision 4.4); both lines now dim (decision 18). |
-| Minimap frame | right-align 0.969 (1240) | 0.052 (37) | 148 × 148, 8 px pad, VOID@88% on 1 px ASH | No. |
+| Minimap frame | right-align 0.969 (1240) | 0.052 (37) | 126 × 126, 8 px pad, VOID@88% on 1 px ASH | Shrunk with its Valenfeld-style companion instruments. |
 
 ### Centre and full-screen
 

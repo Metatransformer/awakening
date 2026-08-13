@@ -203,14 +203,13 @@ const CLUSTER_BOTTOM := 0.855
 ## corner it can be in: top-left is the floor card, bottom-left is the body,
 ## bottom-right is the bag and the fee.
 ##
-## Square, and sized so the widest floor in the game (the Chord Gate, 10 rooms)
-## still puts a room at ~26 px — the size at which a chest glyph is a chest and
-## not three gold pixels. Bigger than this and it starts eating the upper-middle
-## third of the frame, which is where the over-the-shoulder camera puts the
-## fight (see the note at the top of hud.gd).
+## Square, and deliberately the same compact proportion as Valenfeld's radar:
+## about 17.5% of screen height. At 126 reference px the widest dungeon still
+## gives a room enough ink for its drawn glyphs, while the map no longer eats the
+## upper-middle third where the over-the-shoulder camera puts the fight.
 const MINIMAP_RIGHT := 0.969   ## the same right edge as the bag and the fee
 const MINIMAP_TOP := 0.052     ## level with the floor card opposite it
-const MINIMAP_SIZE := 148.0    ## reference px, square
+const MINIMAP_SIZE := 126.0    ## reference px, square
 ## Padding between the minimap's frame and the map fitted inside it. The map is
 ## fitted to the FULL floor bounds, so a room on the outermost cell puts its
 ## wall right on this margin — without it the outline and the frame touch and

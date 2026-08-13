@@ -3187,16 +3187,22 @@ extra row, `ENDLESS`, returned for every level past 4 — plus
 `LONG_DESCENT_RELIC`, which is a named row rather than a field on `ENDLESS`
 because a relic in that row would drop on floor 5, 6, 7 and forever.
 
-### The map — one plan, two sizes, and the fog is the room trigger
+### The map — compact surface plans and one dungeon plan
 
-There is **one** map in this game. `Atlas` holds the plan; `MapDraw.draw_map` is
-the only thing that draws it, and it is called twice — by `Hud._draw_minimap`
-into a 148 px square in the top-right corner, and by `MenuMapPanel` into the MAP
-tab of the pause menu. Do not write a second map; a menu map that re-derived the
-layout is the one that goes stale.
+There is **one dungeon plan** in this game. `Atlas` holds it;
+`MapDraw.draw_map` is the only thing that draws it, and it is called twice — by
+`Hud._draw_minimap` into a 126 px square in the top-right corner, and by
+`MenuMapPanel` into the MAP tab of the pause menu. Do not write a second dungeon
+map; a menu map that re-derived the layout is the one that goes stale.
 
-The two differ in the size of the box and in **one flag**, `follow`. The MAP
-screen fits the whole floor into its well and centres it there. The corner
+Authored exterior zones use the same compact frame but a separate ownership
+contract: the live scene exposes immutable world-space paths, footprints and
+landmarks through `surface_map_plan()`, and `SurfaceMapDraw` only projects that
+plan around the centred player. The HUD never owns a duplicate surface layout,
+and a scene with no provider produces no empty map frame.
+
+The two dungeon presentations differ in the size of the box and in **one flag**,
+`follow`. The MAP screen fits the whole floor into its well and centres it there. The corner
 minimap holds the hero dead centre at a fixed pitch (`MapDraw.FOLLOW_SPAN`, 3.4
 cells across the box) and lets the floor scroll under him — so it is also the
 only one of the two that draws outside its box, and `box` is therefore its clip

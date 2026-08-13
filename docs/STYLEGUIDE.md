@@ -1470,12 +1470,12 @@ Not a fairy, not a triangle.
 - Off-screen locked target: an 8 px RUST chevron on the screen edge at the
   target's bearing, inset `0.028`.
 
-### 5.5b The minimap — line art, and only underground
+### 5.5b The minimap — compact line art
 
-A 148 px square, top-right, VOID @88% on a 1 px ASH border. Drawn by
-`MapDraw.draw_map` — the **same** routine that fills the pause menu's MAP tab,
-called with a smaller box. There is one map in this game; see
-`docs/CONTRACT.md` §8, "The map".
+A 126 px square, top-right, VOID @88% on a 1 px ASH border. Underground it is
+drawn by `MapDraw.draw_map` — the **same** routine that fills the pause menu's
+MAP tab, called with a smaller box. Authored exterior zones provide their own
+world-space plan to `SurfaceMapDraw`; see `docs/CONTRACT.md` §8, "The map".
 
 **It is a schematic and never a rendered camera.** Room outlines, corridors, a
 gap in a wall where a door is, and one small symbol per thing worth walking to.
@@ -1483,12 +1483,13 @@ A top-down render of the floor is a picture of the same masonry the player is
 already looking at, it cannot do fog of war without a second visibility system,
 and it is not line art.
 
-- **It only exists underground**, and only once at least one room is off the fog.
-  In the garrison there is no floor and the corner is empty — an empty corner is correct,
-  not a gap to fill.
-- **It follows the hero.** He is pinned to the middle of the square and the floor
-  scrolls under him, at a fixed pitch of 3.4 cells across the box
-  (`MapDraw.FOLLOW_SPAN`). The MAP tab still fits the whole floor, and the two
+- **It exists in authored exterior zones and underground.** Exterior plans are
+  immediately available public terrain. Dungeon geometry appears only once at
+  least one room is off the fog. A scene with neither contract draws no frame.
+- **It follows the hero.** He is pinned to the middle of the square and the map
+  scrolls under him. Dungeon floors use a fixed pitch of 3.4 cells across the
+  box (`MapDraw.FOLLOW_SPAN`); exterior plans use their scene-authored view
+  range. The MAP tab still fits the whole dungeon floor, and the two
   wanting opposite things is the point: a full-floor fit is the right picture
   when you have stopped to read it, and the wrong one at 132 px in a corner,
   where a six-room floor puts every room under 40 px and "where am I" has to be
@@ -1526,8 +1527,8 @@ spells out the nearest point plus bearing. Below it, a 24-hour line marks dawn
 and dusk, carries the current **DAY X · time**, and moves a gently pulsing sun or
 crescent across the day. The clock eases between minute targets and through
 forward time jumps in absolute campaign minutes, so midnight wraps forward
-rather than making the marker run backward. On the surface this 224×96 stack
-occupies the minimap slot; underground it begins 8 px below the 148 px map.
+rather than making the marker run backward. The compact 126×68 companion stack
+begins 8 px below the 126 px map in authored exterior zones and underground.
 
 The one glyph set this project did NOT use: `~/valenfeld`'s map icons. They are
 256 px painterly round world-map POI tokens in a warmer palette, they are
@@ -1537,8 +1538,9 @@ map most needed.
 ### 5.6 Always visible vs. transient
 
 **ALWAYS — these instruments, nothing else:** the health bar, the stamina bar,
-the compact equipment strip, the bag (rim and slips — no total), and —
-underground only — the minimap. Each is a state or binding the player must
+the compact equipment strip, the bag (rim and slips — no total), and the
+minimap in authored exterior zones or underground. Each is a state or binding
+the player must
 be able to consult unprompted, because each feeds the single recurring decision
 — push on, or leave. The minimap earns the seventh slot on that same test: how
 far from the stair you are is the other half of "can I afford one more room".
@@ -1662,7 +1664,7 @@ point, and a fourth right edge is what made the column read as ragged.
 | Element | x | y | Size |
 |---|---|---|---|
 | Floor card | 0.031 (40) | 0.052 (37) | name 10 px over level 16 px, **both BONE announcing and both MOTH settled**, world plate fading 72% → 34% |
-| Minimap frame | right-align 0.969 (1240) | 0.052 (37) | 148 × 148, 8 px pad, VOID@88% on 1 px ASH |
+| Minimap frame | right-align 0.969 (1240) | 0.052 (37) | 126 × 126, 8 px pad, VOID@88% on 1 px ASH |
 
 #### Centre and full-screen
 
