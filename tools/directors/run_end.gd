@@ -81,7 +81,7 @@ func _death_leg(rig) -> void:
 		_fail("BACK TO THE GARRISON did not go to the garrison (scene=%s)" % rig.scene().name)
 		return
 	print("REND home paused=%s level=%d hp=%d/%d" % [
-		rig.paused, Run.level, Game.quarters, Game.max_quarters])
+		rig.paused, Run.level, Game.health_points, Game.max_health_points])
 	if rig.paused:
 		_fail("the tree is still paused in the garrison")
 	if Run.level != 1:

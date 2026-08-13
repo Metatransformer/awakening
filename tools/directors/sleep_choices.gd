@@ -65,10 +65,10 @@ func _exercise(rig, garrison: Garrison, rested_slots: Array[int]) -> void:
 	Run.in_dungeon = false
 	Game.upgrades[ElderUpgradeDb.BED_ID] = 2
 	Game.upgrades.erase(ElderUpgradeDb.REVEILLE_ID)
-	Game.quarters = K.QUARTER
+	Game.health_points = K.HEALTH_POINT
 	Game.set_temporary_overhealth(0)
 	Game.stamina = 0.0
-	Bus.player_health_changed.emit(Game.quarters, Game.max_quarters)
+	Bus.player_health_changed.emit(Game.health_points, Game.max_health_points)
 	Bus.stamina_changed.emit(Game.stamina, Game.max_stamina)
 	for slot in Saves.SLOTS:
 		Saves.erase(slot)
@@ -182,12 +182,12 @@ func _exercise(rig, garrison: Garrison, rested_slots: Array[int]) -> void:
 		return
 	rig.check(Clock.day == 3 and is_equal_approx(Clock.hour, 20.0),
 		"nightfall sleep lands on Day 3 at exactly 20:00")
-	rig.check(Game.quarters == Game.max_quarters,
+	rig.check(Game.health_points == Game.max_health_points,
 		"successful sleep fully restores real health")
 	rig.check(is_equal_approx(Game.stamina, Game.max_stamina),
 		"successful sleep fully restores stamina")
-	rig.check(Game.temporary_overhealth == 2 * K.QUARTER,
-		"Better Bed rank two grants two temporary quarters")
+	rig.check(Game.temporary_overhealth == 2 * K.HEALTH_POINT,
+		"Better Bed rank two grants two temporary HP")
 	rig.check(Saves.active_slot == 0 and Saves.has_save(0)
 		and rested_slots == [0],
 		"successful sleep autosaves slot one and emits rested with that slot")
@@ -335,7 +335,7 @@ func _backup_state(rig) -> bool:
 	_clock_before = Clock.snapshot().duplicate(true)
 	_garrison_before = Game.garrison_snapshot().duplicate(true)
 	_upgrades_before = Game.upgrades.duplicate(true)
-	_quarters_before = Game.quarters
+	_quarters_before = Game.health_points
 	_temporary_overhealth_before = Game.temporary_overhealth
 	_stamina_before = Game.stamina
 	_run_in_dungeon_before = Run.in_dungeon
@@ -366,10 +366,10 @@ func _restore_state(rig) -> void:
 	Clock.restore(_clock_before)
 	Game.restore_garrison(_garrison_before)
 	Game.upgrades = _upgrades_before.duplicate(true)
-	Game.quarters = _quarters_before
+	Game.health_points = _quarters_before
 	Game.set_temporary_overhealth(_temporary_overhealth_before)
 	Game.stamina = _stamina_before
-	Bus.player_health_changed.emit(Game.quarters, Game.max_quarters)
+	Bus.player_health_changed.emit(Game.health_points, Game.max_health_points)
 	Bus.stamina_changed.emit(Game.stamina, Game.max_stamina)
 	Run.in_dungeon = _run_in_dungeon_before
 	Flow.deliberate_rest = _deliberate_rest_before

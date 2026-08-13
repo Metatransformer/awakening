@@ -3512,7 +3512,7 @@ func set_blocking(on: bool) -> void:
 ##
 ## Returns true if the blow actually landed.
 func take_hit(hit: Hit) -> bool:
-	if hit == null or hit.amount <= 0 or Game.quarters <= 0:
+	if hit == null or hit.amount <= 0 or Game.health_points <= 0:
 		return false
 
 	# **A blow ends the meal, and it ends it BEFORE anything below decides whether
@@ -3586,7 +3586,7 @@ func take_hit(hit: Hit) -> bool:
 	Run.last_attacker = hit.source
 	# Armour never zeroes a blow. A build that cannot be hurt turns the whole
 	# extraction decision into a formality.
-	Game.damage(maxi(K.QUARTER, hit.amount - Game.armour_soak()))
+	Game.damage(maxi(K.HEALTH_POINT, hit.amount - Game.armour_soak()))
 
 	# --- Card #130: what the blow is worth, decided once ---------------------
 	#

@@ -129,7 +129,7 @@ func _sweep(rig) -> void:
 ## the chain is not a resource you can buy your way out of losing.
 func _struck(rig) -> void:
 	var before := Heat.tier
-	Game.damage(2 * K.QUARTER)
+	Game.damage(2 * K.HEALTH_POINT)
 	# Two frames, not six. Bus signals are synchronous, so the break has already
 	# landed; the wait is only to let the HUD repaint, and every extra frame is
 	# eating into the flash this beat exists to photograph.
@@ -145,7 +145,7 @@ func _struck(rig) -> void:
 	# and a capture costs real seconds, so a natural step-down between the two
 	# reads is legal; what must never happen is the chain going back UP.
 	var after_break := Heat.tier
-	Game.heal(Game.max_quarters)
+	Game.heal(Game.max_health_points)
 	await rig.wait_frames(6)
 	_expect(Heat.tier <= after_break, "healing does not restore the chain")
 	await rig.capture(out.path_join("h_05b_healed.png"))
@@ -171,7 +171,7 @@ func _kill_one(rig) -> bool:
 		var hp = n.get(&"health")
 		if hp == null or hp.dead:
 			continue
-		hp.apply_hit(Hit.make(hp.quarters + 4, n.global_position, &"director", 0.0))
+		hp.apply_hit(Hit.make(hp.health_points + 4, n.global_position, &"director", 0.0))
 		return true
 	return false
 

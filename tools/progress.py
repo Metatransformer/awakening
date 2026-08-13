@@ -33,7 +33,7 @@ PIECES = [
     ("P9", "Dungeon graph", "Cyclic layout, small keys, locked doors, item gate, boss key"),
     ("P10", "Enemies", "Roster, AI, targetable, telegraphs, death"),
     ("P11", "Boss", "Arena, phases, telegraphs, item-tied vulnerability"),
-    ("P12", "HUD", "Hearts, magic, C-buttons, rupees, reticle, minimap"),
+    ("P12", "HUD", "Health points, magic, C-buttons, rupees, reticle, minimap"),
     ("P13", "Feel &amp; audio", "Hitstop, shake, footsteps, sfx, music, transitions"),
     ("P14", "Pause menu", "Escape menu, save slots, audio/graphics/control options"),
 ]

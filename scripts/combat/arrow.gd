@@ -29,10 +29,10 @@ extends Node3D
 ## the arrow at whatever it crosses, which is the exact opposite of what a
 ## convert volume wants; merging them is a flame the arrow sticks in.
 
-## Quarter-hearts. Half a heart, same as the sword — the bow's advantage is
+## 2 HP, same as the sword — the bow's advantage is
 ## reach, not damage, and a bow that also out-damages the blade is the only
 ## weapon anyone brings. [tune]
-const DAMAGE := 2 * K.QUARTER
+const DAMAGE := 2
 const KNOCKBACK := K.KNOCKBACK_LIGHT
 ## Seconds a spent arrow stays stuck in whatever it hit before it disappears.
 const LINGER := 2.5

@@ -131,7 +131,7 @@ func run(rig) -> void:
 	# statue is what the card's evidence was.
 	#
 	# Healed to full first, and so is the standing beat below. Each beat is a
-	# separate question and a hero who walks into the second room on the hearts
+	# separate question and a hero who walks into the second room on current HP
 	# the first one left him is answering a THIRD one -- the first cut had the
 	# statue beat starting at 6 of 12 because the fight beat had just happened,
 	# and "died in 5.1 s" meant nothing at all.
@@ -142,15 +142,15 @@ func run(rig) -> void:
 		var cell: Vector2i = rooms_walked[0]
 		var tag := "fight%s" % [cell]
 		cleared.append(cell)
-		Game.heal(Game.max_quarters)
+		Game.heal(Game.max_health_points)
 		if await _approach(rig, d, hero, cell, tag):
 			await _capture(rig, "arrived_fight")
-			var hp0: int = Game.quarters
+			var hp0: int = Game.health_points
 			var killed := await _fight(rig, d, hero, stand_for, tag)
 			await _capture(rig, "fought")
 			deaths_after_fight = Game.deaths
 			fought = "%d of %d killed, hp %d -> %d, died=%s" % [
-				killed, int(census["per"][cell]), hp0, Game.quarters,
+				killed, int(census["per"][cell]), hp0, Game.health_points,
 				deaths_after_fight > deaths_before]
 			print("CROWD %s: %s" % [tag, fought])
 
@@ -168,7 +168,7 @@ func run(rig) -> void:
 	# cleared room and a full one is not the two-rooms-at-once question.
 	var pair := _adjacent_pair(d, census["per"], cleared)
 	if not pair.is_empty() and Game.deaths == deaths_before:
-		Game.heal(Game.max_quarters)
+		Game.heal(Game.max_health_points)
 		corridor = await _corridor_stand(rig, d, hero, pair[0], pair[1], stand_for)
 
 	# And the card's own scenario at a real frame rate: walk in, then stand
@@ -180,16 +180,16 @@ func run(rig) -> void:
 	if not rooms_walked.is_empty() and Game.deaths == deaths_before:
 		var cell: Vector2i = rooms_walked[mini(1, rooms_walked.size() - 1)]
 		var tag := "stand%s" % [cell]
-		Game.heal(Game.max_quarters)
+		Game.heal(Game.max_health_points)
 		if await _approach(rig, d, hero, cell, tag):
 			await _capture(rig, "arrived_stand")
-			var hp0: int = Game.quarters
+			var hp0: int = Game.health_points
 			print("CROWD %s standing still for %.0f game seconds at hp=%d" % [
 				tag, stand_for, hp0])
 			await _sample_seconds(rig, d, hero, stand_for, tag)
 			await _capture(rig, "stood")
 			stood = "%d bodie(s), hp %d -> %d, died=%s" % [
-				int(census["per"][cell]), hp0, Game.quarters,
+				int(census["per"][cell]), hp0, Game.health_points,
 				Game.deaths > deaths_at_stand]
 			print("CROWD %s: %s" % [tag, stood])
 
@@ -447,13 +447,13 @@ func _corridor_stand(rig, d: Node, hero: Node3D, a: Vector2i, b: Vector2i,
 	await _face(rig, hero, _cell_world(d, b))
 	print("CROWD corridor between %s and %s -- standing %.0f s in the middle"
 		% [a, b, secs])
-	var hp: int = Game.quarters
+	var hp: int = Game.health_points
 	var deaths0: int = Game.deaths
 	await _sample_seconds(rig, d, hero, secs, "corridor %s|%s" % [a, b])
 	await _capture(rig, "corridor")
 	var line := "%s(%d) + %s(%d), hp %d -> %d, died=%s" % [
 		a, _per_now(hero, _cell_world(d, a)), b, _per_now(hero, _cell_world(d, b)),
-		hp, Game.quarters, Game.deaths > deaths0]
+		hp, Game.health_points, Game.deaths > deaths0]
 	print("CROWD corridor stood %.0f s: %s" % [secs, line])
 	return line
 
@@ -517,7 +517,7 @@ func _walk_to(rig, d: Node, hero: Node3D, to: Vector3, tag: String) -> void:
 	await rig.wait_physics_frames(2)
 	var gap := K.plane(to - hero.global_position).length()
 	print("CROWD %s stopped %.1f m short after %.1f s (hp=%d)" % [
-		tag, gap, LEG_SECONDS - left, Game.quarters])
+		tag, gap, LEG_SECONDS - left, Game.health_points])
 
 
 ## Hold the four move actions at the strengths whose camera-relative sum is

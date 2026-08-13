@@ -2,7 +2,7 @@ extends RefCounted
 ## **Food and drink, bought over the counter and eaten sitting down.** Card #98,
 ## `docs/METAGAME.md` §6.4.
 ##
-## The item is not the heal. Hardtack gives back one heart over TWELVE SECONDS
+## The item is not the heal. Hardtack gives back 4 HP over TWELVE SECONDS
 ## and Small Beer one spin's worth of magic over the same, and both of them are
 ## paid for by standing still for that long with nothing else happening -- so the
 ## thing this director has to prove is the twelve seconds, not the arithmetic.
@@ -25,12 +25,12 @@ extends RefCounted
 ##      `selected_item()` is the biscuit.
 ##   D  The sit. One press of X and he is DOWN -- rooted, in the rest pose, with
 ##      the gauge on screen -- and it fills as the meal runs.
-##   E  The ticks. A whole hardtack pays exactly `K.MEAL_HEAL` quarters, in
+##   E  The ticks. A whole hardtack pays exactly `K.MEAL_HEAL` HP, in
 ##      `RationDb.ticks()` steps, and a whole small beer pays `K.MEAL_MAGIC`
 ##      magic. The stack went down by one and only one.
 ##   F  The interruptions, which are the item. A step ends it, a blow ends it,
 ##      and NEITHER gives the ration back.
-##   G  The refusals with a known answer: a full heart row will not let you eat
+##   G  The refusals with a known answer: a full health bar will not let you eat
 ##      at all, and a full blue bar will not let you drink.
 ##
 ## ## The calibration, and which direction it runs (CLAUDE.md §2)
@@ -154,7 +154,7 @@ func _counter(rig) -> void:
 			int(row["line"]["cost"]) > 0
 				and (row["line"].get("parts", {}) as Dictionary).is_empty())
 		# The blurb has to say the twelve seconds. That sentence IS the item -- a
-		# row reading "+1 heart" would be describing a cheaper Heart Draught, which
+		# row reading "+4 HP" would be describing a cheaper Health Draught, which
 		# is the one thing this must not read as (`RationDb.effect_of`).
 		_ck("B7 %s says what it costs in TIME (%s)" % [id, row["line"]["blurb"]],
 			String(row["line"]["blurb"]).contains("%ds" % int(K.MEAL_TIME)))
@@ -233,11 +233,11 @@ func _sit(rig) -> void:
 	if hero == null:
 		_ck("D0 there is a hero to feed", false)
 		return
-	# Hurt first, or `begin_meal` refuses a full heart row and every check below
+	# Hurt first, or `begin_meal` refuses a full health bar and every check below
 	# fails for the right reason at the wrong time. Half a row, so the whole
 	# ration fits inside the headroom and E can assert an exact total.
-	Game.quarters = maxi(1, Game.max_quarters / 2)
-	Bus.player_health_changed.emit(Game.quarters, Game.max_quarters)
+	Game.health_points = maxi(1, Game.max_health_points / 2)
+	Bus.player_health_changed.emit(Game.health_points, Game.max_health_points)
 	var where := hero.global_position
 
 	# **The button, not the function.** `Game.begin_meal` is what X reaches; a
@@ -309,17 +309,17 @@ func _ticks(rig) -> void:
 		RationDb.ticks() * RationDb.per_tick(&"small_beer") == K.MEAL_MAGIC)
 
 	# FOOD, weighed end to end. Bracketed immediately either side of one meal.
-	Game.quarters = maxi(1, Game.max_quarters / 2)
-	var health_before := Game.quarters
+	Game.health_points = maxi(1, Game.max_health_points / 2)
+	var health_before := Game.health_points
 	var stack_before := Game.ration_count(&"hardtack")
 	_ck("E3 a meal begins", Game.begin_meal(&"hardtack"))
 	_ck("E4 and the biscuit leaves the pack on the FIRST frame (%d -> %d)"
 		% [stack_before, Game.ration_count(&"hardtack")],
 		Game.ration_count(&"hardtack") == stack_before - 1)
 	await _wait_until(rig, func() -> bool: return not Game.eating(), 900)
-	_ck("E5 the whole biscuit paid exactly %d quarters (%d -> %d)"
-		% [K.MEAL_HEAL, health_before, Game.quarters],
-		Game.quarters == health_before + K.MEAL_HEAL)
+	_ck("E5 the whole biscuit paid exactly %d HP (%d -> %d)"
+		% [K.MEAL_HEAL, health_before, Game.health_points],
+		Game.health_points == health_before + K.MEAL_HEAL)
 
 	# DRINK. The blue bar is the one nothing else in the game refills outside a
 	# run boundary (`Game.fill_magic`), which makes it the cleaner of the two
@@ -343,7 +343,7 @@ func _ticks(rig) -> void:
 # --- F. The interruptions -----------------------------------------------------
 
 ## **This is the item.** Everything above is a heal on a delay; what makes a
-## ration a stopgap rather than a cheap Heart Draught is that anything at all
+## ration a stopgap rather than a cheap Health Draught is that anything at all
 ## takes it away from you, and that you have already paid for it when it does.
 func _interrupt(rig) -> void:
 	var hero := _hero(rig)
@@ -352,33 +352,33 @@ func _interrupt(rig) -> void:
 
 	# A STEP. Held long enough to clear the stick deadzone for a frame or two and
 	# no longer -- the claim is that walking ends it, not that walking a metre does.
-	Game.quarters = maxi(1, Game.max_quarters / 2)
+	Game.health_points = maxi(1, Game.max_health_points / 2)
 	var stack_before := Game.ration_count(&"hardtack")
 	_ck("F0 a meal begins", Game.begin_meal(&"hardtack"))
 	await rig.wait_seconds(K.MEAL_TICK + 0.4)
-	var paid := Game.quarters
+	var paid := Game.health_points
 	_ck("F1 it has paid at least one tick by %.0fs (%d)"
-		% [K.MEAL_TICK, paid], paid > Game.max_quarters / 2)
+		% [K.MEAL_TICK, paid], paid > Game.max_health_points / 2)
 	await rig.hold_seconds(["move_left"], 0.35)
 	_ck("F2 a step ends it", not Game.eating())
 	_ck("F3 and the biscuit is NOT given back (%d -> %d)"
 		% [stack_before, Game.ration_count(&"hardtack")],
 		Game.ration_count(&"hardtack") == stack_before - 1)
-	_ck("F4 while the ticks it already paid are kept (%d)" % Game.quarters,
-		Game.quarters == paid)
+	_ck("F4 while the ticks it already paid are kept (%d)" % Game.health_points,
+		Game.health_points == paid)
 	await rig.wait_frames(20)
 	var up := float(hero._tree.get("parameters/Rest/blend_amount"))
 	_ck("F5 and he is on his feet again (blend %.2f)" % up, up < 0.5)
 
 	# A BLOW. `Hero.take_hit` cancels at the very top, before it decides whether
 	# the blow even lands, so this holds however the hit resolves.
-	Game.quarters = maxi(2, Game.max_quarters / 2)
+	Game.health_points = maxi(2, Game.max_health_points / 2)
 	stack_before = Game.ration_count(&"hardtack")
 	_ck("F6 another meal begins", Game.begin_meal(&"hardtack"))
 	await rig.wait_frames(20)
 	_ck("F7 he is seated for it", Game.eating())
 	var hit := Hit.new()
-	hit.amount = K.QUARTER
+	hit.amount = K.HEALTH_POINT
 	hit.from = hero.global_position + Vector3(0.0, 0.0, 2.0)
 	hero.take_hit(hit)
 	_ck("F8 a blow ends it", not Game.eating())
@@ -395,10 +395,10 @@ func _interrupt(rig) -> void:
 ## something and watched it happen; this asks it to do something whose answer is
 ## already *nothing* and watches nothing happen.
 func _refusals(rig) -> void:
-	Game.quarters = Game.max_quarters
-	Bus.player_health_changed.emit(Game.quarters, Game.max_quarters)
+	Game.health_points = Game.max_health_points
+	Bus.player_health_changed.emit(Game.health_points, Game.max_health_points)
 	var stack := Game.ration_count(&"hardtack")
-	_ck("G0 a full heart row refuses the biscuit", not Game.begin_meal(&"hardtack"))
+	_ck("G0 a full health bar refuses the biscuit", not Game.begin_meal(&"hardtack"))
 	_ck("G1 and refusing costs nothing (%d)" % Game.ration_count(&"hardtack"),
 		Game.ration_count(&"hardtack") == stack)
 	_ck("G2 nobody sat down", not Game.eating())
@@ -410,7 +410,7 @@ func _refusals(rig) -> void:
 		Game.ration_count(&"small_beer") == cups)
 
 	# The PRESS, not just the function -- the whole chain pointed at the known
-	# answer. X on a full heart row must be a silent no-op and not a hero who sits
+	# answer. X on a full health bar must be a silent no-op and not a hero who sits
 	# down for twelve seconds and gets up again having eaten a biscuit.
 	Game.wheel_select(SLOT)
 	await rig.tap(["use_item"])
@@ -423,7 +423,7 @@ func _refusals(rig) -> void:
 	# An empty stack is the other end of the same question.
 	Game.rations.erase(&"hardtack")
 	Bus.rations_changed.emit(Game.rations)
-	Game.quarters = maxi(1, Game.max_quarters / 2)
+	Game.health_points = maxi(1, Game.max_health_points / 2)
 	_ck("G7 an empty stack refuses too", not Game.begin_meal(&"hardtack"))
 	await rig.wait_frames(6)
 	await rig.capture(out.path_join("r_09_refused.png"))

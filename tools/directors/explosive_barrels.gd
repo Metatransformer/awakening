@@ -124,9 +124,9 @@ func _a_direct_hits(rig) -> void:
 	_hero.set(&"velocity", Vector3.ZERO)
 	_hero.set(&"_invuln", 0.0)
 	await rig.wait_physics_frames(4)
-	var hero_before := Game.quarters
-	var enemy_before := hp.quarters
-	sword_barrel.apply_hit(Hit.make(K.QUARTER,
+	var hero_before := Game.health_points
+	var enemy_before := hp.health_points
+	sword_barrel.apply_hit(Hit.make(K.HEALTH_POINT,
 		sword_barrel.global_position + Vector3.BACK, &"sword"))
 	_ok(rig, "A3 a sword Hit starts the same fuse contract",
 		sword_barrel.is_fusing() and _count(&"sword") == 0)
@@ -136,9 +136,9 @@ func _a_direct_hits(rig) -> void:
 		return _count(&"sword") == 1, 2.0)
 	_ok(rig, "A4 the sword-lit barrel explodes exactly once", sword_blast)
 	_ok(rig, "A5 its Hit reaches the real hero through take_hit",
-		Game.quarters < hero_before)
+		Game.health_points < hero_before)
 	_ok(rig, "A6 and reaches an enemy through HealthComponent.apply_hit",
-		hp.quarters < enemy_before)
+		hp.health_points < enemy_before)
 	await rig.wait_physics_frames(4)
 	await rig.capture(_out.path_join("04_sword_explosion.png"))
 	_park_hero()
@@ -159,7 +159,7 @@ func _b_three_barrel_chain(rig) -> void:
 	await rig.wait_physics_frames(4)
 	await rig.capture(_out.path_join("05_three_barrels_intact.png"))
 
-	first.apply_hit(Hit.make(K.QUARTER, first.global_position + Vector3.BACK,
+	first.apply_hit(Hit.make(K.HEALTH_POINT, first.global_position + Vector3.BACK,
 		&"sword"))
 	_ok(rig, "B0 one direct blow lights only the first barrel",
 		first.is_fusing() and not second.is_fusing() and not third.is_fusing())
@@ -195,7 +195,7 @@ func _c_hanging_lantern(rig) -> void:
 	rig.scene().add_child(lantern)
 	await rig.wait_physics_frames(4)
 
-	lantern.apply_hit(Hit.make(K.QUARTER, lantern.global_position + Vector3.BACK,
+	lantern.apply_hit(Hit.make(K.HEALTH_POINT, lantern.global_position + Vector3.BACK,
 		&"sword"))
 	_ok(rig, "C0 the control holds: a non-arrow blow does not sever the chain",
 		not lantern.has_severed())
@@ -233,7 +233,7 @@ func _c_hanging_lantern(rig) -> void:
 
 func _d_enemy_thrower(rig) -> void:
 	_point_camera(Vector3(6.8, 4.2, 7.2), Vector3(-0.6, 0.82, -1.0))
-	Game.heal(Game.max_quarters)
+	Game.heal(Game.max_health_points)
 	_hero.global_position = Vector3(3.0, FLOOR_Y + 0.03, -1.0)
 	_hero.set(&"velocity", Vector3.ZERO)
 	_hero.set(&"_invuln", 0.0)
@@ -325,7 +325,7 @@ func _enemy_contract(parent: Node, at: Vector3) -> CharacterBody3D:
 	body.add_child(shape_node)
 	var health := HealthComponent.new()
 	health.name = "Health"
-	health.max_quarters = 4 * K.HEART
+	health.max_health_points = 16
 	health.iframe_time = 0.0
 	body.add_child(health)
 	parent.add_child(body)

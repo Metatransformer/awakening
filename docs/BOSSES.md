@@ -133,7 +133,7 @@ already standing in reach who presses on the frame the window opens:
 |---|---|---|
 | 1st light | **0.132 – 0.372 s** | — |
 | 2nd light | **0.721 – 0.942 s** | the chain buffer |
-| 3rd light — the finisher | **1.370 – 1.766 s** | +2 quarters, `KNOCKBACK_HEAVY` |
+| 3rd light — the finisher | **1.370 – 1.766 s** | +2 HP, `KNOCKBACK_HEAVY` |
 
 **1.37 s is the finisher line.** What it gets measured against is *not* a beat's
 `punish` on its own, and an earlier draft of this section made exactly that
@@ -172,10 +172,10 @@ blow genuinely reached the hero inside `DODGE_GRACE` 0.30 s of the roll starting
 and pays `SLOWMO_SCALE` 0.34 for 0.55 s plus `FLURRY_WINDOW` 1.40 s of leaping
 overhead.
 
-**A starting hero holds 12 quarters** (`K.START_HEARTS` × `K.HEART`). The
-Warden's beats take 3 and 4 of them; the Riven Knight's take 6. Floor 4 is two
-blows from a hero who never bought a heart, and that is the ladder stated in one
-number rather than a difficulty setting.
+**A starting hero holds 12 HP** (`K.START_HEALTH_POINTS`). The Warden's beats
+deal 3 and 4 HP; the Riven Knight's deal 6 HP. Floor 4 is two blows from a hero
+who never bought a health upgrade, and that is the ladder stated in one number
+rather than a difficulty setting.
 
 ---
 
@@ -291,9 +291,10 @@ having, because both are routinely mis-stated:
   Long Descent (floor 14 computes 0.61; floor 15 computes 0.58 and is clamped).
 - A boss's summoned adds carry the **boss's** floor, not `Run.level`:
   `_shape_summon` passes it to `Enemy.spawn` as an argument. A `call_the_iron`
-  wraith is **35 quarters and 6 damage**, and a `hushing_choir` skeleton is 9.
-  For most of this document's life they were 20 and 5, and 6 — the level was
-  written on the line *after* `spawn`, which had already run `add_child` and let
+  wraith is **35 HP and 6 HP damage**, and a `hushing_choir` skeleton is 9 HP.
+  For most of this document's life they were 20 HP with 5 HP damage, and 6 HP —
+  the level was written on the line *after* `spawn`, which had already run
+  `add_child` and let
   `_build_combat` latch the curve off the `Prog.FIRST` default, so both fights
   summoned floor-1 bodies with a perfectly correct `level` sitting on them
   (board card 22, fixed 2026-08-11). The check is `boss_cistern.gd` section O,
@@ -458,7 +459,7 @@ obvious one:
 - **`keystone` is the cheap one and it is also the late one.** One body, one
   `HookTarget`, no guard needed — the arena has 12.5 m of radius and the mass is
   3 m across at the centre, where nothing stands. What it costs is elsewhere: see
-  §6.4 on the first sixty-four quarters.
+  §6.4 on the first 64 HP.
 
 **Why `douse` is safe at all**, since GDD pillar 5 says a silhouette you cannot
 read is a bug and not atmosphere: the beats' floor markers are built
@@ -552,7 +553,7 @@ a hero who parries a pool while standing on the boss will occasionally get an
 opening the rest of the fight is not teaching him to expect. That is a quirk to
 photograph, not a rule to build on.
 
-**The turn, at 24 of 48 quarters: `shrink`, 11.0 → 8.5 m.** The intake it has
+**The turn, at 24 of 48 HP: `shrink`, 11.0 → 8.5 m.** The intake it has
 been guarding for four hundred years finally gives, the standing water drops, and
 the fence walks in two and a half metres. Everything that follows is arithmetic
 already in the table, not a new rule: past 7.5 m `drown_pool` is the only
@@ -729,7 +730,7 @@ contact, so throw it for the opening as well as for the refusal.
 `tap_the_ladle`: roll, and walk out early; three discs on a 1.30 s fuse is the
 most floor-reading the game asks for anywhere.
 
-**The turn, at 36 of 72 quarters: `topple`, cover 3 → 1.** The crucible above the
+**The turn, at 36 of 72 HP: `topple`, cover 3 → 1.** The crucible above the
 arena lets go and two of the three slag pillars slump into puddles that are no
 longer tall enough to break a lane. The fight's own decision — *spend a pillar or
 take the charge* — gets scarcer rather than louder, and the arrow answer and the
@@ -761,7 +762,7 @@ children; no beat changes.**
 >
 > *This epigraph used to read "and the Burst is the only thing that takes a
 > chorus out in one breath". Board card 73 measured the breath: 0.6 s off one
-> chorister and 1.5 s off the other, and two of the caster's own quarters. See
+> chorister and 1.5 s off the other, and 2 HP from the caster. See
 > the measurement below.*
 
 Floor 3. The player is carrying **the Burst**, taken off the Slag Ogre, and the
@@ -887,8 +888,8 @@ seconds exist — and these are the seconds that *do*:
 `tools/directors/boss_cistern.gd`. Both readings of "clears" are now numbers
 rather than arguments, and neither survives:
 
-- **It does not kill.** `K.BOMB_DAMAGE` is 2 quarters and a chorister curves to
-  **9** at the boss's floor, so one body is **5 blasts and the pair is 10** — the
+- **It does not kill.** `K.BOMB_DAMAGE` is 2 HP and a chorister curves to
+  **9 HP** at the boss's floor, so one body is **5 blasts and the pair is 10** — the
   whole `K.BURST_CHARGES_MAX` stock of 12, inside a 6.00 s window. Card #22 moved
   the number under this sentence (a chorister used to read 6, which was 3 blasts
   each), so #22 made a false sentence falser; it did not make a true one false.
@@ -915,7 +916,7 @@ rather than arguments, and neither survives:
   neighbour in the room, the net displacement is about half that. **The window it
   would have had to buy is 4.66 s**: the choir arrives 1.34 s into the 6.00 s,
   and "spend the rest of it on the boss" is a claim about all of what is left.
-- **And it costs two of the caster's own quarters.** `K.BOMB_HURTS_OWNER` is true
+- **And it costs 2 HP from the caster.** `K.BOMB_HURTS_OWNER` is true
   and `burst_cast.gd` has no owner check. The pair converges on the hero and
   stands **2.65 m apart** once both are on him, so the one point that reaches both
   is **1.38 m from him** — inside `K.BOMB_RADIUS` (1.94 m). There is no version of
@@ -947,15 +948,15 @@ as the one to defend, and it is already spent twice over in this document.
 **Decision: the sentence was wrong. Nothing moves.**
 
 **What the Burst is for here, then: a panic button.** One charge, about a second
-of daylight, two quarters of your own, for the moment both choristers are on you
+of daylight, 2 HP of your own, for the moment both choristers are on you
 and you would rather they were not. That is a real thing to own and it is not the
 answer to the beat. It is a **pressure** answer rather than a **wall** answer, and
 §7's grade of floor 3 as *pressure, not a lock* is unchanged — if anything the
 measurement says it twice over.
 
 **Why not the sword, then — and the answer is that it *is* the sword, at a
-price.** A chorister is 9 quarters against a light swing's
-`2 + K.EDGE_DAMAGE[rung]`: **5 swings on an unforged blade and 2 at rung 3**, so
+price.** A chorister is 9 HP against a light swing's
+`2 + K.EDGE_DAMAGE[rung]` HP: **5 swings on an unforged blade and 2 at rung 3**, so
 the pair is 10 swings or 4. That is arithmetic off two tables and **not** a
 measurement, and it is flagged as such — but the shape of it is the trade this
 section always described from the other side, because those swings come out of
@@ -985,7 +986,7 @@ spread/blue/no mark, tilt/white/no mark until the commit.
 
 - *Fast, and it is not a clear:* one blast into the pair as they close. Measured,
   above: it buys **0.6 s off one of them and 1.5 s off the other**, and takes
-  two of your own quarters doing it. What it is *for* is getting a body off you;
+  2 HP of your own doing it. What it is *for* is getting a body off you;
   what it is *not* is a strip, and the rest of the window is bought with blade
   swings out of the punish rather than with a charge. This bullet used to read
   *"then back onto the boss inside the 6 s… the rest of the strip window spent on
@@ -1014,9 +1015,9 @@ no damage, so nothing ever reaches the hero to react to. That is the single
 reason this boss's answer is an area weapon rather than a timing read, and it is
 what stops the four fights from all being *parry the big one*. `undertow`: one
 disc, drawn under the hero, on a 1.20 s fuse — roll, and note that standing still
-behind a raised shield takes all five quarters (§3).
+behind a raised shield takes all 5 HP (§3).
 
-**The turn, at 48 of 96 quarters: `douse`.** The Choir's sconces go out. The room
+**The turn, at 48 of 96 HP: `douse`.** The Choir's sconces go out. The room
 is read by the boss's own violet emission and by the unshaded marks on the floor,
 which is the reason the marks were built unshaded in the first place. The fight's
 numbers do not move at all; what changes is that the tightening ring of
@@ -1113,7 +1114,7 @@ fan, spread/violet/no mark.
   a reposition rather than an escape. **"After the turn" is doing a great deal of
   work in that sentence, and it should be said out loud: the keystone is the only
   `HookTarget` in the arena, the turn puts it there at half health, and the
-  Knight's bar is 128 quarters. For the first 64 of them — half the fight, and
+  Knight's bar is 128 HP. For the first 64 HP — half the fight, and
   the half in which the player is learning it — the item the whole floor-4
   diagonal is built on has nothing in the room to attach to.** The hookshot is
   not useless before the turn (it is still a freeze on a wraith and still a pull
@@ -1137,22 +1138,22 @@ charge on the shortest tell — and it pays 0.42 s plus whatever was left of
 **0.80 s** of travel. `riven_arc` is the beat that shows what the parry becomes
 at floor 4, and what it becomes is *smaller, not different*: **0.24 s** of window
 — a third of what `cistern_drop` hands over on floor 1, still an extra contact,
-and on top of it six quarters of damage refused and a 1.20 s dash into a body
+and on top of it 6 HP of damage refused and a 1.20 s dash into a body
 that has just spent its fastest move. The parry never stops being worth throwing;
 it stops being worth throwing *for the window alone*. `call_the_iron` is
 unparryable and undodgeable, like every summon, and pays the longest punish in
 the game (2.10 s) for it.
 
 **Balance note, and it is the honest one about this fight.** The two called
-wraiths are 35 quarters and 6 damage each at floor 4 — **55% of the boss's own
-128-quarter bar, standing next to it.** They were 20 and 5 until card 22 landed
-on 2026-08-11, so this is now a heavier beat than anything anyone has played,
-and it is measured: `boss_cistern.gd` section O prints the quarter-hearts off
+wraiths are 35 HP and deal 6 HP damage each at floor 4 — **55% of the boss's own
+128 HP bar, standing next to it.** They were 20 HP and 5 HP damage until card 22
+landed on 2026-08-11, so this is now a heavier beat than anything anyone has played,
+and it is measured: `boss_cistern.gd` section O prints the HP off
 the bodies themselves. `cap: 2` and an 8.00 s cooldown are the only things
 holding the fight's length down, and this is the beat to watch when the Chord
 Gate is first played end to end.
 
-**The turn, at 64 of 128 quarters: `keystone`.** The Chord Gate's broken keystone
+**The turn, at 64 of 128 HP: `keystone`.** The Chord Gate's broken keystone
 comes down into the middle of the arena — one mass about 3 m across, with a
 `HookTarget` at 2.4 m on it. Three consequences, all of them already in the code:
 `gate_lunge` can no longer cross the middle of the room, because
@@ -1233,15 +1234,15 @@ instant the string leaves his fingers):
 
 | The arrow | The plate travelled | Boss | Hero | `punish_opened` |
 |---|---|---|---|---|
-| into the **travel** | **2.38 m** of 11.0 | −2 q | **untouched, 12 q** | 1.70 s |
-| into the **wind-up** | 10.83 m of 11.0 | −2 q | 12 → 8 q | 1.70 s |
-| none | 10.83 m of 11.0 | — | 12 → 8 q | 1.70 s |
+| into the **travel** | **2.38 m** of 11.0 | −2 HP | **untouched, 12 HP** | 1.70 s |
+| into the **wind-up** | 10.83 m of 11.0 | −2 HP | 12 → 8 HP | 1.70 s |
+| none | 10.83 m of 11.0 | — | 12 → 8 HP | 1.70 s |
 
 The wind-up row is the one that matters, and it is why the director throws the
 beat three times instead of once: a branch that fired on *every* arrow would pass
 a positive-only check and would have looked identical in the first row. The
 arrow at the wrong instant buys nothing at all — the same 10.83 m and the same
-four quarters as not shooting.
+4 HP as not shooting.
 
 **Floor 1 is a teaching diagonal, not a mechanical one, and two of those four
 clauses fail.** What the design substitutes for "the shield answers the Warden"
@@ -1270,7 +1271,7 @@ called, during it, and if the Burst is never fired, and it **opens nothing**.
 **And the grade got weaker still under board card 73**, which measured what the
 blast does to the choir rather than assuming it: this paragraph used to say "the
 Burst removes two skeletons out of a 2.00 s punish window", and it removes
-neither — one blast is 2 of a chorister's 9 quarters and buys 0.6 s off one of
+neither — one blast is 2 HP of a chorister's 9 HP and buys 0.6 s off one of
 them and 1.5 s off the other, at the price of two of the hero's own. Two bodies
 converging on you inside the longest window in the game is still a real reason to
 be carrying it, because a blast is the only thing that answers *both at once at
@@ -1284,7 +1285,7 @@ this fight's arena turn to `shrink` would not move it either.
 
 **Floor 4 breaks quietly, and in two places rather than one.** The hookshot
 answers the Riven Knight through *arena furniture the arena did not have until
-half health* — and for the first 64 of 128 quarters it does not have it at all
+half health* — and for the first 64 of 128 HP it does not have it at all
 (§6.4), so the item arrives as an answer only once the fight is half over. The
 Knight would also fight identically if the player had no hookshot, because a
 sidestep answers `gate_lunge` and always did — **and since the receptacle
@@ -1429,7 +1430,7 @@ the three:
 > that throws `SHAPE_SUMMON` — is what *ran* it, and the first frames printed
 > `level=3 6q` twice. Note which half of that reading was green: the `level`
 > was right. A check written against the field the fix touches would have
-> passed. It is `health.max_quarters` — the number the player actually fights —
+> passed. It is `health.max_health_points` — the number the player actually fights —
 > that told the truth, and the moral is the box's own: **the beat that has never
 > executed is where the bug is, and the field that looks like the bug is not
 > necessarily the field that carries it.**
@@ -1445,7 +1446,7 @@ gets its own director on that pattern — `boss_foundry.gd`, `boss_choir.gd`,
 - **All four: DONE**, and it is section L of `tools/directors/boss_cistern.gd`
   rather than four files — the same argument §K made, and for the same reason:
   the arena, the hero and the bleed helper were already there. Each boss is stood
-  up in a fresh `BossArena` at the origin, sealed, bled to one quarter above
+  up in a fresh `BossArena` at the origin, sealed, bled to 1 HP above
   `turn.at`, photographed, given the crossing blow, photographed again, then hit
   twice more to prove the latch. The turn fires **once**, at the authored
   fraction, `Bus.boss_phase_changed` is emitted **exactly once** with it, and the
@@ -1481,7 +1482,7 @@ gets its own director on that pattern — `boss_foundry.gd`, `boss_choir.gd`,
   turn, and it used to name the number wrong: `cistern_drop`'s `safe_inner` is
   **2.1 m**, not the 4.4 m section F probes the *ring* at. Both halves of the
   donut re-measured after the turn has fired, with F's own function and F's own
-  expected quarters: **1.4 m takes 0, 4.4 m takes 4**
+  expected HP: **1.4 m takes 0 HP, 4.4 m takes 4 HP**
   (`b_06_commit_m3/m4_cistern_drop.png`). The floor itself is measured rather
   than read off the row — twenty-four rays out of the arena's pivot, because a
   seal is twenty 0.45 m panels *centred* on the radius and the floor stops
@@ -1502,7 +1503,7 @@ gets its own director on that pattern — `boss_foundry.gd`, `boss_choir.gd`,
   **does** fire in all three (the beat committed — that is the design, §6.2), the
   charge stops at 2.38 m of 11.0 in the first case and runs 10.83 m in the other
   two, `punish_opened` fires with its authored 1.70 in all three, and the hero
-  keeps all twelve quarters only in the first. Frames: `b_11_*_tell.png`,
+  keeps all 12 HP only in the first. Frames: `b_11_*_tell.png`,
   `b_12_*_travel.png`, `b_13_*_punish.png`, the last three from one fixed
   broadside mark so that how far up the room the Ogre finished is the picture.
   Two traps it cost, both written up where they bit: the parked yaw (`_facing`,
@@ -1513,18 +1514,18 @@ gets its own director on that pattern — `boss_foundry.gd`, `boss_choir.gd`,
   intermittently. `_z_target()` sends a real `InputEventAction`).
 - **Bellwake:** **the summon itself is DONE** — section O of `boss_cistern.gd`
   throws `hushing_choir` and `call_the_iron`, photographs the bodies on the ring
-  and asserts their quarter-hearts against the boss's band (board card 22, which
-  it found: `level=3 6q`, twice). **The Burst against the choir is DONE too** —
+  and asserts their HP against the boss's band (board card 22, which
+  it found: `level=3 6 HP`, twice). **The Burst against the choir is DONE too** —
   sections O3 and O4 of the same file (board card 73). What is left of this line:
   - ~~**One blast clears both choristers.**~~ **Struck, and O3/O4 is what struck
-    it** (board card 73). Measured rather than argued: one blast takes 2 of a
-    chorister's 9 quarters, and it buys **0.6 s off one of the pair and 1.5 s
+    it** (board card 73). Measured rather than argued: one blast takes 2 HP from
+    a chorister's 9 HP, and it buys **0.6 s off one of the pair and 1.5 s
     off the other** against the **4.66 s** §6.3 needed. The launch — the one
     variable the arithmetic could not settle, because a Burst's `weight` is
     exactly 0.5 — fired on **1 of 12** seeded bodies (19% by formula) and was
     worth 1.03 s down and 2.0 m of travel; the other eleven were staggered
-    0.25 s and shoved 0.8–0.9 m. The blast also takes **two of the caster's own**
-    quarters, because the only point that reaches both is 1.38 m from a hero they
+    0.25 s and shoved 0.8–0.9 m. The blast also takes **2 HP from the caster**,
+    because the only point that reaches both is 1.38 m from a hero they
     have both walked onto. **No number moved**: §6.3 carries the refusal of all
     three candidates (`K.BOMB_DAMAGE` is `[oot]` and global, `K.BURST_KNOCKBACK`
     at the top of the scale is still a coin flip worth ~1 s, and a `stun_time`
@@ -1536,7 +1537,7 @@ gets its own director on that pattern — `boss_foundry.gd`, `boss_choir.gd`,
     `b_62_bellwake_choir_closed.png`,
     `b_63_bellwake_choir_one_blast_later.png` — the second is the whole verdict,
     a second and a half after the blast with both choristers upright and back on
-    him and the hero's own bar two quarters down. Calibrated in both directions,
+    him and the hero's own bar 2 HP down. Calibrated in both directions,
     because the surviving claim is two-sided: `--sabotage=burst-no-relief`
     (the blast buys nothing → O3g, O4d red) and `--sabotage=burst-endless` (the
     blast buys the window → O3h, O4c red).

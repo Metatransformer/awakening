@@ -2,8 +2,8 @@ class_name FieldNotesDb
 extends Catalogue
 ## The Society's Field Notes: five permanent observations and the three
 ## one-rank doctrines those notes can buy. Definitions live only here; `Game`
-## owns the saved balance and awarded set, while doctrine ranks use the existing
-## `Game.upgrades` store shared by every other permanent purchase.
+## owns the saved completion, awarded set and balance, while doctrine ranks use
+## the existing `Game.upgrades` store shared by every permanent purchase.
 
 const FIRST_DESCENT_DEBRIEF_ID: StringName = &"first_descent_debrief"
 const CISTERN_GATE_CYCLE_SOLVED_ID: StringName = &"cistern_gate_cycle_solved"
@@ -40,27 +40,42 @@ const WARM_HEAT_TIER: int = 1
 const OBSERVATIONS: Dictionary = {
 	FIRST_DESCENT_DEBRIEF_ID: {
 		"id": FIRST_DESCENT_DEBRIEF_ID,
-		"label": "First debrief after a descent",
+		"label": "First Descent Debrief",
+		"objective": "Return from a descent.",
+		"waiting": "Return from your first descent to complete this entry.",
+		"body": "A descent is measured twice: once by what returns, and once by what was learned.",
 		"notes": NOTE_VALUE,
 	},
 	CISTERN_GATE_CYCLE_SOLVED_ID: {
 		"id": CISTERN_GATE_CYCLE_SOLVED_ID,
-		"label": "Solved the Cistern gate cycle",
+		"label": "Cistern Gate Cycle",
+		"objective": "Solve the Cistern gate cycle.",
+		"waiting": "The gate's cycle is still unrecorded.",
+		"body": "The Cistern gate yields to sequence, not force; each plate prepares the next.",
 		"notes": NOTE_VALUE,
 	},
 	CISTERN_SHORTCUT_OPENED_ID: {
 		"id": CISTERN_SHORTCUT_OPENED_ID,
-		"label": "Opened the Cistern shortcut",
+		"label": "Cistern Shortcut",
+		"objective": "Open the Cistern shortcut.",
+		"waiting": "A shorter route through the Cistern remains to be found.",
+		"body": "The old mechanism still answers from both sides; one hard passage can become a known road.",
 		"notes": NOTE_VALUE,
 	},
 	CISTERN_WARDEN_DEFEATED_ID: {
 		"id": CISTERN_WARDEN_DEFEATED_ID,
-		"label": "Defeated the Cistern Warden",
+		"label": "Cistern Warden",
+		"objective": "Defeat the Cistern Warden.",
+		"waiting": "The Warden's measure is not yet known.",
+		"body": "The Warden commits its weight before the blow; the opening is in that commitment.",
 		"notes": NOTE_VALUE,
 	},
 	FAIR_WEIGHTS_LEDGER_HOME_ID: {
 		"id": FAIR_WEIGHTS_LEDGER_HOME_ID,
-		"label": "Brought home the Tally-Ledger of Fair Weights",
+		"label": "Tally-Ledger Returned",
+		"objective": "Bring the Tally-Ledger home.",
+		"waiting": "Recover the Tally-Ledger and return with it.",
+		"body": "The ledger treats every measure as a promise: weight given, weight returned.",
 		"notes": NOTE_VALUE,
 	},
 }
@@ -133,7 +148,22 @@ static func doctrine_effect_text(id: StringName) -> String:
 static func observation_note_value(id: StringName) -> int:
 	if not is_observation(id):
 		return 0
-	return NOTE_VALUE
+	return int((OBSERVATIONS[id] as Dictionary).get("notes", 0))
+
+
+static func observation_objective_text(id: StringName) -> String:
+	var row: Dictionary = observation_definition(id)
+	return String(row.get("objective", ""))
+
+
+static func observation_waiting_text(id: StringName) -> String:
+	var row: Dictionary = observation_definition(id)
+	return String(row.get("waiting", ""))
+
+
+static func observation_note_body(id: StringName) -> String:
+	var row: Dictionary = observation_definition(id)
+	return String(row.get("body", ""))
 
 
 static func observation_for_puzzle(puzzle_id: StringName) -> StringName:
@@ -182,8 +212,8 @@ static func heat_magnet_range(base_range: float, heat_tier: int) -> float:
 	return base_range + HEAT_MAGNET_BONUS
 
 
-## The service sells doctrines only. Observation definitions are queried by the
-## return receipt after award and never become advance objectives on this board.
+## The service sells doctrines only. The bedside book owns observation
+## presentation; both surfaces query the same definitions here.
 static func lines() -> Array[Dictionary]:
 	var rows: Array[Dictionary] = []
 	for id: StringName in DOCTRINE_IDS:

@@ -1,18 +1,19 @@
 extends Node
-## Autoload `Atlas`. The floor's plan, and how much of it the player has seen.
+## Autoload `Atlas`. The active map, and how much of a dungeon the player has
+## seen.
 ##
 ## Two surfaces read this and nothing else: the HUD's corner minimap
 ## (`Hud._draw_minimap`) and the pause menu's MAP screen (`MenuMapPanel`). Both
 ## of them draw through `MapDraw`, so there is one map in this game rendered at
 ## two sizes -- never two maps that agree today.
 ##
-## **Why an autoload and not a method on `Dungeon`.** The map is asked for from
-## two places that cannot see the dungeon node: the HUD is an autoload that
-## outlives every scene, and the pause menu is a separate `CanvasLayer` at layer
-## 100. Both would otherwise have to go hunting through the tree for a `Dungeon`
-## and cope with not finding one, which is three copies of the same null check
-## and a fourth one waiting to be written. The generator publishes here once, on
-## the way up, and everything downstream reads a plain dictionary.
+## **Why an autoload and not a method on a zone.** The map is asked for from two
+## places that cannot own the playable scene: the HUD outlives every scene, and
+## the pause menu is a separate `CanvasLayer` at layer 100. Dungeon generators
+## publish their plan here; authored surface zones register one live provider
+## after their map-relevant nodes exist and unregister it on exit. Atlas asks
+## that provider for the current immutable snapshot, so moving landmarks remain
+## current without either renderer hunting through the scene tree.
 ##
 ## **What this is NOT.** It is not a second copy of the layout that the dungeon
 ## could disagree with -- `Dungeon._plan` is the only writer of the room graph,
@@ -38,6 +39,10 @@ const M_CHEST_OPEN := &"chest_open"
 const M_STAIRS := &"stairs"
 const M_ARROWS := &"arrows"
 const M_ENTRANCE := &"entrance"
+
+const KIND_NONE := &""
+const KIND_DUNGEON := &"dungeon"
+const KIND_SURFACE := &"surface"
 
 ## cell -> Array[StringName] of the four compass doors out of it.
 var rooms: Dictionary[Vector2i, Array] = {}
@@ -84,6 +89,12 @@ var room_frac: float = 0.615
 ## in a wall, and the width it draws a corridor at.
 var door_frac: float = 0.375
 
+## Exactly one of these sources is active. Dungeon data above remains public for
+## its established writers/readers; surface data is deliberately private so a
+## second consumer cannot quietly become another authority.
+var _active_kind: StringName = KIND_NONE
+var _surface_provider: Node = null
+
 
 # --- Publishing -------------------------------------------------------------
 # Called by `scripts/world/dungeon.gd` as it plans and populates. Nothing else
@@ -102,6 +113,9 @@ func open_floor(floor_level: int, cell_spacing: float, room_size: float,
 	room_frac = clampf(room_size / spacing, 0.05, 1.0)
 	door_frac = clampf(door_span / maxf(room_size, 0.001), 0.05, 0.9)
 	entrance = arrival
+	_surface_provider = null
+	_active_kind = KIND_DUNGEON
+	_changed()
 
 
 func add_room(cell: Vector2i, doors: Array) -> void:
@@ -209,6 +223,38 @@ func close_floor() -> void:
 	seen.clear()
 	annexes.clear()
 	level = 0
+	if _active_kind == KIND_DUNGEON:
+		_active_kind = KIND_NONE
+	_changed()
+
+
+## Make one authored zone the active source. Atlas retains the provider rather
+## than a plan snapshot because garrison services move with their staff. Each
+## read asks the registered owner for a fresh immutable snapshot; the HUD and MAP
+## still consume that one Atlas result and never discover the scene themselves.
+func register_surface(provider: Node) -> void:
+	if provider == null or not is_instance_valid(provider):
+		push_error("Atlas.register_surface: provider is not live")
+		return
+	if not provider.has_method(&"surface_map_plan"):
+		push_error("Atlas.register_surface: '%s' has no surface_map_plan" % provider.name)
+		return
+	var plan_value: Variant = provider.call(&"surface_map_plan")
+	if not plan_value is Dictionary or not _valid_surface_plan(plan_value as Dictionary):
+		push_error("Atlas.register_surface: '%s' supplied an invalid plan" % provider.name)
+		return
+	_surface_provider = provider
+	_active_kind = KIND_SURFACE
+	_changed()
+
+
+## Only the provider that owns the active plan may clear it. A late `_exit_tree`
+## from an outgoing scene therefore cannot erase the next scene's registration.
+func unregister_surface(provider: Node) -> void:
+	if _active_kind != KIND_SURFACE or provider != _surface_provider:
+		return
+	_surface_provider = null
+	_active_kind = KIND_NONE
 	_changed()
 
 
@@ -228,6 +274,71 @@ func _changed() -> void:
 
 func has_floor() -> bool:
 	return level > 0 and not rooms.is_empty()
+
+
+func has_map() -> bool:
+	match _active_kind:
+		KIND_DUNGEON:
+			return has_floor()
+		KIND_SURFACE:
+			return not surface_plan().is_empty()
+	return false
+
+
+func map_kind() -> StringName:
+	return _active_kind if has_map() else KIND_NONE
+
+
+func map_title() -> String:
+	if not has_map():
+		return ""
+	if _active_kind == KIND_DUNGEON:
+		return FloorDb.name_of(level)
+	return String(surface_plan().get(&"title", ""))
+
+
+## The current authored snapshot, only while its registered scene is still
+## alive. Returning empty after exit is what makes a stale surface impossible
+## even if a scene is freed before its `_exit_tree` callback can finish.
+func surface_plan() -> Dictionary:
+	if _active_kind != KIND_SURFACE or not _surface_live() \
+			or not _surface_provider.has_method(&"surface_map_plan"):
+		return {}
+	var plan_value: Variant = _surface_provider.call(&"surface_map_plan")
+	if not plan_value is Dictionary:
+		return {}
+	var plan := plan_value as Dictionary
+	return plan if _valid_surface_plan(plan) else {}
+
+
+func map_provider() -> Node:
+	if not has_map():
+		return null
+	return _surface_provider if _active_kind == KIND_SURFACE else self
+
+
+func map_provider_id() -> int:
+	var provider := map_provider()
+	return provider.get_instance_id() if provider != null else 0
+
+
+func map_provider_name() -> String:
+	var provider := map_provider()
+	return String(provider.name) if provider != null else ""
+
+
+func _surface_live() -> bool:
+	return _surface_provider != null and is_instance_valid(_surface_provider) \
+		and _surface_provider.is_inside_tree()
+
+
+func _valid_surface_plan(plan: Dictionary) -> bool:
+	if plan.is_empty() or String(plan.get(&"title", "")).is_empty() \
+			or float(plan.get(&"view_range", 0.0)) <= 0.0:
+		return false
+	return plan.get(&"paths", null) is Array \
+		and plan.get(&"areas", null) is Array \
+		and plan.get(&"landmarks", null) is Array
 
 
 func is_seen(cell: Vector2i) -> bool:

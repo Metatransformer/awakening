@@ -57,7 +57,7 @@ document again.
 
 ## Authorized Field Notes implementation
 
-> Do players connect awarded notes to observed Cistern events, compare finite
+> Do players connect filed notes to observed Cistern events, compare finite
 > doctrines, notice the chosen effect, and name another observation or doctrine
 > as a reason to descend again?
 
@@ -69,11 +69,14 @@ The canonical bounded system is [FIELD_NOTES.md](FIELD_NOTES.md); the
 precommitted human gate is
 [design-tests/FIELD_NOTES_PROOF.md](design-tests/FIELD_NOTES_PROOF.md).
 
-Implement exactly five fixed first-time Cistern observations, debrief awards on
-extraction or death, five total permanent notes and three one-rank doctrines at
-Aldric costing two notes each. Reuse the existing receipt, service and save
-surfaces. This authorises no production floors, additional observations,
-additional doctrines, repeatable faucet, checklist, item or new screen.
+Implement exactly five fixed first-time Cistern observations, all visible in the
+bedside book, and three one-rank doctrines at Aldric costing two notes each.
+Extraction or death records completion without awarding currency; the receipt
+names entries ready to file and directs the player to the book. A yellow marker
+identifies ready entries there, A/interact files the selected entry and awards
+its authored note value, and filed entries remain readable. Aldric still spends
+the resulting five-note finite balance. This authorises no production floors,
+additional observations, additional doctrines, repeatable faucet or item.
 
 ## Frozen
 

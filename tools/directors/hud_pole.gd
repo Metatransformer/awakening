@@ -201,7 +201,7 @@ func run(rig) -> void:
 
 	# Low health: the pulse is VITAL <-> VOID now, and the frame this exists to
 	# disprove is the one where it borrowed BONE from the stamina bar below it.
-	Game.damage(Game.quarters - 2)
+	Game.damage(Game.health_points - 2)
 	await rig.wait_frames(4)
 	await _shot(rig, out.path_join("%s_06_low.png" % tag), "%s_06_low" % tag)
 
@@ -241,7 +241,7 @@ func run(rig) -> void:
 
 		_fails += await _counter_stands_the_hud_down(rig, out)
 
-	print("POLECHECK scene=%s draughts=%d magic=%d/%d q=%d layout_fails=%d" % [
-		tag, Game.draughts.size(), Game.magic, Game.max_magic, Game.quarters, _fails])
+	print("POLECHECK scene=%s draughts=%d magic=%d/%d HP=%d layout_fails=%d" % [
+		tag, Game.draughts.size(), Game.magic, Game.max_magic, Game.health_points, _fails])
 	if _fails > 0:
 		print("POLE FAIL %d layout assertion(s) — see HUDLAYOUT lines above" % _fails)

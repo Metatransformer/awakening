@@ -73,7 +73,7 @@ extends RefCounted
 ## unforced director photographs a different floor every time.
 const SEED := 20260811
 
-## How hard the director hits. Twelve quarter-hearts kills a floor-1 body in a
+## How hard the director hits. Twelve HP kills a floor-1 body in a
 ## few blows and cannot one-shot an elite, which matters for beat B: the room has
 ## to be walked down one corpse at a time.
 const SWING_Q := 12
@@ -519,7 +519,7 @@ func _kill(rig, foe: Node, settle: float = 0.3) -> void:
 		rig.fail("room_reward: %s has no health to beat down" % foe.name)
 		return
 	var swings := 0
-	while is_instance_valid(foe) and hp.quarters > 0 and swings < MAX_SWINGS:
+	while is_instance_valid(foe) and hp.health_points > 0 and swings < MAX_SWINGS:
 		hp.apply_hit(Hit.make(SWING_Q, (foe as Node3D).global_position
 			+ Vector3(0.0, 0.0, 2.0), &"sword"))
 		swings += 1

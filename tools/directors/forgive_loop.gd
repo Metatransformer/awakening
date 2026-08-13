@@ -25,7 +25,7 @@ extends RefCounted
 ##   D  **Reforge** (GDD §6.6). The plate goes back in the fire, the components
 ##      come back, the gold does not, and the piece is uncommitted.
 ##   E  **Recut.** One rung lower and the stones are gone. Four presses re-open
-##      a slot, and Vigor's stored hearts come back down with it.
+##      a slot, and Vigor's max HP comes back down with it.
 ##   F  **Mercy** (GDD §7.1). Off until asked for, driven by deaths, capped well
 ##      short of invulnerable, and it never touches the world.
 ##
@@ -401,9 +401,10 @@ func _recut(rig) -> void:
 		for pid: StringName in buy.get("parts", {}):
 			stones[pid] = int(stones.get(pid, 0)) + int(buy["parts"][pid])
 		_ck("E1.%d rung %d set" % [i, i + 1], JewelDb.buy(buy))
-	var hearts := Game.heart_containers()
-	_ck("E2 four Vigor rungs is two hearts",
-		hearts == K.START_HEARTS + K.JEWEL_MAX / 2)
+	var max_health_points := Game.max_health_points
+	_ck("E2 four Vigor rungs add 8 HP immediately",
+		max_health_points == K.START_HEALTH_POINTS
+			+ K.JEWEL_MAX * K.JEWEL_VIGOR_HEALTH_POINTS)
 	_ck("E3 focus is closed", Game.path_closed(
 		Game.jewel_track(&"amulet", &"focus")))
 
@@ -423,8 +424,8 @@ func _recut(rig) -> void:
 	# the two counters, and it is the line that keeps her the harder commitment.
 	_ck("E10 the stone did NOT come back",
 		Game.component_count(&"cut_gemstone") == bench)
-	_ck("E11 and the hearts came down with it",
-		Game.heart_containers() < hearts)
+	_ck("E11 and the health points came down with it",
+		Game.max_health_points < max_health_points)
 	_ck("E12 focus is still closed at rung 3",
 		Game.path_closed(Game.jewel_track(&"amulet", &"focus")))
 
@@ -439,8 +440,8 @@ func _recut(rig) -> void:
 	_ck("E14 the key is gone, not zeroed", not Game.upgrades.has(track))
 	_ck("E15 and the slot is a real choice again", not Game.path_closed(
 		Game.jewel_track(&"amulet", &"focus")))
-	_ck("E16 the hearts are back where they started",
-		Game.heart_containers() == K.START_HEARTS)
+	_ck("E16 the health points are back where they started",
+		Game.max_health_points == K.START_HEALTH_POINTS)
 
 	Game.upgrades[Game.jewel_track(&"ring1", &"edge")] = 2
 	Game.upgrades[JewelDb.blank_id(&"ring1")] = 1
@@ -491,22 +492,22 @@ func _mercy(rig) -> void:
 	# same reason: a hit that can be reduced to nothing stops being a reason to
 	# move.
 	Game.deaths = 999
-	Game.max_quarters = 999
-	Game.quarters = 999
+	Game.max_health_points = 999
+	Game.health_points = 999
 	Game._mercy_carry = 10.0
-	Game.damage(K.QUARTER)
-	_ck("F4 a one-quarter blow still lands", Game.quarters == 998)
+	Game.damage(K.HEALTH_POINT)
+	_ck("F4 a 1 HP blow still lands", Game.health_points == 998)
 
 	# Over a fight, exactly the advertised fraction. The carry is what makes an
-	# integer resistance honest -- rounded per hit, 30% of a two-quarter blow is
+	# integer resistance honest -- rounded per hit, 30% of a 2 HP blow is
 	# nought every single time.
-	Game.quarters = 999
+	Game.health_points = 999
 	Game._mercy_carry = 0.0
 	var blows := 40
 	var each := 4
 	for _i in blows:
 		Game.damage(each)
-	var taken := 999 - Game.quarters
+	var taken := 999 - Game.health_points
 	var want := int(round(float(blows * each) * (1.0 - K.MERCY_MAX)))
 	print("FORGIVE mercy took %d of %d, expected about %d" % [
 		taken, blows * each, want])

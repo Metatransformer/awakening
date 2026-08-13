@@ -27,8 +27,8 @@ extends Catalogue
 ##  * **Fletch** -- one repeatable named row, zero gold, ordinary bag ingredients.
 ##    It is explicitly a tap and delegates every rule to `Fletching`.
 ##
-## **There used to be a third shape -- STOCK: arrows, a bag slot, a heart
-## container, gold only.** They went to `SupplyDb` and the quartermaster's counter
+## **There used to be a third shape -- STOCK: arrows, a bag slot, a health
+## upgrade, gold only.** They went to `SupplyDb` and the quartermaster's counter
 ## on 2026-08-11 (card #91), when the smith stopped being in the yard on the first
 ## frame: with Brannoc held back until the floor 1 miniboss is down, three
 ## purchases every first-hour player needs were behind a counter that did not
@@ -82,7 +82,7 @@ const GATED_BY := {
 ## smith will sell that one forever"; `forge_loop.gd` beat P0 asserts every id in
 ## `Game.PLATE_TRACKS` appears here, which is where that typo gets caught.
 ##
-## `bag_slot` and `heart` were here and are `SupplyDb.LIMITS` now. Every ceiling
+## `bag_slot` and `health` were here and are `SupplyDb.LIMITS` now. Every ceiling
 ## lives beside the counter that sells the thing.
 const LIMITS := {
 	WOODSMAN_AXE_ID: 1,
@@ -463,8 +463,8 @@ static func stocked(id: StringName) -> bool:
 static func _board() -> Array[Dictionary]:
 	return [
 		_forge(&"edge", "SHARPEN THE BLADE", 120, 2.1,
-			"Takes a quarter-heart more off whatever it meets.",
-			K.EDGE_DAMAGE, "+%d", "quarters"),
+			"Takes 1 HP more off whatever it meets.",
+			K.EDGE_DAMAGE, "+%d", "HP"),
 		# The armour, eight rows deep on a fresh save and four once every piece
 		# has committed. Grouped piece by piece rather than all-heavy-then-all-
 		# light, because the choice the player is making is "what do I do about my
@@ -518,7 +518,7 @@ static func _fletch() -> Dictionary:
 
 ## Build a forge line. `ladder` is the K array the track reads and `unit` is a
 ## format string for ONE of its entries, so the detail text is generated from the
-## same table the gear obeys -- a screen that hardcoded "+3 quarters" would be
+## same table the gear obeys -- a screen that hardcoded "+3 HP" would be
 ## the next thing to drift when the tuning moves.
 ## `fmt` formats one rung's number and `noun` names the unit ONCE, at the end:
 ## "8.7 -> 11.9 m reach", not "8.7 m reach -> 11.9 m reach". The unit on both
@@ -554,7 +554,7 @@ static func _forge(id: StringName, label: String, base: int, growth: float,
 ## about one boot while the player had three other pieces on would be arithmetic
 ## the player has to do in their head. It is printed to one decimal on purpose --
 ## `armour_soak()` floors, so a rung that moves 0.7 to 1.0 is the one that
-## actually pays, and a row rounded to whole quarters would show three purchases
+## actually pays, and a row rounded to whole HP would show three purchases
 ## in a row doing nothing and then a fourth doing everything (see the note over
 ## `K.PLATE_HEAVY_SOAK`).
 static func _plate(piece: StringName, path: StringName) -> Dictionary:
@@ -568,7 +568,7 @@ static func _plate(piece: StringName, path: StringName) -> Dictionary:
 	if lvl < K.FORGE_MAX:
 		var after := minf(soak + (float(ladder[lvl + 1]) - float(ladder[lvl])),
 			K.SOAK_MAX)
-		detail = "%.1f -> %.1f quarters soaked" % [soak, after]
+		detail = "%.1f -> %.1f HP soaked" % [soak, after]
 		if heavy:
 			# Clamped from the RAW product, not from `speed_mult()`. Two Swift
 			# rings can be holding the hero at the 1.0 ceiling with headroom to
@@ -580,7 +580,7 @@ static func _plate(piece: StringName, path: StringName) -> Dictionary:
 			detail += ",  speed %.1f%% -> %.1f%%" % [
 				clampf(raw, 0.5, 1.0) * 100.0, clampf(raw * step, 0.5, 1.0) * 100.0]
 	else:
-		detail = "%.1f quarters soaked  (finished)" % soak
+		detail = "%.1f HP soaked  (finished)" % soak
 
 	return {
 		"id": id,
@@ -748,7 +748,7 @@ static func buy(line: Dictionary) -> bool:
 	# ladders, and it would eventually not.
 	#
 	# There used to be a `match` in front of this, for the three stock lines that
-	# DID have an effect to apply -- ten arrows, a slot, a heart. They are
+	# DID have an effect to apply -- ten arrows, a slot, a health upgrade. They are
 	# `SupplyDb.buy` now and the match went with them.
 	Bus.gear_forged.emit(id, Game.upgrades[id])
 	Bus.item_acquired.emit(id)

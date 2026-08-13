@@ -189,12 +189,6 @@ static func signed_degrees(v: float) -> String:
 	return "%+d°" % roundi(v)
 
 
-## "3 / 3" hearts, quarter-heart aware, the way the HUD counts them.
-static func hearts_text(cur: float, maximum: float) -> String:
-	return "%s / %s" % [_trim(cur), _trim(maximum)]
-
-
-static func _trim(v: float) -> String:
-	if is_equal_approx(v, roundf(v)):
-		return "%d" % roundi(v)
-	return String.num(v, 2).rstrip("0").rstrip(".")
+## The same direct HP readout used by the HUD health bar.
+static func health_points_text(current: int, maximum: int) -> String:
+	return "%d / %d HP" % [current, maximum]

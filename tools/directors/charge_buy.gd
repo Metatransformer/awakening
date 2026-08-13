@@ -173,7 +173,7 @@ func _buy(rig) -> void:
 	# again.
 	#
 	# It used to be asserted against a BREW on the same board -- the charge taps,
-	# the Heart Draught holds -- and that contrast died with the move: nothing on
+	# the Health Draught holds -- and that contrast died with the move: nothing on
 	# this counter is crafted, which is the sentence `SupplyDb`'s header opens with.
 	# So the claim is now the whole board's and it is the stronger one: every row a
 	# quartermaster issues is a tap, and the day one of them grows a `parts` entry

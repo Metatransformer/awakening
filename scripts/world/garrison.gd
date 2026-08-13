@@ -165,9 +165,9 @@ func _ready() -> void:
 	_apply_staffing()
 	_place_dawn_wake()
 	_open_the_game()
-	# Join only after the compound and every live landmark the plan may expose
-	# exist. The HUD discovers this provider; it does not know garrison geometry.
-	add_to_group(&"surface_map")
+	# Publish only after the compound and every live landmark the plan may expose
+	# exist. Atlas owns discovery; neither map surface knows garrison geometry.
+	Atlas.register_surface(self)
 
 
 ## The compound supplies structure. This scene adds only landmarks represented
@@ -204,6 +204,7 @@ func surface_map_plan() -> Dictionary:
 	areas.make_read_only()
 	landmarks.make_read_only()
 	var plan: Dictionary = {
+		&"title": "Highbridge Garrison",
 		&"view_range": float(base[&"view_range"]),
 		&"paths": paths,
 		&"areas": areas,
@@ -317,7 +318,7 @@ func _open_the_game() -> void:
 ## maker's mark in your pack and the smith in the yard (`StoryDb.UNLOCKS`), but a
 ## new shopkeeper who simply APPEARS between one run and the next is a change the
 ## player has to notice on their own -- and the person most likely to miss it is
-## the one who came home with three hearts left and walked straight to their bed.
+## the one who came home with 3 HP left and walked straight to their bed.
 ## So the elder introduces them, once, the first time you are back in the yard
 ## after they arrive.
 ##
@@ -830,6 +831,7 @@ func _raid_route(lane_index: int) -> Array[Vector3]:
 
 
 func _exit_tree() -> void:
+	Atlas.unregister_surface(self)
 	for raider: RaidRaider in raid_raiders:
 		if is_instance_valid(raider):
 			raider.sync_now()

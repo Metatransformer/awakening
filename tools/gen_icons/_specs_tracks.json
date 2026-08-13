@@ -128,14 +128,6 @@
     "gain": 1.0
   },
   {
-    "prompt": "a heavy iron heart-shaped locket, closed; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
-    "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/tracks/hearts.png",
-    "style": "digital_illustration",
-    "px": 256,
-    "internal": 64,
-    "gain": 1.5
-  },
-  {
     "prompt": "an empty corked round-bottomed glass bottle; single object game icon, dark fantasy dungeon, weathered iron and old leather, warm torchlight key from the upper left, cold rim light from behind, heavy chiaroscuro, painted with a confident brush, no gloss, no glow; one isolated object centered and filling the frame, plain flat near-black background, strong readable silhouette, high contrast, readable at very small size, no text, no letters, no border, no frame, no hands, no character, no scenery, no cast shadow, no drop shadow.",
     "out": "/Users/nickbryant/zeldalike/.claude/worktrees/icon-generation-assets-cadec5/assets/icons/tracks/glass.png",
     "style": "digital_illustration",

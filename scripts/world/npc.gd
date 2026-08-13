@@ -70,7 +70,7 @@ const ACTIVITY_SLEEP: StringName = &"sleeping"
 ## the table is still built once for the whole game rather than per shopkeeper.
 static var COUNTERS := {
 	# **The only person in the yard with two services.** Trade is the conventional
-	# two-sided stock/bag window; Upgrades holds the bag and heart ladders. Those
+	# two-sided stock/bag window; Upgrades holds the bag and health ladders. Those
 	# offerings were the
 	# SMITH's until card #91 held him back behind the floor 1 miniboss, at which
 	# point the first hour of the game had no counter that sold them.
@@ -312,6 +312,7 @@ var _person: Node3D
 var _lamp: OmniLight3D
 var _lamp_mat: StandardMaterial3D
 var _sign: WorldCaption
+var attention_marker: WorldAttentionMarker
 var _lit: float = 0.0
 var _age: float = 0.0
 ## Crown height of whoever is standing here, so the name floats over the head it
@@ -354,6 +355,36 @@ func current_services_open() -> bool:
 	return _services_open
 
 
+## Catalogue truth, projected for the director and for no other owner. Only
+## visible rows on progression counters qualify; ordinary Trade stock is never
+## an attention mark.
+func has_affordable_progression() -> bool:
+	if role == Role.GATE or not _services_open or _current_activity != ACTIVITY_WORKING:
+		return false
+	for raw_counter: Variant in _counters(_row()):
+		if not raw_counter is Dictionary:
+			continue
+		var counter := raw_counter as Dictionary
+		if int(counter.get("mode", -1)) != TradeScreen.Mode.PROGRESSION:
+			continue
+		var db := counter.get("db") as GDScript
+		if db == null:
+			continue
+		var ids: Array = counter.get("ids", []) as Array
+		for line: Dictionary in db.lines():
+			var id := StringName(line.get("id", &""))
+			if not ids.is_empty() and not ids.has(id):
+				continue
+			if db.remaining(id) > 0 and db.can_buy(line):
+				return true
+	return false
+
+
+func refresh_attention_marker() -> void:
+	if attention_marker != null:
+		attention_marker.visible = has_affordable_progression()
+
+
 ## The row for this NPC. Never null -- a role added to the enum and forgotten
 ## here gets a nameless prop you can walk up to, not a crash mid-garrison.
 func _row() -> Dictionary:
@@ -368,6 +399,8 @@ func _ready() -> void:
 	radius = 2.3
 	super()
 	_build()
+	_connect_attention_signals()
+	refresh_attention_marker()
 
 
 ## **You TALK to them. The counter is something the conversation offers you.**
@@ -539,6 +572,7 @@ func set_activity(activity: StringName, activity_transform: Transform3D) -> void
 		_body.visible = true
 	if _sign != null:
 		_sign.visible = false
+	refresh_attention_marker()
 
 
 ## Compatibility for callers that still express the old two-state schedule.
@@ -634,6 +668,33 @@ func _build() -> void:
 	_sign.position.y = _head + 0.5
 	_sign.visible = false
 	add_child(_sign)
+
+	attention_marker = WorldAttentionMarker.new()
+	attention_marker.name = "AttentionMarker"
+	attention_marker.position.y = _head + 0.92
+	attention_marker.visible = false
+	add_child(attention_marker)
+
+
+func _connect_attention_signals() -> void:
+	Bus.gold_changed.connect(func(_gold: int) -> void: refresh_attention_marker())
+	Bus.components_changed.connect(
+		func(_stock: Dictionary) -> void: refresh_attention_marker())
+	Bus.bag_changed.connect(
+		func(_bag: Dictionary, _value: int) -> void: refresh_attention_marker())
+	Bus.stash_changed.connect(
+		func(_stock: Dictionary) -> void: refresh_attention_marker())
+	Bus.item_acquired.connect(
+		func(_id: StringName) -> void: refresh_attention_marker())
+	Bus.gear_forged.connect(
+		func(_track: StringName, _level: int) -> void: refresh_attention_marker())
+	Bus.field_observations_completed.connect(
+		func(_ids: Array[StringName]) -> void: refresh_attention_marker())
+	Bus.field_notes_awarded.connect(
+		func(_ids: Array[StringName], _balance: int) -> void: refresh_attention_marker())
+	Bus.doctrine_purchased.connect(
+		func(_id: StringName, _balance: int) -> void: refresh_attention_marker())
+	Game.garrison_changed.connect(refresh_attention_marker)
 
 
 ## A person, their shop, and the lamp they work by.

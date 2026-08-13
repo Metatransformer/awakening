@@ -246,7 +246,7 @@ func _c_key(rig) -> void:
 ## director can break.
 func _c_urn(rig) -> void:
 	var urn := _atom(PuzzleAtoms.URN)
-	urn.call(&"apply_hit", Hit.make(K.QUARTER, urn.global_position + Vector3.BACK,
+	urn.call(&"apply_hit", Hit.make(K.HEALTH_POINT, urn.global_position + Vector3.BACK,
 		&"sword", 0.0, 0.0, &"DIRECTOR"))
 	await rig.wait_physics_frames(6)
 	_ck("the urn breaks to a blow through apply_hit", _solved(PuzzleAtoms.URN))
@@ -296,11 +296,11 @@ func _c_block(rig) -> void:
 ## to a player who has never seen a bow.
 func _c_eye(rig) -> void:
 	var eye := _atom(PuzzleAtoms.EYE_SWITCH)
-	eye.call(&"apply_hit", Hit.make(K.QUARTER, eye.global_position + Vector3.BACK,
+	eye.call(&"apply_hit", Hit.make(K.HEALTH_POINT, eye.global_position + Vector3.BACK,
 		&"sword", 0.0, 0.0, &"DIRECTOR"))
 	await rig.wait_physics_frames(6)
 	_ck("a SWORD blow does not open the eye", not _solved(PuzzleAtoms.EYE_SWITCH))
-	eye.call(&"apply_hit", Hit.make(K.QUARTER, eye.global_position + Vector3.BACK,
+	eye.call(&"apply_hit", Hit.make(K.HEALTH_POINT, eye.global_position + Vector3.BACK,
 		&"arrow", 0.0, 0.0, &"DIRECTOR"))
 	await rig.wait_physics_frames(6)
 	_ck("an ARROW does", _solved(PuzzleAtoms.EYE_SWITCH))
@@ -423,12 +423,12 @@ func _d_gate(rig) -> void:
 	var opened := [false]
 	_gate.connect(&"opened", func(_w): opened[0] = true)
 
-	_atoms["eye_1"].call(&"apply_hit", Hit.make(K.QUARTER, Vector3.ZERO, &"arrow"))
+	_atoms["eye_1"].call(&"apply_hit", Hit.make(K.HEALTH_POINT, Vector3.ZERO, &"arrow"))
 	await rig.wait_physics_frames(6)
 	line = _gate.call(&"refusal_line")
 	_ck("one down, the line follows: \"%s\"" % line, line == "THE EYE IS SHUT")
 
-	_atoms["eye_2"].call(&"apply_hit", Hit.make(K.QUARTER, Vector3.ZERO, &"arrow"))
+	_atoms["eye_2"].call(&"apply_hit", Hit.make(K.HEALTH_POINT, Vector3.ZERO, &"arrow"))
 	await rig.wait_seconds(1.2)
 	_ck("the last atom opens the gate by itself", opened[0]
 		and bool(_gate.call(&"is_open")))

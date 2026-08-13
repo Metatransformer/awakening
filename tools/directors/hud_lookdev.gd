@@ -179,8 +179,8 @@ func run(rig) -> void:
 	await rig.wait_frames(20)
 	await _shot(rig, out.path_join("h_01_early.png"), "h_01_early")
 
-	# 3. Hurt. Two hearts of damage, so the ghost cells are live.
-	Game.damage(2 * K.HEART)
+	# 3. Hurt. 8 HP of damage, so the ghost cells are live.
+	Game.damage(8)
 	await rig.wait_frames(4)
 	await _shot(rig, out.path_join("h_02_ghost.png"), "h_02_ghost")
 	await rig.wait_frames(30)
@@ -222,7 +222,7 @@ func run(rig) -> void:
 	#    it was a 0.034 s timer, `_process` adds a whole delta before the draw,
 	#    and this harness runs well under 30 fps — so it expired every time,
 	#    unseen. HUD_PLAN §15.11.
-	Game.damage(Game.quarters - 2)
+	Game.damage(Game.health_points - 2)
 	await _shot(rig, out.path_join("h_08a_flicker.png"), "h_08a_flicker")
 	await rig.wait_frames(50)
 	await _shot(rig, out.path_join("h_08_low.png"), "h_08_low")
@@ -487,7 +487,7 @@ func run(rig) -> void:
 	# 10. THE BALLAST WINDOW — card #39, and it is three frames because the card
 	#     asks for three and the third is the one that gets skipped.
 	#
-	#     Ballast soaks three quarters for eight seconds and is paid for with a bag
+	#     Ballast soaks 3 HP for eight seconds and is paid for with a bag
 	#     stack; until now nothing on the HUD said it was running, so the player
 	#     read a live ward off the health bar not moving — which only speaks after
 	#     something has already hit you, and never says how long is left.

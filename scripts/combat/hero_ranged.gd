@@ -57,7 +57,7 @@ extends Node3D
 ##
 ## A shot that lands on a body is a THIRD outcome, alongside "found an anchor" and
 ## "played out to nothing". It deals zero damage — deliberately, not as an
-## oversight; `HealthComponent.apply_hit` would refuse a zero-quarter blow even if
+## oversight; `HealthComponent.apply_hit` would refuse a zero-HP blow even if
 ## one were sent — and it does not pull the hero either, because reeling him into
 ## the monster he has just stopped would spend the shot's own reward on closing
 ## the distance he wanted. What it buys is a second of `K.HOOK_FREEZE`: the thing
@@ -691,7 +691,7 @@ func _tick_hook(delta: float) -> void:
 			_end_hook()
 			return
 		# It bit a monster. Zero damage — nothing goes near `HealthComponent`,
-		# which refuses a zero-quarter blow anyway — and the freeze IS the shot's
+		# which refuses a zero-HP blow anyway — and the freeze IS the shot's
 		# whole effect. The hero is handed straight back rather than dragged,
 		# because there is nothing here to be dragged to; `Enemy.freeze` owns the
 		# clang and the hit-stop for this one, since it is the body being hit
