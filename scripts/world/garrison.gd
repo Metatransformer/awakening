@@ -658,7 +658,7 @@ func _build_plaza() -> void:
 	add_child(plaza)
 
 	statue = Statue.new()
-	statue.glint_service = true
+	statue.glint_service = OS.get_cmdline_user_args().has("--glint-mvp")
 	var out := Vector3(sin(deg_to_rad(STATUE_BEARING)), 0.0, -cos(deg_to_rad(STATUE_BEARING)))
 	statue.position = PLAZA_AT + out * 3.9
 	# Looking back across the plaza at the people arriving.

@@ -5,6 +5,8 @@ extends Catalogue
 ## purchase, so there is no mutable currency counter that can drift from them.
 
 const CISTERN_SUN_GLINT_ID: StringName = &"cistern_sun_glint"
+const CISTERN_SUN_RUN_PUZZLE_ID: StringName = &"glint_cistern_sun_run"
+const CISTERN_SUN_RUN_ATOM_INDEX: int = 0
 const HEALTH_ID: StringName = &"glint_health"
 const STAMINA_ID: StringName = &"glint_stamina"
 const MAGIC_ID: StringName = &"glint_magic"
@@ -13,6 +15,15 @@ const TRIAL_IDS: Array[StringName] = [CISTERN_SUN_GLINT_ID]
 const UPGRADE_IDS: Array[StringName] = [HEALTH_ID, STAMINA_ID, MAGIC_ID]
 const RANKS: int = 1
 const COST: int = 1
+
+
+## The latching socket flag distinguishes "this solved run was resumed" from a
+## genuinely new run. The permanent trial id alone cannot do that: suppressing
+## the annex from it would restore a saved hero into geometry that no longer
+## exists. `Run.enter()` clears this atom flag, so only the next run omits it.
+static func cistern_sun_run_flag() -> StringName:
+	return StringName("atom_%s_%s_%d" % [CISTERN_SUN_RUN_PUZZLE_ID,
+		PuzzleAtoms.SUN_SOCKET, CISTERN_SUN_RUN_ATOM_INDEX])
 
 
 static func lines() -> Array[Dictionary]:
@@ -92,7 +103,7 @@ static func buy(line: Dictionary) -> bool:
 
 
 static func crafts(_line: Dictionary) -> bool:
-	return false
+	return true
 
 
 static func currency_label() -> String:
@@ -138,7 +149,7 @@ static func _line(id: StringName) -> Dictionary:
 				"label": "HEALTH",
 				"cost": COST,
 				"parts": {},
-				"blurb": "A Glimmer strengthens the body.",
+				"blurb": "Spend 1 Glimmer permanently. Strengthen the body.",
 				"detail": "%d -> %d max HP" % [Game.max_health_points,
 					mini(Game.max_health_points + K.GLINT_HEALTH_POINTS,
 						K.MAX_HEALTH_POINTS)],
@@ -150,7 +161,7 @@ static func _line(id: StringName) -> Dictionary:
 				"label": "STAMINA",
 				"cost": COST,
 				"parts": {},
-				"blurb": "A Glimmer deepens endurance.",
+				"blurb": "Spend 1 Glimmer permanently. Deepen endurance.",
 				"detail": "%d -> %d max stamina" % [int(round(current)),
 					int(round(minf(current + K.GLINT_STAMINA_POINTS,
 						K.STAMINA_MAX)))],
@@ -161,7 +172,7 @@ static func _line(id: StringName) -> Dictionary:
 				"label": "MAGIC",
 				"cost": COST,
 				"parts": {},
-				"blurb": "A Glimmer widens the magic reserve.",
+				"blurb": "Spend 1 Glimmer permanently. Widen the magic reserve.",
 				"detail": "%d -> %d max magic" % [Game.max_magic,
 					mini(Game.max_magic + K.GLINT_MAGIC_POINTS, K.MAGIC_MAX)],
 			}

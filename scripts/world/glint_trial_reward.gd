@@ -9,14 +9,17 @@ const CAMEO_HOLD := 10.0
 const CAMEO_FADE := 0.45
 
 var _claimed: bool = false
+var _socket: PuzzleAtom = null
 var _cameo: Node3D = null
 var _reward_label: WorldCaption = null
 var _signpost: WorldCaption = null
+var _director_save_commit: Callable = Callable()
 
 
 func bind(socket: PuzzleAtom) -> void:
 	if socket == null or not is_instance_valid(socket):
 		return
+	_socket = socket
 	if not socket.solved.is_connected(_on_socket_solved):
 		socket.solved.connect(_on_socket_solved)
 	if socket.is_solved():
@@ -31,12 +34,45 @@ func cameo_visible() -> bool:
 	return is_instance_valid(_cameo) and _cameo.visible
 
 
-func _on_socket_solved(_atom: PuzzleAtom) -> void:
+## Director-only fault injection. An empty callable restores the production
+## commit, which is always `Saves.autosave()`.
+func _director_set_save_commit(commit: Callable) -> void:
+	_director_save_commit = commit
+
+
+func _on_socket_solved(atom: PuzzleAtom) -> void:
 	if not Game.solve_glint_trial(GlintDb.CISTERN_SUN_GLINT_ID):
 		return
-	Saves.autosave()
+	if not _commit_save():
+		Game.solved_glint_trials.erase(GlintDb.CISTERN_SUN_GLINT_ID)
+		# `PuzzleAtom.reset()` also serves this transaction rollback: unlike a
+		# broken sequence, the verb was valid but its permanent award did not
+		# commit. It erases the latching atom flag with the pose so retry is honest.
+		var rollback := _socket if is_instance_valid(_socket) else atom
+		if rollback != null and is_instance_valid(rollback):
+			# Keep this one failed hold to one transaction. Re-arm after release;
+			# otherwise the still-raised shield solves again on the next physics tick.
+			rollback.armed = false
+			rollback.reset()
+			_rearm_after_release.call_deferred()
+		Bus.request_message.emit(
+			"SAVE SLOT REQUIRED — GLIMMER WAS NOT CLAIMED.")
+		return
 	_claimed = true
 	_present()
+
+
+func _commit_save() -> bool:
+	if _director_save_commit.is_valid():
+		return bool(_director_save_commit.call())
+	return Saves.autosave()
+
+
+func _rearm_after_release() -> void:
+	while Input.is_action_pressed(&"shield"):
+		await get_tree().physics_frame
+	if is_instance_valid(_socket):
+		_socket.armed = true
 
 
 func _present() -> void:

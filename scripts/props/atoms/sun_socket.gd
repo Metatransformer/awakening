@@ -60,6 +60,7 @@ var _lens_mat: StandardMaterial3D
 var _lamp: OmniLight3D
 var _shaft_mat: StandardMaterial3D
 var _shine: SpotLight3D
+var _solve_tween: Tween
 
 
 func _ready() -> void:
@@ -197,16 +198,35 @@ func _show_bounce(on: bool, on_target: bool) -> void:
 func on_solved() -> void:
 	Bus.request_sfx.emit(&"glint_bell", global_position)
 	_show_bounce(false, false)
-	var tw := create_tween().set_parallel(true)
-	tw.tween_property(_lens_mat, "emission", Pal.GOLD, 0.3)
-	tw.tween_property(_lens_mat, "emission_energy_multiplier", 1.8, 0.3)
-	tw.tween_property(_lamp, "light_color", Pal.GOLD, 0.3)
-	tw.tween_property(_lamp, "light_energy", 1.5, 0.3)
+	if _solve_tween != null and _solve_tween.is_valid():
+		_solve_tween.kill()
+	_solve_tween = create_tween().set_parallel(true)
+	_solve_tween.tween_property(_lens_mat, "emission", Pal.GOLD, 0.3)
+	_solve_tween.tween_property(_lens_mat, "emission_energy_multiplier", 1.8, 0.3)
+	_solve_tween.tween_property(_lamp, "light_color", Pal.GOLD, 0.3)
+	_solve_tween.tween_property(_lamp, "light_energy", 1.5, 0.3)
 	# The shaft fades out. It was the puzzle, and a solved puzzle that keeps
 	# advertising itself is a room the player cannot tell they have finished.
-	tw.tween_property(_shaft_mat, "albedo_color:a", 0.08, 0.5)
+	_solve_tween.tween_property(_shaft_mat, "albedo_color:a", 0.08, 0.5)
 	if _shine != null:
-		tw.tween_property(_shine, "light_energy", 0.5, 0.5)
+		_solve_tween.tween_property(_shine, "light_energy", 0.5, 0.5)
+
+
+## A Glint Trial may take a latching solve back only when its permanent reward
+## could not be saved. Restore the complete unsolved read as well as the atom
+## bit, so the retry never presents a gold lens over a live shaft.
+func on_unsolved() -> void:
+	if _solve_tween != null and _solve_tween.is_valid():
+		_solve_tween.kill()
+	_held = 0.0
+	_show_bounce(false, false)
+	_lens_mat.emission = Pal.ARCANE
+	_lens_mat.emission_energy_multiplier = 0.7
+	_lamp.light_color = Pal.ARCANE
+	_lamp.light_energy = 0.7
+	_shaft_mat.albedo_color.a = 0.20
+	if _shine != null:
+		_shine.light_energy = 2.2
 
 
 func restore_solved() -> void:

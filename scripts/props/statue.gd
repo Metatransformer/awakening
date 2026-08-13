@@ -52,7 +52,7 @@ func activate(by: Node3D) -> void:
 		return
 	activated.emit(by)
 	TradeScreen.open(self, TradeScreen.Mode.PROGRESSION,
-		"THE GLINT STATUE", GlintDb, &"", "Glimmer")
+		"THE GLINT STATUE — CHOOSE ONE", GlintDb, &"", "Glimmer")
 
 
 ## Three courses, each smaller than the one under it.

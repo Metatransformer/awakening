@@ -1622,10 +1622,14 @@ refusal.
 | `unsolve()` | clears state, emits `unsolved` | **no-op** |
 | `reset()` | same as `unsolve()` | clears state, **erases the flag**, emits `unsolved` |
 
-**Who may call it: a gate breaking its own sequence, and nothing else.** Today
-that is exactly one caller, `PuzzleGate._break_the_sequence`. It is not a general
-"put the puzzle back" — `PuzzleAtom.clear_run_flags()` (called by `Run.enter()`)
-is that, and it works per *run*, not per floor.
+**Who may call it: a gate breaking its own sequence, or the Glint reward rolling
+back a permanent award that failed to save.** The two authorised callers are
+`PuzzleGate._break_the_sequence` and `GlintTrialReward`. The latter erases the
+stable trial id, disarms the atom for the rest of the held shield input, resets
+the atom and its flag, restores the atom's unsolved presentation, and only
+re-arms after the player releases the shield. It is not a general "put the
+puzzle back" — `PuzzleAtom.clear_run_flags()` (called by `Run.enter()`) is that,
+and it works per *run*, not per floor.
 
 **What a new caller owes.** If you reach for `reset()` you are taking back a
 permanent fact, and two things have to travel with it:

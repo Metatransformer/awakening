@@ -85,15 +85,16 @@ and three one-rank doctrine tracks. It adds no item, pickup, UI screen, NPC,
 stat category, dialogue tree or repeatable system. The exact five-observation,
 five-note boundary is owned by [FIELD_NOTES.md](FIELD_NOTES.md).
 
-Issue #206 is an explicit owner-authorised test exception, not a production cap
-increase. Behind `--glint-mvp`, Floor 1 may replace its normal gate/puzzle
-anchors with one optional post-guardian annex containing one existing authored
-puzzle. Its one Glimmer is derived from a permanent solved id minus one purchased
-stat rank; it is not a saved, repeatable, convertible, or production currency.
-The three choices are one-rank extensions of the existing health, stamina, and
-magic stats through the existing Trade screen and garrison statue. The exception
-adds no screen, autoload, item, dialogue tree, puzzle atom, boss, miniboss, room
-kit, or production content.
+Issue #206 is an explicit owner-authorised test exception, not a default
+production rollout. Behind `--glint-mvp`, Floor 1 may replace its normal
+gate/puzzle anchors with one optional post-guardian annex containing one existing
+authored puzzle. The experiment adds one derived permanent-currency definition,
+Glimmer (`solved trial ids - purchased Glint ranks`), plus three persistent
+one-rank upgrade ids for health, stamina, and magic. Those ids are saved; the
+balance itself is not. Glimmer is finite, non-repeatable and non-convertible, and
+the choices use the existing Trade screen and garrison statue. The exception
+adds no new screen, autoload, inventory item, dialogue tree, puzzle atom, boss,
+miniboss, room kit, or default-generated content.
 
 Issue #197 is the explicit owner amendment for one reusable quest-state seam,
 one Quests inspection page, and `!` / `?` world-attention punctuation. Its two
