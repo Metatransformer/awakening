@@ -586,7 +586,7 @@ the lock's hysteresis band the dodge has already stood down, so a leap that
 refuses on range there would be a dead press.
 
 **The dodge button is a tap OR a hold, and the two are exclusive.** `context` is
-*measured*: released inside `Hero.sprint_hold_time` (0.18 s) the press was a
+*measured*: released inside `Hero.sprint_hold_time` (0.36 s) the press was a
 **dodge**, and it pays out on the release. Still down when the window expires, it
 was a **run** — `K.SPRINT_SPEED`, 6.07 m/s against the 4.37 run cap, until the
 button or the stamina bar gives out — and it will not roll when it finally comes
