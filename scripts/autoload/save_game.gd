@@ -446,6 +446,10 @@ func load_slot(slot: int) -> Dictionary:
 	Game.flags.clear()
 	for k in (d.get("flags", {}) as Dictionary):
 		Game.flags[StringName(k)] = true
+	# The old boss-count arrival path could latch the smith before maker's marks
+	# existed. That downstream arrival fact makes restoring its prerequisite honest.
+	if Game.flag(StoryDb.arrival_flag(&"smith")) and not Game.has(StoryDb.SMITH_TOKEN):
+		Game.items[StoryDb.SMITH_TOKEN] = true
 	# `quick_slots` / `c_items` were the two names the D-pad BINDINGS were saved
 	# under. There are no bindings any more (Game.item_selected), so an old save
 	# simply drops them -- the ring is derived from what you own, and what you own

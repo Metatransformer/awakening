@@ -111,7 +111,19 @@ func run(rig) -> void:
 	legacy.erase("run")
 	legacy["pos"] = [FAR_POSITION.x, FAR_POSITION.y, FAR_POSITION.z]
 	legacy["yaw"] = FAR_YAW
-	_ck("C6 the legacy v8 regression slot writes", _write_slot_json(SLOT, legacy))
+	var legacy_items: Dictionary = legacy.get("items", {})
+	legacy_items.erase(String(StoryDb.SMITH_TOKEN))
+	legacy["items"] = legacy_items
+	var legacy_flags: Dictionary = legacy.get("flags", {})
+	legacy_flags[String(StoryDb.arrival_flag(&"smith"))] = true
+	legacy_flags.erase(String(StoryDb.told_flag(&"elder", &"briefing")))
+	legacy_flags.erase(String(StoryDb.told_flag(&"elder", &"timber_duty")))
+	legacy["flags"] = legacy_flags
+	_ck("C6 the legacy slot carries the smith's arrival",
+		bool(legacy_flags.get(String(StoryDb.arrival_flag(&"smith")), false)))
+	_ck("C7 the legacy slot lacks the maker's mark",
+		not legacy_items.has(String(StoryDb.SMITH_TOKEN)))
+	_ck("C8 the legacy v8 regression slot writes", _write_slot_json(SLOT, legacy))
 
 	var dest: Dictionary = Saves.load_slot(SLOT)
 	_ck("D0 the legacy v8 slot remains readable", not dest.is_empty())
@@ -124,6 +136,15 @@ func run(rig) -> void:
 	_ck("D4 Kessa is still unmet while the load is in flight",
 		StoryDb.pending_introduction() == &"quartermaster"
 		and not Game.flag(StoryDb.intro_flag(&"quartermaster")))
+	_ck("D5 the smith's maker's mark is reconstructed", Game.has(StoryDb.SMITH_TOKEN))
+	_ck("D6 Aldric still owes the briefing",
+		StringName(StoryDb.pending(&"elder").get("id", &"")) == &"briefing")
+	StoryDb.mark_told(&"elder", &"briefing")
+	_ck("D7 Aldric then owes the timber duty",
+		StringName(StoryDb.pending(&"elder").get("id", &"")) == &"timber_duty")
+	StoryDb.mark_told(&"elder", &"timber_duty")
+	_ck("D8 the timber duty stocks the Woodsman's Axe",
+		ShopDb.stocked(ShopDb.WOODSMAN_AXE_ID))
 
 	var resumed: bool = await Flow.resume(dest)
 	_ck("E0 Flow accepted the restored destination", resumed)
