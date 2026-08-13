@@ -18,9 +18,9 @@ extends RefCounted
 ##      re-introduce the place. **The NARRATION is not here**; it moved to
 ##      `Flow.new_game` and the road painting on 2026-08-10, and
 ##      `tools/directors/title.gd` is what proves it.
-##   C  The elder is in the arrival frame, behind the relic counter, and TALK on
-##      him both says something -- a DIFFERENT something the second time -- and
-##      opens the Far Lantern off the same press.
+##   C  The elder is in the arrival frame with no counter between you, and TALK
+##      both says something -- a DIFFERENT something the second time -- and opens
+##      the Far Lantern off the same press.
 ##   D  A counter greets you when you address it, says its piece on the press
 ##      that WORKED and not on the one that was refused, and says goodbye on the
 ##      way out.
@@ -149,14 +149,9 @@ func _opening(rig) -> void:
 
 # --- C. The elder, who keeps the Far Lantern -----------------------------------
 
-## He was two people until 2026-08-10: an elder alone in the middle of the yard
-## with three lines and no counter, and a silent Lanternkeeper behind the relic
-## hall. The owner merged them, so this section changed shape -- every claim about
-## the OPEN MIDDLE is gone, because he is behind a counter now, and the one claim
-## that survived the move is the one that was always load-bearing: **he is in the
-## arrival frame.** The opening's whole third beat is a voice from somebody you
-## can see (`Garrison._open_the_game`), and moving him fifteen metres east is
-## exactly the change that could have broken it in silence.
+## The elder and Lanternkeeper are one person. His opening line only works if the
+## person saying it is visible from the live arrival camera, with no counter
+## between him and Kael.
 func _elder(rig) -> void:
 	var garrison: Garrison = rig.scene()
 	if garrison == null or garrison.keeper == null:
@@ -166,21 +161,23 @@ func _elder(rig) -> void:
 	var at := garrison.keeper.global_position
 	print("VOICES the elder stands at %.2v" % at)
 
-	# The arrival camera, spelled out rather than read off a node: the hero lands
-	# at (0, 0, +4) and the boom sits behind him at (0, 1.7, +8) looking up -Z.
-	# "In the frame" is then just the horizontal angle off that axis against half
-	# the camera's fov, which is the cheapest true version of the claim.
-	var eye := Vector3(0.0, 1.7, 8.0)
-	var to := at - eye
-	var off := rad_to_deg(absf(atan2(to.x, -to.z)))
+	# Read the live follow camera: its authored arrival offset moved when the
+	# compound grew, and a second hard-coded camera position let this proof drift.
+	var camera := garrison.get_viewport().get_camera_3d()
+	if camera == null:
+		_ck("C1 the arrival camera exists", false)
+		return
+	var to := K.plane(at - camera.global_position)
+	var forward := K.plane(-camera.global_basis.z)
+	var off := rad_to_deg(acos(clampf(forward.normalized().dot(to.normalized()), -1.0, 1.0)))
 	print("VOICES he is %.1f deg off the arrival camera's axis, %.1f m away"
 		% [off, to.length()])
 	_ck("C1 he is in the arrival frame (%.1f deg off axis)" % off, off < 24.0)
 
 	# And NO counter, which is the half of him that is new. This checked for
 	# exactly one while he stood on the plaza's middle behind a stall; he is the
-	# person who greets you now, standing on the hero's own axis with nothing in
-	# front of him (`Garrison.KEEPER_AT`), and a stall is the one object that can
+	# person who greets you now, standing on the arrival axis with nothing in
+	# front of him, and a stall is the one object that can
 	# put itself between a greeting and the person being greeted. Kept as a check
 	# rather than deleted: the absence is the decision, so it is the thing worth
 	# failing over if somebody gives him furniture again.
