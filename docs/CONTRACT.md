@@ -2347,14 +2347,38 @@ almost nothing — `capture()` stalls the game clock for longer than the chain
 window, so a director that screenshots mid-chain breaks the thing it is
 measuring. The poses are `swing_lookdev`'s job.
 
-### Ranged — `HeroRanged` owns the bow and the hookshot
+### Ranged — `HeroRanged` owns the bow, hookshot, and temporary lobs
 
 `scripts/combat/hero_ranged.gd`, a child of the hero and a **sibling of
 `HeroCombat`**, not more of it. HeroCombat is the sword arm: the swing, the
 block cone, the sockets every model hangs off. What an arrow does after it
 leaves has nothing to do with any of that. HeroCombat still owns the combat
 BUTTONS (one reader, §4) and hands the shoulders' two edges straight to it when
-the right hand is not holding the sword (`HeroCombat._tick_item_trigger`).
+the right hand is not holding the sword, or when a carried barrel temporarily
+occupies both hands (`HeroCombat._tick_item_trigger`).
+
+**Issue #198's barrel is a world claim, not equipment.** An idle
+`ExplosiveBarrel` participates in the ordinary `Prompt`/`Interactable` path as
+`PICK UP BARREL`; a real Hero delegates that activation to its public
+`HeroRanged` child. Exactly one barrel may be carried. It is absent from `Game`,
+the inventory, persistence, loadouts, and the armament ring. While held it hides
+the ordinary mounted-weapon presentation and owns both `attack` and `heavy`
+instead of sword, Heavy, guard, or the selected armament. Press/hold raises the
+existing aim camera and crosshair; release commits the existing cast/throw pose
+and launches from the barrel's actual carried position at
+`K.BURST_THROW_SPEED` under full `K.GRAVITY`.
+
+Burst and the carried barrel use the same typed world-space `LobTargeter` and no
+new HUD or signal family. `HeroRanged._physics_process` updates it with safe
+direct-space queries at the live physics increment. Burst prediction reproduces
+`BurstCast` gravity, `MOTE_R` stand-off, `BOUNCE`, and `SETTLE_SPEED` until its
+final rest; barrel prediction starts at the body centre and marks its first
+collision. Queries use the launched object's masks/area policy and exclude the
+Hero and carried barrel colliders. No bounded hit means no marker. Release,
+cancel, loss, or a carried barrel starting its fuse lowers aim, hides the marker,
+and restores the prior mounted presentation. `ExplosiveBarrel.throw_from()`
+remains the fuse handoff, and its existing first-impact, fuse, chain, blast,
+damage, and exactly-once rules remain authoritative.
 
 **A drawn item is fired by a HELD shoulder, not a press.** Down raises and aims,
 up fires. Either shoulder works — `attack` and `heavy` are ORed on both the edge
@@ -2373,6 +2397,8 @@ hero.ranged.cancel_use()                             # put it down, fire nothing
 hero.ranged.busy() -> bool                           # a shot is mid-flight
 hero.ranged.aiming -> bool                           # a sighted item is OUT
 hero.ranged.aim_item() -> StringName                 # ...and RAISED, or &""
+hero.ranged.take_barrel(barrel) -> bool              # Prompt-only world claim
+hero.ranged.has_carried_barrel() -> bool             # temporary hand owner
 ```
 
 `use_release()` is called **unconditionally** whenever neither shoulder is down,

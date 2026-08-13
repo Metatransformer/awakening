@@ -155,6 +155,9 @@ became capable through their actions.
 - Item verbs that open combat and puzzle possibilities rather than merely raising numbers.
 - Three bounded non-combat utility tools that turn ordinary metal and home work
   into visible preparation choices without entering the combat kit.
+- Existing explosive barrels may be picked up one at a time and thrown through
+  the ordinary combat shoulders; Burst and the carried barrel share one
+  world-space lob landing marker under issue #198.
 - One living garrison where services, upgrades, artifacts, civil time, bounded
   Firewood/Hearth and fishing/provisions routines, and visible change make
   returning a mode of play without becoming a settlement simulation.
@@ -183,8 +186,8 @@ sessions remain the active proof.
 - More raid cadence, defenses, routes, attackers, or garrison roles only after
   the active choice proves interesting and a separate scope decision authorises
   each addition.
-- The barrel-and-lantern interaction family only as its own bounded proof; it is
-  not part of the raid slice.
+- Any barrel-and-lantern expansion beyond #198's single player-throw extension
+  and shared Burst/barrel marker; it is not part of the raid slice.
 - Further home-life responsibilities only when Firewood/Hearth or a successor
   test shows that they deepen belonging without becoming chores.
 - Any mining or utility-tool expansion only after the fixed #184 slice produces
