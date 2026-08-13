@@ -21,8 +21,8 @@ extends Control
 ##    are in trouble, because it is the answer to "what happens if I do not make
 ##    it back", and §3.1's whole argument is that the answer has to be legible
 ##    for the entire run rather than rolled at the moment of death. So it is not
-##    a mark on five cells: it is a card, with a caption, and A moves a stack
-##    across the line in either direction.
+##    a mark on five cells: it is a card, with a caption, and A opens that
+##    stack's local actions beside it.
 ##  * **A component mark.** A component and an ingredient compete for the same
 ##    cell, and which one you are looking at decides whether it is going to the
 ##    vendor or to the forge. The mark is the ◆ and the caption says which.
@@ -150,7 +150,6 @@ var _band: Control
 var _band_slot: VBoxContainer
 var _stock: GridContainer
 var _stock_empty: Label
-var _drop: Button
 var _back: Button
 ## The hover card. It replaced five labels in a column on the right — see
 ## `RIGHT_W` — and it is fed from `_describe` and from nowhere else.
@@ -170,12 +169,6 @@ var _selected_index: int = -1
 var _selected_from_case: bool = false
 var _selected_id: StringName = &""
 var _selected_count: int = 0
-## `ItemGrid` deliberately treats every press as activation. Inventory needs one
-## extra distinction: a mouse click selects for the adjacent Drop verb, while A
-## keeps its existing pack/unpack action.
-var _mouse_cell_press: bool = false
-
-
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -204,6 +197,17 @@ func _ready() -> void:
 	# tiles now. Two subscribers repainting the same card is how a screen ends up
 	# doing its work twice per press.
 	refresh()
+
+
+## B / Escape belongs to the local focus context before it belongs to the page.
+## `_input` runs ahead of PauseMenu's `_unhandled_input`, so one cancel closes
+## only this card instead of also backing out of Inventory in the same frame.
+func _input(event: InputEvent) -> void:
+	if not is_visible_in_tree() or not _actions_open():
+		return
+	if event.is_action_pressed(&"ui_cancel"):
+		_close_actions()
+		get_viewport().set_input_as_handled()
 
 
 # --- Chrome -----------------------------------------------------------------
@@ -347,14 +351,6 @@ func _build() -> void:
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	frow.add_child(spacer)
-	_drop = Button.new()
-	_drop.name = "Drop"
-	_drop.text = "Drop"
-	_drop.custom_minimum_size.x = 160
-	_drop.disabled = true
-	_drop.pressed.connect(_on_drop_pressed)
-	_drop.focus_entered.connect(_describe_selected)
-	frow.add_child(_drop)
 	_back = Button.new()
 	_back.text = "Back"
 	_back.custom_minimum_size.x = 160
@@ -365,6 +361,65 @@ func _build() -> void:
 	# the bag, the doll and the footer alike, and a card inside the frame would be
 	# clipped by it at the two edges where the placement most often lands.
 	_tip = ItemTip.make(self)
+	_build_actions()
+
+
+## One item's verbs, raised beside that item's tile. The full-rect parent is an
+## input shield rather than a dimmer: the pouch remains visible as context, but
+## neither pointer nor focus can reach it until Back resolves this local choice.
+func _build_actions() -> void:
+	var overlay := Control.new()
+	overlay.name = "ItemActions"
+	overlay.visible = false
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.z_index = 20
+	add_child(overlay)
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	var frame := PanelContainer.new()
+	frame.name = "Frame"
+	frame.add_theme_stylebox_override("panel", UITheme.hover_card())
+	frame.clip_contents = true
+	frame.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.add_child(frame)
+
+	var pad := MarginContainer.new()
+	pad.name = "Pad"
+	for side in ["left", "right", "top", "bottom"]:
+		pad.add_theme_constant_override("margin_" + side, 8)
+	frame.add_child(pad)
+
+	var buttons := VBoxContainer.new()
+	buttons.name = "Buttons"
+	buttons.add_theme_constant_override("separation", 6)
+	pad.add_child(buttons)
+
+	var context := Button.new()
+	context.name = "Context"
+	context.custom_minimum_size.x = 160
+	UITheme.style_pill_button(context)
+	context.add_theme_stylebox_override("focus", UITheme.focus_rim(true))
+	context.pressed.connect(_on_context_pressed)
+	buttons.add_child(context)
+
+	var drop := Button.new()
+	drop.name = "Drop"
+	drop.text = "Drop"
+	drop.custom_minimum_size.x = 160
+	UITheme.style_pill_button(drop)
+	drop.add_theme_stylebox_override("focus", UITheme.focus_rim(true))
+	drop.pressed.connect(_on_drop_pressed)
+	buttons.add_child(drop)
+
+	var back := Button.new()
+	back.name = "Back"
+	back.text = "Back"
+	back.custom_minimum_size.x = 160
+	UITheme.style_pill_button(back)
+	back.add_theme_stylebox_override("focus", UITheme.focus_rim(true))
+	back.pressed.connect(func() -> void: _close_actions())
+	buttons.add_child(back)
+	MenuUtil.chain([context, drop, back])
 
 
 ## The figure, and the three things hanging off it. Read-only: see
@@ -488,9 +543,9 @@ func _fill_cells() -> void:
 
 
 ## `ItemGrid` reports padding cells as -1 because most collections do not care
-## which empty position was crossed. Inventory does: an empty selected cell must
-## disable Drop, so this panel adds the exact cell position without changing the
-## shared grid contract. Focus, hover and click all describe the same cell.
+## which empty position was crossed. Inventory does: its hover card still names
+## the exact empty slot, so this panel adds that position without changing the
+## shared grid contract. Activation remains ItemGrid's one shared path.
 func _wire_cell_selection(grid_of: ItemGrid, case_side: bool) -> void:
 	for i in grid_of.count():
 		var cell := grid_of.cell_at(i)
@@ -500,13 +555,6 @@ func _wire_cell_selection(grid_of: ItemGrid, case_side: bool) -> void:
 		var index := i
 		cell.focus_entered.connect(func() -> void: _describe(index, case_side))
 		cell.mouse_entered.connect(func() -> void: _describe(index, case_side))
-		cell.gui_input.connect(func(event: InputEvent) -> void:
-			if event is InputEventMouseButton \
-					and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-				_mouse_cell_press = true)
-		cell.pressed.connect(func() -> void:
-			_describe(index, case_side)
-			_mouse_cell_press = false)
 
 
 ## One region's cells, in grid order: the item id and how many are in that cell.
@@ -641,6 +689,7 @@ func _process(delta: float) -> void:
 		# Hidden is not the same as un-processed: a Control keeps ticking when its
 		# parent screen is swapped out, and without this the pouch would fill its
 		# gauge from another screen's Y press.
+		_close_actions(false)
 		_reset_hold()
 		return
 
@@ -881,11 +930,9 @@ func _wire_focus() -> void:
 	MenuUtil.link_down(_rope, _back)
 	_rope.focus_neighbor_left = ^"."
 	_rope.focus_neighbor_right = ^"."
-	# Keep the case -> bag -> Rope -> Back vertical loop intact. Drop is the
-	# footer's adjacent branch, reached horizontally when the selected cell is live.
-	MenuUtil.link_right(_drop, _back)
-	_drop.focus_neighbor_top = _drop.get_path_to(_rope)
-	_drop.focus_neighbor_bottom = _drop.get_path_to(first)
+	# The footer has one safe exit. Item verbs live beside their tile, so there is
+	# no horizontal branch here to suggest that Drop acts on some distant row.
+	_back.focus_neighbor_left = ^"."
 	_back.focus_neighbor_bottom = _back.get_path_to(first)
 	_back.focus_next = _back.get_path_to(first)
 	_back.focus_neighbor_right = ^"."
@@ -898,6 +945,7 @@ func _wire_focus() -> void:
 ## leaves the dungeon, and `inventory` is Select while the hold is Y only until
 ## somebody rebinds one of them.
 func focus_first() -> void:
+	_close_actions(false)
 	_rope_armed = false
 	_reset_hold()
 	# On the case, deliberately. The first thing the screen should say when it
@@ -948,6 +996,10 @@ func grid() -> ItemGrid:
 
 
 func refresh() -> void:
+	# A transaction can emit `bag_changed` while the action card is open. Resolve
+	# its focus context before repainting so it never outlives the cell identity it
+	# was opened for; the grid may reuse buttons, but it is not required to.
+	_close_actions()
 	_fill_cells()
 	_sync_selected_cell()
 	_paint_doll()
@@ -1006,61 +1058,114 @@ func _select_cell(index: int, case_side: bool) -> void:
 		if id != &"" and count > 0 and ItemDb.get_def(id) != null:
 			_selected_id = id
 			_selected_count = count
-	if _drop != null:
-		_drop.disabled = _selected_id == &"" or _selected_count <= 0
 
 
 func _sync_selected_cell() -> void:
 	_select_cell(_selected_index, _selected_from_case)
 
 
-func _describe_selected() -> void:
-	if _selected_index >= 0:
-		_describe(_selected_index, _selected_from_case)
-
-
 func _on_drop_pressed() -> void:
 	_sync_selected_cell()
 	if _selected_id == &"" or _selected_count <= 0:
+		_close_actions()
 		return
-	drop_requested.emit(_selected_id, _selected_count, _selected_from_case)
+	var id := _selected_id
+	var count := _selected_count
+	var from_case := _selected_from_case
+	_close_actions()
+	drop_requested.emit(id, count, from_case)
 
 
-## A on a carried cell packs that stack into the case.
-##
+## Every occupied activation opens the same local choice, whether ItemGrid got a
+## mouse click or `ui_accept`. Empty cells never emit `cell_activated`, and the
+## live-array check keeps a stale synthetic press harmless too.
+func _on_hold_activated(index: int) -> void:
+	_open_actions(index, false)
+
+
+func _on_case_activated(index: int) -> void:
+	_open_actions(index, true)
+
+
+func _actions_open() -> bool:
+	var overlay := get_node_or_null("ItemActions") as Control
+	return overlay != null and overlay.visible
+
+
+## Open only after re-reading the displayed stack. The selected index/side are
+## already this panel's cell identity, so the card does not keep a Button ref
+## that could be freed by a later capacity refresh.
+func _open_actions(index: int, case_side: bool) -> void:
+	_select_cell(index, case_side)
+	if _selected_id == &"" or _selected_count <= 0:
+		return
+	var grid_of: ItemGrid = _case_grid if case_side else _grid
+	var source := grid_of.cell_for(index)
+	var overlay := get_node_or_null("ItemActions") as Control
+	var context := get_node_or_null("ItemActions/Frame/Pad/Buttons/Context") as Button
+	var back := get_node_or_null("ItemActions/Frame/Pad/Buttons/Back") as Button
+	if source == null or overlay == null or context == null or back == null:
+		return
+	_describe(index, case_side)
+	_tip.hide_tip()
+	context.text = "Unpack" if case_side else "Pack"
+	overlay.visible = true
+	_place_actions(source)
+	back.grab_focus()
+
+
+## Use the hover card's proven four-way placement solver: same anchor contract,
+## same screen-edge behavior, but a smaller card and a higher draw order.
+func _place_actions(source: Control) -> void:
+	var overlay := get_node_or_null("ItemActions") as Control
+	var frame := get_node_or_null("ItemActions/Frame") as PanelContainer
+	if overlay == null or frame == null:
+		return
+	frame.size = frame.get_combined_minimum_size()
+	var spot := ItemTip.spot_for(source.get_global_rect(), frame.size,
+		get_viewport_rect().size)
+	frame.position = spot - overlay.get_global_rect().position
+
+
+## Back is a pure focus operation. Resolve against the grids NOW rather than a
+## cached source node, because refresh is allowed to rebuild their buttons.
+func _close_actions(restore_focus: bool = true) -> void:
+	var overlay := get_node_or_null("ItemActions") as Control
+	if overlay == null or not overlay.visible:
+		return
+	overlay.visible = false
+	if not restore_focus or not is_visible_in_tree():
+		return
+	var grid_of: ItemGrid = _case_grid if _selected_from_case else _grid
+	var source := grid_of.cell_for(_selected_index)
+	if source != null and source.is_visible_in_tree():
+		source.grab_focus()
+
+
 ## A whole cell at a time, in both directions. Per-item packing would be the more
 ## flexible verb and it is the wrong one: the case is five slots and the choice
 ## §3.1 wants you making is *which things*, not how many of a thing — and a
 ## part-stack moved on its own costs a slot on each side of the line for nothing.
-func _on_hold_activated(index: int) -> void:
-	if _mouse_cell_press:
+func _on_context_pressed() -> void:
+	_sync_selected_cell()
+	if _selected_id == &"" or _selected_count <= 0:
+		_close_actions()
 		return
-	if index < 0 or index >= _cell_ids.size():
-		return
-	var id: StringName = _cell_ids[index]
-	if id == &"":
-		return
-	if Run.stow(id, _cell_counts[index]) <= 0:
-		var why := Run.case_refusal(id)
-		notice.emit(why if why != "" else "That will not fit in the case.", true)
-		return
-	notice.emit("%s packed." % ItemDb.get_def(id).display_name, false)
-	refresh()
-
-
-## A on a cased cell takes it back out. It stays in the bag.
-func _on_case_activated(index: int) -> void:
-	if _mouse_cell_press:
-		return
-	if index < 0 or index >= _case_ids.size():
-		return
-	var id: StringName = _case_ids[index]
-	if id == &"":
-		return
-	if Run.unstow(id, _case_counts[index]) <= 0:
-		notice.emit("There is no room in the bag for that outside the case.", true)
-		return
-	notice.emit("%s unpacked." % ItemDb.get_def(id).display_name, false)
+	var id := _selected_id
+	var count := _selected_count
+	var from_case := _selected_from_case
+	_close_actions()
+	if from_case:
+		if Run.unstow(id, count) <= 0:
+			notice.emit("There is no room in the bag for that outside the case.", true)
+			return
+		notice.emit("%s unpacked." % ItemDb.get_def(id).display_name, false)
+	else:
+		if Run.stow(id, count) <= 0:
+			var why := Run.case_refusal(id)
+			notice.emit(why if why != "" else "That will not fit in the case.", true)
+			return
+		notice.emit("%s packed." % ItemDb.get_def(id).display_name, false)
 	refresh()
 
 
@@ -1188,8 +1293,6 @@ func _describe(index: int, case_side: bool) -> void:
 		(("%s eats this. It goes to the workbench when you reach "
 		+ "garrison, not to the vendor.") % def.bench_name().capitalize() if part else \
 		("The vendor buys this. What it is worth is a quarter of what leaving costs."))
-	# The verb, on the end, and phrased as the consequence rather than the key —
-	# what A does here is decide whether this survives you.
-	_tip.say_note(fate + ("   A takes it out of the case." if case_side
-		else "   A packs it into the case.")
-		+ "   Drop throws this displayed stack onto the floor.", UITheme.TEXT_DIM)
+	# The key opens the verbs beside the exact tile. Naming a footer action here
+	# would teach the stale interaction this local card replaced.
+	_tip.say_note(fate + "   A opens item actions.", UITheme.TEXT_DIM)
