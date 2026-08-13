@@ -6,6 +6,7 @@ extends Node
 
 const GarrisonRaidStateScript := preload(
 	"res://scripts/systems/garrison_raid_state.gd")
+const GardenStateScript := preload("res://scripts/systems/garden_state.gd")
 
 signal garrison_changed
 signal garrison_raid_restoring
@@ -366,6 +367,7 @@ var well_fed_ready: bool = false
 var well_fed_trip: bool = false
 var connected_days: Dictionary[StringName, int] = {}
 var _garrison_raid := GarrisonRaidStateScript.new()
+var _garden := GardenStateScript.new()
 
 
 # --- The starter kit --------------------------------------------------------
@@ -396,6 +398,7 @@ const STARTER_KIT: Array[StringName] = []
 
 func _ready() -> void:
 	_garrison_raid.changed.connect(_on_garrison_raid_changed)
+	_garden.changed.connect(_on_garden_changed)
 	_grant_starter_kit()
 
 
@@ -589,6 +592,7 @@ func garrison_snapshot() -> Dictionary:
 		"well_fed_trip": well_fed_trip,
 		"connected_days": connected_days.duplicate(),
 		"raid": _garrison_raid.snapshot(),
+		"garden": _garden.snapshot(),
 	}
 
 
@@ -648,8 +652,50 @@ func restore_garrison(data: Dictionary) -> void:
 	well_fed_ready = restored_ready
 	well_fed_trip = restored_trip
 	connected_days = restored_connected
+	var raw_garden: Variant = data.get("garden", {})
+	_garden.restore(raw_garden as Dictionary if raw_garden is Dictionary else {})
 	if changed:
 		garrison_changed.emit()
+
+
+func garden_plot(slot: int) -> Dictionary:
+	return _garden.plot(slot)
+
+
+func garden_tree(site: int) -> Dictionary:
+	return _garden.tree(site)
+
+
+func plant_plot(slot: int, seed_id: StringName) -> bool:
+	return _garden.plant_plot(slot, seed_id, Clock.day)
+
+
+func water_plot(slot: int) -> bool:
+	return _garden.water_plot(slot, Clock.day)
+
+
+func harvest_plot(slot: int) -> bool:
+	return _garden.harvest_plot(slot, Clock.day)
+
+
+func plant_tree(site: int, sapling_id: StringName) -> bool:
+	return _garden.plant_tree(site, sapling_id, Clock.day)
+
+
+func water_tree(site: int) -> bool:
+	return _garden.water_tree(site, Clock.day)
+
+
+func harvest_tree(site: int) -> bool:
+	return _garden.harvest_tree(site, Clock.day)
+
+
+func advance_garden_dawn(day: int) -> void:
+	_garden.advance_dawn(day)
+
+
+func _on_garden_changed() -> void:
+	garrison_changed.emit()
 
 
 func raid_arm(at_day: int, at_hour: float) -> bool:
@@ -1333,6 +1379,14 @@ func spend_gold(n: int) -> bool:
 	gold -= n
 	Bus.gold_changed.emit(gold)
 	return true
+
+
+## Roll back a validated purchase without counting the returned coin as earnings.
+func refund_gold(n: int) -> void:
+	if n <= 0:
+		return
+	gold += n
+	Bus.gold_changed.emit(gold)
 
 
 # --- The forge --------------------------------------------------------------

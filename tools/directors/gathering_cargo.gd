@@ -64,9 +64,10 @@ func run(rig) -> void:
 
 
 func _check_catalogue_and_sale_policy(rig) -> void:
-	rig.check(SupplyCargoDb.SUPPLY_IDS.size() == 5
-		and SupplyCargoDb.FISH_IDS.size() == 4,
-		"catalogue exposes one Firewood ID and four exact fish IDs")
+	rig.check(SupplyCargoDb.SUPPLY_IDS.size() == 10
+		and SupplyCargoDb.FISH_IDS.size() == 4
+		and SupplyCargoDb.FOOD_IDS.size() == 9,
+		"catalogue exposes Firewood plus four fish and five garden foods")
 	for id: StringName in SupplyCargoDb.SUPPLY_IDS:
 		var def := ItemDb.get_def(id)
 		var expected_category := SupplyCargoDb.CATEGORY_FIREWOOD \
@@ -80,7 +81,7 @@ func _check_catalogue_and_sale_policy(rig) -> void:
 				and SupplyCargoDb.food_units(id) == 0,
 				"Firewood is not food or fish")
 		else:
-			rig.check(SupplyCargoDb.is_fish(id)
+			rig.check((SupplyCargoDb.is_fish(id) or GardenDb.is_produce(id))
 				and SupplyCargoDb.food_units(id) == 1,
 				"%s is one exact Food unit" % id)
 
@@ -104,6 +105,8 @@ func _check_stack_rules(rig) -> void:
 	}]
 	for fish_id: StringName in SupplyCargoDb.FISH_IDS:
 		stack_cases.append({"id": fish_id, "stack": 6})
+	for produce_id: StringName in GardenDb.PRODUCE_IDS:
+		stack_cases.append({"id": produce_id, "stack": 8})
 	for row: Dictionary in stack_cases:
 		var id: StringName = row["id"]
 		var stack: int = row["stack"]

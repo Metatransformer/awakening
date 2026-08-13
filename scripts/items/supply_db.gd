@@ -3,11 +3,10 @@ extends Catalogue
 ## What the quartermaster offers across her two services: repeatable stock in
 ## Trade, and permanent bag/health progression under Upgrades.
 ##
-## **Six rows now, and four of them are Trade stock** (card #98, 2026-08-11).
-## Arrows, Burst charges, food and drink are the expendables -- the things you buy
-## in the yard, take down, and come back without. Two of the four arrived from
-## other counters and two are new, and the sentence that admits all four is the
-## one Kessa says about herself: a quartermaster ISSUES. She does not make
+## **Eleven rows now, and nine of them are Trade stock.** Arrows, Burst charges,
+## food, drink, seeds, and saplings are the expendables -- the things you buy
+## in the yard, take down, and come back without. The sentence that admits all
+## of them is the one Kessa says about herself: a quartermaster ISSUES. She does not make
 ## anything and nothing on this board is crafted (`crafts()` is false for every
 ## row), which is the whole difference between this counter and the forge or the
 ## bench next door.
@@ -49,6 +48,8 @@ const LIMITS := {
 ## The repeatable expendables shown on the quartermaster's two-sided Trade board.
 const STOCK_IDS: Array[StringName] = [
 	&"arrows", &"charges", &"hardtack", &"small_beer",
+	&"turnip_seed", &"cabbage_seed", &"sunpepper_seed",
+	&"apple_sapling", &"pear_sapling",
 ]
 
 ## The permanent linear ladders shown by her separate Upgrades service.
@@ -89,6 +90,13 @@ const CHARGE_GOLD := 90
 const RATION_GOLD := {
 	&"hardtack": 25,
 	&"small_beer": 45,
+}
+const PLANTING_GOLD := {
+	&"turnip_seed": 20,
+	&"cabbage_seed": 30,
+	&"sunpepper_seed": 42,
+	&"apple_sapling": 75,
+	&"pear_sapling": 95,
 }
 
 
@@ -194,6 +202,11 @@ static func _board() -> Array[Dictionary]:
 		},
 		_ration_line(&"hardtack"),
 		_ration_line(&"small_beer"),
+		_planting_line(&"turnip_seed"),
+		_planting_line(&"cabbage_seed"),
+		_planting_line(&"sunpepper_seed"),
+		_planting_line(&"apple_sapling"),
+		_planting_line(&"pear_sapling"),
 		{
 			"id": &"bag_slot",
 			"label": "BAG SLOT",
@@ -235,6 +248,23 @@ static func _ration_line(id: StringName) -> Dictionary:
 	}
 
 
+static func _planting_line(id: StringName) -> Dictionary:
+	var batch := _planting_batch(id)
+	return {
+		"id": id,
+		"label": "%s X%d" % [GardenDb.name_of(id).to_upper(), batch],
+		"cost": Game.trade_purchase_price(int(PLANTING_GOLD.get(id, 0))),
+		"parts": {},
+		"blurb": "Garden stock. Water it before each dawn until it is grown.",
+		"detail": "%s: %d carried, room for %d" % [
+			GardenDb.name_of(id), int(Run.bag.get(id, 0)), Run.room_for(id)],
+	}
+
+
+static func _planting_batch(id: StringName) -> int:
+	return 4 if GardenDb.is_seed(id) else 1 if GardenDb.is_sapling(id) else 0
+
+
 static func _scaled(base: int, id: StringName, factor: float) -> int:
 	if id == &"":
 		return base
@@ -243,6 +273,8 @@ static func _scaled(base: int, id: StringName, factor: float) -> int:
 
 
 static func remaining(id: StringName) -> int:
+	if GardenDb.is_planting(id):
+		return -1 if Run.room_for(id) >= _planting_batch(id) else 0
 	if id == &"charges":
 		# The pouch's headroom in BUNDLES, rounded up, so a player one charge
 		# short of full still sees a line they can press. `add_charges` clamps, so
@@ -264,6 +296,8 @@ static func remaining(id: StringName) -> int:
 ## one place, because `can_buy` and `refusal` have to agree about it and the way
 ## they stop agreeing is by each growing their own `id ==` chain.
 static func _full(id: StringName) -> bool:
+	if GardenDb.is_planting(id):
+		return Run.room_for(id) < _planting_batch(id)
 	match id:
 		&"arrows": return Game.arrows >= Game.max_arrows
 		&"charges": return Game.charges >= Game.max_charges
@@ -288,6 +322,8 @@ static func refusal(line: Dictionary) -> String:
 	# again the moment you eat one. `rations.gd` beat B12 caught it; the ladders
 	# are unaffected because `_full` is false for both of them.
 	if _full(id):
+		if GardenDb.is_planting(id):
+			return "BAG IS FULL"
 		# Named per vessel rather than one "YOU ARE FULL", because the refusal is
 		# also the only place the counter says WHERE the thing goes -- a player
 		# who has never eaten does not yet know that food is a stack of twenty.
@@ -312,7 +348,19 @@ static func buy(line: Dictionary) -> bool:
 	if not Game.spend_gold(int(line["cost"])):
 		return false
 
-	Game.upgrades[id] = int(Game.upgrades.get(id, 0)) + 1
+	if GardenDb.is_planting(id):
+		var batch := _planting_batch(id)
+		var collected := Run.collect(id, batch)
+		if collected != batch:
+			if collected > 0:
+				Run.consume(id, collected)
+			Game.refund_gold(int(line["cost"]))
+			return false
+		Bus.item_acquired.emit(id)
+		return true
+
+	if UPGRADE_IDS.has(id):
+		Game.upgrades[id] = int(Game.upgrades.get(id, 0)) + 1
 	match id:
 		&"arrows":
 			Game.add_arrows(10)

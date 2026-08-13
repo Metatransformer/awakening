@@ -521,15 +521,6 @@ func _build_garden() -> void:
 	_solid_box(garden, "GardenFenceEastSouth", Vector3(0.16, 0.62, 3.35),
 		Vector3(-3.95, 0.31, 2.575), MAT_WOOD)
 
-	for row: int in 3:
-		var x := -10.55 + float(row) * 1.0
-		_visual_box(garden, "GardenCropRow%02d" % (row + 1),
-			Vector3(0.78, 0.10, 5.0), Vector3(x, 0.10, 1.2), MAT_WOOD)
-		for plant: int in 4:
-			_visual_box(garden, "GardenPlantMass%02d_%02d" % [row + 1, plant + 1],
-				Vector3(0.62, 0.38 + 0.06 * float((row + plant) % 2), 0.55),
-				Vector3(x, 0.29, -0.45 + float(plant) * 1.1), MAT_GRASS)
-
 	_solid_box(garden, "GardenWaterButt", Vector3(1.15, 0.82, 1.15),
 		Vector3(-5.2, 0.41, 2.85), MAT_WOOD)
 	_visual_box(garden, "GardenWaterRim", Vector3(1.35, 0.16, 1.35),

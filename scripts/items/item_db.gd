@@ -151,6 +151,13 @@ static func _build() -> void:
 	_add(ItemDef.gem(&"cut_gemstone", "Cut Gemstone", 95, R, 3,
 		Color(0.72, 0.46, 0.86), "Faceted before the Sundering. Nobody has cut one since."))
 
+	# --- Garden planting stock: repeatable quartermaster merchandise ----------
+	for planting_id: StringName in GardenDb.PLANTING_IDS:
+		_add(ItemDef.make(planting_id, GardenDb.name_of(planting_id),
+			GardenDb.planting_value(planting_id), C,
+			GardenDb.planting_stack(planting_id), GardenDb.tint_of(planting_id),
+			"Plant it in an empty garden site. It survives only by being watered."))
+
 	# --- Garrison supplies: carried to the central gate crate ----------------
 	_add(ItemDef.supply(SupplyCargoDb.FIREWOOD_ID,
 		SupplyCargoDb.name_of(SupplyCargoDb.FIREWOOD_ID), 5,
@@ -167,6 +174,10 @@ static func _build() -> void:
 		_add(ItemDef.supply(fish_id, SupplyCargoDb.name_of(fish_id), 6,
 			fish_tints[i],
 			"Fresh provisions for supper. It belongs in the gate supply box."))
+	for produce_id: StringName in GardenDb.PRODUCE_IDS:
+		_add(ItemDef.supply(produce_id, GardenDb.name_of(produce_id), 8,
+			GardenDb.tint_of(produce_id),
+			"Fresh garden food for supper. It belongs in the gate supply box."))
 
 	# --- The twelve relics ---------------------------------------------------
 	# Built from `RelicDb.RELICS`, never typed out again. `Run.collect` refuses an

@@ -112,7 +112,8 @@ inside this grammar. Their counts and production status belong to
 | Artifacts | Which recovered relic do I repair or read, donate, and see change the garrison? | [ITEMS.md](ITEMS.md), [METAGAME.md](METAGAME.md) |
 | Civil day | Which service can I reach before work, Bonfire Time, sleep, or dawn changes the yard? | [GARRISON_LIFE.md](GARRISON_LIFE.md) |
 | Firewood and Hearth | Is the bounded home responsibility worth completing for the next service window? | [GARRISON_LIFE.md](GARRISON_LIFE.md) |
-| Fishing and Fish reserve | Is a near or deep catch worth its difficulty, civil time, daily yield, and limited reserve space? | [GARRISON_LIFE.md](GARRISON_LIFE.md) |
+| Fishing and Food reserve | Is a near or deep catch worth its difficulty, civil time, daily yield, and limited reserve space? | [GARRISON_LIFE.md](GARRISON_LIFE.md) |
+| Garden and orchard | Which beds and young trees do I tend before dawn, and when do I harvest their Food cargo? | [GARRISON_LIFE.md](GARRISON_LIFE.md) |
 | Supper and Well Fed | Do I stock the next shared supper now for a temporary advantage on the following descent? | [GARRISON_LIFE.md](GARRISON_LIFE.md) |
 | Morale causes | Which visible acts of warmth, provision, and connection are currently supporting each resident? | [GARRISON_LIFE.md](GARRISON_LIFE.md) |
 | Residents and story | Who has arrived, what do they now know, and what has visibly changed because of progress? | [GARRISON_LIFE.md](GARRISON_LIFE.md), [LORE_AND_STORY.md](LORE_AND_STORY.md) |

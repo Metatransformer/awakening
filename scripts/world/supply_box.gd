@@ -6,6 +6,7 @@ extends Interactable
 
 const MAT_WOOD := preload("res://assets/materials/mat_wood.tres")
 const MAT_IRON := preload("res://assets/materials/mat_iron.tres")
+const MAT_GRASS := preload("res://assets/materials/mat_grass.tres")
 
 const WIDE := 1.8
 const DEEP := 1.0
@@ -80,7 +81,7 @@ func _build() -> void:
 		Vector3(0.0, 0.20 + BODY_H * 0.36, -0.03))
 
 	# A low sign keeps the crate readable from the gate: crossed logs on the left,
-	# a fish silhouette on the right. These are physical motifs, not floating UI.
+	# fish and produce on the right. These are physical motifs, not floating UI.
 	var sign := Node3D.new()
 	sign.name = &"SupplyMarks"
 	sign.position = Vector3(0.0, 0.66, DEEP * 0.5 + 0.02)
@@ -89,7 +90,8 @@ func _build() -> void:
 		var log_basis := Basis(Vector3.FORWARD, angle)
 		_cylinder(sign, &"FirewoodMark", MAT_IRON, 0.055, 0.52,
 			Transform3D(log_basis, Vector3(-0.46, 0.0, 0.04)), 8)
-	_build_fish(sign, &"FishMark", Vector3(0.46, 0.0, 0.04), 0.82)
+	_build_fish(sign, &"FishMark", Vector3(0.36, 0.05, 0.04), 0.62)
+	_build_produce(sign, &"ProduceMark", Vector3(0.62, -0.04, 0.04), 0.68)
 
 	var stock := Node3D.new()
 	stock.name = &"VisibleStock"
@@ -108,14 +110,17 @@ func _build() -> void:
 		_box(bundle, &"Binding", MAT_IRON, Vector3(0.10, 0.17, 0.26),
 			Vector3.ZERO)
 	for i: int in Game.FISH_CAP:
-		var fish := Node3D.new()
-		fish.name = StringName("Food%d" % (i + 1))
-		fish.position = Vector3(0.43, 0.77 + float(i) * 0.13,
+		var provision := Node3D.new()
+		provision.name = StringName("Food%d" % (i + 1))
+		provision.position = Vector3(0.43, 0.77 + float(i) * 0.13,
 			-0.20 + float(i % 2) * 0.24)
-		fish.rotation.y = -0.20 + float(i) * 0.18
-		stock.add_child(fish)
-		_food_tokens.append(fish)
-		_build_fish(fish, &"Fish", Vector3.ZERO, 1.0)
+		provision.rotation.y = -0.20 + float(i) * 0.18
+		stock.add_child(provision)
+		_food_tokens.append(provision)
+		if i % 2 == 0:
+			_build_fish(provision, &"Fish", Vector3.ZERO, 0.88)
+		else:
+			_build_produce(provision, &"Produce", Vector3.ZERO, 1.0)
 
 
 func _build_collision() -> void:
@@ -148,6 +153,24 @@ func _build_fish(parent: Node3D, node_name: StringName, at: Vector3,
 		Transform3D(tail_basis, Vector3(-0.24, 0.0, 0.0)), 4)
 	tail.scale.z = 0.42
 	return fish
+
+
+func _build_produce(parent: Node3D, node_name: StringName, at: Vector3,
+		scale_factor: float) -> Node3D:
+	var produce := Node3D.new()
+	produce.name = node_name
+	produce.position = at
+	produce.scale = Vector3.ONE * scale_factor
+	parent.add_child(produce)
+	var bulb := _sphere(produce, &"Bulb", MAT_GRASS, 0.15,
+		Transform3D(Basis.IDENTITY, Vector3(0.0, -0.025, 0.0)))
+	bulb.scale = Vector3(0.92, 0.82, 0.62)
+	for angle: float in [-0.55, 0.0, 0.55]:
+		var leaf_basis := Basis(Vector3.FORWARD, angle)
+		var leaf := _cone(produce, &"Leaf", MAT_GRASS, 0.075, 0.24,
+			Transform3D(leaf_basis, Vector3(sin(angle) * 0.08, 0.16, 0.0)), 5)
+		leaf.scale.z = 0.52
+	return produce
 
 
 func _box(parent: Node3D, node_name: StringName, material: Material,

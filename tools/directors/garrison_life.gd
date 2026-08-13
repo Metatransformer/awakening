@@ -188,6 +188,7 @@ func _daily_state(rig) -> void:
 		"well_fed_trip": false,
 		"connected_days": {},
 		"raid": _default_raid(),
+		"garden": _default_garden(),
 	}, "an older save's absent garrison payload defaults empty and cold")
 	var saved: Dictionary = {
 		"firewood_stock": 2,
@@ -207,6 +208,7 @@ func _daily_state(rig) -> void:
 	Game.restore_garrison(saved)
 	var expected_saved: Dictionary = saved.duplicate(true)
 	expected_saved["connected_days"] = {&"elder": 4}
+	expected_saved["garden"] = _default_garden()
 	var restored_saved: Dictionary = Game.garrison_snapshot()
 	rig.check(restored_saved == expected_saved,
 		"Firewood, Fish, Fed, Well Fed, Connected, and raid state all round-trip")
@@ -217,7 +219,7 @@ func _daily_state(rig) -> void:
 		"JSON-style Connected String keys restore as typed StringName keys")
 	rig.check(not restored_saved.has("carrying_firewood"),
 		"the garrison snapshot no longer writes legacy carrying_firewood state")
-	rig.check(Saves.VERSION == 19, "the additive cargo save contract is version 19")
+	rig.check(Saves.VERSION == 20, "the additive garden save contract is version 20")
 
 	Game.restore_garrison({
 		"fish_caught_day": 4,
@@ -371,7 +373,7 @@ func _well_fed_run(rig) -> void:
 	var focus_before: int = int(Game.upgrades.get(focus_track, 0))
 	var gold_before: int = Game.gold
 	var deaths_before: int = Game.deaths
-	var quarters_before: int = Game.quarters
+	var health_before: int = Game.health_points
 	var stamina_before: float = Game.stamina
 	var flow_busy_before: bool = Flow.busy
 
@@ -420,7 +422,7 @@ func _well_fed_run(rig) -> void:
 	Flow.busy = flow_busy_before
 	Game.gold = gold_before
 	Game.deaths = deaths_before
-	Game.quarters = quarters_before
+	Game.health_points = health_before
 	if had_focus:
 		Game.upgrades[focus_track] = focus_before
 	else:
@@ -460,8 +462,9 @@ func _menu(rig) -> void:
 		return
 	var page_text := " ".join(_all_text(panel))
 	for phrase: String in ["Day", "Bonfire", "Garrison Warmth", "PROVISIONS & MORALE",
-			"Fish reserve", "Carried Firewood cargo", "2 bundles", "Carried Food cargo",
-			"3 fish", "south-gate supply box", "Fed", "Well Fed", "Overall morale", "KEEP THE HEARTH",
+			"Food reserve", "Carried Firewood cargo", "2 bundles", "Carried Food cargo",
+			"3 portions", "GARDEN & ORCHARD", "south-gate supply box", "Fed", "Well Fed",
+			"Overall morale", "KEEP THE HEARTH",
 			"ROSTER", "DONATED RELIC EFFECTS", "ELDER IMPROVEMENTS"]:
 		rig.check(page_text.contains(phrase), "the Garrison page reports %s" % phrase)
 	rig.check(not page_text.contains("hearth stock is full"),
@@ -523,6 +526,23 @@ func _default_raid() -> Dictionary:
 		"advance_notice_delivered": false,
 		"urgent_notice_pending": false,
 		"urgent_notice_delivered": false,
+	}
+
+
+func _default_garden() -> Dictionary:
+	return {
+		"plots": [
+			{"crop_id": &"", "growth": 0, "watered": false},
+			{"crop_id": &"", "growth": 0, "watered": false},
+			{"crop_id": &"", "growth": 0, "watered": false},
+			{"crop_id": &"", "growth": 0, "watered": false},
+		],
+		"trees": [
+			{"tree_id": &"", "age": 0, "watered": false,
+				"fruit_ready": false, "next_fruit_day": 0},
+			{"tree_id": &"", "age": 0, "watered": false,
+				"fruit_ready": false, "next_fruit_day": 0},
+		],
 	}
 
 
