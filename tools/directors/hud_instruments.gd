@@ -31,8 +31,7 @@ func run(rig) -> void:
 	rig.check(instrument.layout_mode() == StringName(mode),
 		"instrument selected the %s layout" % mode)
 	await _capture_layout(rig, instrument, out, output_mode, underground)
-	if not underground:
-		_prove_surface_map(rig, output_mode)
+	await _prove_map(rig, out, output_mode)
 	await _prove_headings(rig, instrument, out, output_mode)
 	await _prove_forward_clock_jump(rig, instrument, out, output_mode)
 	print("HUD INSTRUMENTS OK -- %s" % output_mode)
@@ -69,27 +68,58 @@ func _capture_layout(rig, instrument: CivilInstruments, out: String,
 			"civil instrument is the compact two-band height")
 
 
-func _prove_surface_map(rig, mode: String) -> void:
-	var debug: Dictionary = Hud.surface_map_debug()
-	var provider: Node = rig.get_first_node_in_group(&"surface_map")
-	if not rig.check(provider != null, "%s has a live surface-map provider" % mode):
+func _prove_map(rig, out: String, mode: String) -> void:
+	if not rig.check(Atlas.has_map(), "%s has one active Atlas map" % mode):
 		return
-	rig.check(not debug.is_empty(),
-		"%s provider plan reached the surface renderer" % mode)
-	rig.check(int(debug.get(&"provider_id", 0)) == provider.get_instance_id(),
-		"HUD reports the live %s provider" % mode)
-	rig.check(int(debug.get(&"path_count", 0)) > 0,
-		"%s rendered real authored paths" % mode)
-	rig.check(int(debug.get(&"landmark_count", 0)) > 0,
-		"%s rendered real authored landmarks" % mode)
+	var kind := Atlas.map_kind()
+	var provider_id := Atlas.map_provider_id()
+	var debug: Dictionary = Hud.map_debug()
+	rig.check(not debug.is_empty(), "%s active plan reached MapDraw through HUD" % mode)
+	rig.check(StringName(debug.get(&"kind", &"")) == kind,
+		"HUD reports the active %s kind" % kind)
+	rig.check(int(debug.get(&"provider_id", 0)) == provider_id,
+		"HUD reports the active %s provider" % mode)
 	rig.check(bool(debug.get(&"player_centered", false)),
-		"%s surface radar follows the centred player" % mode)
+		"%s minimap follows the centred player" % mode)
+	if kind == Atlas.KIND_SURFACE:
+		rig.check(not Atlas.surface_plan().is_empty(),
+			"%s Atlas surface plan is non-empty" % mode)
+		rig.check(int(debug.get(&"path_count", 0)) > 0,
+			"%s rendered real authored paths" % mode)
+		rig.check(int(debug.get(&"landmark_count", 0)) > 0,
+			"%s rendered real authored landmarks" % mode)
+	else:
+		rig.check(not Atlas.rooms.is_empty(), "%s Atlas dungeon plan is non-empty" % mode)
+
+	Menu.open_map()
+	await rig.wait_seconds(0.4)
+	var map := Menu.get_node("Root/Screens/MapScreen") as MenuMapPanel
+	rig.check(Menu.is_open and map.visible, "%s opens the pause MAP" % mode)
+	await rig.capture(out.path_join("%s_01_map.png" % mode))
+	var menu_debug := map.map_debug()
+	rig.check(not menu_debug.is_empty(), "%s pause MAP rendered a non-empty plan" % mode)
+	rig.check(Atlas.has_map() and Atlas.map_kind() == kind
+		and Atlas.map_provider_id() == provider_id,
+		"%s pause MAP keeps the same active authority and kind" % mode)
+	rig.check(StringName(menu_debug.get(&"kind", &"")) == kind
+		and int(menu_debug.get(&"provider_id", 0)) == provider_id,
+		"%s pause MAP reports that authority through MapDraw" % mode)
+	var screen_text := " ".join(_all_text(map)).to_lower()
+	if kind == Atlas.KIND_SURFACE:
+		rig.check(not screen_text.contains("nothing down here to chart"),
+			"%s MAP no longer claims the surface is uncharted" % mode)
+		rig.check(screen_text.contains(Atlas.map_title().to_lower()),
+			"%s MAP names the active surface" % mode)
+	Menu.close()
+	await rig.wait_frames(4)
+	rig.check(not Menu.is_open and not Menu.get_tree().paused,
+		"%s closes MAP and leaves pause state clean" % mode)
 
 
 func _output_mode(underground: bool) -> String:
 	if underground:
 		return "dungeon"
-	var provider: Node = Hud.get_tree().get_first_node_in_group(&"surface_map")
+	var provider: Node = Atlas.map_provider()
 	if provider is GarrisonOutskirts:
 		return "outskirts"
 	return "garrison"
@@ -164,3 +194,13 @@ func _prove_forward_clock_jump(rig, instrument: CivilInstruments, out: String,
 	rig.check(instrument.displayed_absolute_minutes() > midnight_start,
 		"midnight wrap continues forward in absolute civil time")
 	Clock.restore(before)
+
+
+func _all_text(root: Node) -> PackedStringArray:
+	var out := PackedStringArray()
+	var label := root as Label
+	if label != null and not label.text.strip_edges().is_empty():
+		out.append(label.text)
+	for child in root.get_children():
+		out.append_array(_all_text(child))
+	return out

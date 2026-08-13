@@ -1,7 +1,9 @@
 class_name MapDraw
 extends RefCounted
-## The dungeon map, drawn. One routine, called at two sizes: the HUD's corner
-## minimap and the pause menu's MAP screen.
+## The active map, drawn. One facade, called at two sizes: the HUD's corner
+## minimap and the pause menu's MAP screen. Dungeon rooms and authored exterior
+## geometry remain different plan vocabularies, but source selection, framing,
+## proof facts, and every call site are shared here.
 ##
 ## **It is line art on purpose.** Not a rendered top-down camera, not a
 ## SubViewport of the real geometry. Three reasons, and only the first is
@@ -66,6 +68,21 @@ const STUB := 0.42
 ## on each side is where the corridor stubs live.
 const FOLLOW_SPAN := 3.4
 
+## Exterior plans keep the authored line weights and glyph size of the compact
+## radar they replaced. The fitted MAP view uses these same primitives at a
+## different projection; it does not own a second plan or symbol table.
+const SURFACE_PATH_W := 3.0
+const SURFACE_SPUR_W := 2.0
+const SURFACE_AREA_W := 1.0
+const SURFACE_HERO_G := 6.0
+const SURFACE_GLYPH_G := 7.0
+const SURFACE_BOUNDS_PAD := 3.0
+
+const SURFACE_GLYPHS: Array[StringName] = [
+	&"gate", &"entrance", &"hearth", &"service", &"landmark",
+	&"dungeon", &"fishing", &"grove",
+]
+
 
 ## Draw the map into `box`.
 ##
@@ -90,9 +107,24 @@ const FOLLOW_SPAN := 3.4
 ## `Hud._draw_minimap` passes by not passing them.
 static func draw_map(ci: CanvasItem, box: Rect2, s_y: float,
 		hero: Node3D, follow: bool = false, zoom: float = 1.0,
-		pan: Vector2 = Vector2.ZERO) -> void:
-	if not Atlas.has_floor():
-		return
+		pan: Vector2 = Vector2.ZERO) -> Dictionary:
+	if not Atlas.has_map():
+		return {}
+	match Atlas.map_kind():
+		Atlas.KIND_DUNGEON:
+			return _draw_dungeon_map(ci, box, s_y, hero, follow, zoom, pan)
+		Atlas.KIND_SURFACE:
+			return _draw_surface_map(ci, box, s_y, Atlas.surface_plan(), hero,
+				follow, zoom, pan)
+	return {}
+
+
+static func _draw_dungeon_map(ci: CanvasItem, box: Rect2, s_y: float,
+		hero: Node3D, follow: bool, zoom: float, pan: Vector2) -> Dictionary:
+	var facts := _debug_facts(Atlas.KIND_DUNGEON)
+	facts[&"room_count"] = Atlas.rooms.size()
+	facts[&"explored_count"] = Atlas.explored_count()
+	facts[&"player_centered"] = follow and hero != null
 	var b := Atlas.bounds()
 	var pitch := 0.0
 	var origin := Vector2.ZERO
@@ -113,7 +145,7 @@ static func draw_map(ci: CanvasItem, box: Rect2, s_y: float,
 		# box to slide to and `MenuMapPanel` clamps it to zero.
 		origin = box.position + (box.size - Vector2(b.size) * pitch) * 0.5 + pan
 	if pitch < 4.0:
-		return
+		return facts
 
 	var room := pitch * Atlas.room_frac
 	var line := Pal.px(WALL_W, s_y)
@@ -163,6 +195,7 @@ static func draw_map(ci: CanvasItem, box: Rect2, s_y: float,
 
 	if hero != null:
 		_draw_hero(ci, origin, pitch, b, hero, room, box)
+	return facts
 
 
 ## Pixels per cell that puts the whole of `b` inside `box`. This is `zoom == 1.0`
@@ -199,6 +232,21 @@ static func fit_pitch(box: Rect2, b: Rect2i) -> float:
 static func pan_limit(box: Rect2, b: Rect2i, zoom: float) -> Vector2:
 	var grid := Vector2(b.size) * fit_pitch(box, b) * maxf(zoom, 0.01)
 	return (grid - box.size).abs() * 0.5
+
+
+## The same edge-meets-edge clamp for whichever plan Atlas has made active.
+## `pan_limit` remains the dungeon-shaped API existing floor directors use;
+## the menu asks this facade and never needs to know whether its units are cells
+## or world metres.
+static func active_pan_limit(box: Rect2, zoom: float) -> Vector2:
+	if not Atlas.has_map():
+		return Vector2.ZERO
+	if Atlas.map_kind() == Atlas.KIND_DUNGEON:
+		return pan_limit(box, Atlas.bounds(), zoom)
+	var bounds := surface_bounds(Atlas.surface_plan())
+	var plan_size := bounds.size * _surface_fit_pitch(box, bounds) \
+		* maxf(zoom, 0.01)
+	return (plan_size - box.size).abs() * 0.5
 
 
 static func _centre(origin: Vector2, pitch: float, b: Rect2i,
@@ -496,8 +544,12 @@ static func _draw_marks(ci: CanvasItem, c: Vector2, room: float, s_y: float,
 ## legend draws the SAME shape the map does: a hand-drawn swatch beside a
 ## hand-drawn map is two chests that agree until one of them is edited.
 static func draw_legend_glyph(ci: CanvasItem, c: Vector2, g: float,
-		id: StringName) -> void:
-	_glyph(ci, c, g, id)
+		id: StringName, kind: StringName = &"") -> void:
+	var map_kind := Atlas.map_kind() if kind == &"" else kind
+	if map_kind == Atlas.KIND_SURFACE:
+		_surface_glyph(ci, c, g, id)
+	else:
+		_glyph(ci, c, g, id)
 
 
 static func _glyph(ci: CanvasItem, c: Vector2, g: float, id: StringName) -> void:
@@ -606,3 +658,363 @@ static func _draw_hero(ci: CanvasItem, origin: Vector2, pitch: float,
 			at - fwd * r * 0.72 + side * r * 0.62,
 			at - fwd * r * 0.72 - side * r * 0.62,
 		]), Color(Pal.VOID, 0.95) if pass_i == 0 else Pal.BONE)
+
+
+# --- Authored surfaces -------------------------------------------------------
+
+## World X/Z bounds from the plan that is actually active. Paths, polygon or
+## rectangular areas, and landmarks all participate so the fitted screen cannot
+## crop a spur or symbol that the following minimap can show.
+static func surface_bounds(plan: Dictionary) -> Rect2:
+	var lo := Vector2(INF, INF)
+	var hi := Vector2(-INF, -INF)
+	for value: Variant in plan.get(&"paths", []):
+		if value is Dictionary:
+			var points_value: Variant = (value as Dictionary).get(&"points", null)
+			if points_value is PackedVector3Array:
+				for point: Vector3 in points_value as PackedVector3Array:
+					lo = lo.min(Vector2(point.x, point.z))
+					hi = hi.max(Vector2(point.x, point.z))
+	for value: Variant in plan.get(&"areas", []):
+		if not value is Dictionary:
+			continue
+		for point: Vector3 in _surface_area_points(value as Dictionary):
+			lo = lo.min(Vector2(point.x, point.z))
+			hi = hi.max(Vector2(point.x, point.z))
+	for value: Variant in plan.get(&"landmarks", []):
+		if value is Dictionary:
+			var position_value: Variant = (value as Dictionary).get(&"position", null)
+			if position_value is Vector3:
+				var point := position_value as Vector3
+				lo = lo.min(Vector2(point.x, point.z))
+				hi = hi.max(Vector2(point.x, point.z))
+	if is_inf(lo.x) or is_inf(lo.y):
+		return Rect2(Vector2.ZERO, Vector2.ONE)
+	var bounds := Rect2(lo, (hi - lo).max(Vector2.ONE))
+	return bounds.grow(SURFACE_BOUNDS_PAD)
+
+
+static func _surface_fit_pitch(box: Rect2, bounds: Rect2) -> float:
+	return minf(box.size.x / maxf(bounds.size.x, 0.001),
+		box.size.y / maxf(bounds.size.y, 0.001))
+
+
+static func _draw_surface_map(ci: CanvasItem, box: Rect2, s_y: float,
+		plan: Dictionary, hero: Node3D, follow: bool, zoom: float,
+		pan: Vector2) -> Dictionary:
+	var following := follow and hero != null and is_instance_valid(hero)
+	var paths: Array = plan[&"paths"]
+	var areas: Array = plan[&"areas"]
+	var landmarks: Array = plan[&"landmarks"]
+	var bounds := surface_bounds(plan)
+	var pixels_per_metre := 0.0
+	var world_center := bounds.get_center()
+	var screen_center := box.get_center()
+	if following:
+		pixels_per_metre = minf(box.size.x, box.size.y) \
+			/ float(plan[&"view_range"])
+		world_center = Vector2(hero.global_position.x, hero.global_position.z)
+	else:
+		pixels_per_metre = _surface_fit_pitch(box, bounds) * maxf(zoom, 0.01)
+		screen_center += pan
+	if pixels_per_metre <= 0.0:
+		return {}
+
+	for value: Variant in areas:
+		if value is Dictionary:
+			_draw_surface_area(ci, box, world_center, screen_center,
+				pixels_per_metre, value as Dictionary, s_y)
+	for value: Variant in paths:
+		if value is Dictionary:
+			_draw_surface_path(ci, box, world_center, screen_center,
+				pixels_per_metre, value as Dictionary, s_y)
+	var drawn_landmarks := 0
+	for value: Variant in landmarks:
+		if value is Dictionary and _draw_surface_landmark(ci, box, world_center,
+				screen_center, pixels_per_metre, value as Dictionary, s_y):
+			drawn_landmarks += 1
+	if hero != null and is_instance_valid(hero):
+		_draw_surface_player(ci, box, world_center, screen_center,
+			pixels_per_metre, hero, s_y)
+
+	var facts := _debug_facts(Atlas.KIND_SURFACE)
+	facts.merge({
+		&"path_count": paths.size(),
+		&"area_count": areas.size(),
+		&"landmark_count": landmarks.size(),
+		&"visible_landmark_count": drawn_landmarks,
+		&"view_range": float(plan[&"view_range"]),
+		&"player_centered": following,
+		&"plan_bounds": bounds,
+	})
+	return facts
+
+
+static func _debug_facts(kind: StringName) -> Dictionary:
+	return {
+		&"kind": kind,
+		&"provider_id": Atlas.map_provider_id(),
+		&"provider_name": Atlas.map_provider_name(),
+		&"title": Atlas.map_title(),
+	}
+
+
+static func _draw_surface_path(ci: CanvasItem, box: Rect2,
+		world_center: Vector2, screen_center: Vector2, pixels_per_metre: float,
+		entry: Dictionary, s_y: float) -> void:
+	var value: Variant = entry.get(&"points", null)
+	if not value is PackedVector3Array:
+		return
+	var points := value as PackedVector3Array
+	if points.size() < 2:
+		return
+	var kind := StringName(entry.get(&"kind", &"path"))
+	var width := Pal.px(SURFACE_SPUR_W if kind == &"spur" \
+		else SURFACE_PATH_W, s_y)
+	var color := Color(Pal.ASH, 0.72) if kind == &"spur" \
+		else Color(Pal.MOTH, 0.62)
+	var clip := box.grow(-width * 0.5)
+	for i in points.size() - 1:
+		var a := _surface_project(points[i], world_center, screen_center,
+			pixels_per_metre)
+		var z := _surface_project(points[i + 1], world_center, screen_center,
+			pixels_per_metre)
+		var clipped := _clip_segment(a, z, clip)
+		if clipped.size() == 2:
+			ci.draw_line(clipped[0], clipped[1], color, width)
+
+
+static func _surface_area_points(entry: Dictionary) -> PackedVector3Array:
+	var points_value: Variant = entry.get(&"points", null)
+	if points_value is PackedVector3Array:
+		return points_value as PackedVector3Array
+	var centre_value: Variant = entry.get(&"center", null)
+	var size_value: Variant = entry.get(&"size", null)
+	if not centre_value is Vector3 or not size_value is Vector2:
+		return PackedVector3Array()
+	var centre := centre_value as Vector3
+	var area_size := size_value as Vector2
+	var yaw := float(entry.get(&"yaw", 0.0))
+	var right := Vector3(cos(yaw), 0.0, -sin(yaw)) * area_size.x * 0.5
+	var down := Vector3(sin(yaw), 0.0, cos(yaw)) * area_size.y * 0.5
+	return PackedVector3Array([
+		centre - right - down, centre + right - down,
+		centre + right + down, centre - right + down,
+	])
+
+
+static func _draw_surface_area(ci: CanvasItem, box: Rect2,
+		world_center: Vector2, screen_center: Vector2, pixels_per_metre: float,
+		entry: Dictionary, s_y: float) -> void:
+	var world_points := _surface_area_points(entry)
+	if world_points.size() < 3:
+		return
+	var projected: Array[Vector2] = []
+	for point: Vector3 in world_points:
+		projected.append(_surface_project(point, world_center, screen_center,
+			pixels_per_metre))
+	var clipped := _clip_polygon(projected, box)
+	if clipped.size() < 3:
+		return
+	var kind := StringName(entry.get(&"kind", &"ground"))
+	var fill := Color(Pal.MOTH, 0.11)
+	if kind == &"footprint":
+		fill = Color(Pal.ASH, 0.34)
+	elif kind == &"water":
+		fill = Color(Pal.ASH, 0.24)
+	elif kind == &"grove":
+		fill = Color(Pal.MOTH, 0.17)
+	ci.draw_colored_polygon(PackedVector2Array(clipped), fill)
+	var width := Pal.px(SURFACE_AREA_W, s_y)
+	for i in clipped.size():
+		ci.draw_line(clipped[i], clipped[(i + 1) % clipped.size()],
+			Color(Pal.ASH, 0.62), width)
+
+
+static func _draw_surface_landmark(ci: CanvasItem, box: Rect2,
+		world_center: Vector2, screen_center: Vector2, pixels_per_metre: float,
+		entry: Dictionary, s_y: float) -> bool:
+	var position_value: Variant = entry.get(&"position", null)
+	var glyph := StringName(entry.get(&"glyph", &""))
+	if not position_value is Vector3 or not SURFACE_GLYPHS.has(glyph):
+		return false
+	var at := _surface_project(position_value as Vector3, world_center,
+		screen_center, pixels_per_metre)
+	var g := Pal.px(SURFACE_GLYPH_G, s_y)
+	if not box.encloses(Rect2(at - Vector2.ONE * g, Vector2.ONE * g * 2.0)):
+		return false
+	_surface_glyph(ci, at, g, glyph)
+	return true
+
+
+static func _surface_glyph(ci: CanvasItem, at: Vector2, g: float,
+		glyph: StringName) -> void:
+	match glyph:
+		&"gate", &"entrance":
+			_surface_gate(ci, at, g)
+		&"hearth":
+			_surface_hearth(ci, at, g)
+		&"service":
+			_surface_service(ci, at, g)
+		&"landmark":
+			_surface_landmark_ring(ci, at, g)
+		&"dungeon":
+			_surface_dungeon(ci, at, g)
+		&"fishing":
+			_surface_fishing(ci, at, g)
+		&"grove":
+			_surface_grove(ci, at, g)
+
+
+static func _surface_gate(ci: CanvasItem, at: Vector2, g: float) -> void:
+	var width := maxf(g * 0.16, 1.0)
+	ci.draw_line(at + Vector2(-g * 0.46, g * 0.42),
+		at + Vector2(-g * 0.46, -g * 0.12), Pal.BONE, width)
+	ci.draw_line(at + Vector2(g * 0.46, g * 0.42),
+		at + Vector2(g * 0.46, -g * 0.12), Pal.BONE, width)
+	ci.draw_arc(at + Vector2(0.0, -g * 0.10), g * 0.46, PI, TAU, 8,
+		Pal.BONE, width)
+
+
+static func _surface_hearth(ci: CanvasItem, at: Vector2, g: float) -> void:
+	ci.draw_circle(at + Vector2(0.0, g * 0.18), g * 0.36, Pal.ASH)
+	ci.draw_colored_polygon(PackedVector2Array([
+		at + Vector2(0.0, -g * 0.52), at + Vector2(-g * 0.32, g * 0.24),
+		at + Vector2(g * 0.32, g * 0.24),
+	]), Pal.RUST)
+
+
+static func _surface_service(ci: CanvasItem, at: Vector2, g: float) -> void:
+	ci.draw_colored_polygon(PackedVector2Array([
+		at + Vector2(0.0, -g * 0.48), at + Vector2(g * 0.48, 0.0),
+		at + Vector2(0.0, g * 0.48), at + Vector2(-g * 0.48, 0.0),
+	]), Pal.MOTH)
+	ci.draw_circle(at, g * 0.13, Pal.VOID)
+
+
+static func _surface_landmark_ring(ci: CanvasItem, at: Vector2, g: float) -> void:
+	ci.draw_arc(at, g * 0.42, 0.0, TAU, 12, Pal.MOTH, maxf(g * 0.15, 1.0))
+	ci.draw_circle(at, g * 0.11, Pal.BONE)
+
+
+static func _surface_dungeon(ci: CanvasItem, at: Vector2, g: float) -> void:
+	var step := g / 3.0
+	for i in 3:
+		ci.draw_rect(Rect2(at.x - g * 0.5, at.y - g * 0.5 + step * i,
+			step * float(i + 1), maxf(step * 0.7, 1.0)), Pal.BONE)
+
+
+static func _surface_fishing(ci: CanvasItem, at: Vector2, g: float) -> void:
+	var width := maxf(g * 0.13, 1.0)
+	for offset: float in [-0.22, 0.22]:
+		ci.draw_arc(at + Vector2(0.0, g * offset), g * 0.45, 0.15, PI - 0.15,
+			8, Pal.MOTH, width)
+
+
+static func _surface_grove(ci: CanvasItem, at: Vector2, g: float) -> void:
+	for offset: float in [-0.28, 0.28]:
+		ci.draw_colored_polygon(PackedVector2Array([
+			at + Vector2(g * offset, -g * 0.48),
+			at + Vector2(g * (offset - 0.27), g * 0.30),
+			at + Vector2(g * (offset + 0.27), g * 0.30),
+		]), Pal.MOTH)
+
+
+static func _draw_surface_player(ci: CanvasItem, box: Rect2,
+		world_center: Vector2, screen_center: Vector2, pixels_per_metre: float,
+		hero: Node3D, s_y: float) -> void:
+	var at := _surface_project(hero.global_position, world_center, screen_center,
+		pixels_per_metre)
+	if not box.has_point(at):
+		return
+	var forward_3d := -hero.global_transform.basis.z
+	var forward := Vector2(forward_3d.x, forward_3d.z)
+	if forward.length_squared() < 0.0001:
+		forward = Vector2.UP
+	forward = forward.normalized()
+	var side := Vector2(-forward.y, forward.x)
+	var g := Pal.px(SURFACE_HERO_G, s_y)
+	for pass_i in 2:
+		var radius := g * (0.68 if pass_i == 0 else 0.54)
+		ci.draw_colored_polygon(PackedVector2Array([
+			at + forward * radius,
+			at - forward * radius * 0.72 + side * radius * 0.62,
+			at - forward * radius * 0.72 - side * radius * 0.62,
+		]), Color(Pal.VOID, 0.96) if pass_i == 0 else Pal.BONE)
+
+
+static func _surface_project(world: Vector3, world_center: Vector2,
+		screen_center: Vector2, pixels_per_metre: float) -> Vector2:
+	return screen_center + (Vector2(world.x, world.z) - world_center) \
+		* pixels_per_metre
+
+
+static func _clip_segment(a: Vector2, z: Vector2, box: Rect2) -> Array[Vector2]:
+	var delta := z - a
+	var p := PackedFloat32Array([-delta.x, delta.x, -delta.y, delta.y])
+	var q := PackedFloat32Array([
+		a.x - box.position.x, box.end.x - a.x,
+		a.y - box.position.y, box.end.y - a.y,
+	])
+	var low := 0.0
+	var high := 1.0
+	for i in 4:
+		if is_zero_approx(p[i]):
+			if q[i] < 0.0:
+				return []
+			continue
+		var t := q[i] / p[i]
+		if p[i] < 0.0:
+			low = maxf(low, t)
+		else:
+			high = minf(high, t)
+		if low > high:
+			return []
+	return [a + delta * low, a + delta * high]
+
+
+static func _clip_polygon(points: Array[Vector2], box: Rect2) -> Array[Vector2]:
+	var output := points
+	for edge in 4:
+		output = _clip_polygon_edge(output, box, edge)
+		if output.is_empty():
+			break
+	return output
+
+
+static func _clip_polygon_edge(points: Array[Vector2], box: Rect2,
+		edge: int) -> Array[Vector2]:
+	var output: Array[Vector2] = []
+	if points.is_empty():
+		return output
+	var previous := points[-1]
+	var previous_inside := _inside_edge(previous, box, edge)
+	for current: Vector2 in points:
+		var current_inside := _inside_edge(current, box, edge)
+		if current_inside != previous_inside:
+			output.append(_edge_intersection(previous, current, box, edge))
+		if current_inside:
+			output.append(current)
+		previous = current
+		previous_inside = current_inside
+	return output
+
+
+static func _inside_edge(point: Vector2, box: Rect2, edge: int) -> bool:
+	match edge:
+		0: return point.x >= box.position.x
+		1: return point.x <= box.end.x
+		2: return point.y >= box.position.y
+		_: return point.y <= box.end.y
+
+
+static func _edge_intersection(a: Vector2, z: Vector2, box: Rect2,
+		edge: int) -> Vector2:
+	var delta := z - a
+	if edge < 2:
+		var x := box.position.x if edge == 0 else box.end.x
+		var t := (x - a.x) / delta.x if not is_zero_approx(delta.x) else 0.0
+		return Vector2(x, a.y + delta.y * t)
+	var y := box.position.y if edge == 2 else box.end.y
+	var t := (y - a.y) / delta.y if not is_zero_approx(delta.y) else 0.0
+	return Vector2(a.x + delta.x * t, y)

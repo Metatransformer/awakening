@@ -72,7 +72,11 @@ func _ready() -> void:
 		return
 	_built = true
 	_build()
-	add_to_group(&"surface_map")
+	Atlas.register_surface(self)
+
+
+func _exit_tree() -> void:
+	Atlas.unregister_surface(self)
 
 
 func port(id: StringName) -> Transform3D:
@@ -124,6 +128,7 @@ func surface_map_plan() -> Dictionary:
 	areas.make_read_only()
 	landmarks.make_read_only()
 	var plan: Dictionary = {
+		&"title": "Garrison Outskirts",
 		&"view_range": 58.0,
 		&"paths": paths,
 		&"areas": areas,

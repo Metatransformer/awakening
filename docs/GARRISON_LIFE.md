@@ -42,8 +42,9 @@ that animation beneath the louder owl or morning birds.
 - At **20:00**, show **“Night falls”** and **“Day X”**, with a tawny-owl call.
 - At **05:00**, show **“The sun rises”** and **“Day X”**, with a morning-bird
   song.
-- The top-right column shows a player-following minimap in authored exterior
-  zones and the discovered dungeon floor plan underground. Directly beneath it,
+- The top-right column and pause MAP share the one active `Atlas` plan in every
+  authored exterior zone and underground; the corner view follows the player
+  while the pause view fits and pans the same plan. Directly beneath the minimap,
   compact companion strips show **Day X**, the current time and moving sun/moon
   track, plus 15-degree heading ticks and eight compass points beneath a fixed
   player-bearing pointer.

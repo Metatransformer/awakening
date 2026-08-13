@@ -166,9 +166,9 @@ func _ready() -> void:
 	_apply_staffing()
 	_place_dawn_wake()
 	_open_the_game()
-	# Join only after the compound and every live landmark the plan may expose
-	# exist. The HUD discovers this provider; it does not know garrison geometry.
-	add_to_group(&"surface_map")
+	# Publish only after the compound and every live landmark the plan may expose
+	# exist. Atlas owns discovery; neither map surface knows garrison geometry.
+	Atlas.register_surface(self)
 
 
 ## The compound supplies structure. This scene adds only landmarks represented
@@ -205,6 +205,7 @@ func surface_map_plan() -> Dictionary:
 	areas.make_read_only()
 	landmarks.make_read_only()
 	var plan: Dictionary = {
+		&"title": "Highbridge Garrison",
 		&"view_range": float(base[&"view_range"]),
 		&"paths": paths,
 		&"areas": areas,
@@ -926,6 +927,7 @@ func _raid_route(lane_index: int) -> Array[Vector3]:
 
 
 func _exit_tree() -> void:
+	Atlas.unregister_surface(self)
 	for raider: RaidRaider in raid_raiders:
 		if is_instance_valid(raider):
 			raider.sync_now()
