@@ -1,5 +1,5 @@
 extends RefCounted
-## The sword trail follows the real LIGHT1/2/3, tap-heavy, parry counter, and
+## The sword trail follows the real LIGHT1/2/3, Heavy dash-spin opener, parry counter, and
 ## jump + held-heavy slam blades. The held charged spin remains the null control.
 ##
 ##   timeout 400 tools/quiet.sh --path . -s tools/shoot.gd -- \
@@ -109,16 +109,16 @@ func _prove_heavy(rig, hero: Hero, combat: HeroCombat, trail: SwordSlashTrail,
 	Game.stamina = Game.max_stamina
 	Bus.stamina_changed.emit(Game.stamina, Game.max_stamina)
 	var before := trail.stroke_serial
-	# A short real trigger pull releases the tap-heavy without arming the spin.
+	# A short real trigger pull releases the Heavy opener without arming the spin.
 	await rig.tap([&"heavy"])
 	# The heavy commits on the RELEASE edge, which the gameplay poller sees on
 	# the frame after the rig sends it. Wait for the accepted move, not the send.
 	var started: bool = await rig.until(func() -> bool:
 		return trail.stroke_serial == before + 1, 0.5)
 	if not started:
-		rig.fail("SLASH TRAIL accepted tap-heavy did not start a stroke")
+		rig.fail("SLASH TRAIL accepted Heavy opener did not start a stroke")
 		return
-	await _capture_special(rig, hero, trail, "heavy", out.path_join("heavy_arc.png"))
+	await _capture_special(rig, hero, trail, "heavy opener", out.path_join("heavy_opener_arc.png"))
 
 
 func _prove_counter(rig, hero: Hero, combat: HeroCombat, trail: SwordSlashTrail,

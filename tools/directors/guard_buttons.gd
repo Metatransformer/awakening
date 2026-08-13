@@ -10,8 +10,8 @@ extends RefCounted
 ## halves to check and the second is the one that was actually broken:
 ##
 ##   * **A behind the guard parries** — and only behind the guard.
-##   * **RB behind the guard swings and RT counters**, straight through, no
-##     frame spent lowering anything. This is the half the remap was for.
+##   * **RB behind the guard swings and RT starts the shared Heavy combo**,
+##     straight through, no frame spent lowering anything.
 ##   * **A behind the guard does not talk to the world.** One press cannot both
 ##     catch a blow and open the chest standing in it (`Prompt._guarding`).
 ##   * **A with the shield down still opens the chest**, which is the regression
@@ -53,7 +53,7 @@ func run(rig) -> void:
 	await _parry_is_on_a(rig, out)
 	await _a_alone_does_not_parry(rig)
 	await _rb_swings_out_of_the_block(rig, out)
-	await _rt_counters_out_of_the_block(rig, out)
+	await _rt_starts_shared_heavy(rig, out)
 	await _guard_takes_the_button_off_the_world(rig)
 	await _shield_down_still_talks(rig)
 
@@ -180,12 +180,12 @@ func _rb_swings_out_of_the_block(rig, out: String) -> void:
 	await _reset(rig, hero)
 
 
-# --- Beat four: RT is the guarded counter -------------------------------------
+# --- Beat four: RT is the same Heavy behind the guard -------------------------
 
-## This is the real stance input, held past the ordinary charge threshold. The
-## DASH must commit on the press, leave the wind-up disarmed for the whole hold,
-## and release without owing a second attack.
-func _rt_counters_out_of_the_block(rig, out: String) -> void:
+## LT does not modify Heavy. The press arms the same charge as neutral and does
+## not swing; a short release starts the same dash-spin opener without free
+## i-frames. `heavy_combo.gd` owns the second tap and hold-to-spin sequence.
+func _rt_starts_shared_heavy(rig, out: String) -> void:
 	var hero: Node3D = _hero(rig)
 	if hero == null:
 		return
@@ -194,7 +194,7 @@ func _rt_counters_out_of_the_block(rig, out: String) -> void:
 	hero.set(&"_invuln", 0.0)
 	var trail: SwordSlashTrail = combat.slash_trail
 	if trail == null:
-		_fail("HeroCombat did not publish a slash trail for the RT counter")
+		_fail("HeroCombat did not publish a slash trail for Heavy")
 		return
 
 	await rig.press(&"shield")
@@ -206,11 +206,14 @@ func _rt_counters_out_of_the_block(rig, out: String) -> void:
 
 	var before_serial: int = trail.stroke_serial
 	await rig.press(&"heavy")
-	await rig.wait_physics_frames(1)
-	if float(combat.get(&"_charge_t")) >= 0.0 or combat.charged:
-		_fail("guard + RT armed the ordinary heavy charge")
+	await rig.wait_physics_frames(2)
+	if hero.get(&"state") == 4:
+		_fail("guard + RT attacked on the press instead of waiting for the release")
+	if float(combat.get(&"_charge_t")) < 0.0:
+		_fail("guard + RT did not arm the shared Heavy wind-up")
 	if bool(hero.call(&"is_invulnerable")):
-		_fail("guard + RT inherited the parry-earned i-frames")
+		_fail("guard + RT inherited parry-earned i-frames")
+	rig.release(&"heavy")
 
 	var tree: AnimationTree = hero.get(&"_tree")
 	var ribbon: MeshInstance3D = trail.get_node_or_null(^"Ribbon") as MeshInstance3D
@@ -233,43 +236,30 @@ func _rt_counters_out_of_the_block(rig, out: String) -> void:
 		await rig.wait_frames(1)
 
 	if tree == null or not saw_dash:
-		_fail("guard + RT swung something that was not SwingDash")
+		_fail("guard + RT release swung something that was not SwingDash")
 	if trail.stroke_serial != before_serial + 1:
-		_fail("guard + RT started %d slash-trail strokes, wanted exactly 1"
+		_fail("guard + RT release started %d slash-trail strokes, wanted exactly 1"
 			% (trail.stroke_serial - before_serial))
 	if not saw_live_ribbon:
-		_fail("guard + RT never built visible, non-empty ribbon geometry")
+		_fail("guard + RT release never built visible, non-empty ribbon geometry")
 	else:
-		print("GUARD block->RT counter  sections=%d rendered=%d vertices=%d"
+		print("GUARD block->RT opener  sections=%d rendered=%d vertices=%d"
 			% [trail.section_count, trail.render_section_count, live_vertices])
-		await rig.capture(out.path_join("guard_03_block_to_rt_counter.png"))
+		await rig.capture(out.path_join("guard_03_block_to_rt_opener.png"))
 
-	# Keep the same press down beyond the ordinary threshold. A delayed wind-up
-	# here would turn its eventual release into the second blow this branch exists
-	# to prevent.
-	await rig.wait_seconds(combat.charge_time + 0.10)
-	if float(combat.get(&"_charge_t")) >= 0.0 or combat.charged:
-		_fail("guard + RT armed a delayed ordinary charge during the counter")
 	var finished: bool = await rig.until(func() -> bool:
 		return hero.get(&"state") != 4, 1.0)  # Hero.MoveState.ATTACK
 	if not finished:
-		_fail("guard + RT counter never left the real attack state")
+		_fail("guard + RT opener never left the real attack state")
 	var cleared: bool = await rig.until(func() -> bool:
 		return trail.section_count == 0, 0.5)
 	if not cleared or trail.render_section_count != 0 \
 			or (ribbon != null and ribbon.visible) \
 			or (ribbon_mesh != null and ribbon_mesh.get_surface_count() != 0):
-		_fail("guard + RT ribbon did not clean up after the counter")
+		_fail("guard + RT ribbon did not clean up after the opener")
 	if trail.stroke_serial != before_serial + 1:
 		_fail("guard + RT finished with %d slash-trail strokes, wanted exactly 1"
 			% (trail.stroke_serial - before_serial))
-
-	rig.release(&"heavy")
-	await rig.wait_physics_frames(3)
-	if hero.get(&"state") == 4:
-		_fail("releasing guard + RT paid out a second attack")
-	if trail.stroke_serial != before_serial + 1:
-		_fail("releasing guard + RT started a later ordinary heavy stroke")
 
 	rig.release(&"shield")
 	await _reset(rig, hero)

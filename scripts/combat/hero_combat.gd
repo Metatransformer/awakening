@@ -27,17 +27,14 @@ const MAT_IRON := preload("res://assets/materials/mat_iron.tres")
 ## the chain state. Buffering an Intent rather than a Swing is what lets a press
 ## made during step 1 still become step 2 when it is finally honoured.
 ##
-## LIGHT is RB. HEAVY is RT, and it is one Intent rather than two because the
-## trigger's meaning is settled at the moment it is HONOURED, not at the moment
-## it is pressed: under a lock it comes out as the jump attack and everywhere
-## else as the overhead (`_begin`). A press buffered during a swing that BREAKS
-## the lock must not still pay out a leap at nothing.
+## LIGHT is RB. HEAVY is RT, and each Intent advances its own combo. Buffering an
+## Intent rather than a concrete swing is what lets a Heavy release made during
+## the opener become the overhead when it is finally honoured.
 ##
 ## SPIN is not a button either. It is what the trigger's HOLD releases into.
-## DASH is the earned riposte counter; GUARD_DASH is the same blade move from an
-## active guard, kept distinct so the stance claim is never buffered after the
-## guard has dropped. A live riposte window still upgrades either input route.
-## They stay Intents because the buffer is the thing that makes them feel honest:
+## DASH is the earned riposte counter. The same blade move is also step one of
+## the Heavy combo, but that route remains HEAVY so it can advance the dedicated
+## two-step chain. They stay Intents because the buffer is what makes them honest:
 ## a charge released during the swing that started it has to come out when that
 ## swing ends, not vanish.
 ## SLAM is the light button pressed in the AIR, and it is the one Intent that is
@@ -50,17 +47,14 @@ const MAT_IRON := preload("res://assets/materials/mat_iron.tres")
 ## when that is honoured a third of a second late is not a late parry, it is a
 ## different one. See `_press`.
 ##
-## The dash has two homes: an immediate heavy press from an active guard, and an
-## attack press inside `_riposte_t`, the window a successful parry opens. Both
-## close the guarded gap through `_dash_swing`; only a counter backed by the
-## earned riposte window carries i-frames for its whole duration. The ordinary
-## stance version is a committed sword attack, not a free dodge. See
-## `_dash_swing`.
+## The dash has two homes: step one of Heavy, and an attack press inside
+## `_riposte_t`, the window a successful parry opens. Only a counter backed by
+## that earned window carries i-frames for its whole duration. See `_dash_swing`.
 ##
 ## FLURRY is the leaping overhead, and it is what an attack press means in the
 ## window a PERFECT DODGE opens (`_flurry_t`). Not buffered either: the window it
 ## belongs to is short and running on a clock the buffer knows nothing about.
-enum Intent { LIGHT, HEAVY, SPIN, DASH, GUARD_DASH, SLAM, PARRY, FLURRY }
+enum Intent { LIGHT, HEAVY, SPIN, DASH, SLAM, PARRY, FLURRY }
 
 ## Read `attack` with exact modifier matching. THIS IS WHAT MAKES THE HEAVY A
 ## SEPARATE BUTTON ON THE KEYBOARD, and without it the strong attack is unusable.
@@ -122,10 +116,9 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 @export var knockback: float = K.KNOCKBACK_LIGHT
 
 @export_group("Heavy")
-## The overhead on the right trigger — the swing the chain used to keep behind
-## two other presses. It plays the finisher's clip (Hero.Swing.LIGHT3, a leaping
-## overhead) from a standing start, which is why it is slow: at the light chain's
-## pace a 2.4 s clip goes past as a twitch.
+## The Heavy combo finisher — the swing the light chain also keeps behind two
+## other presses. It plays Hero.Swing.LIGHT3, a leaping overhead, which is why it
+## is slow: at the light chain's pace a 2.4 s clip goes past as a twitch.
 ##
 ## Priced at a full heart, level with the lunge and under the spin. What it costs
 ## is the second of commitment and K.STAMINA_HEAVY, which is more than twice a
@@ -140,9 +133,9 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 @export var heavy_knockback: float = K.KNOCKBACK_HEAVY
 
 @export_group("Spin")
-## Seconds the trigger must be HELD before the release becomes a spin. Under it,
-## the release is the OVERHEAD — the two are the same pull answered differently,
-## and this is the line between them.
+## Seconds the trigger must be HELD before the release becomes a magic spin.
+## Under it, the release advances the Heavy combo; this is the line between the
+## two paths.
 ##
 ## It is also, therefore, the worst-case latency on a tapped heavy, which is why
 ## it is 0.42 and not the half-second a "charge" usually is. Nobody holds a tap
@@ -239,62 +232,10 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 @export var chain_finisher_bonus: int = 2 * K.QUARTER
 @export var chain_finisher_knockback: float = K.KNOCKBACK_HEAVY
 
-@export_group("Lunge")
-## Between the light swing and the spin. It is not the biggest blow in the kit;
-## what it buys is the distance, and paying twice for that would make Z-targeting
-## strictly better than standing your ground.
-@export var lunge_damage: int = 4 * K.QUARTER
-@export var lunge_swing_time: float = 0.78
-## Opens after the drive ends (see lunge_drive_time), so the blade lands at the
-## end of the leap rather than sweeping everything along the way.
-@export var lunge_damage_window := Vector2(0.46, 0.72)
-@export var lunge_knockback: float = K.KNOCKBACK_HEAVY
-## Seconds of forward drive. See Hero.request_lunge for what it becomes.
-@export var lunge_drive_time: float = 0.24
-## Upward metres/sec at the leap. Deliberately small — the CLIP already leaps
-## (ss_attack_01 lifts the mesh clean out of frame), so this only has to stop
-## the body sliding along the floor under an airborne pose. Adding a real jump
-## on top of a baked one gets you a hero who exits the top of the screen.
-@export var lunge_hop: float = 1.8
-## How far away the leap is still offered. **THE LOCK IS THE GATE**, so this is
-## the lock's own reach and not a shorter band of its own.
-##
-## There used to be a band — 1.9 m to 6.0 m — and the near edge was the bug the
-## player reported as "the jump attack doesn't work". Its argument was that
-## inside 1.9 m there is no gap to close, so the leap reads as hopping on the
-## spot. True, and irrelevant: 1.9 m is INSIDE SWORD RANGE. It is where you are
-## standing when you are fighting something, which made the one button OOT gives
-## you for Z+A silently do nothing at the only distance anybody presses it from.
-## Measured, not argued — tools/directors/lt_moveset.gd sweeps the ranges and
-## caught it refusing at 1.4 m and firing at 2.6 m.
-##
-## Point blank the leap now comes out with no travel at all, because
-## `Hero.request_lunge` clamps the gap at zero: the hero hops, the clip's own
-## jump carries the read, and the blow lands. That is OOT's jump attack in a
-## corridor and it is the right answer — the alternative is a dead button.
-##
-## The far edge stays, because past the lock's reach there is no target to leap
-## at and the swing would be thrown at nothing. It is the lock's number rather
-## than a smaller one for the same reason the near edge went: a button that works
-## on everything you can lock is a rule the player can hold in their head, and
-## anything shorter is a second invisible range they have to learn. The leap's
-## own speed cap (`Hero.lunge_max_speed`) is what stops a long lock becoming a
-## teleport; a leap that falls short and whiffs is a mistimed attack, which is a
-## thing the player can see and learn from.
-##
-## LOCK_BREAK_RANGE and not LOCK_RANGE, and the ~22% between them is the whole
-## reason: that band is the lock's hysteresis, where a target you acquired at
-## 8 m is still yours at 10 m. Gate the leap at the ACQUIRE number and every
-## press inside that band is a dead button — the leap refuses on range while
-## `Hero._try_start_roll` has already stood down for it (neutral stick belongs to
-## the leap). The two numbers have to be the same number, and "as far as the lock
-## reaches" is the one the player can actually perceive.
-@export var lunge_max_range: float = K.LOCK_BREAK_RANGE
-
 @export_group("Dash")
-## The stab out from behind the shield — OOT's R+B. It is not a better light
-## swing and it is not a spin: what it buys is that it CLOSES, and it is the
-## only attack in the kit that closes without a lock. Priced between the two.
+## The Heavy combo's short turning opener, also reused by the earned riposte.
+## It is not a better light swing and it is not the magic spin: what it buys is
+## that it CLOSES without a lock. Priced between the two.
 @export var dash_damage: int = 3 * K.QUARTER
 ## Shorter than a spin (0.90). The commitment is most of the cost, because the
 ## drive has already thrown the hero somewhere he did not have to be.
@@ -507,6 +448,10 @@ var _swing_arc: float = 130.0
 ## Which light comes next: 0, 1, 2. Reset when `_chain_timer` runs out.
 var _chain_step: int = 0
 var _chain_timer: float = 0.0
+## Which Heavy comes next: 0 is the dash-spin opener, 1 the leaping overhead.
+## Kept separate from the light chain so neither button can advance the other.
+var _heavy_step: int = 0
+var _heavy_timer: float = 0.0
 ## An Intent pressed mid-swing or mid-dodge and owed to the player, or -1.
 var _buffer: int = -1
 ## Seconds the owed Intent has left before it lapses. It used to be implicit —
@@ -1199,6 +1144,10 @@ func _physics_process(delta: float) -> void:
 		_chain_timer = maxf(_chain_timer - delta, 0.0)
 		if _chain_timer == 0.0:
 			_chain_step = 0
+	if _swing_t < 0.0 and _heavy_timer > 0.0:
+		_heavy_timer = maxf(_heavy_timer - delta, 0.0)
+		if _heavy_timer == 0.0:
+			_heavy_step = 0
 
 	# Pay out a press made during the recovery — but only on a frame AFTER the
 	# swing ended, never on the boundary frame itself. The hero clears
@@ -1401,10 +1350,9 @@ func _tick_light_button() -> void:
 	if _riposte_t > 0.0:
 		_press(Intent.DASH)
 		return
-	# THE GUARD NO LONGER CHANGES WHAT THIS BUTTON MEANS. RB out of a raised
-	# shield is the light swing, exactly as it is from neutral. RT owns the dash
-	# counter from that stance (`_tick_heavy_button`), so both shoulders still
-	# reach the sword without spending a frame lowering the guard first.
+	# THE GUARD DOES NOT CHANGE WHAT THIS BUTTON MEANS. RB out of a raised shield
+	# is the light swing, exactly as it is from neutral. Heavy owns its own combo,
+	# also unchanged by the stance.
 	#
 	# It used to be the PARRY, and before that the dash, all three fighting over
 	# one attack button because a raised shield was the only modifier anyone had.
@@ -1457,13 +1405,10 @@ func _tick_parry_button() -> void:
 
 ## RT — the heavy, and everything the heavy becomes:
 ##
-##   active guard   -> the dash counter, immediately on the press. No charge.
 ##   on the ground  -> the wind-up, on the press. NOTHING swings yet.
-##   released short -> the overhead.
+##   released short -> Heavy step one (dash-spin), then step two (overhead).
 ##   released armed -> the spin. One pull, one blow, and WHICH blow is the
 ##                     length of the pull.
-##   locked on      -> the leap, closing the gap (`_begin`) — the short
-##                     release's other form, not a third blow.
 ##   IN THE AIR     -> the jump attack. Same slam RB throws off a jump, on the
 ##                     button the player is already holding for the heavy.
 ##
@@ -1474,10 +1419,9 @@ func _tick_parry_button() -> void:
 ## still landing. The charge stopped being a choice: it was what happened to you
 ## if you did not let go fast enough.
 ##
-## So the blow moved to the release. That is Elden Ring's R2, which is what the
-## button was always documented as being (project.godot, `heavy`): tap it for the
-## overhead, hold it for the charged one, and the two are alternatives rather
-## than a sequence. The cost is `charge_time` of latency on a tapped heavy in the
+## So the blow moved to the release: tap it to advance the two-hit Heavy combo,
+## or hold it for the charged spin. Those paths are alternatives. The cost is
+## `charge_time` of latency on a tapped heavy in the
 ## worst case — which is exactly what a tap-length hold is, a fraction of a
 ## second — and that is the price of the trigger meaning one thing. The button
 ## with no latency at all is RB, and it is right there.
@@ -1495,8 +1439,8 @@ func _tick_heavy_button(delta: float) -> void:
 	# THE JUMP ATTACK, off the HELD trigger rather than off the press edge. A
 	# player who wants to come down on something pulls RT on the way up, not at
 	# the top of the arc, and an edge would have been spent on the ground as an
-	# overhead before he ever left it. Reading the held state means the same pull
-	# throws the overhead on the floor and the slam once he is off it.
+	# Heavy opener before he ever left it. Reading the held state means the same
+	# pull advances Heavy on the floor and throws the slam once he is off it.
 	#
 	# Held also makes the mid-air press work, so both readings of "hold RT in the
 	# air" land on the same move. `_press` is safe to call every frame — an
@@ -1512,14 +1456,6 @@ func _tick_heavy_button(delta: float) -> void:
 		return
 
 	if Input.is_action_just_pressed(&"heavy"):
-		# THE GUARDED COUNTER outranks the ordinary wind-up. `blocking`, not the raw
-		# shield button, is the stance: a held trigger in air, during recovery, or
-		# anywhere else the guard was refused must keep the ordinary heavy meaning.
-		# Return before `_charge_t` is armed so releasing this same pull can never
-		# pay out an overhead or spin after the dash.
-		if blocking:
-			_press(Intent.GUARD_DASH)
-			return
 		_charge_t = 0.0
 		# The hum starts on the PRESS, not when the charge arms. It is a rise, and
 		# a rise that begins at the top is a beep.
@@ -1527,9 +1463,9 @@ func _tick_heavy_button(delta: float) -> void:
 			_charging_player.play()
 		return
 	if Input.is_action_just_released(&"heavy"):
-		# The one place either blow is asked for. `_release_charge` fires the spin
-		# when the wind-up armed; when it did not, the pull was a tap and the tap
-		# is the overhead. Exactly one of the two, every time.
+		# The one place either path is asked for. `_release_charge` fires the magic
+		# spin when the wind-up armed; otherwise the short pull advances Heavy.
+		# Exactly one attack comes from one pull, every time.
 		#
 		# `_charge_t >= 0.0` is what makes that "every time" honest. A hold can be
 		# TAKEN from the player mid-pull — a shop opening, an item drawn, the
@@ -1554,7 +1490,7 @@ func _tick_heavy_button(delta: float) -> void:
 	# thing they can already see coming and nothing on the way there.
 	_hero.charging = true
 	# **An empty blue bar cannot arm.** See `_can_spin`: the hold still happens and
-	# the release still throws the overhead, but nothing winds up and nothing
+	# the release still advances Heavy, but nothing winds up and nothing
 	# glows, which is the player being told what they can afford by looking at the
 	# hero instead of at the HUD.
 	if not charged and _charge_t >= charge_time and _can_spin():
@@ -1640,7 +1576,7 @@ func _can_swing() -> bool:
 ## The first of those is the whole tell. An empty bar means the blade never
 ## lights and the motes never gather, so a player holding the trigger can SEE
 ## that the charged release is not available before they commit to waiting for
-## it -- and the hold then comes out as the overhead on release, through the
+## it -- and the hold then advances Heavy on release, through the
 ## `live and not armed` path that a short tap already uses. No new refusal, no
 ## buzzer, no dead button: the trigger still means "hit it hard", and an empty
 ## bar only changes how hard.
@@ -1699,7 +1635,7 @@ func _press(intent: int) -> void:
 ## above for what each exclusion costs if it is dropped.
 func _bufferable(intent: int) -> bool:
 	return intent != Intent.SLAM and intent != Intent.PARRY \
-		and intent != Intent.FLURRY and intent != Intent.GUARD_DASH
+		and intent != Intent.FLURRY
 
 
 ## Turn an Intent into an actual swing. Everything that decides WHICH swing —
@@ -1728,6 +1664,7 @@ func _begin(intent: int) -> void:
 			# before `request_slam` so a refused slam is not also a refund problem,
 			# and the spend is after it so a slam refused for height costs nothing.
 			if _can_swing() and _hero.request_slam():
+				_reset_heavy_combo()
 				# The dive clip is scaled to this measured commit-to-contact interval.
 				# Sample all of it: unlike ordinary swings, the airborne strike has no
 				# narrower damage slice, and held-heavy retries are refused by SLAM.
@@ -1739,24 +1676,12 @@ func _begin(intent: int) -> void:
 			_spin_swing()
 		Intent.DASH:
 			_dash_swing(true)
-		Intent.GUARD_DASH:
-			_dash_swing(_riposte_t > 0.0)
 		Intent.PARRY:
 			_parry()
 		Intent.FLURRY:
 			_flurry_swing()
 		Intent.HEAVY:
-			# THE LOCK DECIDES, and it decides HERE rather than at the press, so a
-			# trigger buffered during a swing that broke the lock comes out as the
-			# overhead instead of as a leap at nothing.
-			#
-			# `_lunge_swing` refuses when there is no target or it is out of the
-			# lock's reach, and the heavy is what a refusal falls through to. That
-			# fall-through is the point: OOT could leave Z+A silent because A swung
-			# anyway, and a dedicated trigger that went quiet at 11 m would just be
-			# a button that intermittently does nothing.
-			if not _lunge_swing():
-				_heavy_swing()
+			_heavy_combo_swing()
 		_:
 			_light_swing(_chain_step)
 
@@ -1778,13 +1703,12 @@ func _spin_swing() -> void:
 	# The blue bar, checked a second time on the way past. `_tick_heavy_button`
 	# will not arm a charge this cannot afford, so reaching here with an empty bar
 	# means the magic went somewhere between the arm-up and the release — and the
-	# answer to that is the overhead, exactly as a short pull would have given.
-	# Falling through rather than going silent is `_lunge_swing`'s rule: the
-	# trigger means "hit it hard" and only the bar decides how hard.
+	# answer to that is the current Heavy step, exactly as a short pull would have
+	# given. The trigger still means "hit it hard" and only the bar decides how.
 	if not _can_spin():
 		if _vfx != null:
 			_vfx.clear()
-		_heavy_swing()
+		_heavy_combo_swing()
 		return
 	if not _hero.request_attack(spin_swing_time, Hero.Swing.SPIN):
 		# Refused, so the charge is spent for nothing — and the blade is still
@@ -1814,6 +1738,7 @@ func _spin_swing() -> void:
 	# finisher something you reach by pressing whatever, which is not a combo.
 	_chain_step = 0
 	_chain_timer = 0.0
+	_reset_heavy_combo()
 	_aim_hitbox(spin_reach, 0.0, spin_arc)
 	# Pitched down, the cheapest honest way to make the swings sound like
 	# different amounts of effort.
@@ -1821,26 +1746,20 @@ func _spin_swing() -> void:
 		K.HITSTOP_HEAVY, randf_range(0.68, 0.78), K.STUN_HEAVY)
 
 
-## THE DASH COUNTER: the stab thrown from an active guard or bought by a landed
-## parry. Unlike the lunge it asks for no target — see Hero.request_dash for why
-## the facing is already a direction the player chose.
+## THE DASH-SPIN: Heavy's opener, also reused by the counter a landed parry buys.
+## It asks for no target — see Hero.request_dash for why facing is enough.
 ##
-## A riposte-window press can still arrive from the BUFFER, a swing after the
-## press. That is correct and it is how the spin behaves: the answer to a press
-## made half a swing early is the move they asked for, late — not a different
-## move, and not silence. The active-guard route is immediate because `blocking`
-## cannot remain up through another attack. Neither route is re-checked here;
-## this is the shared accepted path, and a buffered riposte may arrive after its
-## authorising window has run out.
-func _dash_swing(earned_riposte: bool) -> void:
+## `starts_heavy_combo` distinguishes the ordinary Heavy opener from the riposte
+## input. Both share the move; only Heavy advances to the overhead.
+func _dash_swing(earned_riposte: bool, starts_heavy_combo: bool = false) -> void:
 	if not _can_swing():
 		return
 	if not _hero.request_dash(dash_swing_time, dash_drive_time, dash_speed):
 		return
-	# Any earned window is spent, exactly as `_flurry_swing` spends its own. Zero
-	# is also the right no-op for the active-guard route. Spend it HERE rather than
-	# at the press so a riposte the hero refused (mid-swing, off the floor, no
-	# stamina) does not eat the reward. Both returns above are that refusal.
+	# An earned window is spent, exactly as `_flurry_swing` spends its own. Spend
+	# it HERE rather than at the press so a riposte the hero refused (mid-swing,
+	# off the floor, no stamina) does not eat the reward. Both returns above are
+	# that refusal. The ordinary Heavy opener does not touch an earned window.
 	#
 	# It went unspent for as long as the dash has lived in this window, and that
 	# was survivable while the dash was only damage: 1.20 s of window against a
@@ -1848,12 +1767,10 @@ func _dash_swing(earned_riposte: bool) -> void:
 	# i-frames below it is not survivable — the same mash would buy 1.24 s of
 	# uninterruptible immunity off one read, which is a stronger thing than the
 	# parry was ever priced to grant.
-	_riposte_t = 0.0
-	# THE I-FRAMES belong only to the earned riposte. That window rewards reading
-	# ONE monster and is spent in a room that usually holds three; without them the
-	# correct read on a gang is to walk away from the opening. Guard + heavy is an
-	# always-available stance attack, so giving it the same immunity would turn a
-	# repeatable sword move into a free dodge.
+	if earned_riposte:
+		_riposte_t = 0.0
+	# THE I-FRAMES belong only to the earned riposte. Heavy's always-available
+	# opener is a committed sword attack, not a free dodge.
 	#
 	# For EXACTLY as long as the swing commits him, and that rule is the one the
 	# dodges already live by: "i-frames run for exactly as long as the dodge
@@ -1867,11 +1784,15 @@ func _dash_swing(earned_riposte: bool) -> void:
 	if earned_riposte:
 		_hero.grant_iframes(dash_swing_time)
 	Game.spend_stamina(K.STAMINA_DASH, true)
-	# Ends the chain rather than stepping it, exactly as the spin does. The dash
-	# is how you OPEN on something, so letting it count as step one would make
-	# the finisher two taps away from a button you press while standing still.
+	# It never advances the light chain. The Heavy route below advances only the
+	# dedicated two-step chain; the riposte route resets it.
 	_chain_step = 0
 	_chain_timer = 0.0
+	if starts_heavy_combo:
+		_heavy_step = 1
+		_heavy_timer = chain_window
+	else:
+		_reset_heavy_combo()
 	_aim_sword()
 	# The counter is a real blade thrust, so it owns the same short world-space
 	# ribbon family as the light chain. Start it only after request_dash accepts;
@@ -1903,6 +1824,7 @@ func _parry() -> void:
 		return
 	if not _hero.request_parry(K.PARRY_WINDOW + K.PARRY_RECOVER):
 		return
+	_reset_heavy_combo()
 	_parry_t = 0.0
 	# The guard comes down NOW rather than on the next frame's `want_block` pass.
 	# One frame of a raised shield inside a parry is one frame in which a blow
@@ -2055,6 +1977,7 @@ func _flurry_swing() -> void:
 	Game.spend_stamina(K.STAMINA_LUNGE, true)
 	_chain_step = 0
 	_chain_timer = 0.0
+	_reset_heavy_combo()
 	if _yell_player != null:
 		_yell_player.pitch_scale = randf_range(0.97, 1.03)
 		_yell_player.play()
@@ -2140,9 +2063,10 @@ func _light_swing(step: int) -> void:
 	# refusal would pay out on whatever landed next.
 	if not _hero.request_attack(dur, variant):
 		return
-	# Only this accepted-light path starts the ribbon. LIGHT3 is also the heavy's
-	# clip, so triggering from `_commit` or from the animation variant would put
-	# the same ordinary trail on the tap heavy, spin, lunge, dash and flurry.
+	_reset_heavy_combo()
+	# Only this accepted-light path starts the ribbon. LIGHT3 is also the Heavy
+	# finisher's clip, so triggering from `_commit` or from the animation variant
+	# would put the same ordinary trail on Heavy, spin, dash and flurry.
 	if slash_trail != null:
 		slash_trail.begin_stroke(dur, damage_window, step == 2)
 	Game.spend_stamina(K.STAMINA_SWING, true)
@@ -2154,17 +2078,29 @@ func _light_swing(step: int) -> void:
 	_commit(dur, damage_window, dmg, knock, hitstop,
 		randf_range(0.94, 1.07) * _CHAIN_PITCH[step], stun)
 
+## Advance the dedicated two-hit Heavy chain. Resolve the step only when the
+## Intent is honoured so a release buffered during the opener becomes step two.
+func _heavy_combo_swing() -> void:
+	if _heavy_step == 0:
+		_dash_swing(false, true)
+	else:
+		_heavy_swing()
 
-## The heavy: the finisher's leaping overhead, thrown from a standing start.
+
+func _reset_heavy_combo() -> void:
+	_heavy_step = 0
+	_heavy_timer = 0.0
+
+
+## The heavy finisher: the leaping overhead, thrown after the dash-spin opener.
 ##
 ## It plays Hero.Swing.LIGHT3 rather than a clip of its own, and that is not
-## thrift — the chain's third step IS this swing, and the whole complaint the
-## trigger answers is that the game's biggest ordinary blow was locked behind two
-## presses of a smaller one. Same clip, same read, one button.
+## thrift — the light chain's third step IS this swing. The Heavy chain reaches
+## the same payoff after its own short dash-spin opener.
 ##
-## It ENDS the chain rather than stepping it, exactly as the spin and the dash
-## do: mixing a heavy into the light chain would make the finisher something you
-## arrive at by pressing whatever, which is not a combo.
+## It ends the dedicated Heavy chain. The light chain remains separate: mixing
+## the two would make either finisher something you reach by pressing whatever,
+## which is not a combo.
 func _heavy_swing() -> void:
 	if not _can_swing():
 		return
@@ -2173,8 +2109,9 @@ func _heavy_swing() -> void:
 	Game.spend_stamina(K.STAMINA_HEAVY, true)
 	_chain_step = 0
 	_chain_timer = 0.0
+	_reset_heavy_combo()
 	_aim_sword()
-	# LIGHT3 is shared with the chain finisher, but this accepted tap-heavy path
+	# LIGHT3 is shared with the chain finisher, but this accepted Heavy-finisher path
 	# has its own timing window. Trigger here so the held spin and every other
 	# LIGHT3 user remain outside the ordinary blade ribbon.
 	if slash_trail != null:
@@ -2184,47 +2121,6 @@ func _heavy_swing() -> void:
 	# the enemy.
 	_commit(heavy_swing_time, heavy_damage_window, heavy_damage, heavy_knockback,
 		K.HITSTOP_HEAVY, randf_range(0.74, 0.82), K.STUN_HEAVY)
-
-
-## The Z-targeted leap. Returns false — having done nothing — the moment any of
-## its conditions fail, and the caller (`_begin`) throws the heavy instead. The
-## refusal is a fall-through rather than silence: this is one trigger with one
-## meaning, "hit it hard", and the lock only decides HOW.
-func _lunge_swing() -> bool:
-	# Empty bar: refuse, and let the heavy refuse too. Both ends of the
-	# fall-through ask `_can_swing`, so a spent hero gets one silence rather than
-	# a leap he cannot afford turning into an overhead he cannot afford either.
-	if not _can_swing():
-		return false
-	var target := _hero.lock_target()
-	if target == null:
-		return false
-
-	# Flattened by hand rather than with K.flat, which NORMALISES: a range gate
-	# reading distance off K.flat sees every target in the world as exactly 1 m
-	# away, which puts every one of them inside the gate and none outside it.
-	var delta := target.global_position - _hero.global_position
-	var to := Vector3(delta.x, 0.0, delta.z)
-	var dist := to.length()
-	if dist > lunge_max_range:
-		return false
-
-	# The stick cone and the "only from a standing start" chain gate both went
-	# when the lunge stopped sharing the attack button. They existed to tell a
-	# leap apart from an ordinary swing pressed with the same thumb, and a hidden
-	# rule on a DEDICATED button is just a button that intermittently does
-	# nothing -- press X, press A, watch the hero stand there. What stops a
-	# mashed chain touring the room is the same thing that always did: the leap
-	# costs 0.78 s of unsteerable commitment, and you have to be locked on.
-
-	if not _hero.request_lunge(lunge_swing_time, lunge_drive_time, lunge_hop):
-		return false
-	Game.spend_stamina(K.STAMINA_LUNGE, true)
-	_chain_timer = 0.0
-	_aim_sword()
-	_commit(lunge_swing_time, lunge_damage_window, lunge_damage, lunge_knockback,
-		K.HITSTOP_HEAVY, randf_range(0.80, 0.88), K.STUN_HEAVY)
-	return true
 
 
 ## The air slam has arrived. Everything the blow IS happens here, on the one
