@@ -22,6 +22,15 @@ const ROOF_THICKNESS := 0.24
 const SERVICE_BAY := 5.0
 const CLEAR_CIRCULATION := 4.0
 const PARADE_SIZE := Vector2(17.0, 15.0)
+const PARADE_AT := Vector3(0.0, 0.0, -0.5)
+const WEST_WALK_SIZE := Vector2(CLEAR_CIRCULATION, 25.0)
+const WEST_WALK_AT := Vector3(-11.8, 0.0, 1.0)
+const EAST_WALK_SIZE := Vector2(CLEAR_CIRCULATION, 27.0)
+const EAST_WALK_AT := Vector3(11.0, 0.0, 0.5)
+const NORTH_WALK_SIZE := Vector2(27.0, CLEAR_CIRCULATION)
+const NORTH_WALK_AT := Vector3(-0.5, 0.0, -10.1)
+const SOUTH_WALK_SIZE := Vector2(27.0, CLEAR_CIRCULATION)
+const SOUTH_WALK_AT := Vector3(-0.5, 0.0, 9.3)
 
 const BARRACKS_FRONT_X := -14.0
 const BARRACKS_BACK_X := -22.1
@@ -33,6 +42,10 @@ const ARCADE_FRONT_X := 13.0
 const ARCADE_BACK_X := 22.1
 const ARCADE_NORTH_Z := -11.5
 const ARCADE_SOUTH_Z := 13.5
+const ELDER_QUARTERS_AT := Vector3(-18.2, 0.0, -13.8)
+const ELDER_QUARTERS_SIZE := Vector2(8.0, 7.7)
+const NORTH_RANGE_AT := Vector3(-0.5, 0.0, -14.6)
+const NORTH_RANGE_SIZE := Vector2(27.0, 6.2)
 
 var player_bunk: BunkBed
 var bunk_room: Node3D
@@ -67,6 +80,46 @@ func port(id: StringName) -> Transform3D:
 
 func has_port(id: StringName) -> bool:
 	return _ports.has(id)
+
+
+## The compound owns these walks and footprints, so it also owns their map
+## geometry. Every point is converted from the same constants used to build the
+## fort; the HUD never carries a shadow copy of this layout.
+func surface_map_plan() -> Dictionary:
+	var paths: Array[Dictionary] = [
+		_surface_path(_walk_line(WEST_WALK_AT, WEST_WALK_SIZE, false)),
+		_surface_path(_walk_line(EAST_WALK_AT, EAST_WALK_SIZE, false)),
+		_surface_path(_walk_line(NORTH_WALK_AT, NORTH_WALK_SIZE, true)),
+		_surface_path(_walk_line(SOUTH_WALK_AT, SOUTH_WALK_SIZE, true)),
+	]
+	var barracks_size := Vector2(BARRACKS_FRONT_X - BARRACKS_BACK_X,
+		BARRACKS_SOUTH_Z - BARRACKS_NORTH_Z)
+	var barracks_at := Vector3((BARRACKS_FRONT_X + BARRACKS_BACK_X) * 0.5,
+		0.0, (BARRACKS_NORTH_Z + BARRACKS_SOUTH_Z) * 0.5)
+	var arcade_size := Vector2(ARCADE_BACK_X - ARCADE_FRONT_X,
+		ARCADE_SOUTH_Z - ARCADE_NORTH_Z)
+	var arcade_at := Vector3((ARCADE_FRONT_X + ARCADE_BACK_X) * 0.5,
+		0.0, (ARCADE_NORTH_Z + ARCADE_SOUTH_Z) * 0.5)
+	var areas: Array[Dictionary] = [
+		_surface_rect(Vector3.ZERO, COMPOUND_SIZE, &"ground"),
+		_surface_rect(PARADE_AT, PARADE_SIZE, &"ground"),
+		_surface_rect(barracks_at, barracks_size, &"footprint"),
+		_surface_rect(arcade_at, arcade_size, &"footprint"),
+		_surface_rect(ELDER_QUARTERS_AT, ELDER_QUARTERS_SIZE, &"footprint"),
+		_surface_rect(NORTH_RANGE_AT, NORTH_RANGE_SIZE, &"footprint"),
+	]
+	var landmarks: Array[Dictionary] = []
+	paths.make_read_only()
+	areas.make_read_only()
+	landmarks.make_read_only()
+	var plan: Dictionary = {
+		&"view_range": 52.0,
+		&"paths": paths,
+		&"areas": areas,
+		&"landmarks": landmarks,
+	}
+	plan.make_read_only()
+	return plan
 
 
 func _define_ports() -> void:
@@ -115,23 +168,24 @@ func _build_ground() -> void:
 	# Flush paving defines the routes without adding controller-catching kerbs or
 	# duplicate floor collision over the compound's single ground slab.
 	_floor_slab(
-		ground, "ParadePaving", PARADE_SIZE, Vector3(0.0, 0.008, -0.5), MAT_FLOOR, false
+		ground, "ParadePaving", PARADE_SIZE,
+		PARADE_AT + Vector3.UP * 0.008, MAT_FLOOR, false
 	)
 	_floor_slab(
-		ground, "WestWalk", Vector2(CLEAR_CIRCULATION, 25.0),
-		Vector3(-11.8, 0.009, 1.0), MAT_FLOOR, false
+		ground, "WestWalk", WEST_WALK_SIZE,
+		WEST_WALK_AT + Vector3.UP * 0.009, MAT_FLOOR, false
 	)
 	_floor_slab(
-		ground, "EastWalk", Vector2(CLEAR_CIRCULATION, 27.0),
-		Vector3(11.0, 0.009, 0.5), MAT_FLOOR, false
+		ground, "EastWalk", EAST_WALK_SIZE,
+		EAST_WALK_AT + Vector3.UP * 0.009, MAT_FLOOR, false
 	)
 	_floor_slab(
-		ground, "NorthWalk", Vector2(27.0, CLEAR_CIRCULATION),
-		Vector3(-0.5, 0.010, -10.1), MAT_FLOOR, false
+		ground, "NorthWalk", NORTH_WALK_SIZE,
+		NORTH_WALK_AT + Vector3.UP * 0.010, MAT_FLOOR, false
 	)
 	_floor_slab(
-		ground, "SouthWalk", Vector2(27.0, CLEAR_CIRCULATION),
-		Vector3(-0.5, 0.010, 9.3), MAT_FLOOR, false
+		ground, "SouthWalk", SOUTH_WALK_SIZE,
+		SOUTH_WALK_AT + Vector3.UP * 0.010, MAT_FLOOR, false
 	)
 
 
@@ -254,8 +308,8 @@ func _build_barracks() -> void:
 
 func _build_elder_quarters() -> void:
 	elder_quarters = _group(self, "ElderQuarters")
-	var room_center := Vector3(-18.2, 0.0, -13.8)
-	var room_size := Vector2(8.0, 7.7)
+	var room_center := ELDER_QUARTERS_AT
+	var room_size := ELDER_QUARTERS_SIZE
 	_floor_slab(elder_quarters, "ElderDeck", room_size,
 		room_center + Vector3(0.0, 0.013, 0.0), MAT_FLOOR, false)
 	_solid_box(
@@ -346,8 +400,8 @@ func _build_service_marker(parent: Node3D, index: int, at: Vector3) -> void:
 
 func _build_north_range() -> void:
 	var north := _group(self, "NorthTrainingAndStores")
-	var size := Vector2(27.0, 6.2)
-	var centre := Vector3(-0.5, 0.0, -14.6)
+	var size := NORTH_RANGE_SIZE
+	var centre := NORTH_RANGE_AT
 	_floor_slab(north, "NorthDeck", size, centre + Vector3(0.0, 0.015, 0.0),
 		MAT_FLOOR, false)
 	_solid_box(
@@ -538,3 +592,33 @@ func _sleep_port(bed_center: Vector3, yaw: float, sleeper_height: float) -> Tran
 
 func _camera_port(at: Vector3, target: Vector3) -> Transform3D:
 	return Transform3D(Basis.IDENTITY, at).looking_at(target, Vector3.UP)
+
+
+func _walk_line(at: Vector3, walk_size: Vector2,
+		horizontal: bool) -> Array[Vector3]:
+	var half := (walk_size.x if horizontal else walk_size.y) * 0.5
+	var axis := Vector3.RIGHT if horizontal else Vector3.FORWARD
+	return [at - axis * half, at + axis * half]
+
+
+func _surface_path(local_points: Array[Vector3]) -> Dictionary:
+	var world_points := PackedVector3Array()
+	for point: Vector3 in local_points:
+		world_points.append(to_global(point))
+	var path: Dictionary = {&"kind": &"path", &"points": world_points}
+	path.make_read_only()
+	return path
+
+
+func _surface_rect(at: Vector3, rect_size: Vector2,
+		kind: StringName) -> Dictionary:
+	var half := rect_size * 0.5
+	var points := PackedVector3Array([
+		to_global(at + Vector3(-half.x, 0.0, -half.y)),
+		to_global(at + Vector3(half.x, 0.0, -half.y)),
+		to_global(at + Vector3(half.x, 0.0, half.y)),
+		to_global(at + Vector3(-half.x, 0.0, half.y)),
+	])
+	var area: Dictionary = {&"kind": kind, &"points": points}
+	area.make_read_only()
+	return area

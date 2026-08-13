@@ -42,9 +42,11 @@ that animation beneath the louder owl or morning birds.
 - At **20:00**, show **“Night falls”** and **“Day X”**, with a tawny-owl call.
 - At **05:00**, show **“The sun rises”** and **“Day X”**, with a morning-bird
   song.
-- The top-right civil instrument always shows **Day X**, the current time and a
-  moving sun/moon day track. Its companion heading strip scrolls 15-degree ticks
-  and eight compass points beneath a fixed player-bearing pointer.
+- The top-right column shows a player-following minimap in authored exterior
+  zones and the discovered dungeon floor plan underground. Directly beneath it,
+  compact companion strips show **Day X**, the current time and moving sun/moon
+  track, plus 15-degree heading ticks and eight compass points beneath a fixed
+  player-bearing pointer.
 - A sleep or time jump that crosses a boundary presents it once. Loading a save
   does not replay a boundary already resolved.
 

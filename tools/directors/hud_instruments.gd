@@ -1,14 +1,20 @@
 extends RefCounted
-## Rendered proof for the civil compass and day track, in both layouts.
+## Rendered proof for the compact map/compass/day column in all real layouts.
 ##
 ##   timeout 400 tools/quiet.sh --path . -s tools/shoot.gd -- \
+##     --boot-here \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/hud_instruments.gd \
-##     --out=/tmp/instruments/surface.png --warmup=60
+##     --out=/tmp/instruments/garrison.png --size=1280x720 --warmup=60
+##   timeout 400 tools/quiet.sh --path . -s tools/shoot.gd -- \
+##     --boot-here \
+##     --scene=res://scenes/rooms/garrison_outskirts.tscn \
+##     --director=res://tools/directors/hud_instruments.gd \
+##     --out=/tmp/instruments/outskirts.png --size=1280x720 --warmup=60
 ##   timeout 400 tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/dungeon.tscn \
 ##     --director=res://tools/directors/hud_instruments.gd \
-##     --out=/tmp/instruments/dungeon.png --warmup=60
+##     --out=/tmp/instruments/dungeon.png --size=1280x720 --warmup=60
 
 const Layout := preload("res://tools/directors/_hud_layout.gd")
 
@@ -21,12 +27,15 @@ func run(rig) -> void:
 		return
 	var underground: bool = Run != null and Run.in_dungeon
 	var mode := "dungeon" if underground else "surface"
+	var output_mode := _output_mode(underground)
 	rig.check(instrument.layout_mode() == StringName(mode),
 		"instrument selected the %s layout" % mode)
-	await _capture_layout(rig, instrument, out, mode, underground)
-	await _prove_headings(rig, instrument, out, mode)
-	await _prove_forward_clock_jump(rig, instrument, out, mode)
-	print("HUD INSTRUMENTS OK -- %s" % mode)
+	await _capture_layout(rig, instrument, out, output_mode, underground)
+	if not underground:
+		_prove_surface_map(rig, output_mode)
+	await _prove_headings(rig, instrument, out, output_mode)
+	await _prove_forward_clock_jump(rig, instrument, out, output_mode)
+	print("HUD INSTRUMENTS OK -- %s" % output_mode)
 
 
 func _capture_layout(rig, instrument: CivilInstruments, out: String,
@@ -39,17 +48,46 @@ func _capture_layout(rig, instrument: CivilInstruments, out: String,
 		"HUD publishes the civil instrument rectangle")
 	var rect := instrument.instrument_rect()
 	var viewport_size := Hud.get_viewport().get_visible_rect().size
+	if rig.check(layout.has(&"minimap"), "%s layout includes the minimap" % mode):
+		var map_entry: Dictionary = layout[&"minimap"]
+		var map_rect: Rect2 = map_entry[&"rect"]
+		var gap := rect.position.y - map_rect.end.y
+		var expected_gap := Pal.px(CivilInstruments.MAP_GAP, viewport_size.y)
+		rig.check(absf(gap - expected_gap) <= 1.0,
+			"compact civil stack sits below the minimap (%.1f px gap)" % gap)
+		rig.check(absf(rect.size.x - map_rect.size.x) <= 1.0,
+			"map, compass and day track share one width")
+		rig.check(absf(rect.end.x - map_rect.end.x) <= 1.0,
+			"map, compass and day track share one right edge")
+		rig.check(absf(rect.size.y - Pal.px(CivilInstruments.HEIGHT,
+			viewport_size.y)) <= 1.0,
+			"civil instrument is the compact two-band height")
+
+
+func _prove_surface_map(rig, mode: String) -> void:
+	var debug: Dictionary = Hud.surface_map_debug()
+	var provider: Node = rig.get_first_node_in_group(&"surface_map")
+	if not rig.check(provider != null, "%s has a live surface-map provider" % mode):
+		return
+	rig.check(not debug.is_empty(),
+		"%s provider plan reached the surface renderer" % mode)
+	rig.check(int(debug.get(&"provider_id", 0)) == provider.get_instance_id(),
+		"HUD reports the live %s provider" % mode)
+	rig.check(int(debug.get(&"path_count", 0)) > 0,
+		"%s rendered real authored paths" % mode)
+	rig.check(int(debug.get(&"landmark_count", 0)) > 0,
+		"%s rendered real authored landmarks" % mode)
+	rig.check(bool(debug.get(&"player_centered", false)),
+		"%s surface radar follows the centred player" % mode)
+
+
+func _output_mode(underground: bool) -> String:
 	if underground:
-		if rig.check(layout.has(&"minimap"), "dungeon layout includes the minimap"):
-			var map_entry: Dictionary = layout[&"minimap"]
-			var map_rect: Rect2 = map_entry[&"rect"]
-			var gap := rect.position.y - map_rect.end.y
-			rig.check(gap >= 1.0 and gap <= Pal.px(12.0, viewport_size.y),
-				"civil stack starts immediately below the minimap (%.1f px)" % gap)
-	else:
-		rig.check(not layout.has(&"minimap"), "surface layout has no empty minimap frame")
-		rig.check(absf(rect.position.y - Pal.MINIMAP_TOP * viewport_size.y) <= 1.0,
-			"surface civil stack occupies the minimap's top-right slot")
+		return "dungeon"
+	var provider: Node = Hud.get_tree().get_first_node_in_group(&"surface_map")
+	if provider is GarrisonOutskirts:
+		return "outskirts"
+	return "garrison"
 
 
 func _prove_headings(rig, instrument: CivilInstruments, out: String,

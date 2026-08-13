@@ -72,6 +72,7 @@ func _ready() -> void:
 		return
 	_built = true
 	_build()
+	add_to_group(&"surface_map")
 
 
 func port(id: StringName) -> Transform3D:
@@ -99,6 +100,37 @@ func port(id: StringName) -> Transform3D:
 			return Transform3D(Basis.IDENTITY, eye).looking_at(target, Vector3.UP)
 	push_error("GarrisonOutskirts: unknown port '%s'" % id)
 	return Transform3D.IDENTITY
+
+
+## Authored public terrain is visible immediately; unlike Atlas this plan has no
+## discovery state. Every feature comes from the route, ports, and tree cluster
+## that build this scene rather than from a HUD-owned layout table.
+func surface_map_plan() -> Dictionary:
+	var paths: Array[Dictionary] = [
+		_surface_path(PackedVector3Array(PATH_POINTS), &"path"),
+		_surface_path(PackedVector3Array([BLOCKED_SPUR_START, BLOCKED_SPUR_END]),
+			&"spur"),
+	]
+	var areas: Array[Dictionary] = [_grove_area()]
+	var landmarks: Array[Dictionary] = [
+		_surface_landmark(port(&"garrison_gate").origin, &"gate"),
+		_surface_landmark(CLEARING_LANDMARK_POSITION, &"landmark"),
+		_surface_landmark(port(&"blocked_path").origin, &"landmark"),
+		_surface_landmark(port(&"sunken_cut").origin, &"dungeon"),
+		_surface_landmark(port(&"fishing_hole").origin, &"fishing"),
+		_surface_landmark(port(&"grove").origin, &"grove"),
+	]
+	paths.make_read_only()
+	areas.make_read_only()
+	landmarks.make_read_only()
+	var plan: Dictionary = {
+		&"view_range": 58.0,
+		&"paths": paths,
+		&"areas": areas,
+		&"landmarks": landmarks,
+	}
+	plan.make_read_only()
+	return plan
 
 
 func _build() -> void:
@@ -403,3 +435,45 @@ func _cylinder(parent: Node3D, node_name: StringName, material: Material,
 		collision.shape = shape
 		holder.add_child(collision)
 	return holder
+
+
+func _surface_path(local_points: PackedVector3Array,
+		kind: StringName) -> Dictionary:
+	var world_points := PackedVector3Array()
+	for point: Vector3 in local_points:
+		world_points.append(to_global(point))
+	var path: Dictionary = {&"kind": kind, &"points": world_points}
+	path.make_read_only()
+	return path
+
+
+func _surface_landmark(local_position: Vector3,
+		glyph: StringName) -> Dictionary:
+	var landmark: Dictionary = {
+		&"glyph": glyph,
+		&"position": to_global(local_position),
+	}
+	landmark.make_read_only()
+	return landmark
+
+
+func _grove_area() -> Dictionary:
+	var min_x := INF
+	var max_x := -INF
+	var min_z := INF
+	var max_z := -INF
+	for tree_position: Vector3 in TREE_POSITIONS:
+		min_x = minf(min_x, tree_position.x)
+		max_x = maxf(max_x, tree_position.x)
+		min_z = minf(min_z, tree_position.z)
+		max_z = maxf(max_z, tree_position.z)
+	var margin := 2.5
+	var points := PackedVector3Array([
+		to_global(Vector3(min_x - margin, 0.0, min_z - margin)),
+		to_global(Vector3(max_x + margin, 0.0, min_z - margin)),
+		to_global(Vector3(max_x + margin, 0.0, max_z + margin)),
+		to_global(Vector3(min_x - margin, 0.0, max_z + margin)),
+	])
+	var area: Dictionary = {&"kind": &"grove", &"points": points}
+	area.make_read_only()
+	return area

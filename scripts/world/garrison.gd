@@ -166,6 +166,52 @@ func _ready() -> void:
 	_apply_staffing()
 	_place_dawn_wake()
 	_open_the_game()
+	# Join only after the compound and every live landmark the plan may expose
+	# exist. The HUD discovers this provider; it does not know garrison geometry.
+	add_to_group(&"surface_map")
+
+
+## The compound supplies structure. This scene adds only landmarks represented
+## by live nodes it owns, so absent residents never become phantom map services.
+func surface_map_plan() -> Dictionary:
+	if compound == null or not is_instance_valid(compound):
+		return {}
+	var base := compound.surface_map_plan()
+	var paths: Array = (base[&"paths"] as Array).duplicate()
+	var areas: Array = (base[&"areas"] as Array).duplicate()
+	var landmarks: Array[Dictionary] = []
+	if gate != null and is_instance_valid(gate):
+		landmarks.append(_surface_landmark(gate, &"gate"))
+	if hearth != null and is_instance_valid(hearth):
+		landmarks.append(_surface_landmark(hearth, &"hearth"))
+	if statue != null and is_instance_valid(statue):
+		landmarks.append(_surface_landmark(statue, &"landmark"))
+	for npc: Npc in [vendor, smith, alchemist, keeper, jeweller, builder]:
+		if npc == null or not is_instance_valid(npc):
+			continue
+		# Bonfire and sleeping routines can bunch residents into one small area.
+		# One service glyph there reads; six overprinted diamonds do not.
+		var crowded := false
+		for landmark: Dictionary in landmarks:
+			if StringName(landmark[&"glyph"]) != &"service":
+				continue
+			var position: Vector3 = landmark[&"position"]
+			if position.distance_squared_to(npc.global_position) < 4.0:
+				crowded = true
+				break
+		if not crowded:
+			landmarks.append(_surface_landmark(npc, &"service"))
+	paths.make_read_only()
+	areas.make_read_only()
+	landmarks.make_read_only()
+	var plan: Dictionary = {
+		&"view_range": float(base[&"view_range"]),
+		&"paths": paths,
+		&"areas": areas,
+		&"landmarks": landmarks,
+	}
+	plan.make_read_only()
+	return plan
 
 
 ## The last beat of a new game's opening: the man who sent for you, once the
@@ -950,3 +996,12 @@ func light_of(prop: StringName) -> GarrisonLight:
 		if l.prop == prop:
 			return l
 	return null
+
+
+func _surface_landmark(node: Node3D, glyph: StringName) -> Dictionary:
+	var landmark: Dictionary = {
+		&"glyph": glyph,
+		&"position": node.global_position,
+	}
+	landmark.make_read_only()
+	return landmark

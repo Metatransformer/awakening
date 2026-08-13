@@ -4,10 +4,10 @@ extends Control
 ## and the day's sun/moon track. The clock owns time, SkyCycle owns its authored
 ## boundaries, and the player's -basis.z owns facing; this node only presents them.
 
-const WIDTH := 224.0
-const HEIGHT := 96.0
+const WIDTH := Pal.MINIMAP_SIZE
+const HEIGHT := 68.0
 const MAP_GAP := 8.0
-const COMPASS_H := 48.0
+const COMPASS_H := 34.0
 const SPAN_DEGREES := 150.0
 const REDRAW_HZ := 30.0
 const MINUTE_TWEEN_SECONDS := 1.28
@@ -79,8 +79,9 @@ func _seat() -> void:
 	var height := Pal.px(HEIGHT, viewport_size.y)
 	var right := -(1.0 - Pal.MINIMAP_RIGHT) * viewport_size.x
 	var top := Pal.MINIMAP_TOP * viewport_size.y
-	if _underground:
-		top += Pal.px(Pal.MINIMAP_SIZE + MAP_GAP, viewport_size.y)
+	# Both authored surface zones and the dungeon now carry a map in this slot.
+	# One expression keeps all three widths and right edges mechanically aligned.
+	top += Pal.px(Pal.MINIMAP_SIZE + MAP_GAP, viewport_size.y)
 	offset_left = right - width
 	offset_right = right
 	offset_top = top
@@ -140,27 +141,31 @@ func _set_display_absolute_minutes(value: float) -> void:
 func _draw() -> void:
 	if size.x < 1.0 or size.y < 1.0:
 		return
-	draw_rect(Rect2(Vector2.ZERO, size), Color(Pal.VOID, 0.84))
-	draw_rect(Rect2(Vector2.ZERO, size), Pal.ASH, false, _px(1.0))
 	_draw_compass()
 	_draw_day_track()
 
 
 func _draw_compass() -> void:
 	var centre_x := size.x * 0.5
-	var inset := _px(8.0)
+	var inset := _px(6.0)
 	var strip_width := size.x - inset * 2.0
 	var pixels_per_degree := strip_width / SPAN_DEGREES
 	var label_scale := CanvasText.scale_for(10.0, get_viewport_rect().size.y)
-	var bearing_scale := CanvasText.scale_for(14.0, get_viewport_rect().size.y)
+	var bearing_scale := CanvasText.scale_for(10.0, get_viewport_rect().size.y)
+	# The compass alone gets glass. A faint RUST wash warms the local VOID without
+	# borrowing the currency-only gold used by Valenfeld's pointer.
+	draw_rect(Rect2(Vector2.ZERO, Vector2(size.x, _px(COMPASS_H))),
+		Color(Pal.VOID, 0.62))
+	draw_rect(Rect2(Vector2.ZERO, Vector2(size.x, _px(COMPASS_H))),
+		Color(Pal.RUST, 0.055))
 	var first_tick := int(floor((_heading_degrees - SPAN_DEGREES * 0.5) / 15.0)) * 15
 	var last_tick := int(ceil((_heading_degrees + SPAN_DEGREES * 0.5) / 15.0)) * 15
 	for tick: int in range(first_tick, last_tick + 1, 15):
 		var difference := _signed_difference(float(tick), _heading_degrees)
 		var x := centre_x + difference * pixels_per_degree
 		var cardinal_tick := tick % 45 == 0
-		var tick_top := _px(19.0 if cardinal_tick else 22.0)
-		draw_line(Vector2(x, tick_top), Vector2(x, _px(28.0)),
+		var tick_top := _px(16.0 if cardinal_tick else 19.0)
+		draw_line(Vector2(x, tick_top), Vector2(x, _px(23.0)),
 			Color(Pal.MOTH, 0.72), _px(1.0))
 	for mark: Dictionary in MARKS:
 		var difference := _signed_difference(float(mark[&"bearing"]), _heading_degrees)
@@ -169,21 +174,22 @@ func _draw_compass() -> void:
 		var label := String(mark[&"label"])
 		var tint := Pal.BONE if label.length() == 1 else Pal.MOTH
 		CanvasText.draw_centred(self, label,
-			Vector2(centre_x + difference * pixels_per_degree, _px(5.0)),
+			Vector2(centre_x + difference * pixels_per_degree, _px(2.0)),
 			label_scale, tint)
 	# Fixed pointer: the strip moves beneath this, never the other way around.
-	draw_line(Vector2(centre_x, _px(3.0)), Vector2(centre_x, _px(28.0)),
+	draw_line(Vector2(centre_x, _px(2.0)), Vector2(centre_x, _px(23.0)),
 		Pal.BONE, _px(1.0))
 	draw_colored_polygon(PackedVector2Array([
-		Vector2(centre_x, _px(8.0)),
+		Vector2(centre_x, _px(7.0)),
 		Vector2(centre_x - _px(4.0), _px(1.0)),
 		Vector2(centre_x + _px(4.0), _px(1.0)),
 	]), Pal.BONE)
 	CanvasText.draw_centred(self, "%s  %03d°" % [cardinal_label(),
 		int(round(_heading_degrees)) % 360],
-		Vector2(centre_x, _px(32.0)), bearing_scale, Pal.BONE)
-	draw_line(Vector2(_px(6.0), _px(COMPASS_H)),
-		Vector2(size.x - _px(6.0), _px(COMPASS_H)), Color(Pal.ASH, 0.8), _px(1.0))
+		Vector2(centre_x, _px(23.0)), bearing_scale, Pal.BONE)
+	draw_line(Vector2.ZERO, Vector2(size.x, 0.0), Color(Pal.ASH, 0.8), _px(1.0))
+	draw_line(Vector2(0.0, _px(COMPASS_H - 1.0)),
+		Vector2(size.x, _px(COMPASS_H - 1.0)), Color(Pal.ASH, 0.8), _px(1.0))
 
 
 func _draw_day_track() -> void:
@@ -191,12 +197,12 @@ func _draw_day_track() -> void:
 	var day := int(floor(absolute_minutes / 1440.0)) + 1
 	var minute_of_day := fposmod(absolute_minutes, 1440.0)
 	var hour := minute_of_day / 60.0
-	var text_scale := CanvasText.scale_for(14.0, get_viewport_rect().size.y)
+	var text_scale := CanvasText.scale_for(10.0, get_viewport_rect().size.y)
 	CanvasText.draw_centred(self, "DAY %d  •  %s" % [day, SkyCycle.hour_string(hour)],
-		Vector2(size.x * 0.5, _px(54.0)), text_scale, Pal.MOTH)
-	var left := _px(10.0)
-	var right := size.x - _px(10.0)
-	var track_y := _px(82.0)
+		Vector2(size.x * 0.5, _px(COMPASS_H + 20.0)), text_scale, Pal.MOTH)
+	var left := _px(7.0)
+	var right := size.x - _px(7.0)
+	var track_y := _px(COMPASS_H + 10.0)
 	var track_width := right - left
 	draw_line(Vector2(left, track_y), Vector2(right, track_y),
 		Color(Pal.MOTH, 0.8), _px(1.0))
