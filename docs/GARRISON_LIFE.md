@@ -101,7 +101,16 @@ entry, bag item, wheel item, or shop good.
 
 Interacting enters one bounded fishing mode: choose near or deep water, cast,
 react to the bite, and reel while steering against the fish's run and managing
-tension. The rules that bound its resource economy are exact:
+tension. Water ripples are the bite language: quiet pulses mark the wait and a
+bright, fast expansion marks the hook window. Once hooked, one dominant arrow
+shows the counter-steer input direction rather than the fish's travel; its color
+reacts to correct or wrong steering beside compact **TENSION** and **LAND** bars.
+A landed catch reveals a fish icon with its one- or two-unit yield, while an
+escape or snapped line has a distinct failure emblem. Semantic bite, catch, and
+failure SFX route through the shared pool. Authored cast, bite, hook, neutral
+reel, directional strain, catch, and failure recordings voice the full attempt
+without changing the interaction. The rules that
+bound its resource economy are exact:
 
 - Fish reserve capacity is **three units**, representing three suppers.
 - At most **three Fish units per campaign day** may be banked.
