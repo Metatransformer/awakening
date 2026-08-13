@@ -161,7 +161,7 @@ func _rebuild_band() -> void:
 func _build_hearth_status() -> void:
 	UITheme.section_rule(_body, "HEARTH & TRADE")
 	_fact("Hearth stock", "%d / %d bundles" % [Game.firewood_stock, Game.FIREWOOD_CAP])
-	_fact("Carried bundle", "Yes" if Game.carrying_firewood else "No")
+	_fact("Carried Firewood cargo", "%d bundles" % _carried_firewood())
 	_fact("Next unresolved bonfire",
 		"Can be fueled" if Game.firewood_stock > 0 else "No stored bundle")
 	_fact("Garrison Warmth", "Active" if Game.warmth_active else "Inactive",
@@ -174,6 +174,7 @@ func _build_hearth_status() -> void:
 func _build_provisions_and_morale() -> void:
 	UITheme.section_rule(_body, "PROVISIONS & MORALE")
 	_fact("Fish reserve", "%d / %d meals" % [Game.fish_stock, Game.FISH_CAP])
+	_fact("Carried Food cargo", "%d fish" % _carried_food())
 	_fact("Today's remaining yield",
 		"%d Fish" % Game.fishing_remaining_today(Clock.day))
 	_fact("Next supper", _next_supper_status())
@@ -232,12 +233,8 @@ func _build_duty_status() -> void:
 		availability = "Unavailable · axe not owned"
 	elif completed:
 		availability = "Completed today"
-	elif Game.carrying_firewood:
-		availability = "Bundle already cut"
 	elif Clock.garrison_phase() != WorldClock.GARRISON_DAYTIME:
 		availability = "Closed · %s" % _phase_label(Clock.garrison_phase())
-	elif Game.firewood_stock >= Game.FIREWOOD_CAP:
-		availability = "Unavailable · hearth stock is full"
 	else:
 		availability = "Available now"
 	_fact("Outskirts grove", availability)
@@ -250,14 +247,22 @@ func _duty_step(assigned: bool, owns_axe: bool, completed: bool) -> String:
 		return "Not assigned"
 	if not owns_axe:
 		return "Craft the Woodsman's Axe at Brannoc's forge."
-	if Game.carrying_firewood:
-		return "Carry today's bundle home to the central hearth."
+	if _carried_firewood() > 0 or _carried_food() > 0:
+		return "Deposit carried cargo at the south-gate supply box."
 	if completed:
-		if Clock.garrison_phase() == WorldClock.GARRISON_DAYTIME \
-				and Game.firewood_stock > 0:
-			return "Hearth stocked for tonight's bonfire."
 		return "Return tomorrow for the next bundle."
 	return "Fell today's tree in the outskirts grove."
+
+
+func _carried_firewood() -> int:
+	return int(Run.bag.get(SupplyCargoDb.FIREWOOD_ID, 0))
+
+
+func _carried_food() -> int:
+	var total := 0
+	for fish_id: StringName in SupplyCargoDb.FISH_IDS:
+		total += int(Run.bag.get(fish_id, 0)) * SupplyCargoDb.food_units(fish_id)
+	return total
 
 
 func _build_garrison_defence() -> void:

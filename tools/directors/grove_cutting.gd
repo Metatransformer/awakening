@@ -14,6 +14,7 @@ func run(rig) -> void:
 	Clock.running = false
 	Clock.set_time(1, 10.0)
 	Game.restore_garrison({})
+	Run.reset()
 	Game.set_flag(StoryDb.told_flag(&"elder", &"timber_duty"))
 	Game.grant(ShopDb.WOODSMAN_AXE_ID)
 	var wheel_before: Array[StringName] = Game.wheel.duplicate()
@@ -57,10 +58,10 @@ func run(rig) -> void:
 		await rig.capture("grove_01_chop.png")
 		cam.global_position = tree.global_position + Vector3(7.0, 4.6, 7.5)
 		cam.look_at(tree.global_position + Vector3.UP * 2.7, Vector3.UP)
-	var harvested: bool = await rig.until(
-		func() -> bool: return Game.carrying_firewood, 2.0)
+	var harvested: bool = await rig.until(func() -> bool:
+		return int(Run.bag.get(SupplyCargoDb.FIREWOOD_ID, 0)) == 1, 2.0)
 	rig.release(&"interact")
-	rig.check(harvested, "the axe impact awards one carried firewood bundle")
+	rig.check(harvested, "the axe impact awards exact Firewood cargo to the Run bag")
 	rig.check(heard_cues == [HarvestTree.SFX_AXE_HIT, HarvestTree.SFX_TREE_FALL],
 		"the committed impact requests one axe hit and one tree-fall cue")
 	rig.check(_positional_voice_playing(HarvestTree.SFX_AXE_HIT)
@@ -86,12 +87,14 @@ func run(rig) -> void:
 	var second: HarvestTree = outskirts.harvest_trees[1]
 	second.activate(hero)
 	await rig.wait_seconds(0.1)
-	rig.check(not hero.woodsman_chopping(),
-		"a second tree refuses the same day's already-carried bundle")
+	rig.check(not hero.woodsman_chopping()
+		and int(Run.bag.get(SupplyCargoDb.FIREWOOD_ID, 0)) == 1,
+		"a second tree refuses because today's chop is complete, not because cargo is held")
 	Clock.set_time(2, 10.0)
 	await rig.wait_physics_frames(3)
-	rig.check(not stump.visible and tree.enabled,
-		"a new day restores the grove while preserving the one-bundle rule")
+	rig.check(not stump.visible and tree.enabled
+		and Game.can_chop_firewood(Clock.day, Clock.garrison_phase()),
+		"the next day restores the grove and a fresh daily chop")
 	if Bus.request_sfx.is_connected(cue_listener):
 		Bus.request_sfx.disconnect(cue_listener)
 	Clock.running = true
