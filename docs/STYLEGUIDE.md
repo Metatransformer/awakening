@@ -88,6 +88,181 @@ Rules that keep it dirty rather than clean:
   floor. Temporary overhealth is the additional exception, confined to its
   fixed in-bar health end-cap. **That gap is the art direction.**
 
+### 2.1 The four dungeon floor identities
+
+These are four material cultures built from one dungeon kit, not four global
+colour grades. A floor passes only when a HUD-off frame remains identifiable in
+greyscale from its masonry scale, ground treatment, dressing and architectural
+silhouette. Changing `FloorDb.TINTS` alone cannot satisfy this section.
+
+**Status and boundary.** Issue #132 builds **floor 1, The Cistern / Drowned
+Bronze, only**. The Foundry, Hushing Choir and Chord Gate entries below are
+authoritative specifications for later work; they do not authorise production
+of floors 2–4 while the freeze in `docs/SCOPE.md` remains in force.
+
+#### The cross-floor contract
+
+- **Warm key, cool air.** Every floor uses the same shaped-light baseline from
+  §4.7: torch key energy **9.5**, range **15 m**, attenuation **1.3**, against a
+  shadowless cool directional fill at energy **0.32**. The per-floor colours,
+  ambient level and fog density below are the targets in `FloorDb.TINTS`.
+  “Near-gold” fire still is not GOLD; GOLD remains a progression/currency
+  signal. The fill and distance air must read cooler than the key even where
+  smoke or stone carries a warm local colour.
+- **Dark is an accent, not the majority.** The §4.7 `room_range` gates apply on
+  every floor: no frame may put more than half of the world area under luma 8;
+  at least 3% must sit above 64; mean luma must be at least 18. Preserve a real
+  doorway/corner dark and a real key-light bright instead of lifting the whole
+  room into one sheet.
+- **Three material roles must read at once:** load-bearing wall mass,
+  traversable ground, and the floor's functional hard material (hydraulic
+  metal, foundry iron, resonant bell/bone, or monumental threshold stone).
+  Separate them by value, scale, edge and reflectance before hue. A tiny tint
+  shift between otherwise identical walls and floors is a failure.
+- **Reserved signals remain signals.** EXTRACT CYAN never colours water, air,
+  mineral stain or metal. GOLD never colours flame, bronze, brick or stone.
+  Rarity MOSS is not literal wall moss, and the Choir's violet is not ARCANE;
+  environmental versions are low-saturation palette dithers under §2's world-
+  surface cap. VITAL, RUST, COBALT and the other gameplay colours likewise do
+  not become ambient dressing.
+- **Dress two coherent fictions, not a prop catalogue.** Each floor pairs the
+  place's original function with one present condition named below. A cluster
+  must belong to one of those readings or connect them; no generic barrels,
+  crates, candles or bones merely because the asset exists.
+- **Clusters are sparse, deterministic and non-blocking.** Derive placement
+  from the floor/room seed and stable wall anchors, never frame-time randomness.
+  An ordinary room gets at most one dominant cluster of 2–5 pieces and one
+  smaller supporting cluster; landmark rooms may add one. Keep clusters on
+  perimeter bays, recesses and dead corners, outside doorway approaches,
+  critical paths, combat rings, puzzle footprints, pickups and interaction
+  clearances. Dressing may narrow the picture, never the playable route.
+- **The silhouette is architecture.** Repeat the named floor silhouette at the
+  entrance and authored landmark rooms, large enough to survive fog and a flat
+  black render. It is not a small prop stamped into every room. At least one
+  material cue and one floor-specific structural cue must still identify
+  ordinary rooms between those landmarks.
+
+#### Floor 1 — The Cistern / Drowned Bronze — implementation target
+
+**Fiction.** Ancient Imperial waterworks are now occupied and scavenged by
+goblins and skeletons. The two dressing readings are therefore intact or failed
+hydraulic purpose, and rough occupation/salvage laid over it.
+
+- **Palette and light.** Keep wall mass in cool wet blue-grey between MIDNIGHT
+  SLATE and ASH, lift cobble faces toward muted MOTH, and hold opaque water
+  between VOID and MIDNIGHT SLATE. Moss, lime bloom and green-blue mineral runs
+  are dull surface dithers, never rarity MOSS or EXTRACT CYAN. Bronze is brown,
+  tarnished and below MOTH in value; it never approaches GOLD. Target
+  Drowned Bronze lighting is warm key `Color(1.00, 0.74, 0.46)` at energy 9.5,
+  cool fill `Color(0.58, 0.80, 0.96)` at 0.32, and cool air
+  `Color(0.1255, 0.1569, 0.1882)` with ambient
+  `Color(0.30, 0.34, 0.47)` at **0.38** and fog density **0.0062**. The read is
+  orange pools on blue wet masonry, not a cyan room filter.
+- **Wall and floor vocabulary.** Walls are oversized irregular Imperial blocks
+  with cool recessed mortar, damp lower courses, mineral tide lines and rare
+  bronze or iron sluice hardware. Floors are broad worn cobbles with dark wet
+  joints, chipped drain lips and a continuous perimeter runnel. Water is opaque
+  and dark; it is a missing-value plane with a hard masonry edge, not a glossy
+  blue surface or an extraction-coloured glow.
+- **Prop vocabulary.** Use bronze/iron valve or sluice parts, rope, pulleys,
+  buckets and restrained rubble. Occupation appears through expedient lashings,
+  a bucket pressed into another use, a small bone/rubble rest, or a partly
+  stripped mechanism—not through a second furniture set. One mechanism plus
+  two or three dependent pieces reads better than five unrelated props.
+- **HUD-off silhouette.** **Paired overflow piers joined by a heavy lintel, with
+  a hanging hoist centred above the perimeter runnel.** The piers and lintel are
+  the recognisable mass; rope and bucket complete the read but may not be the
+  only things distinguishing it.
+
+#### Floor 2 — The Foundry / Slag Light — specification only
+
+**Fiction.** An Imperial production floor is arrested in its baked, slag-choked
+aftermath. Dressing reads as industrial process plus the residue and failure of
+that process, not as a generic lava cave.
+
+- **Palette and light.** Baked brick occupies a warmer mid-value band than the
+  Cistern; soot, clinker and slag fall through ASH to VOID; iron stays a cool
+  dark neutral so rails and gantries cut across the brick. Brick may derive from
+  muted RUST mixtures but never use signal RUST itself, and furnace light never
+  uses GOLD. Target Slag Light is the hottest orange key,
+  `Color(1.00, 0.62, 0.30)` at 9.5, opposed by cold blue fill
+  `Color(0.52, 0.64, 0.98)` at 0.32. Smoky air is
+  `Color(0.1882, 0.1569, 0.1569)` with cool ambient
+  `Color(0.34, 0.34, 0.44)` at **0.42** and fog density **0.0075**; the blue
+  fill must remain visible on iron and turned-away brick so the result is not a
+  uniform orange grade.
+- **Wall and floor vocabulary.** Walls use broad baked-brick firebox courses,
+  dark scorched mortar, furnace throats and limited glassy slag accretion.
+  Floors use large soot-dark refractory pavers interrupted by embedded iron
+  rails, quench channels and solidified slag shelves. Glowing lava fields and
+  uniformly emissive cracks are outside the vocabulary.
+- **Prop vocabulary.** Furnaces, rail stops, chained counterweights, ingot
+  moulds, a restrained ore cart or clinker pile, and gantry tackle. Tools appear
+  in one work station, not sprinkled evenly. Rails and gantries are structural
+  lines; loose props support them rather than becoming the identity.
+- **HUD-off silhouette.** **A tall furnace stack crossed by a transverse iron
+  gantry.** The vertical stack and horizontal bridge must read as one large
+  T-shaped industrial landmark from the room approach.
+
+#### Floor 3 — The Hushing Choir / Pale Ring — specification only
+
+**Fiction.** A pale resonant hall was built to hold and shape sound, then
+deliberately muted. Dressing reads as acoustic ceremony plus suppression:
+ringing forms bound, wrapped or made still.
+
+- **Palette and light.** Pale BONE/MOTH stone and bone occupy the highest wall
+  values so far, with ASH joints and low-saturation violet distance air. Violet
+  is atmosphere, never rarity ARCANE, and bells remain dull MOTH/ASH metal
+  rather than GOLD. Target Pale Ring is a thin warm key
+  `Color(1.00, 0.82, 0.60)` at 9.5, violet-cool fill
+  `Color(0.72, 0.66, 1.00)` at 0.32, and clear violet air
+  `Color(0.1569, 0.1569, 0.2196)` with ambient
+  `Color(0.34, 0.32, 0.50)` at **0.44** and fog density **0.0058**. Keep the
+  long view legible; unease comes from pale distance and arrested sound, not
+  darkness.
+- **Wall and floor vocabulary.** Walls are tall pale dressed-stone bays with
+  bone inserts, repeated resonance ribs and shallow ring carvings. Floors are
+  broad pale flags or bone-aggregate terrazzo with concentric scored bands and
+  sparse dark joints. The rhythm is long and vertical, not the Cistern's heavy
+  wet courses or the Foundry's busy brick.
+- **Prop vocabulary.** Bells, clappers or tuning weights, resonance frames and
+  a few lengths of heavy muted cloth. Cloth must bind, hood or interrupt a
+  sounding object; it is not generic drapery. Use one suspended assembly with
+  one grounded counterweight or folded cloth cluster, leaving the hall mostly
+  bare.
+- **HUD-off silhouette.** **A bell canopy held inside a tall ribbed arch.** The
+  canopy's dark hanging mass and the pale repeating ribs must remain separable
+  in silhouette; a loose bell on an ordinary ceiling does not count.
+
+#### Floor 4 — The Chord Gate / Riven Dawn — specification only
+
+**Fiction.** A monumental threshold near open sky has been violently fractured
+without losing its purpose as a passage. Dressing reads as formal gate
+architecture plus the single rupture that opened it, not as a rubble-filled
+ruin.
+
+- **Palette and light.** Monumental stone is nearly untinted BONE/MOTH with
+  ASH fracture faces and sparse MIDNIGHT/VOID fissures. Blue-violet air may be
+  the brightest and coolest distance field in the Descent but never becomes
+  COBALT, ARCANE or EXTRACT CYAN scenery. Target Riven Dawn is warm near-gold
+  key `Color(1.00, 0.78, 0.52)` at 9.5—still not GOLD—against the coldest fill
+  `Color(0.50, 0.66, 1.00)` at 0.32 and the brightest air
+  `Color(0.1569, 0.1882, 0.2510)`, with ambient
+  `Color(0.32, 0.38, 0.56)` at **0.50** and fog density **0.0068**. The deepest
+  authored floor must feel closest to release, not darkest.
+- **Wall and floor vocabulary.** Walls use very large pale ashlar or monolithic
+  threshold slabs, few joints, clean cut faces and broad fractures that expose
+  darker interiors. Floors use enormous worn slabs with sparse, long fissures
+  and partial ring inlays that align toward the route. Do not backfill the
+  scale with ordinary cobble, brick or noisy rubble.
+- **Prop vocabulary.** Keep it almost empty: one fallen threshold block, one
+  aligned stela or support, and a small number of major ring fragments. No
+  household dressing and no carpet of chips. Each fragment must either continue
+  the broken circle or point through it.
+- **HUD-off silhouette.** **A broken monumental ring/oculus framing the route.**
+  The player must pass toward or through its missing arc; a decorative ring on
+  a side wall does not count.
+
 ---
 
 ## 3. Type
