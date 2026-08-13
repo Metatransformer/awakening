@@ -151,8 +151,8 @@ func _ready() -> void:
 		Bus.field_observation_recorded.connect(_on_field_observation_recorded)
 
 
-func reset() -> void:
-	Game.clear_boss_key()
+func reset(announce_keys: bool = true) -> void:
+	Game.clear_run_keys(announce_keys)
 	bag.clear()
 	cased.clear()
 	visited_rooms.clear()
@@ -186,7 +186,7 @@ func _on_field_observation_recorded(observation_id: StringName) -> void:
 
 ## Start a run. Pass a seed to replay one; 0 picks a fresh one and records it.
 func enter(run_seed: int = 0) -> void:
-	Game.clear_boss_key()
+	Game.clear_run_keys()
 	bag.clear()
 	cased.clear()
 	visited_rooms.clear()
@@ -257,6 +257,7 @@ func descend_floor() -> void:
 	depth = 0
 	visited_rooms.clear()
 	Bus.level_changed.emit(level)
+	Game.announce_key_count()
 
 
 ## Take the stair up without ending the run. This is the exact inverse of a
@@ -269,6 +270,7 @@ func ascend_floor() -> void:
 	depth = 0
 	visited_rooms.clear()
 	Bus.level_changed.emit(level)
+	Game.announce_key_count()
 
 
 ## The seed for the floor you are standing on. Same run seed plus same level
@@ -305,11 +307,11 @@ func snapshot() -> Dictionary:
 ## and typed dictionaries, so every collection is rebuilt rather than assigned.
 ## Empty input means there is no resumable run and deliberately clears any live
 ## one the caller may have been standing in.
-func restore(saved: Dictionary) -> bool:
+func restore(saved: Dictionary, announce_keys: bool = true) -> bool:
 	var snapshot_version: int = int(saved.get("version", 0))
 	if saved.is_empty() or snapshot_version < 1 \
 			or snapshot_version > SNAPSHOT_VERSION:
-		reset()
+		reset(announce_keys)
 		return false
 
 	bag = _restore_counts(saved.get("bag", {}))
@@ -372,6 +374,8 @@ func restore(saved: Dictionary) -> bool:
 	# completed state rather than observe the half-restored intermediate values.
 	Bus.bag_changed.emit(bag, bag_value())
 	Bus.level_changed.emit(level)
+	if announce_keys:
+		Game.announce_key_count()
 	Bus.depth_changed.emit(depth)
 	Bus.magic_changed.emit(Game.magic, Game.max_magic)
 	Bus.stamina_changed.emit(Game.stamina, Game.max_stamina)
@@ -419,6 +423,8 @@ func ensure_legacy_cargo(id: StringName, minimum_count: int = 1) -> bool:
 
 
 ## Settle an extraction. Returns false only when there is no run to leave.
+## `charge_gold = false` is reserved for a Rope already consumed at channel start;
+## it changes only the fee, leaving banking, summary and settlement identical.
 ##
 ## **It cannot fail on money.** The fee is capped at the purse (`extract_charge`),
 ## so a toll bigger than your gold takes all of it and extraction still works. The
@@ -427,13 +433,14 @@ func ensure_legacy_cargo(id: StringName, minimum_count: int = 1) -> bool:
 ## the best run of the night, and it stopped them with no way to comply --
 ## nothing underground sells, and dying to clear the debt loses the bag the fee
 ## was charged for. See `extract_charge` for why the cap is the right shape.
-func extract() -> bool:
+func extract(charge_gold: bool = true) -> bool:
 	if not in_dungeon:
 		return false
-	var fee := extract_charge()
+	var fee := extract_charge() if charge_gold else 0
 
-	Game.clear_boss_key()
-	Game.spend_gold(fee)
+	Game.clear_run_keys()
+	if charge_gold:
+		Game.spend_gold(fee)
 	# **The refill the whole bar is built around**: you leave, and the blue comes
 	# back. It lands here rather than only in the next `enter()` so a player
 	# standing in the garrison sees a full meter -- a bar that stayed empty
@@ -598,7 +605,7 @@ func relic_toll() -> int:
 func die() -> void:
 	if not in_dungeon:
 		return
-	Game.clear_boss_key()
+	Game.clear_run_keys()
 	# The dial mercy turns (GDD §7.1). Counted here rather than off
 	# `Bus.player_died` because that fires for a death in the garrison too, and
 	# this is the only place that knows a RUN ended.
@@ -746,10 +753,9 @@ func extract_takes_all() -> bool:
 	return in_dungeon and extract_cost() >= Game.gold and Game.gold > 0
 
 
-## Whether the rope can work at all. Poverty is not one of the answers any more
-## and there is no `Game.gold` term left here -- see `extract_charge`. Kept as a
-## function because the HUD, the pouch and the rope all ask, and a rule about
-## when leaving is possible should have exactly one home.
+## Whether an extraction settlement can run at all. Price is not a blocker and
+## Rope stock is checked by the Equipment/Rope seam before reaching this state;
+## this compatibility query therefore answers only whether a run is live.
 func can_extract() -> bool:
 	return in_dungeon
 

@@ -113,13 +113,13 @@ const DECORATIVE_TREE_POSITIONS: Array[Vector3] = [
 	Vector3(-7.0, 0.0, -29.0), Vector3(-35.0, 0.0, 17.5),
 	Vector3(-27.4, 0.0, 32.2), Vector3(-25.5, 0.0, 30.0),
 	Vector3(-18.0, 0.0, 32.0), Vector3(-11.5, 0.0, 31.5),
-	Vector3(-5.5, 0.0, 33.0), Vector3(2.0, 0.0, 32.5),
-	Vector3(9.0, 0.0, 32.0), Vector3(15.5, 0.0, 31.0),
-	Vector3(34.0, 0.0, 20.5), Vector3(37.0, 0.0, 12.0),
-	Vector3(37.0, 0.0, 2.0), Vector3(37.0, 0.0, -6.0),
-	Vector3(35.0, 0.0, -15.0), Vector3(32.0, 0.0, -23.0),
-	Vector3(22.0, 0.0, -31.0), Vector3(14.0, 0.0, -33.0),
-	Vector3(4.0, 0.0, -33.5), Vector3(-16.0, 0.0, -32.5),
+	Vector3(-5.5, 0.0, 33.0), Vector3(2.0, 0.0, 32.0),
+	Vector3(9.0, 0.0, 29.2), Vector3(15.5, 0.0, 29.0),
+	Vector3(34.0, 0.0, 20.5), Vector3(34.4, 0.0, 11.5),
+	Vector3(34.7, 0.0, 2.0), Vector3(34.6, 0.0, -6.0),
+	Vector3(35.0, 0.0, -15.0), Vector3(29.0, 0.0, -21.0),
+	Vector3(22.0, 0.0, -28.3), Vector3(14.0, 0.0, -30.2),
+	Vector3(4.0, 0.0, -31.0), Vector3(-16.0, 0.0, -32.5),
 	Vector3(-25.0, 0.0, -29.0), Vector3(-33.5, 0.0, -24.0),
 ]
 
@@ -178,6 +178,7 @@ const UNDERGROWTH_POSITIONS: Array[Vector3] = [
 	Vector3(-27.0, 0.0, -22.0), Vector3(-33.0, 0.0, -16.0),
 ]
 
+var open_garrison_end: bool = false
 var bridge_obstruction: Node3D
 var mine_portal: Node3D
 var toolshed_anchor: Node3D
@@ -186,6 +187,9 @@ var central_statue: Statue
 var scenic_water: Array[MeshInstance3D] = []
 
 var _water_material: ShaderMaterial
+var _river_water_material: ShaderMaterial
+var _fishing_water_material: ShaderMaterial
+var _scenic_pond_material: ShaderMaterial
 var _soil_material: StandardMaterial3D
 var _reed_material: StandardMaterial3D
 var _mine_dark_material: StandardMaterial3D
@@ -250,6 +254,48 @@ func _build() -> void:
 	_water_material.set_shader_parameter(&"water_specular", 0.20)
 	_water_material.set_shader_parameter(&"shallow_color", Vector3(0.08, 0.29, 0.28))
 	_water_material.set_shader_parameter(&"deep_color", Vector3(0.018, 0.075, 0.11))
+	# Rivers, fishing water, and the quiet south pond need different surface reads.
+	# Sharing one shader keeps the language coherent; duplicated parameter sets stop
+	# every body of water from reading like the same animated sheet.
+	_river_water_material = _water_material.duplicate() as ShaderMaterial
+	_river_water_material.set_shader_parameter(&"wave_amp", 0.035)
+	_river_water_material.set_shader_parameter(&"wave_len", 6.4)
+	_river_water_material.set_shader_parameter(&"wave_speed", 0.92)
+	_river_water_material.set_shader_parameter(&"swell_normal", 0.14)
+	_river_water_material.set_shader_parameter(&"ripple_scale", 0.31)
+	_river_water_material.set_shader_parameter(&"ripple_strength", 0.22)
+	_river_water_material.set_shader_parameter(&"ripple_speed", 0.78)
+	_river_water_material.set_shader_parameter(&"fresnel_strength", 0.015)
+	_river_water_material.set_shader_parameter(&"water_roughness", 0.82)
+	_river_water_material.set_shader_parameter(&"water_specular", 0.04)
+	_river_water_material.set_shader_parameter(&"shallow_color", Vector3(0.025, 0.14, 0.16))
+	_river_water_material.set_shader_parameter(&"deep_color", Vector3(0.004, 0.024, 0.040))
+
+	_fishing_water_material = _water_material.duplicate() as ShaderMaterial
+	_fishing_water_material.set_shader_parameter(&"wave_amp", 0.018)
+	_fishing_water_material.set_shader_parameter(&"wave_len", 13.5)
+	_fishing_water_material.set_shader_parameter(&"wave_speed", 0.34)
+	_fishing_water_material.set_shader_parameter(&"swell_normal", 0.07)
+	_fishing_water_material.set_shader_parameter(&"ripple_strength", 0.07)
+	_fishing_water_material.set_shader_parameter(&"ripple_speed", 0.24)
+	_fishing_water_material.set_shader_parameter(&"fresnel_strength", 0.07)
+	_fishing_water_material.set_shader_parameter(&"water_roughness", 0.70)
+	_fishing_water_material.set_shader_parameter(&"water_specular", 0.12)
+	_fishing_water_material.set_shader_parameter(&"shallow_color", Vector3(0.12, 0.31, 0.21))
+	_fishing_water_material.set_shader_parameter(&"deep_color", Vector3(0.025, 0.085, 0.065))
+
+	_scenic_pond_material = _water_material.duplicate() as ShaderMaterial
+	_scenic_pond_material.set_shader_parameter(&"wave_amp", 0.025)
+	_scenic_pond_material.set_shader_parameter(&"wave_len", 10.5)
+	_scenic_pond_material.set_shader_parameter(&"wave_speed", 0.46)
+	_scenic_pond_material.set_shader_parameter(&"swell_normal", 0.10)
+	_scenic_pond_material.set_shader_parameter(&"ripple_strength", 0.11)
+	_scenic_pond_material.set_shader_parameter(&"ripple_speed", 0.38)
+	_scenic_pond_material.set_shader_parameter(&"fresnel_strength", 0.08)
+	_scenic_pond_material.set_shader_parameter(&"water_roughness", 0.58)
+	_scenic_pond_material.set_shader_parameter(&"water_specular", 0.16)
+	_scenic_pond_material.set_shader_parameter(&"shallow_color", Vector3(0.085, 0.28, 0.24))
+	_scenic_pond_material.set_shader_parameter(&"deep_color", Vector3(0.018, 0.07, 0.085))
 
 	_soil_material = _plain_material(Color(0.20, 0.105, 0.045), 1.0)
 	_reed_material = _plain_material(Color(0.25, 0.31, 0.13), 0.95)
@@ -269,6 +315,7 @@ func _build() -> void:
 	var details := _group(self, &"Details")
 
 	_build_ground(terrain)
+	_build_ground_patches(terrain)
 	_build_paths(terrain)
 	_build_water(water)
 	_build_waterfalls(water)
@@ -344,15 +391,32 @@ func _build_ground_patches(parent: Node3D) -> void:
 
 
 func _build_water(parent: Node3D) -> void:
-	# An irregular outer sheet reads as connected gorge water without exposing a
-	# rectangular world-plane edge in the comparison view.
-	_irregular_water(parent, &"PerimeterRiver", Vector2(62.0, 62.0),
-		Vector3(0.0, -0.24, 0.0), 48, 1.73)
+	# Three separated channels establish a gorge without turning the playable
+	# meadow into an island. Their inner banks stay outside the authored tree
+	# line, while the west ribbon still reaches the river-fishing dock.
+	_water_ribbon(parent, &"WestRiver", PackedVector2Array([
+		Vector2(-39.6, -24.0), Vector2(-41.7, -15.0),
+		Vector2(-41.2, -4.0), Vector2(-41.9, 7.5),
+		Vector2(-40.4, 17.0), Vector2(-37.5, 23.0),
+	]), 5.0, Vector3(0.0, -0.22, 0.0), _river_water_material, 0.47, true)
+	_water_ribbon(parent, &"SouthRiver", PackedVector2Array([
+		Vector2(-32.5, -32.6), Vector2(-23.0, -36.0),
+		Vector2(-11.0, -37.2), Vector2(2.0, -37.0),
+		Vector2(15.0, -35.8), Vector2(26.5, -31.6),
+		Vector2(33.0, -25.0),
+	]), 5.2, Vector3(0.0, -0.23, 0.0), _river_water_material, 1.31)
+	_water_ribbon(parent, &"EastGorge", PackedVector2Array([
+		Vector2(34.0, -25.0), Vector2(39.5, -17.0),
+		Vector2(41.0, -7.0), Vector2(41.1, 4.0),
+		Vector2(39.6, 15.0), Vector2(35.5, 24.5),
+		Vector2(27.0, 30.5), Vector2(16.0, 33.5),
+		Vector2(7.0, 35.2),
+	]), 5.0, Vector3(0.0, -0.21, 0.0), _river_water_material, 2.17)
 	_build_pond(parent, &"EastFishingPond",
 		FISHING_CENTER + Vector3(0.5, 0.0, -2.25),
-		Vector2(15.0, 10.5), 18)
+		Vector2(15.0, 10.5), 18, _fishing_water_material)
 	_build_pond(parent, &"SouthFishingPond", SOUTH_POND_CENTER,
-		Vector2(16.0, 10.0), 20)
+		Vector2(16.0, 10.0), 20, _scenic_pond_material)
 
 
 func _build_waterfalls(parent: Node3D) -> void:
@@ -362,7 +426,7 @@ func _build_waterfalls(parent: Node3D) -> void:
 	material.set_shader_parameter(&"foam_color", Vector3(0.72, 0.84, 0.82))
 	material.set_shader_parameter(&"water_roughness", 0.34)
 	for row: Vector4 in [Vector4(35.6, 15.0, 3.5, 6.4),
-			Vector4(-6.5, 31.0, 2.4, 4.6)]:
+			Vector4(7.0, 34.8, 2.4, 4.6)]:
 		var fall := MeshInstance3D.new()
 		fall.name = &"GorgeWaterfall"
 		var quad := QuadMesh.new()
@@ -375,12 +439,12 @@ func _build_waterfalls(parent: Node3D) -> void:
 
 
 func _build_pond(parent: Node3D, pond_name: StringName, centre: Vector3,
-		size: Vector2, rocks: int) -> void:
+		size: Vector2, rocks: int, water_material: ShaderMaterial) -> void:
 	var pond := _group(parent, pond_name)
 	pond.position = centre
 	_irregular_disc(pond, &"DarkBasin", MAT_DARK_STONE, size * 0.53,
 		Vector3(0.0, -0.03, 0.0), 28, float(pond_name.hash()) * 0.0001)
-	_irregular_water(pond, &"Surface", size * 0.48,
+	_irregular_water(pond, &"Surface", water_material, size * 0.48,
 		Vector3(0.0, POND_WATER_HEIGHT, 0.0), 32,
 		float(pond_name.hash()) * 0.0001)
 	_build_pond_barrier(pond, size, rocks)
@@ -440,6 +504,35 @@ func _build_boundaries(parent: Node3D) -> void:
 		_box(parent, &"ShorelineCollision", null,
 			Vector3(1.3, 4.6, delta.length() + 0.8),
 			Transform3D(Basis(Vector3.UP, yaw), (a + b) * 0.5 + Vector3.UP * 1.7), true)
+
+	# Broad stone terraces sit beneath the loose boulder language. The missing
+	# northwest run preserves Highbridge as a deliberate aperture rather than a
+	# break in a visibly repeated ring.
+	var shelf_runs: Array[Vector4] = [
+		Vector4(-27.0, -29.2, 9.5, -0.95), Vector4(-13.0, -32.4, 10.0, -1.42),
+		Vector4(3.0, -32.8, 11.0, -1.62), Vector4(20.0, -29.2, 10.0, -2.02),
+		Vector4(33.0, -19.0, 8.0, -2.72), Vector4(36.0, -3.5, 10.0, PI),
+		Vector4(34.2, 15.5, 9.0, 2.75), Vector4(23.0, 29.0, 10.0, 2.02),
+		Vector4(7.0, 31.5, 11.0, 1.58), Vector4(-10.0, 30.5, 9.0, 1.43),
+		Vector4(-35.2, 7.0, 10.0, 0.05), Vector4(-34.0, -12.5, 9.0, 0.36),
+	]
+	for i: int in shelf_runs.size():
+		var row := shelf_runs[i]
+		var point := Vector3(row.x, 0.0, row.y)
+		var outward := Vector3(point.x, 0.0, point.z).normalized()
+		var lower := _group(parent, StringName("LowerCliffShelf%02d" % i))
+		lower.position = point + outward * 0.55
+		lower.rotation.y = row.w
+		_irregular_disc(lower, &"StoneShelf", MAT_CLIFF,
+			Vector2(row.z * 0.52, 2.1 + float(i % 3) * 0.30),
+			Vector3(0.0, -0.10, 0.0), 18, float(i) * 0.61)
+		if i % 3 != 1:
+			var upper := _group(parent, StringName("UpperCliffShelf%02d" % i))
+			upper.position = point + outward * 2.0 + Vector3.UP * 0.32
+			upper.rotation.y = row.w + sin(float(i) * 1.7) * 0.09
+			_irregular_disc(upper, &"StoneShelf", MAT_CLIFF,
+				Vector2(row.z * 0.36, 1.55 + float(i % 2) * 0.25),
+				Vector3.ZERO, 16, float(i) * 0.93 + 0.4)
 
 	# Rocks are grouped into geological shelves instead of evenly spaced edging.
 	var visual_positions: Array[Vector3] = [
@@ -509,10 +602,22 @@ func _build_bridge(parent: Node3D) -> void:
 			+ right * side * 2.0 + Vector3.UP * 0.92
 		_box(bridge, &"BridgeRail", MAT_WOOD, Vector3(0.16, 0.16, length),
 			Transform3D(Basis(Vector3.UP, yaw), rail_mid), true)
-	_box(bridge, &"BridgeDeckCollision", null, Vector3(4.3, 0.30, length),
-		Transform3D(Basis(Vector3.UP, yaw),
-			(GARRISON_THRESHOLD + BRIDGE_END) * 0.5 - Vector3.UP * 0.05), true)
+	# Unlike the stepped horizontal planks, one horizontal collision box leaves a
+	# controller-catching end face wherever the endpoints differ in Y. Pitch the
+	# hidden deck through both authored endpoints so its walk surface follows them.
+	var deck_center := (GARRISON_THRESHOLD + BRIDGE_END) * 0.5 - Vector3.UP * 0.06
+	var deck_basis := Basis.looking_at(delta.normalized(), Vector3.UP)
+	_box(bridge, &"BridgeDeckCollision", null, Vector3(4.3, 0.18, length),
+		Transform3D(deck_basis, deck_center), true)
 
+	if open_garrison_end:
+		# The authored fort slab and bridge deck meet at the same mathematical edge.
+		# A capsule can catch on that zero-overlap contact even though no ray sees a
+		# wall, so carry the bridge floor beneath the final plank into the gate slab.
+		_box(bridge, &"BridgeGateSeamCollision", null, Vector3(4.3, 0.30, 1.4),
+			Transform3D(Basis(Vector3.UP, yaw),
+				BRIDGE_END + direction * 0.55 - Vector3.UP * 0.05), true)
+		return
 	bridge_obstruction = _group(bridge, &"BridgeBoundary")
 	bridge_obstruction.position = BRIDGE_END + direction * 0.2
 	bridge_obstruction.rotation.y = yaw
@@ -724,19 +829,35 @@ func _build_timber_dock(parent: Node3D, length: float, width: float) -> void:
 
 
 func _build_decorative_trees(parent: Node3D) -> void:
+	var pine_a: Array[Dictionary] = []
+	var pine_b: Array[Dictionary] = []
+	var oaks: Array[Dictionary] = []
 	for i: int in DECORATIVE_TREE_POSITIONS.size():
-		var packed := FOREST_OAK if i % 9 == 6 else FOREST_PINES[i % FOREST_PINES.size()]
-		_normalized_model(parent, StringName("BoundaryTree%02d" % i), packed,
-			DECORATIVE_TREE_POSITIONS[i], float(i) * 0.83,
-			8.0 + float(i % 5) * 0.65)
+		var placement: Dictionary = {
+			&"p": DECORATIVE_TREE_POSITIONS[i],
+			&"y": float(i) * 0.83,
+			&"h": 8.0 + float(i % 5) * 0.65,
+		}
+		if i % 9 == 6:
+			oaks.append(placement)
+		elif i % FOREST_PINES.size() == 0:
+			pine_a.append(placement)
+		else:
+			pine_b.append(placement)
 	for i: int in DENSE_TREE_ROWS.size():
 		var row := DENSE_TREE_ROWS[i]
 		var oak := row.z < 0.0
 		var position := Vector3(row.x, 0.0, row.y)
 		var coordinate_hash: int = int(row.x * 738.0) ^ int(row.y * 1931.0)
 		var yaw := fposmod(float(coordinate_hash) * 0.0001, TAU)
-		_normalized_model(parent, StringName("ForestMassTree%02d" % i),
-			FOREST_OAK if oak else FOREST_PINES[0], position, yaw, absf(row.z))
+		var placement: Dictionary = {&"p": position, &"y": yaw, &"h": absf(row.z)}
+		if oak:
+			oaks.append(placement)
+		else:
+			pine_a.append(placement)
+	_batch_normalized_models(parent, &"PineA", FOREST_PINES[0], pine_a, 32.0)
+	_batch_normalized_models(parent, &"PineB", FOREST_PINES[1], pine_b, 32.0)
+	_batch_normalized_models(parent, &"Oak", FOREST_OAK, oaks, 32.0)
 
 
 func _build_logging_detail(parent: Node3D) -> void:
@@ -766,14 +887,30 @@ func _build_logging_detail(parent: Node3D) -> void:
 
 
 func _build_meadow(parent: Node3D) -> void:
+	var flowers_by_source: Array[Array] = []
+	flowers_by_source.resize(FLOWERS.size())
+	for i: int in flowers_by_source.size():
+		flowers_by_source[i] = []
 	for i: int in FLOWER_POSITIONS.size():
-		_model(parent, StringName("FlowerPatch%02d" % i),
-			FLOWERS[i % FLOWERS.size()], FLOWER_POSITIONS[i], float(i) * 1.37,
-			Vector3.ONE * (1.7 + float(i % 3) * 0.35))
+		flowers_by_source[i % FLOWERS.size()].append({
+			&"p": FLOWER_POSITIONS[i], &"y": float(i) * 1.37,
+			&"s": Vector3.ONE * (1.7 + float(i % 3) * 0.35),
+		})
+	for i: int in FLOWERS.size():
+		_batch_scaled_models(parent, StringName("Flower%02d" % i), FLOWERS[i],
+			flowers_by_source[i])
+	var undergrowth_by_source: Array[Array] = []
+	undergrowth_by_source.resize(UNDERGROWTH.size())
+	for i: int in undergrowth_by_source.size():
+		undergrowth_by_source[i] = []
 	for i: int in UNDERGROWTH_POSITIONS.size():
-		_model(parent, StringName("Undergrowth%02d" % i),
-			UNDERGROWTH[i % UNDERGROWTH.size()], UNDERGROWTH_POSITIONS[i],
-			float(i) * 0.97, Vector3.ONE * (0.8 + float(i % 4) * 0.12))
+		undergrowth_by_source[i % UNDERGROWTH.size()].append({
+			&"p": UNDERGROWTH_POSITIONS[i], &"y": float(i) * 0.97,
+			&"s": Vector3.ONE * (0.8 + float(i % 4) * 0.12),
+		})
+	for i: int in UNDERGROWTH.size():
+		_batch_scaled_models(parent, StringName("Undergrowth%02d" % i),
+			UNDERGROWTH[i], undergrowth_by_source[i])
 
 
 func _build_rock_detail(parent: Node3D) -> void:
@@ -867,11 +1004,62 @@ func _water_plane(parent: Node3D, node_name: StringName, size: Vector2,
 	return water
 
 
-func _irregular_water(parent: Node3D, node_name: StringName, radius: Vector2,
-		position: Vector3, segments: int, phase: float) -> MeshInstance3D:
-	var water := _polygon_disc(parent, node_name, _water_material, radius,
+func _irregular_water(parent: Node3D, node_name: StringName, material: Material,
+		radius: Vector2, position: Vector3, segments: int,
+		phase: float) -> MeshInstance3D:
+	var water := _polygon_disc(parent, node_name, material, radius,
 		position, segments, phase)
 	scenic_water.append(water)
+	return water
+
+
+func _water_ribbon(parent: Node3D, node_name: StringName,
+		centreline: PackedVector2Array, width: float, position: Vector3,
+		material: Material, phase: float,
+		register_as_scenic_water: bool = false) -> MeshInstance3D:
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+	var distance := 0.0
+	for i: int in centreline.size():
+		var previous := centreline[maxi(0, i - 1)]
+		var next := centreline[mini(centreline.size() - 1, i + 1)]
+		var tangent := (next - previous).normalized()
+		var normal := Vector2(-tangent.y, tangent.x)
+		var local_width := width * (1.0 + sin(float(i) * 2.11 + phase) * 0.10)
+		if i > 0:
+			distance += centreline[i].distance_to(centreline[i - 1])
+		for side: float in [-1.0, 1.0]:
+			var point := centreline[i] + normal * local_width * 0.5 * side
+			vertices.append(Vector3(point.x, 0.0, point.y))
+			normals.append(Vector3.UP)
+			uvs.append(Vector2(0.0 if side < 0.0 else 1.0, distance / 8.0))
+	if centreline.size() >= 2:
+		for i: int in centreline.size() - 1:
+			var a := i * 2
+			indices.append_array(PackedInt32Array([
+				a, a + 2, a + 1,
+				a + 1, a + 2, a + 3,
+			]))
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var water := MeshInstance3D.new()
+	water.name = node_name
+	water.mesh = mesh
+	water.material_override = material
+	water.position = position
+	parent.add_child(water)
+	# The public proof contract counts one river system plus the two ponds; the
+	# other ribbons are disconnected visual reaches of that same river system.
+	if register_as_scenic_water:
+		scenic_water.append(water)
 	return water
 
 
@@ -928,6 +1116,129 @@ func _polygon_surface(parent: Node3D, node_name: StringName, material: Material,
 	instance.position = position
 	parent.add_child(instance)
 	return instance
+
+
+func _batch_normalized_models(parent: Node3D, batch_name: StringName,
+		packed: PackedScene, placements: Array[Dictionary], cell_size: float) -> void:
+	if placements.is_empty():
+		return
+	var template := packed.instantiate() as Node3D
+	if template == null:
+		return
+	parent.add_child(template)
+	var bounds := _model_bounds(template)
+	var parts: Array[Dictionary] = []
+	var can_batch := _collect_model_parts(template, template, parts)
+	parent.remove_child(template)
+	template.free()
+	if not can_batch or parts.is_empty() or bounds.size.y <= 0.001:
+		for i: int in placements.size():
+			var row := placements[i]
+			_normalized_model(parent, StringName("%sFallback%02d" % [batch_name, i]),
+				packed, row[&"p"], row[&"y"], row[&"h"])
+		return
+	var cells: Dictionary = {}
+	for row: Dictionary in placements:
+		var point: Vector3 = row[&"p"]
+		var cell := Vector2i(floori((point.x + 48.0) / cell_size),
+			floori((point.z + 48.0) / cell_size))
+		if not cells.has(cell):
+			cells[cell] = []
+		(cells[cell] as Array).append(row)
+	for cell_key: Variant in cells:
+		var transforms: Array[Transform3D] = []
+		for row: Dictionary in cells[cell_key]:
+			var factor: float = row[&"h"] / bounds.size.y
+			var base_center := Vector3(bounds.position.x + bounds.size.x * 0.5,
+				bounds.position.y, bounds.position.z + bounds.size.z * 0.5)
+			var holder := Transform3D(Basis(Vector3.UP, row[&"y"]), row[&"p"])
+			var model := Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * factor),
+				-base_center * factor)
+			transforms.append(holder * model)
+		_emit_model_multimeshes(parent,
+			StringName("%s_%d_%d" % [batch_name, cell_key.x, cell_key.y]),
+			parts, transforms, 96.0)
+
+
+func _batch_scaled_models(parent: Node3D, batch_name: StringName,
+		packed: PackedScene, placements: Array) -> void:
+	if placements.is_empty():
+		return
+	var template := packed.instantiate() as Node3D
+	if template == null:
+		return
+	parent.add_child(template)
+	var parts: Array[Dictionary] = []
+	var can_batch := _collect_model_parts(template, template, parts)
+	parent.remove_child(template)
+	template.free()
+	if not can_batch or parts.is_empty():
+		for i: int in placements.size():
+			var row: Dictionary = placements[i]
+			_model(parent, StringName("%sFallback%02d" % [batch_name, i]), packed,
+				row[&"p"], row[&"y"], row[&"s"])
+		return
+	# Meadow batches split once across the site's long axis. It is enough spatial
+	# granularity for culling without turning four flowers into four draw calls.
+	for half: int in 2:
+		var transforms: Array[Transform3D] = []
+		for row_variant: Variant in placements:
+			var row: Dictionary = row_variant
+			var point: Vector3 = row[&"p"]
+			if (point.x >= 0.0) != (half == 1):
+				continue
+			var holder := Transform3D(Basis(Vector3.UP, row[&"y"]), point)
+			var scale_value: Vector3 = row[&"s"]
+			var model := Transform3D(Basis.IDENTITY.scaled(scale_value), Vector3.ZERO)
+			transforms.append(holder * model)
+		if not transforms.is_empty():
+			_emit_model_multimeshes(parent, StringName("%s_Half%d" % [batch_name, half]),
+				parts, transforms, 80.0)
+
+
+func _collect_model_parts(root_node: Node3D, node: Node,
+		parts: Array[Dictionary]) -> bool:
+	var mesh_instance := node as MeshInstance3D
+	if mesh_instance != null and mesh_instance.mesh != null:
+		for surface: int in mesh_instance.mesh.get_surface_count():
+			# MultiMesh preserves materials embedded in the Mesh resource, but it
+			# cannot preserve a different override for every surface.
+			if mesh_instance.get_surface_override_material(surface) != null:
+				return false
+		parts.append({
+			&"mesh": mesh_instance.mesh,
+			&"xform": root_node.global_transform.affine_inverse() \
+				* mesh_instance.global_transform,
+			&"override": mesh_instance.material_override,
+		})
+	for child: Node in node.get_children():
+		if not _collect_model_parts(root_node, child, parts):
+			return false
+	return true
+
+
+func _emit_model_multimeshes(parent: Node3D, batch_name: StringName,
+		parts: Array[Dictionary], model_transforms: Array[Transform3D],
+		visibility_end: float) -> void:
+	for part_index: int in parts.size():
+		var part := parts[part_index]
+		var multimesh := MultiMesh.new()
+		multimesh.transform_format = MultiMesh.TRANSFORM_3D
+		multimesh.mesh = part[&"mesh"]
+		multimesh.instance_count = model_transforms.size()
+		for i: int in model_transforms.size():
+			multimesh.set_instance_transform(i,
+				model_transforms[i] * (part[&"xform"] as Transform3D))
+		var instance := MultiMeshInstance3D.new()
+		instance.name = StringName("%s_Part%02d" % [batch_name, part_index])
+		instance.multimesh = multimesh
+		instance.material_override = part[&"override"]
+		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		instance.visibility_range_end = visibility_end
+		instance.visibility_range_fade_mode = \
+			GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+		instance.lod_bias = 0.75
+		parent.add_child(instance)
 
 
 func _model(parent: Node3D, node_name: StringName, packed: PackedScene,

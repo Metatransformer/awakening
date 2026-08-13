@@ -1422,10 +1422,12 @@ func _endless(rig, hero: Node3D) -> void:
 	_ck("H0 level 5 is the Long Descent",
 		FloorDb.name_of(5) == "The Long Descent")
 	_ck("H1 its length is the curve's, not a manifest's (%d)" % d.rooms.size(),
-		d.rooms.size() == Prog.rooms(5))
+		d.rooms.size() == FloorDb.rooms(5))
 	_ck("H2 it authors no anchors", d.placements.is_empty())
-	_ck("H3 so there are no locked doors on it",
-		_every(d, func(n: Node) -> bool: return n is LockedDoor).is_empty())
+	var endless_locks := _every(d, func(n: Node) -> bool: return n is LockedDoor)
+	_ck("H3 its only lock is the guaranteed Small-Key cycle",
+		endless_locks.size() == 1 and not d.key_loop.is_empty()
+		and endless_locks[0] == d.key_loop.get("gate"))
 	var deep_root: Node = d.rooms[d.deepest]["node"]
 	_ck("H4 and the stair is back in the deepest room",
 		_every(deep_root, func(n: Node) -> bool: return n is Stairs).size() == 1)

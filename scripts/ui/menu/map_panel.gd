@@ -95,6 +95,8 @@ const LEGEND_ROWS := [
 	[&"chest_open", "Chest you have emptied"],
 	[&"arrows", "Arrows on the floor"],
 	[&"stairs", "The stair down"],
+	[&"lock", "Locked door"],
+	[&"boss_lock", "Boss-key door"],
 ]
 const SURFACE_LEGEND_ROWS := [
 	[&"gate", "Gate or passage"],
@@ -155,6 +157,10 @@ func _ready() -> void:
 	# There is no hero arrow to chase here: the world is paused behind this
 	# screen, so the one thing that would want a frame ticker cannot move.
 	Bus.map_changed.connect(func() -> void:
+		if _canvas != null:
+			_canvas.queue_redraw())
+	Bus.key_count_changed.connect(func(_count: int) -> void:
+		_rebuild_band()
 		if _canvas != null:
 			_canvas.queue_redraw())
 
@@ -337,16 +343,14 @@ func _band_cells() -> Array:
 		]
 	var walked := Atlas.explored_count()
 	var total := Atlas.rooms.size()
-	var shut := _marked(Atlas.M_CHEST)
-	var stair := _marked(Atlas.M_STAIRS) > 0
 	return [
 		{"label": "Floor", "value": Prog.label(Atlas.level)},
 		{"label": "Rooms", "value": "%d / %d" % [walked, total],
 			"tone": UITheme.SUCCESS if walked >= total else null},
-		{"label": "Chests", "value": "%d shut" % shut,
-			"tone": UITheme.WARNING if shut > 0 else null},
-		{"label": "Stair", "value": "found" if stair else "not yet",
-			"tone": UITheme.SUCCESS if stair else null},
+		{"label": "Keys", "value": str(Game.small_keys_for_floor(Atlas.level))},
+		{"label": "Boss key",
+			"value": "1" if Game.has_boss_key_for(Atlas.level) else "0",
+			"tone": UITheme.SUCCESS if Game.has_boss_key_for(Atlas.level) else null},
 	]
 
 
@@ -534,6 +538,9 @@ func _draw_plan() -> void:
 	_clamp_pan()
 	_map_debug = MapDraw.draw_map(
 		_canvas, _plan_box(), s_y, _hero(), false, _zoom, _pan)
+	if Atlas.map_kind() == Atlas.KIND_DUNGEON:
+		_map_debug[&"small_keys"] = Game.small_keys_for_floor(Atlas.level)
+		_map_debug[&"boss_key"] = 1 if Game.has_boss_key_for(Atlas.level) else 0
 
 
 ## The hero, or null in a scene that has none. The world is paused behind this

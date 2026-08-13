@@ -6,7 +6,7 @@ extends RefCounted
 ##   2. extracting raises the SAME screen with the fee and the banked components;
 ##   3. BACK TO THE GARRISON actually goes to the garrison — and the button is
 ##      the only thing that does, so a screen that ignores it strands the run;
-##   4. the garrison gate still opens afterwards, both times, which is the bug the
+##   4. the Sunken Cut still opens afterwards, both times, which is the bug the
 ##      player reported ("A to descend doesn't work after I die").
 ##
 ##   tools/quiet.sh --path . -s tools/shoot.gd -- \
@@ -17,7 +17,7 @@ var out := ""
 var _fails := 0
 ## The last prompt line the HUD was told to draw.
 ##
-## A member and not a local in `_gate`, because the probe is a lambda: GDScript
+## A member and not a local in `_descend`, because the probe is a lambda: GDScript
 ## captures locals BY VALUE, so `said = text` inside one writes to the closure's
 ## own copy and the outer variable stays "" forever. It read as the game emitting
 ## nothing at all. Members go through `self`, which is captured by reference.
@@ -36,7 +36,7 @@ func run(rig) -> void:
 # --- Leg one: killed underground --------------------------------------------
 
 func _death_leg(rig) -> void:
-	await _gate(rig, "first")
+	await _descend(rig, "first")
 	if not Run.in_dungeon:
 		_fail("could not get underground at all")
 		return
@@ -92,9 +92,9 @@ func _death_leg(rig) -> void:
 # --- Leg two: walked out with the bag ---------------------------------------
 
 func _extract_leg(rig) -> void:
-	await _gate(rig, "after death")
+	await _descend(rig, "after death")
 	if not Run.in_dungeon:
-		_fail("the gate does not open after a death — the reported bug")
+		_fail("the Sunken Cut does not open after a death — the reported bug")
 		return
 	print("REND second descent ok, level=%d" % Run.level)
 
@@ -139,17 +139,17 @@ func _extract_leg(rig) -> void:
 		return
 	await rig.capture(out.path_join("e_03_garrison_again.png"))
 
-	# And down one more time, because the gate is the thing that broke.
-	await _gate(rig, "after extract")
+	# And down one more time, because the mine transition is the thing that broke.
+	await _descend(rig, "after extract")
 	if not Run.in_dungeon:
-		_fail("the gate does not open after an extraction")
+		_fail("the Sunken Cut does not open after an extraction")
 	print("REND third descent in_dungeon=%s" % Run.in_dungeon)
 
 
 # --- Pieces -----------------------------------------------------------------
 
-## Stand at the gate, check the prompt SAYS HOLD, and hold it.
-func _gate(rig, tag: String) -> void:
+## Stand at the Sunken Cut, check the prompt SAYS HOLD, and hold it.
+func _descend(rig, tag: String) -> void:
 	var garrison := rig.scene() as Garrison
 	if garrison == null:
 		_fail("not in the garrison for the %s descent (scene=%s)" % [tag, rig.scene().name])
@@ -161,27 +161,32 @@ func _gate(rig, tag: String) -> void:
 	Bus.prompt_changed.connect(probe)
 
 	var hero = rig.get_nodes_in_group(&"player")[0]
-	hero.global_position = garrison.gate.global_position + Vector3(0.0, 0.0, 1.8)
+	var descent := garrison.sunken_cut
+	if descent == null:
+		Bus.prompt_changed.disconnect(probe)
+		_fail("the garrison has no Sunken Cut transition (%s)" % tag)
+		return
+	hero.global_position = descent.global_position + Vector3(0.0, 0.0, 1.8)
 	for _i in 60:
-		if Prompt.focus == garrison.gate:
+		if Prompt.focus == descent:
 			break
 		await rig.wait_frames(2)
 	Bus.prompt_changed.disconnect(probe)
 
-	print("REND %s gate prompt=\"%s\"" % [tag, _said])
-	if Prompt.focus != garrison.gate:
-		_fail("nothing owns the interact button at the gate (%s)" % tag)
+	print("REND %s mine prompt=\"%s\"" % [tag, _said])
+	if Prompt.focus != descent:
+		_fail("nothing owns the interact button at the Sunken Cut (%s)" % tag)
 		return
 	# The whole of the reported bug in one assertion: a 0.9 s hold whose prompt
 	# does not say HOLD is a prompt that reads as broken to anyone who taps it.
 	if _said.find("HOLD") == -1:
-		_fail("the gate prompt does not say HOLD: \"%s\"" % _said)
+		_fail("the Sunken Cut prompt does not say HOLD: \"%s\"" % _said)
 
 	# A tap must NOT open it, which is what makes the word load-bearing.
 	await rig.tap([&"interact"])
 	await rig.wait_frames(20)
 	if Run.in_dungeon:
-		_fail("a TAP opened the gate — the hold is not being enforced")
+		_fail("a TAP entered the mine — the hold is not being enforced")
 		return
 
 	await rig.hold_seconds([&"interact"], 1.4)

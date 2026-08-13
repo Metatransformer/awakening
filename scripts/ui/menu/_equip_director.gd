@@ -190,175 +190,108 @@ func run(rig) -> void:
 		Game.loadout_set != live_before)
 	await rig.capture("eq_05_swapped.png")
 
-	# --- The way out, which is on INVENTORY now ------------------------------
-	# It used to be on this screen and it is not any more: the bag's worth, the
-	# purse and the fee are one decision, so they are on one screen (pouch_panel
-	# owns all three, hud.gd draws none of them). The assertions did not move
-	# with it for one commit, which is exactly how a director ends up proving a
-	# button that is no longer there.
-	await _key(rig, KEY_ESCAPE, 12)
-	_check("Escape backed out of Equipment to the root", not equip.visible)
-	await _nav_to_button(rig, "Inventory")
-	await _key(rig, KEY_ENTER, 12)
-	_check("the pouch screen is showing", pouch.visible)
+	# --- Provisions and Rope belong to Equipment -----------------------------
+	Game.add_charges(2)
+	Game.add_rations(&"hardtack", 4)
+	Game.add_rations(&"small_beer", 5)
+	equip.refresh()
+	await rig.wait_frames(4)
 
-	# The rope has to be REACHABLE by keyboard alone, like everything else on
-	# this screen -- it is the only control in the menu that ends a run, and a
-	# pad user who cannot get focus onto it cannot leave the dungeon at all.
-	# The label is read through `UiKit.label_of`, not `Button.text`: the row is a
-	# composed VerbRow now, so its own `text` is empty and the words live in a
-	# child Label. The diamond that used to prefix it is the row's icon.
 	await _nav_to_button(rig, "Escape Rope")
-	_check("the Escape Rope is reachable by keyboard",
-		_focused(rig) != null and UiKit.label_of(_focused(rig) as Button) == "Escape Rope")
-	await rig.capture("eq_06_rope.png")
+	var rope_row := equip.find_child("Rope", true, false) as Button
+	_check("the Escape Rope is reachable on Equipment by keyboard",
+		rope_row != null and _focused(rig) == rope_row)
+	var equip_blob := " ".join(_all_text(equip)).to_upper()
+	_check("Equipment visibly carries every provision number",
+		equip_blob.contains("PROVISIONS")
+		and equip_blob.contains("ARROWS")
+		and equip_blob.contains("%d / %d" % [Game.arrows, Game.max_arrows])
+		and equip_blob.contains("BURST CHARGES")
+		and equip_blob.contains("%d / %d" % [Game.charges, Game.max_charges])
+		and equip_blob.contains("HARDTACK")
+		and equip_blob.contains("SMALL BEER"))
+	var pouch_blob := " ".join(_all_text(pouch)).to_upper()
+	_check("Inventory owns neither Rope nor the old TO LEAVE fee",
+		pouch.find_child("Rope", true, false) == null
+		and not pouch_blob.contains("ESCAPE ROPE")
+		and not pouch_blob.contains("TO LEAVE"))
+	await rig.capture("eq_06_provisions.png")
 
-	# This scene is not a dungeon. Using it must refuse, and must NOT close the
-	# menu -- "the menu ate my button press" is the failure mode the notice and
-	# this assertion exist for.
-	await _key(rig, KEY_ENTER, 10)
-	_check("using the rope outside a run refused, and the menu stayed open",
-		menu.is_open and pouch.visible and not Run.in_dungeon)
+	# Refusal order starts with location, even while stock is also empty.
+	await _key(rig, KEY_ENTER, 8)
+	_check("already home refuses without closing Equipment",
+		menu.is_open and equip.visible and not Run.in_dungeon)
 
-	# Underground, the row has to name the price. `in_dungeon` is set directly
-	# rather than by running Run.enter(): this is a menu test scene with no
-	# dungeon in it, and the rope reads exactly two facts -- are you in a run,
-	# and can you pay.
+	# Underground with zero stock refuses on the first held frame and never moves
+	# the gauge. The row stays focusable so the detail card can explain why.
 	Run.in_dungeon = true
-	pouch.refresh()
+	Game.escape_ropes = 0
+	Bus.provisions_changed.emit()
 	await rig.wait_frames(4)
-	_check("in a run the rope names the fee (%d gold)" % Run.extract_cost(),
-		Run.extract_cost() >= 15)
-	await rig.capture("eq_07_rope_fee.png")
-
-	# --- The toll past the purse ---------------------------------------------
-	# This was the game's one dead end until 2026-08-09: the rope refused, and
-	# refused a player who had no way to comply. The fee is capped at the purse
-	# now, so what used to be a locked row is a priced one -- and the thing to
-	# prove from the UI side is that the row still WORKS and says so in words,
-	# because a fix the player cannot read is the same dead end with better
-	# arithmetic. Dropped to one under the toll; an empty bag tolls EXTRACT_MIN.
-	var kept_gold := Game.gold
-	if Game.gold > Run.extract_cost() - 1:
-		Game.spend_gold(Game.gold - (Run.extract_cost() - 1))
-	pouch.refresh()
-	await rig.wait_frames(4)
-	_check("a toll past the purse is capped at it (toll=%d purse=%d charge=%d)"
-			% [Run.extract_cost(), Game.gold, Run.extract_charge()],
-		Run.extract_takes_all() and Run.extract_charge() == Game.gold)
-	# The hold is what must survive. A row that greyed out here would be the old
-	# refusal wearing a different colour.
-	_check("and the row still offers the hold rather than refusing it",
-		Run.can_extract())
-	await rig.capture("eq_07a_rope_takes_all.png")
-	Game.add_gold(kept_gold - Game.gold)
-	pouch.refresh()
-	await rig.wait_frames(4)
-
-	# --- The way out is a HOLD -----------------------------------------------
-	# A is the universal forward press and it is one row above this on the same
-	# screen, where it fletches arrows repeatedly and on purpose. So A here must
-	# NOT leave -- it must point at the button that does (METAGAME §5).
-	await _key(rig, KEY_ENTER, 10)
-	_check("A on the rope did not leave: it is a hold now",
-		Run.in_dungeon and menu.is_open and pouch.visible)
-
-	# A tap of Y leaves nothing either. Sampled every frame and released on the
-	# FIRST non-zero reading rather than after a fixed wait: the gauge advances by
-	# `delta`, so N frames is N frames of unknown duration, and the shop's twin of
-	# this beat was caught reading 0.00 on a slow run where the whole hold had
-	# already elapsed (see forge_loop `CH3`). Releasing one frame in is also a
-	# harder test of "letting go does nothing" than releasing at 40%.
 	Input.action_press(&"ui_hold")
-	var peak := 0.0
-	for _i in 30:
-		await rig.wait_frames(1)
-		peak = maxf(peak, pouch._rope_hold)
-		if peak > 0.0:
-			break
+	await rig.wait_frames(2)
 	Input.action_release(&"ui_hold")
-	await rig.wait_frames(6)
-	_check("the gauge fills while Y is down (%.2f s)" % peak, peak > 0.0)
-	_check("letting go snapped it back to zero (%.2f)" % pouch._rope_hold,
-		is_zero_approx(pouch._rope_hold))
-	_check("and a tap of Y left nobody anywhere",
-		Run.in_dungeon and menu.is_open and pouch.visible)
+	await rig.wait_frames(4)
+	_check("zero Rope stock refused immediately and left the gauge at zero",
+		menu.is_open and equip.visible and is_zero_approx(equip._rope_hold))
+	_check("the empty Rope row remains focused for its explanation",
+		_focused(rig) == rope_row)
+	await rig.capture("eq_07_rope_empty.png")
 
-	# Held through, with the shutter open two frames in: the frame is the proof,
-	# and no assertion about a float can see a bar that renders behind its row --
-	# which is the exact failure HoldBar exists to avoid.
-	#
-	# The listener is connected BEFORE the press and the capture is INSIDE the
-	# held-through half, both for the same reason: `capture()` costs frames of
-	# unknown duration, and the first version of this beat took a photograph so
-	# slow that the whole 0.9 s elapsed inside it -- the rope left, the menu
-	# closed, and the beat then reported "holding Y did nothing" while the beat
-	# below it reported "the menu closed" and passed. A director that photographs
-	# the thing it is testing has to survive the shutter finishing the job.
-	# `_rope_fired`, a FIELD, and not a local flag closed over by a lambda: a
-	# GDScript lambda captures locals BY VALUE, so `func(): left = true` sets the
-	# lambda's own copy and the caller reads false forever. That is not a
-	# hypothetical either -- it is what this beat did on its first run, reporting
-	# "holding Y did nothing" one line above "the menu closed whole for it".
+	# Signal-driven stock repaint, including the live count in the detail card.
+	Game.add_escape_ropes(2)
+	await rig.wait_frames(4)
+	equip_blob = " ".join(_all_text(equip)).to_upper()
+	_check("Rope stock repainted live (2 / %d)" % K.ESCAPE_ROPE_STACK,
+		equip_blob.contains("2 / %d" % K.ESCAPE_ROPE_STACK))
+	_check("the Rope detail says counted, no-gold, interruptible and not refunded",
+		equip_blob.contains("CONSUMED WHEN THE WORLD CHANNEL BEGINS")
+		and equip_blob.contains("COSTS NO GOLD")
+		and equip_blob.contains("CAN BE INTERRUPTED")
+		and equip_blob.contains("NOT RETURNED"))
+
+	# Use a real EscapeRope in this menu harness. It consumes on begin(), after
+	# Equipment emits use and PauseMenu has closed.
+	var real_rope := EscapeRope.new()
+	real_rope.name = "DirectorEscapeRope"
+	rig.scene().add_child.call_deferred(real_rope)
+	await rig.wait_frames(4)
+	var gold_before := Game.gold
 	_rope_fired = false
 	Bus.escape_rope_used.connect(_on_rope_fired)
+
+	# A and a short Y tap are both harmless.
+	await _key(rig, KEY_ENTER, 6)
+	await rig.hold_seconds([&"ui_hold"], 0.08)
+	await rig.wait_frames(4)
+	_check("confirm and a short hold do not use a stocked Rope",
+		menu.is_open and Game.escape_ropes == 2 and not real_rope.active())
+
 	Input.action_press(&"ui_hold")
-	# Waited on the GAUGE, not on a frame count, so the photograph is taken with
-	# the bar visibly part-full on a fast machine and a slow one alike. A capture
-	# two frames in read 0.02 s of 0.90 -- a two percent sliver, which proves the
-	# code and shows a human nothing.
 	for _i in 120:
 		await rig.wait_frames(1)
-		if pouch._rope_hold >= MenuPouchPanel.ROPE_HOLD * 0.45:
+		if equip._rope_hold >= MenuEquipPanel.ROPE_HOLD * 0.45:
 			break
-	print("ROPE hold at the shutter: %.2f of %.2f s" % [
-		pouch._rope_hold, MenuPouchPanel.ROPE_HOLD])
-	await rig.capture("eq_07b_rope_hold.png")
-	# GAME SECONDS from here, not frames: 45 frames is 0.75 s at 60 Hz and 0.37 s
-	# at 120, and only one of those outlasts a 0.9 s hold.
-	await rig.hold_seconds(["ui_hold"], MenuPouchPanel.ROPE_HOLD + 0.4)
-	await rig.wait_frames(8)
+	_check("the stocked hold visibly fills (%.2f)" % equip._rope_hold,
+		equip._rope_hold > 0.0)
+	await rig.capture("eq_08_rope_mid_hold.png")
+	for _i in 180:
+		if not menu.is_open:
+			break
+		await rig.wait_frames(1)
+	Input.action_release(&"ui_hold")
+	await rig.wait_frames(6)
 	Bus.escape_rope_used.disconnect(_on_rope_fired)
-	_check("holding Y through used the rope", _rope_fired)
-	# The channel happens in the WORLD, so the whole menu goes away -- not one
-	# screen popped off the stack.
-	_check("and the menu closed whole for it", not menu.is_open)
 
-	menu.open_pouch()
-	await rig.wait_frames(8)
-
-	# DEAD BROKE, AND IT STILL WORKS. This beat asserted the opposite until
-	# 2026-08-09 -- "too poor to leave: refused, still in the run" -- on the
-	# theory that an unaffordable exit was a legible failure state. It was a dead
-	# end: nothing sells underground, so the refusal named a price the player had
-	# no way to reach, and the only door left was dying with the bag the fee was
-	# charged for. The fee is capped at the purse now, so an empty purse pays
-	# nothing and the rope pulls him out anyway.
-	#
-	# This is the far end of the cap rather than the interesting middle -- the
-	# expensive exit is `eq_07a` above, where the toll is past the purse and takes
-	# all of it. Zero is here because zero is where the old refusal was loudest.
-	Game.spend_gold(Game.gold)
-	pouch.refresh()
-	await rig.wait_frames(4)
-	_check("broke, the toll charges nothing rather than refusing (charge=%d)"
-			% Run.extract_charge(), Run.extract_charge() == 0 and Run.can_extract())
-	_rope_fired = false
-	Bus.escape_rope_used.connect(_on_rope_fired)
-	await rig.hold_seconds(["ui_hold"], MenuPouchPanel.ROPE_HOLD + 0.4)
-	await rig.wait_frames(8)
-	Bus.escape_rope_used.disconnect(_on_rope_fired)
-	# The gauge is the tell that this is a working hold and not a dead button --
-	# it had to be flat for the old refusal and has to have moved for this one.
-	_check("broke and it still left: the rope fired and the menu closed for it",
+	_check("the stocked hold emitted use and closed the whole menu",
 		_rope_fired and not menu.is_open)
-	await rig.capture("eq_08_rope_broke.png")
+	_check("the real EscapeRope consumed exactly one at channel start",
+		real_rope.active() and Game.escape_ropes == 1)
+	_check("the real Rope channel charged no gold", Game.gold == gold_before)
+	real_rope.cancel()
 	Run.in_dungeon = false
 
-	# Reopened because the beat above now CLOSES the menu. It did not use to --
-	# the rope refused and the pouch stayed up -- so the Escape check below
-	# inherited an open menu for free and would otherwise be asserting that
-	# Escape backed out of a screen that was already gone.
+	# Reopen Inventory directly for its one-press Back contract below.
 	menu.open_pouch()
 	await rig.wait_frames(8)
 
@@ -426,6 +359,16 @@ func _nav_to_button(rig, label: String) -> void:
 			return
 		await _key(rig, KEY_DOWN, 3)
 	_check("could reach button '%s' by keyboard" % label, false)
+
+
+func _all_text(root: Node) -> PackedStringArray:
+	var out := PackedStringArray()
+	var label := root as Label
+	if label != null and not label.text.strip_edges().is_empty():
+		out.append(label.text)
+	for child in root.get_children():
+		out.append_array(_all_text(child))
+	return out
 
 
 func _check(what: String, ok: bool) -> void:

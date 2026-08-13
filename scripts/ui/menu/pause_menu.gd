@@ -197,11 +197,11 @@ func _ready() -> void:
 	_equip.back_requested.connect(back)
 	_equip.notice.connect(_notice)
 	_equip.value_settled.connect(func() -> void: _play(SND_CLICK))
-	_pouch.back_requested.connect(back)
 	# Using the way out is not backing out one screen: the Escape Rope's
 	# channel happens in the world and the player has to be able to watch it, so
 	# the whole menu goes away rather than popping to root.
-	_pouch.use_requested.connect(close)
+	_equip.use_requested.connect(close)
+	_pouch.back_requested.connect(back)
 	_pouch.drop_requested.connect(_on_drop_requested)
 	_pouch.notice.connect(_notice)
 	_map.back_requested.connect(back)
@@ -312,9 +312,9 @@ func toggle() -> void:
 ## already ON the pouch, rather than at the root with the pouch one press away.
 ##
 ## This is the only screen with its own button, and it earns it: "what am I
-## carrying and can I afford to leave" is the question the player asks between
-## every room, and it is now the ONLY place the game says how much money is in
-## play — the HUD stopped printing a total on purpose (see hud.gd). A question
+## carrying" is the question the player asks between every room, and it is the
+## place the game says how much money is in play — the HUD stopped printing a
+## total on purpose (see hud.gd). A question
 ## asked that often must not cost two presses and a focus move.
 ##
 ## Pressed again with the menu up it closes, wherever you had navigated to. A
@@ -888,8 +888,8 @@ func refresh_root() -> void:
 			"tone": UITheme.WARNING if used >= Game.bag_slots else null},
 		{"value": "%d" % Run.bag_value(), "label": "Bag"},
 		{"value": "%d" % Game.gold, "label": "Purse", "tone": UITheme.SUCCESS},
-		{"value": "%d" % Run.extract_cost() if underground else "—", "label": "Way out",
-			"tone": UITheme.DANGER if underground and Run.extract_cost() > Game.gold else null},
+		{"value": "%d / %d" % [Game.escape_ropes, K.ESCAPE_ROPE_STACK],
+			"label": "Ropes", "tone": UITheme.DANGER if Game.escape_ropes <= 0 else null},
 	])
 
 	_command("Resume", "resume", "", close, {"primary": true})

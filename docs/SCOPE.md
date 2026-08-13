@@ -11,8 +11,9 @@ unauthorised.
 | Surface | Cap |
 |---|---:|
 | Dungeon floors | **4**, plus the existing post-credits endless mode |
-| Bosses | **4** |
-| Minibosses | **4**, one per floor |
+| Generated rooms per authored floor | **8 / 11 / 12 / 13** on floors 1–4 |
+| Bosses | **4**, three beats each, one health bar, two behaviour phases |
+| Minibosses | **4**, one per floor, two beats each, two behaviour phases |
 | Enemy kinds in rotation | **9** |
 | New monster models | **0** |
 | Dungeon kits | **1**, used in four tints |
@@ -28,6 +29,7 @@ unauthorised.
 | Puzzle combinators | **9** |
 | Enemy behaviours | **8**, with six built and two deferred |
 | Added dungeon graph edges | **1 per floor** |
+| Mandatory Small Key loops | **4**, one floor-scoped combat-detour loop per authored floor |
 | Blessings | **12** |
 | Relics | **12** |
 | Garrison NPCs | **6**: the existing five plus one Vyr Builder |
@@ -89,6 +91,25 @@ entries wrap existing authorised work: Keep the Hearth and West Gate Defence.
 The amendment raises only the UI-screen cap by one and creates no permission for
 a third quest, new reward, new chore, new objective family, new location, or
 new NPC.
+
+Issue #199 is an explicit owner-authorised vertical expansion alongside the
+freeze. It raises the authored floor totals to **8 / 11 / 12 / 13**; every added
+room is combat only; and exactly one added combat detour per floor awards that
+floor's Small Key before the player cycles back to spend it at a locked
+critical-path gate. It also authorises live ordinary/Boss lock and key telemetry
+on the existing two map surfaces, counted Escape Rope stock, and sparse
+combat-room clear rewards drawn only from Escape Rope, Hardtack and Small Beer.
+It authorises no fifth floor, new enemy, direct health drop, new map, new
+currency, extra key loop, or non-combat added room.
+
+Issue #203 amends boss behaviour without raising a content cap: the roster stays
+at four bosses and four minibosses, uses zero new monster models, adds no item,
+and retains the existing five attack shapes. “One phase” is no longer the cap.
+Each row has one health bar and two behaviour phases at half health; phase 2
+reuses the same three boss beats or two miniboss beats while increasing movement
+and selection pressure. Only full bosses turn the arena. Exact mappings and
+cycle counts are owned by [BOSSES.md](BOSSES.md), and the evidence boundary is
+[design-tests/BOSS_DYNAMISM_PROOF.md](design-tests/BOSS_DYNAMISM_PROOF.md).
 
 Counts rise only through an explicit scope amendment. By default, an addition
 must delete something of comparable cost in the same decision. Implementing a
@@ -155,12 +176,27 @@ the human question is owned by
 This override adds no item, ammo, currency, screen, boss beat, autoload,
 permanent art asset or broader production authority.
 
-Raid, Field Notes, fishing/provisions, #184's bounded tool/mining, #197's
-bounded quest journal, and #198's bounded player-barrel extension are complete;
-their precommitted human tests remain pending.
-#200's implementation proof is complete and its human result is pending.
-Floors 2–4, bosses 2–4, production content, another fishing location or
-minigame, and every expansion below remain frozen.
+Issue #199 is separately owner-authorised implementation sequencing debt: the
+fixed 8/11/12/13 combat-expanded floor shapes, one floor-key loop per authored
+floor, sparse counted provision clear rewards, shared map lock/key telemetry,
+and counted Escape Rope named above. It does not supersede or satisfy the
+active human proofs.
+
+Issue #203 is separately owner-authorised boss/miniboss refinement and proof.
+It may change only the behaviour and evidence for the existing four-plus-four
+roster inside the attack, model, item, and floor caps above. Runtime
+implementation and the dedicated automated gate pass; the five-session human
+gate remains tracked in
+[design-tests/BOSS_DYNAMISM_PROOF.md](design-tests/BOSS_DYNAMISM_PROOF.md).
+
+Raid, Field Notes, fishing/provisions, #184's bounded tool/mining work, #197's
+bounded quest journal, #198's bounded player-barrel extension, and #199's
+bounded dungeon/provision expansion, and #203's boss refinement are
+implementation-complete; their applicable precommitted human tests remain
+pending. #200's implementation proof is complete and its human result is
+pending. Floors 2–4 production content, any fifth boss or miniboss, any
+new boss model/item/attack shape, another fishing location or minigame, and
+every expansion below remain frozen.
 
 ## Later, only if proven
 
@@ -191,8 +227,11 @@ list.
 - A spell school, spell levels, a fourth working, or a seventh ring stop.
 - Procedural bosses, a second dungeon kit, or new monster models.
 - Relics as random drops, sellable relics, or permanent loss of a unique relic.
-- Level-scaled enemies, underground healing drops, dungeon-accessible storage,
-  free fast travel, or a checkpoint/rewind history.
+- Level-scaled enemies, direct underground health or magic drops,
+  dungeon-accessible storage, free fast travel, or a checkpoint/rewind history.
+  Issue #199's sparse counted Hardtack and Small Beer provision stock is the
+  narrow exception: it still requires the ordinary interruptible meal and does
+  not heal or restore magic on pickup.
 - A special raid teleport, summon, or free extraction.
 - New Game+, ascension, prestige, daily challenges, or a third ending.
 - Linux, console, localization, or Steam Deck verification for the first

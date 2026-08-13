@@ -125,28 +125,28 @@ func run(rig) -> void:
 	await rig.capture("m_03_tab_focus.png")
 
 	_key(KEY_RIGHT)
-	await rig.wait_seconds(0.3)
+	await rig.wait_seconds(PauseMenu.PAGE_TURN_DURATION + 0.08)
 	_check("→ paged off the map onto GARRISON", garrison.visible and not map.visible)
 
 	_key(KEY_RIGHT)
-	await rig.wait_seconds(0.3)
+	await rig.wait_seconds(PauseMenu.PAGE_TURN_DURATION + 0.08)
 	_check("→ again wrapped to EQUIP", items.visible and not garrison.visible)
 	await rig.capture("m_04_tab_equip.png")
 
 	_key(KEY_RIGHT)
-	await rig.wait_seconds(0.3)
+	await rig.wait_seconds(PauseMenu.PAGE_TURN_DURATION + 0.08)
 	_check("→ again -> INVENTORY", pouch.visible and not items.visible)
 
 	_key(KEY_LEFT)
-	await rig.wait_seconds(0.3)
+	await rig.wait_seconds(PauseMenu.PAGE_TURN_DURATION + 0.08)
 	_check("← came back to EQUIP", items.visible and not pouch.visible)
 
 	_key(KEY_LEFT)
-	await rig.wait_seconds(0.3)
+	await rig.wait_seconds(PauseMenu.PAGE_TURN_DURATION + 0.08)
 	_check("← again -> GARRISON", garrison.visible)
 
 	_key(KEY_LEFT)
-	await rig.wait_seconds(0.3)
+	await rig.wait_seconds(PauseMenu.PAGE_TURN_DURATION + 0.08)
 	_check("← again -> back on the MAP", map.visible)
 
 	# And the D-PAD, with real joypad buttons rather than an `InputEventAction`.
@@ -157,11 +157,11 @@ func run(rig) -> void:
 	# and it is the PAD that lost its buttons.
 	_arm_pad_dpad()
 	_pad(JOY_BUTTON_DPAD_RIGHT)
-	await rig.wait_seconds(0.3)
+	await rig.wait_seconds(PauseMenu.PAGE_TURN_DURATION + 0.08)
 	_check("the D-pad pages the strip like the arrows do",
 		garrison.visible and not map.visible)
 	_pad(JOY_BUTTON_DPAD_LEFT)
-	await rig.wait_seconds(0.3)
+	await rig.wait_seconds(PauseMenu.PAGE_TURN_DURATION + 0.08)
 	_check("...and back, so a pad is never stuck on the map", map.visible)
 
 	# --- and M closes it ----------------------------------------------------

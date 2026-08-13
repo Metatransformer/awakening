@@ -315,8 +315,9 @@ const BOSS_NAMES := {
 # that owns it (Run's EXTRACT_RATE, Fletching's BATCH) and is passed IN, so
 # there is exactly one place each number is authored.
 
-## What the Rope-Drum takes the extraction fee down to. GDD §6.2 says 25% -> 20%
-## and `Run.EXTRACT_RATE` is the 25. [tune]
+## What the Rope-Drum takes the floor-1 stair's extraction fee down to. Rope
+## extraction is provision-paid and passes `charge_gold = false`; the priced
+## physical exit still uses this 25% -> 20% rate. [tune]
 const RATE_WITH_DRUM := 0.20
 ## A lit market pays more for the same bag. [tune]
 const VENDOR_MULT_LIT := 1.10

@@ -41,8 +41,8 @@ func run(rig) -> void:
 		print("FLETCH FAIL -- %d check(s) failed" % _fails)
 
 
-## POUCH now owns one verb: the rope. The bag grid spills straight to it, then
-## to Back, with no hidden fletch button left in the tree or the focus walk.
+## POUCH owns no action below the bag now. The grid spills straight to Back,
+## with neither the moved Rope nor a hidden fletch button in the focus walk.
 func _pouch(rig) -> void:
 	if bool(Menu.get(&"_is_open")):
 		Menu.call(&"close")
@@ -60,16 +60,16 @@ func _pouch(rig) -> void:
 
 	_ck("P1 no Fletch control exists on POUCH",
 		pouch.find_child("Fletch", true, false) == null)
-	_ck("P2 the bag grid spills directly to Escape Rope",
-		pouch._grid.spill_down == pouch._rope)
-	_ck("P3 Escape Rope spills directly to Back",
-		pouch._rope.find_valid_focus_neighbor(SIDE_BOTTOM) == pouch._back)
+	_ck("P2 the bag grid spills directly to Back",
+		pouch._grid.spill_down == pouch._back)
+	_ck("P3 no Escape Rope control remains on POUCH",
+		pouch.find_child("Rope", true, false) == null)
 
 	var reached: Array[String] = await _walk_down(rig, pouch)
 	_ck("P4 the focus walk contains no fletch stop (%s)" % [reached],
 		not reached.has("Fletch"))
-	_ck("P5 the focus walk reaches Rope then Back (%s)" % [reached],
-		reached.has("Rope") and reached.has(String(pouch._back.name)))
+	_ck("P5 the focus walk reaches Back without Rope (%s)" % [reached],
+		not reached.has("Rope") and reached.has(String(pouch._back.name)))
 	print("POUCH focus walk reached %s" % [reached])
 
 	Menu.call(&"close")
