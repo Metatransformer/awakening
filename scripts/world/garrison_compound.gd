@@ -19,7 +19,6 @@ const HALF_Z := COMPOUND_SIZE.y * 0.5
 const WALL_HEIGHT := 6.6
 const ROOF_HEIGHT := 3.45
 const ROOF_THICKNESS := 0.24
-const SERVICE_BAY := 5.0
 const CLEAR_CIRCULATION := 4.0
 const PARADE_SIZE := Vector2(17.0, 15.0)
 const PARADE_AT := Vector3(0.0, 0.0, -0.5)
@@ -38,14 +37,20 @@ const BARRACKS_NORTH_Z := -9.2
 const BARRACKS_SOUTH_Z := 13.6
 const BUNK_X := -19.3
 
-const ARCADE_FRONT_X := 13.0
-const ARCADE_BACK_X := 22.1
-const ARCADE_NORTH_Z := -11.5
-const ARCADE_SOUTH_Z := 13.5
 const ELDER_QUARTERS_AT := Vector3(-18.2, 0.0, -13.8)
 const ELDER_QUARTERS_SIZE := Vector2(8.0, 7.7)
-const NORTH_RANGE_AT := Vector3(-0.5, 0.0, -14.6)
-const NORTH_RANGE_SIZE := Vector2(27.0, 6.2)
+const MESS_HALL_AT := Vector3(-9.0, 0.0, -14.4)
+const MESS_HALL_SIZE := Vector2(9.0, 6.2)
+const BUILDER_TRAINING_AT := Vector3(-0.4, 0.0, -14.2)
+const BUILDER_TRAINING_SIZE := Vector2(6.8, 5.0)
+const QUARTERMASTER_NOOK_AT := Vector3(17.3, 0.0, 9.5)
+const QUARTERMASTER_NOOK_SIZE := Vector2(7.0, 5.8)
+const JEWELCRAFTER_NOOK_AT := Vector3(17.4, 0.0, 1.5)
+const JEWELCRAFTER_NOOK_SIZE := Vector2(6.4, 4.8)
+const SMITH_NOOK_AT := Vector3(17.6, 0.0, -7.0)
+const SMITH_NOOK_SIZE := Vector2(7.8, 7.8)
+const ALCHEMIST_NOOK_AT := Vector3(7.5, 0.0, -13.3)
+const ALCHEMIST_NOOK_SIZE := Vector2(7.0, 5.4)
 
 var player_bunk: BunkBed
 var bunk_room: Node3D
@@ -66,8 +71,8 @@ func _ready() -> void:
 	_build_parade_yard()
 	_build_barracks()
 	_build_elder_quarters()
-	_build_service_arcade()
-	_build_north_range()
+	_build_service_nooks()
+	_build_north_wing()
 	_build_cross_corridors()
 
 
@@ -96,17 +101,17 @@ func surface_map_plan() -> Dictionary:
 		BARRACKS_SOUTH_Z - BARRACKS_NORTH_Z)
 	var barracks_at := Vector3((BARRACKS_FRONT_X + BARRACKS_BACK_X) * 0.5,
 		0.0, (BARRACKS_NORTH_Z + BARRACKS_SOUTH_Z) * 0.5)
-	var arcade_size := Vector2(ARCADE_BACK_X - ARCADE_FRONT_X,
-		ARCADE_SOUTH_Z - ARCADE_NORTH_Z)
-	var arcade_at := Vector3((ARCADE_FRONT_X + ARCADE_BACK_X) * 0.5,
-		0.0, (ARCADE_NORTH_Z + ARCADE_SOUTH_Z) * 0.5)
 	var areas: Array[Dictionary] = [
 		_surface_rect(Vector3.ZERO, COMPOUND_SIZE, &"ground"),
 		_surface_rect(PARADE_AT, PARADE_SIZE, &"ground"),
 		_surface_rect(barracks_at, barracks_size, &"footprint"),
-		_surface_rect(arcade_at, arcade_size, &"footprint"),
 		_surface_rect(ELDER_QUARTERS_AT, ELDER_QUARTERS_SIZE, &"footprint"),
-		_surface_rect(NORTH_RANGE_AT, NORTH_RANGE_SIZE, &"footprint"),
+		_surface_rect(MESS_HALL_AT, MESS_HALL_SIZE, &"footprint"),
+		_surface_rect(BUILDER_TRAINING_AT, BUILDER_TRAINING_SIZE, &"footprint"),
+		_surface_rect(QUARTERMASTER_NOOK_AT, QUARTERMASTER_NOOK_SIZE, &"footprint"),
+		_surface_rect(JEWELCRAFTER_NOOK_AT, JEWELCRAFTER_NOOK_SIZE, &"footprint"),
+		_surface_rect(SMITH_NOOK_AT, SMITH_NOOK_SIZE, &"footprint"),
+		_surface_rect(ALCHEMIST_NOOK_AT, ALCHEMIST_NOOK_SIZE, &"footprint"),
 	]
 	var landmarks: Array[Dictionary] = []
 	paths.make_read_only()
@@ -127,12 +132,12 @@ func _define_ports() -> void:
 	_ports = {
 		&"arrival": _port_at(Vector3(0.0, 0.05, 10.2), 0.0),
 		&"gate": _port_at(Vector3(0.0, 0.05, 15.4), 0.0),
-		&"quartermaster_day": _port_at(Vector3(15.3, 0.05, -9.0), -PI * 0.5),
-		&"smith_day": _port_at(Vector3(15.3, 0.05, -4.0), -PI * 0.5),
-		&"alchemist_day": _port_at(Vector3(15.3, 0.05, 1.0), -PI * 0.5),
-		&"elder_day": _port_at(Vector3(15.3, 0.05, 6.0), -PI * 0.5),
-		&"jewelcrafter_day": _port_at(Vector3(15.3, 0.05, 11.0), -PI * 0.5),
-		&"builder_day": _port_at(Vector3(8.0, 0.05, -12.8), 0.0),
+		&"quartermaster_day": _port_at(Vector3(15.3, 0.05, 9.5), -PI * 0.5),
+		&"jewelcrafter_day": _port_at(Vector3(15.3, 0.05, 1.5), -PI * 0.5),
+		&"smith_day": _port_at(Vector3(15.0, 0.05, -7.0), -PI * 0.5),
+		&"alchemist_day": _port_at(Vector3(7.5, 0.05, -12.5), 0.0),
+		&"elder_day": _port_at(Vector3(-0.9, 0.05, 8.0), 0.0),
+		&"builder_day": _port_at(Vector3(-0.4, 0.05, -13.2), 0.0),
 		&"hearth": _port_at(hearth_at, 0.0),
 		&"quartermaster_bonfire": _facing_port(
 			hearth_at + Vector3(-3.0, 0.0, 0.8), hearth_at),
@@ -254,6 +259,30 @@ func _build_gatehouse() -> void:
 			sx * deg_to_rad(22.0)
 		)
 
+	# DEPART is a deliberate held transition, not an open-world seam. A collision
+	# plane behind the prompt keeps a player who ignores it inside authored space;
+	# the iron grille makes that boundary visible instead of feeling like an
+	# invisible wall. It fills the opening up to the passage roof, so jumping does
+	# not turn the road beyond the scene into an escape route.
+	var backstop := StaticBody3D.new()
+	backstop.name = &"ExitBackstop"
+	backstop.collision_layer = K.L_WORLD
+	backstop.collision_mask = 0
+	backstop.position = Vector3(0.0, 2.45, 18.0)
+	var collision := CollisionShape3D.new()
+	collision.name = &"Collision"
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(5.8, 4.9, 0.36)
+	collision.shape = shape
+	backstop.add_child(collision)
+	gatehouse.add_child(backstop)
+	for x: float in [-2.4, -1.6, -0.8, 0.0, 0.8, 1.6, 2.4]:
+		_visual_box(gatehouse, "PortcullisBar", Vector3(0.16, 4.9, 0.18),
+			Vector3(x, 2.45, 17.9), MAT_IRON)
+	for y: float in [1.15, 2.55, 3.95]:
+		_visual_box(gatehouse, "PortcullisBrace", Vector3(5.5, 0.16, 0.20),
+			Vector3(0.0, y, 17.88), MAT_IRON)
+
 
 func _build_parade_yard() -> void:
 	var parade := _group(self, "ParadeYard")
@@ -287,11 +316,19 @@ func _build_barracks() -> void:
 	_wall(bunk_room, "BarracksSouthWall", width,
 		Vector3((BARRACKS_FRONT_X + BARRACKS_BACK_X) * 0.5, 0.0,
 			BARRACKS_SOUTH_Z), PI, 7312, ROOF_HEIGHT)
-	for z: float in [-8.8, -1.2, 6.4, 13.2]:
-		_solid_box(
-			bunk_room, "FrontPost", Vector3(0.24, ROOF_HEIGHT, 0.24),
-			Vector3(BARRACKS_FRONT_X + 0.15, ROOF_HEIGHT * 0.5, z), MAT_WOOD
-		)
+	_wall(bunk_room, "BarracksWestWall", length,
+		Vector3(BARRACKS_BACK_X, 0.0,
+			(BARRACKS_NORTH_Z + BARRACKS_SOUTH_Z) * 0.5), PI * 0.5,
+		7313, ROOF_HEIGHT)
+	# The east wall stops around one 2.8 m opening aligned with the player bunk.
+	_wall(bunk_room, "BarracksEastNorthReturn", 18.2,
+		Vector3(BARRACKS_FRONT_X, 0.0, -0.1), -PI * 0.5, 7314, ROOF_HEIGHT)
+	_wall(bunk_room, "BarracksEastSouthReturn", 1.8,
+		Vector3(BARRACKS_FRONT_X, 0.0, 12.7), -PI * 0.5, 7315, ROOF_HEIGHT)
+	_solid_box(
+		bunk_room, "BarracksDoorLintel", Vector3(0.28, 0.65, 2.8),
+		Vector3(BARRACKS_FRONT_X, 3.125, 10.4), MAT_WALL
+	)
 
 	var bunk_zs: Array[float] = [-6.6, -2.3, 2.0, 6.3, 10.6]
 	for index: int in bunk_zs.size():
@@ -304,6 +341,7 @@ func _build_barracks() -> void:
 		if bunk.player_bunk:
 			player_bunk = bunk
 	_warm_light(bunk_room, Vector3(-17.2, 2.35, 1.8), 12.0)
+	_warm_light(bunk_room, Vector3(-17.2, 2.35, 9.8), 8.0)
 
 
 func _build_elder_quarters() -> void:
@@ -319,12 +357,19 @@ func _build_elder_quarters() -> void:
 	)
 	_wall(elder_quarters, "ElderEastWall", room_size.y,
 		Vector3(-14.2, 0.0, room_center.z), -PI * 0.5, 7321, ROOF_HEIGHT)
-	# Two returns frame a broad south opening; the camera remains outside the room
-	# while the elder and furniture remain unmistakably in separate quarters.
-	_wall(elder_quarters, "ElderSouthWestJamb", 2.0,
-		Vector3(-21.2, 0.0, -9.95), PI, 7322, ROOF_HEIGHT)
-	_wall(elder_quarters, "ElderSouthEastJamb", 1.4,
-		Vector3(-14.9, 0.0, -9.95), PI, 7323, ROOF_HEIGHT)
+	_wall(elder_quarters, "ElderWestWall", room_size.y,
+		Vector3(-22.2, 0.0, room_center.z), PI * 0.5, 7322, ROOF_HEIGHT)
+	_wall(elder_quarters, "ElderNorthWall", room_size.x,
+		Vector3(room_center.x, 0.0, -17.65), 0.0, 7323, ROOF_HEIGHT)
+	# Equal returns keep the 2.6 m south doorway centered on the room and map table.
+	_wall(elder_quarters, "ElderSouthWestReturn", 2.7,
+		Vector3(-20.85, 0.0, -9.95), PI, 7324, ROOF_HEIGHT)
+	_wall(elder_quarters, "ElderSouthEastReturn", 2.7,
+		Vector3(-15.55, 0.0, -9.95), PI, 7325, ROOF_HEIGHT)
+	_solid_box(
+		elder_quarters, "ElderDoorLintel", Vector3(2.6, 0.65, 0.28),
+		Vector3(-18.2, 3.125, -9.95), MAT_WALL
+	)
 	_solid_box(
 		elder_quarters, "ElderBedFrame", Vector3(1.2, 0.38, 2.25),
 		Vector3(-19.4, 0.19, -14.8), MAT_WOOD
@@ -344,91 +389,107 @@ func _build_elder_quarters() -> void:
 	_warm_light(elder_quarters, Vector3(-18.0, 2.2, -13.4), 7.0)
 
 
-func _build_service_arcade() -> void:
-	var arcade := _group(self, "ServiceArcade")
-	var width := ARCADE_BACK_X - ARCADE_FRONT_X
-	var length := ARCADE_SOUTH_Z - ARCADE_NORTH_Z
-	_floor_slab(
-		arcade, "ArcadeDeck", Vector2(width, length),
-		Vector3((ARCADE_FRONT_X + ARCADE_BACK_X) * 0.5, 0.014,
-			(ARCADE_NORTH_Z + ARCADE_SOUTH_Z) * 0.5), MAT_FLOOR, false
-	)
-	_solid_box(
-		arcade, "ArcadeRoof", Vector3(width + 0.3, ROOF_THICKNESS, length + 0.35),
-		Vector3((ARCADE_FRONT_X + ARCADE_BACK_X) * 0.5, ROOF_HEIGHT,
-			(ARCADE_NORTH_Z + ARCADE_SOUTH_Z) * 0.5), MAT_WOOD
-	)
-	# Dividers stop at x=17.2, leaving a continuous four-metre covered corridor
-	# in front of all five service nooks.
-	for z: float in [-11.5, -6.5, -1.5, 3.5, 8.5, 13.5]:
-		_wall(arcade, "NookDivider", 5.0, Vector3(19.7, 0.0, z), 0.0,
-			7400 + int((z + 11.5) / SERVICE_BAY), ROOF_HEIGHT)
-	for index: int in 5:
-		var z := -9.0 + float(index) * SERVICE_BAY
-		_solid_box(
-			arcade, "ServiceCounter", Vector3(0.72, 1.02, 3.35),
-			Vector3(17.6, 0.51, z), MAT_WOOD
-		)
-		_build_service_marker(arcade, index, Vector3(20.7, 0.0, z))
-	for z: float in [-11.2, -3.0, 5.2, 13.2]:
-		_solid_box(
-			arcade, "ArcadePost", Vector3(0.24, ROOF_HEIGHT, 0.24),
-			Vector3(ARCADE_FRONT_X + 0.16, ROOF_HEIGHT * 0.5, z), MAT_WOOD
-		)
+func _build_service_nooks() -> void:
+	var services := _group(self, "ServiceNooks")
+
+	var quartermaster := _group(services, "QuartermasterNook")
+	_floor_slab(quartermaster, "QuartermasterDeck", QUARTERMASTER_NOOK_SIZE,
+		QUARTERMASTER_NOOK_AT + Vector3.UP * 0.014, MAT_FLOOR, false)
+	_solid_box(quartermaster, "QuartermasterRoof",
+		Vector3(QUARTERMASTER_NOOK_SIZE.x + 0.3, ROOF_THICKNESS,
+			QUARTERMASTER_NOOK_SIZE.y + 0.3),
+		QUARTERMASTER_NOOK_AT + Vector3.UP * ROOF_HEIGHT, MAT_WOOD)
+	_wall(quartermaster, "QuartermasterBackWall", QUARTERMASTER_NOOK_SIZE.y,
+		Vector3(20.8, 0.0, QUARTERMASTER_NOOK_AT.z), -PI * 0.5, 7401, ROOF_HEIGHT)
+	_wall(quartermaster, "QuartermasterNorthWall", QUARTERMASTER_NOOK_SIZE.x,
+		Vector3(QUARTERMASTER_NOOK_AT.x, 0.0, 6.6), 0.0, 7402, ROOF_HEIGHT)
+	_wall(quartermaster, "QuartermasterSouthWall", QUARTERMASTER_NOOK_SIZE.x,
+		Vector3(QUARTERMASTER_NOOK_AT.x, 0.0, 12.4), PI, 7403, ROOF_HEIGHT)
+
+	var jeweller := _group(services, "JewelcrafterNook")
+	_floor_slab(jeweller, "JewelcrafterDeck", JEWELCRAFTER_NOOK_SIZE,
+		JEWELCRAFTER_NOOK_AT + Vector3.UP * 0.014, MAT_FLOOR, false)
+	_solid_box(jeweller, "JewelcrafterRoof",
+		Vector3(JEWELCRAFTER_NOOK_SIZE.x + 0.3, ROOF_THICKNESS,
+			JEWELCRAFTER_NOOK_SIZE.y + 0.3),
+		JEWELCRAFTER_NOOK_AT + Vector3.UP * ROOF_HEIGHT, MAT_WOOD)
+	_wall(jeweller, "JewelcrafterBackWall", JEWELCRAFTER_NOOK_SIZE.y,
+		Vector3(20.6, 0.0, JEWELCRAFTER_NOOK_AT.z), -PI * 0.5, 7411, ROOF_HEIGHT)
+	# Short returns and front posts make this a lighter display pavilion.
+	_wall(jeweller, "JewelcrafterNorthReturn", 3.5,
+		Vector3(18.85, 0.0, -0.9), 0.0, 7412, ROOF_HEIGHT)
+	_wall(jeweller, "JewelcrafterSouthReturn", 3.5,
+		Vector3(18.85, 0.0, 3.9), PI, 7413, ROOF_HEIGHT)
+	for z: float in [-0.75, 3.75]:
+		_solid_box(jeweller, "JewelcrafterFrontPost", Vector3(0.24, ROOF_HEIGHT, 0.24),
+			Vector3(14.35, ROOF_HEIGHT * 0.5, z), MAT_WOOD)
+
+	var smithy := _group(services, "SmithNook")
+	_floor_slab(smithy, "SmithDeck", SMITH_NOOK_SIZE,
+		SMITH_NOOK_AT + Vector3.UP * 0.014, MAT_FLOOR, false)
+	_solid_box(smithy, "SmithRoof",
+		Vector3(SMITH_NOOK_SIZE.x + 0.3, ROOF_THICKNESS,
+			SMITH_NOOK_SIZE.y + 0.3),
+		SMITH_NOOK_AT + Vector3.UP * ROOF_HEIGHT, MAT_WOOD)
+	_wall(smithy, "SmithBackWall", SMITH_NOOK_SIZE.y,
+		Vector3(21.5, 0.0, SMITH_NOOK_AT.z), -PI * 0.5, 7421, ROOF_HEIGHT)
+	_wall(smithy, "SmithNorthWall", SMITH_NOOK_SIZE.x,
+		Vector3(SMITH_NOOK_AT.x, 0.0, -10.9), 0.0, 7422, ROOF_HEIGHT)
+	_wall(smithy, "SmithSouthWall", SMITH_NOOK_SIZE.x,
+		Vector3(SMITH_NOOK_AT.x, 0.0, -3.1), PI, 7423, ROOF_HEIGHT)
+
+	var apothecary := _group(services, "AlchemistNook")
+	_floor_slab(apothecary, "AlchemistDeck", ALCHEMIST_NOOK_SIZE,
+		ALCHEMIST_NOOK_AT + Vector3.UP * 0.014, MAT_FLOOR, false)
+	_solid_box(apothecary, "AlchemistRoof",
+		Vector3(ALCHEMIST_NOOK_SIZE.x + 0.3, ROOF_THICKNESS,
+			ALCHEMIST_NOOK_SIZE.y + 0.3),
+		ALCHEMIST_NOOK_AT + Vector3.UP * ROOF_HEIGHT, MAT_WOOD)
+	_wall(apothecary, "AlchemistBackWall", ALCHEMIST_NOOK_SIZE.x,
+		Vector3(ALCHEMIST_NOOK_AT.x, 0.0, -16.0), 0.0, 7431, ROOF_HEIGHT)
+	_wall(apothecary, "AlchemistWestWall", ALCHEMIST_NOOK_SIZE.y,
+		Vector3(4.0, 0.0, ALCHEMIST_NOOK_AT.z), PI * 0.5, 7432, ROOF_HEIGHT)
+	_wall(apothecary, "AlchemistEastWall", ALCHEMIST_NOOK_SIZE.y,
+		Vector3(11.0, 0.0, ALCHEMIST_NOOK_AT.z), -PI * 0.5, 7433, ROOF_HEIGHT)
 
 
-func _build_service_marker(parent: Node3D, index: int, at: Vector3) -> void:
-	match index:
-		0:
-			_solid_box(parent, "QuartermasterCrate", Vector3(1.2, 1.05, 1.2),
-				at + Vector3(0.0, 0.525, 0.0), MAT_WOOD)
-		1:
-			_solid_box(parent, "SmithHearth", Vector3(1.5, 1.2, 1.25),
-				at + Vector3(0.0, 0.6, 0.0), MAT_WALL)
-			_visual_box(parent, "SmithAnvil", Vector3(0.75, 0.28, 0.38),
-				at + Vector3(-0.55, 1.02, 0.0), MAT_IRON)
-		2:
-			_solid_box(parent, "AlchemistShelf", Vector3(0.48, 1.8, 2.4),
-				at + Vector3(0.65, 0.9, 0.0), MAT_WOOD)
-		3:
-			_solid_box(parent, "ElderLectern", Vector3(0.9, 1.15, 0.72),
-				at + Vector3(0.0, 0.575, 0.0), MAT_WOOD)
-		4:
-			_solid_box(parent, "JewelDisplay", Vector3(1.55, 0.92, 0.82),
-				at + Vector3(0.0, 0.46, 0.0), MAT_IRON)
+func _build_north_wing() -> void:
+	var north := _group(self, "NorthCommunalAndWork")
+	var mess := _group(north, "MessHall")
+	_floor_slab(mess, "MessHallDeck", MESS_HALL_SIZE,
+		MESS_HALL_AT + Vector3.UP * 0.015, MAT_FLOOR, false)
+	_solid_box(mess, "MessHallRoof",
+		Vector3(MESS_HALL_SIZE.x + 0.3, ROOF_THICKNESS, MESS_HALL_SIZE.y + 0.3),
+		MESS_HALL_AT + Vector3.UP * ROOF_HEIGHT, MAT_WOOD)
+	_wall(mess, "MessHallWestWall", MESS_HALL_SIZE.y,
+		Vector3(-13.5, 0.0, MESS_HALL_AT.z), PI * 0.5, 7501, ROOF_HEIGHT)
+	_wall(mess, "MessHallEastWall", MESS_HALL_SIZE.y,
+		Vector3(-4.5, 0.0, MESS_HALL_AT.z), -PI * 0.5, 7502, ROOF_HEIGHT)
+	_wall(mess, "MessHallNorthWall", MESS_HALL_SIZE.x,
+		Vector3(MESS_HALL_AT.x, 0.0, -17.5), 0.0, 7503, ROOF_HEIGHT)
+	_wall(mess, "MessHallSouthWestReturn", 2.5,
+		Vector3(-12.25, 0.0, -11.3), PI, 7504, ROOF_HEIGHT)
+	_wall(mess, "MessHallSouthEastReturn", 2.5,
+		Vector3(-5.75, 0.0, -11.3), PI, 7505, ROOF_HEIGHT)
+	_solid_box(mess, "MessHallDoorLintel", Vector3(4.0, 0.65, 0.28),
+		Vector3(-9.0, 3.125, -11.3), MAT_WALL)
+	_solid_box(mess, "MessTable", Vector3(4.8, 0.82, 1.1),
+		Vector3(-9.0, 0.41, -14.4), MAT_WOOD)
+	for z: float in [-13.3, -15.5]:
+		_solid_box(mess, "MessBench", Vector3(4.6, 0.46, 0.42),
+			Vector3(-9.0, 0.23, z), MAT_WOOD)
+	_solid_box(mess, "ServingSideboard", Vector3(2.8, 1.0, 0.55),
+		Vector3(-9.0, 0.5, -16.9), MAT_WOOD)
+	_warm_light(mess, Vector3(-9.0, 2.3, -14.2), 8.0)
 
-
-func _build_north_range() -> void:
-	var north := _group(self, "NorthTrainingAndStores")
-	var size := NORTH_RANGE_SIZE
-	var centre := NORTH_RANGE_AT
-	_floor_slab(north, "NorthDeck", size, centre + Vector3(0.0, 0.015, 0.0),
-		MAT_FLOOR, false)
-	_solid_box(
-		north, "NorthRoof", Vector3(size.x + 0.4, ROOF_THICKNESS, size.y + 0.3),
-		centre + Vector3(0.0, ROOF_HEIGHT, 0.0), MAT_WOOD
-	)
-	for x: float in [-13.7, -5.0, 4.0, 13.0]:
-		_solid_box(
-			north, "RangePost", Vector3(0.25, ROOF_HEIGHT, 0.25),
-			Vector3(x, ROOF_HEIGHT * 0.5, -11.65), MAT_WOOD
-		)
-	# Medium store masses occupy the back line; the entire south edge remains a
-	# clear lateral connection between west billets and east services.
-	for x: float in [-10.8, -8.9, -7.0]:
-		_solid_box(
-			north, "StoreCrate", Vector3(1.35, 1.25, 1.35),
-			Vector3(x, 0.625, -16.2), MAT_WOOD
-		)
-	for x: float in [5.6, 8.6, 11.6]:
-		_solid_box(
-			north, "TrainingPost", Vector3(0.34, 2.25, 0.34),
-			Vector3(x, 1.125, -15.7), MAT_WOOD
-		)
-		_visual_box(
-			north, "TrainingCrossbar", Vector3(1.35, 0.20, 0.24),
-			Vector3(x, 1.72, -15.7), MAT_IRON
-		)
+	var training := _group(north, "BuilderTrainingPocket")
+	_floor_slab(training, "TrainingDeck", BUILDER_TRAINING_SIZE,
+		BUILDER_TRAINING_AT + Vector3.UP * 0.015, MAT_FLOOR, false)
+	for x: float in [-2.7, -0.4, 1.9]:
+		_solid_box(training, "TrainingPost", Vector3(0.34, 2.25, 0.34),
+			Vector3(x, 1.125, -16.0), MAT_WOOD)
+		_visual_box(training, "TrainingCrossbar", Vector3(1.35, 0.20, 0.24),
+			Vector3(x, 1.72, -16.0), MAT_IRON)
 
 
 func _build_cross_corridors() -> void:
