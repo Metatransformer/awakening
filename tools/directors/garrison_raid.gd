@@ -239,11 +239,9 @@ func _prove_builder_and_defense(rig, garrison: Garrison) -> void:
 		builder_body = garrison.builder._person as NpcBody
 	rig.check(builder_body != null and builder_body._who == "builder",
 		"the unvoiced Builder is present as Tamsin's authored NpcBody")
-	# `voice_id()` is also the written-dialogue person key. Unvoiced means there
-	# is no recorded-line table for that key, not that the person is anonymous.
-	rig.check(garrison.builder != null
-		and not Voice.LINES.has(garrison.builder.voice_id()),
-		"the prototype Builder has no recorded-voice dependency")
+	# `voice_id()` is the dialogue person key, including written-only speakers.
+	rig.check(garrison.builder != null and garrison.builder.voice_id() == &"builder",
+		"the raid Builder retains Tamsin's production dialogue identity")
 
 	Game.gold = BuilderDb.COST
 	Game.components.clear()

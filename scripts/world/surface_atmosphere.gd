@@ -118,8 +118,8 @@ func _build_atmosphere() -> void:
 	environment.fog_mode = Environment.FOG_MODE_EXPONENTIAL
 	environment.fog_density = 0.0008
 	environment.fog_sun_scatter = 0.06
-	environment.fog_sky_affect = 0.10
-	environment.fog_aerial_perspective = 0.16
+	environment.fog_sky_affect = 0.14
+	environment.fog_aerial_perspective = 0.24
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	environment.tonemap_white = 2.0
 

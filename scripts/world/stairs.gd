@@ -11,8 +11,9 @@ extends Interactable
 ## decision for you (docs/GDD.md §5, docs/METAGAME.md §3).
 ##
 ## Going between floors does NOT bank anything, heal anything, or end the run.
-## The exception is the floor-1 UP stair: it is an EXIT and calls the same
-## `Run.extract()` settlement as the portable Escape Rope, fee included.
+## The exception is the floor-1 UP stair: it is an EXIT and calls the priced
+## `Run.extract()` settlement. A consumed Escape Rope uses the same banking and
+## receipt path with its gold charge disabled.
 ##
 ## Built in code like the rest of the kit: the scene stores parameters, never a
 ## few hundred generated triangles.

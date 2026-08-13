@@ -8,6 +8,13 @@ extends RefCounted
 ##
 ## Add `--item-get-only=1` to stop after H when iterating the reward framing.
 ##
+## Issue #203 moved combat-state ownership to `boss_dynamism.gd`, which proves
+## all eight armour/aperture/stagger mappings, exact cycle counts, moving
+## attacks and both pressure phases. This legacy director retains the Cistern
+## room, reward, persistence, summon-scaling and four arena-turn coverage that
+## is unique to it; its old unconditional-punish and direct-chip assertions are
+## intentionally no longer invoked.
+##
 ## What it claims, in the order it proves them:
 ##
 ##   A  The table is sound. `BossDb.validate()` returns nothing, and `troll` and
@@ -169,8 +176,9 @@ func run(rig) -> void:
 
 	await _seal(rig, arena, boss)
 	await _tells(rig, arena, boss)
-	await _commits(rig, arena, boss)
-	await _windows(rig, arena, boss)
+	# Combat commits and damage windows are issue #203's shared eight-row
+	# contract, proved by boss_dynamism.gd. The old calls here assumed every
+	# recovery accepted chip damage and therefore described the retired fight.
 	await _kill(rig, arena, boss, door)
 	if rig.arg("item-get-only", "") == "1":
 		if _fails == 0:
@@ -179,7 +187,8 @@ func run(rig) -> void:
 			print("BOSS FAIL -- %d item-get check(s) failed" % _fails)
 		return
 	await _reentry(rig, arena, door)
-	await _receptacle(rig)
+	# The Ogre's live charge aperture is likewise covered by boss_dynamism.gd;
+	# this director keeps only the lifecycle evidence it uniquely owns.
 	# BEFORE `_turns`, and for the reason `_turns` puts the Bellwake last: `douse`
 	# darkens the room and nothing puts a sconce back, so a summon photographed
 	# after it is two skeletons in a black rectangle.
@@ -564,6 +573,12 @@ func _kill(rig, arena: Node, boss: Node, door: Node) -> void:
 	_ck("H2 the boss is dead", boss.health.dead)
 	_ck("H3 Bus.boss_defeated fired once (%d)" % _defeated, _defeated == 1)
 	_ck("H4 the %s is not silently granted by the kill" % item, not Game.has(item))
+	# Snapshot the synchronous physical drop before the chest ceremony gives its
+	# magnet time to pull the mote into the hero. Issue #203's mobile kill can
+	# leave the corpse much closer than this legacy fixture once assumed.
+	var mote := _find_mote(rig, relic)
+	_ck("H16 the relic %s is a separate mote on the floor, not an owned item" % relic,
+		mote != null and not Game.has(relic))
 
 	var great_chest: Node3D = arena.boss_item_chest()
 	_ck("H5 the kill placed one deterministic great chest", great_chest != null)
@@ -631,17 +646,14 @@ func _kill(rig, arena: Node, boss: Node, door: Node) -> void:
 	# It is a MOTE and emphatically not a grant: GDD §3 puts a relic in the BAG,
 	# where it costs a slot, is charged the extraction fee and dies with the bag.
 	# Granting it would have deleted the decision it exists to create.
-	var mote := _find_mote(rig, relic)
-	_ck("H16 the relic %s is a separate mote on the floor, not an owned item" % relic,
-		mote != null and not Game.has(relic))
-	if mote != null:
+	if is_instance_valid(mote):
 		# Walked over, the way a player takes it.
 		await _stand_at(rig, mote.global_position + Vector3(0.0, 0.05, 0.0),
 			mote.global_position, false)
 		await rig.wait_seconds(1.6)
-		_ck("H17 and it goes into the BAG (%s)" % [Run.bag],
-			int(Run.bag.get(relic, 0)) >= 1)
-		_ck("H17b and never into the item list", not Game.has(relic))
+	_ck("H17 and it goes into the BAG (%s)" % [Run.bag],
+		int(Run.bag.get(relic, 0)) >= 1)
+	_ck("H17b and never into the item list", not Game.has(relic))
 	await rig.wait_seconds(1.0)
 
 	_ck("H18 the keyed door stayed open through the fight", door.is_open())
@@ -1372,7 +1384,7 @@ func _all(root: Node) -> Array:
 
 # --- L. The turn ---------------------------------------------------------------
 
-## **`docs/BOSSES.md` §5, and board card 41: the one-phase escalation, built for
+## **`docs/BOSSES.md` §5, and board card 41: the phase-2 arena turn, built for
 ## all four bosses and photographed either side of its own signal.**
 ##
 ## Here rather than in four new directors for the reason §K gives for the Ogre:
@@ -1440,7 +1452,8 @@ func _turns(rig) -> void:
 	# **M and N sit INSIDE L's ordering and not after it**, for the same reason
 	# the Bellwake is last: both stand up a fight of their own, and a section that
 	# ran after a `douse` would photograph a barb in a black room.
-	await _warden_floor(rig)
+	# Leap landing and the live annulus are now measured in boss_dynamism.gd;
+	# the shrink/pull assertions above remain this director's responsibility.
 	await _turn_of(rig, &"slag_ogre", "L2", 30, 0.0)
 	await _turn_of(rig, &"riven_knight", "L3", 40, 0.0)
 	await _keystone_press(rig)
@@ -1551,7 +1564,7 @@ func _turn_of(rig, id: StringName, tag: String, shot: int, kite_r: float) -> voi
 	_bleed(boss, 1)
 	_ck("%s3 the turn fired at %.2f (row says %.2f)"
 		% [tag, hp.fraction(), float(t.get("at", -1.0))],
-		arena.has_turned() and _phases.size() == 1 and _phases[0] == 1)
+		arena.has_turned() and _phases.size() == 1 and _phases[0] == 2)
 	# Long enough for every tween the four turns start: the pull is 0.30 s, the
 	# inner ring 0.55 s behind it, `douse` 0.80 s, `topple` 0.55 s.
 	await rig.wait_frames(70)

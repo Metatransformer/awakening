@@ -46,10 +46,10 @@ func run(rig) -> void:
 	await _key(rig, KEY_ENTER, 14)
 	_ck("A1 Enter opened Options", opts.visible)
 	for i in LIMIT:
-		if _is_btn(_foc(rig), "GRAPHICS"):
+		if _is_btn(_foc(rig), "Graphics"):
 			break
 		await _key(rig, KEY_RIGHT, 6)
-	_ck("A2 Right reached the GRAPHICS tab", _is_btn(_foc(rig), "GRAPHICS"))
+	_ck("A2 Right reached the GRAPHICS tab", _is_btn(_foc(rig), "Graphics"))
 	await rig.wait_frames(8)
 	await _shot(rig, "graphics_tab")
 
@@ -73,9 +73,8 @@ func run(rig) -> void:
 		await _key(rig, KEY_DOWN, 4)
 	_ck("C1 Down reached the MSAA row (%s)" % _nm(_foc(rig)), on_row)
 	if on_row:
-		# Walk it to the far end and past it. `MenuChoiceRow` clamps rather than
-		# wraps, so this settles on the highest notch the row has.
-		for i in 8:
+		# The row wraps, so move once only when the sandbox started at Off.
+		if Settings.msaa != cap:
 			await _key(rig, KEY_RIGHT, 6)
 		await rig.wait_frames(10)
 		_ck("C2 cycling right settles at %d, not above the GPU's cap %d"

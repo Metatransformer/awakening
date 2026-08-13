@@ -26,7 +26,7 @@ interfaces belong to [CONTRACT.md](CONTRACT.md).
 | Sword commitments | Do I stop or continue the light chain, finish the two-hit Heavy combo, hold for the magic spin, or slam from the air? | [CONTRACT.md](CONTRACT.md) |
 | Ranged and item answers | Is distance, armour, a group, or room geometry worth spending a prepared tool on? | [ITEMS.md](ITEMS.md), [PUZZLES.md](PUZZLES.md) |
 | Enemy grammar | Can I read the wind-up, committed beat, recovery, formation, and disengagement route? | [BESTIARY.md](BESTIARY.md) |
-| Boss grammar | What authored fight rule must I learn, and when does mastery open a permanent route or verb? | [BOSSES.md](BOSSES.md) |
+| Boss grammar | Which attack exposes the weak point, which floor item breaks it, how do I spend each of the three/four stagger cycles, and how does phase 2 change the pressure without changing the learned beats? | [BOSSES.md](BOSSES.md) |
 | Heat tempo | Do I chase the next kill and cooling loot, or protect health and let the chain fall? | [METAGAME.md](METAGAME.md) |
 | Mercy | Do I enable bounded resistance after repeated deaths without changing encounters or rewards? | [GDD.md](GDD.md), [CONTRACT.md](CONTRACT.md) |
 

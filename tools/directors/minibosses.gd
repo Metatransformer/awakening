@@ -1,5 +1,6 @@
 extends RefCounted
-## Board card 23: **all four minibosses, built, telegraphed and killed**
+## Board card 23 / issue 203: **all four minibosses, built, telegraphed and
+## killed through the live weak-point contract**
 ## (`docs/PUZZLES.md` §7). `tools/directors/puzzle_loop.gd` beats G0-G13 prove
 ## the Sluice-Keeper inside the floor it stands in; nothing proved the other
 ## three, and for three of the four the reason was that they did not exist.
@@ -31,10 +32,14 @@ extends RefCounted
 ##      the model node (`CLAUDE.md` §4).
 ##   E  Both of its tells, photographed at the frame they are readable, with the
 ##      pose asserted to have moved something and to differ from the fight's
-##      other beat, the floor mark asserted to be the picture its shape draws,
-##      and the punish window MEASURED off the fight rather than read back out
-##      of the table.
-##   F  It dies, it drops NOTHING, and its arena comes up spent.
+##      other beat, and the floor mark asserted to be the picture its shape
+##      draws. Ordinary recovery stays armoured and is never `is_punishable()`.
+##   F  Its floor-item weak point opens only on the authored beat, is
+##      photographed open and staggered, and three fully-spent true staggers
+##      kill it through root `Boss.apply_hit`. The first stagger spends the
+##      ordinary 2, 2, 4 chain, scaled by the row multiplier to one segment.
+##   G  Half HP enters behavior phase 2 and emits `Bus.boss_phase_changed(2)`
+##      once. Death keeps the authored drop contract and leaves the arena spent.
 ##
 ## ## Why it builds its own arenas
 ##
@@ -78,9 +83,9 @@ const PORTRAIT_Z := 3.0
 ## are still the same shot. The distance stays exactly `WATCH_DIST`.
 const PORTRAIT_YAW := 20.0
 
-## HP a director swing takes. Six blows kills the biggest of the
-## four, which keeps the whole run inside one `timeout 400`.
-const SWING := 12
+## The bare sword chain: two light swings and its finisher. Every miniboss row's
+## multiplier prices this exact chain to one stagger segment.
+const BARE_CHAIN: Array[int] = [2, 2, 4]
 
 var out := ""
 var _fails := 0
@@ -90,8 +95,8 @@ var _defeated := 0
 ## about grade and `Sfx` played the ordinary room-clear take, so killing the floor
 ## 1 miniboss and killing three goblins were the same noise.
 var _clear_grades: Array[int] = []
-## "<miniboss>/<beat>" -> the punish window the fight actually held open.
-var _punish: Dictionary = {}
+## Every global phase change observed, in order. Each live fight must add one 2.
+var _phases: Array[int] = []
 
 
 func run(rig) -> void:
@@ -103,6 +108,7 @@ func run(rig) -> void:
 	Bus.boss_defeated.connect(func() -> void: _defeated += 1)
 	Bus.room_cleared.connect(func(_id: StringName, grade: int) -> void:
 		_clear_grades.append(grade))
+	Bus.boss_phase_changed.connect(func(phase: int) -> void: _phases.append(phase))
 
 	var fixture: Node = rig.scene().get_node_or_null(^"Arena")
 	if fixture != null:
@@ -262,10 +268,12 @@ func _one(rig, n: int, id: StringName) -> void:
 	# is looking at when a frame looks off.
 	_ck("D%d.0 %s has exactly two beats (§7)" % [n, id], list.size() == 2)
 	var drop: Dictionary = row.get("drop", {})
-	_ck("D%d.1 and drops nothing (item=\"%s\" relic=\"%s\")"
-		% [n, drop.get("item", &"?"), drop.get("relic", &"?")],
-		StringName(drop.get("item", &"")) == &""
-		and StringName(drop.get("relic", &"")) == &"")
+	var drop_item := StringName(drop.get("item", &""))
+	var drop_relic := StringName(drop.get("relic", &""))
+	_ck("D%d.1 and never drops a boss relic (item=\"%s\" relic=\"%s\")"
+		% [n, drop_item, drop_relic], drop_relic == &"")
+	_ck("D%d.1e empty-drop rows stay empty (%s)" % [n, drop_item],
+		id == &"sluice_keeper" or drop_item == &"")
 	_ck("D%d.2 and is not the same silhouette as floor %d's boss (%s vs %s)"
 		% [n, level, row["model"], boss_row.get("model", &"?")],
 		row["model"] != boss_row.get("model", &""))
@@ -286,9 +294,6 @@ func _one(rig, n: int, id: StringName) -> void:
 		arena.queue_free()
 		await rig.wait_frames(6)
 		return
-	boss.punish_closed.connect(func(bid: StringName, measured: float) -> void:
-		_punish["%s/%s" % [id, bid]] = measured)
-
 	_ck("D%d.4 it is asleep until the room seals" % n, not boss.is_awake())
 	_ck("D%d.5 with the %d HP the row authored (%d)"
 		% [n, int(row["health"]), boss.health.max_health_points],
@@ -307,6 +312,12 @@ func _one(rig, n: int, id: StringName) -> void:
 	# art-space 180 goes on the MODEL node and never into the steering.
 	_ck("D%d.7 the art-space 180 is on the model node" % n,
 		absf(wrapf(boss._model.rotation.y - PI, -PI, PI)) < 0.01)
+	var stagger_row: Dictionary = row.get("stagger", {})
+	var movement: Dictionary = row.get("movement", {})
+	_ck("D%d.8 it authors exactly three stagger segments" % n,
+		int(stagger_row.get("goal", 0)) == 3)
+	_ck("D%d.9 it authors distinct phase-one and phase-two behavior" % n,
+		movement.get("phase_1", {}) != movement.get("phase_2", {}))
 
 	# The roster frame: all four at the same distance and the same angle, so the
 	# four PNGs are a contact sheet and "you can tell them apart at a glance" is
@@ -330,7 +341,7 @@ func _one(rig, n: int, id: StringName) -> void:
 	# was wrong: the hero waits in the corridor while the arena is built, and the
 	# seal here is the one `Dungeon` actually relies on -- a body entering a ring.
 	await _mark_up(rig, arena, boss)
-	_ck("D%d.8 walking into the ring seals it and wakes it" % n,
+	_ck("D%d.10 walking into the ring seals it and wakes it" % n,
 		bool(arena.call(&"is_sealed")) and boss.is_awake())
 
 	var i := 0
@@ -340,7 +351,7 @@ func _one(rig, n: int, id: StringName) -> void:
 		await _tell(rig, arena, boss, id, b, "E%d.%d" % [n, i],
 			out.path_join("m%d_%d_%s_%s.png" % [n, i, id, b["id"]]), shapes)
 
-	await _kill(rig, arena, boss, id, n, int(row["health"]))
+	await _combat_contract(rig, arena, boss, id, n, row)
 
 
 ## One `BossArena`, built the way `Dungeon._place_chamber` builds one: from the
@@ -451,70 +462,253 @@ func _tell(rig, arena: Node3D, boss: Node, id: StringName, b: Dictionary,
 			_ck("%sr and a zone draws nothing until the commit" % tag, mark == null)
 	await rig.capture(path)
 
+	# Let the live beat finish. The authored weak beat may open its floor-item
+	# aperture on this pass, but no ordinary recovery is treated as damage time;
+	# the contract proof below drives and inspects those states explicitly.
 	await _until(rig, func() -> bool: return boss.state == Enemy.State.CHASE, 600)
-	var window := float(_punish.get("%s/%s" % [id, bid], -1.0))
-	print("MB   window %s: authored %.2f s, measured %.2f s"
-		% [bid, float(b["punish"]), window])
-	_ck("%sw and it held its %.2f s window open (measured %.2f s)"
-		% [tag, float(b["punish"]), window],
-		absf(window - float(b["punish"])) < 0.15)
 
 
-## It dies, and it leaves nothing behind but the chest that is not in this
-## fixture.
-func _kill(rig, arena: Node3D, boss: Node, id: StringName, n: int,
-		authored: int) -> void:
-	var before := _defeated
-	var clears_before := _clear_grades.size()
+## Prove armour, the authored aperture, one-segment damage capping, phase two,
+## exactly three true staggers, and the arena's real death path. Every successful
+## damage hit enters through root `Boss.apply_hit`; the Health child is observed
+## for HP only and is never called as a combat path.
+func _combat_contract(rig, arena: Node3D, boss: Node, id: StringName, n: int,
+		row: Dictionary) -> void:
+	var authored_hp := int(row["health"])
 	var start_hp: int = boss.health.health_points
-	_ck("F%d.0 it comes to the kill on the row's %d HP (%d)" % [n, authored, start_hp],
-		start_hp == authored)
-	var hero := _hero(rig)
-	var swings := 0
-	var tries := 0
-	while boss.health.health_points > 0 and tries < 40:
-		tries += 1
-		if boss.health.apply_hit(Hit.make(SWING, hero.global_position, &"sword",
-				0.0, 0.0, &"director")):
-			swings += 1
-		if boss.health.health_points == 0:
+	var stagger_row: Dictionary = row["stagger"]
+	var expected := _expected_stagger(id)
+	var kind: StringName = expected["kind"]
+	var beat_id: StringName = expected["beat"]
+	var exposure: StringName = expected["open"]
+	var phase_before := _phases.size()
+	var defeated_before := _defeated
+	var clears_before := _clear_grades.size()
+
+	_ck("F%d.0 it enters the proof on the row's %d HP (%d)"
+		% [n, authored_hp, start_hp], start_hp == authored_hp)
+	_ck("F%d.1 floor item maps to %s during %s/%s"
+		% [n, kind, beat_id, exposure],
+		StringName(stagger_row.get("kind", &"")) == kind
+		and StringName(stagger_row.get("beat", &"")) == beat_id
+		and StringName(stagger_row.get("open", &"")) == exposure)
+	_ck("F%d.2 public stagger goal is exactly three" % n, boss.stagger_goal() == 3)
+
+	# Explicit negative control: ordinary recovery is armour and never the true
+	# vulnerable state, even when struck with this fight's correct floor item.
+	var control_beat := _other_beat(id, beat_id)
+	var reached_recovery := await _force_to_state(rig, arena, boss, control_beat,
+		Enemy.State.RECOVER)
+	_ck("F%d.3 negative control reached ordinary recovery after %s" % [n, control_beat],
+		reached_recovery)
+	if reached_recovery:
+		var hp_before: int = boss.health.health_points
+		var accepted := false
+		if kind == BossDb.STAGGER_HOOKSHOT:
+			boss.freeze()
+		else:
+			accepted = bool(boss.apply_hit(Hit.make(4, _hero(rig).global_position,
+				kind, 0.0, 0.0, &"director_negative_control")))
+		_ck("F%d.4 negative control: ordinary recovery is not punishable" % n,
+			not boss.is_punishable())
+		_ck("F%d.5 negative control: root gate rejects recovery damage" % n,
+			not accepted and boss.health.health_points == hp_before)
+	await _until(rig, func() -> bool: return boss.state == Enemy.State.CHASE, 600)
+
+	for cycle in range(1, 4):
+		var opened := await _open_true_stagger(rig, arena, boss, id, n, cycle,
+			beat_id, kind)
+		if not opened:
 			break
-		# The hero is standing in a live fight for as long as this takes, and
-		# killing him would end the run in the middle of a measurement.
-		Game.heal(999)
-		await rig.wait_seconds(K.ENEMY_IFRAME_TIME + 0.06)
-	print("MB   killed with %d landed blows of %d HP (%d HP, %d expected)"
-		% [swings, SWING, start_hp, ceili(start_hp / float(SWING))])
-	_ck("F%d.1 it dies (%d blows)" % [n, swings],
-		is_instance_valid(boss) and boss.health.health_points == 0)
+		if cycle == 1:
+			await _spend_bare_chain(rig, boss, id, n)
+		else:
+			await _spend_segment(rig, boss, id, n, cycle)
+
+		if cycle == 1:
+			_ck("G%d.0 one spent segment leaves phase one live" % n,
+				boss.current_phase() == 1 and boss.health.health_points > 0
+				and _phases.size() == phase_before)
+		elif cycle == 2:
+			await rig.wait_frames(3)
+			var phase_events := _phases.slice(phase_before)
+			_ck("G%d.1 crossing half HP enters behavior phase two" % n,
+				boss.current_phase() == 2 and boss.health.health_points > 0)
+			_ck("G%d.2 Bus.boss_phase_changed carries exactly [2] (%s)"
+				% [n, phase_events], phase_events == [2])
+
+	_ck("F%d.20 exactly three true staggers were opened (%d)"
+		% [n, boss.stagger_count()], boss.stagger_count() == 3)
+	_ck("F%d.21 exactly three fully-spent staggers kill through root apply_hit"
+		% n, boss.health.health_points == 0 and boss.state == Enemy.State.DEAD)
+	_ck("G%d.3 phase signal stayed one value, 2 (%s)"
+		% [n, _phases.slice(phase_before)], _phases.slice(phase_before) == [2])
+
 	await rig.wait_seconds(1.2)
-	_ck("F%d.2 Bus.boss_defeated fired once for it (%d)" % [n, _defeated - before],
-		_defeated - before == 1)
-	_ck("F%d.3 the arena is spent and the seal came down" % n,
+	_ck("F%d.22 Bus.boss_defeated fired once for it (%d)"
+		% [n, _defeated - defeated_before], _defeated - defeated_before == 1)
+	_ck("F%d.23 the arena is spent and the seal came down" % n,
 		bool(arena.call(&"is_spent")) and not bool(arena.call(&"is_sealed")))
-	# The victory sound, end to end and through the real kill rather than through
-	# a hand-emitted signal: the chamber announces itself beaten exactly once, at
-	# MAJOR, and `Sfx` resolves that grade to a take that is not the one an
-	# ordinary room gets. This is the beat the player complained about -- a
-	# miniboss that went down to the old library horn.
+
+	# The victory sound remains end-to-end through the real root-gated kill.
 	var grades := _clear_grades.slice(clears_before)
 	print("MB   room_cleared grades at the kill: %s" % [grades])
-	_ck("F%d.5 the chamber announced itself beaten once, at MAJOR (%s)"
+	_ck("F%d.24 the chamber announced itself beaten once, at MAJOR (%s)"
 		% [n, grades], grades == [RewardVfx.MAJOR])
-	_ck("F%d.6 MAJOR resolves to a take an ordinary room never plays (%s)"
+	_ck("F%d.25 MAJOR resolves to a take an ordinary room never plays (%s)"
 		% [n, Sfx.CLEAR_CUES[RewardVfx.MAJOR]],
 		Sfx.CLEAR_CUES[RewardVfx.MAJOR] != Sfx.CLEAR_CUES[RewardVfx.MINOR]
 		and Sfx._load(Sfx.CLEAR_CUES[RewardVfx.MAJOR]) != null)
-	# §7's whole reason for the empty `drop` row: nothing on the floor, and
-	# nothing in the item list either. `Boss._drop_loot` reads both keys, and a
-	# non-empty one would be a verb or a relic handed out behind an OPTIONAL
-	# puzzle -- the thing the miniboss branch is defined by not doing.
+
+	# Preserve the empty-drop proof for empty rows, while also checking the one
+	# authored progress-token exception by exact id. Relics stay absent for all.
+	var drop: Dictionary = row.get("drop", {})
+	var expected_item := StringName(drop.get("item", &""))
 	var motes := _motes(rig.scene())
-	print("MB   %d mote(s) anywhere in the scene after the kill" % motes.size())
-	_ck("F%d.4 it left no relic and no item (%s)" % [n, motes], motes.is_empty())
+	print("MB   drop row item=%s relic=%s; motes=%s"
+		% [expected_item, drop.get("relic", &""), motes])
+	if expected_item == &"":
+		_ck("F%d.26 empty drop left no relic and no item (%s)" % [n, motes],
+			motes.is_empty())
+	else:
+		_ck("F%d.26 authored progress token is granted, never dropped (%s)"
+			% [n, expected_item], Game.has(expected_item) and motes.is_empty())
 	await rig.capture(out.path_join("m%d_9_%s_down.png" % [n, id]))
 	arena.queue_free()
 	await rig.wait_frames(10)
+
+
+## Drive a non-weak beat through its real chooser and wait for a named state.
+func _force_to_state(rig, arena: Node3D, boss: Node, beat_id: StringName,
+		wanted: int) -> bool:
+	boss.force_beat(beat_id)
+	await _mark_up_distance(rig, arena, boss, _beat_distance(beat_id, boss.boss_id))
+	var began := await _until(rig, func() -> bool:
+		return boss.current_beat() == beat_id and boss.state == Enemy.State.WINDUP, 600)
+	if not began:
+		return false
+	return await _until(rig, func() -> bool: return boss.state == wanted, 600)
+
+
+## Open the authored aperture, photograph it on cycle one, prove a wrong root
+## hit leaves it intact, then use the exact floor-item interaction to enter the
+## only state for which `is_punishable()` may be true.
+func _open_true_stagger(rig, arena: Node3D, boss: Node, id: StringName, n: int,
+		cycle: int, beat_id: StringName, kind: StringName) -> bool:
+	Game.heal(999)
+	boss.force_beat(beat_id)
+	await _mark_up_distance(rig, arena, boss, _beat_distance(beat_id, id))
+	var began := await _until(rig, func() -> bool:
+		return boss.current_beat() == beat_id and boss.state == Enemy.State.WINDUP, 600)
+	_ck("F%d.%d0 force_beat drove %s" % [n, cycle, beat_id], began)
+	if not began:
+		return false
+	var opened := await _until(rig, func() -> bool: return boss.weakpoint_open(), 600)
+	_ck("F%d.%d1 %s opened its %s weak point" % [n, cycle, beat_id, kind], opened)
+	if not opened:
+		return false
+	_ck("F%d.%d2 an open aperture is not yet punishable" % [n, cycle],
+		not boss.is_punishable())
+	var hp_before: int = boss.health.health_points
+	var wrong_kind := Hit.ARROW if kind == BossDb.STAGGER_SWORD else &"sword"
+	var wrong_landed := bool(boss.apply_hit(Hit.make(1,
+		_hero(rig).global_position, wrong_kind, 0.0, 0.0,
+		&"director_wrong_item")))
+	_ck("F%d.%d3 the wrong item leaves the aperture open and armour whole"
+		% [n, cycle], not wrong_landed and boss.weakpoint_open()
+		and boss.health.health_points == hp_before)
+	if cycle == 1:
+		await rig.capture(out.path_join("m%d_3_%s_%s_open.png" % [n, id, beat_id]))
+
+	if kind == BossDb.STAGGER_HOOKSHOT:
+		boss.freeze()
+	else:
+		var opener_landed := bool(boss.apply_hit(Hit.make(1,
+			_hero(rig).global_position, kind, 0.0, 0.0, &"director_weakpoint")))
+		_ck("F%d.%d4 the weak-point hit opens damage but deals none itself"
+			% [n, cycle], not opener_landed and boss.health.health_points == hp_before)
+	var staggered := await _until(rig, func() -> bool: return boss.is_punishable(), 120)
+	_ck("F%d.%d5 only the true stagger is punishable" % [n, cycle], staggered)
+	_ck("F%d.%d6 public stagger count advanced to %d" % [n, cycle, cycle],
+		boss.stagger_count() == cycle)
+	if staggered and cycle == 1:
+		await rig.capture(out.path_join("m%d_4_%s_%s_staggered.png"
+			% [n, id, beat_id]))
+	return staggered
+
+
+## Spend the first segment with the ordinary 2, 2, 4 chain. The authored row
+## multiplier, not a director-side calculation, makes the three root hits fill
+## exactly one segment for every miniboss.
+func _spend_bare_chain(rig, boss: Node, id: StringName, n: int) -> void:
+	var hp_before: int = boss.health.health_points
+	var capacity: int = boss.segment_capacity()
+	for i in BARE_CHAIN.size():
+		var amount: int = BARE_CHAIN[i]
+		var landed := bool(boss.apply_hit(Hit.make(amount,
+			_hero(rig).global_position, &"sword", 0.0, 0.0,
+			&"director_bare_chain")))
+		_ck("F%d.1%d bare-chain root hit %d landed" % [n, i + 7, amount], landed)
+		if i < BARE_CHAIN.size() - 1:
+			await rig.wait_seconds(K.ENEMY_IFRAME_TIME + 0.06)
+	await rig.wait_frames(3)
+	var spent: int = hp_before - boss.health.health_points
+	print("MB   %s bare chain 2,2,4 -> %d HP, segment capacity %d"
+		% [id, spent, capacity])
+	_ck("F%d.11 bare chain spent exactly one scaled segment (%d/%d)"
+		% [n, spent, capacity], spent == capacity)
+	_ck("F%d.12 one spent segment closes true stagger" % n,
+		not boss.is_punishable() and boss.stagger_count() == 1)
+
+
+## Spend one later true stagger through the root gate. A deliberately oversized
+## input proves the actor caps it to the remaining segment rather than skipping
+## a cycle; the copied hit reaching Health carries only that capped amount.
+func _spend_segment(rig, boss: Node, id: StringName, n: int, cycle: int) -> void:
+	var hp_before: int = boss.health.health_points
+	var capacity: int = boss.segment_capacity()
+	var expected: int = mini(capacity, hp_before)
+	var landed := bool(boss.apply_hit(Hit.make(9999, _hero(rig).global_position,
+		&"sword", 0.0, 0.0, &"director_segment")))
+	await rig.wait_frames(3)
+	var spent: int = hp_before - boss.health.health_points
+	print("MB   %s stagger %d -> %d HP, cap %d" % [id, cycle, spent, capacity])
+	_ck("F%d.%d7 root gate accepted stagger damage" % [n, cycle], landed)
+	_ck("F%d.%d8 stagger spent only its remaining segment (%d/%d)"
+		% [n, cycle, spent, expected], spent == expected)
+	_ck("F%d.%d9 spent stagger closed vulnerability" % [n, cycle],
+		not boss.is_punishable())
+
+
+func _expected_stagger(id: StringName) -> Dictionary:
+	match id:
+		&"sluice_keeper":
+			return {"kind": BossDb.STAGGER_SWORD, "beat": &"flood_stomp",
+				"open": BossDb.OPEN_RECOVER}
+		&"bellows_hand":
+			return {"kind": BossDb.STAGGER_ARROW, "beat": &"plate_advance",
+				"open": BossDb.OPEN_CHARGE}
+		&"second_voice":
+			return {"kind": BossDb.STAGGER_BOMB, "beat": &"keening",
+				"open": BossDb.OPEN_ZONES}
+		&"gate_hound":
+			return {"kind": BossDb.STAGGER_HOOKSHOT, "beat": &"overhand",
+				"open": BossDb.OPEN_ZONES}
+	return {}
+
+
+func _other_beat(id: StringName, weak_beat: StringName) -> StringName:
+	for b in BossDb.beats(id):
+		if StringName(b["id"]) != weak_beat:
+			return StringName(b["id"])
+	return &""
+
+
+func _beat_distance(beat_id: StringName, id: StringName) -> float:
+	var b := BossDb.beat(id, beat_id)
+	var lo := float(b.get("min_range", 0.0))
+	var hi := float(b.get("max_range", WATCH_DIST))
+	return clampf(6.0, lo + 0.75, hi - 0.75)
 
 
 # --- Helpers ------------------------------------------------------------------
@@ -578,8 +772,15 @@ func _portrait(rig, arena: Node3D, boss: Node) -> void:
 ## a director that placed only the hero would walk the pair down the room and
 ## photograph the second fight through a doorway.
 func _mark_up(rig, arena: Node3D, boss: Node) -> void:
-	_park_boss(arena, boss)
-	var at := arena.global_position + Vector3(0.0, 0.05, WATCH_DIST * 0.5)
+	await _mark_up_distance(rig, arena, boss, WATCH_DIST)
+
+
+## The same staged shot at a range eligible for the forced beat. Gate-Hound's
+## Overhand refuses 7 m while Bellows-Hand's Plate-Advance refuses contact, so a
+## director that uses one fixed distance cannot prove both through `force_beat`.
+func _mark_up_distance(rig, arena: Node3D, boss: Node, distance: float) -> void:
+	_park_boss(arena, boss, -distance * 0.5)
+	var at := arena.global_position + Vector3(0.0, 0.05, distance * 0.5)
 	await _stand_at(rig, at, (boss as Node3D).global_position)
 
 

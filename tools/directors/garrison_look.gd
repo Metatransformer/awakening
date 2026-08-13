@@ -90,7 +90,10 @@ func run(rig) -> void:
 		{"name": "alchemist", "at": garrison.alchemist, "back": 3.4, "high": 1.65},
 		{"name": "keeper", "at": garrison.keeper, "back": 3.4, "high": 1.65},
 		{"name": "jeweller", "at": garrison.jeweller, "back": 3.4, "high": 1.65},
-		{"name": "builder", "at": garrison.builder, "back": 3.4, "high": 1.65},
+		# The surface-layout pass deepened her workshop. At the ordinary 3.4 m
+		# counter distance the straight proof camera sits behind the doorway wall;
+		# two metres is still player distance and keeps the authored figure visible.
+		{"name": "builder", "at": garrison.builder, "back": 2.0, "high": 1.65},
 		{"name": "gate", "at": garrison.gate, "back": 6.0, "high": 2.0},
 	]
 	for s in subjects:

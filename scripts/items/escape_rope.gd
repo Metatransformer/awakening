@@ -1,9 +1,9 @@
 class_name EscapeRope
 extends Node3D
 ## The portable way out. You open the menu anywhere on a dungeon floor, use the
-## rope, and it pulls you home. Floor 1's UP stair reaches the same
-## `Run.extract()` settlement; the rope is what makes extraction available away
-## from that physical exit.
+## rope, and it pulls you home through `Run.extract(false)`. Floor 1's UP stair
+## keeps the priced `Run.extract()` settlement; the Rope is the counted,
+## fee-exempt route available away from that physical exit.
 ##
 ## This replaces the rune pad (`ExtractNode`, deleted). The pad made leaving a
 ## PLACE — you had to find your way back to it, which turned the game's central
@@ -18,13 +18,12 @@ extends Node3D
 ##    chasing you was a real problem. Those are two different guarantees and the
 ##    rope now keeps them in two places, because one of them cannot be kept in a
 ##    paused menu: the channel happens in the WORLD, after the menu closes, and a
-##    hit breaks it. **The fumble guard is back where the press is** — the pouch
-##    row is held on Y for `MenuPouchPanel.ROPE_HOLD` seconds with the usual
-##    gauge, on a different button from the A that fletches arrows one row above
-##    it. Nothing in here reads that hold; by the time `Bus.escape_rope_used`
+##    hit breaks it. **The fumble guard is back where the press is** — the
+##    Equipment row is held on Y for `MenuEquipPanel.ROPE_HOLD` seconds with the
+##    usual gauge. Nothing in here reads that hold; by the time `Bus.escape_rope_used`
 ##    arrives the player has already meant it.
-##  * **The fee is paid out of the number you are protecting**, and the HUD says
-##    so: the ring closes around the bag total, exactly as it did on the pad.
+##  * **The Rope itself is the price.** It is spent when the world channel begins
+##    and stays spent if a hit breaks the channel.
 ##
 ## It is deliberately NOT bindable to an item button. One D-pad press that ends
 ## the run is the fumble the hold existed to prevent.
@@ -68,12 +67,9 @@ func begin() -> bool:
 		return false
 	if not Run.in_dungeon:
 		return false
-	# There is deliberately no affordability check. There used to be one here and
-	# another in `Run.extract()`, and between them they were the game's only dead
-	# end: a bag rich enough to outprice the purse rooted the player underground
-	# with a refusal and nothing to do about it. The fee is capped at the purse
-	# now (`Run.extract_charge`), so the rope always works and a toll you cannot
-	# meet simply empties you. Being poor is a price here, never a wall.
+	if not Game.spend_escape_rope():
+		Bus.request_message.emit("NO ESCAPE ROPES")
+		return false
 	_t = 0.0
 	set_process(true)
 	_column.scale.y = 0.001
@@ -115,7 +111,7 @@ func _process(delta: float) -> void:
 	_t = -1.0
 	set_process(false)
 	Hud.set_extract_hold(0.0)
-	if not Run.extract():
+	if not Run.extract(false):
 		# The only remaining refusal is "there is no run to leave" -- something
 		# else ended it while the slats were climbing. Nothing to say; just stop
 		# looking like we left.

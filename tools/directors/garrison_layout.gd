@@ -19,10 +19,12 @@ func run(rig) -> void:
 	if not rig.check(compound != null, "the generated garrison compound exists"):
 		return
 	_prove_floor_plan(rig, compound)
+	_prove_perimeter_ownership(rig, compound)
 	_prove_furnished_interiors(rig, compound)
 	_prove_warm_lighting(rig, compound)
+	_prove_authored_night_lighting(rig, compound)
 	_prove_elder_arrival(rig, compound)
-	_prove_exit_backstop(rig, compound)
+	_prove_open_surface(rig, garrison, compound)
 	var valley := garrison.get_node_or_null(^"EnclosedValleyTerrain") \
 		as EnclosedValleyTerrain
 	rig.check(valley != null and valley.baked_inner_mesh != null
@@ -81,8 +83,8 @@ func run(rig) -> void:
 	_frame(camera, compound, Vector3(13.15, 1.6, 4.3), Vector3(18.3, 1.0, 4.3), 68.0)
 	await _capture(rig, out, "layout_12_quartermaster_interior.png")
 
-	_frame(camera, compound, Vector3(0.0, 5.0, 7.0), Vector3(0.0, 1.8, 17.5), 61.0)
-	await _capture(rig, out, "layout_13_supply_gate_backstop.png")
+	_frame(camera, compound, Vector3(0.0, 4.2, 7.0), Vector3(0.0, 1.2, 28.0), 61.0)
+	await _capture(rig, out, "layout_13_open_surface_gate.png")
 
 	# At night the courtyard stays comparatively cool while every enclosed room
 	# becomes an amber destination; the smithy retains its hotter orange identity.
@@ -92,6 +94,8 @@ func run(rig) -> void:
 	await _capture(rig, out, "layout_14_warm_interiors_night.png")
 	_frame(camera, compound, Vector3(-14.65, 1.6, -4.6), Vector3(-19.2, 1.0, -4.8), 68.0)
 	await _capture(rig, out, "layout_15_smithy_warm_night.png")
+	_frame(camera, compound, Vector3(6.0, 1.65, 3.5), Vector3(0.0, 1.55, 15.3), 64.0)
+	await _capture(rig, out, "layout_16_gate_torch_rhythm_night.png")
 	print("GARRISON FLOOR PLAN OK")
 
 
@@ -119,6 +123,70 @@ func _prove_floor_plan(rig, compound: GarrisonCompound) -> void:
 		"the fenced garden has crops, water, paths, and an alchemist trellis")
 
 
+func _prove_perimeter_ownership(rig, compound: GarrisonCompound) -> void:
+	var removed_curtains: Array[String] = [
+		"NorthCurtain", "EastCurtain", "WestCurtain",
+		"SouthCurtainWest", "SouthCurtainEast",
+	]
+	for old_name: String in removed_curtains:
+		rig.check(compound.find_child(old_name, true, false) == null,
+			"the obsolete %s collider is absent" % old_name)
+
+	# Each ray starts outside the compound and stops just inside one room's rear
+	# plane. The first world collider must therefore be the occupied building,
+	# never a second curtain hiding behind it.
+	var rear_rays: Array[Dictionary] = [
+		{&"room": "Buildings/Barracks", &"outside": Vector3(-18.55, 1.5, -22.3),
+			&"inside": Vector3(-18.55, 1.5, -18.2)},
+		{&"room": "Buildings/MessHall", &"outside": Vector3(-6.9, 1.5, -23.8),
+			&"inside": Vector3(-6.9, 1.5, -19.7)},
+		{&"room": "Buildings/LeaderQuarters", &"outside": Vector3(13.2, 1.5, -22.6),
+			&"inside": Vector3(13.2, 1.5, -18.5)},
+		{&"room": "Buildings/Smithy", &"outside": Vector3(-27.2, 1.5, -4.6),
+			&"inside": Vector3(-23.1, 1.5, -4.6)},
+		{&"room": "Buildings/Jewelcrafter", &"outside": Vector3(-28.0, 1.5, 3.2),
+			&"inside": Vector3(-23.9, 1.5, 3.2)},
+		{&"room": "Buildings/BuilderWorkshop", &"outside": Vector3(-26.8, 1.5, 11.325),
+			&"inside": Vector3(-22.7, 1.5, 11.325)},
+		{&"room": "Buildings/Quartermaster", &"outside": Vector3(27.7, 1.5, 4.3),
+			&"inside": Vector3(23.6, 1.5, 4.3)},
+		{&"room": "Buildings/WestSupplyRoom", &"outside": Vector3(-9.2, 1.5, 23.1),
+			&"inside": Vector3(-9.2, 1.5, 19.0)},
+		{&"room": "Buildings/EastSupplyRoom", &"outside": Vector3(9.2, 1.5, 22.4),
+			&"inside": Vector3(9.2, 1.5, 18.3)},
+	]
+	var space: PhysicsDirectSpaceState3D = compound.get_world_3d().direct_space_state
+	for ray: Dictionary in rear_rays:
+		var room_path: String = ray[&"room"]
+		var outside: Vector3 = ray[&"outside"]
+		var inside: Vector3 = ray[&"inside"]
+		var query := PhysicsRayQueryParameters3D.create(
+			compound.to_global(outside), compound.to_global(inside), K.L_WORLD)
+		var hit: Dictionary = space.intersect_ray(query)
+		var room := compound.get_node_or_null(room_path) as Node3D
+		var collider := hit.get("collider") as Node
+		rig.check(room != null and collider != null
+			and (collider == room or room.is_ancestor_of(collider)),
+			"%s owns its rear defensive perimeter collider" % room_path)
+
+	var west_gate_shape := compound.get_node_or_null(
+		"SouthGatehouse/GateTowerWest/Shape") as CollisionShape3D
+	var east_gate_shape := compound.get_node_or_null(
+		"SouthGatehouse/GateTowerEast/Shape") as CollisionShape3D
+	rig.check(west_gate_shape != null and west_gate_shape.shape is CylinderShape3D
+		and east_gate_shape != null and east_gate_shape.shape is CylinderShape3D,
+		"both gate towers use round stone collision instead of square corner posts")
+	var junction_towers: Array[Node] = compound.get_tree().get_nodes_in_group(
+		&"garrison_junction_tower")
+	var owned_junctions := 0
+	for tower: Node in junction_towers:
+		if compound.is_ancestor_of(tower):
+			owned_junctions += 1
+	rig.check(compound.get_node_or_null("CurtainWall/JunctionTowers") != null
+		and owned_junctions >= 4,
+		"the irregular perimeter has a dedicated round junction-tower group")
+
+
 func _prove_furnished_interiors(rig, compound: GarrisonCompound) -> void:
 	rig.check(compound.get_node_or_null("Buildings/Barracks/BarracksDoorLintel") != null
 		and compound.get_node_or_null("Buildings/Barracks/WeaponLocker") != null
@@ -137,6 +205,19 @@ func _prove_furnished_interiors(rig, compound: GarrisonCompound) -> void:
 		and compound.get_node_or_null("Buildings/BuilderWorkshop/BuilderWorktable") != null
 		and compound.get_node_or_null("Buildings/Quartermaster/CargoStackNorth") != null,
 		"each trade building has profession-specific dressing")
+	rig.check(compound.player_bunk != null and compound.player_bunk.player_bunk
+		and compound.player_bunk.bed != null and compound.player_bunk.locker != null
+		and compound.player_bunk.field_notes_book != null
+		and compound.player_bunk.bed.radius >= 2.0,
+		"PlayerBunk retains its reachable bed, footlocker, and bedside Field Notes")
+	var room_chest := compound.get_node_or_null(
+		"Buildings/Barracks/BarracksStorageChest") as Footlocker
+	rig.check(room_chest != null and room_chest == compound.barracks_storage_chest
+		and room_chest != compound.player_bunk.locker,
+		"the barracks has a second real shared-stash Footlocker")
+	rig.check(compound.find_child("BarracksFootChest", true, false) == null
+		and compound.find_child("BuilderImportedBed", true, false) == null,
+		"decorative barracks chest and duplicate imported bed are absent")
 
 
 func _prove_warm_lighting(rig, compound: GarrisonCompound) -> void:
@@ -162,6 +243,54 @@ func _prove_warm_lighting(rig, compound: GarrisonCompound) -> void:
 		"the forge atmosphere is hotter orange than the other rooms")
 
 
+func _prove_authored_night_lighting(rig, compound: GarrisonCompound) -> void:
+	var wall_torches: Array[Node] = compound.get_tree().get_nodes_in_group(
+		&"garrison_wall_torch")
+	var owned_torches := 0
+	var every_torch_is_shadowless := true
+	for node: Node in wall_torches:
+		if not compound.is_ancestor_of(node):
+			continue
+		owned_torches += 1
+		if not node is KitTorch:
+			every_torch_is_shadowless = false
+			continue
+		if (node as KitTorch).cast_shadow:
+			every_torch_is_shadowless = false
+	rig.check(owned_torches >= 16,
+		"at least sixteen KitTorch sconces carry the garrison wall rhythm")
+	rig.check(every_torch_is_shadowless,
+		"every garrison wall torch is a shadowless KitTorch")
+
+	var gate_west := compound.get_node_or_null(
+		"ArtPass/PerimeterTorches/GateShoulderWestTorch") as KitTorch
+	var gate_east := compound.get_node_or_null(
+		"ArtPass/PerimeterTorches/GateShoulderEastTorch") as KitTorch
+	rig.check(gate_west != null and gate_east != null
+		and gate_west.is_in_group(&"garrison_gate_torch")
+		and gate_east.is_in_group(&"garrison_gate_torch"),
+		"both inside gate-shoulder torch markers exist")
+
+	var fill_nodes: Array[Node] = compound.get_tree().get_nodes_in_group(
+		&"garrison_night_fill")
+	var owned_fills := 0
+	var every_fill_is_cool_and_shadowless := true
+	for node: Node in fill_nodes:
+		if not compound.is_ancestor_of(node):
+			continue
+		owned_fills += 1
+		if not node is OmniLight3D:
+			every_fill_is_cool_and_shadowless = false
+			continue
+		var fill := node as OmniLight3D
+		if fill.shadow_enabled or fill.light_color.b <= fill.light_color.r:
+			every_fill_is_cool_and_shadowless = false
+	rig.check(owned_fills >= 4,
+		"at least four cool night fills keep the garrison paths readable")
+	rig.check(every_fill_is_cool_and_shadowless,
+		"every garrison night fill is cool and shadowless")
+
+
 func _prove_elder_arrival(rig, compound: GarrisonCompound) -> void:
 	var elder := compound.port(&"elder_day")
 	var arrival := compound.port(&"arrival")
@@ -177,14 +306,26 @@ func _prove_elder_arrival(rig, compound: GarrisonCompound) -> void:
 		"the elder faces the arriving hero")
 
 
-func _prove_exit_backstop(rig, compound: GarrisonCompound) -> void:
-	var backstop := compound.get_node_or_null(
-		"SouthGatehouse/ExitBackstop/Collision") as CollisionShape3D
-	var shape := backstop.shape as BoxShape3D if backstop != null else null
-	rig.check(shape != null and shape.size.x >= 5.8 and shape.size.y >= 4.8,
-		"the departure gate blocks walking or jumping into unloaded space")
+func _prove_open_surface(rig, garrison: Garrison,
+		compound: GarrisonCompound) -> void:
+	rig.check(compound.get_node_or_null("SouthGatehouse/ExitBackstop") == null,
+		"the south gate has no unloaded-space backstop")
 	rig.check(compound.get_node_or_null("SouthGatehouse/RaisedPortcullis") != null,
 		"the open raid arch carries a visibly raised portcullis")
+	rig.check(garrison.outskirts != null and garrison.sunken_cut != null,
+		"the homestead and Sunken Cut are live inside the garrison surface")
+	rig.check(garrison.outskirts.garrison_gate == null
+		and garrison.outskirts.blocked_path == null
+		and garrison.outskirts.homestead.bridge_obstruction == null,
+		"the embedded bridge has no loading transition or visual obstruction")
+	var bridge_end := garrison.outskirts.to_global(OutskirtsHomestead.BRIDGE_END)
+	rig.check(bridge_end.distance_to(Vector3(0.0, -0.10, 18.0)) < 0.001,
+		"the timber bridge terminates exactly at the fort ground seam")
+	rig.check(garrison.get_tree().get_nodes_in_group(&"player").size() == 1
+		and garrison.find_children("*", "Camera3D", true, false).size() == 1
+		and garrison.find_children("SurfaceAtmosphere", "SurfaceAtmosphere", true, false).size() == 1
+		and garrison.find_children("EnclosedValleyTerrain", "EnclosedValleyTerrain", true, false).size() == 1,
+		"the combined surface owns one hero, camera, atmosphere, and valley")
 
 
 func _capture(rig, out: String, file_name: String) -> void:

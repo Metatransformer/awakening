@@ -99,15 +99,19 @@ const SLOTS := 3
 ## Legacy carrying_firewood becomes a bag bundle after Run state is restored.
 ## Bumped to 20 for the additive persistent garden payload inside `garrison`.
 ## Older slots have no planted sites and reconstruct as an empty garden.
-## Bumped to 21 for the additive quest payload. Older slots reconstruct only the
-## quest outcomes already proved by their story, raid, tool, and supply state.
+## Bumped to 21 for the additive quest payload, Escape Rope stock, and
+## floor-scoped Small Keys. Older slots reconstruct only quest outcomes already
+## proved by their story, raid, tool, and supply state; a v20 slot maps its
+## legacy key count only onto its restored live dungeon floor.
 const VERSION := 21
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
+const READABLE: Array[int] = [
+	4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+]
 const AUTOSAVE_INTERVAL := 300.0
 
 signal saved(slot: int)
@@ -158,6 +162,11 @@ func peek(slot: int) -> Dictionary:
 	var has_run := not run_data.is_empty()
 	var underground := has_run and bool(run_data.get("in_dungeon", false))
 	var saved_level := maxi(int(run_data.get("level", 1)), 1) if underground else 1
+	var saved_keys := 0
+	if underground:
+		var floor_count := _saved_floor_key_count(
+			d.get("small_keys_by_floor", {}), saved_level)
+		saved_keys = floor_count if floor_count >= 0 else int(d.get("small_keys", 0))
 	# v15 and earlier used these two field names. They are fallbacks only: peek's
 	# returned live header uses the health-points schema below.
 	var health_points := int(d.get("health_points", d.get("quarters", 0)))
@@ -169,7 +178,7 @@ func peek(slot: int) -> Dictionary:
 		"health_points": health_points,
 		"max_health_points": max_health_points,
 		"gold": d.get("gold", 0),
-		"keys": d.get("small_keys", 0),
+		"keys": saved_keys,
 		"last_played_unix": d.get("last_played_unix", 0),
 		"in_dungeon": underground,
 		"floor": saved_level,
@@ -238,12 +247,14 @@ func save(slot: int) -> bool:
 		# with the noun; the READ below still answers to the old key, so this is a
 		# rename rather than the new save field `docs/SCOPE.md` §1 refuses.
 		"charges": Game.charges,
+		"escape_ropes": Game.escape_ropes,
 		# The pack: ration id -> how many. The MEAL is deliberately not here --
 		# twelve seconds of sitting restored by a load would be a meal you spend
 		# the loading screen on, which is the bargain `draughts` already struck
 		# (see `Game.meal_id`).
 		"rations": Game.rations,
 		"small_keys": Game.small_keys,
+		"small_keys_by_floor": Game.small_keys_snapshot(),
 		"has_boss_key": Game.has_boss_key,
 		"boss_key_level": Game.boss_key_level,
 		"has_map": Game.has_map,
@@ -510,7 +521,8 @@ func load_slot(slot: int) -> Dictionary:
 	# Burst had a name carried its stock under "bombs", and dropping it would
 	# quietly empty the pouch of anyone who had bought some.
 	Game.charges = d.get("charges", d.get("bombs", 0))
-	Game.small_keys = d.get("small_keys", 0)
+	Game.escape_ropes = clampi(int(d.get("escape_ropes", 0)),
+		0, K.ESCAPE_ROPE_STACK)
 	Game.has_boss_key = d.get("has_boss_key", false)
 	Game.boss_key_level = maxi(int(d.get("boss_key_level", 0)), 0)
 	Game.has_map = d.get("has_map", false)
@@ -601,12 +613,27 @@ func load_slot(slot: int) -> Dictionary:
 	var raw_run: Variant = d.get("run", {})
 	var run_data: Dictionary = raw_run as Dictionary if raw_run is Dictionary else {}
 	var save_version := int(d.get("version", 0))
+	# Keys are prepared before `Run.restore` so its level assignment and redraw see
+	# one completed floor-scoped state. Legacy stock belongs only to a resumable
+	# dungeon floor; a home save has no dungeon key stock to infer.
+	Game.restore_small_keys({})
+	if bool(run_data.get("in_dungeon", false)):
+		if save_version >= 21:
+			Game.restore_small_keys(d.get("small_keys_by_floor", {}))
+		else:
+			var legacy_floor := maxi(int(run_data.get("level", 1)), 1)
+			var legacy_keys := clampi(int(d.get("small_keys", 0)),
+				0, Game.SMALL_KEYS_PER_FLOOR_MAX)
+			if legacy_keys > 0:
+				Game.set_small_keys_for_floor(legacy_floor, legacy_keys, false)
 	var restored_run := false
 	if save_version >= 10 and not run_data.is_empty():
-		restored_run = Run.restore(run_data)
+		restored_run = Run.restore(run_data, false)
 	else:
-		Run.reset()
+		Run.reset(false)
 	var restored_dungeon := restored_run and Run.in_dungeon
+	if not restored_dungeon:
+		Game.clear_run_keys(false)
 	# The legacy bit lived outside the bag. Migrate only at home, after restoring
 	# the bag it must join; the dedicated Run seam also preserves it if that old
 	# bag was already full rather than deleting another carried item on load.
@@ -638,6 +665,7 @@ func load_slot(slot: int) -> Dictionary:
 	Bus.wheel_changed.emit(Game.wheel)
 	Bus.bottles_changed.emit(Game.bottle_contents)
 	Bus.rations_changed.emit(Game.rations)
+	Bus.provisions_changed.emit()
 	Bus.components_changed.emit(Game.components)
 	Bus.stash_changed.emit(Game.stash)
 	Bus.loadout_changed.emit(Game.loadout_set,
@@ -689,3 +717,27 @@ func _read(slot: int) -> Dictionary:
 func _scene_path() -> String:
 	var cs := get_tree().current_scene
 	return cs.scene_file_path if cs else ""
+
+
+## Read one floor count without trusting JSON's key or number representation.
+## -1 means the dictionary carried no valid entry, so `peek` may use the legacy
+## compatibility field instead.
+func _saved_floor_key_count(raw: Variant, floor_number: int) -> int:
+	if raw is not Dictionary or floor_number <= 0:
+		return -1
+	var source := raw as Dictionary
+	for raw_floor: Variant in source:
+		var parsed_floor := 0
+		if raw_floor is int:
+			parsed_floor = int(raw_floor)
+		elif raw_floor is String and (raw_floor as String).is_valid_int():
+			parsed_floor = (raw_floor as String).to_int()
+		else:
+			continue
+		if parsed_floor != floor_number:
+			continue
+		var raw_count: Variant = source[raw_floor]
+		if raw_count is not int and raw_count is not float:
+			return -1
+		return clampi(int(raw_count), 0, Game.SMALL_KEYS_PER_FLOOR_MAX)
+	return -1
