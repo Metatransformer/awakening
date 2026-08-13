@@ -12,8 +12,8 @@ unauthorised.
 |---|---:|
 | Dungeon floors | **4**, plus the existing post-credits endless mode |
 | Generated rooms per authored floor | **8 / 11 / 12 / 13** on floors 1–4 |
-| Bosses | **4** |
-| Minibosses | **4**, one per floor |
+| Bosses | **4**, three beats each, one health bar, two behaviour phases |
+| Minibosses | **4**, one per floor, two beats each, two behaviour phases |
 | Enemy kinds in rotation | **9** |
 | New monster models | **0** |
 | Dungeon kits | **1**, used in four tints |
@@ -102,6 +102,15 @@ combat-room clear rewards drawn only from Escape Rope, Hardtack and Small Beer.
 It authorises no fifth floor, new enemy, direct health drop, new map, new
 currency, extra key loop, or non-combat added room.
 
+Issue #203 amends boss behaviour without raising a content cap: the roster stays
+at four bosses and four minibosses, uses zero new monster models, adds no item,
+and retains the existing five attack shapes. “One phase” is no longer the cap.
+Each row has one health bar and two behaviour phases at half health; phase 2
+reuses the same three boss beats or two miniboss beats while increasing movement
+and selection pressure. Only full bosses turn the arena. Exact mappings and
+cycle counts are owned by [BOSSES.md](BOSSES.md), and the evidence boundary is
+[design-tests/BOSS_DYNAMISM_PROOF.md](design-tests/BOSS_DYNAMISM_PROOF.md).
+
 Counts rise only through an explicit scope amendment. By default, an addition
 must delete something of comparable cost in the same decision. Implementing a
 feature does not authorise another instance, variant, or supporting system.
@@ -173,13 +182,21 @@ floor, sparse counted provision clear rewards, shared map lock/key telemetry,
 and counted Escape Rope named above. It does not supersede or satisfy the
 active human proofs.
 
+Issue #203 is separately owner-authorised boss/miniboss refinement and proof.
+It may change only the behaviour and evidence for the existing four-plus-four
+roster inside the attack, model, item, and floor caps above. Runtime
+implementation and the dedicated automated gate pass; the five-session human
+gate remains tracked in
+[design-tests/BOSS_DYNAMISM_PROOF.md](design-tests/BOSS_DYNAMISM_PROOF.md).
+
 Raid, Field Notes, fishing/provisions, #184's bounded tool/mining work, #197's
 bounded quest journal, #198's bounded player-barrel extension, and #199's
-bounded dungeon/provision expansion are implementation-complete; their
-applicable precommitted human tests remain pending. #200's implementation proof
-is complete and its human result is pending.
-Floors 2–4, bosses 2–4, production content, another fishing location or
-minigame, and every expansion below remain frozen.
+bounded dungeon/provision expansion, and #203's boss refinement are
+implementation-complete; their applicable precommitted human tests remain
+pending. #200's implementation proof is complete and its human result is
+pending. Floors 2–4 production content, any fifth boss or miniboss, any
+new boss model/item/attack shape, another fishing location or minigame, and
+every expansion below remain frozen.
 
 ## Later, only if proven
 

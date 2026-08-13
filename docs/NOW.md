@@ -1,6 +1,6 @@
 # Now
 
-**Stage: Pre-production — Raid Loop and Field Notes Proof**
+**Stage: Pre-production — Raid Loop, Field Notes, and Boss Dynamism Proof**
 
 ## Pending Raid Loop human question
 
@@ -42,6 +42,23 @@ This slice may reuse existing enemies, currencies, UI, dialogue presentation,
 services, and garrison spaces. It may add only what the slice requires.
 
 ## Owner-authorised implementation alongside the freeze
+
+Issue #203 is an active owner override to the frozen boss language. It
+authorises refinement and proof of the existing fixed roster—four floor bosses
+and four optional floor minibosses—without adding a model, item, attack shape,
+fight, or floor. The current runtime implements orbiting/repositioning, authored
+charges, leaps and thrown zones, armour and timed item-specific weak points,
+true stagger segment caps, two pressure phases at half health, and one arena
+turn for each full boss. Exact combat truth is owned by
+[BOSSES.md](BOSSES.md).
+
+The runtime slice and its dedicated automated acceptance pass are complete;
+the five cold human sessions have not happened. The precommitted mechanical and
+human evidence boundary is
+[design-tests/BOSS_DYNAMISM_PROOF.md](design-tests/BOSS_DYNAMISM_PROOF.md).
+Until that test resolves, issue #203 supports only the claim that the structure
+is stronger and mechanically testable; it does not establish fun or boss
+distinctness.
 
 Issue #168 is an explicitly owner-authorised, bounded daily-life implementation
 slice: one fishing pond and minigame, a three-meal Fish reserve, supper-derived
@@ -159,9 +176,9 @@ additional observations, additional doctrines, repeatable faucet or item.
   or tool types, fishing gear collections, and profession progression.
 - Any currency beyond gold and Field Notes, UI screen beyond #197's one Quests
   page, voiced line, or enemy model.
-- Floors, bosses, production content, broad lore, or unrelated polish.
+- Floors, production content, boss/miniboss content beyond issue #203's fixed
+  four-plus-four refinement, broad lore, or unrelated polish.
 
 Implementation proves only that each bounded system works. It does not prove
-any human hypothesis. The #200 prototype does not lift the floor, boss,
-content-production or permanent-art freezes. Expansion remains frozen until the
-pending human tests are resolved and [SCOPE.md](SCOPE.md) is amended.
+the pending human hypotheses. Expansion remains frozen until the relevant human
+tests are resolved and [SCOPE.md](SCOPE.md) is amended.

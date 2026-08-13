@@ -1,6 +1,6 @@
 class_name BossDb
 extends RefCounted
-## The four bosses, as data. Twelve beats, five shapes, no behaviour.
+## The four bosses, as data. Twelve beats, five shapes, one shared behaviour loop.
 ##
 ## `docs/GDD.md` §5 and `docs/SCOPE.md` §1: a boss is an existing monster GLB,
 ## fitted to a bigger height, re-tinted, and given an authored move set. Zero new
@@ -39,8 +39,7 @@ extends RefCounted
 ## **2. Health and damage are ABSOLUTE. Do not run them through `Prog`.**
 ## `Prog.health_mult`, `Prog.damage_bonus` and `Prog.ELITE_*` exist to curve the
 ## generated roster against the floor it spawned on. A boss is authored for
-## exactly one floor and its numbers are already that floor's numbers — putting
-## the curve on top would make the arithmetic in `health`'s comment a lie.
+## exactly one floor and its numbers are already that floor's numbers.
 ##
 ## **3. `Prog.windup_scale` does not apply either.** The tell is the fight. It is
 ## the same length on run one and run fifty.
@@ -48,7 +47,7 @@ extends RefCounted
 ## **4. One beat is exactly this sequence, and nothing may reorder it:**
 ##
 ##   `pick_beat()` -> TELL (`tell.time`) -> COMMIT -> RECOVER (`recover`)
-##   -> PUNISH (`punish`) -> the rest of COOLDOWN (`cooldown - punish`)
+##   -> either the authored weak-point APERTURE or a moving REPOSITION
 ##
 ##   * **TELL** — hold still, track the hero slowly, hold `tell.pose`, and drive
 ##     `HitFlash.glow(tell.color, t * tell.energy)` **every frame** off the tell's
@@ -60,15 +59,14 @@ extends RefCounted
 ##     and `stun`, and `Bus.request_hitstop.emit(K.HITSTOP_HEAVY)`.
 ##   * **RECOVER** — rooted, hitboxes closed, no new tell. This is the beat's
 ##     animation tail.
-##   * **PUNISH** — rooted, and *still* no new tell. This is the promise the
-##     fight makes: every beat, without exception, buys the player a window.
-##     `punish` is measured from the end of `recover`, and it is guaranteed —
-##     do not cut it short because the hero is out of reach.
-##   * **COOLDOWN** — measured from the same instant as `punish` and never
-##     shorter than it (`validate()` asserts this). Between the end of `punish`
-##     and the end of `cooldown` the boss may walk and turn, and that is the only
-##     thing it may do. Beats whose `cooldown` equals their `punish` are pure
-##     openings with no repositioning.
+##   * **APERTURE** — only a weak point authored as `recover` stays rooted for
+##     `punish` seconds. Correct item input converts it into the true stagger;
+##     every other blow clangs for 0 HP.
+##   * **REPOSITION** — every other beat returns to orbit after `recover`.
+##     `punish` is its minimum visible movement breath and `cooldown` gates the
+##     next tell; both count down while the boss runs. A live thrown-zone weak
+##     point also blocks the next tell until its last fuse closes or it breaks.
+##     This is deliberately not a stationary fake opening.
 ##
 ## **5. Five shapes. Implement each once; there are twelve beats and no
 ## thirteenth shape.** Read only the keys listed — a beat carries the keys its
@@ -78,8 +76,8 @@ extends RefCounted
 ##   |---|---|---|
 ##   | `arc`    | `reach`, `arc_deg` | a cone in front of the boss, `reach` m long, `arc_deg` HALF-angle either side of `-basis.z`. Resolved once at commit. |
 ##   | `slam`   | `radius`, `safe_inner` | a ring centred on the boss: hurts between `safe_inner` and `radius`. `safe_inner == 0` is a solid disc. |
-##   | `charge` | `reach`, `radius`, `speed` | the boss travels up to `reach` m at `speed` m/s along the heading it locked at commit, damaging bodies within `radius` of its path. Once per charge, per body. Stops on a wall — **and on an arrow, §5b.** |
-##   | `zone`   | `radius`, `fuse`, `count` | `count` discs marked on the floor at commit — the first under the hero, the rest scattered inside the arena — which detonate `fuse` seconds later. **They hurt the player and nothing else.** |
+##   | `charge` | `reach`, `radius`, `speed` | the boss travels up to `reach` m at `speed` m/s along the heading it locked at commit, damaging bodies within `radius` of its path. Once per charge, per body. Stops on a wall. |
+##   | `zone`   | `radius`, `fuse`, `count` | `count` destinations marked at commit; authored throws travel there, then burn `fuse`. They hurt the player and nothing else. |
 ##   | `summon` | `kind`, `count`, `cap`, `radius` | `count` ordinary `Enemy`s of `kind` at `radius` from the boss. Deals no damage. Refuse the beat if `cap` of its summons are already alive. |
 ##
 ##   `kind` is always a key of `Enemy.DEFS`, and it has to be: `Enemy._ready`
@@ -87,23 +85,11 @@ extends RefCounted
 ##   GLB exists but whose stats do not — silently spawns a troll-shaped skeleton.
 ##   `validate()` checks this.
 ##
-## **5b. THE RECEPTACLE — the one exception poise has, and it belongs to a
-## shape rather than to a beat.** `docs/BOSSES.md` §6.2. An `arrow` or
-## `arrow_fire` blow landing while a `charge` is in `State.STRIKE` **with the
-## travel already under way** calls `stagger()` instead of falling through to
-## poise: the charge stops dead where the arrow found it, the body drops into
-## `RECOVER`, and the beat's own authored punish opens exactly as it would have.
-## `beat_committed` still fires, because the beat committed.
-##
-##   * **Not during the tell.** §4's TELL is unbreakable and stays that way — a
-##     tell that never lands makes the telegraph a lie, and `Boss.freeze` refuses
-##     the hookshot a tell-cut on precisely that argument. Two items, one rule.
-##   * **It invents no opening.** Same vocabulary as a parry (`Boss.stagger`):
-##     the window the beat already owed is brought forward, never lengthened.
-##   * **Three beats carry it**, because three beats are charges:
-##     `bellows_charge`, `gate_lunge`, `plate_advance`. Floor 2 is the one the
-##     design is *about* — it is the only beat in the game past 4.5 m, so it is
-##     the beat that happens where the bow lives.
+## **5b. ARMOUR AND THE AUTHORED WEAK POINT.** Each row names one floor-item
+## interaction, one beat, and one exposure (`recover`, `charge`, or `zones`).
+## Correct input consumes that aperture and opens the true stagger window;
+## everything else rings off. Parry's public `stagger()` remains a short poise
+## interruption and never substitutes for the item interaction.
 ##
 ## **6. Choosing is `pick_beat`, not a sequence.** Call it; do not re-implement
 ## the weights, the repeat penalty or the range gate anywhere else. A scripted
@@ -111,9 +97,9 @@ extends RefCounted
 ## (`gamestack` combat-design; GDD pillar 3). Pass the flat boss-to-hero distance
 ## in metres and the id of the beat that just finished.
 ##
-## **7. One phase. No second health bar.** `docs/SCOPE.md` §6 names "boss move
-## sets balloon" as a likely failure and caps it at three beats and one phase.
-## Four bosses × four beats × two phases is thirty-two behaviours nobody tuned.
+## **7. Two pressure phases, one move set and one health bar.** Phase two changes
+## movement and authored selection weights only. It never adds or removes a beat,
+## and tell durations remain identical, so the learned vocabulary stays valid.
 ##
 ## **8. Music picks itself.** Emit `Bus.boss_engaged(self)` on the first frame of
 ## the fight and `Bus.boss_defeated` on death. Do **not** call `Music`, and do
@@ -155,6 +141,25 @@ const SHAPES: Array[StringName] = [
 	SHAPE_ARC, SHAPE_SLAM, SHAPE_CHARGE, SHAPE_ZONE, SHAPE_SUMMON,
 ]
 
+const OPEN_RECOVER := &"recover"
+const OPEN_CHARGE := &"charge"
+const OPEN_ZONES := &"zones"
+const EXPOSURES: Array[StringName] = [OPEN_RECOVER, OPEN_CHARGE, OPEN_ZONES]
+
+const STAGGER_SWORD := &"sword"
+const STAGGER_ARROW := &"arrow"
+const STAGGER_BOMB := &"bomb"
+const STAGGER_HOOKSHOT := &"hookshot"
+const STAGGER_KINDS: Array[StringName] = [
+	STAGGER_SWORD, STAGGER_ARROW, STAGGER_BOMB, STAGGER_HOOKSHOT,
+]
+
+## Bare sword chain damage: 2 + 2 + 4 HP. Each row's vulnerability multiplier
+## scales that one complete chain to exactly one health segment, so a competent
+## opening always closes one of the promised three/four cycles while partial
+## strings still leave work for the next exposure.
+const STAGGER_BASE_CHAIN_DAMAGE := 8.0
+
 ## What the body DOES during a tell. Five poses, each implemented once by the
 ## executor as a pose on the MODEL node (never on the body — the body's yaw is
 ## the facing contract, and `Enemy._flinch` explains why at length).
@@ -174,11 +179,8 @@ const POSES: Array[StringName] = [
 
 ## What a boss's ONE escalation does to the room. `docs/BOSSES.md` §5.
 ##
-## Not a phase, not a bar, not a beat: `docs/SCOPE.md` §6 caps this game at one
-## phase, and §5's reading of it is that the phase should be the room rather than
-## a second move set. So a `turn` may touch **the fence radius, the cover posts
-## and the room's light, and nothing else, ever** — a turn that edited a beat's
-## numbers or `pick_beat` would be a second phase wearing a room.
+## Separate from the actor's pressure phase: a `turn` may touch **the fence
+## radius, the cover posts and the room's light, and nothing else, ever**.
 ##
 ## Four kinds, one per boss, and that is the cap. A fifth is a proposal to make
 ## the room a mechanic and it goes to the owner rather than into this list.
@@ -235,21 +237,20 @@ static var BOSSES := {
 			"albedo": Pal.COBALT, "albedo_mix": 0.34,
 			"emission": Pal.MOSS, "energy": 0.22,
 		},
-		# 48 HP. THE ARITHMETIC, because a boss health number
-		# with no working shown is a number nobody can ever safely change:
-		#
-		#   A light swing is `2 + K.EDGE_DAMAGE[rung]` (hero_combat.gd `damage`,
-		#   + `Game.sword_bonus()`), so 2 HP at rung 0 and 5 HP at rung 3.
-		#     rung 0 -> 48/2 = 24 swings.   rung 3 -> 48/5 = 10 swings.
-		#   A punish window here averages 1.35 s, which is two light swings
-		#   (swing_time 0.60, chain step two 0.55). So 24 swings is 12 windows,
-		#   and the average beat cycle is 3.4 s -> about a 45-second fight for
-		#   the player who meets it on run one with an unforged blade.
-		#
-		# At rung 3 it is a ten-swing fight, and that is CORRECT, not a bug:
-		# bands, not level-scaling (GDD §7). The Cistern's mouth stays easy for
-		# ever and so does the thing at the bottom of it.
+		# Four 12 HP stagger segments. Outside a true stagger the armour takes no
+		# health damage, and a single opening can never remove more than one.
 		"health": 48,
+		"movement": {
+			"phase_1": {"speed": 2.5, "orbit_radius": 4.2,
+				"orbit_strength": 1.10, "reposition": 0.75},
+			"phase_2": {"speed": 3.2, "orbit_radius": 3.6,
+				"orbit_strength": 1.45, "reposition": 0.60},
+		},
+		"phase": {"at": 0.50},
+		"stagger": {
+			"kind": STAGGER_SWORD, "beat": &"cistern_drop", "open": OPEN_RECOVER,
+			"goal": 4, "window": 2.8, "multiplier": 1.50, "color": Pal.VITAL,
+		},
 		"arena": {
 			"radius": 11.0,
 			# No cover, deliberately. This is the first boss in the game and the
@@ -297,7 +298,8 @@ static var BOSSES := {
 				"damage": 3, "knockback": K.KNOCKBACK_LIGHT, "stun": 0.24,
 				"sfx": &"weapon_impact_blunt",
 				"recover": 0.80, "punish": 1.10, "cooldown": 1.10,
-				"weight": 3.0, "min_range": 0.0, "max_range": 6.0,
+				"weight": 3.0, "phase_2_weight": 2.2,
+				"min_range": 0.0, "max_range": 6.0,
 			},
 			{
 				"id": &"cistern_drop", "name": "Cistern Drop",
@@ -316,10 +318,12 @@ static var BOSSES := {
 				# the biggest, loudest attack is to walk toward it, and the
 				# 1.60 s punish is the reward for having done that.
 				"shape": SHAPE_SLAM, "radius": 6.2, "safe_inner": 2.1,
+				"leap": {"time": 0.78, "height": 2.2},
 				"damage": 4, "knockback": K.KNOCKBACK_HEAVY, "stun": 0.36,
 				"sfx": &"jump_slam",
 				"recover": 1.10, "punish": 1.60, "cooldown": 1.60,
-				"weight": 3.0, "min_range": 0.0, "max_range": 7.5,
+				"weight": 3.0, "phase_2_weight": 4.8,
+				"min_range": 0.0, "max_range": 7.5,
 			},
 			{
 				"id": &"drown_pool", "name": "Drown Pool",
@@ -333,6 +337,7 @@ static var BOSSES := {
 						+ "of them bursts, and they are drawn where the hero IS.",
 				},
 				"shape": SHAPE_ZONE, "radius": 2.6, "fuse": 1.10, "count": 2,
+				"throw": {"flight": 0.65, "height": 1.8},
 				"damage": 3, "knockback": K.KNOCKBACK_LIGHT, "stun": 0.20,
 				"sfx": &"spell_impact_frost",
 				# Cooldown outruns the punish here: it has to walk back into
@@ -347,7 +352,8 @@ static var BOSSES := {
 				# is inside 7.5 m all three beats are live again. A director
 				# logging "drown_pool x4" at range has caught the design.
 				"recover": 0.55, "punish": 1.35, "cooldown": 1.60,
-				"weight": 2.0, "min_range": 0.0, "max_range": 14.0,
+				"weight": 2.0, "phase_2_weight": 2.6,
+				"min_range": 0.0, "max_range": 14.0,
 			},
 		],
 	},
@@ -365,13 +371,20 @@ static var BOSSES := {
 			"albedo": Pal.RUST, "albedo_mix": 0.30,
 			"emission": Pal.VITAL, "energy": 0.34,
 		},
-		# 72 HP. rung 0 -> 36 swings; rung 3 -> 15.
-		# Floor 2 is met at rung 1-2 in practice (the Warden's relic teaches the
-		# smith rung 2), so: 3 HP -> 24 swings, 4 HP -> 18. Punish averages 1.30 s
-		# = two swings, so 9-12 windows at ~3.2 s a cycle: a 40-50 s fight for
-		# the player who forged, and twice that for the player who did not.
-		# That gap IS the forge, stated in one number (GDD §5.2, pillar 4).
+		# Four 18 HP stagger segments. Weapon strength changes how much of each
+		# window is needed, never how many fully exploited windows can kill it.
 		"health": 72,
+		"movement": {
+			"phase_1": {"speed": 2.7, "orbit_radius": 4.8,
+				"orbit_strength": 1.15, "reposition": 0.75},
+			"phase_2": {"speed": 3.5, "orbit_radius": 4.1,
+				"orbit_strength": 1.50, "reposition": 0.55},
+		},
+		"phase": {"at": 0.50},
+		"stagger": {
+			"kind": STAGGER_ARROW, "beat": &"bellows_charge", "open": OPEN_CHARGE,
+			"goal": 4, "window": 3.2, "multiplier": 2.25, "color": Pal.COBALT,
+		},
 		"arena": {
 			"radius": 12.0,
 			# Three slag pillars, and they are load-bearing design rather than
@@ -417,12 +430,12 @@ static var BOSSES := {
 				"speed": 13.0,
 				"damage": 4, "knockback": K.KNOCKBACK_HEAVY, "stun": 0.40,
 				"sfx": &"weapon_impact_blunt_2h_heavy",
-				# The longest punish it has, because it overshoots and has to
-				# turn around: a charge that ends facing you is a charge with no
-				# answer, and the answer to a charge is supposed to be sidestep
-				# and hit the back of it.
+				# Its longest post-commit movement breath: a missed arrow still
+				# leaves time to reset spacing, but the armoured back is not a
+				# second health-damage answer.
 				"recover": 1.20, "punish": 1.70, "cooldown": 1.70,
-				"weight": 3.0, "min_range": 4.5, "max_range": 16.0,
+				"weight": 3.0, "phase_2_weight": 4.8,
+				"min_range": 4.5, "max_range": 16.0,
 			},
 			{
 				"id": &"slag_backhand", "name": "Slag Backhand",
@@ -436,14 +449,15 @@ static var BOSSES := {
 						+ "the arena is a fist at chest height, off to one side.",
 				},
 				# The widest arc in the game and the shortest tell. This is the
-				# beat that punishes standing in front of it out of habit, and
-				# the 1.00 s punish is deliberately the smallest of the three:
-				# the cheap attack buys the cheap opening.
+				# beat that punishes standing in front of it out of habit. Its
+				# one-second moving breath is deliberately the smallest of the
+				# three: the cheap attack buys the cheap reset.
 				"shape": SHAPE_ARC, "reach": 4.2, "arc_deg": 95.0,
 				"damage": 5, "knockback": K.KNOCKBACK_HEAVY, "stun": 0.30,
 				"sfx": &"weapon_impact_mace_1",
 				"recover": 0.70, "punish": 1.00, "cooldown": 1.00,
-				"weight": 4.0, "min_range": 0.0, "max_range": 5.5,
+				"weight": 4.0, "phase_2_weight": 4.5,
+				"min_range": 0.0, "max_range": 5.5,
 			},
 			{
 				"id": &"tap_the_ladle", "name": "Tap the Ladle",
@@ -458,10 +472,12 @@ static var BOSSES := {
 						+ "where it will put them.",
 				},
 				"shape": SHAPE_ZONE, "radius": 2.3, "fuse": 1.30, "count": 3,
+				"throw": {"flight": 0.75, "height": 2.2},
 				"damage": 4, "knockback": K.KNOCKBACK_LIGHT, "stun": 0.22,
 				"sfx": &"spell_impact_fire",
 				"recover": 0.90, "punish": 1.45, "cooldown": 1.70,
-				"weight": 2.0, "min_range": 0.0, "max_range": 16.0,
+				"weight": 2.0, "phase_2_weight": 1.6,
+				"min_range": 0.0, "max_range": 16.0,
 			},
 		],
 	},
@@ -484,11 +500,20 @@ static var BOSSES := {
 			"albedo": Pal.MIDNIGHT, "albedo_mix": 0.42,
 			"emission": Pal.ARCANE, "energy": 0.46,
 		},
-		# 96 HP. rung 0 -> 48 swings; rung 3 -> 20.
-		# Met at rung 2-3: 4 HP -> 24 swings, 5 HP -> 20, which is 10-12 punish
-		# windows — the same fight LENGTH as the Warden. That is the ladder's
-		# whole job. The floors get harder; the fight stays a fight.
+		# Four 24 HP stagger segments. Its own thrown Undertow can break the bomb
+		# weak point when it bursts close, so the loop never depends on ammunition.
 		"health": 96,
+		"movement": {
+			"phase_1": {"speed": 2.9, "orbit_radius": 5.3,
+				"orbit_strength": 1.10, "reposition": 0.70},
+			"phase_2": {"speed": 3.8, "orbit_radius": 4.5,
+				"orbit_strength": 1.50, "reposition": 0.50},
+		},
+		"phase": {"at": 0.50},
+		"stagger": {
+			"kind": STAGGER_BOMB, "beat": &"undertow", "open": OPEN_ZONES,
+			"goal": 4, "window": 3.2, "multiplier": 3.00, "color": Pal.MOSS,
+		},
 		"arena": {
 			"radius": 13.0,
 			# The largest arena and no cover. Beat one is a ring that fills it,
@@ -534,10 +559,12 @@ static var BOSSES := {
 				# mirror of the Warden's donut so the two slams are not one
 				# attack in two hues.
 				"shape": SHAPE_SLAM, "radius": 7.5, "safe_inner": 0.0,
+				"leap": {"time": 0.95, "height": 3.0},
 				"damage": 5, "knockback": K.KNOCKBACK_HEAVY, "stun": 0.34,
 				"sfx": &"spell_impact_dark",
 				"recover": 1.15, "punish": 1.55, "cooldown": 1.55,
-				"weight": 3.0, "min_range": 0.0, "max_range": 9.5,
+				"weight": 3.0, "phase_2_weight": 4.2,
+				"min_range": 0.0, "max_range": 9.5,
 			},
 			{
 				"id": &"hushing_choir", "name": "The Hushing Choir",
@@ -560,13 +587,13 @@ static var BOSSES := {
 				"cap": 4, "radius": 8.0,
 				"damage": 0, "knockback": 0.0, "stun": 0.0,
 				"sfx": &"cast_conjuration_1",
-				# 2.00 s: the longest punish in the game, and 6 s of cooldown on
-				# top. A summon on a short clock is a boss you lose to
+				# Two seconds of guaranteed reposition and six seconds before the
+				# next tell. A summon on a short clock is a boss you lose to
 				# arithmetic rather than to reading, and the whole cost of
-				# adding bodies is paid here, in one number the player feels as
-				# "I get to hit it for free now".
+				# adding bodies is paid here as room to handle the adds.
 				"recover": 1.30, "punish": 2.00, "cooldown": 6.00,
-				"weight": 1.0, "min_range": 0.0, "max_range": 16.0,
+				"weight": 1.0, "phase_2_weight": 0.7,
+				"min_range": 0.0, "max_range": 16.0,
 			},
 			{
 				"id": &"undertow", "name": "Undertow",
@@ -580,10 +607,12 @@ static var BOSSES := {
 						+ "audibly before anything about the body has changed.",
 				},
 				"shape": SHAPE_ZONE, "radius": 3.2, "fuse": 1.20, "count": 1,
+				"throw": {"flight": 0.80, "height": 2.6},
 				"damage": 5, "knockback": K.KNOCKBACK_LIGHT, "stun": 0.26,
 				"sfx": &"spell_impact",
 				"recover": 0.60, "punish": 1.20, "cooldown": 1.40,
-				"weight": 3.0, "min_range": 0.0, "max_range": 16.0,
+				"weight": 3.0, "phase_2_weight": 4.8,
+				"min_range": 0.0, "max_range": 16.0,
 			},
 		],
 	},
@@ -605,14 +634,21 @@ static var BOSSES := {
 			"albedo": Pal.VOID, "albedo_mix": 0.38,
 			"emission": Pal.VITAL, "energy": 0.30,
 		},
-		# 128 HP. rung 0 -> 64 swings; rung 3 -> 26.
-		# Floor 4 assumes rung 3 (the Warden's relic gives rung 2, the smith
-		# sells rung 3): 26 swings at ~2 a window is 13 windows, ~2.9 s a cycle,
-		# so a 40-second core fight that the summoned wraiths stretch to 60-90.
-		# At rung 0 it is 64 swings and it SHOULD be a wall — arriving at the
-		# Chord Gate with a starting blade is a decision the game is allowed to
-		# answer honestly.
+		# Four 32 HP stagger segments. The hookshot opens the planted-sword weak
+		# point after Call the Iron; the adds complicate access, not the arithmetic.
 		"health": 128,
+		"movement": {
+			"phase_1": {"speed": 3.2, "orbit_radius": 4.4,
+				"orbit_strength": 1.30, "reposition": 0.60},
+			"phase_2": {"speed": 4.3, "orbit_radius": 3.7,
+				"orbit_strength": 1.80, "reposition": 0.45},
+		},
+		"phase": {"at": 0.50},
+		"stagger": {
+			"kind": STAGGER_HOOKSHOT, "beat": &"call_the_iron",
+			"open": OPEN_RECOVER, "goal": 4, "window": 3.4,
+			"multiplier": 4.00, "color": Pal.BONE,
+		},
 		"arena": {
 			"radius": 12.5,
 			# Two broken gate pylons. Same reason the Foundry has cover: this is
@@ -659,7 +695,8 @@ static var BOSSES := {
 				"damage": 6, "knockback": K.KNOCKBACK_HEAVY, "stun": 0.38,
 				"sfx": &"weapon_impact_stab_1",
 				"recover": 1.05, "punish": 1.35, "cooldown": 1.35,
-				"weight": 3.0, "min_range": 1.0, "max_range": 16.0,
+				"weight": 3.0, "phase_2_weight": 4.2,
+				"min_range": 1.0, "max_range": 16.0,
 			},
 			{
 				"id": &"riven_arc", "name": "Riven Arc",
@@ -673,15 +710,14 @@ static var BOSSES := {
 						+ "the stillness that reads, not the movement.",
 				},
 				# The tightest numbers in the game: 0.62 s of tell and 0.90 s of
-				# punish. Still above `Prog.WINDUP_FLOOR` territory and still two
-				# swings' worth of opening — a fair fight at the fast end, which
-				# is what floor 4 is allowed to be. It is NOT allowed to be a
-				# fight with no window (GDD pillar 3).
+				# moving reset. Still above `Prog.WINDUP_FLOOR` territory; the
+				# health opening remains Call the Iron's hookshot stagger.
 				"shape": SHAPE_ARC, "reach": 4.0, "arc_deg": 70.0,
 				"damage": 6, "knockback": K.KNOCKBACK_HEAVY, "stun": 0.32,
 				"sfx": &"weapon_impact_blade",
 				"recover": 0.65, "punish": 0.90, "cooldown": 0.90,
-				"weight": 4.0, "min_range": 0.0, "max_range": 5.5,
+				"weight": 4.0, "phase_2_weight": 5.0,
+				"min_range": 0.0, "max_range": 5.5,
 			},
 			{
 				"id": &"call_the_iron", "name": "Call the Iron",
@@ -703,7 +739,8 @@ static var BOSSES := {
 				"damage": 0, "knockback": 0.0, "stun": 0.0,
 				"sfx": &"cast_divinity",
 				"recover": 1.40, "punish": 2.10, "cooldown": 8.00,
-				"weight": 1.0, "min_range": 0.0, "max_range": 16.0,
+				"weight": 1.0, "phase_2_weight": 2.5,
+				"min_range": 0.0, "max_range": 16.0,
 			},
 		],
 	},
@@ -788,12 +825,9 @@ static var BOSSES := {
 ## `slam` band with a wide `safe_inner`, and the Burst is what answers it from
 ## outside the band.
 ##
-## **3. The Gate-Hound does not back away.** `Boss._tick_chase` closes to
-## `ROAM_RING` and nothing in the executor retreats; a retreat behaviour is a
-## fourth thing this card would have had to build. What produces the same loop out
-## of numbers already in the table is beat two's `KNOCKBACK_HEAVY` throwing the
-## hero back out past beat one's `min_range`. The gap is opened by the fight
-## rather than by the body's feet, and closing it is still the hookshot's job.
+## **3. The Gate-Hound backs away through the shared orbit.** Its smaller authored
+## ring still yields when crowded, while beat two's `KNOCKBACK_HEAVY` opens the
+## larger gap. Closing it quickly remains the hookshot's job.
 ## The only ids a miniboss's `drop.item` may name. See rule 2.
 ##
 ## **A token, and never a verb.** Everything on this list has to be a thing that
@@ -828,18 +862,19 @@ static var MINIBOSSES := {
 			"albedo": Pal.COBALT, "albedo_mix": 0.28,
 			"emission": Pal.COBALT, "energy": 0.20,
 		},
-		# 24 HP, HALF the Warden. The arithmetic, as the bosses show it:
-		#
-		#   A light swing is 2 HP at forge rung 0 and 5 HP at rung 3.
-		#     rung 0 -> 24/2 = 12 swings.   rung 3 -> 24/5 = 5 swings.
-		#   A punish window here averages 1.25 s, which is two light swings, so
-		#   12 swings is 6 windows and the average cycle is 3.3 s: about a
-		#   25-second fight on run one with an unforged blade.
-		#
-		# Half the boss is the right size for an optional side branch met on the
-		# way past. It is long enough to be a fight and short enough that losing
-		# the Heat chain to it is a real cost rather than a foregone one.
+		# Three 8 HP stagger segments: the shared grammar at optional-branch scale.
 		"health": 24,
+		"movement": {
+			"phase_1": {"speed": 2.0, "orbit_radius": 3.7,
+				"orbit_strength": 0.85, "reposition": 0.75},
+			"phase_2": {"speed": 2.6, "orbit_radius": 3.2,
+				"orbit_strength": 1.10, "reposition": 0.65},
+		},
+		"phase": {"at": 0.50},
+		"stagger": {
+			"kind": STAGGER_SWORD, "beat": &"flood_stomp", "open": OPEN_RECOVER,
+			"goal": 3, "window": 2.5, "multiplier": 1.00, "color": Pal.VITAL,
+		},
 		"arena": {
 			"radius": 7.5,
 			# No cover. Beat two is a ring you roll out of and a pillar would
@@ -895,7 +930,8 @@ static var MINIBOSSES := {
 				"damage": 3, "knockback": K.KNOCKBACK_HEAVY, "stun": 0.28,
 				"sfx": &"weapon_impact_blunt",
 				"recover": 0.85, "punish": 1.35, "cooldown": 1.35,
-				"weight": 3.0, "min_range": 0.0, "max_range": 5.5,
+				"weight": 3.0, "phase_2_weight": 2.0,
+				"min_range": 0.0, "max_range": 5.5,
 			},
 			{
 				# THE THREAT. Rolled, never blocked -- the shield answers beat one
@@ -917,10 +953,12 @@ static var MINIBOSSES := {
 				# and the miniboss is where the player learns that a ring can go
 				# either way.
 				"shape": SHAPE_SLAM, "radius": 5.0, "safe_inner": 0.0,
+				"leap": {"time": 0.70, "height": 1.3},
 				"damage": 3, "knockback": K.KNOCKBACK_LIGHT, "stun": 0.22,
 				"sfx": &"spell_impact_frost",
 				"recover": 0.60, "punish": 1.15, "cooldown": 1.40,
-				"weight": 2.0, "min_range": 0.0, "max_range": 7.0,
+				"weight": 2.0, "phase_2_weight": 4.2,
+				"min_range": 0.0, "max_range": 7.0,
 			},
 		],
 	},
@@ -948,26 +986,25 @@ static var MINIBOSSES := {
 			"albedo": Pal.ASH, "albedo_mix": 0.36,
 			"emission": Pal.RUST, "energy": 0.24,
 		},
-		# 36 HP, HALF the Slag Ogre. That halving is the rule all four
-		# minibosses are authored on -- the Sluice-Keeper is 24 against the Warden's
-		# 48 -- and it is what keeps an optional side branch a fight rather than a
-		# second boss. THE ARITHMETIC, as the bosses show it:
-		#
-		#   A light swing is 2 HP at blade rung 0 and 5 HP at rung 3.
-		#     rung 0 -> 36/2 = 18 swings.   rung 2 -> 9.   rung 3 -> 8.
-		#   A punish window here averages 1.38 s, which is two light swings, and the
-		#   average beat cycle is 4.2 s -- the advance is a slow beat, 1.00 s of tell
-		#   and a full second of travel.
-		#   So 18 swings is 9 windows: about 38 s on an unforged blade, about 21 s
-		#   for the player who took the Warden's relic to the smith.
+		# Three 12 HP stagger segments, below the Slag Ogre in both health and motion.
 		"health": 36,
+		"movement": {
+			"phase_1": {"speed": 2.2, "orbit_radius": 4.2,
+				"orbit_strength": 0.90, "reposition": 0.75},
+			"phase_2": {"speed": 2.9, "orbit_radius": 3.6,
+				"orbit_strength": 1.20, "reposition": 0.60},
+		},
+		"phase": {"at": 0.50},
+		"stagger": {
+			"kind": STAGGER_ARROW, "beat": &"plate_advance", "open": OPEN_CHARGE,
+			"goal": 3, "window": 2.9, "multiplier": 1.50, "color": Pal.COBALT,
+		},
 		"arena": {
 			"radius": 8.0,
-			# Two slag posts, and they are beat one's cheapest answer rather than set
-			# dressing: `Boss._advance_charge` ends the commit on `is_on_wall()` and
-			# the punish opens anyway, so a plate walked into a post is a plate that
-			# bought the player a window for nothing. That is LIVE CODE, which is why
-			# this arena gets cover and the Gate-Hound's does not (see its row).
+			# Two slag posts are defensive cover, not a damage answer:
+			# `Boss._advance_charge` ends the commit on `is_on_wall()`. That stops
+			# the hit but also closes the arrow aperture, so the player chooses safe
+			# cover or the riskier shot during travel.
 			"cover": true, "cover_count": 2,
 		},
 		# Nothing. Rule 2 above -- the empty row is load-bearing, not a gap.
@@ -985,15 +1022,12 @@ static var MINIBOSSES := {
 				# `bellows_charge` uses to be "the only beat that happens where the bow
 				# lives" (`docs/BOSSES.md` §6.2), one branch earlier and half the size.
 				#
-				# **The second way over, and it is two ways** (`docs/BESTIARY.md` §4.2
-				# -- the floor's verb is the *fast* answer, never the only one).
-				# Sidestep the lane and hit the back of it: 1.45 s is the longest window
-				# in this fight and it is long for exactly that reason, because the
-				# plate overshoots and has to be turned round. Or put one of the two
-				# slag posts in the lane, which ends the commit early and opens the same
-				# window for free.
+				# **The slower answer is survival, not health damage**
+				# (`docs/BESTIARY.md` §4.2). Sidestep or put a slag post in the lane;
+				# either avoids the blow and buys a moving reset. The arrow during
+				# travel is still the only action that converts the beat into stagger.
 				#
-				# **The fast way over is BUILT** (§5b above, `Boss._is_receptacle_hit`),
+				# **The fast way over is BUILT** (§5b above, `Boss.apply_hit`),
 				# and this beat carries it because it is a charge: an arrow into the
 				# TRAVEL stops the plate where it finds it. This comment used to be a
 				# `# NEEDS:` asking for the branch during `State.WINDUP`, which is the
@@ -1021,7 +1055,8 @@ static var MINIBOSSES := {
 				"damage": 3, "knockback": K.KNOCKBACK_HEAVY, "stun": 0.30,
 				"sfx": &"weapon_impact_blunt_2h_heavy",
 				"recover": 1.10, "punish": 1.45, "cooldown": 1.45,
-				"weight": 3.0, "min_range": 5.0, "max_range": 16.0,
+				"weight": 3.0, "phase_2_weight": 4.3,
+				"min_range": 5.0, "max_range": 16.0,
 			},
 			{
 				# THE THREAT, and it is a `zone` rather than the cone §7's prose asks
@@ -1047,13 +1082,15 @@ static var MINIBOSSES := {
 						+ "drawn on the floor at all until it coughs.",
 				},
 				"shape": SHAPE_ZONE, "radius": 2.2, "fuse": 1.20, "count": 3,
+				"throw": {"flight": 0.65, "height": 1.7},
 				"damage": 3, "knockback": K.KNOCKBACK_LIGHT, "stun": 0.20,
 				"sfx": &"spell_impact_fire",
 				# 1.30 s is two contacts and misses the finisher line (1.37 s,
 				# `docs/BOSSES.md` §2) on purpose: the cheap beat buys the cheap
 				# opening, and the wall's 1.45 s is where the third swing lands.
 				"recover": 0.75, "punish": 1.30, "cooldown": 1.55,
-				"weight": 2.0, "min_range": 0.0, "max_range": 16.0,
+				"weight": 2.0, "phase_2_weight": 2.0,
+				"min_range": 0.0, "max_range": 16.0,
 			},
 		],
 	},
@@ -1090,15 +1127,20 @@ static var MINIBOSSES := {
 			"albedo": Pal.BONE, "albedo_mix": 0.55,
 			"emission": Pal.COBALT, "energy": 0.16,
 		},
-		# 48 HP, half the Bellwake's 96 -- and exactly the Cistern
-		# Warden's number, which is the ladder working rather than a coincidence:
-		# floor 3's optional branch is worth the whole of floor 1's boss, and the
-		# player meets it holding two more verbs.
-		#
-		#   rung 0 -> 48/2 = 24 swings.   rung 2 -> 12.   rung 3 -> 10.
-		#   Punish averages 1.30 s = two light swings; the cycle averages 3.6 s. So
-		#   at the rung 2-3 this floor is met at, 5-6 windows -- about 21 s.
+		# Three 16 HP stagger segments. The two Keening bombs renew the floor-3
+		# answer even when the player's Burst has no charge left.
 		"health": 48,
+		"movement": {
+			"phase_1": {"speed": 2.4, "orbit_radius": 4.6,
+				"orbit_strength": 0.90, "reposition": 0.70},
+			"phase_2": {"speed": 3.1, "orbit_radius": 3.9,
+				"orbit_strength": 1.20, "reposition": 0.55},
+		},
+		"phase": {"at": 0.50},
+		"stagger": {
+			"kind": STAGGER_BOMB, "beat": &"keening", "open": OPEN_ZONES,
+			"goal": 3, "window": 2.8, "multiplier": 2.00, "color": Pal.VITAL,
+		},
 		"arena": {
 			"radius": 9.0,
 			# No cover, and for a sharper reason than the Bellwake's. Beat one is a
@@ -1147,10 +1189,12 @@ static var MINIBOSSES := {
 						+ "its own feet.",
 				},
 				"shape": SHAPE_SLAM, "radius": 7.5, "safe_inner": 3.0,
+				"leap": {"time": 0.85, "height": 1.7},
 				"damage": 4, "knockback": K.KNOCKBACK_HEAVY, "stun": 0.32,
 				"sfx": &"spell_impact_dark",
 				"recover": 1.00, "punish": 1.40, "cooldown": 1.65,
-				"weight": 3.0, "min_range": 0.0, "max_range": 16.0,
+				"weight": 3.0, "phase_2_weight": 2.0,
+				"min_range": 0.0, "max_range": 16.0,
 			},
 			{
 				# THE THREAT, and §7's line about it is a fact about the game rather
@@ -1159,25 +1203,25 @@ static var MINIBOSSES := {
 				# chain is what makes this optional branch cost something even when it
 				# is won, and nothing in this row has to arrange it.
 				#
-				# The shield answers this one and does not answer the ring (§4.3's two
-				# beats, two tools), and the 8.0 m gate is what stops the rim from being
-				# somewhere to stand and shoot from: the note reaches the wall.
+				# Two thrown notes make this the roll beat and provide the renewable
+				# bomb fallback. The 8.0 m gate preserves its original range pressure.
 				"id": &"keening", "name": "The Keening",
 				"tell": {
 					"time": 0.95, "pose": POSE_RISE,
 					"color": Pal.COBALT, "energy": 0.66,
 					"sfx": &"cast_conjuration",
 					"read": "It draws itself up a head taller than it stands, and the "
-						+ "jaw comes open and stays open. Cold blue runs up the ribs to "
-						+ "the throat and a long narrow wedge lights on the floor in front "
-						+ "of it -- tall and blue and pointed, against a beat that was "
-						+ "wide and white and everywhere.",
+					+ "jaw comes open and stays open. Cold blue runs up the ribs to "
+					+ "the throat, then two bright charges lift from its hands. Their "
+					+ "landing circles are already burning on the floor.",
 				},
-				"shape": SHAPE_ARC, "reach": 7.0, "arc_deg": 38.0,
+				"shape": SHAPE_ZONE, "radius": 2.4, "fuse": 1.05, "count": 2,
+				"throw": {"flight": 0.70, "height": 1.8},
 				"damage": 4, "knockback": K.KNOCKBACK_LIGHT, "stun": 0.26,
 				"sfx": &"spell_impact",
 				"recover": 0.70, "punish": 1.20, "cooldown": 1.20,
-				"weight": 3.0, "min_range": 0.0, "max_range": 8.0,
+				"weight": 3.0, "phase_2_weight": 4.4,
+				"min_range": 0.0, "max_range": 8.0,
 			},
 		],
 	},
@@ -1206,14 +1250,20 @@ static var MINIBOSSES := {
 			"albedo": Pal.VOID, "albedo_mix": 0.40,
 			"emission": Pal.ARCANE, "energy": 0.22,
 		},
-		# 64 HP, half the Riven Knight's 128.
-		#
-		#   rung 0 -> 32 swings.   rung 3 -> 13.
-		#   Floor 4 assumes rung 3, so 13 swings is 7 windows at ~3.2 s a cycle: a
-		#   22-second fight for the player who forged and a 50-second one for the
-		#   player who did not. The Chord Gate is allowed to answer that honestly on
-		#   the optional branch exactly as it does at the boss.
+		# Three stagger segments with `ceil(64 / 3) == 22` HP capacity. The final
+		# segment is 20 HP, so it still cannot die before the third full opening.
 		"health": 64,
+		"movement": {
+			"phase_1": {"speed": 2.7, "orbit_radius": 4.0,
+				"orbit_strength": 1.00, "reposition": 0.65},
+			"phase_2": {"speed": 3.6, "orbit_radius": 3.4,
+				"orbit_strength": 1.40, "reposition": 0.50},
+		},
+		"phase": {"at": 0.50},
+		"stagger": {
+			"kind": STAGGER_HOOKSHOT, "beat": &"overhand", "open": OPEN_ZONES,
+			"goal": 3, "window": 3.0, "multiplier": 2.75, "color": Pal.MOSS,
+		},
 		"arena": {
 			"radius": 8.5,
 			# **No cover, and the asymmetry with the Bellows-Hand is principled.** A
@@ -1270,7 +1320,8 @@ static var MINIBOSSES := {
 				"damage": 4, "knockback": K.KNOCKBACK_LIGHT, "stun": 0.22,
 				"sfx": &"weapon_impact_stab_1",
 				"recover": 0.60, "punish": 1.15, "cooldown": 1.40,
-				"weight": 3.0, "min_range": 5.0, "max_range": 16.0,
+				"weight": 3.0, "phase_2_weight": 2.0,
+				"min_range": 5.0, "max_range": 16.0,
 			},
 			{
 				# THE THREAT, and §7 is emphatic: *rolled, not blocked -- the one beat
@@ -1295,11 +1346,11 @@ static var MINIBOSSES := {
 					"sfx": &"attack_prepare_1",
 					"read": "Both arms go over and behind the head and the whole body "
 						+ "comes up with them, pale white, for four fifths of a second. "
-						+ "Nothing is drawn while it is up there. The disc arrives on the "
-						+ "floor WITH the blow and burns for the last second before it "
-						+ "lands, under whoever it was aimed at.",
+					+ "Its pale landing disc appears under whoever it aimed at, then the "
+					+ "thrown mass crosses the gap before the fuse begins.",
 				},
 				"shape": SHAPE_ZONE, "radius": 3.0, "fuse": 0.95, "count": 1,
+				"throw": {"flight": 0.75, "height": 2.1},
 				"damage": 6, "knockback": K.KNOCKBACK_HEAVY, "stun": 0.34,
 				"sfx": &"jump_slam",
 				# 1.40 s clears the 1.37 s finisher line (`docs/BOSSES.md` §2) and it is
@@ -1307,11 +1358,41 @@ static var MINIBOSSES := {
 				# the third swing away exactly once a cycle, and takes 6 HP for
 				# it.
 				"recover": 0.85, "punish": 1.40, "cooldown": 1.40,
-				"weight": 4.0, "min_range": 0.0, "max_range": 6.0,
+				"weight": 4.0, "phase_2_weight": 4.6,
+				"min_range": 0.0, "max_range": 6.0,
 			},
 		],
 	},
 }
+
+## The floor-item grammar, written once for validation. These are the only
+## interactions that may open health damage; parry remains a poise interruption.
+static var STAGGER_EXPECTED := {
+	&"cistern_warden": {"kind": STAGGER_SWORD, "beat": &"cistern_drop",
+		"open": OPEN_RECOVER, "goal": 4},
+	&"slag_ogre": {"kind": STAGGER_ARROW, "beat": &"bellows_charge",
+		"open": OPEN_CHARGE, "goal": 4},
+	&"bellwake": {"kind": STAGGER_BOMB, "beat": &"undertow",
+		"open": OPEN_ZONES, "goal": 4},
+	&"riven_knight": {"kind": STAGGER_HOOKSHOT, "beat": &"call_the_iron",
+		"open": OPEN_RECOVER, "goal": 4},
+	&"sluice_keeper": {"kind": STAGGER_SWORD, "beat": &"flood_stomp",
+		"open": OPEN_RECOVER, "goal": 3},
+	&"bellows_hand": {"kind": STAGGER_ARROW, "beat": &"plate_advance",
+		"open": OPEN_CHARGE, "goal": 3},
+	&"second_voice": {"kind": STAGGER_BOMB, "beat": &"keening",
+		"open": OPEN_ZONES, "goal": 3},
+	&"gate_hound": {"kind": STAGGER_HOOKSHOT, "beat": &"overhand",
+		"open": OPEN_ZONES, "goal": 3},
+}
+
+static var STAGGER_COLORS: Array[Color] = [
+	Pal.VITAL, Pal.RUST, Pal.BONE, Pal.MOSS, Pal.COBALT, Pal.ARCANE,
+]
+
+static var LEAP_BEATS: Array[StringName] = [
+	&"cistern_drop", &"first_toll", &"flood_stomp", &"sounding_ring",
+]
 
 
 # --- Reading the table --------------------------------------------------------
@@ -1345,12 +1426,9 @@ static func is_miniboss(id: StringName) -> bool:
 
 ## `id`'s one escalation, or an empty Dictionary when it has none.
 ##
-## **The minibosses have none, and the empty row is the answer rather than a
-## gap.** `docs/SCOPE.md` §6's cap is one phase per FIGHT and `docs/BESTIARY.md`
-## §4 prices a miniboss at a third of a boss; a 24 HP Sluice-Keeper that
-## rebuilt its room halfway through would be the boss's whole structure handed
-## out behind an optional puzzle. `BossArena` connects nothing at all when this
-## comes back empty, so a miniboss chamber keeps exactly the code path it had.
+## **The minibosses have no room turn, and the empty row is the answer rather
+## than a gap.** Their actor still enters phase two through `Boss`'s health
+## fallback, but an optional chamber never rebuilds its room halfway through.
 static func turn(id: StringName) -> Dictionary:
 	var row := get_boss(id)
 	if row.is_empty():
@@ -1465,7 +1543,7 @@ const REPEAT_WEIGHT := 0.22
 ## summon beats are rare in play without needing a tiny weight: `cap` is the
 ## structural limit and the weight is only the flavour of it.
 static func pick_beat(id: StringName, rng: RandomNumberGenerator,
-		last_id: StringName = &"", distance: float = 0.0) -> StringName:
+		last_id: StringName = &"", distance: float = 0.0, phase: int = 1) -> StringName:
 	var list := beats(id)
 	if list.is_empty():
 		return &""
@@ -1485,7 +1563,8 @@ static func pick_beat(id: StringName, rng: RandomNumberGenerator,
 	var weights: Array[float] = []
 	var total := 0.0
 	for b in pool:
-		var w := maxf(float(b["weight"]), 0.0)
+		var weight_key := "phase_2_weight" if phase >= 2 else "weight"
+		var w := maxf(float(b.get(weight_key, b["weight"])), 0.0)
 		if b["id"] == last_id:
 			w *= REPEAT_WEIGHT
 		weights.append(w)
@@ -1504,6 +1583,123 @@ static func pick_beat(id: StringName, rng: RandomNumberGenerator,
 
 # --- Proving the table --------------------------------------------------------
 
+static func _is_numeric(value: Variant) -> bool:
+	var kind := typeof(value)
+	return kind == TYPE_INT or kind == TYPE_FLOAT
+
+
+static func _dynamic_row_errors(id: StringName, row: Dictionary,
+		miniboss: bool) -> PackedStringArray:
+	var out := PackedStringArray()
+	var movement: Dictionary = row.get("movement", {})
+	if movement.is_empty():
+		out.append("%s: missing movement configuration" % id)
+	else:
+		for phase_key: String in ["phase_1", "phase_2"]:
+			var values: Dictionary = movement.get(phase_key, {})
+			if values.is_empty():
+				out.append("%s: movement.%s is missing" % [id, phase_key])
+				continue
+			for field: String in ["speed", "orbit_radius", "orbit_strength", "reposition"]:
+				var value: Variant = values.get(field)
+				if not _is_numeric(value) or float(value) <= 0.0:
+					out.append("%s: movement.%s.%s must be a positive number"
+						% [id, phase_key, field])
+		var p1: Dictionary = movement.get("phase_1", {})
+		var p2: Dictionary = movement.get("phase_2", {})
+		if not p1.is_empty() and not p2.is_empty():
+			if float(p2.get("speed", 0.0)) <= float(p1.get("speed", 0.0)):
+				out.append("%s: phase 2 movement speed must exceed phase 1" % id)
+			if float(p2.get("orbit_strength", 0.0)) <= \
+					float(p1.get("orbit_strength", 0.0)):
+				out.append("%s: phase 2 orbit pressure must exceed phase 1" % id)
+			if float(p2.get("orbit_radius", 0.0)) >= float(p1.get("orbit_radius", 0.0)):
+				out.append("%s: phase 2 orbit radius must press inside phase 1" % id)
+
+	var phase: Dictionary = row.get("phase", {})
+	if phase.is_empty() or not _is_numeric(phase.get("at")) \
+			or not is_equal_approx(float(phase.get("at", -1.0)), 0.50):
+		out.append("%s: phase.at must be 0.50" % id)
+
+	var authored: Dictionary = row.get("stagger", {})
+	var expected: Dictionary = STAGGER_EXPECTED.get(id, {})
+	if authored.is_empty():
+		out.append("%s: missing stagger configuration" % id)
+		return out
+	var kind: StringName = authored.get("kind", &"")
+	var beat_id: StringName = authored.get("beat", &"")
+	var exposure: StringName = authored.get("open", &"")
+	var goal := int(authored.get("goal", 0))
+	if not STAGGER_KINDS.has(kind):
+		out.append("%s: stagger kind %s is not in the vocabulary" % [id, kind])
+	if not EXPOSURES.has(exposure):
+		out.append("%s: stagger exposure %s is invalid" % [id, exposure])
+	if not expected.is_empty() and (kind != expected["kind"] \
+			or beat_id != expected["beat"] or exposure != expected["open"]):
+		out.append("%s: stagger interaction does not match its floor item mapping" % id)
+	var expected_goal := 3 if miniboss else 4
+	if goal != expected_goal or (not expected.is_empty() and goal != int(expected["goal"])):
+		out.append("%s: stagger goal must be %d" % [id, expected_goal])
+	var window: Variant = authored.get("window")
+	# The bare chain is 2.142 s before input/swap slack. An authored aperture
+	# shorter than that makes the promised one-chain segment impossible in play.
+	var window_min := 2.5 if miniboss else 2.8
+	var window_max := 3.0 if miniboss else 3.4
+	if not _is_numeric(window) or float(window) < window_min or float(window) > window_max:
+		out.append("%s: stagger window must be in [%.1f, %.1f]"
+			% [id, window_min, window_max])
+	var segment_capacity := ceilf(float(int(row.get("health", 0))) \
+		/ float(maxi(goal, 1)))
+	var expected_multiplier := segment_capacity / STAGGER_BASE_CHAIN_DAMAGE
+	if not _is_numeric(authored.get("multiplier")) or not is_equal_approx(
+			float(authored.get("multiplier", 0.0)), expected_multiplier):
+		out.append("%s: stagger multiplier must make the bare sword chain spend "
+			% id + "one segment (expected %.2f)" % expected_multiplier)
+	var color: Variant = authored.get("color")
+	if typeof(color) != TYPE_COLOR or not STAGGER_COLORS.has(color):
+		out.append("%s: stagger color must be a readable Pal color" % id)
+	var weak_beat := beat(id, beat_id)
+	if weak_beat.is_empty():
+		out.append("%s: stagger beat %s does not exist" % [id, beat_id])
+	else:
+		var shape: StringName = weak_beat.get("shape", &"")
+		if exposure == OPEN_CHARGE and shape != SHAPE_CHARGE:
+			out.append("%s: charge exposure is not on a charge beat" % id)
+		if exposure == OPEN_ZONES and shape != SHAPE_ZONE:
+			out.append("%s: zones exposure is not on a zone beat" % id)
+	return out
+
+
+static func _beat_modifier_errors(id: StringName, b: Dictionary) -> PackedStringArray:
+	var out := PackedStringArray()
+	var bid: StringName = b.get("id", &"")
+	var shape: StringName = b.get("shape", &"")
+	var phase_weight: Variant = b.get("phase_2_weight")
+	if not _is_numeric(phase_weight) or float(phase_weight) <= 0.0:
+		out.append("%s/%s: phase_2_weight must be positive" % [id, bid])
+	if b.has("leap"):
+		var leap: Dictionary = b.get("leap", {})
+		if shape != SHAPE_SLAM:
+			out.append("%s/%s: leap is only legal on a slam" % [id, bid])
+		if not _is_numeric(leap.get("time")) or float(leap.get("time", 0.0)) <= 0.0 \
+				or not _is_numeric(leap.get("height")) \
+				or float(leap.get("height", 0.0)) <= 0.0:
+			out.append("%s/%s: leap time and height must be positive" % [id, bid])
+	elif LEAP_BEATS.has(bid):
+		out.append("%s/%s: authored leap is missing" % [id, bid])
+	if b.has("throw"):
+		var throw: Dictionary = b.get("throw", {})
+		if shape != SHAPE_ZONE:
+			out.append("%s/%s: throw is only legal on a zone" % [id, bid])
+		if not _is_numeric(throw.get("flight")) \
+				or float(throw.get("flight", 0.0)) <= 0.0 \
+				or not _is_numeric(throw.get("height")) \
+				or float(throw.get("height", 0.0)) <= 0.0:
+			out.append("%s/%s: throw flight and height must be positive" % [id, bid])
+	elif shape == SHAPE_ZONE:
+		out.append("%s/%s: every zone requires a throw" % [id, bid])
+	return out
+
 ## Every rule this file claims about itself, checked. Returns one line per
 ## problem and an empty array when the table is sound.
 ##
@@ -1520,6 +1716,7 @@ static func validate() -> PackedStringArray:
 	for id in all():
 		var row := get_boss(id)
 		var list := beats(id)
+		out.append_array(_dynamic_row_errors(id, row, false))
 
 		# SCOPE §1: the four models are on disk and there is no fifth.
 		var model_path: String = MODEL_DIR + String(row["model"]) + ".glb"
@@ -1547,8 +1744,9 @@ static func validate() -> PackedStringArray:
 					% [id, relic,
 						placed.get("id", &"nothing"), int(row["floor"])])
 
-		# SCOPE §6's OTHER cap: one phase. `docs/BOSSES.md` §8 item 3 asks for
-		# exactly these two and no more -- the kind is in the vocabulary, and the
+		# The room turn remains a separate half-health effect. The actor's phase
+		# uses the same threshold but owns movement and selection, while the turn
+		# still owns only the room. The kind is in the vocabulary, and the
 		# threshold is a fraction of a health bar rather than a number of
 		# HP. A `turn.at` of 0 never fires and one of 1 fires on the first
 		# blow, and both are the kind of typo that reads as "the turn is broken"
@@ -1568,7 +1766,7 @@ static func validate() -> PackedStringArray:
 				out.append("%s: turn.at is %.2f — it is a health FRACTION and "
 					% [id, at] + "must be in (0, 1)")
 
-		# SCOPE §6: three beats, one phase, hard cap.
+		# Three beats across both pressure phases, hard cap.
 		if list.size() != 3:
 			out.append("%s: %d beats — the cap is exactly 3 (SCOPE §6)"
 				% [id, list.size()])
@@ -1577,6 +1775,7 @@ static func validate() -> PackedStringArray:
 		for b in list:
 			var bid: StringName = b["id"]
 			var tell: Dictionary = b["tell"]
+			out.append_array(_beat_modifier_errors(id, b))
 
 			if not SHAPES.has(b["shape"]):
 				out.append("%s/%s: shape %s is not in the vocabulary"
@@ -1599,11 +1798,11 @@ static func validate() -> PackedStringArray:
 					% [id, bid, seen_tells[key]])
 			seen_tells[key] = "%s/%s" % [id, bid]
 
-			# Every beat buys a window, and the cooldown has to contain it —
-			# otherwise the executor is being asked to start a tell inside the
-			# punish it just promised.
+			# Every beat buys a readable breath: a rooted aperture only on the
+			# authored recover weak point, otherwise movement. Cooldown contains
+			# that budget so the next tell cannot start before it is paid.
 			if float(b["punish"]) <= 0.0:
-				out.append("%s/%s: no punish window" % [id, bid])
+				out.append("%s/%s: no post-commit breath" % [id, bid])
 			if float(b["cooldown"]) < float(b["punish"]):
 				out.append("%s/%s: cooldown %.2f is shorter than punish %.2f"
 					% [id, bid, b["cooldown"], b["punish"]])
@@ -1660,6 +1859,7 @@ static func validate() -> PackedStringArray:
 		var row := get_boss(id)
 		var list := beats(id)
 		var level := int(row["floor"])
+		out.append_array(_dynamic_row_errors(id, row, true))
 
 		var model_path: String = MODEL_DIR + String(row["model"]) + ".glb"
 		if not ResourceLoader.exists(model_path):
@@ -1691,11 +1891,27 @@ static func validate() -> PackedStringArray:
 		if boss_id != &"" and BOSSES[boss_id]["model"] == row["model"]:
 			out.append("%s: shares the model %s with floor %d's boss %s"
 				% [id, row["model"], level, boss_id])
+		if boss_id != &"":
+			var mini_move: Dictionary = row.get("movement", {})
+			var boss_move: Dictionary = BOSSES[boss_id].get("movement", {})
+			for phase_key: String in ["phase_1", "phase_2"]:
+				var mini_phase: Dictionary = mini_move.get(phase_key, {})
+				var boss_phase: Dictionary = boss_move.get(phase_key, {})
+				if not mini_phase.is_empty() and not boss_phase.is_empty():
+					if float(mini_phase.get("speed", INF)) >= \
+							float(boss_phase.get("speed", 0.0)):
+						out.append("%s: %s speed must stay below %s"
+							% [id, phase_key, boss_id])
+					if float(mini_phase.get("orbit_strength", INF)) >= \
+							float(boss_phase.get("orbit_strength", 0.0)):
+						out.append("%s: %s orbit pressure must stay below %s"
+							% [id, phase_key, boss_id])
 
 		var mini_poses: Dictionary = {}
 		for b in list:
 			var bid: StringName = b["id"]
 			var tell: Dictionary = b["tell"]
+			out.append_array(_beat_modifier_errors(id, b))
 			if not SHAPES.has(b["shape"]):
 				out.append("%s/%s: shape %s is not in the vocabulary"
 					% [id, bid, b["shape"]])
@@ -1715,7 +1931,7 @@ static func validate() -> PackedStringArray:
 					% [id, bid, seen_tells[key]])
 			seen_tells[key] = "%s/%s" % [id, bid]
 			if float(b["punish"]) <= 0.0:
-				out.append("%s/%s: no punish window" % [id, bid])
+				out.append("%s/%s: no post-commit breath" % [id, bid])
 			if float(b["cooldown"]) < float(b["punish"]):
 				out.append("%s/%s: cooldown %.2f is shorter than punish %.2f"
 					% [id, bid, b["cooldown"], b["punish"]])

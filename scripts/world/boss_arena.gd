@@ -36,26 +36,19 @@ extends Area3D
 ## When `Dungeon` places these for real it can hand over a room instead; the
 ## radius is already the thing the table authored.
 ##
-## ## The turn: one signal, four rooms
+## ## The turn and actor phase: one threshold, separate effects
 ##
-## `docs/BOSSES.md` §5. Every boss escalates once, at half health, and **the
-## escalation is the room** -- `docs/SCOPE.md` §6 caps this game at one phase and
-## §5's reading of that cap is that the phase should be the fence, the posts and
-## the light rather than a second move set. What a turn may touch is exactly
-## those three things and nothing else, ever: not a beat's numbers, not the move
-## set, not `pick_beat`, not the health bar, not the tint. Each of those is a
-## second phase wearing a room.
+## `docs/BOSSES.md` §5. Every floor boss turns its room once at half health. The
+## actor owns a separate phase-two pressure change at the same threshold; the
+## arena still touches only room geometry/light and never edits a beat.
 ##
 ## It is a `health.damaged` CONNECT and not a `_process`. The fraction only moves
 ## when something hits it, so a poll here would be a per-frame read of a number
 ## that changes about twenty times a fight -- and this node has no per-frame work
 ## of its own to hang one on.
 ##
-## It emits `Bus.boss_phase_changed(1)` on the frame it applies. **That does not
-## make the turn a phase.** Nothing listens today and `pick_beat` never sees it;
-## the emit exists so a director has an event to photograph either side of
-## instead of diffing two screenshots and hoping, and so that a signal declared at
-## `event_bus.gd`:90 and emitted by nothing finally has its one emitter.
+## After applying the room turn it asks the boss to enter phase two. The boss is
+## the single owner and emitter of that phase event.
 
 ## Which fight this is. A key into `BossDb.BOSSES`.
 @export var boss_id: StringName = &"cistern_warden"
@@ -377,8 +370,8 @@ func _build_boss() -> void:
 	# read of a number that changes about twenty times in a fight -- and this node
 	# has no per-frame work of its own to hang one on (`docs/BOSSES.md` §5).
 	#
-	# Connected only when there IS a turn, so a miniboss chamber keeps exactly the
-	# code path it had. `BossDb.turn` says why the minibosses have none.
+	# Connected only when there IS a room turn. Miniboss phase two is actor-owned
+	# and comes from `Boss`'s deferred health fallback.
 	if not BossDb.turn(boss_id).is_empty():
 		var hp := _boss.get(&"health") as HealthComponent
 		if hp == null:
@@ -509,11 +502,10 @@ func _on_boss_damaged(_hit: Hit) -> void:
 
 	_turned = true
 	_apply_turn(t)
-	# AFTER the dispatch, so anything that ever does listen sees the room it has
-	# been told about. The tweens the turn starts are still running -- this
-	# announces the decision, not its arrival, and §5 is explicit that no listener
-	# may act on it by changing a beat.
-	Bus.boss_phase_changed.emit(1)
+	# AFTER the room dispatch, so phase listeners see the turn already decided.
+	# The actor owns the idempotence and the single global phase event.
+	if _boss.has_method(&"enter_phase_two"):
+		_boss.call(&"enter_phase_two")
 
 
 func _apply_turn(t: Dictionary) -> void:
