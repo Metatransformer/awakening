@@ -1,0 +1,94 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/dev/dev_puzzle_room.gd" id="room"]
+[ext_resource type="PackedScene" path="res://scenes/rooms/proving_ground.tscn" id="ground"]
+[ext_resource type="PackedScene" path="res://scenes/actors/hero/hero.tscn" id="hero"]
+[ext_resource type="PackedScene" path="res://scenes/camera/game_camera.tscn" id="camera"]
+
+[sub_resource type="StyleBoxFlat" id="caption_panel"]
+bg_color = Color(0.035, 0.045, 0.055, 0.9)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.4, 0.52, 0.34, 0.95)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[node name="DevPuzzleRoom" type="Node3D"]
+script = ExtResource("room")
+
+[node name="Ground" parent="." instance=ExtResource("ground")]
+
+; Matches ProvingGround/HeroSpawn and faces north into every fixture.
+[node name="Hero" parent="." instance=ExtResource("hero")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 6)
+
+[node name="GameCamera" parent="." instance=ExtResource("camera")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 10)
+
+[node name="DevCaption" type="CanvasLayer" parent="."]
+layer = 20
+
+[node name="Screen" type="Control" parent="DevCaption"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Layout" type="MarginContainer" parent="DevCaption/Screen"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -684.0
+offset_top = 24.0
+offset_right = -24.0
+offset_bottom = 154.0
+grow_horizontal = 0
+mouse_filter = 2
+
+[node name="Panel" type="PanelContainer" parent="DevCaption/Screen/Layout"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("caption_panel")
+
+[node name="Inset" type="MarginContainer" parent="DevCaption/Screen/Layout/Panel"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 12
+
+[node name="VBox" type="VBoxContainer" parent="DevCaption/Screen/Layout/Panel/Inset"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 5
+
+[node name="FixtureTitle" type="Label" parent="DevCaption/Screen/Layout/Panel/Inset/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.8, 0.91, 0.68, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 22
+text = "Developer Puzzle"
+
+[node name="FixtureDescription" type="Label" parent="DevCaption/Screen/Layout/Panel/Inset/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(620, 54)
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.88, 0.88, 0.84, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.85)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 16
+text = "Fixture description"
+autowrap_mode = 2

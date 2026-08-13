@@ -11,6 +11,9 @@ const GarrisonRaidStateScript := preload(
 signal garrison_changed
 signal garrison_raid_restoring
 
+## Local developer-only state. Deliberately absent from Saves.
+var dev_god_mode: bool = false
+
 var max_quarters: int = K.START_HEARTS * K.HEART
 var quarters: int = K.START_HEARTS * K.HEART
 var temporary_overhealth: int = 0
@@ -407,6 +410,7 @@ func _grant_starter_kit() -> void:
 
 
 func reset() -> void:
+	dev_god_mode = false
 	max_quarters = K.START_HEARTS * K.HEART
 	quarters = max_quarters
 	temporary_overhealth = 0
@@ -885,7 +889,7 @@ func restore_wishlist_lines(raw: Array) -> void:
 # --- Health -----------------------------------------------------------------
 
 func damage(amount_quarters: int) -> void:
-	if amount_quarters <= 0:
+	if dev_god_mode or amount_quarters <= 0:
 		return
 	var remaining: int = _softened(amount_quarters)
 	if temporary_overhealth > 0:
@@ -1025,7 +1029,7 @@ func fill_magic() -> void:
 ## the player's hand. A half-priced spin would be a budget of four-and-a-bit,
 ## which is a budget nobody can count.
 func spend_magic(cost: int) -> bool:
-	if cost <= 0:
+	if dev_god_mode or cost <= 0:
 		return true
 	if magic < cost:
 		return false
@@ -1097,7 +1101,7 @@ func _process(delta: float) -> void:
 ## swing refused halfway through a combo reads as the game dropping an input,
 ## while an empty bar after the combo reads as a decision you made.
 func spend_stamina(cost: float, partial: bool = false) -> bool:
-	if cost <= 0.0:
+	if dev_god_mode or cost <= 0.0:
 		return true
 	if stamina < cost and not partial:
 		return false
@@ -1135,6 +1139,8 @@ func add_charges(n: int) -> void:
 
 ## Spend one unit of a consumable. Returns false if the player has none.
 func spend_ammo(id: StringName) -> bool:
+	if dev_god_mode:
+		return true
 	match id:
 		&"arrows":
 			if arrows <= 0:

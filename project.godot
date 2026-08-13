@@ -96,9 +96,12 @@ Prompt="*res://scripts/autoload/prompt.gd"
 ; Layer 100 -- above the HUD (50), below Flow's fade (200). It boots hidden, so
 ; lookdev and tool scenes stay clean. This is the ONLY instance in the project.
 Menu="*res://scenes/ui/menu/pause_menu.tscn"
-; Flow owns the garrison<->dungeon scene change and the fade. It must load LAST:
-; its fade veil has to sit above every other autoload's CanvasLayer.
+; Flow owns the garrison<->dungeon scene change and the fade. It loads after all
+; gameplay overlays so its layer-200 veil covers them during transitions.
 Flow="*res://scripts/autoload/game_flow.gd"
+; The developer console is the sole intentional overlay after Flow: layer 300
+; keeps its paused command surface visible over the world and Flow's veil.
+DevConsole="*res://scripts/dev/dev_console.gd"
 
 [display]
 
