@@ -696,7 +696,7 @@ func _selected_row() -> Dictionary:
 ##
 ## Two kinds of row can name a thing that exists: a SELL row carries the bag id
 ## it came from, and a BUY row's catalogue line id is the item id when the
-## counter is selling an object (`SupplyDb.STOCK_IDS` is hardtack and small beer,
+## counter is selling an object (`SupplyDb.STOCK_IDS` includes rations and planting stock,
 ## `AlchemyDb`'s is the three draughts). Every other line id is an UPGRADE token —
 ## `edge`, `bag_slot`, `chest_heavy` — and naming one of those is the whole
 ## hazard here: `UiKit.item_icon` answers by file existence alone, so the day
@@ -720,7 +720,10 @@ func _build_sell_rows() -> void:
 	var unmarked: Array[StringName] = []
 	for id: StringName in Run.bag:
 		var def := ItemDb.get_def(id)
-		if def == null:
+		# Supplies have one destination: the south-gate crate. Keeping them off
+		# the vendor's board is stronger signposting than drawing a zero-gold row
+		# whose press the transaction layer must refuse.
+		if def == null or def.is_supply():
 			continue
 		var keep := def.is_component() or RelicDb.is_relic(id) or wished.has(id)
 		if not keep and Run.line_value(id) > 0:

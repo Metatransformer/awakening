@@ -1180,18 +1180,21 @@ func _describe(index: int, case_side: bool) -> void:
 	var def := ItemDb.get_def(id)
 	var n: int = counts[index]
 	var part := def.is_component()
+	var supply := def.is_supply()
+	var kind_label := def.bench_name() if part else "SUPPLY" if supply else "INGREDIENT"
 	_tip.kicker.text = "%s %d  ·  %s  ·  %s" % [
 		"CASE" if case_side else "SLOT", slot, def.rarity_name().to_upper(),
-		def.bench_name() if part else "INGREDIENT"]
+		kind_label]
 	_tip.title.text = def.display_name
 	_tip.price.text = "%d ◇  ·  %d per slot" % [def.value * n, def.stack]
 	_tip.blurb.text = "%s  %s" % [def.blurb, Wishlist.usage_sentence(id)]
 	# WHICH bench, by name. Two counters eat components now and they are at
 	# opposite ends of the yard; a caption that said "the forge" over a Fired
 	# Cullet would send the player to the wrong one.
-	var fate := ("%s eats this. It goes to the workbench when you reach "
+	var fate := "Take this to the south-gate supply box." if supply else \
+		(("%s eats this. It goes to the workbench when you reach "
 		+ "garrison, not to the vendor.") % def.bench_name().capitalize() if part else \
-		("The vendor buys this. What it is worth is a quarter of what leaving costs.")
+		("The vendor buys this. What it is worth is a quarter of what leaving costs."))
 	# The verb, on the end, and phrased as the consequence rather than the key —
 	# what A does here is decide whether this survives you.
 	_tip.say_note(fate + ("   A takes it out of the case." if case_side

@@ -97,13 +97,15 @@ const SLOTS := 3
 ## to full durability; the additive tool manifest is otherwise empty.
 ## Bumped to 19 so a non-dungeon Run snapshot is restored instead of discarded.
 ## Legacy carrying_firewood becomes a bag bundle after Run state is restored.
-const VERSION := 19
+## Bumped to 20 for the additive persistent garden payload inside `garrison`.
+## Older slots have no planted sites and reconstruct as an empty garden.
+const VERSION := 20
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
 const AUTOSAVE_INTERVAL := 300.0
 
 signal saved(slot: int)

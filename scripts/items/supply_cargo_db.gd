@@ -27,6 +27,22 @@ const SUPPLY_IDS: Array[StringName] = [
 	RIVER_PERCH_ID,
 	SILVER_TROUT_ID,
 	CROWN_PIKE_ID,
+	&"turnip",
+	&"cabbage",
+	&"sunpepper",
+	&"apple",
+	&"pear",
+]
+const FOOD_IDS: Array[StringName] = [
+	POND_SHINER_ID,
+	RIVER_PERCH_ID,
+	SILVER_TROUT_ID,
+	CROWN_PIKE_ID,
+	&"turnip",
+	&"cabbage",
+	&"sunpepper",
+	&"apple",
+	&"pear",
 ]
 
 const _FIREWOOD_ROW: Dictionary = {
@@ -82,6 +98,10 @@ static func fish_ids() -> Array[StringName]:
 	return FISH_IDS.duplicate()
 
 
+static func food_ids() -> Array[StringName]:
+	return FOOD_IDS.duplicate()
+
+
 static func all_supply_ids() -> Array[StringName]:
 	return SUPPLY_IDS.duplicate()
 
@@ -100,6 +120,14 @@ static func row(id: StringName) -> Dictionary:
 	for fish_row: Dictionary in _FISH_ROWS:
 		if fish_row["id"] == id:
 			return fish_row.duplicate(true)
+	if GardenDb.is_produce(id):
+		return {
+			"id": id,
+			"name": GardenDb.name_of(id),
+			"tier": 0,
+			"food_units": 1,
+			"category": CATEGORY_FOOD,
+		}
 	return {}
 
 

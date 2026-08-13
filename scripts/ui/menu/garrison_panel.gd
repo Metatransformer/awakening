@@ -50,6 +50,7 @@ func refresh() -> void:
 		return
 	UITheme.clear_children(_body)
 	_build_provisions_and_morale()
+	_build_garden_status()
 	_build_hearth_status()
 	_build_duty_status()
 	_build_garrison_defence()
@@ -173,8 +174,8 @@ func _build_hearth_status() -> void:
 
 func _build_provisions_and_morale() -> void:
 	UITheme.section_rule(_body, "PROVISIONS & MORALE")
-	_fact("Fish reserve", "%d / %d meals" % [Game.fish_stock, Game.FISH_CAP])
-	_fact("Carried Food cargo", "%d fish" % _carried_food())
+	_fact("Food reserve", "%d / %d meals" % [Game.fish_stock, Game.FISH_CAP])
+	_fact("Carried Food cargo", "%d portions" % _carried_food())
 	_fact("Today's remaining yield",
 		"%d Fish" % Game.fishing_remaining_today(Clock.day))
 	_fact("Next supper", _next_supper_status())
@@ -217,8 +218,45 @@ func _build_provisions_and_morale() -> void:
 
 func _next_supper_status() -> String:
 	var next_day: int = Clock.day + 1 if Game.last_supper_day >= Clock.day else Clock.day
-	var reserve_status := "Fish reserved" if Game.fish_stock > 0 else "No Fish reserved"
+	var reserve_status := "Food reserved" if Game.fish_stock > 0 else "No Food reserved"
 	return "Day %d at 20:00 · %s" % [next_day, reserve_status]
+
+
+func _build_garden_status() -> void:
+	UITheme.section_rule(_body, "GARDEN & ORCHARD")
+	var planted := 0
+	var ready := 0
+	var thirsty := 0
+	for slot: int in GardenDb.PLOT_SLOTS:
+		var state := Game.garden_plot(slot)
+		var crop_id := StringName(state.get(&"crop_id", &""))
+		if crop_id == &"":
+			continue
+		planted += 1
+		if int(state.get(&"growth", 0)) >= GardenDb.growth_days(crop_id):
+			ready += 1
+		elif not bool(state.get(&"watered", false)):
+			thirsty += 1
+	_fact("Garden beds", "%d / %d planted · %d ready · %d need water" \
+		% [planted, GardenDb.PLOT_SLOTS, ready, thirsty])
+
+	var growing_trees := 0
+	var mature_trees := 0
+	var fruit_ready := 0
+	for site: int in GardenDb.TREE_SITES:
+		var state := Game.garden_tree(site)
+		var tree_id := StringName(state.get(&"tree_id", &""))
+		if tree_id == &"":
+			continue
+		if int(state.get(&"age", 0)) >= GardenDb.growth_days(tree_id):
+			mature_trees += 1
+			if bool(state.get(&"fruit_ready", false)):
+				fruit_ready += 1
+		else:
+			growing_trees += 1
+	_fact("Fruit trees", "%d growing · %d mature · %d ready to pick" \
+		% [growing_trees, mature_trees, fruit_ready])
+	_fact("Next step", "Plant with quartermaster stock, then water before dawn.")
 
 
 func _build_duty_status() -> void:
@@ -262,8 +300,8 @@ func _carried_firewood() -> int:
 
 func _carried_food() -> int:
 	var total := 0
-	for fish_id: StringName in SupplyCargoDb.FISH_IDS:
-		total += int(Run.bag.get(fish_id, 0)) * SupplyCargoDb.food_units(fish_id)
+	for food_id: StringName in SupplyCargoDb.FOOD_IDS:
+		total += int(Run.bag.get(food_id, 0)) * SupplyCargoDb.food_units(food_id)
 	return total
 
 

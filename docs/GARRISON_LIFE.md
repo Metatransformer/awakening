@@ -63,7 +63,7 @@ ceremony is implemented and verified in the real garrison; it remains separate
 from the raid proof.
 
 The existing read-only Garrison page reports time, the next phase, carried
-Firewood and aggregate Food cargo, stored Firewood/Hearth and Fish/supper state,
+Firewood and aggregate Food cargo, stored Firewood/Hearth and Food/supper state,
 Well Fed readiness, overall and per-resident morale with its causes, residents
 and their activities, and active garrison effects. It points carried provisions
 to the south-gate supply box and performs no remote action.
@@ -145,7 +145,7 @@ supper unit, stacks by its own ID to **six per bag slot**, has no sale value, an
 leaves the bag only through the south-gate supply box. The resource rules are
 exact:
 
-- Fish reserve capacity is **three units**, representing three suppers.
+- Food reserve capacity is **three units**, representing three suppers.
 - At most **three Fish units per campaign day** may be caught. The daily cap is
   recorded at the catch; the garrison reserve is not.
 - Stored reserve capacity never prevents fishing while the bag has room. A
@@ -154,7 +154,7 @@ exact:
 - A successful or failed attempt advances the civil clock by **ten minutes**
   and spends one Rod use. Cancelling exits lawfully, advances no time, and
   spends no durability.
-- At **20:00**, supper consumes at most one stored Fish. A served supper makes
+- At **20:00**, supper consumes at most one stored Food unit. A served supper makes
   the current Fed cause active and prepares Well Fed. An empty supper clears
   the current Fed cause but does not erase a previously prepared, unused Well
   Fed meal.
@@ -171,6 +171,41 @@ and makes a full no-op without deleting overflow cargo. Home saves preserve the
 whole Run snapshot so undeposited provisions survive save/load. Beginning a new
 descent deliberately starts a new Run and clears that home bag, so cargo must be
 deposited before setting out if the player wants it added to garrison stores.
+
+## Garden and orchard
+
+The fenced garrison garden contains exactly **four** reusable crop beds and
+**two** permanent fruit-tree sites. Gardening is a small civil-day responsibility,
+not a remote timer menu: the quartermaster sells stackable planting stock, the
+player plants it from the ordinary bag, and each live site physically shows bare
+soil, wet soil, growth, ripe produce, young trees, mature crowns, and fruit.
+
+The starting catalogue is deliberately narrow:
+
+| Planting stock | Result | Watered dawns to grow | Harvest |
+|---|---|---:|---:|
+| Turnip Seed | Turnip | 2 | 1 |
+| Cabbage Seed | Cabbage | 3 | 1 |
+| Sunpepper Seed | Sunpepper | 4 | 1 |
+| Apple Sapling | Apple tree | 4 | 2 Apples every 3 dawns |
+| Pear Sapling | Pear tree | 5 | 2 Pears every 4 dawns |
+
+A crop or young tree advances once at dawn only if it was watered, then dries.
+Missed water costs a day but never kills or regresses the plant. A ripe crop
+stays in its bed until picked; harvesting empties that bed for another seed.
+Fruit trees remain planted after maturity, require no further watering, and
+produce again on their authored cadence after each pick. Planting consumes one
+exact seed or sapling. Harvesting is atomic: if the full yield does not fit, the
+produce stays visibly ready rather than being partly lost.
+
+Turnips, Cabbages, Sunpeppers, Apples, and Pears enter the ordinary Run bag as
+named, stackable, zero-sale-value **Food** cargo. They are not eaten directly and
+the vendor does not list them. Like fish, the player carries them to the one
+south-gate supply box; all nine fish-and-garden IDs share the same three-meal Food
+reserve, supper, Fed morale cause, and Well Fed preparation. The Garrison page
+reports planted, thirsty, ripe, growing-tree, mature-tree, and fruit-ready counts
+without mutating them. Garden state, tree maturity, and next-fruit days persist
+inside the garrison save snapshot.
 
 ## Morale and care
 

@@ -96,6 +96,9 @@ var gate: SurfaceTransition
 ## it without knowing where the corner is.
 var house: BunkBed
 var compound: GarrisonCompound
+var garden: GarrisonGarden
+var garden_plots: Array[GardenPlot] = []
+var fruit_tree_sites: Array[FruitTreeSite] = []
 var atmosphere: SurfaceAtmosphere
 ## The paved circle, and the carved figure standing on the middle of it. Public
 ## so a director can frame the plaza without re-deriving where it is.
@@ -145,6 +148,7 @@ func _ready() -> void:
 	compound.name = &"Compound"
 	add_child(compound)
 	house = compound.player_bunk
+	_build_garrison_garden()
 	_build_plaza()
 	_build_hearth()
 	_build_supply_box()
@@ -170,6 +174,14 @@ func _ready() -> void:
 	# Publish only after the compound and every live landmark the plan may expose
 	# exist. Atlas owns discovery; neither map surface knows garrison geometry.
 	Atlas.register_surface(self)
+
+
+func _build_garrison_garden() -> void:
+	garden = GarrisonGarden.new()
+	garden.name = &"GarrisonGarden"
+	add_child(garden)
+	garden_plots = garden.plots
+	fruit_tree_sites = garden.tree_sites
 
 
 ## The compound supplies structure. This scene adds only landmarks represented

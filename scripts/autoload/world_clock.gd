@@ -40,6 +40,7 @@ var _last_day: int = -1
 
 
 func _ready() -> void:
+	dawn_started.connect(Game.advance_garden_dawn)
 	bonfire_started.connect(Game.resolve_bonfire)
 	hour_crossed.connect(Game.raid_observe_hour)
 	_prime_observed_state()
