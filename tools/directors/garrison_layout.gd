@@ -24,7 +24,7 @@ func run(rig) -> void:
 	_prove_warm_lighting(rig, compound)
 	_prove_authored_night_lighting(rig, compound)
 	_prove_elder_arrival(rig, compound)
-	_prove_exit_backstop(rig, compound)
+	_prove_open_surface(rig, garrison, compound)
 	var valley := garrison.get_node_or_null(^"EnclosedValleyTerrain") \
 		as EnclosedValleyTerrain
 	rig.check(valley != null and valley.baked_inner_mesh != null
@@ -83,8 +83,8 @@ func run(rig) -> void:
 	_frame(camera, compound, Vector3(13.15, 1.6, 4.3), Vector3(18.3, 1.0, 4.3), 68.0)
 	await _capture(rig, out, "layout_12_quartermaster_interior.png")
 
-	_frame(camera, compound, Vector3(0.0, 5.0, 7.0), Vector3(0.0, 1.8, 17.5), 61.0)
-	await _capture(rig, out, "layout_13_supply_gate_backstop.png")
+	_frame(camera, compound, Vector3(0.0, 4.2, 7.0), Vector3(0.0, 1.2, 28.0), 61.0)
+	await _capture(rig, out, "layout_13_open_surface_gate.png")
 
 	# At night the courtyard stays comparatively cool while every enclosed room
 	# becomes an amber destination; the smithy retains its hotter orange identity.
@@ -306,14 +306,26 @@ func _prove_elder_arrival(rig, compound: GarrisonCompound) -> void:
 		"the elder faces the arriving hero")
 
 
-func _prove_exit_backstop(rig, compound: GarrisonCompound) -> void:
-	var backstop := compound.get_node_or_null(
-		"SouthGatehouse/ExitBackstop/Collision") as CollisionShape3D
-	var shape := backstop.shape as BoxShape3D if backstop != null else null
-	rig.check(shape != null and shape.size.x >= 5.8 and shape.size.y >= 4.8,
-		"the departure gate blocks walking or jumping into unloaded space")
+func _prove_open_surface(rig, garrison: Garrison,
+		compound: GarrisonCompound) -> void:
+	rig.check(compound.get_node_or_null("SouthGatehouse/ExitBackstop") == null,
+		"the south gate has no unloaded-space backstop")
 	rig.check(compound.get_node_or_null("SouthGatehouse/RaisedPortcullis") != null,
 		"the open raid arch carries a visibly raised portcullis")
+	rig.check(garrison.outskirts != null and garrison.sunken_cut != null,
+		"the homestead and Sunken Cut are live inside the garrison surface")
+	rig.check(garrison.outskirts.garrison_gate == null
+		and garrison.outskirts.blocked_path == null
+		and garrison.outskirts.homestead.bridge_obstruction == null,
+		"the embedded bridge has no loading transition or visual obstruction")
+	var bridge_end := garrison.outskirts.to_global(OutskirtsHomestead.BRIDGE_END)
+	rig.check(bridge_end.distance_to(Vector3(0.0, -0.10, 18.0)) < 0.001,
+		"the timber bridge terminates exactly at the fort ground seam")
+	rig.check(garrison.get_tree().get_nodes_in_group(&"player").size() == 1
+		and garrison.find_children("*", "Camera3D", true, false).size() == 1
+		and garrison.find_children("SurfaceAtmosphere", "SurfaceAtmosphere", true, false).size() == 1
+		and garrison.find_children("EnclosedValleyTerrain", "EnclosedValleyTerrain", true, false).size() == 1,
+		"the combined surface owns one hero, camera, atmosphere, and valley")
 
 
 func _capture(rig, out: String, file_name: String) -> void:

@@ -60,21 +60,34 @@ var fishing_hole: FishingHole
 var homestead: OutskirtsHomestead
 var harvest_trees: Array[HarvestTree] = []
 
+var embedded_in_garrison: bool = false
 var _built: bool = false
 
 
 func _ready() -> void:
-	if Flow.refuse_boot(self):
+	if not embedded_in_garrison and Flow.refuse_boot(self):
 		return
 	if _built:
 		return
 	_built = true
 	_build()
-	Atlas.register_surface(self)
+	if not embedded_in_garrison:
+		Atlas.register_surface(self)
 
 
 func _exit_tree() -> void:
-	Atlas.unregister_surface(self)
+	if not embedded_in_garrison:
+		Atlas.unregister_surface(self)
+
+
+## A composition root must select component mode before this node enters the tree.
+## The parent then owns the shared atmosphere, valley terrain, map registration,
+## and the open route through the garrison bridge.
+func configure_embedded() -> void:
+	if _built or is_inside_tree():
+		push_error("GarrisonOutskirts: embedded mode must be configured before add_child().")
+		return
+	embedded_in_garrison = true
 
 
 func port(id: StringName) -> Transform3D:
@@ -120,6 +133,10 @@ func port(id: StringName) -> Transform3D:
 	return Transform3D.IDENTITY
 
 
+func global_port(id: StringName) -> Transform3D:
+	return global_transform * port(id)
+
+
 ## Authored public terrain is immediately visible on the surface map. Garden and
 ## grove areas are shapes, while every landmark is derived from a live world port.
 func surface_map_plan() -> Dictionary:
@@ -162,21 +179,21 @@ func surface_map_plan() -> Dictionary:
 
 
 func _build() -> void:
-	var atmosphere := SurfaceAtmosphere.new()
-	atmosphere.name = &"SurfaceAtmosphere"
-	add_child(atmosphere)
-	var valley := EnclosedValleyTerrain.new()
-	valley.name = &"EnclosedValleyTerrain"
-	valley.baked_inner_mesh = VALLEY_INNER
-	valley.baked_mid_mesh = VALLEY_MID
-	valley.baked_far_mesh = VALLEY_FAR
-	valley.gorge_angle_degrees = 135.0
-	valley.gorge_width_degrees = 20.0
-	valley.configure_for_site(58.0, 440.0, -9.0, 0.0)
-	add_child(valley)
+	if not embedded_in_garrison:
+		var atmosphere := SurfaceAtmosphere.new()
+		atmosphere.name = &"SurfaceAtmosphere"
+		add_child(atmosphere)
+		var valley := EnclosedValleyTerrain.new()
+		valley.name = &"EnclosedValleyTerrain"
+		valley.baked_inner_mesh = VALLEY_INNER
+		valley.baked_mid_mesh = VALLEY_MID
+		valley.baked_far_mesh = VALLEY_FAR
+		valley.configure_for_site(58.0, 440.0, -9.0, 0.0)
+		add_child(valley)
 
 	homestead = OutskirtsHomestead.new()
 	homestead.name = &"Homestead"
+	homestead.open_garrison_end = embedded_in_garrison
 	add_child(homestead)
 
 	var gameplay := Node3D.new()
@@ -224,12 +241,13 @@ func _build_transitions(parent: Node3D) -> void:
 	transitions.name = &"Transitions"
 	parent.add_child(transitions)
 
-	garrison_gate = SurfaceTransition.new()
-	garrison_gate.name = &"GarrisonGate"
-	garrison_gate.destination = SurfaceTransition.Destination.GARRISON
-	garrison_gate.radius = 3.0
-	garrison_gate.transform = port(&"garrison_gate")
-	transitions.add_child(garrison_gate)
+	if not embedded_in_garrison:
+		garrison_gate = SurfaceTransition.new()
+		garrison_gate.name = &"GarrisonGate"
+		garrison_gate.destination = SurfaceTransition.Destination.GARRISON
+		garrison_gate.radius = 3.0
+		garrison_gate.transform = port(&"garrison_gate")
+		transitions.add_child(garrison_gate)
 
 	sunken_cut = SurfaceTransition.new()
 	sunken_cut.name = &"SunkenCutTransition"
@@ -238,16 +256,17 @@ func _build_transitions(parent: Node3D) -> void:
 	sunken_cut.transform = port(&"sunken_cut")
 	transitions.add_child(sunken_cut)
 
-	# A player may walk onto the bridge before choosing RETURN, but the far end is
-	# always a visible, solid boundary. This dead-end prompt animates its timbers.
-	blocked_path = SurfaceTransition.new()
-	blocked_path.name = &"BridgeBoundary"
-	blocked_path.destination = SurfaceTransition.Destination.BLOCKED
-	blocked_path.radius = 2.6
-	blocked_path.transform = port(&"blocked_path")
-	if homestead.bridge_obstruction != null:
-		blocked_path.bind_obstruction(homestead.bridge_obstruction)
-	transitions.add_child(blocked_path)
+	if not embedded_in_garrison:
+		# A player may walk onto the bridge before choosing RETURN, but the far end is
+		# always a visible, solid boundary. This dead-end prompt animates its timbers.
+		blocked_path = SurfaceTransition.new()
+		blocked_path.name = &"BridgeBoundary"
+		blocked_path.destination = SurfaceTransition.Destination.BLOCKED
+		blocked_path.radius = 2.6
+		blocked_path.transform = port(&"blocked_path")
+		if homestead.bridge_obstruction != null:
+			blocked_path.bind_obstruction(homestead.bridge_obstruction)
+		transitions.add_child(blocked_path)
 
 
 func _surface_path(local_points: PackedVector3Array,

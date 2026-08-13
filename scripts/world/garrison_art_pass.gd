@@ -85,7 +85,8 @@ static func build(compound: GarrisonCompound) -> void:
 	_build_perimeter_torches(art_pass)
 	_build_night_fills(art_pass)
 	_build_gate_mechanism(art_pass)
-	_build_gate_vista(art_pass)
+	if not compound.open_surface_gate:
+		_build_gate_vista(art_pass)
 
 
 static func _build_terrain(compound: GarrisonCompound, art_pass: Node3D) -> void:

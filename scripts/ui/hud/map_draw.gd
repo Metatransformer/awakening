@@ -814,6 +814,7 @@ static func _draw_surface_area(ci: CanvasItem, box: Rect2,
 		projected.append(_surface_project(point, world_center, screen_center,
 			pixels_per_metre))
 	var clipped := _clip_polygon(projected, box)
+	clipped = _safe_surface_polygon(clipped)
 	if clipped.size() < 3:
 		return
 	var kind := StringName(entry.get(&"kind", &"ground"))
@@ -829,6 +830,33 @@ static func _draw_surface_area(ci: CanvasItem, box: Rect2,
 	for i in clipped.size():
 		ci.draw_line(clipped[i], clipped[(i + 1) % clipped.size()],
 			Color(Pal.ASH, 0.62), width)
+
+
+## Rotated surface areas can meet the minimap clip rect exactly. Sutherland-
+## Hodgman then legitimately emits the same corner from two adjacent edges, but
+## RenderingServer rejects that degenerate polygon. Keep the authored order and
+## remove only coincident consecutive vertices before triangulation.
+static func _safe_surface_polygon(points: Array[Vector2]) -> Array[Vector2]:
+	var clean: Array[Vector2] = []
+	for point: Vector2 in points:
+		if clean.is_empty() or not clean[-1].is_equal_approx(point):
+			clean.append(point)
+	if clean.size() > 1 and clean[0].is_equal_approx(clean[-1]):
+		clean.pop_back()
+	if clean.size() < 3:
+		return []
+	# Every current surface area is an authored rectangle or bounding footprint,
+	# hence convex. Clipping should preserve that property, but exact edge/corner
+	# contacts can return vertices in a crossing order. Rebuilding the hull is the
+	# canonical representation and prevents RenderingServer triangulation errors.
+	var hull := Geometry2D.convex_hull(PackedVector2Array(clean))
+	clean.assign(Array(hull))
+	if clean.size() > 1 and clean[0].is_equal_approx(clean[-1]):
+		clean.pop_back()
+	if clean.size() < 3 \
+			or Geometry2D.triangulate_polygon(PackedVector2Array(clean)).is_empty():
+		return []
+	return clean
 
 
 static func _draw_surface_landmark(ci: CanvasItem, box: Rect2,

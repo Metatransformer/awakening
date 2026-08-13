@@ -22,14 +22,13 @@ extends Node3D
 ## as a fort rather than as a room whose ceiling failed to load. Those are the two
 ## halves; do not remove either one thinking it is decoration.
 ##
-## Deliberately TINY -- about eight seconds of walking, corner to corner. The
-## garrison is not content; it is the place where the number in your bag turns
-## into a number you keep, and every extra metre of it is a tax on the loop.
-## Moonlighter earns its town by making you run a shop in it. This one does not,
-## so it does not get to be big.
+## The walled service compound remains deliberately tiny. Its open south gate now
+## shares one surface with the working homestead, grove, ponds, and visible
+## Sunken Cut. That land earns its walk by holding the civil chores and mine
+## approach; the service loop inside the walls is still only seconds across.
 ##
 ## It is also the only warm, lit, safe place in the game, which is what makes the
-## gate's cold mouth mean something.
+## mine's cold mouth mean something.
 
 const KIT_FLOOR := preload("res://scenes/kit/floor_slab.tscn")
 const KIT_WALL := preload("res://scenes/kit/wall_segment.tscn")
@@ -46,11 +45,11 @@ const MAT_GRASS := preload("res://assets/materials/mat_grass.tres")
 const MAT_WALL_SUNLIT := preload("res://assets/materials/mat_wall_sunlit.tres")
 const SKY_SHADER := preload("res://assets/shaders/sky.gdshader")
 const VALLEY_INNER: ArrayMesh = preload(
-	"res://assets/terrain/enclosed_valley_inner.res")
+	"res://assets/terrain/enclosed_valley_combined_inner.res")
 const VALLEY_MID: ArrayMesh = preload(
-	"res://assets/terrain/enclosed_valley_mid.res")
+	"res://assets/terrain/enclosed_valley_combined_mid.res")
 const VALLEY_FAR: ArrayMesh = preload(
-	"res://assets/terrain/enclosed_valley_far.res")
+	"res://assets/terrain/enclosed_valley_combined_far.res")
 
 ## Where the paved circle sits, and how big it is.
 ##
@@ -97,7 +96,11 @@ var alchemist: Npc
 var keeper: Npc
 var jeweller: Npc
 var builder: Npc
-var gate: SurfaceTransition
+## Spatial anchor at the open south gate. The live descent seam is `sunken_cut`;
+## keeping this node preserves map, raid, lookdev, and supply-box contracts.
+var gate: Marker3D
+var outskirts: GarrisonOutskirts
+var sunken_cut: SurfaceTransition
 ## The hero's billet, in the south-west corner. Public so a director can walk to
 ## it without knowing where the corner is.
 var house: BunkBed
@@ -150,19 +153,21 @@ func _ready() -> void:
 	atmosphere = SurfaceAtmosphere.new()
 	atmosphere.name = &"SurfaceAtmosphere"
 	add_child(atmosphere)
+	_build_combined_basin_ground()
 	var valley := EnclosedValleyTerrain.new()
 	valley.name = &"EnclosedValleyTerrain"
 	valley.baked_inner_mesh = VALLEY_INNER
 	valley.baked_mid_mesh = VALLEY_MID
 	valley.baked_far_mesh = VALLEY_FAR
-	valley.gorge_angle_degrees = 135.0
-	valley.gorge_width_degrees = 20.0
-	valley.configure_for_site(58.0, 440.0, -9.0, -PI * 0.25)
+	valley.position = Vector3(1.5, 0.0, 43.0)
+	valley.configure_for_site(112.0, 560.0, -9.0)
 	add_child(valley)
 	compound = GarrisonCompound.new()
 	compound.name = &"Compound"
+	compound.open_surface_gate = true
 	add_child(compound)
 	house = compound.player_bunk
+	_build_outskirts()
 	_build_garrison_garden()
 	_build_plaza()
 	_build_hearth()
@@ -191,6 +196,33 @@ func _ready() -> void:
 	Atlas.register_surface(self)
 
 
+func _build_combined_basin_ground() -> void:
+	# The compound and homestead retain their authored walkable/collision ground.
+	# This buried visual basin closes the space between those shapes and the
+	# combined terrain's 86 m cliff lip so no camera can look down into sky/void.
+	var basin := MeshInstance3D.new()
+	basin.name = &"CombinedBasinGround"
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = 112.0
+	mesh.bottom_radius = 112.0
+	mesh.height = 0.40
+	mesh.radial_segments = 96
+	basin.mesh = mesh
+	basin.material_override = MAT_GRASS
+	basin.position = Vector3(1.5, -0.49, 43.0)
+	basin.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(basin)
+
+
+func _build_outskirts() -> void:
+	outskirts = GarrisonOutskirts.new()
+	outskirts.name = &"Outskirts"
+	outskirts.configure_embedded()
+	outskirts.transform = GarrisonSurfaceLayout.outskirts_world_transform()
+	add_child(outskirts)
+	sunken_cut = outskirts.sunken_cut
+
+
 func _build_garrison_garden() -> void:
 	garden = GarrisonGarden.new()
 	garden.name = &"GarrisonGarden"
@@ -208,6 +240,15 @@ func surface_map_plan() -> Dictionary:
 	var paths: Array = (base[&"paths"] as Array).duplicate()
 	var areas: Array = (base[&"areas"] as Array).duplicate()
 	var landmarks: Array[Dictionary] = []
+	if outskirts != null and is_instance_valid(outskirts):
+		var outside := outskirts.surface_map_plan()
+		paths.append_array(outside[&"paths"] as Array)
+		areas.append_array(outside[&"areas"] as Array)
+		for landmark: Dictionary in outside[&"landmarks"]:
+			# The child fragment retains a gate glyph for its standalone shell.
+			# Production has one gate landmark, owned by this composition root.
+			if StringName(landmark[&"glyph"]) != &"gate":
+				landmarks.append(landmark)
 	if gate != null and is_instance_valid(gate):
 		landmarks.append(_surface_landmark(gate, &"gate"))
 	if hearth != null and is_instance_valid(hearth):
@@ -236,7 +277,7 @@ func surface_map_plan() -> Dictionary:
 	landmarks.make_read_only()
 	var plan: Dictionary = {
 		&"title": "Highbridge Garrison",
-		&"view_range": float(base[&"view_range"]),
+		&"view_range": 140.0,
 		&"paths": paths,
 		&"areas": areas,
 		&"landmarks": landmarks,
@@ -684,10 +725,8 @@ func _build_compound_people() -> void:
 	jeweller = _compound_counter(Npc.Role.JEWELLER, &"jewelcrafter",
 		&"jewelcrafter_day", Color(0.80, 0.62, 0.94))
 
-	gate = SurfaceTransition.new()
+	gate = Marker3D.new()
 	gate.name = &"OuterGate"
-	gate.destination = SurfaceTransition.Destination.OUTSKIRTS
-	gate.radius = 3.0
 	add_child(gate)
 	gate.global_transform = compound.global_transform * compound.port(&"gate")
 

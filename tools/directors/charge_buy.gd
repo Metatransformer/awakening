@@ -18,9 +18,10 @@ extends RefCounted
 ## exists once the Slag Ogre is dead. True, and true by a coincidence of ordering.
 ## Kessa is unconditional.
 ##
-## Point it at GARRISON. It descends on its own, because the claim is not "a
-## counter took some gold" -- it is that a charge bought upstairs is in the pouch
-## when you get down there and comes out of it when you pull the trigger.
+## Point it at GARRISON. It walks the Sunken Cut transition on its own, because
+## the claim is not "a counter took some gold" -- it is that a charge bought in
+## the compound is in the pouch when you get underground and comes out of it
+## when you pull the trigger.
 ##
 ##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
@@ -261,14 +262,21 @@ func _underground(rig) -> void:
 	var garrison := rig.scene() as Garrison
 	if garrison == null:
 		return
-	_stand_at(rig, garrison.gate.global_position + Vector3(0.0, 0.0, 1.8))
-	await _wait_until(rig, func() -> bool: return Prompt.focus == garrison.gate, 90)
+	var descent := garrison.sunken_cut
+	_ck("E0 the Sunken Cut exists in the garrison surface world", descent != null)
+	if descent == null:
+		return
+	_stand_at(rig, descent.global_position + Vector3(0.0, 0.0, 1.8),
+		descent.global_position)
+	var focused := await _wait_until(rig,
+		func() -> bool: return Prompt.focus == descent, 90)
+	_ck("E0b the Sunken Cut owns the interact button", focused)
 	# `hold_seconds`, not a frame count. alchemy_loop.gd's H beat carries the long
-	# note about why: the descent is ~0.9 s of hold plus a scene change, and a
-	# frame budget that lands short releases the button mid-transition.
+	# note about why: entering the mine is ~0.9 s of hold plus a scene change,
+	# and a frame budget that lands short releases the button mid-transition.
 	await rig.hold_seconds(["interact"], 1.6)
 	await rig.wait_frames(140)
-	_ck("E0 he went down", Run.in_dungeon)
+	_ck("E0c he descended through the Sunken Cut", Run.in_dungeon)
 	if not Run.in_dungeon:
 		return
 	print("CHARGE underground charges=%d scene=%s" % [Game.charges, rig.scene().name])

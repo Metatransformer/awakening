@@ -3,7 +3,7 @@ extends RefCounted
 ##
 ## This director never replaces the production chase camera and never teleports
 ## between rooms. The one initial placement is the fixture; every doorway,
-## garden opening, aisle, and the blocked departure gate are exercised through
+## garden opening, aisle, open gate, bridge, and homestead path are exercised through
 ## the Hero's live camera-relative action-state controller.
 ##
 ##   timeout 400 tools/quiet.sh --path . -s tools/shoot.gd -- \
@@ -16,7 +16,9 @@ const STALL_SECONDS := 1.15
 const STALL_PROGRESS := 0.22
 
 var _out := ""
+var _garrison: Garrison
 var _compound: GarrisonCompound
+var _outskirts: GarrisonOutskirts
 var _hero: Hero
 
 
@@ -24,11 +26,13 @@ func run(rig) -> void:
 	var garrison := rig.scene() as Garrison
 	if not rig.check(garrison != null, "golden route loaded the real Garrison"):
 		return
+	_garrison = garrison
 	_compound = garrison.compound
+	_outskirts = garrison.outskirts
 	_hero = garrison.get_tree().get_first_node_in_group(&"player") as Hero
 	var camera := garrison.get_node_or_null("GameCamera") as GameCamera
-	if not rig.check(_compound != null and _hero != null,
-			"golden route has the live compound and Hero"):
+	if not rig.check(_compound != null and _outskirts != null and _hero != null,
+			"golden route has the live compound, outskirts, and Hero"):
 		return
 	if not rig.check(camera != null and camera.current
 			and _hero.get_viewport().get_camera_3d() == camera,
@@ -209,9 +213,9 @@ func run(rig) -> void:
 		return
 	await _shot(rig, "route_10_quartermaster.png")
 
-	# Finish at the authored world edge. Keep moving into it while jumping often;
-	# success is being visibly stopped inside the portcullis, not reaching a point
-	# beyond the scene.
+	# The former loading seam is now a real route. Cross the open portcullis and
+	# timber bridge, follow the authored spine to the mine, then prove both civil
+	# branches from the clearing without ever changing scenes or teleporting.
 	if not await _walk_many(rig, "gate approach", [
 		Vector3(11.5, 0.0, 4.3), Vector3(9.8, 0.0, 8.6),
 		Vector3(5.8, 0.0, 8.2), Vector3(2.6, 0.0, 8.2),
@@ -219,9 +223,61 @@ func run(rig) -> void:
 		Vector3(0.0, 0.0, 15.0),
 	]):
 		return
-	if not await _assault_backstop(rig):
+	if not await _walk_to(rig, Vector3(0.0, 0.0, 17.8), "open gate threshold"):
 		return
-	await _shot(rig, "route_11_gate_backstop.png")
+	var spine: Array = []
+	# The path contract runs threshold -> mine. Stop at the authored approach;
+	# MINE_MOUTH itself is deliberately behind the dark portal collision.
+	for point_index: int in GarrisonOutskirts.PATH_POINTS.size() - 1:
+		var point := GarrisonOutskirts.PATH_POINTS[point_index]
+		if point.is_equal_approx(OutskirtsHomestead.CLEARING_CENTER):
+			# The statue occupies the mathematical route centre. The visible round
+			# path is the route, so exercise its south arc instead of its plinth.
+			spine.append(_outside(Vector3(-3.4, 0.0, -3.2)))
+			spine.append(_outside(Vector3(3.4, 0.0, -3.2)))
+		else:
+			spine.append(_outside(point))
+	if not await _walk_many(rig, "bridge and mine spine", spine):
+		return
+	if not await _walk_to(rig, _outside(OutskirtsHomestead.MINE_APPROACH),
+			"Sunken Cut approach", 0.9):
+		return
+	if not await _expect_prompt(rig, _garrison.sunken_cut, "Sunken Cut descent"):
+		return
+	await _shot(rig, "route_11_sunken_cut.png")
+
+	var return_to_clearing: Array = []
+	for point_index: int in range(GarrisonOutskirts.PATH_POINTS.size() - 2, 7, -1):
+		return_to_clearing.append(_outside(GarrisonOutskirts.PATH_POINTS[point_index]))
+	return_to_clearing.append(_outside(Vector3(3.4, 0.0, -3.2)))
+	if not await _walk_many(rig, "mine return to clearing", return_to_clearing):
+		return
+	if not await _walk_many(rig, "clearing to grove", [
+		_outside(Vector3(5.8, 0.0, -5.5)),
+		_outside(Vector3(0.0, 0.0, -8.5)),
+		_outside(Vector3(-7.0, 0.0, -6.0)),
+		_outside(Vector3(-12.5, 0.0, -3.0)),
+	]):
+		return
+	await _shot(rig, "route_12_harvest_grove.png")
+	if not await _walk_many(rig, "grove to east fishing dock", [
+		_outside(Vector3(-7.0, 0.0, -6.0)),
+		_outside(Vector3(0.0, 0.0, -8.5)),
+		_outside(Vector3(5.8, 0.0, -5.5)),
+		_outside(Vector3(8.0, 0.0, 5.0)),
+		_outside(Vector3(13.0, 0.0, 7.0)),
+		_outside(Vector3(20.0, 0.0, 4.5)),
+	]):
+		return
+	# The public port faces from the dock's dry edge toward the pond. Stop at
+	# that real timber lip instead of asking the capsule to enter the water.
+	if not await _walk_to(rig,
+			_outside(OutskirtsHomestead.FISHING_CENTER + Vector3(0.5, 0.0, 3.0)),
+			"east fishing dock edge", 1.4):
+		return
+	if not await _expect_prompt(rig, _outskirts.fishing_hole, "east fishing dock"):
+		return
+	await _shot(rig, "route_13_east_fishing_dock.png")
 	print("GARRISON GOLDEN ROUTE OK")
 
 
@@ -286,36 +342,6 @@ func _expect_prompt(rig, interactable: Interactable, tag: String) -> bool:
 	return true
 
 
-func _assault_backstop(rig) -> bool:
-	var max_z := _local().z
-	var max_y := _local().y
-	Input.action_release(&"jump")
-	for tick: int in 360:
-		var toward_road := K.plane(_compound.to_global(Vector3(0.0, 0.0, 23.0))
-			- _hero.global_position).normalized()
-		_press_stick(toward_road)
-		if tick % 72 == 0:
-			Input.action_press(&"jump")
-		elif tick % 72 == 3:
-			Input.action_release(&"jump")
-		await rig.wait_physics_frames(1)
-		var local := _local()
-		max_z = maxf(max_z, local.z)
-		max_y = maxf(max_y, local.y)
-	_release_stick()
-	Input.action_release(&"jump")
-	await rig.wait_physics_frames(3)
-	var stopped_inside := max_z < 17.7 and _local().z < 17.7
-	if not rig.check(max_z > 17.0, "the Hero reached the departure portcullis"):
-		return false
-	if not rig.check(max_y > 0.45, "the gate assault used repeated live Hero jumps"):
-		return false
-	if not rig.check(stopped_inside,
-			"the player-only gate backstop kept every jump inside z < 17.7"):
-		return false
-	return true
-
-
 func _press_stick(dir: Vector3) -> void:
 	var camera := _hero.get_viewport().get_camera_3d()
 	var forward := Vector3.FORWARD
@@ -344,6 +370,10 @@ func _release_stick() -> void:
 
 func _local() -> Vector3:
 	return _compound.to_local(_hero.global_position)
+
+
+func _outside(local_position: Vector3) -> Vector3:
+	return _compound.to_local(_outskirts.to_global(local_position))
 
 
 func _flat_gap(local_target: Vector3) -> float:

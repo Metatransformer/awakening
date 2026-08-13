@@ -54,6 +54,7 @@ var player_bunk: BunkBed
 var barracks_storage_chest: Footlocker
 var bunk_room: Node3D
 var elder_quarters: Node3D
+var open_surface_gate: bool = false
 
 var _ports: Dictionary[StringName, Transform3D] = {}
 var _built := false
@@ -253,22 +254,21 @@ func _build_gatehouse() -> void:
 			sx * deg_to_rad(22.0)
 		)
 
-	# DEPART is a deliberate held transition, not an open-world seam. An invisible
-	# player-only boundary holds the hero inside authored space while raid attackers
-	# continue through the visibly open gate route. It reaches the passage roof, so
-	# jumping does not turn the road beyond the scene into an escape route.
-	var backstop := StaticBody3D.new()
-	backstop.name = &"ExitBackstop"
-	backstop.collision_layer = K.L_PLAYER_BOUNDARY
-	backstop.collision_mask = 0
-	backstop.position = Vector3(0.0, 2.45, 18.0)
-	var collision := CollisionShape3D.new()
-	collision.name = &"Collision"
-	var shape := BoxShape3D.new()
-	shape.size = Vector3(5.8, 4.9, 0.36)
-	collision.shape = shape
-	backstop.add_child(collision)
-	gatehouse.add_child(backstop)
+	if not open_surface_gate:
+		# The standalone compound retains its deliberate held-transition boundary.
+		# A composition root opens this passage only when it supplies real terrain.
+		var backstop := StaticBody3D.new()
+		backstop.name = &"ExitBackstop"
+		backstop.collision_layer = K.L_PLAYER_BOUNDARY
+		backstop.collision_mask = 0
+		backstop.position = Vector3(0.0, 2.45, 18.0)
+		var collision := CollisionShape3D.new()
+		collision.name = &"Collision"
+		var shape := BoxShape3D.new()
+		shape.size = Vector3(5.8, 4.9, 0.36)
+		collision.shape = shape
+		backstop.add_child(collision)
+		gatehouse.add_child(backstop)
 	_visual_box(gatehouse, "RaisedPortcullis", Vector3(5.5, 0.08, 0.10),
 		Vector3(0.0, 5.32, 17.88), MAT_IRON)
 
