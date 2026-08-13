@@ -510,14 +510,14 @@ static func soft_edge_frame() -> StyleBoxTexture:
 	return _soft_edge_box(_soft_edge_tex("soft_frame", FRAME_FACE), 22, 22)
 
 
-## The keyboard / gamepad focus marker. `strong` is the bright 2px all-sides ring
-## for full-screen or stick-distance focus, where the default hairline is too
-## subtle to track. Off-white, never gold.
+## The keyboard / gamepad focus marker. `strong` is a neutral selected fill under
+## a bright 3px all-sides rim for full-screen or stick-distance focus, where the
+## default hairline is too subtle to track. Off-white, never gold.
 static func focus_rim(strong := false) -> StyleBox:
 	if strong:
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(HIGHLIGHT.r, HIGHLIGHT.g, HIGHLIGHT.b, 0.10)
-		sb.set_border_width_all(2)
+		sb.bg_color = Color(SELECT_GREY.r, SELECT_GREY.g, SELECT_GREY.b, 0.78)
+		sb.set_border_width_all(3)
 		sb.border_color = HIGHLIGHT
 		sb.set_corner_radius_all(RADIUS)
 		sb.anti_aliasing = false

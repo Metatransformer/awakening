@@ -54,6 +54,8 @@ func _assignment_and_axe(rig) -> void:
 	StoryDb.mark_told(&"elder", &"timber_duty")
 	rig.check(ShopDb.stocked(ShopDb.WOODSMAN_AXE_ID),
 		"the axe line appears after the assignment")
+	rig.check(Game.quest_accept(QuestDb.KEEP_THE_HEARTH),
+		"the assigned timber duty is accepted into the quest journal")
 	pending = StoryDb.pending(&"elder")
 	rig.check(StringName(pending.get("id", &"")) == &"first_haul",
 		"the first-haul beat remains waiting behind the duty")
@@ -219,7 +221,8 @@ func _daily_state(rig) -> void:
 		"JSON-style Connected String keys restore as typed StringName keys")
 	rig.check(not restored_saved.has("carrying_firewood"),
 		"the garrison snapshot no longer writes legacy carrying_firewood state")
-	rig.check(Saves.VERSION == 20, "the additive garden save contract is version 20")
+	rig.check(Saves.VERSION == 21,
+		"the additive quest save contract preserves the garden payload at version 21")
 
 	Game.restore_garrison({
 		"fish_caught_day": 4,
@@ -271,6 +274,23 @@ func _hearth_and_schedule(rig, garrison: Garrison) -> void:
 	Clock.restore({"day": 2, "hour": 12.0, "running": false})
 	Game.restore_garrison({"firewood_stock": 2, "fish_stock": 2})
 	await rig.wait_frames(5)
+	var stump_seats := garrison.hearth.get_node_or_null("StumpSeats") as Node3D
+	rig.check(stump_seats != null and stump_seats.get_child_count() == 6,
+		"the hearth has exactly six decorative stump seats")
+	var flames := garrison.hearth.get_node_or_null("BonfireFlames") as Node3D
+	var fire_light := garrison.hearth.get_node_or_null("BonfireLight") as OmniLight3D
+	var vfx_names: Array[StringName] = [
+		&"FireVFX", &"FlameLicksVFX", &"EmberVFX", &"SmokeVFX",
+	]
+	rig.check(flames != null and flames.get_child_count() == vfx_names.size(),
+		"the hearth has exactly four Valenfeld fire VFX layers")
+	if flames != null:
+		for layer_name: StringName in vfx_names:
+			rig.check(flames.get_node_or_null(NodePath(String(layer_name))) is GPUParticles3D,
+				"the hearth has named %s particles" % layer_name)
+	rig.check(flames != null and not flames.visible
+		and fire_light != null and not fire_light.visible,
+		"the fire VFX container and light are off in daytime")
 	var cam := Camera3D.new()
 	cam.fov = 55.0
 	garrison.add_child(cam)
@@ -294,6 +314,9 @@ func _hearth_and_schedule(rig, garrison: Garrison) -> void:
 	Game.resolve_bonfire(2)
 	rig.check(Game.firewood_stock == 1 and Game.fish_stock == 1,
 		"the same campaign day's supper consumes neither wood nor Fish twice")
+	rig.check(flames != null and flames.visible
+		and fire_light != null and fire_light.visible,
+		"the fire VFX container and light turn on for the fueled bonfire")
 
 	var roster: Array[Npc] = [garrison.vendor, garrison.smith, garrison.alchemist,
 		garrison.keeper, garrison.jeweller]
@@ -463,10 +486,11 @@ func _menu(rig) -> void:
 	var page_text := " ".join(_all_text(panel))
 	for phrase: String in ["Day", "Bonfire", "Garrison Warmth", "PROVISIONS & MORALE",
 			"Food reserve", "Carried Firewood cargo", "2 bundles", "Carried Food cargo",
-			"3 portions", "GARDEN & ORCHARD", "south-gate supply box", "Fed", "Well Fed",
-			"Overall morale", "KEEP THE HEARTH",
+			"3 portions", "GARDEN & ORCHARD", "Fed", "Well Fed", "Overall morale",
 			"ROSTER", "DONATED RELIC EFFECTS", "ELDER IMPROVEMENTS"]:
 		rig.check(page_text.contains(phrase), "the Garrison page reports %s" % phrase)
+	rig.check(not page_text.contains("KEEP THE HEARTH"),
+		"quest duty is no longer duplicated on the Garrison status page")
 	rig.check(not page_text.contains("hearth stock is full"),
 		"full stored Firewood does not make gathering unavailable in the read-only page")
 	var focus: Control = rig.root.gui_get_focus_owner()
@@ -482,8 +506,8 @@ func _menu(rig) -> void:
 	await rig.capture("life_03_garrison_menu.png")
 
 	var strip := _first_tabs(panel)
-	rig.check(strip != null and strip.get_child_count() == 4,
-		"the focusable four-page tab strip is present")
+	rig.check(strip != null and strip.get_child_count() == 5,
+		"the focusable five-page tab strip is present")
 	if strip != null:
 		strip.focus_home()
 		_key(KEY_RIGHT)
@@ -504,6 +528,16 @@ func _menu(rig) -> void:
 		focus = rig.root.gui_get_focus_owner()
 		rig.check(focus != null and scroll != null and scroll.scroll_vertical == 0,
 			"tab wrapping preserves valid focus and the top scroll position")
+
+	Menu.call(&"_open_onto", PauseMenu.Screen.QUESTS)
+	await rig.wait_frames(5)
+	var quests := Menu.get_node("Root/Screens/QuestScreen") as MenuQuestPanel
+	var quest_text := " ".join(_all_text(quests)) if quests != null else ""
+	rig.check(quests != null and quests.visible
+		and quest_text.contains("KEEP THE HEARTH") and quest_text.contains("Ready")
+		and quest_text.contains("Store the firewood"),
+		"the completed timber actions are reported in the dedicated quest journal")
+	await rig.capture("life_04_quest_journal.png")
 
 
 func _catalogue_line(lines: Array[Dictionary], id: StringName) -> Dictionary:

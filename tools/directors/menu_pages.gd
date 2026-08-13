@@ -1,5 +1,5 @@
 extends RefCounted
-## The four paged screens — EQUIP, INVENTORY, MAP, GARRISON — reached the way a player
+## The five paged screens — EQUIP, INVENTORY, MAP, QUESTS, GARRISON — reached the way a player
 ## reaches them, on a keyboard AND on a pad, and measured while they are up.
 ##
 ##   timeout 400 tools/quiet.sh --path . -s tools/shoot.gd -- \
@@ -59,6 +59,7 @@ func run(rig) -> void:
 	var equip: MenuEquipPanel = menu.get_node("Root/Screens/EquipScreen")
 	var pouch: MenuPouchPanel = menu.get_node("Root/Screens/PouchScreen")
 	var map_panel: Control = menu.get_node("Root/Screens/MapScreen")
+	var quest_panel: Control = menu.get_node("Root/Screens/QuestScreen")
 	var garrison_panel: Control = menu.get_node("Root/Screens/GarrisonScreen")
 	var root_screen: Control = menu.get_node("Root/Screens/RootScreen")
 
@@ -87,8 +88,8 @@ func run(rig) -> void:
 	await _open_pouch(rig, menu)
 	_check("the Inventory screen is up", pouch.visible)
 	var labels := _tab_labels(pouch)
-	_check("the tabs read Equip / Inventory / Map / Garrison (got %s)" % [labels],
-		labels == PackedStringArray(["Equip", "Inventory", "Map", "Garrison"]))
+	_check("the tabs read Equip / Inventory / Map / Quests / Garrison (got %s)" % [labels],
+		labels == PackedStringArray(["Equip", "Inventory", "Map", "Quests", "Garrison"]))
 	_check("the live page tabs resolve to the body face", _tabs_use_body_font(pouch))
 	await _shot(rig, "inventory")
 
@@ -106,6 +107,7 @@ func run(rig) -> void:
 	# Walk to GARRISON, then prove both wrap directions on the shoulders. The
 	# first wrap is sampled before settling so the director witnesses both faces
 	# and their directional transforms rather than only the final page.
+	await _pad(rig, JOY_BUTTON_RIGHT_SHOULDER, 0)
 	await _pad(rig, JOY_BUTTON_RIGHT_SHOULDER, 0)
 	await _pad(rig, JOY_BUTTON_RIGHT_SHOULDER, 0)
 	await rig.wait_seconds(PAGE_SETTLE_SECONDS)
@@ -153,6 +155,10 @@ func run(rig) -> void:
 	await _shot(rig, "map")
 
 	await _key_page(rig, KEY_RIGHT)
+	_check("→ again paged to Quests (%s)" % _where(menu), quest_panel.visible)
+	await _shot(rig, "quests")
+
+	await _key_page(rig, KEY_RIGHT)
 	_check("→ again paged to Garrison (%s)" % _where(menu), garrison_panel.visible)
 	await _shot(rig, "garrison")
 
@@ -178,15 +184,17 @@ func run(rig) -> void:
 	_check("PAD: ↑ off the Garrison Back button reached the tab strip (%s)"
 		% _focus_name(rig), _on_tabs(rig))
 	await _pad_page(rig, JOY_BUTTON_DPAD_LEFT)
-	_check("PAD: ← paged off Garrison onto Map (%s)" % _where(menu), map_panel.visible)
+	_check("PAD: ← paged off Garrison onto Quests (%s)" % _where(menu), quest_panel.visible)
+	await _pad_page(rig, JOY_BUTTON_DPAD_LEFT)
+	_check("PAD: ← again reached Map (%s)" % _where(menu), map_panel.visible)
 	await _pad_page(rig, JOY_BUTTON_DPAD_LEFT)
 	_check("PAD: ← again reached Inventory (%s)" % _where(menu), pouch.visible)
 	var seen := {}
-	for i in 4:
+	for i in 5:
 		seen[_where(menu)] = true
 		await _pad_page(rig, JOY_BUTTON_DPAD_RIGHT)
-	_check("PAD: all four screens are reachable on the pad alone (%s)"
-		% [seen.keys()], seen.size() == 4)
+	_check("PAD: all five screens are reachable on the pad alone (%s)"
+		% [seen.keys()], seen.size() == 5)
 	await _shot(rig, "pad_ring")
 
 	# The pad has to get INTO a page too, or the strip is a place it can only

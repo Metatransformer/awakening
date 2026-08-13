@@ -102,7 +102,8 @@ func _table() -> void:
 		if DialogueDb.name_of(who).is_empty():
 			nameless.append(String(who))
 		var model := DialogueDb.model_of(who)
-		if model.is_empty() or not NpcBody.PEOPLE.has(model):
+		if model.is_empty() or (not NpcBody.PEOPLE.has(model)
+				and not RaceBody.RACES.has(model)):
 			faceless.append(String(who))
 	_ck("A1 every counter's speaker has a name (%s)" % [nameless], nameless.is_empty())
 	_ck("A2 and a body to show (%s)" % [faceless], faceless.is_empty())

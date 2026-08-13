@@ -1,7 +1,7 @@
 class_name MenuGarrisonPanel
 extends Control
 ## Read-only view of the garrison's authoritative clock, hearth, provisions,
-## morale, duty, roster, relic, and improvement state. Nothing here mutates it.
+## morale, roster, relic, and improvement state. Nothing here mutates it.
 
 signal back_requested
 
@@ -52,7 +52,6 @@ func refresh() -> void:
 	_build_provisions_and_morale()
 	_build_garden_status()
 	_build_hearth_status()
-	_build_duty_status()
 	_build_garrison_defence()
 	_build_roster()
 	_build_relic_effects()
@@ -257,41 +256,6 @@ func _build_garden_status() -> void:
 	_fact("Fruit trees", "%d growing · %d mature · %d ready to pick" \
 		% [growing_trees, mature_trees, fruit_ready])
 	_fact("Next step", "Plant with quartermaster stock, then water before dawn.")
-
-
-func _build_duty_status() -> void:
-	UITheme.section_rule(_body, "KEEP THE HEARTH")
-	var assigned: bool = Game.flag(StoryDb.told_flag(&"elder", &"timber_duty"))
-	var owns_axe: bool = Game.has(ShopDb.WOODSMAN_AXE_ID)
-	var completed: bool = Game.timber_completed_day == Clock.day
-	var availability: String
-	if not assigned:
-		availability = "Unavailable · duty not assigned"
-	elif not owns_axe:
-		availability = "Unavailable · axe not owned"
-	elif completed:
-		availability = "Completed today"
-	elif Clock.garrison_phase() != WorldClock.GARRISON_DAYTIME:
-		availability = "Closed · %s" % _phase_label(Clock.garrison_phase())
-	else:
-		availability = "Available now"
-	_fact("Outskirts grove", availability)
-	_fact("Today's chop", "Complete" if completed else "Not complete")
-	_fact("Current step", _duty_step(assigned, owns_axe, completed))
-
-
-func _duty_step(assigned: bool, owns_axe: bool, completed: bool) -> String:
-	if not assigned:
-		return "Not assigned"
-	if not owns_axe:
-		return "Craft the Woodsman's Axe at Brannoc's forge."
-	if not Game.tool_usable(ToolDb.WOODSMAN_AXE_ID):
-		return "Reforge the broken Woodsman's Axe at Brannoc's forge."
-	if _carried_firewood() > 0 or _carried_food() > 0:
-		return "Deposit carried cargo at the south-gate supply box."
-	if completed:
-		return "Return tomorrow for the next bundle."
-	return "Fell today's tree in the outskirts grove."
 
 
 func _carried_firewood() -> int:

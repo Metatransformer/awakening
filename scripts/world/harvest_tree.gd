@@ -28,6 +28,7 @@ var _trunk_body: StaticBody3D
 var _trunk_collision: CollisionShape3D
 var _stump: MeshInstance3D
 var _fall_tween: Tween
+var attention_marker: WorldAttentionMarker
 
 
 ## Route-builder API. Configure before adding the node to the tree; calls made
@@ -50,8 +51,15 @@ func _ready() -> void:
 	hold_time = CHOP_HOLD
 	radius = 2.35
 	super()
+	attention_marker = WorldAttentionMarker.new()
+	attention_marker.name = &"AttentionMarker"
+	attention_marker.visible = false
+	add_child(attention_marker)
 	_rebuild()
 	Clock.minute_changed.connect(_on_minute_changed)
+	Game.quests_changed.connect(
+		func(_quest_id: StringName) -> void: _refresh_attention_marker())
+	_refresh_attention_marker()
 
 
 func activate(by: Node3D) -> void:
@@ -169,6 +177,16 @@ func _rebuild() -> void:
 	add_child(_stump)
 
 	_apply_saved_state()
+	_refresh_attention_marker()
+
+
+func _refresh_attention_marker() -> void:
+	if attention_marker == null:
+		return
+	attention_marker.position.y = _target_height + 0.5
+	var symbol: String = QuestDb.marker_for_target(QuestDb.TARGET_OUTSKIRTS_TREE)
+	attention_marker.set_symbol(symbol)
+	attention_marker.visible = not symbol.is_empty()
 
 
 func _primitive_visual(radius: float, height: float) -> Node3D:

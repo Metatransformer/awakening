@@ -99,13 +99,15 @@ const SLOTS := 3
 ## Legacy carrying_firewood becomes a bag bundle after Run state is restored.
 ## Bumped to 20 for the additive persistent garden payload inside `garrison`.
 ## Older slots have no planted sites and reconstruct as an empty garden.
-const VERSION := 20
+## Bumped to 21 for the additive quest payload. Older slots reconstruct only the
+## quest outcomes already proved by their story, raid, tool, and supply state.
+const VERSION := 21
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
 const AUTOSAVE_INTERVAL := 300.0
 
 signal saved(slot: int)
@@ -257,6 +259,7 @@ func save(slot: int) -> bool:
 		"loadout": Game.loadout,
 		"loadout_set": Game.loadout_set,
 		"flags": Game.flags,
+		"quests": Game.quest_snapshot(),
 		"run": Run.snapshot(),
 		"room": String(current_room),
 		"scene": destination_scene,
@@ -395,6 +398,12 @@ func load_slot(slot: int) -> Dictionary:
 		Game.upgrades[upgrade_id] = maxi(
 			int(Game.upgrades.get(upgrade_id, 0)),
 			int((d["upgrades"] as Dictionary)[k]))
+	# Stored capacity alone cannot reveal whether it includes the old 12-cell
+	# baseline, so rebuild that baseline from the purchased rank without reducing
+	# a larger explicit stored value.
+	var bag_slot_rank: int = clampi(int(Game.upgrades.get(&"bag_slot", 0)),
+		0, int(SupplyDb.LIMITS[&"bag_slot"]))
+	Game.bag_slots = maxi(Game.bag_slots, K.START_BAG_SLOTS + bag_slot_rank)
 	var bed_rank: int = clampi(
 		int(Game.upgrades.get(ElderUpgradeDb.BED_ID, 0)),
 		0, int(ElderUpgradeDb.LIMITS[ElderUpgradeDb.BED_ID]))
@@ -608,6 +617,11 @@ func load_slot(slot: int) -> Dictionary:
 	# invalid inventory and `Run.reset()` has already cleared it.
 	if restored_dungeon and Game.has_boss_key and Game.boss_key_level <= 0:
 		Game.boss_key_level = Run.level
+	# Quest migration needs every fact it can conservatively prove: flags,
+	# garrison/raid state, durable tools, and the restored Run bag. Keep it after
+	# all four, so carried Firewood can never be confused with saved Fish or with
+	# the pre-restore bag from the slot that was just left.
+	Game.restore_quests(d.get("quests", {}))
 
 	active_slot = slot
 	current_room = StringName(d.get("room", ""))

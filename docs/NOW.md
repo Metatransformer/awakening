@@ -70,9 +70,27 @@ location. It changes access and cost around fishing but is not evidence that
 the near/deep fishing choice is deep; that hypothesis remains open in
 [design-tests/FISHING_PROVISIONS_PROOF.md](design-tests/FISHING_PROVISIONS_PROOF.md).
 
+Issue #197 is a third explicit owner override alongside the freeze. It
+authorises shared quest-state infrastructure, one read-only Quests page in the
+pause-menu ring, and punctuation-only world guidance: `!` for an available
+quest or its current target, and `?` on an NPC with a ready turn-in. It seeds
+exactly the already-built **Keep the Hearth** duty and the already-authorised
+**West Gate Defence** project; both use their existing actions, costs, spaces,
+and residents.
+
+This override adds no third quest, chore, reward economy, voiced line, route,
+NPC, location, or combat objective. It is state legibility for existing work,
+not raid evidence and not a new human-test hypothesis.
+
+Issue #198 is a fourth explicit owner-authorised bounded override alongside the
+freeze. It permits only player pickup and throw of the existing explosive
+barrels, plus one shared world-space lob landing marker used by both Burst and a
+carried barrel. The barrel is never inventory, persistent gear, or a ring stop;
+its existing fuse, impact, chain, and blast rules remain authoritative.
+
 ### Enemy tool-ladder prototype
 
-Issue [#200](https://github.com/Metatransformer/awakening/issues/200) is a third
+Issue [#200](https://github.com/Metatransformer/awakening/issues/200) is a fifth
 explicit owner override alongside the freeze. It authorises exactly four
 behavior-bearing variants in tool-acquisition order: floor 1 Knotback/Sword,
 floor 2 Lantern Seer/Bow, floor 3 Cinder Automaton/Burst and floor 4
@@ -83,9 +101,9 @@ Implementation and deterministic automated proof are complete. The human
 question remains unproven and its criteria are precommitted in
 [design-tests/ENEMY_TOOL_LADDER_PROOF.md](design-tests/ENEMY_TOOL_LADDER_PROOF.md).
 The variants use only temporary primitive kitbash attachments over existing
-animated bipeds, add no `Enemy.DEFS` kind or permanent monster model, and keep the
-rotation at seven kinds. At most one may appear in an ordinary room, and none
-may be an elite or boss summon. This override adds no item, ammo, currency,
+animated bipeds, add no `Enemy.DEFS` kind or permanent monster model, and keep
+the rotation at seven kinds. At most one may appear in an ordinary room, and
+none may be an elite or boss summon. This override adds no item, ammo, currency,
 screen, boss beat, autoload, permanent art asset or broader production
 authorisation.
 
@@ -120,13 +138,14 @@ additional observations, additional doctrines, repeatable faucet or item.
 - Multiple waves, routes, raid types, or defensive structures.
 - Freeform construction or placement.
 - Destructible buildings.
-- The explosive-barrel and hanging-lantern interaction system.
+- Any explosive-barrel or hanging-lantern expansion beyond #198's player
+  pickup/throw and shared Burst/barrel lob marker.
 - Signature variants beyond #200's four, more than one per ordinary room,
   elite signatures, or boss-summon signatures.
 - Mining expansion beyond #184's one deterministic vein rule, additional ore
   or tool types, fishing gear collections, and profession progression.
-- Any currency beyond gold and Field Notes, UI screen, voiced line, or enemy
-  model.
+- Any currency beyond gold and Field Notes, UI screen beyond #197's one Quests
+  page, voiced line, or enemy model.
 - Floors, bosses, production content, broad lore, or unrelated polish.
 
 Implementation proves only that each bounded system works. It does not prove

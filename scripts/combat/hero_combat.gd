@@ -855,7 +855,7 @@ func _show_equipped() -> void:
 		var pair: Dictionary = _items[id]
 		var in_hand := id == equipped
 		if pair["hand"] != null:
-			(pair["hand"] as Node3D).visible = in_hand
+			_set_desired_visibility(pair["hand"] as Node3D, in_hand)
 		if pair["stow"] != null:
 			# Stowed, but only if he actually has one. Both mounts are built at
 			# _ready because BoneAttachment3D is not something to be creating
@@ -863,16 +863,17 @@ func _show_equipped() -> void:
 			# bow and a hookshot he has never found -- and the ownership check
 			# in Game.cycle_armament then refuses to equip the bow the player
 			# can plainly see on his own back.
-			(pair["stow"] as Node3D).visible = not in_hand and Game.has(id)
+			_set_desired_visibility(pair["stow"] as Node3D,
+				not in_hand and Game.has(id))
 	# You cannot hold a bow and a sword — and the sword he is not holding is on
 	# his hip, never nowhere. `drawn` is the single answer both mounts read, so
 	# the two can never both be visible (a hero with two swords) or both hidden
 	# (a swordsman who has mislaid it).
 	var drawn := equipped == &""
 	if sword != null:
-		sword.visible = drawn
+		_set_desired_visibility(sword, drawn)
 	if sword_stow != null:
-		sword_stow.visible = not drawn
+		_set_desired_visibility(sword_stow, not drawn)
 	_hide_loadout_for_utility()
 
 
@@ -886,7 +887,8 @@ func _show_left(left: StringName) -> void:
 		# set used to leave both on the same arm -- a kite shield growing out of a
 		# bowstring. You cannot draw a bow with a shield strapped to the hand that
 		# holds it, so the shield comes off for as long as the bow is out.
-		shield.visible = left == &"shield" and equipped != &"bow"
+		_set_desired_visibility(shield,
+			left == &"shield" and equipped != &"bow")
 	_hide_loadout_for_utility()
 
 
@@ -1129,6 +1131,8 @@ func _build_vfx() -> void:
 func _physics_process(delta: float) -> void:
 	if _hero == null:
 		return
+	var carrying_barrel := _hero.ranged != null \
+		and _hero.ranged.has_carried_barrel()
 
 	# A shop or a fade owns the buttons while it is up. The swing already in
 	# flight still finishes below -- cancelling it would leave the hitbox on.
@@ -1189,6 +1193,7 @@ func _physics_process(delta: float) -> void:
 	# also makes a landed parry honest in the other direction: you cannot catch a
 	# blow and be back behind the guard for the next one on the same press.
 	var want_block := _hero.is_on_floor() and not locked and not rolling \
+		and not carrying_barrel \
 		and not _hero.first_person() \
 		and Input.is_action_pressed(&"shield") and _swing_t < 0.0 and _parry_t < 0.0
 	if want_block != blocking:
@@ -1384,6 +1389,7 @@ func _tick_use_item_button() -> void:
 func _tick_item_trigger() -> void:
 	if _hero.ranged == null:
 		return
+	var carrying_barrel := _hero.ranged.has_carried_barrel()
 	# `attack` is read EXACTLY here and in `_tick_light_button` — see ATTACK_EXACT.
 	# It matters even on this line, where both buttons do the same thing: without
 	# it a Shift+LMB draw would arrive as two presses in one frame, so `edge`
@@ -1393,7 +1399,7 @@ func _tick_item_trigger() -> void:
 		or Input.is_action_pressed(&"attack", ATTACK_EXACT)
 	var edge := (Input.is_action_just_pressed(&"heavy")
 		or Input.is_action_just_pressed(&"attack", ATTACK_EXACT))
-	if equipped != &"" and edge:
+	if (equipped != &"" or carrying_barrel) and edge:
 		_hero.ranged.use_press(equipped)
 		return
 	if not down:
@@ -1413,7 +1419,8 @@ func _tick_item_trigger() -> void:
 func _tick_light_button() -> void:
 	# An item owns both shoulder buttons while it is drawn (`_tick_item_trigger`,
 	# which has already run this frame). There is no sword half to reach.
-	if equipped != &"":
+	if equipped != &"" or (_hero.ranged != null \
+			and _hero.ranged.has_carried_barrel()):
 		return
 	if not Input.is_action_just_pressed(&"attack", ATTACK_EXACT):
 		return
@@ -1485,7 +1492,8 @@ func _tick_parry_button() -> void:
 	# shield to throw. `_begin` would swallow this anyway — it refuses every
 	# Intent while something is equipped — but bailing here keeps the refusal
 	# where the reason for it is, and matches how the two swing ticks open.
-	if equipped != &"":
+	if equipped != &"" or (_hero.ranged != null \
+			and _hero.ranged.has_carried_barrel()):
 		return
 	if not blocking:
 		return
@@ -1517,7 +1525,8 @@ func _tick_parry_button() -> void:
 ## second — and that is the price of the trigger meaning one thing. The button
 ## with no latency at all is RB, and it is right there.
 func _tick_heavy_button(delta: float) -> void:
-	if equipped != &"":
+	if equipped != &"" or (_hero.ranged != null \
+			and _hero.ranged.has_carried_barrel()):
 		# An item owns this trigger while it is drawn (`_tick_item_trigger`), so
 		# there is no sword half to run — and any wind-up that was already in
 		# flight is dropped rather than left armed. The only way to be mid-hold

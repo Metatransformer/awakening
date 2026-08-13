@@ -36,6 +36,7 @@ var _warning_step := 0
 var _age := 0.0
 var _afterglow := 0.0
 var _explosion_count := 0
+var _last_impact := Vector3.INF
 
 var _body: AnimatableBody3D
 var _shape: CollisionShape3D
@@ -46,9 +47,11 @@ var _fuse_glow: StandardMaterial3D
 var _blast: Node3D
 var _blast_core: MeshInstance3D
 var _blast_ring: MeshInstance3D
+var _interactable: Interactable
 
 var _flight_query := PhysicsRayQueryParameters3D.new()
 var _blast_query := PhysicsShapeQueryParameters3D.new()
+var _flight_exclusions: Array[RID] = []
 
 
 func _ready() -> void:
@@ -57,7 +60,7 @@ func _ready() -> void:
 	_flight_query.collision_mask = K.L_WORLD | K.L_ENEMY | K.L_INTERACT
 	_flight_query.collide_with_bodies = true
 	_flight_query.collide_with_areas = true
-	_flight_query.exclude = [_body.get_rid()]
+	_reset_flight_exclusions()
 
 
 ## True only while a carry interaction may claim this barrel. A lit fuse is not
@@ -78,6 +81,26 @@ func explosion_count() -> int:
 	return _explosion_count
 
 
+func is_carried_by(carrier: Node3D) -> bool:
+	return _state == State.CARRIED and _carrier == carrier
+
+
+func flight_centre() -> Vector3:
+	return global_position + Vector3.UP * (BODY_H * 0.5)
+
+
+func flight_exclusions() -> Array[RID]:
+	var copy: Array[RID] = []
+	copy.assign(_flight_exclusions)
+	return copy
+
+
+## The swept contact that ended the latest throw. This is the landing point a
+## lob preview names; the barrel's Node3D origin is offset from it by its shape.
+func last_impact_position() -> Vector3:
+	return _last_impact
+
+
 ## WP2's whole carry contract. The prop follows one carrier but never reparents,
 ## so its world transform and ownership stay predictable for rooms and queries.
 func begin_carry(carrier: Node3D) -> bool:
@@ -85,7 +108,21 @@ func begin_carry(carrier: Node3D) -> bool:
 		return false
 	_carrier = carrier
 	_state = State.CARRIED
-	_shape.set_deferred(&"disabled", true)
+	# Keep the authored body hittable while it is in somebody's hands, but drop
+	# its WORLD layer so it cannot become a moving wall against its carrier.
+	_shape.set_deferred(&"disabled", false)
+	_body.set_deferred(&"collision_layer", K.L_INTERACT)
+	_set_interaction(false)
+	_reset_flight_exclusions(carrier)
+	return true
+
+
+## Return a claim that never became a throw. The carrier identity prevents a
+## stale owner from cancelling a barrel another actor has since claimed.
+func cancel_carry(carrier: Node3D) -> bool:
+	if _state != State.CARRIED or _carrier != carrier:
+		return false
+	_return_to_idle()
 	return true
 
 
@@ -97,9 +134,11 @@ func throw_from(origin: Vector3, velocity: Vector3) -> bool:
 		return false
 	global_position = origin
 	_velocity = velocity
+	_last_impact = Vector3.INF
 	_carrier = null
 	_state = State.THROWN
 	_shape.set_deferred(&"disabled", false)
+	_body.set_deferred(&"collision_layer", K.L_WORLD | K.L_INTERACT)
 	_start_fuse(THROW_FUSE)
 	return true
 
@@ -139,9 +178,7 @@ func _physics_process(delta: float) -> void:
 
 func _follow_carrier() -> void:
 	if _carrier == null or not is_instance_valid(_carrier):
-		_carrier = null
-		_state = State.IDLE
-		_shape.set_deferred(&"disabled", false)
+		_return_to_idle()
 		return
 	var forward := -_carrier.global_transform.basis.z.normalized()
 	global_position = _carrier.global_position + Vector3.UP * 1.08 + forward * 0.62
@@ -152,7 +189,12 @@ func _start_fuse(seconds: float) -> void:
 		return
 	# A throw remains a throw until it lands; its fuse still burns in parallel.
 	if _state != State.THROWN:
+		if _state == State.CARRIED:
+			_carrier = null
+			_shape.set_deferred(&"disabled", false)
+			_body.set_deferred(&"collision_layer", K.L_WORLD | K.L_INTERACT)
 		_state = State.FUSING
+	_set_interaction(false)
 	_fuse_total = maxf(seconds, 0.05)
 	_fuse_left = _fuse_total
 	_warning_step = 0
@@ -198,9 +240,10 @@ func _fly(delta: float) -> void:
 		rotation.y += delta * 4.5
 		return
 
+	_last_impact = found["position"] as Vector3
 	var normal := found["normal"] as Vector3
 	var support := BODY_H * 0.5 if absf(normal.y) > 0.55 else BODY_R
-	global_position = found["position"] as Vector3 + normal * support \
+	global_position = _last_impact + normal * support \
 		- Vector3.UP * (BODY_H * 0.5)
 	_explode()
 
@@ -283,6 +326,46 @@ func _tick_afterglow(delta: float) -> void:
 		queue_free()
 
 
+func _on_pickup(by: Node3D) -> void:
+	var hero := by as Hero
+	if hero == null or hero.ranged == null:
+		return
+	hero.ranged.take_barrel(self)
+
+
+func _on_interactable_ready() -> void:
+	# Prompt overlap comes from this Area's PLAYER mask. Keeping it off every
+	# query layer prevents an interaction radius from becoming a huge hitbox.
+	_interactable.collision_layer = 0
+
+
+func _set_interaction(active: bool) -> void:
+	if _interactable != null:
+		_interactable.enabled = active
+
+
+func _reset_flight_exclusions(carrier: Node3D = null) -> void:
+	_flight_exclusions.clear()
+	if _body != null:
+		_flight_exclusions.append(_body.get_rid())
+	if _interactable != null:
+		_flight_exclusions.append(_interactable.get_rid())
+	var collision_carrier := carrier as CollisionObject3D
+	if collision_carrier != null:
+		_flight_exclusions.append(collision_carrier.get_rid())
+	_flight_query.exclude = _flight_exclusions
+
+
+func _return_to_idle() -> void:
+	_carrier = null
+	_velocity = Vector3.ZERO
+	_state = State.IDLE
+	_shape.set_deferred(&"disabled", false)
+	_body.set_deferred(&"collision_layer", K.L_WORLD | K.L_INTERACT)
+	_reset_flight_exclusions()
+	_set_interaction(true)
+
+
 # --- Construction ------------------------------------------------------------
 
 func _build() -> void:
@@ -298,6 +381,16 @@ func _build() -> void:
 	_shape.shape = cylinder
 	_shape.position.y = BODY_H * 0.5
 	_body.add_child(_shape)
+
+	_interactable = Interactable.new()
+	_interactable.name = &"Pickup"
+	_interactable.prompt = "PICK UP BARREL"
+	_interactable.radius = 1.65
+	_interactable.activated.connect(_on_pickup)
+	# The Area scans the player for Prompt, but is not itself a weapon/flight
+	# target. The barrel's authored Body remains on L_INTERACT for those hits.
+	_interactable.ready.connect(_on_interactable_ready, CONNECT_ONE_SHOT)
+	add_child(_interactable)
 
 	_whole = Node3D.new()
 	_whole.name = "Barrel"

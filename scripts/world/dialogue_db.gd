@@ -39,11 +39,12 @@ extends RefCounted
 ##   * `portrait`  -- the drawing shown in the box, cut out of its backdrop by
 ##     `tools/cut_portrait.py`. A person with no portrait simply has no figure on
 ##     their side of the box (`DialogueBox._portrait`).
-##   * `model`    -- their body in the world, an `NpcBody.PEOPLE` key. Nothing
-##     renders from this any more -- the box is painted, not posed -- but it is
-##     the link that says the person talking to you is the person standing in
-##     front of you, and `tools/directors/dialogue.gd` beat A2 asserts it. Absent
-##     for the hero, whose rig is not an NPC body at all.
+##   * `model`    -- their body in the world, an `NpcBody.PEOPLE` or
+##     `RaceBody.RACES` key. Nothing renders from this any more -- the box is
+##     painted, not posed -- but it is the link that says the person talking to
+##     you is the person standing in front of you, and
+##     `tools/directors/dialogue.gd` beat A2 asserts it. Absent for the hero,
+##     whose rig is not an NPC body at all.
 ##
 ## Note `elder` -> the `lanternkeeper` model. They were two people until
 ## 2026-08-10 and the voice id is the one that survived the merge (`Npc.COUNTERS`
@@ -69,6 +70,8 @@ static var PEOPLE := {
 	# either to match the other would break the thing it was named for.
 	&"jewelcrafter": {"name": "Marisel", "model": "jewelcrafter",
 		"portrait": PORTRAITS + "jeweler.png"},
+	&"builder": {"name": "Tamsin", "model": "vyr",
+		"portrait": PORTRAITS + "builder.png"},
 }
 
 ## take -> the words, verbatim.
@@ -119,6 +122,10 @@ static var SAID := {
 static var WRITTEN := {
 	&"elder": {
 		&"farewell": "You're doing wonderfully.",
+	},
+	&"builder": {
+		&"hello": "The west wall will not mend itself.",
+		&"farewell": "Bring me what the works board asks for.",
 	},
 }
 
