@@ -92,6 +92,7 @@ var _card: LoadingCard = null
 var _day_title_queue: Array[DayTitleRequest] = []
 var _day_title_card: DayTitleCard = null
 var _presenting_day_title: bool = false
+var _sleep_clock_card: SleepClockCard = null
 
 
 func _ready() -> void:
@@ -561,6 +562,51 @@ func blink(during: Callable, dark: float = 0.9) -> void:
 	_try_present_day_title()
 	var tin := create_tween().set_ignore_time_scale(true)
 	tin.tween_property(_veil, "color:a", 0.0, FADE_IN)
+
+
+## Bed rest keeps Flow's one veil and one transition layer, but replaces blink's
+## undifferentiated black hold with a paused civil-time presentation.
+func sleep_transition(during: Callable, from_absolute_hour: float,
+		to_absolute_hour: float) -> void:
+	if busy or ending:
+		return
+	busy = true
+	Prompt.blocked = true
+
+	var tw := create_tween().set_ignore_time_scale(true)
+	tw.tween_property(_veil, "color:a", 1.0, FADE_OUT)
+	await tw.finished
+
+	get_tree().paused = true
+	_drop_sleep_clock_card()
+	_sleep_clock_card = SleepClockCard.open(
+		_layer, from_absolute_hour, to_absolute_hour)
+	Bus.request_global_sfx.emit(CLOCK_CUE)
+	await _sleep_clock_card.finished
+
+	if during.is_valid():
+		during.call()
+	_drop_sleep_clock_card()
+	get_tree().paused = false
+
+	Prompt.blocked = false
+	busy = false
+	# Crossed dawn/nightfall signals queued their cards while this transition
+	# still owned input. Transfer the blocker synchronously before lifting black.
+	_try_present_day_title()
+	var tin := create_tween().set_ignore_time_scale(true)
+	tin.tween_property(_veil, "color:a", 0.0, FADE_IN)
+
+
+func _drop_sleep_clock_card() -> void:
+	if not is_instance_valid(_sleep_clock_card):
+		_sleep_clock_card = null
+		return
+	var card: SleepClockCard = _sleep_clock_card
+	_sleep_clock_card = null
+	if card.get_parent() != null:
+		card.get_parent().remove_child(card)
+	card.queue_free()
 
 
 ## `open_on_black` USED TO BE HERE, and it is deliberately gone.
