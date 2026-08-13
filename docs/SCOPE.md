@@ -32,6 +32,7 @@ unauthorised.
 | Relics | **12** |
 | Garrison NPCs | **6**: the existing five plus one Vyr Builder |
 | Authored build quests | **1**: West Gate Bolt-Thrower |
+| Authored quest-journal entries | **2**: Keep the Hearth, West Gate Defence |
 | Authored defensive structures | **1**: West Gate Bolt-Thrower |
 | Authored raid occurrences | **1**, with no scheduler |
 | Player stats | **5** |
@@ -40,7 +41,7 @@ unauthorised.
 | Jewelry slots | **4** |
 | Armour or jewelry art | **0** |
 | Garrison surface scenes | **2** |
-| New UI screens | **3** |
+| New UI screens | **4**: including the one Quests inspection page |
 | Endings | **2** |
 | Currencies | **2**: gold and Field Notes |
 | Ingredients / components | **10 / 8**, with no new rarity band |
@@ -75,6 +76,13 @@ The Field Notes amendment adds one finite, non-convertible permanent currency
 and three one-rank doctrine tracks. It adds no item, pickup, UI screen, NPC,
 stat category, dialogue tree or repeatable system. The exact five-observation,
 five-note boundary is owned by [FIELD_NOTES.md](FIELD_NOTES.md).
+
+Issue #197 is the explicit owner amendment for one reusable quest-state seam,
+one Quests inspection page, and `!` / `?` world-attention punctuation. Its two
+entries wrap existing authorised work: Keep the Hearth and West Gate Defence.
+The amendment raises only the UI-screen cap by one and creates no permission for
+a third quest, new reward, new chore, new objective family, new location, or
+new NPC.
 
 Counts rise only through an explicit scope amendment. By default, an addition
 must delete something of comparable cost in the same decision. Implementing a
@@ -119,7 +127,12 @@ slice. It does not supersede the authorised human proofs above or satisfy the
 near/deep evidence bar in
 [design-tests/FISHING_PROVISIONS_PROOF.md](design-tests/FISHING_PROVISIONS_PROOF.md).
 
-Raid, Field Notes, fishing/provisions, and #184's bounded tool/mining
+Issue #197 is separately owner-authorised implementation sequencing debt: the
+bounded two-entry quest journal and its `!` / `?` NPC-and-target feedback. It
+does not supersede either authorised human proof.
+
+Raid, Field Notes, fishing/provisions, #184's bounded tool/mining, and #197's
+bounded quest-journal
 implementations are complete; their precommitted human tests remain pending.
 Floors 2–4, bosses 2–4, production content, another fishing location or
 minigame, and every expansion below remain frozen.

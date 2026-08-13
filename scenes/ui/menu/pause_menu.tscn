@@ -1,9 +1,10 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/menu/pause_menu.gd" id="1_menu"]
 [ext_resource type="Script" path="res://scripts/ui/menu/equip_panel.gd" id="7_equip"]
 [ext_resource type="Script" path="res://scripts/ui/menu/pouch_panel.gd" id="8_pouch"]
 [ext_resource type="Script" path="res://scripts/ui/menu/map_panel.gd" id="9_map"]
+[ext_resource type="Script" path="res://scripts/ui/menu/quest_panel.gd" id="11_quests"]
 [ext_resource type="Script" path="res://scripts/ui/menu/garrison_panel.gd" id="10_garrison"]
 [ext_resource type="Script" path="res://scripts/ui/menu/options_panel.gd" id="3_options"]
 [ext_resource type="Script" path="res://scripts/ui/menu/saves_panel.gd" id="4_saves"]
@@ -85,6 +86,17 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("9_map")
+
+[node name="QuestScreen" type="Control" parent="Root/Screens"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("11_quests")
 
 [node name="GarrisonScreen" type="Control" parent="Root/Screens"]
 visible = false

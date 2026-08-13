@@ -14,6 +14,7 @@ const BODY_H := 0.82
 
 var _firewood_tokens: Array[Node3D] = []
 var _food_tokens: Array[Node3D] = []
+var attention_marker: WorldAttentionMarker
 
 
 func _ready() -> void:
@@ -21,8 +22,16 @@ func _ready() -> void:
 	radius = 2.0
 	super()
 	_build()
+	attention_marker = WorldAttentionMarker.new()
+	attention_marker.name = &"AttentionMarker"
+	attention_marker.position.y = BODY_H + 0.72
+	attention_marker.visible = false
+	add_child(attention_marker)
 	Game.garrison_changed.connect(_repaint)
+	Game.quests_changed.connect(
+		func(_quest_id: StringName) -> void: _refresh_attention_marker())
 	_repaint()
+	_refresh_attention_marker()
 
 
 func activate(by: Node3D) -> void:
@@ -58,6 +67,14 @@ func _repaint() -> void:
 		_firewood_tokens[i].visible = i < Game.firewood_stock
 	for i: int in _food_tokens.size():
 		_food_tokens[i].visible = i < Game.fish_stock
+
+
+func _refresh_attention_marker() -> void:
+	if attention_marker == null:
+		return
+	var symbol: String = QuestDb.marker_for_target(QuestDb.TARGET_SUPPLY_BOX)
+	attention_marker.set_symbol(symbol)
+	attention_marker.visible = not symbol.is_empty()
 
 
 func _build() -> void:

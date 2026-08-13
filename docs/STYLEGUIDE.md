@@ -1746,7 +1746,9 @@ at. The only reference is **Options → Controls**, which lists every live bindi
 for the device in hand. Do not reinstate a bottom-of-frame legend without
 re-opening that card.
 
-**NEVER:** quest text, objective markers, floating damage numbers, an XP bar.
+**NEVER:** persistent quest text, compass trails or path arrows, floating damage
+numbers, an XP bar. The punctuation-only `!` / `?` world-attention exception is
+defined below; it points at a person or usable object without drawing a route.
 
 **Superseded 2026-08-09, on the owner's instruction: this list began "a minimap"
 and there is now one in the top-right corner (§5.5b).** The old argument was that
@@ -1860,7 +1862,7 @@ point, and a fourth right edge is what made the column read as ragged.
 | Lock brackets | half-extent (26, 34), 2 px on a 1 px VOID keyline, quantized to 480×270; arm 8 inward / 12 outward / 5 on two corners (§5.5) |
 | Enemy health bar | 20 × 2 px (×2.2 locked), 1 px frame (BONE if elite), ASH@85% track, RUST fill, ≤ 22 m, LOS-gated |
 | World caption (`WorldCaption`) | §3.1b type at its own `ref_px` (14 body / 16 damage), World plate, cap TOP on the anchor, quantized to 480×270, ≤ `max_range` (18 m default) with a 3 m fade, LOS-gated, behind-camera culled, **de-collided against the other captions on the frame**. Billboarded captions only — see §4.3 |
-| World attention (`WorldAttentionMarker`) | Exactly `!` in GOLD at the 16 px HUD rung, on the World plate and through the same range, LOS and de-collision path as every `WorldCaption`. It may breathe only in alpha. It means **an actionable permanent-progression commit is available now**: an unfiled completed Field Note at the bedside book, or an affordable visible progression-catalogue row at an open NPC service. It disappears immediately when the last ready note is filed, the last qualifying bill is no longer affordable/remaining, or the service closes. Never use it for ordinary Trade stock, focus, proximity, undiscovered content or a general quest hint. |
+| World attention (`WorldAttentionMarker`) | Exactly `!` or `?` in GOLD at the 16 px HUD rung, on the World plate and through the same range, LOS and de-collision path as every `WorldCaption`. It may breathe only in alpha. `!` means an actionable permanent-progression commit, an available quest giver, or the current active quest target. `?` means one thing only: this NPC can receive a READY quest now. Quest punctuation wins over the older affordable-progression `!`. It disappears immediately when its state is spent or moves to the next target. Never use it for ordinary Trade stock, focus, proximity, undiscovered content, routing, or non-current objectives. |
 
 #### The caption de-collide — what does not shrink does not get out of the way
 
@@ -2110,6 +2112,11 @@ for 2D art anywhere else.
   is drawn from, so the numbers cannot claim a chest the map is not showing;
   on authored surfaces the same screen instead names the active plan and counts
   ROUTES, AREAS and PLACES from it, with only its live landmark glyphs in the key;
+  and the quest journal (`MenuQuestPanel`), a two-pane inspection page with the
+  quest rows on the left and the selected summary plus ordered objectives on the
+  right. READY and completed objectives use SUCCESS; only the current active
+  objective gets the HIGHLIGHT diamond. The page performs no acceptance,
+  progression, failure, or turn-in mutation;
   the save/load screen (`MenuSavesPanel` + `MenuSlotRow`), where an empty slot
   in LOAD mode is the refusal law rendered on a card rather than a row — 38%,
   "Nothing here to load." at full DANGER, and still in its place; and the one

@@ -261,7 +261,7 @@ These nine facts are the ones clones get wrong. Build to them:
 | Autoload | Script | Purpose |
 |---|---|---|
 | `Bus` | `scripts/autoload/event_bus.gd` | sideways peer→peer signals |
-| `Game` | `scripts/autoload/game_state.gd` | health points, magic, keys, items, flags |
+| `Game` | `scripts/autoload/game_state.gd` | campaign health, items, flags, garrison, and quest progress |
 | `Run` | `scripts/autoload/run_state.gd` | the current delve; **after `Game`** — it spends and grants gold |
 | `Heat` | `scripts/autoload/heat.gd` | the kill chain and what it is worth; **after `Game`** (it refunds stamina) and **after `Run`** (no chain outside the dungeon) |
 | `Settings` | `scripts/autoload/settings.gd` | volumes, video, binds, and their persistence |
@@ -1803,6 +1803,55 @@ Rules:
   effects and Elder improvements. Back is its only body action. The authoritative
   design and scope gate are `docs/GARRISON_LIFE.md`; the panel never chops,
   deposits, buys, donates or advances time.
+- Between MAP and GARRISON in the same inspection ring:
+  `PauseMenu.Screen.QUESTS`, `Root/Screens/QuestScreen`
+  (`scripts/ui/menu/quest_panel.gd`). It is a two-pane journal: the left row
+  list selects an accepted/terminal quest and the right pane shows its status,
+  summary, ordered objectives, completed checks, and one current-objective
+  diamond. It is read-only; accepting and turning in remain NPC dialogue acts.
+
+### Quest authority — authored definitions, one mutable campaign owner
+
+`QuestDef` and `QuestDb` (`scripts/quests/`) own immutable ids, words, NPC ids,
+and ordered objectives. `QuestState` (`scripts/systems/quest_state.gd`) owns the
+mutable entries, but it is not an autoload: `Game` owns one instance and exposes
+the campaign API.
+
+```gdscript
+Game.quest_offer(quest_id) -> bool
+Game.quest_accept(quest_id) -> bool
+Game.quest_advance(quest_id, objective_id, amount := 1) -> bool
+Game.quest_complete_objective(quest_id, objective_id) -> bool
+Game.quest_turn_in(quest_id) -> bool
+Game.quest_status(quest_id) -> QuestState.Status
+Game.quest_active_objective(quest_id) -> Dictionary
+Game.quest_snapshot() -> Dictionary
+Game.restore_quests(raw) -> void
+Game.quests_changed(quest_id)
+```
+
+The lifecycle is `LOCKED → AVAILABLE → ACTIVE → READY → COMPLETED`; `FAILED`
+is the other terminal state. Acceptance requires a real AVAILABLE offer. The
+last objective stops at READY, and only the turn-in row on the authored NPC may
+make it COMPLETED. Progress is keyed only by stable quest/objective ids and is
+JSON-safe.
+
+Exactly two definitions exist: **Keep the Hearth** (forge the axe, fell one
+tree, store the Firewood; Aldric gives and receives it) and **West Gate
+Defence** (build the one bolt-thrower; the Builder gives and receives it). The
+real craft, chop, deposit, raid-arm, and works-board purchase functions advance
+them; the journal never does.
+
+`QuestDb.marker_for_npc` / `marker_for_target` project that state into the
+world. `!` means an available giver or the current active target. `?` exists
+only on the NPC who can receive a READY quest, and wins over `!`. Quest
+punctuation wins over an NPC's affordable-progression `!`; all three still use
+the one `WorldAttentionMarker` caption path.
+
+NPC option order is ready turn-ins, available offers, services, topics, Leave.
+Choosing a quest row performs the mutation and returns its authored text pages.
+The Builder is a written, unvoiced speaker with a painted portrait so both offer
+and turn-in use the ordinary two-sided `DialogueBox` composition.
 
 ### Durable utility tools — three ids outside every carried-item path
 
@@ -3160,7 +3209,7 @@ false on a Recut, where clamping down is the point.
 
 ```gdscript
 Saves.peek(slot: int) -> Dictionary       # readable list header; empty=true if unused
-Saves.save(slot: int) -> bool             # Game + destination/transform + v18 Run/garrison/tool state
+Saves.save(slot: int) -> bool             # Game + destination/transform + v21 Run/garrison/tool/quest state
 Saves.load_slot(slot: int) -> Dictionary  # restores data and returns the travel destination
 Saves.erase(slot: int) -> void            # 3 slots, 0..2
 Saves.autosave() -> bool                  # active slot, else first empty, else decline
@@ -3176,7 +3225,7 @@ garrison load. v4-v8 transforms are deliberately omitted because their owner is
 unknown; v9 introduced `position_scene`, and a transform is returned only when
 that owner matches the destination.
 
-The save file is at **`VERSION = 18`**, and `READABLE` — not `VERSION` — is what
+The save file is at **`VERSION = 21`**, and `READABLE` — not `VERSION` — is what
 `load_slot` checks. v4 split the old `plate` rung into eight gear tracks and is
 why **v3 is refused rather than migrated**: its `plate` key has no honest mapping
 to the new pieces. The later bumps are additive: v5 added `deaths`, v6
@@ -3184,13 +3233,19 @@ to the new pieces. The later bumps are additive: v5 added `deaths`, v6
 v10 `last_played_unix` plus the single versioned `run` snapshot, v11 manual
 wishlist tracks, v12 the additive `garrison` payload, v13 Field Notes, v14
 temporary overhealth, v15 fishing/supper/Well Fed/Connected state, v16 the
-health-points vocabulary, v17 completed Field Notes, and v18 durable utility-
-tool state. `READABLE` is therefore every version from **4 through 18**; absent
+health-points vocabulary, v17 completed Field Notes, v18 durable utility-tool
+state, v19 restoration of non-dungeon Run snapshots, v20 the additive garden
+payload, and v21 the
+additive quest payload. `READABLE` is therefore every version from **4 through
+21**; absent
 fields take their version-appropriate defaults instead of making those slots
 unreadable. A pre-v18 slot that owns the Woodsman's Axe migrates it at full
 eight-use durability. v18 writes all three durability
 entries, including a known broken zero, and rebuilds `Game.items` only for
-positive values. `save_game.gd`'s header carries the full version history.
+positive values. v21 writes `quests`; older slots conservatively reconstruct
+only quest facts already proved by their story flags, tools, carried/stored
+Firewood, and raid record. Migration never turns a READY quest in for the
+player. `save_game.gd`'s header carries the full version history.
 
 Every one of those dictionaries is rebuilt on load with `StringName` keys — JSON
 hands back `String` keys, and a `String` key makes `forge_level(&"edge")` and

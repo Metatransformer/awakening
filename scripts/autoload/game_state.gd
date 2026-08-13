@@ -7,9 +7,11 @@ extends Node
 const GarrisonRaidStateScript := preload(
 	"res://scripts/systems/garrison_raid_state.gd")
 const GardenStateScript := preload("res://scripts/systems/garden_state.gd")
+const QuestStateScript := preload("res://scripts/systems/quest_state.gd")
 
 signal garrison_changed
 signal garrison_raid_restoring
+signal quests_changed(quest_id: StringName)
 
 ## Local developer-only state. Deliberately absent from Saves.
 var dev_god_mode: bool = false
@@ -368,6 +370,7 @@ var well_fed_trip: bool = false
 var connected_days: Dictionary[StringName, int] = {}
 var _garrison_raid := GarrisonRaidStateScript.new()
 var _garden := GardenStateScript.new()
+var _quests := QuestStateScript.new()
 
 
 # --- The starter kit --------------------------------------------------------
@@ -399,6 +402,7 @@ const STARTER_KIT: Array[StringName] = []
 func _ready() -> void:
 	_garrison_raid.changed.connect(_on_garrison_raid_changed)
 	_garden.changed.connect(_on_garden_changed)
+	_quests.changed.connect(_on_quest_changed)
 	_grant_starter_kit()
 
 
@@ -418,6 +422,150 @@ func _grant_starter_kit() -> void:
 	_seed_wheel()
 	while bottle_count() < K.BOTTLE_START:
 		add_bottle()
+
+
+# --- Quests ------------------------------------------------------------------
+
+func quest_offer(quest_id: StringName) -> bool:
+	var definition: QuestDef = QuestDb.get_def(quest_id)
+	return definition != null and _quests.offer(definition)
+
+
+func quest_accept(quest_id: StringName) -> bool:
+	var definition: QuestDef = QuestDb.get_def(quest_id)
+	return definition != null and _quests.accept(definition)
+
+
+func quest_advance(quest_id: StringName, objective_id: StringName,
+		amount: int = 1) -> bool:
+	var definition: QuestDef = QuestDb.get_def(quest_id)
+	return definition != null \
+		and _quests.advance(definition, objective_id, amount)
+
+
+func quest_complete_objective(quest_id: StringName,
+		objective_id: StringName) -> bool:
+	var definition: QuestDef = QuestDb.get_def(quest_id)
+	return definition != null \
+		and _quests.complete_objective(definition, objective_id)
+
+
+func quest_turn_in(quest_id: StringName) -> bool:
+	var definition: QuestDef = QuestDb.get_def(quest_id)
+	return definition != null and _quests.turn_in(definition)
+
+
+func quest_fail(quest_id: StringName) -> bool:
+	var definition: QuestDef = QuestDb.get_def(quest_id)
+	return definition != null and _quests.fail(definition)
+
+
+func quest_status(quest_id: StringName) -> int:
+	if QuestDb.get_def(quest_id) == null:
+		return QuestState.Status.LOCKED
+	return _quests.status(quest_id)
+
+
+func quest_entry(quest_id: StringName) -> Dictionary:
+	if QuestDb.get_def(quest_id) == null:
+		return {}
+	return _quests.entry(quest_id)
+
+
+func quest_progress(quest_id: StringName, objective_id: StringName) -> int:
+	var definition: QuestDef = QuestDb.get_def(quest_id)
+	if definition == null or definition.objective_by_id(objective_id).is_empty():
+		return 0
+	return _quests.progress(quest_id, objective_id)
+
+
+func quest_active_objective(quest_id: StringName) -> Dictionary:
+	var definition: QuestDef = QuestDb.get_def(quest_id)
+	return _quests.active_objective(definition) if definition != null else {}
+
+
+func quest_snapshot() -> Dictionary:
+	return _quests.snapshot()
+
+
+## Restore current quest data, filling only entries an older save could prove.
+## READY remains READY: migration never turns in a current quest on the player's
+## behalf, and only definitions absent from the payload are reconciled.
+func restore_quests(raw: Variant) -> void:
+	var reconciled: Dictionary = (raw as Dictionary).duplicate(true) \
+		if raw is Dictionary else {}
+	if not _saved_quest_has_entry(reconciled, QuestDb.WEST_GATE_DEFENCE):
+		var raid_entry: Dictionary = _legacy_raid_quest_entry()
+		if not raid_entry.is_empty():
+			reconciled[String(QuestDb.WEST_GATE_DEFENCE)] = raid_entry
+	if not _saved_quest_has_entry(reconciled, QuestDb.KEEP_THE_HEARTH) \
+			and flag(StoryDb.told_flag(&"elder", &"timber_duty")):
+		reconciled[String(QuestDb.KEEP_THE_HEARTH)] = \
+			_legacy_hearth_quest_entry()
+	_quests.restore(reconciled, QuestDb.all())
+
+
+func _legacy_raid_quest_entry() -> Dictionary:
+	var definition: QuestDef = QuestDb.get_def(QuestDb.WEST_GATE_DEFENCE)
+	if definition == null:
+		return {}
+	if raid_defense_built():
+		return _quest_restore_entry(definition, QuestState.Status.COMPLETED,
+			[QuestDb.BUILD_BOLT_THROWER])
+	var phase: StringName = raid_phase()
+	if phase == GarrisonRaidState.PHASE_ARMED \
+			or phase == GarrisonRaidState.PHASE_WARNED:
+		return _quest_restore_entry(definition, QuestState.Status.AVAILABLE, [])
+	if raid_terminal():
+		return _quest_restore_entry(definition, QuestState.Status.FAILED, [])
+	return {}
+
+
+func _legacy_hearth_quest_entry() -> Dictionary:
+	var definition: QuestDef = QuestDb.get_def(QuestDb.KEEP_THE_HEARTH)
+	if definition == null:
+		return {}
+	if firewood_stock > 0:
+		return _quest_restore_entry(definition, QuestState.Status.COMPLETED,
+			[QuestDb.FORGE_AXE, QuestDb.FELL_TREE, QuestDb.STORE_FIREWOOD])
+	var completed: Array[StringName] = []
+	if tool_known(ToolDb.WOODSMAN_AXE_ID):
+		completed.append(QuestDb.FORGE_AXE)
+	if int(Run.bag.get(SupplyCargoDb.FIREWOOD_ID, 0)) > 0 \
+			or (Clock.day > 0 and timber_completed_day == Clock.day):
+		completed.append(QuestDb.FELL_TREE)
+	return _quest_restore_entry(definition, QuestState.Status.ACTIVE, completed)
+
+
+func _quest_restore_entry(definition: QuestDef, restored_status: int,
+		completed: Array[StringName]) -> Dictionary:
+	var objective_progress: Dictionary = {}
+	if restored_status != QuestState.Status.AVAILABLE:
+		for authored: Dictionary in definition.objectives:
+			var objective_id := StringName(authored.get("id", &""))
+			objective_progress[String(objective_id)] = \
+				int(authored.get("goal", 0)) if completed.has(objective_id) else 0
+	return {
+		"status": restored_status,
+		"objectives": objective_progress,
+	}
+
+
+func _saved_quest_has_entry(raw: Dictionary, quest_id: StringName) -> bool:
+	return raw.has(quest_id) or raw.has(String(quest_id))
+
+
+func _on_quest_changed(quest_id: StringName) -> void:
+	quests_changed.emit(quest_id)
+
+
+func _sync_hearth_quest_offer() -> void:
+	if quest_status(QuestDb.KEEP_THE_HEARTH) != QuestState.Status.LOCKED:
+		return
+	if not has(StoryDb.SMITH_TOKEN) \
+			or not flag(StoryDb.told_flag(&"elder", &"briefing")):
+		return
+	quest_offer(QuestDb.KEEP_THE_HEARTH)
 
 
 func reset() -> void:
@@ -477,6 +625,7 @@ func reset() -> void:
 	# by `wheel_ready` with no explanation the player could see.
 	wheel = _blank_wheel()
 	_seed_wheel()
+	_quests.reset()
 	flags.clear()
 	restore_garrison({})
 	# Say that the hands and the selection emptied. Without this, resetting
@@ -699,7 +848,10 @@ func _on_garden_changed() -> void:
 
 
 func raid_arm(at_day: int, at_hour: float) -> bool:
-	return _garrison_raid.arm(at_day, at_hour)
+	if not _garrison_raid.arm(at_day, at_hour):
+		return false
+	quest_offer(QuestDb.WEST_GATE_DEFENCE)
+	return true
 
 
 func raid_observe_hour(at_day: int, at_hour: int) -> void:
@@ -747,7 +899,13 @@ func raid_ledger_stolen() -> bool:
 
 
 func raid_build_defense() -> bool:
-	return _garrison_raid.build_defense()
+	if not _garrison_raid.build_defense():
+		return false
+	if quest_status(QuestDb.WEST_GATE_DEFENCE) == QuestState.Status.AVAILABLE:
+		quest_accept(QuestDb.WEST_GATE_DEFENCE)
+	quest_complete_objective(
+		QuestDb.WEST_GATE_DEFENCE, QuestDb.BUILD_BOLT_THROWER)
+	return true
 
 
 func raid_restore_ledger() -> bool:
@@ -822,6 +980,9 @@ func chop_firewood(at_day: int, phase: StringName) -> bool:
 		return false
 	timber_completed_day = at_day
 	garrison_changed.emit()
+	if tool_known(ToolDb.WOODSMAN_AXE_ID) or has(ToolDb.WOODSMAN_AXE_ID):
+		quest_complete_objective(QuestDb.KEEP_THE_HEARTH, QuestDb.FORGE_AXE)
+	quest_complete_objective(QuestDb.KEEP_THE_HEARTH, QuestDb.FELL_TREE)
 	return true
 
 
@@ -888,6 +1049,11 @@ func deposit_supplies() -> Dictionary:
 	}
 	if not moved.is_empty():
 		garrison_changed.emit()
+	if firewood_units > 0:
+		if tool_known(ToolDb.WOODSMAN_AXE_ID) or has(ToolDb.WOODSMAN_AXE_ID):
+			quest_complete_objective(QuestDb.KEEP_THE_HEARTH, QuestDb.FORGE_AXE)
+		quest_complete_objective(QuestDb.KEEP_THE_HEARTH, QuestDb.FELL_TREE)
+		quest_complete_objective(QuestDb.KEEP_THE_HEARTH, QuestDb.STORE_FIREWOOD)
 	return receipt
 
 
@@ -2078,6 +2244,7 @@ func grant(item_id: StringName) -> void:
 	# its own — which is the point of routing off the id rather than off the
 	# call site. A bow found underground is on the wheel before the chest shuts.
 	wheel_auto_bind(item_id)
+	_sync_hearth_quest_offer()
 	Bus.item_acquired.emit(item_id)
 
 
@@ -2133,6 +2300,8 @@ func craft_tool(id: StringName) -> bool:
 	items[id] = true
 	Bus.item_acquired.emit(id)
 	garrison_changed.emit()
+	if id == ToolDb.WOODSMAN_AXE_ID:
+		quest_complete_objective(QuestDb.KEEP_THE_HEARTH, QuestDb.FORGE_AXE)
 	return true
 
 
@@ -2586,6 +2755,7 @@ func wheel_pool() -> Array[StringName]:
 
 func set_flag(id: StringName) -> void:
 	flags[id] = true
+	_sync_hearth_quest_offer()
 
 
 func flag(id: StringName) -> bool:
