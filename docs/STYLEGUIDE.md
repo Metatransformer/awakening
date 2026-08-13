@@ -64,7 +64,7 @@ move it anyway.
 | MOTH | `#807868` | Muted text, disabled state, button glyphs, **and common-tier loot** — common items render in the "not worth reading" colour. |
 | VITAL | `#E04038` | Health fill. Dirty arterial, not fire-engine. |
 | RUST | `#B83818` | Danger: incoming damage, damage ghost, hostile lock-on, unaffordable cost. |
-| GOLD | `#F8C038` | Currency and the authored Boss Key/Boss Door progression mark. The most saturated colour in the build. Not a torch, title, or general UI highlight. |
+| GOLD | `#F8C038` | Currency, the authored Boss Key/Boss Door progression mark, and the temporary-overhealth end-cap inside the health bar. The most saturated colour in the build. Not a torch, title, or general UI highlight. |
 | EXTRACT CYAN | `#38D0C8` | The only cool saturated hue. Reserved for the way out: extraction nodes and the hookshot line — the two things that pull you somewhere. |
 | MOSS | `#68A050` | Rarity: uncommon. |
 | COBALT | `#5878C8` | Rarity: rare. |
@@ -84,9 +84,9 @@ Rules that keep it dirty rather than clean:
   Game Boy, not a PlayStation.
 - World surfaces sit between VOID and ASH with a texture saturation cap of
   ~0.25. GOLD and the rarity tiers are the only things above 0.6. The Boss Key
-  and its door sigil are the one non-currency GOLD exception: a deliberately
-  scarce progression pair, once per authored floor. **That gap is the art
-  direction.**
+  and its door sigil are the scarce progression exception, once per authored
+  floor. Temporary overhealth is the additional exception, confined to its
+  fixed in-bar health end-cap. **That gap is the art direction.**
 
 ---
 
@@ -1062,6 +1062,14 @@ The health ghost begins flat beneath the current fill and ends diagonally, so
 their overlap exposes a small RUST wedge. These are hard, un-antialiased pixel
 polygons. The authored bar rectangles, left edge and row positions below do not
 move; `_note` publishes the unchanged outer bezel bounds used by layout checks.
+Temporary overhealth is a GOLD end-cap **inside the recessed health track**, at
+its right edge. It overlays the ordinary VITAL fill or empty track after those
+are drawn and before the unchanged health ticks cut through it. Each temporary
+quarter contributes exactly 4 reference pixels of cap width (scaled with
+`Pal.px`, clamped to the track width); the cap uses the same hard diagonal and
+lit/dark bands as every meter segment. It does not enter `max_quarters` or the
+real-health fraction, and it never changes tick spacing/count, the authored
+343×15 bar rectangle, or the published bezel bounds.
 Enemy health bars are excluded: at 2 px tall they are minimal world markers,
 not player instruments, and this bezel would consume them.
 

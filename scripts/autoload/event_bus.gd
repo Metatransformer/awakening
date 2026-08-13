@@ -9,6 +9,8 @@ extends Node
 signal player_spawned(player: Node3D)
 ## Health is in QUARTER hearts. See K.HEART.
 signal player_health_changed(quarters: int, max_quarters: int)
+## Temporary health above the real maximum, also in quarter-hearts.
+signal temporary_overhealth_changed(quarters: int)
 ## A blow landed on the hero, and WHERE IT CAME FROM -- the world position of the
 ## thing that threw it, straight off `Hit.from`.
 ##

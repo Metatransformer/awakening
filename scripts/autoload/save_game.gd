@@ -84,13 +84,15 @@ const SLOTS := 3
 ## payload and reconstructs as an empty, cold hearth.
 ## Bumped to 13 for Field Notes. It is additive: v4-v12 have no awarded
 ## observations or balance and reconstruct as zero/empty.
-const VERSION := 13
+## Bumped to 14 for temporary overhealth. It is additive: v4-v13 have no such
+## health and reconstruct as zero.
+const VERSION := 14
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 const AUTOSAVE_INTERVAL := 300.0
 
 signal saved(slot: int)
@@ -173,6 +175,7 @@ func save(slot: int) -> bool:
 		"last_played_unix": Time.get_unix_time_from_system(),
 		"quarters": Game.quarters,
 		"max_quarters": Game.max_quarters,
+		"temporary_overhealth": Game.temporary_overhealth,
 		# A Focus amulet raises this permanently, so it is a purchase and it saves.
 		"max_stamina": Game.max_stamina,
 		# The SIZE of the blue bar saves; how much is in it does not, for the reason
@@ -361,6 +364,12 @@ func load_slot(slot: int) -> Dictionary:
 	Game.upgrades.clear()
 	for k in (d.get("upgrades", {}) as Dictionary):
 		Game.upgrades[StringName(k)] = int((d["upgrades"] as Dictionary)[k])
+	var bed_rank: int = clampi(
+		int(Game.upgrades.get(ElderUpgradeDb.BED_ID, 0)),
+		0, int(ElderUpgradeDb.LIMITS[ElderUpgradeDb.BED_ID]))
+	var maximum_overhealth: int = bed_rank * ElderUpgradeDb.BED_OVERHEALTH_PER_RANK
+	Game.temporary_overhealth = clampi(
+		int(d.get("temporary_overhealth", 0)), 0, maximum_overhealth)
 	# Doctrines share the upgrade store, but unlike forge tracks each has exactly
 	# one rung. Clamp loaded state at the definition boundary so no save can turn
 	# an effect into a multiplier by carrying rank 2 or higher.
@@ -516,6 +525,7 @@ func load_slot(slot: int) -> Dictionary:
 
 	# Push the restored state at everyone who draws it.
 	Bus.player_health_changed.emit(Game.quarters, Game.max_quarters)
+	Bus.temporary_overhealth_changed.emit(Game.temporary_overhealth)
 	Bus.magic_changed.emit(Game.magic, Game.max_magic)
 	Bus.stamina_changed.emit(Game.stamina, Game.max_stamina)
 	Bus.key_count_changed.emit(Game.small_keys)

@@ -13,6 +13,7 @@ signal garrison_raid_restoring
 
 var max_quarters: int = K.START_HEARTS * K.HEART
 var quarters: int = K.START_HEARTS * K.HEART
+var temporary_overhealth: int = 0
 
 ## The blue bar. **Full from the first frame of a new save**, which is a change
 ## from the meter this started as: it was OOT's, granted by a Great Fairy, and
@@ -397,6 +398,7 @@ func _grant_starter_kit() -> void:
 func reset() -> void:
 	max_quarters = K.START_HEARTS * K.HEART
 	quarters = max_quarters
+	temporary_overhealth = 0
 	# Focus raises this, so a reset has to put it back. It did not need clearing
 	# while nothing could buy it.
 	max_stamina = K.MAX_STAMINA
@@ -465,6 +467,7 @@ func reset() -> void:
 	Bus.gold_changed.emit(gold)
 	Bus.key_count_changed.emit(small_keys)
 	Bus.player_health_changed.emit(quarters, max_quarters)
+	Bus.temporary_overhealth_changed.emit(temporary_overhealth)
 	Bus.magic_changed.emit(magic, max_magic)
 	Bus.wishlist_changed.emit()
 	stamina = max_stamina
@@ -735,7 +738,14 @@ func restore_wishlist_lines(raw: Array) -> void:
 func damage(amount_quarters: int) -> void:
 	if amount_quarters <= 0:
 		return
-	quarters = maxi(0, quarters - _softened(amount_quarters))
+	var remaining: int = _softened(amount_quarters)
+	if temporary_overhealth > 0:
+		var absorbed := mini(temporary_overhealth, remaining)
+		set_temporary_overhealth(temporary_overhealth - absorbed)
+		remaining -= absorbed
+	if remaining <= 0:
+		return
+	quarters = maxi(0, quarters - remaining)
 	Bus.player_health_changed.emit(quarters, max_quarters)
 	if quarters == 0:
 		Bus.player_died.emit()
@@ -785,6 +795,11 @@ func _softened(amount: int) -> int:
 func heal(amount_quarters: int) -> void:
 	quarters = mini(max_quarters, quarters + amount_quarters)
 	Bus.player_health_changed.emit(quarters, max_quarters)
+
+
+func set_temporary_overhealth(amount_quarters: int) -> void:
+	temporary_overhealth = maxi(0, amount_quarters)
+	Bus.temporary_overhealth_changed.emit(temporary_overhealth)
 
 
 ## The maxima are STORED rather than returned from an accessor, unlike soak and
