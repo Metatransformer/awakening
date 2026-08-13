@@ -31,7 +31,6 @@ extends CanvasLayer
 
 const DRAW_LAYER := 50  ## under the pause menu, which sits at 100
 const CivilInstrumentsScript := preload("res://scripts/ui/hud/civil_instruments.gd")
-const SurfaceMapDrawScript := preload("res://scripts/ui/hud/surface_map_draw.gd")
 
 # --- Health -----------------------------------------------------------------
 ## OVERRIDES STYLEGUIDE §5.1, which specifies a row of discrete quarter cells.
@@ -328,10 +327,10 @@ var _hold_required: bool = false
 var _wheel: KitWheel = null
 var _civil_instruments: CivilInstruments = null
 var _clock_text := ""
-## Facts returned by SurfaceMapDraw's most recent successful paint. Cleared on
-## every non-surface frame so proof tooling cannot mistake stale geometry for a
-## live provider.
-var _surface_map_debug: Dictionary = {}
+## Facts returned by MapDraw's most recent successful paint. Cleared whenever
+## the map does not draw so proof tooling cannot mistake stale geometry for the
+## active Atlas authority.
+var _map_debug: Dictionary = {}
 
 
 func _ready() -> void:
@@ -820,7 +819,7 @@ func _refresh_visibility() -> void:
 		if not showing:
 			_layout.clear()
 			_glyphs.clear()
-			_surface_map_debug.clear()
+			_map_debug.clear()
 
 	# Deferred off node_added/node_removed, which is exactly when this answer can
 	# change, so the enemy bars get their frame ticker the moment a dungeon builds
@@ -830,7 +829,7 @@ func _refresh_visibility() -> void:
 	_enemies_present = not get_tree().get_nodes_in_group(&"enemy").is_empty()
 	if has_player and _enemies_present and not had:
 		_wake()
-	if has_player and _surface_map_provider() != null:
+	if has_player and Atlas != null and Atlas.has_map():
 		_wake()
 
 	if has_player:
@@ -924,16 +923,12 @@ func _process(delta: float) -> void:
 	# on the floor is what puts it back to sleep.
 	if _enemies_present:
 		busy = true
-	# The dungeon minimap's hero arrow
+	# The minimap's hero arrow
 	# is pinned to a body that walks, exactly like an enemy bar, and there is no
 	# "the hero moved" signal to hang it on -- so while there is a floor plan on
 	# screen, the overlay ticks. It stops the moment the run ends, because
 	# `Atlas` tears the plan down on `run_ended` and this goes false with it.
-	if Run != null and Run.in_dungeon and Atlas != null and Atlas.has_floor():
-		busy = true
-	# Authored exterior maps follow the live player by the same rule. Discovery is
-	# gated on the provider group, so lookdev scenes still let this overlay sleep.
-	if (Run == null or not Run.in_dungeon) and _surface_map_provider() != null:
+	if Atlas != null and Atlas.has_map():
 		busy = true
 
 	_canvas.queue_redraw()
@@ -2125,52 +2120,24 @@ func _draw_item_cell(s: Vector2) -> void:
 ## and it is rendered at two sizes -- a corner minimap that drifted from the
 ## screen you open to read it properly is worse than having only one of them.
 ##
-## Dungeon plans retain Atlas fog of war. Authored exterior zones instead expose
-## an immediate scene-owned plan through the `surface_map` provider group. A
-## scene with neither contract draws nothing, including no empty frame.
+## Dungeon plans retain Atlas fog of war. Authored exterior zones register an
+## immediate scene-owned plan with the same authority. A scene with neither
+## contract draws nothing, including no empty frame.
 ##
 ## The plate is opaque VOID rather than the 0.72 the prompt box uses. Everything
 ## else on this HUD is a mark over the world; this is a document held up in
 ## front of it, and a floor plan you can see torchlight through is a floor plan
 ## you have to work to read.
 func _draw_minimap(s: Vector2) -> void:
-	_surface_map_debug.clear()
-	if Run != null and Run.in_dungeon:
-		if Atlas == null or not Atlas.has_floor():
-			return
-		# Nothing at all until the first room is out of the fog. On arrival the
-		# entrance is already marked seen (`Dungeon._add_room_trigger` seeds it), so
-		# this is only ever true in a scene with no player in it -- which is exactly
-		# where the rest of this overlay hides too.
-		if Atlas.explored_count() <= 0:
-			return
-
-		var size := Pal.px(Pal.MINIMAP_SIZE, s.y)
-		var frame := Rect2(
-			Pal.MINIMAP_RIGHT * s.x - size, Pal.MINIMAP_TOP * s.y, size, size)
-		# A root in its own right: it is a document held up in front of the world, not
-		# part of either pole.
-		_note(&"minimap", &"", frame)
-		_canvas.draw_rect(frame, Color(Pal.VOID, 0.88))
-		_canvas.draw_rect(frame, Pal.ASH, false, Pal.px(1.0, s.y))
-
-		var pad := Pal.px(Pal.MINIMAP_PAD, s.y)
-		# `follow`: the hero sits still in the middle of this one and the floor moves
-		# under him. The MAP screen still fits the whole floor -- `MapDraw.FOLLOW_SPAN`
-		# carries why the two want opposite things.
-		MapDraw.draw_map(_canvas, frame.grow(-pad), s.y,
-			get_tree().get_first_node_in_group(&"player") as Node3D, true)
+	_map_debug.clear()
+	if Atlas == null or not Atlas.has_map():
 		return
-
-	var provider := _surface_map_provider()
+	# Nothing at all until the first dungeon room is out of the fog. Surface plans
+	# are authored public terrain and are available immediately on registration.
+	if Atlas.map_kind() == Atlas.KIND_DUNGEON and Atlas.explored_count() <= 0:
+		return
 	var player := get_tree().get_first_node_in_group(&"player") as Node3D
-	if provider == null or player == null:
-		return
-	var plan_value: Variant = provider.call(&"surface_map_plan")
-	if not plan_value is Dictionary:
-		return
-	var plan := plan_value as Dictionary
-	if not SurfaceMapDrawScript.valid_plan(plan):
+	if player == null:
 		return
 	var size := Pal.px(Pal.MINIMAP_SIZE, s.y)
 	var frame := Rect2(
@@ -2179,23 +2146,13 @@ func _draw_minimap(s: Vector2) -> void:
 	_canvas.draw_rect(frame, Color(Pal.VOID, 0.88))
 	_canvas.draw_rect(frame, Pal.ASH, false, Pal.px(1.0, s.y))
 	var pad := Pal.px(Pal.MINIMAP_PAD, s.y)
-	_surface_map_debug = SurfaceMapDrawScript.draw_map(
-		_canvas, frame.grow(-pad), s.y, plan, player)
-	if not _surface_map_debug.is_empty():
-		_surface_map_debug[&"provider_id"] = provider.get_instance_id()
-		_surface_map_debug[&"provider_name"] = String(provider.name)
+	_map_debug = MapDraw.draw_map(
+		_canvas, frame.grow(-pad), s.y, player, true)
 
 
-func _surface_map_provider() -> Node:
-	var provider := get_tree().get_first_node_in_group(&"surface_map")
-	if provider == null or not provider.has_method(&"surface_map_plan"):
-		return null
-	return provider
-
-
-## Debug seam produced by the live provider -> renderer -> HUD path.
-func surface_map_debug() -> Dictionary:
-	return _surface_map_debug.duplicate()
+## Debug seam produced by the live Atlas -> MapDraw -> HUD path.
+func map_debug() -> Dictionary:
+	return _map_debug.duplicate()
 
 
 ## One item's icon in a cell, or its two letters if the bake is missing. An

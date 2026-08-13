@@ -269,7 +269,7 @@ These nine facts are the ones clones get wrong. Build to them:
 | `Music` | `scripts/autoload/music.gd` | picks the track and crossfades it; **after `Bus`** |
 | `Sfx` | `scripts/autoload/sfx.gd` | implements `Bus.request_sfx`, owns the signal→sound table; **after `Bus`** |
 | `Voice` | `scripts/autoload/voice.gd` | the fifteen recorded lines and the one mouth that says them; anywhere after `Sfx` — it shares the `SFX` bus and calls nothing |
-| `Atlas` | `scripts/autoload/atlas.gd` | the floor's plan and its fog of war; **before `Hud`** (the minimap reads it on every repaint) and **before `Menu`** (the MAP screen connects to `Bus.map_changed` on `_ready`) |
+| `Atlas` | `scripts/autoload/atlas.gd` | the single active-map authority: authored surface plan or dungeon plan and fog; **before `Hud`** (the minimap reads it on every repaint) and **before `Menu`** (the MAP screen connects to `Bus.map_changed` on `_ready`) |
 | `Hud` | `scripts/ui/hud/hud.gd` | the overlay, `CanvasLayer` **50** |
 | `Prompt` | `scripts/autoload/prompt.gd` | which Interactable owns the interact button |
 | `Menu` | `scenes/ui/menu/pause_menu.tscn` | the pause menu, `CanvasLayer` **100** |
@@ -3187,29 +3187,34 @@ extra row, `ENDLESS`, returned for every level past 4 — plus
 `LONG_DESCENT_RELIC`, which is a named row rather than a field on `ENDLESS`
 because a relic in that row would drop on floor 5, 6, 7 and forever.
 
-### The map — compact surface plans and one dungeon plan
+### The map — one active authority in every playable zone
 
-There is **one dungeon plan** in this game. `Atlas` holds it;
+There is **one active map system** in this game. `Atlas` holds the active source;
 `MapDraw.draw_map` is the only thing that draws it, and it is called twice — by
 `Hud._draw_minimap` into a 126 px square in the top-right corner, and by
-`MenuMapPanel` into the MAP tab of the pause menu. Do not write a second dungeon
-map; a menu map that re-derived the layout is the one that goes stale.
+`MenuMapPanel` into the MAP tab of the pause menu. Do not write a second map or
+let either consumer discover one independently; that is how the two views go stale.
 
-Authored exterior zones use the same compact frame but a separate ownership
-contract: the live scene exposes immutable world-space paths, footprints and
-landmarks through `surface_map_plan()`, and `SurfaceMapDraw` only projects that
-plan around the centred player. The HUD never owns a duplicate surface layout,
-and a scene with no provider produces no empty map frame.
+Authored exterior zones register themselves with `Atlas` after every
+map-relevant node exists and unregister on exit. Atlas alone asks the active
+provider's `surface_map_plan()` for an immutable current snapshot of world-space
+paths, footprints and landmarks; that keeps moving service markers current
+without either renderer discovering the scene. `open_floor` makes the dungeon
+active; surface registration makes that zone active. An outgoing provider may
+clear only its own registration, and `Atlas.has_map()` also rejects a freed
+provider, so no previous zone can remain on either screen. Every authority
+change emits `Bus.map_changed`; a scene with no active map produces no empty map
+frame.
 
-The two dungeon presentations differ in the size of the box and in **one flag**,
-`follow`. The MAP screen fits the whole floor into its well and centres it there. The corner
-minimap holds the hero dead centre at a fixed pitch (`MapDraw.FOLLOW_SPAN`, 3.4
-cells across the box) and lets the floor scroll under him — so it is also the
-only one of the two that draws outside its box, and `box` is therefore its clip
-as well as its frame. Every fill goes through `MapDraw._rect`, which intersects;
-there is no `clip_contents` Control to set, because the HUD is one `_draw`
-surface and clipping it would clip the whole overlay. Glyphs are dropped whole
-rather than cut — half a chest is a gold bar, not a smaller chest.
+The two presentations differ in the size of the box and in **one flag**,
+`follow`. The MAP screen derives bounds from the active plan and fits it into its
+well; zoom and pan use those same bounds for dungeon cells or surface world X/Z.
+The corner minimap holds the hero dead centre: dungeon floors use a fixed pitch
+(`MapDraw.FOLLOW_SPAN`, 3.4 cells across the box), while authored surfaces use
+their plan's `view_range`. The following view is clipped by the box. Dungeon
+fills go through `MapDraw._rect`; authored paths and areas use the same box as
+their segment/polygon clip. Glyphs are dropped whole rather than cut — half a
+chest or landmark is not a smaller symbol.
 
 `Dungeon._publish()` is the **only writer** of the room graph, and it writes it
 in the same pass that builds the geometry. Markers go on from `_populate` and
@@ -3243,9 +3248,9 @@ for an annex exactly as it does for a corridor (`Atlas.annex_dirs_of`), and stub
 the first box the player has not walked into. Before this existed, going through
 a boss door walked you off the edge of the map.
 
-The plan is not persisted and does not survive the run: `open_floor` wipes the
-previous floor, and `Bus.run_ended` wipes it entirely. `Atlas.bounds()` is the
-whole floor including fogged rooms **and its annexes**, deliberately — fitting to
+The dungeon plan is not persisted and does not survive the run: `open_floor`
+wipes the previous floor, and `Bus.run_ended` wipes it entirely. `Atlas.bounds()`
+is the whole floor including fogged rooms **and its annexes**, deliberately — fitting to
 the explored subset would re-scale and re-centre the map every time a door
 opened, which makes the one instrument whose job is orientation the least stable
 thing on screen. (The annexes are in it because the MAP screen clips to its well,
@@ -3255,6 +3260,12 @@ Markers are drawn shapes in `Pal` colours, not textures. At 6 px on the minimap
 a photograph of a chest is four brown pixels; a gold box with a dark band is a
 chest. `Atlas`'s marker ids and `MapDraw.MARK_ORDER` are two halves of one list —
 an id with no glyph draws nothing, silently. Add to both.
+
+Surface routes, areas and landmarks are also drawn shapes in `Pal` colours.
+Their glyph vocabulary lives in `MapDraw`, and the MAP legend filters that same
+vocabulary against the landmarks in `Atlas.surface_plan()`; it does not maintain
+a second list of which places exist. The surface header names the registered
+plan and counts its routes, areas and places from that plan.
 
 ### Rewards — a prize does not exist until you have beaten what guards it
 

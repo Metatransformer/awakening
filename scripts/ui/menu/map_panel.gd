@@ -1,6 +1,6 @@
 class_name MenuMapPanel
 extends Control
-## The MAP screen: the same floor plan the corner minimap draws, big enough to
+## The MAP screen: the same active plan the corner minimap draws, big enough to
 ## stop and read.
 ##
 ## **It is the same map, not a second one.** Both this and `Hud._draw_minimap`
@@ -96,6 +96,15 @@ const LEGEND_ROWS := [
 	[&"arrows", "Arrows on the floor"],
 	[&"stairs", "The stair down"],
 ]
+const SURFACE_LEGEND_ROWS := [
+	[&"gate", "Gate or passage"],
+	[&"hearth", "The central hearth"],
+	[&"service", "A staffed service"],
+	[&"landmark", "A local landmark"],
+	[&"dungeon", "The Sunken Cut"],
+	[&"fishing", "Fishing water"],
+	[&"grove", "Harvestable grove"],
+]
 
 var _band: Control
 var _band_slot: VBoxContainer
@@ -105,13 +114,14 @@ var _back: Button
 ## The header's row, so `PauseMenu` can drop the shared tab strip into it. See
 ## the same field on `MenuEquipPanel`.
 var _hrow: HBoxContainer
-var _legend_rows: Array[Control] = []
+var _legend_rows: Array[Dictionary] = []
 var _key_rule: Control
 ## The view. `_zoom` multiplies `MapDraw.fit_pitch`; `_pan` is a pixel offset on
 ## the centred plan, clamped by `MapDraw.pan_limit` so the plan can never be
 ## pushed off its own frame.
 var _zoom := OPEN_ZOOM
 var _pan := Vector2.ZERO
+var _map_debug: Dictionary = {}
 ## True between the press and the release of a left-drag on the plan.
 var _dragging := false
 
@@ -223,29 +233,14 @@ func _build() -> void:
 	_sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	side.add_child(_sub)
 
-	# The rule hides with the rows it heads. Above ground there is no floor to
-	# chart, and a KEY over nothing reads as a legend that failed to draw.
+	# The rule hides with the rows it heads. A scene with no active map draws no
+	# key, because a KEY over nothing reads as a legend that failed to draw.
 	_key_rule = UITheme.section_rule(side, "KEY")
 
 	for row: Array in LEGEND_ROWS:
-		var line := HBoxContainer.new()
-		line.add_theme_constant_override(&"separation", 12)
-		side.add_child(line)
-		# The glyph is drawn by MapDraw, into a Control sized to it, so the key
-		# and the map cannot show two different chests.
-		var swatch := Control.new()
-		swatch.custom_minimum_size = Vector2(LEGEND_GLYPH * 1.6, LEGEND_GLYPH * 1.6)
-		swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var id: StringName = row[0]
-		swatch.draw.connect(func() -> void:
-			MapDraw.draw_legend_glyph(swatch, swatch.size * 0.5, LEGEND_GLYPH, id))
-		line.add_child(swatch)
-		var label := Label.new()
-		UITheme.apply_text_style(label, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
-		label.text = String(row[1])
-		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		line.add_child(label)
-		_legend_rows.append(line)
+		_build_legend_row(side, row, Atlas.KIND_DUNGEON)
+	for row: Array in SURFACE_LEGEND_ROWS:
+		_build_legend_row(side, row, Atlas.KIND_SURFACE)
 
 	var footer := PanelContainer.new()
 	footer.add_theme_stylebox_override("panel",
@@ -265,42 +260,80 @@ func _build() -> void:
 	MenuUtil.chain([_back], true)
 
 
+func _build_legend_row(side: VBoxContainer, row: Array,
+		kind: StringName) -> void:
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override(&"separation", 12)
+	side.add_child(line)
+	# The glyph is drawn by MapDraw, into a Control sized to it, so the key
+	# and the map cannot show two different chests.
+	var swatch := Control.new()
+	swatch.custom_minimum_size = Vector2(LEGEND_GLYPH * 1.6, LEGEND_GLYPH * 1.6)
+	swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var id: StringName = row[0]
+	swatch.draw.connect(func() -> void:
+		MapDraw.draw_legend_glyph(swatch, swatch.size * 0.5, LEGEND_GLYPH,
+			id, kind))
+	line.add_child(swatch)
+	var label := Label.new()
+	UITheme.apply_text_style(label, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
+	label.text = String(row[1])
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	line.add_child(label)
+	_legend_rows.append({&"control": line, &"kind": kind, &"glyph": id})
+
+
 func refresh() -> void:
 	# The view resets on every open. See the class note.
 	_zoom = OPEN_ZOOM
 	_pan = Vector2.ZERO
 	_dragging = false
+	_map_debug.clear()
 	_rebuild_band()
-	if Atlas.has_floor():
+	if Atlas.has_map():
 		# The floor's NAME, which the band cannot carry -- a band cell is a
 		# number under a caption and "The Foundry" is neither. It is the title
 		# of the column it heads, so it is typed as one; above ground the same
 		# Label carries a sentence instead and drops back to prose.
-		_sub.text = FloorDb.name_of(Atlas.level)
+		_sub.text = Atlas.map_title()
 		UITheme.apply_text_style(_sub, UITheme.TYPE_H2, UITheme.TEXT)
 	else:
-		# In the garrison, and it says so rather than showing an empty frame. A
-		# blank panel reads as a screen that failed to load.
-		_sub.text = "You are above ground. There is nothing down here to chart."
+		_sub.text = "There is no map for this place."
 		UITheme.apply_text_style(_sub, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
-	for row in _legend_rows:
-		row.visible = Atlas.has_floor()
+	var surface_glyphs := _surface_glyphs()
+	for entry: Dictionary in _legend_rows:
+		var row: Control = entry[&"control"]
+		var kind: StringName = entry[&"kind"]
+		var glyph: StringName = entry[&"glyph"]
+		row.visible = Atlas.has_map() and kind == Atlas.map_kind() \
+			and (kind != Atlas.KIND_SURFACE or surface_glyphs.has(glyph))
 	if _key_rule != null:
-		_key_rule.visible = Atlas.has_floor()
+		_key_rule.visible = Atlas.has_map()
 	_canvas.queue_redraw()
 
 
-## The four numbers, or four dashes above ground. Counted off the SAME `marks`
+## Four facts from the active plan. Dungeon counts come from the SAME `marks`
 ## the plan is drawn from, so the band cannot claim a chest the map is not
 ## showing -- the whole point of this screen sharing `MapDraw` with the corner
 ## minimap (see the class note) applied to its numbers as well as its shapes.
 func _band_cells() -> Array:
-	if not Atlas.has_floor():
+	if not Atlas.has_map():
 		return [
 			{"label": "Floor", "value": "—"},
 			{"label": "Rooms", "value": "—"},
 			{"label": "Chests", "value": "—"},
 			{"label": "Stair", "value": "—"},
+		]
+	if Atlas.map_kind() == Atlas.KIND_SURFACE:
+		var plan := Atlas.surface_plan()
+		var paths: Array = plan[&"paths"]
+		var areas: Array = plan[&"areas"]
+		var landmarks: Array = plan[&"landmarks"]
+		return [
+			{"label": "Map", "value": "Surface"},
+			{"label": "Routes", "value": str(paths.size())},
+			{"label": "Areas", "value": str(areas.size())},
+			{"label": "Places", "value": str(landmarks.size())},
 		]
 	var walked := Atlas.explored_count()
 	var total := Atlas.rooms.size()
@@ -315,6 +348,19 @@ func _band_cells() -> Array:
 		{"label": "Stair", "value": "found" if stair else "not yet",
 			"tone": UITheme.SUCCESS if stair else null},
 	]
+
+
+func _surface_glyphs() -> Array[StringName]:
+	var glyphs: Array[StringName] = []
+	if Atlas.map_kind() != Atlas.KIND_SURFACE:
+		return glyphs
+	for value: Variant in Atlas.surface_plan()[&"landmarks"]:
+		if not value is Dictionary:
+			continue
+		var glyph := StringName((value as Dictionary).get(&"glyph", &""))
+		if not glyphs.has(glyph):
+			glyphs.append(glyph)
+	return glyphs
 
 
 func _rebuild_band() -> void:
@@ -368,7 +414,7 @@ func _process(delta: float) -> void:
 	# the menu closes on the MAP tab -- `PauseMenu` hides `Root`, not the screen
 	# inside it -- so a bare `visible` check would have the right stick panning a
 	# map nobody is looking at while the player is steering the camera with it.
-	if not is_visible_in_tree() or not Atlas.has_floor():
+	if not is_visible_in_tree() or not Atlas.has_map():
 		return
 	var stick := Input.get_vector(&"cam_left", &"cam_right",
 		&"cam_up", &"cam_down")
@@ -389,7 +435,7 @@ func _process(delta: float) -> void:
 ## takes, so a drag that wanders off the plan does not turn into a click on
 ## whatever is under it.
 func _plan_input(event: InputEvent) -> void:
-	if not Atlas.has_floor():
+	if not Atlas.has_map():
 		return
 	var btn := event as InputEventMouseButton
 	if btn != null:
@@ -440,10 +486,10 @@ func _move_pan(by: Vector2) -> void:
 ## Hold the plan against its own frame. `MapDraw.pan_limit` owns the rule and
 ## the reason it is not the obvious one.
 func _clamp_pan() -> void:
-	if not Atlas.has_floor():
+	if not Atlas.has_map():
 		_pan = Vector2.ZERO
 		return
-	var lim := MapDraw.pan_limit(_plan_box(), Atlas.bounds(), _zoom)
+	var lim := MapDraw.active_pan_limit(_plan_box(), _zoom)
 	_pan = Vector2(clampf(_pan.x, -lim.x, lim.x), clampf(_pan.y, -lim.y, lim.y))
 
 
@@ -458,8 +504,12 @@ func _plan_box() -> Rect2:
 ## count pixels, and a director wants both -- see `tools/directors/map_pan.gd`.
 func view() -> Dictionary:
 	return {&"zoom": _zoom, &"pan": _pan,
-		&"limit": MapDraw.pan_limit(_plan_box(), Atlas.bounds(), _zoom)
-			if Atlas.has_floor() else Vector2.ZERO}
+		&"limit": MapDraw.active_pan_limit(_plan_box(), _zoom)
+			if Atlas.has_map() else Vector2.ZERO}
+
+
+func map_debug() -> Dictionary:
+	return _map_debug.duplicate()
 
 
 func _draw_plan() -> void:
@@ -471,7 +521,7 @@ func _draw_plan() -> void:
 	# a `_draw` surface, not a PanelContainer.
 	_canvas.draw_rect(box, UITheme.BG_INSET)
 	_canvas.draw_rect(box, UITheme.EDGE_FAINT, false, 1.0)
-	if not Atlas.has_floor():
+	if not Atlas.has_map():
 		return
 	# `Pal.px` measures against the viewport height, not this Control's, so the
 	# line weights here come out the same thickness as everything else the theme
@@ -482,7 +532,8 @@ func _draw_plan() -> void:
 	# its frame for a frame. Cheap, and it is the only place that knows the real
 	# size. `false` is the fit; `_zoom`/`_pan` are the player's view on top of it.
 	_clamp_pan()
-	MapDraw.draw_map(_canvas, _plan_box(), s_y, _hero(), false, _zoom, _pan)
+	_map_debug = MapDraw.draw_map(
+		_canvas, _plan_box(), s_y, _hero(), false, _zoom, _pan)
 
 
 ## The hero, or null in a scene that has none. The world is paused behind this

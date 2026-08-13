@@ -1472,10 +1472,10 @@ Not a fairy, not a triangle.
 
 ### 5.5b The minimap — compact line art
 
-A 126 px square, top-right, VOID @88% on a 1 px ASH border. Underground it is
-drawn by `MapDraw.draw_map` — the **same** routine that fills the pause menu's
-MAP tab, called with a smaller box. Authored exterior zones provide their own
-world-space plan to `SurfaceMapDraw`; see `docs/CONTRACT.md` §8, "The map".
+A 126 px square, top-right, VOID @88% on a 1 px ASH border. It is drawn by
+`MapDraw.draw_map` — the **same** facade that fills the pause menu's MAP tab,
+called with a smaller box. `Atlas` selects the active dungeon or authored
+world-space surface plan; see `docs/CONTRACT.md` §8, "The map".
 
 **It is a schematic and never a rendered camera.** Room outlines, corridors, a
 gap in a wall where a door is, and one small symbol per thing worth walking to.
@@ -1489,8 +1489,8 @@ and it is not line art.
 - **It follows the hero.** He is pinned to the middle of the square and the map
   scrolls under him. Dungeon floors use a fixed pitch of 3.4 cells across the
   box (`MapDraw.FOLLOW_SPAN`); exterior plans use their scene-authored view
-  range. The MAP tab still fits the whole dungeon floor, and the two
-  wanting opposite things is the point: a full-floor fit is the right picture
+  range. The MAP tab fits the whole active plan from dungeon-cell or surface
+  world X/Z bounds, and the two wanting opposite things is the point: a full-floor fit is the right picture
   when you have stopped to read it, and the wrong one at 132 px in a corner,
   where a six-room floor puts every room under 40 px and "where am I" has to be
   answered by finding a 5 px arrow. Following answers it by never moving the
@@ -1927,10 +1927,12 @@ for 2D art anywhere else.
   header's one right-aligned string became a four-cell `StatBand` — SLOTS, BAG,
   PURSE, TO LEAVE — so the extraction decision is four numbers read at once
   instead of a sentence parsed, with the fee no longer stranded two feet from
-  the purse it is measured against; and the map (`MenuMapPanel`), whose floor
+  the purse it is measured against; and the map (`MenuMapPanel`), whose dungeon
   label and "6 of 8 rooms walked" subtitle became a four-cell band of their own
   — FLOOR, ROOMS, CHESTS, STAIR — counted off the same `Atlas.marks` the plan
   is drawn from, so the numbers cannot claim a chest the map is not showing;
+  on authored surfaces the same screen instead names the active plan and counts
+  ROUTES, AREAS and PLACES from it, with only its live landmark glyphs in the key;
   the save/load screen (`MenuSavesPanel` + `MenuSlotRow`), where an empty slot
   in LOAD mode is the refusal law rendered on a card rather than a row — 38%,
   "Nothing here to load." at full DANGER, and still in its place; and the one
