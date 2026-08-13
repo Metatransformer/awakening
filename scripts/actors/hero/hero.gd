@@ -1062,7 +1062,7 @@ const _P_CHARGE_SEEK := "parameters/ChargeSeek/seek_request"
 func _ready() -> void:
 	add_to_group(&"player")
 	collision_layer = K.L_PLAYER
-	collision_mask = K.L_WORLD
+	collision_mask = K.L_WORLD | K.L_PLAYER_BOUNDARY
 	floor_snap_length = 0.45
 	floor_max_angle = deg_to_rad(50.0)
 	floor_block_on_wall = false

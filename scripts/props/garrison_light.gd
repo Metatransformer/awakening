@@ -4,10 +4,9 @@ extends Node3D
 ## garrison changes".
 ##
 ## `docs/GDD.md` §6.2 budgets this at **a prop and a light**, and the budget is
-## the design: the reward is the CONTRAST between the first frame of the game
-## and the last one, and anything spent on making a single lamp beautiful is
-## spent on the wrong half of that sentence. So this is a post, a box and an
-## `OmniLight3D`, and its entire state is one bool read out of `RelicDb`.
+## the design: the reward remains instantly readable through flare and light
+## contrast, while the prop now belongs to the garrison's crafted lantern
+## language. Its entire state is one bool read out of `RelicDb`.
 ##
 ## ## Why the moment is deferred, and why that is not a hack
 ##
@@ -32,6 +31,8 @@ extends Node3D
 ## rather than lit-by-accident.
 @export var prop: StringName = &""
 
+const LANTERN_WALL: PackedScene = preload("res://assets/props/booth/Lantern_Wall.gltf")
+
 # --- The two states ----------------------------------------------------------
 # Both are the garrison's existing warm-gold vocabulary (every lamp in `Npc` is
 # `Pal.GOLD`), so a lit relic prop reads as the same garrison with more of it
@@ -40,33 +41,14 @@ extends Node3D
 # the yard, which is the only requirement (GDD §6.2).
 
 const DARK_ALBEDO := Color(0.13, 0.12, 0.15)
-## **The BOX is the signal, and it was not always.** These numbers were first
-## tuned against a walled stone courtyard at night, where the answer was a short
-## post and a tight bright omni: the lamp threw a hard patch on the masonry and a
-## pool on the flagstones, and those shapes were metres across where the head was
-## centimetres.
-##
-## Then `garrison.gd` moved the garrison outdoors onto daylit grass, and that
-## solution lost its premise -- **a pool of light is invisible in daylight**.
-## There is no near-black background left for it to sit against, so the light
-## stopped being the thing you notice and the head started being it.
-##
-## So the head is now big enough to read as a SHAPE at fourteen metres, which is
-## the distance from the hall doorway and the only distance that matters. The two
-## states are an unshaded near-black box and an unshaded gold one -- maximum
-## contrast either side of a daylit scene that is neither -- and at 0.95 m that is
-## something like sixty pixels of solid colour flipping, rather than the forty
-## pixels of pale-on-pale it was when this file assumed night.
-##
-## The omni stays, and it is no longer redundant: one lamp barely tints the grass,
-## but twelve of them visibly warm the whole yard and the fence, and THAT is the
-## hour-one-to-hour-forty contrast the twelve props exist to produce (GDD §3).
+## The compact unshaded core makes the state readable inside an authored fixture;
+## the flare and omni carry the reward across the yard without a giant signal cube.
 ## Shape and scale, never a shader. [tune]
-const HEAD := 0.95
-const POST_H := 2.35
-const LIT_EMISSION := 2.8
-const LIT_ENERGY := 9.0
-const LIT_RANGE := 7.5
+const POST_H := 1.48
+const HEAD := 0.22
+const LIT_EMISSION := 3.4
+const LIT_ENERGY := 6.5
+const LIT_RANGE := 5.2
 ## Seconds the lamp takes to come up, and how far past its resting brightness it
 ## overshoots on the way. The overshoot is the part that makes it an EVENT and
 ## not a state change you notice later. [tune]
@@ -163,6 +145,8 @@ func lit() -> bool:
 # --- Construction ------------------------------------------------------------
 
 func _build() -> void:
+	# The short iron post and imported fixture share the garrison's crafted lantern
+	# language; flare and light contrast keep the reward instantly readable.
 	var iron := StandardMaterial3D.new()
 	iron.albedo_color = Color(0.16, 0.15, 0.17)
 	iron.roughness = 0.9
@@ -170,7 +154,7 @@ func _build() -> void:
 
 	var post := MeshInstance3D.new()
 	var pm := CylinderMesh.new()
-	pm.top_radius = 0.05
+	pm.top_radius = 0.055
 	pm.bottom_radius = 0.08
 	pm.height = POST_H
 	pm.radial_segments = 6
@@ -179,21 +163,26 @@ func _build() -> void:
 	post.position.y = POST_H * 0.5
 	add_child(post)
 
+	var fixture := LANTERN_WALL.instantiate() as Node3D
+	fixture.name = &"LanternFixture"
+	fixture.scale = Vector3.ONE * 0.30
+	fixture.position = Vector3(0.0, 1.38, 0.02)
+	add_child(fixture)
+
 	_mat = StandardMaterial3D.new()
 	_mat.emission = Pal.GOLD
 	_mat.roughness = 0.7
 	_mat.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
-	# UNSHADED, so a dark prop is legibly dark rather than picking up the moon
-	# and reading as half-lit. The two states have to be unmistakable from the
-	# far wall; a shaded box at night is neither.
+	# UNSHADED keeps the small core's off/on contrast legible inside the fixture.
 	_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 
 	_head = MeshInstance3D.new()
-	var hm := BoxMesh.new()
-	hm.size = Vector3(HEAD, HEAD, HEAD)
+	var hm := SphereMesh.new()
+	hm.radius = HEAD * 0.5
+	hm.height = HEAD
 	_head.mesh = hm
 	_head.material_override = _mat
-	_head.position.y = POST_H + HEAD * 0.4
+	_head.position = Vector3(0.0, 1.47, 0.08)
 	add_child(_head)
 
 	_light = OmniLight3D.new()
@@ -203,5 +192,5 @@ func _build() -> void:
 	# Twelve shadow-casting omnis in one small yard is the whole shadow budget
 	# spent on dressing. The prop's job is to be SEEN, not to cast.
 	_light.shadow_enabled = false
-	_light.position.y = _head.position.y
+	_light.position = _head.position
 	add_child(_light)

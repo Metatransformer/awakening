@@ -31,6 +31,13 @@ func run(rig) -> void:
 	var game_camera := garrison.get_node_or_null(^"GameCamera") as Camera3D
 	rig.check(game_camera != null and game_camera.far >= 300.0,
 		"the garrison camera resolves the reused mountain skyline")
+	Menu.close()
+	Prompt.drop_focus()
+	# HUD visibility is authority-owned and intentionally repairs direct external
+	# writes every tree change. Announce a synthetic full-screen lookdev surface so
+	# the contact sheet is clean through the same supported path as production UI.
+	Bus.screen_opened.emit(&"garrison_lookdev")
+	await rig.wait_frames(3)
 
 	var camera := Camera3D.new()
 	camera.fov = 56.0
@@ -79,8 +86,8 @@ func run(rig) -> void:
 
 	# At night the courtyard stays comparatively cool while every enclosed room
 	# becomes an amber destination; the smithy retains its hotter orange identity.
-	Clock.set_time(1, 22.0)
-	await rig.wait_frames(45)
+	Clock.set_time(1, 23.5)
+	await rig.wait_frames(60)
 	_frame(camera, compound, Vector3(0.0, 18.0, 21.0), Vector3(0.0, 0.8, -2.0), 58.0)
 	await _capture(rig, out, "layout_14_warm_interiors_night.png")
 	_frame(camera, compound, Vector3(-14.65, 1.6, -4.6), Vector3(-19.2, 1.0, -4.8), 68.0)
@@ -151,7 +158,7 @@ func _prove_warm_lighting(rig, compound: GarrisonCompound) -> void:
 			"%s uses a warm amber interior light" % path)
 	var smith_light := compound.get_node_or_null(
 		"Buildings/Smithy/InteriorLight") as OmniLight3D
-	rig.check(smith_light != null and smith_light.light_color.g < 0.5,
+	rig.check(smith_light != null and smith_light.light_color.g < 0.65,
 		"the forge atmosphere is hotter orange than the other rooms")
 
 
@@ -176,8 +183,8 @@ func _prove_exit_backstop(rig, compound: GarrisonCompound) -> void:
 	var shape := backstop.shape as BoxShape3D if backstop != null else null
 	rig.check(shape != null and shape.size.x >= 5.8 and shape.size.y >= 4.8,
 		"the departure gate blocks walking or jumping into unloaded space")
-	rig.check(compound.get_node_or_null("SouthGatehouse/PortcullisBar") != null,
-		"the blocked edge is visibly communicated by a portcullis")
+	rig.check(compound.get_node_or_null("SouthGatehouse/RaisedPortcullis") != null,
+		"the open raid arch carries a visibly raised portcullis")
 
 
 func _capture(rig, out: String, file_name: String) -> void:

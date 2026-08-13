@@ -64,6 +64,9 @@ const L_HOOK := 1 << 7
 ## arrow's second, separate probe, which is what makes the volume invisible to
 ## the sword's sweep, the hero's interact scan and the camera's collision alike.
 const L_CONVERT := 1 << 8
+## A world-looking boundary that only the hero masks. It lets the garrison gate
+## bar the player without becoming raid navigation collision.
+const L_PLAYER_BOUNDARY := 1 << 9
 
 # --- Hero body --------------------------------------------------------------
 ## The source mesh is 1.0 units tall; this scales it to adult-Link height.

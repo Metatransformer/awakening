@@ -1,2 +1,6 @@
 # Normalize EOL for all files that Git considers text files.
 * text=auto eol=lf
+
+# glTF buffer payloads are binary even when a particular mesh happens to lack
+# NUL bytes. Never line-normalize or whitespace-check their vertex/index data.
+*.bin binary

@@ -75,7 +75,6 @@ func _rebuild() -> void:
 	_disc(radius * 0.66, 0.04, Color(0.98, 0.96, 0.92))
 	_disc(radius * 0.30, 0.05, Color(0.74, 0.72, 0.70))
 
-	_spokes()
 	_kerb()
 
 
@@ -96,30 +95,6 @@ func _disc(r: float, y: float, tint: Color) -> void:
 	# The mesh is centred, so the top face lands at `y`.
 	m.position.y = y - 0.09
 	add_child(m)
-
-
-## Eight joint lines from the roundel out to the rim.
-##
-## They are the cheapest thing in this file and they do the most work: a plain
-## disc of stone has no scale to it -- it could be three metres across or thirty
-## -- and radial joints give the eye something to measure the circle against as
-## the hero walks over them.
-func _spokes() -> void:
-	var mat := MAT_STONE.duplicate() as StandardMaterial3D
-	mat.albedo_color = MAT_STONE.albedo_color * Color(0.52, 0.51, 0.50)
-	for i in 8:
-		var a := float(i) * TAU / 8.0
-		var m := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		var span := radius - radius * 0.30
-		bm.size = Vector3(0.16, 0.06, span)
-		m.mesh = bm
-		m.material_override = mat
-		# Halfway along its own run, out from the roundel's edge.
-		var mid := radius * 0.30 + span * 0.5
-		m.position = Vector3(sin(a) * mid, 0.055, cos(a) * mid)
-		m.rotation.y = a
-		add_child(m)
 
 
 ## The rim: a ring of set stones, gapped at the four ways in.
