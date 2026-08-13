@@ -12,11 +12,10 @@ extends RefCounted
 ## owns the counters; this owns the rest, and each of the three has a shape the
 ## widget has never been on:
 ##
-##   the BAG      two grids (the case and the bag), a button in neither of them
-##                (the escape rope), and a left-hand column that puts the cells
-##                further left than any counter's board does
-##   EQUIP        slots in the MIDDLE of the frame, where the card cannot go
-##                right and has to fall through to the second candidate
+##   the BAG      two grids (the case and the bag) and a left-hand column that
+##                puts the cells further left than any counter's board does
+##   EQUIP        slots in the MIDDLE of the frame plus the Escape Rope at the
+##                bottom edge, where the card has to use its fallback positions
 ##   the RECEIPT  cells that cannot take focus at all, so the hover route is the
 ##                only route in
 ##
@@ -26,8 +25,8 @@ extends RefCounted
 ##
 ##   A  It covers the cell it is describing. The one thing a description of a
 ##      thing must never do, and it only happens at SOME cells.
-##   B  It runs off the screen. The bag's last row and the rope, which is the
-##      lowest thing on the page, are this screen's corners.
+##   B  It runs off the screen. The bag's last row and Equipment's Rope, which
+##      is the lowest described verb, are this screen's corners.
 ##   C  It stops following. The pouch feeds it from `_describe`, which is reached
 ##      from FOUR places — the bag grid's `cell_focused`, the case grid's, the
 ##      rope's `focus_entered`, and `_describe_focus` on a refresh — and a card
@@ -81,7 +80,6 @@ func run(rig) -> void:
 	await _shape(pouch)
 	await _walk(pouch, "b_bag")
 	await _mouse_path(pouch, "c_mouse")
-	await _rope(pouch)
 	await _equip(menu)
 	await _receipt()
 	print("PACK done (%d passed, %d failed)" % [_pass, _fail])
@@ -306,19 +304,18 @@ func _mouse_path(pouch, tag: String) -> void:
 		"%s the pad still moves the card after the mouse has" % tag)
 
 
-## The rope is not in either grid and it is the lowest thing on the page, so it
-## is this screen's bottom edge — the case `ItemTip`'s "under it" and "over it"
-## fallbacks exist for.
-func _rope(pouch) -> void:
-	pouch._rope.grab_focus()
+## The Rope is not a hand or wheel cell and it is the lowest described thing on
+## Equipment, so it exercises the card's bottom-edge fallback.
+func _rope(equip) -> void:
+	equip._rope.grab_focus()
 	await _rig.wait_frames(8)
-	_ck(pouch._tip.anchor == pouch._rope,
-		"D0 the card follows focus off the grids onto the escape rope")
-	_ck(pouch._tip.title.text == "Escape Rope",
-		"D1 ...and says what it is ('%s')" % pouch._tip.title.text)
-	_ck(not _overlaps(pouch), "D2 the card is not on the rope button")
-	_ck(_inside(pouch), "D3 the card is on screen at the bottom of the page (%s in %s)"
-		% [_tip_rect(pouch), _view(pouch)])
+	_ck(equip._tip.anchor == equip._rope,
+		"D0 the Equipment card follows focus onto the Escape Rope")
+	_ck(equip._tip.title.text == "Escape Rope",
+		"D1 ...and says what it is ('%s')" % equip._tip.title.text)
+	_ck(not _overlaps(equip), "D2 the card is not on the Rope button")
+	_ck(_inside(equip), "D3 the card is on screen at the bottom of Equipment (%s in %s)"
+		% [_tip_rect(equip), _view(equip)])
 	await _rig.capture(_out.path_join("d_rope.png"))
 
 
@@ -388,6 +385,7 @@ func _equip(menu: PauseMenu) -> void:
 	_ck(bad_edge == 0, "E5 it never left the screen (%d)" % bad_edge)
 	_ck(String(equip._tip.kicker.text).contains("KIT WHEEL"),
 		"E6 the last cell walked was a wheel direction ('%s')" % equip._tip.kicker.text)
+	await _rope(equip)
 	await _rig.capture(_out.path_join("e_equip.png"))
 	menu.close()
 	await _rig.wait_frames(8)

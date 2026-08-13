@@ -11,6 +11,7 @@ unauthorised.
 | Surface | Cap |
 |---|---:|
 | Dungeon floors | **4**, plus the existing post-credits endless mode |
+| Generated rooms per authored floor | **8 / 11 / 12 / 13** on floors 1–4 |
 | Bosses | **4** |
 | Minibosses | **4**, one per floor |
 | Enemy kinds in rotation | **9** |
@@ -28,6 +29,7 @@ unauthorised.
 | Puzzle combinators | **9** |
 | Enemy behaviours | **8**, with four currently committed |
 | Added dungeon graph edges | **1 per floor** |
+| Mandatory Small Key loops | **4**, one floor-scoped combat-detour loop per authored floor |
 | Blessings | **12** |
 | Relics | **12** |
 | Garrison NPCs | **6**: the existing five plus one Vyr Builder |
@@ -76,6 +78,16 @@ and three one-rank doctrine tracks. It adds no item, pickup, UI screen, NPC,
 stat category, dialogue tree or repeatable system. The exact five-observation,
 five-note boundary is owned by [FIELD_NOTES.md](FIELD_NOTES.md).
 
+Issue #199 is an explicit owner-authorised vertical expansion alongside the
+freeze. It raises the authored floor totals to **8 / 11 / 12 / 13**; every added
+room is combat only; and exactly one added combat detour per floor awards that
+floor's Small Key before the player cycles back to spend it at a locked
+critical-path gate. It also authorises live ordinary/Boss lock and key telemetry
+on the existing two map surfaces, counted Escape Rope stock, and sparse
+combat-room clear rewards drawn only from Escape Rope, Hardtack and Small Beer.
+It authorises no fifth floor, new enemy, direct health drop, new map, new
+currency, extra key loop, or non-combat added room.
+
 Counts rise only through an explicit scope amendment. By default, an addition
 must delete something of comparable cost in the same decision. Implementing a
 feature does not authorise another instance, variant, or supporting system.
@@ -119,8 +131,15 @@ slice. It does not supersede the authorised human proofs above or satisfy the
 near/deep evidence bar in
 [design-tests/FISHING_PROVISIONS_PROOF.md](design-tests/FISHING_PROVISIONS_PROOF.md).
 
-Raid, Field Notes, fishing/provisions, and #184's bounded tool/mining
-implementations are complete; their precommitted human tests remain pending.
+Issue #199 is separately owner-authorised implementation sequencing debt: the
+fixed 8/11/12/13 combat-expanded floor shapes, one floor-key loop per authored
+floor, sparse counted provision clear rewards, shared map lock/key telemetry,
+and counted Escape Rope named above. It does not supersede or satisfy either
+active human proof.
+
+Raid, Field Notes, fishing/provisions, #184's bounded tool/mining work, and
+#199's bounded dungeon/provision expansion are implementation-complete; their
+applicable precommitted human tests remain pending.
 Floors 2–4, bosses 2–4, production content, another fishing location or
 minigame, and every expansion below remain frozen.
 
@@ -152,8 +171,11 @@ list.
 - A spell school, spell levels, a fourth working, or a seventh ring stop.
 - Procedural bosses, a second dungeon kit, or new monster models.
 - Relics as random drops, sellable relics, or permanent loss of a unique relic.
-- Level-scaled enemies, underground healing drops, dungeon-accessible storage,
-  free fast travel, or a checkpoint/rewind history.
+- Level-scaled enemies, direct underground health or magic drops,
+  dungeon-accessible storage, free fast travel, or a checkpoint/rewind history.
+  Issue #199's sparse counted Hardtack and Small Beer provision stock is the
+  narrow exception: it still requires the ordinary interruptible meal and does
+  not heal or restore magic on pickup.
 - A special raid teleport, summon, or free extraction.
 - New Game+, ascension, prestige, daily challenges, or a third ending.
 - Linux, console, localization, or Steam Deck verification for the first

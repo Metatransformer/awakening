@@ -709,6 +709,11 @@ func _row_icon(row: Dictionary) -> String:
 		id = (row["line"] as Dictionary).get("id", &"")
 	if id == &"":
 		return ""
+	# Rope provision stock deliberately has no ItemDb entry. Reuse the action
+	# glyph already drawn by the pouch instead of inventing an item asset merely
+	# to pass the registry guard below.
+	if id == &"escape_rope":
+		return UiKit.action_icon("rope")
 	if ItemDb.get_def(id) == null and not RationDb.has(id) and not PotionDb.has(id):
 		return ""
 	return UiKit.item_icon(id)

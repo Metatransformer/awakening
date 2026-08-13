@@ -38,6 +38,10 @@ extends RefCounted
 ## as a value someone forgot to fill in.
 const ROOMS_FROM_PROG := 0
 const PACK_FROM_PROG := Vector2i.ZERO
+## One authored expansion rule for every floor shape. The manifest and `Prog`
+## remain the authorities for the baseline; this is the only place that turns a
+## baseline into the combat-room extension the dungeon actually builds.
+const ROOM_EXPANSION := 0.30
 
 
 # --- Tints --------------------------------------------------------------------
@@ -507,10 +511,30 @@ static func announced_name(level: int) -> String:
 	return n if n != "" else Prog.NAME
 
 
-## Rooms on this floor. Authored, or the curve's answer where the row defers.
-static func rooms(level: int) -> int:
+## The floor length before the combat extension. These are the manifest's
+## explicit 6/8/9/10 answers on authored floors and `Prog.rooms(level)` in the
+## Long Descent; callers validating authored pacing can therefore inspect the
+## baseline without undoing the expansion arithmetic themselves.
+static func base_rooms(level: int) -> int:
 	var n: int = get_floor(level).get("rooms", ROOMS_FROM_PROG)
 	return Prog.rooms(level) if n == ROOMS_FROM_PROG else n
+
+
+static func room_expansion() -> float:
+	return ROOM_EXPANSION
+
+
+## Every added room is an ordinary combat room. `ceil` is deliberate: a short
+## six-room floor still earns two full detours rather than rounding the promise
+## down to one.
+static func combat_bonus(level: int) -> int:
+	return int(ceil(float(base_rooms(level)) * ROOM_EXPANSION))
+
+
+## Total generated rooms: the unchanged authored/endless baseline plus its one
+## central combat extension.
+static func rooms(level: int) -> int:
+	return base_rooms(level) + combat_bonus(level)
 
 
 ## Bodies per room as (min, max). Authored, or the curve's answer where the row

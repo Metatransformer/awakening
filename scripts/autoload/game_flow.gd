@@ -510,8 +510,8 @@ func descend() -> void:
 
 
 ## Go back one generated floor without settling the run. Floor 1 is the surface
-## seam instead: it uses `Run.extract()` itself, preserving the fee, current
-## health, banking and receipt path shared with the portable Escape Rope.
+## seam instead: it uses priced `Run.extract()` itself. The portable Rope shares
+## its health, banking and receipt path but disables this stair's gold charge.
 func ascend() -> void:
 	if busy or ending or not Run.in_dungeon:
 		return

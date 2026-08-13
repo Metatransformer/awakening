@@ -3,9 +3,9 @@ extends Catalogue
 ## What the quartermaster offers across her two services: repeatable stock in
 ## Trade, and permanent bag/health progression under Upgrades.
 ##
-## **Eleven rows now, and nine of them are Trade stock.** Arrows, Burst charges,
-## food, drink, seeds, and saplings are the expendables -- the things you buy
-## in the yard, take down, and come back without. The sentence that admits all
+## **Twelve rows now, and ten of them are Trade stock.** Arrows, Burst charges,
+## Rope provisions, food, drink, seeds, and saplings are the expendables -- the
+## things you buy in the yard, take down, and come back without. The sentence that admits all
 ## of them is the one Kessa says about herself: a quartermaster ISSUES. She does not make
 ## anything and nothing on this board is crafted (`crafts()` is false for every
 ## row), which is the whole difference between this counter and the forge or the
@@ -47,7 +47,7 @@ const LIMITS := {
 
 ## The repeatable expendables shown on the quartermaster's two-sided Trade board.
 const STOCK_IDS: Array[StringName] = [
-	&"arrows", &"charges", &"hardtack", &"small_beer",
+	&"arrows", &"charges", &"escape_rope", &"hardtack", &"small_beer",
 	&"turnip_seed", &"cabbage_seed", &"sunpepper_seed",
 	&"apple_sapling", &"pear_sapling",
 ]
@@ -78,6 +78,7 @@ const GATED_BY := {
 ## nobody's mental price list moved with the counter (card #98).
 const CHARGE_BATCH := 3
 const CHARGE_GOLD := 90
+const ESCAPE_ROPE_GOLD := 60
 
 ## What a purchase of food or drink costs, per `K.RATION_BATCH`.
 ##
@@ -200,6 +201,14 @@ static func _board() -> Array[Dictionary]:
 			# rope down is the whole of what you get.
 			"detail": "%d / %d charges" % [Game.charges, Game.max_charges],
 		},
+		{
+			"id": &"escape_rope",
+			"label": "ESCAPE ROPE",
+			"cost": Game.trade_purchase_price(ESCAPE_ROPE_GOLD),
+			"parts": {},
+			"blurb": "Carried provision stock. Using it costs no gold, but consumes the Rope.",
+			"detail": "%d / %d carried" % [Game.escape_ropes, K.ESCAPE_ROPE_STACK],
+		},
 		_ration_line(&"hardtack"),
 		_ration_line(&"small_beer"),
 		_planting_line(&"turnip_seed"),
@@ -275,6 +284,8 @@ static func _scaled(base: int, id: StringName, factor: float) -> int:
 static func remaining(id: StringName) -> int:
 	if GardenDb.is_planting(id):
 		return -1 if Run.room_for(id) >= _planting_batch(id) else 0
+	if id == &"escape_rope":
+		return maxi(0, K.ESCAPE_ROPE_STACK - Game.escape_ropes)
 	if id == &"charges":
 		# The pouch's headroom in BUNDLES, rounded up, so a player one charge
 		# short of full still sees a line they can press. `add_charges` clamps, so
@@ -301,6 +312,7 @@ static func _full(id: StringName) -> bool:
 	match id:
 		&"arrows": return Game.arrows >= Game.max_arrows
 		&"charges": return Game.charges >= Game.max_charges
+		&"escape_rope": return Game.escape_ropes >= K.ESCAPE_ROPE_STACK
 	return RationDb.has(id) and Game.ration_count(id) >= K.RATION_STACK
 
 
@@ -330,6 +342,7 @@ static func refusal(line: Dictionary) -> String:
 		match id:
 			&"arrows": return "THE QUIVER IS FULL"
 			&"charges": return "THE POUCH IS FULL"
+			&"escape_rope": return "THE ROPE STOCK IS FULL"
 		return "THE PACK IS FULL"
 	# A finished LADDER, which is the one thing here that really is permanent.
 	if remaining(id) == 0:
@@ -369,6 +382,10 @@ static func buy(line: Dictionary) -> bool:
 			# which is what puts the new numeral in the HUD's working cell -- so
 			# the counter and the cell cannot disagree.
 			Game.add_charges(CHARGE_BATCH)
+		&"escape_rope":
+			if Game.add_escape_ropes(1) != 1:
+				Game.refund_gold(int(line["cost"]))
+				return false
 		&"hardtack", &"small_beer":
 			Game.add_rations(id, K.RATION_BATCH)
 		&"bag_slot":

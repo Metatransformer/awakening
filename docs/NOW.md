@@ -26,8 +26,8 @@ Test exactly one implemented vertical slice:
   components.
 - Give one afternoon warning and one urgent 23:00 warning; the urgent warning
   interrupts sleep.
-- Let underground players continue or use the ordinary Escape Rope. The raid
-  provides no summon, teleport, or free extraction.
+- Let underground players continue or consume one carried Escape Rope. The raid
+  provides no summon, teleport, free Rope, or special extraction.
 - Run one attack through the main gate: three kobolds and one orc.
 - Show authoritative GARRISON integrity in the normal HUD. Only completed
   attacks on the courtyard command standard reduce it; all raiders dead above
@@ -69,6 +69,19 @@ currency, reward id, combat use, inventory expansion, or additional fishing
 location. It changes access and cost around fishing but is not evidence that
 the near/deep fishing choice is deep; that hypothesis remains open in
 [design-tests/FISHING_PROVISIONS_PROOF.md](design-tests/FISHING_PROVISIONS_PROOF.md).
+
+Issue #199 is a third explicit owner-authorised vertical expansion alongside
+the freeze. Its completed slice expands authored floor room totals to
+**8 / 11 / 12 / 13** with combat-only additions; guarantees one floor-scoped
+Small Key detour-and-gate loop per floor; adds sparse counted Escape Rope,
+Hardtack and Small Beer clear rewards; publishes live ordinary/Boss locks and
+key counts through the shared minimap/MAP renderer; and makes Escape Rope
+counted provision stock bought or found before use.
+
+This is accepted sequencing debt, not Raid Loop evidence. It neither resolves
+nor displaces the pending Raid Loop human question, and it authorises no broader
+dungeon, floor, enemy, reward, map, provision, or extraction expansion beyond
+the fixed [SCOPE.md](SCOPE.md) amendment.
 
 ## Authorized Field Notes implementation
 

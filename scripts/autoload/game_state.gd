@@ -122,6 +122,8 @@ var max_arrows: int = 30
 ## `docs/METAGAME.md` §2 is built on.
 var charges: int = 0
 var max_charges: int = K.BURST_CHARGES_MAX
+## Carried Escape Ropes. Provision stock, not an item, ration or run-bag line.
+var escape_ropes: int = 0
 
 # --- Bottles (docs/METAGAME.md §6.6) ----------------------------------------
 ## What is in each bottle you own, in order. The ARRAY'S SIZE is how many
@@ -219,7 +221,16 @@ const LASTING_IDS: Array[StringName] = [
 	DRAUGHT_PLATE_ID, DRAUGHT_EDGE_ID, BALLAST_ID,
 ]
 
-var small_keys: int = 0
+## Small Keys belong to the floor where they were found. `small_keys` remains the
+## compatibility surface for gates and directors, but reads and assignments are
+## always redirected to the floor `Run.level` names right now.
+const SMALL_KEYS_PER_FLOOR_MAX := 99
+var small_keys_by_floor: Dictionary[int, int] = {}
+var small_keys: int:
+	get:
+		return small_keys_for_floor(Run.level)
+	set(value):
+		set_small_keys_for_floor(Run.level, value)
 var has_boss_key: bool = false
 ## The authored floor whose Boss Key is currently held. A run can backtrack, so
 ## the boolean alone is not enough to stop floor 2's key opening floor 1's door.
@@ -450,7 +461,8 @@ func reset() -> void:
 	stash.clear()
 	arrows = 0
 	charges = 0
-	small_keys = 0
+	escape_ropes = 0
+	small_keys_by_floor.clear()
 	has_boss_key = false
 	boss_key_level = 0
 	has_map = false
@@ -492,6 +504,7 @@ func reset() -> void:
 	Bus.stash_changed.emit(stash)
 	Bus.ammo_changed.emit(&"arrows", arrows)
 	Bus.ammo_changed.emit(&"charges", charges)
+	Bus.provisions_changed.emit()
 	Bus.gold_changed.emit(gold)
 	Bus.key_count_changed.emit(small_keys)
 	Bus.player_health_changed.emit(health_points, max_health_points)
@@ -1317,6 +1330,30 @@ func add_charges(n: int) -> void:
 	Bus.ammo_changed.emit(&"charges", charges)
 
 
+## Put Rope provision stock in the carried stack. Returns exactly how many fit.
+func add_escape_ropes(n: int) -> int:
+	if n <= 0:
+		return 0
+	var was := escape_ropes
+	escape_ropes = clampi(escape_ropes + n, 0, K.ESCAPE_ROPE_STACK)
+	var added := escape_ropes - was
+	if added > 0:
+		Bus.provisions_changed.emit()
+	return added
+
+
+## Spend the Rope when its world channel begins. God mode keeps the same
+## no-decrement behavior as ammunition.
+func spend_escape_rope() -> bool:
+	if dev_god_mode:
+		return true
+	if escape_ropes <= 0:
+		return false
+	escape_ropes -= 1
+	Bus.provisions_changed.emit()
+	return true
+
+
 ## Spend one unit of a consumable. Returns false if the player has none.
 func spend_ammo(id: StringName) -> bool:
 	if dev_god_mode:
@@ -2020,16 +2057,81 @@ func _tick_draughts(delta: float) -> void:
 
 # --- Keys -------------------------------------------------------------------
 
-func add_key(n: int = 1) -> void:
-	small_keys += n
+func small_keys_for_floor(floor_number: int) -> int:
+	if floor_number <= 0:
+		return 0
+	return int(small_keys_by_floor.get(floor_number, 0))
+
+
+func set_small_keys_for_floor(floor_number: int, count: int,
+		announce: bool = true) -> void:
+	if floor_number <= 0:
+		return
+	var safe_count := clampi(count, 0, SMALL_KEYS_PER_FLOOR_MAX)
+	if safe_count <= 0:
+		small_keys_by_floor.erase(floor_number)
+	else:
+		small_keys_by_floor[floor_number] = safe_count
+	if announce:
+		announce_key_count()
+
+
+## Plain integer-keyed data for JSON. The save layer may serialize the keys as
+## strings; `restore_small_keys` accepts either representation on the way back.
+func small_keys_snapshot() -> Dictionary[int, int]:
+	return small_keys_by_floor.duplicate()
+
+
+func restore_small_keys(raw: Variant) -> void:
+	small_keys_by_floor.clear()
+	if raw is not Dictionary:
+		return
+	var source := raw as Dictionary
+	for raw_floor: Variant in source:
+		var floor_number := 0
+		if raw_floor is int:
+			floor_number = int(raw_floor)
+		elif raw_floor is String and (raw_floor as String).is_valid_int():
+			floor_number = (raw_floor as String).to_int()
+		else:
+			continue
+		var raw_count: Variant = source[raw_floor]
+		if floor_number <= 0 or (raw_count is not int and raw_count is not float):
+			continue
+		var count := clampi(int(raw_count), 0, SMALL_KEYS_PER_FLOOR_MAX)
+		if count > 0:
+			small_keys_by_floor[floor_number] = count
+
+
+func clear_small_keys(announce: bool = true) -> void:
+	small_keys_by_floor.clear()
+	if announce:
+		announce_key_count()
+
+
+func announce_key_count() -> void:
 	Bus.key_count_changed.emit(small_keys)
+
+
+## One lifecycle seam for a fresh run and either run ending.
+func clear_run_keys(announce: bool = true) -> void:
+	small_keys_by_floor.clear()
+	has_boss_key = false
+	boss_key_level = 0
+	if announce:
+		announce_key_count()
+
+
+func add_key(n: int = 1) -> void:
+	if n <= 0:
+		return
+	set_small_keys_for_floor(Run.level, small_keys + n)
 
 
 func spend_key() -> bool:
 	if small_keys <= 0:
 		return false
-	small_keys -= 1
-	Bus.key_count_changed.emit(small_keys)
+	set_small_keys_for_floor(Run.level, small_keys - 1)
 	return true
 
 
@@ -2039,6 +2141,7 @@ func add_boss_key() -> void:
 	has_boss_key = true
 	boss_key_level = Run.level
 	Bus.item_acquired.emit(&"boss_key")
+	announce_key_count()
 
 
 func has_boss_key_for(level: int) -> bool:
@@ -2055,6 +2158,7 @@ func spend_boss_key() -> bool:
 func clear_boss_key() -> void:
 	has_boss_key = false
 	boss_key_level = 0
+	announce_key_count()
 
 
 # --- Items and flags --------------------------------------------------------

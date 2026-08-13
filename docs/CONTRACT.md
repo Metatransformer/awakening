@@ -395,7 +395,7 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `interact` | E | **A / Cross** (pad0) | talk/open, and nothing else. **E and A are also `ui_accept`** — the confirm is the same press in the world and in a menu, see below |
 | `ui_accept` | Enter, Space, **E** | **A** (pad0), **X** (pad2) | confirm — in menus only. E is registered at runtime, the same way the pad buttons are |
 | `ui_cancel` | Esc | **B / Circle** (pad1) | close/back — in menus only |
-| `ui_hold` | **Y** | **Y / Triangle** (pad3) | the menu's HOLD — in menus only. A goes forward, B goes back, and this is the press that must not be a press. Today: the escape rope on the INVENTORY screen (METAGAME §5). Shares Y with `jump`, which is safe because the tree is paused whenever it is read. **Not rebindable** — the `ui_` prefix is what enforces that (`Settings._capture_defaults` skips it). |
+| `ui_hold` | **Y** | **Y / Triangle** (pad3) | the menu's HOLD — in menus only. A goes forward, B goes back, and this is the press that must not be a press. Today: the Escape Rope on the **Equipment** page (METAGAME §7). Shares Y with `jump`, which is safe because the tree is paused whenever it is read. **Not rebindable** — the `ui_` prefix is what enforces that (`Settings._capture_defaults` skips it). |
 | `weapon_prev` / `weapon_next` | 1 / 3 | dpad ← / → | step the right hand through the weapons you own — §4.1 |
 | `item_next` | 4 | dpad ↓ | step the selected item — §4.1 |
 | `loadout_swap` | 2 | dpad ↑ | primary ↔ alternate — §4.1 |
@@ -1714,11 +1714,11 @@ the bow, the hookshot and arrows in `Game._ready()` so all three were reachable
 from a cold boot. That kit was costing every gate in the game: `Game.has()` is
 the ownership check the smith, the locked doors and the boss drops all read, and
 a kit granted on frame one made it answer yes before anything had been earned.
-The hero now starts with the sword, the shield and the rope — the first two are
-unconditional in `armament_owned()`, the third is a menu verb, so none of the
-three needs a row in the array. `STARTER_ARROWS` is deleted outright; a quiver
-you cannot fire is a slot that lies, which is the rule
-`armament_owned(&"arrow")` already keeps.
+The hero now starts with the sword and shield, both unconditional in
+`armament_owned()`. Escape Rope is counted provision stock and a new or legacy
+save with no stock field starts at zero; it is not a boot grant or a row in this
+array. `STARTER_ARROWS` is deleted outright; a quiver you cannot fire is a slot
+that lies, which is the rule `armament_owned(&"arrow")` already keeps.
 
 The constant itself survives, empty, as the place the *next* boot grant goes (a
 demo build, a debug loadout). `_grant_starter_kit()` still runs, because
@@ -2157,14 +2157,28 @@ Rules:
   through `RationDb.has()` on load, for the reason the bottle array is rebuilt
   with `StringName(c)`.
 
+`ProvisionPickup` (`scripts/world/provision_pickup.gd`) is the physical dungeon
+surface for `escape_rope`, `hardtack`, and `small_beer`. It writes through
+`Game.add_escape_ropes` or `Game.add_rations`, stays present when no stock fits,
+and never enters `Run.bag`, value, Heat, or extraction sorting. `Dungeon` alone
+chooses the seeded clear-reward rate and weighted id, stages the node on its
+`RoomWatch`, and calls `reveal()` when that combat room clears.
+
 ### The way out — the Escape Rope
 
 ```gdscript
 # scripts/items/escape_rope.gd, built by hero.gd as `hero.rope`
-Bus.escape_rope_used.emit()      # the INVENTORY screen, after closing the menu
+var escape_ropes: int                         # 0..K.ESCAPE_ROPE_STACK (9)
+func add_escape_ropes(n: int) -> int          # returns how many fit
+func spend_escape_rope() -> bool              # one at channel start; zero refuses
+Bus.provisions_changed                        # consumers reread Game
+
+Bus.escape_rope_used.emit()      # Equipment, after its hold and menu close
 hero.rope.begin() -> bool        # or drive it directly, as directors do
 hero.rope.active() -> bool       # rooted, mid-channel
 hero.rope.cancel()               # a blow landed; emits Bus.escape_rope_broken
+Run.extract(false) -> bool       # consumed-Rope settlement; no gold charge
+Run.extract() -> bool            # default physical-stair settlement; toll preserved
 ```
 
 There is no extraction node and no exit room. `ExtractNode` is **deleted** —
@@ -2179,14 +2193,17 @@ do not add a second way out (METAGAME §5).
 - **It is not on any ring.** It is not in `RIGHT_POOL` and must not be added —
   the way out of a run is a decision made from a menu, not a thing you can step
   onto with a D-pad press mid-fight.
-- **Only `Run` decides whether leaving is possible, and money is not one of its
-  reasons.** The fee is capped at the purse (`Run.extract_charge()`), so a toll
-  bigger than your gold takes all of it and the rope still works. `can_extract()`
-  is `in_dungeon` and nothing else. **Do not add an affordability check** — one
-  here and one in `Run.extract()` were between them the game's only dead end, and
-  the player they caught was always the one holding the best bag of the night.
-  `Run.extract_cost()` is the toll, `Run.extract_charge()` is what leaves the
-  purse, and **every UI that names a price shows the charge**.
+- **The Rope is counted provision stock.** It is neither starting/permanent gear
+  nor Inventory, ration, run-bag, item-ring, locker, or sale state. Equipment
+  shows the live `count / 9`, refuses at zero, and spends one before the world
+  channel begins. A broken channel does not refund it.
+- **Only `Run` settles leaving.** The consumed Rope calls `Run.extract(false)`,
+  which changes only the gold charge to zero. The physical floor-1 stair keeps
+  calling default `Run.extract()`: `Run.extract_cost()` remains its toll and
+  `Run.extract_charge()` the amount capped to the purse. Both paths keep the
+  same banking, summary, return and receipt machinery. Do not add an
+  affordability check to the stair; a toll bigger than the purse takes all of it
+  and leaving still succeeds.
 - **Unowned gear is not on the body.** The bow and the hookshot each have two
   mounts, both built at `_ready` (a `BoneAttachment3D` is not something to be
   creating mid-run). The stow mount is shown only when `Game.has(id)` — without
@@ -3160,7 +3177,7 @@ false on a Recut, where clamping down is the point.
 
 ```gdscript
 Saves.peek(slot: int) -> Dictionary       # readable list header; empty=true if unused
-Saves.save(slot: int) -> bool             # Game + destination/transform + v18 Run/garrison/tool state
+Saves.save(slot: int) -> bool             # Game + destination/transform + v21 Run/provision/key state
 Saves.load_slot(slot: int) -> Dictionary  # restores data and returns the travel destination
 Saves.erase(slot: int) -> void            # 3 slots, 0..2
 Saves.autosave() -> bool                  # active slot, else first empty, else decline
@@ -3176,7 +3193,7 @@ garrison load. v4-v8 transforms are deliberately omitted because their owner is
 unknown; v9 introduced `position_scene`, and a transform is returned only when
 that owner matches the destination.
 
-The save file is at **`VERSION = 18`**, and `READABLE` — not `VERSION` — is what
+The save file is at **`VERSION = 21`**, and `READABLE` — not `VERSION` — is what
 `load_slot` checks. v4 split the old `plate` rung into eight gear tracks and is
 why **v3 is refused rather than migrated**: its `plate` key has no honest mapping
 to the new pieces. The later bumps are additive: v5 added `deaths`, v6
@@ -3185,12 +3202,17 @@ v10 `last_played_unix` plus the single versioned `run` snapshot, v11 manual
 wishlist tracks, v12 the additive `garrison` payload, v13 Field Notes, v14
 temporary overhealth, v15 fishing/supper/Well Fed/Connected state, v16 the
 health-points vocabulary, v17 completed Field Notes, and v18 durable utility-
-tool state. `READABLE` is therefore every version from **4 through 18**; absent
+tool state. v19 restores home Run snapshots, v20 adds the persistent garden, and
+v21 adds counted Escape Rope stock plus `small_keys_by_floor`.
+`READABLE` is therefore every version from **4 through 21**; absent
 fields take their version-appropriate defaults instead of making those slots
 unreadable. A pre-v18 slot that owns the Woodsman's Axe migrates it at full
 eight-use durability. v18 writes all three durability
 entries, including a known broken zero, and rebuilds `Game.items` only for
-positive values. `save_game.gd`'s header carries the full version history.
+positive values. Saves missing `escape_ropes` restore zero. A v20 dungeon save's
+legacy `small_keys` integer migrates only to its restored live floor; a home save
+does not invent a floor for it. `save_game.gd`'s header carries the full version
+history.
 
 Every one of those dictionaries is rebuilt on load with `StringName` keys — JSON
 hands back `String` keys, and a `String` key makes `forge_level(&"edge")` and
@@ -3247,7 +3269,9 @@ FloorDb.floor_count() -> int              # 4, and SCOPE §1 freezes it there
 FloorDb.is_authored(level) -> bool
 FloorDb.get_floor(level) -> Dictionary    # never empty; past 4 it is ENDLESS
 FloorDb.name_of(level) -> String
-FloorDb.rooms(level) -> int               # authored, or defers to Prog
+FloorDb.base_rooms(level) -> int          # authored 6/8/9/10, else Prog
+FloorDb.combat_bonus(level) -> int        # ceil(base * 0.30), combat only
+FloorDb.rooms(level) -> int               # total: 8/11/12/13 on floors 1..4
 FloorDb.pack(level) -> Vector2i           # authored, or defers to Prog
 FloorDb.bands(level) -> Dictionary        # room distance -> pool of kinds
 FloorDb.roster(level, room_dist) -> Array
@@ -3283,6 +3307,13 @@ extra row, `ENDLESS`, returned for every level past 4 — plus
 `LONG_DESCENT_RELIC`, which is a named row rather than a field on `ENDLESS`
 because a relic in that row would drop on floor 5, 6, 7 and forever.
 
+`Game.small_keys_by_floor: Dictionary[int, int]` is the one Small Key state.
+`small_keys` remains a compatibility property redirected through `Run.level`;
+new code uses `small_keys_for_floor`, `set_small_keys_for_floor`,
+`small_keys_snapshot`, and `restore_small_keys`. Starting or ending a run clears
+the dictionary. Changing floors preserves every entry and emits the current
+floor's `key_count_changed`; a key can only pay a gate on its own floor.
+
 ### The map — one active authority in every playable zone
 
 There is **one active map system** in this game. `Atlas` holds the active source;
@@ -3290,6 +3321,13 @@ There is **one active map system** in this game. `Atlas` holds the active source
 `Hud._draw_minimap` into a 126 px square in the top-right corner, and by
 `MenuMapPanel` into the MAP tab of the pause menu. Do not write a second map or
 let either consumer discover one independently; that is how the two views go stale.
+
+Live closed doors are `Atlas.locks`, keyed by a stable tag and carrying exactly
+`{tag: StringName, cell: Vector2i, wall: StringName, kind: StringName}` where
+`kind` is `LOCK_SMALL` or `LOCK_BOSS`. The door registers its actual host wall,
+removes the record when opened, and restores it if a reversible gate shuts.
+These are not room-centre markers. `MapDraw` alone turns the records into bone
+ordinary padlocks and gold Boss padlocks on both map surfaces.
 
 Authored exterior zones register themselves with `Atlas` after every
 map-relevant node exists and unregister on exit. Atlas alone asks the active
@@ -3311,6 +3349,12 @@ their plan's `view_range`. The following view is clipped by the box. Dungeon
 fills go through `MapDraw._rect`; authored paths and areas use the same box as
 their segment/polygon clip. Glyphs are dropped whole rather than cut — half a
 chest or landmark is not a smaller symbol.
+
+The dungeon minimap adds one key strip directly beneath its frame: current-floor
+Small Keys on the left and the floor's Boss Key count on the right. The full MAP
+stat band reports the same two counts. Both consumers repaint from
+`Bus.key_count_changed` and read the authoritative Game/Atlas state; neither
+keeps a second counter.
 
 `Dungeon._publish()` is the **only writer** of the room graph, and it writes it
 in the same pass that builds the geometry. Markers go on from `_populate` and

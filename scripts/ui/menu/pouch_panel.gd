@@ -8,7 +8,7 @@ extends Control
 ## difference between them (docs/METAGAME.md §3). A grid of `Game.bag_slots`
 ## cells, most of them visibly empty or visibly not, answers "how much room is
 ## left" without the player reading a single number — and then the header gives
-## them the number anyway, because the extraction fee is taken from it.
+## them the number anyway, because capacity pressure is the decision it serves.
 ##
 ## Three things live here and nowhere else:
 ##
@@ -28,12 +28,6 @@ extends Control
 ##    vendor or to the forge. The mark is the ◆ and the caption says which.
 ##  * **The workbench**, which is what survived. Read-only: this screen shows
 ##    the stock, the smith spends it.
-##  * **The way out**, its fee, and the HOLD it now takes — Y, down for
-##    `ROPE_HOLD` seconds, with the gauge. It moved here off the EQUIP screen, and the
-##    HUD's gold total moved here too (hud.gd took it off the screen on purpose).
-##    That is not three unrelated things sharing a frame: the bag's worth, the
-##    purse and the fee ARE the extraction decision, and it is a decision made by
-##    stopping and looking, not by glancing at a corner while running.
 ##
 ## It owns no state and changes none. Equipping is the EQUIP screen's job (the
 ## D-pad and the two hands), and the two are separate screens on purpose — one
@@ -43,29 +37,11 @@ extends Control
 signal back_requested
 signal notice(text: String, is_error: bool)
 signal drop_requested(item_id: StringName, count: int, from_case: bool)
-## The player asked to leave. The channel happens in the WORLD, so the menu has
-## to close whole rather than back out one screen.
-signal use_requested
 
 ## No `FRAME_SIZE` here any more. It was one of five identical copies and the
 ## paper doll needed the frame wider, so it lives in `MenuUtil.FRAME_SIZE` where
 ## all five screens read the same number — see the comment on it for why they
 ## have to.
-
-## The action the way out is held on: Y on the pad, Y on the keyboard.
-##
-## Not `ui_accept`. A is the universal forward press in every menu in this game,
-## including packing a stack on this screen. The run-ending control cannot be
-## the same button as an ordinary menu action; a HOLD on a DIFFERENT button is
-## what keeps the fumble from ending a run.
-const HOLD_ACTION := &"ui_hold"
-
-## Seconds on Y. Longer than the shop's 0.5 s craft hold and the same length as
-## the gate's descent, because those spend materials and this ends the run. [tune]
-##
-## It is a real hold and not ceremony: the thing it guards against is the press
-## you make while reading something else on this screen.
-const ROPE_HOLD := 0.9
 
 ## Cells per row, and the same five every other collection screen in the game
 ## draws (`ItemGrid.columns`). It was four on both sides until card #120; the
@@ -116,12 +92,7 @@ const MAX_CELLS := 16
 ## item name. Card #156's square tiles handed it back.
 const DOLL_W := 152
 
-## The RIGHT column, which is now the way out and nothing else.
-##
-## It was `DETAIL_W` — a card naming the focused cell, its worth and its blurb,
-## standing full height whatever it had to say. That is the hover card's job now
-## (`ItemTip`), so what is left on this side is the one control on the screen
-## that ENDS something. 260 is what the rope's warning sentence wraps at.
+## The workbench column. The old detail pane is the shared hover card now.
 const RIGHT_W := 260
 
 ## The header's row, so `PauseMenu` can drop the shared tab strip into it. See
@@ -155,15 +126,6 @@ var _back: Button
 ## The hover card. It replaced five labels in a column on the right — see
 ## `RIGHT_W` — and it is fed from `_describe` and from nowhere else.
 var _tip: ItemTip
-var _rope: Button
-var _rope_bar: HoldBar
-var _rope_say: Label
-## Seconds of Y accumulated. Snapped to 0 on release, never decayed.
-var _rope_hold: float = 0.0
-## The hold starts DISARMED and arms on the first frame Y is up. Without it, a
-## player who opens the pouch with Y already down (it is `jump` in the world)
-## arrives on this screen part-way through leaving the dungeon.
-var _rope_armed: bool = false
 ## The cell last described by focus, hover or click. The index and side are the
 ## identity; id/count are refreshed from the live arrays before Drop can emit.
 var _selected_index: int = -1
@@ -240,13 +202,8 @@ func _build() -> void:
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_hrow.add_child(gap)
 
-	# The four numbers the extraction decision is made out of, in a `StatBand`
-	# under the tab strip. They were one right-aligned string in the header row —
-	# "4 / 12 SLOTS   BAG 334 ◇   PURSE 30 ◇" — which is three answers the eye has
-	# to parse a sentence to separate, and it had no room for the fee at all. The
-	# fee lived only on the rope row, two feet away from the purse it is measured
-	# against, and this screen's whole argument (see the class doc) is that those
-	# numbers ARE one decision.
+	# Four inventory facts in a StatBand under the tab strip. They were one
+	# right-aligned sentence that the eye had to parse to separate.
 	_band_slot = VBoxContainer.new()
 	_band_slot.add_theme_constant_override("separation", 0)
 	col.add_child(_band_slot)
@@ -272,8 +229,7 @@ func _build() -> void:
 	# bottom edges of the screen, and nothing complained -- the same failure the
 	# EQUIP screen hit and the same one `_build_stock`'s own comment describes
 	# surviving once already. The bench is the only card here that is not
-	# focusable and not part of the extraction arithmetic, so it is the one that
-	# moves.
+	# focusable, so it is the one that moves.
 	#
 	# "Under, not beside" is the other half, and it was paid for by a merge: the
 	# bench arrived on the left in the same week the paper doll did, and three
@@ -323,18 +279,14 @@ func _build() -> void:
 	var right := VBoxContainer.new()
 	right.name = "Right"
 	right.custom_minimum_size.x = RIGHT_W
-	# 8 and not the 12 the other columns use. This is the tallest column on the
-	# is the tallest thing on the screen -- it, not the frame's 604, is what sets
-	# the pouch's height, and at 12 the footer's Back button ran off the bottom
-	# of a 720p viewport. Four px a gap is the whole difference.
+	# Compact enough for the complete component manifest at 720p.
 	right.add_theme_constant_override("separation", 8)
 	split.add_child(right)
-	_build_rope(right)
 	# **The bench came back up the screen with card #156.** It was moved UNDER the
 	# bag because three cards in this row wanted 948 px of a 776 px budget (see
 	# the note on `Left` above) -- and then the detail column left this side
-	# entirely for the hover card, so the way out is 100 px of a 400 px column and
-	# the bench is a list that fits in what is left. The row that held it is gone,
+	# entirely for the hover card, so the bench is a list that fits in what is left.
+	# The row that held it is gone,
 	# which is 51 px of height back for the bag.
 	_build_stock(right)
 
@@ -463,7 +415,7 @@ func _build_grid(parent: Node) -> void:
 ## The layout is `Run.slots_used()`'s: full stacks first, then the remainder.
 ## Anything that will not fit is dropped from the PICTURE only — it cannot happen
 ## while `bag_slots` and the grid agree, and if it ever does the header's number
-## is still right, which is the number the fee is taken from.
+## is still right.
 ##
 ## Two grids now, laid out from the same rule and from the two halves `Run` keeps
 ## — `Run.in_case(id)` and `Run.in_hold(id)`. The case's five cells are the
@@ -477,13 +429,12 @@ func _fill_cells() -> void:
 	# `capacity` is the point of this screen: the empty cells are the message.
 	# Out of the case comes the bag; the case is never the last row.
 	_case_grid.set_cells(_cells_of(_case_ids, _case_counts), Run.CASE_SLOTS)
-	_grid.spill_down = _rope
+	_grid.spill_down = _back
 	_grid.set_cells(_cells_of(_cell_ids, _cell_counts), want)
 	_wire_cell_selection(_case_grid, true)
 	_wire_cell_selection(_grid, false)
 	_case_grid.spill_down = _grid.cell_at(0)
-	# Out of the bottom of the grid comes the way out, then Back: the bag spills
-	# directly into the only verb this screen owns.
+	# Out of the bottom of the bag comes the footer directly.
 	_wire_focus()
 
 
@@ -551,280 +502,6 @@ func _cells_of(ids: Array[StringName], counts: Array[int]) -> Array:
 	return entries
 
 
-## The way out. The only control on this screen that ENDS something — everything
-## above it is a picture of what you are carrying, and this spends it.
-##
-## It sits directly under the grid it is priced from, which is why it moved here
-## from the EQUIP screen: the fee is a quarter of the bag, and the bag is what
-## the left column draws. On the other screen the number had nothing beside it.
-##
-## It is not one of the three bindable buttons and it never will be. Extraction
-## used to be a hold on a rune pad precisely so it could not be triggered by a
-## fumble (METAGAME §5); putting it on a D-pad direction would hand back exactly
-## the fumble the hold was guarding against.
-##
-## **So the hold came back, here.** The row does not fire on A — it fires on Y
-## held for `ROPE_HOLD` seconds, anywhere on this screen, with the gauge every
-## other hold in the game uses. What A does now is say so, because a control that
-## does nothing when you press the button everything else answers to is a control
-## the player files a bug about (`HoldGauge`'s whole opening argument).
-##
-## Why the world channel is still there and this is not a replacement for it:
-## they guard different things. The channel is INTERRUPTIBLE — something swinging
-## at you can break it, which is what makes leaving a decision made in a room
-## rather than in a menu. This is the FUMBLE guard: the menu is paused, so no
-## amount of holding in here can be interrupted by anything, and a hold whose
-## only job is to be deliberate is exactly the right shape for a run-ending press.
-func _build_rope(parent: Node) -> void:
-	var inner := VBoxContainer.new()
-	inner.name = "Use"
-	inner.add_theme_constant_override("separation", 6)
-	parent.add_child(inner)
-
-	UITheme.section_rule(inner, "THE WAY OUT")
-
-	# `primary`: the display face, on the one row this screen exists to lead you
-	# to. Exactly one per panel, and on the pouch it is not in doubt — everything
-	# above this row is a picture of what you are carrying, and this is the row
-	# that spends it.
-	#
-	# Live even when it will refuse, for the reason the class doc argues: the fee
-	# and the refusal are things you READ, and a `refused` row cannot be focused
-	# to be read. The meta column carries the toll — see `_paint_rope`.
-	_rope = UiKit.verb_row(inner, {
-		"label": "Escape Rope",
-		"icon": UiKit.action_icon("rope"),
-		"meta": "",
-		"primary": true,
-	})
-	_rope.name = "Rope"
-
-	# CYAN, because the way out is CYAN and nothing else is (STYLEGUIDE §1) —
-	# the same colour the rope's slats climb the hero in and the same colour the
-	# HUD's extraction ring closes in. One hold, drawn twice, in one hue.
-	_rope_bar = HoldBar.new()
-	_rope_bar.name = "Hold"
-	_rope_bar.col = Pal.CYAN
-	_rope_bar.pin_to_bottom_of(_rope)
-
-	# The instruction, on the row. `HoldGauge`'s rule is that a hold says it in
-	# language AND in shape, because either one alone has already shipped as a bug
-	# here: the word with no bar was a player tapping and filing "it doesn't
-	# work", and the bar with no word is a player watching something fill without
-	# knowing they are the one filling it.
-	_rope_say = Label.new()
-	_rope_say.name = "Say"
-	UITheme.apply_text_style(_rope_say, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
-	_rope_say.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	inner.add_child(_rope_say)
-
-	_rope.pressed.connect(_on_rope_pressed)
-	_rope.focus_entered.connect(_describe_rope)
-	_rope.mouse_entered.connect(_describe_rope)
-
-
-## The hold, ticked while this screen is up.
-##
-## `_process`, polling `Input`, and not `_unhandled_input`: a hold is a duration
-## and there is no event for "still down". It is also the only thing that works
-## here — the menu pauses the tree and `Input.action_press` (which every director
-## drives this with) sets action STATE and dispatches no InputEvent at all
-## (CLAUDE.md §3). This node reaches `_process` while paused because PauseMenu is
-## PROCESS_MODE_ALWAYS and children inherit it.
-##
-## Held ANYWHERE on the screen, not only with the row focused. The row is a
-## readout of a decision you make by looking at the grid and the header, and
-## making the player navigate to it first would put a focus move between reading
-## the number and acting on it.
-func _process(delta: float) -> void:
-	if not is_visible_in_tree():
-		# Hidden is not the same as un-processed: a Control keeps ticking when its
-		# parent screen is swapped out, and without this the pouch would fill its
-		# gauge from another screen's Y press.
-		_reset_hold()
-		return
-
-	if not Input.is_action_pressed(HOLD_ACTION):
-		_rope_armed = true
-		_reset_hold()
-		return
-	if not _rope_armed:
-		return
-
-	# Refused on the FIRST frame of the press, never after a full second of
-	# holding. Making a player hold something down to be told no is the one thing
-	# worse than a dead button: it costs them the second AND teaches them the
-	# gauge is a lie.
-	var why := _rope_refusal()
-	if not why.is_empty():
-		_rope_armed = false
-		notice.emit(why, true)
-		Bus.request_sfx.emit(&"craft_fail", Vector3.ZERO)
-		return
-
-	_rope_hold += delta
-	if _rope_hold >= ROPE_HOLD:
-		# Disarmed, so a button still down through the scene change cannot be read
-		# as the beginning of a second one.
-		_rope_armed = false
-		_reset_hold()
-		_use_rope()
-		return
-	_rope_bar.progress = _rope_hold / ROPE_HOLD
-
-
-## Snapped to zero, not decayed. A bar that drains says "keep going", and letting
-## go was the opposite of that (`trade_screen._tick_input` says the same).
-func _reset_hold() -> void:
-	_rope_hold = 0.0
-	if _rope_bar != null:
-		_rope_bar.progress = 0.0
-
-
-## Why the rope will not work right now, or "" if it will.
-##
-## Being poor is no longer on this list. It was, and it was the game's one dead
-## end -- the rope told a player holding the best bag of the night that it wanted
-## more gold than they had, in a place where nothing sells. The fee is capped at
-## the purse now (`Run.extract_charge`); what used to be a refusal is `_rope_warning`
-## below, which is a sentence about a price rather than a locked door.
-func _rope_refusal() -> String:
-	if not Run.in_dungeon:
-		return "You are already home."
-	return ""
-
-
-## What the player should know before they hold, or "" if the price is ordinary.
-## Not a refusal: the hold works either way, and the track under it stays drawn.
-func _rope_warning() -> String:
-	if not Run.extract_takes_all():
-		return ""
-	return "The rope wants %d and you have %d. It will take all of it." \
-		% [Run.extract_cost(), Game.gold]
-
-
-## A on the row. It does not leave — it points at the button that does.
-##
-## The alternative was to make the row unfocusable, and that is worse: the row
-## is where the fee and the detail pane live, and a player who cannot put the
-## cursor on the way out has no way to read what leaving costs. So it keeps the
-## focus and answers the universal confirm with the one sentence that is useful.
-func _on_rope_pressed() -> void:
-	var why := _rope_refusal()
-	if not why.is_empty():
-		notice.emit(why, true)
-		return
-	notice.emit("Hold %s to use the rope." % _hold_glyph(), false)
-
-
-## The hold button, named off the LIVE InputMap and on the device in the player's
-## hands (`Glyph`). Both bindings happen to be "Y" today; this file is not the
-## place that decides that, and a line reading "Hold Y" to somebody who rebound
-## it is the bug Glyph exists to prevent.
-func _hold_glyph() -> String:
-	var e := Glyph.event_for(HOLD_ACTION, Settings != null and Settings.using_pad)
-	if e == null:
-		e = Glyph.event_for(HOLD_ACTION, false)
-	return Glyph.long(e) if e != null else "Y"
-
-
-## Leaving is not something to do from inside a menu screen: the channel happens
-## in the world and the player has to be able to see it. So the menu closes and
-## the hero's rope node takes it from there (`Bus.escape_rope_used`).
-func _use_rope() -> void:
-	var why := _rope_refusal()
-	if not why.is_empty():
-		notice.emit(why, true)
-		return
-	use_requested.emit()
-	Bus.escape_rope_used.emit()
-
-
-func _describe_rope() -> void:
-	# NOT "THE WAY OUT" — that is the caption on the section directly below this
-	# panel, and with the rope focused the screen said it twice, one line apart.
-	# The kind line is metadata everywhere else on this screen ("SLOT 1 · COMMON
-	# · INGREDIENT"), so it says the two things about the rope that are not
-	# obvious from the button: it costs no slot, and it is deliberately not
-	# bindable (escape_rope.gd — one D-pad press that ends the run is the fumble
-	# the channel exists to prevent).
-	if _tip == null:
-		return
-	_tip.clear()
-	# Anchored to the ROW, not to a cell: the rope is the one thing on this screen
-	# the card describes that is not in a grid, and the placement solver does not
-	# care what kind of Control it is handed.
-	_tip.point_at(_rope)
-	_tip.kicker.text = "ALWAYS CARRIED  ·  NOT BINDABLE"
-	_tip.title.text = "Escape Rope"
-	if not Run.in_dungeon:
-		_tip.blurb.text = "Cold, and quiet. It only wakes underground."
-		_tip.say_note("Nothing to leave.", UITheme.TEXT_DIM)
-		return
-	# The CHARGE, not the toll — this is the line that answers "what does leaving
-	# cost", so it has to name the gold that actually goes. When the two differ
-	# the blurb below spells out why, so the smaller number is never a mystery.
-	# The sentence is #158's and the fields are the card's: extraction stopped
-	# healing, and the rope must not go on promising it.
-	_tip.price.text = "%d gold" % Run.extract_charge()
-	_tip.blurb.text = "It pulls you home, wounds and all. Sleep is where " \
-		+ "you recover. The fee is a quarter of what you are carrying, and the " \
-		+ "fee is why the greedy run is a decision."
-	var warn := _rope_warning()
-	if not warn.is_empty():
-		# The whole purse is a real price and it earns a whole sentence. It is not
-		# a refusal and never stops the hold, so it reads as a cost being named —
-		# which is what it is.
-		_tip.blurb.text += "  " + warn \
-			+ " You will reach the garrison broke, with a bag to sell."
-	# Both halves of the way out, in the order the player meets them: the hold in
-	# here, then the channel out there. They are separate on purpose — one cannot
-	# be fumbled, the other can be interrupted (see `_build_rope`).
-	_tip.say_note("Hold %s. Then it takes a moment, and a blow that lands breaks it."
-		% _hold_glyph(), UITheme.TEXT_DIM)
-
-
-## The fee, live. It is on the row rather than only in the detail pane because
-## it is the whole decision: "leave" and "leave for 340 gold" are different
-## sentences and the player should not have to focus the row to read the second.
-##
-## The row never greys out. The only thing that can refuse it now is being in
-## garrison, and there the fee reads "—" rather than a number, which says it on
-## its own. An expensive rope is not a disabled rope: the price is the message.
-func _paint_rope() -> void:
-	if _rope == null:
-		return
-	# The empty track is drawn whenever the hold is POSSIBLE and hidden when it is
-	# not — `HoldGauge` calls that the pre-press tell, and it is only a tell if its
-	# absence means something. It stays drawn under a rope that will empty you:
-	# that hold works, and hiding the track would say the opposite.
-	var ready := _rope_refusal().is_empty()
-	_rope_bar.visible = ready
-	if not ready:
-		_rope_say.text = _rope_refusal()
-		_rope_say.modulate = Pal.RUST
-	else:
-		var warn := _rope_warning()
-		_rope_say.text = warn if not warn.is_empty() \
-			else "Hold %s to climb out." % _hold_glyph()
-		# RUST on a line that still ends in a hold you can do. It means "this
-		# costs you everything", not "this will not work" — and the track under
-		# it, still drawn, is what tells the two apart.
-		_rope_say.modulate = Pal.RUST if not warn.is_empty() else Color.WHITE
-	if not Run.in_dungeon:
-		UiKit.verb_meta(_rope, "—")
-		return
-	# The charge, for the same reason the detail pane shows it: this figure is a
-	# promise about the purse and it has to be the one that comes true.
-	#
-	# WARNING, not DANGER, when it takes everything: the hold still works. DANGER
-	# on this screen means "this will not happen", and the difference between
-	# "this empties you" and "this is refused" is the whole reason the empty track
-	# stays drawn under the row above.
-	UiKit.verb_meta(_rope, "%d ◇" % Run.extract_charge(),
-		UITheme.WARNING if Run.extract_takes_all() else UITheme.ACCENT)
-
-
 ## What made it home. Not focusable and not editable — it is the answer to "can
 ## I afford the next rung", shown next to the bag it came out of.
 func _build_stock(parent: Node) -> void:
@@ -865,11 +542,8 @@ func _build_stock(parent: Node) -> void:
 	col.add_child(_stock_empty)
 
 
-## The column BELOW the grid. The grid wires itself (left/right wraps within a
-## row, down leaves the bottom row through `spill_down`); this wires what it
-## leaves into, and closes the loop from Back back to the top left. Every cell
-## and every button is reachable by holding one direction — the same guarantee
-## the EQUIP screen makes, and for the same reason.
+## The bag's bottom row reaches the footer directly; Back closes onto the case's
+## first cell, and Drop remains the adjacent contextual branch.
 func _wire_focus() -> void:
 	# The loop closes on the CASE's first cell, not the bag's, because the case is
 	# now the top of the screen and Back's job is to return you to the top.
@@ -878,13 +552,10 @@ func _wire_focus() -> void:
 		first = _grid.cell_at(0)
 	if first == null:
 		return
-	MenuUtil.link_down(_rope, _back)
-	_rope.focus_neighbor_left = ^"."
-	_rope.focus_neighbor_right = ^"."
-	# Keep the case -> bag -> Rope -> Back vertical loop intact. Drop is the
-	# footer's adjacent branch, reached horizontally when the selected cell is live.
 	MenuUtil.link_right(_drop, _back)
-	_drop.focus_neighbor_top = _drop.get_path_to(_rope)
+	var last := _grid.cell_at(_grid.count() - 1)
+	if last != null:
+		_drop.focus_neighbor_top = _drop.get_path_to(last)
 	_drop.focus_neighbor_bottom = _drop.get_path_to(first)
 	_back.focus_neighbor_bottom = _back.get_path_to(first)
 	_back.focus_next = _back.get_path_to(first)
@@ -893,13 +564,8 @@ func _wire_focus() -> void:
 
 # --- State ------------------------------------------------------------------
 
-## Called every time the screen is entered. It re-disarms the hold as well as
-## placing the cursor: the press that OPENED the pouch is not the press that
-## leaves the dungeon, and `inventory` is Select while the hold is Y only until
-## somebody rebinds one of them.
+## Called every time the screen is entered.
 func focus_first() -> void:
-	_rope_armed = false
-	_reset_hold()
 	# On the case, deliberately. The first thing the screen should say when it
 	# opens is what survives you (docs/GDD.md §3.1) — a cursor that started in the
 	# hold would put the answer one flick away from a player who never asked.
@@ -952,12 +618,9 @@ func refresh() -> void:
 	_sync_selected_cell()
 	_paint_doll()
 	_paint_header()
-	_paint_rope()
 	_paint_stock()
 	var focused := get_viewport().gui_get_focus_owner()
-	if focused == _rope:
-		_describe_rope()
-	elif not _describe_focus(focused) and _selected_index < 0:
+	if not _describe_focus(focused) and _selected_index < 0:
 		# The cursor is on a cell, or on nothing at all because the screen has
 		# only just been built. Either way the detail pane describes a cell, and
 		# the grid is the one that knows which button is which index.
@@ -1064,7 +727,7 @@ func _on_case_activated(index: int) -> void:
 	refresh()
 
 
-## Three numbers, and this screen is now the only place two of them are said.
+## Four useful inventory facts.
 ##
 ## The HUD used to print a running gold total in the corner and it was taken out
 ## on purpose (see hud.gd `_draw_bag`): money on screen turns a dungeon into an
@@ -1073,22 +736,11 @@ func _on_case_activated(index: int) -> void:
 ## actually made. That is also why the pouch got its own button.
 ##
 ## BAG and PURSE are labelled rather than left as two bare figures with a diamond
-## each. Unlabelled, they read as one number that changed, and the whole point of
-## showing them together is that they are the two sides of the extraction trade.
-## Slots, worth, purse, fee — the extraction decision, in the order you make it:
-## how full am I, what is it worth, what have I got, what will leaving cost.
-##
-## Slots goes WARNING at the brim and it means one thing: the next mote you walk
-## over is going to stay on the floor. The fee goes WARNING when it takes the
-## whole purse, which is a different statement from "you cannot leave" and has to
-## look like one — DANGER on this band would say the door was shut.
+## each. Unlabelled, they read as one number that changed.
+## Slots goes WARNING at the brim. Safe reports the document-case occupancy
+## already drawn immediately below the band.
 func _band_cells() -> Array:
 	var used := Run.slots_used()
-	var fee := "—"
-	var fee_tone: Variant = null
-	if Run.in_dungeon:
-		fee = "%d ◇" % Run.extract_charge()
-		fee_tone = UITheme.WARNING if Run.extract_takes_all() else null
 	return [
 		{"key": &"slots", "label": "Slots",
 			"value": "%d / %d" % [used, Game.bag_slots],
@@ -1097,7 +749,8 @@ func _band_cells() -> Array:
 		{"key": &"worth", "label": "Bag", "value": "%d ◇" % Run.bag_value()},
 		{"key": &"purse", "label": "Purse", "value": "%d ◇" % Game.gold,
 			"icon": UiKit.action_icon("coin")},
-		{"key": &"fee", "label": "To leave", "value": fee, "tone": fee_tone},
+		{"key": &"safe", "label": "Safe",
+			"value": "%d / %d" % [Run.case_slots_used(), Run.CASE_SLOTS]},
 	]
 
 

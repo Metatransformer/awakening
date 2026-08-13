@@ -23,20 +23,24 @@ permanence.
 A **trip** begins when the player crosses the Cut threshold. Taking a stair to
 another floor in either direction continues the same trip: health, bag
 contents, document-case contents, Heat premium, ammunition, bottle contents,
-magic, and the extraction price all carry forward. Changing floors does not
+magic, carried Escape Ropes, and the floor-1 stair's extraction price all carry
+forward. Changing floors does not
 bank loot, heal the player, or refill a resource.
 
-The garrison is the preparation boundary. Bottles are brewed there, arrows and
-charges are bought or made there, and the full magic allowance is restored
-between trips. Stamina is different: it regenerates during play and prices the
-next action rather than the next room.
+The garrison is the preparation boundary. Bottles are brewed there; Escape
+Ropes are bought there; arrows and charges are bought or made there; and the
+full magic allowance is restored between trips. Sparse dungeon provisions may extend what was
+carried in, but they do not replace preparing before a descent. Stamina is
+different: it regenerates during play and prices the next action rather than the
+next room.
 
 The recurring decision is:
 
 > Is what I am carrying worth more than the cost and danger of continuing?
 
 The game keeps both answers viable. Going deeper offers richer possibilities;
-ordinary extraction always remains available at a known price.
+the physical floor-1 extraction stair remains available at a known price, while
+a carried Rope is a prepaid, consumable way out.
 
 ## 2. Value and loss lanes
 
@@ -45,10 +49,10 @@ types do not convert into one another automatically.
 
 | Lane | During a trip | On extraction | On death |
 |---|---|---|---|
-| Gold | Coins bank directly and use no bag slot | Kept, minus the extraction charge | Kept |
+| Gold | Coins bank directly and use no bag slot | Kept; the floor-1 stair subtracts its charge, while Rope extraction subtracts none | Kept |
 | Field Notes | First-time observation ids are pending run knowledge, not carried loot | New ids award permanent notes at debrief | New ids award permanent notes at debrief |
 | Bag | Holds sale goods, components, relics, and temporary finds | Banked by item kind | Exposed contents are lost |
-| Document case | Five secure cells within the bag limit | Banked with the rest | Banked; no extraction fee is charged |
+| Document case | Five secure cells within the bag limit | Banked with the rest and excluded from the stair toll | Banked |
 | Components | Occupy bag cells until brought home | Move to their named workbench | Lost unless packed in the case |
 | Relics | Unique, unsellable, and always exposed | Become available for their home transaction | Return to their authored recovery location |
 | Permanent progress | Lives at home | Kept | Kept |
@@ -220,7 +224,7 @@ drops, then cools toward base value over **6 seconds**. Collected bonus value is
 stored as one premium in the bag rather than as duplicate item stacks. Selling
 a line pays its proportional premium, and the extraction fee includes it.
 
-## 6. Arrows, charges, rations, and draughts
+## 6. Arrows, charges, Escape Ropes, rations, and draughts
 
 These are preparation resources, not merchandise. They do not add bag value or
 Heat premium.
@@ -247,6 +251,20 @@ The quartermaster sells **3 charges for 90 gold** after Burst is owned. A
 required Burst route supplies its authored charge cache, and ambient pots may
 rarely provide one. There is no general underground refill that replaces
 preparation.
+
+### Escape Ropes and sparse provision rewards
+
+The quartermaster sells one **Escape Rope for 60 gold**. Ropes are counted
+carried provision stock with a hard maximum of **9**; they may also be found as
+sparse dungeon clear rewards. They do not occupy the bag, ration pack, item ring,
+or Inventory page, and they carry no sale value or Heat premium.
+
+Each ordinary combat-room clear makes one seeded **17%** provision roll. A
+successful roll selects one unit from the implemented **2 : 5 : 5** weights for
+Escape Rope, Hardtack and Small Beer. This is sparse generated supply, not a
+promise that a floor contains any particular provision or count. A pickup that
+would exceed its stock cap stays in the world; a partial Rope pickup fills only
+the remaining capacity.
 
 ### Rations
 
@@ -282,36 +300,41 @@ loading.
 
 ## 7. Ordinary extraction and death
 
-The **Escape Rope** is the portable way to reach the ordinary extraction
-settlement. It is a permanent key item on the Inventory screen, not consumable,
-and not placed on a combat ring. Walking back to the **floor 1 up stair** reaches
-the same settlement, pays the same charge, and produces the same receipt.
+The counted **Escape Rope** is the portable way to reach the ordinary extraction
+settlement. It is used from the Equipment/character page and never placed on a
+combat or item ring. Walking back to the **floor 1 up stair** reaches the same
+banking and receipt settlement, but retains its separate gold toll.
 
 An up stair on a deeper floor returns to the preceding seeded floor beside its
 canonical down stair. It does not extract, bank, heal, or reset the trip.
 
 Leaving has two deliberate commitments:
 
-1. Hold **Y / `ui_hold` for 0.9 seconds** on the Inventory screen.
-2. After the menu closes, remain rooted through a **1.2-second** world channel,
+1. Hold **Y / `ui_hold` for 0.9 seconds** on the Equipment page. Zero Rope
+   stock refuses before the menu closes.
+2. The menu closes, one Rope is consumed, and the player remains rooted through
+   a **1.2-second** world channel,
    reduced to **1.0 second** by Rope Drill.
 
 A landed blow breaks the world channel. A blocked blow does not. The channel
-makes safety matter; the menu hold prevents an accidental run-ending press.
+makes safety matter; the menu hold prevents an accidental run-ending press. A
+consumed or broken Rope is not refunded.
 
-The ordinary extraction price, whether reached by rope or the floor 1 stair,
-is:
+Rope activation and Rope extraction are gold-free. The physical floor-1 stair's
+ordinary extraction price remains:
 
 ```text
 toll   = max(15, round(bag_value x 0.25))
 charge = min(toll, current_gold)
 ```
 
-The rope always works. If the calculated toll exceeds the purse, extraction
-takes all current gold and still brings the haul home. Extraction banks the
-whole bag by item kind and preserves current health. Rest and sleep are the
-normal garrison recovery seam: every completed sleep restores real health to
-maximum, and purchased bed ranks grant 1 temporary HP each on top.
+The stair always works. If the calculated toll exceeds the purse, it takes all
+current gold and still brings the haul home. Rope and stair extraction both bank
+the whole bag by item kind, preserve current health, and produce the existing
+settlement receipt; that receipt records **0 gold paid** for a Rope and the
+actual capped charge for the stair. Rest and sleep are the normal garrison
+recovery seam: every completed sleep restores real health to maximum, and
+purchased bed ranks grant 1 temporary HP each on top.
 
 Death loses the exposed bag, banks the document case, preserves gold and
 permanent progression, and returns the player to the garrison at full health.
@@ -320,7 +343,8 @@ Unique lost relics return to their authored recovery locations.
 The bounded raid interaction is owned only by
 [GARRISON_LIFE.md](GARRISON_LIFE.md) and
 [design-tests/RAID_LOOP_PROOF.md](design-tests/RAID_LOOP_PROOF.md). It does not
-change the ordinary Escape Rope, its cost, its channel, or either run outcome.
+grant a Rope, refund one, waive the stair toll, teleport the player, or change
+the Rope's gold-free activation, channel, and ordinary run outcome.
 
 ## 8. Receipts and saves
 
@@ -411,9 +435,9 @@ ordinary purchases and single-stack sales are taps.
 | Bag cell | 140 | x1.6 | 4 |
 | Health upgrade (+4 HP) | 320 | x1.5 | 3 |
 
-Trade also carries arrows, charges, Hardtack, and Small Beer at the prices in
-§6. **Sell Unmarked** protects components, relics, and stacks needed by current
-or pinned recipes.
+Trade also carries Escape Rope, arrows, charges, Hardtack, and Small Beer at the
+prices in §6. **Sell Unmarked** protects components, relics, and stacks needed by
+current or pinned recipes.
 
 ### Forge ladders
 

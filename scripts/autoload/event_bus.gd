@@ -180,11 +180,9 @@ signal items_sold(sold: Dictionary, paid: int)
 ## payload: listeners recompute current ingredients from the live catalogues.
 signal wishlist_changed
 ## Deleted 2026-08-09: `extract_refused`. It meant "you tried to leave and could
-## not afford the fee", and no code can reach that state any more -- the fee is
-## capped at the purse (`Run.extract_charge`), so the rope always works. It is
-## named here rather than silently removed because a signal that cannot fire is
-## worse than none: the next reader takes it as evidence of a failure state the
-## game still has.
+## not afford the fee", and no priced extraction can reach that state any more:
+## the stair fee is capped at the purse (`Run.extract_charge`). Empty Rope stock
+## is a menu refusal before this signal and is not an extraction failure.
 ##
 ## The Escape Rope was used from the menu. The hero's rope node picks this
 ## up and starts the channel — the menu deliberately does not reach into the
@@ -251,6 +249,10 @@ signal draught_changed(potion: StringName, seconds_left: float)
 ## is what the carry ring is made of, and a listener that had to keep its own
 ## tally of that would be the second copy of it.
 signal rations_changed(stock: Dictionary)
+## Carried provision stock outside the ration dictionary changed. Consumers read
+## the authoritative counts from `Game` so this signal cannot carry a partial
+## second copy of the provision state.
+signal provisions_changed
 ## The hero sat down to eat (`seconds_left` == K.MEAL_TIME), stood up again
 ## (`ration` `&""`), or crossed a tick.
 ##
