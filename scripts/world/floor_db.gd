@@ -249,6 +249,33 @@ static var ANCHORS_STANDARD := {
 	},
 }
 
+## The bounded `--glint-mvp` fork of the Cistern. `Dungeon` selects this table
+## only for flagged Floor 1; the ordinary floor rows keep sharing
+## `ANCHORS_STANDARD` unchanged. The trial takes a second blank wall of the
+## deepest room after the Boss Door has claimed its far wall.
+static var ANCHORS_CISTERN_MVP := {
+	&"boss_door": {
+		"room": &"deepest", "at": &"wall", "side": &"far",
+		"offset": Vector2(0.0, 0.0),
+	},
+	&"deep_chest": {
+		"room": &"deepest", "at": &"floor", "side": &"",
+		"offset": Vector2(-0.22, 0.24),
+	},
+	&"shortcut_door": {
+		"room": &"entrance", "at": &"wall", "side": &"blank",
+		"offset": Vector2(0.0, 0.0),
+	},
+	&"vault_door": {
+		"room": &"mid_ring", "at": &"wall", "side": &"blank",
+		"offset": Vector2(0.0, 0.0),
+	},
+	&"glint_trial": {
+		"room": &"deepest", "at": &"wall", "side": &"blank",
+		"offset": Vector2(0.0, 0.0),
+	},
+}
+
 ## The Long Descent authors nothing. An empty anchor set means "generate as the
 ## dungeon did before the Descent existed" — the stair goes back in the deepest
 ## room and there are no locked doors, because there is no floor N+1 item to key
@@ -631,6 +658,12 @@ static func has_vault(level: int) -> bool:
 ## Empty in the Long Descent, which means "generate as before".
 static func anchors(level: int) -> Dictionary:
 	return get_floor(level).get("anchors", {})
+
+
+## Separate from the floor row on purpose: only Dungeon's explicit MVP flag is
+## allowed to replace the Cistern's standard gate and treasure-puzzle anchors.
+static func cistern_mvp_anchors() -> Dictionary:
+	return ANCHORS_CISTERN_MVP
 
 
 static func anchor(level: int, id: StringName) -> Dictionary:

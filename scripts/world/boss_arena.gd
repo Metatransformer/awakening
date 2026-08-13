@@ -64,6 +64,9 @@ extends Area3D
 ## the empty case a spent miniboss chamber would put floor N's BOSS relic on the
 ## floor, which is the boss's drop handed out behind an optional puzzle.
 @export var relic_slot: StringName = &"boss"
+## Optional run-scoped identity for a fixture whose fight is not the floor boss
+## behind a BossDoor. Empty preserves the existing `BossDoor.dead_flag` contract.
+@export var defeat_flag_override: StringName = &""
 
 # --- The fence ---------------------------------------------------------------
 const SEAL_SEGMENTS := 20
@@ -168,7 +171,12 @@ func _ready() -> void:
 
 
 func _already_dead() -> bool:
-	return Game.flag(BossDoor.dead_flag(boss_id))
+	return Game.flag(_defeat_flag())
+
+
+func _defeat_flag() -> StringName:
+	return defeat_flag_override if defeat_flag_override != &"" \
+		else BossDoor.dead_flag(boss_id)
 
 
 ## Put the boss's relic back on a floor whose boss is already dead.
@@ -404,7 +412,7 @@ func seal() -> void:
 
 func _on_boss_died(_where: Vector3) -> void:
 	# First, before any reward or release listener can rebuild this chamber.
-	Game.set_flag(BossDoor.dead_flag(boss_id))
+	Game.set_flag(_defeat_flag())
 	_spent = true
 	_sealed = false
 	# BOTH rings. A `shrink`ed arena that dropped only the outer fence would leave

@@ -62,6 +62,7 @@ const VAULT_SCRIPT := "res://scripts/world/vault.gd"
 const ARENA_SCRIPT := "res://scripts/world/boss_arena.gd"
 const BOSS_DOOR_SCRIPT := "res://scripts/world/boss_door.gd"
 const BOSS_KEY_SCRIPT := "res://scripts/props/atoms/boss_key.gd"
+const GLINT_REWARD_SCRIPT := "res://scripts/world/glint_trial_reward.gd"
 ## Loaded by PATH and never named: a newly added `class_name` is not in the
 ## global class cache until the project is re-imported. The shrine is a scene,
 ## because its Interactable and replaceable effigies are authored composition.
@@ -106,7 +107,7 @@ const ENTRANCE_UP_WALL_INSET := 1.55
 ## wants two clear cells against its one -- has to pick first or it is the one
 ## left without a wall.
 const ANCHOR_ORDER: Array[StringName] = [
-	&"shortcut_door", &"boss_door", &"deep_chest", &"vault_door",
+	&"shortcut_door", &"boss_door", &"glint_trial", &"deep_chest", &"vault_door",
 	&"gate_room", &"puzzle_room",
 ]
 
@@ -118,7 +119,7 @@ const ANCHOR_ORDER: Array[StringName] = [
 ## here even though floor 4 has none — "this floor authors no vault" is the
 ## manifest's decision (`FloorDb.vault_key`), not a fallback for a floor that
 ## wanted one and could not fit it. The rest ARE the floor.
-const OPTIONAL_ANCHORS: Array[StringName] = [&"puzzle_room"]
+const OPTIONAL_ANCHORS: Array[StringName] = [&"puzzle_room", &"glint_trial"]
 
 @export_group("Layout")
 ## Fallback only. `_ready` asks `FloorDb` for the real number -- see the note
@@ -187,6 +188,10 @@ const CHAMBER_SKIRT := 10.0
 ## deep chest and descent both stand outside the arena's seal at the far wall.
 const BOSS_CHAMBER_MIN := 20.0
 const BOSS_CHAMBER_SKIRT := 10.0
+## One fixed sun-socket composition fits the ordinary Cistern footprint. This
+## remains an annex size, not a second generated room size.
+const GLINT_TRIAL_SIZE := 16.0
+const GLINT_GUARDIAN_FLAG: StringName = &"atom_glint_guardian_1"
 
 ## How far apart in tree distance the two ends of the chord edge have to be
 ## (`docs/PUZZLES.md` §4: *"pick two rooms whose `dist` differs by >= 3"*). Below
@@ -290,6 +295,9 @@ var _maze_rolled: bool = false
 var _rng: RandomNumberGenerator
 var _seed_salt: int = 0
 var _entrance_shortcut_side: StringName = &"n"
+## Latched once in `_ready`, before any plan or RNG read. No later code asks the
+## process command line and no scene rebuild can change forks halfway through.
+var _glint_mvp_enabled: bool = false
 ## Grid cells spoken for by something built OUTSIDE the room tree -- a landing, a
 ## vault. Nothing may bud into one and no later anchor may point through one.
 var _reserved: Dictionary = {}
@@ -316,6 +324,8 @@ func _ready() -> void:
 		if Flow.refuse_boot(self):
 			return
 		Run.enter(seed_override)
+	_glint_mvp_enabled = Run.level == 1 \
+		and OS.get_cmdline_user_args().has("--glint-mvp")
 	_rng = RandomNumberGenerator.new()
 	# `Run.floor_seed()`, not `Run.seed_used`: the same run seed has to give a
 	# DIFFERENT floor each time you descend, and the same one every time you
@@ -366,14 +376,8 @@ func _ready() -> void:
 ## the most recently placed room, which produces long walks with short spurs
 ## rather than a blob around the entrance.
 func _plan() -> void:
-	rooms.clear()
-	key_loop.clear()
 	entrance = Vector2i.ZERO
-	rooms[entrance] = {
-		"doors": [] as Array, "index": 0, "dist": 0, "parent": entrance,
-		"size": room_size, "anchors": {}, "combat_only": false,
-	}
-	var placed: Array[Vector2i] = [entrance]
+	key_loop.clear()
 
 	# **Two distinct sides beside the entrance are held empty.** South/+Z belongs
 	# to the UP stair; one of the other three belongs to the shortcut, which is
@@ -400,60 +404,143 @@ func _plan() -> void:
 	var kept_up: Vector2i = entrance + DIRS[ENTRANCE_UP_SIDE]
 	var kept_shortcut: Vector2i = entrance + DIRS[_entrance_shortcut_side]
 
-	var guard := 0
 	var base_target := FloorDb.base_rooms(Run.level)
-	while placed.size() < base_target and guard < 4000:
-		guard += 1
-		# 70% of the time extend the frontier; otherwise branch off anywhere.
-		var from: Vector2i = placed.back() if _rng.randf() < 0.7 \
-			else placed[_rng.randi_range(0, placed.size() - 1)]
-
-		var options: Array[StringName] = []
-		for d: StringName in DIRS:
-			if rooms.has(from + DIRS[d]) or from + DIRS[d] == kept_up \
-					or from + DIRS[d] == kept_shortcut:
-				continue
-			options.append(d)
-		if options.is_empty():
-			continue
-
-		var dir: StringName = options[_rng.randi_range(0, options.size() - 1)]
-		var cell: Vector2i = from + DIRS[dir]
-		rooms[cell] = {
-			"doors": [] as Array,
-			"index": placed.size(),
-			"dist": int(rooms[from]["dist"]) + 1,
-			"parent": from,
-			"size": room_size,
-			"anchors": {},
+	var placed: Array[Vector2i] = []
+	var base_attempt := 0
+	while true:
+		base_attempt += 1
+		rooms.clear()
+		rooms[entrance] = {
+			"doors": [] as Array, "index": 0, "dist": 0,
+			"parent": entrance, "size": room_size, "anchors": {},
 			"combat_only": false,
 		}
-		rooms[from]["doors"].append(dir)
-		rooms[cell]["doors"].append(_opposite(dir))
-		placed.append(cell)
-	assert(placed.size() == base_target,
-		"Dungeon: baseline layout guard exhausted before its authored room count")
-
-	deepest = entrance
-	for cell: Vector2i in rooms:
-		if int(rooms[cell]["dist"]) > int(rooms[deepest]["dist"]):
-			deepest = cell
+		placed = [entrance]
+		if base_attempt <= 32:
+			var guard := 0
+			while placed.size() < base_target and guard < 4000:
+				guard += 1
+				# 70% of the time extend the frontier; otherwise branch off anywhere.
+				var from: Vector2i = placed.back() if _rng.randf() < 0.7 \
+					else placed[_rng.randi_range(0, placed.size() - 1)]
+				var options: Array[StringName] = []
+				for d: StringName in DIRS:
+					if rooms.has(from + DIRS[d]) or from + DIRS[d] == kept_up \
+							or from + DIRS[d] == kept_shortcut:
+						continue
+					options.append(d)
+				if options.is_empty():
+					continue
+				var dir: StringName = options[
+					_rng.randi_range(0, options.size() - 1)]
+				_add_planned_room(placed, from, dir)
+		else:
+			# A bounded deterministic fallback: a straight tree ends in a leaf
+			# with three blank walls, so the boss and trial can never collide.
+			# It is reached only if 32 seeded ordinary layouts all fold back
+			# around their deepest leaf.
+			var line_dir: StringName = &""
+			for d: StringName in DIR_ORDER:
+				var first: Vector2i = entrance + DIRS[d]
+				if first != kept_up and first != kept_shortcut:
+					line_dir = d
+					break
+			assert(line_dir != &"",
+				"Dungeon: no direction remains for Glint-safe fallback layout")
+			while placed.size() < base_target:
+				_add_planned_room(placed, placed.back(), line_dir)
+		assert(placed.size() == base_target,
+			"Dungeon: baseline layout guard exhausted before its authored room count")
+		deepest = entrance
+		for cell: Vector2i in rooms:
+			if int(rooms[cell]["dist"]) > int(rooms[deepest]["dist"]):
+				deepest = cell
+		if not _glint_trial_present_this_run() \
+				or _glint_annex_pair_fits(kept_up, kept_shortcut):
+			break
 
 	# The deepest generated room is now the approach. Its boss arena is sized in
 	# an annex after anchor planning, so this room keeps the ordinary footprint.
+	# A live Glint fork needs TWO annex cells beside that approach: one for the
+	# existing BossChamber and one for the optional trial. Pick and protect them
+	# before #199's combat/key bonus rooms are allowed to fill adjacent grid.
+	var kept_glint_annexes := _glint_annex_reservations(
+		kept_up, kept_shortcut)
 	var bonus_target := FloorDb.combat_bonus(Run.level)
 	if bonus_target > 0:
-		_plan_key_detour(placed, kept_up, kept_shortcut)
-		_add_bonus_rooms(placed, bonus_target - 1, kept_up, kept_shortcut)
+		_plan_key_detour(placed, kept_up, kept_shortcut, kept_glint_annexes)
+		_add_bonus_rooms(placed, bonus_target - 1, kept_up, kept_shortcut,
+			kept_glint_annexes)
 	assert(rooms.size() == FloorDb.rooms(Run.level),
 		"Dungeon: combat expansion must place every promised room")
+
+
+func _add_planned_room(placed: Array[Vector2i], from: Vector2i,
+		dir: StringName) -> void:
+	var cell: Vector2i = from + DIRS[dir]
+	rooms[cell] = {
+		"doors": [] as Array,
+		"index": placed.size(),
+		"dist": int(rooms[from]["dist"]) + 1,
+		"parent": from,
+		"size": room_size,
+		"anchors": {},
+		"combat_only": false,
+	}
+	rooms[from]["doors"].append(dir)
+	rooms[cell]["doors"].append(_opposite(dir))
+	placed.append(cell)
+
+
+## Two empty neighbours of the future guardian antechamber, held out of the
+## combat expansion. This is plan state, not authored geometry: anchors still
+## choose which wall is Boss and which is Glint after every room is known.
+func _glint_annex_reservations(kept_up: Vector2i,
+		kept_shortcut: Vector2i) -> Array[Vector2i]:
+	var kept: Array[Vector2i] = []
+	if not _glint_trial_present_this_run():
+		return kept
+	# Protect every still-viable ray, not merely its doorway cell. The Boss
+	# Chamber reaches two grid cells on Floor 1; allowing the combat expansion to
+	# occupy the second would leave two blank walls but no full-depth boss wall.
+	var boss_reach := _reach_for(&"boss_door", deepest)
+	for d: StringName in DIR_ORDER:
+		for k in range(1, boss_reach + 1):
+			var at: Vector2i = deepest + DIRS[d] * k
+			if rooms.has(at) or at == kept_up or at == kept_shortcut:
+				break
+			kept.append(at)
+	return kept
+
+
+## The post-guardian fork needs two distinct blank walls and one of them must
+## carry the Boss Chamber's complete depth. Trial depth is one cell on Floor 1,
+## so the second blank wall is enough for it. Checked against the BASE tree;
+## `_glint_annex_reservations` then freezes every viable ray before bonus growth.
+func _glint_annex_pair_fits(kept_up: Vector2i,
+		kept_shortcut: Vector2i) -> bool:
+	var blank_sides := 0
+	var full_boss_side := false
+	var boss_reach := _reach_for(&"boss_door", deepest)
+	for d: StringName in DIR_ORDER:
+		var clear := 0
+		for k in range(1, boss_reach + 1):
+			var at: Vector2i = deepest + DIRS[d] * k
+			if rooms.has(at) or at == kept_up or at == kept_shortcut:
+				break
+			clear += 1
+		if clear >= 1:
+			blank_sides += 1
+		if clear >= boss_reach:
+			full_boss_side = true
+	return blank_sides >= 2 and full_boss_side
 
 
 ## Reserve the first bonus room as a one-edge combat leaf on the entrance side
 ## of a mid-critical-path lock. Mission graph first: no geometry or anchor can
 ## later reinterpret either room.
 func _plan_key_detour(placed: Array[Vector2i], kept_up: Vector2i,
-		kept_shortcut: Vector2i) -> void:
+		kept_shortcut: Vector2i, kept_glint_annexes: Array[Vector2i]) -> void:
 	var route := path_to(deepest)
 	assert(route.size() >= 3,
 		"Dungeon: a guaranteed key lock needs a non-entrance critical-path edge")
@@ -485,7 +572,8 @@ func _plan_key_detour(placed: Array[Vector2i], kept_up: Vector2i,
 	for candidate: Vector2i in candidates:
 		for d: StringName in DIR_ORDER:
 			var at: Vector2i = candidate + DIRS[d]
-			if rooms.has(at) or at == kept_up or at == kept_shortcut:
+			if rooms.has(at) or at == kept_up or at == kept_shortcut \
+					or kept_glint_annexes.has(at):
 				continue
 			host = candidate
 			side = d
@@ -526,7 +614,8 @@ func _plan_key_detour(placed: Array[Vector2i], kept_up: Vector2i,
 ## Add the rest of the combat extension without ever budding from the key leaf.
 ## The high guard is an alarm, not a fallback: fewer rooms is never accepted.
 func _add_bonus_rooms(placed: Array[Vector2i], amount: int,
-		kept_up: Vector2i, kept_shortcut: Vector2i) -> void:
+		kept_up: Vector2i, kept_shortcut: Vector2i,
+		kept_glint_annexes: Array[Vector2i]) -> void:
 	var added := 0
 	var guard := 0
 	var key_cell: Vector2i = key_loop.get("key_cell", Vector2i(2147483647, 0))
@@ -543,7 +632,8 @@ func _add_bonus_rooms(placed: Array[Vector2i], amount: int,
 		var options: Array[StringName] = []
 		for d: StringName in DIR_ORDER:
 			var at: Vector2i = from + DIRS[d]
-			if rooms.has(at) or at == kept_up or at == kept_shortcut:
+			if rooms.has(at) or at == kept_up or at == kept_shortcut \
+					or kept_glint_annexes.has(at):
 				continue
 			options.append(d)
 		if options.is_empty():
@@ -608,7 +698,7 @@ func _plan_chord() -> void:
 	# No gate room on this floor means no reward to attach the cycle to. An
 	# unbarred second route through a floor is a generator being generous, which
 	# is not what §4 asked for.
-	if not FloorDb.anchors(Run.level).has(&"gate_room") \
+	if not _anchor_table().has(&"gate_room") \
 			or not _anchor_keyed(&"gate_room"):
 		return
 	var gate = _room_for(&"gate_path")
@@ -747,7 +837,7 @@ func _plan_anchors() -> void:
 	# Anchor planning must see the same south reservation as tree planning. In
 	# particular, the shortcut's blank-wall search may never claim the UP wall.
 	_reserve(entrance, ENTRANCE_UP_SIDE, 1)
-	var table := FloorDb.anchors(Run.level)
+	var table := _anchor_table()
 	if table.is_empty():
 		return
 
@@ -818,6 +908,7 @@ func _anchor_keyed(id: StringName) -> bool:
 		# floor's MINIBOSS. A floor without one does not get the anchor; that is
 		# the same shape `vault_key` uses to say floor 4 has no vault.
 		&"puzzle_room": return BossDb.miniboss_for(Run.level) != &""
+		&"glint_trial": return _glint_trial_present_this_run()
 		# The gate room needs a verb it is allowed to ask for. §5.2 caps it at
 		# tier N-1, and floor 1's N-1 is T0 -- which `PuzzleAtoms.pool` always
 		# answers with something, so this only ever refuses on a manifest whose
@@ -826,6 +917,30 @@ func _anchor_keyed(id: StringName) -> bool:
 		# world, on the critical path.
 		&"gate_room": return not PuzzleAtoms.pool(_gate_tier()).is_empty()
 	return true
+
+
+## Every anchor-table decision routes through this one fork. The separate table
+## replaces the two standard puzzle anchors; it is never layered over them.
+func _anchor_table() -> Dictionary:
+	return FloorDb.cistern_mvp_anchors() if _glint_mvp_enabled \
+		else FloorDb.anchors(Run.level)
+
+
+func glint_mvp_enabled() -> bool:
+	return _glint_mvp_enabled
+
+
+## Keep a claimed annex for the lifetime of the run that contains it. The solve
+## autosave records both the permanent Glint id and the latching socket's atom
+## flag; rebuilding that snapshot must reproduce the room under the saved hero.
+## `Run.enter()` clears atom flags, so a later fresh run sees only the permanent
+## id and omits the one-shot trial as intended.
+func _glint_trial_present_this_run() -> bool:
+	if not _glint_mvp_enabled:
+		return false
+	return not bool(Game.solved_glint_trials.get(
+		GlintDb.CISTERN_SUN_GLINT_ID, false)) \
+		or Game.flag(GlintDb.cistern_sun_run_flag())
 
 
 ## The verb ceiling for this floor's gate room: **tier N-1** (`docs/PUZZLES.md`
@@ -1011,6 +1126,8 @@ func _reach_for(id: StringName, cell: Vector2i) -> int:
 		depth = _vault_depth()
 	elif id == &"puzzle_room":
 		depth = CHAMBER_STUB + _chamber_size()
+	elif id == &"glint_trial":
+		depth = CHAMBER_STUB + GLINT_TRIAL_SIZE
 	var far_edge := size_of(cell) * 0.5 + depth
 	return maxi(1, int(floor((far_edge + room_size * 0.5) / spacing)))
 
@@ -1467,6 +1584,7 @@ func _build_anchors() -> void:
 			continue
 		match id:
 			&"boss_door": _place_boss(id)
+			&"glint_trial": _place_glint_trial(id)
 			&"deep_chest": _place_deep_chest(id)
 			&"shortcut_door": _place_shortcut(id)
 			&"vault_door": _place_vault(id)
@@ -1478,7 +1596,7 @@ func _build_anchors() -> void:
 ## Checking both the plan and built tree catches a duplicated builder as well as
 ## a dropped anchor, while the cell assertion guards the topology between them.
 func _validate_authored_topology() -> void:
-	var authored := FloorDb.anchors(Run.level)
+	var authored := _anchor_table()
 	var wants_boss := authored.has(&"boss_door") and _anchor_keyed(&"boss_door")
 	var wants_gate := authored.has(&"gate_room") and _anchor_keyed(&"gate_room")
 	if wants_boss:
@@ -1662,6 +1780,131 @@ func _place_deep_chest(id: StringName) -> void:
 		RelicPickup.place(get_tree().current_scene, relic,
 			chest.global_position + Vector3.UP * 0.7,
 			-chamber.global_basis.z.normalized() * 1.3))
+
+
+# --- Flagged Cistern Glint trial ---------------------------------------------
+
+## A second arch from the deepest room, beside the real Boss Door. The grille is
+## disabled as an interaction and lifted only by the guardian arena; the annex
+## itself contains one fixed T0 sun-socket composition.
+func _place_glint_trial(id: StringName) -> void:
+	var p: Dictionary = placements[id]
+	var cell: Vector2i = p["cell"]
+	var approach: Node3D = rooms[cell]["node"]
+	var spot := _wall_spot(p)
+
+	var bars_script := load(BARS_SCRIPT) as GDScript
+	if bars_script == null:
+		push_error("dungeon: %s failed to load" % BARS_SCRIPT)
+		return
+	var bars := bars_script.new() as Node3D
+	if bars == null:
+		return
+	bars.name = "GlintTrialBars"
+	bars.set(&"tag", &"glint_trial_guardian_1")
+	bars.set(&"enabled", false)
+	bars.position = spot["pos"]
+	bars.rotation.y = float(spot["yaw"])
+	approach.add_child(bars)
+	p["node"] = bars
+	p["bars"] = bars
+
+	var caption := WorldCaption.new()
+	caption.name = "GlintTrialCaption"
+	caption.text = "OPTIONAL GLINT TRIAL"
+	caption.tint = Pal.GOLD
+	caption.ref_px = 14.0
+	caption.max_range = 18.0
+	# The caption's anchor sits in the guardian room, not inside the doorway's
+	# lintel. WorldCaption uses a real LOS ray; an anchor in the wall makes the
+	# route label honestly occlude itself at the exact decision point it serves.
+	caption.position = bars.position + spot["facing"] * 0.9 + Vector3.UP * 3.25
+	approach.add_child(caption)
+	p["caption"] = caption
+
+	var chamber := _build_chamber(spot, cell, p["side"],
+		"GlintTrialChamber", GLINT_TRIAL_SIZE)
+	p["chamber"] = chamber
+	var back := CHAMBER_STUB + GLINT_TRIAL_SIZE
+	var socket := PuzzleAtoms.make(PuzzleAtoms.SUN_SOCKET,
+		GlintDb.CISTERN_SUN_RUN_PUZZLE_ID)
+	if socket == null:
+		push_error("dungeon: Glint Trial sun socket failed to build")
+		return
+	socket.name = "GlintTrialSocket"
+	socket.set(&"index", GlintDb.CISTERN_SUN_RUN_ATOM_INDEX)
+	# The imported composition's catch and grate extend along local -Z, toward
+	# the mouth. Fixed here: no prefab scheduler and no solution roll.
+	socket.position = Vector3(0.0, 0.0, back - 1.3)
+	socket.rotation.y = 0.0
+	chamber.add_child(socket)
+	p["socket"] = socket
+
+	var reward_script := load(GLINT_REWARD_SCRIPT) as GDScript
+	if reward_script == null:
+		push_error("dungeon: %s failed to load" % GLINT_REWARD_SCRIPT)
+		return
+	var reward := reward_script.new() as Node3D
+	if reward == null:
+		return
+	reward.name = "GlintTrialReward"
+	reward.position = Vector3(2.8, 0.0, back - 3.0)
+	chamber.add_child(reward)
+	reward.call(&"bind", socket)
+	p["reward"] = reward
+
+
+## The deepest generated room replaces its ordinary population with one
+## miniboss arena and one staged Boss Key. Its run-scoped defeat flag survives a
+## save/reload but is cleared with the other `atom_*` flags on a new run.
+func _place_glint_guardian(root: Node3D) -> void:
+	var boss_id := BossDb.miniboss_for(1)
+	var arena_script := load(ARENA_SCRIPT) as GDScript
+	var key_script := load(BOSS_KEY_SCRIPT) as GDScript
+	if boss_id == &"" or arena_script == null or key_script == null:
+		push_error("dungeon: Glint guardian fixture is incomplete")
+		return
+
+	var arena := arena_script.new() as Node3D
+	arena.name = "GlintGuardianArena"
+	arena.set(&"boss_id", boss_id)
+	arena.set(&"relic_slot", &"")
+	arena.set(&"defeat_flag_override", GLINT_GUARDIAN_FLAG)
+	var parent: Vector2i = rooms[deepest]["parent"]
+	var step := parent - deepest
+	# Across the room from its one generated entrance. The Boss Door and trial
+	# arch are wall anchors, not alternate arrivals.
+	arena.set(&"boss_offset",
+		Vector3(float(-step.x), 0.0, float(-step.y)) * 4.5)
+	root.add_child(arena)
+
+	var key := key_script.new() as SmallKey
+	if key == null:
+		push_error("dungeon: %s is not a SmallKey" % BOSS_KEY_SCRIPT)
+		return
+	key.name = "GuardianBossKey"
+	key.atom_id = PuzzleAtoms.SMALL_KEY
+	key.puzzle_id = &"glint_guardian_key_1"
+	key.position = Vector3.ZERO
+	key.armed = false
+	root.add_child(key)
+	key.visible = false
+
+	var trial: Dictionary = placements.get(&"glint_trial", {})
+	var bars := trial.get("bars") as Node3D
+	var release := func() -> void:
+		if is_instance_valid(key):
+			key.reveal()
+		if is_instance_valid(bars):
+			bars.call(&"lift")
+	var boss := arena.call(&"boss") as Node3D
+	if boss != null:
+		boss.connect(&"died_at",
+			func(_where: Vector3) -> void: release.call())
+	elif bool(arena.call(&"is_spent")):
+		release.call()
+	else:
+		push_warning("dungeon: Glint guardian built no boss; Boss Key stays hidden")
 
 
 # --- The two forks ------------------------------------------------------------
@@ -3501,6 +3744,12 @@ func _populate() -> void:
 		# (and EXIT on floor 1); the Escape Rope remains the portable extraction
 		# option that works anywhere on the floor.
 		if cell == entrance:
+			continue
+		# The flagged deepest room is the guardian antechamber. This branch lands
+		# before every ordinary population roll, so it contains no random pack,
+		# scatter chest, urn, vein, arrows, barrel cluster or pillars.
+		if _glint_mvp_enabled and cell == deepest:
+			_place_glint_guardian(root)
 			continue
 		# The maze fills its room wall to wall, so it gets no scatter and no
 		# chest of its own -- both would land inside masonry. Its reward hangs on

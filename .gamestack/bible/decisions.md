@@ -1,5 +1,17 @@
 # Decisions
 
+### 2026-08-13 — Authorise one flagged Glint Trial, not the epic
+
+The owner authorises issue #206 as one reversible Floor-1 experiment behind
+`--glint-mvp`: a real post-guardian boss-or-trial choice, one existing fixed
+puzzle, one permanent solve, and one derived Glimmer spent on one of three
+existing stats at the garrison statue. Default generation and the active raid
+and Field Notes evidence remain unchanged. The full issue #134 scheduler,
+four-floor catalogue, key-cycle rewrite, and economy consolidation stay in the
+backlog unless the precommitted five-session Glint test passes.
+
+supersedes: 2026-08-13 — Queue Glint Trials as the post-freeze puzzle direction, only where it described implementation as wholly unauthorised
+
 ### 2026-08-13 — Queue Glint Trials as the post-freeze puzzle direction
 
 The backlog direction moves full authored puzzles off the mandatory dungeon

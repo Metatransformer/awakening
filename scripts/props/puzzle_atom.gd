@@ -218,10 +218,11 @@ func unsolve() -> void:
 ## honestly and should not have, because it was not its turn. `unsolve()` refuses
 ## a latching atom on purpose (a smashed urn does not reassemble), and that rule
 ## is right for the world and wrong for a sequence, so this is the door the
-## sequence gets rather than a hole knocked in that one. The only caller is
-## `PuzzleGate._break_the_sequence`, and **`docs/CONTRACT.md` §8 ("Puzzle atoms")
-## is where that restriction is written down** -- with what a second caller owes,
-## which is the flag below and `PuzzleGate._breaking`'s re-entrancy guard.
+## sequence gets rather than a hole knocked in that one. The two authorised
+## callers are `PuzzleGate._break_the_sequence` and `GlintTrialReward`'s failed
+## save transaction. **`docs/CONTRACT.md` §8 ("Puzzle atoms") is where that
+## restriction is written down** -- with what any further caller owes, including
+## the flag below and protection against re-entrant solves.
 ##
 ## **The flag goes with it, and that is not tidiness.** A latching atom writes
 ## `atom_*` in `solve()` and `PuzzleAtom._ready` restores from it, so an eye left

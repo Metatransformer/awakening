@@ -1,5 +1,5 @@
 class_name Statue
-extends Node3D
+extends Interactable
 ## The First Lanternbearer, on a plinth in the middle of the plaza.
 ##
 ## **It is the `lanternkeeper` body in stone, and that is the point rather than a
@@ -32,12 +32,27 @@ const STONE := Color(0.47, 0.48, 0.46)
 
 ## Which body is carved. `NpcBody.PEOPLE` names them.
 @export var who: String = "lanternkeeper"
+## Only the real plaza monument offers the Glint service. Other copies preserve
+## the same sculpture and collision but never enter Prompt arbitration.
+@export var glint_service: bool = false
 
 
 func _ready() -> void:
+	prompt = "COMMUNE"
+	enabled = glint_service
+	radius = 2.5
+	super()
 	_build_plinth()
 	_build_figure()
 	_build_collision()
+
+
+func activate(by: Node3D) -> void:
+	if not glint_service or not enabled:
+		return
+	activated.emit(by)
+	TradeScreen.open(self, TradeScreen.Mode.PROGRESSION,
+		"THE GLINT STATUE — CHOOSE ONE", GlintDb, &"", "Glimmer")
 
 
 ## Three courses, each smaller than the one under it.

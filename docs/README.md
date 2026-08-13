@@ -45,7 +45,9 @@ A reference may be long only when its subject is narrow.
 - [design-tests/](design-tests/) holds precommitted questions, criteria, results,
   and decisions. The current dedicated human gates are
   [RAID_LOOP_PROOF.md](design-tests/RAID_LOOP_PROOF.md) and
-  [FIELD_NOTES_PROOF.md](design-tests/FIELD_NOTES_PROOF.md).
+  [FIELD_NOTES_PROOF.md](design-tests/FIELD_NOTES_PROOF.md). The bounded,
+  owner-authorised Glint experiment has its own pending gate in
+  [GLINT_TRIAL_MVP.md](design-tests/GLINT_TRIAL_MVP.md).
 - [playtests/](playtests/) holds observations, timecodes, and player words.
 - [archive/](archive/) holds intentionally retained superseded material.
 - Git history is the archive for replaced text. Do not create snapshot copies.

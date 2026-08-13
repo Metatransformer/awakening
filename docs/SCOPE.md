@@ -85,6 +85,17 @@ and three one-rank doctrine tracks. It adds no item, pickup, UI screen, NPC,
 stat category, dialogue tree or repeatable system. The exact five-observation,
 five-note boundary is owned by [FIELD_NOTES.md](FIELD_NOTES.md).
 
+Issue #206 is an explicit owner-authorised test exception, not a default
+production rollout. Behind `--glint-mvp`, Floor 1 may replace its normal
+gate/puzzle anchors with one optional post-guardian annex containing one existing
+authored puzzle. The experiment adds one derived permanent-currency definition,
+Glimmer (`solved trial ids - purchased Glint ranks`), plus three persistent
+one-rank upgrade ids for health, stamina, and magic. Those ids are saved; the
+balance itself is not. Glimmer is finite, non-repeatable and non-convertible, and
+the choices use the existing Trade screen and garrison statue. The exception
+adds no new screen, autoload, inventory item, dialogue tree, puzzle atom, boss,
+miniboss, room kit, or default-generated content.
+
 Issue #197 is the explicit owner amendment for one reusable quest-state seam,
 one Quests inspection page, and `!` / `?` world-attention punctuation. Its two
 entries wrap existing authorised work: Keep the Hearth and West Gate Defence.
@@ -189,9 +200,17 @@ implementation and the dedicated automated gate pass; the five-session human
 gate remains tracked in
 [design-tests/BOSS_DYNAMISM_PROOF.md](design-tests/BOSS_DYNAMISM_PROOF.md).
 
+Issue #206 is separately owner-authorised implementation sequencing debt: only
+the flagged one-trial Floor-1 experiment defined in
+[design-tests/GLINT_TRIAL_MVP.md](design-tests/GLINT_TRIAL_MVP.md). It composes
+with #199's floor-scoped keys but authorises no further key-cycle expansion. It
+does not supersede the raid or Field Notes tests and cannot roll into default
+generation until its five cold sessions pass.
+
 Raid, Field Notes, fishing/provisions, #184's bounded tool/mining work, #197's
 bounded quest journal, #198's bounded player-barrel extension, and #199's
-bounded dungeon/provision expansion, and #203's boss refinement are
+bounded dungeon/provision expansion, #203's boss refinement, and #206's flagged
+Glint experiment are
 implementation-complete; their applicable precommitted human tests remain
 pending. #200's implementation proof is complete and its human result is
 pending. Floors 2–4 production content, any fifth boss or miniboss, any
@@ -246,6 +265,8 @@ Do not expand production until the pending five-session human tests are
 resolved.
 Issue #200 does not lift the floor, boss, content-production or permanent-art
 freezes; it authorises only the four bounded prototype variants and their proof.
+Issue #206's explicit flagged experiment is permitted alongside the freeze; its
+result can authorise or reject Glint planning only, not production.
 Directors and automated checks can prove implementation; only observed human
 play can answer a design question. An automated result cannot prove a human
 result. After a result, update the owning design test first, then amend current

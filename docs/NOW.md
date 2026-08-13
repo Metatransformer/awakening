@@ -160,6 +160,19 @@ nor displaces the pending Raid Loop human question, and it authorises no broader
 dungeon, floor, enemy, reward, map, provision, or extraction expansion beyond
 the fixed [SCOPE.md](SCOPE.md) amendment.
 
+Issue #206 is another explicit owner-authorised experiment alongside the freeze:
+one Floor-1 Glint Trial prototype behind `--glint-mvp`. It may replace the normal
+gate/puzzle anchors only in that flagged run, put one existing puzzle on an
+optional post-guardian side branch beside a valid boss route, persist one solve,
+and offer one derived Glimmer for one health, stamina, or magic choice at the
+existing garrison statue. Its human question and stop conditions are fixed in
+[design-tests/GLINT_TRIAL_MVP.md](design-tests/GLINT_TRIAL_MVP.md).
+
+This override authorises no production rollout, random scheduler, additional
+trial, new screen, new autoload, repeatable reward, or key-cycle expansion beyond
+#199's implemented floor-scoped contract. Default runs remain evidence for the
+current puzzle and Field Notes proofs.
+
 ## Authorized Field Notes implementation
 
 > Do players connect filed notes to observed Cistern events, compare finite
@@ -199,6 +212,8 @@ additional observations, additional doctrines, repeatable faucet or item.
   or tool types, fishing gear collections, and profession progression.
 - Any currency beyond gold and Field Notes, UI screen beyond #197's one Quests
   page, voiced line, or enemy model.
+- Any Glint Trial expansion beyond #206's flagged one-trial prototype and its
+  single derived Glimmer.
 - Floors, production content, boss/miniboss content beyond issue #203's fixed
   four-plus-four refinement, broad lore, or unrelated polish.
 

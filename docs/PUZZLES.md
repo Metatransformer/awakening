@@ -1,5 +1,12 @@
 # Puzzles and Blessings
 
+**Flagged experiment, not default truth:** issue #206 replaces Floor 1's normal
+gate and treasure-puzzle anchors only when launched with `--glint-mvp`. That
+prototype moves one existing puzzle into a finite optional post-guardian Glint
+Trial; [design-tests/GLINT_TRIAL_MVP.md](design-tests/GLINT_TRIAL_MVP.md) owns
+the question and rollout gate. Everything below remains the default generator's
+current contract until that human test justifies a production amendment.
+
 **Status: §2 is built (M1). §4, §5.2, §5.3, §6 and §7 are built (M4).** The nine
 atoms and the door that listens are in the code —
 `scripts/props/puzzle_atoms.gd` (the table and the factory),
