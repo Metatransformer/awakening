@@ -1,0 +1,14 @@
+[gd_resource type="StandardMaterial3D" load_steps=2 format=3]
+
+[ext_resource type="Texture2D" uid="uid://bsksc6vwlbxke" path="res://assets/props/garrison_architecture/Textures/planks.png" id="1_planks"]
+
+[resource]
+resource_name = "mat_garrison_ceiling"
+albedo_color = Color(0.34, 0.24, 0.15, 1)
+albedo_texture = ExtResource("1_planks")
+metallic_specular = 0.12
+roughness = 0.94
+uv1_scale = Vector3(0.48, 0.48, 0.48)
+uv1_triplanar = true
+uv1_world_triplanar = true
+texture_filter = 5

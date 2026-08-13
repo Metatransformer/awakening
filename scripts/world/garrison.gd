@@ -754,7 +754,9 @@ func _sync_raid() -> void:
 	if Game.raid_defense_built() and not is_instance_valid(bolt_thrower):
 		bolt_thrower = BoltThrower.new()
 		bolt_thrower.name = &"BoltThrower"
-		bolt_thrower.position = Vector3(-8.6, 0.05, 13.4)
+		# South of the supply rooms, with a clean view through the open gate.
+		bolt_thrower.position = Vector3(4.6, 0.05, 10.4)
+		bolt_thrower.rotation.y = PI
 		add_child(bolt_thrower)
 	for light: GarrisonLight in lights:
 		light.sync()
@@ -854,43 +856,33 @@ func _place_dawn_wake() -> void:
 ## `docs/GDD.md` §3 names the failure this is built against by name: Moonlighter's
 ## town, identical on hour forty and hour one, so that late runs were payroll.
 ## Gold and components change the character sheet; a relic changes *the place you
-## come home to*, and this ring is the entire mechanism.
-##
-## **A RING, not a scatter, and that is the load-bearing choice.** The gate
-## question in `docs/SCOPE.md` §4.1 is "did the garrison changing register, or
-## did you have to be told?" -- so the test a placement has to pass is *at least
-## one of these is in frame from wherever the player is standing when a lamp
-## comes on*, and a ring around the perimeter is the only arrangement that
-## passes it from every position in the yard. Props tucked into the corners they
-## thematically belong to (the mill by the mill, the kiln by the glasshouse)
-## would read better in a screenshot of the finished garrison and fail the only
-## test that matters, because eleven of the twelve would be behind you.
-##
-## Order is `RelicDb.props()`, which is catalogue order, so the FIRST relic the
-## player can possibly find (the Cistern's deep chest, floor 1) lights the lamp
-## nearest the gate -- the thing they walk past on the way back down.
-##
-## Twelve unshaded boxes on twelve posts. GDD §6.2: "do not spend more than a
-## prop on it."
+## come home to*, and this authored asymmetric chain along the gate, parade and
+## district transitions is the entire mechanism. It stays off the garden, elder
+## arrival, room interiors and door thresholds while still offering multiple
+## visible consequence lamps from every major route. Order remains
+## `RelicDb.props()` catalogue order.
 func _build_relic_props() -> void:
 	var props := RelicDb.props()
-	# Inset from the walls by enough that a lamp is a thing standing IN the yard
-	# rather than a light smeared on masonry, and the torches (which live flat
-	# against the two long walls) stay a clear metre behind them.
-	# The old tiny yard used the curtain itself as the ring. The generated fort's
-	# wings now occupy that perimeter, so the same twelve consequences line the
-	# open parade loop where every trip between barracks, gate and services sees
-	# at least one.
-	var rx := 8.8
-	var rz := 7.8
+	var positions: Array[Vector3] = [
+		Vector3(-3.6, 0.0, 13.1),
+		Vector3(3.7, 0.0, 13.1),
+		Vector3(-3.6, 0.0, 9.7),
+		Vector3(4.0, 0.0, 9.5),
+		Vector3(-12.2, 0.0, 8.0),
+		Vector3(-12.0, 0.0, -8.3),
+		Vector3(-1.8, 0.0, -9.2),
+		Vector3(6.4, 0.0, -8.0),
+		Vector3(10.5, 0.0, -5.0),
+		Vector3(10.8, 0.0, -0.4),
+		Vector3(10.7, 0.0, 9.5),
+		Vector3(6.0, 0.0, 10.4),
+	]
+	assert(props.size() == positions.size(),
+		"Every relic prop needs one authored garrison light position.")
 	for i in props.size():
-		# Starting a quarter-step past due north, not on it and not on the
-		# half-step: due north is the gate's arch, and the half-step puts two of
-		# them inside the pillars at z = -0.55 * hz. A quarter-step misses both.
-		var a: float = -PI * 0.5 + (float(i) + 0.25) * TAU / float(props.size())
 		var light := GarrisonLight.new()
 		light.prop = props[i]
-		light.position = Vector3(cos(a) * rx, 0.0, sin(a) * rz)
+		light.position = positions[i]
 		add_child(light)
 		lights.append(light)
 

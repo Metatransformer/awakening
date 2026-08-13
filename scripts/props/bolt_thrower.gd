@@ -18,6 +18,7 @@ var _retry_window: float = 0.0
 
 func _ready() -> void:
 	_build()
+	_build_collision()
 
 
 func _process(delta: float) -> void:
@@ -50,6 +51,11 @@ func _attempt(target_id: StringName) -> void:
 	if target == null:
 		_retry_left = 0.05
 		return
+	if not _has_clear_shot(target.head_point()):
+		# The saved defense selection remains pending until the raider clears
+		# architecture. Never present or apply a bolt through a room wall.
+		_retry_left = 0.08
+		return
 	_aim_at(target.head_point())
 	_fire_presentation(target.head_point())
 	var hit := Hit.make(
@@ -73,6 +79,12 @@ func _find_raider(target_id: StringName) -> RaidRaider:
 				and raider.health != null and not raider.health.dead:
 			return raider
 	return null
+
+
+func _has_clear_shot(world_target: Vector3) -> bool:
+	var query := PhysicsRayQueryParameters3D.create(
+		_muzzle.global_position, world_target, K.L_WORLD)
+	return get_world_3d().direct_space_state.intersect_ray(query).is_empty()
 
 
 func _aim_at(world_target: Vector3) -> void:
@@ -171,6 +183,23 @@ func _build() -> void:
 	_muzzle.name = &"Muzzle"
 	_muzzle.position = Vector3(0.0, 0.10, -1.92)
 	_weapon.add_child(_muzzle)
+
+
+func _build_collision() -> void:
+	# One honest carriage proxy: enough to prevent ghosting through the timber,
+	# without boxing the moving bow arms or widening the courtyard obstruction.
+	var body := StaticBody3D.new()
+	body.name = &"CarriageCollision"
+	body.collision_layer = K.L_WORLD
+	body.collision_mask = 0
+	var shape := CollisionShape3D.new()
+	shape.name = &"Shape"
+	var box := BoxShape3D.new()
+	box.size = Vector3(1.55, 1.25, 1.85)
+	shape.shape = box
+	shape.position = Vector3(0.0, 0.62, 0.0)
+	body.add_child(shape)
+	add_child(body)
 
 
 func _add_signal_lamp(parent: Node3D) -> void:

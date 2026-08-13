@@ -736,6 +736,7 @@ dbg_reload={
 3d_physics/layer_6="interact"
 3d_physics/layer_7="pit"
 3d_physics/layer_8="hookshot_target"
+3d_physics/layer_10="player_boundary"
 
 [audio]
 

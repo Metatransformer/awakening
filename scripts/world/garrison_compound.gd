@@ -14,6 +14,8 @@ const MAT_IRON := preload("res://assets/materials/mat_iron.tres")
 const MAT_GRASS := preload("res://assets/materials/mat_grass.tres")
 const MAT_PROP := preload("res://assets/materials/mat_prop.tres")
 const MAT_EMBER := preload("res://assets/materials/mat_ember.tres")
+const MAT_ROOF_TILES := preload("res://assets/materials/mat_garrison_roof_tiles.tres")
+const MAT_CEILING := preload("res://assets/materials/mat_garrison_ceiling.tres")
 
 const COMPOUND_SIZE := Vector2(45.0, 36.0)
 const HALF_X := COMPOUND_SIZE.x * 0.5
@@ -70,6 +72,7 @@ func _ready() -> void:
 	_build_parade_yard()
 	_build_buildings()
 	_build_garden()
+	GarrisonArtPass.build(self)
 
 
 func port(id: StringName) -> Transform3D:
@@ -129,9 +132,9 @@ func _define_ports() -> void:
 	_ports = {
 		&"arrival": _port_at(Vector3(0.0, 0.05, 10.2), 0.0),
 		&"gate": _port_at(Vector3(0.0, 0.05, 15.4), 0.0),
-		&"quartermaster_day": _port_at(Vector3(15.0, 0.05, 4.3), -PI * 0.5),
-		&"jewelcrafter_day": _port_at(Vector3(-16.0, 0.05, 3.2), PI * 0.5),
-		&"smith_day": _port_at(Vector3(-16.0, 0.05, -4.6), PI * 0.5),
+		&"quartermaster_day": _port_at(Vector3(15.0, 0.05, 3.35), -PI * 0.5),
+		&"jewelcrafter_day": _port_at(Vector3(-16.0, 0.05, 1.85), PI * 0.5),
+		&"smith_day": _port_at(Vector3(-16.0, 0.05, -5.75), PI * 0.5),
 		&"alchemist_day": _port_at(Vector3(-7.2, 0.05, -2.0), 0.0),
 		&"elder_day": _port_at(Vector3(-0.9, 0.05, 8.0), 0.0),
 		&"builder_day": _port_at(Vector3(-15.6, 0.05, 11.1), PI * 0.5),
@@ -232,10 +235,11 @@ func _build_gatehouse() -> void:
 		"PassageRoof",
 		Vector3(6.0, 0.48, 7.2),
 		Vector3(0.0, 5.25, 15.4),
-		MAT_WOOD
+		MAT_WALL
 	)
 	# Open timber leaves make the gate legible without ever closing the six-metre
-	# camera-safe passage.
+	# camera-safe passage. There is no closed portcullis visual: the departure
+	# boundary is a gameplay seam, while raid attackers must visibly use this arch.
 	for sx: float in [-1.0, 1.0]:
 		_visual_box(
 			gatehouse,
@@ -246,14 +250,13 @@ func _build_gatehouse() -> void:
 			sx * deg_to_rad(22.0)
 		)
 
-	# DEPART is a deliberate held transition, not an open-world seam. A collision
-	# plane behind the prompt keeps a player who ignores it inside authored space;
-	# the iron grille makes that boundary visible instead of feeling like an
-	# invisible wall. It fills the opening up to the passage roof, so jumping does
-	# not turn the road beyond the scene into an escape route.
+	# DEPART is a deliberate held transition, not an open-world seam. An invisible
+	# player-only boundary holds the hero inside authored space while raid attackers
+	# continue through the visibly open gate route. It reaches the passage roof, so
+	# jumping does not turn the road beyond the scene into an escape route.
 	var backstop := StaticBody3D.new()
 	backstop.name = &"ExitBackstop"
-	backstop.collision_layer = K.L_WORLD
+	backstop.collision_layer = K.L_PLAYER_BOUNDARY
 	backstop.collision_mask = 0
 	backstop.position = Vector3(0.0, 2.45, 18.0)
 	var collision := CollisionShape3D.new()
@@ -263,12 +266,8 @@ func _build_gatehouse() -> void:
 	collision.shape = shape
 	backstop.add_child(collision)
 	gatehouse.add_child(backstop)
-	for x: float in [-2.4, -1.6, -0.8, 0.0, 0.8, 1.6, 2.4]:
-		_visual_box(gatehouse, "PortcullisBar", Vector3(0.16, 4.9, 0.18),
-			Vector3(x, 2.45, 17.9), MAT_IRON)
-	for y: float in [1.15, 2.55, 3.95]:
-		_visual_box(gatehouse, "PortcullisBrace", Vector3(5.5, 0.16, 0.20),
-			Vector3(0.0, y, 17.88), MAT_IRON)
+	_visual_box(gatehouse, "RaisedPortcullis", Vector3(5.5, 0.08, 0.10),
+		Vector3(0.0, 5.32, 17.88), MAT_IRON)
 
 
 func _build_parade_yard() -> void:
@@ -339,8 +338,8 @@ func _build_mess_hall(buildings: Node3D) -> void:
 		Vector3(-6.9, 0.41, -14.4), MAT_WOOD)
 	_solid_box(mess, "MessBenchNorth", Vector3(5.0, 0.46, 0.40),
 		Vector3(-6.9, 0.23, -15.35), MAT_WOOD)
-	_solid_box(mess, "MessBenchSouth", Vector3(5.0, 0.46, 0.40),
-		Vector3(-6.9, 0.23, -13.45), MAT_WOOD)
+	_solid_box(mess, "MessBenchSouth", Vector3(2.8, 0.46, 0.40),
+		Vector3(-8.0, 0.23, -13.45), MAT_WOOD)
 	_solid_box(mess, "ServingSideboard", Vector3(2.8, 1.0, 0.55),
 		Vector3(-9.2, 0.5, -17.05), MAT_WOOD)
 	_solid_box(mess, "PantryBarrels", Vector3(1.15, 1.15, 1.15),
@@ -402,7 +401,7 @@ func _build_smithy(buildings: Node3D) -> void:
 	_visual_box(smithy, "ToolRack", Vector3(0.12, 1.35, 2.2),
 		Vector3(-21.91, 1.35, -4.15), MAT_IRON)
 	_interior_light(smithy, "InteriorLight",
-		Vector3(-18.4, 2.25, -4.6), 7.5, Color(1.0, 0.43, 0.16), 4.2)
+		Vector3(-18.9, 1.45, -5.9), 4.6, Color(1.0, 0.62, 0.34), 3.4)
 
 
 func _build_jewelcrafter(buildings: Node3D) -> void:
@@ -512,14 +511,14 @@ func _build_garden() -> void:
 		Vector3(-11.45, 0.31, 0.0), MAT_WOOD)
 	_solid_box(garden, "GardenFenceSouth", Vector3(GARDEN_SIZE.x, 0.62, 0.16),
 		Vector3(-7.7, 0.31, 4.25), MAT_WOOD)
-	_solid_box(garden, "GardenFenceNorthWest", Vector3(2.85, 0.62, 0.16),
-		Vector3(-10.025, 0.31, -4.25), MAT_WOOD)
-	_solid_box(garden, "GardenFenceNorthEast", Vector3(2.85, 0.62, 0.16),
-		Vector3(-5.375, 0.31, -4.25), MAT_WOOD)
-	_solid_box(garden, "GardenFenceEastNorth", Vector3(0.16, 0.62, 3.35),
-		Vector3(-3.95, 0.31, -2.575), MAT_WOOD)
-	_solid_box(garden, "GardenFenceEastSouth", Vector3(0.16, 0.62, 3.35),
-		Vector3(-3.95, 0.31, 2.575), MAT_WOOD)
+	_solid_box(garden, "GardenFenceNorthWest", Vector3(2.6, 0.62, 0.16),
+		Vector3(-10.15, 0.31, -4.25), MAT_WOOD)
+	_solid_box(garden, "GardenFenceNorthEast", Vector3(2.6, 0.62, 0.16),
+		Vector3(-5.25, 0.31, -4.25), MAT_WOOD)
+	_solid_box(garden, "GardenFenceEastNorth", Vector3(0.16, 0.62, 3.1),
+		Vector3(-3.95, 0.31, -2.7), MAT_WOOD)
+	_solid_box(garden, "GardenFenceEastSouth", Vector3(0.16, 0.62, 3.1),
+		Vector3(-3.95, 0.31, 2.7), MAT_WOOD)
 
 	for row: int in 3:
 		var x := -10.55 + float(row) * 1.0
@@ -530,7 +529,7 @@ func _build_garden() -> void:
 				Vector3(0.62, 0.38 + 0.06 * float((row + plant) % 2), 0.55),
 				Vector3(x, 0.29, -0.45 + float(plant) * 1.1), MAT_GRASS)
 
-	_solid_box(garden, "GardenWaterButt", Vector3(1.15, 0.82, 1.15),
+	_solid_box(garden, "GardenWaterButt", Vector3(0.8, 0.72, 0.8),
 		Vector3(-5.2, 0.41, 2.85), MAT_WOOD)
 	_visual_box(garden, "GardenWaterRim", Vector3(1.35, 0.16, 1.35),
 		Vector3(-5.2, 0.88, 2.85), MAT_IRON)
@@ -564,7 +563,12 @@ func _room_shell(
 		at + Vector3.UP * 0.014, MAT_FLOOR, false)
 	_solid_box(parent, "%sRoof" % label,
 		Vector3(size.x + 0.30, ROOF_THICKNESS, size.y + 0.30),
-		at + Vector3.UP * roof_height, MAT_WOOD)
+		at + Vector3.UP * roof_height, MAT_CEILING)
+	# Flat-roof rooms keep the warm timber ceiling below and receive a weathered
+	# tile cap above, avoiding an exterior made from exposed interior planks.
+	_visual_box(parent, "%sRoofTileCap" % label,
+		Vector3(size.x + 0.48, 0.08, size.y + 0.48),
+		at + Vector3.UP * (roof_height + ROOF_THICKNESS * 0.5 + 0.04), MAT_ROOF_TILES)
 
 	var west_x := at.x - size.x * 0.5
 	var east_x := at.x + size.x * 0.5
@@ -642,10 +646,10 @@ func _gabled_roof(parent: Node3D, label: String, at: Vector3,
 		var panel := _visual_box(parent, "%sRoofPitch" % label,
 			Vector3(panel_run + 0.35, 0.18, size.y + 0.55),
 			at + Vector3(side * size.x * 0.25, base_y + rise * 0.5, 0.0),
-			MAT_WOOD)
+			MAT_ROOF_TILES)
 		panel.rotation.z = -side * pitch
 	_visual_box(parent, "%sRoofRidge" % label, Vector3(0.24, 0.28, size.y + 0.7),
-		at + Vector3(0.0, base_y + rise + 0.05, 0.0), MAT_IRON)
+		at + Vector3(0.0, base_y + rise + 0.05, 0.0), MAT_ROOF_TILES)
 
 
 func _door_canopy(parent: Node3D, label: String, at: Vector3,
@@ -777,14 +781,17 @@ func _interior_light(
 		node_name: String,
 		at: Vector3,
 		reach: float,
-		color: Color = Color(1.0, 0.62, 0.30),
-		energy: float = 3.6
+		color: Color = Color(1.0, 0.72, 0.48),
+		energy: float = 2.9
 	) -> void:
 	var light := OmniLight3D.new()
 	light.name = node_name
 	light.light_color = color
-	light.light_energy = energy
-	light.omni_range = reach
+	light.light_energy = minf(energy, 3.5)
+	light.light_indirect_energy = 0.25
+	light.omni_range = minf(reach, 5.2)
+	light.omni_attenuation = 1.75
+	light.shadow_enabled = false
 	light.position = at
 	parent.add_child(light)
 

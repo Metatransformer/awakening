@@ -270,19 +270,17 @@ func _build_fire() -> void:
 ## to walk back there, and the yard is eight seconds wide -- there is no room to
 ## spend on collision the player only discovers by getting stuck in it.
 ##
-## The counter must not push the player out of talking range: `Npc` uses a 2.3 m
-## trigger, the keeper stands 0.95 m behind the booth origin, and this stops the
-## player about 1.1 m in front of it. That is ~2.05 m apart, which leaves the
-## prompt comfortably inside its radius.
+## The counter is offset and narrowed so room booths preserve a full side aisle
+## while still stopping the player within the keeper's interaction range.
 func _build_collision() -> void:
 	var body := StaticBody3D.new()
 	body.collision_layer = K.L_WORLD
 	body.collision_mask = 0
 	var cs := CollisionShape3D.new()
 	var box := BoxShape3D.new()
-	box.size = Vector3(2.1, 1.0, 0.9)
+	box.size = Vector3(1.45, 1.0, 0.75)
 	cs.shape = box
-	cs.position = Vector3(0.0, 0.5, -0.1)
+	cs.position = Vector3(-0.45, 0.5, -0.1)
 	body.add_child(cs)
 	add_child(body)
 
