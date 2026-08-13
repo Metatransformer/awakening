@@ -64,33 +64,27 @@ extends RefCounted
 ## and a repeatable's name on a board of rungs.
 enum Size {
 	FULL,     ## the bag, the receipt, the vendor's stock -- a name and a number
-	RUNG,     ## one step of a ladder: a numeral and a price
-	NAMED,    ## a repeatable sitting in a row of rungs -- a name, at rung height
+	RUNG,     ## legacy compact card for a price-bearing step
+	NAMED,    ## legacy compact named card for a repeatable
 }
 
-## The square. 84 and not valenfeld's 62 because this game's names are on the
-## tile rather than in a filter strip above it, and "Emberblood" needs the width
-## to survive the ellipsis. Five across is 5x84 + 4x8 = **452 px**, where five of
-## the old card was 732 -- the 280 px that buys is what the detail COLUMN used to
-## cost on two of these screens.
-const SIZE := Vector2(84, 84)
-## A rung on a ladder holds a numeral and a price, not a name, so it does not
-## need the width a name needs. Six of these plus a title still fit across the
-## counter's left pane, which four full cells would not.
+## The square. 60 keeps the icon-first hierarchy while giving the shared grids
+## the compact footprint of the 62 px reference tile. Five across is
+## 5x60 + 4x8 = **332 px**, less than half the width of five old landscape cards;
+## the hover card carries every name that the tighter strip has to ellipsize.
+const SIZE := Vector2(60, 60)
+## Legacy compact shapes retained for callers outside the tabbed progression
+## board. `UpgradeLadder` now draws its own authored-name nodes and locks.
 const COMPACT_SIZE := Vector2(78, 62)
-## Arrows and the draughts: things with no ladder, on a board made of ladders.
-## Near rung height so the row does not grow around them, name width because the
-## name is the whole of what they say. The extra ten pixels over `COMPACT_SIZE`
-## are for the second line: "EMBERBLOOD DRAUGHT" wraps at this width whatever it
-## is given, and at rung height exactly its price fell out through the bottom.
+## Name width for the old compact repeatable presentation.
 const NAMED_SIZE := Vector2(158, 72)
 
 ## Cell text is smaller than the theme's Label default, and smaller again since
-## the tile went square: 84 px of width is about eleven characters at 13 pt, and
-## the label TRIMS rather than wraps (a second line would eat the picture). What
-## a trimmed name costs is paid back by the hover card.
-const NAME_PT := 13
-const SUB_PT := 14
+## the tile tightened to 60 px: the label TRIMS rather than wraps (a second line
+## would eat the picture). What a trimmed name costs is paid back by the hover
+## card.
+const NAME_PT := 10
+const SUB_PT := 11
 const COMPACT_NAME_PT := 17
 const COMPACT_SUB_PT := 14
 
@@ -101,14 +95,14 @@ const COMPACT_SUB_PT := 14
 ## tile and takes everything the frame and the name strip do not, which is what
 ## makes it read as a thing sitting in a slot rather than a stamp in the middle
 ## of one. `ICON_PX` survives as the minimum the art may shrink to.
-const ICON_PX := 30
+const ICON_PX := 22
 
 ## The tile's inner geometry. `TILE_PAD` is the gap between the tint frame and
 ## the art; `TILE_NAME_H` is the strip along the bottom the name owns, which the
 ## art stops above rather than being drawn under -- a name over the picture is a
 ## name you have to read twice.
-const TILE_PAD := 5.0
-const TILE_NAME_H := 16.0
+const TILE_PAD := 4.0
+const TILE_NAME_H := 13.0
 ## The tint frame. Two pixels, because one disappears against a busy icon and
 ## three starts to read as a coloured tile rather than a framed picture.
 const TILE_EDGE_PX := 2
@@ -194,8 +188,8 @@ static func _build_tile(b: Button) -> void:
 	label.add_theme_font_size_override("font_size", NAME_PT)
 	b.add_child(label)
 	label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	label.offset_left = 3
-	label.offset_right = -3
+	label.offset_left = 2
+	label.offset_right = -2
 	label.offset_top = -(TILE_NAME_H + 1.0)
 	label.offset_bottom = -1
 
@@ -211,14 +205,14 @@ static func _build_tile(b: Button) -> void:
 	sub.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	sub.add_theme_font_size_override("font_size", SUB_PT)
-	sub.add_theme_constant_override("outline_size", 4)
+	sub.add_theme_constant_override("outline_size", 3)
 	sub.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	b.add_child(sub)
 	sub.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	sub.offset_left = 4
-	sub.offset_right = -5
-	sub.offset_top = 2
-	sub.offset_bottom = 2 + float(SUB_PT) + 6.0
+	sub.offset_left = 3
+	sub.offset_right = -4
+	sub.offset_top = 1
+	sub.offset_bottom = 1 + float(SUB_PT) + 5.0
 
 	# The second badge, top-LEFT, and empty on every screen but the receipt. Built
 	# for all of them rather than only where it is used: `paint` writes cells that
@@ -231,14 +225,14 @@ static func _build_tile(b: Button) -> void:
 	tag.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tag.add_theme_font_size_override("font_size", SUB_PT)
-	tag.add_theme_constant_override("outline_size", 4)
+	tag.add_theme_constant_override("outline_size", 3)
 	tag.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	b.add_child(tag)
 	tag.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	tag.offset_left = 5
-	tag.offset_right = -4
-	tag.offset_top = 2
-	tag.offset_bottom = 2 + float(SUB_PT) + 6.0
+	tag.offset_left = 4
+	tag.offset_right = -3
+	tag.offset_top = 1
+	tag.offset_bottom = 1 + float(SUB_PT) + 5.0
 
 
 ## A rung on a ladder, or a repeatable sitting in a row of rungs. The stacked

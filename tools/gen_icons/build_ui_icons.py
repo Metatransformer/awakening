@@ -94,6 +94,11 @@ ACTIONS = {
                 '<path d="M16 9v6a3.5 3.5 0 0 1-7 0"/>',
     "jewel": '<path d="m12 3 6 5.5-6 12.5L6 8.5z"/><path d="M6 8.5h12M12 3l-3 5.5 3 12.5 3-12.5z"/>',
     "key": '<circle cx="7" cy="12" r="4"/><path d="M11 12h10M18 12v4M15 12v3"/>',
+    # A closed shackle over a square hasp. The key already means an object the
+    # player carries; this means a future upgrade node they cannot reach yet.
+    "lock": '<path d="M7 10V7a5 5 0 0 1 10 0v3"/>'
+            '<rect x="5" y="10" width="14" height="11" rx="1"/>'
+            '<path d="M12 14v3"/>',
     # The locker is the footlocker in the hero's quarters: a lid, a hasp, feet.
     "locker": '<path d="M3 9h18v11H3zM3 9l2-4h14l2 4"/><path d="M10.5 13h3v3h-3z"/>',
     "map": '<path d="m3 6 6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/>',

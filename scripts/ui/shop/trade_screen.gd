@@ -1,5 +1,6 @@
 class_name TradeScreen
 extends Control
+const UpgradeDetailControl := preload("res://scripts/ui/common/upgrade_detail.gd")
 ## The vendor, the smith, the alchemist, the jewelcrafter and the Lanternkeeper,
 ## which are the same screen pointed in five directions.
 ##
@@ -35,14 +36,9 @@ extends Control
 ## cursor runs over the ladder's selection keys as well, so owned rungs can share
 ## the description card without pretending to be catalogue lines.
 ##
-## **The description is a TOOLTIP on the cell, not a column beside the board.**
-## Until 2026-08-12 the right third of the frame was a detail card: kicker, name,
-## price, recipe and blurb, standing full height whatever it had to say. The
-## longest blurb in the game is six lines (`lore_panes`), so on nearly every row
-## that column was a hand's width of empty panel holding two lines of text — and
-## it was taking that width off the one thing the player came to look at. The
-## board has it now, and what the column said follows the cursor instead
-## (`ItemTip`).
+## TRADE keeps its cell-following `ItemTip`. PROGRESSION keeps a compact inspector
+## beside the board because upgrade names, before→after stats and multi-part
+## recipes are one persistent decision rather than incidental inventory detail.
 ##
 ## The frame, the header and the footer are the game's ONE menu look -- since the
 ## Gallery Vellum port that is `UITheme` and `UiKit`, and a shop that did not use
@@ -68,7 +64,7 @@ const ROLL_TIME := 0.25
 ## It was TWO, and the reason was honest: the cell was a 140x88 card and two of
 ## them was all a side of the 1280x720 trade frame could hold at a readable size.
 ## The owner, 2026-08-12, looking at the result: *"the traders should have smaller
-## grid items -- the inventory grids are too big rn."* The cell is a square 84 px
+## grid items -- the inventory grids are too big rn."* The cell is a square 60 px
 ## tile now (`ItemCell`), so five fit across a side with room, and the vendor's
 ## stock is the same picture of a collection as the bag beside it -- which is the
 ## promise `ItemGrid`'s header makes and the two-wide board was quietly breaking.
@@ -118,10 +114,11 @@ var _band_slot: VBoxContainer
 var _empty: Label
 var _stock_empty: Label
 var _bag_empty: Label
-## The hover card. It is `ItemTip` now rather than six fields and a placement
-## solver of this screen's own: card #156 took the same card to the bag and the
-## locker, and the placement -- right of the cell, then left, then under, then
-## over -- is the one thing on it that is hard, so there is one copy of it.
+var _detail: UpgradeDetailControl
+## Trade's hover card. Progression uses `_detail`; trade keeps `ItemTip` rather
+## than six fields and a placement solver of this screen's own. Card #156 took
+## the same card to the bag and locker, and the edge placement is the hard part,
+## so there is one copy of it.
 ##
 ## The cell it describes is `_tip.anchor`, set by `_point_at` and by NOTHING
 ## else. That is the whole of card #119's second warning and it is not a style
@@ -271,14 +268,16 @@ func _build() -> void:
 	_build_header(stack)
 	_build_body(stack)
 	_build_footer(stack)
-	# LAST, and a sibling of the frame rather than a child of it. Two reasons and
+	# In trade mode, LAST and a sibling of the frame rather than a child of it.
+	# Two reasons and
 	# both have already cost a card here: a child of the frame is clipped by the
 	# board's well the moment the cursor is on an edge cell, and DRAW ORDER is
 	# what put the shop modal under the world's control legend once (#48). This
 	# screen's own CanvasLayer is 60 -- above the HUD's 50 -- and the tooltip is
 	# the last child of the last thing on it, so it is over the frame it floats
 	# on and over the HUD both.
-	_tip = ItemTip.make(self)
+	if mode == Mode.TRADE:
+		_tip = ItemTip.make(self)
 
 
 ## Who this is and what they do, then the four numbers you decide with.
@@ -427,6 +426,9 @@ func _build_trade_side(parent: Node, label: String, stock: bool) -> void:
 
 func _build_progression_board(parent: Node) -> void:
 	var inner := _build_board_well(parent)
+	var board_well := inner.get_parent().get_parent() as Control
+	if board_well != null:
+		board_well.size_flags_stretch_ratio = 2.25
 	UITheme.section_rule(inner, "ON THE BOARD")
 
 	# The smith's board is taller than the frame. It scrolls instead of shrinking
@@ -443,6 +445,7 @@ func _build_progression_board(parent: Node) -> void:
 	_ladder.name = "Board"
 	_ladder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_ladder.cell_focused.connect(_on_cell_looked)
+	_ladder.tab_changed.connect(_on_ladder_tab_changed)
 	_scroll.add_child(_ladder)
 
 	_empty = Label.new()
@@ -450,6 +453,9 @@ func _build_progression_board(parent: Node) -> void:
 	_empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	UITheme.apply_text_style(_empty, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT_DIM)
 	inner.add_child(_empty)
+
+	_detail = UpgradeDetailControl.new()
+	parent.add_child(_detail)
 
 
 func _build_board_well(parent: Node) -> VBoxContainer:
@@ -608,6 +614,7 @@ func _refresh() -> void:
 			"index": i,
 			"label": String(row["label"]),
 			"blurb": String(row.get("owned_blurb", row["blurb"])),
+			"detail": String(row.get("detail", "")),
 			"sub": String(row["sub"]),
 			"tint": row["color"],
 			"icon": _row_icon(row),
@@ -675,7 +682,14 @@ func _selected_row() -> Dictionary:
 			return _ladder.owned_detail(_cursor)
 		if not _order.has(_cursor):
 			return {}
-	return _rows[_cursor] if _cursor >= 0 and _cursor < _rows.size() else {}
+	var row: Dictionary = (_rows[_cursor] if _cursor >= 0
+		and _cursor < _rows.size() else {})
+	if mode == Mode.PROGRESSION and not row.is_empty():
+		row = row.duplicate()
+		var rung_name := _ladder.label_of_selection(_cursor)
+		if not rung_name.is_empty():
+			row["label"] = rung_name
+	return row
 
 
 ## The glyph for a row, or "" — which is most rows.
@@ -770,10 +784,11 @@ func _build_buy_rows() -> void:
 			"sub": sub,
 			"sub_tint": Color.WHITE if cost > 0 else Pal.MOSS,
 			"color": Pal.BONE,
-			# The blurb says what the thing IS; the detail says what the number
-			# DOES, in the unit the player feels. A forge line without the second
-			# sentence is asking them to buy on faith.
-			"blurb": "%s   %s" % [line["blurb"], line.get("detail", "")],
+			# Kept separate for the progression inspector: the before→after result
+			# is a STATS line and the authored blurb sits below it. Trade's hover
+			# card combines them at presentation time to preserve its compact copy.
+			"blurb": String(line["blurb"]),
+			"detail": String(line.get("detail", "")),
 			# Owned rungs name their rank themselves. Keep their card on the
 			# permanent effect, not the live next-purchase arithmetic in `detail`.
 			"owned_blurb": String(line["blurb"]),
@@ -787,7 +802,8 @@ func _build_buy_rows() -> void:
 ## Move the cursor and make the screen agree with it: the cell takes focus (which
 ## is what draws the highlight, out of the theme, exactly as it does in the pause
 ## menu) and the detail pane describes it.
-func _point_at(i: int, play_selection_sfx: bool = false) -> void:
+func _point_at(i: int, play_selection_sfx: bool = false,
+		focus_cell: bool = true) -> void:
 	var previous: int = _cursor
 	if mode == Mode.TRADE:
 		_cursor = clampi(i, 0, maxi(_rows.size() - 1, 0))
@@ -815,7 +831,7 @@ func _point_at(i: int, play_selection_sfx: bool = false) -> void:
 	# rows -- see `ItemTip`.
 	if _tip != null:
 		_tip.anchor = cell
-	if cell != null and cell.get_viewport() != null:
+	if focus_cell and cell != null and cell.get_viewport() != null:
 		cell.grab_focus()
 		# The board is taller than the frame. Following the cursor is what makes
 		# the scrollbar something the player never has to know about.
@@ -825,7 +841,7 @@ func _point_at(i: int, play_selection_sfx: bool = false) -> void:
 		# containers have not laid out yet, so it is still at (0,0) with zero
 		# size and scrolling to it scrolls to the top every time.
 		if cell_scroll != null:
-			cell_scroll.ensure_control_visible.call_deferred(cell)
+			_ensure_visible.call_deferred(cell_scroll, cell)
 	_describe()
 
 
@@ -838,7 +854,17 @@ func _keep_cursor_in_view() -> void:
 		return
 	var cell := _ladder.cell_of_selection(_cursor)
 	if cell != null and cell.get_viewport() != null:
-		_scroll.ensure_control_visible.call_deferred(cell)
+		_ensure_visible.call_deferred(_scroll, cell)
+
+
+## A deferred scroll target can be replaced by `_refresh` before the deferred
+## call runs. Validate the live ancestry here so a successful purchase never asks
+## a ScrollContainer to reveal a rung from the board it just tore down.
+func _ensure_visible(scroll: ScrollContainer, control: Control) -> void:
+	if scroll == null or control == null or not is_instance_valid(scroll) \
+			or not is_instance_valid(control) or not scroll.is_ancestor_of(control):
+		return
+	scroll.ensure_control_visible(control)
 
 
 ## The mouse landed on a cell. Follow it — a click is also a look.
@@ -847,11 +873,40 @@ func _on_cell_looked(index: int) -> void:
 		_point_at(index, true)
 
 
+## A tab owns focus while the screen adopts its first selection for the inspector.
+## Calling `_point_at` here would immediately grab the node and make tab mode
+## impossible to enter with a mouse.
+func _on_ladder_tab_changed(first_selection: int) -> void:
+	var previous := _cursor
+	_order = _ladder.order().duplicate()
+	_cursor = first_selection
+	_hold = 0.0
+	if _cursor != previous and _cursor != -1:
+		Bus.request_sfx.emit(&"upgrade_stat_selected", _hero_position())
+	_describe()
+	if _scroll != null:
+		var tab := _ladder.current_tab_button()
+		if tab != null:
+			_ensure_visible.call_deferred(_scroll, tab)
+
+
 func _describe() -> void:
+	var row := _selected_row()
+	if mode == Mode.PROGRESSION:
+		if _detail != null:
+			_detail.describe(row, _db())
+		if row.is_empty():
+			UiKit.band_value(_band, &"cost", "—")
+		elif row["kind"] == &"owned":
+			UiKit.band_value(_band, &"cost", "Owned", UITheme.SUCCESS)
+		elif row["kind"] == &"buy":
+			UiKit.band_value(_band, &"cost",
+				_db().format_currency(int(row["price"])),
+				UITheme.SUCCESS if bool(row["ok"]) else UITheme.DANGER)
+		return
 	if _tip == null:
 		return
 	_tip.clear()
-	var row := _selected_row()
 	if row.is_empty():
 		# A card describing nothing is not an empty card, it is no card. The
 		# board says "Sold out." on its own and a bordered rectangle of nothing
@@ -879,6 +934,9 @@ func _describe() -> void:
 			var left: int = int(row["count"])
 			_tip.kicker.text = "%d LEFT" % left if left >= 0 else ""
 			_tip.price.text = _db().format_currency(int(row["price"]))
+			var detail_text := String(row.get("detail", ""))
+			if not detail_text.is_empty():
+				_tip.blurb.text += "   " + detail_text
 			# Off `ok` and out of the CATALOGUE's own mouth, for the reason
 			# `_show_refusal` gives: once a line can be refused for four
 			# different reasons, "Not enough gold" sends the player back down
@@ -1007,6 +1065,8 @@ var _hold: float = 0.0
 func _hold_time(i: int) -> float:
 	if i != _cursor:
 		return 0.0
+	if mode == Mode.PROGRESSION and _ladder != null and _ladder.focus_is_tab():
+		return 0.0
 	var row := _selected_row()
 	if row.is_empty() or row["kind"] == &"owned":
 		return 0.0
@@ -1072,7 +1132,9 @@ func _tick_input(delta: float) -> void:
 	elif _armed_jump and not _wishlist_key().is_empty():
 		_armed_jump = false
 		Game.toggle_wishlist_line(_wishlist_key())
-	if _order.is_empty():
+	var on_tabs := (mode == Mode.PROGRESSION and _ladder != null
+		and _ladder.focus_is_tab())
+	if _order.is_empty() and not on_tabs:
 		return
 
 	var step := _step(delta)
@@ -1083,7 +1145,7 @@ func _tick_input(delta: float) -> void:
 		# hold exists to prevent.
 		_hold = 0.0
 
-	if accept and _armed_accept:
+	if accept and _armed_accept and not on_tabs:
 		var need := _hold_time(_cursor)
 		if need <= 0.0:
 			_armed_accept = false
@@ -1096,6 +1158,10 @@ func _tick_input(delta: float) -> void:
 				# start brewing the next one.
 				_armed_accept = false
 				_commit()
+	elif accept and _armed_accept and on_tabs:
+		# Accept is inert on a tab and must not carry through into the first node
+		# when DOWN is pressed while the same physical button is still held.
+		_armed_accept = false
 	elif _hold > 0.0:
 		# Snapped to zero, not decayed, for the reason `Prompt` gives: a bar that
 		# drains says "keep going", and letting go was the opposite of that.
@@ -1150,11 +1216,20 @@ func _step(delta: float) -> Vector2i:
 ## which is the guarantee the pouch's grid makes and the reason this screen moves
 ## its own cursor at all (see `_tick_input`).
 func _move(d: Vector2i) -> void:
+	if mode == Mode.PROGRESSION and _ladder != null and _ladder.focus_is_tab():
+		if d.x != 0:
+			_ladder.cycle_tab(d.x)
+		elif d.y > 0 and not _order.is_empty():
+			_point_at(_order[0], true)
+		return
 	if _order.is_empty():
 		return
 	if d.x != 0:
-		var i := (_at() + d.x + _order.size()) % _order.size()
-		_point_at(_order[i], true)
+		if mode == Mode.TRADE:
+			var i := (_at() + d.x + _order.size()) % _order.size()
+			_point_at(_order[i], true)
+		else:
+			_point_at(_ladder.horizontal_selection(_cursor, d.x), true)
 		return
 	if d.y == 0:
 		return
@@ -1163,13 +1238,23 @@ func _move(d: Vector2i) -> void:
 		_point_at(_order[i], true)
 		return
 
-	# The next row that has an owned or buyable selection. A row made only of
-	# future sockets is not a stop; a fully climbed row is, because its purchased
-	# rungs are part of the board the player can inspect.
+	# Up from the first visible track enters the current tab. The tab keeps focus
+	# while the selected node remains available to the persistent inspector.
+	var first_row := _ladder.row_of_selection(_ladder.first_selection())
+	var current_row := _ladder.row_of_selection(_cursor)
+	if d.y < 0 and current_row == first_row:
+		if _ladder.focus_current_tab() and _scroll != null:
+			var tab := _ladder.current_tab_button()
+			if tab != null:
+				_ensure_visible.call_deferred(_scroll, tab)
+		return
+
+	# The next track that has an owned or buyable selection. Locked-only tracks
+	# remain drawn but are not controller stops; finished tracks remain stops.
 	var rows := _ladder.row_count()
 	if rows <= 0:
 		return
-	var at := _ladder.row_of_selection(_cursor)
+	var at := current_row
 	for n in rows:
 		at = (at + d.y + rows) % rows
 		var selection := _ladder.first_selection_of_row(at)
@@ -1179,6 +1264,8 @@ func _move(d: Vector2i) -> void:
 
 
 func _commit() -> void:
+	if mode == Mode.PROGRESSION and _ladder != null and _ladder.focus_is_tab():
+		return
 	var row := _selected_row()
 	# Owned cells are inspection targets only. Returning before the transaction
 	# path also guarantees no refusal, voice, unlock sound or refresh on ACCEPT.

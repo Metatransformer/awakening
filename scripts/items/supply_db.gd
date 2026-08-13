@@ -54,6 +54,12 @@ const STOCK_IDS: Array[StringName] = [
 ## The permanent linear ladders shown by her separate Upgrades service.
 const UPGRADE_IDS: Array[StringName] = [&"bag_slot", &"heart"]
 
+const RUNG_NAMES := {
+	&"bag_slot": ["Wayfarer's Pack", "Delver's Pack", "Expedition Pack",
+		"Quartermaster's Case"],
+	&"heart": ["Stout Heart", "Iron Heart", "Lionheart"],
+}
+
 ## Lines that DO NOT EXIST until the player owns the thing they are about.
 ##
 ## The same rule `ShopDb.GATED_BY` keeps for the bow's ladders: ammunition you
@@ -115,9 +121,9 @@ static func groups() -> Array[Dictionary]:
 		at[rows[i]["id"]] = i
 
 	var out: Array[Dictionary] = []
-	out.append({"title": "THE BAG", "icon": "bag", "tracks": [
+	out.append({"title": "THE BAG", "tab": "PACK", "icon": "bag", "tracks": [
 		_track(at, &"bag_slot", "", int(LIMITS[&"bag_slot"]))]})
-	out.append({"title": "HEARTS", "icon": "hearts", "tracks": [
+	out.append({"title": "HEARTS", "tab": "HEARTS", "icon": "hearts", "tracks": [
 		_track(at, &"heart", "", int(LIMITS[&"heart"]))]})
 	return out
 
@@ -129,7 +135,17 @@ static func _track(at: Dictionary, id: StringName, branch: String,
 		"line": int(at.get(id, -1)),
 		"owned": int(Game.upgrades.get(id, 0)),
 		"rungs": rungs,
+		"rung_names": _rung_names(id, rungs),
 	}
+
+
+static func _rung_names(id: StringName, rungs: int) -> Array[String]:
+	var authored: Array = RUNG_NAMES.get(id, [])
+	var names: Array[String] = []
+	for i in rungs:
+		names.append(String(authored[i]) if i < authored.size()
+			else "%s %d" % [String(id).replace("_", " ").capitalize(), i + 1])
+	return names
 
 
 ## Is `id` on the counter at all? The same distinction `ShopDb.stocked` draws: a
