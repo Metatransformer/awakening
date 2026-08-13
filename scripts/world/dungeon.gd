@@ -44,8 +44,8 @@ extends Node3D
 ## one, in a short landing, and pressing it is still the commitment. The entrance
 ## UP stair is the separate backtracking seam present on every generated floor.
 ##
-## **The tint field is deliberately NOT read.** The zone/colour work is parked
-## behind SCOPE §4.1's gate; a floor is its shape and its roster this round.
+## Floor 1's authorised look is applied through the manifest's tint key after
+## population. The remaining floor looks stay parked behind SCOPE §4.1's gate.
 
 const ROOM_SCENE_FLOOR := preload("res://scenes/kit/floor_slab.tscn")
 const ROOM_SCENE_CEIL := preload("res://scenes/kit/ceiling_slab.tscn")
@@ -72,6 +72,9 @@ const SHORTCUT_GATE_SCRIPT := "res://scripts/props/shortcut_gate.gd"
 ## Loaded by path because MiningVein is a new global class and the importer is
 ## not required before a generated floor can parse and build it.
 const MINING_VEIN_SCRIPT := "res://scripts/world/mining_vein.gd"
+## Path-loaded because this visual layer is added beside the generator and must
+## parse before the global script-class cache has seen the new file.
+const DUNGEON_LOOK := preload("res://scripts/world/dungeon_look.gd")
 
 ## Grid steps, as (x, z) cells.
 const DIRS := {
@@ -332,6 +335,7 @@ func _ready() -> void:
 	_build_anchors()
 	_validate_authored_topology()
 	_populate()
+	DUNGEON_LOOK.apply(self, Run.level, rooms)
 
 
 # --- Layout -----------------------------------------------------------------
