@@ -156,41 +156,29 @@ var ui_volume: float = 0.8
 ## 0 = windowed, 1 = borderless fullscreen
 var fullscreen: bool = false
 var vsync: bool = true
-var resolution_scale: float = 1.0  ## 0.5 .. 1.0, renders below native and upscales
+var resolution_scale: float = 1.0  ## Native default; 0.5 .. 1.0 user scaling.
 ## 0=off 1=2x 2=4x 3=8x.
 ##
-## **DEFAULT OFF SINCE 2026-08-11 (#55), AND THAT IS A LOOK DECISION, NOT A PERF
-## ONE** — docs/STYLEGUIDE.md §4.9 owns it and holds the frames. In short: MSAA
-## only ever touched the geometric silhouettes, it bought exactly one partial
-## pixel per edge, and the hard silhouette is the thing §4.3 is *for*. It also
-## cost 103 MB of VRAM at 1080p for that one pixel. `project.godot` has said
-## `anti_aliasing/quality/msaa_3d=0` all along; this line was quietly overriding
-## it at boot, because `apply_video()` runs after the project setting is read.
-## The row stays in the options menu — a player who wants it can have it, up to
-## `max_msaa()`, which on Apple silicon is 4x and not 8x (#57).
+## MSAA remains off by default because the native renderer uses SMAA for full-
+## frame geometric edges. The row stays in the options menu as an optional 2x
+## supplement for players who want it.
 var msaa: int = 0
 var shadow_quality: int = 2        ## 0=off 1=low 2=med 3=high
 var fov_offset: float = 0.0        ## added to K.CAM_FOV, -10 .. +15
 
-## **THE 480x270 INTERNAL BUFFER — docs/STYLEGUIDE.md §4.5, and this is the one
-## field that turns it on or off.**
+## Legacy 480x270 diagnostic buffer; this is its only switch.
 ##
 ## True renders the world into a fixed 480 x 270 SubViewport and presents it to
-## the window sharp-bilinear with §4.4's Bayer RGB555 dither applied at that
+## the window sharp-bilinear with its Bayer RGB555 dither applied at that
 ## internal resolution; the HUD, the menus and the fade stay at native. False is
 ## the renderer this project shipped with from the first commit until 2026-08-11:
 ## everything at the window's resolution.
 ##
-## It is a LOOK decision, not a performance one (§4.5 is most of what separates
-## "PSX" from "low-poly indie"), and it is decided on frames in §4.5. It happens
-## to be a large perf win as well, which is recorded there rather than here.
-##
-## Not persisted as a player preference on purpose: this is the game's look, not
-## a quality slider. `resolution_scale` is still the slider, and it now scales
-## the internal buffer rather than the window.
+## Not persisted as a player preference: native is the production target. The
+## seam survives because old comparison directors still exercise migration debt.
 var internal_render: bool = false
 
-## §4.5's SubViewport + present layer. Built in `_ready`, driven by
+## Legacy diagnostic SubViewport + present layer. Built in `_ready`, driven by
 ## `apply_video()`, and the only thing in the project that reads
 ## `internal_render`.
 var _screen: ScreenPresent = null
@@ -251,7 +239,7 @@ func _ready() -> void:
 	# the pause screen is exactly where a player switches to a pad, and a paused
 	# node is not offered input at all.
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	# §4.5's present pipeline. It lives under this autoload because it has no
+	# The legacy diagnostic present pipeline lives here because it has no
 	# `[autoload]` line of its own -- `project.godot` is orchestrator-owned
 	# (CONTRACT §3) -- and because `apply_video()` below already owned the three
 	# viewport knobs it has to be handed. Built before `apply_all()`, which drives
@@ -423,10 +411,11 @@ func _set_bus(bus_name: StringName, linear: float) -> void:
 
 # --- Video ------------------------------------------------------------------
 
-## The highest `msaa` index this GPU will actually render — 3 (8x) everywhere the
-## project has not measured otherwise, 2 (4x) on Apple silicon.
+## The highest `msaa` index the shared renderer offers: 1 (2x). SMAA owns the
+## production edge treatment; this is the one optional supplement in CONTRACT.
 ##
-## **Card #57: 8x MSAA is 4x MSAA on this Mac, and the driver reports success.**
+## Card #57 established that higher reported GPU modes are not dependable:
+## 8x MSAA is 4x MSAA on this Mac, and the driver reports success.
 ## #55 saw it as identical VRAM (393.1 MB at both, to 0.1 MB) and an edge
 ## histogram inside noise, which is consistent with a clamp and *also* with "the
 ## extra four samples land in the same places". `tools/directors/msaa_clamp.gd`
@@ -435,20 +424,10 @@ func _set_bus(bus_name: StringName, linear: float) -> void:
 ## `4x -> 8x` moves **0**, which is below the 3 px two captures of one unchanged
 ## config differ by. Eight samples and four cannot resolve to a bit-identical
 ## frame unless the driver handed back the same framebuffer. Same answer under
-## §4.5's 480x270 buffer.
+## the legacy 480x270 diagnostic buffer.
 ##
-## So the options row offered a fourth choice that did nothing. It is gated here
-## rather than in the menu because `apply_video()` must clamp too — a
-## `settings.cfg` carried from a machine where 8x is real would otherwise leave
-## `msaa = 3` selected against a three-item row.
-##
-## **Gated on the GPU VENDOR and not on `OS.get_name()` on purpose.** Apple is
-## what was measured; an Intel Mac on MoltenVK with an AMD part is a different
-## adapter this project has never photographed, and hiding a working setting
-## there would be the other half of the same mistake. If you get an 8x-capable
-## Mac in front of you, re-run the director before widening this.
 func max_msaa() -> int:
-	return 2 if RenderingServer.get_video_adapter_vendor() == "Apple" else 3
+	return 1
 
 
 func apply_video() -> void:
@@ -482,11 +461,15 @@ func apply_video() -> void:
 	if vp:
 		vp.scaling_3d_scale = clampf(resolution_scale, 0.5, 1.0)
 		vp.msaa_3d = msaa as Viewport.MSAA
+		vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_SMAA
+		vp.use_taa = false
+		vp.use_debanding = false
+		vp.msaa_2d = Viewport.MSAA_DISABLED
 		vp.positional_shadow_atlas_size = atlas
 	# The same three knobs on the viewport that is actually drawing 3D. They are
-	# pushed whether or not §4.5's pipeline is on, so flipping `internal_render`
-	# never loses the player's shadow or MSAA choice -- and the root keeps its
-	# copy for the same reason in reverse.
+	# pushed whether or not the diagnostic pipeline is on, so flipping
+	# `internal_render` never loses the player's shadow or MSAA choice -- and the
+	# root keeps its copy for the same reason in reverse.
 	if _screen != null:
 		_screen.apply_video(msaa, atlas, resolution_scale)
 		_screen.set_enabled(internal_render)
@@ -496,7 +479,7 @@ func apply_video() -> void:
 	)
 
 
-## Flip §4.5's pipeline without going through `apply_video()`.
+## Flip the legacy diagnostic pipeline without going through `apply_video()`.
 ##
 ## `apply_video()` also re-asserts the window mode and the vsync mode, and a
 ## director measuring frame times has deliberately turned vsync off — calling it

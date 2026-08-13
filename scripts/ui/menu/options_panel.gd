@@ -338,12 +338,8 @@ func _build_graphics() -> void:
 			Settings.msaa = i
 			_apply_video())
 	if msaa_max < MSAA_NAMES.size() - 1:
-		# Say it rather than let a player hunt for a notch a guide told them
-		# about. The alternative -- greying the row's fourth stop out -- draws
-		# MORE attention to a setting that can never do anything.
-		_caption("%s does not support %s MSAA; this GPU renders it as %s."
-			% [RenderingServer.get_video_adapter_name(),
-				MSAA_NAMES[MSAA_NAMES.size() - 1], MSAA_NAMES[msaa_max]])
+		_caption("SMAA is always active; optional MSAA is limited to %s."
+			% MSAA_NAMES[msaa_max])
 	_choice("Shadow Quality", SHADOW_NAMES, Settings.shadow_quality,
 		func(i: int) -> void:
 			Settings.shadow_quality = i
