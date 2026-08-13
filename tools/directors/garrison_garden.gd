@@ -164,6 +164,14 @@ func _check_tree_loop(rig, garrison: Garrison, hero: Hero) -> void:
 	rig.check(bool(Game.garden_tree(0).get(&"fruit_ready", false))
 		and site.prompt == "PICK APPLE",
 		"the mature tree grows visible pickable fruit on its cadence")
+	if hero != null:
+		hero.global_position = site.global_position + Vector3(0.95, 0.08, 0.35)
+		hero.velocity = Vector3.ZERO
+	await rig.wait_physics_frames(5)
+	var camera := garrison.get_viewport().get_camera_3d()
+	if camera != null:
+		camera.global_position = Vector3(-13.2, 3.3, -6.8)
+		camera.look_at(site.global_position + Vector3(0.0, 1.55, 0.0), Vector3.UP)
 	await rig.capture("garden_03_ripe_apple_tree.png")
 	Clock.set_time(10, 8.0)
 	site.activate(hero)
@@ -195,6 +203,10 @@ func _check_save_round_trip(rig) -> void:
 
 
 func _capture_mixed_garden(rig) -> void:
+	var camera := rig.root.get_viewport().get_camera_3d() as Camera3D
+	if camera != null:
+		camera.global_position = Vector3(-7.7, 3.25, 6.25)
+		camera.look_at(Vector3(-7.7, 0.50, 0.95), Vector3.UP)
 	Game.restore_garrison({
 		"garden": {
 			"plots": [

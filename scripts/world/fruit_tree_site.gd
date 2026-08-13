@@ -220,15 +220,15 @@ func _build_fruit(tree_id: StringName, crown_y: float) -> void:
 	var fruit_id := GardenDb.produce_id(tree_id)
 	var fruit_material := _material(GardenDb.tint_of(fruit_id), 0.48)
 	var positions: Array[Vector3] = [
-		Vector3(-0.42, crown_y - 0.18, 0.42),
-		Vector3(0.46, crown_y - 0.08, 0.28),
-		Vector3(-0.12, crown_y - 0.30, -0.45),
-		Vector3(0.30, crown_y + 0.12, -0.18),
-		Vector3(0.02, crown_y + 0.26, 0.36),
+		Vector3(-0.62, crown_y - 0.24, 0.52),
+		Vector3(0.64, crown_y - 0.15, 0.36),
+		Vector3(-0.24, crown_y - 0.36, -0.61),
+		Vector3(0.51, crown_y + 0.06, -0.52),
+		Vector3(0.04, crown_y + 0.38, 0.54),
 	]
 	for at: Vector3 in positions:
 		var fruit := _sphere(_tree_visuals, &"RipeFruit", fruit_material,
-			0.13, at, 7, 4)
+			0.17, at, 7, 4)
 		fruit.scale.y = 0.86
 
 
