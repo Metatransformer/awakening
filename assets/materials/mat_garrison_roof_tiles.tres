@@ -4,11 +4,11 @@
 
 [resource]
 resource_name = "mat_garrison_roof_tiles"
-albedo_color = Color(0.48, 0.57, 0.56, 1)
+albedo_color = Color(0.74, 0.58, 0.45, 1)
 albedo_texture = ExtResource("1_roof")
-metallic_specular = 0.14
-roughness = 0.92
-uv1_scale = Vector3(0.38, 0.38, 0.38)
+metallic_specular = 0.1
+roughness = 0.95
+uv1_scale = Vector3(0.32, 0.32, 0.32)
 uv1_triplanar = true
 uv1_world_triplanar = true
 texture_filter = 5

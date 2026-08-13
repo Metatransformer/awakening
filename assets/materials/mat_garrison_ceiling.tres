@@ -4,11 +4,11 @@
 
 [resource]
 resource_name = "mat_garrison_ceiling"
-albedo_color = Color(0.34, 0.24, 0.15, 1)
+albedo_color = Color(0.3, 0.225, 0.16, 1)
 albedo_texture = ExtResource("1_planks")
-metallic_specular = 0.12
-roughness = 0.94
-uv1_scale = Vector3(0.48, 0.48, 0.48)
+metallic_specular = 0.08
+roughness = 0.96
+uv1_scale = Vector3(0.8, 0.8, 0.8)
 uv1_triplanar = true
 uv1_world_triplanar = true
 texture_filter = 5

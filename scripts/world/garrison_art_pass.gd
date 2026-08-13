@@ -7,8 +7,12 @@ const MAT_DIRT: Material = preload("res://assets/materials/mat_garrison_dirt.tre
 const MAT_EARTH: Material = preload("res://assets/materials/mat_garrison_earth.tres")
 const MAT_RUSTIC_STONE: Material = preload("res://assets/materials/mat_garrison_rustic_stone.tres")
 const MAT_PLASTER: Material = preload("res://assets/materials/mat_garrison_plaster.tres")
+const MAT_SERVICE_STONE: Material = preload("res://assets/materials/mat_garrison_service_stone.tres")
+const MAT_STONE_TRIM: Material = preload("res://assets/materials/mat_garrison_stone_trim.tres")
 const MAT_MOSSY_ROCK: Material = preload("res://assets/materials/mat_garrison_mossy_rock.tres")
 const MAT_CEILING: Material = preload("res://assets/materials/mat_garrison_ceiling.tres")
+const MAT_DEFENSIVE_STONE: Material = preload("res://assets/materials/mat_garrison_defensive_stone.tres")
+const MAT_WALL_SUNLIT: Material = preload("res://assets/materials/mat_wall_sunlit.tres")
 const MAT_IRON: Material = preload("res://assets/materials/mat_iron.tres")
 
 const KIT_TORCH: PackedScene = preload("res://scenes/kit/torch.tscn")
@@ -73,17 +77,115 @@ const WOODEN_BUCKET: PackedScene = preload("res://assets/props/garrison_farm/woo
 const WOODEN_CRATE: PackedScene = preload("res://assets/props/garrison_farm/wooden_crate_01.glb")
 
 
+class VisualLightController extends Node:
+	var _torch_energies: Dictionary[KitTorch, float] = {}
+	var _fill_energies: Dictionary[OmniLight3D, float] = {}
+	var _day_fill_energies: Dictionary[OmniLight3D, float] = {}
+	var _authored_visibility: Dictionary[Node3D, bool] = {}
+	var _day_material_colors: Dictionary[StandardMaterial3D, Color] = {}
+	var _night_material_multipliers: Dictionary[StandardMaterial3D, float] = {}
+	var _building_light_energies: Dictionary[OmniLight3D, float] = {}
+	var _building_light_day_factors: Dictionary[OmniLight3D, float] = {}
+
+
+	func capture(compound: GarrisonCompound, art_pass: Node3D,
+			night_material_multipliers: Dictionary) -> void:
+		for candidate: Node in art_pass.find_children("*", "KitTorch", true, false):
+			var torch := candidate as KitTorch
+			_torch_energies[torch] = torch.light_energy
+			_authored_visibility[torch] = torch.visible
+			for child_name: StringName in [&"Body", &"Flame", &"Embers", &"Light"]:
+				var visual := torch.get_node_or_null(NodePath(child_name)) as Node3D
+				if visual != null:
+					_authored_visibility[visual] = visual.visible
+		for candidate: Node in art_pass.find_children("*", "OmniLight3D", true, false):
+			var fill := candidate as OmniLight3D
+			if fill.is_in_group(&"garrison_night_fill"):
+				_fill_energies[fill] = fill.light_energy
+			elif fill.is_in_group(&"garrison_day_fill"):
+				_day_fill_energies[fill] = fill.light_energy
+		for candidate: Variant in night_material_multipliers:
+			var material := candidate as StandardMaterial3D
+			if material != null:
+				_day_material_colors[material] = material.albedo_color
+				_night_material_multipliers[material] = float(
+					night_material_multipliers[candidate])
+		for candidate: Node in compound.find_children("*", "OmniLight3D", true, false):
+			var building_light := candidate as OmniLight3D
+			if (String(building_light.name).begins_with("InteriorLight")
+					or building_light.name in [&"DisplayLight", &"GardenTaskLight"]):
+				_building_light_energies[building_light] = building_light.light_energy
+				var light_path := String(building_light.get_path())
+				_building_light_day_factors[building_light] = 0.08 \
+					if "Smithy" in light_path else 0.28
+		_torch_energies.make_read_only()
+		_fill_energies.make_read_only()
+		_day_fill_energies.make_read_only()
+		_authored_visibility.make_read_only()
+		_day_material_colors.make_read_only()
+		_night_material_multipliers.make_read_only()
+		_building_light_energies.make_read_only()
+		_building_light_day_factors.make_read_only()
+
+
+	func _ready() -> void:
+		Clock.minute_changed.connect(_on_minute_changed)
+		Clock.garrison_phase_changed.connect(_on_garrison_phase_changed)
+		_apply_current_phase()
+
+
+	func _on_minute_changed(_day: int, _hour: int, _minute: int) -> void:
+		_apply_current_phase()
+
+
+	func _on_garrison_phase_changed(_phase: StringName) -> void:
+		_apply_current_phase()
+
+
+	func _apply_current_phase() -> void:
+		var daytime: bool = (Clock.hour >= WorldClock.DAWN_HOUR
+			and Clock.hour < WorldClock.BONFIRE_HOUR)
+		for torch: KitTorch in _torch_energies:
+			if is_instance_valid(torch):
+				torch.light_energy = 0.0 if daytime else _torch_energies[torch]
+		for visual: Node3D in _authored_visibility:
+			if is_instance_valid(visual):
+				visual.visible = false if daytime else _authored_visibility[visual]
+		for fill: OmniLight3D in _fill_energies:
+			if is_instance_valid(fill):
+				fill.light_energy = 0.0 if daytime else _fill_energies[fill]
+		for fill: OmniLight3D in _day_fill_energies:
+			if is_instance_valid(fill):
+				fill.light_energy = _day_fill_energies[fill] if daytime else 0.0
+		for material: StandardMaterial3D in _day_material_colors:
+			var day_color: Color = _day_material_colors[material]
+			var multiplier: float = 1.0 if daytime else \
+				_night_material_multipliers[material]
+			material.albedo_color = Color(
+				day_color.r * multiplier,
+				day_color.g * multiplier,
+				day_color.b * multiplier,
+				day_color.a)
+		for light: OmniLight3D in _building_light_energies:
+			if is_instance_valid(light):
+				light.light_energy = _building_light_energies[light] * \
+					(_building_light_day_factors[light] if daytime else 1.0)
+
+
 static func build(compound: GarrisonCompound) -> void:
 	if compound.get_node_or_null(^"ArtPass") != null:
 		return
 	var art_pass := _group(compound, &"ArtPass")
 	_build_terrain(compound, art_pass)
 	_build_architecture(compound, art_pass)
+	_build_architectural_bands(art_pass)
 	_build_interiors(compound, art_pass)
 	_build_garden(art_pass)
 	_build_practicals(art_pass)
 	_build_perimeter_torches(art_pass)
+	_build_day_fills(art_pass)
 	_build_night_fills(art_pass)
+	_attach_visual_light_controller(compound, art_pass)
 	_build_gate_mechanism(art_pass)
 	if not compound.open_surface_gate:
 		_build_gate_vista(art_pass)
@@ -153,18 +255,25 @@ static func _build_terrain(compound: GarrisonCompound, art_pass: Node3D) -> void
 
 static func _build_architecture(compound: GarrisonCompound, art_pass: Node3D) -> void:
 	var architecture := _group(art_pass, &"Architecture")
-	# Occupied buildings use a lighter, warmer masonry family than the defensive
-	# curtain. Keeping the curtain dark makes the rooms read as authored places
-	# inside the fort instead of one continuous stone bunker.
+	_apply_defensive_stone(compound)
+	# Occupied buildings stay warmer than the cooler, low-relief defensive shell,
+	# so the rooms read as authored places instead of one continuous stone bunker.
 	var buildings := compound.get_node_or_null(^"Buildings")
 	if buildings != null:
 		for node: Node in buildings.find_children("*", "KitWall", true, false):
+			var building_wall := node as KitWall
 			var wall_material: Material = MAT_RUSTIC_STONE
 			var room_path := String(node.get_path())
 			if ("LeaderQuarters" in room_path or "MessHall" in room_path
 					or "Jewelcrafter" in room_path):
 				wall_material = MAT_PLASTER
-			(node as KitWall).material = wall_material
+			elif ("BuilderWorkshop" in room_path or "Quartermaster" in room_path
+					or "SupplyRoom" in room_path):
+				wall_material = MAT_SERVICE_STONE
+			building_wall.material = wall_material
+			building_wall.relief = 0.0
+			building_wall.joint = 0.0
+			building_wall.plinth_relief = 0.0
 	_hide_named_visuals(compound, [
 	])
 
@@ -204,10 +313,6 @@ static func _build_architecture(compound: GarrisonCompound, art_pass: Node3D) ->
 		Vector3(9.55, 0.08, -9.48), PI, Vector3(1.6, 3.0, 0.8))
 	_facade_panel(facades, WALL_PAINTED_WINDOW, &"LeaderWindowEast",
 		Vector3(15.85, 0.08, -9.48), PI, Vector3(1.6, 3.0, 0.8))
-	_facade_panel(facades, WALL_WOOD, &"SmithPanelNorth", Vector3(-14.31, 0.08, -7.1),
-		-PI * 0.5, Vector3(1.35, 3.0, 0.8))
-	_facade_panel(facades, WALL_WINDOW, &"SmithWindowSouth", Vector3(-14.31, 0.08, -1.7),
-		-PI * 0.5, Vector3(1.25, 3.0, 0.8))
 	_facade_panel(facades, WALL_PAINTED_WINDOW, &"JewelWindowNorth",
 		Vector3(-14.31, 0.08, 0.25), -PI * 0.5, Vector3(1.25, 2.75, 0.8))
 	_facade_panel(facades, WALL_PAINTED_WINDOW, &"JewelWindowSouth",
@@ -229,18 +334,66 @@ static func _build_architecture(compound: GarrisonCompound, art_pass: Node3D) ->
 	_facade_panel(facades, WALL_WOOD, &"EastSupplyPanelEast",
 		Vector3(12.25, 0.08, 11.81), 0.0, Vector3(1.25, 2.85, 0.8))
 
-	# Stone aprons sit on blank exterior walls; they add material depth without
-	# becoming a second architectural collision shell.
-	_asset(facades, STRUCTURE_WALL, &"SmithStoneApron",
-		Vector3(-21.92, 0.04, -4.6), PI * 0.5, Vector3(4.8, 1.1, 0.35), MAT_RUSTIC_STONE)
-	_asset(facades, STRUCTURE_WALL, &"QuartermasterStoneApron",
-		Vector3(21.92, 0.04, 4.3), -PI * 0.5, Vector3(5.4, 1.0, 0.35), MAT_RUSTIC_STONE)
 	_asset(facades, BANNER_1, &"BarracksFacadeBanner",
 		Vector3(-13.45, 1.55, -15.7), -PI * 0.5, Vector3(0.8, 0.8, 0.8))
 	_asset(facades, BANNER_2, &"LeaderFacadeBanner",
 		Vector3(15.75, 1.55, -9.34), PI, Vector3(0.9, 0.9, 0.9))
 	_asset(facades, BANNER_1, &"QuartermasterFacadeBanner",
 		Vector3(12.65, 1.5, 0.7), PI * 0.5, Vector3(0.72, 0.72, 0.72))
+
+
+static func _build_architectural_bands(art_pass: Node3D) -> void:
+	var bands := _group(art_pass, &"ArchitecturalBands")
+	# A quiet base, corner bond, and eave course make the masonry describe how
+	# each building stands up. These are visual-only and sit outside the authored
+	# wall collision, so the gameplay shell remains unchanged.
+	_building_bands(bands, &"Barracks", Vector3(-18.55, 0.0, -13.2),
+		Vector2(9.7, 12.2), 3.45)
+	_building_bands(bands, &"Mess", Vector3(-6.9, 0.0, -15.95),
+		Vector2(9.0, 9.7), 3.45)
+	_building_bands(bands, &"Leader", Vector3(13.2, 0.0, -14.6),
+		Vector2(9.2, 10.0), 3.45)
+	_building_bands(bands, &"Smith", Vector3(-19.325, 0.0, -4.6),
+		Vector2(9.75, 6.5), 3.45)
+	_building_bands(bands, &"Jewel", Vector3(-19.725, 0.0, 3.2),
+		Vector2(10.55, 6.3), 3.18)
+	_building_bands(bands, &"Builder", Vector3(-18.4, 0.0, 11.325),
+		Vector2(10.8, 6.95), 3.45)
+	_building_bands(bands, &"Quartermaster", Vector3(18.8, 0.0, 4.3),
+		Vector2(11.8, 9.0), 3.25)
+	_building_bands(bands, &"WestSupply", Vector3(-9.2, 0.0, 16.0),
+		Vector2(7.6, 8.2), 3.15)
+	_building_bands(bands, &"EastSupply", Vector3(9.2, 0.0, 15.65),
+		Vector2(7.6, 7.5), 3.28)
+
+
+static func _building_bands(parent: Node3D, label: StringName, at: Vector3,
+		size: Vector2, height: float) -> void:
+	var group := _group(parent, label)
+	var outside := 0.19
+	var base_y := 0.17
+	var cap_y := height - 0.11
+	for z_side: float in [-1.0, 1.0]:
+		var z := at.z + z_side * (size.y * 0.5 + outside)
+		_visual_box(group, "%sBaseZ%d" % [label, int(z_side)],
+			Vector3(size.x + 0.5, 0.34, 0.22), Vector3(at.x, base_y, z),
+			MAT_STONE_TRIM)
+		_visual_box(group, "%sCapZ%d" % [label, int(z_side)],
+			Vector3(size.x + 0.5, 0.18, 0.24), Vector3(at.x, cap_y, z),
+			MAT_STONE_TRIM)
+	for x_side: float in [-1.0, 1.0]:
+		var x := at.x + x_side * (size.x * 0.5 + outside)
+		_visual_box(group, "%sBaseX%d" % [label, int(x_side)],
+			Vector3(0.22, 0.34, size.y + 0.5), Vector3(x, base_y, at.z),
+			MAT_STONE_TRIM)
+		_visual_box(group, "%sCapX%d" % [label, int(x_side)],
+			Vector3(0.24, 0.18, size.y + 0.5), Vector3(x, cap_y, at.z),
+			MAT_STONE_TRIM)
+		for z_side: float in [-1.0, 1.0]:
+			_visual_box(group, "%sCorner%d_%d" % [label, int(x_side), int(z_side)],
+				Vector3(0.28, height - 0.35, 0.28),
+				Vector3(x, (height + 0.35) * 0.5,
+					at.z + z_side * (size.y * 0.5 + outside)), MAT_STONE_TRIM)
 
 
 static func _build_interiors(compound: GarrisonCompound, art_pass: Node3D) -> void:
@@ -540,20 +693,23 @@ static func _build_practicals(art_pass: Node3D) -> void:
 	var practicals := _group(art_pass, &"WarmThresholds")
 	# Every occupied building announces itself with a small visible source and a
 	# restrained pool at the threshold. Interiors remain the brightest warm zones.
-	_practical(practicals, &"Barracks", Vector3(-13.28, 1.78, -12.4), -PI * 0.5, 8101)
-	_practical(practicals, &"Mess", Vector3(-6.9, 1.78, -10.72), PI, 8102)
+	_practical(practicals, &"Barracks", Vector3(-13.28, 1.78, -12.4), -PI * 0.5,
+		8101, 2.35)
+	_practical(practicals, &"Mess", Vector3(-6.9, 1.78, -10.72), PI, 8102, 2.35)
 	_practical(practicals, &"Leader", Vector3(12.7, 1.82, -9.16), PI, 8103,
-		1.45, 3.25)
+		2.65, 3.25)
 	_practical(practicals, &"Smith", Vector3(-14.12, 1.78, -4.6), -PI * 0.5,
-		8104, 1.55, 3.3, Color(1.0, 0.54, 0.27))
-	_practical(practicals, &"Jewel", Vector3(-14.12, 1.76, 3.2), -PI * 0.5, 8105)
-	_practical(practicals, &"Builder", Vector3(-12.62, 1.78, 11.1), -PI * 0.5, 8106)
+		8104, 2.9, 3.3, Color(1.0, 0.54, 0.27))
+	_practical(practicals, &"Jewel", Vector3(-14.12, 1.76, 3.2), -PI * 0.5,
+		8105, 2.35)
+	_practical(practicals, &"Builder", Vector3(-12.62, 1.78, 11.1), -PI * 0.5,
+		8106, 2.35)
 	_practical(practicals, &"Quartermaster", Vector3(12.5, 1.78, 4.3), PI * 0.5,
-		8107)
+		8107, 2.35)
 	_practical(practicals, &"WestSupply", Vector3(-9.2, 1.72, 11.48), 0.0,
-		8108, 1.1, 2.8)
+		8108, 2.0, 2.8)
 	_practical(practicals, &"EastSupply", Vector3(9.2, 1.72, 11.48), 0.0,
-		8109, 1.1, 2.8)
+		8109, 2.0, 2.8)
 
 
 static func _practical(
@@ -576,37 +732,37 @@ static func _build_perimeter_torches(art_pass: Node3D) -> void:
 	# The shoulder pair reads from both directions through the open six-metre
 	# passage. The approach pair picks the arch out from the inner courtyard.
 	_wall_torch(torches, &"GateShoulderWestTorch", Vector3(-2.55, 2.35, 15.55),
-		PI * 0.5, 8201, 2.0, 5.2, warm, true, true)
+		PI * 0.5, 8201, 4.0, 5.2, warm, true, true)
 	_wall_torch(torches, &"GateShoulderEastTorch", Vector3(2.55, 2.35, 15.55),
-		-PI * 0.5, 8202, 2.0, 5.2, warm, true, true)
+		-PI * 0.5, 8202, 4.0, 5.2, warm, true, true)
 	_wall_torch(torches, &"GateApproachWestTorch", Vector3(-5.35, 2.35, 13.08),
-		PI, 8203, 1.75, 4.8, warm, true)
+		PI, 8203, 3.5, 4.8, warm, true)
 	_wall_torch(torches, &"GateApproachEastTorch", Vector3(5.35, 2.35, 13.08),
-		PI, 8204, 1.75, 4.8, warm, true)
+		PI, 8204, 3.5, 4.8, warm, true)
 
 	# Junction towers carry the rhythm around every turn in the irregular wall.
 	_wall_torch(torches, &"NorthJunctionTorch", Vector3(3.1, 2.35, -17.22),
-		0.0, 8210, 1.65, 4.8, warm)
+		0.0, 8210, 2.8, 4.8, warm)
 	_wall_torch(torches, &"LeaderDoglegTorch", Vector3(19.28, 2.35, -9.35),
-		-PI * 0.5, 8211, 1.65, 4.7, warm)
+		-PI * 0.5, 8211, 2.8, 4.7, warm)
 	_wall_torch(torches, &"EastStepTorch", Vector3(21.83, 2.35, -4.65),
-		-PI * 0.5, 8212, 1.65, 4.7, warm)
+		-PI * 0.5, 8212, 2.8, 4.7, warm)
 	_wall_torch(torches, &"QuartermasterTurnTorch", Vector3(21.72, 2.35, 8.15),
-		-PI * 0.5, 8213, 1.7, 4.9, warm)
+		-PI * 0.5, 8213, 2.9, 4.9, warm)
 	_wall_torch(torches, &"WestCraftTurnTorch", Vector3(-22.28, 2.35, 7.0),
-		PI * 0.5, 8214, 1.65, 4.7, warm)
+		PI * 0.5, 8214, 2.8, 4.7, warm)
 	_wall_torch(torches, &"WestMidTurnTorch", Vector3(-22.58, 2.35, -0.55),
-		PI * 0.5, 8215, 1.65, 4.7, warm)
+		PI * 0.5, 8215, 2.8, 4.7, warm)
 
 	# Courtyard-facing pockets bridge the longer dark gaps between destinations.
 	_wall_torch(torches, &"NorthBarracksPocketTorch", Vector3(-13.62, 2.35, -17.0),
-		PI * 0.5, 8220, 1.45, 4.5, warm)
+		PI * 0.5, 8220, 2.5, 4.5, warm)
 	_wall_torch(torches, &"NorthLeaderPocketTorch", Vector3(9.75, 2.35, -9.48),
-		0.0, 8221, 1.45, 4.5, warm)
+		0.0, 8221, 2.5, 4.5, warm)
 	_wall_torch(torches, &"WestSupplyShoulderTorch", Vector3(-11.35, 2.3, 11.72),
-		PI, 8222, 1.5, 4.6, warm)
+		PI, 8222, 2.6, 4.6, warm)
 	_wall_torch(torches, &"EastSupplyShoulderTorch", Vector3(11.55, 2.3, 11.72),
-		PI, 8223, 1.5, 4.6, warm)
+		PI, 8223, 2.6, 4.6, warm)
 
 
 static func _wall_torch(
@@ -647,16 +803,43 @@ static func _wall_torch(
 
 static func _build_night_fills(art_pass: Node3D) -> void:
 	var fills := _group(art_pass, &"NightFills")
-	var cool := Color(0.38, 0.52, 0.78)
-	_night_fill(fills, &"GatePlazaFill", Vector3(0.0, 4.0, 10.0), 1.75, 14.0, cool)
+	var cool := Color(0.30, 0.43, 0.72)
+	_night_fill(fills, &"GatePlazaFill", Vector3(0.0, 4.0, 10.0), 1.5, 14.0, cool)
 	_night_fill(fills, &"WestCraftGardenFill", Vector3(-10.5, 3.0, 0.5),
-		1.45, 14.5, cool)
+		5.5, 15.5, cool)
 	_night_fill(fills, &"NorthWingFill", Vector3(0.0, 4.0, -11.5),
-		1.55, 16.0, cool)
+		9.0, 17.0, cool)
 	_night_fill(fills, &"EastQuartermasterFill", Vector3(12.5, 3.0, 3.5),
-		1.45, 14.5, cool)
+		7.0, 15.5, cool)
 	_night_fill(fills, &"SupplyPocketFill", Vector3(0.0, 3.5, 13.5),
-		1.25, 12.5, cool)
+		6.5, 13.5, cool)
+	_night_fill(fills, &"WestTradesFill", Vector3(-17.5, 3.0, -2.0),
+		1.0, 10.0, Color(0.34, 0.45, 0.68))
+	_night_fill(fills, &"HighMoonFill", Vector3(0.0, 9.0, -3.0),
+		28.0, 26.0, Color(0.40, 0.44, 0.5))
+	_night_fill(fills, &"RouteSparkFill", Vector3(1.0, 2.8, 7.0),
+		2.0, 13.0, Color(0.48, 0.55, 0.72))
+
+
+static func _build_day_fills(art_pass: Node3D) -> void:
+	var fills := _group(art_pass, &"DayFills")
+	_day_fill(fills, &"WestCivicSunFill", Vector3(-13.0, 7.0, -1.0), 2.4, 22.0)
+	_day_fill(fills, &"NorthCivicSunFill", Vector3(0.0, 8.0, -13.0), 2.6, 23.0)
+
+
+static func _day_fill(parent: Node3D, fill_name: StringName, at: Vector3,
+		energy: float, reach: float) -> void:
+	var light := OmniLight3D.new()
+	light.name = fill_name
+	light.position = at
+	light.light_color = Color(1.0, 0.88, 0.7)
+	light.light_energy = energy
+	light.omni_range = reach
+	light.omni_attenuation = 0.9
+	light.light_specular = 0.05
+	light.shadow_enabled = false
+	parent.add_child(light)
+	light.add_to_group(&"garrison_day_fill")
 
 
 static func _night_fill(parent: Node3D, fill_name: StringName, at: Vector3,
@@ -667,11 +850,45 @@ static func _night_fill(parent: Node3D, fill_name: StringName, at: Vector3,
 	light.light_color = color
 	light.light_energy = energy
 	light.omni_range = reach
-	light.omni_attenuation = 1.05
+	light.omni_attenuation = 0.8
 	light.light_specular = 0.1
 	light.shadow_enabled = false
 	parent.add_child(light)
 	light.add_to_group(&"garrison_night_fill")
+
+
+static func _attach_visual_light_controller(compound: GarrisonCompound,
+		art_pass: Node3D) -> void:
+	var controller := VisualLightController.new()
+	controller.name = &"VisualLightController"
+	controller.capture(compound, art_pass, {
+		MAT_PLASTER: 0.75,
+		MAT_RUSTIC_STONE: 0.72,
+		MAT_SERVICE_STONE: 0.7,
+		MAT_STONE_TRIM: 0.66,
+		MAT_DEFENSIVE_STONE: 0.65,
+		preload("res://assets/materials/mat_garrison_roof_tiles.tres"): 1.15,
+	})
+	art_pass.add_child(controller)
+
+
+static func _apply_defensive_stone(compound: GarrisonCompound) -> void:
+	for root_name: StringName in [&"CurtainWall", &"SouthGatehouse"]:
+		var root := compound.get_node_or_null(NodePath(root_name))
+		if root != null:
+			_override_defensive_meshes(root)
+
+
+static func _override_defensive_meshes(node: Node) -> void:
+	if node.name in [&"OpenGateLeaf", &"RaisedPortcullis", &"ArtPass"]:
+		return
+	if node is MeshInstance3D:
+		var mesh_instance := node as MeshInstance3D
+		if mesh_instance.mesh != null and mesh_instance.mesh.get_surface_count() > 0 \
+				and mesh_instance.get_active_material(0) == MAT_WALL_SUNLIT:
+			mesh_instance.material_override = MAT_DEFENSIVE_STONE
+	for child: Node in node.get_children():
+		_override_defensive_meshes(child)
 
 
 static func _build_gate_mechanism(art_pass: Node3D) -> void:

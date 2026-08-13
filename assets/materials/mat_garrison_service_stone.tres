@@ -1,0 +1,15 @@
+[gd_resource type="StandardMaterial3D" load_steps=2 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/garrison/warm_limestone_blocks_v1.png" id="1_wall"]
+
+[resource]
+resource_name = "mat_garrison_service_stone"
+albedo_color = Color(1.06, 1.14, 1.28, 1)
+albedo_texture = ExtResource("1_wall")
+metallic_specular = 0.08
+roughness = 0.97
+uv1_scale = Vector3(0.56, 0.56, 0.56)
+uv1_offset = Vector3(0.37, 0.16, 0)
+uv1_triplanar = true
+uv1_world_triplanar = true
+texture_filter = 5
