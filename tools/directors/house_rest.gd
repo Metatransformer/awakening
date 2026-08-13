@@ -14,12 +14,14 @@ extends RefCounted
 ##   4. **what is on the shelf survives `Run.enter()`**, which is the whole
 ##      reason the locker exists: the bag is cleared at the top of every run and
 ##      merchandise you did not sell used to die there with no event at all;
-##   5. sleeping fades, fully restores real health, grants rank-based temporary
-##      overhealth, and WRITES A SLOT — and the slot reads all of it back;
+##   5. sleeping offers nightfall or morning; choosing morning plays the paused
+##      clock and crossed civil cards, fully restores real health, grants
+##      rank-based temporary overhealth, and WRITES A SLOT — and the slot reads
+##      all of it back;
 ##   6. the lid is open while the screen is up and shut when it comes down.
 ##
 ## Then the pictures: the billet from the yard, the room from the doorway, the
-## screen with both columns populated, and the cot with the prompt on it.
+## screen with both columns populated, and the personal bed with its prompt.
 ##
 ## This director writes to the real `user://saves` (sleeping is an autosave, and
 ## a director that mocked that out would be proving nothing). It takes the three
@@ -285,18 +287,18 @@ func _survives_a_run(rig, _garrison: Garrison) -> void:
 func _sleep(rig, garrison: Garrison) -> void:
 	var h := garrison.house
 	# Sleep always restores real health now; Elder rank two adds exactly two
-	# temporary quarters. One real quarter is low enough that the old rank-two
+	# temporary HP. One real HP is low enough that the old rank-two
 	# ordinary heal could not have reached the maximum, so this distinguishes the
 	# new contract from the one it replaced.
 	Game.upgrades[&"elder_bed"] = 2
 	Game.upgrades.erase(&"elder_reveille")
 	Game.set_temporary_overhealth(0)
-	Game.quarters = K.QUARTER
-	Bus.player_health_changed.emit(Game.quarters, Game.max_quarters)
+	Game.health_points = K.HEALTH_POINT
+	Bus.player_health_changed.emit(Game.health_points, Game.max_health_points)
 	await rig.wait_frames(4)
-	var hurt := Game.quarters
-	_check("he is at one quarter before he lies down (%d/%d)"
-		% [hurt, Game.max_quarters], hurt == K.QUARTER)
+	var hurt := Game.health_points
+	_check("he is at 1 HP before he lies down (%d/%d)"
+		% [hurt, Game.max_health_points], hurt == K.HEALTH_POINT)
 
 	if not await _approach(rig, h.bed, h.bed.global_position + Vector3(1.2, 0.0, 0.0)):
 		return
@@ -306,22 +308,25 @@ func _sleep(rig, garrison: Garrison) -> void:
 
 	# Held for well over `Bed.SLEEP_HOLD`, and then released: `Prompt` disarms on
 	# activate and re-arms on the button coming up, so a director that never let
-	# go would leave the button down across the fade.
+	# go would leave the button down inside the dialogue.
 	await rig.hold_seconds(["interact"], 0.9)
+	_check("the bed offered morning and accepted it through real dialogue presses",
+		await rig.talk("Sleep until morning"))
 	var went: bool = await rig.until(func() -> bool: return Flow.busy, 2.0)
-	_check("the screen went dark", went)
-	# A daytime sleep crosses nightfall and dawn. Flow now presents both civil
-	# boundaries in order (three seconds each) before returning control.
-	var back: bool = await rig.until(func() -> bool: return not Flow.busy, 14.0)
-	_check("...and came back", back)
+	_check("the paused sleep-clock ceremony began", went)
+	# A daytime morning sleep plays the 2.4-second clock, then crosses nightfall
+	# and dawn. Flow presents both civil cards in order before returning control.
+	var back: bool = await rig.until(func() -> bool:
+		return not Flow.busy and not rig.paused and not Prompt.blocked, 18.0)
+	_check("...and the sleep clock plus crossed civil cards gave control back", back)
 	await rig.wait_frames(30)
 
 	_check("sleep fully restored real health (%d -> %d/%d)"
-		% [hurt, Game.quarters, Game.max_quarters],
-		Game.quarters == Game.max_quarters)
-	_check("the rank-two bunk granted two temporary quarters (%d)"
+		% [hurt, Game.health_points, Game.max_health_points],
+		Game.health_points == Game.max_health_points)
+	_check("the rank-two bunk granted two temporary HP (%d)"
 		% Game.temporary_overhealth,
-		Game.temporary_overhealth == 2 * K.QUARTER)
+		Game.temporary_overhealth == 2 * K.HEALTH_POINT)
 	_check("the rest wrote a slot (%d)" % Saves.active_slot, Saves.has_save(0))
 	var rest_slot := Saves.active_slot
 	var minutes_after_open := (Clock.hour - Clock.effective_service_open_hour()) * 60.0
@@ -329,38 +334,38 @@ func _sleep(rig, garrison: Garrison) -> void:
 		minutes_after_open >= 0.0 and minutes_after_open < 2.0
 		and Clock.services_available())
 	_check("the world is running again", not rig.paused)
-	await _shot(rig, "woke_gold_cap_2q")
+	await _shot(rig, "woke_gold_cap_2hp")
 
-	Game.damage(K.QUARTER)
+	Game.damage(K.HEALTH_POINT)
 	await rig.wait_frames(2)
-	_check("one damage quarter reduced temporary overhealth from two to one (%d)"
+	_check("1 HP of damage reduced temporary overhealth from two to one (%d)"
 		% Game.temporary_overhealth,
-		Game.temporary_overhealth == K.QUARTER)
-	_check("the first damage quarter left real health full (%d/%d)"
-		% [Game.quarters, Game.max_quarters],
-		Game.quarters == Game.max_quarters)
-	await _shot(rig, "damage_gold_cap_1q")
+		Game.temporary_overhealth == K.HEALTH_POINT)
+	_check("the first 1 HP of damage left real health full (%d/%d)"
+		% [Game.health_points, Game.max_health_points],
+		Game.health_points == Game.max_health_points)
+	await _shot(rig, "damage_gold_cap_1hp")
 
-	# Two one-quarter blows, not one two-quarter blow: mercy never softens a
-	# one-quarter hit, so this proof is independent of the player's preference.
-	Game.damage(K.QUARTER)
-	Game.damage(K.QUARTER)
-	_check("two more damage quarters consumed the last temporary quarter (%d)"
+	# Two 1 HP blows, not one 2 HP blow: mercy never softens a
+	# 1 HP hit, so this proof is independent of the player's preference.
+	Game.damage(K.HEALTH_POINT)
+	Game.damage(K.HEALTH_POINT)
+	_check("two more HP of damage consumed the last temporary HP (%d)"
 		% Game.temporary_overhealth, Game.temporary_overhealth == 0)
-	_check("only the one-quarter remainder reduced real health (%d/%d)"
-		% [Game.quarters, Game.max_quarters],
-		Game.quarters == Game.max_quarters - K.QUARTER)
+	_check("only the 1 HP remainder reduced real health (%d/%d)"
+		% [Game.health_points, Game.max_health_points],
+		Game.health_points == Game.max_health_points - K.HEALTH_POINT)
 
 	# The autosave predates the damage probes. Loading it proves the rest wrote
 	# both kinds of health and the locker's contents, not merely live memory.
 	Game.stash.clear()
 	Saves.load_slot(rest_slot)
 	_check("full real health came back off the disk (%d/%d)"
-		% [Game.quarters, Game.max_quarters],
-		Game.quarters == Game.max_quarters)
-	_check("the saved two-quarter temporary overhealth came back off the disk (%d)"
+		% [Game.health_points, Game.max_health_points],
+		Game.health_points == Game.max_health_points)
+	_check("the saved 2 HP temporary overhealth came back off the disk (%d)"
 		% Game.temporary_overhealth,
-		Game.temporary_overhealth == 2 * K.QUARTER)
+		Game.temporary_overhealth == 2 * K.HEALTH_POINT)
 	_check("the shelf came back off the disk (%d pearls)"
 		% Game.stash_count(&"void_pearl"), Game.stash_count(&"void_pearl") == 2)
 

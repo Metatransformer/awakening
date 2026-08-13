@@ -17,8 +17,8 @@ const WORKING_RELICS := {
 static func toggle_god() -> Dictionary:
 	Game.dev_god_mode = not Game.dev_god_mode
 	if Game.dev_god_mode:
-		Game.quarters = Game.max_quarters
-		Bus.player_health_changed.emit(Game.quarters, Game.max_quarters)
+		Game.health_points = Game.max_health_points
+		Bus.player_health_changed.emit(Game.health_points, Game.max_health_points)
 		Game.stamina = Game.max_stamina
 		Bus.stamina_changed.emit(Game.stamina, Game.max_stamina)
 		Game.fill_magic()
@@ -112,7 +112,7 @@ static func upgrade(raw_id: StringName) -> Dictionary:
 	Game.upgrades[id] = next
 	if id == &"bag_slot":
 		Game.bag_slots += 1
-	if id == &"heart" or id == &"jewel_amulet_vigor" \
+	if id == &"health" or id == &"jewel_amulet_vigor" \
 			or id == &"jewel_amulet_focus":
 		Game.resync_maxima(true)
 

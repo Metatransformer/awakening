@@ -122,12 +122,12 @@ func _register(amount: int, from: Vector3) -> void:
 	_idle = 0.0
 	_flash = 1.0
 
-	# Rock away from the striker, scaled by how hard it was hit. A quarter-heart
+	# Rock away from the striker, scaled by how hard it was hit. A 1 HP
 	# tap should visibly differ from a spin attack.
 	var dir := K.flat(global_position - from)
 	if dir == Vector3.ZERO:
 		dir = -global_transform.basis.z
-	var force := clampf(float(maxi(amount, 1)) / float(K.HEART), 0.25, 2.0)
+	var force := clampf(float(maxi(amount, 1)) / float(K.HEALTH_UPGRADE_POINTS), 0.25, 2.0)
 	var kick := deg_to_rad(wobble_deg) * force / maxf(wobble_time * 0.25, 0.01)
 	_wobble_vel += Vector2(dir.z, -dir.x) * kick
 
@@ -281,11 +281,9 @@ func _refresh_readout() -> void:
 	if hit_count == 0:
 		_readout.text = ""
 		return
-	# Damage is in quarter-hearts (K.HEART == 4), so report both — the raw number
-	# a system passed, and what it means in the currency the HUD draws.
-	_readout.text = "%d hit%s   %d q  (%.2f ♥)" % [
-		hit_count, "" if hit_count == 1 else "s",
-		total_damage, float(total_damage) / float(K.HEART),
+	# Damage is already in the same integer HP unit the HUD draws.
+	_readout.text = "%d hit%s   %d HP" % [
+		hit_count, "" if hit_count == 1 else "s", total_damage,
 	]
 
 

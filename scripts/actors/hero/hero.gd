@@ -706,7 +706,7 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## classified. The window is one number and not two on purpose: the frame the
 ## sprint begins is the frame the dodge stops being possible, so there is no
 ## band in which a press means neither.
-@export var sprint_hold_time: float = 0.18
+@export var sprint_hold_time: float = 0.36
 ## Stamina per second, spent while running. The bar is the whole limit on it —
 ## there is no separate sprint meter, so a run and a dodge come out of the same
 ## pocket and a player who sprints everywhere arrives with nothing to dodge on.
@@ -3512,7 +3512,7 @@ func set_blocking(on: bool) -> void:
 ##
 ## Returns true if the blow actually landed.
 func take_hit(hit: Hit) -> bool:
-	if hit == null or hit.amount <= 0 or Game.quarters <= 0:
+	if hit == null or hit.amount <= 0 or Game.health_points <= 0:
 		return false
 
 	# **A blow ends the meal, and it ends it BEFORE anything below decides whether
@@ -3586,7 +3586,7 @@ func take_hit(hit: Hit) -> bool:
 	Run.last_attacker = hit.source
 	# Armour never zeroes a blow. A build that cannot be hurt turns the whole
 	# extraction decision into a formality.
-	Game.damage(maxi(K.QUARTER, hit.amount - Game.armour_soak()))
+	Game.damage(maxi(K.HEALTH_POINT, hit.amount - Game.armour_soak()))
 
 	# --- Card #130: what the blow is worth, decided once ---------------------
 	#

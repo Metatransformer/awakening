@@ -55,7 +55,7 @@ var sustained: bool = false
 ## session was always read as "health went UP from -1" and never broke a chain.
 ## That is a bug you cannot see by playing: the first hit is free, every hit
 ## after it works, and the meter looks correct the whole time.
-var _last_quarters: int = 0
+var _last_health_points: int = 0
 
 
 func _ready() -> void:
@@ -78,7 +78,7 @@ func reset() -> void:
 	sustained = false
 	# Both ends of a run restore health, and re-reading it here is what stops the
 	# heal that follows a death from being mistaken for a blow on the next run.
-	_last_quarters = Game.quarters
+	_last_health_points = Game.health_points
 	_announce()
 
 
@@ -87,7 +87,7 @@ func reset() -> void:
 ## Only the STEP is announced, never the countdown. A signal every frame would
 ## drag the HUD out of its repaint-on-signal architecture and into polling; the
 ## HUD instead keeps itself awake while a chain is live and reads window01()
-## when it draws, exactly as it already reads Game.quarters.
+## when it draws, exactly as it already reads Game.health_points.
 func _process(delta: float) -> void:
 	if kills <= 0:
 		return
@@ -160,10 +160,10 @@ func _on_blocked(_position: Vector3, _normal: Vector3) -> void:
 
 
 ## He took a hit that actually cost health. Blocked blows never reach here.
-func _on_health_changed(quarters: int, _max_quarters: int) -> void:
-	if quarters < _last_quarters and kills > 0:
+func _on_health_changed(health_points: int, _max_health_points: int) -> void:
+	if health_points < _last_health_points and kills > 0:
 		_step_down(true)
-	_last_quarters = quarters
+	_last_health_points = health_points
 
 
 ## Fall one tier -- to the floor of the tier below, not to zero.

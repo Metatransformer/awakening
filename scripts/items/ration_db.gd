@@ -22,7 +22,7 @@ extends RefCounted
 ##
 ## It is a **stopgap and it says so** (`docs/METAGAME.md` §6.4). The hero starts
 ## with one bottle and meets the alchemist only after a boss is dead, so the first
-## hours of a save have exactly one answer to a half-empty heart row, which is
+## hours of a save have exactly one answer to a half-empty health bar, which is
 ## walking home. This is the second one, and it is meant to stop mattering: by the
 ## time you own three bottles, twelve seconds is a price you stop wanting to pay.
 ##
@@ -107,16 +107,15 @@ static func kind_of(id: StringName) -> StringName:
 
 
 ## What it DOES, in the unit the player feels it in, and **it names the time**.
-## The other two numbers are the item; a line that said "+1 heart" and left the
-## twelve seconds out would be describing a cheaper Heart Draught, which is
+## The other two numbers are the item; a line that said "+4 HP" and left the
+## twelve seconds out would be describing a cheaper Health Draught, which is
 ## exactly the thing this must not read as. Generated from K rather than written
 ## out, for `PotionDb.effect_of`'s reason: a line claiming "+2" over a constant
 ## that says 3 is worse than no line at all.
 static func effect_of(id: StringName) -> String:
 	match kind_of(id):
 		HEALS:
-			return "+%.1f hearts over %ds, seated" % [
-				float(K.MEAL_HEAL) / float(K.HEART), int(K.MEAL_TIME)]
+			return "+%d HP over %ds, seated" % [K.MEAL_HEAL, int(K.MEAL_TIME)]
 		RESTORES:
 			return "+%d magic over %ds, seated  (one spin)" % [
 				K.MEAL_MAGIC, int(K.MEAL_TIME)]
@@ -128,7 +127,7 @@ static func effect_of(id: StringName) -> String:
 ## Derived from the two constants rather than stored, so the pair can never round
 ## to something that does not add up to the whole ration: `per_tick` is what
 ## `Game._tick_meal` hands to the bar, and `ticks()` is what the clock counts. At
-## MEAL_TIME 12 / MEAL_TICK 3 that is four ticks of one quarter-heart, or four of
+## MEAL_TIME 12 / MEAL_TICK 3 that is four ticks of 1 HP, or four of
 ## three magic.
 static func ticks() -> int:
 	return maxi(1, int(round(K.MEAL_TIME / K.MEAL_TICK)))

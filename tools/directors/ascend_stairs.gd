@@ -39,20 +39,20 @@ func run(rig) -> void:
 	# setup; the floor changes themselves happen only through Stairs.activate().
 	Run.collect(&"iron_scrap", 4)
 	Run.collect(&"deep_amber", 2)
-	Game.heal(Game.max_quarters)
-	Game.damage(K.HEART)
+	Game.heal(Game.max_health_points)
+	Game.damage(4)
 	Game.fill_magic()
 	Game.spend_magic(K.MAGIC_SPIN)
 	var run_seed := Run.seed_used
 	var bag_before: Dictionary = Run.bag.duplicate(true)
 	var bag_count := Run.bag_count()
 	var bag_value := Run.bag_value()
-	var health := Game.quarters
+	var health := Game.health_points
 	var magic := Game.magic
 	rig.check(not bag_before.is_empty(), "ASCEND test trip has no carried bag state")
-	rig.check(health > 0 and health < Game.max_quarters,
+	rig.check(health > 0 and health < Game.max_health_points,
 		"ASCEND test trip health is not a live non-full value (%d/%d)"
-		% [health, Game.max_quarters])
+		% [health, Game.max_health_points])
 	rig.check(magic >= 0 and magic < Game.max_magic,
 		"ASCEND test trip magic is not non-full (%d/%d)"
 		% [magic, Game.max_magic])
@@ -102,9 +102,9 @@ func run(rig) -> void:
 	rig.check(Run.bag_value() == bag_value,
 		"ASCEND bag value changed across the trip: %d -> %d"
 		% [bag_value, Run.bag_value()])
-	rig.check(Game.quarters == health,
+	rig.check(Game.health_points == health,
 		"ASCEND health changed across the trip: %d -> %d"
-		% [health, Game.quarters])
+		% [health, Game.health_points])
 	rig.check(Game.magic == magic,
 		"ASCEND magic changed across the trip: %d -> %d" % [magic, Game.magic])
 
@@ -135,7 +135,7 @@ func run(rig) -> void:
 	var gold_before := Game.gold
 	var expected_charge := Run.extract_charge()
 	var expected_contents: Dictionary = Run.bag.duplicate(true)
-	var expected_health := Game.quarters
+	var expected_health := Game.health_points
 	up.activate(hero)
 	var receipt_ready: bool = await rig.until(func() -> bool:
 		return not Run.in_dungeon and Flow.ending and _run_end(rig) != null, 8.0)
@@ -155,9 +155,9 @@ func run(rig) -> void:
 	var receipt_contents: Dictionary = summary.get("contents", {})
 	rig.check(_same_counts(receipt_contents, expected_contents),
 		"ASCEND receipt contents differ from the carried bag")
-	rig.check(Game.quarters == expected_health,
+	rig.check(Game.health_points == expected_health,
 		"ASCEND shared extraction changed health: %d -> %d"
-		% [expected_health, Game.quarters])
+		% [expected_health, Game.health_points])
 	rig.check(Game.magic == Game.max_magic,
 		"ASCEND shared extraction did not restore magic")
 	await rig.capture(out.path_join("ascend_03_receipt.png"))

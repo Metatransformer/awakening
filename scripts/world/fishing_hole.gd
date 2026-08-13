@@ -8,6 +8,7 @@ const MAT_PATH := preload("res://assets/materials/mat_flagstone_sunlit.tres")
 const MAT_STONE := preload("res://assets/materials/mat_wall_sunlit.tres")
 const MAT_WOOD := preload("res://assets/materials/mat_wood.tres")
 const MAT_IRON := preload("res://assets/materials/mat_iron.tres")
+const FEEDBACK_DRAW := preload("res://scripts/ui/fishing_feedback_draw.gd")
 
 const TARGET_NEAR: StringName = &"near"
 const TARGET_DEEP: StringName = &"deep"
@@ -18,6 +19,10 @@ const BITE_WINDOW: float = 0.9
 const RESULT_TIME: float = 1.8
 const NEAR_RUN_TIME: float = 1.45
 const DEEP_RUN_TIME: float = 0.95
+const NEAR_LINE_ESCAPE_RATE: float = 0.09
+const DEEP_LINE_ESCAPE_RATE: float = 0.11
+const REEL_SFX_GAP: float = 0.72
+const STRAIN_SFX_GAP: float = 0.58
 
 enum State { IDLE, CHOOSE, CASTING, WAITING, BITE, HOOKED, RESULT }
 
@@ -31,6 +36,14 @@ var _run_direction: int = -1
 var _run_elapsed: float = 0.0
 var _run_index: int = 0
 var _result_text: String = ""
+var _result_success: bool = false
+var _caught_quantity: int = 0
+var _failure_result: StringName = &""
+var _actual_steering: int = 0
+var _reeling: bool = false
+var _reel_sfx_armed: bool = false
+var _last_reel_sfx_msec: int = -1000000
+var _last_strain_sfx_msec: int = -1000000
 var _mode_active: bool = false
 var _clock_was_running: bool = true
 
@@ -48,14 +61,14 @@ var _water: MeshInstance3D
 var _near_fish: Node3D
 var _deep_fish: Node3D
 var _splash: Node3D
+var _ripple_root: Node3D
+var _ripple_rings: Array[MeshInstance3D] = []
+var _ripple_materials: Array[StandardMaterial3D] = []
 var _creel_meals: Array[Node3D] = []
 
 var _overlay: CanvasLayer
 var _overlay_root: Control
-var _title_label: Label
-var _detail_label: Label
-var _status_label: Label
-var _controls_label: Label
+var _feedback: FishingFeedbackDraw
 var _cast_row: VBoxContainer
 var _tension_row: VBoxContainer
 var _line_row: VBoxContainer
@@ -123,7 +136,7 @@ func _process(delta: float) -> void:
 				_interact_armed = false
 				_transition(State.HOOKED)
 			elif _state_elapsed >= BITE_WINDOW:
-				_finish_failure("THE BITE SLIPPED AWAY.")
+				_finish_failure("THE BITE SLIPPED AWAY.", &"escaped")
 		State.HOOKED:
 			_tick_hooked(delta, interact_down, left_down, right_down)
 		State.RESULT:
@@ -185,6 +198,30 @@ func line_progress() -> float:
 	return _line_value
 
 
+func feedback_mode_name() -> StringName:
+	return _feedback.mode if _feedback != null else &"idle"
+
+
+func fish_run_direction() -> int:
+	return _run_direction if _state == State.HOOKED else 0
+
+
+func desired_steer_direction() -> int:
+	return -_run_direction if _state == State.HOOKED else 0
+
+
+func actual_steering() -> int:
+	return _actual_steering if _state == State.HOOKED else 0
+
+
+func feedback_reaction_name() -> StringName:
+	return _feedback.reaction_name() if _feedback != null else &"neutral"
+
+
+func feedback_visual_text() -> String:
+	return _feedback.visual_text() if _feedback != null else ""
+
+
 ## Only waiting may be advanced by this probe. It cannot manufacture a cast or
 ## hook and therefore cannot bypass the transaction-bearing outcome states.
 func debug_force_bite() -> void:
@@ -197,6 +234,15 @@ func debug_force_bite() -> void:
 func debug_land_catch() -> void:
 	if _state == State.HOOKED:
 		_land_catch()
+
+
+## Deterministic failure proof still uses the real attempt outcome: ten civil
+## minutes, no banked Fish, RESULT, and ordinary delayed cleanup.
+func debug_fail_attempt() -> void:
+	if _state == State.BITE:
+		_finish_failure("THE BITE SLIPPED AWAY.", &"escaped")
+	elif _state == State.HOOKED:
+		_finish_failure("THE LINE SNAPPED.", &"snapped")
 
 
 func cancel() -> void:
@@ -241,18 +287,29 @@ func _transition(next: State) -> void:
 			_cast_charge = 0.0
 			_tension_value = 0.0
 			_line_value = 1.0
+			_result_success = false
+			_caught_quantity = 0
+			_failure_result = &""
 		State.CASTING:
 			_cast_charge = 0.0
 		State.WAITING:
 			_set_selected_fish_visible(true)
+			Bus.request_sfx.emit(&"fishing_cast", _selected_fish_world_position())
 		State.BITE:
 			_set_selected_fish_visible(true)
+			Bus.request_sfx.emit(&"fishing_bite", _selected_fish_world_position())
 		State.HOOKED:
+			Bus.request_sfx.emit(&"fishing_hook", _selected_fish_world_position())
 			_tension_value = 0.22 if _target == TARGET_NEAR else 0.30
 			_line_value = 1.0
 			_run_index = 0
 			_run_direction = -1
 			_run_elapsed = 0.0
+			_actual_steering = 0
+			_reeling = false
+			_reel_sfx_armed = false
+			_last_reel_sfx_msec = -1000000
+			_last_strain_sfx_msec = -1000000
 		State.RESULT:
 			pass
 	_refresh_overlay()
@@ -266,10 +323,16 @@ func _exit_mode() -> void:
 	Clock.running = _clock_was_running
 	_overlay.visible = false
 	_result_text = ""
+	_result_success = false
+	_caught_quantity = 0
+	_failure_result = &""
+	_actual_steering = 0
+	_reeling = false
 	_cast_charge = 0.0
 	_tension_value = 0.0
 	_line_value = 1.0
 	_splash.visible = false
+	_ripple_root.visible = false
 	_near_fish.visible = true
 	_deep_fish.visible = true
 	_disarm_input()
@@ -306,10 +369,16 @@ func _tick_hooked(delta: float, reeling: bool, left_down: bool,
 		_run_direction = -1 if _run_index % 2 == 0 else 1
 
 	var steer: int = (1 if right_down else 0) - (1 if left_down else 0)
+	_actual_steering = steer
+	_reeling = reeling
+	_tick_reel_sfx(reeling, steer)
 	var correcting: bool = steer == -_run_direction
 	var following: bool = steer == _run_direction
 	if not reeling:
 		_tension_value -= delta * (0.31 if _target == TARGET_NEAR else 0.25)
+		var escape_rate: float = NEAR_LINE_ESCAPE_RATE if _target == TARGET_NEAR \
+			else DEEP_LINE_ESCAPE_RATE
+		_line_value += delta * escape_rate
 	elif correcting:
 		_tension_value -= delta * (0.24 if _target == TARGET_NEAR else 0.18)
 		var reel_rate: float = 0.27 if _target == TARGET_NEAR else 0.17
@@ -322,9 +391,25 @@ func _tick_hooked(delta: float, reeling: bool, left_down: bool,
 	_tension_value = clampf(_tension_value, 0.0, 1.0)
 	_line_value = clampf(_line_value, 0.0, 1.0)
 	if _tension_value >= 1.0:
-		_finish_failure("THE LINE SNAPPED.")
+		_finish_failure("THE LINE SNAPPED.", &"snapped")
 	elif _line_value <= 0.0:
 		_land_catch()
+
+
+func _tick_reel_sfx(reeling: bool, steer: int) -> void:
+	if not reeling:
+		_reel_sfx_armed = true
+		return
+	if not _reel_sfx_armed:
+		return
+	var now: int = Time.get_ticks_msec()
+	if steer == 0:
+		if now - _last_reel_sfx_msec >= int(REEL_SFX_GAP * 1000.0):
+			_last_reel_sfx_msec = now
+			Bus.request_sfx.emit(&"fishing_reel", _selected_fish_world_position())
+	elif now - _last_strain_sfx_msec >= int(STRAIN_SFX_GAP * 1000.0):
+		_last_strain_sfx_msec = now
+		Bus.request_sfx.emit(&"fishing_strain", _selected_fish_world_position())
 
 
 func _land_catch() -> void:
@@ -333,19 +418,36 @@ func _land_catch() -> void:
 	var reserve_after_bank: int = Game.fish_stock
 	Clock.advance_hours(ATTEMPT_MINUTES / 60.0)
 	if banked == units:
+		_result_success = true
+		_caught_quantity = banked
+		_failure_result = &""
 		_result_text = "LANDED %d FISH · RESERVE %d / %d" \
 			% [banked, reserve_after_bank, Game.FISH_CAP]
+		Bus.request_sfx.emit(&"fishing_catch", _selected_fish_world_position())
 	else:
 		# Capacity is reserved when the mode starts, so this can only describe an
 		# external state change. It still resolves as the attempt the player made.
+		_result_success = false
+		_caught_quantity = 0
+		_failure_result = &"escaped"
 		_result_text = "THE CATCH COULD NOT ENTER THE CREEL."
+		Bus.request_sfx.emit(&"fishing_fail", _selected_fish_world_position())
 	_transition(State.RESULT)
 
 
-func _finish_failure(text: String) -> void:
+func _finish_failure(text: String, result: StringName) -> void:
 	Clock.advance_hours(ATTEMPT_MINUTES / 60.0)
+	_result_success = false
+	_caught_quantity = 0
+	_failure_result = result
 	_result_text = text + " · 10 MINUTES PASS"
+	Bus.request_sfx.emit(&"fishing_fail", _selected_fish_world_position())
 	_transition(State.RESULT)
+
+
+func _selected_fish_world_position() -> Vector3:
+	var fish: Node3D = _deep_fish if _target == TARGET_DEEP else _near_fish
+	return fish.global_position if fish != null else global_position
 
 
 func _yield_for(target: StringName) -> int:
@@ -387,12 +489,48 @@ func _animate_fish() -> void:
 
 	var cue_visible: bool = _state == State.WAITING or _state == State.BITE \
 		or _state == State.HOOKED
-	_splash.visible = cue_visible
-	if cue_visible:
+	# The droplets punctuate the bite; the reused ring family carries the quieter
+	# waiting and hooked language without turning the pond into particle noise.
+	_splash.visible = _state == State.BITE
+	if _splash.visible:
 		_splash.position = selected.position + Vector3(0.0, 0.12, 0.0)
-		var pulse: float = 0.82 + sin(_state_elapsed * 9.0) * 0.18
+		var pulse: float = 0.92 + sin(_state_elapsed * 14.0) * 0.22
 		_splash.scale = Vector3.ONE * pulse
+	_animate_ripples(selected.position, cue_visible)
 	_water.position.y = 0.30 + sin(Time.get_ticks_msec() * 0.0018) * 0.012
+
+
+func _animate_ripples(fish_position: Vector3, cue_visible: bool) -> void:
+	_ripple_root.visible = cue_visible
+	if not cue_visible:
+		return
+	_ripple_root.position = fish_position + Vector3(0.0, 0.27, 0.0)
+	var speed: float = 0.72
+	var reach: float = 0.72
+	var alpha: float = 0.24
+	var color: Color = Pal.BONE
+	if _state == State.BITE:
+		speed = 2.8
+		reach = 1.45
+		alpha = 0.92
+		color = Pal.CYAN
+	elif _state == State.HOOKED:
+		speed = 1.65
+		reach = 0.92
+		alpha = 0.46
+		color = Pal.GOLD
+	for i: int in _ripple_rings.size():
+		var phase: float = fmod(_state_elapsed * speed + float(i) / 3.0, 1.0)
+		var radius: float = 0.42 + phase * reach
+		var ring := _ripple_rings[i]
+		if _state == State.HOOKED:
+			ring.scale = Vector3(radius * 1.35, 1.0, radius * 0.68)
+		else:
+			ring.scale = Vector3(radius, 1.0, radius)
+		var ring_alpha: float = alpha * (1.0 - phase)
+		var material := _ripple_materials[i]
+		material.albedo_color = Color(color, ring_alpha)
+		material.emission = Color(color, ring_alpha)
 
 
 func _set_selected_fish_visible(value: bool) -> void:
@@ -426,47 +564,42 @@ func _build_overlay() -> void:
 	_fit_overlay()
 	get_viewport().size_changed.connect(_fit_overlay)
 
-	var frame := PanelContainer.new()
+	var frame := Control.new()
 	frame.name = &"Frame"
 	_overlay_root.add_child(frame)
-	frame.anchor_left = 0.22
-	frame.anchor_top = 0.67
-	frame.anchor_right = 0.78
-	frame.anchor_bottom = 0.965
+	frame.anchor_left = 0.5
+	frame.anchor_top = 0.62
+	frame.anchor_right = 0.5
+	frame.anchor_bottom = 0.62
+	frame.offset_left = -230.0
+	frame.offset_top = -104.0
+	frame.offset_right = 230.0
+	frame.offset_bottom = 150.0
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	UITheme.style_panel(frame, UITheme.FRAME_FACE_SOLID)
 
 	var pad := MarginContainer.new()
-	for side: String in ["left", "right"]:
-		pad.add_theme_constant_override("margin_" + side, 18)
-	for side: String in ["top", "bottom"]:
-		pad.add_theme_constant_override("margin_" + side, 10)
 	frame.add_child(pad)
-
+	pad.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for side: String in ["left", "right"]:
+		pad.add_theme_constant_override("margin_" + side, 12)
+	for side: String in ["top", "bottom"]:
+		pad.add_theme_constant_override("margin_" + side, 4)
 	var stack := VBoxContainer.new()
-	stack.add_theme_constant_override("separation", 4)
+	stack.add_theme_constant_override("separation", 3)
 	pad.add_child(stack)
 
-	_title_label = _label(stack, &"Title", "FISHING HOLE", UITheme.TYPE_H2,
-		UITheme.ACCENT)
-	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_detail_label = _label(stack, &"Detail", "", UITheme.TYPE_PARAGRAPH_1,
-		UITheme.TEXT)
-	_detail_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_status_label = _label(stack, &"Status", "", UITheme.TYPE_PARAGRAPH_2,
-		UITheme.TEXT_DIM)
-	_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_feedback = FEEDBACK_DRAW.new() as FishingFeedbackDraw
+	_feedback.name = &"FeedbackDraw"
+	_feedback.custom_minimum_size = Vector2(436.0, 176.0)
+	_feedback.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stack.add_child(_feedback)
 
 	_cast_row = _gauge_row(stack, &"CastRow", "CAST", Pal.CYAN)
 	_cast_gauge = _cast_row.get_node("Gauge") as ProgressBar
 	_tension_row = _gauge_row(stack, &"TensionRow", "TENSION", Pal.VITAL)
 	_tension_gauge = _tension_row.get_node("Gauge") as ProgressBar
-	_line_row = _gauge_row(stack, &"LineRow", "LINE TO LAND", Pal.MOSS)
+	_line_row = _gauge_row(stack, &"LineRow", "LAND", Pal.MOSS)
 	_line_gauge = _line_row.get_node("Gauge") as ProgressBar
-
-	_controls_label = _label(stack, &"Controls", "", UITheme.TYPE_CAPTION,
-		UITheme.TEXT_DIM)
-	_controls_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 
 func _fit_overlay() -> void:
@@ -498,7 +631,8 @@ func _gauge_row(parent: VBoxContainer, row_name: StringName, caption: String,
 	cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var gauge := ProgressBar.new()
 	gauge.name = &"Gauge"
-	gauge.custom_minimum_size.y = 10.0
+	gauge.custom_minimum_size = Vector2(240.0, 9.0)
+	gauge.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	gauge.max_value = 1.0
 	gauge.show_percentage = false
 	var boxes: Array = UITheme.bar_styleboxes(color)
@@ -511,63 +645,52 @@ func _gauge_row(parent: VBoxContainer, row_name: StringName, caption: String,
 func _refresh_overlay() -> void:
 	if _overlay == null or not _mode_active:
 		return
-	var reserve: String = "RESERVE %d / %d · TODAY %d LEFT" % [Game.fish_stock,
-		Game.FISH_CAP, Game.fishing_remaining_today(Clock.day)]
-	_cast_row.visible = _state == State.CASTING
-	_tension_row.visible = _state == State.HOOKED
-	_line_row.visible = _state == State.HOOKED
+	_set_row_visible(_cast_row, _state == State.CASTING)
+	_set_row_visible(_tension_row, _state == State.HOOKED)
+	_set_row_visible(_line_row, _state == State.HOOKED)
 	_cast_gauge.value = _cast_charge
 	_tension_gauge.value = _tension_value
 	# The remaining line falls toward zero in play; invert it so the landing bar
 	# visibly fills toward the promised catch.
 	_line_gauge.value = 1.0 - _line_value
-
+	_feedback.selected_target = _target
+	_feedback.selected_yield = _yield_for(_target)
+	_feedback.near_ready = Game.can_bank_fish(1, Clock.day)
+	_feedback.deep_ready = Game.can_bank_fish(2, Clock.day)
+	_feedback.reserve_available = Game.fish_space()
+	_feedback.fish_run_direction = fish_run_direction()
+	_feedback.desired_steer_direction = desired_steer_direction()
+	_feedback.actual_steering = actual_steering()
+	_feedback.reeling = _reeling
+	_feedback.tension = _tension_value
+	_feedback.landing_progress = 1.0 - _line_value
+	_feedback.caught_quantity = _caught_quantity
+	_feedback.failure_result = _failure_result
+	_feedback.animation_phase = _state_elapsed
 	match _state:
 		State.CHOOSE:
-			var near_ready: String = "READY" if Game.can_bank_fish(1, Clock.day) \
-				else "UNAVAILABLE"
-			var deep_ready: String = "READY" if Game.can_bank_fish(2, Clock.day) \
-				else "UNAVAILABLE"
-			_title_label.text = "CHOOSE WATER · %s" % _target.to_upper()
-			_detail_label.text = ("%s NEAR · 1 FISH · FORGIVING · %s\n"
-				+ "%s DEEP · 2 FISH · HARDER / LONGER · %s") % [
-				">" if _target == TARGET_NEAR else " ", near_ready,
-				">" if _target == TARGET_DEEP else " ", deep_ready]
-			_status_label.text = reserve
-			_controls_label.text = "MOVE LEFT / RIGHT: TARGET · INTERACT: CAST · CANCEL: LEAVE"
+			_feedback.mode = FishingFeedbackDraw.MODE_CHOOSE
 		State.CASTING:
-			_title_label.text = "CASTING · %s WATER" % _target.to_upper()
-			_detail_label.text = "%d FISH · %s" % [_yield_for(_target),
-				"DEEP, STRONG RUNS" if _target == TARGET_DEEP else "NEAR, FORGIVING RUNS"]
-			_status_label.text = reserve
-			_controls_label.text = "HOLD INTERACT TO CHARGE · RELEASE TO CAST"
+			_feedback.mode = FishingFeedbackDraw.MODE_CASTING
 		State.WAITING:
-			_title_label.text = "LINE SET · WATCH THE WATER"
-			_detail_label.text = "%s WATER · THE FISH IS CIRCLING" % _target.to_upper()
-			_status_label.text = reserve
-			_controls_label.text = "WAIT FOR THE SPLASH · CANCEL: LEAVE"
+			_feedback.mode = FishingFeedbackDraw.MODE_WAITING
 		State.BITE:
-			_title_label.text = "BITE — HOOK NOW"
-			_detail_label.text = "THE FLOAT IS UNDER · %.1f SECONDS" \
-				% maxf(0.0, BITE_WINDOW - _state_elapsed)
-			_status_label.text = reserve
-			_controls_label.text = "PRESS INTERACT"
+			_feedback.mode = FishingFeedbackDraw.MODE_BITE
 		State.HOOKED:
-			var run_word: String = "LEFT" if _run_direction < 0 else "RIGHT"
-			var steer_word: String = "RIGHT" if _run_direction < 0 else "LEFT"
-			_title_label.text = "FISH RUNS %s · STEER %s" % [run_word, steer_word]
-			_detail_label.text = "%s WATER · %d FISH ON THE LINE" % [
-				_target.to_upper(), _yield_for(_target)]
-			_status_label.text = "TENSION %d%% · LANDED %d%%" % [
-				roundi(_tension_value * 100.0), roundi((1.0 - _line_value) * 100.0)]
-			_controls_label.text = "HOLD INTERACT TO REEL · STEER AGAINST THE RUN · RELEASE TO EASE"
+			_feedback.mode = FishingFeedbackDraw.MODE_HOOKED
 		State.RESULT:
-			_title_label.text = "ATTEMPT COMPLETE"
-			_detail_label.text = _result_text
-			_status_label.text = "RESERVE %d / %d" % [Game.fish_stock, Game.FISH_CAP]
-			_controls_label.text = "CANCEL: CLOSE"
+			_feedback.mode = FishingFeedbackDraw.MODE_RESULT_SUCCESS if _result_success \
+				else FishingFeedbackDraw.MODE_RESULT_FAILURE
 		State.IDLE:
 			pass
+	_feedback.queue_redraw()
+
+
+func _set_row_visible(row: Control, value: bool) -> void:
+	# Visibility changes affect the VBox only at state boundaries; draw animation
+	# itself is queue_redraw-only and never asks the container to lay out again.
+	if row.visible != value:
+		row.visible = value
 
 
 # --- Landmark ---------------------------------------------------------------
@@ -626,6 +749,7 @@ func _build_landmark() -> void:
 	_build_rod_rack()
 	_build_creel()
 	_build_fish()
+	_build_ripples()
 
 
 func _build_dock() -> void:
@@ -702,6 +826,35 @@ func _build_fish() -> void:
 		_sphere(_splash, &"Drop", MAT_PATH, 0.055,
 			Transform3D(Basis.IDENTITY,
 				Vector3(cos(angle) * 0.42, 0.0, sin(angle) * 0.42)))
+
+
+func _build_ripples() -> void:
+	_ripple_root = Node3D.new()
+	_ripple_root.name = &"FishingRipples"
+	_ripple_root.visible = false
+	add_child(_ripple_root)
+	for i: int in 3:
+		var material := StandardMaterial3D.new()
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.albedo_color = Color(Pal.BONE, 0.0)
+		material.emission_enabled = true
+		material.emission = Color(Pal.BONE, 0.0)
+		material.emission_energy_multiplier = 1.25
+		material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_ripple_materials.append(material)
+
+		var ring := MeshInstance3D.new()
+		ring.name = StringName("Ripple%d" % (i + 1))
+		var torus := TorusMesh.new()
+		torus.inner_radius = 0.41
+		torus.outer_radius = 0.48
+		torus.rings = 16
+		torus.ring_segments = 4
+		ring.mesh = torus
+		ring.material_override = material
+		_ripple_root.add_child(ring)
+		_ripple_rings.append(ring)
 
 
 func _fish_shape(parent: Node3D, material: Material, scale_factor: float) -> void:

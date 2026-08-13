@@ -358,7 +358,7 @@ func _c_control(rig) -> void:
 ## (`docs/CONTRACT.md` §8). Not `solve()` -- a lantern that reports lit when told
 ## to proves nothing about the prop the player swings at.
 func _d_light(rig) -> void:
-	_lantern.call(&"apply_hit", Hit.make(K.QUARTER,
+	_lantern.call(&"apply_hit", Hit.make(K.HEALTH_POINT,
 		_lantern.global_position + Vector3.BACK, Hit.ARROW, 0.0, 0.0, &"DIRECTOR"))
 	await rig.wait_seconds(0.5)
 	_ck("a blow lights the lantern", bool(_lantern.call(&"is_solved")))
@@ -422,13 +422,13 @@ func _f_refusal(rig) -> void:
 
 func _g_fire_opens_plain(rig) -> void:
 	var eye := await _offstage(rig, false)
-	eye.call(&"apply_hit", Hit.make(K.QUARTER, Vector3.ZERO, Hit.ARROW_FIRE))
+	eye.call(&"apply_hit", Hit.make(K.HEALTH_POINT, Vector3.ZERO, Hit.ARROW_FIRE))
 	_ck("a burning arrow opens a PLAIN eye too", bool(eye.call(&"is_solved")))
 
 	var iced := await _offstage(rig, true)
-	iced.call(&"apply_hit", Hit.make(K.QUARTER, Vector3.ZERO, Hit.ARROW))
+	iced.call(&"apply_hit", Hit.make(K.HEALTH_POINT, Vector3.ZERO, Hit.ARROW))
 	_ck("a plain arrow never opens an iced one", not bool(iced.call(&"is_solved")))
-	iced.call(&"apply_hit", Hit.make(K.QUARTER, Vector3.ZERO, &"sword"))
+	iced.call(&"apply_hit", Hit.make(K.HEALTH_POINT, Vector3.ZERO, &"sword"))
 	_ck("and neither does a sword", not bool(iced.call(&"is_solved")))
 
 

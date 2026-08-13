@@ -14,7 +14,7 @@ extends Interactable
 ## shape has used to say it.
 ##
 ## **Recovery is complete.** Every successful sleep fills real health, while
-## each `elder_bed` rung grants one quarter-heart of temporary overhealth. The
+## each `elder_bed` rung grants 1 temporary HP. The
 ## clock jump happens behind Flow's existing black veil so every clock listener
 ## finds morning already true when the world comes back.
 ##
@@ -30,15 +30,19 @@ extends Interactable
 ## fade is coming.
 const SLEEP_HOLD := 0.55
 
-## Seconds of black. Long enough to read as a night and not as a hitch.
-const DARK := 0.9
+const IDLE_MOTE_RATIO: float = 0.38
+const FOCUSED_MOTE_RATIO: float = 0.92
 
-var _sheet: MeshInstance3D
-var _glow: OmniLight3D
+var _glow: OmniLight3D = null
+var _quilt_material: ShaderMaterial = null
+var _motes: GPUParticles3D = null
+var _dialogue: DialogueBox = null
+var _selected_destination_id: StringName = &""
+var _sleep_pending: bool = false
 
 
 func _ready() -> void:
-	prompt = "SLEEP"
+	prompt = "SLEEP IN YOUR BED"
 	radius = 1.5
 	hold_time = SLEEP_HOLD
 	super()
@@ -55,10 +59,59 @@ func _ready() -> void:
 ## on floor three would be the whole extraction decision undone by a prop, and
 ## the file that stops it should be the file the prop is in.
 func activate(_by: Node3D) -> void:
-	if Run.in_dungeon or Flow.busy:
+	if Run.in_dungeon or Flow.busy or Flow.ending or _sleep_pending \
+			or is_instance_valid(_dialogue):
 		return
 	activated.emit(_by)
-	Flow.blink(_sleep, DARK)
+	_sleep_pending = true
+	_selected_destination_id = &""
+	var choices: Array = [
+		{
+			"label": "Sleep until nightfall",
+			"act": _select_sleep_destination.bind(
+				WorldClock.SLEEP_DESTINATION_NIGHTFALL),
+		},
+		{
+			"label": "Sleep until morning",
+			"act": _select_sleep_destination.bind(
+				WorldClock.SLEEP_DESTINATION_MORNING),
+		},
+	]
+	_dialogue = DialogueBox.open(self, &"",
+		PackedStringArray(["How long should I sleep?"]), choices)
+	if _dialogue == null:
+		_sleep_pending = false
+		return
+	_dialogue.finished.connect(_on_sleep_dialogue_finished, CONNECT_ONE_SHOT)
+
+
+func _select_sleep_destination(destination_id: StringName) -> PackedStringArray:
+	_selected_destination_id = destination_id
+	return PackedStringArray()
+
+
+## Dialogue has removed its own Prompt blocker before emitting `finished`, so
+## Flow can claim the transition without two full-screen owners overlapping.
+func _on_sleep_dialogue_finished() -> void:
+	_dialogue = null
+	if _selected_destination_id == &"":
+		_sleep_pending = false
+		return
+	if Run.in_dungeon or Flow.busy or Flow.ending:
+		_selected_destination_id = &""
+		_sleep_pending = false
+		return
+	var destination: Dictionary[StringName, Variant] = \
+		Clock.effective_sleep_destination(_selected_destination_id)
+	if destination.is_empty():
+		_selected_destination_id = &""
+		_sleep_pending = false
+		return
+	var from_absolute_hour: float = Clock.absolute_hours(Clock.day, Clock.hour)
+	var to_absolute_hour: float = Clock.absolute_hours(
+		int(destination[&"day"]), float(destination[&"hour"]))
+	Flow.sleep_transition(_sleep.bind(_selected_destination_id),
+		from_absolute_hour, to_absolute_hour)
 
 
 ## Called with the world stopped and the screen black. Everything in here is a
@@ -67,18 +120,18 @@ func activate(_by: Node3D) -> void:
 ## hero's position out of the live tree, and the position it should record is the
 ## one he is standing in now — beside his own bed — rather than wherever a fade
 ## found him.
-func _sleep() -> void:
-	# `sleep_to_dawn` emits synchronously. Mark this as deliberate so Flow's dawn
-	# curfew handler does not try to start a second fade inside this one.
+func _sleep(destination_id: StringName) -> void:
+	# `sleep_until` emits synchronously. Mark this as deliberate so Flow's dawn
+	# curfew handler does not try to start a second transition inside this one.
 	Flow.deliberate_rest = true
-	var reached_dawn: bool = Clock.sleep_to_dawn()
-	if reached_dawn:
-		Clock.settle_wake_after_dawn()
+	var completed: bool = Clock.sleep_until(destination_id)
 	Flow.deliberate_rest = false
-	if not reached_dawn:
+	_selected_destination_id = &""
+	_sleep_pending = false
+	if not completed:
 		return
 	var bed_rank := int(Game.upgrades.get(ElderUpgradeDb.BED_ID, 0))
-	Game.heal(Game.max_quarters)
+	Game.heal(Game.max_health_points)
 	Game.set_temporary_overhealth(
 		bed_rank * ElderUpgradeDb.BED_OVERHEALTH_PER_RANK)
 	Game.refund_stamina(Game.max_stamina)
@@ -103,6 +156,7 @@ func _sleep() -> void:
 # the shape of a bed is a low rectangle with a pale block at one end.
 
 const MAT_WOOD := preload("res://assets/materials/mat_wood.tres")
+const YOUR_BED_SHADER := preload("res://assets/shaders/your_bed.gdshader")
 
 const LEN := 2.05
 const WIDE := 0.95
@@ -136,7 +190,9 @@ func _build() -> void:
 	var qm := BoxMesh.new()
 	qm.size = Vector3(WIDE + 0.04, 0.10, LEN * 0.58)
 	quilt.mesh = qm
-	quilt.material_override = _flat(Pal.RUST)
+	_quilt_material = ShaderMaterial.new()
+	_quilt_material.shader = YOUR_BED_SHADER
+	quilt.material_override = _quilt_material
 	quilt.position = Vector3(0.0, FRAME_Y + 0.19, LEN * 0.16)
 	add_child(quilt)
 
@@ -161,6 +217,110 @@ func _build() -> void:
 	_glow.omni_range = 3.2
 	_glow.position = Vector3(0.0, 1.05, 0.0)
 	add_child(_glow)
+
+	_motes = _build_motes()
+	add_child(_motes)
+
+
+func on_focus(on: bool) -> void:
+	if _quilt_material != null:
+		_quilt_material.set_shader_parameter(&"focus", 1.0 if on else 0.0)
+	if _motes != null:
+		_motes.amount_ratio = FOCUSED_MOTE_RATIO if on else IDLE_MOTE_RATIO
+
+
+func _build_motes() -> GPUParticles3D:
+	var particles := GPUParticles3D.new()
+	particles.name = &"BedMotes"
+	particles.amount = 10
+	particles.amount_ratio = IDLE_MOTE_RATIO
+	particles.lifetime = 3.2
+	particles.preprocess = 3.2
+	particles.one_shot = false
+	particles.local_coords = true
+	particles.fixed_fps = 30
+	particles.position = Vector3(0.0, FRAME_Y + 0.34, -LEN * 0.08)
+	particles.visibility_aabb = AABB(
+		Vector3(-0.55, -0.18, -0.98), Vector3(1.10, 1.05, 1.96))
+	particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+	var process := ParticleProcessMaterial.new()
+	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	process.emission_box_extents = Vector3(0.38, 0.04, 0.80)
+	process.direction = Vector3.UP
+	process.spread = 16.0
+	process.initial_velocity_min = 0.08
+	process.initial_velocity_max = 0.18
+	process.gravity = Vector3.ZERO
+	process.damping_min = 0.05
+	process.damping_max = 0.16
+	process.scale_min = 0.65
+	process.scale_max = 1.2
+	process.scale_curve = _mote_scale_curve()
+	process.color_ramp = _mote_color_ramp()
+	particles.process_material = process
+	particles.draw_pass_1 = _mote_billboard()
+	particles.emitting = true
+	return particles
+
+
+func _mote_scale_curve() -> CurveTexture:
+	var curve := Curve.new()
+	curve.add_point(Vector2(0.0, 0.0))
+	curve.add_point(Vector2(0.24, 1.0))
+	curve.add_point(Vector2(1.0, 0.12))
+	var texture := CurveTexture.new()
+	texture.curve = curve
+	return texture
+
+
+func _mote_color_ramp() -> GradientTexture1D:
+	var warm: Color = Pal.RUST.lerp(Pal.GOLD, 0.44)
+	var gradient := Gradient.new()
+	gradient.offsets = PackedFloat32Array([0.0, 0.18, 0.72, 1.0])
+	gradient.colors = PackedColorArray([
+		Color(warm.r, warm.g, warm.b, 0.0),
+		Color(warm.r, warm.g, warm.b, 0.44),
+		Color(warm.r, warm.g, warm.b, 0.25),
+		Color(warm.r, warm.g, warm.b, 0.0),
+	])
+	var texture := GradientTexture1D.new()
+	texture.gradient = gradient
+	return texture
+
+
+func _mote_billboard() -> QuadMesh:
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.055, 0.055)
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.blend_mode = BaseMaterial3D.BLEND_MODE_MIX
+	material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	material.billboard_keep_scale = true
+	material.vertex_color_use_as_albedo = true
+	material.albedo_texture = _mote_texture()
+	material.disable_receive_shadows = true
+	quad.material = material
+	return quad
+
+
+func _mote_texture() -> GradientTexture2D:
+	var gradient := Gradient.new()
+	gradient.offsets = PackedFloat32Array([0.0, 0.58, 1.0])
+	gradient.colors = PackedColorArray([
+		Color(1.0, 1.0, 1.0, 1.0),
+		Color(1.0, 1.0, 1.0, 0.68),
+		Color(1.0, 1.0, 1.0, 0.0),
+	])
+	var texture := GradientTexture2D.new()
+	texture.gradient = gradient
+	texture.width = 32
+	texture.height = 32
+	texture.fill = GradientTexture2D.FILL_RADIAL
+	texture.fill_from = Vector2(0.5, 0.5)
+	texture.fill_to = Vector2(1.0, 0.5)
+	return texture
 
 
 ## An unshaded material, the way `GarrisonLight` builds its two states: these

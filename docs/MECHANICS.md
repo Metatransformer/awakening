@@ -23,14 +23,14 @@ interfaces belong to [CONTRACT.md](CONTRACT.md).
 | Stamina economy | Is this run, dodge, guard action, jump, or committed attack worth the mobility it spends? | [CONTRACT.md](CONTRACT.md) |
 | Targeting and facing | Which threat do I frame, and am I facing it well enough to defend? | [CONTRACT.md](CONTRACT.md) |
 | Dodge, block, and parry | Do I evade, absorb inside the shield arc, or risk timing a punish? | [CONTRACT.md](CONTRACT.md), [BESTIARY.md](BESTIARY.md) |
-| Sword commitments | Do I stop a light chain, continue it, charge a heavy, lunge, spin, or slam? | [CONTRACT.md](CONTRACT.md) |
+| Sword commitments | Do I stop or continue the light chain, finish the two-hit Heavy combo, hold for the magic spin, or slam from the air? | [CONTRACT.md](CONTRACT.md) |
 | Ranged and item answers | Is distance, armour, a group, or room geometry worth spending a prepared tool on? | [ITEMS.md](ITEMS.md), [PUZZLES.md](PUZZLES.md) |
 | Enemy grammar | Can I read the wind-up, committed beat, recovery, formation, and disengagement route? | [BESTIARY.md](BESTIARY.md) |
 | Boss grammar | What authored fight rule must I learn, and when does mastery open a permanent route or verb? | [BOSSES.md](BOSSES.md) |
 | Heat tempo | Do I chase the next kill and cooling loot, or protect health and let the chain fall? | [METAGAME.md](METAGAME.md) |
 | Mercy | Do I enable bounded resistance after repeated deaths without changing encounters or rewards? | [GDD.md](GDD.md), [CONTRACT.md](CONTRACT.md) |
 
-Combat uses quarter-heart damage through one health path. Attacks have readable
+Combat uses integer HP damage through one health path. Attacks have readable
 commitment and recovery; defence depends on position, facing, and timing rather
 than passive equipment alone. A blow taken is readable the same way: its weight
 and the direction it came from are legible in the reaction, without reading the

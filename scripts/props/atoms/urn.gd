@@ -12,7 +12,7 @@ extends PuzzleAtom
 ## before it could be solved would make the ammunition a lock.
 ##
 ## What it holds is decided by the PLACER, not rolled here. Puzzle urns remain
-## authored supply: arrows, charges or hearts selected to solve the room. An
+## authored supply: arrows, charges or health selected to solve the room. An
 ## ambient caller may instead choose coins or any merchandise id before the
 ## break. Rolling inside the urn would make rule 2 a probability, and a
 ## probability is exactly what rule 2 forbids: "the urns beside it hold exactly
@@ -23,11 +23,11 @@ extends PuzzleAtom
 ## scan both look for (`docs/CONTRACT.md` §8). Any blow breaks it -- there is no
 ## health, because an urn with hit points is a fight.
 
-## What comes out. `&"arrows"`, `&"charges"` and `&"hearts"` are authored puzzle
+## What comes out. `&"arrows"`, `&"charges"` and `&"health"` are authored puzzle
 ## supply; `&"coins"` is direct gold; any other non-empty ItemDb id is a bag
 ## mote; `&""` and unknown ids are nothing. The placer chooses before break.
 @export var holds: StringName = &"arrows"
-## How many arrows, charges, quarter-hearts, coins, or copies of the item.
+## How many arrows, charges, HP, coins, or copies of the item.
 ## Each lane supplies its own small default when this is zero.
 @export var amount: int = 0
 
@@ -110,7 +110,7 @@ func _spill() -> void:
 			# The same shape as the arrows, for the same rule -- a `ChargeCache`
 			# is `ArrowBundle` for the working (`docs/PUZZLES.md` §0 rule 2,
 			# `docs/ITEMS.md` §8 D13). NOT a direct `Game.add_charges()` the way
-			# the hearts below are: hearts have no pickup prop in this game and
+			# the health below is: health has no pickup prop in this game and
 			# inventing one would be a new system, whereas charges are a counted
 			# consumable that the bow's supply already showed how to lie on a
 			# floor. It also keeps the take REFUSABLE -- a hero who arrives
@@ -125,13 +125,13 @@ func _spill() -> void:
 			# broken pot, and the tween is the only gravity either pickup has.
 			var c := amount if amount > 0 else ChargeCache.HOLDS
 			ChargeCache.drop(scene, at, c, Vector3(0.0, -0.30, 0.0))
-		&"hearts":
-			# Straight to the hero. There is no heart pickup prop in this game --
+		&"health":
+			# Straight to the hero. There is no health pickup prop in this game --
 			# health comes from rest, potions and this -- and inventing one to
 			# serve an urn would be a new system against a frozen manifest
-			# (`docs/SCOPE.md` §1). It is a quarter-heart-counted heal and the
+			# (`docs/SCOPE.md` §1). It is an integer-HP heal and the
 			# HUD already draws it.
-			Game.heal(amount if amount > 0 else 2 * K.QUARTER)
+			Game.heal(amount if amount > 0 else 2)
 			Bus.request_sfx.emit(&"buff_apply", global_position)
 		&"coins":
 			var value := amount if amount > 0 else CoinPickup.DEFAULT_AMOUNT

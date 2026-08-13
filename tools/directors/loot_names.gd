@@ -276,7 +276,7 @@ func _kill_a_pack(rig, hero: Node3D) -> void:
 		if e.global_position.distance_to(hero.global_position) > 12.0:
 			break
 		var hp = e.get(&"health")
-		hp.apply_hit(Hit.make(hp.quarters + 4, e.global_position, &"director", 0.0))
+		hp.apply_hit(Hit.make(hp.health_points + 4, e.global_position, &"director", 0.0))
 		killed += 1
 		if killed >= 4:
 			break

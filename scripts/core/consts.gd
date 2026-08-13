@@ -129,7 +129,7 @@ static func speed_for_stick(magnitude: float) -> float:
 const CAM_FOV := 60.0              # free
 const CAM_FOV_LOCK := 50.0         # locked onto a hostile
 const CAM_FOV_PARALLEL := 45.0     # Z held with no target, and first-person
-const CAM_FOV_LOW_HEALTH := 0.8    # multiplier at <= 1 heart
+const CAM_FOV_LOW_HEALTH := 0.8    # multiplier at <= 4 HP
 
 ## [oot] DUNGEON0 camera set — dungeons are TIGHTER and FLATTER than outdoors.
 ## Distance is a range the rig lives within, not a fixed boom length.
@@ -180,10 +180,11 @@ const LETTERBOX_FRAC := 0.1125
 const LETTERBOX_TIME := 3.0 * TICK  # 0.15 s
 
 # --- Health -----------------------------------------------------------------
-## [oot] A heart is 16 internal units; the smallest displayed step is a quarter.
-const QUARTER := 1
-const HEART := 4
-const START_HEARTS := 3
+## Health is stored and presented as integer points; the smallest step is 1 HP.
+const HEALTH_POINT := 1
+const START_HEALTH_POINTS := 12
+## One permanent health purchase adds the former container-sized amount.
+const HEALTH_UPGRADE_POINTS := 4
 const MAX_MAGIC := 48
 ## What one charged spin costs out of that 48.
 ##
@@ -735,7 +736,7 @@ const HOOK_THAW := 0.45
 ## Link is NOT exempt from his own bomb (AT_TYPE_ALL, no owner check).
 const BOMB_FUSE := 3.5
 const BOMB_RADIUS := 80.0 * U       # 1.94 m
-const BOMB_DAMAGE := 2 * QUARTER
+const BOMB_DAMAGE := 2 * HEALTH_POINT
 const BOMB_HURTS_OWNER := true
 ## [oot] arrows cross the whole 8.5 m lock range in ~1 tick — near hitscan.
 const ARROW_SPEED := 42.0
@@ -792,11 +793,11 @@ const BURST_KNOCKBACK := 6.0
 ## cover the swing you saw coming and the one behind it, and not long enough to
 ## be a stance. [tune]
 const BALLAST_TIME := 8.0
-## Quarter-hearts the window takes off every blow, on top of armour and any
+## HP the window takes off every blow, on top of armour and any
 ## draught. Three, which is `PLATE_SOAK`'s whole ceiling -- the point of eating
 ## your own profit is that it is worth more than a rung of plate for those eight
 ## seconds, or nobody would ever pay for it. `Hero.hurt` still floors a blow at
-## one quarter, so this is never immunity. [tune]
+## 1 HP, so this is never immunity. [tune]
 const BALLAST_SOAK := 3
 
 
@@ -814,9 +815,9 @@ const BALLAST_SOAK := 3
 ## The rule every rung obeys: **one number, and the player can feel it inside
 ## one run.** No percentages, no stat sticks, nothing you have to take on faith.
 const FORGE_MAX := 3
-## Quarter-hearts added to every sword swing, light and heavy alike. [tune]
+## HP added to every sword swing, light and heavy alike. [tune]
 const EDGE_DAMAGE: Array[int] = [0, 1, 2, 3]
-## Quarter-hearts taken off every blow that lands, floored at one by `Hero.hurt`.
+## HP taken off every blow that lands, floored at one by `Hero.hurt`.
 ## Armour makes you last longer; it never makes you safe. [tune]
 ##
 ## **Superseded by the four PLATE_* tables below** (docs/GDD.md §6.6) and kept
@@ -831,23 +832,23 @@ const PLATE_SOAK: Array[int] = [0, 1, 2, 3]
 ##
 ## ## Why these are floats when health is an integer
 ##
-## Twelve buyable heavy rungs have to add up to about FOUR quarter-hearts, which
+## Twelve buyable heavy rungs have to add up to about 4 HP, which
 ## is `PLATE_SOAK`'s old ceiling and the number the whole bestiary is tuned
 ## against (GDD §6.6 is explicit: sixteen rungs of `[0,1,2,3]` would be twelve
-## quarters, `Hero.hurt`'s one-quarter floor would eat the entire difficulty
+## HP, `Hero.hurt`'s 1 HP floor would eat the entire difficulty
 ## curve, and §7's *difficulty comes from depth* would be dead).
 ##
-## Four quarters across twelve rungs is a third of a quarter per rung. There is
+## Four HP across twelve rungs is a third of an HP per rung. There is
 ## no integer table that does that, so the pieces carry fractions and
 ## `Game.armour_soak()` floors the SUM. A rung is still a number the player can
-## feel -- the shop line prints "1.4 -> 1.7 quarters soaked" and the equipment
+## feel -- the shop line prints "1.4 -> 1.7 HP soaked" and the equipment
 ## screen prints the floored total -- but the thing that moves is the total,
 ## because the total is what a blow is measured against.
 ##
 ## Do not "fix" these into integers. That was tried in the design and it is what
 ## the paragraph above is about.
 const PLATE_PIECE_COUNT := 4
-## Soak, in quarter-hearts, contributed by ONE piece at rung 0..FORGE_MAX.
+## Soak, in HP, contributed by ONE piece at rung 0..FORGE_MAX.
 ## Four pieces at full heavy: 4.0. Four at full light: 2.0. [tune]
 const PLATE_HEAVY_SOAK: Array[float] = [0.0, 0.4, 0.7, 1.0]
 const PLATE_LIGHT_SOAK: Array[float] = [0.0, 0.2, 0.35, 0.5]
@@ -871,7 +872,7 @@ const JEWEL_MAX := 4
 
 ## **Ceilings belong to the NUMBER, not to the faucet.** Armour and Ward both
 ## pour into soak; the forge's `edge` and an Edge ring both pour into damage; the
-## smith's heart line and Vigor both pour into hearts. Each pair is clamped here,
+## quartermaster's health line and Vigor both add max HP. Each pair is clamped here,
 ## once, so adding a third faucet later cannot quietly raise a ceiling the
 ## bestiary was tuned against (GDD §6.6).
 ##
@@ -879,9 +880,9 @@ const JEWEL_MAX := 4
 ## as they were: a draught is 45 seconds long and gone, and capping a consumable
 ## against a permanent ladder would make Ironhide worthless to the player who
 ## most needs it.
-const SOAK_MAX := 4.0          ## quarter-hearts, all permanent sources
-const EDGE_MAX := 5            ## quarter-hearts a swing, forge + rings
-const HEART_MAX := 8           ## heart containers: 3 start + 3 smith + 2 Vigor
+const SOAK_MAX := 4.0          ## HP, all permanent sources
+const EDGE_MAX := 5            ## HP a swing, forge + rings
+const MAX_HEALTH_POINTS := 32  ## 12 start + 12 quartermaster + 8 Vigor
 const STAMINA_MAX := 160.0     ## MAX_STAMINA 100 + four Focus rungs
 
 ## **The slider that goes the other way** (GDD §7.1). A fraction of every blow
@@ -890,7 +891,7 @@ const STAMINA_MAX := 160.0     ## MAX_STAMINA 100 + four Focus rungs
 ## It starts small and climbs with `Game.deaths`, so it only ever reaches the
 ## player who is actually stuck -- that is the whole design, and it is why there
 ## is no difficulty menu on the title card. The cap is well short of invulnerable
-## and deliberately so: at 30% a wraith still takes four hearts off a careless
+## and deliberately so: at 30% a wraith still takes 16 HP off a careless
 ## hero, and a mercy that made the Cut survivable by standing in it would have
 ## deleted the extraction decision instead of softening it.
 ##
@@ -906,7 +907,7 @@ const MERCY_MAX := 0.30
 ## soak back with a slot instead of with speed, which is the decision GDD §6.6
 ## wants the jewelcrafter to pose. [tune]
 const JEWEL_WARD_SOAK := 0.5
-## Two rings at four rungs is +2 quarters, on top of the forge's +3. [tune]
+## Two rings at four rungs is +2 HP, on top of the forge's +3. [tune]
 const JEWEL_EDGE_DAMAGE := 0.25
 ## Multiplier per rung, MULTIPLIED like the plate penalty. Two Swift rings at
 ## rung 4 come to 1.0834, which is more than enough to undo a full heavy suit --
@@ -914,8 +915,8 @@ const JEWEL_EDGE_DAMAGE := 0.25
 ## hero faster than [oot]'s measured run. Buying speed BACK is the promise; going
 ## past the source material is not. [tune]
 const JEWEL_SWIFT_SPEED := 1.0101
-## Heart containers per rung: two rungs buy one. Four rungs, two hearts. [tune]
-const JEWEL_VIGOR_HEARTS := 0.5
+## Max HP per rung. Every purchase applies immediately. [tune]
+const JEWEL_VIGOR_HEALTH_POINTS := 2
 ## Stamina points per rung. Four rungs takes 100 -> 160. [tune]
 const JEWEL_FOCUS_STAMINA := 15.0
 ## Fraction of the base regen added per rung. Four rungs is +40%. [tune]
@@ -985,8 +986,8 @@ const BOTTLE_MAX := 4
 ## over. Do not delete it looking for the other half of a pair.
 const BOTTLE_START := 1
 
-## Quarter-hearts a Heart Draught puts back. Two whole hearts against a starting
-## three: a draught is a second chance at the fight you are in, not a top-up you
+## HP a Health Draught puts back. Eight against a starting twelve: a draught is
+## a second chance at the fight you are in, not a top-up you
 ## sip between rooms. It is also the only healing in the game that is not the
 ## walk home (docs/METAGAME.md §5), which is why it costs a slot and a brew.
 const DRAUGHT_HEAL := 8
@@ -994,7 +995,7 @@ const DRAUGHT_HEAL := 8
 ## fight, short enough that you cannot drink one in the garrison and still have
 ## it at the stair. [tune]
 const DRAUGHT_TIME := 45.0
-## Quarter-hearts Emberblood adds to a swing, and Ironhide soaks off a blow.
+## HP Emberblood adds to a swing, and Ironhide soaks off a blow.
 ## Both are read through the SAME accessors the forge feeds (`Game.sword_bonus`,
 ## `Game.armour_soak`), so a draught is worth exactly two rungs for its 45 s and
 ## nothing downstream needed a line of code to know potions exist.
@@ -1021,7 +1022,7 @@ const RATION_BATCH := 5
 
 ## Seconds one ration takes to finish, and how often it pays out inside that.
 ##
-## Twelve seconds is the whole design of the thing. A Heart Draught is instant and
+## Twelve seconds is the whole design of the thing. A Health Draught is instant and
 ## is the answer to the fight you are IN; food is the answer to the corridor
 ## AFTER it, and twelve seconds is comfortably longer than any enemy in the game
 ## will leave you alone for. Any hit, any step and any swing cancels it (see
@@ -1036,7 +1037,7 @@ const MEAL_TICK := 3.0
 
 ## What one whole ration puts back, spread across the four ticks above.
 ##
-## Food is FOUR quarters -- one heart, against the Heart Draught's two, and taking
+## Food restores 4 HP, against the Health Draught's 8, and takes
 ## twelve seconds to do what the draught does in a frame. That ratio is the
 ## sentence "a weak version of a potion" written as numbers.
 ##

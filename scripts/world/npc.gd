@@ -70,7 +70,7 @@ const ACTIVITY_SLEEP: StringName = &"sleeping"
 ## the table is still built once for the whole game rather than per shopkeeper.
 static var COUNTERS := {
 	# **The only person in the yard with two services.** Trade is the conventional
-	# two-sided stock/bag window; Upgrades holds the bag and heart ladders. Those
+	# two-sided stock/bag window; Upgrades holds the bag and health ladders. Those
 	# offerings were the
 	# SMITH's until card #91 held him back behind the floor 1 miniboss, at which
 	# point the first hour of the game had no counter that sold them.

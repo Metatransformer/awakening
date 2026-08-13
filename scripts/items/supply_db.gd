@@ -1,7 +1,7 @@
 class_name SupplyDb
 extends Catalogue
 ## What the quartermaster offers across her two services: repeatable stock in
-## Trade, and permanent bag/heart progression under Upgrades.
+## Trade, and permanent bag/health progression under Upgrades.
 ##
 ## **Six rows now, and four of them are Trade stock** (card #98, 2026-08-11).
 ## Arrows, Burst charges, food and drink are the expendables -- the things you buy
@@ -16,7 +16,7 @@ extends Catalogue
 ## wrong shop, which only became visible when the smith stopped being in the yard
 ## on the first frame.** `StoryDb.UNLOCKS` now holds Brannoc back until the floor
 ## 1 miniboss is down (card #91), and every rung of that first hour -- a bag slot,
-## a heart container, a fresh ten of arrows -- was locked behind a counter the
+## a max-HP upgrade, a fresh ten of arrows -- was locked behind a counter the
 ## player could not reach. A hero could buy a sharpening he had no components for
 ## and could not buy the bag slot he had the gold for.
 ##
@@ -24,7 +24,7 @@ extends Catalogue
 ## (`StoryDb.BEATS.smith.the_forge`: "I don't make things here. I mend them");
 ## Kessa is a quartermaster, and a quartermaster is exactly the person who issues
 ## you a bigger pack, a ration of arrows and -- as far as this outpost's paperwork
-## is concerned -- another heart. Nothing about the three lines changed in the
+## is concerned -- more staying power. Nothing about the three lines changed in the
 ## move: the same ids, the same prices, the same `LIMITS`, the same growth
 ## factors, so a save written before the move loads with its `Game.upgrades`
 ## intact and finds the ladders exactly where it left them, behind a different
@@ -43,7 +43,7 @@ extends Catalogue
 ## so this constant is load-bearing outside this file.
 const LIMITS := {
 	&"bag_slot": 4,
-	&"heart": 3,
+	&"health": 3,
 }
 
 ## The repeatable expendables shown on the quartermaster's two-sided Trade board.
@@ -52,7 +52,13 @@ const STOCK_IDS: Array[StringName] = [
 ]
 
 ## The permanent linear ladders shown by her separate Upgrades service.
-const UPGRADE_IDS: Array[StringName] = [&"bag_slot", &"heart"]
+const UPGRADE_IDS: Array[StringName] = [&"bag_slot", &"health"]
+
+const RUNG_NAMES := {
+	&"bag_slot": ["Wayfarer's Pack", "Delver's Pack", "Expedition Pack",
+		"Quartermaster's Case"],
+	&"health": ["Reinforced Vitality", "Hardened Vitality", "Valen's Vitality"],
+}
 
 ## Lines that DO NOT EXIST until the player owns the thing they are about.
 ##
@@ -77,7 +83,7 @@ const CHARGE_GOLD := 90
 ## Priced against the arrow line's 40 for ten, which is the only other expendable
 ## on this counter: a biscuit is cheaper than an arrow because it is worth less
 ## and because the thing it actually costs is the twelve seconds. Drink is dearer
-## than food for the reason the bars differ -- a heart comes back by walking home
+## than food for the reason the bars differ -- HP comes back by walking home
 ## and the blue bar does not come back at all, so the drink is the only thing in
 ## the game that sells you a spin. [tune]
 const RATION_GOLD := {
@@ -115,10 +121,11 @@ static func groups() -> Array[Dictionary]:
 		at[rows[i]["id"]] = i
 
 	var out: Array[Dictionary] = []
-	out.append({"title": "THE BAG", "icon": "bag", "tracks": [
+	out.append({"title": "THE BAG", "tab": "PACK", "icon": "bag", "tracks": [
 		_track(at, &"bag_slot", "", int(LIMITS[&"bag_slot"]))]})
-	out.append({"title": "HEARTS", "icon": "hearts", "tracks": [
-		_track(at, &"heart", "", int(LIMITS[&"heart"]))]})
+	# No icon until there is dedicated health-progression art.
+	out.append({"title": "HEALTH", "tab": "HEALTH", "tracks": [
+		_track(at, &"health", "", int(LIMITS[&"health"]))]})
 	return out
 
 
@@ -129,7 +136,17 @@ static func _track(at: Dictionary, id: StringName, branch: String,
 		"line": int(at.get(id, -1)),
 		"owned": int(Game.upgrades.get(id, 0)),
 		"rungs": rungs,
+		"rung_names": _rung_names(id, rungs),
 	}
+
+
+static func _rung_names(id: StringName, rungs: int) -> Array[String]:
+	var authored: Array = RUNG_NAMES.get(id, [])
+	var names: Array[String] = []
+	for i in rungs:
+		names.append(String(authored[i]) if i < authored.size()
+			else "%s %d" % [String(id).replace("_", " ").capitalize(), i + 1])
+	return names
 
 
 ## Is `id` on the counter at all? The same distinction `ShopDb.stocked` draws: a
@@ -186,13 +203,15 @@ static func _board() -> Array[Dictionary]:
 			"detail": "%d slots -> %d" % [Game.bag_slots, Game.bag_slots + 1],
 		},
 		{
-			"id": &"heart",
-			"label": "HEART CONTAINER",
-			"cost": _scaled(320, &"heart", 1.5),
+			"id": &"health",
+			"label": "MAX HEALTH +%d" % K.HEALTH_UPGRADE_POINTS,
+			"cost": _scaled(320, &"health", 1.5),
 			"parts": {},
-			"blurb": "One more heart. It does not grow back on its own.",
-			"detail": "%d hearts -> %d" % [
-				Game.max_quarters / K.HEART, Game.max_quarters / K.HEART + 1],
+			"blurb": "%d more max HP. It does not grow back on its own."
+				% K.HEALTH_UPGRADE_POINTS,
+			"detail": "%d -> %d max HP" % [Game.max_health_points,
+				mini(Game.max_health_points + K.HEALTH_UPGRADE_POINTS,
+					K.MAX_HEALTH_POINTS)],
 		},
 	]
 
@@ -264,7 +283,7 @@ static func refusal(line: Dictionary) -> String:
 	# `remaining()` answers an expendable in BUNDLES, so a full quiver, pouch or
 	# pack is also a `remaining() == 0` -- and with the ladder's phrase on top, a
 	# player who could not buy another biscuit was told "NOTHING LEFT TO DO THERE",
-	# which is what the board says about a heart container you have bought all
+	# which is what the board says about a max-health upgrade you have bought all
 	# three of. It reads as a permanent ceiling on a line that will be pressable
 	# again the moment you eat one. `rations.gd` beat B12 caught it; the ladders
 	# are unaffected because `_full` is false for both of them.
@@ -306,9 +325,9 @@ static func buy(line: Dictionary) -> bool:
 			Game.add_rations(id, K.RATION_BATCH)
 		&"bag_slot":
 			Game.bag_slots += 1
-		&"heart":
+		&"health":
 			# Derived from `upgrades`, which the line above has already bumped, so
-			# there is no second copy of "how many hearts have been bought".
+			# there is no second copy of "how much max HP has been bought".
 			Game.resync_maxima(true)
 	Bus.item_acquired.emit(id)
 	return true

@@ -169,13 +169,13 @@ func _arc(rig, out: String) -> void:
 		# Immortal for the retries. The launch roll is a coin and this beat needs
 		# a launch, not a corpse -- and a body killed on attempt three would be
 		# measured on the DEATH launch, which is a different impulse.
-		foe.health.max_quarters = 100000
-		foe.health.quarters = 100000
+		foe.health.max_health_points = 100000
+		foe.health.health_points = 100000
 		Bus.camera_recenter.emit()
 
 		var launched := false
 		for _try in 40:
-			foe.health.quarters = 100000
+			foe.health.health_points = 100000
 			# Struck from the body's LEFT, so it is thrown across the frame to
 			# the right and the arc is side-on to the camera. See FOE_AT.
 			_strike(foe, foe.global_position + Vector3(-1.2, 0.9, 0.0),
@@ -260,8 +260,8 @@ func _impact(rig, out: String) -> void:
 	scene.add_child(foe)
 	foe.global_position = FOE_AT
 	await rig.wait_frames(24)
-	foe.health.max_quarters = 100000
-	foe.health.quarters = 100000
+	foe.health.max_health_points = 100000
+	foe.health.health_points = 100000
 	# Held still so the camera can hold on the impact site. The burst is parented
 	# to the SCENE, so it stays where the blow landed either way -- but a skeleton
 	# walking into the lens photographs its own approach instead of its bruise.

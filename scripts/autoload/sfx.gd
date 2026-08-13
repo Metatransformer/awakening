@@ -99,6 +99,19 @@ const CUES := {
 	&"bag_full": &"craft_fail",
 }
 
+## Fishing emits stable semantic beats, never filenames. These ids resolve to
+## the authored recordings while the interaction and pooled playback stay
+## agnostic to the concrete files.
+const FISHING_CUES := {
+	&"fishing_cast": &"fishing_cast",
+	&"fishing_bite": &"fishing_bite",
+	&"fishing_hook": &"fishing_hook",
+	&"fishing_reel": &"fishing_reel",
+	&"fishing_strain": &"fishing_strain",
+	&"fishing_catch": &"fishing_catch",
+	&"fishing_fail": &"fishing_fail",
+}
+
 ## The arrival sounds, indexed by `RewardVfx` tier. A second table rather than two
 ## rows in `CUES`, because `CUES` is keyed on the SIGNAL and one signal cannot
 ## have two entries there -- `reward_revealed` carries the tier as an argument.
@@ -150,7 +163,7 @@ const CLEAR_CUES := {
 ## combat with no sound at all. Making it `hit_flesh` would have been worse than
 ## silence: the sound you hear when you connect and the sound you hear when you
 ## are opened up would then be the same file, and the mix would be telling you
-## the fight is going well while your hearts drain.
+## the fight is going well while your HP drains.
 ##
 ## Two layers per blow, because a body being hurt is two things and one file
 ## cannot be both:
@@ -230,6 +243,10 @@ var _last_played: Dictionary = {}
 ## Observable for directors and future alarm orchestration. Playback still goes
 ## through `Bus.request_global_sfx`; this is not a second request interface.
 var last_global_cue: StringName = &""
+## The semantic id most recently requested through the positional pool. This is
+## recorded before filename resolution so a Dummy audio driver still proves the
+## gameplay beat without teaching the caller which temporary recording voices it.
+var last_positional_semantic_cue: StringName = &""
 
 
 func _ready() -> void:
@@ -310,9 +327,11 @@ func _ready() -> void:
 ## emit that rather than calling this directly, so nothing has to hold a
 ## reference to this autoload.
 func play_at(id: StringName, position: Vector3) -> void:
-	if _too_soon(id):
+	last_positional_semantic_cue = id
+	var resolved_id: StringName = resolve_semantic_cue(id)
+	if _too_soon(resolved_id):
 		return
-	var stream := _load(id)
+	var stream := _load(resolved_id)
 	if stream == null:
 		return
 	var v := _claim()
@@ -325,6 +344,16 @@ func play_at(id: StringName, position: Vector3) -> void:
 ## than about a place.
 func play(id: StringName) -> void:
 	play_at(id, _hero_pos())
+
+
+func resolve_semantic_cue(id: StringName) -> StringName:
+	var resolved: StringName = FISHING_CUES.get(id, id)
+	return resolved
+
+
+## Director seam: use the same resolver and loader as live pooled playback.
+func semantic_cue_exists(id: StringName) -> bool:
+	return _load(resolve_semantic_cue(id)) != null
 
 
 ## Play a non-positional cue through the SFX bus. These voices survive a paused

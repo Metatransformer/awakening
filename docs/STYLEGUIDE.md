@@ -537,7 +537,7 @@ can actually use.
 #### What it breaks, and it is one thing
 
 **World-space `Label3D` text is illegible.** `LANTERNKEEPER` over the keeper's
-booth, the training post's readout (`1 hit 3 q (0.75 ♥)`) and its damage number
+booth, the training post's readout (`1 hit 3 HP`) and its damage number
 are all 3D geometry wearing a glyph atlas, so they go through the buffer and come
 out as noise at anything past a couple of metres. `tools/directors/world_labels.gd`
 still passes — it counts pixels, and the pixels are all there — which is exactly
@@ -1030,21 +1030,21 @@ top-left. Safe area: nothing within `0.025w` / `0.031h` of an edge.
 
 ### 5.1 Health — a ticked bar, not hearts and not cells
 
-**Superseded 2026-08-08, on the owner's instruction: this was a row of discrete
-quarter cells and is now a continuous bar.** The cells' argument was
-countability — under pressure the player needs "three left", not "about a fifth"
-— and that argument was right, so the countability is carried over by other
-means rather than dropped: a **2 px VOID tick at every heart boundary and a 1 px
-tick at every quarter**, cut *through* the fill. You can still count what is
-left; the fill is continuous between the ticks.
+Health is a fixed-width continuous bar with a **uniform 1 px VOID tick at every
+individual HP boundary**, cut through the fill. There are no grouped heart
+boundaries. Countability also comes directly from the numeric
+**`current / maximum HP`** readout drawn inside the bar after the fill, ghost,
+and ticks, with the same restrained scale and contrast/shadow treatment as the
+nearby HUD text.
 
 What did **not** come across from the bar idiom is easing. §7.4 still stands:
 the bar moves instantly on damage and drains its ghost in the same 4 discrete
 steps the cells did. "Bar" here is the shape, not the animation.
 
-One horizontal bar, fixed width. The width does **not** grow with max health —
-a bar that lengthens as you buy containers walks across the screen and stops
-being a shape you recognise peripherally. More containers means denser ticks.
+One horizontal bar, fixed width. The width does **not** grow with maximum health
+— a bar that lengthens as you buy health upgrades walks across the screen and
+stops being a shape you recognise peripherally. More maximum HP means denser,
+still-uniform per-HP ticks.
 
 Health, stamina, magic and heat use one clean dark meter recipe: a VOID outer
 shell around an ASH bevel face and a recessed MIDNIGHT / ASH@60% track. Both
@@ -1053,9 +1053,9 @@ ends are straight parallel diagonals, never curves or clipped round corners:
 frame edge and MIDNIGHT lower edge deepen the face. The semantic fill colour has
 its own restrained 1 px BONE-alpha top band and VOID-alpha lower band, with no
 grain or surface texture inside the semantic fill. Valenfeld's cave-rock material
-belongs to the equipment housing (§5.2), not to body resources. Ticks still cut
-through last. Health carries a 2 px
-outer bezel and 2 px inner face;
+belongs to the equipment housing (§5.2), not to body resources. Ticks cut
+through the fill and ghost; the numeric HP readout is drawn after them. Health
+carries a 2 px outer bezel and 2 px inner face;
 the three subordinate meters carry 1 px of each, preserving a readable live
 track inside the 15 / 8 / 6 / 6 weight hierarchy. Partial fills end diagonally.
 The health ghost begins flat beneath the current fill and ends diagonally, so
@@ -1064,11 +1064,11 @@ polygons. The authored bar rectangles, left edge and row positions below do not
 move; `_note` publishes the unchanged outer bezel bounds used by layout checks.
 Temporary overhealth is a GOLD end-cap **inside the recessed health track**, at
 its right edge. It overlays the ordinary VITAL fill or empty track after those
-are drawn and before the unchanged health ticks cut through it. Each temporary
-quarter contributes exactly 4 reference pixels of cap width (scaled with
+are drawn and before the uniform health ticks cut through it. Each temporary HP
+contributes exactly 4 reference pixels of cap width (scaled with
 `Pal.px`, clamped to the track width); the cap uses the same hard diagonal and
-lit/dark bands as every meter segment. It does not enter `max_quarters` or the
-real-health fraction, and it never changes tick spacing/count, the authored
+lit/dark bands as every meter segment. It does not enter `max_health_points` or
+the real-health fraction, and it never changes tick spacing/count, the authored
 343×15 bar rectangle, or the published bezel bounds.
 Enemy health bars are excluded: at 2 px tall they are minimal world markers,
 not player instruments, and this bezel would consume them.
@@ -1077,7 +1077,7 @@ not player instruments, and this bezel would consume them.
 |---|---|
 | Origin | x `0.031` (40), top y `0.882` (635) |
 | Bar | `0.268` w (343 px) × 15 px, fixed at every max-health value |
-| Ticks | 2 px VOID full height at heart boundaries; 1 px VOID at 45% height at quarters |
+| Ticks / readout | Uniform 1 px VOID ticks at every individual HP boundary; `current / maximum HP` inside the bar, drawn last with a restrained scale and contrast/shadow |
 | Filled | VITAL | Empty | ASH @60% |
 | Frame / track | 2 px outer VOID shell; 2 px ASH/MIDNIGHT bevel face; recessed track; straight 6 px diagonal at both ends; 1 px lit/dark frame and fill bands |
 
@@ -1102,10 +1102,10 @@ unit it is ever spent in.
 | Ticks | 1 px VOID at each affordable roll boundary |
 | Frame / track | Shared recipe: 1 px outer shell and inset face; straight 3 px diagonals at both ends |
 
-- **Damage ghost:** cells just lost stay lit in RUST for 400 ms, then drain
+- **Damage ghost:** HP just lost stays lit in RUST for 400 ms, then drains
   right-to-left over 250 ms in 4 discrete steps. *How much you just lost* is the
   information; the new total is secondary.
-- **Low health (≤3 quarters):** the track goes VOID and the fill pulses
+- **Low health (≤3 HP):** the track goes VOID and the fill pulses
   **VITAL↔VOID** at 2 Hz. No red screen vignette.
 
   It was VITAL↔BONE until 2026-08-10 and that was wrong in two ways a rendered
@@ -1116,8 +1116,9 @@ unit it is ever spent in.
   alarm running backwards. Blinking to the track colour reads as the bar failing,
   which is the sentence. RUST was the other candidate and is stamina's
   *exhausted* colour, which trades one collision for the same one a row down.
-- **Extraction restore:** cells refill left-to-right at 40 ms/cell with a 1-frame
-  BONE flash each — a full bar takes 0.8 s. The heal is the reward for leaving
+- **Extraction restore:** HP refills left-to-right at 40 ms/point with a 1-frame
+  BONE flash each — 12 HP takes 0.48 s and the 32 HP cap takes 1.28 s. The heal
+  is the reward for leaving
   and it should be watched and counted, not granted in a frame.
 
 ### 5.1c Magic — the only bar that does not come back
@@ -1197,7 +1198,7 @@ Three rules, each of which replaced something that had shipped:
    leftmost-first, so a slot's position carried no information — the first slot
    meant Ironhide or Emberblood depending on what else happened to be running.
    Fixed slots make position the identity channel and colour the redundant one.
-3. **It is not a meter, and that is why it is tiles.** `heart_draught`'s tint is
+3. **It is not a meter, and that is why it is tiles.** `health_draught`'s tint is
    `(0.88, 0.25, 0.22)` and `Pal.VITAL` is `(0.878, 0.251, 0.220)`;
    `ironhide_draught`'s is `(0.35, 0.47, 0.78)` and `Pal.COBALT` is
    `(0.345, 0.471, 0.784)`. To the precision this palette is written in, a
@@ -1206,7 +1207,7 @@ Three rules, each of which replaced something that had shipped:
    risk. Four discrete steps is what §7.4 permits where it bans a lerp, and a row
    that empties in steps is visibly not one of the bars above it.
 
-**Heart Draught has no slot**, because `PotionDb.apply` sends it to `Game.heal()`
+**Health Draught has no slot**, because `PotionDb.apply` sends it to `Game.heal()`
 and never to `Game.start_draught` — a slot for it would be a container that can
 never fill.
 
@@ -1472,10 +1473,10 @@ Not a fairy, not a triangle.
 
 ### 5.5b The minimap — compact line art
 
-A 126 px square, top-right, VOID @88% on a 1 px ASH border. Underground it is
-drawn by `MapDraw.draw_map` — the **same** routine that fills the pause menu's
-MAP tab, called with a smaller box. Authored exterior zones provide their own
-world-space plan to `SurfaceMapDraw`; see `docs/CONTRACT.md` §8, "The map".
+A 126 px square, top-right, VOID @88% on a 1 px ASH border. It is drawn by
+`MapDraw.draw_map` — the **same** facade that fills the pause menu's MAP tab,
+called with a smaller box. `Atlas` selects the active dungeon or authored
+world-space surface plan; see `docs/CONTRACT.md` §8, "The map".
 
 **It is a schematic and never a rendered camera.** Room outlines, corridors, a
 gap in a wall where a door is, and one small symbol per thing worth walking to.
@@ -1489,8 +1490,8 @@ and it is not line art.
 - **It follows the hero.** He is pinned to the middle of the square and the map
   scrolls under him. Dungeon floors use a fixed pitch of 3.4 cells across the
   box (`MapDraw.FOLLOW_SPAN`); exterior plans use their scene-authored view
-  range. The MAP tab still fits the whole dungeon floor, and the two
-  wanting opposite things is the point: a full-floor fit is the right picture
+  range. The MAP tab fits the whole active plan from dungeon-cell or surface
+  world X/Z bounds, and the two wanting opposite things is the point: a full-floor fit is the right picture
   when you have stopped to read it, and the wrong one at 132 px in a corner,
   where a six-room floor puts every room under 40 px and "where am I" has to be
   answered by finding a 5 px arrow. Following answers it by never moving the
@@ -1906,15 +1907,17 @@ for 2D art anywhere else.
   compatibility name) with two layouts: **Trade** is a dual-inventory shop with
   NPC stock on one side, the player's bag on the other and shared item details;
   quartermaster and jewelcrafter **Upgrades**, **Smithing**, **Alchemy** and
-  **Artifacts** use the progression layout, which is a wrapping field of PLATES
-  and not a list (card #118). A plate is one track: its face (§4.7b) at the
-  left, lit `0.34 -> 1.0` with the fraction of its rungs bought, then the chain
-  of rungs, with an unreached rung drawn as a narrow empty SOCKET rather than a
-  dimmed copy of a cell. The socket is the load-bearing half — a greyed row says
-  "you cannot afford this", an absence says "there is more ladder here", and
-  only the second one makes a maxed board and a fresh one different SHAPES.
-  Measured by `tools/directors/upgrade_board.gd`: **50.5% of the board's own
-  pixels differ** between a save at rung 0 and one with every ladder climbed. This is one shared
+  **Artifacts** use the tabbed progression layout (cards #118 and #175). Tabs
+  divide upgrade families; within the active tab, every upgrade type owns one
+  full-width textured-stone row. Its track icon is the row identity and is also
+  ghosted directly behind every 80×80 square rung. Every rung stays full-size,
+  carries an authored name rather than a Roman numeral, and is joined to the
+  next by an arrow. Future rungs are visible locked nodes with the lock glyph,
+  not empty sockets. The selected rung has a persistent inspector: ownership or
+  affordability, before→after stats, authored effect copy, price, and one recipe
+  row per material with its item icon, Required/Owned counts, and green check or
+  red cross. `tools/directors/upgrade_board.gd` proves those structural rules and
+  captures fresh and climbed saves for the pixel comparison. This is one shared
   implementation, not a claim that every service is Trade; and the footlocker
   (`StashScreen`), whose
   refusal moved off the hint line and into a `FooterToast`, so "← STOW
@@ -1926,10 +1929,12 @@ for 2D art anywhere else.
   header's one right-aligned string became a four-cell `StatBand` — SLOTS, BAG,
   PURSE, TO LEAVE — so the extraction decision is four numbers read at once
   instead of a sentence parsed, with the fee no longer stranded two feet from
-  the purse it is measured against; and the map (`MenuMapPanel`), whose floor
+  the purse it is measured against; and the map (`MenuMapPanel`), whose dungeon
   label and "6 of 8 rooms walked" subtitle became a four-cell band of their own
   — FLOOR, ROOMS, CHESTS, STAIR — counted off the same `Atlas.marks` the plan
   is drawn from, so the numbers cannot claim a chest the map is not showing;
+  on authored surfaces the same screen instead names the active plan and counts
+  ROUTES, AREAS and PLACES from it, with only its live landmark glyphs in the key;
   the save/load screen (`MenuSavesPanel` + `MenuSlotRow`), where an empty slot
   in LOAD mode is the refusal law rendered on a card rather than a row — 38%,
   "Nothing here to load." at full DANGER, and still in its place; and the one

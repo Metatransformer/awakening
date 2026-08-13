@@ -26,9 +26,9 @@ const SLOTS := 3
 ## bump does not have to.
 ##
 ## The **gear split** is not additive, and it wins. A v3 slot holds
-## `{"plate": 3}` — three quarter-hearts of soak — and since `plate` became four
+## `{"plate": 3}` — 3 HP of soak — and since `plate` became four
 ## pieces × two paths (docs/GDD.md §6.6) there is no honest place to put it.
-## Spending it on one piece (`plate_chest_heavy` at rung 3) is 1.0 quarters, a
+## Spending it on one piece (`plate_chest_heavy` at rung 3) is 1.0 HP, a
 ## silent two-thirds cut to a number the player paid for. Spreading it over four
 ## pieces commits all four to heavy — the one thing §6.6 says can never be undone
 ## — on the player's behalf, without asking. Refusing reads as an empty slot,
@@ -88,15 +88,18 @@ const SLOTS := 3
 ## health and reconstruct as zero.
 ## Bumped to 15 for the additive fishing, supper, Well Fed and Connected fields
 ## inside the existing garrison payload. A v14 slot reconstructs them empty.
-## Bumped to 16 for completed Field Notes. A v15 slot has only filed/awarded ids;
+## Bumped to 16 for the health-points vocabulary. v15 remains readable: its
+## health fields, permanent upgrade id and restorative draught id are migrated
+## at the three narrow read seams below.
+## Bumped to 17 for completed Field Notes. A v16 slot has only filed/awarded ids;
 ## each of those is also completed, while no other completion can be inferred.
-const VERSION := 16
+const VERSION := 17
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
 const AUTOSAVE_INTERVAL := 300.0
 
 signal saved(slot: int)
@@ -147,11 +150,16 @@ func peek(slot: int) -> Dictionary:
 	var has_run := not run_data.is_empty()
 	var underground := has_run and bool(run_data.get("in_dungeon", false))
 	var saved_level := maxi(int(run_data.get("level", 1)), 1) if underground else 1
+	# v15 and earlier used these two field names. They are fallbacks only: peek's
+	# returned live header uses the health-points schema below.
+	var health_points := int(d.get("health_points", d.get("quarters", 0)))
+	var max_health_points := int(
+		d.get("max_health_points", d.get("max_quarters", 0)))
 	return {
 		"empty": false,
 		"slot": slot,
-		"hearts": float(d.get("quarters", 0)) / float(K.HEART),
-		"max_hearts": float(d.get("max_quarters", 0)) / float(K.HEART),
+		"health_points": health_points,
+		"max_health_points": max_health_points,
 		"gold": d.get("gold", 0),
 		"keys": d.get("small_keys", 0),
 		"last_played_unix": d.get("last_played_unix", 0),
@@ -177,8 +185,8 @@ func save(slot: int) -> bool:
 		"stamp": Time.get_datetime_string_from_system(false, true),
 		"played": Time.get_ticks_msec() / 1000.0,
 		"last_played_unix": Time.get_unix_time_from_system(),
-		"quarters": Game.quarters,
-		"max_quarters": Game.max_quarters,
+		"health_points": Game.health_points,
+		"max_health_points": Game.max_health_points,
 		"temporary_overhealth": Game.temporary_overhealth,
 		# A Focus amulet raises this permanently, so it is a purchase and it saves.
 		# Well Fed is carried in `garrison`; it must never become a saved purchase.
@@ -335,8 +343,11 @@ func load_slot(slot: int) -> Dictionary:
 	if d.is_empty():
 		return {}
 
-	Game.max_quarters = d.get("max_quarters", K.START_HEARTS * K.HEART)
-	Game.quarters = d.get("quarters", Game.max_quarters)
+	# v15 and earlier stored the same integer values under the old field names.
+	Game.max_health_points = int(d.get(
+		"max_health_points", d.get("max_quarters", K.START_HEALTH_POINTS)))
+	Game.health_points = int(d.get(
+		"health_points", d.get("quarters", Game.max_health_points)))
 	# Clamped rather than trusted: `K.STAMINA_MAX` is the ceiling every Focus
 	# purchase already respects, and a hand-edited slot must not out-buy the shop.
 	Game.max_stamina = minf(K.STAMINA_MAX,
@@ -369,7 +380,14 @@ func load_slot(slot: int) -> Dictionary:
 	# reloads holding the bare blade.
 	Game.upgrades.clear()
 	for k in (d.get("upgrades", {}) as Dictionary):
-		Game.upgrades[StringName(k)] = int((d["upgrades"] as Dictionary)[k])
+		var upgrade_id := StringName(k)
+		# v15 and earlier called the permanent +4 HP ladder "heart". Collapse it
+		# into the live id instead of retaining a duplicate runtime key.
+		if upgrade_id == &"heart":
+			upgrade_id = &"health"
+		Game.upgrades[upgrade_id] = maxi(
+			int(Game.upgrades.get(upgrade_id, 0)),
+			int((d["upgrades"] as Dictionary)[k]))
 	var bed_rank: int = clampi(
 		int(Game.upgrades.get(ElderUpgradeDb.BED_ID, 0)),
 		0, int(ElderUpgradeDb.LIMITS[ElderUpgradeDb.BED_ID]))
@@ -450,6 +468,10 @@ func load_slot(slot: int) -> Dictionary:
 		if Game.bottle_contents.size() >= K.BOTTLE_MAX:
 			break
 		var potion := StringName(c)
+		# v15 and earlier used the old restorative draught id. Convert it before
+		# catalogue validation so the bottle remains full and drinkable.
+		if potion == &"heart_draught":
+			potion = &"health_draught"
 		Game.bottle_contents.append(potion if PotionDb.has(potion) else &"")
 	# Rebuilt key by key for `upgrades`' reason -- JSON has no StringName, so an
 	# assigned dictionary comes back keyed by String and `RationDb.has()` misses
@@ -550,7 +572,7 @@ func load_slot(slot: int) -> Dictionary:
 	current_scene_path = d.get("scene", "")
 
 	# Push the restored state at everyone who draws it.
-	Bus.player_health_changed.emit(Game.quarters, Game.max_quarters)
+	Bus.player_health_changed.emit(Game.health_points, Game.max_health_points)
 	Bus.temporary_overhealth_changed.emit(Game.temporary_overhealth)
 	Bus.magic_changed.emit(Game.magic, Game.max_magic)
 	Bus.stamina_changed.emit(Game.stamina, Game.max_stamina)

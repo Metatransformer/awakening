@@ -6,8 +6,12 @@ extends RefCounted
 ##     --director=res://tools/directors/shop_tip.gd \
 ##     --out=/tmp/tip/x.png --size=1280x720 --warmup=60
 ##
-## Card #119 replaced the shop's right-hand detail column with a tooltip anchored
-## to the cell under the cursor. That change has exactly three ways to go wrong and
+## Card #119 replaced Trade's right-hand detail column with a tooltip anchored
+## to the cell under the cursor. Card #175 deliberately gives Progression a
+## persistent inspector instead: upgrade stats and recipes should not disappear
+## when the pointer leaves a node. The two presentations share one cursor and
+## catalogue contract, but their proofs are now intentionally different.
+## The trade tooltip has exactly three ways to go wrong and
 ## none of them is visible in one screenshot of one row:
 ##
 ##   A  The card covers the cell it is describing -- which is the one thing a
@@ -18,8 +22,9 @@ extends RefCounted
 ##      nothing else on purpose (the board POLLS the arrows and ALSO lets cells
 ##      take focus -- CLAUDE.md §3, cards #74/#76), and a mouse that moves the
 ##      cursor through `cell_focused` is the path most likely to come apart.
-##   D  A finished board still has a controller path: its purchased rungs remain
-##      inspectable, and ACCEPT on one is read-only rather than a refusal.
+##   D  A finished progression board still has a controller path: its purchased
+##      rungs remain inspectable in the persistent panel, tabs still work, and
+##      ACCEPT on one is read-only rather than a refusal.
 ##
 ## So the card is checked at EVERY cell of three boards, on both input paths, and
 ## the geometry is asserted as numbers rather than eyeballed: the tip rect against
@@ -130,8 +135,8 @@ func _inside(screen) -> bool:
 ##   Z3     The numbers are about the CURRENT cell. A reader that had latched
 ##          one rect would pass every check in `_walk` while describing nothing.
 func _calibrate() -> void:
-	var screen := _open(TradeScreen.Mode.PROGRESSION, "THE FORGE", ShopDb,
-		&"smith", "Smithing")
+	var screen := _open(TradeScreen.Mode.TRADE, "THE QUARTERMASTER", SupplyDb,
+		&"quartermaster", "Trade")
 	await _rig.wait_frames(12)
 
 	var cell := Rect2(100.0, 100.0, 80.0, 60.0)
@@ -168,17 +173,16 @@ func _owned_board() -> void:
 	var saved_upgrades: Dictionary[StringName, int] = Game.upgrades.duplicate()
 	var saved_gold := Game.gold
 	Game.upgrades[&"bag_slot"] = int(SupplyDb.LIMITS[&"bag_slot"])
-	Game.upgrades[&"heart"] = int(SupplyDb.LIMITS[&"heart"])
+	Game.upgrades[&"health"] = int(SupplyDb.LIMITS[&"health"])
 
 	var screen := _open(TradeScreen.Mode.PROGRESSION, "THE QUARTERMASTER",
 		SupplyDb, &"quartermaster", "Upgrades")
 	await _rig.wait_frames(14)
 
-	var first := screen._cursor
+	var first: int = screen._cursor
 	var first_label := screen.cursor_label()
-	_ck(screen.line_count() == int(SupplyDb.LIMITS[&"bag_slot"])
-			+ int(SupplyDb.LIMITS[&"heart"]),
-		"D0 the fully purchased board exposes every owned rung (%d)"
+	_ck(screen.line_count() == int(SupplyDb.LIMITS[&"bag_slot"]),
+		"D0 the storage tab exposes every owned bag rung (%d)"
 			% screen.line_count())
 	_ck(first <= -2, "D1 the first purchased rung has an owned key (%d)" % first)
 	await _key(KEY_RIGHT)
@@ -186,13 +190,13 @@ func _owned_board() -> void:
 		"D2 RIGHT moves between owned cells (%d -> %d)" % [first, screen._cursor])
 	_ck(screen.cursor_label() != first_label and not screen.cursor_label().is_empty(),
 		"D3 the owned selection is identified (%s)" % screen.cursor_label())
-	_ck(screen._tip.title.text == screen.cursor_label()
-			and screen._tip.kicker.text == "PURCHASED"
-			and screen._tip.note.text == "Owned"
-			and screen._tip.price.text.is_empty()
-			and not screen._tip.blurb.text.is_empty()
-			and screen._tip.blurb.text != "Already purchased.",
-		"D4 the tip identifies it as PURCHASED / Owned and explains the effect")
+	_ck(screen._detail._title.text == screen.cursor_label()
+			and screen._detail._state.text == "OWNED"
+			and screen._detail._price.text == "Owned"
+			and screen._detail._verdict.text == "Owned"
+			and not screen._detail._blurb.text.is_empty()
+			and screen._detail._blurb.text != "Already purchased.",
+		"D4 the persistent inspector identifies Owned and explains the effect")
 	var band_values: Dictionary = screen._band.get_meta(&"band_values")
 	var cost := band_values.get(&"cost") as Label
 	_ck(cost != null and cost.text == "Owned",
@@ -205,6 +209,12 @@ func _owned_board() -> void:
 		"D6 ACCEPT changes neither upgrades nor gold")
 	_ck(screen._refuse < 0.0 and screen._toast == null,
 		"D7 ACCEPT on an owned rung shows no refusal")
+	await _key(KEY_UP)
+	_ck(screen._ladder.focus_is_tab(), "D8 UP enters the upgrade tab strip")
+	await _key(KEY_RIGHT)
+	_ck(screen.line_count() == int(SupplyDb.LIMITS[&"health"])
+			and screen._detail._title.text == screen.cursor_label(),
+		"D9 RIGHT changes to Health and refreshes its inspector")
 	await _rig.capture(_out.path_join("d_owned_read_only.png"))
 
 	screen.close()
@@ -213,31 +223,25 @@ func _owned_board() -> void:
 	Game.gold = saved_gold
 
 
-## The smith: five rows of ladders, and the board card #119 is written about.
+## The smith: tabbed ladders and the persistent decision inspector from #175.
 func _smith() -> void:
 	var screen := _open(TradeScreen.Mode.PROGRESSION, "THE FORGE", ShopDb,
 		&"smith", "Smithing")
 	await _rig.wait_frames(14)
 
-	# A. The column is gone and the board has the width it was using.
-	_ck(screen._tip != null and screen._tip.visible,
-		"A0 the counter has a description card")
-	_ck(screen.find_child("Detail", true, false) == null,
-		"A1 the right-hand detail column is gone")
-	# Last child of the screen, so it draws over the frame -- and the screen's own
-	# CanvasLayer is 60, over the HUD's 50. Card #48 shipped the shop UNDER the
-	# world's control legend; a floating card is one more layer to get wrong.
-	_ck(screen._tip.get_index() == screen.get_child_count() - 1,
-		"A2 the card is the last thing the screen draws")
+	_ck(screen._tip == null,
+		"A0 progression does not create the transient trade tooltip")
+	_ck(screen._detail != null and screen._detail.visible,
+		"A1 progression keeps a visible UpgradeDetail")
+	_ck(screen._detail._title.text == screen.cursor_label(),
+		"A2 the inspector describes the selected named rung")
 	var well := screen.find_child("BoardScroll", true, false) as Control
 	var frame := screen.find_child("Frame", true, false) as Control
 	if well != null and frame != null:
-		var slack: float = frame.get_global_rect().end.x - well.get_global_rect().end.x
-		_ck(slack < 60.0,
-			"A3 the board reaches the frame's right edge (%.0f px short)" % slack)
+		_ck(frame.get_global_rect().encloses(screen._detail.get_global_rect()),
+			"A3 the persistent inspector stays inside the counter frame")
 
-	await _walk(screen, "b_forge")
-	await _mouse_path(screen, "c_forge_mouse")
+	await _progression_path(screen, "b_forge")
 	screen.close()
 	await _rig.wait_frames(8)
 
@@ -250,7 +254,7 @@ func _keeper() -> void:
 	var screen := _open(TradeScreen.Mode.PROGRESSION, "THE FAR LANTERN", RelicDb,
 		&"keeper", "Artifacts")
 	await _rig.wait_frames(14)
-	await _walk(screen, "d_keeper")
+	await _progression_path(screen, "d_keeper")
 	screen.close()
 	await _rig.wait_frames(8)
 
@@ -264,8 +268,8 @@ func _quartermaster() -> void:
 	var screen := _open(TradeScreen.Mode.TRADE, "THE QUARTERMASTER", SupplyDb,
 		&"quartermaster", "Trade")
 	await _rig.wait_frames(14)
-	_ck(screen.find_child("Detail", true, false) == null,
-		"E0 the trade window has no detail column either")
+	_ck(screen._detail == null and screen._tip != null,
+		"E0 Trade keeps the floating card and no upgrade inspector")
 	await _walk(screen, "e_trade")
 	await _mouse_path(screen, "f_trade_mouse")
 	screen.close()
@@ -273,6 +277,29 @@ func _quartermaster() -> void:
 
 
 # --- walking -----------------------------------------------------------------
+
+## Progression keeps its detail in one place. Exercise pad, mouse and tab focus
+## without applying Trade's floating-card geometry rules to it.
+func _progression_path(screen, tag: String) -> void:
+	var first: int = screen._cursor
+	_ck(screen._detail._title.text == screen.cursor_label(),
+		"%s the inspector initially reads the cursor" % tag)
+	await _key(KEY_DOWN)
+	_ck(screen._cursor != first and screen._detail._title.text == screen.cursor_label(),
+		"%s DOWN moves a track and refreshes the inspector" % tag)
+	var target := -1
+	for selection: int in screen._order:
+		if selection != screen._cursor:
+			target = selection
+			break
+	if target != -1:
+		var cell: Button = _cell_for(screen, target)
+		await _hover(cell.get_global_rect().get_center())
+		_ck(screen._cursor == target and screen._detail._title.text == screen.cursor_label(),
+			"%s the inspector follows a hovered named rung" % tag)
+	await _key(KEY_UP)
+	_ck(screen._ladder.focus_is_tab(), "%s UP reaches the tab strip" % tag)
+	await _rig.capture(_out.path_join(tag + ".png"))
 
 ## Press RIGHT across the whole board and check the card at every stop.
 ##

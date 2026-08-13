@@ -261,7 +261,7 @@ These nine facts are the ones clones get wrong. Build to them:
 | Autoload | Script | Purpose |
 |---|---|---|
 | `Bus` | `scripts/autoload/event_bus.gd` | sideways peer→peer signals |
-| `Game` | `scripts/autoload/game_state.gd` | hearts, magic, keys, items, flags |
+| `Game` | `scripts/autoload/game_state.gd` | health points, magic, keys, items, flags |
 | `Run` | `scripts/autoload/run_state.gd` | the current delve; **after `Game`** — it spends and grants gold |
 | `Heat` | `scripts/autoload/heat.gd` | the kill chain and what it is worth; **after `Game`** (it refunds stamina) and **after `Run`** (no chain outside the dungeon) |
 | `Settings` | `scripts/autoload/settings.gd` | volumes, video, binds, and their persistence |
@@ -269,7 +269,7 @@ These nine facts are the ones clones get wrong. Build to them:
 | `Music` | `scripts/autoload/music.gd` | picks the track and crossfades it; **after `Bus`** |
 | `Sfx` | `scripts/autoload/sfx.gd` | implements `Bus.request_sfx`, owns the signal→sound table; **after `Bus`** |
 | `Voice` | `scripts/autoload/voice.gd` | the fifteen recorded lines and the one mouth that says them; anywhere after `Sfx` — it shares the `SFX` bus and calls nothing |
-| `Atlas` | `scripts/autoload/atlas.gd` | the floor's plan and its fog of war; **before `Hud`** (the minimap reads it on every repaint) and **before `Menu`** (the MAP screen connects to `Bus.map_changed` on `_ready`) |
+| `Atlas` | `scripts/autoload/atlas.gd` | the single active-map authority: authored surface plan or dungeon plan and fog; **before `Hud`** (the minimap reads it on every repaint) and **before `Menu`** (the MAP screen connects to `Bus.map_changed` on `_ready`) |
 | `Hud` | `scripts/ui/hud/hud.gd` | the overlay, `CanvasLayer` **50** |
 | `Prompt` | `scripts/autoload/prompt.gd` | which Interactable owns the interact button |
 | `Menu` | `scenes/ui/menu/pause_menu.tscn` | the pause menu, `CanvasLayer` **100** |
@@ -386,7 +386,7 @@ godot --path . --headless res://tools/scenes/_padnames.tscn
 | `move_up/down/left/right` | WASD, arrows | left stick | move |
 | `cam_up/down/left/right` | mouse motion (read in code) | right stick | camera |
 | `attack` | **LMB** | **RB / R1** (pad10) | light attack — the chain, or fire what is in the right hand |
-| `heavy` | **Shift+LMB** | **RT / R2** (axis5+) | active grounded **guard** = dash counter on the **press**; otherwise heavy — one pull, one blow, on the **release**: **tap** = overhead, **hold** = spin, **airborne** = jump attack, **locked** = leap, or fire what is in the right hand. **The modifier only works because `attack` is read exactly** — see below |
+| `heavy` | **Shift+LMB** | **RT / R2** (axis5+) | heavy combo on the **release**: first **tap** = dash-spin opener, second **tap** = leaping overhead; **hold** = magic spin instead; **airborne** = jump attack; or fire what is in the right hand. Guard and lock-on do not change the grounded combo. **The modifier only works because `attack` is read exactly** — see below |
 | `shield` | **RMB** | **LT / L2** (axis4+) | guard — **held** and grounded only, and it targets, and it recentres. It drops on takeoff, cannot be raised in air, and may return on landing while held. In first person the guard drops out and only the target/recentre halves remain |
 | `context` | **Space** | **B / Circle** (pad1) | **tap** = dodge, including in air with a committed direction — **hold** = run, and then it is not a dodge |
 | `use_item` | **R** | **X / Square** (pad2) | drink the selected bottle — §4.1 |
@@ -442,19 +442,14 @@ the same argument `rb_swing.gd` makes for the pad. Its discriminator is timing:
 the light swing lands on the PRESS and the heavy on the RELEASE, so a Shift+LMB
 that is still not swinging two physics frames in is proof the light did not fire.
 
-**The triggers are a pair and that is the layout's spine.** This is BOTW's
-arrangement, and it is right: the left index finger holds a STANCE and the right
-index finger fires what that stance is aimed at. LT raises the guard and takes
-the lock; RT is the dash counter from that active stance and the heavy from
-neutral, and whatever the right hand is holding takes it over. Aiming a bow with
-a shoulder and loosing it with a thumb makes you let go
-of the stick that was aiming.
+**The triggers are a pair and that is the layout's spine.** LT raises the guard
+and takes the lock; RT owns one Heavy combo whether LT is down or not, and
+whatever the right hand is holding takes it over. Aiming a bow with a shoulder
+and loosing it with a thumb makes you let go of the stick that was aiming.
 
 **The sword is on the two right shoulders and the face buttons are verbs.** RB
-is the light chain; RT is the heavy from neutral and the dash counter behind an
-active guard. A talks, B dodges, X drinks what you have selected, Y jumps. The
-stance changes the sword move, not the physical verb: the right index still
-attacks with the weapon in hand.
+is the light chain; RT is the two-hit Heavy combo or its held magic spin. A
+talks, B dodges, X drinks what you have selected, Y jumps.
 
 **LB is bound to no additional world action, on purpose.** It is where spells
 go if they are ever built: casting is a left-hand verb in every game this one
@@ -573,20 +568,15 @@ paging moved off the letter keys entirely — first to Q / R, then, with card #1
 onto the tab strip and the arrows (§ above). The disarm above is what makes it
 safe in both directions.
 
-**The jump attack came off A with the dodge.** It was "guard up, stick still, A"
-— OOT's Z + A read literally, with a four-way stick table deciding between the
-leap, the backflip and two dodges. It is `heavy` now: **airborne** it is the
-slam, **locked on** it is the leap, and neither reads the stick at all. What the
-stick table leaves behind is better — a neutral-stick dodge under a lock or a
-guard is the **backstep**, on `context`, with nothing to fall between.
+**The jump attack is the air slam.** Both sword shoulders throw the same move
+while airborne: `attack` on its press and a held `heavy`. Grounded Heavy always
+belongs to its two-hit combo; lock-on does not replace it with a leap.
 
-`Hero.stick_neutral()` still picks the backstep out of the dodges, and
-`lunge_max_range` is still `K.LOCK_BREAK_RANGE` and not `K.LOCK_RANGE`: inside
-the lock's hysteresis band the dodge has already stood down, so a leap that
-refuses on range there would be a dead press.
+`Hero.stick_neutral()` still picks the backstep out of the dodges. Targeting and
+guarding change movement and defence, not which grounded Heavy step comes next.
 
 **The dodge button is a tap OR a hold, and the two are exclusive.** `context` is
-*measured*: released inside `Hero.sprint_hold_time` (0.18 s) the press was a
+*measured*: released inside `Hero.sprint_hold_time` (0.36 s) the press was a
 **dodge**, and it pays out on the release. Still down when the window expires, it
 was a **run** — `K.SPRINT_SPEED`, 6.07 m/s against the 4.37 run cap, until the
 button or the stamina bar gives out — and it will not roll when it finally comes
@@ -654,19 +644,18 @@ for, so they are started at their launch frame via `jump_start_offset`. Set that
 to zero and the hero visibly squats while already 0.4 m in the air; it was A/B'd
 in `tools/directors/_jump_trace.gd` and the two frames are not subtle.
 
-**There IS a heavy-attack button now, and it is RT.** For most of this project's
-life there was not: the heavy was the charge, held off the same light button, and
-"the game's biggest ordinary blow" was locked behind two presses of a smaller
-one. RB taps the light chain; RT throws the overhead, and *holding* RT winds up
-the **spin**.
+**The heavy-attack button is RT, and it owns a two-hit combo.** RB taps the
+three-hit light chain. A short RT release throws the dash-spin opener; another
+short release inside `chain_window` throws the leaping overhead and completes
+the Heavy combo. The next short release starts again at the opener. LT/guard and
+lock-on do not change either step.
 
-Outside an active guard, **one pull of RT is exactly one blow**, and both heavy
-forms come out on the **release**. A short pull is the overhead; a pull past
-`charge_time` (0.42 s) is the spin *instead of* it. That is Elden Ring's R2, and
-`combat.charged` — public, up at `charge_time` — is which of the two the release
-will pay out. With an accepted grounded guard already active, the press instead
-throws the dash counter immediately; the ordinary charge never arms, so this
-same pull's release owes no overhead or spin.
+**One pull of RT is exactly one blow**, and every grounded result comes out on
+the **release**. A pull past `charge_time` (0.42 s) releases the magic spin
+*instead of* advancing the ordinary Heavy combo. `combat.charged` — public, up
+at `charge_time` — says which path the release will pay out. This remains true
+with LT held: the press winds up, a short release advances the same combo, and a
+long release throws the same magic spin.
 
 They used to be a **sequence** and it was wrong: the overhead fired on the press
 and the charge kept running underneath it, so holding the trigger threw the
@@ -742,26 +731,21 @@ Sound: `sword_charging` rises from the **press**, and both the release swipe and
 the hero's yell fire on the **release**. The yell was on the arm-up at first,
 which announced a commitment the player had not made yet.
 
-**The dash counter is `heavy` pressed with an active grounded guard**
-(`HeroCombat._tick_heavy_button`, gated by `blocking`, not the raw shield input).
-A successful parry's riposte window also maps `attack` to this same counter.
-The routes use `Intent.GUARD_DASH` and `Intent.DASH` respectively, then enter the
-same accepted `_dash_swing` path: a committed forward lunge in which
-`Hero.request_dash` drives him along
+**The dash-spin is Heavy step one and the successful-parry riposte.** Heavy
+reaches it through `Intent.HEAVY`; a successful parry's riposte window maps
+`attack` to `Intent.DASH`. Both enter `_dash_swing`: a committed forward move in
+which `Hero.request_dash` drives him along
 `_forward()` at 8.0 m/s for `dash_drive_time` (0.20 s) under the `SwingDash`
-one-shot, does 3 quarter-hearts, and resets the light chain so it can never be
-step 2 of a combo. It reads as a *decision*: the guard drops, he closes the gap,
-and the recovery is long enough to punish. The guarded press returns before the
-ordinary heavy charge is armed, so holding or releasing that pull cannot add an
-overhead or spin later.
+one-shot and does 3 HP. The Heavy route advances its dedicated
+two-step chain; the riposte route does not. Only the earned riposte carries
+i-frames. LT changes neither the move nor its ordinary vulnerability.
 
 **The air slam is on BOTH shoulders off the floor**, and it is the same move
 either way: `HeroCombat._tick_light_button` throws it on the `attack` press, and
 `_tick_heavy_button` throws it off a **held** `heavy`. Held rather than an edge,
 deliberately — a player who wants to come down on something pulls RT on the way
 up, not at the top of the arc, and an edge would have been spent on the ground as
-an overhead before he ever left it. From neutral, the same pull therefore throws
-the overhead on the floor and the slam once he is off it. It is never buffered:
+a Heavy step before he ever left it. It is never buffered:
 a slam that fires because you pressed attack a moment before you left the ground
 is a slam you did not ask for.
 
@@ -1083,6 +1067,14 @@ is deliberate:
 | Enemies, props | a `HealthComponent` child | health dies with the body |
 | The hero | `Hero.take_hit(hit) -> bool` | his health lives in `Game` so it survives the scene change extracting causes |
 
+Health is integer HP throughout this path. One point is `K.HEALTH_POINT`; the
+hero starts at `K.START_HEALTH_POINTS` (12), a permanent `&"health"` upgrade adds
+`K.HEALTH_UPGRADE_POINTS` (4), each Vigor rung adds
+`K.JEWEL_VIGOR_HEALTH_POINTS` (2), and `K.MAX_HEALTH_POINTS` caps the hero's
+maximum health at 32. The live fields are `health_points` and
+`max_health_points` on both
+`Game` and `HealthComponent`.
+
 `DamageArea` asks for `take_hit` first and falls back to the component. **Do not
 reach around it** — the box-built placeholder enemy (`Crawler`, since deleted)
 did, calling `hero.take_hit` itself, and that is the only reason it was the one
@@ -1095,17 +1087,17 @@ first is announced on `connected`.
 The hero resolves defences in one order inside `Hero.take_hit`: parry, roll and
 perfect-dodge handling, existing i-frames, then the frontal shield, then damage.
 A shield block is eligible only while `Game.stamina > 0.0`; when it catches a
-blow it spends `hit.amount * K.STAMINA_BLOCK_PER_QUARTER` through
+blow it spends `hit.amount` scaled by the per-HP stamina block cost through
 `Game.spend_stamina(cost, true)` before block feedback. Partial spending is the
 rule: any positive stamina catches that blow and clamps to zero, while the next
-blow lands if stamina remains empty. `Hit.amount`, in quarter-hearts, is the one
+blow lands if stamina remains empty. `Hit.amount`, in HP, is the one
 measure of attack weight; do not add a second weight field.
 
 `HealthComponent` (`scripts/combat/health_component.gd`, owned by P4):
 
 ```gdscript
 class_name Hit extends RefCounted
-var amount: int          # in QUARTER hearts (K.QUARTER); 4 = one heart
+var amount: int          # integer HP; one point is K.HEALTH_POINT
 var from: Vector3        # world position the hit came from
 var knockback: float     # metres/sec applied away from `from`
 var stun: float          # seconds the victim is stunned
@@ -1117,6 +1109,8 @@ var odds_knockdown: float  # authored override, -1 = use the curve
 var odds_stagger: float    # authored override, -1 = use the curve
 
 # on HealthComponent:
+var health_points: int
+var max_health_points: int
 func apply_hit(hit: Hit) -> void
 signal damaged(hit: Hit)
 signal died
@@ -1413,7 +1407,7 @@ The cursor walks `order()`, never `lines()`: the smith's board reorders what
 `lines()` hands over, and its LENGTH depends on what the player owns (`arrows`
 does not appear until you own a bow). **No fixed press count into a counter is
 ever safe** — `mvp_loop` walks the board by `TradeScreen.cursor_label()` for that
-reason, having once silently bought a heart container instead of a bag slot.
+reason, having once silently bought a health upgrade instead of a bag slot.
 
 ### Counters — one screen, one contract, a subclass per shop
 
@@ -1756,8 +1750,8 @@ var components: Dictionary[StringName, int] = {}   # the workbench, survives dea
 
 func forge_level(track: StringName) -> int         # 0..K.FORGE_MAX, clamped
 
-func sword_bonus() -> int        # K.EDGE_DAMAGE[level]   quarter-hearts
-func armour_soak() -> int        # K.PLATE_SOAK[level]    quarter-hearts
+func sword_bonus() -> int        # K.EDGE_DAMAGE[level]   HP
+func armour_soak() -> int        # K.PLATE_SOAK[level]    HP
 func guard_arc() -> float        # K.GUARD_ARC[level]     degrees
 func bow_draw_time() -> float    # K.BOW_DRAW[level]      seconds
 func hook_reach() -> float       # K.CHAIN_REACH[level]   metres
@@ -1992,6 +1986,8 @@ func start_draught(id: StringName, seconds: float) -> void
 
 Rules:
 
+- **Health Draught is `&"health_draught"`.** It restores 8 HP immediately and
+  never enters the timed `draughts` dictionary.
 - **There is no bottle count.** `bottle_contents.size()` is it. A separate
   integer is a second source of truth that will disagree with this one.
 - **A bottle is USED, never drawn**, and that asymmetry is the whole reason
@@ -2135,7 +2131,7 @@ Grip convention, **verified by render**, not by reading the GLB:
 Do not compute a bone-socket offset analytically. The rest-pose numbers are in a
 rotated FBX space and will mislead you. Render it, look, adjust, render again.
 
-### The sword — three lights, a heavy, and a lunge
+### The sword — three lights and a two-hit Heavy
 
 `HeroCombat` owns what a blow COSTS and DOES; `Hero` owns the pose and the
 facing. The split is why `Hero.Swing` exists at all: the animation tree needs one
@@ -2149,21 +2145,21 @@ hero.request_lunge(duration: float, drive_time: float, hop: float) -> bool
 hero.wish_dir() -> Vector3          # the stick, camera-relative, in world space
 ```
 
-| Move | Clip | Button | Damage (quarter-hearts) |
+| Move | Clip | Button | Damage (HP) |
 |---|---|---|---|
 | light 1 | `ss_slash_01` | attack | 2 |
 | light 2 | `ss_slash_03` | attack, again inside `chain_window` | 2 |
 | light 3 (finisher) | `ss_slash_04` | attack, again | 4 |
-| heavy | `ss_slash_04` | heavy, **tapped** — on the release | 4 |
-| spin | `ax_melee_attack_360_low` | heavy **held** past `charge_time`, on release, *instead of* the heavy | 5, all round |
-| lunge | `ss_attack_01` | heavy, tapped, **locked on** and in range | 4 |
-| dash | `ss_attack_03` | heavy on the press with an **active guard**, or attack in the riposte window | 3 |
+| Heavy 1 | `ss_attack_03` | heavy, first **tap** — on the release | 3 |
+| Heavy 2 | `ss_slash_04` | heavy, second **tap** inside `chain_window` | 4 |
+| magic spin | `ax_melee_attack_360_low` | heavy **held** past `charge_time`, on release, *instead of* advancing Heavy | 5, all round |
+| riposte | `ss_attack_03` | attack in the earned riposte window | 3 |
 
 The clips were picked off `tools/directors/swing_lookdev.gd`, which renders
 every frame of every swing in the library — not off their filenames, which carry
-no information at all. The three lights are a SEQUENCE (down, up, overhead), and
-`ss_attack_01` is the only clip in which the hero's feet leave the ground, which
-is why it is the lunge and was a terrible heavy.
+no information at all. The three lights are a SEQUENCE (down, up, overhead).
+Heavy is its own sequence (short turning dash, leaping overhead), sharing the
+overhead payoff without sharing combo state.
 
 The spin is the only grounded **combat** swing borrowed from another
 character's moveset: the sword-and-shield set has no 360 in it. The axe
@@ -2185,14 +2181,14 @@ past before you could see it was an overhead. `chain_time_scale` (0.92, 1.65)
 multiplies it, so steps 2 and 3 move with it, and the damage windows are
 fractions of it, so the blade's live slice sits in the same place in the swing.
 
-**The three ordinary lights, tap-heavy, dash counter, and air slam own a blade
+**The three ordinary lights, both Heavy steps, riposte, and air slam own a blade
 trail.**
 `HeroCombat` creates and publishes `SwordSlashTrail`
 (`scripts/combat/sword_slash_trail.gd`), binds it to the mounted sword holder,
 and starts a stroke only from the accepted move path: `_light_swing` after
 `Hero.request_attack` accepts `LIGHT1`, `LIGHT2` or `LIGHT3`, `_heavy_swing`
-after the tap-heavy is accepted, and `_dash_swing` after either dash-counter
-route is accepted, and the `Intent.SLAM` branch after `Hero.request_slam()`
+after the Heavy finisher is accepted, `_dash_swing` after either Heavy step one
+or the riposte is accepted, and the `Intent.SLAM` branch after `Hero.request_slam()`
 accepts the airborne strike. Each ordinary swing passes its own damage window.
 The slam passes its full measured airborne interval, `Hero.slam_strike_time`,
 with an active window of 0.0–1.0; this is the same exact value `Hero` uses to
@@ -2200,11 +2196,10 @@ scale the dive clip, so the water sheet runs from commit through contact on ever
 measured drop. The ribbon samples the real
 weapon convention — an inner point at 0.12 m and an outer point at 0.88 m along
 the holder's local `+Y` — into world space, so the down, up, overhead, thrust,
-and jump-slam clips leave their own swept surfaces. The tap-heavy happens to
-reuse the `LIGHT3` clip, while the counter uses the riposte dash; all enter only
-through their named accepted paths. Only a counter backed by the earned riposte
-window carries i-frames; ordinary guard + heavy is a committed stance attack.
-Held charge/wind-up, spin, lunge, parry and flurry produce no ordinary trail.
+and jump-slam clips leave their own swept surfaces. Heavy step two reuses the
+`LIGHT3` clip, while step one and the riposte share the dash; all enter only
+through their named accepted paths. Only the earned riposte carries i-frames.
+Held charge/wind-up, magic spin, parry and flurry produce no ordinary trail.
 
 Sampling is confined to each ordinary sword attack's existing damage window
 (0.22–0.62 of the move for the light chain), while the slam samples its full
@@ -2224,14 +2219,14 @@ strongly. Three parallel highlight currents break up the interior; travelling
 brightness runs along them without displacing their clean arc silhouettes. A
 sub-pixel screen-texture offset refracts the room through the darker gaps,
 producing a layered water-sheet read without changing the global environment.
-The finisher intensity gives the chain finisher, tap-heavy, dash counter, and
+The finisher intensity gives the chain finisher, Heavy combo, riposte, and
 slam the same modest opacity lift, keeping ordinary and earned sword attacks
 visibly below `SpinVfx`'s charged spectacle. Proved at gameplay camera distance
-for all three lights, the tap-heavy, the riposte counter, the real jump +
+for all three lights, the Heavy opener, the riposte counter, the real jump +
 held-heavy slam (including one stroke, a visible captured arc, follow-through
 cleanup, and exit from `SLAM`), and the charged-spin null control by
-`tools/directors/sword_slash_trail.gd`. The active-guard + heavy route proves
-the same one-stroke ribbon lifecycle through `tools/directors/guard_buttons.gd`.
+`tools/directors/sword_slash_trail.gd`. Guarded Heavy's shared opener proves the
+same one-stroke ribbon lifecycle through `tools/directors/guard_buttons.gd`.
 
 **The chain is buffered.** A press in the back half of a swing
 (`chain_buffer_from`) is remembered and paid out one frame AFTER the swing ends
@@ -2239,42 +2234,22 @@ the same one-stroke ribbon lifecycle through `tools/directors/guard_buttons.gd`.
 swing clock runs a frame ahead of his `MoveState.ATTACK`. Ask him on the
 boundary frame and he refuses, and the press vanishes.
 
-**The heavy and the spin are one pull** (§4). The press starts the wind-up and
-throws nothing; the release throws whichever of the two `combat.charged` says,
-buffered like any other intent if a swing is still running. Both END the chain
-rather than counting as a step in it.
+**Heavy and the magic spin share one pull** (§4). The press starts the wind-up
+and throws nothing. A short release advances `_heavy_step`; an armed release
+throws the magic spin instead and resets the ordinary Heavy combo. The Heavy
+Intent is buffered in the back half of step one, so an early second tap pays out
+the overhead one frame after the opener ends.
 
 A wind-up **taken** from the player mid-pull — a shop opening, an item drawn, the
 ground leaving his feet — pays out nothing at all, and the release edge that
 arrives afterwards is swallowed (`_charge_t < 0`). Otherwise a cancelled hold
-comes back as an overhead a second later, which is the same double-blow bug
+comes back as a Heavy step a second later, which is the same double-blow bug
 wearing a different hat.
-
-**The lunge is what Z-targeting buys.** It refuses without a lock, on purpose;
-a version that also fired unlocked would just be a better standing attack. It
-has no stick gate and no chain gate — both existed to tell a leap apart from an
-ordinary swing pressed with the same thumb, and on a dedicated button a hidden
-rule is just a button that intermittently does nothing.
-
-**And no near range gate.** There was one — `lunge_min_range`, 1.9 m — whose
-argument was that point blank there is no gap to close, so the leap reads as
-hopping on the spot. 1.9 m is *inside sword range*: it is where you stand when
-you are fighting something, so the button did nothing at the only distance
-anyone presses it from, and that is precisely how it got reported as broken.
-Point blank the leap now comes out with no travel (`request_lunge` clamps the
-gap at zero), the clip's own jump carries the read, and the blow lands. The far
-gate is the **lock's** reach — `K.LOCK_BREAK_RANGE`, the number the lock itself
-breaks at rather than the one it acquires at — for the same reason the near one
-went: if you can lock it you can leap at it, and anything shorter is a second
-invisible range to learn. Inside the hysteresis band between the two the dodge
-has already stood down for the leap (§4), so a leap refusing there would be a
-dead press rather than a fallback. `lunge_max_speed` is what stops a long lock becoming a
-teleport. Swept at 1.4 / 2.6 / 4.2 / 6.5 m by `tools/directors/lt_moveset.gd`.
 
 Proved by `tools/directors/p4_combo.gd` (the chain, in damage),
 `tools/directors/p4_charge.gd` (the hold: a tap is a tap, a short hold is a tap,
-a long hold arms and pays) and `tools/directors/p4_lunge.gd` (the leap, in
-metres closed against an unlocked control). The chain directors photograph
+a long hold arms and pays), and `tools/directors/heavy_combo.gd` (Heavy→Heavy,
+buffering, guard/lock invariance, and hold-to-spin). The chain directors photograph
 almost nothing — `capture()` stalls the game clock for longer than the chain
 window, so a director that screenshots mid-chain breaks the thing it is
 measuring. The poses are `swing_lookdev`'s job.
@@ -2521,11 +2496,11 @@ left turns him 111°, of which 101° is his own. Guarded, the same input turns h
 across the whole guarded strafe, which is what says the autoswing suppression is
 doing the work rather than the threshold.
 
-The four guarded dodges and the counter's forward travel are verified by
+The four guarded dodges and Heavy step one's forward travel are verified by
 `tools/directors/guard_moveset.gd`, which asserts the `Dodge` that fired, the
-dominant travel axis, and the counter's `SwingDash` path. The exact guarded-heavy
+dominant travel axis, and the opener's `SwingDash` path. The exact guarded-heavy
 input contract is verified by `tools/directors/guard_buttons.gd`, including the
-disarmed charge, one live and cleaned ribbon stroke, and exit from the attack
+shared release-based wind-up, one live and cleaned ribbon stroke, and exit from the attack
 state. The moveset director runs each dodge
 **twice**: once measured with no captures, once photographed. That is not
 redundancy. `rig.capture()` consumes game time, so a window that samples travel
@@ -2647,12 +2622,12 @@ far shots streak, which is the giveaway tell of a clone.
 `L_WORLD | L_HOOK | L_ENEMY`, and a hit on `L_ENEMY` neither damages nor pulls:
 
 ```gdscript
-foe.freeze(K.HOOK_FREEZE)   # 1.0 s, State.FROZEN, zero quarters of damage
+foe.freeze(K.HOOK_FREEZE)   # 1.0 s, State.FROZEN, zero HP damage
 foe.is_frozen() -> bool
 ```
 
 Zero damage is the design, not a gap — `HealthComponent.apply_hit` refuses a
-zero-quarter blow anyway, so nothing is sent down the damage path at all
+zero-HP blow anyway, so nothing is sent down the damage path at all
 (§ "one damage path"). The hero is handed straight back rather than dragged,
 because reeling him into the thing he just stopped would spend the shot's reward
 on closing the distance he wanted. `freeze` interrupts whatever the monster was
@@ -2951,7 +2926,7 @@ StoryDb.SMITH_TOKEN                   # &"makers_mark" — the object the gate r
   miniboss drops, which is what brings the smith back. It is the only rung on the
   arrival ladder that is not a body count, and the asymmetry is deliberate: the
   smith has to be reachable on the first descent or `arrows`, `bag_slot` and
-  `heart` are unreachable for an hour. See `docs/METAGAME.md` §6.
+  `health` are unreachable for an hour. See `docs/METAGAME.md` §6.
 - **The latch is what makes an object safe to gate on.** `unlocked()` stamps the
   arrival flag the first time the metric is met, so spending, dropping or losing
   the mark cannot un-arrive Brannoc. `tools/directors/roster.gd` beat D erases
@@ -3072,21 +3047,23 @@ off the disk.
 # scripts/autoload/game_state.gd
 var deaths: int = 0                       # incremented ONLY by Run.die()
 func mercy_rate() -> float                # 0.0 unless Settings.mercy; K.MERCY_* otherwise
-func resync_maxima(fill := false) -> void # rebuild max_quarters / max_stamina from `upgrades`
+var health_points: int                    # current integer HP
+var max_health_points: int                # 12..32, derived from `upgrades`
+func resync_maxima(fill := false) -> void # rebuild max_health_points / max_stamina from `upgrades`
 ```
 
 `Game.damage()` is the only place mercy applies, and it never zeroes a blow: a
-one-quarter hit lands in full, and the softened fraction is carried in
+one-HP hit lands in full, and the softened fraction is carried in
 `_mercy_carry` between hits rather than rounded per hit. **Nothing else reads
 `mercy_rate()`** — not `Prog`, not the spawner, not the telegraphs — because the
 moment the world reads it this stops being forgiveness and becomes difficulty
 scaling (GDD §7.1's second property).
 
 `resync_maxima()` exists because Recut has to run a purchase *backwards*.
-Deriving both maxima from `upgrades` means the jeweller's undo is one call, and
-it replaced `add_heart_container()` / `add_max_stamina()`, which could only ever
-count up. Pass `fill := true` on a purchase (the player should feel the new
-heart at once) and leave it false on a Recut, where clamping down is the point.
+Deriving both maxima from `upgrades` means the jeweller's undo is one call; the
+old one-way maximum-growth helpers could only ever count up. Pass `fill := true`
+on a purchase (the player should feel the new maximum at once) and leave it
+false on a Recut, where clamping down is the point.
 
 ```gdscript
 Saves.peek(slot: int) -> Dictionary       # readable list header; empty=true if unused
@@ -3207,29 +3184,34 @@ extra row, `ENDLESS`, returned for every level past 4 — plus
 `LONG_DESCENT_RELIC`, which is a named row rather than a field on `ENDLESS`
 because a relic in that row would drop on floor 5, 6, 7 and forever.
 
-### The map — compact surface plans and one dungeon plan
+### The map — one active authority in every playable zone
 
-There is **one dungeon plan** in this game. `Atlas` holds it;
+There is **one active map system** in this game. `Atlas` holds the active source;
 `MapDraw.draw_map` is the only thing that draws it, and it is called twice — by
 `Hud._draw_minimap` into a 126 px square in the top-right corner, and by
-`MenuMapPanel` into the MAP tab of the pause menu. Do not write a second dungeon
-map; a menu map that re-derived the layout is the one that goes stale.
+`MenuMapPanel` into the MAP tab of the pause menu. Do not write a second map or
+let either consumer discover one independently; that is how the two views go stale.
 
-Authored exterior zones use the same compact frame but a separate ownership
-contract: the live scene exposes immutable world-space paths, footprints and
-landmarks through `surface_map_plan()`, and `SurfaceMapDraw` only projects that
-plan around the centred player. The HUD never owns a duplicate surface layout,
-and a scene with no provider produces no empty map frame.
+Authored exterior zones register themselves with `Atlas` after every
+map-relevant node exists and unregister on exit. Atlas alone asks the active
+provider's `surface_map_plan()` for an immutable current snapshot of world-space
+paths, footprints and landmarks; that keeps moving service markers current
+without either renderer discovering the scene. `open_floor` makes the dungeon
+active; surface registration makes that zone active. An outgoing provider may
+clear only its own registration, and `Atlas.has_map()` also rejects a freed
+provider, so no previous zone can remain on either screen. Every authority
+change emits `Bus.map_changed`; a scene with no active map produces no empty map
+frame.
 
-The two dungeon presentations differ in the size of the box and in **one flag**,
-`follow`. The MAP screen fits the whole floor into its well and centres it there. The corner
-minimap holds the hero dead centre at a fixed pitch (`MapDraw.FOLLOW_SPAN`, 3.4
-cells across the box) and lets the floor scroll under him — so it is also the
-only one of the two that draws outside its box, and `box` is therefore its clip
-as well as its frame. Every fill goes through `MapDraw._rect`, which intersects;
-there is no `clip_contents` Control to set, because the HUD is one `_draw`
-surface and clipping it would clip the whole overlay. Glyphs are dropped whole
-rather than cut — half a chest is a gold bar, not a smaller chest.
+The two presentations differ in the size of the box and in **one flag**,
+`follow`. The MAP screen derives bounds from the active plan and fits it into its
+well; zoom and pan use those same bounds for dungeon cells or surface world X/Z.
+The corner minimap holds the hero dead centre: dungeon floors use a fixed pitch
+(`MapDraw.FOLLOW_SPAN`, 3.4 cells across the box), while authored surfaces use
+their plan's `view_range`. The following view is clipped by the box. Dungeon
+fills go through `MapDraw._rect`; authored paths and areas use the same box as
+their segment/polygon clip. Glyphs are dropped whole rather than cut — half a
+chest or landmark is not a smaller symbol.
 
 `Dungeon._publish()` is the **only writer** of the room graph, and it writes it
 in the same pass that builds the geometry. Markers go on from `_populate` and
@@ -3263,9 +3245,9 @@ for an annex exactly as it does for a corridor (`Atlas.annex_dirs_of`), and stub
 the first box the player has not walked into. Before this existed, going through
 a boss door walked you off the edge of the map.
 
-The plan is not persisted and does not survive the run: `open_floor` wipes the
-previous floor, and `Bus.run_ended` wipes it entirely. `Atlas.bounds()` is the
-whole floor including fogged rooms **and its annexes**, deliberately — fitting to
+The dungeon plan is not persisted and does not survive the run: `open_floor`
+wipes the previous floor, and `Bus.run_ended` wipes it entirely. `Atlas.bounds()`
+is the whole floor including fogged rooms **and its annexes**, deliberately — fitting to
 the explored subset would re-scale and re-centre the map every time a door
 opened, which makes the one instrument whose job is orientation the least stable
 thing on screen. (The annexes are in it because the MAP screen clips to its well,
@@ -3275,6 +3257,12 @@ Markers are drawn shapes in `Pal` colours, not textures. At 6 px on the minimap
 a photograph of a chest is four brown pixels; a gold box with a dark band is a
 chest. `Atlas`'s marker ids and `MapDraw.MARK_ORDER` are two halves of one list —
 an id with no glyph draws nothing, silently. Add to both.
+
+Surface routes, areas and landmarks are also drawn shapes in `Pal` colours.
+Their glyph vocabulary lives in `MapDraw`, and the MAP legend filters that same
+vocabulary against the landmarks in `Atlas.surface_plan()`; it does not maintain
+a second list of which places exist. The surface header names the registered
+plan and counts its routes, areas and places from that plan.
 
 ### Rewards — a prize does not exist until you have beaten what guards it
 

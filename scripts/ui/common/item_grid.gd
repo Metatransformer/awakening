@@ -85,7 +85,7 @@ var _index_of: Array[int] = []
 ##
 ## It stopped being expensive when the cell went square. Five of the old 140 px
 ## card was 732 px and the pouch had to take a hundred of it off the paper doll
-## and the detail column to fit; five 84 px tiles is **452**, which is why the
+## and the detail column to fit; five 60 px tiles is **332**, which is why the
 ## vendor's two-across board (`TradeScreen.TRADE_COLS`) could become five too.
 ## One number, one picture of a collection, on every screen that draws one.
 ##

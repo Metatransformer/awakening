@@ -1,22 +1,20 @@
 extends RefCounted
-## Card #118's acceptance test, as a measurement instead of an opinion.
+## Cards #118 and #175's acceptance test, as a measurement instead of an opinion.
 ##
 ##   timeout 400 tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/upgrade_board.gd \
 ##     --out=/tmp/board/x.png --size=1280x720 --warmup=60
 ##
-## The card's own words: *"Two saves at different progressions, screenshotted at
-## the smith, and you can tell them apart at a glance without reading a word."*
-## That is a claim about PIXELS, so it is settled in pixels — the two boards are
-## shot and diffed, and the diff has to be large. The old board would have failed
-## it: a maxed track and a fresh one differed by a tick, a numeral and 45% of
-## alpha on cells that were the same size in the same places.
+## The board is a Moonlighter-like progression map: service tabs, one textured
+## stone row per track, authored names on every full-size rung, arrows between
+## rungs, and visible locks on the future. A persistent inspector beside it owns
+## the selected upgrade's stat result and icon/required/owned recipe rows.
 ##
 ## Four beats:
 ##
-##   A  a fresh smith            — every ladder at rung 0
-##   B  the same smith, climbed  — every ladder maxed, both bought armour paths
+##   A  a fresh smith            — tabs, named nodes, locks, stone and recipe
+##   B  the same smith, climbed  — the active tab has no locks left
 ##   C  A vs B, as a pixel count over the board's own rect
 ##   D  every other counter that draws a board, so a `groups()` row with no
 ##      `icon` token or a bad one is found here and not by a player
@@ -70,8 +68,18 @@ func _ck(ok: bool, what: String) -> bool:
 ## already wrote down: this is a quarter of a million pixels a call and GDScript
 ## charges per call, not per byte.
 func _ink(a: Image, b: Image) -> float:
-	if a == null or b == null or a.get_size() != b.get_size():
+	if a == null or b == null:
 		return -1.0
+	# Footer copy and a material recipe can change the board well by a few pixels.
+	# Compare the common top-left board rect; both inputs are already crops of the
+	# same named BoardScroll.
+	if a.get_size() != b.get_size():
+		var common := Vector2i(mini(a.get_width(), b.get_width()),
+			mini(a.get_height(), b.get_height()))
+		if common.x <= 0 or common.y <= 0:
+			return -1.0
+		a = a.get_region(Rect2i(Vector2i.ZERO, common))
+		b = b.get_region(Rect2i(Vector2i.ZERO, common))
 	var ra := _rgb(a)
 	var rb := _rgb(b)
 	var total := a.get_width() * a.get_height()
@@ -165,9 +173,23 @@ func _fresh_smith() -> void:
 
 	var ladder := screen.find_child("Board", true, false) as UpgradeLadder
 	_ck(ladder != null, "A0 the smith draws an UpgradeLadder")
-	_ck(_faces(ladder) > 0, "A1 every row has a face (%d drawn)" % _faces(ladder))
-	_ck(_sockets(ladder) > 0,
-		"A2 an unclimbed rung is a socket, not a cell (%d sockets)" % _sockets(ladder))
+	var rows := _rows(ladder)
+	var named := _named_rungs(ladder)
+	_ck(_tabs(ladder) >= 2, "A1 the smith exposes service tabs (%d drawn)" % _tabs(ladder))
+	_ck(_faces(ladder) == rows,
+		"A2 every visible track has a face (%d of %d)" % [_faces(ladder), rows])
+	_ck(_stone_tracks(ladder) == rows,
+		"A3 every visible track has textured stone (%d of %d)" % [_stone_tracks(ladder), rows])
+	_ck(named.x == named.y and named.y > 0,
+		"A4 every rung has an authored name (%d of %d)" % [named.x, named.y])
+	_ck(_square_rungs(ladder), "A4b every upgrade rung is square (%s)"
+		% UpgradeLadder.RUNG_SIZE)
+	_ck(_locks(ladder) > 0,
+		"A5 future rungs are full locked nodes (%d locks)" % _locks(ladder))
+	var detail := screen.find_child("UpgradeDetail", true, false) as Control
+	_ck(detail != null, "A6 progression keeps a persistent detail inspector")
+	_ck(_recipe_icons(detail) > 0,
+		"A7 the selected recipe shows material icons (%d drawn)" % _recipe_icons(detail))
 
 	_fresh = await _board_shot(screen, _out.path_join("a_fresh.png"))
 	screen.close()
@@ -185,15 +207,15 @@ func _climbed_smith() -> void:
 	await _rig.wait_frames(16)
 
 	var ladder := screen.find_child("Board", true, false) as UpgradeLadder
-	_ck(_sockets(ladder) == 0,
-		"B0 a climbed board has no sockets left (%d)" % _sockets(ladder))
+	_ck(_locks(ladder) == 0,
+		"B0 a climbed active tab has no locks left (%d)" % _locks(ladder))
 
 	var climbed := await _board_shot(screen, _out.path_join("b_climbed.png"))
 
 	# C. The card's own sentence, as a number.
 	var ink := _ink(_fresh, climbed)
 	if ink < 0.0:
-		_ck(false, "C the two boards are not the same size — nothing to compare")
+		_ck(false, "C the two board crops have no common pixels to compare")
 	else:
 		_ck(ink >= MIN_DIFF,
 			"C two saves are told apart without reading a word (%.1f%% of the board differs, want >= %.0f%%)"
@@ -202,10 +224,8 @@ func _climbed_smith() -> void:
 	await _rig.wait_frames(8)
 
 
-## Every other counter that draws a board. A `groups()` row whose `icon` token has
-## no file is not a crash and not a warning the player sees — it is a row that
-## quietly has no face — so the only thing that finds it is counting faces
-## against rows on each counter in turn.
+## Every other counter that draws a board. Besides catching missing track art,
+## this proves the shared tab/name/stone contract against each catalogue shape.
 func _other_counters() -> void:
 	for row in RelicDb.RELICS:
 		Game.set_flag(RelicDb.flag_held(row["id"]))
@@ -224,6 +244,14 @@ func _other_counters() -> void:
 		if rows > 0:
 			_ck(faces == rows, "%s every row has a face (%d of %d)"
 				% [String(c[2]), faces, rows])
+			_ck(_tabs(ladder) > 0, "%s has at least one upgrade tab" % String(c[2]))
+			_ck(_stone_tracks(ladder) == rows,
+				"%s every row has textured stone (%d of %d)"
+					% [String(c[2]), _stone_tracks(ladder), rows])
+			var named := _named_rungs(ladder)
+			_ck(named.x == named.y and named.y > 0,
+				"%s every rung is named (%d of %d)"
+					% [String(c[2]), named.x, named.y])
 		_rig.still_the_frame()
 		await _rig.wait_frames(3)
 		await _rig.capture(_out.path_join(String(c[2]) + ".png"))
@@ -233,15 +261,11 @@ func _other_counters() -> void:
 
 # --- reading the board -------------------------------------------------------
 
-## Rows are the ladder's direct PanelContainer children — one plate per group.
+## Rows are the named track panels under the active tab's Tracks container.
 func _rows(ladder: UpgradeLadder) -> int:
 	if ladder == null:
 		return 0
-	var n := 0
-	for c in ladder.get_children():
-		if c is PanelContainer:
-			n += 1
-	return n
+	return ladder.find_children("Track_*", "PanelContainer", true, false).size()
 
 
 ## Faces are TextureRects with a texture on them. Counted rather than assumed,
@@ -253,19 +277,78 @@ func _faces(ladder: UpgradeLadder) -> int:
 	var n := 0
 	for node in ladder.find_children("*", "TextureRect", true, false):
 		var t := node as TextureRect
-		if t.texture != null and t.custom_minimum_size.x == UpgradeLadder.FACE_PX:
+		if t.texture != null and is_equal_approx(t.custom_minimum_size.x,
+				UpgradeLadder.ROW_ICON_PX):
 			n += 1
 	return n
 
 
-## Sockets are the bare `Panel`s. `ItemCell` builds Buttons and the plates are
-## PanelContainers, so a plain Panel in this subtree is a socket and nothing else.
-func _sockets(ladder: UpgradeLadder) -> int:
+func _tabs(ladder: UpgradeLadder) -> int:
+	if ladder == null:
+		return 0
+	return ladder.find_children("Tab_*", "Button", true, false).size()
+
+
+func _stone_tracks(ladder: UpgradeLadder) -> int:
 	if ladder == null:
 		return 0
 	var n := 0
-	for node in ladder.find_children("*", "Panel", true, false):
-		if node.get_class() == "Panel":
+	for node in ladder.find_children("Track_*", "PanelContainer", true, false):
+		if (node as PanelContainer).get_theme_stylebox("panel") is StyleBoxTexture:
+			n += 1
+	return n
+
+
+## A future rung remains a full Button and carries the generated lock glyph.
+func _locks(ladder: UpgradeLadder) -> int:
+	if ladder == null:
+		return 0
+	var n := 0
+	for node in ladder.find_children("Rung_*", "Button", true, false):
+		var button := node as Button
+		if button.focus_mode != Control.FOCUS_NONE:
+			continue
+		for child in button.find_children("*", "TextureRect", true, false):
+			if is_equal_approx((child as TextureRect).custom_minimum_size.x, 17.0):
+				n += 1
+				break
+	return n
+
+
+## x = authored/readable names, y = total rungs. The rejected set is the old
+## Roman-numeral-only board, plus the empty label failure.
+func _named_rungs(ladder: UpgradeLadder) -> Vector2i:
+	if ladder == null:
+		return Vector2i.ZERO
+	var good := 0
+	var total := 0
+	var roman := ["I", "II", "III", "IV", "V", "VI"]
+	for node in ladder.find_children("Rung_*", "Button", true, false):
+		total += 1
+		var labels := node.find_children("*", "Label", true, false)
+		var text := String((labels[0] as Label).text).strip_edges() if not labels.is_empty() else ""
+		if not text.is_empty() and not roman.has(text):
+			good += 1
+	return Vector2i(good, total)
+
+
+func _square_rungs(ladder: UpgradeLadder) -> bool:
+	if ladder == null or not is_equal_approx(UpgradeLadder.RUNG_SIZE.x,
+			UpgradeLadder.RUNG_SIZE.y):
+		return false
+	for node in ladder.find_children("Rung_*", "Button", true, false):
+		var size := (node as Button).custom_minimum_size
+		if not is_equal_approx(size.x, size.y):
+			return false
+	return true
+
+
+func _recipe_icons(detail: Control) -> int:
+	if detail == null:
+		return 0
+	var n := 0
+	for node in detail.find_children("*", "TextureRect", true, false):
+		if (node as TextureRect).texture != null:
 			n += 1
 	return n
 

@@ -66,18 +66,18 @@ const PATHS := {
 
 ## What each path is called on the counter, and the sentence under it.
 ##
-## Every one names the unit the player FEELS it in -- a heart, a quarter, a
+## Every one names the unit the player FEELS it in -- HP, a
 ## second of running -- because GDD §6.6's rule for the whole gear loop is that
 ## a stat needing a tooltip is a stat that does not matter.
 const PATH_INFO := {
 	&"vigor": {
-		"label": "VIGOR", "blurb": "Two rungs is a whole heart more to lose.",
+		"label": "VIGOR", "blurb": "Each rung grants 2 max HP immediately.",
 	},
 	&"focus": {
 		"label": "FOCUS", "blurb": "A longer breath. One more roll before the well is dry.",
 	},
 	&"edge": {
-		"label": "EDGE", "blurb": "The stone bites for you. Four rungs is a quarter-heart a swing.",
+		"label": "EDGE", "blurb": "The stone bites for you. Four rungs adds 1 HP a swing.",
 	},
 	&"swift": {
 		"label": "SWIFT", "blurb": "Back on your feet. This is where heavy plate is paid for.",
@@ -88,6 +88,15 @@ const PATH_INFO := {
 	&"wind": {
 		"label": "WIND", "blurb": "The breath comes back quicker. Nothing else does.",
 	},
+}
+
+const RUNG_NAMES := {
+	&"vigor": ["Seed of Vigor", "Rooted Vigor", "Crimson Pulse", "Valen's Vigor"],
+	&"focus": ["Quiet Mind", "Clear Thought", "Stillwater Focus", "Seer's Eye"],
+	&"edge": ["Keen Shard", "Biting Stone", "Razor Facet", "Wyrmtooth"],
+	&"swift": ["Quickstep Cut", "Fleetstone", "Windcarved Gem", "Mercury Ring"],
+	&"ward": ["Wardstone", "Iron Halo", "Bulwark Seal", "Aegis Bracelet"],
+	&"wind": ["Breathstone", "Gale Setting", "Stormglass", "Endless Wind"],
 }
 
 ## What rung N costs in stones, index 0 being the FIRST one bought -- the same
@@ -112,7 +121,7 @@ const PARTS_LADDER := [
 ]
 
 ## Gold for rung N, index 0 first. Steeper than the forge's geometric ramp on
-## purpose: four rungs of Edge is +1 quarter-heart of damage forever, which is a
+## purpose: four rungs of Edge is +1 HP of damage forever, which is a
 ## third of what the sword's whole ladder buys, and it must not be the cheaper
 ## way to get there.
 const GOLD_LADDER := [90, 180, 340, 620]
@@ -185,8 +194,9 @@ static func groups() -> Array[Dictionary]:
 			var i: int = at.get(blank_id(slot), -1)
 			if i < 0:
 				continue
-			out.append({"title": title, "icon": glyph, "tracks": [{
-				"name": "BLANK", "line": i, "owned": 0, "rungs": 1}]})
+			out.append({"title": title, "tab": title, "icon": glyph, "tracks": [{
+				"name": "BLANK", "line": i, "owned": 0, "rungs": 1,
+				"rung_names": _one_rung(String(BLANKS[slot]["name"]).capitalize())}]})
 			continue
 		var tracks: Array = []
 		for path: StringName in PATHS[slot]:
@@ -198,9 +208,10 @@ static func groups() -> Array[Dictionary]:
 				"line": int(at.get(track, -1)),
 				"owned": Game.jewel_level(track),
 				"rungs": K.JEWEL_MAX,
+				"rung_names": _rung_names(path, K.JEWEL_MAX),
 			})
 		if not tracks.is_empty():
-			out.append({"title": title, "icon": glyph, "tracks": tracks})
+			out.append({"title": title, "tab": title, "icon": glyph, "tracks": tracks})
 
 	var undo: Array = []
 	for slot: StringName in Game.JEWEL_SLOTS:
@@ -208,10 +219,24 @@ static func groups() -> Array[Dictionary]:
 		if i < 0:
 			continue
 		undo.append({"name": String(BLANKS[slot]["name"]), "line": i,
-			"owned": 0, "rungs": 1})
+			"owned": 0, "rungs": 1,
+			"rung_names": _one_rung(String(rows[i].get("label", "")).capitalize())})
 	if not undo.is_empty():
-		out.append({"title": "RECUT", "icon": "recut", "tracks": undo})
+		out.append({"title": "RECUT", "tab": "RECUT", "icon": "recut", "tracks": undo})
 	return out
+
+
+static func _rung_names(path: StringName, rungs: int) -> Array[String]:
+	var authored: Array = RUNG_NAMES.get(path, [])
+	var names: Array[String] = []
+	for i in rungs:
+		names.append(String(authored[i]) if i < authored.size()
+			else "%s %d" % [String(path).capitalize(), i + 1])
+	return names
+
+
+static func _one_rung(name: String) -> Array[String]:
+	return [name]
 
 
 ## Has the player bought the blank for `slot`? Stored as a rung count on the
@@ -317,32 +342,29 @@ static func _detail(path: StringName, lvl: int) -> String:
 	var n := 0.0 if last else 1.0
 	match path:
 		&"vigor":
-			# The half-containers Vigor has bought so far, which `heart_containers()`
-			# cannot see: a container only arrives on the EVEN rung, so an
-			# odd rung is half a heart that has been paid for and is not on the HUD
-			# yet. A row that rounded that away would show a purchase doing nothing.
-			var h := float(Game.heart_containers()) + 0.5 * float(lvl % 2)
-			return _arrow("%.1f", "hearts", h,
-				minf(h + K.JEWEL_VIGOR_HEARTS * n, float(K.HEART_MAX)), last)
+			var hp := float(Game.max_health_points)
+			return _arrow("%.0f", "max HP", hp,
+				minf(hp + K.JEWEL_VIGOR_HEALTH_POINTS * n,
+					float(K.MAX_HEALTH_POINTS)), last)
 		&"focus":
 			var s := Game.max_stamina
 			return _arrow("%.0f", "stamina", s,
 				minf(s + K.JEWEL_FOCUS_STAMINA * n, K.STAMINA_MAX), last)
 		&"edge":
 			# The FLOORED figure, like `sword_bonus()` itself, so the row is the
-			# number the swing will actually use. Four rungs is one quarter, and
+			# number the swing will actually use. Four rungs is 1 HP, and
 			# the three that are not paying yet say so by not moving.
 			var e := float(Game.sword_bonus())
 			var e2 := minf(floorf(_edge_exact() + K.JEWEL_EDGE_DAMAGE * n),
 				float(K.EDGE_MAX))
-			return _arrow("+%.0f", "quarters a swing", e, e2, last)
+			return _arrow("+%.0f", "HP a swing", e, e2, last)
 		&"swift":
 			var m := Game.speed_mult_raw()
 			return _arrow("%.1f%%", "speed", clampf(m, 0.5, 1.0) * 100.0,
 				clampf(m * pow(K.JEWEL_SWIFT_SPEED, n), 0.5, 1.0) * 100.0, last)
 		&"ward":
 			var k := Game.armour_soak_exact()
-			return _arrow("%.1f", "quarters soaked", k,
+			return _arrow("%.1f", "HP soaked", k,
 				minf(k + K.JEWEL_WARD_SOAK * n, K.SOAK_MAX), last)
 		&"wind":
 			var r := Game.stamina_regen()
@@ -351,7 +373,7 @@ static func _detail(path: StringName, lvl: int) -> String:
 	return ""
 
 
-## "1.4 -> 1.9 quarters soaked", or just "1.9 quarters soaked" on a finished
+## "1.4 -> 1.9 HP soaked", or just "1.9 HP soaked" on a finished
 ## path. Same shape as `ShopDb._forge`'s and the same reason: the unit is named
 ## ONCE, at the end, because the unit on both sides pushed the shop's blurb past
 ## the width of the panel.
@@ -363,7 +385,7 @@ static func _arrow(fmt: String, noun: String, now: float, then: float,
 
 
 ## Permanent sword damage BEFORE the floor, so `_detail` can add a rung to it and
-## floor once. Flooring first and then adding 0.25 would round the same quarter
+## floor once. Flooring first and then adding 0.25 would round the same 0.25 HP
 ## away four times over and show a path that never pays.
 static func _edge_exact() -> float:
 	var e := float(K.EDGE_DAMAGE[Game.forge_level(Game.FORGE_EDGE)])
@@ -446,7 +468,7 @@ static func refusal(line: Dictionary) -> String:
 ## Vigor and Focus are the only two paths that APPLY anything here. Every other
 ## rung is read straight off `Game.upgrades` by an accessor the next time
 ## something asks -- but max health and max stamina are stored numbers rather
-## than derived ones (the HUD's hearts, and a bar that has to refill), so their
+## than derived ones (max HP, and a bar that has to refill), so their
 ## rung has to push. That asymmetry is the whole reason there is a branch here
 ## and not a comment saying there is nothing to do.
 static func buy(line: Dictionary) -> bool:
@@ -465,9 +487,8 @@ static func buy(line: Dictionary) -> bool:
 	Game.upgrades[id] = int(Game.upgrades.get(id, 0)) + 1
 	var path := String(id).get_slice("_", 2)
 	if path == "vigor" or path == "focus":
-		# Half a container a rung on Vigor, so four rungs is two hearts and the
-		# odd rungs are the ones that feel like nothing. Deliberate: the pair is
-		# the purchase. The arithmetic lives in `resync_maxima`, which derives both
+		# Vigor adds 2 max HP on every rung. The arithmetic lives in
+		# `resync_maxima`, which derives both
 		# maxima from `upgrades` -- so Recut taking a rung back off is the same
 		# call with `fill` off, rather than this match run backwards.
 		Game.resync_maxima(true)
@@ -496,7 +517,7 @@ static func _do_recut(slot: StringName) -> bool:
 		Game.upgrades[track] = lvl - 1
 	# Vigor and Focus are stored maxima, so the number has to come back down.
 	# `fill` is off: nobody is healed for changing their mind, and a hero on two
-	# quarters who recuts a Vigor amulet is clamped, not topped up.
+	# HP who recuts a Vigor amulet is clamped, not topped up.
 	Game.resync_maxima()
 	Bus.gear_forged.emit(track, lvl - 1)
 	return true

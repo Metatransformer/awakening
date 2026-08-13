@@ -46,17 +46,17 @@ const BOTTLE_PARTS := [
 ## found resin is a run that gets to choose between offence and defence rather
 ## than being handed both.
 const BREW_PARTS := {
-	&"heart_draught": {&"bitter_root": 3},
+	&"health_draught": {&"bitter_root": 3},
 	&"ironhide_draught": {&"ash_resin": 2, &"bitter_root": 2},
 	&"emberblood_draught": {&"ash_resin": 3},
 }
 
 ## Gold, per brew. Flat, and cheap against the smith's lines on purpose: the
 ## draught's real price is the slot it sits in and the materials it ate. A ramp
-## here would make the tenth Heart Draught cost more than the first, which is
+## here would make the tenth Health Draught cost more than the first, which is
 ## nonsense for a thing you drink.
 const BREW_GOLD := {
-	&"heart_draught": 55,
+	&"health_draught": 55,
 	&"ironhide_draught": 85,
 	&"emberblood_draught": 95,
 }
@@ -66,6 +66,7 @@ const BREW_GOLD := {
 ## is permanent, and because the fourth one should hurt.
 const BOTTLE_GOLD := 110
 const BOTTLE_GROWTH := 2.4
+const BOTTLE_RUNG_NAMES := ["Bottle 2", "Bottle 3", "Bottle 4"]
 
 
 
@@ -91,7 +92,7 @@ static func emblem() -> StringName:
 ## are what put Ironhide and Emberblood here (GDD §6.2, relics 3 and 4).
 ##
 ## Adopted with no `if`: `knows_draught()` answers true for anything not in
-## `RelicDb.DRAUGHT_RELICS`, so the Heart Draught -- and any recipe added later
+## `RelicDb.DRAUGHT_RELICS`, so the Health Draught -- and any recipe added later
 ## that forgets to ask -- is hers from the start.
 static func lines() -> Array[Dictionary]:
 	var out: Array[Dictionary] = [_bottle_line()]
@@ -106,8 +107,8 @@ static func lines() -> Array[Dictionary]:
 ## made them look like one.
 ##
 ## Glass is a LADDER: four bottles at rising prices, and how many you have is the
-## only cap on everything under it. Draughts are repeatables -- a Heart Draught
-## is a Heart Draught however many you have brewed -- so they share one wrapping
+## only cap on everything under it. Draughts are repeatables -- a Health Draught
+## is a Health Draught however many you have brewed -- so they share one wrapping
 ## row of plain named cells, which is what they already looked like.
 static func groups() -> Array[Dictionary]:
 	var rows: Array[Dictionary] = lines()
@@ -118,11 +119,13 @@ static func groups() -> Array[Dictionary]:
 	# `_bottle_line` is always `lines()[0]`; asserting that here rather than
 	# searching for the id, because if it ever stops being true the glass row is
 	# the wrong length and that is worth failing loudly over.
-	out.append({"title": "GLASS", "icon": "glass", "tracks": [{
+	var bottle_rungs: int = K.BOTTLE_MAX - K.BOTTLE_START
+	out.append({"title": "GLASS", "tab": "BOTTLES", "icon": "glass", "tracks": [{
 		"name": "",
 		"line": 0 if Game.bottle_count() < K.BOTTLE_MAX else -1,
 		"owned": Game.bottle_count() - K.BOTTLE_START,
-		"rungs": K.BOTTLE_MAX - K.BOTTLE_START,
+		"rungs": bottle_rungs,
+		"rung_names": _bottle_rung_names(bottle_rungs),
 	}]})
 	# Everything after the glass is a draught, and `flat_group` is still not what
 	# builds it. A third row (CHARGES) lived here until the charges moved to the
@@ -133,11 +136,25 @@ static func groups() -> Array[Dictionary]:
 	# `lines()`, which is the only coupling this row has.
 	var draughts: Array = []
 	for i in range(1, rows.size()):
+		var id: StringName = rows[i]["id"]
 		draughts.append({"name": String(rows[i].get("label", "")), "line": i,
-			"owned": 0, "rungs": 1})
+			"owned": 0, "rungs": 1, "rung_names": _one_rung(PotionDb.name_of(id))})
 	if not draughts.is_empty():
-		out.append({"title": "DRAUGHTS", "icon": "draughts", "tracks": draughts})
+		out.append({"title": "DRAUGHTS", "tab": "DRAUGHTS", "icon": "draughts",
+			"tracks": draughts})
 	return out
+
+
+static func _bottle_rung_names(rungs: int) -> Array[String]:
+	var names: Array[String] = []
+	for i in rungs:
+		names.append(String(BOTTLE_RUNG_NAMES[i]) if i < BOTTLE_RUNG_NAMES.size()
+			else "Bottle %d" % (K.BOTTLE_START + i + 1))
+	return names
+
+
+static func _one_rung(name: String) -> Array[String]:
+	return [name]
 
 
 static func _bottle_line() -> Dictionary:

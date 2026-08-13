@@ -290,7 +290,7 @@ func _theft_and_kill(rig, out: String) -> void:
 		Bus.camera_recenter.emit()
 		await _strike(rig, foe, 4)
 	if not bool(kill["done"]):
-		_fail("six blows did not kill a 5-quarter goblin")
+		_fail("six blows did not kill a 5 HP goblin")
 		return
 	await rig.wait_frames(10)
 	await rig.capture(out.path_join("thief_06_killed.png"))

@@ -202,7 +202,7 @@ preparation.
 
 | Ration | Trade bundle | Effect | Carry cap |
 |---|---:|---|---:|
-| Hardtack | 5 for **25 gold** | Restores **1 heart** over 12 seconds | 20 |
+| Hardtack | 5 for **25 gold** | Restores **4 HP** over 12 seconds | 20 |
 | Small Beer | 5 for **45 gold** | Restores **12 magic**, exactly one spin, over 12 seconds | 20 |
 
 Eating roots the player in a seated channel with four ticks, one every three
@@ -221,9 +221,9 @@ Bottles and their contents persist until used; descending does not refill them.
 
 | Draught | Gold | Materials | Effect |
 |---|---:|---|---|
-| Heart | 55 | 3 Bitter Root | Restore **2 hearts** immediately |
-| Ironhide | 85 | 2 Ash Resin + 2 Bitter Root | Reduce each blow by **2 quarters** for **45 s** |
-| Emberblood | 95 | 3 Ash Resin | Add **2 quarters** per swing for **45 s** |
+| Health Draught | 55 | 3 Bitter Root | Restore **8 HP** immediately |
+| Ironhide | 85 | 2 Ash Resin + 2 Bitter Root | Reduce each blow by **2 HP** for **45 s** |
+| Emberblood | 95 | 3 Ash Resin | Add **2 HP** per swing for **45 s** |
 
 The three added bottles cost gold on a **110 x 2.4** ladder and require,
 respectively, **4 Fired Cullet**; **8 Cullet + 2 Resin**; and
@@ -261,7 +261,7 @@ The rope always works. If the calculated toll exceeds the purse, extraction
 takes all current gold and still brings the haul home. Extraction banks the
 whole bag by item kind and preserves current health. Rest and sleep are the
 normal garrison recovery seam: every completed sleep restores real health to
-maximum, and purchased bed ranks grant one temporary quarter-heart each on top.
+maximum, and purchased bed ranks grant 1 temporary HP each on top.
 
 Death loses the exposed bag, banks the document case, preserves gold and
 permanent progression, and returns the player to the garrison at full health.
@@ -330,17 +330,17 @@ The civil day lasts **32 real minutes**.
   trade.
 - Bedtime runs **23:00–05:00**.
 
-Sleeping advances to the next dawn. Every crossed civil boundary resolves
-once; loading does not replay it. Missing dawn on the surface returns the
-player to the bunk. Missing dawn underground uses the ordinary death-loss
-outcome and never becomes free extraction.
+Bed sleep advances to the chosen nightfall or morning destination. Every
+crossed civil boundary resolves once; loading does not replay it. Missing dawn
+on the surface returns the player to the bunk. Missing dawn underground uses
+the ordinary death-loss outcome and never becomes free extraction.
 
 ### Service ownership
 
 | Service | Role | Player-facing contract |
 |---|---|---|
 | Trade | Quartermaster | Buy expendables; sell ingredients and sale goods; never buy components or relics |
-| Upgrades | Quartermaster | Four bag cells and three heart containers |
+| Upgrades | Quartermaster | Four bag cells and three +4 HP health upgrades |
 | Smithing | Brannoc | Gold-plus-component forge ladders and fletching |
 | Alchemy | Ysolt | Bottle capacity and three draught recipes |
 | Artifacts | Lanternkeeper | Repair/read and donate the twelve relics |
@@ -359,7 +359,7 @@ ordinary purchases and single-stack sales are taps.
 | Line | Base cost | Growth | Purchases |
 |---|---:|---:|---:|
 | Bag cell | 140 | x1.6 | 4 |
-| Heart container | 320 | x1.5 | 3 |
+| Health upgrade (+4 HP) | 320 | x1.5 | 3 |
 
 Trade also carries arrows, charges, Hardtack, and Small Beer at the prices in
 §6. **Sell Unmarked** protects components, relics, and stacks needed by current
@@ -372,17 +372,17 @@ rung costs gold and forge components.
 
 | Track | Base cost | Growth | Rank-3 effect |
 |---|---:|---:|---|
-| Sword edge | 120 | x2.1 | +3 quarters per hit |
+| Sword edge | 120 | x2.1 | +3 HP per hit |
 | Shield guard | 110 | x2.2 | 115-degree block arc, from 70 degrees |
 | Bow string | 130 | x2.1 | 0.26-second draw, from 0.44 |
 | Hookshot chain | 150 | x2.1 | 18.20 m reach, from 8.74 m |
-| Each heavy armour piece | 65 | x1.9 | +1 soak quarter and x0.97937 speed per piece |
-| Each light armour piece | 35 | x1.8 | +0.5 soak quarter and no speed cost per piece |
+| Each heavy armour piece | 65 | x1.9 | +1 HP soak and x0.97937 speed per piece |
+| Each light armour piece | 35 | x1.8 | +0.5 HP soak and no speed cost per piece |
 
 Chest, legs, arms, and boots each choose heavy or light independently, creating
 eight armour tracks and **12 forge tracks** total. Four maxed heavy pieces give
-**4.00 quarters** of soak at **0.9200 speed**; four maxed light pieces give
-**2.00 quarters** at full speed. Choosing one path closes its sibling for that
+**4.00 HP** of soak at **0.9200 speed**; four maxed light pieces give
+**2.00 HP** at full speed. Choosing one path closes its sibling for that
 piece.
 
 Every third forge rung requires a chest-only **Cold Iron Core**. **Reforge**
@@ -396,22 +396,25 @@ paths with **four purchasable rungs**:
 
 | Slot | Blank | Path A | Path B |
 |---|---:|---|---|
-| Amulet | 220 | Vigor: +0.5 heart per rung | Focus: +15 stamina per rung |
-| First Ring | 150 | Edge: +0.25 quarters per swing | Swift: x1.0101 speed per rung |
-| Second Ring | 150 | Edge: +0.25 quarters per swing | Swift: x1.0101 speed per rung |
-| Bracelet | 190 | Ward: +0.5 soak quarters per rung | Wind: +0.1 stamina regeneration per rung |
+| Amulet | 220 | Vigor: +2 HP per rung | Focus: +15 stamina per rung |
+| First Ring | 150 | Edge: +0.25 HP per swing | Swift: x1.0101 speed per rung |
+| Second Ring | 150 | Edge: +0.25 HP per swing | Swift: x1.0101 speed per rung |
+| Bracelet | 190 | Ward: +0.5 HP soak per rung | Wind: +0.1 stamina regeneration per rung |
 
 Rungs cost **90 / 180 / 340 / 620 gold** and use
 **2 / 4 / 6 + 1 gem / 8 + 2 gems** from the jewellery bench. **Recut** removes
 one rung without refunding its stone.
 
 All sources share their final stat ceilings: total added edge caps at **+5**,
-soak at **4.0 quarters**, speed at **1.0**, and maximum stamina at **160**. The
-equipment screen reports only damage, speed, maximum health, stamina, and soak.
+soak at **4.0 HP**, speed at **1.0**, and maximum stamina at **160**. Health
+starts at **12 HP**; each of the quartermaster's three health upgrades adds
+**4 HP**, each Vigor rung adds **2 HP**, and maximum health is capped at
+**32 HP**. The equipment screen reports only damage, speed, maximum health,
+stamina, and soak.
 
 ### Home convenience ladders
 
-- **Better Bed:** three ranks, one temporary quarter-heart granted per rank when
+- **Better Bed:** three ranks, 1 temporary HP granted per rank when
   sleeping; this overhealth absorbs damage before real health and does not raise
   maximum health.
 - **Locker shelves:** starts at **24 cells**; two ranks add six each, for a hard
@@ -423,9 +426,16 @@ It uses the same stack-to-cell arithmetic as the bag. A full locker refuses a
 transfer visibly. Starting a new trip clears the run bag, so anything the player
 wants to keep unsold must first be sold, crafted, or moved into the locker.
 
-The bed requires a hold, advances to dawn, fully restores real health and
-stamina, grants purchased Better Bed overhealth, and requests an autosave. It is
-unavailable during a descent.
+The personal bed requires a hold and is identified by its **SLEEP IN YOUR BED**
+prompt, focused quilt glow, and warm motes. It offers **Sleep until nightfall**
+and **Sleep until morning**: nightfall means the next strictly future 20:00, while
+morning settles at 07:00 or at 06:00 with Early Reveille. Sleep pauses the world
+for a 2.4-second analog clock whose hands sweep linearly from the starting time
+to the target before the jump is applied. A successful sleep fully restores real
+health and stamina, grants purchased Better Bed overhealth, and requests an
+autosave. A raid boundary at 23:00 can interrupt either destination; interrupted
+sleep grants no recovery and requests no autosave. The bed is unavailable during
+a descent.
 
 ## 11. Boundaries
 

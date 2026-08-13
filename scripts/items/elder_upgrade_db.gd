@@ -16,13 +16,19 @@ const LIMITS := {
 	REVEILLE_ID: 1,
 }
 
-const BED_OVERHEALTH_PER_RANK := K.QUARTER
+const BED_OVERHEALTH_PER_RANK := K.HEALTH_POINT
 const LOCKER_SLOTS_PER_RANK := 6
 
 const _COSTS := {
 	BED_ID: [120, 260, 480],
 	LOCKER_ID: [180, 420],
 	REVEILLE_ID: [350],
+}
+
+const RUNG_NAMES := {
+	BED_ID: ["Wool Mattress", "Featherbed", "Restorative Bed"],
+	LOCKER_ID: ["Pine Shelves", "Iron Shelves"],
+	REVEILLE_ID: ["Dawn Bell"],
 }
 
 
@@ -69,11 +75,11 @@ static func groups() -> Array[Dictionary]:
 	for i in rows.size():
 		at[rows[i]["id"]] = i
 	return [
-		{"title": "QUARTERS", "icon": "quarters", "tracks": [
+		{"title": "QUARTERS", "tab": "QUARTERS", "icon": "quarters", "tracks": [
 			_track(at, BED_ID, "BED"),
 			_track(at, LOCKER_ID, "LOCKER"),
 		]},
-		{"title": "REVEILLE", "icon": "reveille", "tracks": [
+		{"title": "REVEILLE", "tab": "REVEILLE", "icon": "reveille", "tracks": [
 			_track(at, REVEILLE_ID, ""),
 		]},
 	]
@@ -85,7 +91,17 @@ static func _track(at: Dictionary, id: StringName, name: String) -> Dictionary:
 		"line": int(at.get(id, -1)),
 		"owned": int(Game.upgrades.get(id, 0)),
 		"rungs": int(LIMITS[id]),
+		"rung_names": _rung_names(id, int(LIMITS[id])),
 	}
+
+
+static func _rung_names(id: StringName, rungs: int) -> Array[String]:
+	var authored: Array = RUNG_NAMES.get(id, [])
+	var names: Array[String] = []
+	for i in rungs:
+		names.append(String(authored[i]) if i < authored.size()
+			else "%s %d" % [String(id).replace("elder_", "").capitalize(), i + 1])
+	return names
 
 
 static func _line(id: StringName) -> Dictionary:
@@ -99,9 +115,9 @@ static func _line(id: StringName) -> Dictionary:
 				"label": "A BETTER BED",
 				"cost": cost,
 				"parts": {},
-				"blurb": "Sleep fully heals. Each rank grants 1/4 heart of temporary overhealth.",
-				"detail": "Complete: sleep grants 3/4 heart of temporary overhealth." if done \
-					else "Temporary overhealth: %d/4 heart -> %d/4 heart." % [owned, owned + 1],
+				"blurb": "Sleep fully heals. Each rank grants 1 temporary HP.",
+				"detail": "Complete: sleep grants 3 temporary HP." if done \
+					else "Temporary overhealth: %d HP -> %d HP." % [owned, owned + 1],
 			}
 		LOCKER_ID:
 			var slots := owned * LOCKER_SLOTS_PER_RANK
@@ -133,7 +149,7 @@ static func _effect_text(id: StringName, owned: int) -> String:
 		BED_ID:
 			if owned <= 0:
 				return "Sleep fully heals; no temporary overhealth."
-			return "Sleep fully heals and grants %d/4 heart of temporary overhealth." % owned
+			return "Sleep fully heals and grants %d temporary HP." % owned
 		LOCKER_ID:
 			if owned <= 0:
 				return "No bonus footlocker slots."

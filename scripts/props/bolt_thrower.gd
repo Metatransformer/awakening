@@ -53,7 +53,7 @@ func _attempt(target_id: StringName) -> void:
 	_aim_at(target.head_point())
 	_fire_presentation(target.head_point())
 	var hit := Hit.make(
-		maxi(target.health.max_quarters, target.health.quarters),
+		maxi(target.health.max_health_points, target.health.health_points),
 		_muzzle.global_position, &"bolt", K.KNOCKBACK_HEAVY, 0.25,
 		&"BOLT-THROWER", 1.0, 1.0)
 	if target.health.apply_hit(hit):

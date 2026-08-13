@@ -49,7 +49,7 @@ for n in $levels; do
 		log=$OUT/floor$tag.log
 		print -n "  floor $tag … "
 		# **Floor 4 needs more than 500 s and floors 1-3 do not.** Its boss is the
-		# Riven Knight at 128 quarter-hearts -- four times an ordinary monster and the
+		# Riven Knight at 128 HP -- four times an ordinary monster and the
 		# deepest fight in the game -- and beat H (`--level=4` only) walks the endless
 		# floor past it. Measured: floors 1 and 2 finish inside 200 s, floor 4 was
 		# still going at 500 s and got killed mid-fight, which reads in the summary as

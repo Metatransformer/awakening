@@ -68,8 +68,8 @@ func _ready() -> void:
 	var where := Saves.load_slot(1)
 	if Game.gold != 137 or Game.small_keys != 2 or not Game.has(&"hookshot"):
 		print("FAIL load did not restore: gold=", Game.gold, " keys=", Game.small_keys); fails += 1
-	if Game.quarters != Game.max_quarters - 3:
-		print("FAIL health not restored: ", Game.quarters); fails += 1
+	if Game.health_points != Game.max_health_points - 3:
+		print("FAIL health not restored: ", Game.health_points); fails += 1
 	if String(where.get("room", "")) != "room_04":
 		print("FAIL room not restored: ", where); fails += 1
 	if Saves.peek(2).get("empty") != true:

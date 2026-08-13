@@ -162,15 +162,16 @@ func _counter(rig) -> void:
 	Game.gold = 40000
 	Game.components.clear()
 	screen._refresh()
-	var heart := _row(screen, &"heart_draught")
-	_ck("C0 the heart draught is on the board", not heart.is_empty())
-	if heart.is_empty():
+	var health_draught := _row(screen, &"health_draught")
+	_ck("C0 the Health Draught is on the board", not health_draught.is_empty())
+	if health_draught.is_empty():
 		return
-	_ck("C1 it names a material cost", not (heart["parts"] as Dictionary).is_empty())
-	_ck("C2 gold alone cannot buy it", not AlchemyDb.can_buy(heart["line"]))
+	_ck("C1 it names a material cost",
+		not (health_draught["parts"] as Dictionary).is_empty())
+	_ck("C2 gold alone cannot buy it", not AlchemyDb.can_buy(health_draught["line"]))
 	_ck("C3 the refusal names the root, not the money (%s)"
-		% AlchemyDb.refusal(heart["line"]),
-		AlchemyDb.refusal(heart["line"]).contains("ROOT"))
+		% AlchemyDb.refusal(health_draught["line"]),
+		AlchemyDb.refusal(health_draught["line"]).contains("ROOT"))
 	# `_point_at`, and not `screen._cursor = i` (CLAUDE.md §3, card #77). The
 	# assignment is half a move: `_point_at` is the half that calls `grab_focus`,
 	# which is DEFERRED, so the `focus_entered` it queues lands a frame later, runs
@@ -181,7 +182,13 @@ func _counter(rig) -> void:
 	# the row that was asked for -- so a beat that waits a frame before acting is
 	# safe rather than racing. That is why no wait is added here: the fix is the
 	# call, not a sleep.
-	screen._point_at(screen._rows.find(heart))
+	# Card #175 split bottles and draughts into tabs. Move to DRAUGHTS through the
+	# same public ladder seam the screen's left/right tab input uses before asking
+	# `_point_at` for a draught line; the active BOTTLES tab quite correctly rejects
+	# a selection it is not drawing.
+	screen._ladder.cycle_tab(1)
+	await rig.wait_frames(4)
+	screen._point_at(screen._rows.find(health_draught))
 	screen._commit()
 	await rig.wait_frames(12)
 	_ck("C4 the press changed nothing", Game.bottle(0) == &"")
@@ -223,11 +230,11 @@ func _brew(rig) -> void:
 	_ck("D0 he starts with one empty bottle",
 		Game.bottle_count() == K.BOTTLE_START and Game.empty_bottles() == 1)
 
-	var heart := _row(screen, &"heart_draught")
-	if heart.is_empty():
+	var health_draught := _row(screen, &"health_draught")
+	if health_draught.is_empty():
 		_ck("D1 the draught is in the bottle", false)
 		return
-	screen._point_at(screen._rows.find(heart))
+	screen._point_at(screen._rows.find(health_draught))
 
 	# Brewed the way a player brews it: the button, HELD. This was a direct
 	# `screen._commit()`, which would still pass with the hold, the gauge and the
@@ -269,13 +276,13 @@ func _brew(rig) -> void:
 	print("ALCHEMY brewed bottles=%s gold=%d -> %d root=%d -> %d" % [
 		Game.bottle_contents, gold_before, Game.gold,
 		root_before, Game.component_count(&"bitter_root")])
-	_ck("D1 the draught is in the bottle", Game.bottle(0) == &"heart_draught")
+	_ck("D1 the draught is in the bottle", Game.bottle(0) == &"health_draught")
 	_ck("D2 it took gold", Game.gold < gold_before)
 	_ck("D3 it took the root as well", Game.component_count(&"bitter_root") < root_before)
 
 	# --- E. Nowhere to put the next one ---------------------------------------
 	screen._refresh()
-	var again := _row(screen, &"heart_draught")
+	var again := _row(screen, &"health_draught")
 	_ck("E0 with the only bottle full, brewing is refused",
 		not AlchemyDb.can_buy(again["line"]))
 	_ck("E1 the refusal says so (%s)" % AlchemyDb.refusal(again["line"]),
@@ -308,12 +315,12 @@ func _bottles(rig) -> void:
 	_ck("F2 the finished line is refused",
 		not done.is_empty() and not AlchemyDb.can_buy(done["line"]))
 	_ck("F3 the first bottle still has its draught in it",
-		Game.bottle(0) == &"heart_draught")
+		Game.bottle(0) == &"health_draught")
 
 	# Fill the rest, so the HUD cross has one of each to draw and the drink beat
 	# below has all three to swallow.
 	for id in PotionDb.IDS:
-		if id == &"heart_draught":
+		if id == &"health_draught":
 			continue
 		var line := _row(screen, id)
 		if not line.is_empty():
@@ -401,25 +408,25 @@ func _screens(rig) -> void:
 
 func _drink(rig) -> void:
 	# --- The heal -------------------------------------------------------------
-	Game.quarters = 2
-	Bus.player_health_changed.emit(Game.quarters, Game.max_quarters)
+	Game.health_points = 2
+	Bus.player_health_changed.emit(Game.health_points, Game.max_health_points)
 	await rig.wait_frames(4)
-	var hurt := Game.quarters
-	_ck("G1a the heart draught is the one selected",
-		Game.selected_potion() == &"heart_draught")
+	var hurt := Game.health_points
+	_ck("G1a the Health Draught is the one selected",
+		Game.selected_potion() == &"health_draught")
 	await rig.tap(["use_item"])
 	await rig.wait_frames(12)
-	print("ALCHEMY drank heart quarters=%d -> %d bottle0=%s" % [
-		hurt, Game.quarters, Game.bottle(0)])
+	print("ALCHEMY drank Health Draught HP=%d -> %d bottle0=%s" % [
+		hurt, Game.health_points, Game.bottle(0)])
 	_ck("G2 X drank it -- health went up",
-		Game.quarters == mini(Game.max_quarters, hurt + K.DRAUGHT_HEAL))
+		Game.health_points == mini(Game.max_health_points, hurt + K.DRAUGHT_HEAL))
 	_ck("G3 the bottle emptied", Game.bottle(0) == &"")
 	_ck("G4 the bottle itself stayed", Game.bottle_count() == K.BOTTLE_MAX)
 	# An empty bottle on a button is a no-op, not a crash and not a free heal.
-	var after := Game.quarters
+	var after := Game.health_points
 	await rig.tap(["use_item"])
 	await rig.wait_frames(8)
-	_ck("G5 pressing it again does nothing", Game.quarters == after)
+	_ck("G5 pressing it again does nothing", Game.health_points == after)
 
 	# --- The two that last ----------------------------------------------------
 	# Checked through the accessors the SWORD and `Hero.hurt` read, which is the
@@ -578,7 +585,7 @@ func _save(rig) -> void:
 	while Game.bottle_count() < 2:
 		if not Game.add_bottle():
 			break
-	Game.bottle_contents[0] = &"heart_draught"
+	Game.bottle_contents[0] = &"health_draught"
 	for i in range(1, Game.bottle_count()):
 		Game.bottle_contents[i] = &""
 	Bus.bottles_changed.emit(Game.bottle_contents)
@@ -611,10 +618,10 @@ func _save(rig) -> void:
 	# the catalogue knows.
 	_ck("I3 the reloaded draught is still a draught PotionDb knows",
 		PotionDb.has(Game.bottle(0)))
-	var hurt := Game.max_quarters - K.DRAUGHT_HEAL
-	Game.quarters = hurt
+	var hurt := Game.max_health_points - K.DRAUGHT_HEAL
+	Game.health_points = hurt
 	_ck("I4 and it still drinks", Game.drink_bottle(0))
-	_ck("I5 and it still heals", Game.quarters > hurt)
+	_ck("I5 and it still heals", Game.health_points > hurt)
 	Saves.erase(2)
 
 

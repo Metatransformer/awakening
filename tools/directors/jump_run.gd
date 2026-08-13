@@ -154,7 +154,7 @@ func _beat_sprint(rig, hero: Node3D, cam: Camera3D, out: String) -> void:
 	# being hunted here is 0.4 s long and lands right at the start, so a single
 	# read taken once the sprint is up would miss it every time.
 	var rolled_in := false
-	for i in 60:  # 1.0 s, well past sprint_hold_time (0.18)
+	for i in 60:  # 1.0 s, well past sprint_hold_time (0.36)
 		await rig.physics_frame
 		if int(hero.get(&"state")) == ST_ROLL:
 			rolled_in = true
@@ -210,10 +210,11 @@ func _beat_sprint(rig, hero: Node3D, cam: Camera3D, out: String) -> void:
 
 
 ## The half that had to keep working. A tap is still a dodge — on the RELEASE
-## now, since that is the frame the press is known to have been a tap, and 0.04 s
-## after the press is the same instant as far as anyone playing is concerned.
-## That is the entire promise of putting the run on a hold, and it is the half
-## the window could break by classifying every press as a run.
+## now, since that is the frame the press is known to have been a tap. Hold it
+## for 0.30 s to prove the newly forgiving 0.36 s window accepts a slower
+## reaction that the old 0.18 s window would have classified as a run. That is
+## the entire promise of putting the run on a hold, and it is the half the
+## window could break by classifying every press as a run.
 func _beat_tap_still_rolls(rig, hero: Node3D) -> void:
 	_release_all()
 	await rig.wait_seconds(1.6)
@@ -222,7 +223,7 @@ func _beat_tap_still_rolls(rig, hero: Node3D) -> void:
 	Input.action_press(&"move_up", 1.0)
 	await rig.wait_seconds(0.6)
 	Input.action_press(&"context")
-	await rig.wait_seconds(0.04)
+	await rig.wait_seconds(0.30)
 	Input.action_release(&"context")
 
 	var rolled := false
@@ -240,7 +241,7 @@ func _beat_tap_still_rolls(rig, hero: Node3D) -> void:
 ## The other end of the window, and the beat that would have caught the obvious
 ## wrong implementation of it: fire the dodge whenever the button comes up.
 ##
-## Held 0.5 s — past `Hero.sprint_hold_time` (0.18) but nowhere near long enough
+## Held 0.5 s — past `Hero.sprint_hold_time` (0.36) but nowhere near long enough
 ## to be mistaken for the sprint beat above — and then released with a FULL bar,
 ## so a roll refusing here would have to be refused for the right reason and not
 ## for want of stamina. Nothing may happen on the release: the press was spent on

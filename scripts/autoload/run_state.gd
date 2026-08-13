@@ -610,7 +610,7 @@ func die() -> void:
 	# You wake up in the garrison: broke, but alive. Leaving health at zero
 	# would mean the next thing that touched you killed you again before you
 	# could sell.
-	Game.heal(Game.max_quarters)
+	Game.heal(Game.max_health_points)
 	# `bag_value()`, not 0. The bag is not empty any more -- the case is in it --
 	# and a HUD told the bag is worth nothing over a case holding two Void Pearls
 	# is the first thing a player would file a bug about.

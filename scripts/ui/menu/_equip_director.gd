@@ -3,7 +3,7 @@ extends RefCounted
 ## screen with nothing but injected keyboard events and photographs every state
 ## worth arguing about.
 ##
-##   godot --path . -s tools/shoot.gd -- \
+##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/ui/menu/_menu_test.tscn \
 ##     --director=res://scripts/ui/menu/_equip_director.gd \
 ##     --out=/abs/out/f.png --size=1280x720 --warmup=60
@@ -102,7 +102,7 @@ func run(rig) -> void:
 	var hand_before := Game.armament(Game.HAND_RIGHT)
 	while Game.bottle_count() < 2:
 		Game.add_bottle()
-	Game.fill_bottle(&"heart_draught")
+	Game.fill_bottle(&"health_draught")
 	await rig.wait_frames(4)
 	_check("↓ steps the bottles", Game.bottle_count() >= 2)
 	var item_before := Game.item_selected

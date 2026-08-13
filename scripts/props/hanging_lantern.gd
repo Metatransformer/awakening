@@ -91,7 +91,7 @@ func _impact(collider: Node, at: Vector3) -> void:
 	Bus.request_sfx.emit(&"weapon_impact_stab_1", at)
 	var receiver := _damageable(collider)
 	if receiver != null:
-		receiver.call(&"apply_hit", Hit.make(K.QUARTER, at, &"fire", 2.0, 0.0,
+		receiver.call(&"apply_hit", Hit.make(K.HEALTH_POINT, at, &"fire", 2.0, 0.0,
 			&"FALLING LANTERN"))
 	impacted.emit(at)
 
