@@ -1908,7 +1908,7 @@ for 2D art anywhere else.
   **Artifacts** use the tabbed progression layout (cards #118 and #175). Tabs
   divide upgrade families; within the active tab, every upgrade type owns one
   full-width textured-stone row. Its track icon is the row identity and is also
-  ghosted directly behind every hotkey-sized rung. Every rung stays full-size,
+  ghosted directly behind every 80×80 square rung. Every rung stays full-size,
   carries an authored name rather than a Roman numeral, and is joined to the
   next by an arrow. Future rungs are visible locked nodes with the lock glyph,
   not empty sockets. The selected rung has a persistent inspector: ownership or
