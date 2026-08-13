@@ -10,8 +10,8 @@ extends RefCounted
 ## halves to check and the second is the one that was actually broken:
 ##
 ##   * **A behind the guard parries** — and only behind the guard.
-##   * **RB and RT behind the guard SWING**, straight through, no frame spent
-##     lowering anything. This is the half the remap was for.
+##   * **RB behind the guard swings and RT counters**, straight through, no
+##     frame spent lowering anything. This is the half the remap was for.
 ##   * **A behind the guard does not talk to the world.** One press cannot both
 ##     catch a blow and open the chest standing in it (`Prompt._guarding`).
 ##   * **A with the shield down still opens the chest**, which is the regression
@@ -26,7 +26,7 @@ extends RefCounted
 ## pressed. (`rig._send` does the `InputEventAction` half as well as the action
 ## state — CLAUDE.md §3's `Input.action_press` row.)
 ##
-##   tools/quiet.sh --path . -s tools/shoot.gd -- \
+##   timeout 400 tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/guard_buttons.gd --out=/tmp/guard/x.png
 
@@ -53,7 +53,7 @@ func run(rig) -> void:
 	await _parry_is_on_a(rig, out)
 	await _a_alone_does_not_parry(rig)
 	await _rb_swings_out_of_the_block(rig, out)
-	await _rt_swings_out_of_the_block(rig)
+	await _rt_counters_out_of_the_block(rig, out)
 	await _guard_takes_the_button_off_the_world(rig)
 	await _shield_down_still_talks(rig)
 
@@ -180,17 +180,22 @@ func _rb_swings_out_of_the_block(rig, out: String) -> void:
 	await _reset(rig, hero)
 
 
-# --- Beat four: and so is RT --------------------------------------------------
+# --- Beat four: RT is the guarded counter -------------------------------------
 
-## The heavy comes out on the RELEASE (`project.godot`, `heavy`), so this beat
-## has to let go before it can assert anything -- a press-and-check would read a
-## wind-up as a failure.
-func _rt_swings_out_of_the_block(rig) -> void:
+## This is the real stance input, held past the ordinary charge threshold. The
+## DASH must commit on the press, leave the wind-up disarmed for the whole hold,
+## and release without owing a second attack.
+func _rt_counters_out_of_the_block(rig, out: String) -> void:
 	var hero: Node3D = _hero(rig)
 	if hero == null:
 		return
-	var combat = hero.get(&"combat")
+	var combat: HeroCombat = hero.get(&"combat")
 	Game.stamina = K.MAX_STAMINA
+	hero.set(&"_invuln", 0.0)
+	var trail: SwordSlashTrail = combat.slash_trail
+	if trail == null:
+		_fail("HeroCombat did not publish a slash trail for the RT counter")
+		return
 
 	await rig.press(&"shield")
 	await rig.wait_frames(GUARD_SETTLE)
@@ -199,15 +204,72 @@ func _rt_swings_out_of_the_block(rig) -> void:
 		rig.release(&"shield")
 		return
 
-	await rig.hold([&"heavy"], 4)
-	await rig.wait_physics_frames(2)
-	var swing: float = combat.get(&"_swing_t")
-	var parry: float = combat.get(&"_parry_t")
-	print("GUARD block->RT  _swing_t=%.3f _parry_t=%.3f" % [swing, parry])
-	if parry >= 0.0:
-		_fail("RT out of a block came out as the parry")
-	if swing < 0.0:
-		_fail("RT out of a block swung nothing")
+	var before_serial: int = trail.stroke_serial
+	await rig.press(&"heavy")
+	await rig.wait_physics_frames(1)
+	if float(combat.get(&"_charge_t")) >= 0.0 or combat.charged:
+		_fail("guard + RT armed the ordinary heavy charge")
+	if bool(hero.call(&"is_invulnerable")):
+		_fail("guard + RT inherited the parry-earned i-frames")
+
+	var tree: AnimationTree = hero.get(&"_tree")
+	var ribbon: MeshInstance3D = trail.get_node_or_null(^"Ribbon") as MeshInstance3D
+	var ribbon_mesh: ArrayMesh = ribbon.mesh as ArrayMesh if ribbon != null else null
+	var saw_dash: bool = false
+	var saw_live_ribbon: bool = false
+	var live_vertices: int = 0
+	for _i in 45:
+		if tree != null and bool(tree.get("parameters/SwingDash/active")):
+			saw_dash = true
+		if ribbon != null and ribbon.visible and trail.section_count > 0 \
+				and trail.render_section_count > 0:
+			if ribbon_mesh != null and ribbon_mesh.get_surface_count() > 0:
+				var arrays: Array = ribbon_mesh.surface_get_arrays(0)
+				var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+				live_vertices = vertices.size()
+				saw_live_ribbon = live_vertices > 0
+		if saw_dash and saw_live_ribbon:
+			break
+		await rig.wait_frames(1)
+
+	if tree == null or not saw_dash:
+		_fail("guard + RT swung something that was not SwingDash")
+	if trail.stroke_serial != before_serial + 1:
+		_fail("guard + RT started %d slash-trail strokes, wanted exactly 1"
+			% (trail.stroke_serial - before_serial))
+	if not saw_live_ribbon:
+		_fail("guard + RT never built visible, non-empty ribbon geometry")
+	else:
+		print("GUARD block->RT counter  sections=%d rendered=%d vertices=%d"
+			% [trail.section_count, trail.render_section_count, live_vertices])
+		await rig.capture(out.path_join("guard_03_block_to_rt_counter.png"))
+
+	# Keep the same press down beyond the ordinary threshold. A delayed wind-up
+	# here would turn its eventual release into the second blow this branch exists
+	# to prevent.
+	await rig.wait_seconds(combat.charge_time + 0.10)
+	if float(combat.get(&"_charge_t")) >= 0.0 or combat.charged:
+		_fail("guard + RT armed a delayed ordinary charge during the counter")
+	var finished: bool = await rig.until(func() -> bool:
+		return hero.get(&"state") != 4, 1.0)  # Hero.MoveState.ATTACK
+	if not finished:
+		_fail("guard + RT counter never left the real attack state")
+	var cleared: bool = await rig.until(func() -> bool:
+		return trail.section_count == 0, 0.5)
+	if not cleared or trail.render_section_count != 0 \
+			or (ribbon != null and ribbon.visible) \
+			or (ribbon_mesh != null and ribbon_mesh.get_surface_count() != 0):
+		_fail("guard + RT ribbon did not clean up after the counter")
+	if trail.stroke_serial != before_serial + 1:
+		_fail("guard + RT finished with %d slash-trail strokes, wanted exactly 1"
+			% (trail.stroke_serial - before_serial))
+
+	rig.release(&"heavy")
+	await rig.wait_physics_frames(3)
+	if hero.get(&"state") == 4:
+		_fail("releasing guard + RT paid out a second attack")
+	if trail.stroke_serial != before_serial + 1:
+		_fail("releasing guard + RT started a later ordinary heavy stroke")
 
 	rig.release(&"shield")
 	await _reset(rig, hero)
