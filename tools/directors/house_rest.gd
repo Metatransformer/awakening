@@ -14,12 +14,14 @@ extends RefCounted
 ##   4. **what is on the shelf survives `Run.enter()`**, which is the whole
 ##      reason the locker exists: the bag is cleared at the top of every run and
 ##      merchandise you did not sell used to die there with no event at all;
-##   5. sleeping fades, fully restores real health, grants rank-based temporary
-##      overhealth, and WRITES A SLOT — and the slot reads all of it back;
+##   5. sleeping offers nightfall or morning; choosing morning plays the paused
+##      clock and crossed civil cards, fully restores real health, grants
+##      rank-based temporary overhealth, and WRITES A SLOT — and the slot reads
+##      all of it back;
 ##   6. the lid is open while the screen is up and shut when it comes down.
 ##
 ## Then the pictures: the billet from the yard, the room from the doorway, the
-## screen with both columns populated, and the cot with the prompt on it.
+## screen with both columns populated, and the personal bed with its prompt.
 ##
 ## This director writes to the real `user://saves` (sleeping is an autosave, and
 ## a director that mocked that out would be proving nothing). It takes the three
@@ -306,14 +308,17 @@ func _sleep(rig, garrison: Garrison) -> void:
 
 	# Held for well over `Bed.SLEEP_HOLD`, and then released: `Prompt` disarms on
 	# activate and re-arms on the button coming up, so a director that never let
-	# go would leave the button down across the fade.
+	# go would leave the button down inside the dialogue.
 	await rig.hold_seconds(["interact"], 0.9)
+	_check("the bed offered morning and accepted it through real dialogue presses",
+		await rig.talk("Sleep until morning"))
 	var went: bool = await rig.until(func() -> bool: return Flow.busy, 2.0)
-	_check("the screen went dark", went)
-	# A daytime sleep crosses nightfall and dawn. Flow now presents both civil
-	# boundaries in order (three seconds each) before returning control.
-	var back: bool = await rig.until(func() -> bool: return not Flow.busy, 14.0)
-	_check("...and came back", back)
+	_check("the paused sleep-clock ceremony began", went)
+	# A daytime morning sleep plays the 2.4-second clock, then crosses nightfall
+	# and dawn. Flow presents both civil cards in order before returning control.
+	var back: bool = await rig.until(func() -> bool:
+		return not Flow.busy and not rig.paused and not Prompt.blocked, 18.0)
+	_check("...and the sleep clock plus crossed civil cards gave control back", back)
 	await rig.wait_frames(30)
 
 	_check("sleep fully restored real health (%d -> %d/%d)"
