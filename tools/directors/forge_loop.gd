@@ -237,13 +237,15 @@ func _pouch(rig) -> void:
 # --- C and D. The smith -----------------------------------------------------
 
 func _smith(rig) -> void:
-	# THE COUNTER IS THIRTEEN LINES ONLY IF YOU OWN THE BOW AND THE HOOKSHOT AND
+	# THE COUNTER IS FIFTEEN LINES ONLY IF YOU OWN THE BOW AND THE HOOKSHOT AND
 	# HAVE COMMITTED NO ARMOUR PIECE.
 	# `ShopDb.GATED_BY` hides the `string` and `chain` ladders until the weapon
 	# they sharpen is owned (docs/SCOPE.md M1), and `Game.STARTER_KIT` is empty
-	# now -- so a cold boot stands at this counter and sees TEN rows, not twelve.
+	# now -- so a cold boot stands at this counter and sees TWELVE rows, not
+	# fifteen. Pickaxe and Fishing Rod are always stocked; the Woodsman's Axe
+	# retains Aldric's assignment gate.
 	# From the other end, each of the four armour pieces drops its losing path the
-	# moment it commits (GDD §6.6), so a finished hero sees eight. The count
+	# moment it commits (GDD §6.6). The count
 	# asserted below is the widest the board ever gets, which is also the one the
 	# panel has to be able to draw.
 	#
@@ -274,9 +276,9 @@ func _smith(rig) -> void:
 	if screen == null:
 		print("FORGE FAIL the smith did not open")
 		return
-	_ck("C0 the smith lists thirteen lines (4 + armour's 4x2 + fletching), got %d"
-		% screen._rows.size(), screen._rows.size() == 13)
-	# Thirteen rows against a panel that fits about thirteen. The window is the
+	_ck("C0 the smith lists fifteen lines (4 + armour's 4x2 + 2 tools + fletching), got %d"
+		% screen._rows.size(), screen._rows.size() == 15)
+	# Fifteen rows against a panel that fits about thirteen. The window is the
 	# only reason the boots are reachable at all, and a list that silently ran
 	# off the bottom would look exactly like a list that was complete.
 	_ck("C0b the panel windows rather than overflowing",
@@ -575,6 +577,11 @@ func _descend(rig) -> void:
 	for _i in 12:
 		await rig.wait_frames(8)
 		if Run.in_dungeon:
+			break
+		# The scene can be freed one frame before Run publishes the destination.
+		# At that point the held gate has already succeeded; wait for the new scene
+		# instead of dereferencing the old garrison during the hand-off.
+		if not is_instance_valid(garrison):
 			break
 		if Prompt.focus != garrison.gate:
 			_stand_at(rig, garrison.gate.global_position + Vector3(0.0, 0.0, 1.8))

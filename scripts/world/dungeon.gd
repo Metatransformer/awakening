@@ -69,6 +69,9 @@ const STONE_SCENE := "res://scenes/world/votive_shrine.tscn"
 const BARS_SCRIPT := "res://scripts/props/barred_passage.gd"
 ## And the third, for the same reason: `docs/PUZZLES.md` §5.1's door.
 const SHORTCUT_GATE_SCRIPT := "res://scripts/props/shortcut_gate.gd"
+## Loaded by path because MiningVein is a new global class and the importer is
+## not required before a generated floor can parse and build it.
+const MINING_VEIN_SCRIPT := "res://scripts/world/mining_vein.gd"
 
 ## Grid steps, as (x, z) cells.
 const DIRS := {
@@ -3099,6 +3102,14 @@ const AMBIENT_POT_REWARDS := [
 	{"id": &"blood_ruby", "weight": 2, "amount": 1},
 ]
 
+const MINING_VEIN_CHANCE := 0.65
+const MINING_VEIN_WALL_INSET := 0.72
+const MINING_VEIN_REWARDS := [
+	{"id": &"iron_scrap", "weight": 65, "amount": 3},
+	{"id": &"riveted_plate", "weight": 22, "amount": 2},
+	{"id": &"tension_coil", "weight": 13, "amount": 1},
+]
+
 
 ## Put one urn against a blank wall, and sometimes a second against another.
 ## A blank side has neither doorway nor anchor, so its centre is outside both
@@ -3166,6 +3177,57 @@ func _ambient_pot_reward(rng: RandomNumberGenerator) -> Dictionary:
 	return AMBIENT_POT_REWARDS.back() as Dictionary
 
 
+## At most one site per ordinary room, on a stream derived only from the
+## floor/cell salt. Nothing here advances `_rng`, so mining cannot move any
+## existing layout, population, furniture or reward roll for the same seed.
+func _place_mining_vein(root: Node3D, cell: Vector2i) -> void:
+	var sides := _ambient_pot_sides(cell)
+	if sides.is_empty():
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _salt(cell, &"mining_vein", 0)
+	if rng.randf() >= MINING_VEIN_CHANCE:
+		return
+
+	var side: StringName = sides[rng.randi_range(0, sides.size() - 1)]
+	var wall: Dictionary = _sides_of(cell)[side]
+	var yaw := float(wall["yaw"])
+	var along := along_of(yaw)
+	# Ambient pots occupy a blank wall's centre. A signed quarter-wall offset
+	# clears that prop as well as the room centre and chest traffic lane.
+	var offset_sign := -1.0 if rng.randf() < 0.5 else 1.0
+	var offset := offset_sign * rng.randf_range(size_of(cell) * 0.20,
+		size_of(cell) * 0.28)
+	var reward := _mining_vein_reward(rng)
+
+	var script := load(MINING_VEIN_SCRIPT) as GDScript
+	if script == null:
+		push_error("dungeon: %s failed to load" % MINING_VEIN_SCRIPT)
+		return
+	var vein := script.new() as Node3D
+	if vein == null:
+		push_error("dungeon: %s root is not Node3D" % MINING_VEIN_SCRIPT)
+		return
+	vein.name = &"MiningVein"
+	vein.call(&"configure",
+		StringName("mining_vein:%d:%d:%d" % [Run.level, cell.x, cell.y]),
+		StringName(reward["id"]), int(reward["amount"]))
+	vein.position = wall["at"] + facing_of(yaw) * MINING_VEIN_WALL_INSET \
+		+ along * offset
+	vein.rotation.y = yaw
+	root.add_child(vein)
+
+
+func _mining_vein_reward(rng: RandomNumberGenerator) -> Dictionary:
+	var roll := rng.randi_range(1, 100)
+	var ceiling := 0
+	for row: Dictionary in MINING_VEIN_REWARDS:
+		ceiling += int(row["weight"])
+		if roll <= ceiling:
+			return row
+	return MINING_VEIN_REWARDS.back() as Dictionary
+
+
 func _populate() -> void:
 	# Untyped on purpose: `pick_maze_cell` answers `null` when the floor has no
 	# room to spare, and `:=` cannot infer a type from a Variant (CLAUDE.md §3).
@@ -3194,6 +3256,7 @@ func _populate() -> void:
 
 		var size := size_of(cell)
 		_place_ambient_pots(root, cell)
+		_place_mining_vein(root, cell)
 		var dist := int(rooms[cell]["dist"])
 		# Rolled once for the room and shared by the chest and the arrows, because
 		# the arrows are placed OPPOSITE the chest and `_chest_dir` draws from the

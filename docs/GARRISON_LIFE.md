@@ -74,13 +74,14 @@ Firewood is built and valid. It is a supporting warm-home vignette, not the
 active proof and not a prerequisite for the raid.
 
 - After Brannoc arrives, Aldric assigns **Keep the Hearth**.
-- Brannoc forges the permanent Woodsman's Axe for 60 gold and three Iron Scrap.
-  It is a utility tool, not a weapon or hand slot.
+- Brannoc forges or fully reforges the permanent Woodsman's Axe for 60 gold and
+  three Iron Scrap. It has eight uses, remains known and **BROKEN** at zero, and
+  is a utility tool rather than a weapon or hand slot.
 - The cliff-partitioned outskirts between the garrison and the Sunken Cut holds
   a visible side grove of individually harvestable trees. Holding at one with
-  the axe plays the work, fells that trunk to a stump, and yields at most one
-  carried bundle per campaign day during Daytime. The player must carry it to
-  the separate hearth.
+  the axe plays the work, fells that trunk to a stump, spends one use only on
+  that successful tree impact, and yields at most one carried bundle per
+  campaign day during Daytime. The player must carry it to the separate hearth.
 - The hearth stores at most three bundles and consumes at most one at Bonfire
   Time.
 - A fueled bonfire grants Warmth for the next service window; an unfueled
@@ -104,8 +105,10 @@ The exact item, service, and economy contracts remain with
 Exactly one spring-fed fishing pond occupies the blocked eastern spur of the
 garrison outskirts. Its dock, rod rack, creel, near-water target, and deep-water
 target make the opportunity readable while the route beyond remains physically
-closed. The rod belongs to this location; it is not a weapon, tool-manifest
-entry, bag item, wheel item, or shop good.
+closed. Brannoc forges or fully reforges its durable Fishing Rod for 45 gold,
+one Iron Scrap, and one bundle already deposited in the hearth. It has ten uses,
+remains known and **BROKEN** at zero, and is not a weapon, hand or armament slot,
+bag item, locker item, wheel item, sale good, or combat verb.
 
 Interacting enters one bounded fishing mode: choose near or deep water, cast,
 react to the bite, and reel while steering against the fish's run and managing
@@ -127,8 +130,9 @@ bound its resource economy are exact:
 - A near-water catch banks **one** unit; a deep-water catch banks **two**.
   A target is unavailable unless both its full yield and reserve space remain;
   catches are never partially banked.
-- A successful or failed attempt advances the civil clock by **ten minutes**.
-  Cancelling exits lawfully and advances no time.
+- A successful or failed attempt advances the civil clock by **ten minutes**
+  and spends one Rod use. Cancelling exits lawfully, advances no time, and
+  spends no durability.
 - At **20:00**, supper consumes at most one stored Fish. A served supper makes
   the current Fed cause active and prepares Well Fed. An empty supper clears
   the current Fed cause but does not erase a previously prepared, unused Well
@@ -202,6 +206,8 @@ The complete authored slice and evidence rules live in
 - The bounded Firewood and fishing/provisions loop does not authorise another
   chore, fishing location, gathering profession, relationship ladder, town
   economy, or freeform base builder.
+- Issue #184's Pickaxe and bounded deterministic dungeon veins do not authorise
+  another tool, ore, gathering site, profession ladder, or mining expansion.
 - Implementing one raid does not authorise recurrence.
 - No scouts, watchtowers, guards, staffing, morale-based service locks or
   relationship progression, multiple raid routes or waves, additional

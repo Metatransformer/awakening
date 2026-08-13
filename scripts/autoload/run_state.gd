@@ -96,10 +96,14 @@ var seed_used: int = 0
 ## `seed_used` + `level`, so names such as `Room_2_-1` survive a save/load even
 ## though the Node instances do not.
 var visited_rooms: Dictionary[StringName, bool] = {}
+## Stable generated resource sites exhausted during this trip. Unlike room
+## visits this spans floor changes, so backtracking cannot rebuild ore already
+## mined earlier in the same run.
+var depleted_resource_sites: Dictionary[StringName, bool] = {}
 ## Version of the nested run payload inside a `Saves` slot. Kept separate from
 ## the outer save version so a future dungeon-state migration has an explicit
 ## seam instead of having to infer its shape from whichever app version wrote it.
-const SNAPSHOT_VERSION: int = 2
+const SNAPSHOT_VERSION: int = 3
 
 ## The seed the NEXT run will use, if non-zero. Consumed and cleared by `enter()`.
 ##
@@ -152,6 +156,7 @@ func reset() -> void:
 	bag.clear()
 	cased.clear()
 	visited_rooms.clear()
+	depleted_resource_sites.clear()
 	premium = 0
 	in_dungeon = false
 	depth = 0
@@ -185,6 +190,7 @@ func enter(run_seed: int = 0) -> void:
 	bag.clear()
 	cased.clear()
 	visited_rooms.clear()
+	depleted_resource_sites.clear()
 	premium = 0
 	depth = 0
 	# Every NEW run starts at the top. A restored snapshot bypasses `enter()`;
@@ -289,6 +295,7 @@ func snapshot() -> Dictionary:
 		"magic": Game.magic,
 		"stamina": Game.stamina,
 		"visited_rooms": visited_rooms.keys(),
+		"depleted_resource_sites": depleted_resource_sites.keys(),
 		"pending_field_observations": pending_field_observations.keys(),
 		"rng_state": rng.state,
 	}
@@ -300,8 +307,8 @@ func snapshot() -> Dictionary:
 ## one the caller may have been standing in.
 func restore(saved: Dictionary) -> bool:
 	var snapshot_version: int = int(saved.get("version", 0))
-	if saved.is_empty() or (snapshot_version != 1 \
-			and snapshot_version != SNAPSHOT_VERSION):
+	if saved.is_empty() or snapshot_version < 1 \
+			or snapshot_version > SNAPSHOT_VERSION:
 		reset()
 		return false
 
@@ -345,6 +352,16 @@ func restore(saved: Dictionary) -> bool:
 			var room_id := StringName(raw_id)
 			if String(room_id).begins_with("Room_"):
 				visited_rooms[room_id] = true
+	depleted_resource_sites.clear()
+	if snapshot_version >= 3 and in_dungeon:
+		var raw_depleted: Variant = saved.get("depleted_resource_sites", [])
+		if raw_depleted is Array:
+			for raw_id: Variant in raw_depleted:
+				if raw_id is not String and raw_id is not StringName:
+					continue
+				var site_id := StringName(raw_id)
+				if _valid_mining_site_id(site_id):
+					depleted_resource_sites[site_id] = true
 
 	rng.seed = seed_used
 	var raw_state: Variant = saved.get("rng_state", null)
@@ -1443,6 +1460,36 @@ func sell(id: StringName, count: int = -1) -> int:
 	Bus.bag_changed.emit(bag, bag_value())
 	Bus.items_sold.emit({id: n}, paid)
 	return paid
+
+
+## Query and commit share the same validation seam so only canonical generated
+## mining ids can enter the resumable run payload.
+func is_resource_site_depleted(site_id: StringName) -> bool:
+	return _valid_mining_site_id(site_id) and depleted_resource_sites.has(site_id)
+
+
+func commit_resource_site_depletion(site_id: StringName) -> bool:
+	if not _valid_mining_site_id(site_id) or depleted_resource_sites.has(site_id):
+		return false
+	depleted_resource_sites[site_id] = true
+	return true
+
+
+func _valid_mining_site_id(site_id: StringName) -> bool:
+	var text := String(site_id)
+	if not text.begins_with("mining_vein:"):
+		return false
+	var parts := text.split(":", false)
+	if parts.size() != 4 or parts[0] != "mining_vein" \
+			or not parts[1].is_valid_int() or not parts[2].is_valid_int() \
+			or not parts[3].is_valid_int():
+		return false
+	var floor_number := parts[1].to_int()
+	var cell_x := parts[2].to_int()
+	var cell_y := parts[3].to_int()
+	if floor_number <= 0:
+		return false
+	return text == "mining_vein:%d:%d:%d" % [floor_number, cell_x, cell_y]
 
 
 ## Whether this generated room was already entered on the current floor.

@@ -14,6 +14,13 @@ func run(rig) -> void:
 	Clock.running = false
 	Clock.set_time(1, 9.0)
 	Game.restore_garrison({})
+	Game.tool_durabilities.erase(ToolDb.FISHING_ROD_ID)
+	Game.items.erase(ToolDb.FISHING_ROD_ID)
+	Game.grant(ToolDb.FISHING_ROD_ID)
+	var rod_maximum: int = Game.tool_max_durability(ToolDb.FISHING_ROD_ID)
+	rig.check(rod_maximum == 10
+		and Game.tool_durability(ToolDb.FISHING_ROD_ID) == rod_maximum,
+		"the granted Fishing Rod begins at its exact 10 / 10 durability")
 	await rig.wait_frames(6)
 
 	var fishing := outskirts.fishing_hole as FishingHole
@@ -49,6 +56,7 @@ func run(rig) -> void:
 	await rig.capture("fishing_00_pond_wide.png")
 
 	var before_begin_cancel: int = _civil_minute()
+	var durability_before_cancel: int = Game.tool_durability(ToolDb.FISHING_ROD_ID)
 	rig.check(fishing.begin_for_test(&"near"), "near water enters the fishing FSM")
 	rig.check(fishing.state_name() == &"choose" and Prompt.blocked,
 		"begin_for_test enters CHOOSE and blocks Prompt")
@@ -57,6 +65,9 @@ func run(rig) -> void:
 	await rig.wait_frames(3)
 	rig.check(fishing.feedback_mode_name() == &"choose",
 		"CHOOSE exposes the compact selection feedback mode")
+	rig.check(fishing.feedback_visual_text().contains("ROD %d/%d" % [
+		durability_before_cancel, rod_maximum]),
+		"the live fishing overlay reports Rod durability")
 	await rig.capture("fishing_01_choose.png")
 	var before_cancel: int = _civil_minute()
 	await rig.tap([&"ui_cancel"])
@@ -66,9 +77,12 @@ func run(rig) -> void:
 		"real ui_cancel exits to IDLE and releases Prompt")
 	rig.check(_civil_minute() == before_cancel,
 		"a cancelled attempt costs zero civil minutes")
+	rig.check(Game.tool_durability(ToolDb.FISHING_ROD_ID) == durability_before_cancel,
+		"a cancelled attempt spends no Rod durability")
 
 	Game.restore_garrison({})
 	Clock.set_time(1, 9.0)
+	var durability_before_near: int = Game.tool_durability(ToolDb.FISHING_ROD_ID)
 	var near_started: int = _civil_minute()
 	rig.check(fishing.begin_for_test(&"near"), "a fresh near attempt begins")
 	rig.check(_civil_minute() == near_started,
@@ -119,8 +133,9 @@ func run(rig) -> void:
 		"HOOKED begins with a neutral counter-steer arrow")
 	rig.check(fishing.desired_steer_direction() == -fishing.fish_run_direction(),
 		"the dominant arrow points opposite the fish run")
-	rig.check(fishing.feedback_visual_text() == "L R TENSION LAND",
-		"HOOKED retains only key glyphs and compact TENSION/LAND labels")
+	rig.check(fishing.feedback_visual_text() == "L R TENSION LAND ROD %d/%d" % [
+		Game.tool_durability(ToolDb.FISHING_ROD_ID), rod_maximum],
+		"HOOKED retains compact glyphs plus the live Rod durability")
 	_check_no_old_visual_prose(rig, fishing, "HOOKED")
 	await rig.capture("fishing_04_hooked_neutral.png")
 	var reel_events_before: int = fishing_sfx_events.count(&"fishing_reel")
@@ -178,6 +193,9 @@ func run(rig) -> void:
 		and fishing_sfx_events.count(&"fishing_catch") == catch_events_before + 1,
 		"the near RESULT reveals x1 and emits exactly one semantic catch cue")
 	_check_no_old_visual_prose(rig, fishing, "RESULT success x1")
+	rig.check(Game.tool_durability(ToolDb.FISHING_ROD_ID)
+		== durability_before_near - 1,
+		"the resolved near catch spends exactly one Rod durability")
 	await rig.wait_frames(4)
 	await rig.capture("fishing_07_result_success_x1.png")
 	var near_closed: bool = await rig.until(
@@ -187,6 +205,7 @@ func run(rig) -> void:
 
 	Game.restore_garrison({})
 	Clock.set_time(2, 11.0)
+	var durability_before_deep: int = Game.tool_durability(ToolDb.FISHING_ROD_ID)
 	var deep_started: int = _civil_minute()
 	rig.check(fishing.begin_for_test(&"deep"), "deep water begins on a fresh day and state")
 	rig.check(_civil_minute() == deep_started,
@@ -238,6 +257,9 @@ func run(rig) -> void:
 	_check_no_old_visual_prose(rig, fishing, "RESULT success x2")
 	await rig.wait_frames(4)
 	await rig.capture("fishing_08_result_success_x2.png")
+	rig.check(Game.tool_durability(ToolDb.FISHING_ROD_ID)
+		== durability_before_deep - 1,
+		"the resolved deep catch spends exactly one Rod durability")
 	var deep_closed: bool = await rig.until(
 		func() -> bool: return fishing.state_name() == &"idle", 3.0)
 	rig.check(deep_closed and not Prompt.blocked,
@@ -246,6 +268,8 @@ func run(rig) -> void:
 	Game.restore_garrison({})
 	Clock.set_time(3, 12.0)
 	var failure_started: int = _civil_minute()
+	var failure_durability_before: int = Game.tool_durability(
+		ToolDb.FISHING_ROD_ID)
 	rig.check(fishing.begin_for_test(&"near"),
 		"a failure probe begins through the ordinary capacity gate")
 	await rig.wait_frames(3)
@@ -272,6 +296,9 @@ func run(rig) -> void:
 		"a failed attempt banks no Fish")
 	rig.check(_civil_minute() == failure_minutes_before + 10,
 		"a failed attempt advances civil time by exactly ten minutes")
+	rig.check(Game.tool_durability(ToolDb.FISHING_ROD_ID)
+		== failure_durability_before - 1,
+		"the resolved failure spends exactly one Rod durability")
 	rig.check(Sfx.last_positional_semantic_cue == &"fishing_fail"
 		and fishing_sfx_events.count(&"fishing_fail") == fail_events_before + 1,
 		"the failure outcome emits exactly one semantic fishing_fail cue")
@@ -355,5 +382,5 @@ func _check_no_old_visual_prose(rig, fishing: FishingHole, beat: String) -> void
 			"WATCH THE WATER", "FISH RUNS", "STEER RIGHT", "STEER LEFT",
 			"HOLD INTERACT", "PRESS INTERACT", "WAIT FOR THE SPLASH",
 			"CANCEL CLOSE", "CANCEL: CLOSE", "HOOK NOW", "RELEASE TO EASE"]:
-		rig.check(not visible_text.contains(phrase),
-			"%s visual text omits '%s'" % [beat, phrase])
+			rig.check(not visible_text.contains(phrase),
+				"%s visual text omits '%s'" % [beat, phrase])

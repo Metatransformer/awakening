@@ -228,6 +228,9 @@ var has_compass: bool = false
 
 ## Item ids the player owns, e.g. &"hookshot".
 var items: Dictionary[StringName, bool] = {}
+## Durable utility tool id -> uses remaining. Zero is retained as the durable
+## fact that a tool was made and broke; positive entries mirror into `items`.
+var tool_durabilities: Dictionary[StringName, int] = {}
 
 # --- The selected item ------------------------------------------------------
 ## Which bottle D-pad ↓ has stepped to, and X will use. An index into
@@ -446,6 +449,7 @@ func reset() -> void:
 	has_map = false
 	has_compass = false
 	items.clear()
+	tool_durabilities.clear()
 	bottle_contents.clear()
 	rations.clear()
 	# Through `cancel_meal` rather than by clearing the three fields, so the hero
@@ -487,6 +491,7 @@ func reset() -> void:
 	Bus.temporary_overhealth_changed.emit(temporary_overhealth)
 	Bus.magic_changed.emit(magic, max_magic)
 	Bus.wishlist_changed.emit()
+	garrison_changed.emit()
 	stamina = max_stamina
 	_stamina_hold = 0.0
 	Bus.stamina_changed.emit(stamina, max_stamina)
@@ -780,6 +785,18 @@ func deposit_firewood() -> bool:
 		return false
 	carrying_firewood = false
 	firewood_stock += 1
+	garrison_changed.emit()
+	return true
+
+
+## Spend stored hearth stock as one checked mutation. Tool recipes use this
+## after their complete gold/material/firewood bill has been found affordable.
+func consume_stored_firewood(amount: int) -> bool:
+	if amount <= 0:
+		return true
+	if firewood_stock < amount:
+		return false
+	firewood_stock -= amount
 	garrison_changed.emit()
 	return true
 
@@ -1923,6 +1940,11 @@ func clear_boss_key() -> void:
 ## bow you just found is one press of D-pad → away, which is what the auto-bind
 ## was for.
 func grant(item_id: StringName) -> void:
+	if ToolDb.has(item_id):
+		if tool_usable(item_id):
+			return
+		craft_tool(item_id)
+		return
 	if items.get(item_id, false):
 		return
 	items[item_id] = true
@@ -1954,6 +1976,51 @@ func grant(item_id: StringName) -> void:
 ## filters rather than a system.
 func has(item_id: StringName) -> bool:
 	return items.get(item_id, false)
+
+
+# --- Durable utility tools -------------------------------------------------
+
+func tool_durability(id: StringName) -> int:
+	if not ToolDb.has(id):
+		return 0
+	return clampi(int(tool_durabilities.get(id, 0)), 0,
+		ToolDb.max_durability(id))
+
+
+func tool_max_durability(id: StringName) -> int:
+	return ToolDb.max_durability(id)
+
+
+func tool_known(id: StringName) -> bool:
+	return ToolDb.has(id) and tool_durabilities.has(id)
+
+
+func tool_usable(id: StringName) -> bool:
+	return ToolDb.has(id) and tool_durability(id) > 0 and has(id)
+
+
+## First craft and reforge are the same state transition: full durability,
+## compatibility ownership restored, and the ordinary acquisition notice.
+func craft_tool(id: StringName) -> bool:
+	var maximum := tool_max_durability(id)
+	if maximum <= 0:
+		return false
+	tool_durabilities[id] = maximum
+	items[id] = true
+	Bus.item_acquired.emit(id)
+	garrison_changed.emit()
+	return true
+
+
+func spend_tool_use(id: StringName) -> bool:
+	if not tool_usable(id):
+		return false
+	var remaining := tool_durability(id) - 1
+	tool_durabilities[id] = remaining
+	if remaining <= 0:
+		items.erase(id)
+	garrison_changed.emit()
+	return true
 
 
 # --- The selected item ------------------------------------------------------

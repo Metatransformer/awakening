@@ -100,7 +100,9 @@ banked Heat premium and is also the value used by extraction.
 The ten ingredients are saleable merchandise. They occupy bag cells, can be
 lost, and become gold only when sold at the quartermaster. Selling is a choice:
 some common ingredients can instead be consumed by a named supply recipe such
-as fletching.
+as fletching. Iron Scrap retains that ordinary sale-good lane, but Brannoc's
+three utility-tool recipes may consume it directly from the returned bag; this
+is the explicit reason not to sell every unmarked stack automatically.
 
 ### Components
 
@@ -112,6 +114,54 @@ Forge, alchemy, and jewellery components remain separate recipe families. A
 component has one bench and does not appear in another counter's recipes. Exact
 component identities, stack sizes, and catalogue roles belong to
 [ITEMS.md](ITEMS.md).
+
+Riveted Plate feeds Brannoc's forge and, together with Tension Coil, the
+Builder's already-authored West Gate Bolt-Thrower. Those shared metal demands
+create allocation; mining does not create a new material family or currency.
+
+### Durable utility tools and mining
+
+Brannoc's utility-tool transactions are fixed:
+
+| Tool | Full durability | First forge or full reforge |
+|---|---:|---|
+| Woodsman's Axe | **8 uses** | **60 gold + 3 Iron Scrap** |
+| Pickaxe | **12 uses** | **75 gold + 3 Iron Scrap** |
+| Fishing Rod | **10 uses** | **45 gold + 1 Iron Scrap + 1 stored Firewood bundle** |
+
+A reforge is the same full bill and restores the maximum; there is no prorated
+repair. A known zero-use tool remains **BROKEN** and eligible for reforge.
+Positive durability mirrors into ordinary item ownership only for compatibility,
+and utility tools never become carried stock, bag value, sale goods, armaments,
+or combat equipment.
+
+The three durability spends occur only at the work's commitment point: a
+successful daily tree impact for the Axe, every resolved success or failure for
+the Rod with no spend on cancel, and a committed intact-vein impact for the
+Pickaxe. The Rod's Firewood is removed from the stored hearth, so the player
+must complete the ordinary daily grove-to-hearth loop before forging or
+reforging it.
+
+Every ordinary non-entrance, non-maze room independently has a deterministic
+**65%** vein chance. Mining pays one physical existing-item stack:
+
+| Payout | Chance within a placed vein | Yield |
+|---|---:|---:|
+| Iron Scrap | **65%** | **3** |
+| Riveted Plate | **22%** | **2** |
+| Tension Coil | **13%** | **1** |
+
+Enemy Iron Scrap drops remain unchanged and are the less-efficient fallback.
+A vein becomes rubble and throws a physical LootMote stack, so bag room, case
+protection, extraction, and loss stay ordinary decisions. Stable floor/cell
+depletion survives room and floor rebuilds and resumable Run v3 saves, then
+clears on a new run. Mining adds no map marker, gate, room, currency, item id,
+or automatic banking.
+
+The resulting chain is deliberate: choose incidental enemy iron or Pickaxe
+durability for efficient mining; allocate metals between tool forging,
+Brannoc's forge, and Bolt-Thrower construction; chop and deposit wood before a
+Rod transaction; and decide when a worn tool warrants a full-cost reforge.
 
 ### Relics and the Artifacts service
 
@@ -341,7 +391,7 @@ the ordinary death-loss outcome and never becomes free extraction.
 |---|---|---|
 | Trade | Quartermaster | Buy expendables; sell ingredients and sale goods; never buy components or relics |
 | Upgrades | Quartermaster | Four bag cells and three +4 HP health upgrades |
-| Smithing | Brannoc | Gold-plus-component forge ladders and fletching |
+| Smithing | Brannoc | Gold-plus-component forge ladders, three utility-tool forge/reforge lines, and fletching |
 | Alchemy | Ysolt | Bottle capacity and three draught recipes |
 | Artifacts | Lanternkeeper | Repair/read and donate the twelve relics |
 | Field Notes | Aldric | Review awarded observations and spend the finite note balance on one-rank doctrines |
@@ -366,6 +416,11 @@ Trade also carries arrows, charges, Hardtack, and Small Beer at the prices in
 or pinned recipes.
 
 ### Forge ladders
+
+The three utility-tool lines above share Brannoc's counter but are not upgrade
+tracks: each is either ready, known and **BROKEN**, or never forged, and a
+transaction always returns it to full durability. They therefore do not change
+the 12-track forge-ladder or 26-track total caps.
 
 Each forge track begins at rung 0 and has **three purchasable rungs**. Every
 rung costs gold and forge components.

@@ -726,6 +726,10 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 var targeting: Node = null
 
 var state: MoveState = MoveState.GROUND
+## ToolDb id that owns the live utility commitment. The movement state remains
+## the existing WOODSMAN state; the id is what keeps an axe reel from counting
+## as a pickaxe impact when both tools share the same downward clip.
+var _utility_tool_id: StringName = &""
 ## Measured seconds from an accepted slam's commit through airborne contact.
 ## Public so combat VFX can use the exact interval that scales the dive clip.
 var slam_strike_time: float = 0.0
@@ -2559,7 +2563,7 @@ func _tick_attack(delta: float) -> void:
 		state = MoveState.GROUND
 
 
-## Serve the tree-cutting commitment without borrowing combat movement. The
+## Serve the utility-work commitment without borrowing combat movement. The
 ## target-facing was fixed at the request, and the body stays planted while the
 ## authored downward reel supplies all visible motion.
 func _tick_woodsman_chop(delta: float) -> void:
@@ -2570,8 +2574,7 @@ func _tick_woodsman_chop(delta: float) -> void:
 		return
 	state = MoveState.GROUND
 	_state_timer = 0.0
-	if combat != null:
-		combat.set_woodsman_axe_visible(false)
+	_clear_utility_work()
 
 
 ## Keep the body on the target through a move that owns the hero. Without this a
@@ -2716,8 +2719,8 @@ func _enter_hurt(tier: Hit.Tier, stun: float) -> void:
 	# for us next frame anyway -- doing it here means the shield is already down in
 	# the frame the flinch starts, rather than one frame into it.
 	blocking = false
-	if state == MoveState.WOODSMAN and combat != null:
-		combat.set_woodsman_axe_visible(false)
+	if state == MoveState.WOODSMAN:
+		_clear_utility_work()
 
 	state = MoveState.HURT
 	_hurt_tier = tier
@@ -2882,14 +2885,17 @@ func request_attack(duration: float, variant: int = Swing.LIGHT1) -> bool:
 	return true
 
 
-## Commit to one non-combat Woodsman's Axe cut facing `target`. The axe is a
-## temporary rig presentation owned by HeroCombat; it never becomes an armament
-## id and therefore cannot enter either the weapon ring or the radial wheel.
-func request_woodsman_chop(duration: float, target: Vector3) -> bool:
-	if not can_act() or combat == null:
+## Commit to one non-combat utility action facing `target`. ToolDb names the
+## presentation, but the tool never becomes an armament, wheel item or hitbox.
+func request_utility_work(tool_id: StringName, duration: float,
+		target: Vector3) -> bool:
+	if not can_act() or combat == null or not ToolDb.has(tool_id):
+		return false
+	if not combat.set_utility_tool_visible(tool_id, true):
 		return false
 	_cancel_dodge()
 	state = MoveState.WOODSMAN
+	_utility_tool_id = tool_id
 	_state_timer = maxf(duration, 0.05)
 	_speed = 0.0
 	_lunge_left = 0.0
@@ -2901,7 +2907,6 @@ func request_woodsman_chop(duration: float, target: Vector3) -> bool:
 		flat = flat.normalized()
 		facing_yaw = atan2(flat.x, flat.z)
 
-	combat.set_woodsman_axe_visible(true)
 	if _tree != null:
 		_tree.set(_P_WOODSMAN_CHOP_SCALE,
 			_clip_scale(clip_woodsman_chop, _state_timer))
@@ -2909,10 +2914,24 @@ func request_woodsman_chop(duration: float, target: Vector3) -> bool:
 	return true
 
 
-## HarvestTree checks this at the authored impact beat so an interrupted cut
-## cannot award a bundle after the axe has already been knocked from the hand.
+## Is this exact tool still serving the planted utility commitment?
+func utility_working(tool_id: StringName) -> bool:
+	return state == MoveState.WOODSMAN and _utility_tool_id == tool_id
+
+
+## Compatibility surface for the grove and its proof director.
+func request_woodsman_chop(duration: float, target: Vector3) -> bool:
+	return request_utility_work(ToolDb.WOODSMAN_AXE_ID, duration, target)
+
+
 func woodsman_chopping() -> bool:
-	return state == MoveState.WOODSMAN
+	return utility_working(ToolDb.WOODSMAN_AXE_ID)
+
+
+func _clear_utility_work() -> void:
+	if combat != null and _utility_tool_id != &"":
+		combat.set_utility_tool_visible(_utility_tool_id, false)
+	_utility_tool_id = &""
 
 
 ## The lock-on lunge: the same swing, plus a burst of drive at the locked target

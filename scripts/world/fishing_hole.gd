@@ -46,6 +46,7 @@ var _last_reel_sfx_msec: int = -1000000
 var _last_strain_sfx_msec: int = -1000000
 var _mode_active: bool = false
 var _clock_was_running: bool = true
+var _attempt_spent: bool = false
 
 ## Release-gated edges are deliberate. The interact press that Prompt used to
 ## open this mode is still down when our first `_process` runs, and polling it as
@@ -64,6 +65,7 @@ var _splash: Node3D
 var _ripple_root: Node3D
 var _ripple_rings: Array[MeshInstance3D] = []
 var _ripple_materials: Array[StandardMaterial3D] = []
+var _rack_rods: Array[Node3D] = []
 var _creel_meals: Array[Node3D] = []
 
 var _overlay: CanvasLayer
@@ -159,7 +161,7 @@ func activate(_by: Node3D) -> void:
 	_start_mode(first_target)
 
 
-## Director seam: enter through the same capacity gate as ordinary activation,
+## Director seam: enter through the same tool and capacity gates as activation,
 ## but begin with the authored target already selected.
 func begin_for_test(target: StringName) -> bool:
 	if _mode_active or not _valid_target(target):
@@ -251,6 +253,13 @@ func cancel() -> void:
 
 
 func _start_mode(target: StringName) -> bool:
+	if not Game.tool_known(ToolDb.FISHING_ROD_ID):
+		Bus.request_message.emit("BRANNOC FORGES THE FISHING ROD.")
+		return false
+	if not Game.tool_usable(ToolDb.FISHING_ROD_ID):
+		Bus.request_message.emit(
+			"THE FISHING ROD IS BROKEN. BRANNOC MUST REFORGE IT.")
+		return false
 	if Game.fish_space() <= 0:
 		Bus.request_message.emit("THE CREEL IS FULL. SUPPER MUST USE THE RESERVE.")
 		return false
@@ -262,6 +271,7 @@ func _start_mode(target: StringName) -> bool:
 		return false
 
 	_target = target
+	_attempt_spent = false
 	_mode_active = true
 	_clock_was_running = Clock.running
 	# The world clock normally advances in real time. Holding it here is what
@@ -432,6 +442,7 @@ func _land_catch() -> void:
 		_failure_result = &"escaped"
 		_result_text = "THE CATCH COULD NOT ENTER THE CREEL."
 		Bus.request_sfx.emit(&"fishing_fail", _selected_fish_world_position())
+	_result_text += _spend_attempt_use()
 	_transition(State.RESULT)
 
 
@@ -440,7 +451,7 @@ func _finish_failure(text: String, result: StringName) -> void:
 	_result_success = false
 	_caught_quantity = 0
 	_failure_result = result
-	_result_text = text + " · 10 MINUTES PASS"
+	_result_text = text + " · 10 MINUTES PASS" + _spend_attempt_use()
 	Bus.request_sfx.emit(&"fishing_fail", _selected_fish_world_position())
 	_transition(State.RESULT)
 
@@ -448,6 +459,17 @@ func _finish_failure(text: String, result: StringName) -> void:
 func _selected_fish_world_position() -> Vector3:
 	var fish: Node3D = _deep_fish if _target == TARGET_DEEP else _near_fish
 	return fish.global_position if fish != null else global_position
+
+
+func _spend_attempt_use() -> String:
+	if not _attempt_spent:
+		_attempt_spent = true
+		Game.spend_tool_use(ToolDb.FISHING_ROD_ID)
+	var remaining: int = Game.tool_durability(ToolDb.FISHING_ROD_ID)
+	if remaining <= 0:
+		return " · ROD BROKEN — BRANNOC MUST REFORGE IT"
+	return " · ROD %d / %d" % [remaining,
+		Game.tool_max_durability(ToolDb.FISHING_ROD_ID)]
 
 
 func _yield_for(target: StringName) -> int:
@@ -543,6 +565,9 @@ func _set_selected_fish_visible(value: bool) -> void:
 func _repaint_creel() -> void:
 	for i: int in _creel_meals.size():
 		_creel_meals[i].visible = i < Game.fish_stock
+	var rods_visible: bool = Game.tool_usable(ToolDb.FISHING_ROD_ID)
+	for rod: Node3D in _rack_rods:
+		rod.visible = rods_visible
 	if _mode_active:
 		_refresh_overlay()
 
@@ -667,6 +692,8 @@ func _refresh_overlay() -> void:
 	_feedback.caught_quantity = _caught_quantity
 	_feedback.failure_result = _failure_result
 	_feedback.animation_phase = _state_elapsed
+	_feedback.rod_durability = Game.tool_durability(ToolDb.FISHING_ROD_ID)
+	_feedback.rod_max_durability = Game.tool_max_durability(ToolDb.FISHING_ROD_ID)
 	match _state:
 		State.CHOOSE:
 			_feedback.mode = FishingFeedbackDraw.MODE_CHOOSE
@@ -780,10 +807,10 @@ func _build_rod_rack() -> void:
 		Transform3D(Basis.IDENTITY, Vector3(0.0, 0.82, 0.0)), false)
 	for x: float in [-0.24, 0.24]:
 		var rod_basis := Basis(Vector3.RIGHT, deg_to_rad(-12.0))
-		_cylinder(rack, &"Rod", MAT_WOOD, 0.035, 2.15,
-			Transform3D(rod_basis, Vector3(x, 1.28, -0.10)), false, 7)
-		_cylinder(rack, &"IronGrip", MAT_IRON, 0.055, 0.42,
-			Transform3D(rod_basis, Vector3(x, 0.36, 0.10)), false, 7)
+		_rack_rods.append(_cylinder(rack, &"Rod", MAT_WOOD, 0.035, 2.15,
+			Transform3D(rod_basis, Vector3(x, 1.28, -0.10)), false, 7))
+		_rack_rods.append(_cylinder(rack, &"IronGrip", MAT_IRON, 0.055, 0.42,
+			Transform3D(rod_basis, Vector3(x, 0.36, 0.10)), false, 7))
 
 
 func _build_creel() -> void:

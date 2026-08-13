@@ -93,13 +93,15 @@ const SLOTS := 3
 ## at the three narrow read seams below.
 ## Bumped to 17 for completed Field Notes. A v16 slot has only filed/awarded ids;
 ## each of those is also completed, while no other completion can be inferred.
-const VERSION := 17
+## Bumped to 18 for durable utility tools. Older owned Woodsman's Axes migrate
+## to full durability; the additive tool manifest is otherwise empty.
+const VERSION := 18
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
 const AUTOSAVE_INTERVAL := 300.0
 
 signal saved(slot: int)
@@ -241,6 +243,7 @@ func save(slot: int) -> bool:
 		"has_map": Game.has_map,
 		"has_compass": Game.has_compass,
 		"items": Game.items,
+		"tool_durability": Game.tool_durabilities,
 		"item_selected": Game.item_selected,
 		# The kit wheel's eight bindings. A flat array of ids, which is the whole
 		# reason the wheel encodes a bottle as a `bottle_N` token rather than as a
@@ -418,7 +421,7 @@ func load_slot(slot: int) -> Dictionary:
 			var observation_id: StringName = StringName(raw_id)
 			if FieldNotesDb.is_observation(observation_id):
 				Game.awarded_field_observations[observation_id] = true
-	# Completion is additive in v16. Earlier saves can prove only that every
+	# Completion is additive in v17. Earlier saves can prove only that every
 	# already-awarded entry was completed; missing state otherwise stays empty.
 	Game.completed_field_observations.clear()
 	var raw_completed: Variant = d.get("completed_field_observations", [])
@@ -500,6 +503,32 @@ func load_slot(slot: int) -> Dictionary:
 	Game.items.clear()
 	for k in (d.get("items", {}) as Dictionary):
 		Game.items[StringName(k)] = true
+	# Tool state is rebuilt through the authoritative catalogue. Keep valid zero
+	# entries (broken is known), clamp positive uses, and restore the compatibility
+	# ownership gate only for usable tools.
+	Game.tool_durabilities.clear()
+	var raw_tool_durability: Variant = d.get("tool_durability", {})
+	if raw_tool_durability is Dictionary:
+		for raw_id: Variant in raw_tool_durability:
+			if raw_id is not String and raw_id is not StringName:
+				continue
+			var tool_id := StringName(raw_id)
+			if not ToolDb.has(tool_id):
+				continue
+			var uses := clampi(int((raw_tool_durability as Dictionary)[raw_id]),
+				0, ToolDb.max_durability(tool_id))
+			Game.tool_durabilities[tool_id] = uses
+	# The axe predates durability. This applies to pre-v18 slots and to a current
+	# payload missing the additive key, so legacy ownership never loads broken.
+	if Game.has(ToolDb.WOODSMAN_AXE_ID) \
+			and not Game.tool_durabilities.has(ToolDb.WOODSMAN_AXE_ID):
+		Game.tool_durabilities[ToolDb.WOODSMAN_AXE_ID] = \
+			ToolDb.max_durability(ToolDb.WOODSMAN_AXE_ID)
+	for tool_id: StringName in ToolDb.TOOL_IDS:
+		if Game.tool_durability(tool_id) > 0:
+			Game.items[tool_id] = true
+		else:
+			Game.items.erase(tool_id)
 	Game.flags.clear()
 	for k in (d.get("flags", {}) as Dictionary):
 		Game.flags[StringName(k)] = true
@@ -586,6 +615,7 @@ func load_slot(slot: int) -> Dictionary:
 	Bus.stash_changed.emit(Game.stash)
 	Bus.loadout_changed.emit(Game.loadout_set,
 		Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_LEFT))
+	Game.garrison_changed.emit()
 	loaded.emit(slot)
 
 	var destination := {
