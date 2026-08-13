@@ -46,7 +46,7 @@ signal quit_to_title_requested
 signal load_requested(slot: int, dest: Dictionary)
 signal saved_to(slot: int)
 
-enum Screen { ROOT, EQUIP, POUCH, MAP, GARRISON, OPTIONS, SAVES }
+enum Screen { ROOT, EQUIP, POUCH, MAP, QUESTS, GARRISON, OPTIONS, SAVES }
 
 const NOTICE_TIME := 3.5
 
@@ -95,10 +95,10 @@ const KEY_UI_BUTTONS := {
 
 ## The screens the tab strip cycles, in ring order, with its labels.
 ##
-## Four, and not six. EQUIP / INVENTORY / MAP / GARRISON are the screens that
+## Five, and not seven. EQUIP / INVENTORY / MAP / QUESTS / GARRISON are the screens that
 ## ANSWER a question about the run in progress — what am I holding, what am I
 ## carrying, where am I, how is home — and paging between them is how a player
-## checks all four without going back to a list each time. Options and Save/Load are things you DO, they
+## checks all five without going back to a list each time. Options and Save/Load are things you DO, they
 ## change the game or the disk, and putting them one arrow away from a map read
 ## mid-corridor is how a player lands on the save screen by accident. They stay
 ## commands on the root menu.
@@ -114,6 +114,7 @@ const PAGES := [
 	[Screen.EQUIP, "Equip"],
 	[Screen.POUCH, "Inventory"],
 	[Screen.MAP, "Map"],
+	[Screen.QUESTS, "Quests"],
 	[Screen.GARRISON, "Garrison"],
 ]
 const PAGE_TURN_DURATION: float = 0.32
@@ -142,6 +143,7 @@ const SND_CONFIRM := preload("res://audio/sfx/ui_confirm.ogg")
 @onready var _equip: MenuEquipPanel = $Root/Screens/EquipScreen
 @onready var _pouch: MenuPouchPanel = $Root/Screens/PouchScreen
 @onready var _map: MenuMapPanel = $Root/Screens/MapScreen
+@onready var _quests: MenuQuestPanel = $Root/Screens/QuestScreen
 @onready var _garrison: MenuGarrisonPanel = $Root/Screens/GarrisonScreen
 @onready var _options: MenuOptionsPanel = $Root/Screens/OptionsScreen
 @onready var _saves: MenuSavesPanel = $Root/Screens/SavesScreen
@@ -203,6 +205,7 @@ func _ready() -> void:
 	_pouch.drop_requested.connect(_on_drop_requested)
 	_pouch.notice.connect(_notice)
 	_map.back_requested.connect(back)
+	_quests.back_requested.connect(back)
 	_garrison.back_requested.connect(back)
 	_build_page_tabs()
 	_options.back_requested.connect(back)
@@ -350,7 +353,7 @@ func open_map() -> void:
 ## you reached in one press is the world.
 ##
 ## Paging (`_go_page`) REPLACES the top of the stack, so this holds across the
-## whole EQUIP/INVENTORY/MAP/GARRISON ring: however you walk it, Escape leaves.
+## whole EQUIP/INVENTORY/MAP/QUESTS/GARRISON ring: however you walk it, Escape leaves.
 ##
 ## Reaching the same screen from the root menu still stacks normally — there the
 ## root IS where you came from, and backing onto it is what the player means.
@@ -365,7 +368,7 @@ func _open_onto(screen: int) -> void:
 ## `picked` re-emission, no "which tab am I" of their own. That is deliberate:
 ## the ring, the strips, the highlight and the screen stack are one mechanism,
 ## and the version of this where each panel owned its strip is the version where
-## adding a fourth tab means editing four files and getting one of them wrong.
+## adding another tab means editing every panel and getting one of them wrong.
 func _build_page_tabs() -> void:
 	_page_tabs.clear()
 	for page: Array in PAGES:
@@ -391,6 +394,7 @@ func _panel_for(screen: int) -> Control:
 		Screen.EQUIP: return _equip
 		Screen.POUCH: return _pouch
 		Screen.MAP: return _map
+		Screen.QUESTS: return _quests
 		Screen.GARRISON: return _garrison
 	return null
 
@@ -418,7 +422,7 @@ func _tab_row(screen: int) -> Array:
 ##
 ## It REPLACES the top of the stack rather than pushing onto it. That is the
 ## whole difference between a tab and a screen: paging EQUIP → INVENTORY → MAP
-## → GARRISON and then pressing B should put you back where you were before you
+## → QUESTS → GARRISON and then pressing B should put you back where you were before you
 ## opened any of them, not walk you back out through screens you were only passing
 ## through. The stack still records the one entry, so B behaves the same
 ## whichever tab you happen to be standing on when you press it.
@@ -598,6 +602,7 @@ func _apply_top() -> void:
 	_equip.visible = screen == Screen.EQUIP
 	_pouch.visible = screen == Screen.POUCH
 	_map.visible = screen == Screen.MAP
+	_quests.visible = screen == Screen.QUESTS
 	_garrison.visible = screen == Screen.GARRISON
 	_options.visible = screen == Screen.OPTIONS
 	_saves.visible = screen == Screen.SAVES
@@ -611,7 +616,7 @@ func _apply_top() -> void:
 				target = _cmd_buttons[0]
 			if target:
 				target.grab_focus()
-		Screen.EQUIP, Screen.POUCH, Screen.MAP, Screen.GARRISON:
+		Screen.EQUIP, Screen.POUCH, Screen.MAP, Screen.QUESTS, Screen.GARRISON:
 			_enter_page(screen)
 		Screen.OPTIONS:
 			_options.open_tab(top.get("tab", MenuOptionsPanel.Tab.AUDIO))
@@ -621,10 +626,10 @@ func _apply_top() -> void:
 			_saves.focus_first()
 
 
-## Show one of the four paged screens and put the cursor somewhere sensible.
+## Show one of the five paged screens and put the cursor somewhere sensible.
 ##
-## The re-link is not optional and it is not a refresh of the paint. Two of the
-## three panels rebuild their top row of focusables inside `refresh()` — the
+## The re-link is not optional and it is not a refresh of the paint. Three of the
+## five panels rebuild their top row of focusables inside `refresh()` — the
 ## bag's cells are `ItemGrid` buttons that come and go with `bag_slots` — so the
 ## strip's ↓ and the row's ↑ have to be re-pointed at the controls that exist
 ## NOW. Linked once at build time, the first bag slot bought at the smith would
@@ -898,6 +903,12 @@ func refresh_root() -> void:
 	# and a command that names a screen has to name the screen it opens.
 	_command("Inventory", "bag", "%d / %d slots" % [used, Game.bag_slots],
 		func() -> void: _push({"screen": Screen.POUCH}), {"submenu": true})
+	var active_quests := 0
+	for quest_id: StringName in QuestDb.journal_ids():
+		if Game.quest_status(quest_id) == QuestState.Status.ACTIVE:
+			active_quests += 1
+	_command("Quests", "read", "%d active" % active_quests,
+		func() -> void: _push({"screen": Screen.QUESTS}), {"submenu": true})
 	_command("Garrison", "relic", "%d / %d hearth" % [
 		Game.firewood_stock, Game.FIREWOOD_CAP],
 		func() -> void: _push({"screen": Screen.GARRISON}), {"submenu": true})

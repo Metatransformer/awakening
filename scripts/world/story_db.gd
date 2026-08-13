@@ -127,7 +127,7 @@ static var BEATS := {
 			"Our timber stores are running low. Keeping them filled is your duty now.",
 			"Brannoc can make you a woodsman's axe. Take him sixty gold and three pieces of iron scrap.",
 			"There is a grove beyond the gate. During daylight, fell one tree there for a bundle.",
-			"Carry it back and stack it at the central hearth before Bonfire Time.",
+			"Carry it back and stack it in the south-gate supply box before Bonfire Time.",
 		]},
 		# The first time the loop has actually paid out. Gold and not a boss,
 		# because the thing being acknowledged is that you came back UP, and coming
@@ -461,7 +461,10 @@ static func pages_of(entry: Dictionary) -> PackedStringArray:
 
 
 static func mark_told(who: StringName, beat: StringName) -> void:
-	Game.set_flag(told_flag(who, beat))
+	var flag := told_flag(who, beat)
+	if Game.flag(flag):
+		return
+	Game.set_flag(flag)
 
 
 # --- The gate ------------------------------------------------------------------

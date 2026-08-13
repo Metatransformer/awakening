@@ -70,7 +70,19 @@ location. It changes access and cost around fishing but is not evidence that
 the near/deep fishing choice is deep; that hypothesis remains open in
 [design-tests/FISHING_PROVISIONS_PROOF.md](design-tests/FISHING_PROVISIONS_PROOF.md).
 
-Issue #198 is a third explicit owner-authorised bounded override alongside the
+Issue #197 is a third explicit owner override alongside the freeze. It
+authorises shared quest-state infrastructure, one read-only Quests page in the
+pause-menu ring, and punctuation-only world guidance: `!` for an available
+quest or its current target, and `?` on an NPC with a ready turn-in. It seeds
+exactly the already-built **Keep the Hearth** duty and the already-authorised
+**West Gate Defence** project; both use their existing actions, costs, spaces,
+and residents.
+
+This override adds no third quest, chore, reward economy, voiced line, route,
+NPC, location, or combat objective. It is state legibility for existing work,
+not raid evidence and not a new human-test hypothesis.
+
+Issue #198 is a fourth explicit owner-authorised bounded override alongside the
 freeze. It permits only player pickup and throw of the existing explosive
 barrels, plus one shared world-space lob landing marker used by both Burst and a
 carried barrel. The barrel is never inventory, persistent gear, or a ring stop;
@@ -111,8 +123,8 @@ additional observations, additional doctrines, repeatable faucet or item.
   pickup/throw and shared Burst/barrel lob marker.
 - Mining expansion beyond #184's one deterministic vein rule, additional ore
   or tool types, fishing gear collections, and profession progression.
-- Any currency beyond gold and Field Notes, UI screen, voiced line, or enemy
-  model.
+- Any currency beyond gold and Field Notes, UI screen beyond #197's one Quests
+  page, voiced line, or enemy model.
 - Floors, bosses, production content, broad lore, or unrelated polish.
 
 Implementation proves only that each bounded system works. It does not prove
