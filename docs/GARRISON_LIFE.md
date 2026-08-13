@@ -21,9 +21,16 @@ The civil clock is the only owner of day and time:
 - **Bedtime, 23:00–05:00:** residents retire to their authored sleeping places
   and the yard closes.
 
-Sleeping and forward time jumps resolve every crossed boundary once. Save/load
-restores the current result without replaying it. Weather and lighting share
-this civil day; they do not create a second calendar or simulation.
+The personal bed is identified by its **SLEEP IN YOUR BED** prompt, focused
+quilt glow, and warm motes. It offers **Sleep until nightfall** and **Sleep until
+morning**.
+Nightfall is the next strictly future 20:00; morning settles at 07:00, or 06:00
+with Early Reveille. Before applying either jump, sleep pauses the world for a
+2.4-second analog-clock presentation whose hands sweep linearly from the start
+to the target. Sleeping and forward time jumps then resolve every crossed
+boundary once. Save/load restores the current result without replaying it.
+Weather and lighting share this civil day; they do not create a second calendar
+or simulation.
 
 The dawn boundary remains 05:00, but waking is a later settlement: deliberate
 rest and the automatic dawn return both hand control back at the effective
@@ -165,7 +172,8 @@ systems named under Aldric.
 
 The implemented prototype is one authored occurrence armed by donation of the
 Tally-Ledger and scheduled for the next day. It warns at 15:00, sounds the raid
-horn at 23:00, and interrupts sleep when the attack boundary is crossed.
+horn at 23:00, and interrupts sleep when the attack boundary is crossed; an
+interrupted sleep grants no recovery and requests no autosave.
 Underground players choose between continuing and the ordinary Escape Rope;
 the raid never summons, teleports, or grants free extraction.
 

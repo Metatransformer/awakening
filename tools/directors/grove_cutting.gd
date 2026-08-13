@@ -26,6 +26,10 @@ func run(rig) -> void:
 	var tree: HarvestTree = outskirts.harvest_trees[0]
 	if not rig.check(hero != null and tree != null, "hero and first tree are present"):
 		return
+	var heard_cues: Array[StringName] = []
+	var cue_listener: Callable = func(id: StringName, _position: Vector3) -> void:
+		heard_cues.append(id)
+	Bus.request_sfx.connect(cue_listener)
 
 	var cam := Camera3D.new()
 	cam.fov = 48.0
@@ -57,6 +61,11 @@ func run(rig) -> void:
 		func() -> bool: return Game.carrying_firewood, 2.0)
 	rig.release(&"interact")
 	rig.check(harvested, "the axe impact awards one carried firewood bundle")
+	rig.check(heard_cues == [HarvestTree.SFX_AXE_HIT, HarvestTree.SFX_TREE_FALL],
+		"the committed impact requests one axe hit and one tree-fall cue")
+	rig.check(_positional_voice_playing(HarvestTree.SFX_AXE_HIT)
+		and _positional_voice_playing(HarvestTree.SFX_TREE_FALL),
+		"both supplied wood-cutting takes start through pooled positional SFX")
 	await rig.wait_seconds(0.26)
 	await rig.capture("grove_02_falling.png")
 	await rig.wait_seconds(0.75)
@@ -83,5 +92,16 @@ func run(rig) -> void:
 	await rig.wait_physics_frames(3)
 	rig.check(not stump.visible and tree.enabled,
 		"a new day restores the grove while preserving the one-bundle rule")
+	if Bus.request_sfx.is_connected(cue_listener):
+		Bus.request_sfx.disconnect(cue_listener)
 	Clock.running = true
 	print("GROVE CUTTING OK")
+
+
+func _positional_voice_playing(cue: StringName) -> bool:
+	var suffix := "/%s.wav" % String(cue)
+	for voice: AudioStreamPlayer3D in Sfx._pool:
+		if voice.playing and voice.stream != null \
+				and voice.stream.resource_path.ends_with(suffix):
+			return true
+	return false
