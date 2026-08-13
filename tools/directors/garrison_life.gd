@@ -271,6 +271,23 @@ func _hearth_and_schedule(rig, garrison: Garrison) -> void:
 	Clock.restore({"day": 2, "hour": 12.0, "running": false})
 	Game.restore_garrison({"firewood_stock": 2, "fish_stock": 2})
 	await rig.wait_frames(5)
+	var stump_seats := garrison.hearth.get_node_or_null("StumpSeats") as Node3D
+	rig.check(stump_seats != null and stump_seats.get_child_count() == 6,
+		"the hearth has exactly six decorative stump seats")
+	var flames := garrison.hearth.get_node_or_null("BonfireFlames") as Node3D
+	var fire_light := garrison.hearth.get_node_or_null("BonfireLight") as OmniLight3D
+	var vfx_names: Array[StringName] = [
+		&"FireVFX", &"FlameLicksVFX", &"EmberVFX", &"SmokeVFX",
+	]
+	rig.check(flames != null and flames.get_child_count() == vfx_names.size(),
+		"the hearth has exactly four Valenfeld fire VFX layers")
+	if flames != null:
+		for layer_name: StringName in vfx_names:
+			rig.check(flames.get_node_or_null(NodePath(String(layer_name))) is GPUParticles3D,
+				"the hearth has named %s particles" % layer_name)
+	rig.check(flames != null and not flames.visible
+		and fire_light != null and not fire_light.visible,
+		"the fire VFX container and light are off in daytime")
 	var cam := Camera3D.new()
 	cam.fov = 55.0
 	garrison.add_child(cam)
@@ -294,6 +311,9 @@ func _hearth_and_schedule(rig, garrison: Garrison) -> void:
 	Game.resolve_bonfire(2)
 	rig.check(Game.firewood_stock == 1 and Game.fish_stock == 1,
 		"the same campaign day's supper consumes neither wood nor Fish twice")
+	rig.check(flames != null and flames.visible
+		and fire_light != null and fire_light.visible,
+		"the fire VFX container and light turn on for the fueled bonfire")
 
 	var roster: Array[Npc] = [garrison.vendor, garrison.smith, garrison.alchemist,
 		garrison.keeper, garrison.jeweller]
